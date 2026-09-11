@@ -376,6 +376,7 @@ export class PersistentBaseWorldMaterializer {
       if (removed) this.options.construction.releaseRuntime(removed, false);
     };
     try {
+      if (definition.category === 'baseTurret') this.options.placementSystem.bindCarrierBase(runtime.id, site.baseId);
       if (definition.category === 'basePedestal') {
         if (definition.gameplaySource.kind !== 'power-up-definition') {
           cleanup();

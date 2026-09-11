@@ -18,7 +18,9 @@ describe('HE shared explosion damage', () => {
     const aoe = vi.fn();
     const rock = { active: true, x: CELL_SIZE / 2, y: CELL_SIZE / 2,
       getBounds: () => ({ left: 0, top: 0, right: CELL_SIZE, bottom: CELL_SIZE }) };
-    const combat = { applyAoeDamage: aoe, resolveExternalTargetDamage: resolve, getPlayerRuntimeDamageMultiplier: () => 2 };
+    const combat = { applyAoeDamage: aoe, resolveExternalTargetDamage: resolve, getPlayerRuntimeDamageMultiplier: () => 2,
+      captureWorldDamageSource: (ownerId: string) => ({ gameplaySource: { kind: 'player', id: ownerId },
+        attribution: { kind: 'player', id: ownerId }, allegiance: { kind: 'player', ownerId, allianceId: 'coop:players' } }) };
     const coordinator = new HostUpdateCoordinator({} as never, {
       getWorldCombatCore: () => combat,
     } as never, {} as never, {} as never, {} as never);

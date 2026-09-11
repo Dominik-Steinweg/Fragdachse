@@ -42,7 +42,8 @@ export interface ProjectileTrainBindingPort {
 
 /** World-owned effects produced by a projectile contact. */
 export interface ProjectileWorldImpactBindingPort {
-  setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string) => void) | null): void;
+  setLowSupportTargetChecker(checker: ((rockId: number, ownerId: string) => boolean) | null): void;
+  setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void;
   setObstacleKindResolver(resolver: ((rockId: number) => import('../types').PlaceableKind | undefined) | null): void;
   setBaseHitCallback(callback: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void;
   setSupportImpactCallback(callback: ((projectile: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null): void;

@@ -1397,6 +1397,14 @@ export class NetworkBridge {
     return firstTeam !== null && firstTeam === secondTeam;
   }
 
+  /** Stable relationship fact captured by committed effects, including after owner disconnect. */
+  getCombatAllianceId(playerId: string): string | undefined {
+    if (this.usesFreeForAllWorldRelationships() || !isTeamGameMode(this.getActiveGameMode())) return undefined;
+    if (isCoopDefenseMode(this.getActiveGameMode())) return 'coop:players';
+    const team = this.getPlayerTeam(playerId);
+    return team ? `team:${team}` : undefined;
+  }
+
   isEnemyPair(firstPlayerId: string, secondPlayerId: string): boolean {
     if (firstPlayerId === secondPlayerId) return false;
     if (this.usesFreeForAllWorldRelationships()) return true;

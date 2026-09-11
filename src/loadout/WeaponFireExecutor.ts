@@ -41,6 +41,7 @@ export function isAmbientCompatibleWeapon(config: WeaponConfig): boolean {
 
 /** Normalisierter Hitscan-Schuss – frei von Waffen-, Ressourcen- und Netzwerkwissen. */
 export interface HitscanShotRequest {
+  sourceCarrierBaseId?: string;
   readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
   shooterId:       string;
   /** Ursprünglicher Fire-Request-Ursprung; fehlt bei rein lokalen oder Headless-Aufträgen. */
@@ -119,7 +120,7 @@ export interface WeaponFireSink extends ProjectileSpawnPort {
 
 /** Zusatzangaben automatischer Feuerquellen (Türme, Konstrukte). */
 export interface WeaponFireOptions {
-  ignoreBaseCollisions?: boolean;
+  sourceCarrierBaseId?: string;
   ignoreRockIndex?: number;
   sourceSlot?: LoadoutSlot;
   /** Quellkonstrukt eines automatischen Turms fuer typisierte Projektilwirkungen. */
@@ -308,7 +309,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
           penetratesRocks: (config.penetratesRocks ?? 0) > 0,
         },
         collisionFilter: {
-          ignoreBaseCollisions: options?.ignoreBaseCollisions,
+          sourceCarrierBaseId: options?.sourceCarrierBaseId,
           ignoreRockIndex:      options?.ignoreRockIndex,
         },
         split: {
@@ -454,6 +455,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
       ?? getTopDownMuzzleOrigin(params.x, params.y, params.angle);
     const hasGameplayMuzzle = params.gameplayMuzzleOrigin !== undefined;
     return this.sink.resolveHitscan({
+      sourceCarrierBaseId: params.options?.sourceCarrierBaseId,
       primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:hitscan`, params.adrenalineGainBasis, config.adrenalinGain, 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, params.sourceSlot),
       shooterId:       params.ownerId,
       shooterX:        hasGameplayMuzzle ? params.x : undefined,

@@ -87,8 +87,9 @@ export interface CombatGeometryPort {
     endX: number,
     endY: number,
     skipRockIndex?: number,
-    ignoreBaseObstacles?: boolean,
+    sourceCarrierBaseId?: string,
     clearanceRadius?: number,
+    purpose?: import('../systems/ObstacleRules').ObstacleQueryPurpose,
   ): boolean;
   hasClearLineOfFire(
     startX: number,
@@ -96,8 +97,9 @@ export interface CombatGeometryPort {
     endX: number,
     endY: number,
     options?: {
+      readonly purpose?: import('../systems/ObstacleRules').ObstacleQueryPurpose;
       readonly skipRockIndex?: number;
-      readonly ignoreBaseObstacles?: boolean;
+      readonly sourceCarrierBaseId?: string;
       readonly clearanceRadius?: number;
     },
   ): boolean;
@@ -228,6 +230,7 @@ export interface CombatSafeMuzzlePort {
     shooterY: number,
     desiredMuzzleX: number,
     desiredMuzzleY: number,
+    options?: import('../systems/ObstacleRules').ObstacleShotOptions,
   ): { readonly x: number; readonly y: number };
 }
 

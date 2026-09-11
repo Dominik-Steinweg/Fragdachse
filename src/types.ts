@@ -1110,7 +1110,7 @@ export interface ProjectileSpawnConfig {
   /** Authoritative collision candidate mode; presentation style is never used for this choice. */
   collisionMode?: ProjectileCollisionMode;
   /** Base-mounted turret projectiles pass through their own base footprint. */
-  ignoreBaseCollisions?: boolean;
+  sourceCarrierBaseId?: string;
   /** Placeable turret projectiles pass through the runtime rock they are mounted on. */
   ignoreRockIndex?: number;
   excludedTarget?: import('./combat/CombatScope').CombatTargetRef;

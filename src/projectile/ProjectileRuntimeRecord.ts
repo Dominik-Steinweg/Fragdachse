@@ -22,6 +22,8 @@ import type { ProjectileSpeedVariationState } from './ProjectileSpeedVariation';
 
 /** Private authoritative state: never exported through a gameplay boundary. */
 export interface ProjectileRuntimeRecord {
+  /** Consumed on first full carrier exit; never replicated or inherited by children. */
+  sourceCarrierBaseId?: string;
   portalGates?: PortalGates;
   portalFlightPending?: boolean;
   /** Confirmed pre-transfer segments, retained until the flight stage completes. */

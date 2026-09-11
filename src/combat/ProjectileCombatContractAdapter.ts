@@ -24,7 +24,7 @@ export interface ProjectileCombatSourceClassification {
 /** Lossless Projectile provenance translation; attribution never falls back to allegiance. */
 export function adaptProjectileCombatSource(
   provenance: ProjectileProvenance,
-  projectileId: number,
+  projectileId: number | undefined,
   classification: ProjectileCombatSourceClassification,
 ): CombatSource {
   const actor = classification.actor ?? (provenance.sourceTurretId

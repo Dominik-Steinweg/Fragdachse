@@ -602,7 +602,7 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
     });
     expect(request.flight.collisionFilter).toMatchObject({
       ignoreRockIndex: placed.id,
-      ignoreBaseCollisions: false,
+      sourceCarrierBaseId: undefined,
     });
     expect(request.interaction.directHit?.damage)
       .toBe(WEAPON_CONFIGS.TURRET_ROCKET_BURST.damage * 1.25);
@@ -625,6 +625,7 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
       enemies: [],
       baseTurrets: [{
         id: 'hostile-base:front',
+        baseId: 'hostile-base',
         x: 0,
         y: 0,
         weaponId: 'BASE_SPORES',
@@ -645,14 +646,14 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
       attributionId: COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
       sourceTurretId: 'hostile-base:front',
     });
-    expect(request.flight.collisionFilter?.ignoreBaseCollisions).toBe(true);
+    expect(request.flight.collisionFilter?.sourceCarrierBaseId).toBe('hostile-base');
     expect(request.flight.homing).toMatchObject({ targetTypes: ['players'] });
     expect(request.provenance.sourceSlot).toBeUndefined();
     expect(request.flight.collisionFilter?.ignoreRockIndex).toBeUndefined();
     fixture.binding.destroy();
   });
 
-  it('fires a persistent base-owned turret through the world loadout with base collision bypass', () => {
+  it('does not grant a carrier to an ordinary base-owned construction', () => {
     const player = { id: 'builder', x: 0, y: 0, active: true };
     const playerManager = {
       getAllPlayers: () => [player] as unknown as PlayerEntity[],
@@ -694,7 +695,7 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
     });
     expect(request.provenance.sourceSlot).toBeUndefined();
     expect(request.flight.collisionFilter).toMatchObject({
-      ignoreBaseCollisions: true,
+      sourceCarrierBaseId: undefined,
       ignoreRockIndex: placed.id,
     });
     expect(request.interaction.directHit?.damage).toBe(WEAPON_CONFIGS.SPORES.damage);

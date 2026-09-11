@@ -167,6 +167,7 @@ function fakePlacementSystem(initialRocks: readonly SyncedPlaceableRock[] = []) 
   const rocks = new Map(initialRocks.map((rock) => [rock.id, rock]));
   let nextId = Math.max(20, ...initialRocks.map((rock) => rock.id + 1));
   const placementSystem = {
+    bindCarrierBase: vi.fn(),
     getRuntimeRock: (id: number) => rocks.get(id),
     getRuntimeRockAt: (gridX: number, gridY: number) => [...rocks.values()]
       .find((rock) => rock.gridX === gridX && rock.gridY === gridY),

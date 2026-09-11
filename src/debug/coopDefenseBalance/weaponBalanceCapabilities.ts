@@ -311,7 +311,7 @@ export const HEADLESS_PAYLOAD_CAPABILITY_DEFINITIONS: readonly HeadlessPayloadCa
 
 const PROJECTILE_STRUCTURAL_FIELDS = new Set([
   'speed', 'size', 'damage', 'lifetime', 'maxBounces', 'adrenalinGain', 'sourceId',
-  'allowTeamDamage', 'ignoreBaseCollisions', 'ignoreRockIndex', 'burnDurationMs', 'burnDamagePerTick',
+  'allowTeamDamage', 'sourceCarrierBaseId', 'ignoreRockIndex', 'burnDurationMs', 'burnDamagePerTick',
 ]);
 const PROJECTILE_CONTEXT_FIELDS = new Set([
   'color', 'ownerColor', 'visualMuzzleOrigin', 'projectileVisualScale', 'projectileStyle',

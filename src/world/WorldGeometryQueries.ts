@@ -173,7 +173,7 @@ export function createWorldGeometryQueries(input: WorldGeometryQueryInput): Worl
     ),
     hasLineOfFire: (startX, startY, endX, endY, options = {}) => (
       !active()
-      || (ensureGeometry().geometry.hasLineOfSight(startX, startY, endX, endY, options)
+      || (ensureGeometry().geometry.hasLineOfSight(startX, startY, endX, endY, { purpose: 'directFire', ...options })
         && !getTrainHit(startX, startY, endX, endY, Math.max(0, options.clearanceRadius ?? 0)))
     ),
     isCircleBlocked: (x, y, radius) => (

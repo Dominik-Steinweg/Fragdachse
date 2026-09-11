@@ -35,6 +35,34 @@ import { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { TurretSystem } from '../src/systems/TurretSystem';
 
 describe('hostile base turrets', () => {
+  it('preserves building allegiance after an attacker disappears, independently of character team damage', () => {
+    const players = new Set(['owner', 'ally', 'opponent']);
+    const enemies = new Map([
+      ['summon', { faction: 'allied', ownerId: 'owner' }],
+      ['enemy', { faction: 'hostile', ownerId: undefined }],
+    ]);
+    const combat = new CombatSystem({ getPlayer: (id: string) => players.has(id) ? { id } : undefined } as never,
+      { areTeammates: () => false, getCombatAllianceId: (id: string) =>
+        players.has(id) ? id === 'opponent' ? 'team:red' : 'team:blue' : undefined } as never);
+    combat.setEnemyManager({ getEnemy: (id: string) => enemies.get(id), hasEnemy: (id: string) => enemies.has(id) } as never);
+    const own = combat.captureWorldDamageSource('owner', 'shot');
+    const allied = combat.captureWorldDamageSource('ally', 'explosion', 'explosion');
+    const summoned = combat.captureWorldDamageSource('summon', 'cloud', 'ground');
+    const hostile = combat.captureWorldDamageSource('enemy', 'attack');
+    const neutral = combat.captureWorldDamageSource('world', 'hazard');
+    players.delete('ally'); enemies.clear();
+    expect(combat.canDamageStructure(own, 'owner')).toBe(false);
+    expect(combat.canDamageStructure({ ...allied, allegiance: { ...allied.allegiance, allowTeamDamage: true } }, 'owner')).toBe(false);
+    expect(combat.canDamageStructure(summoned, 'owner')).toBe(false);
+    expect(combat.canDamageStructure(allied, undefined, 'friendly')).toBe(false);
+    expect(combat.canDamageStructure(summoned, undefined, 'friendly')).toBe(false);
+    expect(combat.canDamageStructure(allied, undefined, 'hostile')).toBe(true);
+    expect(combat.canDamageStructure(hostile, undefined, 'hostile')).toBe(false);
+    expect(combat.canDamageStructure(hostile, 'owner')).toBe(true);
+    expect(combat.canDamageStructure(neutral, 'owner')).toBe(true);
+    expect(combat.canDamageStructure(neutral, undefined, 'friendly')).toBe(true);
+  });
+
   it('multiplies both automated projectile variants with the selected construct bonus', () => {
     const playerManager = {
       getAllPlayers: () => [
@@ -131,7 +159,7 @@ describe('hostile base turrets', () => {
       ownerColor: TEAM_RED_COLOR,
       weaponId: 'BASE_SPORES',
       targetMode: 'players',
-      ignoreBaseObstacles: true,
+      sourceCarrierBaseId: 'carrier',
     }], null);
 
     turrets.hostUpdate(
@@ -141,7 +169,7 @@ describe('hostile base turrets', () => {
     );
 
     expect(lineOfFire).toHaveBeenCalledOnce();
-    expect(lineOfFire.mock.calls[0][5]).toBe(true);
+    expect(lineOfFire.mock.calls[0][5]).toBe('carrier');
   });
 
   it('treats hostile base spores as zombie-faction damage', () => {

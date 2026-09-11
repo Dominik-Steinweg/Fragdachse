@@ -8,6 +8,19 @@ import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies'
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
 
 describe('selected runtime asset package', () => {
+  it('keeps the wall palette derivative on the identical 32-pixel grid with byte-identical alpha', async () => {
+    const [rock, wall] = await Promise.all(['rocks', 'walls'].map(key =>
+      sharp(`public/assets/sprites/${key}47blob.png`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })));
+    expect(wall.info).toEqual(rock.info);
+    expect(wall.info.width % 32).toBe(0); expect(wall.info.height % 32).toBe(0);
+    let original = 0, recolored = 0;
+    for (let i = 0; i < rock.data.length; i += 4) {
+      expect(wall.data[i + 3]).toBe(rock.data[i + 3]);
+      expect(wall.data[i]).toBe(wall.data[i + 1]); expect(wall.data[i]).toBe(wall.data[i + 2]);
+      if (rock.data[i + 3]) { original += (rock.data[i] + rock.data[i + 1] + rock.data[i + 2]) / 3; recolored += wall.data[i]; }
+    }
+    expect(recolored).toBeGreaterThan(original);
+  });
   it('resolves every smoke upgrade alias to a shipped PNG', async () => {
     const ids = ['smoke_grenade_radius', 'smoke_grenade_duration', 'smoke_grenade_storm',
       'smoke_grenade_disorientation', 'smoke_grenade_vulnerability', 'smoke_grenade_discharge', 'smoke_grenade_growth'];

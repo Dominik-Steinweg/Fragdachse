@@ -409,8 +409,9 @@ export class PlacementPreviewRenderer {
   ): string {
     if (constructionId === 'medic_pedestal') return 'powerup_hp';
     if (constructionId === 'armor_pedestal') return 'powerup_arm';
-    if (constructionId) return kind === 'turret' ? 'rocks' : `construction_${constructionId}`;
-    return kind === 'turret' ? 'rocks' : kind === 'pedestal' ? 'placeable_turret' : 'rocks';
+    if (kind === 'rock' || kind === 'turret') return 'walls';
+    if (constructionId) return `construction_${constructionId}`;
+    return kind === 'pedestal' ? 'placeable_turret' : 'walls';
   }
 
   private getPlacementPreviewDisplaySize(kind: PlacementPreviewNetState['kind'], powerUpDefId?: string): number {

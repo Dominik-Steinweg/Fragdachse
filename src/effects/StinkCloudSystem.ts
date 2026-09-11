@@ -55,6 +55,7 @@ const ELEC_ARC_BRIGHT = 0xffffff;
 
 /* ── Damage event (returned to host for WorldCombatCore processing) ── */
 export interface StinkCloudDamageEvent {
+  combatSource?: import('../combat/CombatScope').CombatSource;
   readonly cloudId: number;
   readonly kind: 'player-primary' | 'enemy-aura' | 'stationary';
   readonly plague?: PlagueApplication;
@@ -72,6 +73,7 @@ export interface StinkCloudDamageEvent {
 
 /* ── Host-side active cloud tracking ── */
 interface ActiveStinkCloud {
+  combatSource?: import('../combat/CombatScope').CombatSource;
   kind: 'player-primary' | 'enemy-aura' | 'stationary';
   plague?: PlagueApplication;
   id:             number;
@@ -227,6 +229,7 @@ export class StinkCloudSystem {
     const id = this.nextId++;
     this.activeZones.push({
       kind,
+      combatSource: this.combatSourceResolver?.(ownerId),
       plague,
       id,
       ownerId,
@@ -251,6 +254,9 @@ export class StinkCloudSystem {
     return id;
   }
 
+  private combatSourceResolver: ((ownerId: string) => import('../combat/CombatScope').CombatSource | undefined) | null = null;
+  setCombatSourceResolver(resolver: typeof this.combatSourceResolver): void { this.combatSourceResolver = resolver; }
+
   hostCreateStationaryCloud(
     ownerId: string,
     ownerColor: number,
@@ -265,10 +271,12 @@ export class StinkCloudSystem {
     baseDamageMult = 1,
     visualVariant: DamageZoneVisualStyle = 'spore',
     now = this.hostNow,
+    combatSource?: import('../combat/CombatScope').CombatSource,
   ): void {
     this.hostNow = now;
     this.activeZones.push({
       kind: 'stationary',
+      combatSource: combatSource ?? this.combatSourceResolver?.(ownerId),
       id: this.nextId++,
       ownerId,
       ownerColor,
@@ -332,6 +340,7 @@ export class StinkCloudSystem {
           radius:          zone.radius,
           damage:          zone.damagePerTick,
           ownerId:         zone.ownerId,
+          combatSource: zone.combatSource,
           rockDamageMult:  zone.rockDamageMult,
           trainDamageMult: zone.trainDamageMult,
           baseDamageMult:  zone.baseDamageMult,
@@ -437,6 +446,8 @@ export class StinkCloudSystem {
       zone.trainDamageMult,
       zone.baseDamageMult,
       'stink',
+      this.hostNow,
+      zone.combatSource,
     );
   }
 

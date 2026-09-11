@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
 import { beginRockSweepDiagnostic, tracerBounceDebug } from './ProjectileBounceDiagnostics';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
-import { OBSTACLE_ROCK, OBSTACLE_BASE, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
+import { OBSTACLE_ROCK, OBSTACLE_BASE, OBSTACLE_BARRIER, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
+import { obstacleBlocks, segmentRectInterval, type ObstacleShotOptions } from '../systems/ObstacleRules';
 import { CombatGeometry } from '../systems/CombatGeometry';
 import { DEPTH } from '../config';
 import { portalCircleEntry } from '../systems/PortalTraversal';
@@ -51,7 +52,7 @@ export interface ProjectileSafeMuzzleGeometry {
 }
 
 export interface ProjectileRockSweepHit {
-  readonly kind?: 'trunk' | 'train' | 'world-boundary';
+  readonly kind?: 'trunk' | 'barrier' | 'train' | 'world-boundary';
   readonly rockIndex: number;
   /** Base cells use the same sweep, but retain their base damage identity. */
   readonly baseId?: string;
@@ -77,6 +78,7 @@ export type ProjectilePhysicsContactHandler = (contact: ProjectilePhysicsContact
 export type ProjectileMovementObserver = (id: number, x: number, y: number, vx: number, vy: number) => void;
 
 export interface ProjectilePhysicsBindingPort {
+  setWorldContactFilter?(filter: ((id: number, target: ProjectilePhysicsContactTarget, endX: number, endY: number) => boolean) | null): void;
   setContactFilter?(filter: ((id: number, endX: number, endY: number) => boolean) | null): void;
   findNearestPortalWorldSweep?(startX: number, startY: number, endX: number, endY: number,
     halfWidth: number, halfHeight: number, ignoreTrunks: boolean): ProjectileRockSweepHit | null;
@@ -90,6 +92,7 @@ export interface ProjectilePhysicsBindingPort {
   setTrainGroup(group: Phaser.Physics.Arcade.StaticGroup | null): void;
   setObstacleIndex(index: ArenaObstacleIndex | null): void;
   getSafeMuzzleGeometry(): ProjectileSafeMuzzleGeometry;
+  getObstacleGeometry?(): CombatGeometry | null;
   findNearestRockSweep(
     startX: number,
     startY: number,
@@ -100,6 +103,7 @@ export interface ProjectilePhysicsBindingPort {
     halfHeight?: number,
     diagnosticProjectileId?: number,
     includeBases?: boolean,
+    options?: ObstacleShotOptions,
   ): ProjectileRockSweepHit | null;
   createPhysicsHandle(spec: ProjectilePhysicsSpawnSpec): ProjectilePhysicsHandle;
   releaseProjectileResources(handle: ProjectilePhysicsHandle): void;
@@ -112,6 +116,8 @@ export interface ProjectilePhysicsBindingPort {
  * Contact meaning and lifecycle decisions return to WorldProjectileRuntime as primitive contacts.
  */
 export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
+  private worldContactFilter: ((id: number, target: ProjectilePhysicsContactTarget, endX: number, endY: number) => boolean) | null = null;
+  setWorldContactFilter(filter: typeof this.worldContactFilter): void { this.worldContactFilter = filter; }
   private contactFilter: ((id: number, endX: number, endY: number) => boolean) | null = null;
   setContactFilter(filter: ((id: number, endX: number, endY: number) => boolean) | null): void { this.contactFilter = filter; }
 
@@ -214,6 +220,8 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     };
   }
 
+  getObstacleGeometry(): CombatGeometry | null { return this.obstacleGeometry; }
+
   findNearestRockSweep(
     startX: number,
     startY: number,
@@ -224,6 +232,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     halfHeight = 0,
     diagnosticProjectileId?: number,
     includeBases = false,
+    options: ObstacleShotOptions = {},
   ): ProjectileRockSweepHit | null {
     const diagnostic = tracerBounceDebug.centerline ? beginRockSweepDiagnostic({
       projectileId: diagnosticProjectileId, start: { x: startX, y: startY }, end: { x: endX, y: endY },
@@ -231,8 +240,24 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     }) : undefined;
     const dx = endX - startX, dy = endY - startY, length = Math.hypot(dx, dy);
     if (length < 1e-9) return null;
+    let carrierExit = this.obstacleGeometry?.carrierExitFraction(startX, startY, endX, endY,
+      options.sourceCarrierBaseId, halfWidth, halfHeight) ?? -1;
+    if (!this.obstacleGeometry && options.sourceCarrierBaseId) {
+      const intervals = (this.baseGroup?.getChildren() ?? []).flatMap(child => {
+        const cell = child as Phaser.GameObjects.Rectangle;
+        if (!cell.active || cell.getData('baseId') !== options.sourceCarrierBaseId) return [];
+        const b = cell.getBounds();
+        const interval = segmentRectInterval(startX, startY, endX, endY, b.left - halfWidth,
+          b.top - halfHeight, b.right + halfWidth, b.bottom + halfHeight);
+        return interval ? [interval] : [];
+      }).sort((a, b) => a.enter - b.enter);
+      for (const interval of intervals) {
+        if (carrierExit < 0 ? interval.enter > 0 : interval.enter > carrierExit + 1e-9) break;
+        carrierExit = Math.max(carrierExit, interval.exit);
+      }
+    }
     const best = { index: -1, x: 0, y: 0, distance: Number.POSITIVE_INFINITY, normalX: 0, normalY: 0,
-      left: 0, top: 0, right: 0, bottom: 0, baseId: undefined as string | undefined };
+      left: 0, top: 0, right: 0, bottom: 0, baseId: undefined as string | undefined, barrier: false };
     const tangencies: { distance: number; normalX: number; normalY: number }[] = [];
     const mergeNormal = (normalX: number, normalY: number): void => {
       const commonX = best.normalX === normalX ? normalX : 0;
@@ -240,11 +265,11 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       best.normalX = commonX || commonY ? commonX : Math.sign(best.normalX + normalX);
       best.normalY = commonX || commonY ? commonY : Math.sign(best.normalY + normalY);
     };
-    const consider = (index: number, left: number, top: number, right: number, bottom: number, baseId?: string): void => {
+    const consider = (index: number, left: number, top: number, right: number, bottom: number, baseId?: string, barrier = false): void => {
       const candidate: NonNullable<typeof diagnostic>['candidates'][number] | undefined = diagnostic
         ? { index, left, top, right, bottom, baseId } : undefined;
       if (candidate && diagnostic!.candidates.length < 64) diagnostic!.candidates.push(candidate);
-      if (index < 0 || (baseId === undefined && index === ignoreRockIndex)) {
+      if (index < 0 || (!barrier && baseId === undefined && index === ignoreRockIndex)) {
         if (candidate) candidate.rejected = 'ignored-rock';
         return;
       }
@@ -261,7 +286,12 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       const farX = dx ? ((dx > 0 ? right : left) - startX) / dx : Infinity;
       const nearY = dy ? ((dy > 0 ? top : bottom) - startY) / dy : -Infinity;
       const farY = dy ? ((dy > 0 ? bottom : top) - startY) / dy : Infinity;
-      const enter = Math.max(nearX, nearY), exit = Math.min(farX, farY);
+      let enter = Math.max(nearX, nearY);
+      const exit = Math.min(farX, farY);
+      if (baseId === options.sourceCarrierBaseId && baseId !== undefined
+        && carrierExit >= 0 && enter <= carrierExit + 1e-9) return;
+      const startsInside = enter < 0 && exit >= 0 && options.purpose !== undefined && options.purpose !== 'physical';
+      if (startsInside) enter = 0;
       if (candidate) { candidate.enter = enter; candidate.exit = exit; }
       if (enter < 0 || enter > 1 || exit < enter) {
         if (candidate) candidate.rejected = enter < 0 && exit >= 0 ? 'starts-inside' : 'no-entry';
@@ -270,8 +300,9 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       const distance = enter * length;
       const entersInterior = exit > enter;
       if (distance > best.distance + 1e-7) return;
-      const normalX = Math.abs(nearX - enter) < 1e-9 ? -Math.sign(dx) : 0;
-      const normalY = Math.abs(nearY - enter) < 1e-9 ? -Math.sign(dy) : 0;
+      const normalEntry = startsInside ? Math.max(nearX, nearY) : enter;
+      const normalX = Math.abs(nearX - normalEntry) < 1e-9 ? -Math.sign(dx) : 0;
+      const normalY = Math.abs(nearY - normalEntry) < 1e-9 ? -Math.sign(dy) : 0;
       if (!entersInterior) { tangencies.push({ distance, normalX, normalY }); return; }
       if (Math.abs(distance - best.distance) <= 1e-7) {
         // At a shared tile corner retain the common exterior face. An internal
@@ -280,12 +311,14 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
         if (index < best.index || (index === best.index && (baseId ?? '') < (best.baseId ?? ''))) {
           best.index = index;
           best.baseId = baseId;
+          best.barrier = barrier;
           best.left = surfaceLeft; best.top = surfaceTop; best.right = surfaceRight; best.bottom = surfaceBottom;
         }
         return;
       }
       best.index = index;
       best.baseId = baseId;
+      best.barrier = barrier;
       best.x = startX + dx * enter; best.y = startY + dy * enter; best.distance = distance;
       best.normalX = normalX; best.normalY = normalY;
       best.left = surfaceLeft; best.top = surfaceTop; best.right = surfaceRight; best.bottom = surfaceBottom;
@@ -294,7 +327,11 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       this.obstacleIndex.querySegment(
         startX, startY, endX, endY,
         (kind, rockIndex, left, top, right, bottom, source) => {
-          if (kind === OBSTACLE_ROCK) consider(rockIndex, left, top, right, bottom);
+          if (kind === OBSTACLE_ROCK && !options.ignoreRocks
+            && obstacleBlocks(this.obstacleIndex!.getRockClass(rockIndex), options.purpose ?? 'physical')
+            && !(this.obstacleIndex!.getRockClass(rockIndex) === 'low' && options.purpose === 'support'
+              && options.acceptsLowTarget && !options.acceptsLowTarget(rockIndex))) consider(rockIndex, left, top, right, bottom);
+          else if (kind === OBSTACLE_BARRIER) consider(0, left, top, right, bottom, undefined, true);
           else if (kind === OBSTACLE_BASE && includeBases) {
             const baseId = (source as { getData?: (key: string) => unknown }).getData?.('baseId');
             if (typeof baseId === 'string' && baseId) consider(0, left, top, right, bottom, baseId);
@@ -308,6 +345,9 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       for (let index = 0; index < (this.rockObjects?.length ?? 0); index += 1) {
         const rock = this.rockObjects![index];
         if (!rock?.active) continue;
+        if (options.ignoreRocks || !obstacleBlocks(rock.obstacleClass ?? 'veryHigh', options.purpose ?? 'physical')) continue;
+        if (rock.obstacleClass === 'low' && options.purpose === 'support'
+          && options.acceptsLowTarget && !options.acceptsLowTarget(index)) continue;
         const bounds = rock.getBounds();
         consider(index, bounds.left, bounds.top, bounds.right, bounds.bottom);
       }
@@ -326,7 +366,9 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     for (const tangent of tangencies) if (Math.abs(tangent.distance - best.distance) <= 1e-7) {
       mergeNormal(tangent.normalX, tangent.normalY);
     }
-    const hit = { rockIndex: best.baseId === undefined ? best.index : -1, baseId: best.baseId,
+    const hit: ProjectileRockSweepHit = { rockIndex: best.baseId === undefined && !best.barrier ? best.index : -1,
+      baseId: best.baseId,
+      kind: best.barrier ? 'barrier' : undefined,
       x: Math.max(best.left, Math.min(best.right, best.x)), y: Math.max(best.top, Math.min(best.bottom, best.y)),
       centerX: best.x, centerY: best.y, normalX: best.normalX, normalY: best.normalY };
     if (diagnostic) diagnostic.hit = { ...hit };
@@ -435,6 +477,8 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       };
       const process = (_projectile: unknown, targetObject: unknown): boolean => (
         (filter?.(targetObject as Phaser.GameObjects.GameObject) ?? true)
+        && (this.worldContactFilter?.(spec.id, target(targetObject as Phaser.GameObjects.GameObject)!,
+          sprite.x + body.x - body.prevFrame.x, sprite.y + body.y - body.prevFrame.y) ?? true)
         && (this.contactFilter?.(spec.id, sprite.x + body.x - body.prevFrame.x,
           sprite.y + body.y - body.prevFrame.y) ?? true)
       );
@@ -471,6 +515,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
 
   releaseWorldState(): void {
     this.contactFilter = null;
+    this.worldContactFilter = null;
     this.setMovementObserver(null);
     this.observedHandles.clear();
     this.contactHandler = null;

@@ -52,12 +52,12 @@ describe('automated projectile weapons', () => {
       {
         x: 100, y: 200, angle: 0, targetX: 400, targetY: 200,
         ownerId: 'player-owner', ownerColor: 0xff8a3d,
-        options: { ignoreBaseCollisions: true, ignoreRockIndex: 7, sourceTurretId: '7' },
+        options: { sourceCarrierBaseId: 'carrier', ignoreRockIndex: 7, sourceTurretId: '7' },
       },
     );
 
     const request = spawnProjectile.mock.calls[0]?.[0];
-    expect(request?.flight.collisionFilter).toMatchObject({ ignoreBaseCollisions: true, ignoreRockIndex: 7 });
+    expect(request?.flight.collisionFilter).toMatchObject({ sourceCarrierBaseId: 'carrier', ignoreRockIndex: 7 });
     expect(request?.provenance.sourceTurretId).toBe('7');
   });
 

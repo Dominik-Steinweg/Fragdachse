@@ -873,8 +873,8 @@ export class WorldPlayerGameplayRuntime implements
   getPlayerFireChunkPort(): FireChunkBurstPort | null {
     if (this.destroyed || !this.systems.flamethrowerUpgrade) return null;
     return {
-      hostCreateFireChunkBurst: (ownerId, x, y, burst, sourceKey, now) => (
-        this.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, now)
+      hostCreateFireChunkBurst: (ownerId, x, y, burst, sourceKey, now, source) => (
+        this.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, now, source)
       ),
     };
   }
@@ -1090,9 +1090,10 @@ export class WorldPlayerGameplayRuntime implements
     burst: FireChunkBurstConfig,
     sourceKey: string,
     nowMs: number,
+    source?: import('../combat/CombatScope').CombatSource,
   ): void {
     if (this.destroyed) return;
-    this.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, nowMs);
+    this.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, nowMs, source);
   }
 
   registerDashCompleted(playerId: string, nowMs: number): void {

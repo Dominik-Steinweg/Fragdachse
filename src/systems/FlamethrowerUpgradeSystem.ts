@@ -42,6 +42,7 @@ interface RingRuntime {
 }
 
 interface PendingFireChunkLanding {
+  combatSource?: import('../combat/CombatScope').CombatSource;
   ownerId: string;
   target: FireChunkTarget;
   landsAt: number;
@@ -62,6 +63,7 @@ export interface FireChunkBurstPort {
     burst: FireChunkBurstConfig,
     sourceKey: string,
     now: number,
+    combatSource?: import('../combat/CombatScope').CombatSource,
   ): void;
 }
 
@@ -199,8 +201,9 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     burst: FireChunkBurstConfig,
     sourceKey: string,
     now: number,
+    combatSource?: import('../combat/CombatScope').CombatSource,
   ): void {
-    this.launchFireChunks(ownerId, x, y, burst, now, sourceKey);
+    this.launchFireChunks(ownerId, x, y, burst, now, sourceKey, combatSource);
   }
 
   handleNaturalFlameExpiry(projectile: ProjectileFlameExpiryEvent, now: number): void {
@@ -304,6 +307,8 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
         trail.effect,
         now,
         `fireball-trail:${sample.projectileId}`,
+        this.fireSystem.captureCombatSource?.(sample.provenance.allegiance.ownerId,
+          trail.effect.sourceId ?? 'ground_fire.fireball', sample.provenance),
       );
     }
     for (const projectileId of this.fireTrailCellByProjectile.keys()) {
@@ -318,6 +323,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     burst: FireChunkBurstConfig,
     now: number,
     sourceKey: string,
+    combatSource = this.fireSystem.captureCombatSource?.(ownerId, burst.sourceId ?? 'ground_fire.chunk'),
   ): void {
     const effect: GroundFireCellEffect = {
       durationMs: burst.durationMs,
@@ -328,14 +334,14 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
       damageTarget: burst.damageTarget,
       baseDamageMult: burst.baseDamageMult,
     };
-    if (burst.igniteCenter) this.refreshGenericGround(ownerId, x, y, effect, now, `${sourceKey}:center`);
+    if (burst.igniteCenter) this.refreshGenericGround(ownerId, x, y, effect, now, `${sourceKey}:center`, combatSource);
     const count = Math.max(0, Math.floor(burst.count));
     if (count <= 0) return;
     const targets = this.selectRandomFireCells(x, y, burst.searchRadius, count);
     if (targets.length === 0) return;
     const landsAt = now + Math.max(1, burst.flightMs);
     for (const target of targets) {
-      this.pendingChunkLandings.push({ ownerId, target, landsAt, effect, sourceKey });
+      this.pendingChunkLandings.push({ ownerId, target, landsAt, effect, sourceKey, combatSource });
     }
     this.playFireChunkBurst(x, y, targets, landsAt, effect.visualStyle ?? 'normal');
   }
@@ -351,6 +357,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
         landing.effect,
         now,
         `${landing.sourceKey}:chunk`,
+        landing.combatSource,
       );
       this.pendingChunkLandings.splice(index, 1);
     }
@@ -363,8 +370,10 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     effect: GroundFireCellEffect,
     now: number,
     sourceKey: string,
+    combatSource?: import('../combat/CombatScope').CombatSource,
   ): void {
     this.fireSystem.hostRefreshGroundCell(x, y, {
+      combatSource,
       sourceKey,
       ownerId,
       durationMs: effect.durationMs,

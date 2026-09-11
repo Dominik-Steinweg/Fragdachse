@@ -53,9 +53,9 @@ function state(id: number, gridX: number, gridY: number): RockVisualState {
 
 function fixture(states: RockVisualState[], width = 1024, height = 512) {
   const layers: FakeGpuLayer[] = [];
-  const texture = { get: (frame: number) => ({ name: String(frame), width: 32, height: 32 }) };
+  const textures = (key: string) => ({ get: (frame: number) => ({ name: String(frame), textureKey: key, width: 32, height: 32 }) });
   const scene = {
-    textures: { get: () => texture },
+    textures: { get: textures },
     add: {
       spriteGPULayer: (_texture: unknown, size: number) => {
         const layer = new FakeGpuLayer(size);
@@ -74,6 +74,23 @@ function fixture(states: RockVisualState[], width = 1024, height = 512) {
 }
 
 describe('PersistentGpuWorldSystem', () => {
+  it('keeps wall and nature material separate through patch, removal and cell reuse', () => {
+    const wall = { ...state(0, 3, 5), material: 'walls' as const };
+    const nature = state(1, 4, 5);
+    const { system, layers } = fixture([wall, nature]);
+    const wallSlot = 5 * 16 + 3, rockSlot = wallSlot + 1;
+    expect(layers[0].members[wallSlot]).toMatchObject({ alpha: 0 });
+    expect(layers[0].members[rockSlot]).toMatchObject({ frame: { textureKey: 'rocks' } });
+    expect(layers[2].members[wallSlot]).toMatchObject({ frame: { textureKey: 'walls' }, alpha: 1 });
+    expect(system.getDiagnostics().capacity).toBe(3 * 256);
+    wall.active = false; system.applyDirty([0]);
+    expect(layers[2].members[wallSlot]).toMatchObject({ alpha: 0 });
+    Object.assign(wall, { active: true, material: 'rocks' }); system.applyDirty([0]);
+    expect(layers[0].members[wallSlot]).toMatchObject({ frame: { textureKey: 'rocks' }, alpha: 1 });
+    expect(layers[2].members[wallSlot]).toMatchObject({ alpha: 0 });
+    system.destroy();
+  });
+
   it('keeps a grid cell on the same deterministic page slot across destroy and rebuild', () => {
     const rock = state(0, 3, 5);
     const { system, layers } = fixture([rock]);

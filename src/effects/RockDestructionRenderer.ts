@@ -153,7 +153,8 @@ export class RockDestructionRenderer {
     if (this.destroyed || !this.isWorthShowing(snapshot.x, snapshot.y,
       snapshot.size * Math.max(Math.abs(snapshot.scaleX), Math.abs(snapshot.scaleY)))) return;
 
-    const frame = this.scene.textures.getFrame(ROCK_TEXTURE_KEY, snapshot.frame);
+    const textureKey = snapshot.material ?? ROCK_TEXTURE_KEY;
+    const frame = this.scene.textures.getFrame(textureKey, snapshot.frame);
     const frameWidth = frame.realWidth;
     const frameHeight = frame.realHeight;
     this.pendingRequests.push({
@@ -163,7 +164,7 @@ export class RockDestructionRenderer {
       frameHeight,
       displayWidth: snapshot.size * snapshot.scaleX,
       displayHeight: snapshot.size * snapshot.scaleY,
-      textureKey: ROCK_TEXTURE_KEY,
+      textureKey,
       frameName: snapshot.frame,
       tint: snapshot.tint,
       angle: snapshot.angle,

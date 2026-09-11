@@ -6,6 +6,8 @@ import {
 } from '../utils/geometry';
 import { isAngleWithinArc } from '../combat/rules/DirectCombatHitResolver';
 import { ArenaObstacleIndex, OBSTACLE_BARRIER, OBSTACLE_BASE, OBSTACLE_ROCK } from './ArenaObstacleIndex';
+import type { ObstacleRectBody } from './ArenaObstacleIndex';
+import { obstacleBlocks, segmentRectInterval, type ObstacleShotOptions } from './ObstacleRules';
 
 /** Art des getroffenen Hindernisses aus dem {@link ArenaObstacleIndex}. */
 export type ObstacleHitKind = 'rock' | 'trunk' | 'base' | 'barrier';
@@ -14,13 +16,12 @@ export interface ObstacleHit extends GeometryHit {
   kind: ObstacleHitKind;
   /** Index in `layout.rocks`, nur bei `kind === 'rock'`. */
   index?: number;
+  baseId?: string;
 }
 
-export interface ObstacleTraceOptions {
+export interface ObstacleTraceOptions extends ObstacleShotOptions {
   /** Dieser Fels blockiert nicht (z. B. der Fels, aus dem der Strahl austritt). */
   skipRockIndex?: number;
-  /** Coop-Defense-Basen ignorieren (Quellen oberhalb der eigenen Basisfläche). */
-  ignoreBases?: boolean;
   /**
    * Korridorbreite für Körper, die breiter als die Linie sind (z. B. Translocator-Puck).
    * Hindernisse werden um diesen Betrag aufgeblasen.
@@ -76,24 +77,30 @@ export class CombatGeometry {
    * dieses Ergebnis.
    */
   nearestObstacleHit(line: Phaser.Geom.Line, options: ObstacleTraceOptions = {}): ObstacleHit | null {
-    const { skipRockIndex, ignoreBases = false, clearanceRadius = 0 } = options;
-    const clearance = Math.max(0, clearanceRadius);
+    const { clearanceRadius = 0 } = options;
+    const halfWidth = Math.max(0, options.halfWidth ?? clearanceRadius);
+    const halfHeight = Math.max(0, options.halfHeight ?? clearanceRadius);
+    const clearance = Math.max(halfWidth, halfHeight);
+    const carrierExit = this.carrierExitFraction(line.x1, line.y1, line.x2, line.y2, options.sourceCarrierBaseId, halfWidth, halfHeight);
     let bestHit: ObstacleHit | null = null;
 
     this.obstacleIndex.querySegment(
       line.x1, line.y1, line.x2, line.y2,
-      (kind, rockIndex, left, top, right, bottom) => {
-        if (kind === OBSTACLE_ROCK && rockIndex === skipRockIndex) return false;
-        if (ignoreBases && kind === OBSTACLE_BASE) return false;
-        const hit = this.nearestRectangleHit(
-          line,
-          this.obstacleRect(left - clearance, top - clearance, right + clearance, bottom + clearance),
-        );
+      (kind, rockIndex, left, top, right, bottom, source) => {
+        const interval = segmentRectInterval(line.x1, line.y1, line.x2, line.y2,
+          left - halfWidth, top - halfHeight, right + halfWidth, bottom + halfHeight);
+        if (!interval || this.ignoresRect(kind, rockIndex, source, options, interval.enter, carrierExit)) return false;
+        const hit = options.purpose && options.purpose !== 'physical'
+          ? { x: line.x1 + (line.x2 - line.x1) * Math.max(0, interval.enter),
+            y: line.y1 + (line.y2 - line.y1) * Math.max(0, interval.enter),
+            distance: Math.hypot(line.x2 - line.x1, line.y2 - line.y1) * Math.max(0, interval.enter) }
+          : this.nearestRectangleHit(line, this.obstacleRect(left - halfWidth, top - halfHeight, right + halfWidth, bottom + halfHeight));
         if (hit && (!bestHit || hit.distance < bestHit.distance)) {
           bestHit = {
             ...hit,
             kind: kind === OBSTACLE_ROCK ? 'rock' : kind === OBSTACLE_BARRIER ? 'barrier' : 'base',
             ...(kind === OBSTACLE_ROCK ? { index: rockIndex } : {}),
+            ...(kind === OBSTACLE_BASE ? { baseId: this.obstacleIndex.getBaseId(source) } : {}),
           };
         }
         return false;
@@ -118,18 +125,26 @@ export class CombatGeometry {
     maxDistance: number,
     options: ObstacleTraceOptions = {},
   ): boolean {
-    const { skipRockIndex, ignoreBases = false, clearanceRadius = 0 } = options;
-    const clearance = Math.max(0, clearanceRadius);
+    const { clearanceRadius = 0 } = options;
+    const halfWidth = Math.max(0, options.halfWidth ?? clearanceRadius);
+    const halfHeight = Math.max(0, options.halfHeight ?? clearanceRadius);
+    const clearance = Math.max(halfWidth, halfHeight);
+    const carrierExit = this.carrierExitFraction(line.x1, line.y1, line.x2, line.y2, options.sourceCarrierBaseId, halfWidth, halfHeight);
     let blocked = false;
 
     this.obstacleIndex.querySegment(
       line.x1, line.y1, line.x2, line.y2,
-      (kind, rockIndex, left, top, right, bottom) => {
-        if (kind === OBSTACLE_ROCK && rockIndex === skipRockIndex) return false;
-        if (ignoreBases && kind === OBSTACLE_BASE) return false;
+      (kind, rockIndex, left, top, right, bottom, source) => {
+        const interval = segmentRectInterval(line.x1, line.y1, line.x2, line.y2,
+          left - halfWidth, top - halfHeight, right + halfWidth, bottom + halfHeight);
+        if (!interval || this.ignoresRect(kind, rockIndex, source, options, interval.enter, carrierExit)) return false;
+        if (options.purpose && options.purpose !== 'physical') {
+          if (Math.max(0, interval.enter) * Math.hypot(line.x2 - line.x1, line.y2 - line.y1) < maxDistance) { blocked = true; return true; }
+          return false;
+        }
         const hit = this.nearestRectangleHit(
           line,
-          this.obstacleRect(left - clearance, top - clearance, right + clearance, bottom + clearance),
+          this.obstacleRect(left - halfWidth, top - halfHeight, right + halfWidth, bottom + halfHeight),
         );
         if (hit && hit.distance < maxDistance) { blocked = true; return true; }
         return false;
@@ -145,6 +160,43 @@ export class CombatGeometry {
     return blocked;
   }
 
+  getRockClass(index: number) { return this.obstacleIndex.getRockClass(index); }
+
+  /** Narrow phase for a base identity; aggregate bounds never become collision geometry. */
+  baseHit(baseId: string, sx: number, sy: number, ex: number, ey: number,
+    halfWidth = 0, halfHeight = halfWidth, sourceCarrierBaseId?: string): GeometryHit | null {
+    const carrierExit = this.carrierExitFraction(sx, sy, ex, ey, sourceCarrierBaseId, halfWidth, halfHeight);
+    let nearest = Infinity;
+    this.obstacleIndex.querySegment(sx, sy, ex, ey, (kind, _id, l, t, r, b, source) => {
+      if (kind !== OBSTACLE_BASE || this.obstacleIndex.getBaseId(source) !== baseId) return false;
+      const interval = segmentRectInterval(sx, sy, ex, ey, l - halfWidth, t - halfHeight, r + halfWidth, b + halfHeight);
+      if (!interval || (baseId === sourceCarrierBaseId && carrierExit >= 0 && interval.enter <= carrierExit + 1e-9)) return false;
+      nearest = Math.min(nearest, Math.max(0, interval.enter));
+      return false;
+    }, () => false, Math.max(halfWidth, halfHeight));
+    return Number.isFinite(nearest) ? { x: sx + (ex - sx) * nearest, y: sy + (ey - sy) * nearest,
+      distance: Math.hypot(ex - sx, ey - sy) * nearest } : null;
+  }
+
+  carrierExitFraction(sx: number, sy: number, ex: number, ey: number, baseId?: string,
+    halfWidth = 0, halfHeight = halfWidth): number {
+    return this.obstacleIndex.carrierExitFraction(baseId, sx, sy, ex, ey, halfWidth, halfHeight);
+  }
+
+  private ignoresRect(kind: number, rockIndex: number, source: ObstacleRectBody,
+    options: ObstacleTraceOptions, enter: number, carrierExit: number): boolean {
+    if (kind === OBSTACLE_ROCK) {
+      if (rockIndex === options.skipRockIndex || options.ignoreRocks) return true;
+      const height = this.obstacleIndex.getRockClass(rockIndex);
+      if (!obstacleBlocks(height, options.purpose ?? 'physical')) return true;
+      if (height === 'low' && options.purpose === 'support'
+        && options.acceptsLowTarget && !options.acceptsLowTarget(rockIndex)) return true;
+    }
+    return kind === OBSTACLE_BASE && options.sourceCarrierBaseId !== undefined
+      && this.obstacleIndex.getBaseId(source) === options.sourceCarrierBaseId
+      && carrierExit >= 0 && enter <= carrierExit + 1e-9;
+  }
+
   /**
    * Freie Sichtlinie zwischen zwei Punkten. Die letzten 2 px vor dem Ziel zählen nicht mit,
    * damit ein Hindernis direkt hinter dem Ziel die Linie nicht sperrt.
@@ -155,7 +207,7 @@ export class CombatGeometry {
     options: ObstacleTraceOptions = {},
   ): boolean {
     const line = this.scratchLine.setTo(startX, startY, endX, endY);
-    const blockDistance = Phaser.Geom.Line.Length(line) - 2;
+    const blockDistance = Math.hypot(line.x2 - line.x1, line.y2 - line.y1) - 2;
     return !this.isPathBlocked(line, blockDistance, options);
   }
 

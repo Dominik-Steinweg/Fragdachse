@@ -201,7 +201,7 @@ describe('ProjectileSpawnResolver', () => {
     const desired = { x: 220, y: 100 };
     const profile = resolveProjectileBodyProfile(cfg, 0);
     const line = new Phaser.Geom.Line(100, 100, desired.x, desired.y);
-    const hit = geometry.nearestObstacleHit(line, { clearanceRadius: profile.conservativeClearance });
+    const hit = geometry.nearestObstacleHit(line, { purpose: 'directFire', halfWidth: profile.width / 2, halfHeight: profile.height / 2 });
     if (!hit) throw new Error('Test benötigt einen Fels-Treffer');
 
     const spawn = resolveSafeMuzzleSpawn(100, 100, desired, 0, cfg, {
@@ -230,6 +230,13 @@ describe('ProjectileSpawnResolver', () => {
     }
   });
 
+  it('does not turn leaf-blower target piercing into high-obstacle muzzle penetration', () => {
+    const geometry = geometryWith([new FakeBox(150, 100, 20)]);
+    const spawn = resolveSafeMuzzleSpawn(100, 100, { x: 200, y: 100 }, 0,
+      projectileConfig({ collisionMode: 'overlap', piercesTargets: true, leafBlowerMinKnockback: 1 }), { geometry });
+    expect(spawn.x).toBeLessThan(140);
+  });
+
   it('hält den Start vor den World-Bounds und lässt durchdringende Spezialprojektile passieren', () => {
     const worldBounds = new Phaser.Geom.Rectangle(0, 0, 200, 200);
     const context = { geometry: geometryWith(), worldBounds };
@@ -254,6 +261,6 @@ describe('ProjectileSpawnResolver', () => {
       projectileConfig({ penetratesRocks: true }),
       { geometry: geometryWith([new FakeBox(125, 100, 20)]), worldBounds },
     );
-    expect(penetrating).toEqual({ x: 100, y: 100 });
+    expect(penetrating).toEqual({ x: 150, y: 100 });
   });
 });

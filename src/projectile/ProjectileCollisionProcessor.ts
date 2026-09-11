@@ -58,6 +58,10 @@ interface SweepCandidate {
 
 /** Was der Owner für die Kandidatenverarbeitung bereitstellt. */
 export interface ProjectileCollisionDependencies {
+  shotOptions?(record: ProjectileRuntimeRecord): import('../systems/ObstacleRules').ObstacleShotOptions;
+  allowsWorldContact?(record: ProjectileRuntimeRecord, target: ProjectileTargetRef): boolean;
+  worldTargetHit?(record: ProjectileRuntimeRecord, target: ProjectileTargetRef,
+    sx: number, sy: number, ex: number, ey: number): { x: number; y: number; distance: number } | null | undefined;
   onGrenadeContact?(record: ProjectileRuntimeRecord, candidate: ProjectileImpactCandidate): void;
   readonly targetQuery: ProjectileCollisionTargetQueryPort | null;
   readonly targetability: ProjectileTargetabilityPort | null;
@@ -212,7 +216,7 @@ export class ProjectileCollisionProcessor {
     const sx = record.lastX, sy = record.lastY;
     const ex = record.physics.sprite.x, ey = record.physics.sprite.y;
     const radius = record.hitboxSize! * 0.5;
-    let blocker = deps.worldBlocker?.getNearestBlockerDistance(sx, sy, ex, ey, false) ?? Infinity;
+    let blocker = deps.worldBlocker?.getNearestBlockerDistance(sx, sy, ex, ey, false, { purpose: 'physical' }) ?? Infinity;
     const candidates: Array<{ slot: CollisionTargetSlot; x: number; y: number; distance: number }> = [];
     for (let i = 0; i < this.targetCount; i++) {
       const slot = this.targetPool[i];
@@ -312,6 +316,8 @@ export class ProjectileCollisionProcessor {
       endX,
       endY,
       record.spec.flight.penetration.penetratesRocks === true,
+      deps.shotOptions?.(record) ?? { purpose: record.spec.flight.isGrenade || record.spec.flight.isTranslocatorPuck ? 'physical' : 'directFire',
+        sourceCarrierBaseId: record.sourceCarrierBaseId },
     ) ?? null;
     const projectileRadius = Math.max(record.physics.sprite.displayWidth, record.physics.sprite.displayHeight) * 0.5;
 
@@ -319,7 +325,8 @@ export class ProjectileCollisionProcessor {
     for (let index = 0; index < this.targetCount; index += 1) {
       const slot = this.targetPool[index];
       if (!this.isCandidateAllowed(record, slot, deps)) continue;
-      const hit = resolveProjectileTargetImpact({
+      const worldHit = deps.worldTargetHit?.(record, slot.ref, startX, startY, endX, endY);
+      const hit = worldHit !== undefined ? worldHit : resolveProjectileTargetImpact({
         startX,
         startY,
         endX,
@@ -403,6 +410,8 @@ export class ProjectileCollisionProcessor {
       const slot = this.targetPool[index];
       if (!this.isCandidateAllowed(record, slot, deps, bounds)) continue;
       if (!overlaps(bounds, slot)) continue;
+      if (deps.worldTargetHit?.(record, slot.ref, record.physics.sprite.x, record.physics.sprite.y,
+        record.physics.sprite.x, record.physics.sprite.y) === null) continue;
       this.overlapCandidates.push(slot);
     }
     this.sortOverlapCandidates(record);
@@ -455,7 +464,8 @@ export class ProjectileCollisionProcessor {
     deps: ProjectileCollisionDependencies,
     overlapBounds?: { left: number; right: number; top: number; bottom: number },
   ): boolean {
-    if (record.provenance.allegiance.ownerId === slot.ownerId) return false;
+    if (slot.kind !== 'base' && slot.kind !== 'rock' && record.provenance.allegiance.ownerId === slot.ownerId) return false;
+    if (deps.allowsWorldContact?.(record, slot.ref) === false) return false;
     const excluded = record.spec.flight.collisionFilter.excludedTarget;
     if (excluded && excluded.id === slot.id && excluded.kind === slot.kind
       && (deps.targetability?.isCurrentTargetInstance?.(excluded) ?? true)) return false;
@@ -471,7 +481,6 @@ export class ProjectileCollisionProcessor {
       && (slot.obstacleKind === undefined || slot.obstacleKind === 'rock')) return false;
     if (slot.kind === 'rock' && record.spec.flight.collisionFilter.ignoreRockIndex !== undefined
       && record.spec.flight.collisionFilter.ignoreRockIndex === slot.numericId) return false;
-    if (slot.kind === 'base' && record.spec.flight.collisionFilter.ignoreBaseCollisions === true) return false;
     if (hasPersistentWorldContact(record, slot)) return false;
 
     const exclusionKey = projectileExclusionKey(slot.ref);

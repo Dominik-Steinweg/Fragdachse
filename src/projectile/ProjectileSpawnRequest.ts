@@ -98,7 +98,7 @@ export interface ProjectilePenetrationSpec {
 export interface ProjectileCollisionFilterSpec {
   readonly excludedTarget?: import('../combat/CombatScope').CombatTargetRef;
   readonly initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
-  readonly ignoreBaseCollisions?: boolean;
+  readonly sourceCarrierBaseId?: string;
   readonly ignoreRockIndex?: number;
 }
 
@@ -171,6 +171,7 @@ export interface ProjectileProvenance {
 
 /** Zugehörigkeit, aus der Freund-/Feind-Beziehungen aufgelöst werden. */
 export interface ProjectileAllegianceRef {
+  readonly allianceId?: string;
   readonly ownerId: string;
   readonly kind?: 'player' | 'enemy' | 'world';
   readonly factionId?: string;

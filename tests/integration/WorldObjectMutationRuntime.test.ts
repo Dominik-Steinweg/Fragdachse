@@ -42,7 +42,8 @@ function resolvedDamage(amount: number) {
   });
 }
 
-function createFixture(options: { readonly throwFromVisuals?: boolean; readonly mgRange?: () => number } = {}) {
+function createFixture(options: { readonly throwFromVisuals?: boolean; readonly mgRange?: () => number;
+  readonly canDamageStructure?: (source: CombatSource, ownerId?: string, faction?: 'friendly' | 'hostile') => boolean } = {}) {
   const layout: ArenaLayout = {
     seed: 17,
     rocks: [
@@ -168,6 +169,7 @@ function createFixture(options: { readonly throwFromVisuals?: boolean; readonly 
     construction,
     bases: null,
     train: null,
+    canDamageStructure: options.canDamageStructure,
   });
 
   return {
@@ -189,6 +191,27 @@ function createFixture(options: { readonly throwFromVisuals?: boolean; readonly 
 }
 
 describe('WorldObjectMutationRuntime real-owner integration', () => {
+  it('guards direct, explosive and delayed building damage at the HP owner while allowing removal and nature damage', () => {
+    const f = createFixture({ canDamageStructure: source => source.allegiance.factionId !== 'allied' });
+    const wall = f.placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS.rock_barrier,
+      10, 10, 0, 'owner', 0xffffff)!;
+    const before = wall.hp;
+    const source: CombatSource = { ...SOURCE, allegiance: { ownerId: 'removed-summon', kind: 'enemy', factionId: 'allied' } };
+    for (const kind of ['direct', 'explosion', 'ground'] as const) {
+      expect(f.mutations.applyResolvedDamage('rock', wall.id, 10, 'removed-summon', 'committed', kind, undefined, source))
+        .toMatchObject({ kind: 'accepted-no-effect', reason: 'immune' });
+      expect(wall.hp).toBe(before);
+    }
+    expect(f.mutations.applyResolvedDamage('rock', wall.id, 10, 'owner', 'own'))
+      .toMatchObject({ kind: 'accepted-no-effect', reason: 'immune' });
+    expect(f.mutations.applyResolvedDamage('rock', wall.id, 10, 'enemy', 'attack'))
+      .toMatchObject({ kind: 'damage-applied', actualDamage: 10 });
+    expect(f.mutations.applyResolvedDamage('rock', 0, 10, 'removed-summon', 'nature', 'explosion', undefined, source))
+      .toMatchObject({ kind: 'damage-applied', actualDamage: 10 });
+    expect(f.placement.removeRock(wall.id)).toBeTruthy();
+    f.mutations.destroy(); f.construction.destroy();
+  });
+
   it('restores personal MG range from current owner data and shares it with placement previews', () => {
     let range = .4;
     const f = createFixture({ mgRange: () => range }), base = COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret;

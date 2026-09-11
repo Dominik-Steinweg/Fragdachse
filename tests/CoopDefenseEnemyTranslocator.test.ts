@@ -89,7 +89,7 @@ describe('Void-Stalker Translocator', () => {
 
     system.hostUpdate(0);
 
-    expect(hasClearLineOfFire).toHaveBeenCalledWith(400, 300, 800, 300, { clearanceRadius: 12 });
+    expect(hasClearLineOfFire).toHaveBeenCalledWith(400, 300, 800, 300, { clearanceRadius: 12, purpose: 'physical' });
     expect(spawnPuck).toHaveBeenCalledTimes(1);
   });
 
@@ -111,7 +111,7 @@ describe('Thrower-Badger brood bomb', () => {
     system.hostUpdate(0);
     system.hostUpdate(getCoopDefenseEnemyConfig('thrower-badger').spawnThrow!.cooldownMs);
 
-    expect(hasClearLineOfFire).toHaveBeenCalledWith(400, 300, 800, 300, { clearanceRadius: 12 });
+    expect(hasClearLineOfFire).toHaveBeenCalledWith(400, 300, 800, 300, { clearanceRadius: 12, purpose: 'physical' });
     expect(spawnProjectile).toHaveBeenCalledTimes(1);
   });
 

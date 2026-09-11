@@ -8,6 +8,7 @@ import { ProjectilePathRecorder } from './ProjectileFlightPath';
 import { usesRockSweep } from './ProjectileRockSweep';
 import { captureBounceContact, captureFlightStep, tracerBounceDebug } from './ProjectileBounceDiagnostics';
 import * as Phaser from 'phaser';
+import type { ProjectilePhysicsContactTarget, ProjectileTargetRef } from './ProjectileTargetPort';
 import { findNearestRectangleHit } from '../utils/geometry';
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import type {
@@ -271,8 +272,45 @@ export class WorldProjectileRuntime implements
   private miniRocketDestroyedCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
   private standaloneExplosionRequestCallback: ((request: ProjectileExplosionRequest) => void) | null = null;
   private proximityPulseCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
-  private rockHitCallback: ((rockId: number, damage: number, attackerId: string) => void) | null = null;
+  private rockHitCallback: ((rockId: number, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
   private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
+  private lowSupportTargetChecker: ((rockId: number, ownerId: string) => boolean) | null = null;
+  setLowSupportTargetChecker(checker: typeof this.lowSupportTargetChecker): void { this.lowSupportTargetChecker = checker; }
+
+  private shotOptions(record: ProjectileRuntimeRecord): import('../systems/ObstacleRules').ObstacleShotOptions {
+    return { purpose: record.spec.flight.isGrenade || record.spec.flight.isTranslocatorPuck ? 'physical'
+      : record.spec.interaction.energyInjectorPayload ? 'support' : 'directFire',
+      sourceCarrierBaseId: record.sourceCarrierBaseId,
+      halfWidth: record.physics.body.width / 2, halfHeight: record.physics.body.height / 2,
+      acceptsLowTarget: id => this.lowSupportTargetChecker?.(id, record.provenance.allegiance.ownerId) ?? true };
+  }
+
+  private allowsWorldContact(record: ProjectileRuntimeRecord, target: ProjectilePhysicsContactTarget | ProjectileTargetRef,
+    ex = record.physics.sprite.x, ey = record.physics.sprite.y): boolean {
+    if (target.kind !== 'rock' && target.kind !== 'base') return true;
+    if (target.kind === 'rock') {
+      const kind = this.obstacleKindResolver?.(target.id);
+      const low = kind === 'rock' || kind === 'turret'
+        || this.physicsBinding.getObstacleGeometry?.()?.getRockClass(target.id) === 'low';
+      if (low) return record.spec.flight.isGrenade === true || record.spec.flight.isTranslocatorPuck === true
+        || (record.spec.interaction.energyInjectorPayload !== undefined
+          && (this.lowSupportTargetChecker?.(target.id, record.provenance.allegiance.ownerId) ?? true));
+    }
+    if (target.kind === 'base') {
+      const geometry = this.physicsBinding.getObstacleGeometry?.();
+      if (geometry) return geometry.baseHit(target.id, record.lastX, record.lastY, ex, ey,
+        record.physics.body.width / 2, record.physics.body.height / 2, record.sourceCarrierBaseId) !== null;
+    }
+    return true;
+  }
+
+  private advanceCarrier(record: ProjectileRuntimeRecord): void {
+    if (!record.sourceCarrierBaseId) return;
+    const exit = this.physicsBinding.getObstacleGeometry?.()?.carrierExitFraction(
+      record.lastX, record.lastY, record.physics.sprite.x, record.physics.sprite.y,
+      record.sourceCarrierBaseId, record.physics.body.width / 2, record.physics.body.height / 2) ?? -1;
+    if (exit < 1) record.sourceCarrierBaseId = undefined;
+  }
   private baseHitCallback: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
   private supportImpactCallback: ((projectile: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null = null;
   private trainImpactPort: ProjectileTrainImpactPort | null = null;
@@ -304,6 +342,11 @@ export class WorldProjectileRuntime implements
     this.projectiles = new ProjectileStore(options.identityScope);
     const runtime = this;
     this.collisionDependencies = {
+      shotOptions: record => this.shotOptions(record),
+      allowsWorldContact: (record, target) => this.allowsWorldContact(record, target),
+      worldTargetHit: (record, target, sx, sy, ex, ey) => target.kind === 'base'
+        ? this.physicsBinding.getObstacleGeometry?.()?.baseHit(target.id, sx, sy, ex, ey,
+          record.physics.body.width / 2, record.physics.body.height / 2, record.sourceCarrierBaseId) : undefined,
       onGrenadeContact: (record, candidate) => this.resolveGrenadeContact(record, candidate),
       get targetQuery() { return runtime.collisionTargetQueryPort; },
       get targetability() { return runtime.targetabilityPort; },
@@ -315,6 +358,7 @@ export class WorldProjectileRuntime implements
       resolveWorldImpact: (record, candidate) => this.resolveWorldImpact(record, candidate),
     };
     const lifecycleDependencies: ProjectileLifecycleDependencies = {
+      advanceCarrier: record => this.advanceCarrier(record),
       prepareGrenadePayload: (projectile) => this.prepareGrenadePayload(projectile),
       queueDestroy: (projectile) => this.queueProjectileDestroy(projectile.id),
       release: (projectile) => this.releaseProjectile(projectile),
@@ -329,6 +373,10 @@ export class WorldProjectileRuntime implements
     };
     this.lifecycleProcessor = new ProjectileLifecycleProcessor(lifecycleDependencies);
     this.physicsBinding.setPhysicsContactHandler((contact) => this.reportPhysicsContact(contact));
+    this.physicsBinding.setWorldContactFilter?.((id, target, x, y) => {
+      const record = this.projectiles.getById(id);
+      return !target || !record || this.allowsWorldContact(record, target, x, y);
+    });
     this.physicsBinding.setMovementObserver?.((id, x, y, vx, vy) =>
       this.flightPaths.observe(id, x, y, vx, vy, this.hostNowMs()));
   }
@@ -501,7 +549,7 @@ export class WorldProjectileRuntime implements
     this.proximityPulseCallback = callback;
   }
 
-  setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string) => void) | null): void {
+  setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void {
     this.rockHitCallback = callback;
   }
 
@@ -589,6 +637,8 @@ export class WorldProjectileRuntime implements
     if (this.destroyed) return true;
     const projectile = this.projectiles.getById(contact.projectileId);
     if (!projectile || projectile.pendingDestroy || !this.projectiles.activeRecords.has(projectile)) return true;
+    if (!this.allowsWorldContact(projectile, contact.target, contact.flightPosition?.x ?? contact.x,
+      contact.flightPosition?.y ?? contact.y)) return true;
 
     const bounceEligible = this.shouldBounceAfterContact(projectile, contact.target);
     if (bounceEligible && contact.target.kind !== 'world-boundary'
@@ -607,6 +657,7 @@ export class WorldProjectileRuntime implements
         ? { x: contact.x, y: contact.y }
         : { x: projectile.physics.sprite.x, y: projectile.physics.sprite.y };
     if (bounceEligible) {
+      projectile.sourceCarrierBaseId = undefined;
       const multiplier = projectile.spec.flight.drag.bounceFrictionMultiplier;
       if (multiplier !== undefined && multiplier < 1) {
         projectile.physics.body.velocity.x *= multiplier;
@@ -643,6 +694,7 @@ export class WorldProjectileRuntime implements
         break;
       }
       case 'trunk':
+      case 'barrier':
         consumed = this.resolveTrunkPhysicsContact(projectile);
         break;
       case 'base': {
@@ -782,9 +834,14 @@ export class WorldProjectileRuntime implements
       projectile.lastX, projectile.lastY, projectile.physics.sprite.x, projectile.physics.sprite.y,
       projectile.spec.flight.collisionFilter.ignoreRockIndex,
       projectile.physics.body.width / 2, projectile.physics.body.height / 2, projectile.id,
-      !projectile.spec.flight.collisionFilter.ignoreBaseCollisions,
+      true, this.shotOptions(projectile),
     );
     if (!hit) return;
+    if (hit.kind === 'barrier') {
+      this.resolvePortalWorldContact(projectile, hit, this.hostFrameNowMs);
+      return;
+    }
+    projectile.sourceCarrierBaseId = undefined;
     const normalLength = Math.hypot(hit.normalX, hit.normalY) || 1;
     let nextVx = projectile.physics.body.velocity.x;
     let nextVy = projectile.physics.body.velocity.y;
@@ -1026,7 +1083,7 @@ export class WorldProjectileRuntime implements
       const multiplier = obstacleKind !== undefined && obstacleKind !== 'rock'
         ? 1
         : projectile.spec.interaction.directHit.rockDamageMult ?? 1;
-      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.provenance.attributionId);
+      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.provenance.attributionId, impact);
       return false;
     }
     if (hasLeafBlowerCapability(projectile.spec.interaction.impulse)) {
@@ -1040,7 +1097,7 @@ export class WorldProjectileRuntime implements
       const multiplier = obstacleKind !== undefined && obstacleKind !== 'rock'
         ? 1
         : projectile.spec.interaction.directHit.rockDamageMult ?? 1;
-      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.provenance.attributionId);
+      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.provenance.attributionId, impact);
     }
     return false;
   }
@@ -1337,7 +1394,6 @@ export class WorldProjectileRuntime implements
           damage: childDamage,
           color: projectile.presentation.color,
           allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
-          ignoreBaseCollisions: projectile.spec.flight.collisionFilter.ignoreBaseCollisions,
           ownerColor: projectile.presentation.ownerColor,
           lifetime: childLifetime,
           maxBounces: projectile.maxBounces,
@@ -1518,7 +1574,7 @@ export class WorldProjectileRuntime implements
             const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t;
             const distance = Math.hypot(x - from.x, y - from.y);
             const blocker = this.worldBlockerPort?.getNearestBlockerDistance(from.x, from.y, x, y,
-              detonator.spec.flight.penetration.penetratesRocks === true);
+              detonator.spec.flight.penetration.penetratesRocks === true, this.shotOptions(detonator));
             return blocker == null || blocker > distance;
           });
           if (!intersects) continue;
@@ -1738,13 +1794,13 @@ export class WorldProjectileRuntime implements
       if (!crossing) return true;
       const distance = Math.hypot(crossing.entry.x - from.x, crossing.entry.y - from.y);
       if (record.remainingRangePx !== undefined && distance >= record.remainingRangePx) return true;
-      const blocker = this.worldBlockerPort?.getNearestBlockerDistance(from.x, from.y,
-        crossing.entry.x, crossing.entry.y, record.spec.flight.penetration.penetratesRocks === true);
+      const blocker = shouldPassThroughWorldTarget(record) ? null : this.worldBlockerPort?.getNearestBlockerDistance(from.x, from.y,
+        crossing.entry.x, crossing.entry.y, record.spec.flight.penetration.penetratesRocks === true, this.shotOptions(record));
       if (blocker != null && blocker <= distance) return true;
-      if (!record.spec.flight.penetration.penetratesRocks && this.physicsBinding.findNearestRockSweep(
+      if (!shouldPassThroughWorldTarget(record) && !record.spec.flight.penetration.penetratesRocks && this.physicsBinding.findNearestRockSweep(
         from.x, from.y, crossing.entry.x, crossing.entry.y,
         record.spec.flight.collisionFilter.ignoreRockIndex, record.physics.body.halfWidth,
-        record.physics.body.halfHeight, record.id, !record.spec.flight.collisionFilter.ignoreBaseCollisions)) return true;
+        record.physics.body.halfHeight, record.id, true, this.shotOptions(record))) return true;
       return this.physicsBinding.findNearestPortalWorldSweep?.(from.x, from.y,
         crossing.entry.x, crossing.entry.y, record.physics.body.halfWidth, record.physics.body.halfHeight,
         shouldPassThroughWorldTarget(record)) != null;
@@ -1799,13 +1855,13 @@ export class WorldProjectileRuntime implements
         if (!crossing) break;
         const prefixLength = Math.hypot(crossing.entry.x - from.x, crossing.entry.y - from.y);
         if (record.remainingRangePx !== undefined && prefixLength >= record.remainingRangePx) break;
-        const blocker = this.worldBlockerPort?.getNearestBlockerDistance(from.x, from.y,
-          crossing.entry.x, crossing.entry.y, record.spec.flight.penetration.penetratesRocks === true);
+        const blocker = shouldPassThroughWorldTarget(record) ? null : this.worldBlockerPort?.getNearestBlockerDistance(from.x, from.y,
+          crossing.entry.x, crossing.entry.y, record.spec.flight.penetration.penetratesRocks === true, this.shotOptions(record));
         if (blocker != null && blocker <= prefixLength) break;
         if (this.shouldSweepRocks(record) && this.physicsBinding.findNearestRockSweep(from.x, from.y,
           crossing.entry.x, crossing.entry.y, record.spec.flight.collisionFilter.ignoreRockIndex,
           record.physics.body.halfWidth, record.physics.body.halfHeight, record.id,
-          !record.spec.flight.collisionFilter.ignoreBaseCollisions)) break;
+          true, this.shotOptions(record))) break;
         const velocity = { x: record.physics.body.velocity.x, y: record.physics.body.velocity.y };
         record.physics.body.reset(crossing.entry.x, crossing.entry.y);
         record.physics.body.setVelocity(velocity.x, velocity.y);
@@ -1846,6 +1902,7 @@ export class WorldProjectileRuntime implements
         gatePortalExit(gates, crossing);
         end = { x: crossing.exit.x + end.x - crossing.entry.x, y: crossing.exit.y + end.y - crossing.entry.y };
         from = crossing.exit;
+        record.sourceCarrierBaseId = undefined;
         record.lastX = from.x; record.lastY = from.y;
         record.physics.body.reset(end.x, end.y);
         record.physics.body.setVelocity(velocity.x, velocity.y);
@@ -1959,6 +2016,17 @@ export class WorldProjectileRuntime implements
       }
       this.runBarrierStage(nowMs);
       this.runDeflectionStage(nowMs);
+      // Mission gates have index geometry but no Arcade group. Non-swept direct shots
+      // receive the same physical contact before overlaps can hit a figure behind a gate.
+      for (const record of this.projectiles.activeRecords) {
+        if (record.pendingDestroy || record.bounceProcessedThisStep || this.shouldSweepRocks(record)
+          || shouldPassThroughWorldTarget(record)) continue;
+        const hit = this.physicsBinding.findNearestRockSweep(record.lastX, record.lastY,
+          record.physics.sprite.x, record.physics.sprite.y, undefined,
+          record.physics.body.width / 2, record.physics.body.height / 2, record.id, false,
+          { ...this.shotOptions(record), ignoreRocks: true });
+        if (hit?.kind === 'barrier') this.resolvePortalWorldContact(record, hit, nowMs);
+      }
       // Barrier/deflection may have consumed the last projectile. Do not enter the collision
       // target provider in that empty stage; same-stage projectile additions still use the live
       // active Set when at least one record remains.
@@ -2076,8 +2144,8 @@ export class WorldProjectileRuntime implements
       const contact = port.getNearestContact?.(request, record.lastX, record.lastY);
       if (port.getNearestContact && !contact) continue;
       if (contact) {
-        const blocker = this.worldBlockerPort?.getNearestBlockerDistance(record.lastX, record.lastY,
-          contact.x, contact.y, record.spec.flight.penetration.penetratesRocks === true);
+        const blocker = shouldPassThroughWorldTarget(record) ? null : this.worldBlockerPort?.getNearestBlockerDistance(record.lastX, record.lastY,
+          contact.x, contact.y, record.spec.flight.penetration.penetratesRocks === true, this.shotOptions(record));
         if (blocker != null && blocker <= contact.distance) continue;
         record.physics.body.reset(contact.x, contact.y);
         record.physics.body.setVelocity(request.velocityX, request.velocityY);
@@ -2257,6 +2325,7 @@ export class WorldProjectileRuntime implements
     record.presentation = { ...record.presentation, color: options.color, ownerColor: options.ownerColor };
     this.flightContactPoints.delete(record.id);
     record.physics.body.reset(options.x, options.y);
+    record.sourceCarrierBaseId = undefined;
     record.lastX = options.x;
     record.lastY = options.y;
     record.physics.body.setVelocity(Math.cos(options.angle) * options.speed, Math.sin(options.angle) * options.speed);
@@ -2286,6 +2355,7 @@ export class WorldProjectileRuntime implements
   private createHomingRequest(projectile: ProjectileRuntimeRecord): ProjectileHomingRequest {
     const runtime = this;
     return projectile.interaction.guidance ??= {
+      get shotOptions() { return runtime.shotOptions(projectile); },
       get ownerId() { return projectile.provenance.allegiance.ownerId; },
       homing: projectile.spec.flight.homing!,
       isTargetClaimed: projectile.spec.flight.homingExcludedCircle?.bubbleId === undefined ? undefined : (id, type) => {
@@ -2433,6 +2503,7 @@ export class WorldProjectileRuntime implements
     this.proximityPulseCallback = null;
     this.rockHitCallback = null;
     this.obstacleKindResolver = null;
+    this.lowSupportTargetChecker = null;
     this.baseHitCallback = null;
     this.supportImpactCallback = null;
     this.projectileReplicationAdapter?.reset();
@@ -2480,7 +2551,8 @@ export class WorldProjectileRuntime implements
     const resolvedSpawn = cfg.gameplayMuzzleOrigin
       ? resolveSafeMuzzleSpawn(
         x, y, cfg.gameplayMuzzleOrigin, angle, cfg,
-        this.physicsBinding.getSafeMuzzleGeometry(), bodyProfile,
+        { ...this.physicsBinding.getSafeMuzzleGeometry(),
+          acceptsLowTarget: id => this.lowSupportTargetChecker?.(id, provenance.allegiance.ownerId) ?? true }, bodyProfile,
       )
       : { x, y };
     const timeFactor = clampProjectileTimeFactor(this.projectileTimeFieldPort?.getMovementFactor(
@@ -2499,6 +2571,9 @@ export class WorldProjectileRuntime implements
     });
     const record: ProjectileRuntimeRecord = {
       id,
+      sourceCarrierBaseId: cfg.sourceCarrierBaseId && (this.physicsBinding.getObstacleGeometry?.()?.carrierExitFraction(
+        x, y, resolvedSpawn.x, resolvedSpawn.y, cfg.sourceCarrierBaseId, bodyProfile.width / 2, bodyProfile.height / 2) ?? -1) >= 1
+        ? cfg.sourceCarrierBaseId : undefined,
       grenadeLastDirection: cfg.isGrenade ? angle : undefined,
       lastX: resolvedSpawn.x,
       lastY: resolvedSpawn.y,
@@ -2539,7 +2614,7 @@ export class WorldProjectileRuntime implements
           isFlame: cfg.isFlame,
           isBfg: cfg.isBfg,
           collisionFilter: {
-            ignoreBaseCollisions: cfg.ignoreBaseCollisions,
+            sourceCarrierBaseId: cfg.sourceCarrierBaseId,
             ignoreRockIndex: cfg.ignoreRockIndex,
             excludedTarget: cfg.excludedTarget,
             initialTargetProtection: cfg.initialTargetProtection
@@ -2773,7 +2848,7 @@ function resolvePhysicsMechanics(cfg: ProjectileSpawnConfig): ProjectilePhysicsM
     rock: !usesRockSweep({ ...cfg, collisionMode: resolveProjectileCollisionMode(cfg),
       penetration: { penetratesRocks: cfg.penetratesRocks } }),
     trunk: !passThrough,
-    base: !passThrough && !cfg.ignoreBaseCollisions
+    base: !passThrough
       && !usesRockSweep({ ...cfg, collisionMode: resolveProjectileCollisionMode(cfg),
         penetration: { penetratesRocks: cfg.penetratesRocks } }),
     train: true,
@@ -2797,7 +2872,9 @@ function hasGaussDischarge(
 }
 
 function shouldPassThroughWorldTarget(projectile: ProjectileRuntimeRecord): boolean {
-  return projectile.spec.flight.isBfg === true || hasGaussDischarge(projectile.spec.interaction.directHit);
+  return projectile.spec.flight.isBfg === true || hasGaussDischarge(projectile.spec.interaction.directHit)
+    || (projectile.spec.flight.collisionMode === 'overlap' && projectile.spec.flight.piercesTargets === true
+      && !projectile.spec.flight.isFlame && !hasLeafBlowerCapability(projectile.spec.interaction.impulse));
 }
 
 function createTravelPathEffect(record: ProjectileRuntimeRecord): ProjectileTravelCapabilities['pathEffect'] {

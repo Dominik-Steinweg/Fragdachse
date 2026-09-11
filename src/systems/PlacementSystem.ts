@@ -149,6 +149,19 @@ export class PlacementSystem {
     return this.runtimeRocks.get(id);
   }
 
+  /** Host-only mounting relation, established by the Base-Site materializer. */
+  private readonly carrierBases = new Map<number, string>();
+
+  bindCarrierBase(id: number, baseId: string): void {
+    const rock = this.runtimeRocks.get(id);
+    if (!rock || rock.kind !== 'turret' || !rock.persistentRewardId || !baseId) {
+      throw new Error('A carrier requires a materialized roof turret and a Base-Site');
+    }
+    this.carrierBases.set(id, baseId);
+  }
+
+  getCarrierBaseId(id: number): string | undefined { return this.carrierBases.get(id); }
+
   getRuntimeRockAt(gridX: number, gridY: number): SyncedPlaceableRock | undefined {
     const id = this.rockGrid.getIndex(gridX, gridY);
     return id >= 0 ? this.runtimeRocks.get(id) : undefined;
@@ -187,6 +200,7 @@ export class PlacementSystem {
       if (rock.expiresAt <= 0) continue;
       if (now < rock.expiresAt) continue;
       this.runtimeRocks.delete(rock.id);
+      this.carrierBases.delete(rock.id);
       this.rockGrid.remove(rock.gridX, rock.gridY);
       expired.push({ ...rock });
     }
@@ -194,6 +208,7 @@ export class PlacementSystem {
   }
 
   removeRock(id: number): SyncedPlaceableRock | undefined {
+    this.carrierBases.delete(id);
     const rock = this.runtimeRocks.get(id);
     if (!rock) return undefined;
     this.runtimeRocks.delete(id);
@@ -780,6 +795,7 @@ export class PlacementSystem {
     for (const [id, existing] of this.runtimeRocks) {
       if (next.has(id)) continue;
       this.runtimeRocks.delete(id);
+      this.carrierBases.delete(id);
       this.rockGrid.remove(existing.gridX, existing.gridY);
       removed.push({ ...existing });
     }

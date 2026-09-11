@@ -43,6 +43,7 @@ export class WorldWeaponExecutionRuntime implements WorldScopedBinding, WeaponEx
         const shooterY = request.shooterY ?? request.startY;
         const resolvedStart = combatSystem.resolveSafeHitscanStart(
           shooterX, shooterY, request.startX, request.startY,
+          { sourceCarrierBaseId: request.sourceCarrierBaseId, purpose: request.supportEffect ? 'support' : 'directFire' },
         );
         const resolvedRange = getHitscanRequestRange(request, resolvedStart.x, resolvedStart.y, request.angle);
         const normalizedRequest = { ...request, startX: resolvedStart.x, startY: resolvedStart.y, range: resolvedRange };

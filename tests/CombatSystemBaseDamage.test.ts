@@ -852,12 +852,47 @@ describe('CombatSystem melee query target set', () => {
 });
 
 describe('Plasmabrenner hitscan support impact', () => {
+  it('preserves the explicit character team-damage rule when an explosion retains its source', () => {
+    const { combat } = makeSupportCombatHarness();
+    const source = combat.captureWorldDamageSource('shooter', 'grenade', 'explosion');
+    const before = combat.getHP('ally');
+    combat.applyAoeDamage(100, 0, 10, 10, 'shooter', false, { category: 'explosion', allowTeamDamage: false, source });
+    expect(combat.getHP('ally')).toBe(before);
+    combat.applyAoeDamage(100, 0, 10, 10, 'shooter', false, { category: 'explosion', allowTeamDamage: true, source });
+    expect(combat.getHP('ally')).toBeLessThan(before);
+    expect(combat.canDamageStructure(source, 'ally')).toBe(false);
+  });
+
   const effect: HitscanSupportEffect = {
     type: 'plasma_burner',
     healPerHit: 25,
     damagePerHit: 25,
     beamColor: 0x5cf58f,
   };
+
+  it('ends each support beam at the first low target even when fully repaired, while offensive hitscan passes it', () => {
+    const { combat } = makeCombatHarness();
+    const walls = [120, 180].map(x => ({ active: true, obstacleClass: 'low',
+      getBounds: () => new Phaser.Geom.Rectangle(x, -10, 20, 20) }));
+    combat.setArenaObstacles(walls as never, []);
+    combat.setBaseObstacles([{ active: true, getData: () => 'hostile-base',
+      getBounds: () => new Phaser.Geom.Rectangle(250, -10, 20, 20) }] as never);
+    const callback = vi.fn(); // Full HP: support applies no repair, but still consumes the beam.
+    combat.setHitscanSupportImpactCallback(callback);
+    resolveHitscan(combat, 'player-1', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
+      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect);
+    expect(callback).toHaveBeenCalledOnce();
+    expect(callback.mock.calls[0][0]).toMatchObject({ targetType: 'rock', targetId: '0', x: 120 });
+    expect(combat.traceHitscan({ shooterId: 'player-1', startX: 0, startY: 0, angle: 0, range: 420, traceThickness: 5 }))
+      .toMatchObject({ hitObstacleKind: 'base', hitBaseId: 'hostile-base', endX: 250 });
+    combat.setBaseObstacles([{ active: true, getData: () => 'hostile-base',
+      getBounds: () => new Phaser.Geom.Rectangle(60, -10, 20, 20) }] as never);
+    callback.mockClear();
+    resolveHitscan(combat, 'player-1', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
+      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect);
+    expect(callback).toHaveBeenCalledOnce();
+    expect(callback.mock.calls[0][0]).toMatchObject({ targetType: 'base', targetId: 'hostile-base', x: 60 });
+  });
 
   it('does not rewind the shooter into its own support trace while moving backwards', () => {
     const shooter = fakeEntity({ id: 'shooter',

@@ -112,6 +112,7 @@ export interface ProjectileWorldBlockerPort {
     endX: number,
     endY: number,
     ignoreRocks: boolean,
+    options?: import('../systems/ObstacleRules').ObstacleShotOptions,
   ): number | null;
 }
 
@@ -161,6 +162,7 @@ export interface ProjectileImpactCandidate {
 export type ProjectilePhysicsContactTarget =
   | { readonly kind: 'rock'; readonly id: number }
   | { readonly kind: 'trunk' }
+  | { readonly kind: 'barrier' }
   | { readonly kind: 'base'; readonly id: string }
   | { readonly kind: 'train'; readonly id: 'main' }
   | { readonly kind: 'world-boundary' };

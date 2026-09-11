@@ -284,6 +284,8 @@ export function composeWorldObjectMutation(
     },
   });
   const runtime = new WorldObjectMutationRuntime({
+    captureSource: (actorId, sourceId, origin) => combatSystem.captureWorldDamageSource(actorId, sourceId, origin),
+    canDamageStructure: (source, ownerId, faction) => combatSystem.canDamageStructure(source, ownerId, faction),
     scope: combatSystem.getCombatScope(),
     metrics: world.metrics,
     rockRegistry,

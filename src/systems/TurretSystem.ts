@@ -16,7 +16,7 @@ type LineOfFireChecker = (
   ex: number,
   ey: number,
   skipRockIndex?: number,
-  ignoreBaseObstacles?: boolean,
+  sourceCarrierBaseId?: string,
 ) => boolean;
 export type AutomatedTurretId = number | string;
 export type AutomatedTurretTargetMode = 'players' | 'enemies';
@@ -29,8 +29,8 @@ export interface AutomatedTurret extends TurretAimConfig {
   readonly ownerColor: number;
   readonly weaponId?: keyof typeof WEAPON_CONFIGS;
   readonly skipRockIndex?: number;
-  /** Basistürme stehen auf ihrer Basis und ignorieren deren Sichtlinien-Hindernisse. */
-  readonly ignoreBaseObstacles?: boolean;
+  /** Nur der konkrete Träger ist bis zum ersten vollständigen Austritt freigegeben. */
+  readonly sourceCarrierBaseId?: string;
   readonly secondProjectileDamageFactor?: number;
   /** Beim Platzieren eingefrorene Zielreichweite; fehlt bei Basis-Turrets (dann gilt die Config). */
   readonly targetRange?: number;
@@ -67,6 +67,7 @@ type TurretFireHandler = (
   rangeFactor?: number,
   sourceTurretId?: AutomatedTurretId,
   skipRockIndex?: number,
+  sourceCarrierBaseId?: string,
 ) => void;
 
 export class TurretSystem {
@@ -184,6 +185,8 @@ export class TurretSystem {
         );
         const burstAngle = this.updateAim(turret, desiredAngle, deltaMs);
         if (now < pendingBurst.nextShotAt || !this.fireHandler) continue;
+        if (turret.rotationSpeedDegPerSec === undefined
+          && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset)) continue;
         if (!this.canFireAtAngle(turret, burstAngle, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset)) continue;
         const muzzleX = turretX + Math.cos(burstAngle) * muzzleOffset;
         const muzzleY = turretY + Math.sin(burstAngle) * muzzleOffset;
@@ -200,6 +203,7 @@ export class TurretSystem {
           pendingBurst.rangeFactor,
           turret.id,
           turret.skipRockIndex,
+          turret.sourceCarrierBaseId,
         );
         pendingBurst.shotsRemaining -= 1;
         if (pendingBurst.shotsRemaining > 0) {
@@ -247,6 +251,7 @@ export class TurretSystem {
         rangeFactor,
         turret.id,
         turret.skipRockIndex,
+        turret.sourceCarrierBaseId,
       );
       const burstCount = turretWeaponConfig.turretBurst
         ? Math.max(1, Math.floor(turretWeaponConfig.turretBurst.count))
@@ -290,6 +295,7 @@ export class TurretSystem {
             rangeFactor,
             turret.id,
             turret.skipRockIndex,
+            turret.sourceCarrierBaseId,
           );
         }
       }
@@ -322,7 +328,7 @@ export class TurretSystem {
     return this.lineOfFireChecker(
       turret.x + dx * muzzleOffset, turret.y + dy * muzzleOffset,
       turret.x + dx * distance, turret.y + dy * distance,
-      turret.skipRockIndex, turret.ignoreBaseObstacles,
+      turret.skipRockIndex, turret.sourceCarrierBaseId,
     );
   }
 
@@ -411,7 +417,7 @@ export class TurretSystem {
       targetX,
       targetY,
       turret.skipRockIndex,
-      turret.ignoreBaseObstacles,
+      turret.sourceCarrierBaseId,
     );
   }
 }

@@ -144,6 +144,139 @@ function rock(x: number): RockPhysicsProxy {
 }
 
 describe('technical Phaser boundary with the authoritative runtime', () => {
+  it('hits a figure behind several low walls without spending penetration on the walls', () => {
+    const { binding, runtime, doubles } = fixture();
+    const walls = [20, 40, 60].map(x => Object.assign(rock(x), { obstacleClass: 'low' as const }));
+    binding.setRockGroup(null, walls, null);
+    binding.setObstacleIndex(new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 200 }),
+      rocks: () => walls, trunks: () => null, bases: () => null }));
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      for (let i = 0; i < 3; i++) sink('rock', i, 'owner', 25 + 20 * i, 0, 10, 20 + 20 * i, -10, 30 + 20 * i, 10, 'rock');
+      for (const x of [90, 130]) sink('enemy', String(x), 'hostile', x, 0, 5, x - 5, -5, x + 5, 5);
+    } });
+    const hit = vi.fn(() => ({ accepted: true }));
+    runtime.setProjectileCombatPort({ resolveDirectImpact: hit } as never);
+    const spawn = request(); runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight, penetration: { count: 1 } } });
+    doubles.handles.get(0)!.sprite.x = 160;
+    runtime.runHostInteractionStage(16); runtime.runHostProjectileStage(16, 16);
+    expect(hit.mock.calls.map(call => (call[0] as { target: { id: string } }).target.id)).toEqual(['90', '130']);
+    expect(runtime.activeCount).toBe(0);
+    runtime.destroy();
+  });
+
+  it.each(['sweep', 'physics', 'overlap'] as const)('blocks standard %s fire at a closed mission gate and releases an open gate', mode => {
+    for (const active of [true, false]) {
+      const { binding, runtime, doubles } = fixture();
+      const gate = { active, getBounds: () => new Phaser.Geom.Rectangle(50, -20, 10, 40) };
+      binding.setObstacleIndex(new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 200 }),
+        rocks: () => null, trunks: () => null, bases: () => null, barriers: () => [gate] }));
+      const spawn = request(); runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight, collisionMode: mode } });
+      const handle = doubles.handles.get(0)!; handle.sprite.x = 80;
+      runtime.runHostInteractionStage(16); runtime.runHostProjectileStage(16, 16);
+      expect(handle.body.velocity.x > 0).toBe(!active);
+      runtime.destroy();
+    }
+  });
+
+  it.each(['portal', 'redirect'] as const)('revokes an active carrier exemption on %s', transfer => {
+    const { binding, runtime, doubles, scene } = fixture();
+    scene.physics.world.bounds.setTo(-100, -100, 1000, 500);
+    const cells = [{ active: true, getData: () => 'carrier', getBounds: () => new Phaser.Geom.Rectangle(0, 0, 300, 32) }];
+    binding.setBaseGroup({ getChildren: () => cells } as never);
+    binding.setObstacleIndex(new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 500 }),
+      rocks: () => null, trunks: () => null, bases: () => cells }));
+    const hit = vi.fn(); runtime.setBaseHitCallback(hit);
+    const spawn = request(); runtime.spawnProjectile({ ...spawn, origin: { x: 16, y: 16, angle: 0 },
+      flight: { ...spawn.flight, collisionFilter: { sourceCarrierBaseId: 'carrier' } } });
+    const handle = doubles.handles.get(0)!;
+    if (transfer === 'portal') {
+      runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'pair', ownerId: 'owner', a: { x: 60, y: 16 }, b: { x: 200, y: 16 },
+        radius: 8, reentryDistance: 20, damageBonus: 0, createdAt: 0, expiresAt: 2000 }], isPortalFriendly: () => true });
+      handle.sprite.x = 100; runtime.runHostPortalStage(16);
+    } else {
+      runtime.focusProjectilesInCircle({ x: 16, y: 16, radius: 30, targetX: 100, targetY: 16, ownerId: 'other', ownerColor: 0xffffff, nowMs: 0 });
+      handle.sprite.x = 70;
+    }
+    runtime.runHostInteractionStage(16); runtime.runHostProjectileStage(16, 16);
+    expect(hit).toHaveBeenCalledOnce();
+    expect(hit.mock.calls[0][0]).toBe('carrier');
+    runtime.destroy();
+  });
+
+  it.each(['sweep', 'physics', 'bfg', 'gauss', 'piercing'] as const)('passes low walls without contact or hit consumption (%s)', mode => {
+    const { binding, runtime, doubles, contacts } = fixture();
+    const walls = [20, 40, 60].map(x => Object.assign(rock(x), { obstacleClass: 'low' as const }));
+    binding.setRockGroup({ getChildren: () => walls } as never, walls, null);
+    binding.setObstacleIndex(new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 200 }),
+      rocks: () => walls, trunks: () => null, bases: () => null }));
+    const damage = vi.fn(); runtime.setRockHitCallback(damage);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight,
+      collisionMode: mode === 'sweep' ? 'sweep' : mode === 'physics' ? 'physics' : 'overlap',
+      isBfg: mode === 'bfg', piercesTargets: mode === 'gauss',
+      penetration: mode === 'piercing' ? { penetratesRocks: true, count: 2 } : undefined } });
+    const handle = doubles.handles.get(0)!;
+    handle.sprite.x = 80;
+    for (const contact of contacts) for (const wall of walls) expect(contact.process?.(handle.sprite, wall)).toBe(false);
+    runtime.runHostInteractionStage(16); runtime.runHostProjectileStage(16, 16);
+    expect(damage).not.toHaveBeenCalled();
+    expect(runtime.activeCount).toBe(1);
+    expect(handle.body.velocity.x).toBe(100);
+    runtime.readProjectileReplication(record => expect(record.dynamic.bounce).toBeUndefined());
+    runtime.destroy();
+  });
+
+  it.each([false, true])('ends carrier permission at a complete exit, including a same-frame niche (niche: %s)', niche => {
+    const { binding, runtime, doubles } = fixture();
+    const cells = (niche ? [0, 64] : [0, 32]).map(x => ({ active: true, getData: () => 'carrier',
+      getBounds: () => new Phaser.Geom.Rectangle(x, 0, 32, 32) }));
+    binding.setBaseGroup({ getChildren: () => cells } as never);
+    binding.setObstacleIndex(new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 300 }),
+      rocks: () => null, trunks: () => null, bases: () => cells as never }));
+    const hit = vi.fn(); runtime.setBaseHitCallback(hit);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, origin: { x: 16, y: 16, angle: 0 },
+      flight: { ...spawn.flight, collisionFilter: { sourceCarrierBaseId: 'carrier' } } });
+    const handle = doubles.handles.get(0)!;
+    handle.sprite.x = niche ? 80 : 90;
+    runtime.runHostInteractionStage(16); runtime.runHostProjectileStage(16, 16);
+    if (!niche) {
+      expect(hit).not.toHaveBeenCalled();
+      handle.body.setVelocity(-100, 0); handle.sprite.x = 40;
+      runtime.runHostInteractionStage(32); runtime.runHostProjectileStage(16, 32);
+    }
+    expect(hit).toHaveBeenCalledOnce();
+    expect(hit.mock.calls[0][0]).toBe('carrier');
+    runtime.destroy();
+  });
+
+  it('delivers one injector support contact to the first eligible low target', () => {
+    const { binding, runtime, doubles } = fixture();
+    const walls = [20, 40, 60].map(x => Object.assign(rock(x), { obstacleClass: 'low' as const }));
+    binding.setRockGroup(null, walls, null);
+    runtime.setLowSupportTargetChecker(id => id !== 0);
+    runtime.setObstacleKindResolver(() => 'turret');
+    binding.setObstacleIndex(new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 200 }),
+      rocks: () => walls, trunks: () => null, bases: () => null }));
+    runtime.setProjectileWorldBlockerPort({ getNearestBlockerDistance: (sx, sy, ex, ey, _ignore, options) =>
+      binding.getObstacleGeometry()!.nearestObstacleHit(new Phaser.Geom.Line(sx, sy, ex, ey), options)?.distance ?? null });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+      sink('enemy', 'behind', 'hostile', 80, 0, 5, 75, -5, 85, 5) });
+    const figureHit = vi.fn(() => ({ accepted: true }));
+    runtime.setProjectileCombatPort({ resolveDirectImpact: figureHit } as never);
+    const support = vi.fn(); runtime.setSupportImpactCallback(support);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, interaction: { ...spawn.interaction,
+      support: { energyInjector: { damageMultiplier: 1.2, durationMs: 1000 } as never } } });
+    doubles.handles.get(0)!.sprite.x = 80;
+    runtime.runHostInteractionStage(16); runtime.runHostProjectileStage(16, 16);
+    expect(support).toHaveBeenCalledOnce();
+    expect(support.mock.calls[0][1]).toMatchObject({ kind: 'rock', rockId: 1 });
+    expect(figureHit).not.toHaveBeenCalled();
+    expect(runtime.activeCount).toBe(0);
+    runtime.destroy();
+  });
+
   it('defers Arcade contacts behind an earlier portal and resolves the physical exit remainder', () => {
     const { binding, runtime, doubles, contacts, scene } = fixture();
     scene.physics.world.bounds.setTo(-100, -100, 1100, 200);
@@ -364,7 +497,7 @@ describe('technical Phaser boundary with the authoritative runtime', () => {
     }
   });
 
-  it('keeps a real opening between base cells passable and preserves base collision opt-out', () => {
+  it('keeps a real opening between base cells passable but blocks an unrelated carrier reference', () => {
     const { runtime, binding, doubles, contacts } = fixture();
     const cells = [100, 164].map(y => ({ active: true, getData: () => 'main',
       getBounds: () => new Phaser.Geom.Rectangle(100, y, 32, 32) }));
@@ -373,13 +506,13 @@ describe('technical Phaser boundary with the authoritative runtime', () => {
     const hit = vi.fn(); runtime.setBaseHitCallback(hit);
     const spawn = request();
     runtime.spawnProjectile({ ...spawn, origin: { x: 160, y: 116, angle: Math.PI },
-      flight: { ...spawn.flight, collisionFilter: { ignoreBaseCollisions: true } } });
+      flight: { ...spawn.flight, collisionFilter: { sourceCarrierBaseId: 'carrier' } } });
     expect(contacts).toHaveLength(0);
     doubles.handles.get(0)!.sprite.x = 80;
     runtime.runHostInteractionStage(16);
     runtime.runHostProjectileStage(16, 16);
-    expect(hit).not.toHaveBeenCalled();
-    expect(doubles.handles.get(0)!.body.velocity.x).toBeLessThan(0);
+    expect(hit).toHaveBeenCalledOnce();
+    expect(doubles.handles.get(0)!.body.velocity.x).toBeGreaterThan(0);
     runtime.destroy();
   });
 

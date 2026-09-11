@@ -22,6 +22,7 @@ const FLOW_DIRECTIONS: readonly (readonly [number, number])[] = [
 ];
 
 export interface FireDamageEvent {
+  combatSource?: import('../combat/CombatScope').CombatSource;
   sourceKey: string;
   x: number;
   y: number;
@@ -71,6 +72,7 @@ export interface WildfireSourceInfo {
 }
 
 export interface GroundFireCellOptions {
+  combatSource?: import('../combat/CombatScope').CombatSource;
   firewalker?: MolotovFirewalkerEffect;
   /** Stabiler logischer Schluessel; pro Rasterzelle wird daraus eine auffrischbare Quelle. */
   sourceKey: string;
@@ -91,6 +93,7 @@ export interface GroundFireCellOptions {
 }
 
 interface ActiveGroundSource {
+  combatSource?: import('../combat/CombatScope').CombatSource;
   firewalker?: MolotovFirewalkerEffect;
   id: number;
   key: string;
@@ -198,7 +201,14 @@ export class FireSystem {
   }
 
   /** Legt eine neue, eigenstaendig stapelnde Kreisquelle in das gemeinsame Raster. */
-  hostCreateZone(x: number, y: number, config: FireGrenadeEffect, ownerId: string): void {
+  private combatSourceResolver: ((ownerId: string, sourceId: string, provenance?: import('../projectile/ProjectileSpawnRequest').ProjectileProvenance) => import('../combat/CombatScope').CombatSource | undefined) | null = null;
+  setCombatSourceResolver(resolver: typeof this.combatSourceResolver): void { this.combatSourceResolver = resolver; }
+  captureCombatSource(ownerId: string, sourceId: string, provenance?: import('../projectile/ProjectileSpawnRequest').ProjectileProvenance) {
+    return this.combatSourceResolver?.(ownerId, sourceId, provenance);
+  }
+
+  hostCreateZone(x: number, y: number, config: FireGrenadeEffect, ownerId: string,
+    combatSource?: import('../combat/CombatScope').CombatSource): void {
     const durationMs = Math.max(0, config.lingerDuration);
     const radius = Math.max(0, config.radius);
     if (durationMs <= 0 || radius <= 0) return;
@@ -208,6 +218,7 @@ export class FireSystem {
     const id = this.nextSourceId++;
     const key = `zone:${id}`;
     const source: ActiveGroundSource = {
+      combatSource: combatSource ?? this.combatSourceResolver?.(ownerId, config.sourceId ?? 'ground_fire.molotov'),
       id,
       key,
       ownerId,
@@ -274,6 +285,7 @@ export class FireSystem {
 
     if (!source) {
       source = {
+        combatSource: options.combatSource ?? this.combatSourceResolver?.(options.ownerId, options.sourceId ?? 'ground_fire.player_fire'),
         id: this.nextSourceId++,
         key,
         ownerId: options.ownerId,
@@ -468,6 +480,7 @@ export class FireSystem {
           y: source.y,
           radius: source.radius,
           damage: source.damagePerTick,
+          combatSource: source.combatSource,
           ownerId: source.ownerId,
           rockDamageMult: source.rockDamageMult,
           trainDamageMult: source.trainDamageMult,

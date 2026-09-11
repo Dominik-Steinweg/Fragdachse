@@ -3,6 +3,7 @@ import type { BlobSurfaceCornerTints } from '../BlobSurfaceShading';
 
 /** Rendererunabhaengige Darstellungswahrheit eines einzelnen Felsens. */
 export interface RockVisualState {
+  material?: 'rocks' | 'walls';
   readonly id: number;
   readonly gridX: number;
   readonly gridY: number;

@@ -187,6 +187,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     private readonly localPlayerState: LocalPlayerState,
     private readonly rockVisualHelper: RockVisualHelper,
   ) {
+    this.ctx.fireSystem?.setCombatSourceResolver?.((ownerId, sourceId, provenance) =>
+      this.ctx.getWorldCombatCore()?.captureWorldDamageSource(ownerId, sourceId, 'ground', provenance));
+    this.ctx.stinkCloudSystem?.setCombatSourceResolver?.(ownerId =>
+      this.ctx.getWorldCombatCore()?.captureWorldDamageSource(ownerId, 'weapon.stink_cloud', 'ground'));
     this.blackHoleSystem = new BlackHoleSystem(
       () => this.enemyManager,
       this.ctx.hostPhysics,
@@ -581,11 +585,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     for (const ev of fireDamageEvents) {
       this.ctx.getWorldCombatCore()!.applyRadialHostileBaseDamage(
-        ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, undefined, undefined, ev.baseDamageMult,
+        ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, undefined, undefined, ev.baseDamageMult, undefined, ev.combatSource,
       );
       this.applyAoeEnvironmentDamage(
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
+        undefined, undefined, ev.combatSource,
       );
     }
 
@@ -596,10 +601,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         sourceId: 'weapon.stink_cloud',
         sourceSlot: 'utility',
         baseDamageMult: ev.baseDamageMult,
+        source: ev.combatSource,
       });
       this.applyAoeEnvironmentDamage(
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
+        undefined, undefined, ev.combatSource,
       );
     }
 
@@ -1251,6 +1258,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     rockMult: number, trainMult: number, attackerId: string,
     damageFalloff?: RadialDamageFalloffConfig,
     source?: { slot: LoadoutSlot; id: string },
+    combatSource?: import('../../combat/CombatScope').CombatSource,
   ): void {
     const arenaResult = this.arenaResult;
 
@@ -1272,13 +1280,13 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           },
           resolveRockDamage: (index, amount, owner) => this.resolveObstacleDamage(index, amount, owner, source.slot),
           applyRockDamage: (index, amount, owner) => {
-            const outcome = this.worldMutation?.applyResolvedDamage('rock', index, amount, owner, source.id, 'explosion');
+            const outcome = this.worldMutation?.applyResolvedDamage('rock', index, amount, owner, source.id, 'explosion', source.slot, combatSource);
             if (!outcome || outcome.kind === 'rejected' || outcome.resultingState.kind !== 'integrity') return null;
             return { actualDamage: outcome.kind === 'damage-applied' ? outcome.actualDamage : 0,
               remainingIntegrity: outcome.resultingState.integrity,
               becameDestroyed: outcome.kind === 'damage-applied' && outcome.transition.kind === 'destroyed' };
           },
-        } : this.environmentRockSink,
+        } : this.environmentRockSinkFor(combatSource),
         { x, y, radius, damage, rockDamageMult: rockMult, falloff: damageFalloff },
         attackerId,
         false,
@@ -1417,15 +1425,16 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.ctx.hostPhysics.applyRadialImpulse(
         request.x, request.y, effect.radius, effect.knockback, ownerId, effect.selfKnockbackMult ?? 1,
       );
-      this.applyExplosionEnvironmentDamage(request.x, request.y, effect, ownerId);
+      const combatSource = this.ctx.getWorldCombatCore()!.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'projectile.explosion', 'explosion', request.provenance, request.projectileId);
+      this.applyExplosionEnvironmentDamage(request.x, request.y, effect, ownerId, combatSource);
       bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, effect.color, effect.visualStyle);
       const groundFire = effect.groundFire;
       if (groundFire && groundFire.radius > 0 && groundFire.lingerDuration > 0) {
-        this.ctx.fireSystem.hostCreateZone(request.x, request.y, groundFire, ownerId);
+        this.ctx.fireSystem.hostCreateZone(request.x, request.y, groundFire, ownerId, combatSource);
       }
       if (effect.fireChunkBurst) {
         this.playerGameplayRuntime?.hostCreateFireChunkBurst(
-          ownerId, request.x, request.y, effect.fireChunkBurst, `fireball-impact:${ownerId}`, this.hostFrameNowMs,
+          ownerId, request.x, request.y, effect.fireChunkBurst, `fireball-impact:${ownerId}`, this.hostFrameNowMs, combatSource,
         );
       }
       if ((effect.blackHoleDurationMs ?? 0) > 0) {
@@ -1472,6 +1481,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         category: 'explosion',
         allowTeamDamage: effect.allowTeamDamage,
         sourceId: request.provenance.weaponSourceId ?? 'weapon.grenade',
+        source: combat.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'weapon.grenade', 'explosion', request.provenance, request.projectileId),
         sourceSlot: request.provenance.sourceSlot ?? 'utility',
         damageFalloff: effect.damageFalloff,
         baseDamageMult: effect.baseDamageMult,
@@ -1482,6 +1492,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         effect.rockDamageMult ?? 1, effect.trainDamageMult ?? 1, ownerId,
         effect.damageFalloff ? { ...effect.damageFalloff, minDamage: effect.damageFalloff.minDamage * environmentMultiplier } : undefined,
         { slot: sourceSlot, id: request.provenance.weaponSourceId ?? 'weapon.grenade' },
+        combat.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'weapon.grenade', 'explosion', request.provenance, request.projectileId),
       );
       if (this.worldRuntime !== world || this.ctx.getWorldCombatCore() !== combat) return;
       bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, undefined, effect.visualStyle);
@@ -1490,7 +1501,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (effect.type === 'spawn_enemy') {
       this.spawnEnemiesFromGrenade(request.x, request.y, effect, ownerId);
     } else if (effect.type === 'fire') {
-      this.ctx.fireSystem.hostCreateZone(request.x, request.y, effect, ownerId);
+      this.ctx.fireSystem.hostCreateZone(request.x, request.y, effect, ownerId,
+        this.ctx.getWorldCombatCore()!.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'weapon.grenade', 'ground', request.provenance, request.projectileId));
     } else if (effect.type === 'time_bubble') {
       if (request.provenance.sourceSlot === 'utility' && request.provenance.weaponSourceId === 'TIME_BUBBLE') {
         this.playerGameplayRuntime?.getPlayerCombatIntegrationPort().utility.createTimeBubbleFromGrenade?.(request, this.hostFrameNowMs);
@@ -1504,6 +1516,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     x: number, y: number,
     effect: import('../../types').ProjectileExplosionConfig,
     attackerId: string,
+    source?: import('../../combat/CombatScope').CombatSource,
   ): void {
     const arenaResult = this.arenaResult;
     const rockMult  = effect.rockDamageMult  ?? 1;
@@ -1511,7 +1524,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     if (rockMult !== 0 && arenaResult) {
       applyRadialEnvironmentDamage(
-        this.environmentRockSink,
+        this.environmentRockSinkFor(source),
         {
           x,
           y,
@@ -1676,7 +1689,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       if (!this.ctx.getWorldCombatCore()!.canDamageTarget(proj.ownerId, enemy.id)) continue;
       if (Phaser.Math.Distance.Squared(originX, originY, enemy.sprite.x, enemy.sprite.y) > radiusSquared) continue;
-      if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, enemy.sprite.x, enemy.sprite.y)) continue;
+      if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, enemy.sprite.x, enemy.sprite.y, undefined, undefined, 0, 'directFire')) continue;
 
       this.ctx.getWorldCombatCore()!.applyDamage(enemy.id, config.damage, false, proj.ownerId, proj.isBfg ? 'BFG' : 'ASMD Kugelgewitter', {
         sourceX: originX,
@@ -1691,15 +1704,17 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (arenaResult) {
       this.forEachArenaRockInRadius(originX, originY, config.radius, (i, rock) => {
         if (Phaser.Math.Distance.Squared(originX, originY, rock.x, rock.y) > radiusSquared) return;
-        if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, rock.x, rock.y, i)) return;
+        if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, rock.x, rock.y, i, undefined, 0, 'directFire')) return;
         const resolvedDamage = this.resolveObstacleDamage(
           i,
           config.damage * (proj.rockDamageMult ?? 1),
           proj.ownerId,
         );
         if (resolvedDamage <= 0) return;
-        this.worldMutation?.applyResolvedDamage('rock', i, resolvedDamage, proj.ownerId, 'environment.projectile_pulse');
-        lines.push(lineTo(rock.x, rock.y));
+        const outcome = this.worldMutation?.applyResolvedDamage('rock', i, resolvedDamage, proj.ownerId,
+          'environment.projectile_pulse', 'direct', proj.sourceSlot,
+          this.ctx.getWorldCombatCore()!.captureWorldDamageSource(proj.ownerId, 'environment.projectile_pulse', 'direct', proj.provenance, proj.projectileId));
+        if (outcome?.kind === 'damage-applied') lines.push(lineTo(rock.x, rock.y));
       });
     }
 
@@ -1709,7 +1724,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (trainState?.alive) {
         for (const seg of this.trainManager.getSegmentPositions()) {
           if (Phaser.Math.Distance.Squared(originX, originY, seg.x, seg.y) > radiusSquared) continue;
-          if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, seg.x, seg.y)) continue;
+          if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, seg.x, seg.y, undefined, undefined, 0, 'directFire')) continue;
           this.worldMutation?.applyResolvedDamage('train', 'main', config.damage * trainMult, proj.ownerId, 'environment.projectile_pulse');
           lines.push(lineTo(seg.x, seg.y));
           break;
@@ -1734,7 +1749,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (!this.ctx.getWorldCombatCore()!.isAlive(player.id)) continue;
       if (this.playerGameplayRuntime?.isBurrowed(player.id)) continue;
       if (Phaser.Math.Distance.Squared(originX, originY, player.x, player.y) > radiusSquared) continue;
-      if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, player.x, player.y)) continue;
+      if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, player.x, player.y, undefined, undefined, 0, 'directFire')) continue;
       if (!this.ctx.getWorldCombatCore()!.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
       if (this.combatSystems?.energyShield?.tryBlockDamage({
         targetId: player.id,
@@ -1807,6 +1822,18 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    * Gameplay-Seite des gemeinsamen Umgebungsschaden-Kerns: runden-autoritativer Felsbestand,
    * Zielstatus-Trichter und die replizierte Zerstörungsdarstellung.
    */
+  private environmentRockSinkFor(source?: import('../../combat/CombatScope').CombatSource): EnvironmentRockSink {
+    if (!source) return this.environmentRockSink;
+    return { ...this.environmentRockSink, applyRockDamage: (index, damage, attackerId) => {
+      const outcome = this.worldMutation?.applyResolvedDamage('rock', index, damage, attackerId,
+        source.authoredSourceId ?? 'environment.radial', source.origin === 'support' ? 'direct' : source.origin, source.sourceSlot, source);
+      if (!outcome || outcome.kind === 'rejected' || outcome.resultingState.kind !== 'integrity') return null;
+      return { actualDamage: outcome.kind === 'damage-applied' ? outcome.actualDamage : 0,
+        remainingIntegrity: outcome.resultingState.integrity,
+        becameDestroyed: outcome.kind === 'damage-applied' && outcome.transition.kind === 'destroyed' };
+    } };
+  }
+
   private readonly environmentRockSink: EnvironmentRockSink = {
     forEachRockInRadius: (x, y, radius, visit) => {
       this.forEachArenaRockInRadius(x, y, radius, (index, rock) => {

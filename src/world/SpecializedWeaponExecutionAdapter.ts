@@ -64,7 +64,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
           maxBounces: 0,
           isGrenade: false,
           collisionFilter: {
-            ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
+            sourceCarrierBaseId: params.options?.sourceCarrierBaseId,
             ignoreRockIndex: params.options?.ignoreRockIndex,
           },
         },
@@ -128,7 +128,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         isFlame: true,
         flamePiercing: (fireConfig.piercingCount ?? 0) > 0,
         collisionFilter: {
-          ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
+          sourceCarrierBaseId: params.options?.sourceCarrierBaseId,
           ignoreRockIndex: params.options?.ignoreRockIndex,
         },
         hitboxGrowth: { growRatePerSec: fireConfig.hitboxGrowRate, maxSize: fireConfig.hitboxEndSize },
@@ -182,7 +182,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         isGrenade: false,
         collisionMode: 'overlap',
         collisionFilter: {
-          ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
+          sourceCarrierBaseId: params.options?.sourceCarrierBaseId,
           ignoreRockIndex: params.options?.ignoreRockIndex,
         },
         hitboxGrowth: { growRatePerSec: fireConfig.hitboxGrowRate, maxSize: fireConfig.hitboxEndSize },

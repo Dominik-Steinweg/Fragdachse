@@ -5,6 +5,7 @@ import { scalePortalDamagePayload } from './PortalDamagePayload';
 import { resolveProjectileExplosionFalloff } from '../utils/radialDamage';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import * as Phaser from 'phaser';
+import type { ObstacleShotOptions, ObstacleQueryPurpose } from '../systems/ObstacleRules';
 import type { PrimaryHitAdrenalineRewardFact, PrimaryHitAdrenalineRewardIntent, PrimaryHitRewardScope } from './PrimaryHitReward';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { BaseManager } from '../entities/BaseManager';
@@ -39,6 +40,7 @@ import {
   BURN_TICK_INTERVAL_MS,
   COLORS,
   COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
+  COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   ENEMY_HIT_STAGGER_BASE_MS,
   HP_MAX, RESPAWN_DELAY_MS,
   DEFAULT_ARENA_HEIGHT,
@@ -141,6 +143,7 @@ type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlay
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string, now?: number): void };
 
 interface AoeDamageOptions {
+  source?: CombatSource;
   /** Explicit source resolution, e.g. a reservoir whose accumulated damage must not be amplified again. */
   damageBasis?: Extract<CombatDamageBasis, { kind: 'source-resolved' }>;
   allowCritical?: boolean;
@@ -241,6 +244,10 @@ function toDamageOptions(
 ): DamageApplicationOptions {
   return {
     allowTeamDamage: options?.allowTeamDamage,
+    source: options?.source ? { ...options.source,
+      sourceSlot: options.sourceSlot ?? options.source.sourceSlot,
+      allegiance: options.allowTeamDamage === undefined ? options.source.allegiance
+        : { ...options.source.allegiance, allowTeamDamage: options.allowTeamDamage } } : undefined,
     sourceSlot: options?.sourceSlot,
     allowCritical: options?.allowCritical,
     damageKind,
@@ -260,6 +267,7 @@ export interface HitscanTraceResult {
   readonly hitObstacle: boolean;
   readonly hitObstacleKind?: HitscanObstacleKind;
   readonly hitObstacleIndex?: number;
+  readonly hitBaseId?: string;
 }
 
 export interface HitscanPathSegment {
@@ -269,7 +277,7 @@ export interface HitscanPathSegment {
   readonly portalDamage?: import('../systems/PortalTraversal').PortalDamageContext;
 }
 
-export interface HitscanTraceOptions {
+export interface HitscanTraceOptions extends ObstacleShotOptions {
   readonly shooterId: string;
   readonly startX: number;
   readonly startY: number;
@@ -290,11 +298,9 @@ export type HitscanObstacleKind = 'arena' | 'rock' | 'base' | 'barrier' | 'trunk
  * Blocker weiter, deshalb wären drei optionale Positionsparameter an der Aufrufstelle nicht
  * mehr lesbar.
  */
-export interface LineOfFireOptions {
+export interface LineOfFireOptions extends ObstacleShotOptions {
   /** Dieser Fels blockiert nicht (z. B. der Fels, in dem das Geschütz steht). */
   readonly skipRockIndex?: number;
-  /** Coop-Defense-Basen ignorieren (Quellen oberhalb der eigenen Basisfläche). */
-  readonly ignoreBaseObstacles?: boolean;
   /** Korridorbreite für Körper, die breiter als die Linie sind (Wurfgeschosse, Translocator-Puck). */
   readonly clearanceRadius?: number;
 }
@@ -681,6 +687,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
               payload.visualMuzzleOrigin,
               payload.baseDamageMult,
               this.capturePrimaryHitRewardScope(payload.primaryHitReward),
+              payload.sourceCarrierBaseId,
             ),
             interactions: Object.freeze([...interactions]),
           };
@@ -1532,6 +1539,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.applyRadialHostileBaseDamage(
       x, y, radius, damage, ownerId, options?.damageFalloff, options?.sourceSlot,
       options?.baseDamageMult, options?.damageBasis?.sourceFactors ?? derivedFrom?.damage.sourceFactors,
+      options?.source,
     );
 
     if (options?.skipEnemies) return;
@@ -1782,9 +1790,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     endX: number,
     endY: number,
     ignoreRocks: boolean,
+    options: ObstacleShotOptions = {},
   ): number | null {
     this.projectileBlockerLine.setTo(startX, startY, endX, endY);
-    return this.findNearestProjectilePathBlockerDistance(this.projectileBlockerLine, ignoreRocks);
+    return this.findNearestProjectilePathBlockerDistance(this.projectileBlockerLine, ignoreRocks, options);
   }
 
   /**
@@ -2006,7 +2015,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         ? Object.freeze({ x: player.x, y: player.y }) : undefined;
       primaryHitReward = gainBasis ? Object.freeze({ ...primaryHitReward, gainBasis, sourcePosition }) : undefined;
     }
-    if (provenance.gameplaySourceKind && provenance.attributionKind && provenance.allegiance.kind) {
+    if (provenance.gameplaySourceKind && provenance.attributionKind && provenance.allegiance.kind
+      && Object.prototype.hasOwnProperty.call(provenance.allegiance, 'allianceId')) {
       return primaryHitReward === provenance.primaryHitReward ? provenance : Object.freeze({ ...provenance, primaryHitReward });
     }
     const sourceEnemy = this.enemyManager?.getEnemy(provenance.gameplaySourceId);
@@ -2025,11 +2035,42 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         ? 'player' : creditedEnemy ? 'enemy' : 'world'),
       allegiance: Object.freeze({
         ...provenance.allegiance,
+        allianceId: provenance.allegiance.allianceId ?? this.bridge.getCombatAllianceId?.(allegianceEnemy?.ownerId ?? provenance.allegiance.ownerId),
         kind: provenance.allegiance.kind ?? (allegianceEnemy ? 'enemy'
           : this.playerManager.getPlayer(provenance.allegiance.ownerId) ? 'player' : 'world'),
-        factionId: provenance.allegiance.factionId ?? allegianceEnemy?.faction,
+        factionId: provenance.allegiance.factionId ?? allegianceEnemy?.faction
+          ?? (provenance.allegiance.ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID ? 'allied'
+            : provenance.allegiance.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID ? 'hostile' : undefined),
       }),
     });
+  }
+
+  captureWorldDamageSource(actorId: string, authoredSourceId: string, origin: CombatDamageKind = 'direct',
+    provenance?: ProjectileProvenance, projectileId?: number): CombatSource {
+    if (provenance) {
+      const saved = this.captureProjectileProvenance(provenance);
+      return { ...adaptProjectileCombatSource(saved, projectileId, this.classifyProjectileSource({ provenance: saved })), origin, authoredSourceId };
+    }
+    return this.createLegacyMutationSource(actorId, authoredSourceId, origin);
+  }
+
+  /** Building immunity ignores character friendly-fire settings. Nature and neutral hazards are separate. */
+  canDamageStructure(source: CombatSource, ownerId?: string, faction?: 'friendly' | 'hostile'): boolean {
+    const allegiance = source.allegiance;
+    if (ownerId && allegiance.ownerId === ownerId) return false;
+    const hostile = allegiance.factionId === 'hostile' || allegiance.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID;
+    const playerSide = (allegiance.kind ?? source.actor?.kind ?? source.gameplaySource.kind) === 'player' || allegiance.factionId === 'allied'
+      || allegiance.ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
+    if (faction) return faction === 'hostile' ? !hostile : !playerSide;
+    if (!ownerId) return true;
+    const targetHostile = ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID
+      || this.enemyManager?.getEnemy(ownerId)?.faction === 'hostile';
+    if (hostile) return !targetHostile;
+    if (!playerSide || targetHostile) return true;
+    if (allegiance.factionId === 'allied' || ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID) return false;
+    const alliance = this.bridge.getCombatAllianceId?.(ownerId);
+    return !(allegiance.allianceId && allegiance.allianceId === alliance)
+      && !this.bridge.areTeammates(allegiance.ownerId, ownerId);
   }
 
   /** Committed effects use saved relationship facts, independently of new-action permission. */
@@ -2478,28 +2519,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private findNearestProjectilePathBlockerDistance(
     line: Phaser.Geom.Line,
     ignoreRocks = false,
+    options: ObstacleShotOptions = {},
   ): number | null {
-    let bestDistance: number | null = null;
-
-    this.obstacleIndex.querySegment(
-      line.x1, line.y1, line.x2, line.y2,
-      (kind, _rockIndex, left, top, right, bottom) => {
-        if (ignoreRocks && kind === OBSTACLE_ROCK) return false;
-        const hit = this.findNearestRectangleHit(line, this.obstacleRect(left, top, right, bottom));
-        if (hit && (bestDistance === null || hit.distance < bestDistance)) {
-          bestDistance = hit.distance;
-        }
-        return false;
-      },
-      (centerX, centerY, radius) => {
-        const hit = this.findNearestCircleHit(line, centerX, centerY, radius);
-        if (hit && (bestDistance === null || hit.distance < bestDistance)) {
-          bestDistance = hit.distance;
-        }
-        return false;
-      },
-    );
-
+    let bestDistance: number | null = this.geometry.nearestObstacleHit(line,
+      { purpose: 'directFire', ...options, ignoreRocks })?.distance ?? null;
     const trainBounds = this.computeTrainBounds();
     if (trainBounds) {
       const hit = this.findNearestRectangleHit(line, trainBounds);
@@ -2520,6 +2543,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     shooterY: number,
     desiredMuzzleX: number,
     desiredMuzzleY: number,
+    options: ObstacleShotOptions = { purpose: 'directFire' },
   ): MuzzleOrigin {
     const dx = desiredMuzzleX - shooterX;
     const dy = desiredMuzzleY - shooterY;
@@ -2527,7 +2551,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     if (distance <= 0.0001) return { x: desiredMuzzleX, y: desiredMuzzleY };
 
     this.hitscanLine.setTo(shooterX, shooterY, desiredMuzzleX, desiredMuzzleY);
-    const obstacleHit = this.findNearestObstacleHit(this.hitscanLine);
+    const obstacleHit = this.findNearestObstacleHit(this.hitscanLine, options);
     if (!obstacleHit) return { x: desiredMuzzleX, y: desiredMuzzleY };
 
     const safeDistance = Math.max(0, obstacleHit.distance - HITSCAN_MUZZLE_EPSILON);
@@ -2561,6 +2585,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     visualMuzzleOrigin?: { x: number; y: number },
     baseDamageMult = 1,
     primaryHitReward?: PrimaryHitAdrenalineRewardIntent,
+    sourceCarrierBaseId?: string,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -2573,6 +2598,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       traceThickness,
       applyFavorTheShooter: true,
       includeShooter: Boolean(supportEffect),
+      purpose: supportEffect ? 'support' : 'directFire',
+      sourceCarrierBaseId,
     });
     for (const [index, segment] of segments.entries()) {
       const { trace, startX, startY } = segment;
@@ -2693,6 +2720,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       this.applyHitscanObjectDamage(
         startX, startY, trace.endX, trace.endY,
         damage, rockDamageMult, trainDamageMult, shooterId, sourceSlot, baseDamageMult,
+        trace.hitBaseId,
       );
     }
 
@@ -2833,7 +2861,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
 
     if (trace.hitObstacleKind === 'base') {
-      const targetId = this.resolveHitscanBaseId(trace.endX, trace.endY, dirX, dirY);
+      const targetId = trace.hitBaseId ?? this.resolveHitscanBaseId(trace.endX, trace.endY, dirX, dirY);
       if (!targetId) return;
       this.onHitscanSupportImpact?.(
         { targetType: 'base', targetId, x: trace.endX, y: trace.endY },
@@ -3015,6 +3043,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     damage: number, rockMult: number, trainMult: number, shooterId: string,
     sourceSlot?: WeaponSlot,
     baseDamageMult = 1,
+    hitBaseId?: string,
   ): void {
     const hitLine = new Phaser.Geom.Line(startX, startY, endX, endY);
     const endDist = Phaser.Geom.Line.Length(hitLine);
@@ -3027,7 +3056,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       this.obstacleIndex.querySegment(
         startX, startY, endX, endY,
         (kind, rockIndex, left, top, right, bottom) => {
-          if (kind !== OBSTACLE_ROCK) return false;
+          if (kind !== OBSTACLE_ROCK || this.obstacleIndex.getRockClass(rockIndex) === 'low') return false;
           const hit = this.findNearestRectangleHit(hitLine, this.obstacleRect(left, top, right, bottom));
           if (hit && Math.abs(hit.distance - endDist) < EPSILON && hit.distance < bestRockDist) {
             bestRockDist = hit.distance;
@@ -3046,7 +3075,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     // Feindliche Basis am Endpunkt: dieselbe Reihenfolge wie bei Felsen und Zug, damit ein
     // getroffenes Hindernis den Schuss beendet.
     if (this.baseManager && !this.enemyManager?.hasEnemy(shooterId)) {
-      const baseId = this.baseManager.getBaseIdAtWorldPoint(endX, endY);
+      const baseId = hitBaseId ?? this.baseManager.getBaseIdAtWorldPoint(endX, endY);
       const base = baseId ? this.baseManager.getBase(baseId) : undefined;
       if (base && base.faction === 'hostile' && !(base.isInert?.() ?? false) && base.getHp() > 0) {
         this.applyBaseDamage(base.id, damage, shooterId, sourceSlot, baseDamageMult);
@@ -3401,6 +3430,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceSlot?: LoadoutSlot,
     baseDamageMult = 1,
     appliedSourceFactors?: readonly CombatSourceFactor[],
+    source?: CombatSource,
   ): void {
     if (!attackerId || radius <= 0 || maxDamage <= 0) return;
     if (this.enemyManager?.hasEnemy(attackerId)) return;
@@ -3410,7 +3440,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > radius) continue;
       const damage = computeRadialDamage(surface.distance, radius, maxDamage, falloff);
-      this.applyBaseDamage(base.id, damage, attackerId, sourceSlot, baseDamageMult, appliedSourceFactors);
+      this.applyBaseDamage(base.id, damage, attackerId, sourceSlot, baseDamageMult, appliedSourceFactors, source);
     }
   }
 
@@ -3483,10 +3513,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const visitedPairs = new Set<string>();
     let from = { x: options.startX, y: options.startY };
     let range = options.range;
+    let carrier = options.sourceCarrierBaseId;
     let context: import('../systems/PortalTraversal').PortalDamageContext | undefined;
     const pairs = this.portalQuery?.getPortalPairs() ?? [];
     while (true) {
-      const trace = this.traceHitscan({ ...options, startX: from.x, startY: from.y, range });
+      const trace = this.traceHitscan({ ...options, sourceCarrierBaseId: carrier, startX: from.x, startY: from.y, range });
       const crossing = findPortalCrossing(pairs, from, { x: trace.endX, y: trace.endY }, { excludedPairs: visitedPairs });
       const distance = crossing ? Math.hypot(crossing.entry.x - from.x, crossing.entry.y - from.y) : Infinity;
       const hit = trace.hitObstacle || trace.hitPlayerId !== null || trace.hitEnemyId !== null || trace.hitDecoyId !== null;
@@ -3503,6 +3534,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         this.portalQuery!.isPortalFriendly(crossing.pair.ownerId, options.shooterId));
       range = Math.max(0, range - distance);
       from = crossing.exit;
+      carrier = undefined;
     }
     return segments;
   }
@@ -3517,7 +3549,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.hitscanLine.setTo(startX, startY, maxEndX, maxEndY);
 
     let closestDistance = Phaser.Geom.Line.Length(this.hitscanLine);
-    const obstacleHit = this.findNearestObstacleHit(this.hitscanLine);
+    const obstacleHit = this.findNearestObstacleHit(this.hitscanLine, { purpose: 'directFire', ...options });
     if (obstacleHit) closestDistance = obstacleHit.distance;
 
     let hitPlayerId: string | null = null;
@@ -3589,6 +3621,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       hitObstacle,
       hitObstacleKind: hitObstacle ? obstacleHit?.kind : undefined,
       hitObstacleIndex: hitObstacle ? obstacleHit?.index : undefined,
+      hitBaseId: hitObstacle ? obstacleHit?.baseId : undefined,
     };
   }
 
@@ -3607,16 +3640,18 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     startX: number, startY: number,
     endX: number, endY: number,
     skipRockIndex?: number,
-    ignoreBaseObstacles = false,
+    sourceCarrierBaseId?: string,
     // Optional corridor radius for bodies such as the translocator puck.
     clearanceRadius = 0,
+    purpose: ObstacleQueryPurpose = 'physical',
   ): boolean {
     // Heißester Pfad des Host-Frames (zielsuchende Projektile prüfen pro Kandidat eine
     // Sichtlinie), deshalb über den Hindernis-Index statt über alle Felsen der Karte.
     return this.geometry.hasLineOfSight(startX, startY, endX, endY, {
       skipRockIndex,
-      ignoreBases: ignoreBaseObstacles,
+      sourceCarrierBaseId,
       clearanceRadius,
+      purpose,
     });
   }
 
@@ -3637,8 +3672,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     endX: number, endY: number,
     options: LineOfFireOptions = {},
   ): boolean {
-    const { skipRockIndex, ignoreBaseObstacles = false, clearanceRadius = 0 } = options;
-    if (!this.hasLineOfSight(startX, startY, endX, endY, skipRockIndex, ignoreBaseObstacles, clearanceRadius)) {
+    const { clearanceRadius = 0 } = options;
+    if (!this.geometry.hasLineOfSight(startX, startY, endX, endY, { purpose: 'directFire', ...options })) {
       return false;
     }
     return !this.isDynamicBlockerOnPath(startX, startY, endX, endY, clearanceRadius);
@@ -3741,15 +3776,16 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   private findNearestObstacleHit(
     line: Phaser.Geom.Line,
-  ): (GeometryHit & { kind: HitscanObstacleKind; index?: number }) | null {
+    options: ObstacleShotOptions = { purpose: 'directFire' },
+  ): (GeometryHit & { kind: HitscanObstacleKind; index?: number; baseId?: string }) | null {
     // Arena-Außenwand und Zug sind Gameplay-Sonderkörper und stehen deshalb nicht im
     // gemeinsamen Hindernis-Kern; sie werden hier gegen dessen Ergebnis verglichen.
     const arenaHit = this.findNearestRectangleHit(line, this.arenaBounds);
-    let bestHit: (GeometryHit & { kind: HitscanObstacleKind; index?: number }) | null = arenaHit
+    let bestHit: (GeometryHit & { kind: HitscanObstacleKind; index?: number; baseId?: string }) | null = arenaHit
       ? { ...arenaHit, kind: 'arena' }
       : null;
 
-    const obstacleHit = this.geometry.nearestObstacleHit(line);
+    const obstacleHit = this.geometry.nearestObstacleHit(line, options);
     if (obstacleHit && (!bestHit || obstacleHit.distance < bestHit.distance)) bestHit = obstacleHit;
 
     const trainBounds = this.computeTrainBounds();
@@ -4492,7 +4528,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       gameplaySource,
       actor: gameplaySource,
       attribution,
-      allegiance: { ownerId: actorId ?? 'world', factionId: enemy?.faction },
+      allegiance: { ownerId: actorId ?? 'world',
+        kind: actorIsEnemy ? 'enemy' : actorIsPlayer ? 'player' : 'world',
+        factionId: enemy?.faction ?? (actorId === COOP_DEFENSE_BASE_TURRET_OWNER_ID ? 'allied'
+          : actorId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID ? 'hostile' : undefined),
+        allianceId: actorId ? this.bridge.getCombatAllianceId?.(enemy?.ownerId ?? actorId) : undefined },
       authoredSourceId,
       origin,
     };

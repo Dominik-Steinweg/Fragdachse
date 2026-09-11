@@ -86,13 +86,13 @@ describe('turret aiming and discharge', () => {
   });
 
   it('does not consume cooldown when the real ray is blocked and preserves obstacle exceptions', () => {
-    const f = fixture({ rotationSpeedDegPerSec: 90, angle: rad(88), skipRockIndex: 7, ignoreBaseObstacles: true });
+    const f = fixture({ rotationSpeedDegPerSec: 90, angle: rad(88), skipRockIndex: 7, sourceCarrierBaseId: 'carrier' });
     let blocked = true;
     const line = vi.fn((_sx, _sy, ex) => !blocked || Math.abs(ex) < 1e-8);
     f.system.setLineOfFireChecker(line);
     f.tick(0);
     expect(f.fire).not.toHaveBeenCalled();
-    expect(line.mock.calls.at(-1)?.slice(4)).toEqual([7, true]);
+    expect(line.mock.calls.at(-1)?.slice(4)).toEqual([7, 'carrier']);
     blocked = false;
     f.tick(0);
     expect(f.fire).toHaveBeenCalledOnce();
@@ -128,6 +128,18 @@ describe('turret aiming and discharge', () => {
     expect(f.fire).toHaveBeenCalledTimes(2);
     f.tick(interval + 1000 + cooldown);
     expect(f.fire).toHaveBeenCalledTimes(3);
+  });
+
+  it('rechecks cover between burst shots while retaining the concrete carrier', () => {
+    const f = fixture({ weaponId: 'TURRET_ROCKET_BURST', sourceCarrierBaseId: 'carrier' });
+    const clear = vi.fn(() => true); f.system.setLineOfFireChecker(clear);
+    f.tick(0);
+    const interval = WEAPON_CONFIGS.TURRET_ROCKET_BURST.turretBurst!.intervalMs;
+    clear.mockReturnValue(false); f.tick(interval);
+    expect(f.fire).toHaveBeenCalledOnce();
+    clear.mockReturnValue(true); f.tick(interval + 1);
+    expect(f.fire).toHaveBeenCalledTimes(2);
+    expect(f.fire.mock.calls.every(call => call.at(-1) === 'carrier')).toBe(true);
   });
 
   it.each([undefined, 90])('gates secondary shots only for limited turrets (%s)', speed => {

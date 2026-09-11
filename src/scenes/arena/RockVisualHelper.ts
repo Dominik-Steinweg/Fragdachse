@@ -217,6 +217,9 @@ export class RockVisualHelper {
       if (presentation) this.createOrUpdateTurretVisual(rock);
     }
 
+    const obstacle = this.arenaResult.rockPhysicsProxies[rock.id];
+    if (obstacle) obstacle.obstacleClass = 'low';
+    this.arenaResult.rockVisualStates.patch(rock.id, { material: 'walls' });
     this.updateRockVisualById(rock.id, rock.hp);
 
     if (playSpawnFx && presentation) {

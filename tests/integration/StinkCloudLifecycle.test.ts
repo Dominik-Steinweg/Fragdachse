@@ -40,6 +40,22 @@ function fixture() {
 }
 
 describe('primary stink cloud lifetime', () => {
+  it('retains stationary cloud allegiance when its original turret and owner are gone', () => {
+    const f = fixture();
+    try {
+      const source = { gameplaySource: { kind: 'turret' as const, id: 'removed-turret' },
+        attribution: { kind: 'player' as const, id: 'p1' },
+        allegiance: { ownerId: 'p1', kind: 'player' as const, allianceId: 'coop:players' }, origin: 'ground' as const };
+      f.cloud.setCombatSourceResolver(() => source);
+      f.cloud.hostCreateStationaryCloud('p1', 0xffffff, 40, 20, 50, 2000, 5, 100, 1, 1, 1, 'spore', 1000);
+      f.cloud.setCombatSourceResolver(() => undefined);
+      const update = f.cloud.hostUpdate(1100, () => null);
+      expect(update.damageEvents).toHaveLength(1);
+      expect(update.damageEvents[0].combatSource).toBe(source);
+      expect(update.synced[0]).not.toHaveProperty('combatSource');
+    } finally { f.destroy(); }
+  });
+
   it('replicates owner-following independently from stationary cloud ownership', () => {
     const f = fixture();
     try {

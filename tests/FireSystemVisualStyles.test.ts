@@ -33,6 +33,22 @@ vi.mock('phaser', () => ({
 import { FireSystem } from '../src/effects/FireSystem';
 
 describe('FireSystem visual styles and damage targets', () => {
+  it('retains the captured source for ground damage after the attacker is removed', () => {
+    const fire = new FireSystem({} as Phaser.Scene);
+    const source = { gameplaySource: { kind: 'player' as const, id: 'owner' },
+      attribution: { kind: 'player' as const, id: 'owner' },
+      allegiance: { ownerId: 'owner', kind: 'player' as const, allianceId: 'team:blue' }, origin: 'ground' as const };
+    const capture = vi.fn(() => source);
+    fire.setCombatSourceResolver(capture);
+    fire.hostRefreshGroundCell(300, 300, { sourceKey: 'committed-fire', ownerId: 'owner', durationMs: 5000, damagePerTick: 2,
+      burn: { durationMs: 5000, damagePerTick: 2 } }, 1000);
+    fire.setCombatSourceResolver(() => undefined);
+    const events = fire.hostUpdate(2000).damageEvents;
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.every(event => event.combatSource === source)).toBe(true);
+    expect(capture).toHaveBeenCalledOnce();
+  });
+
   it('copies and refreshes Firewalker metadata independently of ordinary ground fire', () => {
     const fire = new FireSystem({} as Phaser.Scene);
     const walker = { durationMs: 1000, trailDurationMs: 2000, trailDamagePerTick: 2,

@@ -95,6 +95,8 @@ export class WeaponUpgradeSystem {
         sample.toY + normalY * offset,
         {
           sourceKey: `awp-trail:${sample.projectileId}`,
+          combatSource: this.fireSystem.captureCombatSource?.(sample.provenance.allegiance.ownerId,
+            trail.effect.sourceId ?? 'ground_fire.awp_trail', sample.provenance),
           ownerId: sample.provenance.allegiance.ownerId,
           durationMs: trail.effect.durationMs,
           burn: {

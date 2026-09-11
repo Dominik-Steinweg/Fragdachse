@@ -31,7 +31,7 @@ export const deContent = {
   "loadout.TRANSLOCATOR.name": "Translocator",
   "loadout.ZEUS_TASER.name": "Zeus",
   "loadout.DECOY.name": "Decoy",
-  "loadout.ROCK_BARRIER.name": "Felsbarriere",
+  "loadout.ROCK_BARRIER.name": "Mauer",
   "loadout.SPORE_TURRET.name": "Sporenturm",
   "loadout.ARMAGEDDON.name": "Armageddon",
   "loadout.GAUSS_RIFLE.name": "Gauss-Gewehr",

@@ -25,6 +25,8 @@ import type { WorldScopedBinding } from './WorldRuntime';
 import type { CombatDamageKind, LoadoutSlot } from '../types';
 
 export interface WorldObjectMutationRuntimeOptions {
+  readonly captureSource?: (actorId: string, sourceId: string, origin: CombatDamageKind) => CombatSource;
+  readonly canDamageStructure?: (source: CombatSource, ownerId?: string, faction?: 'friendly' | 'hostile') => boolean;
   readonly scope: CombatScope;
   readonly metrics: WorldMetrics;
   readonly rockRegistry: RockHpRegistry;
@@ -149,7 +151,9 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
   ): CombatDamageMutationOutcome | null {
     const target = this.resolveTarget(kind, id);
     if (!target) return null;
-    const source = explicitSource ?? legacyWorldSource(attackerId, sourceId, damageKind, sourceSlot);
+    const captured = explicitSource ? undefined : this.options.captureSource?.(attackerId, sourceId, damageKind);
+    const source = explicitSource ?? (captured ? { ...captured, sourceSlot } : undefined)
+      ?? legacyWorldSource(attackerId, sourceId, damageKind, sourceSlot);
     const damage: CombatResolvedDamage = {
       amount,
       damageKind,
@@ -190,6 +194,14 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
     const before = this.readState(request.target);
     const facts = this.readFacts(request.target);
     if (!before || !facts) return this.rejected(request, 'target-missing');
+    const placed = request.target.kind === 'rock' || request.target.kind === 'construction'
+      ? this.options.placement.getRuntimeRock(Number(request.target.id)) : undefined;
+    const base = request.target.kind === 'base' ? this.options.bases?.getBase(String(request.target.id)) : undefined;
+    if ((placed || base) && (placed?.ownerId === request.source.allegiance.ownerId
+      || this.options.canDamageStructure?.(request.source, placed?.ownerId, base?.faction) === false)) {
+      return freezeTargetMutationOutcome({ kind: 'accepted-no-effect', outcomeId: request.outcomeId,
+        target: request.target, source: request.source, reason: 'immune', resultingState: toCombatState(before) });
+    }
     const result = this.commitOwnerDamage(request.target, request.damage.amount, sourceActorId(request.source));
     const outcome = this.damageOutcome(request, result, facts);
     if (!this.destroyed && outcome.kind === 'damage-applied') for (const observer of this.damageObservers) {

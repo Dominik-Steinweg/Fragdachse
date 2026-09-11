@@ -31,7 +31,7 @@ export const enContent = {
   "loadout.TRANSLOCATOR.name": "Translocator",
   "loadout.ZEUS_TASER.name": "Zeus",
   "loadout.DECOY.name": "Decoy",
-  "loadout.ROCK_BARRIER.name": "Rock Barrier",
+  "loadout.ROCK_BARRIER.name": "Wall",
   "loadout.SPORE_TURRET.name": "Spore Turret",
   "loadout.ARMAGEDDON.name": "Armageddon",
   "loadout.GAUSS_RIFLE.name": "Gauss Rifle",

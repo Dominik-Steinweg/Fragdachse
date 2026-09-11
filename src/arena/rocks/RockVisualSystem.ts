@@ -9,6 +9,7 @@ import type { RockGpuPageSize, RockRendererMode } from './RockRendererSettings';
 import { RockVisualStateStore, resolveRockCornerTints } from './RockVisualState';
 
 export interface RockDestructionVisualSnapshot {
+  readonly material?: 'rocks' | 'walls';
   readonly x: number;
   readonly y: number;
   readonly frame: number;
@@ -82,6 +83,7 @@ export class RockVisualSystem {
     const state = this.store.get(id);
     if (!state?.active) return null;
     return {
+      material: state.material,
       x: state.x,
       y: state.y,
       frame: state.frame,

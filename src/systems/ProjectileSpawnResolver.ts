@@ -75,6 +75,7 @@ export function resolveProjectileBodyProfile(
 }
 
 export interface SafeMuzzleSpawnContext {
+  readonly acceptsLowTarget?: (rockId: number) => boolean;
   /** Gemeinsamer CombatGeometry-Wrapper über dem bestehenden ArenaObstacleIndex. */
   geometry?: CombatGeometry | null;
   /** Aktuelle zusammengefasste Zug-Bounds; der Zug gehört nicht zum statischen Index. */
@@ -107,18 +108,13 @@ export function resolveSafeMuzzleSpawn(
   const line = new Phaser.Geom.Line(shooterX, shooterY, desiredMuzzle.x, desiredMuzzle.y);
   const clearanceRadius = bodyProfile.conservativeClearance;
 
-  // Die bestehende Geometry-API kann penetrative Rock-Pfade nicht selektiv
-  // genug filtern. Daher bleibt hier der bisherige Shooter-Ursprung erhalten,
-  // statt neue Blocker- oder Kollisionssemantik einzuführen.
-  if (cfg.penetratesRocks) {
-    return { x: shooterX, y: shooterY };
-  }
-
   let blockerDistance = Number.POSITIVE_INFINITY;
 
   const isBfgOrGauss = cfg.isBfg === true
-    || (cfg.gaussChainRadius ?? 0) > 0
-    || (cfg.gaussChainDamageFactor ?? 0) > 0;
+    || ((cfg.gaussChainRadius ?? 0) > 0 && (cfg.gaussChainDamageFactor ?? 0) > 0)
+    || (cfg.collisionMode === 'overlap' && cfg.piercesTargets === true && !cfg.isFlame
+      && cfg.leafBlowerMinKnockback === undefined && cfg.leafBlowerMaxKnockback === undefined
+      && cfg.leafBlowerDeflectsProjectiles !== true);
   // Diese Projektiltypen passieren Welt-Hindernisse im normalen Flug per Overlap. Für sie
   // werden deshalb nur die normalen World-Bounds berücksichtigt.
   const resolvesWorldObstacleBlockers = !isBfgOrGauss;
@@ -126,8 +122,13 @@ export function resolveSafeMuzzleSpawn(
   if (resolvesWorldObstacleBlockers && context.geometry) {
     const obstacleHit = context.geometry.nearestObstacleHit(line, {
       clearanceRadius,
+      halfWidth: bodyProfile.width / 2,
+      halfHeight: bodyProfile.height / 2,
       skipRockIndex: cfg.ignoreRockIndex,
-      ignoreBases: cfg.ignoreBaseCollisions,
+      sourceCarrierBaseId: cfg.sourceCarrierBaseId,
+      ignoreRocks: cfg.penetratesRocks,
+      purpose: cfg.isGrenade || cfg.isTranslocatorPuck ? 'physical' : cfg.energyInjectorPayload ? 'support' : 'directFire',
+      acceptsLowTarget: context.acceptsLowTarget,
     });
     if (obstacleHit) blockerDistance = Math.min(blockerDistance, obstacleHit.distance);
 

@@ -697,7 +697,7 @@ export class CoopDefenseEnemyAbilitySystem {
           enemy.sprite.y,
           target.sprite.x,
           target.sprite.y,
-          { clearanceRadius: pathClearance },
+          { clearanceRadius: pathClearance, purpose: 'physical' },
         )) continue;
         best = { x: target.sprite.x, y: target.sprite.y, distance, targetRef: { kind: 'enemy', id: target.id } };
       }
@@ -718,7 +718,7 @@ export class CoopDefenseEnemyAbilitySystem {
         enemy.sprite.y,
         player.x,
         player.y,
-        { clearanceRadius: pathClearance },
+        { clearanceRadius: pathClearance, purpose: 'physical' },
       )) continue;
       best = { x: player.x, y: player.y, distance, targetRef: { kind: 'player', id: player.id } };
     }
@@ -743,7 +743,7 @@ export class CoopDefenseEnemyAbilitySystem {
           enemy.sprite.y,
           target.sprite.x,
           target.sprite.y,
-          { clearanceRadius: pathClearance },
+          { clearanceRadius: pathClearance, purpose: 'physical' },
         )) continue;
         best = { x: target.sprite.x, y: target.sprite.y, distance };
       }
@@ -765,7 +765,7 @@ export class CoopDefenseEnemyAbilitySystem {
         enemy.sprite.y,
         player.x,
         player.y,
-        { clearanceRadius: pathClearance },
+        { clearanceRadius: pathClearance, purpose: 'physical' },
       )) continue;
       best = { x: player.x, y: player.y, distance };
     }
@@ -792,7 +792,7 @@ export class CoopDefenseEnemyAbilitySystem {
         enemy.sprite.y,
         position.x,
         position.y,
-        { clearanceRadius: pathClearance },
+        { clearanceRadius: pathClearance, purpose: 'physical' },
       )) return;
       best = { x: position.x, y: position.y, distance, targetRef: { kind: target.kind, id: target.id } };
     });

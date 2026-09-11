@@ -139,7 +139,7 @@ describe('projectile homing against hostile bases', () => {
     const projectile = makeProjectile(BASE_HOMING);
     expect(controller.update(projectile, 0, true)).toBe(false);
     expect(projectile.state.lockedTargetId).toBeNull();
-    expect(lineOfFire).toHaveBeenCalledWith(0, 0, 100, 0);
+    expect(lineOfFire).toHaveBeenCalledWith(0, 0, 100, 0, undefined);
   });
 
   it('filters stealthed reacquire candidates while keeping decoys valid', () => {

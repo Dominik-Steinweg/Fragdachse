@@ -1,6 +1,7 @@
 // Nur Typ-Import: dieses Modul soll ohne Phaser-Laufzeit (und damit ohne DOM) nutzbar
 // und testbar bleiben. Alle Phaser-Aufrufe laufen über die übergebenen Objekte.
 import type * as Phaser from 'phaser';
+import { obstacleClassFor, obstacleBlocks, segmentRectInterval, type ObstacleClass } from './ObstacleRules';
 
 const BUCKET_SIZE = 128;
 const TANGENCY_EPSILON_PX = 0.000001;
@@ -18,6 +19,9 @@ export const OBSTACLE_BARRIER = 3;
  */
 export interface ObstacleRectBody {
   readonly active: boolean;
+  /** Supplied by the physical object's materializer; omitted rock sources are authored nature. */
+  readonly obstacleClass?: ObstacleClass;
+  readonly getData?: (key: string) => unknown;
   getBounds(output?: Phaser.Geom.Rectangle): Phaser.Geom.Rectangle;
 }
 
@@ -208,6 +212,40 @@ export class ArenaObstacleIndex {
   private scratchBounds: Phaser.Geom.Rectangle | null = null;
 
   constructor(private readonly sources: ArenaObstacleSources) {}
+
+  getRockClass(index: number): ObstacleClass {
+    const value = this.sources.rocks()?.[index]?.obstacleClass ?? obstacleClassFor('rock');
+    obstacleBlocks(value, 'physical'); // Reject malformed classifications instead of opening a hole.
+    return value;
+  }
+
+  getBaseId(source: ObstacleRectBody): string | undefined {
+    const id = source.getData?.('baseId');
+    return typeof id === 'string' && id.length > 0 ? id : undefined;
+  }
+
+  /** First exit from the source-connected union, including the travelling body's extent.
+   * -1 means the segment starts outside; >= 1 means it has not fully left during this segment.
+   */
+  carrierExitFraction(baseId: string | undefined, sx: number, sy: number, ex: number, ey: number,
+    halfWidth = 0, halfHeight = halfWidth): number {
+    if (!baseId) return -1;
+    const intervals: { enter: number; exit: number }[] = [];
+    this.querySegment(sx, sy, ex, ey, (kind, _id, left, top, right, bottom, source) => {
+      if (kind !== OBSTACLE_BASE || this.getBaseId(source) !== baseId) return false;
+      const interval = segmentRectInterval(sx, sy, ex, ey,
+        left - halfWidth, top - halfHeight, right + halfWidth, bottom + halfHeight);
+      if (interval) intervals.push(interval);
+      return false;
+    }, () => false, Math.max(halfWidth, halfHeight));
+    intervals.sort((a, b) => a.enter - b.enter);
+    let extent = -1;
+    for (const interval of intervals) {
+      if (extent < 0 ? interval.enter > 0 : interval.enter > extent + 1e-9) break;
+      extent = Math.max(extent, interval.exit);
+    }
+    return extent;
+  }
 
   /** Nach jeder Änderung der Hindernis-*Geometrie* aufrufen (Fels gesetzt oder entfernt). */
   markDirty(): void {

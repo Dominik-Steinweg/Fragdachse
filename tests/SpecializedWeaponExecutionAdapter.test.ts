@@ -17,7 +17,7 @@ describe('SpecializedWeaponExecutionAdapter – unmittelbare Spezialschüsse (4C
       ownerId: 'player-owner',
       ownerColor: 0xff8a3d,
       sourceSlot: 'weapon1' as const,
-      options: { ignoreBaseCollisions: true, sourceTurretId: 'turret-1' },
+      options: { sourceCarrierBaseId: 'carrier', sourceTurretId: 'turret-1' },
       gameplayMuzzleOrigin: { x: 108, y: 200 },
       visualMuzzleOrigin: { x: 109, y: 201 },
     };
@@ -45,7 +45,7 @@ describe('SpecializedWeaponExecutionAdapter – unmittelbare Spezialschüsse (4C
     // Nur die beiden Dauerstrahl-Waffen tragen die Quellen-Kollisionsausnahmen des Turms.
     for (const index of [0, 1]) {
       const request = spawnProjectile.mock.calls[index]?.[0];
-      expect(request?.flight.collisionFilter).toMatchObject({ ignoreBaseCollisions: true });
+      expect(request?.flight.collisionFilter).toMatchObject({ sourceCarrierBaseId: 'carrier' });
       expect(request?.provenance.sourceTurretId).toBe('turret-1');
     }
   });

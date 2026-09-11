@@ -1,4 +1,5 @@
 import { turretAimConfig } from '../config/turretAim';
+import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 import type { BaseManager } from '../entities/BaseManager';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import type { BaseEntity } from '../entities/BaseEntity';
@@ -475,6 +476,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.projectileTimeField.setProjectileTimeFieldPort(null);
     this.options.projectileWorldImpact.setRockHitCallback(() => { /* noop */ });
     this.options.projectileWorldImpact.setObstacleKindResolver(null);
+    this.options.projectileWorldImpact.setLowSupportTargetChecker(null);
     this.options.projectileWorldImpact.setBaseHitCallback(null);
     this.options.projectileWorldImpact.setSupportImpactCallback(null);
     this.options.projectileHoming.setProjectileTargetQueryPort(null);
@@ -753,8 +755,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   private bindHostSystems(systems: WorldCombatGameplaySystems, playerCombat: PlayerCombatIntegrationPort): void {
     const o = this.options;
     const { teslaDome, turret, energyShield, timeBubble } = systems;
-    teslaDome.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => o.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex));
-    turret.setLineOfFireChecker((sx, sy, ex, ey, skipRockIndex, ignoreBaseObstacles) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, { skipRockIndex, ignoreBaseObstacles }));
+    teslaDome.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => o.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex, undefined, 0, 'directFire'));
+    turret.setLineOfFireChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, { skipRockIndex, sourceCarrierBaseId }));
     turret.setTurretProvider(() => this.getTurretDefinitions(), (id, angle) => {
       if (typeof id === 'number') {
         o.placementSystem.updateAngle(id, angle);
@@ -771,7 +773,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.id)
       ? this.mgTurret?.score(source.ownerId, String(source.id), kind, id, now) ?? 0 : 0);
-    turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex) => {
+    turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex, sourceCarrierBaseId) => {
       const turretCfg = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const weapon = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
       const isFriendlyBaseTurret = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
@@ -802,7 +804,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
           ownerId,
           ownerColor: color,
           options: {
-            ignoreBaseCollisions: isBaseTurret,
+            sourceCarrierBaseId,
             ignoreRockIndex: skipRockIndex,
             // Spielerbauten bleiben ihrem Besitzer zugerechnet und laufen als Utility-Schaden
             // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
@@ -1084,7 +1086,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     };
     o.projectileHoming.setProjectileTargetQueryPort(targetQueryPort);
     const lineOfFirePort: LineOfFireReadPort = {
-      hasClearLineOfFire: (sx, sy, ex, ey) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey),
+      hasClearLineOfFire: (sx, sy, ex, ey, options) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, options),
     };
     o.projectileHoming.setLineOfFireReadPort(lineOfFirePort);
     // Targetability-Familie: Beziehung und Homing-Gültigkeit kommen aus ihren kanonischen Ownern.
@@ -1194,8 +1196,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       },
     });
     o.projectileInteraction.setProjectileWorldBlockerPort({
-      getNearestBlockerDistance: (startX, startY, endX, endY, ignoreRocks) => (
-        o.combatSystem.getNearestProjectileBlockerDistance(startX, startY, endX, endY, ignoreRocks)
+      getNearestBlockerDistance: (startX, startY, endX, endY, ignoreRocks, options) => (
+        o.combatSystem.getNearestProjectileBlockerDistance(startX, startY, endX, endY, ignoreRocks, options)
       ),
     });
     o.projectileInteraction.setProjectileBarrierPort({
@@ -1204,14 +1206,22 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     o.projectileInteraction.setProjectileCombatPort(o.combatSystem);
     o.combatSystem.setProjectileDetonableReadPort(o.projectileInteraction);
-    o.projectileWorldImpact.setRockHitCallback((rockId, damage, attackerId) => {
+    o.projectileWorldImpact.setRockHitCallback((rockId, damage, attackerId, projectile) => {
       const resolvedDamage = o.resolveObstacleDamage(rockId, damage, attackerId);
       if (resolvedDamage <= 0) return;
       this.requireWorldMutation().applyResolvedDamage(
-        'rock', rockId, resolvedDamage, attackerId, 'projectile.world_object',
+        'rock', rockId, resolvedDamage, attackerId, 'projectile.world_object', 'direct', projectile?.sourceSlot,
+        o.combatSystem.captureWorldDamageSource(attackerId, 'projectile.world_object', 'direct', projectile?.provenance, projectile?.projectileId),
       );
     });
     o.projectileWorldImpact.setObstacleKindResolver((rockId) => o.placementSystem.getRuntimeRock(rockId)?.kind);
+    o.projectileWorldImpact.setLowSupportTargetChecker((rockId, ownerId) => {
+      const rock = o.placementSystem.getRuntimeRock(rockId);
+      if (!rock) return false;
+      const definition = rock.constructionId ? getCoopDefenseConstructionDefinition(rock.constructionId) : null;
+      return o.network.authority.isEnemyPair(ownerId, rock.ownerId)
+        || Boolean(rock.energyInjectorEffect ?? definition?.energyInjectorEffect);
+    });
     o.projectileWorldImpact.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
       const base = o.baseManager?.getBase(baseId);
       if (!base || base.faction !== 'hostile' || base.isInert?.() || base.getHp() <= 0) return;
@@ -1376,7 +1386,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         damage: mg?.damage,
         muzzleOffset: rock.constructionId ? o.getConstructionMuzzleOffset(rock.constructionId) : undefined,
         weaponId: rock.turretWeaponId ?? ('SPORES' as const),
-        ignoreBaseObstacles: rock.ownership === 'base-owned',
+        sourceCarrierBaseId: o.placementSystem.getCarrierBaseId(rock.id),
       }); });
     const bases = (o.baseManager?.getTurrets() ?? []).map(turret => ({
       id: turret.id,
@@ -1387,7 +1397,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       ownerId: turret.faction === 'hostile' ? COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID : COOP_DEFENSE_BASE_TURRET_OWNER_ID,
       ownerColor: turret.faction === 'hostile' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR,
       weaponId: turret.weaponId,
-      ignoreBaseObstacles: true,
+      sourceCarrierBaseId: turret.baseId,
       targetMode: turret.faction === 'hostile' ? 'players' as const : 'enemies' as const,
     }));
     return [...placeable, ...bases];

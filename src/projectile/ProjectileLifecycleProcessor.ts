@@ -13,6 +13,7 @@ export interface ProjectileLifecycleDependencies {
   isCurrent(projectile: ProjectileRuntimeRecord): boolean;
   shouldSweepRocks(projectile: ProjectileRuntimeRecord): boolean;
   sweepRocks(projectile: ProjectileRuntimeRecord): void;
+  advanceCarrier?(projectile: ProjectileRuntimeRecord): void;
   updateHoming(projectile: ProjectileRuntimeRecord, simulatedAgeMs: number): void;
   onImpact(projectile: ProjectileRuntimeRecord, x: number, y: number): void;
   onNaturalFlameExpiry(projectile: ProjectileRuntimeRecord): void;
@@ -214,6 +215,7 @@ export class ProjectileLifecycleProcessor {
       }
       proj.bounceProcessedThisStep = false;
       proj.velocityAfterFirstBounce = undefined;
+      this.deps.advanceCarrier?.(proj);
       proj.lastX = proj.physics.sprite.x;
       proj.lastY = proj.physics.sprite.y;
       return true;
@@ -222,6 +224,7 @@ export class ProjectileLifecycleProcessor {
     const awaitingContinuation = proj.pendingExplosion
       && (proj.interaction.multiExplosionsRemaining ?? 0) > 0;
     if (awaitingContinuation) {
+      this.deps.advanceCarrier?.(proj);
       proj.lastX = proj.physics.sprite.x;
       proj.lastY = proj.physics.sprite.y;
       return true;
@@ -235,6 +238,7 @@ export class ProjectileLifecycleProcessor {
           proj.miniRocket.deferredExplosionStopsAtObstacle ?? false,
         );
       }
+      this.deps.advanceCarrier?.(proj);
       proj.lastX = proj.physics.sprite.x;
       proj.lastY = proj.physics.sprite.y;
       return true;
@@ -286,6 +290,7 @@ export class ProjectileLifecycleProcessor {
       this.deps.release(proj);
     } else if (proj.spec.flight.homing && proj.spec.flight.miniRocket.stageRangePx === undefined) {
       const simulatedAge = proj.simulatedAgeMs ?? 0;
+      this.deps.advanceCarrier?.(proj);
       this.deps.updateHoming(proj, simulatedAge);
     }
 
@@ -299,6 +304,7 @@ export class ProjectileLifecycleProcessor {
       }
     }
 
+    this.deps.advanceCarrier?.(proj);
     proj.lastX = proj.physics.sprite.x;
     proj.lastY = proj.physics.sprite.y;
     proj.bounceProcessedThisStep = false;

@@ -90,6 +90,7 @@ vi.mock('phaser', () => {
 
 import { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
+import { CombatGeometry } from '../src/systems/CombatGeometry';
 import { createWorldGeometryQueries } from '../src/world/WorldGeometryQueries';
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../src/entities/PlayerManager';
@@ -210,6 +211,42 @@ describe('CombatSystem.resolveSafeHitscanStart', () => {
 });
 
 describe('WorldGeometryQueries – headless read-only boundary', () => {
+  it('separates direct fire and support from physical blocking and reads gate state live', () => {
+    const walls = [20, 40].map(x => ({ active: true, obstacleClass: 'low' as const,
+      getBounds: () => new Phaser.Geom.Rectangle(x, -10, 10, 20) }));
+    const gate = { active: false, getBounds: () => new Phaser.Geom.Rectangle(70, -10, 10, 20) };
+    const index = new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 200 }),
+      rocks: () => walls, bases: () => null, trunks: () => null, barriers: () => [gate] });
+    const geometry = new CombatGeometry(index);
+    const line = new Phaser.Geom.Line().setTo(0, 0, 100, 0);
+    expect(geometry.nearestObstacleHit(line, { purpose: 'directFire' })).toBeNull();
+    expect(geometry.nearestObstacleHit(line, { purpose: 'physical' })).toMatchObject({ kind: 'rock', index: 0 });
+    expect(geometry.nearestObstacleHit(line, { purpose: 'support', acceptsLowTarget: id => id === 1 }))
+      .toMatchObject({ kind: 'rock', index: 1, x: 40 });
+    gate.active = true;
+    expect(geometry.nearestObstacleHit(line, { purpose: 'directFire' })).toMatchObject({ kind: 'barrier', x: 70 });
+    gate.active = false;
+    expect(geometry.nearestObstacleHit(line, { purpose: 'directFire' })).toBeNull();
+    Object.assign(walls[0], { obstacleClass: 'invalid' });
+    expect(() => geometry.nearestObstacleHit(line, { purpose: 'directFire' })).toThrow('Unclassified solid obstacle');
+  });
+
+  it('keeps exact base gaps open and limits carrier permission to the first connected body footprint', () => {
+    const cells = [0, 32, 96].map(x => ({ active: true, getData: () => 'carrier',
+      getBounds: () => new Phaser.Geom.Rectangle(x, 0, 32, 32) }));
+    const geometry = new CombatGeometry(new ArenaObstacleIndex({
+      bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 300 }),
+      rocks: () => [], bases: () => cells, trunks: () => [] }));
+    const shot = { purpose: 'directFire' as const, sourceCarrierBaseId: 'carrier', halfWidth: 5, halfHeight: 2 };
+    expect(geometry.nearestObstacleHit(new Phaser.Geom.Line().setTo(16, 16, 68, 16), shot)).toBeNull();
+    expect(geometry.carrierExitFraction(16, 16, 68, 16, 'carrier', 5, 2)).toBeGreaterThan(1);
+    expect(geometry.nearestObstacleHit(new Phaser.Geom.Line().setTo(16, 16, 120, 16), shot))
+      .toMatchObject({ kind: 'base', baseId: 'carrier', x: 91 });
+    expect(geometry.nearestObstacleHit(new Phaser.Geom.Line().setTo(80, -30, 80, 60), shot)).toBeNull();
+    expect(geometry.nearestObstacleHit(new Phaser.Geom.Line().setTo(80, 16, 110, 16), shot))
+      .toMatchObject({ kind: 'base', baseId: 'carrier', x: 91 });
+  });
+
   it('produces the same blocker and safe-muzzle result without a CombatSystem instance', () => {
     const rock = {
       active: true,

@@ -34,6 +34,7 @@ interface RockGpuVisualHandle {
 }
 
 interface RockGpuPage {
+  wallLayer?: Phaser.GameObjects.SpriteGPULayer;
   readonly key: number;
   readonly layer: Phaser.GameObjects.SpriteGPULayer;
   readonly slotOwners: Int32Array;
@@ -69,6 +70,7 @@ export class PersistentGpuWorldSystem {
     this.texture = this.scene.textures.get('rocks');
     this.buildPages();
     this.diagnostics = this.emptyDiagnostics();
+    this.applyDirty(states.filter(state => state?.material === 'walls').map(state => state!.id));
   }
 
   applyDirty(ids: readonly number[]): void {
@@ -82,7 +84,11 @@ export class PersistentGpuWorldSystem {
       const page = this.pages.get(handle.pageKey);
       if (!page) continue;
       page.slotOwners[handle.slot] = state.active ? id : -1;
-      page.layer.editMember(handle.slot, this.memberFor(state));
+      const wall = state.material === 'walls';
+      page.layer.editMember(handle.slot, wall ? this.deadMember(state.gridX, state.gridY) : this.memberFor(state));
+      const wallLayer = wall ? this.ensureWallLayer(page) : page.wallLayer;
+      wallLayer?.editMember(handle.slot, wall ? this.memberFor(state)
+        : this.deadMember(state.gridX, state.gridY, this.scene.textures.get('walls')));
       this.handles[id] = handle;
       const segment = Math.min(
         BUFFER_SEGMENTS - 1,
@@ -101,14 +107,16 @@ export class PersistentGpuWorldSystem {
     for (const [pageKey, segments] of dirtySegments) {
       const page = this.pages.get(pageKey)!;
       const stride = page.layer.getDataByteSize();
-      segmentCount += segments.size;
+      const materials = page.wallLayer ? 2 : 1;
+      segmentCount += segments.size * materials;
       if (segments.size >= FULL_UPLOAD_SEGMENT_THRESHOLD) {
         page.layer.setAllSegmentsNeedUpdate();
-        fullUploads += 1;
-        estimatedUploadBytes += this.slotsPerPage * stride;
+        page.wallLayer?.setAllSegmentsNeedUpdate();
+        fullUploads += materials;
+        estimatedUploadBytes += this.slotsPerPage * stride * materials;
       } else {
-        sparseUploads += segments.size;
-        estimatedUploadBytes += segments.size * page.layer.bufferUpdateSegmentSize * stride;
+        sparseUploads += segments.size * materials;
+        estimatedUploadBytes += segments.size * page.layer.bufferUpdateSegmentSize * stride * materials;
       }
     }
 
@@ -136,6 +144,7 @@ export class PersistentGpuWorldSystem {
       if (!this.visiblePageKeys.has(key)) this.pages.get(key)?.layer.setVisible(true);
     }
     this.visiblePageKeys = wanted;
+    for (const page of this.pages.values()) page.wallLayer?.setVisible(wanted.has(page.key));
     this.diagnostics = { ...this.diagnostics, visiblePages: wanted.size };
   }
 
@@ -144,7 +153,7 @@ export class PersistentGpuWorldSystem {
   }
 
   destroy(): void {
-    for (const page of this.pages.values()) page.layer.destroy();
+    for (const page of this.pages.values()) { page.layer.destroy(); page.wallLayer?.destroy(); }
     this.pages.clear();
     this.handles.length = 0;
     this.visiblePageKeys.clear();
@@ -170,7 +179,7 @@ export class PersistentGpuWorldSystem {
             const gridY = cy * this.cellsPerPage + localY;
             const state = stateByCell.get(`${gridX}:${gridY}`);
             const slot = localY * this.cellsPerPage + localX;
-            layer.addMember(state ? this.memberFor(state) : this.deadMember(gridX, gridY));
+            layer.addMember(state && state.material !== 'walls' ? this.memberFor(state) : this.deadMember(gridX, gridY));
             if (state) {
               slotOwners[slot] = state.id;
               this.handles[state.id] = { pageKey: key, slot };
@@ -190,13 +199,25 @@ export class PersistentGpuWorldSystem {
     return { pageKey: this.grid.key(cx, cy), slot: localY * this.cellsPerPage + localX };
   }
 
+  /** Allocate a second material only in chunks which actually contain constructed walls. */
+  private ensureWallLayer(page: RockGpuPage): Phaser.GameObjects.SpriteGPULayer {
+    if (page.wallLayer) return page.wallLayer;
+    const texture = this.scene.textures.get('walls');
+    const layer = this.scene.add.spriteGPULayer(texture, this.slotsPerPage)
+      .setDepth(DEPTH.ROCKS).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(this.visiblePageKeys.has(page.key));
+    for (let slot = 0; slot < this.slotsPerPage; slot++) layer.addMember(this.deadMember(0, 0, texture));
+    page.wallLayer = layer;
+    return layer;
+  }
+
   private memberFor(state: RockVisualState): Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member> {
-    if (!state.active) return this.deadMember(state.gridX, state.gridY);
+    const texture = state.material === 'walls' ? this.scene.textures.get('walls') : this.texture;
+    if (!state.active) return this.deadMember(state.gridX, state.gridY, texture);
     const [topLeft, topRight, bottomLeft, bottomRight] = resolveRockCornerTints(state);
     return {
       x: state.x,
       y: state.y,
-      frame: this.texture.get(state.frame),
+      frame: texture.get(state.frame),
       scaleX: state.scaleX,
       scaleY: state.scaleY,
       alpha: state.alpha,
@@ -208,11 +229,11 @@ export class PersistentGpuWorldSystem {
     };
   }
 
-  private deadMember(gridX: number, gridY: number): Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member> {
+  private deadMember(gridX: number, gridY: number, texture = this.texture): Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member> {
     return {
       x: this.frame.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2,
       y: this.frame.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2,
-      frame: this.texture.get(0),
+      frame: texture.get(0),
       scaleX: 0,
       scaleY: 0,
       alpha: 0,
@@ -222,12 +243,13 @@ export class PersistentGpuWorldSystem {
   private emptyDiagnostics(): PersistentGpuWorldDiagnostics {
     const first = this.pages.values().next().value as RockGpuPage | undefined;
     const stride = first?.layer.getDataByteSize() ?? 0;
+    const layers = this.pages.size + [...this.pages.values()].filter(page => page.wallLayer).length;
     return {
       pageSize: this.configuredPageSize,
       pageCount: this.pages.size,
       visiblePages: this.visiblePageKeys.size,
-      capacity: this.pages.size * this.slotsPerPage,
-      bufferBytes: this.pages.size * this.slotsPerPage * stride,
+      capacity: layers * this.slotsPerPage,
+      bufferBytes: layers * this.slotsPerPage * stride,
       dirtyRocks: 0,
       affectedPages: 0,
       dirtyBufferSegments: 0,

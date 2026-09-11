@@ -46,7 +46,8 @@ type HomingTargetabilityView = Pick<
 >;
 
 /** Prüft die tatsächliche Projectile-Schusslinie, nicht bloß Sichtbarkeit. */
-export type HomingLineOfFireChecker = (sx: number, sy: number, ex: number, ey: number) => boolean;
+export type HomingLineOfFireChecker = (sx: number, sy: number, ex: number, ey: number,
+  options?: import('../systems/ObstacleRules').ObstacleShotOptions) => boolean;
 
 export interface LineOfFireReadPort {
   readonly hasClearLineOfFire: HomingLineOfFireChecker;
@@ -63,6 +64,7 @@ export interface ProjectileKinematics {
 
 /** Alle Daten, die der Homing-Processor für ein einzelnes Projectile benötigt. */
 export interface ProjectileHomingRequest {
+  readonly shotOptions?: import('../systems/ObstacleRules').ObstacleShotOptions;
   readonly ownerId: string;
   readonly homing: ProjectileHomingConfig;
   readonly kinematics: ProjectileKinematics;
@@ -220,7 +222,7 @@ export class ProjectileHomingController {
         if (this.rejected[i]) continue;
         const candidate = this.candidatePool[i];
         if (candidate.id !== state.lockedTargetId || candidate.type !== state.lockedTargetType) continue;
-        if (!requireLineOfFire || this.lineOfFirePort!.hasClearLineOfFire(originX, originY, candidate.x, candidate.y)) {
+        if (!requireLineOfFire || this.lineOfFirePort!.hasClearLineOfFire(originX, originY, candidate.x, candidate.y, request.shotOptions)) {
           if (!request.isTargetClaimed?.(candidate.id, candidate.type)) return candidate;
           sharedLockedTarget = candidate;
           break;
@@ -262,7 +264,7 @@ export class ProjectileHomingController {
       if (bestIndex < 0) return null;
       if (bestClaimed && sharedLockedTarget) return sharedLockedTarget;
       const best = this.candidatePool[bestIndex];
-      if (!requireLineOfFire || this.lineOfFirePort!.hasClearLineOfFire(originX, originY, best.x, best.y)) return best;
+      if (!requireLineOfFire || this.lineOfFirePort!.hasClearLineOfFire(originX, originY, best.x, best.y, request.shotOptions)) return best;
       this.rejected[bestIndex] = 1;
       eligible -= 1;
     }

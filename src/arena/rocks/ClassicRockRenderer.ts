@@ -56,6 +56,7 @@ export class ClassicRockRenderer {
       this.layers.layerFor(state.gridX, state.gridY),
     );
     this.images[id] = image;
+    if (state.material === 'walls' || image.texture?.key === 'walls') image.setTexture(state.material ?? 'rocks', state.frame);
     image
       .setPosition(state.x, state.y)
       .setFrame(state.frame)

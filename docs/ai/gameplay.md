@@ -77,13 +77,42 @@ Nicht-penetrierende Geschosse mit aktivem Zell-Sweep erhalten weder Arcade-Rock-
 Auch die generische Combat-Zielaufloesung laesst diese Kontakte dem Runtime-Sweep.
 BaseEntity-Zellkoerper (einschliesslich persistenter Basiszellen) sind im Index OBSTACLE_BASE,
 nicht OBSTACLE_ROCK; beide nutzen dieselbe Kontaktgeometrie, behalten aber ihre Schadensidentitaet.
-ignoreBaseCollisions schliesst Basiszellen auch vom Sweep aus. Der Runtime-Sweep besitzt fuer diese Kontakte
-Positionierung, Schaden und Reflexion; Physics- und Overlap-Geschosse behalten ihre eigenen Kontaktwege.
+Der Runtime-Sweep besitzt fuer diese Kontakte Positionierung, Schaden und Reflexion;
+Physics- und Overlap-Geschosse behalten ihre eigenen Kontaktwege.
 Der Sweep beruecksichtigt die Ausdehnung des Projektilkoerpers auch bei der raeumlichen Vorauswahl
 und trennt dessen Kontakt-Center vom Oberflaechenpunkt. Die Sweep-Normale folgt der zuerst betretenen Rechteckflaeche,
 nicht einer benachbarten Kante oder einer Austrittsflaeche. Gemeinsame Wandkanten erzeugen keine
 zusaetzliche Reflexionsachse. Dies prueft
 [`ProjectilePhysicsBoundary.test.ts`](../../tests/ProjectilePhysicsBoundary.test.ts).
+
+## Hindernisse, Schusslinien und Bauschutz
+
+[`ObstacleRules`](../../src/systems/ObstacleRules.ts) trennt Hindernisklasse und Abfragezweck.
+Objekte ohne feste Geometrie gehören zu `ground`, gebaute Mauern und normale Turmsockel zu
+`low`, Basiszellen zu `high`, Naturfelsen, Stämme, aktive Missionssperren und Zug zu `veryHigh`.
+Der bestehende `ArenaObstacleIndex` bleibt die einzige statische Geometrieprojektion.
+Direktfeuer ignoriert niedrige Geometrie vor Kontaktgedächtnis, Schaden, Reflexion und Verbrauch;
+Support darf berechtigte niedrige Ziele treffen. Physische Sicht-, Bewegungs-, Nahkampf-,
+Wurf- und Landungsprüfungen übernehmen diese Durchlässigkeit nicht.
+
+`sourceCarrierBaseId` bezeichnet ausschließlich den konkreten Abschussträger. Authored Türme
+nutzen ihre `baseId`; persistente Dachtürme erhalten die Zuordnung beim Materialisieren ihrer
+Base-Site. Die Bauzone allein erteilt keine Freigabe. Die Projectile-Runtime beendet ihre
+hostseitige Freigabe beim ersten vollständigen Austritt des Körpers aus der anfänglich
+zusammenhängend durchquerten Zellfläche, auch innerhalb eines Frames oder in eine Nische.
+Portaltransport und Reflexion beenden sie ebenfalls; Folgegeschosse erben sie nicht.
+Basis-Rechtecke zur Vorauswahl ersetzen niemals die tatsächlichen Zellen als Treffergeometrie.
+
+[`WorldObjectMutationRuntime`](../../src/world/WorldObjectMutationRuntime.ts) prüft eigene und
+verbündete Bauwerke vor dem autoritativen HP-Abzug. Die Zugehörigkeitsentscheidung liegt im
+`WorldCombatCore`; sie bleibt unabhängig von Teamschaden an Figuren und von physischer
+Schussblockierung. Bereits erzeugte Angriffe und verzögerte Wirkungen erhalten ihre
+`CombatSource` beziehungsweise `ProjectileProvenance` mit erfasster Zugehörigkeit, auch nach
+Entfernung des Angreifers. Natur, Zug und neutrale Gefahren erhalten dadurch keinen Bauschutz;
+Rückbau verwendet weiterhin den separaten Entfernungspfad. Diese Grenzen sichern die
+[Geometrie-Tests](../../tests/CombatSystemLineOfFire.test.ts),
+[Träger- und Kontakttests](../../tests/ProjectilePhysicsBoundary.test.ts) und die
+[Mutation-Integration](../../tests/integration/WorldObjectMutationRuntime.test.ts).
 
 ## Eingaben und Aktionen
 
