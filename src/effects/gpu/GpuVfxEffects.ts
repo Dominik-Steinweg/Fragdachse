@@ -82,6 +82,9 @@ export const GpuVfxEffectId = {
   ElectricGroundGlow: 68,
   ElectricBodyCore: 69,
   ElectricBodyGlow: 70,
+  MgAttrition: 71,
+  MgBleed: 72,
+  MgTransfer: 73,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -594,4 +597,10 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.FlightCoreStrip, importance: 'critical', release: 'kill-with-source' },
   { id: GpuVfxEffectId.ElectricBodyGlow, label: 'zeus.body-glow', lane: GpuVfxLaneId.ElectricBody,
     frame: GpuVfxFrameId.DeathGlow, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.MgAttrition, label: 'mg.attrition', lane: GpuVfxLaneId.EntityBurn,
+    frame: GpuVfxFrameId.FlameSpark, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.MgBleed, label: 'mg.bleed', lane: GpuVfxLaneId.GoreNormal,
+    frame: GpuVfxFrameId.BloodDroplet, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.MgTransfer, label: 'mg.transfer', lane: GpuVfxLaneId.ElectricBody,
+    frame: GpuVfxFrameId.FlightCoreStrip, importance: 'standard', release: 'kill-with-source' },
 ];

@@ -1,3 +1,5 @@
+import { encodeMgAttrition, decodeMgAttrition } from './mgAttritionCodec';
+import { emptyMgAttritionSnapshot, type MgAttritionSnapshot } from '../systems/MgAttritionRuntime';
 import { EMPTY_ZEUS_SNAPSHOT, type ZeusSnapshot } from '../systems/ZeusRuntime';
 import { parseStinkCloudUtilityState, type StinkCloudUtilityState } from '../loadout/StinkCloudUtilityState';
 import { decodeStinkPlague, encodeStinkPlague, emptyStinkPlagueSnapshot } from './stinkPlagueCodec';
@@ -328,6 +330,7 @@ export interface GameState {
   zeus?: ZeusSnapshot;
   smokeTargets?: import('../types').SyncedSmokeTargetStatus[];
   stinkPlague?: import('../systems/StinkPlagueRuntime').StinkPlagueSnapshot;
+  mgAttrition?: MgAttritionSnapshot;
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
   pedestals:    SyncedPowerUpPedestal[]; // feste Power-Up-Podeste
@@ -353,6 +356,7 @@ export interface GameState {
 }
 
 interface OutboundGameState {
+  mgAttrition?: MgAttritionSnapshot;
   adrenalineEssence?: EssenceSnapshot | null;
   /** Optionaler Test-/Host-Anker; die Bridge schreibt immer die aktuelle World-Revision. */
   worldRevision?: number;
@@ -2727,6 +2731,7 @@ export class NetworkBridge {
     payload.zs = state.zeus ?? EMPTY_ZEUS_SNAPSHOT;
     payload.sx = encodeSmokeTargets(state.smokeTargets ?? []);
     payload.pl = encodeStinkPlague(state.stinkPlague ?? emptyStinkPlagueSnapshot());
+    payload.mga = encodeMgAttrition(state.mgAttrition ?? emptyMgAttritionSnapshot());
     if (state.fires.length > 0)        payload.f = state.fires;
     if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
     if (state.timeBubbles.length > 0)  payload.tb = state.timeBubbles;
@@ -2832,6 +2837,7 @@ export class NetworkBridge {
       zs: state.zeus ?? EMPTY_ZEUS_SNAPSHOT,
       sx: encodeSmokeTargets(state.smokeTargets ?? []),
       pl: encodeStinkPlague(state.stinkPlague ?? emptyStinkPlagueSnapshot()),
+      mga: encodeMgAttrition(state.mgAttrition ?? emptyMgAttritionSnapshot()),
       f: state.fires,
       sc: state.stinkClouds,
       tb: state.timeBubbles,
@@ -2950,6 +2956,7 @@ export class NetworkBridge {
       zeus: (raw.zs as ZeusSnapshot | undefined) ?? this.cachedGameState?.zeus ?? EMPTY_ZEUS_SNAPSHOT,
       smokeTargets: decodeSmokeTargets(raw.sx),
       stinkPlague: decodeStinkPlague(raw.pl),
+      mgAttrition: decodeMgAttrition(raw.mga),
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
       stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
       timeBubbles:   (raw.tb as SyncedTimeBubble[]   | undefined) ?? [],

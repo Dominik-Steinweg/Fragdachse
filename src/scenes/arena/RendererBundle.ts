@@ -1,3 +1,4 @@
+import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
 import { TurretAnimationController } from '../../effects/TurretAnimationController';
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
@@ -106,6 +107,7 @@ export interface RendererBundle {
   burrowGpu:           BurrowGpuRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
+  mgAttrition:         MgAttritionRenderer;
   explosionGpu:        ExplosionGpuRenderer;
   fireball:            FireballRenderer;
   spore:               SporeRenderer;
@@ -145,6 +147,7 @@ export function createRendererBundle(
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
   // melden sich hier an, statt je Brand eigene Emitter oder Callbacks zu erzeugen.
   const entityBurnGpu = new EntityBurnGpuController(gpuVfx);
+  const mgAttrition = new MgAttritionRenderer(scene, gpuVfx);
   const combatGoreGpu = new CombatGoreGpuRenderer(scene);
   combatGoreGpu.registerGpuVfx(gpuVfx);
   const explosionGpu = new ExplosionGpuRenderer();
@@ -330,6 +333,7 @@ export function createRendererBundle(
     burrowGpu,
     combatGoreGpu,
     entityBurnGpu,
+    mgAttrition,
     explosionGpu,
     train: null,
     translocatorTeleport: null,
@@ -378,6 +382,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setPlasmaBurnerRenderer(bundle.plasmaBurner);
   effectSystem.setBiteRenderer(bundle.bite);
   effectSystem.setZeusTaserRenderer(bundle.zeusTaser);
+  effectSystem.setMgAttritionRenderer(bundle.mgAttrition);
   bundle.nuke.setEffectSystem(effectSystem);
   bundle.airstrike.setEffectSystem(effectSystem);
   effectSystem.setLightingSystem(bundle.lighting);

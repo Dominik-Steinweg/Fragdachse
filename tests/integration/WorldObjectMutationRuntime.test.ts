@@ -42,7 +42,7 @@ function resolvedDamage(amount: number) {
   });
 }
 
-function createFixture(options: { readonly throwFromVisuals?: boolean } = {}) {
+function createFixture(options: { readonly throwFromVisuals?: boolean; readonly mgRange?: () => number } = {}) {
   const layout: ArenaLayout = {
     seed: 17,
     rocks: [
@@ -107,7 +107,8 @@ function createFixture(options: { readonly throwFromVisuals?: boolean } = {}) {
       unregisterConstructionPedestal,
       unregisterPersistentBaseRewardPedestal,
     } as never,
-    modifierReadPort: null,
+    modifierReadPort: options.mgRange ? { getNumericStat: () => 0,
+      getPercentageStat: (_id: string, stat: string) => stat === 'construction.machine_gun_turret.range' ? options.mgRange!() : 0 } as never : null,
     tunnelPlacementPort: null,
     gameAudioSystem: {} as never,
     getGameMode: () => 'coop_defense',
@@ -188,6 +189,25 @@ function createFixture(options: { readonly throwFromVisuals?: boolean } = {}) {
 }
 
 describe('WorldObjectMutationRuntime real-owner integration', () => {
+  it('restores personal MG range from current owner data and shares it with placement previews', () => {
+    let range = .4;
+    const f = createFixture({ mgRange: () => range }), base = COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret;
+    const candidate = { gridX: 10, gridY: 10,
+      blueprint: { persistentId: 'saved-mg', tool: { kind: 'construction' as const, id: base.id }, relativeGridX: 0, relativeGridY: 0, angle: 0, placementOrder: 0 },
+      tool: { kind: 'construction' as const, id: base.id, footprint: base.footprint, maxHp: base.maxHp, capacityCost: base.capacityCost, unlocked: true } };
+    const restored = f.construction.materializeRestoreCandidate(candidate, 'owner', 0xffffff, 'host-persistent')!;
+    expect(restored.targetRange).toBeCloseTo(base.targetRange * 1.4);
+    expect(restored.maxHp).toBe(base.maxHp);
+    range = .6;
+    const effective = f.construction.getEffectiveDefinition('machine_gun_turret', 'owner');
+    const metrics = resolveActiveArenaWorldMetrics(), x = metrics.offsetX + metrics.widthPx / 2, y = metrics.offsetY + metrics.heightPx / 2;
+    const preview = f.placement.getConstructionPlacementPreview(effective, x, y, x, y);
+    expect(preview?.targetRange).toBeCloseTo(base.targetRange * 1.6);
+    expect(f.construction.getEffectiveDefinition('machine_gun_turret', 'owner', false)).toBe(base);
+    const independent = f.construction.materializeRestoreCandidate({ ...candidate, gridX: 12 }, 'owner', 0xffffff, 'base-owned')!;
+    expect(independent.targetRange).toBe(base.targetRange);
+    f.mutations.destroy(); f.construction.destroy();
+  });
   it('commits rock damage and repair at the real HP owner without renderer authority', () => {
     const fixture = createFixture({ throwFromVisuals: true });
     vi.spyOn(console, 'error').mockImplementation(() => {});

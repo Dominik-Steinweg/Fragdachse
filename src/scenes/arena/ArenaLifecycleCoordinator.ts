@@ -1304,6 +1304,7 @@ export class ArenaLifecycleCoordinator {
   private detachActivityRuntime(): void {
     this.worldGameplay?.support?.plague?.clearTargets();
     this.ctx.stinkCloudSystem.clearPlagueVisuals();
+    this.ctx.effectSystem.clearMgAttrition();
     this.worldGameplay?.support?.smoke.runtime.clearTargets();
     this.captureTheBeerPresentation?.detach();
     this.worldRuntime?.activity.detach();
@@ -2761,6 +2762,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.stinkCloudSystem.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
     this.ctx.effectSystem.clearZeusUpgrades();
+    this.ctx.effectSystem.clearMgAttrition();
     // Die Effektdarstellung der vergangenen World raeumt ihr eigener Owner ab.
     resetRenderersForWorldGameplayTeardown(this.renderers);
     // Laufende Kameraquellen und Trefferkopien dürfen nicht in die Lobby überlaufen.

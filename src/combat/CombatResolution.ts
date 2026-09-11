@@ -28,7 +28,7 @@ export interface CombatResolutionContext {
     request: CombatDamageRequest, amount: number, allowCritical: boolean,
     nowMs: number, random: () => number,
   ) => { readonly amount: number; readonly isCritical: boolean };
-  readonly incomingMultiplier?: (target: CombatTargetRef, nowMs: number) => number;
+  readonly incomingMultiplier?: (target: CombatTargetRef, nowMs: number, source?: CombatSource) => number;
   /** Direction/category shield is before M/T; the World-space projectile barrier is not here. */
   readonly blockBeforeModifiers?: (request: CombatDamageRequest, amount: number, nowMs: number) => boolean;
   /** Target-area protection receives post-M/T damage, before Player reduction. */
@@ -82,7 +82,7 @@ export function resolveCombatDamage(
     outgoing: newSource && context.resolveOutgoing
       ? (value, allowCritical, nowMs, random) => context.resolveOutgoing!(request, value, allowCritical, nowMs, random)
       : undefined,
-    incoming: nowMs => context.incomingMultiplier?.(request.target, nowMs) ?? 1,
+    incoming: nowMs => context.incomingMultiplier?.(request.target, nowMs, request.source) ?? 1,
   });
   if (!modified) return reject('invalid-value');
   amount = modified.amount;

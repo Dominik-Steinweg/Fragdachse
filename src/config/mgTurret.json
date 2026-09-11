@@ -1,0 +1,8 @@
+{
+  "damage": 2,
+  "cooldownMs": 275,
+  "durationMs": 4000,
+  "baseMaximumPercent": 50,
+  "bleedTickMs": 250,
+  "transferRadius": 150
+}

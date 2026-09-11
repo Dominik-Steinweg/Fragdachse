@@ -147,6 +147,8 @@ export interface ProjectileMiniRocketFlightSpec {
  * Zurechnung und Zugehörigkeit ändern kann, ohne Herkunft oder Abstammung zu verlieren.
  */
 export interface ProjectileProvenance {
+  readonly personalMgOwnerId?: string;
+  readonly personalMgScope?: import('../combat/CombatScope').CombatScope;
   /** Contributions already included in this attack's damage payload; inherited by children. */
   readonly portalDamage?: PortalDamageContext;
   readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
@@ -204,6 +206,8 @@ export interface ProjectileCorrelation {
 
 /** Quelle, bei der Gameplay-Source, Attribution und Allegiance dieselbe Entität sind. */
 export interface SingleOwnerProvenanceDetails {
+  readonly personalMgOwnerId?: string;
+  readonly personalMgScope?: import('../combat/CombatScope').CombatScope;
   readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
   readonly weaponSourceId?: string;
   readonly allowTeamDamage?: boolean;
@@ -225,12 +229,15 @@ export function createSingleOwnerProvenance(
 ): ProjectileProvenance {
   return {
     gameplaySourceId: ownerId,
+    ...(details.personalMgOwnerId ? { gameplaySourceKind: 'player' as const, attributionKind: 'player' as const } : {}),
     primaryHitReward: details.primaryHitReward,
     attributionId: ownerId,
     allegiance: { ownerId, allowTeamDamage: details.allowTeamDamage },
     weaponSourceId: details.weaponSourceId,
     sourceSlot: details.sourceSlot,
     sourceTurretId: details.sourceTurretId,
+    personalMgOwnerId: details.personalMgOwnerId,
+    personalMgScope: details.personalMgScope ? { ...details.personalMgScope } : undefined,
     lineage: details.lineage,
     correlation: details.correlation,
   };

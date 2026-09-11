@@ -1,4 +1,5 @@
 import type { PlayerManager } from '../../entities/PlayerManager';
+import { bridge } from '../../network/bridge';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { ArenaInputPersistentBasePorts, ArenaInputPlacementPorts } from './ArenaInputBindings';
@@ -229,7 +230,7 @@ export function createArenaPlacementPorts(flow: ArenaLifecycleCoordinator): Aren
     ),
     getConstructionPlacementPreview: (definition, originX, originY, pointerX, pointerY) => (
       flow.getWorldRuntime()?.materialization?.placement?.getConstructionPlacementPreview(
-        definition,
+        flow.getConstructionWorldRuntime()?.getEffectiveDefinition(definition.id, bridge.getLocalPlayerId()) ?? definition,
         originX,
         originY,
         pointerX,

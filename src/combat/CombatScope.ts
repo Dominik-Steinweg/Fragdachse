@@ -73,6 +73,9 @@ export interface CombatSourceCorrelation {
 
 /** Immutable source facts retained even when the originating entity has despawned. */
 export interface CombatSource {
+  /** Immutable personal MG origin; independent base/world turrets never set it. */
+  readonly personalMgOwnerId?: string;
+  readonly personalMgScope?: CombatScope;
   readonly portalDamage?: import('../systems/PortalTraversal').PortalDamageContext;
   readonly gameplaySource: CombatSourceEntityRef;
   readonly actor?: CombatSourceEntityRef;

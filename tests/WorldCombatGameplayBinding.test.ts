@@ -49,6 +49,8 @@ import {
   type WorldCombatGameplayBindingOptions,
 } from '../src/world/WorldCombatGameplayBinding';
 import type { PlayerCombatIntegrationPort } from '../src/world/PlayerCombatIntegrationPort';
+import { mgTarget } from './MgTurretTestHelper';
+import { resolveMgTurretStats } from '../src/config/mgTurret';
 
 const layout: ArenaLayout = {
   seed: 1,
@@ -66,7 +68,7 @@ function methodBag(overrides: Record<string, unknown> = {}): Record<string, unkn
       if (Reflect.has(target, property)) return Reflect.get(target, property, receiver);
       let method = methods.get(property);
       if (!method) {
-        method = vi.fn();
+        method = property === 'observeEnemyDamageCommitted' ? vi.fn(() => vi.fn()) : vi.fn();
         methods.set(property, method);
       }
       return method;
@@ -102,6 +104,10 @@ interface TurretFixture {
 }
 
 function createFixture(options: {
+  readonly coop?: boolean;
+  readonly activity?: () => boolean;
+  readonly participants?: () => readonly string[];
+  readonly observer?: (id: string) => boolean;
   readonly placementSystem?: PlacementSystem;
   readonly players: readonly { id: string; x: number; y: number; active: boolean; rotation?: number }[];
   readonly enemies: readonly { id: string; x: number; y: number; active: boolean }[];
@@ -137,6 +143,8 @@ function createFixture(options: {
   const projectileWorldImpact = methodBag();
   const projectileSwarm = methodBag();
   const combatSystem = options.combatSystem ?? (methodBag({
+    observeEnemyDamageCommitted: vi.fn(() => () => {}),
+    getCombatScope: vi.fn(() => ({ worldRevision: 1, runtimeGeneration: 1 })),
     isAlive: vi.fn(() => true),
     isBurrowed: vi.fn(() => false),
     canDamageTarget: vi.fn(() => true),
@@ -144,6 +152,8 @@ function createFixture(options: {
     hasLineOfSight: vi.fn(() => true),
   }) as unknown as CombatSystem);
   const enemyManager = {
+    getCombatTargetRef: (id: string) => mgTarget(id).ref,
+    getHostileEnemies: () => options.enemies.map(enemy => ({ id: enemy.id, sprite: { active: enemy.active, x: enemy.x, y: enemy.y }, getHp: () => 1000 })),
     getAllEnemies: () => options.enemies.map((enemy) => ({
       id: enemy.id,
       sprite: { active: enemy.active, x: enemy.x, y: enemy.y },
@@ -152,6 +162,7 @@ function createFixture(options: {
     hasEnemy: () => false,
   } as unknown as EnemyManager;
   const baseManager = options.baseManager ?? methodBag({
+    getBases: () => [],
     getTurrets: () => options.baseTurrets ?? [],
     getBasesByFaction: () => [],
     getBase: () => undefined,
@@ -233,9 +244,9 @@ function createFixture(options: {
   const network = {
     authority: {
       isHost: () => true,
-      isEnemyPair: () => true,
+      isEnemyPair: (a: string, b: string) => a !== b && !options.coop,
       getPlayerProfile: (id: string) => options.players.find(player => player.id === id) as unknown as PlayerProfile | undefined,
-      getConnectedPlayers: (): readonly PlayerProfile[] => [],
+      getConnectedPlayers: (): readonly PlayerProfile[] => (options.participants?.() ?? []).map(id => ({ id } as PlayerProfile)),
     },
     round: {
       canPlayerInitialSpawn: () => true,
@@ -270,9 +281,10 @@ function createFixture(options: {
     baseManager,
     worldMetrics: metrics,
     isCoopMission: () => false,
-    isActivityActive: () => true,
+    isActivityActive: options.activity ?? (() => true),
+    isCoopDefense: () => options.coop ?? false,
     getSpawnContext: () => undefined,
-    getWorldParticipation: () => ({}) as never,
+    getWorldParticipation: id => options.observer?.(id) ? 'observer' : 'interactive',
     getPlayerCapabilities: () => ({ canUseCombat: true }),
     getEnemyManager: () => enemyManager,
     getPlayerCombatIntegration: () => playerCombat,
@@ -324,6 +336,74 @@ function createFixture(options: {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('personal MG profile and World lifetime', () => {
+  it('prioritizes valid focus, active attrition, distance and stable identity and reevaluates between shots', () => {
+    const turret = new TurretSystem({ getAllPlayers: () => [] } as never,
+      { isAlive: () => true, isBurrowed: () => false, canDamageTarget: () => true });
+    turret.setTurretProvider(() => [{ id: 't', x: 0, y: 0, ownerId: 'owner', ownerColor: 0xffffff, weaponId: 'TURRET_MG', targetRange: 400, muzzleOffset: 0 }], null);
+    const scores = new Map<string, number>([['far', 10]]);
+    let enemies = [{ id: 'near', x: 50, y: 0 }, { id: 'far', x: 200, y: 0 }];
+    let focus: { targetType: 'enemy' | 'base'; targetId: string } | null = null;
+    let blockedX: number | null = null;
+    turret.setEnemyTargetProvider(() => enemies); turret.setTargetScoreProvider((_turret,_kind,id) => scores.get(id) ?? 0);
+    turret.setFocusTargetProvider(() => focus); turret.setFocusedBaseTargetProvider(() => ({ id: 'base', x: 300, y: 0 }));
+    turret.setLineOfFireChecker((_sx,_sy,ex) => ex !== blockedX);
+    const fire = vi.fn(); turret.setFireHandler(fire); let now = 0;
+    const target = () => { turret.hostUpdate(now += 1000, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES); return fire.mock.calls.at(-1)!.slice(6,8); };
+    expect(target()).toEqual([200,0]); focus = { targetType: 'enemy', targetId: 'near' }; expect(target()).toEqual([50,0]);
+    focus = { targetType: 'base', targetId: 'base' }; expect(target()).toEqual([300,0]);
+    blockedX = 300; expect(target()).toEqual([200,0]);
+    focus = null; scores.clear(); expect(target()).toEqual([50,0]);
+    enemies = [{ id: 'z', x: -100, y: 0 }, { id: 'a', x: 100, y: 0 }]; expect(target()).toEqual([100,0]);
+    enemies.reverse(); expect(target()).toEqual([100,0]);
+  });
+  it('updates restored personal MGs immediately, preserves fire cooldown and leaves base-owned MGs unchanged', () => {
+    const placement = createPlacement({ getAllPlayers: () => [] } as never);
+    const personal = placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret, 10, 10, 0, 'owner', 0xffffff, 'host-persistent')!;
+    const independent = placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret, 12, 10, 0, 'base', 0xffffff, 'base-owned')!;
+    const metrics = resolveActiveArenaWorldMetrics(), x = metrics.offsetX + 10 * CELL_SIZE + CELL_SIZE / 2, y = metrics.offsetY + 10 * CELL_SIZE + CELL_SIZE / 2;
+    const f = createFixture({ coop: true, placementSystem: placement, players: [{ id: 'owner', x: 0, y: 0, active: true }],
+      enemies: [{ id: 'enemy', x: x + 100, y, active: true }] });
+    let range = 0, frequency = 0;
+    vi.mocked(f.playerCombat.modifier.getNumericStat).mockReturnValue(0);
+    vi.mocked(f.playerCombat.modifier.getPercentageStat).mockImplementation((_id, stat) => stat.endsWith('.range') ? range : stat.endsWith('.frequency') ? frequency : 0);
+    const fire = (now: number) => f.binding.systems!.turret.hostUpdate(now, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
+    const baseline = resolveMgTurretStats(); fire(0);
+    const first = f.projectileSpawn.spawnProjectile.mock.calls.map(([request]) => request).find(request => request.provenance.sourceTurretId === String(personal.id))!;
+    expect(first.interaction.directHit!.damage).toBe(baseline.damage);
+    expect(first.provenance).toMatchObject({ personalMgOwnerId: 'owner', personalMgScope: { worldRevision: 1, runtimeGeneration: 1 }, attributionKind: 'player' });
+    expect(f.projectileSpawn.spawnProjectile.mock.calls.find(([r]) => r.provenance.sourceTurretId === String(independent.id))![0].provenance.personalMgOwnerId).toBeUndefined();
+    range = .6; frequency = .3;
+    const personalRead = f.binding.systems!.turret.getTurrets().find(t => t.id === personal.id)!;
+    const baseRead = f.binding.systems!.turret.getTurrets().find(t => t.id === independent.id)!;
+    expect(personalRead.targetRange).toBeCloseTo(baseline.targetRange * 1.6);
+    expect(personalRead.projectileRange).toBeCloseTo(baseline.projectileRange * 1.6);
+    expect(personalRead.cooldownMs).toBeCloseTo(baseline.cooldownMs / 1.3);
+    expect(baseRead.targetRange).toBe(independent.targetRange); expect(baseRead.cooldownMs).toBeUndefined();
+    const before = f.projectileSpawn.spawnProjectile.mock.calls.length;
+    fire(1); expect(f.projectileSpawn.spawnProjectile).toHaveBeenCalledTimes(before);
+    fire(baseline.cooldownMs); expect(f.projectileSpawn.spawnProjectile).toHaveBeenCalledTimes(before + 1);
+    f.binding.destroy();
+  });
+  it('keeps lobby networks without a built MG, excludes observers and retains progress when participants change', () => {
+    let participants = ['b']; const observers = new Set<string>(['spectator']);
+    const f = createFixture({ coop: true, activity: () => false, participants: () => participants, observer: id => observers.has(id),
+      players: [], enemies: [{ id: 'enemy', x: 300, y: 100, active: true }] });
+    vi.mocked(f.playerCombat.modifier.getClassDefinition).mockReturnValue({ id: 'inspector_gadachs' } as never);
+    vi.mocked(f.playerCombat.modifier.getNumericStat).mockImplementation((_id, stat) => stat.endsWith('.network') ? 1 : stat.endsWith('.perHitPercent') ? 2 : 0);
+    const mg = f.binding.mgTurret!, target = mgTarget('enemy', 300);
+    f.binding.advanceMgTurrets(0); mg.runtime.hit('b', 'removed', target, 0);
+    participants = ['a', 'b', 'spectator']; f.binding.advanceMgTurrets(10);
+    expect(mg.runtime.getPercent('a', 'anything', target.ref, 10)).toBe(2);
+    expect(mg.runtime.getPercent('spectator', 'anything', target.ref, 10)).toBe(0);
+    participants = ['b']; vi.mocked(f.combatSystem.isAlive).mockReturnValue(false); f.binding.advanceMgTurrets(20);
+    expect(mg.runtime.getPercent('b', 'anything', target.ref, 20)).toBe(2);
+    f.binding.clearActivityBindings(); expect(mg.runtime.snapshot(20).targets).toEqual([]);
+    f.binding.advanceMgTurrets(21); expect(mg.runtime.getPercent('b', 'anything', target.ref, 21)).toBe(0);
+    f.binding.destroy();
+  });
 });
 
 describe('WorldCombatGameplayBinding projectile target geometry', () => {

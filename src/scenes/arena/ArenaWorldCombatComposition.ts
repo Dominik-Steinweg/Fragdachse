@@ -137,6 +137,7 @@ export function composeWorldCombatGameplay(
     baseManager,
     worldMetrics: world.metrics,
     isCoopMission: () => flow.isCoopMissionActivity(),
+    isCoopDefense: () => bridge.getGameMode() === 'coop_defense',
     isActivityActive: () => flow.isActivityActive(),
     getSpawnContext: (playerId) => {
       const latestState = bridge.getLatestGameState();

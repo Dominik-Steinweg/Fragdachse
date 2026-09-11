@@ -68,6 +68,13 @@ export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
 }
 
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  mg_attrition: 'UPGRADE_CRITICAL_DAMAGE',
+  mg_calibration: 'UPGRADE_CRITICAL_DAMAGE',
+  mg_optics: 'UPGRADE_FLIEGENPILZ_RANGE',
+  mg_fire_superiority: 'UPGRADE_FLIEGENPILZ_DOUBLE_SPORE',
+  mg_fire_control_network: 'UPGRADE_FLIEGENPILZ_PLASMA_GUN',
+  mg_bleed: 'UPGRADE_STINKDRUESEN_DAMAGE',
+  mg_handoff: 'UPGRADE_STINKDRUESEN_RADIUS',
   zeus_dynamo: 'UPGRADE_ZEUS_TASER_RANGE',
   zeus_nerve_shock: 'UPGRADE_ZEUS_TASER_RANGE',
   zeus_ball_lightning: 'UPGRADE_ZEUS_TASER_RANGE',

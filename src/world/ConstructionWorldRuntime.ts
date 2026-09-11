@@ -8,6 +8,7 @@ import type { LoadoutUseParams, LoadoutUseResult, LoadoutToolRef, SyncedPlaceabl
 import type { PlaceableUtilityConfig, TunnelUltimateConfig, UtilityConfig } from '../loadout/LoadoutConfig';
 import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../loadout/CoopDefenseLoadoutModifiers';
+import { resolveMgTurretStats } from '../config/mgTurret';
 import type {
   CoopDefensePlayerModifierReadPort,
   CoopDefensePlayerRuntimeModifiers,
@@ -212,6 +213,15 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     return normalizeConstructionId(value);
   }
 
+  getEffectiveDefinition(constructionId: ConstructionId, ownerId: string, personal = true): CoopDefenseConstructionDefinition {
+    const definition = getCoopDefenseConstructionDefinition(constructionId);
+    if (!personal || constructionId !== 'machine_gun_turret' || definition.kind !== 'turret' || this.options.getGameMode() !== 'coop_defense') return definition;
+    const modifiers = this.options.modifierReadPort;
+    const mg = resolveMgTurretStats(stat => modifiers?.getNumericStat(ownerId, stat) ?? 0,
+      stat => modifiers?.getPercentageStat(ownerId, stat) ?? 0);
+    return { ...definition, targetRange: mg.targetRange };
+  }
+
   getDefinition(value: string | number | undefined): CoopDefenseConstructionDefinition | null {
     const id = normalizeConstructionId(value);
     return id ? getCoopDefenseConstructionDefinition(id) : null;
@@ -311,7 +321,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
     const player = this.options.playerManager.getPlayer(playerId);
     if (!player || !player.active || !this.options.combatSystem.isAlive(playerId) || this.options.combatSystem.isBurrowed(playerId)) return { ok: false, reason: 'blocked' };
-    const definition = getCoopDefenseConstructionDefinition(canonical);
+    const definition = this.getEffectiveDefinition(canonical, playerId);
     if (this.isConstructionOnCooldown(playerId, canonical, hostNowMs)) return { ok: false, reason: 'cooldown' };
     if (!this.hasFreeCapacity(playerId, definition.capacityCost)) return { ok: false, reason: 'capacity' };
     const hpMultiplier = definition.indestructible ? 1 : 1 + (this.options.modifierReadPort?.getPercentageStat(playerId, 'construction.maxHp') ?? 0);
@@ -523,7 +533,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
       this.options.rockVisualHelper.materializePlaceableRock(runtime, false);
       return runtime;
     }
-    const definition = getCoopDefenseConstructionDefinition(constructionId);
+    const definition = this.getEffectiveDefinition(constructionId, ownerId, ownership !== 'base-owned');
     const runtime = this.options.placementSystem.materializePersistentPlaceable({ ...definition, maxHp: candidate.tool.maxHp }, candidate.gridX, candidate.gridY, candidate.blueprint.angle, ownerId, ownerColor, ownership);
     if (!runtime) return null;
     if (definition.kind === 'pedestal') {

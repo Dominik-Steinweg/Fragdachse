@@ -191,6 +191,7 @@ interface DamageApplicationOptions {
    * Lifeleech und keine schadensabhaengigen Folgeeffekte ausloesen.
    */
   skipLifeLeech?: boolean;
+  suppressHitEffect?: boolean;
 }
 
 /** Passiver, autoritativer Messpunkt nach tatsaechlich verlorenem HP/Armor. */
@@ -412,6 +413,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private lastSource = new Map<string, CombatSource>();
   private attributionTargets = new Map<string, CombatTargetRef>();
   private readonly enemyDamageCommittedObservers = new Set<(outcome: TargetDamageAppliedOutcome, x: number, y: number, now: number) => void>();
+  private projectileTargetMultiplier: ((source: CombatSource, target: CombatTargetRef, now: number) => number) | null = null;
+  setProjectileTargetMultiplier(resolver: typeof this.projectileTargetMultiplier): void { this.projectileTargetMultiplier = resolver; }
   observeEnemyDamageCommitted(observer: (outcome: TargetDamageAppliedOutcome, x: number, y: number, now: number) => void): () => void {
     this.enemyDamageCommittedObservers.add(observer);
     return () => { this.enemyDamageCommittedObservers.delete(observer); };
@@ -436,7 +439,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private enemyManager:     EnemyManager | null = null;
   private projectileDetonableReadPort: ProjectileDetonableReadPort | null = null;
   private baseManager:      BaseManager | null = null;
-  private baseDamageCallback: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => CombatDamageMutationOutcome | null) | null = null;
+  private baseDamageCallback: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot, source?: CombatSource) => CombatDamageMutationOutcome | null) | null = null;
   private trunkObjects: readonly ObstacleCircleBody[] | null = null;
   /**
    * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
@@ -875,7 +878,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    * Schaden durch `resolveOutgoingDamage` laeuft und Klassen-, Item- sowie optionale
    * Quell-Slot-Modifikatoren sieht.
    */
-  setBaseDamageCallback(cb: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => CombatDamageMutationOutcome | null) | null): void {
+  setBaseDamageCallback(cb: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot, source?: CombatSource) => CombatDamageMutationOutcome | null) | null): void {
     this.baseDamageCallback = cb;
   }
   setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
@@ -1884,7 +1887,19 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       projectile.ownerId,
       projectile.sourceSlot,
       projectile.baseDamageMult,
+      undefined,
+      adaptProjectileCombatSource(projectile.provenance, projectile.projectileId,
+        this.classifyProjectileSource({ provenance: projectile.provenance })),
     );
+  }
+
+  /** Already integrated status damage: only target vulnerability/protection remains pending. */
+  applyBaseStatusDamage(baseId: string, amount: number, source: CombatSource, now: number): CombatDamageMutationOutcome | null {
+    return this.runHostExecution(() => {
+      if (!this.bridge.isHost() || !Number.isFinite(amount) || amount <= 0) return null;
+      const multiplier = this.targetIncomingDamageMultiplierResolver?.({ targetType: 'base', targetId: baseId }, now) ?? 1;
+      return this.baseDamageCallback?.(baseId, amount * multiplier, source.attribution.id, source.sourceSlot, source) ?? null;
+    }, now);
   }
 
   private registerAk47Hit(context: ProjectileAk47HitContext | undefined): void {
@@ -3329,6 +3344,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceSlot?: LoadoutSlot,
     baseDamageMult = 1,
     appliedSourceFactors?: readonly CombatSourceFactor[],
+    source?: CombatSource,
   ): CombatDamageMutationOutcome | null {
     if (!this.bridge.isHost() || !Number.isFinite(damage) || !Number.isFinite(baseDamageMult) || damage <= 0 || baseDamageMult <= 0) return null;
     const runtimeDamage = damage * baseDamageMult
@@ -3338,7 +3354,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       appliedSourceFactors,
     );
     if (resolvedDamage <= 0) return null;
-    return this.baseDamageCallback?.(baseId, resolvedDamage, attackerId, sourceSlot) ?? null;
+    return (source ? this.baseDamageCallback?.(baseId, resolvedDamage, attackerId, sourceSlot, source)
+      : this.baseDamageCallback?.(baseId, resolvedDamage, attackerId, sourceSlot)) ?? null;
   }
 
   /**
@@ -4031,7 +4048,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (!current()) return outcome;
     }
 
-    this.bridge.broadcastEffect({
+    if (!options?.suppressHitEffect) this.bridge.broadcastEffect({
       type: 'hit',
       x,
       y,
@@ -4362,11 +4379,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         request.source.allegiance.ownerId === 'world' ? undefined : request.source.allegiance.ownerId,
         String(request.target.id), amount, allowCritical, request.source.sourceSlot, nowMs, random,
       ) ?? { amount, isCritical: false },
-      incomingMultiplier: (target, nowMs) => {
+      incomingMultiplier: (target, nowMs, source) => {
         if (target.kind !== 'player' && target.kind !== 'enemy') return 1;
         const statusTarget: TargetStatusTarget = { targetType: target.kind, targetId: String(target.id) };
-        return this.targetIncomingDamageMultiplierResolver?.(statusTarget, nowMs)
+        const incoming = this.targetIncomingDamageMultiplierResolver?.(statusTarget, nowMs)
           ?? (target.kind === 'enemy' ? this.enemyIncomingDamageMultiplierResolver?.(target.id, nowMs) : undefined) ?? 1;
+        return incoming * (source ? this.projectileTargetMultiplier?.(source, target, nowMs) ?? 1 : 1);
       },
       blockAtTarget: (request, amount, nowMs) => {
         const target = request.target;

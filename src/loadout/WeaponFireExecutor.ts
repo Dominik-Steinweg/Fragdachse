@@ -124,6 +124,8 @@ export interface WeaponFireOptions {
   sourceSlot?: LoadoutSlot;
   /** Quellkonstrukt eines automatischen Turms fuer typisierte Projektilwirkungen. */
   sourceTurretId?: string;
+  personalMgOwnerId?: string;
+  readonly personalMgScope?: import('../combat/CombatScope').CombatScope;
   /** Orts-/konstruktspezifischer Faktor fuer den unmittelbaren Treffer. */
   directDamageMultiplier?: number;
   /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
@@ -344,6 +346,8 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
         primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:projectile`, params.adrenalineGainBasis, config.adrenalinGain, 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, sourceSlot),
         sourceSlot,
         sourceTurretId: options?.sourceTurretId,
+        personalMgOwnerId: options?.personalMgOwnerId,
+        personalMgScope: options?.personalMgScope,
         correlation: { ak47ShotId: config.ak47ShotId },
       }),
       interaction: {

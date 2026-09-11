@@ -1,3 +1,5 @@
+import { mgTargetVisual } from '../../effects/MgAttritionVisualTarget';
+import { emptyMgAttritionSnapshot } from '../../systems/MgAttritionRuntime';
 import { getUtilityRechargeFraction } from '../../loadout/UtilityChargeState';
 import type Phaser from 'phaser';
 import { bridge }          from '../../network/bridge';
@@ -434,6 +436,8 @@ export class ClientUpdateCoordinator {
       this.ctx.smokeSystem.syncTargetVisuals(state.smokeTargets ?? [], bridge.getSynchronizedNow(),
         id => this.activityFramePort?.getEnemyStatusVisual(id) ?? null);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
+      this.ctx.effectSystem.syncMgAttrition(state.mgAttrition ?? emptyMgAttritionSnapshot(), bridge.getSynchronizedNow(),
+        target => mgTargetVisual(target, id => this.activityFramePort?.getEnemyStatusVisual(id) ?? null, id => this.baseManager?.getBase(id)));
       this.ctx.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
       this.ctx.stinkCloudSystem.syncPlagueVisuals(state.stinkPlague ?? { targets: [], transfers: [], transferSequence: 0 },
         bridge.getSynchronizedNow(), id => this.activityFramePort?.getEnemyStatusVisual(id) ?? null);

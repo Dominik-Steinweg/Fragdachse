@@ -1,3 +1,5 @@
+import { mgTargetVisual } from '../../effects/MgAttritionVisualTarget';
+import { emptyMgAttritionSnapshot } from '../../systems/MgAttritionRuntime';
 import { getUtilityRechargeFraction } from '../../loadout/UtilityChargeState';
 import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
@@ -357,6 +359,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // World: Koeder und Tarnung leben unabhaengig von jeder Activity und stehen deshalb vor dem
     // Missionsschritt, der sie als Ziele liest.
     if (!countdownActive) this.plagueBinding?.advance(now);
+    if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceMgTurrets(now);
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
     if (!countdownActive) this.smokeBinding?.refresh(now);
     // Activity: Missionsfortschritt, Navigation und Gegner. Die Reihenfolge darin gehoert der
@@ -756,6 +759,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const visual = manager?.getEnemy(id)?.getStatusVisualTarget();
       return visual ? { ...visual, entityGeneration: manager?.getCombatTargetRef(id)?.instance.entityGeneration } : null;
     });
+    this.effects?.syncMgAttrition(this.combatFramePort?.getCombatGameplayBinding()?.mgTurret?.runtime.snapshot(now) ?? emptyMgAttritionSnapshot(), now,
+      target => mgTargetVisual(target, id => {
+        const manager = this.enemyManager;
+        const visual = manager?.getEnemy(id)?.getStatusVisualTarget();
+        return visual ? { ...visual, entityGeneration: manager?.getCombatTargetRef(id)?.instance.entityGeneration } : null;
+      }, id => this.baseManager?.getBase(id)));
     const airstrikes  = this.supportSystems?.airstrike?.getSnapshot()        ?? [];
     const meteors     = this.supportSystems?.armageddon?.getSnapshot()       ?? [];
     const train     = this.trainManager?.getNetSnapshot()        ?? null;
@@ -1097,6 +1106,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       fires,
       stinkClouds,
       stinkPlague: this.plagueBinding?.runtime.getSnapshot(now),
+      mgAttrition: this.combatFramePort?.getCombatGameplayBinding()?.mgTurret?.runtime.snapshot(now),
       timeBubbles,
       teslaDomes,
       energyShields,

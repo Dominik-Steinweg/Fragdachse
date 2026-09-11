@@ -1,3 +1,4 @@
+import type { MgAttritionRenderer } from './MgAttritionRenderer';
 import * as Phaser from 'phaser';
 import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
@@ -184,6 +185,11 @@ export class EffectSystem implements EnemyVisualSink {
     this.zeusTaserRenderer = renderer;
     if (!renderer) this.zeusAudioUses.clear();
   }
+
+  private mgAttrition: MgAttritionRenderer | null = null;
+  setMgAttritionRenderer(renderer: MgAttritionRenderer | null): void { this.mgAttrition = renderer; }
+  syncMgAttrition(...args: Parameters<MgAttritionRenderer['sync']>): void { this.mgAttrition?.sync(...args); }
+  clearMgAttrition(): void { this.mgAttrition?.clear(); }
 
   private readonly zeusAudioUses = new Map<string, number>();
   clearZeusUpgrades(): void {

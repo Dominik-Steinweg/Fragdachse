@@ -642,6 +642,7 @@ export class PlacementSystem {
       ),
       frame: cfg.kind === 'turret' ? AutoTiler.getFrame(mask, ROCK_AUTOTILE) : 0,
       range: cfg.placementRange,
+      targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
       kind: cfg.kind,
       sourceSlot: 'utility',
       constructionId: cfg.id,

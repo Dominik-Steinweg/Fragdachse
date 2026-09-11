@@ -1,4 +1,5 @@
 import { resolveTimeBubblePrismEmitter } from '../loadout/TimeBubbleConfig';
+import { MG_TURRET_RULES } from '../config/mgTurretRules';
 import { getDomainCatalog, getDomainKeys, translate, translateSegments, type TranslationSegment } from './catalog';
 import { formatNumber, formatUpgradeEffectValue } from './format';
 import type { Locale } from './types';
@@ -22,6 +23,10 @@ function getUpgradeParams(
   locale: Locale,
 ): Record<string, string | number> {
   const params: Record<string, string | number> = {
+    mgDuration: MG_TURRET_RULES.durationMs / 1000,
+    mgPercentBasis: 100,
+    mgRadius: MG_TURRET_RULES.transferRadius,
+    mgBaseMaximum: MG_TURRET_RULES.baseMaximumPercent,
     maxLevel: formatNumber(definition.maxLevel, locale, { useGrouping: false }),
   };
   definition.effects.forEach((effect, index) => {

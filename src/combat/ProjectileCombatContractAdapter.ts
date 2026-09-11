@@ -36,6 +36,8 @@ export function adaptProjectileCombatSource(
       id: provenance.gameplaySourceId,
     },
     actor,
+    personalMgOwnerId: provenance.personalMgOwnerId,
+    personalMgScope: provenance.personalMgScope,
     attribution: {
       kind: classification.attributionKind,
       id: provenance.attributionId,

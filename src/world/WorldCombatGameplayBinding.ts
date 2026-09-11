@@ -3,6 +3,9 @@ import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import type { BaseEntity } from '../entities/BaseEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
+import { WorldMgTurretBinding } from './WorldMgTurretBinding';
+import { resolveMgTurretStats } from '../config/mgTurret';
+import type { MgOwner } from '../systems/MgAttritionRuntime';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import type {
   ProjectileHomingBindingPort,
@@ -217,6 +220,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly baseManager: BaseManager | null;
   readonly worldMetrics: WorldMetrics;
   readonly isCoopMission: () => boolean;
+  readonly isCoopDefense?: () => boolean;
   readonly isActivityActive: () => boolean;
   readonly getSpawnContext: Parameters<PlayerManager['setSpawnContextProvider']>[0];
   readonly getWorldParticipation: (playerId: string) => WorldParticipation;
@@ -287,9 +291,12 @@ interface CachedProjectileBaseGeometry {
 
 /** Owns the World binding graph for combat, physics, projectile, turret and decoy systems. */
 export class WorldCombatGameplayBinding implements WorldScopedBinding {
+  readonly mgTurret: WorldMgTurretBinding | null;
   readonly systems: WorldCombatGameplaySystems | null;
   private destroyed = false;
   private activityGeneration = 0;
+  private mgGroupSequence = 0;
+  private readonly mgOwnerGroups = new Map<string, string>();
   /**
    * Base cell bounds are stable for a base lifetime. Keep the expensive cell traversal out of the
    * projectile stage and invalidate this projection only at the existing base lifecycle boundary.
@@ -301,6 +308,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
     const playerCombat = options.getPlayerCombatIntegration();
+    this.mgTurret = playerCombat && options.network.authority.isHost() ? new WorldMgTurretBinding({
+      combat: options.combatSystem, getEnemies: options.getEnemyManager, bases: options.baseManager,
+      getMutation: options.getWorldMutation,
+      owners: () => this.getMgOwners(playerCombat),
+    }) : null;
     if (playerCombat) {
       const shieldBuff = new ConcreteShieldBuffSystem();
       const timeBubble = new ConcreteTimeBubbleSystem();
@@ -366,6 +378,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.getTargetStatusSystem()?.removeTargetsOfType?.('enemy');
     this.options.getEnemyMovementStatusSystem?.()?.clear();
     this.systems?.plasmaSwarmReaction.clear();
+    this.mgTurret?.clear();
+    this.mgOwnerGroups.clear();
   }
 
   setPowerUpSystem(powerUpSystem: PowerUpSystem | null): void {
@@ -377,6 +391,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     if (this.destroyed) return;
     this.clearActivityBindings();
     this.destroyed = true;
+    this.mgTurret?.destroy();
     this.projectileBaseGeometry.length = 0;
     this.projectileBaseGeometryGeneration = -1;
     this.options.bindPlayerShieldBuffPort?.(null);
@@ -506,6 +521,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems.turret.setFireHandler(null);
       this.systems.turret.setTurretDamageBuffProvider(null);
       this.systems.turret.setTurretDamageMultiplierProvider(null);
+      this.systems.turret.setTargetScoreProvider(null);
     }
   }
 
@@ -664,7 +680,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         'rock', rockIndex, resolvedDamage, attackerId, 'combat.world_object',
       );
     });
-    combat.setBaseDamageCallback((baseId, damage, attackerId) => {
+    combat.setBaseDamageCallback((baseId, damage, attackerId, sourceSlot, source) => {
       if (this.destroyed) return null;
       const generation = this.activityGeneration;
       const worldMutation = this.requireWorldMutation();
@@ -675,13 +691,20 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.baseObjectiveCommit = objectiveCommit;
       let outcome: ReturnType<WorldObjectMutationRuntime['applyResolvedDamage']>;
       try {
-        outcome = worldMutation.applyResolvedDamage('base', baseId, damage, attackerId, 'combat.base');
+        const target = source ? worldMutation.resolveTarget('base', baseId) : null;
+        const factor = source && target ? this.mgTurret?.multiplier(source, target, combat.getHostTime()) ?? 1 : 1;
+        outcome = worldMutation.applyResolvedDamage('base', baseId, damage * factor, attackerId,
+          source?.authoredSourceId ?? 'combat.base', source?.origin === 'ground' ? 'ground' : 'direct', sourceSlot, source);
       } finally {
         this.baseObjectiveCommit = previousCommit;
       }
       const current = () => !this.destroyed && generation === this.activityGeneration
         && o.getWorldMutation() === worldMutation;
       const damaged = outcome?.kind === 'damage-applied' && outcome.actualDamage > 0;
+      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0 && source?.authoredSourceId === 'mg_bleed'
+        && base?.faction === 'hostile' && current() && o.network.authority.getPlayerProfile(attackerId)) {
+        o.network.stats.addPlayerRoomDamage(attackerId, outcome.actualDamage);
+      }
       if (objectiveId && damaged
         && current() && o.network.round.canPlayerReceiveRoundRewards(attackerId) && current()) {
         o.reportTargetContribution(objectiveId, baseId);
@@ -745,6 +768,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const surface = base.getNearestSurfacePoint(turretX, turretY);
       return surface ? { id: base.id, x: surface.x, y: surface.y } : null;
     });
+    turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.id)
+      ? this.mgTurret?.score(source.ownerId, String(source.id), kind, id, now) ?? 0 : 0);
     turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex) => {
       const turretCfg = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const weapon = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
@@ -782,6 +807,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
             sourceSlot: isBaseTurret ? undefined : 'utility',
             sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
+            personalMgOwnerId: this.isPersonalMg(sourceTurretId) ? ownerId : undefined,
+            personalMgScope: this.isPersonalMg(sourceTurretId) ? o.combatSystem.getCombatScope() : undefined,
             directDamageMultiplier: damageFactor,
             // Payload P is frozen at execution; explosion resolution must retain that ownership.
             payloadDamageMultiplier: damageFactor * ownerRuntimeDamageMultiplier,
@@ -1281,17 +1308,59 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
   }
 
-  private getTurretDefinitions(): readonly {
-    id: AutomatedTurretId; x: number; y: number; ownerId: string; ownerColor: number;
-    skipRockIndex?: number; secondProjectileDamageFactor?: number; targetRange?: number;
-    muzzleOffset?: number; weaponId?: keyof typeof WEAPON_CONFIGS; ignoreBaseObstacles?: boolean;
-    targetMode?: 'players' | 'enemies';
-  }[] {
+  private isPersonalMg(id: AutomatedTurretId | undefined): boolean {
+    if (!this.options.isCoopDefense?.() || id === undefined) return false;
+    const rock = this.options.placementSystem.getRuntimeRock(Number(id));
+    return !!rock && rock.kind === 'turret' && rock.constructionId === 'machine_gun_turret' && rock.ownership !== 'base-owned';
+  }
+
+  advanceMgTurrets(now: number): void {
+    if (this.destroyed) return;
+    this.mgTurret?.advance(now);
+    for (const turret of this.getTurretDefinitions()) {
+      if (!this.isPersonalMg(turret.id)) continue;
+      const rock = this.options.placementSystem.getRuntimeRock(Number(turret.id));
+      if (rock) rock.targetRange = turret.targetRange;
+    }
+  }
+
+  private getMgOwners(playerCombat: PlayerCombatIntegrationPort): MgOwner[] {
+    const o = this.options;
+    if (!o.isCoopDefense?.()) return [];
+    const owners: MgOwner[] = [];
+    const claimedGroups = new Set<string>();
+    const participants = [...o.network.authority.getConnectedPlayers()].filter(profile =>
+      o.getWorldParticipation(profile.id) === 'interactive'
+      && (!o.isActivityActive() || o.network.round.canPlayerReceiveRoundRewards(profile.id))
+      && playerCombat.modifier.getClassDefinition(profile.id)?.id === 'inspector_gadachs')
+      .sort((a, b) => a.id.localeCompare(b.id));
+    for (const profile of participants) {
+      const ally = owners.find(owner => !o.network.authority.isEnemyPair(owner.id, profile.id));
+      // Group identity survives departure of the player that originally established it.
+      const establishedAlly = participants.find(peer => this.mgOwnerGroups.has(peer.id)
+        && !o.network.authority.isEnemyPair(peer.id, profile.id));
+      const oldGroup = establishedAlly ? this.mgOwnerGroups.get(establishedAlly.id) : undefined;
+      const group = ally?.group ?? (oldGroup && !claimedGroups.has(oldGroup) ? oldGroup : `mg:${++this.mgGroupSequence}`);
+      claimedGroups.add(group);
+      owners.push({ id: profile.id, group,
+        stats: resolveMgTurretStats(stat => playerCombat.modifier.getNumericStat(profile.id, stat),
+          stat => playerCombat.modifier.getPercentageStat(profile.id, stat)) });
+    }
+    this.mgOwnerGroups.clear();
+    for (const owner of owners) this.mgOwnerGroups.set(owner.id, owner.group);
+    return owners;
+  }
+
+  private getTurretDefinitions(): readonly import('../systems/TurretSystem').AutomatedTurret[] {
     const o = this.options;
     const placeable = o.placementSystem.getAllRuntimeRocks()
       .filter(rock => rock.kind === 'turret')
       .filter(rock => !(rock.ownership === 'base-owned' && o.baseManager?.getBase(o.getPersistentBaseId() ?? '')?.isInert()))
-      .map(rock => ({
+      .map(rock => {
+        const modifier = o.getPlayerCombatIntegration()?.modifier;
+        const mg = this.isPersonalMg(rock.id) && modifier ? resolveMgTurretStats(
+          stat => modifier.getNumericStat(rock.ownerId, stat), stat => modifier.getPercentageStat(rock.ownerId, stat)) : null;
+        return ({
         id: rock.id,
         x: o.worldMetrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2,
         y: o.worldMetrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2,
@@ -1299,11 +1368,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         ownerColor: rock.ownership === 'base-owned' ? TEAM_BLUE_COLOR : rock.ownerColor,
         skipRockIndex: rock.collisionMode === 'none' ? undefined : rock.id,
         secondProjectileDamageFactor: rock.secondProjectileDamageFactor,
-        targetRange: rock.targetRange,
+        targetRange: mg?.targetRange ?? rock.targetRange,
+        projectileRange: mg?.projectileRange,
+        cooldownMs: mg?.cooldownMs,
+        damage: mg?.damage,
         muzzleOffset: rock.constructionId ? o.getConstructionMuzzleOffset(rock.constructionId) : undefined,
         weaponId: rock.turretWeaponId ?? ('SPORES' as const),
         ignoreBaseObstacles: rock.ownership === 'base-owned',
-      }));
+      }); });
     const bases = (o.baseManager?.getTurrets() ?? []).map(turret => ({
       id: turret.id,
       x: turret.x,

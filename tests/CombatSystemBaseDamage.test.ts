@@ -122,6 +122,7 @@ import type {
   SyncedDeathEffect,
 } from '../src/types';
 import type { ProjectileImpactSource } from '../src/projectile/ProjectileGameplayPort';
+import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
 import type { TargetDamageMutationRequest } from '../src/combat/CombatMutation';
 import type { CombatTargetRef } from '../src/combat/CombatScope';
 import type { HitscanShotRequest, MeleeSwingRequest } from '../src/loadout/WeaponFireExecutor';
@@ -361,6 +362,8 @@ describe('CombatSystem base damage routing', () => {
     const { combat, baseDamage } = makeCombatHarness();
 
     combat.applyProjectileBaseDamage('hostile-base', {
+      projectileId: 1,
+      provenance: createSingleOwnerProvenance('player-1', { sourceSlot: 'weapon1' }),
       damage: 10,
       ownerId: 'player-1',
       sourceSlot: 'weapon1',
@@ -407,7 +410,7 @@ describe('CombatSystem base damage routing', () => {
     combat.applyExplosionDamage(0, 0, explosion, 'player-1', 'utility', 'Explosion');
 
     expect(baseDamage.mock.calls).toEqual([
-      ['hostile-base', 60, 'player-1', 'weapon1'],
+      ['hostile-base', 60, 'player-1', 'weapon1', expect.objectContaining({ attribution: expect.objectContaining({ id: 'player-1' }), origin: 'direct' })],
       ['hostile-base', 42, 'player-1', 'weapon1'],
       ['hostile-base', 30, 'player-1', 'weapon1'],
       ['hostile-base', 66, 'player-1', 'utility'],
@@ -423,6 +426,8 @@ describe('CombatSystem base damage routing', () => {
     combat.setPlayerOutgoingDamageResolver(outgoing);
 
     combat.applyProjectileBaseDamage('hostile-base', {
+      projectileId: 2,
+      provenance: createSingleOwnerProvenance('player-1', { sourceSlot: 'weapon1' }),
       damage: 10,
       ownerId: 'player-1',
       sourceSlot: 'weapon1',

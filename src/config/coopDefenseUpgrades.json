@@ -6324,6 +6324,178 @@
                                                 "sortOrder":  20
                                             },
                                             {
+                                                "id": "mg_attrition",
+                                                "code": "E-K2-L1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 21,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_machine_gun_turret",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "construction.machine_gun_turret.perHitPercent",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "mg_calibration",
+                                                "code": "E-K2-L2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 22,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "mg_attrition",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "construction.machine_gun_turret.maximumPercent",
+                                                        "mode": "add_per_level",
+                                                        "value": 50
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "mg_optics",
+                                                "code": "E-K2-R1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 23,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_machine_gun_turret",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "construction.machine_gun_turret.range",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": 0.2
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "mg_fire_superiority",
+                                                "code": "E-K2-R2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 24,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "mg_optics",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "construction.machine_gun_turret.frequency",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": 0.1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "mg_fire_control_network",
+                                                "code": "E-K2-B",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 0,
+                                                "bossPointCostPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 25,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "mg_calibration",
+                                                        "minLevel": 1
+                                                    },
+                                                    {
+                                                        "upgradeId": "mg_fire_superiority",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "construction.machine_gun_turret.network",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "mg_bleed",
+                                                "code": "E-K2-BL1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 26,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "mg_fire_control_network",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "construction.machine_gun_turret.bleedLevel",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "mg_handoff",
+                                                "code": "E-K2-BR1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 27,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "mg_fire_control_network",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "construction.machine_gun_turret.transfer",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": 0.2
+                                                    }
+                                                ]
+                                            },
+                                            {
                                                 "id":  "unlock_flame_turret",
                                                 "code":  "E-K3",
                                                 "kind":  "unlock",

@@ -105,6 +105,10 @@ export class PlacementPreviewRenderer {
       this.drawDismantleMarker(preview);
       this.rangeGraphics.lineStyle(2, ownerColor, 0.5);
       this.rangeGraphics.strokeCircle(localPlayer.x, localPlayer.y, preview.range);
+    if (preview.constructionId === 'machine_gun_turret' && preview.targetRange !== undefined) {
+      this.rangeGraphics.lineStyle(1, ownerColor, 0.22);
+      this.rangeGraphics.strokeCircle(preview.targetX, preview.targetY, preview.targetRange);
+    }
       return;
     }
     if (preview.kind === 'tunnel') {

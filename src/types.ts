@@ -1065,6 +1065,7 @@ export interface UtilityTargetingPreviewState {
 }
 
 export interface UtilityPlacementPreviewState {
+  targetRange?: number;
   angle: number;
   targetX: number;
   targetY: number;

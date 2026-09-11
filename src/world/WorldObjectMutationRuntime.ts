@@ -54,12 +54,19 @@ interface PreparedWorldDamage {
 export class WorldObjectMutationRuntime implements WorldTargetMutationPort, WorldScopedBinding {
   private outcomeSequence = 0;
   private destroyed = false;
+  private readonly damageObservers = new Set<(outcome: CombatDamageMutationOutcome, position: { x: number; y: number }) => void>();
+
+  observeDamageCommitted(observer: (outcome: CombatDamageMutationOutcome, position: { x: number; y: number }) => void): () => void {
+    this.damageObservers.add(observer);
+    return () => { this.damageObservers.delete(observer); };
+  }
 
   constructor(private readonly options: WorldObjectMutationRuntimeOptions) {}
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.damageObservers.clear();
     this.options.onDestroy?.(this);
   }
 
@@ -138,10 +145,11 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
     sourceId: string,
     damageKind: CombatDamageKind = 'direct',
     sourceSlot?: LoadoutSlot,
+    explicitSource?: CombatSource,
   ): CombatDamageMutationOutcome | null {
     const target = this.resolveTarget(kind, id);
     if (!target) return null;
-    const source = legacyWorldSource(attackerId, sourceId, damageKind, sourceSlot);
+    const source = explicitSource ?? legacyWorldSource(attackerId, sourceId, damageKind, sourceSlot);
     const damage: CombatResolvedDamage = {
       amount,
       damageKind,
@@ -183,7 +191,12 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
     const facts = this.readFacts(request.target);
     if (!before || !facts) return this.rejected(request, 'target-missing');
     const result = this.commitOwnerDamage(request.target, request.damage.amount, sourceActorId(request.source));
-    return this.damageOutcome(request, result, facts);
+    const outcome = this.damageOutcome(request, result, facts);
+    if (!this.destroyed && outcome.kind === 'damage-applied') for (const observer of this.damageObservers) {
+      observer(outcome, facts.position);
+      if (this.destroyed) break;
+    }
+    return outcome;
   }
 
   commitSupport(request: TargetSupportMutationRequest): CombatSupportMutationOutcome {

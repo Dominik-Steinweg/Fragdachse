@@ -31,6 +31,9 @@ export interface AutomatedTurret {
   readonly secondProjectileDamageFactor?: number;
   /** Beim Platzieren eingefrorene Zielreichweite; fehlt bei Basis-Turrets (dann gilt die Config). */
   readonly targetRange?: number;
+  readonly projectileRange?: number;
+  readonly cooldownMs?: number;
+  readonly damage?: number;
   readonly muzzleOffset?: number;
   /** Erzwingt die Laufzeit-Zielfraktion; ohne Wert bleibt das bisherige gemischte Verhalten. */
   readonly targetMode?: AutomatedTurretTargetMode;
@@ -75,6 +78,9 @@ export class TurretSystem {
   private turretDamageMultiplierProvider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null = null;
   private nextFireAt = new Map<AutomatedTurretId, number>();
   private pendingBursts = new Map<AutomatedTurretId, PendingTurretBurst>();
+  private targetScore: ((turret: AutomatedTurret, kind: 'player' | 'enemy' | 'base', id: string, now: number) => number) | null = null;
+
+  setTargetScoreProvider(provider: typeof this.targetScore): void { this.targetScore = provider; }
 
   constructor(
     private readonly playerManager: PlayerManager,
@@ -157,7 +163,7 @@ export class TurretSystem {
       // Tesla-Konstrukte werden vom TeslaDomeSystem als Feldwaffe verarbeitet und
       // duerfen hier nicht zusaetzlich den generischen Projektilpfad ausloesen.
       if (turretWeaponConfig.fire.type === 'tesla_dome') continue;
-      const rangeFactor = turret.muzzleOffset === undefined
+      const rangeFactor = turret.projectileRange !== undefined ? turret.projectileRange / turretWeaponConfig.range : turret.muzzleOffset === undefined
         ? (baseTargetRange > 0 ? targetRange / baseTargetRange : 1)
         : Math.max(1, targetRange / Math.max(1, turretWeaponConfig.range));
       const muzzleOffset = turret.muzzleOffset ?? config.placeable.muzzleOffset;
@@ -205,6 +211,7 @@ export class TurretSystem {
         turretY,
         targetRange,
         muzzleOffset,
+        now,
       );
       if (!target) continue;
 
@@ -214,6 +221,7 @@ export class TurretSystem {
       if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
       const buff = this.turretDamageBuffProvider?.(turretX, turretY) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
+        * (turret.damage === undefined ? 1 : turret.damage / turretWeaponConfig.damage)
         * Math.max(0, this.turretDamageMultiplierProvider?.(turret, turrets) ?? 1);
 
       const muzzleDistance = muzzleOffset;
@@ -247,7 +255,7 @@ export class TurretSystem {
           rangeFactor,
         });
       } else {
-        this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
+        this.nextFireAt.set(turret.id, now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
       }
       if (burstCount <= 1 && (turret.secondProjectileDamageFactor ?? 0) > 0) {
         const secondTarget = this.findNearestTarget(
@@ -256,6 +264,7 @@ export class TurretSystem {
           turretY,
           targetRange,
           muzzleOffset,
+          now,
           target,
         );
         if (secondTarget) {
@@ -292,19 +301,27 @@ export class TurretSystem {
     turretY: number,
     range: number,
     lineOfFireStartOffset: number,
+    now: number,
     excluded?: { x: number; y: number },
   ): { x: number; y: number } | null {
     let bestTarget: { x: number; y: number } | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
     let bestPriority = Number.POSITIVE_INFINITY;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    let bestKey = '';
     const focus = this.focusTargetProvider?.(turret.ownerId) ?? null;
 
-    const consider = (candidate: { x: number; y: number }, priority: number): void => {
+    const consider = (candidate: { x: number; y: number }, priority: number, kind: 'player' | 'enemy' | 'base', id: string): void => {
       const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
       if (distance > range) return;
       if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return;
-      if (priority > bestPriority || (priority === bestPriority && distance >= bestDistance)) return;
+      const score = this.targetScore?.(turret, kind, id, now) ?? 0;
+      const key = kind + ':' + id;
+      if (priority > bestPriority || (priority === bestPriority && (score < bestScore
+        || (score === bestScore && (distance > bestDistance || (distance === bestDistance && key >= bestKey)))))) return;
       bestPriority = priority;
+      bestScore = score;
+      bestKey = key;
       bestDistance = distance;
       bestTarget = candidate;
     };
@@ -321,6 +338,7 @@ export class TurretSystem {
       consider(
         { x: player.x, y: player.y },
         focus?.targetType === 'enemy' && focus.targetId === player.id ? 0 : 1,
+        'player', player.id,
       );
     }
 
@@ -332,12 +350,13 @@ export class TurretSystem {
       consider(
         { x: enemy.x, y: enemy.y },
         focus?.targetType === 'enemy' && focus.targetId === enemy.id ? 0 : 1,
+        'enemy', enemy.id,
       );
     }
 
     if (focus?.targetType === 'base') {
       const base = this.focusedBaseTargetProvider?.(focus.targetId, turretX, turretY) ?? null;
-      if (base) consider({ x: base.x, y: base.y }, 0);
+      if (base) consider({ x: base.x, y: base.y }, 0, 'base', base.id);
     }
 
     return bestTarget;
