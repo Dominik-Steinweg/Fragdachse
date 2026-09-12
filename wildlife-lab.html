@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fragdachse · Kleine Wildtiere</title>
+<style>
+*{box-sizing:border-box}body{display:flex;flex-direction:column;height:100vh;margin:0;background:#14221e;color:#e6eee4;font:14px system-ui}header{flex-shrink:0;padding:18px 24px;border-bottom:1px solid #3a5147}h1{font-size:21px;margin:0 0 6px}p{margin:4px 0;color:#b0c2b5}nav{flex-shrink:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 24px}button{background:#2c473a;border:1px solid #60816a;border-radius:6px;color:#eff7e9;padding:9px 13px;cursor:pointer}button:hover{background:#42624b}#stage{width:100%;flex:1;min-height:340px}output{flex-shrink:0;display:block;padding:12px 24px;color:#c7dfbe}a{color:#bbe1c8}
+</style></head><body>
+<header><h1>Fragdachse · Kleine Wildtiere</h1><p>Lebensräume der Lobby und Testkarte · Maßstab: 32 Weltpixel ≈ 1 Meter. Die Tiere laufen auch ohne Spieler.</p><p>Die Spielerprobe bewegt einen Dachs automatisch zum ausgewählten Tier. Sie liefert nur ein Bewegungssignal an die originale Tierdarstellung.</p></header>
+<nav aria-label="Tierprobe"><button id="butterfly">Schmetterlinge</button><button id="snake">Schlangen</button><button id="fish">Fische</button><button id="next">Nächstes Tier / Variante</button><button id="approach">Spielerbewegung simulieren</button><button id="clear">Ohne Spieler</button><button id="zoom">Zoom 100 %</button><button id="canopies">Baumkronen: normal</button><button id="fixture">Karte: Lobby</button><button id="rebuild">Neu aufbauen</button><a href="/">Zum Spiel</a></nav>
+<div id="stage"></div><output id="status" aria-live="polite">Lädt …</output>
+<script type="module" src="/src/dev/wildlifeLab.ts"></script></body></html>

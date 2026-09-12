@@ -57,6 +57,7 @@ export const CLASSIC_PARTICLE_FAMILIES = {
 } as const;
 
 export const GRAPHICS_FAMILIES = {
+  ambientWildlife: ['AmbientWildlifeRenderer'],
   lightingOcclusion: ['LightingSystem'],
   dynamicShadows: ['ShadowSystem'],
   treeTrunks: ['ArenaVisualFactory'],

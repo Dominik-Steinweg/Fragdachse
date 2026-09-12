@@ -1,4 +1,5 @@
 import { WaterSurfaceRenderer } from './WaterSurfaceRenderer';
+import { AmbientWildlifeRenderer } from './AmbientWildlifeRenderer';
 import { WaterGeometry } from './WaterGeometry';
 import * as Phaser from 'phaser';
 import {
@@ -109,6 +110,7 @@ export interface ArenaPresentationResult {
    */
   groundSurface: GroundSurfaceStreamer | null;
   waterSurface: WaterSurfaceRenderer | null;
+  wildlife: AmbientWildlifeRenderer | null;
   /**
    * Die Ground-Cover-Platzierungen dieser World. Einmalig aus `layout.seed` und `layout.dirt`
    * erzeugt und danach unveraendert: Sie sind die Quelle jedes Chunk-Bakes und muessen deshalb
@@ -338,6 +340,7 @@ export class ArenaBuilder {
       trackObjects,
       groundSurface: null,
       waterSurface: presentation && layout.water?.length ? new WaterSurfaceRenderer(this.scene, frame, layout.water, layout.seed) : null,
+      wildlife: presentation ? new AmbientWildlifeRenderer(this.scene, frame, layout) : null,
       groundCoverPlacements,
       rockOverlaySurface: null,
       rockOverlaySource: createRockOverlaySource(),
@@ -465,6 +468,7 @@ export class ArenaBuilder {
       trackObjects: result.trackObjects,
       groundSurface: result.groundSurface,
       waterSurface: result.waterSurface,
+      wildlife: result.wildlife,
       groundCoverPlacements: result.groundCoverPlacements,
       rockOverlaySurface: result.rockOverlaySurface,
       rockOverlaySource: result.rockOverlaySource,
@@ -873,6 +877,8 @@ export class ArenaBuilder {
 
     result.waterSurface?.destroy();
     result.waterSurface = null;
+    result.wildlife?.destroy();
+    result.wildlife = null;
     result.rockOverlaySurface?.destroy();
     result.rockOverlaySurface = null;
     result.rockOverlaySource.cells.length = 0;

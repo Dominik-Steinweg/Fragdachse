@@ -384,6 +384,34 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     updateSurfaceResidency.mockRestore();
   });
 
+  it('ticks wildlife in an empty preview, reads visible players, and stops before presentation handoff', () => {
+    const scene = Object.assign(fakeScene(), { game: { loop: { delta: 16 } } });
+    const wildlife = { update: vi.fn(), destroy: vi.fn() };
+    const arena = { wildlife } as unknown as ArenaBuilderResult;
+    const players: { id: string; active: boolean; displayObject: object | null }[] = [];
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
+      getLocalWorldPresentation: () => PREVIEW_PRESENTATION,
+      getArenaResult: () => arena,
+      getPlayers: () => players as never,
+    }));
+    const residency = vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
+    try {
+      binding.syncSurfaceResidency(true);
+      expect(wildlife.update).toHaveBeenLastCalledWith(16, [], expect.any(Object));
+      players.push({ id: 'visible', active: true, displayObject: { visible: true, alpha: 1, x: 120, y: 90 } },
+        { id: 'hidden', active: true, displayObject: { visible: false, alpha: 1, x: 0, y: 0 } },
+        { id: 'absent', active: false, displayObject: null });
+      binding.syncSurfaceResidency(true);
+      expect(wildlife.update).toHaveBeenLastCalledWith(16, [{ id: 'visible', x: 120, y: 90 }], expect.any(Object));
+      binding.syncSurfaceResidency(false);
+      binding.destroy(); binding.syncSurfaceResidency(true);
+      expect(wildlife.update).toHaveBeenCalledTimes(2);
+      // The frame binding stops updates; the handoff still owns the drawn objects.
+      expect(wildlife.destroy).not.toHaveBeenCalled();
+      expect(ArenaBuilder.presentationOf(arena).wildlife).toBe(wildlife);
+    } finally { residency.mockRestore(); }
+  });
+
   it('laesst einen stalen syncCamera()-Aufruf nach destroy() die Kamera einer nachfolgenden World nicht mehr bewegen', () => {
     applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
     const camera = fakeCamera();

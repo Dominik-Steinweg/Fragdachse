@@ -1,4 +1,5 @@
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
+import type { WildlifePlayer } from '../arena/AmbientWildlifeModel';
 import type { MovementEffectsRenderer } from '../effects/MovementEffectsRenderer';
 import type { BurrowGpuRenderer } from '../effects/BurrowGpuRenderer';
 import * as Phaser from 'phaser';
@@ -215,6 +216,7 @@ export class WorldPresentationFrameBinding {
   private ownershipScope: object | null = null;
   private readonly ownedConstructionIds = new Set<number>();
   private destroyed = false;
+  private readonly wildlifePlayers: WildlifePlayer[] = [];
   private lastCameraScrollX = 0;
   private lastCameraScrollY = 0;
   private spectatorCameraScrollX = 0;
@@ -369,6 +371,16 @@ export class WorldPresentationFrameBinding {
     if (this.destroyed || !showWorld) return;
     const worldView = getVisibleWorldView(this.input.scene.cameras.main);
     ArenaBuilder.updateSurfaceResidency(this.input.getArenaResult(), worldView);
+    const wildlife = this.input.getArenaResult()?.wildlife;
+    if (wildlife) {
+      this.wildlifePlayers.length = 0;
+      for (const player of this.input.getPlayers()) {
+        const sprite = player.displayObject;
+        if (player.active && sprite?.visible && sprite.alpha > .1)
+          this.wildlifePlayers.push({ id: player.id, x: sprite.x, y: sprite.y });
+      }
+      wildlife.update(this.input.scene.game.loop.delta, this.wildlifePlayers, worldView);
+    }
     this.input.shadow.updateStaticResidency(worldView);
   }
 
@@ -584,6 +596,7 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.wildlifePlayers.length = 0;
     this.clearConstructionOwnership();
     if (this.input.healthBarScope) this.input.healthBars?.closeWorld(this.input.healthBarScope);
     this.input.movementEffects?.closeWorld(this);

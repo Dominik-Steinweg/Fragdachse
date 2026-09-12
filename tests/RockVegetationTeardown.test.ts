@@ -107,6 +107,7 @@ function buildResult() {
     canopyObjects: [],
     trackObjects: [],
     groundSurface,
+    wildlife: { destroy: vi.fn() },
     groundCoverPlacements: [{ textureKey: 'ground_cover_01' }],
     rockOverlaySurface,
     rockOverlaySource: overlaySource,
@@ -120,6 +121,7 @@ function buildResult() {
 describe('round-scoped world surface teardown', () => {
   it('destroys every resident chunk target and scratch of both streamers', () => {
     const { result, groundSurface, rockOverlaySurface } = buildResult();
+    const wildlife = result.wildlife!;
 
     expect(groundSurface.getStats().residentChunks).toBeGreaterThan(0);
     expect(rockOverlaySurface.getStats().residentChunks).toBeGreaterThan(0);
@@ -130,6 +132,8 @@ describe('round-scoped world surface teardown', () => {
     expect(rockChunk.active).toBe(true);
 
     ArenaBuilder.destroyDynamic(result);
+    expect(wildlife.destroy).toHaveBeenCalledOnce();
+    expect(result.wildlife).toBeNull();
 
     expect(groundChunk.active).toBe(false);
     expect(rockChunk.active).toBe(false);
