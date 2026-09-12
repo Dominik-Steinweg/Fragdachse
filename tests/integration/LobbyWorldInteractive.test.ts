@@ -760,7 +760,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     player.closeColorPicker = vi.fn();
     player.closeNameEditPopup = vi.fn();
     player.setLobbyFieldsLocked = vi.fn();
-    overlay.progress = { setVisible: vi.fn() };
+    overlay.progress = { setVisible: vi.fn(), hideTooltip: vi.fn() };
     overlay.show();
     overlay.completeBootReveal();
     overlay.progress.setVisible.mockClear();
@@ -770,6 +770,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const rightExit = tweens.add.mock.calls[1][0];
     expect(rightExit).toMatchObject({ y: leftExit.y, duration: leftExit.duration, ease: leftExit.ease });
     expect(overlay.progress.setVisible).not.toHaveBeenCalled();
+    expect(overlay.progress.hideTooltip).toHaveBeenCalledOnce();
     expect(player.badgerPreview.setVisible).not.toHaveBeenCalled();
     leftExit.onComplete(); rightExit.onComplete();
     expect(container.visible).toBe(false);

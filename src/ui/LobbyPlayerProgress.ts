@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { FOREST } from './UiSkin';
-import { COLORS } from '../config';
+import { COLORS, DEPTH } from '../config';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
 import { getLocale, t } from '../i18n';
 import { getMapName } from '../i18n/contentPresentation';
@@ -56,7 +57,9 @@ export class LobbyPlayerProgress {
     private readonly onOpenCoopDefenseUpgrades: () => void,
     private readonly onOpenCoopDefenseItems: () => void) {}
   setVisible(visible: boolean): void { this.visible = visible; this.syncCoopEffectActivity(); }
+  hideTooltip(): void { this.itemsTooltip?.hide(); }
   setReady(ready: boolean, ended = false): void {
+    this.hideTooltip();
     this.isReady = ready; this.connectionEnded = ended; this.updateCoopDefenseMenuButtons();
   }
   destroy(): void {
@@ -180,9 +183,11 @@ export class LobbyPlayerProgress {
       { glowTarget: this.coopProgressBarFill, scrollFactor: 0, intensity: 1.2, startActive: false },
     );
 
-    // Zuletzt eingehaengt, damit der Tooltip ueber Buttons und Feld-Images liegt.
+    // Eine eigene Overlay-Ebene liegt auch ueber Systemleiste und aeusserem Kartenrahmen.
+    // Die Lebensdauer bleibt beim Fortschrittsbereich; Sichtwechsel blenden den Hinweis aus.
     this.itemsTooltip = new UiTooltip(this.scene, 360, undefined, undefined, 'forest');
-    this.coopBand.add(this.itemsTooltip.build());
+    const tooltipRoot = this.itemsTooltip.build().setDepth(DEPTH.OVERLAY + 2).setScrollFactor(0);
+    promoteToClarityCamera(this.scene, tooltipRoot);
   }
 
   private attachItemsLockTooltip(): void {
@@ -288,6 +293,7 @@ export class LobbyPlayerProgress {
 
   private syncCoopEffectActivity(): void {
     const visible = this.visible && this.coopProgressAvailable;
+    if (!visible) this.hideTooltip();
     if (this.coopBand && this.coopBand.visible !== visible) {
       this.coopBand.setVisible(visible);
     }

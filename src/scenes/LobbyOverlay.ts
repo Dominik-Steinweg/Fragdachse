@@ -626,6 +626,7 @@ export class LobbyOverlay {
     this.playerContextMenu?.close();
     this.loadoutTooltip?.hide();
     this.playerNameTooltip?.hide();
+    this.progress?.hideTooltip();
     this.entranceTween?.remove();
     this.entranceTween = null;
     this.stopReadyGlow();

@@ -38,6 +38,7 @@ vi.mock('../../src/ui/LivingBarEffect', async importOriginal => ({
 
 import { UiButton } from '../../src/ui/UiButton';
 import { LobbyPlayerProgress } from '../../src/ui/LobbyPlayerProgress';
+import { DEPTH } from '../../src/config';
 import { OptionsOverlay } from '../../src/ui/OptionsOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
 import { CenterHUD } from '../../src/ui/CenterHUD';
@@ -47,6 +48,7 @@ class UiObject extends EventEmitter {
   visible = true;
   active = true;
   alpha = 1;
+  depth = 0;
   width = 40;
   height = 20;
   scaleX = 1;
@@ -76,7 +78,7 @@ class UiObject extends EventEmitter {
   setColor() { return this; }
   setOrigin() { return this; }
   setDisplaySize() { return this; }
-  setDepth() { return this; }
+  setDepth(depth: number) { this.depth = depth; return this; }
   setInteractive() { return this; }
   disableInteractive() { return this; }
   setStrokeStyle() { return this; }
@@ -140,6 +142,9 @@ describe('living UI consumer ownership', () => {
     const { scene } = sceneStub();
     const lobby: any = new LobbyPlayerProgress(scene, () => {}, () => {});
     lobby.build([]);
+    const tooltip = lobby.itemsTooltip.container as UiObject;
+    expect(tooltip.parentContainer).toBeNull();
+    expect(tooltip.depth).toBeGreaterThan(DEPTH.OVERLAY);
     expect(effects.every(effect => !effect.active)).toBe(true);
     for (const [effect, button] of [[lobby.upgradeBtnEffect, lobby.coopUpgradesBtn], [lobby.itemsBtnEffect, lobby.coopItemsBtn]]) {
       expect(effect.parent).toBe(button.getEffectLayer());
@@ -162,7 +167,13 @@ describe('living UI consumer ownership', () => {
     expect(effects.every(effect => !effect.active)).toBe(true);
     lobby.setVisible(true); // No new snapshot required to restore the last state.
     expect(effects.every(effect => effect.active)).toBe(true);
+    tooltip.setVisible(true);
+    lobby.setVisible(false);
+    expect(tooltip.visible).toBe(false);
+    lobby.setVisible(true);
+    expect(tooltip.visible).toBe(false);
     lobby.destroy();
+    expect(tooltip.active).toBe(false);
     expect(effects.every(effect => effect.destroyed)).toBe(true);
   });
 
