@@ -24,14 +24,14 @@
       font-style: normal;
       font-weight: 500;
       font-display: block;
-      src: url('./assets/fonts/chakra-petch-500.woff2') format('woff2');
+      src: url('assets/fonts/chakra-petch-500.woff2') format('woff2');
     }
     @font-face {
       font-family: 'Chakra Petch';
       font-style: normal;
       font-weight: 700;
       font-display: block;
-      src: url('./assets/fonts/chakra-petch-700.woff2') format('woff2');
+      src: url('assets/fonts/chakra-petch-700.woff2') format('woff2');
     }
     /* Variabler Schnitt: eine Datei bedient die gesamte Gewichtsachse. */
     @font-face {
@@ -39,11 +39,18 @@
       font-style: normal;
       font-weight: 100 800;
       font-display: block;
-      src: url('./assets/fonts/jetbrains-mono-variable.woff2') format('woff2');
+      src: url('assets/fonts/jetbrains-mono-variable.woff2') format('woff2');
     }
 
     * { margin: 0; padding: 0; }
     body { background: #000; overflow: hidden; }
+    /*
+      Der ScaleManager misst genau diese Box. Ohne eigene Groesse haette sie vor dem Einhaengen
+      der Canvas die Hoehe 0, waehrend die Startaufloesung aus dem Fenster geschaetzt wird
+      (src/graphics/RenderResolution.ts) - die Korrektur direkt danach rastert jeden Text neu.
+      Dasselbe Element ist auch das Vollbildziel (src/ui/fullscreen.ts).
+    */
+    #game-container { position: fixed; inset: 0; }
     /*
       Bewusst kein `image-rendering: pixelated` auf der Canvas. Das Spiel laeuft mit
       `smoothPixelArt`, dessen Shader blockige Pixel bereits im Renderer erhaelt und nur
@@ -127,8 +134,8 @@
       100% { background-position: -100% 0; }
     }
   </style>
-  <script type="module" crossorigin src="./assets/index-YEjYyrMu.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/vendor-DObSMU0F.js">
+  <script type="module" crossorigin src="./assets/index-4XclJZTx.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/vendor-HmWCoNYV.js">
 </head>
 <body>
   <div id="game-container">
