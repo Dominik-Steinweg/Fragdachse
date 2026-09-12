@@ -243,3 +243,8 @@ export const GRAVEL_AUTOTILE: AutoTileConfig = {
 export const BASE_AUTOTILE: AutoTileConfig = {
   bitmaskToFrame: BLOB47_TABLE,
 };
+
+/** Mission barriers use the same 47-Blob frame layout as the world surfaces. */
+export const MISSION_BARRIER_AUTOTILE: AutoTileConfig = {
+  bitmaskToFrame: BLOB47_TABLE,
+};

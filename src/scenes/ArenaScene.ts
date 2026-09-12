@@ -293,6 +293,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('walls', './assets/sprites/walls47blob.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('mission_barrier', './assets/sprites/missionbarrier47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('rock_mottle', './assets/sprites/rocks47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt_mottle', './assets/sprites/dirt47blob_mottle.png', { frameWidth: 32, frameHeight: 32 });

@@ -70,15 +70,20 @@ describe('Water terrain contracts', () => {
     expect(placement.canPlaceSingleCell(cell.gridX - 1, cell.gridY)).toBe(true);
   });
 
-  it('generates reproducible water and reserves it from scenery and pickups', () => {
-    const map = getCoopDefenseMapConfig('0');
-    const input = resolveArenaGenerationInput('coop_defense', metrics);
+  it.each(['0', '1'])('generates reproducible water and reserves it from scenery and pickups on Map %s', mapId => {
+    const map = getCoopDefenseMapConfig(mapId);
+    const mapMetrics = resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells));
+    const input = resolveArenaGenerationInput('coop_defense', mapMetrics);
     const layout = ArenaGenerator.generate(183, input, map);
     expect(layout.water).toEqual(map.water);
     expect(layout.water!.length).toBeGreaterThan(0);
     const occupied = new Set(layout.water!.map(c => `${c.gridX},${c.gridY}`));
     for (const c of [...layout.rocks, ...layout.trees, ...layout.powerUpPedestals, ...layout.dirt, ...(layout.decals ?? [])]) {
       expect(occupied.has(`${c.gridX},${c.gridY}`)).toBe(false);
+    }
+    for (const track of layout.tracks) {
+      expect(occupied.has(`${track.gridX},${track.gridY}`)).toBe(false);
+      expect(occupied.has(`${track.gridX + 1},${track.gridY}`)).toBe(false);
     }
     expect(ArenaGenerator.fingerprint(ArenaGenerator.generate(183, input, map))).toBe(ArenaGenerator.fingerprint(layout));
   });

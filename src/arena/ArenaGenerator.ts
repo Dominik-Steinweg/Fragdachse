@@ -103,7 +103,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 4;
+export const ARENA_GENERATOR_VERSION = 6;
 
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
@@ -262,9 +262,8 @@ export class ArenaGenerator {
         map = newMap;
       }
 
-      // Ein konfiguriertes Felsfeld ersetzt die prozedurale Verteilung komplett – auch die
-      // Tutorial-Formation, deren Zweck (Bereich unter dem Hinweisfenster zubauen) es ohnehin
-      // bereits erfüllt.
+      // Organische Felsfelder erhalten die CA-Formationen; geschlossene Felder ersetzen sie.
+      // Beide fräsen die authored Route frei, bevor die Tutorial-Flächen gestempelt werden.
       let tutorialRockCells: Set<string> | null = null;
       if (coopMapConfig?.rockField) {
         this.applyRockField(
@@ -334,11 +333,16 @@ export class ArenaGenerator {
       // Bäume auf verbleibenden freien Zellen platzieren.
       // Mindestabstand zum Arena-Rand: ceil(CANOPY_RADIUS / CELL_SIZE) Zellen,
       // damit die Baumkrone nie über die Arena-Grenze hinausragt.
-      const treeMargin = Math.ceil(CANOPY_RADIUS / CELL_SIZE); // bei r=96, size=48 → 2
+      const treeMargin = Math.ceil(CANOPY_RADIUS / CELL_SIZE);
       const trees: TreeCell[] = [];
-      // Im Felsfeld sind die einzigen freien Zellen die Gänge – ein Baum darin würde sie
-      // verstopfen und die Konnektivität kippen. Deshalb wachsen dort keine Bäume.
-      const shuffledForTrees = coopMapConfig?.rockField ? [] : allCells.filter(
+      const organicRockField = coopMapConfig?.rockField?.fillMode === 'organic';
+      const startArea = coopMapConfig?.missionProgress?.startArea;
+      const treeClearanceReservations = new Set([
+        ...missionBarrierCells, ...authoredRockWallCells, ...missionCheckpointCells,
+      ]);
+      // Geschlossene Felsfelder bleiben baumfrei. Organische Felder reservieren die ganze
+      // Baumkrone, damit Brücken, schmale Gänge und Missionsflächen lesbar und begehbar bleiben.
+      const shuffledForTrees = coopMapConfig?.rockField && !organicRockField ? [] : allCells.filter(
         ({ gx, gy }) =>
           !blocked[gy][gx] &&
           !trackCols.has(gx) &&
@@ -347,7 +351,11 @@ export class ArenaGenerator {
           !authoredRockWallCells.has(`${gx}_${gy}`) &&
           !missionCheckpointCells.has(`${gx}_${gy}`) &&
           gx >= treeMargin && gx < this.metrics.gridCols - treeMargin &&
-          gy >= treeMargin && gy < this.metrics.gridRows - treeMargin,
+          gy >= treeMargin && gy < this.metrics.gridRows - treeMargin &&
+          (!organicRockField || (
+            (!startArea || Math.hypot(gx - startArea.gridX, gy - startArea.gridY) > (startArea.radiusCells ?? 4) + treeMargin)
+            && this.isOpenTreeClearing(gx, gy, treeMargin, blocked, treeClearanceReservations, trackCols, coopBaseSpecs)
+          )),
       );
       // Nochmals shuffeln für unabhängige Baumpositionierung
       this.shuffle(shuffledForTrees, rng);
@@ -895,6 +903,27 @@ export class ArenaGenerator {
     return false;
   }
 
+  private isOpenTreeClearing(
+    gridX: number,
+    gridY: number,
+    radius: number,
+    blocked: readonly (readonly boolean[])[],
+    reservations: ReadonlySet<string>,
+    trackCols: ReadonlySet<number>,
+    bases?: readonly BaseSpec[],
+  ): boolean {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy > radius * radius) continue;
+        const x = gridX + dx;
+        const y = gridY + dy;
+        if (blocked[y][x] || reservations.has(`${x}_${y}`) || trackCols.has(x)
+          || this.isReservedBaseObstacleCell(x, y, bases)) return false;
+      }
+    }
+    return true;
+  }
+
   private buildTrackLayout(col: number): { trackCols: Set<number>; tracks: TrackCell[] } {
     const trackCols = new Set([col, col + 1]);
     const tracks: TrackCell[] = [];
@@ -919,7 +948,7 @@ export class ArenaGenerator {
   }
 
   /**
-   * Baut die komplette Arena mit Fels zu und fräst anschließend die konfigurierten Gänge frei.
+   * Fräst die konfigurierten Gänge durch vorhandene CA-Formationen oder ein geschlossenes Feld.
    * Gleisspalten und die Schutzradien der Basen werden erst beim Übertragen nach `blocked`
    * ausgenommen (siehe generate()) und brauchen hier keine Sonderbehandlung.
    */
@@ -929,9 +958,11 @@ export class ArenaGenerator {
     rng: () => number,
     minimumCorridorRadiusCells = MIN_CARVED_RADIUS_CELLS,
   ): void {
-    for (let gy = 0; gy < this.metrics.gridRows; gy++) {
-      for (let gx = 0; gx < this.metrics.gridCols; gx++) {
-        map[gy][gx] = true;
+    if (rockField.fillMode !== 'organic') {
+      for (let gy = 0; gy < this.metrics.gridRows; gy++) {
+        for (let gx = 0; gx < this.metrics.gridCols; gx++) {
+          map[gy][gx] = true;
+        }
       }
     }
 
@@ -1205,16 +1236,26 @@ export class ArenaGenerator {
     // Tutorial-Rüstungsdrop-Marker. Neue lokale Steps bekommen denselben World-Space-Unterbau,
     // aber ausschließlich normale Felsen ohne Sondermarker.
     const anchors = [
-      tutorialAnchor,
-      ...tutorialStepAnchors,
+      { anchor: tutorialAnchor, showControls: tutorialShowControls },
+      ...tutorialStepAnchors.map((anchor) => ({ anchor, showControls: false })),
     ];
     const seenAnchors = new Set<string>();
-    for (const anchor of anchors) {
+    for (const { anchor, showControls } of anchors) {
       const anchorKey = anchor ? `${anchor.gridX}_${anchor.gridY}` : 'default';
       if (seenAnchors.has(anchorKey)) continue;
       seenAnchors.add(anchorKey);
+      const region = getCoopDefenseTutorialRockRegion(showControls, anchor, this.metrics);
+      if (anchor) {
+        // Close thin pockets behind edge-mounted panels before connectivity repair can
+        // cut artificial access tunnels through their backing rock.
+        if (region.minGridY <= COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS) region.minGridY = 0;
+        if (region.maxGridY >= this.metrics.gridRows - 1 - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS) {
+          region.maxGridY = this.metrics.gridRows - 1;
+        }
+      }
       const cells = generateSolidRockFormation(rng, {
-        region: getCoopDefenseTutorialRockRegion(tutorialShowControls, anchor, this.metrics),
+        // Only the opening panel contains controls; step panels reserve their actual short footprint.
+        region,
         haloCells: COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
         haloFillChance: [0.72],
         outerHaloFillChance: 0.36,

@@ -21,12 +21,12 @@ import { RockRegistry } from '../src/arena/RockRegistry';
 import { RockVisualStateStore } from '../src/arena/rocks/RockVisualState';
 import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import {
-  COOP_DEFENSE_MODE,
   COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID,
   GRID_COLS,
   GRID_ROWS,
   applyArenaMetricsForMode,
 } from '../src/config';
+import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import { RockVisualHelper } from '../src/scenes/arena/RockVisualHelper';

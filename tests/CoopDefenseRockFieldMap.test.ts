@@ -10,13 +10,37 @@ vi.mock('../src/network/bridge', () => ({
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 import { applyArenaMetricsForMode, GRID_COLS, GRID_ROWS } from '../src/config';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
-import { getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, normalizeCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { ArenaGenerator, resolveArenaGenerationInput } from '../src/arena/ArenaGenerator';
+import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 
 const MAP_14 = '14';
 
 /** Mehrere Seeds, weil die Gänge pro Runde neu ausgewürfelt werden. */
 const SEEDS = [4_711, 20_260_721, 1, 987_654, 31_337];
 const blockedGridBySeed = new Map<number, boolean[][]>();
+
+it('retains procedural terrain only in organic fields and defaults to the existing solid field', () => {
+  const generate = (fillMode?: 'solid' | 'organic') => {
+    const map = normalizeCoopDefenseMapConfig({
+      mapId: 'rock-field-mode-test', arenaWidthCells: 40, arenaHeightCells: 33,
+      objective: 'survive', surviveDurationSec: 60, balanceReferenceDurationSec: 60,
+      respawnsPerPlayer: 1, bases: [], powerUps: [],
+      rockFillRatio: 0, treeCount: 0,
+      rockField: {
+        fillMode, corridorRadiusCells: 2, corridorRadiusVarianceCells: 0,
+        corridorWanderCells: 0, waypointJitterCells: 0,
+        corridors: [{ id: 'route', points: [{ gridX: 2, gridY: 16 }, { gridX: 37, gridY: 16 }] }],
+      },
+    });
+    const metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
+    return ArenaGenerator.generate(123, resolveArenaGenerationInput('coop_defense', metrics), map);
+  };
+  expect(generate('organic').rocks).toHaveLength(0);
+  const solid = generate('solid');
+  expect(solid.rocks.length).toBeGreaterThan(0);
+  expect(ArenaGenerator.fingerprint(generate())).toBe(ArenaGenerator.fingerprint(solid));
+});
 
 function buildBlockedGrid(seed: number): boolean[][] {
   const cached = blockedGridBySeed.get(seed);

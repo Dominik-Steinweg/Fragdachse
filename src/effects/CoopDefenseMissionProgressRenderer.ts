@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../arena/AutoTiler';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH } from '../config';
 import type { ResolvedCoopDefenseMapMissionProgressConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
@@ -33,9 +34,9 @@ function checkpointSeed(id: string): number {
   return (hash >>> 0) % 1024;
 }
 
-/** Rein prozedurale Weltpresentation fuer Checkpoints, Extraktion und Missionstore. */
+/** World presentation for checkpoint shaders and authored mission-barrier tiles. */
 export class CoopDefenseMissionProgressRenderer {
-  private readonly graphics: Phaser.GameObjects.Graphics;
+  private readonly barrierImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly checkpoints: CheckpointVisual[] = [];
   private config: ResolvedCoopDefenseMapMissionProgressConfig | undefined;
   private roundRevision = -1;
@@ -45,10 +46,7 @@ export class CoopDefenseMissionProgressRenderer {
   private burstCount = 24;
   private destroyed = false;
 
-  constructor(private readonly scene: Phaser.Scene) {
-    this.graphics = scene.add.graphics().setDepth(DEPTH.BASES + 7).setVisible(false);
-    registerGraphicsObject(scene, 'objectiveMarkers', this.graphics);
-  }
+  constructor(private readonly scene: Phaser.Scene) {}
 
   sync(
     config: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
@@ -88,30 +86,24 @@ export class CoopDefenseMissionProgressRenderer {
       visual.opacity = visual.next ? 0.9 : reached ? 0.3 : visual.extraction ? 0.38 : 0.16;
     }
 
-    this.graphics.clear().setVisible(true);
-    const barrierOpen = new Map(state.barriers.map((barrier) => [barrier.barrierId, barrier.open]));
-    for (const barrier of config.barriers) {
-      const open = barrierOpen.get(barrier.id) === true;
-      if (open) continue;
-      for (const cell of barrier.cells) this.drawClosedGateCell(cell.gridX, cell.gridY);
-    }
+    this.syncBarriers(config, state);
   }
 
   clear(): void {
     if (this.destroyed) return;
     for (const visual of this.checkpoints) visual.quad.destroy();
     this.checkpoints.length = 0;
+    for (const image of this.barrierImages.values()) image.destroy();
+    this.barrierImages.clear();
     this.config = undefined;
     this.roundRevision = -1;
     this.missionRevision = -1;
     this.elapsedMs = 0;
-    this.graphics.clear().setVisible(false);
   }
 
   destroy(): void {
     if (this.destroyed) return;
     this.clear();
-    this.graphics.destroy();
     this.destroyed = true;
   }
 
@@ -171,22 +163,38 @@ export class CoopDefenseMissionProgressRenderer {
     }
   }
 
-  private drawClosedGateCell(gridX: number, gridY: number): void {
-    const left = ARENA_OFFSET_X + gridX * CELL_SIZE;
-    const top = ARENA_OFFSET_Y + gridY * CELL_SIZE;
-    const inset = 2;
-    this.graphics.fillStyle(COLORS.BLUE_5, 0.92)
-      .fillRoundedRect(left + inset, top + inset, CELL_SIZE - inset * 2, CELL_SIZE - inset * 2, 4);
-    this.graphics.lineStyle(2, COLORS.BLUE_2, 0.95)
-      .strokeRoundedRect(left + inset, top + inset, CELL_SIZE - inset * 2, CELL_SIZE - inset * 2, 4);
-    this.graphics.lineStyle(3, COLORS.GOLD_1, 0.82);
-    for (let offset = -CELL_SIZE; offset < CELL_SIZE * 2; offset += 12) {
-      const x1 = Math.max(left + 4, left + offset);
-      const y1 = top + 4 + Math.max(0, -offset);
-      const x2 = Math.min(left + CELL_SIZE - 4, left + offset + CELL_SIZE);
-      const y2 = top + 4 + Math.min(CELL_SIZE - 8, CELL_SIZE - offset);
-      if (y1 <= top + CELL_SIZE - 4 && y2 >= top + 4) this.graphics.lineBetween(x1, y1, x2, y2);
+  private syncBarriers(
+    config: ResolvedCoopDefenseMapMissionProgressConfig,
+    state: CoopDefenseMissionProgressPresentationState,
+  ): void {
+    const open = new Set(state.barriers.filter(barrier => barrier.open).map(barrier => barrier.barrierId));
+    const cells = config.barriers.filter(barrier => !open.has(barrier.id)).flatMap(barrier => barrier.cells);
+    const keyOf = (x: number, y: number) => `${x}_${y}`;
+    const occupied = new Set(cells.map(cell => keyOf(cell.gridX, cell.gridY)));
+    const isOccupied = (x: number, y: number) => occupied.has(keyOf(x, y));
+
+    for (const [key, image] of this.barrierImages) {
+      if (occupied.has(key)) continue;
+      image.destroy();
+      this.barrierImages.delete(key);
     }
-    this.graphics.fillStyle(COLORS.BLUE_1, 0.9).fillCircle(left + CELL_SIZE / 2, top + CELL_SIZE / 2, 4);
+    // Adjacent gates share contours while closed; opening one exposes the other's end cap.
+    for (const cell of cells) {
+      const key = keyOf(cell.gridX, cell.gridY);
+      const mask = AutoTiler.computeMask(cell.gridX, cell.gridY, isOccupied);
+      const frame = AutoTiler.getFrame(mask, MISSION_BARRIER_AUTOTILE);
+      const existing = this.barrierImages.get(key);
+      if (existing) {
+        existing.setFrame(frame);
+        continue;
+      }
+      const image = this.scene.add.image(
+        ARENA_OFFSET_X + (cell.gridX + 0.5) * CELL_SIZE,
+        ARENA_OFFSET_Y + (cell.gridY + 0.5) * CELL_SIZE,
+        'mission_barrier', frame,
+      ).setDisplaySize(CELL_SIZE, CELL_SIZE).setDepth(DEPTH.ROCKS);
+      registerGraphicsObject(this.scene, 'objectiveMarkers', image);
+      this.barrierImages.set(key, image);
+    }
   }
 }

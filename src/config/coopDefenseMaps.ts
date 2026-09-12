@@ -606,14 +606,16 @@ export interface CoopDefenseMapCorridorConfig {
 }
 
 /**
- * Ersetzt die prozeduralen Felsen durch ein durchgehend zugebautes Feld, in das nur die
- * konfigurierten Gänge gefräst werden. Die Schutzradien der Basen und die Gleisspalten bleiben
- * wie immer frei; Bäume entfallen, damit sie keinen Gang zustellen.
+ * Fräst konfigurierte Gänge durch ein geschlossenes Felsfeld oder durch prozedurale
+ * Felsformationen. Basen und Gleise bleiben frei; im organischen Modus können Bäume
+ * in ausreichend großen Lichtungen wachsen.
  *
  * Alle Streuwerte hängen am Arena-Seed: dieselbe Map sieht jede Runde etwas anders aus, bleibt
  * aber zwischen Host und Clients identisch.
  */
 export interface CoopDefenseMapRockFieldConfig {
+  /** Standard `solid` füllt die Arena; `organic` erhält die mit rockFillRatio erzeugten Formationen. */
+  readonly fillMode?: 'solid' | 'organic';
   /** Mittlerer Radius der Gänge in Zellen (Mitte der Schwankung). */
   readonly corridorRadiusCells: number;
   /** Maximale Abweichung des Radius nach oben und unten – erzeugt Engstellen und Kammern. */
@@ -731,13 +733,13 @@ export interface CoopDefenseMapConfig {
   /**
    * Anteil der Zellen, die vor dem Cellular-Automata-Smoothing als Fels ausgewürfelt werden
    * (0…1, Standard entspricht dem globalen `ROCK_FILL_RATIO`). Steuert, wie voll die Map mit
-   * Felsen wird. Wird ignoriert, wenn `rockField` gesetzt ist – dort steuert stattdessen
-   * `rockField.rockDensityScale` die Fülle über die Gangbreite.
+   * Felsen wird. Ein `solid`-Felsfeld ignoriert diesen Wert; dort steuert stattdessen
+   * `rockField.rockDensityScale` die Fülle über die Gangbreite. `organic` nutzt beides.
    */
   readonly rockFillRatio?: number;
   /** Authored Baumzahl; ohne Angabe gilt der globale Arena-Standard. */
   readonly treeCount?: number;
-  /** Gesetzt: zugebautes Felsfeld mit festen Gängen statt prozeduraler Felsverteilung. */
+  /** Authored Gänge durch ein geschlossenes Felsfeld oder organische Felsformationen. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /**
    * Authored Felsbaender aus ganz normalen zerstoerbaren Felsen. Sie werden erst nach
@@ -3472,6 +3474,10 @@ function normalizeRockFieldConfig(
 ): CoopDefenseMapRockFieldConfig | undefined {
   if (!rockField) return undefined;
 
+  if (rockField.fillMode !== undefined && rockField.fillMode !== 'solid' && rockField.fillMode !== 'organic') {
+    throw new Error(`[coopDefenseMaps] Invalid rock field fillMode on map ${mapId}`);
+  }
+
   const densityScale = typeof rockField.rockDensityScale === 'number' && Number.isFinite(rockField.rockDensityScale) && rockField.rockDensityScale > 0
     ? rockField.rockDensityScale
     : 1;
@@ -3503,6 +3509,7 @@ function normalizeRockFieldConfig(
   }
 
   return {
+    ...(rockField.fillMode ? { fillMode: rockField.fillMode } : {}),
     corridorRadiusCells: clampCorridorRadius(rockField.corridorRadiusCells * densityScale),
     corridorRadiusVarianceCells: Math.max(0, rockField.corridorRadiusVarianceCells),
     corridorWanderCells: Math.max(0, rockField.corridorWanderCells),

@@ -3,6 +3,7 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, DEPTH } from '../src/config'
 import type { ResolvedCoopDefenseMapMissionProgressConfig } from '../src/config/coopDefenseMaps';
 import type { CoopDefenseMissionProgressPresentationState } from '../src/types';
 import { CHECKPOINT_ACTIVATION_MS } from '../src/effects/checkpointMarkerShader';
+import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../src/arena/AutoTiler';
 
 const quality = vi.hoisted(() => ({ level: 'high' }));
 vi.mock('../src/graphics/GraphicsQuality', () => ({ getGraphicsQualityProfile: () => quality }));
@@ -41,6 +42,11 @@ interface Quad {
   uniforms(zoom?: number): Record<string, number | number[]>;
 }
 
+interface BarrierImage {
+  x: number; y: number; texture: string; frame: number;
+  width: number; height: number; depth: number; destroyed: boolean;
+}
+
 function makeConfig(): ResolvedCoopDefenseMapMissionProgressConfig {
   return {
     checkpoints: [
@@ -63,24 +69,25 @@ function makeState(): CoopDefenseMissionProgressPresentationState {
 
 function setup(webgl = true) {
   const quads: Quad[] = [];
-  const graphics = {
-    visible: true, destroyed: false, gateCells: 0,
-    setDepth() { return this; },
-    setVisible(v: boolean) { this.visible = v; return this; },
-    clear() { this.gateCells = 0; return this; },
-    fillStyle() { return this; },
-    lineStyle() { return this; },
-    fillRoundedRect() { this.gateCells++; return this; },
-    strokeRoundedRect() { return this; },
-    lineBetween() { return this; },
-    fillCircle() { return this; },
-    destroy() { this.destroyed = true; },
-  };
+  const images: BarrierImage[] = [];
   const scene = {
     sys: { renderer: webgl ? { gl: {} } : {} },
-    add: { graphics: () => graphics, existing: (quad: Quad) => { quads.push(quad); } },
+    add: {
+      existing: (quad: Quad) => { quads.push(quad); },
+      image: (x: number, y: number, texture: string, frame: number) => {
+        const image = {
+          x, y, texture, frame, width: 0, height: 0, depth: 0, destroyed: false,
+          setFrame(value: number) { this.frame = value; return this; },
+          setDisplaySize(width: number, height: number) { this.width = width; this.height = height; return this; },
+          setDepth(value: number) { this.depth = value; return this; },
+          destroy() { this.destroyed = true; },
+        };
+        images.push(image);
+        return image;
+      },
+    },
   };
-  return { renderer: new CoopDefenseMissionProgressRenderer(scene as never), quads, graphics };
+  return { renderer: new CoopDefenseMissionProgressRenderer(scene as never), quads, images };
 }
 
 beforeEach(() => { quality.level = 'high'; });
@@ -128,13 +135,13 @@ describe('CoopDefenseMissionProgressRenderer', () => {
   });
 
   it('derives acquisition feedback from the authoritative timestamp, including late joins and repeated snapshots', () => {
-    const { renderer, quads, graphics } = setup();
+    const { renderer, quads, images } = setup();
     const config = makeConfig();
     const state = makeState();
     renderer.sync(config, state, 0, true);
     const waiting = quads[0].uniforms();
     expect(waiting).toMatchObject({ uNext: 1, uActivationAge: -1 });
-    expect(graphics.gateCells).toBe(config.barriers[0].cells.length);
+    expect(images.filter(image => !image.destroyed)).toHaveLength(config.barriers[0].cells.length);
     const activatedAt = 5_000;
     state.missionRevision++;
     state.activatedCheckpoints = [{ checkpointId: 'entry', activatedAtRoundMs: activatedAt }];
@@ -146,7 +153,7 @@ describe('CoopDefenseMissionProgressRenderer', () => {
     expect(justReached.uActivationAge).toBeCloseTo(0.2);
     expect(justReached.uColor).not.toEqual(waiting.uColor);
     expect(quads[1].uniforms().uNext).toBe(1);
-    expect(graphics.gateCells).toBe(0);
+    expect(images.every(image => image.destroyed)).toBe(true);
     renderer.sync(config, { ...state }, activatedAt + CHECKPOINT_ACTIVATION_MS * 0.6, true);
     expect(quads[0].uniforms().uActivationAge).toBeCloseTo(0.6);
     const late = setup();
@@ -177,14 +184,13 @@ describe('CoopDefenseMissionProgressRenderer', () => {
   });
 
   it('releases activity resources on hide, null state and clear, and is inert after destruction', () => {
-    const { renderer, quads, graphics } = setup();
+    const { renderer, quads, images } = setup();
     const config = makeConfig();
     const state = makeState();
     renderer.sync(config, state, 0, true);
     renderer.sync(config, state, 1, false);
     expect(quads.every(quad => quad.destroyed)).toBe(true);
-    expect(graphics.visible).toBe(false);
-    expect(graphics.destroyed).toBe(false);
+    expect(images.every(image => image.destroyed)).toBe(true);
     renderer.sync(config, state, 2, true);
     expect(quads.at(-1)!.destroyed).toBe(false);
     renderer.sync(config, null, 3, true);
@@ -199,7 +205,46 @@ describe('CoopDefenseMissionProgressRenderer', () => {
     renderer.sync(config, state, 6, true);
     expect(quads).toHaveLength(count);
     expect(quads.every(quad => quad.destroyed)).toBe(true);
-    expect(graphics.destroyed).toBe(true);
+    expect(images.every(image => image.destroyed)).toBe(true);
+  });
+
+  it('joins closed gates, reuses images and exposes new end caps when a neighbour opens', () => {
+    const { renderer, images } = setup();
+    const baseConfig = makeConfig();
+    const config = { ...baseConfig, barriers: [
+      { ...baseConfig.barriers[0], cells: [{ gridX: 10, gridY: 5 }, { gridX: 10, gridY: 6 }] },
+      { ...baseConfig.barriers[0], id: 'other', cells: [{ gridX: 11, gridY: 6 }] },
+    ] };
+    const state = makeState();
+    state.barriers.push({ barrierId: 'other', open: false });
+    renderer.sync(config, state, 0, true);
+    expect(images).toHaveLength(3);
+    expect(images[0]).toMatchObject({
+      x: ARENA_OFFSET_X + 10.5 * CELL_SIZE, y: ARENA_OFFSET_Y + 5.5 * CELL_SIZE,
+      width: CELL_SIZE, height: CELL_SIZE, texture: 'mission_barrier',
+      frame: AutoTiler.getFrame(16, MISSION_BARRIER_AUTOTILE),
+    });
+    expect(images[1].frame).toBe(AutoTiler.getFrame(1 | 4, MISSION_BARRIER_AUTOTILE));
+    expect(images[2].frame).toBe(AutoTiler.getFrame(64, MISSION_BARRIER_AUTOTILE));
+    renderer.sync(config, { ...state }, 100, true);
+    expect(images).toHaveLength(3);
+
+    renderer.sync(config, { ...state, missionRevision: 1, barriers: [
+      { barrierId: 'gate', open: true }, { barrierId: 'other', open: false },
+    ] }, 200, true);
+    expect(images).toHaveLength(3);
+    expect(images.slice(0, 2).every(image => image.destroyed)).toBe(true);
+    expect(images[2]).toMatchObject({ destroyed: false, frame: AutoTiler.getFrame(0, MISSION_BARRIER_AUTOTILE) });
+    renderer.destroy();
+    expect(images.every(image => image.destroyed)).toBe(true);
+  });
+
+  it('does not create barrier images for gates already open on a late join', () => {
+    const { renderer, images } = setup();
+    const state = makeState();
+    state.barriers = [{ barrierId: 'gate', open: true }];
+    renderer.sync(makeConfig(), state, 500, true);
+    expect(images).toHaveLength(0);
   });
 
   it('does not allocate shader objects without WebGL', () => {

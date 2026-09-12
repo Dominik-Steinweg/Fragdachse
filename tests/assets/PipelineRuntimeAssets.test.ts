@@ -6,8 +6,31 @@ import manifest from '../../src/config/pipelineAssets.json';
 import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
+import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
 
 describe('selected runtime asset package', () => {
+  it('ships the mission barrier blob frames with transparent spare slots and seamless straight runs', async () => {
+    const { data, info } = await sharp('public/assets/sprites/missionbarrier47blob.png')
+      .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    expect([info.width, info.height]).toEqual([11 * 32, 5 * 32]);
+    const usedFrames = new Set(MISSION_BARRIER_AUTOTILE.bitmaskToFrame);
+    const pixel = (frame: number, x: number, y: number, channel: number) =>
+      data[((Math.floor(frame / 11) * 32 + y) * info.width + (frame % 11) * 32 + x) * 4 + channel];
+    for (let frame = 0; frame < 55; frame++) {
+      let visiblePixels = 0;
+      for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+        if (pixel(frame, x, y, 3) > 0) visiblePixels++;
+      }
+      expect(visiblePixels > 0).toBe(usedFrames.has(frame));
+    }
+    const vertical = AutoTiler.getFrame(1 | 16, MISSION_BARRIER_AUTOTILE);
+    const horizontal = AutoTiler.getFrame(4 | 64, MISSION_BARRIER_AUTOTILE);
+    for (let t = 0; t < 32; t++) for (let c = 0; c < 4; c++) {
+      expect(pixel(vertical, t, 0, c)).toBe(pixel(vertical, t, 31, c));
+      expect(pixel(horizontal, 0, t, c)).toBe(pixel(horizontal, 31, t, c));
+    }
+  });
+
   it('keeps the wall material on the identical 32-pixel grid with byte-identical alpha', async () => {
     const [rock, wall] = await Promise.all(['rocks', 'walls'].map(key =>
       sharp(`public/assets/sprites/${key}47blob.png`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })));

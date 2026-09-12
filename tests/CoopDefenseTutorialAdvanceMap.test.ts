@@ -4,6 +4,7 @@ import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   CELL_SIZE,
+  CANOPY_RADIUS,
   GRID_COLS,
   GRID_ROWS,
   applyArenaMetricsForMode,
@@ -26,10 +27,62 @@ import {
   getVisibleCoopDefenseTutorialStepId,
 } from '../src/ui/coopDefenseTutorialStepModel';
 import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
+import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 
 const MAP = getCoopDefenseMapConfig('1');
 const MISSION = resolveCoopDefenseMapMissionProgress(MAP)!;
 const TEST_WORLD_METRICS = resolveCoopDefenseWorldMetrics(MAP.arenaWidthCells, MAP.arenaHeightCells);
+const BASE_CELLS = resolveCoopDefenseBases(MAP, TEST_WORLD_METRICS).flatMap((base) => base.cells);
+
+type GridCell = { gridX: number; gridY: number };
+const cellKey = ({ gridX, gridY }: GridCell): string => `${gridX}:${gridY}`;
+const CROSSINGS = [
+  ...(MAP.rockWalls ?? []).map((wall) => ({
+    id: wall.id,
+    cells: Array.from({ length: wall.heightCells }, (_, offset) => ({
+      gridX: wall.gridX, gridY: wall.gridY + offset,
+    })),
+  })),
+  ...MISSION.barriers,
+].sort((a, b) => a.cells[0].gridX - b.cells[0].gridX);
+
+function waterComponents(): GridCell[][] {
+  const remaining = new Set((MAP.water ?? []).map(cellKey));
+  const components: GridCell[][] = [];
+  for (const start of MAP.water ?? []) {
+    if (!remaining.delete(cellKey(start))) continue;
+    const cells = [start];
+    for (let index = 0; index < cells.length; index++) {
+      const cell = cells[index];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const next = { gridX: cell.gridX + dx, gridY: cell.gridY + dy };
+        if (remaining.delete(cellKey(next))) cells.push(next);
+      }
+    }
+    components.push(cells);
+  }
+  return components;
+}
+
+function reachableCells(start: GridCell, blocked: ReadonlySet<string>): Set<string> {
+  const reached = new Set<string>();
+  if (blocked.has(cellKey(start))) return reached;
+  const queue = [start];
+  reached.add(cellKey(start));
+  for (let index = 0; index < queue.length; index += 1) {
+    const { gridX, gridY } = queue[index];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const next = { gridX: gridX + dx, gridY: gridY + dy };
+      const key = cellKey(next);
+      if (next.gridX < 0 || next.gridY < 0
+        || next.gridX >= TEST_WORLD_METRICS.gridCols || next.gridY >= TEST_WORLD_METRICS.gridRows
+        || blocked.has(key) || reached.has(key)) continue;
+      reached.add(key);
+      queue.push(next);
+    }
+  }
+  return reached;
+}
 
 function applyMapMetrics(): void {
   applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', MAP.arenaWidthCells, MAP.arenaHeightCells);
@@ -94,30 +147,36 @@ describe('Map 1 as the guided advance tutorial', () => {
     }
   });
 
-  it('places each step window on deterministic ordinary rock banks', () => {
+  it.each([1, 42, 4242])('keeps tutorial rock banks intact through the nearby map edge (seed %i)', (seed) => {
     applyMapMetrics();
     const steps = resolveCoopDefenseMapTutorialSteps(MAP);
-    const layout = generateArenaWithActiveMetrics(42_424, MAP);
+    const layout = generateArenaWithActiveMetrics(seed, MAP);
+    const rocks = new Set(layout.rocks.map(cellKey));
     const trackColumns = new Set(layout.tracks.flatMap(({ gridX }) => [gridX, gridX + 1]));
     for (const step of steps) {
       const region = getCoopDefenseTutorialRockRegion(false, step.anchor);
-      const rocksUnderPanel = layout.rocks.filter((rock) => (
-        rock.gridX >= region.minGridX
-        && rock.gridX <= region.maxGridX
-        && rock.gridY >= region.minGridY
-        && rock.gridY <= region.maxGridY
-        && !trackColumns.has(rock.gridX)
-      ));
-      expect(rocksUnderPanel.length, step.id).toBeGreaterThan(0);
+      expect(layout.water?.some((cell) => (
+        cell.gridX >= region.minGridX && cell.gridX <= region.maxGridX
+        && cell.gridY >= region.minGridY && cell.gridY <= region.maxGridY
+      )), step.id).toBe(false);
+      const minY = step.anchor!.gridY < GRID_ROWS / 2 ? 0 : region.minGridY;
+      const maxY = step.anchor!.gridY < GRID_ROWS / 2 ? region.maxGridY : GRID_ROWS - 1;
+      for (let gridY = minY; gridY <= maxY; gridY++) {
+        for (let gridX = region.minGridX; gridX <= region.maxGridX; gridX++) {
+          if (trackColumns.has(gridX)) continue;
+          expect(rocks.has(cellKey({ gridX, gridY })), `${step.id} backing rock ${gridX}:${gridY}`).toBe(true);
+        }
+      }
     }
   });
 
-  it('keeps every authored checkpoint core free of rocks and trees', () => {
+  it('keeps every authored checkpoint core free of rocks, trees and water', () => {
     applyMapMetrics();
     for (const seed of [1, 42, 4242]) {
       const layout = generateArenaWithActiveMetrics(seed, MAP);
       const rocks = new Set(layout.rocks.map(({ gridX, gridY }) => `${gridX}:${gridY}`));
       const trees = new Set(layout.trees.map(({ gridX, gridY }) => `${gridX}:${gridY}`));
+      const water = new Set((layout.water ?? []).map(cellKey));
 
       for (const checkpoint of MISSION.checkpoints) {
         const centerX = checkpoint.gridX + 0.5;
@@ -138,6 +197,7 @@ describe('Map 1 as the guided advance tutorial', () => {
             if (dx * dx + dy * dy > radiusSq) continue;
             expect(rocks.has(`${gridX}:${gridY}`), `${seed} ${checkpoint.id} rock`).toBe(false);
             expect(trees.has(`${gridX}:${gridY}`), `${seed} ${checkpoint.id} tree`).toBe(false);
+            expect(water.has(`${gridX}:${gridY}`), `${seed} ${checkpoint.id} water`).toBe(false);
           }
         }
       }
@@ -153,12 +213,12 @@ describe('Map 1 as the guided advance tutorial', () => {
     expect(narrowestAuthoredRadius).toBeGreaterThanOrEqual(1.1);
   });
 
-  it('starts the burrow train five seconds after checkpoint 3 and repeats every ten seconds', () => {
+  it('starts the burrow train three seconds after checkpoint 3 and repeats every ten seconds', () => {
     expect(MAP.mapEvents).toEqual([{
       id: 'burrow-train',
       type: 'train',
       start: { type: 'after-checkpoint', checkpointId: 'cp3-burrow' },
-      delayMs: 5_000,
+      delayMs: 3_000,
       repeatAfterExitMs: 10_000,
     }]);
   });
@@ -189,7 +249,7 @@ describe('Map 1 as the guided advance tutorial', () => {
     expect(MAP.rockWalls?.map((wall) => wall.id)).toEqual(['utility-wall', 'burrow-wall']);
     for (const wall of MAP.rockWalls ?? []) {
       expect(wall.widthCells, wall.id).toBe(1);
-      expect(wall.heightCells, wall.id).toBe(MAP.arenaHeightCells);
+      expect(wall.heightCells, wall.id).toBeLessThan(MAP.arenaHeightCells!);
     }
     // Jede Wand liegt hinter ihrem Lern-Checkpoint und vor dem naechsten.
     const checkpointX = Object.fromEntries(MISSION.checkpoints.map((cp) => [cp.id, cp.gridX]));
@@ -200,13 +260,13 @@ describe('Map 1 as the guided advance tutorial', () => {
     expect(burrowWall.gridX).toBeLessThan(checkpointX['cp4-rage']);
   });
 
-  it('stamps the authored walls as complete rock bands without cutting them open again', () => {
+  it('stamps the complete tutorial bridge blockades without cutting them open again', () => {
     applyMapMetrics();
     for (const seed of [1, 42, 4242]) {
       const layout = generateArenaWithActiveMetrics(seed, MAP);
       const rocks = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
       for (const wall of MAP.rockWalls ?? []) {
-        for (let gridY = 0; gridY < GRID_ROWS; gridY += 1) {
+        for (let gridY = wall.gridY; gridY < wall.gridY + wall.heightCells; gridY += 1) {
           expect(rocks.has(`${wall.gridX}:${gridY}`), `${seed} ${wall.id} ${gridY}`).toBe(true);
         }
       }
@@ -225,6 +285,149 @@ describe('Map 1 as the guided advance tutorial', () => {
     }
   });
 
+  it('requires each land bridge even after every ordinary landscape rock is removed', () => {
+    const water = new Set((MAP.water ?? []).map(cellKey));
+    expect(water.size).toBeGreaterThan(0);
+    const start = MISSION.startArea!;
+    const final = MISSION.checkpoints[MISSION.checkpoints.length - 1];
+    expect(reachableCells(start, water).has(cellKey(final))).toBe(true);
+
+    for (const crossing of CROSSINGS) {
+      const blocked = new Set([...water, ...crossing.cells.map(cellKey)]);
+      // Only this blockade and permanent water remain: no destructible rock can hide a bypass.
+      expect(reachableCells(start, blocked).has(cellKey(final)), crossing.id).toBe(false);
+      const top = crossing.cells[0];
+      const bottom = crossing.cells[crossing.cells.length - 1];
+      expect(water.has(cellKey({ gridX: top.gridX, gridY: top.gridY - 1 })), crossing.id).toBe(true);
+      expect(water.has(cellKey({ gridX: bottom.gridX, gridY: bottom.gridY + 1 })), crossing.id).toBe(true);
+    }
+  });
+
+  it('keeps river bends at least three connected cells wide outside the land bridges', () => {
+    const components = waterComponents();
+    for (const crossing of CROSSINGS) {
+      const top = crossing.cells[0];
+      const bottom = crossing.cells[crossing.cells.length - 1];
+      // Follow the two river arms at the crossing; separate inland ponds are not river width.
+      const river = components.filter((cells) => cells.some((cell) => (
+        cell.gridX === top.gridX && (cell.gridY === top.gridY - 1 || cell.gridY === bottom.gridY + 1)
+      ))).flat();
+      let previousRow = new Set<number>();
+      for (let y = 0; y < MAP.arenaHeightCells!; y++) {
+        const row = new Set(river.filter((cell) => cell.gridY === y).map((cell) => cell.gridX));
+        if (crossing.cells.some((cell) => cell.gridY === y)) {
+          expect(row.size, crossing.id).toBe(0);
+        } else {
+          expect(row.size, `${crossing.id} row ${y}`).toBeGreaterThanOrEqual(3);
+          // Adjacent wide rows can still form a one-cell pinch when their banks shift too far.
+          if (previousRow.size > 0) {
+            expect([...row].filter((x) => previousRow.has(x)).length, `${crossing.id} bend ${y}`)
+              .toBeGreaterThanOrEqual(3);
+          }
+        }
+        previousRow = row;
+      }
+    }
+  });
+
+  it('keeps the ponds and lake separate from rivers and contained within rounded inland shores', () => {
+    const inland = waterComponents().filter((cells) => cells.every((cell) => (
+      cell.gridX > 0 && cell.gridY > 0
+      && cell.gridX < TEST_WORLD_METRICS.gridCols - 1 && cell.gridY < TEST_WORLD_METRICS.gridRows - 1
+    )));
+    expect(inland).toHaveLength(3);
+    for (const cells of inland) {
+      const width = Math.max(...cells.map((cell) => cell.gridX)) - Math.min(...cells.map((cell) => cell.gridX)) + 1;
+      const height = Math.max(...cells.map((cell) => cell.gridY)) - Math.min(...cells.map((cell) => cell.gridY)) + 1;
+      expect(cells.length).toBeLessThan(width * height);
+      expect(width).toBeGreaterThan(1);
+      expect(height).toBeGreaterThan(1);
+    }
+  });
+
+  it('leaves a mostly open start around the intact control tutorial and open terrain across the map', () => {
+    applyMapMetrics();
+    const startPanel = getCoopDefenseTutorialRockRegion(true, MAP.tutorialAnchor, TEST_WORLD_METRICS);
+    const panels = [startPanel, ...resolveCoopDefenseMapTutorialSteps(MAP).map((step) => (
+      getCoopDefenseTutorialRockRegion(false, step.anchor, TEST_WORLD_METRICS)
+    ))];
+    const inside = (cell: GridCell, region: typeof startPanel) => (
+      cell.gridX >= region.minGridX && cell.gridX <= region.maxGridX
+      && cell.gridY >= region.minGridY && cell.gridY <= region.maxGridY
+    );
+    for (const seed of [1, 42, 4242]) {
+      const layout = generateArenaWithActiveMetrics(seed, MAP);
+      const rocks = new Set(layout.rocks.map(cellKey));
+      const occupied = new Set([...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...BASE_CELLS].map(cellKey));
+      let startFree = 0, startTerrain = 0, worldFree = 0, worldTerrain = 0;
+      for (let y = 0; y < GRID_ROWS; y++) for (let x = 0; x < GRID_COLS; x++) {
+        const cell = { gridX: x, gridY: y };
+        if (inside(cell, startPanel)) expect(rocks.has(cellKey(cell)), `${seed} start panel`).toBe(true);
+        if (panels.some((panel) => inside(cell, panel))) continue;
+        worldTerrain++;
+        if (!occupied.has(cellKey(cell))) worldFree++;
+        if (x < MISSION.checkpoints[0].gridX) {
+          startTerrain++;
+          if (!occupied.has(cellKey(cell))) startFree++;
+        }
+      }
+      expect(startFree, `${seed} start clearing`).toBeGreaterThan(startTerrain / 2);
+      expect(worldFree, `${seed} open landscape`).toBeGreaterThan(worldTerrain / 2);
+    }
+  });
+
+  it('respects the authored tree budget and keeps crowns off water, rock and crossings', () => {
+    applyMapMetrics();
+    const margin = Math.ceil(CANOPY_RADIUS / CELL_SIZE);
+    for (const seed of [1, 42, 4242]) {
+      const layout = generateArenaWithActiveMetrics(seed, MAP);
+      const obstacles = new Set([
+        ...layout.rocks, ...(layout.water ?? []), ...BASE_CELLS,
+        ...CROSSINGS.flatMap((crossing) => crossing.cells),
+        ...layout.tracks.flatMap((cell) => [cell, { gridX: cell.gridX + 1, gridY: cell.gridY }]),
+      ].map(cellKey));
+      expect(layout.trees.length, `${seed} trees in clearings`).toBeGreaterThan(0);
+      expect(layout.trees.length, `${seed} authored tree budget`).toBeLessThanOrEqual(MAP.treeCount!);
+      for (const tree of layout.trees) {
+        for (let dy = -margin; dy <= margin; dy++) for (let dx = -margin; dx <= margin; dx++) {
+          if (dx * dx + dy * dy > margin * margin) continue;
+          expect(obstacles.has(cellKey({ gridX: tree.gridX + dx, gridY: tree.gridY + dy })), `${seed} tree ${cellKey(tree)}`)
+            .toBe(false);
+        }
+      }
+    }
+  });
+
+  it('keeps bridge approaches clear and unlocks the route in order across generated layouts', () => {
+    applyMapMetrics();
+    for (const seed of [1, 42, 4242]) {
+      const layout = generateArenaWithActiveMetrics(seed, MAP);
+      const blocked = new Set([
+        ...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...BASE_CELLS,
+        ...MISSION.barriers.flatMap((barrier) => barrier.cells),
+      ].map(cellKey));
+      const start = MISSION.startArea!;
+      const checkpoints = MISSION.checkpoints;
+      const opening = reachableCells(start, blocked);
+      expect(opening.has(cellKey(checkpoints[0])), `${seed} cp1`).toBe(true);
+      expect(opening.has(cellKey(checkpoints[1])), `${seed} cp2`).toBe(true);
+
+      for (const [index, crossing] of CROSSINGS.entries()) {
+        const target = checkpoints[index + 2];
+        expect(reachableCells(start, blocked).has(cellKey(target)), `${seed} ${crossing.id} closed`).toBe(false);
+        for (const cell of crossing.cells) blocked.delete(cellKey(cell));
+        const reached = reachableCells(start, blocked);
+        expect(reached.has(cellKey(target)), `${seed} ${crossing.id} open`).toBe(true);
+        for (const cell of crossing.cells) {
+          for (let dx = -3; dx <= 3; dx += 1) {
+            const approach = { gridX: cell.gridX + dx, gridY: cell.gridY };
+            expect(reached.has(cellKey(approach)), `${seed} ${crossing.id} approach ${cellKey(approach)}`).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
   it('keeps every route stage and authored spawn area walkable', () => {
     applyMapMetrics();
     for (const seed of [1, 42, 4242]) {
@@ -232,7 +435,12 @@ describe('Map 1 as the guided advance tutorial', () => {
       const blocked = new Set<string>([
         ...layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`),
         ...layout.trees.map((tree) => `${tree.gridX}:${tree.gridY}`),
+        ...(layout.water ?? []).map(cellKey),
+        ...BASE_CELLS.map(cellKey),
       ]);
+      // Evaluate the ordinary walking route after the two tutorial walls have been overcome.
+      for (const crossing of CROSSINGS) for (const cell of crossing.cells) blocked.delete(cellKey(cell));
+      const reached = reachableCells(MISSION.startArea!, blocked);
       const countFree = (
         minGridX: number,
         minGridY: number,
@@ -242,7 +450,7 @@ describe('Map 1 as the guided advance tutorial', () => {
         let free = 0;
         for (let gridY = Math.max(0, minGridY); gridY < Math.min(GRID_ROWS, minGridY + heightCells); gridY += 1) {
           for (let gridX = Math.max(0, minGridX); gridX < Math.min(GRID_COLS, minGridX + widthCells); gridX += 1) {
-            if (!blocked.has(`${gridX}:${gridY}`)) free += 1;
+            if (reached.has(`${gridX}:${gridY}`)) free += 1;
           }
         }
         return free;
@@ -312,7 +520,7 @@ describe('Map 1 as the guided advance tutorial', () => {
     const barrier = MISSION.barriers.find(({ id }) => id === 'extraction-gate')!;
     expect(MISSION.barriers).toHaveLength(2);
     expect(barrier.openOn).toEqual({ type: 'after-encounter', encounterId: 'cp5-wave-2' });
-    expect(barrier.cells).toHaveLength(MAP.arenaHeightCells);
+    expect(barrier.cells.length).toBeLessThan(MAP.arenaHeightCells!);
     const extraction = MISSION.checkpoints[MISSION.checkpoints.length - 1];
     expect(barrier.cells.every((cell) => cell.gridX < extraction.gridX)).toBe(true);
     expect(barrier.cells.every((cell) => cell.gridX > MISSION.checkpoints[4].gridX)).toBe(true);
@@ -329,7 +537,7 @@ describe('Map 1 as the guided advance tutorial', () => {
 
   it('locks the CP4-to-CP5 route behind the ordinary rage encounter', () => {
     const barrier = MISSION.barriers.find(({ id }) => id === 'rage-gate')!;
-    expect(barrier.cells).toHaveLength(MAP.arenaHeightCells);
+    expect(barrier.cells.length).toBeLessThan(MAP.arenaHeightCells!);
     expect(barrier.openOn).toEqual({ type: 'after-encounter', encounterId: 'cp4-pressure' });
     expect(MISSION.mandatoryDefenses).toHaveLength(1);
     expect(MISSION.mandatoryDefenses[0].checkpointId).toBe('cp5-base-defense');
@@ -443,6 +651,10 @@ describe('Map 1 as the guided advance tutorial', () => {
     } as unknown as CoopDefenseMapConfig;
 
     expect(() => normalizeCoopDefenseMapConfig(base)).not.toThrow();
+    expect(() => normalizeCoopDefenseMapConfig({
+      ...base,
+      rockField: { ...MAP.rockField!, fillMode: 'unknown' as 'organic' },
+    })).toThrow(/fillMode/);
     expect(() => normalizeCoopDefenseMapConfig({
       ...base,
       tutorialSteps: [{ id: 'step', checkpointId: 'missing' }],

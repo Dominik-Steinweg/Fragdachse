@@ -121,7 +121,7 @@ describe('Train as a standalone map event', () => {
       id: 'burrow-train',
       type: 'train',
       start: { type: 'after-checkpoint', checkpointId: 'cp3-burrow' },
-      delayMs: 5_000,
+      delayMs: 3_000,
       repeatAfterExitMs: 10_000,
     });
   });
