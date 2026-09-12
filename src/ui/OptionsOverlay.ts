@@ -1,18 +1,19 @@
+import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
 import {
   COLORS,
   DEPTH,
   GAME_HEIGHT,
   GAME_WIDTH,
-  toCssColor,
 } from '../config';
 import type { AudioAssetKey } from '../audio/AudioCatalog';
 import { GameAudioSystem, type MusicLoadState } from '../audio/GameAudioSystem';
 import type { LivingBarPalette } from './LivingBarEffect';
 import { LivingBarEffect } from './LivingBarEffect';
-import { ensureGlossyButtonTexture, ensureModalPanelTexture } from './uiTextures';
+
+import { ensureRoundedTexture } from './uiTextures';
 import { attachHoverEffect } from './uiHover';
-import { BORDER, INTENT, SURFACE, TEXT, textStyle } from './uiTheme';
+import { INTENT } from './uiTheme';
 import {
   setStoredEffectsVolume,
   setStoredGraphicsQuality,
@@ -25,24 +26,24 @@ import { toDesignSpace } from '../graphics/RenderResolution';
 import { formatPercent, getLocale, setLocale, t } from '../i18n';
 import type { Locale } from '../i18n/types';
 
-const PANEL_W = 680;
-const PANEL_H = 760;
+const PANEL_W = 800;
+const PANEL_H = 920;
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
-const TITLE_Y = CY - PANEL_H / 2 + 38;
+const TITLE_Y = CY - PANEL_H / 2 + 94;
 const TRACK_W = 430;
 const TRACK_H = 18;
 const TRACK_X = CX - TRACK_W / 2;
 const PERCENT_X = TRACK_X + TRACK_W;
-const FOOTER_Y = CY + PANEL_H / 2 - 12;
+const FOOTER_Y = CY + PANEL_H / 2 - 94;
 const QUALITY_BUTTON_Y = CY - 184;
 const QUALITY_BUTTON_W = 150;
 const QUALITY_BUTTON_H = 44;
 const QUALITY_BUTTON_GAP = 12;
 
 const DIM_COLOR = COLORS.GREY_10;
-const DIM_ALPHA = 0.78;
+const DIM_ALPHA = 0.58;
 const PANEL_BG = SURFACE.modal;
 const PANEL_BORDER = BORDER.default;
 const TRACK_BG = SURFACE.sunken;
@@ -57,7 +58,7 @@ const PREVIEW_COOLDOWN_MS = 120;
 const MUSIC_LOAD_BAR_H = 8;
 const MUSIC_LOAD_BAR_Y = CY + 192;
 const MUSIC_LOAD_LABEL_Y = MUSIC_LOAD_BAR_Y + 17;
-const SECTION_BLOCK_W = PANEL_W - 60;
+const SECTION_BLOCK_W = PANEL_W - 128;
 const GRAPHICS_HEADING_CONTENT_GAP = 44;
 const AUDIO_HEADING_CONTENT_GAP = 18;
 const GRAPHICS_HEADER_Y = QUALITY_BUTTON_Y - GRAPHICS_HEADING_CONTENT_GAP;
@@ -107,12 +108,12 @@ interface SliderState {
 }
 
 interface QualityButtonState {
-  readonly background: Phaser.GameObjects.Rectangle;
+  readonly background: Phaser.GameObjects.Image;
   readonly label: Phaser.GameObjects.Text;
 }
 
 interface LocaleButtonState {
-  readonly background: Phaser.GameObjects.Rectangle;
+  readonly background: Phaser.GameObjects.Image;
   readonly label: Phaser.GameObjects.Text;
 }
 
@@ -358,6 +359,7 @@ export class OptionsOverlay {
     );
 
     this.container.add(objects);
+    mountForestModal(this.scene, this.container, PANEL_W, PANEL_H);
     this.unsubscribeMusicLoadState = this.audioSystem.subscribeMusicLoadState((state) => {
       this.syncMusicLoadingIndicator(state);
     });
@@ -499,14 +501,11 @@ export class OptionsOverlay {
     headingY: number,
     objects: Phaser.GameObjects.GameObject[],
   ): void {
-    const background = this.scene.add.rectangle(
-      CX,
-      (top + bottom) / 2,
-      SECTION_BLOCK_W,
-      bottom - top,
-      SURFACE.raised,
-      0.34,
-    ).setStrokeStyle(1, BORDER.subtle, 0.9).setScrollFactor(0);
+    const background = this.scene.add.image(CX, (top + bottom) / 2, ensureRoundedTexture(this.scene, {
+      key: `_forest_options_section_${SECTION_BLOCK_W}x${bottom-top}`, w: SECTION_BLOCK_W, h: bottom - top,
+      radius: 14, topColor: SURFACE.raised, bottomColor: SURFACE.sunken, fillAlpha: .5,
+      strokeColor: BORDER.subtle, strokeAlpha: .35, strokeWidth: 1, highlightAlpha: 0,
+    })).setScrollFactor(0);
     const heading = this.scene.add.text(
       CX,
       headingY,
@@ -517,6 +516,12 @@ export class OptionsOverlay {
     objects.push(background, heading);
   }
 
+  private selectionTexture(w: number, h: number, active: boolean): string {
+    return ensureRoundedTexture(this.scene, { key: `_forest_options_select_${w}x${h}_${active}`, w, h, radius: 8,
+      topColor: active ? 0x474735 : SURFACE.raised, bottomColor: SURFACE.sunken, fillAlpha: .9,
+      strokeColor: active ? TEXT.accent : BORDER.subtle, strokeAlpha: active ? .8 : .7, strokeWidth: 1.5, highlightAlpha: .03 });
+  }
+
   private buildQualitySelector(objects: Phaser.GameObjects.GameObject[]): void {
     const totalWidth = QUALITY_OPTIONS.length * QUALITY_BUTTON_W
       + (QUALITY_OPTIONS.length - 1) * QUALITY_BUTTON_GAP;
@@ -524,9 +529,7 @@ export class OptionsOverlay {
 
     QUALITY_OPTIONS.forEach((option, index) => {
       const x = startX + index * (QUALITY_BUTTON_W + QUALITY_BUTTON_GAP);
-      const background = this.scene.add.rectangle(
-        x, QUALITY_BUTTON_Y, QUALITY_BUTTON_W, QUALITY_BUTTON_H, TRACK_BG, 0.96,
-      ).setStrokeStyle(1, TRACK_BORDER)
+      const background = this.scene.add.image(x, QUALITY_BUTTON_Y, this.selectionTexture(QUALITY_BUTTON_W, QUALITY_BUTTON_H, false))
         .setScrollFactor(0)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
@@ -548,8 +551,7 @@ export class OptionsOverlay {
     for (const [level, state] of this.qualityButtons) {
       const active = level === selected;
       state.background
-        .setFillStyle(active ? SURFACE.raised : TRACK_BG, active ? 1 : 0.96)
-        .setStrokeStyle(active ? 2 : 1, active ? BORDER.default : TRACK_BORDER);
+        .setTexture(this.selectionTexture(QUALITY_BUTTON_W, QUALITY_BUTTON_H, active));
       state.label.setColor(toCssColor(active ? TEXT.primary : TEXT.secondary));
     }
   }
@@ -567,9 +569,7 @@ export class OptionsOverlay {
     const startX = CX - totalWidth / 2 + LOCALE_BUTTON_W / 2;
     for (const [index, option] of locales.entries()) {
       const x = startX + index * (LOCALE_BUTTON_W + LOCALE_BUTTON_GAP);
-      const background = this.scene.add.rectangle(
-        x, LOCALE_BUTTON_Y, LOCALE_BUTTON_W, LOCALE_BUTTON_H, TRACK_BG, 0.96,
-      ).setStrokeStyle(1, TRACK_BORDER).setScrollFactor(0)
+      const background = this.scene.add.image(x, LOCALE_BUTTON_Y, this.selectionTexture(LOCALE_BUTTON_W, LOCALE_BUTTON_H, false)).setScrollFactor(0)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.onLocaleSelected(option.locale))
         .on('pointerover', () => {
@@ -606,8 +606,7 @@ export class OptionsOverlay {
     for (const [locale, state] of this.localeButtons) {
       const active = locale === selected;
       state.background
-        .setFillStyle(active ? SURFACE.raised : TRACK_BG, canChange ? 1 : 0.55)
-        .setStrokeStyle(active ? 2 : 1, active ? BORDER.default : TRACK_BORDER)
+        .setTexture(this.selectionTexture(LOCALE_BUTTON_W, LOCALE_BUTTON_H, active))
         .setAlpha(canChange ? 1 : 0.55)
         .setInteractive({ useHandCursor: canChange });
       state.label.setColor(toCssColor(canChange && active ? TEXT.primary : TEXT.secondary)).setAlpha(canChange ? 1 : 0.55);

@@ -50,7 +50,7 @@ function drain(scene: object): void {
 }
 
 describe('persistent-base gravel field', () => {
-  it('uses exactly the resolved 3x3 build area and never the reservation radius', () => {
+  it('uses exactly the resolved square build area and never the reservation radius', () => {
     const anchor = { gridX: 20, gridY: 12 };
     const cells = getPersistentBaseGravelCells(anchor, DEFAULT_PERSISTENT_BASE_BUILD_AREA, 40, 30);
     const expected = [];
@@ -67,7 +67,7 @@ describe('persistent-base gravel field', () => {
     }
 
     expect(cells).toEqual(expected);
-    expect(cells).toHaveLength(9);
+    expect(cells).toHaveLength(DEFAULT_PERSISTENT_BASE_BUILD_AREA.sizeCells ** 2);
     expect(cells.length).toBeLessThan(
       getPersistentBaseGravelCells(
         anchor,
@@ -96,18 +96,27 @@ describe('persistent-base gravel field', () => {
     }
 
     expect(cells).toEqual(expected);
-    expect(cells).toHaveLength(13);
   });
 
-  it('renders the resolved Stage-1 radius without a separate visual path', () => {
+  it.each([1, 2] as const)('renders the resolved Stage-%i radius with three-cell tips', (stage) => {
     const anchor = { gridX: 20, gridY: 12 };
-    const buildArea = resolvePersistentBaseBuildAreaForStage(1);
+    const buildArea = resolvePersistentBaseBuildAreaForStage(stage);
     const cells = getPersistentBaseGravelCells(anchor, buildArea, 40, 30);
 
-    expect(buildArea).toEqual({ kind: 'radius', radiusCells: 5 });
-    expect(cells).toHaveLength(81);
-    expect(cells).toContainEqual({ gridX: anchor.gridX + 5, gridY: anchor.gridY });
-    expect(cells).not.toContainEqual({ gridX: anchor.gridX + 6, gridY: anchor.gridY });
+    expect(buildArea.kind).toBe('radius');
+    if (buildArea.kind !== 'radius') throw new Error('Expected radius build area');
+    for (const [axisX, axisY] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (const offset of [-1, 0, 1]) {
+        expect(cells).toContainEqual({
+          gridX: anchor.gridX + axisX * buildArea.radiusCells - axisY * offset,
+          gridY: anchor.gridY + axisY * buildArea.radiusCells + axisX * offset,
+        });
+      }
+      expect(cells).not.toContainEqual({
+        gridX: anchor.gridX + axisX * (buildArea.radiusCells + 1),
+        gridY: anchor.gridY + axisY * (buildArea.radiusCells + 1),
+      });
+    }
   });
 
   it('keeps complete 47-blob neighbour context across a 128-px chunk boundary', () => {
@@ -232,7 +241,7 @@ describe('persistent-base gravel streaming integration', () => {
     drain(scene);
     const initialState = streamer.getPersistentBaseGravelState();
     expect(initialState?.buildArea).toEqual(DEFAULT_PERSISTENT_BASE_BUILD_AREA);
-    expect(initialState?.cells).toHaveLength(9);
+    expect(initialState?.cells).toHaveLength(DEFAULT_PERSISTENT_BASE_BUILD_AREA.sizeCells ** 2);
     expect(streamer.getChunkTexture(GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID, 0, 0)).not.toBeNull();
     expect(sceneImageCalls).toBe(0);
 

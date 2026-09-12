@@ -283,7 +283,7 @@ export const deContent = {
   "item.affix.glutwanderer.description": "Je {distance} zurückgelegte Pixel: {chunks} brennende Brocken",
   "gameMode.deathmatch": "Deathmatch",
   "gameMode.teamDeathmatch": "Team-Deathmatch",
-  "gameMode.captureTheBeer": "Bier erobern",
+  "gameMode.captureTheBeer": "Capture the Beer",
   "gameMode.coopDefense": "Dachs vs. Zombies",
   "map.objective.repel-assault": "ANGRIFF ABWEHREN",
   "map.objective.survive": "ÜBERLEBEN",

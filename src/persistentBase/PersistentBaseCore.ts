@@ -20,9 +20,9 @@ import type { PersistentBaseAnchor } from './PersistentBaseTypes';
  */
 
 /** Kantenlaenge der kanonischen Grundflaeche. Ungerade, damit der Anker eine echte Zelle ist. */
-export const PERSISTENT_BASE_CORE_SIZE_CELLS = 5;
+export const PERSISTENT_BASE_CORE_SIZE_CELLS = 7;
 
-/** Groesster Betrag eines relativen Offsets, also `(5 - 1) / 2`. */
+/** Groesster Betrag eines relativen Offsets, also `(7 - 1) / 2`. */
 const CORE_EXTENT_CELLS = (PERSISTENT_BASE_CORE_SIZE_CELLS - 1) / 2;
 
 /**
@@ -44,7 +44,7 @@ export type PersistentBaseCellDomain =
  * Regel, die den bebaubaren Bereich relativ zum persistenten Basisanker beschreibt.
  *
  * Die aktive Regel wird ausschliesslich aus der semantischen Area-Stufe aufgeloest: Stage 0 nutzt
- * das feste 3x3-Quadrat, Stage 1 Radius 5 und Stage 2 Radius 6. Platzierung, Restore und Darstellung
+ * das feste 7x7-Quadrat, Stage 1 Radius 5 und Stage 2 Radius 6. Platzierung, Restore und Darstellung
  * erhalten danach dieselbe aufgeloeste Geometrie.
  */
 export type PersistentBaseBuildArea =
@@ -59,10 +59,10 @@ export const DEFAULT_PERSISTENT_BASE_AREA_STAGE: PersistentBaseAreaStage = 0;
 /** Authoritative Stage-Werte an der Persistenz- und Netzwerkgrenze. */
 export const PERSISTENT_BASE_AREA_STAGES = [0, 1, 2] as const satisfies readonly PersistentBaseAreaStage[];
 
-/** Aktueller Baubereich: genau die neun Innenhofzellen im 5x5-Kern. */
+/** Baubereich der ersten Stufe; unabhaengig von den festen Domains des Basiskerns. */
 export const DEFAULT_PERSISTENT_BASE_BUILD_AREA = Object.freeze({
   kind: 'square',
-  sizeCells: 3,
+  sizeCells: 7,
 } as const satisfies PersistentBaseBuildArea);
 
 /** Authoring-/Wire-Grenze fuer die semantische Area-Stufe. */
@@ -118,7 +118,13 @@ export function isCellInsidePersistentBaseBuildArea(
     const extent = (area.sizeCells - 1) / 2;
     return Math.abs(relativeGridX) <= extent && Math.abs(relativeGridY) <= extent;
   }
-  return relativeGridX * relativeGridX + relativeGridY * relativeGridY <= area.radiusCells * area.radiusCells;
+  const dx = Math.abs(relativeGridX);
+  const dy = Math.abs(relativeGridY);
+  // Kreis plus drei Zellen breite Achsenenden, ohne die maximale Ausdehnung zu vergroessern.
+  // Die Regel gilt fuer jeden Radius; die Generator-Reservierung bleibt davon unabhaengig.
+  const insideCircle = dx * dx + dy * dy <= area.radiusCells * area.radiusCells;
+  const insideCardinalStrip = Math.max(dx, dy) <= area.radiusCells && Math.min(dx, dy) <= 1;
+  return insideCircle || insideCardinalStrip;
 }
 
 /**
@@ -146,7 +152,7 @@ export function isPersistentBaseOrientation(value: unknown): value is Persistent
 }
 
 export interface PersistentBaseCoreCell {
-  /** -2 ... +2, relativ zum Anker. Der Anker selbst ist `(0, 0)` und liegt im Innenhof. */
+  /** -3 ... +3, relativ zum Anker. Der Anker selbst ist `(0, 0)` und liegt im Innenhof. */
   readonly relativeGridX: number;
   readonly relativeGridY: number;
   readonly domain: PersistentBaseCellDomain;
@@ -187,18 +193,20 @@ function buildCanonicalCells(): PersistentBaseCoreCell[] {
 }
 
 /**
- * Die kanonische 5x5-Grundflaeche (Default-Ausrichtung `open-left`):
+ * Die kanonische 7x7-Grundflaeche (Default-Ausrichtung `open-left`):
  *
  * ```
- *   B B E B B      B = base-surface          (12 Zellen)
- *   B H H H B      H = courtyard-build-area  ( 9 Zellen)
- *   E H H H E      E = entrance              ( 4 Zellen)
- *   B H H H B
- *   B B E B B
+ *   B B B E B B B      B = base-surface          (20 Zellen)
+ *   B H H H H H B      H = courtyard-build-area  (25 Zellen)
+ *   B H H H H H B      E = entrance              ( 4 Zellen)
+ *   E H H H H H E
+ *   B H H H H H B
+ *   B H H H H H B
+ *   B B B E B B B
  * ```
  *
  * Die vier mittleren Randzellen sind offene Eingaenge. Die Ecken und die uebrigen Randzellen
- * bilden die feste Basisflaeche; der Innenhof ist der aktuelle Baubereich.
+ * bilden die feste Basisflaeche. Die aktive Bauzone wird separat aus der Area-Stufe aufgeloest.
  */
 export const CANONICAL_PERSISTENT_BASE_CORE_CELLS: readonly PersistentBaseCoreCell[] =
   Object.freeze(buildCanonicalCells());
@@ -310,7 +318,7 @@ export interface PersistentBaseCoreSite {
   readonly hpMax: number;
 }
 
-/** Gitterursprung der 5x5-Grundflaeche, also die obere linke Zelle ihrer Bounding-Box. */
+/** Gitterursprung der 7x7-Grundflaeche, also die obere linke Zelle ihrer Bounding-Box. */
 export function getPersistentBaseCoreOrigin(anchor: PersistentBaseAnchor): { gridX: number; gridY: number } {
   return { gridX: anchor.gridX - CORE_EXTENT_CELLS, gridY: anchor.gridY - CORE_EXTENT_CELLS };
 }
@@ -318,7 +326,7 @@ export function getPersistentBaseCoreOrigin(anchor: PersistentBaseAnchor): { gri
 /**
  * Expandiert eine authored Basisstelle in die vollstaendige Basiskonfiguration.
  *
- * Weil die Bounding-Box immer die volle 5x5-Flaeche ist, faellt ihre Mitte exakt auf den
+ * Weil die Bounding-Box immer die volle 7x7-Flaeche ist, faellt ihre Mitte exakt auf den
  * authored Anker - genau den Wert, den `addPersistentBaseReservation` spaeter als
  * `anchorGridX/Y` ableitet. Anker und persistente Konstruktionen bleiben dadurch ohne Sonderfall
  * deckungsgleich.

@@ -1,5 +1,6 @@
+import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
-import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
+import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import {
   COOP_DEFENSE_ITEM_SLOTS,
   getCoopDefenseItemRarityDefinition,
@@ -23,26 +24,22 @@ import {
   type CoopDefenseItemDropTarget,
 } from './CoopDefenseItemsModel';
 import {
-  ensureCoopDefenseItemCellTexture,
+  ensureForestItemCellTexture as ensureCoopDefenseItemCellTexture,
   resolveCoopDefenseItemEmptyIconTexture,
   resolveCoopDefenseItemIconTexture,
 } from './coopDefenseItemIcons';
 import { attachHoverEffect } from './uiHover';
-import {
-  ensureGlossyButtonTexture,
-  ensureFlatPanelTexture,
-  ensureModalPanelTexture,
-} from './uiTextures';
+import { ensureFlatPanelTexture } from './uiTextures';
 import { UiContextMenu } from './UiContextMenu';
 import { UiTooltip } from './UiTooltip';
-import { BORDER, INTENT, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
+import { INTENT, RADIUS, SPACE } from './uiTheme';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { getLocale, t } from '../i18n';
 import { getItemSlotName } from '../i18n/itemPresentation';
 
 /**
- * Item-Menue der Lobby im Stil klassischer Action-Rollenspiele: links eine Ausruestungspuppe
- * (Helm ueber Ruestung ueber Stiefel, Handschuhe daneben), rechts alle vier Kategorien als
+ * Item-Menue der Lobby im Stil klassischer Action-Rollenspiele: links vier gleichwertige Ausruestungsplaetze
+ * (Helm, Ruestung, Handschuhe und Stiefel), rechts alle vier Kategorien als
  * 2x5-Raster nebeneinander.
  *
  * Die Zellen zeigen nur Symbol, Seltenheitsrahmen und Stufe. Die genauen Werte liefert der
@@ -59,51 +56,48 @@ export interface CoopDefenseItemsOverlayState {
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
-const PANEL_W = 1660;
+const PANEL_W = 1780;
 const PANEL_H = 980;
 const PANEL_TOP = CY - PANEL_H / 2;
 const PANEL_BOTTOM = CY + PANEL_H / 2;
 const PANEL_LEFT = CX - PANEL_W / 2;
 const PANEL_RIGHT = CX + PANEL_W / 2;
-const CONTENT_PAD = 34;
+const CONTENT_PAD = 78;
 
-const TITLE_Y = PANEL_TOP + 50;
-const REWARD_HINT_Y = TITLE_Y + 38;
+const TITLE_Y = PANEL_TOP + 82;
+const REWARD_HINT_Y = TITLE_Y + 30;
 
-const SECTION_TOP = PANEL_TOP + 110;
-const SECTION_BOTTOM = PANEL_BOTTOM - 96;
+const SECTION_TOP = PANEL_TOP + 132;
+const SECTION_BOTTOM = PANEL_BOTTOM - 150;
 const SECTION_H = SECTION_BOTTOM - SECTION_TOP;
 const SECTION_CY = SECTION_TOP + SECTION_H / 2;
 const SECTION_TITLE_Y = SECTION_TOP + 30;
 
 // ── Ausruestungspuppe ────────────────────────────────────────────────────────
-const DOLL_W = 500;
+const DOLL_W = 550;
 const DOLL_LEFT = PANEL_LEFT + CONTENT_PAD;
 const DOLL_CX = DOLL_LEFT + DOLL_W / 2;
-const DOLL_CELL = 120;
-const DOLL_ROW_STRIDE = 150;
-const DOLL_TOP_Y = SECTION_TOP + 116;
+const DOLL_CELL = 100;
+const DOLL_ROW_STRIDE = 142;
+const DOLL_TOP_Y = SECTION_TOP + 104;
 
-/**
- * Feste Plaetze der Puppe. Rechts neben der Ruestung bleibt bewusst Raum frei, damit spaeter
- * weitere Slots (Ringe, Amulett) ohne Umbau danebenpassen.
- */
+/** Kompakte Zweierreihen schaffen darunter Raum für lesbare Werte und Sondereffekte. */
 const DOLL_POSITIONS: Readonly<Record<CoopDefenseItemSlot, { x: number; y: number }>> = {
-  helmet: { x: DOLL_CX, y: DOLL_TOP_Y },
-  gloves: { x: DOLL_CX - 142, y: DOLL_TOP_Y + DOLL_ROW_STRIDE },
-  armor: { x: DOLL_CX, y: DOLL_TOP_Y + DOLL_ROW_STRIDE },
-  boots: { x: DOLL_CX, y: DOLL_TOP_Y + DOLL_ROW_STRIDE * 2 },
+  helmet: { x: DOLL_CX - 122, y: DOLL_TOP_Y },
+  gloves: { x: DOLL_CX - 122, y: DOLL_TOP_Y + DOLL_ROW_STRIDE },
+  armor: { x: DOLL_CX + 122, y: DOLL_TOP_Y },
+  boots: { x: DOLL_CX + 122, y: DOLL_TOP_Y + DOLL_ROW_STRIDE },
 };
 
-const SUMMARY_TITLE_Y = DOLL_TOP_Y + DOLL_ROW_STRIDE * 2 + 104;
+const SUMMARY_TITLE_Y = DOLL_TOP_Y + DOLL_ROW_STRIDE + 98;
 const SUMMARY_START_Y = SUMMARY_TITLE_Y + 34;
-const SUMMARY_LINE_H = 18;
+const SUMMARY_LINE_H = 34;
 const SUMMARY_COLUMN_GAP = 24;
 const SUMMARY_COLUMN_W = (DOLL_W - 92 - SUMMARY_COLUMN_GAP) / 2;
 const MAX_SUMMARY_LINES = 12;
 const SPECIAL_TITLE_Y = SUMMARY_START_Y + Math.ceil(MAX_SUMMARY_LINES / 2) * SUMMARY_LINE_H + 20;
 const SPECIAL_START_Y = SPECIAL_TITLE_Y + 24;
-const SPECIAL_LINE_H = 18;
+const SPECIAL_LINE_H = 20;
 const MAX_SPECIAL_EFFECT_LINES = 8;
 const EMPTY_SLOT_ICON_ALPHA = 0.1;
 
@@ -112,8 +106,8 @@ const GRID_LEFT = DOLL_LEFT + DOLL_W + 28;
 const GRID_W = PANEL_RIGHT - CONTENT_PAD - GRID_LEFT;
 const GRID_CX = GRID_LEFT + GRID_W / 2;
 
-const CELL = 104;
-const CELL_GAP = 12;
+const CELL = 96;
+const CELL_GAP = 10;
 const GRID_COLUMNS = 2;
 const GRID_ROWS = 5;
 const COLUMN_W = CELL * GRID_COLUMNS + CELL_GAP;
@@ -123,7 +117,7 @@ const COLUMN_TITLE_Y = SECTION_TOP + 58;
 const CELL_TOP_Y = SECTION_TOP + 104;
 const GRID_HINT_Y = CELL_TOP_Y + GRID_ROWS * (CELL + CELL_GAP) + 34;
 
-const FOOTER_Y = PANEL_BOTTOM - 46;
+const FOOTER_Y = PANEL_BOTTOM - 100;
 const FOOTER_BTN_W = 260;
 const FOOTER_BTN_H = 50;
 const SORT_BTN_W = 240;
@@ -193,7 +187,7 @@ export class CoopDefenseItemsOverlay {
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     objects.push(
-      this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.86)
+      this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.58)
         .setScrollFactor(0)
         .setInteractive(),
     );
@@ -224,15 +218,17 @@ export class CoopDefenseItemsOverlay {
 
     // Tooltip, Aktionsmenue und Zieh-Schemen liegen als letzte Kinder ueber allem im Overlay,
     // bleiben aber unter Ergebnis- und Belohnungs-Layer – die Depth-Leiter aendert sich nicht.
-    this.tooltip = new UiTooltip(this.scene, 340);
-    objects.push(this.tooltip.build());
+    this.tooltip = new UiTooltip(this.scene, 340, undefined, undefined, 'forest');
+    const tooltipRoot = this.tooltip.build();
+    objects.push(tooltipRoot);
     objects.push(this.buildGhost());
 
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 3)
       .setVisible(false);
+    mountForestModal(this.scene, this.container, PANEL_W, PANEL_H, [this.ghost!, tooltipRoot]);
     promoteToClarityCamera(this.scene, this.container);
-    this.contextMenu = new UiContextMenu(this.scene, this.container);
+    this.contextMenu = new UiContextMenu(this.scene, this.container, undefined, 'forest');
   }
 
   show(): void {
@@ -365,8 +361,8 @@ export class CoopDefenseItemsOverlay {
       const y = SUMMARY_START_Y + row * SUMMARY_LINE_H;
       const label = this.scene.add.text(columnLeft, y, '', textStyle('caption', {
         color: TEXT.muted,
-      })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false).setWordWrapWidth(SUMMARY_COLUMN_W - 64);
-      const value = this.scene.add.text(columnLeft + SUMMARY_COLUMN_W, y, '', textStyle('caption', {
+      })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false).setWordWrapWidth(SUMMARY_COLUMN_W);
+      const value = this.scene.add.text(columnLeft + SUMMARY_COLUMN_W, y + 14, '', textStyle('caption', {
         color: TEXT.primary,
       })).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
       this.summaryLines.push(label, value);
@@ -500,7 +496,7 @@ export class CoopDefenseItemsOverlay {
     equipmentSlot: boolean,
   ): ItemCell {
     const frame = this.scene.add.image(0, 0, ensureCoopDefenseItemCellTexture(
-      this.scene, size, size, COLORS.GREY_6, 'empty',
+      this.scene, size, size, BORDER.subtle, 'empty',
     )).setScrollFactor(0).setInteractive();
     const icon = this.scene.add.image(0, 0, resolveCoopDefenseItemEmptyIconTexture(this.scene, slot, size))
       .setDisplaySize(size * 0.68, size * 0.68)

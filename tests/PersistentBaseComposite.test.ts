@@ -121,7 +121,7 @@ describe('PersistentBaseComposite – Baubereich ist die einzige Geometriequelle
     const result = merge({
       hostContribution: contribution('owner-host', [
         blueprint('inside', 1, 1, 0),
-        blueprint('outside', 2, 0, 1),
+        blueprint('outside', 4, 0, 1),
       ]),
     });
 
@@ -137,7 +137,7 @@ describe('PersistentBaseComposite – Baubereich ist die einzige Geometriequelle
       capacityCost: 1,
     };
     const result = merge({
-      hostContribution: contribution('owner-host', [blueprint('spills-out', 1, 0)]),
+      hostContribution: contribution('owner-host', [blueprint('spills-out', 3, 0)]),
       resolveTool: () => wideTool,
     });
 

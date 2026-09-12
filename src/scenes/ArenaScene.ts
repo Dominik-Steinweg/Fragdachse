@@ -1,6 +1,7 @@
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import * as Phaser from 'phaser';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
+import { getForestModalSurfaces, preloadForestModalAssets } from '../ui/ForestModal';
 import { preloadForestAssets } from '../ui/LobbyForestAssets';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
@@ -289,6 +290,7 @@ export class ArenaScene extends Phaser.Scene {
 
     preloadAllAudio(this.load);
     preloadForestAssets(this.load);
+    preloadForestModalAssets(this.load);
     // Beide Boden-Kacheln stammen aus scripts/generate-grass-tiles.mjs; die Detailkachel liegt
     // als Multiply-Ebene darueber und bricht die Periode der Basiskachel (siehe ArenaBackground).
     this.load.image('gras_bg_tile', './assets/sprites/gras_bg_tile.png');
@@ -984,6 +986,7 @@ export class ArenaScene extends Phaser.Scene {
     const lobbyBackdrop = new BackdropBlur(this, () => [
       this.lobbyOverlay?.getBackdropSurface() ?? null,
       leftPanel.getBackdropSurface(),
+      ...getForestModalSurfaces(this),
     ]);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobbyBackdrop.destroy());
     leftPanel.setLocaleSelectionBinding({

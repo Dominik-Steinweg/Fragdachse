@@ -4,6 +4,7 @@
   "arenaHeightCells": 37,
   "timeOfDay": "17:00",
   "tutorialPersistent": true,
+  "tutorialAnchor": { "gridX": 37, "gridY": 6 },
   "rockFillRatio": 0.4,
   "trackPosition": "center",
   "mapEvents": [{

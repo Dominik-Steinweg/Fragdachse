@@ -1,5 +1,6 @@
+import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal, ensureTintedSectionTexture } from './ForestModal';
 import * as Phaser from 'phaser';
-import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
+import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import {
   getCoopDefenseItemRarityDefinition,
   getCoopDefenseItemSlotDefinition,
@@ -13,20 +14,15 @@ import {
 import type { MatchItemRewardOption, MatchItemRewardPresentation } from './MatchResultsModel';
 import { buildCoopDefenseItemTooltip } from './CoopDefenseItemsModel';
 import {
-  ensureCoopDefenseItemCellTexture,
+  ensureForestItemCellTexture as ensureCoopDefenseItemCellTexture,
   resolveCoopDefenseItemEmptyIconTexture,
   resolveCoopDefenseItemIconTexture,
 } from './coopDefenseItemIcons';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { attachHoverEffect } from './uiHover';
 import { UiTooltip } from './UiTooltip';
-import {
-  ensureFlatPanelTexture,
-  ensureGlossyButtonTexture,
-  ensureModalPanelTexture,
-  ensureTintedSectionTexture,
-} from './uiTextures';
-import { BORDER, INTENT, SURFACE, TEXT, textStyle } from './uiTheme';
+import { ensureFlatPanelTexture, lerpColor } from './uiTextures';
+import { INTENT } from './uiTheme';
 import { getLocale, t } from '../i18n';
 import { getItemRarityName, getItemSlotName } from '../i18n/itemPresentation';
 import { getMapName } from '../i18n/contentPresentation';
@@ -44,18 +40,18 @@ import { getMapName } from '../i18n/contentPresentation';
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
-const PANEL_W = 1520;
-const PANEL_H = 960;
+const PANEL_W = 1580;
+const PANEL_H = 1020;
 const PANEL_TOP = CY - PANEL_H / 2;
 const PANEL_BOTTOM = CY + PANEL_H / 2;
 
-const TITLE_Y = PANEL_TOP + 62;
-const SUBTITLE_Y = PANEL_TOP + 104;
+const TITLE_Y = PANEL_TOP + 94;
+const SUBTITLE_Y = PANEL_TOP + 132;
 
 const CARD_W = 440;
-const CARD_H = 720;
+const CARD_H = 696;
 const CARD_GAP = 40;
-const CARD_TOP = PANEL_TOP + 150;
+const CARD_TOP = PANEL_TOP + 176;
 const CARD_CY = CARD_TOP + CARD_H / 2;
 const CARDS_LEFT = CX - (CARD_W * 3 + CARD_GAP * 2) / 2;
 
@@ -84,7 +80,7 @@ const CARD_BUTTON_H = 46;
 const CARD_BUTTON_GAP = 12;
 const CARD_ACTION_W = (CARD_BUTTON_W - CARD_BUTTON_GAP) / 2;
 
-const FOOTER_Y = PANEL_BOTTOM - 44;
+const FOOTER_Y = PANEL_BOTTOM - 100;
 const FOOTER_BUTTON_W = 300;
 const FOOTER_BUTTON_H = 50;
 
@@ -216,7 +212,7 @@ export class CoopDefenseItemRewardOverlay {
     }
 
     this.backButton = this.scene.add.image(
-      CX - PANEL_W / 2 + 40 + FOOTER_BUTTON_W / 2,
+      CX - PANEL_W / 2 + 88 + FOOTER_BUTTON_W / 2,
       FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, INTENT.ghost.fill, INTENT.ghost.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
@@ -231,7 +227,7 @@ export class CoopDefenseItemRewardOverlay {
     objects.push(this.backButton, this.backLabel);
 
     this.footerButton = this.scene.add.image(
-      CX + PANEL_W / 2 - 40 - FOOTER_BUTTON_W / 2,
+      CX + PANEL_W / 2 - 88 - FOOTER_BUTTON_W / 2,
       FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, INTENT.ghost.fill, INTENT.ghost.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
@@ -246,12 +242,14 @@ export class CoopDefenseItemRewardOverlay {
     attachHoverEffect(this.scene, this.footerButton, this.footerLabel);
     objects.push(this.footerButton, this.footerLabel);
 
-    this.tooltip = new UiTooltip(this.scene, 340);
-    objects.push(this.tooltip.build());
+    this.tooltip = new UiTooltip(this.scene, 340, undefined, undefined, 'forest');
+    const tooltipRoot = this.tooltip.build();
+    objects.push(tooltipRoot);
 
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 5)
       .setVisible(false);
+    mountForestModal(this.scene, this.container, PANEL_W, PANEL_H, [tooltipRoot]);
     promoteToClarityCamera(this.scene, this.container);
   }
 
@@ -304,11 +302,11 @@ export class CoopDefenseItemRewardOverlay {
     const frame = this.scene.add.image(
       0,
       0,
-      ensureTintedSectionTexture(this.scene, `_cdir_card_${index}`, CARD_W, CARD_H, COLORS.BLUE_4, COLORS.GREY_9),
+      ensureTintedSectionTexture(this.scene, `_cdir_card_${index}`, CARD_W, CARD_H, COLORS.BLUE_4, SURFACE.sunken),
     ).setScrollFactor(0);
 
     const iconFrame = this.scene.add.image(0, CARD_ICON_DY, ensureCoopDefenseItemCellTexture(
-      this.scene, CARD_ICON, CARD_ICON, COLORS.GREY_6, 'rest',
+      this.scene, CARD_ICON, CARD_ICON, BORDER.subtle, 'rest',
     )).setScrollFactor(0);
     const icon = this.scene.add.image(0, CARD_ICON_DY, resolveCoopDefenseItemIconTexture(
       this.scene, 'armor', 1, CARD_ICON,
@@ -352,7 +350,7 @@ export class CoopDefenseItemRewardOverlay {
     const equippedFrame = this.scene.add.image(
       -CARD_W / 2 + CARD_PAD + CARD_EQUIPPED_ICON / 2,
       CARD_EQUIPPED_DY,
-      ensureCoopDefenseItemCellTexture(this.scene, CARD_EQUIPPED_ICON, CARD_EQUIPPED_ICON, COLORS.GREY_6, 'empty'),
+      ensureCoopDefenseItemCellTexture(this.scene, CARD_EQUIPPED_ICON, CARD_EQUIPPED_ICON, BORDER.subtle, 'empty'),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
     const equippedIcon = this.scene.add.image(
       -CARD_W / 2 + CARD_PAD + CARD_EQUIPPED_ICON / 2,
@@ -399,7 +397,7 @@ export class CoopDefenseItemRewardOverlay {
       ensureGlossyButtonTexture(this.scene, TEX_EQUIP_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, INTENT.primary.fill, INTENT.primary.stroke),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
     const equipLabel = this.scene.add.text(equipButton.x, CARD_BUTTON_DY, t('ui.items.rewardEquip'), textStyle('labelSm', {
-      color: INTENT.primary.label,
+      color: TEXT.accent,
     })).setOrigin(0.5).setScrollFactor(0);
     equipButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
@@ -426,7 +424,7 @@ export class CoopDefenseItemRewardOverlay {
     const frame = this.scene.add.image(
       0,
       0,
-      ensureFlatPanelTexture(this.scene, TEX_SALVAGE_ROW, SALVAGE_ROW_W, SALVAGE_ROW_H, COLORS.GREY_8, COLORS.GREY_5),
+      ensureFlatPanelTexture(this.scene, TEX_SALVAGE_ROW, SALVAGE_ROW_W, SALVAGE_ROW_H, SURFACE.raised, COLORS.GREY_5),
     ).setScrollFactor(0).setInteractive({ useHandCursor: true });
     const icon = this.scene.add.image(-SALVAGE_ROW_W / 2 + 18 + SALVAGE_ICON / 2, 0, resolveCoopDefenseItemIconTexture(
       this.scene, 'armor', 1, SALVAGE_ICON,
@@ -443,10 +441,10 @@ export class CoopDefenseItemRewardOverlay {
 
     // Linksbuendige Zeilen skalieren beim Hover unschoen; stattdessen die Fuellung aufhellen.
     frame.on('pointerover', () => frame.setTexture(ensureFlatPanelTexture(
-      this.scene, TEX_SALVAGE_ROW_HOT, SALVAGE_ROW_W, SALVAGE_ROW_H, COLORS.GREY_6, COLORS.GOLD_2,
+      this.scene, TEX_SALVAGE_ROW_HOT, SALVAGE_ROW_W, SALVAGE_ROW_H, BORDER.subtle, COLORS.GOLD_2,
     )));
     frame.on('pointerout', () => frame.setTexture(ensureFlatPanelTexture(
-      this.scene, TEX_SALVAGE_ROW, SALVAGE_ROW_W, SALVAGE_ROW_H, COLORS.GREY_8, COLORS.GREY_5,
+      this.scene, TEX_SALVAGE_ROW, SALVAGE_ROW_W, SALVAGE_ROW_H, SURFACE.raised, COLORS.GREY_5,
     )));
     frame.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
@@ -485,6 +483,7 @@ export class CoopDefenseItemRewardOverlay {
 
   private renderCard(card: RewardCard, option: MatchItemRewardOption): void {
     const rarity = getCoopDefenseItemRarityDefinition(option.item.rarity);
+    const rarityText = lerpColor(rarity.color, TEXT.primary, 0.4);
     const locale = getLocale();
     const description = describeCoopDefenseItem(option.item, locale);
 
@@ -494,7 +493,7 @@ export class CoopDefenseItemRewardOverlay {
       CARD_W,
       CARD_H,
       rarity.color,
-      COLORS.GREY_9,
+      SURFACE.sunken,
     ));
     card.iconFrame.setTexture(ensureCoopDefenseItemCellTexture(
       this.scene, CARD_ICON, CARD_ICON, rarity.color, 'rest',
@@ -503,7 +502,7 @@ export class CoopDefenseItemRewardOverlay {
       this.scene, option.item.slot, option.item.itemLevel, CARD_ICON,
     ))
       .setDisplaySize(CARD_ICON * 0.7, CARD_ICON * 0.7);
-    card.title.setText(this.describeSlot(option.item)).setColor(toCssColor(rarity.color));
+    card.title.setText(this.describeSlot(option.item)).setColor(toCssColor(rarityText));
     card.meta.setText(`${getItemRarityName(option.item.rarity, getLocale())}  •  ${t('ui.items.level')} ${option.item.itemLevel}`);
 
     card.statLines.forEach((text, index) => {
@@ -511,7 +510,7 @@ export class CoopDefenseItemRewardOverlay {
       text.setVisible(!!line);
       if (!line) return;
       text.setText(`${formatCoopDefenseItemValue(line.value, line.displayAsPercent, locale)}  ${line.label}`);
-      text.setColor(toCssColor(line.isBaseStat ? COLORS.GREY_1 : rarity.color));
+      text.setColor(toCssColor(line.isBaseStat ? COLORS.GREY_1 : rarityText));
     });
 
     card.affixTitle.setVisible(description.affixLines.length > 0);
@@ -519,7 +518,7 @@ export class CoopDefenseItemRewardOverlay {
       const line = description.affixLines[index];
       text.setVisible(!!line);
       if (!line) return;
-      text.setText(`${line.label}: ${line.text}`).setColor(toCssColor(rarity.color));
+      text.setText(`${line.label}: ${line.text}`).setColor(toCssColor(rarityText));
     });
 
     card.compareTitle.setText(t('ui.items.currentlyEquipped')).setVisible(true);
@@ -544,7 +543,7 @@ export class CoopDefenseItemRewardOverlay {
     } else {
       card.equippedFrame
         .setTexture(ensureCoopDefenseItemCellTexture(
-          this.scene, CARD_EQUIPPED_ICON, CARD_EQUIPPED_ICON, COLORS.GREY_6, 'empty',
+          this.scene, CARD_EQUIPPED_ICON, CARD_EQUIPPED_ICON, BORDER.subtle, 'empty',
         ))
         .setVisible(true);
       card.equippedIcon
@@ -622,7 +621,7 @@ export class CoopDefenseItemRewardOverlay {
         .setDisplaySize(SALVAGE_ICON, SALVAGE_ICON)
         .setAlpha(entry.isOffer ? 0.5 : 1);
       row.label.setText(entry.isOffer ? t('ui.items.newItemDiscard') : this.describeSlot(entry.item));
-      row.label.setColor(toCssColor(entry.isOffer ? COLORS.GREY_4 : rarity.color));
+      row.label.setColor(toCssColor(entry.isOffer ? COLORS.GREY_4 : lerpColor(rarity.color, TEXT.primary, 0.4)));
       row.detail.setText(`${getItemRarityName(entry.item.rarity, getLocale())}  •  ${t('ui.items.level')} ${entry.item.itemLevel}  •  ${this.describeItemLines(entry.item)}`);
       row.reward.setText(`+${getCoopDefenseItemSalvageXp(entry.item)} XP`);
     });

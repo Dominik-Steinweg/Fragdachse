@@ -1,6 +1,7 @@
+import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
 import { resolvePersistentBaseBuildAreaForStage } from '../persistentBase/PersistentBaseCore';
-import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
+import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { getLocalizedTeamLabel } from '../i18n/gameModePresentation';
 import {
   getCoopDefenseLevelForXp,
@@ -23,14 +24,9 @@ import {
   type LivingBarPalette,
 } from './LivingBarEffect';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { UiTooltip } from './UiTooltip';
 import { attachHoverEffect } from './uiHover';
-import {
-  ensureFlatPanelTexture,
-  ensureGlossyButtonTexture,
-  ensureModalPanelTexture,
-  ensureRoundedTexture,
-  lerpColor,
-} from './uiTextures';
+import { ensureFlatPanelTexture, ensureRoundedTexture, lerpColor } from './uiTextures';
 import type {
   MatchItemRewardPresentation,
   MatchProgressDelta,
@@ -38,9 +34,9 @@ import type {
   MatchResultsPresentation,
 } from './MatchResultsModel';
 import { getCoopDefenseItemCellColor } from './CoopDefenseItemsModel';
-import { BORDER, INTENT, SURFACE, textStyle, FONT_MONO } from './uiTheme';
+import { INTENT, FONT_MONO } from './uiTheme';
 import {
-  ensureCoopDefenseItemCellTexture,
+  ensureForestItemCellTexture as ensureCoopDefenseItemCellTexture,
   resolveCoopDefenseItemIconTexture,
 } from './coopDefenseItemIcons';
 import { formatNumber, getLocale, t } from '../i18n';
@@ -53,22 +49,22 @@ import { formatNumber, getLocale, t } from '../i18n';
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
-const PANEL_W = 1800;
+const PANEL_W = 1860;
 const PANEL_H = 1008;
 const PANEL_LEFT = CX - PANEL_W / 2;
 const PANEL_RIGHT = CX + PANEL_W / 2;
-const PANEL_PAD = 30;
+const PANEL_PAD = 68;
 
 const CONTENT_LEFT = PANEL_LEFT + PANEL_PAD;
 const CONTENT_RIGHT = PANEL_RIGHT - PANEL_PAD;
 
 const BANNER_W = 800;
-const BANNER_H = 106;
-const BANNER_Y = 118;
-const META_Y = 190;
+const BANNER_H = 80;
+const BANNER_Y = 148;
+const META_Y = 214;
 
-const SECTION_TOP = 236;
-const SECTION_BOTTOM = 976;
+const SECTION_TOP = 260;
+const SECTION_BOTTOM = 902;
 const SECTION_H = SECTION_BOTTOM - SECTION_TOP;
 const SECTION_CY = SECTION_TOP + SECTION_H / 2;
 const SECTION_GAP = 24;
@@ -84,24 +80,24 @@ const SECTION_TITLE_Y = SECTION_TOP + 30;
 
 const ROW_INSET = 20;
 const ROW_W = LEFT_W - ROW_INSET * 2;
-const ROW_H = 46;
+const ROW_H = 40;
 const ROW_GAP = 3;
-const ROW_START_Y = 366;
+const ROW_START_Y = 376;
 const MAX_ROWS = 12;
 const MEDAL_SIZE = 32;
 const MEDAL_X = LEFT_X + 52;
 const NAME_X = LEFT_X + 96;
 const TEAM_X = LEFT_X + 700;
 const SCORE_X = LEFT_X + LEFT_W - ROW_INSET - 20;
-const HEADER_ROW_Y = 312;
-const HEADER_DIVIDER_Y = 336;
+const HEADER_ROW_Y = 332;
+const HEADER_DIVIDER_Y = 356;
 
 const CHIP_X = RIGHT_X + 36;
 const CHIP_W = RIGHT_W - 72;
-const CHIP_H = 60;
+const CHIP_H = 44;
 const CHIP_CX = CHIP_X + CHIP_W / 2;
 const CHIP_STRIDE = 74;
-const BADGE_SIZE = 36;
+const BADGE_SIZE = 30;
 const CHIP_LABEL_W = CHIP_W - BADGE_SIZE - 70;
 
 const BAR_X = CHIP_X;
@@ -117,7 +113,7 @@ const MAX_REWARD_CHIPS = 8;
 /** Unterkante, an der die Belohnungsliste enden muss – daraus folgt der Zeilenabstand. */
 const REWARD_LIMIT_Y = SECTION_BOTTOM - 8;
 /** Vorschau der drei angebotenen Teile, rechts in der Item-Zeile. */
-const OFFER_PREVIEW_SIZE = 46;
+const OFFER_PREVIEW_SIZE = 36;
 const OFFER_PREVIEW_GAP = 8;
 const MAX_OFFER_PREVIEWS = 3;
 const OFFER_PREVIEW_BLOCK_W = MAX_OFFER_PREVIEWS * (OFFER_PREVIEW_SIZE + OFFER_PREVIEW_GAP);
@@ -125,7 +121,7 @@ const OFFER_PREVIEW_BLOCK_W = MAX_OFFER_PREVIEWS * (OFFER_PREVIEW_SIZE + OFFER_P
 const SUMMARY_START_Y = 330;
 const MAX_SUMMARY_CHIPS = 5;
 
-const FOOTER_Y = 1012;
+const FOOTER_Y = 952;
 const CONTINUE_W = 270;
 const CONTINUE_H = 56;
 const CONTINUE_X = CONTENT_RIGHT - CONTINUE_W / 2;
@@ -134,7 +130,7 @@ const FEEDBACK_X = CONTENT_RIGHT - CONTINUE_W - 16 - FEEDBACK_W / 2;
 
 const PANEL_BG = SURFACE.modal;
 const PANEL_ACCENT = BORDER.default;
-const LOCAL_ROW_ACCENT = COLORS.BLUE_2;
+const LOCAL_ROW_ACCENT = COLORS.GOLD_2;
 
 const TEX_PANEL = '_mro_panel';
 const TEX_SECTION_LEFT = '_mro_section_left';
@@ -218,6 +214,7 @@ interface OfferPreview {
 
 export class MatchResultsOverlay {
   private container: Phaser.GameObjects.Container | null = null;
+  private modalFrame: Phaser.GameObjects.Image | null = null;
   private panel: Phaser.GameObjects.Image | null = null;
   private banner: Phaser.GameObjects.Image | null = null;
   private outcomeText: Phaser.GameObjects.Text | null = null;
@@ -236,6 +233,7 @@ export class MatchResultsOverlay {
   private xpFlash: Phaser.GameObjects.Rectangle | null = null;
   private xpBarEffect: LivingBarEffect | null = null;
   private rewardChips: RewardChip[] = [];
+  private rewardTooltip: UiTooltip | null = null;
   private offerPreviewGroup: Phaser.GameObjects.Container | null = null;
   private offerPreviews: OfferPreview[] = [];
 
@@ -287,7 +285,7 @@ export class MatchResultsOverlay {
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
-    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.88)
+    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.58)
       .setScrollFactor(0)
       .setInteractive();
     backdrop.on('pointerdown', () => this.skipAnimations());
@@ -342,6 +340,10 @@ export class MatchResultsOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 4)
       .setVisible(false);
+    this.rewardTooltip = new UiTooltip(this.scene, 480, TEXT.accent, GAME_HEIGHT - 24, 'forest');
+    const tooltipRoot = this.rewardTooltip.build();
+    this.container.add(tooltipRoot);
+    this.modalFrame = mountForestModal(this.scene, this.container, PANEL_W, PANEL_H, [tooltipRoot]);
     promoteToClarityCamera(this.scene, this.container);
 
     // Der lebendige XP-Balken braucht den Container und entsteht deshalb erst hier.
@@ -371,6 +373,7 @@ export class MatchResultsOverlay {
     this.applyAccent(OUTCOME_STYLE.syncing.color);
     this.container!.setVisible(true).setAlpha(1);
     this.panel?.setScale(1);
+    this.modalFrame?.setScale(0.5);
     this.outcomeText?.setText(t(OUTCOME_STYLE.syncing.labelKey)).setScale(1).setAlpha(1);
     this.outcomeFlash?.setVisible(false);
     this.metaText?.setText(`${modeLabel.toUpperCase()}  •  ${mapLabel.toUpperCase()}`).setAlpha(1);
@@ -432,6 +435,7 @@ export class MatchResultsOverlay {
     // Sequenz animiert weiterhin Panel, Text und Belohnungen separat.
     this.container!.setVisible(true).setAlpha(1);
     this.panel?.setScale(0.96);
+    this.modalFrame?.setScale(0.48);
     this.outcomeText?.setText(t(style.labelKey)).setAlpha(0).setScale(0.7);
     this.outcomeFlash?.setText(t(style.labelKey)).setAlpha(0).setScale(1).setVisible(false);
     this.metaText
@@ -469,6 +473,7 @@ export class MatchResultsOverlay {
   }
 
   hide(): void {
+    this.rewardTooltip?.hide();
     this.stopSequence();
     this.stopIdleAnimations();
     this.xpBarEffect?.stop();
@@ -479,6 +484,8 @@ export class MatchResultsOverlay {
   }
 
   destroy(): void {
+    this.rewardTooltip?.destroy();
+    this.rewardTooltip = null;
     this.stopSequence();
     this.stopIdleAnimations();
     if (this.sparkEmitter) destroyEmitter(this.sparkEmitter);
@@ -490,6 +497,7 @@ export class MatchResultsOverlay {
     this.container?.destroy(true);
     this.container = null;
     this.panel = null;
+    this.modalFrame = null;
     this.banner = null;
     this.outcomeText = null;
     this.outcomeFlash = null;
@@ -576,7 +584,7 @@ export class MatchResultsOverlay {
 
     this.metaText = this.scene.add.text(CX, META_Y, '', {
       fontFamily: FONT_MONO,
-      fontSize: '18px',
+      fontSize: '16px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.GREY_4),
     }).setOrigin(0.5).setScrollFactor(0);
@@ -656,7 +664,7 @@ export class MatchResultsOverlay {
     objects.push(this.levelText, this.xpGainText);
 
     objects.push(
-      this.scene.add.rectangle(BAR_X + BAR_W / 2, BAR_Y, BAR_W, BAR_H, COLORS.GREY_9, 0.95)
+      this.scene.add.rectangle(BAR_X + BAR_W / 2, BAR_Y, BAR_W, BAR_H, SURFACE.sunken, 0.95)
         .setStrokeStyle(1, COLORS.GREY_4)
         .setScrollFactor(0),
     );
@@ -702,7 +710,7 @@ export class MatchResultsOverlay {
     for (let index = 0; index < MAX_OFFER_PREVIEWS; index++) {
       const x = -index * (OFFER_PREVIEW_SIZE + OFFER_PREVIEW_GAP);
       const frame = this.scene.add.image(x, 0, ensureCoopDefenseItemCellTexture(
-        this.scene, OFFER_PREVIEW_SIZE, OFFER_PREVIEW_SIZE, COLORS.GREY_6, 'rest',
+        this.scene, OFFER_PREVIEW_SIZE, OFFER_PREVIEW_SIZE, BORDER.subtle, 'rest',
       )).setScrollFactor(0);
       const icon = this.scene.add.image(x, 0, resolveCoopDefenseItemIconTexture(
         this.scene, 'armor', 1, OFFER_PREVIEW_SIZE,
@@ -727,7 +735,7 @@ export class MatchResultsOverlay {
     }).setOrigin(0.5).setScrollFactor(0);
     const label = this.scene.add.text(-CHIP_W / 2 + 22 + BADGE_SIZE + 18, 0, '', {
       fontFamily: FONT_MONO,
-      fontSize: '18px',
+      fontSize: '16px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.GREY_1),
       wordWrap: { width: CHIP_LABEL_W },
@@ -746,7 +754,8 @@ export class MatchResultsOverlay {
       tooltip: null,
     };
     frame.setInteractive()
-      .on('pointerover', () => this.showRewardTooltip(chip))
+      .on('pointerover', (pointer: Phaser.Input.Pointer) => this.showRewardTooltip(chip, pointer))
+      .on('pointermove', (pointer: Phaser.Input.Pointer) => this.rewardTooltip?.move(pointer))
       .on('pointerout', () => this.hideRewardTooltip());
     return chip;
   }
@@ -814,7 +823,7 @@ export class MatchResultsOverlay {
       this.scene, TEX_CONTINUE, CONTINUE_W, CONTINUE_H, INTENT.primary.fill, INTENT.primary.stroke,
     )).setScrollFactor(0).setInteractive({ useHandCursor: true });
     this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, t('ui.results.continueLobby'), textStyle('label', {
-      color: INTENT.primary.label,
+      color: TEXT.accent,
     })).setOrigin(0.5).setScrollFactor(0);
     this.continueButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       // Das Overlay verschwindet sofort. Die Abbruchmarkierung verhindert, dass ein
@@ -1013,6 +1022,8 @@ export class MatchResultsOverlay {
       duration: 420,
       ease: 'Back.easeOut',
     });
+
+    this.addTween({ targets: this.modalFrame, scale: 0.5, duration: 420, ease: 'Back.easeOut' });
 
     // 2. Ergebnis schlägt ein: Schrift springt auf, Druckwelle und Funken markieren den Moment.
     this.addTween({
@@ -1264,22 +1275,12 @@ export class MatchResultsOverlay {
     }));
   }
 
-  private showRewardTooltip(chip: RewardChip): void {
-    if (!chip.tooltip || !this.hintText) return;
-    this.hintText
-      .setText(chip.tooltip)
-      .setColor(toCssColor(COLORS.GOLD_1))
-      .setVisible(true)
-      .setAlpha(1);
+  private showRewardTooltip(chip: RewardChip, pointer: Phaser.Input.Pointer): void {
+    if (!chip.tooltip) return;
+    this.rewardTooltip?.show(chip.label.text, TEXT.accent, [{ text: chip.tooltip, color: TEXT.primary }], pointer);
   }
 
-  private hideRewardTooltip(): void {
-    if (!this.hintText) return;
-    this.hintText
-      .setText(t('ui.results.skipHint'))
-      .setColor(toCssColor(COLORS.GREY_5));
-    if (this.sequenceComplete) this.hintText.setVisible(false);
-  }
+  private hideRewardTooltip(): void { this.rewardTooltip?.hide(); }
 
   private skipAnimations(): void {
     if (!this.visible || this.sequenceComplete || this.syncing) return;
@@ -1287,6 +1288,7 @@ export class MatchResultsOverlay {
 
     this.container?.setAlpha(1);
     this.panel?.setScale(1);
+    this.modalFrame?.setScale(0.5);
     this.outcomeText?.setAlpha(1).setScale(1);
     this.outcomeFlash?.setVisible(false);
     this.metaText?.setAlpha(1);
@@ -1388,8 +1390,8 @@ export class MatchResultsOverlay {
       w: BANNER_W,
       h: BANNER_H,
       radius: 18,
-      topColor: lerpColor(COLORS.GREY_8, accent, 0.34),
-      bottomColor: lerpColor(COLORS.GREY_9, accent, 0.14),
+      topColor: lerpColor(SURFACE.raised, accent, 0.34),
+      bottomColor: lerpColor(SURFACE.sunken, accent, 0.14),
       fillAlpha: 0.94,
       strokeColor: accent,
       strokeAlpha: 0.9,
@@ -1405,8 +1407,8 @@ export class MatchResultsOverlay {
         w: ROW_W,
         h: ROW_H,
         radius: 10,
-        topColor: lerpColor(COLORS.GREY_8, LOCAL_ROW_ACCENT, 0.34),
-        bottomColor: lerpColor(COLORS.GREY_9, LOCAL_ROW_ACCENT, 0.16),
+        topColor: lerpColor(SURFACE.raised, LOCAL_ROW_ACCENT, 0.34),
+        bottomColor: lerpColor(SURFACE.sunken, LOCAL_ROW_ACCENT, 0.16),
         fillAlpha: 0.92,
         strokeColor: LOCAL_ROW_ACCENT,
         strokeAlpha: 0.85,
@@ -1419,8 +1421,8 @@ export class MatchResultsOverlay {
       `_mro_row_${variant}`,
       ROW_W,
       ROW_H,
-      variant === 'even' ? COLORS.GREY_8 : COLORS.GREY_9,
-      COLORS.GREY_6,
+      variant === 'even' ? SURFACE.raised : SURFACE.sunken,
+      BORDER.subtle,
       { radius: 10, fillAlpha: variant === 'even' ? 0.72 : 0.58, strokeAlpha: 0.35 },
     );
   }
@@ -1447,8 +1449,8 @@ export class MatchResultsOverlay {
       w: CHIP_W,
       h: CHIP_H,
       radius: 12,
-      topColor: lerpColor(COLORS.GREY_8, color, 0.28),
-      bottomColor: lerpColor(COLORS.GREY_9, color, 0.1),
+      topColor: lerpColor(SURFACE.raised, color, 0.10),
+      bottomColor: lerpColor(SURFACE.sunken, color, 0.04),
       fillAlpha: 0.85,
       strokeColor: color,
       strokeAlpha: 0.6,

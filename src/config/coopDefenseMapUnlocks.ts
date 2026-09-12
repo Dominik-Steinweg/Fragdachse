@@ -8,8 +8,8 @@ import { COOP_DEFENSE_MAP_CONFIGS, type CoopDefenseMapConfig } from './coopDefen
  * numerischen Map-ID: die Registry ist die einzige Stelle, an der die Kampagnenreihenfolge steht.
  */
 
-/** Testmap – bleibt unabhaengig vom Fortschritt waehlbar. */
-const ALWAYS_UNLOCKED_MAP_IDS: ReadonlySet<string> = new Set(['0']);
+/** Die Testmap wird nur explizit ueber das Debug-Overlay freigeschaltet. */
+export const COOP_DEFENSE_TEST_MAP_ID = '0';
 
 /** Freischaltstand eines neuen Spielers: alles bis einschliesslich Map 1. */
 export const INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID = '1';
@@ -30,18 +30,19 @@ function indexOfMapId(mapId: string): number {
 export function sanitizeHighestUnlockedCoopDefenseMapId(mapId: unknown): string {
   if (typeof mapId !== 'string') return INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
   const trimmedMapId = mapId.trim();
-  return indexOfMapId(trimmedMapId) >= 0 ? trimmedMapId : INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
+  return trimmedMapId !== COOP_DEFENSE_TEST_MAP_ID && indexOfMapId(trimmedMapId) >= 0
+    ? trimmedMapId : INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
 }
 
-export function isCoopDefenseMapUnlocked(mapId: string, highestUnlockedMapId: string): boolean {
-  if (ALWAYS_UNLOCKED_MAP_IDS.has(mapId)) return true;
+export function isCoopDefenseMapUnlocked(mapId: string, highestUnlockedMapId: string, testMapUnlocked = false): boolean {
+  if (mapId === COOP_DEFENSE_TEST_MAP_ID) return testMapUnlocked;
   const mapIndex = indexOfMapId(mapId);
   if (mapIndex < 0) return false;
   return mapIndex <= indexOfMapId(sanitizeHighestUnlockedCoopDefenseMapId(highestUnlockedMapId));
 }
 
-export function getUnlockedCoopDefenseMapConfigs(highestUnlockedMapId: string): readonly CoopDefenseMapConfig[] {
-  return COOP_DEFENSE_MAP_CONFIGS.filter((mapConfig) => isCoopDefenseMapUnlocked(mapConfig.mapId, highestUnlockedMapId));
+export function getUnlockedCoopDefenseMapConfigs(highestUnlockedMapId: string, testMapUnlocked = false): readonly CoopDefenseMapConfig[] {
+  return COOP_DEFENSE_MAP_CONFIGS.filter((mapConfig) => isCoopDefenseMapUnlocked(mapConfig.mapId, highestUnlockedMapId, testMapUnlocked));
 }
 
 /** Alle Maps in Kampagnenreihenfolge – Auswahlreihenfolge des Debug-Dropdowns. */

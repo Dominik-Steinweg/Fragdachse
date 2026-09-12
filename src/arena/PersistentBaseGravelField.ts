@@ -180,7 +180,7 @@ function createPersistentBaseGravelDecorations(
       buildArea,
     )) {
       // Square areas keep their exact cell set; only the authored stamp itself may overhang
-      // that edge slightly. No circular fallback is allowed for the current 3x3 courtyard.
+      // that edge slightly. No circular fallback is allowed for the square courtyard.
       continue;
     }
     const alphaRoll = hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.alpha);

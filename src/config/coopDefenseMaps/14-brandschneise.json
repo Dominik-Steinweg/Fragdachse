@@ -4,6 +4,7 @@
   "arenaHeightCells": 42,
   "timeOfDay": "20:30",
   "tutorialDurationMs": 10000,
+  "tutorialAnchor": { "gridX": 29, "gridY": 6 },
   "mapEvents": [
     {
       "id": "brandschneise-firefront",

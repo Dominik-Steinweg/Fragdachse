@@ -421,7 +421,7 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
     const { coordinator, rewardStore, rocks, site, baseManager } = testCoordinator();
     expect(rewardStore.placeReward({
       rewardId: 'base_spore_turret',
-      relativeGridX: 2,
+      relativeGridX: 3,
       relativeGridY: 1,
       angle: 0,
     })).toBe(true);

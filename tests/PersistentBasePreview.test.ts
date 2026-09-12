@@ -10,7 +10,7 @@ import {
 import rawMap from '../src/config/coopDefenseMaps/01-feuertaufe.json';
 import type { CoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import { toAuthoredScenario, toCoopDefenseMapConfig } from '../src/config/authoring/coopDefenseAuthoringAdapter';
-import { DEFAULT_PERSISTENT_BASE_BUILD_AREA, resolvePersistentBaseCoreCells } from '../src/persistentBase/PersistentBaseCore';
+import { DEFAULT_PERSISTENT_BASE_BUILD_AREA, PERSISTENT_BASE_CORE_SIZE_CELLS, resolvePersistentBaseCoreCells } from '../src/persistentBase/PersistentBaseCore';
 import { getAuthoredWorldMetricsProfile } from '../src/config';
 import { resolveWorldMetrics } from '../src/world/WorldMetrics';
 import { PersistentBasePreviewRenderer } from '../src/scenes/arena/PersistentBasePreviewRenderer';
@@ -56,16 +56,16 @@ describe('Persistent-Base-Vorschau – Map 1 Authoring', () => {
 });
 
 describe('Persistent-Base-Vorschau – Presentation', () => {
-  it('verwendet exakt den kanonischen Kern und neun 3x3-Baubereichszellen', () => {
+  it('verwendet exakt den kanonischen Kern und den zentralen Baubereich', () => {
     const preview = resolveCoopDefenseMapPersistentBasePreview(getCoopDefenseMapConfig('1'))!;
     const core = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation);
 
-    expect(core.filter((cell) => cell.domain === 'base-surface')).toHaveLength(12);
-    expect(core.filter((cell) => cell.domain === 'courtyard-build-area')).toHaveLength(9);
-    expect(preview.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(core.filter((cell) => cell.domain === 'base-surface')).toHaveLength(20);
+    expect(core.filter((cell) => cell.domain === 'courtyard-build-area')).toHaveLength((PERSISTENT_BASE_CORE_SIZE_CELLS - 2) ** 2);
+    expect(preview.buildArea).toEqual(DEFAULT_PERSISTENT_BASE_BUILD_AREA);
   });
 
-  it('rendert zwölf blaue Basisbilder ohne aktive Basis-Entity und hält die Basislichter am Leben', () => {
+  it('rendert die kanonischen blauen Basisbilder ohne aktive Basis-Entity und hält die Basislichter am Leben', () => {
     const scene = createFakeArenaScene();
     const images: Array<{ key: string; active: boolean }> = [];
     const originalImage = scene.add.image;
@@ -86,8 +86,8 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     const metrics = resolveWorldMetrics(getAuthoredWorldMetricsProfile(260, 33));
 
     renderer.sync(preview, metrics);
-    expect(images.filter((image) => image.key === 'base')).toHaveLength(12);
-    expect(renderer.getSurfaceImages()).toHaveLength(12);
+    expect(images.filter((image) => image.key === 'base')).toHaveLength(20);
+    expect(renderer.getSurfaceImages()).toHaveLength(20);
     const surfaceCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation)
       .filter((cell) => cell.domain === 'base-surface');
     const grounding = images.filter((image) => image.key.startsWith('base-grounding-'));

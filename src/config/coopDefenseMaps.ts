@@ -676,7 +676,7 @@ export interface CoopDefenseMapTutorialStepConfig {
  */
 export interface CoopDefenseMapPersistentBaseConfig {
   readonly baseId: string;
-  /** Kanonischer Bezugspunkt des Kerns: die Mittelzelle seiner 5x5-Grundflaeche. */
+  /** Kanonischer Bezugspunkt des Kerns: die Mittelzelle seiner 7x7-Grundflaeche. */
   readonly anchor: PersistentBaseAnchor;
   /** Ohne Angabe die kanonische Ausrichtung. */
   readonly orientation?: PersistentBaseOrientation;
@@ -688,7 +688,7 @@ export interface CoopDefenseMapPersistentBaseConfig {
  *
  * Die Vorschau besitzt bewusst weder `baseId` noch HP oder einen eigenen Baubereich: Ihre Lage
  * kommt aus einem vorhandenen Missions-Checkpoint und ihr aktueller Baubereich bleibt an den
- * gemeinsamen 3x3-Default gebunden. Dadurch kann sie keine World-Basis und keinen persistenten
+ * gemeinsamen 7x7-Default gebunden. Dadurch kann sie keine World-Basis und keinen persistenten
  * Working State erzeugen.
  */
 export interface CoopDefenseMapPersistentBasePreviewConfig {

@@ -1,3 +1,4 @@
+import { BORDER, SURFACE, TEXT, textStyle, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 /**
  * HelpOverlay – Steuerungsübersicht als modales Overlay.
  * Wird über den „?"-Button in der Lobby geöffnet.
@@ -8,29 +9,30 @@ import {
   GAME_WIDTH, GAME_HEIGHT,
   DEPTH, COLORS,
 } from '../config';
-import { ensureModalPanelTexture } from './uiTextures';
-import { BORDER, SURFACE, TEXT, textStyle } from './uiTheme';
+
+
 import { HELP_CONTROLS } from '../config/helpControls';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import { ensureRoundedTexture } from './uiTextures';
 import { t } from '../i18n';
 
 // ── Layout ────────────────────────────────────────────────────────────────────
-const PANEL_W = 660;
-const PANEL_H = 520;
+const PANEL_W = 780;
+const PANEL_H = 700;
 const CX      = GAME_WIDTH  / 2;
 const CY      = GAME_HEIGHT / 2;
 
-const TITLE_Y     = CY - PANEL_H / 2 + 36;
-const SEP_Y       = TITLE_Y + 24;
-const LIST_START_Y = SEP_Y + 28;
-const ROW_H       = 44;
-const KEY_X       = CX - PANEL_W / 2 + 48;
-const DESC_X      = CX - PANEL_W / 2 + 230;
-const FOOTER_Y    = CY + PANEL_H / 2 - 28;
+const TITLE_Y     = CY - PANEL_H / 2 + 94;
+const SEP_Y       = TITLE_Y + 32;
+const LIST_START_Y = SEP_Y + 36;
+const ROW_H       = 46;
+const KEY_X       = CX - PANEL_W / 2 + 94;
+const DESC_X      = CX - PANEL_W / 2 + 294;
+const FOOTER_Y    = CY + PANEL_H / 2 - 90;
 
 // ── Farben ────────────────────────────────────────────────────────────────────
 const DIM_COLOR   = COLORS.GREY_10;
-const DIM_ALPHA   = 0.75;
+const DIM_ALPHA = 0.58;
 const PANEL_BG    = SURFACE.modal;
 const PANEL_BORDER = BORDER.default;
 
@@ -78,7 +80,7 @@ export class HelpOverlay {
 
     // ── Trennlinie ────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.rectangle(CX, SEP_Y, PANEL_W - 60, 1, BORDER.subtle, 0.9)
+      this.scene.add.rectangle(CX, SEP_Y, PANEL_W - 132, 1, BORDER.subtle, 0.9)
         .setScrollFactor(0),
     );
 
@@ -88,10 +90,14 @@ export class HelpOverlay {
 
       // Ruhige, gleichmaessige Zeilenflaechen statt eines starken Zebra-Musters.
       objects.push(
-        this.scene.add.rectangle(CX, y, PANEL_W - 48, ROW_H - 4, SURFACE.raised, i % 2 === 0 ? 0.28 : 0.16)
+        this.scene.add.rectangle(CX, y, PANEL_W - 132, ROW_H - 4, SURFACE.raised, i % 2 === 0 ? 0.28 : 0.16)
           .setScrollFactor(0),
       );
 
+      objects.push(this.scene.add.image(KEY_X + 78, y, ensureRoundedTexture(this.scene, {
+        key: '_forest_help_keycap', w: 174, h: 34, radius: 7, topColor: SURFACE.raised,
+        bottomColor: SURFACE.sunken, fillAlpha: .9, strokeColor: BORDER.subtle, strokeAlpha: .8, strokeWidth: 1, highlightAlpha: .04,
+      })).setScrollFactor(0));
       objects.push(
         this.scene.add.text(KEY_X, y, t(entry.keyId), KEY_STYLE)
           .setOrigin(0, 0.5).setScrollFactor(0),
@@ -112,6 +118,7 @@ export class HelpOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 1);
     this.container.setVisible(false);
+    mountForestModal(this.scene, this.container, PANEL_W, PANEL_H);
     promoteToClarityCamera(this.scene, this.container);
   }
 

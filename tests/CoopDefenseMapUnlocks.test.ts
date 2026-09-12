@@ -12,14 +12,21 @@ import {
 const LAST_MAP_ID = COOP_DEFENSE_MAP_CONFIGS[COOP_DEFENSE_MAP_CONFIGS.length - 1].mapId;
 
 describe('Coop defense map unlocks', () => {
-  it('gives a new player the test map and map 1 only', () => {
+  it('gives a new player map 1 only', () => {
     const unlockedMapIds = getUnlockedCoopDefenseMapConfigs(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID)
       .map((mapConfig) => mapConfig.mapId);
-    expect(unlockedMapIds).toEqual(['0', '1']);
+    expect(unlockedMapIds).toEqual(['1']);
   });
 
-  it('keeps the test map unlocked regardless of progress', () => {
-    expect(isCoopDefenseMapUnlocked('0', INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID)).toBe(true);
+  it('requires explicit debug access to the test map regardless of campaign progress', () => {
+    for (const progress of [INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID, LAST_MAP_ID]) {
+      expect(isCoopDefenseMapUnlocked('0', progress)).toBe(false);
+      expect(isCoopDefenseMapUnlocked('0', progress, true)).toBe(true);
+      expect(getUnlockedCoopDefenseMapConfigs(progress, true).map(map => map.mapId))
+        .toEqual(['0', ...getUnlockedCoopDefenseMapConfigs(progress).map(map => map.mapId)]);
+    }
+    expect(isCoopDefenseMapUnlocked(LAST_MAP_ID, INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID, true)).toBe(false);
+    expect(sanitizeHighestUnlockedCoopDefenseMapId('0')).toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
   });
 
   it('unlocks the next map in registry order after a victory and stops at the campaign end', () => {
@@ -49,6 +56,6 @@ describe('Coop defense map unlocks', () => {
 
   it('unlocks every earlier map once a late map is reached', () => {
     const unlockedMapIds = getUnlockedCoopDefenseMapConfigs(LAST_MAP_ID).map((mapConfig) => mapConfig.mapId);
-    expect(unlockedMapIds).toEqual(COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => mapConfig.mapId));
+    expect(unlockedMapIds).toEqual(COOP_DEFENSE_MAP_CONFIGS.filter(map => map.mapId !== '0').map(map => map.mapId));
   });
 });

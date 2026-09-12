@@ -91,11 +91,11 @@ describe('LobbyWorld – Authoring', () => {
       kind: 'cells',
       cells: getPersistentBaseCoreSurfaceOffsets(),
     });
-    // Der Anker der Stelle ist die Mittelzelle; der Shape-Ursprung liegt zwei Zellen davor.
+    // Der Anker der Stelle ist die Mittelzelle; der Shape-Ursprung liegt drei Zellen davor.
     expect(core?.anchor).toEqual({
       kind: 'grid',
-      gridX: world.persistentBaseSite!.anchor.gridX - 2,
-      gridY: world.persistentBaseSite!.anchor.gridY - 2,
+      gridX: world.persistentBaseSite!.anchor.gridX - 3,
+      gridY: world.persistentBaseSite!.anchor.gridY - 3,
     });
 
     // Kampf ist eine ausdrueckliche World-Policy, keine Nebenwirkung einer laufenden Activity.
@@ -292,7 +292,7 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     expect(world.persistentBaseSite).toMatchObject({
       baseId: LOBBY_PERSISTENT_BASE_ID,
       areaStage: 0,
-      buildArea: { kind: 'square', sizeCells: 3 },
+      buildArea: { kind: 'square', sizeCells: 7 },
     });
     // Der Anker ist die authored Mitte der World und damit zugleich ihr Spawn-Fokus: Wer das
     // Testgelaende betritt, steht im eigenen Hof.
@@ -301,8 +301,8 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
       gridY: LOBBY_SPAWN_FOCUS_CELL.gridY,
     });
     expect(isValidPersistentBaseSite(world.persistentBaseSite)).toBe(true);
-    // Die vierseitig offene Kernform: 12 feste Zellen, der Hof bleibt begehbar.
-    expect(world.bases[0]?.cells).toHaveLength(12);
+    // Die vierseitig offene Kernform; der Hof bleibt begehbar.
+    expect(world.bases[0]?.cells).toHaveLength(getPersistentBaseCoreSurfaceOffsets().length);
     expect(world.bases[0]?.cells.some((cell) => (
       cell.gridX === LOBBY_SPAWN_FOCUS_CELL.gridX && cell.gridY === LOBBY_SPAWN_FOCUS_CELL.gridY
     ))).toBe(false);

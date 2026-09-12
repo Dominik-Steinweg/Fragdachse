@@ -733,7 +733,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
       unlockedWorld.metrics.gridCols,
       unlockedWorld.metrics.gridRows,
     );
-    expect(gravelCells).toHaveLength(9);
+    expect(gravelCells).toHaveLength(49);
 
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     const composition = read('src/world/WorldComposition.ts');
@@ -772,12 +772,12 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
       definition,
     });
 
-    expect(stage0World.persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(stage0World.persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 7 });
     expect(stage1World.persistentBaseSite?.buildArea).toEqual({ kind: 'radius', radiusCells: 5 });
     expect(stage0World.persistentBaseSite?.areaStage).toBe(0);
     expect(stage1World.persistentBaseSite?.areaStage).toBe(1);
     expect(hasPersistentBaseConfigurationChanged(stage0Descriptor, stage1Descriptor)).toBe(true);
-    expect(stage0World.persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(stage0World.persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 7 });
 
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     expect(lifecycle).toContain('lobbyWorldPersistentBaseAreaStageAtRevision');

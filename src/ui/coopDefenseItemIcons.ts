@@ -1,3 +1,4 @@
+import type { UiSkin } from './UiSkin';
 import * as Phaser from 'phaser';
 import { COLORS } from '../config';
 import type { CoopDefenseItemSlot } from '../types';
@@ -60,16 +61,17 @@ export function ensureCoopDefenseItemCellTexture(
   h: number,
   color: number,
   variant: 'rest' | 'hot' | 'empty' = 'rest',
+  skin: UiSkin = 'default',
 ): string {
   return ensureRoundedTexture(scene, {
     // ensureRoundedTexture cached ausschliesslich ueber den Key: Farbe, Groesse und Zustand
     // muessen deshalb alle darin stehen.
-    key: `${CELL_KEY_PREFIX}_${variant}_${color.toString(16)}_${w}x${h}`,
+    key: `${CELL_KEY_PREFIX}${skin === 'forest' ? '_forest' : ''}_${variant}_${color.toString(16)}_${w}x${h}`,
     w,
     h,
     radius: 10,
-    topColor: variant === 'hot' ? lerpColor(COLORS.GREY_8, color, 0.22) : COLORS.GREY_9,
-    bottomColor: variant === 'hot' ? lerpColor(COLORS.GREY_9, color, 0.1) : COLORS.GREY_10,
+    topColor: variant === 'hot' ? lerpColor(skin === 'forest' ? 0x293027 : COLORS.GREY_8, color, 0.22) : skin === 'forest' ? 0x20291f : COLORS.GREY_9,
+    bottomColor: variant === 'hot' ? lerpColor(skin === 'forest' ? 0x141c18 : COLORS.GREY_9, color, 0.1) : skin === 'forest' ? 0x101610 : COLORS.GREY_10,
     fillAlpha: variant === 'empty' ? 0.55 : 0.95,
     strokeColor: color,
     strokeAlpha: variant === 'empty' ? 0.35 : 0.95,
@@ -232,3 +234,9 @@ const DRAW_BY_SLOT: Record<CoopDefenseItemSlot, (ctx: CanvasRenderingContext2D, 
   armor: drawArmor,
   boots: drawBoots,
 };
+
+/** The modal inventory uses calm forest glass while retaining rarity and interaction cues. */
+export function ensureForestItemCellTexture(scene: Phaser.Scene, w: number, h: number, color: number,
+  variant: 'rest' | 'hot' | 'empty' = 'rest'): string {
+  return ensureCoopDefenseItemCellTexture(scene, w, h, color, variant, 'forest');
+}

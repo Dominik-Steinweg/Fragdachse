@@ -47,47 +47,49 @@ function domainOf(
 }
 
 describe('PersistentBaseCore – kanonische Form', () => {
-  it('beschreibt eine 5x5-Flaeche mit Anker in der Mitte', () => {
-    expect(PERSISTENT_BASE_CORE_SIZE_CELLS).toBe(5);
-    expect(CANONICAL_PERSISTENT_BASE_CORE_CELLS).toHaveLength(25);
+  it('beschreibt eine quadratische Flaeche mit Anker in der Mitte', () => {
+    expect(PERSISTENT_BASE_CORE_SIZE_CELLS).toBe(PERSISTENT_BASE_CORE_SIZE_CELLS);
+    expect(CANONICAL_PERSISTENT_BASE_CORE_CELLS).toHaveLength(PERSISTENT_BASE_CORE_SIZE_CELLS ** 2);
 
     const xs = CANONICAL_PERSISTENT_BASE_CORE_CELLS.map((cell) => cell.relativeGridX);
     const ys = CANONICAL_PERSISTENT_BASE_CORE_CELLS.map((cell) => cell.relativeGridY);
-    expect(Math.min(...xs)).toBe(-2);
-    expect(Math.max(...xs)).toBe(2);
-    expect(Math.min(...ys)).toBe(-2);
-    expect(Math.max(...ys)).toBe(2);
+    expect(Math.min(...xs)).toBe(-3);
+    expect(Math.max(...xs)).toBe(3);
+    expect(Math.min(...ys)).toBe(-3);
+    expect(Math.max(...ys)).toBe(3);
 
     // Der Anker selbst ist eine echte Zelle und liegt im Innenhof – nicht in einer Wand.
     expect(domainOf(CANONICAL_PERSISTENT_BASE_CORE_CELLS, 0, 0)).toBe('courtyard-build-area');
   });
 
   it('teilt die Flaeche in feste Basis, Innenhof und Eingang', () => {
-    expect(getCanonicalPersistentBaseCoreCells('base-surface')).toHaveLength(12);
-    expect(getCanonicalPersistentBaseCoreCells('courtyard-build-area')).toHaveLength(9);
+    expect(getCanonicalPersistentBaseCoreCells('base-surface')).toHaveLength(20);
+    expect(getCanonicalPersistentBaseCoreCells('courtyard-build-area')).toHaveLength((PERSISTENT_BASE_CORE_SIZE_CELLS - 2) ** 2);
     expect(getCanonicalPersistentBaseCoreCells('entrance')).toHaveLength(4);
   });
 
   it('bildet vier mittige, ein Rasterfeld grosse Eingaenge', () => {
     const rows: string[] = [];
-    for (let relativeGridY = -2; relativeGridY <= 2; relativeGridY += 1) {
+    for (let relativeGridY = -3; relativeGridY <= 3; relativeGridY += 1) {
       let row = '';
-      for (let relativeGridX = -2; relativeGridX <= 2; relativeGridX += 1) {
+      for (let relativeGridX = -3; relativeGridX <= 3; relativeGridX += 1) {
         const domain = domainOf(CANONICAL_PERSISTENT_BASE_CORE_CELLS, relativeGridX, relativeGridY);
         row += domain === 'base-surface' ? 'B' : domain === 'courtyard-build-area' ? 'H' : 'E';
       }
       rows.push(row);
     }
     expect(rows).toEqual([
-      'BBEBB',
-      'BHHHB',
-      'EHHHE',
-      'BHHHB',
-      'BBEBB',
+      'BBBEBBB',
+      'BHHHHHB',
+      'BHHHHHB',
+      'EHHHHHE',
+      'BHHHHHB',
+      'BHHHHHB',
+      'BBBEBBB',
     ]);
   });
 
-  it('beschreibt die Area-Stufen zentral als 3x3-Quadrat bzw. Radius 5', () => {
+  it('beschreibt die Area-Stufen zentral als 7x7-Quadrat bzw. Radius 5', () => {
     expect(DEFAULT_PERSISTENT_BASE_AREA_STAGE).toBe(0);
     expect(isPersistentBaseAreaStage(0)).toBe(true);
     expect(isPersistentBaseAreaStage(1)).toBe(true);
@@ -101,21 +103,21 @@ describe('PersistentBaseCore – kanonische Form', () => {
       expect(isCellInsidePersistentBaseBuildArea(expanded.radiusCells, 0, expanded)).toBe(true);
       expect(isCellInsidePersistentBaseBuildArea(expanded.radiusCells, 0, previous)).toBe(false);
     }
-    expect(resolvePersistentBaseBuildAreaForStage(0)).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(resolvePersistentBaseBuildAreaForStage(0)).toEqual({ kind: 'square', sizeCells: 7 });
     expect(resolvePersistentBaseBuildAreaForStage(1)).toEqual({ kind: 'radius', radiusCells: 5 });
-    expect(DEFAULT_PERSISTENT_BASE_BUILD_AREA).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(DEFAULT_PERSISTENT_BASE_BUILD_AREA).toEqual({ kind: 'square', sizeCells: 7 });
     expect(isPersistentBaseBuildArea(DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(true);
     expect(isPersistentBaseBuildArea({ kind: 'square', sizeCells: 4 })).toBe(false);
     expect(isPersistentBaseBuildArea({ kind: 'radius', radiusCells: 5 })).toBe(true);
 
-    for (let relativeGridY = -2; relativeGridY <= 2; relativeGridY += 1) {
-      for (let relativeGridX = -2; relativeGridX <= 2; relativeGridX += 1) {
+    for (let relativeGridY = -4; relativeGridY <= 4; relativeGridY += 1) {
+      for (let relativeGridX = -4; relativeGridX <= 4; relativeGridX += 1) {
         const inside = isCellInsidePersistentBaseBuildArea(
           relativeGridX,
           relativeGridY,
           DEFAULT_PERSISTENT_BASE_BUILD_AREA,
         );
-        expect(inside).toBe(Math.abs(relativeGridX) <= 1 && Math.abs(relativeGridY) <= 1);
+        expect(inside).toBe(Math.abs(relativeGridX) <= 3 && Math.abs(relativeGridY) <= 3);
       }
     }
     expect(isCellInsidePersistentBaseBuildArea(3, 4, { kind: 'radius', radiusCells: 5 })).toBe(true);
@@ -135,16 +137,16 @@ describe('PersistentBaseCore – Ausrichtung', () => {
     const anchor = { gridX: 40, gridY: 40 };
     for (const orientation of PERSISTENT_BASE_ORIENTATIONS) {
       const cells = resolvePersistentBaseCoreCells(anchor, orientation);
-      expect(cells).toHaveLength(25);
+      expect(cells).toHaveLength(PERSISTENT_BASE_CORE_SIZE_CELLS ** 2);
       // Die Domainverteilung ist eine Eigenschaft der Form, nicht ihrer Lage im Raum.
       for (const [domain, count] of [
-        ['base-surface', 12],
-        ['courtyard-build-area', 9],
+        ['base-surface', 20],
+        ['courtyard-build-area', 25],
         ['entrance', 4],
       ] as const) {
         expect(cells.filter((cell) => cell.domain === domain), orientation).toHaveLength(count);
       }
-      // Die Drehung erfolgt um den Anker; die belegte Flaeche bleibt exakt dieselbe 5x5-Box.
+      // Die Drehung erfolgt um den Anker; die belegte Flaeche bleibt exakt dieselbe 7x7-Box.
       expect(cellKeys(cells), orientation)
         .toEqual(cellKeys(resolvePersistentBaseCoreCells(anchor)));
     }
@@ -157,17 +159,17 @@ describe('PersistentBaseCore – Ausrichtung', () => {
 
     for (const orientation of PERSISTENT_BASE_ORIENTATIONS) {
       expect(entranceOf(orientation).map((cell) => `${cell.gridX}:${cell.gridY}`).sort()).toEqual([
-        '38:40',
-        '40:38',
-        '40:42',
-        '42:40',
+        '37:40',
+        '40:37',
+        '40:43',
+        '43:40',
       ]);
     }
   });
 
   it('loest Reward-Offsets immer kanonisch und genau einmal in World-Zellen auf', () => {
     const anchor = { gridX: 40, gridY: 40 };
-    const canonicalSurfaceCell = { relativeGridX: -2, relativeGridY: -1 };
+    const canonicalSurfaceCell = { relativeGridX: -3, relativeGridY: -1 };
     const openLeft = resolvePersistentBaseCell(
       anchor,
       canonicalSurfaceCell.relativeGridX,
@@ -181,8 +183,8 @@ describe('PersistentBaseCore – Ausrichtung', () => {
       'open-up',
     );
 
-    expect(openLeft).toEqual({ gridX: 38, gridY: 39, domain: 'base-surface' });
-    expect(openUp).toEqual({ gridX: 41, gridY: 38, domain: 'base-surface' });
+    expect(openLeft).toEqual({ gridX: 37, gridY: 39, domain: 'base-surface' });
+    expect(openUp).toEqual({ gridX: 41, gridY: 37, domain: 'base-surface' });
 
     const canonicalPedestalCell = { relativeGridX: 1, relativeGridY: 0 };
     const pedestalOpenUp = resolvePersistentBaseCell(
@@ -207,14 +209,14 @@ describe('PersistentBaseCore – dieselbe Basis an verschiedenen Ankern', () => 
   });
 
   it('haelt Shape-Ursprung und Anker deterministisch auseinander', () => {
-    expect(getPersistentBaseCoreOrigin({ gridX: 24, gridY: 20 })).toEqual({ gridX: 22, gridY: 18 });
+    expect(getPersistentBaseCoreOrigin({ gridX: 24, gridY: 20 })).toEqual({ gridX: 21, gridY: 17 });
     // Die Shape-Offsets sind auf (0,0) normalisiert, damit sie zum Basisvertrag passen.
     const offsets = getPersistentBaseCoreSurfaceOffsets();
-    expect(offsets).toHaveLength(12);
+    expect(offsets).toHaveLength(20);
     expect(Math.min(...offsets.map((offset) => offset.gridX))).toBe(0);
     expect(Math.min(...offsets.map((offset) => offset.gridY))).toBe(0);
-    expect(Math.max(...offsets.map((offset) => offset.gridX))).toBe(4);
-    expect(Math.max(...offsets.map((offset) => offset.gridY))).toBe(4);
+    expect(Math.max(...offsets.map((offset) => offset.gridX))).toBe(6);
+    expect(Math.max(...offsets.map((offset) => offset.gridY))).toBe(6);
   });
 });
 
@@ -238,7 +240,7 @@ describe('PersistentBaseCore – Uebergang in den Basisvertrag', () => {
     expect(base.hpMax).toBe(4200);
     expect(base.faction).toBe('friendly');
     expect(base.role).toBe('main');
-    expect(base.anchor).toEqual({ kind: 'grid', gridX: 28, gridY: 14 });
+    expect(base.anchor).toEqual({ kind: 'grid', gridX: 27, gridY: 13 });
     expect(base.shape).toEqual({ kind: 'cells', cells: getPersistentBaseCoreSurfaceOffsets() });
   });
 
@@ -246,11 +248,11 @@ describe('PersistentBaseCore – Uebergang in den Basisvertrag', () => {
     const metrics = resolveWorldMetrics(getAuthoredWorldMetricsProfile(60, 33));
     const [resolved] = resolveWorldBases(worldWithCore(), metrics);
 
-    // Die Bounding-Box ist immer die volle 5x5-Flaeche, ihre Mitte deshalb exakt die Ankerzelle.
+    // Die Bounding-Box ist immer die volle 7x7-Flaeche, ihre Mitte deshalb exakt die Ankerzelle.
     // Genau daran haengt, dass anker-relative Konstruktionen jede Map ueberleben.
-    expect(resolved.region).toEqual({ minGridX: 28, maxGridX: 32, minGridY: 14, maxGridY: 18 });
+    expect(resolved.region).toEqual({ minGridX: 27, maxGridX: 33, minGridY: 13, maxGridY: 19 });
     expect(getPersistentBaseAnchor(resolved)).toEqual(site.anchor);
-    expect(resolved.cells).toHaveLength(12);
+    expect(resolved.cells).toHaveLength(20);
     expect(resolved.persistentReservationRadiusCells).toBeGreaterThan(0);
   });
 

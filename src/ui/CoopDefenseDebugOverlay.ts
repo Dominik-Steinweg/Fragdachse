@@ -1,5 +1,7 @@
 import { COLORS, toCssColor } from '../config';
 import { COOP_DEFENSE_MAP_CONFIGS } from '../config/coopDefenseMaps';
+import { COOP_DEFENSE_TEST_MAP_ID } from '../config/coopDefenseMapUnlocks';
+import { isCoopDefenseTestMapUnlocked, unlockCoopDefenseTestMap } from '../utils/coopDefenseDebugSession';
 import {
   COOP_DEFENSE_CLASS_IDS,
   getUnlockedCoopDefenseClassIds,
@@ -243,6 +245,7 @@ export class CoopDefenseDebugOverlay {
       marginBottom: '10px',
     });
     for (const mapConfig of COOP_DEFENSE_MAP_CONFIGS) {
+      if (mapConfig.mapId === COOP_DEFENSE_TEST_MAP_ID) continue;
       const option = document.createElement('option');
       option.value = mapConfig.mapId;
       option.innerText = `Map ${mapConfig.mapId}`;
@@ -270,6 +273,18 @@ export class CoopDefenseDebugOverlay {
       lineHeight: '1.45',
     });
     campaignSection.append(valuesGrid, unlockLabel, unlockSelect, currentClassesStatus, preview);
+    const unlockTestMapButton = createButton(
+      isCoopDefenseTestMapUnlocked() ? '[MAP 0 FREIGESCHALTET]' : '[MAP 0 FREISCHALTEN]',
+      'positive',
+    );
+    unlockTestMapButton.style.marginTop = '7px';
+    unlockTestMapButton.disabled = isCoopDefenseTestMapUnlocked();
+    unlockTestMapButton.title = 'Testmap bis zum Neuladen des Spiels in der Map-Auswahl freischalten';
+    unlockTestMapButton.onclick = () => {
+      unlockCoopDefenseTestMap();
+      this.refresh();
+    };
+    campaignSection.appendChild(unlockTestMapButton);
 
     const itemSection = createSection('ITEM-SYSTEM');
     const itemStatus = createStatusLine(

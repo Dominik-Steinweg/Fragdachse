@@ -207,8 +207,8 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
 
     expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
       .toMatchObject({ origin: 'new' });
-    // Zwei Zellen rechts vom Anker liegt bereits auf der festen Basisflaeche.
-    expect(store.registerNew('owner-a', runtime(2, 12), tool, footprint, anchor, buildArea))
+    // Vier Zellen rechts vom Anker liegt ausserhalb des Baubereichs.
+    expect(store.registerNew('owner-a', runtime(2, 14), tool, footprint, anchor, buildArea))
       .toBeNull();
     expect(store.getContribution('owner-a')?.constructions).toHaveLength(1);
   });

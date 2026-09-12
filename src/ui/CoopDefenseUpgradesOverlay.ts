@@ -1,10 +1,10 @@
+import { toCssColor, BORDER, SURFACE, TEXT, textStyle, mountForestModal, ensureModalPanelTexture, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
 import {
   COLORS,
   DEPTH,
   GAME_HEIGHT,
   GAME_WIDTH,
-  toCssColor,
 } from '../config';
 import type {
   CoopDefenseProgressSnapshot,
@@ -30,7 +30,7 @@ import {
 import { attachHoverEffect } from './uiHover';
 import { UiTooltip, type UiTooltipLine } from './UiTooltip';
 import { UiContextMenu, type UiContextMenuEntry } from './UiContextMenu';
-import { BORDER, INTENT, SURFACE, TEXT, textStyle, FONT_MONO } from './uiTheme';
+import { INTENT, FONT_MONO } from './uiTheme';
 import {
   COOP_DEFENSE_CLASS_DEFINITIONS,
   COOP_DEFENSE_CLASS_IDS,
@@ -82,19 +82,19 @@ const NODE_TEX_RADIUS = 12;
 const XP_BAR_TEX_KEY = '_ccd_xpbar';
 const TREE_BACKGROUND_TEX_KEY = '_ccd_tree_background';
 
-const PANEL_W = GAME_WIDTH - 120;
-const PANEL_H = GAME_HEIGHT - 88;
+const PANEL_W = GAME_WIDTH - 60;
+const PANEL_H = GAME_HEIGHT - 16;
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
-const TITLE_Y = CY - PANEL_H / 2 + 38;
+const TITLE_Y = CY - PANEL_H / 2 + 78;
 const SUBTITLE_Y = TITLE_Y + 32;
 const BAR_W = PANEL_W - 140;
 const BAR_H = 18;
 const BAR_X = CX - BAR_W / 2;
-const BAR_Y = SUBTITLE_Y + 36;
-const HEADER_DIVIDER_Y = BAR_Y + 26;
+const BAR_Y = SUBTITLE_Y + 28;
+const HEADER_DIVIDER_Y = BAR_Y + 18;
 const HEADER_DIVIDER_W = 360;
-const POINTS_Y = HEADER_DIVIDER_Y + 32;
+const POINTS_Y = HEADER_DIVIDER_Y + 18;
 const POINTS_CHIP_W = 520;
 const POINTS_CHIP_H = 40;
 const RESPEC_W = 180;
@@ -103,19 +103,19 @@ const RESPEC_H = 38;
 const ACTION_BTN_W = 220;
 const ACTION_BTN_H = 50;
 const ACTION_BTN_GAP = 40;
-const ACTION_BTN_Y = CY + PANEL_H / 2 - 60;
-const FOOTER_Y = CY + PANEL_H / 2 - 22;
+const ACTION_BTN_Y = CY + PANEL_H / 2 - 112;
+const FOOTER_Y = CY + PANEL_H / 2 - 76;
 // Die feste Steuerungshinweiszeile bleibt unter jedem Upgrade-Tooltip lesbar.
 const TOOLTIP_BOTTOM = FOOTER_Y - 16;
 
-const CLASS_ROW_Y = POINTS_Y + 62;
+const CLASS_ROW_Y = POINTS_Y + 50;
 const CLASS_BUTTON_W = 250;
 const CLASS_BUTTON_H = 52;
 const CLASS_BUTTON_GAP = 20;
 // Loadout-Block: Jede Kategorie bekommt eine Spaltenkarte, die Slot und Tab zusammenfasst.
 // Deshalb liegt die Kartenoberkante ueber der Slot-Zeile und die Unterkante unter den Tabs.
 const LOADOUT_LABEL_Y = CLASS_ROW_Y + 42;
-const LOADOUT_CARD_TOP = CLASS_ROW_Y + 56;
+const LOADOUT_CARD_TOP = CLASS_ROW_Y + 42;
 const LOADOUT_SLOT_SIZE = 56;
 const LOADOUT_SLOT_GAP = 8;
 const LOADOUT_ROW_Y = LOADOUT_CARD_TOP + 12 + LOADOUT_SLOT_SIZE / 2;
@@ -125,12 +125,16 @@ const TAB_H = 36;
 const TAB_GAP = 12;
 const TAB_MAX_W = 240;
 
-const CONTENT_TOP = TAB_TOP + TAB_H + 26;
+const CONTENT_TOP = TAB_TOP + TAB_H + 20;
 const CONTENT_BOTTOM = ACTION_BTN_Y - ACTION_BTN_H / 2 - 16;
-const CONTENT_W = PANEL_W - 80;
+const CONTENT_W = PANEL_W - 140;
 const CONTENT_X = CX - CONTENT_W / 2;
 const CONTENT_H = CONTENT_BOTTOM - CONTENT_TOP;
 const CONTENT_Y = CONTENT_TOP + CONTENT_H / 2;
+
+/** The tree owns only this area; the action strip below it is always reserved. */
+export const COOP_UPGRADE_TREE_BOUNDS = Object.freeze({ left: CONTENT_X, top: CONTENT_TOP,
+  right: CONTENT_X + CONTENT_W, bottom: CONTENT_BOTTOM });
 
 const NODE_W = 48;
 const NODE_H = 48;
@@ -156,7 +160,7 @@ const BASE_UNLOCK_NODE_STROKE = COLORS.GREY_2;
 const BASE_UNLOCK_NODE_ACTIVE = COLORS.GREY_1;
 
 const DIM_COLOR = COLORS.GREY_10;
-const DIM_ALPHA = 0.78;
+const DIM_ALPHA = 0.58;
 const PANEL_BG = SURFACE.modal;
 const PANEL_ALPHA = 0.96;
 const PANEL_BORDER = BORDER.default;
@@ -407,7 +411,7 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
     const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, t('ui.upgrades.apply'), textStyle('label', {
-      color: INTENT.primary.label,
+      color: TEXT.accent,
     })).setOrigin(0.5).setScrollFactor(0);
     applyBtn.on('pointerdown', () => this.closeWithApply());
     attachHoverEffect(this.scene, applyBtn, applyLabel);
@@ -430,7 +434,7 @@ export class CoopDefenseUpgradesOverlay {
     );
     objects.push(this.levelText);
 
-    const barBackground = this.scene.add.rectangle(CX, BAR_Y, BAR_W, BAR_H, COLORS.GREY_9, 0.95)
+    const barBackground = this.scene.add.rectangle(CX, BAR_Y, BAR_W, BAR_H, SURFACE.sunken, 0.95)
       .setStrokeStyle(1, COLORS.GREY_4)
       .setScrollFactor(0);
     this.attachInfoTooltip(
@@ -518,9 +522,10 @@ export class CoopDefenseUpgradesOverlay {
     this.upgradesContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.upgradesContainer);
 
-    this.tooltip = new UiTooltip(this.scene, TOOLTIP_MAX_W, TEXT.primary, TOOLTIP_BOTTOM);
+    this.tooltip = new UiTooltip(this.scene, TOOLTIP_MAX_W, TEXT.primary, TOOLTIP_BOTTOM, 'forest');
+    const tooltipRoot = this.tooltip.build();
     objects.push(
-      this.tooltip.build()
+      tooltipRoot
         // Ueber dem Auswahl-Popup (OVERLAY + 2), damit Slot-Erklaerungen sichtbar bleiben.
         .setDepth(DEPTH.OVERLAY + 3),
     );
@@ -533,9 +538,10 @@ export class CoopDefenseUpgradesOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 1);
     this.container.setVisible(false);
+    mountForestModal(this.scene, this.container, PANEL_W, PANEL_H, [tooltipRoot]);
     promoteToClarityCamera(this.scene, this.container);
-    this.picker = new LoadoutSlotPicker(this.scene, this.container, DEPTH.OVERLAY + 2);
-    this.respecMenu = new UiContextMenu(this.scene, this.container);
+    this.picker = new LoadoutSlotPicker(this.scene, this.container, DEPTH.OVERLAY + 2, false, 'forest');
+    this.respecMenu = new UiContextMenu(this.scene, this.container, undefined, 'forest');
 
     // Shared living field for the XP bar, active only while the overlay is shown.
     this.xpBarEffect = new LivingBarEffect(
@@ -581,7 +587,7 @@ export class CoopDefenseUpgradesOverlay {
         earnedBossPoints: progress.earnedBossPoints,
       }),
     );
-    this.pointsText.setColor(toCssColor(hasPoints ? COLORS.BLUE_1 : COLORS.GREY_4));
+    this.pointsText.setColor(toCssColor(hasPoints ? TEXT.accent : TEXT.muted));
     this.pointsChip?.setTexture(this.ensurePointsChipTexture(hasPoints));
 
     const fillW = Math.max(0.001, BAR_W * progress.levelProgressFraction);
@@ -881,7 +887,7 @@ export class CoopDefenseUpgradesOverlay {
         fontFamily: FONT_MONO,
         fontStyle: 'bold',
         color: toCssColor(active
-          ? COLORS.GREY_9
+          ? SURFACE.sunken
           : (classesUnlocked ? lerpColor(COLORS.GREY_3, accentColor, 0.5) : COLORS.GREY_5)),
       }).setOrigin(0.5).setScrollFactor(0);
       const labels = this.scene.add.container(centerX, CLASS_ROW_Y, [name, role]).setScrollFactor(0);
@@ -947,8 +953,8 @@ export class CoopDefenseUpgradesOverlay {
       w: CLASS_BUTTON_W,
       h: CLASS_BUTTON_H,
       radius: 12,
-      topColor: lerpColor(COLORS.GREY_8, accentColor, 0.4),
-      bottomColor: lerpColor(COLORS.GREY_9, accentColor, 0.26),
+      topColor: lerpColor(SURFACE.raised, accentColor, 0.4),
+      bottomColor: lerpColor(SURFACE.sunken, accentColor, 0.26),
       fillAlpha: 0.9,
       strokeColor: lerpColor(COLORS.GREY_5, accentColor, 0.55),
       strokeAlpha: 0.75,
@@ -1255,8 +1261,8 @@ export class CoopDefenseUpgradesOverlay {
       w,
       h: height,
       radius: LOADOUT_CARD_RADIUS,
-      topColor: lerpColor(COLORS.GREY_8, accentColor, isActive ? 0.34 : 0.2),
-      bottomColor: lerpColor(COLORS.GREY_9, accentColor, isActive ? 0.2 : 0.1),
+      topColor: lerpColor(SURFACE.raised, accentColor, isActive ? 0.34 : 0.2),
+      bottomColor: lerpColor(SURFACE.sunken, accentColor, isActive ? 0.2 : 0.1),
       fillAlpha: isActive ? 0.8 : 0.6,
       strokeColor: accentColor,
       strokeAlpha: isActive ? 0.85 : 0.4,
@@ -1378,8 +1384,8 @@ export class CoopDefenseUpgradesOverlay {
       w,
       h: TAB_H,
       radius: 10,
-      topColor: lerpColor(COLORS.GREY_8, tabColor, 0.45),
-      bottomColor: lerpColor(COLORS.GREY_9, tabColor, 0.32),
+      topColor: lerpColor(SURFACE.raised, tabColor, 0.45),
+      bottomColor: lerpColor(SURFACE.sunken, tabColor, 0.32),
       fillAlpha: 0.9,
       strokeColor: lerpColor(COLORS.GREY_5, tabColor, 0.55),
       strokeAlpha: 0.75,
@@ -2290,50 +2296,12 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private ensurePanelTexture(): string {
-    return this.ensureRoundedTexture({
-      key: '_ccd_panel',
-      w: PANEL_W,
-      h: PANEL_H,
-      radius: 22,
-      topColor: lerpColor(PANEL_BG, 0xffffff, 0.07),
-      bottomColor: lerpColor(PANEL_BG, 0x000000, 0.3),
-      fillAlpha: PANEL_ALPHA,
-      strokeColor: PANEL_BORDER,
-      strokeAlpha: 0.5,
-      strokeWidth: 2,
-      highlightAlpha: 0.05,
-    });
+    return ensureModalPanelTexture(this.scene, "upgrades", PANEL_W, PANEL_H);
   }
 
   private ensureActionButtonTexture(kind: 'cancel' | 'apply'): string {
-    if (kind === 'cancel') {
-      return this.ensureRoundedTexture({
-        key: '_ccd_cancel',
-        w: ACTION_BTN_W,
-        h: ACTION_BTN_H,
-        radius: 12,
-        topColor: lerpColor(INTENT.neutral.fill, 0xffffff, 0.16),
-        bottomColor: lerpColor(INTENT.neutral.fill, 0x000000, 0.30),
-        fillAlpha: INTENT.neutral.fillAlpha,
-        strokeColor: INTENT.neutral.stroke,
-        strokeAlpha: INTENT.neutral.strokeAlpha,
-        strokeWidth: 2,
-        highlightAlpha: INTENT.neutral.gloss,
-      });
-    }
-    return this.ensureRoundedTexture({
-      key: '_ccd_apply',
-      w: ACTION_BTN_W,
-      h: ACTION_BTN_H,
-      radius: 12,
-      topColor: lerpColor(INTENT.primary.fill, 0xffffff, 0.18),
-      bottomColor: lerpColor(INTENT.primary.fill, 0x000000, 0.30),
-      fillAlpha: INTENT.primary.fillAlpha,
-      strokeColor: INTENT.primary.stroke,
-      strokeAlpha: INTENT.primary.strokeAlpha,
-      strokeWidth: 2,
-      highlightAlpha: INTENT.primary.gloss,
-    });
+    return ensureGlossyButtonTexture(this.scene, kind, ACTION_BTN_W, ACTION_BTN_H,
+      kind === 'apply' ? INTENT.primary.fill : INTENT.neutral.fill);
   }
 
   private ensurePointsChipTexture(active: boolean): string {
@@ -2344,10 +2312,10 @@ export class CoopDefenseUpgradesOverlay {
         w: POINTS_CHIP_W,
         h: POINTS_CHIP_H,
         radius: 10,
-        topColor: lerpColor(COLORS.GREY_8, COLORS.BLUE_3, 0.30),
-        bottomColor: lerpColor(COLORS.GREY_9, COLORS.BLUE_4, 0.16),
+        topColor: lerpColor(SURFACE.raised, TEXT.accent, 0.08),
+        bottomColor: lerpColor(SURFACE.sunken, TEXT.accent, 0.04),
         fillAlpha: 0.55,
-        strokeColor: lerpColor(COLORS.BLUE_2, COLORS.GREY_4, 0.25),
+        strokeColor: BORDER.default,
         strokeAlpha: 0.6,
         strokeWidth: 1.5,
         highlightAlpha: 0,
@@ -2358,10 +2326,10 @@ export class CoopDefenseUpgradesOverlay {
       w: POINTS_CHIP_W,
       h: POINTS_CHIP_H,
       radius: 10,
-      topColor: COLORS.GREY_8,
-      bottomColor: COLORS.GREY_9,
+      topColor: SURFACE.raised,
+      bottomColor: SURFACE.sunken,
       fillAlpha: 0.45,
-      strokeColor: COLORS.GREY_6,
+      strokeColor: BORDER.subtle,
       strokeAlpha: 0.5,
       strokeWidth: 1.5,
       highlightAlpha: 0,
@@ -2369,19 +2337,7 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private ensureRespecButtonTexture(): string {
-    return this.ensureRoundedTexture({
-      key: '_ccd_respec',
-      w: RESPEC_W,
-      h: RESPEC_H,
-      radius: 11,
-      topColor: lerpColor(INTENT.danger.fill, 0xffffff, 0.16),
-      bottomColor: lerpColor(INTENT.danger.fill, 0x000000, 0.30),
-      fillAlpha: INTENT.danger.fillAlpha,
-      strokeColor: INTENT.danger.stroke,
-      strokeAlpha: INTENT.danger.strokeAlpha,
-      strokeWidth: 2,
-      highlightAlpha: INTENT.danger.gloss,
-    });
+    return ensureGlossyButtonTexture(this.scene, 'respec', RESPEC_W, RESPEC_H, INTENT.danger.fill);
   }
 
   private ensureContentBgTexture(color: number): string {
@@ -2403,8 +2359,8 @@ export class CoopDefenseUpgradesOverlay {
     // Dunkler Grund, sanft in die Kategoriefarbe getoent.
     roundRectPath(ctx, inset, inset, rectW, rectH, radius);
     const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, rgbStr(lerpColor(COLORS.GREY_8, color, 0.22), 0.55));
-    grad.addColorStop(1, rgbStr(lerpColor(COLORS.GREY_9, color, 0.08), 0.6));
+    grad.addColorStop(0, rgbStr(lerpColor(SURFACE.raised, color, 0.22), 0.55));
+    grad.addColorStop(1, rgbStr(lerpColor(SURFACE.sunken, color, 0.08), 0.6));
     ctx.fillStyle = grad;
     ctx.fill();
 

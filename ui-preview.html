@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="de"><head><meta charset="UTF-8"><title>Fragdachse · Menüwerkstatt</title>
+<style>
+@font-face{font-family:'Chakra Petch';font-weight:500;src:url('/assets/fonts/chakra-petch-500.woff2')}
+@font-face{font-family:'Chakra Petch';font-weight:700;src:url('/assets/fonts/chakra-petch-700.woff2')}
+@font-face{font-family:'JetBrains Mono';font-weight:100 800;src:url('/assets/fonts/jetbrains-mono-variable.woff2')}
+*{box-sizing:border-box}body{margin:0;background:#101711;color:#d0c8ae;font:14px 'Chakra Petch',sans-serif}
+html,body{height:100%;overflow:hidden}nav{height:48px;display:flex;gap:12px;align-items:center;padding:6px 18px}select,button{font:inherit;color:inherit;background:#30291f;border:1px solid #7e7355;border-radius:5px;padding:5px 10px}output{margin-left:auto}#preview{position:relative;overflow:hidden;height:calc(100vh - 48px);width:100%}canvas{display:block}
+</style></head><body><nav><strong>Menüwerkstatt · nur lokaler Testzustand</strong>
+<select id="menu" aria-label="Menü"><option value="help">Hilfe</option><option value="options">Optionen</option><option value="upgrades">Upgrades</option><option value="items">Items</option><option value="rewards">Item-Belohnung</option><option value="results">Letzte Runde</option><option value="statistics">Raum-Statistik</option></select>
+<select id="variant" aria-label="Szenario"><option value="full">Voll / Sieg / Host im Match</option><option value="locked">Gesperrt / Lobby</option><option value="client">Client im Match</option><option value="defeat">Niederlage</option><option value="replay">Replay</option><option value="sync">Synchronisierung</option><option value="technical">Technischer Abbruch</option></select>
+<select id="locale" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select><button id="reopen">Neu öffnen</button><output>Wird geladen …</output></nav><div id="preview"></div>
+<script type="module" src="/src/dev/forestUiPreview.ts"></script></body></html>

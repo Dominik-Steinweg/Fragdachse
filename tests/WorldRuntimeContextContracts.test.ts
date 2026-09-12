@@ -166,14 +166,14 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
       areaStage: 1,
       buildArea: { kind: 'radius', radiusCells: 5 },
     });
-    // Der Anker ist die Mittelzelle der kanonischen 5x5-Grundflaeche, also exakt der authored
+    // Der Anker ist die Mittelzelle der kanonischen 7x7-Grundflaeche, also exakt der authored
     // Wert der Map – nicht die Mitte einer je Map beschriebenen Form.
     expect(withParameter.persistentBaseSite?.anchor)
       .toEqual(getCoopDefenseMapConfig('17').persistentBase?.anchor);
     expect(isValidPersistentBaseSite(withParameter.persistentBaseSite)).toBe(true);
 
     expect(contextForMap('17').persistentBaseSite?.areaStage).toBe(0);
-    expect(contextForMap('17').persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(contextForMap('17').persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 7 });
     // Eine World ohne authored Stelle hat auch keine.
     expect(contextForMap('1').persistentBaseSite).toBeNull();
     expect(isValidPersistentBaseSite(null)).toBe(false);
