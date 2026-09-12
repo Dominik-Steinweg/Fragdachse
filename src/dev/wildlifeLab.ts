@@ -13,6 +13,8 @@ class WildlifeLab extends Phaser.Scene {
   private wildlife!: AmbientWildlifeRenderer;
   private water!: WaterSurfaceRenderer;
   private actor!: Phaser.GameObjects.Image;
+  private shotMarker!: Phaser.GameObjects.Arc;
+  private shotTime = 0;
   private target: WildlifeAnimal | undefined;
   private fixture = 0;
   private kind: WildlifeKind = 'butterfly';
@@ -48,6 +50,8 @@ class WildlifeLab extends Phaser.Scene {
     this.water = new WaterSurfaceRenderer(this, frame, layout.water ?? [], layout.seed);
     this.wildlife = new AmbientWildlifeRenderer(this, frame, layout);
     this.actor = this.add.image(0, 0, 'wildlife-badger').setDisplaySize(48, 48).setDepth(DEPTH.PLAYERS).setVisible(false);
+    this.shotMarker = this.add.circle(0, 0, 4, 0xffdb85).setDepth(DEPTH.PLAYERS).setVisible(false);
+    this.shotTime = 0;
     this.approachTime = -1;
     this.cameras.main.setBounds(0, 0, width, height).setZoom(1);
     document.getElementById('zoom')!.textContent = 'Zoom 100 %';
@@ -80,6 +84,13 @@ class WildlifeLab extends Phaser.Scene {
       this.actor.setPosition(this.approachX, this.approachY).setVisible(true).setAngle(90);
     });
     bind('clear', () => { this.actor.setVisible(false); this.approachTime = -1; });
+    bind('shot', () => {
+      if (!this.target) return;
+      const x = this.target.x - AMBIENT_WILDLIFE[this.kind].alertRadius * .7, y = this.target.y + 10;
+      this.wildlife.notifyShot(x, y);
+      this.shotMarker.setPosition(x, y).setVisible(true).setAlpha(1);
+      this.shotTime = 1;
+    });
     bind('zoom', () => {
       const zoom = this.cameras.main.zoom === 1 ? 3 : 1;
       this.cameras.main.setZoom(zoom);
@@ -103,6 +114,8 @@ class WildlifeLab extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.shotTime = Math.max(0, this.shotTime - Math.min(delta / 1000, .05));
+    this.shotMarker.setVisible(this.shotTime > 0).setAlpha(this.shotTime);
     if (this.approachTime >= 0) {
       this.approachTime += Math.min(delta / 1000, .05);
       this.actor.setPosition(this.approachX + Math.min(this.approachTime, 1.2) * 45, this.approachY);
@@ -114,6 +127,7 @@ class WildlifeLab extends Phaser.Scene {
     const animals = this.wildlife.model.animals;
     const counts = (['butterfly', 'snake', 'fish'] as const).map(kind => animals.filter(a => a.kind === kind).length);
     const solitary = animals.filter(a => a.kind === 'fish' && a.appearance.count === 1).length;
+    const fishTotal = animals.reduce((sum, a) => sum + (a.kind === 'fish' ? a.appearance.count : 0), 0);
     let variant = '';
     if (this.target?.kind === 'snake') {
       const style = this.target.appearance;
@@ -123,9 +137,10 @@ class WildlifeLab extends Phaser.Scene {
       variant = ` · ${AMBIENT_WILDLIFE.fishGroups[style.groupIndex].name}: ${style.count} ${style.count === 1 ? 'Fisch' : 'Fische'} · ${AMBIENT_WILDLIFE.fishColors[style.colorIndex].name}`;
     }
     const phases = { swimming: 'Schwimmen', fleeing: 'Flucht', diving: 'Abtauchen', hidden: 'Untergetaucht', emerging: 'Auftauchen' };
-    const phase = this.target?.kind === 'fish' ? ` · ${phases[this.target.fishPhase]} · Sichtbarkeit ${Math.round(this.target.opacity * 100)} %` : '';
+    const phase = this.target?.kind === 'fish' ? ` · ${phases[this.target.fishPhase]} · Sichtbarkeit ${Math.round(this.target.opacity * 100)} %`
+      : this.target ? ` · ${this.target.resting ? 'Ruhe · Flügel still' : this.target.fleeing ? 'Flucht' : 'Unterwegs'}` : '';
     const position = this.target ? ` · Tierposition ${this.target.x.toFixed(1)}, ${this.target.y.toFixed(1)}` : ' · Kein passender Lebensraum';
-    document.getElementById('status')!.textContent = `${counts[0]} Schmetterlinge · ${counts[1]} Schlangen · ${counts[2] - solitary} Fischschwärme · ${solitary} ${solitary === 1 ? 'Einzelfisch' : 'Einzelfische'}${variant}${phase}${position}`;
+    document.getElementById('status')!.textContent = `${counts[0]} Schmetterlinge · ${counts[1]} Schlangen · ${counts[2] - solitary} Fischschwärme · ${solitary} ${solitary === 1 ? 'Einzelfisch' : 'Einzelfische'} (${fishTotal} Fische gesamt)${variant}${phase}${position}`;
   }
 }
 

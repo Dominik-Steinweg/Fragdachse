@@ -1,9 +1,13 @@
 /** World pixels (32 px ≈ 1 m). Cosmetic tuning only; never read by gameplay. */
 export const AMBIENT_WILDLIFE = {
   visualScale: 1.3,
-  butterfly: { size: 5.2, speed: 4, fleeSpeed: 12, alertRadius: 64, turnRate: 2.4, maxCount: 160, density: .5, animationRate: 14 },
-  snake: { size: 24, speed: 9, fleeSpeed: 32, alertRadius: 96, turnRate: 4.2, maxCount: 96 },
-  fish: { size: 4.5, speed: 11, fleeSpeed: 96, alertRadius: 160, turnRate: 18, maxCount: 96 },
+  butterfly: { size: 5.2, speed: 4, fleeSpeed: 18, alertRadius: 64, turnRate: 2.4, maxCount: 80, density: .25, animationRate: 14 },
+  snake: { size: 24, speed: 9, fleeSpeed: 32, alertRadius: 96, turnRate: 1.6, maxCount: 96 },
+  fish: { size: 4.5, speed: 11, fleeSpeed: 96, alertRadius: 160, turnRate: 3, maxCount: 48, density: .5 },
+  shotRadiusScale: 2,
+  shotAlertSeconds: 1.6,
+  butterflyFlightSeconds: 9,
+  butterflyRestSeconds: 18,
   snakeSizes: [.85, 1, 1.22],
   snakeColors: [
     { name: 'Olivgrün', body: 0x424b2c, head: 0x58603b, pattern: 0x303820, highlight: 0x73764a },

@@ -43,6 +43,7 @@ export interface VisualFeedbackDeps {
   readonly getWeaponPlayer: (id: string) => WeaponFeedbackPlayer | undefined;
   readonly getWorldRevision: () => number | null;
   readonly isWeaponTriggerHeld: (slot: WeaponSlot) => boolean;
+  readonly onWeaponShot?: (shooterId: string) => void;
   /** Bezugspunkt der Distanzdämpfung – normalerweise der lokale Spieler. */
   readonly getListener: () => { x: number; y: number } | null;
   readonly getLocalPlayerId: () => string;
@@ -86,6 +87,7 @@ export class VisualFeedbackDirector {
       getLocalPlayerId: deps.getLocalPlayerId,
       getWorldRevision: deps.getWorldRevision,
       isLocalTriggerHeld: deps.isWeaponTriggerHeld,
+      onShot: deps.onWeaponShot,
       requestCamera: (request) => this.camera.request(request),
       cancelCamera: () => this.camera.cancel('weapon:local-shot'),
     });

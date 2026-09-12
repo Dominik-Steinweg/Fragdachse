@@ -529,6 +529,7 @@ export class ArenaScene extends Phaser.Scene {
       getWeaponPlayer: (id) => playerManager.getPlayer(id),
       getWorldRevision: () => bridge.getCurrentWorldRevision(),
       isWeaponTriggerHeld: (slot) => inputSystem.isWeaponTriggerHeld(slot),
+      onWeaponShot: (shooterId) => this.arenaRuntime?.notifyWildlifeShot(shooterId),
       getListener: () => {
         const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
         return sprite ? { x: sprite.x, y: sprite.y } : null;

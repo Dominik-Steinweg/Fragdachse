@@ -41,6 +41,10 @@ export class AmbientWildlifeRenderer {
     }
   }
 
+  notifyShot(x: number, y: number): void {
+    if (!this.destroyed) this.model.notifyShot(x, y);
+  }
+
   private drawButterfly(g: Phaser.GameObjects.Graphics, a: WildlifeAnimal): void {
     const flap = .28 + .72 * (.5 - .5 * Math.cos(a.animation * 2));
     const color = TUNING.butterflyColors[a.appearance.colorIndex];

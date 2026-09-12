@@ -19,6 +19,8 @@ export interface WeaponFireFeedbackDeps {
   isLocalTriggerHeld(slot: WeaponSlot): boolean;
   requestCamera(request: CameraFeedbackRequest): void;
   cancelCamera(): void;
+  /** Once per displayed activation, after prediction/confirmation deduplication. */
+  onShot?(shooterId: string): void;
 }
 
 /** Routes presentation only. Prediction watermarks and sequence baselines end with the World. */
@@ -71,6 +73,8 @@ export class WeaponFireFeedbackController {
 
   private play(event: Omit<WeaponShotFeedbackEvent, 'sequence'>): void {
     const config = findWeaponConfig(event.weaponId);
+    if (!config) return;
+    this.deps.onShot?.(event.shooterId);
     const profile = config?.shotFeedbackProfile && WEAPON_FEEDBACK_PROFILES[config.shotFeedbackProfile];
     const player = this.deps.getPlayer(event.shooterId);
     if (!profile || !player) return;

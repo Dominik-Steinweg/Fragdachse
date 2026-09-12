@@ -18,6 +18,8 @@ export interface WildlifeAnimal {
   x: number;
   y: number;
   angle: number;
+  turnSpeed: number;
+  avoidanceAngle: number | null;
   speed: number;
   animation: number;
   opacity: number;
@@ -26,10 +28,13 @@ export interface WildlifeAnimal {
   calmTime: number;
   alertCooldown: number;
   fleeing: boolean;
+  resting: boolean;
+  readonly shot: { x: number; y: number; until: number };
 }
 interface PlayerMotion { x: number; y: number; movingUntil: number; seen: number }
 const TAU = Math.PI * 2;
 const key = (x: number, y: number): string => `${x},${y}`;
+const angleDelta = (from: number, to: number): number => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 
 /** Local presentation state only. Owns no entities, physics, timers, global RNG or wire state. */
 export class AmbientWildlifeModel {
@@ -68,9 +73,15 @@ export class AmbientWildlifeModel {
     const add = (kind: WildlifeKind, x: number, y: number, homeX = x, homeY = y,
       appearance = appearanceAt(kind, x, y)): WildlifeAnimal => {
       const variation = random(x, y, 803), phaseOffset = random(x, y, 809) * TAU;
+      const resting = kind === 'butterfly' && random(x, y, 804)
+        < TUNING.butterflyRestSeconds / (TUNING.butterflyRestSeconds + TUNING.butterflyFlightSeconds);
+      const calmTime = kind === 'butterfly'
+        ? random(x, y, 805) * (resting ? TUNING.butterflyRestSeconds : TUNING.butterflyFlightSeconds) * (.7 + variation * .6)
+        : 3 + variation * 9;
       const animal: WildlifeAnimal = { kind, x, y, homeX, homeY, variation, phaseOffset, appearance,
-        angle: phaseOffset, speed: TUNING[kind].speed, animation: phaseOffset, opacity: 1,
-        fishPhase: 'swimming', phaseTime: 0, calmTime: 3 + variation * 9, alertCooldown: 0, fleeing: false };
+        angle: phaseOffset, turnSpeed: 0, avoidanceAngle: null, speed: resting ? 0 : TUNING[kind].speed, animation: phaseOffset, opacity: 1,
+        fishPhase: 'swimming', phaseTime: 0, calmTime, alertCooldown: 0, fleeing: false,
+        resting, shot: { x: 0, y: 0, until: 0 } };
       this.animals.push(animal);
       return animal;
     };
@@ -105,10 +116,11 @@ export class AmbientWildlifeModel {
       }
     }
     const schoolHomes: { x: number; y: number }[] = [];
+    const fishStart = this.animals.length;
     const deepCells = [...this.deepWater].map(cell => cell.split(',').map(Number));
     deepCells.sort((a, b) => random(a[0], a[1], 880) - random(b[0], b[1], 880));
     for (const [gx, gy] of deepCells) {
-      if (schoolHomes.length >= TUNING.fish.maxCount) break;
+      if (schoolHomes.length >= Math.round(TUNING.fish.maxCount / TUNING.fish.density)) break;
       const x = frame.offsetX + (gx + .5) * CELL_SIZE, y = frame.offsetY + (gy + .5) * CELL_SIZE;
       // Rotate through the forms from a seeded starting point, ensuring variety
       // even in small lakes without adding extra schools to the population.
@@ -120,6 +132,13 @@ export class AmbientWildlifeModel {
       // Stagger visibility so the water is already alive before anyone joins.
       if (schoolHomes.length > 1 && random(gx, gy, 882) < .25) { animal.fishPhase = 'hidden'; animal.opacity = 0; }
     }
+    // Keep complete schools and single fish, evenly thinning the seeded sequence
+    // of forms. This reduces small lakes too, while retaining their size variants.
+    const candidates = this.animals.splice(fishStart);
+    const fishCount = Math.min(candidates.length, Math.max(1, Math.floor(candidates.length * TUNING.fish.density)));
+    for (let i = 0; i < fishCount; i++) this.animals.push(candidates[Math.floor(i * candidates.length / fishCount)]);
+    const firstFish = this.animals[fishStart];
+    if (firstFish) { firstFish.fishPhase = 'swimming'; firstFish.opacity = 1; }
   }
 
   private footprint(x: number, y: number, radius: number, test: (cell: string, gx: number) => boolean): boolean {
@@ -161,6 +180,19 @@ export class AmbientWildlifeModel {
       && this.isLand(x, y, animal.appearance.footprint);
   }
 
+  /** A brief local disturbance at the displayed shooter's position, without a gameplay event queue. */
+  notifyShot(x: number, y: number): void {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    for (const a of this.animals) {
+      const distance = Math.hypot(a.x - x, a.y - y);
+      if (distance >= TUNING[a.kind].alertRadius * TUNING.shotRadiusScale) continue;
+      if (a.shot.until <= this.time || distance <= Math.hypot(a.x - a.shot.x, a.y - a.shot.y)) {
+        a.shot.x = x; a.shot.y = y;
+      }
+      a.shot.until = this.time + TUNING.shotAlertSeconds;
+    }
+  }
+
   update(deltaMs: number, players: readonly WildlifePlayer[], view?: ChunkWorldRect): void {
     const dt = Math.max(0, Math.min(deltaMs / 1000, .05));
     this.time += dt; this.frameId++;
@@ -177,34 +209,89 @@ export class AmbientWildlifeModel {
       if (view && (animal.x < view.x - 192 || animal.y < view.y - 192
         || animal.x > view.x + view.width + 192 || animal.y > view.y + view.height + 192)) continue;
       const tuning = TUNING[animal.kind];
-      let threat: PlayerMotion | undefined, distance = tuning.alertRadius as number;
+      let threat: { x: number; y: number } | undefined, distance = tuning.alertRadius as number;
       for (const p of this.players.values()) {
-        if (p.movingUntil <= this.time) continue;
+        // Butterflies also take off for a nearby stationary player and cannot
+        // settle again beside them. Other animals retain movement sensitivity.
+        if (animal.kind !== 'butterfly' && p.movingUntil <= this.time) continue;
         const d = Math.hypot(animal.x - p.x, animal.y - p.y);
         if (d < distance) { distance = d; threat = p; }
+      }
+      if (animal.shot.until > this.time) {
+        const d = Math.hypot(animal.x - animal.shot.x, animal.y - animal.shot.y);
+        if (d < tuning.alertRadius * TUNING.shotRadiusScale && (!threat || d < distance)) threat = animal.shot;
       }
       if (animal.kind === 'fish') this.updateFish(animal, dt, !!threat);
       animal.fleeing = animal.kind === 'fish'
         ? animal.fishPhase === 'fleeing' || (animal.fishPhase === 'diving' && animal.fleeing) : !!threat;
+      if (animal.kind === 'butterfly') {
+        this.updateButterfly(animal, dt, !!threat);
+        if (animal.resting) { animal.speed = 0; animal.turnSpeed = 0; continue; }
+      }
       const desiredSpeed = animal.fleeing ? tuning.fleeSpeed : tuning.speed;
       animal.speed += (desiredSpeed - animal.speed) * Math.min(1, dt * 6);
       const wander = Math.sin(this.time * .63 + animal.phaseOffset) * .8
         + Math.sin(this.time * .27 + animal.phaseOffset * 3) * .45;
-      let desiredAngle = animal.angle + wander * dt;
+      // Aim a short, fixed time ahead; the turn controller integrates dt once.
+      let desiredAngle = animal.angle + wander * .25;
       if (threat && animal.fleeing) desiredAngle = Math.atan2(animal.y - threat.y, animal.x - threat.x);
-      const turn = Math.atan2(Math.sin(desiredAngle - animal.angle), Math.cos(desiredAngle - animal.angle));
-      animal.angle += Math.max(-tuning.turnRate * dt, Math.min(tuning.turnRate * dt, turn));
-      const step = animal.speed * dt;
-      // Constrained steering checks the complete visual footprint. No collider or
-      // pathfinding request is registered with the authoritative world.
-      for (const offset of [0, .5, -.5, 1, -1, 1.8, -1.8, Math.PI]) {
-        const angle = animal.angle + offset;
-        const x = animal.x + Math.cos(angle) * step, y = animal.y + Math.sin(angle) * step;
-        if (!this.contains(animal, x, y)) continue;
-        animal.x = x; animal.y = y; animal.angle = angle; break;
-      }
+      this.move(animal, desiredAngle, dt);
       animal.animation += dt * (animal.kind === 'butterfly' ? TUNING.butterfly.animationRate : 5 + animal.speed * .25);
     }
+  }
+
+  private updateButterfly(a: WildlifeAnimal, dt: number, disturbed: boolean): void {
+    if (disturbed) {
+      a.resting = false;
+      a.calmTime = TUNING.butterflyFlightSeconds * (.7 + a.variation * .6);
+      return;
+    }
+    a.calmTime -= dt;
+    if (a.calmTime > 0) return;
+    a.resting = !a.resting;
+    a.calmTime = (a.resting ? TUNING.butterflyRestSeconds : TUNING.butterflyFlightSeconds) * (.7 + a.variation * .6);
+  }
+
+  /** Short probes include the full silhouette, never authoritatively registered colliders. */
+  private clearance(a: WildlifeAnimal, angle: number, distance: number): number {
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const steps = Math.max(1, Math.ceil(distance / 4));
+    for (let i = 1; i <= steps; i++) {
+      const d = distance * i / steps;
+      if (!this.contains(a, a.x + dx * d, a.y + dy * d)) return distance * (i - 1) / steps;
+    }
+    return distance;
+  }
+
+  private move(a: WildlifeAnimal, desiredAngle: number, dt: number): void {
+    const turnRate = TUNING[a.kind].turnRate;
+    const lookAhead = 8 + a.speed / turnRate * 1.3;
+    const forward = this.clearance(a, a.angle, lookAhead);
+    if (a.avoidanceAngle !== null && Math.abs(angleDelta(a.angle, a.avoidanceAngle)) < .15 && forward === lookAhead)
+      a.avoidanceAngle = null;
+    if ((a.avoidanceAngle === null && forward < lookAhead)
+      || (a.avoidanceAngle !== null && this.clearance(a, a.avoidanceAngle, lookAhead) < lookAhead * .25)) {
+      // Commit to a clear heading while turning; a new random side each frame
+      // would cause boundary jitter even with a bounded angular velocity.
+      let bestAngle = a.angle, bestScore = -Infinity;
+      const preferred = a.avoidanceAngle ?? desiredAngle;
+      for (let i = 0; i < 12; i++) {
+        const candidate = a.angle + (i - 6) * TAU / 12;
+        const score = this.clearance(a, candidate, lookAhead) / lookAhead
+          - Math.abs(angleDelta(preferred, candidate)) * .12;
+        if (score > bestScore) { bestScore = score; bestAngle = candidate; }
+      }
+      a.avoidanceAngle = bestAngle;
+    }
+    const turn = angleDelta(a.angle, a.avoidanceAngle ?? desiredAngle);
+    const desiredTurnSpeed = Math.max(-turnRate, Math.min(turnRate, turn * 4));
+    const acceleration = turnRate * 3 * dt;
+    a.turnSpeed += Math.max(-acceleration, Math.min(acceleration, desiredTurnSpeed - a.turnSpeed));
+    a.angle += a.turnSpeed * dt;
+    // Brake while turning near a bank/trunk instead of snapping to a free angle.
+    const step = a.speed * dt * Math.min(1, .15 + forward / lookAhead);
+    const x = a.x + Math.cos(a.angle) * step, y = a.y + Math.sin(a.angle) * step;
+    if (this.contains(a, x, y)) { a.x = x; a.y = y; }
   }
 
   private updateFish(a: WildlifeAnimal, dt: number, disturbed: boolean): void {

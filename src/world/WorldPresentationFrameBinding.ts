@@ -384,6 +384,15 @@ export class WorldPresentationFrameBinding {
     this.input.shadow.updateStaticResidency(worldView);
   }
 
+  /** Shot feedback observes only this World's displayed players and ends before handoff. */
+  notifyWildlifeShot(shooterId: string): void {
+    if (this.destroyed || !this.input.getLocalWorldPresentation().required) return;
+    const player = this.input.getPlayers().find(p => p.id === shooterId);
+    const sprite = player?.displayObject;
+    if (player?.active && sprite?.visible && sprite.alpha > .1)
+      this.input.getArenaResult()?.wildlife?.notifyShot(sprite.x, sprite.y);
+  }
+
   /** Projiziert den allgemeinen replizierten World-Zustand fuer Clients, auch ohne Activity. */
   syncClientWorldPresentation(
     state: WorldClientPresentationState | undefined,

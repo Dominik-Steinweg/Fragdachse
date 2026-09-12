@@ -16,14 +16,15 @@ function fixture() {
     };
   }
   const local = player(), remote = player();
-  const camera = vi.fn(), cancel = vi.fn();
+  const camera = vi.fn(), cancel = vi.fn(), onShot = vi.fn();
   const controller = new WeaponFireFeedbackController({
     getPlayer: id => id === 'local' ? local : id === 'remote' ? remote : undefined,
     getLocalPlayerId: () => 'local', getWorldRevision: () => revision,
     isLocalTriggerHeld: () => held,
     requestCamera: camera, cancelCamera: cancel,
+    onShot,
   });
-  return { controller, local, remote, camera, cancel,
+  return { controller, local, remote, camera, cancel, onShot,
     time: (n: number) => { now = n; }, world: (n: number | null) => { revision = n; },
     held: (v: boolean) => { held = v; } };
 }
@@ -38,6 +39,8 @@ describe('weapon fire presentation routing', () => {
     f.controller.confirm({ ...shot, sequence: 2, predictionId: 2 });
     expect(f.local.playHeldWeaponShot).toHaveBeenCalledTimes(2);
     expect(f.camera).toHaveBeenCalledTimes(2);
+    expect(f.onShot).toHaveBeenCalledTimes(2);
+    expect(f.onShot).toHaveBeenLastCalledWith('local');
     expect(f.camera.mock.calls[0][0].dirY).toBeCloseTo(-1);
   });
 
@@ -46,6 +49,7 @@ describe('weapon fire presentation routing', () => {
     f.controller.confirm({ ...shot, shooterId: 'remote' });
     f.controller.confirm({ ...shot, shooterId: 'remote' });
     expect(f.remote.playHeldWeaponShot).toHaveBeenCalledTimes(1);
+    expect(f.onShot).toHaveBeenCalledExactlyOnceWith('remote');
     expect(f.camera).not.toHaveBeenCalled();
     f.controller.confirm(shot);
     expect(f.local.playHeldWeaponShot).toHaveBeenCalledTimes(1);
@@ -75,6 +79,15 @@ describe('weapon fire presentation routing', () => {
     expect(f.local.playHeldWeaponShot).toHaveBeenCalledTimes(3);
     f.world(null); f.controller.confirm({ ...shot, sequence: 2 });
     expect(f.local.playHeldWeaponShot).toHaveBeenCalledTimes(3);
+    expect(f.onShot).toHaveBeenCalledTimes(3);
+  });
+
+  it('notifies the world even when a held weapon has no matching visible animation', () => {
+    const f = fixture();
+    f.local.playHeldWeaponShot.mockReturnValue(null as never);
+    f.controller.confirm(shot);
+    expect(f.onShot).toHaveBeenCalledExactlyOnceWith('local');
+    expect(f.camera).not.toHaveBeenCalled();
   });
 
   it('validates the typed shot-event boundary', () => {

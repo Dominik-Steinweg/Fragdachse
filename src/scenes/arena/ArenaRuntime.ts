@@ -311,6 +311,10 @@ export class ArenaRuntime {
     this.flow.getWorldRuntime()?.presentationFrame?.syncSurfaceResidency(showWorld);
   }
 
+  notifyWildlifeShot(shooterId: string): void {
+    this.flow.getWorldRuntime()?.presentationFrame?.notifyWildlifeShot(shooterId);
+  }
+
   private syncWorldClientPresentation(
     state: WorldClientPresentationState | undefined,
     delta: number,

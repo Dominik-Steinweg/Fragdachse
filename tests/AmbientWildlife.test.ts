@@ -31,12 +31,19 @@ describe('cosmetic wildlife', () => {
     expect(shallow.animals.some(a => a.kind === 'fish')).toBe(false);
   });
 
-  it('keeps every animal inside its habitat under sustained player pressure, with explicit world offsets', () => {
+  it('turns continuously and stays in its habitat under sustained pressure, with explicit world offsets', () => {
     const model = new AmbientWildlifeModel(layout(), frame);
+    const travelled = model.animals.map(() => 0);
     for (let i = 0; i < 1200; i++) {
-      model.update(1000 / 30, model.animals.map((a, j) => ({ id: `pressure-${j}`,
+      const before = model.animals.map(a => ({ x: a.x, y: a.y, angle: a.angle }));
+      const dt = i % 2 ? 1 / 30 : 1 / 60;
+      if (i % 90 === 0) for (const a of model.animals) model.notifyShot(a.x + 20, a.y);
+      model.update(dt * 1000, model.animals.map((a, j) => ({ id: `pressure-${j}`,
         x: a.x + Math.cos(i * .04) * 25, y: a.y + Math.sin(i * .04) * 25 })));
-      for (const a of model.animals) {
+      for (const [j, a] of model.animals.entries()) {
+        const turn = Math.atan2(Math.sin(a.angle - before[j].angle), Math.cos(a.angle - before[j].angle));
+        expect(Math.abs(turn)).toBeLessThanOrEqual(AMBIENT_WILDLIFE[a.kind].turnRate * dt + 1e-9);
+        travelled[j] += Math.hypot(a.x - before[j].x, a.y - before[j].y);
         expect(model.contains(a, a.x, a.y)).toBe(true);
         if (a.kind === 'snake') {
           // Even the full body remains in the immediate surroundings of its own tree.
@@ -45,9 +52,11 @@ describe('cosmetic wildlife', () => {
         }
       }
     }
+    // Bounded steering must still let animals leave a blocked heading.
+    expect(travelled.every(distance => distance > CELL_SIZE)).toBe(true);
   });
 
-  it.each<WildlifeKind>(['butterfly', 'snake', 'fish'])('reacts to movement, not a stationary or departed player: %s', kind => {
+  it.each<WildlifeKind>(['snake', 'fish'])('reacts to movement, not a stationary or departed player: %s', kind => {
     const model = new AmbientWildlifeModel(layout(), frame);
     const a = model.animals.find(a => a.kind === kind)!;
     // A controlled facing within the existing habitat removes unrelated random steering.
@@ -62,6 +71,75 @@ describe('cosmetic wildlife', () => {
     expect(a.x).toBeGreaterThan(player.x + 21);
     model.update(16, []);
     if (kind !== 'fish') expect(a.fleeing).toBe(false);
+  });
+
+  it('butterflies rest with a frozen pose, resume flight, and take off for nearby players', () => {
+    const model = new AmbientWildlifeModel(layout(), frame);
+    const a = model.animals.find(a => a.kind === 'butterfly')!;
+    for (let i = 0; i < 800 && !a.resting; i++) model.update(25, []);
+    expect(a.resting).toBe(true);
+    const restingPose = [a.x, a.y, a.angle, a.animation];
+    const restingStepMs = Math.min(25, a.calmTime * 1000 / 40);
+    for (let i = 0; i < 20; i++) model.update(restingStepMs, []);
+    expect([a.x, a.y, a.angle, a.animation]).toEqual(restingPose);
+    expect(a.speed).toBe(0);
+    for (let i = 0; i < 800 && a.resting; i++) model.update(25, []);
+    expect(a.resting).toBe(false);
+    expect(a.animation).not.toBe(restingPose[3]);
+    for (let i = 0; i < 800 && !a.resting; i++) model.update(25, []);
+    expect(a.resting).toBe(true);
+    const player = { id: 'visitor', x: a.x - 12, y: a.y };
+    model.update(25, [player]);
+    expect(a.resting).toBe(false);
+    expect(a.fleeing).toBe(true);
+    expect(a.speed).toBeGreaterThan(0);
+    model.update(25, [player]); // Stationary proximity also prevents immediate resettling.
+    expect(a.fleeing).toBe(true);
+    model.update(25, []);
+    expect(a.fleeing).toBe(false);
+  });
+
+  it('starts butterflies at individually seeded points in both flight and rest phases', () => {
+    const source = { ...layout(), trees: [], water: [], rocks: [], dirt: [] };
+    const model = new AmbientWildlifeModel(source, { ...frame, width: 4096, height: 4096 });
+    const butterflies = model.animals.filter(a => a.kind === 'butterfly');
+    expect(new Set(butterflies.map(a => a.resting))).toEqual(new Set([true, false]));
+    for (const a of butterflies) {
+      expect(a.calmTime).toBeGreaterThan(0);
+      expect(a.speed === 0).toBe(a.resting);
+    }
+    expect(new Set(butterflies.map(a => a.calmTime)).size).toBe(butterflies.length);
+    const firstToSwitch = butterflies.reduce((first, a) => a.calmTime < first.calmTime ? a : first);
+    const wasResting = firstToSwitch.resting;
+    let remaining = firstToSwitch.calmTime + .001;
+    while (remaining > 0) {
+      const step = Math.min(.05, remaining);
+      model.update(step * 1000, []); remaining -= step;
+    }
+    expect(firstToSwitch.resting).toBe(!wasResting);
+  });
+
+  it.each<WildlifeKind>(['butterfly', 'snake', 'fish'])('reacts to nearby shots without movement and forgets the disturbance: %s', kind => {
+    const model = new AmbientWildlifeModel(layout(), frame);
+    const a = model.animals.find(a => a.kind === kind)!;
+    if (kind === 'butterfly') {
+      for (let i = 0; i < 800 && !a.resting; i++) model.update(25, []);
+      expect(a.resting).toBe(true);
+    }
+    model.notifyShot(frame.offsetX - 1000, frame.offsetY - 1000);
+    model.update(16, []);
+    expect(a.fleeing).toBe(false);
+    model.notifyShot(a.x - AMBIENT_WILDLIFE[kind].alertRadius * 1.2, a.y);
+    model.update(16, []);
+    expect(a.fleeing).toBe(true);
+    expect(a.resting).toBe(false);
+    const phases = new Set<string>();
+    for (let i = 0; i < 800; i++) { model.update(25, []); phases.add(a.fishPhase); }
+    expect(a.fleeing).toBe(false);
+    if (kind === 'fish') {
+      expect(phases.has('hidden')).toBe(true);
+      expect(phases.has('emerging')).toBe(true);
+    }
   });
 
   it('fishes flee, fully disappear, and return to ordinary swimming; undisturbed schools also dive', () => {
