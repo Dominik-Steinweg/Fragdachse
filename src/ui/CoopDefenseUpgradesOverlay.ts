@@ -1859,8 +1859,8 @@ export class CoopDefenseUpgradesOverlay {
     const baseAlpha = isLocked ? 0.34 : isActive ? 1 : 0.82;
 
     const iconKey = this.getNodeTextureKey(node);
-    // Pending-Upgrades liefern bewusst keinen Texture-Key. In diesem Fall bleibt der
-    // Knoten vollstaendig funktionsfaehig, zeigt aber niemals ein fachlich falsches Aliasbild.
+    // Nicht registrierte Upgrades liefern bewusst keinen Texture-Key. In diesem Fall bleibt der
+    // Knoten vollstaendig funktionsfaehig und zeigt Text statt eines fachlich falschen Bildes.
     const hasIcon = iconKey !== null && this.scene.textures.exists(iconKey);
 
     // Boss-Punkt-Upgrades bilden den hochwertigen Abschluss eines Zweigs. Ein
@@ -2438,7 +2438,6 @@ export class CoopDefenseUpgradesOverlay {
 
   private getNodeTextureKey(node: CoopDefenseUpgradeNodeSnapshot): string | null {
     const upgradeTextureKey = getCoopDefenseUpgradeTextureKey(node.id);
-    if (upgradeTextureKey === null) return null;
     // Dedicated upgrade artwork takes precedence over the corresponding loadout-item icon.
     if (hasCoopDefenseDedicatedUpgradeIcon(node.id)) return upgradeTextureKey;
     if (node.toolRef) return describeLoadoutTool(node.toolRef).textureKey;
@@ -2447,7 +2446,6 @@ export class CoopDefenseUpgradesOverlay {
       // historical German asset name (e.g. LEAF_BLOWER -> LAUBBLAESER).
       return describeLoadoutItem(node.loadoutUnlock.slot, node.loadoutUnlock.itemId).textureKey;
     }
-    if (node.kind === 'upgrade') return upgradeTextureKey;
     return null;
   }
 

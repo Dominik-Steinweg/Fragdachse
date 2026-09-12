@@ -1,0 +1,728 @@
+{
+  "adrenaline_spawn_full": {
+    "symbol": "adrenaline",
+    "modifiers": [
+      "full"
+    ],
+    "color": "yellow"
+  },
+  "adrenaline_syringe_drops": {
+    "symbol": "syringe",
+    "modifiers": [
+      "drop"
+    ],
+    "color": "yellow"
+  },
+  "adrenaline_syringe_drop_chance": {
+    "symbol": "syringe",
+    "modifiers": [
+      "chance"
+    ],
+    "color": "yellow"
+  },
+  "adrenaline_syringe_duration": {
+    "symbol": "syringe",
+    "modifiers": [
+      "duration"
+    ],
+    "color": "yellow"
+  },
+  "ultimate_armor_rage": {
+    "symbol": "shield",
+    "modifiers": [
+      "rage"
+    ],
+    "color": "red"
+  },
+  "ultimate_max_rage": {
+    "symbol": "rage",
+    "modifiers": [
+      "max"
+    ],
+    "color": "red"
+  },
+  "dash_range": {
+    "symbol": "dash",
+    "modifiers": [
+      "range"
+    ],
+    "color": "cyan"
+  },
+  "dash_fire_trail": {
+    "symbol": "dash",
+    "modifiers": [
+      "fire",
+      "trail"
+    ],
+    "color": "orange"
+  },
+  "dash_impact_damage": {
+    "symbol": "dash",
+    "modifiers": [
+      "impact",
+      "damage"
+    ],
+    "color": "red"
+  },
+  "dash_overdrive": {
+    "symbol": "dash",
+    "modifiers": [
+      "duration",
+      "speed"
+    ],
+    "color": "yellow"
+  },
+  "necromancy": {
+    "symbol": "skull",
+    "modifiers": [
+      "summon"
+    ],
+    "color": "purple"
+  },
+  "necromancy_count": {
+    "symbol": "skull",
+    "modifiers": [
+      "count"
+    ],
+    "color": "purple"
+  },
+  "necromancy_hp": {
+    "symbol": "skull",
+    "modifiers": [
+      "health"
+    ],
+    "color": "green"
+  },
+  "necromancy_vitality": {
+    "symbol": "skull",
+    "modifiers": [
+      "health",
+      "plus"
+    ],
+    "color": "green"
+  },
+  "necromancy_undying": {
+    "symbol": "skull",
+    "modifiers": [
+      "revive"
+    ],
+    "color": "purple"
+  },
+  "necromancy_revive_radius": {
+    "symbol": "skull",
+    "modifiers": [
+      "revive",
+      "radius"
+    ],
+    "color": "purple"
+  },
+  "necromancy_dominance": {
+    "symbol": "skull",
+    "modifiers": [
+      "crown"
+    ],
+    "color": "purple"
+  },
+  "guardian_spirit_trinity": {
+    "symbol": "spirit",
+    "modifiers": [
+      "trinity"
+    ],
+    "color": "purple"
+  },
+  "honey_badger_pack_rage": {
+    "symbol": "badger",
+    "modifiers": [
+      "pack",
+      "rage"
+    ],
+    "color": "red"
+  },
+  "slime_trail_bloom": {
+    "symbol": "slime",
+    "modifiers": [
+      "trail",
+      "growth"
+    ],
+    "color": "green"
+  },
+  "stink_cloud_slime_plague": {
+    "symbol": "cloud",
+    "modifiers": [
+      "trail"
+    ],
+    "color": "green"
+  },
+  "armor_gain": {
+    "symbol": "shield",
+    "modifiers": [
+      "gain"
+    ],
+    "color": "green"
+  },
+  "flamethrower_fire_ring": {
+    "symbol": "flame-ring",
+    "modifiers": [
+      "enable"
+    ],
+    "color": "orange"
+  },
+  "flamethrower_fire_ring_projectiles": {
+    "symbol": "flame-ring",
+    "modifiers": [
+      "projectiles"
+    ],
+    "color": "orange"
+  },
+  "flamethrower_fire_ring_damage": {
+    "symbol": "flame-ring",
+    "modifiers": [
+      "damage"
+    ],
+    "color": "red"
+  },
+  "flamethrower_fire_ring_radius": {
+    "symbol": "flame-ring",
+    "modifiers": [
+      "radius"
+    ],
+    "color": "orange"
+  },
+  "flamethrower_burning_ground": {
+    "symbol": "flame",
+    "modifiers": [
+      "ground"
+    ],
+    "color": "orange"
+  },
+  "flamethrower_death_fire_burst": {
+    "symbol": "flame",
+    "modifiers": [
+      "death",
+      "explosion"
+    ],
+    "color": "orange"
+  },
+  "general_burning_projectiles": {
+    "symbol": "projectile",
+    "modifiers": [
+      "fire"
+    ],
+    "color": "orange"
+  },
+  "inspector_construction_slots": {
+    "symbol": "construction",
+    "modifiers": [
+      "slots"
+    ],
+    "color": "yellow"
+  },
+  "inspector_construction_hp": {
+    "symbol": "construction",
+    "modifiers": [
+      "armor"
+    ],
+    "color": "green"
+  },
+  "inspector_repair_drone": {
+    "symbol": "drone",
+    "modifiers": [
+      "repair"
+    ],
+    "color": "yellow"
+  },
+  "unlock_rocket_turret": {
+    "symbol": "turret",
+    "modifiers": [
+      "rocket"
+    ],
+    "color": "yellow"
+  },
+  "unlock_machine_gun_turret": {
+    "symbol": "turret",
+    "modifiers": [
+      "machine-gun"
+    ],
+    "color": "yellow"
+  },
+  "unlock_flame_turret": {
+    "symbol": "turret",
+    "modifiers": [
+      "fire"
+    ],
+    "color": "orange"
+  },
+  "hydra_damage_split": {
+    "symbol": "hydra",
+    "modifiers": [
+      "split",
+      "damage"
+    ],
+    "color": "green"
+  },
+  "overcharge_radius": {
+    "symbol": "energy-core",
+    "modifiers": [
+      "radius"
+    ],
+    "color": "cyan"
+  },
+  "overcharge_duration": {
+    "symbol": "energy-core",
+    "modifiers": [
+      "duration"
+    ],
+    "color": "cyan"
+  },
+  "overcharge_power": {
+    "symbol": "energy-core",
+    "modifiers": [
+      "power"
+    ],
+    "color": "yellow"
+  },
+  "overcharge_cost": {
+    "symbol": "energy-core",
+    "modifiers": [
+      "cost-down"
+    ],
+    "color": "yellow"
+  },
+  "ak47_fire_control": {
+    "symbol": "crosshair",
+    "modifiers": [
+      "stack"
+    ],
+    "color": "cyan"
+  },
+  "ak47_rhythm": {
+    "symbol": "crosshair",
+    "modifiers": [
+      "damage"
+    ],
+    "color": "red"
+  },
+  "ak47_fire_superiority": {
+    "symbol": "rifle",
+    "modifiers": [
+      "pierce",
+      "adrenaline"
+    ],
+    "color": "yellow"
+  },
+  "ak47_breakthrough_magazine": {
+    "symbol": "rifle",
+    "modifiers": [
+      "count"
+    ],
+    "color": "yellow"
+  },
+  "shotgun_brake_load": {
+    "symbol": "shotgun",
+    "modifiers": [
+      "slow"
+    ],
+    "color": "cyan"
+  },
+  "shotgun_lightning_blast": {
+    "symbol": "shotgun",
+    "modifiers": [
+      "lightning",
+      "explosion"
+    ],
+    "color": "cyan"
+  },
+  "shotgun_lightning_slow": {
+    "symbol": "lightning",
+    "modifiers": [
+      "slow"
+    ],
+    "color": "blue"
+  },
+  "shotgun_round_shot": {
+    "symbol": "shotgun",
+    "modifiers": [
+      "radial"
+    ],
+    "color": "yellow"
+  },
+  "shotgun_proximity_damage": {
+    "symbol": "shotgun",
+    "modifiers": [
+      "proximity",
+      "damage"
+    ],
+    "color": "red"
+  },
+  "shotgun_thunder_avalanche": {
+    "symbol": "lightning",
+    "modifiers": [
+      "chain",
+      "explosion"
+    ],
+    "color": "cyan"
+  },
+  "shotgun_lightning_damage": {
+    "symbol": "lightning",
+    "modifiers": [
+      "damage"
+    ],
+    "color": "blue"
+  },
+  "asmd_secondary_match_primary_range": {
+    "symbol": "energy-orb",
+    "modifiers": [
+      "link",
+      "range"
+    ],
+    "color": "cyan"
+  },
+  "asmd_secondary_dot_field_damage": {
+    "symbol": "energy-orb",
+    "modifiers": [
+      "field",
+      "damage"
+    ],
+    "color": "blue"
+  },
+  "asmd_secondary_combo_adrenaline": {
+    "symbol": "energy-orb",
+    "modifiers": [
+      "link",
+      "adrenaline"
+    ],
+    "color": "yellow"
+  },
+  "asmd_secondary_arc_lightning": {
+    "symbol": "energy-orb",
+    "modifiers": [
+      "lightning"
+    ],
+    "color": "cyan"
+  },
+  "asmd_secondary_arc_range": {
+    "symbol": "lightning",
+    "modifiers": [
+      "range"
+    ],
+    "color": "cyan"
+  },
+  "asmd_secondary_arc_damage": {
+    "symbol": "lightning",
+    "modifiers": [
+      "damage"
+    ],
+    "color": "blue"
+  },
+  "mini_rocket_thermobaric_charge": {
+    "symbol": "rocket",
+    "modifiers": [
+      "large-explosion"
+    ],
+    "color": "orange"
+  },
+  "mini_rocket_long_range_drive": {
+    "symbol": "rocket",
+    "modifiers": [
+      "range"
+    ],
+    "color": "cyan"
+  },
+  "mini_rocket_launcher_explosion_damage": {
+    "symbol": "rocket",
+    "modifiers": [
+      "explosion",
+      "damage"
+    ],
+    "color": "red"
+  },
+  "awp_moving_precision": {
+    "symbol": "sniper",
+    "modifiers": [
+      "moving",
+      "precision"
+    ],
+    "color": "cyan"
+  },
+  "flamethrower_expiry_ground": {
+    "symbol": "flame",
+    "modifiers": [
+      "duration",
+      "ground"
+    ],
+    "color": "orange"
+  },
+  "flamethrower_kamikaze": {
+    "symbol": "flame",
+    "modifiers": [
+      "charge",
+      "explosion"
+    ],
+    "color": "red"
+  },
+  "flamethrower_kamikaze_molotov_bonuses": {
+    "symbol": "molotov",
+    "modifiers": [
+      "plus",
+      "explosion"
+    ],
+    "color": "orange"
+  },
+  "flamethrower_fireball": {
+    "symbol": "fireball",
+    "modifiers": [
+      "projectile"
+    ],
+    "color": "orange"
+  },
+  "flamethrower_fireball_trail": {
+    "symbol": "fireball",
+    "modifiers": [
+      "trail",
+      "ground"
+    ],
+    "color": "orange"
+  },
+  "flamethrower_fireball_chunks": {
+    "symbol": "fireball",
+    "modifiers": [
+      "fragments"
+    ],
+    "color": "orange"
+  },
+  "negev_adrenaline_cost": {
+    "symbol": "bullet-stream",
+    "modifiers": [
+      "adrenaline",
+      "cost-down"
+    ],
+    "color": "yellow"
+  },
+  "negev_burning_bullets": {
+    "symbol": "bullet-stream",
+    "modifiers": [
+      "fire"
+    ],
+    "color": "orange"
+  },
+  "negev_rock_damage": {
+    "symbol": "bullet-stream",
+    "modifiers": [
+      "rock",
+      "damage"
+    ],
+    "color": "red"
+  },
+  "negev_killstreak": {
+    "symbol": "bullet-stream",
+    "modifiers": [
+      "killstreak"
+    ],
+    "color": "yellow"
+  },
+  "negev_killstreak_recovery": {
+    "symbol": "bullet-stream",
+    "modifiers": [
+      "killstreak",
+      "recovery"
+    ],
+    "color": "cyan"
+  },
+  "negev_killstreak_explosion": {
+    "symbol": "bullet-stream",
+    "modifiers": [
+      "killstreak",
+      "explosion"
+    ],
+    "color": "orange"
+  },
+  "energy_shield_dome": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "dome"
+    ],
+    "color": "cyan"
+  },
+  "energy_shield_mobility": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "speed"
+    ],
+    "color": "cyan"
+  },
+  "energy_shield_dome_heal": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "dome",
+      "health"
+    ],
+    "color": "green"
+  },
+  "energy_shield_overcharge": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "power"
+    ],
+    "color": "yellow"
+  },
+  "energy_shield_sustain": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "duration"
+    ],
+    "color": "cyan"
+  },
+  "energy_shield_efficiency": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "cost-down"
+    ],
+    "color": "yellow"
+  },
+  "energy_shield_autonomous": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "autonomous"
+    ],
+    "color": "cyan"
+  },
+  "energy_shield_dome_size": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "dome",
+      "size"
+    ],
+    "color": "cyan"
+  },
+  "mini_rocket_triple_detonation": {
+    "symbol": "rocket",
+    "modifiers": [
+      "triple-explosion"
+    ],
+    "color": "orange"
+  },
+  "mini_rocket_cascade_charge": {
+    "symbol": "rocket",
+    "modifiers": [
+      "chain",
+      "explosion"
+    ],
+    "color": "orange"
+  },
+  "mini_rocket_homecoming_protocol": {
+    "symbol": "rocket",
+    "modifiers": [
+      "return"
+    ],
+    "color": "cyan"
+  },
+  "mini_rocket_adrenaline_recovery": {
+    "symbol": "rocket",
+    "modifiers": [
+      "pickup",
+      "adrenaline"
+    ],
+    "color": "yellow"
+  },
+  "mini_rocket_armor_recovery": {
+    "symbol": "rocket",
+    "modifiers": [
+      "pickup",
+      "armor"
+    ],
+    "color": "green"
+  },
+  "awp_charge_damage": {
+    "symbol": "sniper",
+    "modifiers": [
+      "charge",
+      "damage"
+    ],
+    "color": "red"
+  },
+  "awp_fire_trail": {
+    "symbol": "sniper",
+    "modifiers": [
+      "fire",
+      "trail"
+    ],
+    "color": "orange"
+  },
+  "awp_destruction_corridor": {
+    "symbol": "sniper",
+    "modifiers": [
+      "corridor",
+      "damage"
+    ],
+    "color": "red"
+  },
+  "awp_full_charge_time": {
+    "symbol": "sniper",
+    "modifiers": [
+      "full",
+      "duration"
+    ],
+    "color": "yellow"
+  },
+  "awp_full_charge_damage": {
+    "symbol": "sniper",
+    "modifiers": [
+      "full",
+      "damage"
+    ],
+    "color": "red"
+  },
+  "energy_shield_dome_reflect": {
+    "symbol": "energy-shield",
+    "modifiers": [
+      "dome",
+      "reflect"
+    ],
+    "color": "cyan"
+  },
+  "rock_barrier_range": {
+    "symbol": "construction",
+    "modifiers": [
+      "rock",
+      "range"
+    ],
+    "color": "yellow"
+  },
+  "spore_turret_build_range": {
+    "symbol": "mushroom",
+    "modifiers": [
+      "build-range"
+    ],
+    "color": "purple"
+  },
+  "spore_turret_plasma_gun": {
+    "symbol": "mushroom",
+    "modifiers": [
+      "plasma"
+    ],
+    "color": "cyan"
+  },
+  "armageddon_meteor_count": {
+    "symbol": "meteor",
+    "modifiers": [
+      "count"
+    ],
+    "color": "orange"
+  },
+  "armageddon_rage_required": {
+    "symbol": "meteor",
+    "modifiers": [
+      "rage",
+      "threshold-down"
+    ],
+    "color": "red"
+  },
+  "armageddon_fire_chunks": {
+    "symbol": "meteor",
+    "modifiers": [
+      "fragments",
+      "ground"
+    ],
+    "color": "orange"
+  }
+}

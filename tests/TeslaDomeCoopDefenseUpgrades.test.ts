@@ -177,21 +177,8 @@ describe('Tesla dome coop-defense upgrade tree', () => {
     }
   });
 
-  it('reuses only fitting legacy icons and lets the rest fall back to text', () => {
-    // Nur die Symbole der ersetzten Vorgänger, deren Motiv fachlich weiterträgt.
-    expect(getCoopDefenseUpgradeTextureKey('tesla_dome_energy_efficiency')).toBe('UPGRADE_TESLA_DOME_ADRENALIN_DRAIN');
-    expect(getCoopDefenseUpgradeTextureKey('tesla_dome_field_charge')).toBe('UPGRADE_TESLA_DOME_HIGH_VOLTAGE');
-    expect(getCoopDefenseUpgradeTextureKey('tesla_dome_field_stabilization')).toBe('UPGRADE_TESLA_DOME_MOVEMENT_SLOW');
-    expect(getCoopDefenseUpgradeTextureKey('tesla_dome_overcharge_pulse')).toBe('UPGRADE_TESLA_DOME_DAMAGE');
-    expect(getCoopDefenseUpgradeTextureKey('tesla_dome_overcharge')).toBe('UPGRADE_TESLA_DOME_RADIUS');
-
-    // Ohne passendes Motiv bewusst kein Alias: der Baum zeigt dann den Namen als Text.
-    for (const id of [
-      'tesla_dome_additional_beams',
-      'tesla_dome_focused_conductivity',
-      'tesla_dome_thunderstorm',
-      'tesla_dome_fast_charge',
-    ]) {
+  it('uses dedicated canonical artwork for every Tesla upgrade', () => {
+    for (const id of TESLA_NODES) {
       expect(getCoopDefenseUpgradeTextureKey(id)).toBe(`UPGRADE_${id.toUpperCase()}`);
     }
   });

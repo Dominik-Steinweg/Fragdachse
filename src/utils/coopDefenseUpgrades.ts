@@ -1,4 +1,5 @@
 import rawCoopDefenseUpgrades from '../config/coopDefenseUpgrades.json';
+import rawCoopDefenseUpgradeIcons from '../config/coopDefenseUpgradeIcons.json';
 import {
   COOP_DEFENSE_CLASS_IDS,
   DEFAULT_COOP_DEFENSE_CLASS_ID,
@@ -32,141 +33,36 @@ export type CoopDefenseUpgradeCategoryId = 'general' | 'weapon1' | 'weapon2' | '
 export type CoopDefenseUpgradeKind = 'upgrade' | 'unlock';
 export type CoopDefenseUpgradeEffectMode = 'add_per_level' | 'add_percent_per_level';
 
-/**
- * Upgrade IDs that may temporarily require an explicit asset-handoff entry.
- *
- * Keep this registry available for future staged asset handoffs; it is empty while every
- * currently registered upgrade resolves to final artwork or a deliberate shared alias.
- */
-export const COOP_DEFENSE_PENDING_UPGRADE_ICONS: ReadonlySet<string> = new Set([
-]);
-
-/** Unlock nodes with their own upgrade-tree artwork instead of loadout-item icons. */
-export const COOP_DEFENSE_AUTHORED_UNLOCK_UPGRADE_ICONS: ReadonlySet<string> = new Set([
-  'unlock_plasma_burner',
-  'unlock_overcharge_core',
-  'unlock_energy_injector',
-  'unlock_tesla_turret',
-  'unlock_gravity_turret',
-  'unlock_slow_bubble_turret',
-  'unlock_medic_pedestal',
-  'unlock_armor_pedestal',
-  'unlock_rock_barrier',
-  'unlock_spore_turret',
-  'unlock_rocket_turret',
-  'unlock_machine_gun_turret',
-  'unlock_flame_turret',
-  'unlock_armageddon',
-  'unlock_gauss_rifle',
-  'unlock_airstrike',
-  'unlock_honey_badger_rage',
-]);
-
-export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
-  return COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(upgradeId)
-    || COOP_DEFENSE_AUTHORED_UNLOCK_UPGRADE_ICONS.has(upgradeId);
+interface CoopDefenseUpgradeIconRegistryFile {
+  readonly withIcon: readonly string[];
+  readonly withoutIcon: readonly string[];
 }
 
-const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  mg_attrition: 'UPGRADE_CRITICAL_DAMAGE',
-  mg_calibration: 'UPGRADE_CRITICAL_DAMAGE',
-  mg_optics: 'UPGRADE_FLIEGENPILZ_RANGE',
-  mg_fire_superiority: 'UPGRADE_FLIEGENPILZ_DOUBLE_SPORE',
-  mg_fire_control_network: 'UPGRADE_FLIEGENPILZ_PLASMA_GUN',
-  mg_bleed: 'UPGRADE_STINKDRUESEN_DAMAGE',
-  mg_handoff: 'UPGRADE_STINKDRUESEN_RADIUS',
-  zeus_dynamo: 'UPGRADE_ZEUS_TASER_RANGE',
-  zeus_nerve_shock: 'UPGRADE_ZEUS_TASER_RANGE',
-  zeus_ball_lightning: 'UPGRADE_ZEUS_TASER_RANGE',
-  zeus_electric_ground: 'UPGRADE_ZEUS_TASER_RANGE',
-  zeus_thunderfront: 'UPGRADE_ZEUS_CHAIN_LIGHTNING',
-  zeus_lightning_flood: 'UPGRADE_ZEUS_CHAIN_LIGHTNING',
-  zeus_breakthrough: 'UPGRADE_ZEUS_CHAIN_LIGHTNING',
+const COOP_DEFENSE_UPGRADE_ICON_REGISTRY = rawCoopDefenseUpgradeIcons as CoopDefenseUpgradeIconRegistryFile;
 
-  decoy_mass_distraction: 'UPGRADE_DECOY_DURATION',
-  decoy_irresistible_lure: 'UPGRADE_DECOY_DURATION',
-  decoy_shadow_runner: 'UPGRADE_DECOY_STEALTH_DURATION',
-  decoy_shadow_regeneration: 'UPGRADE_DECOY_STEALTH_DURATION',
-  decoy_fire_chunks: 'UPGRADE_DECOY_DURATION',
-  decoy_fire_trail: 'UPGRADE_DECOY_DURATION',
-  smoke_grenade_disorientation: 'UPGRADE_SMOKE_GRENADE_DURATION',
-  smoke_grenade_vulnerability: 'UPGRADE_CRITICAL_DAMAGE',
-  smoke_grenade_discharge: 'UPGRADE_SMOKE_GRENADE_STORM',
-  smoke_grenade_growth: 'UPGRADE_SMOKE_GRENADE_RADIUS',
-  he_grenade_charges: 'UPGRADE_HE_GRENADE_COOLDOWN',
-  he_grenade_impact_fuse: 'UPGRADE_HE_GRENADE_RADIUS',
-  he_grenade_cluster_mass: 'UPGRADE_HE_GRENADE_CLUSTER',
-  he_grenade_demolition_cluster: 'UPGRADE_HE_GRENADE_DAMAGE',
-  critical_chance: 'UPGRADE_CRITICAL_CHANCE',
-  critical_damage: 'UPGRADE_CRITICAL_DAMAGE',
-  glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
-  leaf_blower_adrenalin_gain: 'UPGRADE_LAUBBLAESER_ADRENALIN_GAIN',
-  leaf_blower_knockback: 'UPGRADE_LAUBBLAESER_KNOCKBACK',
-  leaf_blower_hitbox_size: 'UPGRADE_LAUBBLAESER_HITBOX_SIZE',
-  leaf_blower_pressure_damage: 'UPGRADE_LAUBBLAESER_PRESSURE_DAMAGE',
-  unlock_plasma_burner: 'UPGRADE_UNLOCK_REPARATURSTRAHL',
-  unlock_energy_injector: 'UPGRADE_UNLOCK_ENERGIEINJEKTOR',
-  unlock_rock_barrier: 'UPGRADE_UNLOCK_FELSBAU',
-  rock_barrier_hp: 'UPGRADE_FELSBAU_HP',
-  rock_barrier_range: 'UPGRADE_FELSBAU_RANGE',
-  rock_barrier_explosive_collapse: 'UPGRADE_FELSBAU_EXPLOSIVE_COLLAPSE',
-  unlock_spore_turret: 'UPGRADE_UNLOCK_FLIEGENPILZ',
-  spore_turret_build_range: 'UPGRADE_FLIEGENPILZ_BUILD_RANGE',
-  spore_turret_hp: 'UPGRADE_FLIEGENPILZ_HP',
-  spore_turret_range: 'UPGRADE_FLIEGENPILZ_RANGE',
-  spore_turret_double_spore: 'UPGRADE_FLIEGENPILZ_DOUBLE_SPORE',
-  spore_turret_plasma_gun: 'UPGRADE_FLIEGENPILZ_PLASMA_GUN',
-  stink_cloud_infection: 'UPGRADE_STINKDRUESEN_DAMAGE',
-  stink_cloud_life_leech: 'UPGRADE_STINKDRUESEN_DAMAGE',
-  stink_cloud_spread: 'UPGRADE_STINKDRUESEN_RADIUS',
-  stink_cloud_combat_mode: 'UPGRADE_STINKDRUESEN_RADIUS',
-  stink_cloud_pandemic: 'UPGRADE_STINKDRUESEN_AFTERCLOUD',
-  stink_cloud_septic_shock: 'UPGRADE_STINKDRUESEN_DAMAGE',
-  stink_cloud_slime_plague: 'UPGRADE_STINKDRUESEN_AFTERCLOUD',
-  shotgun_range: 'UPGRADE_SHOTGUN_RANGE',
-  shotgun_lightning_radius: 'UPGRADE_SHOTGUN_LIGHTNING_RADIUS',
-  molotov_grenade_radius: 'UPGRADE_MOLOTOV_GRENADE_RADIUS',
-  molotov_wildfire_chunks: 'UPGRADE_FLAMETHROWER_FIREBALL_CHUNKS',
-  molotov_firewalker: 'UPGRADE_DASH_FIRE_TRAIL',
-  translocator_cooldown: 'UPGRADE_HE_GRENADE_COOLDOWN',
-  translocator_phase_boost: 'UPGRADE_RUN_SPEED',
-  translocator_phase_regeneration: 'UPGRADE_HP_REGENERATION',
-  translocator_telefrag_radius: 'UPGRADE_TRANSLOCATOR_TELEFRAG',
-  translocator_portal_pair: 'TRANSLOCATOR',
-  translocator_rift_collapse: 'UPGRADE_ROCKET_LAUNCHER_BLACK_HOLE_PULL',
-  translocator_portal_penetration: 'UPGRADE_CRITICAL_DAMAGE',
-  time_bubble_prism_spiral: 'TIME_BUBBLE',
-  time_bubble_resonance: 'TIME_BUBBLE',
-  time_bubble_focus: 'TIME_BUBBLE',
-  time_bubble_cooldown: 'TIME_BUBBLE',
-  time_bubble_radius: 'TIME_BUBBLE',
-  time_bubble_overcharge: 'TIME_BUBBLE',
-  time_bubble_resonance_flow: 'TIME_BUBBLE',
-  mini_rocket_launcher_homing_turn: 'UPGRADE_MINI_ROCKET_LAUNCHER_HOMING_TURN',
-  xbow_life_leech: 'UPGRADE_LIFE_LEECH',
-  xbow_homing: 'UPGRADE_P90_HOMING_TURN',
-  flamethrower_range: 'UPGRADE_FLAMETHROWER_RANGE',
-  armageddon_radius: 'UPGRADE_ARMAGEDDON_RADIUS',
-  ak47_fire_control: 'UPGRADE_AK47_FOCUS',
-  ak47_rhythm: 'UPGRADE_AK47_FOCUS_DAMAGE',
-  ak47_breakthrough_magazine: 'UPGRADE_AK47_FIRE_SUPERIORITY_SHOTS',
-  // Tesla-Rework: nur Symbole der ersetzten Vorgänger, deren Motiv fachlich weiterträgt.
-  // Zusätzliche Strahlen, Fokussierte Leitfähigkeit, Gewittersturm und Schnellladung haben
-  // bewusst kein Alias und zeigen im Baum den lokalisierten Namen als Text.
-  tesla_dome_energy_efficiency: 'UPGRADE_TESLA_DOME_ADRENALIN_DRAIN',
-  tesla_dome_field_charge: 'UPGRADE_TESLA_DOME_HIGH_VOLTAGE',
-  tesla_dome_field_stabilization: 'UPGRADE_TESLA_DOME_MOVEMENT_SLOW',
-  tesla_dome_overcharge_pulse: 'UPGRADE_TESLA_DOME_DAMAGE',
-  tesla_dome_overcharge: 'UPGRADE_TESLA_DOME_RADIUS',
-});
+/**
+ * Explicit presentation contract for upgrade-tree artwork.
+ *
+ * Only IDs in this set may enqueue `UPGRADE_<ID>.png`. New authored upgrades therefore fall
+ * back to text until their icon is deliberately registered; the runtime never guesses a file.
+ */
+export const COOP_DEFENSE_UPGRADE_IDS_WITH_DEDICATED_ICON: ReadonlySet<string> = new Set(
+  COOP_DEFENSE_UPGRADE_ICON_REGISTRY.withIcon,
+);
+
+/** Active IDs that deliberately use the loadout-item icon or the text fallback. */
+export const COOP_DEFENSE_UPGRADE_IDS_WITHOUT_DEDICATED_ICON: ReadonlySet<string> = new Set(
+  COOP_DEFENSE_UPGRADE_ICON_REGISTRY.withoutIcon,
+);
+
+export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
+  return COOP_DEFENSE_UPGRADE_IDS_WITH_DEDICATED_ICON.has(upgradeId);
+}
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string | null {
-  if (upgradeId === 'unlock_rocket_launcher' || upgradeId.startsWith('rocket_launcher_')) return null;
-  // Keep aliases above intact so duplicate-icon cleanup remains authoritative.
-  if (COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(upgradeId)) {
-    return `UPGRADE_${upgradeId.toUpperCase()}`;
-  }
-  return COOP_DEFENSE_UPGRADE_ICON_ALIASES[upgradeId] ?? `UPGRADE_${upgradeId.toUpperCase()}`;
+  return hasCoopDefenseDedicatedUpgradeIcon(upgradeId)
+    ? `UPGRADE_${upgradeId.toUpperCase()}`
+    : null;
 }
 
 export interface CoopDefenseUpgradeEffectDefinition {

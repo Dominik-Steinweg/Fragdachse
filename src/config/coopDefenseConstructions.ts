@@ -11,7 +11,7 @@ interface CoopDefenseConstructionBaseDefinition {
   readonly buildCooldownMs: number;
   /**
    * Optionales individuelles Loadout-Icon des Konstrukts. Solange es `null` ist, verwenden
-   * Slot und Unlock-Knoten gemeinsam das temporaere Icon aus `unlockUpgradeId`.
+   * Slot und Unlock-Knoten das explizit registrierte Icon aus `unlockUpgradeId`.
    */
   readonly iconKey: string | null;
   readonly unlockUpgradeId: string;

@@ -23,7 +23,9 @@ describe('Rocket authored upgrade contract', () => {
       const cleaned = sanitizeCoopDefenseUpgradeProfile(raw);
       expect(cleaned.upgrades.rocket_launcher_aftershock.level).toBe(0);
     }
-    for (const id of ids.filter(id => id.startsWith('rocket_launcher_'))) expect(getCoopDefenseUpgradeTextureKey(id)).toBeNull();
+    for (const id of ids.filter(id => id.startsWith('rocket_launcher_'))) {
+      expect(getCoopDefenseUpgradeTextureKey(id)).toBe(`UPGRADE_${id.toUpperCase()}`);
+    }
   });
 
   it('retains unlock and R1 while releasing all removed normal and boss investments', () => {

@@ -343,8 +343,8 @@ export class ArenaScene extends Phaser.Scene {
       this.load.image(entry.iconKey, `./assets/sprites/Loadout/${entry.iconKey}.png`);
     }
 
-    // Upgrade-Icons direkt aus den Definitionen ableiten, damit neue Upgrades
-    // automatisch geladen werden (kein manuelles Pflegen einer Liste noetig).
+    // Nur explizit registrierte Upgrade-Icons laden. Neue Upgrades fallen dadurch auf Text
+    // zurueck, bis das zugehoerige PNG vorhanden und in der Icon-Registry eingetragen ist.
     const queuedUpgradeTextures = new Set<string>();
     for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
       // Dedicated upgrade-tree artwork also covers unlock nodes that should not fall back to

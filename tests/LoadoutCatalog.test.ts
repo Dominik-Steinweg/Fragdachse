@@ -124,50 +124,18 @@ describe('loadout catalog', () => {
     for (const weaponId of supportWeapons) expect(coopWeapon2Ids).toContain(weaponId);
   });
 
-  it('uses final dedicated upgrade icons without undoing existing aliases', () => {
-    expect(getCoopDefenseUpgradeTextureKey('dash_fire_trail')).toBe('UPGRADE_DASH_FIRE_TRAIL');
-    expect(getCoopDefenseUpgradeTextureKey('shotgun_range')).toBe('UPGRADE_SHOTGUN_RANGE');
-    expect(getCoopDefenseUpgradeTextureKey('glock_adrenaline_gain')).toBe('UPGRADE_GLOCK_ADRENALINE_GAIN');
-    expect(getCoopDefenseUpgradeTextureKey('leaf_blower_adrenalin_gain'))
-      .toBe('UPGRADE_LAUBBLAESER_ADRENALIN_GAIN');
-    expect(getCoopDefenseUpgradeTextureKey('leaf_blower_knockback'))
-      .toBe('UPGRADE_LAUBBLAESER_KNOCKBACK');
-    expect(getCoopDefenseUpgradeTextureKey('leaf_blower_hitbox_size'))
-      .toBe('UPGRADE_LAUBBLAESER_HITBOX_SIZE');
-    expect(getCoopDefenseUpgradeTextureKey('leaf_blower_pressure_damage'))
-      .toBe('UPGRADE_LAUBBLAESER_PRESSURE_DAMAGE');
-    expect(getCoopDefenseUpgradeTextureKey('unlock_plasma_burner'))
-      .toBe('UPGRADE_UNLOCK_REPARATURSTRAHL');
-    expect(getCoopDefenseUpgradeTextureKey('unlock_energy_injector'))
-      .toBe('UPGRADE_UNLOCK_ENERGIEINJEKTOR');
-    expect(getCoopDefenseUpgradeTextureKey('unlock_rock_barrier')).toBe('UPGRADE_UNLOCK_FELSBAU');
-    expect(getCoopDefenseUpgradeTextureKey('rock_barrier_hp')).toBe('UPGRADE_FELSBAU_HP');
-    expect(getCoopDefenseUpgradeTextureKey('rock_barrier_range')).toBe('UPGRADE_FELSBAU_RANGE');
-    expect(getCoopDefenseUpgradeTextureKey('rock_barrier_explosive_collapse'))
-      .toBe('UPGRADE_FELSBAU_EXPLOSIVE_COLLAPSE');
-    expect(getCoopDefenseUpgradeTextureKey('unlock_spore_turret')).toBe('UPGRADE_UNLOCK_FLIEGENPILZ');
-    expect(getCoopDefenseUpgradeTextureKey('spore_turret_build_range'))
-      .toBe('UPGRADE_FLIEGENPILZ_BUILD_RANGE');
-    expect(getCoopDefenseUpgradeTextureKey('spore_turret_hp')).toBe('UPGRADE_FLIEGENPILZ_HP');
-    expect(getCoopDefenseUpgradeTextureKey('spore_turret_range')).toBe('UPGRADE_FLIEGENPILZ_RANGE');
-    expect(getCoopDefenseUpgradeTextureKey('spore_turret_double_spore'))
-      .toBe('UPGRADE_FLIEGENPILZ_DOUBLE_SPORE');
-    expect(getCoopDefenseUpgradeTextureKey('spore_turret_plasma_gun'))
-      .toBe('UPGRADE_FLIEGENPILZ_PLASMA_GUN');
-    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_spread')).toBe('UPGRADE_STINKDRUESEN_RADIUS');
-    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_infection')).toBe('UPGRADE_STINKDRUESEN_DAMAGE');
-    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_pandemic')).toBe('UPGRADE_STINKDRUESEN_AFTERCLOUD');
-    expect(getCoopDefenseUpgradeTextureKey('flamethrower_adrenalin_efficiency')).toBe(
-      'UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY',
-    );
-    expect(getCoopDefenseUpgradeTextureKey('ak47_fire_control')).toBe('UPGRADE_AK47_FOCUS');
-    expect(getCoopDefenseUpgradeTextureKey('ak47_rhythm')).toBe('UPGRADE_AK47_FOCUS_DAMAGE');
-    expect(getCoopDefenseUpgradeTextureKey('ak47_breakthrough_magazine')).toBe(
-      'UPGRADE_AK47_FIRE_SUPERIORITY_SHOTS',
-    );
-    expect(getCoopDefenseUpgradeTextureKey('ak47_fire_superiority')).toBe('UPGRADE_AK47_FIRE_SUPERIORITY');
-    expect(getCoopDefenseUpgradeTextureKey('ak47_rock_destruction')).toBe('UPGRADE_AK47_ROCK_DESTRUCTION');
+  it('resolves only explicitly registered artwork through canonical upgrade keys', () => {
     for (const id of [
+      'dash_fire_trail',
+      'glock_stopping_power',
+      'leaf_blower_adrenalin_gain',
+      'leaf_blower_knockback',
+      'rock_barrier_explosive_collapse',
+      'spore_turret_hp',
+      'stink_cloud_infection',
+      'ak47_fire_control',
+      'ak47_rhythm',
+      'ak47_breakthrough_magazine',
       'ak47_firepower',
       'ak47_strategic_targets',
       'ak47_target_prioritization',
@@ -186,6 +154,8 @@ describe('loadout catalog', () => {
       expect(getCoopDefenseUpgradeTextureKey(id)).toBe(`UPGRADE_${id.toUpperCase()}`);
     }
     expect(getCoopDefenseUpgradeTextureKey('unlock_armageddon')).toBe('UPGRADE_UNLOCK_ARMAGEDDON');
+    expect(getCoopDefenseUpgradeTextureKey('unlock_ak47')).toBeNull();
+    expect(getCoopDefenseUpgradeTextureKey('future_unregistered_upgrade')).toBeNull();
   });
 
   it('keeps internal Coop utility variants out of user-facing catalog lists', () => {
@@ -216,10 +186,10 @@ describe('loadout catalog', () => {
 
   it('uses the dedicated upgrade artwork for Inspector weapon 2 slots', () => {
     expect(describeLoadoutItem('weapon2', 'PLASMA_BURNER').textureKey)
-      .toBe('UPGRADE_UNLOCK_REPARATURSTRAHL');
+      .toBe('UPGRADE_UNLOCK_PLASMA_BURNER');
     expect(describeLoadoutItem('weapon2', 'OVERCHARGE_CORE').textureKey)
       .toBe('UPGRADE_UNLOCK_OVERCHARGE_CORE');
     expect(describeLoadoutItem('weapon2', 'ENERGY_INJECTOR').textureKey)
-      .toBe('UPGRADE_UNLOCK_ENERGIEINJEKTOR');
+      .toBe('UPGRADE_UNLOCK_ENERGY_INJECTOR');
   });
 });

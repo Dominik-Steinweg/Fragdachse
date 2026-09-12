@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,7 +13,8 @@ import {
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(SCRIPT_DIR, '..');
 const CONFIG_PATH = path.join(REPOSITORY_ROOT, 'src', 'config.ts');
-const PENDING_UPGRADES_PATH = path.join(REPOSITORY_ROOT, 'src', 'utils', 'coopDefenseUpgrades.ts');
+const ICON_REGISTRY_PATH = path.join(REPOSITORY_ROOT, 'src', 'config', 'coopDefenseUpgradeIcons.json');
+const RECIPE_PATH = path.join(SCRIPT_DIR, 'upgrade-icon-recipes.json');
 const SVG_OUTPUT_DIR = path.join(SCRIPT_DIR, 'generated-upgrade-icons', 'svg');
 const PNG_OUTPUT_DIR = path.join(REPOSITORY_ROOT, 'public', 'assets', 'sprites', 'Loadout');
 
@@ -56,41 +57,23 @@ async function pathExists(filePath) {
   }
 }
 
-async function findRecipeFile(repositoryRoot) {
-  const directories = [repositoryRoot];
-  const ignoredDirectories = new Set(['.git', 'node_modules', 'dist']);
-
-  while (directories.length > 0) {
-    const currentDirectory = directories.shift();
-    const entries = await readdir(currentDirectory, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const entryPath = path.join(currentDirectory, entry.name);
-      if (entry.isFile() && entry.name === 'recept.json') return entryPath;
-      if (entry.isDirectory() && !ignoredDirectories.has(entry.name)) directories.push(entryPath);
-    }
-  }
-
-  throw new Error(`recept.json was not found below ${repositoryRoot}.`);
-}
-
 async function readRecipes(recipePath) {
   let source;
   try {
     source = await readFile(recipePath, 'utf8');
   } catch (error) {
-    throw new Error(`Could not read recept.json at ${recipePath}: ${error.message}`);
+    throw new Error(`Could not read upgrade-icon-recipes.json at ${recipePath}: ${error.message}`);
   }
 
   let rawRecipes;
   try {
     rawRecipes = JSON.parse(source);
   } catch (error) {
-    throw new Error(`recept.json is not valid JSON: ${error.message}`);
+    throw new Error(`upgrade-icon-recipes.json is not valid JSON: ${error.message}`);
   }
 
   if (!rawRecipes || Array.isArray(rawRecipes) || typeof rawRecipes !== 'object') {
-    throw new Error('recept.json must contain an object keyed by upgrade ID.');
+    throw new Error('upgrade-icon-recipes.json must contain an object keyed by upgrade ID.');
   }
 
   const recipes = [];
@@ -142,25 +125,19 @@ async function readProjectColors(configPath) {
   return colors;
 }
 
-async function readPendingUpgradeIds(filePath) {
-  let source;
-  try {
-    source = await readFile(filePath, 'utf8');
-  } catch (error) {
-    throw new Error(`Could not read COOP_DEFENSE_PENDING_UPGRADE_ICONS at ${filePath}: ${error.message}`);
+async function readRegisteredIconIds(filePath) {
+  const registry = JSON.parse(await readFile(filePath, 'utf8'));
+  if (!registry || !Array.isArray(registry.withIcon)) {
+    throw new Error(`${filePath} must provide a withIcon array.`);
   }
-
-  const pendingMatch = source.match(/COOP_DEFENSE_PENDING_UPGRADE_ICONS[\s\S]*?new\s+Set\s*\(\s*\[([\s\S]*?)\]\s*\)/);
-  if (!pendingMatch) throw new Error(`Could not find COOP_DEFENSE_PENDING_UPGRADE_ICONS in ${filePath}.`);
-
-  return [...pendingMatch[1].matchAll(/['"]([^'"]+)['"]/g)].map((match) => match[1]);
+  return registry.withIcon;
 }
 
-function listDifferences(recipes, pendingIds) {
+function listDifferences(recipes, registeredIconIds) {
   const recipeIds = recipes.map((recipe) => recipe.id);
   return {
-    missingRecipes: pendingIds.filter((id) => !recipeIds.includes(id)),
-    recipesOutsidePending: recipeIds.filter((id) => !pendingIds.includes(id)),
+    registeredIconsWithoutRecipe: registeredIconIds.filter((id) => !recipeIds.includes(id)),
+    recipesOutsideRegistry: recipeIds.filter((id) => !registeredIconIds.includes(id)),
   };
 }
 
@@ -217,6 +194,8 @@ async function generateIcon(sharp, recipe, palette, force) {
   const fileStem = `UPGRADE_${recipe.id.toUpperCase()}`;
   const svgPath = path.join(SVG_OUTPUT_DIR, `${fileStem}.svg`);
   const pngPath = path.join(PNG_OUTPUT_DIR, `${fileStem}.png`);
+  if (!force && await pathExists(pngPath)) return { generated: false, skipped: true };
+
   const svg = renderUpgradeIcon({
     symbol: recipe.symbol,
     modifiers: recipe.modifiers,
@@ -225,8 +204,6 @@ async function generateIcon(sharp, recipe, palette, force) {
   });
 
   await writeFile(svgPath, `${svg}\n`, 'utf8');
-  if (!force && await pathExists(pngPath)) return { generated: false, skipped: true };
-
   await sharp(Buffer.from(svg))
     .resize(32, 32, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .ensureAlpha()
@@ -236,7 +213,7 @@ async function generateIcon(sharp, recipe, palette, force) {
   return { generated: true, skipped: false };
 }
 
-function printSummary({ recipePath, recipes, selectedRecipes, generated, skipped, pendingIds, differences }) {
+function printSummary({ recipePath, recipes, selectedRecipes, generated, skipped, registeredIconIds, differences }) {
   const symbols = [...new Set(recipes.map((recipe) => recipe.symbol))].sort();
   const modifiers = [...new Set(recipes.flatMap((recipe) => recipe.modifiers))].sort();
   const colors = [...new Set(recipes.map((recipe) => recipe.color))].sort();
@@ -246,9 +223,9 @@ function printSummary({ recipePath, recipes, selectedRecipes, generated, skipped
   console.log(`Recipes processed: ${selectedRecipes.length}`);
   console.log(`Icons generated: ${generated}`);
   console.log(`Existing PNGs skipped: ${skipped}`);
-  console.log(`Pending IDs: ${pendingIds.length}`);
-  console.log(`Recipe IDs missing from pending list: ${formatIds(differences.recipesOutsidePending)}`);
-  console.log(`Pending IDs missing a recipe: ${formatIds(differences.missingRecipes)}`);
+  console.log(`Registered dedicated icons: ${registeredIconIds.length}`);
+  console.log(`Recipe IDs outside the icon registry: ${formatIds(differences.recipesOutsideRegistry)}`);
+  console.log(`Registered icons without a deterministic recipe: ${differences.registeredIconsWithoutRecipe.length}`);
   console.log(`Main symbols: ${symbols.join(', ')}`);
   console.log(`Modifiers: ${modifiers.join(', ')}`);
   console.log(`Colors: ${colors.join(', ')}`);
@@ -256,16 +233,16 @@ function printSummary({ recipePath, recipes, selectedRecipes, generated, skipped
 
 async function main() {
   const { force, id } = parseArguments(process.argv.slice(2));
-  const recipePath = await findRecipeFile(REPOSITORY_ROOT);
+  const recipePath = RECIPE_PATH;
   const recipes = await readRecipes(recipePath);
-  const pendingIds = await readPendingUpgradeIds(PENDING_UPGRADES_PATH);
-  const differences = listDifferences(recipes, pendingIds);
+  const registeredIconIds = await readRegisteredIconIds(ICON_REGISTRY_PATH);
+  const differences = listDifferences(recipes, registeredIconIds);
 
   if (id && !recipes.some((recipe) => recipe.id === id)) {
-    throw new Error(`Unknown upgrade ID "${id}". It is not present in recept.json.`);
+    throw new Error(`Unknown upgrade ID "${id}". It is not present in upgrade-icon-recipes.json.`);
   }
-  if (differences.missingRecipes.length > 0 || differences.recipesOutsidePending.length > 0) {
-    throw new Error('Recipe IDs and COOP_DEFENSE_PENDING_UPGRADE_ICONS differ. Resolve the mismatch without changing the pending list automatically.');
+  if (differences.recipesOutsideRegistry.length > 0) {
+    throw new Error('A deterministic icon recipe references an upgrade without registered artwork.');
   }
 
   const projectColors = await readProjectColors(CONFIG_PATH);
@@ -285,7 +262,7 @@ async function main() {
     if (result.skipped) skipped += 1;
   }
 
-  printSummary({ recipePath, recipes, selectedRecipes, generated, skipped, pendingIds, differences });
+  printSummary({ recipePath, recipes, selectedRecipes, generated, skipped, registeredIconIds, differences });
 }
 
 try {

@@ -46,7 +46,7 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDe
     gameplaySource: { kind: 'construction-definition', constructionId: 'spore_turret' },
     initialState: { respawnMs: null, spawnOnArenaStart: true },
     placementRule: 'base-surface',
-    presentation: { labelKey: 'loadout.SPORE_TURRET.name', iconKey: 'UPGRADE_UNLOCK_FLIEGENPILZ' },
+    presentation: { labelKey: 'loadout.SPORE_TURRET.name', iconKey: 'UPGRADE_UNLOCK_SPORE_TURRET' },
   },
   {
     id: 'base_health_pedestal',
