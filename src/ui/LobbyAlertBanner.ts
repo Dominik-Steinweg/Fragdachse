@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, GAME_WIDTH, toCssColor } from '../config';
-import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/LobbyWorldLayout';
+import { LOBBY_CARD } from './LobbyLayout';
 import { ensureRoundedTexture } from './uiTextures';
 import { RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 
@@ -14,10 +14,10 @@ export interface LobbyAlert {
   readonly priority?: number;
 }
 
-const BANNER_W = LOBBY_PANEL_WIDTH;
+const BANNER_W = 832;
 const BANNER_X = (GAME_WIDTH - BANNER_W) / 2;
 /** Der Banner sitzt ueber dem Panel und reserviert dort im Normalzustand keinen Platz. */
-const BANNER_BOTTOM_Y = LOBBY_FRAME_BOUNDS.outerTop - SPACE.md;
+const BANNER_BOTTOM_Y = LOBBY_CARD.top - SPACE.md;
 const BANNER_MIN_H = 80;
 const BANNER_MAX_H = 176;
 const BANNER_PAD_X = SPACE.xl;

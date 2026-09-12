@@ -25,6 +25,8 @@ export const enUi = {
   "ui.common.later": "Decide later",
   "ui.lobby.player": "Player",
   "ui.lobby.room": "Room",
+  "ui.lobby.title": "Lobby",
+  "ui.lobby.netDetails": "Technical details",
   "ui.lobby.ready": "READY",
   "ui.lobby.notReady": "NOT READY",
   "ui.lobby.waitingForPlayers": "Waiting for teammates …",

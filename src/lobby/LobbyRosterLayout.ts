@@ -10,7 +10,7 @@ export interface LobbyRosterPlayer {
 }
 
 export interface LobbyRosterSlot {
-  readonly column: 0 | 1;
+  readonly column: 0;
   readonly row: number;
   readonly teamId: TeamId | null;
   readonly playerId: string | null;
@@ -18,8 +18,8 @@ export interface LobbyRosterSlot {
 }
 
 /**
- * Pure Slot-Zuordnung fuer die Lobby. Die Eingabereihenfolge bleibt innerhalb eines Rasters
- * bzw. Teams stabil; freie Plaetze werden bis zur globalen Raumgrenze immer mit ausgegeben.
+ * Einspaltige Lobby-Projektion: belegte Plaetze und genau eine Einladung bei freier Kapazitaet.
+ * Eingabereihenfolge und Teamzugehoerigkeit bleiben stabil; Leerplaetze sind keine UI-Zeilen.
  */
 export function buildLobbyRosterSlots(
   mode: GameMode,
@@ -28,9 +28,9 @@ export function buildLobbyRosterSlots(
   if (!hasTeamSelection(mode)) {
     const visiblePlayers = players.slice(0, MAX_PLAYERS);
     const inviteIndex = visiblePlayers.length < MAX_PLAYERS ? visiblePlayers.length : -1;
-    return Array.from({ length: MAX_PLAYERS }, (_, index) => ({
-      column: (index % 2) as 0 | 1,
-      row: Math.floor(index / 2),
+    return Array.from({ length: visiblePlayers.length + (inviteIndex >= 0 ? 1 : 0) }, (_, index) => ({
+      column: 0,
+      row: index,
       teamId: null,
       playerId: visiblePlayers[index]?.id ?? null,
       invite: index === inviteIndex,
@@ -41,17 +41,17 @@ export function buildLobbyRosterSlots(
   const red = players.filter((player) => player.teamId === 'red').slice(0, LOBBY_TEAM_CAPACITY);
   const inviteTeam = pickInviteTeam(blue.length, red.length);
 
-  return (['blue', 'red'] as const).flatMap((teamId, column) => {
+  return (['blue', 'red'] as const).flatMap((teamId) => {
     const teamPlayers = teamId === 'blue' ? blue : red;
     const inviteRow = inviteTeam === teamId ? teamPlayers.length : -1;
-    return Array.from({ length: LOBBY_TEAM_CAPACITY }, (_, row) => ({
-      column: column as 0 | 1,
+    return Array.from({ length: teamPlayers.length + (inviteRow >= 0 ? 1 : 0) }, (_, row) => ({
+      column: 0 as const,
       row,
       teamId,
       playerId: teamPlayers[row]?.id ?? null,
       invite: row === inviteRow,
     }));
-  });
+  }).map((slot, row) => ({ ...slot, row }));
 }
 
 /** Kleinere Mannschaft gewinnt; bei Gleichstand deterministisch Blau. */

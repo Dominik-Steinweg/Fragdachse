@@ -2,7 +2,6 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  LOBBY_LAYOUT_GRID,
   LOBBY_SPAWN_FOCUS_CELL,
   LOBBY_WORLD_HEIGHT_CELLS,
   LOBBY_WORLD_WIDTH_CELLS,
@@ -128,10 +127,9 @@ describe('LobbyWorld – Authoring', () => {
 
 describe('LobbyWorld – authored Geometrie', () => {
   const layout = buildLobbyWorldLayout();
-  const rockAt = new Map(layout.rocks.map((rock) => [`${rock.gridX}:${rock.gridY}`, rock]));
 
   it('haelt den FRAGDACHSE-Schriftzug als ganz normalen, zerstoerbaren Fels', () => {
-    // Der Schriftzug steht ueber dem Rahmen, also oberhalb der oberen Rahmenzeile.
+    // Der Schriftzug steht am oberen Rand der authored World.
     const titleRocks = layout.rocks.filter((rock) => rock.gridY >= 1 && rock.gridY <= 5);
     expect(titleRocks.length).toBeGreaterThan(100);
     for (const rock of titleRocks) {
@@ -139,20 +137,8 @@ describe('LobbyWorld – authored Geometrie', () => {
     }
   });
 
-  it('schuetzt ausschliesslich den Rahmen der Lobby-Oberflaeche', () => {
-    const { leftFrameColumn, rightFrameColumn, frameTopRow, frameBottomRow } = LOBBY_LAYOUT_GRID;
-    for (const row of [frameTopRow, frameBottomRow]) {
-      expect(rockAt.get(`${leftFrameColumn}:${row}`)?.indestructible).toBe(true);
-      expect(rockAt.get(`${rightFrameColumn}:${row}`)?.indestructible).toBe(true);
-    }
-    // Jeder geschuetzte Fels liegt auf einer Rahmenzeile oder -spalte; sonst waere die
-    // Unterscheidung zwischen Struktur und Ziel bloss zufaellig.
-    for (const rock of layout.rocks) {
-      if (rock.indestructible !== true) continue;
-      const onFrameRow = rock.gridY === frameTopRow || rock.gridY === frameBottomRow;
-      const onFrameColumn = rock.gridX === leftFrameColumn || rock.gridX === rightFrameColumn;
-      expect(onFrameRow || onFrameColumn, `${rock.gridX}:${rock.gridY}`).toBe(true);
-    }
+  it('enthaelt keine unzerstoerbaren UI-Rahmen mehr', () => {
+    expect(layout.rocks.every(rock => !rock.indestructible)).toBe(true);
   });
 
   it('haelt die zentrale Flaeche fuer die spaetere persistente Basis frei', () => {
@@ -328,14 +314,17 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
   });
 });
 
-describe('LobbyWorld – geschuetzte Struktur nimmt keinen Schaden', () => {
-  it('laesst den Rahmen unversehrt und den Schriftzug zerstoerbar', () => {
-    const layout = buildLobbyWorldLayout();
-    const registry = new RockHpRegistry(layout);
-    const frameId = layout.rocks.findIndex((rock) => rock.indestructible === true);
-    const titleId = layout.rocks.findIndex((rock) => rock.indestructible !== true);
-    expect(frameId).toBeGreaterThanOrEqual(0);
-    expect(titleId).toBeGreaterThanOrEqual(0);
+describe('RockHpRegistry – geschuetzte Struktur nimmt keinen Schaden', () => {
+  it('unterscheidet explizit geschuetzte und zerstoerbare Felsen unabhaengig vom Lobby-Authoring', () => {
+    const registry = new RockHpRegistry({
+      ...buildLobbyWorldLayout(),
+      rocks: [
+        { gridX: 0, gridY: 0, indestructible: true },
+        { gridX: 1, gridY: 0 },
+      ],
+    });
+    const frameId = 0;
+    const titleId = 1;
 
     expect(registry.applyDamage(frameId, ROCK_HP_MAX * 10)).toBe(ROCK_HP_MAX);
     expect(registry.isDestroyed(frameId)).toBe(false);

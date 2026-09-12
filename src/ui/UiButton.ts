@@ -48,6 +48,8 @@ export interface UiButtonOptions {
   /** Nur das Symbol zeigen – fuer Pfeile und Werkzeugknoepfe. */
   iconOnly?: boolean;
   iconSize?: number;
+  /** Selection fields align the value left and the disclosure icon at the right edge. */
+  trailingIcon?: boolean;
   radius?: number;
   onClick?: () => void;
   /**
@@ -345,6 +347,13 @@ export class UiButton {
   /** Zentriert Symbol und Beschriftung gemeinsam – die Beschriftung wechselt zur Laufzeit. */
   private layoutContent(): void {
     const iconVisible = this.iconImage !== null && this.currentIcon !== null;
+    if (this.options.trailingIcon) {
+      this.labelText?.setOrigin(0, 0.5).setPosition(-this.options.w / 2 + SPACE.md, 0)
+        .setWordWrapWidth(this.options.w - SPACE.md * 2 - (iconVisible ? this.iconSize() + SPACE.sm : 0))
+        .setMaxLines(2);
+      this.iconImage?.setPosition(this.options.w / 2 - SPACE.md - this.iconSize() / 2, 0);
+      return;
+    }
     if (!iconVisible) {
       this.labelText?.setOrigin(0.5).setPosition(0, 0);
       return;

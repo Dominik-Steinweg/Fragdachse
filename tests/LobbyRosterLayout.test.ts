@@ -13,9 +13,12 @@ const players = (count: number, teamId: TeamId | null = null, prefix = 'p') =>
 describe('LobbyRosterLayout', () => {
   for (const mode of ['deathmatch', 'coop_defense'] as const satisfies readonly GameMode[]) {
     for (const count of [1, 2, 6, 11, 12]) {
-      it(`${mode} keeps twelve stable slots with ${count} players`, () => {
+      it(`${mode} shows occupied rows and one invitation with ${count} players`, () => {
         const slots = buildLobbyRosterSlots(mode, players(count));
-        expect(slots).toHaveLength(12);
+        expect(slots).toHaveLength(Math.min(count + 1, 12));
+        expect(slots.every(slot => slot.column === 0)).toBe(true);
+        expect(slots.map(slot => slot.row)).toEqual(slots.map((_, index) => index));
+        expect(slots.filter(slot => slot.playerId).map(slot => slot.playerId)).toEqual(players(count).map(p => p.id));
         expect(slots.filter((slot) => slot.playerId !== null)).toHaveLength(count);
         expect(slots.filter((slot) => slot.invite)).toHaveLength(count < 12 ? 1 : 0);
       });
@@ -24,13 +27,17 @@ describe('LobbyRosterLayout', () => {
 
   for (const mode of ['team_deathmatch', 'capture_the_beer'] as const satisfies readonly GameMode[]) {
     for (const [blueCount, redCount] of [[1, 0], [3, 2], [6, 0], [6, 5], [6, 6]] as const) {
-      it(`${mode} lays out ${blueCount} vs ${redCount} in two capped columns`, () => {
+      it(`${mode} groups ${blueCount} vs ${redCount} vertically without empty rows`, () => {
         const slots = buildLobbyRosterSlots(mode, [
           ...players(blueCount, 'blue', 'b'),
           ...players(redCount, 'red', 'r'),
         ]);
-        expect(slots.filter((slot) => slot.teamId === 'blue')).toHaveLength(LOBBY_TEAM_CAPACITY);
-        expect(slots.filter((slot) => slot.teamId === 'red')).toHaveLength(LOBBY_TEAM_CAPACITY);
+        expect(slots.filter(slot => slot.teamId === 'blue' && slot.playerId)).toHaveLength(blueCount);
+        expect(slots.filter(slot => slot.teamId === 'red' && slot.playerId)).toHaveLength(redCount);
+        expect(slots.every(slot => slot.column === 0 && (slot.playerId !== null || slot.invite))).toBe(true);
+        expect(slots.map(slot => slot.row)).toEqual(slots.map((_, index) => index));
+        expect(slots.filter(slot => slot.teamId === 'blue').length).toBeLessThanOrEqual(LOBBY_TEAM_CAPACITY);
+        expect(slots.filter(slot => slot.teamId === 'red').length).toBeLessThanOrEqual(LOBBY_TEAM_CAPACITY);
         expect(slots.filter((slot) => slot.invite)).toHaveLength(blueCount + redCount < 12 ? 1 : 0);
         const invite = slots.find((slot) => slot.invite);
         const expected = blueCount === 6 ? (redCount === 6 ? undefined : 'red') : blueCount <= redCount ? 'blue' : 'red';

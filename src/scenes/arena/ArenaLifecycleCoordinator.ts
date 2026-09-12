@@ -3147,12 +3147,6 @@ export class ArenaLifecycleCoordinator {
 
     this.syncLobbySurface(true);
     this.ctx.leftPanel.setLobbyFieldsLocked(false);
-    const roundResults = bridge.getRoundResults();
-    this.ctx.rightPanel.showRoomStatistics(bridge.getRoomPlayerStatistics());
-    this.ctx.rightPanel.showRoundResults(
-      bridge.isLocalRoundResultEligible(roundResults) ? roundResults : null,
-      bridge.getRoundState(),
-    );
     this.lobbyOverlay.setReadyButtonState(false);
   }
 

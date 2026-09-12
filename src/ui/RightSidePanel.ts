@@ -1,51 +1,29 @@
-/**
- * RightSidePanel – verwaltet den rechten Seitenbereich für beide Spielphasen.
- *
- * Zwei Phaser-Container werden überlagert und via Y-Tween animiert:
- *  - lobbyContainer: Endstand der letzten Runde (Lobby-Phase), startet bei y=0
- *  - gameContainer:  Timer + Killfeed + Leaderboard (Arena-Phase), startet bei y=-GAME_HEIGHT
- *
- * Gleiche Public API wie LeftSidePanel: build(), transitionToGame(), transitionToLobby().
- */
+/** Right-side arena leaderboard and kill feed. Lobby cards have their own presentation. */
 import * as Phaser from 'phaser';
 import {
-  GAME_WIDTH,
-  GAME_HEIGHT,
   ARENA_OFFSET_X,
-  DEFAULT_ARENA_OFFSET_X,
-  LOBBY_SIDE_MENU_WIDTH,
-  DEPTH,
   COLORS,
+  DEFAULT_ARENA_OFFSET_X,
+  DEPTH,
+  GAME_HEIGHT,
+  GAME_WIDTH,
   toCssColor,
 } from '../config';
 import { isCoopDefenseMode } from '../gameModes';
-import { bridge } from '../network/bridge';
-import type { TeamId } from '../types';
-import type { RoomPlayerStatistics, RoundResult, RoundState } from '../network/NetworkBridge';
-import {
-  ensureFlatPanelTexture,
-  ensureGlassColumnTexture,
-  ensureIconTexture,
-  lerpColor,
-} from './uiTextures';
-import { attachHoverEffect } from './uiHover';
-import { getPingColor, TEXT, textStyle } from './uiTheme';
-import { LOBBY_FRAME_BOUNDS } from '../arena/LobbyWorldLayout';
-import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
-import { COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y } from './CoopDefenseSecondaryObjectiveLayout';
-import { formatNumber, getLocale, t } from '../i18n';
+import { getLocale, t } from '../i18n';
 import { getSourceName } from '../i18n/contentPresentation';
 import { getLocalizedTeamLabel } from '../i18n/gameModePresentation';
+import { bridge } from '../network/bridge';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
+import type { TeamId } from '../types';
+import { COOP_DEFENSE_SECONDARY_OBJECTIVE_STACK_BOTTOM_Y } from './CoopDefenseSecondaryObjectiveLayout';
+import { getPingColor, TEXT } from './uiTheme';
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
-const LOBBY_SIDEBAR_CENTER_X = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH / 2;
-const LOBBY_SIDEBAR_LEFT_X   = GAME_WIDTH - LOBBY_SIDE_MENU_WIDTH + 8;
-const LOBBY_SIDEBAR_RIGHT_X  = GAME_WIDTH - 8;
-const LOBBY_PANEL_WIDTH      = LOBBY_SIDE_MENU_WIDTH - 40;
 const ARENA_SIDEBAR_WIDTH    = Math.round(ARENA_OFFSET_X * 1.5);
 const ARENA_SIDEBAR_CENTER_X = GAME_WIDTH - ARENA_SIDEBAR_WIDTH / 2;
 const ARENA_SIDEBAR_LEFT_X   = GAME_WIDTH - ARENA_SIDEBAR_WIDTH + 8;
-const ARENA_SIDEBAR_RIGHT_X  = LOBBY_SIDEBAR_RIGHT_X;
+const ARENA_SIDEBAR_RIGHT_X = GAME_WIDTH - 8;
 
 /**
  * Linke Kante der Arena-Seitenspalte. Exportiert, damit weitere HUD-Elemente davor enden
@@ -53,8 +31,6 @@ const ARENA_SIDEBAR_RIGHT_X  = LOBBY_SIDEBAR_RIGHT_X;
  */
 export const ARENA_SIDEBAR_CONTENT_LEFT_X = ARENA_SIDEBAR_LEFT_X;
 const ARENA_PANEL_WIDTH      = Math.round((DEFAULT_ARENA_OFFSET_X - 40) * 1.5);
-const LOBBY_TOP_OFFSET_Y = 246;
-const RESULTS_EXTRA_OFFSET_Y = 32;
 
 // Killfeed: Namen links/rechts, Waffe zentriert
 const KILLFEED_MAX     = 5;
@@ -78,40 +54,6 @@ const LB_FRAGS_X     = ARENA_SIDEBAR_RIGHT_X - 116;
 const LB_XP_X        = ARENA_SIDEBAR_RIGHT_X - 58;
 const LB_PING_X      = ARENA_SIDEBAR_RIGHT_X;
 
-// Lobby-Endstand
-const RESULTS_HEADER_Y   = 60  + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_SEP_Y      = 94  + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_OUTCOME_Y  = 118 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_LABEL_Y    = 140 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_START_Y    = 162 + LOBBY_TOP_OFFSET_Y + RESULTS_EXTRA_OFFSET_Y;
-const RESULTS_ENTRY_H          = 24;
-const RESULTS_FONT             = '14px'; // einzelne Spielerzeilen
-const RESULTS_HEADER_FONT      = '20px'; // "LETZTE RUNDE"
-// Die Ueberschrift ist zugleich der Knopf, der die Match-Auswertung erneut oeffnet.
-const RESULTS_HEADER_BTN_W     = LOBBY_PANEL_WIDTH;
-const RESULTS_HEADER_BTN_H     = 32;
-const TEX_RESULTS_HEADER_ON    = '_rsp_lastround_neutral_on_v2';
-const TEX_RESULTS_HEADER_OFF   = '_rsp_lastround_neutral_off_v2';
-const RESULTS_TEAM_HEADER_FONT = '16px'; // Team-Summenzeile – größer als Spielerzeilen
-const RESULTS_LABEL_FONT       = '14px';
-const RESULTS_OUTCOME_FONT     = '18px';
-const RESULTS_XP_X             = LOBBY_SIDEBAR_RIGHT_X - 2;
-const RESULTS_FRAGS_X          = RESULTS_XP_X - 72;
-const RESULTS_TEAM_PLAYERS_GAP = 28; // Summary + Separator → erste Spielerzeile
-const RESULTS_SECTION_GAP      = 16; // Abstand: Ende einer Sektion → naechste Team-Summary
-const RESULTS_SUMMARY_SEP_DY   = 14;
-const ROOM_STATS_DAMAGE_X      = RESULTS_XP_X - 58;
-const ROOM_STATS_DEATHS_X      = RESULTS_XP_X;
-const ROOM_STATS_LABEL_FONT    = '12px';
-const ROOM_STATS_EMPTY_FONT    = '14px';
-const ROOM_STATS_SWITCH_W      = 34;
-const ROOM_STATS_SWITCH_H      = 28;
-const ROOM_STATS_SWITCH_X      = LOBBY_SIDEBAR_LEFT_X + ROOM_STATS_SWITCH_W / 2 + 2;
-const ROOM_STATS_SWITCH_Y      = RESULTS_HEADER_Y;
-const TEX_ROOM_STATS_HEADER_ON  = '_rsp_roomstats_neutral_on_v1';
-const TEX_ROOM_STATS_HEADER_OFF = '_rsp_roomstats_neutral_off_v1';
-const TEX_ROOM_STATS_SWITCH     = '_rsp_lobby_view_switch_v1';
-
 // Farbrollen statt eigener Blaugrau-Werte: die frueheren '#607080'/'#8fa8b8'/0x334455 lagen
 // dicht neben der Grau-Rampe, ohne zu ihr zu gehoeren.
 const COLOR_DIM       = toCssColor(TEXT.muted);
@@ -119,14 +61,6 @@ const COLOR_KILLFEED_WEAPON = toCssColor(COLORS.GOLD_1);
 const COLOR_ARENA_FRAGS = toCssColor(COLORS.GREY_2);
 const COLOR_HEADER    = toCssColor(COLORS.GREY_3);
 const COLOR_SEPARATOR = COLORS.GREY_6;
-
-// ── Glasflaeche hinter der Spalte (Gegenstueck zur linken Spalte) ────────────
-// Buendig am Felsrahmen: aussen am Bildrand, oben und unten an den Felszeilen, nach innen
-// zur Felssaeule hin auslaufend.
-const GLASS_X = LOBBY_FRAME_BOUNDS.rightColumnLeft;
-const GLASS_W = GAME_WIDTH - LOBBY_FRAME_BOUNDS.rightColumnLeft;
-const GLASS_Y = LOBBY_FRAME_BOUNDS.top;
-const GLASS_H = LOBBY_FRAME_BOUNDS.bottom - LOBBY_FRAME_BOUNDS.top;
 
 interface KillFeedEntryView {
   killerText: string;
@@ -163,164 +97,73 @@ interface TeamHeaderRow {
   score: Phaser.GameObjects.Text;
 }
 
-interface ResultsTeamHeaderRow extends TeamHeaderRow {
-  separator: Phaser.GameObjects.Rectangle;
-}
-
-interface RoomStatsRow {
-  name: Phaser.GameObjects.Text;
-  damage: Phaser.GameObjects.Text;
-  taken: Phaser.GameObjects.Text;
-}
-
 export class RightSidePanel {
-  private lobbyContainer!: Phaser.GameObjects.Container;
-  private resultsViewContainer!: Phaser.GameObjects.Container;
-  private roomStatsViewContainer!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
-  private arenaOverlayVisible = false;
-  private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
-  // ── Killfeed ──────────────────────────────────────────────────────────────
+  private arenaOverlayVisible = false;
+
+
   private killFeedData: {
     killerName: string; killerColor: number;
     sourceId:   string;
     victimName: string; victimColor: number;
   }[] = [];
 
-  /** 3 Text-Objekte pro Zeile: killer (links), weapon (mitte), victim (rechts) */
   private killFeedRows: {
     killer: Phaser.GameObjects.Text;
     weapon: Phaser.GameObjects.Text;
     victim: Phaser.GameObjects.Text;
   }[] = [];
 
-  // ── Leaderboard (Arena) ───────────────────────────────────────────────────
   private lbRows: {
     name:  Phaser.GameObjects.Text;
     frags: Phaser.GameObjects.Text;
-  }[] = [];  private lbPingRows: Phaser.GameObjects.Text[] = [];
-  private lbTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
-  private leaderboardScoreLabel!: Phaser.GameObjects.Text;
-  private leaderboardXpLabel!: Phaser.GameObjects.Text;
-  private leaderboardSharedXpValue!: Phaser.GameObjects.Text;
-  private leaderboardCache: (LeaderboardEntryView | null)[] = Array.from({ length: 12 }, () => null);
-  private leaderboardInputCache: LeaderboardEntry[] = [];
-  private leaderboardInputMode: string | null = null;
-  private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
-  private readonly cssColorCache = new Map<number, string>();
-
-  // ── Ergebnisse (Lobby) ────────────────────────────────────────────────────
-  private resultsHeader!: Phaser.GameObjects.Text;
-  private resultsHeaderButton!: Phaser.GameObjects.Image;
-  private resultsHeaderLabels!: Phaser.GameObjects.Container;
-  private resultsHeaderHint!: Phaser.GameObjects.Image;
-  private replayResultsHandler: (() => void) | null = null;
-  private replayResultsAvailable = false;
-  private resultsSep!:    Phaser.GameObjects.Rectangle;
-  private resultsOutcome!: Phaser.GameObjects.Text;
-  private resultsOutcomeIcon!: Phaser.GameObjects.Image;
-  private resultsFragsLabel!: Phaser.GameObjects.Text;
-  private resultsXpLabel!: Phaser.GameObjects.Text;
-  private resultsSharedXpValue!: Phaser.GameObjects.Text;
-  private resultsEmptyState!: Phaser.GameObjects.Text;
-  private resultsEmptyIcon!: Phaser.GameObjects.Image;
-  private resultsRows: {
-    name:  Phaser.GameObjects.Text;
-    frags: Phaser.GameObjects.Text;
   }[] = [];
-  private resultsTeamHeaders: Record<TeamId, ResultsTeamHeaderRow> | null = null;
-  private roundResultsSignature: string | null = null;
-  private roomStatsHeader!: Phaser.GameObjects.Text;
-  private roomStatsHeaderButton!: Phaser.GameObjects.Image;
-  private roomStatsHeaderLabels!: Phaser.GameObjects.Container;
-  private roomStatsHeaderHint!: Phaser.GameObjects.Image;
-  private roomStatsDetailHandler: (() => void) | null = null;
-  private roomStatsDetailAvailable = false;
-  private roomStatsSwitchButton!: Phaser.GameObjects.Image;
-  private roomStatsSwitchLabels!: Phaser.GameObjects.Container;
-  private roomStatsRows: RoomStatsRow[] = [];
-  private roomStatsDamageLabel!: Phaser.GameObjects.Text;
-  private roomStatsTakenLabel!: Phaser.GameObjects.Text;
-  private roomStatsEmptyState!: Phaser.GameObjects.Text;
-  private roomStatsInputSignature: string | null = null;
-  private lobbyView: 'results' | 'roomStats' = 'results';
-  private lastRoundResults: RoundResult[] | null = null;
-  private lastRoundState: RoundState | null = null;
-  private lastRoundHasData = false;
+
+  private lbPingRows: Phaser.GameObjects.Text[] = [];
+
+  private lbTeamHeaders: Record<TeamId, TeamHeaderRow> | null = null;
+
+  private leaderboardScoreLabel!: Phaser.GameObjects.Text;
+
+  private leaderboardXpLabel!: Phaser.GameObjects.Text;
+
+  private leaderboardSharedXpValue!: Phaser.GameObjects.Text;
+
+  private leaderboardCache: (LeaderboardEntryView | null)[] = Array.from({ length: 12 }, () => null);
+
+  private leaderboardInputCache: LeaderboardEntry[] = [];
+
+  private leaderboardInputMode: string | null = null;
+
+  private killFeedCache: (KillFeedEntryView | null)[] = Array.from({ length: KILLFEED_MAX }, () => null);
+
+  private readonly cssColorCache = new Map<number, string>();
 
   constructor(private scene: Phaser.Scene) {}
 
-  // ── Einmalig aufzurufen ───────────────────────────────────────────────────
-
-  build(): void {
-    this.buildGameContainer();
-    this.buildLobbyContainer();
-  }
+  build(): void { this.buildGameContainer(); }
 
   refreshLocale(): void {
     this.leaderboardScoreLabel.setText(t('ui.score.frags'));
     this.leaderboardXpLabel.setText(t('ui.score.xp'));
     this.lbTeamHeaders?.blue.label.setText(t('ui.score.teamBlue'));
     this.lbTeamHeaders?.red.label.setText(t('ui.score.teamRed'));
-    this.resultsHeader.setText(t('ui.results.lastRound'));
-    this.roomStatsHeader.setText(t('ui.results.roomStats'));
-    this.resultsFragsLabel.setText(t('ui.score.frags'));
-    this.resultsXpLabel.setText(t('ui.score.xp'));
-    this.resultsEmptyState.setText(t('ui.results.noRound'));
-    this.roomStatsEmptyState.setText(t('ui.results.noPlayers'));
-    this.roomStatsDamageLabel.setText(t('ui.results.damage'));
-    this.roomStatsTakenLabel.setText(t('ui.results.taken'));
     this.renderKillFeed();
     this.syncArenaLabels(this.leaderboardInputCache);
-    this.syncLobbyLabels(this.lastRoundResults);
-    this.renderRoundOutcome(this.lastRoundHasData, this.lastRoundState);
-    this.roomStatsInputSignature = null;
-    if (this.lobbyView === 'roomStats') this.showRoomStatistics(bridge.getRoomPlayerStatistics());
   }
-
-  // ── Transitions ────────────────────────────────────────────────────────────
 
   transitionToGame(): void {
-    this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
-    this.pendingDelay?.remove();
     this.arenaOverlayVisible = false;
-    this.gameContainer.y = -GAME_HEIGHT;
-    this.gameContainer.setVisible(false).setActive(false);
-
-    this.scene.tweens.add({
-      targets:  this.lobbyContainer,
-      y:        GAME_HEIGHT,
-      duration: 350,
-      ease:     'Power2.easeIn',
-    });
-    this.pendingDelay = null;
+    this.gameContainer.setY(-GAME_HEIGHT).setVisible(false).setActive(false);
   }
 
-  transitionToLobby(): void {
-    this.scene.tweens.killTweensOf(this.lobbyContainer);
+  transitionToLobby(): void { this.setArenaOverlayVisible(false); }
+
+  destroy(): void {
     this.scene.tweens.killTweensOf(this.gameContainer);
-    this.pendingDelay?.remove();
-    this.arenaOverlayVisible = false;
-
-    this.scene.tweens.add({
-      targets:  this.gameContainer,
-      y:        -GAME_HEIGHT,
-      duration: 350,
-      ease:     'Power2.easeIn',
-      onComplete: () => this.gameContainer.setVisible(false).setActive(false),
-    });
-
-    this.pendingDelay = this.scene.time.delayedCall(100, () => {
-      this.scene.tweens.add({
-        targets:    this.lobbyContainer,
-        y:          0,
-        duration:   500,
-        ease:       'Back.easeOut',
-        onComplete: () => { this.pendingDelay = null; },
-      });
-    });
+    this.gameContainer.destroy(true);
   }
 
   setArenaOverlayVisible(visible: boolean, immediate = false): void {
@@ -360,15 +203,8 @@ export class RightSidePanel {
     return this.arenaOverlayVisible;
   }
 
-  // ── Daten-Updates ──────────────────────────────────────────────────────────
-
-  /** @deprecated Timer wird jetzt vom CenterHUD verwaltet. */
   updateTimer(_secs: number): void { /* no-op */ }
 
-  /**
-   * Fügt einen Kill oben in den Killfeed ein.
-   * Ältere Einträge rutschen nach unten; überschüssige fallen weg.
-   */
   addKillFeedEntry(
     killerName: string, killerColor: number,
     sourceId:   string,
@@ -379,10 +215,6 @@ export class RightSidePanel {
     if (this.arenaOverlayVisible) this.renderKillFeed();
   }
 
-  /**
-   * Aktualisiert das Arena-Leaderboard.
-   * entries muss bereits absteigend nach Frags sortiert sein.
-   */
   updateLeaderboard(entries: LeaderboardEntry[]): void {
     if (!this.arenaOverlayVisible) return;
     if (this.isLeaderboardInputUnchanged(entries)) return;
@@ -434,184 +266,13 @@ export class RightSidePanel {
     }
   }
 
-  /**
-   * Haengt die Aktion an die Ueberschrift "Letzte Runde". Sie oeffnet die vollstaendige
-   * Match-Auswertung erneut; die Verfuegbarkeit steuert {@link setResultsReplayAvailable}.
-   */
-  setResultsReplayHandler(handler: (() => void) | null): void {
-    this.replayResultsHandler = handler;
-  }
-
-  /** Bereitet die spätere Detailansicht für die Raumstatistik vor. */
-  setRoomStatisticsDetailHandler(handler: (() => void) | null): void {
-    this.roomStatsDetailHandler = handler;
-  }
-
-  /** Schaltet den noch nicht verwendeten Detailknopf der Raumstatistik scharf. */
-  setRoomStatisticsDetailAvailable(available: boolean): void {
-    if (this.roomStatsDetailAvailable === available) return;
-    this.roomStatsDetailAvailable = available;
-    this.roomStatsHeaderButton.setTexture(this.ensureRoomStatsHeaderTexture(available));
-    this.roomStatsHeader.setColor(toCssColor(available ? COLORS.GREY_1 : COLORS.GREY_2));
-    this.roomStatsHeaderHint.setVisible(available);
-    if (available) {
-      this.roomStatsHeaderButton.setInteractive({ useHandCursor: true });
-      return;
-    }
-    this.roomStatsHeaderButton.disableInteractive();
-    this.roomStatsHeaderButton.setScale(1);
-    this.roomStatsHeaderLabels.setScale(1);
-  }
-
-  /** Aktualisiert die raumweite Statistik; die Darstellung bleibt im Lobby-Platz der Ergebnisse. */
-  showRoomStatistics(statistics: RoomPlayerStatistics[]): void {
-    const signature = JSON.stringify(statistics.map((entry) => [
-      entry.id,
-      entry.name,
-      entry.colorHex,
-      entry.teamId,
-      entry.damageDealt,
-      entry.damageTaken,
-    ]));
-    if (signature === this.roomStatsInputSignature) return;
-    this.roomStatsInputSignature = signature;
-
-    const sorted = [...statistics].sort((left, right) => (
-      right.damageDealt - left.damageDealt
-      || right.damageTaken - left.damageTaken
-      || left.name.localeCompare(right.name)
-    ));
-    const hasData = sorted.length > 0;
-    this.roomStatsHeaderButton.setVisible(true);
-    this.roomStatsHeaderLabels.setVisible(true);
-    this.roomStatsEmptyState.setVisible(!hasData);
-
-    for (let index = 0; index < this.roomStatsRows.length; index += 1) {
-      const row = this.roomStatsRows[index];
-      const entry = sorted[index];
-      if (!entry) {
-        row.name.setVisible(false);
-        row.damage.setVisible(false);
-        row.taken.setVisible(false);
-        continue;
-      }
-      row.name
-        .setText(`${index + 1}. ${entry.name}`)
-        .setColor(this.toCachedCssColor(entry.colorHex))
-        .setVisible(true);
-      row.damage.setText(this.formatRoomDamage(entry.damageDealt)).setVisible(true);
-      row.taken.setText(this.formatRoomDamage(entry.damageTaken)).setVisible(true);
-    }
-  }
-
-  private setLobbyView(view: 'results' | 'roomStats'): void {
-    this.lobbyView = view;
-    this.resultsViewContainer.setVisible(view === 'results');
-    this.roomStatsViewContainer.setVisible(view === 'roomStats');
-    if (view === 'roomStats') this.showRoomStatistics(bridge.getRoomPlayerStatistics());
-  }
-
-  /**
-   * Schaltet den Knopf scharf. Ergebnisse im Panel bedeuten nicht automatisch, dass eine
-   * Auswertung vorliegt: Wer erst nach dem Rundenende beitritt, sieht den replizierten
-   * Endstand, hat die Auswertung selbst aber nie durchlaufen.
-   */
-  setResultsReplayAvailable(available: boolean): void {
-    if (this.replayResultsAvailable === available) return;
-    this.replayResultsAvailable = available;
-    this.resultsHeaderButton.setTexture(this.ensureResultsHeaderTexture(available));
-    this.resultsHeader.setColor(toCssColor(available ? COLORS.GREY_1 : COLORS.GREY_2));
-    this.resultsHeaderHint.setVisible(available);
-    if (available) {
-      this.resultsHeaderButton.setInteractive({ useHandCursor: true });
-      return;
-    }
-    this.resultsHeaderButton.disableInteractive();
-    // Wird der Knopf unter dem Zeiger deaktiviert, laeuft kein pointerout mehr —
-    // der vergroesserte Hover-Zustand muss deshalb hier zurueckgesetzt werden.
-    this.resultsHeaderButton.setScale(1);
-    this.resultsHeaderLabels.setScale(1);
-  }
-
-  /**
-   * Zeigt den Endstand der letzten Runde im Lobby-Panel.
-    * Ohne gespeicherte Runde bleibt nur der Leerzustand sichtbar.
-   */
-  showRoundResults(results: RoundResult[] | null, roundState: RoundState | null = null): void {
-    this.lastRoundResults = results;
-    this.lastRoundState = roundState;
-    this.lastRoundHasData = !!results && results.length > 0;
-    const signature = JSON.stringify([
-      bridge.getGameMode(),
-      roundState?.status ?? null,
-      results?.map(result => [
-        result.id,
-        result.name,
-        result.colorHex,
-        result.frags,
-        result.teamId,
-        result.teamScore ?? null,
-        result.sharedXp ?? null,
-      ]) ?? null,
-    ]);
-    if (signature === this.roundResultsSignature) return;
-    this.roundResultsSignature = signature;
-
-    this.syncLobbyLabels(results);
-    if (results && results.some((result) => result.teamId === 'blue' || result.teamId === 'red')) {
-      this.renderGroupedRoundResults(results, roundState);
-      return;
-    }
-
-    const sorted  = results ? this.sortRoundResultsForDisplay(results) : null;
-    const hasData = !!sorted && sorted.length > 0;
-    this.lastRoundHasData = hasData;
-
-    this.resultsTeamHeaders?.blue.label.setVisible(false);
-    this.resultsTeamHeaders?.blue.score.setVisible(false);
-    this.resultsTeamHeaders?.blue.separator.setVisible(false);
-    this.resultsTeamHeaders?.red.label.setVisible(false);
-    this.resultsTeamHeaders?.red.score.setVisible(false);
-    this.resultsTeamHeaders?.red.separator.setVisible(false);
-
-    this.resultsHeaderButton.setVisible(true);
-    this.resultsHeaderLabels.setVisible(true);
-    this.resultsSep.setVisible(true);
-    this.renderRoundOutcome(hasData, roundState);
-    this.resultsFragsLabel.setVisible(hasData);
-    this.resultsEmptyState.setVisible(!hasData);
-    this.resultsEmptyIcon.setVisible(!hasData);
-
-    for (let i = 0; i < this.resultsRows.length; i++) {
-      const row   = this.resultsRows[i];
-      const entry = hasData ? sorted![i] : undefined;
-      if (entry) {
-        row.name.setText(`${i + 1}. ${entry.name}`).setColor(toCssColor(entry.colorHex)).setVisible(true);
-        row.frags.setText(String(this.resolveRoundResultFrags(entry))).setVisible(true);
-      } else {
-        row.name.setVisible(false);
-        row.frags.setVisible(false);
-      }
-    }
-  }
-
-  // ── Zug-Widget-Updates (no-op – jetzt im CenterHUD) ────────────────────────
-
-  /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
   setTrainArrival(_arrivalTimerSecs: number): void { /* no-op */ }
-  /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
+
   updateTrainHP(_hp: number, _maxHp: number): void { /* no-op */ }
-  /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
+
   showTrainDestroyed(): void { /* no-op */ }
-  /** @deprecated Zug-Widget wird jetzt vom CenterHUD verwaltet. */
+
   hideTrainWidget(): void { /* no-op */ }
-
-  destroy(): void {
-    this.lobbyContainer.destroy(true);
-    this.gameContainer.destroy(true);
-  }
-
-  // ── Interne Build-Helfer ──────────────────────────────────────────────────
 
   private buildGameContainer(): void {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
@@ -754,349 +415,6 @@ export class RightSidePanel {
     }
   }
 
-  /**
-   * Flache Knopfflaeche im Stil der uebrigen Menues. Bewusst ohne Glanz: Die Zeile bleibt
-   * zuerst eine Ueberschrift und soll den Blick nicht vom Lobby-Inhalt wegziehen.
-   */
-  private ensureResultsHeaderTexture(enabled: boolean): string {
-    return ensureFlatPanelTexture(
-      this.scene,
-      enabled ? TEX_RESULTS_HEADER_ON : TEX_RESULTS_HEADER_OFF,
-      RESULTS_HEADER_BTN_W,
-      RESULTS_HEADER_BTN_H,
-      COLORS.GREY_8,
-      enabled ? COLORS.GREY_5 : COLORS.GREY_6,
-      { radius: 8, fillAlpha: enabled ? 0.78 : 0.55, strokeAlpha: enabled ? 0.62 : 0.4 },
-    );
-  }
-
-  private ensureRoomStatsHeaderTexture(enabled: boolean): string {
-    return ensureFlatPanelTexture(
-      this.scene,
-      enabled ? TEX_ROOM_STATS_HEADER_ON : TEX_ROOM_STATS_HEADER_OFF,
-      RESULTS_HEADER_BTN_W,
-      RESULTS_HEADER_BTN_H,
-      COLORS.GREY_8,
-      enabled ? COLORS.GREY_5 : COLORS.GREY_6,
-      { radius: 8, fillAlpha: enabled ? 0.78 : 0.55, strokeAlpha: enabled ? 0.62 : 0.4 },
-    );
-  }
-
-  private buildRoomStatsView(): void {
-    const separator = this.scene.add.rectangle(
-      LOBBY_SIDEBAR_CENTER_X,
-      RESULTS_SEP_Y,
-      LOBBY_PANEL_WIDTH,
-      1,
-      COLOR_SEPARATOR,
-      0.8,
-    ).setScrollFactor(0);
-    const damageLabel = this.roomStatsDamageLabel = this.scene.add.text(ROOM_STATS_DAMAGE_X, RESULTS_LABEL_Y, t('ui.results.damage'), {
-      fontSize: ROOM_STATS_LABEL_FONT,
-      fontFamily: 'monospace',
-      color: COLOR_HEADER,
-      fontStyle: 'bold',
-    }).setOrigin(1, 0.5).setScrollFactor(0);
-    const takenLabel = this.roomStatsTakenLabel = this.scene.add.text(ROOM_STATS_DEATHS_X, RESULTS_LABEL_Y, t('ui.results.taken'), {
-      fontSize: ROOM_STATS_LABEL_FONT,
-      fontFamily: 'monospace',
-      color: COLOR_HEADER,
-      fontStyle: 'bold',
-    }).setOrigin(1, 0.5).setScrollFactor(0);
-    this.roomStatsEmptyState = this.scene.add.text(
-      LOBBY_SIDEBAR_CENTER_X,
-      RESULTS_START_Y + 26,
-      t('ui.results.noPlayers'),
-      textStyle('caption', {
-        color: lerpColor(TEXT.muted, COLORS.GREY_3, 0.35),
-        align: 'center',
-        wordWrapWidth: LOBBY_PANEL_WIDTH,
-      }),
-    ).setFontSize(ROOM_STATS_EMPTY_FONT).setOrigin(0.5, 0).setScrollFactor(0).setVisible(false);
-
-    this.roomStatsViewContainer.add([
-      this.roomStatsHeaderButton,
-      this.roomStatsHeaderLabels,
-      separator,
-      damageLabel,
-      takenLabel,
-      this.roomStatsEmptyState,
-    ]);
-
-    for (let index = 0; index < 12; index += 1) {
-      const y = RESULTS_START_Y + index * RESULTS_ENTRY_H;
-      const name = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, y, '', {
-        fontSize: RESULTS_FONT,
-        fontFamily: 'monospace',
-        color: '#ffffff',
-      }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-      const damage = this.scene.add.text(ROOM_STATS_DAMAGE_X, y, '', {
-        fontSize: RESULTS_FONT,
-        fontFamily: 'monospace',
-        color: COLOR_DIM,
-      }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-      const taken = this.scene.add.text(ROOM_STATS_DEATHS_X, y, '', {
-        fontSize: RESULTS_FONT,
-        fontFamily: 'monospace',
-        color: COLOR_DIM,
-      }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-      this.roomStatsViewContainer.add([name, damage, taken]);
-      this.roomStatsRows.push({ name, damage, taken });
-    }
-  }
-
-  private buildLobbyContainer(): void {
-    this.lobbyContainer = this.scene.add.container(0, 0);
-    this.resultsViewContainer = this.scene.add.container(0, 0).setScrollFactor(0);
-    this.roomStatsViewContainer = this.scene.add.container(0, 0).setScrollFactor(0).setVisible(false);
-    // Zuerst eingehaengt: Glasflaeche hinter allem Uebrigen, Gegenstueck zur linken Spalte.
-    this.lobbyContainer.add(
-      this.scene.add.image(
-        GLASS_X + GLASS_W / 2, GLASS_Y + GLASS_H / 2,
-        ensureGlassColumnTexture(this.scene, '_lobby_glass_right', GLASS_W, GLASS_H, COLORS.GREY_9, 'left'),
-      ).setScrollFactor(0),
-    );
-    this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
-    promoteToClarityCamera(this.scene, this.lobbyContainer);
-
-    // ── Endstand-Header (Knopf: oeffnet die Match-Auswertung erneut) ──────────
-    // Beschriftung und Pfeil liegen in einem Container auf der Knopfmitte, damit der
-    // Hover-Effekt sie um ihre eigene Mitte skaliert statt Richtung Bildschirmursprung.
-    this.resultsHeaderButton = this.scene.add.image(
-      LOBBY_SIDEBAR_CENTER_X,
-      RESULTS_HEADER_Y,
-      this.ensureResultsHeaderTexture(false),
-    ).setScrollFactor(0);
-    // Ohne abrufbare Auswertung bleibt der Knopf stumm — sonst verspraeche schon der
-    // Zeigerwechsel eine Aktion, die es nicht gibt. Scharf schaltet ihn erst
-    // `setResultsReplayAvailable()`.
-    this.resultsHeaderButton.on('pointerdown', () => {
-      if (!this.replayResultsAvailable) return;
-      this.replayResultsHandler?.();
-    });
-
-    this.resultsHeader = this.scene.add.text(-10, 0, t('ui.results.lastRound'), textStyle('label'))
-      .setOrigin(0.5, 0.5).setScrollFactor(0);
-    // Gezeichnetes Chevron statt des Zeichens '▸': Textglyphen dieser Art rendern je nach
-    // Schriftfallback unterschiedlich breit und sitzen selten auf der Grundlinie.
-    this.resultsHeaderHint = this.scene.add.image(
-      RESULTS_HEADER_BTN_W / 2 - 16, 0,
-      ensureIconTexture(this.scene, 'chevron-right', 36, COLORS.GREY_2),
-    ).setDisplaySize(14, 14).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
-    this.resultsHeaderLabels = this.scene.add.container(
-      LOBBY_SIDEBAR_CENTER_X,
-      RESULTS_HEADER_Y,
-      [this.resultsHeader, this.resultsHeaderHint],
-    ).setScrollFactor(0);
-
-    attachHoverEffect(this.scene, this.resultsHeaderButton, this.resultsHeaderLabels, {
-      isEnabled: () => this.replayResultsAvailable,
-    });
-
-    this.roomStatsHeaderButton = this.scene.add.image(
-      LOBBY_SIDEBAR_CENTER_X,
-      RESULTS_HEADER_Y,
-      this.ensureRoomStatsHeaderTexture(false),
-    ).setScrollFactor(0);
-    this.roomStatsHeaderButton.on('pointerdown', () => {
-      if (!this.roomStatsDetailAvailable) return;
-      this.roomStatsDetailHandler?.();
-    });
-    this.roomStatsHeader = this.scene.add.text(-10, 0, t('ui.results.roomStats'), textStyle('label'))
-      .setOrigin(0.5, 0.5).setScrollFactor(0);
-    this.roomStatsHeaderHint = this.scene.add.image(
-      RESULTS_HEADER_BTN_W / 2 - 16, 0,
-      ensureIconTexture(this.scene, 'chevron-right', 36, COLORS.GREY_2),
-    ).setDisplaySize(14, 14).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
-    this.roomStatsHeaderLabels = this.scene.add.container(
-      LOBBY_SIDEBAR_CENTER_X,
-      RESULTS_HEADER_Y,
-      [this.roomStatsHeader, this.roomStatsHeaderHint],
-    ).setScrollFactor(0).setVisible(false);
-    attachHoverEffect(this.scene, this.roomStatsHeaderButton, this.roomStatsHeaderLabels, {
-      isEnabled: () => this.roomStatsDetailAvailable,
-    });
-
-    this.roomStatsSwitchButton = this.scene.add.image(
-      ROOM_STATS_SWITCH_X,
-      ROOM_STATS_SWITCH_Y,
-      ensureFlatPanelTexture(
-        this.scene,
-        TEX_ROOM_STATS_SWITCH,
-        ROOM_STATS_SWITCH_W,
-        ROOM_STATS_SWITCH_H,
-        COLORS.GREY_8,
-        COLORS.GREY_5,
-        { radius: 6, fillAlpha: 0.9, strokeAlpha: 0.72 },
-      ),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    this.roomStatsSwitchButton.on('pointerdown', () => {
-      this.setLobbyView(this.lobbyView === 'results' ? 'roomStats' : 'results');
-    });
-    const switchLeft = this.scene.add.image(
-      -7, 0,
-      ensureIconTexture(this.scene, 'chevron-left', 32, COLORS.GREY_2),
-    ).setDisplaySize(10, 10).setOrigin(0.5, 0.5).setScrollFactor(0);
-    const switchRight = this.scene.add.image(
-      7, 0,
-      ensureIconTexture(this.scene, 'chevron-right', 32, COLORS.GREY_2),
-    ).setDisplaySize(10, 10).setOrigin(0.5, 0.5).setScrollFactor(0);
-    this.roomStatsSwitchLabels = this.scene.add.container(
-      ROOM_STATS_SWITCH_X,
-      ROOM_STATS_SWITCH_Y,
-      [switchLeft, switchRight],
-    ).setScrollFactor(0);
-    attachHoverEffect(this.scene, this.roomStatsSwitchButton, this.roomStatsSwitchLabels);
-
-    this.resultsSep = this.scene.add.rectangle(LOBBY_SIDEBAR_CENTER_X, RESULTS_SEP_Y, LOBBY_PANEL_WIDTH, 1, COLOR_SEPARATOR, 0.8,
-    ).setScrollFactor(0) as Phaser.GameObjects.Rectangle;
-
-    this.resultsOutcome = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_OUTCOME_Y, '', {
-      fontSize: RESULTS_OUTCOME_FONT,
-      fontFamily: 'monospace',
-      color: toCssColor(COLORS.GREEN_2),
-      fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-
-    this.resultsOutcomeIcon = this.scene.add.image(
-      LOBBY_SIDEBAR_LEFT_X + 9,
-      RESULTS_OUTCOME_Y,
-      ensureIconTexture(this.scene, 'trophy', 48, COLORS.GREEN_2),
-    ).setDisplaySize(18, 18).setScrollFactor(0).setVisible(false);
-
-    this.resultsFragsLabel = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_LABEL_Y, t('ui.score.frags'), {
-      fontSize: RESULTS_LABEL_FONT,
-      fontFamily: 'monospace',
-      color: COLOR_HEADER,
-      fontStyle: 'bold',
-    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-    this.resultsXpLabel = this.scene.add.text(RESULTS_XP_X, RESULTS_LABEL_Y, t('ui.score.xp'), {
-      fontSize: RESULTS_LABEL_FONT,
-      fontFamily: 'monospace',
-      color: COLOR_HEADER,
-      fontStyle: 'bold',
-    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-    this.resultsSharedXpValue = this.scene.add.text(RESULTS_XP_X, RESULTS_START_Y, '', {
-      fontSize: RESULTS_TEAM_HEADER_FONT,
-      fontFamily: 'monospace',
-      color: toCssColor(COLORS.GOLD_1),
-      fontStyle: 'bold',
-    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-
-    // Leerzustand statt blossem "Noch keine Daten": ein gedaempftes Symbol und eine Zeile, die
-    // erklaert, wann hier etwas steht – sonst liest sich die leere Spalte wie ein Fehler.
-    this.resultsEmptyIcon = this.scene.add.image(
-      LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 18,
-      ensureIconTexture(this.scene, 'trophy', 96, COLORS.GREY_6),
-    ).setDisplaySize(36, 36).setAlpha(0.52).setScrollFactor(0).setVisible(true);
-
-    this.resultsEmptyState = this.scene.add.text(
-      LOBBY_SIDEBAR_CENTER_X, RESULTS_START_Y + 54,
-      t('ui.results.noRound'),
-      textStyle('caption', {
-        color: lerpColor(TEXT.muted, COLORS.GREY_3, 0.35),
-        align: 'center',
-        wordWrapWidth: LOBBY_PANEL_WIDTH,
-      }),
-    ).setOrigin(0.5, 0).setScrollFactor(0).setVisible(true);
-
-    this.resultsViewContainer.add([
-      this.resultsHeaderButton,
-      this.resultsHeaderLabels,
-      this.resultsEmptyIcon,
-      this.resultsSep,
-      this.resultsOutcome,
-      this.resultsOutcomeIcon,
-      this.resultsFragsLabel,
-      this.resultsXpLabel,
-      this.resultsSharedXpValue,
-      this.resultsEmptyState,
-    ]);
-
-    const blueLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, t('ui.score.teamBlue'), {
-      fontSize: RESULTS_TEAM_HEADER_FONT,
-      fontFamily: 'monospace',
-      color: toCssColor(COLORS.BLUE_2),
-      fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    const blueScore = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_START_Y, '', {
-      fontSize: RESULTS_TEAM_HEADER_FONT,
-      fontFamily: 'monospace',
-      color: toCssColor(COLORS.BLUE_2),
-      fontStyle: 'bold',
-    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-    const blueSeparator = this.scene.add.rectangle(
-      LOBBY_SIDEBAR_CENTER_X,
-      RESULTS_START_Y + RESULTS_SUMMARY_SEP_DY,
-      LOBBY_PANEL_WIDTH,
-      1,
-      COLORS.GREY_6,
-      0.48,
-    ).setScrollFactor(0).setVisible(false);
-    const redLabel = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, RESULTS_START_Y, t('ui.score.teamRed'), {
-      fontSize: RESULTS_TEAM_HEADER_FONT,
-      fontFamily: 'monospace',
-      color: toCssColor(COLORS.RED_2),
-      fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    const redScore = this.scene.add.text(RESULTS_FRAGS_X, RESULTS_START_Y, '', {
-      fontSize: RESULTS_TEAM_HEADER_FONT,
-      fontFamily: 'monospace',
-      color: toCssColor(COLORS.RED_2),
-      fontStyle: 'bold',
-    }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-    const redSeparator = this.scene.add.rectangle(
-      LOBBY_SIDEBAR_CENTER_X,
-      RESULTS_START_Y + RESULTS_SUMMARY_SEP_DY,
-      LOBBY_PANEL_WIDTH,
-      1,
-      COLORS.GREY_6,
-      0.48,
-    ).setScrollFactor(0).setVisible(false);
-    this.resultsTeamHeaders = {
-      blue: { label: blueLabel, score: blueScore, separator: blueSeparator },
-      red: { label: redLabel, score: redScore, separator: redSeparator },
-    };
-    this.resultsViewContainer.add([
-      blueLabel,
-      blueScore,
-      blueSeparator,
-      redLabel,
-      redScore,
-      redSeparator,
-    ]);
-
-    // ── Endstand-Einträge (Max. 12 Spieler) ──────────────────────────────────
-    for (let i = 0; i < 12; i++) {
-      const y = RESULTS_START_Y + i * RESULTS_ENTRY_H;
-
-      const nameText = this.scene.add.text(LOBBY_SIDEBAR_LEFT_X, y, '', {
-        fontSize:   RESULTS_FONT,
-        fontFamily: 'monospace',
-        color:      '#ffffff',
-      }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-
-      const fragsText = this.scene.add.text(RESULTS_FRAGS_X, y, '', {
-        fontSize:   RESULTS_FONT,
-        fontFamily: 'monospace',
-        color:      COLOR_DIM,
-      }).setOrigin(1, 0.5).setScrollFactor(0).setVisible(false);
-
-      this.resultsViewContainer.add([nameText, fragsText]);
-      this.resultsRows.push({ name: nameText, frags: fragsText });
-    }
-
-    this.buildRoomStatsView();
-    this.lobbyContainer.add([
-      this.resultsViewContainer,
-      this.roomStatsViewContainer,
-      this.roomStatsSwitchButton,
-      this.roomStatsSwitchLabels,
-    ]);
-  }
-
-  // ── Killfeed-Render ───────────────────────────────────────────────────────
-
   private renderKillFeed(): void {
     for (let i = 0; i < KILLFEED_MAX; i++) {
       const row   = this.killFeedRows[i];
@@ -1156,13 +474,8 @@ export class RightSidePanel {
     return cssColor;
   }
 
-  /** Kürzt einen String auf maxLen Zeichen (hängt … an wenn nötig). */
   private truncate(s: string, maxLen: number): string {
     return s.length <= maxLen ? s : `${s.slice(0, maxLen - 1)}…`;
-  }
-
-  private formatRoomDamage(damage: number): string {
-    return formatNumber(Math.max(0, Math.round(damage)), getLocale());
   }
 
   private renderGroupedLeaderboard(entries: LeaderboardEntry[]): void {
@@ -1206,11 +519,6 @@ export class RightSidePanel {
     }
   }
 
-  /**
-   * Netzwerk- und Hostpfad liefern pro Frame ein neues Array, obwohl Scoreboardwerte meist
-   * unveraendert bleiben. Der kleine lineare Vergleich vermeidet dann Filter-, Sortier- und
-   * Textlayout-Arbeit komplett; kopiert wird nur bei einer echten Aenderung.
-   */
   private isLeaderboardInputUnchanged(entries: LeaderboardEntry[]): boolean {
     const mode = bridge.getGameMode();
     const previous = this.leaderboardInputCache;
@@ -1262,84 +570,6 @@ export class RightSidePanel {
     return rowIndex;
   }
 
-  private renderGroupedRoundResults(results: RoundResult[], roundState: RoundState | null): void {
-    const blueEntries = this.sortRoundResultsForDisplay(results.filter((result) => result.teamId === 'blue'));
-    const redEntries = this.sortRoundResultsForDisplay(results.filter((result) => result.teamId === 'red'));
-    const hasData = blueEntries.length > 0 || redEntries.length > 0;
-    const blueScore = this.resolveGroupedTeamScore(blueEntries);
-    const redScore = this.resolveGroupedTeamScore(redEntries);
-    const sharedXp = this.resolveSharedXp(results);
-    const mode = bridge.getGameMode();
-    const showBlueHeader = blueEntries.length > 0;
-    const showRedHeader = redEntries.length > 0;
-
-    this.resultsHeaderButton.setVisible(true);
-    this.resultsHeaderLabels.setVisible(true);
-    this.resultsSep.setVisible(true);
-    this.renderRoundOutcome(hasData, roundState);
-    this.resultsFragsLabel.setVisible(hasData);
-    this.resultsEmptyState.setVisible(!hasData);
-    this.resultsEmptyIcon.setVisible(!hasData);
-
-    let nextHeaderY = RESULTS_START_Y;
-    const blueHeaderY = nextHeaderY;
-    const blueRowsStartY = blueHeaderY + RESULTS_TEAM_PLAYERS_GAP;
-    if (showBlueHeader) {
-      nextHeaderY = blueRowsStartY + blueEntries.length * RESULTS_ENTRY_H + RESULTS_SECTION_GAP;
-    }
-    const redHeaderY = showBlueHeader ? nextHeaderY : RESULTS_START_Y;
-    const redRowsStartY = redHeaderY + RESULTS_TEAM_PLAYERS_GAP;
-    const summaryXpY = showBlueHeader ? blueHeaderY : redHeaderY;
-
-    this.resultsSharedXpValue
-      .setVisible(this.isDefenseXpMode() && this.hasSharedXpData(results) && hasData)
-      .setText(String(sharedXp))
-      .setPosition(RESULTS_XP_X, summaryXpY);
-    this.resultsTeamHeaders?.blue.label
-      .setVisible(showBlueHeader)
-      .setText(getLocalizedTeamLabel('blue', mode).toUpperCase())
-      .setPosition(LOBBY_SIDEBAR_LEFT_X, blueHeaderY);
-    this.resultsTeamHeaders?.blue.score
-      .setVisible(showBlueHeader)
-      .setText(String(blueScore))
-      .setPosition(RESULTS_FRAGS_X, blueHeaderY);
-    this.resultsTeamHeaders?.blue.separator
-      .setVisible(showBlueHeader)
-      .setPosition(LOBBY_SIDEBAR_CENTER_X, blueHeaderY + RESULTS_SUMMARY_SEP_DY);
-
-    this.resultsTeamHeaders?.red.label
-      .setVisible(showRedHeader)
-      .setText(getLocalizedTeamLabel('red', mode).toUpperCase())
-      .setPosition(LOBBY_SIDEBAR_LEFT_X, redHeaderY);
-    this.resultsTeamHeaders?.red.score
-      .setVisible(showRedHeader)
-      .setText(String(redScore))
-      .setPosition(RESULTS_FRAGS_X, redHeaderY);
-    this.resultsTeamHeaders?.red.separator
-      .setVisible(showRedHeader)
-      .setPosition(LOBBY_SIDEBAR_CENTER_X, redHeaderY + RESULTS_SUMMARY_SEP_DY);
-
-    let rowIndex = 0;
-    rowIndex = this.renderGroupedResultRows(blueEntries, rowIndex, blueRowsStartY);
-    rowIndex = this.renderGroupedResultRows(redEntries, rowIndex, redRowsStartY);
-    for (let i = rowIndex; i < this.resultsRows.length; i++) {
-      this.resultsRows[i].name.setVisible(false);
-      this.resultsRows[i].frags.setVisible(false);
-    }
-  }
-
-  private renderGroupedResultRows(entries: RoundResult[], startRowIndex: number, startY: number): number {
-    let rowIndex = startRowIndex;
-    for (let i = 0; i < entries.length && rowIndex < this.resultsRows.length; i++, rowIndex++) {
-      const row = this.resultsRows[rowIndex];
-      const entry = entries[i];
-      const y = startY + i * RESULTS_ENTRY_H;
-      row.name.setPosition(LOBBY_SIDEBAR_LEFT_X, y).setText(entry.name).setColor(this.toCachedCssColor(entry.colorHex)).setVisible(true);
-      row.frags.setPosition(RESULTS_FRAGS_X, y).setText(String(this.resolveRoundResultFrags(entry))).setVisible(true);
-    }
-    return rowIndex;
-  }
-
   private resolveGroupedTeamScore(entries: Array<{ frags: number; teamScore?: number; sharedXp?: number }>): number {
     const scoredEntry = entries.find((entry) => entry.teamScore !== undefined);
     if (scoredEntry?.teamScore !== undefined) return scoredEntry.teamScore;
@@ -1362,23 +592,7 @@ export class RightSidePanel {
       .setPosition(LB_XP_X, LB_START_Y);
   }
 
-  private syncLobbyLabels(results: RoundResult[] | null): void {
-    const sharedXp = this.resolveSharedXp(results ?? []);
-    const showDefenseXp = this.isDefenseXpMode() && this.hasSharedXpData(results ?? []);
-    this.resultsFragsLabel.setText(t('ui.score.frags')).setPosition(RESULTS_FRAGS_X, RESULTS_LABEL_Y);
-    this.resultsXpLabel.setText(t('ui.score.xp'));
-    this.resultsXpLabel.setVisible(showDefenseXp);
-    this.resultsSharedXpValue
-      .setVisible(showDefenseXp && !!results?.length)
-      .setText(String(sharedXp))
-      .setPosition(RESULTS_XP_X, RESULTS_START_Y);
-  }
-
   private resolveLeaderboardEntryFrags(entry: LeaderboardEntry): number {
-    return Math.max(0, Math.floor(entry.frags));
-  }
-
-  private resolveRoundResultFrags(entry: RoundResult): number {
     return Math.max(0, Math.floor(entry.frags));
   }
 
@@ -1392,36 +606,5 @@ export class RightSidePanel {
 
   private sortLeaderboardEntriesForDisplay(entries: LeaderboardEntry[]): LeaderboardEntry[] {
     return [...entries].sort((a, b) => b.frags - a.frags);
-  }
-
-  private sortRoundResultsForDisplay(results: RoundResult[]): RoundResult[] {
-    return [...results].sort((a, b) => b.frags - a.frags);
-  }
-
-  private renderRoundOutcome(hasData: boolean, roundState: RoundState | null): void {
-    if (!hasData || !roundState || roundState.status === 'active') {
-      this.resultsOutcome.setVisible(false);
-      this.resultsOutcomeIcon.setVisible(false);
-      return;
-    }
-
-    // Ein Host-Abbruch ist kein Spielausgang – daher weder Sieg- noch Niederlagenfarbe.
-    if (roundState.status === 'aborted') {
-      this.resultsOutcomeIcon.setVisible(false);
-      this.resultsOutcome
-        .setText(t('ui.results.hostEnded'))
-        .setColor(toCssColor(COLORS.GREY_3))
-        .setPosition(LOBBY_SIDEBAR_LEFT_X, RESULTS_OUTCOME_Y)
-        .setVisible(true);
-      return;
-    }
-
-    const isVictory = roundState.status === 'victory';
-    this.resultsOutcomeIcon.setVisible(isVictory);
-    this.resultsOutcome
-      .setText(t(isVictory ? 'ui.results.victory' : 'ui.results.defeat'))
-      .setColor(toCssColor(isVictory ? COLORS.GREEN_2 : COLORS.RED_2))
-      .setPosition(LOBBY_SIDEBAR_LEFT_X + (isVictory ? 24 : 0), RESULTS_OUTCOME_Y)
-      .setVisible(true);
   }
 }

@@ -656,7 +656,7 @@ export class ArenaScene extends Phaser.Scene {
         isMatchResultsVisible: () => this.matchResultsOverlay?.isVisible() ?? false,
         setMatchResultsBalanceFeedbackVisible: (visible) => this.matchResultsOverlay?.setBalanceFeedbackVisible(visible),
         showMatchResultsTechnicalAbort: (message) => this.matchResultsOverlay?.showTechnicalAbort(message),
-        setResultsReplayAvailable: (available) => rightPanel.setResultsReplayAvailable(available),
+        setResultsReplayAvailable: (available) => this.lobbyOverlay?.setResultsReplayAvailable(available),
       },
     });
     this.coopDefenseDebugOverlay = new CoopDefenseDebugOverlay(
@@ -769,19 +769,6 @@ export class ArenaScene extends Phaser.Scene {
     this.roomStatisticsOverlay.build();
     this.arenaExitFadeOverlay = new ArenaExitFadeOverlay(this);
     this.arenaExitFadeOverlay.build();
-    rightPanel.setResultsReplayHandler(() => {
-      const presentation = this.meta?.getLastMatchResultsPresentation();
-      const roundEndedAt = presentation?.leaderboard[0]?.roundEndedAt ?? null;
-      this.meta?.replayMatchResults(
-        !!presentation
-        && isCoopDefenseMode(presentation.mode)
-        && roundEndedAt !== null
-        && this.coopDefenseBalanceTracker.hasRound(roundEndedAt),
-      );
-    });
-    rightPanel.setRoomStatisticsDetailHandler(() => {
-      this.roomStatisticsOverlay?.show(bridge.getRoomPlayerStatistics());
-    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.arenaExitFadeOverlay?.destroy();
       this.arenaExitFadeOverlay = null;
@@ -974,6 +961,20 @@ export class ArenaScene extends Phaser.Scene {
         : this.requestLocalLobbyWorldLeave(),
     );
     this.lobbyOverlay.build();
+    this.lobbyOverlay.setResultsReplayHandler(() => {
+      const presentation = this.meta?.getLastMatchResultsPresentation();
+      const roundEndedAt = presentation?.leaderboard[0]?.roundEndedAt ?? null;
+      this.meta?.replayMatchResults(
+        !!presentation
+        && isCoopDefenseMode(presentation.mode)
+        && roundEndedAt !== null
+        && this.coopDefenseBalanceTracker.hasRound(roundEndedAt),
+      );
+    });
+    this.lobbyOverlay.setRoomStatisticsDetailHandler(() => {
+      this.roomStatisticsOverlay?.show(bridge.getRoomPlayerStatistics());
+    });
+
     this.lobbyOverlay.show();
     leftPanel.setLocaleSelectionBinding({
       canChange: () => bridge.getGamePhase() === 'LOBBY',
@@ -1174,7 +1175,7 @@ export class ArenaScene extends Phaser.Scene {
         isCoopDefenseMode: () => isCoopDefenseMode(bridge.getGameMode()),
         canLeaveLocalLobbyWorld: () => this.canLeaveLocalLobbyWorld(),
         requestLocalLobbyWorldLeave: () => this.requestLocalLobbyWorldLeave(),
-        isHotkeyInputBlocked: () => this.ctx.leftPanel.isHotkeyInputBlocked(),
+        isHotkeyInputBlocked: () => (this.ctx.leftPanel.isHotkeyInputBlocked() || this.lobbyOverlay.isHotkeyInputBlocked()),
         isHelpOverlayOpen: () => this.ctx.leftPanel.isHelpOverlayOpen(),
         hideHelpOverlay: () => this.ctx.leftPanel.hideHelpOverlay(),
         isOptionsOverlayOpen: () => this.ctx.leftPanel.isOptionsOverlayOpen(),
@@ -1675,14 +1676,6 @@ export class ArenaScene extends Phaser.Scene {
       this.lobbyOverlay.setRoomQuality(this.roomQualitySnapshot, bridge.isHost());
       this.lobbyOverlay.setTransportDiagnostics(bridge.getWorstTransportDiagnostics());
       this.lobbyOverlay.refreshPlayerList(players);
-      const roundResults = bridge.getRoundResults();
-      const roomStatistics = bridge.getRoomPlayerStatistics();
-      this.ctx.rightPanel.showRoomStatistics(roomStatistics);
-      this.ctx.rightPanel.setRoomStatisticsDetailAvailable(roomStatistics.length > 0);
-      this.ctx.rightPanel.showRoundResults(
-        bridge.isLocalRoundResultEligible(roundResults) ? roundResults : null,
-        bridge.getRoundState(),
-      );
       this.meta?.refreshLobbyProjection();
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       const localId = bridge.getLocalPlayerId();
@@ -1758,7 +1751,7 @@ export class ArenaScene extends Phaser.Scene {
         this.weaponBalanceLabRuntime.update(phase, gameplayActive, delta);
         if (isCoopDefenseMode(configuredGameMode)
           && this.inputBindings?.isCoopDefenseDebugDamageJustDown()
-          && !this.ctx.leftPanel.isHotkeyInputBlocked()
+          && !(this.ctx.leftPanel.isHotkeyInputBlocked() || this.lobbyOverlay.isHotkeyInputBlocked())
           && !countdownActive) {
           this.arenaRuntime.applyDebugBaseDamage(50);
         }

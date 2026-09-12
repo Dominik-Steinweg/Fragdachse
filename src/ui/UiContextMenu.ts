@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { ensureFlatPanelTexture } from './uiTextures';
 import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 /**
  * Kleines Aktionsmenue am Klickpunkt (Ausruesten, Ablegen, Zerlegen ...).
@@ -28,6 +29,8 @@ export interface UiContextMenuOptions {
   readonly y: number;
   readonly title: string;
   readonly titleColor: number;
+  /** Optional explanatory text above the actions, e.g. room connection diagnostics. */
+  readonly description?: string;
   readonly entries: readonly UiContextMenuEntry[];
   readonly onClose?: () => void;
 }
@@ -41,10 +44,16 @@ const ROW_GAP = SPACE.xs;
 export class UiContextMenu {
   private container: Phaser.GameObjects.Container | null = null;
   private onClose: (() => void) | null = null;
+  private readonly parentDestroyed = (): void => this.closeSilently();
+  private readonly escape = (event: KeyboardEvent): void => {
+    event.stopImmediatePropagation();
+    this.close();
+  };
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly parent: Phaser.GameObjects.Container,
+    private readonly standaloneDepth?: number,
   ) {}
 
   isOpen(): boolean {
@@ -57,7 +66,12 @@ export class UiContextMenu {
     this.onClose = options.onClose ?? null;
 
     const width = ROW_W + PADDING * 2;
-    const height = PADDING * 2 + TITLE_H + options.entries.length * (ROW_H + ROW_GAP) - ROW_GAP;
+    const description = options.description
+      ? this.scene.add.text(PADDING, PADDING + TITLE_H, options.description,
+        textStyle('caption', { color: TEXT.primary, wordWrapWidth: ROW_W })).setOrigin(0, 0).setScrollFactor(0)
+      : null;
+    const descriptionH = description ? description.height + SPACE.md : 0;
+    const height = PADDING * 2 + TITLE_H + descriptionH + options.entries.length * (ROW_H + ROW_GAP) - ROW_GAP;
     const x = Phaser.Math.Clamp(options.x, 12, GAME_WIDTH - width - 12);
     const y = Phaser.Math.Clamp(options.y, 12, GAME_HEIGHT - height - 12);
 
@@ -88,8 +102,9 @@ export class UiContextMenu {
       })).setOrigin(0, 0).setScrollFactor(0),
     ];
 
+    if (description) children.push(description);
     options.entries.forEach((entry, index) => {
-      const rowY = PADDING + TITLE_H + index * (ROW_H + ROW_GAP);
+      const rowY = PADDING + TITLE_H + descriptionH + index * (ROW_H + ROW_GAP);
       const enabled = entry.enabled !== false;
       const entryColor = enabled ? entry.color : COLORS.GREY_5;
       const row = this.scene.add.rectangle(PADDING, rowY, ROW_W, ROW_H, SURFACE.raised, enabled ? 0.9 : 0.55)
@@ -118,7 +133,14 @@ export class UiContextMenu {
     });
 
     this.container = this.scene.add.container(x, y, children).setScrollFactor(0);
-    this.parent.add(this.container);
+    if (this.standaloneDepth !== undefined) {
+      this.container.setDepth(this.standaloneDepth);
+      promoteToClarityCamera(this.scene, this.container);
+      this.parent.once('destroy', this.parentDestroyed);
+    } else {
+      this.parent.add(this.container);
+    }
+    this.scene.input.keyboard?.on('keydown-ESC', this.escape);
   }
 
   /** Schliesst das Menue und meldet das dem Aufrufer (z.B. um eine Hervorhebung zuruecknehmen). */
@@ -129,6 +151,8 @@ export class UiContextMenu {
   }
 
   private closeSilently(): void {
+    this.scene.input.keyboard?.off('keydown-ESC', this.escape);
+    this.parent.off('destroy', this.parentDestroyed);
     this.container?.destroy(true);
     this.container = null;
     this.onClose = null;

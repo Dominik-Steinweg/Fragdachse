@@ -1,6 +1,6 @@
 import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
 /**
- * LeftSidePanel – linker Seitenbereich für Lobby- und Arena-Phase.
+ * LeftSidePanel – linkes Arena-HUD und rechts angeordnete Spielerkarte der Lobby.
  *
  * lobbyContainer (y=0):      Namensanzeige, Farbauswahl
  * gameContainer  (y=−H):     ArenaHUD (initial off-screen oben)
@@ -8,32 +8,22 @@ import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
  * Reusability-Template: gleiche Public-API wie RightSidePanel.
  */
 import * as Phaser from 'phaser';
-import type { NetworkBridge } from '../network/NetworkBridge';
 import { GameAudioSystem } from '../audio/GameAudioSystem';
-import { ArenaHUD } from './ArenaHUD';
-import { configureArenaHudLayout } from './ArenaHUD';
-import type { ArenaHUDData } from './ArenaHUD';
 import {
-  GAME_WIDTH,
-  GAME_HEIGHT,
+  COLORS,
   DEFAULT_ARENA_OFFSET_X,
   DEPTH,
-  COLORS,
+  GAME_HEIGHT,
+  GAME_WIDTH,
   PLAYER_COLORS,
-  LOBBY_SIDE_MENU_EXTRA_HEIGHT,
-  LOBBY_SIDE_MENU_WIDTH,
   toCssColor,
 } from '../config';
-import { HelpOverlay } from './HelpOverlay';
-import {
-  OptionsOverlay,
-  type AbortMatchBinding,
-  type LocaleSelectionBinding,
-  type SpectatorMatchBinding,
-  type WorldLeaveBinding,
-} from './OptionsOverlay';
+import { hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
 import type { GraphicsQualityController } from '../graphics/GraphicsQuality';
-import { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../loadout/LoadoutConfig';
+import { toDesignSpace } from '../graphics/RenderResolution';
+import { getLocale, t } from '../i18n';
+import { getLoadoutItemName } from '../i18n/contentPresentation';
+import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import {
   describeLoadoutItem,
   describeLoadoutTool,
@@ -41,88 +31,80 @@ import {
   loadoutToolKey,
   type LoadoutItemRef,
 } from '../loadout/LoadoutCatalog';
-import { LivingBarEffect, paletteFromColor, createGradientTexture, ensureLivingBarTextures } from './LivingBarEffect';
-import { ensureFlatPanelTexture, ensureGlassColumnTexture, ensureRoundedTexture, lerpColor } from './uiTextures';
-import { attachHoverEffect } from './uiHover';
-import { BORDER, FONT_DISPLAY, INTENT, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
-import { getOverlayRoot } from './fullscreen';
-import { BadgerPreview } from './BadgerPreview';
-import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
-import type { CoopDefenseClassId, GameMode, LoadoutSlot, TeamId } from '../types';
-import { hasTeamSelection, isCoopDefenseMode, usesTeamColors } from '../gameModes';
-import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { getLocale, t } from '../i18n';
-import { getMapName } from '../i18n/contentPresentation';
-import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
-import {
-  downloadStoredGameProgress,
-  getStoredCoopDefenseLoadoutSlot,
-  getStoredCoopDefenseProgress,
-  getStoredCoopDefenseUpgradeProfile,
-  getStoredHighestUnlockedCoopDefenseMapId,
-  getStoredLoadoutSlot,
-  getStoredPlayerName,
-  importStoredGameProgressFile,
-  type LocalProgressTransferResult,
-  setStoredCoopDefenseLoadoutSlot,
-  setStoredCoopDefenseUpgradeProfile,
-  setStoredLoadoutSlot,
-  setStoredPlayerName,
-  type CoopDefenseProgressPreferences,
-} from '../utils/localPreferences';
-import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
-import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
-import { UiContextMenu } from './UiContextMenu';
-import { LOBBY_FRAME_BOUNDS, LOBBY_PANEL_WIDTH } from '../arena/LobbyWorldLayout';
+import { DEFAULT_LOADOUT, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import type { NetworkBridge } from '../network/NetworkBridge';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
-import { toDesignSpace } from '../graphics/RenderResolution';
-import { LoadoutSlotPicker, type LoadoutPickerEntry } from './LoadoutSlotPicker';
-import { createLoadoutSlotControl, createLoadoutToolRowControl } from './LoadoutSlotControl';
+import type { CoopDefenseClassId, GameMode, LoadoutSlot, LoadoutToolRef, TeamId } from '../types';
 import {
   getCoopDefenseToolCapacity,
   getLoadoutToolSlots,
   getUnlockedLoadoutToolRefs,
   setLoadoutToolSlots,
 } from '../utils/coopDefenseUpgrades';
-import type { LoadoutToolRef } from '../types';
-import { getLoadoutItemName } from '../i18n/contentPresentation';
-import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
+import {
+  downloadStoredGameProgress,
+  getStoredCoopDefenseLoadoutSlot,
+  getStoredCoopDefenseProgress,
+  getStoredCoopDefenseUpgradeProfile,
+  getStoredLoadoutSlot,
+  getStoredPlayerName,
+  importStoredGameProgressFile,
+  setStoredCoopDefenseLoadoutSlot,
+  setStoredCoopDefenseUpgradeProfile,
+  setStoredLoadoutSlot,
+  setStoredPlayerName,
+  type CoopDefenseProgressPreferences,
+  type LocalProgressTransferResult,
+} from '../utils/localPreferences';
+import { clampPlayerNameInput, PLAYER_NAME_MAX_LENGTH, sanitizePlayerName } from '../utils/playerName';
+import type { ArenaHUDData } from './ArenaHUD';
+import { ArenaHUD, configureArenaHudLayout } from './ArenaHUD';
+import { BadgerPreview } from './BadgerPreview';
+import { getOverlayRoot } from './fullscreen';
+import { HelpOverlay } from './HelpOverlay';
+import {
+  createGradientTexture,
+  ensureLivingBarTextures,
+  LivingBarEffect,
+  paletteFromColor,
+} from './LivingBarEffect';
+import { createLoadoutSlotControl, createLoadoutToolRowControl } from './LoadoutSlotControl';
+import { LoadoutSlotPicker, type LoadoutPickerEntry } from './LoadoutSlotPicker';
+import { LOBBY_CARD, LOBBY_PLAYER_CENTER, LOBBY_PLAYER_CONTENT_LEFT, LOBBY_POPUP_SAFE_AREA } from './LobbyLayout';
+import {
+  OptionsOverlay,
+  type AbortMatchBinding,
+  type LocaleSelectionBinding,
+  type SpectatorMatchBinding,
+  type WorldLeaveBinding,
+} from './OptionsOverlay';
+import { UiContextMenu } from './UiContextMenu';
+import { attachHoverEffect } from './uiHover';
+import { ensureFlatPanelTexture, ensureLobbyPanelTexture, ensureRoundedTexture, lerpColor } from './uiTextures';
+import { BORDER, FONT_DISPLAY, INTENT, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 
-// ── Layout-Konstanten (innerhalb des linken Sidebars) ────────────────────────
-const LOBBY_PANEL_W = LOBBY_SIDE_MENU_WIDTH;
+// ── Layout-Konstanten der rechten Spielerkarte ────────────────────────
+const LOBBY_PANEL_W = LOBBY_CARD.width;
 const ARENA_PANEL_W = Math.round(DEFAULT_ARENA_OFFSET_X * 1.5);
-const CENTER_X     = LOBBY_PANEL_W / 2;
+const CENTER_X = LOBBY_PLAYER_CENTER;
 const ARENA_CENTER_X = ARENA_PANEL_W / 2;
-const LOBBY_TOP_OFFSET_Y = 246;
-const UPPER_INFO_SPACING_STEP = LOBBY_SIDE_MENU_EXTRA_HEIGHT / 8;
-const NAME_LABEL_Y = 60 + LOBBY_TOP_OFFSET_Y;
-const NAME_VALUE_Y = 80 + LOBBY_TOP_OFFSET_Y;
-const EDIT_BTN_Y   = 114 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP;
-const MODE_LABEL_Y = 162 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 2;
-const MODE_ROW_Y   = 180 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 3;
-const MAP_LABEL_Y  = 204 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 4;
-const MAP_ROW_Y    = 222 + LOBBY_TOP_OFFSET_Y + UPPER_INFO_SPACING_STEP * 5;
-const DIVIDER1_Y   = MAP_ROW_Y + 42;
-const BADGER_Y     = DIVIDER1_Y + 58;
-const BADGER_SIZE        = 68;
-const BADGER_CLICK_SIZE  = 76;
-const DIVIDER2_Y         = BADGER_Y + BADGER_SIZE / 2 + 16;
-const CONTROL_BUTTON_DY  = 8;
-const NAME_COLOR_BUTTON_W = 128;
-const NAME_COLOR_BUTTON_H = 28;
-const NAME_COLOR_BUTTON_GAP = 8;
-const NAME_BUTTON_X      = CENTER_X - (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
-const COLOR_BUTTON_X     = CENTER_X + (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
-const NAME_COLOR_ROW_Y   = EDIT_BTN_Y + CONTROL_BUTTON_DY;
-const NAME_MODE_DIVIDER_Y = NAME_COLOR_ROW_Y + NAME_COLOR_BUTTON_H / 2 + 12;
+const NAME_LABEL_Y = 274;
+const NAME_VALUE_Y = 306;
+const BADGER_Y = 448;
+const BADGER_SIZE = 80;
+const BADGER_CLICK_SIZE = 88;
+const DIVIDER2_Y = 510;
+const NAME_COLOR_BUTTON_W = 190;
+const NAME_COLOR_BUTTON_H = 36;
+const NAME_COLOR_BUTTON_GAP = 12;
+const NAME_BUTTON_X = CENTER_X - (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
+const COLOR_BUTTON_X = CENTER_X + (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
+const NAME_COLOR_ROW_Y = 368;
+const NAME_MODE_DIVIDER_Y = 398;
 const CONTROL_LABEL_OFFSET_Y = 1.5;
-const ARROW_BUTTON_W     = 24;
-const ARROW_BUTTON_H     = 24;
+const ARROW_BUTTON_W = 24;
+const ARROW_BUTTON_H = 24;
 const TEAM_SELECT_ARROW_OFFSET_X = NAME_COLOR_BUTTON_W / 2 - ARROW_BUTTON_W / 2;
-const TIME_SLIDER_TRACK_W = 192;
-const TIME_SLIDER_TRACK_X = CENTER_X - TIME_SLIDER_TRACK_W / 2;
-const TIME_SLIDER_TRACK_Y = MAP_ROW_Y + 8;
-const TIME_SLIDER_STEP_MINUTES = 15;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_PADDING  = 10;
@@ -132,7 +114,7 @@ const PICKER_COLS     = 4;
 const PICKER_GRID_W    = PICKER_COLS * SWATCH_SIZE + (PICKER_COLS - 1) * SWATCH_GAP;
 const PICKER_W        = PICKER_PADDING * 2 + PICKER_GRID_W;
 const PICKER_H        = 148;
-const PICKER_WORLD_X  = (LOBBY_PANEL_W - PICKER_W) / 2;
+const PICKER_WORLD_X = LOBBY_CARD.right + (LOBBY_PANEL_W - PICKER_W) / 2;
 const PICKER_WORLD_Y  = NAME_COLOR_ROW_Y + NAME_COLOR_BUTTON_H / 2 + 10;
 const PICKER_GRID_Y   = 30;   // Y-Start des Gitters innerhalb des Popups
 const TEX_SWATCH_PREFIX = '__picker_swatch_';
@@ -140,39 +122,21 @@ const TEX_SWATCH_PREFIX = '__picker_swatch_';
 /** Sektionsbeschriftung ueber einem Bedienfeld – gesperrt und gedaempft, damit der Wert traegt. */
 const LABEL_FONT = textStyle('section');
 const NAME_FONT = textStyle('title', { color: COLORS.GREY_1 });
-/** Ausgewaehlter Wert eines Karussells (Modus, Map, Loadout-Slot). */
-const VALUE_FONT = textStyle('body', { color: TEXT.primary });
 
-// ── Glasflaeche hinter der Spalte ────────────────────────────────────────────
-// Ohne sie steht der Text direkt auf dem Gras der Menuevorschau. Die Flaeche schliesst buendig
-// an den Felsrahmen an: aussen am Bildrand, oben unter der oberen Felszeile, unten an der
-// unteren, und nach innen laeuft sie zur Felssaeule hin aus. Kanten aus `LOBBY_FRAME_BOUNDS`,
-// damit sie dem Raster der Vorschau folgen statt eigener Schaetzwerte.
-const GLASS_X = 0;
-const GLASS_W = LOBBY_FRAME_BOUNDS.leftColumnRight;
-const GLASS_Y = LOBBY_FRAME_BOUNDS.top;
-const GLASS_H = LOBBY_FRAME_BOUNDS.bottom - LOBBY_FRAME_BOUNDS.top;
+// ── Player card surface ────────────────────────────────────────────
+const GLASS_X = LOBBY_CARD.right;
+const GLASS_W = LOBBY_CARD.width;
+const GLASS_Y = LOBBY_CARD.top;
+const GLASS_H = LOBBY_CARD.height;
 
 // ── Loadout-Karussell-Konstanten ──────────────────────────────────────────────
 const CAROUSEL_START_Y  = DIVIDER2_Y + 18;
-const CAROUSEL_ROW_STEP = 50;
-const CAROUSEL_GROUP_DY = 46;
-const LOADOUT_CONTROL_W = LOBBY_PANEL_W - 40;
-const LOADOUT_CONTROL_H = 38;
-const LOADOUT_POPUP_MARGIN = 12;
-const LOADOUT_POPUP_SAFE_AREA = {
-  left: LOADOUT_POPUP_MARGIN,
-  top: LOADOUT_POPUP_MARGIN,
-  right: GAME_WIDTH / 2 - LOBBY_PANEL_WIDTH / 2 - LOADOUT_POPUP_MARGIN,
-  bottom: GAME_HEIGHT - LOADOUT_POPUP_MARGIN,
-} as const;
+const CAROUSEL_ROW_STEP = 60;
+const CAROUSEL_GROUP_DY = 44;
+const LOADOUT_CONTROL_W = LOBBY_CARD.contentWidth;
+const LOADOUT_CONTROL_H = 48;
+const LOADOUT_POPUP_SAFE_AREA = LOBBY_POPUP_SAFE_AREA;
 
-// ── Hilfe-Button unter Loadout ────────────────────────────────────────────────
-const ARROW_X_LEFT      = 20;
-const ARROW_X_RIGHT     = LOBBY_PANEL_W - 20;
-const ITEM_NAME_X       = CENTER_X;
-
-const MODE_OPTIONS: readonly GameMode[] = ['deathmatch', 'team_deathmatch', 'capture_the_beer', 'coop_defense'];
 const TEAM_OPTIONS: readonly TeamId[] = ['blue', 'red'];
 
 function getTeamLabel(teamId: TeamId | null): string {
@@ -218,26 +182,12 @@ export class LeftSidePanel {
   private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
   private playerLabelText!: Phaser.GameObjects.Text;
-  private gameModeLabelText!: Phaser.GameObjects.Text;
   private loadoutLabelText!: Phaser.GameObjects.Text;
   private saveMenu: UiContextMenu | null = null;
   private saveStatusText: Phaser.GameObjects.Text | null = null;
   private saveStatusTimer: Phaser.Time.TimerEvent | null = null;
   private editBtn:         Phaser.GameObjects.Image | null = null;
   private editBtnLabel:    Phaser.GameObjects.Text | null = null;
-  private modeNameText:    Phaser.GameObjects.Text | null = null;
-  private modeArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
-  private mapLabelText:    Phaser.GameObjects.Text | null = null;
-  private mapNameText:     Phaser.GameObjects.Text | null = null;
-  private mapArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
-  private timeSliderLabel: Phaser.GameObjects.Text | null = null;
-  private timeSliderTrack: Phaser.GameObjects.Rectangle | null = null;
-  private timeSliderFill: Phaser.GameObjects.Rectangle | null = null;
-  private timeSliderThumb: Phaser.GameObjects.Arc | null = null;
-  private timeSliderHitArea: Phaser.GameObjects.Rectangle | null = null;
-  private timeSliderDragging = false;
-  private timeSliderPointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
-  private timeSliderPointerUpHandler: (() => void) | null = null;
   private colorEditBtn:   Phaser.GameObjects.Image | null = null;
   private colorEditText:   Phaser.GameObjects.Text | null = null;
   private teamArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
@@ -315,12 +265,12 @@ export class LeftSidePanel {
     objects.push(
       this.scene.add.image(
         GLASS_X + GLASS_W / 2, GLASS_Y + GLASS_H / 2,
-        ensureGlassColumnTexture(this.scene, '_lobby_glass_left', GLASS_W, GLASS_H, COLORS.GREY_9, 'right'),
+        ensureLobbyPanelTexture(this.scene, '_lobby_player_card', GLASS_W, GLASS_H, COLORS.GREY_8, BORDER.default),
       ).setScrollFactor(0),
     );
 
-    this.playerLabelText = this.scene.add.text(CENTER_X, NAME_LABEL_Y, t('ui.lobby.player').toUpperCase(), LABEL_FONT)
-      .setOrigin(0.5, 0)
+    this.playerLabelText = this.scene.add.text(LOBBY_PLAYER_CONTENT_LEFT, NAME_LABEL_Y, t('ui.lobby.player').toUpperCase(), LABEL_FONT)
+      .setOrigin(0, 0)
       .setScrollFactor(0);
     objects.push(this.playerLabelText);
 
@@ -361,144 +311,9 @@ export class LeftSidePanel {
     objects.push(colorEditBtn.button, colorEditBtn.label);
 
     objects.push(
-      this.scene.add.rectangle(CENTER_X, NAME_MODE_DIVIDER_Y, LOBBY_PANEL_W - 40, 1, COLORS.GREY_6, 0.5)
+      this.scene.add.rectangle(CENTER_X, NAME_MODE_DIVIDER_Y, LOBBY_CARD.contentWidth, 1, COLORS.GREY_6, 0.5)
         .setScrollFactor(0),
     );
-
-    this.gameModeLabelText = this.scene.add.text(CENTER_X, MODE_LABEL_Y, t('ui.lobby.gameMode'), LABEL_FONT)
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0);
-    objects.push(this.gameModeLabelText);
-
-    const modeLeftBtn = this.createChevronButton(
-      ARROW_X_LEFT,
-      MODE_ROW_Y + CONTROL_BUTTON_DY,
-      'left',
-      () => this.stepGameMode(-1),
-    );
-    objects.push(modeLeftBtn.button, modeLeftBtn.label);
-
-    const modeNameText = this.scene.add.text(ITEM_NAME_X, MODE_ROW_Y, '', {
-      ...VALUE_FONT,
-    }).setOrigin(0.5, 0).setScrollFactor(0);
-    this.modeNameText = modeNameText;
-    objects.push(modeNameText);
-
-    const modeRightBtn = this.createChevronButton(
-      ARROW_X_RIGHT,
-      MODE_ROW_Y + CONTROL_BUTTON_DY,
-      'right',
-      () => this.stepGameMode(+1),
-    );
-    objects.push(modeRightBtn.button, modeRightBtn.label);
-    this.modeArrowButtons = { left: modeLeftBtn, right: modeRightBtn };
-
-    const mapLabelText = this.scene.add.text(CENTER_X, MAP_LABEL_Y, t('ui.lobby.map'), LABEL_FONT)
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0);
-    this.mapLabelText = mapLabelText;
-    objects.push(mapLabelText);
-
-    const mapLeftBtn = this.createChevronButton(
-      ARROW_X_LEFT,
-      MAP_ROW_Y + CONTROL_BUTTON_DY,
-      'left',
-      () => this.stepCoopDefenseMap(-1),
-    );
-    objects.push(mapLeftBtn.button, mapLeftBtn.label);
-
-    const mapNameText = this.scene.add.text(ITEM_NAME_X, MAP_ROW_Y, '', {
-      ...VALUE_FONT,
-    }).setOrigin(0.5, 0).setScrollFactor(0);
-    this.mapNameText = mapNameText;
-    objects.push(mapNameText);
-
-    const mapRightBtn = this.createChevronButton(
-      ARROW_X_RIGHT,
-      MAP_ROW_Y + CONTROL_BUTTON_DY,
-      'right',
-      () => this.stepCoopDefenseMap(+1),
-    );
-    objects.push(mapRightBtn.button, mapRightBtn.label);
-    this.mapArrowButtons = { left: mapLeftBtn, right: mapRightBtn };
-
-    const timeSliderLabel = this.scene.add.text(
-      CENTER_X,
-      MAP_LABEL_Y,
-      t('ui.lobby.time', { time: formatTimeOfDay(this.bridge.getLobbyTimeOfDayMinutes()) }),
-      LABEL_FONT,
-    )
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0);
-    this.timeSliderLabel = timeSliderLabel;
-    objects.push(timeSliderLabel);
-
-    const timeSliderTrack = this.scene.add.rectangle(
-      TIME_SLIDER_TRACK_X,
-      TIME_SLIDER_TRACK_Y,
-      TIME_SLIDER_TRACK_W,
-      7,
-      COLORS.GREY_8,
-      0.95,
-    ).setOrigin(0, 0.5).setStrokeStyle(1, COLORS.GREY_6, 0.8).setScrollFactor(0);
-    this.timeSliderTrack = timeSliderTrack;
-    objects.push(timeSliderTrack);
-
-    const timeSliderFill = this.scene.add.rectangle(
-      TIME_SLIDER_TRACK_X,
-      TIME_SLIDER_TRACK_Y,
-      1,
-      5,
-      COLORS.BLUE_4,
-      0.9,
-    ).setOrigin(0, 0.5).setScrollFactor(0);
-    this.timeSliderFill = timeSliderFill;
-    objects.push(timeSliderFill);
-
-    const timeSliderThumb = this.scene.add.circle(
-      TIME_SLIDER_TRACK_X,
-      TIME_SLIDER_TRACK_Y,
-      7,
-      COLORS.GREY_3,
-      1,
-    ).setStrokeStyle(1, COLORS.BLUE_2, 1).setScrollFactor(0);
-    this.timeSliderThumb = timeSliderThumb;
-    objects.push(timeSliderThumb);
-
-    const timeSliderHitArea = this.scene.add.rectangle(
-      TIME_SLIDER_TRACK_X,
-      TIME_SLIDER_TRACK_Y,
-      TIME_SLIDER_TRACK_W,
-      28,
-      0x000000,
-      0,
-    ).setOrigin(0, 0.5).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-    timeSliderHitArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (!this.isTimeSliderEnabled()) return;
-      this.timeSliderDragging = true;
-      this.applyTimeSliderPointer(pointer.x);
-    });
-    this.timeSliderHitArea = timeSliderHitArea;
-    objects.push(timeSliderHitArea);
-
-    this.timeSliderPointerMoveHandler = (pointer: Phaser.Input.Pointer) => {
-      if (this.timeSliderDragging) this.applyTimeSliderPointer(pointer.x);
-    };
-    this.timeSliderPointerUpHandler = () => {
-      this.timeSliderDragging = false;
-    };
-    this.scene.input.on('pointermove', this.timeSliderPointerMoveHandler);
-    this.scene.input.on('pointerup', this.timeSliderPointerUpHandler);
-
-    // ── Trennlinie ──
-    const divider = this.scene.add.graphics();
-    divider.lineStyle(1, COLORS.GREY_6, 0.5);
-    divider.beginPath();
-    divider.moveTo(20, DIVIDER1_Y);
-    divider.lineTo(LOBBY_PANEL_W - 20, DIVIDER1_Y);
-    divider.strokePath();
-    divider.setScrollFactor(0);
-    objects.push(divider);
 
     // ── Dachs-Vorschau als Farbindikator ──
     // Invisible click zone (sprite itself is not in lobbyContainer — it's world-space for preFX)
@@ -533,15 +348,15 @@ export class LeftSidePanel {
     const divider2 = this.scene.add.graphics();
     divider2.lineStyle(1, COLORS.GREY_6, 0.5);
     divider2.beginPath();
-    divider2.moveTo(20, DIVIDER2_Y);
-    divider2.lineTo(LOBBY_PANEL_W - 20, DIVIDER2_Y);
+    divider2.moveTo(LOBBY_PLAYER_CONTENT_LEFT, DIVIDER2_Y);
+    divider2.lineTo(LOBBY_PLAYER_CONTENT_LEFT + LOBBY_CARD.contentWidth, DIVIDER2_Y);
     divider2.strokePath();
     divider2.setScrollFactor(0);
     objects.push(divider2);
 
     // ── Loadout-Karussell ──
-    this.loadoutLabelText = this.scene.add.text(CENTER_X, CAROUSEL_START_Y, t('ui.lobby.loadout').toUpperCase(), LABEL_FONT)
-      .setOrigin(0.5, 0)
+    this.loadoutLabelText = this.scene.add.text(LOBBY_PLAYER_CONTENT_LEFT, CAROUSEL_START_Y, t('ui.lobby.loadout').toUpperCase(), LABEL_FONT)
+      .setOrigin(0, 0)
       .setScrollFactor(0);
     objects.push(this.loadoutLabelText);
 
@@ -551,8 +366,8 @@ export class LeftSidePanel {
 
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
-    this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer);
-    this.loadoutPicker = new LoadoutSlotPicker(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 2);
+    this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 3);
+    this.loadoutPicker = new LoadoutSlotPicker(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 2, true);
 
     // BadgerPreview (world-space, separate from container for preFX support)
     this.badgerPreview = new BadgerPreview(
@@ -626,12 +441,9 @@ export class LeftSidePanel {
   refreshLocale(): void {
     this.arenaHUD?.refreshLocale();
     this.playerLabelText?.setText(t('ui.lobby.player').toUpperCase());
-    this.gameModeLabelText?.setText(t('ui.lobby.gameMode'));
     this.loadoutLabelText?.setText(t('ui.lobby.loadout').toUpperCase());
     this.editBtnLabel?.setText(t('ui.lobby.editName'));
     this.colorEditText?.setText(t('ui.lobby.editColor'));
-    this.mapLabelText?.setText(t('ui.lobby.map'));
-    this.timeSliderLabel?.setText(t('ui.lobby.time', { time: formatTimeOfDay(this.bridge.getLobbyTimeOfDayMinutes()) }));
     this.helpOverlay?.build();
     this.optionsOverlay?.setLocaleSelectionBinding(this.localeSelectionBinding);
     this.renderLoadoutControls();
@@ -806,14 +618,8 @@ export class LeftSidePanel {
       this.badgerPreview?.setColor(color);
       this.localNameText?.setColor(toCssColor(color));
     }
-    this.modeNameText?.setText(getLocalizedGameModeLabel(mode));
-    this.mapNameText?.setText(isCoopDefenseMode(mode)
-      ? getMapName(this.bridge.getCoopDefenseMapId(), getLocale())
-      : '---');
     this.syncAllLoadoutSelections();
     this.refreshBadgerHeldItem();
-    this.updateModeSelectorState();
-    this.updateMapSelectorState(mode);
     this.updateTeamSelectorState(mode, teamId);
   }
 
@@ -830,7 +636,6 @@ export class LeftSidePanel {
       );
       this.badgerPreview.setRotation(angle);
     }
-    this.refreshTimeSlider();
   }
 
   /** Aktualisiert den Picker live, solange er offen ist (jeden Lobby-Frame). */
@@ -871,21 +676,10 @@ export class LeftSidePanel {
     this.updateNameEditButtonVisibility();
     this.updateColorEditState();
     this.updateLoadoutArrowVisibility();
-    this.updateModeSelectorState();
-    this.updateMapSelectorState(this.bridge.getGameMode());
     this.updateTeamSelectorState(this.bridge.getGameMode(), this.bridge.getPlayerTeam(this.bridge.getLocalPlayerId()));
   }
 
   destroy(): void {
-    if (this.timeSliderPointerMoveHandler) {
-      this.scene.input.off('pointermove', this.timeSliderPointerMoveHandler);
-      this.timeSliderPointerMoveHandler = null;
-    }
-    if (this.timeSliderPointerUpHandler) {
-      this.scene.input.off('pointerup', this.timeSliderPointerUpHandler);
-      this.timeSliderPointerUpHandler = null;
-    }
-    this.timeSliderDragging = false;
     this.closeNameEditPopup();
     this.saveStatusTimer?.remove();
     this.saveStatusTimer = null;
@@ -1362,7 +1156,7 @@ export class LeftSidePanel {
     // NAME_VALUE_Y sind Designkoordinaten (siehe `graphics/RenderResolution`).
     const scaleX = canvasRect.width / GAME_WIDTH;
     const scaleY = canvasRect.height / GAME_HEIGHT;
-    const popupLeft = canvasRect.left + (CENTER_X + 80) * scaleX;
+    const popupLeft = canvasRect.left + LOBBY_PLAYER_CONTENT_LEFT * scaleX;
     const popupTop  = canvasRect.top  + NAME_VALUE_Y * scaleY;
 
     const popup = document.createElement('div');
@@ -1609,28 +1403,7 @@ export class LeftSidePanel {
     this.renderLoadoutControls();
   }
 
-  private stepGameMode(delta: -1 | 1): void {
-    if (this.lobbyFieldsLocked || !this.bridge.isHost()) return;
-    const currentMode = this.bridge.getGameMode();
-    const currentIndex = MODE_OPTIONS.indexOf(currentMode);
-    const nextIndex = (currentIndex + delta + MODE_OPTIONS.length) % MODE_OPTIONS.length;
-    this.bridge.setGameMode(MODE_OPTIONS[nextIndex]);
-    this.refreshColorIndicator();
-  }
-
   /** Blaettert nur durch die lokal freigeschalteten Maps – gesperrte Maps sind nicht erreichbar. */
-  private stepCoopDefenseMap(delta: -1 | 1): void {
-    const mode = this.bridge.getGameMode();
-    if (this.lobbyFieldsLocked || !this.bridge.isHost() || !isCoopDefenseMode(mode)) return;
-    const selectableMaps = getUnlockedCoopDefenseMapConfigs(getStoredHighestUnlockedCoopDefenseMapId());
-    if (selectableMaps.length === 0) return;
-    const currentMapId = this.bridge.getCoopDefenseMapId();
-    const currentIndex = selectableMaps.findIndex((mapConfig) => mapConfig.mapId === currentMapId);
-    const normalizedIndex = currentIndex >= 0 ? currentIndex : 0;
-    const nextIndex = (normalizedIndex + delta + selectableMaps.length) % selectableMaps.length;
-    this.bridge.setCoopDefenseMapId(selectableMaps[nextIndex].mapId);
-    this.refreshColorIndicator();
-  }
 
   private stepTeam(delta: -1 | 1): void {
     if (!hasTeamSelection(this.bridge.getGameMode())) return;
@@ -1643,78 +1416,6 @@ export class LeftSidePanel {
     void this.bridge.requestTeamChange(TEAM_OPTIONS[nextIndex]).then((changed) => {
       if (changed) this.refreshColorIndicator();
     });
-  }
-
-  private updateModeSelectorState(): void {
-    const isHost = this.bridge.isHost();
-    const enabled = !this.lobbyFieldsLocked && isHost;
-    const alpha = enabled ? 1 : 0.35;
-    if (this.modeArrowButtons) {
-      this.setCompactButtonState(this.modeArrowButtons.left, isHost, enabled, alpha);
-      this.setCompactButtonState(this.modeArrowButtons.right, isHost, enabled, alpha);
-    }
-  }
-
-  private updateMapSelectorState(mode: GameMode): void {
-    const isHost = this.bridge.isHost();
-    const showMapSelector = isCoopDefenseMode(mode);
-    const enabled = showMapSelector && !this.lobbyFieldsLocked && isHost;
-    const alpha = enabled ? 1 : 0.35;
-
-    this.mapLabelText?.setVisible(showMapSelector);
-    if (this.mapArrowButtons) {
-      this.setCompactButtonState(this.mapArrowButtons.left, showMapSelector && isHost, enabled, alpha);
-      this.setCompactButtonState(this.mapArrowButtons.right, showMapSelector && isHost, enabled, alpha);
-    }
-    this.mapNameText?.setVisible(showMapSelector).setAlpha(1);
-
-    const showTimeHeader = !showMapSelector;
-    const showTimeSlider = showTimeHeader && isHost;
-    const timeEnabled = showTimeSlider && !this.lobbyFieldsLocked;
-    const timeAlpha = timeEnabled ? 1 : 0.42;
-    this.timeSliderLabel?.setVisible(showTimeHeader).setAlpha(showTimeHeader ? 1 : 0);
-    this.timeSliderTrack?.setVisible(showTimeSlider).setAlpha(timeAlpha);
-    this.timeSliderFill?.setVisible(showTimeSlider).setAlpha(timeAlpha);
-    this.timeSliderThumb?.setVisible(showTimeSlider).setAlpha(timeAlpha);
-    this.timeSliderHitArea?.setVisible(showTimeSlider);
-    if (timeEnabled) this.timeSliderHitArea?.setInteractive({ useHandCursor: true });
-    else this.timeSliderHitArea?.disableInteractive();
-    if (!timeEnabled) this.timeSliderDragging = false;
-    this.refreshTimeSlider();
-  }
-
-  private isTimeSliderEnabled(): boolean {
-    return !this.lobbyFieldsLocked
-      && this.bridge.isHost()
-      && !isCoopDefenseMode(this.bridge.getGameMode());
-  }
-
-  private refreshTimeSlider(): void {
-    const minutes = this.bridge.getLobbyTimeOfDayMinutes();
-    const fraction = minutes / MINUTES_PER_DAY;
-    this.timeSliderLabel?.setText(t('ui.lobby.time', { time: formatTimeOfDay(minutes) }));
-    this.timeSliderFill?.setDisplaySize(Math.max(1, TIME_SLIDER_TRACK_W * fraction), 5);
-    this.timeSliderThumb?.setPosition(
-      TIME_SLIDER_TRACK_X + TIME_SLIDER_TRACK_W * fraction,
-      TIME_SLIDER_TRACK_Y,
-    );
-  }
-
-  private applyTimeSliderPointer(pointerX: number): void {
-    if (!this.isTimeSliderEnabled()) return;
-    const fraction = Phaser.Math.Clamp(
-      (pointerX - TIME_SLIDER_TRACK_X) / TIME_SLIDER_TRACK_W,
-      0,
-      1,
-    );
-    const maxStep = Math.floor((MINUTES_PER_DAY - TIME_SLIDER_STEP_MINUTES) / TIME_SLIDER_STEP_MINUTES);
-    const step = Phaser.Math.Clamp(
-      Math.round(fraction * maxStep),
-      0,
-      maxStep,
-    );
-    this.bridge.setLobbyTimeOfDayMinutes(step * TIME_SLIDER_STEP_MINUTES);
-    this.refreshTimeSlider();
   }
 
   private updateTeamSelectorState(mode: GameMode, teamId: TeamId | null): void {

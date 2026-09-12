@@ -183,7 +183,6 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
     expect(overlay).toContain("label: t('ui.lobby.returnToLobby')");
     expect(overlay).toContain('private testAreaBtn:');
     expect(overlay).toContain('private worldExitBtn:');
-    expect(overlay).toContain('COOP_ACTION_ROW_W');
     expect(overlay).toContain('const showEntry = this.visible && !this.worldEntryInside;');
     expect(overlay).toContain('showEntry && this.worldEntryAvailable && this.worldEntryEnabled');
     expect(overlay).toContain('const showExit = this.worldEntryAvailable && this.worldEntryInside;');
@@ -540,7 +539,10 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     setAlpha(alpha: number) { this.alpha = alpha; return this; }
     setY(y: number) { this.y = y; return this; }
     setVisible(visible: boolean) { this.visible = visible; return this; }
-    add(children: DisplayObject[]) { this.children.push(...children); return this; }
+    add(children: DisplayObject | DisplayObject[]) {
+      this.children.push(...(Array.isArray(children) ? children : [children]));
+      return this;
+    }
     setScrollFactor() { return this; }
     setOrigin() { return this; }
     setText() { return this; }
@@ -744,6 +746,32 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     overlay.show();
     expect(tweens.add).toHaveBeenCalledOnce();
     expect(tweens.add.mock.calls[0][0]).toMatchObject({ targets: container, alpha: 1, y: 0 });
+  });
+
+  it('zeigt beide Ergebnisaktionen gemeinsam erst bei verfuegbarer Rundenauswertung', () => {
+    const { overlay } = overlayFixture();
+    overlay.replayBtn = new DisplayObject();
+    overlay.statisticsBtn = new DisplayObject();
+    overlay.setResultsReplayAvailable(false);
+    expect(overlay.replayBtn.visible).toBe(false);
+    expect(overlay.statisticsBtn.visible).toBe(false);
+    overlay.setResultsReplayAvailable(true);
+    expect(overlay.replayBtn.visible).toBe(true);
+    expect(overlay.statisticsBtn.visible).toBe(true);
+    overlay.setResultsReplayAvailable(false);
+    expect(overlay.replayBtn.visible).toBe(false);
+    expect(overlay.statisticsBtn.visible).toBe(false);
+  });
+
+  it('sperrt offene Raumeinstellungen auch beim autoritativen Rundenstart', () => {
+    const { overlay } = overlayFixture();
+    overlay.readyBtn = new DisplayObject();
+    overlay.settings = { setLocked: vi.fn() };
+    overlay.progress = { setReady: vi.fn() };
+    overlay.updateRoomActionButtons = vi.fn();
+    overlay.lockButton();
+    expect(overlay.settings.setLocked).toHaveBeenCalledWith(true);
+    expect(overlay.progress.setReady).toHaveBeenCalledWith(true, false);
   });
 });
 

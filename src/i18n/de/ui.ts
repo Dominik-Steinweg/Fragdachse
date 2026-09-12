@@ -25,6 +25,8 @@ export const deUi = {
   "ui.common.later": "Später entscheiden",
   "ui.lobby.player": "Spieler",
   "ui.lobby.room": "Raum",
+  "ui.lobby.title": "Lobby",
+  "ui.lobby.netDetails": "Technische Details",
   "ui.lobby.ready": "BEREIT",
   "ui.lobby.notReady": "NICHT BEREIT",
   "ui.lobby.waitingForPlayers": "Warte auf Mitspieler …",

@@ -3,6 +3,7 @@ import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { ensureFlatPanelTexture, lerpColor } from './uiTextures';
 import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
+import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 
 /** Ein waehlbarer Eintrag im Auswahl-Popup. */
 export interface LoadoutPickerEntry {
@@ -39,6 +40,11 @@ export interface LoadoutPickerOptions {
   readonly groups: readonly LoadoutPickerGroup[];
   /** Ueberschreibt die gemeinsame Spaltenobergrenze fuer spezielle Einbettungen. */
   readonly maxColumns?: number;
+  /** Explicit grid geometry for compact room settings; loadout defaults are unchanged. */
+  readonly columns?: number;
+  readonly entryWidth?: number;
+  readonly entryHeight?: number;
+  readonly centeredLabels?: boolean;
   /** Optionale sichere Overlay-Zone; das Popup bleibt mit seiner ganzen Flaeche darin. */
   readonly safeArea?: LoadoutPickerSafeArea;
   /** Optionale "Slot leeren"-Aktion; nur fuer Slots, die leer bleiben duerfen. */
@@ -71,11 +77,17 @@ interface RowVisualState {
  */
 export class LoadoutSlotPicker {
   private container: Phaser.GameObjects.Container | null = null;
+  private readonly parentDestroyed = (): void => this.close();
+  private readonly escape = (event: KeyboardEvent): void => {
+    event.stopImmediatePropagation();
+    this.close();
+  };
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly parent: Phaser.GameObjects.Container,
     private readonly depth: number,
+    private readonly standalone = false,
   ) {}
 
   isOpen(): boolean {
@@ -83,6 +95,8 @@ export class LoadoutSlotPicker {
   }
 
   close(): void {
+    this.parent.off('destroy', this.parentDestroyed);
+    this.scene.input.keyboard?.off('keydown-ESC', this.escape);
     this.container?.destroy(true);
     this.container = null;
   }
@@ -95,8 +109,12 @@ export class LoadoutSlotPicker {
     if (totalEntries === 0) return;
 
     const maxColumns = Math.max(1, Math.floor(options.maxColumns ?? DEFAULT_MAX_COLUMNS));
-    const columns = Math.min(maxColumns, Math.max(1, Math.ceil(Math.sqrt(totalEntries))));
-    const bodyW = columns * ENTRY_W + (columns - 1) * ENTRY_GAP;
+    const columns = options.columns === undefined
+      ? Math.min(maxColumns, Math.max(1, Math.ceil(Math.sqrt(totalEntries))))
+      : Math.max(1, Math.floor(options.columns));
+    const entryW = options.entryWidth ?? ENTRY_W;
+    const entryH = options.entryHeight ?? ENTRY_H;
+    const bodyW = columns * entryW + (columns - 1) * ENTRY_GAP;
     const width = bodyW + PADDING * 2;
 
     let cursorY = PADDING + TITLE_H;
@@ -116,11 +134,11 @@ export class LoadoutSlotPicker {
         const entry = group.entries[index];
         const column = index % columns;
         const row = Math.floor(index / columns);
-        const x = PADDING + column * (ENTRY_W + ENTRY_GAP);
-        const y = cursorY + row * (ENTRY_H + ENTRY_GAP);
-        rows.push(() => this.buildEntry(children, entry, x, y));
+        const x = PADDING + column * (entryW + ENTRY_GAP);
+        const y = cursorY + row * (entryH + ENTRY_GAP);
+        rows.push(() => this.buildEntry(children, entry, x, y, entryW, entryH, options.centeredLabels ?? false));
       }
-      cursorY += groupRows * (ENTRY_H + ENTRY_GAP) + 4;
+      cursorY += groupRows * (entryH + ENTRY_GAP) + 4;
     }
 
     if (options.clearLabel && options.onClear) {
@@ -176,7 +194,15 @@ export class LoadoutSlotPicker {
     this.container = this.scene.add.container(x, y, [backdrop, background, title, ...children])
       .setDepth(this.depth)
       .setScrollFactor(0);
-    this.parent.add(this.container);
+    if (this.standalone) {
+      // Lobby cards, personal progression and the badger preview have separate roots.
+      // A modal must block all of them, rather than inherit one card's lower depth.
+      promoteToClarityCamera(this.scene, this.container);
+      this.parent.once('destroy', this.parentDestroyed);
+    } else {
+      this.parent.add(this.container);
+    }
+    this.scene.input.keyboard?.on('keydown-ESC', this.escape);
   }
 
   private buildEntry(
@@ -184,6 +210,9 @@ export class LoadoutSlotPicker {
     entry: LoadoutPickerEntry,
     x: number,
     y: number,
+    width: number,
+    height: number,
+    centered: boolean,
   ): void {
     const restState: RowVisualState = {
       fillColor: entry.selected ? entry.accentColor : COLORS.GREY_8,
@@ -203,7 +232,7 @@ export class LoadoutSlotPicker {
       strokeAlpha: entry.selected ? 0.9 : 0.78,
       labelColor: entry.selected ? COLORS.GREY_1 : lerpColor(COLORS.GREY_1, 0xffffff, 0.08),
     };
-    const background = this.scene.add.rectangle(x, y, ENTRY_W, ENTRY_H, restState.fillColor, restState.fillAlpha)
+    const background = this.scene.add.rectangle(x, y, width, height, restState.fillColor, restState.fillAlpha)
       .setOrigin(0, 0)
       .setStrokeStyle(restState.strokeWidth, restState.strokeColor, restState.strokeAlpha)
       .setScrollFactor(0)
@@ -213,7 +242,7 @@ export class LoadoutSlotPicker {
     if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
       const textureKey = getLoadoutIconTextureKey(this.scene, entry.textureKey);
       children.push(fitLoadoutIcon(
-        this.scene.add.image(x + 6 + ICON_SIZE / 2, y + ENTRY_H / 2, textureKey),
+        this.scene.add.image(x + 6 + ICON_SIZE / 2, y + height / 2, textureKey),
         ICON_SIZE,
         ICON_SIZE,
       )
@@ -221,10 +250,11 @@ export class LoadoutSlotPicker {
         .setAlpha(entry.disabled ? 0.45 : 1));
     }
 
-    const label = this.scene.add.text(x + SPACE.md + ICON_SIZE, y + ENTRY_H / 2, entry.displayName, textStyle(
+    const labelX = centered ? width / 2 : SPACE.md + (entry.textureKey ? ICON_SIZE : 0);
+    const label = this.scene.add.text(x + labelX, y + height / 2, entry.displayName, textStyle(
       entry.selected ? 'labelSm' : 'caption',
-      { color: restState.labelColor!, wordWrapWidth: ENTRY_W - ICON_SIZE - SPACE.md - SPACE.sm },
-    )).setOrigin(0, 0.5).setScrollFactor(0);
+      { color: restState.labelColor!, wordWrapWidth: width - (centered ? SPACE.md : labelX + SPACE.sm) },
+    )).setOrigin(centered ? 0.5 : 0, 0.5).setScrollFactor(0);
     children.push(label);
 
     if (entry.disabled) return;

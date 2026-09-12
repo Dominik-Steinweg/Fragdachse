@@ -26,14 +26,8 @@ import { createOrganicDirtMargin } from './OrganicDirtMargin';
  * ausschliesslich ihr **Authoring** - sie beschreibt, was in der Lobby steht, und kennt weder
  * Phaser noch Netzwerk noch Runtime.
  *
- * Zwei Gameplay-Rollen bleiben dabei ausdruecklich unterscheidbar:
- *
- * - Der Felsrahmen um die Lobby-Oberflaeche traegt das Layout und bleibt geschuetzt
- *   ({@link RockCell.indestructible}). Er ist Struktur, kein Ziel.
- * - Der FRAGDACHSE-Schriftzug und die Landschaftsfelsen sind ganz normale Felsen. Sobald die
- *   LobbyWorld Kampf erlaubt, zerlegt sie dieselbe World-Destruction wie jede andere World.
- *
- * Die zentrale Flaeche unter dem Lobby-Panel bleibt bewusst frei: dort erscheint spaeter die
+ * Schriftzug und Landschaftsfelsen sind normale, zerstoerbare World-Objekte.
+ * Die zentrale Flaeche bleibt bewusst frei: dort erscheint spaeter die
  * persistente Basis. Sie wird hier nicht vorbereitet und nicht reserviert.
  */
 
@@ -91,18 +85,6 @@ function points<T extends RockCell | TreeCell | DirtCell>(
 function line(fromX: number, toX: number, gridY: number): DirtCell[] {
   const result: DirtCell[] = [];
   for (let gridX = fromX; gridX <= toX; gridX += 1) result.push({ gridX, gridY });
-  return result;
-}
-
-function rockRow(fromX: number, toX: number, gridY: number): RockCell[] {
-  const result: RockCell[] = [];
-  for (let gridX = fromX; gridX <= toX; gridX += 1) result.push({ gridX, gridY });
-  return result;
-}
-
-function rockColumn(fromY: number, toY: number, gridX: number): RockCell[] {
-  const result: RockCell[] = [];
-  for (let gridY = fromY; gridY <= toY; gridY += 1) result.push({ gridX, gridY });
   return result;
 }
 
@@ -441,49 +423,9 @@ const RIGHT_OVERLAY_BORDER_X = GRID_COLS - 11;
 const RIGHT_OVERLAY_INFO_MIN_X = RIGHT_OVERLAY_BORDER_X + 1;
 
 /**
- * Breite des zentralen Lobby-Panels.
- *
- * Steht hier und nicht in der Oberflaeche, weil die Lobby-Geometrie exakt seinen Grundriss als
- * Freiflaeche benutzt. Zwei getrennte Zahlen wuerden bei der naechsten Aenderung auseinanderlaufen.
- */
-export const LOBBY_PANEL_WIDTH = 832;
-
-/**
- * Gitterbezugspunkte der Lobby-Oberflaeche. Wer den Rahmen verschiebt, verschiebt damit auch
- * jede daraus abgeleitete Flaeche.
- */
-export const LOBBY_LAYOUT_GRID = {
-  cols: GRID_COLS,
-  rows: GRID_ROWS,
-  /** Senkrechte Felssaeule links bzw. rechts. */
-  leftFrameColumn: LEFT_OVERLAY_BORDER_X,
-  rightFrameColumn: RIGHT_OVERLAY_BORDER_X,
-  /** Waagerechte Rahmenzeilen. */
-  frameTopRow: OVERLAY_BORDER_TOP_Y,
-  frameBottomRow: OVERLAY_BORDER_BOTTOM_Y,
-} as const;
-
-/**
- * Weltkoordinaten der Flaeche, die der Felsrahmen fuer die Lobby-Oberflaeche freilaesst.
- *
- * Der Rahmen besteht aus Felszellen im 32-px-Raster, die Lobby rechnet in Pixeln. Alle
- * Lobby-Flaechen leiten ihre Kanten hieraus ab, statt die Umrechnung je UI-Datei nachzubilden.
- */
-export const LOBBY_FRAME_BOUNDS = {
-  top: DEFAULT_ARENA_OFFSET_Y + (OVERLAY_BORDER_TOP_Y + 1) * CELL_SIZE,
-  bottom: DEFAULT_ARENA_OFFSET_Y + OVERLAY_BORDER_BOTTOM_Y * CELL_SIZE,
-  outerTop: DEFAULT_ARENA_OFFSET_Y + OVERLAY_BORDER_TOP_Y * CELL_SIZE,
-  outerBottom: DEFAULT_ARENA_OFFSET_Y + (OVERLAY_BORDER_BOTTOM_Y + 1) * CELL_SIZE,
-  /** Innenkante der linken Spalte: dort beginnt die senkrechte Felssaeule. */
-  leftColumnRight: LEFT_OVERLAY_BORDER_X * CELL_SIZE,
-  /** Innenkante der rechten Spalte: dort endet die senkrechte Felssaeule. */
-  rightColumnLeft: RIGHT_OVERLAY_INFO_MIN_X * CELL_SIZE,
-} as const;
-
-/**
  * Freiflaechen fuer die Lobby-Oberflaeche.
  *
- * Die mittlere Zone traegt das Lobby-Panel und bleibt vollstaendig frei - sie ist zugleich die
+ * Die mittlere Zone bleibt vollstaendig frei - sie ist zugleich die
  * Flaeche, auf der spaeter die persistente Basis erscheint.
  */
 const overlayClearZones: readonly GridRect[] = [
@@ -496,8 +438,8 @@ const leftOverlayInfoQuietZone = overlayClearZones[0];
 const rightOverlayInfoQuietZone = overlayClearZones[2];
 
 /**
- * Flaechen, die von der Lobby-Oberflaeche belegt sind: die beiden Seitenmenues und das
- * Mittelpanel. Dort entsteht weder Geometrie noch Bodendetail.
+ * Authored Ruhezonen der Landschaft und zentrale Reserve fuer die persistente Basis.
+ * Dort entsteht weder Geometrie noch Bodendetail. Sie definieren keine UI-Kartenmasse.
  */
 const LOBBY_UI_RESERVED_ZONES: readonly GridRect[] = [
   leftOverlayInfoQuietZone,
@@ -521,7 +463,7 @@ export function isLobbyUiReservedCell(gridX: number, gridY: number): boolean {
  * Sie sind begehbar – wer das Testgelaende betritt, darf dort laufen. Nur starten soll niemand
  * hinter einem Seitenmenue, weil seine Figur dort dauerhaft verdeckt waere.
  *
- * Die Mittelflaeche traegt zwar das Lobby-Panel, ist aber ausdruecklich **keine** Spawn-Sperre:
+ * Die Mittelflaeche ist ausdruecklich **keine** Spawn-Sperre:
  * Wer die World betritt, verlaesst damit die Lobby-Oberflaeche, und das Panel ist fuer ihn
  * ausgeblendet. Als Geometrie-Reserve ({@link LOBBY_UI_RESERVED_ZONES}) bleibt sie zugleich die
  * grosse Freiflaeche der World – genau deshalb taugt sie als zentraler Startpunkt.
@@ -549,15 +491,6 @@ export const LOBBY_SPAWN_FOCUS_CELL = {
 } as const;
 
 // -- Authored Geometrie ------------------------------------------------------
-
-const frameRocks: RockCell[] = mergeUnique<RockCell>(
-  rockRow(0, LEFT_OVERLAY_BORDER_X, OVERLAY_BORDER_TOP_Y),
-  rockRow(0, LEFT_OVERLAY_BORDER_X, OVERLAY_BORDER_BOTTOM_Y),
-  rockColumn(OVERLAY_BORDER_TOP_Y, OVERLAY_BORDER_BOTTOM_Y, LEFT_OVERLAY_BORDER_X),
-  rockRow(RIGHT_OVERLAY_BORDER_X, GRID_COLS - 1, OVERLAY_BORDER_TOP_Y),
-  rockRow(RIGHT_OVERLAY_BORDER_X, GRID_COLS - 1, OVERLAY_BORDER_BOTTOM_Y),
-  rockColumn(OVERLAY_BORDER_TOP_Y, OVERLAY_BORDER_BOTTOM_Y, RIGHT_OVERLAY_BORDER_X),
-).map((cell) => ({ ...cell, indestructible: true }));
 
 /** Der Schriftzug ist gewoehnlicher Fels: er faellt der normalen World-Destruction zu. */
 const titleRocks: RockCell[] = textRocks(TITLE_TEXT, TITLE_START_X, 1, TITLE_GAP);
@@ -620,11 +553,8 @@ const titleDirtClearZone: GridRect = {
 
 const dirtQuietZones: readonly GridRect[] = [rightOverlayInfoQuietZone, overlayClearZones[1]];
 
-/**
- * Reihenfolge zaehlt: `mergeUnique` behaelt den ersten Treffer, und der geschuetzte Rahmen
- * steht vorn. Ein Schriftzugfels an derselben Zelle waere sonst still unzerstoerbar.
- */
-const lobbyRocks: RockCell[] = mergeUnique<RockCell>(frameRocks, titleRocks, ambientRocks);
+/** Authored title and landscape rocks remain destructible world objects. */
+const lobbyRocks: RockCell[] = mergeUnique<RockCell>(titleRocks, ambientRocks);
 
 const lobbyTrees: TreeCell[] = excludeRectCells(
   points<TreeCell>([[1, 4], [12, 18], [15, 31], [57, 4], [47, 17], [46, 25], [51, 31]]),

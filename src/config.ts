@@ -564,10 +564,6 @@ export const DEPTH_AIM = DEPTH.CANOPY - 0.4;
 export const DEPTH_LIGHTING = DEPTH.CANOPY - 0.5;
 
 // ---- Prozedurales Arena-Grid ----
-/** Lobby side menus extend two grid cells farther toward the screen centre than the arena HUD. */
-export const LOBBY_SIDE_MENU_WIDTH = DEFAULT_ARENA_OFFSET_X + CELL_SIZE * 2;
-/** The lobby rock frames gain one grid row at their lower edge. */
-export const LOBBY_SIDE_MENU_EXTRA_HEIGHT = CELL_SIZE;
 export let GRID_COLS             = Math.floor(ARENA_WIDTH  / CELL_SIZE); // 45 / 135
 export let GRID_ROWS              = Math.floor(ARENA_HEIGHT / CELL_SIZE); // 33
 /** Aktuelle Coop-Breite: 60 Rasterzellen entsprechen der 1920-px-Designbreite. */
