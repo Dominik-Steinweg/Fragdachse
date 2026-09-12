@@ -17,6 +17,35 @@ const x = metrics.offsetX + (cell.gridX + .5) * CELL_SIZE;
 const y = metrics.offsetY + (cell.gridY + .5) * CELL_SIZE;
 
 describe('Water terrain contracts', () => {
+  it.each([1, -1])('slides diagonally along a bank without losing tangential speed (%s)', direction => {
+    const water = new WaterGeometry(Array.from({ length: 8 }, (_, i) => ({ gridX: 8, gridY: 5 + i })), metrics);
+    const out = { x: 0, y: 0, vx: 0, vy: 0 };
+    const left = x - CELL_SIZE / 2;
+    expect(water.slideCircle(left - 40, y, left + 80, y + direction * 40, 12, 120, direction * 40, out)).toBe(true);
+    expect(out.x).toBeCloseTo(left - 12, 3);
+    expect(out.y).toBeCloseTo(y + direction * 40);
+    expect(out.vx).toBe(0);
+    expect(out.vy).toBe(direction * 40);
+    expect(water.isCircleBlocked(out.x, out.y, 12)).toBe(false);
+  });
+
+  it('uses round body corners and sweeps the slide against a second bank', () => {
+    const water = new WaterGeometry([cell], metrics);
+    const out = { x: 0, y: 0, vx: 0, vy: 0 };
+    const left = x - CELL_SIZE / 2, top = y - CELL_SIZE / 2;
+    expect(water.slideCircle(left - 10, top - 10, left - 8, top - 10, 12, 2, 0, out)).toBe(false);
+    expect(out.x).toBe(left - 8);
+    const corner = new WaterGeometry([
+      ...Array.from({ length: 8 }, (_, i) => ({ gridX: 8, gridY: 5 + i })),
+      ...Array.from({ length: 4 }, (_, i) => ({ gridX: 5 + i, gridY: 10 })),
+    ], metrics);
+    corner.slideCircle(left - 40, y, left + 300, y + 300, 12, 300, 300, out);
+    expect(out.x).toBeLessThanOrEqual(left - 12);
+    expect(out.y).toBeLessThanOrEqual(metrics.offsetY + 10 * CELL_SIZE - 12);
+    expect(corner.isCircleBlocked(out.x, out.y, 12)).toBe(false);
+    expect(Math.hypot(out.vx, out.vy)).toBeCloseTo(0);
+  });
+
   it('blocks ground clearance and swept motion without entering shot obstacle traversal', () => {
     const water = new WaterGeometry([cell], metrics);
     const index = new ArenaObstacleIndex({ bounds: () => ({ offsetX: metrics.offsetX, offsetY: metrics.offsetY,

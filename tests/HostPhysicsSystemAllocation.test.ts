@@ -184,7 +184,9 @@ function createBurrowDashHarness(blocked: () => boolean = () => false) {
 }
 
 describe('Water physics lifetime', () => {
-  it.each([false, true])('sweeps players and enemies across water while burrowed=%s', burrowed => {
+  it.each([{ burrowed: false, tangent: 0 }, { burrowed: true, tangent: 0 },
+    { burrowed: false, tangent: 12 }, { burrowed: true, tangent: 12 }])(
+    'sweeps players and enemies while burrowed=$burrowed, retaining tangent=$tangent', ({ burrowed, tangent }) => {
     const h = createHarness();
     const m = resolveActiveArenaWorldMetrics();
     const cell = { gridX: 5, gridY: 5 };
@@ -197,8 +199,9 @@ describe('Water physics lifetime', () => {
     for (const b of bodies) {
       const body = b as any;
       Object.assign(body, { enable: true, halfWidth: 8, halfHeight: 8,
-        prev: { x: left - 80, y: cy - 8 }, center: { x: left + 100, y: cy },
-        position: { x: left + 92, y: cy - 8, set(x: number, y: number) { this.x = x; this.y = y; } },
+        velocity: { x: 180, y: tangent },
+        prev: { x: left - 80, y: cy - 8 }, center: { x: left + 100, y: cy + tangent },
+        position: { x: left + 92, y: cy - 8 + tangent, set(x: number, y: number) { this.x = x; this.y = y; } },
         updateCenter() { this.center.x = this.position.x + 8; this.center.y = this.position.y + 8; } });
     }
     h.players.set(player.id, player); h.enemies.set(enemy.id, enemy);
@@ -207,7 +210,11 @@ describe('Water physics lifetime', () => {
     const on = h.scene.physics.world.on as ReturnType<typeof vi.fn>;
     const step = on.mock.calls[0][1];
     step();
-    for (const b of bodies) expect((b as any).center.x + 8).toBeLessThanOrEqual(left);
+    for (const b of bodies) {
+      expect((b as any).center.x + 8).toBeLessThanOrEqual(left);
+      expect((b as any).center.y).toBeCloseTo(cy + tangent);
+      expect(b.setVelocity).toHaveBeenCalledWith(0, tangent);
+    }
     const world = h.scene.physics.world;
     // The Arcade plugin clears its World before later Scene SHUTDOWN callbacks.
     (h.scene.physics as any).world = null;
@@ -583,7 +590,7 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     }
   });
 
-  it('applies corner assistance only to the normal input path', () => {
+  it.each(['rocks', 'water'])('applies the same corner assistance to normal input near %s', terrain => {
     const { system, players, getPlayerInput } = createHarness();
     const metrics = resolveActiveArenaWorldMetrics();
     const player1 = createMockPlayer(
@@ -595,7 +602,10 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     getPlayerInput.mockReturnValue({ dx: 1, dy: 1 });
 
     system.setWorldMetrics(metrics);
-    system.setMovementBlockedCellResolver((gridX, gridY) => (
+    if (terrain === 'water') system.setWaterGeometry(new WaterGeometry([
+      { gridX: 1, gridY: 1 }, { gridX: 1, gridY: 0 },
+    ], metrics));
+    else system.setMovementBlockedCellResolver((gridX, gridY) => (
       (gridX === 1 && gridY === 1) || (gridX === 1 && gridY === 0)
     ));
     system.setRunSpeedResolver(() => 100);

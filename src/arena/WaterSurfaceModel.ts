@@ -3,15 +3,16 @@ import { CELL_SIZE } from '../config';
 import type { WaterCell } from '../types';
 
 export const WATER_COLOR = 0x285d61;
-export const WATER_SHORE_DISTANCE = 48;
+export const WATER_SHORE_DISTANCE = 64;
 export const WATER_MASK_STEP = 2;
-export const WATER_MASK_HALO = 52;
+const WATER_MASK_BLUR_RADIUS = 10;
+export const WATER_MASK_HALO = WATER_SHORE_DISTANCE + (WATER_MASK_BLUR_RADIUS + 2) * WATER_MASK_STEP;
 
 /** Positive inside the 47-Blob contour. Connected edges are never independently rounded. */
 export function waterBlobDistance(mask: number, x: number, y: number): number {
   const size = CELL_SIZE;
-  const inset = size * .18;
-  const radius = size * .32;
+  const inset = size * .10;
+  const radius = size * .40;
   const n = !!(mask & 1), e = !!(mask & 4), s = !!(mask & 16), w = !!(mask & 64);
   let d = WATER_SHORE_DISTANCE;
   if (!n) d = Math.min(d, y - inset);
@@ -71,6 +72,25 @@ export class WaterSurfaceModel {
       }
     }
     for (let i = 0; i < distance.length; i++) data[i * 4] = Math.round(distance[i] / WATER_SHORE_DISTANCE * 255);
+    // Smooth coverage AND shore distance together: an unsmoothed distance channel would
+    // stamp the cell corners back into opacity, depth and receding water even with soft coverage.
+    // The halo includes the filter support beyond the distance propagation range.
+    const radius = WATER_MASK_BLUR_RADIUS, sigma = 4.5;
+    const weights = Array.from({ length: radius * 2 + 1 }, (_, i) => Math.exp(-.5 * ((i - radius) / sigma) ** 2));
+    const sum = weights.reduce((a, b) => a + b, 0);
+    const horizontal = new Float32Array(size * size);
+    for (const channel of [0, 2]) {
+      for (let py = radius; py < size - radius; py++) for (let px = radius; px < size - radius; px++) {
+        let value = 0;
+        for (let dx = -radius; dx <= radius; dx++) value += data[(py * size + px + dx) * 4 + channel] * weights[dx + radius];
+        horizontal[py * size + px] = value / sum;
+      }
+      for (let py = radius * 2; py < size - radius * 2; py++) for (let px = radius * 2; px < size - radius * 2; px++) {
+        let value = 0;
+        for (let dy = -radius; dy <= radius; dy++) value += horizontal[(py + dy) * size + px] * weights[dy + radius];
+        data[(py * size + px) * 4 + channel] = Math.round(value / sum);
+      }
+    }
     return { size, data };
   }
 }

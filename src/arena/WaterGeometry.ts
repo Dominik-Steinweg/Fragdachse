@@ -3,6 +3,8 @@ import type { WaterCell } from '../types';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import { segmentRectInterval } from '../systems/ObstacleRules';
 
+export interface WaterSlideResult { x: number; y: number; vx: number; vy: number }
+
 /** Immutable, renderer-free water occupancy. Fire consumers never query this geometry. */
 export class WaterGeometry {
   private readonly cells = new Set<number>();
@@ -66,5 +68,64 @@ export class WaterGeometry {
         return false;
       });
     return fraction < 1 ? Math.max(0, fraction - 0.01 / Math.max(0.01, Math.hypot(ex - sx, ey - sy))) : 1;
+  }
+
+  /** Continuous circle/shore contact, matching Arcade circles and GridCornerAssist.
+   * Resolve the remaining displacement along the contact tangent, sweeping again so sliding
+   * cannot cut through a second bank. The caller owns the reusable result.
+   */
+  slideCircle(sx: number, sy: number, ex: number, ey: number, radius: number,
+    vx: number, vy: number, out: WaterSlideResult): boolean {
+    out.x = sx; out.y = sy; out.vx = vx; out.vy = vy;
+    let dx = ex - sx, dy = ey - sy, collided = false;
+    for (let iteration = 0; iteration < 4; iteration++) {
+      let time = 1, nx = 0, ny = 0;
+      const accept = (t: number, x: number, y: number): void => {
+        if (t < -1e-7 || t > time || dx * x + dy * y >= -1e-8) return;
+        time = Math.max(0, t); nx = x; ny = y;
+      };
+      this.visit(Math.min(out.x, out.x + dx) - radius, Math.min(out.y, out.y + dy) - radius,
+        Math.max(out.x, out.x + dx) + radius, Math.max(out.y, out.y + dy) + radius, (left, top, size) => {
+          const right = left + size, bottom = top + size;
+          // Flat faces of the Minkowski sum; corners are circles, not expanded squares.
+          if (dx !== 0) {
+            const t = ((dx > 0 ? left - radius : right + radius) - out.x) / dx;
+            const y = out.y + t * dy;
+            if (y >= top && y <= bottom) accept(t, dx > 0 ? -1 : 1, 0);
+          }
+          if (dy !== 0) {
+            const t = ((dy > 0 ? top - radius : bottom + radius) - out.y) / dy;
+            const x = out.x + t * dx;
+            if (x >= left && x <= right) accept(t, 0, dy > 0 ? -1 : 1);
+          }
+          const lengthSq = dx * dx + dy * dy;
+          if (lengthSq < 1e-12 || radius <= 0) return false;
+          for (const sideX of [-1, 1]) for (const sideY of [-1, 1]) {
+            const cx = sideX < 0 ? left : right, cy = sideY < 0 ? top : bottom;
+            const ox = out.x - cx, oy = out.y - cy;
+            const dot = ox * dx + oy * dy;
+            const discriminant = dot * dot - lengthSq * (ox * ox + oy * oy - radius * radius);
+            if (discriminant <= 0) continue;
+            const t = (-dot - Math.sqrt(discriminant)) / lengthSq;
+            const hx = ox + dx * t, hy = oy + dy * t;
+            if (hx * sideX >= -1e-7 && hy * sideY >= -1e-7) accept(t, hx / radius, hy / radius);
+          }
+          return false;
+        });
+      out.x += dx * time; out.y += dy * time;
+      if (nx === 0 && ny === 0) return collided;
+      collided = true;
+      // Tiny separation makes exact tangency stable without creating a visible bank gap.
+      if (!this.isCircleBlocked(out.x + nx * .0001, out.y + ny * .0001, radius)) {
+        out.x += nx * .0001; out.y += ny * .0001;
+      }
+      dx *= 1 - time; dy *= 1 - time;
+      const intoBank = Math.min(0, dx * nx + dy * ny);
+      dx -= intoBank * nx; dy -= intoBank * ny;
+      const velocityIntoBank = Math.min(0, out.vx * nx + out.vy * ny);
+      out.vx -= velocityIntoBank * nx; out.vy -= velocityIntoBank * ny;
+      if (dx * dx + dy * dy < 1e-12) return collided;
+    }
+    return collided;
   }
 }

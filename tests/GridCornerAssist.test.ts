@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_SIZE } from '../src/config';
+import { CELL_SIZE, PLAYER_SIZE } from '../src/config';
+import { WaterGeometry } from '../src/arena/WaterGeometry';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
 import {
   applyGridCornerAssist,
@@ -33,6 +34,24 @@ function apply(
 }
 
 describe('GridCornerAssist', () => {
+  it.each([-5, 5])('guides an off-center player through a one-cell land gap between water banks (%s)', offset => {
+    const metrics = TEST_WORLD_METRICS;
+    const water = new WaterGeometry([
+      ...Array.from({ length: 3 }, (_, i) => ({ gridX: 4, gridY: 5 + i })),
+      ...Array.from({ length: 3 }, (_, i) => ({ gridX: 6, gridY: 5 + i })),
+    ], metrics);
+    const center = worldCenter(metrics, 5, 4);
+    const out = { x: center.x + offset, y: center.y, vx: 0, vy: 0 };
+    for (let frame = 0; frame < 120; frame++) {
+      const direction = apply(metrics, out.x, out.y, 0, 1, (gx, gy) => water.hasCell(gx, gy));
+      const speed = 100 / Math.hypot(direction.dx, direction.dy);
+      const vx = direction.dx * speed, vy = direction.dy * speed;
+      water.slideCircle(out.x, out.y, out.x + vx / 60, out.y + vy / 60, PLAYER_SIZE / 2, vx, vy, out);
+      expect(water.isCircleBlocked(out.x, out.y, PLAYER_SIZE / 2)).toBe(false);
+    }
+    expect(out.y).toBeGreaterThan(metrics.offsetY + 8 * CELL_SIZE);
+  });
+
   it('keeps a perfectly centered 32-px corridor unchanged', () => {
     const player = worldCenter(TEST_WORLD_METRICS, 1, 0);
     const blocked = (gridX: number, gridY: number) => (

@@ -4,6 +4,8 @@ import { WaterSurfaceRenderer } from '../arena/WaterSurfaceRenderer';
 import { WaterGeometry } from '../arena/WaterGeometry';
 import { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import { ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
+import { applyGridCornerAssist } from '../systems/GridCornerAssist';
+import { PLAYER_SIZE } from '../config';
 import { resolveCoopDefenseWorldMetrics } from '../world/WorldMetrics';
 
 // A deliberately small, directly operable fixture. It imports production behavior;
@@ -21,6 +23,8 @@ class WaterLab extends Phaser.Scene {
   private proxy!: Phaser.GameObjects.Zone;
   private actor!: Phaser.GameObjects.Image;
   private motion: Phaser.Time.TimerEvent | null = null;
+  private movement: { speed: number; dx: number; dy: number; assist: boolean } | null = null;
+  private readonly assistedDirection = { dx: 0, dy: 0 };
   private disposers: (() => void)[] = [];
 
   preload(): void {
@@ -30,14 +34,16 @@ class WaterLab extends Phaser.Scene {
   }
   create(): void {
     this.motion = null;
+    this.movement = null;
     document.getElementById('zoom')!.textContent = 'Zoom 100 %';
     document.getElementById('pan')!.textContent = 'Kamera weg';
     document.getElementById('light')!.textContent = 'Lichtprobe: Tag';
     this.add.tileSprite(0, 0, width, height, 'lab-grass').setOrigin(0).setDepth(1);
     this.add.tileSprite(0, 0, width, height, 'lab-detail').setOrigin(0).setDepth(2).setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.surface = new WaterSurfaceRenderer(this, { offsetX: 0, offsetY: 0, width, height }, water, 183);
-    this.proxy = this.add.zone(400, 432, 24, 24);
+    this.proxy = this.add.zone(400, 432, PLAYER_SIZE, PLAYER_SIZE);
     this.physics.add.existing(this.proxy);
+    this.body.setCircle(PLAYER_SIZE / 2);
     this.actor = this.add.image(400, 432, 'lab-badger').setDisplaySize(48, 48).setDepth(10).setAngle(90);
     const players = [{ active: true, physicsProxy: this.proxy }];
     this.host = new HostPhysicsSystem(this, { getAllPlayers: () => players } as never, { isHost: () => true } as never);
@@ -61,10 +67,10 @@ class WaterLab extends Phaser.Scene {
     bind('walk', () => this.move('Laufen', 220));
     bind('dash', () => this.move('Dash', 2400));
     bind('burrow', () => this.move('Buddeln', 400, true));
-    bind('diagonal', () => this.move('Diagonal', 600, false, true));
+    bind('diagonal', () => this.move('Diagonal', 320, false, true));
     const teleport = (x: number): void => {
-      this.motion?.remove(); this.body.setVelocity(0);
-      const allowed = this.host.canOccupyCircle(x, 432, 12);
+      this.motion?.remove(); this.movement = null; this.body.setVelocity(0);
+      const allowed = this.host.canOccupyCircle(x, 432, PLAYER_SIZE / 2);
       if (allowed) this.body.reset(x, 432);
       status(allowed ? 'Teleport über den Teich: sicher auf Land gelandet.' : 'Wasserziel abgelehnt. Die Figur bleibt auf Land.');
     };
@@ -99,16 +105,25 @@ class WaterLab extends Phaser.Scene {
   private get body(): Phaser.Physics.Arcade.Body { return this.proxy.body as Phaser.Physics.Arcade.Body; }
   private move(label: string, speed: number, underground = false, diagonal = false): void {
     this.motion?.remove();
-    this.body.reset(400, diagonal ? 210 : 432);
+    this.body.reset(400, diagonal ? 368 : 432);
     this.host.setPlayerBurrowed('lab', underground);
     this.actor.setAlpha(underground ? .45 : 1);
-    this.body.setVelocity(speed, diagonal ? speed : 0);
+    this.movement = { speed, dx: 1, dy: diagonal ? 1 : 0, assist: !underground && label !== 'Dash' };
     this.motion = this.time.delayedCall(1600, () => {
-      this.body.setVelocity(0);
-      status(`${label}: ${geometry.isCircleBlocked(this.body.center.x, this.body.center.y, 12) ? 'FEHLER: Wasser betreten' : 'auf Land gestoppt'} · Position ${Math.round(this.body.center.x)}, ${Math.round(this.body.center.y)}.`);
+      this.movement = null; this.body.setVelocity(0);
+      status(`${label}: ${geometry.isCircleBlocked(this.body.center.x, this.body.center.y, PLAYER_SIZE / 2) ? 'FEHLER: Wasser betreten' : 'auf Land gestoppt'} · Position ${Math.round(this.body.center.x)}, ${Math.round(this.body.center.y)}.`);
     });
   }
   update(): void {
+    if (this.movement) {
+      const { speed, dx, dy, assist } = this.movement;
+      const direction = this.assistedDirection;
+      direction.dx = dx; direction.dy = dy;
+      if (assist) applyGridCornerAssist(this.body.center.x, this.body.center.y, dx, dy, metrics,
+        (gx, gy) => geometry.hasCell(gx, gy), direction);
+      const scale = speed / Math.hypot(direction.dx, direction.dy);
+      this.body.setVelocity(direction.dx * scale, direction.dy * scale);
+    }
     this.actor.setPosition(this.proxy.x, this.proxy.y);
     this.surface.updateResidency(this.cameras.main.worldView);
   }

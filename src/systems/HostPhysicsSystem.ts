@@ -217,6 +217,9 @@ export class HostPhysicsSystem {
   setWorldMetrics(metrics: WorldMetrics | null): void { this.worldMetrics = metrics; }
   private waterGeometry: WaterGeometry | null = null;
   private waterPhysicsWorld: Phaser.Physics.Arcade.World | null = null;
+  private readonly waterSlide = { x: 0, y: 0, vx: 0, vy: 0 };
+  private readonly assistedMovementBlocked: MovementBlockedCell = (x, y) =>
+    this.waterGeometry?.hasCell(x, y) === true || this.movementBlockedCellResolver?.(x, y) === true;
   /** World-owned collision pass, independent of the colliders disabled by burrowing. */
   setWaterGeometry(water: WaterGeometry | null): void {
     this.waterPhysicsWorld?.off('worldstep', this.collideWater);
@@ -233,11 +236,11 @@ export class HostPhysicsSystem {
       const sy = body.prev.y + body.halfHeight;
       const ex = body.center.x;
       const ey = body.center.y;
-      const t = this.waterGeometry!.sweep(sx, sy, ex, ey, body.halfWidth, body.halfHeight);
-      if (t === 1) return;
-      body.position.set(sx + (ex - sx) * t - body.halfWidth, sy + (ey - sy) * t - body.halfHeight);
+      if (!this.waterGeometry!.slideCircle(sx, sy, ex, ey, body.halfWidth,
+        body.velocity.x, body.velocity.y, this.waterSlide)) return;
+      body.position.set(this.waterSlide.x - body.halfWidth, this.waterSlide.y - body.halfHeight);
       body.updateCenter();
-      body.setVelocity(0, 0);
+      body.setVelocity(this.waterSlide.vx, this.waterSlide.vy);
     };
     for (const player of this.playerManager.getAllPlayers()) {
       if (player.active) collide(player.physicsProxy.body as Phaser.Physics.Arcade.Body | null);
@@ -850,7 +853,7 @@ export class HostPhysicsSystem {
       if (
         !this.burrowSystem?.isBurrowed(player.id)
         && this.worldMetrics
-        && this.movementBlockedCellResolver
+        && (this.movementBlockedCellResolver || this.waterGeometry)
       ) {
         applyGridCornerAssist(
           player.x,
@@ -858,7 +861,7 @@ export class HostPhysicsSystem {
           dx,
           dy,
           this.worldMetrics,
-          this.movementBlockedCellResolver,
+          this.assistedMovementBlocked,
           this.gridCornerAssistOutput,
         );
         dx = this.gridCornerAssistOutput.dx;
