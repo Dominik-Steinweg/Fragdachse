@@ -53,15 +53,57 @@ export function ensureForestButton(scene: Phaser.Scene, w: number, h: number, in
   const key = `_btn_forest_${glass ? 'glass' : 'wood'}_${intent}_${state}_${Math.round(w)}x${Math.round(h)}_r${radius}`;
   if (scene.textures.exists(key)) return key;
   const spec = buttonSkinSpec('forest', intent);
-  const base = glass ? FOREST.raised : spec.fill;
+  const base = glass ? FOREST.field : spec.fill;
   const fill = state === 'hover' ? lerpColor(base, COLORS.BROWN_1, 0.12)
     : state === 'press' ? lerpColor(base, COLORS.GREY_10, 0.25) : base;
   ensureRoundedTexture(scene, { key, w, h, radius,
-    topColor: lerpColor(fill, COLORS.BROWN_1, 0.14), bottomColor: lerpColor(fill, FOREST.sunken, 0.42),
+    topColor: glass ? fill : lerpColor(fill, COLORS.BROWN_1, 0.08), bottomColor: glass ? FOREST.sunken : lerpColor(fill, FOREST.sunken, 0.42),
     fillAlpha: spec.fillAlpha, strokeColor: glass ? FOREST.border : spec.stroke,
-    strokeAlpha: spec.strokeAlpha, strokeWidth: 2, highlightAlpha: state === 'press' ? 0.01 : 0.08 });
-  paintWood(scene, scene.textures.get(key) as Phaser.Textures.CanvasTexture,
-    w, h, radius, intent === 'primary' ? 0.12 : state === 'press' ? 0.3 : 0.5);
+    strokeAlpha: spec.strokeAlpha, strokeWidth: 1, highlightAlpha: state === 'press' ? 0.01 : 0.04 });
+  if (!glass) paintWood(scene, scene.textures.get(key) as Phaser.Textures.CanvasTexture,
+    w, h, radius, intent === 'primary' ? 0.08 : state === 'press' ? 0.35 : 0.6);
+  return key;
+}
+
+/** Source-space trim excludes transparent generation margins; artwork always scales uniformly. */
+const ACTION_FRAME_SOURCE = {
+  ready: { ...FOREST_ASSETS.ready.crop, insetX: 0.065, insetY: 0.19 },
+  world: { ...FOREST_ASSETS.world.crop, insetX: 0.13, insetY: 0.30 },
+} as const;
+
+export function ensureForestActionButton(scene: Phaser.Scene, w: number, h: number,
+  frame: 'ready' | 'world', intent: ButtonIntent, state: 'rest' | 'hover' | 'press'): string {
+  const key = `_btn_forest_${frame}_${intent}_${state}_${Math.round(w)}x${Math.round(h)}`;
+  if (scene.textures.exists(key)) return key;
+  const texture = scene.textures.createCanvas(key, Math.round(w), Math.round(h))!;
+  const ctx = texture.context;
+  const source = ACTION_FRAME_SOURCE[frame];
+  const scale = Math.min(w / source.width, h / source.height);
+  const dw = source.width * scale, dh = source.height * scale;
+  const dx = (w - dw) / 2, dy = (h - dh) / 2;
+  const spec = buttonSkinSpec('forest', intent);
+  const fill = state === 'hover' ? lerpColor(spec.fill, COLORS.BROWN_1, .12)
+    : state === 'press' ? lerpColor(spec.fill, FOREST.sunken, .22) : spec.fill;
+  ctx.save();
+  roundRectPath(ctx, dx + dw * source.insetX, dy + dh * source.insetY,
+    dw * (1 - source.insetX * 2), dh * (1 - source.insetY * 2), dh * .2);
+  ctx.clip();
+  const gradient = ctx.createLinearGradient(0, dy, 0, dy + dh);
+  gradient.addColorStop(0, '#' + lerpColor(fill, COLORS.BROWN_1, .15).toString(16).padStart(6, '0'));
+  gradient.addColorStop(1, '#' + lerpColor(fill, FOREST.sunken, .32).toString(16).padStart(6, '0'));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, w, h);
+  if (frame === 'world' && scene.textures.exists(FOREST_ASSETS.wood.key)) {
+    const pattern = ctx.createPattern(scene.textures.get(FOREST_ASSETS.wood.key).getSourceImage() as HTMLImageElement, 'repeat');
+    if (pattern) { ctx.globalAlpha = .45; ctx.fillStyle = pattern; ctx.scale(.35, .35); ctx.fillRect(0, 0, w / .35, h / .35); }
+  }
+  ctx.restore();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  if (scene.textures.exists(FOREST_ASSETS[frame].key)) ctx.drawImage(
+    scene.textures.get(FOREST_ASSETS[frame].key).getSourceImage() as HTMLImageElement,
+    source.x, source.y, source.width, source.height, dx, dy, dw, dh);
+  texture.refresh();
   return key;
 }
 
@@ -94,8 +136,11 @@ export function forestOrnament(scene: Phaser.Scene, asset: 'leaves' | 'medallion
     const texture = scene.textures.createCanvas(key, Math.round(w * 2), Math.round(h * 2))!;
     texture.context.imageSmoothingEnabled = true;
     texture.context.imageSmoothingQuality = 'high';
-    texture.context.drawImage(scene.textures.get(FOREST_ASSETS[asset].key).getSourceImage() as HTMLImageElement,
-      0, 0, w * 2, h * 2);
+    const image = scene.textures.get(FOREST_ASSETS[asset].key).getSourceImage() as HTMLImageElement;
+    if (asset === 'relief') {
+      const crop = FOREST_ASSETS.relief.crop;
+      texture.context.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, w * 2, h * 2);
+    } else texture.context.drawImage(image, 0, 0, w * 2, h * 2);
     texture.refresh();
   }
   return scene.add.image(x, y, key).setDisplaySize(w, h).setScrollFactor(0);

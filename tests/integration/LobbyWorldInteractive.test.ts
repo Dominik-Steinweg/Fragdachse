@@ -56,6 +56,7 @@ import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { LobbyOverlay } from '../../src/scenes/LobbyOverlay';
+import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
 import { BootScreen } from '../../src/ui/BootScreen';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
 import { resolveInputPolicy } from '../../src/world/InputPolicy';
@@ -526,6 +527,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     setAlpha(alpha: number) { this.alpha = alpha; return this; }
     setY(y: number) { this.y = y; return this; }
     setVisible(visible: boolean) { this.visible = visible; return this; }
+    setActive() { return this; }
     add(children: DisplayObject | DisplayObject[]) {
       this.children.push(...(Array.isArray(children) ? children : [children]));
       return this;
@@ -544,7 +546,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
   function overlayFixture() {
     const container = new DisplayObject();
     const add = () => new DisplayObject();
-    const tweens = { add: vi.fn((_config: { targets: unknown; alpha?: number; y?: number }) => ({ remove: vi.fn() })) };
+    const tweens = { add: vi.fn((_config: any) => ({ remove: vi.fn() })), killTweensOf: vi.fn() };
     const scene = { add: { image: add, text: add, circle: add, container: add }, tweens };
     const noop = () => {};
     const overlay = new LobbyOverlay(
@@ -559,7 +561,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     overlay.loadoutFrameTexture = () => 'loadout-frame';
     overlay.refreshPlayerLoadout = vi.fn();
     overlay.setPlayerRowInteractive = vi.fn();
-    return { overlay, container, tweens };
+    return { overlay, container, tweens, uiScene: scene };
   }
 
   function bootFixture() {
@@ -730,9 +732,53 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     tweens.add.mockClear();
 
     overlay.hide();
+    const exit = tweens.add.mock.calls[0][0];
+    expect(exit.targets).toBe(container);
+    expect(exit.y).toBeGreaterThan(0);
+    expect(container.visible).toBe(true); // The card remains rendered throughout its exit.
+    const exitTween = tweens.add.mock.results[0].value;
     overlay.show();
-    expect(tweens.add).toHaveBeenCalledOnce();
-    expect(tweens.add.mock.calls[0][0]).toMatchObject({ targets: container, alpha: 1, y: 0 });
+    expect(exitTween.remove).toHaveBeenCalledOnce();
+    expect(tweens.add).toHaveBeenCalledTimes(2);
+    expect(tweens.add.mock.calls[1][0]).toMatchObject({ targets: container, alpha: 1, y: 0 });
+  });
+
+  it('slides both cards together and only hides the preview and progression after exiting', () => {
+    const { overlay, container, tweens, uiScene } = overlayFixture();
+    const player: any = new LeftSidePanel(uiScene as any, {} as any, {} as any, {} as any);
+    player.lobbyContainer = new DisplayObject();
+    player.gameContainer = new DisplayObject();
+    player.puContainer = new DisplayObject();
+    player.badgerPreview = { setVisible: vi.fn() };
+    player.arenaHUD = { reset: vi.fn(), setPresentationActive: vi.fn() };
+    player.initArenaHUD = vi.fn();
+    player.closeColorPicker = vi.fn();
+    player.closeNameEditPopup = vi.fn();
+    player.setLobbyFieldsLocked = vi.fn();
+    overlay.progress = { setVisible: vi.fn() };
+    overlay.show();
+    overlay.completeBootReveal();
+    overlay.progress.setVisible.mockClear();
+    overlay.hide();
+    player.transitionToGame();
+    const leftExit = tweens.add.mock.calls[0][0];
+    const rightExit = tweens.add.mock.calls[1][0];
+    expect(rightExit).toMatchObject({ y: leftExit.y, duration: leftExit.duration, ease: leftExit.ease });
+    expect(overlay.progress.setVisible).not.toHaveBeenCalled();
+    expect(player.badgerPreview.setVisible).not.toHaveBeenCalled();
+    leftExit.onComplete(); rightExit.onComplete();
+    expect(container.visible).toBe(false);
+    expect(player.lobbyContainer.visible).toBe(false);
+    expect(overlay.progress.setVisible).toHaveBeenLastCalledWith(false);
+    expect(player.badgerPreview.setVisible).toHaveBeenLastCalledWith(false);
+    tweens.add.mockClear();
+    overlay.show(); player.transitionToLobby();
+    const leftEnter = tweens.add.mock.calls.find(([config]) => config.targets === container)![0];
+    const rightEnter = tweens.add.mock.calls.find(([config]) => config.targets === player.lobbyContainer)![0];
+    expect(rightEnter).toMatchObject({ y: leftEnter.y, delay: leftEnter.delay, duration: leftEnter.duration, ease: leftEnter.ease });
+    expect(container.visible && player.lobbyContainer.visible).toBe(true);
+    expect(overlay.progress.setVisible).toHaveBeenLastCalledWith(true);
+    expect(player.badgerPreview.setVisible).toHaveBeenLastCalledWith(true);
   });
 
   it('zeigt beide Ergebnisaktionen gemeinsam erst bei verfuegbarer Rundenauswertung', () => {

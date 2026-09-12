@@ -30,7 +30,7 @@ import type { LinkDiagnostics } from '../network/peer';
 import type { LoadoutSlot, LoadoutToolRef, PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
 import { createLoadoutHoverGroup, createLoadoutSlotControl } from '../ui/LoadoutSlotControl';
 import { LobbyAlertBanner, type LobbyAlert } from '../ui/LobbyAlertBanner';
-import { getLobbyReliefBounds, LOBBY_CARD, LOBBY_PLAYER_FOOTER, LOBBY_ROSTER_ROW_STEP, LOBBY_WORLD_BUTTON } from '../ui/LobbyLayout';
+import { getLobbyReliefBounds, LOBBY_CARD, LOBBY_CARD_MOTION, LOBBY_PLAYER_FOOTER, LOBBY_ROSTER_ROW_STEP, LOBBY_WORLD_BUTTON } from '../ui/LobbyLayout';
 import { FOREST } from '../ui/UiSkin';
 import { ensureForestFrame, ensureForestPanel, forestOrnament } from '../ui/forestTextures';
 import { LobbyPlayerProgress } from '../ui/LobbyPlayerProgress';
@@ -62,9 +62,6 @@ const CONTENT_L = PANEL_X + LOBBY_CARD.padding;
 const CONTENT_R = CONTENT_L + LOBBY_CARD.contentWidth;
 const CONTENT_W = LOBBY_CARD.contentWidth;
 
-/** Startversatz des Panel-Auftritts bei einer spaeteren Rueckkehr in die Lobby. */
-const ENTRANCE_OFFSET_Y = 18;
-
 // ── Raumzeile ───────────────────────────────────────────────────────
 const HEADER_Y = LOBBY_CARD.titleY;
 const QUALITY_Y = PANEL_Y + 90;
@@ -95,7 +92,7 @@ const LOADOUT_LEFT_OFFSET = ROSTER_SLOT_W - LOADOUT_FRAME_W - 68;
 // ── Fixed footer; the primary action remains below the history actions. ──
 const CTA_BLOCK_H = 152;
 const READY_BTN_W = CONTENT_W;
-const READY_BTN_H = 64;
+const READY_BTN_H = 80;
 const HOST_BTN_W = 200;
 const HOST_BTN_H = ROOM_CHIP_H;
 const HOST_BTN_X = CONTENT_L + ROOM_CHIP_W + 8 + HOST_BTN_W / 2;
@@ -230,6 +227,7 @@ export class LobbyOverlay {
     private onOpenCoopDefenseUpgrades: () => void,
     private onOpenCoopDefenseItems: () => void,
     private onToggleWorldEntry: (enter: boolean) => void,
+    private readonly playerCardParent?: Phaser.GameObjects.Container,
   ) {}
 
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void { this.progress?.setCoopDefenseProgress(progress); }
@@ -276,8 +274,9 @@ export class LobbyOverlay {
     objects.push(this.scene.add.image(PANEL_CX, PANEL_Y + PANEL_H_MAX / 2,
       ensureForestFrame(this.scene, PANEL_W, PANEL_H_MAX))
       .setDisplaySize(PANEL_W, PANEL_H_MAX).setScrollFactor(0));
-    this.forestRelief = forestOrnament(this.scene, 'relief', PANEL_CX, LIST_Y, 400, 200)
-      .setAlpha(0.16).setVisible(false);
+    const relief = getLobbyReliefBounds();
+    this.forestRelief = forestOrnament(this.scene, 'relief', relief.x, relief.y, relief.width, relief.height)
+      .setTint(0x977b51).setTintMode(Phaser.TintModes.FILL).setAlpha(0.24);
     objects.push(this.forestRelief);
     this.headerTitle = this.scene.add.text(PANEL_CX, HEADER_Y, '', textStyle('title', {
       color: FOREST.text,
@@ -378,7 +377,7 @@ export class LobbyOverlay {
       .setScrollFactor(0);
     objects.push(this.ctaDivider);
 
-    this.readyBtn = new UiButton(this.scene, { skin: 'forest',
+    this.readyBtn = new UiButton(this.scene, { skin: 'forest', forestFrame: 'ready',
       x: PANEL_CX, y: LOBBY_CARD.readyY, w: READY_BTN_W, h: READY_BTN_H,
       label: t('ui.lobby.ready'),
       labelRole: 'subtitle',
@@ -408,7 +407,7 @@ export class LobbyOverlay {
     ).setOrigin(0, 1).setAlpha(0.9).setScrollFactor(0);
     objects.push(buildInfo);
 
-    // ── Systemleiste (unten rechts, unabhaengig von den Panels) ───────────
+    // ── Systemleiste im festen Fussbereich der Spielerkarte ─────────────
     // Bleibt auf `pointerup`, damit die Browser-Geste auch auf Touch gueltig ist; UiButton
     // akzeptiert dieses Loslassen nur nach einem eigenen `pointerdown`.
     this.helpBtn = new UiButton(this.scene, { skin: 'forest',
@@ -446,10 +445,11 @@ export class LobbyOverlay {
 
     this.progress = new LobbyPlayerProgress(this.scene,
       this.onOpenCoopDefenseUpgrades, this.onOpenCoopDefenseItems);
-    this.progress.build(objects);
+    const playerObjects: Phaser.GameObjects.GameObject[] = [];
+    this.progress.build(playerObjects);
 
     // Freistehender Einstieg in die World zwischen den beiden Karten.
-    this.testAreaBtn = new UiButton(this.scene, { skin: 'forest',
+    this.testAreaBtn = new UiButton(this.scene, { skin: 'forest', forestFrame: 'world',
       ...LOBBY_WORLD_BUTTON,
       label: t('ui.lobby.testArea'),
       intent: 'neutral',
@@ -457,8 +457,6 @@ export class LobbyOverlay {
         if (!this.worldEntryInside) this.onToggleWorldEntry(true);
       },
     }).setVisible(false);
-    objects.push(this.testAreaBtn.getRoot());
-    this.testAreaBtn.getRoot().add(forestOrnament(this.scene, 'leaves', 96, 0, 64, 64));
 
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.container);
@@ -480,15 +478,17 @@ export class LobbyOverlay {
     this.container.setVisible(this.visible);
 
     this.systemBar = this.scene.add.container(0, 0, [
+      ...playerObjects,
       this.helpBtn.getRoot(),
       this.optionsBtn.getRoot(),
       this.fullscreenBtn.getRoot(),
     ]).setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.systemBar);
-    this.systemBar.setVisible(this.visible);
+    // The card owns the transform; this helper retains control/effect cleanup across rebuilds.
+    this.playerCardParent?.add(this.systemBar);
 
     // Eigener Container: seine Sichtbarkeit folgt der World-Teilnahme, nicht dem Lobby-Panel.
-    this.worldExitBtn = new UiButton(this.scene, { skin: 'forest',
+    this.worldExitBtn = new UiButton(this.scene, { skin: 'forest', forestFrame: 'world',
       ...LOBBY_WORLD_BUTTON,
       label: t('ui.lobby.returnToLobby'),
       labelRole: 'labelSm',
@@ -500,11 +500,9 @@ export class LobbyOverlay {
       },
     });
     this.worldExitBar = this.scene.add
-      .container(0, 0, [this.worldExitBtn.getRoot()])
+      .container(0, 0, [this.testAreaBtn.getRoot(), this.worldExitBtn.getRoot()])
       .setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.worldExitBar);
-    this.worldExitBar.setVisible(false);
-    this.worldExitBtn.getRoot().add(forestOrnament(this.scene, 'leaves', 96, 0, 64, 64));
 
     this.refreshHeader();
     this.updateRoomActionButtons();
@@ -579,7 +577,6 @@ export class LobbyOverlay {
     this.visible = true;
     this.container?.setVisible(true);
     this.settings?.refresh();
-    this.systemBar?.setVisible(true);
     this.updateWorldEntryButtons();
     // Alpha 0 wuerde das Panel vom Rendern ausschliessen. Beim Boot muss es bereits
     // vollstaendig hinter dem deckenden DOM-Ladescreen stehen.
@@ -609,11 +606,13 @@ export class LobbyOverlay {
       ?.setVisible(showEntry)
       .setEnabled(showEntry && this.worldEntryAvailable && this.worldEntryEnabled
         && !this.btnLocked && !this.connectionEnded);
-    this.worldExitBar?.setVisible(showExit);
+    this.worldExitBar?.setVisible(showEntry || showExit);
+    this.worldExitBtn?.setVisible(showExit);
     this.worldExitBtn?.setEnabled(showExit && !this.connectionEnded);
   }
 
   hide(): void {
+    if (!this.visible) return;
     this.visible = false;
     this.settings?.close();
     this.rosterScroller?.reset();
@@ -623,10 +622,16 @@ export class LobbyOverlay {
     this.entranceTween?.remove();
     this.entranceTween = null;
     this.stopReadyGlow();
-    this.container?.setVisible(false);
-    this.systemBar?.setVisible(false);
+    if (this.container) this.entranceTween = this.scene.tweens.add({
+      targets: this.container, y: GAME_HEIGHT,
+      duration: LOBBY_CARD_MOTION.exitDuration, ease: 'Power2.easeIn',
+      onComplete: () => {
+        this.container?.setVisible(false);
+        this.progress?.setVisible(false);
+        this.entranceTween = null;
+      },
+    });
     this.updateWorldEntryButtons();
-    this.progress?.setVisible(this.visible);
   }
 
   /** Endgueltiger Scene-Abbau; build() verwendet denselben idempotenten Pfad. */
@@ -663,13 +668,15 @@ export class LobbyOverlay {
   private playEntrance(): void {
     if (!this.container) return;
     this.entranceTween?.remove();
-    this.container.setAlpha(0).setY(ENTRANCE_OFFSET_Y);
+    this.container.setAlpha(1);
     this.entranceTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 1,
       y: 0,
-      duration: MOTION.slow,
-      ease: MOTION.ease.out,
+      delay: LOBBY_CARD_MOTION.enterDelay,
+      duration: LOBBY_CARD_MOTION.enterDuration,
+      ease: 'Back.easeOut',
+      onComplete: () => { this.entranceTween = null; },
     });
   }
 
@@ -1229,9 +1236,6 @@ export class LobbyOverlay {
     })));
     const teamMode = hasTeamSelection(mode);
     const height = slots.length * ROSTER_ROW_STEP + (teamMode ? TEAM_HEADER_H * 2 : 0);
-    const relief = getLobbyReliefBounds(height);
-    this.forestRelief?.setVisible(relief !== null);
-    if (relief) this.forestRelief?.setPosition(relief.x, relief.y).setDisplaySize(relief.width, relief.height);
     this.rosterScroller.setContentHeight(height);
     let y = LIST_Y - this.rosterScroller.scrollOffset;
     const inView = (top: number, height: number) => top >= LIST_Y && top + height <= LOBBY_CARD.rosterBottom;
@@ -1316,9 +1320,9 @@ export class LobbyOverlay {
       w: width,
       h: height,
       radius: 10,
-      topColor: ghost ? FOREST.sunken : FOREST.raised,
+      topColor: ghost ? FOREST.sunken : FOREST.field,
       bottomColor: FOREST.sunken,
-      fillAlpha: ghost ? 0.18 : own ? 0.76 : 0.66,
+      fillAlpha: ghost ? 0.18 : 0.94,
       strokeColor: FOREST.border,
       strokeAlpha: ghost ? 0.1 : own ? 0.72 : 0.46,
       strokeWidth: own ? 2 : 1,

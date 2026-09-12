@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameMode, TeamId } from '../src/types';
-import { getLobbyReliefBounds, LOBBY_CARD, LOBBY_ROSTER_ROW_STEP } from '../src/ui/LobbyLayout';
+import { getLobbyReliefBounds, LOBBY_CARD } from '../src/ui/LobbyLayout';
 import {
   buildLobbyRosterSlots,
   canJoinLobbyTeam,
@@ -11,16 +11,11 @@ import {
 const players = (count: number, teamId: TeamId | null = null, prefix = 'p') =>
   Array.from({ length: count }, (_, index) => ({ id: `${prefix}${index}`, teamId }));
 
-it('fits decorative relief entirely between the occupied roster and its footer, hiding it on overflow', () => {
-  for (let rows = 0; rows <= 12; rows++) {
-    const height = rows * LOBBY_ROSTER_ROW_STEP;
-    const bounds = getLobbyReliefBounds(height);
-    if (!bounds) continue;
-    expect(bounds.y - bounds.height / 2).toBeGreaterThan(LOBBY_CARD.rosterTop + height);
-    expect(bounds.y + bounds.height / 2).toBeLessThan(LOBBY_CARD.rosterBottom);
-    expect(bounds.width).toBeLessThanOrEqual(LOBBY_CARD.contentWidth);
-  }
-  expect(getLobbyReliefBounds(LOBBY_CARD.rosterBottom - LOBBY_CARD.rosterTop)).toBeNull();
+it('keeps the persistent roster backdrop within the list area and clear of the footer', () => {
+  const bounds = getLobbyReliefBounds();
+  expect(bounds.y - bounds.height / 2).toBeGreaterThanOrEqual(LOBBY_CARD.rosterTop);
+  expect(bounds.y + bounds.height / 2).toBeLessThan(LOBBY_CARD.rosterBottom);
+  expect(bounds.width).toBeLessThanOrEqual(LOBBY_CARD.contentWidth);
 });
 
 describe('LobbyRosterLayout', () => {

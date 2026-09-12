@@ -15,7 +15,7 @@
  */
 import * as Phaser from 'phaser';
 import { buttonSkinSpec, type UiSkin } from './UiSkin';
-import { ensureForestButton } from './forestTextures';
+import { ensureForestButton, ensureForestActionButton } from './forestTextures';
 import {
   BUTTON_SCALE,
   INTENT,
@@ -49,6 +49,8 @@ export interface UiButtonOptions {
   skin?: UiSkin;
   /** Forest selection fields stay translucent and untextured. */
   surface?: 'wood' | 'glass';
+  /** Authored artwork for the two standalone lobby actions. Ignored by the default skin. */
+  forestFrame?: 'ready' | 'world';
   icon?: UiIconName;
   /** Nur das Symbol zeigen – fuer Pfeile und Werkzeugknoepfe. */
   iconOnly?: boolean;
@@ -293,6 +295,8 @@ export class UiButton {
 
   private textureFor(state: ButtonVisualState): string {
     const intent = this.effectiveIntent();
+    if (this.options.skin === 'forest' && this.options.forestFrame) return ensureForestActionButton(
+      this.scene, this.options.w, this.options.h, this.options.forestFrame, intent, state);
     if (this.options.skin === 'forest') return ensureForestButton(this.scene, this.options.w, this.options.h,
       intent, state, this.options.radius ?? RADIUS.md, this.options.surface === 'glass' || !!this.options.trailingIcon);
     const spec = INTENT[intent];

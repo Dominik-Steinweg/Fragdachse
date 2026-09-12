@@ -12,8 +12,8 @@ export const FOREST = {
   border: COLORS.BROWN_3,
   wood: lerpColor(COLORS.BROWN_6, COLORS.GOLD_4, 0.38),
   woodEdge: COLORS.BROWN_3,
-  text: lerpColor(COLORS.BROWN_1, COLORS.GREY_1, 0.55),
-  muted: lerpColor(COLORS.GREEN_1, COLORS.GREY_3, 0.5),
+  text: 0xd7c8aa,
+  muted: 0xadb293,
 } as const;
 
 export function skinTextColor(skin: UiSkin, color: number): number {
@@ -27,10 +27,10 @@ export function buttonSkinSpec(skin: UiSkin, intent: ButtonIntent): ButtonIntent
   const base = INTENT[intent];
   if (skin === 'default') return base;
   if (intent === 'disabled') return { ...base, fill: FOREST.sunken, stroke: FOREST.woodEdge, label: FOREST.muted };
-  if (intent === 'primary') return { ...base, label: FOREST.sunken };
+  if (intent === 'primary') return { ...base, label: FOREST.sunken, labelHover: FOREST.sunken };
   if (intent === 'danger') return base;
   const attention = intent === 'attention' || intent === 'accent';
   return { ...base, fill: FOREST.wood, stroke: attention ? COLORS.GOLD_1 : FOREST.woodEdge,
-    label: attention ? COLORS.GOLD_1 : FOREST.text, labelHover: attention ? COLORS.GOLD_1 : COLORS.GREY_1,
-    fillAlpha: 0.94, strokeAlpha: attention ? 0.95 : 0.8, gloss: 0.07 };
+    label: attention ? COLORS.GOLD_1 : FOREST.text, labelHover: attention ? COLORS.GOLD_1 : FOREST.text,
+    fillAlpha: 0.94, strokeAlpha: attention ? 0.95 : 0.48, gloss: 0.04 };
 }

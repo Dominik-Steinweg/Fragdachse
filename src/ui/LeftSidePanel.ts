@@ -2,7 +2,7 @@ import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
 /**
  * LeftSidePanel – linkes Arena-HUD und rechts angeordnete Spielerkarte der Lobby.
  *
- * lobbyContainer (y=0):      Namensanzeige, Farbauswahl
+ * lobbyContainer (y=0):      gesamte Spielerkarte inklusive Vorschau und Zusatzinhalten
  * gameContainer  (y=−H):     ArenaHUD (initial off-screen oben)
  *
  * Reusability-Template: gleiche Public-API wie RightSidePanel.
@@ -73,7 +73,7 @@ import {
 } from './LivingBarEffect';
 import { createLoadoutSlotControl, createLoadoutToolRowControl } from './LoadoutSlotControl';
 import { LoadoutSlotPicker, type LoadoutPickerEntry } from './LoadoutSlotPicker';
-import { LOBBY_CARD, LOBBY_PLAYER_CENTER, LOBBY_PLAYER_CONTENT_LEFT, LOBBY_POPUP_SAFE_AREA } from './LobbyLayout';
+import { LOBBY_CARD, LOBBY_CARD_MOTION, LOBBY_PLAYER_CENTER, LOBBY_PLAYER_CONTENT_LEFT, LOBBY_POPUP_SAFE_AREA } from './LobbyLayout';
 import {
   OptionsOverlay,
   type AbortMatchBinding,
@@ -92,7 +92,7 @@ const CENTER_X = LOBBY_PLAYER_CENTER;
 const ARENA_CENTER_X = ARENA_PANEL_W / 2;
 const NAME_LABEL_Y = LOBBY_CARD.titleY;
 const NAME_VALUE_Y = 306;
-const BADGER_Y = 448;
+const BADGER_Y = 462;
 const BADGER_SIZE = 80;
 const BADGER_CLICK_SIZE = 88;
 const DIVIDER2_Y = 510;
@@ -102,7 +102,6 @@ const NAME_COLOR_BUTTON_GAP = 12;
 const NAME_BUTTON_X = CENTER_X - (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
 const COLOR_BUTTON_X = CENTER_X + (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
 const NAME_COLOR_ROW_Y = 368;
-const NAME_MODE_DIVIDER_Y = 398;
 const CONTROL_LABEL_OFFSET_Y = 1.5;
 const ARROW_BUTTON_W = 24;
 const ARROW_BUTTON_H = 24;
@@ -198,7 +197,6 @@ export class LeftSidePanel {
   private nameEditOpen     = false;
   private nameEditPopup:   HTMLDivElement | null = null;
   private closeNameEditPopupFn: (() => void) | null = null;
-  private pendingDelay:    Phaser.Time.TimerEvent | null = null;
 
   // Dachs-Vorschau als Farbindikator
   private badgerPreview: BadgerPreview | null = null;
@@ -317,19 +315,14 @@ export class LeftSidePanel {
     this.colorEditText = colorEditBtn.text ?? null;
     objects.push(colorEditBtn.button, colorEditBtn.label);
 
-    objects.push(
-      this.scene.add.rectangle(CENTER_X, NAME_MODE_DIVIDER_Y, LOBBY_CARD.contentWidth, 1, COLORS.GREY_6, 0.5)
-        .setScrollFactor(0),
-    );
-
     // ── Dachs-Vorschau als Farbindikator ──
-    // Invisible click zone (sprite itself is not in lobbyContainer — it's world-space for preFX)
+    // The preview and its held item share the card's transform, including during transitions.
     this.badgerClickZone = this.scene.add
       .rectangle(CENTER_X, BADGER_Y, BADGER_CLICK_SIZE, BADGER_CLICK_SIZE, 0x000000, 0)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.toggleColorPicker());
-    objects.push(forestOrnament(this.scene, 'medallion', CENTER_X, BADGER_Y, 124, 124), this.badgerClickZone);
+    objects.push(forestOrnament(this.scene, 'medallion', CENTER_X, BADGER_Y, 158, 158), this.badgerClickZone);
     const teamLeftBtn = this.createChevronButton(
       COLOR_BUTTON_X - TEAM_SELECT_ARROW_OFFSET_X,
       NAME_COLOR_ROW_Y,
@@ -351,16 +344,6 @@ export class LeftSidePanel {
     objects.push(teamRightBtn.button, teamRightBtn.label);
     this.teamArrowButtons = { left: teamLeftBtn, right: teamRightBtn };
 
-    // ── Trennlinie 2 ──
-    const divider2 = this.scene.add.graphics();
-    divider2.lineStyle(1, COLORS.GREY_6, 0.5);
-    divider2.beginPath();
-    divider2.moveTo(LOBBY_PLAYER_CONTENT_LEFT, DIVIDER2_Y);
-    divider2.lineTo(LOBBY_PLAYER_CONTENT_LEFT + LOBBY_CARD.contentWidth, DIVIDER2_Y);
-    divider2.strokePath();
-    divider2.setScrollFactor(0);
-    objects.push(divider2);
-
     // ── Loadout-Karussell ──
     this.loadoutLabelText = this.scene.add.text(LOBBY_PLAYER_CONTENT_LEFT, CAROUSEL_START_Y, t('ui.lobby.loadout').toUpperCase(), LABEL_FONT)
       .setOrigin(0, 0)
@@ -376,7 +359,7 @@ export class LeftSidePanel {
     this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 3, 'forest');
     this.loadoutPicker = new LoadoutSlotPicker(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 2, true, 'forest');
 
-    // BadgerPreview (world-space, separate from container for preFX support)
+    // Internal Phaser 4 filters work on the preview within its card container.
     this.badgerPreview = new BadgerPreview(
       this.scene,
       CENTER_X,
@@ -385,10 +368,11 @@ export class LeftSidePanel {
       BADGER_SIZE,
       // Das Bild der getragenen Waffe entsteht erst beim ersten Item und verpasst deshalb die
       // Kamerazuordnung weiter unten im Aufbaupfad.
-      (image) => promoteToClarityCamera(this.scene, image),
+      (image) => { this.lobbyContainer.add(image); promoteToClarityCamera(this.scene, image); },
     );
     this.badgerPreview.setScrollFactor(0);
     this.badgerPreview.setDepth(DEPTH.OVERLAY);
+    this.lobbyContainer.add(this.badgerPreview.sprite);
 
     // ── Picker-Popup (world-space, über LobbyOverlay) ─────────────────────────
     this.pickerContainer = this.buildPickerContainer();
@@ -489,6 +473,9 @@ export class LeftSidePanel {
 
   // ── Transitions ────────────────────────────────────────────────────────────
 
+  /** Presentation parent for the progression and system controls owned by LobbyOverlay. */
+  getLobbyContainer(): Phaser.GameObjects.Container { return this.lobbyContainer; }
+
   transitionToGame(): void {
     this.saveMenu?.close();
     this.loadoutPicker?.close();
@@ -498,10 +485,8 @@ export class LeftSidePanel {
     this.optionsOverlay?.hide();
     this.nameEditEnabled = false;
     this.loadoutEnabled  = false;
-    this.badgerPreview?.setVisible(false);
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
-    this.pendingDelay?.remove();
 
     // Populate ArenaHUD with player info and loadout names
     this.initArenaHUD();
@@ -513,10 +498,10 @@ export class LeftSidePanel {
     this.scene.tweens.add({
       targets:  this.lobbyContainer,
       y:        GAME_HEIGHT,
-      duration: 350,
+      duration: LOBBY_CARD_MOTION.exitDuration,
       ease:     'Power2.easeIn',
+      onComplete: () => { this.lobbyContainer.setVisible(false); this.badgerPreview?.setVisible(false); },
     });
-    this.pendingDelay = null;
   }
 
   transitionToLobby(): void {
@@ -525,12 +510,12 @@ export class LeftSidePanel {
     this.optionsOverlay?.hide();
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
-    this.pendingDelay?.remove();
 
     this.arenaHUD.reset();
     this.arenaHUD.setPresentationActive(false);
     this.arenaOverlayVisible = false;
     this.badgerPreview?.setVisible(true);
+    this.lobbyContainer.setVisible(true);
     this.puContainer.setVisible(false);
 
     this.scene.tweens.add({
@@ -541,19 +526,17 @@ export class LeftSidePanel {
       onComplete: () => this.gameContainer.setVisible(false).setActive(false),
     });
 
-    this.pendingDelay = this.scene.time.delayedCall(100, () => {
-      this.scene.tweens.add({
-        targets:    this.lobbyContainer,
-        y:          0,
-        duration:   500,
-        ease:       'Back.easeOut',
-        onComplete: () => {
-          this.nameEditEnabled = true;
-          this.loadoutEnabled  = true;
-          this.setLobbyFieldsLocked(false);
-          this.pendingDelay    = null;
-        },
-      });
+    this.scene.tweens.add({
+      targets:    this.lobbyContainer,
+      y:          0,
+      delay:      LOBBY_CARD_MOTION.enterDelay,
+      duration:   LOBBY_CARD_MOTION.enterDuration,
+      ease:       'Back.easeOut',
+      onComplete: () => {
+        this.nameEditEnabled = true;
+        this.loadoutEnabled  = true;
+        this.setLobbyFieldsLocked(false);
+      },
     });
   }
 
@@ -695,6 +678,8 @@ export class LeftSidePanel {
   }
 
   destroy(): void {
+    this.scene.tweens.killTweensOf(this.lobbyContainer);
+    this.scene.tweens.killTweensOf(this.gameContainer);
     this.closeNameEditPopup();
     this.saveStatusTimer?.remove();
     this.saveStatusTimer = null;

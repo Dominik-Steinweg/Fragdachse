@@ -11,20 +11,27 @@ Final PNGs are copied from the tool's output without modifying their pixels.
 | `wood.png` | Repeating horizontal walnut grain for buttons |
 | `leaves.png` | Small ivy ornaments |
 | `medallion.png` | Open ring around the live, player-coloured badger preview |
-| `relief.png` | Low-opacity woodland/badger relief in unused roster space |
+| `relief.png` | Monochrome rifle duel between two badgers, always behind the roster |
+| `ready.png` | Dedicated open ivy/walnut frame for the green ready action |
+| `world.png` | Standalone branch sign for training-ground entry and return |
 
 `LobbyForestAssets.ts` owns preload names; `forestTextures.ts` composes cached textures.
-The final frame is authored for the cards' 4:5 aspect ratio and scaled uniformly as a whole.
+The final frame is authored for the narrower cards' aspect ratio and scaled uniformly as a whole.
 It deliberately does not stretch populated edge strips: that distorted leaves in earlier
-browser iterations. Card width increased while preserving the roster's content width.
+browser iterations. Cards sit closer to the outer screen edges while retaining roster width.
 Wood grain repeats at a stable scale, with procedural button/popup corners retaining their
-radii. Small cutouts are resampled into display-sized caches for readable edges.
+radii. Dedicated action frames and the duel stencil trim transparent source margins at runtime
+and preserve the artwork's proportions. Small cutouts use display-sized caches for readable edges.
+The black stencil receives a muted ochre Phaser 4 FILL tint and low opacity; it is independent
+of roster length and scrolling. No preprocessing changes the generated PNG pixels.
 
 No PNG includes text or an input surface. Decorations belong to the card/popup container,
 while the existing world-camera backdrop blur remains separate. The `forest` skin is selected
 explicitly by lobby callers. Shared controls default to their original appearance for match
 HUDs and larger screens. Brown controls leave the ready action as the only green button;
-progression, player, team and equipment accents retain their meaning.
+progression, player, team and equipment accents retain their meaning. Player, invitation and
+loadout rows share the calm untextured field material. Progression and system controls, the
+preview and its held item inherit the player card's slide transform; the centre sign stays fixed.
 
 Validation covers alpha cutouts, shipped assets, texture reuse, undistorted proportions,
 skin isolation and lobby behaviour. Cutouts can contain imperceptible 1/255 alpha residue;

@@ -962,6 +962,7 @@ export class ArenaScene extends Phaser.Scene {
       (enter) => enter
         ? this.arenaRuntime.requestLocalWorldParticipation(true)
         : this.requestLocalLobbyWorldLeave(),
+      leftPanel.getLobbyContainer(),
     );
     this.lobbyOverlay.build();
     this.lobbyOverlay.setResultsReplayHandler(() => {

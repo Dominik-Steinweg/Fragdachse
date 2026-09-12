@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({}));
 vi.mock('../src/ui/LivingBarEffect', () => ({ rgbStr: () => 'rgba(0,0,0,1)' }));
-import { drawForestFrame, ensureForestButton, ensureForestFrame, ensureForestPanel, forestOrnament } from '../src/ui/forestTextures';
+import { drawForestFrame, ensureForestButton, ensureForestActionButton, ensureForestFrame, ensureForestPanel, forestOrnament } from '../src/ui/forestTextures';
 import { ensureRoundedTexture } from '../src/ui/uiTextures';
 import { FOREST_ASSETS } from '../src/ui/LobbyForestAssets';
 
@@ -15,7 +15,7 @@ function fixture() {
       drawImage: vi.fn(), scale: vi.fn(), translate() {}, save() {}, restore() {}, clearRect() {},
       beginPath() {}, moveTo() {}, arcTo() {}, closePath() {}, rect() {}, clip() {},
       fillRect() {}, fill() {}, stroke() {},
-      createPattern: () => ({}), createLinearGradient: () => ({ addColorStop() {} }),
+      createPattern: vi.fn(() => ({})), createLinearGradient: () => ({ addColorStop() {} }),
     };
     const texture = { width, height, context, refresh: vi.fn() };
     textures.set(key, texture);
@@ -29,6 +29,36 @@ function fixture() {
 }
 
 describe('forest texture ownership and reuse', () => {
+  it('keeps selection fields free of wood grain', () => {
+    const { scene, textures } = fixture();
+    for (const state of ['rest', 'hover', 'press'] as const) {
+      const glass = ensureForestButton(scene, 220, 44, 'neutral', state, 12, true);
+      const wood = ensureForestButton(scene, 220, 44, 'neutral', state);
+      expect(textures.get(glass).context.createPattern).not.toHaveBeenCalled();
+      expect(textures.get(wood).context.createPattern).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('caches dedicated action frames and preserves the trimmed artwork proportions in every state', () => {
+    const { scene, textures, createCanvas } = fixture();
+    const keys = new Set<string>();
+    for (const frame of ['ready', 'world'] as const) for (const intent of ['primary', 'neutral', 'disabled'] as const) {
+      for (const state of ['rest', 'hover', 'press'] as const) {
+        const key = ensureForestActionButton(scene, 484, 80, frame, intent, state);
+        expect(keys.has(key)).toBe(false);
+        keys.add(key);
+        const [, , , sw, sh, dx, dy, dw, dh] = textures.get(key).context.drawImage.mock.calls[0];
+        expect(dw / dh).toBeCloseTo(sw / sh);
+        expect(dx).toBeGreaterThanOrEqual(0);
+        expect(dy).toBeGreaterThanOrEqual(0);
+        expect(dx + dw).toBeLessThanOrEqual(484);
+        expect(dy + dh).toBeLessThanOrEqual(80);
+        const count = createCanvas.mock.calls.length;
+        expect(ensureForestActionButton(scene, 484, 80, frame, intent, state)).toBe(key);
+        expect(createCanvas).toHaveBeenCalledTimes(count);
+      }
+    }
+  });
   it('keeps size, material, intent and pointer state in separate cache entries', () => {
     const { scene, createCanvas } = fixture();
     const keys = new Set<string>();
