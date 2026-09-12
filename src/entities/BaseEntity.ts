@@ -24,6 +24,7 @@ import {
 import { makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
 import { createBaseSurfaceImages, getBaseLightSpots } from './BaseVisuals';
+import { BaseGroundingRenderer } from '../arena/BaseGroundingRenderer';
 import {
   integrityState,
   type WorldIntegrityMutationResult,
@@ -77,6 +78,7 @@ export class BaseEntity {
   private damageable: boolean;
   private voidBurning = false;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
+  private grounding: BaseGroundingRenderer | null = null;
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Sprite>();
   private readonly turretAngles = new Map<string, number>();
@@ -162,6 +164,7 @@ export class BaseEntity {
 
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
     this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
+    this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics);
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
     for (const turret of this.spec.turrets) {
@@ -250,6 +253,7 @@ export class BaseEntity {
 
   /** Entfernt genau das Zellbild, dessen Explosion gerade abgespielt wird. */
   destroyCellVisual(cellIndex: number): void {
+    this.grounding?.destroyCell(cellIndex);
     const image = this.cellImages[cellIndex];
     if (image?.active) image.destroy();
   }
@@ -513,6 +517,7 @@ export class BaseEntity {
       this.onDestroyed();
     } else {
       // Defensive Direktnutzung außerhalb des BaseManager.
+      this.grounding?.destroy();
       for (const image of this.cellImages) {
         if (image.active) image.destroy();
       }
@@ -520,6 +525,8 @@ export class BaseEntity {
   }
 
   destroy(): void {
+    this.grounding?.destroy();
+    this.grounding = null;
     for (const image of this.cellImages) {
       if (image.active) image.destroy();
     }
@@ -540,6 +547,8 @@ export class BaseEntity {
   }
 
   private resetRepresentation(): void {
+    this.grounding?.destroy();
+    this.grounding = null;
     for (const image of this.cellImages) {
       if (image.active) image.destroy();
     }

@@ -5,12 +5,14 @@ import type { PersistentBaseVisualSite } from '../../persistentBase/PersistentBa
 import type { WorldMetrics } from '../../world/WorldMetrics';
 import type { LightingSystem } from '../../effects/LightingSystem';
 import { BASE_LIGHT_COLOR, getBaseLightSpots, createBaseSurfaceImages } from '../../entities/BaseVisuals';
+import { BaseGroundingRenderer } from '../../arena/BaseGroundingRenderer';
 
 const PREVIEW_LIGHT_PREFIX = 'persistent-base-preview';
 
 /** Rein visuelle, nicht kollidierende Darstellung des kanonischen Persistent-Base-Kerns. */
 export class PersistentBasePreviewRenderer {
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
+  private grounding: BaseGroundingRenderer | null = null;
   private readonly lightKeys = new Set<string>();
   private lightSpots: readonly { readonly x: number; readonly y: number; readonly radius: number }[] = [];
   private currentKey = '';
@@ -45,6 +47,7 @@ export class PersistentBasePreviewRenderer {
     const coreCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation);
     const surfaceCells = coreCells.filter((cell) => cell.domain === 'base-surface');
     this.cellImages.push(...createBaseSurfaceImages(this.scene, surfaceCells, metrics, 'base'));
+    this.grounding = new BaseGroundingRenderer(this.scene, surfaceCells, metrics);
     const originX = metrics.offsetX + (preview.anchor.gridX - 2) * CELL_SIZE;
     const originY = metrics.offsetY + (preview.anchor.gridY - 2) * CELL_SIZE;
     this.lightSpots = getBaseLightSpots({
@@ -84,6 +87,8 @@ export class PersistentBasePreviewRenderer {
   }
 
   clear(): void {
+    this.grounding?.destroy();
+    this.grounding = null;
     for (const image of this.cellImages) image.destroy();
     this.cellImages.length = 0;
     this.releaseLights();

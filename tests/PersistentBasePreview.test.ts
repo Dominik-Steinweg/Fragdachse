@@ -15,6 +15,8 @@ import { getAuthoredWorldMetricsProfile } from '../src/config';
 import { resolveWorldMetrics } from '../src/world/WorldMetrics';
 import { PersistentBasePreviewRenderer } from '../src/scenes/arena/PersistentBasePreviewRenderer';
 import { createFakeArenaScene } from './fakeArenaRenderScene';
+import { buildBaseGroundingLayout } from '../src/arena/BaseGroundingLayout';
+import { baseGroundingTextureKey } from '../src/arena/BaseGroundingConfig';
 
 describe('Persistent-Base-Vorschau – Map 1 Authoring', () => {
   it('löst die Vorschau am finalen Checkpoint in den sauberen Standardzustand auf', () => {
@@ -84,13 +86,27 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     const metrics = resolveWorldMetrics(getAuthoredWorldMetricsProfile(260, 33));
 
     renderer.sync(preview, metrics);
-    expect(images).toHaveLength(12);
-    expect(images.every((image) => image.key === 'base')).toBe(true);
+    expect(images.filter((image) => image.key === 'base')).toHaveLength(12);
+    expect(renderer.getSurfaceImages()).toHaveLength(12);
+    const surfaceCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation)
+      .filter((cell) => cell.domain === 'base-surface');
+    const grounding = images.filter((image) => image.key.startsWith('base-grounding-'));
+    expect(grounding.map((image) => image.key)).toEqual(
+      buildBaseGroundingLayout(surfaceCells, metrics).map((placement) => baseGroundingTextureKey(placement.asset)),
+    );
+    expect(grounding.length).toBeGreaterThan(0);
+    const imageCount = images.length;
+    renderer.sync(preview, metrics);
+    expect(images).toHaveLength(imageCount);
 
     renderer.syncLights(true);
     expect(lighting.setLight).toHaveBeenCalled();
     renderer.clear();
     expect(images.every((image) => image.active === false)).toBe(true);
     expect(lighting.releaseLight).toHaveBeenCalled();
+    renderer.sync(preview, metrics);
+    expect(images.slice(imageCount).every((image) => image.active)).toBe(true);
+    renderer.sync(null, null);
+    expect(images.every((image) => !image.active)).toBe(true);
   });
 });

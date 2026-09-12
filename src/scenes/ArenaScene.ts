@@ -12,6 +12,7 @@ import { ChunkedRenderSurface }  from '../arena/chunks/ChunkedRenderSurface';
 import { CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS } from '../arena/chunks/ChunkBakeScheduler';
 import { preloadCanopyAssets }   from '../arena/CanopyConfig';
 import { preloadArenaDecalAssets } from '../arena/DecalConfig';
+import { preloadBaseGroundingAssets } from '../arena/BaseGroundingConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravelConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
@@ -303,6 +304,7 @@ export class ArenaScene extends Phaser.Scene {
     // Frame-Indizes, daher unveraenderte Autotile-Logik.
     this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
     preloadArenaDecalAssets(this.load);
+    preloadBaseGroundingAssets(this.load);
     preloadGroundCoverAssets(this.load);
     preloadPersistentBaseGravelAssets(this.load);
     preloadRockMossAssets(this.load);

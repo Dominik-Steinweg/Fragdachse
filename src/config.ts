@@ -99,6 +99,8 @@ export const DEPTH = {
   PERSISTENT_BASE_GRAVEL: 2.04,
   PERSISTENT_BASE_GRAVEL_DECORATION: 2.7,
   TRACKS: 3,
+  /** Foundation debris sits below the base shadow (BASES - 0.35). */
+  BASE_GROUNDING: 3.5,
   BASES: 4,
   DECALS: 5,
   WATER: 5.2,

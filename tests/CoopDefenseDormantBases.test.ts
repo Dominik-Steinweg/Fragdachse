@@ -119,6 +119,7 @@ function fakeGameObject(width = 32, height = 32): Record<string, any> {
   object.setDisplaySize = chain((value) => { object.width = value; object.height = value; });
   object.setDepth = chain();
   object.setRotation = chain((value) => { object.rotation = value; });
+  object.setAlpha = chain((value) => { object.alpha = value; });
   object.setTint = chain();
   object.setPosition = chain();
   object.setOrigin = chain();
