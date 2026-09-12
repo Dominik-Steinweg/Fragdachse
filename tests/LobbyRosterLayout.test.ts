@@ -11,10 +11,10 @@ import {
 const players = (count: number, teamId: TeamId | null = null, prefix = 'p') =>
   Array.from({ length: count }, (_, index) => ({ id: `${prefix}${index}`, teamId }));
 
-it('keeps the persistent roster backdrop within the list area and clear of the footer', () => {
+it('keeps the persistent roster backdrop below the list header and clear of the footer', () => {
   const bounds = getLobbyReliefBounds();
   expect(bounds.y - bounds.height / 2).toBeGreaterThanOrEqual(LOBBY_CARD.rosterTop);
-  expect(bounds.y + bounds.height / 2).toBeLessThan(LOBBY_CARD.rosterBottom);
+  expect(bounds.y + bounds.height / 2).toBeLessThan(LOBBY_CARD.footerTop);
   expect(bounds.width).toBeLessThanOrEqual(LOBBY_CARD.contentWidth);
 });
 

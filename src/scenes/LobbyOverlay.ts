@@ -30,7 +30,7 @@ import type { LinkDiagnostics } from '../network/peer';
 import type { LoadoutSlot, LoadoutToolRef, PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
 import { createLoadoutHoverGroup, createLoadoutSlotControl } from '../ui/LoadoutSlotControl';
 import { LobbyAlertBanner, type LobbyAlert } from '../ui/LobbyAlertBanner';
-import { getLobbyReliefBounds, LOBBY_CARD, LOBBY_CARD_MOTION, LOBBY_PLAYER_FOOTER, LOBBY_ROSTER_ROW_STEP, LOBBY_WORLD_BUTTON } from '../ui/LobbyLayout';
+import { getLobbyReliefBounds, LOBBY_CARD, LOBBY_CARD_MOTION, LOBBY_PLAYER_FOOTER, LOBBY_ROSTER_CONTENT, LOBBY_ROSTER_ROW_STEP, LOBBY_WORLD_BUTTON } from '../ui/LobbyLayout';
 import { FOREST } from '../ui/UiSkin';
 import { ensureForestFrame, ensureForestPanel, forestOrnament } from '../ui/forestTextures';
 import { LobbyPlayerProgress } from '../ui/LobbyPlayerProgress';
@@ -63,16 +63,16 @@ const CONTENT_R = CONTENT_L + LOBBY_CARD.contentWidth;
 const CONTENT_W = LOBBY_CARD.contentWidth;
 
 // ── Raumzeile ───────────────────────────────────────────────────────
-const QUALITY_Y = PANEL_Y + 90;
+const ROOM_Y = LOBBY_CARD.roomY;
 const HEADER_DIVIDER_Y = 482;
-const ROOM_CHIP_W = 224;
-const ROOM_CHIP_H = 38;
-const ROOM_CHIP_X = CONTENT_L + ROOM_CHIP_W / 2;
+const ROOM_CHIP_W = 166;
+const ROOM_CHIP_H = 34;
+const ROOM_CHIP_X = LOBBY_ROSTER_CONTENT.left + LOBBY_ROSTER_CONTENT.labelWidth + ROOM_CHIP_W / 2;
 
 // ── Spielerliste ─────────────────────────────────────────────────────────────
 const LIST_LABEL_Y = 496;
 const LIST_Y = LOBBY_CARD.rosterTop;
-const ROSTER_SLOT_W = CONTENT_W - 16;
+const ROSTER_SLOT_W = LOBBY_ROSTER_CONTENT.width;
 const ROSTER_SLOT_H = 52;
 const ROSTER_ROW_STEP = LOBBY_ROSTER_ROW_STEP;
 const TEAM_HEADER_H = 28;
@@ -89,15 +89,15 @@ const LOADOUT_FRAME_H = LOADOUT_ICON_SIZE + LOADOUT_FRAME_PADDING_Y * 2;
 const LOADOUT_LEFT_OFFSET = ROSTER_SLOT_W - LOADOUT_FRAME_W - 68;
 
 // ── Fixed footer; the primary action remains below the history actions. ──
-const CTA_BLOCK_H = 152;
 const READY_BTN_W = CONTENT_W;
 const READY_BTN_H = 80;
-const HOST_BTN_W = 200;
+const HOST_BTN_W = 136;
 const HOST_BTN_H = ROOM_CHIP_H;
-const HOST_BTN_X = CONTENT_L + ROOM_CHIP_W + 8 + HOST_BTN_W / 2;
-const INFO_BTN_SIZE = 36;
-const INFO_BTN_X = CONTENT_R - INFO_BTN_SIZE / 2;
-const CTA_DIVIDER_Y_MAX = LOBBY_CARD.rosterBottom + 12;
+const HOST_BTN_X = ROOM_CHIP_X + ROOM_CHIP_W / 2 + 4 + HOST_BTN_W / 2;
+const INFO_BTN_SIZE = 30;
+const INFO_BTN_X = LOBBY_ROSTER_CONTENT.right - INFO_BTN_SIZE / 2;
+const CTA_DIVIDER_Y = LOBBY_CARD.footerTop;
+const CTA_BLOCK_H = LOBBY_CARD.bottom - LOBBY_CARD.glassInset - CTA_DIVIDER_Y;
 const CTA_FADE_OVERLAP = 24;
 
 // ── Ausserhalb des Panels ────────────────────────────────────────────────────
@@ -153,6 +153,7 @@ type PlayerRow = {
 
 export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
+  private cardContent:    Phaser.GameObjects.Container | null = null;
   private systemBar:      Phaser.GameObjects.Container | null = null;
   /** Austritt aus dem Testgelaende; unabhaengig vom Lobby-Panel sichtbar. */
   private worldExitBar:   Phaser.GameObjects.Container | null = null;
@@ -175,6 +176,7 @@ export class LobbyOverlay {
   private statusText!:    Phaser.GameObjects.Text;
   private readyBtn!:      UiButton;
   private roomChip!:      UiButton;
+  private roomLabel!:     Phaser.GameObjects.Text;
   private infoBtn!:       UiButton;
   private retryBtn!:      UiButton;
   private inviteRow!:     UiButton;
@@ -258,7 +260,7 @@ export class LobbyOverlay {
     const footerH = CTA_BLOCK_H + CTA_FADE_OVERLAP;
     objects.push(this.scene.add.image(
       PANEL_CX,
-      CTA_DIVIDER_Y_MAX - CTA_FADE_OVERLAP + footerH / 2,
+      CTA_DIVIDER_Y - CTA_FADE_OVERLAP + footerH / 2,
       ensureLobbyFooterTexture(
         this.scene,
         `_lobby_forest_footer_${PANEL_W - LOBBY_CARD.glassInset * 2}x${footerH}`,
@@ -268,17 +270,25 @@ export class LobbyOverlay {
       ),
     ).setScrollFactor(0));
 
-    // ── Kopfzeile: was wird gespielt, und in welchem Raum ─────────────────
-    objects.push(this.scene.add.image(PANEL_CX, PANEL_Y + PANEL_H_MAX / 2,
+    // ── Kartenrahmen und dezenter Titel gegenueber dem Spielernamen ────────
+    const cardFrame = this.scene.add.image(PANEL_CX, PANEL_Y + PANEL_H_MAX / 2,
       ensureForestFrame(this.scene, PANEL_W, PANEL_H_MAX))
-      .setDisplaySize(PANEL_W, PANEL_H_MAX).setScrollFactor(0));
+      .setDisplaySize(PANEL_W, PANEL_H_MAX).setScrollFactor(0);
     const relief = getLobbyReliefBounds();
     this.forestRelief = forestOrnament(this.scene, 'relief', relief.x, relief.y, relief.width, relief.height)
-      .setTint(0x977b51).setTintMode(Phaser.TintModes.FILL).setAlpha(0.24);
+      .setTint(0x977b51).setTintMode(Phaser.TintModes.FILL).setAlpha(0.16);
     objects.push(this.forestRelief);
 
+    objects.push(this.scene.add.text(PANEL_CX, 306, t('ui.lobby.title'),
+      textStyle('title', { color: FOREST.muted })).setOrigin(0.5, 0).setScrollFactor(0));
+
+    // Die Raumaktionen bleiben fest ueber Ergebnisaktionen und Bereit-Button.
+    this.roomLabel = this.scene.add.text(LOBBY_ROSTER_CONTENT.left, ROOM_Y, t('ui.lobby.room').toUpperCase(),
+      textStyle('section', { color: FOREST.muted })).setOrigin(0, 0.5).setScrollFactor(0);
+    objects.push(this.roomLabel);
+
     this.roomChip = new UiButton(this.scene, { skin: 'forest',
-      x: ROOM_CHIP_X, y: QUALITY_Y, w: ROOM_CHIP_W, h: ROOM_CHIP_H,
+      x: ROOM_CHIP_X, y: ROOM_Y, w: ROOM_CHIP_W, h: ROOM_CHIP_H,
       label: this.bridge.getRoomCode(),
       labelRole: 'code',
       intent: 'ghost',
@@ -292,14 +302,14 @@ export class LobbyOverlay {
     objects.push(this.roomChip.getRoot());
 
     this.infoBtn = new UiButton(this.scene, { skin: 'forest',
-      x: INFO_BTN_X, y: QUALITY_Y, w: INFO_BTN_SIZE, h: INFO_BTN_SIZE,
+      x: INFO_BTN_X, y: ROOM_Y, w: INFO_BTN_SIZE, h: INFO_BTN_SIZE,
       intent: 'ghost',
       icon: 'info',
       iconOnly: true,
       iconSize: 16,
       onClick: () => {
         this.playerContextMenu?.open({
-          x: INFO_BTN_X - 210, y: QUALITY_Y + 26,
+          x: INFO_BTN_X - 210, y: ROOM_Y + 26,
           title: t('ui.lobby.room') + ' ' + this.bridge.getRoomCode(),
           titleColor: TEXT.primary,
           description: [this.formatTransportText()?.text, this.formatRoomQualityText()].filter(Boolean).join('\n\n')
@@ -311,7 +321,7 @@ export class LobbyOverlay {
     objects.push(this.infoBtn.getRoot());
 
     this.retryBtn = new UiButton(this.scene, { skin: 'forest',
-      x: HOST_BTN_X, y: QUALITY_Y, w: HOST_BTN_W, h: HOST_BTN_H,
+      x: HOST_BTN_X, y: ROOM_Y, w: HOST_BTN_W, h: HOST_BTN_H,
       label: t('ui.lobby.newRoom'),
       labelRole: 'labelSm',
       intent: 'ghost',
@@ -320,25 +330,25 @@ export class LobbyOverlay {
     objects.push(this.retryBtn.getRoot());
 
     objects.push(
-      this.scene.add.rectangle(PANEL_CX, HEADER_DIVIDER_Y, CONTENT_W, 1, COLORS.GREY_6, 0.7)
+      this.scene.add.rectangle(PANEL_CX, HEADER_DIVIDER_Y, ROSTER_SLOT_W, 1, FOREST.text, 0.22)
         .setScrollFactor(0),
     );
 
     // ── Listenkopf ────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.text(CONTENT_L, LIST_LABEL_Y, t('ui.lobby.players'), textStyle('section', { color: FOREST.muted }))
+      this.scene.add.text(LOBBY_ROSTER_CONTENT.left, LIST_LABEL_Y, t('ui.lobby.players'), textStyle('section', { color: FOREST.muted }))
         .setOrigin(0, 0.5).setScrollFactor(0),
     );
-    this.statusText = this.scene.add.text(CONTENT_R, LIST_LABEL_Y, '', textStyle('section', {
+    this.statusText = this.scene.add.text(LOBBY_ROSTER_CONTENT.right, LIST_LABEL_Y, '', textStyle('section', {
       color: TEXT.accent,
     })).setOrigin(1, 0.5).setScrollFactor(0);
     objects.push(this.statusText);
 
-    const blueHeader = this.scene.add.text(CONTENT_L, LIST_Y, t('ui.lobby.teamBlue'), textStyle('caption', {
+    const blueHeader = this.scene.add.text(LOBBY_ROSTER_CONTENT.left, LIST_Y, t('ui.lobby.teamBlue'), textStyle('caption', {
       color: TEAM_BLUE_COLOR,
     })).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
     const redHeader = this.scene.add.text(
-      CONTENT_L,
+      LOBBY_ROSTER_CONTENT.left,
       LIST_Y,
       t('ui.lobby.teamRed'),
       textStyle('caption', { color: TEAM_RED_COLOR }),
@@ -367,7 +377,7 @@ export class LobbyOverlay {
 
     // ── Handlungsaufruf ───────────────────────────────────────────────────
     this.ctaDivider = this.scene.add
-      .rectangle(PANEL_CX, CTA_DIVIDER_Y_MAX, CONTENT_W, 1, COLORS.GREY_6, 0.7)
+      .rectangle(PANEL_CX, CTA_DIVIDER_Y, CONTENT_W, 1, FOREST.text, 0.22)
       .setScrollFactor(0);
     objects.push(this.ctaDivider);
 
@@ -452,9 +462,11 @@ export class LobbyOverlay {
       },
     }).setVisible(false);
 
-    this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
+    this.cardContent = this.scene.add.container(0, 0, objects).setScrollFactor(0);
+    // Late roster rows stay below the frame; transient menus are added above it to the root.
+    this.container = this.scene.add.container(0, 0, [this.cardContent, cardFrame]).setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.container);
-    this.settings = new LobbySettingsControls(this.scene, this.bridge, this.container);
+    this.settings = new LobbySettingsControls(this.scene, this.bridge, this.cardContent, this.container);
     this.rosterScroller = new LobbyRosterScroller(this.scene, this.container,
       () => this.visible && !this.settings?.isOpen() && !this.playerContextMenu?.isOpen(),
       () => { this.loadoutTooltip?.hide(); this.playerNameTooltip?.hide(); this.layoutList(); });
@@ -553,6 +565,7 @@ export class LobbyOverlay {
       this.container.destroy(true);
       this.container = null;
     }
+    this.cardContent = null;
     if (this.systemBar) {
       this.systemBar.destroy(true);
       this.systemBar = null;
@@ -933,6 +946,7 @@ export class LobbyOverlay {
   /** Kopfzeile: welcher Modus, welche Karte, welcher Raum. */
   private refreshHeader(): void {
     this.roomChip.setLabel(this.bridge.getRoomCode());
+    this.roomLabel.setText(t('ui.lobby.room').toUpperCase());
   }
 
   private updateFullscreenIcon(): void {
@@ -1013,7 +1027,7 @@ export class LobbyOverlay {
     name.on('pointerup', handlePlayerPointerUp);
 
     const root = this.scene.add.container(0, 0, [bg, name, badge, mark, loadoutFrame, loadout, ping]).setScrollFactor(0);
-    this.container!.add(root);
+    this.cardContent!.add(root);
     if (!this.bootPreparing) {
       root.setAlpha(0);
       this.scene.tweens.add({ targets: root, alpha: 1, duration: MOTION.base, ease: MOTION.ease.out });
@@ -1239,7 +1253,7 @@ export class LobbyOverlay {
     const groups = teamMode ? ['blue', 'red'] as const : [null];
     for (const teamId of groups) {
       if (teamId && this.teamHeaders) {
-        this.teamHeaders[teamId].setPosition(CONTENT_L, y + TEAM_HEADER_H / 2)
+        this.teamHeaders[teamId].setPosition(LOBBY_ROSTER_CONTENT.left, y + TEAM_HEADER_H / 2)
           .setVisible(inView(y, TEAM_HEADER_H));
         y += TEAM_HEADER_H;
       }
@@ -1379,7 +1393,7 @@ export class LobbyOverlay {
       this.bridge.getPlayerProfile(playerId)?.name ?? '',
       TEXT.accent,
       isCoopDefenseMode(this.bridge.getGameMode())
-        ? [{ text: 'Coop-Level ' + this.bridge.getPlayerCoopDefenseLevel(playerId), color: TEXT.primary }]
+        ? [{ text: `${t('ui.lobby.level')} ${this.bridge.getPlayerCoopDefenseLevel(playerId)}`, color: TEXT.primary }]
         : [],
       pointer,
     );

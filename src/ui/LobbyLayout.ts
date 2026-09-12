@@ -7,16 +7,26 @@ export const LOBBY_CARD = {
   height: 832,
   top: 240,
   bottom: 1072,
-  left: 12,
-  right: GAME_WIDTH - 12 - 596,
+  left: 6,
+  right: GAME_WIDTH - 6 - 596,
   padding: 56,
   glassInset: 36,
   contentWidth: 484,
   readyY: 992,
-  historyY: 908,
+  historyY: 932,
+  roomY: 890,
+  footerTop: 868,
   systemY: 992,
   rosterTop: 516,
-  rosterBottom: 864,
+  rosterBottom: 836,
+} as const;
+
+/** Roster and lobby metadata share the same inset, including their labels and right edges. */
+export const LOBBY_ROSTER_CONTENT = {
+  left: LOBBY_CARD.left + LOBBY_CARD.padding + 8,
+  right: LOBBY_CARD.left + LOBBY_CARD.width - LOBBY_CARD.padding - 8,
+  width: LOBBY_CARD.contentWidth - 16,
+  labelWidth: 128,
 } as const;
 
 export const LOBBY_PLAYER_CONTENT_LEFT = LOBBY_CARD.right + LOBBY_CARD.padding;
@@ -34,7 +44,7 @@ export function getLobbyReliefBounds() {
   const width = LOBBY_CARD.contentWidth - 24;
   const height = width * FOREST_ASSETS.relief.crop.height / FOREST_ASSETS.relief.crop.width;
   return { x: LOBBY_CARD.left + LOBBY_CARD.width / 2,
-    y: LOBBY_CARD.rosterBottom - 16 - height / 2, width, height };
+    y: LOBBY_CARD.footerTop - 8 - height / 2, width, height };
 }
 export const LOBBY_POPUP_SAFE_AREA = {
   left: 12, top: 12, right: GAME_WIDTH - 12, bottom: 1068,

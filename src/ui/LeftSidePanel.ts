@@ -175,6 +175,7 @@ const PU_CONTAINER_X = GAME_WIDTH / 2;
 
 export class LeftSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
+  private lobbyContent!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
   private puContainer!:    Phaser.GameObjects.Container;
   private arenaHUD!:       ArenaHUD;
@@ -268,9 +269,9 @@ export class LeftSidePanel {
       ).setScrollFactor(0),
     );
 
-    objects.push(this.scene.add.image(CENTER_X, GLASS_Y + GLASS_H / 2,
+    const cardFrame = this.scene.add.image(CENTER_X, GLASS_Y + GLASS_H / 2,
       ensureForestFrame(this.scene, GLASS_W, GLASS_H))
-      .setDisplaySize(GLASS_W, GLASS_H).setScrollFactor(0));
+      .setDisplaySize(GLASS_W, GLASS_H).setScrollFactor(0);
 
     this.localNameText = this.scene.add.text(CENTER_X, NAME_VALUE_Y, '', NAME_FONT)
       .setOrigin(0.5, 0)
@@ -347,7 +348,8 @@ export class LeftSidePanel {
     this.loadoutLayer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.loadoutLayer);
 
-    this.lobbyContainer = this.scene.add.container(0, 0, objects);
+    this.lobbyContent = this.scene.add.container(0, 0, objects).setScrollFactor(0);
+    this.lobbyContainer = this.scene.add.container(0, 0, [this.lobbyContent, cardFrame]);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
     this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 3, 'forest');
     this.loadoutPicker = new LoadoutSlotPicker(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 2, true, 'forest');
@@ -361,11 +363,11 @@ export class LeftSidePanel {
       BADGER_SIZE,
       // Das Bild der getragenen Waffe entsteht erst beim ersten Item und verpasst deshalb die
       // Kamerazuordnung weiter unten im Aufbaupfad.
-      (image) => { this.lobbyContainer.add(image); promoteToClarityCamera(this.scene, image); },
+      (image) => { this.lobbyContent.add(image); promoteToClarityCamera(this.scene, image); },
     );
     this.badgerPreview.setScrollFactor(0);
     this.badgerPreview.setDepth(DEPTH.OVERLAY);
-    this.lobbyContainer.add(this.badgerPreview.sprite);
+    this.lobbyContent.add(this.badgerPreview.sprite);
 
     // ── Picker-Popup (world-space, über LobbyOverlay) ─────────────────────────
     this.pickerContainer = this.buildPickerContainer();
@@ -466,7 +468,8 @@ export class LeftSidePanel {
   // ── Transitions ────────────────────────────────────────────────────────────
 
   /** Presentation parent for the progression and system controls owned by LobbyOverlay. */
-  getLobbyContainer(): Phaser.GameObjects.Container { return this.lobbyContainer; }
+  /** Added controls inherit the card motion and remain behind its outer ivy frame. */
+  getLobbyContentContainer(): Phaser.GameObjects.Container { return this.lobbyContent; }
 
   transitionToGame(): void {
     this.saveMenu?.close();

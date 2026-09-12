@@ -28,7 +28,7 @@ vi.mock('../src/ui/UiButton', () => ({
 import { LoadoutSlotPicker, type LoadoutPickerOptions } from '../src/ui/LoadoutSlotPicker';
 import { LobbyRosterScroller } from '../src/ui/LobbyRosterScroller';
 import { LobbySettingsControls } from '../src/ui/LobbySettingsControls';
-import { LOBBY_CARD } from '../src/ui/LobbyLayout';
+import { LOBBY_CARD, LOBBY_ROSTER_CONTENT } from '../src/ui/LobbyLayout';
 import { promoteToClarityCamera } from '../src/scenes/arena/ClarityCameraRegistry';
 
 /** Minimal display objects for selection/scroll input contracts; no rendering emulation. */
@@ -116,8 +116,14 @@ describe('Lobby selection menus', () => {
       getLobbyTimeOfDayMinutes: () => 720,
       setGameMode: vi.fn(next => { mode = next; }), setCoopDefenseMapId: vi.fn(),
     };
-    const settings = new LobbySettingsControls(scene as any, bridge as any, parent as any);
+    const content = new Display('content');
+    const frame = new Display('frame');
+    parent.add([content, frame]);
+    const settings = new LobbySettingsControls(scene as any, bridge as any, content as any, parent as any);
     const modeButton = created.find(object => object.kind === 'rectangle')!;
+    expect(modeButton.x + modeButton.width / 2).toBe(LOBBY_ROSTER_CONTENT.right);
+    expect(modeButton.parentContainer?.parentContainer).toBe(content);
+    expect(parent.children).toEqual([content, frame]);
     click(modeButton);
     expect(settings.isOpen()).toBe(false);
     host = true;

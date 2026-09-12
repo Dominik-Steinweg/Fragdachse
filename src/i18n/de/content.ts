@@ -284,7 +284,7 @@ export const deContent = {
   "gameMode.deathmatch": "Deathmatch",
   "gameMode.teamDeathmatch": "Team-Deathmatch",
   "gameMode.captureTheBeer": "Bier erobern",
-  "gameMode.coopDefense": "Coop-Defense",
+  "gameMode.coopDefense": "Dachs vs. Zombies",
   "map.objective.repel-assault": "ANGRIFF ABWEHREN",
   "map.objective.survive": "ÜBERLEBEN",
   "map.objective.defeat-boss": "BOSS MUSS FALLEN",

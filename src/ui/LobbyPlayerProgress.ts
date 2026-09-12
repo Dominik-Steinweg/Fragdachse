@@ -88,7 +88,7 @@ export class LobbyPlayerProgress {
     const bandLabel = this.scene.add.text(CONTENT_L, COOP_LABEL_Y, t('ui.lobby.progress'),
       textStyle('section', { color: FOREST.muted })).setOrigin(0, 0.5).setScrollFactor(0);
 
-    this.coopProgressLevelText = this.scene.add.text(CONTENT_L, COOP_LABEL_Y + 28, t('ui.lobby.level', { level: 1 }),
+    this.coopProgressLevelText = this.scene.add.text(CONTENT_L, COOP_LABEL_Y + 28, `${t('ui.lobby.level')} 1`,
       textStyle('numL', { color: FOREST.text })).setOrigin(0, 0.5).setScrollFactor(0);
 
     const barW = CONTENT_W;

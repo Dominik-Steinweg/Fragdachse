@@ -11,7 +11,7 @@ Final PNGs are copied from the tool's output without modifying their pixels.
 | `wood.png` | Repeating horizontal walnut grain for buttons |
 | `button-frame.png` | Quiet walnut rim, composed from fixed corners and repeated edges for all ordinary wood buttons |
 | `leaves.png` | Small ivy ornaments |
-| `medallion.png` | Delicate open twig with two leaves, partially transparent around the live badger preview |
+| `medallion.png` | Continuous bare walnut ring with no foliage, partially transparent around the live badger preview |
 | `relief.png` | Monochrome rifle duel between two badgers, always behind the roster |
 | `ready.png` | Dedicated open ivy/walnut frame for the green ready action |
 | `world.png` | Standalone branch sign for training-ground entry and return |
@@ -37,6 +37,8 @@ preview and its held item inherit the player card's slide transform; the centre 
 The room-code copy action also uses wood. The training-ground sign's backing extends under
 its asymmetrical upper and lower branches so the entire opening is filled. The two large
 card title labels are absent; player name and preview precede the name/colour controls.
+Card contents live below their large outer frames, so ivy can overlap controls. Popups remain
+above the frames, while late roster entries and player controls retain their card's motion.
 
 Validation covers alpha cutouts, shipped assets, texture reuse, undistorted proportions,
 skin isolation and lobby behaviour. Cutouts can contain imperceptible 1/255 alpha residue;

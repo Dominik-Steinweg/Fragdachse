@@ -12,14 +12,14 @@ import { getStoredHighestUnlockedCoopDefenseMapId } from '../utils/localPreferen
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { LoadoutSlotPicker } from './LoadoutSlotPicker';
-import { LOBBY_CARD, LOBBY_POPUP_SAFE_AREA } from './LobbyLayout';
+import { LOBBY_ROSTER_CONTENT, LOBBY_POPUP_SAFE_AREA } from './LobbyLayout';
 import { UiButton } from './UiButton';
 import { textStyle } from './uiTheme';
 
 const MODES: readonly GameMode[] = ['deathmatch', 'team_deathmatch', 'capture_the_beer', 'coop_defense'];
-const LEFT = LOBBY_CARD.left + LOBBY_CARD.padding;
-const VALUE_LEFT = LEFT + 128;
-const VALUE_W = LOBBY_CARD.contentWidth - 128;
+const LEFT = LOBBY_ROSTER_CONTENT.left;
+const VALUE_LEFT = LEFT + LOBBY_ROSTER_CONTENT.labelWidth;
+const VALUE_W = LOBBY_ROSTER_CONTENT.width - LOBBY_ROSTER_CONTENT.labelWidth;
 const VALUE_X = VALUE_LEFT + VALUE_W / 2;
 const MODE_Y = 388;
 const MAP_Y = 450;
@@ -42,7 +42,7 @@ export class LobbySettingsControls {
   private signature = '';
 
   constructor(private readonly scene: Phaser.Scene, private readonly bridge: NetworkBridge,
-    parent: Phaser.GameObjects.Container) {
+    parent: Phaser.GameObjects.Container, popupParent = parent) {
     this.modeLabel = scene.add.text(LEFT, MODE_Y, '', textStyle('section', { color: FOREST.muted })).setOrigin(0, 0.5);
     this.mapLabel = scene.add.text(LEFT, MAP_Y, '', textStyle('section', { color: FOREST.muted })).setOrigin(0, 0.5);
     this.mode = new UiButton(scene, { skin: 'forest', x: VALUE_X, y: MODE_Y, w: VALUE_W, h: 44,
@@ -65,7 +65,7 @@ export class LobbySettingsControls {
       this.timeLabel, this.track, this.fill, this.thumb, this.hit];
     objects.forEach(object => object.setScrollFactor(0));
     parent.add(objects);
-    this.picker = new LoadoutSlotPicker(scene, parent, DEPTH.OVERLAY + 3, true, 'forest');
+    this.picker = new LoadoutSlotPicker(scene, popupParent, DEPTH.OVERLAY + 3, true, 'forest');
     scene.input.on('pointermove', this.move);
     scene.input.on('pointerup', this.release);
     this.refresh();

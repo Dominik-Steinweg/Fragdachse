@@ -75,7 +75,7 @@ export const deUi = {
   "ui.lobby.host": "HOST",
   "ui.lobby.fullscreenBrowserLocked": "MIT F11 RAUS",
   "ui.lobby.fullscreenUnavailable": "NICHT MÖGLICH",
-  "ui.lobby.level": "Coop-Level",
+  "ui.lobby.level": "Level",
   "ui.lobby.saveInvalidJson": "Die Datei enthält kein gültiges JSON.",
   "ui.lobby.saveIncompatible": "Die Datei ist kein kompatibler Fragdachse-Spielstand.",
   "ui.lobby.saveInvalid": "Der Spielstand ist ungültig oder verwendet ein inkompatibles Schema.",

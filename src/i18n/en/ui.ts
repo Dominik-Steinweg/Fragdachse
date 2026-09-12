@@ -75,7 +75,7 @@ export const enUi = {
   "ui.lobby.host": "HOST",
   "ui.lobby.fullscreenBrowserLocked": "EXIT WITH F11",
   "ui.lobby.fullscreenUnavailable": "NOT AVAILABLE",
-  "ui.lobby.level": "Co-op level",
+  "ui.lobby.level": "Level",
   "ui.lobby.saveInvalidJson": "The file does not contain valid JSON.",
   "ui.lobby.saveIncompatible": "The file is not a compatible Fragdachse save.",
   "ui.lobby.saveInvalid": "The save is invalid or uses an incompatible schema.",

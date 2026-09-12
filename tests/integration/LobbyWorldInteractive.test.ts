@@ -554,6 +554,9 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       noop, noop, noop, noop, noop, noop, noop, noop, noop, noop,
     ) as any;
     overlay.container = container;
+    overlay.cardContent = new DisplayObject();
+    const frame = new DisplayObject();
+    container.add([overlay.cardContent, frame]);
     // Texturen, Loadout-Controls und dekoratives Ready-Glow sind nicht Teil des Eintritts.
     overlay.updateReadyGlow = vi.fn();
     overlay.rowTexture = () => 'row';
@@ -561,7 +564,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     overlay.loadoutFrameTexture = () => 'loadout-frame';
     overlay.refreshPlayerLoadout = vi.fn();
     overlay.setPlayerRowInteractive = vi.fn();
-    return { overlay, container, tweens, uiScene: scene };
+    return { overlay, container, frame, tweens, uiScene: scene };
   }
 
   function bootFixture() {
@@ -717,7 +720,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
   });
 
   it('bereitet die erste Spielerliste voll sichtbar vor und animiert erst spaetere Eintritte', () => {
-    const { overlay, container, tweens } = overlayFixture();
+    const { overlay, container, frame, tweens } = overlayFixture();
     overlay.show();
     overlay.addPlayerRow({ id: 'local', name: 'Host', colorHex: 0xffffff });
     expect(container.children.length).toBeGreaterThan(0);
@@ -728,6 +731,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     overlay.show();
     expect(tweens.add).not.toHaveBeenCalled();
     overlay.addPlayerRow({ id: 'guest', name: 'Guest', colorHex: 0xffffff });
+    expect(overlay.cardContent.children).toHaveLength(2);
+    expect(container.children).toEqual([overlay.cardContent, frame]);
     expect(tweens.add).toHaveBeenCalled();
     tweens.add.mockClear();
 

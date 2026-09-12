@@ -284,7 +284,7 @@ export const enContent = {
   "gameMode.deathmatch": "Deathmatch",
   "gameMode.teamDeathmatch": "Team Deathmatch",
   "gameMode.captureTheBeer": "Capture the Beer",
-  "gameMode.coopDefense": "Co-op Defense",
+  "gameMode.coopDefense": "Badger vs. Zombies",
   "map.objective.repel-assault": "REPEL THE ASSAULT",
   "map.objective.survive": "SURVIVE",
   "map.objective.defeat-boss": "DEFEAT THE BOSS",
