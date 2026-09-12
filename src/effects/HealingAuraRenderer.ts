@@ -47,6 +47,11 @@ export class HealingAuraRenderer {
     ]);
   }
 
+  playHealingBurst(x: number, y: number): void {
+    this.generateTextures();
+    this.spawnHealingBurst(x, y, 5);
+  }
+
   syncEnemies(enemies: readonly EnemyVisualSource[]): void {
     const activeAuraIds = new Set<string>();
     const activeEnemyIds = new Set<string>();

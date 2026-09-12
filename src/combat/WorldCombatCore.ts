@@ -1,3 +1,4 @@
+import { PressureShieldSystem } from '../systems/PressureShieldSystem';
 import type { CombatStunStatusSystem } from '../systems/CombatStunStatusSystem';
 import type { MolotovWildfireDeath } from '../types';
 import { acquirePortalDamage, findPortalCrossing, portalCircleEntry, portalDamageMultiplier, type PortalQueryPort } from '../systems/PortalTraversal';
@@ -360,6 +361,13 @@ type MeleeSwingTargetCandidate =
   | Omit<Extract<MeleeSwingTarget, { readonly kind: 'decoy' }>, 'distance'>;
 
 export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAttackPort {
+  private readonly pressureShields = new PressureShieldSystem();
+  private readonly rocketHealSequences = new Map<string, number>();
+  getRocketSupportState(playerId: string, now: number): { pressureShieldUntil: number; rocketHealSequence: number } {
+    return { pressureShieldUntil: this.isAlive(playerId) ? this.pressureShields.getUntil(playerId, now) : 0,
+      rocketHealSequence: this.rocketHealSequences.get(playerId) ?? 0 };
+  }
+
   private portalQuery: PortalQueryPort | null = null;
   setPortalQueryPort(port: PortalQueryPort | null): void { this.portalQuery = port; }
   private bubbleChargePort: TimeBubbleChargePort | null = null;
@@ -475,7 +483,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private playerArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
   private playerOutgoingDamageResolver: ((
     attackerId: string | undefined,
-    targetId: string,
+    targetId: string | undefined,
     amount: number,
     allowCritical: boolean,
     sourceSlot: LoadoutSlot | undefined,
@@ -812,6 +820,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   bindPlayerVitalsScope(scope: CombatScope): { destroy(): void } {
+    this.pressureShields.clear();
+    this.rocketHealSequences.clear();
     if (this.playerVitals.hasAttachedPlayers()) {
       throw new Error('[WorldCombatCore] Cannot replace Player vitals while Players are attached');
     }
@@ -828,6 +838,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       destroy: () => {
         if (this.playerVitals === owner) {
           this.reactionGeneration += 1;
+          this.pressureShields.clear(); this.rocketHealSequences.clear();
           this.lastSource.clear(); this.attributionTargets.clear();
           this.lastKillSource.clear();
         }
@@ -992,7 +1003,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   setPlayerOutgoingDamageResolver(
     resolver: ((
       attackerId: string | undefined,
-      targetId: string,
+      targetId: string | undefined,
       amount: number,
       allowCritical: boolean,
       sourceSlot: LoadoutSlot | undefined,
@@ -1168,6 +1179,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   invalidatePlayerLifecyclePolicy(): void {
+    this.pressureShields.clear();
     this.reactionGeneration += 1;
     this.playerLife.invalidatePolicy();
   }
@@ -1181,6 +1193,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   getHostTime(): number { return this.hostFrameNowMs; }
 
   removePlayer(id: string): void {
+    this.pressureShields.clearPlayer(id);
+    this.rocketHealSequences.delete(id);
     this.clearAttribution(id);
     this.clearBurnForPlayer(id);
     this.clearBurnByAttacker(id);
@@ -1619,6 +1633,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceId = 'environment.explosion',
     source?: CombatSource,
   ): string[] {
+    if (effect.rocketSupport) effect = this.captureRocketExplosionDamage(effect, ownerId, sourceSlot);
     this.bubbleChargePort?.observeExplosion(x, y, effect.radius, effect.maxDamage,
       this.hostFrameNowMs, resolveProjectileExplosionFalloff(effect));
     const damagedTargetKeys: string[] = [];
@@ -1637,6 +1652,21 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const dist = Phaser.Math.Distance.Between(x, y, player.x, player.y);
       if (dist > effect.radius) continue;
 
+      const friendly = player.id === ownerId || this.relationshipForSource(
+        source ?? this.createLegacyMutationSource(ownerId, sourceId, 'explosion'), player.id).canSupport;
+      if (friendly && effect.rocketSupport) {
+        const support = effect.rocketSupport;
+        this.pressureShields.apply(player.id, support.pressureShieldReduction, support.pressureShieldDurationMs, this.hostFrameNowMs);
+        if (support.healFraction > 0) {
+          const before = this.getHP(player.id);
+          const healBasis = this.resolveExplosionDamageBasis(dist, effect, ownerId, sourceSlot).amount;
+          this.heal(player.id, healBasis * support.healFraction * (support.healDamageMultiplier ?? 1),
+            source ?? this.createLegacyMutationSource(ownerId, sourceId, 'explosion'));
+          if (this.getHP(player.id) > before) this.rocketHealSequences.set(player.id, (this.rocketHealSequences.get(player.id) ?? 0) + 1);
+          continue;
+        }
+      }
+      if (friendly && effect.excludeFriendlyPlayers) continue;
       const basis = this.resolveExplosionDamageBasis(
         dist, effect, ownerId, sourceSlot, player.id === ownerId ? effect.selfDamageMult : 1,
       );
@@ -1982,11 +2012,15 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const provenance = this.captureProjectileProvenance(request.provenance);
     const source = { ...adaptProjectileCombatSource(provenance, request.projectileId ?? 0,
       this.classifyProjectileSource({ provenance })), origin: 'explosion' as const };
+    const effect = request.effect.rocketSupport
+      ? this.captureRocketExplosionDamage(request.effect, provenance.allegiance.ownerId, provenance.sourceSlot)
+      : request.effect;
     return {
+      resolvedEffect: effect,
       damagedTargetKeys: this.applyExplosionDamage(
         request.x,
         request.y,
-        request.effect,
+        effect,
         request.provenance.allegiance.ownerId,
         request.provenance.sourceSlot,
         request.provenance.weaponSourceId ?? 'environment.explosion',
@@ -2377,6 +2411,27 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       request.provenance.allegiance.ownerId, request.provenance.sourceSlot,
       request.directHit.appliedSourceDamageFactors,
     );
+  }
+
+  private captureRocketExplosionDamage(effect: ProjectileExplosionConfig, ownerId: string, slot?: LoadoutSlot): ProjectileExplosionConfig {
+    if (effect.rocketSupport?.healDamageMultiplier !== undefined) return effect;
+    const existing = effect.appliedSourceDamageFactors ?? [];
+    const multiplier = existing.some(f => f.kind === 'runtime-power') ? 1 : this.getPlayerRuntimeDamageMultiplier(ownerId, slot);
+    const sourceFactors: NonNullable<ProjectileExplosionConfig['appliedSourceDamageFactors']> = existing.some(f => f.kind === 'runtime-power') ? existing
+      : [...existing, { kind: 'runtime-power', multiplier, resolvedAt: 'impact' }];
+    const outgoing = existing.some(f => f.kind === 'outgoing-modifier') ? 1
+      : this.playerOutgoingDamageResolver?.(ownerId, undefined, 1, false, slot, this.hostFrameNowMs, this.hostRandom).amount ?? 1;
+    const scale = <T extends { maxDamage: number; minDamage?: number }>(e: T, factor = multiplier) => ({
+      ...e, maxDamage: e.maxDamage * factor, minDamage: e.minDamage === undefined ? undefined : e.minDamage * factor,
+      appliedSourceDamageFactors: sourceFactors,
+    });
+    const landing = effect.fireChunkBurst?.landingExplosion;
+    return { ...scale(effect), rocketSupport: effect.rocketSupport ? { ...effect.rocketSupport, healDamageMultiplier: outgoing } : undefined,
+      fireChunkBurst: effect.fireChunkBurst ? { ...effect.fireChunkBurst, landingExplosion: landing ? {
+        ...scale(landing, multiplier * outgoing),
+        appliedSourceDamageFactors: [...sourceFactors, { kind: 'outgoing-modifier', multiplier: outgoing, resolvedAt: 'impact' }],
+        rocketSupport: landing.rocketSupport ? { ...landing.rocketSupport, healDamageMultiplier: 1 } : undefined,
+      } : undefined } : undefined };
   }
 
   private resolveExplosionDamageBasis(
@@ -4213,6 +4268,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const killSource = terminal?.source ?? this.lastKillSource.get(playerId);
 
     // Aktive Duration-Buffs (z.B. Adrenalinspritze) beim Tod entfernen
+    this.pressureShields.clearPlayer(playerId);
     this.powerUpSystem?.removePlayer(playerId);
     if (!current()) return;
     // Stinkwolke beim Tod sofort deaktivieren
@@ -4249,14 +4305,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     return this.getHP(playerId) - current;
   }
 
-  heal(playerId: string, amount: number): number {
+  heal(playerId: string, amount: number, source?: CombatSource): number {
     if (!this.isAlive(playerId) || amount <= 0) return this.getHP(playerId);
     const target = this.playerVitals.getTargetRef(playerId);
     if (!target) return this.getHP(playerId);
     const outcome = this.applySupport({
       outcomeId: this.nextMutationOutcomeId('heal', playerId),
       target,
-      source: this.createLegacyMutationSource(playerId, 'combat.heal', 'support'),
+      source: source ?? this.createLegacyMutationSource(playerId, 'combat.heal', 'support'),
       supportKind: 'heal',
       amount,
     });
@@ -4320,6 +4376,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         };
       },
       resetLifeResources: (id) => {
+        this.pressureShields.clearPlayer(id);
         this.clearAttribution(id);
         this.clearBurnForPlayer(id);
         this.lastKillSource.delete(id);
@@ -4432,7 +4489,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
           target.kind === 'player' ? target.id : null, amount, nowMs,
         ) ?? false;
       },
-      damageReduction: (target, nowMs) => target.kind === 'player' ? this.playerDamageReductionResolver?.(target.id, nowMs) ?? 0 : 0,
+      damageReduction: (target, nowMs) => target.kind === 'player'
+        ? (this.playerDamageReductionResolver?.(target.id, nowMs) ?? 0) + this.pressureShields.getReduction(target.id, nowMs) : 0,
     };
   }
 

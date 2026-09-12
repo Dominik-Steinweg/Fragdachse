@@ -1111,3 +1111,105 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     second.destroy();
   });
 });
+
+
+describe('Rocket distance authority', () => {
+  function rocket() {
+    const request = baseRequest({ collisionMode: 'sweep', remainingRangePx: 600, explosion: {
+      ...baseExplosion(), fireChunkBurst: { count: 2, searchRadius: 30, flightMs: 100, igniteCenter: false,
+        durationMs: 200, burnDurationMs: 200, burnDamagePerTick: 3,
+        landingExplosion: { radius: 10, maxDamage: 8, minDamage: 2, knockback: 0, selfDamageMult: 0 } },
+    } });
+    return { ...request, flight: { ...request.flight, distanceScaling: { maxBonus: 0.8, maxDistance: 200 } } };
+  }
+
+  it('uses the swept contact distance for direct, main and aftershock damage exactly once', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const impacts: ProjectileDirectImpactRequest[] = [];
+    configureEnemyImpact(runtime, vi.fn((r: ProjectileDirectImpactRequest) => { impacts.push(r); return { accepted: true }; }));
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+      sink('enemy', 'victim', 'enemy-owner', 100, 0, 8, 92, -8, 108, 8) });
+    const request = rocket(), id = runtime.spawnProjectile(request)!;
+    physics.handles.get(id)!.sprite.x = 180;
+    runtime.runHostInteractionStage(1050);
+    const stage = runtime.runHostProjectileStage(50, 1050);
+    expect(impacts).toHaveLength(1); expect(stage.projectileExplosions).toHaveLength(1);
+    const impact = impacts[0], factor = 1 + impact.impact.x / 200 * 0.8;
+    expect(impact.directHit.damage).toBeCloseTo(10 * factor);
+    const main = stage.projectileExplosions[0];
+    expect(main.x).toBeCloseTo(impact.impact.x);
+    expect(main.effect.maxDamage).toBeCloseTo(20 * factor);
+    expect(main.effect.fireChunkBurst!.landingExplosion!.maxDamage).toBeCloseTo(8 * factor);
+    expect(main.effect.fireChunkBurst!.burnDamagePerTick).toBe(3);
+    expect(runtime.runHostProjectileStage(50, 1100).projectileExplosions).toEqual([]);
+    runtime.destroy();
+  });
+
+  it('accumulates real segments across a portal, clamps the bonus and preserves time-field speed', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'p', ownerId: 'owner',
+      a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0, createdAt: 0, expiresAt: 2000 }], isPortalFriendly: () => true });
+    let slow = 0.5;
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: () => slow, isBubbleActive: () => true });
+    const id = runtime.spawnProjectile(rocket())!, h = physics.handles.get(id)!;
+    h.sprite.x = 100; runtime.runHostPortalStage(1010); runtime.runHostProjectileStage(10, 1010);
+    expect(h.sprite.x).toBe(550);
+    expect(h.body.velocity.x).toBeCloseTo(100 * 1.4 * slow);
+    h.sprite.x += 100; runtime.runHostProjectileStage(10, 1020);
+    expect(h.body.velocity.x).toBeCloseTo(100 * 1.8 * slow);
+    slow = 1; h.sprite.x += 100; runtime.runHostProjectileStage(10, 1030);
+    expect(h.body.velocity.x).toBeCloseTo(180);
+    runtime.destroy();
+  });
+
+  it('detonates at the cursor range instead of disappearing early or damaging a target beyond it', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const hit = configureEnemyImpact(runtime);
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+      sink('enemy', 'beyond', 'enemy-owner', 150, 0, 8, 142, -8, 158, 8) });
+    const request = rocket();
+    const id = runtime.spawnProjectile({ ...request, flight: { ...request.flight, remainingRangePx: 120 } })!;
+    physics.handles.get(id)!.sprite.x = 180;
+    runtime.runHostInteractionStage(1010);
+    const stage = runtime.runHostProjectileStage(10, 1010);
+    expect(hit).not.toHaveBeenCalled();
+    expect(stage.projectileExplosions).toHaveLength(1);
+    expect(stage.projectileExplosions[0].x).toBe(120);
+    expect(stage.projectileExplosions[0].effect.maxDamage).toBeCloseTo(20 * (1 + 120 / 200 * 0.8));
+    runtime.destroy();
+  });
+
+  it('shortens a flight step at a late wall sweep without counting the return to contact as more flight', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const id = runtime.spawnProjectile(rocket())!;
+    physics.handles.get(id)!.sprite.x = 180;
+    vi.mocked(physics.binding.findNearestRockSweep).mockReturnValueOnce({ rockIndex: 1, x: 60, y: 0, normalX: -1, normalY: 0 });
+    runtime.runHostProjectileStage(10, 1010);
+    const stage = runtime.runHostProjectileStage(10, 1020);
+    expect(stage.projectileExplosions).toHaveLength(1);
+    expect(stage.projectileExplosions[0].effect.maxDamage).toBeCloseTo(20 * (1 + 60 / 200 * 0.8));
+    expect(stage.projectileExplosions[0].x).toBe(60);
+    runtime.destroy();
+  });
+});
+
+
+it('continues accelerated portal travel after Combat rejects an earlier target', () => {
+  const { runtime, physics } = createRuntimeHarness();
+  runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'p', ownerId: 'owner',
+    a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+    damageBonus: 0, createdAt: 0, expiresAt: 2000 }], isPortalFriendly: () => true });
+  const impact = configureEnemyImpact(runtime, vi.fn(() => ({ accepted: false })));
+  runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+    sink('enemy', 'rejected', 'enemy-owner', 25, 0, 4, 21, -4, 29, 4) });
+  const request = baseRequest({ collisionMode: 'sweep', remainingRangePx: 300 });
+  const id = runtime.spawnProjectile({ ...request, flight: { ...request.flight,
+    distanceScaling: { maxBonus: 0.8, maxDistance: 200 } } })!;
+  physics.handles.get(id)!.sprite.x = 100;
+  runtime.runHostPortalStage(1010); runtime.runHostProjectileStage(10, 1010);
+  expect(impact).toHaveBeenCalledOnce();
+  expect(physics.handles.get(id)!.sprite.x).toBe(550);
+  expect(physics.handles.get(id)!.body.velocity.x).toBeCloseTo(140);
+  runtime.destroy();
+});

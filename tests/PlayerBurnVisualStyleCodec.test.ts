@@ -59,3 +59,16 @@ describe('player burn visual style codec', () => {
     expect(decodePlayerStates(encodedNormal).p0.burnVisualStyle).toBe('normal');
   });
 });
+
+
+describe('Rocket player snapshot fields', () => {
+  it('round-trips confirmed charge, focus, shield expiry and healing sequence and removes absent state', () => {
+    const state = { ...makePlayerState('normal'), pressureShieldUntil: 5300, rocketHealSequence: 4,
+      rocketMagazine: { id: 6, loaded: 3, capacity: 6, nextLoadAt: 4000, intervalMs: 730, focused: true } };
+    const active = decodePlayerStates(encodePlayerStates({ p: state })).p;
+    expect(active).toMatchObject({ rocketMagazine: state.rocketMagazine, pressureShieldUntil: 5300, rocketHealSequence: 4 });
+    const clean = decodePlayerStates(encodePlayerStates({ p: makePlayerState('normal') })).p;
+    expect(clean.rocketMagazine).toBeUndefined(); expect(clean.pressureShieldUntil ?? 0).toBe(0);
+    expect(clean.rocketHealSequence ?? 0).toBe(0);
+  });
+});

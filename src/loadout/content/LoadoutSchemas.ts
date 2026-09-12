@@ -1,3 +1,4 @@
+import { validateRocketLauncherConfig } from '../RocketLauncherConfig';
 import { validateStinkPlagueConfig } from '../StinkPlagueConfig';
 import { validateTurretAimConfig } from '../../config/turretAim';
 import { isWeaponFeedbackProfileId } from '../../config/weaponFeedback';
@@ -220,6 +221,7 @@ export function validateResolvedWeapon(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: WeaponConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.rocketLauncher !== undefined) issues.push(...validateRocketLauncherConfig(value.rocketLauncher));
   requireFields(value, [
     'cooldown', 'damage', 'range', 'fire', 'allowedSlots', 'adrenalinCost', 'adrenalinGain',
     'spreadStanding', 'spreadMoving', 'spreadPerShot', 'maxDynamicSpread',

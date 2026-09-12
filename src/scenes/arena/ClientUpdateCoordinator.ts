@@ -381,6 +381,8 @@ export class ClientUpdateCoordinator {
         player.updateHP(ps.hp, ps.maxHp, countdownActive || (ps.alive && !wasAlive));
         player.updateArmor(ps.armor);
         player.updateBurnStacks(ps.burnStacks ?? 0, ps.burnVisualStyle ?? 'normal');
+        player.updateRocketSupport?.(ps, bridge.getSynchronizedNow());
+        if (player.id === bridge.getLocalPlayerId()) this.ctx.inputSystem.syncRocketMagazineState?.(ps.alive ? ps.rocketMagazine : undefined);
         player.updateMolotovFirewalker(ps.isMolotovFirewalkerActive === true && ps.alive);
         player.setVisible(ps.alive);
         player.setWalking(ps.aim.isMoving && ps.alive && !ps.isBurrowed);

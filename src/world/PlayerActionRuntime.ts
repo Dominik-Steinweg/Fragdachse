@@ -2,6 +2,7 @@ import type { UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../types';
 import type { SustainedWeaponActionRequest, SustainedWeaponBehaviorPort } from '../loadout/SustainedWeaponBehaviorPort';
 import type { PlayerWeaponActivationRequest } from './PlayerWeaponActivationRuntime';
+import type { RocketMagazineRuntime } from './RocketMagazineRuntime';
 
 /** Optional client-position compensation supplied by a player-action request. */
 export interface PlayerActionPositionInput {
@@ -142,6 +143,7 @@ export class PlayerActionRuntime {
     private readonly loadout: PlayerActionLoadoutPort,
     private readonly sustainedWeaponBehavior: SustainedWeaponBehaviorPort | null = null,
     private readonly weaponActivation: PlayerWeaponActivationPort,
+    private readonly rocketMagazine: RocketMagazineRuntime | null = null,
   ) {}
 
   execute(request: PlayerWeaponActionRequest): LoadoutUseResult {
@@ -152,9 +154,22 @@ export class PlayerActionRuntime {
       return { ok: false, reason: 'invalid' };
     }
 
+    if (request.params?.rocketMagazine) {
+      if (request.slot !== 'weapon2') return { ok: false, reason: 'invalid' };
+      const result = this.rocketMagazine?.input(request.playerId, request.params.rocketMagazine,
+        request.angle, request.targetX, request.targetY, request.hostNowMs) ?? { ok: false, reason: 'invalid' as const };
+      if (result.ok && request.params.rocketMagazine.phase !== 'cancel') {
+        this.sustainedWeaponBehavior?.claimWeaponAction(request.playerId, request.slot, request.hostNowMs, request.angle);
+        this.loadout.noteWeaponAction(request.playerId, request.slot, request.hostNowMs, request.angle);
+      }
+      return result;
+    }
+
     const player = this.actor.getPlayer(request.playerId);
     const config: WeaponConfig | undefined = this.loadout.getEquippedWeaponConfig(request.playerId, request.slot);
     if (!player || !config) return { ok: false, reason: 'invalid' };
+    if (config.rocketLauncher && config.rocketLauncher.magazineLevel > 0) return { ok: false, reason: 'invalid' };
+    this.rocketMagazine?.cancel(request.playerId);
     if (!this.actor.canInteract(request.playerId)
       || !this.actor.isAlive(request.playerId)
       || this.actor.isWeaponBlocked(request.playerId)) {

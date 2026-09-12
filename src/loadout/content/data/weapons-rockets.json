@@ -3,9 +3,36 @@
     "ROCKET_LAUNCHER": {
       "id": "ROCKET_LAUNCHER",
       "shotFeedbackProfile": "heavy",
-      "cooldown": 950,
+      "cooldown": 800,
       "damage": 10,
       "range": 900,
+      "rocketLauncher": {
+        "jumpMultiplier": 1,
+        "healFraction": 0,
+        "pressureShieldDurationMs": 0,
+        "pressureShieldReduction": 0.2,
+        "distanceLevel": 0,
+        "distanceBonusPerLevel": 0.5,
+        "distanceForMaxBonus": 300,
+        "magazineLevel": 0,
+        "magazineCapacities": [
+          2,
+          4,
+          6
+        ],
+        "salvoAngleDegrees": 4,
+        "focusAngleFactor": 0.25,
+        "aftershockEnabled": 0,
+        "chunkCount": 6,
+        "targetedChunks": 0,
+        "chunkFlightMs": 320,
+        "groundDurationMs": 2000,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.5,
+        "aftershockRadius": 50,
+        "aftershockMaxDamage": 15,
+        "aftershockMinDamage": 5
+      },
       "fire": {
         "type": "projectile",
         "projectileSpeed": 600,
@@ -21,20 +48,7 @@
           "rockDamageMult": 1,
           "trainDamageMult": 1.15,
           "color": "#ff8a3d",
-          "visualStyle": "rocket",
-          "blackHoleDurationMs": 0,
-          "blackHolePullStrength": 2400,
-          "groundFire": {
-            "type": "fire",
-            "radius": 110,
-            "damagePerTick": 1,
-            "lingerDuration": 0,
-            "rockDamageMult": 0,
-            "trainDamageMult": 0,
-            "burnDurationMs": 2000,
-            "burnDamagePerTick": 1,
-            "sourceId": "ground_fire.rocket"
-          }
+          "visualStyle": "rocket"
         }
       },
       "allowedSlots": [

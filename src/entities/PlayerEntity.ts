@@ -1,4 +1,6 @@
 import { MolotovFirewalkerRenderer } from '../effects/MolotovFirewalkerRenderer';
+import { PressureShieldRenderer } from '../effects/PressureShieldRenderer';
+import { HealingAuraRenderer } from '../effects/HealingAuraRenderer';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
 import { PLAYER_MOVEMENT_VISUAL } from '../config/movementEffects';
 import { BURROW_FX } from '../config/burrowEffects';
@@ -63,6 +65,24 @@ export interface PlayerEntityOptions {
 }
 
 export class PlayerEntity {
+  private pressureShieldRenderer: PressureShieldRenderer | null = null;
+  private rocketHealingRenderer: HealingAuraRenderer | null = null;
+  private lastRocketHealSequence: number | undefined;
+
+  updateRocketSupport(state: { pressureShieldUntil?: number; rocketHealSequence?: number; alive: boolean }, now: number): void {
+    if (!this.sprite) return;
+    const active = state.alive && (state.pressureShieldUntil ?? 0) > now;
+    if (active) this.pressureShieldRenderer ??= new PressureShieldRenderer(this.sprite.scene);
+    else { this.pressureShieldRenderer?.destroy(); this.pressureShieldRenderer = null; }
+    if (!state.alive) { this.rocketHealingRenderer?.destroyAll(); this.rocketHealingRenderer = null; }
+    const sequence = state.rocketHealSequence ?? 0;
+    if (state.alive && this.sprite.visible && this.lastRocketHealSequence !== undefined && sequence > this.lastRocketHealSequence) {
+      this.rocketHealingRenderer ??= new HealingAuraRenderer(this.sprite.scene);
+      this.rocketHealingRenderer.playHealingBurst(this.sprite.x, this.sprite.y);
+    }
+    this.lastRocketHealSequence = sequence;
+    this.pressureShieldRenderer?.sync(this.sprite.x, this.sprite.y, this.sprite.displayWidth, this.sprite.visible);
+  }
   readonly id:     string;
   /**
    * Kanonische Runtime dieser Figur: Position, Ausrichtung, Aktivitaet, Bounds und Physik.
@@ -1177,6 +1197,7 @@ export class PlayerEntity {
   private syncAttachedEffects(): void {
     // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
     if (!this.sprite) return;
+    this.pressureShieldRenderer?.sync(this.sprite.x, this.sprite.y, this.sprite.displayWidth, this.sprite.visible);
     this.firewalkerRenderer?.sync(this.sprite.x, this.sprite.y, this.sprite.displayWidth, this.sprite.visible);
     this.burnRenderer?.sync(
       this.sprite.x,
@@ -1190,6 +1211,8 @@ export class PlayerEntity {
   }
 
   destroy(): void {
+    this.pressureShieldRenderer?.destroy();
+    this.rocketHealingRenderer?.destroyAll();
     this.stopBurrowTween(true);
     this.glowTween?.stop();
     this.stopSpawnShine();

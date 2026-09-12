@@ -55,6 +55,8 @@ export interface ProjectileCombatExplosionRequest {
 
 export interface ProjectileCombatExplosionOutcome {
   readonly damagedTargetKeys: readonly string[];
+  /** Source bonuses frozen at the main impact for subsequent world effects. */
+  readonly resolvedEffect?: ProjectileExplosionConfig;
 }
 
 /**

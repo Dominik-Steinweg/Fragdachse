@@ -161,6 +161,7 @@ const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Obje
 });
 
 export function getCoopDefenseUpgradeTextureKey(upgradeId: string): string | null {
+  if (upgradeId === 'unlock_rocket_launcher' || upgradeId.startsWith('rocket_launcher_')) return null;
   // Keep aliases above intact so duplicate-icon cleanup remains authoritative.
   if (COOP_DEFENSE_PENDING_UPGRADE_ICONS.has(upgradeId)) {
     return `UPGRADE_${upgradeId.toUpperCase()}`;

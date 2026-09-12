@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { RocketMagazineIndicator } from './RocketMagazineIndicator';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import { AimSpreadModel } from './AimSpreadModel';
 import { AimVisuals, type SlotPalette } from './AimVisuals';
@@ -69,6 +70,9 @@ function usesGameplayMuzzle(config: WeaponConfig): boolean {
  * auf gebackenen Texturen – siehe dort, warum Immediate-Mode-Bogen teuer sind.
  */
 export class AimSystem {
+  private rocketIndicator: RocketMagazineIndicator | null = null;
+  private rocketMagazineState: import('../types').RocketMagazineState | undefined;
+  setRocketMagazineState(state: import('../types').RocketMagazineState | undefined): void { this.rocketMagazineState = state; }
   private readonly visuals: AimVisuals;
   private readonly spreadModel: AimSpreadModel;
 
@@ -88,6 +92,10 @@ export class AimSystem {
   ) {
     this.visuals = new AimVisuals(scene);
     this.spreadModel = new AimSpreadModel(getWeaponConfig);
+  }
+
+  setActiveSlot(slot: WeaponSlot): void {
+    this.spreadModel.setActiveSlot(slot);
   }
 
   notifyShot(slot: WeaponSlot): void {
@@ -141,6 +149,7 @@ export class AimSystem {
     // Versteckt alle Visuals. Steht bewusst vor jedem Early Return, damit kein Zweig etwas
     // stehen lassen kann – dieselbe Rolle, die frueher `gfx.clear()` hatte.
     this.visuals.beginFrame();
+    this.rocketIndicator?.hide();
     if (!showAim) return;
 
     const sprite = this.getLocalSprite();
@@ -188,6 +197,10 @@ export class AimSystem {
     const pointerWorld = getUnshakenPointerWorldPoint(this.scene, pointer);
     const px = pointerWorld.x;
     const py = pointerWorld.y;
+    if (this.rocketMagazineState) {
+      this.rocketIndicator ??= new RocketMagazineIndicator(this.scene);
+      this.rocketIndicator.update(px, py, this.rocketMagazineState, Date.now());
+    }
     const dx = px - sx;
     const dy = py - sy;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -247,6 +260,7 @@ export class AimSystem {
   }
 
   destroy(): void {
+    this.rocketIndicator?.destroy();
     this.scene.input.setDefaultCursor('default');
     this.appliedCursor = 'default';
     this.visuals.destroy();

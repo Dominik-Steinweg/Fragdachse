@@ -36,6 +36,7 @@ function imports(source: ts.SourceFile): string[] {
 const internalStateOwners = new Set([
   'WorldProjectileRuntime.ts', 'ProjectileStore.ts', 'ProjectileRuntimeRecord.ts',
   'ProjectileFlightProcessor.ts', 'ProjectileCollisionProcessor.ts',
+  'ProjectileDistanceScaling.ts', // Private flight/contact bookkeeping inside the same authority.
   'ProjectileLifecycleProcessor.ts', 'ProjectileMiniRocketProcessor.ts',
 ]);
 const projections = new Set([

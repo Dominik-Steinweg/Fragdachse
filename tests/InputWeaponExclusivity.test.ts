@@ -22,6 +22,7 @@ vi.mock('../src/ui/RadialActionMenu', () => ({
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { InputSystem } from '../src/systems/InputSystem';
 import { DASH_T1_S, DASH_T2_S } from '../src/config';
+import type { LoadoutUseParams } from '../src/types';
 
 interface TestPointerState {
   left: boolean;
@@ -42,6 +43,7 @@ function createInput(getWeapon2Config: () => typeof WEAPON_CONFIGS.TESLA_DOME | 
     getLocalPlayerId: () => 'player-1',
     sendLocalInput: vi.fn(),
     sendDash: vi.fn(),
+    sendBurrowRequest: vi.fn(),
   };
   const scene = { input: { activePointer: pointer } };
   const system = new InputSystem(scene as never, bridge as never, () => ({ x: 0, y: 0 } as never));
@@ -52,7 +54,7 @@ function createInput(getWeapon2Config: () => typeof WEAPON_CONFIGS.TESLA_DOME | 
     localBurrowPhase: 'idle',
   });
   system.setupWeapon2ConfigProvider(getWeapon2Config);
-  const uses: Array<{ slot: string; params?: { inputStarted?: boolean; scopeHolding?: boolean } }> = [];
+  const uses: Array<{ slot: string; params?: LoadoutUseParams }> = [];
   system.setupLoadoutListener((slot, _angle, _targetX, _targetY, params) => {
     uses.push({ slot, params });
   });
@@ -140,5 +142,98 @@ describe('weapon input exclusivity', () => {
     system.update();
 
     expect(uses.at(-1)).toEqual({ slot: 'weapon2', params: { inputStarted: true } });
+  });
+});
+
+
+describe('Rocket magazine mouse ownership', () => {
+  function rocketInput() {
+    return createInput(() => ({ ...WEAPON_CONFIGS.ROCKET_LAUNCHER,
+      rocketLauncher: { ...WEAPON_CONFIGS.ROCKET_LAUNCHER.rocketLauncher!, magazineLevel: 1 } }));
+  }
+  it('toggles focus with clicks, retains it after LMB release, and starts the next gesture unfocused', () => {
+    const f = rocketInput();
+    f.pointerState.left = true; f.pointerState.right = true; f.system.update();
+    expect(f.uses).toEqual([{ slot: 'weapon2', params: expect.objectContaining({
+      rocketMagazine: { id: 1, phase: 'hold', focused: true } }) }]);
+    f.system.update(); // Holding LMB must not toggle each frame.
+    f.pointerState.left = false; f.system.update();
+    expect(f.uses.at(-1)?.params).toMatchObject({ rocketMagazine: { id: 1, phase: 'hold', focused: true } });
+    f.system.syncRocketMagazineState({ id: 1, loaded: 1, capacity: 2, intervalMs: 100, nextLoadAt: 1000, focused: false, canLoadNext: true });
+    expect(f.system.getRocketMagazinePreview()?.focused).toBe(true);
+    f.pointerState.left = true; f.system.update();
+    expect(f.uses.at(-1)?.params).toMatchObject({ rocketMagazine: { id: 1, phase: 'hold', focused: false } });
+    f.pointerState.left = false; f.system.update();
+    f.pointerState.right = false; f.system.update();
+    expect(f.uses.at(-1)?.params).toMatchObject({ rocketMagazine: { id: 1, phase: 'release', focused: false } });
+    expect(f.uses.every(u => u.slot === 'weapon2')).toBe(true);
+    f.pointerState.right = true; f.system.update();
+    expect(f.uses.at(-1)?.params).toMatchObject({ rocketMagazine: { id: 2, phase: 'hold', focused: false } });
+  });
+
+  it.each(['dash', 'burrow', 'utility'] as const)('releases the magazine before %s and requires a fresh RMB gesture', action => {
+    const f = rocketInput();
+    f.pointerState.right = true; f.pointerState.left = true; f.system.update();
+    f.pointerState.left = false; f.system.update();
+    const before = f.uses.length;
+    const order: string[] = [];
+    f.bridge.sendDash.mockImplementation(() => { order.push('dash'); expect(f.uses.at(-1)?.params?.rocketMagazine?.phase).toBe('release'); });
+    f.bridge.sendBurrowRequest.mockImplementation(() => { order.push('burrow'); expect(f.uses.at(-1)?.params?.rocketMagazine?.phase).toBe('release'); });
+    const keys = f.system as unknown as { keySpace: { justDown: boolean }; keyShift: { justDown: boolean }; keyE: { justDown: boolean } };
+    if (action === 'dash') keys.keySpace.justDown = true;
+    if (action === 'burrow') keys.keyShift.justDown = true;
+    if (action === 'utility') {
+      // An available instantaneous utility follows the same E entry point as targeted/charged utilities.
+      vi.spyOn(f.system as any, 'getSelectedRadialActionState').mockReturnValue({ ref: { kind: 'utility', utilityId: 'DECOY' }, available: true });
+      vi.spyOn(f.system as any, 'getEffectiveUtilityCooldownUntil').mockReturnValue(0);
+      keys.keyE.justDown = true;
+    }
+    f.system.update();
+    const releaseIndex = f.uses.findIndex((use, i) => i >= before && use.params?.rocketMagazine?.phase === 'release');
+    expect(releaseIndex).toBeGreaterThanOrEqual(before);
+    expect(f.uses[releaseIndex].params?.rocketMagazine).toMatchObject({ id: 1, focused: true });
+    if (action === 'utility') expect(f.uses.at(-1)?.slot).toBe('utility');
+    else expect(order).toEqual([action]);
+    const after = f.uses.length;
+    keys.keySpace.justDown = keys.keyShift.justDown = keys.keyE.justDown = false;
+    f.system.update();
+    expect(f.uses).toHaveLength(after);
+    f.pointerState.right = false; f.system.update();
+    f.pointerState.right = true; f.system.update();
+    expect(f.uses.at(-1)?.params?.rocketMagazine).toMatchObject({ id: 2, phase: 'hold', focused: false });
+  });
+  it('keeps targeted utility aiming active after firing the magazine with E while RMB stays held', () => {
+    const f = rocketInput();
+    const utility = { id: 'test-targeted', cooldown: 200, activation: { type: 'targeted_click' } } as const;
+    f.system.setupUtilityConfigProvider(() => utility as never);
+    vi.spyOn(f.system as any, 'getSelectedRadialActionState').mockReturnValue({ ref: { kind: 'utility', utilityId: utility.id }, available: true });
+    vi.spyOn(f.system as any, 'getEffectiveUtilityCooldownUntil').mockReturnValue(0);
+    const keys = f.system as unknown as { keyE: { justDown: boolean } };
+    f.pointerState.right = true; f.system.update();
+    keys.keyE.justDown = true; f.system.update();
+    expect(f.uses.at(-1)?.params?.rocketMagazine?.phase).toBe('release');
+    keys.keyE.justDown = false; f.system.update();
+    expect(f.system.getUtilityTargetingPreviewState()).toBeDefined();
+    f.pointerState.left = true; f.system.update();
+    expect(f.uses.at(-1)?.slot).toBe('utility');
+    expect(f.system.getUtilityTargetingPreviewState()).toBeUndefined();
+  });
+
+  it('uses an LMB toggle in the same frame as a forced dash release', () => {
+    const f = rocketInput(); f.pointerState.right = true; f.system.update();
+    f.pointerState.left = true;
+    (f.system as unknown as { keySpace: { justDown: boolean } }).keySpace.justDown = true;
+    f.system.update();
+    expect(f.uses.find(use => use.params?.rocketMagazine?.phase === 'release')?.params?.rocketMagazine?.focused).toBe(true);
+  });
+
+  it('cancels at menu/input loss and cannot revive the same held gesture', () => {
+    const f = rocketInput(); f.pointerState.right = true; f.system.update();
+    f.system.setInputEnabled(false);
+    expect(f.uses.at(-1)?.params).toMatchObject({ rocketMagazine: { id: 1, phase: 'cancel' } });
+    f.system.setInputEnabled(true); f.system.update();
+    expect(f.uses.at(-1)?.params).toMatchObject({ rocketMagazine: { phase: 'cancel' } });
+    f.pointerState.right = false; f.system.update(); f.pointerState.right = true; f.system.update();
+    expect(f.uses.at(-1)?.params).toMatchObject({ rocketMagazine: { id: 2, phase: 'hold' } });
   });
 });

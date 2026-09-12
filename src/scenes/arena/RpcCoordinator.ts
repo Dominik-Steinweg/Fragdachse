@@ -166,7 +166,7 @@ export class RpcCoordinator {
       if (!bridge.isHost()) return;
       if (!this.capabilities.get(playerId).canMove) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.hostPhysics.handleDashRPC(playerId, dx, dy);
+      this.playerLoadout.handleDashRequest(playerId, dx, dy, this.resolveHostActionTime());
     });
   }
 
@@ -203,6 +203,7 @@ export class RpcCoordinator {
       // duplicate-safe behandelt und dürfen den ursprünglichen Startzeitpunkt nicht verschieben.
       const hostNowMs = this.resolveHostActionTime();
 
+
       if (kind === 'global_dismantle') {
         if (toolRef || temporaryUtilityInstanceId) return false;
         return this.heldActions.start(playerId, actionId, kind, 1_000, hostNowMs);
@@ -234,6 +235,13 @@ export class RpcCoordinator {
       // `clientX`/`clientY` bleiben Positions-/Latenzkompensation und sind davon unberührt;
       // eine Client-Uhr fließt bewusst nicht mehr in Cooldown-/Commit-Entscheidungen ein.
       const hostNowMs = this.resolveHostActionTime();
+      if (params?.rocketMagazine && params.activityRevision !== bridge.getActivityDescriptor()?.activityRevision) {
+        return { ok: false, reason: 'invalid' };
+      }
+      if (slot === 'weapon2' && params?.rocketMagazine?.phase === 'cancel') {
+        return this.playerLoadout.usePlayerAction({ category: 'weapon', playerId: senderId, slot,
+          angle, targetX, targetY, hostNowMs, params });
+      }
       const isGaussCancellation = slot === 'ultimate'
         && params?.ultimateAction === 'cancel'
         && params?.gaussChargeId !== undefined;
@@ -396,7 +404,7 @@ export class RpcCoordinator {
             clientPosition: { x: clientX, y: clientY },
           });
       if (result.ok && (slot === 'weapon1' || slot === 'weapon2')
-        && senderId === bridge.getLocalPlayerId() && !params?.scopeHolding) {
+        && senderId === bridge.getLocalPlayerId() && !params?.scopeHolding && !params?.rocketMagazine) {
         this.clientUpdate.notifyAuthoritativeLocalWeaponFired(slot);
       }
       if (slot !== 'weapon2') return result;
@@ -451,12 +459,12 @@ export class RpcCoordinator {
   }
 
   private registerFireChunkEffectHandler(): void {
-    bridge.registerFireChunkEffectHandler((x, y, targets, landsAt, visualStyle) => {
+    bridge.registerFireChunkEffectHandler((x, y, targets, startedAt, visualStyle) => {
       this.renderers.flamethrowerUpgrades.playFireChunkBurst(
         x,
         y,
         targets,
-        landsAt,
+        startedAt,
         bridge.getSynchronizedNow(),
         visualStyle,
       );

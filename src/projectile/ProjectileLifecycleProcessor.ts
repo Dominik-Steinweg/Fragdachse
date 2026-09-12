@@ -185,8 +185,8 @@ export class ProjectileLifecycleProcessor {
     if (!effect) throw new Error(`[ProjectileLifecycleProcessor] explosion request without effect for ${proj.id}`);
     const excludedTargetKey = proj.interaction.multiExplosionExcludedTargetKeys?.values().next().value as string | undefined;
     return {
-      x: proj.physics.sprite.x,
-      y: proj.physics.sprite.y,
+      x: proj.distanceScaling?.x ?? proj.physics.sprite.x,
+      y: proj.distanceScaling?.y ?? proj.physics.sprite.y,
       projectileId: proj.id,
       provenance: proj.provenance,
       effect,
@@ -249,7 +249,7 @@ export class ProjectileLifecycleProcessor {
       return false;
     }
 
-    if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.interaction.explosion) {
+    if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.interaction.explosion && !proj.spec.flight.distanceScaling) {
       projectileExplosions.push(this.createExplosionRequest(proj));
       this.deps.release(proj);
       return false;
@@ -267,6 +267,13 @@ export class ProjectileLifecycleProcessor {
         this.deps.release(proj);
         return false;
       }
+    }
+
+    if (proj.spec.flight.distanceScaling && proj.interaction.explosion
+      && (coreStage.rangeDepletedIds.has(proj.id) || coreStage.lifetimeExpiredIds.has(proj.id))) {
+      projectileExplosions.push(this.createExplosionRequest(proj));
+      this.deps.release(proj);
+      return false;
     }
 
     if (coreStage.rangeDepletedIds.has(proj.id)

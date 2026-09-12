@@ -504,16 +504,6 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "PLASMA",
     targets: [{ path: ["plasmaSwarmExplosionSlowFraction"], formula: "add", createIfMissing: true }],
   },
-  "weapon.ROCKET_LAUNCHER.fire.impactExplosion.groundFire.burnDamagePerTick": {
-    kind: "weapon",
-    itemId: "ROCKET_LAUNCHER",
-    targets: [{ path: ["fire","impactExplosion","groundFire","burnDamagePerTick"], formula: "scale" }],
-  },
-  "weapon.ROCKET_LAUNCHER.fire.impactExplosion.groundFire.lingerDuration": {
-    kind: "weapon",
-    itemId: "ROCKET_LAUNCHER",
-    targets: [{ path: ["fire","impactExplosion","groundFire","lingerDuration"], formula: "add" }],
-  },
   "weapon.SHOTGUN.range": {
     kind: "weapon",
     itemId: "SHOTGUN",

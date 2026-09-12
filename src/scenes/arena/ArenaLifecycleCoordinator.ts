@@ -2582,7 +2582,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);
         },
         playFireChunks: (x, y, targets, landsAt, now) => {
-          this.renderers.flamethrowerUpgrades.playFireChunkBurst(x, y, targets, landsAt, now);
+          this.renderers.flamethrowerUpgrades.playFireChunkBurst(x, y, targets.map(target => ({ ...target, landsAt })), now, now);
         },
         onFireChunksLanded: bridge.isHost()
           ? (baseId, _cellIndex, targets, landedAt) => {

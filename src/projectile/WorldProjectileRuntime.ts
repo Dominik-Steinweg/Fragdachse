@@ -38,6 +38,7 @@ import type { WorldScopedBinding } from '../world/WorldRuntime';
 import type { ProjectileIdentityScope } from './ProjectileIdentityScope';
 import { toProjectileSpawnConfig } from './projectileSpawnPayloadAdapter';
 import { ProjectileFlightProcessor } from './ProjectileFlightProcessor';
+import { advanceProjectileDistance, resetProjectileDistanceAnchor, clipProjectileDistanceStep } from './ProjectileDistanceScaling';
 import { ProjectileHomingController } from '../entities/ProjectileHomingController';
 import type {
   LineOfFireReadPort,
@@ -590,6 +591,7 @@ export class WorldProjectileRuntime implements
     x = projectile.physics.sprite?.x ?? 0,
     y = projectile.physics.sprite?.y ?? 0,
   ): ProjectileImpactSource {
+    advanceProjectileDistance(projectile, x, y);
     return {
       projectileId: projectile.id,
       ownerId: projectile.provenance.attributionId,
@@ -651,7 +653,8 @@ export class WorldProjectileRuntime implements
     }
     const usesPenetratingRockContact = contact.target.kind === 'rock' && projectile.spec.flight.penetration.penetratesRocks
       && this.shouldBounceAfterContact(projectile, { kind: 'trunk' });
-    const impactPoint = bounceEligible || usesPenetratingRockContact
+    const impactPoint = projectile.spec.flight.distanceScaling ? { x: contact.x, y: contact.y }
+      : bounceEligible || usesPenetratingRockContact
       ? this.resolveContactImpactPoint(projectile, contact)
       : contact.target.kind === 'world-boundary'
         ? { x: contact.x, y: contact.y }
@@ -679,6 +682,7 @@ export class WorldProjectileRuntime implements
         );
       }
     }
+    advanceProjectileDistance(projectile, impactPoint.x, impactPoint.y);
     this.flightContactPoints.set(projectile.id, impactPoint);
     let consumed = false;
     switch (contact.target.kind) {
@@ -1837,6 +1841,7 @@ export class WorldProjectileRuntime implements
     this.setHostFrameTime(nowMs);
     for (const record of this.projectiles.activeRecords) {
       if (record.pendingDestroy || record.pendingExplosion || record.miniRocket.deferredExplosion) continue;
+      clipProjectileDistanceStep(record);
       const gates = record.portalGates ??= new Map();
       let from = { x: record.lastX, y: record.lastY };
       let end = { x: record.physics.sprite.x, y: record.physics.sprite.y };
@@ -1863,6 +1868,7 @@ export class WorldProjectileRuntime implements
           record.physics.body.halfWidth, record.physics.body.halfHeight, record.id,
           true, this.shotOptions(record))) break;
         const velocity = { x: record.physics.body.velocity.x, y: record.physics.body.velocity.y };
+        const distanceFactor = record.distanceScaling?.factor ?? 1;
         record.physics.body.reset(crossing.entry.x, crossing.entry.y);
         record.physics.body.setVelocity(velocity.x, velocity.y);
         const sample: ProjectileTravelSample = { projectileId: record.id,
@@ -1880,8 +1886,13 @@ export class WorldProjectileRuntime implements
         this.collisionProcessor.run([record], nowMs, this.collisionDependencies);
         if (record.pendingDestroy || !this.projectiles.activeRecords.has(record)) break;
         if (this.shouldSweepRocks(record)) this.sweepRocks(record);
+        const distanceRatio = (record.distanceScaling?.factor ?? 1) / distanceFactor;
         if (record.pendingDestroy || record.bounceProcessedThisStep
-          || record.physics.body.velocity.x !== velocity.x || record.physics.body.velocity.y !== velocity.y) break;
+          || Math.abs(record.physics.body.velocity.x - velocity.x * distanceRatio) > 0.000001
+          || Math.abs(record.physics.body.velocity.y - velocity.y * distanceRatio) > 0.000001) break;
+        advanceProjectileDistance(record, crossing.entry.x, crossing.entry.y);
+        velocity.x = record.physics.body.velocity.x;
+        velocity.y = record.physics.body.velocity.y;
         if (record.remainingRangePx !== undefined) record.remainingRangePx -= prefixLength;
         this.flightPaths.redirect(record.id, crossing.entry.x, crossing.entry.y, velocity.x, velocity.y, nowMs, false);
         this.flightPaths.redirect(record.id, crossing.exit.x, crossing.exit.y, velocity.x, velocity.y, nowMs, true);
@@ -1904,6 +1915,7 @@ export class WorldProjectileRuntime implements
         from = crossing.exit;
         record.sourceCarrierBaseId = undefined;
         record.lastX = from.x; record.lastY = from.y;
+        resetProjectileDistanceAnchor(record, from.x, from.y);
         record.physics.body.reset(end.x, end.y);
         record.physics.body.setVelocity(velocity.x, velocity.y);
         record.portalFlightPending = true;
@@ -2007,6 +2019,7 @@ export class WorldProjectileRuntime implements
     this.hasStartedInteractionStage = true;
     this.interactionNowMs = nowMs;
     this.setHostFrameTime(nowMs);
+    for (const record of this.projectiles.activeRecords) clipProjectileDistanceStep(record);
     this.captureDebugFlightSteps('before-interaction');
     try {
       if (this.bubbleChargePort) for (const record of this.projectiles.activeRecords) {
@@ -2599,6 +2612,7 @@ export class WorldProjectileRuntime implements
           isGrenade: cfg.isGrenade,
           speed: cfg.speed,
           speedVariation: cfg.speedVariation,
+          distanceScaling: cfg.distanceScaling,
           originalBodySize: cfg.size < MIN_BODY_LEN
             && cfg.isFlame !== true
             && !hasLeafBlowerCapability(cfg)

@@ -293,47 +293,15 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'P90',
     targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], formula: 'scale' }],
   },
-  'weapon.ROCKET_LAUNCHER.impactExplosion.radius': {
-    kind: 'weapon',
-    itemId: 'ROCKET_LAUNCHER',
-    targets: [
-      { path: ['fire', 'impactExplosion', 'radius'], formula: 'scale' },
-      { path: ['fire', 'impactExplosion', 'groundFire', 'radius'], formula: 'scale' },
-    ],
-  },
-  'weapon.ROCKET_LAUNCHER.cooldown': {
-    kind: 'weapon',
-    itemId: 'ROCKET_LAUNCHER',
-    targets: [{ path: ['cooldown'], formula: 'scale' }],
-  },
-  'weapon.ROCKET_LAUNCHER.adrenalinCost': {
-    kind: 'weapon',
-    itemId: 'ROCKET_LAUNCHER',
-    targets: [{ path: ['adrenalinCost'], formula: 'scale' }],
-  },
-  'weapon.ROCKET_LAUNCHER.damage': {
-    kind: 'weapon',
-    itemId: 'ROCKET_LAUNCHER',
-    targets: [{ path: ['damage'], formula: 'scale' }],
-  },
-  'weapon.ROCKET_LAUNCHER.impactExplosion.damage': {
-    kind: 'weapon',
-    itemId: 'ROCKET_LAUNCHER',
-    targets: [
-      { path: ['fire', 'impactExplosion', 'maxDamage'], formula: 'scale' },
-      { path: ['fire', 'impactExplosion', 'minDamage'], formula: 'scale' },
-    ],
-  },
-  'weapon.ROCKET_LAUNCHER.blackHoleDurationMs': {
-    kind: 'weapon',
-    itemId: 'ROCKET_LAUNCHER',
-    targets: [{ path: ['fire', 'impactExplosion', 'blackHoleDurationMs'], formula: 'add' }],
-  },
-  'weapon.ROCKET_LAUNCHER.blackHolePullStrength': {
-    kind: 'weapon',
-    itemId: 'ROCKET_LAUNCHER',
-    targets: [{ path: ['fire', 'impactExplosion', 'blackHolePullStrength'], formula: 'scale' }],
-  },
+  'weapon.ROCKET_LAUNCHER.adrenalinCost': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['adrenalinCost'], formula: 'scale' }] },
+  'weapon.ROCKET_LAUNCHER.rocketLauncher.jumpMultiplier': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'jumpMultiplier'], formula: 'add' }] },
+  'weapon.ROCKET_LAUNCHER.rocketLauncher.healFraction': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'healFraction'], formula: 'add' }] },
+  'weapon.ROCKET_LAUNCHER.rocketLauncher.pressureShieldDurationMs': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'pressureShieldDurationMs'], formula: 'add' }] },
+  'weapon.ROCKET_LAUNCHER.rocketLauncher.distanceLevel': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'distanceLevel'], formula: 'add' }] },
+  'weapon.ROCKET_LAUNCHER.rocketLauncher.magazineLevel': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'magazineLevel'], formula: 'add' }] },
+  'weapon.ROCKET_LAUNCHER.rocketLauncher.aftershockEnabled': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'aftershockEnabled'], formula: 'add' }] },
+  'weapon.ROCKET_LAUNCHER.rocketLauncher.chunkCount': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'chunkCount'], formula: 'add' }] },
+  'weapon.ROCKET_LAUNCHER.rocketLauncher.targetedChunks': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'targetedChunks'], formula: 'add' }] },
   'weapon.SHOTGUN.pelletCount': {
     kind: 'weapon',
     itemId: 'SHOTGUN',

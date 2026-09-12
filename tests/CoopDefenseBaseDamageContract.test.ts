@@ -12,7 +12,7 @@ import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { DamageGrenadeEffect } from '../src/types';
 
 describe('Coop-Defense base damage payload contracts', () => {
-  it('scales Rocket Launcher direct and impact damage together at +20%', () => {
+  it('ignores removed Rocket-specific damage modifiers', () => {
     const base = WEAPON_CONFIGS.ROCKET_LAUNCHER;
     const resolved = applyCoopDefenseModifiersToWeaponConfig(base, 'weapon2', {
       additive: {},
@@ -22,11 +22,11 @@ describe('Coop-Defense base damage payload contracts', () => {
       },
     });
 
-    expect(resolved.damage).toBeCloseTo(base.damage * 1.2);
+    expect(resolved.damage).toBeCloseTo(base.damage);
     expect(resolved.fire.type).toBe('projectile');
     if (resolved.fire.type !== 'projectile') return;
-    expect(resolved.fire.impactExplosion?.maxDamage).toBeCloseTo(36);
-    expect(resolved.fire.impactExplosion?.minDamage).toBeCloseTo(6);
+    expect(resolved.fire.impactExplosion?.maxDamage).toBeCloseTo(base.fire.type === 'projectile' ? base.fire.impactExplosion!.maxDamage : 0);
+    expect(resolved.fire.impactExplosion?.minDamage).toBeCloseTo(base.fire.type === 'projectile' ? base.fire.impactExplosion!.minDamage! : 0);
   });
 
   it('keeps HE base damage on the primary and inherited cluster payload', () => {

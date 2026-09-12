@@ -162,6 +162,7 @@ export interface ArenaInputActionPorts {
     targetY: number,
   ): LocalWeaponPredictionResult;
   rollbackRejectedLoadoutFire(slot: 'weapon1' | 'weapon2', predictionId?: number): void;
+  selectAimWeapon(slot: 'weapon1' | 'weapon2'): void;
   notifyUtilityFired(): void;
   beginPredictedWeapon2Use(
     predictionId: number,
@@ -692,6 +693,14 @@ export class ArenaInputBindings {
       }
     };
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
+      if (slot === 'weapon2' && params?.rocketMagazine) {
+        if (params.rocketMagazine.phase === 'cancel' || (actions.getPlayerCapabilities().canUseCombat
+          && actions.isLocalPlayerAlive() && !actions.isLocalPlayerBurrowed())) {
+          if (params.rocketMagazine.phase !== 'cancel') actions.selectAimWeapon(slot);
+          void actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
+        }
+        return;
+      }
       const isGaussLifecycleAction = slot === 'ultimate'
         && (params?.ultimateAction === 'release' || params?.ultimateAction === 'cancel')
         && params?.gaussChargeId !== undefined;

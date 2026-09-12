@@ -55,6 +55,7 @@ export interface ProjectileSpawnOrigin {
 
 /** Flug-, Lebenszeit- und Kollisionsverhalten ohne Wirkungssemantik. */
 export interface ProjectileFlightSpec {
+  readonly distanceScaling?: import('./ProjectileDistanceScaling').ProjectileDistanceScaling;
   readonly speed: number;
   /** Opt-in host motion; independent of presentation style. */
   readonly speedVariation?: 'charged_bolt';

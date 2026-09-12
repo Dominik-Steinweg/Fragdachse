@@ -16,6 +16,7 @@ import type {
 import { PLAYER_SIZE, PLAYER_VISUAL_SIZE, type MuzzleOrigin } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 import { resolveShotPlan } from '../loadout/ShotPlanResolver';
+import { rocketSalvoAngles } from '../loadout/RocketLauncherConfig';
 import {
   getHeldWeaponGameplayMuzzleOrigin,
   getHeldWeaponMuzzleOrigin,
@@ -108,7 +109,7 @@ export class PlayerWeaponActivationRuntime {
 
   constructor(private readonly options: PlayerWeaponActivationRuntimeOptions) {}
 
-  activateWeapon(request: PlayerWeaponActivationRequest): LoadoutUseResult {
+  activateWeapon(request: PlayerWeaponActivationRequest, prepaidRocketSalvo?: { count: number; focused: boolean }): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
 
     const player = this.options.playerManager.getPlayer(request.playerId);
@@ -122,7 +123,7 @@ export class PlayerWeaponActivationRuntime {
     const fireSuperiorityCanFire = cfg.id === 'AK47'
       && (this.options.ak47Behavior?.isFireSuperiorityAvailable(request.playerId) ?? false);
 
-    const effectiveAdrenalineCost = fireSuperiorityCanFire
+    const effectiveAdrenalineCost = fireSuperiorityCanFire || prepaidRocketSalvo !== undefined
       ? 0
       : this.options.resourceSystem.resolveAdrenalineCost(request.playerId, cfg.adrenalinCost);
     if (effectiveAdrenalineCost > 0
@@ -189,7 +190,11 @@ export class PlayerWeaponActivationRuntime {
     const adrenalineGainBasis = this.options.resourceSystem.captureAdrenalineGainBasis?.(request.playerId);
     const primaryHitRewardScope = this.options.capturePrimaryHitRewardScope?.() ?? null;
     const primaryHitRewardOrigin = Object.freeze({ x: player.x, y: player.y });
-    const shotPlan = resolveShotPlan({
+    const shotPlan = prepaidRocketSalvo && cfg.rocketLauncher ? {
+      shots: rocketSalvoAngles(prepaidRocketSalvo.count, request.angle, cfg.rocketLauncher.salvoAngleDegrees,
+        prepaidRocketSalvo.focused ? cfg.rocketLauncher.focusAngleFactor : 1)
+        .map((angle, index) => ({ angle, config: index === 0 ? shotCfg : { ...shotCfg, shotAudio: undefined } })),
+    } : resolveShotPlan({
       config: shotCfg,
       aimAngle: request.angle,
       dynamicSpread: this.options.loadout.getDynamicSpread(request.playerId, request.slot),

@@ -156,6 +156,7 @@ export interface CombatDamageEffectPort {
     ownerId: string,
     sourceSlot?: LoadoutSlot,
     sourceId?: string,
+    source?: CombatSource,
   ): readonly string[];
   applyBaseDamage(baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot): void;
   applyRadialHostileBaseDamage(

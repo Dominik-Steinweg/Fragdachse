@@ -1,4 +1,5 @@
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
+import { advanceProjectileDistance } from './ProjectileDistanceScaling';
 import { usesRockSweep } from './ProjectileRockSweep';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
 import { shouldIgnorePlasmaSwarmOriginHit } from '../systems/PlasmaCharge';
@@ -563,6 +564,7 @@ function createDirectImpactRequest(
   target: ProjectileCombatTargetRef,
   candidate: ProjectileImpactCandidate,
 ): ProjectileDirectImpactRequest {
+  advanceProjectileDistance(record, candidate.x, candidate.y);
   const augments: Array<ProjectileDirectImpactRequest['augments'][number]> = [];
   if ((record.spec.interaction.burn.burnDurationMs ?? 0) > 0 && (record.spec.interaction.burn.burnDamagePerTick ?? 0) > 0) {
     augments.push({

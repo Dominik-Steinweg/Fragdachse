@@ -223,6 +223,7 @@ export type WeaponFireConfig =
   | EnergyInjectorWeaponFireConfig;
 
 export interface WeaponConfigShape {
+  readonly rocketLauncher?: import('./RocketLauncherConfig').RocketLauncherConfig;
   readonly id: string;
   readonly cooldown: number;            // ms zwischen zwei Schüssen
   readonly damage: number;              // HP-Schaden pro Direkttreffer

@@ -21,6 +21,7 @@ import type {
   WeaponConfig,
 } from './LoadoutConfig';
 import { getTopDownMuzzleOrigin, type MuzzleOrigin } from '../config';
+import { resolveRocketExplosion } from './RocketLauncherConfig';
 
 /**
  * Fire-Typen, die über einen gemeinsamen, zustandsarmen Pfad laufen und deshalb auch ohne
@@ -295,6 +296,10 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
       origin: { x, y, angle, gameplayMuzzleOrigin },
       flight: {
         speed:      fireConfig.projectileSpeed,
+        distanceScaling: config.rocketLauncher && config.rocketLauncher.distanceLevel > 0 ? {
+          maxBonus: config.rocketLauncher.distanceLevel * config.rocketLauncher.distanceBonusPerLevel,
+          maxDistance: config.rocketLauncher.distanceForMaxBonus,
+        } : undefined,
         size:       fireConfig.projectileSize,
         lifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : lifetime,
         maxBounces: fireConfig.projectileMaxBounces,
@@ -388,7 +393,8 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
             fireSuperiorityShot: config.ak47FireSuperiorityShot,
           },
         },
-        explosion:         fireConfig.impactExplosion,
+        explosion: fireConfig.impactExplosion && config.rocketLauncher
+          ? resolveRocketExplosion(fireConfig.impactExplosion, config.rocketLauncher) : fireConfig.impactExplosion,
         enemyHitExplosion: fireConfig.enemyHitExplosion,
         multiExplosion: {
           count:   config.multiExplosionCount,

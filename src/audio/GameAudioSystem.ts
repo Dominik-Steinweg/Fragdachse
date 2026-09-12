@@ -21,6 +21,7 @@ import {
 import { getHitFeedbackVolumeScale } from './HitFeedbackAudio';
 
 const HIT_FEEDBACK_MERGE_WINDOW_MS = 30;
+const ROCKET_EXPLOSION_MERGE_WINDOW_MS = 50;
 
 interface ListenerPosition {
   x: number;
@@ -58,6 +59,7 @@ type MusicLoadStateListener = (state: MusicLoadState | null) => void;
  */
 export class GameAudioSystem {
   private loopCounter = 0;
+  private lastRocketExplosionAt = -Infinity;
   private readonly activeLoops = new Map<string, ActiveLoop>();
   private currentMusic: Phaser.Sound.BaseSound | null = null;
   private currentMusicKey: MusicAssetKey | null = null;
@@ -153,6 +155,10 @@ export class GameAudioSystem {
     const finalVolume = this.getEffectsPlaybackVolume(soundKey, volumeScale, volume);
 
     if (finalVolume <= 0.001) return;
+    if (soundKey === 'sfx_explosion_rocket') {
+      if (this.scene.time.now - this.lastRocketExplosionAt < ROCKET_EXPLOSION_MERGE_WINDOW_MS) return;
+      this.lastRocketExplosionAt = this.scene.time.now;
+    }
 
     this.scene.sound.play(soundKey, {
       volume: Phaser.Math.Clamp(finalVolume, 0, 1),

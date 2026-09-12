@@ -146,7 +146,7 @@ export class CoopDefensePlayerModifierSystem {
    */
   resolveOutgoingDamage(
     attackerId: string | undefined,
-    targetId: string,
+    targetId: string | undefined,
     amount: number,
     allowCritical: boolean,
     random: () => number = Math.random,

@@ -49,7 +49,8 @@ export interface PlayerCombatModifierPort {
   getClassDefinition(playerId: string): CoopDefenseClassDefinition | null;
   resolveOutgoingDamage(
     attackerId: string | undefined,
-    targetId: string,
+    /** Omit the recipient to resolve attack bonuses without the self-damage exception. */
+    targetId: string | undefined,
     amount: number,
     allowCritical: boolean,
     random?: () => number,

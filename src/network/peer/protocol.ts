@@ -10,7 +10,8 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-export const PEER_PROTOCOL_VERSION = 14;
+// Fire-chunk bursts now carry individual landing times; older peers cannot decode them.
+export const PEER_PROTOCOL_VERSION = 15;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

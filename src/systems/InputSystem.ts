@@ -90,6 +90,49 @@ interface RadialActionProviders {
 }
 
 export class InputSystem {
+  private rocketMagazineId: number | null = null;
+  private rocketRequiresRelease = false;
+  private rocketMagazineFocused = false;
+  private rocketMagazineSequence = 0;
+  private rocketMagazineState: import('../types').RocketMagazineState | undefined;
+
+  syncRocketMagazineState(state: import('../types').RocketMagazineState | undefined): void {
+    this.rocketMagazineState = state;
+  }
+
+  getRocketMagazinePreview(): import('../types').RocketMagazineState | undefined {
+    const state = this.rocketMagazineState;
+    return this.rocketMagazineId !== null && state?.id === this.rocketMagazineId
+      ? { ...state, focused: this.rocketMagazineFocused,
+        nextLoadAt: state.nextLoadAt - this.bridge.getSynchronizedNow() + Date.now() } : undefined;
+  }
+
+  private releaseRocketMagazine(target: { x: number; y: number } | undefined): void {
+    const id = this.rocketMagazineId;
+    if (id === null || !target) return;
+    // Movement actions run before the regular pointer edges are consumed in this frame.
+    if (this.scene.input.activePointer.leftButtonDown() && !this.prevLeftPointerDown
+      && (this.consumedPointerButtons & PRIMARY_POINTER_BUTTON) === 0) {
+      this.rocketMagazineFocused = !this.rocketMagazineFocused;
+    }
+    // The held RMB now belongs to the ended magazine, so it cannot cancel utility targeting.
+    this.consumedPointerButtons |= SECONDARY_POINTER_BUTTON;
+    this.pendingRightInputStarted = false;
+    this.rocketRequiresRelease = true;
+    this.rocketMagazineId = null;
+    this.rocketMagazineState = undefined;
+    this.onLoadoutUse?.('weapon2', this.currentAimAngle, target.x, target.y,
+      { rocketMagazine: { id, phase: 'release', focused: this.rocketMagazineFocused } });
+  }
+
+  private cancelRocketMagazine(): void {
+    const id = this.rocketMagazineId;
+    if (id !== null) this.rocketRequiresRelease = true;
+    this.rocketMagazineId = null;
+    this.rocketMagazineState = undefined;
+    if (id !== null) this.onLoadoutUse?.('weapon2', this.currentAimAngle, 0, 0,
+      { rocketMagazine: { id, phase: 'cancel', focused: false } });
+  }
   private scene:           Phaser.Scene;
   private bridge:          NetworkBridge;
   private getLocalSprite:  () => Phaser.GameObjects.Image | undefined;
@@ -257,7 +300,13 @@ export class InputSystem {
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
     this.radialActionMenu = new RadialActionMenu(this.scene);
+    const cancelOnInputLoss = () => this.cancelUtilityInteraction();
+    this.scene.game.events.on('blur', cancelOnInputLoss);
+    this.scene.game.events.on('hidden', cancelOnInputLoss);
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      cancelOnInputLoss();
+      this.scene.game.events.off('blur', cancelOnInputLoss);
+      this.scene.game.events.off('hidden', cancelOnInputLoss);
       this.radialActionMenu?.destroy();
       this.radialActionMenu = null;
     });
@@ -1170,12 +1219,14 @@ export class InputSystem {
 
     // ── 4. Dash (Flanke, einmalig auslösen) ────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
+      this.releaseRocketMagazine(aimTarget);
       this.bridge.sendDash(dx, dy);
     }
 
     // ── 5. Burrow-Toggle (Flanke) ───────────────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
       if (this.localBurrowPhase === 'idle') {
+        this.releaseRocketMagazine(aimTarget);
         this.bridge.sendBurrowRequest(true);
       } else if (this.localBurrowPhase === 'underground' || this.localBurrowPhase === 'trapped') {
         this.bridge.sendBurrowRequest(false);
@@ -1488,7 +1539,25 @@ export class InputSystem {
     // LMB gedrückt halten → weapon1 (Dauerfeuer, kein Client-Throttle)
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
     // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
-    if (!weaponsBlocked && !primaryWeaponSuppressed && leftPointerDown) {
+    const rocketConfig = this.getWeapon2Config?.()?.rocketLauncher;
+    if (!rightPointerDown) this.rocketRequiresRelease = false;
+    if ((weaponsBlocked || !rocketConfig?.magazineLevel) && this.rocketMagazineId !== null) this.cancelRocketMagazine();
+    const rocketOwnsInput = !weaponsBlocked && !!rocketConfig?.magazineLevel
+      && (rightPointerDown || this.rocketMagazineId !== null);
+    if (rocketOwnsInput) {
+      if (rightInputStarted && this.rocketMagazineId === null && !this.rocketRequiresRelease) {
+        this.rocketMagazineId = ++this.rocketMagazineSequence;
+        this.rocketMagazineFocused = false;
+      }
+      if (this.rocketMagazineId !== null) {
+        if (leftInputStarted) this.rocketMagazineFocused = !this.rocketMagazineFocused;
+        this.firingWeaponSlot = 'weapon2';
+        this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { rocketMagazine: {
+          id: this.rocketMagazineId, phase: rightPointerDown ? 'hold' : 'release', focused: this.rocketMagazineFocused,
+        } });
+        if (!rightPointerDown) { this.rocketMagazineId = null; this.rocketMagazineState = undefined; }
+      }
+    } else if (!weaponsBlocked && !primaryWeaponSuppressed && leftPointerDown) {
       this.firingWeaponSlot = 'weapon1';
       this.onLoadoutUse('weapon1', angle, clampedTarget.x, clampedTarget.y, { inputStarted: leftInputStarted });
     } else if (!weaponsBlocked) {
@@ -1563,6 +1632,9 @@ export class InputSystem {
       if (selectedAction && !selectedAction.available) {
         if (selectedAction.disabledReason === 'cooldown') this.onUtilityPressedDuringCooldown?.();
         return;
+      }
+      if (selectedAction.ref.kind === 'utility' || selectedAction.ref.kind === 'temporary-utility') {
+        this.releaseRocketMagazine(clampedTarget);
       }
       const bubble = this.getSelectedTimeBubbleState();
       const translocator = this.getSelectedTranslocatorState();
@@ -2005,6 +2077,7 @@ export class InputSystem {
   }
 
   private cancelUtilityInteraction(): void {
+    this.cancelRocketMagazine();
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
     this.cancelUtilityPlacement();

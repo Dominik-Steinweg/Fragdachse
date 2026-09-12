@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AimSpreadModel } from '../../src/ui/AimSpreadModel';
+import { AimSystem } from '../../src/ui/AimSystem';
 
 vi.mock('phaser', async () => {
   const base = (await import('../fakeArenaRenderScene')).createFakePhaserModule() as any;
@@ -59,6 +61,7 @@ const network = vi.hoisted(() => ({
   getLatestGameState: () => ({ worldRevision: 1, players: {} }),
   isArenaCountdownActive: () => false,
   getActiveGameMode: () => 'deathmatch',
+  getActivityDescriptor: vi.fn(() => null),
   getPlayerCurrentLoadoutSnapshot: () => null,
   registerLoadoutUseHandler: vi.fn(),
 }));
@@ -68,6 +71,7 @@ import { ArenaInputBindings, type ArenaInputBindingsInput } from '../../src/scen
 import { ClientUpdateCoordinator } from '../../src/scenes/arena/ClientUpdateCoordinator';
 import { RpcCoordinator } from '../../src/scenes/arena/RpcCoordinator';
 import { PlayerWeaponActivationRuntime } from '../../src/world/PlayerWeaponActivationRuntime';
+import { RocketMagazineRuntime } from '../../src/world/RocketMagazineRuntime';
 import { PlayerActionRuntime } from '../../src/world/PlayerActionRuntime';
 import { WorldWeaponExecutionRuntime } from '../../src/world/WorldWeaponExecutionRuntime';
 import { WorldCombatCore } from '../../src/combat/WorldCombatCore';
@@ -87,7 +91,7 @@ import { createArenaCoopMissionPorts } from '../../src/scenes/arena/ArenaCoopMis
 
 // Compose the real input, prediction, RPC, activation, cooldown, combat and trace-dedupe paths.
 // Only renderer/audio and the transport delivery are headless ports.
-function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
+function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number, rocketMagazineLevel = 0) {
   let now = 1_000;
   let processingDelay = 0;
   let processingHost = false;
@@ -95,7 +99,9 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
   vi.spyOn(network, 'isHost').mockImplementation(() => !remote || processingHost);
   vi.spyOn(network, 'getLocalPlayerId').mockImplementation(() => remote && processingHost ? 'host' : 'shooter');
   vi.spyOn(Date, 'now').mockImplementation(() => now);
-  const config = pelletCount === undefined ? WEAPON_CONFIGS[weaponId] : { ...WEAPON_CONFIGS[weaponId], pelletCount };
+  network.getActivityDescriptor.mockReturnValue(null);
+  const original = pelletCount === undefined ? WEAPON_CONFIGS[weaponId] : { ...WEAPON_CONFIGS[weaponId], pelletCount };
+  const config = rocketMagazineLevel ? { ...original, rocketLauncher: { ...original.rocketLauncher!, magazineLevel: rocketMagazineLevel } } : original;
   const fireSlot = config.allowedSlots.includes('weapon1') ? 'weapon1' : 'weapon2';
   const players = [
     fakeEntity({ id: 'shooter', x: 300, y: 200, color: 0xffffff, rotation: 0 }),
@@ -177,7 +183,10 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
   combat.setPlayerMaxHpResolver(() => config.damage * 100);
   players.forEach(p => combat.initPlayer(p.id as string));
   const prediction = Object.create(ClientUpdateCoordinator.prototype) as ClientUpdateCoordinator;
-  const aim = vi.fn();
+  const aimModel = new AimSpreadModel(() => config);
+  const aimSystem = Object.create(AimSystem.prototype) as AimSystem;
+  Object.assign(aimSystem, { spreadModel: aimModel });
+  const aim = vi.fn((slot: WeaponSlot) => aimSystem.notifyShot(slot));
   const hud = vi.fn();
   Object.assign(prediction, {
     ctx: { playerManager, getWorldCombatCore: () => combat, effectSystem: localEffects,
@@ -196,18 +205,32 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
   const execution = new WorldWeaponExecutionRuntime({ combatSystem: combat, projectileSpawn: {
     spawnProjectile: (request: unknown) => { projectiles.push(request); return { uid: projectiles.length }; },
   } as never });
+  const resourceSystem = { getAdrenaline: () => 100, resolveAdrenalineCost: () => resourceCost, drainAdrenaline: vi.fn() };
+  const recoil = vi.fn();
   const activation = new PlayerWeaponActivationRuntime({
     playerManager: playerManager as never,
     loadout,
-    resourceSystem: { getAdrenaline: () => 100, resolveAdrenalineCost: () => resourceCost, drainAdrenaline: vi.fn() },
+    resourceSystem, physicsSystem: { addRecoil: recoil },
     weaponExecution: execution, specializedWeaponExecution: { fire: () => false },
     broadcastShotFx: (event) => { shotEvents.push(event); localFeedback.confirm(event); remoteFeedback.confirm(event); },
+  });
+  const magazine = new RocketMagazineRuntime({
+    getConfig: () => config, canAct: () => true,
+    isOnCooldown: (id, time) => loadout.isWeaponOnCooldown(id, 'weapon2', time),
+    canPay: () => resourceSystem.getAdrenaline() >= resourceCost,
+    pay: (id, cfg, time) => resourceSystem.drainAdrenaline(id, cfg.adrenalinCost, time),
+    fire: (id, cfg, aim, count, focused, time) => {
+      const result = activation.activateWeapon({ playerId: id, slot: 'weapon2', config: cfg,
+        x: players[0].x, y: players[0].y, ...aim, nowMs: time }, { count, focused });
+      if (result.ok) activation.noteWeaponFired(id, 'weapon2', time);
+      return result;
+    },
   });
   const playerAction = new PlayerActionRuntime({
     getPlayer: playerManager.getPlayer as never,
     canInteract: () => true, isAlive: () => true,
     isWeaponBlocked: () => false, isDashBurst: () => false,
-  }, loadout, null, activation);
+  }, loadout, null, activation, magazine);
   const capabilities = { canInteract: true, canUseCombat: true };
   const rpc = Object.create(RpcCoordinator.prototype);
   Object.assign(rpc, {
@@ -232,6 +255,7 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
     isHost: () => network.isHost(),
     getLocalWeaponConfig: () => config,
     getWeaponLastFired: (slot: WeaponSlot) => prediction.weaponLastFiredRecord()[slot],
+    selectAimWeapon: aimSystem.setActiveSlot.bind(aimSystem),
     notifyLoadoutFired: prediction.notifyLoadoutFired.bind(prediction),
     rollbackRejectedLoadoutFire: prediction.rollbackRejectedLoadoutFire.bind(prediction),
     sendLoadoutUse: (slot: WeaponSlot, angle: number, tx: number, ty: number, shotId: number, params: unknown, _x: unknown, _y: unknown, awaitResult: boolean, predictionId?: number) => {
@@ -248,8 +272,10 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
   // Bind only the loadout listener; keyboard/UI setup is unrelated to held-fire dispatch.
   (input as any).setupActionBindings();
   return {
-    config, item, commits, combat, traces, localEffects, remoteEffects, aim, hud, prediction, actions, replies,
-    shotEvents, localWeapon, remoteWeapon, localKick, remoteKick, projectiles,
+    config, item, commits, combat, traces, localEffects, remoteEffects, aim, aimSystem, aimModel, hud, prediction, actions, replies,
+    shotEvents, localWeapon, remoteWeapon, localKick, remoteKick, projectiles, magazine, resourceSystem, recoil,
+    setCombatEnabled: (enabled: boolean) => { capabilities.canUseCombat = enabled; },
+    setActivityRevision: (revision: number) => network.getActivityDescriptor.mockReturnValue({ activityRevision: revision } as never),
     setShooterDisplaySize: (size: number) => { players[0].displayObject = { displayWidth: size }; },
     localViewport: localView.viewport, remoteViewport: remoteView.viewport,
     present: (time: number) => {
@@ -488,5 +514,61 @@ describe('held weapon fire at the authoritative cooldown boundary', () => {
     f.shoot(t + f.config.cooldown + 1, 1);
     expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(3);
     expect(f.commits).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe('Rocket magazine input through RPC and weapon execution', () => {
+  it.each([false, true])('selects the rocket aim again after a primary shot without predicting a shot while charging (client=%s)', remote => {
+    const f = fixture(remote, 'ROCKET_LAUNCHER', undefined, 1);
+    f.shoot(1000, 0, true, 0, { rocketMagazine: { id: 1, phase: 'hold', focused: false } });
+    f.shoot(1001, 0, false, 0, { rocketMagazine: { id: 1, phase: 'release', focused: false } });
+    expect(f.aimModel.getResolvedState().activeSlot).toBe('weapon2');
+    f.aimSystem.notifyShot('weapon1');
+    expect(f.aimModel.getResolvedState().activeSlot).toBe('weapon1');
+    const t = 1001 + f.config.cooldown;
+    f.shoot(t, 0, true, 0, { rocketMagazine: { id: 2, phase: 'hold', focused: true } });
+    expect(f.aimModel.getResolvedState().activeSlot).toBe('weapon2');
+    expect(f.projectiles).toHaveLength(1);
+    expect(f.aim).not.toHaveBeenCalled(); // Selection must not add predicted shot bloom.
+    f.shoot(t + 1, 0, false, 0, { rocketMagazine: { id: 2, phase: 'release', focused: true } });
+    expect(f.projectiles).toHaveLength(2);
+    expect(f.aimModel.getResolvedState().activeSlot).toBe('weapon2');
+  });
+  it.each([false, true])('loads without predicted shots or double costs and emits one feedback event per salvo (client=%s)', remote => {
+    const f = fixture(remote, 'ROCKET_LAUNCHER', undefined, 1);
+    f.setResourceCost(7);
+    const params = (phase: 'hold' | 'release', focused = false) => ({ rocketMagazine: { id: 1, phase, focused } });
+    f.shoot(1000, 20, true, 0, params('hold'));
+    expect(f.projectiles).toHaveLength(0); expect(f.shotEvents).toHaveLength(0);
+    expect(f.resourceSystem.drainAdrenaline).toHaveBeenCalledOnce();
+    f.shoot(1000, 20, false, 0, params('hold'));
+    expect(f.resourceSystem.drainAdrenaline).toHaveBeenCalledOnce();
+    f.shoot(1000 + f.config.cooldown, 20, false, 0.5, params('hold', true));
+    const shots = f.projectiles as Array<{ origin: { angle: number }; presentation: { shotAudioKey?: string } }>;
+    expect(shots).toHaveLength(f.config.rocketLauncher!.magazineCapacities[0]);
+    expect(shots[0].origin.angle).toBeCloseTo(0.5 - f.config.rocketLauncher!.salvoAngleDegrees * f.config.rocketLauncher!.focusAngleFactor * Math.PI / 180);
+    expect(shots.filter(s => s.presentation.shotAudioKey)).toHaveLength(1);
+    expect(f.resourceSystem.drainAdrenaline).toHaveBeenCalledTimes(shots.length);
+    expect(f.commits).toHaveBeenCalledOnce(); expect(f.shotEvents).toHaveLength(1);
+    expect(f.recoil).toHaveBeenCalledExactlyOnceWith('shooter', -Math.cos(0.5) * f.config.shotRecoilForce!,
+      -Math.sin(0.5) * f.config.shotRecoilForce!, f.config.shotRecoilDuration);
+    f.shoot(1001 + f.config.cooldown, 20, false, 0, params('release'));
+    f.shoot(1002 + f.config.cooldown, 20, false, 0, params('release'));
+    expect(f.shotEvents).toHaveLength(1); expect(f.projectiles).toHaveLength(shots.length);
+  });
+
+  it('rejects old Activity input and cancels through the RPC even when normal combat input is unavailable', () => {
+    const f = fixture(true, 'ROCKET_LAUNCHER', undefined, 1);
+    f.setActivityRevision(2); f.setResourceCost(7);
+    f.shoot(1000, 0, true, 0, { activityRevision: 1, rocketMagazine: { id: 1, phase: 'hold', focused: false } });
+    expect(f.resourceSystem.drainAdrenaline).not.toHaveBeenCalled();
+    f.shoot(1010, 0, true, 0, { activityRevision: 2, rocketMagazine: { id: 2, phase: 'hold', focused: false } });
+    expect(f.resourceSystem.drainAdrenaline).toHaveBeenCalledOnce();
+    f.setCombatEnabled(false);
+    f.shoot(1011, 0, false, 0, { activityRevision: 2, rocketMagazine: { id: 2, phase: 'cancel', focused: false } });
+    f.shoot(1012, 0, false, 0, { activityRevision: 2, rocketMagazine: { id: 2, phase: 'release', focused: false } });
+    expect(f.magazine.getState('shooter')).toBeUndefined(); expect(f.projectiles).toEqual([]);
+    expect(f.resourceSystem.drainAdrenaline).toHaveBeenCalledOnce();
   });
 });

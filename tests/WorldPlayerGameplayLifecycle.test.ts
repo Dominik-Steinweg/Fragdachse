@@ -566,3 +566,48 @@ describe('WorldPlayerGameplayRuntime – Read-Views (2B)', () => {
     expect(runtime.getAk47StrategicTargetNetSnapshot(0)).toEqual([]);
   });
 });
+
+
+describe('World player actions release a Rocket magazine before changing player state', () => {
+  it.each(['dash', 'burrow', 'utility', 'charged utility', 'tool utility'] as const)('%s closes the gesture before executing', async action => {
+    const { RocketMagazineRuntime } = await import('../src/world/RocketMagazineRuntime');
+    const { WEAPON_CONFIGS, UTILITY_CONFIGS } = await import('../src/loadout/LoadoutConfig');
+    const config = { ...WEAPON_CONFIGS.ROCKET_LAUNCHER,
+      rocketLauncher: { ...WEAPON_CONFIGS.ROCKET_LAUNCHER.rocketLauncher!, magazineLevel: 2 } };
+    const order: string[] = [];
+    let canAct = true;
+    const now = Date.now();
+    const pay = vi.fn();
+    const fire = vi.fn(() => { order.push('fire'); return { ok: true }; });
+    const magazine = new RocketMagazineRuntime({ getConfig: () => config, canAct: () => canAct,
+      isOnCooldown: () => false, canPay: () => true, pay, fire });
+    magazine.input('p', { id: 1, phase: 'hold', focused: true }, 0.3, 300, 50, now);
+    const perform = vi.fn(() => {
+      expect(magazine.getState('p')).toBeUndefined();
+      order.push('action');
+      canAct = false;
+      return { ok: true };
+    });
+    const world = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+    world.systems = {
+      rocketMagazine: magazine,
+      burrow: { handleBurrowRequest: perform },
+      utilityAction: { execute: perform, startHeldAction: perform, useInspectorUtility: perform },
+    };
+    world.options = { hostPhysics: { handleDashRPC: perform } };
+    if (action === 'dash') world.handleDashRequest('p', 1, 0, now);
+    if (action === 'burrow') world.handleBurrowRequest('p', true);
+    if (action === 'utility') world.usePlayerAction({ category: 'utility', playerId: 'p', angle: 0.3,
+      targetX: 300, targetY: 50, hostNowMs: now });
+    if (action === 'charged utility') world.startUtilityHeldAction('p', 'charge', 'charged_gate', now);
+    if (action === 'tool utility') world.useInspectorUtility('p', { kind: 'utility', id: 'DECOY' },
+      UTILITY_CONFIGS.DECOY, 0.3, 300, 50, now);
+    expect(order).toEqual(['fire', 'action']);
+    expect(pay).toHaveBeenCalledOnce();
+    expect(fire.mock.calls[0]).toBeDefined();
+    magazine.input('p', { id: 1, phase: 'release', focused: true }, 0.3, 300, 50, now + 1);
+    magazine.update(now + 1);
+    expect(fire).toHaveBeenCalledOnce();
+    expect(magazine.getState('p')).toBeUndefined();
+  });
+});

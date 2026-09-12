@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { OwnerVisualSource } from '../entities/OwnerVisualSource';
-import type { FireChunkTarget, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundSnapshot } from '../types';
+import type { FireChunkFlight, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundSnapshot } from '../types';
 import {
   createEmitter,
   destroyEmitter,
@@ -113,6 +113,7 @@ class RingTurbulenceProcessor extends Phaser.GameObjects.Particles.ParticleProce
 export class FlamethrowerUpgradeRenderer {
   private readonly groundFire: GroundFireClusterRenderer;
   private readonly flyingChunks = new Set<Phaser.GameObjects.Image>();
+  private readonly chunkTweens = new Map<Phaser.GameObjects.Image, Phaser.Tweens.Tween>();
   private readonly ringRadii = new Map<string, number>();
   private readonly ringVisuals = new Map<string, RingVisual>();
   private readonly ringFlames: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -153,13 +154,15 @@ export class FlamethrowerUpgradeRenderer {
   playFireChunkBurst(
     x: number,
     y: number,
-    targets: readonly FireChunkTarget[],
-    landsAt: number,
+    targets: readonly FireChunkFlight[],
+    startedAt: number,
     now = Date.now(),
     visualStyle: GroundFireVisualStyle = 'normal',
   ): void {
-    const duration = Phaser.Math.Clamp(landsAt - now, 80, 420);
     for (const target of targets) {
+      if (target.landsAt <= now) continue;
+      const duration = target.landsAt - now;
+      const startProgress = Math.max(0, Math.min(1, (now - startedAt) / Math.max(1, target.landsAt - startedAt)));
       // Ein Follow-Light je fliegendem Brocken; freigegeben beim Aufschlag.
       const lightKey = `firechunk:${this.nextChunkLightId++}`;
       this.activeChunkLightKeys.add(lightKey);
@@ -173,11 +176,13 @@ export class FlamethrowerUpgradeRenderer {
         .setScale(0.72);
       this.flyingChunks.add(chunk);
       const arc = Phaser.Math.Between(22, 46);
-      this.scene.tweens.addCounter({
-        from: 0,
+      chunk.setPosition(Phaser.Math.Linear(x, target.x, startProgress),
+        Phaser.Math.Linear(y, target.y, startProgress) - Math.sin(startProgress * Math.PI) * arc);
+      const flightTween = this.scene.tweens.addCounter({
+        from: startProgress,
         to: 1,
         duration,
-        ease: 'Sine.easeInOut',
+        ease: 'Linear',
         onUpdate: tween => {
           if (!chunk.active) return;
           const t = tween.getValue() ?? 0;
@@ -192,6 +197,7 @@ export class FlamethrowerUpgradeRenderer {
         onComplete: () => {
           const shouldLand = chunk.active;
           this.flyingChunks.delete(chunk);
+          this.chunkTweens.delete(chunk);
           this.activeChunkLightKeys.delete(lightKey);
           this.lighting?.releaseLight(lightKey);
           chunk.destroy();
@@ -202,6 +208,7 @@ export class FlamethrowerUpgradeRenderer {
           this.groundFire.spawnImpact(target.x, target.y, visualStyle);
         },
       });
+      this.chunkTweens.set(chunk, flightTween);
     }
   }
 
@@ -249,10 +256,12 @@ export class FlamethrowerUpgradeRenderer {
     killAllAndResetParticlePositions(this.ringFlames);
     killAllAndResetParticlePositions(this.ringSparks);
     for (const chunk of this.flyingChunks) {
+      this.chunkTweens.get(chunk)?.remove();
       this.scene.tweens.killTweensOf(chunk);
       chunk.destroy();
     }
     this.flyingChunks.clear();
+    this.chunkTweens.clear();
     // Die Tweens wurden abgebrochen, ihre onComplete-Freigabe läuft also nicht mehr.
     for (const key of this.activeChunkLightKeys) this.lighting?.releaseLight(key);
     this.activeChunkLightKeys.clear();

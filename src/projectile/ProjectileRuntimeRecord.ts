@@ -22,6 +22,8 @@ import type { ProjectileSpeedVariationState } from './ProjectileSpeedVariation';
 
 /** Private authoritative state: never exported through a gameplay boundary. */
 export interface ProjectileRuntimeRecord {
+  distanceScaling?: { distance: number; committed: number; startX: number; startY: number;
+    range: number; x: number; y: number; factor: number };
   /** Consumed on first full carrier exit; never replicated or inherited by children. */
   sourceCarrierBaseId?: string;
   portalGates?: PortalGates;
@@ -70,6 +72,7 @@ export interface ProjectileResolvedSpec {
   readonly interaction: ProjectileResolvedInteraction;
 }
 export interface ProjectileResolvedFlight extends Pick<ProjectileFlightSpec, 'lifetimeMs' | 'speed' | 'speedVariation' | 'isGrenade'> {
+  readonly distanceScaling?: import('./ProjectileDistanceScaling').ProjectileDistanceScaling;
   readonly originalBodySize?: number;
   readonly collisionMode: ProjectileCollisionMode;
   readonly isTranslocatorPuck?: boolean;

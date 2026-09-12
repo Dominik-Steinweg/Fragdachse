@@ -889,6 +889,7 @@ export class ArenaScene extends Phaser.Scene {
         getScopeProgress: () => this.ctx.inputSystem.getScopeProgress(),
         isScoping: () => this.ctx.inputSystem.isScoping(),
         getScopeChargeProgress: () => this.ctx.inputSystem.getScopeChargeProgress(),
+        getRocketMagazinePreview: () => this.ctx.inputSystem.getRocketMagazinePreview(),
         getWeapon2ScopeConfig: () => this.ctx.inputSystem.getWeapon2ScopeConfig(),
       },
       {
@@ -1114,6 +1115,7 @@ export class ArenaScene extends Phaser.Scene {
         getLocalInspectorTools: () => this.clientUpdate.getLocalInspectorTools(),
         getLocalConstructionCapacity: () => this.clientUpdate.getLocalConstructionCapacity(),
         getWeaponLastFired: (slot) => this.clientUpdate.weaponLastFiredRecord()[slot],
+        selectAimWeapon: slot => aimSystem.setActiveSlot(slot),
         notifyLoadoutFired: (slot, angle, targetX, targetY) => this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY),
         rollbackRejectedLoadoutFire: (slot, predictionId) => this.clientUpdate.rollbackRejectedLoadoutFire(slot, predictionId),
         notifyUtilityFired: () => this.clientUpdate.notifyUtilityFired(),

@@ -24,6 +24,9 @@ const FLAG_MOLOTOV_FIREWALKER = 256;
 
 /** Kompakte Wire-Form eines Spielers. Schlüssel bewusst kurz; optionale Felder fehlen bei Default. */
 interface CompactPlayerState {
+  rm?: import('../types').RocketMagazineState;
+  ps?: number;
+  rh?: number;
   pr?: number;
   x: number;
   y: number;
@@ -84,6 +87,9 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
   };
 
   if (state.activeUltimateId !== undefined) compact.k = state.activeUltimateId;
+  if (state.rocketMagazine) compact.rm = state.rocketMagazine;
+  if (state.pressureShieldUntil) compact.ps = state.pressureShieldUntil;
+  if (state.rocketHealSequence) compact.rh = state.rocketHealSequence;
   if (state.burnVisualStyle === 'void') compact.bv = 1;
   if (state.ultimateChargeFraction) compact.cf = state.ultimateChargeFraction;
   if (state.ultimateChargeRange) compact.cr = state.ultimateChargeRange;
@@ -104,6 +110,9 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
 
   return {
     x: compact.x,
+    ...(compact.rm ? { rocketMagazine: compact.rm } : {}),
+    ...(compact.ps ? { pressureShieldUntil: compact.ps } : {}),
+    ...(compact.rh ? { rocketHealSequence: compact.rh } : {}),
     ...(compact.pr === undefined ? {} : { positionRevision: compact.pr }),
     y: compact.y,
     rot: compact.r,

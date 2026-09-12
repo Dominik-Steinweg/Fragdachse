@@ -64,6 +64,7 @@ export interface HeldActionRpcResult {
 
 /** RPC access to current World-owned player capabilities, never to their Runtime owner. */
 export interface PlayerLoadoutRpcPort {
+  handleDashRequest(playerId: string, dx: number, dy: number, hostNowMs: number): void;
   handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void;
   isBurrowed(playerId: string): boolean;
   isStunned(playerId: string): boolean;

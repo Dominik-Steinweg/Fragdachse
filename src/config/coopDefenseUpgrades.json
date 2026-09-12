@@ -2324,150 +2324,212 @@
                                                                       "itemId":  "ROCKET_LAUNCHER"
                                                                   }
                                             },
+
                                             {
-                                                "id":  "rocket_launcher_explosion_radius",
-                                                "code":  "C-W2-1",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  5,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  140,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_rocket_launcher",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.impactExplosion.radius",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "rocket_launcher_cooldown",
-                                                "code":  "C-W2-2",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  150,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "rocket_launcher_explosion_radius",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.cooldown",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  -0.1
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "rocket_launcher_direct_damage",
-                                                "code":  "C-W2-5",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  153,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "rocket_launcher_cooldown",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.damage",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.2
-                                                                },
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.impactExplosion.damage",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.2
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "rocket_launcher_burning_explosion",
-                                                "code":  "C-W2-3",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  155,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_rocket_launcher",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.fire.impactExplosion.groundFire.lingerDuration",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  2000
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "rocket_launcher_burning_explosion_damage",
-                                                "code":  "C-W2-4",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  157,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "rocket_launcher_burning_explosion",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.fire.impactExplosion.groundFire.burnDamagePerTick",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.5
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "rocket_launcher_adrenaline_cost",
-                                                "code":  "C-W2-6",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  158,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "rocket_launcher_burning_explosion_damage",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.adrenalinCost",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  -0.1
-                                                                }
-                                                            ]
-                                            },
+    "id": "rocket_launcher_adrenaline_cost",
+    "code": "C-W2-6",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "startingLevel": 0,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 151,
+    "requires": [
+        {
+            "upgradeId": "unlock_rocket_launcher",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.adrenalinCost",
+            "mode": "add_percent_per_level",
+            "value": -0.1
+        }
+    ]
+},
+{
+    "id": "rocket_launcher_rocket_jump",
+    "code": "C-W2-10",
+    "kind": "upgrade",
+    "maxLevel": 1,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 151,
+    "requires": [
+        {
+            "upgradeId": "unlock_rocket_launcher",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.jumpMultiplier",
+            "mode": "add_per_level",
+            "value": 3
+        }
+    ]
+},
+{
+    "id": "rocket_launcher_explosive_medicine",
+    "code": "C-W2-11",
+    "kind": "upgrade",
+    "maxLevel": 1,
+    "costPerLevel": 0,
+    "bossPointCostPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 152,
+    "requires": [
+        {
+            "upgradeId": "rocket_launcher_rocket_jump",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.healFraction",
+            "mode": "add_per_level",
+            "value": 0.5
+        }
+    ]
+},
+{
+    "id": "rocket_launcher_pressure_shield",
+    "code": "C-W2-12",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 153,
+    "requires": [
+        {
+            "upgradeId": "rocket_launcher_explosive_medicine",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.pressureShieldDurationMs",
+            "mode": "add_per_level",
+            "value": 1000
+        }
+    ]
+},
+{
+    "id": "rocket_launcher_heavy_charge",
+    "code": "C-W2-13",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 154,
+    "requires": [
+        {
+            "upgradeId": "rocket_launcher_adrenaline_cost",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.distanceLevel",
+            "mode": "add_per_level",
+            "value": 1
+        }
+    ]
+},
+{
+    "id": "rocket_launcher_magazine",
+    "code": "C-W2-14",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 155,
+    "requires": [
+        {
+            "upgradeId": "rocket_launcher_heavy_charge",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.magazineLevel",
+            "mode": "add_per_level",
+            "value": 1
+        }
+    ]
+},
+{
+    "id": "rocket_launcher_aftershock",
+    "code": "C-W2-15",
+    "kind": "upgrade",
+    "maxLevel": 1,
+    "costPerLevel": 0,
+    "bossPointCostPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 156,
+    "requires": [
+        {
+            "upgradeId": "rocket_launcher_pressure_shield",
+            "minLevel": 1
+        },
+        {
+            "upgradeId": "rocket_launcher_magazine",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.aftershockEnabled",
+            "mode": "add_per_level",
+            "value": 1
+        }
+    ]
+},
+{
+    "id": "rocket_launcher_more_chunks",
+    "code": "C-W2-16",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 157,
+    "requires": [
+        {
+            "upgradeId": "rocket_launcher_aftershock",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.chunkCount",
+            "mode": "add_per_level",
+            "value": 2
+        }
+    ]
+},
+{
+    "id": "rocket_launcher_targeted_scatter",
+    "code": "C-W2-17",
+    "kind": "upgrade",
+    "maxLevel": 1,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 158,
+    "requires": [
+        {
+            "upgradeId": "rocket_launcher_aftershock",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.targetedChunks",
+            "mode": "add_per_level",
+            "value": 1
+        }
+    ]
+},
                                             {
                                                 "id":  "unlock_ak47",
                                                 "code":  "C-W3",
@@ -4436,74 +4498,7 @@
                                                                 }
                                                             ]
                                             },
-                                            {
-                                                "id":  "rocket_launcher_black_hole",
-                                                "code":  "C-W2-C",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "sortOrder":  175,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "rocket_launcher_direct_damage",
-                                                                     "minLevel":  1
-                                                                 },
-                                                                 {
-                                                                     "upgradeId":  "rocket_launcher_adrenaline_cost",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.blackHoleDurationMs",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  1000
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "rocket_launcher_black_hole_duration",
-                                                "code":  "C-W2-7",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "costPerLevel":  1,
-                                                "sortOrder":  177,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "rocket_launcher_black_hole",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.blackHoleDurationMs",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  1000
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "rocket_launcher_black_hole_pull",
-                                                "code":  "C-W2-8",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "costPerLevel":  1,
-                                                "sortOrder":  178,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "rocket_launcher_black_hole",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "weapon.ROCKET_LAUNCHER.blackHolePullStrength",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.3
-                                                                }
-                                                            ]
-                                            },
+
                                             {
                                                 "id":  "mini_rocket_triple_detonation",
                                                 "code":  "C-W6-5",
@@ -5646,7 +5641,6 @@
                                                 ]
                                             },
 
-
                                             {
                                                 "id":  "unlock_translocator",
                                                 "code":  "D-U6",
@@ -6210,7 +6204,6 @@
                                                                 }
                                                             ]
                                             },
-
 
                                             {
                                                 "id": "decoy_explosive_dummy",

@@ -219,6 +219,9 @@ export interface SyncedActiveHudBuff {
 
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
 export interface PlayerNetState {
+  rocketMagazine?: RocketMagazineState;
+  pressureShieldUntil?: number;
+  rocketHealSequence?: number;
   /** Discontinuous movement revision; repeated until acknowledged by ordinary snapshots. */
   positionRevision?: number;
   x:          number;
@@ -418,10 +421,42 @@ export interface GroundFireCellEffect {
 }
 
 export interface FireChunkBurstConfig extends GroundFireCellEffect {
+  readonly requireLineOfSight?: boolean;
+  readonly targetSurvivors?: boolean;
+  readonly landingExplosion?: FireChunkLandingExplosion;
   readonly count: number;
   readonly searchRadius: number;
   readonly flightMs: number;
   readonly igniteCenter: boolean;
+}
+
+export interface RocketMagazineInput {
+  readonly id: number;
+  readonly phase: 'hold' | 'release' | 'cancel';
+  readonly focused: boolean;
+}
+
+export interface RocketMagazineState {
+  readonly canLoadNext?: boolean;
+  readonly id: number;
+  readonly loaded: number;
+  readonly capacity: number;
+  readonly nextLoadAt: number;
+  readonly intervalMs: number;
+  readonly focused: boolean;
+}
+
+/** A landing cannot recursively create another burst. */
+export type FireChunkLandingExplosion = Pick<ProjectileExplosionConfig,
+  'radius' | 'maxDamage' | 'minDamage' | 'knockback' | 'selfDamageMult' | 'excludeFriendlyPlayers' |
+  'rocketSupport' | 'visualStyle' | 'appliedSourceDamageFactors'>;
+
+export interface RocketExplosionSupport {
+  /** Source-only outgoing bonus captured at the main impact, before recipient defenses. */
+  readonly healDamageMultiplier?: number;
+  readonly healFraction: number;
+  readonly pressureShieldDurationMs: number;
+  readonly pressureShieldReduction: number;
 }
 
 /** Resolved at Molotov creation; inherited only by its enemy wildfire trail. */
@@ -444,6 +479,10 @@ export interface FireChunkTarget {
   y: number;
 }
 
+export interface FireChunkFlight extends FireChunkTarget {
+  readonly landsAt: number;
+}
+
 /**
  * Nutzlast der Verstärkungsmatrix. Sie laeuft ueber den normalen Projektil-
  * Explosionspfad, erzeugt am Einschlag aber ausschliesslich ein Schutz-/Verwundbarkeitsfeld.
@@ -460,6 +499,8 @@ export type OverchargeFieldEffect = ReinforcementMatrixEffect;
 
 /** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
 export interface ProjectileExplosionConfig {
+  readonly rocketSupport?: RocketExplosionSupport;
+  readonly excludeFriendlyPlayers?: boolean;
   readonly radius: number;
   readonly maxDamage: number;
   /** Execution factors already included in max/min damage; pending runtime P remains at impact. */
@@ -982,6 +1023,7 @@ export interface LoadoutCommitSnapshot {
 
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
 export interface LoadoutUseParams {
+  rocketMagazine?: RocketMagazineInput;
   /** Explicit secondary action; a stale request must never turn into a new throw. */
   timeBubbleCollapseId?: number;
   /** Identity of the host-owned translocator use, including depleted temporary sources. */
@@ -1096,16 +1138,17 @@ export interface UtilityPlacementPreviewState {
   sourceRuntimeId?: number;
 }
 
-/** Source-owned factor that was already applied before a projectile entered its Runtime. */
+/** Source-owned factor already applied to a projectile or its resolved impact payload. */
 export interface ProjectileDamageSourceFactor {
   readonly kind: 'automated-source' | 'runtime-power' | 'outgoing-modifier' | 'critical';
   readonly multiplier: number;
-  readonly resolvedAt: 'execution';
+  readonly resolvedAt: 'execution' | 'impact';
 }
 
 /** Konfiguration für ein gespawntes Projektil (wird von der World-Runtime aufgelöst) */
 export interface ProjectileSpawnConfig {
   speedVariation?: 'charged_bolt';
+  distanceScaling?: import('./projectile/ProjectileDistanceScaling').ProjectileDistanceScaling;
   proximityPulse?: ProjectileProximityPulseConfig;
   /** Authoritative collision candidate mode; presentation style is never used for this choice. */
   collisionMode?: ProjectileCollisionMode;

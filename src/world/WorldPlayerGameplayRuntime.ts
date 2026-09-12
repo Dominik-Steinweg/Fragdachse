@@ -54,6 +54,7 @@ import { NegevBehaviorRuntime } from './NegevBehaviorRuntime';
 import { WeaponReactionRuntime } from './WeaponReactionRuntime';
 import { SustainedWeaponBehaviorRuntime } from './SustainedWeaponBehaviorRuntime';
 import { PlayerWeaponActivationRuntime } from './PlayerWeaponActivationRuntime';
+import { RocketMagazineRuntime } from './RocketMagazineRuntime';
 import type { PlayerRelationshipPort } from './PlayerRelationshipPort';
 import type { TrainManager } from '../train/TrainManager';
 import {
@@ -63,7 +64,7 @@ import {
 } from '../systems/HostHeldActionSystem';
 import type {
   BurrowPhase,
-  FireChunkTarget,
+  FireChunkFlight,
   FireChunkBurstConfig,
   ExplosionVisualStyle,
   GroundFireVisualStyle,
@@ -129,7 +130,7 @@ export interface WorldPlayerGameplayNetworkPort {
     readonly broadcastFireChunkEffect: (
       x: number,
       y: number,
-      targets: readonly FireChunkTarget[],
+      targets: readonly FireChunkFlight[],
       landsAt: number,
       visualStyle?: GroundFireVisualStyle,
     ) => void;
@@ -156,6 +157,7 @@ export interface WorldPlayerGameplayNetworkPort {
 interface WorldPlayerGameplaySystems {
   readonly playerAction: PlayerActionRuntime;
   readonly weaponActivation: PlayerWeaponActivationRuntime;
+  readonly rocketMagazine: RocketMagazineRuntime;
   readonly utilityAction: PlayerUtilityActionRuntime;
   readonly ultimateBehavior: PlayerUltimateBehaviorRuntime;
   readonly heldAction: HostHeldActionSystem;
@@ -212,6 +214,7 @@ export type PlayerGameplayHeldActionResult = ConsumedHeldAction;
 /** World-facing player action boundary for host-authoritative action mutations. */
 export interface PlayerGameplayActionPort {
   usePlayerAction(request: PlayerActionRequest): LoadoutUseResult;
+  handleDashRequest(playerId: string, dx: number, dy: number, hostNowMs: number): void;
   handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void;
   startHeldAction(
     playerId: string,
@@ -310,6 +313,7 @@ export type PlayerGameplayReadViews =
   & PlayerGameplaySnapshotReadView;
 
 export interface PlayerGameplayHostFrameReadModel {
+  readonly rocketMagazine?: import('../types').RocketMagazineState;
   readonly adrenaline: number;
   readonly adrenalineRevision: number;
   readonly maxAdrenaline: number;
@@ -386,6 +390,7 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly projectileEnvironmentInteractionPort: ProjectileEnvironmentInteractionPort;
   readonly combatSystem:
     & CombatRelationshipQueryPort
+    & { resolveCombatRelationship: import('../combat/CombatCapabilities').CombatRelationshipReadPort['resolveRelationship'] }
     & { applyEnemySlow(id: string, fraction: number, durationMs: number, now?: number): void }
     & CombatPlayerSupportPort
     & CombatDamageEffectPort
@@ -628,6 +633,19 @@ export class WorldPlayerGameplayRuntime implements
         landsAt,
         visualStyle,
       ),
+      {
+        hasLineOfSight: (x, y, tx, ty) => options.combatSystem.hasLineOfSight(x, y, tx, ty),
+        canTarget: (ownerId, enemyId, source) => {
+          const target = this.options.getEnemyManager()?.getCombatTargetRef(enemyId);
+          return source && target ? options.combatSystem.resolveCombatRelationship(source, target).canDamage
+            : options.combatSystem.canDamageTarget(ownerId, enemyId);
+        },
+        explode: landing => {
+          options.combatSystem.applyExplosionDamage(landing.x, landing.y, landing.effect, landing.ownerId,
+            'weapon2', 'ROCKET_LAUNCHER.aftershock', landing.source);
+          options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket');
+        },
+      },
     );
     const molotovUpgrade = new MolotovUpgradeSystem(
       () => options.playerManager.getAllPlayers(),
@@ -697,6 +715,26 @@ export class WorldPlayerGameplayRuntime implements
       registerWeaponFired: (playerId, sourceSlot, nowMs) => itemRuntime.registerWeaponFired(playerId, sourceSlot, nowMs),
       broadcastShotFx: options.network.presentation.broadcastShotFx,
     });
+    const rocketMagazine = new RocketMagazineRuntime({
+      getConfig: id => loadout.getEquippedWeaponConfig(id, 'weapon2'),
+      canAct: (id, now) => options.getPlayerCapabilities(id).canUseCombat && options.getPlayerCapabilities(id).canInteract
+        && options.combatSystem.isAlive(id) && !burrow.isWeaponBlocked(id) && !options.hostPhysics.isDashBurst(id)
+        && !(options.combatSystem.isStunned?.(id, now) ?? false),
+      isOnCooldown: (id, now) => loadout.isWeaponOnCooldown(id, 'weapon2', now),
+      canPay: (id, config) => resource.getAdrenaline(id) >= resource.resolveAdrenalineCost(id, config.adrenalinCost),
+      pay: (id, config, now) => resource.drainAdrenaline(id, config.adrenalinCost, now),
+      fire: (id, config, aim, count, focused, nowMs) => {
+        const player = options.playerManager.getPlayer(id);
+        if (!player) return { ok: false, reason: 'invalid' };
+        const result = weaponActivation.activateWeapon({ playerId: id, slot: 'weapon2', config,
+          x: player.x, y: player.y, ...aim, nowMs }, { count, focused });
+        if (result.ok) {
+          options.decoySystem.breakStealth(id, nowMs);
+          weaponActivation.noteWeaponFired(id, 'weapon2', nowMs);
+        }
+        return result;
+      },
+    });
     const playerAction = new PlayerActionRuntime(
       {
         getPlayer: (playerId) => {
@@ -714,9 +752,11 @@ export class WorldPlayerGameplayRuntime implements
       loadout,
       sustainedWeaponBehavior,
       weaponActivation,
+      rocketMagazine,
     );
 
     this.systems = {
+      rocketMagazine,
       playerAction,
       weaponActivation,
       utilityAction,
@@ -873,8 +913,8 @@ export class WorldPlayerGameplayRuntime implements
   getPlayerFireChunkPort(): FireChunkBurstPort | null {
     if (this.destroyed || !this.systems.flamethrowerUpgrade) return null;
     return {
-      hostCreateFireChunkBurst: (ownerId, x, y, burst, sourceKey, now, source) => (
-        this.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, now, source)
+      hostCreateFireChunkBurst: (ownerId, x, y, burst, sourceKey, now, source, preferredTargets) => (
+        this.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, now, source, preferredTargets)
       ),
     };
   }
@@ -924,6 +964,7 @@ export class WorldPlayerGameplayRuntime implements
     const { systems } = this;
     systems.heldAction.clearExpired(nowMs);
     if (countdownActive) {
+      systems.rocketMagazine?.cancelAll();
       systems.heldAction.reset();
     this.heldActionUtilityIds?.clear();
       return;
@@ -949,6 +990,7 @@ export class WorldPlayerGameplayRuntime implements
       }
     }
 
+    systems.rocketMagazine?.update(nowMs);
     systems.translocator.update(nowMs);
     systems.itemRuntime.hostUpdate(nowMs);
     systems.itemRuntime.updateSurroundedPlayers(
@@ -1051,6 +1093,7 @@ export class WorldPlayerGameplayRuntime implements
     ];
     return {
       adrenaline: systems.resource.getAdrenaline(playerId),
+      rocketMagazine: systems.rocketMagazine?.getState(playerId),
       adrenalineRevision: systems.resource.getAdrenalineRevision(playerId),
       maxAdrenaline: systems.resource.getMaxAdrenaline(playerId),
       rage: systems.resource.getRage(playerId),
@@ -1091,9 +1134,10 @@ export class WorldPlayerGameplayRuntime implements
     sourceKey: string,
     nowMs: number,
     source?: import('../combat/CombatScope').CombatSource,
+    preferredTargets?: readonly import('../types').FireChunkTarget[],
   ): void {
     if (this.destroyed) return;
-    this.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, nowMs, source);
+    this.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, nowMs, source, preferredTargets);
   }
 
   registerDashCompleted(playerId: string, nowMs: number): void {
@@ -1166,12 +1210,14 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   detachPlayerBuild(playerId: string): void {
+    this.systems.rocketMagazine?.cancel(playerId);
     this.systems.itemRuntime.removePlayer(playerId);
   }
 
   attachPlayerLoadout(playerId: string, selection?: LoadoutSelection): void {
     // Frischer Ultimate-State (deaktiviert u. a. ein laufendes Armageddon nach Reconnect),
     // dann das Default-Loadout aus der eingefrorenen bzw. Live-Auswahl.
+    this.systems.rocketMagazine?.cancel(playerId);
     this.systems.ultimateBehavior.resetPlayer(playerId);
     this.systems.ak47Behavior?.resetPlayer(playerId);
     this.systems.negevBehavior.resetPlayer(playerId);
@@ -1186,6 +1232,7 @@ export class WorldPlayerGameplayRuntime implements
   detachPlayerLoadout(playerId: string): void {
     this.systems.ultimateBehavior.removePlayer(playerId);
     this.systems.ak47Behavior?.removePlayer(playerId);
+    this.systems.rocketMagazine?.removePlayer(playerId);
     this.systems.negevBehavior.removePlayer(playerId);
     this.systems.sustainedWeaponBehavior.removePlayer(playerId);
     this.systems.weaponReaction.removePlayer(playerId);
@@ -1202,6 +1249,7 @@ export class WorldPlayerGameplayRuntime implements
   reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean {
     const changed = this.systems.loadout.syncSelectedLoadout(playerId, selection);
     if (changed) {
+      this.systems.rocketMagazine?.cancel(playerId);
       this.systems.ultimateBehavior.resetPlayer(playerId);
       this.systems.ak47Behavior?.resetPlayer(playerId);
       this.systems.negevBehavior.resetPlayer(playerId);
@@ -1225,6 +1273,7 @@ export class WorldPlayerGameplayRuntime implements
   ): void {
     const changedPlayerIds = this.systems.playerModifier.syncPlayers(builds);
     for (const playerId of changedPlayerIds) {
+      this.systems.rocketMagazine?.cancel(playerId);
       const snapshot = builds.get(playerId) ?? null;
       const wantsItemRuntime = Boolean(snapshot?.coopDefenseProfile)
         || (snapshot?.equippedItems?.length ?? 0) > 0;
@@ -1238,6 +1287,7 @@ export class WorldPlayerGameplayRuntime implements
 
   /** Held Actions eines austretenden Spielers verwerfen (Player-in-World-Detach-Grenze). */
   invalidateHeldActionsForPlayer(playerId: string): void {
+    this.systems.rocketMagazine?.cancel(playerId);
     this.clearHeldActionsForPlayer(playerId);
   }
 
@@ -1246,6 +1296,7 @@ export class WorldPlayerGameplayRuntime implements
    * Runtime-Detach derselben Activity lässt sie bewusst bestehen.
    */
   invalidateHeldActionsOnActivityEnd(): void {
+    this.systems.rocketMagazine?.cancelAll();
     this.systems.heldAction.reset();
     this.systems.translocator.clear();
   }
@@ -1253,7 +1304,10 @@ export class WorldPlayerGameplayRuntime implements
   /** Host-authoritative Phase-6A Player Action entry point for Weapon1/Weapon2. */
   usePlayerAction(request: PlayerActionRequest): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
-    if (request.category === 'utility') return this.systems.utilityAction.execute(request);
+    if (request.category === 'utility') {
+      this.systems.rocketMagazine?.releaseForAction(request.playerId, request.hostNowMs);
+      return this.systems.utilityAction.execute(request);
+    }
     if (request.category === 'ultimate') return this.systems.ultimateBehavior.execute(request);
     return this.systems.playerAction.execute(request);
   }
@@ -1282,6 +1336,7 @@ export class WorldPlayerGameplayRuntime implements
     temporaryUtilityInstanceId?: string,
   ): boolean {
     if (this.destroyed) return false;
+    this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     return this.systems.utilityAction.startHeldAction(playerId, actionId, kind, hostNowMs, toolRef, temporaryUtilityInstanceId);
   }
 
@@ -1296,6 +1351,7 @@ export class WorldPlayerGameplayRuntime implements
     params?: LoadoutUseParams,
   ): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
+    this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     return this.systems.utilityAction.useInspectorUtility(playerId, tool, config, angle, targetX, targetY, hostNowMs, params);
   }
 
@@ -1314,8 +1370,15 @@ export class WorldPlayerGameplayRuntime implements
     if (!this.destroyed) this.systems.utilityAction.refundUtilityCooldown(playerId, utilityId, amountMs, now);
   }
 
+  handleDashRequest(playerId: string, dx: number, dy: number, hostNowMs: number): void {
+    if (this.destroyed) return;
+    this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
+    this.options.hostPhysics.handleDashRPC(playerId, dx, dy);
+  }
+
   handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void {
     if (this.destroyed) return;
+    if (wantsBurrowed) this.systems.rocketMagazine?.releaseForAction(playerId, Date.now());
     this.systems.burrow.handleBurrowRequest(playerId, wantsBurrowed);
   }
 
@@ -1478,6 +1541,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.loadout.setShieldBuffReadPort(null);
     systems.loadout.setSustainedWeaponBehavior(null);
     systems.loadout.setUltimateModifierReadPort(null);
+    systems.rocketMagazine?.destroy();
     systems.weaponActivation.destroy();
     systems.ultimateBehavior.destroy();
     systems.ak47Behavior?.destroy();

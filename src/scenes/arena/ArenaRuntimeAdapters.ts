@@ -137,6 +137,9 @@ export function createArenaRuntimeRpcPorts(
       moveObject: (playerId, request, hostNowMs) => persistentBase.movePersistentBaseObject(playerId, request, hostNowMs),
     },
     playerLoadout: {
+      handleDashRequest: (playerId, dx, dy, hostNowMs) => {
+        flow.getWorldPlayerGameplayRuntime()?.handleDashRequest(playerId, dx, dy, hostNowMs);
+      },
       handleBurrowRequest: (playerId, wantsBurrowed) => {
         flow.getWorldPlayerGameplayRuntime()?.handleBurrowRequest(playerId, wantsBurrowed);
       },

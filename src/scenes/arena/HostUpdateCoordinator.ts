@@ -820,6 +820,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
       const playerFrame = this.playerGameplayRuntime?.getHostPlayerFrameReadModel(localId, now, isMovingLocal);
       const aimLocal      = playerFrame?.aim ?? this.getDefaultAimState(isMovingLocal);
+      this.ctx.inputSystem.syncRocketMagazineState?.(playerFrame?.rocketMagazine);
       this.ctx.aimSystem?.setAuthoritativeState(aimLocal);
       this.ctx.inputSystem.setLocalDecoyActive(this.ctx.decoySystem.hasActiveDecoy(localId));
       this.ctx.inputSystem.setLocalState(
@@ -1039,6 +1040,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       player.updateMolotovFirewalker(playerFrame?.isMolotovFirewalkerActive ?? false);
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
+        ...this.ctx.getWorldCombatCore()!.getRocketSupportState(player.id, now),
+        rocketMagazine: playerFrame?.rocketMagazine,
         positionRevision: player.positionRevision,
         x: Math.round(player.x),
         y: Math.round(player.y),
@@ -1076,6 +1079,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       };
     }
 
+    for (const player of this.ctx.playerManager.getAllPlayers()) player.updateRocketSupport?.(players[player.id], now);
     this.visuals?.flamethrowerUpgrades.syncRings(players);
     // Waehrend des Countdowns gibt es keine Projektile; der als "voll" markierte Leer-Snapshot
     // raeumt einen etwaigen Client-Statikcache ab, statt ihn unveraendert stehen zu lassen.
@@ -1380,7 +1384,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
   resolveProjectileExplosion(request: ProjectileExplosionRequest): ProjectileExplosionOutcome {
     const ownerId = request.provenance.allegiance.ownerId;
-    const effect = request.effect;
+    let effect = request.effect;
     const matrix = effect.reinforcementMatrix ?? effect.overchargeField;
     let damagedTargetKeys: readonly string[] = [];
 
@@ -1415,13 +1419,15 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         : effect.timeBubble;
       this.combatSystems?.timeBubble?.hostCreateBubble(ownerId, request.x, request.y, bubble, now);
     } else {
-      damagedTargetKeys = this.ctx.getWorldCombatCore()!.resolveExplosionCombat({
+      const outcome = this.ctx.getWorldCombatCore()!.resolveExplosionCombat({
         projectileId: request.projectileId,
         x: request.x,
         y: request.y,
         provenance: request.provenance,
         effect,
-      }).damagedTargetKeys;
+      });
+      damagedTargetKeys = outcome.damagedTargetKeys;
+      effect = outcome.resolvedEffect ?? effect;
       this.ctx.hostPhysics.applyRadialImpulse(
         request.x, request.y, effect.radius, effect.knockback, ownerId, effect.selfKnockbackMult ?? 1,
       );

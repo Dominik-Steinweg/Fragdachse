@@ -1,4 +1,5 @@
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
+import { advanceProjectileDistance, clipProjectileDistanceStep } from './ProjectileDistanceScaling';
 import { MIN_PROJECTILE_BODY_LENGTH } from './ProjectileFlightConstants';
 import { isGrenadeFragment } from '../systems/GrenadeFragmentRules';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
@@ -76,6 +77,8 @@ export class ProjectileFlightProcessor {
     const simulatedAgeMs = projectile.simulatedAgeMs;
     const realAgeMs = nowMs - projectile.createdAt;
 
+    clipProjectileDistanceStep(projectile);
+    advanceProjectileDistance(projectile);
     this.decrementRange(projectile);
     if (projectile.spec.flight.speedVariation === 'charged_bolt') {
       const state = projectile.speedVariation ??= createSpeedVariation(projectile.id);

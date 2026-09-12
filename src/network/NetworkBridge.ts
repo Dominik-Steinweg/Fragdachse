@@ -56,7 +56,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkTarget, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkFlight, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import {
   clonePersistentPlayerBaseContribution,
@@ -516,7 +516,7 @@ type CorpseMarkerHandler = (
 type FireChunkEffectHandler = (
   x: number,
   y: number,
-  targets: readonly FireChunkTarget[],
+  targets: readonly FireChunkFlight[],
   landsAt: number,
   visualStyle: GroundFireVisualStyle,
 ) => void;
@@ -3483,15 +3483,15 @@ export class NetworkBridge {
   broadcastFireChunkEffect(
     x: number,
     y: number,
-    targets: readonly FireChunkTarget[],
-    landsAt: number,
+    targets: readonly FireChunkFlight[],
+    startedAt: number,
     visualStyle: GroundFireVisualStyle = 'normal',
   ): void {
     this.broadcastGameplayEvent('fcfx', {
       x,
       y,
-      t: landsAt,
-      p: targets.flatMap(target => [target.x, target.y]),
+      t: startedAt,
+      p: targets.flatMap(target => [target.x, target.y, target.landsAt]),
       ...(visualStyle === 'void' ? { v: 1 } : {}),
     });
   }
@@ -3500,10 +3500,14 @@ export class NetworkBridge {
     this.fireChunkEffectHandler = handler;
     this.registerAllRpcHandler('fcfx', async (data: unknown): Promise<unknown> => {
       const fireChunkEffectHandler = this.fireChunkEffectHandler;
-      if (!fireChunkEffectHandler) return undefined;
+      if (!fireChunkEffectHandler || !data || typeof data !== 'object') return undefined;
       const { x, y, t, p, v } = data as { x: number; y: number; t: number; p: number[]; v?: number };
-      const targets: FireChunkTarget[] = [];
-      for (let index = 0; index + 1 < p.length; index += 2) targets.push({ x: p[index], y: p[index + 1] });
+      if (![x, y, t].every(Number.isFinite) || !Array.isArray(p) || p.length % 3 !== 0 || !p.every(Number.isFinite)) return;
+      const targets: FireChunkFlight[] = [];
+      for (let index = 0; index < p.length; index += 3) {
+        if (p[index + 2] < t) return;
+        targets.push({ x: p[index], y: p[index + 1], landsAt: p[index + 2] });
+      }
       fireChunkEffectHandler(x, y, targets, t, v === 1 ? 'void' : 'normal');
       return undefined;
     });

@@ -4,7 +4,7 @@ import { getDomainCatalog, getDomainKeys, translate, translateSegments, type Tra
 import { formatNumber, formatUpgradeEffectValue } from './format';
 import type { Locale } from './types';
 import { VULNERABILITY_INCOMING_DAMAGE_BONUS } from '../systems/TargetStatusSystem';
-import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
+import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { getCoopDefenseUpgradeDefinition, type CoopDefenseUpgradeDefinition } from '../utils/coopDefenseUpgrades';
 import {
   COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS,
@@ -44,6 +44,18 @@ function getUpgradeParams(
     );
   });
 
+  const rocket = WEAPON_CONFIGS.ROCKET_LAUNCHER.rocketLauncher!;
+  if (definition.id.startsWith('rocket_launcher_')) {
+    const percent = (n: number) => formatNumber(n, locale, { style: 'percent' });
+    params.rocketHeal = percent(getCoopDefenseUpgradeDefinition('rocket_launcher_explosive_medicine')!.effects[0].value);
+    params.rocketShield = formatNumber(rocket.pressureShieldReduction * 100, locale);
+    params.rocketShieldSeconds = formatNumber(getCoopDefenseUpgradeDefinition('rocket_launcher_pressure_shield')!.effects[0].value / 1000, locale);
+    params.rocketJump = formatNumber(rocket.jumpMultiplier + getCoopDefenseUpgradeDefinition('rocket_launcher_rocket_jump')!.effects[0].value, locale);
+    params.rocketDistanceBonus = percent(rocket.distanceBonusPerLevel);
+    params.rocketDistance = formatNumber(rocket.distanceForMaxBonus, locale);
+    params.rocketCapacities = rocket.magazineCapacities.map(n => formatNumber(n, locale)).join(' / ');
+    params.rocketChunks = formatNumber(rocket.chunkCount, locale);
+  }
   const zeus = UTILITY_CONFIGS.ZEUS_TASER;
   if (definition.id.startsWith('zeus_') && zeus.activation.type === 'charged_alternate') {
     params.zeusChargeSeconds = formatNumber(zeus.activation.fullChargeDuration / 1000, locale);

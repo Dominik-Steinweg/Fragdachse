@@ -9,7 +9,7 @@ import {
   type FlamethrowerWeaponFireConfig,
   type MolotovUtilityConfig,
 } from '../loadout/LoadoutConfig';
-import type { BurnOnHitConfig, FireChunkBurstConfig, FireChunkTarget, FireGrenadeEffect, GroundFireCellEffect, GroundFireVisualStyle } from '../types';
+import type { BurnOnHitConfig, FireChunkBurstConfig, FireChunkFlight, FireChunkTarget, FireGrenadeEffect, GroundFireCellEffect, GroundFireVisualStyle } from '../types';
 import type { FireSystem } from '../effects/FireSystem';
 import { BURN_TICK_INTERVAL_MS } from '../config';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
@@ -42,6 +42,7 @@ interface RingRuntime {
 }
 
 interface PendingFireChunkLanding {
+  landingExplosion?: import('../types').FireChunkLandingExplosion;
   combatSource?: import('../combat/CombatScope').CombatSource;
   ownerId: string;
   target: FireChunkTarget;
@@ -64,12 +65,14 @@ export interface FireChunkBurstPort {
     sourceKey: string,
     now: number,
     combatSource?: import('../combat/CombatScope').CombatSource,
+    preferredTargets?: readonly FireChunkTarget[],
   ): void;
 }
 
 /** Host-authoritative simulation for the Flamethrower's passive upgrade branches. */
 export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   private lastRingContactTick = -1;
+  private generation = 0;
   private readonly pendingChunkLandings: PendingFireChunkLanding[] = [];
   private readonly fireTrailCellByProjectile = new Map<ProjectileId, string>();
   private readonly activeFireTrailIds = new Set<ProjectileId>();
@@ -90,10 +93,16 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     private readonly playFireChunkBurst: (
       x: number,
       y: number,
-      targets: readonly FireChunkTarget[],
-      landsAt: number,
+      targets: readonly FireChunkFlight[],
+      startedAt: number,
       visualStyle: GroundFireVisualStyle,
     ) => void,
+    private readonly chunkEffects?: {
+      hasLineOfSight(x: number, y: number, tx: number, ty: number): boolean;
+      canTarget(ownerId: string, enemyId: string, source?: import('../combat/CombatScope').CombatSource): boolean;
+      explode(landing: { x: number; y: number; ownerId: string; effect: import('../types').FireChunkLandingExplosion;
+        source?: import('../combat/CombatScope').CombatSource; now: number }): void;
+    },
   ) {
     this.enemyManager = enemyManager;
   }
@@ -202,8 +211,9 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     sourceKey: string,
     now: number,
     combatSource?: import('../combat/CombatScope').CombatSource,
+    preferredTargets?: readonly FireChunkTarget[],
   ): void {
-    this.launchFireChunks(ownerId, x, y, burst, now, sourceKey, combatSource);
+    this.launchFireChunks(ownerId, x, y, burst, now, sourceKey, combatSource, preferredTargets);
   }
 
   handleNaturalFlameExpiry(projectile: ProjectileFlameExpiryEvent, now: number): void {
@@ -235,6 +245,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   }
 
   clear(): void {
+    this.generation += 1;
     this.lastRingContactTick = -1;
     this.pendingChunkLandings.length = 0;
     this.fireTrailCellByProjectile.clear();
@@ -324,6 +335,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     now: number,
     sourceKey: string,
     combatSource = this.fireSystem.captureCombatSource?.(ownerId, burst.sourceId ?? 'ground_fire.chunk'),
+    preferredTargets: readonly FireChunkTarget[] = [],
   ): void {
     const effect: GroundFireCellEffect = {
       durationMs: burst.durationMs,
@@ -337,19 +349,40 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     if (burst.igniteCenter) this.refreshGenericGround(ownerId, x, y, effect, now, `${sourceKey}:center`, combatSource);
     const count = Math.max(0, Math.floor(burst.count));
     if (count <= 0) return;
-    const targets = this.selectRandomFireCells(x, y, burst.searchRadius, count);
-    if (targets.length === 0) return;
-    const landsAt = now + Math.max(1, burst.flightMs);
-    for (const target of targets) {
-      this.pendingChunkLandings.push({ ownerId, target, landsAt, effect, sourceKey, combatSource });
+    const valid = (target: FireChunkTarget) => Math.hypot(target.x - x, target.y - y) <= burst.searchRadius
+      && this.fireSystem.canPlaceGroundCell(target.x, target.y)
+      && (!burst.requireLineOfSight || this.chunkEffects?.hasLineOfSight(x, y, target.x, target.y) === true);
+    const targets: FireChunkTarget[] = preferredTargets.filter(valid).slice(0, count).map(t => ({ x: t.x, y: t.y }));
+    if (targets.length === 0 && burst.targetSurvivors) {
+      const survivors = (this.enemyManager?.getAllEnemies() ?? []).filter(enemy => enemy.getHp() > 0
+        && !enemy.isBurrowed() && this.chunkEffects?.canTarget(ownerId, enemy.id, combatSource) === true
+        && valid(enemy.sprite));
+      Phaser.Utils.Array.Shuffle(survivors);
+      for (const enemy of survivors.slice(0, count)) targets.push({ x: enemy.sprite.x, y: enemy.sprite.y });
     }
-    this.playFireChunkBurst(x, y, targets, landsAt, effect.visualStyle ?? 'normal');
+    const occupied = new Set(targets.map(t => Math.floor(t.x / 16) + ':' + Math.floor(t.y / 16)));
+    for (const candidate of this.selectRandomFireCells(x, y, burst.searchRadius, Infinity)) {
+      if (targets.length >= count) break;
+      const key = Math.floor(candidate.x / 16) + ':' + Math.floor(candidate.y / 16);
+      if (!occupied.has(key) && valid(candidate)) { targets.push(candidate); occupied.add(key); }
+    }
+    if (targets.length === 0) return;
+    const flights: FireChunkFlight[] = targets.map(target => ({ ...target, landsAt: now + Math.max(1,
+      burst.flightMs * Math.min(1, Math.hypot(target.x - x, target.y - y) / Math.max(1, burst.searchRadius))) }));
+    for (const target of flights) {
+      this.pendingChunkLandings.push({ ownerId, target, landsAt: target.landsAt, effect, sourceKey, combatSource,
+        landingExplosion: burst.landingExplosion });
+    }
+    this.playFireChunkBurst(x, y, flights, now, effect.visualStyle ?? 'normal');
   }
 
   private landPendingFireChunks(now: number): void {
+    const generation = this.generation;
     for (let index = this.pendingChunkLandings.length - 1; index >= 0; index -= 1) {
+      if (generation !== this.generation) return;
       const landing = this.pendingChunkLandings[index];
       if (landing.landsAt > now) continue;
+      this.pendingChunkLandings.splice(index, 1);
       this.refreshGenericGround(
         landing.ownerId,
         landing.target.x,
@@ -359,7 +392,9 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
         `${landing.sourceKey}:chunk`,
         landing.combatSource,
       );
-      this.pendingChunkLandings.splice(index, 1);
+      if (generation !== this.generation) return;
+      if (landing.landingExplosion) this.chunkEffects?.explode({ x: landing.target.x, y: landing.target.y,
+        ownerId: landing.ownerId, effect: landing.landingExplosion, source: landing.combatSource, now });
     }
   }
 

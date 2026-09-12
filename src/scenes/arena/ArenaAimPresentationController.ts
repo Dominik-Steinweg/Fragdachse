@@ -11,6 +11,7 @@ import type { ArenaDiagnosticsFrame } from './ArenaDiagnosticsController';
 import type { PlacementPreviewRenderer } from './PlacementPreviewRenderer';
 
 export interface ArenaAimPresentationInputPort {
+  readonly getRocketMagazinePreview?: () => import('../../types').RocketMagazineState | undefined;
   readonly getUtilityTargetingPreviewState: () => UtilityTargetingPreviewState | undefined;
   readonly getAirstrikeTargetingPreviewState: () => UtilityTargetingPreviewState | undefined;
   readonly getConstructionPlacementPreviewState: () => UtilityPlacementPreviewState | undefined;
@@ -39,6 +40,7 @@ export interface ArenaAimPresentationWorldPort {
 
 export interface ArenaAimPresentationRendererPort {
   readonly aimSystem: {
+    setRocketMagazineState?: (state: import('../../types').RocketMagazineState | undefined) => void;
     setScopeProgress: (progress: number) => void;
     setScoping: (scoping: boolean) => void;
     setWeaponChargeProgress: (progress: number) => void;
@@ -152,6 +154,7 @@ export class ArenaAimPresentationController {
     this.renderers.aimSystem.setScopeProgress(scopeProgress);
     this.renderers.aimSystem.setScoping(this.input.isScoping());
     this.renderers.aimSystem.setWeaponChargeProgress(this.input.getScopeChargeProgress());
+    this.renderers.aimSystem.setRocketMagazineState?.(this.input.getRocketMagazinePreview?.());
     const targetingForReticle = utilityTargeting ?? airstrikeTargeting;
     this.renderers.aimSystem.update(
       (showAim || targetingForReticle !== undefined) && aimPresentation.cursorVisible,
