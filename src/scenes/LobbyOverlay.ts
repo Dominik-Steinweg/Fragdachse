@@ -63,7 +63,6 @@ const CONTENT_R = CONTENT_L + LOBBY_CARD.contentWidth;
 const CONTENT_W = LOBBY_CARD.contentWidth;
 
 // ── Raumzeile ───────────────────────────────────────────────────────
-const HEADER_Y = LOBBY_CARD.titleY;
 const QUALITY_Y = PANEL_Y + 90;
 const HEADER_DIVIDER_Y = 482;
 const ROOM_CHIP_W = 224;
@@ -173,7 +172,6 @@ export class LobbyOverlay {
   private forestRelief: Phaser.GameObjects.Image | null = null;
   private panelBg!:       Phaser.GameObjects.Image;
   private ctaDivider!:    Phaser.GameObjects.Rectangle;
-  private headerTitle!:   Phaser.GameObjects.Text;
   private statusText!:    Phaser.GameObjects.Text;
   private readyBtn!:      UiButton;
   private roomChip!:      UiButton;
@@ -278,14 +276,10 @@ export class LobbyOverlay {
     this.forestRelief = forestOrnament(this.scene, 'relief', relief.x, relief.y, relief.width, relief.height)
       .setTint(0x977b51).setTintMode(Phaser.TintModes.FILL).setAlpha(0.24);
     objects.push(this.forestRelief);
-    this.headerTitle = this.scene.add.text(PANEL_CX, HEADER_Y, '', textStyle('title', {
-      color: FOREST.text,
-    })).setOrigin(0.5).setScrollFactor(0).setStroke('#23170f', 3);
-    objects.push(this.headerTitle);
 
     this.roomChip = new UiButton(this.scene, { skin: 'forest',
       x: ROOM_CHIP_X, y: QUALITY_Y, w: ROOM_CHIP_W, h: ROOM_CHIP_H,
-      surface: 'glass', label: this.bridge.getRoomCode(),
+      label: this.bridge.getRoomCode(),
       labelRole: 'code',
       intent: 'ghost',
       icon: 'copy',
@@ -938,7 +932,6 @@ export class LobbyOverlay {
 
   /** Kopfzeile: welcher Modus, welche Karte, welcher Raum. */
   private refreshHeader(): void {
-    this.headerTitle.setText(t('ui.lobby.title'));
     this.roomChip.setLabel(this.bridge.getRoomCode());
   }
 
@@ -1256,12 +1249,12 @@ export class LobbyOverlay {
         if (slot.playerId) {
           const row = this.playerRows.get(slot.playerId);
           if (row) {
-            this.positionPlayerRow(row, CONTENT_L + ROSTER_SLOT_W / 2, centerY, ROSTER_SLOT_W, ROSTER_SLOT_H,
+            this.positionPlayerRow(row, PANEL_CX, centerY, ROSTER_SLOT_W, ROSTER_SLOT_H,
               slot.playerId === this.bridge.getLocalPlayerId(), this.bridge.getPlayerProfile(slot.playerId)?.colorHex ?? COLORS.GREY_4);
             row.root.setVisible(visible);
           }
         } else if (slot.invite) {
-          this.inviteRow.setPosition(CONTENT_L + ROSTER_SLOT_W / 2, centerY).setVisible(visible && !this.connectionEnded);
+          this.inviteRow.setPosition(PANEL_CX, centerY).setVisible(visible && !this.connectionEnded);
         }
         y += ROSTER_ROW_STEP;
       }

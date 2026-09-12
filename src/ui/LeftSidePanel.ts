@@ -90,9 +90,8 @@ const LOBBY_PANEL_W = LOBBY_CARD.width;
 const ARENA_PANEL_W = Math.round(DEFAULT_ARENA_OFFSET_X * 1.5);
 const CENTER_X = LOBBY_PLAYER_CENTER;
 const ARENA_CENTER_X = ARENA_PANEL_W / 2;
-const NAME_LABEL_Y = LOBBY_CARD.titleY;
 const NAME_VALUE_Y = 306;
-const BADGER_Y = 462;
+const BADGER_Y = 408;
 const BADGER_SIZE = 80;
 const BADGER_CLICK_SIZE = 88;
 const DIVIDER2_Y = 510;
@@ -101,7 +100,7 @@ const NAME_COLOR_BUTTON_H = 36;
 const NAME_COLOR_BUTTON_GAP = 12;
 const NAME_BUTTON_X = CENTER_X - (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
 const COLOR_BUTTON_X = CENTER_X + (NAME_COLOR_BUTTON_W / 2 + NAME_COLOR_BUTTON_GAP / 2);
-const NAME_COLOR_ROW_Y = 368;
+const NAME_COLOR_ROW_Y = 496;
 const CONTROL_LABEL_OFFSET_Y = 1.5;
 const ARROW_BUTTON_W = 24;
 const ARROW_BUTTON_H = 24;
@@ -134,7 +133,7 @@ const GLASS_H = LOBBY_CARD.height;
 const CAROUSEL_START_Y  = DIVIDER2_Y + 18;
 const CAROUSEL_ROW_STEP = 60;
 const CAROUSEL_GROUP_DY = 44;
-const LOADOUT_CONTROL_W = LOBBY_CARD.contentWidth;
+const LOADOUT_CONTROL_W = LOBBY_CARD.contentWidth - 32;
 const LOADOUT_CONTROL_H = 48;
 const LOADOUT_POPUP_SAFE_AREA = LOBBY_POPUP_SAFE_AREA;
 
@@ -182,7 +181,6 @@ export class LeftSidePanel {
   private adrenalineCostProvider: (() => number) | null = null;
   private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
-  private playerLabelText!: Phaser.GameObjects.Text;
   private colorPickerTitle!: Phaser.GameObjects.Text;
   private loadoutLabelText!: Phaser.GameObjects.Text;
   private saveMenu: UiContextMenu | null = null;
@@ -270,14 +268,9 @@ export class LeftSidePanel {
       ).setScrollFactor(0),
     );
 
-    this.playerLabelText = this.scene.add.text(CENTER_X, NAME_LABEL_Y, t('ui.lobby.player'),
-      textStyle('title', { color: FOREST.text }))
-      .setOrigin(0.5)
-      .setScrollFactor(0).setStroke('#23170f', 3);
     objects.push(this.scene.add.image(CENTER_X, GLASS_Y + GLASS_H / 2,
       ensureForestFrame(this.scene, GLASS_W, GLASS_H))
       .setDisplaySize(GLASS_W, GLASS_H).setScrollFactor(0));
-    objects.push(this.playerLabelText);
 
     this.localNameText = this.scene.add.text(CENTER_X, NAME_VALUE_Y, '', NAME_FONT)
       .setOrigin(0.5, 0)
@@ -322,7 +315,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.toggleColorPicker());
-    objects.push(forestOrnament(this.scene, 'medallion', CENTER_X, BADGER_Y, 158, 158), this.badgerClickZone);
+    objects.push(forestOrnament(this.scene, 'medallion', CENTER_X, BADGER_Y, 140, 140).setAlpha(0.7), this.badgerClickZone);
     const teamLeftBtn = this.createChevronButton(
       COLOR_BUTTON_X - TEAM_SELECT_ARROW_OFFSET_X,
       NAME_COLOR_ROW_Y,
@@ -345,7 +338,7 @@ export class LeftSidePanel {
     this.teamArrowButtons = { left: teamLeftBtn, right: teamRightBtn };
 
     // ── Loadout-Karussell ──
-    this.loadoutLabelText = this.scene.add.text(LOBBY_PLAYER_CONTENT_LEFT, CAROUSEL_START_Y, t('ui.lobby.loadout').toUpperCase(), LABEL_FONT)
+    this.loadoutLabelText = this.scene.add.text(CENTER_X - LOADOUT_CONTROL_W / 2, CAROUSEL_START_Y, t('ui.lobby.loadout').toUpperCase(), LABEL_FONT)
       .setOrigin(0, 0)
       .setScrollFactor(0);
     objects.push(this.loadoutLabelText);
@@ -431,7 +424,6 @@ export class LeftSidePanel {
 
   refreshLocale(): void {
     this.arenaHUD?.refreshLocale();
-    this.playerLabelText?.setText(t('ui.lobby.player'));
     this.colorPickerTitle?.setText(t('ui.lobby.editColor'));
     this.loadoutLabelText?.setText(t('ui.lobby.loadout').toUpperCase());
     this.editBtnLabel?.setText(t('ui.lobby.editName'));
@@ -1192,31 +1184,24 @@ export class LeftSidePanel {
 
     const confirmBtn     = document.createElement('button');
     confirmBtn.innerText = 'OK';
-    Object.assign(confirmBtn.style, {
-      padding:         `${SPACE.sm}px ${SPACE.md}px`,
-      fontSize:        '13px',
-      cursor:          'pointer',
-      backgroundColor: toCssColor(INTENT.primary.fill),
-      color:           toCssColor(INTENT.primary.label),
-      border:          `1px solid ${toCssColor(INTENT.primary.stroke)}`,
-      borderRadius:    `${RADIUS.sm}px`,
-      fontFamily:      FONT_DISPLAY,
-      fontWeight:      'bold',
-    });
-
     const cancelBtn     = document.createElement('button');
     cancelBtn.innerText = 'X';
-    Object.assign(cancelBtn.style, {
-      padding:         `${SPACE.sm}px ${SPACE.md}px`,
-      fontSize:        '13px',
-      cursor:          'pointer',
-      backgroundColor: toCssColor(FOREST.wood),
-      color:           toCssColor(FOREST.text),
-      border:          `1px solid ${toCssColor(FOREST.woodEdge)}`,
-      borderRadius:    `${RADIUS.sm}px`,
-      fontFamily:      FONT_DISPLAY,
-      fontWeight:      'bold',
-    });
+    // The DOM editor reuses the same generated border and state textures as the card buttons.
+    for (const [button, width] of [[confirmBtn, 44], [cancelBtn, 36]] as const) {
+      const backgrounds = Object.fromEntries((['rest', 'hover', 'press'] as const).map(state => [state,
+        `url("${this.scene.textures.getBase64(ensureForestButton(this.scene, width, 36, 'secondary', state))}")`,
+      ]));
+      Object.assign(button.style, {
+        width: `${width}px`, height: '36px', padding: '0', border: 'none',
+        fontSize: '13px', cursor: 'pointer', backgroundColor: 'transparent',
+        backgroundImage: backgrounds.rest, backgroundSize: '100% 100%',
+        color: toCssColor(FOREST.text), fontFamily: FONT_DISPLAY, fontWeight: 'bold',
+      });
+      button.onpointerenter = () => { button.style.backgroundImage = backgrounds.hover; };
+      button.onpointerleave = () => { button.style.backgroundImage = backgrounds.rest; };
+      button.onpointerdown = () => { button.style.backgroundImage = backgrounds.press; };
+      button.onpointerup = () => { button.style.backgroundImage = backgrounds.hover; };
+    }
 
     popup.appendChild(inputElement);
     popup.appendChild(confirmBtn);

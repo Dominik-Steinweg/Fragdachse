@@ -56,19 +56,62 @@ export function ensureForestButton(scene: Phaser.Scene, w: number, h: number, in
   const base = glass ? FOREST.field : spec.fill;
   const fill = state === 'hover' ? lerpColor(base, COLORS.BROWN_1, 0.12)
     : state === 'press' ? lerpColor(base, COLORS.GREY_10, 0.25) : base;
-  ensureRoundedTexture(scene, { key, w, h, radius,
+  ensureRoundedTexture(scene, { key, w, h, radius: glass ? radius : 6,
     topColor: glass ? fill : lerpColor(fill, COLORS.BROWN_1, 0.08), bottomColor: glass ? FOREST.sunken : lerpColor(fill, FOREST.sunken, 0.42),
     fillAlpha: spec.fillAlpha, strokeColor: glass ? FOREST.border : spec.stroke,
     strokeAlpha: spec.strokeAlpha, strokeWidth: 1, highlightAlpha: state === 'press' ? 0.01 : 0.04 });
-  if (!glass) paintWood(scene, scene.textures.get(key) as Phaser.Textures.CanvasTexture,
-    w, h, radius, intent === 'primary' ? 0.08 : state === 'press' ? 0.35 : 0.6);
+  if (!glass) {
+    const texture = scene.textures.get(key) as Phaser.Textures.CanvasTexture;
+    paintWood(scene, texture, w, h, 4, intent === 'primary' ? 0.08 : state === 'press' ? 0.35 : 0.6);
+    if (scene.textures.exists(FOREST_ASSETS.buttonFrame.key)) {
+      const ctx = texture.context;
+      ctx.save();
+      ctx.globalAlpha = intent === 'disabled' ? .45 : state === 'press' ? .72 : 1;
+      drawForestButtonFrame(ctx,
+        scene.textures.get(FOREST_ASSETS.buttonFrame.key).getSourceImage() as HTMLImageElement, w, h);
+      ctx.restore();
+      if (intent === 'attention' || intent === 'danger') {
+        roundRectPath(ctx, 5, 5, w - 10, h - 10, 4);
+        ctx.strokeStyle = '#' + spec.stroke.toString(16).padStart(6, '0');
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      texture.refresh();
+    }
+  }
   return key;
+}
+
+/** Fixed corners and cropped repeats keep timber grain and pegs undistorted at every button size. */
+export function drawForestButtonFrame(ctx: CanvasRenderingContext2D, image: HTMLImageElement,
+  width: number, height: number): void {
+  const { crop, corner } = FOREST_ASSETS.buttonFrame;
+  const cap = Math.min(8, width / 2, height / 2);
+  const scale = cap / corner;
+  const sx = [crop.x, crop.x + corner, crop.x + crop.width - corner];
+  const sy = [crop.y, crop.y + corner, crop.y + crop.height - corner];
+  const sw = [corner, crop.width - corner * 2, corner];
+  const sh = [corner, crop.height - corner * 2, corner];
+  const dx = [0, cap, width - cap], dy = [0, cap, height - cap];
+  const dw = [cap, width - cap * 2, cap], dh = [cap, height - cap * 2, cap];
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
+    if (row === 1 && col === 1) continue;
+    for (let y = 0; y < dh[row]; y += sh[row] * scale) for (let x = 0; x < dw[col]; x += sw[col] * scale) {
+      const tileW = Math.min(sw[col] * scale, dw[col] - x);
+      const tileH = Math.min(sh[row] * scale, dh[row] - y);
+      ctx.drawImage(image, sx[col], sy[row], tileW / scale, tileH / scale,
+        dx[col] + x, dy[row] + y, tileW, tileH);
+    }
+  }
 }
 
 /** Source-space trim excludes transparent generation margins; artwork always scales uniformly. */
 const ACTION_FRAME_SOURCE = {
-  ready: { ...FOREST_ASSETS.ready.crop, insetX: 0.065, insetY: 0.19 },
-  world: { ...FOREST_ASSETS.world.crop, insetX: 0.13, insetY: 0.30 },
+  ready: { ...FOREST_ASSETS.ready.crop, insetX: 0.065, insetTop: 0.19, insetBottom: 0.19 },
+  // The branch opening is lower than the foliage silhouette's centre. Fill underneath both rails.
+  world: { ...FOREST_ASSETS.world.crop, insetX: 0.12, insetTop: 0.27, insetBottom: 0.20 },
 } as const;
 
 export function ensureForestActionButton(scene: Phaser.Scene, w: number, h: number,
@@ -85,8 +128,8 @@ export function ensureForestActionButton(scene: Phaser.Scene, w: number, h: numb
   const fill = state === 'hover' ? lerpColor(spec.fill, COLORS.BROWN_1, .12)
     : state === 'press' ? lerpColor(spec.fill, FOREST.sunken, .22) : spec.fill;
   ctx.save();
-  roundRectPath(ctx, dx + dw * source.insetX, dy + dh * source.insetY,
-    dw * (1 - source.insetX * 2), dh * (1 - source.insetY * 2), dh * .2);
+  roundRectPath(ctx, dx + dw * source.insetX, dy + dh * source.insetTop,
+    dw * (1 - source.insetX * 2), dh * (1 - source.insetTop - source.insetBottom), dh * .2);
   ctx.clip();
   const gradient = ctx.createLinearGradient(0, dy, 0, dy + dh);
   gradient.addColorStop(0, '#' + lerpColor(fill, COLORS.BROWN_1, .15).toString(16).padStart(6, '0'));

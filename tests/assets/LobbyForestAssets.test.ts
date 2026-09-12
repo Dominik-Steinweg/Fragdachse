@@ -22,7 +22,7 @@ describe('lobby forest artwork', () => {
     expect(image).toHaveBeenCalledTimes(Object.keys(FOREST_ASSETS).length);
   });
 
-  it.each(['frame', 'medallion', 'ready', 'world'] as const)('%s leaves its central opening genuinely transparent', async (name) => {
+  it.each(['frame', 'buttonFrame', 'medallion', 'ready', 'world'] as const)('%s leaves its central opening genuinely transparent', async (name) => {
     const source = sharp(resolve(root, FOREST_ASSETS[name].file));
     const { width, height, hasAlpha } = await source.metadata();
     expect(hasAlpha).toBe(true);
@@ -40,7 +40,7 @@ describe('lobby forest artwork', () => {
     expect(alpha.some(value => value === 0)).toBe(true);
   });
 
-  it.each(['frame', 'leaves', 'medallion', 'relief', 'ready', 'world'] as const)('%s retains alpha cutouts and softly antialiased edges', async (name) => {
+  it.each(['frame', 'buttonFrame', 'leaves', 'medallion', 'relief', 'ready', 'world'] as const)('%s retains alpha cutouts and softly antialiased edges', async (name) => {
     const source = sharp(resolve(root, FOREST_ASSETS[name].file));
     expect((await source.metadata()).hasAlpha).toBe(true);
     const alpha = await source.extractChannel('alpha').raw().toBuffer();

@@ -11,7 +11,6 @@ export const LOBBY_CARD = {
   right: GAME_WIDTH - 12 - 596,
   padding: 56,
   glassInset: 36,
-  titleY: 286,
   contentWidth: 484,
   readyY: 992,
   historyY: 908,

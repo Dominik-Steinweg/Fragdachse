@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({}));
 vi.mock('../src/ui/LivingBarEffect', () => ({ rgbStr: () => 'rgba(0,0,0,1)' }));
-import { drawForestFrame, ensureForestButton, ensureForestActionButton, ensureForestFrame, ensureForestPanel, forestOrnament } from '../src/ui/forestTextures';
+import { drawForestFrame, drawForestButtonFrame, ensureForestButton, ensureForestActionButton, ensureForestFrame, ensureForestPanel, forestOrnament } from '../src/ui/forestTextures';
 import { ensureRoundedTexture } from '../src/ui/uiTextures';
 import { FOREST_ASSETS } from '../src/ui/LobbyForestAssets';
 
@@ -35,7 +35,35 @@ describe('forest texture ownership and reuse', () => {
       const glass = ensureForestButton(scene, 220, 44, 'neutral', state, 12, true);
       const wood = ensureForestButton(scene, 220, 44, 'neutral', state);
       expect(textures.get(glass).context.createPattern).not.toHaveBeenCalled();
+      expect(textures.get(glass).context.drawImage).not.toHaveBeenCalled();
       expect(textures.get(wood).context.createPattern).toHaveBeenCalledOnce();
+      expect(textures.get(wood).context.drawImage).toHaveBeenCalled();
+    }
+  });
+
+  it('fits icon and wide wood buttons with undistorted corners and clipped edge repeats', () => {
+    const image = { width: 2172, height: 724 } as HTMLImageElement;
+    const drawImage = vi.fn();
+    const ctx = { drawImage } as unknown as CanvasRenderingContext2D;
+    let cornerWidth: number | undefined;
+    for (const [width, height] of [[24, 24], [36, 36], [190, 36], [236, 40], [216, 48]]) {
+      drawImage.mockClear();
+      drawForestButtonFrame(ctx, image, width, height);
+      for (const [, sx, sy, sw, sh, dx, dy, dw, dh] of drawImage.mock.calls) {
+        expect(dw / sw).toBeCloseTo(dh / sh);
+        expect(sx).toBeGreaterThanOrEqual(0);
+        expect(sy).toBeGreaterThanOrEqual(0);
+        expect(sx + sw).toBeLessThanOrEqual(image.width);
+        expect(sy + sh).toBeLessThanOrEqual(image.height);
+        expect(dx).toBeGreaterThanOrEqual(0);
+        expect(dy).toBeGreaterThanOrEqual(0);
+        expect(dx + dw).toBeLessThanOrEqual(width);
+        expect(dy + dh).toBeLessThanOrEqual(height);
+        expect(dx === 0 || dy === 0 || dx + dw === width || dy + dh === height).toBe(true);
+      }
+      const [, , , , , , , dw] = drawImage.mock.calls[0];
+      cornerWidth ??= dw;
+      expect(dw).toBe(cornerWidth);
     }
   });
 

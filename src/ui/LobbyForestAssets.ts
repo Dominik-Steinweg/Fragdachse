@@ -3,6 +3,8 @@ import type * as Phaser from 'phaser';
 export const FOREST_ASSETS = {
   frame: { key: 'lobby_forest_frame', file: 'frame.png' },
   wood: { key: 'lobby_forest_wood', file: 'wood.png' },
+  buttonFrame: { key: 'lobby_forest_button_frame', file: 'button-frame.png',
+    crop: { x: 15, y: 177, width: 2141, height: 366 }, corner: 128 },
   leaves: { key: 'lobby_forest_leaves', file: 'leaves.png' },
   medallion: { key: 'lobby_forest_medallion', file: 'medallion.png' },
   relief: { key: 'lobby_forest_relief', file: 'relief.png', crop: { x: 18, y: 189, width: 1504, height: 656 } },
