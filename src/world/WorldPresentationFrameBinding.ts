@@ -191,6 +191,7 @@ export interface WorldPresentationFrameBindingInput {
   readonly getTrainVisual: () => Pick<TrainRenderer, 'computeSegYs'> | null;
   readonly syncTurretLights: (inArena: boolean) => void;
   readonly syncBaseLights: (inArena: boolean) => void;
+  readonly getBaseShadowCells: () => Iterable<Phaser.GameObjects.Image>;
   readonly getSynchronizedNow: () => number;
 }
 
@@ -503,6 +504,7 @@ export class WorldPresentationFrameBinding {
       return;
     }
 
+    this.input.shadow.syncBaseShadows(this.input.getBaseShadowCells());
     this.input.shadow.syncStaticProfile(
       this.input.getSynchronizedNow(),
       this.forceStaticShadowBake,

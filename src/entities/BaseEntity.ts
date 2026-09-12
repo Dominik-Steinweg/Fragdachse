@@ -254,6 +254,11 @@ export class BaseEntity {
     if (image?.active) image.destroy();
   }
 
+  /** Presentation cells remain available during the staggered destruction. */
+  getSurfaceImages(): readonly Phaser.GameObjects.Image[] {
+    return this.cellImages;
+  }
+
   /**
    * Liefert den nächstgelegenen Punkt auf der Basis-Oberfläche (per-Zell-genau,
    * konkavitätsbewusst). Wird für Reichweiten-/Treffer-Berechnungen verwendet,

@@ -184,6 +184,35 @@ function drain(scene: object): void {
 }
 
 describe('static shadow baking', () => {
+  it('caches base cells and removes their shadows as surface images disappear', () => {
+    const { scene, graphicsLog, textures } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    shadows.setWorldBoundsOverride({ minX: 0, minY: 0, maxX: ARENA_RENDER_CHUNK_SIZE * 2, maxY: 512 });
+    shadows.rebuildStaticLayoutShadows(layout(0, 0), { offsetX: 0, offsetY: 0 });
+    const cell = { x: ARENA_RENDER_CHUNK_SIZE, y: 100, active: true, visible: true };
+    shadows.syncBaseShadows([cell]);
+    drain(scene);
+    const graphics = graphicsLog.find((entry) => entry.depth === SHADOW_CASTERS.base.layerDepth)!;
+    expect(graphics.fillPoints.length).toBeGreaterThan(0);
+
+    const draws = totalDraws(textures);
+    shadows.syncBaseShadows([cell]);
+    drain(scene);
+    expect(totalDraws(textures)).toBe(draws);
+
+    graphics.fillPoints.length = 0;
+    for (const texture of textures) texture.stamps.length = 0;
+    cell.active = false;
+    shadows.syncBaseShadows([cell]);
+    drain(scene);
+    expect(totalDraws(textures)).toBeGreaterThan(draws);
+    expect(graphics.fillPoints).toHaveLength(0);
+    const updatedChunks = chunkTargets(textures).filter((texture) => texture.stamps.length > 0);
+    expect(updatedChunks.some((texture) => texture.x <= 0)).toBe(true);
+    expect(updatedChunks.some((texture) => texture.x > ARENA_RENDER_CHUNK_SIZE / 2)).toBe(true);
+    shadows.destroy();
+  });
+
   it('bakes a far-right lobby rock through the public layout path', () => {
     const { scene, graphicsLog } = makeScene();
     const shadows = new ShadowSystem(scene);

@@ -5,6 +5,12 @@ import type { CoopDefenseMissionProgressPresentationState } from '../types';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import { worldCellCenter } from '../world/WorldMetrics';
 
+const missionBarrierBodies = new WeakSet<object>();
+
+export function isMissionBarrierBody(object: object): boolean {
+  return missionBarrierBodies.has(object);
+}
+
 export interface MissionBarrierCellChange {
   readonly gridX: number;
   readonly gridY: number;
@@ -53,6 +59,7 @@ export class CoopDefenseMissionBarrierManager {
           0,
         );
         body.setVisible(false);
+        missionBarrierBodies.add(body);
         this.physicsGroup.add(body);
         return body;
       });

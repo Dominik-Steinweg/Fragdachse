@@ -79,6 +79,19 @@ export const SHADOW_PROFILES: Readonly<Record<'day' | 'night', ShadowProfile>> =
 };
 
 export const SHADOW_CASTERS = {
+  base: {
+    enabled: true,
+    layerDepth: DEPTH.BASES - 0.35,
+    castHeightPx: 12,
+    opacity: 0.72,
+    softnessPx: 4,
+    blurLayers: 8,
+    stretch: 0.8,
+    inflatePx: 1,
+    shape: 'cell',
+    footprintWidthPx: CELL_SIZE * 0.85,
+    footprintHeightPx: CELL_SIZE * 0.85,
+  },
   rock: {
     enabled: true,
     layerDepth: DEPTH.ROCKS - 0.35,

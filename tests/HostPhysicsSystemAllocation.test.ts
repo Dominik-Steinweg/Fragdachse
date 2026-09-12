@@ -23,6 +23,38 @@ import { BurrowSystem } from '../src/systems/BurrowSystem';
 import { getPlayerDashBurstSpeedFactor } from '../src/utils/dashTiming';
 import { WaterGeometry } from '../src/arena/WaterGeometry';
 import { CELL_SIZE } from '../src/config';
+import { CoopDefenseMissionBarrierManager } from '../src/systems/CoopDefenseMissionBarrierManager';
+
+describe('mission barrier burrow collision', () => {
+  it.each([false, true])('blocks underground players, including lazy colliders (burrow first: %s)', (burrowFirst) => {
+    const h = createHarness();
+    const player = createMockPlayer('p');
+    h.players.set(player.id, player);
+    const barrier = { setVisible: vi.fn(), setActive: vi.fn(), body: { enable: true } };
+    const group = { add: vi.fn() };
+    const manager = new CoopDefenseMissionBarrierManager(
+      { add: { rectangle: () => barrier } } as never,
+      { barriers: [{ id: 'gate', cells: [{ gridX: 1, gridY: 1 }] }] } as never,
+      resolveActiveArenaWorldMetrics(),
+      { physicsGroup: group as never },
+    );
+    h.system.setRockGroup({} as never, group as never);
+    if (burrowFirst) h.system.setPlayerBurrowed('p', true);
+    h.system.update();
+    h.system.setPlayerBurrowed('p', true);
+    const calls = vi.mocked(h.scene.physics.add.collider).mock.calls;
+    const index = calls.findIndex(call => call[1] === group);
+    const collider = vi.mocked(h.scene.physics.add.collider).mock.results[index].value;
+    const process = calls[index][3]!;
+    expect(collider.active).toBe(true);
+    expect(process(player as never, barrier as never)).toBe(true);
+    expect(process(player as never, {} as never)).toBe(false);
+    h.system.setPlayerBurrowed('p', false);
+    expect(process(player as never, {} as never)).toBe(true);
+    manager.syncPresentationState({ barriers: [{ barrierId: 'gate', open: true }] } as never);
+    expect(barrier.body.enable).toBe(false);
+  });
+});
 
 function createMockEnemy(id: string, x = 100, y = 100, vx = 50, vy = 60) {
   const setVelocity = vi.fn();
@@ -283,10 +315,13 @@ describe('host player dash and Burrow transition', () => {
     h.system.update();
     expect(h.player.setVelocity).toHaveBeenLastCalledWith(PLAYER_SPEED * BURROW_UNDERGROUND_SPEED_FACTOR, 0);
     expect(h.colliders).toHaveLength(3);
-    expect(h.colliders.every(c => !c.active)).toBe(true);
+    const allowsOrdinaryObstacle = () => vi.mocked(h.scene.physics.add.collider).mock.calls
+      .every(call => call[3]!(h.player as never, {} as never));
+    expect(allowsOrdinaryObstacle()).toBe(false);
     h.system.handleDashRPC(h.player.id, 1, 0);
     expect(h.burrow.getPhase(h.player.id)).toBe('recovery');
     expect(h.colliders.every(c => c.active)).toBe(true);
+    expect(allowsOrdinaryObstacle()).toBe(true);
     expect(h.system.isDashBurst(h.player.id)).toBe(true);
     expect(h.system.isBurrowDash(h.player.id)).toBe(true);
     h.system.update();

@@ -56,6 +56,10 @@ export class PersistentBasePreviewRenderer {
     this.active = true;
   }
 
+  getSurfaceImages(): readonly Phaser.GameObjects.Image[] {
+    return this.cellImages;
+  }
+
   /** Hält Preview-Lichter wie die bestehenden Basislichter pro Frame am Leben. */
   syncLights(inArena: boolean): void {
     if (!inArena || !this.active) {

@@ -456,6 +456,14 @@ export class ArenaLifecycleCoordinator {
           if (inArena) this.worldRuntime?.materialization?.bases?.syncLights();
           else this.worldRuntime?.materialization?.bases?.releaseLights();
         },
+        getBaseShadowCells: () => {
+          const bases = this.worldRuntime?.materialization?.bases?.getBases() ?? [];
+          const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
+          return (function* () {
+            for (const base of bases) yield* base.getSurfaceImages();
+            yield* preview;
+          })();
+        },
         getSynchronizedNow: () => bridge.getSynchronizedNow(),
       }));
     },

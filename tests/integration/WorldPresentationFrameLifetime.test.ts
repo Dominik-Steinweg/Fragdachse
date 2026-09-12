@@ -144,6 +144,7 @@ function fakeBindingInput(
       getStaticSurfaceWorkingSet: vi.fn(() => null),
       isStaticReadyForView: vi.fn(() => false),
       syncStaticProfile: vi.fn(),
+      syncBaseShadows: vi.fn(),
       syncDynamicShadows: vi.fn(),
       clear: vi.fn(),
     } as never,
@@ -170,6 +171,7 @@ function fakeBindingInput(
     getTrainVisual: () => null,
     syncTurretLights: vi.fn(),
     syncBaseLights: vi.fn(),
+    getBaseShadowCells: () => [],
     getSynchronizedNow: () => 0,
     ...overrides,
   };

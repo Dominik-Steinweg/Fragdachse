@@ -1,5 +1,6 @@
 import type { ZeusMovement } from './ZeusRuntime';
 import * as Phaser from 'phaser';
+import { isMissionBarrierBody } from './CoopDefenseMissionBarrierManager';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { WaterGeometry } from '../arena/WaterGeometry';
 import type { EnemyEntity } from '../entities/EnemyEntity';
@@ -530,20 +531,14 @@ export class HostPhysicsSystem {
   // ── Burrow-Kollisions-Steuerung (aufgerufen von BurrowSystem) ────────────
 
   /**
-   * Aktiviert oder deaktiviert die Rock/Trunk-Collider für einen Spieler.
+   * Filtert unterirdische Kollisionen; Missionsbarrieren bleiben unpassierbar.
    * Wird von BurrowSystem beim Betreten/Verlassen des Burrow-Zustands aufgerufen.
    */
   setPlayerBurrowed(id: string, burrowed: boolean): void {
     if (burrowed) {
       this.burrowedPlayers.add(id);
-      // Vorhandene Collider deaktivieren
-      const colliders = this.playerColliders.get(id) ?? [];
-      for (const c of colliders) c.active = false;
     } else {
       this.burrowedPlayers.delete(id);
-      // Collider reaktivieren
-      const colliders = this.playerColliders.get(id) ?? [];
-      for (const c of colliders) c.active = true;
     }
   }
 
@@ -670,9 +665,8 @@ export class HostPhysicsSystem {
       // Lazy: Collider mit Felsen anlegen
       if (this.rockGroup && !this.rockCollidersSetup.has(player.id)) {
         const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.physicsProxy, this.rockGroup);
-        // Wenn Spieler bereits burrowed ist → sofort deaktivieren
-        if (this.burrowedPlayers.has(player.id)) c.active = false;
+        const c = this.scene.physics.add.collider(player.physicsProxy, this.rockGroup, undefined,
+          (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
         existing.push(c);
         this.playerColliders.set(player.id, existing);
         this.rockCollidersSetup.add(player.id);
@@ -681,8 +675,8 @@ export class HostPhysicsSystem {
       // Lazy: Collider mit Baumstümpfen anlegen
       if (this.trunkGroup && !this.trunkCollidersSetup.has(player.id)) {
         const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.physicsProxy, this.trunkGroup);
-        if (this.burrowedPlayers.has(player.id)) c.active = false;
+        const c = this.scene.physics.add.collider(player.physicsProxy, this.trunkGroup, undefined,
+          (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
         existing.push(c);
         this.playerColliders.set(player.id, existing);
         this.trunkCollidersSetup.add(player.id);
@@ -691,8 +685,8 @@ export class HostPhysicsSystem {
       // Lazy: Collider mit Coop-Defense-Basen anlegen
       if (this.baseGroup && !this.baseCollidersSetup.has(player.id)) {
         const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.physicsProxy, this.baseGroup);
-        if (this.burrowedPlayers.has(player.id)) c.active = false;
+        const c = this.scene.physics.add.collider(player.physicsProxy, this.baseGroup, undefined,
+          (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
         existing.push(c);
         this.playerColliders.set(player.id, existing);
         this.baseCollidersSetup.add(player.id);

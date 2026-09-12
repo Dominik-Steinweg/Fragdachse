@@ -168,7 +168,7 @@ describe('PlayerEntity – das Sprite ist keine Runtime-API mehr', () => {
     const physics = read('src/systems/HostPhysicsSystem.ts');
     expect(physics).toContain('player.physicsProxy.body as Phaser.Physics.Arcade.Body | null');
     for (const group of ['rockGroup', 'trunkGroup', 'baseGroup']) {
-      expect(physics).toContain(`this.scene.physics.add.collider(player.physicsProxy, this.${group})`);
+      expect(physics).toContain(`this.scene.physics.add.collider(player.physicsProxy, this.${group},`);
     }
   });
 

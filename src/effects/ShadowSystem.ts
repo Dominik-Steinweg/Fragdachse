@@ -47,7 +47,7 @@ interface StaticShadowLayoutBuildOptions {
 }
 
 /** Welche Quelle die statischen Footprints einer Ebene liefert – bestimmt, wann neu gebacken wird. */
-type StaticShadowGroup = 'rocks' | 'trees';
+type StaticShadowGroup = 'rocks' | 'trees' | 'bases';
 
 interface ShadowLayerBucket {
   /**
@@ -73,13 +73,14 @@ const SHADOW_DIRTY_CHUNK_SIZE = 128;
  * Die Caster, deren Schatten gebacken werden – und damit genau die Ebenen der Chunk-Flaeche.
  *
  * Die Menge ist fest, weil die Tiefen Konstanten sind: Fels und Turret aendern sich mit dem
- * Hindernisbestand, Stamm und Krone gehoeren zum unveraenderlichen Layout. Alles andere
+ * Hindernisbestand, Basen folgen ihren sichtbaren Zellen, Stamm und Krone dem Layout. Alles andere
  * (Spieler, Projektile, Zug) ist dynamisch und wird pro Frame gezeichnet.
  */
 const STATIC_SHADOW_CASTERS: ReadonlyArray<{
   readonly config: ShadowCasterConfig;
   readonly group: StaticShadowGroup;
 }> = [
+  { config: SHADOW_CASTERS.base, group: 'bases' },
   { config: SHADOW_CASTERS.rock, group: 'rocks' },
   { config: SHADOW_CASTERS.turret, group: 'rocks' },
   { config: SHADOW_CASTERS.trunk, group: 'trees' },
@@ -145,6 +146,11 @@ const STADIUM_FRONT_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: num
   });
 
 export class ShadowSystem {
+  private readonly baseCells = new Map<
+    { readonly x: number; readonly y: number },
+    { x: number; y: number }
+  >();
+  private readonly seenBaseCells = new Set<{ readonly x: number; readonly y: number }>();
   private readonly layers = new Map<string, ShadowLayerBucket>();
   private worldBoundsOverride: ShadowWorldBounds | null = null;
   private profile: ShadowProfile = SHADOW_PROFILES.day;
@@ -203,6 +209,47 @@ export class ShadowSystem {
 
   setWorldBoundsOverride(bounds: ShadowWorldBounds | null): void {
     this.worldBoundsOverride = bounds;
+  }
+
+  /** Cache visible surface cells, including previews and cells still awaiting destruction. */
+  syncBaseShadows(cells: Iterable<{
+    readonly x: number;
+    readonly y: number;
+    readonly active: boolean;
+    readonly visible: boolean;
+  }>): void {
+    this.seenBaseCells.clear();
+    for (const cell of cells) {
+      if (!cell.active || !cell.visible) continue;
+      this.seenBaseCells.add(cell);
+      const previous = this.baseCells.get(cell);
+      if (previous?.x === cell.x && previous.y === cell.y) continue;
+      if (previous) this.invalidateBaseShadow(previous.x, previous.y);
+      this.baseCells.set(cell, { x: cell.x, y: cell.y });
+      this.invalidateBaseShadow(cell.x, cell.y);
+    }
+    for (const [cell, position] of this.baseCells) {
+      if (this.seenBaseCells.has(cell)) continue;
+      this.baseCells.delete(cell);
+      this.invalidateBaseShadow(position.x, position.y);
+    }
+    this.seenBaseCells.clear();
+  }
+
+  private invalidateBaseShadow(x: number, y: number): void {
+    const shadow = this.getShadowBounds(x, y, SHADOW_CASTERS.base, this.staticBakeProfile);
+    const world = this.getStaticWorldBounds();
+    const size = SHADOW_DIRTY_CHUNK_SIZE;
+    const minX = Math.floor((Math.max(world.minX, shadow.minX) - world.minX) / size);
+    const minY = Math.floor((Math.max(world.minY, shadow.minY) - world.minY) / size);
+    const maxX = Math.floor((Math.min(world.maxX - 1, shadow.maxX) - world.minX) / size);
+    const maxY = Math.floor((Math.min(world.maxY - 1, shadow.maxY) - world.minY) / size);
+    // refreshRegion addresses one chunk; invalidate each intersected work unit explicitly.
+    for (let cy = minY; cy <= maxY; cy += 1) {
+      for (let cx = minX; cx <= maxX; cx += 1) {
+        this.staticSurface?.refreshRegion(cx * size, cy * size, size);
+      }
+    }
   }
 
   /**
@@ -566,6 +613,11 @@ export class ShadowSystem {
       bucket.staticGraphics.clear();
 
       if (layout && this.staticHasLayout) {
+        if (SHADOW_CASTERS.base.layerDepth === depth) {
+          for (const cell of this.baseCells.values()) {
+            this.drawStaticFootprintInRegion(bucket, cell.x, cell.y, SHADOW_CASTERS.base, regionBounds, profile);
+          }
+        }
         const drawsRock = SHADOW_CASTERS.rock.layerDepth === depth;
         const drawsTurret = SHADOW_CASTERS.turret.layerDepth === depth;
         if (drawsRock || drawsTurret) {
@@ -789,6 +841,8 @@ export class ShadowSystem {
   }
 
   destroy(): void {
+    this.baseCells.clear();
+    this.seenBaseCells.clear();
     for (const bucket of this.layers.values()) {
       bucket.staticGraphics.destroy();
       bucket.dynamicGraphics.destroy();
@@ -810,6 +864,8 @@ export class ShadowSystem {
    * Arena-Teardown und blieben als Raster in der Lobby sichtbar.
    */
   private clearStatic(): void {
+    this.baseCells.clear();
+    this.seenBaseCells.clear();
     for (const bucket of this.layers.values()) bucket.staticGraphics.clear();
     this.staticHasLayout = false;
     // Verwerfen statt Weisszeichnen: Ohne Layout gibt es nichts zu backen, und die Renderziele
