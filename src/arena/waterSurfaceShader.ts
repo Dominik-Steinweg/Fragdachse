@@ -18,6 +18,26 @@ float noise(vec2 p) {
   return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
 }
 float field(vec2 p) { return noise(p)*.58 + noise(p*2.03+17.3)*.28 + noise(p*4.07+8.1)*.14; }
+// Gradient noise on a triangular lattice avoids the square plateaus of value noise.
+// Rotated octaves keep the surface material free of a shared grid direction.
+float pondNoise(vec2 p) {
+  vec2 cell=floor(p+(p.x+p.y)*.3660254);
+  vec2 v0=p-cell+(cell.x+cell.y)*.2113249;
+  vec2 corner=v0.x>v0.y ? vec2(1.0,0.0) : vec2(0.0,1.0);
+  vec2 v1=v0-corner+.2113249;
+  vec2 v2=v0-1.0+.4226497;
+  vec3 angle=vec3(hash(cell),hash(cell+corner),hash(cell+1.0))*6.2831853;
+  vec3 weight=max(.5-vec3(dot(v0,v0),dot(v1,v1),dot(v2,v2)),0.0);
+  weight*=weight;
+  weight*=weight;
+  vec3 gradient=cos(angle)*vec3(v0.x,v1.x,v2.x)+sin(angle)*vec3(v0.y,v1.y,v2.y);
+  return .5+35.0*dot(weight,gradient);
+}
+float pondField(vec2 p) {
+  mat2 turn=mat2(.8,.6,-.6,.8);
+  return pondNoise(p)*.58+pondNoise(turn*p*2.03+17.3)*.28
+    +pondNoise(turn*turn*p*4.07+8.1)*.14;
+}
 void main() {
   vec2 uv=outTexCoord;
   // Canvas samplers use bottom-up UVs; world Y grows downwards.
@@ -31,7 +51,7 @@ void main() {
   float t=uTime;
   float deepTime=t*.35;
   float shoreTime=t*1.5;
-  float broad=field(p*.004+uSeed);
+  float broad=pondField(p*.004+uSeed);
   // World-space bank variation keeps neighboring chunks on the same shoreline.
   float bank=field(p*.038+vec2(uSeed,31.7));
   float grain=noise(p*.16+9.2);
@@ -67,18 +87,17 @@ void main() {
 
   // Bounded local eddies stretch and relax independently. Integrating position via
   // bounded oscillations avoids the increasing shear of position * time flow fields.
-  float phase=field(p*.005+23.4)*6.28318;
+  float phase=pondField(p*.005+23.4)*6.28318;
   vec2 eddyA=vec2(sin(deepTime*.17+phase),cos(deepTime*.13+phase*1.37));
   vec2 eddyB=vec2(cos(deepTime*.11-phase*.83),sin(deepTime*.19+phase*1.19));
-  float a=field(q+eddyA*.62+eddyB*.23);
-  float b=field(q*1.63+eddyB*.54-eddyA*.19+a*.6);
-  float pulseA=sin(deepTime*.31+phase)*1.9+sin(deepTime*.14-phase*.7)*.8;
-  float pulseB=sin(deepTime*.23-phase*1.23)*1.7+cos(deepTime*.37+phase)*.6;
-  float ripples=sin(p.x*.082+p.y*.046+a*7.0+pulseA)
-    +.45*sin(p.x*-.055+p.y*.103+b*6.0+pulseB);
+  float a=pondField(q+eddyA*.24+eddyB*.10);
+  float b=pondField(q*1.63+eddyB*.20-eddyA*.08+a*.25);
+  // Small wind ripples disturb a sheltered surface instead of forming large swells.
+  float pulseA=sin(deepTime*.31+phase)*.7+sin(deepTime*.14-phase*.7)*.3;
+  float ripples=sin(p.x*.16+p.y*.057+a*2.4+pulseA)*mix(.35,1.0,b);
   // Stationary variations in bed depth soften the parallel band around the pond.
   // Fade this displacement at both ends to retain a calm bank and full deep material.
-  float shelf=(noise(p*.011+vec2(uSeed,53.2))-.5)*24.0+(bank-.5)*8.0;
+  float shelf=(pondNoise(p*.011+vec2(uSeed,53.2))-.5)*24.0+(bank-.5)*8.0;
   float depthDistance=shore*1.2;
   float basinDistance=depthDistance+shelf*smoothstep(12.0,28.0,depthDistance)*(1.0-smoothstep(46.0,64.0,depthDistance));
   float depth=smoothstep(6.0,60.0,basinDistance);
@@ -90,23 +109,34 @@ void main() {
   // Every color channel darkens continuously; only the slope eases into deep water.
   float shoreFraction=clamp(depthDistance/${WATER_SHORE_DISTANCE.toFixed(1)},0.0,1.0);
   float colorDepth=1.0-pow(1.0-shoreFraction,1.5);
-  vec3 shallow=vec3(.155,.30,.325);
-  vec3 deep=vec3(.05,.185,.235);
+  vec3 shallow=vec3(.095,.325,.32);
+  vec3 deep=vec3(.022,.17,.195);
   vec3 color=mix(shallow,deep,colorDepth)*(.90+broad*.18);
   color*=1.0+(grain-.5)*(1.0-depth)*.025;
   float surfaceMotion=smoothstep(0.0,12.0,shore)*mix(.50,1.0,depth);
-  color+=vec3(.11,.18,.16)*(a-.5)*surfaceMotion;
-  color+=vec3(.025,.043,.042)*ripples*deepMotion;
-  float glint=pow(max(0.0,1.0-abs(ripples*.53+b*.30-.50)),15.0);
-  glint*=smoothstep(.42,.74,a)*deepReflections;
-  color+=vec3(.30,.40,.36)*glint*.34;
+  float depthReflection=mix(1.0,.25,colorDepth);
+  color+=vec3(.025,.070,.075)*(a-.5)*surfaceMotion*mix(1.0,.65,colorDepth);
+  // Soft procedural vegetation/sky reflections remain almost stationary; gentle
+  // distortion and small highlights give the pond depth without ocean-like troughs.
+  float canopy=pondField(p*.006+vec2(uSeed,39.1)+eddyA*.06);
+  float sky=smoothstep(.38,.72,pondField(p*.008+vec2(7.2,uSeed)+eddyB*.08));
+  color-=vec3(.015,.030,.028)*smoothstep(.40,.72,canopy)*surfaceMotion;
+  // Broad reflected light fades into the basin so it cannot read as a shallow shelf.
+  color+=vec3(.035,.085,.105)*sky*surfaceMotion*depthReflection;
+  color+=vec3(.003,.011,.013)*ripples*deepMotion;
+  // Broken wind-aligned highlights avoid the regular dots of crossed crest fields.
+  float glint=pow(max(0.0,sin(p.x*.14+p.y*.05+a*4.0+sin(p.y*.025+b*2.0)*.65+pulseA)),18.0);
+  float reflectionBreaks=pondField(p*.032+eddyA*.08+vec2(19.1,uSeed));
+  glint*=smoothstep(.38,.64,b)*smoothstep(.25,.65,sky)
+    *smoothstep(.42,.68,reflectionBreaks)*deepReflections;
+  color+=vec3(.15,.31,.32)*glint*.16;
   // Small shoreward wavelets share the outer water film's wetting cycle.
   // Roughly 39 px between crests leaves one or two across the shallow margin.
   // Base travel is 3.75 px/s; a faint trailing crest persists while its film spreads.
   float wave=max(pow(.5+.5*sin(shorePhase),10.0),.65*(1.0-smoothstep(.02,.10,localWaveAge)));
   float fringe=smoothstep(0.0,4.0,shore)*(1.0-smoothstep(24.0,42.0,shore));
   float broken=smoothstep(.28,.70,bank+.10*sin(shoreTime*.14+p.x*.022-p.y*.014));
-  color+=vec3(.18,.24,.20)*wave*fringe*broken*.12;
+  color+=vec3(.12,.26,.27)*wave*fringe*broken*.12;
   gl_FragColor=vec4(color*alpha,alpha);
 }
 `;
