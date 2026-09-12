@@ -824,6 +824,7 @@ export class PlacementSystem {
         || current.hp !== incoming.hp
         || current.maxHp !== incoming.maxHp
         || current.ownerColor !== incoming.ownerColor
+        || current.ownerId !== incoming.ownerId
         || current.expiresAt !== incoming.expiresAt
         || current.warningStartsAt !== incoming.warningStartsAt
         || current.kind !== incoming.kind

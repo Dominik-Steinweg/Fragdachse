@@ -13,6 +13,10 @@ import { setCameraBaseScroll } from '../graphics/cameraBaseScroll';
 import type { ArenaSpectatorCameraInput } from '../scenes/arena/ArenaInputBindings';
 import { advanceSpectatorCameraScroll } from '../scenes/arena/SpectatorCameraModel';
 import { getVisibleWorldView, type WorldViewRect } from '../ui/HostileBaseIndicator';
+import { ConstructionOwnershipGpuSystem } from '../effects/ConstructionOwnershipGpuSystem';
+import type { ConstructionOwnershipMoteRenderer } from '../effects/ConstructionOwnershipMoteRenderer';
+import type { PlacementSystem } from '../systems/PlacementSystem';
+import type { InputSystem } from '../systems/InputSystem';
 import { allowsWorldPresentationSurface, type WorldPresentationRequirement } from './WorldPresentation';
 import type {
   ArenaLayout,
@@ -135,6 +139,13 @@ export interface WorldClientPresentationRenderers {
  * schmalen, benannten Ports dieses Inputs. Activity-Presentation bleibt ausserhalb dieses Owners.
  */
 export interface WorldPresentationFrameBindingInput {
+  readonly constructionOwnership?: {
+    readonly motes: Pick<ConstructionOwnershipMoteRenderer, 'openWorld' | 'closeWorld' | 'captureFrame'>;
+    readonly getPlacement: () => Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getOwnedConstructions'> | null;
+    readonly getLocalPlayerId: () => string;
+    readonly interaction: Pick<InputSystem, 'isConstructionPlacementActive' | 'isDismantlePlacementActive'
+      | 'isGlobalDismantleHoldActive' | 'isPersistentRewardPlacementActive' | 'isRepositionActive'>;
+  };
   readonly movementEffects?: MovementEffectsRenderer;
   readonly burrowEffects?: BurrowGpuRenderer;
   readonly healthBars?: WorldHealthBarRenderer;
@@ -199,6 +210,9 @@ export function resetWorldCameraBase(scene: Phaser.Scene): void {
 }
 
 export class WorldPresentationFrameBinding {
+  private ownershipMarkers: ConstructionOwnershipGpuSystem | null = null;
+  private ownershipScope: object | null = null;
+  private readonly ownedConstructionIds = new Set<number>();
   private destroyed = false;
   private lastCameraScrollX = 0;
   private lastCameraScrollY = 0;
@@ -213,6 +227,45 @@ export class WorldPresentationFrameBinding {
 
   isDestroyed(): boolean {
     return this.destroyed;
+  }
+
+  /** Capture after input and replica/host state, before the shared GPU retire/emission tick. */
+  syncConstructionOwnership(showWorld: boolean): void {
+    if (this.destroyed) return;
+    const ownership = this.input.constructionOwnership;
+    if (!ownership) return;
+    const presentation = this.input.getLocalWorldPresentation();
+    const metrics = this.input.getWorldMetrics();
+    const placement = ownership.getPlacement();
+    if (!allowsWorldPresentationSurface(presentation, 'worldOverlays') || !metrics || !placement) {
+      this.clearConstructionOwnership();
+      return;
+    }
+    if (!this.ownershipMarkers) {
+      this.ownershipMarkers = new ConstructionOwnershipGpuSystem(this.input.scene);
+      this.ownershipScope = {};
+      ownership.motes.openWorld(this.ownershipScope);
+    }
+    const interaction = ownership.interaction;
+    const active = showWorld && presentation.mode === 'interactive'
+      && this.input.isLocalPlayerAttachedToWorld() && this.input.isLocalPlayerAlive()
+      && !this.input.isLocalPlayerSpectator() && (interaction.isConstructionPlacementActive()
+        || interaction.isDismantlePlacementActive() || interaction.isGlobalDismantleHoldActive()
+        || interaction.isPersistentRewardPlacementActive() || interaction.isRepositionActive());
+    this.ownedConstructionIds.clear();
+    for (const rock of placement.getOwnedConstructions(ownership.getLocalPlayerId())) {
+      if (rock.ownership !== 'base-owned') this.ownedConstructionIds.add(rock.id);
+    }
+    const targets = this.ownershipMarkers.sync(placement.getAllRuntimeRocks(), this.ownedConstructionIds, metrics, showWorld, active);
+    ownership.motes.captureFrame(this.ownershipScope!, active, targets, getVisibleWorldView(this.input.scene.cameras.main));
+  }
+
+  private clearConstructionOwnership(): void {
+    this.ownershipMarkers?.destroy();
+    this.ownershipMarkers = null;
+    if (this.ownershipScope) this.input.constructionOwnership?.motes.closeWorld(this.ownershipScope);
+    this.ownershipScope = null;
+    this.ownedConstructionIds.clear();
   }
 
   /**
@@ -529,6 +582,7 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.clearConstructionOwnership();
     if (this.input.healthBarScope) this.input.healthBars?.closeWorld(this.input.healthBarScope);
     this.input.movementEffects?.closeWorld(this);
     this.input.burrowEffects?.closeWorld(this);

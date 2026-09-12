@@ -63,6 +63,22 @@ function createSystem() {
 }
 
 describe('Radial Menu V2 input', () => {
+  it('exposes global dismantle from the first E-down frame, never selection alone, and clears on release or input lock', () => {
+    const { system, keys } = createSystem();
+    system.setupRadialActionProviders({ getTools: () => [], getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      getManagementActions: () => ['dismantle-own-all'] });
+    system.setupLoadoutListener(vi.fn());
+    Object.assign(system, { selectedRadialAction: { kind: 'management', action: 'dismantle-own-all' } });
+    system.update(); expect(system.isGlobalDismantleHoldActive()).toBe(false);
+    keys.keyE.isDown = true; keys.keyE.justDown = true; system.update();
+    expect(system.isGlobalDismantleHoldActive()).toBe(true);
+    keys.keyE.justDown = false; keys.keyE.isDown = false; keys.keyE.justUp = true; system.update();
+    expect(system.isGlobalDismantleHoldActive()).toBe(false);
+    keys.keyE.justUp = false; keys.keyE.isDown = true; keys.keyE.justDown = true; system.update();
+    expect(system.isGlobalDismantleHoldActive()).toBe(true);
+    system.setInputEnabled(false); expect(system.isGlobalDismantleHoldActive()).toBe(false);
+  });
   it.each([false, true])('uses Zeus on short release or automatically at full charge exactly once (full=%s)', full => {
     vi.useFakeTimers(); vi.setSystemTime(1000);
     try {

@@ -35,6 +35,7 @@ import { RemoteControlRenderer } from '../../effects/RemoteControlRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
 import { GpuVfxSystem }        from '../../effects/gpu/GpuVfxSystem';
+import { ConstructionOwnershipMoteRenderer } from '../../effects/ConstructionOwnershipMoteRenderer';
 import { EntityBurnGpuController } from '../../effects/EntityBurnGpuController';
 import { FireballRenderer }    from '../../effects/FireballRenderer';
 import { SporeRenderer }       from '../../effects/SporeRenderer';
@@ -103,6 +104,7 @@ export interface RendererBundle {
   rocket:              RocketRenderer;
   /** Gemeinsame Klammer aller SpriteGPULayer-Partikeleffekte: Tick, Ablation, Diagnose. */
   gpuVfx:              GpuVfxSystem;
+  constructionOwnershipMotes: ConstructionOwnershipMoteRenderer;
   movement:            MovementEffectsRenderer;
   burrowGpu:           BurrowGpuRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
@@ -329,6 +331,7 @@ export function createRendererBundle(
     remoteControl,
     healthBars: new WorldHealthBarRenderer(scene),
     gpuVfx,
+    constructionOwnershipMotes: new ConstructionOwnershipMoteRenderer(gpuVfx),
     movement: new MovementEffectsRenderer(gpuVfx, burrowGpu),
     burrowGpu,
     combatGoreGpu,

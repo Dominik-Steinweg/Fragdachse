@@ -68,6 +68,17 @@ function createPlacement(bases: readonly BaseSpec[] = []): PlacementSystem {
 }
 
 describe('turret aim configuration in placement snapshots', () => {
+  it('applies an owner-only snapshot update without merging equal construction types', () => {
+    const host = createPlacement(); const definition = COOP_DEFENSE_CONSTRUCTIONS.rock_barrier;
+    const first = host.materializePersistentPlaceable(definition, 10, 10, 0, 'p1', 0xffffff)!;
+    const second = host.materializePersistentPlaceable(definition, 12, 10, 0, 'p1', 0xffffff)!;
+    const client = createPlacement(); client.syncFromSnapshot([first, second]);
+    const changed = { ...first, ownerId: 'p2' };
+    expect(client.syncFromSnapshot([changed, second])).toMatchObject({ updated: [changed], relocated: [], added: [], removed: [] });
+    expect(client.getOwnedConstructions('p1').map(r => r.id)).toEqual([second.id]);
+    expect(client.getOwnedConstructions('p2').map(r => r.id)).toEqual([first.id]);
+    expect(client.syncFromSnapshot([changed, second]).updated).toEqual([]);
+  });
   it.each(['machine_gun_turret', 'rocket_turret'] as const)('preserves %s tuning across placement, restore and client sync', id => {
     const definition = COOP_DEFENSE_CONSTRUCTIONS[id];
     const host = createPlacement();

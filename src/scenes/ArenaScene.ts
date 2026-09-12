@@ -823,6 +823,7 @@ export class ArenaScene extends Phaser.Scene {
       this.renderers?.combatGoreGpu.destroy();
       this.renderers?.movement.destroy();
       this.renderers?.burrowGpu.destroy();
+      this.renderers?.constructionOwnershipMotes.destroy();
       this.renderers?.gpuVfx.destroy();
     });
     this.diagnostics?.subscribeDiagnostics((enabled) => {
@@ -1393,6 +1394,7 @@ export class ArenaScene extends Phaser.Scene {
       getVisibleWorldView(this.cameras.main),
     );
     this.visualFeedback?.weaponFire.update();
+    this.arenaRuntime.presentation.syncConstructionOwnership(presentationPolicy.showWorld);
     this.renderers.gpuVfx.update(delta);
     const inArena = presentationPolicy.showWorld;
     // Eine Preview zeigt die Welt, ohne dass dieser Peer in ihr steht. Zielhilfe, Systemcursor

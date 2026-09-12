@@ -43,6 +43,7 @@ export interface EnemyFlowFieldDebugPort {
 }
 
 export interface ArenaRuntimePresentationPort {
+  readonly syncConstructionOwnership: (showWorld: boolean) => void;
   readonly syncWorldCamera: (deltaMs: number, showWorld: boolean) => void;
   readonly syncWorldSurfaceResidency: (showWorld: boolean) => void;
   readonly syncWorldClientPresentation: (

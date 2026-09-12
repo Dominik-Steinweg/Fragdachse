@@ -15,6 +15,9 @@ import { WorldLifecycle, type WorldLifecycleSink } from '../../src/world/WorldLi
 import { WorldPresentationBinding } from '../../src/world/WorldPresentationBinding';
 import { WorldPresentationHandoff } from '../../src/world/WorldPresentationHandoff';
 import { getCameraBaseScroll } from '../../src/graphics/cameraBaseScroll';
+import { findFakeLane, makeFakeGpuVfxScene } from '../fakeGpuVfxScene';
+import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
+import type { SyncedPlaceableRock } from '../../src/types';
 import {
   resetWorldCameraBase,
   WorldPresentationFrameBinding,
@@ -173,6 +176,81 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  const ownershipModes = ['isConstructionPlacementActive', 'isDismantlePlacementActive',
+    'isGlobalDismantleHoldActive', 'isPersistentRewardPlacementActive', 'isRepositionActive'] as const;
+
+  function ownershipHarness() {
+    const gpuScene = makeFakeGpuVfxScene();
+    const scene = Object.assign(gpuScene, { cameras: { main: fakeCamera() } });
+    const state = { presentation: INTERACTIVE_PRESENTATION, alive: true, spectator: false, attached: true,
+      mode: '' as string };
+    const rock: SyncedPlaceableRock = { id: 11, kind: 'rock', constructionId: 'rock_barrier', gridX: 2, gridY: 2,
+      ownerId: 'local', ownerColor: 0x44aaff, ownership: 'guest-session', hp: 10, maxHp: 10,
+      angle: 0, expiresAt: 0, warningStartsAt: 0 };
+    const rocks = [rock, { ...rock, id: 12, gridX: 4, ownership: 'base-owned' as const }];
+    const motes = { openWorld: vi.fn(), closeWorld: vi.fn(), captureFrame: vi.fn() };
+    const interaction = Object.fromEntries(ownershipModes.map(mode => [mode, () => state.mode === mode])) as
+      NonNullable<WorldPresentationFrameBindingInput['constructionOwnership']>['interaction'];
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
+      getLocalWorldPresentation: () => state.presentation,
+      isLocalPlayerAlive: () => state.alive, isLocalPlayerSpectator: () => state.spectator,
+      isLocalPlayerAttachedToWorld: () => state.attached,
+      getWorldMetrics: () => resolveCoopDefenseWorldMetrics(30, 30),
+      constructionOwnership: { motes, interaction, getLocalPlayerId: () => 'local', getPlacement: () => ({
+        getAllRuntimeRocks: () => rocks, getOwnedConstructions: owner => rocks.filter(r => r.ownerId === owner),
+      }) },
+    }));
+    return { binding, state, motes, scene };
+  }
+
+  it.each(ownershipModes)('activates ownership for %s without requiring an Activity, then clears on input cancellation', mode => {
+    const h = ownershipHarness(); h.binding.syncConstructionOwnership(true);
+    const active = findFakeLane(h.scene, 'construction-ownership-active');
+    const passive = findFakeLane(h.scene, 'construction-ownership-passive');
+    expect(active.visible).toBe(false); expect(passive.visible).toBe(true);
+    h.state.mode = mode; h.binding.syncConstructionOwnership(true);
+    expect(active.visible).toBe(true);
+    const [scope, enabled, targets] = h.motes.captureFrame.mock.calls.at(-1)!;
+    expect(enabled).toBe(true); expect(targets.map((t: { id: number }) => t.id)).toEqual([11]);
+    expect(h.motes.openWorld).toHaveBeenCalledExactlyOnceWith(scope);
+    h.state.mode = ''; h.binding.syncConstructionOwnership(true);
+    expect(active.visible).toBe(false);
+    expect(h.motes.captureFrame.mock.calls.at(-1)?.[1]).toBe(false);
+    h.binding.destroy();
+  });
+
+  it('keeps preview passive, has no layers for none, and closes every presentation scope before stale calls can act', () => {
+    const h = ownershipHarness(); h.state.mode = 'isConstructionPlacementActive';
+    h.state.presentation = { required: false, mode: 'none', surfaces: [] };
+    h.binding.syncConstructionOwnership(true); expect(h.scene.layers).toHaveLength(0);
+    h.state.presentation = PREVIEW_PRESENTATION; h.binding.syncConstructionOwnership(true);
+    expect(findFakeLane(h.scene, 'construction-ownership-passive').visible).toBe(true);
+    expect(findFakeLane(h.scene, 'construction-ownership-active').visible).toBe(false);
+    const firstScope = h.motes.openWorld.mock.calls[0][0];
+    h.state.presentation = INTERACTIVE_PRESENTATION; h.binding.syncConstructionOwnership(true);
+    expect(findFakeLane(h.scene, 'construction-ownership-active').visible).toBe(true);
+    h.binding.syncConstructionOwnership(false);
+    expect(h.scene.layers.every(l => !l.visible)).toBe(true);
+    expect(h.motes.captureFrame.mock.calls.at(-1)?.[1]).toBe(false);
+    h.state.presentation = { required: false, mode: 'none', surfaces: [] }; h.binding.syncConstructionOwnership(false);
+    expect(h.scene.layers.every(l => l.destroyed)).toBe(true);
+    expect(h.motes.closeWorld).toHaveBeenCalledExactlyOnceWith(firstScope);
+    h.state.presentation = INTERACTIVE_PRESENTATION; h.binding.syncConstructionOwnership(true);
+    const newScope = h.motes.openWorld.mock.calls.at(-1)![0]; expect(newScope).not.toBe(firstScope);
+    const count = h.motes.captureFrame.mock.calls.length;
+    h.binding.destroy(); h.binding.destroy(); h.binding.syncConstructionOwnership(true);
+    expect(h.motes.captureFrame).toHaveBeenCalledTimes(count);
+    expect(h.motes.closeWorld.mock.calls.map(c => c[0])).toEqual([firstScope, newScope]);
+    expect(h.scene.layers.every(l => l.destroyed)).toBe(true);
+  });
+
+  it.each(['alive', 'spectator', 'attached'] as const)('does not expose local active markers without %s eligibility', gate => {
+    const h = ownershipHarness(); h.state.mode = 'isConstructionPlacementActive';
+    h.state[gate] = gate === 'spectator'; h.binding.syncConstructionOwnership(true);
+    expect(findFakeLane(h.scene, 'construction-ownership-active').visible).toBe(false);
+    expect(h.motes.captureFrame.mock.calls.at(-1)?.[1]).toBe(false);
+    h.binding.destroy();
+  });
   it('owns movement and Burrow presentation without activity and closes both once before handoff', () => {
     const movementEffects = { openWorld: vi.fn(), closeWorld: vi.fn() };
     const burrowEffects = { openWorld: vi.fn(), closeWorld: vi.fn() };

@@ -142,6 +142,7 @@ export interface FakeGpuLayer {
   name: string;
   size: number;
   memberCount: number;
+  destroyed: boolean;
   gravity: number;
   timeElapsed: number;
   visible: boolean;
@@ -157,6 +158,8 @@ export interface FakeGpuLayer {
   members: FakeGpuMemberSnapshot[];
   patched: number[];
   getDataByteSize(): number;
+  resize(size: number, clear?: boolean): void;
+  destroy(): void;
   addMember(): void;
   editMember(index: number, member: Record<string, unknown>): void;
   patchMember(index: number, data: Uint32Array, mask?: number[]): void;
@@ -173,6 +176,7 @@ export function makeFakeGpuLayer(key: string, size: number): FakeGpuLayer {
     name: '',
     size,
     memberCount: 0,
+    destroyed: false,
     gravity: 1024,
     timeElapsed: 0,
     visible: true,
@@ -186,6 +190,8 @@ export function makeFakeGpuLayer(key: string, size: number): FakeGpuLayer {
     members: [],
     patched: [],
     getDataByteSize: () => 42 * 4,
+    resize: (size, clear = false) => { layer.size = size; layer.memberCount = clear ? 0 : Math.min(layer.memberCount, size); },
+    destroy: () => { layer.destroyed = true; layer.setVisible(false); },
     addMember: () => { layer.added += 1; layer.memberCount += 1; },
     editMember: (index, member) => {
       // Phaser steigt bei `index >= memberCount` still aus.

@@ -713,6 +713,10 @@ export class InputSystem {
     return this.dismantlePlacementActive;
   }
 
+  isGlobalDismantleHoldActive(): boolean {
+    return this.globalDismantleHoldStartedAt !== null;
+  }
+
   isPersistentRewardPlacementActive(): boolean {
     return this.getSelectedPersistentRewardId() !== null
       && this.persistentRewardPlacementActive;

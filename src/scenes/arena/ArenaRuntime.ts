@@ -225,6 +225,7 @@ export class ArenaRuntime {
       this.syncWorldStaticShadowProfile.bind(this),
       this.syncWorldShadows.bind(this),
       this.syncWorldLighting.bind(this),
+      (showWorld) => this.flow.getWorldRuntime()?.presentationFrame?.syncConstructionOwnership(showWorld),
     );
     this.diagnostics = createArenaRuntimeDiagnosticsPort(
       this.getChunkRenderingDiagnosticsState.bind(this),

@@ -67,6 +67,7 @@ export function createArenaRuntimePresentationPort(
   syncWorldStaticShadowProfile: ArenaRuntimePresentationPort['syncWorldStaticShadowProfile'],
   syncWorldShadows: ArenaRuntimePresentationPort['syncWorldShadows'],
   syncWorldLighting: ArenaRuntimePresentationPort['syncWorldLighting'],
+  syncConstructionOwnership: ArenaRuntimePresentationPort['syncConstructionOwnership'],
 ): ArenaRuntimePresentationPort {
   return {
     syncWorldCamera,
@@ -80,6 +81,7 @@ export function createArenaRuntimePresentationPort(
     syncWorldStaticShadowProfile,
     syncWorldShadows,
     syncWorldLighting,
+    syncConstructionOwnership,
   };
 }
 
