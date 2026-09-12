@@ -423,6 +423,8 @@ export interface GroundFireCellEffect {
 export interface FireChunkBurstConfig extends GroundFireCellEffect {
   readonly requireLineOfSight?: boolean;
   readonly targetSurvivors?: boolean;
+  /** Optional extra landings per survivor, using landingExplosion.radius as their reach. */
+  readonly nearbyChunksPerTarget?: number;
   readonly landingExplosion?: FireChunkLandingExplosion;
   readonly count: number;
   readonly searchRadius: number;

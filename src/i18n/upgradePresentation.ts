@@ -55,6 +55,7 @@ function getUpgradeParams(
     params.rocketDistance = formatNumber(rocket.distanceForMaxBonus, locale);
     params.rocketCapacities = rocket.magazineCapacities.map(n => formatNumber(n, locale)).join(' / ');
     params.rocketChunks = formatNumber(rocket.chunkCount, locale);
+    params.rocketTargetExtras = formatNumber(rocket.targetedExtraChunksPerEnemy, locale);
   }
   const zeus = UTILITY_CONFIGS.ZEUS_TASER;
   if (definition.id.startsWith('zeus_') && zeus.activation.type === 'charged_alternate') {

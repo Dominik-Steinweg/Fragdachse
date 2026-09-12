@@ -630,7 +630,7 @@ export const enUpgrades = {
   "upgrade.rocket_launcher_explosive_medicine.name": "Explosive Medicine",
   "upgrade.rocket_launcher_explosive_medicine.description": "Your main detonations heal you and allies for {rocketHeal} of their radial damage instead of hurting you.",
   "upgrade.rocket_launcher_pressure_shield.name": "Pressure Shield",
-  "upgrade.rocket_launcher_pressure_shield.description": "Your main detonations and aftershocks grant {rocketShield} percentage points of additional damage reduction for {rocketShieldSeconds} s per level.",
+  "upgrade.rocket_launcher_pressure_shield.description": "Your main detonations and aftershocks grant {rocketShield} percentage points of additional damage reduction for {rocketShieldSeconds} s per level. Also increases the main explosion radius by {value1Unsigned} per level; aftershock radius stays unchanged.",
   "upgrade.rocket_launcher_heavy_charge.name": "Heavy Payload",
   "upgrade.rocket_launcher_heavy_charge.description": "Rockets gain up to {rocketDistanceBonus} speed and damage per level, linearly over {rocketDistance} px of flight.",
   "upgrade.rocket_launcher_magazine.name": "Rocket Magazine",
@@ -640,5 +640,5 @@ export const enUpgrades = {
   "upgrade.rocket_launcher_more_chunks.name": "More Fire Chunks",
   "upgrade.rocket_launcher_more_chunks.description": "{value0Unsigned} additional fire chunks per level.",
   "upgrade.rocket_launcher_targeted_scatter.name": "Targeted Scatter",
-  "upgrade.rocket_launcher_targeted_scatter.description": "Chunks target different surviving enemies. Landing positions stay fixed after launch.",
+  "upgrade.rocket_launcher_targeted_scatter.description": "First sends one chunk directly to each surviving enemy. Extras are shared evenly: up to {rocketTargetExtras} per enemy at separate positions within aftershock reach. Remaining chunks land randomly. All targets stay fixed after launch.",
 } as const;

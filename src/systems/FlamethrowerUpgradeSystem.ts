@@ -353,18 +353,34 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
       && this.fireSystem.canPlaceGroundCell(target.x, target.y)
       && (!burst.requireLineOfSight || this.chunkEffects?.hasLineOfSight(x, y, target.x, target.y) === true);
     const targets: FireChunkTarget[] = preferredTargets.filter(valid).slice(0, count).map(t => ({ x: t.x, y: t.y }));
+    const survivorTargets: FireChunkTarget[] = [];
     if (targets.length === 0 && burst.targetSurvivors) {
       const survivors = (this.enemyManager?.getAllEnemies() ?? []).filter(enemy => enemy.getHp() > 0
         && !enemy.isBurrowed() && this.chunkEffects?.canTarget(ownerId, enemy.id, combatSource) === true
         && valid(enemy.sprite));
       Phaser.Utils.Array.Shuffle(survivors);
-      for (const enemy of survivors.slice(0, count)) targets.push({ x: enemy.sprite.x, y: enemy.sprite.y });
+      for (const enemy of survivors.slice(0, count)) survivorTargets.push({ x: enemy.sprite.x, y: enemy.sprite.y });
+      targets.push(...survivorTargets);
     }
-    const occupied = new Set(targets.map(t => Math.floor(t.x / 16) + ':' + Math.floor(t.y / 16)));
-    for (const candidate of this.selectRandomFireCells(x, y, burst.searchRadius, Infinity)) {
+    const cellKey = (t: FireChunkTarget) => Math.floor(t.x / 16) + ':' + Math.floor(t.y / 16);
+    const occupied = new Set(targets.map(cellKey));
+    const candidates = targets.length < count
+      ? this.selectRandomFireCells(x, y, burst.searchRadius, Infinity).filter(t => !occupied.has(cellKey(t)))
+      : [];
+    // Only near candidates and actual random fallback attempts need a flight-line query.
+    const validity = new Map<FireChunkTarget, boolean>();
+    const validCandidate = (candidate: FireChunkTarget): boolean => {
+      let result = validity.get(candidate);
+      if (result === undefined) { result = valid(candidate); validity.set(candidate, result); }
+      return result;
+    };
+    const nearby = this.selectNearbyFireCells(survivorTargets, candidates, count - targets.length,
+      burst.nearbyChunksPerTarget ?? 0, burst.landingExplosion?.radius ?? 0, validCandidate);
+    targets.push(...nearby);
+    for (const target of nearby) occupied.add(cellKey(target));
+    for (const candidate of candidates) {
       if (targets.length >= count) break;
-      const key = Math.floor(candidate.x / 16) + ':' + Math.floor(candidate.y / 16);
-      if (!occupied.has(key) && valid(candidate)) { targets.push(candidate); occupied.add(key); }
+      if (!occupied.has(cellKey(candidate)) && validCandidate(candidate)) { targets.push(candidate); occupied.add(cellKey(candidate)); }
     }
     if (targets.length === 0) return;
     const flights: FireChunkFlight[] = targets.map(target => ({ ...target, landsAt: now + Math.max(1,
@@ -374,6 +390,72 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
         landingExplosion: burst.landingExplosion });
     }
     this.playFireChunkBurst(x, y, flights, now, effect.visualStyle ?? 'normal');
+  }
+
+  /**
+   * Match extra slots to unique cells, round-robin over the shuffled survivor list.
+   * Augmenting paths preserve earlier quotas when survivors compete for scarce cells.
+   * The shuffled cell pool breaks ties; available cells prefer separation from all landings.
+   */
+  private selectNearbyFireCells(
+    survivors: readonly FireChunkTarget[],
+    candidates: readonly FireChunkTarget[],
+    count: number,
+    perTarget: number,
+    radius: number,
+    valid: (target: FireChunkTarget) => boolean,
+  ): FireChunkTarget[] {
+    if (!survivors.length || !candidates.length || count <= 0
+      || !Number.isSafeInteger(perTarget) || perTarget <= 0 || !Number.isFinite(radius) || radius <= 0) return [];
+    const distanceSq = (a: FireChunkTarget, b: FireChunkTarget) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+    const eligible = survivors.map(target => candidates.flatMap((cell, index) =>
+      distanceSq(target, cell) <= radius * radius && valid(cell) ? [index] : []));
+    const slots: Array<{ target: number; cell: number }> = [];
+    const cellOwners = new Map<number, number>();
+    const separation = (cell: number, slotIndex: number): number => {
+      let min = Infinity;
+      for (const direct of survivors) min = Math.min(min, distanceSq(candidates[cell], direct));
+      for (let index = 0; index < slots.length; index++) {
+        if (index !== slotIndex && slots[index].cell >= 0) {
+          min = Math.min(min, distanceSq(candidates[cell], candidates[slots[index].cell]));
+        }
+      }
+      return min;
+    };
+    const assign = (slotIndex: number, visited: Set<number>): boolean => {
+      const ranked = eligible[slots[slotIndex].target]
+        .filter(cell => !visited.has(cell))
+        .map(cell => ({ cell, separation: separation(cell, slotIndex) }))
+        .sort((a, b) => b.separation - a.separation);
+      // Do not disturb prior placements while a free reachable cell exists.
+      for (const { cell } of ranked) {
+        if (cellOwners.has(cell)) continue;
+        visited.add(cell);
+        cellOwners.set(cell, slotIndex);
+        slots[slotIndex].cell = cell;
+        return true;
+      }
+      for (const { cell } of ranked) {
+        if (visited.has(cell)) continue;
+        visited.add(cell);
+        const owner = cellOwners.get(cell)!;
+        if (assign(owner, visited)) {
+          cellOwners.set(cell, slotIndex);
+          slots[slotIndex].cell = cell;
+          return true;
+        }
+      }
+      return false;
+    };
+    for (let round = 0; round < Math.min(perTarget, count) && slots.length < count; round++) {
+      const before = slots.length;
+      for (let target = 0; target < survivors.length && slots.length < count; target++) {
+        slots.push({ target, cell: -1 });
+        if (!assign(slots.length - 1, new Set())) slots.pop();
+      }
+      if (slots.length === before) break;
+    }
+    return slots.map(slot => candidates[slot.cell]);
   }
 
   private landPendingFireChunks(now: number): void {

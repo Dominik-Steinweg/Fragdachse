@@ -111,11 +111,13 @@ Heal = 0.50 × normaler radialer Schaden einschließlich Angriffsboni
 
 Spieler, die von einer eigenen Rocket-Launcher-Hauptdetonation oder einem B2-Nachbeben erfasst werden, erhalten **20 Prozentpunkte zusätzliche Schadensreduktion**.
 
-| Stufe | Schadensreduktion | Dauer |
-|---|---:|---:|
-| 1 | 20 % | 1 s |
-| 2 | 20 % | 2 s |
-| 3 | 20 % | 3 s |
+Zusätzlich erhöht jede investierte Stufe den Radius der **Hauptdetonation um 15 %**. Der Radius beträgt Basisradius × (1 + 0,15 × Stufe).
+
+| Stufe | Schadensreduktion | Dauer | Hauptexplosionsradius |
+|---|---:|---:|---:|
+| 1 | 20 % | 1 s | +15 % |
+| 2 | 20 % | 2 s | +30 % |
+| 3 | 20 % | 3 s | +45 % |
 
 ### Regeln
 
@@ -123,6 +125,7 @@ Spieler, die von einer eigenen Rocket-Launcher-Hauptdetonation oder einem B2-Nac
 - Die Schadensreduktion stackt nicht.
 - Weitere gültige Treffer aktualisieren ausschließlich die Dauer.
 - Nachbeben können Druckschild auslösen bzw. erneuern.
+- Der größere Hauptradius gilt für Schaden, Heilung und Schildvergabe sowie den gekoppelten Brandbrocken-Suchbereich. Nachbeben behalten ihren eigenen unveränderten Radius.
 
 ---
 
@@ -489,33 +492,35 @@ Keine weitere Regeländerung.
 
 **Stufen:** 1
 
-„Gezielte Streuung“ sorgt dafür, dass Gegner, die die Hauptdetonation überlebt haben, möglichst jeweils einen Brandbrocken erhalten.
+Das bestehende Budget von 6 bis 12 Brandbrocken wird bevorzugt auf überlebende Gegner und deren Umgebung verteilt. Das Upgrade erzeugt keine zusätzlichen Brocken.
 
 ## Ablauf
 
-Nach der Hauptdetonation:
+Nach dem Schaden der Hauptdetonation:
 
-1. Ermittle alle noch lebenden Gegner innerhalb des aktuellen Haupt-Explosionsradius.
-2. Entferne Gegner ohne gültige Sicht-/Fluglinie vom Explosionsursprung.
-3. Weise verfügbaren Brandbrocken möglichst unterschiedlichen gültigen Gegnern zu.
-4. Pro Gegner wird maximal **ein** Brandbrocken gezielt.
-5. Ein gezielter Brocken erhält die Position dieses Gegners zum Zeitpunkt der Zielauswahl als Landepunkt.
-6. Der Brocken homt danach **nicht** und verfolgt bewegte Gegner nicht.
-7. Für alle übrigen Brandbrocken werden wie ohne Upgrade zufällige gültige Landepunkte gewählt.
+1. Ermittle die gültigen überlebenden Gegner im aktuellen Haupt-Explosionsradius. Tote, eingegrabene oder nicht angreifbare Gegner sowie Gegner ohne gültige direkte Landeposition und freie Fluglinie bleiben ausgeschlossen.
+2. Mische die Gegnerreihenfolge einmal zufällig.
+3. Verteile zuerst höchstens einen direkten Brocken je Gegner, solange das Budget reicht.
+4. Verteile danach Extras gleichmäßig reihum: bis zu **fünf zusätzliche Brocken je Gegner**.
+5. Extras landen auf unterschiedlichen, noch unbelegten Bodenbrandzellen innerhalb der Nachbeben-Reichweite des zugewiesenen Gegners. Auch die direkt belegten Zellen sind für Extras gesperrt.
+6. Bevorzuge möglichst großen Mindestabstand zu bereits gewählten Landepunkten; Gleichstände werden zufällig aufgelöst. Ein begrenztes Matching kann frühere Zuweisungen verschieben, damit ein anderer Gegner seine einzige gültige Zelle nutzen kann.
+7. Erst nach ausgeschöpften Kontingenten oder fehlenden weiteren Nahplatzierungen werden übrige Brocken zufällig im gesamten Suchbereich verteilt. Bei insgesamt zu wenig gültigen Zellen entstehen weniger Brocken.
 
-### Beispiel
+Alle Landepunkte liegen weiterhin innerhalb des Haupt-Explosionsradius und benötigen gültigen Boden sowie eine freie Fluglinie vom Explosionsursprung. Der Kandidatenpool ist endlich; es gibt keine unbegrenzten Wiederholungsversuche.
 
-```text
-6 Brandbrocken
-3 überlebende gültige Gegner
+Die Gegnerpositionen werden bei der Hauptdetonation fixiert. Ein nahes Nachbeben trifft diese Position; der Gegner kann während des Flugs ausweichen. Die Brocken verfolgen keine Bewegung und besitzen kein Homing.
 
-→ 1 Brocken zu Gegner A
-→ 1 Brocken zu Gegner B
-→ 1 Brocken zu Gegner C
-→ 3 Brocken zufällig
-```
+Die Kontingente begrenzen Zuweisungen, nicht überlappende Explosionstreffer. Auch zufällige Restbrocken können zufällig in Gegnernähe landen.
 
-Damit verbessert das Upgrade die Zuverlässigkeit, ohne alle Brandbrocken auf ein einziges Ziel zu konzentrieren.
+### Beispiele bei ausreichend gültigen Landepunkten
+
+| Budget | Gegner | Verteilung |
+|---|---:|---|
+| 6 | 3 | Je ein direkter Brocken und ein Extra pro Gegner |
+| 12 | 1 | Ein direkter Brocken, fünf Extras, sechs zufällige Brocken |
+| 12 | 2 | Je ein direkter Brocken und fünf Extras pro Gegner |
+
+Explizit übergebene bevorzugte Zielpositionen behalten ihren bisherigen Vorrang und werden nicht als Gegner rekonstruiert. Andere Brandbrocken-Erzeuger ohne die neue Nahverteilungsoption behalten ihr bisheriges Verhalten.
 
 ---
 
@@ -555,7 +560,7 @@ Direkte Eskalation von 6 auf bis zu 12 Landungen/Nachbeben.
 
 ## B2 + Gezielte Streuung
 
-Überlebende Gegner im Explosionsbereich erhalten zuverlässig maximal einen gezielten Folgeeinschlag.
+Überlebende Gegner erhalten zuerst je einen direkten Folgeeinschlag und danach gleichmäßig bis zu fünf zusätzliche Landungen in Nachbeben-Reichweite.
 
 ---
 
@@ -581,7 +586,7 @@ Die Black-Hole-Fantasie gehört zum entsprechenden Turm.
 |---|---|
 | L1 Rocket-Jump | `4.0×` Self-Explosion-Movement-Impuls |
 | L2 Explosive Medizin | Heal = `50 %` des normalen radialen Schadens einschließlich Angriffsboni |
-| L3 Druckschild | `20 %` DR für `1 / 2 / 3 s` |
+| L3 Druckschild | 20 Prozentpunkte DR für 1 / 2 / 3 s; +15 % Hauptexplosionsradius je Stufe |
 | R1 Adrenalin | bestehende Werte |
 | R2 Speed | `+50 % / Stufe`, linear bis 300 px |
 | R2 Damage | `+50 % / Stufe`, linear bis 300 px |
@@ -599,7 +604,7 @@ Die Black-Hole-Fantasie gehört zum entsprechenden Turm.
 | B2 Nachbebenschaden | `15 → 5` radial |
 | B2 Knockback | `0` |
 | Mehr Brandbrocken | `+2 / Stufe`, max. `12` |
-| Gezielte Streuung | `1` Stufe, max. 1 gezielter Brocken je Gegner |
+| Gezielte Streuung | 1 Stufe; ein direkter Brocken und bis zu fünf Extras je Gegner, innerhalb des bestehenden Gesamtbudgets |
 
 ---
 
@@ -623,7 +628,7 @@ Die Umsetzung ist funktional abgeschlossen, wenn:
 
 - L1 den bestehenden Rocket-Jump-Impuls exakt vervierfacht.
 - L2 50 % des normalen radialen Schadens einschließlich Angriffsboni als Heilung für Besitzer/Verbündete verwendet, ohne Self-Damage-Faktor und ohne Empfängerabwehr.
-- L3 korrekt 20 % DR für 1/2/3 s vergibt und nur die Dauer aktualisiert.
+- L3 korrekt 20 Prozentpunkte DR für 1/2/3 s vergibt, bei erneuter Anwendung nur die Dauer aktualisiert und je investierter Stufe den Hauptexplosionsradius um 15 % erhöht, ohne den Nachbebenradius zu verändern.
 - R2 Geschwindigkeit und gesamten zugehörigen Schaden linear bis 300 px skaliert.
 - R3 Tap als Einzelschuss und Hold als 2/4/6-Magazin funktioniert.
 - R3 mit dem normalen Rocket-Cooldown lädt (Basis 800 ms in allen Modi).
@@ -638,7 +643,8 @@ Die Umsetzung ist funktional abgeschlossen, wenn:
 - jeder Rocket-B2-Brandbrocken Bodenbrand erzeugt.
 - jeder Rocket-B2-Brandbrocken zusätzlich genau ein 50-px-Nachbeben mit 5–15 Schaden und 0 Knockback erzeugt.
 - B2-Kaskaden nicht rekursiv weitere Brandbrocken/Nachbeben erzeugen.
-- Gezielte Streuung pro überlebendem Gegner maximal einen Brocken zuweist und übrige Brocken zufällig verteilt.
+- Gezielte Streuung direkte Brocken priorisiert, Extras gleichmäßig auf getrennten Zellen in Trefferreichweite verteilt und erst nach Kontingent- oder Platzgrenzen zufällige Restbrocken wählt.
+- Die begrenzte Umzuweisung verhindert, dass eine frühe Zellwahl vermeidbar andere Gegner ohne Nahplatzierung lässt.
 
 ## 18. Beschlossene Ergänzungen zur Umsetzung (2026-09-12)
 
@@ -648,7 +654,7 @@ Diese Entscheidungen konkretisieren beziehungsweise ersetzen abweichende Aussage
 |---|---|
 | Punkte und Voraussetzungen | L2 und B2 kosten jeweils einen Boss-Punkt und keinen normalen Punkt. Normale Knoten kosten einen regulären Punkt je Stufe. Jeder Vorgänger muss mindestens Stufe 1 besitzen. B2 benötigt beide Vorgänger L3 und R3. |
 | Heilbasis | 50 % des normalen radialen Hauptdetonationsschadens einschließlich R2, Power-ups und Angriffsboni. Der Self-Damage-Faktor und die Abwehr des Empfängers werden nicht angewandt. Besitzer und verbündete Spieler erhalten Heilung ohne Overheal. |
-| Druckschild | Additive 20 Prozentpunkte Schadensreduktion; die gesamte Reduktion bleibt auf 100 % begrenzt. Dauer 1/2/3 s. Weitere Anwendungen stapeln die Stärke nicht und setzen das Ende auf mindestens den neuen Ablaufzeitpunkt. |
+| Druckschild | Additive 20 Prozentpunkte Schadensreduktion; die gesamte Reduktion bleibt auf 100 % begrenzt. Dauer 1/2/3 s. Weitere Anwendungen stapeln die Stärke nicht und setzen das Ende auf mindestens den neuen Ablaufzeitpunkt. Je investierter Stufe wächst der Radius der Hauptdetonation um 15 %, einschließlich Heil-/Schildreichweite und Brandbrocken-Suchbereich. Der Nachbebenradius bleibt unverändert. |
 | Magazinbedienung | Tap schießt beim Loslassen. Die erste bezahlbare Rakete wird ohne Hold-Schwelle geladen. Hold lädt und feuert bei vollem Magazin automatisch; danach beginnt bei weiter gehaltenem RMB nach dem normalen Cooldown die nächste Ladung. |
 | Ressourcen | Kosten werden je Rakete beim Laden nach den aktuellen Kostenmodifikatoren verbraucht. Sobald keine weitere Rakete bezahlbar ist, wird die vorhandene Salve abgefeuert. Beim Abschuss werden keine weiteren Kosten abgezogen. |
 | Abbruch | Dash, Einbuddeln und Utility-Nutzung schießen die geladene Salve vor der Aktion ab. Waffen-/Buildwechsel, Menü, Eingabe- oder Fensterfokusverlust, Tod, sonstige Handlungsunfähigkeit und Lifecycle-Ende verwerfen die Ladung ohne Erstattung. Ein abgebrochener Mausgriff benötigt erneutes Loslassen und Drücken. |
@@ -656,7 +662,7 @@ Diese Entscheidungen konkretisieren beziehungsweise ersetzen abweichende Aussage
 | Flug und Reichweite | Cursorentfernung begrenzt weiterhin die Flugstrecke. R2 zählt tatsächlich zurückgelegte Segmente bis zum Kontakt; Portalversatz zählt nicht. Zeitblasen verändern die Simulation weiterhin korrekt. |
 | Vererbung | R2 wird einmal auf Direkttreffer, Hauptdetonation und deren Nachbeben angewandt. Bodenbrand erhält keinen zusätzlichen R2-Bonus. Die Hauptdetonation fixiert Angriffsboni für verzögerte Nachbeben. Raketen und Landungen führen Herkunft, Zugehörigkeit und aufgelöste Rocket-Effekte mit. |
 | Deckung | Brandbrocken benötigen gültige Bodenbrandzellen, Positionen innerhalb des Suchradius und freie Fluglinien. Explosionen wirken weiterhin radiusbasiert, auch durch Deckung. |
-| Zielauswahl | Gezielte Streuung mischt die nach der Hauptdetonation gültigen überlebenden Gegner zufällig. Pro Gegner und Hauptdetonation höchstens ein gezielter Brocken; feste Position beim Start, kein Homing. Übrige Brocken erhalten zufällige gültige Zellen. Bei Platzmangel entstehen weniger Brocken. |
+| Zielauswahl | Gezielte Streuung mischt gültige Überlebende einmal zufällig. Erst je ein direkter Brocken, danach reihum bis zu fünf Extras je Gegner auf unterschiedlichen gültigen Zellen in Nachbeben-Reichweite. Möglichst große Abstände; bei Zellkonkurrenz begrenzte Umzuweisung. Nur verbleibende Brocken landen zufällig. Feste Positionen beim Start, kein Homing; Gesamtbudget unverändert. Bei Platzmangel entstehen weniger Brocken. |
 | Globale Flugzeit | Für sämtliche Erzeuger gemeinsamer Brandbrocken gilt: max(1 ms, flightMs × min(1, Distanz / searchRadius)). Ein Burst führt einen gemeinsamen Startzeitpunkt und individuelle Landezeitpunkte. Verspätete Darstellung verschiebt keine Landung; die frühere Mindestanimation entfällt. |
 | Landung | Rocket-B2 erzeugt je Landung einmal Bodenbrand und einmal ein Nachbeben. Nachbeben schädigen nur feindliche Ziele und gewähren Freunden Druckschild, ohne Heilung oder weitere Kaskade. Bodenbrand behält seine bisherigen Zielregeln. Veränderte Hindernisse werden bei der Bodenbrandplatzierung erneut geprüft; die Explosion ist unabhängig davon. |
 | Profile und Texte | Freischaltung und bisherige R1-ID bleiben erhalten. Entfernte Investitionen werden durch die bestehende Profilbereinigung wieder frei, ohne Umwandlung. Alle Rocket-Knoten einschließlich Freischaltung verwenden lokalisierte Textplatzhalter; keine neuen oder ersatzweise alten Upgrade-Icons. |

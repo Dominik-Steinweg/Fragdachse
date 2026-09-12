@@ -25,6 +25,7 @@
         "aftershockEnabled": 0,
         "chunkCount": 6,
         "targetedChunks": 0,
+        "targetedExtraChunksPerEnemy": 5,
         "chunkFlightMs": 320,
         "groundDurationMs": 2000,
         "burnDurationMs": 2000,

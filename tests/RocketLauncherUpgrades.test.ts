@@ -44,13 +44,44 @@ describe('Rocket authored upgrade contract', () => {
     expect(validateRocketLauncherConfig(resolved.rocketLauncher)).toEqual([]);
     expect(resolved.adrenalinCost).toBeLessThan(base.adrenalinCost);
     expect(resolved.damage).toBe(base.damage); expect(resolved.cooldown).toBe(base.cooldown);
-    if (base.fire.type !== 'projectile') throw Error('rocket must be a projectile');
-    const effect = resolveRocketExplosion(base.fire.impactExplosion!, resolved.rocketLauncher!);
+    if (base.fire.type !== 'projectile' || resolved.fire.type !== 'projectile') throw Error('rocket must be a projectile');
+    const effect = resolveRocketExplosion(resolved.fire.impactExplosion!, resolved.rocketLauncher!);
     expect(effect.selfKnockbackMult).toBe(resolved.rocketLauncher!.jumpMultiplier);
     expect(resolved.shotRecoilForce).toBe(base.shotRecoilForce);
     expect(effect.fireChunkBurst!.landingExplosion).toMatchObject({ excludeFriendlyPlayers: true, knockback: 0, rocketSupport: { healFraction: 0 } });
     expect(effect.fireChunkBurst!.landingExplosion).not.toHaveProperty('fireChunkBurst');
+    expect(effect.fireChunkBurst!.nearbyChunksPerTarget).toBe(resolved.rocketLauncher!.targetedExtraChunksPerEnemy);
+    const untargeted = resolveRocketExplosion(resolved.fire.impactExplosion!, { ...resolved.rocketLauncher!, targetedChunks: 0 });
+    expect(untargeted.fireChunkBurst!.nearbyChunksPerTarget).toBeUndefined();
     expect(effect.fireChunkBurst!.count).toBe(base.rocketLauncher!.chunkCount + definition('rocket_launcher_more_chunks')!.maxLevel * definition('rocket_launcher_more_chunks')!.effects[0].value);
     expect(resolveRocketExplosion(base.fire.impactExplosion!, base.rocketLauncher!).fireChunkBurst).toBeUndefined();
   });
+});
+
+
+it('scales only the main explosion radius and shares that resolved radius with the chunk search', () => {
+  const base = WEAPON_CONFIGS.ROCKET_LAUNCHER;
+  if (base.fire.type !== 'projectile') throw Error('rocket');
+  const radiusEffect = definition('rocket_launcher_pressure_shield')!.effects.find(e => e.stat.endsWith('.radius'))!;
+  const durationEffect = definition('rocket_launcher_pressure_shield')!.effects.find(e => e.stat.endsWith('.pressureShieldDurationMs'))!;
+  for (let level = 0; level <= definition('rocket_launcher_pressure_shield')!.maxLevel; level++) {
+    const raw = profile(3);
+    raw.upgrades.rocket_launcher_pressure_shield.level = level;
+    const resolved = applyCoopDefenseModifiersToWeaponConfig(base, 'weapon2', getCoopDefenseResolvedEffectTotals(raw));
+    if (resolved.fire.type !== 'projectile') throw Error('rocket');
+    const main = resolved.fire.impactExplosion!;
+    expect(main.radius).toBeCloseTo(base.fire.impactExplosion!.radius * (1 + level * radiusEffect.value));
+    expect(main.maxDamage).toBe(base.fire.impactExplosion!.maxDamage);
+    expect(main.minDamage).toBe(base.fire.impactExplosion!.minDamage);
+    expect(resolved.rocketLauncher!.pressureShieldReduction).toBe(base.rocketLauncher!.pressureShieldReduction);
+    expect(resolved.rocketLauncher!.pressureShieldDurationMs).toBe(level * durationEffect.value);
+    const effect = resolveRocketExplosion(main, { ...resolved.rocketLauncher!, aftershockEnabled: 1 });
+    expect(effect.fireChunkBurst!.searchRadius).toBe(main.radius);
+    expect(effect.fireChunkBurst!.landingExplosion!.radius).toBe(base.rocketLauncher!.aftershockRadius);
+  }
+});
+
+it.each([-1, 0.5, Infinity, NaN, undefined])('rejects an invalid nearby chunk quota (%s)', targetedExtraChunksPerEnemy => {
+  expect(validateRocketLauncherConfig({ ...WEAPON_CONFIGS.ROCKET_LAUNCHER.rocketLauncher!, targetedExtraChunksPerEnemy }))
+    .toContainEqual(expect.stringContaining('targetedExtraChunksPerEnemy'));
 });

@@ -16,6 +16,7 @@ export interface RocketLauncherConfig {
   readonly aftershockEnabled: number;
   readonly chunkCount: number;
   readonly targetedChunks: number;
+  readonly targetedExtraChunksPerEnemy: number;
   readonly chunkFlightMs: number;
   readonly groundDurationMs: number;
   readonly burnDurationMs: number;
@@ -48,6 +49,7 @@ export function resolveRocketExplosion(effect: ProjectileExplosionConfig, rocket
       igniteCenter: false, durationMs: rocket.groundDurationMs, burnDurationMs: rocket.burnDurationMs,
       burnDamagePerTick: rocket.burnDamagePerTick, sourceId: 'ground_fire.rocket_chunks',
       requireLineOfSight: true, targetSurvivors: rocket.targetedChunks > 0,
+      nearbyChunksPerTarget: rocket.targetedChunks > 0 ? rocket.targetedExtraChunksPerEnemy : undefined,
       landingExplosion: { radius: rocket.aftershockRadius, maxDamage: rocket.aftershockMaxDamage,
         minDamage: rocket.aftershockMinDamage, knockback: 0, selfDamageMult: 0,
         excludeFriendlyPlayers: true, visualStyle: 'rocket',
@@ -61,7 +63,7 @@ export function validateRocketLauncherConfig(value: unknown): string[] {
   const r = value as Record<string, unknown>;
   const fields = ['jumpMultiplier','healFraction','pressureShieldDurationMs','pressureShieldReduction','distanceLevel',
     'distanceBonusPerLevel','distanceForMaxBonus','magazineLevel','salvoAngleDegrees','focusAngleFactor',
-    'aftershockEnabled','chunkCount','targetedChunks','chunkFlightMs','groundDurationMs','burnDurationMs',
+    'aftershockEnabled','chunkCount','targetedChunks','targetedExtraChunksPerEnemy','chunkFlightMs','groundDurationMs','burnDurationMs',
     'burnDamagePerTick','aftershockRadius','aftershockMaxDamage','aftershockMinDamage'];
   const issues = fields.filter(key => typeof r[key] !== 'number' || !Number.isFinite(r[key]) || Number(r[key]) < 0)
     .map(key => `rocketLauncher.${key}: nonnegative finite number required`);
@@ -73,6 +75,8 @@ export function validateRocketLauncherConfig(value: unknown): string[] {
     if (!Number.isInteger(r[key]) || Number(r[key]) > 3) issues.push(`rocketLauncher.${key}: level out of range`);
   }
   for (const key of ['aftershockEnabled','targetedChunks']) if (r[key] !== 0 && r[key] !== 1) issues.push(`rocketLauncher.${key}: flag required`);
-  if (!Number.isInteger(r.chunkCount)) issues.push('rocketLauncher.chunkCount: integer required');
+  for (const key of ['chunkCount', 'targetedExtraChunksPerEnemy']) {
+    if (!Number.isSafeInteger(r[key])) issues.push('rocketLauncher.' + key + ': integer required');
+  }
   return issues;
 }

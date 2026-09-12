@@ -294,6 +294,7 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     targets: [{ path: ['fire', 'homing', 'maxTurnDegreesPerStep'], formula: 'scale' }],
   },
   'weapon.ROCKET_LAUNCHER.adrenalinCost': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['adrenalinCost'], formula: 'scale' }] },
+  'weapon.ROCKET_LAUNCHER.impactExplosion.radius': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['fire', 'impactExplosion', 'radius'], formula: 'scale' }] },
   'weapon.ROCKET_LAUNCHER.rocketLauncher.jumpMultiplier': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'jumpMultiplier'], formula: 'add' }] },
   'weapon.ROCKET_LAUNCHER.rocketLauncher.healFraction': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'healFraction'], formula: 'add' }] },
   'weapon.ROCKET_LAUNCHER.rocketLauncher.pressureShieldDurationMs': { kind: 'weapon', itemId: 'ROCKET_LAUNCHER', targets: [{ path: ['rocketLauncher', 'pressureShieldDurationMs'], formula: 'add' }] },

@@ -100,3 +100,41 @@ it('includes source-only attack bonuses in self healing and freezes them for del
   expect(enemyBefore - f.combat.getHP('enemy')).toBe(Math.round(landing.maxDamage));
   f.world.destroy();
 });
+
+
+it('applies the pressure-shield radius to enemy damage, allied healing and protection without enlarging aftershocks', async () => {
+  const { applyCoopDefenseModifiersToWeaponConfig } = await import('../../src/loadout/CoopDefenseLoadoutModifiers');
+  const { getCoopDefenseUpgradeDefinition } = await import('../../src/utils/coopDefenseUpgrades');
+  const upgrade = getCoopDefenseUpgradeDefinition('rocket_launcher_pressure_shield')!;
+  const base = WEAPON_CONFIGS.ROCKET_LAUNCHER;
+  const resolved = applyCoopDefenseModifiersToWeaponConfig(base, 'weapon2', {
+    percentage: Object.fromEntries(upgrade.effects.filter(e => e.mode === 'add_percent_per_level').map(e => [e.stat, e.value * upgrade.maxLevel])),
+    additive: Object.fromEntries(upgrade.effects.filter(e => e.mode === 'add_per_level').map(e => [e.stat, e.value * upgrade.maxLevel])),
+  });
+  if (base.fire.type !== 'projectile' || resolved.fire.type !== 'projectile') throw Error('rocket');
+  const f = fixture();
+  const config = { ...resolved.rocketLauncher!, healFraction: f.effect.rocketSupport!.healFraction, aftershockEnabled: 1 };
+  const effect = resolveRocketExplosion(resolved.fire.impactExplosion!, config);
+  const distance = (base.fire.impactExplosion!.radius + effect.radius) / 2;
+  f.players.forEach(player => { player.x = distance; });
+  const before = f.players.map(player => f.combat.getHP(player.id));
+  const provenance = createSingleOwnerProvenance('owner', { weaponSourceId: base.id, sourceSlot: 'weapon2' });
+  f.combat.resolveExplosionCombat({ x: 0, y: 0, effect: resolveRocketExplosion(base.fire.impactExplosion!, config), provenance });
+  expect(f.players.map(player => f.combat.getHP(player.id))).toEqual(before);
+  const outcome = f.combat.resolveExplosionCombat({ x: 0, y: 0, effect, provenance });
+  expect(f.combat.getHP('owner')).toBeGreaterThan(before[0]);
+  expect(f.combat.getHP('ally')).toBeGreaterThan(before[1]);
+  expect(f.combat.getHP('enemy')).toBeLessThan(before[2]);
+  for (const id of ['owner', 'ally']) {
+    expect(f.combat.getRocketSupportState(id, 1000).pressureShieldUntil).toBe(1000 + config.pressureShieldDurationMs);
+  }
+  const burst = outcome.resolvedEffect!.fireChunkBurst!;
+  expect(burst.searchRadius).toBe(effect.radius);
+  expect(burst.landingExplosion!.radius).toBe(base.rocketLauncher!.aftershockRadius);
+  const after = f.players.map(player => f.combat.getHP(player.id));
+  f.setNow(1100);
+  f.combat.applyExplosionDamage(0, 0, burst.landingExplosion!, 'owner', 'weapon2');
+  expect(f.players.map(player => f.combat.getHP(player.id))).toEqual(after);
+  expect(f.combat.getRocketSupportState('ally', 1100).pressureShieldUntil).toBe(1000 + config.pressureShieldDurationMs);
+  f.world.destroy();
+});

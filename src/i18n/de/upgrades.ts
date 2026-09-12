@@ -630,7 +630,7 @@ export const deUpgrades = {
   "upgrade.rocket_launcher_explosive_medicine.name": "Explosive Medizin",
   "upgrade.rocket_launcher_explosive_medicine.description": "Eigene Hauptdetonationen heilen dich und Verbündete um {rocketHeal} ihres radialen Schadens statt euch zu verletzen.",
   "upgrade.rocket_launcher_pressure_shield.name": "Druckschild",
-  "upgrade.rocket_launcher_pressure_shield.description": "Eigene Hauptdetonationen und Nachbeben gewähren {rocketShield} Prozentpunkte zusätzliche Schadensreduktion für {rocketShieldSeconds} s je Stufe.",
+  "upgrade.rocket_launcher_pressure_shield.description": "Eigene Hauptdetonationen und Nachbeben gewähren {rocketShield} Prozentpunkte zusätzliche Schadensreduktion für {rocketShieldSeconds} s je Stufe. Zusätzlich wächst der Radius der Hauptdetonation um {value1Unsigned} je Stufe; Nachbeben behalten ihren Radius.",
   "upgrade.rocket_launcher_heavy_charge.name": "Schwere Ladung",
   "upgrade.rocket_launcher_heavy_charge.description": "Raketen erhalten je Stufe bis zu {rocketDistanceBonus} Geschwindigkeit und Schaden, linear über {rocketDistance} px Flugstrecke.",
   "upgrade.rocket_launcher_magazine.name": "Raketenmagazin",
@@ -640,5 +640,5 @@ export const deUpgrades = {
   "upgrade.rocket_launcher_more_chunks.name": "Mehr Brandbrocken",
   "upgrade.rocket_launcher_more_chunks.description": "{value0Unsigned} zusätzliche Brandbrocken je Stufe.",
   "upgrade.rocket_launcher_targeted_scatter.name": "Gezielte Streuung",
-  "upgrade.rocket_launcher_targeted_scatter.description": "Brocken zielen auf unterschiedliche überlebende Gegner. Ihre Landepunkte bleiben nach dem Start fest.",
+  "upgrade.rocket_launcher_targeted_scatter.description": "Zuerst fliegt ein Brocken direkt zu jedem überlebenden Gegner. Weitere werden gleichmäßig verteilt: bis zu {rocketTargetExtras} je Gegner auf getrennte Landepunkte in Nachbeben-Reichweite. Restliche Brocken landen zufällig. Alle Ziele bleiben nach dem Start fest.",
 } as const;

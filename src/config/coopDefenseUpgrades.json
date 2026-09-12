@@ -2412,6 +2412,11 @@
             "stat": "weapon.ROCKET_LAUNCHER.rocketLauncher.pressureShieldDurationMs",
             "mode": "add_per_level",
             "value": 1000
+        },
+        {
+            "stat": "weapon.ROCKET_LAUNCHER.impactExplosion.radius",
+            "mode": "add_percent_per_level",
+            "value": 0.15
         }
     ]
 },
