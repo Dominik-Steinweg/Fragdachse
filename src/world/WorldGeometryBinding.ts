@@ -149,7 +149,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
         Math.floor(bounds.centerX / GROUND_FIRE_CELL_SIZE),
         Math.floor(bounds.centerY / GROUND_FIRE_CELL_SIZE),
       ),
-      (startX, startY, endX, endY) => this.hasFireLineOfSight(startX, startY, endX, endY),
+      (startX, startY, endX, endY, style) => this.hasFireLineOfSight(startX, startY, endX, endY, style === 'void'),
       () => this.fireObstacles.revision,
     );
   }
@@ -302,7 +302,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     this.rebuildFireObstacles();
   }
 
-  private hasFireLineOfSight(startX: number, startY: number, endX: number, endY: number): boolean {
+  private hasFireLineOfSight(startX: number, startY: number, endX: number, endY: number, ignoreBases = false): boolean {
     const dx = endX - startX;
     const dy = endY - startY;
     const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / GROUND_FIRE_CELL_SIZE));
@@ -310,7 +310,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       const t = step / steps;
       const gridX = Math.floor((startX + dx * t) / GROUND_FIRE_CELL_SIZE);
       const gridY = Math.floor((startY + dy * t) / GROUND_FIRE_CELL_SIZE);
-      if (this.fireObstacles.hasLineOfSightObstacle(gridX, gridY)) return false;
+      if (this.fireObstacles.hasLineOfSightObstacle(gridX, gridY, ignoreBases)) return false;
     }
     return true;
   }

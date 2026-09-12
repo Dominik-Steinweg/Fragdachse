@@ -60,7 +60,7 @@ Für die zunächst fünf horizontalen Bänder wird zuerst die vertikale Schnittm
 
 **Halber Node:** Die obere Fill-Kante liegt gerade und in voller Innenbreite in der Node-Mitte; nur die unteren äußeren Bänder sind eingerückt. Die Clipform bleibt immer die volle 44 × 44-Innenform.
 
-Fünf Bänder sind eine Startkalibrierung. Sie garantieren geometrische Einschließung, aber keine mathematisch glatte Rundung. Sichtbare Stufen oder Nähte müssen bei der späteren Sichtprüfung durch angepasste Bandgrenzen bzw. eine begrenzte höhere Bandzahl behoben werden. Ein zusätzlicher Masken-/Filterpass ist dafür nicht vorgesehen.
+Fünf Bänder waren die Startkalibrierung. Die im Nutzer-Screenshot erkennbaren rechteckigen Eckausschnitte werden inzwischen durch radiusabhängige, feinere Bandgrenzen vermieden: Die nach innen fehlende Kontur bleibt bei den verwendeten UI-Radien unter 0,25 lokalen Pixeln. Die Geometrie bleibt konservativ und statisch; maximal 64 Bänder je oberer/unterer Rundung begrenzen die Objektzahl bei ungewöhnlich großen Radien. Ein zusätzlicher Masken-/Filterpass ist dafür nicht vorgesehen.
 
 ### 2.5 Sehr flache Füllungen brauchen einen definierten Sampling-Pfad
 
@@ -171,8 +171,8 @@ Für eine beauftragte Browserprüfung gilt der vorhandene Ablauf: `npm run dev:b
 ## 4. Grenzen und Risiken
 
 - **Architektur:** Ein Shared-Field pro Scene; keine neuen Consumer-Shader, ParticleEmitter, DynamicTextures oder Masken pro Node; keine per-frame Sample-Positionsanimation. Bar-Shader, Renderauflösung und Frequenz bleiben unverändert.
-- **Performance:** Drei Samples × fünf Bänder ergeben bei einer voll gefüllten, nicht X-geteilten Node zunächst bis zu 15 Feld-Images, bei 20 solchen Nodes bis zu 300. Dies sind Quad-/Objektzahlen, keine Draw-Call- oder FPS-Zusagen. Blendmode-, Container- und Glow-Grenzen können Batches teilen. Kleine Sonderfüllungen können zusätzliche X-Fragmente benötigen.
-- **Visuelles Risiko:** Additive Überlagerung kann zu hell wirken; Gewichte werden lokal angepasst. Fünf Bänder können sichtbare Stufen hinterlassen. Beides benötigt die spätere Abnahme bei tatsächlicher Anzeigegröße.
+- **Performance:** Nach der Eckkorrektur ergeben drei Samples × 43 Bänder bei einer voll gefüllten, nicht X-geteilten Node mit Radius 10 insgesamt 129 Feld-Images, bei 20 solchen Nodes 2.580. Dies sind Quad-/Objektzahlen, keine Draw-Call- oder FPS-Zusagen. Die feinere Kontur erhöht den Objektaufwand; Shaderzahl und Update-Kadenz bleiben gleich. Blendmode-, Container- und Glow-Grenzen können Batches teilen. Kleine Sonderfüllungen können zusätzliche X-Fragmente benötigen.
+- **Visuelles Risiko:** Additive Überlagerung kann zu hell wirken; Gewichte werden lokal angepasst. Die verfeinerte Eckkontur ist weiterhin eine Subpixel-Approximation und benötigt ebenso wie die Helligkeit die Abnahme bei tatsächlicher Anzeigegröße.
 - **Lifecycle-Risiko:** Quality-Rebuilds und Parent-Destroy können dieselben Ressourcen über mehrere Pfade erreichen. Tests müssen balancierten Besitz und idempotentes Stop/Destroy schützen, nicht nur den Happy Path.
 - **Geltungsbereich:** Gameplay, Progression, Netzwerk und die vorhandenen anderen Arbeitskopieänderungen werden durch dieses Vorhaben nicht geändert. Das aktuelle Boot-Rendering hinter dem DOM-Ladescreen bleibt erhalten; die neue Aktivitätssteuerung folgt den UI-Ownern und führt keine DOM-Verdeckungsanalyse ein.
 

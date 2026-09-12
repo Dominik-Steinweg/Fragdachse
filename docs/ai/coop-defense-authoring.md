@@ -77,6 +77,19 @@ akzeptierte Mutation, und ein Fehlschlag lässt die Quelle vollständig unverän
 
 ## Erweiterung einer Mission
 
+Fortschreitende Ground-Hazards beschreiben mit ihrem Rechteck die maximale Ausdehnung, nicht
+bereits brennenden Boden. Der Activity-gebundene `CoopDefenseGroundHazardEventHandler` aktiviert
+die vorbereitete Zündreihenfolge hostseitig und hält blockierte, bereits erreichte Zellen zum
+Nachzünden vor. Platzierung und sichere Spawns lesen bei solchen Events dieselbe aktuelle
+Feuer-/Warnprojektion wie die Darstellung; sie dürfen nicht die gesamte zukünftige Fläche sperren.
+`SyncedBurningGroundSnapshot.warnings` ist ausschließlich eine Hostprojektion, keine clientseitige
+Zündentscheidung. Der bestehende Snapshotpfad liefert sie auch an Late Join.
+
+Der zusätzliche Void-Basisbrand gehört zur Activity (`BaseVoidFireSystem`), nicht zum Blueprint
+oder World-Layout. Er prüft tatsächliche Basiszellen statt Bounding-Boxen, verwendet einen
+Schadensstrom je Basis und führt Schaden über `applyBaseStatusDamage` samt Fraktionsprüfung aus.
+`SyncedBaseState.voidBurning` projiziert nur die Darstellung; Activity-Ende verwirft den Status.
+
 Bei einer neuen Activity oder Map zuerst entscheiden, welche Daten World-weit und welche Activity-spezifisch sind. Danach:
 
 1. authored Definition und Registry-Eintrag anlegen;

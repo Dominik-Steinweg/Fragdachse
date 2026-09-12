@@ -65,7 +65,7 @@ describe('Persistente Basis – Freischaltung', () => {
   it('vergibt Area Stage 1 nur beim Sieg auf Map 10 und niemals rueckwaerts', () => {
     expect(PERSISTENT_BASE_AREA_STAGE_UNLOCK_AFTER_MAP_ID).toBe('10');
     expect(unlockStoredPersistentBaseAreaStageAfterVictory('9')).toBe(false);
-    expect(unlockStoredPersistentBaseAreaStageAfterVictory('11')).toBe(false);
+    expect(unlockStoredPersistentBaseAreaStageAfterVictory('12')).toBe(false);
     expect(getStoredPersistentBaseAreaStage()).toBe(0);
 
     expect(unlockStoredPersistentBaseAreaStageAfterVictory('10')).toBe(true);
@@ -73,6 +73,19 @@ describe('Persistente Basis – Freischaltung', () => {
     expect(unlockStoredPersistentBaseAreaStageAfterVictory('10')).toBe(false);
     expect(setStoredPersistentBaseAreaStage(0)).toBe(false);
     expect(getStoredPersistentBaseAreaStage()).toBe(1);
+  });
+
+  it('erweitert nach Map 11 erneut, bleibt bei Wiederholung monoton und ueberlebt Reload', () => {
+    unlockStoredPersistentBaseAreaStageAfterVictory('10');
+    const previous = resolvePersistentBaseBuildAreaForStage(getStoredPersistentBaseAreaStage());
+    expect(unlockStoredPersistentBaseAreaStageAfterVictory('11')).toBe(true);
+    expect(getStoredPersistentBaseAreaStage()).toBe(2);
+    expect(resolvePersistentBaseBuildAreaForStage(2).radiusCells).toBeGreaterThan(previous.radiusCells);
+    expect(unlockStoredPersistentBaseAreaStageAfterVictory('11')).toBe(false);
+    expect(unlockStoredPersistentBaseAreaStageAfterVictory('10')).toBe(false);
+    expect(setStoredPersistentBaseAreaStage(1)).toBe(false);
+    invalidateLocalStorageCache();
+    expect(getStoredPersistentBaseAreaStage()).toBe(2);
   });
 
   it('unterstuetzt die lokalen Debug-Schalter fuer Basis und Baubereich', () => {

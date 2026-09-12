@@ -1,6 +1,6 @@
 # Fragdachse – GDD Kampagnenprogression Maps 1–17
 
-**Status:** Planungsstand  
+**Status:** Funktional vorbereitet am 12.09.2026; manuelles Solo-/Koop-Playtesting und Balancing stehen aus.
 **Ziel:** Kampagnenprogression abwechslungsreicher, klarer und belohnender strukturieren, ohne unnötig neue technische Systeme einzuführen.  
 **Umsetzung:** Primär durch Anpassung bestehender Map-Konfigurationen, Objectives, Gegner-Spawns, Rewards und vorhandener Hazard-/Persistent-Base-Strukturen.  
 **Nachgelagert:** Manuelles Balancing und Finetuning nach funktionaler Umsetzung.
@@ -21,7 +21,7 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 
 ---
 
-## 2. Aktueller Stand
+## 2. Ausgangslage vor dem Umbau
 
 | Map | Name | Aktuelle Hauptrolle / Besonderheit | Aktuelle Belohnung / Progression |
 |---|---|---|---|
@@ -72,7 +72,7 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 ## 4. Erforderliche Änderungen
 
 ### Map 1 – Feuertaufe
-- Rabid Badger aus allen regulären Begegnungen entfernen.
+- Rabid und die ebenfalls vorhandenen Demon Badger durch Zombies ersetzen.
 - Nur Zombie Badger als Gegner verwenden.
 - Tutorial-, Advance-, Zug-, Hold- und Persistent-Base-Preview-Strukturen beibehalten.
 - Ziel: maximale Lesbarkeit und minimale kognitive Last während des Tutorials.
@@ -101,7 +101,8 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 - Relativ viele HP-Podeste entlang der Route verteilen.
 - Normale Respawns auf **0** setzen.
 - Plague Medic als zentralen Gegner der Map beibehalten.
-- Optional bei Playtests prüfen, ob Checkpoint-basierte Wiederbelebung nötig ist, um lange Zuschauerzeiten im Koop zu vermeiden.
+- Vier Kampf-/Versorgungsabschnitte von der rechten persistenten Basis nach Westen, danach Extraktion.
+- Keine zusätzliche Checkpoint-Wiederbelebung. Die Checkpoints dieser Map setzen keinen Respawnpunkt.
 
 ### Map 8 – Dimensionsbruch
 - Beschädigte Vorposten stärker auf Raketentürme ausrichten.
@@ -134,8 +135,9 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 - Primärziel von Repel Assault auf **Advance** umbauen.
 - Lineare bzw. segmentierte Route mit bewusst gesetzten Timebomb-Hinterhalten.
 - Timebomb Badger als Kern der Encounter-Komposition.
-- Vorhandene Spawnstrukturen, Void-Hazards und Hold-Elemente nur beibehalten, wenn sie die neue Advance-Struktur unterstützen.
-- Nicht benötigte Altmechaniken reduzieren, damit die Map nicht überladen wirkt.
+- Fünf checkpointgesteuerte Hinterhalte von der rechten Basis nach Westen, danach Extraktion. Seitliche Spawnflächen, in späteren Abschnitten auch Angriffe von hinten.
+- Alte Dauerproduktion, Hold-Mission und flächige Turmverteidigung entfallen; zwei kleine seitliche Void-Gefahren bleiben.
+- Startwert: zwei normale Respawns je Spieler. Checkpoints verlegen den Respawnpunkt und gewähren keine zusätzlichen Leben.
 - Ziel: „durch ein gefährliches Gebiet vorrücken, in dem jederzeit Timebomb-Hinterhalte ausgelöst werden können“.
 
 ---
@@ -151,6 +153,8 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 - Build-Area verwendet den freigeschalteten Radius
 - Unlock nur einmalig
 - UI-Kommunikation nach Sieg bzw. beim nächsten Base-Besuch
+- Stufe 0 bleibt die anfängliche Fläche, Sieg auf Map 10 gewährt Stufe 1 (Radius 5), Sieg auf Map 11 Stufe 2 (Radius 6). Derselbe Resolver gilt für Speicherung, World-Parameter, Platzierung und Anzeige. Im Koop bestimmt die Host-World die Fläche.
+- Keine zusätzliche Altsave-Migration und keine rückwirkende Freischaltung aus dem Mapfortschritt.
 
 ### 5.2 Side-Mission-basierter Konstrukt-Unlock
 **Map 8:** Rocket Turret  
@@ -158,11 +162,19 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 
 Wenn bestehende Reward-Strukturen bereits `persistentBaseRewardsOnComplete` unterstützen, **kein neues generisches Reward-System bauen**.
 
+Erfolgreicher Hold-Abschluss gewährt den Unlock unmittelbar und idempotent. Er bleibt auch bei einer späteren Niederlage der Hauptmission erhalten. Ein Hold-Fehlschlag gewährt ihn nicht und beendet die Hauptmission nicht.
+
 ### 5.3 Schrumpfende Void-Fire-Zone
 **Map 14**
 - Hazard-Front bewegt sich von links nach rechts.
 - Bereits verlorene Fläche bleibt gefährlich.
 - Hazard soll möglichst bestehende Ground-Hazard-/Void-Fire-Systeme wiederverwenden.
+- Startwerte: Ankündigung bei Sekunde 15, Zündung ab Sekunde 20, Ausbreitung über 90 Sekunden bis Sekunde 110. Survival endet weiter bei 120 Sekunden.
+- Maximales Zielrechteck: linke 36 × 42 Zellen. Die rechten 24 Spalten bleiben frei, einschließlich persistenter Basis und Radius-6-Baubereich. Ein durchgehender Rückzugsweg verbindet die linke Kampfzone mit dem rechten Endbereich.
+- `spread` ergänzt den Ground-Hazard-Vertrag: Richtung `left-to-right`, Ausbreitungsdauer, Konturunregelmäßigkeit und lokale Vorwarnzeit. Ausgangswerte: zwei Zellen Unregelmäßigkeit, drei Sekunden Warnsaum.
+- World-Seed und Event-ID erzeugen einmalig eine geglättete Zündreihenfolge. Benachbarte Reihen rücken versetzt vor; die Kontur bleibt verbunden und bewegt sich ausschließlich vorwärts. Hindernisse blockieren weiterhin reale Feuerzellen; erreichte blockierte Zellen werden nach Freigabe nachgezündet.
+- Nur der Host zündet und simuliert Schaden. Aktive Feuerzellen und der schmale Warnsaum werden für Clients und Late Join repliziert. Zukünftige, noch nicht angekündigte Zellen bleiben für Spawn und Bauen nutzbar.
+- Ausbreitung ist nur für permanente rechteckige Void-Hazards vorgesehen; endliche und nichtrechteckige Hazards behalten ihre bisherige Logik.
 
 
 ### 5.4 Advance-Encounter mit Hinterhalten
@@ -170,6 +182,19 @@ Wenn bestehende Reward-Strukturen bereits `persistentBaseRewardsOnComplete` unte
 - Bestehende Advance-/Checkpoint-/Trigger-Strukturen wiederverwenden.
 - Hinterhalte über vorhandene Encounter-Trigger oder räumliche Aktivierung realisieren.
 - Kein neues universelles Encounter-Framework entwickeln, sofern bestehende Systeme aus Map 1/anderen Advance-Strukturen ausreichen.
+- Maps 7 und 16 verwenden durchgehende Encounter-Barrieren zwischen den Abschnitten. Die finale Sperre öffnet nach Auflösung des letzten Encounters; erst dann ist die Extraktion erreichbar. Map-Abmessungen bleiben erhalten.
+
+### 5.5 Allgemeiner Void-Fire-Basisbrand
+
+- Jeder Kontakt von Void-Fire mit einer tatsächlichen, schadensfähigen Basiszelle entzündet die Basis. Konkave Aussparungen zählen nicht zur Basis. Normales Feuer erhält diesen zusätzlichen Status nicht.
+- Startwerte: **200 HP pro Sekunde**, **vier Sekunden Nachbrennen** ab letztem zulässigen Kontakt. Mehrere Zellen oder Quellen stapeln den Schaden nicht; weiterer Kontakt erneuert die Laufzeit.
+- Map-Hazards können freundliche und feindliche Basen entzünden. Spieler- und Gegnerquellen beachten die vorhandenen Fraktionsregeln. Explizit positive Hazard-Abstände zu Basen bleiben wirksam.
+- Void-Fire darf Basisflächen erreichen. Felsen, Bäume und andere Hindernisse behalten ihre bestehende Blockadewirkung.
+- Ein Activity-gebundener Owner verwaltet Kontakt und Brandticks. Schaden läuft über `applyBaseStatusDamage`, einschließlich Schutz, Verwundbarkeit und regulärer Zerstörungsfolgen.
+- Host und Clients zeigen das Nachbrennen über vorhandene Void-Flammen und `SyncedBaseState.voidBurning`. Erlöschen, Zerstörung, Activity-Ende und Retry räumen den Status und seine Darstellung auf. HP und Brandstatus gehören nicht in Blueprints.
+- Basisbrandparameter liegen zentral in `src/config/baseVoidFire.ts`, unabhängig von Map 14 und vom Spielerbrand.
+
+Konfigurationsstellen, Ausgangswerte und Playtest-Fragen: [Tuning-Übersicht](Kampagnenprogression_Maps_1-17_Tuning.md).
 
 ---
 

@@ -84,6 +84,7 @@ function isCountdownGroundHazard(
   event: ResolvedCoopDefenseMapEventConfig,
 ): event is CoopDefenseMapGroundHazardEventConfig {
   return event.type === 'ground-hazard'
+    && event.spread === undefined
     && event.effect.visualStyle === 'void'
     && event.start.type === 'time'
     && event.start.atMs <= 0

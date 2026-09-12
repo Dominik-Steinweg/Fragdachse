@@ -3,7 +3,7 @@
   "arenaWidthCells": 82,
   "arenaHeightCells": 38,
   "timeOfDay": "06:00",
-    "tutorialPersistent": true,
+  "tutorialPersistent": true,
   "rockFillRatio": 0.3,
   "trackPosition": "center",
   "mapEvents": [{
@@ -18,56 +18,28 @@
     {
       "id": "coop-base-middle",
       "hpMax": 1050,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": 1
-      },
+      "anchor": {"kind": "center-offset", "dxCells": -4, "dyCells": 1},
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 0,
-            "gridY": 3
-          },
-          {
-            "gridX": 1,
-            "gridY": 3
-          }
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 1, "gridY": 1},
+          {"gridX": 1, "gridY": 2},
+          {"gridX": 0, "gridY": 3},
+          {"gridX": 1, "gridY": 3}
         ]
       },
       "turrets": [
         {
           "id": "front-top",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
+          "cellOffset": {"gridX": 0, "gridY": 0},
           "mountSide": "front",
           "weaponId": "BASE_SPORES"
         },
         {
           "id": "front-bottom",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 3
-          },
+          "cellOffset": {"gridX": 0, "gridY": 3},
           "mountSide": "front",
           "weaponId": "BASE_SPORES"
         }
@@ -75,23 +47,24 @@
       "powerUpPedestals": [
         {
           "id": "health-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
+          "cellOffset": {"gridX": 0, "gridY": 1},
           "defId": "HEALTH_PACK",
           "respawnMs": 5000,
           "spawnOnArenaStart": true
         },
         {
           "id": "adrenaline-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 2
-          },
+          "cellOffset": {"gridX": 0, "gridY": 2},
           "defId": "ADRENALINE",
           "respawnMs": 10000,
           "spawnOnArenaStart": true
+        },
+        {
+          "id": "bfg-station",
+          "cellOffset": {"gridX": -2, "gridY": 1},
+          "defId": "BFG",
+          "respawnMs": 15000,
+          "spawnOnArenaStart": false
         }
       ]
     }
@@ -105,38 +78,34 @@
     "hpMax": 1650
   },
   "persistentBaseRewardsOnVictory": ["base_adrenaline_pedestal"],
-  "powerUps": [
-    {
-      "defId": "BFG",
-      "region": "front",
-      "respawnMs": 30000,
-      "spawnOnArenaStart": false
-    }
-  ],
+  "powerUps": [],
   "encounters": [
     {
       "id": "adrenaline-opening",
-      "start": { "type": "time", "atMs": 0 },
+      "start": {"type": "time", "atMs": 0},
       "restAfterMs": 5000,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 15, "front": "west" },
-                 { "enemyKind": "demon-badger", "count": 4, "delayMs": 1000, "front": "west" }]
+      "groups": [
+        {"enemyKind": "zombie-badger", "count": 8, "front": "west"},
+        {"enemyKind": "zombie-badger", "count": 22, "delayMs": 16000, "spawnStaggerMs": 250, "front": "west"},
+        {"enemyKind": "demon-badger", "count": 4, "delayMs": 18500, "front": "west"}
+      ]
     },
     {
       "id": "adrenaline-rush",
-      "start": { "type": "after-previous" },
+      "start": {"type": "after-previous"},
       "restAfterMs": 5000,
       "groups": [
-        { "enemyKind": "demon-badger", "count": 10, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "west" }
+        {"enemyKind": "demon-badger", "count": 10, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "west"}
       ]
     },
     {
       "id": "adrenaline-finale",
-      "start": { "type": "after-previous" },
+      "start": {"type": "after-previous"},
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 15, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 10, "delayMs": 1000, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 6, "delayMs": 1800, "front": "west" }
+        {"enemyKind": "zombie-badger", "count": 15, "front": "west"},
+        {"enemyKind": "demon-badger", "count": 10, "delayMs": 1000, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 6, "delayMs": 1800, "front": "west"}
       ]
     }
   ]

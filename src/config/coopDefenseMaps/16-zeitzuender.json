@@ -3,577 +3,85 @@
   "arenaWidthCells": 104,
   "arenaHeightCells": 40,
   "timeOfDay": "05:00",
+  "tutorialAnchor": {"gridX": 89, "gridY": 0},
   "trackMode": "void-fire",
   "mapEvents": [
     {
-      "id": "void-track-corridor",
+      "id": "route-void-pocket-0",
       "type": "ground-hazard",
-      "start": { "type": "time", "atMs": 0 },
-      "area": {
-        "type": "rectangle",
-        "gridX": 51,
-        "gridY": 0,
-        "widthCells": 2,
-        "heightCells": 40,
-        "baseClearanceCells": 2
-      },
+      "start": {"type": "time", "atMs": 0},
+      "area": {"type": "rectangle", "gridX": 48, "gridY": 3, "widthCells": 5, "heightCells": 3, "baseClearanceCells": 1},
       "effect": {
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "sourceId": "ground_fire.timebomb_void"
+        "sourceId": "ground_fire.void_hunter"
       }
     },
     {
-      "id": "void-random-patches",
+      "id": "route-void-pocket-1",
       "type": "ground-hazard",
-      "start": { "type": "time", "atMs": 0 },
-      "area": {
-        "type": "random-patches",
-        "randomPatchCount": 6,
-        "minPatchRadiusCells": 2,
-        "maxPatchRadiusCells": 4,
-        "baseClearanceCells": 2
-      },
+      "start": {"type": "time", "atMs": 0},
+      "area": {"type": "rectangle", "gridX": 20, "gridY": 33, "widthCells": 5, "heightCells": 3, "baseClearanceCells": 1},
       "effect": {
         "visualStyle": "void",
         "burnDurationMs": 2000,
         "burnDamagePerTick": 0.5,
-        "sourceId": "ground_fire.timebomb_void"
+        "sourceId": "ground_fire.void_hunter"
       }
     }
   ],
-  "rockFillRatio": 0.12,
-  "balanceReferenceDurationSec": 220,
-  "objective": "repel-assault",
+  "rockFillRatio": 0.2,
+  "balanceReferenceDurationSec": 180,
+  "objective": "advance",
   "bases": [
     {
-      "id": "enemy-timebomb-hive",
+      "id": "ambush-supply-2",
       "role": "outpost",
-      "faction": "hostile",
-      "hpMax": 3000,
-      "anchor": {
-        "kind": "left-center",
-        "edgeInsetCells": 10
-      },
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 61, "gridY": 16},
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 3,
-            "gridY": 0
-          },
-          {
-            "gridX": 0,
-            "gridY": 1
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 2,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          },
-          {
-            "gridX": 0,
-            "gridY": 3
-          },
-          {
-            "gridX": 1,
-            "gridY": 3
-          },
-          {
-            "gridX": 2,
-            "gridY": 3
-          },
-          {
-            "gridX": 0,
-            "gridY": 4
-          },
-          {
-            "gridX": 1,
-            "gridY": 4
-          },
-          {
-            "gridX": 2,
-            "gridY": 4
-          },
-          {
-            "gridX": 3,
-            "gridY": 4
-          }
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
         ]
-      }
-    },
-    {
-      "id": "enemy-flame-tower-top",
-      "role": "outpost",
-      "faction": "hostile",
-      "hpMax": 700,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 17,
-        "gridY": 9
       },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
+      "powerUpPedestals": [
         {
-          "id": "void-flame",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "rear",
-          "weaponId": "TURRET_VOID_FLAME"
+          "id": "ambush-supply-2-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
         }
       ]
     },
     {
-      "id": "enemy-flame-tower-middle",
+      "id": "ambush-supply-4",
       "role": "outpost",
-      "faction": "hostile",
-      "hpMax": 700,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 17,
-        "gridY": 15
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "void-flame",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "rear",
-          "weaponId": "TURRET_VOID_FLAME"
-        }
-      ]
-    },
-    {
-      "id": "enemy-flame-tower-bottom",
-      "role": "outpost",
-      "faction": "hostile",
-      "hpMax": 700,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 17,
-        "gridY": 22
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "void-flame",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "rear",
-          "weaponId": "TURRET_VOID_FLAME"
-        }
-      ]
-    },
-    {
-      "id": "coop-base-middle",
-      "hpMax": 1200,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": 3
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 2,
-        "heightCells": 3
-      }
-    },
-    {
-      "id": "friendly-middle-mushroom-top",
-      "role": "outpost",
-      "dormant": true,
-      "startHpFactor": 0.65,
-      "hpMax": 900,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 44,
-        "gridY": 18
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "plasma",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "SPORE_TURRET_PLASMA"
-        }
-      ]
-    },
-    {
-      "id": "friendly-middle-mushroom-bottom",
-      "role": "outpost",
-      "hpMax": 900,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 44,
-        "gridY": 24
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "plasma",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "SPORE_TURRET_PLASMA"
-        }
-      ]
-    },
-    {
-      "id": "friendly-rear-mushroom-1",
-      "role": "outpost",
-      "hpMax": 950,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 77,
-        "gridY": 9
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "plasma",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "SPORE_TURRET_PLASMA"
-        }
-      ]
-    },
-    {
-      "id": "friendly-rear-mushroom-2",
-      "role": "outpost",
-      "hpMax": 950,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 77,
-        "gridY": 13
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "plasma",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "SPORE_TURRET_PLASMA"
-        }
-      ]
-    },
-    {
-      "id": "friendly-rear-mushroom-3",
-      "role": "outpost",
-      "hpMax": 950,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 77,
-        "gridY": 18
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "plasma",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "SPORE_TURRET_PLASMA"
-        }
-      ]
-    },
-    {
-      "id": "friendly-rear-mushroom-4",
-      "role": "outpost",
-      "hpMax": 950,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 77,
-        "gridY": 22
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 1,
-        "heightCells": 1
-      },
-      "turrets": [
-        {
-          "id": "plasma",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "SPORE_TURRET_PLASMA"
-        }
-      ]
-    },
-    {
-      "id": "spawn-point-timebomb-top",
-      "role": "spawn-point",
-      "faction": "hostile",
-      "hpMax": 220,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 1,
-        "gridY": 4
-      },
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 29, "gridY": 17},
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 0,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          }
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
         ]
       },
-      "spawnCenter": {
-        "gridX": 1,
-        "gridY": 1
-      }
-    },
-    {
-      "id": "spawn-point-timebomb-bottom",
-      "role": "spawn-point",
-      "faction": "hostile",
-      "hpMax": 220,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 2,
-        "gridY": 24
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 0,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          }
-        ]
-      },
-      "spawnCenter": {
-        "gridX": 1,
-        "gridY": 1
-      }
-    },
-    {
-      "id": "spawn-point-timebomb-rear",
-      "role": "spawn-point",
-      "faction": "hostile",
-      "hpMax": 220,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 23,
-        "gridY": 4
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 0,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          }
-        ]
-      },
-      "spawnCenter": {
-        "gridX": 1,
-        "gridY": 1
-      }
-    },
-    {
-      "id": "spawn-point-zombie-rear",
-      "role": "spawn-point",
-      "faction": "hostile",
-      "hpMax": 220,
-      "anchor": {
-        "kind": "grid",
-        "gridX": 31,
-        "gridY": 24
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 0,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          }
-        ]
-      },
-      "spawnCenter": {
-        "gridX": 1,
-        "gridY": 1
-      }
+      "powerUpPedestals": [
+        {
+          "id": "ambush-supply-4-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
+        }
+      ]
     }
   ],
   "persistentBase": {
@@ -584,131 +92,489 @@
     },
     "hpMax": 1650
   },
-  "powerUps": [
-    {
-      "defId": "HEALTH_PACK",
-      "region": "front",
-      "respawnMs": 5000,
-      "spawnOnArenaStart": true
-    },
-    {
-      "defId": "ARMOR",
-      "region": "middle",
-      "respawnMs": 10000,
-      "spawnOnArenaStart": true
-    },
-    {
-      "defId": "ADRENALINE",
-      "region": "rear",
-      "respawnMs": 10000,
-      "spawnOnArenaStart": true
-    },
-    {
-      "defId": "HEALTH_PACK",
-      "region": "rear",
-      "respawnMs": 5000,
-      "spawnOnArenaStart": true
-    },
-    {
-      "defId": "DOUBLE_DAMAGE",
-      "region": "rear",
-      "respawnMs": 20000,
-      "spawnOnArenaStart": false
-    }
-  ],
+  "powerUps": [],
   "itemDrop": {
     "itemLevel": 1
   },
   "encounters": [
     {
-      "id": "zeitzunder-opening-assault",
-      "start": { "type": "time", "atMs": 3000 },
+      "id": "timebomb-ambush-1",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-1"},
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 20, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 20, "delayMs": 1000, "front": "west" },
-        { "enemyKind": "timebomb-badger", "count": 12, "delayMs": 2000,"front": "west" }
+        {
+          "enemyKind": "timebomb-badger",
+          "count": 3,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 73, "gridY": 6, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 7,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 73, "gridY": 30, "widthCells": 5, "heightCells": 3}
+        }
       ]
     },
     {
-      "id": "zeitzunder-mid-assault",
-      "start": { "type": "after-previous" },
+      "id": "timebomb-ambush-2",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-2"},
       "groups": [
-        { "enemyKind": "timebomb-badger", "count": 4, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1000, "front": "west" }
+        {
+          "enemyKind": "timebomb-badger",
+          "count": 4,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 57, "gridY": 0, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 57, "gridY": 23, "widthCells": 5, "heightCells": 3}
+        }
       ]
     },
     {
-      "id": "zeitzunder-counterattack",
-      "start": { "type": "after-previous" },
+      "id": "timebomb-ambush-3",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-3"},
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 4, "front": "west" },
-        { "enemyKind": "timebomb-badger", "count": 6, "delayMs": 1200, "front": "west" }
+        {
+          "enemyKind": "timebomb-badger",
+          "count": 5,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 41, "gridY": 14, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 9,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 41, "gridY": 37, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "timebomb-badger",
+          "count": 2,
+          "delayMs": 2500,
+          "spawnArea": {"gridX": 48, "gridY": 25, "widthCells": 5, "heightCells": 4}
+        }
       ]
     },
     {
-      "id": "zeitzunder-final-assault",
-      "start": { "type": "after-previous" },
+      "id": "timebomb-ambush-4",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-4"},
       "groups": [
-        { "enemyKind": "demon-badger", "count": 8, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 10, "delayMs": 900, "front": "west" },
-        { "enemyKind": "timebomb-badger", "count": 12, "delayMs": 2000,"front": "west" }
+        {
+          "enemyKind": "timebomb-badger",
+          "count": 6,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 25, "gridY": 0, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 10,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 25, "gridY": 24, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "timebomb-badger",
+          "count": 2,
+          "delayMs": 2500,
+          "spawnArea": {"gridX": 32, "gridY": 11, "widthCells": 5, "heightCells": 4}
+        }
+      ]
+    },
+    {
+      "id": "timebomb-ambush-5",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-5"},
+      "groups": [
+        {
+          "enemyKind": "timebomb-badger",
+          "count": 7,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 10, "gridY": 7, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 11,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 10, "gridY": 31, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "timebomb-badger",
+          "count": 2,
+          "delayMs": 2500,
+          "spawnArea": {"gridX": 17, "gridY": 18, "widthCells": 5, "heightCells": 4}
+        }
       ]
     }
   ],
-  "secondaryObjectives": [
-    {
-      "id": "hold-zeitzunder-middle-outpost",
-      "type": "hold",
-      "start": { "type": "time", "atMs": 0 },
-      "holdUntil": { "type": "after-encounter", "encounterId": "zeitzunder-opening-assault" },
-      "targets": ["friendly-middle-mushroom-top"],
-      "rewards": { "repairTargetOnComplete": true }
-    }
-  ],
-  "persistentSpawns": [
-    {
-      "id": "base-16-spawn-point-timebomb-top-pressure",
-      "enemyKind": "timebomb-badger",
-      "intervalMs": 3500,
-      "countPerTick": 1,
-      "startAtMs": 15000,
-      "source": {
-        "type": "base",
-        "baseId": "spawn-point-timebomb-top"
+  "secondaryObjectives": [],
+  "respawnsPerPlayer": 2,
+  "rockField": {
+    "corridorRadiusCells": 3,
+    "corridorRadiusVarianceCells": 0.4,
+    "corridorWanderCells": 0.4,
+    "waypointJitterCells": 0.3,
+    "rockDensityScale": 0.7,
+    "corridors": [
+      {
+        "id": "advance-route",
+        "points": [
+          {"gridX": 91, "gridY": 19},
+          {"gridX": 75, "gridY": 19},
+          {"gridX": 59, "gridY": 12},
+          {"gridX": 43, "gridY": 27},
+          {"gridX": 27, "gridY": 13},
+          {"gridX": 12, "gridY": 20},
+          {"gridX": 3, "gridY": 20}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-1-approach-0",
+        "points": [
+          {"gridX": 75, "gridY": 7},
+          {"gridX": 75, "gridY": 19}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-1-approach-1",
+        "points": [
+          {"gridX": 75, "gridY": 31},
+          {"gridX": 75, "gridY": 19}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-2-approach-0",
+        "points": [
+          {"gridX": 59, "gridY": 1},
+          {"gridX": 59, "gridY": 12}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-2-approach-1",
+        "points": [
+          {"gridX": 59, "gridY": 24},
+          {"gridX": 59, "gridY": 12}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-3-approach-0",
+        "points": [
+          {"gridX": 43, "gridY": 15},
+          {"gridX": 43, "gridY": 27}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-3-approach-1",
+        "points": [
+          {"gridX": 43, "gridY": 38},
+          {"gridX": 43, "gridY": 27}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-3-approach-2",
+        "points": [
+          {"gridX": 50, "gridY": 27},
+          {"gridX": 43, "gridY": 27}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-4-approach-0",
+        "points": [
+          {"gridX": 27, "gridY": 1},
+          {"gridX": 27, "gridY": 13}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-4-approach-1",
+        "points": [
+          {"gridX": 27, "gridY": 25},
+          {"gridX": 27, "gridY": 13}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-4-approach-2",
+        "points": [
+          {"gridX": 34, "gridY": 13},
+          {"gridX": 27, "gridY": 13}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-5-approach-0",
+        "points": [
+          {"gridX": 12, "gridY": 8},
+          {"gridX": 12, "gridY": 20}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-5-approach-1",
+        "points": [
+          {"gridX": 12, "gridY": 32},
+          {"gridX": 12, "gridY": 20}
+        ]
+      },
+      {
+        "id": "timebomb-ambush-5-approach-2",
+        "points": [
+          {"gridX": 19, "gridY": 20},
+          {"gridX": 12, "gridY": 20}
+        ]
+      },
+      {
+        "id": "route-void-pocket-0-clearing",
+        "points": [
+          {"gridX": 50, "gridY": 4},
+          {"gridX": 51, "gridY": 4}
+        ]
+      },
+      {
+        "id": "route-void-pocket-1-clearing",
+        "points": [
+          {"gridX": 22, "gridY": 34},
+          {"gridX": 23, "gridY": 34}
+        ]
       }
-    },
-    {
-      "id": "base-16-spawn-point-timebomb-bottom-pressure",
-      "enemyKind": "timebomb-badger",
-      "intervalMs": 3500,
-      "countPerTick": 1,
-      "startAtMs": 1000,
-      "source": {
-        "type": "base",
-        "baseId": "spawn-point-timebomb-bottom"
+    ]
+  },
+  "missionProgress": {
+    "startArea": {"gridX": 91, "gridY": 19, "radiusCells": 4},
+    "checkpoints": [
+      {"id": "advance-1", "gridX": 75, "gridY": 19, "radiusCells": 2, "setRespawn": true},
+      {"id": "advance-2", "gridX": 59, "gridY": 12, "radiusCells": 2, "setRespawn": true},
+      {"id": "advance-3", "gridX": 43, "gridY": 27, "radiusCells": 2, "setRespawn": true},
+      {"id": "advance-4", "gridX": 27, "gridY": 13, "radiusCells": 2, "setRespawn": true},
+      {"id": "advance-5", "gridX": 12, "gridY": 20, "radiusCells": 2, "setRespawn": true},
+      {"id": "final-extraction", "gridX": 3, "gridY": 20, "radiusCells": 1.5, "setRespawn": true}
+    ],
+    "barriers": [
+      {
+        "id": "advance-gate-1",
+        "cells": [
+          {"gridX": 71, "gridY": 0},
+          {"gridX": 71, "gridY": 1},
+          {"gridX": 71, "gridY": 2},
+          {"gridX": 71, "gridY": 3},
+          {"gridX": 71, "gridY": 4},
+          {"gridX": 71, "gridY": 5},
+          {"gridX": 71, "gridY": 6},
+          {"gridX": 71, "gridY": 7},
+          {"gridX": 71, "gridY": 8},
+          {"gridX": 71, "gridY": 9},
+          {"gridX": 71, "gridY": 10},
+          {"gridX": 71, "gridY": 11},
+          {"gridX": 71, "gridY": 12},
+          {"gridX": 71, "gridY": 13},
+          {"gridX": 71, "gridY": 14},
+          {"gridX": 71, "gridY": 15},
+          {"gridX": 71, "gridY": 16},
+          {"gridX": 71, "gridY": 17},
+          {"gridX": 71, "gridY": 18},
+          {"gridX": 71, "gridY": 19},
+          {"gridX": 71, "gridY": 20},
+          {"gridX": 71, "gridY": 21},
+          {"gridX": 71, "gridY": 22},
+          {"gridX": 71, "gridY": 23},
+          {"gridX": 71, "gridY": 24},
+          {"gridX": 71, "gridY": 25},
+          {"gridX": 71, "gridY": 26},
+          {"gridX": 71, "gridY": 27},
+          {"gridX": 71, "gridY": 28},
+          {"gridX": 71, "gridY": 29},
+          {"gridX": 71, "gridY": 30},
+          {"gridX": 71, "gridY": 31},
+          {"gridX": 71, "gridY": 32},
+          {"gridX": 71, "gridY": 33},
+          {"gridX": 71, "gridY": 34},
+          {"gridX": 71, "gridY": 35},
+          {"gridX": 71, "gridY": 36},
+          {"gridX": 71, "gridY": 37},
+          {"gridX": 71, "gridY": 38},
+          {"gridX": 71, "gridY": 39}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "timebomb-ambush-1"}
+      },
+      {
+        "id": "advance-gate-2",
+        "cells": [
+          {"gridX": 55, "gridY": 0},
+          {"gridX": 55, "gridY": 1},
+          {"gridX": 55, "gridY": 2},
+          {"gridX": 55, "gridY": 3},
+          {"gridX": 55, "gridY": 4},
+          {"gridX": 55, "gridY": 5},
+          {"gridX": 55, "gridY": 6},
+          {"gridX": 55, "gridY": 7},
+          {"gridX": 55, "gridY": 8},
+          {"gridX": 55, "gridY": 9},
+          {"gridX": 55, "gridY": 10},
+          {"gridX": 55, "gridY": 11},
+          {"gridX": 55, "gridY": 12},
+          {"gridX": 55, "gridY": 13},
+          {"gridX": 55, "gridY": 14},
+          {"gridX": 55, "gridY": 15},
+          {"gridX": 55, "gridY": 16},
+          {"gridX": 55, "gridY": 17},
+          {"gridX": 55, "gridY": 18},
+          {"gridX": 55, "gridY": 19},
+          {"gridX": 55, "gridY": 20},
+          {"gridX": 55, "gridY": 21},
+          {"gridX": 55, "gridY": 22},
+          {"gridX": 55, "gridY": 23},
+          {"gridX": 55, "gridY": 24},
+          {"gridX": 55, "gridY": 25},
+          {"gridX": 55, "gridY": 26},
+          {"gridX": 55, "gridY": 27},
+          {"gridX": 55, "gridY": 28},
+          {"gridX": 55, "gridY": 29},
+          {"gridX": 55, "gridY": 30},
+          {"gridX": 55, "gridY": 31},
+          {"gridX": 55, "gridY": 32},
+          {"gridX": 55, "gridY": 33},
+          {"gridX": 55, "gridY": 34},
+          {"gridX": 55, "gridY": 35},
+          {"gridX": 55, "gridY": 36},
+          {"gridX": 55, "gridY": 37},
+          {"gridX": 55, "gridY": 38},
+          {"gridX": 55, "gridY": 39}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "timebomb-ambush-2"}
+      },
+      {
+        "id": "advance-gate-3",
+        "cells": [
+          {"gridX": 39, "gridY": 0},
+          {"gridX": 39, "gridY": 1},
+          {"gridX": 39, "gridY": 2},
+          {"gridX": 39, "gridY": 3},
+          {"gridX": 39, "gridY": 4},
+          {"gridX": 39, "gridY": 5},
+          {"gridX": 39, "gridY": 6},
+          {"gridX": 39, "gridY": 7},
+          {"gridX": 39, "gridY": 8},
+          {"gridX": 39, "gridY": 9},
+          {"gridX": 39, "gridY": 10},
+          {"gridX": 39, "gridY": 11},
+          {"gridX": 39, "gridY": 12},
+          {"gridX": 39, "gridY": 13},
+          {"gridX": 39, "gridY": 14},
+          {"gridX": 39, "gridY": 15},
+          {"gridX": 39, "gridY": 16},
+          {"gridX": 39, "gridY": 17},
+          {"gridX": 39, "gridY": 18},
+          {"gridX": 39, "gridY": 19},
+          {"gridX": 39, "gridY": 20},
+          {"gridX": 39, "gridY": 21},
+          {"gridX": 39, "gridY": 22},
+          {"gridX": 39, "gridY": 23},
+          {"gridX": 39, "gridY": 24},
+          {"gridX": 39, "gridY": 25},
+          {"gridX": 39, "gridY": 26},
+          {"gridX": 39, "gridY": 27},
+          {"gridX": 39, "gridY": 28},
+          {"gridX": 39, "gridY": 29},
+          {"gridX": 39, "gridY": 30},
+          {"gridX": 39, "gridY": 31},
+          {"gridX": 39, "gridY": 32},
+          {"gridX": 39, "gridY": 33},
+          {"gridX": 39, "gridY": 34},
+          {"gridX": 39, "gridY": 35},
+          {"gridX": 39, "gridY": 36},
+          {"gridX": 39, "gridY": 37},
+          {"gridX": 39, "gridY": 38},
+          {"gridX": 39, "gridY": 39}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "timebomb-ambush-3"}
+      },
+      {
+        "id": "advance-gate-4",
+        "cells": [
+          {"gridX": 23, "gridY": 0},
+          {"gridX": 23, "gridY": 1},
+          {"gridX": 23, "gridY": 2},
+          {"gridX": 23, "gridY": 3},
+          {"gridX": 23, "gridY": 4},
+          {"gridX": 23, "gridY": 5},
+          {"gridX": 23, "gridY": 6},
+          {"gridX": 23, "gridY": 7},
+          {"gridX": 23, "gridY": 8},
+          {"gridX": 23, "gridY": 9},
+          {"gridX": 23, "gridY": 10},
+          {"gridX": 23, "gridY": 11},
+          {"gridX": 23, "gridY": 12},
+          {"gridX": 23, "gridY": 13},
+          {"gridX": 23, "gridY": 14},
+          {"gridX": 23, "gridY": 15},
+          {"gridX": 23, "gridY": 16},
+          {"gridX": 23, "gridY": 17},
+          {"gridX": 23, "gridY": 18},
+          {"gridX": 23, "gridY": 19},
+          {"gridX": 23, "gridY": 20},
+          {"gridX": 23, "gridY": 21},
+          {"gridX": 23, "gridY": 22},
+          {"gridX": 23, "gridY": 23},
+          {"gridX": 23, "gridY": 24},
+          {"gridX": 23, "gridY": 25},
+          {"gridX": 23, "gridY": 26},
+          {"gridX": 23, "gridY": 27},
+          {"gridX": 23, "gridY": 28},
+          {"gridX": 23, "gridY": 29},
+          {"gridX": 23, "gridY": 30},
+          {"gridX": 23, "gridY": 31},
+          {"gridX": 23, "gridY": 32},
+          {"gridX": 23, "gridY": 33},
+          {"gridX": 23, "gridY": 34},
+          {"gridX": 23, "gridY": 35},
+          {"gridX": 23, "gridY": 36},
+          {"gridX": 23, "gridY": 37},
+          {"gridX": 23, "gridY": 38},
+          {"gridX": 23, "gridY": 39}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "timebomb-ambush-4"}
+      },
+      {
+        "id": "advance-gate-5",
+        "cells": [
+          {"gridX": 8, "gridY": 0},
+          {"gridX": 8, "gridY": 1},
+          {"gridX": 8, "gridY": 2},
+          {"gridX": 8, "gridY": 3},
+          {"gridX": 8, "gridY": 4},
+          {"gridX": 8, "gridY": 5},
+          {"gridX": 8, "gridY": 6},
+          {"gridX": 8, "gridY": 7},
+          {"gridX": 8, "gridY": 8},
+          {"gridX": 8, "gridY": 9},
+          {"gridX": 8, "gridY": 10},
+          {"gridX": 8, "gridY": 11},
+          {"gridX": 8, "gridY": 12},
+          {"gridX": 8, "gridY": 13},
+          {"gridX": 8, "gridY": 14},
+          {"gridX": 8, "gridY": 15},
+          {"gridX": 8, "gridY": 16},
+          {"gridX": 8, "gridY": 17},
+          {"gridX": 8, "gridY": 18},
+          {"gridX": 8, "gridY": 19},
+          {"gridX": 8, "gridY": 20},
+          {"gridX": 8, "gridY": 21},
+          {"gridX": 8, "gridY": 22},
+          {"gridX": 8, "gridY": 23},
+          {"gridX": 8, "gridY": 24},
+          {"gridX": 8, "gridY": 25},
+          {"gridX": 8, "gridY": 26},
+          {"gridX": 8, "gridY": 27},
+          {"gridX": 8, "gridY": 28},
+          {"gridX": 8, "gridY": 29},
+          {"gridX": 8, "gridY": 30},
+          {"gridX": 8, "gridY": 31},
+          {"gridX": 8, "gridY": 32},
+          {"gridX": 8, "gridY": 33},
+          {"gridX": 8, "gridY": 34},
+          {"gridX": 8, "gridY": 35},
+          {"gridX": 8, "gridY": 36},
+          {"gridX": 8, "gridY": 37},
+          {"gridX": 8, "gridY": 38},
+          {"gridX": 8, "gridY": 39}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "timebomb-ambush-5"}
       }
-    },
-    {
-      "id": "base-16-spawn-point-timebomb-rear-pressure",
-      "enemyKind": "timebomb-badger",
-      "intervalMs": 3500,
-      "countPerTick": 1,
-      "startAtMs": 2000,
-      "source": {
-        "type": "base",
-        "baseId": "spawn-point-timebomb-rear"
-      }
-    },
-    {
-      "id": "base-16-spawn-point-zombie-rear-pressure",
-      "enemyKind": "timebomb-badger",
-      "intervalMs": 3500,
-      "countPerTick": 1,
-      "startAtMs": 0,
-      "source": {
-        "type": "base",
-        "baseId": "spawn-point-zombie-rear"
-      }
-    }
-  ]
+    ]
+  }
 }

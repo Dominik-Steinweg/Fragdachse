@@ -250,7 +250,7 @@ export const enUi = {
   "ui.reward.persistentBaseUnlocked": "NEW FEATURE UNLOCKED: YOUR BASE",
   "ui.reward.persistentBaseUnlockedHint": "You now own a permanent base. It stands in the training grounds and is your main base on every later map.",
   "ui.reward.persistentBaseAreaExpanded": "BASE AREA EXPANDED",
-  "ui.reward.persistentBaseAreaExpandedHint": "Your buildable base area has expanded to radius 5. The expansion becomes active in the next LobbyWorld.",
+  "ui.reward.persistentBaseAreaExpandedHint": "Your buildable base area has expanded to radius {radius}. The expansion becomes active on your next base visit.",
   "ui.reward.itemsUnlocked": "NEW FEATURE UNLOCKED: ITEMS",
   "ui.reward.itemsUnlockedHint": "Victories now drop permanent gear. Manage it from the Items button in the lobby.",
   "ui.reward.itemChoice": "CHOOSE 1 OF {count} ITEMS · AT LEAST {guarantee} EPIC GUARANTEED",

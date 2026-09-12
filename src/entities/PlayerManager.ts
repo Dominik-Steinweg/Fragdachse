@@ -156,6 +156,11 @@ const EMPTY_SPAWN_CONTEXT: SpawnContextSnapshot = {
 };
 
 export class PlayerManager implements OwnerVisualSource {
+  private groundHazardCellDanger: ((eventId: string, gridX: number, gridY: number) => boolean | null) | null = null;
+
+  setGroundHazardCellDangerResolver(resolver: typeof this.groundHazardCellDanger): void {
+    this.groundHazardCellDanger = resolver;
+  }
   private scene:   Phaser.Scene;
   private players: Map<string, PlayerEntity> = new Map();
   private layout:  ArenaLayout | null = null;
@@ -528,6 +533,7 @@ export class PlayerManager implements OwnerVisualSource {
     const excluded = new Set<string>();
     for (const zone of this.layout?.groundHazardZones ?? []) {
       for (const cell of zone.cells) {
+        if (this.groundHazardCellDanger?.(zone.eventId, cell.gridX, cell.gridY) === false) continue;
         for (
           let offsetY = -GROUND_HAZARD_SPAWN_CLEARANCE_CELLS;
           offsetY <= GROUND_HAZARD_SPAWN_CLEARANCE_CELLS;

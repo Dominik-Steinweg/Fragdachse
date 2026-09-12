@@ -51,7 +51,7 @@ export class CoopDefenseDebugOverlay {
     ) => void,
     private readonly onResetCharacter: () => void,
     private readonly onUnlockPersistentBase: () => void = () => undefined,
-    private readonly onUnlockPersistentBaseAreaStage: () => void = () => undefined,
+    private readonly onUnlockPersistentBaseAreaStage: (stage: PersistentBaseAreaStage) => void = () => undefined,
     private readonly onGrantPersistentBaseReward: (rewardId: PersistentBaseRewardId) => void = () => undefined,
     private readonly onGrantAllPersistentBaseRewards: () => void = () => undefined,
     private readonly onUnlockItemSystem: () => void = () => undefined,
@@ -307,17 +307,18 @@ export class CoopDefenseDebugOverlay {
       ? `Stage ${currentValues.persistentBaseAreaStage} · kleiner ${area.sizeCells}×${area.sizeCells}-Baubereich`
       : `Stage ${currentValues.persistentBaseAreaStage} · erweiterter Radius-${area.radiusCells}-Baubereich`;
     persistentBaseSection.appendChild(createStatusLine('Baubereich', areaDescription));
-    if (currentValues.persistentBaseAreaStage === 0) {
-      const unlockAreaButton = createButton('[BAUBEREICH STUFE 1 FREISCHALTEN]', 'positive');
+    if (currentValues.persistentBaseAreaStage < 2) {
+      const nextStage = (currentValues.persistentBaseAreaStage + 1) as PersistentBaseAreaStage;
+      const unlockAreaButton = createButton(`[BAUBEREICH STUFE ${nextStage} FREISCHALTEN]`, 'positive');
       unlockAreaButton.style.marginTop = '7px';
       unlockAreaButton.onclick = () => {
-        this.onUnlockPersistentBaseAreaStage();
+        this.onUnlockPersistentBaseAreaStage(nextStage);
         this.refresh();
       };
       persistentBaseSection.appendChild(unlockAreaButton);
     } else {
       const stageDone = document.createElement('div');
-      stageDone.innerText = '✓ Baubereich Stufe 1';
+      stageDone.innerText = `✓ Baubereich Stufe ${currentValues.persistentBaseAreaStage}`;
       Object.assign(stageDone.style, {
         color: toCssColor(COLORS.GREEN_2),
         fontSize: '12px',

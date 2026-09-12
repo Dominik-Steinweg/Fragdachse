@@ -26,7 +26,7 @@ function expectInscribed(shape: LivingBarRoundedClip, fill: LivingClipRect) {
     }
   }
   for (let i = 1; i < bands.length; i++) {
-    expect(bands[i].y).toBeGreaterThanOrEqual(bands[i - 1].y + bands[i - 1].height);
+    expect(bands[i].y).toBeGreaterThanOrEqual(bands[i - 1].y + bands[i - 1].height - 1e-10);
   }
   return bands;
 }
@@ -44,6 +44,35 @@ describe('rounded living fill geometry', () => {
     expect(bands[0].y).toBe(0);
     expect(bands[0].width).toBe(44);
     expect(bands.at(-1)!.width).toBeLessThan(44);
+  });
+
+  it('covers all four rounded corners to subpixel depth for full and partial fills', () => {
+    for (const shape of [node, { ...node, x: -93, y: -20, width: 186, height: 40, radius: 12 }]) {
+      for (const height of [shape.height, shape.height / 2, 1]) {
+        const fill = { ...shape, y: shape.y + shape.height - height, height };
+        const bands = expectInscribed(shape, fill);
+        for (const sideX of [-1, 1]) {
+          for (const sideY of [-1, 1]) {
+            const cx = shape.x + (sideX < 0 ? shape.radius : shape.width - shape.radius);
+            const cy = shape.y + (sideY < 0 ? shape.radius : shape.height - shape.radius);
+            for (let degrees = 0; degrees <= 90; degrees += 1) {
+              const angle = degrees * Math.PI / 180;
+              // Probe half a pixel inside the true arc, independent of the chosen band count.
+              const x = cx + sideX * (shape.radius - 0.5) * Math.cos(angle);
+              const y = cy + sideY * (shape.radius - 0.5) * Math.sin(angle);
+              if (y < fill.y || y > fill.y + fill.height) continue;
+              expect(bands.some(band => x >= band.x - 1e-10 && x <= band.x + band.width + 1e-10
+                && y >= band.y - 1e-10 && y <= band.y + band.height + 1e-10)).toBe(true);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('bounds the geometry cost even for oversized UI shapes', () => {
+    const shape = { ...node, width: 10000, height: 10000, radius: 5000 };
+    expect(expectInscribed(shape, shape).length).toBeLessThan(256);
   });
 
   it('handles small fills and horizontal cropping against the original shape', () => {

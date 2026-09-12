@@ -3,7 +3,8 @@
   "arenaWidthCells": 80,
   "arenaHeightCells": 37,
   "timeOfDay": "17:00",
-  "rockFillRatio": 0.3,
+  "tutorialAnchor": {"gridX": 65, "gridY": 0},
+  "rockFillRatio": 0.2,
   "trackPosition": "right",
   "mapEvents": [{
     "id": "train-rhythm",
@@ -11,63 +12,174 @@
     "start": { "type": "time", "atMs": 10000 },
     "repeatAfterExitMs": 10000
   }],
-  "balanceReferenceDurationSec": 125,
-  "objective": "repel-assault",
+  "balanceReferenceDurationSec": 150,
+  "objective": "advance",
   "bases": [
     {
-      "id": "coop-base-middle",
-      "hpMax": 850,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": -4,
-        "dyCells": 1
-      },
+      "id": "medic-supply-1",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 53, "gridY": 22},
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          }
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
         ]
       },
-      "turrets": [
-        {
-          "id": "front-middle",
-          "cellOffset": {
-            "gridX": 1,
-            "gridY": 1
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        }
-      ],
       "powerUpPedestals": [
         {
-          "id": "nuke-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "defId": "NUKE",
-          "respawnMs": 30000,
-          "spawnOnArenaStart": false
+          "id": "medic-supply-1-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    },
+    {
+      "id": "medic-reserve-1",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 46, "gridY": 13},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "medic-reserve-1-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    },
+    {
+      "id": "medic-supply-2",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 40, "gridY": 16},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "medic-supply-2-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    },
+    {
+      "id": "medic-reserve-2",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 33, "gridY": 7},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "medic-reserve-2-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    },
+    {
+      "id": "medic-supply-3",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 27, "gridY": 28},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "medic-supply-3-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    },
+    {
+      "id": "medic-reserve-3",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 20, "gridY": 19},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "medic-reserve-3-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
+        }
+      ]
+    },
+    {
+      "id": "medic-supply-4",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 14, "gridY": 22},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "powerUpPedestals": [
+        {
+          "id": "medic-supply-4-health",
+          "cellOffset": {"gridX": 1, "gridY": 1},
+          "defId": "HEALTH_PACK",
+          "respawnMs": 8000,
+          "spawnOnArenaStart": true
         }
       ]
     }
@@ -81,61 +193,341 @@
     "hpMax": 1650
   },
   "persistentBaseRewardsOnVictory": ["base_health_pedestal"],
-  "powerUps": [
-    {
-      "defId": "HEALTH_PACK",
-      "region": "front",
-      "respawnMs": 5000,
-      "spawnOnArenaStart": true
-    },
-    {
-      "defId": "HEALTH_PACK",
-      "region": "middle",
-      "respawnMs": 5000,
-      "spawnOnArenaStart": true
-    },
-    {
-      "defId": "DOUBLE_DAMAGE",
-      "region": "rear",
-      "respawnMs": 20000,
-      "spawnOnArenaStart": false
-    }
-  ],
+  "powerUps": [],
   "encounters": [
     {
-      "id": "medic-opening",
-      "start": { "type": "time", "atMs": 0 },
-      "restAfterMs": 3000,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 12, "front": "west" }]
-    },
-    {
-      "id": "medic-response",
-      "start": { "type": "after-previous" },
-      "restAfterMs": 3000,
+      "id": "medic-1",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-1"},
       "groups": [
-        { "enemyKind": "plague-medic", "count": 2, "front": "west" },
-        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 4, "front": "west" }
+        {
+          "enemyKind": "plague-medic",
+          "count": 1,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 50, "gridY": 5, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 7,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 50, "gridY": 29, "widthCells": 5, "heightCells": 3}
+        }
       ]
     },
     {
-      "id": "medic-pressure",
-      "start": { "type": "after-previous" },
-      "restAfterMs": 3000,
+      "id": "medic-2",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-2"},
       "groups": [
-        { "enemyKind": "plague-medic", "count": 2, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 14, "delayMs": 1000, "front": "west" },
-        { "enemyKind": "zombie-badger", "count": 12, "front": "west" }
+        {
+          "enemyKind": "plague-medic",
+          "count": 1,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 37, "gridY": 0, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 37, "gridY": 23, "widthCells": 5, "heightCells": 3}
+        }
       ]
     },
     {
-      "id": "medic-finale",
-      "start": { "type": "after-previous" },
+      "id": "medic-3",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-3"},
       "groups": [
-        { "enemyKind": "plague-medic", "count": 3, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 12, "delayMs": 1000, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 6, "front": "west" }
+        {
+          "enemyKind": "plague-medic",
+          "count": 2,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 24, "gridY": 11, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 9,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 24, "gridY": 34, "widthCells": 5, "heightCells": 3}
+        }
+      ]
+    },
+    {
+      "id": "medic-4",
+      "start": {"type": "after-checkpoint", "checkpointId": "advance-4"},
+      "groups": [
+        {
+          "enemyKind": "plague-medic",
+          "count": 2,
+          "spawnStaggerMs": 1000,
+          "spawnArea": {"gridX": 11, "gridY": 5, "widthCells": 5, "heightCells": 3}
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 10,
+          "delayMs": 1400,
+          "spawnArea": {"gridX": 11, "gridY": 29, "widthCells": 5, "heightCells": 3}
+        }
       ]
     }
-  ]
+  ],
+  "respawnsPerPlayer": 0,
+  "secondaryObjectives": [],
+  "rockField": {
+    "corridorRadiusCells": 3,
+    "corridorRadiusVarianceCells": 0.4,
+    "corridorWanderCells": 0.4,
+    "waypointJitterCells": 0.3,
+    "rockDensityScale": 0.7,
+    "corridors": [
+      {
+        "id": "advance-route",
+        "points": [
+          {"gridX": 67, "gridY": 18},
+          {"gridX": 52, "gridY": 18},
+          {"gridX": 39, "gridY": 12},
+          {"gridX": 26, "gridY": 24},
+          {"gridX": 13, "gridY": 18},
+          {"gridX": 3, "gridY": 18}
+        ]
+      },
+      {
+        "id": "medic-1-approach-0",
+        "points": [
+          {"gridX": 52, "gridY": 6},
+          {"gridX": 52, "gridY": 18}
+        ]
+      },
+      {
+        "id": "medic-1-approach-1",
+        "points": [
+          {"gridX": 52, "gridY": 30},
+          {"gridX": 52, "gridY": 18}
+        ]
+      },
+      {
+        "id": "medic-2-approach-0",
+        "points": [
+          {"gridX": 39, "gridY": 1},
+          {"gridX": 39, "gridY": 12}
+        ]
+      },
+      {
+        "id": "medic-2-approach-1",
+        "points": [
+          {"gridX": 39, "gridY": 24},
+          {"gridX": 39, "gridY": 12}
+        ]
+      },
+      {
+        "id": "medic-3-approach-0",
+        "points": [
+          {"gridX": 26, "gridY": 12},
+          {"gridX": 26, "gridY": 24}
+        ]
+      },
+      {
+        "id": "medic-3-approach-1",
+        "points": [
+          {"gridX": 26, "gridY": 35},
+          {"gridX": 26, "gridY": 24}
+        ]
+      },
+      {
+        "id": "medic-4-approach-0",
+        "points": [
+          {"gridX": 13, "gridY": 6},
+          {"gridX": 13, "gridY": 18}
+        ]
+      },
+      {
+        "id": "medic-4-approach-1",
+        "points": [
+          {"gridX": 13, "gridY": 30},
+          {"gridX": 13, "gridY": 18}
+        ]
+      }
+    ]
+  },
+  "missionProgress": {
+    "startArea": {"gridX": 67, "gridY": 18, "radiusCells": 4},
+    "checkpoints": [
+      {"id": "advance-1", "gridX": 52, "gridY": 18, "radiusCells": 2, "setRespawn": false},
+      {"id": "advance-2", "gridX": 39, "gridY": 12, "radiusCells": 2, "setRespawn": false},
+      {"id": "advance-3", "gridX": 26, "gridY": 24, "radiusCells": 2, "setRespawn": false},
+      {"id": "advance-4", "gridX": 13, "gridY": 18, "radiusCells": 2, "setRespawn": false},
+      {"id": "final-extraction", "gridX": 3, "gridY": 18, "radiusCells": 1.5, "setRespawn": false}
+    ],
+    "barriers": [
+      {
+        "id": "advance-gate-1",
+        "cells": [
+          {"gridX": 48, "gridY": 0},
+          {"gridX": 48, "gridY": 1},
+          {"gridX": 48, "gridY": 2},
+          {"gridX": 48, "gridY": 3},
+          {"gridX": 48, "gridY": 4},
+          {"gridX": 48, "gridY": 5},
+          {"gridX": 48, "gridY": 6},
+          {"gridX": 48, "gridY": 7},
+          {"gridX": 48, "gridY": 8},
+          {"gridX": 48, "gridY": 9},
+          {"gridX": 48, "gridY": 10},
+          {"gridX": 48, "gridY": 11},
+          {"gridX": 48, "gridY": 12},
+          {"gridX": 48, "gridY": 13},
+          {"gridX": 48, "gridY": 14},
+          {"gridX": 48, "gridY": 15},
+          {"gridX": 48, "gridY": 16},
+          {"gridX": 48, "gridY": 17},
+          {"gridX": 48, "gridY": 18},
+          {"gridX": 48, "gridY": 19},
+          {"gridX": 48, "gridY": 20},
+          {"gridX": 48, "gridY": 21},
+          {"gridX": 48, "gridY": 22},
+          {"gridX": 48, "gridY": 23},
+          {"gridX": 48, "gridY": 24},
+          {"gridX": 48, "gridY": 25},
+          {"gridX": 48, "gridY": 26},
+          {"gridX": 48, "gridY": 27},
+          {"gridX": 48, "gridY": 28},
+          {"gridX": 48, "gridY": 29},
+          {"gridX": 48, "gridY": 30},
+          {"gridX": 48, "gridY": 31},
+          {"gridX": 48, "gridY": 32},
+          {"gridX": 48, "gridY": 33},
+          {"gridX": 48, "gridY": 34},
+          {"gridX": 48, "gridY": 35},
+          {"gridX": 48, "gridY": 36}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "medic-1"}
+      },
+      {
+        "id": "advance-gate-2",
+        "cells": [
+          {"gridX": 35, "gridY": 0},
+          {"gridX": 35, "gridY": 1},
+          {"gridX": 35, "gridY": 2},
+          {"gridX": 35, "gridY": 3},
+          {"gridX": 35, "gridY": 4},
+          {"gridX": 35, "gridY": 5},
+          {"gridX": 35, "gridY": 6},
+          {"gridX": 35, "gridY": 7},
+          {"gridX": 35, "gridY": 8},
+          {"gridX": 35, "gridY": 9},
+          {"gridX": 35, "gridY": 10},
+          {"gridX": 35, "gridY": 11},
+          {"gridX": 35, "gridY": 12},
+          {"gridX": 35, "gridY": 13},
+          {"gridX": 35, "gridY": 14},
+          {"gridX": 35, "gridY": 15},
+          {"gridX": 35, "gridY": 16},
+          {"gridX": 35, "gridY": 17},
+          {"gridX": 35, "gridY": 18},
+          {"gridX": 35, "gridY": 19},
+          {"gridX": 35, "gridY": 20},
+          {"gridX": 35, "gridY": 21},
+          {"gridX": 35, "gridY": 22},
+          {"gridX": 35, "gridY": 23},
+          {"gridX": 35, "gridY": 24},
+          {"gridX": 35, "gridY": 25},
+          {"gridX": 35, "gridY": 26},
+          {"gridX": 35, "gridY": 27},
+          {"gridX": 35, "gridY": 28},
+          {"gridX": 35, "gridY": 29},
+          {"gridX": 35, "gridY": 30},
+          {"gridX": 35, "gridY": 31},
+          {"gridX": 35, "gridY": 32},
+          {"gridX": 35, "gridY": 33},
+          {"gridX": 35, "gridY": 34},
+          {"gridX": 35, "gridY": 35},
+          {"gridX": 35, "gridY": 36}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "medic-2"}
+      },
+      {
+        "id": "advance-gate-3",
+        "cells": [
+          {"gridX": 22, "gridY": 0},
+          {"gridX": 22, "gridY": 1},
+          {"gridX": 22, "gridY": 2},
+          {"gridX": 22, "gridY": 3},
+          {"gridX": 22, "gridY": 4},
+          {"gridX": 22, "gridY": 5},
+          {"gridX": 22, "gridY": 6},
+          {"gridX": 22, "gridY": 7},
+          {"gridX": 22, "gridY": 8},
+          {"gridX": 22, "gridY": 9},
+          {"gridX": 22, "gridY": 10},
+          {"gridX": 22, "gridY": 11},
+          {"gridX": 22, "gridY": 12},
+          {"gridX": 22, "gridY": 13},
+          {"gridX": 22, "gridY": 14},
+          {"gridX": 22, "gridY": 15},
+          {"gridX": 22, "gridY": 16},
+          {"gridX": 22, "gridY": 17},
+          {"gridX": 22, "gridY": 18},
+          {"gridX": 22, "gridY": 19},
+          {"gridX": 22, "gridY": 20},
+          {"gridX": 22, "gridY": 21},
+          {"gridX": 22, "gridY": 22},
+          {"gridX": 22, "gridY": 23},
+          {"gridX": 22, "gridY": 24},
+          {"gridX": 22, "gridY": 25},
+          {"gridX": 22, "gridY": 26},
+          {"gridX": 22, "gridY": 27},
+          {"gridX": 22, "gridY": 28},
+          {"gridX": 22, "gridY": 29},
+          {"gridX": 22, "gridY": 30},
+          {"gridX": 22, "gridY": 31},
+          {"gridX": 22, "gridY": 32},
+          {"gridX": 22, "gridY": 33},
+          {"gridX": 22, "gridY": 34},
+          {"gridX": 22, "gridY": 35},
+          {"gridX": 22, "gridY": 36}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "medic-3"}
+      },
+      {
+        "id": "advance-gate-4",
+        "cells": [
+          {"gridX": 9, "gridY": 0},
+          {"gridX": 9, "gridY": 1},
+          {"gridX": 9, "gridY": 2},
+          {"gridX": 9, "gridY": 3},
+          {"gridX": 9, "gridY": 4},
+          {"gridX": 9, "gridY": 5},
+          {"gridX": 9, "gridY": 6},
+          {"gridX": 9, "gridY": 7},
+          {"gridX": 9, "gridY": 8},
+          {"gridX": 9, "gridY": 9},
+          {"gridX": 9, "gridY": 10},
+          {"gridX": 9, "gridY": 11},
+          {"gridX": 9, "gridY": 12},
+          {"gridX": 9, "gridY": 13},
+          {"gridX": 9, "gridY": 14},
+          {"gridX": 9, "gridY": 15},
+          {"gridX": 9, "gridY": 16},
+          {"gridX": 9, "gridY": 17},
+          {"gridX": 9, "gridY": 18},
+          {"gridX": 9, "gridY": 19},
+          {"gridX": 9, "gridY": 20},
+          {"gridX": 9, "gridY": 21},
+          {"gridX": 9, "gridY": 22},
+          {"gridX": 9, "gridY": 23},
+          {"gridX": 9, "gridY": 24},
+          {"gridX": 9, "gridY": 25},
+          {"gridX": 9, "gridY": 26},
+          {"gridX": 9, "gridY": 27},
+          {"gridX": 9, "gridY": 28},
+          {"gridX": 9, "gridY": 29},
+          {"gridX": 9, "gridY": 30},
+          {"gridX": 9, "gridY": 31},
+          {"gridX": 9, "gridY": 32},
+          {"gridX": 9, "gridY": 33},
+          {"gridX": 9, "gridY": 34},
+          {"gridX": 9, "gridY": 35},
+          {"gridX": 9, "gridY": 36}
+        ],
+        "openOn": {"type": "after-encounter", "encounterId": "medic-4"}
+      }
+    ]
+  }
 }

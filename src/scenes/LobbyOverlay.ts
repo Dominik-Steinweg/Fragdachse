@@ -645,7 +645,7 @@ export class LobbyOverlay {
       COOP_BTN_H,
       { dark: COLORS.GOLD_3, mid: COLORS.GOLD_1, light: COLORS.GOLD_1 },
       {
-        glowTarget: this.coopUpgradesBtn.getBackground(), scrollFactor: 0, intensity: 0.34,
+        glowTarget: this.coopUpgradesBtn.getBackground(), scrollFactor: 0, intensity: 0.41,
         clipShape: { kind: 'roundedRect', ...this.coopUpgradesBtn.getEffectBounds() },
         startActive: false, variantKey: 'lobby-upgrades',
       },
@@ -660,7 +660,7 @@ export class LobbyOverlay {
       COOP_BTN_H,
       { dark: COLORS.GOLD_3, mid: COLORS.GOLD_1, light: COLORS.GOLD_1 },
       {
-        glowTarget: this.coopItemsBtn.getBackground(), scrollFactor: 0, intensity: 0.34,
+        glowTarget: this.coopItemsBtn.getBackground(), scrollFactor: 0, intensity: 0.41,
         clipShape: { kind: 'roundedRect', ...this.coopItemsBtn.getEffectBounds() },
         startActive: false, variantKey: 'lobby-items',
       },

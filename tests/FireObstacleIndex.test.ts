@@ -57,7 +57,13 @@ describe('FireObstacleIndex', () => {
 
     index.setBase('base-a', [{ left: 128, top: 128, right: 160, bottom: 160 }]);
     expect(index.hasLineOfSightObstacle(8, 8)).toBe(true);
+    expect(index.hasLineOfSightObstacle(8, 8, true)).toBe(false);
     expect(index.isCellBlocked(8, 8)).toBe(false);
+
+    index.addStaticRock(12, { left: 128, top: 128, right: 160, bottom: 160 });
+    expect(index.hasLineOfSightObstacle(8, 8, true)).toBe(true);
+    index.removeStaticRock(12);
+    expect(index.hasLineOfSightObstacle(8, 8, true)).toBe(false);
 
     index.removeBase('base-a');
     expect(index.hasLineOfSightObstacle(8, 8)).toBe(false);

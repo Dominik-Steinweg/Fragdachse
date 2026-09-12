@@ -2,6 +2,10 @@ import { WorldZeusBinding } from '../../world/WorldZeusBinding';
 import { WorldStinkPlagueBinding } from '../../world/WorldStinkPlagueBinding';
 import { WorldSmokeBinding } from '../../world/WorldSmokeBinding';
 import { bridge } from '../../network/bridge';
+import { getActivityDefinition } from '../../config/authoring/authoredScenarios';
+import { CELL_SIZE } from '../../config';
+import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
+import type { SyncedBurningGroundSnapshot } from '../../types';
 import { CAPTURE_THE_BEER_MODE } from '../../gameModes';
 import { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
 import { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
@@ -43,6 +47,31 @@ export function composeWorldGeometry(
       ?.find((candidate) => candidate.eventId === eventId);
     return entry === undefined ? true : entry.state !== 'dormant';
   });
+  let indexedGround: SyncedBurningGroundSnapshot | undefined;
+  const dangerCells = new Set<string>();
+  const progressiveCellDanger = (eventId: string, gridX: number, gridY: number): boolean | null => {
+    const mission = flow.getCoopMissionRuntime();
+    const event = mission && getActivityDefinition(mission.descriptor.definitionId)?.mapEvents
+      ?.find(candidate => candidate.id === eventId);
+    if (!event || event.type !== 'ground-hazard' || !event.spread) return null;
+    const ground = bridge.isHost() ? ctx.fireSystem.getGroundState() : bridge.getLatestGameState()?.burningGround;
+    if (ground !== indexedGround) {
+      indexedGround = ground;
+      dangerCells.clear();
+      for (const cell of [...(ground?.cells ?? []), ...(ground?.warnings ?? [])]) {
+        const x = Math.floor(((cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE - world.metrics.offsetX) / CELL_SIZE);
+        const y = Math.floor(((cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE - world.metrics.offsetY) / CELL_SIZE);
+        dangerCells.add(`${x}_${y}`);
+      }
+    }
+    return dangerCells.has(`${gridX}_${gridY}`);
+  };
+  placementSystem.setGroundHazardCellDangerResolver(progressiveCellDanger);
+  ctx.playerManager.setGroundHazardCellDangerResolver(progressiveCellDanger);
+  worldRuntime.bind({ destroy: () => {
+    placementSystem.setGroundHazardCellDangerResolver(null);
+    ctx.playerManager.setGroundHazardCellDangerResolver(null);
+  } });
   const worldGeometryBinding = new WorldGeometryBinding({
     scene: scene,
     world,

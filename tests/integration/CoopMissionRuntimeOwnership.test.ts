@@ -38,6 +38,18 @@ function flowField(name: string, calls: string[]): CoopMissionNavigationRuntime[
 }
 
 describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
+  it('ticks the base burn only during active simulation and discards it on Activity end', () => {
+    const runtime = new CoopMissionRuntime(descriptor());
+    const burn = { hostUpdate: vi.fn(), destroy: vi.fn() };
+    runtime.setBaseVoidFire(burn as unknown as import('../../src/systems/BaseVoidFireSystem').BaseVoidFireSystem);
+    runtime.hostSimulationStep(16, 100, true, false);
+    expect(burn.hostUpdate).not.toHaveBeenCalled();
+    runtime.hostSimulationStep(16, 116, false, false);
+    expect(burn.hostUpdate).toHaveBeenCalledExactlyOnceWith(116);
+    runtime.destroy(); runtime.destroy(); runtime.hostSimulationStep(16, 132, false, false);
+    expect(burn.destroy).toHaveBeenCalledOnce();
+    expect(burn.hostUpdate).toHaveBeenCalledOnce();
+  });
   it('akzeptiert ausschliesslich Coop-Missionen', () => {
     expect(() => new CoopMissionRuntime(descriptor('deathmatch'))).toThrow(/not coop-mission/);
   });

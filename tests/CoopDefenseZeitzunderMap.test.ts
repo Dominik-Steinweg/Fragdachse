@@ -22,12 +22,11 @@ describe('Map 16 - Zeitzünder', () => {
   it('keeps the migrated persistent rear core and independent support bases', () => {
     const map = getCoopDefenseMapConfig('16');
     const rearBase = map.bases.find((base) => base.id === 'coop-base-rear');
-    const middleBase = map.bases.find((base) => base.id === 'coop-base-middle');
 
     expect(map).toMatchObject({
       timeOfDay: '05:00',
       trackMode: 'void-fire',
-      objective: 'repel-assault',
+      objective: 'advance',
       persistentBase: {
         baseId: 'coop-base-rear',
         anchor: { gridX: 91, gridY: 19 },
@@ -37,14 +36,12 @@ describe('Map 16 - Zeitzünder', () => {
     expect(rearBase?.hpMax).toBeGreaterThan(0);
     expect(rearBase?.turrets).toEqual([]);
     expect(rearBase?.powerUpPedestals).toEqual([]);
-    expect(middleBase?.hpMax).toBeGreaterThan(0);
-    const friendlyOutpostTurrets = map.bases
-      .filter((base) => base.role === 'outpost' && base.faction !== 'hostile')
-      .flatMap((base) => base.turrets ?? [])
-      .map((turret) => turret.weaponId);
-    expect(friendlyOutpostTurrets.length).toBeGreaterThan(0);
-    expect(friendlyOutpostTurrets.every((weaponId) => weaponId === 'SPORE_TURRET_PLASMA')).toBe(true);
-    expect(map.powerUps.length).toBeGreaterThan(0);
+    expect(map.bases.flatMap(base => base.turrets ?? [])).toEqual([]);
+    expect(map.bases.flatMap(base => base.powerUpPedestals ?? []).length).toBeGreaterThan(0);
+    expect(map.persistentSpawns ?? []).toEqual([]);
+    expect(map.secondaryObjectives ?? []).toEqual([]);
+    expect(map.encounters?.every(encounter => encounter.start.type === 'after-checkpoint'
+      && encounter.groups.some(group => group.enemyKind === 'timebomb-badger' && group.spawnArea))).toBe(true);
   });
 
   it('generates deterministic prebuilt void-fire fields and no train', () => {
@@ -74,21 +71,16 @@ describe('Map 16 - Zeitzünder', () => {
     }
   });
 
-  /**
-   * Das Korridor-Rechteck ist authored, die Gleisspalten entstehen prozedural aus `GRID_COLS`.
-   * Ohne diese Kopplung wuerde eine geaenderte `arenaWidthCells` den Voidbrand still neben den
-   * Korridor schieben -- die Map-Validierung akzeptiert ein Rechteck an jeder Stelle der Arena.
-   */
-  it('keeps the authored corridor rectangle on the centered track columns', () => {
-    const corridor = getCoopDefenseMapConfig('16').mapEvents
-      ?.find((event) => event.id === 'void-track-corridor') as CoopDefenseMapGroundHazardEventConfig;
-    expect(corridor?.type).toBe('ground-hazard');
-    expect(corridor.area).toMatchObject({
-      type: 'rectangle',
-      gridX: Math.floor((GRID_COLS - 2) / 2),
-      widthCells: 2,
-      gridY: 0,
-      heightCells: GRID_ROWS,
-    });
+  it('keeps residual void pockets away from checkpoints and extraction', () => {
+    const map = getCoopDefenseMapConfig('16');
+    for (const event of map.mapEvents ?? []) {
+      if (event.type !== 'ground-hazard' || event.area.type !== 'rectangle') continue;
+      expect(event.area.heightCells).toBeLessThan(GRID_ROWS / 2);
+      for (const checkpoint of map.missionProgress?.checkpoints ?? []) {
+        const area = event.area;
+        expect(checkpoint.gridX >= area.gridX && checkpoint.gridX < area.gridX + area.widthCells
+          && checkpoint.gridY >= area.gridY && checkpoint.gridY < area.gridY + area.heightCells).toBe(false);
+      }
+    }
   });
 });

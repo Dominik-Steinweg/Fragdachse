@@ -219,7 +219,14 @@ export interface CombatTrainSegmentPort {
 }
 
 /** Activity consumer view for enemy behaviours and authored mission effects. */
+export interface CombatStructureStatusPort {
+  captureWorldDamageSource(actorId: string, sourceId: string, origin?: CombatDamageKind): CombatSource;
+  canDamageStructure(source: CombatSource, ownerId?: string, faction?: 'friendly' | 'hostile'): boolean;
+  applyBaseStatusDamage(baseId: string, amount: number, source: CombatSource, now: number): void;
+}
+
 export type CombatActivityPort =
+  & CombatStructureStatusPort
   & CombatActorStatePort
   & CombatDamageEffectPort
   & CombatGeometryPort

@@ -172,6 +172,12 @@ export interface CoopMissionScopedBinding {
  * bleiben ausserhalb dieses Teardowns.
  */
 export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityStep {
+  private baseVoidFireOwner: import('../systems/BaseVoidFireSystem').BaseVoidFireSystem | null = null;
+
+  setBaseVoidFire(system: import('../systems/BaseVoidFireSystem').BaseVoidFireSystem): void {
+    this.baseVoidFireOwner?.destroy();
+    this.baseVoidFireOwner = system;
+  }
   private enemyOwner: EnemyManager | null = null;
   private navigationOwner: CoopMissionNavigationRuntime | null = null;
   private encounterOwner: CoopMissionEncounterRuntime | null = null;
@@ -400,6 +406,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   ): void {
     if (this.destroyed) return;
     this.hostUpdateOwner?.run(deltaMs, nowMs, countdownActive, weaponBalanceLabActive, metrics);
+    if (!countdownActive) this.baseVoidFireOwner?.hostUpdate(nowMs);
   }
 
   /** Missionsanteil unmittelbar vor der Physik dieses Frames. */
@@ -455,6 +462,8 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.baseVoidFireOwner?.destroy();
+    this.baseVoidFireOwner = null;
     this.secondaryObjectiveConfigsValue = [];
 
     const scopedBindings = this.scopedBindings;

@@ -12,6 +12,10 @@ import {
 import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, applyArenaMetricsForMode, GRID_COLS, GRID_ROWS } from '../../src/config';
 import { getCoopDefenseMapConfig } from '../../src/config/coopDefenseMaps';
 import { COOP_DEFENSE_MODE } from '../../src/gameModes';
+import { resolveCoopDefenseMapMissionProgress } from '../../src/config/coopDefenseMaps';
+import { CoopDefenseMissionProgressSystem } from '../../src/systems/CoopDefenseMissionProgressSystem';
+import { resolveActiveArenaWorldMetrics } from '../../src/world/WorldMetrics';
+import { CELL_SIZE } from '../../src/config';
 
 describe('Coop defense arena generation', () => {
   const map = getCoopDefenseMapConfig('2');
@@ -22,6 +26,80 @@ describe('Coop defense arena generation', () => {
 
   afterAll(() => {
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'LOBBY');
+  });
+
+  it('generates every campaign map with valid in-bounds content', () => {
+    for (let id = 1; id <= 17; id++) {
+      const campaign = getCoopDefenseMapConfig(String(id));
+      applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', campaign.arenaWidthCells, campaign.arenaHeightCells);
+      const layout = generateArenaWithActiveMetrics(81000 + id, campaign);
+      for (const cell of [...layout.rocks, ...layout.trees, ...layout.powerUpPedestals,
+        ...(layout.groundHazardZones ?? []).flatMap(zone => zone.cells)]) {
+        expect(cell.gridX, `Map ${id}`).toBeGreaterThanOrEqual(0);
+        expect(cell.gridX, `Map ${id}`).toBeLessThan(GRID_COLS);
+        expect(cell.gridY, `Map ${id}`).toBeGreaterThanOrEqual(0);
+        expect(cell.gridY, `Map ${id}`).toBeLessThan(GRID_ROWS);
+      }
+    }
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
+  });
+
+  it('keeps authored advance encounters reachable and extraction behind their final barrier across seeds', () => {
+    for (const id of ['7', '16']) for (const seed of [101, 444, 1907, 7733]) {
+      const campaign = getCoopDefenseMapConfig(id);
+      applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', campaign.arenaWidthCells, campaign.arenaHeightCells);
+      const metrics = resolveActiveArenaWorldMetrics();
+      const layout = generateArenaWithActiveMetrics(seed, campaign);
+      const route = resolveCoopDefenseMapMissionProgress(campaign)!;
+      const occupied = new Set([...layout.rocks, ...layout.trees,
+        ...resolveCoopDefenseBases(campaign).flatMap(base => base.cells)].map(cell => `${cell.gridX}:${cell.gridY}`));
+      const cleared = new Set<string>();
+      const progress = new CoopDefenseMissionProgressSystem(route, { roundRevision: 1, worldMetrics: metrics,
+        getDefenseObjectiveState: () => null, isEncounterCleared: encounter => cleared.has(encounter) });
+      const flood = (x: number, y: number, closed: Set<string>) => {
+        const seen = new Set<string>(); const queue = [{ gridX: x, gridY: y }];
+        for (let i = 0; i < queue.length; i++) {
+          const c = queue[i], key = `${c.gridX}:${c.gridY}`;
+          if (seen.has(key) || occupied.has(key) || closed.has(key) || c.gridX < 0 || c.gridY < 0
+            || c.gridX >= GRID_COLS || c.gridY >= GRID_ROWS) continue;
+          seen.add(key);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) queue.push({ gridX: c.gridX + dx, gridY: c.gridY + dy });
+        }
+        return seen;
+      };
+      for (const [index, checkpoint] of route.checkpoints.entries()) {
+        const closed = new Set(route.barriers.filter(barrier => barrier.openOn.type === 'after-encounter'
+          && !cleared.has(barrier.openOn.encounterId)).flatMap(barrier => barrier.cells.map(cell => `${cell.gridX}:${cell.gridY}`)));
+        const reachable = flood(checkpoint.gridX, checkpoint.gridY, closed);
+        expect(reachable.size, `${id}/${seed}/${checkpoint.id}`).toBeGreaterThan(0);
+        const previous = route.checkpoints[index - 1] ?? route.startArea!;
+        expect([...reachable].some(key => {
+          const [x, y] = key.split(':').map(Number);
+          return Math.hypot(x - previous.gridX, y - previous.gridY) <= previous.radiusCells;
+        }), `${id}/${seed}/${checkpoint.id} approach`).toBe(true);
+        const encounter = campaign.encounters?.find(entry => entry.start.type === 'after-checkpoint'
+          && entry.start.checkpointId === checkpoint.id);
+        if (encounter) {
+          const extraction = route.checkpoints.at(-1)!;
+          expect(reachable.has(`${extraction.gridX}:${extraction.gridY}`)).toBe(false);
+          for (const group of encounter.groups) {
+            const area = group.spawnArea!;
+            expect([...reachable].some(key => {
+              const [x, y] = key.split(':').map(Number);
+              return x >= area.gridX && x < area.gridX + area.widthCells && y >= area.gridY && y < area.gridY + area.heightCells;
+            }), `${id}/${seed}/${encounter.id} spawn`).toBe(true);
+          }
+        }
+        progress.hostUpdate(16, false, [{ playerId: 'p', eligible: true,
+          x: metrics.offsetX + (checkpoint.gridX + .5) * CELL_SIZE,
+          y: metrics.offsetY + (checkpoint.gridY + .5) * CELL_SIZE }]);
+        expect(progress.isCheckpointActivated(checkpoint.id)).toBe(true);
+        if (encounter) { expect(progress.isRouteComplete()).toBe(false); cleared.add(encounter.id); }
+      }
+      expect(progress.isRouteComplete()).toBe(true);
+      if (id === '7') expect(progress.getRespawnCheckpointId()).toBeNull();
+    }
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
   });
 
   it('keeps the railway away from the authored base footprint', () => {

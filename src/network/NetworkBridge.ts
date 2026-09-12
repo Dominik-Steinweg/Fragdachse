@@ -454,9 +454,16 @@ function decodeTargetVulnerabilities(raw: unknown): SyncedTargetVulnerability[] 
 
 type EncodedBurningGroundCell = [number, number, number, number, number, number];
 interface EncodedBurningGroundDelta {
+  w?: NonNullable<SyncedBurningGroundSnapshot['warnings']>;
   f?: EncodedBurningGroundCell[];
   u?: EncodedBurningGroundCell[];
   r?: number[];
+}
+
+function sanitizeGroundWarnings(value: unknown, now: number): NonNullable<SyncedBurningGroundSnapshot['warnings']> {
+  if (!Array.isArray(value)) return [];
+  return value.filter(cell => cell && Number.isSafeInteger(cell.gridX) && Number.isSafeInteger(cell.gridY)
+    && Number.isFinite(cell.activatesAt) && cell.activatesAt > now);
 }
 
 function encodeBurningGroundCell(cell: SyncedBurningGroundSnapshot['cells'][number]): EncodedBurningGroundCell {
@@ -2672,6 +2679,7 @@ export class NetworkBridge {
   // Host-seitige Sequenznummer: wird bei jedem publishGameState() inkrementiert
   private publishSeq = 0;
   private burningGroundPublishTicks = 0;
+  private lastPublishedGroundHadWarnings = false;
   private readonly lastPublishedBurningGround = new Map<number, EncodedBurningGroundCell>();
   // Client-seitiger Statik-Cache der Projektile. Nur die Statik wird gecacht – die Dynamik kommt
   // jeden Tick vollstaendig, weshalb es keinen SyncedProjectile-Cache braucht.
@@ -2697,6 +2705,7 @@ export class NetworkBridge {
     this.cachedGameStateWorldRevision = this.getWorldDescriptor()?.worldRevision ?? null;
     this.lastSeenSeq = -1;
     this.burningGroundPublishTicks = 0;
+    this.lastPublishedGroundHadWarnings = false;
     this.lastPublishedBurningGround.clear();
     this.projectileStaticCache.clear();
     this.mapEventPresentationCache = null;
@@ -3386,9 +3395,10 @@ export class NetworkBridge {
     const sendFull = this.burningGroundPublishTicks === 1
       || this.burningGroundPublishTicks % NET_TICK_RATE_HZ === 0;
     if (sendFull) {
+      this.lastPublishedGroundHadWarnings = !!snapshot.warnings?.length;
       this.lastPublishedBurningGround.clear();
       for (const [id, encoded] of current) this.lastPublishedBurningGround.set(id, encoded);
-      return { f: [...current.values()] };
+      return { f: [...current.values()], w: snapshot.warnings ?? [] };
     }
 
     const upserts: EncodedBurningGroundCell[] = [];
@@ -3402,14 +3412,20 @@ export class NetworkBridge {
     }
     this.lastPublishedBurningGround.clear();
     for (const [id, encoded] of current) this.lastPublishedBurningGround.set(id, encoded);
-    if (upserts.length === 0 && removals.length === 0) return null;
+    // Send the small warning band even when fire geometry did not change. Empty clears it;
+    // repeated state also repairs dropped unreliable packets without replaying events.
+    if (upserts.length === 0 && removals.length === 0 && !snapshot.warnings?.length
+      && !this.lastPublishedGroundHadWarnings) return null;
+    this.lastPublishedGroundHadWarnings = !!snapshot.warnings?.length;
     return {
+      w: snapshot.warnings ?? [],
       ...(upserts.length > 0 ? { u: upserts } : {}),
       ...(removals.length > 0 ? { r: removals } : {}),
     };
   }
 
   private buildFullBurningGroundDelta(snapshot: SyncedBurningGroundSnapshot): EncodedBurningGroundDelta {
+    this.lastPublishedGroundHadWarnings = !!snapshot.warnings?.length;
     this.burningGroundPublishTicks += 1;
     this.lastPublishedBurningGround.clear();
     const full = snapshot.cells.map((cell) => {
@@ -3417,7 +3433,7 @@ export class NetworkBridge {
       this.lastPublishedBurningGround.set(cell.id, encoded);
       return encoded;
     });
-    return { f: full };
+    return { f: full, w: snapshot.warnings ?? [] };
   }
 
   private mergeBurningGroundDelta(
@@ -3426,7 +3442,8 @@ export class NetworkBridge {
   ): SyncedBurningGroundSnapshot {
     const now = Date.now();
     if (delta?.f) {
-      return { cells: delta.f.map(decodeBurningGroundCell).filter(cell => cell.expiresAt > now) };
+      return { cells: delta.f.map(decodeBurningGroundCell).filter(cell => cell.expiresAt > now),
+        warnings: sanitizeGroundWarnings(delta.w, now) };
     }
     const cells = new Map(previous.cells.filter(cell => cell.expiresAt > now).map(cell => [cell.id, cell]));
     for (const id of delta?.r ?? []) cells.delete(id);
@@ -3434,7 +3451,8 @@ export class NetworkBridge {
       const cell = decodeBurningGroundCell(encoded);
       if (cell.expiresAt > now) cells.set(cell.id, cell);
     }
-    return { cells: [...cells.values()].sort((left, right) => left.id - right.id) };
+    return { cells: [...cells.values()].sort((left, right) => left.id - right.id),
+      warnings: sanitizeGroundWarnings(delta?.w ?? previous.warnings, now) };
   }
 
   /** Repliziert die Zielzellen der Schleimbluete fuer identische Einschlagsorte auf allen Clients. */

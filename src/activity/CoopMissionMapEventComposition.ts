@@ -92,6 +92,7 @@ export class CoopMissionMapEventComposition {
       handlers.push(new CoopDefenseGroundHazardEventHandler({
         fireSystem: this.options.fireSystem,
         prebuiltZones: this.options.layout.groundHazardZones ?? [],
+        worldSeed: this.options.layout.seed,
         getNowMs: this.options.getNowMs,
         worldMetrics: this.options.worldMetrics,
       }));

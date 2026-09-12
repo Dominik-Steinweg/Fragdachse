@@ -3,7 +3,7 @@
   "arenaWidthCells": 76,
   "arenaHeightCells": 37,
   "timeOfDay": "17:00",
-    "tutorialPersistent": true,
+  "tutorialPersistent": true,
   "rockFillRatio": 0.4,
   "trackPosition": "center",
   "mapEvents": [{
@@ -27,26 +27,38 @@
   "encounters": [
     {
       "id": "restless-opening",
-      "start": { "type": "time", "atMs": 0 },
+      "start": {"type": "time", "atMs": 0},
       "restAfterMs": 5000,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 14, "front": "west" }]
+      "groups": [
+        {"enemyKind": "zombie-badger", "count": 14, "front": "west"}
+      ]
+    },
+    {
+      "id": "rabid-first-contact",
+      "start": {"type": "after-previous"},
+      "restAfterMs": 4500,
+      "groups": [
+        {"enemyKind": "rabid-badger", "count": 5, "spawnStaggerMs": 500, "front": "east"}
+      ]
     },
     {
       "id": "restless-mix",
-      "start": { "type": "after-previous" },
-      "restAfterMs": 5000,
+      "start": {"type": "after-previous"},
+      "restAfterMs": 3000,
       "groups": [
-        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "east" }
+        {"enemyKind": "demon-badger", "count": 6, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "east"}
       ]
     },
     {
-      "id": "spore-breakthrough",
-      "start": { "type": "after-previous" },
+      "id": "rabid-breakthrough",
+      "start": {"type": "after-previous"},
       "groups": [
-        { "enemyKind": "demon-badger", "count": 6, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west" }
-      ]
+        {"enemyKind": "demon-badger", "count": 6, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west"},
+        {"enemyKind": "zombie-badger", "count": 8, "delayMs": 1800, "front": "east"}
+      ],
+      "restAfterMs": 3000
     }
   ]
 }

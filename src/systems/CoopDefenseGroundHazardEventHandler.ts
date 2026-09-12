@@ -1,4 +1,5 @@
 import { CELL_SIZE } from '../config';
+import { groundHazardIgnitionDelay } from './GroundHazardSpread';
 import type {
   ResolvedCoopDefenseMapEventConfig,
   CoopDefenseMapGroundHazardEventConfig,
@@ -24,6 +25,7 @@ const BLOCKED_CELL_RETRY_INTERVAL_MS = 500;
 interface PendingHazardCell {
   readonly centerX: number;
   readonly centerY: number;
+  readonly delayMs: number;
 }
 
 interface ScheduledGroundHazardOccurrence {
@@ -35,10 +37,14 @@ interface ScheduledGroundHazardOccurrence {
   /** Beim Aktivieren blockierte Zellen; sie zuenden nach, sobald der Platz wieder frei ist. */
   pendingCells: PendingHazardCell[];
   nextRetryAtRoundMs: number;
+  readonly cells: readonly PendingHazardCell[];
+  nextCell: number;
 }
 
 export interface CoopDefenseGroundHazardEventHandlerDeps {
-  readonly fireSystem: Pick<FireSystem, 'hostRefreshGroundCell' | 'hostRemoveGroundSourcesBySourceKey'>;
+  readonly fireSystem: Pick<FireSystem, 'hostRefreshGroundCell' | 'hostRemoveGroundSourcesBySourceKey'>
+    & Partial<Pick<FireSystem, 'hostSetGroundWarnings'>>;
+  readonly worldSeed?: number;
   readonly prebuiltZones: readonly ArenaGroundHazardZone[];
   /** Nur fuer die eigene, relative Brenndauer des FireSystems -- nie fuer Trigger oder Lifecycle. */
   readonly getNowMs: () => number;
@@ -82,6 +88,8 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
       activatedAtRoundMs: null,
       pendingCells: [],
       nextRetryAtRoundMs: 0,
+      cells: this.prepareCells(event),
+      nextCell: 0,
     });
     this.ownedSourceKeys.add(sourceKey);
     return true;
@@ -91,12 +99,24 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
     if (countdownActive) return;
     for (const occurrence of [...this.occurrences.values()]) {
       if (occurrence.activatedAtRoundMs === null) {
-        if (roundTimeMs < occurrence.actionAtMs) continue;
-        this.activate(occurrence, roundTimeMs);
+        if (roundTimeMs < occurrence.actionAtMs) {
+          this.updateWarnings(occurrence, roundTimeMs);
+          continue;
+        }
+        occurrence.activatedAtRoundMs = occurrence.actionAtMs;
+        occurrence.nextRetryAtRoundMs = roundTimeMs + BLOCKED_CELL_RETRY_INTERVAL_MS;
       }
 
       const activatedAtRoundMs = occurrence.activatedAtRoundMs;
       if (activatedAtRoundMs === null) continue;
+
+      while (occurrence.nextCell < occurrence.cells.length) {
+        const cell = occurrence.cells[occurrence.nextCell];
+        if (occurrence.actionAtMs + cell.delayMs > roundTimeMs) break;
+        occurrence.nextCell++;
+        if (!this.igniteCell(occurrence, cell, activatedAtRoundMs, roundTimeMs)) occurrence.pendingCells.push(cell);
+      }
+      this.updateWarnings(occurrence, roundTimeMs);
 
       if (occurrence.pendingCells.length > 0 && roundTimeMs >= occurrence.nextRetryAtRoundMs) {
         occurrence.nextRetryAtRoundMs = roundTimeMs + BLOCKED_CELL_RETRY_INTERVAL_MS;
@@ -132,14 +152,12 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
     this.onCycleFinished = callback;
   }
 
-  private activate(occurrence: ScheduledGroundHazardOccurrence, roundTimeMs: number): void {
-    const zones = this.getZonesForEvent(occurrence.event.id);
-    if (zones.length === 0) return;
+  private prepareCells(event: CoopDefenseMapGroundHazardEventConfig): PendingHazardCell[] {
+    const zones = this.getZonesForEvent(event.id);
+    const cells: PendingHazardCell[] = [];
     const worldMetrics = this.deps.worldMetrics
       ?? resolveCoopDefenseWorldMetrics(undefined, undefined);
 
-    occurrence.activatedAtRoundMs = roundTimeMs;
-    occurrence.nextRetryAtRoundMs = roundTimeMs + BLOCKED_CELL_RETRY_INTERVAL_MS;
     for (const zone of zones) {
       for (const cell of zone.cells) {
         const cellLeft = worldMetrics.offsetX + cell.gridX * CELL_SIZE;
@@ -149,14 +167,31 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
             const pending: PendingHazardCell = {
               centerX: cellLeft + subX + GROUND_FIRE_CELL_SIZE * 0.5,
               centerY: cellTop + subY + GROUND_FIRE_CELL_SIZE * 0.5,
+              delayMs: groundHazardIgnitionDelay(event, cell.gridX + subX / CELL_SIZE,
+                cell.gridY + subY / CELL_SIZE, this.deps.worldSeed ?? 0),
             };
-            if (!this.igniteCell(occurrence, pending, roundTimeMs, roundTimeMs)) {
-              occurrence.pendingCells.push(pending);
-            }
+            cells.push(pending);
           }
         }
       }
     }
+    return cells.sort((a, b) => a.delayMs - b.delayMs || a.centerY - b.centerY || a.centerX - b.centerX);
+  }
+
+  private updateWarnings(occurrence: ScheduledGroundHazardOccurrence, roundTimeMs: number): void {
+    const lead = occurrence.event.spread?.warningLeadMs ?? 0;
+    if (lead <= 0) return;
+    const warnings = [];
+    const now = this.deps.getNowMs();
+    for (let index = occurrence.nextCell; index < occurrence.cells.length; index++) {
+      const cell = occurrence.cells[index];
+      const remaining = occurrence.actionAtMs + cell.delayMs - roundTimeMs;
+      if (remaining > lead) break;
+      if (remaining <= 0) continue;
+      warnings.push({ gridX: Math.floor(cell.centerX / GROUND_FIRE_CELL_SIZE),
+        gridY: Math.floor(cell.centerY / GROUND_FIRE_CELL_SIZE), activatesAt: Math.round(now + remaining) });
+    }
+    this.deps.fireSystem.hostSetGroundWarnings?.(occurrence.sourceKey, warnings);
   }
 
   /**

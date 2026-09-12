@@ -11,6 +11,9 @@ export interface LivingBarRoundedClip extends LivingClipRect {
   readonly radius: number;
 }
 
+const CORNER_INSET_ERROR = 0.25;
+const MAX_CORNER_BANDS = 64;
+
 /**
  * Inscribed horizontal bands, intersected with the fill. In particular, a partial vertical
  * fill does not acquire new rounded corners along its straight upper edge.
@@ -25,10 +28,21 @@ export function buildRoundedRectClipBands(
 
   const radius = Math.max(0, Math.min(shape.radius, shape.width / 2, shape.height / 2));
   const bottom = shape.y + shape.height;
-  const edges = radius === 0
-    ? [shape.y, bottom]
-    : [shape.y, shape.y + radius / 2, shape.y + radius,
-      bottom - radius, bottom - radius / 2, bottom];
+  const edges = [shape.y];
+  if (radius > 0) {
+    // Equal steps in squared distance from the corner center bound the inward error of
+    // each rectangle by CORNER_INSET_ERROR. This spends more bands near the horizontal
+    // tangent, where the old half-radius strips left large rectangular cutouts.
+    // The cap bounds allocations for unusually large shapes; normal UI radii stay below it.
+    const error = Math.min(radius, CORNER_INSET_ERROR);
+    const count = Math.min(MAX_CORNER_BANDS, Math.ceil(radius / (error * (2 - error / radius))));
+    const offsets = Array.from({ length: count + 1 }, (_, index) =>
+      radius * (1 - Math.sqrt(1 - index / count)));
+    for (let index = 1; index <= count; index += 1) edges.push(shape.y + offsets[index]);
+    for (let index = count; index >= 0; index -= 1) edges.push(bottom - offsets[index]);
+  } else {
+    edges.push(bottom);
+  }
   const bands: LivingClipRect[] = [];
   for (let index = 1; index < edges.length; index += 1) {
     const top = Math.max(edges[index - 1], fill.y);

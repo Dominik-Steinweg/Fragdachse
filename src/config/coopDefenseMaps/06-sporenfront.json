@@ -13,7 +13,77 @@
   }],
   "balanceReferenceDurationSec": 115,
   "objective": "repel-assault",
-  "bases": [],
+  "bases": [
+    {
+      "id": "spore-outpost-west",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 29, "gridY": 21},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "turrets": [
+        {
+          "id": "spore-outpost-west-turret",
+          "cellOffset": {"gridX": 0, "gridY": 0},
+          "mountSide": "front",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        }
+      ]
+    },
+    {
+      "id": "spore-outpost-north",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 36, "gridY": 18},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "turrets": [
+        {
+          "id": "spore-outpost-north-turret",
+          "cellOffset": {"gridX": 0, "gridY": 0},
+          "mountSide": "front",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        }
+      ]
+    },
+    {
+      "id": "spore-outpost-east",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 650,
+      "anchor": {"kind": "grid", "gridX": 67, "gridY": 21},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0},
+          {"gridX": 1, "gridY": 0},
+          {"gridX": 0, "gridY": 1}
+        ]
+      },
+      "turrets": [
+        {
+          "id": "spore-outpost-east-turret",
+          "cellOffset": {"gridX": 0, "gridY": 0},
+          "mountSide": "front",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        }
+      ]
+    }
+  ],
   "persistentBase": {
     "baseId": "coop-base-rear",
     "anchor": {
@@ -52,41 +122,86 @@
   "encounters": [
     {
       "id": "spore-front-opening",
-      "start": { "type": "time", "atMs": 0 },
+      "start": {"type": "time", "atMs": 0},
       "restAfterMs": 3000,
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 10, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 4, "delayMs": 700, "front": "east" }
+        {
+          "enemyKind": "zombie-badger",
+          "count": 10,
+          "spawnArea": {"gridX": 15, "gridY": 19, "widthCells": 4, "heightCells": 6}
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 4,
+          "delayMs": 700,
+          "spawnArea": {"gridX": 79, "gridY": 19, "widthCells": 4, "heightCells": 6}
+        }
       ]
     },
     {
       "id": "spore-front-wardens",
-      "start": { "type": "after-previous" },
+      "start": {"type": "after-previous"},
       "restAfterMs": 3000,
       "groups": [
-        { "enemyKind": "spore-warden", "count": 4, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 6, "delayMs": 1000, "front": "north" },
-        { "enemyKind": "rabid-badger", "count": 5, "delayMs": 1400, "front": "south" }
+        {
+          "enemyKind": "spore-warden",
+          "count": 4,
+          "spawnArea": {"gridX": 15, "gridY": 19, "widthCells": 4, "heightCells": 6}
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 6,
+          "delayMs": 1000,
+          "spawnArea": {"gridX": 27, "gridY": 9, "widthCells": 4, "heightCells": 4}
+        },
+        {"enemyKind": "rabid-badger", "count": 5, "delayMs": 1400, "front": "south"}
       ]
     },
     {
       "id": "spore-front-surge",
-      "start": { "type": "after-previous" },
+      "start": {"type": "after-previous"},
       "restAfterMs": 3000,
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 12, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1600, "front": "east" }
+        {
+          "enemyKind": "rabid-badger",
+          "count": 12,
+          "spawnArea": {"gridX": 15, "gridY": 19, "widthCells": 4, "heightCells": 6}
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 3,
+          "delayMs": 1200,
+          "spawnArea": {"gridX": 15, "gridY": 19, "widthCells": 4, "heightCells": 6}
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 3,
+          "delayMs": 1600,
+          "spawnArea": {"gridX": 79, "gridY": 19, "widthCells": 4, "heightCells": 6}
+        }
       ]
     },
     {
       "id": "spore-front-finale",
-      "start": { "type": "after-previous" },
+      "start": {"type": "after-previous"},
       "groups": [
-        { "enemyKind": "spore-warden", "count": 4, "front": "east" },
-        { "enemyKind": "spore-warden", "count": 4, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 8, "delayMs": 900, "front": "north" },
-        { "enemyKind": "rabid-badger", "count": 6, "delayMs": 1300, "front": "south" }
+        {
+          "enemyKind": "spore-warden",
+          "count": 4,
+          "spawnArea": {"gridX": 79, "gridY": 19, "widthCells": 4, "heightCells": 6}
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 4,
+          "spawnArea": {"gridX": 15, "gridY": 19, "widthCells": 4, "heightCells": 6}
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 8,
+          "delayMs": 900,
+          "spawnArea": {"gridX": 27, "gridY": 9, "widthCells": 4, "heightCells": 4}
+        },
+        {"enemyKind": "rabid-badger", "count": 6, "delayMs": 1300, "front": "south"}
       ]
     }
   ]

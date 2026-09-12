@@ -165,7 +165,7 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     expect(parseWorldDescriptor({ ...world, layoutFingerprint: '' })).toBeNull();
     expect(parseWorldDescriptor({ ...world, seed: Number.NaN })).toBeNull();
     // Unbrauchbare Parameter loeschen nicht die World, sie entfallen.
-    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseAreaStage: 2 } }))
+    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseAreaStage: 3 } }))
       .toEqual({ ...world, parameters: undefined });
     expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseUnlocked: 'yes' } }))
       .toEqual({ ...world, parameters: undefined });
@@ -176,6 +176,7 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
       { persistentBaseUnlocked: true },
       { persistentBaseUnlocked: false },
       { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
+      { persistentBaseUnlocked: true, persistentBaseAreaStage: 2 },
     ]) {
       const descriptor = { ...world, parameters };
       expect(parseWorldDescriptor(JSON.parse(JSON.stringify(descriptor)))).toEqual(descriptor);

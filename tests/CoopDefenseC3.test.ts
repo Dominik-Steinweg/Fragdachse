@@ -1,4 +1,5 @@
 import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
+import authoredMap16 from '../src/config/coopDefenseMaps/16-zeitzuender.json';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -23,6 +24,8 @@ import {
   type CoopDefenseMapGroundHazardEventConfig,
 } from '../src/config/coopDefenseMaps';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
+import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+import { resolvePersistentBaseBuildAreaForStage } from '../src/persistentBase/PersistentBaseCore';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, applyArenaMetricsForMode } from '../src/config';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
 import type { PlayerManager } from '../src/entities/PlayerManager';
@@ -82,6 +85,29 @@ function makeZone(eventId: string) {
 }
 
 describe('Coop Defense C3 configuration', () => {
+  it('lets void touch the actual base footprint while preserving explicitly positive clearance', () => {
+    const map = getCoopDefenseMapConfig('16');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
+    const cell = resolveCoopDefenseBases(map).find(base => base.id === map.persistentBase?.baseId)!.cells[0];
+    const events = [
+      makeEvent({ id: 'touch', area: { type: 'cells', cells: [cell], baseClearanceCells: 0 } }),
+      makeEvent({ id: 'protected', area: { type: 'cells', cells: [cell], baseClearanceCells: 1 } }),
+    ];
+    const config = normalizeCoopDefenseMapConfig({ ...authoredMap16 as unknown as CoopDefenseMapConfig, mapEvents: events });
+    const zones = generateArenaWithActiveMetrics(902, config).groundHazardZones ?? [];
+    expect(zones.find(zone => zone.eventId === 'touch')?.cells).toContainEqual(cell);
+    expect(zones.some(zone => zone.eventId === 'protected')).toBe(false);
+  });
+
+  it('keeps the entire expanded final base area outside Map 14 maximum fire extent', () => {
+    const map = getCoopDefenseMapConfig('14');
+    const fire = map.mapEvents!.find(event => event.type === 'ground-hazard' && event.spread)!;
+    expect(fire.type).toBe('ground-hazard');
+    if (fire.type !== 'ground-hazard' || fire.area.type !== 'rectangle') throw new Error('Missing front');
+    const expanded = resolvePersistentBaseBuildAreaForStage(2);
+    if (expanded.kind !== 'radius') throw new Error('Expected expanded radius');
+    expect(map.persistentBase!.anchor.gridX - expanded.radiusCells).toBeGreaterThanOrEqual(fire.area.gridX + fire.area.widthCells);
+  });
   it('normalizes rectangle, cells and random-patches areas with finite and persistent lifecycles', () => {
     const normalized = normalizeCoopDefenseMapConfig(makeMap({
       mapEvents: [
@@ -177,8 +203,7 @@ describe('Coop Defense C3 configuration', () => {
     // aufloesbar. Der Generator liefert dafuer keine Zone -- der Handler laesst das Event dann
     // dormant. Ein Layout-Retry bis zum Abbruch waere fuer einen Authoring-Fehler unverhaeltnismaessig.
     const withUnreachableHazard = normalizeCoopDefenseMapConfig({
-      ...map,
-      bases: map.bases.filter((base) => base.id !== map.persistentBase?.baseId),
+      ...authoredMap16 as unknown as CoopDefenseMapConfig,
       mapEvents: [
         ...(map.mapEvents ?? []),
         makeEvent({
@@ -206,6 +231,40 @@ describe('Coop Defense C3 configuration', () => {
 
 describe('Coop Defense C3 ground hazard lifecycle', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it('replicates only the local warning rim, catches up late starts and retries reached blocked cells', () => {
+    let now = 0;
+    let blocked = true;
+    const lit = new Set<string>();
+    let warnings: Array<{ gridX: number; gridY: number; activatesAt: number }> = [];
+    const event = makeEvent({ durationMs: undefined, start: { type: 'time', atMs: 500 }, delayMs: 500,
+      area: { type: 'rectangle', gridX: 4, gridY: 4, widthCells: 6, heightCells: 2 },
+      spread: { direction: 'left-to-right', durationMs: 6000, roughnessCells: 1, warningLeadMs: 500 } });
+    const cells = Array.from({ length: 12 }, (_, i) => ({ gridX: 4 + i % 6, gridY: 4 + Math.floor(i / 6) }));
+    const handler = new CoopDefenseGroundHazardEventHandler({ worldSeed: 33, getNowMs: () => now,
+      prebuiltZones: [{ eventId: event.id, id: 'zone', cells }],
+      fireSystem: {
+        hostRefreshGroundCell: (x, y, options) => {
+          if (blocked) return false;
+          expect(options.permanent).toBe(true); lit.add(`${x}:${y}`); return true;
+        },
+        hostSetGroundWarnings: (_key, next) => { warnings = next; },
+        hostRemoveGroundSourcesBySourceKey: () => { lit.clear(); warnings = []; },
+      },
+    });
+    const director = new CoopDefenseMapEventDirector([event], [handler]);
+    now = 750; director.hostUpdate(now, false);
+    expect(lit.size).toBe(0); expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.length).toBeLessThan(cells.length * 4);
+    expect(warnings.every(cell => cell.activatesAt > now && cell.activatesAt <= now + 500)).toBe(true);
+    now = 7000; director.hostUpdate(6250, false);
+    expect(warnings).toEqual([]); expect(lit.size).toBe(0);
+    blocked = false; now = 7500; director.hostUpdate(500, false);
+    expect(lit.size).toBe(cells.length * 4);
+    now = 100000; director.hostUpdate(92500, false);
+    expect(lit.size).toBe(cells.length * 4);
+    director.reset(); expect(lit.size).toBe(0); expect(warnings).toEqual([]);
+  });
 
   function createHarness(events: readonly CoopDefenseMapGroundHazardEventConfig[]) {
     let now = 0;
@@ -327,7 +386,7 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
       powerUpPedestals: [],
       groundHazardZones: [{ eventId: 'hazard', id: 'hazard:zone', cells: [{ gridX: 4, gridY: 3 }] }],
     };
-    const placeOnHazardCell = (armed: boolean | null) => {
+    const placeOnHazardCell = (armed: boolean | null, danger?: boolean) => {
       const placement = new PlacementSystem(
         hazardLayout,
         new RockGridIndex([]),
@@ -335,6 +394,7 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
         resolveActiveArenaWorldMetrics(),
       );
       if (armed !== null) placement.setHazardEventArmedResolver(() => armed);
+      if (danger !== undefined) placement.setGroundHazardCellDangerResolver(() => danger);
       return placement.tryPlaceConstruction(
         COOP_DEFENSE_CONSTRUCTIONS.medic_pedestal,
         1,
@@ -352,6 +412,8 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
     // Ab der Ankuendigung gesperrt -- und ohne Lifecycle-Wissen bleibt es konservativ gesperrt.
     expect(placeOnHazardCell(true)).toBeNull();
     expect(placeOnHazardCell(null)).toBeNull();
+    expect(placeOnHazardCell(true, false)).toMatchObject({ gridX: 4, gridY: 3 });
+    expect(placeOnHazardCell(true, true)).toBeNull();
   });
 
   it('accepts a completion that arrives before the announced cycle turned active', () => {

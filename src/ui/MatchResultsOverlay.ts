@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { resolvePersistentBaseBuildAreaForStage } from '../persistentBase/PersistentBaseCore';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { getLocalizedTeamLabel } from '../i18n/gameModePresentation';
 import {
@@ -1509,11 +1510,14 @@ function describeRewards(
     });
   }
   if (progress.persistentBaseAreaStageUnlocked) {
+    const area = resolvePersistentBaseBuildAreaForStage(progress.persistentBaseAreaStage ?? 1);
     descriptors.push({
       glyph: '↗',
       label: t('ui.reward.persistentBaseAreaExpanded'),
       color: COLORS.GOLD_1,
-      tooltip: t('ui.reward.persistentBaseAreaExpandedHint'),
+      tooltip: t('ui.reward.persistentBaseAreaExpandedHint', {
+        radius: area.kind === 'radius' ? area.radiusCells : 0,
+      }),
     });
   }
   if (progress.itemsUnlocked) {

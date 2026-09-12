@@ -1,4 +1,5 @@
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
+import type { PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseItemSlot, GameMode, TeamId } from '../types';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import { getLocale } from '../i18n';
@@ -35,8 +36,9 @@ export interface MatchProgressDelta {
    * {@link itemsUnlocked} ein Ergebnis des Sieg-Verbuchens, kein Feld des Fortschritts-Schnappschusses.
    */
   persistentBaseUnlocked: boolean;
-  /** Der erstmalige Map-10-Sieg hat die aktive Persistent-Base-Area erweitert. */
+  /** Dieser Sieg hat die aktive Persistent-Base-Area erweitert. */
   persistentBaseAreaStageUnlocked: boolean;
+  persistentBaseAreaStage?: PersistentBaseAreaStage;
 }
 
 /** Ein angebotenes Item samt allem, was der Auswahlbildschirm dafuer braucht. */
@@ -141,6 +143,7 @@ export function createMatchProgressDelta(
   itemsUnlocked = false,
   persistentBaseUnlocked = false,
   persistentBaseAreaStageUnlocked = false,
+  persistentBaseAreaStage?: PersistentBaseAreaStage,
 ): MatchProgressDelta {
   return {
     before,
@@ -154,6 +157,7 @@ export function createMatchProgressDelta(
     itemsUnlocked,
     persistentBaseUnlocked,
     persistentBaseAreaStageUnlocked,
+    persistentBaseAreaStage,
   };
 }
 

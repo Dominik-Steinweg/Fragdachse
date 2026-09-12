@@ -682,8 +682,8 @@ export class ArenaScene extends Phaser.Scene {
         this.meta?.setDebugPersistentBaseUnlocked(true);
         this.refreshCoopDefenseDebugState();
       },
-      () => {
-        this.meta?.setDebugPersistentBaseAreaStage(1);
+      (stage) => {
+        this.meta?.setDebugPersistentBaseAreaStage(stage);
         this.refreshCoopDefenseDebugState();
       },
       (rewardId) => {

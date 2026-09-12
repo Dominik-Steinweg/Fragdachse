@@ -6,17 +6,12 @@
   "tutorialDurationMs": 10000,
   "mapEvents": [
     {
-      "id": "brandschneise-void-corridor",
+      "id": "brandschneise-firefront",
       "type": "ground-hazard",
-      "start": { "type": "time", "atMs": 0 },
-      "area": {
-        "type": "rectangle",
-        "gridX": 29,
-        "gridY": 0,
-        "widthCells": 2,
-        "heightCells": 42,
-        "baseClearanceCells": 2
-      },
+      "start": {"type": "time", "atMs": 15000},
+      "delayMs": 5000,
+      "area": {"type": "rectangle", "gridX": 0, "gridY": 0, "widthCells": 36, "heightCells": 42, "baseClearanceCells": 0},
+      "spread": {"direction": "left-to-right", "durationMs": 90000, "roughnessCells": 2, "warningLeadMs": 3000},
       "effect": {
         "visualStyle": "void",
         "burnDurationMs": 2000,
@@ -40,134 +35,79 @@
       {
         "id": "front-top",
         "points": [
-          {
-            "gridX": 0,
-            "gridY": 4
-          },
-          {
-            "gridX": 6,
-            "gridY": 3
-          },
-          {
-            "gridX": 12,
-            "gridY": 4
-          },
-          {
-            "gridX": 17,
-            "gridY": 8
-          },
-          {
-            "gridX": 19,
-            "gridY": 8
-          }
+          {"gridX": 0, "gridY": 4},
+          {"gridX": 6, "gridY": 3},
+          {"gridX": 12, "gridY": 4},
+          {"gridX": 17, "gridY": 8},
+          {"gridX": 19, "gridY": 8}
         ]
       },
       {
         "id": "front-middle",
         "points": [
-          {
-            "gridX": 0,
-            "gridY": 16
-          },
-          {
-            "gridX": 5,
-            "gridY": 17
-          },
-          {
-            "gridX": 10,
-            "gridY": 14
-          },
-          {
-            "gridX": 19,
-            "gridY": 14
-          }
+          {"gridX": 0, "gridY": 16},
+          {"gridX": 5, "gridY": 17},
+          {"gridX": 10, "gridY": 14},
+          {"gridX": 19, "gridY": 14}
         ]
       },
       {
         "id": "front-bottom",
         "points": [
-          {
-            "gridX": 0,
-            "gridY": 28
-          },
-          {
-            "gridX": 6,
-            "gridY": 29
-          },
-          {
-            "gridX": 12,
-            "gridY": 28
-          },
-          {
-            "gridX": 17,
-            "gridY": 20
-          },
-          {
-            "gridX": 19,
-            "gridY": 20
-          }
+          {"gridX": 0, "gridY": 28},
+          {"gridX": 6, "gridY": 29},
+          {"gridX": 12, "gridY": 28},
+          {"gridX": 17, "gridY": 20},
+          {"gridX": 19, "gridY": 20}
         ]
       },
       {
         "id": "rear-north",
         "points": [
-          {
-            "gridX": 30,
-            "gridY": 12
-          },
-          {
-            "gridX": 36,
-            "gridY": 14
-          },
-          {
-            "gridX": 44,
-            "gridY": 12
-          },
-          {
-            "gridX": 51,
-            "gridY": 14
-          }
+          {"gridX": 30, "gridY": 12},
+          {"gridX": 36, "gridY": 14},
+          {"gridX": 44, "gridY": 12},
+          {"gridX": 51, "gridY": 14}
         ]
       },
       {
         "id": "north-approach",
         "points": [
-          { "gridX": 30, "gridY": 0 },
-          { "gridX": 32, "gridY": 7 },
-          { "gridX": 38, "gridY": 13 },
-          { "gridX": 47, "gridY": 16 },
-          { "gridX": 55, "gridY": 16 }
+          {"gridX": 30, "gridY": 0},
+          {"gridX": 32, "gridY": 7},
+          {"gridX": 38, "gridY": 13},
+          {"gridX": 47, "gridY": 16},
+          {"gridX": 55, "gridY": 16}
         ]
       },
       {
         "id": "south-approach",
         "points": [
-          { "gridX": 30, "gridY": 39 },
-          { "gridX": 32, "gridY": 32 },
-          { "gridX": 38, "gridY": 26 },
-          { "gridX": 47, "gridY": 23 },
-          { "gridX": 55, "gridY": 23 }
+          {"gridX": 30, "gridY": 39},
+          {"gridX": 32, "gridY": 32},
+          {"gridX": 38, "gridY": 26},
+          {"gridX": 47, "gridY": 23},
+          {"gridX": 55, "gridY": 23}
         ]
       },
       {
         "id": "rear-south",
         "points": [
-          {
-            "gridX": 30,
-            "gridY": 19
-          },
-          {
-            "gridX": 38,
-            "gridY": 26
-          },
-          {
-            "gridX": 46,
-            "gridY": 25
-          },
-          {
-            "gridX": 51,
-            "gridY": 21
-          }
+          {"gridX": 30, "gridY": 19},
+          {"gridX": 38, "gridY": 26},
+          {"gridX": 46, "gridY": 25},
+          {"gridX": 51, "gridY": 21}
+        ]
+      },
+      {
+        "id": "firefront-retreat",
+        "points": [
+          {"gridX": 3, "gridY": 20},
+          {"gridX": 13, "gridY": 20},
+          {"gridX": 25, "gridY": 20},
+          {"gridX": 36, "gridY": 20},
+          {"gridX": 47, "gridY": 20},
+          {"gridX": 56, "gridY": 20}
         ]
       }
     ]

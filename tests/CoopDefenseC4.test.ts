@@ -227,7 +227,7 @@ describe('Coop Defense C4 campaign validation', () => {
 
     for (const map of mapsWithGroundHazards) {
       testNetwork.mapId = map.mapId;
-      applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells);
+      applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
       const seed = map.mapId === '14'
         ? 4_711
         : map.mapId === '15'

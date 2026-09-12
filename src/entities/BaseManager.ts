@@ -1,6 +1,8 @@
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
+import { BaseBurnRenderer } from '../effects/BaseBurnRenderer';
+import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import type { SyncedBaseState } from '../types';
 import type { CoopBaseFaction } from '../config/coopDefenseMaps';
 import type { BaseActivityOverlay, BaseSpec } from '../arena/BaseRegistry';
@@ -56,6 +58,7 @@ export class BaseManager {
   private lighting: LightingSystem | null = null;
   private readonly litBaseKeys = new Set<string>();
   private readonly destructionRenderer: BaseDestructionRenderer | null;
+  private readonly burnRenderer: BaseBurnRenderer | null;
   private readonly worldMetrics: WorldMetrics;
   private activeActivityBinding: BaseActivityBinding | null = null;
   private destroyed = false;
@@ -74,8 +77,10 @@ export class BaseManager {
     damageable = false,
     healthBars: WorldHealthBarRenderer | null = null,
     turretAnimations: TurretAnimationController | null = null,
+    burnGpu: EntityBurnGpuController | null = null,
   ) {
     this.presentation = presentation;
+    this.burnRenderer = presentation && burnGpu ? new BaseBurnRenderer(scene, burnGpu) : null;
     this.worldMetrics = metrics;
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
@@ -150,6 +155,7 @@ export class BaseManager {
         attached = false;
         if (this.activeActivityBinding !== binding) return;
         this.activeActivityBinding = null;
+        this.burnRenderer?.clear();
         this.snapshotSeen.clear();
         for (const entity of this.entities) entity.clearActivityOverlay();
         this.rebuildActivityIndexes();
@@ -184,6 +190,7 @@ export class BaseManager {
    * Basen geben ihre Lichter frei; ein `setLight` je Frame hält die keyed-Lichter am Leben.
    */
   syncLights(): void {
+    this.burnRenderer?.sync(this.entities, this.worldMetrics, this.lighting);
     const lighting = this.lighting;
     if (!this.presentation || !lighting) return;
 
@@ -218,6 +225,7 @@ export class BaseManager {
 
   /** Gibt alle Basislichter frei (Teardown). */
   releaseLights(): void {
+    this.burnRenderer?.clear();
     if (!this.lighting) return;
     for (const key of this.litBaseKeys) this.lighting.releaseLight(key);
     this.litBaseKeys.clear();
@@ -410,11 +418,12 @@ export class BaseManager {
       // Strukturen müssen dagegen einmalig bzw. weiter als HP=0 sichtbar bleiben.
       if (entity.isDormant()) continue;
       const turrets = entity.getSyncedTurretStates();
-      if (entity.getHp() < entity.getMaxHp() || turrets.length > 0) {
+      if (entity.getHp() < entity.getMaxHp() || turrets.length > 0 || entity.isVoidBurning()) {
         snapshot.push({
           id: entity.id,
           hp: entity.getHp(),
           maxHp: entity.getMaxHp(),
+          ...(entity.isVoidBurning() ? { voidBurning: true } : {}),
           turrets: turrets.length > 0 ? turrets : undefined,
         });
       }
@@ -436,6 +445,7 @@ export class BaseManager {
       } else if (!entity.isInert()) {
         entity.setHp(entity.getMaxHp(), baseline);
       }
+      entity.setVoidBurning(remote?.voidBurning === true);
       if (remote || !entity.isInert()) this.snapshotSeen.add(entity.id);
     }
   }

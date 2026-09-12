@@ -102,7 +102,10 @@ export class CoopDefenseMapEventDirector {
 
     for (const runtime of this.runtimes) {
       if (runtime.state === 'dormant' && this.isStartSatisfied(runtime.config.start)) {
-        this.scheduleOccurrence(runtime, 1, this.elapsedMs + (runtime.config.delayMs ?? 0));
+        // A progressive front follows its authored timeline even after a delayed host frame.
+        const startedAt = runtime.config.type === 'ground-hazard' && runtime.config.spread
+          && runtime.config.start.type === 'time' ? runtime.config.start.atMs : this.elapsedMs;
+        this.scheduleOccurrence(runtime, 1, startedAt + (runtime.config.delayMs ?? 0));
       }
       if (runtime.state === 'scheduled' || runtime.state === 'waiting-repeat') {
         if (runtime.nextActionAtMs !== null && this.elapsedMs >= runtime.nextActionAtMs) {

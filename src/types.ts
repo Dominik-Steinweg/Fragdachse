@@ -1690,6 +1690,8 @@ export interface ArenaGroundHazardZone {
 
 export interface SyncedBurningGroundSnapshot {
   cells: SyncedBurningGroundCell[];
+  /** Host-selected upcoming cells. Presentation only; never used for damage or safe spawning. */
+  warnings?: { gridX: number; gridY: number; activatesAt: number }[];
 }
 
 /** Zielzelle eines replizierten Schleimblueten-Brockens. */
@@ -1870,6 +1872,7 @@ export interface SyncedBaseState {
   id:     string;
   hp:     number;
   maxHp:  number;
+  voidBurning?: boolean;
   /** Zielwinkel der an diese Basis gekoppelten Geschütztürme. */
   turrets?: SyncedBaseTurretState[];
 }

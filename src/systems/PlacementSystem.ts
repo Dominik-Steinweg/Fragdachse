@@ -58,6 +58,11 @@ export class PlacementSystem {
   /** Vorbereitete Gefahrenzellen je authored Event; gesperrt wird erst ab der Ankuendigung. */
   private readonly hazardCellEventIds = new Map<string, string>();
   private isHazardEventArmed: ((eventId: string) => boolean) | null = null;
+  private groundHazardCellDanger: ((eventId: string, gridX: number, gridY: number) => boolean | null) | null = null;
+
+  setGroundHazardCellDangerResolver(resolver: typeof this.groundHazardCellDanger): void {
+    this.groundHazardCellDanger = resolver;
+  }
   private nextRockId: number;
 
   /** Raeumliche Grundlage dieser World; Placement rechnet ausschliesslich dagegen. */
@@ -140,6 +145,9 @@ export class PlacementSystem {
   private isHazardCellLocked(cellKey: string): boolean {
     const eventId = this.hazardCellEventIds.get(cellKey);
     if (eventId === undefined) return false;
+    const [gridX, gridY] = cellKey.split('_').map(Number);
+    const cellDanger = this.groundHazardCellDanger?.(eventId, gridX, gridY);
+    if (cellDanger !== undefined && cellDanger !== null) return cellDanger;
     // Ohne Resolver bleibt es bei der konservativen Sperre: Wer den Lifecycle nicht kennt, darf
     // nicht versehentlich in eine bereits brennende Flaeche bauen lassen.
     return this.isHazardEventArmed?.(eventId) ?? true;

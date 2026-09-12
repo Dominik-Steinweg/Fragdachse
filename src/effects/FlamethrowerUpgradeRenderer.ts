@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { GroundHazardWarningRenderer } from './GroundHazardWarningRenderer';
 import { DEPTH } from '../config';
 import type { OwnerVisualSource } from '../entities/OwnerVisualSource';
 import type { FireChunkFlight, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundSnapshot } from '../types';
@@ -111,6 +112,7 @@ class RingTurbulenceProcessor extends Phaser.GameObjects.Particles.ParticleProce
  * sichtbaren Flammen, Glut und Funken stammen aus wenigen gepoolten GPUFX-Flows.
  */
 export class FlamethrowerUpgradeRenderer {
+  private readonly groundWarning: GroundHazardWarningRenderer;
   private readonly groundFire: GroundFireClusterRenderer;
   private readonly flyingChunks = new Set<Phaser.GameObjects.Image>();
   private readonly chunkTweens = new Map<Phaser.GameObjects.Image, Phaser.Tweens.Tween>();
@@ -132,6 +134,7 @@ export class FlamethrowerUpgradeRenderer {
     ensureFlameTextures(scene);
     ensureVoidFlameTextures(scene);
     this.groundFire = new GroundFireClusterRenderer();
+    this.groundWarning = new GroundHazardWarningRenderer(scene);
     this.ringFlames = this.createRingFlameEmitter(RING_PARTICLE_DEPTH + 0.04);
     this.ringSparks = this.createRingSparkEmitter(RING_PARTICLE_DEPTH + 0.1);
     this.ringFlames.addParticleProcessor(new RingTurbulenceProcessor(32));
@@ -148,6 +151,7 @@ export class FlamethrowerUpgradeRenderer {
   }
 
   syncGround(snapshot: SyncedBurningGroundSnapshot, now = Date.now()): void {
+    this.groundWarning.sync(snapshot.warnings, now);
     this.groundFire.syncGround(snapshot, now);
   }
 
@@ -248,6 +252,7 @@ export class FlamethrowerUpgradeRenderer {
   }
 
   clear(): void {
+    this.groundWarning.clear();
     this.groundFire.clear();
     this.ringRadii.clear();
     for (const [playerId, visual] of this.ringVisuals) this.destroyRingVisual(playerId, visual);

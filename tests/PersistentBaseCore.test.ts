@@ -91,7 +91,16 @@ describe('PersistentBaseCore – kanonische Form', () => {
     expect(DEFAULT_PERSISTENT_BASE_AREA_STAGE).toBe(0);
     expect(isPersistentBaseAreaStage(0)).toBe(true);
     expect(isPersistentBaseAreaStage(1)).toBe(true);
-    expect(isPersistentBaseAreaStage(2)).toBe(false);
+    expect(isPersistentBaseAreaStage(2)).toBe(true);
+    expect(isPersistentBaseAreaStage(3)).toBe(false);
+    const expanded = resolvePersistentBaseBuildAreaForStage(2);
+    const previous = resolvePersistentBaseBuildAreaForStage(1);
+    expect(expanded.kind).toBe('radius');
+    if (expanded.kind === 'radius' && previous.kind === 'radius') {
+      expect(expanded.radiusCells).toBeGreaterThan(previous.radiusCells);
+      expect(isCellInsidePersistentBaseBuildArea(expanded.radiusCells, 0, expanded)).toBe(true);
+      expect(isCellInsidePersistentBaseBuildArea(expanded.radiusCells, 0, previous)).toBe(false);
+    }
     expect(resolvePersistentBaseBuildAreaForStage(0)).toEqual({ kind: 'square', sizeCells: 3 });
     expect(resolvePersistentBaseBuildAreaForStage(1)).toEqual({ kind: 'radius', radiusCells: 5 });
     expect(DEFAULT_PERSISTENT_BASE_BUILD_AREA).toEqual({ kind: 'square', sizeCells: 3 });

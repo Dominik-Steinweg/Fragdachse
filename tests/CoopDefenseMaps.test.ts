@@ -281,24 +281,18 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('builds linked power-up bases symmetrically around open pedestal cells', () => {
+  it('keeps linked pedestal cells outside the solid base footprint', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => mapId !== '0')) {
       for (const base of map.bases) {
         const pedestals = base.powerUpPedestals ?? [];
         if (pedestals.length === 0) continue;
         expect(base.shape.kind).toBe('cells');
-        const bounds = getShapeBounds(base.shape);
         const cells = base.shape.kind === 'cells' ? base.shape.cells : [];
         const occupied = new Set(cells.map((cell) => `${cell.gridX}:${cell.gridY}`));
         for (const pedestal of pedestals) {
-          expect(pedestal.cellOffset.gridX).toBeGreaterThanOrEqual(0);
-          expect(pedestal.cellOffset.gridX).toBeLessThan(bounds.width);
-          expect(pedestal.cellOffset.gridY).toBeGreaterThanOrEqual(0);
-          expect(pedestal.cellOffset.gridY).toBeLessThan(bounds.height);
+          expect(Number.isInteger(pedestal.cellOffset.gridX)).toBe(true);
+          expect(Number.isInteger(pedestal.cellOffset.gridY)).toBe(true);
           expect(occupied.has(`${pedestal.cellOffset.gridX}:${pedestal.cellOffset.gridY}`)).toBe(false);
-        }
-        for (const cell of cells) {
-          expect(occupied.has(`${cell.gridX}:${bounds.height - 1 - cell.gridY}`)).toBe(true);
         }
       }
     }

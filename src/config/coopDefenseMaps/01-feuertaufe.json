@@ -322,106 +322,64 @@
   "encounters": [
     {
       "id": "cp1-first-contact",
-      "start": {
-        "type": "after-checkpoint",
-        "checkpointId": "cp1-adrenaline"
-      },
+      "start": {"type": "after-checkpoint", "checkpointId": "cp1-adrenaline"},
       "groups": [
         {
           "enemyKind": "zombie-badger",
           "count": 4,
           "spawnStaggerMs": 1600,
-          "spawnArea": {
-            "gridX": 47,
-            "gridY": 14,
-            "widthCells": 18,
-            "heightCells": 12
-          }
+          "spawnArea": {"gridX": 47, "gridY": 14, "widthCells": 18, "heightCells": 12}
         }
       ]
     },
     {
       "id": "cp4-pressure",
-      "start": {
-        "type": "after-checkpoint",
-        "checkpointId": "cp4-rage"
-      },
+      "start": {"type": "after-checkpoint", "checkpointId": "cp4-rage"},
       "groups": [
         {
           "enemyKind": "zombie-badger",
           "count": 6,
           "spawnStaggerMs": 1600,
-          "spawnArea": {
-            "gridX": 151,
-            "gridY": 8,
-            "widthCells": 20,
-            "heightCells": 16
-          }
+          "spawnArea": {"gridX": 151, "gridY": 8, "widthCells": 20, "heightCells": 16}
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "zombie-badger",
           "count": 3,
           "delayMs": 6000,
           "spawnStaggerMs": 1600,
-          "spawnArea": {
-            "gridX": 132,
-            "gridY": 5,
-            "widthCells": 20,
-            "heightCells": 24
-          }
+          "spawnArea": {"gridX": 132, "gridY": 5, "widthCells": 20, "heightCells": 24}
         }
       ]
     },
     {
       "id": "cp5-wave-1",
-      "start": {
-        "type": "after-checkpoint",
-        "checkpointId": "cp5-base-defense"
-      },
+      "start": {"type": "after-checkpoint", "checkpointId": "cp5-base-defense"},
       "groups": [
         {
           "enemyKind": "zombie-badger",
           "count": 6,
           "spawnStaggerMs": 1800,
-          "spawnArea": {
-            "gridX": 192,
-            "gridY": 10,
-            "widthCells": 25,
-            "heightCells": 9
-          }
+          "spawnArea": {"gridX": 192, "gridY": 10, "widthCells": 25, "heightCells": 9}
         }
       ]
     },
     {
       "id": "cp5-wave-2",
-      "start": {
-        "type": "after-encounter",
-        "encounterId": "cp5-wave-1"
-      },
+      "start": {"type": "after-encounter", "encounterId": "cp5-wave-1"},
       "groups": [
         {
           "enemyKind": "zombie-badger",
           "count": 8,
           "delayMs": 4000,
           "spawnStaggerMs": 1800,
-          "spawnArea": {
-            "gridX": 192,
-            "gridY": 10,
-            "widthCells": 25,
-            "heightCells": 9
-          }
+          "spawnArea": {"gridX": 192, "gridY": 10, "widthCells": 25, "heightCells": 9}
         },
         {
-          "enemyKind": "demon-badger",
+          "enemyKind": "zombie-badger",
           "count": 4,
           "delayMs": 7000,
           "spawnStaggerMs": 1800,
-          "spawnArea": {
-            "gridX": 192,
-            "gridY": 14,
-            "widthCells": 25,
-            "heightCells": 9
-          }
+          "spawnArea": {"gridX": 192, "gridY": 14, "widthCells": 25, "heightCells": 9}
         }
       ]
     }

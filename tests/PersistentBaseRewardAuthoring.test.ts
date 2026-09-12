@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeCoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
-import rawMap16 from '../src/config/coopDefenseMaps/16-zeitzuender.json';
 import rawMap1 from '../src/config/coopDefenseMaps/01-feuertaufe.json';
 import rawMap4 from '../src/config/coopDefenseMaps/04-adrenalinrausch.json';
 import rawMap6 from '../src/config/coopDefenseMaps/06-sporenfront.json';
@@ -19,7 +18,7 @@ import {
 
 describe('Persistent-Base-Reward-Authoring', () => {
   it('normalizes map and secondary-objective reward IDs and preserves the adapter round trip', () => {
-    const source = rawMap16 as unknown as CoopDefenseMapConfig;
+    const source = rawMap8 as unknown as CoopDefenseMapConfig;
     const firstObjective = source.secondaryObjectives?.[0];
     const authored = normalizeCoopDefenseMapConfig({
       ...source,
@@ -59,7 +58,6 @@ describe('Persistent-Base-Reward-Authoring', () => {
       [rawMap4, 'base_adrenaline_pedestal'],
       [rawMap6, 'base_spore_turret'],
       [rawMap7, 'base_health_pedestal'],
-      [rawMap8, 'base_rocket_turret'],
     ] as const;
     for (const [rawMap, rewardId] of authoredRewards) {
       expect(normalizeCoopDefenseMapConfig(rawMap as unknown as CoopDefenseMapConfig)
@@ -67,6 +65,10 @@ describe('Persistent-Base-Reward-Authoring', () => {
     }
     expect(normalizeCoopDefenseMapConfig(rawMap9 as unknown as CoopDefenseMapConfig)
       .persistentBaseRewardsOnVictory).toBeUndefined();
+    const map8 = normalizeCoopDefenseMapConfig(rawMap8 as unknown as CoopDefenseMapConfig);
+    expect(map8.persistentBaseRewardsOnVictory).toBeUndefined();
+    expect(map8.secondaryObjectives?.some(objective => objective.type === 'hold'
+      && objective.rewards?.persistentBaseRewardsOnComplete?.includes('base_rocket_turret'))).toBe(true);
   });
 
   it('restores Map 12 supply-base authoring with a permanent HHG reward', () => {

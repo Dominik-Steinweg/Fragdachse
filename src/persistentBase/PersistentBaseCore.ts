@@ -4,7 +4,7 @@ import type {
   CoopBaseConfig,
   CoopBaseShape,
 } from '../config/coopDefenseMaps';
-import { DEFAULT_PERSISTENT_BASE_RADIUS_CELLS } from '../config/persistentBase';
+import { DEFAULT_PERSISTENT_BASE_RADIUS_CELLS, EXPANDED_PERSISTENT_BASE_RADIUS_CELLS } from '../config/persistentBase';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
 
 /**
@@ -44,7 +44,7 @@ export type PersistentBaseCellDomain =
  * Regel, die den bebaubaren Bereich relativ zum persistenten Basisanker beschreibt.
  *
  * Die aktive Regel wird ausschliesslich aus der semantischen Area-Stufe aufgeloest: Stage 0 nutzt
- * das feste 3x3-Quadrat, Stage 1 die zentrale Radius-5-Regel. Platzierung, Restore und Darstellung
+ * das feste 3x3-Quadrat, Stage 1 Radius 5 und Stage 2 Radius 6. Platzierung, Restore und Darstellung
  * erhalten danach dieselbe aufgeloeste Geometrie.
  */
 export type PersistentBaseBuildArea =
@@ -52,12 +52,12 @@ export type PersistentBaseBuildArea =
   | { readonly kind: 'radius'; readonly radiusCells: number };
 
 /** Semantische Ausbau-Stufe der persistenten Basis. */
-export type PersistentBaseAreaStage = 0 | 1;
+export type PersistentBaseAreaStage = 0 | 1 | 2;
 
 export const DEFAULT_PERSISTENT_BASE_AREA_STAGE: PersistentBaseAreaStage = 0;
 
 /** Authoritative Stage-Werte an der Persistenz- und Netzwerkgrenze. */
-export const PERSISTENT_BASE_AREA_STAGES = [0, 1] as const satisfies readonly PersistentBaseAreaStage[];
+export const PERSISTENT_BASE_AREA_STAGES = [0, 1, 2] as const satisfies readonly PersistentBaseAreaStage[];
 
 /** Aktueller Baubereich: genau die neun Innenhofzellen im 5x5-Kern. */
 export const DEFAULT_PERSISTENT_BASE_BUILD_AREA = Object.freeze({
@@ -67,7 +67,7 @@ export const DEFAULT_PERSISTENT_BASE_BUILD_AREA = Object.freeze({
 
 /** Authoring-/Wire-Grenze fuer die semantische Area-Stufe. */
 export function isPersistentBaseAreaStage(value: unknown): value is PersistentBaseAreaStage {
-  return value === 0 || value === 1;
+  return value === 0 || value === 1 || value === 2;
 }
 
 /** Leitet die aktive Build-Area genau einmal aus der persistenten Area-Stufe ab. */
@@ -79,6 +79,8 @@ export function resolvePersistentBaseBuildAreaForStage(
       return DEFAULT_PERSISTENT_BASE_BUILD_AREA;
     case 1:
       return { kind: 'radius', radiusCells: DEFAULT_PERSISTENT_BASE_RADIUS_CELLS };
+    case 2:
+      return { kind: 'radius', radiusCells: EXPANDED_PERSISTENT_BASE_RADIUS_CELLS };
   }
 }
 

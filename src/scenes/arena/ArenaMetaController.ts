@@ -965,6 +965,7 @@ export class ArenaMetaController {
       unlockedItems,
       unlockedPersistentBase,
       unlockedPersistentBaseAreaStage,
+      unlockedPersistentBaseAreaStage ? this.storedProgress?.persistentBaseAreaStage : undefined,
     );
   }
 

@@ -75,6 +75,7 @@ export class BaseEntity {
    * keinen Schaden - das Bauwerk bleibt trotzdem solide und blockiert wie jedes andere.
    */
   private damageable: boolean;
+  private voidBurning = false;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Sprite>();
@@ -315,6 +316,7 @@ export class BaseEntity {
 
   /** Activity-Binding fuer den BaseManager; nicht als World-State gespeichert. */
   applyActivityOverlay(overlay: BaseActivityOverlay): void {
+    this.voidBurning = false;
     this.resetRepresentation();
     this.resetTurretAngles();
     this.activityOverlay = overlay;
@@ -331,6 +333,7 @@ export class BaseEntity {
 
   /** Entfernt den Activity-Zustand und stellt die World-Grundlage wieder her. */
   clearActivityOverlay(): void {
+    this.voidBurning = false;
     if (this.activityOverlay === null) return;
     this.resetRepresentation();
     this.resetTurretAngles();
@@ -400,6 +403,10 @@ export class BaseEntity {
   isInert(): boolean {
     return this.isDestroyed() || this.isDormant();
   }
+
+  isDamageable(): boolean { return this.damageable && !this.isInert(); }
+  isVoidBurning(): boolean { return this.voidBurning && this.isDamageable(); }
+  setVoidBurning(burning: boolean): void { this.voidBurning = burning && this.isDamageable(); }
 
   /** Monotonic activation derived from the replicated secondary-objective state. */
   activate(): boolean {

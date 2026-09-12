@@ -1938,7 +1938,7 @@ export class CoopDefenseUpgradesOverlay {
           fillHeight,
           fillPalette,
           {
-            scrollFactor: 0, intensity: 0.32, sampling: 'compact',
+            scrollFactor: 0, intensity: 0.98, sampling: 'compact',
             startActive: this.visible, variantKey: node.id,
             clipShape: {
               kind: 'roundedRect', x: -innerW / 2, y: -innerH / 2,

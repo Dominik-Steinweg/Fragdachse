@@ -1597,8 +1597,15 @@ export class ArenaGenerator {
       gridY: number,
       baseClearanceCells: number,
       avoidVoidTrackCorridor = false,
+      burnsBases = false,
+      spreading = false,
     ): boolean => {
       if (gridX < 0 || gridX >= this.metrics.gridCols || gridY < 0 || gridY >= this.metrics.gridRows) return false;
+      if (spreading || (burnsBases && baseClearanceCells === 0
+        && baseCells.some(cell => cell.gridX === gridX && cell.gridY === gridY))) {
+        return baseClearanceCells === 0 || baseCells.every(cell =>
+          Math.max(Math.abs(gridX - cell.gridX), Math.abs(gridY - cell.gridY)) > baseClearanceCells);
+      }
       const key = this.cellKey(gridX, gridY);
       if (
         blocked[gridY][gridX]
@@ -1629,7 +1636,7 @@ export class ArenaGenerator {
         const cells: ArenaGroundHazardZone['cells'] = [];
         for (let gridY = area.gridY; gridY < area.gridY + area.heightCells; gridY += 1) {
           for (let gridX = area.gridX; gridX < area.gridX + area.widthCells; gridX += 1) {
-            if (isValidCell(gridX, gridY, baseClearanceCells)) cells.push({ gridX, gridY });
+            if (isValidCell(gridX, gridY, baseClearanceCells, false, event.effect.visualStyle === 'void', !!event.spread)) cells.push({ gridX, gridY });
           }
         }
         if (cells.length > 0) zones.push(makeZone(event, event.id, cells));
@@ -1637,7 +1644,7 @@ export class ArenaGenerator {
       }
 
       if (area.type === 'cells') {
-        const cells = area.cells.filter((cell) => isValidCell(cell.gridX, cell.gridY, baseClearanceCells));
+        const cells = area.cells.filter((cell) => isValidCell(cell.gridX, cell.gridY, baseClearanceCells, false, event.effect.visualStyle === 'void'));
         if (cells.length > 0) zones.push(makeZone(event, event.id, cells));
         continue;
       }
@@ -1670,7 +1677,7 @@ export class ArenaGenerator {
               const key = this.cellKey(gridX, gridY);
               if (
                 !usedInEvent.has(key)
-                && isValidCell(gridX, gridY, baseClearanceCells, avoidVoidTrackCorridor)
+                && isValidCell(gridX, gridY, baseClearanceCells, avoidVoidTrackCorridor, event.effect.visualStyle === 'void')
               ) {
                 cells.push({ gridX, gridY });
               }

@@ -52,6 +52,7 @@ import {
 import {
   PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID,
   PERSISTENT_BASE_AREA_STAGE_UNLOCK_AFTER_MAP_ID,
+  PERSISTENT_BASE_AREA_STAGE_2_UNLOCK_AFTER_MAP_ID,
 } from '../config/persistentBase';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
@@ -1984,8 +1985,11 @@ export function unlockStoredPersistentBaseAfterVictory(completedMapId: string): 
     && setStoredPersistentBaseUnlocked(true);
 }
 
-/** Analog zur Klassenfreischaltung: Map 10 vergibt Area Stage 1 dauerhaft. */
+/** Siege vergeben monotone Area-Stufen; Wiederholung kann keinen Ausbau zuruecknehmen. */
 export function unlockStoredPersistentBaseAreaStageAfterVictory(completedMapId: string): boolean {
+  if (completedMapId.trim() === PERSISTENT_BASE_AREA_STAGE_2_UNLOCK_AFTER_MAP_ID) {
+    return setStoredPersistentBaseAreaStage(2);
+  }
   return completedMapId.trim() === PERSISTENT_BASE_AREA_STAGE_UNLOCK_AFTER_MAP_ID
     && setStoredPersistentBaseAreaStage(1);
 }

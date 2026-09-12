@@ -31,6 +31,7 @@ export interface FireObstacleIndexOptions {
 export class FireObstacleIndex {
   private readonly blockedFireCells: Uint16Array;
   private readonly fireLineOfSightCells: Uint16Array;
+  private readonly baseLineOfSightCells: Uint16Array;
   private readonly staticRockFootprints = new Map<number, FireCellRange>();
   private readonly placeableFootprints = new Map<number, FireCellRange>();
   private readonly baseFootprints = new Map<string, FireCellRange[]>();
@@ -40,6 +41,7 @@ export class FireObstacleIndex {
     const cellCount = Math.max(0, options.width * options.height);
     this.blockedFireCells = new Uint16Array(cellCount);
     this.fireLineOfSightCells = new Uint16Array(cellCount);
+    this.baseLineOfSightCells = new Uint16Array(cellCount);
   }
 
   get revision(): number {
@@ -50,6 +52,7 @@ export class FireObstacleIndex {
   reset(): void {
     this.blockedFireCells.fill(0);
     this.fireLineOfSightCells.fill(0);
+    this.baseLineOfSightCells.fill(0);
     this.staticRockFootprints.clear();
     this.placeableFootprints.clear();
     this.baseFootprints.clear();
@@ -61,9 +64,9 @@ export class FireObstacleIndex {
     return index >= 0 && this.blockedFireCells[index] > 0;
   }
 
-  hasLineOfSightObstacle(gridX: number, gridY: number): boolean {
+  hasLineOfSightObstacle(gridX: number, gridY: number, ignoreBases = false): boolean {
     const index = this.cellIndex(gridX, gridY);
-    return index >= 0 && this.fireLineOfSightCells[index] > 0;
+    return index >= 0 && this.fireLineOfSightCells[index] > (ignoreBases ? this.baseLineOfSightCells[index] : 0);
   }
 
   addStaticRock(rockId: number, bounds: FireObstacleBounds): void {
@@ -97,7 +100,7 @@ export class FireObstacleIndex {
       const range = this.boundsToRange(bound);
       if (!range) continue;
       ranges.push(range);
-      this.applyRange(range, false, 1);
+      this.applyBaseRange(range, 1);
     }
     if (ranges.length > 0) this.baseFootprints.set(baseId, ranges);
     this.obstacleRevision += 1;
@@ -106,7 +109,7 @@ export class FireObstacleIndex {
   removeBase(baseId: string): void {
     const ranges = this.baseFootprints.get(baseId);
     if (!ranges) return;
-    for (const range of ranges) this.applyRange(range, false, -1);
+    for (const range of ranges) this.applyBaseRange(range, -1);
     this.baseFootprints.delete(baseId);
     this.obstacleRevision += 1;
   }
@@ -169,6 +172,16 @@ export class FireObstacleIndex {
         this.blockedFireCells[index] = delta > 0
           ? blockedCount + 1
           : Math.max(0, blockedCount - 1);
+      }
+    }
+  }
+
+  private applyBaseRange(range: FireCellRange, delta: 1 | -1): void {
+    this.applyRange(range, false, delta);
+    for (let y = range.minY; y <= range.maxY; y++) {
+      for (let x = range.minX; x <= range.maxX; x++) {
+        const index = this.cellIndex(x, y);
+        if (index >= 0) this.baseLineOfSightCells[index] += delta;
       }
     }
   }

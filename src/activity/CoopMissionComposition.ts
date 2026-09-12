@@ -31,6 +31,7 @@ import { CoopMissionCombatComposition } from './CoopMissionCombatComposition';
 import { CoopMissionEnemyBehaviourComposition } from './CoopMissionEnemyBehaviourComposition';
 import { CoopMissionEnemySupportComposition } from './CoopMissionEnemySupportComposition';
 import { CoopMissionMapEventComposition } from './CoopMissionMapEventComposition';
+import { BaseVoidFireSystem, collectBaseFireContacts } from '../systems/BaseVoidFireSystem';
 import { CoopMissionObjectiveComposition } from './CoopMissionObjectiveComposition';
 import { CoopMissionPlayerComposition } from './CoopMissionPlayerComposition';
 import type { CoopMissionRuntime } from './CoopMissionRuntime';
@@ -294,6 +295,16 @@ export class CoopMissionComposition {
       onDiagnosticEvent: this.options.onDiagnosticEvent,
       worldMetrics: world.metrics,
     }).materialize(runtime);
+
+    const fire = this.options.getFireSystem();
+    runtime.setBaseVoidFire(new BaseVoidFireSystem({
+      getBases: () => baseManager.getBases(),
+      getContacts: (baseId, now) => collectBaseFireContacts(fire,
+        baseManager.getBase(baseId)?.spec.cells ?? [], world.metrics, now),
+      captureSource: contact => combatSystem.captureWorldDamageSource(contact.ownerId, contact.sourceId, 'burn'),
+      canDamage: (source, faction) => combatSystem.canDamageStructure(source, undefined, faction),
+      damage: (id, amount, source, now) => { combatSystem.applyBaseStatusDamage(id, amount, source, now); },
+    }));
 
     const airstrikeSystem = this.options.getAirstrikeSystem();
     if (!airstrikeSystem) return;

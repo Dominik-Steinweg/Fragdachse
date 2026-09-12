@@ -36,6 +36,7 @@ export interface FireDamageEvent {
 }
 
 export interface GroundFireContact {
+  combatSource?: import('../combat/CombatScope').CombatSource;
   firewalker?: MolotovFirewalkerEffect;
   sourceKey: string;
   x: number;
@@ -149,6 +150,7 @@ export type GroundFireLineOfSightResolver = (
   startY: number,
   endX: number,
   endY: number,
+  visualStyle?: GroundFireVisualStyle,
 ) => boolean;
 export type GroundFireObstacleRevisionResolver = () => number;
 
@@ -173,6 +175,9 @@ export class FireSystem {
   private getObstacleRevision: GroundFireObstacleRevisionResolver | null = null;
   private groundSnapshotDirty = true;
   private cachedGroundSnapshot: SyncedBurningGroundSnapshot = { cells: [] };
+  private readonly groundWarnings = new Map<string, NonNullable<SyncedBurningGroundSnapshot['warnings']>>();
+  private warningCells: NonNullable<SyncedBurningGroundSnapshot['warnings']> = [];
+  private groundState: SyncedBurningGroundSnapshot = { cells: [] };
   private lastSimulationMs = 0;
   private lastCreationMs = 0;
   private performanceMetricsEnabled = false;
@@ -332,6 +337,7 @@ export class FireSystem {
 
   /** Entfernt ausschliesslich die Zellen einer logisch besitzenden Quelle. */
   hostRemoveGroundSourcesBySourceKey(sourceKey: string): void {
+    if (this.groundWarnings.delete(sourceKey)) this.warningCells = [...this.groundWarnings.values()].flat();
     const prefix = `cell:${sourceKey}:`;
     for (const [sourceId, source] of this.sources) {
       if (!sourceId.startsWith(prefix)) continue;
@@ -349,6 +355,22 @@ export class FireSystem {
       this.sources.delete(sourceId);
       this.dynamicSources.delete(sourceId);
     }
+  }
+
+  hostSetGroundWarnings(sourceKey: string, cells: NonNullable<SyncedBurningGroundSnapshot['warnings']>): void {
+    if (cells.length === 0 && !this.groundWarnings.has(sourceKey)) return;
+    if (cells.length) this.groundWarnings.set(sourceKey, cells);
+    else this.groundWarnings.delete(sourceKey);
+    this.warningCells = [...this.groundWarnings.values()].flat();
+  }
+
+  /** Read-only live projection shared by network, placement and safe spawning. */
+  getGroundState(): SyncedBurningGroundSnapshot {
+    const ground = this.getGroundSnapshot();
+    if (this.groundState.cells !== ground.cells || this.groundState.warnings !== this.warningCells) {
+      this.groundState = { cells: ground.cells, warnings: this.warningCells };
+    }
+    return this.groundState;
   }
 
   hostRefreshGroundCellsAlongSegment(
@@ -489,7 +511,7 @@ export class FireSystem {
         }))
       : [];
 
-    const result = { synced, ground: this.getGroundSnapshot(), damageEvents, damageTick };
+    const result = { synced, ground: this.getGroundState(), damageEvents, damageTick };
     if (this.performanceMetricsEnabled) this.lastSimulationMs = performance.now() - simulationStartedAt;
     return result;
   }
@@ -509,6 +531,7 @@ export class FireSystem {
         const source = this.sources.get(sourceKey);
         if (!source || source.expiresAt <= now) continue;
         contacts.set(sourceKey, {
+          combatSource: source.combatSource,
           sourceKey: source.key,
           x: source.x,
           y: source.y,
@@ -577,6 +600,8 @@ export class FireSystem {
   syncVisuals(_zones: SyncedFireZone[]): void {}
 
   destroyAll(): void {
+    this.groundWarnings.clear();
+    this.warningCells = [];
     this.sources.clear();
     this.dynamicSources.clear();
     this.cells.clear();
@@ -608,7 +633,7 @@ export class FireSystem {
         const dy = source.y - nearestY;
         if (dx * dx + dy * dy > radiusSq) continue;
         if (this.isCellBlocked?.(bounds)) continue;
-        if (this.hasLineOfSight && !this.hasLineOfSight(source.x, source.y, centerX, centerY)) continue;
+        if (this.hasLineOfSight && !this.hasLineOfSight(source.x, source.y, centerX, centerY, source.visualStyle)) continue;
         this.attachSourceToCell(source, gridX, gridY);
       }
     }

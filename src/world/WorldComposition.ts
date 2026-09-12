@@ -168,6 +168,7 @@ export interface MaterializeWorldCompositionInput {
   readonly createRockRegistry: boolean;
   readonly healthBars?: WorldHealthBarRenderer;
   readonly turretAnimations?: TurretAnimationController;
+  readonly entityBurnGpu?: import('../effects/EntityBurnGpuController').EntityBurnGpuController;
 }
 
 export interface MaterializedWorldComposition {
@@ -262,6 +263,7 @@ export function materializeWorldComposition(
       false,
       input.healthBars,
       input.turretAnimations,
+      input.entityBurnGpu,
     )
     : null;
   materialization.setBases(baseManager);

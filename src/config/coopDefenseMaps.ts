@@ -570,6 +570,13 @@ export interface CoopDefenseMapGroundHazardEventConfig extends CoopDefenseMapEve
   readonly durationMs?: number;
   readonly area: CoopDefenseMapGroundHazardArea;
   readonly effect: CoopDefenseMapGroundHazardEffectConfig;
+  /** Organic, monotone expansion inside a rectangle; reached cells stay active. */
+  readonly spread?: {
+    readonly direction: 'left-to-right';
+    readonly durationMs: number;
+    readonly roughnessCells: number;
+    readonly warningLeadMs: number;
+  };
 }
 
 export type ResolvedCoopDefenseMapGroundHazardEventConfig = CoopDefenseMapGroundHazardEventConfig;
@@ -2530,6 +2537,17 @@ function normalizeGroundHazardMapEvent(
   if (burnDurationMs <= 0) {
     throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${event.id} needs a positive burnDurationMs`);
   }
+  const spread = event.spread;
+  if (spread !== undefined && (
+    !spread || area.type !== 'rectangle' || effect.visualStyle !== 'void'
+    || durationMs !== undefined || spread.direction !== 'left-to-right'
+    || !Number.isFinite(spread.durationMs) || spread.durationMs <= 0
+    || !Number.isFinite(spread.roughnessCells) || spread.roughnessCells < 0
+    || spread.roughnessCells >= area.widthCells / Math.PI
+    || !Number.isFinite(spread.warningLeadMs) || spread.warningLeadMs < 0
+  )) {
+    throw new Error(`[coopDefenseMaps] Invalid permanent rectangular void spread on ${mapId}:${event.id}`);
+  }
   return {
     id: event.id,
     type: 'ground-hazard',
@@ -2537,6 +2555,7 @@ function normalizeGroundHazardMapEvent(
     delayMs,
     ...(durationMs === undefined ? {} : { durationMs }),
     area,
+    ...(spread === undefined ? {} : { spread: { ...spread } }),
     effect: {
       visualStyle: effect.visualStyle,
       burnDurationMs,

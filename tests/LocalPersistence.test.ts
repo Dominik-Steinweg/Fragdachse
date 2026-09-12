@@ -233,7 +233,7 @@ describe('local progress generation', () => {
     expect(getStoredPersistentBaseAreaStage()).toBe(1);
 
     const corrupt = structuredClone(exported);
-    corrupt.progress.coopDefense.persistentBaseAreaStage = 2;
+    corrupt.progress.coopDefense.persistentBaseAreaStage = 99;
     expect(importStoredGameProgressJson(JSON.stringify(corrupt)).ok).toBe(false);
     expect(getStoredPersistentBaseAreaStage()).toBe(1);
   });
