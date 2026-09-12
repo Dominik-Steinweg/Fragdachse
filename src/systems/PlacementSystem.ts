@@ -66,6 +66,7 @@ export class PlacementSystem {
   private nextRockId: number;
 
   /** Raeumliche Grundlage dieser World; Placement rechnet ausschliesslich dagegen. */
+  private readonly waterCells = new Set<string>();
   private readonly metrics: WorldMetrics;
 
   constructor(
@@ -82,6 +83,7 @@ export class PlacementSystem {
     this.coopDefenseBases = coopDefenseBases;
     this.nextRockId = layout.rocks.length;
 
+    for (const cell of layout.water ?? []) this.waterCells.add(this.key(cell.gridX, cell.gridY));
     for (const tree of layout.trees) {
       this.treeCells.add(this.key(tree.gridX, tree.gridY));
     }
@@ -383,6 +385,7 @@ export class PlacementSystem {
       const tx = gridX + cell.dx;
       const ty = gridY + cell.dy;
       if (tx < 0 || tx >= this.metrics.gridCols || ty < 0 || ty >= this.metrics.gridRows) return undefined;
+      if (this.waterCells.has(this.key(tx, ty))) return undefined;
       const occupiedId = this.rockGrid.getIndex(tx, ty);
       if (occupiedId >= 0 && occupiedId !== id) return undefined;
     }
@@ -1018,6 +1021,7 @@ export class PlacementSystem {
         if (occupiedId !== movableSourceId
           && (!allowRuntimeReplacement || !this.runtimeRocks.has(occupiedId))) return false;
       }
+      if (this.waterCells.has(this.key(tx, ty))) return false;
       if (this.treeCells.has(this.key(tx, ty))) return false;
       if (this.trackCells.has(this.key(tx, ty))) return false;
       if (this.pedestalCells.has(this.key(tx, ty))) return false;

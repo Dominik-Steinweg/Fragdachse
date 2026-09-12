@@ -449,6 +449,7 @@ export class PlayerManager implements OwnerVisualSource {
 
     // Felsen, Baumstümpfe und Gleise aus dem Layout blockieren
     if (this.layout) {
+      for (const cell of this.layout.water ?? []) blocked.add(`${cell.gridX}_${cell.gridY}`);
       for (const r of this.layout.rocks) blocked.add(`${r.gridX}_${r.gridY}`);
       for (const t of this.layout.trees) blocked.add(`${t.gridX}_${t.gridY}`);
       for (const track of this.layout.tracks) {

@@ -18,6 +18,17 @@ import { resolveActiveArenaWorldMetrics } from '../../src/world/WorldMetrics';
 import { CELL_SIZE } from '../../src/config';
 
 describe('Coop defense arena generation', () => {
+  it('keeps a two-cell dry walk around the authored test pond across seeds', () => {
+    const pondMap = getCoopDefenseMapConfig('0');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', pondMap.arenaWidthCells, pondMap.arenaHeightCells);
+    for (const seed of [1, 183, 444, 1907, 7733]) {
+      const layout = generateArenaWithActiveMetrics(seed, pondMap);
+      const solids = new Set([...layout.rocks, ...layout.trees].map(c => `${c.gridX}:${c.gridY}`));
+      for (const c of layout.water ?? []) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++)
+        expect(solids.has(`${c.gridX + dx}:${c.gridY + dy}`), `${seed} pond clearance at ${c.gridX + dx},${c.gridY + dy}`).toBe(false);
+    }
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
+  });
   const map = getCoopDefenseMapConfig('2');
 
   beforeAll(() => {

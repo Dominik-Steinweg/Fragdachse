@@ -40,9 +40,8 @@ export function createFlowFieldTuning(): FlowFieldTuning {
 }
 
 /**
- * Faltet die vier unveraenderlichen Zellquellen in ein Raster. Die Reihenfolge entspricht der
- * Regelprioritaet des bisherigen Build-Kontexts; Basis und Fels stehen strikt darueber und werden
- * deshalb erst zur Laufzeit im Kernel aufgesetzt.
+ * Faltet die unveraenderlichen Zellquellen in ein Raster. Wasser bleibt im Kernel auch gegen
+ * dynamische Belegungs-Patches unpassierbar; Basis und Fels ueberlagern nur die anderen Bodenarten.
  */
 export function buildStaticKindRaster(layout: ArenaLayout, metrics: FlowFieldMetrics): Uint8Array {
   const staticKind = new Uint8Array(totalCellsOf(metrics)).fill(CELL_CODE.ground);
@@ -57,6 +56,7 @@ export function buildStaticKindRaster(layout: ArenaLayout, metrics: FlowFieldMet
     }
   };
 
+  stamp(layout.water ?? [], CELL_CODE.water);
   stamp(layout.trees, CELL_CODE.trunk);
   stampTracks(staticKind, layout.tracks, metrics);
   stamp(layout.powerUpPedestals, CELL_CODE.pedestal);

@@ -1,5 +1,6 @@
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
+import type { WaterGeometry } from '../arena/WaterGeometry';
 import {
   ENEMY_NET_REFRESH_CYCLE_TICKS,
   CELL_SIZE,
@@ -239,6 +240,9 @@ export class EnemyManager {
     this.worldMetrics = metrics;
   }
 
+  private waterGeometry: WaterGeometry | null = null;
+  setWaterGeometry(water: WaterGeometry | null): void { this.waterGeometry = water; }
+
   /** Reicht die scene-lifetime Beleuchtung an neue und bestehende Gegner durch. */
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
@@ -329,6 +333,11 @@ export class EnemyManager {
     ownerColor?: number,
     options: EnemySpawnOptions = {},
   ): EnemyEntity {
+    if (this.waterGeometry) {
+      const dry = this.waterGeometry.resolveDryPoint(x, y, this.resolvedConfigs[kind].size * .5);
+      if (!dry) throw new Error('[EnemyManager] No dry ground available for enemy spawn');
+      x = dry.x; y = dry.y;
+    }
     const id = this.generateEnemyId(kind);
     const enemy = new EnemyEntity(
       this.scene,
@@ -1379,6 +1388,7 @@ export class EnemyManager {
   }
 
   destroy(): void {
+    this.waterGeometry = null;
     this.combatActive = false;
     this.plagueMovement = null;
     this.plaguePursuers.clear();

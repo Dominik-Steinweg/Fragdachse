@@ -38,7 +38,7 @@ export interface FlowFieldTuning {
 }
 
 export type FlowFieldCellKind =
-  | 'ground' | 'rock' | 'trunk' | 'dirt' | 'track' | 'pedestal' | 'base' | 'outOfBounds';
+  | 'water' | 'ground' | 'rock' | 'trunk' | 'dirt' | 'track' | 'pedestal' | 'base' | 'outOfBounds';
 
 export const CELL_CODE = {
   ground: 0,
@@ -49,19 +49,20 @@ export const CELL_CODE = {
   pedestal: 5,
   base: 6,
   outOfBounds: 7,
+  water: 8,
 } as const;
 
 export const CELL_KINDS_BY_CODE: readonly FlowFieldCellKind[] = [
-  'ground', 'rock', 'trunk', 'dirt', 'track', 'pedestal', 'base', 'outOfBounds',
+  'ground', 'rock', 'trunk', 'dirt', 'track', 'pedestal', 'base', 'outOfBounds', 'water',
 ];
 
-const TRAVERSABLE_BY_CODE = Uint8Array.of(1, 0, 0, 1, 1, 1, 0, 0);
-const DESTRUCTIBLE_BY_CODE = Uint8Array.of(0, 1, 0, 0, 0, 0, 0, 0);
+const TRAVERSABLE_BY_CODE = Uint8Array.of(1, 0, 0, 1, 1, 1, 0, 0, 0);
+const DESTRUCTIBLE_BY_CODE = Uint8Array.of(0, 1, 0, 0, 0, 0, 0, 0, 0);
 /**
  * Zellarten, die dauerhaft blockieren und nicht weggeraeumt werden koennen. Nur sie loesen den
  * Wandaufschlag aus - Felsen sind zerstoerbar und sollen weiterhin angelaufen werden.
  */
-const WALL_BY_CODE = Uint8Array.of(0, 0, 1, 0, 0, 0, 1, 1);
+const WALL_BY_CODE = Uint8Array.of(0, 0, 1, 0, 0, 0, 1, 1, 1);
 
 export const INTEGRATION_INFINITY = 999999;
 
@@ -73,7 +74,8 @@ export const NEIGHBOR_DIRECTIONS = [
 export const NEIGHBOR_MOVE_FACTORS = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2] as const;
 
 export function buildCostByCode(tuning: FlowFieldTuning): Uint32Array {
-  const costs = new Uint32Array(8);
+  const costs = new Uint32Array(CELL_KINDS_BY_CODE.length);
+  costs[CELL_CODE.water] = INTEGRATION_INFINITY;
   costs[CELL_CODE.ground] = tuning.groundCost;
   costs[CELL_CODE.rock] = tuning.rockCost;
   costs[CELL_CODE.trunk] = tuning.trunkCost;
@@ -86,7 +88,7 @@ export function buildCostByCode(tuning: FlowFieldTuning): Uint32Array {
 }
 
 export function createEmptyCounts(): Record<FlowFieldCellKind, number> {
-  return { ground: 0, rock: 0, trunk: 0, dirt: 0, track: 0, pedestal: 0, base: 0, outOfBounds: 0 };
+  return { water: 0, ground: 0, rock: 0, trunk: 0, dirt: 0, track: 0, pedestal: 0, base: 0, outOfBounds: 0 };
 }
 
 /** Allokationsarmer Min-Heap fuer die gewichtete Mehrziel-Dijkstra-Berechnung. */
@@ -259,6 +261,7 @@ export function createTopology(totalCells: number): FlowFieldTopology {
 
 /** Prioritaet: Basis vor Barriere vor Fels vor allen statischen Quellen. */
 export function resolveCellCode(sources: FlowFieldTopologySources, index: number): number {
+  if (sources.staticKind[index] === CELL_CODE.water) return CELL_CODE.water;
   if (sources.baseOccupancy[index] === 1) return CELL_CODE.base;
   // Kein eigener Cell-Code: aktive Tore teilen die vorhandene nicht-destruktible Hard-Wall-Semantik.
   if (sources.barrierOccupancy[index] === 1) return CELL_CODE.trunk;

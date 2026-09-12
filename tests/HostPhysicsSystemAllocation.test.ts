@@ -21,6 +21,8 @@ import { BURROW_DASH_IMPULSE_MULTIPLIER, BURROW_UNDERGROUND_SPEED_FACTOR, BURROW
   DASH_F_MIN, DASH_T1_S, DASH_T2_S, ENEMY_DASH_F_START, PLAYER_SIZE, PLAYER_SPEED } from '../src/config';
 import { BurrowSystem } from '../src/systems/BurrowSystem';
 import { getPlayerDashBurstSpeedFactor } from '../src/utils/dashTiming';
+import { WaterGeometry } from '../src/arena/WaterGeometry';
+import { CELL_SIZE } from '../src/config';
 
 function createMockEnemy(id: string, x = 100, y = 100, vx = 50, vy = 60) {
   const setVelocity = vi.fn();
@@ -121,6 +123,7 @@ function createHarness() {
   const colliderDestroySpies: Array<() => void> = [];
   const scene = {
     physics: {
+      world: { on: vi.fn(), off: vi.fn() },
       add: {
         collider: vi.fn(() => {
           const destroy = vi.fn();
@@ -179,6 +182,39 @@ function createBurrowDashHarness(blocked: () => boolean = () => false) {
   };
   return { ...h, player, burrow, effects, colliders, enter };
 }
+
+describe('Water physics lifetime', () => {
+  it.each([false, true])('sweeps players and enemies across water while burrowed=%s', burrowed => {
+    const h = createHarness();
+    const m = resolveActiveArenaWorldMetrics();
+    const cell = { gridX: 5, gridY: 5 };
+    const water = new WaterGeometry([cell], m);
+    const left = m.offsetX + cell.gridX * CELL_SIZE;
+    const cy = m.offsetY + (cell.gridY + .5) * CELL_SIZE;
+    const player = createMockPlayer('water-player');
+    const enemy = createMockEnemy('water-enemy');
+    const bodies = [player.physicsProxy.body!, enemy.sprite.body!];
+    for (const b of bodies) {
+      const body = b as any;
+      Object.assign(body, { enable: true, halfWidth: 8, halfHeight: 8,
+        prev: { x: left - 80, y: cy - 8 }, center: { x: left + 100, y: cy },
+        position: { x: left + 92, y: cy - 8, set(x: number, y: number) { this.x = x; this.y = y; } },
+        updateCenter() { this.center.x = this.position.x + 8; this.center.y = this.position.y + 8; } });
+    }
+    h.players.set(player.id, player); h.enemies.set(enemy.id, enemy);
+    h.system.setPlayerBurrowed(player.id, burrowed); h.system.setEnemyBurrowed(enemy.id, burrowed);
+    h.system.setWaterGeometry(water);
+    const on = h.scene.physics.world.on as ReturnType<typeof vi.fn>;
+    const step = on.mock.calls[0][1];
+    step();
+    for (const b of bodies) expect((b as any).center.x + 8).toBeLessThanOrEqual(left);
+    const world = h.scene.physics.world;
+    // The Arcade plugin clears its World before later Scene SHUTDOWN callbacks.
+    (h.scene.physics as any).world = null;
+    h.system.setWaterGeometry(null);
+    expect(world.off).toHaveBeenCalledWith('worldstep', step);
+  });
+});
 
 describe('host player dash and Burrow transition', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(0); });

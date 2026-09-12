@@ -101,6 +101,7 @@ export const DEPTH = {
   TRACKS: 3,
   BASES: 4,
   DECALS: 5,
+  WATER: 5.2,
   ROCKS: 9,
   /**
    * Grossflaechiges Moos auf dem Felsbestand. Liegt ueber der Materialstoerung des Felsens

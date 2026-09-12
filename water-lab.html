@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fragdachse · Wasserprobe</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101d22;color:#e6eeea;font:14px system-ui}header{padding:16px 24px;border-bottom:1px solid #365058}h1{font-size:20px;margin:0 0 5px}p{margin:4px 0;color:#afc5c3}nav{display:flex;gap:8px;flex-wrap:wrap;padding:12px 24px}button{background:#29474c;border:1px solid #58797a;border-radius:6px;color:#effaf5;padding:8px 12px;cursor:pointer}button:hover{background:#41666a}#stage{width:100%;height:calc(100vh - 238px);min-height:380px}#status{padding:12px 24px;display:block;color:#c4e6d5}a{color:#a8ded8}
+</style></head><body>
+<header><h1>Fragdachse · Wasserprobe</h1><p>Teich aus Testkarte 00 · originaler Wasser-Renderer, Host-Kollision und Spieltexturen. Lokale Testszene ohne Runde.</p></header>
+<nav aria-label="Spielregeln"><button id="walk">Laufen</button><button id="dash">Dash</button><button id="burrow">Buddeln</button><button id="diagonal">Diagonal ans Ufer</button><button id="teleport">Teleport über Wasser</button><button id="wet-teleport">Teleport ins Wasser</button><button id="shots">Schüsse</button></nav>
+<nav aria-label="Darstellung"><button id="zoom">Zoom 100 %</button><button id="pan">Kamera weg</button><button id="grid">Chunkgrenzen</button><button id="light">Lichtprobe: Tag</button><button id="rebuild">Welt neu aufbauen</button><a href="/">Zum Spiel</a></nav>
+<div id="stage"></div><output id="status" aria-live="polite">Lädt …</output>
+<script type="module" src="/src/dev/waterLab.ts"></script></body></html>

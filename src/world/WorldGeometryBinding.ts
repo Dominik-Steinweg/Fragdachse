@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { WaterGeometry } from '../arena/WaterGeometry';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
 import type { BaseSpec } from '../arena/BaseRegistry';
 import { CELL_SIZE } from '../config';
@@ -87,6 +88,8 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     // WorldCombatCore created this sole index before the World existed. Binding claims that
     // instance after installing the World arrays; Projectile and Queries receive the same object.
     this.obstacleIndex = combatSystem.claimObstacleIndex(this.bindingToken);
+    const water = new WaterGeometry(layout.water ?? [], world.metrics);
+    this.obstacleIndex.setWaterGeometry(water);
     this.geometryQueries = createWorldGeometryQueries({
       metrics: world.metrics,
       index: this.obstacleIndex,
@@ -126,7 +129,9 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     hostPhysics.setRockGroup(arena.rockGroup, arena.trunkGroup);
     hostPhysics.setBaseGroup(baseManager?.getBaseGroup() ?? null);
     hostPhysics.setWorldMetrics(world.metrics);
+    hostPhysics.setWaterGeometry(water);
     hostPhysics.setMovementBlockedCellResolver((gridX, gridY) => {
+      if (water.hasCell(gridX, gridY)) return true;
       const rockId = arena.rockGrid.getIndex(gridX, gridY);
       if (rockId >= 0 && arena.rockPhysicsProxies[rockId]?.active === true) return true;
       if (baseManager?.isMovementBlockedCell(gridX, gridY) === true) return true;
@@ -230,6 +235,8 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.gridListener);
     this.fireObstacles.reset();
     if (ownsGeometry) {
+      this.obstacleIndex.setWaterGeometry(null);
+      hostPhysics.setWaterGeometry(null);
       fireSystem.setGroundResolvers(null, null);
       lighting.setOccluderIndex(null);
       leafBlower.setTerrainMaterialLayout(null);

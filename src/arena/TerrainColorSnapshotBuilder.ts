@@ -1,8 +1,10 @@
+import { WaterSurfaceModel, WATER_COLOR } from './WaterSurfaceModel';
 import * as Phaser from 'phaser';
 import {
   CAPTURE_THE_BEER_BASE_TINT_ALPHA,
   CAPTURE_THE_BEER_BLUE_BASE_TINT,
   CAPTURE_THE_BEER_RED_BASE_TINT,
+  CELL_SIZE,
   getCaptureTheBeerBaseWorldBounds,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
@@ -124,6 +126,20 @@ export class TerrainColorSnapshotBuilder {
       const readRegion = (index: number): void => {
         if (index >= this.regions.length) {
           this.scratch.destroy();
+          const water = new WaterSurfaceModel(this.options.layout.water ?? []);
+          if (this.options.layout.water?.length) {
+            for (const cell of this.options.layout.water) {
+              const left = Math.floor(cell.gridX * CELL_SIZE / TERRAIN_SNAPSHOT_SCALE);
+              const top = Math.floor(cell.gridY * CELL_SIZE / TERRAIN_SNAPSHOT_SCALE);
+              const size = CELL_SIZE / TERRAIN_SNAPSHOT_SCALE;
+              for (let y = Math.max(0, top); y < Math.min(this.height, top + size); y++)
+                for (let x = Math.max(0, left); x < Math.min(this.width, left + size); x++) {
+                  if (water.sample((x + .5) * TERRAIN_SNAPSHOT_SCALE, (y + .5) * TERRAIN_SNAPSHOT_SCALE) <= 0) continue;
+                  const i = (y * this.width + x) * 3;
+                  data[i] = WATER_COLOR >> 16; data[i + 1] = WATER_COLOR >> 8 & 255; data[i + 2] = WATER_COLOR & 255;
+              }
+            }
+          }
           resolve(snapshot);
           return;
         }

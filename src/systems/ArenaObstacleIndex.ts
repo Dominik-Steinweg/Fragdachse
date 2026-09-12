@@ -1,3 +1,4 @@
+import type { WaterGeometry } from '../arena/WaterGeometry';
 // Nur Typ-Import: dieses Modul soll ohne Phaser-Laufzeit (und damit ohne DOM) nutzbar
 // und testbar bleiben. Alle Phaser-Aufrufe laufen über die übergebenen Objekte.
 import type * as Phaser from 'phaser';
@@ -211,6 +212,10 @@ export class ArenaObstacleIndex {
   /** Lazy vom ersten Hindernis erzeugt, danach wiederverwendet (siehe `writeRect`). */
   private scratchBounds: Phaser.Geom.Rectangle | null = null;
 
+  private waterGeometry: WaterGeometry | null = null;
+
+  setWaterGeometry(water: WaterGeometry | null): void { this.waterGeometry = water; }
+
   constructor(private readonly sources: ArenaObstacleSources) {}
 
   getRockClass(index: number): ObstacleClass {
@@ -267,6 +272,7 @@ export class ArenaObstacleIndex {
    * erfolgt erst hier, damit Rocks, Basen und Barrieren Rechtecke und Trunks Kreise bleiben.
    */
   isCircleBlocked(centerX: number, centerY: number, radius: number): boolean {
+    if (this.waterGeometry?.isCircleBlocked(centerX, centerY, radius)) return true;
     if (!Number.isFinite(centerX) || !Number.isFinite(centerY) || !Number.isFinite(radius) || radius < 0) {
       return true;
     }

@@ -1,3 +1,5 @@
+import { WaterSurfaceRenderer } from './WaterSurfaceRenderer';
+import { WaterGeometry } from './WaterGeometry';
 import * as Phaser from 'phaser';
 import {
   GAME_WIDTH, GAME_HEIGHT,
@@ -106,6 +108,7 @@ export interface ArenaPresentationResult {
    * sichtbaren Ausschnitt statt der Weltflaeche (siehe {@link ./chunks/GroundSurfaceStreamer}).
    */
   groundSurface: GroundSurfaceStreamer | null;
+  waterSurface: WaterSurfaceRenderer | null;
   /**
    * Die Ground-Cover-Platzierungen dieser World. Einmalig aus `layout.seed` und `layout.dirt`
    * erzeugt und danach unveraendert: Sie sind die Quelle jedes Chunk-Bakes und muessen deshalb
@@ -270,11 +273,12 @@ export class ArenaBuilder {
 
     // Ground-Cover-Platzierungen entstehen genau einmal je World und bleiben danach
     // unveraendert; sie sind die Quelle jedes Chunk-Bakes dieser Schicht.
+    const waterGeometry = new WaterGeometry(layout.water ?? [], worldMetrics);
     const groundCoverPlacements = generateGroundCoverPlacements({
       seed: layout.seed,
       dirt: layout.dirt ?? [],
       metrics: worldMetrics,
-    });
+    }).filter(p => !waterGeometry.isCircleBlocked(p.worldX, p.worldY, p.sizePx * Math.SQRT2 / 2));
 
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
@@ -333,6 +337,7 @@ export class ArenaBuilder {
       canopyObjects,
       trackObjects,
       groundSurface: null,
+      waterSurface: presentation && layout.water?.length ? new WaterSurfaceRenderer(this.scene, frame, layout.water, layout.seed) : null,
       groundCoverPlacements,
       rockOverlaySurface: null,
       rockOverlaySource: createRockOverlaySource(),
@@ -459,6 +464,7 @@ export class ArenaBuilder {
       canopyObjects: result.canopyObjects,
       trackObjects: result.trackObjects,
       groundSurface: result.groundSurface,
+      waterSurface: result.waterSurface,
       groundCoverPlacements: result.groundCoverPlacements,
       rockOverlaySurface: result.rockOverlaySurface,
       rockOverlaySource: result.rockOverlaySource,
@@ -513,6 +519,7 @@ export class ArenaBuilder {
   static updateSurfaceResidency(result: ArenaBuilderResult | null, view: ChunkWorldRect): void {
     if (!result) return;
     result.groundSurface?.updateResidency(view);
+    result.waterSurface?.updateResidency(view);
     result.rockOverlaySurface?.updateResidency(view);
     result.rockVisualSystem?.updateVisibility(view);
   }
@@ -864,6 +871,8 @@ export class ArenaBuilder {
     result.groundSurface = null;
     result.groundCoverPlacements.length = 0;
 
+    result.waterSurface?.destroy();
+    result.waterSurface = null;
     result.rockOverlaySurface?.destroy();
     result.rockOverlaySurface = null;
     result.rockOverlaySource.cells.length = 0;
@@ -1044,6 +1053,8 @@ function replaceArenaLayoutContents(target: ArenaLayout, authored: ArenaLayout):
   replaceArrayContents(target.trees, authored.trees);
   replaceArrayContents(target.tracks, authored.tracks);
   replaceArrayContents(target.dirt, authored.dirt);
+  if (authored.water) target.water = authored.water.map(cell => ({ ...cell }));
+  else delete target.water;
   replaceArrayContents(target.powerUpPedestals, authored.powerUpPedestals);
 
   if (authored.decals) {

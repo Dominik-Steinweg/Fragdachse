@@ -42,6 +42,7 @@ function createExecutor(
   } as unknown as EnemyManager;
   const flowField = {
     isTraversableAt,
+    getKindAt: () => 'empty',
     getIntegrationValueAt,
     // Erreichbare Integrationswerte bedeuten ein Feld mit Zielen; nur die Zellform bleibt leer.
     hasGoalCells: () => true,

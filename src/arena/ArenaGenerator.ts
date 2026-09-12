@@ -27,6 +27,8 @@ import { createOrganicDirtMargin } from './OrganicDirtMargin';
 import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 import type { GameMode } from '../types';
 import type { WorldMetrics } from '../world/WorldMetrics';
+import { WaterGeometry } from './WaterGeometry';
+import { DECAL_SIZE } from './DecalConfig';
 
 // ── Felsfeld-Gänge ──────────────────────────────────────────────────────────
 /** Abtastschritt entlang eines Gangs in Zellen; kleiner = glattere Wand, mehr Rechenaufwand. */
@@ -101,7 +103,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 3;
+export const ARENA_GENERATOR_VERSION = 4;
 
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
@@ -144,6 +146,8 @@ function clampToUnitRange(value: number): number {
 export class ArenaGenerator {
   private constructor(private readonly input: ArenaGenerationInput) {}
 
+  private readonly waterKeys = new Set<number>();
+
   private get metrics(): WorldMetrics {
     return this.input.metrics;
   }
@@ -183,6 +187,16 @@ export class ArenaGenerator {
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
     // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
     // bewusst gesetztes Band als abgeschnürte Tasche und fräste es wieder auf.
+    const water = (coopMapConfig?.water ?? []).map(cell => ({ ...cell }));
+    const waterGeometry = new WaterGeometry(water, this.metrics);
+    for (const cell of water) {
+      if (!Number.isInteger(cell.gridX) || !Number.isInteger(cell.gridY) || cell.gridX < 0 || cell.gridY < 0
+        || cell.gridX >= this.metrics.gridCols || cell.gridY >= this.metrics.gridRows
+        || this.isReservedBaseObstacleCell(cell.gridX, cell.gridY, coopBaseSpecs)
+        || missionBarrierCells.has(cell.gridX + '_' + cell.gridY)
+        || missionCheckpointCells.has(cell.gridX + '_' + cell.gridY)) throw new Error('[ArenaGenerator] Invalid water cell');
+      this.waterKeys.add(this.cellKey(cell.gridX, cell.gridY));
+    }
     const authoredRockWallCells = this.collectRockWallCells(coopMapConfig?.rockWalls);
 
     for (let attempt = 0; attempt < 100; attempt++) {
@@ -289,6 +303,7 @@ export class ArenaGenerator {
         for (let gx = 0; gx < this.metrics.gridCols; gx++) {
           if (
             map[gy][gx]
+            && !this.waterKeys.has(this.cellKey(gx, gy))
             && !trackCols.has(gx)
             && !this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
             && !missionBarrierCells.has(`${gx}_${gy}`)
@@ -313,6 +328,7 @@ export class ArenaGenerator {
       // Konnektivität sicherstellen: Statt bei einer abgeschnürten Tasche den kompletten Versuch
       // zu verwerfen (was bei höherem rockFillRatio schnell alle 100 Versuche verbraucht und in
       // einer Exception endet), wird die günstigste Verbindung zwischen den Regionen nachgefräst.
+      for (const cell of water) blocked[cell.gridY][cell.gridX] = true;
       this.ensureConnected(blocked, rocks);
 
       // Bäume auf verbleibenden freien Zellen platzieren.
@@ -397,6 +413,8 @@ export class ArenaGenerator {
         coopBaseSpecs,
       );
 
+      for (const cell of water) blocked[cell.gridY][cell.gridX] = true;
+
       // Dirt-Zellen: Unter/um Felsen, unter/um Gleise + zusammenhängende Zufallsflecken
       const dirtSet = new Set<number>(); // gy * this.metrics.gridCols + gx
       const marginSources: Array<{ gridX: number; gridY: number }> = [...rocks];
@@ -438,6 +456,7 @@ export class ArenaGenerator {
       }
       const dirt: DirtCell[] = [];
       for (const key of dirtSet) {
+        if (this.waterKeys.has(key)) continue;
         dirt.push({ gridX: key % this.metrics.gridCols, gridY: Math.floor(key / this.metrics.gridCols) });
       }
 
@@ -493,7 +512,12 @@ export class ArenaGenerator {
         trees,
         tracks,
         dirt,
-        decals,
+        decals: water.length ? decals.filter(cell => !waterGeometry.isCircleBlocked(
+          this.metrics.offsetX + (cell.gridX + .5) * CELL_SIZE + cell.offsetX,
+          this.metrics.offsetY + (cell.gridY + .5) * CELL_SIZE + cell.offsetY,
+          (cell.surface === 'rock' ? cell.displaySize ?? ROCK_DECAL_SIZE : DECAL_SIZE) * Math.SQRT1_2,
+        )) : decals,
+        ...(water.length ? { water } : {}),
         powerUpPedestals,
         groundHazardZones,
       };
@@ -549,7 +573,8 @@ export class ArenaGenerator {
     trackPosition?: CoopDefenseMapTrackPosition,
   ): { trackCols: Set<number>; tracks: TrackCell[] } {
     const candidateColumns = Array.from({ length: Math.max(0, this.metrics.gridCols - 1) }, (_, col) => col)
-      .filter((col) => this.isTrackColumnClearOfBases(col, bases));
+      .filter((col) => this.isTrackColumnClearOfBases(col, bases)
+        && !Array.from(this.waterKeys).some(key => key % this.metrics.gridCols === col || key % this.metrics.gridCols === col + 1));
 
     if (candidateColumns.length === 0) {
       throw new Error('[ArenaGenerator] Keine Gleisspalte mit ausreichendem Abstand zu den Basen verfügbar');
@@ -1890,6 +1915,7 @@ export class ArenaGenerator {
       const other = components[1];
       const path = this.findCheapestPath(blocked, other, main);
 
+      if (path.length === 0) throw new Error('[ArenaGenerator] Water disconnects walkable terrain');
       for (const [gx, gy] of path) {
         if (!blocked[gy][gx]) continue;
         blocked[gy][gx] = false;
@@ -1977,6 +2003,7 @@ export class ArenaGenerator {
         const nx = cx + dx;
         const ny = cy + dy;
         if (nx < 0 || nx >= this.metrics.gridCols || ny < 0 || ny >= this.metrics.gridRows) continue;
+        if (this.waterKeys.has(this.cellKey(nx, ny))) continue;
         const weight = blocked[ny][nx] ? 1 : 0;
         const nextDist = d + weight;
         if (nextDist < dist[ny][nx]) {

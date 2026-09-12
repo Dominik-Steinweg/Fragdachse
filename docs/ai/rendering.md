@@ -32,6 +32,8 @@ Camera-Feedback besitzt einen zentralen Owner: [CameraFeedbackController.ts](../
 
 ## Runtime und Renderer
 
+Wasser besitzt getrennte World-Geometrie: [WaterGeometry.ts](../../src/arena/WaterGeometry.ts) sperrt Bodenabfragen, Platzierung und gesweepte Koerperbewegung auch bei deaktivierten Buddel-Collidern. Es hat keine HP und nimmt nicht an Schuss-, Sicht- oder Projektil-Hindernisabfragen teil; die Navigation fuehrt Wasser als ausdruecklich unpassierbar. [WaterSurfaceRenderer.ts](../../src/arena/WaterSurfaceRenderer.ts) gehoert ausschliesslich zur World-Praesentation: Maskentextur und Shader entstehen pro residentem Chunk, Uferdaten bleiben statisch, Animation verwendet gemeinsame Weltkoordinaten und lokale Zeit. Renderer-Teardown veraendert keine Wasser-Spielregel.
+
 [ArenaBuilder.ts](../../src/arena/ArenaBuilder.ts) trennt Runtime-/Physik-Proxies von visuellen World-Objekten. Ohne Presentation werden World-Physik, Runtime-Geometrie und notwendige Indizes weiter aufgebaut; nur die visuellen Flächen, Overlays und Streamer entfallen. Renderer beobachten Runtime und werden bei Teardown vollständig gelöst.
 
 Player- und Tree-Runtime folgen demselben Prinzip: PlayerBody und TreePhysicsProxy sind Simulation; Sprite, Licht, Textur und Overlay sind Präsentation. Kollisionen werden aus expliziter Runtime-Geometrie abgeleitet, nicht aus Displaymaßen.

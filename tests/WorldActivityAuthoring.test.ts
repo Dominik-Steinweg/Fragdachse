@@ -72,6 +72,13 @@ const ALL_MAP_CONFIGS = [
   getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID),
 ];
 
+it('keeps authored water on the World through the complete map round-trip', () => {
+  const map = getCoopDefenseMapConfig('0');
+  const scenario = toAuthoredScenario(map);
+  expect(scenario.world.terrain.water).toEqual(map.water);
+  expect(toCoopDefenseMapConfig(scenario).water).toEqual(map.water);
+});
+
 /** Feldnamen eines authored Interfaces – die Quelle, die aufgeteilt wird. */
 function collectInterfaceFields(interfaceName: string): string[] {
   const source = readFileSync(resolve(process.cwd(), 'src/config/coopDefenseMaps.ts'), 'utf8');

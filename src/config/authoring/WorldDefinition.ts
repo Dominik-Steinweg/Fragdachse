@@ -115,6 +115,7 @@ export interface WorldMetricsDefinition {
 }
 
 export interface WorldTerrainDefinition {
+  readonly water?: readonly import('../../types').WaterCell[];
   readonly rockFillRatio?: number;
   readonly treeCount?: number;
   readonly rockField?: CoopDefenseMapRockFieldConfig;

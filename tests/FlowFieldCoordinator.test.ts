@@ -100,6 +100,25 @@ function createHarness(options: {
 }
 
 describe('FlowFieldCoordinator', () => {
+  it('preserves impassable water through worker jobs and dynamic obstacle patches', () => {
+    const water = Array.from({ length: METRICS.rows }, (_, gridY) => ({ gridX: 7, gridY }));
+    const harness = createHarness({ layout: createLayout({ water }), autoFlush: false });
+    const view = harness.coordinator.registerField('water-probe', { goalMode: 'dynamic' });
+    const service = EnemyFlowFieldService.fromView(view);
+    view.setGoals(harness.goals([{ gridX: 2, gridY: 5 }]));
+    harness.bootstrap();
+    expect(service.getReachedGoalCellAt(3, 5)).not.toBeNull();
+    view.setGoals(harness.goals([{ gridX: 10, gridY: 5 }]));
+    harness.coordinator.patchCell(7, 5, true);
+    harness.coordinator.patchCell(7, 5, false);
+    harness.coordinator.advance(NAV_TICK_MS);
+    harness.runner.flush();
+    harness.coordinator.advance(NAV_TICK_MS);
+    expect(service.getKindAt(7, 5)).toBe('water');
+    expect(service.isTraversableAt(7, 5)).toBe(false);
+    expect(service.getReachedGoalCellAt(3, 5)).toBeNull();
+    harness.coordinator.destroy();
+  });
   it('activates a result only at a nav tick, never as soon as it is finished', () => {
     const harness = createHarness({ autoFlush: false });
     const view = harness.coordinator.registerField('player', { goalMode: 'dynamic' });

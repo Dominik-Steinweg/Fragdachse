@@ -1558,6 +1558,9 @@ export interface TrackCell { gridX: number; gridY: number; }
 /** Eine Dirt-Gitterzelle (rein visuell, keine Kollision) */
 export interface DirtCell { gridX: number; gridY: number; }
 
+/** Immutable water terrain: blocks ground movement, never fire. */
+export interface WaterCell { gridX: number; gridY: number; }
+
 export type DecalTerrainLayer = 'dirt' | 'grass' | 'rock';
 
 /** Visuelle Oberflaeche, auf der ein Decal liegt. */
@@ -1707,6 +1710,7 @@ export interface ArenaLayout {
   trees:  TreeCell[];
   tracks: TrackCell[];
   dirt:   DirtCell[];
+  water?: WaterCell[];
   decals?: DecalCell[];
   powerUpPedestals: PowerUpPedestalCell[];
   /** Seed-deterministic, inactive cells for authored ground-hazard events. */

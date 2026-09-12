@@ -706,6 +706,7 @@ export interface ResolvedCoopDefenseMapTutorialStepConfig extends CoopDefenseMap
 }
 
 export interface CoopDefenseMapConfig {
+  readonly water?: readonly import('../types').WaterCell[];
   readonly mapId: string;
   /**
    * Horizontale Arenabreite im 32-px-Raster. Standard sind 60 Zellen; Werte werden auf
@@ -1232,6 +1233,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     arenaWidthCells,
     arenaHeightCells,
   );
+  const water = normalizeWaterCells(mapConfig.water, arenaWidthCells, arenaHeightCells, bases, rockWalls, missionProgress, trackPosition);
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -1257,6 +1259,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     rockWalls,
     tutorialAnchor,
+    water,
     tutorialSteps,
     trackMode,
     trackPosition,
@@ -3829,4 +3832,45 @@ function normalizePersistentSpawnSource(
     throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${spawnId} needs a spawn-point base: ${baseId}`);
   }
   return { type: 'base', baseId };
+}
+
+/** Water is permanent World geometry; invalid authored overlaps are errors, never silently clipped. */
+function normalizeWaterCells(
+  cells: CoopDefenseMapConfig['water'], cols: number, rows: number,
+  bases: readonly CoopBaseConfig[], walls: readonly CoopDefenseMapRockWallConfig[] | undefined,
+  mission: ResolvedCoopDefenseMapMissionProgressConfig | undefined, tracks: CoopDefenseMapTrackPosition,
+): CoopDefenseMapConfig['water'] {
+  if (cells === undefined) return undefined;
+  if (!Array.isArray(cells)) throw new Error('[coopDefenseMaps] Water must be an array');
+  const blocked = new Set<string>();
+  for (const base of bases) {
+    const { width, height } = getBaseShapeDimensions(base.shape);
+    const origin = getBaseOriginForArena(base.anchor, width, height, cols, rows);
+    const offsets = base.shape.kind === 'rectangle'
+      ? Array.from({ length: width * height }, (_, i) => ({ gridX: i % width, gridY: Math.floor(i / width) }))
+      : base.shape.cells;
+    for (const cell of offsets) blocked.add((origin.gridX + cell.gridX) + '_' + (origin.gridY + cell.gridY));
+  }
+  for (const wall of walls ?? []) for (let y = wall.gridY; y < wall.gridY + wall.heightCells; y++)
+    for (let x = wall.gridX; x < wall.gridX + wall.widthCells; x++) blocked.add(x + '_' + y);
+  for (const barrier of mission?.barriers ?? []) for (const cell of barrier.cells) blocked.add(cell.gridX + '_' + cell.gridY);
+  for (const checkpoint of [...(mission?.checkpoints ?? []), ...(mission?.startArea ? [mission.startArea] : [])]) {
+    const radius = checkpoint.radiusCells ?? 1;
+    for (let y = Math.max(0, Math.ceil(checkpoint.gridY - radius)); y <= Math.min(rows - 1, Math.floor(checkpoint.gridY + radius)); y++)
+      for (let x = Math.max(0, Math.ceil(checkpoint.gridX - radius)); x <= Math.min(cols - 1, Math.floor(checkpoint.gridX + radius)); x++)
+        if ((x - checkpoint.gridX) ** 2 + (y - checkpoint.gridY) ** 2 <= radius ** 2) blocked.add(x + '_' + y);
+  }
+  const seen = new Set<string>();
+  return cells.map(cell => {
+    if (!cell || !Number.isInteger(cell.gridX) || !Number.isInteger(cell.gridY)
+      || cell.gridX < 0 || cell.gridY < 0 || cell.gridX >= cols || cell.gridY >= rows)
+      throw new Error('[coopDefenseMaps] Water cell outside arena or non-integer');
+    const key = cell.gridX + '_' + cell.gridY;
+    if (seen.has(key)) throw new Error('[coopDefenseMaps] Duplicate water cell: ' + key);
+    if (blocked.has(key)) throw new Error('[coopDefenseMaps] Water overlaps authored structure: ' + key);
+    if (typeof tracks === 'object' && (cell.gridX === tracks.gridX || cell.gridX === tracks.gridX + 1))
+      throw new Error('[coopDefenseMaps] Water overlaps authored railway: ' + key);
+    seen.add(key);
+    return { gridX: cell.gridX, gridY: cell.gridY };
+  });
 }

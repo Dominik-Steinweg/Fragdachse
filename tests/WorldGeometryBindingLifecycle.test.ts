@@ -77,7 +77,7 @@ function createSceneScopedCollaborators() {
     arenaObstacles: undefined as unknown,
     baseManager: undefined as unknown,
     setWorldMetrics(value: unknown) { this.worldMetrics = value; },
-    claimObstacleIndex() { return this.obstacleIndex = {}; },
+    claimObstacleIndex() { return this.obstacleIndex = { setWaterGeometry: vi.fn() }; },
     setArenaObstacles(rocks: unknown, trunks: unknown) { this.arenaObstacles = [rocks, trunks]; },
     setBaseObstacles: vi.fn(),
     setBaseManager(value: unknown) { this.baseManager = value; },
@@ -98,6 +98,7 @@ function createSceneScopedCollaborators() {
   };
 
   const hostPhysics = {
+    setWaterGeometry: vi.fn(),
     worldMetrics: undefined as unknown,
     movementBlockedResolver: null as ((gridX: number, gridY: number) => boolean) | null,
     setRockGroup: vi.fn(),

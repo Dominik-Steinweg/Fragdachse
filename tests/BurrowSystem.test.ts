@@ -3,6 +3,7 @@ import { BURROW_DRAIN_INTERVAL_MS, BURROW_WINDUP_DURATION_MS, PLAYER_SIZE } from
 import type { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
 import { BurrowSystem } from '../src/systems/BurrowSystem';
 import type { WorldMetrics } from '../src/world/WorldMetrics';
+import { WaterGeometry } from '../src/arena/WaterGeometry';
 
 const PLAYER_ID = 'p1';
 
@@ -110,6 +111,13 @@ function enterUnderground(system: BurrowSystem): void {
 }
 
 describe('BurrowSystem Exit Assist', () => {
+  it('resolves a burrow exit beside water onto ground with full surface clearance', () => {
+    const water = new WaterGeometry([{ gridX: 1, gridY: 1 }], worldMetrics());
+    const h = createHarness({ blocked: (x, y, radius) => water.isCircleBlocked(x, y, radius) });
+    enterUnderground(h.system);
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(true);
+    expect(water.isCircleBlocked(h.player.x, h.player.y, PLAYER_SIZE / 2)).toBe(false);
+  });
   it('fans out windup to collection observers without replacing the existing Beer callback', () => {
     const harness = createHarness();
     const beer = vi.fn();

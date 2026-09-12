@@ -229,6 +229,7 @@ export class CoopDefenseSpawnExecutor {
       const gridX = edgeCell.gridX + inward.x * distance;
       const gridY = edgeCell.gridY + inward.y * distance;
       if (gridX < 0 || gridX >= cols || gridY < 0 || gridY >= rows) break;
+      if (flowFieldService.getKindAt(gridX, gridY) === 'water') return null;
       if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;
       if (flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
       return distance;

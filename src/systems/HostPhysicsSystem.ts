@@ -1,6 +1,7 @@
 import type { ZeusMovement } from './ZeusRuntime';
 import * as Phaser from 'phaser';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
+import type { WaterGeometry } from '../arena/WaterGeometry';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
@@ -214,8 +215,40 @@ export class HostPhysicsSystem {
   setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
   setEnemyHitStaggerResolver(resolver: ((enemyId: string, now: number) => boolean) | null): void { this.enemyHitStaggerResolver = resolver; }
   setWorldMetrics(metrics: WorldMetrics | null): void { this.worldMetrics = metrics; }
+  private waterGeometry: WaterGeometry | null = null;
+  private waterPhysicsWorld: Phaser.Physics.Arcade.World | null = null;
+  /** World-owned collision pass, independent of the colliders disabled by burrowing. */
+  setWaterGeometry(water: WaterGeometry | null): void {
+    this.waterPhysicsWorld?.off('worldstep', this.collideWater);
+    this.waterGeometry = water?.water.length ? water : null;
+    this.waterPhysicsWorld = this.waterGeometry ? this.scene.physics.world : null;
+    this.waterPhysicsWorld?.on('worldstep', this.collideWater);
+  }
+
+  private readonly collideWater = (): void => {
+    if (!this.bridge.isHost() || !this.waterGeometry) return;
+    const collide = (body: Phaser.Physics.Arcade.Body | null): void => {
+      if (!body?.enable) return;
+      const sx = body.prev.x + body.halfWidth;
+      const sy = body.prev.y + body.halfHeight;
+      const ex = body.center.x;
+      const ey = body.center.y;
+      const t = this.waterGeometry!.sweep(sx, sy, ex, ey, body.halfWidth, body.halfHeight);
+      if (t === 1) return;
+      body.position.set(sx + (ex - sx) * t - body.halfWidth, sy + (ey - sy) * t - body.halfHeight);
+      body.updateCenter();
+      body.setVelocity(0, 0);
+    };
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (player.active) collide(player.physicsProxy.body as Phaser.Physics.Arcade.Body | null);
+    }
+    this.enemyManager?.forEachEnemy(enemy => {
+      if (enemy.sprite.active) collide(enemy.sprite.body as Phaser.Physics.Arcade.Body | null);
+    });
+  };
   /** Landing validation reads the same static bodies that block ordinary movement. */
   canOccupyCircle(x: number, y: number, radius: number): boolean {
+    if (this.waterGeometry?.isCircleBlocked(x, y, radius)) return false;
     const m = this.worldMetrics;
     if (!m || ![x, y, radius].every(Number.isFinite) || radius < 0
       || x - radius < m.offsetX || y - radius < m.offsetY || x + radius > m.maxX || y + radius > m.maxY) return false;

@@ -1,4 +1,5 @@
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
+import { WaterGeometry } from '../arena/WaterGeometry';
 import * as Phaser from 'phaser';
 import { CELL_SIZE, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC, COOP_DEFENSE_NAV_TICK_INTERVAL_MS } from '../config';
 import type { BaseSpec } from '../arena/BaseRegistry';
@@ -109,6 +110,7 @@ export class CoopMissionCombatComposition {
   private createEnemyManager(): EnemyManager {
     const enemyManager = new EnemyManager(this.options.scene, this.options.enemyConfigs);
     enemyManager.setWorldMetrics(this.options.worldMetrics);
+    enemyManager.setWaterGeometry(new WaterGeometry(this.options.layout.water ?? [], this.options.worldMetrics));
     enemyManager.setVisualSink(this.options.visualSink);
     enemyManager.setLightingSystem(this.options.lighting);
     enemyManager.setEntityBurnGpuController(this.options.entityBurnGpuController);

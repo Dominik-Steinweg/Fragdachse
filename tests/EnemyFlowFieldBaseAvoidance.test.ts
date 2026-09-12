@@ -62,6 +62,29 @@ function createBase(
 }
 
 describe('Flow field around bases', () => {
+  it('does not escape diagonally between two touching water banks', () => {
+    const service = new EnemyFlowFieldService(createLayout({ water: [{ gridX: 1, gridY: 0 }, { gridX: 0, gridY: 1 }] }),
+      [], METRICS, { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 2, gridY: 2 }] });
+    expect(service.getReachedGoalCellAt(0, 0)).toBeNull();
+    expect(service.findNextWorldPositionTowards(0, 0, 2, 2)).toBeNull();
+    service.destroy();
+  });
+  it('routes around water and never treats it as destructible terrain', () => {
+    const water = Array.from({ length: ROWS - 2 }, (_, y) => ({ gridX: 7, gridY: y + 1 }));
+    const service = new EnemyFlowFieldService(createLayout({ water }), [], METRICS,
+      { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 12, gridY: 5 }] });
+    service.update(Date.now() + 1000);
+    expect(service.getKindAt(7, 5)).toBe('water');
+    expect(service.isTraversableAt(7, 5)).toBe(false);
+    expect(service.getReachedGoalCellAt(3, 5)).toEqual({ gridX: 12, gridY: 5 });
+    service.destroy();
+    const closed = new EnemyFlowFieldService(createLayout({ water: [...water,
+      { gridX: 7, gridY: 0 }, { gridX: 7, gridY: ROWS - 1 }] }), [], METRICS,
+      { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 12, gridY: 5 }] });
+    closed.update(Date.now() + 1000);
+    expect(closed.getReachedGoalCellAt(3, 5)).toBeNull();
+    closed.destroy();
+  });
   it('keeps the concrete source behind a shared dynamic multi-goal field', () => {
     const service = new EnemyFlowFieldService(createLayout(), [], METRICS, {
       goalMode: 'dynamic-fallback-bases',
