@@ -104,7 +104,7 @@ void main() {
   float deepMotion=smoothstep(18.0,58.0,basinDistance);
   float deepReflections=smoothstep(32.0,62.0,basinDistance);
   // One continuous water material: the shallow region shares the slow surface field,
-  // with much lower contrast. Only the large ripples and sharp reflections need depth.
+  // with much lower contrast. Ripples and their reflected light build up with depth.
   // A single monotonic distance ramp replaces the nearly uniform shallow shelf.
   // Every color channel darkens continuously; only the slope eases into deep water.
   float shoreFraction=clamp(depthDistance/${WATER_SHORE_DISTANCE.toFixed(1)},0.0,1.0);
@@ -116,20 +116,17 @@ void main() {
   float surfaceMotion=smoothstep(0.0,12.0,shore)*mix(.50,1.0,depth);
   float depthReflection=mix(1.0,.25,colorDepth);
   color+=vec3(.025,.070,.075)*(a-.5)*surfaceMotion*mix(1.0,.65,colorDepth);
-  // Soft procedural vegetation/sky reflections remain almost stationary; gentle
-  // distortion and small highlights give the pond depth without ocean-like troughs.
+  // Soft procedural vegetation/sky reflections remain almost stationary and follow
+  // the surface distortion. Reflected light belongs to the water, without drawn crests.
   float canopy=pondField(p*.006+vec2(uSeed,39.1)+eddyA*.06);
   float sky=smoothstep(.38,.72,pondField(p*.008+vec2(7.2,uSeed)+eddyB*.08));
   color-=vec3(.015,.030,.028)*smoothstep(.40,.72,canopy)*surfaceMotion;
-  // Broad reflected light fades into the basin so it cannot read as a shallow shelf.
-  color+=vec3(.035,.085,.105)*sky*surfaceMotion*depthReflection;
+  // A soft sheen shares the existing ripple field instead of drawing separate bright
+  // strokes. Broad reflected light stays subdued in the basin to preserve its depth.
+  float surfaceSheen=smoothstep(-.25,.90,ripples);
+  float reflectedSky=sky*mix(1.0,.70+.30*surfaceSheen,deepReflections);
+  color+=vec3(.035,.085,.105)*reflectedSky*surfaceMotion*depthReflection;
   color+=vec3(.003,.011,.013)*ripples*deepMotion;
-  // Broken wind-aligned highlights avoid the regular dots of crossed crest fields.
-  float glint=pow(max(0.0,sin(p.x*.14+p.y*.05+a*4.0+sin(p.y*.025+b*2.0)*.65+pulseA)),18.0);
-  float reflectionBreaks=pondField(p*.032+eddyA*.08+vec2(19.1,uSeed));
-  glint*=smoothstep(.38,.64,b)*smoothstep(.25,.65,sky)
-    *smoothstep(.42,.68,reflectionBreaks)*deepReflections;
-  color+=vec3(.15,.31,.32)*glint*.16;
   // Small shoreward wavelets share the outer water film's wetting cycle.
   // Roughly 39 px between crests leaves one or two across the shallow margin.
   // Base travel is 3.75 px/s; a faint trailing crest persists while its film spreads.
