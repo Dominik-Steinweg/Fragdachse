@@ -62,18 +62,28 @@ ist wieder platzierbar, und es gibt bewusst kein historisches Placeability-Feld.
 
 Das Verschieben ist eine atomare Mutation des vorhandenen Objekts und ausdrücklich kein Rückbau
 mit anschließendem Neubau. Die Runtime behält ihre ID, HP und alle Systemregistrierungen
-([`PlacementSystem.relocateRock`](../../src/systems/PlacementSystem.ts)); der Blueprint behält
+([`PlacementSystem.relocateRock`](../../src/systems/PlacementSystem.ts)); innerhalb des Speicherbereichs behält der Blueprint
 `persistentId`, Owner und `placementOrder`
 ([`PersistentBaseContributionStore.moveConstruction`](../../src/persistentBase/PersistentBaseContributionStore.ts)),
 ein Reward seine Identität und Freischaltung
 ([`PersistentBaseRewardStore.moveReward`](../../src/persistentBase/PersistentBaseRewardStore.ts)),
 und ein Reward-Podest seinen Item- und Respawn-Zustand
 ([`PowerUpSystem.repositionPersistentBaseRewardPedestal`](../../src/powerups/PowerUpSystem.ts)).
-Ein Ab- und Neuanmelden über die vorhandenen Remove-/Register-Pfade wäre hier falsch: Es würde
+Ein Ab- und Neuanmelden der Runtime über die vorhandenen Remove-/Register-Pfade wäre hier falsch: Es würde
 neue Identitäten, volle HP und neue Lifecycle-Effekte erzeugen. Nur die Darstellung darf neu
 aufgebaut werden. Der Host validiert Quelle und Ziel unmittelbar vor der Mutation erneut gegen
 dieselbe Vorschau, die der Client sieht; bei konkurrierenden Anfragen gewinnt die erste vom Host
 akzeptierte Mutation, und ein Fehlschlag lässt die Quelle vollständig unverändert.
+
+Eigene Konstruktionen dürfen die Grenze des persistenten Baubereichs beim Verschieben in beide
+Richtungen überschreiten. Beim Hinausschieben werden nur Blueprint und Persistenzbindung entfernt;
+die Runtime bleibt erhalten. Beim Hineinschieben wird die vorhandene Runtime als persönlicher
+Beitrag registriert. Außerhalb entsteht kein gespeicherter Blueprint. Diese Änderungen folgen
+denselben Commit-/Rollback-Regeln wie Bauen und Rückbau; der Baubereich ist eine Speichergrenze,
+keine Bewegungsgrenze für persönliche Konstruktionen. Base-owned Rewards behalten ihre authored
+Platzierungsdomain. Maßgeblich sind
+[`ConstructionWorldRuntime.movePersonalConstruction`](../../src/world/ConstructionWorldRuntime.ts)
+und [`PersistentBaseManagementAllClasses.test.ts`](../../tests/integration/PersistentBaseManagementAllClasses.test.ts).
 
 ## Erweiterung einer Mission
 

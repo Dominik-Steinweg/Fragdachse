@@ -37,11 +37,13 @@ export function constructionOwnershipTarget(rock: SyncedPlaceableRock, metrics: 
   }
   if (rock.kind === 'turret') {
     const size = getTurretVisualSpec(rock.turretWeaponId ?? (definition.kind === 'turret' ? definition.weaponId : 'SPORES')).displaySize;
-    halfWidth = Math.max(halfWidth, size / 2);
-    halfHeight = Math.max(halfHeight, size / 2);
+    // Sprite bounds include transparent padding; never extend into a neighbouring cell.
+    halfWidth = Math.min(halfWidth, size / 2);
+    halfHeight = Math.min(halfHeight, size / 2);
   }
+  // Keep the entire marker quad (including its glow) inside the occupied footprint.
   return { id: rock.id, ...worldCellCenter(metrics, rock.gridX, rock.gridY),
-    width: halfWidth * 2 + 10, height: halfHeight * 2 + 10, color: rock.ownerColor };
+    width: halfWidth * 2 - 2, height: halfHeight * 2 - 2, color: rock.ownerColor };
 }
 
 /** World-owned persistent markers. Only Runtime-Rock IDs own slots, never construction types. */
@@ -122,7 +124,7 @@ export class ConstructionOwnershipGpuSystem {
 
   private write(marker: Marker, append: boolean): void {
     const texture = this.scene.textures.get(TEXTURE);
-    const member = (frame: string, color: number, alpha: Member['alpha'], expand = 4 / 3): Member => ({
+    const member = (frame: string, color: number, alpha: Member['alpha'], expand = 1): Member => ({
       x: marker.x, y: marker.y, frame: texture.get(frame),
       scaleX: marker.width / 128 * expand, scaleY: marker.height / 128 * expand,
       alpha, tintBlend: 1, tintTopLeft: color, tintTopRight: color, tintBottomLeft: color, tintBottomRight: color,
@@ -132,8 +134,8 @@ export class ConstructionOwnershipGpuSystem {
       base: min, amplitude: max - min, duration: 1600, ease: EASE, loop: true, yoyo: true,
     });
     const passive = marker.passive ? member('aura', marker.color, 0.22, 1.55) : DEAD;
-    const glow = marker.own ? member('glow', marker.color, pulse(0.34, 0.52)) : DEAD;
-    const core = marker.own ? member('core', 0xf3f7ff, pulse(0.58, 0.8)) : DEAD;
+    const glow = marker.own ? member('glow', marker.color, pulse(0.28, 0.44)) : DEAD;
+    const core = marker.own ? member('core', 0xf3f7ff, pulse(0.48, 0.68)) : DEAD;
     if (append) {
       this.passiveLayer.addMember(passive);
       this.activeLayer.addMember(glow); this.activeLayer.addMember(core);
@@ -156,12 +158,12 @@ function ensureOwnershipTexture(scene: Phaser.Scene): void {
       ctx.strokeStyle = `rgba(255,255,255,${alpha})`; ctx.lineWidth = width; ctx.lineCap = 'round';
       ctx.beginPath();
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
-        const x = offset + 64 + sx * 48; const y = 64 + sy * 48;
-        ctx.moveTo(x - sx * 18, y); ctx.lineTo(x, y); ctx.lineTo(x, y - sy * 18);
+        const x = offset + 64 + sx * 56; const y = 64 + sy * 56;
+        ctx.moveTo(x - sx * 14, y); ctx.lineTo(x, y); ctx.lineTo(x, y - sy * 14);
       }
       ctx.stroke();
     };
-    corners(128, 18, 0.07); corners(128, 12, 0.12); corners(128, 7, 0.38);
+    corners(128, 12, 0.07); corners(128, 8, 0.12); corners(128, 5, 0.38);
     corners(256, 3.5, 1);
     texture.add('glow', 0, 128, 0, 128, 128);
     texture.add('core', 0, 256, 0, 128, 128);

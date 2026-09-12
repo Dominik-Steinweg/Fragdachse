@@ -180,7 +180,6 @@ function expectedState(
 describe('RockVisualHelper client snapshot materialization', () => {
   it('materializes adjacent rock_barrier snapshot additions from one complete grid', () => {
     const fixture = createFixture([0, 1, 2]);
-    const ownerTintStrength = UTILITY_CONFIGS.ROCK_BARRIER.placeable.ownerTintStrength;
 
     for (const rock of fixture.changes.added) {
       const state = fixture.result.rockVisualStates.get(rock.id);
@@ -188,7 +187,8 @@ describe('RockVisualHelper client snapshot materialization', () => {
         active: true,
         alpha: 1,
         ownerColor: OWNER_COLOR,
-        ownerTintStrength,
+        ownerTintStrength: 0,
+        material: 'walls',
       });
       expect(state?.frame).toBe(expectedState(fixture.result, makeLayoutWithRocks(fixture.changes.added), rock.id).frame);
       expect(state?.cornerTints).toEqual(
@@ -234,6 +234,29 @@ describe('RockVisualHelper client snapshot materialization', () => {
     expect(state?.alpha).toBe(1);
     expect(fixture.result.rockGrid.getIndex(rock.gridX, rock.gridY)).toBe(rock.id);
     expect(fixture.result.rockPhysicsProxies[rock.id]?.active).toBe(true);
+  });
+
+  it.each(['base-owned', 'guest-session'] as const)('keeps %s walls neutral and light through HP updates', (ownership) => {
+    const fixture = createFixture([0], false);
+    const rock = fixture.changes.added[0];
+    rock.ownership = ownership;
+    fixture.helper.materializePlaceableRock(rock, false);
+    fixture.helper.updateRockVisualById(rock.id, rock.maxHp / 2);
+    expect(fixture.result.rockVisualStates.get(rock.id)).toMatchObject({
+      material: 'walls', ownerTintStrength: 0, ownerColor: OWNER_COLOR,
+    });
+  });
+
+  it('preserves configured owner tint for temporary utility rocks', () => {
+    const fixture = createFixture([0], false);
+    const rock = fixture.changes.added[0];
+    delete rock.constructionId;
+    fixture.helper.materializePlaceableRock(rock, false);
+    fixture.helper.updateRockVisualById(rock.id, rock.maxHp / 2);
+    expect(fixture.result.rockVisualStates.get(rock.id)).toMatchObject({
+      ownerColor: OWNER_COLOR,
+      ownerTintStrength: UTILITY_CONFIGS.ROCK_BARRIER.placeable.ownerTintStrength,
+    });
   });
 });
 

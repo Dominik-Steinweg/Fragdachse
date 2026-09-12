@@ -62,16 +62,33 @@ export class PersistentBaseVisuals {
     metrics: WorldMetrics,
   ): void {
     const extent = getPersistentBaseBuildAreaExtentCells(buildArea);
-    this.overlay.fillStyle(0x8fda83, 0.08);
-    this.overlay.lineStyle(1, 0xb4ee9d, 0.42);
+    const contains = (gridX: number, gridY: number): boolean => gridX >= 0 && gridY >= 0
+      && gridX < metrics.gridCols && gridY < metrics.gridRows
+      && isCellInsidePersistentBaseZone(gridX - anchor.gridX, gridY - anchor.gridY, buildArea);
+    const border: [number, number, number, number][] = [];
     for (let gridY = Math.max(0, anchor.gridY - extent); gridY <= Math.min(metrics.gridRows - 1, anchor.gridY + extent); gridY += 1) {
       for (let gridX = Math.max(0, anchor.gridX - extent); gridX <= Math.min(metrics.gridCols - 1, anchor.gridX + extent); gridX += 1) {
-        if (!isCellInsidePersistentBaseZone(gridX - anchor.gridX, gridY - anchor.gridY, buildArea)) continue;
+        if (!contains(gridX, gridY)) continue;
         const x = metrics.offsetX + gridX * CELL_SIZE;
         const y = metrics.offsetY + gridY * CELL_SIZE;
+        this.overlay.fillStyle(0x85cbbd, 0.035);
         this.overlay.fillRect(x, y, CELL_SIZE, CELL_SIZE);
-        this.overlay.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+        // A quiet centre dot retains the placement rhythm without a grid across the buildings.
+        this.overlay.fillStyle(0xc3e6da, 0.28);
+        this.overlay.fillRect(x + CELL_SIZE / 2 - 0.75, y + CELL_SIZE / 2 - 0.75, 1.5, 1.5);
+        if (!contains(gridX, gridY - 1)) border.push([x, y, x + CELL_SIZE, y]);
+        if (!contains(gridX + 1, gridY)) border.push([x + CELL_SIZE, y, x + CELL_SIZE, y + CELL_SIZE]);
+        if (!contains(gridX, gridY + 1)) border.push([x + CELL_SIZE, y + CELL_SIZE, x, y + CELL_SIZE]);
+        if (!contains(gridX - 1, gridY)) border.push([x, y + CELL_SIZE, x, y]);
       }
     }
+    // Only exposed cell edges: the outline matches the authoritative build area, including world clipping.
+    const strokeBorder = (width: number, color: number, alpha: number): void => {
+      this.overlay.lineStyle(width, color, alpha).beginPath();
+      for (const [x1, y1, x2, y2] of border) this.overlay.moveTo(x1, y1).lineTo(x2, y2);
+      this.overlay.strokePath();
+    };
+    strokeBorder(5, 0x60b9a8, 0.08);
+    strokeBorder(1.25, 0xafdccc, 0.55);
   }
 }

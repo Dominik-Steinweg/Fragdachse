@@ -195,7 +195,7 @@ export class RockVisualHelper {
         this.currentLayout.rocks,
         rock.id,
         rock.ownerColor,
-        this.getPlaceableRockConfig(rock).placeable.ownerTintStrength,
+        this.getRockOwnerTintStrength(rock),
         rock.hp,
         rock.maxHp,
       );
@@ -334,7 +334,7 @@ export class RockVisualHelper {
       hp,
       runtimeRock?.maxHp ?? this.rockRegistry?.getMaxHP(rockId) ?? ROCK_HP_MAX,
       runtimeRock?.ownerColor,
-      runtimeRock ? this.getPlaceableRockConfig(runtimeRock).placeable.ownerTintStrength : 0,
+      runtimeRock ? this.getRockOwnerTintStrength(runtimeRock) : 0,
     );
   }
 
@@ -521,6 +521,12 @@ export class RockVisualHelper {
       cloud.visualVariant ?? 'spore',
       this.ctx.getWorldCombatCore()!.getHostTime(),
     );
+  }
+
+  private getRockOwnerTintStrength(rock: SyncedPlaceableRock): number {
+    // Built walls share the light, neutral blob material of turret foundations.
+    // Ownership is conveyed by the dedicated aura/corners; temporary utility rocks keep their tint.
+    return rock.constructionId ? 0 : this.getPlaceableRockConfig(rock).placeable.ownerTintStrength;
   }
 
   private getPlaceableRockConfig(rock: SyncedPlaceableRock): PlaceableRockUtilityConfig {

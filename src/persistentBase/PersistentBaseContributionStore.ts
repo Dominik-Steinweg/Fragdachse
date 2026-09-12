@@ -279,9 +279,9 @@ export class PersistentBaseContributionStore {
   /**
    * Entfernt die Konstruktion hinter einem Runtime-Objekt aus dem aktuellen Stand.
    *
-   * Das ist der Abriss und damit die einzige Stelle, an der ein Blueprint absichtlich
-   * verschwindet. Er unterscheidet sich ausdruecklich vom Konflikt: Ein Konflikt laesst den
-   * Besitz stehen, ein Abriss gibt ihn auf.
+   * Abriss oder Verschieben aus dem Speicherbereich entfernt den Blueprint bewusst.
+   * Die Runtime selbst wird hier nicht entfernt. Bei einem temporaeren Platzierungskonflikt
+   * bleibt dagegen der Blueprint bestehen.
    */
   removeByRuntimeId(runtimeId: number): boolean {
     const entry = this.runtimeBindings.get(runtimeId);

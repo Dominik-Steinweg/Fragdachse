@@ -23,6 +23,7 @@ import {
 } from '../../src/utils/localPreferences';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../../src/config/persistentBase';
 import { PersistentBaseContributionStore } from '../../src/persistentBase/PersistentBaseContributionStore';
+import type { PersistentRestoreToolDefinition } from '../../src/persistentBase/PersistentBaseTools';
 import { PersistentBaseRewardStore } from '../../src/persistentBase/PersistentBaseRewardStore';
 import { PersistentBaseRoomSession } from '../../src/persistentBase/PersistentBaseRoomSession';
 import { PersistentBaseRewardGrantService } from '../../src/persistentBase/PersistentBaseRewardGrant';
@@ -119,7 +120,7 @@ function makeLayout(): ArenaLayout {
   return { seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] };
 }
 
-function createHarness(classId: string) {
+function createHarness(classId: string, restoreTools: readonly PersistentRestoreToolDefinition[] = []) {
   const site = testSite();
   const layout = makeLayout();
   const placementSystem = new PlacementSystem(
@@ -251,7 +252,7 @@ function createHarness(classId: string) {
       getCapacity: () => 100,
       getBuildRevision: () => 0,
       getOwnership: () => 'host-persistent',
-      resolveRestoreTools: () => [],
+      resolveRestoreTools: () => restoreTools,
       materializeRestoreCandidate: () => null,
       materializeRewardConstruction: () => null,
       releaseRuntime: () => { /* PlacementSystem already removed the runtime. */ },
@@ -821,26 +822,69 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     )?.isValid).toBe(false);
   });
 
-  it('haelt einen persistenten Beitrag beim Verschieben im Baubereich', () => {
+  it.each(['commit', 'rollback'] as const)('beachtet %s beim Herausschieben waehrend einer Mission', (outcome) => {
     const harness = createHarness('assault_dachs');
+    const { coordinator, contributionStore, persistentBaseSession, placementSystem, playerId, site } = harness;
+    const source = placeOwnConstruction(harness, playerId, 0, 0);
+    contributionStore.registerNew(playerId, source, { kind: 'construction', id: 'rock_barrier' },
+      getCoopDefenseConstructionDefinition('rock_barrier').footprint, site.anchor, site.buildArea);
+    const baseline = contributionStore.getCommittedContribution(playerId)!;
+    const identity = { worldRevision: WORLD_REVISION, activityRevision: ACTIVITY_A_REVISION };
+    persistentBaseSession.beginTransaction(identity);
+    const outside = { gridX: ANCHOR.gridX + 4, gridY: ANCHOR.gridY };
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, outside, identity), 1_000))
+      .toEqual({ ok: true });
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject(outside);
+    expect(contributionStore.getContribution(playerId)?.constructions).toEqual([]);
+    expect(contributionStore.getCommittedContribution(playerId)).toEqual(baseline);
+    expect(coordinator.publishImmediatePersistentBaseContribution).not.toHaveBeenCalled();
+    persistentBaseSession.completeTransaction(outcome, id => placementSystem.hasRuntimeRock(id), identity);
+    expect(contributionStore.getCommittedContribution(playerId)?.constructions)
+      .toEqual(outcome === 'commit' ? [] : baseline.constructions);
+  });
+
+  it('verschiebt eigene Gebaeude ueber die Speichergrenze und aktualisiert nur den Basisbeitrag', () => {
+    const definition = getCoopDefenseConstructionDefinition('rock_barrier');
+    const harness = createHarness('assault_dachs', [{
+      kind: 'construction', id: definition.id, footprint: definition.footprint,
+      capacityCost: definition.capacityCost, maxHp: definition.maxHp, unlocked: true, active: true,
+    }]);
     const { coordinator, placementSystem, contributionStore, playerId } = harness;
     const source = placeOwnConstruction(harness, playerId, 0, 0);
-    contributionStore.registerRestored('owner-a', {
-      persistentId: 'pb-owner-a-1-0',
-      tool: { kind: 'construction', id: 'rock_barrier' },
-      relativeGridX: 0,
-      relativeGridY: 0,
-      angle: 0,
-      placementOrder: 4,
-    }, source.id);
+    contributionStore.registerNew(playerId, source, { kind: 'construction', id: 'rock_barrier' },
+      getCoopDefenseConstructionDefinition('rock_barrier').footprint, harness.site.anchor, harness.site.buildArea);
+    placementSystem.applyDamage(source.id, 60);
+    const hp = placementSystem.getRuntimeRock(source.id)!.hp;
+    coordinator.persistentBaseWorldBinding.reconcile =
+      PersistentBaseWorldBinding.prototype.reconcile.bind(coordinator.persistentBaseWorldBinding);
 
-    // Ausserhalb des 3x3-Baubereichs koennte der Store den Blueprint nicht mehr halten.
     const outside = { gridX: ANCHOR.gridX + 4, gridY: ANCHOR.gridY };
+    const targetWorld = worldCellCenter(METRICS, outside.gridX, outside.gridY);
+    expect(coordinator.getPersistentBaseMoveTargetPreview(playerId, source.id, targetWorld.x, targetWorld.y)?.isValid)
+      .toBe(true);
     expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, outside), 1_000))
-      .toEqual({ ok: false, reason: 'placement' });
-    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({
-      gridX: source.gridX,
-      gridY: source.gridY,
-    });
+      .toEqual({ ok: true });
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({ ...outside, hp });
+    expect(contributionStore.getCommittedContribution(playerId)?.constructions).toEqual([]);
+    expect(contributionStore.getRuntimeBindings()).toEqual([]);
+    expect(coordinator.publishImmediatePersistentBaseContribution).toHaveBeenCalledWith(playerId);
+
+    const fartherOutside = { gridX: outside.gridX + 1, gridY: outside.gridY };
+    expect(coordinator.movePersistentBaseObject(playerId,
+      moveRequest(placementSystem.getRuntimeRock(source.id)!, fartherOutside), 2_000)).toEqual({ ok: true });
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({ ...fartherOutside, hp });
+    expect(contributionStore.getCommittedContribution(playerId)?.constructions).toEqual([]);
+
+    const inside = rewardCell(1, 1);
+    expect(coordinator.movePersistentBaseObject(playerId,
+      moveRequest(placementSystem.getRuntimeRock(source.id)!, inside), 3_000)).toEqual({ ok: true });
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({ ...inside, hp });
+    expect(contributionStore.getCommittedContribution(playerId)?.constructions).toEqual([
+      expect.objectContaining({ relativeGridX: inside.gridX - ANCHOR.gridX, relativeGridY: inside.gridY - ANCHOR.gridY }),
+    ]);
+    expect(contributionStore.getRuntimeBindings()).toEqual([
+      expect.objectContaining({ runtimeId: source.id, ownerId: playerId }),
+    ]);
+    expect(placementSystem.getAllRuntimeRocks().filter(rock => rock.ownerId === playerId)).toHaveLength(1);
   });
 });

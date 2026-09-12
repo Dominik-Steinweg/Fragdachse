@@ -4,7 +4,7 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
 import type { ArenaContext } from './ArenaContext';
 import type { RockVisualHelper } from './RockVisualHelper';
 import {
-  COOP_DEFENSE_DISMANTLE_RANGE,
+  COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
 } from '../../config/coopDefenseConstructions';
 import { isCoopDefenseMode } from '../../gameModes';
 import type { GameMode, LoadoutUseResult, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
@@ -280,7 +280,7 @@ export class ArenaPersistentBaseSession {
       return { ok: false, reason: 'placement' };
     }
     const cellWorld = placementSystem.getWorldPointForCell(cell.gridX, cell.gridY);
-    if (Math.hypot(player.x - cellWorld.x, player.y - cellWorld.y) > COOP_DEFENSE_DISMANTLE_RANGE) {
+    if (Math.hypot(player.x - cellWorld.x, player.y - cellWorld.y) > COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE) {
       return { ok: false, reason: 'placement' };
     }
     if (store.getState().placements.some((entry) => {
@@ -434,7 +434,7 @@ export class ArenaPersistentBaseSession {
       player.y,
       pointerX,
       pointerY,
-      COOP_DEFENSE_DISMANTLE_RANGE,
+      COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
     );
     if (!targetCell) return undefined;
     const relative = this.resolvePersistentBaseRewardRelativeCell(site, targetCell.gridX, targetCell.gridY);
@@ -471,7 +471,7 @@ export class ArenaPersistentBaseSession {
       gridY: targetCell.gridY,
       isValid,
       frame: 0,
-      range: COOP_DEFENSE_DISMANTLE_RANGE,
+      range: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       kind: definition.category === 'baseTurret' ? 'turret' : 'pedestal',
       sourceSlot: 'utility',
       constructionId: definition.gameplaySource.kind === 'construction-definition'
@@ -531,7 +531,7 @@ export class ArenaPersistentBaseSession {
       player.y,
       pointerX,
       pointerY,
-      COOP_DEFENSE_DISMANTLE_RANGE,
+      COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       'move-source',
     );
     if (!preview) return undefined;
@@ -577,11 +577,7 @@ export class ArenaPersistentBaseSession {
       source.id,
     );
     if (!preview) return undefined;
-    // Ein persistenter Beitrag ist genau ein Beitrag innerhalb des Baubereichs. Verliesse er
-    // ihn, koennte der Store ihn nicht mehr halten - das waere ein Abriss und kein Move.
-    const staysPersistent = !this.isPersistentBaseBuildAreaCell(site, source.gridX, source.gridY)
-      || this.isPersistentBaseBuildAreaCell(site, preview.gridX, preview.gridY);
-    return { ...preview, isValid: preview.isValid && staysPersistent, mode: 'move-target', sourceRuntimeId };
+    return { ...preview, mode: 'move-target', sourceRuntimeId };
   }
 
   /** Sendet eine Zielvorschau ueber den dedizierten Move-Pfad zum Host. */
@@ -747,19 +743,6 @@ export class ArenaPersistentBaseSession {
     return this.world.getConstructionRuntime()?.isMovableConstructionSource(playerId, source) ?? false;
   }
 
-  /** True, wenn diese absolute Rasterzelle im aktiven Baubereich der persistenten Basis liegt. */
-  isPersistentBaseBuildAreaCell(
-    site: WorldPersistentBaseSite | null,
-    gridX: number,
-    gridY: number,
-  ): boolean {
-    return site !== null && isCellInsidePersistentBaseBuildArea(
-      gridX - site.anchor.gridX,
-      gridY - site.anchor.gridY,
-      site.buildArea,
-    );
-  }
-
   /** Zielvorschau eines bereits platzierten Rewards; seine eigene Zelle ist kein Zielkonflikt. */
   buildPersistentBaseRewardMovePreview(
     site: WorldPersistentBaseSite,
@@ -777,7 +760,7 @@ export class ArenaPersistentBaseSession {
       player.y,
       pointerX,
       pointerY,
-      COOP_DEFENSE_DISMANTLE_RANGE,
+      COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
     );
     if (!targetCell) return undefined;
     const relative = this.resolvePersistentBaseRewardRelativeCell(site, targetCell.gridX, targetCell.gridY);
@@ -827,7 +810,7 @@ export class ArenaPersistentBaseSession {
       gridY: targetCell.gridY,
       isValid,
       frame: 0,
-      range: COOP_DEFENSE_DISMANTLE_RANGE,
+      range: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       kind: definition.category === 'baseTurret' ? 'turret' : 'pedestal',
       sourceSlot: 'utility',
       constructionId: definition.gameplaySource.kind === 'construction-definition'

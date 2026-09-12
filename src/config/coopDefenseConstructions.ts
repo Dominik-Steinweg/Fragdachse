@@ -131,8 +131,8 @@ export const COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT = 'construction.capacity';
 
 const COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS = loadConstructionBuildCooldowns();
 
-/** Reichweite, in der eigene Konstrukte zurueckgebaut werden koennen. */
-export const COOP_DEFENSE_DISMANTLE_RANGE = 320;
+/** Gemeinsame Reichweite fuer Bauen, Zurueckbauen und Verschieben von Konstrukten. */
+export const COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE = 350;
 
 /**
  * Fester Doppelinput-Schutz fuer Verschieben und Einzel-Rueckbau.
@@ -192,7 +192,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       unlockUpgradeId: 'unlock_rock_barrier',
       allowedModes: ['coop_defense', 'deathmatch', 'team_deathmatch', 'capture_the_beer'],
       maxHp: 200,
-      placementRange: 160,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       capacityCost: 1,
       color: 0x92705a,
       footprint: SINGLE_CELL_FOOTPRINT,
@@ -207,7 +207,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       allowedModes: ['coop_defense', 'deathmatch', 'team_deathmatch', 'capture_the_beer'],
       maxHp: 50,
       targetRange: 280,
-      placementRange: 240,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       muzzleOffset: 26,
       capacityCost: 15,
       color: 0x9b65d8,
@@ -226,7 +226,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       allowedModes: ['coop_defense'],
       maxHp: 250,
       targetRange: 600,
-      placementRange: 320,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       muzzleOffset: 18,
       capacityCost: 30,
       color: 0xff8a3d,
@@ -245,7 +245,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       allowedModes: ['coop_defense'],
       maxHp: 180,
       targetRange: 550,
-      placementRange: 320,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       muzzleOffset: 17,
       capacityCost: 10,
       color: 0xd8b46b,
@@ -262,7 +262,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       allowedModes: ['coop_defense'],
       maxHp: 220,
       targetRange: 220,
-      placementRange: 320,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       muzzleOffset: 16,
       capacityCost: 20,
       color: 0xff5f28,
@@ -279,7 +279,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       allowedModes: ['coop_defense'],
       maxHp: 200,
       targetRange: 96,
-      placementRange: 320,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       muzzleOffset: 0,
       capacityCost: 25,
       color: 0x9ae7ff,
@@ -296,7 +296,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       allowedModes: ['coop_defense'],
       maxHp: 200,
       targetRange: 520,
-      placementRange: 320,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       muzzleOffset: 16,
       capacityCost: 25,
       color: 0xa755ff,
@@ -313,7 +313,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       allowedModes: ['coop_defense'],
       maxHp: 180,
       targetRange: 500,
-      placementRange: 320,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       muzzleOffset: 16,
       capacityCost: 20,
       color: 0x8edcff,
@@ -329,7 +329,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       unlockUpgradeId: 'unlock_medic_pedestal',
       allowedModes: ['coop_defense'],
       maxHp: 1,
-      placementRange: 320,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       capacityCost: 30,
       color: 0x52d273,
       footprint: SINGLE_CELL_FOOTPRINT,
@@ -345,7 +345,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       unlockUpgradeId: 'unlock_armor_pedestal',
       allowedModes: ['coop_defense'],
       maxHp: 1,
-      placementRange: 320,
+      placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       capacityCost: 25,
       color: 0x5aa9ff,
       footprint: SINGLE_CELL_FOOTPRINT,

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
 import { ConstructionOwnershipGpuSystem, constructionOwnershipTarget } from '../src/effects/ConstructionOwnershipGpuSystem';
-import { getTurretVisualSpec } from '../src/config/turretVisuals';
+import { CELL_SIZE } from '../src/config';
 import { resolveCoopDefenseWorldMetrics, worldCellCenter } from '../src/world/WorldMetrics';
 import type { SyncedPlaceableRock } from '../src/types';
 import { findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
@@ -43,7 +43,29 @@ describe('construction ownership persistent GPU markers', () => {
     expect(h.passive.visible).toBe(false);
     expect(h.active.edited).toEqual([]);
     expect(constructionOwnershipTarget(updated, metrics)).toEqual(constructionOwnershipTarget(turret, metrics));
-    expect(constructionOwnershipTarget(turret, metrics).width).toBeGreaterThan(getTurretVisualSpec('TURRET_ROCKET_BURST').displaySize);
+  });
+
+  it('keeps corners inside neighbouring construction cells, including padded turret sprites', () => {
+    const h = setup();
+    const buildings = [rock(1), rock(2, { kind: 'turret', constructionId: 'rocket_turret', turretWeaponId: 'TURRET_ROCKET_BURST' }),
+      rock(3, { kind: 'turret', constructionId: 'spore_turret', turretWeaponId: 'SPORES' })];
+    const targets = buildings.map(building => constructionOwnershipTarget(building, metrics));
+    for (const target of targets) {
+      expect(target.width).toBeGreaterThan(0);
+      expect(target.height).toBeGreaterThan(0);
+      expect(target.width).toBeLessThan(CELL_SIZE);
+      expect(target.height).toBeLessThan(CELL_SIZE);
+      expect(target).toMatchObject(worldCellCenter(metrics, target.id, 3));
+    }
+    for (let i = 1; i < targets.length; i++) {
+      expect(targets[i - 1].x + targets[i - 1].width / 2).toBeLessThan(targets[i].x - targets[i].width / 2);
+    }
+    h.renderer.sync(buildings, new Set(buildings.map(building => building.id)), metrics, true, true);
+    for (const member of h.active.members) {
+      const frame = h.scene.textures.get(h.active.key).get(member.frame!);
+      expect(frame.cutWidth * member.scaleX.base).toBeLessThan(CELL_SIZE);
+      expect(frame.cutHeight * member.scaleY.base).toBeLessThan(CELL_SIZE);
+    }
   });
 
   it('retints in place and removes own or base-owned markings without affecting other owners', () => {

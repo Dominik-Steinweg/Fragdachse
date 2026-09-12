@@ -37,6 +37,44 @@ import type { ArenaLayout, LoadoutCommitSnapshot, LoadoutToolRef } from '../../s
 afterEach(() => { clearActiveSession(); vi.unstubAllGlobals(); });
 
 describe('configuration-driven shared utility slots', () => {
+  it.each(['rock_barrier', 'spore_turret'] as const)(
+    'places %s in the cell selected by the construction preview across its full range',
+    (constructionId) => {
+      const metrics = resolveActiveArenaWorldMetrics();
+      const origin = worldCellCenter(metrics, 20, 20);
+      const playerId = 'builder';
+      const definition = COOP_DEFENSE_CONSTRUCTIONS[constructionId];
+      const layout: ArenaLayout = { seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] };
+      const players = { getPlayer: () => ({ id: playerId, ...origin, active: true, color: 0xffffff }), getAllPlayers: () => [] };
+      const placement = new PlacementSystem(layout, new RockGridIndex([]), players as never, metrics);
+      const classId = 'inspector_gadachs';
+      const profile = sanitizeCoopDefenseUpgradeProfile({
+        upgrades: { [definition.unlockUpgradeId]: { level: 1 } },
+      }, classId);
+      const runtime = new ConstructionWorldRuntime({
+        isHost: () => true, getGameMode: () => 'coop_defense',
+        getCurrentLoadout: () => ({ coopDefenseClassId: classId, coopDefenseProfile: profile,
+          tools: [{ kind: 'construction', id: constructionId }] }),
+        getPersistentBaseContext: () => null, getPlayerCapabilities: () => ({ canPlace: true }),
+        playerManager: players, placementSystem: placement,
+        combatSystem: { isAlive: () => true, isBurrowed: () => false },
+        getLocalPlayerId: () => playerId, resolveOwnerId: () => playerId,
+        rockVisualHelper: { materializePlaceableRock: vi.fn() }, emitGridChanged: vi.fn(),
+        publishUtilityCooldown: vi.fn(), recordConstructionBuilt: vi.fn(),
+      } as never);
+
+      const preview = placement.getConstructionPlacementPreview(
+        definition, origin.x, origin.y, origin.x + definition.placementRange * 0.9, origin.y,
+      )!;
+      expect(preview.isValid).toBe(true);
+      expect(runtime.placeInspectorConstruction(playerId, constructionId, preview.targetX, preview.targetY, 100))
+        .toEqual({ ok: true });
+      expect(placement.getAllRuntimeRocks()).toEqual([
+        expect.objectContaining({ constructionId, gridX: preview.gridX, gridY: preview.gridY }),
+      ]);
+    },
+  );
+
   it('carries an additional class through unlocks, persistence, network, host placement and restore', async () => {
     const classId = 'dachs_of_steel';
     const tool: LoadoutToolRef = { kind: 'construction', id: 'machine_gun_turret' };

@@ -1,4 +1,5 @@
 import { isCoopDefenseLoadoutItemUnlocked } from '../utils/coopDefenseUpgrades';
+import { isCellInsidePersistentBaseBuildArea } from '../persistentBase/PersistentBaseCore';
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatActorStatePort } from '../combat/CombatCapabilities';
@@ -33,7 +34,7 @@ import {
 } from './ConstructionReadinessRuntime';
 import {
   COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
-  COOP_DEFENSE_DISMANTLE_RANGE,
+  COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
   COOP_DEFENSE_CONSTRUCTION_IDS,
   getCoopDefenseConstructionDefinition,
   getConstructionIdForUtility,
@@ -387,7 +388,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     const player = this.options.playerManager.getPlayer(playerId);
     if (!player || !player.active || !this.options.combatSystem.isAlive(playerId) || this.options.combatSystem.isBurrowed(playerId)) return { ok: false, reason: 'blocked' };
     if (this.isManagementActionOnCooldown(playerId, 'dismantle', hostNowMs)) return { ok: false, reason: 'cooldown' };
-    const cell = this.options.placementSystem.getClampedTargetCell(player.x, player.y, targetX, targetY, COOP_DEFENSE_DISMANTLE_RANGE);
+    const cell = this.options.placementSystem.getClampedTargetCell(player.x, player.y, targetX, targetY, COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE);
     if (!cell) return { ok: false, reason: 'blocked' };
     const target = this.options.placementSystem.getRuntimeRockAt(cell.gridX, cell.gridY);
     const rewardId = target?.ownership === 'base-owned' ? target.persistentRewardId : undefined;
@@ -590,11 +591,25 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     const relocated = this.options.placementSystem.relocateRock(source.id, preview.gridX, preview.gridY, preview.angle, footprint);
     if (!relocated) return { ok: false, reason: 'placement' };
     const binding = context.contributions.getRuntimeBindings().find((entry) => entry.runtimeId === source.id);
-    if (binding && !context.contributions.moveConstruction(binding.ownerId, binding.blueprint.persistentId, { relativeGridX: preview.gridX - context.anchor.gridX, relativeGridY: preview.gridY - context.anchor.gridY, angle: preview.angle }, footprint, context.buildArea)) {
-      this.options.placementSystem.relocateRock(source.id, previous.gridX, previous.gridY, previous.angle, footprint);
-      return { ok: false, reason: 'placement' };
+    const inside = (footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }]).every(offset => (
+      isCellInsidePersistentBaseBuildArea(
+        preview.gridX + offset.dx - context.anchor.gridX,
+        preview.gridY + offset.dy - context.anchor.gridY,
+        context.buildArea,
+      )
+    ));
+    if (binding) {
+      if (!inside) {
+        // Leaving the save area detaches only the blueprint; the live construction survives.
+        context.contributions.removeByRuntimeId(source.id);
+      } else if (!context.contributions.moveConstruction(binding.ownerId, binding.blueprint.persistentId, { relativeGridX: preview.gridX - context.anchor.gridX, relativeGridY: preview.gridY - context.anchor.gridY, angle: preview.angle }, footprint, context.buildArea)) {
+        this.options.placementSystem.relocateRock(source.id, previous.gridX, previous.gridY, previous.angle, footprint);
+        return { ok: false, reason: 'placement' };
+      }
+      if (!context.contributions.hasActiveMission) this.options.publishImmediateContribution(binding.ownerId);
+    } else if (inside) {
+      this.registerNewPersistentPlaceable(relocated, { kind: 'construction', id: constructionId }, footprint);
     }
-    if (binding && !context.contributions.hasActiveMission) this.options.publishImmediateContribution(binding.ownerId);
     const targetWorld = this.options.rockVisualHelper.gridToWorld(relocated.gridX, relocated.gridY);
     if (previous.kind === 'pedestal') this.options.powerUpSystem?.repositionConstructionPedestal(source.id, targetWorld.x, targetWorld.y);
     this.options.relocatePresentation(previous, relocated);
@@ -634,7 +649,9 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     if (!base || !('placeable' in base)) return null;
     const modifiers = this.options.modifierReadPort?.getModifiers(playerId);
     const effective = modifiers ? applyCoopDefenseModifiersToUtilityConfig(base as PlaceableUtilityConfig, { additive: modifiers.additiveStats, percentage: modifiers.percentageStats }) as PlaceableUtilityConfig : base as PlaceableUtilityConfig;
-    return { ...effective, id: utilityId, placeable: { ...effective.placeable, lifetimeMs: 0 } } as PlaceableUtilityConfig;
+    // Utility-backed constructions must use the same placement range as their construction preview.
+    const range = this.getEffectiveDefinition(constructionId, playerId).placementRange;
+    return { ...effective, id: utilityId, placeable: { ...effective.placeable, range, lifetimeMs: 0 } } as PlaceableUtilityConfig;
   }
 
   private sourceFor(runtime: SyncedPlaceableRock): 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal' {

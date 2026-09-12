@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
-import { getCoopDefenseConstructionDefinition, COOP_DEFENSE_DISMANTLE_RANGE } from '../../config/coopDefenseConstructions';
+import { getCoopDefenseConstructionDefinition, COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE } from '../../config/coopDefenseConstructions';
 import type { CoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { isCoopDefenseMode } from '../../gameModes';
 import { getUtilityConfigForMode } from '../../loadout/LoadoutConfig';
@@ -481,7 +481,7 @@ export class ArenaInputBindings {
           position.y,
           pointer.x,
           pointer.y,
-          COOP_DEFENSE_DISMANTLE_RANGE,
+          COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
         );
       },
       getCooldownUntil: (ref: RadialActionRef) => {
