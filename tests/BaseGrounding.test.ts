@@ -3,6 +3,7 @@ vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFak
 
 import { CELL_SIZE } from '../src/config';
 import { buildBaseGroundingLayout } from '../src/arena/BaseGroundingLayout';
+import { BASE_GROUNDING_ASSETS } from '../src/arena/BaseGroundingConfig';
 import { BaseEntity } from '../src/entities/BaseEntity';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
 import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
@@ -15,6 +16,17 @@ const cells = [
 const metrics = resolveCoopDefenseWorldMetrics(20, 20);
 
 describe('Base foundation layout', () => {
+  it('composes the active generated palette, including gravel and earth, across varied footprints', () => {
+    const variedCells = Array.from({ length: 16 }, (_, index) => ({ gridX: index * 4, gridY: (index % 3) * 4 }));
+    const layout = buildBaseGroundingLayout(variedCells, metrics);
+    const used = new Set(layout.map((item) => item.asset));
+    expect([...used].sort()).toEqual([...BASE_GROUNDING_ASSETS].sort());
+    for (const cluster of layout.filter((item) => item.kind === 'cluster')) {
+      expect(layout.some((item) => item.cellIndex === cluster.cellIndex && item.kind === 'gravel'
+        && item.asset.startsWith('edge-') && Math.hypot(item.x - cluster.x, item.y - cluster.y) < CELL_SIZE / 2)).toBe(true);
+    }
+  });
+
   it('is independent of cell enumeration and translates with world metrics', () => {
     const normalize = (items: ReturnType<typeof buildBaseGroundingLayout>) => items
       .map(({ cellIndex: _index, ...item }) => JSON.stringify(item)).sort();
@@ -31,15 +43,13 @@ describe('Base foundation layout', () => {
       const neighbors = [[0, -1], [1, 0], [0, 1], [-1, 0]];
       const exposed = neighbors.filter(([dx, dy]) => !cells.some((other) =>
         other.gridX === cell.gridX + dx && other.gridY === cell.gridY + dy));
-      const edges = layout.filter((item) => item.cellIndex === cellIndex && item.asset.startsWith('edge-'));
-      expect(edges).toHaveLength(exposed.length);
       const cx = metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE;
       const cy = metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE;
-      for (const [dx, dy] of exposed) {
-        expect(edges.some((item) => dx ? (item.x - cx) * dx > CELL_SIZE / 2
-          : (item.y - cy) * dy > CELL_SIZE / 2)).toBe(true);
-      }
       for (const item of layout.filter((placement) => placement.cellIndex === cellIndex)) {
+        const dx = item.x - cx;
+        const dy = item.y - cy;
+        const normal = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+        expect(exposed).toContainEqual(normal);
         const halfX = (Math.abs(Math.cos(item.rotation)) * item.width + Math.abs(Math.sin(item.rotation)) * item.height) / 2;
         const halfY = (Math.abs(Math.sin(item.rotation)) * item.width + Math.abs(Math.cos(item.rotation)) * item.height) / 2;
         expect(Math.abs(item.x - cx) + halfX).toBeLessThanOrEqual(CELL_SIZE);
@@ -47,6 +57,33 @@ describe('Base foundation layout', () => {
       }
     }
     expect(buildBaseGroundingLayout([], metrics)).toEqual([]);
+  });
+
+  it('leaves gaps between stone nests and grades smaller stones outward over connecting earth', () => {
+    const layout = buildBaseGroundingLayout(cells, metrics);
+    const clusters = layout.filter((item) => item.kind === 'cluster');
+    expect(clusters.length).toBeGreaterThan(0);
+    for (let i = 0; i < clusters.length; i++) {
+      for (let j = i + 1; j < clusters.length; j++) {
+        const a = clusters[i], b = clusters[j];
+        const reach = (Math.hypot(a.width, a.height) + Math.hypot(b.width, b.height)) / 2;
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(reach);
+      }
+    }
+    expect(layout.filter((item) => item.kind === 'soil').length).toBeGreaterThan(clusters.length);
+    for (const item of layout.filter((placement) => placement.kind === 'pebble')) {
+      const cell = cells[item.cellIndex];
+      const cx = metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE;
+      const cy = metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE;
+      const distance = Math.max(Math.abs(item.x - cx), Math.abs(item.y - cy));
+      const nearer = layout.filter((other) => other.cellIndex === item.cellIndex && (other.kind === 'cluster' || other.kind === 'pebble')
+        && Math.max(Math.abs(other.x - cx), Math.abs(other.y - cy)) < distance);
+      expect(nearer.length).toBeGreaterThan(0);
+      for (const other of nearer) {
+        expect(item.width).toBeLessThan(other.width);
+        expect(item.alpha).toBeLessThan(other.alpha);
+      }
+    }
   });
 });
 

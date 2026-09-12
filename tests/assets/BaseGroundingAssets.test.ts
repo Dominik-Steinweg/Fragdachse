@@ -14,12 +14,13 @@ describe('Generated foundation textures', () => {
       expect(metadata.format).toBe('png');
       expect(metadata.hasAlpha).toBe(true);
       const { data, info } = await sharp(path).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-      let visible = 0, transparent = 0;
+      let visible = 0, transparent = 0, soft = 0;
       let left = info.width, top = info.height, right = -1, bottom = -1;
       for (let y = 0; y < info.height; y++) {
         for (let x = 0; x < info.width; x++) {
           const alpha = data[(y * info.width + x) * 4 + 3];
           if (alpha > 0) visible++; else transparent++;
+          if (alpha > 0 && alpha < 240) soft++;
           if (alpha >= 8) {
             left = Math.min(left, x); right = Math.max(right, x);
             top = Math.min(top, y); bottom = Math.max(bottom, y);
@@ -32,6 +33,7 @@ describe('Generated foundation textures', () => {
       // Invisible generator specks must not shrink the subject into a small canvas corner.
       expect(right - left + 1).toBeGreaterThan(info.width / 2);
       expect(bottom - top + 1).toBeGreaterThan(info.height / 2);
+      if (asset.startsWith('soil-')) expect(soft).toBeGreaterThan(visible / 4);
     }
   });
 });

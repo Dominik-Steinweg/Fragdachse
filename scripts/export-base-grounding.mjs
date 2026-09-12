@@ -10,6 +10,7 @@ const output = resolve(root, 'public/assets/sprites/base-grounding');
 const manifest = JSON.parse(await readFile(resolve(sourceRoot, 'prompts.json'), 'utf8'));
 await mkdir(output, { recursive: true });
 for (const asset of manifest.assets) {
+  if (asset.active === false) continue;
   const source = resolve(sourceRoot, asset.source);
   const metadata = await sharp(source).metadata();
   if (!metadata.hasAlpha) throw new Error(`${asset.name}: source has no alpha`);
@@ -25,10 +26,11 @@ for (const asset of manifest.assets) {
     }
   }
   if (right < left) throw new Error(`${asset.name}: empty source`);
-  const width = asset.name.startsWith('edge-') ? 256 : 128;
+  const elongated = asset.name.startsWith('edge-') || asset.name.startsWith('soil-');
+  const width = elongated ? 256 : 128;
   // A fixed tall canvas shrinks the visible fringe when the renderer assigns its display size.
   // Keep strips close to their actual aspect ratio and only reserve a small filtering gutter.
-  const height = asset.name.startsWith('edge-')
+  const height = elongated
     ? Math.ceil((bottom - top + 1) / (right - left + 1) * (width - 8)) + 8 : 128;
   await sharp(source)
     .extract({ left, top, width: right - left + 1, height: bottom - top + 1 })

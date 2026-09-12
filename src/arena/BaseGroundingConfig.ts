@@ -2,7 +2,7 @@ import type * as Phaser from 'phaser';
 
 export const BASE_GROUNDING_ASSET_PATH = './assets/sprites/base-grounding';
 export const BASE_GROUNDING_ASSETS = [
-  'edge-a', 'edge-b', 'edge-c', 'corner-a', 'corner-b', 'scatter',
+  'soil-a', 'soil-b', 'edge-a', 'edge-b', 'edge-c', 'scatter', 'corner-a', 'corner-b', 'pebble-a',
 ] as const;
 export type BaseGroundingAsset = typeof BASE_GROUNDING_ASSETS[number];
 

@@ -15,7 +15,8 @@ export class BaseGroundingRenderer {
         .setDisplaySize(placement.width, placement.height)
         .setRotation(placement.rotation)
         .setAlpha(placement.alpha)
-        .setDepth(DEPTH.BASE_GROUNDING);
+        .setDepth(DEPTH.BASE_GROUNDING - (placement.kind === 'soil' ? 0.12 : placement.kind === 'gravel' ? 0.06 : 0));
+      if (placement.tint !== undefined) image.setTint(placement.tint);
       let images = this.imagesByCell.get(placement.cellIndex);
       if (!images) this.imagesByCell.set(placement.cellIndex, images = []);
       images.push(image);
