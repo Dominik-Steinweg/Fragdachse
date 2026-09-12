@@ -28,6 +28,7 @@ import { COLORS, toCssColor } from '../config';
 import {
   ensureIconTexture,
   ensureRoundedTexture,
+  getRoundedTextureBounds,
   lerpColor,
   type UiIconName,
 } from './uiTextures';
@@ -61,10 +62,12 @@ export interface UiButtonOptions {
 }
 
 const BADGE_RADIUS = 9;
+const BUTTON_STROKE_WIDTH = 2;
 
 export class UiButton {
   private readonly root: Phaser.GameObjects.Container;
   private readonly bg: Phaser.GameObjects.Image;
+  private readonly effectLayer: Phaser.GameObjects.Container;
   private readonly labelText: Phaser.GameObjects.Text | null = null;
   private readonly iconImage: Phaser.GameObjects.Image | null = null;
   private badge: Phaser.GameObjects.Container | null = null;
@@ -90,7 +93,8 @@ export class UiButton {
 
     this.bg = scene.add.image(0, 0, this.textureFor('rest')).setScrollFactor(scrollFactor);
 
-    const children: Phaser.GameObjects.GameObject[] = [this.bg];
+    this.effectLayer = scene.add.container(0, 0).setScrollFactor(scrollFactor);
+    const children: Phaser.GameObjects.GameObject[] = [this.bg, this.effectLayer];
 
     if (options.icon) {
       this.iconImage = scene.add.image(0, 0, this.iconTexture())
@@ -131,6 +135,23 @@ export class UiButton {
   /** Die Hintergrundflaeche – etwa als `glowTarget` fuer `LivingBarEffect`. */
   getBackground(): Phaser.GameObjects.Image {
     return this.bg;
+  }
+
+  /** Decoration follows the button transform, above its face and below icon/text/badge. */
+  getEffectLayer(): Phaser.GameObjects.Container {
+    return this.effectLayer;
+  }
+
+  getEffectBounds() {
+    const bounds = getRoundedTextureBounds({
+      w: this.options.w, h: this.options.h,
+      radius: this.options.radius ?? RADIUS.md, strokeWidth: BUTTON_STROKE_WIDTH,
+    });
+    return {
+      ...bounds,
+      x: bounds.x - Math.max(1, Math.round(this.options.w)) / 2,
+      y: bounds.y - Math.max(1, Math.round(this.options.h)) / 2,
+    };
   }
 
   setIntent(intent: ButtonIntent): this {
@@ -279,7 +300,7 @@ export class UiButton {
       fillAlpha: spec.fillAlpha,
       strokeColor: spec.stroke,
       strokeAlpha: spec.strokeAlpha,
-      strokeWidth: 2,
+      strokeWidth: BUTTON_STROKE_WIDTH,
       highlightAlpha: spec.gloss,
     });
   }

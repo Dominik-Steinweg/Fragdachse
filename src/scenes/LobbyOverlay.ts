@@ -286,6 +286,9 @@ export class LobbyOverlay {
   private lobbyAlertBanner: LobbyAlertBanner | null = null;
   private coopItemsUnlocked = false;
   private coopItemsSignature: string | null = null;
+  private coopProgressAvailable = false;
+  private coopUpgradesNeedAttention = false;
+  private coopItemsNeedAttention = false;
   private visible         = false;
   private btnLocked       = false;
   private isReady         = false;
@@ -635,30 +638,33 @@ export class LobbyOverlay {
     // Living-Bar-Effekt auf dem Upgrade-Button: macht auf freie Punkte aufmerksam.
     this.upgradeBtnEffect = new LivingBarEffect(
       this.scene,
-      this.coopBand,
-      COOP_UPGRADE_BTN_X - COOP_BTN_W / 2,
-      COOP_BTN_Y - COOP_BTN_H / 2,
+      this.coopUpgradesBtn.getEffectLayer(),
+      -COOP_BTN_W / 2,
+      -COOP_BTN_H / 2,
       COOP_BTN_W,
       COOP_BTN_H,
       { dark: COLORS.GOLD_3, mid: COLORS.GOLD_1, light: COLORS.GOLD_1 },
-      { glowTarget: this.coopUpgradesBtn.getBackground(), scrollFactor: 0, intensity: 0.34 },
+      {
+        glowTarget: this.coopUpgradesBtn.getBackground(), scrollFactor: 0, intensity: 0.34,
+        clipShape: { kind: 'roundedRect', ...this.coopUpgradesBtn.getEffectBounds() },
+        startActive: false, variantKey: 'lobby-upgrades',
+      },
     );
-    // Effektpartikel ueber der Flaeche, aber unter der Beschriftung halten.
-    this.coopBand.bringToTop(this.coopUpgradesBtn.getRoot());
-    this.upgradeBtnEffect.stop();
 
     this.itemsBtnEffect = new LivingBarEffect(
       this.scene,
-      this.coopBand,
-      COOP_ITEMS_BTN_X - COOP_BTN_W / 2,
-      COOP_BTN_Y - COOP_BTN_H / 2,
+      this.coopItemsBtn.getEffectLayer(),
+      -COOP_BTN_W / 2,
+      -COOP_BTN_H / 2,
       COOP_BTN_W,
       COOP_BTN_H,
       { dark: COLORS.GOLD_3, mid: COLORS.GOLD_1, light: COLORS.GOLD_1 },
-      { glowTarget: this.coopItemsBtn.getBackground(), scrollFactor: 0, intensity: 0.34 },
+      {
+        glowTarget: this.coopItemsBtn.getBackground(), scrollFactor: 0, intensity: 0.34,
+        clipShape: { kind: 'roundedRect', ...this.coopItemsBtn.getEffectBounds() },
+        startActive: false, variantKey: 'lobby-items',
+      },
     );
-    this.coopBand.bringToTop(this.coopItemsBtn.getRoot());
-    this.itemsBtnEffect.stop();
 
     this.coopBarEffect = new LivingBarEffect(
       this.scene,
@@ -668,11 +674,10 @@ export class LobbyOverlay {
       barW,
       COOP_BAR_H,
       coopBarPalette,
-      { glowTarget: this.coopProgressBarFill, scrollFactor: 0, intensity: 1.2 },
+      { glowTarget: this.coopProgressBarFill, scrollFactor: 0, intensity: 1.2, startActive: false },
     );
-    this.coopBarEffect.stop();
 
-    // Zuletzt eingehaengt, damit der Tooltip ueber Buttons und Effektpartikeln liegt.
+    // Zuletzt eingehaengt, damit der Tooltip ueber Buttons und Feld-Images liegt.
     this.itemsTooltip = new UiTooltip(this.scene, 360);
     this.coopBand.add(this.itemsTooltip.build());
   }
@@ -729,6 +734,9 @@ export class LobbyOverlay {
     this.transportDiagnosticsSignature = null;
     this.coopProgressSignature = null;
     this.coopItemsSignature = null;
+    this.coopProgressAvailable = false;
+    this.coopUpgradesNeedAttention = false;
+    this.coopItemsNeedAttention = false;
     this.playerContextMenu?.destroy();
     this.playerContextMenu = null;
     this.loadoutTooltip?.destroy();
@@ -800,6 +808,7 @@ export class LobbyOverlay {
     if (this.bootPreparing) this.container?.setAlpha(1).setY(0);
     else if (!wasVisible) this.playEntrance();
     this.updateReadyGlow();
+    this.syncCoopEffectActivity();
   }
 
   /**
@@ -840,10 +849,8 @@ export class LobbyOverlay {
     this.container?.setVisible(false);
     this.systemBar?.setVisible(false);
     this.updateWorldEntryButtons();
-    this.upgradeBtnEffect?.stop();
-    this.itemsBtnEffect?.stop();
+    this.syncCoopEffectActivity();
     this.itemsTooltip?.hide();
-    this.coopBarEffect?.stop();
   }
 
   /** Endgueltiger Scene-Abbau; build() verwendet denselben idempotenten Pfad. */
@@ -1021,6 +1028,7 @@ export class LobbyOverlay {
 
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
     if (!this.coopBand || !this.coopProgressLevelText) return;
+    this.coopProgressAvailable = progress !== null;
 
     const signature = progress
       ? [
@@ -1031,31 +1039,24 @@ export class LobbyOverlay {
         progress.earnedBossPoints,
       ].join('|')
       : 'none';
-    const shouldBeVisible = this.visible && progress !== null;
-    if (signature === this.coopProgressSignature && this.coopBand.visible === shouldBeVisible) {
+    if (signature === this.coopProgressSignature) {
+      this.syncCoopEffectActivity();
       return;
     }
-    const bandVisibilityChanged = this.coopBand.visible !== shouldBeVisible;
     this.coopProgressSignature = signature;
 
     if (!progress) {
-      this.coopBand.setVisible(false);
-      this.upgradeBtnEffect?.stop();
-      this.coopBarEffect?.stop();
-      if (bandVisibilityChanged) this.layoutList();
+      this.coopUpgradesNeedAttention = false;
+      this.syncCoopEffectActivity();
       return;
     }
 
-    this.coopBand.setVisible(this.visible);
-    if (bandVisibilityChanged) this.layoutList();
     this.coopProgressLevelText.setText(`${t('ui.lobby.level')} ${progress.level}`);
 
     const barW = CONTENT_W - SPACE.lg * 2;
     const fillW = Math.max(0.001, barW * progress.levelProgressFraction);
     this.coopProgressBarFill?.setCrop(0, 0, fillW, COOP_BAR_H);
     this.coopBarEffect?.setFilledWidth(fillW);
-    if (this.visible) this.coopBarEffect?.start();
-    else this.coopBarEffect?.stop();
 
     const freePoints = progress.availableUpgradePoints;
     const upgradesAvailable = freePoints > 0 || progress.availableBossPoints > 0;
@@ -1069,12 +1070,8 @@ export class LobbyOverlay {
     // Gold bleibt als Kontur und Glanz lokal; die Flaeche konkurriert nicht mit BEREIT.
     this.coopUpgradesBtn?.setIntent(upgradesAvailable ? 'attention' : 'neutral');
 
-    if (upgradesAvailable && this.visible) {
-      this.upgradeBtnEffect?.setFilledWidth(COOP_BTN_W);
-      this.upgradeBtnEffect?.start();
-    } else {
-      this.upgradeBtnEffect?.stop();
-    }
+    this.coopUpgradesNeedAttention = upgradesAvailable;
+    this.syncCoopEffectActivity();
   }
 
   /**
@@ -1092,8 +1089,11 @@ export class LobbyOverlay {
     if (!this.coopItemsBtn) return;
 
     const openCount = Math.max(0, Math.floor(pendingRewardCount));
-    const signature = `${unlocked}|${openCount}|${hasUnseenItems}|${this.visible}`;
-    if (signature === this.coopItemsSignature) return;
+    const signature = `${unlocked}|${openCount}|${hasUnseenItems}`;
+    if (signature === this.coopItemsSignature) {
+      this.syncCoopEffectActivity();
+      return;
+    }
     this.coopItemsSignature = signature;
     this.coopItemsUnlocked = unlocked;
     // Ein offener Sperr-Hinweis waere nach dem Freischalten falsch.
@@ -1105,12 +1105,22 @@ export class LobbyOverlay {
     const needsAttention = unlocked && (openCount > 0 || hasUnseenItems);
     this.coopItemsBtn.setBadge(unlocked && openCount > 0 ? openCount : null);
     this.coopItemsBtn.setIntent(needsAttention ? 'attention' : 'neutral');
-    if (needsAttention && this.visible) {
-      this.itemsBtnEffect?.setFilledWidth(COOP_BTN_W);
-      this.itemsBtnEffect?.start();
-    } else {
-      this.itemsBtnEffect?.stop();
+    this.coopItemsNeedAttention = needsAttention;
+    this.syncCoopEffectActivity();
+  }
+
+  private syncCoopEffectActivity(): void {
+    const visible = this.visible && this.coopProgressAvailable;
+    if (this.coopBand && this.coopBand.visible !== visible) {
+      this.coopBand.setVisible(visible);
+      this.layoutList();
     }
+    if (visible) this.coopBarEffect?.start();
+    else this.coopBarEffect?.stop();
+    if (visible && this.coopUpgradesNeedAttention) this.upgradeBtnEffect?.start();
+    else this.upgradeBtnEffect?.stop();
+    if (visible && this.coopItemsNeedAttention) this.itemsBtnEffect?.start();
+    else this.itemsBtnEffect?.stop();
   }
 
   /** Button-Zustand nach isReady-Toggle anpassen. */

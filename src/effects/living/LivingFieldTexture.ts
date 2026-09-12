@@ -106,6 +106,8 @@ export class LivingFieldTexture {
   private shader: Phaser.GameObjects.Shader | null = null;
   private step: QualityStep = QUALITY_HIGH;
   private consumers = 0;
+  private activeConsumers = 0;
+  private destroyed = false;
   private nextRenderAt = 0;
   private elapsedSec = 0;
   private readonly available: boolean;
@@ -153,7 +155,7 @@ export class LivingFieldTexture {
 
   /** `false` ohne WebGL-Renderer oder Shader-Klasse — dann bleibt jeder Balken wie im `low`-Profil leer. */
   isAvailable(): boolean {
-    return this.available;
+    return this.available && !this.destroyed;
   }
 
   getTextureKey(): string {
@@ -178,6 +180,7 @@ export class LivingFieldTexture {
   }
 
   retain(): void {
+    if (this.destroyed) return;
     this.consumers += 1;
     if (this.consumers === 1) this.ensureShader();
   }
@@ -185,11 +188,25 @@ export class LivingFieldTexture {
   release(): void {
     if (this.consumers === 0) return;
     this.consumers -= 1;
-    if (this.consumers === 0) this.disposeShader();
+    if (this.consumers === 0) {
+      this.activeConsumers = 0;
+      this.disposeShader();
+    }
+  }
+
+  /** Animation ownership is separate from Images retaining the texture's frames. */
+  activate(): void {
+    if (this.destroyed || this.consumers === 0) return;
+    this.activeConsumers += 1;
+    if (this.activeConsumers === 1) this.nextRenderAt = 0;
+  }
+
+  deactivate(): void {
+    this.activeConsumers = Math.max(0, this.activeConsumers - 1);
   }
 
   private update(deltaMs: number): void {
-    if (!this.shader || this.consumers === 0) return;
+    if (!this.shader || this.consumers === 0 || this.activeConsumers === 0) return;
     this.elapsedSec += deltaMs / 1000;
     this.nextRenderAt -= deltaMs;
     if (this.nextRenderAt > 0) return;
@@ -245,12 +262,15 @@ export class LivingFieldTexture {
   }
 
   private destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.unsubscribeQuality?.();
     this.unsubscribeQuality = null;
     this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.onUpdate);
     this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown);
     this.scene.events.off(Phaser.Scenes.Events.DESTROY, this.onShutdown);
     this.consumers = 0;
+    this.activeConsumers = 0;
     this.disposeShader();
     instances.delete(this.scene);
   }

@@ -319,6 +319,7 @@ export class CoopDefenseUpgradesOverlay {
   private upgradesContainer: Phaser.GameObjects.Container | null = null;
   private tooltip: UiTooltip | null = null;
   private visible = false;
+  private visibilityTween: Phaser.Tweens.Tween | null = null;
   private activeCategoryIndex = 0;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
   private keyHandler: ((event: KeyboardEvent) => void) | null = null;
@@ -352,6 +353,8 @@ export class CoopDefenseUpgradesOverlay {
   ) {}
 
   build(): void {
+    this.visibilityTween?.remove();
+    this.visibilityTween = null;
     this.container?.destroy(true);
     this.container = null;
     this.dimRect = null;
@@ -534,7 +537,7 @@ export class CoopDefenseUpgradesOverlay {
     this.picker = new LoadoutSlotPicker(this.scene, this.container, DEPTH.OVERLAY + 2);
     this.respecMenu = new UiContextMenu(this.scene, this.container);
 
-    // Living breathing effect for the XP bar (particles confined to the fill region + glow).
+    // Shared living field for the XP bar, active only while the overlay is shown.
     this.xpBarEffect = new LivingBarEffect(
       this.scene,
       this.container,
@@ -543,7 +546,7 @@ export class CoopDefenseUpgradesOverlay {
       BAR_W,
       BAR_H,
       xpPalette,
-      { glowTarget: this.progressFill, scrollFactor: 0, intensity: 1.35 },
+      { glowTarget: this.progressFill, scrollFactor: 0, intensity: 1.35, startActive: false },
     );
 
     this.refresh();
@@ -604,8 +607,9 @@ export class CoopDefenseUpgradesOverlay {
     this.refresh();
 
     this.container.setVisible(true);
+    this.visibilityTween?.remove();
     this.container.setAlpha(0);
-    this.scene.tweens.add({
+    this.visibilityTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 1,
       duration: 150,
@@ -646,7 +650,8 @@ export class CoopDefenseUpgradesOverlay {
     this.clearClassDecorations();
     this.xpBarEffect?.stop();
 
-    this.scene.tweens.add({
+    this.visibilityTween?.remove();
+    this.visibilityTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 0,
       duration: 100,
@@ -665,6 +670,8 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   destroy(): void {
+    this.visibilityTween?.remove();
+    this.visibilityTween = null;
     this.dismissDelay?.destroy();
     this.loadoutHintTimer?.destroy();
     this.loadoutHintTimer = null;
@@ -1930,7 +1937,14 @@ export class CoopDefenseUpgradesOverlay {
           innerW,
           fillHeight,
           fillPalette,
-          { scrollFactor: 0, intensity: 0.32 },
+          {
+            scrollFactor: 0, intensity: 0.32, sampling: 'compact',
+            startActive: this.visible, variantKey: node.id,
+            clipShape: {
+              kind: 'roundedRect', x: -innerW / 2, y: -innerH / 2,
+              width: innerW, height: innerH, radius: NODE_TEX_RADIUS - NODE_INNER_PADDING,
+            },
+          },
         );
         effect.setFilledWidth(innerW);
         this.nodeEffects.push(effect);
@@ -2423,7 +2437,7 @@ export class CoopDefenseUpgradesOverlay {
    * Sammelt Refreshes bis zum Frame-Ende.
    *
    * `refresh()` baut den gesamten Kategoriebaum neu auf – inklusive Zerstoeren und Neuanlegen
-   * eines {@link LivingBarEffect} (zwei Partikel-Emitter und Aura) **je Knoten**.
+   * eines {@link LivingBarEffect} (Sample-Images der geteilten Feldtextur) **je Knoten**.
    * Beim schnellen Vergeben mehrerer Punkte lief das pro Klick und war deutlich spuerbar; so
    * laeuft es hoechstens einmal pro Frame.
    */

@@ -2,7 +2,7 @@
 
 **Stand:** 12.09.2026
 
-**Status:** Planung abgeschlossen; Implementierung noch nicht begonnen.
+**Status:** Implementiert und automatisiert geprüft; visuelle Abnahme im Browser noch offen.
 
 **Grundlage:** [Technisches Konzept](Fragdachse_LivingBar_GPU_Visual_Fidelity_Technisches_Konzept.md), Referenz `6dcfb63edd7fdd682ee8804767bf1c30cbabbc8b`.
 
@@ -176,12 +176,33 @@ Für eine beauftragte Browserprüfung gilt der vorhandene Ablauf: `npm run dev:b
 - **Lifecycle-Risiko:** Quality-Rebuilds und Parent-Destroy können dieselben Ressourcen über mehrere Pfade erreichen. Tests müssen balancierten Besitz und idempotentes Stop/Destroy schützen, nicht nur den Happy Path.
 - **Geltungsbereich:** Gameplay, Progression, Netzwerk und die vorhandenen anderen Arbeitskopieänderungen werden durch dieses Vorhaben nicht geändert. Das aktuelle Boot-Rendering hinter dem DOM-Ladescreen bleibt erhalten; die neue Aktivitätssteuerung folgt den UI-Ownern und führt keine DOM-Verdeckungsanalyse ein.
 
-## 5. Bereits ausgeführte Prüfung
+## 5. Vorabprüfung für den Plan
 
 - Konzept vollständig gelesen; Referenzcommit gegen aktuellen Arbeitsstand in den betroffenen Dateien verglichen.
 - Sämtliche `new LivingBarEffect`-Aufrufstellen gesucht; Konstruktion, Sichtbarkeit, Quality und Teardown in den relevanten Ownern abgeglichen.
 - Phaser-4.2.1-Implementierung von Crop und Shader-Texture-Initialisierung lokal geprüft.
 - `npm test -- tests/LivingFieldTexture.test.ts tests/LivingBarEffectQuality.test.ts`: **2 Dateien, 11 Tests bestanden**. Die bisherigen Tests schützen Grundpfad und Quality, aber noch nicht die hier geplanten neuen Verträge.
 - Keine Laufzeitimplementierung geändert. Kein Build, Dev-Server oder Browser für diesen Plan gestartet; visuelle Aussagen sind konzeptuelle Abnahmekriterien, keine bereits bestätigten Ergebnisse.
+
+## 6. Umsetzungsstand vom 12.09.2026
+
+Die Implementierung erfolgte auf Basis von `e21ebfb2` und umfasst die Phasen 1–5 sowie die automatisierte Prüfung aus Phase 6.
+
+- Shared-Field-Besitz und Aktivität sind getrennt. Stop pausiert die Shader-Updates; residente Images behalten ihre Texture. Quality-Wechsel, letzter Release und Shutdown sind abgesichert.
+- Compact-Samples verwenden stabile Consumer-Schlüssel und gewichtete Alpha-Werte. [livingClipGeometry.ts](../../src/effects/living/livingClipGeometry.ts) begrenzt das Feld durch konservative Bänder der vollständigen Rundform. Sehr flache Füllungen behalten X-Tiling und gültige Source-Crops.
+- Die Lobby-Buttons besitzen den internen Effect-Layer und teilen die tatsächliche Flächengeometrie mit dem Texture-Helper. Ihre Aktivität folgt auch bei identischen Snapshots der Sichtbarkeit des Coop-Bands.
+- Upgrade-Nodes, Farb-Picker, Options-Slider und untere CenterHUD-Balken sind an ihre Owner-Sichtbarkeit gebunden. Versteckte Konstruktion und Refresh starten keine Living-Animation.
+- Ergänzend werden laufende Sichtbarkeits-Tweens in Options und Upgrades beim Richtungswechsel abgebrochen. Ein alter Fade kann dadurch ein neu geöffnetes Overlay nicht nachträglich verstecken.
+- Die ursprüngliche Einfügeposition des Felds bleibt auch nach `low → high` erhalten. Der Effekt merkt sich die vor ihm liegenden Objekte und fügt neue Images hinter dem letzten noch vorhandenen Vorgänger ein. Das schützt Icons, Texte und Rahmen auch bei anfänglich niedriger Qualität.
+- Shaderrezept, Texture-Auflösung, 20/30-Hz-Kadenz, normale Bar-Kalibrierung und PlayerStatusRing sind unverändert.
+
+**Abschließende Prüfung:**
+
+- `npm run check`: **391 Core-Testdateien / 3.457 Tests**, **6 Architecture-Testdateien / 33 Tests** und TypeScript-/Vite-Produktionsbuild erfolgreich.
+- [LivingBarConsumers.test.ts](../../tests/integration/LivingBarConsumers.test.ts): **7 Integrationstests erfolgreich**. Der vorherige Integration-Suite-Lauf bestand außerdem mit allen 422 Tests der 45 bestehenden Dateien; die neue Datei wurde nach Fertigstellung gezielt geprüft.
+- Die fokussierten Core-Dateien enthalten zusammen **27 Tests** für Texture-Lifecycle, Sampling, Quality, Schichtung und reine Clip-Geometrie.
+- Diff-Whitespace und Dokumentverweise geprüft. Kein Dev-Server oder Browser gestartet.
+
+**Offen:** Die visuelle Abnahme aus Phase 6, insbesondere wahrgenommene Bewegungsdichte und Sichtbarkeit der Bandstufen bei tatsächlicher Anzeigegröße. Dafür ist weiterhin ein ausdrücklicher Auftrag zur Sichtprüfung erforderlich.
 
 Knowledge writeback: No durable project knowledge discovered.

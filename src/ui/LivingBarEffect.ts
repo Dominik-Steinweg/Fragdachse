@@ -12,7 +12,10 @@ import { getGraphicsQualityController, getGraphicsQualityProfile } from '../grap
 import { LivingBreathDriver } from '../effects/living/LivingBreathDriver';
 import { LivingFieldTexture } from '../effects/living/LivingFieldTexture';
 import { LIVING_FIELD_UNITS_PER_BAR_HEIGHT } from '../effects/living/livingFieldShader';
+import { buildRoundedRectClipBands, type LivingBarRoundedClip, type LivingClipRect } from '../effects/living/livingClipGeometry';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
+
+export type { LivingBarRoundedClip } from '../effects/living/livingClipGeometry';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -97,13 +100,38 @@ export function createGradientTexture(
 
 // ── LivingBarEffect class ───────────────────────────────────────────────────
 
+export type LivingBarSampling = 'bar' | 'compact';
+
 export interface LivingBarEffectOpts {
-  /** Vorhandenes Balkenbild; aktiviert Glow auf high und die gebackene Aura auf medium. */
+  /** Vorhandenes Balkenbild fuer den konturgebundenen Shared-Glow. */
   glowTarget?: Phaser.GameObjects.Image;
   /** Set to 0 for screen-fixed HUD elements. Default: don't override. */
   scrollFactor?: number;
   /** Scales field alpha and glow strength. Default: 1.0 (full intensity). */
   intensity?: number;
+  /** Default 'bar'; compact superimposes distinct windows of the same field. */
+  sampling?: LivingBarSampling;
+  /** Full shape in container-local coordinates, independent of the current fill rectangle. */
+  clipShape?: LivingBarRoundedClip;
+  /** Default true. Hidden UI owners should opt out until shown. */
+  startActive?: boolean;
+  /** Stable consumer identity, including when multiple nodes share local geometry and color. */
+  variantKey?: string;
+}
+
+const COMPACT_SAMPLE_WEIGHTS = [1, 0.75, 0.55] as const;
+const BAR_SAMPLE_WEIGHTS = [1] as const;
+
+interface LivingFieldTile {
+  readonly image: Phaser.GameObjects.Image;
+  readonly bounds: LivingClipRect;
+  readonly sourceX: number;
+  readonly sourceY: number;
+  readonly sampleWeight: number;
+  readonly gradientLeft: number;
+  readonly gradientRight: number;
+  tintStart: number;
+  tintEnd: number;
 }
 
 /**
@@ -126,11 +154,14 @@ export class LivingBarEffect {
   breathAura: Phaser.GameObjects.Image | null = null;
   breathGlow: GlowHandle | null = null;
 
-  private active = true;
+  private active: boolean;
+  private destroyed = false;
+  private readonly onContainerDestroy = () => this.destroy();
   private glowTarget: Phaser.GameObjects.Image | null;
   private enabled: boolean;
   private filterGlowEnabled: boolean;
   private readonly container: Phaser.GameObjects.Container;
+  private readonly precedingSiblings: readonly Phaser.GameObjects.GameObject[];
   private readonly barHeight: number;
   private readonly barX: number;
   private readonly barY: number;
@@ -142,13 +173,11 @@ export class LivingBarEffect {
   private unsubscribeQuality: (() => void) | null = null;
 
   private field: LivingFieldTexture | null = null;
-  private tiles: Phaser.GameObjects.Image[] = [];
+  private fieldActive = false;
+  private breathDriver: LivingBreathDriver | null = null;
+  private tiles: LivingFieldTile[] = [];
   /** Bildschirmpixel je Texturpixel. */
   private imageScale = 1;
-  /** Breite einer Kachel in Bildschirmpixeln. */
-  private tileWidth = 1;
-  private cropHeight = 1;
-  private cropTop = 0;
   private energyIntensity = 0;
 
   constructor(
@@ -159,11 +188,15 @@ export class LivingBarEffect {
     opts?: LivingBarEffectOpts,
   ) {
     this.container = container;
-    this.barHeight = Math.max(1, h);
+    // Quality may destroy all field Images. Remember the surrounding authored objects so a
+    // rebuild (including initially low quality) stays beneath later icons, text and borders.
+    this.precedingSiblings = container.list.slice();
+    this.active = opts?.startActive ?? true;
+    this.barHeight = Number.isFinite(h) ? Math.max(1, h) : 1;
     this.barX = x;
     this.barY = y;
-    this.fullWidth = Math.max(1, w);
-    this.filledWidth = Math.max(0, w);
+    this.fullWidth = Number.isFinite(w) ? Math.max(1, w) : 1;
+    this.filledWidth = Number.isFinite(w) ? Math.max(0, w) : 0;
     this.opts = opts;
     this.baseIntensity = Phaser.Math.Clamp(opts?.intensity ?? 1, 0, 1);
     this.glowIntensity = opts?.intensity ?? 1;
@@ -172,6 +205,7 @@ export class LivingBarEffect {
     this.filterGlowEnabled = qualityProfile.sharedGlow.enabled
       && qualityProfile.sharedGlow.importance.standard;
     this.glowTarget = opts?.glowTarget ?? null;
+    this.container.once(Phaser.GameObjects.Events.DESTROY, this.onContainerDestroy);
 
     // Der Effekt muss auf Qualitaetswechsel zur Laufzeit reagieren: Die Instanzen leben so
     // lange wie ihr HUD-Element und wuerden sonst nach einem Wechsel von `low` auf `high`
@@ -186,20 +220,16 @@ export class LivingBarEffect {
 
     if (this.enabled) {
       this.createTiles();
-      this.setFilledWidth(this.filledWidth);
+      this.syncPresentation();
     }
   }
 
   private applyEnabled(enabled: boolean): void {
-    if (this.enabled === enabled) return;
+    if (this.destroyed || this.enabled === enabled) return;
     this.enabled = enabled;
     if (enabled) {
       this.createTiles();
-      if (this.active) this.setFilledWidth(this.filledWidth);
-      else {
-        this.hideTiles();
-        this.removeGlowVisual();
-      }
+      this.syncPresentation();
       return;
     }
     this.removeGlowVisual();
@@ -207,7 +237,11 @@ export class LivingBarEffect {
   }
 
   private createTiles(): void {
-    if (this.tiles.length > 0) return;
+    if (this.field || this.destroyed) return;
+
+    const rect = { x: this.barX, y: this.barY, width: this.fullWidth, height: this.barHeight };
+    const bands = this.opts?.clipShape ? buildRoundedRectClipBands(this.opts.clipShape, rect) : [rect];
+    if (!Number.isFinite(this.barX) || !Number.isFinite(this.barY) || bands.length === 0) return;
 
     const field = LivingFieldTexture.get(this.scene);
     // Ohne WebGL-Shader (Tests, exotische Kontexte) bleibt der Effekt still, statt einen
@@ -219,40 +253,64 @@ export class LivingBarEffect {
 
     const pixelsPerUnit = field.getPixelsPerUnit();
     this.imageScale = (this.barHeight / LIVING_FIELD_UNITS_PER_BAR_HEIGHT) / pixelsPerUnit;
-    this.tileWidth = field.getTextureWidth() * this.imageScale;
-    this.cropHeight = Math.min(
+    const textureWidth = field.getTextureWidth();
+    const cropHeight = Math.min(
       field.getTextureHeight(),
       LIVING_FIELD_UNITS_PER_BAR_HEIGHT * pixelsPerUnit,
     );
-    // Der senkrechte Versatz ist die einzige Variation zwischen benachbarten Balken. Er ist
-    // stetig und aus der Balkengeometrie abgeleitet, damit derselbe Balken nach einem
-    // Qualitaetswechsel dasselbe Fenster zeigt.
-    const verticalRange = Math.max(0, field.getTextureHeight() - this.cropHeight);
-    this.cropTop = verticalRange * variantFraction(this.barX, this.barY, this.palette.mid);
+    const verticalRange = Math.max(0, field.getTextureHeight() - cropHeight);
+    const compact = this.opts?.sampling === 'compact';
+    const weights = compact ? COMPACT_SAMPLE_WEIGHTS : BAR_SAMPLE_WEIGHTS;
+    const keyHash = hashVariantKey(this.opts?.variantKey ?? '');
+    const variation = variantFraction(this.barX, this.barY, this.palette.mid + keyHash);
+    const sourceWidth = this.fullWidth / this.imageScale;
+    let insertionIndex = 0;
+    for (let index = this.precedingSiblings.length - 1; index >= 0; index -= 1) {
+      const siblingIndex = this.container.getIndex(this.precedingSiblings[index]);
+      if (siblingIndex >= 0) {
+        insertionIndex = siblingIndex + 1;
+        break;
+      }
+    }
 
-    const tileCount = Math.max(1, Math.ceil(this.fullWidth / this.tileWidth));
-
-    for (let index = 0; index < tileCount; index += 1) {
-      const tile = this.scene.add.image(0, 0, field.getTextureKey())
-        .setOrigin(0, 0)
-        .setScale(this.imageScale)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setAlpha(this.baseIntensity)
-        .setVisible(false);
-      // Eckweiser Tint bildet den dark→light-Verlauf ab, den die frueheren Partikel ueber ihre
-      // Tint-Liste im Mittel erzeugt haben.
-      tile.setTint(this.palette.dark, this.palette.light, this.palette.dark, this.palette.light);
-      tile.setPosition(
-        this.barX + index * this.tileWidth,
-        this.barY - this.cropTop * this.imageScale,
-      );
-      if (this.opts?.scrollFactor !== undefined) tile.setScrollFactor(this.opts.scrollFactor);
-      this.container.add(tile);
-      this.tiles.push(tile);
+    for (let sample = 0; sample < weights.length; sample += 1) {
+      const cropTop = verticalRange * (sample === 0 ? variation
+        : variantFraction(this.barX + sample * 37, this.barY, this.palette.mid + keyHash));
+      // Fitting windows need no wrap; very shallow fills retain periodic X-tiling.
+      const sourceRange = sourceWidth <= textureWidth ? textureWidth - sourceWidth : textureWidth;
+      let sourceX = compact ? sourceRange * (sample + variation) / weights.length : 0;
+      let covered = 0;
+      while (covered < this.fullWidth) {
+        const segmentWidth = Math.min(this.fullWidth - covered, (textureWidth - sourceX) * this.imageScale);
+        const segmentLeft = this.barX + covered;
+        const segmentRight = segmentLeft + segmentWidth;
+        for (const band of bands) {
+          const left = Math.max(band.x, segmentLeft);
+          const right = Math.min(band.x + band.width, segmentRight);
+          if (right <= left) continue;
+          const sx = sourceX + (left - segmentLeft) / this.imageScale;
+          const sy = cropTop + (band.y - this.barY) / this.imageScale;
+          const image = this.scene.add.image(left - sx * this.imageScale, band.y - sy * this.imageScale, field.getTextureKey())
+            .setOrigin(0, 0)
+            .setScale(this.imageScale)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setVisible(false);
+          if (this.opts?.scrollFactor !== undefined) image.setScrollFactor(this.opts.scrollFactor);
+          this.container.addAt(image, insertionIndex++);
+          this.tiles.push({
+            image, sourceX: sx, sourceY: sy, sampleWeight: weights[sample],
+            bounds: { x: left, y: band.y, width: right - left, height: band.height },
+            gradientLeft: compact ? this.barX : segmentLeft,
+            gradientRight: compact ? this.barX + this.fullWidth : segmentRight,
+            tintStart: 0, tintEnd: 1,
+          });
+        }
+        covered += segmentWidth;
+        sourceX = 0;
+      }
     }
 
     this.applyEnergyVisuals();
-    this.ensureGlowVisual();
   }
 
   /**
@@ -261,6 +319,7 @@ export class LivingBarEffect {
    * the already visible field window and the existing shared glow.
    */
   setEnergyIntensity(intensity: number): void {
+    if (this.destroyed) return;
     const next = Phaser.Math.Clamp(Number.isFinite(intensity) ? intensity : 0, 0, 1);
     if (Math.abs(this.energyIntensity - next) < 0.001) return;
     this.energyIntensity = next;
@@ -269,21 +328,13 @@ export class LivingBarEffect {
 
   private applyEnergyVisuals(): void {
     const energy = this.energyIntensity;
-    const alpha = this.baseIntensity * (1 + energy * 0.2);
-    const dark = energyTint(this.palette.dark, this.palette.light, energy * 0.28);
-    const light = energyTint(this.palette.light, 0xffffff, energy * 0.72);
-
-    for (const tile of this.tiles) {
-      tile
-        .setTint(dark, light, dark, light)
-        .setAlpha(alpha);
-    }
+    for (const tile of this.tiles) this.applyTileEnergy(tile);
 
     if (this.breathAura) {
       this.breathAura
         .setTint(energyTint(this.palette.mid, 0xffffff, energy * 0.65))
         .setAlpha(0.1 * this.glowIntensity * (1 + energy * 1.5));
-      LivingBreathDriver.get(this.scene).register(
+      this.breathDriver?.register(
         this.breathAura,
         'alpha',
         0.08 * this.glowIntensity * (1 + energy * 1.5),
@@ -291,7 +342,7 @@ export class LivingBarEffect {
       );
     }
     if (this.breathGlow) {
-      LivingBreathDriver.get(this.scene).register(
+      this.breathDriver?.register(
         this.breathGlow,
         'outerStrength',
         0,
@@ -302,43 +353,72 @@ export class LivingBarEffect {
 
   /** Update the visible field region (call when bar fill changes). */
   setFilledWidth(w: number): void {
-    this.filledWidth = Math.max(0, w);
-
-    if (w > 4 && this.active) {
-      this.applyCrop(Math.min(this.filledWidth, this.fullWidth));
-      this.ensureGlowVisual();
-      this.syncAuraGeometry();
-      return;
-    }
-
-    this.hideTiles();
-    if (w <= 4) this.removeGlowVisual();
+    const next = Number.isFinite(w) ? Math.max(0, w) : 0;
+    if (this.destroyed || this.filledWidth === next) return;
+    this.filledWidth = next;
+    this.syncPresentation();
   }
 
-  private applyCrop(width: number): void {
-    if (this.tiles.length === 0 || this.imageScale <= 0) return;
-    const textureWidth = this.field?.getTextureWidth() ?? 0;
+  private applyTileEnergy(tile: LivingFieldTile): void {
+    const energy = this.energyIntensity;
+    const dark = energyTint(this.palette.dark, this.palette.light, energy * 0.28);
+    const light = energyTint(this.palette.light, 0xffffff, energy * 0.72);
+    const left = energyTint(dark, light, tile.tintStart);
+    const right = energyTint(dark, light, tile.tintEnd);
+    tile.image.setTint(left, right, left, right)
+      .setAlpha(this.baseIntensity * (1 + energy * 0.2) * tile.sampleWeight);
+  }
 
-    for (let index = 0; index < this.tiles.length; index += 1) {
-      const tile = this.tiles[index];
-      const covered = index * this.tileWidth;
-      const remaining = width - covered;
-      if (remaining <= 0) {
-        tile.setVisible(false);
+  private applyCrop(width: number): boolean {
+    const fillRight = this.barX + width;
+    let visible = false;
+    for (const tile of this.tiles) {
+      const right = Math.min(tile.bounds.x + tile.bounds.width, fillRight);
+      if (right <= tile.bounds.x) {
+        tile.image.setVisible(false);
         continue;
       }
-      const cropWidth = Math.min(textureWidth, remaining / this.imageScale);
-      tile.setCrop(0, this.cropTop, cropWidth, this.cropHeight);
-      tile.setVisible(true);
+      const gradientWidth = Math.min(fillRight, tile.gradientRight) - tile.gradientLeft;
+      const tintStart = (tile.bounds.x - tile.gradientLeft) / gradientWidth;
+      const tintEnd = (right - tile.gradientLeft) / gradientWidth;
+      if (tile.tintStart !== tintStart || tile.tintEnd !== tintEnd) {
+        tile.tintStart = tintStart;
+        tile.tintEnd = tintEnd;
+        this.applyTileEnergy(tile);
+      }
+      tile.image.setCrop(tile.sourceX, tile.sourceY,
+        (right - tile.bounds.x) / this.imageScale, tile.bounds.height / this.imageScale);
+      tile.image.setVisible(true);
+      visible = true;
     }
+    return visible;
   }
 
   private hideTiles(): void {
-    for (const tile of this.tiles) tile.setVisible(false);
+    for (const tile of this.tiles) tile.image.setVisible(false);
+  }
+
+  private setFieldActive(active: boolean): void {
+    if (this.fieldActive === active) return;
+    this.fieldActive = active;
+    if (active) this.field?.activate();
+    else this.field?.deactivate();
+  }
+
+  private syncPresentation(): void {
+    const show = !this.destroyed && this.enabled && this.active && this.filledWidth > 4 && this.baseIntensity > 0;
+    const visible = show && this.applyCrop(Math.min(this.filledWidth, this.fullWidth));
+    if (!visible) this.hideTiles();
+    this.setFieldActive(visible);
+    if (visible) {
+      this.ensureGlowVisual();
+      this.syncAuraGeometry();
+    } else this.removeGlowVisual();
   }
 
   private destroyTiles(): void {
-    for (const tile of this.tiles) tile.destroy();
+    this.setFieldActive(false);
+    for (const tile of this.tiles) tile.image.destroy();
     this.tiles = [];
     this.field?.release();
     this.field = null;
@@ -346,19 +426,16 @@ export class LivingBarEffect {
 
   /** Pause the effect (field hidden, glow removed). */
   stop(): void {
+    if (!this.active) return;
     this.active = false;
-    this.hideTiles();
-    this.removeGlowVisual();
+    this.syncPresentation();
   }
 
   /** Resume the effect (field shown, glow added). */
   start(): void {
+    if (this.destroyed || this.active) return;
     this.active = true;
-    if (this.filledWidth > 4) {
-      this.applyCrop(Math.min(this.filledWidth, this.fullWidth));
-      this.ensureGlowVisual();
-      this.breathAura?.setVisible(true);
-    }
+    this.syncPresentation();
   }
 
   private rebuildGlowVisual(): void {
@@ -368,7 +445,7 @@ export class LivingBarEffect {
 
   /** High und medium nutzen den zentralen Shared-Glow; die Aura bleibt ein sicherer Fallback. */
   private ensureGlowVisual(): void {
-    if (!this.enabled || !this.glowTarget || this.filledWidth <= 4) return;
+    if (!this.fieldActive || !this.glowTarget) return;
     if (this.filterGlowEnabled) this.ensureFilterGlow();
     else this.ensureAura();
   }
@@ -378,7 +455,8 @@ export class LivingBarEffect {
     const intensity = this.glowIntensity * (1 + this.energyIntensity * 1.5);
     this.breathGlow = addExternalGlow(this.glowTarget, this.palette.mid, 0, 0, false, 0.1, 6);
     if (!this.breathGlow) return;
-    LivingBreathDriver.get(this.scene).register(this.breathGlow, 'outerStrength', 0, 2.5 * intensity);
+    this.breathDriver = LivingBreathDriver.get(this.scene);
+    this.breathDriver.register(this.breathGlow, 'outerStrength', 0, 2.5 * intensity);
   }
 
   private ensureAura(): void {
@@ -394,7 +472,8 @@ export class LivingBarEffect {
     if (this.opts?.scrollFactor !== undefined) this.breathAura.setScrollFactor(this.opts.scrollFactor);
     this.container.addAt(this.breathAura, 0);
     this.syncAuraGeometry();
-    LivingBreathDriver.get(this.scene).register(
+    this.breathDriver = LivingBreathDriver.get(this.scene);
+    this.breathDriver.register(
       this.breathAura,
       'alpha',
       0.08 * intensity * energyScale,
@@ -415,26 +494,35 @@ export class LivingBarEffect {
     // Den Treiber nur anfassen, wenn wirklich etwas angemeldet war: sonst entstuende auf `low`
     // beim Aufraeumen noch ein Szenen-Update-Listener fuer einen Effekt, den es nie gab.
     if (!this.breathGlow && !this.breathAura) return;
-    const breath = LivingBreathDriver.get(this.scene);
     if (this.breathGlow && this.glowTarget) {
-      breath.unregister(this.breathGlow);
+      this.breathDriver?.unregister(this.breathGlow);
       removeExternalFx(this.glowTarget, this.breathGlow);
       this.breathGlow = null;
     }
     if (this.breathAura) {
-      breath.unregister(this.breathAura);
+      this.breathDriver?.unregister(this.breathAura);
       this.breathAura.destroy();
       this.breathAura = null;
     }
+    this.breathDriver = null;
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.container.off(Phaser.GameObjects.Events.DESTROY, this.onContainerDestroy);
     this.unsubscribeQuality?.();
     this.unsubscribeQuality = null;
     this.stop();
     this.removeGlowVisual();
     this.destroyTiles();
   }
+}
+
+function hashVariantKey(key: string): number {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) hash = (Math.imul(hash, 31) + key.charCodeAt(index)) | 0;
+  return hash;
 }
 
 /** Stabiler, aus der Balkengeometrie abgeleiteter Wert in [0, 1) für den Fensterversatz. */

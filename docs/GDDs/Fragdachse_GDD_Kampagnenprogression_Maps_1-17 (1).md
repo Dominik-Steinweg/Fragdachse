@@ -124,7 +124,6 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
   - Feuerfront breitet sich im Verlauf der Survival-Zeit nach rechts aus.
   - Nutzbare Kampffläche wird dauerhaft kleiner.
 - Ausbreitung klar telegraphieren.
-- Empfohlen: mehrere erkennbare Ausbreitungsschübe statt rein linearer Bewegung.
 - Finale Restfläche muss für Koop und mobile Pyro Badgers ausreichend groß bleiben.
 - Pyro Badger bleibt der zentrale neue Gegner.
 - Zielunterscheidung:
@@ -163,9 +162,8 @@ Wenn bestehende Reward-Strukturen bereits `persistentBaseRewardsOnComplete` unte
 **Map 14**
 - Hazard-Front bewegt sich von links nach rechts.
 - Bereits verlorene Fläche bleibt gefährlich.
-- Spieler erhalten vor jedem Fortschritt der Front eindeutiges visuelles Feedback.
 - Hazard soll möglichst bestehende Ground-Hazard-/Void-Fire-Systeme wiederverwenden.
-- Kein allgemein konfigurierbares „Battle-Royale-Circle-System“ nötig, sofern es nur für diese Map gebraucht wird.
+
 
 ### 5.4 Advance-Encounter mit Hinterhalten
 **Map 16**
@@ -199,16 +197,15 @@ Wenn bestehende Reward-Strukturen bereits `persistentBaseRewardsOnComplete` unte
 1. Vorhandenes Void-Fire-/Ground-Hazard-System prüfen und wiederverwenden.
 2. Fortschreitende linke Hazard-Grenze konfigurieren bzw. minimal erweitern.
 3. Telegraphing ergänzen.
-4. Mehrere Ausbreitungsphasen an die 120-s-Survival-Dauer koppeln.
+4. Mehrere Ausbreitungsphasen an die 120-s-Survival-Dauer koppeln oder einen Zeitraum definieren in dem es sich kontinuierlich ausbreitet.
 5. Multiplayer-Synchronität und Damage-Verhalten testen.
 
 ### Phase D – Progression & Persistenz
 **Niedrig bis mittel**
 1. Map-11-Radius-Unlock persistent speichern.
 2. Radius-Auflösung in Persistent Base anbinden.
-3. Save-Migration/Fallback für bestehende Spielstände sicherstellen.
-4. Unlock-Kommunikation prüfen.
-5. Map-8-Side-Mission-Reward auf einmalige permanente Freischaltung testen.
+3. Unlock-Kommunikation prüfen.
+4. Map-8-Side-Mission-Reward auf einmalige permanente Freischaltung testen.
 
 ### Phase E – Funktionaler Test
 - Solo und Koop.

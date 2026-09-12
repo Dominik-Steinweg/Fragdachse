@@ -214,6 +214,7 @@ export class OptionsOverlay {
   private readonly qualityButtons = new Map<GraphicsQuality, QualityButtonState>();
   private readonly localeButtons = new Map<Locale, LocaleButtonState>();
   private visible = false;
+  private visibilityTween: Phaser.Tweens.Tween | null = null;
   private draggingSliderKey: VolumeSliderKey | null = null;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
   private pointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
@@ -272,6 +273,8 @@ export class OptionsOverlay {
   }
 
   build(): void {
+    this.visibilityTween?.remove();
+    this.visibilityTween = null;
     this.unsubscribeMusicLoadState?.();
     this.unsubscribeMusicLoadState = null;
     this.musicLoadHideTimer?.destroy();
@@ -375,8 +378,10 @@ export class OptionsOverlay {
     this.syncAbortSection();
 
     this.container.setVisible(true);
+    for (const slider of this.sliders.values()) slider.fillEffect.start();
+    this.visibilityTween?.remove();
     this.container.setAlpha(0);
-    this.scene.tweens.add({
+    this.visibilityTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 1,
       duration: 150,
@@ -404,6 +409,7 @@ export class OptionsOverlay {
   hide(): void {
     if (!this.visible || !this.container) return;
     this.visible = false;
+    for (const slider of this.sliders.values()) slider.fillEffect.stop();
     this.draggingSliderKey = null;
     this.resetAbortConfirm();
     this.resetSpectatorConfirm();
@@ -419,7 +425,8 @@ export class OptionsOverlay {
       this.pointerUpHandler = null;
     }
 
-    this.scene.tweens.add({
+    this.visibilityTween?.remove();
+    this.visibilityTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 0,
       duration: 100,
@@ -439,6 +446,8 @@ export class OptionsOverlay {
 
   destroy(): void {
     this.hide();
+    this.visibilityTween?.remove();
+    this.visibilityTween = null;
     this.unsubscribeMusicLoadState?.();
     this.unsubscribeMusicLoadState = null;
     this.musicLoadHideTimer?.destroy();
@@ -665,7 +674,7 @@ export class OptionsOverlay {
       TRACK_W,
       TRACK_H,
       definition.palette,
-      { glowTarget: fill, scrollFactor: 0, intensity: 0.45 },
+      { glowTarget: fill, scrollFactor: 0, intensity: 0.45, startActive: false },
     );
 
     this.sliders.set(definition.key, {

@@ -49,6 +49,14 @@ export interface RoundedTextureParams {
   leftAccentWidth?: number;
 }
 
+/** The filled path inside the texture, before its stroke is drawn. */
+export function getRoundedTextureBounds(params: Pick<RoundedTextureParams, 'w' | 'h' | 'strokeWidth' | 'radius'>) {
+  const inset = Math.max(1, params.strokeWidth);
+  const width = Math.max(1, Math.round(params.w)) - inset * 2;
+  const height = Math.max(1, Math.round(params.h)) - inset * 2;
+  return { x: inset, y: inset, width, height, radius: Math.min(params.radius, width / 2, height / 2) };
+}
+
 /** Erzeugt (oder liefert gecacht) eine abgerundete Rechteck-Textur mit Verlauf + Glanz. */
 export function ensureRoundedTexture(scene: Phaser.Scene, params: RoundedTextureParams): string {
   if (scene.textures.exists(params.key)) return params.key;
@@ -60,11 +68,9 @@ export function ensureRoundedTexture(scene: Phaser.Scene, params: RoundedTexture
   const ctx = ct.context;
   ctx.clearRect(0, 0, w, h);
 
-  const inset = Math.max(1, params.strokeWidth);
-  const rectW = w - inset * 2;
-  const rectH = h - inset * 2;
+  const { x: inset, width: rectW, height: rectH, radius } = getRoundedTextureBounds(params);
 
-  roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
+  roundRectPath(ctx, inset, inset, rectW, rectH, radius);
   const grad = ctx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, rgbStr(params.topColor, params.fillAlpha));
   grad.addColorStop(1, rgbStr(params.bottomColor, params.fillAlpha));
@@ -73,7 +79,7 @@ export function ensureRoundedTexture(scene: Phaser.Scene, params: RoundedTexture
 
   if (params.leftAccentColor !== undefined && (params.leftAccentAlpha ?? 0) > 0) {
     ctx.save();
-    roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
+    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
     ctx.clip();
     ctx.fillStyle = rgbStr(params.leftAccentColor, params.leftAccentAlpha ?? 1);
     ctx.fillRect(0, 0, inset + Math.max(1, params.leftAccentWidth ?? 4), h);
@@ -82,7 +88,7 @@ export function ensureRoundedTexture(scene: Phaser.Scene, params: RoundedTexture
 
   if (params.highlightAlpha > 0) {
     ctx.save();
-    roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
+    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
     ctx.clip();
     const hi = ctx.createLinearGradient(0, 0, 0, h * 0.55);
     hi.addColorStop(0, `rgba(255,255,255,${params.highlightAlpha})`);
@@ -93,7 +99,7 @@ export function ensureRoundedTexture(scene: Phaser.Scene, params: RoundedTexture
   }
 
   if (params.strokeAlpha > 0) {
-    roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
+    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
     ctx.lineWidth = params.strokeWidth;
     ctx.strokeStyle = rgbStr(params.strokeColor, params.strokeAlpha);
     ctx.stroke();

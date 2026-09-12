@@ -923,7 +923,7 @@ export class CenterHUD {
       TRAIN_PAL,
       { glowTarget: this.trainBarFgImg, scrollFactor: 0, intensity: TRAIN_BAR_ALPHA },
     );
-    // The effect starts with a full emit zone by default, while the train widget
+    // The effect starts with a full field window by default, while the train widget
     // itself is hidden until a round actually provides a train.
     this.trainBarEffect.setFilledWidth(0);
     this.trainBarEffect.stop();
@@ -977,7 +977,7 @@ export class CenterHUD {
       BOTTOM_STACK_BAR_W,
       BOTTOM_STACK_BAR_H,
       palette,
-      { glowTarget: fg, scrollFactor: 0 },
+      { glowTarget: fg, scrollFactor: 0, startActive: false },
     );
     section.add(border);
     this.container.add(section);
@@ -1956,7 +1956,7 @@ export class CenterHUD {
       section.effect.setFilledWidth(fillW);
       section.lastWidth = fillW;
     }
-    if (fillW <= 6) {
+    if (!this.container.visible || fillW <= 6) {
       section.effect.stop();
     } else {
       section.effect.start();
@@ -1964,7 +1964,15 @@ export class CenterHUD {
   }
 
   private hideLowerSection(section: LowerBarSection): void {
-    if (!section.container.visible || section.hideTween) return;
+    if (!this.container.visible || !section.container.visible) {
+      section.hideTween?.destroy();
+      section.hideTween = null;
+      section.container.setVisible(false).setAlpha(1);
+      section.effect.stop();
+      section.lastWidth = -1;
+      return;
+    }
+    if (section.hideTween) return;
     section.hideTween = this.scene.tweens.add({
       targets: section.container,
       alpha: 0,
@@ -2057,7 +2065,7 @@ export class CenterHUD {
     section.energized = energized;
     const hasFill = section.lastWidth > 6;
     section.effect.setEnergyIntensity(energized ? 1 : 0);
-    if (section.container.visible && hasFill) section.effect.start();
+    if (this.container.visible && section.container.visible && hasFill) section.effect.start();
     else section.effect.stop();
   }
 

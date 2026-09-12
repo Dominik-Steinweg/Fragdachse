@@ -929,7 +929,7 @@ export class LeftSidePanel {
     const container = this.scene.add.container(PICKER_WORLD_X, PICKER_WORLD_Y, objects);
     container.setDepth(DEPTH.OVERLAY + 2);
 
-    // Farb-Swatches (created after container, so LivingBarEffect can add emitters)
+    // Farb-Swatches mit Sample-Images der geteilten Living-Textur.
     this.pickerSwatches = [];
     PLAYER_COLORS.forEach((color, idx) => {
       const col = idx % PICKER_COLS;
@@ -950,12 +950,12 @@ export class LeftSidePanel {
       const img = this.scene.add.image(sx + SWATCH_SIZE / 2, sy + SWATCH_SIZE / 2, texKey);
       container.add(img);
 
-      // LivingBarEffect (particles inside swatch area, reduced intensity for small swatches)
+      // Mehrere Feld-Samples halten die kleinen Swatches organisch bewegt.
       const effect = new LivingBarEffect(
         this.scene, container,
         sx, sy, SWATCH_SIZE, SWATCH_SIZE,
         palette,
-        { intensity: 0.25 },
+        { intensity: 0.25, sampling: 'compact', startActive: false, variantKey: String(color) },
       );
 
       // Interactive zone on top
@@ -994,6 +994,7 @@ export class LeftSidePanel {
   private closeColorPicker(): void {
     this.pickerOpen = false;
     this.pickerContainer.setVisible(false);
+    for (const { effect } of this.pickerSwatches) effect.stop();
     this.cleanupPickerDismissListener();
   }
 
@@ -1022,7 +1023,7 @@ export class LeftSidePanel {
         isOwn ? 1 : (isClickable ? 0.85 : 0.35),
       );
 
-      if (visible) effect.start();
+      if (this.pickerOpen && visible) effect.start();
       else effect.stop();
 
       if (isClickable) {
