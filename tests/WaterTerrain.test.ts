@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({}));
 import { WaterGeometry } from '../src/arena/WaterGeometry';
-import { WaterSurfaceModel, WATER_MASK_HALO, WATER_MASK_STEP, waterBlobDistance } from '../src/arena/WaterSurfaceModel';
+import { WaterSurfaceModel, WATER_MASK_HALO, WATER_MASK_STEP, WATER_VISUAL_EXPANSION, waterBlobDistance } from '../src/arena/WaterSurfaceModel';
 import { AutoTiler } from '../src/arena/AutoTiler';
 import { CELL_SIZE, getArenaMetricsProfile } from '../src/config';
 import { getCoopDefenseMapConfig, normalizeCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
@@ -17,6 +17,59 @@ const x = metrics.offsetX + (cell.gridX + .5) * CELL_SIZE;
 const y = metrics.offsetY + (cell.gridY + .5) * CELL_SIZE;
 
 describe('Water terrain contracts', () => {
+  const readMask = (mask: ReturnType<WaterSurfaceModel['bake']>, x: number, y: number, channel: number): number => {
+    const px = Math.floor((x + WATER_MASK_HALO) / WATER_MASK_STEP);
+    const py = Math.floor((y + WATER_MASK_HALO) / WATER_MASK_STEP);
+    return mask.data[(py * mask.size + px) * 4 + channel];
+  };
+
+  it('expands straight banks equally in every direction without changing occupancy', () => {
+    const cells = Array.from({ length: 8 * 8 }, (_, i) => ({ gridX: 4 + i % 8, gridY: 4 + Math.floor(i / 8) }));
+    const model = new WaterSurfaceModel(cells), baked = model.bake(0, 0, 512);
+    const geometry = new WaterGeometry(cells, metrics);
+    const center = 8 * CELL_SIZE;
+    const edge = 4 * CELL_SIZE + CELL_SIZE * .1 - WATER_VISUAL_EXPANSION;
+    for (const [x, y] of [[edge, center], [2 * center - edge, center], [center, edge], [center, 2 * center - edge]]) {
+      // Locate the half-coverage contour to within one mask texel; not an alpha tuning snapshot.
+      const dx = Math.sign(center - x), dy = Math.sign(center - y);
+      expect(readMask(baked, x + dx * WATER_MASK_STEP, y + dy * WATER_MASK_STEP, 2)).toBeGreaterThan(127);
+      expect(readMask(baked, x - dx * WATER_MASK_STEP, y - dy * WATER_MASK_STEP, 2)).toBeLessThan(128);
+    }
+    expect(geometry.hasCell(3, 8)).toBe(false);
+    expect(geometry.hasCell(4, 8)).toBe(true);
+    expect(readMask(baked, 4 * CELL_SIZE - 1, center, 2)).toBeGreaterThan(127);
+  });
+
+  it('gives a one-neighbor water tip a continuous visible mask beyond its authored cell', () => {
+    const cells = Array.from({ length: 6 * 6 }, (_, i) => ({ gridX: 5 + i % 6, gridY: 5 + Math.floor(i / 6) }));
+    cells.push({ gridX: 4, gridY: 8 });
+    const model = new WaterSurfaceModel(cells), baked = model.bake(0, 0, 512);
+    const tipX = 4.5 * CELL_SIZE, tipY = 8.5 * CELL_SIZE;
+    expect(readMask(baked, tipX, tipY, 2)).toBeGreaterThan(127);
+    expect(readMask(baked, tipX, 8 * CELL_SIZE - 1, 2)).toBeGreaterThan(0);
+    const distances = [0, 8, 16, 24, 32].map(dx => readMask(baked, tipX + dx, tipY, 0));
+    expect(distances[0]).toBeGreaterThan(0);
+    expect(distances).toEqual([...distances].sort((a, b) => a - b));
+  });
+
+  it('keeps empty water empty and bounds expanded chunk residency to the world', () => {
+    const empty = new WaterSurfaceModel([]), mask = empty.bake(0, 0, 64);
+    expect(empty.getChunkOrigins(512, 1024, 1024)).toEqual([]);
+    expect(mask.data.every((value, i) => i % 4 === 3 ? value === 255 : value === 0)).toBe(true);
+    expect(new WaterSurfaceModel([{ gridX: 0, gridY: 0 }]).getChunkOrigins(512, 512, 512)).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  it.each([false, true])('keeps the expanded exterior bank seamless at a chunk edge (vertical: %s)', vertical => {
+    const cells = Array.from({ length: 4 * 4 }, (_, i) => ({ gridX: 12 + i % 4, gridY: 12 + Math.floor(i / 4) }));
+    const model = new WaterSurfaceModel(cells);
+    const a = model.bake(0, 0, 512), b = model.bake(vertical ? 0 : 512, vertical ? 512 : 0, 512);
+    for (let along = 370; along < 550; along += 2) for (let across = 500; across < 530; across += 2)
+      for (const channel of [0, 2]) {
+        const x = vertical ? along : across, y = vertical ? across : along;
+        expect(Math.abs(readMask(a, x, y, channel) - readMask(b, x - (vertical ? 0 : 512), y - (vertical ? 512 : 0), channel))).toBeLessThanOrEqual(1);
+      }
+  });
+
   it.each([1, -1])('slides diagonally along a bank without losing tangential speed (%s)', direction => {
     const water = new WaterGeometry(Array.from({ length: 8 }, (_, i) => ({ gridX: 8, gridY: 5 + i })), metrics);
     const out = { x: 0, y: 0, vx: 0, vy: 0 };

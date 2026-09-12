@@ -34,7 +34,7 @@ export const enUi = {
   "ui.lobby.progress": "PROGRESS",
   "ui.lobby.upgrades": "UPGRADES",
   "ui.lobby.items": "ITEMS",
-  "ui.lobby.testArea": "TEST AREA",
+  "ui.lobby.testArea": "TRAINING GROUNDS",
   "ui.lobby.returnToLobby": "BACK TO LOBBY",
   "ui.lobby.help": "HELP",
   "ui.lobby.options": "OPTIONS",

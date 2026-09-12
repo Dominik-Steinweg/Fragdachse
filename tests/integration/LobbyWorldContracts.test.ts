@@ -177,13 +177,16 @@ describe('LobbyWorld – authored Geometrie', () => {
     }
   });
 
-  it('haelt die zentrale Flaeche fuer die spaetere persistente Basis frei', () => {
+  it('haelt die Basisflaeche frei von Hindernissen, aber erlaubt Bodendetails', () => {
     for (const rock of layout.rocks) {
       expect(isLobbyBaseReservedCell(rock.gridX, rock.gridY), `Fels ${rock.gridX}:${rock.gridY}`).toBe(false);
     }
     for (const tree of layout.trees) {
       expect(isLobbyBaseReservedCell(tree.gridX, tree.gridY), `Baum ${tree.gridX}:${tree.gridY}`).toBe(false);
     }
+    expect(layout.decals?.some(cell =>
+      cell.surface === 'ground' && isLobbyBaseReservedCell(cell.gridX, cell.gridY),
+    )).toBe(true);
   });
 
   it('liegt vollstaendig innerhalb ihrer eigenen Metrik und traegt keine Gleise', () => {

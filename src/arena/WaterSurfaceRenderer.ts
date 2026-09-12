@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { CELL_SIZE, DEPTH } from '../config';
+import { DEPTH } from '../config';
 import type { WaterCell } from '../types';
 import { ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX,
   type ChunkWorldFrame, type ChunkWorldRect } from './chunks/ArenaChunkGrid';
@@ -18,7 +18,8 @@ export class WaterSurfaceRenderer {
   constructor(private readonly scene: Phaser.Scene, private readonly frame: ChunkWorldFrame,
     water: readonly WaterCell[], private readonly seed: number) {
     this.model = new WaterSurfaceModel(water);
-    for (const cell of water) this.occupied.add(`${Math.floor(cell.gridX * CELL_SIZE / ARENA_RENDER_CHUNK_SIZE)},${Math.floor(cell.gridY * CELL_SIZE / ARENA_RENDER_CHUNK_SIZE)}`);
+    for (const origin of this.model.getChunkOrigins(ARENA_RENDER_CHUNK_SIZE, frame.width, frame.height))
+      this.occupied.add(`${origin.x / ARENA_RENDER_CHUNK_SIZE},${origin.y / ARENA_RENDER_CHUNK_SIZE}`);
   }
 
   updateResidency(view: ChunkWorldRect): void {

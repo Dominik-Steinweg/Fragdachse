@@ -345,7 +345,6 @@ function generateLobbyDecals(
   rocks: readonly RockCell[],
   trees: readonly TreeCell[],
   dirtCells: readonly DirtCell[],
-  clearZones: readonly GridRect[],
 ): DecalCell[] {
   const rng = createLobbyRng(LOBBY_WORLD_SEED + 17);
   const dirtSet = new Set<number>(dirtCells.map((cell) => cellKey(cell.gridX, cell.gridY)));
@@ -359,7 +358,6 @@ function generateLobbyDecals(
     for (let gridX = 0; gridX < GRID_COLS; gridX += 1) {
       const key = cellKey(gridX, gridY);
       if (blockedCells.has(key)) continue;
-      if (clearZones.some((rect) => isInsideRect(gridX, gridY, rect))) continue;
 
       const terrain = dirtSet.has(key) ? 'dirt' : 'grass';
       const layerConfig = ARENA_DECAL_CONFIG[terrain];
@@ -442,14 +440,14 @@ const titleRocks: RockCell[] = textRocks(TITLE_TEXT, TITLE_START_X, 1, TITLE_GAP
 const ambientRockAnchors: readonly RockClusterAnchor[] = [
   { gridX: 13.8, gridY: 10.4, radiusX: 2.8, radiusY: 1.8 },
   { gridX: 18.2, gridY: 28.8, radiusX: 3.2, radiusY: 2.1 },
-  { gridX: 48.3, gridY: 12.9, radiusX: 3.4, radiusY: 2.2, lobeCount: 4 },
-  { gridX: 45.2, gridY: 19.7, radiusX: 3.1, radiusY: 2.1 },
-  { gridX: 53.7, gridY: 25.9, radiusX: 3.6, radiusY: 2.3, lobeCount: 4 },
+  { gridX: 49.0, gridY: 11.6, radiusX: 2.2, radiusY: 1.3, lobeCount: 3 },
+  { gridX: 58.0, gridY: 20.5, radiusX: 1.0, radiusY: 1.3 },
+  { gridX: 56.8, gridY: 27.5, radiusX: 1.8, radiusY: 1.1, lobeCount: 3 },
   { gridX: 56.8, gridY: 10.8, radiusX: 2.4, radiusY: 1.7 },
   { gridX: 56.4, gridY: 29.7, radiusX: 2.8, radiusY: 1.6 },
   { gridX: 4.3, gridY: 29.8, radiusX: 2.9, radiusY: 1.9 },
-  { gridX: 9.1, gridY: 24.4, radiusX: 3.1, radiusY: 2.2 },
-  { gridX: 36.4, gridY: 30.6, radiusX: 2.8, radiusY: 1.7 },
+  { gridX: 9.1, gridY: 24.6, radiusX: 2.5, radiusY: 1.7 },
+  { gridX: 38.4, gridY: 30.6, radiusX: 2.8, radiusY: 1.7 },
   { gridX: 41.8, gridY: 6.8, radiusX: 2.5, radiusY: 1.5 },
   { gridX: 59.0, gridY: 6.4, radiusX: 2.2, radiusY: 1.4 },
   { gridX: 2.4, gridY: 12.5, radiusX: 2.2, radiusY: 1.5 },
@@ -531,7 +529,8 @@ const lobbyDirt: DirtCell[] = excludeWater(mergeUnique<DirtCell>(
     ),
     dirtQuietZones,
   ),
-  createOrganicDirtMargin([...lobbyRocks, ...lobbyWater], {
+  // Grass reaches the lakes; only rock formations produce a dirt margin.
+  createOrganicDirtMargin(lobbyRocks, {
     maxCols: GRID_COLS,
     maxRows: GRID_ROWS,
     rng: createLobbyRng(LOBBY_WORLD_SEED + 223),
@@ -542,7 +541,6 @@ const lobbyDecals: DecalCell[] = excludeWater(generateLobbyDecals(
   lobbyRocks,
   lobbyTrees,
   lobbyDirt,
-  [BASE_CLEAR_ZONE],
 ));
 
 const LOBBY_WORLD_LAYOUT: ArenaLayout = {

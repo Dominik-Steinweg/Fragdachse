@@ -5,13 +5,27 @@ import {
   copyRgbRegion,
   getTerrainSnapshotRegions,
   getTerrainTexturePhase,
+  stampWaterSnapshot,
 } from '../src/arena/TerrainColorSnapshotBuilder';
 import { TerrainColorSnapshot } from '../src/arena/TerrainColorSnapshot';
+import { WATER_COLOR } from '../src/arena/WaterSurfaceModel';
 import { DIRT_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { stampBlobSurfaceMottle } from '../src/arena/BlobSurfaceMottle';
 import { stampGroundCover } from '../src/arena/GroundCoverLayer';
 
 describe('TerrainColorSnapshot', () => {
+  it('stamps expanded water across chunk boundaries while retaining dry ground', () => {
+    const cells = Array.from({ length: 4 * 4 }, (_, i) => ({ gridX: 12 + i % 4, gridY: 12 + Math.floor(i / 4) }));
+    const data = new Uint8Array(256 * 256 * 3).fill(17);
+    stampWaterSnapshot(data, 256, 256, cells);
+    const snapshot = new TerrainColorSnapshot(256, 256, 100, 200, data);
+    expect(snapshot.sample(100 + 514, 200 + 448)).toBe(WATER_COLOR);
+    expect(snapshot.sample(100 + 448, 200 + 514)).toBe(WATER_COLOR);
+    expect(snapshot.sample(100 + 540, 200 + 448)).toBe(0x111111);
+    const before = data.slice();
+    stampWaterSnapshot(data, 256, 256, []);
+    expect(data).toEqual(before);
+  });
   it('uses fixed 1:4 RGB coordinates with explicit world offsets', () => {
     const data = new Uint8Array([1, 2, 3, 4, 5, 6]);
     const snapshot = new TerrainColorSnapshot(2, 1, 100, 200, data);

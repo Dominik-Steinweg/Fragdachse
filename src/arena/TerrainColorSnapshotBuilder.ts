@@ -1,14 +1,14 @@
-import { WaterSurfaceModel, WATER_COLOR } from './WaterSurfaceModel';
+import { WaterSurfaceModel, WATER_COLOR, WATER_MASK_HALO, WATER_MASK_STEP } from './WaterSurfaceModel';
+import { ARENA_RENDER_CHUNK_SIZE } from './chunks/ArenaChunkGrid';
 import * as Phaser from 'phaser';
 import {
   CAPTURE_THE_BEER_BASE_TINT_ALPHA,
   CAPTURE_THE_BEER_BLUE_BASE_TINT,
   CAPTURE_THE_BEER_RED_BASE_TINT,
-  CELL_SIZE,
   getCaptureTheBeerBaseWorldBounds,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
-import type { ArenaLayout, GameMode } from '../types';
+import type { ArenaLayout, GameMode, WaterCell } from '../types';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { resolveArenaBackgroundSpec } from './ArenaBackground';
 import type { ArenaBuilderResult, RockWorldFrame } from './ArenaBuilder';
@@ -76,6 +76,24 @@ export function getTerrainTexturePhase(worldPosition: number, worldOffset: numbe
   return phase < 0 ? phase + textureSize : phase;
 }
 
+/** The coarse ground-color lookup follows the same expanded coverage as presentation. */
+export function stampWaterSnapshot(data: Uint8Array, width: number, height: number, cells: readonly WaterCell[]): void {
+  const water = new WaterSurfaceModel(cells);
+  const scale = TERRAIN_SNAPSHOT_SCALE, chunkSize = ARENA_RENDER_CHUNK_SIZE;
+  for (const origin of water.getChunkOrigins(chunkSize, width * scale, height * scale)) {
+    const mask = water.bake(origin.x, origin.y, chunkSize);
+    const left = origin.x / scale, top = origin.y / scale;
+    for (let y = top; y < Math.min(height, top + chunkSize / scale); y++)
+      for (let x = left; x < Math.min(width, left + chunkSize / scale); x++) {
+        const mx = Math.floor(((x + .5) * scale - origin.x + WATER_MASK_HALO) / WATER_MASK_STEP);
+        const my = Math.floor(((y + .5) * scale - origin.y + WATER_MASK_HALO) / WATER_MASK_STEP);
+        if (mask.data[(my * mask.size + mx) * 4 + 2] < 128) continue;
+        const i = (y * width + x) * 3;
+        data[i] = WATER_COLOR >> 16; data[i + 1] = WATER_COLOR >> 8 & 255; data[i + 2] = WATER_COLOR & 255;
+      }
+  }
+}
+
 export class TerrainColorSnapshotBuilder {
   private readonly frame: RockWorldFrame;
   private readonly width: number;
@@ -126,20 +144,7 @@ export class TerrainColorSnapshotBuilder {
       const readRegion = (index: number): void => {
         if (index >= this.regions.length) {
           this.scratch.destroy();
-          const water = new WaterSurfaceModel(this.options.layout.water ?? []);
-          if (this.options.layout.water?.length) {
-            for (const cell of this.options.layout.water) {
-              const left = Math.floor(cell.gridX * CELL_SIZE / TERRAIN_SNAPSHOT_SCALE);
-              const top = Math.floor(cell.gridY * CELL_SIZE / TERRAIN_SNAPSHOT_SCALE);
-              const size = CELL_SIZE / TERRAIN_SNAPSHOT_SCALE;
-              for (let y = Math.max(0, top); y < Math.min(this.height, top + size); y++)
-                for (let x = Math.max(0, left); x < Math.min(this.width, left + size); x++) {
-                  if (water.sample((x + .5) * TERRAIN_SNAPSHOT_SCALE, (y + .5) * TERRAIN_SNAPSHOT_SCALE) <= 0) continue;
-                  const i = (y * this.width + x) * 3;
-                  data[i] = WATER_COLOR >> 16; data[i + 1] = WATER_COLOR >> 8 & 255; data[i + 2] = WATER_COLOR & 255;
-              }
-            }
-          }
+          stampWaterSnapshot(data, this.width, this.height, this.options.layout.water ?? []);
           resolve(snapshot);
           return;
         }
