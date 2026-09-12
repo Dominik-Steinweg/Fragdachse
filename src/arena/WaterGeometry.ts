@@ -78,6 +78,34 @@ export class WaterGeometry {
     vx: number, vy: number, out: WaterSlideResult): boolean {
     out.x = sx; out.y = sy; out.vx = vx; out.vy = vy;
     let dx = ex - sx, dy = ey - sy, collided = false;
+    // Recovery grows the dash hitbox into the bank before movement starts. Sweeps
+    // only detect entry from outside, so separate existing overlaps first.
+    for (let iteration = 0; iteration < 8; iteration++) {
+      let depth = 0, nx = 0, ny = 0;
+      this.visit(out.x - radius, out.y - radius, out.x + radius, out.y + radius, (left, top, size) => {
+        const ox = out.x - Math.max(left, Math.min(out.x, left + size));
+        const oy = out.y - Math.max(top, Math.min(out.y, top + size));
+        const distance = Math.hypot(ox, oy);
+        if (distance > 0) {
+          if (radius - distance > depth) {
+            depth = radius - distance; nx = ox / distance; ny = oy / distance;
+          }
+        } else {
+          const faces = [
+            [out.x - left + radius, -1, 0], [left + size - out.x + radius, 1, 0],
+            [out.y - top + radius, 0, -1], [top + size - out.y + radius, 0, 1],
+          ];
+          const face = faces.reduce((nearest, candidate) => candidate[0] < nearest[0] ? candidate : nearest);
+          if (face[0] > depth) [depth, nx, ny] = face;
+        }
+        return false;
+      });
+      if (depth <= 1e-7) break;
+      out.x += nx * (depth + .0001); out.y += ny * (depth + .0001);
+      const velocityIntoBank = Math.min(0, out.vx * nx + out.vy * ny);
+      out.vx -= velocityIntoBank * nx; out.vy -= velocityIntoBank * ny;
+      collided = true;
+    }
     for (let iteration = 0; iteration < 4; iteration++) {
       let time = 1, nx = 0, ny = 0;
       const accept = (t: number, x: number, y: number): void => {

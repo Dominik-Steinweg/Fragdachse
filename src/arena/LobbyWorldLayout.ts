@@ -316,8 +316,7 @@ function createOrganicTopDirtBand(seed: number): DirtCell[] {
     else if (drift > 0.72) depth += 1;
     depth = clampInt(depth, 4, 7);
 
-    const edgeWeight = gridX < 5 || gridX > GRID_COLS - 6 ? 1 : 0;
-    const columnDepth = clampInt(depth + edgeWeight, 4, 7);
+    const columnDepth = clampInt(depth - 4, 0, 2);
     for (let gridY = 0; gridY <= columnDepth; gridY += 1) result.push({ gridX, gridY });
   }
 
@@ -438,22 +437,32 @@ export const LOBBY_SPAWN_FOCUS_CELL = {
 const titleRocks: RockCell[] = textRocks(TITLE_TEXT, TITLE_START_X, 1, TITLE_GAP);
 
 const ambientRockAnchors: readonly RockClusterAnchor[] = [
-  { gridX: 13.8, gridY: 10.4, radiusX: 2.8, radiusY: 1.8 },
-  { gridX: 18.2, gridY: 28.8, radiusX: 3.2, radiusY: 2.1 },
-  { gridX: 49.0, gridY: 11.6, radiusX: 2.2, radiusY: 1.3, lobeCount: 3 },
+  { gridX: 8.8, gridY: 12.1, radiusX: 3.0, radiusY: 1.6, lobeCount: 4 },
+  { gridX: 18.2, gridY: GRID_ROWS, radiusX: 4.2, radiusY: 4.3, lobeCount: 1 },
+  { gridX: 50.8, gridY: 12.1, radiusX: 2.7, radiusY: 1.6, lobeCount: 4 },
   { gridX: 58.0, gridY: 20.5, radiusX: 1.0, radiusY: 1.3 },
   { gridX: 56.8, gridY: 27.5, radiusX: 1.8, radiusY: 1.1, lobeCount: 3 },
-  { gridX: 56.8, gridY: 10.8, radiusX: 2.4, radiusY: 1.7 },
-  { gridX: 56.4, gridY: 29.7, radiusX: 2.8, radiusY: 1.6 },
-  { gridX: 4.3, gridY: 29.8, radiusX: 2.9, radiusY: 1.9 },
-  { gridX: 9.1, gridY: 24.6, radiusX: 2.5, radiusY: 1.7 },
-  { gridX: 38.4, gridY: 30.6, radiusX: 2.8, radiusY: 1.7 },
+  { gridX: 54.1, gridY: 12.6, radiusX: 2.2, radiusY: 2.2, lobeCount: 4 },
+  { gridX: 57.3, gridY: 30.4, radiusX: 4.8, radiusY: 3.6 },
+  { gridX: 3.3, gridY: 30.8, radiusX: 3.3, radiusY: 2.3 },
+  { gridX: 5.5, gridY: 28.8, radiusX: 3.0, radiusY: 2.3 },
+  { gridX: 38.4, gridY: GRID_ROWS, radiusX: 3.8, radiusY: 4.1, lobeCount: 1 },
   { gridX: 41.8, gridY: 6.8, radiusX: 2.5, radiusY: 1.5 },
   { gridX: 59.0, gridY: 6.4, radiusX: 2.2, radiusY: 1.4 },
-  { gridX: 2.4, gridY: 12.5, radiusX: 2.2, radiusY: 1.5 },
+  { gridX: 5.3, gridY: 12.4, radiusX: 2.5, radiusY: 2.3, lobeCount: 4 },
 ];
 
 const titleRockGapZone: GridRect = { minX: 0, maxX: GRID_COLS - 1, minY: 0, maxY: 9 };
+
+/** Authored cutouts refine the landscape silhouettes at individual grid cells. */
+const ambientRockCutouts = new Set(points<RockCell>([
+  [11, 11], [7, 13], [8, 13],
+  [4, 14], [6, 14], [7, 14], [8, 14], [5, 15],
+  [55, 10], [52, 11], [53, 11],
+  [49, 12], [49, 13], [49, 14], [56, 13],
+  [57, 20], [58, 20], [57, 21], [58, 21],
+  [21, 30], [22, 31], [41, 30],
+]).map(cell => cellKey(cell.gridX, cell.gridY)));
 
 /** Compact authored shore silhouettes, using the ordinary World water geometry. */
 function waterPatch(startX: number, startY: number, rows: readonly string[]): WaterCell[] {
@@ -491,9 +500,20 @@ function excludeWater<T extends { gridX: number; gridY: number }>(cells: T[]): T
 }
 
 const ambientRocks: RockCell[] = excludeWater(excludeRectCells(
-  createOrganicRockClusters(ambientRockAnchors, LOBBY_WORLD_SEED + 101),
+  mergeUnique<RockCell>(
+    createOrganicRockClusters(ambientRockAnchors, LOBBY_WORLD_SEED + 101),
+    points<RockCell>([
+      [14, GRID_ROWS - 1], [15, GRID_ROWS - 1], [16, GRID_ROWS - 1],
+      [17, GRID_ROWS - 1], [18, GRID_ROWS - 1], [19, GRID_ROWS - 1],
+      [20, GRID_ROWS - 1], [21, GRID_ROWS - 1], [22, GRID_ROWS - 1],
+    ]),
+    [
+      { gridX: 0, gridY: GRID_ROWS - 1 },
+      { gridX: GRID_COLS - 1, gridY: GRID_ROWS - 1 },
+    ],
+  ),
   [BASE_CLEAR_ZONE, titleRockGapZone],
-));
+)).filter(cell => !ambientRockCutouts.has(cellKey(cell.gridX, cell.gridY)));
 
 const titleTreeClearZone: GridRect = {
   minX: Math.max(0, TITLE_START_X - 1),
@@ -515,7 +535,7 @@ const dirtQuietZones: readonly GridRect[] = [BASE_CLEAR_ZONE];
 const lobbyRocks: RockCell[] = mergeUnique<RockCell>(titleRocks, ambientRocks);
 
 const lobbyTrees: TreeCell[] = excludeRectCells(
-  points<TreeCell>([[1, 4], [12, 18], [15, 31], [57, 4], [44, 13], [44, 27], [51, 31]]),
+  points<TreeCell>([[1, 4], [12, 18], [1, 23], [15, 31], [57, 4], [44, 13], [44, 27], [59, 24], [51, 31]]),
   [BASE_CLEAR_ZONE, titleTreeClearZone],
 );
 

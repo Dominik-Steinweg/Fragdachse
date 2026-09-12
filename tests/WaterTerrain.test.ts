@@ -82,6 +82,38 @@ describe('Water terrain contracts', () => {
     expect(water.isCircleBlocked(out.x, out.y, 12)).toBe(false);
   });
 
+  it.each([[1, 0], [-1, 0], [0, 1], [0, -1], [Math.SQRT1_2, Math.SQRT1_2]])(
+    'keeps a growing recovery hitbox outside water (%s, %s)', (nx, ny) => {
+      const water = new WaterGeometry([cell], metrics);
+      const bankX = x + Math.sign(nx) * CELL_SIZE / 2;
+      const bankY = y + Math.sign(ny) * CELL_SIZE / 2;
+      const out = { x: bankX + nx * 6, y: bankY + ny * 6, vx: 0, vy: 0 };
+      for (let radius = 7; radius <= 12; radius++) {
+        const sx = out.x, sy = out.y;
+        water.slideCircle(sx, sy, sx - nx * 2, sy - ny * 2, radius, -nx * 120, -ny * 120, out);
+        expect(water.isCircleBlocked(out.x, out.y, radius)).toBe(false);
+        expect(out.vx * nx + out.vy * ny).toBeGreaterThanOrEqual(-1e-7);
+      }
+      expect(water.slideCircle(out.x, out.y, out.x, out.y, 14, 0, 0, out)).toBe(true);
+      expect(water.isCircleBlocked(out.x, out.y, 14)).toBe(false);
+    },
+  );
+
+  it('separates a growing circle from both banks while preserving movement away from water', () => {
+    const left = x - CELL_SIZE / 2, top = y - CELL_SIZE / 2;
+    const water = new WaterGeometry([
+      { gridX: 8, gridY: 7 }, { gridX: 7, gridY: 8 }, cell,
+    ], metrics);
+    const sx = left - 6, sy = top - 6;
+    const out = { x: 0, y: 0, vx: 0, vy: 0 };
+    water.slideCircle(sx, sy, sx - 3, sy - 4, 12, -30, -40, out);
+    expect(water.isCircleBlocked(out.x, out.y, 12)).toBe(false);
+    expect(out.x).toBeCloseTo(left - 12 - 3, 3);
+    expect(out.y).toBeCloseTo(top - 12 - 4, 3);
+    expect(out.vx).toBe(-30);
+    expect(out.vy).toBe(-40);
+  });
+
   it('uses round body corners and sweeps the slide against a second bank', () => {
     const water = new WaterGeometry([cell], metrics);
     const out = { x: 0, y: 0, vx: 0, vy: 0 };
