@@ -20,21 +20,7 @@ export type { RadialFocusFrame } from './radialFocusState';
  * GraphicsQualityController can disable the persistent controller without a later frame update
  * re-enabling it while the focus animation is still alive.
  */
-export class RadialFocusParallelFilters extends Phaser.Filters.ParallelFilters {
-  private effectActive = false;
-  private qualityEnabled = true;
-
-  override setActive(value: boolean): this {
-    this.qualityEnabled = value;
-    super.setActive(value && this.effectActive);
-    return this;
-  }
-
-  setEffectActive(value: boolean): void {
-    this.effectActive = value;
-    super.setActive(this.qualityEnabled && value);
-  }
-}
+export { QualityControlledParallelFilters as RadialFocusParallelFilters } from './QualityControlledParallelFilters';
 
 /**
  * Persistent, low-resolution radial alpha mask for the built-in Mask filter.

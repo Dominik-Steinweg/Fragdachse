@@ -14,6 +14,8 @@
  * anschliessend einmal `promoteToClarityCamera` auf der Wurzel des Overlays auf.
  */
 import * as Phaser from 'phaser';
+import { buttonSkinSpec, type UiSkin } from './UiSkin';
+import { ensureForestButton } from './forestTextures';
 import {
   BUTTON_SCALE,
   INTENT,
@@ -44,6 +46,9 @@ export interface UiButtonOptions {
   /** Typo-Rolle der Beschriftung. Vorgabe `label` (15 px), fuer den Haupt-CTA `subtitle`. */
   labelRole?: TypeRole;
   intent?: ButtonIntent;
+  skin?: UiSkin;
+  /** Forest selection fields stay translucent and untextured. */
+  surface?: 'wood' | 'glass';
   icon?: UiIconName;
   /** Nur das Symbol zeigen – fuer Pfeile und Werkzeugknoepfe. */
   iconOnly?: boolean;
@@ -274,7 +279,7 @@ export class UiButton {
   }
 
   private labelColor(): number {
-    const spec = INTENT[this.effectiveIntent()];
+    const spec = buttonSkinSpec(this.options.skin ?? 'default', this.effectiveIntent());
     return this.hovered && spec.labelHover !== undefined ? spec.labelHover : spec.label;
   }
 
@@ -288,6 +293,8 @@ export class UiButton {
 
   private textureFor(state: ButtonVisualState): string {
     const intent = this.effectiveIntent();
+    if (this.options.skin === 'forest') return ensureForestButton(this.scene, this.options.w, this.options.h,
+      intent, state, this.options.radius ?? RADIUS.md, this.options.surface === 'glass' || !!this.options.trailingIcon);
     const spec = INTENT[intent];
     const radius = this.options.radius ?? RADIUS.md;
     const fill = this.fillFor(state);

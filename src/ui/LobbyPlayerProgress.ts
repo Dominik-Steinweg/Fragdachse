@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { FOREST } from './UiSkin';
 import { COLORS } from '../config';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
 import { getLocale, t } from '../i18n';
@@ -15,12 +16,12 @@ import { UiTooltip } from './UiTooltip';
 import { ensureRoundedTexture } from './uiTextures';
 import { textStyle } from './uiTheme';
 
-import { LOBBY_CARD, LOBBY_PLAYER_CENTER, LOBBY_PLAYER_CONTENT_LEFT } from './LobbyLayout';
+import { LOBBY_CARD, LOBBY_PLAYER_CENTER, LOBBY_PLAYER_FOOTER } from './LobbyLayout';
 
-const CONTENT_L = LOBBY_PLAYER_CONTENT_LEFT;
-const CONTENT_W = LOBBY_CARD.contentWidth;
+const CONTENT_L = LOBBY_PLAYER_FOOTER.left;
+const CONTENT_W = LOBBY_PLAYER_FOOTER.width;
 const PANEL_CX = LOBBY_PLAYER_CENTER;
-const COOP_BAND_BG_TOP = 802;
+const COOP_BAND_BG_TOP = 798;
 const COOP_LABEL_Y = 820;
 const COOP_BAR_Y = 876;
 const COOP_BAR_H = 12;
@@ -65,19 +66,19 @@ export class LobbyPlayerProgress {
   }
   build(objects: Phaser.GameObjects.GameObject[]): void {
     // Das Band gibt es nur bei voller Panelhoehe, deshalb die feste Obergrenze.
-    const bandBottom = 956;
+    const bandBottom = 966;
     const bandH = bandBottom - COOP_BAND_BG_TOP;
     const bandBg = this.scene.add.image(
       PANEL_CX, COOP_BAND_BG_TOP + bandH / 2,
       ensureRoundedTexture(this.scene, {
-        key: `_lobby_coop_panel_polished_${Math.round(CONTENT_W)}x${Math.round(bandH)}`,
-        w: CONTENT_W,
+        key: `_lobby_forest_coop_panel_${LOBBY_CARD.contentWidth}x${Math.round(bandH)}`,
+        w: LOBBY_CARD.contentWidth,
         h: bandH,
         radius: 16,
-        topColor: COLORS.GREY_7,
-        bottomColor: COLORS.GREY_8,
+        topColor: FOREST.glass,
+        bottomColor: FOREST.sunken,
         fillAlpha: 0.42,
-        strokeColor: COLORS.GREY_5,
+        strokeColor: FOREST.border,
         strokeAlpha: 0.18,
         strokeWidth: 1,
         highlightAlpha: 0.025,
@@ -85,14 +86,14 @@ export class LobbyPlayerProgress {
     ).setScrollFactor(0);
 
     const bandLabel = this.scene.add.text(CONTENT_L, COOP_LABEL_Y, t('ui.lobby.progress'),
-      textStyle('section', { color: COLORS.GREY_3 })).setOrigin(0, 0.5).setScrollFactor(0);
+      textStyle('section', { color: FOREST.muted })).setOrigin(0, 0.5).setScrollFactor(0);
 
     this.coopProgressLevelText = this.scene.add.text(CONTENT_L, COOP_LABEL_Y + 28, t('ui.lobby.level', { level: 1 }),
-      textStyle('numL', { color: COLORS.GREY_1 })).setOrigin(0, 0.5).setScrollFactor(0);
+      textStyle('numL', { color: FOREST.text })).setOrigin(0, 0.5).setScrollFactor(0);
 
     const barW = CONTENT_W;
     const barX = CONTENT_L;
-    const barBg = this.scene.add.rectangle(PANEL_CX, COOP_BAR_Y, barW, COOP_BAR_H, COLORS.GREY_9, 0.95)
+    const barBg = this.scene.add.rectangle(PANEL_CX, COOP_BAR_Y, barW, COOP_BAR_H, FOREST.sunken, 0.95)
       .setStrokeStyle(1, COLORS.GREY_6)
       .setScrollFactor(0);
 
@@ -104,7 +105,7 @@ export class LobbyPlayerProgress {
       .setScrollFactor(0);
     this.coopProgressBarFill.setCrop(0, 0, barW, COOP_BAR_H);
 
-    this.coopUpgradesBtn = new UiButton(this.scene, {
+    this.coopUpgradesBtn = new UiButton(this.scene, { skin: 'forest',
       x: COOP_UPGRADE_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
       label: t('ui.lobby.upgrades'),
       intent: 'neutral',
@@ -112,7 +113,7 @@ export class LobbyPlayerProgress {
     });
 
     // Items bleiben bis zum Sieg auf Map 10 gesperrt: `disabled` statt einer eigenen Farbe.
-    this.coopItemsBtn = new UiButton(this.scene, {
+    this.coopItemsBtn = new UiButton(this.scene, { skin: 'forest',
       x: COOP_ITEMS_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
       label: t('ui.lobby.items'),
       intent: 'neutral',
@@ -180,7 +181,7 @@ export class LobbyPlayerProgress {
     );
 
     // Zuletzt eingehaengt, damit der Tooltip ueber Buttons und Feld-Images liegt.
-    this.itemsTooltip = new UiTooltip(this.scene, 360);
+    this.itemsTooltip = new UiTooltip(this.scene, 360, undefined, undefined, 'forest');
     this.coopBand.add(this.itemsTooltip.build());
   }
 
@@ -196,16 +197,16 @@ export class LobbyPlayerProgress {
         'ITEMS',
         COLORS.GOLD_1,
         [
-          { text: t('ui.items.locked'), color: COLORS.GREY_1 },
+          { text: t('ui.items.locked'), color: FOREST.text },
           { text: '', color: COLORS.GREY_5 },
-          { text: t('ui.items.unlockByVictory'), color: COLORS.GREY_3 },
+          { text: t('ui.items.unlockByVictory'), color: FOREST.muted },
           {
             text: getMapName(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID, getLocale()),
             color: COLORS.GOLD_2,
             bold: true,
           },
           { text: '', color: COLORS.GREY_5 },
-          { text: t('ui.items.victoryDrops'), color: COLORS.GREY_3 },
+          { text: t('ui.items.victoryDrops'), color: FOREST.muted },
         ],
         pointer,
       );

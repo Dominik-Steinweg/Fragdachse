@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
+import { ensureForestPanel } from './forestTextures';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { ensureFlatPanelTexture } from './uiTextures';
@@ -58,6 +60,7 @@ export class UiTooltip {
     private readonly accentColor: number = TEXT.primary,
     /** Untere Designraumgrenze fuer Overlays mit einer festen Fusszeile. */
     private readonly bottomLimit = GAME_HEIGHT - 12,
+    private readonly skin: UiSkin = 'default',
   ) {}
 
   build(): Phaser.GameObjects.Container {
@@ -73,7 +76,7 @@ export class UiTooltip {
       color: this.accentColor,
       wordWrapWidth: this.maxWidth,
     })).setOrigin(0, 0).setScrollFactor(0);
-    this.divider = this.scene.add.rectangle(0, 0, 10, 1, BORDER.subtle, 0.9)
+    this.divider = this.scene.add.rectangle(0, 0, 10, 1, this.skin === 'forest' ? FOREST.border : BORDER.subtle, 0.9)
       .setOrigin(0, 0)
       .setScrollFactor(0);
 
@@ -105,7 +108,7 @@ export class UiTooltip {
   ): void {
     if (!this.container || !this.background || !this.titleText || !this.divider) return;
 
-    this.titleText.setText(title).setColor(toCssColor(titleColor));
+    this.titleText.setText(title).setColor(toCssColor(skinTextColor(this.skin, titleColor)));
     this.clearRichText();
     let contentWidth = this.titleText.width;
 
@@ -141,7 +144,7 @@ export class UiTooltip {
       const textX = PADDING + (icon ? ICON_SIZE + ICON_GAP : 0);
       text
         .setText(line.text)
-        .setColor(toCssColor(line.color))
+        .setColor(toCssColor(skinTextColor(this.skin, line.color)))
         .setFontStyle(line.bold ? 'bold' : '')
         .setWordWrapWidth(this.maxWidth - (icon ? ICON_SIZE + ICON_GAP : 0))
         .setPosition(textX, cursorY)
@@ -161,7 +164,7 @@ export class UiTooltip {
 
     const width = contentWidth + PADDING * 2;
     const height = cursorY + PADDING;
-    this.background.setTexture(ensureFlatPanelTexture(
+    this.background.setTexture(this.skin === 'forest' ? ensureForestPanel(this.scene, width, height) : ensureFlatPanelTexture(
       this.scene,
       `_uitooltip_${Math.ceil(width)}x${Math.ceil(height)}`,
       width,
@@ -251,7 +254,7 @@ export class UiTooltip {
           const parts = token.split('\n');
           for (const [partIndex, part] of parts.entries()) {
             if (part.length > 0) {
-              const text = this.scene.add.text(0, 0, part, textStyle('body', { color: segment.color }))
+              const text = this.scene.add.text(0, 0, part, textStyle('body', { color: skinTextColor(this.skin, segment.color) }))
                 .setOrigin(0, 0)
                 .setFontStyle(segment.bold ? 'bold' : '')
                 .setScrollFactor(0);
@@ -269,7 +272,7 @@ export class UiTooltip {
         }
 
         const whitespace = /^\s+$/.test(token);
-        const text = this.scene.add.text(0, 0, token, textStyle('body', { color: segment.color }))
+        const text = this.scene.add.text(0, 0, token, textStyle('body', { color: skinTextColor(this.skin, segment.color) }))
           .setOrigin(0, 0)
           .setFontStyle(segment.bold ? 'bold' : '')
           .setScrollFactor(0);

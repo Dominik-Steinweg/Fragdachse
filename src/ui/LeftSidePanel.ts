@@ -8,6 +8,9 @@ import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
  * Reusability-Template: gleiche Public-API wie RightSidePanel.
  */
 import * as Phaser from 'phaser';
+import { FOREST } from './UiSkin';
+import { ensureForestFrame, ensureForestPanel, ensureForestButton, forestOrnament } from './forestTextures';
+import type { BackdropSurface } from '../effects/postfx/BackdropBlur';
 import { GameAudioSystem } from '../audio/GameAudioSystem';
 import {
   COLORS,
@@ -80,7 +83,6 @@ import {
 } from './OptionsOverlay';
 import { UiContextMenu } from './UiContextMenu';
 import { attachHoverEffect } from './uiHover';
-import { ensureFlatPanelTexture, ensureLobbyPanelTexture, ensureRoundedTexture, lerpColor } from './uiTextures';
 import { BORDER, FONT_DISPLAY, INTENT, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 
 // ── Layout-Konstanten der rechten Spielerkarte ────────────────────────
@@ -88,7 +90,7 @@ const LOBBY_PANEL_W = LOBBY_CARD.width;
 const ARENA_PANEL_W = Math.round(DEFAULT_ARENA_OFFSET_X * 1.5);
 const CENTER_X = LOBBY_PLAYER_CENTER;
 const ARENA_CENTER_X = ARENA_PANEL_W / 2;
-const NAME_LABEL_Y = 274;
+const NAME_LABEL_Y = LOBBY_CARD.titleY;
 const NAME_VALUE_Y = 306;
 const BADGER_Y = 448;
 const BADGER_SIZE = 80;
@@ -120,7 +122,7 @@ const PICKER_GRID_Y   = 30;   // Y-Start des Gitters innerhalb des Popups
 const TEX_SWATCH_PREFIX = '__picker_swatch_';
 
 /** Sektionsbeschriftung ueber einem Bedienfeld – gesperrt und gedaempft, damit der Wert traegt. */
-const LABEL_FONT = textStyle('section');
+const LABEL_FONT = textStyle('section', { color: FOREST.muted });
 const NAME_FONT = textStyle('title', { color: COLORS.GREY_1 });
 
 // ── Player card surface ────────────────────────────────────────────
@@ -182,6 +184,7 @@ export class LeftSidePanel {
   private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
   private playerLabelText!: Phaser.GameObjects.Text;
+  private colorPickerTitle!: Phaser.GameObjects.Text;
   private loadoutLabelText!: Phaser.GameObjects.Text;
   private saveMenu: UiContextMenu | null = null;
   private saveStatusText: Phaser.GameObjects.Text | null = null;
@@ -265,13 +268,17 @@ export class LeftSidePanel {
     objects.push(
       this.scene.add.image(
         GLASS_X + GLASS_W / 2, GLASS_Y + GLASS_H / 2,
-        ensureLobbyPanelTexture(this.scene, '_lobby_player_card', GLASS_W, GLASS_H, COLORS.GREY_8, BORDER.default),
+        ensureForestPanel(this.scene, GLASS_W - LOBBY_CARD.glassInset * 2, GLASS_H - LOBBY_CARD.glassInset * 2, true),
       ).setScrollFactor(0),
     );
 
-    this.playerLabelText = this.scene.add.text(LOBBY_PLAYER_CONTENT_LEFT, NAME_LABEL_Y, t('ui.lobby.player').toUpperCase(), LABEL_FONT)
-      .setOrigin(0, 0)
-      .setScrollFactor(0);
+    this.playerLabelText = this.scene.add.text(CENTER_X, NAME_LABEL_Y, t('ui.lobby.player'),
+      textStyle('title', { color: FOREST.text }))
+      .setOrigin(0.5)
+      .setScrollFactor(0).setStroke('#23170f', 3);
+    objects.push(this.scene.add.image(CENTER_X, GLASS_Y + GLASS_H / 2,
+      ensureForestFrame(this.scene, GLASS_W, GLASS_H))
+      .setDisplaySize(GLASS_W, GLASS_H).setScrollFactor(0));
     objects.push(this.playerLabelText);
 
     this.localNameText = this.scene.add.text(CENTER_X, NAME_VALUE_Y, '', NAME_FONT)
@@ -322,7 +329,7 @@ export class LeftSidePanel {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.toggleColorPicker());
-    objects.push(this.badgerClickZone);
+    objects.push(forestOrnament(this.scene, 'medallion', CENTER_X, BADGER_Y, 124, 124), this.badgerClickZone);
     const teamLeftBtn = this.createChevronButton(
       COLOR_BUTTON_X - TEAM_SELECT_ARROW_OFFSET_X,
       NAME_COLOR_ROW_Y,
@@ -366,8 +373,8 @@ export class LeftSidePanel {
 
     this.lobbyContainer = this.scene.add.container(0, 0, objects);
     this.lobbyContainer.setDepth(DEPTH.OVERLAY - 1);
-    this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 3);
-    this.loadoutPicker = new LoadoutSlotPicker(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 2, true);
+    this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 3, 'forest');
+    this.loadoutPicker = new LoadoutSlotPicker(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 2, true, 'forest');
 
     // BadgerPreview (world-space, separate from container for preFX support)
     this.badgerPreview = new BadgerPreview(
@@ -440,7 +447,8 @@ export class LeftSidePanel {
 
   refreshLocale(): void {
     this.arenaHUD?.refreshLocale();
-    this.playerLabelText?.setText(t('ui.lobby.player').toUpperCase());
+    this.playerLabelText?.setText(t('ui.lobby.player'));
+    this.colorPickerTitle?.setText(t('ui.lobby.editColor'));
     this.loadoutLabelText?.setText(t('ui.lobby.loadout').toUpperCase());
     this.editBtnLabel?.setText(t('ui.lobby.editName'));
     this.colorEditText?.setText(t('ui.lobby.editColor'));
@@ -547,6 +555,13 @@ export class LeftSidePanel {
         },
       });
     });
+  }
+
+  getBackdropSurface(): BackdropSurface | null {
+    if (!this.lobbyContainer?.visible) return null;
+    return { x: GLASS_X + LOBBY_CARD.glassInset, y: GLASS_Y + LOBBY_CARD.glassInset + this.lobbyContainer.y,
+      width: GLASS_W - LOBBY_CARD.glassInset * 2, height: GLASS_H - LOBBY_CARD.glassInset * 2,
+      radius: 22, alpha: this.lobbyContainer.alpha };
   }
 
   setArenaOverlayVisible(visible: boolean, immediate = false): void {
@@ -707,18 +722,14 @@ export class LeftSidePanel {
     // Hintergrund
     objects.push(
       this.scene.add
-        .image(0, 0, ensureFlatPanelTexture(
-          this.scene, '__picker_panel', PICKER_W, PICKER_H, SURFACE.modal, BORDER.subtle,
-          { radius: RADIUS.md, fillAlpha: 0.98, strokeAlpha: 0.9 },
-        ))
+        .image(0, 0, ensureForestPanel(this.scene, PICKER_W, PICKER_H))
         .setOrigin(0, 0),
     );
 
     // Titel
-    objects.push(
-      this.scene.add
-        .text(PICKER_PADDING, PICKER_PADDING, 'FARBE WÄHLEN', textStyle('section')),
-    );
+    this.colorPickerTitle = this.scene.add.text(PICKER_PADDING, PICKER_PADDING,
+      t('ui.lobby.editColor'), textStyle('section', { color: FOREST.text }));
+    objects.push(this.colorPickerTitle);
 
     const container = this.scene.add.container(PICKER_WORLD_X, PICKER_WORLD_Y, objects);
     container.setDepth(DEPTH.OVERLAY + 2);
@@ -868,7 +879,7 @@ export class LeftSidePanel {
       const rowIndex = toolLoadout && slot === 'ultimate' ? 3 : visibleIndex;
       const items = this.getSlotItems(slot, storedProgress);
       const item = this.getSelectedSlotItem(slot, items, storedProgress);
-      this.loadoutLayer!.add(createLoadoutSlotControl(this.scene, {
+      this.loadoutLayer!.add(createLoadoutSlotControl(this.scene, { skin: 'forest',
         x: CENTER_X,
         y: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + rowIndex * CAROUSEL_ROW_STEP,
         width: LOADOUT_CONTROL_W,
@@ -951,7 +962,7 @@ export class LeftSidePanel {
     const tools = getLoadoutToolSlots(profile, classId);
     const capacity = Math.max(1, getCoopDefenseToolCapacity(profile, classId));
     const rowY = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 2 * CAROUSEL_ROW_STEP;
-    this.loadoutLayer.add(createLoadoutToolRowControl(this.scene, {
+    this.loadoutLayer.add(createLoadoutToolRowControl(this.scene, { skin: 'forest',
       x: CENTER_X,
       y: rowY,
       width: LOADOUT_CONTROL_W,
@@ -1164,8 +1175,8 @@ export class LeftSidePanel {
       position:        'fixed',
       top:             `${popupTop}px`,
       left:            `${popupLeft}px`,
-      backgroundColor: toCssColor(SURFACE.modal),
-      border:          `1px solid ${toCssColor(BORDER.default)}`,
+      backgroundColor: toCssColor(FOREST.glass),
+      border:          `2px solid ${toCssColor(FOREST.woodEdge)}`,
       borderRadius:    `${RADIUS.md}px`,
       boxShadow:       '0 12px 28px rgba(0, 0, 0, 0.32)',
       padding:         `${SPACE.md}px`,
@@ -1184,10 +1195,10 @@ export class LeftSidePanel {
     Object.assign(inputElement.style, {
       fontSize:        '15px',
       padding:         `${SPACE.sm}px ${SPACE.md}px`,
-      border:          `1px solid ${toCssColor(BORDER.subtle)}`,
+      border:          `1px solid ${toCssColor(FOREST.border)}`,
       borderRadius:    `${RADIUS.sm}px`,
-      backgroundColor: toCssColor(SURFACE.sunken),
-      color:           toCssColor(TEXT.primary),
+      backgroundColor: toCssColor(FOREST.sunken),
+      color:           toCssColor(FOREST.text),
       outline:         'none',
       width:           '160px',
       fontFamily:      FONT_DISPLAY,
@@ -1214,9 +1225,9 @@ export class LeftSidePanel {
       padding:         `${SPACE.sm}px ${SPACE.md}px`,
       fontSize:        '13px',
       cursor:          'pointer',
-      backgroundColor: toCssColor(INTENT.ghost.fill),
-      color:           toCssColor(INTENT.ghost.label),
-      border:          `1px solid ${toCssColor(INTENT.ghost.stroke)}`,
+      backgroundColor: toCssColor(FOREST.wood),
+      color:           toCssColor(FOREST.text),
+      border:          `1px solid ${toCssColor(FOREST.woodEdge)}`,
       borderRadius:    `${RADIUS.sm}px`,
       fontFamily:      FONT_DISPLAY,
       fontWeight:      'bold',
@@ -1279,24 +1290,10 @@ export class LeftSidePanel {
     // Bedienelemente der Spalte sind Nebenwege: ghost, damit sie den Handlungsaufruf im
     // Zentrum nicht ueberstimmen. Der Intent gehoert in den Schluessel – ohne ihn teilten sich
     // alle gleich grossen Kompaktbuttons zwangslaeufig eine Textur.
-    const spec = INTENT.ghost;
-    const textureKey = `_lsp_compact_btn_ghost_${width}x${height}`;
     const button = this.scene.add.image(
       x,
       y,
-      ensureRoundedTexture(this.scene, {
-        key: textureKey,
-        w: width,
-        h: height,
-        radius: RADIUS.sm,
-        topColor: lerpColor(spec.fill, 0xffffff, 0.16),
-        bottomColor: lerpColor(spec.fill, 0x000000, 0.3),
-        fillAlpha: spec.fillAlpha,
-        strokeColor: spec.stroke,
-        strokeAlpha: spec.strokeAlpha,
-        strokeWidth: 1.5,
-        highlightAlpha: spec.gloss,
-      }),
+      ensureForestButton(this.scene, width, height, 'secondary', 'rest', RADIUS.sm),
     )
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', onClick)
@@ -1304,7 +1301,7 @@ export class LeftSidePanel {
     const label: CompactLabel = iconDirection
       ? this.createChevronIcon(x, y, iconDirection)
       : this.scene.add.text(x, y + labelOffsetY, labelText, textStyle('labelSm', {
-        color: spec.label,
+        color: FOREST.text,
       })).setOrigin(0.5).setScrollFactor(0);
     attachHoverEffect(this.scene, button, label);
     return { button, label, text: iconDirection ? undefined : label as Phaser.GameObjects.Text };

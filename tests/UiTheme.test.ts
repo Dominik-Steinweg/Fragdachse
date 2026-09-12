@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COLORS } from '../src/config';
+import { buttonSkinSpec, FOREST, skinTextColor } from '../src/ui/UiSkin';
 import {
   BUTTON_SCALE,
   FONT_DISPLAY,
@@ -24,6 +25,27 @@ const TYPE_ROLES = Object.keys(TYPE) as TypeRole[];
 
 /** WCAG 2.1 AA fuer normalen Text. Gilt hier auch fuer die kleinen Buttonbeschriftungen. */
 const MIN_CONTRAST = 4.5;
+
+describe('lobby forest skin isolation', () => {
+  it('retains default intents and semantic colours while replacing only neutral text', () => {
+    for (const intent of INTENT_NAMES) expect(buttonSkinSpec('default', intent)).toBe(INTENT[intent]);
+    for (const color of Object.values(COLORS)) expect(skinTextColor('default', color)).toBe(color);
+    for (const color of [COLORS.RED_2, COLORS.BLUE_2, COLORS.GREEN_2, COLORS.GOLD_1]) {
+      expect(skinTextColor('forest', color)).toBe(color);
+    }
+    expect(skinTextColor('forest', COLORS.GREY_1)).toBe(FOREST.text);
+    expect(buttonSkinSpec('forest', 'danger')).toBe(INTENT.danger);
+  });
+
+  it('keeps action labels readable against forest materials', () => {
+    for (const intent of INTENT_NAMES.filter(value => value !== 'disabled')) {
+      const spec = buttonSkinSpec('forest', intent);
+      expect(contrastRatio(spec.fill, spec.label)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+    expect(contrastRatio(FOREST.glass, FOREST.text)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    expect(contrastRatio(FOREST.glass, FOREST.muted)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+  });
+});
 
 describe('ping colors', () => {
   it('uses the shared inclusive thresholds', () => {

@@ -44,7 +44,7 @@ vi.mock('phaser', () => ({
   Filters: { ParallelFilters: class {}, Displacement: class {} },
 }));
 import { CELL_SIZE, getAuthoredWorldMetricsProfile, isGridCellInArenaRegion } from '../../src/config';
-import { buildLobbyWorldLayout, isLobbyUiReservedCell } from '../../src/arena/LobbyWorldLayout';
+import { buildLobbyWorldLayout } from '../../src/arena/LobbyWorldLayout';
 import {
   LOBBY_WORLD_DEFINITION_ID,
   getLobbyWorldDefinition,
@@ -380,20 +380,7 @@ describe('LobbyWorld – Preview und Interactive Presentation', () => {
 });
 
 describe('LobbyWorld – Spawn gehoert der World', () => {
-  it('haelt jeden authored Spawn-Ausschluss von der Oberflaeche frei', () => {
-    const zones = LOBBY_WORLD.spawnExclusionZones ?? [];
-    expect(zones.length).toBeGreaterThan(0);
-    for (const zone of zones) {
-      for (const [gridX, gridY] of [
-        [zone.minGridX, zone.minGridY],
-        [zone.maxGridX, zone.maxGridY],
-      ] as const) {
-        expect(isLobbyUiReservedCell(gridX, gridY), `${gridX}:${gridY}`).toBe(true);
-      }
-    }
-  });
-
-  it('laesst genug freie Startzellen ausserhalb von Fels, Baum und Oberflaeche', () => {
+  it('laesst genug freie Startzellen ausserhalb von Fels, Baum und Wasser', () => {
     const layout = buildLobbyWorldLayout();
     const profile = getAuthoredWorldMetricsProfile(
       LOBBY_WORLD.metrics.widthCells,
@@ -402,7 +389,7 @@ describe('LobbyWorld – Spawn gehoert der World', () => {
     const cols = Math.floor(profile.arenaWidth / CELL_SIZE);
     const rows = Math.floor(profile.arenaHeight / CELL_SIZE);
     const blocked = new Set<string>();
-    for (const cell of [...layout.rocks, ...layout.trees]) blocked.add(`${cell.gridX}_${cell.gridY}`);
+    for (const cell of [...layout.rocks, ...layout.trees, ...(layout.water ?? [])]) blocked.add(`${cell.gridX}_${cell.gridY}`);
 
     let free = 0;
     for (let gridY = 0; gridY < rows; gridY += 1) {

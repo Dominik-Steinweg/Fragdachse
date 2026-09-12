@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({ Math: { Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)) } }));
 vi.mock('../src/ui/uiTextures', () => ({ ensureFlatPanelTexture: () => 'panel', lerpColor: (color: number) => color }));
+vi.mock('../src/ui/forestTextures', () => ({ ensureForestPanel: () => 'forest-panel' }));
 vi.mock('../src/ui/LoadoutIconLayout', () => ({ fitLoadoutIcon: (image: unknown) => image, getLoadoutIconTextureKey: (_scene: unknown, key: string) => key }));
 vi.mock('../src/scenes/arena/ClarityCameraRegistry', () => ({ promoteToClarityCamera: vi.fn() }));
 vi.mock('../src/ui/UiButton', () => ({
@@ -68,7 +69,7 @@ class Display extends EventEmitter {
   }
 }
 
-function fixture(standalone = false) {
+function fixture(standalone = false, skin: 'default' | 'forest' = 'default') {
   const created: Display[] = [];
   const add = (kind: string, x: number, y: number, width = 0, height = 0) => {
     const object = new Display(kind, x, y, width, height);
@@ -88,7 +89,7 @@ function fixture(standalone = false) {
     },
   };
   const parent = new Display('parent');
-  const picker = new LoadoutSlotPicker(scene as any, parent as any, 20, standalone);
+  const picker = new LoadoutSlotPicker(scene as any, parent as any, 20, standalone, skin);
   return { scene, input, keyboard, created, parent, picker };
 }
 
@@ -136,8 +137,8 @@ describe('Lobby selection menus', () => {
     settings.destroy();
   });
 
-  it('shows twenty map choices as a complete five-by-four grid without scrolling', () => {
-    const { picker, created, input } = fixture();
+  it.each(['default', 'forest'] as const)('shows twenty map choices as a complete five-by-four grid without scrolling (%s)', (skin) => {
+    const { picker, created, input } = fixture(false, skin);
     picker.open(options());
     const entries = created.filter(object => object.kind === 'rectangle' && object.width === 52);
     expect(entries).toHaveLength(20);
@@ -177,13 +178,14 @@ describe('Lobby selection menus', () => {
     expect(menu.groups[0].entries[0].onPick).not.toHaveBeenCalled();
   });
 
-  it('places lobby popups above both cards and closes them when their owner is destroyed', () => {
-    const { picker, parent, keyboard } = fixture(true);
+  it.each(['default', 'forest'] as const)('places popups above both cards and releases decorated objects on owner destruction (%s)', (skin) => {
+    const { picker, parent, keyboard, created } = fixture(true, skin);
     picker.open(options());
     expect(parent.children).toHaveLength(0);
     expect(promoteToClarityCamera).toHaveBeenCalled();
     parent.destroy();
     expect(picker.isOpen()).toBe(false);
+    expect(created.every(object => object.destroyed)).toBe(true);
     expect(keyboard.listenerCount('keydown-ESC')).toBe(0);
   });
 });

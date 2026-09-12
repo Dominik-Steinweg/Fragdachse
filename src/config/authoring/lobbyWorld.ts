@@ -1,5 +1,4 @@
 import {
-  LOBBY_SPAWN_EXCLUSION_ZONES,
   LOBBY_SPAWN_FOCUS_CELL,
   LOBBY_WORLD_HEIGHT_CELLS,
   LOBBY_WORLD_WIDTH_CELLS,
@@ -39,7 +38,7 @@ export const LOBBY_PERSISTENT_BASE_ID = 'lobby-persistent-base';
 /**
  * Die persistente Basis der Lobby steht in der Mitte der World.
  *
- * Das ist genau die Flaeche, die `LOBBY_UI_RESERVED_ZONES` seit jeher von Geometrie freihaelt,
+ * Das ist genau die Flaeche, die das Lobby-Authoring von Geometrie freihaelt,
  * und zugleich der authored Spawn-Fokus: Weil der Anker die Mittelzelle des Innenhofs ist,
  * materialisiert im eigenen Hof, wer das Testgelaende betritt.
  *
@@ -72,7 +71,6 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   actionPolicy: { combat: true, playerRelationships: 'game-mode' },
   presentationPolicy: { previewWithoutParticipation: true },
   participationPolicy: { selfAdmit: true },
-  spawnExclusionZones: LOBBY_SPAWN_EXCLUSION_ZONES,
   // Das Testgelaende ist eine Buehne, kein Gefecht: wer es betritt, soll mittendrin stehen statt
   // erst quer ueber die World laufen zu muessen.
   spawnFocusCell: LOBBY_SPAWN_FOCUS_CELL,

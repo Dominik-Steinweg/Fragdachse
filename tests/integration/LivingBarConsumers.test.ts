@@ -37,7 +37,7 @@ vi.mock('../../src/ui/LivingBarEffect', async importOriginal => ({
 }));
 
 import { UiButton } from '../../src/ui/UiButton';
-import { LobbyOverlay } from '../../src/scenes/LobbyOverlay';
+import { LobbyPlayerProgress } from '../../src/ui/LobbyPlayerProgress';
 import { OptionsOverlay } from '../../src/ui/OptionsOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
 import { CenterHUD } from '../../src/ui/CenterHUD';
@@ -117,9 +117,10 @@ function sceneStub() {
 beforeEach(() => { effects.length = 0; });
 
 describe('living UI consumer ownership', () => {
-  it('places button decoration between face and content, including badges and hover transforms', () => {
+  it.each(['default', 'forest'] as const)('places button decoration between face and content, including badges and hover transforms (%s)', (skin) => {
     const { scene, tweens } = sceneStub();
-    const button = new UiButton(scene, { x: 400, y: 120, w: 190, h: 44, label: 'Items', icon: 'lock' });
+    const button = new UiButton(scene, { x: 400, y: 120, w: 190, h: 44, label: 'Items', icon: 'lock', skin });
+    expect(button.getBackground().texture.key.includes('_forest_')).toBe(skin === 'forest');
     const layer = button.getEffectLayer() as unknown as UiObject;
     layer.add(new UiObject('living'));
     button.setBadge(2);
@@ -137,12 +138,8 @@ describe('living UI consumer ownership', () => {
 
   it('binds both Lobby button effects to their layers and to actual Coop-band visibility', () => {
     const { scene } = sceneStub();
-    const lobby: any = new (LobbyOverlay as any)(scene, {});
-    // Isolate the Coop band from roster/network widgets, retaining its real construction.
-    for (const method of ['attachItemsLockTooltip', 'layoutList', 'updateCoopDefenseMenuButtons',
-      'updateWorldEntryButtons', 'updateReadyGlow', 'stopReadyGlow']) lobby[method] = () => {};
-    lobby.container = new UiObject('container');
-    lobby.buildCoopBand([]);
+    const lobby: any = new LobbyPlayerProgress(scene, () => {}, () => {});
+    lobby.build([]);
     expect(effects.every(effect => !effect.active)).toBe(true);
     for (const [effect, button] of [[lobby.upgradeBtnEffect, lobby.coopUpgradesBtn], [lobby.itemsBtnEffect, lobby.coopItemsBtn]]) {
       expect(effect.parent).toBe(button.getEffectLayer());
@@ -153,7 +150,7 @@ describe('living UI consumer ownership', () => {
     lobby.setCoopDefenseItemsState(true, 2, false); // Items may arrive before Progress.
     lobby.setCoopDefenseProgress(progress);
     expect(effects.every(effect => !effect.active)).toBe(true);
-    lobby.show();
+    lobby.setVisible(true);
     expect(effects.every(effect => effect.active)).toBe(true);
     lobby.setCoopDefenseProgress(null);
     expect(effects.every(effect => !effect.active)).toBe(true);
@@ -161,10 +158,12 @@ describe('living UI consumer ownership', () => {
     expect(effects.every(effect => !effect.active)).toBe(true);
     lobby.setCoopDefenseProgress(progress);
     expect(effects.every(effect => effect.active)).toBe(true);
-    lobby.hide();
+    lobby.setVisible(false);
     expect(effects.every(effect => !effect.active)).toBe(true);
-    lobby.show(); // No new snapshot required to restore the last state.
+    lobby.setVisible(true); // No new snapshot required to restore the last state.
     expect(effects.every(effect => effect.active)).toBe(true);
+    lobby.destroy();
+    expect(effects.every(effect => effect.destroyed)).toBe(true);
   });
 
   it('starts and stops Options slider effects, preserving hidden fill updates', () => {

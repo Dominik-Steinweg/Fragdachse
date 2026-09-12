@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { FOREST, type UiSkin } from './UiSkin';
 import { COLORS } from '../config';
 import type { LoadoutItemPresentation } from '../loadout/LoadoutCatalog';
 import { ensureRoundedTexture, lerpColor } from './uiTextures';
@@ -7,6 +8,7 @@ import { t } from '../i18n';
 import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
 
 export interface LoadoutSlotControlOptions {
+  readonly skin?: UiSkin;
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -29,6 +31,7 @@ export interface LoadoutSlotControlOptions {
 }
 
 export interface LoadoutToolRowControlOptions {
+  readonly skin?: UiSkin;
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -118,6 +121,7 @@ export function createLoadoutSlotControl(
     filled,
     enabled,
     accentMode,
+    options.skin,
   );
   const root = scene.add.container(options.x, options.y).setScrollFactor(0).setAlpha(enabled ? 1 : 0.45);
   const frame = scene.add.image(0, 0, key).setScrollFactor(0);
@@ -127,7 +131,7 @@ export function createLoadoutSlotControl(
   // Rounded-Texture geclippt und folgen dadurch auch an den Ecken exakt der Rahmengeometrie.
   const hoverOutline = !options.compact || accentMode === 'subtle' || accentMode === 'lobby'
     ? scene.add.image(0, 0, ensureRoundedTexture(scene, {
-      key: `_loadout_slot_hover_${accentMode}_${Math.round(options.width)}x${Math.round(options.height)}_${options.accentColor.toString(16)}_${filled ? 'on' : 'off'}_${enabled ? 'enabled' : 'disabled'}`,
+      key: `_loadout_slot_hover_${options.skin === 'forest' ? 'forest_' : ''}${accentMode}_${Math.round(options.width)}x${Math.round(options.height)}_${options.accentColor.toString(16)}_${filled ? 'on' : 'off'}_${enabled ? 'enabled' : 'disabled'}`,
       w: options.width,
       h: options.height,
       radius: Math.min(12, options.height / 3),
@@ -202,7 +206,7 @@ export function createLoadoutSlotControl(
     const role = presentation ? 'micro' : 'title';
     if (options.hoverGroup && presentation) {
       const mutedText = scene.add.text(0, 0, fallbackText, textStyle(role, {
-        color: TEXT.muted,
+        color: options.skin === 'forest' ? FOREST.muted : TEXT.muted,
         align: 'center',
         wordWrapWidth: options.width - 8,
       })).setOrigin(0.5).setScrollFactor(0);
@@ -212,7 +216,7 @@ export function createLoadoutSlotControl(
         wordWrapWidth: options.width - 8,
       })).setOrigin(0.5).setAlpha(0).setScrollFactor(0);
       const colorText = scene.add.text(0, 0, fallbackText, textStyle(role, {
-        color: TEXT.primary,
+        color: options.skin === 'forest' ? FOREST.text : TEXT.primary,
         align: 'center',
         wordWrapWidth: options.width - 8,
       })).setOrigin(0.5).setAlpha(0).setScrollFactor(0);
@@ -256,12 +260,12 @@ export function createLoadoutSlotControl(
   if (!options.compact) {
     const textX = -options.width / 2 + 12 + iconSize + 10;
     root.add(scene.add.text(textX, -8, presentation?.displayName ?? t('ui.common.empty'), textStyle('labelSm', {
-      color: TEXT.primary,
+      color: options.skin === 'forest' ? FOREST.text : TEXT.primary,
     })).setOrigin(0, 0.5).setScrollFactor(0));
-    root.add(scene.add.text(textX, 10, options.label ?? '', textStyle('micro'))
+    root.add(scene.add.text(textX, 10, options.label ?? '', textStyle('micro', { color: options.skin === 'forest' ? FOREST.muted : TEXT.muted }))
       .setOrigin(0, 0.5).setScrollFactor(0));
     root.add(scene.add.text(options.width / 2 - 14, 0, '›', textStyle('title', {
-      color: TEXT.muted,
+      color: options.skin === 'forest' ? FOREST.muted : TEXT.muted,
     })).setOrigin(0.5).setScrollFactor(0));
   }
 
@@ -334,18 +338,19 @@ export function createLoadoutToolRowControl(
     false,
     enabled,
     'default',
+    options.skin,
   );
   root.add(scene.add.image(0, 0, frameKey).setScrollFactor(0));
 
   const labelX = -options.width / 2 + 12;
   const labelAlpha = enabled ? 1 : 0.45;
   root.add(scene.add.text(labelX, -7, options.label, textStyle('labelSm', {
-    color: TEXT.primary,
+    color: options.skin === 'forest' ? FOREST.text : TEXT.primary,
     tracking: 0.6,
   })).setOrigin(0, 0.5).setAlpha(labelAlpha).setScrollFactor(0));
   if (options.sublabel) {
     root.add(scene.add.text(labelX, 8, options.sublabel, textStyle('micro', {
-      color: TEXT.muted,
+      color: options.skin === 'forest' ? FOREST.muted : TEXT.muted,
       tracking: 0.5,
     })).setOrigin(0, 0.5).setAlpha(labelAlpha).setScrollFactor(0));
   }
@@ -365,6 +370,7 @@ export function createLoadoutToolRowControl(
     const slotX = startX + index * (slotWidth + gap);
     const presentation = options.presentations[index] ?? null;
     root.add(createLoadoutSlotControl(scene, {
+      skin: options.skin,
       x: slotX,
       y: 0,
       width: slotWidth,
@@ -389,6 +395,7 @@ function ensureSlotTexture(
   filled: boolean,
   enabled: boolean,
   accentMode: 'default' | 'subtle' | 'lobby',
+  skin: UiSkin = 'default',
 ): string {
   const w = Math.round(width);
   const h = Math.round(height);
@@ -396,16 +403,16 @@ function ensureSlotTexture(
   const subtle = accentMode === 'subtle';
   const lobby = accentMode === 'lobby';
   return ensureRoundedTexture(scene, {
-    key: `_loadout_slot_${accentMode}_${compact ? 'compact' : 'row'}_${w}x${h}_${accentColor.toString(16)}_${filled ? 'on' : 'off'}_${enabled ? 'enabled' : 'disabled'}`,
+    key: `_loadout_slot_${skin === 'forest' ? 'forest_' : ''}${accentMode}_${compact ? 'compact' : 'row'}_${w}x${h}_${accentColor.toString(16)}_${filled ? 'on' : 'off'}_${enabled ? 'enabled' : 'disabled'}`,
     w,
     h,
     radius: Math.min(12, h / 3),
-    topColor: compact
+    topColor: skin === 'forest' ? (compact ? FOREST.sunken : FOREST.field) : compact
       ? lobby
         ? COLORS.GREY_8
         : lerpColor(COLORS.GREY_8, accentColor, filled ? (subtle ? 0.08 : 0.34) : (subtle ? 0.03 : 0.08))
       : lerpColor(COLORS.GREY_7, 0xffffff, 0.03),
-    bottomColor: compact
+    bottomColor: skin === 'forest' ? FOREST.sunken : compact
       ? lobby
         ? COLORS.GREY_10
         : lerpColor(COLORS.GREY_10, accentColor, filled ? (subtle ? 0.05 : 0.2) : (subtle ? 0.02 : 0.04))
@@ -413,7 +420,7 @@ function ensureSlotTexture(
     fillAlpha: enabled
       ? (filled ? (compact ? (lobby ? 0.78 : subtle ? 0.92 : 0.97) : 0.93) : 0.8)
       : 0.65,
-    strokeColor: compact ? accentColor : COLORS.GREY_5,
+    strokeColor: compact ? accentColor : skin === 'forest' ? FOREST.border : COLORS.GREY_5,
     strokeAlpha: enabled
       ? (filled
         ? (compact ? (lobby ? 0.28 : subtle ? 0.58 : 0.9) : 0.58)

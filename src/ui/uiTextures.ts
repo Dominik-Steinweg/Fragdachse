@@ -7,6 +7,8 @@
  */
 import * as Phaser from 'phaser';
 import { rgbStr } from './LivingBarEffect';
+import { lerpColor } from './uiColor';
+export { lerpColor } from './uiColor';
 
 export function roundRectPath(
   ctx: CanvasRenderingContext2D,
@@ -20,15 +22,6 @@ export function roundRectPath(
   ctx.arcTo(x, y + h, x, y, rr);
   ctx.arcTo(x, y, x + w, y, rr);
   ctx.closePath();
-}
-
-export function lerpColor(a: number, b: number, t: number): number {
-  const ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff;
-  const br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff;
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const bl = Math.round(ab + (bb - ab) * t);
-  return (r << 16) | (g << 8) | bl;
 }
 
 export interface RoundedTextureParams {

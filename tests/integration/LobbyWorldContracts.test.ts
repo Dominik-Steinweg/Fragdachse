@@ -6,7 +6,7 @@ import {
   LOBBY_WORLD_HEIGHT_CELLS,
   LOBBY_WORLD_WIDTH_CELLS,
   buildLobbyWorldLayout,
-  isLobbyUiReservedCell,
+  isLobbyBaseReservedCell,
 } from '../../src/arena/LobbyWorldLayout';
 import { RockHpRegistry } from '../../src/arena/RockHpRegistry';
 import { getWorldDefinition } from '../../src/config/authoring/authoredScenarios';
@@ -141,19 +141,55 @@ describe('LobbyWorld – authored Geometrie', () => {
     expect(layout.rocks.every(rock => !rock.indestructible)).toBe(true);
   });
 
+  it('belebt beide Seiten auch hinter den Karten und verwendet keine UI-Spawn-Sperren', () => {
+    for (const side of [(x: number) => x < 10, (x: number) => x >= 50]) {
+      expect(layout.rocks.some(cell => side(cell.gridX) && cell.gridY > 9 && cell.gridY < 28)).toBe(true);
+      expect(layout.decals?.some(cell => side(cell.gridX) && cell.gridY > 9 && cell.gridY < 28)).toBe(true);
+    }
+    expect(getLobbyWorldDefinition().spawnExclusionZones ?? []).toEqual([]);
+  });
+
+  it('traegt zwei zusammenhaengende Seen ausserhalb der Basis ohne ueberlagerte Landobjekte', () => {
+    const water = layout.water ?? [];
+    const key = (cell: { gridX: number; gridY: number }) => `${cell.gridX}:${cell.gridY}`;
+    const remaining = new Set(water.map(key));
+    const lakes: typeof water[] = [];
+    while (remaining.size > 0) {
+      const first = water.find(cell => remaining.has(key(cell)))!;
+      const lake = [first];
+      remaining.delete(key(first));
+      for (let i = 0; i < lake.length; i++) {
+        const cell = lake[i];
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const next = { gridX: cell.gridX + dx, gridY: cell.gridY + dy };
+          if (remaining.delete(key(next))) lake.push(next);
+        }
+      }
+      lakes.push(lake);
+    }
+    expect(lakes).toHaveLength(2);
+    const [left, right] = lakes.sort((a, b) => a[0].gridX - b[0].gridX);
+    expect(right.length).toBeGreaterThan(left.length);
+    for (const cell of water) expect(isLobbyBaseReservedCell(cell.gridX, cell.gridY)).toBe(false);
+    const waterKeys = new Set(water.map(key));
+    for (const cell of [...layout.rocks, ...layout.trees, ...layout.dirt, ...(layout.decals ?? [])]) {
+      expect(waterKeys.has(key(cell)), `Landobjekt im Wasser: ${key(cell)}`).toBe(false);
+    }
+  });
+
   it('haelt die zentrale Flaeche fuer die spaetere persistente Basis frei', () => {
     for (const rock of layout.rocks) {
-      expect(isLobbyUiReservedCell(rock.gridX, rock.gridY), `Fels ${rock.gridX}:${rock.gridY}`).toBe(false);
+      expect(isLobbyBaseReservedCell(rock.gridX, rock.gridY), `Fels ${rock.gridX}:${rock.gridY}`).toBe(false);
     }
     for (const tree of layout.trees) {
-      expect(isLobbyUiReservedCell(tree.gridX, tree.gridY), `Baum ${tree.gridX}:${tree.gridY}`).toBe(false);
+      expect(isLobbyBaseReservedCell(tree.gridX, tree.gridY), `Baum ${tree.gridX}:${tree.gridY}`).toBe(false);
     }
   });
 
   it('liegt vollstaendig innerhalb ihrer eigenen Metrik und traegt keine Gleise', () => {
     expect(layout.tracks).toEqual([]);
     expect(layout.powerUpPedestals).toEqual([]);
-    for (const cell of [...layout.rocks, ...layout.trees, ...layout.dirt]) {
+    for (const cell of [...layout.rocks, ...layout.trees, ...layout.dirt, ...(layout.water ?? [])]) {
       expect(cell.gridX).toBeGreaterThanOrEqual(0);
       expect(cell.gridY).toBeGreaterThanOrEqual(0);
       expect(cell.gridX).toBeLessThan(LOBBY_WORLD_WIDTH_CELLS);
@@ -167,6 +203,8 @@ describe('LobbyWorld – authored Geometrie', () => {
     expect(second).toEqual(first);
     expect(second).not.toBe(first);
     expect(second.rocks).not.toBe(first.rocks);
+    expect(second.water).not.toBe(first.water);
+    expect(second.water?.[0]).not.toBe(first.water?.[0]);
     // Die Runtime haengt platzierte Konstrukte als zusaetzliche Felszellen an; das darf die
     // naechste LobbyWorld nicht erben.
     first.rocks.push({ gridX: 0, gridY: 0 });

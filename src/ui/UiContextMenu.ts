@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
+import { ensureForestPanel } from './forestTextures';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { ensureFlatPanelTexture } from './uiTextures';
 import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
@@ -54,6 +56,7 @@ export class UiContextMenu {
     private readonly scene: Phaser.Scene,
     private readonly parent: Phaser.GameObjects.Container,
     private readonly standaloneDepth?: number,
+    private readonly skin: UiSkin = 'default',
   ) {}
 
   isOpen(): boolean {
@@ -68,7 +71,7 @@ export class UiContextMenu {
     const width = ROW_W + PADDING * 2;
     const description = options.description
       ? this.scene.add.text(PADDING, PADDING + TITLE_H, options.description,
-        textStyle('caption', { color: TEXT.primary, wordWrapWidth: ROW_W })).setOrigin(0, 0).setScrollFactor(0)
+        textStyle('caption', { color: skinTextColor(this.skin, TEXT.primary), wordWrapWidth: ROW_W })).setOrigin(0, 0).setScrollFactor(0)
       : null;
     const descriptionH = description ? description.height + SPACE.md : 0;
     const height = PADDING * 2 + TITLE_H + descriptionH + options.entries.length * (ROW_H + ROW_GAP) - ROW_GAP;
@@ -86,7 +89,7 @@ export class UiContextMenu {
       this.close();
     });
 
-    const background = this.scene.add.image(0, 0, ensureFlatPanelTexture(
+    const background = this.scene.add.image(0, 0, this.skin === 'forest' ? ensureForestPanel(this.scene, width, height) : ensureFlatPanelTexture(
       this.scene, `_uicm_panel_${width}x${height}`, width, height, SURFACE.modal, BORDER.subtle,
       { radius: RADIUS.md, fillAlpha: 0.98, strokeAlpha: 0.9 },
     )).setOrigin(0, 0).setScrollFactor(0).setInteractive();
@@ -98,7 +101,7 @@ export class UiContextMenu {
       backdrop,
       background,
       this.scene.add.text(PADDING, PADDING, options.title, textStyle('section', {
-        color: options.titleColor ?? TEXT.primary,
+        color: skinTextColor(this.skin, options.titleColor ?? TEXT.primary),
       })).setOrigin(0, 0).setScrollFactor(0),
     ];
 
@@ -106,16 +109,17 @@ export class UiContextMenu {
     options.entries.forEach((entry, index) => {
       const rowY = PADDING + TITLE_H + descriptionH + index * (ROW_H + ROW_GAP);
       const enabled = entry.enabled !== false;
-      const entryColor = enabled ? entry.color : COLORS.GREY_5;
-      const row = this.scene.add.rectangle(PADDING, rowY, ROW_W, ROW_H, SURFACE.raised, enabled ? 0.9 : 0.55)
+      const entryColor = skinTextColor(this.skin, enabled ? entry.color : COLORS.GREY_5);
+      const fill = this.skin === 'forest' ? FOREST.sunken : SURFACE.raised;
+      const row = this.scene.add.rectangle(PADDING, rowY, ROW_W, ROW_H, fill, enabled ? 0.9 : 0.55)
         .setOrigin(0, 0)
         .setStrokeStyle(1, entryColor, enabled ? 0.75 : 0.35)
         .setScrollFactor(0)
         .setInteractive({ useHandCursor: enabled });
       row.on('pointerover', () => {
-        if (enabled) row.setFillStyle(COLORS.GREY_6, 1);
+        if (enabled) row.setFillStyle(this.skin === 'forest' ? FOREST.raised : COLORS.GREY_6, 1);
       });
-      row.on('pointerout', () => row.setFillStyle(SURFACE.raised, enabled ? 0.9 : 0.55));
+      row.on('pointerout', () => row.setFillStyle(fill, enabled ? 0.9 : 0.55));
       row.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
         event?.stopPropagation();
         if (!enabled) return;

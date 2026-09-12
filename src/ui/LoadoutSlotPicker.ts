@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
+import { ensureForestPanel } from './forestTextures';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { ensureFlatPanelTexture, lerpColor } from './uiTextures';
 import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
@@ -88,6 +90,7 @@ export class LoadoutSlotPicker {
     private readonly parent: Phaser.GameObjects.Container,
     private readonly depth: number,
     private readonly standalone = false,
+    private readonly skin: UiSkin = 'default',
   ) {}
 
   isOpen(): boolean {
@@ -125,7 +128,7 @@ export class LoadoutSlotPicker {
       if (group.label) {
         const labelY = cursorY;
         rows.push(() => children.push(this.scene.add.text(PADDING, labelY, group.label!, textStyle('section', {
-          color: TEXT.muted,
+          color: skinTextColor(this.skin, TEXT.muted),
         })).setOrigin(0, 0).setScrollFactor(0)));
         cursorY += GROUP_LABEL_H;
       }
@@ -174,7 +177,7 @@ export class LoadoutSlotPicker {
       this.close();
     });
 
-    const background = this.scene.add.image(0, 0, ensureFlatPanelTexture(
+    const background = this.scene.add.image(0, 0, this.skin === 'forest' ? ensureForestPanel(this.scene, width, height) : ensureFlatPanelTexture(
       this.scene, `_loadout_picker_${width}x${height}`, width, height, SURFACE.modal, BORDER.subtle,
       { radius: RADIUS.lg, fillAlpha: 0.98, strokeAlpha: 0.9 },
     ))
@@ -186,7 +189,7 @@ export class LoadoutSlotPicker {
     });
 
     const title = this.scene.add.text(PADDING, PADDING, options.title, textStyle('label', {
-      color: TEXT.primary,
+      color: skinTextColor(this.skin, TEXT.primary),
     })).setOrigin(0, 0).setScrollFactor(0);
 
     for (const build of rows) build();
@@ -215,22 +218,22 @@ export class LoadoutSlotPicker {
     centered: boolean,
   ): void {
     const restState: RowVisualState = {
-      fillColor: entry.selected ? entry.accentColor : COLORS.GREY_8,
+      fillColor: entry.selected ? entry.accentColor : this.skin === 'forest' ? FOREST.sunken : COLORS.GREY_8,
       fillAlpha: entry.selected ? 0.35 : 0.9,
-      strokeColor: entry.selected ? entry.accentColor : COLORS.GREY_5,
+      strokeColor: entry.selected ? entry.accentColor : this.skin === 'forest' ? FOREST.border : COLORS.GREY_5,
       strokeWidth: entry.selected ? 2 : 1,
       strokeAlpha: entry.disabled ? 0.4 : 0.9,
-      labelColor: entry.disabled ? COLORS.GREY_4 : COLORS.GREY_1,
+      labelColor: skinTextColor(this.skin, entry.disabled ? COLORS.GREY_4 : COLORS.GREY_1),
     };
     const hoverState: RowVisualState = {
       // Selected rows keep their saturated fill; active, unselected rows only get
       // a restrained accent tint so hover stays visibly below selection.
-      fillColor: entry.selected ? entry.accentColor : lerpColor(COLORS.GREY_8, entry.accentColor, 0.1),
+      fillColor: entry.selected ? entry.accentColor : lerpColor(this.skin === 'forest' ? FOREST.raised : COLORS.GREY_8, entry.accentColor, 0.1),
       fillAlpha: entry.selected ? 0.6 : 0.92,
       strokeColor: entry.accentColor,
       strokeWidth: entry.selected ? 2 : 1,
       strokeAlpha: entry.selected ? 0.9 : 0.78,
-      labelColor: entry.selected ? COLORS.GREY_1 : lerpColor(COLORS.GREY_1, 0xffffff, 0.08),
+      labelColor: this.skin === 'forest' ? FOREST.text : entry.selected ? COLORS.GREY_1 : lerpColor(COLORS.GREY_1, 0xffffff, 0.08),
     };
     const background = this.scene.add.rectangle(x, y, width, height, restState.fillColor, restState.fillAlpha)
       .setOrigin(0, 0)

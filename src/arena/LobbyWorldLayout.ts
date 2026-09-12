@@ -4,8 +4,7 @@ import {
   DEFAULT_ARENA_HEIGHT,
   FULL_ARENA_WIDTH,
 } from '../config';
-import type { ArenaGridRegion } from '../config';
-import type { ArenaLayout, DecalCell, DirtCell, RockCell, TreeCell } from '../types';
+import type { ArenaLayout, DecalCell, DirtCell, RockCell, TreeCell, WaterCell } from '../types';
 import {
   ARENA_DECAL_CONFIG,
   ROCK_DECAL_CONFIG,
@@ -28,7 +27,7 @@ import { createOrganicDirtMargin } from './OrganicDirtMargin';
  *
  * Schriftzug und Landschaftsfelsen sind normale, zerstoerbare World-Objekte.
  * Die zentrale Flaeche bleibt bewusst frei: dort erscheint spaeter die
- * persistente Basis. Sie wird hier nicht vorbereitet und nicht reserviert.
+ * persistente Basis. Ihre Freiflaeche wird im Authoring von Landschaftsgeometrie freigehalten.
  */
 
 interface GridRect {
@@ -62,9 +61,6 @@ const LOBBY_WORLD_SEED = 20260524;
 const GRID_COLS = LOBBY_WORLD_WIDTH_CELLS;
 const GRID_ROWS = LOBBY_WORLD_HEIGHT_CELLS;
 
-const OVERLAY_BORDER_TOP_Y = 8;
-const OVERLAY_BORDER_BOTTOM_Y = 28;
-const LEFT_OVERLAY_BORDER_X = 10;
 const TITLE_TEXT = 'FRAGDACHSE';
 const TITLE_GAP = 1;
 
@@ -416,67 +412,15 @@ function generateLobbyDecals(
   return decals;
 }
 
-// -- Lobby-Oberflaeche: Rahmen, Panel und Freiflaechen -----------------------
+// -- Authored Freiflaeche fuer die persistente Basis -------------------------
 
 const TITLE_START_X = Math.floor((GRID_COLS - textWidth(TITLE_TEXT, TITLE_GAP)) * 0.5);
-const RIGHT_OVERLAY_BORDER_X = GRID_COLS - 11;
-const RIGHT_OVERLAY_INFO_MIN_X = RIGHT_OVERLAY_BORDER_X + 1;
+const BASE_CLEAR_ZONE: GridRect = { minX: 16, maxX: 42, minY: 7, maxY: 28 };
 
-/**
- * Freiflaechen fuer die Lobby-Oberflaeche.
- *
- * Die mittlere Zone bleibt vollstaendig frei - sie ist zugleich die
- * Flaeche, auf der spaeter die persistente Basis erscheint.
- */
-const overlayClearZones: readonly GridRect[] = [
-  { minX: 0, maxX: LEFT_OVERLAY_BORDER_X - 1, minY: 9, maxY: OVERLAY_BORDER_BOTTOM_Y - 1 },
-  { minX: 16, maxX: 42, minY: 7, maxY: OVERLAY_BORDER_BOTTOM_Y },
-  { minX: RIGHT_OVERLAY_INFO_MIN_X, maxX: GRID_COLS - 1, minY: 9, maxY: OVERLAY_BORDER_BOTTOM_Y - 1 },
-];
-
-const leftOverlayInfoQuietZone = overlayClearZones[0];
-const rightOverlayInfoQuietZone = overlayClearZones[2];
-
-/**
- * Authored Ruhezonen der Landschaft und zentrale Reserve fuer die persistente Basis.
- * Dort entsteht weder Geometrie noch Bodendetail. Sie definieren keine UI-Kartenmasse.
- */
-const LOBBY_UI_RESERVED_ZONES: readonly GridRect[] = [
-  leftOverlayInfoQuietZone,
-  rightOverlayInfoQuietZone,
-  overlayClearZones[1],
-];
-
-/**
- * Liegt die Zelle unter einer Oberflaechenflaeche?
- *
- * Zugleich die Zusicherung, die die Mittelflaeche fuer die spaetere persistente Basis
- * freihaelt: in diesen Zonen entsteht keine Geometrie.
- */
-export function isLobbyUiReservedCell(gridX: number, gridY: number): boolean {
-  return LOBBY_UI_RESERVED_ZONES.some((rect) => isInsideRect(gridX, gridY, rect));
+/** Only the central base reserve excludes landscape; UI cards do not reserve world cells. */
+export function isLobbyBaseReservedCell(gridX: number, gridY: number): boolean {
+  return isInsideRect(gridX, gridY, BASE_CLEAR_ZONE);
 }
-
-/**
- * Die Seitenmenues als authored Spawn-Sperre der World.
- *
- * Sie sind begehbar – wer das Testgelaende betritt, darf dort laufen. Nur starten soll niemand
- * hinter einem Seitenmenue, weil seine Figur dort dauerhaft verdeckt waere.
- *
- * Die Mittelflaeche ist ausdruecklich **keine** Spawn-Sperre:
- * Wer die World betritt, verlaesst damit die Lobby-Oberflaeche, und das Panel ist fuer ihn
- * ausgeblendet. Als Geometrie-Reserve ({@link LOBBY_UI_RESERVED_ZONES}) bleibt sie zugleich die
- * grosse Freiflaeche der World – genau deshalb taugt sie als zentraler Startpunkt.
- */
-export const LOBBY_SPAWN_EXCLUSION_ZONES: readonly ArenaGridRegion[] = [
-  leftOverlayInfoQuietZone,
-  rightOverlayInfoQuietZone,
-].map((rect) => ({
-  minGridX: rect.minX,
-  maxGridX: rect.maxX,
-  minGridY: rect.minY,
-  maxGridY: rect.maxY,
-}));
 
 /**
  * Mitte der LobbyWorld als authored Spawn-Fokus.
@@ -513,29 +457,45 @@ const ambientRockAnchors: readonly RockClusterAnchor[] = [
 
 const titleRockGapZone: GridRect = { minX: 0, maxX: GRID_COLS - 1, minY: 0, maxY: 9 };
 
-const leftOverlayBorderReserveZone: GridRect = {
-  minX: 0,
-  maxX: LEFT_OVERLAY_BORDER_X + 2,
-  minY: OVERLAY_BORDER_TOP_Y,
-  maxY: OVERLAY_BORDER_BOTTOM_Y,
-};
+/** Compact authored shore silhouettes, using the ordinary World water geometry. */
+function waterPatch(startX: number, startY: number, rows: readonly string[]): WaterCell[] {
+  return rows.flatMap((row, y) => [...row].flatMap((cell, x) =>
+    cell === '#' ? [{ gridX: startX + x, gridY: startY + y }] : []));
+}
 
-const rightOverlayBorderReserveZone: GridRect = {
-  minX: RIGHT_OVERLAY_BORDER_X - 1,
-  maxX: GRID_COLS - 1,
-  minY: OVERLAY_BORDER_TOP_Y,
-  maxY: OVERLAY_BORDER_BOTTOM_Y,
-};
+const lobbyWater: WaterCell[] = [
+  ...waterPatch(5, 15, [
+    '.###..',
+    '#####.',
+    '######',
+    '######',
+    '.#####',
+    '..###.',
+  ]),
+  ...waterPatch(45, 15, [
+    '...#####....',
+    '..########..',
+    '.##########.',
+    '.###########',
+    '############',
+    '############',
+    '.###########',
+    '..##########',
+    '..#########.',
+    '.##########.',
+    '..########..',
+    '....#####...',
+  ]),
+];
+const waterKeys = new Set(lobbyWater.map(cell => cellKey(cell.gridX, cell.gridY)));
+function excludeWater<T extends { gridX: number; gridY: number }>(cells: T[]): T[] {
+  return cells.filter(cell => !waterKeys.has(cellKey(cell.gridX, cell.gridY)));
+}
 
-const ambientRocks: RockCell[] = excludeRectCells(
+const ambientRocks: RockCell[] = excludeWater(excludeRectCells(
   createOrganicRockClusters(ambientRockAnchors, LOBBY_WORLD_SEED + 101),
-  [
-    ...overlayClearZones,
-    titleRockGapZone,
-    leftOverlayBorderReserveZone,
-    rightOverlayBorderReserveZone,
-  ],
-);
+  [BASE_CLEAR_ZONE, titleRockGapZone],
+));
 
 const titleTreeClearZone: GridRect = {
   minX: Math.max(0, TITLE_START_X - 1),
@@ -551,17 +511,17 @@ const titleDirtClearZone: GridRect = {
   maxY: 9,
 };
 
-const dirtQuietZones: readonly GridRect[] = [rightOverlayInfoQuietZone, overlayClearZones[1]];
+const dirtQuietZones: readonly GridRect[] = [BASE_CLEAR_ZONE];
 
 /** Authored title and landscape rocks remain destructible world objects. */
 const lobbyRocks: RockCell[] = mergeUnique<RockCell>(titleRocks, ambientRocks);
 
 const lobbyTrees: TreeCell[] = excludeRectCells(
-  points<TreeCell>([[1, 4], [12, 18], [15, 31], [57, 4], [47, 17], [46, 25], [51, 31]]),
-  [...overlayClearZones, titleTreeClearZone],
+  points<TreeCell>([[1, 4], [12, 18], [15, 31], [57, 4], [44, 13], [44, 27], [51, 31]]),
+  [BASE_CLEAR_ZONE, titleTreeClearZone],
 );
 
-const lobbyDirt: DirtCell[] = mergeUnique<DirtCell>(
+const lobbyDirt: DirtCell[] = excludeWater(mergeUnique<DirtCell>(
   excludeRectCells(
     mergeUnique<DirtCell>(
       excludeRectCells(createOrganicTopDirtBand(LOBBY_WORLD_SEED + 211), [titleDirtClearZone]),
@@ -571,19 +531,19 @@ const lobbyDirt: DirtCell[] = mergeUnique<DirtCell>(
     ),
     dirtQuietZones,
   ),
-  createOrganicDirtMargin(lobbyRocks, {
+  createOrganicDirtMargin([...lobbyRocks, ...lobbyWater], {
     maxCols: GRID_COLS,
     maxRows: GRID_ROWS,
     rng: createLobbyRng(LOBBY_WORLD_SEED + 223),
   }),
-);
+));
 
-const lobbyDecals: DecalCell[] = generateLobbyDecals(
+const lobbyDecals: DecalCell[] = excludeWater(generateLobbyDecals(
   lobbyRocks,
   lobbyTrees,
   lobbyDirt,
-  LOBBY_UI_RESERVED_ZONES,
-);
+  [BASE_CLEAR_ZONE],
+));
 
 const LOBBY_WORLD_LAYOUT: ArenaLayout = {
   seed: LOBBY_WORLD_SEED,
@@ -591,6 +551,7 @@ const LOBBY_WORLD_LAYOUT: ArenaLayout = {
   trees: lobbyTrees,
   tracks: [],
   dirt: lobbyDirt,
+  water: lobbyWater,
   decals: lobbyDecals,
   powerUpPedestals: [],
 };
@@ -612,6 +573,7 @@ export function buildLobbyWorldLayout(): ArenaLayout {
     trees: LOBBY_WORLD_LAYOUT.trees.map((cell) => ({ ...cell })),
     tracks: [],
     dirt: LOBBY_WORLD_LAYOUT.dirt.map((cell) => ({ ...cell })),
+    water: (LOBBY_WORLD_LAYOUT.water ?? []).map((cell) => ({ ...cell })),
     decals: (LOBBY_WORLD_LAYOUT.decals ?? []).map((cell) => ({ ...cell })),
     powerUpPedestals: [],
   };

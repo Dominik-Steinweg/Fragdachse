@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
-import { COLORS } from '../config';
+import { FOREST } from './UiSkin';
 import { toDesignSpace } from '../graphics/RenderResolution';
-import { LOBBY_CARD } from './LobbyLayout';
+import { LOBBY_CARD, LOBBY_ROSTER_ROW_STEP } from './LobbyLayout';
 
 /** Scrolls only roster content; fully clipped rows are hidden by the roster renderer. */
 export class LobbyRosterScroller {
@@ -16,8 +16,8 @@ export class LobbyRosterScroller {
   constructor(private readonly scene: Phaser.Scene, private readonly parent: Phaser.GameObjects.Container,
     private readonly canScroll: () => boolean, private readonly onChange: () => void) {
     const x = LOBBY_CARD.left + LOBBY_CARD.width - LOBBY_CARD.padding - 4;
-    this.track = scene.add.rectangle(x, LOBBY_CARD.rosterTop, 4, this.height, COLORS.GREY_6, 0.35).setOrigin(0.5, 0);
-    this.thumb = scene.add.rectangle(x, LOBBY_CARD.rosterTop, 6, 32, COLORS.GREY_4).setOrigin(0.5, 0);
+    this.track = scene.add.rectangle(x, LOBBY_CARD.rosterTop, 4, this.height, FOREST.border, 0.35).setOrigin(0.5, 0);
+    this.thumb = scene.add.rectangle(x, LOBBY_CARD.rosterTop, 6, 32, FOREST.muted).setOrigin(0.5, 0);
     this.hit = scene.add.rectangle(x, LOBBY_CARD.rosterTop, 16, this.height, 0, 0)
       .setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
     for (const object of [this.track, this.thumb, this.hit]) object.setScrollFactor(0);
@@ -72,7 +72,7 @@ export class LobbyRosterScroller {
       while (ancestor && ancestor !== this.parent) ancestor = ancestor.parentContainer;
       return ancestor !== this.parent;
     })) return;
-    this.setOffset(this.offset + Math.sign(dy) * 48);
+    this.setOffset(this.offset + Math.sign(dy) * LOBBY_ROSTER_ROW_STEP);
   };
   destroy(): void {
     this.scene.input.off('wheel', this.wheel);

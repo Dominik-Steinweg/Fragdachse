@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { FOREST } from './UiSkin';
 import { COLORS, DEPTH } from '../config';
 import type { GameMode } from '../types';
 import type { NetworkBridge } from '../network/NetworkBridge';
@@ -42,16 +43,16 @@ export class LobbySettingsControls {
 
   constructor(private readonly scene: Phaser.Scene, private readonly bridge: NetworkBridge,
     parent: Phaser.GameObjects.Container) {
-    this.modeLabel = scene.add.text(LEFT, MODE_Y, '', textStyle('section')).setOrigin(0, 0.5);
-    this.mapLabel = scene.add.text(LEFT, MAP_Y, '', textStyle('section')).setOrigin(0, 0.5);
-    this.mode = new UiButton(scene, { x: VALUE_X, y: MODE_Y, w: VALUE_W, h: 44,
+    this.modeLabel = scene.add.text(LEFT, MODE_Y, '', textStyle('section', { color: FOREST.muted })).setOrigin(0, 0.5);
+    this.mapLabel = scene.add.text(LEFT, MAP_Y, '', textStyle('section', { color: FOREST.muted })).setOrigin(0, 0.5);
+    this.mode = new UiButton(scene, { skin: 'forest', x: VALUE_X, y: MODE_Y, w: VALUE_W, h: 44,
       label: ' ', icon: 'chevron-right', trailingIcon: true, intent: 'neutral', onClick: () => this.open(false) });
-    this.map = new UiButton(scene, { x: VALUE_X, y: MAP_Y, w: VALUE_W, h: 44,
+    this.map = new UiButton(scene, { skin: 'forest', x: VALUE_X, y: MAP_Y, w: VALUE_W, h: 44,
       label: ' ', icon: 'chevron-right', trailingIcon: true, intent: 'neutral', onClick: () => this.open(true) });
-    this.timeLabel = scene.add.text(VALUE_LEFT, MAP_Y - 14, '', textStyle('caption')).setOrigin(0, 0.5);
-    this.track = scene.add.rectangle(VALUE_LEFT, MAP_Y + 12, VALUE_W, 7, COLORS.GREY_8)
+    this.timeLabel = scene.add.text(VALUE_LEFT, MAP_Y - 14, '', textStyle('caption', { color: FOREST.text })).setOrigin(0, 0.5);
+    this.track = scene.add.rectangle(VALUE_LEFT, MAP_Y + 12, VALUE_W, 7, FOREST.sunken)
       .setOrigin(0, 0.5).setStrokeStyle(1, COLORS.GREY_6);
-    this.fill = scene.add.rectangle(VALUE_LEFT, MAP_Y + 12, 1, 5, COLORS.BLUE_4).setOrigin(0, 0.5);
+    this.fill = scene.add.rectangle(VALUE_LEFT, MAP_Y + 12, 1, 5, COLORS.GREEN_3).setOrigin(0, 0.5);
     this.thumb = scene.add.circle(VALUE_LEFT, MAP_Y + 12, 7, COLORS.GREY_3);
     this.hit = scene.add.rectangle(VALUE_LEFT, MAP_Y + 12, VALUE_W, 28, 0, 0)
       .setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
@@ -64,7 +65,7 @@ export class LobbySettingsControls {
       this.timeLabel, this.track, this.fill, this.thumb, this.hit];
     objects.forEach(object => object.setScrollFactor(0));
     parent.add(objects);
-    this.picker = new LoadoutSlotPicker(scene, parent, DEPTH.OVERLAY + 3, true);
+    this.picker = new LoadoutSlotPicker(scene, parent, DEPTH.OVERLAY + 3, true, 'forest');
     scene.input.on('pointermove', this.move);
     scene.input.on('pointerup', this.release);
     this.refresh();
@@ -117,7 +118,7 @@ export class LobbySettingsControls {
     if (!this.canEdit()) return;
     const entries = maps
       ? getUnlockedCoopDefenseMapConfigs(getStoredHighestUnlockedCoopDefenseMapId()).map(map => ({
-        key: map.mapId, displayName: map.mapId, textureKey: null, accentColor: COLORS.BLUE_2,
+        key: map.mapId, displayName: map.mapId, textureKey: null, accentColor: FOREST.border,
         selected: map.mapId === this.bridge.getCoopDefenseMapId(), disabled: false,
         onPick: () => {
           if (this.canEdit() && isCoopDefenseMode(this.bridge.getGameMode())) this.bridge.setCoopDefenseMapId(map.mapId);
@@ -125,7 +126,7 @@ export class LobbySettingsControls {
         },
       }))
       : MODES.map(mode => ({
-        key: mode, displayName: getLocalizedGameModeLabel(mode), textureKey: null, accentColor: COLORS.BLUE_2,
+        key: mode, displayName: getLocalizedGameModeLabel(mode), textureKey: null, accentColor: FOREST.border,
         selected: mode === this.bridge.getGameMode(), disabled: false,
         onPick: () => { if (this.canEdit()) this.bridge.setGameMode(mode); this.refresh(); },
       }));

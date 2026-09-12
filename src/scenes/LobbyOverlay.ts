@@ -12,6 +12,7 @@ import { getCoopDefenseToolCapacity } from '../utils/coopDefenseUpgrades';
  * Screen-fixed Kartenmasse gehoeren LobbyLayout; die World-Geometrie ist davon unabhaengig.
  */
 import * as Phaser from 'phaser';
+import type { BackdropSurface } from '../effects/postfx/BackdropBlur';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH, TEAM_BLUE_COLOR, TEAM_RED_COLOR, toCssColor } from '../config';
 import { hasTeamSelection, isCoopDefenseMode } from '../gameModes';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
@@ -29,7 +30,9 @@ import type { LinkDiagnostics } from '../network/peer';
 import type { LoadoutSlot, LoadoutToolRef, PlayerProfile, RoomQualitySnapshot, TeamId } from '../types';
 import { createLoadoutHoverGroup, createLoadoutSlotControl } from '../ui/LoadoutSlotControl';
 import { LobbyAlertBanner, type LobbyAlert } from '../ui/LobbyAlertBanner';
-import { LOBBY_CARD } from '../ui/LobbyLayout';
+import { getLobbyReliefBounds, LOBBY_CARD, LOBBY_PLAYER_FOOTER, LOBBY_ROSTER_ROW_STEP, LOBBY_WORLD_BUTTON } from '../ui/LobbyLayout';
+import { FOREST } from '../ui/UiSkin';
+import { ensureForestFrame, ensureForestPanel, forestOrnament } from '../ui/forestTextures';
 import { LobbyPlayerProgress } from '../ui/LobbyPlayerProgress';
 import { LobbyRosterScroller } from '../ui/LobbyRosterScroller';
 import { LobbySettingsControls } from '../ui/LobbySettingsControls';
@@ -63,7 +66,7 @@ const CONTENT_W = LOBBY_CARD.contentWidth;
 const ENTRANCE_OFFSET_Y = 18;
 
 // ── Raumzeile ───────────────────────────────────────────────────────
-const HEADER_Y = PANEL_Y + 34;
+const HEADER_Y = LOBBY_CARD.titleY;
 const QUALITY_Y = PANEL_Y + 90;
 const HEADER_DIVIDER_Y = 482;
 const ROOM_CHIP_W = 224;
@@ -74,11 +77,11 @@ const ROOM_CHIP_X = CONTENT_L + ROOM_CHIP_W / 2;
 const LIST_LABEL_Y = 496;
 const LIST_Y = LOBBY_CARD.rosterTop;
 const ROSTER_SLOT_W = CONTENT_W - 16;
-const ROSTER_SLOT_H = 44;
-const ROSTER_ROW_STEP = 48;
+const ROSTER_SLOT_H = 52;
+const ROSTER_ROW_STEP = LOBBY_ROSTER_ROW_STEP;
 const TEAM_HEADER_H = 28;
 const READY_STATUS_OFFSET_X = 23;
-const LOADOUT_ICON_SIZE = 28;
+const LOADOUT_ICON_SIZE = 36;
 const LOADOUT_ICON_GAP = 2;
 const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
 const LOADOUT_CONTENT_W = LOADOUT_ICON_SIZE * LOADOUT_SLOTS.length + LOADOUT_ICON_GAP * (LOADOUT_SLOTS.length - 1);
@@ -87,7 +90,7 @@ const LOADOUT_FRAME_PADDING_Y = 3;
 const LOADOUT_FRAME_W = LOADOUT_CONTENT_W + LOADOUT_FRAME_PADDING_X * 2;
 const LOADOUT_FRAME_H = LOADOUT_ICON_SIZE + LOADOUT_FRAME_PADDING_Y * 2;
 /** Fester Anker des Loadout-Trays mit etwas Luft zur Ping-/HOST-Spalte. */
-const LOADOUT_LEFT_OFFSET = ROSTER_SLOT_W - 192;
+const LOADOUT_LEFT_OFFSET = ROSTER_SLOT_W - LOADOUT_FRAME_W - 68;
 
 // ── Fixed footer; the primary action remains below the history actions. ──
 const CTA_BLOCK_H = 152;
@@ -106,23 +109,13 @@ const BUILD_INFO_X = 16;
 const BUILD_INFO_Y = GAME_HEIGHT - 16;
 const SYSTEM_BAR_GAP = 8;
 const SYSTEM_BAR_H = 40;
-const SYSTEM_BAR_MARGIN = 28;
-const HELP_BTN_W = 112;
-const OPTIONS_BTN_W = 132;
-const FULLSCREEN_BTN_W = 168;
+const HELP_BTN_W = (LOBBY_PLAYER_FOOTER.width - SYSTEM_BAR_GAP * 2) / 3;
+const OPTIONS_BTN_W = HELP_BTN_W;
+const FULLSCREEN_BTN_W = HELP_BTN_W;
 const SYSTEM_BAR_Y = LOBBY_CARD.systemY;
-const FULLSCREEN_BTN_X = LOBBY_CARD.right + LOBBY_CARD.width - LOBBY_CARD.padding - FULLSCREEN_BTN_W / 2;
+const FULLSCREEN_BTN_X = LOBBY_PLAYER_FOOTER.left + LOBBY_PLAYER_FOOTER.width - FULLSCREEN_BTN_W / 2;
 const OPTIONS_BTN_X = FULLSCREEN_BTN_X - FULLSCREEN_BTN_W / 2 - SYSTEM_BAR_GAP - OPTIONS_BTN_W / 2;
 const HELP_BTN_X = OPTIONS_BTN_X - OPTIONS_BTN_W / 2 - SYSTEM_BAR_GAP - HELP_BTN_W / 2;
-/** Der Exit bleibt auch bei ausgeblendetem Lobby-Panel im unteren Systembereich sichtbar. */
-const WORLD_EXIT_BTN_W = 268;
-/** Platz neben der sichtbaren Systemleiste – nur solange das Lobby-Panel noch steht. */
-const WORLD_EXIT_BTN_X = HELP_BTN_X - HELP_BTN_W / 2 - SYSTEM_BAR_GAP - WORLD_EXIT_BTN_W / 2;
-/**
- * Regelfall: Wer in der World steht, sieht die Systemleiste nicht mehr. Der Exit rueckt dann an
- * denselben rechten Rand, an dem sonst VOLLBILD sitzt – ohne ihn stuende er allein in der Mitte.
- */
-const WORLD_EXIT_BTN_SOLO_X = GAME_WIDTH - SYSTEM_BAR_MARGIN - WORLD_EXIT_BTN_W / 2;
 const FULLSCREEN_HINT_MS = 2200;
 
 /**
@@ -180,6 +173,7 @@ export class LobbyOverlay {
   private playerNameTooltipRoot: Phaser.GameObjects.Container | null = null;
   private playerRows:     Map<string, PlayerRow> = new Map();
   private teamHeaders:     Record<TeamId, Phaser.GameObjects.Text> | null = null;
+  private forestRelief: Phaser.GameObjects.Image | null = null;
   private panelBg!:       Phaser.GameObjects.Image;
   private ctaDivider!:    Phaser.GameObjects.Rectangle;
   private headerTitle!:   Phaser.GameObjects.Text;
@@ -271,22 +265,28 @@ export class LobbyOverlay {
       CTA_DIVIDER_Y_MAX - CTA_FADE_OVERLAP + footerH / 2,
       ensureLobbyFooterTexture(
         this.scene,
-        `_lobby_footer_${PANEL_W - 4}x${footerH}`,
-        PANEL_W - 4,
+        `_lobby_forest_footer_${PANEL_W - LOBBY_CARD.glassInset * 2}x${footerH}`,
+        PANEL_W - LOBBY_CARD.glassInset * 2,
         footerH,
-        COLORS.GREY_9,
+        FOREST.sunken,
       ),
     ).setScrollFactor(0));
 
     // ── Kopfzeile: was wird gespielt, und in welchem Raum ─────────────────
-    this.headerTitle = this.scene.add.text(CONTENT_L, HEADER_Y, '', textStyle('subtitle', {
-      color: COLORS.GREY_1,
-    })).setOrigin(0, 0.5).setScrollFactor(0);
+    objects.push(this.scene.add.image(PANEL_CX, PANEL_Y + PANEL_H_MAX / 2,
+      ensureForestFrame(this.scene, PANEL_W, PANEL_H_MAX))
+      .setDisplaySize(PANEL_W, PANEL_H_MAX).setScrollFactor(0));
+    this.forestRelief = forestOrnament(this.scene, 'relief', PANEL_CX, LIST_Y, 400, 200)
+      .setAlpha(0.16).setVisible(false);
+    objects.push(this.forestRelief);
+    this.headerTitle = this.scene.add.text(PANEL_CX, HEADER_Y, '', textStyle('title', {
+      color: FOREST.text,
+    })).setOrigin(0.5).setScrollFactor(0).setStroke('#23170f', 3);
     objects.push(this.headerTitle);
 
-    this.roomChip = new UiButton(this.scene, {
+    this.roomChip = new UiButton(this.scene, { skin: 'forest',
       x: ROOM_CHIP_X, y: QUALITY_Y, w: ROOM_CHIP_W, h: ROOM_CHIP_H,
-      label: this.bridge.getRoomCode(),
+      surface: 'glass', label: this.bridge.getRoomCode(),
       labelRole: 'code',
       intent: 'ghost',
       icon: 'copy',
@@ -298,7 +298,7 @@ export class LobbyOverlay {
     });
     objects.push(this.roomChip.getRoot());
 
-    this.infoBtn = new UiButton(this.scene, {
+    this.infoBtn = new UiButton(this.scene, { skin: 'forest',
       x: INFO_BTN_X, y: QUALITY_Y, w: INFO_BTN_SIZE, h: INFO_BTN_SIZE,
       intent: 'ghost',
       icon: 'info',
@@ -317,7 +317,7 @@ export class LobbyOverlay {
     });
     objects.push(this.infoBtn.getRoot());
 
-    this.retryBtn = new UiButton(this.scene, {
+    this.retryBtn = new UiButton(this.scene, { skin: 'forest',
       x: HOST_BTN_X, y: QUALITY_Y, w: HOST_BTN_W, h: HOST_BTN_H,
       label: t('ui.lobby.newRoom'),
       labelRole: 'labelSm',
@@ -333,7 +333,7 @@ export class LobbyOverlay {
 
     // ── Listenkopf ────────────────────────────────────────────────────────
     objects.push(
-      this.scene.add.text(CONTENT_L, LIST_LABEL_Y, t('ui.lobby.players'), textStyle('section'))
+      this.scene.add.text(CONTENT_L, LIST_LABEL_Y, t('ui.lobby.players'), textStyle('section', { color: FOREST.muted }))
         .setOrigin(0, 0.5).setScrollFactor(0),
     );
     this.statusText = this.scene.add.text(CONTENT_R, LIST_LABEL_Y, '', textStyle('section', {
@@ -355,9 +355,9 @@ export class LobbyOverlay {
 
     // Einladen-Zeile: beantwortet die eigentliche Frage einer wartenden Lobby und ersetzt den
     // frueheren, gleich lauten Kopieren-Button in der Fusszeile.
-    this.inviteRow = new UiButton(this.scene, {
+    this.inviteRow = new UiButton(this.scene, { skin: 'forest',
       x: PANEL_CX, y: LIST_Y, w: ROSTER_SLOT_W, h: ROSTER_SLOT_H,
-      label: t('ui.lobby.inviteFriend'),
+      surface: 'glass', label: t('ui.lobby.inviteFriend'),
       intent: 'ghost',
       icon: 'plus',
       iconSize: 18,
@@ -378,7 +378,7 @@ export class LobbyOverlay {
       .setScrollFactor(0);
     objects.push(this.ctaDivider);
 
-    this.readyBtn = new UiButton(this.scene, {
+    this.readyBtn = new UiButton(this.scene, { skin: 'forest',
       x: PANEL_CX, y: LOBBY_CARD.readyY, w: READY_BTN_W, h: READY_BTN_H,
       label: t('ui.lobby.ready'),
       labelRole: 'subtitle',
@@ -387,12 +387,12 @@ export class LobbyOverlay {
     });
     objects.push(this.readyBtn.getRoot());
     const historyW = (CONTENT_W - 12) / 2;
-    this.replayBtn = new UiButton(this.scene, {
+    this.replayBtn = new UiButton(this.scene, { skin: 'forest',
       x: CONTENT_L + historyW / 2, y: LOBBY_CARD.historyY, w: historyW, h: 40,
       label: t('ui.results.lastRound'), intent: 'neutral', labelRole: 'labelSm',
       onClick: () => this.replayResultsHandler?.(),
     });
-    this.statisticsBtn = new UiButton(this.scene, {
+    this.statisticsBtn = new UiButton(this.scene, { skin: 'forest',
       x: CONTENT_R - historyW / 2, y: LOBBY_CARD.historyY, w: historyW, h: 40,
       label: t('ui.results.roomStats'), intent: 'neutral', labelRole: 'labelSm',
       onClick: () => this.roomStatsDetailHandler?.(),
@@ -411,7 +411,7 @@ export class LobbyOverlay {
     // ── Systemleiste (unten rechts, unabhaengig von den Panels) ───────────
     // Bleibt auf `pointerup`, damit die Browser-Geste auch auf Touch gueltig ist; UiButton
     // akzeptiert dieses Loslassen nur nach einem eigenen `pointerdown`.
-    this.helpBtn = new UiButton(this.scene, {
+    this.helpBtn = new UiButton(this.scene, { skin: 'forest',
       x: HELP_BTN_X, y: SYSTEM_BAR_Y, w: HELP_BTN_W, h: SYSTEM_BAR_H,
       label: t('ui.lobby.help'),
       labelRole: 'labelSm',
@@ -420,7 +420,7 @@ export class LobbyOverlay {
       iconSize: 20,
       onClick: () => this.onShowHelp(),
     });
-    this.optionsBtn = new UiButton(this.scene, {
+    this.optionsBtn = new UiButton(this.scene, { skin: 'forest',
       x: OPTIONS_BTN_X, y: SYSTEM_BAR_Y, w: OPTIONS_BTN_W, h: SYSTEM_BAR_H,
       label: t('ui.lobby.options'),
       labelRole: 'labelSm',
@@ -429,7 +429,7 @@ export class LobbyOverlay {
       iconSize: 20,
       onClick: () => this.onShowOptions(),
     });
-    this.fullscreenBtn = new UiButton(this.scene, {
+    this.fullscreenBtn = new UiButton(this.scene, { skin: 'forest',
       x: FULLSCREEN_BTN_X, y: SYSTEM_BAR_Y, w: FULLSCREEN_BTN_W, h: SYSTEM_BAR_H,
       label: t('ui.lobby.fullscreen'),
       labelRole: 'labelSm',
@@ -449,8 +449,8 @@ export class LobbyOverlay {
     this.progress.build(objects);
 
     // Freistehender Einstieg in die World zwischen den beiden Karten.
-    this.testAreaBtn = new UiButton(this.scene, {
-      x: GAME_WIDTH / 2, y: LOBBY_CARD.systemY, w: 240, h: 48,
+    this.testAreaBtn = new UiButton(this.scene, { skin: 'forest',
+      ...LOBBY_WORLD_BUTTON,
       label: t('ui.lobby.testArea'),
       intent: 'neutral',
       onClick: () => {
@@ -458,6 +458,7 @@ export class LobbyOverlay {
       },
     }).setVisible(false);
     objects.push(this.testAreaBtn.getRoot());
+    this.testAreaBtn.getRoot().add(forestOrnament(this.scene, 'leaves', 96, 0, 64, 64));
 
     this.container = this.scene.add.container(0, 0, objects).setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.container);
@@ -465,11 +466,11 @@ export class LobbyOverlay {
     this.rosterScroller = new LobbyRosterScroller(this.scene, this.container,
       () => this.visible && !this.settings?.isOpen() && !this.playerContextMenu?.isOpen(),
       () => { this.loadoutTooltip?.hide(); this.playerNameTooltip?.hide(); this.layoutList(); });
-    this.playerContextMenu = new UiContextMenu(this.scene, this.container, DEPTH.OVERLAY + 3);
-    this.loadoutTooltip = new UiTooltip(this.scene, 280);
+    this.playerContextMenu = new UiContextMenu(this.scene, this.container, DEPTH.OVERLAY + 3, 'forest');
+    this.loadoutTooltip = new UiTooltip(this.scene, 280, undefined, undefined, 'forest');
     this.loadoutTooltipRoot = this.loadoutTooltip.build();
     this.container.add(this.loadoutTooltipRoot);
-    this.playerNameTooltip = new UiTooltip(this.scene, 180);
+    this.playerNameTooltip = new UiTooltip(this.scene, 180, undefined, undefined, 'forest');
     this.playerNameTooltipRoot = this.playerNameTooltip.build();
     this.container.add(this.playerNameTooltipRoot);
     // Im Normalzustand unsichtbar; im Fehlerfall sitzt der Banner ueber dem Panel, ohne dessen
@@ -487,8 +488,8 @@ export class LobbyOverlay {
     this.systemBar.setVisible(this.visible);
 
     // Eigener Container: seine Sichtbarkeit folgt der World-Teilnahme, nicht dem Lobby-Panel.
-    this.worldExitBtn = new UiButton(this.scene, {
-      x: WORLD_EXIT_BTN_X, y: SYSTEM_BAR_Y, w: WORLD_EXIT_BTN_W, h: SYSTEM_BAR_H,
+    this.worldExitBtn = new UiButton(this.scene, { skin: 'forest',
+      ...LOBBY_WORLD_BUTTON,
       label: t('ui.lobby.returnToLobby'),
       labelRole: 'labelSm',
       intent: 'secondary',
@@ -503,6 +504,7 @@ export class LobbyOverlay {
       .setDepth(DEPTH.OVERLAY);
     promoteToClarityCamera(this.scene, this.worldExitBar);
     this.worldExitBar.setVisible(false);
+    this.worldExitBtn.getRoot().add(forestOrnament(this.scene, 'leaves', 96, 0, 64, 64));
 
     this.refreshHeader();
     this.updateRoomActionButtons();
@@ -568,6 +570,7 @@ export class LobbyOverlay {
       this.worldExitBar = null;
     }
     this.playerRows.clear();
+    this.forestRelief = null;
     this.inviteCopyIcon = null;
   }
 
@@ -588,7 +591,7 @@ export class LobbyOverlay {
 
   /**
    * Synchronisiert die Teilnahme an der LobbyWorld. Der Entry sitzt zwischen den Lobby-Karten;
-   * der Exit bleibt davon getrennt unten rechts sichtbar, sobald der lokale Spieler interaktiv
+   * der Exit bleibt an derselben Stelle sichtbar, sobald der lokale Spieler interaktiv
    * teilnimmt.
    */
   setWorldEntryState(state: { readonly inside: boolean; readonly canEnter: boolean } | null): void {
@@ -606,10 +609,7 @@ export class LobbyOverlay {
       ?.setVisible(showEntry)
       .setEnabled(showEntry && this.worldEntryAvailable && this.worldEntryEnabled
         && !this.btnLocked && !this.connectionEnded);
-    // Der Button sitzt im eigenen Container; die Ankerwahl verschiebt ihn, statt ihn neu zu bauen.
-    this.worldExitBar
-      ?.setX(this.visible ? 0 : WORLD_EXIT_BTN_SOLO_X - WORLD_EXIT_BTN_X)
-      .setVisible(showExit);
+    this.worldExitBar?.setVisible(showExit);
     this.worldExitBtn?.setEnabled(showExit && !this.connectionEnded);
   }
 
@@ -637,6 +637,13 @@ export class LobbyOverlay {
 
   isVisible(): boolean {
     return this.visible;
+  }
+
+  getBackdropSurface(): BackdropSurface | null {
+    if (!this.container?.visible) return null;
+    return { x: PANEL_X + LOBBY_CARD.glassInset, y: PANEL_Y + LOBBY_CARD.glassInset + this.container.y,
+      width: PANEL_W - LOBBY_CARD.glassInset * 2, height: PANEL_H_MAX - LOBBY_CARD.glassInset * 2,
+      radius: 22, alpha: this.container.alpha };
   }
 
   /** Ein terminaler Fehlerbanner muss auch ohne fertig aufgebaute World sichtbar werden. */
@@ -719,7 +726,7 @@ export class LobbyOverlay {
       } else {
         const row = this.playerRows.get(profile.id)!;
         row.name.setText(profile.name.slice(0, PLAYER_NAME_MAX_LENGTH));
-        row.name.setColor(toCssColor(COLORS.GREY_1));
+        row.name.setColor(toCssColor(FOREST.text));
         this.refreshPlayerLoadout(profile.id, row);
       }
       this.setPlayerRowInteractive(profile.id, this.playerRows.get(profile.id)!.bg);
@@ -962,7 +969,7 @@ export class LobbyOverlay {
       .setScrollFactor(0);
 
     const name = this.scene.add.text(CONTENT_L + 40, LIST_Y, profile.name, textStyle('body', {
-      color: COLORS.GREY_1,
+      color: FOREST.text,
     })).setOrigin(0, 0.5).setScrollFactor(0);
     name.setText(profile.name.slice(0, PLAYER_NAME_MAX_LENGTH));
     name
@@ -1086,7 +1093,7 @@ export class LobbyOverlay {
     LOADOUT_SLOTS.forEach((slot, index) => {
       const presentation = presentations[index];
       if (!presentation) return;
-      const control = createLoadoutSlotControl(this.scene, {
+      const control = createLoadoutSlotControl(this.scene, { skin: 'forest',
         x: LOADOUT_FRAME_PADDING_X + LOADOUT_ICON_SIZE / 2 + index * slotStep,
         y: 0,
         width: LOADOUT_ICON_SIZE,
@@ -1222,6 +1229,9 @@ export class LobbyOverlay {
     })));
     const teamMode = hasTeamSelection(mode);
     const height = slots.length * ROSTER_ROW_STEP + (teamMode ? TEAM_HEADER_H * 2 : 0);
+    const relief = getLobbyReliefBounds(height);
+    this.forestRelief?.setVisible(relief !== null);
+    if (relief) this.forestRelief?.setPosition(relief.x, relief.y).setDisplaySize(relief.width, relief.height);
     this.rosterScroller.setContentHeight(height);
     let y = LIST_Y - this.rosterScroller.scrollOffset;
     const inView = (top: number, height: number) => top >= LIST_Y && top + height <= LOBBY_CARD.rosterBottom;
@@ -1262,9 +1272,8 @@ export class LobbyOverlay {
    * beansprucht und dem Fortschrittsband seine Auszeichnung genommen.
    */
   private panelTexture(height: number): string {
-    return ensureLobbyPanelTexture(
-      this.scene, `_lobby_panel_${Math.round(height)}`, PANEL_W, height, COLORS.GREY_8, BORDER.default,
-    );
+    return ensureForestPanel(this.scene, PANEL_W - LOBBY_CARD.glassInset * 2,
+      height - LOBBY_CARD.glassInset * 2, true);
   }
 
   private positionPlayerRow(
@@ -1303,14 +1312,14 @@ export class LobbyOverlay {
     accentColor?: number,
   ): string {
     return ensureRoundedTexture(this.scene, {
-      key: rowTextureKey(width, height, ghost, own, accentColor),
+      key: '_forest' + rowTextureKey(width, height, ghost, own, accentColor),
       w: width,
       h: height,
       radius: 10,
-      topColor: ghost ? COLORS.GREY_7 : COLORS.GREY_6,
-      bottomColor: COLORS.GREY_8,
+      topColor: ghost ? FOREST.sunken : FOREST.raised,
+      bottomColor: FOREST.sunken,
       fillAlpha: ghost ? 0.18 : own ? 0.76 : 0.66,
-      strokeColor: ghost ? COLORS.GREY_5 : COLORS.GREY_4,
+      strokeColor: FOREST.border,
       strokeAlpha: ghost ? 0.1 : own ? 0.72 : 0.46,
       strokeWidth: own ? 2 : 1,
       highlightAlpha: ghost ? 0.01 : 0.04,
@@ -1323,12 +1332,12 @@ export class LobbyOverlay {
   /** Ruhige Tray-Flaeche, die die vier zusammengehoerenden Loadout-Slots klar gruppiert. */
   private loadoutFrameTexture(): string {
     return ensureRoundedTexture(this.scene, {
-      key: `_lobby_loadout_tray_${LOADOUT_FRAME_W}x${LOADOUT_FRAME_H}`,
+      key: `_lobby_forest_loadout_tray_${LOADOUT_FRAME_W}x${LOADOUT_FRAME_H}`,
       w: LOADOUT_FRAME_W,
       h: LOADOUT_FRAME_H,
       radius: 7,
-      topColor: COLORS.GREY_8,
-      bottomColor: COLORS.GREY_9,
+      topColor: FOREST.field,
+      bottomColor: FOREST.sunken,
       fillAlpha: 0.18,
       strokeColor: BORDER.subtle,
       strokeAlpha: 0.38,
