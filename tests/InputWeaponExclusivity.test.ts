@@ -44,6 +44,8 @@ function createInput(getWeapon2Config: () => typeof WEAPON_CONFIGS.TESLA_DOME | 
     sendLocalInput: vi.fn(),
     sendDash: vi.fn(),
     sendBurrowRequest: vi.fn(),
+    sendTurretControlRequest: vi.fn(),
+    isEnemyPair: () => false,
   };
   const scene = { input: { activePointer: pointer } };
   const system = new InputSystem(scene as never, bridge as never, () => ({ x: 0, y: 0 } as never));
@@ -111,6 +113,31 @@ describe('authoritative dash input feedback', () => {
 });
 
 describe('weapon input exclusivity', () => {
+  it('prioritizes Shift exit, then entry, then Burrow and blocks all mounted loadout input', () => {
+    const f = createInput(() => WEAPON_CONFIGS.AWP);
+    let state: import('../src/types').TurretControlState | undefined;
+    let available = true;
+    f.system.setupTurretControlProviders({ isEnabled: () => true, getState: () => state,
+      getTurrets: () => available ? [{ id: 1, x: 60, y: 0, ownerId: 'friend', ownerColor: 1 }] : [] });
+    const keys = f.system as any;
+    keys.keyShift.justDown = true; keys.keySpace.justDown = true;
+    f.system.update();
+    expect(f.bridge.sendTurretControlRequest).toHaveBeenLastCalledWith({ action: 'enter', turretId: 1 });
+    expect(f.bridge.sendBurrowRequest).not.toHaveBeenCalled(); expect(f.bridge.sendDash).not.toHaveBeenCalled();
+    expect(f.uses).toEqual([]);
+    state = { turretId: 1, revision: 2 };
+    f.system.setInputEnabled(false); f.system.setTurretInputEnabled(true);
+    f.pointerState.left = true; f.pointerState.right = true; keys.keyE.justDown = true;
+    f.system.update();
+    expect(f.bridge.sendTurretControlRequest).toHaveBeenLastCalledWith({ action: 'exit', ...state });
+    expect(f.bridge.sendLocalInput).toHaveBeenLastCalledWith(expect.objectContaining({ dx: 0, dy: 0, dashHeld: false,
+      turretControl: { ...state, targetX: expect.any(Number), targetY: expect.any(Number), fireHeld: true } }));
+    expect(f.uses).toEqual([]); expect(f.bridge.sendDash).not.toHaveBeenCalled();
+    state = undefined; available = false; keys.keySpace.justDown = false;
+    f.pointerState.left = false; f.pointerState.right = false; keys.keyE.justDown = false;
+    f.system.setInputEnabled(true); f.system.update();
+    expect(f.bridge.sendBurrowRequest).toHaveBeenCalledWith(true);
+  });
   it('cancels an in-progress RMB scope when LMB is pressed and never fires the stale RMB release', () => {
     const { system, pointerState, uses } = createInput(() => WEAPON_CONFIGS.AWP);
 

@@ -111,6 +111,11 @@ export function composeWorldCombatGameplay(
   }
   const combatSystem = gameplay.combatSystem;
   if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
+  combatSystem.setPlayerMountedResolver(id => bridge.isHost()
+    ? gameplay.player?.isControllingTurret(id) ?? false
+    : !!bridge.getLatestGameState()?.players[id]?.turretControl);
+  worldRuntime.bind({ destroy: () => combatSystem.setPlayerMountedResolver(null) });
+  worldRuntime.bind({ destroy: () => combatSystem.setPlayerMountedResolver(null) });
   // Eine Basisaenderung trifft alle Felder gemeinsam: Der Coordinator verschickt den Patch
   // prioritaer und sperrt die entfallenen Zielzellen sofort, bis das neue Feld aktiv ist.
   const syncActiveBaseIds = (): void => {
@@ -228,6 +233,7 @@ export function composeWorldCombatGameplay(
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
     getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
     getPlayerCombatIntegration: () => gameplay.player?.getPlayerCombatIntegrationPort() ?? null,
+    getManualTurretControl: (id, now) => gameplay.player?.getManualTurretControl(id, now) ?? null,
     bindPlayerShieldBuffPort: (port) => gameplay.player?.bindShieldBuffPort(port),
     automatedWeaponExecution: gameplay.automatedWeaponExecution,
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,

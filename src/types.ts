@@ -150,6 +150,7 @@ export interface CoopDefenseMissionProgressPresentationState {
 
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
 export interface PlayerInput {
+  turretControl?: TurretControlInput;
   dx: number;  // -1 | 0 | 1
   dy: number;  // -1 | 0 | 1
   aim: number; // Aim-Winkel quantisiert als uint8 (0-255 → 0-2π)
@@ -157,6 +158,16 @@ export interface PlayerInput {
   /** World-Instanz, aus der dieser Input stammt; veraltete Inputs werden verworfen. */
   worldRevision?: number;
 }
+
+export interface TurretControlState { readonly turretId: number | string; readonly revision: number }
+export interface TurretControlInput extends TurretControlState {
+  readonly targetX: number;
+  readonly targetY: number;
+  readonly fireHeld: boolean;
+}
+export type TurretControlRequest =
+  | { readonly action: 'enter'; readonly turretId: number | string }
+  | ({ readonly action: 'exit' } & TurretControlState);
 
 export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel';
 
@@ -219,6 +230,7 @@ export interface SyncedActiveHudBuff {
 
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
 export interface PlayerNetState {
+  turretControl?: TurretControlState;
   rocketMagazine?: RocketMagazineState;
   pressureShieldUntil?: number;
   rocketHealSequence?: number;

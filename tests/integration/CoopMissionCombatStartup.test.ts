@@ -66,6 +66,11 @@ vi.mock('../../src/network/bridge', () => ({
     getLocalPlayerId: () => 'local',
     isLocalSpectator: () => false,
     isHost: () => true,
+    isArenaCountdownActive: vi.fn(() => false),
+    getActivityDescriptor: () => null,
+    getPlayerHeldItemId: () => null,
+    getPlayerInput: () => null,
+    flushEffects: () => {},
     getWorldParticipation: () => 'interactive',
     getLocalWorldParticipation: () => 'interactive',
     clearWeapon2PredictionState: () => {},
@@ -79,6 +84,8 @@ vi.mock('../../src/arena/BaseRegistry', () => ({
 }));
 
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
+import { HostUpdateCoordinator } from '../../src/scenes/arena/HostUpdateCoordinator';
+import { bridge } from '../../src/network/bridge';
 import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { CoopMissionRuntime } from '../../src/activity/CoopMissionRuntime';
 import { CoopMissionPlayerRuntime } from '../../src/activity/CoopMissionPlayerRuntime';
@@ -330,6 +337,7 @@ describe('Coop mission combat startup', () => {
       hostPhysics: { removePlayer: () => {} },
     };
     coordinator.clientUpdate = { removePlayerState: () => {} };
+    coordinator.hostUpdate = { removePlayerState: () => {} };
     coordinator.worldGameplay = {
       combatSystem: combat,
       player: null,
@@ -341,6 +349,113 @@ describe('Coop mission combat startup', () => {
     coordinator.worldRuntime = { players, activity: { runtime: mission } };
     return { coordinator, combat, budget, activityPlayers, profile, actors, liveActors };
   }
+
+  function spawnAudioFixture() {
+    const f = reconnectFixture(1);
+    const audio = { playSound: vi.fn(), stopLoop: vi.fn() };
+    const noop = () => {};
+    Object.assign(f.coordinator.ctx, {
+      getWorldCombatCore: () => f.combat,
+      gameAudioSystem: audio,
+      effectSystem: {
+        clearBurrowState: noop, syncZeusUpgrades: noop, syncMgAttrition: noop,
+        syncPlayerBurrowState: noop,
+      },
+      hostPhysics: { removePlayer: noop, update: noop, getDashPhase: () => 0, isBurrowDash: () => false },
+      decoySystem: {
+        hostUpdateLifecycle: noop, hostPostPhysics: noop, createHostSnapshots: () => [], isStealthed: () => false,
+      },
+      fireSystem: { hostUpdate: () => ({ synced: [], ground: { cells: [] }, damageEvents: [], damageTick: false }) },
+      stinkCloudSystem: {
+        hostUpdate: () => ({ synced: [], damageEvents: [] }), syncPlagueVisuals: noop, clientUpdate: noop,
+      },
+      smokeSystem: { syncVisuals: noop, syncTargetVisuals: noop },
+    });
+    const host = new HostUpdateCoordinator({} as never, f.coordinator.ctx, null as never, {} as never, {} as never);
+    host.setWorldFramePort({
+      getWorldRuntime: () => ({ context: { descriptor: { definitionId: 'world:lobby' } } }),
+      getWorldMutationRuntime: () => null,
+      getTrainRuntime: () => null,
+    } as never);
+    f.coordinator.hostUpdate = host;
+    const tick = () => {
+      for (const actor of f.liveActors.values()) {
+        Object.assign(actor, {
+          body: { enable: true, velocity: { x: 0, y: 0 } },
+          updateHP: noop, updateArmor: noop, updateBurnStacks: noop, setVisible: noop, setTurretMounted: noop,
+          setWalking: noop, setRageTint: noop, setDecoyStealth: noop, setHeldItemId: noop,
+          syncBar: noop, setMovementDashPhase: noop, setBurrowPhase: noop,
+        });
+      }
+      // No elapsed simulation time is needed to reconcile a newly attached player.
+      host.runHostUpdate(0);
+    };
+    return { ...f, host, audio, tick };
+  }
+
+  it('plays one spawn sound on every World reattach without replaying it for an unchanged live player', () => {
+    const f = spawnAudioFixture();
+    for (let entry = 1; entry <= 3; entry++) {
+      expect(f.coordinator.attachPlayerToWorld(f.profile, false)).toBe(true);
+      f.tick();
+      f.tick();
+      expect(f.audio.playSound).toHaveBeenCalledTimes(entry);
+      expect(f.audio.playSound).toHaveBeenLastCalledWith('sfx_player_spawn', 10, 20, f.profile.id);
+      f.coordinator.detachPlayerFromWorld(f.profile.id);
+      f.coordinator.detachPlayerFromWorld(f.profile.id);
+    }
+  });
+
+  it('defers spawn audio until the countdown ends and still plays it after death and respawn', () => {
+    const f = spawnAudioFixture();
+    const countdown = vi.mocked(bridge.isArenaCountdownActive);
+    countdown.mockReturnValue(true);
+    try {
+      f.coordinator.attachPlayerToWorld(f.profile, false);
+      f.tick();
+      f.tick();
+      expect(f.audio.playSound).not.toHaveBeenCalled();
+      countdown.mockReturnValue(false);
+      f.tick();
+      f.tick();
+      expect(f.audio.playSound).toHaveBeenCalledTimes(1);
+      f.combat.applyDamage(f.profile.id, 10_000);
+      f.tick();
+      expect(f.audio.playSound).toHaveBeenCalledTimes(1);
+      f.combat.advancePlayerLifecycle(100_000);
+      expect(f.combat.isAlive(f.profile.id)).toBe(true);
+      f.tick();
+      f.tick();
+      expect(f.audio.playSound).toHaveBeenCalledTimes(2);
+    } finally {
+      countdown.mockReturnValue(false);
+    }
+  });
+
+  it('cleans only the departing player and stops owned loops even while presentation is hidden', () => {
+    const { host, audio } = spawnAudioFixture();
+    const state = host as any;
+    const maps = [
+      state.prevAliveStates, state.prevDashPhases, state.prevBurrowPhases, state.prevStealthStates,
+      state.dashPhase2StartTimes, state.dashTrailTimers,
+    ];
+    for (const map of maps) {
+      map.set('p1', 1);
+      map.set('local', 2);
+    }
+    state.burrowLoopHandles.set('p1', 'remote-burrow');
+    state.burrowLoopHandles.set('local', 'local-burrow');
+    state.moveLoopHandle = 'local-move';
+    host.setPresentationActive(false);
+    host.removePlayerState('p1');
+    host.removePlayerState('p1');
+    expect(audio.stopLoop.mock.calls).toEqual([['remote-burrow']]);
+    for (const map of maps) expect([...map.entries()]).toEqual([['local', 2]]);
+    host.removePlayerState('local');
+    host.removePlayerState('local');
+    expect(audio.stopLoop.mock.calls).toEqual([['remote-burrow'], ['local-burrow'], ['local-move']]);
+    for (const map of maps) expect(map.size).toBe(0);
+  });
 
   it('reconnects through Death -> full Detach -> Reattach and consumes the remaining budget once', () => {
     const f = reconnectFixture(1);

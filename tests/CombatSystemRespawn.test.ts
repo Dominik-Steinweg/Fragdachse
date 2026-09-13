@@ -169,6 +169,31 @@ function primaryRewardFixture() {
 }
 
 describe('primary hit reward cutover', () => {
+  it('excludes occupants from projectile, hitscan, melee, area and raw damage without disabling their sources', () => {
+    const f = primaryRewardFixture();
+    f.combat.addArmor('p2', 35);
+    const before = { hp: f.combat.getHP('p2'), armor: f.combat.getArmor('p2') };
+    f.combat.setPlayerMountedResolver(id => id === 'p2');
+    expect(f.combat.isPlayerTargetable('p2')).toBe(false);
+    expect(f.combat.canDamageTarget('p1', 'p2')).toBe(false);
+    expect(f.combat.canDamageTarget('p2', 'p1')).toBe(true);
+    f.combat.resolveDirectImpact(f.request);
+    f.combat.applyDamage('p2', 1000, true, 'p1', 'burn', undefined, { damageKind: 'burn' });
+    f.combat.applyAoeDamage(100, 100, 200, 1000, 'p1', false);
+    const common = { shooterId: 'p1', damage: 1000, adrenalinGain: 0, sourceId: 'test', color: 1,
+      sourceSlot: 'weapon1' as const, rockDamageMult: 0, trainDamageMult: 0, baseDamageMult: 0 };
+    Object.assign(f.combat, { traceHitscan: () => ({ endX: 100, endY: 100, hitPlayerId: 'p2', hitEnemyId: null, hitDecoyId: null, hitObstacle: false }) });
+    f.combat.resolveImmediateAttack({ kind: 'hitscan', payload: { ...common, startX: 0, startY: 100,
+      angle: 0, range: 200, traceThickness: 1, visualPreset: 'default' }, origin: { x: 0, y: 100 }, aim: { x: 1, y: 0 }, range: 200 });
+    f.combat.resolveImmediateAttack({ kind: 'melee', payload: { ...common, x: 100, y: 100,
+      angle: 0, range: 200, arcDegrees: 360, visualPreset: 'default', hitHeal: 0, hitAdrenaline: 0, bloodEffectMultiplier: 1 },
+      origin: { x: 100, y: 100 }, aim: { x: 1, y: 0 }, range: 200 });
+    expect({ hp: f.combat.getHP('p2'), armor: f.combat.getArmor('p2') }).toEqual(before);
+    expect(f.facts).toEqual([]);
+    f.combat.setPlayerMountedResolver(null);
+    f.combat.resolveDirectImpact(f.request);
+    expect(f.combat.getArmor('p2')).toBeLessThan(before.armor);
+  });
   it.each([4, null])('carries a real equipped weapon action through combat with Activity/practice revision %s', activityRevision => {
     const f = lifecycleFixture();
     f.players.get('p1')!.x = 0;

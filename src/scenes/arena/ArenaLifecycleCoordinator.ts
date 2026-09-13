@@ -582,6 +582,7 @@ export class ArenaLifecycleCoordinator {
       },
       detachEntity: (playerId) => {
         this.ctx.effectSystem.clearBurrowState(playerId);
+        this.hostUpdate.removePlayerState(playerId);
         this.clientUpdate.removePlayerState(playerId);
         this.ctx.hostPhysics.removePlayer(playerId);
         this.ctx.playerManager.removePlayer(playerId);
@@ -708,6 +709,7 @@ export class ArenaLifecycleCoordinator {
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
     }) ?? null;
     this.coopMissionPorts = createArenaCoopMissionPorts({
+      getTurretControlState: id => this.worldPlayerGameplayRuntime?.getTurretControlState(id),
       getSmokePerception: () => this.worldGameplay?.support?.smoke.runtime ?? null,
       ctx,
       getWorldRuntime: () => this.worldRuntime,
@@ -2368,12 +2370,16 @@ export class ArenaLifecycleCoordinator {
    * ein Client benutzt dieselbe reine Regel nur fuer Eingabe-UX und Vorschau.
    */
   getPlayerCapabilities(playerId: string): PlayerCapabilities {
-    return resolvePlayerCapabilities({
+    const capabilities = resolvePlayerCapabilities({
       participation: this.getWorldParticipation(playerId),
       activityKind: this.worldLifecycle.activity.kind,
       worldCombatAllowed: this.worldLifecycle.activity.kind !== null
         || this.worldRuntime?.context.definition?.actionPolicy?.combat === true,
     });
+    const occupied = bridge.isHost() ? this.worldPlayerGameplayRuntime?.isControllingTurret(playerId)
+      : !!bridge.getLatestGameState()?.players[playerId]?.turretControl;
+    return occupied ? { ...capabilities, canMove: false, canInteract: false, canPlace: false,
+      canDismantle: false, canUseMissionActions: false } : capabilities;
   }
 
   /**

@@ -3,7 +3,7 @@ vi.mock('phaser', () => ({
   Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)) },
 }));
 vi.mock('../../src/network/bridge', () => ({
-  bridge: { canPlayerReceiveRoundRewards: () => true },
+  bridge: { canPlayerReceiveRoundRewards: () => true, registerTurretControlHandler: vi.fn() },
 }));
 vi.mock('../../src/world/WorldPlayerGameplayRuntime', async importOriginal => {
   const actual = await importOriginal<typeof import('../../src/world/WorldPlayerGameplayRuntime')>();
@@ -11,7 +11,7 @@ vi.mock('../../src/world/WorldPlayerGameplayRuntime', async importOriginal => {
     constructor(options: unknown) {
       // Omit unrelated graph construction; retain the real resource binding and host tick.
       return Object.assign(Object.create(actual.WorldPlayerGameplayRuntime.prototype), {
-        options, heldActionUtilityIds: new Map(),
+        options, heldActionUtilityIds: new Map(), turretControl: { reconcile() {} },
         systems: { burrow: { setWorldGeometryQueries() {} }, translocator: { getPortalPairs: () => [], update() {} } },
       });
     }

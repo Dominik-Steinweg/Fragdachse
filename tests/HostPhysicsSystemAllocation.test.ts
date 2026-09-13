@@ -26,6 +26,20 @@ import { CELL_SIZE } from '../src/config';
 import { CoopDefenseMissionBarrierManager } from '../src/systems/CoopDefenseMissionBarrierManager';
 
 describe('mission barrier burrow collision', () => {
+  it('pins an occupant without teleport revisions and rejects recoil and forced movement until release', () => {
+    const h = createHarness(); const player = createMockPlayer('pilot');
+    h.players.set(player.id, player);
+    Object.assign(player.body, { reset: vi.fn((x: number, y: number) => { player.x = x; player.y = y; }), enable: true });
+    Object.assign(player, { positionRevision: 8 });
+    h.system.setPlayerMounted('pilot', { x: 450, y: 300 });
+    h.system.addRecoil('pilot', 100, 100); h.system.setForcedMovement('pilot', 200, 200);
+    h.system.update(); h.system.update();
+    expect(player.body.enable).toBe(false); expect([player.x, player.y]).toEqual([450, 300]);
+    expect(player.positionRevision).toBe(8); expect(h.system.hasForcedMovement('pilot')).toBe(false);
+    h.system.setPlayerMounted('pilot', null);
+    expect(player.body.enable).toBe(true);
+    h.system.update(); expect(player.setVelocity).toHaveBeenLastCalledWith(expect.any(Number), expect.any(Number));
+  });
   it.each([false, true])('blocks underground players, including lazy colliders (burrow first: %s)', (burrowFirst) => {
     const h = createHarness();
     const player = createMockPlayer('p');

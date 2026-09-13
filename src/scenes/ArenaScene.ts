@@ -18,6 +18,7 @@ import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadBaseGroundingAssets } from '../arena/BaseGroundingConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravelConfig';
+import { preloadTrackGravelAssets } from '../arena/TrackGravelConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationAssets } from '../arena/RockVegetationConfig';
 import { preloadTurretVisualAssets, registerTurretAnimations } from '../config/turretVisuals';
@@ -114,6 +115,7 @@ import { getRenderResolutionController, toDesignSpace } from '../graphics/Render
 import { installTextResolution } from '../graphics/TextResolution';
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
+  getCoopDefenseNumericStatTotals,
   getCoopDefenseUpgradeTextureKey,
   hasCoopDefenseDedicatedUpgradeIcon,
 } from '../utils/coopDefenseUpgrades';
@@ -296,7 +298,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('gras_bg_tile', './assets/sprites/gras_bg_tile.png');
     this.load.image('gras_detail_tile', './assets/sprites/gras_detail_tile.png');
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
-    this.load.image('bg_tracks',  './assets/sprites/64x32tracks.png');
+    this.load.image('bg_tracks', './assets/sprites/BahnstreckeSchienen.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('walls', './assets/sprites/walls47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('mission_barrier', './assets/sprites/missionbarrier47blob.png', { frameWidth: 32, frameHeight: 32 });
@@ -312,6 +314,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadBaseGroundingAssets(this.load);
     preloadGroundCoverAssets(this.load);
     preloadPersistentBaseGravelAssets(this.load);
+    preloadTrackGravelAssets(this.load);
     preloadRockMossAssets(this.load);
     preloadRockVegetationAssets(this.load);
     preloadTurretVisualAssets(this.load);
@@ -1118,6 +1121,15 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     this.arenaRuntime.initialize();
+    inputSystem.setupTurretControlProviders({
+      getTurrets: () => this.arenaRuntime.getTurretDefinitions(),
+      getState: id => bridge.isHost() ? this.arenaRuntime.getTurretControlState(id) : bridge.getLatestGameState()?.players[id]?.turretControl,
+      isEnabled: () => {
+        const loadout = bridge.getPlayerCurrentLoadoutSnapshot(bridge.getLocalPlayerId());
+        return isCoopDefenseMode(bridge.getActiveGameMode()) && !!loadout?.coopDefenseProfile
+          && (getCoopDefenseNumericStatTotals(loadout.coopDefenseProfile, loadout.coopDefenseClassId ?? undefined)['player.turretControlEnabled'] ?? 0) > 0;
+      },
+    });
     const inputBindings = new ArenaInputBindings({
       scene: this,
       inputSystem,
@@ -1445,6 +1457,15 @@ export class ArenaScene extends Phaser.Scene {
     diagnosticsFrame?.mark('visualCameraEnd');
 
     this.combatPresentation?.sync({ inArena, delta }, diagnosticsFrame);
+    this.renderers.turretAnimations.syncControl(
+      bridge.getConnectedPlayers().flatMap(profile => {
+        const state = bridge.isHost() ? this.arenaRuntime.getTurretControlState(profile.id)
+          : bridge.getLatestGameState()?.players[profile.id]?.turretControl;
+        return state ? [{ id: String(state.turretId), color: profile.colorHex }] : [];
+      }),
+      this.ctx.inputSystem.getTurretCandidate(),
+      t('ui.turretControl.enter'),
+    );
 
     const {
       showAim,

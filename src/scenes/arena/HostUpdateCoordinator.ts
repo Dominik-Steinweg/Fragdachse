@@ -292,6 +292,23 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   setClassicTrainSpawned(v: boolean): void { this.classicTrainSpawned = v; }
   getClassicTrainSpawned(): boolean { return this.classicTrainSpawned; }
 
+  /** Presentation history belongs to this player's current World attachment. */
+  removePlayerState(playerId: string): void {
+    const burrowLoop = this.burrowLoopHandles.get(playerId);
+    if (burrowLoop) this.ctx.gameAudioSystem.stopLoop(burrowLoop);
+    this.burrowLoopHandles.delete(playerId);
+    this.prevBurrowPhases.delete(playerId);
+    this.prevAliveStates.delete(playerId);
+    this.prevDashPhases.delete(playerId);
+    this.prevStealthStates.delete(playerId);
+    this.dashPhase2StartTimes.delete(playerId);
+    this.dashTrailTimers.delete(playerId);
+    if (playerId !== bridge.getLocalPlayerId()) return;
+
+    if (this.moveLoopHandle) this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle);
+    this.moveLoopHandle = null;
+  }
+
   resetPerRound(): void {
     this.active = true;
     this.netTickAccumulator = 0;
@@ -682,6 +699,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     // Host-local visuals each frame
+    this.playerGameplayRuntime?.reconcileTurretControl();
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       const hp    = this.ctx.getWorldCombatCore()!.getHP(player.id);
       const maxHp = this.ctx.getWorldCombatCore()!.getMaxHp(player.id);
@@ -697,6 +715,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const burn = this.ctx.getWorldCombatCore()!.getBurnVisualState(player.id, now);
       player.updateBurnStacks(burn.stackCount, burn.visualStyle);
       player.setVisible(alive);
+      player.setTurretMounted(this.playerGameplayRuntime?.isControllingTurret(player.id) ?? false);
       player.setWalking(isVelocityMoving(player.body.velocity.x, player.body.velocity.y) && alive);
       player.setRageTint(this.playerGameplayRuntime?.isUltimateActive(player.id) ?? false);
       const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
@@ -753,7 +772,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const pedestals   = this.powerUpSystem?.getPedestalSnapshot()  ?? [];
     const nukes       = this.powerUpSystem?.getNukeSnapshot()      ?? [];
     this.effects?.syncZeusUpgrades(this.zeusBinding?.snapshot(now) ?? { balls: [], ground: [], stuns: [] }, now, (id, kind) => {
-      if (kind === 'player') { const p = this.ctx.playerManager.getPlayer(id); return p?.active ? { x: p.x, y: p.y, radius: p.getCollisionRadius() } : null; }
+      if (kind === 'player') { const p = this.ctx.playerManager.getPlayer(id); return p?.active && !this.playerGameplayRuntime?.isControllingTurret(id) ? { x: p.x, y: p.y, radius: p.getCollisionRadius() } : null; }
       const e = this.coopMissionRuntime?.enemyManager?.getEnemy(id);
       return e?.sprite.active && e.getHp() > 0 && !e.isBurrowed() ? { x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius() } : null;
     });
@@ -1040,6 +1059,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       player.updateMolotovFirewalker(playerFrame?.isMolotovFirewalkerActive ?? false);
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
+        turretControl: playerFrame?.turretControl,
         ...this.ctx.getWorldCombatCore()!.getRocketSupportState(player.id, now),
         rocketMagazine: playerFrame?.rocketMagazine,
         positionRevision: player.positionRevision,

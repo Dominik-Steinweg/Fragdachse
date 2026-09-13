@@ -219,6 +219,7 @@ export class TerrainColorSnapshotBuilder {
     groundSurface?.renderSnapshotPersistentBaseGravel(this.scratch, region, renderScale);
     groundSurface?.renderSnapshotGroundCover(this.scratch, region, renderScale);
     groundSurface?.renderSnapshotPersistentBaseGravelDecoration(this.scratch, region, renderScale);
+    groundSurface?.renderSnapshotTrackGravel(this.scratch, region, renderScale);
     this.renderTracks(layout, region);
     this.renderStaticBases(region);
     groundSurface?.renderSnapshotDecals(this.scratch, region, renderScale);

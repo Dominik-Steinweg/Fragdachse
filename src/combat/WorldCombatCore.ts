@@ -946,6 +946,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.onAuthoritativePositionReset = cb;
   }
   setPlayerActionAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerActionAllowedResolver = resolver; }
+  private playerMountedResolver: ((playerId: string) => boolean) | null = null;
+  setPlayerMountedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerMountedResolver = resolver; }
+  isPlayerTargetable(playerId: string): boolean { return !this.playerMountedResolver?.(playerId); }
   /**
    * Meldung ueber einen direkten Primaerwaffentreffer, der den Gegner nicht getoetet hat.
    * Ausschliesslich `damageKind === 'direct'` und `sourceSlot === 'weapon1'`.
@@ -1090,6 +1093,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   setRockDamageCallback(cb: ((rockIndex: number, damage: number, attackerId: string) => void) | null): void {
     this.onRockDamage = cb;
+  }
+
+  /** Direct field damage to a semantic structure; uses the existing World mutation bindings. */
+  applyStructureDamage(target: { kind: 'construction' | 'base'; id: string }, amount: number, attackerId: string): void {
+    this.runHostExecution(() => {
+      if (target.kind === 'base') this.applyBaseDamage(target.id, amount, attackerId);
+      else this.onRockDamage?.(Number(target.id), amount, attackerId);
+    });
   }
 
   setTrainDamageCallback(cb: ((damage: number, attackerId: string) => void) | null): void {
@@ -1734,6 +1745,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage = false): boolean {
+    if (!this.isPlayerTargetable(targetId)) return false;
     if (!attackerId) return true;
     if (this.playerActionAllowedResolver
       && this.bridge.getPlayerProfile(attackerId)
@@ -1783,6 +1795,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    */
   readCollisionTargets(sink: ProjectileCollisionTargetSink): void {
     for (const player of this.playerManager.getAllPlayers()) {
+      if (!this.isPlayerTargetable(player.id)) continue;
       if (!this.isAlive(player.id)) continue;
       if (this.burrowSystem?.isBurrowed(player.id)) continue;
       const bounds = player.getBounds();
@@ -2109,6 +2122,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   /** Committed effects use saved relationship facts, independently of new-action permission. */
   canProjectileDamageTarget(provenance: ProjectileProvenance, targetId: string, allowTeamDamage = false): boolean {
+    if (!this.isPlayerTargetable(targetId)) return false;
     const saved = this.captureProjectileProvenance(provenance);
     const source = adaptProjectileCombatSource(saved, 0, this.classifyProjectileSource({ provenance: saved }));
     if (this.isBurrowed(targetId)) return false;
@@ -3613,6 +3627,15 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isHitscanTargetCandidate(player.id, shooterId, includeShooter)) continue;
 
+      if (player.id === shooterId) {
+        // A muzzle overlapping its moving owner must be allowed to leave the owner's
+        // hit circle. Support beams arriving from outside can still heal the shooter.
+        const radius = player.getHitRadius() + traceThickness * 0.5;
+        const dx = startX - player.x;
+        const dy = startY - player.y;
+        if (dx * dx + dy * dy <= radius * radius) continue;
+      }
+
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
         { x: player.x, y: player.y, hitRadius: player.getHitRadius(), body: player.body },
@@ -3792,6 +3815,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   private isMeleeTargetCandidate(playerId: string, shooterId: string): boolean {
+    if (!this.isPlayerTargetable(playerId)) return false;
     if (playerId === shooterId) return false;
     if (!this.isAlive(playerId)) return false;
     if (this.burrowSystem?.isBurrowed(playerId)) return false;
@@ -3799,6 +3823,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   private isHitscanTargetCandidate(playerId: string, shooterId: string, includeShooter = false): boolean {
+    if (!this.isPlayerTargetable(playerId)) return false;
     if (playerId === shooterId && !includeShooter) return false;
     if (!this.isHitscanTargetAlive(playerId)) return false;
     if (this.isHitscanTargetBurrowed(playerId)) return false;
@@ -4457,6 +4482,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
           && isSameCombatScope(target.scope, this.enemyManager.getCombatTargetRef(target.id)!.scope)
         : isSameCombatScope(target.scope, this.playerVitals.scope),
       resolveTarget: (target, source) => {
+        if (target.kind === 'player' && !this.isPlayerTargetable(target.id)) return null;
         const state = target.kind === 'player' ? this.playerVitals.readVitals(target)
           : target.kind === 'enemy' ? this.enemyManager?.readCombatVitals(target) : null;
         if (!state) return null;

@@ -102,14 +102,14 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
     let best: { x: number; y: number; distance: number } | null = null;
 
     if (this.targetCatalog) {
-      this.targetCatalog.forEachTarget('player-like', (target) => {
+      this.targetCatalog.forEachTarget('player-like-threats', (target) => {
         const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
         if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, positioning.preferredDistancePx + positioning.toleranceP)) return;
         if (best && distance >= best.distance) return;
         if (
           positioning.requireLineOfSight
-          && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, position.x, position.y)
+          && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, position.x, position.y, target.skipRockIndex)
         ) return;
         best = { x: position.x, y: position.y, distance };
       });

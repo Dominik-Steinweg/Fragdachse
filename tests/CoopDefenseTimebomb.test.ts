@@ -54,6 +54,7 @@ describe('Zeitbombendachs', () => {
       getEnemy: () => enemyActive ? enemy : undefined,
     } as unknown as EnemyManager;
     const strategicTargets = {
+      resolve: () => null,
       selectTarget: () => ({ kind: 'player', id: 'p0', x: 100, y: 0, goalCells: [] }),
       getPosition: () => ({ x: 100, y: 0 }),
     } as unknown as EnemyStrategicTargetService;

@@ -395,7 +395,7 @@ export class PlayerEntity {
 
   setNameVisible(visible: boolean): void {
     this.nameLabelVisible = visible;
-    this.nameLabel?.setVisible(visible && this.baseVisible);
+    this.nameLabel?.setVisible(visible && this.baseVisible && !this.turretMounted);
   }
 
   isDecoyStealthedVisual(): boolean {
@@ -596,7 +596,7 @@ export class PlayerEntity {
     this.healthBar = this.healthBars.bind(
       playerHealthBarStyle(this.isEnemy), this.currentHp, this.maxHp,
       this.runtime.x, this.runtime.y + HP_BAR_OFFSET_Y,
-      !this.baseVisible || !this.worldBarsVisible || this.isDecoyStealthed
+      !this.baseVisible || !this.worldBarsVisible || this.isDecoyStealthed || this.turretMounted
         || this.burrowPhase === 'underground' || this.burrowPhase === 'trapped',
     );
   }
@@ -698,6 +698,15 @@ export class PlayerEntity {
     }
 
     this.syncWalkingAnimation();
+  }
+
+  private turretMounted = false;
+  setTurretMounted(mounted: boolean): void {
+    if (mounted === this.turretMounted) return;
+    this.turretMounted = mounted;
+    if (mounted) this.rocketHealingRenderer?.destroyAll();
+    this.applyDisplayVisibility();
+    this.syncOverlays();
   }
 
   /** Spawn-/Respawn-Effekt: Sprite materialisiert sich, Welt-Effekte werden abgespielt.
@@ -1018,7 +1027,7 @@ export class PlayerEntity {
     // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
     if (!this.sprite) return;
     this.stopBurrowTween(false);
-    this.sprite.setVisible(this.baseVisible);
+    this.applyDisplayVisibility();
     this.applySpriteScale(1, 1);
     this.burrowTweenAlpha = 1;
     const state = { progress: 0 };
@@ -1056,7 +1065,7 @@ export class PlayerEntity {
     // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
     if (!this.sprite) return;
     this.stopBurrowTween(false);
-    this.sprite.setVisible(this.baseVisible);
+    this.applyDisplayVisibility();
     const state = { scaleX: 0.72, scaleY: 1.28, alpha: 0.55 };
     this.applySpriteScale(state.scaleX, state.scaleY);
     this.burrowTweenAlpha = state.alpha;
@@ -1091,7 +1100,7 @@ export class PlayerEntity {
     // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
     if (!this.sprite) return;
     const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
-    const visible = this.baseVisible && !hiddenByBurrow;
+    const visible = this.baseVisible && !hiddenByBurrow && !this.turretMounted;
     const barsVisible = visible && this.worldBarsVisible && !this.isDecoyStealthed;
     const alpha = this.burrowTweenAlpha * (this.isDecoyStealthed ? this.stealthTweenAlpha : 1);
     this.sprite.setVisible(visible);

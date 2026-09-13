@@ -71,6 +71,7 @@ export interface CombatLineQueryPort {
  * consumers must not depend on the concrete WorldCombatCore implementation.
  */
 export interface CombatActorStatePort {
+  isPlayerTargetable?(id: string): boolean;
   isStunned?(id: string, now: number): boolean;
   isAlive(id: string): boolean;
   isBurrowed(id: string): boolean;
@@ -131,6 +132,7 @@ export interface CombatAoeDamageOptions {
 }
 
 export interface CombatDamageEffectPort {
+  applyStructureDamage?(target: { kind: 'construction' | 'base'; id: string }, amount: number, attackerId: string): void;
   applyDamage(
     targetId: string,
     amount: number,

@@ -123,6 +123,32 @@ function spreadEnemies(
 }
 
 describe('Tesla dome adrenaline drain', () => {
+  it('gates construction ticks by manual fire without catch-up or cadence gain and preserves carrier LOS', () => {
+    const f = makeSystem();
+    const config = makeTurretConfig(['enemies']);
+    const interval = config.fire.tickInterval;
+    f.enemies.push({ id: 'enemy', x: 50, y: 0 });
+    f.system.setConstructionSourceProvider(() => [{ id: 'base:tesla', ownerId: 'owner', x: 0, y: 0, color: 1,
+      config, damageMultiplier: 2, sourceCarrierBaseId: 'carrier' }]);
+    let held = false;
+    f.system.setManualControlProvider(() => ({ playerId: 'pilot', revision: 1, targetX: 0, targetY: -500,
+      fireHeld: held, fresh: true }));
+    f.system.hostUpdate(0);
+    f.system.hostUpdate(interval * 10);
+    expect(f.combatSystem.applyDamage).not.toHaveBeenCalled();
+    held = true; f.system.hostUpdate(interval * 10 + 1);
+    expect(f.combatSystem.applyDamage).not.toHaveBeenCalled();
+    f.system.hostUpdate(interval * 11);
+    expect(f.combatSystem.applyDamage).toHaveBeenCalledOnce();
+    expect(f.combatSystem.applyDamage).toHaveBeenLastCalledWith('enemy', config.fire.damagePerTick * 2,
+      false, 'owner', config.id, expect.anything(), expect.anything());
+    expect(f.lineOfSight).toHaveBeenCalledWith(0, 0, 50, 0, undefined, 'carrier');
+    held = false; f.system.hostUpdate(interval * 11 + 1);
+    f.system.setManualControlProvider(null); f.system.hostUpdate(interval * 11 + 2);
+    expect(f.combatSystem.applyDamage).toHaveBeenCalledOnce();
+    f.system.hostUpdate(interval * 12);
+    expect(f.combatSystem.applyDamage).toHaveBeenCalledTimes(2);
+  });
   it.each([undefined, 0.4])('applies idle factor %s only without current primary targets', (idleAdrenalineDrainFactor) => {
     const { system, enemies, lineOfSight, resourceSystem } = makeSystem();
     const config = makeConfig(['enemies'], { adrenalineDrainPerSecond: 20, idleAdrenalineDrainFactor });
@@ -161,7 +187,7 @@ describe('Tesla dome base targets', () => {
       slotIndex: 0,
     });
     expect(base.getNearestSurfacePoint).toHaveBeenCalledWith(0, 0);
-    expect(lineOfSight).toHaveBeenCalledWith(0, 0, 120, 0, undefined);
+    expect(lineOfSight).toHaveBeenCalledWith(0, 0, 120, 0, undefined, undefined);
   });
 
   it('never targets friendly or destroyed bases', () => {
@@ -191,7 +217,7 @@ describe('Tesla dome base targets', () => {
 
     expect(damageHandler).toHaveBeenCalledTimes(1);
     expect(synced[0]?.targets[0]).toMatchObject({ x: 180, y: 0, type: 'bases' });
-    expect(lineOfSight).toHaveBeenCalledWith(0, 0, 180, 0, undefined);
+    expect(lineOfSight).toHaveBeenCalledWith(0, 0, 180, 0, undefined, undefined);
   });
 });
 

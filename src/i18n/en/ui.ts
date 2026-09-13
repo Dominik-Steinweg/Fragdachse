@@ -1,4 +1,5 @@
 export const enUi = {
+  "ui.turretControl.enter": "Shift: Man turret",
   "ui.stinkCloud.active": "Active",
   "ui.stinkCloud.cooldown": "Cooldown",
   "ui.timeBubble.flying": "In flight",

@@ -3,6 +3,7 @@ import { addInternalGlowLegacy, type GlowHandle } from '../utils/phaserFx';
 
 const NODE = 'PlayerOuterGlow';
 const registeredManagers = new WeakSet<object>();
+const glowRadiusScales = new WeakMap<object, number>();
 
 // Object-local sampling follows the animated frame. The radial envelope closes the gaps
 // between the badger's head, body and feet, so they cannot become glowing interior edges.
@@ -13,6 +14,7 @@ uniform sampler2D uMainSampler;
 uniform vec2 resolution;
 uniform vec4 glowColor;
 uniform float outerStrength;
+uniform float radiusScale;
 varying vec2 outTexCoord;
 #pragma phaserTemplate(fragmentHeader)
 void main() {
@@ -34,7 +36,7 @@ void main() {
             float weight = exp(-0.5 * pow(radius / 14.0, 2.0)) * radius;
             for (int direction = 0; direction < 12; direction++) {
                 float angle = (float(direction) + float(ring) * 0.375) * 0.523598776;
-                vec2 offset = vec2(cos(angle), sin(angle)) * radius / resolution;
+                vec2 offset = vec2(cos(angle), sin(angle)) * radius * radiusScale / resolution;
                 halo += boundedSampler(uMainSampler, outTexCoord + offset).a * weight;
                 weightSum += weight;
             }
@@ -60,13 +62,15 @@ function createPlayerGlowNode() {
       this.programManager.setUniform('resolution', [drawingContext.width, drawingContext.height]);
       this.programManager.setUniform('glowColor', controller.glcolor);
       this.programManager.setUniform('outerStrength', controller.outerStrength);
+      this.programManager.setUniform('radiusScale', glowRadiusScales.get(controller) ?? 1);
     }
   };
 }
 
 /** Uses the existing filter ownership, quality tracking and teardown for every player form. */
-export function addPlayerGlow(target: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, color: number): GlowHandle | null {
-  const glow = addInternalGlowLegacy(target, color, 4, 0, false, 0.1, 40, 'critical');
+export function addPlayerGlow(target: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image, color: number, radiusScale = 1, strength = 4): GlowHandle | null {
+  const glow = addInternalGlowLegacy(target, color, strength, 0, false, 0.1, 40 * radiusScale, 'critical');
+  if (glow) glowRadiusScales.set(glow, radiusScale);
   const renderer = target.scene.sys?.renderer;
   if (glow && renderer && 'gl' in renderer) {
     const manager = renderer.renderNodes;
@@ -75,7 +79,7 @@ export function addPlayerGlow(target: Phaser.GameObjects.Sprite | Phaser.GameObj
       registeredManagers.add(manager);
     }
     glow.renderNode = NODE;
-    glow.setPaddingOverride?.(-44, -44, 44, 44);
+    glow.setPaddingOverride?.(-44 * radiusScale, -44 * radiusScale, 44 * radiusScale, 44 * radiusScale);
   }
   return glow;
 }

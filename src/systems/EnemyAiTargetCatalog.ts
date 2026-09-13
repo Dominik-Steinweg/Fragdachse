@@ -1,8 +1,10 @@
 import type { EnemyFlowFieldGoalCell } from './EnemyFlowFieldService';
 
-export type EnemyAiTargetKind = 'player' | 'decoy' | 'armed-construct' | 'armed-outpost';
+export type EnemyAiTargetKind = 'player' | 'decoy' | 'armed-construct' | 'armed-outpost' | 'armed-base';
 
 export type EnemyAiTargetGroup =
+  | 'player-threats'
+  | 'player-like-threats'
   | 'player-like'
   | 'players'
   | 'players-and-armed-constructs'
@@ -15,6 +17,8 @@ export interface EnemyAiTargetRef {
 }
 
 export interface EnemyAiTargetCandidate extends EnemyAiTargetRef {
+  readonly representedPlayerIds?: readonly string[];
+  readonly skipRockIndex?: number;
   readonly x: number;
   readonly y: number;
   readonly radius?: number;
@@ -36,7 +40,7 @@ export class EnemyAiTargetCatalog {
 
   updateTargets(candidates: readonly EnemyAiTargetCandidate[]): void {
     this.targets.clear();
-    for (const group of ['player-like', 'players', 'players-and-armed-constructs', 'armed-constructs', 'armed-outposts'] as const) {
+    for (const group of ['player-like', 'players', 'player-threats', 'player-like-threats', 'players-and-armed-constructs', 'armed-constructs', 'armed-outposts'] as const) {
       const entries = this.groups.get(group);
       if (entries) entries.length = 0;
       else this.groups.set(group, []);
@@ -45,6 +49,10 @@ export class EnemyAiTargetCatalog {
     const ordered = [...candidates].sort((left, right) => this.key(left).localeCompare(this.key(right)));
     for (const candidate of ordered) {
       this.targets.set(this.key(candidate), candidate);
+      if (candidate.kind === 'player' || (candidate.representedPlayerIds?.length ?? 0) > 0) {
+        this.groups.get('player-threats')!.push(candidate);
+        this.groups.get('player-like-threats')!.push(candidate);
+      } else if (candidate.kind === 'decoy') this.groups.get('player-like-threats')!.push(candidate);
       if (candidate.kind === 'player' || candidate.kind === 'decoy') {
         this.groups.get('player-like')!.push(candidate);
         this.groups.get('players-and-armed-constructs')!.push(candidate);
@@ -54,7 +62,7 @@ export class EnemyAiTargetCatalog {
         this.groups.get('armed-constructs')!.push(candidate);
         this.groups.get('players-and-armed-constructs')!.push(candidate);
       }
-      if (candidate.kind === 'armed-outpost') {
+      if (candidate.kind === 'armed-outpost' || candidate.kind === 'armed-base') {
         this.groups.get('armed-outposts')!.push(candidate);
         this.groups.get('players-and-armed-constructs')!.push(candidate);
       }
@@ -81,6 +89,11 @@ export class EnemyAiTargetCatalog {
 
   isTargetValid(ref: EnemyAiTargetRef): boolean {
     return this.resolve(ref) !== null;
+  }
+
+  getPlayerReplacement(playerId: string): EnemyAiTargetCandidate | null {
+    return (this.groups.get('player-threats') ?? []).find(target =>
+      target.representedPlayerIds?.includes(playerId) && this.isTargetable(target)) ?? null;
   }
 
   getPosition(ref: EnemyAiTargetRef, fromX: number, fromY: number): { x: number; y: number } | null {

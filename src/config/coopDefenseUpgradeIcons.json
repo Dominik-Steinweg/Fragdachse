@@ -291,6 +291,7 @@
     "zeus_thunderfront"
   ],
   "withoutIcon": [
+    "turret_control",
     "unlock_ak47",
     "unlock_asmd_primary",
     "unlock_asmd_secondary",

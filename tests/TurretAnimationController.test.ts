@@ -8,6 +8,12 @@ import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { NET_TICK_INTERVAL_MS } from '../src/config';
 import type { SyncedTeslaDome } from '../src/types';
 
+vi.mock('phaser', () => ({}));
+const glowFx = vi.hoisted(() => ({ add: vi.fn(() => ({})), remove: vi.fn() }));
+vi.mock('../src/effects/PlayerGlow', () => ({ addPlayerGlow: glowFx.add }));
+vi.mock('../src/utils/phaserFx', () => ({ removeInternalFx: glowFx.remove }));
+vi.mock('../src/effects/EffectUtils', () => ({ registerGraphicsObject: vi.fn() }));
+
 function sprite() {
   const events = new EventEmitter();
   const view = Object.assign(events, {
@@ -32,6 +38,33 @@ function sprite() {
 }
 
 describe('turret animation lifecycle', () => {
+  it('marks only the local candidate and releases occupant glow on exit, rebinding and world teardown', () => {
+    glowFx.add.mockClear(); glowFx.remove.mockClear();
+    const element = () => {
+      const view: any = { visible: true, destroy: vi.fn() };
+      for (const method of ['setDepth', 'setOrigin', 'clear', 'setPosition', 'lineStyle', 'strokeCircle', 'setText']) view[method] = vi.fn(() => view);
+      view.setVisible = (visible: boolean) => { view.visible = visible; return view; };
+      return view;
+    };
+    const marker = element(), label = element();
+    const scene = { add: { graphics: () => marker, text: () => label } };
+    const turret = sprite(); Object.assign(turret.view, { scene, displayWidth: 48, displayHeight: 48 });
+    const controller = new TurretAnimationController(); controller.bind('7', turret.phaser, 'TURRET_TESLA');
+    controller.syncControl([], { id: 7, x: 20, y: 30 }, 'Shift: Bemannen');
+    expect(marker.visible).toBe(true); expect(label.setText).toHaveBeenCalledWith('Shift: Bemannen');
+    controller.syncControl([{ id: '7', color: 0x22ddff }], null, '');
+    expect(marker.visible).toBe(false); expect(label.visible).toBe(false);
+    expect(glowFx.add).toHaveBeenCalledWith(turret.phaser, 0x22ddff, expect.any(Number), expect.any(Number));
+    const [, , scale, strength] = glowFx.add.mock.calls[0]; expect(scale).toBeGreaterThan(1); expect(strength).toBeGreaterThan(4);
+    controller.syncControl([{ id: '7', color: 0x22ddff }], null, ''); expect(glowFx.add).toHaveBeenCalledOnce();
+    controller.syncControl([], null, ''); expect(glowFx.remove).toHaveBeenCalledOnce();
+    controller.syncControl([{ id: '7', color: 1 }], { id: 7, x: 20, y: 30 }, '');
+    controller.unbind('7'); expect(marker.visible).toBe(false); expect(glowFx.remove).toHaveBeenCalledTimes(2);
+    controller.bind('7', turret.phaser, 'TURRET_TESLA');
+    controller.syncControl([{ id: '7', color: 1 }], null, '');
+    controller.clear(); expect(glowFx.remove).toHaveBeenCalledTimes(3);
+    expect(marker.destroy).toHaveBeenCalledOnce(); expect(label.destroy).toHaveBeenCalledOnce();
+  });
   it.each(['7', 'base:turret'])('interpolates confirmed poses across wrap and holds on packet loss (%s)', id => {
     const controller = new TurretAnimationController();
     const { view, phaser } = sprite();

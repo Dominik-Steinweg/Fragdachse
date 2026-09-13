@@ -141,6 +141,8 @@ function createAttackSystem(
   enemy: TestColossus,
   players: readonly TestPlayer[],
   targetCatalog: EnemyAiTargetCatalog | null = null,
+  rocks: readonly any[] = [],
+  lineOfFire = () => true,
 ) {
   const shots: FiredShot[] = [];
   const enemyManager = {
@@ -164,7 +166,7 @@ function createAttackSystem(
       isBurrowed: () => false,
       canDamageTarget: () => true,
       hasLineOfSight: () => true,
-      hasClearLineOfFire: () => true,
+      hasClearLineOfFire: lineOfFire,
     } as unknown as CombatSystem,
     {
       fire: (config: { id: string }, params: { targetX: number; targetY: number }) => {
@@ -172,7 +174,7 @@ function createAttackSystem(
         return true;
       },
     } as unknown as AutomatedWeaponExecution,
-    () => [],
+    () => rocks,
     null,
     null,
     targetCatalog,
@@ -194,6 +196,21 @@ function runAttackFrames(
 }
 
 describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
+  it.each(['armed-construct', 'armed-outpost', 'armed-base'] as const)('player-only weapons acquire real %s references and still respect cover', kind => {
+    const enemy = createColossus(100, 100, 'players'), catalog = new EnemyAiTargetCatalog();
+    const ref = { kind, id: kind === 'armed-construct' ? '0' : 'base' };
+    let clear = false;
+    catalog.updateTargets([{ ...ref, x: 220, y: 100, representedPlayerIds: ['pilot'],
+      skipRockIndex: kind === 'armed-construct' ? 0 : undefined, isTargetable: () => true },
+      { kind: 'player', id: 'pilot', x: 220, y: 100, isTargetable: () => false }]);
+    const { system, shots } = createAttackSystem(enemy, [], catalog,
+      [{ active: true, x: 220, y: 100 }], () => clear);
+    runAttackFrames(system, 1000, 1200); expect(shots).toEqual([]);
+    clear = true; runAttackFrames(system, 1300, 1800);
+    expect(shots.length).toBeGreaterThan(0);
+    expect(system.getCurrentTarget(enemy.id, 1800)).toEqual(ref);
+    expect(shots[0]).toMatchObject({ targetX: 220, targetY: 100 });
+  });
   it('finishes a committed salvo at the frozen player position before using its Decoy lock', () => {
     const enemy = createColossus(), catalog = new EnemyAiTargetCatalog();
     let visible = true;

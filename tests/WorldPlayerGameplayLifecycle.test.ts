@@ -20,6 +20,13 @@ import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
 import { ResourceSystem } from '../src/systems/ResourceSystem';
 import { BurrowSystem } from '../src/systems/BurrowSystem';
 import { TunnelSystem } from '../src/systems/TunnelSystem';
+import { TurretControlSystem } from '../src/systems/TurretControlSystem';
+
+function emptyTurretControl() {
+  return new TurretControlSystem({ getTurrets: () => [], getActor: () => null,
+    canOccupy: () => false, canEnter: () => false, isFriendly: () => false,
+    getInput: () => null, enter: vi.fn(), pin: vi.fn(), exit: vi.fn() });
+}
 
 type AnyRuntime = WorldPlayerGameplayRuntime & Record<string, any>;
 
@@ -118,6 +125,7 @@ function makeRuntime() {
 
   const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
   runtime.systems = systems;
+  runtime.turretControl = emptyTurretControl();
   runtime.options = {
     playerManager: {
       hasPlayer: (playerId: string) => playerId !== 'absent',
@@ -195,6 +203,7 @@ function makeConcreteRemoveRuntime() {
     ak47Behavior: { removePlayer: vi.fn(), destroy: vi.fn() },
   };
   runtime.options = { decoySystem: { clearPlayer: vi.fn() } };
+  runtime.turretControl = emptyTurretControl();
   return {
     runtime,
     playerId,
@@ -283,6 +292,7 @@ function makeDestroyRuntime() {
     },
     decoySystem: { clearPlayer: vi.fn() },
   };
+  runtime.turretControl = emptyTurretControl();
   return { runtime, systems };
 }
 
@@ -471,6 +481,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
   it('macht spielerbezogenes Held-Action-Remove und Activity-Reset wiederholbar', () => {
     const heldAction = new HostHeldActionSystem();
     const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+    runtime.turretControl = emptyTurretControl();
     runtime.systems = { heldAction, translocator: { clear: vi.fn() } };
 
     expect(heldAction.start('p1', 'action-p1', 'charged_throw', 100, 0)).toBe(true);
@@ -589,6 +600,7 @@ describe('World player actions release a Rocket magazine before changing player 
       return { ok: true };
     });
     const world = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+    world.turretControl = emptyTurretControl();
     world.systems = {
       rocketMagazine: magazine,
       burrow: { handleBurrowRequest: perform },

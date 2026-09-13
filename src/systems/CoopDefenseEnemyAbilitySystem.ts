@@ -281,6 +281,8 @@ export class CoopDefenseEnemyAbilitySystem {
     if (tickCount <= 0) return;
     const damage = fire.damagePerTick * tickCount;
 
+    this.damagePlayerReplacementStructures(enemy, enemy.sprite.x, enemy.sprite.y, fire.radius, damage);
+
     if (enemy.faction === 'allied') {
       for (const target of this.enemyManager.getHostileEnemies()) {
         if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
@@ -574,6 +576,14 @@ export class CoopDefenseEnemyAbilitySystem {
     state: EnemyVoidMolotovState,
     now: number,
   ): void {
+    if (state.targetRef?.kind === 'player' && (this.combatSystem.isPlayerTargetable?.(state.targetRef.id) === false
+      || this.targetCatalog?.getPlayerReplacement(state.targetRef.id))) {
+      state.throwAt = 0;
+      state.targetRef = undefined;
+      state.readyAt = now + ability.cooldownMs;
+      enemy.setSpecialAction('none');
+      return;
+    }
     // Ein einmal angesetzter Wurf bleibt auf seinem Zielpunkt: Der Gegner holt sichtbar aus, das
     // Ziel kann ausweichen. Ein noch erreichbarer Spieler frischt den Punkt aber nach.
     const refreshed = this.findThrowTarget(enemy, 0, ability.maxRange, 0, state.targetRef);
@@ -781,7 +791,7 @@ export class CoopDefenseEnemyAbilitySystem {
     lockedTarget?: ThrowTarget['targetRef'],
   ): ThrowTarget | null {
     let best: ThrowTarget | null = null;
-    this.targetCatalog?.forEachTarget('player-like', (target) => {
+    this.targetCatalog?.forEachTarget('player-like-threats', (target) => {
       if (lockedTarget && (lockedTarget.kind !== target.kind || lockedTarget.id !== target.id)) return;
       const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
@@ -792,7 +802,7 @@ export class CoopDefenseEnemyAbilitySystem {
         enemy.sprite.y,
         position.x,
         position.y,
-        { clearanceRadius: pathClearance, purpose: 'physical' },
+        { clearanceRadius: pathClearance, purpose: 'physical', skipRockIndex: target.skipRockIndex },
       )) return;
       best = { x: position.x, y: position.y, distance, targetRef: { kind: target.kind, id: target.id } };
     });
@@ -829,14 +839,27 @@ export class CoopDefenseEnemyAbilitySystem {
     }
     for (const player of this.playerManager.getAllPlayers()) {
       if (!player.active || !this.combatSystem.isAlive(player.id)) continue;
+      if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
       if (Phaser.Math.Distance.Between(targetX, targetY, player.x, player.y) > telefragRadius) continue;
       this.combatSystem.applyDamage(player.id, 9999, true, enemy.id, 'Telefrag', {
         sourceX: targetX,
         sourceY: targetY,
       });
     }
+    this.damagePlayerReplacementStructures(enemy, targetX, targetY, telefragRadius, 9999);
 
     this.resetTeleportState(state, now + ability.cooldownMs);
+  }
+
+  private damagePlayerReplacementStructures(enemy: EnemyEntity, x: number, y: number, radius: number, damage: number): void {
+    if (enemy.faction === 'allied') return;
+    this.targetCatalog?.forEachTarget('player-threats', target => {
+      if (target.kind === 'player' || target.kind === 'decoy') return;
+      const point = target.resolvePosition?.(x, y) ?? target;
+      if (Math.hypot(point.x - x, point.y - y) > radius) return;
+      if (!this.combatSystem.hasClearLineOfFire(x, y, point.x, point.y, { skipRockIndex: target.skipRockIndex })) return;
+      this.combatSystem.applyStructureDamage?.({ kind: target.kind === 'armed-construct' ? 'construction' : 'base', id: target.id }, damage, enemy.id);
+    });
   }
 
   private consumeTicks(

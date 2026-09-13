@@ -1,4 +1,6 @@
 export const enUpgrades = {
+  "upgrade.turret_control.name": "Turret control",
+  "upgrade.turret_control.description": "Aim at a nearby friendly turret and press Shift to man it. Aim with the mouse and hold LMB to fire. Press Shift to exit in your aim direction. Enemies attack the turret or its carrier while you are inside.",
   "upgrade.decoy_mass_distraction.name": "Mass Distraction",
   "upgrade.decoy_mass_distraction.description": "When the decoy ends, refund {decoyRefundSeconds} s of cooldown per living enemy in range that actually pursued or attacked this decoy. Adds {value0Unsigned} radius per level.",
   "upgrade.decoy_irresistible_lure.name": "Irresistible Lure",

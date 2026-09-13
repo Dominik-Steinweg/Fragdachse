@@ -98,6 +98,7 @@ export const DEPTH = {
   /** Aktueller Persistent-Base-Kies liegt ueber Dirt, aber unter seinen grossen Dekorstempeln. */
   PERSISTENT_BASE_GRAVEL: 2.04,
   PERSISTENT_BASE_GRAVEL_DECORATION: 2.7,
+  TRACK_GRAVEL: 2.9,
   TRACKS: 3,
   /** Foundation debris sits below the base shadow (BASES - 0.35). */
   BASE_GROUNDING: 3.5,

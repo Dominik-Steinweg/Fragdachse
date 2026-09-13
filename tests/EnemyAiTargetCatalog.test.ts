@@ -17,6 +17,22 @@ function candidate(
 }
 
 describe('EnemyAiTargetCatalog', () => {
+  it('replaces mounted players with one real carrier target while keeping pure player groups unambiguous', () => {
+    let mounted = false;
+    const catalog = new EnemyAiTargetCatalog();
+    const player = candidate('player', 'p', () => !mounted);
+    const carrier = { ...candidate('armed-base', 'home', () => true), representedPlayerIds: ['p', 'q'] };
+    catalog.updateTargets([player, carrier, candidate('armed-construct', 'free', () => true)]);
+    expect(catalog.resolve({ kind: 'player', id: 'p' })).toBe(player);
+    mounted = true;
+    expect(catalog.resolve({ kind: 'player', id: 'p' })).toBeNull();
+    expect(catalog.getCandidates('players')).toEqual([]);
+    expect(catalog.getCandidates('player-like')).toEqual([]);
+    expect(catalog.getCandidates('player-threats')).toEqual([carrier]);
+    expect(catalog.getPlayerReplacement('p')).toBe(carrier);
+    expect(catalog.getPlayerReplacement('q')).toBe(carrier);
+    catalog.clear(); expect(catalog.getPlayerReplacement('p')).toBeNull();
+  });
   it('excludes a stealthed player but keeps the technical decoy target', () => {
     let stealthed = true;
     let decoyAlive = true;

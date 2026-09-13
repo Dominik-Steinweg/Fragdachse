@@ -615,6 +615,9 @@ export class ArenaRuntime {
     return this.flow.getWorldCombatCore();
   }
 
+  getTurretDefinitions() { return this.flow.getWorldCombatGameplayBinding()?.getTurretDefinitions() ?? []; }
+  getTurretControlState(playerId: string) { return this.flow.getWorldPlayerGameplayRuntime()?.getTurretControlState(playerId); }
+
   getWorldLayout(): ArenaLayout | null {
     return this.flow.getWorldRuntime()?.presentation?.layout ?? null;
   }

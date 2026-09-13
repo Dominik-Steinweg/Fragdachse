@@ -621,7 +621,12 @@ function isSamePlayerInput(input: PlayerInput, previous: PlayerInput | null): bo
     && input.dy === previous.dy
     && input.aim === previous.aim
     && input.dashHeld === previous.dashHeld
-    && input.worldRevision === previous.worldRevision;
+    && input.worldRevision === previous.worldRevision
+    && input.turretControl?.turretId === previous.turretControl?.turretId
+    && input.turretControl?.revision === previous.turretControl?.revision
+    && input.turretControl?.targetX === previous.turretControl?.targetX
+    && input.turretControl?.targetY === previous.turretControl?.targetY
+    && input.turretControl?.fireHeld === previous.turretControl?.fireHeld;
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -784,6 +789,7 @@ export class NetworkBridge {
   private hitscanTracerHandler: HitscanTracerHandler | null = null;
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
+  private turretControlHandler: ((id: string, request: import('../types').TurretControlRequest) => boolean) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
   private trainBurrowSparksHandler: TrainBurrowSparksHandler | null = null;
   private burrowVisualHandler: BurrowVisualHandler | null = null;
@@ -1550,6 +1556,31 @@ export class NetworkBridge {
       && isCurrentWorldRevision(world.worldRevision, input.worldRevision)
       ? input
       : undefined;
+  }
+
+  getPlayerTurretControlInput(playerId: string): { input: import('../types').TurretControlInput; receivedAt: number } | null {
+    const input = this.getPlayerInput(playerId)?.turretControl;
+    const receivedAt = requireRoom().getPlayerStateUpdatedAt(playerId, KEY_INPUT);
+    return input && receivedAt !== undefined ? { input, receivedAt } : null;
+  }
+
+  sendTurretControlRequest(request: import('../types').TurretControlRequest): void {
+    if (this.getWorldActionRevision() === null) return;
+    if (isHost()) { this.turretControlHandler?.(myPlayer().id, request); return; }
+    this.sendWorldRpc('turret-control', { ...request });
+  }
+
+  registerTurretControlHandler(handler: typeof this.turretControlHandler): void {
+    this.turretControlHandler = handler;
+    this.registerHostRpcHandler('turret-control', (data: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !this.acceptsWorldRpc(data) || !data || typeof data !== 'object') return false;
+      const request = data as import('../types').TurretControlRequest;
+      if (!(typeof request.turretId === 'string' && request.turretId.length > 0 && request.turretId.length <= 200)
+        && !(typeof request.turretId === 'number' && Number.isSafeInteger(request.turretId) && request.turretId >= 0)) return false;
+      if (request.action !== 'enter' && request.action !== 'exit') return false;
+      if (request.action === 'exit' && (!Number.isSafeInteger(request.revision) || request.revision <= 0)) return false;
+      return this.turretControlHandler?.(caller.id, request) ?? false;
+    });
   }
 
   getPlayerPlacementPreview(playerId: string): PlacementPreviewNetState | null {

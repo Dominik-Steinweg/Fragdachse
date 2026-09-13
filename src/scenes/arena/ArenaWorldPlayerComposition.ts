@@ -1,4 +1,5 @@
 import { isCoopDefenseLoadoutItemUnlocked } from '../../utils/coopDefenseUpgrades';
+import { isFriendlyTurret } from '../../systems/TurretControlSystem';
 import { bridge } from '../../network/bridge';
 import { BurrowSystem } from '../../systems/BurrowSystem';
 import { LoadoutManager } from '../../loadout/LoadoutManager';
@@ -53,6 +54,9 @@ export function composeWorldPlayerGameplay(
   // LobbyWorld wirken. Die darunterliegenden Missionssysteme bleiben weiterhin an
   // `isCoopMission`/`missionMapConfig` gebunden.
   const playerGameplayRuntime = new WorldPlayerGameplayRuntime({
+    getTurrets: () => gameplay.combat?.getTurretDefinitions() ?? [],
+    isFriendlyTurret: (id, turret) => isFriendlyTurret(id, turret, (a, b) => bridge.isEnemyPair(a, b)),
+    getTurretControlInput: id => bridge.getPlayerTurretControlInput(id),
     playerManager: ctx.playerManager,
     projectileSpawn,
     translocatorProjectilePort: projectileSpawn,
@@ -141,9 +145,14 @@ export function composeWorldPlayerGameplay(
     },
   });
   gameplay.player = playerGameplayRuntime;
+  bridge.registerTurretControlHandler((id, request) => {
+    if (request.action === 'enter' && (bridge.isArenaCountdownActive() || bridge.getWorldParticipation(id) !== 'interactive')) return false;
+    return playerGameplayRuntime.requestTurretControl(id, request);
+  });
   projectileSpawn.setPortalQueryPort(playerGameplayRuntime.getPortalQueryPort());
   combatSystem.setPortalQueryPort(playerGameplayRuntime.getPortalQueryPort());
   worldRuntime.bind({ destroy: () => {
+    bridge.registerTurretControlHandler(null);
     projectileSpawn.setPortalQueryPort(null);
     combatSystem.setPortalQueryPort(null);
   } });

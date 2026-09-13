@@ -113,6 +113,7 @@ function createFixture(options: {
   readonly enemies: readonly { id: string; x: number; y: number; active: boolean }[];
   readonly baseTurrets?: readonly {
     id: string;
+    baseId: string;
     x: number;
     y: number;
     weaponId: 'BASE_SPORES';
@@ -165,7 +166,8 @@ function createFixture(options: {
     getBases: () => [],
     getTurrets: () => options.baseTurrets ?? [],
     getBasesByFaction: () => [],
-    getBase: () => undefined,
+    getBase: (id: string) => options.baseTurrets?.some(turret => turret.baseId === id)
+      ? { getHp: () => 100, isInert: () => false, getSpec: () => ({ cells: [] }) } : undefined,
     getObstacleRectangles: () => null,
   }) as unknown as BaseManager;
   const resource = methodBag() as unknown as ResourceSystem;

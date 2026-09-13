@@ -74,7 +74,7 @@ export const GRAPHICS_FAMILIES = {
   miniTeslaDomeEffects: ['MiniTeslaDomeRenderer'],
   plasmaBurnerEffects: ['PlasmaBurnerRenderer'],
   energyShieldEffects: ['EnergyShieldRenderer'],
-  weaponTelegraphs: ['Ak47StrategicTargetRenderer'],
+  weaponTelegraphs: ['Ak47StrategicTargetRenderer', 'TurretAnimationController'],
   gaussWarning: ['GaussWarningRenderer'],
   airstrikeWarning: ['AirstrikeRenderer'],
   meteorEffects: ['MeteorRenderer'],

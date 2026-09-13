@@ -172,6 +172,27 @@ export class HostPhysicsSystem {
   private pendingRecoils = new Map<string, ExternalImpulse[]>();
   private recentImpulseSources = new Map<string, RecentImpulseSource>();
   private forcedMovement = new Map<string, ForcedMovement>();
+  private readonly mountedPlayers = new Map<string, { x: number; y: number }>();
+
+  hasForcedMovement(id: string): boolean { return this.forcedMovement.has(id); }
+
+  setPlayerMounted(id: string, position: { x: number; y: number } | null): void {
+    const player = this.playerManager.getPlayer(id);
+    if (position) {
+      this.mountedPlayers.set(id, { x: position.x, y: position.y });
+      this.pendingRecoils.delete(id);
+      this.recentImpulseSources.delete(id);
+      this.forcedMovement.delete(id);
+      if (player?.body) {
+        player.body.reset(position.x, position.y);
+        player.body.setVelocity(0, 0);
+        player.body.enable = false;
+      }
+    } else {
+      this.mountedPlayers.delete(id);
+      if (player?.body) player.body.enable = this.combatSystem?.isAlive(id) ?? false;
+    }
+  }
 
   constructor(
     scene:         Phaser.Scene,
@@ -304,6 +325,7 @@ export class HostPhysicsSystem {
    * einzige Ort, an dem Gegner-Impulse entstehen, damit gilt der Faktor für jeden Wegstoß-Effekt.
    */
   addRecoil(playerId: string, vx: number, vy: number, durationMs = 180, sourcePlayerId?: string): void {
+    if (this.mountedPlayers.has(playerId)) return;
     const knockbackFactor = this.enemyManager?.getEnemy(playerId)?.getKnockbackFactor() ?? 1;
     if (knockbackFactor <= 0) return;
 
@@ -331,6 +353,7 @@ export class HostPhysicsSystem {
   }
 
   setForcedMovement(playerId: string, vx: number, vy: number): void {
+    if (this.mountedPlayers.has(playerId)) return;
     this.forcedMovement.set(playerId, { vx, vy });
   }
 
@@ -610,6 +633,7 @@ export class HostPhysicsSystem {
    * Spieler-Collider zerstören wenn ein Spieler die Lobby verlässt.
    */
   removePlayer(id: string): void {
+    this.mountedPlayers.delete(id);
     const colliders = this.playerColliders.get(id);
     if (colliders) {
       for (const c of colliders) c.destroy();
@@ -661,6 +685,8 @@ export class HostPhysicsSystem {
       // obwohl Phaser den Koerper bereits entfernt hat.
       const playerBody = player.physicsProxy.body as Phaser.Physics.Arcade.Body | null;
       if (!player.active || !playerBody) continue;
+      const mounted = this.mountedPlayers.get(player.id);
+      if (mounted) { this.setPlayerMounted(player.id, mounted); continue; }
 
       // Lazy: Collider mit Felsen anlegen
       if (this.rockGroup && !this.rockCollidersSetup.has(player.id)) {

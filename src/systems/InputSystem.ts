@@ -1,4 +1,7 @@
 import { UtilityChargePrediction } from '../loadout/UtilityChargePrediction';
+import { selectTurretCandidate, isFriendlyTurret } from './TurretControlSystem';
+import type { AutomatedTurret } from './TurretSystem';
+import type { TurretControlState } from '../types';
 import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
@@ -90,6 +93,34 @@ interface RadialActionProviders {
 }
 
 export class InputSystem {
+  private turretProviders: {
+    getTurrets: () => readonly AutomatedTurret[];
+    getState: (id: string) => TurretControlState | undefined;
+    isEnabled: () => boolean;
+  } | null = null;
+  private turretInputEnabled = false;
+  private turretCandidateId: number | string | null = null;
+  private previousTurretRevision: number | null = null;
+
+  setupTurretControlProviders(providers: NonNullable<InputSystem['turretProviders']>): void { this.turretProviders = providers; }
+  getTurretControlState(): TurretControlState | undefined { return this.turretProviders?.getState(this.bridge.getLocalPlayerId()); }
+  setTurretInputEnabled(enabled: boolean): void { this.turretInputEnabled = enabled; }
+  getTurretCandidate(): AutomatedTurret | null {
+    const providers = this.turretProviders, sprite = this.getLocalSprite();
+    if (!providers || !sprite || !this.inputEnabled || !providers.isEnabled() || this.getTurretControlState()
+      || this.localIsStunned || this.localBurrowPhase !== 'idle' || this.localDashPhase !== 0) {
+      this.turretCandidateId = null; return null;
+    }
+    const id = this.bridge.getLocalPlayerId();
+    const occupied = new Set((this.bridge.getConnectedPlayers?.() ?? []).flatMap(player => {
+      const state = providers.getState(player.id); return state ? [state.turretId] : [];
+    }));
+    const candidate = selectTurretCandidate({ x: sprite.x, y: sprite.y, angle: this.currentAimAngle },
+      providers.getTurrets(), this.turretCandidateId,
+      turret => !occupied.has(turret.id) && isFriendlyTurret(id, turret, (a, b) => this.bridge.isEnemyPair(a, b)));
+    this.turretCandidateId = candidate?.id ?? null;
+    return candidate;
+  }
   private rocketMagazineId: number | null = null;
   private rocketRequiresRelease = false;
   private rocketMagazineFocused = false;
@@ -1178,13 +1209,31 @@ export class InputSystem {
       return;
     }
 
-    // Process debug hotkeys first (regardless of input enabled state)
-    this.updateDebugHotkeys();
-
     // ── 1. Blickrichtung (auch bei gesperrter Eingabe) ─────────────────────
     // Drehen bleibt während des Arena-Countdowns erlaubt und wird über den
     // Input-Kanal repliziert; Bewegung und Aktionen bleiben gesperrt.
     const aimTarget = this.updateAimFromPointer();
+    const turretState = this.getTurretControlState();
+    if ((turretState?.revision ?? null) !== this.previousTurretRevision) {
+      this.cancelUtilityInteraction();
+      this.cancelUltimateCharge();
+      this.cancelRocketMagazine();
+      this.ultimateTargetingActive = false;
+      this.consumedPointerButtons |= this.scene.input.activePointer.buttons ?? 0;
+      this.previousTurretRevision = turretState?.revision ?? null;
+    }
+    if (turretState) {
+      const pointer = this.scene.input.activePointer;
+      this.bridge.sendLocalInput({ dx: 0, dy: 0, aim: quantizeAngle(this.currentAimAngle), dashHeld: false,
+        turretControl: { ...turretState, targetX: aimTarget?.x ?? 0, targetY: aimTarget?.y ?? 0,
+          fireHeld: this.turretInputEnabled && !!aimTarget && pointer.leftButtonDown() } });
+      if (this.turretInputEnabled && Phaser.Input.Keyboard.JustDown(this.keyShift)) {
+        this.bridge.sendTurretControlRequest({ action: 'exit', ...turretState });
+      }
+      this.placementPreviewState = null;
+      return;
+    }
+    this.updateDebugHotkeys();
     const constructionPreview = (this.isPersistentRewardPlacementActive()
       || this.isConstructionPlacementActive()
       || this.isDismantlePlacementActive()
@@ -1210,6 +1259,24 @@ export class InputSystem {
     };
     this.bridge.sendLocalInput(input);
 
+    // Resolve Shift before Dash, radial menus and every loadout action.
+    if (this.inputEnabled && Phaser.Input.Keyboard.JustDown(this.keyShift)) {
+      const candidate = this.getTurretCandidate();
+      if (candidate) {
+        this.cancelRocketMagazine();
+        this.bridge.sendTurretControlRequest({ action: 'enter', turretId: candidate.id });
+        return;
+      }
+      if (!this.localIsStunned) {
+        if (this.localBurrowPhase === 'idle') {
+          this.releaseRocketMagazine(aimTarget);
+          this.bridge.sendBurrowRequest(true);
+        } else if (this.localBurrowPhase === 'underground' || this.localBurrowPhase === 'trapped') {
+          this.bridge.sendBurrowRequest(false);
+        }
+      }
+    }
+
     const radialHandled = this.updateRadialActionMenu();
     if (!this.inputEnabled || radialHandled) return;
 
@@ -1225,16 +1292,6 @@ export class InputSystem {
     if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
       this.releaseRocketMagazine(aimTarget);
       this.bridge.sendDash(dx, dy);
-    }
-
-    // ── 5. Burrow-Toggle (Flanke) ───────────────────────────────────────────
-    if (Phaser.Input.Keyboard.JustDown(this.keyShift)) {
-      if (this.localBurrowPhase === 'idle') {
-        this.releaseRocketMagazine(aimTarget);
-        this.bridge.sendBurrowRequest(true);
-      } else if (this.localBurrowPhase === 'underground' || this.localBurrowPhase === 'trapped') {
-        this.bridge.sendBurrowRequest(false);
-      }
     }
 
     // ── 6. Loadout-Aktionen ────────────────────────────────────────────────

@@ -83,6 +83,22 @@ function finishTween(tween: any) {
 }
 
 describe('figure source resolution and Arcade geometry', () => {
+  it('hides an occupant and held item through pose updates, then restores visibility without respawning', () => {
+    const spawn = vi.spyOn(SpawnEffectRenderer.prototype, 'play').mockImplementation(() => {});
+    const { scene, images } = sceneWithArcadeBodies(BADGER_WALKING_FRAME_WIDTH);
+    const player = new PlayerEntity(scene, { id: 'pilot', name: 'Pilot', colorHex: 0x22ddff },
+      100, 200, false, null, { spawnEffect: false });
+    player.setHeldItemId('GLOCK'); player.setNameVisible(true);
+    const held = images.find(image => image.texture.key === getHeldItemSpriteSpec('GLOCK')!.textureKey);
+    player.setTurretMounted(true);
+    player.setRotation(2); player.setDashScale(1); player.setVisible(true); player.setNameVisible(true);
+    expect(player.displayObject!.visible).toBe(false); expect(held.visible).toBe(false);
+    expectPlayerBody(player.body, 100, 200);
+    player.setTurretMounted(false);
+    expect(player.displayObject!.visible).toBe(true); expect(held.visible).toBe(true);
+    expect(spawn).not.toHaveBeenCalled();
+    player.destroy();
+  });
   it('keeps authored enemy diameters and centered bodies across source sizes and dashes', () => {
     for (const config of Object.values(resolveCoopDefenseEnemyConfigs(1))) {
       const asset = getPipelineAssetForTexture(config.imageKey)!;

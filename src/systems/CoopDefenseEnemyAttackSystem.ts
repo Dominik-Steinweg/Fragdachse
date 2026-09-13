@@ -144,6 +144,11 @@ export class CoopDefenseEnemyAttackSystem {
       activeEnemyIds.add(enemy.id);
       enemy.decayWeaponSpread(delta, now);
       this.expireStaleSalvo(enemy, now);
+      // Mounted players leave the player target space. Do not keep their last position as a
+      // smoke-obscured lock; the next scan must select the real construct/carrier reference.
+      const currentTarget = this.getCurrentTarget(enemy.id, now);
+      if (currentTarget?.kind === 'player' && (this.combatSystem.isPlayerTargetable?.(currentTarget.id) === false
+        || this.targetCatalog?.getPlayerReplacement(currentTarget.id))) this.abortCombat(enemy, now);
 
       if (this.combatSystem.isStunned?.(enemy.id, now) || this.actionBlockedChecker?.(enemy.id)) {
         this.abortCombat(enemy, now);
@@ -263,8 +268,7 @@ export class CoopDefenseEnemyAttackSystem {
   }
 
   private shouldStartMeleeWindup(attack: SelectedEnemyAttack): boolean {
-    return (attack.target.kind === 'player' || attack.target.kind === 'decoy')
-      && attack.attackWeapon.weapon.config.fire.type === 'melee'
+    return attack.attackWeapon.weapon.config.fire.type === 'melee'
       && attack.attackWeapon.playerMeleeWindupMs > 0
       && attack.target.targetRef !== undefined;
   }
@@ -518,7 +522,7 @@ export class CoopDefenseEnemyAttackSystem {
   ): EnemyAttackCandidate | null {
     const candidates: EnemyAttackCandidate[] = [];
     if (this.targetCatalog) {
-      this.targetCatalog.forEachTarget('player-like', (target) => {
+      this.targetCatalog.forEachTarget('player-like-threats', (target) => {
         const candidate = this.buildPlayerLikeTargetCandidate(enemy, { kind: target.kind, id: target.id }, range);
         if (!candidate || candidate.distance < minTargetDistancePx) return;
         candidates.push(candidate);
@@ -756,7 +760,7 @@ export class CoopDefenseEnemyAttackSystem {
     let best: EnemyAttackCandidate | null = null;
 
     if (this.targetCatalog) {
-      this.targetCatalog.forEachTarget('player-like', (target) => {
+      this.targetCatalog.forEachTarget('player-like-threats', (target) => {
         const candidate = this.buildPlayerLikeTargetCandidate(enemy, {
           kind: target.kind,
           id: target.id,
@@ -793,7 +797,7 @@ export class CoopDefenseEnemyAttackSystem {
     if (lockedTarget) return lockedTarget;
 
     const target = this.findNearestLivingTarget(enemy, range);
-    if ((target?.kind === 'player' || target?.kind === 'decoy') && target.targetRef) {
+    if (target?.targetRef) {
       this.playerTargetLocks.set(enemy.id, {
         targetRef: target.targetRef,
         lockedUntil: now + CoopDefenseEnemyAttackSystem.PLAYER_TARGET_LOCK_DURATION_MS,
@@ -847,12 +851,21 @@ export class CoopDefenseEnemyAttackSystem {
     }
 
     const target = this.targetCatalog?.resolve(targetRef);
-    if (!target || (target.kind !== 'player' && target.kind !== 'decoy')) return null;
+    if (!target) return null;
     const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
     if (distance > range + (target.radius ?? PLAYER_SIZE * 0.5)) return null;
     if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, range)) return null;
-    if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, position.x, position.y)) return null;
+    if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, position.x, position.y,
+      { skipRockIndex: target.skipRockIndex })) return null;
+    if (target.kind === 'armed-construct') {
+      const obstacle = this.getRockObjects()?.[Number(target.id)];
+      if (!obstacle?.active) return null;
+      return { kind: 'obstacle', priority: 2, distance, targetX: position.x, targetY: position.y, obstacle, targetRef };
+    }
+    if (target.kind === 'armed-base' || target.kind === 'armed-outpost') {
+      return { kind: 'base', priority: 2, distance, targetX: position.x, targetY: position.y, targetRef };
+    }
     return {
       kind: target.kind,
       priority: 2,

@@ -99,7 +99,21 @@ vi.mock('phaser', () => {
       Circle: TestCircle,
       Intersects: {
         GetLineToRectangle: getLineToRectangle,
-        GetLineToCircle: (_line: TestLine, _circle: TestCircle, out: { x: number; y: number }[] = []) => out,
+        GetLineToCircle: (line: TestLine, circle: TestCircle, out: { x: number; y: number }[] = []) => {
+          const dx = line.x2 - line.x1;
+          const dy = line.y2 - line.y1;
+          const ox = line.x1 - circle.x;
+          const oy = line.y1 - circle.y;
+          const a = dx * dx + dy * dy;
+          const b = 2 * (ox * dx + oy * dy);
+          const c = ox * ox + oy * oy - circle.radius * circle.radius;
+          const discriminant = b * b - 4 * a * c;
+          if (a === 0 || discriminant < 0) return out;
+          for (const t of [(-b - Math.sqrt(discriminant)) / (2 * a), (-b + Math.sqrt(discriminant)) / (2 * a)]) {
+            if (t >= 0 && t <= 1) out.push({ x: line.x1 + dx * t, y: line.y1 + dy * t });
+          }
+          return out;
+        },
       },
     },
     Math: {
@@ -943,6 +957,31 @@ describe('Plasmabrenner hitscan support impact', () => {
     );
     expect(trace.distance).toBe(420);
     expect(trace.hitPlayerId).toBeNull();
+  });
+
+  it.each([0, 4, 8])('does not block an outgoing support beam when the shooter advances %s pixels into its muzzle', (advance) => {
+    const shooter = fakeEntity({ id: 'shooter', x: 500 + advance, y: 500,
+      displayWidth: 40, displayHeight: 40, body: { velocity: { x: 240, y: 0 } } });
+    const combat = new CombatSystem({
+      getAllPlayers: () => [shooter], getPlayer: () => shooter,
+    } as unknown as PlayerManager, {
+      isHost: () => true, getLatestGameState: () => undefined,
+    } as unknown as NetworkBridge);
+    combat.initPlayer('shooter');
+
+    const trace = combat.traceHitscan({
+      shooterId: 'shooter', startX: 524, startY: 500, angle: 0,
+      range: 300, traceThickness: 5, applyFavorTheShooter: true, includeShooter: true,
+    });
+    expect(trace.hitPlayerId).toBeNull();
+    expect(trace.endX).toBe(824);
+
+    // A beam arriving from outside can still reach the shooter as a support target.
+    const returningTrace = combat.traceHitscan({
+      shooterId: 'shooter', startX: 824, startY: 500, angle: Math.PI,
+      range: 400, traceThickness: 5, applyFavorTheShooter: true, includeShooter: true,
+    });
+    expect(returningTrace.hitPlayerId).toBe('shooter');
   });
 
   it('heals allies and damages enemies through the normal damage path', () => {

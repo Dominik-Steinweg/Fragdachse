@@ -29,6 +29,7 @@ export interface CoopMissionDecoyView {
 
 /** Ein bewaffnetes Bauwerk der World als Gegnerziel. */
 export interface CoopMissionArmedConstructionView {
+  readonly representedPlayerIds?: readonly string[];
   readonly id: string;
   readonly gridX: number;
   readonly gridY: number;
@@ -37,6 +38,8 @@ export interface CoopMissionArmedConstructionView {
 
 /** Ein bewaffneter Aussenposten der World als Gegnerziel. */
 export interface CoopMissionArmedOutpostView {
+  readonly kind?: 'armed-outpost' | 'armed-base';
+  readonly representedPlayerIds?: readonly string[];
   readonly id: string;
   readonly x: number;
   readonly y: number;
@@ -53,6 +56,7 @@ export interface CoopMissionArmedOutpostView {
  * diese Antworten heute liefert.
  */
 export interface CoopMissionHostUpdatePort {
+  readonly isPlayerTargetable?: (playerId: string) => boolean;
   readonly getPlayers: () => readonly CoopMissionPlayerView[];
   readonly getPlayerPosition: (playerId: string) => { x: number; y: number } | null;
   readonly isPlayerAlive: (playerId: string) => boolean;
@@ -283,6 +287,7 @@ export class CoopMissionHostUpdate {
             && this.port.isPlayerAlive(player.id)
             && !this.port.isPlayerBurrowed(player.id)
             && !this.port.isPlayerStealthed(player.id)
+            && (this.port.isPlayerTargetable?.(player.id) ?? true)
           ),
         });
       }
@@ -302,12 +307,14 @@ export class CoopMissionHostUpdate {
         });
       }
 
-      if (strategicFlowFieldService) {
+      if (strategicGrid) {
         for (const construction of this.port.getArmedConstructions()) {
-          const world = strategicFlowFieldService.gridToWorld(construction.gridX, construction.gridY);
+          const world = strategicGrid.gridToWorld(construction.gridX, construction.gridY);
           if (!world) continue;
           candidates.push({
             kind: 'armed-construct',
+            representedPlayerIds: construction.representedPlayerIds,
+            skipRockIndex: Number(construction.id),
             id: construction.id,
             x: world.x,
             y: world.y,
@@ -320,7 +327,8 @@ export class CoopMissionHostUpdate {
 
         for (const outpost of this.port.getArmedOutposts()) {
           candidates.push({
-            kind: 'armed-outpost',
+            kind: outpost.kind ?? 'armed-outpost',
+            representedPlayerIds: outpost.representedPlayerIds,
             id: outpost.id,
             x: outpost.x,
             y: outpost.y,
@@ -351,7 +359,8 @@ export class CoopMissionHostUpdate {
 
     const playerGoalCells: { gridX: number; gridY: number }[] = [];
     if (targetCatalog) {
-      targetCatalog.forEachTarget('players', (target) => {
+      targetCatalog.forEachTarget('player-threats', (target) => {
+        if (target.kind !== 'player' && target.goalCells?.length) { playerGoalCells.push(...target.goalCells); return; }
         const position = target.resolvePosition?.(0, 0) ?? { x: target.x, y: target.y };
         const goalCell = playerFlowFieldService.worldToGrid(position.x, position.y);
         if (!goalCell) return;
@@ -375,7 +384,7 @@ export class CoopMissionHostUpdate {
       flowFieldCoordinator.setGoalCells(ENEMY_FLOW_FIELD_IDS.boss, playerGoalIndexes);
     }
 
-    if (targetCatalog) this.runtime.coopDefenseDecoyTargetSystem?.prepareOrdinaryGoals(targetCatalog.getCandidates('players'));
+    if (targetCatalog) this.runtime.coopDefenseDecoyTargetSystem?.prepareOrdinaryGoals(targetCatalog.getCandidates('player-threats'));
     this.runtime.coopDefenseDecoyTargetSystem?.prepareNavigation();
 
     // Die Nekromantie setzt ihr gemeinsames Besitzer-Flowfield selbst auf den

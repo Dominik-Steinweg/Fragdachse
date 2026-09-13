@@ -5,6 +5,7 @@ import type { CombatActorStatePort, CombatRelationshipQueryPort } from '../comba
 import type { TurretDamageBuff } from '../types';
 import { DEFAULT_TURRET_AIM_TOLERANCE_DEG, type TurretAimConfig } from '../config/turretAim';
 import { stepTurretAngle, turretAngleDifference } from '../utils/turretAngle';
+import type { ManualTurretControl } from './TurretControlSystem';
 
 /**
  * Schusslinienprüfung des Turrets. Bewusst die Schuss- und nicht die Sichtlinie: ein Turret,
@@ -21,6 +22,8 @@ type LineOfFireChecker = (
 export type AutomatedTurretId = number | string;
 export type AutomatedTurretTargetMode = 'players' | 'enemies';
 export interface AutomatedTurret extends TurretAimConfig {
+  /** Occupant exit contour; retained through removal of the turret or its carrier. */
+  readonly footprint?: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
   readonly angle?: number;
   readonly id: AutomatedTurretId;
   readonly x: number;
@@ -71,6 +74,12 @@ type TurretFireHandler = (
 ) => void;
 
 export class TurretSystem {
+  private manualControlProvider: ((id: AutomatedTurretId, now: number) => ManualTurretControl | null) | null = null;
+  private readonly controlRevisions = new Map<AutomatedTurretId, number>();
+
+  setManualControlProvider(provider: typeof this.manualControlProvider): void {
+    this.manualControlProvider = provider;
+  }
   private lineOfFireChecker: LineOfFireChecker | null = null;
   private turretProvider: TurretProvider | null = null;
   private turretAngleUpdater: TurretAngleUpdater | null = null;
@@ -117,6 +126,8 @@ export class TurretSystem {
     if (!handler) {
       this.nextFireAt.clear();
       this.pendingBursts.clear();
+      this.controlRevisions.clear();
+      this.controlRevisions.clear();
     }
   }
 
@@ -165,6 +176,15 @@ export class TurretSystem {
       const targetRange = turret.targetRange ?? baseTargetRange;
       const turretWeaponId = turret.weaponId ?? 'SPORES';
       const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
+      const manual = this.manualControlProvider?.(turret.id, now) ?? null;
+      const revision = manual?.revision ?? 0;
+      if ((this.controlRevisions.get(turret.id) ?? 0) !== revision) {
+        if (this.pendingBursts.delete(turret.id)) {
+          this.nextFireAt.set(turret.id, Math.max(this.nextFireAt.get(turret.id) ?? 0,
+            now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown)));
+        }
+        this.controlRevisions.set(turret.id, revision);
+      }
       // Tesla-Konstrukte werden vom TeslaDomeSystem als Feldwaffe verarbeitet und
       // duerfen hier nicht zusaetzlich den generischen Projektilpfad ausloesen.
       if (turretWeaponConfig.fire.type === 'tesla_dome') continue;
@@ -172,9 +192,19 @@ export class TurretSystem {
         ? (baseTargetRange > 0 ? targetRange / baseTargetRange : 1)
         : Math.max(1, targetRange / Math.max(1, turretWeaponConfig.range));
       const muzzleOffset = turret.muzzleOffset ?? config.placeable.muzzleOffset;
+      const manualTarget = manual ? this.resolveManualTarget(turret, manual, targetRange, muzzleOffset) : null;
+      if (manual && !manual.fresh) {
+        if (this.pendingBursts.delete(turret.id)) this.nextFireAt.set(turret.id,
+          now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
+        continue;
+      }
 
       const pendingBurst = this.pendingBursts.get(turret.id);
       if (pendingBurst) {
+        if (manualTarget) {
+          pendingBurst.targetX = manualTarget.x;
+          pendingBurst.targetY = manualTarget.y;
+        }
         // Legacy bursts only update their pose when due; limited turrets track between shots.
         if (turret.rotationSpeedDegPerSec === undefined && (now < pendingBurst.nextShotAt || !this.fireHandler)) continue;
         const desiredAngle = Phaser.Math.Angle.Between(
@@ -210,12 +240,12 @@ export class TurretSystem {
           pendingBurst.nextShotAt = now + Math.max(1, turretWeaponConfig.turretBurst?.intervalMs ?? 1);
         } else {
           this.pendingBursts.delete(turret.id);
-          this.nextFireAt.set(turret.id, now + Math.max(1, turretWeaponConfig.cooldown));
+          this.nextFireAt.set(turret.id, now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
         }
         continue;
       }
 
-      const target = this.findNearestTarget(
+      const target = manualTarget ?? this.findNearestTarget(
         turret,
         turretX,
         turretY,
@@ -227,7 +257,10 @@ export class TurretSystem {
 
       const angle = this.updateAim(turret, Phaser.Math.Angle.Between(turretX, turretY, target.x, target.y), deltaMs);
 
+      if (manual && !manual.fireHeld) continue;
       if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
+      if (manual && turret.rotationSpeedDegPerSec === undefined
+        && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, target.x, target.y, muzzleOffset)) continue;
       if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset)) continue;
       const buff = this.turretDamageBuffProvider?.(turretX, turretY) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
@@ -269,7 +302,7 @@ export class TurretSystem {
         this.nextFireAt.set(turret.id, now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
       }
       if (burstCount <= 1 && (turret.secondProjectileDamageFactor ?? 0) > 0) {
-        const secondTarget = this.findNearestTarget(
+        const secondTarget = manualTarget ?? this.findNearestTarget(
           turret,
           turretX,
           turretY,
@@ -307,6 +340,16 @@ export class TurretSystem {
     for (const id of [...this.pendingBursts.keys()]) {
       if (!activeIds.has(id)) this.pendingBursts.delete(id);
     }
+    for (const id of this.controlRevisions.keys()) {
+      if (!activeIds.has(id)) this.controlRevisions.delete(id);
+    }
+  }
+
+  private resolveManualTarget(turret: AutomatedTurret, control: ManualTurretControl, range: number, muzzle: number): { x: number; y: number } {
+    const dx = control.targetX - turret.x, dy = control.targetY - turret.y;
+    const angle = dx === 0 && dy === 0 ? turret.angle ?? 0 : Math.atan2(dy, dx);
+    const distance = Math.max(muzzle, Math.min(range, Math.hypot(dx, dy)));
+    return { x: turret.x + Math.cos(angle) * distance, y: turret.y + Math.sin(angle) * distance };
   }
 
   private updateAim(turret: AutomatedTurret, desiredAngle: number, deltaMs: number): number {

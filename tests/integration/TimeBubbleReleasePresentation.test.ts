@@ -34,7 +34,7 @@ describe('Time Bubble release across World composition and presentation', () => 
     // would miss adapters that silently discard optional event fields.
     composeWorldCombatGameplay({
       ctx: {}, worldRuntime: { bind: vi.fn() }, world: { metrics: {} },
-    } as never, { projectiles: {}, combatSystem: {} } as never);
+    } as never, { projectiles: {}, combatSystem: { setPlayerMountedResolver: vi.fn() } } as never);
     const broadcast = composed.options!.network.effects.broadcastExplosionEffect;
     const gpu = { spawnCombatExplosion: vi.fn() };
     const lighting = { pulse: vi.fn() };

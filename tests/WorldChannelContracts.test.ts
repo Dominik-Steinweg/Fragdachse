@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TurretControlSystem } from '../src/systems/TurretControlSystem';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
@@ -53,6 +54,59 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
 }
 
 describe('World-Kanal – Replikation', () => {
+  it('validates reliable turret requests and repeatedly snapshots typed occupancy for clients and late join', async () => {
+    const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom); host.publishLobbySync(); host.publishWorldAndActivity(world(), activity());
+      const client = bridgeFor(clientRoom); use(hostRoom);
+      const owner = new TurretControlSystem({ getTurrets: () => [{ id: 'base:tesla', x: 50, y: 0, ownerId: 'friendly', ownerColor: 1 }],
+        getActor: () => ({ x: 0, y: 0, angle: 0 }), canEnter: () => true, canOccupy: () => true,
+        isFriendly: () => true, getInput: () => null, enter: () => {}, pin: () => {}, exit: () => {} });
+      host.registerTurretControlHandler((id, request) => owner.request(id, request));
+      clientRoom.room.sendHost('turret-control', { action: 'enter', turretId: 'base:tesla', wr: 11 });
+      const pilot = clientRoom.room.getLocalPlayerId();
+      expect(owner.getState(pilot)).toBeUndefined();
+      clientRoom.room.sendHost('turret-control', { action: 'enter', turretId: {}, wr: 12 });
+      expect(owner.getState(pilot)).toBeUndefined();
+      clientRoom.room.sendHost('turret-control', { action: 'enter', turretId: 'base:tesla', wr: 12, playerId: 'forged' });
+      const occupied = owner.getState(pilot)!;
+      expect(occupied?.turretId).toBe('base:tesla'); expect(owner.getState('forged')).toBeUndefined();
+      const state: Parameters<NetworkBridge['publishGameState']>[0] = {
+        roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
+        placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
+        remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
+        nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+        coopDefenseCarry: [], stinkClouds: [], timeBubbles: [], teslaDomes: [], energyShields: [],
+        guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
+        targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
+      };
+      const publish = (full = false) => {
+        use(hostRoom);
+        host.publishGameState({ ...state, players: { [pilot]: { x: 50, y: 0, positionRevision: 3,
+          aim: { revision: 0, isMoving: false, weapon1DynamicSpread: 0, weapon2DynamicSpread: 0 },
+          burrowPhase: 'idle', turretControl: owner.getState(pilot) } as never } }, full);
+        hostRoom.room.update();
+      };
+      publish(true); use(clientRoom);
+      expect(client.getLatestGameState()!.players[pilot].turretControl).toEqual(occupied);
+      const joining = bridgeFor(await addClientRoom(network));
+      expect(joining.getLatestGameState()!.players[pilot].turretControl).toEqual(occupied);
+      publish(); use(clientRoom);
+      expect(client.getLatestGameState()!.players[pilot].positionRevision).toBe(3);
+      use(hostRoom);
+      clientRoom.room.sendHost('turret-control', { action: 'exit', ...occupied, revision: occupied.revision + 1, wr: 12 });
+      expect(owner.getState(pilot)).toEqual(occupied);
+      clientRoom.room.sendHost('turret-control', { action: 'exit', ...occupied, wr: 12 });
+      publish(); use(clientRoom);
+      expect(client.getLatestGameState()!.players[pilot].turretControl).toBeUndefined();
+      use(hostRoom); host.registerTurretControlHandler(null);
+      clientRoom.room.sendHost('turret-control', { action: 'enter', turretId: 'base:tesla', wr: 12 });
+      expect(owner.getState(pilot)).toBeUndefined();
+      expect(clientRoom.transport.links.flatMap(link => link.sent).filter(item =>
+        JSON.stringify(item.message).includes('turret-control')).every(item => item.channel === 'rel')).toBe(true);
+    } finally { clearActiveSession(); }
+  });
   it('repliziert World und Activity getrennt an jeden Peer, auch an Nachzuegler', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);
     try {

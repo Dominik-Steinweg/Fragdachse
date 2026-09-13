@@ -49,8 +49,8 @@ import { formatNumber, getLocale, t } from '../i18n';
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
-const PANEL_W = 1860;
-const PANEL_H = 1008;
+const PANEL_W = GAME_WIDTH;
+const PANEL_H = GAME_HEIGHT;
 const PANEL_LEFT = CX - PANEL_W / 2;
 const PANEL_RIGHT = CX + PANEL_W / 2;
 const PANEL_PAD = 68;
@@ -64,7 +64,7 @@ const BANNER_Y = 148;
 const META_Y = 214;
 
 const SECTION_TOP = 260;
-const SECTION_BOTTOM = 902;
+const SECTION_BOTTOM = 938;
 const SECTION_H = SECTION_BOTTOM - SECTION_TOP;
 const SECTION_CY = SECTION_TOP + SECTION_H / 2;
 const SECTION_GAP = 24;
@@ -121,7 +121,7 @@ const OFFER_PREVIEW_BLOCK_W = MAX_OFFER_PREVIEWS * (OFFER_PREVIEW_SIZE + OFFER_P
 const SUMMARY_START_Y = 330;
 const MAX_SUMMARY_CHIPS = 5;
 
-const FOOTER_Y = 952;
+const FOOTER_Y = GAME_HEIGHT - 92;
 const CONTINUE_W = 270;
 const CONTINUE_H = 56;
 const CONTINUE_X = CONTENT_RIGHT - CONTINUE_W / 2;
@@ -285,7 +285,7 @@ export class MatchResultsOverlay {
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
-    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.58)
+    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.84)
       .setScrollFactor(0)
       .setInteractive();
     backdrop.on('pointerdown', () => this.skipAnimations());

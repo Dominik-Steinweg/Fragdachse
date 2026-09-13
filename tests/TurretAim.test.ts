@@ -34,6 +34,67 @@ function fixture(overrides: Partial<AutomatedTurret> = {}) {
 }
 
 describe('turret aiming and discharge', () => {
+  it('finishes a released manual salvo and cannot gain shots by switching control modes mid-salvo', () => {
+    const weapon = WEAPON_CONFIGS.TURRET_ROCKET_BURST;
+    const f = fixture({ weaponId: 'TURRET_ROCKET_BURST' });
+    let held = true;
+    const manual = () => ({ playerId: 'pilot', revision: 1, targetX: 200, targetY: 0, fireHeld: held, fresh: true });
+    f.system.setManualControlProvider(manual);
+    f.tick(0); held = false;
+    const end = (weapon.turretBurst!.count - 1) * weapon.turretBurst!.intervalMs;
+    for (let t = weapon.turretBurst!.intervalMs; t <= end; t += weapon.turretBurst!.intervalMs) f.tick(t);
+    expect(f.fire).toHaveBeenCalledTimes(weapon.turretBurst!.count);
+    f.tick(end + weapon.cooldown); expect(f.fire).toHaveBeenCalledTimes(weapon.turretBurst!.count);
+    held = true; f.tick(end + weapon.cooldown + 1);
+    const count = f.fire.mock.calls.length, handoff = end + weapon.cooldown + 2;
+    f.system.setManualControlProvider(null); f.tick(handoff);
+    f.system.setManualControlProvider(manual); f.tick(handoff + 1);
+    f.tick(handoff + weapon.cooldown - 1); expect(f.fire).toHaveBeenCalledTimes(count);
+    f.tick(handoff + weapon.cooldown); expect(f.fire).toHaveBeenCalledTimes(count + 1);
+  });
+
+  it('uses manual aim for secondary shots with the existing range, buffs and carrier contract', () => {
+    const f = fixture({ targetRange: 100, sourceCarrierBaseId: 'carrier', skipRockIndex: 1, secondProjectileDamageFactor: 0.5 });
+    const line = vi.fn(() => false);
+    f.system.setLineOfFireChecker(line);
+    f.system.setTurretDamageBuffProvider(() => ({ damageMultiplier: 2 }));
+    f.system.setTurretDamageMultiplierProvider(() => 3);
+    f.system.setManualControlProvider(() => ({ playerId: 'pilot', revision: 1, targetX: 1000, targetY: 0, fireHeld: true, fresh: true }));
+    f.targets([]); f.tick(0); expect(f.fire).not.toHaveBeenCalled();
+    line.mockReturnValue(true); f.tick(1);
+    expect(f.fire).toHaveBeenCalledTimes(2);
+    expect(line).toHaveBeenCalledWith(20, 0, 100, 0, 1, 'carrier');
+    expect(f.fire.mock.calls[0].slice(6, 9)).toEqual([100, 0, 6]);
+    expect(f.fire.mock.calls[1].slice(6, 9)).toEqual([100, 0, 3]);
+    expect(f.fire.mock.calls[1].slice(-3)).toEqual([1, 1, 'carrier']);
+  });
+  it('manually tracks the mouse through a burst using the normal muzzle, cadence and alignment', () => {
+    const f = fixture({ weaponId: 'TURRET_ROCKET_BURST', rotationSpeedDegPerSec: 90, angle: 0 });
+    let targetY = 0, held = false;
+    f.system.setManualControlProvider(() => ({ playerId: 'pilot', revision: 1, targetX: 200, targetY,
+      fireHeld: held, fresh: true }));
+    f.targets([]);
+    f.tick(0); expect(f.fire).not.toHaveBeenCalled();
+    held = true; f.tick(1); expect(f.fire).toHaveBeenCalledOnce();
+    const interval = WEAPON_CONFIGS.TURRET_ROCKET_BURST.turretBurst!.intervalMs;
+    targetY = 200;
+    f.tick(1 + interval, 0); expect(f.fire).toHaveBeenCalledOnce();
+    f.tick(2 + interval, 1000);
+    expect(f.fire).toHaveBeenCalledTimes(2);
+    expect(f.fire.mock.calls[1][7]).toBeCloseTo(200);
+    expect(f.fire.mock.calls[1][0]).toBe('owner');
+  });
+
+  it('keeps automation off while occupied and preserves cooldown through control handoff', () => {
+    const f = fixture({ cooldownMs: 1000 });
+    f.tick(0); expect(f.fire).toHaveBeenCalledOnce();
+    f.system.setManualControlProvider(() => ({ playerId: 'pilot', revision: 1, targetX: 100, targetY: 0,
+      fireHeld: true, fresh: true }));
+    f.tick(500); expect(f.fire).toHaveBeenCalledOnce();
+    f.tick(1000); expect(f.fire).toHaveBeenCalledTimes(2);
+    f.system.setManualControlProvider(null);
+    f.tick(1500); expect(f.fire).toHaveBeenCalledTimes(2);
+  });
   it('preserves immediate legacy rotation, fire and cooldown even with a tolerance alone', () => {
     const f = fixture({ aimToleranceDeg: 0, cooldownMs: 100 });
     f.tick(0);

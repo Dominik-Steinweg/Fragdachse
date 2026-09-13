@@ -95,7 +95,7 @@ export class CoopDefenseDecoyTargetSystem implements DecoyTargetPort {
 
   /** Mapping payloads travel with the same ordinary field computation as its goals. */
   prepareOrdinaryGoals(candidates: readonly EnemyAiTargetCandidate[]): void {
-    const players = candidates.filter(target => target.kind === 'player');
+    const players = candidates.filter(target => target.kind === 'player' || (target.representedPlayerIds?.length ?? 0) > 0);
     for (const [id, targets] of this.ordinaryTargets) {
       const prepared = targets.prepareTargets(players);
       this.options.coordinator.setGoalCells(id,

@@ -385,6 +385,7 @@ export class ClientUpdateCoordinator {
         if (player.id === bridge.getLocalPlayerId()) this.ctx.inputSystem.syncRocketMagazineState?.(ps.alive ? ps.rocketMagazine : undefined);
         player.updateMolotovFirewalker(ps.isMolotovFirewalkerActive === true && ps.alive);
         player.setVisible(ps.alive);
+        player.setTurretMounted(!!ps.turretControl);
         player.setWalking(ps.aim.isMoving && ps.alive && !ps.isBurrowed);
         player.setRageTint(ps.isRaging && ps.activeUltimateId === 'HONEY_BADGER_RAGE');
         const isStealthed = ps.isDecoyStealthed ?? false;
@@ -427,6 +428,7 @@ export class ClientUpdateCoordinator {
       this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
       this.ctx.effectSystem.syncZeusUpgrades(state.zeus ?? { balls: [], ground: [], stuns: [] }, bridge.getSynchronizedNow(), (id, kind) => {
         if (kind === 'player') {
+          if (state.players[id]?.turretControl) return null;
           const p = this.ctx.playerManager.getPlayer(id);
           return p?.active ? { x: p.x, y: p.y, radius: p.getCollisionRadius() } : null;
         }

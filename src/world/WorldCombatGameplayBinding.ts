@@ -199,6 +199,7 @@ export interface ProjectileInteractionBinding {
 }
 
 export interface WorldCombatGameplayBindingOptions {
+  readonly getManualTurretControl?: (id: AutomatedTurretId, now: number) => import('../systems/TurretControlSystem').ManualTurretControl | null;
   readonly projectileUtility?: {
     focusProjectilesInCircle(request: import('../projectile/ProjectileExternalInteractionPort').ProjectileFocusRequest): number;
     destroyProjectile(projectileId: number): void;
@@ -507,6 +508,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         this.systems.teslaDome.hostDeactivateForPlayer(player.id);
       }
       this.systems.teslaDome.setConstructionSourceProvider(null);
+      this.systems.teslaDome.setManualControlProvider(null);
+      this.systems.teslaDome.setManualControlProvider(null);
       this.systems.teslaDome.setRockCallbacks(null, null);
       this.systems.teslaDome.setTrainCallbacks(null, null);
       this.systems.teslaDome.setTurretCallbacks(null, null);
@@ -517,6 +520,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems.teslaDome.setNovaHitHandler(null);
       this.systems.teslaDome.setLineOfSightChecker(null);
       this.systems.turret.setLineOfFireChecker(null);
+      this.systems.turret.setManualControlProvider(null);
+      this.systems.turret.setManualControlProvider(null);
       this.systems.turret.setTurretProvider(null, null);
       this.systems.turret.setEnemyTargetProvider(null);
       this.systems.turret.setFocusTargetProvider(null);
@@ -755,7 +760,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   private bindHostSystems(systems: WorldCombatGameplaySystems, playerCombat: PlayerCombatIntegrationPort): void {
     const o = this.options;
     const { teslaDome, turret, energyShield, timeBubble } = systems;
-    teslaDome.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex) => o.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex, undefined, 0, 'directFire'));
+    turret.setManualControlProvider((id, now) => o.getManualTurretControl?.(id, now) ?? null);
+    teslaDome.setManualControlProvider((id, now) => o.getManualTurretControl?.(id, now) ?? null);
+    teslaDome.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) =>
+      o.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId, 0, 'directFire'));
     turret.setLineOfFireChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, { skipRockIndex, sourceCarrierBaseId }));
     turret.setTurretProvider(() => this.getTurretDefinitions(), (id, angle) => {
       if (typeof id === 'number') {
@@ -1133,7 +1141,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         o.combatSystem.canProjectileDamageTarget(provenance, otherOwnerId, allowTeamDamage)
       ),
       isCurrentTargetInstance: target => o.combatSystem.isCurrentCombatantTarget(target),
-      isTargetCurrentlyValid: (id, type, ownerId) => o.isHomingTargetValid?.(id, type, ownerId) ?? true,
+      isTargetCurrentlyValid: (id, type, ownerId) => (type !== 'players' || o.combatSystem.isPlayerTargetable(id))
+        && (o.isHomingTargetValid?.(id, type, ownerId) ?? true),
     });
     o.projectileInteraction.setProjectileCollisionTargetQueryPort({
       readCollisionTargets: (sink) => {
@@ -1361,10 +1370,25 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     return owners;
   }
 
-  private getTurretDefinitions(): readonly import('../systems/TurretSystem').AutomatedTurret[] {
+  getTurretDefinitions(): readonly import('../systems/TurretSystem').AutomatedTurret[] {
     const o = this.options;
+    const footprint = (carrierId?: string) => {
+      const cells = carrierId ? o.baseManager?.getBase(carrierId)?.getSpec().cells : undefined;
+      if (!cells?.length) return undefined;
+      return {
+        left: o.worldMetrics.offsetX + Math.min(...cells.map(cell => cell.gridX)) * CELL_SIZE,
+        right: o.worldMetrics.offsetX + (Math.max(...cells.map(cell => cell.gridX)) + 1) * CELL_SIZE,
+        top: o.worldMetrics.offsetY + Math.min(...cells.map(cell => cell.gridY)) * CELL_SIZE,
+        bottom: o.worldMetrics.offsetY + (Math.max(...cells.map(cell => cell.gridY)) + 1) * CELL_SIZE,
+      };
+    };
     const placeable = o.placementSystem.getAllRuntimeRocks()
-      .filter(rock => rock.kind === 'turret')
+      .filter(rock => rock.kind === 'turret' && rock.hp > 0)
+      .filter(rock => {
+        const carrierId = o.placementSystem.getCarrierBaseId(rock.id);
+        const carrier = carrierId ? o.baseManager?.getBase(carrierId) : undefined;
+        return !carrierId || (!!carrier && carrier.getHp() > 0 && !carrier.isInert());
+      })
       .filter(rock => !(rock.ownership === 'base-owned' && o.baseManager?.getBase(o.getPersistentBaseId() ?? '')?.isInert()))
       .map(rock => {
         const modifier = o.getPlayerCombatIntegration()?.modifier;
@@ -1387,8 +1411,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         muzzleOffset: rock.constructionId ? o.getConstructionMuzzleOffset(rock.constructionId) : undefined,
         weaponId: rock.turretWeaponId ?? ('SPORES' as const),
         sourceCarrierBaseId: o.placementSystem.getCarrierBaseId(rock.id),
+        footprint: footprint(o.placementSystem.getCarrierBaseId(rock.id)),
       }); });
-    const bases = (o.baseManager?.getTurrets() ?? []).map(turret => ({
+    const bases = (o.baseManager?.getTurrets() ?? [])
+      .filter(turret => (o.baseManager?.getBase(turret.baseId)?.getHp() ?? 0) > 0)
+      .map(turret => ({
       id: turret.id,
       angle: turret.angle,
       ...turretAimConfig(turret),
@@ -1398,35 +1425,39 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       ownerColor: turret.faction === 'hostile' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR,
       weaponId: turret.weaponId,
       sourceCarrierBaseId: turret.baseId,
+      footprint: footprint(turret.baseId),
       targetMode: turret.faction === 'hostile' ? 'players' as const : 'enemies' as const,
     }));
     return [...placeable, ...bases];
   }
 
   private getTeslaConstructionSources(): readonly {
-    id: number; ownerId: string; x: number; y: number; color: number;
+    id: number | string; ownerId: string; x: number; y: number; color: number;
+    sourceCarrierBaseId?: string; skipRockIndex?: number;
     config: WeaponConfig & { fire: TeslaDomeWeaponFireConfig }; damageMultiplier: number;
   }[] {
     const o = this.options;
     const playerCombat = o.getPlayerCombatIntegration();
-    const turrets = this.systems?.turret.getTurrets() ?? [];
-    return o.placementSystem.getAllRuntimeRocks()
-      .filter(rock => rock.kind === 'turret' && rock.constructionId === 'tesla_turret' && rock.turretWeaponId === 'TURRET_TESLA' && rock.hp > 0)
-      .map(rock => {
-        const x = o.worldMetrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2;
-        const y = o.worldMetrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2;
-        const turret = turrets.find(candidate => String(candidate.id) === String(rock.id));
+    const turrets = this.getTurretDefinitions();
+    return turrets.flatMap(turret => {
+        const weapon = WEAPON_CONFIGS[turret.weaponId ?? 'SPORES'];
+        if (weapon.fire.type !== 'tesla_dome') return [];
+        const { x, y, ownerId } = turret;
         const injectorMultiplier = o.getEnergyInjectorSystem()?.getTurretDamageMultiplierAt(x, y) ?? 1;
-        const remote = turret && playerCombat ? playerCombat.item.getRemoteControlDamageMultiplier(rock.ownerId, turret, turrets) : 1;
-        return {
-          id: rock.id,
-          ownerId: rock.ownerId,
+        const baseOwned = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID || ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID;
+        const remote = !baseOwned && playerCombat ? playerCombat.item.getRemoteControlDamageMultiplier(ownerId, turret, turrets) : 1;
+        return [{
+          id: turret.id,
+          ownerId,
           x,
           y,
-          color: rock.ownerColor,
-          config: WEAPON_CONFIGS.TURRET_TESLA as WeaponConfig & { fire: TeslaDomeWeaponFireConfig },
-          damageMultiplier: injectorMultiplier * remote * (playerCombat?.loadout.getDamageMultiplier(rock.ownerId, Date.now()) ?? 1) * (o.getPowerUpSystem()?.getDamageMultiplier(rock.ownerId) ?? 1),
-        };
+          color: turret.ownerColor,
+          sourceCarrierBaseId: turret.sourceCarrierBaseId,
+          skipRockIndex: turret.skipRockIndex,
+          config: { ...weapon, fire: { ...weapon.fire, targetTypes: turret.targetMode === 'players' ? ['players'] : weapon.fire.targetTypes } } as WeaponConfig & { fire: TeslaDomeWeaponFireConfig },
+          damageMultiplier: injectorMultiplier * remote * (baseOwned ? 1
+            : (playerCombat?.loadout.getDamageMultiplier(ownerId, Date.now()) ?? 1) * (o.getPowerUpSystem()?.getDamageMultiplier(ownerId) ?? 1)),
+        }];
       });
   }
 }

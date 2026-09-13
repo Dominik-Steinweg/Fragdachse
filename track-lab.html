@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fragdachse · Gleisprobe</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101d22;color:#e6eeea;font:14px system-ui}header{padding:16px 24px;border-bottom:1px solid #365058}h1{font-size:20px;margin:0 0 5px}p{margin:4px 0;color:#afc5c3}nav{display:flex;gap:8px;flex-wrap:wrap;padding:12px 24px}button{background:#29474c;border:1px solid #58797a;border-radius:6px;color:#effaf5;padding:8px 12px;cursor:pointer}button:hover{background:#41666a}#stage{width:100%;height:calc(100vh - 240px);min-height:380px}output{padding:12px 24px;display:block;color:#c4e6d5}a{color:#a8ded8}
+</style></head><body>
+<header><h1>Fragdachse · Gleisprobe</h1><p>Normaler Dirt, variables Kiesbett und extrahierte Schienen · originale Spielrenderer und Texturen.</p></header>
+<nav aria-label="Darstellung"><button id="zoom">Zoom 100 %</button><button id="seed">Seed 17</button><button id="rails">Schienen ausblenden</button><button id="grid">Chunkgrenzen</button><button id="pan">Kamera weg</button><button id="offset">Weltversatz ändern</button><button id="rebuild">Neu aufbauen</button><a href="/">Zum Spiel</a></nav>
+<div id="stage"></div><output id="status" aria-live="polite">Lädt …</output>
+<script type="module" src="/src/dev/trackLab.ts"></script></body></html>

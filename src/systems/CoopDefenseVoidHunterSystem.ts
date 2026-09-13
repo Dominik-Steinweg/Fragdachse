@@ -234,8 +234,13 @@ export class CoopDefenseVoidHunterSystem {
 
     const positions = this.playerManager.getAllPlayers()
       .filter((player) => player.active && this.combatSystem.isAlive(player.id))
-      .filter((player) => this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, Math.hypot(this.worldMetrics.widthPx, this.worldMetrics.heightPx)))
-      .map((player) => ({ x: player.x, y: player.y }));
+      .flatMap(player => {
+        const replacement = this.targetCatalog?.getPlayerReplacement(player.id);
+        const point = replacement ? replacement.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? replacement
+          : this.combatSystem.isPlayerTargetable?.(player.id) === false ? null : player;
+        return point && this.enemyManager.canSeeThroughSmoke(enemy.id, point.x, point.y, Math.hypot(this.worldMetrics.widthPx, this.worldMetrics.heightPx))
+          ? [{ x: point.x, y: point.y }] : [];
+      });
     const target = computeVoidHunterNukeTarget(positions, {
       x: enemy.sprite.x,
       y: enemy.sprite.y,
@@ -260,19 +265,19 @@ export class CoopDefenseVoidHunterSystem {
 
   private canStartGauss(enemy: EnemyEntity, config: CoopDefenseVoidHunterBossConfig): boolean {
     let hasTarget = false;
-    const checkTarget = (x: number, y: number): boolean => {
+    const checkTarget = (x: number, y: number, skipRockIndex?: number): boolean => {
       if (!this.enemyManager.canSeeThroughSmoke(enemy.id, x, y, VOID_HUNTER_GAUSS.range)) return false;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, x, y);
       if (distance <= config.shotgunRangePx) return true;
       if (distance <= VOID_HUNTER_GAUSS.range
-        && this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, x, y)) hasTarget = true;
+        && this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, x, y, skipRockIndex)) hasTarget = true;
       return false;
     };
     if (this.targetCatalog) {
       let tooClose = false;
-      this.targetCatalog.forEachTarget('player-like', (target) => {
+      this.targetCatalog.forEachTarget('player-like-threats', (target) => {
         const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
-        if (checkTarget(position.x, position.y)) tooClose = true;
+        if (checkTarget(position.x, position.y, target.skipRockIndex)) tooClose = true;
       });
       if (tooClose) return false;
     } else {
@@ -330,6 +335,13 @@ export class CoopDefenseVoidHunterSystem {
   ): void {
     const gauss = state.gauss;
     if (!gauss) return;
+    if (gauss.targetRef.kind === 'player' && (this.combatSystem.isPlayerTargetable?.(gauss.targetRef.id) === false
+      || this.targetCatalog?.getPlayerReplacement(gauss.targetRef.id))) {
+      state.gauss = null;
+      state.nextGaussAt = now + config.gauss.cooldownMs;
+      enemy.setSpecialAction('none');
+      return;
+    }
     enemy.stopMovement();
 
     if (now >= gauss.nextAimUpdateAt) {
@@ -417,7 +429,7 @@ export class CoopDefenseVoidHunterSystem {
     }
     let best: { ref: EnemyAiTargetRef; x: number; y: number; distanceSq: number } | null = null;
     if (this.targetCatalog) {
-      this.targetCatalog.forEachTarget('player-like', (target) => {
+      this.targetCatalog.forEachTarget('player-like-threats', (target) => {
         const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
         const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
         if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, VOID_HUNTER_GAUSS.range)) return;

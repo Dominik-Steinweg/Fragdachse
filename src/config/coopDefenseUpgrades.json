@@ -5,6 +5,15 @@
                            "sortOrder":  10,
                            "upgrades":  [
                                             {
+                                                "id": "turret_control",
+                                                "code": "A23",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "costPerLevel": 1,
+                                                "sortOrder": 230,
+                                                "effects": [{ "stat": "player.turretControlEnabled", "mode": "add_per_level", "value": 1 }]
+                                            },
+                                            {
                                                 "id":  "hp",
                                                 "code":  "A1",
                                                 "kind":  "upgrade",

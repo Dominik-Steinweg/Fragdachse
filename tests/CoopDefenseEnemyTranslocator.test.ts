@@ -25,15 +25,18 @@ import { CoopDefenseEnemyAbilitySystem } from '../src/systems/CoopDefenseEnemyAb
 import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
+import { EnemyAiTargetCatalog } from '../src/systems/EnemyAiTargetCatalog';
 
 function createSystem(
   hasClearLineOfFire: (...args: unknown[]) => boolean,
   kind = 'void-stalker',
+  catalog: EnemyAiTargetCatalog | null = null,
 ) {
   const enemy = fakeEntity({ id: 'void-stalker-1',
     kind,
     faction: 'hostile', active: true, x: 400, y: 300, getHp: () => 160,
     getCollisionRadius: () => 16,
+    setPosition: vi.fn(),
     isBurrowed: () => false }) as unknown as EnemyEntity;
   const player = fakeEntity({ id: 'player-1', active: true, x: 800, y: 300 });
   const spawnPuck = vi.fn().mockReturnValue(7);
@@ -51,6 +54,7 @@ function createSystem(
     canDamageTarget: () => true,
     hasClearLineOfFire,
     applyDamage: vi.fn(),
+    applyStructureDamage: vi.fn(),
   } as unknown as CombatSystem;
   const projectileSpawn = {
     spawnProjectile,
@@ -72,17 +76,41 @@ function createSystem(
       null as FlamethrowerUpgradeSystem | null,
       {} as FireSystem,
       { broadcastTranslocatorFlash: vi.fn() },
-      undefined,
+      catalog,
       undefined,
       translocatorProjectilePort,
     ),
     hasClearLineOfFire,
     spawnPuck,
     spawnProjectile,
+    translocatorProjectilePort,
+    combatSystem,
   };
 }
 
 describe('Void-Stalker Translocator', () => {
+  it.each(['armed-construct', 'armed-outpost', 'armed-base'] as const)('telefrags the actual %s once for its occupants and respects cover', kind => {
+    const catalog = new EnemyAiTargetCatalog();
+    catalog.updateTargets([{ kind, id: 'structure', x: 800, y: 300, representedPlayerIds: ['player-1', 'player-2'],
+      skipRockIndex: kind === 'armed-construct' ? 7 : undefined, resolvePosition: () => ({ x: 795, y: 300 }) }]);
+    let clear = true;
+    const f = createSystem(() => clear, 'void-stalker', catalog);
+    f.combatSystem.canDamageTarget = () => false;
+    f.translocatorProjectilePort.getPuckPosition = () => ({ x: 790, y: 300 });
+    f.translocatorProjectilePort.consumePuck = () => true;
+    const ability = getCoopDefenseEnemyConfig('void-stalker').translocator!;
+    f.system.hostUpdate(0);
+    expect(f.spawnPuck).toHaveBeenCalledOnce();
+    f.system.hostUpdate(ability.flightTimeMs);
+    expect(f.combatSystem.applyStructureDamage).toHaveBeenCalledExactlyOnceWith(
+      { kind: kind === 'armed-construct' ? 'construction' : 'base', id: 'structure' }, 9999, 'void-stalker-1');
+    expect(f.combatSystem.applyDamage).not.toHaveBeenCalled();
+    f.system.hostUpdate(ability.flightTimeMs + ability.cooldownMs);
+    clear = false;
+    f.system.hostUpdate(2 * ability.flightTimeMs + ability.cooldownMs);
+    expect(f.combatSystem.applyStructureDamage).toHaveBeenCalledTimes(1);
+  });
+
   it('passes puck radius and safety margin to the path check', () => {
     const hasClearLineOfFire = vi.fn((...args: unknown[]) => (args[4] as { clearanceRadius?: number }).clearanceRadius === 12);
     const { system, spawnPuck } = createSystem(hasClearLineOfFire);

@@ -1,4 +1,5 @@
 export const deUi = {
+  "ui.turretControl.enter": "Shift: Bemannen",
   "ui.stinkCloud.active": "Aktiv",
   "ui.stinkCloud.cooldown": "Abklingzeit",
   "ui.timeBubble.flying": "Unterwegs",

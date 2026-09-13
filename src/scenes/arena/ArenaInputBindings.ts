@@ -904,7 +904,10 @@ export class ArenaInputBindings {
       diagnosticsArena: frame.diagnosticsArena,
     };
     const inputPolicy = resolveInputPolicy(policyInput);
-    this.input.inputSystem.setAimEnabled(inputPolicy.aim);
+    const turretInput = !!this.input.inputSystem.getTurretControlState?.() && frame.gameplayActive
+      && !frame.uiBlocking && !frame.diagnosticsArena && policyInput.capabilities.canControlCamera;
+    this.input.inputSystem.setTurretInputEnabled?.(turretInput);
+    this.input.inputSystem.setAimEnabled(inputPolicy.aim || turretInput);
     this.input.inputSystem.setInputEnabled(inputPolicy.movement, inputPolicy.worldInteraction);
     this.input.inputSystem.update();
   }

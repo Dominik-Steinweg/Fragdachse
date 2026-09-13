@@ -462,9 +462,12 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
 
   private damageArmedOutposts(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {
     for (const base of this.baseManager.getBasesByFaction('friendly')) {
-      if (base.role !== 'outpost' || (base.isInert?.() ?? false) || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
+      const represented = this.strategicTargets.resolve({ kind: base.role === 'outpost' ? 'armed-outpost' : 'armed-base', id: base.id })?.representedPlayerIds?.length;
+      if ((base.isInert?.() ?? false) || base.getHp() <= 0
+        || (!represented && (base.role !== 'outpost' || base.getTurrets().length === 0))) continue;
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > radius) continue;
+      if (represented && !this.combatSystem.hasClearLineOfFire(x, y, surface.x, surface.y)) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - surface.distance / radius)));
       // Auch Gegner-Spezialschaden laeuft durch den zentralen Zielstatuspfad, damit Matrixschutz
       // und Verwundbarkeit auf Basen fuer jede Schadensquelle gleich gelten. Der ausgehende

@@ -37,10 +37,11 @@ import type {
 } from './ChunkedRenderSurface';
 import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
 import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
+import { TrackGravelLayer } from '../TrackGravelLayer';
 
 /**
  * Gestreamte statische Bodenbaender: Dirt samt eingebackener Materialstoerung, optionaler
- * Persistent-Base-Kies, Ground Cover und die statischen Decals.
+ * Persistent-Base-Kies, Ground Cover, Bahnschotter und die statischen Decals.
  *
  * Diese Schichten aendern sich zur Laufzeit nicht. Frueher war das der Grund, sie genau einmal je World
  * in je eine arenagrosse RenderTexture zu backen; bei 400 x 80 Zellen waeren das 12 800 x 2 560 px
@@ -58,6 +59,7 @@ export const GROUND_DIRT_LAYER_ID = 'dirt';
 export const GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID = 'persistentBaseGravel';
 export const GROUND_PERSISTENT_BASE_GRAVEL_DECORATION_LAYER_ID = 'persistentBaseGravelDecoration';
 export const GROUND_COVER_LAYER_ID = 'groundCover';
+export const GROUND_TRACK_GRAVEL_LAYER_ID = 'trackGravel';
 export const GROUND_DECAL_LAYER_ID = 'groundDecals';
 
 export interface GroundSurfacePersistentBaseGravelZone {
@@ -131,6 +133,7 @@ export class GroundSurfaceStreamer {
   ];
   private readonly scratch: ChunkScratchPool;
   private readonly surface: ChunkedRenderSurface;
+  private readonly trackGravelLayer: TrackGravelLayer | null;
 
   constructor(options: GroundSurfaceStreamerOptions) {
     this.scene = options.scene;
@@ -172,6 +175,7 @@ export class GroundSurfaceStreamer {
     this.groundDecalIndex.sync(this.groundDecals);
     this.dirtIsOccupied = (gx, gy) => this.dirtGrid.isOccupiedWithBorder(gx, gy);
 
+    const trackColumns = ArenaVisualFactory.getTrackColumnSpecs(options.layout.tracks ?? [], options.frame);
     const layers: ChunkedSurfaceLayerSpec[] = [
       { id: GROUND_DIRT_LAYER_ID, depth: DEPTH.DIRT },
       ...(this.persistentBaseGravelEnabled
@@ -184,6 +188,7 @@ export class GroundSurfaceStreamer {
         ]
         : []),
       { id: GROUND_COVER_LAYER_ID, depth: DEPTH.GROUND_COVER },
+      ...(trackColumns.length > 0 ? [{ id: GROUND_TRACK_GRAVEL_LAYER_ID, depth: DEPTH.TRACK_GRAVEL }] : []),
       { id: GROUND_DECAL_LAYER_ID, depth: DEPTH.DECALS },
     ];
 
@@ -198,6 +203,10 @@ export class GroundSurfaceStreamer {
     // im verdeckten Startup angelegt, damit auch eine spaet erstmals befuellte Mottle-/Decal-
     // Variante keinen neuen Framebuffer mitten im Match anfordern muss.
     const scratchSize = ROCK_OVERLAY_CHUNK_SIZE + this.surface.gutterPx * 2;
+    this.trackGravelLayer = trackColumns.length > 0
+      ? new TrackGravelLayer(options.scene, options.layout.seed, trackColumns, options.frame, scratchSize)
+      : null;
+    if (this.trackGravelLayer) this.scratch.preallocate('trackGravel', scratchSize);
     this.scratch.preallocate('dirt', scratchSize);
     this.scratch.preallocate('dirtCutout', scratchSize, 'redraw');
     for (let index = 0; index < this.mottleConfigs.length; index += 1) {
@@ -311,6 +320,24 @@ export class GroundSurfaceStreamer {
     region: GroundSnapshotRegion,
     renderScale: number,
   ): void {
+    this.renderSnapshotBakedLayer(target, region, renderScale, (part, sink) => this.bakeDirtRegion(part, sink));
+  }
+
+  renderSnapshotTrackGravel(
+    target: Phaser.GameObjects.RenderTexture,
+    region: GroundSnapshotRegion,
+    renderScale: number,
+  ): void {
+    if (!this.trackGravelLayer) return;
+    this.renderSnapshotBakedLayer(target, region, renderScale, (part, sink) => this.bakeTrackGravelRegion(part, sink));
+  }
+
+  private renderSnapshotBakedLayer(
+    target: Phaser.GameObjects.RenderTexture,
+    region: GroundSnapshotRegion,
+    renderScale: number,
+    bake: (region: ChunkBakeRegion, sink: ChunkBakeSink) => void,
+  ): void {
     // Die Aufloesung des Snapshot-Targets ist grober als der bestehende Dirt-Bake. Wir lassen
     // deshalb denselben 128-px-Bake in kleinen Quadraten laufen und stempeln jedes fertige,
     // silhouette-geclipte Ergebnis 1:4 in das eine Snapshot-Target. Dadurch braucht der
@@ -332,7 +359,7 @@ export class GroundSurfaceStreamer {
           worldY,
           gutterPx: 0,
         };
-        this.bakeDirtRegion(bakeRegion, {
+        bake(bakeRegion, {
           blit: (_layerId, scratch) => {
             target.stamp(
               scratch.texture.key,
@@ -515,6 +542,7 @@ export class GroundSurfaceStreamer {
   destroy(): void {
     this.surface.destroy();
     this.scratch.destroy();
+    this.trackGravelLayer?.destroy();
     this.dirtIndex.clear();
     this.groundCoverIndex.clear();
     this.groundDecalIndex.clear();
@@ -588,7 +616,15 @@ export class GroundSurfaceStreamer {
     this.bakePersistentBaseGravelRegion(region, sink);
     this.bakePersistentBaseGravelDecorationRegion(region, sink);
     this.bakeGroundCoverRegion(region, sink);
+    this.bakeTrackGravelRegion(region, sink);
     this.bakeDecalRegion(region, sink);
+  }
+
+  private bakeTrackGravelRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
+    if (!this.trackGravelLayer) return;
+    const target = this.scratch.get('trackGravel', region.size);
+    this.trackGravelLayer.bake(target, region);
+    sink.blit(GROUND_TRACK_GRAVEL_LAYER_ID, target);
   }
 
   /**

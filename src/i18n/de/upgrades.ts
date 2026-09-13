@@ -1,4 +1,6 @@
 export const deUpgrades = {
+  "upgrade.turret_control.name": "Türme bemannen",
+  "upgrade.turret_control.description": "Blicke auf einen freundlichen Turm in deiner Nähe und drücke Shift, um ihn zu bemannen. Ziele mit der Maus und halte LMB zum Feuern. Shift steigt in Zielrichtung aus. Gegner greifen währenddessen den Turm oder seinen Träger an.",
   "upgrade.decoy_mass_distraction.name": "Massenablenkung",
   "upgrade.decoy_mass_distraction.description": "Beim Attrappen-Ende: {decoyRefundSeconds} s Cooldown-Erstattung je noch lebendem Gegner im Radius, der diese Attrappe tatsächlich verfolgt oder angegriffen hat. Radius {value0Unsigned} je Stufe.",
   "upgrade.decoy_irresistible_lure.name": "Unwiderstehlicher Lockvogel",

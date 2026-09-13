@@ -1,4 +1,8 @@
 import { MolotovUpgradeSystem } from '../systems/MolotovUpgradeSystem';
+import { TurretControlSystem, resolveTurretExit } from '../systems/TurretControlSystem';
+import { dequantizeAngle } from '../utils/angle';
+import type { AutomatedTurret } from '../systems/TurretSystem';
+import { PLAYER_SIZE } from '../config';
 import type { WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
 import { captureCoopDefenseOutgoingDamage } from '../utils/coopDefenseStats';
 import type { PrimaryHitRewardScopeReadPort } from '../combat/PrimaryHitReward';
@@ -277,6 +281,8 @@ export interface PlayerGameplayResourceCommandPort {
  * über benannte Runtime-Grenzen.
  */
 export interface PlayerGameplayStateReadView {
+  isControllingTurret(playerId: string): boolean;
+  getTurretControlState(playerId: string): import('../types').TurretControlState | undefined;
   isBurrowed(playerId: string): boolean;
   isStunned(playerId: string): boolean;
   getPlayerClassId(playerId: string): string | null;
@@ -313,6 +319,7 @@ export type PlayerGameplayReadViews =
   & PlayerGameplaySnapshotReadView;
 
 export interface PlayerGameplayHostFrameReadModel {
+  readonly turretControl?: import('../types').TurretControlState;
   readonly rocketMagazine?: import('../types').RocketMagazineState;
   readonly adrenaline: number;
   readonly adrenalineRevision: number;
@@ -383,6 +390,9 @@ export interface PlayerGameplayTunnelPlacementPort {
 }
 
 export interface WorldPlayerGameplayRuntimeOptions {
+  readonly getTurrets?: () => readonly AutomatedTurret[];
+  readonly isFriendlyTurret?: (playerId: string, turret: AutomatedTurret) => boolean;
+  readonly getTurretControlInput?: (id: string) => { input: import('../types').TurretControlInput; receivedAt: number } | null;
   readonly playerManager: PlayerManager;
   readonly projectileSpawn: ProjectileSpawnPort;
   readonly translocatorProjectilePort: TranslocatorProjectilePort;
@@ -435,11 +445,52 @@ export class WorldPlayerGameplayRuntime implements
   PlayerGameplayResourceCommandPort,
   PlayerGameplayFrameStages {
   private readonly systems: WorldPlayerGameplaySystems;
+  private readonly turretControl: TurretControlSystem;
+  private geometryQueries: WorldGeometryQueries | null = null;
   private destroyed = false;
   private shieldBuffPort: ShieldBuffPort | null = null;
   private readonly heldActionUtilityIds = new Map<string, string | null>();
 
   constructor(private readonly options: WorldPlayerGameplayRuntimeOptions) {
+    this.turretControl = new TurretControlSystem({
+      getTurrets: () => options.getTurrets?.() ?? [],
+      getActor: id => {
+        const player = options.playerManager.getPlayer(id);
+        const aim = options.network.input.getPlayerInput(id)?.aim;
+        return player ? { x: player.x, y: player.y, angle: aim === undefined ? player.rotation : dequantizeAngle(aim) } : null;
+      },
+      canOccupy: id => !this.destroyed && options.combatSystem.isAlive(id)
+        && options.getPlayerCapabilities(id).canUseCombat
+        && (this.systems?.playerModifier.getNumericStat(id, 'player.turretControlEnabled') ?? 0) > 0,
+      canEnter: id => options.getPlayerCapabilities(id).canInteract && options.getPlayerCapabilities(id).canMove
+        && this.systems.burrow.getPhase(id) === 'idle' && !this.systems.burrow.isTunnelTransit(id)
+        && !this.systems.burrow.isStunned(id) && !(options.combatSystem.isStunned?.(id, Date.now()) ?? false)
+        && options.hostPhysics.getDashPhase(id) === 0 && !options.hostPhysics.hasForcedMovement(id),
+      isFriendly: (id, turret) => options.isFriendlyTurret?.(id, turret) ?? false,
+      getInput: id => options.getTurretControlInput?.(id) ?? null,
+      enter: (id, turret) => {
+        this.clearHeldActionsForPlayer(id);
+        this.systems.rocketMagazine?.cancel(id);
+        this.systems.sustainedWeaponBehavior.resetPlayer(id);
+        this.systems.ultimateBehavior.interruptCombat(id, Date.now());
+        options.decoySystem.breakStealth(id, Date.now());
+        options.playerManager.getPlayer(id)?.setPosition(turret.x, turret.y);
+        options.hostPhysics.resetMovementOrigin(id, turret.x, turret.y);
+        options.resetPlayerPosition(id, turret.x, turret.y);
+        options.hostPhysics.setPlayerMounted(id, turret);
+      },
+      pin: (id, turret) => options.hostPhysics.setPlayerMounted(id, turret),
+      exit: (id, turret, origin, angle) => {
+        const player = options.playerManager.getPlayer(id);
+        options.hostPhysics.setPlayerMounted(id, null);
+        if (!player) return;
+        const exit = resolveTurretExit(turret, origin, angle, PLAYER_SIZE / 2,
+          this.geometryQueries, () => options.playerManager.getWorldSpawnPoint(id));
+        player.setPosition(exit.x, exit.y);
+        options.hostPhysics.resetMovementOrigin(id, exit.x, exit.y);
+        options.resetPlayerPosition(id, exit.x, exit.y);
+      },
+    });
     const heldAction = new HostHeldActionSystem();
     const playerModifier = new CoopDefensePlayerModifierSystem();
     const itemRuntime = new CoopDefenseItemRuntimeSystem({
@@ -960,6 +1011,7 @@ export class WorldPlayerGameplayRuntime implements
 
   runHostPrePhysicsStage(deltaMs: number, nowMs: number, countdownActive: boolean): void {
     if (this.destroyed) return;
+    this.turretControl.reconcile();
     this.interruptStunnedActions(nowMs);
     const { systems } = this;
     systems.heldAction.clearExpired(nowMs);
@@ -1093,6 +1145,7 @@ export class WorldPlayerGameplayRuntime implements
     ];
     return {
       adrenaline: systems.resource.getAdrenaline(playerId),
+      turretControl: this.getTurretControlState(playerId),
       rocketMagazine: systems.rocketMagazine?.getState(playerId),
       adrenalineRevision: systems.resource.getAdrenalineRevision(playerId),
       maxAdrenaline: systems.resource.getMaxAdrenaline(playerId),
@@ -1230,6 +1283,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   detachPlayerLoadout(playerId: string): void {
+    this.turretControl.release(playerId);
     this.systems.ultimateBehavior.removePlayer(playerId);
     this.systems.ak47Behavior?.removePlayer(playerId);
     this.systems.rocketMagazine?.removePlayer(playerId);
@@ -1296,6 +1350,7 @@ export class WorldPlayerGameplayRuntime implements
    * Runtime-Detach derselben Activity lässt sie bewusst bestehen.
    */
   invalidateHeldActionsOnActivityEnd(): void {
+    this.turretControl.clear();
     this.systems.rocketMagazine?.cancelAll();
     this.systems.heldAction.reset();
     this.systems.translocator.clear();
@@ -1304,6 +1359,7 @@ export class WorldPlayerGameplayRuntime implements
   /** Host-authoritative Phase-6A Player Action entry point for Weapon1/Weapon2. */
   usePlayerAction(request: PlayerActionRequest): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
+    if (this.isControllingTurret(request.playerId)) return { ok: false, reason: 'blocked' };
     if (request.category === 'utility') {
       this.systems.rocketMagazine?.releaseForAction(request.playerId, request.hostNowMs);
       return this.systems.utilityAction.execute(request);
@@ -1335,7 +1391,7 @@ export class WorldPlayerGameplayRuntime implements
     toolRef?: import('../types').LoadoutToolRef,
     temporaryUtilityInstanceId?: string,
   ): boolean {
-    if (this.destroyed) return false;
+    if (this.destroyed || this.isControllingTurret(playerId)) return false;
     this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     return this.systems.utilityAction.startHeldAction(playerId, actionId, kind, hostNowMs, toolRef, temporaryUtilityInstanceId);
   }
@@ -1350,7 +1406,7 @@ export class WorldPlayerGameplayRuntime implements
     hostNowMs: number,
     params?: LoadoutUseParams,
   ): LoadoutUseResult {
-    if (this.destroyed) return { ok: false, reason: 'invalid' };
+    if (this.destroyed || this.isControllingTurret(playerId)) return { ok: false, reason: 'blocked' };
     this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     return this.systems.utilityAction.useInspectorUtility(playerId, tool, config, angle, targetX, targetY, hostNowMs, params);
   }
@@ -1371,13 +1427,13 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   handleDashRequest(playerId: string, dx: number, dy: number, hostNowMs: number): void {
-    if (this.destroyed) return;
+    if (this.destroyed || this.isControllingTurret(playerId)) return;
     this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     this.options.hostPhysics.handleDashRPC(playerId, dx, dy);
   }
 
   handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void {
-    if (this.destroyed) return;
+    if (this.destroyed || this.isControllingTurret(playerId)) return;
     if (wantsBurrowed) this.systems.rocketMagazine?.releaseForAction(playerId, Date.now());
     this.systems.burrow.handleBurrowRequest(playerId, wantsBurrowed);
   }
@@ -1390,7 +1446,7 @@ export class WorldPlayerGameplayRuntime implements
     hostNowMs: number,
     identity?: PlayerGameplayHeldActionIdentity,
   ): boolean {
-    if (this.destroyed) return false;
+    if (this.destroyed || this.isControllingTurret(playerId)) return false;
     return this.systems.heldAction.start(
       playerId,
       actionId,
@@ -1441,6 +1497,12 @@ export class WorldPlayerGameplayRuntime implements
   isBurrowed(playerId: string): boolean {
     return this.systems.burrow.isBurrowed(playerId);
   }
+
+  isControllingTurret(playerId: string): boolean { return this.turretControl.isOccupied(playerId); }
+  getTurretControlState(playerId: string): import('../types').TurretControlState | undefined { return this.turretControl.getState(playerId); }
+  getManualTurretControl(id: number | string, now: number) { return this.turretControl.getManualControl(id, now); }
+  requestTurretControl(id: string, request: import('../types').TurretControlRequest): boolean { return this.turretControl.request(id, request); }
+  reconcileTurretControl(): void { this.turretControl.reconcile(); }
 
   isStunned(playerId: string): boolean {
     return this.systems.burrow.isStunned(playerId);
@@ -1524,6 +1586,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   setWorldGeometryQueries(queries: WorldGeometryQueries | null): void {
+    this.geometryQueries = queries;
     if (this.destroyed) return;
     this.systems.burrow.setWorldGeometryQueries(queries);
   }
@@ -1533,6 +1596,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   destroy(): void {
+    this.turretControl.clear();
     if (this.destroyed) return;
     this.destroyed = true;
     const { systems } = this;

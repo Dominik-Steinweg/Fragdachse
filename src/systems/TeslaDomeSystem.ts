@@ -41,6 +41,7 @@ interface ActiveTeslaDome {
   x: number;
   y: number;
   skipRockIndex?: number;
+  sourceCarrierBaseId?: string;
   color: number;
   config: WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
   lastRefreshAt: number;
@@ -58,7 +59,9 @@ interface ActiveTeslaDome {
 }
 
 interface TeslaConstructionSource {
-  id: number;
+  id: number | string;
+  skipRockIndex?: number;
+  sourceCarrierBaseId?: string;
   ownerId: string;
   x: number;
   y: number;
@@ -69,7 +72,7 @@ interface TeslaConstructionSource {
 }
 
 interface ActiveConstructionTeslaDome extends ActiveTeslaDome {
-  sourceId: number;
+  sourceId: number | string;
 }
 
 interface TeslaRockTarget {
@@ -138,7 +141,7 @@ export interface TeslaNovaHit {
   ownerId: string;
 }
 
-type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number) => boolean;
+type LineOfSightChecker = (sx: number, sy: number, ex: number, ey: number, skipRockIndex?: number, sourceCarrierBaseId?: string) => boolean;
 type RockTargetProvider = () => readonly TeslaRockTarget[];
 type RockDamageHandler = (index: number, damage: number, ownerId: string) => void;
 type TrainTargetProvider = () => readonly { x: number; y: number }[];
@@ -156,8 +159,10 @@ type NovaHitHandler = (hit: TeslaNovaHit) => void;
 const TRAIN_TARGET_ID = 'train';
 
 export class TeslaDomeSystem {
+  private manualControlProvider: ((id: number | string, now: number) => import('./TurretControlSystem').ManualTurretControl | null) | null = null;
+  setManualControlProvider(provider: typeof this.manualControlProvider): void { this.manualControlProvider = provider; }
   private readonly activeDomes = new Map<string, ActiveTeslaDome>();
-  private readonly activeConstructionDomes = new Map<number, ActiveConstructionTeslaDome>();
+  private readonly activeConstructionDomes = new Map<number | string, ActiveConstructionTeslaDome>();
 
   private lineOfSightChecker: LineOfSightChecker | null = null;
   private rockTargetProvider: RockTargetProvider | null = null;
@@ -367,7 +372,7 @@ export class TeslaDomeSystem {
 
   private hostUpdateConstructionDomes(now: number): SyncedTeslaDome[] {
     const synced: SyncedTeslaDome[] = [];
-    const activeSourceIds = new Set<number>();
+    const activeSourceIds = new Set<number | string>();
 
     for (const source of this.constructionSourceProvider?.() ?? []) {
       activeSourceIds.add(source.id);
@@ -380,7 +385,8 @@ export class TeslaDomeSystem {
           damageMultiplier: Math.max(0, source.damageMultiplier ?? 1),
           x: source.x,
           y: source.y,
-          skipRockIndex: source.id,
+          skipRockIndex: source.skipRockIndex ?? (typeof source.id === 'number' ? source.id : undefined),
+          sourceCarrierBaseId: source.sourceCarrierBaseId,
           color: source.color,
           config: source.config,
           lastRefreshAt: now,
@@ -400,9 +406,19 @@ export class TeslaDomeSystem {
         dome.y = source.y;
         dome.color = source.color;
         dome.config = source.config;
+        dome.sourceCarrierBaseId = source.sourceCarrierBaseId;
         dome.damageMultiplier = Math.max(0, source.damageMultiplier ?? 1);
       }
 
+      const manual = this.manualControlProvider?.(source.id, now) ?? null;
+      if (manual && !manual.fireHeld) {
+        // Keep the cadence but discard elapsed idle ticks; no catch-up damage on repress.
+        const interval = Math.max(1, dome.config.fire.tickInterval);
+        dome.lastTickAt += Math.floor(Math.max(0, now - dome.lastTickAt) / interval) * interval;
+        dome.locks = [];
+        this.activeConstructionDomes.set(source.id, dome);
+        continue;
+      }
       this.refreshLocks(dome);
 
       // Ein Tesla-Turm ist nur bei einem erreichbaren Gegner aktiv. Dadurch bleiben
@@ -682,7 +698,7 @@ export class TeslaDomeSystem {
         if (!this.combatSystem.canDamageTarget(dome.ownerId, player.id)) continue;
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, player.x, player.y);
         if (dist > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, player.x, player.y, dome.skipRockIndex)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, player.x, player.y, dome.skipRockIndex, dome.sourceCarrierBaseId)) continue;
         push('players', player.id, player.x, player.y, dist);
       }
     }
@@ -691,7 +707,7 @@ export class TeslaDomeSystem {
       for (const rock of this.rockTargetProvider()) {
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, rock.x, rock.y);
         if (dist > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, rock.x, rock.y, rock.index)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, rock.x, rock.y, rock.index, dome.sourceCarrierBaseId)) continue;
         push('rocks', String(rock.index), rock.x, rock.y, dist);
       }
     }
@@ -701,7 +717,7 @@ export class TeslaDomeSystem {
         if (!this.combatSystem.canDamageTarget(dome.ownerId, turret.ownerId)) continue;
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, turret.x, turret.y);
         if (dist > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, turret.x, turret.y, turret.id)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, turret.x, turret.y, turret.id, dome.sourceCarrierBaseId)) continue;
         push('turrets', String(turret.id), turret.x, turret.y, dist);
       }
     }
@@ -711,7 +727,7 @@ export class TeslaDomeSystem {
         if (!this.combatSystem.canDamageTarget(dome.ownerId, enemy.id)) continue;
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, enemy.x, enemy.y);
         if (dist > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, enemy.x, enemy.y, dome.skipRockIndex)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, enemy.x, enemy.y, dome.skipRockIndex, dome.sourceCarrierBaseId)) continue;
         push('enemies', enemy.id, enemy.x, enemy.y, dist);
       }
     }
@@ -723,7 +739,7 @@ export class TeslaDomeSystem {
         if (base.faction !== 'hostile' || (base.isInert?.() ?? false) || base.getHp() <= 0) continue;
         const surface = base.getNearestSurfacePoint(dome.x, dome.y);
         if (!surface || surface.distance > radius) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, surface.x, surface.y, dome.skipRockIndex)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, surface.x, surface.y, dome.skipRockIndex, dome.sourceCarrierBaseId)) continue;
         push('bases', base.id, surface.x, surface.y, surface.distance);
       }
     }
@@ -735,7 +751,7 @@ export class TeslaDomeSystem {
         const dist = Phaser.Math.Distance.Between(dome.x, dome.y, segment.x, segment.y);
         if (dist > radius) continue;
         if (best && dist >= best.distance) continue;
-        if (!this.hasLineOfSight(fire, dome.x, dome.y, segment.x, segment.y, dome.skipRockIndex)) continue;
+        if (!this.hasLineOfSight(fire, dome.x, dome.y, segment.x, segment.y, dome.skipRockIndex, dome.sourceCarrierBaseId)) continue;
         best = { x: segment.x, y: segment.y, distance: dist };
       }
       if (best) push('train', TRAIN_TARGET_ID, best.x, best.y, best.distance);
@@ -866,10 +882,11 @@ export class TeslaDomeSystem {
     ex: number,
     ey: number,
     skipRockIndex?: number,
+    sourceCarrierBaseId?: string,
   ): boolean {
     if (!fire.requireLineOfSight) return true;
     if (!this.lineOfSightChecker) return true;
-    return this.lineOfSightChecker(sx, sy, ex, ey, skipRockIndex);
+    return this.lineOfSightChecker(sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId);
   }
 
   private getEffectiveRadius(dome: ActiveTeslaDome): number {
@@ -902,6 +919,6 @@ export function toHomingTargetTypes(
   return targetTypes.filter((type): type is Exclude<TeslaDomeTargetType, 'rocks'> => type !== 'rocks');
 }
 
-function constructionVisualId(sourceId: number): string {
+function constructionVisualId(sourceId: number | string): string {
   return `tesla-turret:${sourceId}`;
 }

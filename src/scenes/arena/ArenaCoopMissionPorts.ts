@@ -15,6 +15,7 @@ import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { ArenaContext } from './ArenaContext';
 
 export interface ArenaCoopMissionPortsInput {
+  readonly getTurretControlState?: (playerId: string) => import('../../types').TurretControlState | undefined;
   readonly getSmokePerception: () => import('../../systems/SmokeRules').SmokePerceptionPort | null;
   readonly ctx: ArenaContext;
   readonly getWorldRuntime: () => WorldRuntime | null;
@@ -76,6 +77,11 @@ export function createArenaCoopMissionPresentationPort(
  */
 export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): CoopMissionRuntimePorts {
   const { ctx, getWorldRuntime, isPlayerBurrowed, getPlayerCapabilities } = input;
+  const representedPlayers = (matches: (id: number | string) => boolean): string[] =>
+    ctx.playerManager.getAllPlayers().flatMap(player => {
+      const state = input.getTurretControlState?.(player.id);
+      return state && matches(state.turretId) ? [player.id] : [];
+    });
 
   return {
     hostUpdate: {
@@ -85,6 +91,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
         return player ? { x: player.x, y: player.y } : null;
       },
       isPlayerAlive: (playerId) => ctx.getWorldCombatCore()!.isAlive(playerId),
+      isPlayerTargetable: id => !input.getTurretControlState?.(id),
       isPlayerBurrowed,
       isPlayerStealthed: (playerId) => ctx.decoySystem.isStealthed(playerId),
       canUseMissionActions: (playerId) => getPlayerCapabilities(playerId).canUseMissionActions,
@@ -104,7 +111,9 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
         const constructions: CoopMissionArmedConstructionView[] = [];
         for (const construction of getWorldRuntime()?.materialization?.placement?.getAllRuntimeRocks() ?? []) {
           if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+          if (getWorldRuntime()?.materialization?.placement?.getCarrierBaseId(construction.id)) continue;
           constructions.push({
+            representedPlayerIds: representedPlayers(id => id === construction.id),
             id: String(construction.id),
             gridX: construction.gridX,
             gridY: construction.gridY,
@@ -116,12 +125,16 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
       getArmedOutposts: () => {
         const outposts: CoopMissionArmedOutpostView[] = [];
         for (const base of getWorldRuntime()?.materialization?.bases?.getBasesByFaction('friendly') ?? []) {
-          if (base.role !== 'outpost'
-            || base.isInert?.() === true
-            || base.getHp() <= 0
-            || base.getTurrets().length === 0) continue;
-          const turret = base.getTurrets()[0];
+          const representedPlayerIds = representedPlayers(id => typeof id === 'number'
+            ? getWorldRuntime()?.materialization?.placement?.getCarrierBaseId(id) === base.id
+            : base.getTurrets().some(turret => turret.id === id));
+          if (base.isInert?.() === true || base.getHp() <= 0
+            || (!representedPlayerIds.length && (base.role !== 'outpost' || base.getTurrets().length === 0))) continue;
+          const turret = base.getTurrets()[0] ?? base.getNearestSurfacePoint(0, 0);
+          if (!turret) continue;
           outposts.push({
+            kind: base.role === 'outpost' ? 'armed-outpost' : 'armed-base',
+            representedPlayerIds,
             id: base.id,
             x: turret.x,
             y: turret.y,
@@ -131,7 +144,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
               return surface ? { x: surface.x, y: surface.y } : null;
             },
             isTargetable: () => (
-              base.isInert?.() !== true && base.getHp() > 0 && base.getTurrets().length > 0
+              base.isInert?.() !== true && base.getHp() > 0
             ),
           });
         }
