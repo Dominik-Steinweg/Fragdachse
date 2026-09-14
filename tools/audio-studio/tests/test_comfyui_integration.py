@@ -16,15 +16,16 @@ from audio_studio.storage import atomic_json, read_json, sha256
 TOOL = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("model", ["medium", "small-sfx-comfyui"])
-def test_shipped_workflow_api_job_raw_and_processing(studio, model):
+@pytest.mark.parametrize("model,key,duration", [("medium", "sfx_one", 2), ("small-sfx-comfyui", "sfx_one", 2), ("medium", "music_arena", 60)])
+def test_shipped_workflow_api_job_raw_and_processing(studio, model, key, duration):
     # Captured read-only from the installed native ComfyUI 0.35.1 API. In
     # particular, legacy COMBO lists and the V3 FLAC saver coexist here.
     schemas = read_json(TOOL / "tests/fixtures/comfyui-0.35.1-object-info.json")
     registry = read_json(TOOL / "catalog/generators.json")
     workflow_path = TOOL / "workflows" / registry["models"][model]["workflow"]
     template = read_json(workflow_path)
-    prompt = "  A single explosive metal impact.\nNo rewrite: {dry|wet}.  "
+    music = key == "music_arena"
+    prompt = "  Original instrumental groove.\nNo rewrite: {dry|wet}.  " if music else "  A single explosive metal impact.\nNo rewrite: {dry|wet}.  "
     received = []
     source = np.sin(np.arange(44100)[:, None] * np.array([[.08, .081]])) * .4
     encoded = io.BytesIO()
@@ -44,7 +45,7 @@ def test_shipped_workflow_api_job_raw_and_processing(studio, model):
             assert graph["1"]["inputs"]["ckpt_name"] == registry["models"][model]["model_filename"]
             assert graph["3"]["inputs"]["text"] == prompt
             assert graph["4"]["inputs"]["text"] == ""
-            assert graph["5"]["inputs"]["seconds_total"] == graph["6"]["inputs"]["seconds"] == 2
+            assert graph["5"]["inputs"]["seconds_total"] == graph["6"]["inputs"]["seconds"] == duration
             assert graph["7"]["inputs"]["seed"] == 1701
             assert graph["7"]["inputs"]["steps"] == 10
             assert graph["7"]["inputs"]["cfg"] == 1.5
@@ -65,9 +66,9 @@ def test_shipped_workflow_api_job_raw_and_processing(studio, model):
     router = GenerationRouter(studio.tool, registry=registry, factories={"python": lambda: None, "comfyui": lambda: comfy})
     studio.jobs.backend = router
     state = studio.catalog.read()
-    state = studio.catalog.edit("sfx_one", {"prompt": {"text": prompt}, "playback": "oneshot"}, state["revision"])
+    state = studio.catalog.edit(key, {"prompt": {"text": prompt}, "playback": "loop" if music else "oneshot"}, state["revision"])
     revision = studio.catalog.read()["revision"]
-    run = studio.generate("sfx_one", revision, generation={"model": model, "duration_seconds": 2, "candidate_count": 1, "steps": 10, "cfg_scale": 1.5}, seed=1701)
+    run = studio.generate(key, revision, generation={"model": model, "duration_seconds": duration, "candidate_count": 1, "steps": 10, "cfg_scale": 1.5}, seed=1701)
     studio.jobs.queue.join()
     finished = studio.jobs.read(run["id"])
     assert finished["status"] == "complete", finished.get("error")
@@ -85,7 +86,7 @@ def test_shipped_workflow_api_job_raw_and_processing(studio, model):
     assert candidate["generation"]["transport_output"]["format"] == "flac"
     assert template == read_json(workflow_path)
     before = sha256(raw)
-    version = studio.process(run["id"], "0", "oneshot", "impact", {})
+    version = studio.process(run["id"], "0", "loop" if music else "oneshot", "music_loop" if music else "impact", {})
     assert version["id"]
     assert sha256(raw) == before
     assert studio.jobs.read(run["id"])["candidates"][0]["versions"]

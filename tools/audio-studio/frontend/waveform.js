@@ -6,8 +6,9 @@ export function moveMarker(selection, marker, fraction) {
   const next = {...selection};
   const position = Math.round(clamp(fraction, 0, 1) * next.duration_ms * 10) / 10;
   const gap = Math.min(1, next.duration_ms);
-  if (marker === 'start') next.start_ms = clamp(position, 0, Math.min(24000, next.end_ms - gap));
-  if (marker === 'end') next.end_ms = clamp(position, next.start_ms + gap, next.duration_ms);
+  const limit = Math.min(next.duration_ms, next.cut_limit_ms ?? next.duration_ms);
+  if (marker === 'start') next.start_ms = clamp(position, 0, Math.min(next.end_ms, limit) - gap);
+  if (marker === 'end') next.end_ms = clamp(position, next.start_ms + gap, limit);
   const length = next.end_ms - next.start_ms;
   if (marker === 'fade-in') next.fade_in_ms = clamp(position - next.start_ms, 0, Math.min(1000, length));
   if (marker === 'fade-out') next.fade_out_ms = clamp(next.end_ms - position, 0, Math.min(5000, length));

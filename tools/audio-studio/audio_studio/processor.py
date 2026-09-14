@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -40,11 +41,15 @@ _OVERRIDE_NAMES = {
     "auto_trim",
     "pre_roll_ms",
     "peak_db",
+    "target_lufs",
+    "true_peak_db",
 }
 _PLAYBACKS = {"oneshot", "loop"}
 _CROSSFADE_CURVES = {"linear", "equal_power"}
 _OUTPUT_NAMES = ("processed.wav", "export.ogg", "loop-preview.wav")
 _OGG_COMPRESSION_LEVEL = 0.8
+_MUSIC_PROFILE = "music_loop"
+_MUSIC_MAX_SECONDS = 380.0
 
 
 def _require_soundfile() -> Any:
@@ -88,8 +93,13 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def read_audio(path: Path) -> tuple[np.ndarray, int]:
-    """Read an audio file as finite ``(frames, channels)`` float64 samples."""
+def read_audio(path: Path, dtype: str = "float64") -> tuple[np.ndarray, int]:
+    """Read an audio file as finite ``(frames, channels)`` floating samples.
+
+    The public default remains float64 for the established SFX contract.  The
+    long-form music path may request float32 to keep a 120-second stereo source
+    bounded while it creates its derived loop buffer.
+    """
     soundfile = _require_soundfile()
     path = Path(path)
     if not path.is_file():
@@ -100,10 +110,12 @@ def read_audio(path: Path) -> tuple[np.ndarray, int]:
             raise AudioProcessingError("SFX must use one or two channels at 8–192 kHz")
         if info.frames <= 0 or info.duration > 600:
             raise AudioProcessingError("SFX duration must be nonempty and at most ten minutes")
-        data, sample_rate = soundfile.read(str(path), always_2d=True, dtype="float64")
+        if dtype not in {"float32", "float64"}:
+            raise AudioProcessingError("audio dtype must be float32 or float64")
+        data, sample_rate = soundfile.read(str(path), always_2d=True, dtype=dtype)
     except Exception as exc:  # soundfile exposes several backend-specific errors.
         raise AudioProcessingError(f"could not decode audio source {path}: {exc}") from exc
-    data = np.asarray(data, dtype=np.float64)
+    data = np.asarray(data, dtype=dtype)
     if data.ndim != 2:
         raise AudioProcessingError("decoded audio must have shape (frames, channels)")
     if int(sample_rate) <= 0:
@@ -117,6 +129,89 @@ def read_audio(path: Path) -> tuple[np.ndarray, int]:
 
 def _db(value: float, floor: float = -120.0) -> float:
     return max(floor, 20.0 * math.log10(max(abs(float(value)), 10.0 ** (floor / 20.0))))
+
+
+def _ffmpeg_level_metrics(path: Path, loop: bool = False) -> dict[str, Any] | None:
+    """Read FFmpeg's ebur128 integrated LUFS and true-peak summary.
+
+    ``imageio-ffmpeg`` supplies the studio's bundled, cross-platform meter.
+    Music processing turns a missing runtime or malformed meter response into
+    a clear processing error instead of claiming an unverified true peak.
+    """
+    try:
+        import imageio_ffmpeg  # type: ignore
+
+        executable = imageio_ffmpeg.get_ffmpeg_exe()
+        command = [executable]
+        if loop:
+            # Meter two passes so the true-peak check includes the actual
+            # playback boundary between the final and first encoded frames.
+            command.extend(["-stream_loop", "1"])
+        command.extend(
+            [
+                "-hide_banner",
+                "-nostats",
+                "-i",
+                str(path),
+                "-filter_complex",
+                "ebur128=peak=true:framelog=verbose",
+                "-f",
+                "null",
+                "-",
+            ]
+        )
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except Exception:
+        return None
+    if completed.returncode != 0:
+        return None
+    output = completed.stderr
+    loudness_match = re.search(r"Integrated loudness:\s*\n\s*I:\s*([-+]?\d+(?:\.\d+)?|[-+]?inf)", output)
+    true_peak_match = re.search(r"True peak:\s*\n\s*Peak:\s*([-+]?\d+(?:\.\d+)?|[-+]?inf)\s*dBFS", output)
+    if loudness_match is None or true_peak_match is None:
+        return None
+    try:
+        loudness_text = loudness_match.group(1)
+        true_peak_text = true_peak_match.group(1)
+        integrated = None if "inf" in loudness_text.lower() else float(loudness_text)
+        true_peak_db = -120.0 if "inf" in true_peak_text.lower() else float(true_peak_text)
+        true_peak = 10.0 ** (true_peak_db / 20.0)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return {
+        "integrated_lufs": integrated,
+        "true_peak": true_peak,
+        "true_peak_db": true_peak_db,
+        "method": "FFmpeg ebur128 (BS.1770 gated integrated loudness and true peak; two loop passes)",
+    }
+
+
+def _require_ffmpeg_level_metrics(path: Path, loop: bool = False) -> dict[str, Any]:
+    metrics = _ffmpeg_level_metrics(path, loop=loop)
+    if metrics is None:
+        raise AudioProcessingError(
+            "music_loop requires the bundled imageio-ffmpeg ebur128 meter; install audio-studio dependencies"
+        )
+    return metrics
+
+
+def _verified_buffer_metrics(data: np.ndarray, sample_rate: int, output_dir: Path) -> dict[str, Any]:
+    """Measure an in-memory arrangement through the bundled FFmpeg meter."""
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", dir=str(output_dir), delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+        _write_wav(temporary_path, data, sample_rate)
+        return _require_ffmpeg_level_metrics(temporary_path, loop=True)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def _compact_waveform(data: np.ndarray, bins: int = 128) -> list[dict[str, float]]:
@@ -155,11 +250,10 @@ def _seam_metrics(data: np.ndarray, sample_rate: int, window_ms: float = 8.0) ->
     }
 
 
-def inspect_audio(path: Path, playback: str = "oneshot") -> dict[str, Any]:
-    """Return validation, level, duration, seam, and compact waveform metrics."""
+def _inspect_data(data: np.ndarray, sample_rate: int, path: Path, playback: str) -> dict[str, Any]:
+    """Inspect already-decoded samples without creating another long buffer."""
     if playback not in _PLAYBACKS:
         raise AudioProcessingError(f"playback must be one of {sorted(_PLAYBACKS)}")
-    data, sample_rate = read_audio(Path(path))
     peak = float(np.max(np.abs(data)))
     rms = float(np.sqrt(np.mean(np.square(data))))
     duration = float(data.shape[0] / sample_rate)
@@ -191,6 +285,12 @@ def inspect_audio(path: Path, playback: str = "oneshot") -> dict[str, Any]:
             "waveform_peaks": _compact_waveform(data),
         }
     )
+
+
+def inspect_audio(path: Path, playback: str = "oneshot") -> dict[str, Any]:
+    """Return validation, level, duration, seam, and compact waveform metrics."""
+    data, sample_rate = read_audio(Path(path))
+    return _inspect_data(data, sample_rate, Path(path), playback)
 
 
 def _frame_energy(data: np.ndarray, sample_rate: int) -> tuple[np.ndarray, int]:
@@ -309,6 +409,45 @@ def _crossfade_loop(data: np.ndarray, count: int, curve: str) -> tuple[np.ndarra
     return result, count
 
 
+def _crossfade_music_loop(data: np.ndarray, count: int, curve: str) -> tuple[np.ndarray, int]:
+    """Overlap the arrangement's tail and head without duplicating its head.
+
+    The existing SFX loop helper retains the pre-overlap head in the output.
+    For a long arrangement that makes
+    the first musical phrase occur twice around the seam.  This helper removes
+    both endpoint overlap regions and inserts the blended region once, split
+    across the file boundary.  The interior remains sample-for-sample intact.
+    """
+    if data.shape[0] < 2 or count <= 0:
+        return np.array(data, dtype=np.float64, copy=True), 0
+    requested = int(count)
+    count = min(requested, max(1, (data.shape[0] - 1) // 2))
+    values = np.linspace(0.0, 1.0, count, endpoint=True)
+    tail = data[-count:]
+    head = data[:count]
+    if curve == "equal_power":
+        outgoing = np.cos(values * math.pi / 2.0)[:, None]
+        incoming = np.sin(values * math.pi / 2.0)[:, None]
+    else:
+        outgoing = (1.0 - values)[:, None]
+        incoming = values[:, None]
+    blended = tail * outgoing + head * incoming
+
+    # Put the seam through the middle of the overlap.  The source interior is
+    # copied once, while the crossfade is split into its two circular halves.
+    midpoint = count // 2
+    interior = data[count : data.shape[0] - count]
+    result = np.empty((data.shape[0] - count, data.shape[1]), dtype=np.float64)
+    cursor = 0
+    first = blended[midpoint:]
+    result[cursor : cursor + first.shape[0]] = first
+    cursor += first.shape[0]
+    result[cursor : cursor + interior.shape[0]] = interior
+    cursor += interior.shape[0]
+    result[cursor:] = blended[:midpoint]
+    return result, count
+
+
 def _stable_loop_segment(
     data: np.ndarray,
     start: int,
@@ -359,12 +498,17 @@ def _stable_loop_segment(
     return start + selected, start + selected + target
 
 
-def validate_overrides(overrides: dict[str, Any] | None) -> dict[str, Any]:
+def validate_overrides(overrides: dict[str, Any] | None, profile: str | None = None) -> dict[str, Any]:
     if overrides is None:
         return {}
     if not isinstance(overrides, dict):
         raise AudioProcessingError("overrides must be an object")
-    unknown = sorted(set(overrides) - _OVERRIDE_NAMES)
+    unknown_names = set(overrides) - _OVERRIDE_NAMES
+    if profile != _MUSIC_PROFILE:
+        # Keep the established SFX override contract strict.  These controls
+        # only have meaning for the authored music alignment path.
+        unknown_names.update(set(overrides) & {"target_lufs", "true_peak_db"})
+    unknown = sorted(unknown_names)
     if unknown:
         raise AudioProcessingError(f"unknown processing override(s): {', '.join(unknown)}")
     normalized = dict(overrides)
@@ -384,7 +528,14 @@ def validate_overrides(overrides: dict[str, Any] | None) -> dict[str, Any]:
         "output_gain_db": (-60.0, 24.0),
         "pre_roll_ms": (0.0, 1000.0),
         "peak_db": (-120.0, 0.0),
+        "target_lufs": (-70.0, -5.0),
+        "true_peak_db": (-20.0, 0.0),
     }
+    endpoint_limit = _MUSIC_MAX_SECONDS if profile == _MUSIC_PROFILE else 24.0
+    crossfade_limit = _MUSIC_MAX_SECONDS * 1000.0 if profile == _MUSIC_PROFILE else 5000.0
+    bounds["start_seconds"] = (0.0, endpoint_limit)
+    bounds["end_seconds"] = (0.0, endpoint_limit)
+    bounds["crossfade_ms"] = (0.0, crossfade_limit)
     for name, (minimum, maximum) in bounds.items():
         if name in normalized and not minimum <= normalized[name] <= maximum:
             raise AudioProcessingError(f"{name} must be between {minimum} and {maximum}")
@@ -401,45 +552,71 @@ def _write_wav(path: Path, data: np.ndarray, sample_rate: int) -> None:
         raise AudioProcessingError(f"could not write WAV output {path}: {exc}") from exc
 
 
-def _write_ogg(path: Path, data: np.ndarray, sample_rate: int, output_dir: Path) -> dict[str, Any]:
+def _write_loop_preview(path: Path, data: np.ndarray, sample_rate: int, repeats: int = 3) -> None:
+    """Write a repeated preview in chunks so long music stays bounded in RAM."""
     soundfile = _require_soundfile()
     try:
-        soundfile.write(
-            str(path),
-            np.asarray(data, dtype=np.float64),
-            sample_rate,
-            format="OGG",
-            subtype="VORBIS",
-            compression_level=_OGG_COMPRESSION_LEVEL,
-        )
-        return {"backend": "soundfile/libvorbis", "codec": "Vorbis", "compression_level": _OGG_COMPRESSION_LEVEL}
-    except Exception as soundfile_error:
-        # Some Python wheels ship libsndfile without Vorbis even though WAV is
-        # available.  imageio-ffmpeg is an optional local fallback.
-        try:
-            import imageio_ffmpeg  # type: ignore
+        with soundfile.SoundFile(str(path), mode="w", samplerate=sample_rate, channels=data.shape[1], format="WAV", subtype="FLOAT") as stream:
+            chunk_frames = max(1, min(data.shape[0], int(round(sample_rate * 10.0))))
+            for _ in range(repeats):
+                for start in range(0, data.shape[0], chunk_frames):
+                    stream.write(np.asarray(data[start : start + chunk_frames], dtype=np.float64))
+    except Exception as exc:
+        raise AudioProcessingError(f"could not write WAV loop preview {path}: {exc}") from exc
 
-            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-        except Exception as exc:
-            raise AudioProcessingError(
-                f"could not encode OGG with soundfile ({soundfile_error}); install libvorbis or imageio-ffmpeg"
-            ) from exc
-        with tempfile.NamedTemporaryFile(suffix=".wav", dir=str(output_dir), delete=False) as temporary:
-            temporary_path = Path(temporary.name)
+
+def _write_ogg(
+    path: Path,
+    data: np.ndarray,
+    sample_rate: int,
+    output_dir: Path,
+    prefer_ffmpeg: bool = False,
+) -> dict[str, Any]:
+    soundfile = _require_soundfile()
+    soundfile_error: Exception | None = None
+    if not prefer_ffmpeg:
         try:
-            _write_wav(temporary_path, data, sample_rate)
-            completed = subprocess.run(
-                [ffmpeg, "-v", "error", "-y", "-i", str(temporary_path), "-c:a", "libvorbis", "-q:a", "6", str(path)],
-                check=False,
-                capture_output=True,
-                text=True,
+            soundfile.write(
+                str(path),
+                np.asarray(data, dtype=np.float64),
+                sample_rate,
+                format="OGG",
+                subtype="VORBIS",
+                compression_level=_OGG_COMPRESSION_LEVEL,
             )
-            if completed.returncode != 0 or not path.is_file() or path.stat().st_size == 0:
-                detail = completed.stderr.strip() or "unknown ffmpeg error"
-                raise AudioProcessingError(f"could not encode OGG with ffmpeg: {detail}")
-            return {"backend": "ffmpeg/libvorbis", "codec": "Vorbis", "quality": 6}
-        finally:
-            temporary_path.unlink(missing_ok=True)
+            return {"backend": "soundfile/libvorbis", "codec": "Vorbis", "compression_level": _OGG_COMPRESSION_LEVEL}
+        except Exception as exc:
+            soundfile_error = exc
+    # Some Python wheels ship libsndfile without Vorbis even though WAV is
+    # available.  Long music arrangements also use this path deliberately:
+    # the bundled FFmpeg encoder avoids a libsndfile native abort on large
+    # 44.1/48 kHz stereo inputs.
+    try:
+        import imageio_ffmpeg  # type: ignore
+
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception as exc:
+        detail = f" ({soundfile_error})" if soundfile_error is not None else ""
+        raise AudioProcessingError(
+            f"could not encode OGG with soundfile{detail}; install imageio-ffmpeg"
+        ) from exc
+    with tempfile.NamedTemporaryFile(suffix=".wav", dir=str(output_dir), delete=False) as temporary:
+        temporary_path = Path(temporary.name)
+    try:
+        _write_wav(temporary_path, data, sample_rate)
+        completed = subprocess.run(
+            [ffmpeg, "-nostdin", "-v", "error", "-y", "-i", str(temporary_path), "-c:a", "libvorbis", "-q:a", "6", str(path)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        if completed.returncode != 0 or not path.is_file() or path.stat().st_size == 0:
+            detail = completed.stderr.strip() or "unknown ffmpeg error"
+            raise AudioProcessingError(f"could not encode OGG with ffmpeg: {detail}")
+        return {"backend": "ffmpeg/libvorbis", "codec": "Vorbis", "quality": 6}
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def _validate_output(path: Path, playback: str) -> dict[str, Any]:
@@ -449,6 +626,30 @@ def _validate_output(path: Path, playback: str) -> dict[str, Any]:
         raise
     except Exception as exc:
         raise AudioProcessingError(f"output validation failed for {path}: {exc}") from exc
+
+
+def _inspect_repeated_preview(path: Path, reference: dict[str, Any], repeats: int) -> dict[str, Any]:
+    """Validate preview metadata without loading a multi-minute file again."""
+    soundfile = _require_soundfile()
+    try:
+        info = soundfile.info(str(path))
+    except Exception as exc:
+        raise AudioProcessingError(f"loop preview validation failed for {path}: {exc}") from exc
+    if info.channels not in (1, 2) or info.samplerate <= 0 or info.frames <= 0:
+        raise AudioProcessingError("loop preview has invalid stream metadata")
+    expected_frames = int(reference["frames"]) * int(repeats)
+    if abs(int(info.frames) - expected_frames) > max(16, int(info.samplerate * 0.01)):
+        raise AudioProcessingError("loop preview duration differs from its exported loop")
+    result = dict(reference)
+    result.update(
+        {
+            "path": str(path),
+            "frames": int(info.frames),
+            "duration_seconds": float(info.frames / info.samplerate),
+            "seam": reference.get("seam", {}),
+        }
+    )
+    return result
 
 
 def process_audio(
@@ -469,8 +670,11 @@ def process_audio(
         raise AudioProcessingError(f"playback must be one of {sorted(_PLAYBACKS)}")
     if profile not in PROFILES:
         raise AudioProcessingError(f"unknown processing profile: {profile}")
-    overrides = validate_overrides(overrides)
-    source_data, sample_rate = read_audio(source)
+    if profile == _MUSIC_PROFILE and playback != "loop":
+        raise AudioProcessingError("music_loop profile requires loop playback")
+    overrides = validate_overrides(overrides, profile=profile)
+    is_music = profile == _MUSIC_PROFILE
+    source_data, sample_rate = read_audio(source, dtype="float32" if is_music else "float64")
     source_bytes_hash = _sha256(source)
     output_dir.mkdir(parents=True, exist_ok=True)
     collisions = [name for name in _OUTPUT_NAMES if (output_dir / name).exists()]
@@ -478,16 +682,22 @@ def process_audio(
         raise AudioProcessingError(f"refusing to overwrite existing output(s): {', '.join(collisions)}")
 
     authored = PROFILES[profile]
-    auto_trim = overrides.get("auto_trim", authored.get("auto_trim", playback == "oneshot"))
+    # A musical arrangement is authored as a complete performance.  Even if
+    # an old caller sends auto_trim=True, do not apply the SFX onset/tail or
+    # stable-half selection heuristics to it.
+    auto_trim = False if is_music else overrides.get("auto_trim", authored.get("auto_trim", playback == "oneshot"))
     pre_roll_ms = overrides.get("pre_roll_ms", authored["pre_roll_ms"])
     fade_in_ms = overrides.get("fade_in_ms", authored["fade_in_ms"])
     fade_out_ms = overrides.get("fade_out_ms", authored["fade_out_ms"])
     peak_db = overrides.get("peak_db", authored["peak_db"])
+    target_lufs = overrides.get("target_lufs", authored.get("target_lufs"))
+    true_peak_db = overrides.get("true_peak_db", authored.get("true_peak_db", peak_db))
+    true_peak_guard_db = float(authored.get("true_peak_guard_db", 0.0)) if is_music else 0.0
     crossfade_ms = overrides.get("crossfade_ms", authored["default_crossfade_ms"])
-    curve = overrides.get("crossfade_curve", "linear")
+    curve = overrides.get("crossfade_curve", authored.get("default_crossfade_curve", "linear"))
     warnings: list[str] = []
 
-    onset = _find_onset(source_data, sample_rate, authored)
+    onset = 0 if is_music else _find_onset(source_data, sample_rate, authored)
     if "start_seconds" in overrides:
         start = int(round(overrides["start_seconds"] * sample_rate))
     elif auto_trim:
@@ -506,10 +716,10 @@ def process_audio(
         raise AudioProcessingError("start_seconds is outside the source")
 
     selection = "manual" if "start_seconds" in overrides or "end_seconds" in overrides else ("auto_trim" if auto_trim else "full_source")
-    if playback == "loop" and auto_trim and not ("start_seconds" in overrides or "end_seconds" in overrides):
+    if playback == "loop" and auto_trim and not is_music and not ("start_seconds" in overrides or "end_seconds" in overrides):
         start, end = _stable_loop_segment(source_data, start, end, sample_rate)
         selection = "stable_segment"
-    cut = np.array(source_data[start:end], dtype=np.float64, copy=True)
+    cut = source_data[start:end] if is_music else np.array(source_data[start:end], dtype=np.float64, copy=True)
     explicit_fade_in = "fade_in_ms" in overrides
     requested_fade_in_samples = int(round(fade_in_ms * sample_rate / 1000.0)) if playback == "oneshot" else 0
     available_preroll = max(0, onset - start)
@@ -528,21 +738,45 @@ def process_audio(
     crossfade_samples = int(round(crossfade_ms * sample_rate / 1000.0)) if playback == "loop" else 0
     if playback == "oneshot":
         processed = _fade(cut, fade_in_samples, fade_out_samples)
+    elif is_music:
+        processed, crossfade_samples = _crossfade_music_loop(cut, crossfade_samples, curve)
     else:
         processed, crossfade_samples = _crossfade_loop(cut, crossfade_samples, curve)
 
     requested_gain_db = overrides.get("output_gain_db", 0.0)
+    loudness_before = _verified_buffer_metrics(processed, sample_rate, output_dir) if is_music else None
+    loudness_gain_db = 0.0
+    if is_music and target_lufs is not None:
+        measured_lufs = loudness_before["integrated_lufs"] if loudness_before else None
+        if measured_lufs is None or not math.isfinite(float(measured_lufs)):
+            warnings.append("music arrangement is effectively silent; integrated LUFS alignment was skipped")
+        else:
+            loudness_gain_db = float(target_lufs) - float(measured_lufs)
+            processed *= 10.0 ** (loudness_gain_db / 20.0)
     if requested_gain_db:
         processed *= 10.0 ** (requested_gain_db / 20.0)
     peak_before_limit = float(np.max(np.abs(processed))) if processed.size else 0.0
-    allowed_peak = 10.0 ** (peak_db / 20.0)
+    true_peak_before_limit = (
+        _verified_buffer_metrics(processed, sample_rate, output_dir)["true_peak"]
+        if is_music
+        else peak_before_limit
+    )
+    effective_true_peak_db = true_peak_db - true_peak_guard_db if is_music else peak_db
+    allowed_peak = 10.0 ** (effective_true_peak_db / 20.0)
     limiter_gain_db = 0.0
-    if peak_before_limit > allowed_peak and peak_before_limit > 0.0:
-        limiter_gain_db = 20.0 * math.log10(allowed_peak / peak_before_limit)
-        processed *= allowed_peak / peak_before_limit
-        warnings.append(f"peak exceeded {peak_db:.2f} dBFS; attenuated by {limiter_gain_db:.2f} dB")
-    if requested_gain_db > 0.0:
+    limiter_reference = true_peak_before_limit if is_music else peak_before_limit
+    if limiter_reference > allowed_peak and limiter_reference > 0.0:
+        limiter_gain_db = 20.0 * math.log10(allowed_peak / limiter_reference)
+        processed *= allowed_peak / limiter_reference
+        limit_name = "true peak" if is_music else "peak"
+        limit_value = effective_true_peak_db if is_music else peak_db
+        warnings.append(f"{limit_name} exceeded {limit_value:.2f} dBFS; attenuated by {limiter_gain_db:.2f} dB")
+    if requested_gain_db > 0.0 and not is_music:
         warnings.append("explicit positive output_gain_db applied; no implicit peak normalization was used")
+    elif requested_gain_db > 0.0 and is_music:
+        warnings.append("explicit positive output_gain_db was applied alongside music loudness alignment")
+    if is_music:
+        warnings.append("music loop uses an endpoint crossfade; beat and harmony continuity are not guaranteed")
     if playback == "oneshot" and not explicit_fade_in and fade_in_samples < requested_fade_in_samples:
         warnings.append("automatic cut has little attack pre-roll; review for an aggressive cut")
     if auto_trim and onset >= source_data.shape[0] - max(1, int(round(sample_rate * 0.01))):
@@ -553,11 +787,35 @@ def process_audio(
     processed_path = output_dir / "processed.wav"
     export_path = output_dir / "export.ogg"
     preview_path = output_dir / "loop-preview.wav"
-    _write_wav(processed_path, processed, sample_rate)
-    encoding = _write_ogg(export_path, processed, sample_rate, output_dir)
-    exported_data, exported_rate = read_audio(export_path)
-    if exported_rate != sample_rate or exported_data.shape[1] != processed.shape[1] or not np.isfinite(exported_data).all():
-        raise AudioProcessingError("redecoded OGG output has invalid sample rate, channels, or finite values")
+    # Encode, decode, and (for music) repeat after any codec true-peak
+    # overshoot.  This makes the safety limit apply to the file that the game
+    # will actually decode rather than only to the pre-encoded WAV.
+    codec_limiter_gain_db = 0.0
+    exported_data: np.ndarray
+    exported_rate: int
+    export_levels: dict[str, Any] | None = None
+    for attempt in range(3 if is_music else 1):
+        _write_wav(processed_path, processed, sample_rate)
+        encoding = _write_ogg(export_path, processed, sample_rate, output_dir, prefer_ffmpeg=is_music)
+        exported_data, exported_rate = read_audio(export_path)
+        if exported_rate != sample_rate or exported_data.shape[1] != processed.shape[1] or not np.isfinite(exported_data).all():
+            raise AudioProcessingError("redecoded OGG output has invalid sample rate, channels, or finite values")
+        if not is_music:
+            break
+        export_levels = _require_ffmpeg_level_metrics(export_path, loop=True)
+        exported_true_peak = float(export_levels["true_peak"])
+        if exported_true_peak <= allowed_peak * 1.000001 or exported_true_peak <= 0.0:
+            break
+        attenuation = allowed_peak / exported_true_peak
+        attenuation_db = 20.0 * math.log10(attenuation)
+        codec_limiter_gain_db += attenuation_db
+        processed *= attenuation
+        if attempt == 0:
+            warnings.append(
+                f"redecoded OGG true peak exceeded the guarded {effective_true_peak_db:.2f} dBTP ceiling; attenuated by {attenuation_db:.2f} dB"
+            )
+    if is_music and export_levels is not None and float(export_levels["true_peak"]) > allowed_peak * 1.000001:
+        raise AudioProcessingError("redecoded OGG true peak remains above the requested safety limit")
     frame_delta = abs(int(exported_data.shape[0]) - int(processed.shape[0]))
     plausible_delta = max(16, int(round(sample_rate * 0.01)))
     if frame_delta > max(16, int(round(sample_rate * 0.10))):
@@ -565,12 +823,20 @@ def process_audio(
     if frame_delta > plausible_delta:
         warnings.append(f"redecoded OGG duration differs by {frame_delta} frames from the processed WAV")
     export_inspection = inspect_audio(export_path, playback=playback)
-    if export_inspection["peak"] > (10.0 ** (peak_db / 20.0)) * 1.01:
+    if is_music:
+        if export_levels is None:
+            export_levels = _require_ffmpeg_level_metrics(export_path, loop=True)
+        export_inspection.update(export_levels)
+    elif export_inspection["peak"] > (10.0 ** (peak_db / 20.0)) * 1.01:
         warnings.append("redecoded OGG peak exceeds the requested one-shot peak limit; review codec overshoot")
     if playback == "loop":
-        preview = np.tile(exported_data, (3, 1))
-        _write_wav(preview_path, preview, exported_rate)
-        preview_inspection = inspect_audio(preview_path, playback="loop")
+        if is_music:
+            _write_loop_preview(preview_path, exported_data, exported_rate)
+            preview_inspection = _inspect_repeated_preview(preview_path, export_inspection, 3)
+        else:
+            preview = np.tile(exported_data, (3, 1))
+            _write_wav(preview_path, preview, exported_rate)
+            preview_inspection = inspect_audio(preview_path, playback="loop")
         warnings.extend(export_inspection.get("warnings", []))
     else:
         # Keep the output contract predictable while avoiding a misleading
@@ -579,6 +845,27 @@ def process_audio(
         preview_inspection = None
 
     processed_inspection = _validate_output(processed_path, playback)
+    processed_levels = (
+        _require_ffmpeg_level_metrics(processed_path, loop=True)
+        if is_music
+        else None
+    )
+    if is_music and processed_levels is not None:
+        processed_inspection.update(processed_levels)
+    if is_music:
+        if export_levels is None:
+            export_levels = _require_ffmpeg_level_metrics(export_path, loop=True)
+        total_limiter_gain_db = limiter_gain_db + codec_limiter_gain_db
+        if (
+            target_lufs is not None
+            and processed_levels is not None
+            and processed_levels["integrated_lufs"] is not None
+            and abs(float(processed_levels["integrated_lufs"]) - float(target_lufs)) > 0.5
+        ):
+            warnings.append("true-peak safety attenuation leaves the arrangement below the requested loudness target")
+    else:
+        export_levels = None
+        total_limiter_gain_db = limiter_gain_db
     output_hashes = {"processed.wav": _sha256(processed_path), "export.ogg": _sha256(export_path)}
     if preview_path is not None:
         output_hashes["loop-preview.wav"] = _sha256(preview_path)
@@ -610,10 +897,48 @@ def process_audio(
                 "crossfade_ms": crossfade_samples * 1000.0 / sample_rate,
                 "crossfade_curve": curve if playback == "loop" else None,
             },
+            "loop": (
+                {
+                    "start_seconds": start / sample_rate,
+                    "end_seconds": end / sample_rate,
+                    "crossfade_ms": crossfade_samples * 1000.0 / sample_rate,
+                    "crossfade_samples": crossfade_samples,
+                    "endpoint_match": "conservative amplitude overlap-add",
+                }
+                if is_music
+                else None
+            ),
+            "loudness": (
+                {
+                    "target_lufs": target_lufs,
+                    "before_alignment_lufs": loudness_before["integrated_lufs"] if loudness_before else None,
+                    "processed_lufs": processed_levels["integrated_lufs"] if processed_levels else None,
+                    "export_lufs": export_levels["integrated_lufs"] if export_levels else None,
+                    "alignment_gain_db": loudness_gain_db,
+                    "method": processed_levels["method"] if processed_levels else None,
+                }
+                if is_music
+                else None
+            ),
+            "true_peak": (
+                {
+                    "limit_db": true_peak_db,
+                    "guard_db": true_peak_guard_db,
+                    "effective_limit_db": effective_true_peak_db,
+                    "processed_db": processed_levels["true_peak_db"] if processed_levels else None,
+                    "export_db": export_levels["true_peak_db"] if export_levels else None,
+                    "meter": "FFmpeg ebur128 true peak",
+                    "meter_loop_repeats": 2,
+                    "codec_verified": True,
+                }
+                if is_music
+                else None
+            ),
             "gain": {
                 "output_gain_db": requested_gain_db,
-                "limiter_attenuation_db": limiter_gain_db,
+                "limiter_attenuation_db": total_limiter_gain_db,
                 "peak_limit_db": peak_db,
+                "true_peak_limit_db": true_peak_db if is_music else None,
             },
             "encoding": {
                 "wav": "FLOAT",

@@ -1,6 +1,8 @@
 # Fragdachse Audio Studio
 
-Eigenständiges lokales SFX-Unterprojekt zum [Konzept v1](../../docs/GDDs/Fragdachse_Audio_Studio_Konzept_v1.md). Catalog Builder über Codex/Astra und manuelle Weboberfläche verwenden dieselben Kernmodule. Das Spiel braucht weder Python noch Audiomodelle.
+Eigenständiges lokales Audio-Unterprojekt zum [Konzept v1](../../docs/GDDs/Fragdachse_Audio_Studio_Konzept_v1.md). Catalog Builder über Codex/Astra und manuelle Weboberfläche verwenden dieselben Kernmodule. Das Spiel braucht weder Python noch Audiomodelle.
+
+**Musik:** Lobby und Arena sind als eigene Kategorie integriert. Beide nutzen Medium über den vorhandenen ComfyUI-Workflow, mit längeren Generationen, `music_loop`, RAW-/WAV-/OGG-Vergleich und ausdrücklicher Übernahmefreigabe. Einrichtung und Bedienung: [Musik im Studio](docs/music.md).
 
 **Stand:** Katalog, Studio, Jobs, Processor und kontrollierte Übernahme sind implementiert und ohne GPU getestet. **Small-SFX ist parallel über Python und ComfyUI auswählbar; Medium nutzt ComfyUI.** Alle Wege haben echte lokale Audiodateien erzeugt. Einrichtung und Vergleich: [ComfyUI/Python](docs/comfyui.md), [Python-Runtime](docs/model-setup.md). Ergebnisse und offene Hörabnahme: [Abnahme](docs/acceptance.md).
 
@@ -68,7 +70,7 @@ uv run --inexact audio-studio edit shot_p90 .audio-workspace/prompt-patch.json -
 uv run --inexact audio-studio edit shot_p90 .audio-workspace/prompt-patch.json --revision <SHA256> --propose
 ```
 
-`--propose` speichert einen Vorschlag und bewahrt die aktuelle Entscheidung. Zwischenzeitliche Änderungen führen zum Konflikt. Editierbar sind `name`, `category`, `intent`, `playback`, `prompt`, `generation_defaults`, `processing`, `notes`, `needs_revision`. Keys, Ziele und Lautstärken gehören dem Spiel. Weitere Codex-Hinweise: [AGENTS.md](AGENTS.md).
+`--propose` speichert einen Vorschlag und bewahrt die aktuelle Entscheidung. Zwischenzeitliche Änderungen führen zum Konflikt. Editierbar sind `name`, `category`, `intent`, `musical_identity`, `playback`, `prompt`, `generation_defaults`, `processing`, `notes`, `needs_revision`. Keys, Ziele und Lautstärken gehören dem Spiel. Weitere Codex-Hinweise: [AGENTS.md](AGENTS.md).
 
 ## Tool 2: Produzieren, vergleichen, freigeben
 
@@ -112,7 +114,7 @@ Voraussetzungen treten vor dem Modellwechsel auf; Small-SFX bleibt dabei geladen
 
 ## Grenzen und Wiederherstellung
 
-Spieländerungen laufen nur durch [adapter/index.mjs](adapter/index.mjs): freigegebenes OGG am aktuell vorgesehenen SFX-Ziel und additive Pflege genau des Sets `SHIPPED_AUDIO_FILES`. Keine Änderungen an Keys, Zuordnungen, Lautstärken, Gameplay, Musik, Build, Git-Commits oder Deployment. Medium spricht ausschließlich mit lokalem ComfyUI; kein LLM-Dienst, Prompt-Rewriting oder Cloud-Generierungsfallback.
+Spieländerungen laufen nur durch [adapter/index.mjs](adapter/index.mjs): freigegebenes OGG am aktuell vorgesehenen SFX- oder unterstützten Musik-Ziel und additive Pflege genau des Sets `SHIPPED_AUDIO_FILES`. Musik ist auf Lobby und Arena beschränkt. Keine Änderungen an Keys, Zuordnungen, Lautstärken, Gameplay, Build, Git-Commits oder Deployment. Medium spricht ausschließlich mit lokalem ComfyUI; kein LLM-Dienst, Prompt-Rewriting oder Cloud-Generierungsfallback.
 
 Fingerprints binden die Freigabe an den überprüften Zustand. Ein Konflikt verlangt neuen Abgleich/neue Vorschau. Das gemeinsame Schreiblock koordiniert CLI und Studio; atomare JSON-Saves erkennen externe Katalogänderungen. Fremde Hosts, Browser-Origins und Schreibanfragen ohne Sitzungstoken werden abgewiesen.
 

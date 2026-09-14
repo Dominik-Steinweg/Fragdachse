@@ -16,11 +16,11 @@ from .storage import read_json
 
 def main():
     tool = Path(__file__).resolve().parents[1]
-    parser = argparse.ArgumentParser(description="Fragdachse local SFX production")
+    parser = argparse.ArgumentParser(description="Fragdachse local SFX and music production")
     parser.add_argument("--root", type=Path, default=tool.parents[1])
     parser.add_argument("--workspace", type=Path, default=Path(os.environ.get("AUDIO_STUDIO_WORKSPACE", tool / ".audio-workspace")))
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("scan", help="Read game SFX inventory as JSON")
+    commands.add_parser("scan", help="Read game SFX and supported music inventory as JSON")
     commands.add_parser("sync", help="Merge current repository facts, preserving authorship")
     commands.add_parser("validate", help="Validate the production catalog")
     commands.add_parser("schema", help="Print the shared authoring JSON Schema")

@@ -14,14 +14,19 @@ const SFX_ASSETS = {
   sfx_one: './assets/sounds/one.ogg',
   sfx_pending: './assets/sounds/pending.ogg',
 };
-const MUSIC_ASSETS = { music_arena: './assets/sounds/music.ogg' };
+const MUSIC_ASSETS = {
+  music_lobby: './assets/sounds/lobby.ogg',
+  music_arena: './assets/sounds/music_arena.wav',
+};
 const AUDIO_ASSETS = { ...SFX_ASSETS, ...MUSIC_ASSETS } as const;
-const SOUND_VOLUMES = { sfx_one: 0.5, sfx_pending: 0.2, music_arena: 0.8 };
+const SOUND_VOLUMES = { sfx_one: 0.5, sfx_pending: 0.2, music_lobby: 0.8, music_arena: 0.8 };
 export { AUDIO_ASSETS, SOUND_VOLUMES };
 `;
   await writeFile(path.join(root, 'src', 'audio', 'AudioCatalog.ts'), catalog);
-  await writeFile(path.join(root, 'src', 'usage.ts'), "audio.playSound('sfx_one'); audio.startLoop('sfx_pending');\n");
+  await writeFile(path.join(root, 'src', 'usage.ts'), "audio.playSound('sfx_one'); audio.startLoop('sfx_pending'); audio.playMusic('music_lobby'); audio.playMusic('music_arena');\n");
   await writeFile(path.join(root, 'public', 'assets', 'sounds', 'one.ogg'), Buffer.from('OggS-original'));
+  await writeFile(path.join(root, 'public', 'assets', 'sounds', 'lobby.ogg'), Buffer.from('OggS-lobby'));
+  await writeFile(path.join(root, 'public', 'assets', 'sounds', 'music_arena.wav'), Buffer.from('RIFF-arena'));
   return root;
 }
 
@@ -30,17 +35,26 @@ async function withFixture(callback) {
   try { return await callback(root); } finally { await rm(root, { recursive: true, force: true }); }
 }
 
-test('scan is AST-only, excludes music, and reports planned missing SFX', async () => {
+test('scan discovers central music roles and reports planned missing SFX', async () => {
   await withFixture(async (root) => {
     await mkdir(path.join(root, 'tests'));
     await writeFile(path.join(root, 'tests', 'unrelated.ts'), "audio.startLoop('sfx_one');");
     const result = await scanRepository({ root });
-    assert.deepEqual(Object.keys(result.entries), ['sfx_one', 'sfx_pending']);
+    assert.deepEqual(Object.keys(result.entries), ['music_arena', 'music_lobby', 'sfx_one', 'sfx_pending']);
     assert.equal(result.entries.sfx_pending.exists, false);
     assert.equal(result.entries.sfx_pending.shipped, false);
     assert.equal(result.entries.sfx_pending.playback, 'loop');
     assert.deepEqual(result.entries.sfx_one.shared_keys, ['sfx_one']);
     assert.equal(result.entries.sfx_one.playback, 'oneshot');
+    assert.equal(result.entries.music_lobby.kind, 'music');
+    assert.equal(result.entries.music_lobby.music_role, 'lobby');
+    assert.equal(result.entries.music_lobby.playback, 'loop');
+    assert.equal(result.entries.music_lobby.editable, true);
+    assert.equal(result.entries.music_arena.kind, 'music');
+    assert.equal(result.entries.music_arena.music_role, 'arena');
+    assert.equal(result.entries.music_arena.exists, true);
+    assert.equal(result.entries.music_arena.target_path.endsWith('.wav'), true);
+    assert.deepEqual(result.unsupported_music, {});
   });
 });
 
@@ -132,6 +146,107 @@ test('publish accepts an OGG inside workspace and rejects an outside source', as
       expected_source_hash: actualSourceHash,
       approval_id: 'human-review-3',
     }), (error) => error.code === 'unsafe_path');
+  });
+});
+
+test('publish treats recognized lobby music as a reviewed OGG transaction', async () => {
+  await withFixture(async (root) => {
+    const workspace = path.join(root, '.audio-workspace');
+    await mkdir(workspace, { recursive: true });
+    const source = path.join(workspace, 'lobby-candidate.ogg');
+    const bytes = Buffer.from('OggS-lobby-candidate');
+    await writeFile(source, bytes);
+    const crypto = await import('node:crypto');
+    const sourceHash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const before = await scanRepository({ root });
+    const target = path.join(root, 'public', 'assets', 'sounds', 'lobby.ogg');
+    const originalTarget = await readFile(target);
+    const published = await publishAudio({
+      root,
+      workspace,
+      key: 'music_lobby',
+      source_path: source,
+      expected_catalog_hash: before.catalog_hash,
+      expected_file_hash: before.entries.music_lobby.file_hash,
+      expected_source_hash: sourceHash,
+      approval_id: 'human-review-music-lobby',
+    });
+    assert.equal(published.result.published, true);
+    assert.equal(published.result.key, 'music_lobby');
+    assert.equal((await readFile(target)).toString(), bytes.toString());
+    assert.equal((await scanRepository({ root })).entries.music_lobby.kind, 'music');
+    assert.deepEqual(published.result.whitelist_added, ['lobby.ogg']);
+
+    const manifestPath = path.join(workspace, 'exports', `${published.transaction.id}.json`);
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.status = 'target_written';
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const recovered = await recoverAudio({ root, workspace, transaction_id: published.transaction.id });
+    assert.equal(recovered.result.recovered, true);
+    assert.deepEqual(await readFile(target), originalTarget);
+  });
+});
+
+test('scan keeps arena WAV playable but publication remains OGG-only', async () => {
+  await withFixture(async (root) => {
+    const workspace = path.join(root, '.audio-workspace');
+    await mkdir(workspace, { recursive: true });
+    const source = path.join(workspace, 'arena-candidate.ogg');
+    await writeFile(source, Buffer.from('OggS-arena-candidate'));
+    const before = await scanRepository({ root });
+    assert.equal(before.entries.music_arena.playback, 'loop');
+    assert.equal(before.entries.music_arena.target_path.endsWith('.wav'), true);
+    const crypto = await import('node:crypto');
+    const sourceHash = crypto.createHash('sha256').update(await readFile(source)).digest('hex');
+    await assert.rejects(() => publishAudio({
+      root,
+      workspace,
+      key: 'music_arena',
+      source_path: source,
+      expected_catalog_hash: before.catalog_hash,
+      expected_file_hash: before.entries.music_arena.file_hash,
+      expected_source_hash: sourceHash,
+      approval_id: 'human-review-music-arena-wav',
+    }), (error) => error.code === 'invalid_target');
+  });
+});
+
+test('unsupported music stays visible and protects a shared SFX target', async () => {
+  await withFixture(async (root) => {
+    const catalogPath = path.join(root, 'src', 'audio', 'AudioCatalog.ts');
+    const source = await readFile(catalogPath, 'utf8');
+    await writeFile(catalogPath, source
+      .replace("  music_arena: './assets/sounds/music_arena.wav',", "  music_arena: './assets/sounds/music_arena.wav',\n  music_unknown: './assets/sounds/one.ogg',")
+      .replace("music_arena: 0.8", "music_arena: 0.8, music_unknown: 0.7"));
+    const scan = await scanRepository({ root });
+    assert.equal(scan.entries.music_unknown, undefined);
+    assert.equal(scan.unsupported_music.music_unknown.kind, 'music');
+    assert.equal(scan.unsupported_music.music_unknown.music_role, null);
+    assert.equal(scan.unsupported_music.music_unknown.editable, false);
+    assert.deepEqual(scan.unsupported_music.music_unknown.shared_keys, ['music_unknown', 'sfx_one']);
+    assert.match(scan.entries.sfx_one.conflicts.join('; '), /also used by music/);
+
+    const workspace = path.join(root, '.audio-workspace');
+    await mkdir(workspace, { recursive: true });
+    const candidate = path.join(workspace, 'candidate.ogg');
+    const bytes = Buffer.from('OggS-unsupported-boundary');
+    await writeFile(candidate, bytes);
+    const crypto = await import('node:crypto');
+    const sourceHash = crypto.createHash('sha256').update(bytes).digest('hex');
+    await assert.rejects(() => publishAudio({
+      root, workspace, key: 'music_unknown', source_path: candidate,
+      expected_catalog_hash: scan.catalog_hash,
+      expected_file_hash: scan.unsupported_music.music_unknown.file_hash,
+      expected_source_hash: sourceHash,
+      approval_id: 'human-review-unsupported-music',
+    }), (error) => error.code === 'unknown_key' && /unsupported audio key/.test(error.message));
+    await assert.rejects(() => publishAudio({
+      root, workspace, key: 'sfx_one', source_path: candidate,
+      expected_catalog_hash: scan.catalog_hash,
+      expected_file_hash: scan.entries.sfx_one.file_hash,
+      expected_source_hash: sourceHash,
+      approval_id: 'human-review-shared-unsupported-music',
+    }), (error) => error.code === 'catalog_conflict');
   });
 });
 

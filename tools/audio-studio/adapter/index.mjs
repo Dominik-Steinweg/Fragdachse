@@ -11,7 +11,10 @@ const PUBLIC_SOUNDS_RELATIVE = path.join('public', 'assets', 'sounds');
 const WORKSPACE_DEFAULT = '.audio-workspace';
 const TRANSACTION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const OGG_EXTENSION = '.ogg';
-const MUSIC_NAMES = new Set(['MUSIC_ASSETS']);
+const MUSIC_ROLES = new Map([
+  ['music_lobby', 'lobby'],
+  ['music_arena', 'arena'],
+]);
 
 export class AdapterError extends Error {
   constructor(code, message, details = undefined) {
@@ -207,6 +210,9 @@ function parseCatalog(source, fileName) {
   };
   const assets = evaluateObject(getInitializer('AUDIO_ASSETS'), declarations, sourceFile);
   const music = evaluateObject(getInitializer('MUSIC_ASSETS'), declarations, sourceFile);
+  for (const key of music.keys()) {
+    if (!assets.has(key)) fail('unsupported_catalog_syntax', `Music key ${key} is not present in AUDIO_ASSETS`);
+  }
   const volumes = evaluateNumberObject(getInitializer('SOUND_VOLUMES'), declarations, sourceFile);
   const shippedDeclaration = declarations.get('SHIPPED_AUDIO_FILES');
   if (!shippedDeclaration?.initializer) fail('unsupported_catalog_syntax', 'Missing SHIPPED_AUDIO_FILES declaration');
@@ -260,7 +266,7 @@ function classifyUsage(node) {
   if (parent && ts.isCallExpression(parent)) {
     const expression = parent.expression;
     const name = ts.isPropertyAccessExpression(expression) ? expression.name.text : '';
-    if (name === 'startLoop') return 'loop';
+    if (name === 'startLoop' || name === 'playMusic') return 'loop';
     if (name === 'playSound' || name === 'playLocalSound') return 'oneshot';
   }
   if (parent && ts.isPropertyAssignment(parent)) {
@@ -327,38 +333,49 @@ function toRelative(root, filePath) {
 export async function scanRepository({ root = process.cwd() } = {}) {
   const repository = await readRoot(root);
   const { parsed } = repository;
-  const sfxEntries = [...parsed.assets.entries()].filter(([key]) => !parsed.music.has(key));
-  const usages = await collectUsages(repository.root, new Set(sfxEntries.map(([key]) => key)));
+  const assetEntries = [...parsed.assets.entries()];
+  const usages = await collectUsages(repository.root, new Set(assetEntries.map(([key]) => key)));
   const targets = new Map();
   const soundsRoot = path.join(repository.root, 'public', 'assets', 'sounds');
   await assertSafePath(repository.root, soundsRoot, 'public sound root');
   const soundsRootReal = await fs.realpath(soundsRoot);
   if (canonicalPath(soundsRootReal) !== canonicalPath(soundsRoot)) fail('unsafe_symlink', 'public/assets/sounds must not be reached through a symlink');
-  for (const [key, rawPath] of sfxEntries) {
+  for (const [key, rawPath] of assetEntries) {
     const targetPath = canonicalTarget(rawPath);
-    if (!targetPath) fail('unsafe_catalog_target', `Audio catalog target for ${key} is not a local SFX path`, { key, target: rawPath });
+    if (!targetPath) fail('unsafe_catalog_target', `Audio catalog target for ${key} is not a local sound path`, { key, target: rawPath });
     const absolute = await assertSafePath(repository.root, path.join(repository.root, targetPath), `target for ${key}`, { allowMissing: true });
     const targetReal = await realpathNearestExisting(absolute);
     if (!isInside(soundsRootReal, targetReal)) {
       fail('unsafe_symlink', `Target for ${key} escapes public/assets/sounds`, { key, target: targetPath });
     }
-    const existing = targets.get(targetPath) ?? [];
+    const targetKey = targetPath.toLowerCase();
+    const existing = targets.get(targetKey) ?? [];
     existing.push(key);
-    targets.set(targetPath, existing);
+    targets.set(targetKey, existing);
   }
   const entries = {};
-  for (const [key, rawPath] of sfxEntries.sort(([a], [b]) => a.localeCompare(b))) {
+  const unsupportedMusic = {};
+  for (const [key, rawPath] of assetEntries.sort(([a], [b]) => a.localeCompare(b))) {
     const targetPath = canonicalTarget(rawPath);
     const absolute = path.join(repository.root, targetPath);
     const filename = path.basename(targetPath);
-    const sharedKeys = (targets.get(targetPath) ?? []).slice().sort();
+    const targetKey = targetPath.toLowerCase();
+    const sharedKeys = (targets.get(targetKey) ?? []).slice().sort();
     const fileHash = await sha256File(absolute);
     const shipped = parsed.shipped.values.has(filename);
-    const musicUsers = [...parsed.music.entries()].filter(([, value]) => canonicalTarget(value)?.toLowerCase() === targetPath.toLowerCase()).map(([musicKey]) => musicKey);
+    const isMusic = parsed.music.has(key);
+    const musicRole = isMusic ? (MUSIC_ROLES.get(key) ?? null) : null;
+    const musicUsers = sharedKeys.filter((sharedKey) => parsed.music.has(sharedKey));
+    const sfxUsers = sharedKeys.filter((sharedKey) => !parsed.music.has(sharedKey));
     const conflicts = [];
-    if (musicUsers.length) conflicts.push(`Target is also used by music: ${musicUsers.join(', ')}`);
-    entries[key] = {
+    if (musicUsers.length && sfxUsers.length) conflicts.push(`Target is also used by music: ${musicUsers.join(', ')}`);
+    if (isMusic && sharedKeys.length > 1) conflicts.push(`Music target is shared by audio keys: ${sharedKeys.join(', ')}`);
+    if (isMusic && musicRole === null) conflicts.push(`Unsupported music key: ${key}`);
+    const entry = {
       key,
+      kind: isMusic ? 'music' : 'sfx',
+      music_role: musicRole,
+      editable: !isMusic || musicRole !== null,
       target_path: targetPath.split(path.sep).join('/'),
       asset_path: rawPath,
       filename,
@@ -369,11 +386,13 @@ export async function scanRepository({ root = process.cwd() } = {}) {
       file_error: shipped && fileHash === null ? 'Shipped audio file is missing' : null,
       shared_keys: sharedKeys,
       usages: usages.get(key) ?? [],
-      playback: inferPlayback(usages.get(key) ?? []),
+      playback: isMusic ? 'loop' : inferPlayback(usages.get(key) ?? []),
       conflicts,
     };
+    if (isMusic && musicRole === null) unsupportedMusic[key] = entry;
+    else entries[key] = entry;
   }
-  return { catalog_hash: canonicalCatalogHash(parsed), entries };
+  return { catalog_hash: canonicalCatalogHash(parsed), entries, unsupported_music: unsupportedMusic };
 }
 
 function inferPlayback(usages) {
@@ -511,7 +530,7 @@ async function rollbackManifest(root, workspace, manifest) {
   const targetRelative = typeof manifest.target_path === 'string' ? manifest.target_path.replaceAll('\\', '/') : '';
   const targetPath = path.posix.normalize(targetRelative);
   if (!targetPath.startsWith('public/assets/sounds/') || targetPath === 'public/assets/sounds/' || path.posix.basename(targetPath).toLowerCase().endsWith('.ogg') === false || path.posix.basename(targetPath).includes('/')) {
-    fail('rollback_conflict', 'Transaction target is not an approved SFX OGG path');
+    fail('rollback_conflict', 'Transaction target is not an approved audio OGG path');
   }
   const target = path.join(root, targetPath.split('/').join(path.sep));
   const catalog = path.join(root, AUDIO_CATALOG_RELATIVE);
@@ -520,7 +539,7 @@ async function rollbackManifest(root, workspace, manifest) {
   const currentScan = await scanRepository({ root });
   const currentEntry = currentScan.entries[manifest.key];
   if (!currentEntry || currentEntry.target_path !== targetPath || !currentEntry.target_path.endsWith('.ogg')) {
-    fail('rollback_conflict', 'Transaction target no longer resolves to the same current SFX key');
+    fail('rollback_conflict', 'Transaction target no longer resolves to the same current audio key');
   }
   const transaction = transactionPaths(workspace, manifest.id);
   await assertSafePath(workspace, transaction.manifest, 'transaction manifest');
@@ -558,9 +577,9 @@ export async function publishAudio({ root = process.cwd(), key, source_path: sou
   const currentScan = await scanRepository({ root: repository.root });
   if (expectedCatalogHash !== currentScan.catalog_hash) fail('stale_catalog', 'Catalog changed since approval', { expected: expectedCatalogHash, actual: currentScan.catalog_hash });
   const entry = currentScan.entries[key];
-  if (!entry) fail('unknown_key', `Unknown or music audio key: ${key}`);
+  if (!entry) fail('unknown_key', `Unknown or unsupported audio key: ${key}`);
   if (entry.conflicts.length) fail('catalog_conflict', entry.conflicts.join('; '));
-  if (!entry.target_path.endsWith(OGG_EXTENSION)) fail('invalid_target', 'Only OGG SFX targets can be published', { key, target: entry.target_path });
+  if (!entry.target_path.endsWith(OGG_EXTENSION)) fail('invalid_target', 'Only OGG audio targets can be published', { key, target: entry.target_path });
   const target = await assertSafePath(repository.root, path.join(repository.root, entry.target_path), 'publish target', { allowMissing: true });
   const workspace = await ensureWorkspace(repository.root, workspaceInput);
   await assertNoPendingTransactions(workspace);

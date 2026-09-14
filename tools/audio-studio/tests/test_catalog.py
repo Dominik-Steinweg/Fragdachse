@@ -26,7 +26,8 @@ def test_sync_preserves_authorship_hidden_provenance_and_orphans(studio):
     fresh = studio.catalog.sync()["catalog"]["entries"]
     assert fresh["sfx_missing"]["orphaned"] is True
     assert fresh["sfx_new"]["prompt"]["text"] == ""
-    assert "music_arena" not in fresh
+    assert fresh["music_arena"]["repository"]["kind"] == "music"
+    assert fresh["music_arena"]["processing"]["profile"] == "music_loop"
 
 
 def test_stale_edits_and_author_proposals_do_not_overwrite(studio):

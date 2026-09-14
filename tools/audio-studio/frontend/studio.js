@@ -1,6 +1,7 @@
 import {drawWaveform, milliseconds, moveMarker, processingOverrides} from './waveform.js';
 import {jobProgress} from './progress.js';
 import {generationLabel, generationSettings} from './generation.js';
+import {isMusic, durationLimit, cutLimit, allowedModels, allowedProfiles, matchesCategory} from './production.js';
 
 const $ = id => document.getElementById(id);
 let state, key, chosen, waveform, resultWaveform, resultVersion, formRevision, formEntry;
@@ -81,13 +82,13 @@ function badges(entry) {
 }
 function showInventory() {
   const query = $('search').value.toLowerCase(), category = $('category').value;
-  const entries = Object.entries(state.catalog.entries).filter(([id, entry]) => (!category || entry.category === category) && `${id} ${entry.name} ${badges(entry).map(b => b[0]).join(' ')}`.toLowerCase().includes(query));
+  const entries = Object.entries(state.catalog.entries).filter(([id, entry]) => matchesCategory(entry, category) && `${id} ${entry.name} ${badges(entry).map(b => b[0]).join(' ')}`.toLowerCase().includes(query));
   $('inventory').replaceChildren(...entries.map(([id, entry]) => {
     const control = node('button', null, {className: id === key ? 'active' : '', type: 'button'});
     control.onclick = () => { if (activeOperations) return;key = id;clearSelection();showInventory();showDetail(); };
     control.append(node('strong', entry.name || id), node('code', id));
     badges(entry).forEach(([text, cls]) => control.append(node('span', text, {className: `badge ${cls}`})));return control;
-  }));$('inventory-count').textContent = `${entries.length} / ${Object.keys(state.catalog.entries).length} SFX`;
+  }));$('inventory-count').textContent = `${entries.length} / ${Object.keys(state.catalog.entries).length} Audio-Einträge`;
 }
 function clearSelection() { chosen = null;waveform = null;resultWaveform = null;resultVersion = null;++resultSequence;candidateSignature = ''; }
 function showStep(next, scroll = true) {
@@ -96,7 +97,7 @@ function showStep(next, scroll = true) {
   if (scroll) $('workflow').scrollIntoView({behavior: 'smooth', block: 'start'});drawWaves();
 }
 function showDetail() {
-  if (!key) { $('detail').replaceChildren(node('p', 'Keine SFX gefunden. Spielkatalog aktualisieren.'));return; }
+  if (!key) { $('detail').replaceChildren(node('p', 'Keine Audio-Einträge gefunden. Spielkatalog aktualisieren.'));return; }
   const entry = state.catalog.entries[key], root = $('detail');root.replaceChildren(node('h2', entry.name || key), node('code', key));
   const nav = node('nav', null, {id: 'workflow', className: 'workflow', role: 'tablist', 'aria-label': 'Produktionsschritte'});
   for (const [id, label] of [['source', '1 · Bestand'], ['generate', '2 · Generieren'], ['process', '3 · Bearbeiten & Ergebnis']]) {
@@ -123,13 +124,18 @@ function showSource(entry) {
 }
 function showRecipe(entry) {
   formRevision = state.revision;formEntry = structuredClone(entry);
-  const panel = $('panel-generate'), editor = card('Sound erzeugen'), settings = entry.generation_defaults;
+  const music = isMusic(entry), panel = $('panel-generate'), editor = card(music ? 'Musik erzeugen' : 'Sound erzeugen'), settings = entry.generation_defaults;
   editor.append(node('p', 'Prompt und Modell wählen, Kandidaten erzeugen und einen RAW-Sound zum Bearbeiten auswählen.', {className: 'muted'}));input(editor, 'Englischer Sound-Prompt', 'prompt', entry.prompt.text, 'textarea');
   const grid = node('div', null, {className: 'grid'});
-  const models = state.generation_models?.length ? state.generation_models.map(model => [model.name, `${model.label} (${{comfyui: 'ComfyUI', python: 'Python'}[model.backend] || model.backend})`]) : [['medium', 'Stable Audio 3 · Medium'], ['small-sfx', 'Stable Audio 3 · Small-SFX']];
+  const registry = state.generation_models?.length ? state.generation_models : [{name: 'medium', label: 'Stable Audio 3 · Medium', backend: 'comfyui'}, {name: 'small-sfx', label: 'Stable Audio 3 · Small-SFX', backend: 'python'}];
+  const models = allowedModels(entry, registry).map(model => [model.name, `${model.label} (${{comfyui: 'ComfyUI', python: 'Python'}[model.backend] || model.backend})`]);
   select(grid, 'Modell', 'model', models, settings.model);
-  editor.append(node('p', 'Small-SFX ist über Python und ComfyUI vergleichbar: Für beide Durchläufe denselben Prompt, Seed, dieselbe Dauer, Schritte und CFG verwenden.', {className: 'muted'}));
-  input(grid, 'Dauer (Sekunden)', 'duration', settings.duration_seconds, 'number', {min: 1, max: 47, step: 1, required: true});input(grid, 'Kandidaten (nacheinander)', 'count', settings.candidate_count, 'number', {min: 1, max: 32, step: 1, required: true});editor.append(grid);
+  editor.append(node('p', music ? 'Musik verwendet Medium über ComfyUI. 60–120 Sekunden sind ein guter Start; lange Tracks benötigen mehr Zeit und Speicher. Der Prompt wird unverändert übertragen.' : 'Small-SFX ist über Python und ComfyUI vergleichbar: Für beide Durchläufe denselben Prompt, Seed, dieselbe Dauer, Schritte und CFG verwenden.', {className: 'muted'}));
+  input(grid, 'Dauer (Sekunden)', 'duration', settings.duration_seconds, 'number', {min: 1, max: durationLimit(entry), step: 1, required: true});input(grid, 'Kandidaten (nacheinander)', 'count', settings.candidate_count, 'number', {min: 1, max: 32, step: 1, required: true});editor.append(grid);
+  if (music) {
+    input(editor, 'Gemeinsame musikalische Identität', 'musical-identity', entry.musical_identity);
+    editor.append(node('p', 'Gleiche Kennungen verbinden die musikalische Ausrichtung von Lobby und Arena für die Promptpflege. Diese Notiz ergänzt den Generierungsprompt nicht automatisch.', {className: 'muted'}));
+  }
   const advanced = node('div'), fields = node('div', null, {className: 'grid'});
   input(fields, 'Seed (leer = zufällig)', 'seed', '', 'number', {min: 0, max: 2147483615, step: 1});input(fields, 'Schritte', 'steps', settings.steps, 'number', {min: 1, max: 100, step: 1});input(fields, 'CFG', 'cfg', settings.cfg_scale, 'number', {min: 0, max: 20, step: .1});advanced.append(fields);
   input(advanced, 'Name', 'name', entry.name);input(advanced, 'Kategorie', 'entry-category', entry.category);input(advanced, 'Soundabsicht', 'intent', entry.intent, 'textarea');input(advanced, 'Dauerhafte Hinweise', 'notes', entry.notes, 'textarea');
@@ -151,6 +157,7 @@ async function save() {
   if (formRevision !== state.revision) throw new Error('Das Rezept wurde inzwischen geändert. Zuerst „Aktuelles Rezept neu laden“ wählen.');
   const previous = formEntry, patch = {
     name: $('name').value, category: $('entry-category').value, intent: $('intent').value, playback: $('playback').value,
+    musical_identity: $('musical-identity')?.value ?? previous.musical_identity,
     prompt: {text: $('prompt').value, source: $('prompt').value === previous.prompt.text ? previous.prompt.source : 'manual', preserve_on_sync: true},
     generation_defaults: {model: $('model').value, duration_seconds: Number($('duration').value), candidate_count: Number($('count').value), steps: Number($('steps').value), cfg_scale: Number($('cfg').value)},
     processing: {profile: $('profile').value, overrides: previous.processing.overrides}, notes: $('notes').value, needs_revision: $('revise').checked,
@@ -209,8 +216,9 @@ function showProcessor(entry) {
   const panel = $('panel-process'), editor = card('RAW schneiden und formen');
   select(editor, 'Ausgangskandidat', 'source-candidate', [['', 'RAW-Kandidaten auswählen …']], '');
   const settings = node('div', null, {className: 'grid two'});
-  select(settings, 'Wiedergabe', 'playback', [['unknown', 'Unklar – zuerst prüfen'], ['oneshot', 'One-Shot'], ['loop', 'Loop']], entry.playback);
-  select(settings, 'Processing-Profil', 'profile', Object.keys(state.profiles).map(profile => [profile, profile]), entry.processing.profile);editor.append(settings);
+  select(settings, 'Wiedergabe', 'playback', isMusic(entry) ? [['loop', 'Musik-Loop']] : [['unknown', 'Unklar – zuerst prüfen'], ['oneshot', 'One-Shot'], ['loop', 'Loop']], entry.playback);
+  select(settings, 'Processing-Profil', 'profile', allowedProfiles(entry, state.profiles).map(profile => [profile, profile]), entry.processing.profile);editor.append(settings);
+  if (isMusic(entry)) editor.append(node('p', 'music_loop erhält den musikalischen Verlauf und verbindet Ende und Anfang mit einem längeren Crossfade. Start/Ende setzen die Loop-Punkte manuell. Lautheit und True-Peaks werden einschließlich des fertigen OGG geprüft. Takt und Harmonie bitte über die Loop-Prüfung abhören.', {className: 'notice'}));
   editor.append(node('p', 'Markierung wählen und im RAW klicken oder ziehen. Die Zeitfelder lassen sich auch direkt eingeben.', {className: 'muted'}));
   const modes = node('div', null, {className: 'marker-tools', role: 'group', 'aria-label': 'Markierung mit der Maus setzen'});
   for (const [value, label] of [['start', 'Start'], ['end', 'Ende'], ['fade-in', 'Fade-In'], ['fade-out', 'Fade-Out']]) {
@@ -219,13 +227,19 @@ function showProcessor(entry) {
   }
   editor.append(modes, node('canvas', null, {id: 'wave', width: 1100, height: 240, tabIndex: 0, 'aria-label': 'RAW-Wellenform. Markierung per Maus setzen; Pfeiltasten verschieben die ausgewählte Markierung um eine Millisekunde.'}), node('p', '', {id: 'selection-summary', className: 'muted'}));
   const fields = node('div', null, {className: 'grid'}), overrides = entry.processing.overrides;
-  input(fields, 'Start (ms, leer = automatisch)', 'cut-start', overrides.start_seconds === undefined ? '' : milliseconds(overrides.start_seconds), 'number', {min: 0, max: 24000, step: .1});
-  input(fields, 'Ende (ms, leer = automatisch)', 'cut-end', overrides.end_seconds === undefined ? '' : milliseconds(overrides.end_seconds), 'number', {min: 0, max: 47000, step: .1});
+  input(fields, 'Start (ms, leer = automatisch)', 'cut-start', overrides.start_seconds === undefined ? '' : milliseconds(overrides.start_seconds), 'number', {min: 0, max: cutLimit(entry), step: .1});
+  input(fields, 'Ende (ms, leer = automatisch)', 'cut-end', overrides.end_seconds === undefined ? '' : milliseconds(overrides.end_seconds), 'number', {min: 0, max: cutLimit(entry), step: .1});
   input(fields, 'Output Gain (dB)', 'gain', overrides.output_gain_db ?? 0, 'number', {min: -60, max: 18, step: .1});
   input(fields, 'Fade-In (ms)', 'fade-in', overrides.fade_in_ms ?? '', 'number', {min: 0, max: 1000, step: .1});
   input(fields, 'Fade-Out (ms)', 'fade-out', overrides.fade_out_ms ?? '', 'number', {min: 0, max: 5000, step: .1});
-  input(fields, 'Loop-Crossfade (ms)', 'crossfade', overrides.crossfade_ms ?? '', 'number', {min: 0, max: 5000, step: .1});editor.append(fields);
-  select(editor, 'Loop-Crossfade-Kurve', 'curve', [['linear', 'Linear'], ['equal_power', 'Equal Power']], overrides.crossfade_curve ?? 'linear');
+  input(fields, 'Loop-Crossfade (ms)', 'crossfade', overrides.crossfade_ms ?? '', 'number', {min: 0, max: isMusic(entry) ? 10000 : 5000, step: .1, placeholder: String(state.profiles[entry.processing.profile].default_crossfade_ms)});editor.append(fields);
+  select(editor, 'Loop-Crossfade-Kurve', 'curve', [['linear', 'Linear'], ['equal_power', 'Equal Power']], overrides.crossfade_curve ?? state.profiles[entry.processing.profile].default_crossfade_curve ?? 'linear');
+  if (isMusic(entry)) {
+    const levels = node('div', null, {className: 'grid two'});
+    input(levels, 'Ziel-Lautheit (LUFS)', 'target-lufs', overrides.target_lufs ?? state.profiles.music_loop.target_lufs, 'number', {min: -70, max: -5, step: .1, required: true});
+    input(levels, 'True-Peak-Obergrenze (dBTP)', 'true-peak', overrides.true_peak_db ?? state.profiles.music_loop.true_peak_db, 'number', {min: -20, max: 0, step: .1, required: true});
+    editor.append(levels, node('p', 'Die Pegelgrenze hat Vorrang vor der Ziel-Lautheit. Output Gain wirkt nach der Lautheitsangleichung; die Schutzgrenze bleibt aktiv.', {className: 'muted'}));
+  }
   const trim = node('label', null, {className: 'check'});trim.append(node('input', null, {id: 'auto-trim', type: 'checkbox', checked: overrides.auto_trim ?? state.profiles[entry.processing.profile].auto_trim}), node('span', 'Automatische Bereichserkennung, soweit Start/Ende leer sind'));editor.append(trim);
   editor.append(append(node('div', null, {className: 'actions'}), button('Schnitt zurücksetzen', async () => {
     for (const id of ['cut-start', 'cut-end', 'fade-in', 'fade-out']) $(id).value = '';
@@ -239,8 +253,10 @@ function showProcessor(entry) {
     work(async () => { const [run, candidate] = value.split('/');await chooseCandidate(run, candidate);return 'Ausgangskandidat und vorhandene Versionen geladen.'; }, {target: 'process-feedback', busy: 'Wellenformen werden geladen …'});
   };
   $('profile').onchange = () => { $('auto-trim').checked = state.profiles[$('profile').value].auto_trim;drawWaves();markResultStale(); };
+  if (isMusic(entry)) { $('auto-trim').checked = false;$('auto-trim').disabled = true; }
   $('playback').onchange = () => { updateLoopControls();drawWaves();markResultStale(); };
   for (const id of ['cut-start', 'cut-end', 'fade-in', 'fade-out', 'gain', 'crossfade', 'curve', 'auto-trim']) $(id).addEventListener('input', () => { drawWaves();markResultStale(); });
+  for (const id of ['target-lufs', 'true-peak']) $(id)?.addEventListener('input', markResultStale);
   setupWavePointer();updateLoopControls();drawWaves();
 }
 function updateLoopControls() {
@@ -252,7 +268,7 @@ function updateLoopControls() {
 }
 function selection() {
   if (!waveform) return null;const profile = state.profiles[$('profile').value];
-  return {duration_ms: milliseconds(waveform.duration_seconds), start_ms: Number($('cut-start').value || 0), end_ms: $('cut-end').value === '' ? milliseconds(waveform.duration_seconds) : Number($('cut-end').value), fade_in_ms: $('fade-in').value === '' ? profile.fade_in_ms : Number($('fade-in').value), fade_out_ms: $('fade-out').value === '' ? profile.fade_out_ms : Number($('fade-out').value), loop: $('playback').value === 'loop'};
+  return {duration_ms: milliseconds(waveform.duration_seconds), cut_limit_ms: cutLimit(state.catalog.entries[key]), start_ms: Number($('cut-start').value || 0), end_ms: $('cut-end').value === '' ? milliseconds(waveform.duration_seconds) : Number($('cut-end').value), fade_in_ms: $('fade-in').value === '' ? profile.fade_in_ms : Number($('fade-in').value), fade_out_ms: $('fade-out').value === '' ? profile.fade_out_ms : Number($('fade-out').value), loop: $('playback').value === 'loop'};
 }
 function drawWaves() {
   drawWaveform($('wave'), waveform, {selection: selection(), title: 'RAW · Quelle und Schnittmarkierungen'});
@@ -285,7 +301,8 @@ function markResultStale() { if (resultVersion) $('result-stale').textContent = 
 async function chooseCandidate(runId, candidateId) {
   const fresh = await api(`/api/waveform/${runId}/${candidateId}`);
   chosen = {run_id: runId, candidate_id: candidateId};waveform = fresh;resultWaveform = null;resultVersion = null;
-  $('source-candidate').value = `${runId}/${candidateId}`;$('cut-start').max = Math.min(24000, milliseconds(fresh.duration_seconds));$('cut-end').max = milliseconds(fresh.duration_seconds);
+  const limit = Math.min(cutLimit(state.catalog.entries[key]), milliseconds(fresh.duration_seconds));
+  $('source-candidate').value = `${runId}/${candidateId}`;$('cut-start').max = limit;$('cut-end').max = limit;
   const run = state.runs.find(item => item.id === runId), defaults = run.author_snapshot.processing;
   $('profile').value = defaults.profile;$('playback').value = run.author_snapshot.playback;fillProcessing(defaults.overrides);
   candidateSignature = '';showCandidates();updateVersions();drawWaves();
@@ -293,11 +310,19 @@ async function chooseCandidate(runId, candidateId) {
 }
 function fillProcessing(overrides) {
   for (const [id, name, factor] of [['cut-start', 'start_seconds', 1000], ['cut-end', 'end_seconds', 1000], ['fade-in', 'fade_in_ms', 1], ['fade-out', 'fade_out_ms', 1], ['crossfade', 'crossfade_ms', 1]]) $(id).value = overrides[name] === undefined ? '' : Math.round(overrides[name] * factor * 10) / 10;
-  $('gain').value = overrides.output_gain_db ?? 0;$('curve').value = overrides.crossfade_curve ?? 'linear';$('auto-trim').checked = overrides.auto_trim ?? state.profiles[$('profile').value].auto_trim;updateLoopControls();
+  const profile = state.profiles[$('profile').value];
+  $('gain').value = overrides.output_gain_db ?? 0;$('curve').value = overrides.crossfade_curve ?? profile.default_crossfade_curve ?? 'linear';$('auto-trim').checked = $('profile').value === 'music_loop' ? false : overrides.auto_trim ?? profile.auto_trim;
+  if ($('target-lufs')) $('target-lufs').value = overrides.target_lufs ?? profile.target_lufs;
+  if ($('true-peak')) $('true-peak').value = overrides.true_peak_db ?? profile.true_peak_db;
+  updateLoopControls();
 }
 async function processSelected() {
   if (!chosen) throw new Error('Zuerst einen RAW-Kandidaten auswählen.');validateFields(['cut-start', 'cut-end', 'gain', 'fade-in', 'fade-out', 'crossfade']);
   const overrides = processingOverrides({start: $('cut-start').value, end: $('cut-end').value, fade_in: $('fade-in').value, fade_out: $('fade-out').value, gain: $('gain').value, crossfade: $('crossfade').value, curve: $('curve').value, auto_trim: $('auto-trim').checked});
+  if ($('target-lufs')) {
+    validateFields(['target-lufs', 'true-peak']);
+    overrides.target_lufs = Number($('target-lufs').value);overrides.true_peak_db = Number($('true-peak').value);
+  }
   let version;
   try { version = await api(`/api/runs/${chosen.run_id}/${chosen.candidate_id}/process`, {playback: $('playback').value, profile: $('profile').value, overrides, replace_overrides: true}); }
   catch (error) {
@@ -324,7 +349,12 @@ async function showVersion(id, loadRecipe = false) {
   resultVersion = version;resultWaveform = fresh;const recipe = version.recipe.recipe;
   if (loadRecipe) { $('profile').value = version.profile;$('playback').value = version.playback;fillProcessing({...recipe.overrides, start_seconds: recipe.cuts.start_seconds, end_seconds: recipe.cuts.end_seconds, fade_in_ms: recipe.fades.fade_in_ms, fade_out_ms: recipe.fades.fade_out_ms}); }
   $('result-description').textContent = `RAW ${milliseconds(waveform.duration_seconds)} ms → WAV ${milliseconds(fresh.duration_seconds)} ms · Schnitt ${milliseconds(recipe.cuts.start_seconds)}–${milliseconds(recipe.cuts.end_seconds)} ms · Fade-In ${recipe.fades.fade_in_ms.toFixed(1)} ms / Fade-Out ${recipe.fades.fade_out_ms.toFixed(1)} ms. Beide Wellenformen zeigen dieselbe Amplitudenskala; die Zeitachse passt zur jeweiligen Datei.`;
+  if (version.profile === 'music_loop') {
+    const loudness = recipe.loudness?.export_lufs, peak = recipe.true_peak?.export_db;
+    $('result-description').textContent = `RAW ${waveform.duration_seconds.toFixed(2)} s → Musik-Loop ${fresh.duration_seconds.toFixed(2)} s · RAW-Loop-Punkte ${milliseconds(recipe.cuts.start_seconds)}–${milliseconds(recipe.cuts.end_seconds)} ms · Crossfade ${recipe.fades.crossfade_ms.toFixed(1)} ms. OGG: ${Number.isFinite(loudness) ? loudness.toFixed(1) + ' LUFS' : 'Lautheit nicht messbar'} · ${Number.isFinite(peak) ? peak.toFixed(1) + ' dBTP' : 'True-Peak nicht messbar'}. Die Wellenformen verwenden dieselbe Amplitudenskala.`;
+  }
   const host = $('result-audio'), players = node('div', null, {className: 'grid two'}), wav = node('div'), ogg = node('div');
+  audio(media(chosen.run_id, chosen.candidate_id), 'Unverändertes RAW zum direkten Vergleich', host);
   audio(media(chosen.run_id, chosen.candidate_id, 'wav', id), 'Bearbeitetes WAV', wav);audio(media(chosen.run_id, chosen.candidate_id, 'ogg', id), 'Finales OGG · Datei für das Spiel', ogg);players.append(wav, ogg);host.append(players);
   if (version.files.loop) audio(media(chosen.run_id, chosen.candidate_id, 'loop', id), 'Loop-Prüfung · drei OGG-Wiederholungen', host);
   const warnings = version.recipe.analysis?.warnings || [];
@@ -363,8 +393,9 @@ async function refresh(full = false) {
     observedJobs.set(run.id, run.status);
   }
   state = fresh;if (!key || !state.catalog.entries[key]) key = Object.keys(state.catalog.entries)[0];
-  const categories = [...new Set(Object.values(state.catalog.entries).map(entry => entry.category))].sort(), category = $('category').value;
-  $('category').replaceChildren(node('option', 'Alle Kategorien', {value: ''}), ...categories.map(item => node('option', item, {value: item, selected: item === category})));
+  const categories = [...new Set(Object.values(state.catalog.entries).filter(entry => !isMusic(entry)).map(entry => entry.category))].sort(), category = $('category').value;
+  const options = [['', 'Alle Kategorien'], ['kind:music', 'Musik · Lobby & Arena'], ['kind:sfx', 'Alle SFX'], ...categories.map(item => [`category:${item}`, `SFX · ${item}`])];
+  $('category').replaceChildren(...options.map(([value, label]) => node('option', label, {value, selected: value === category})));
   showInventory();if (full) showDetail();else showCandidates();showJobs();
   if ($('recipe-conflict')) $('recipe-conflict').hidden = formRevision === state.revision;
 }

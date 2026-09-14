@@ -5,6 +5,7 @@
       "name": "Adrenalin – Aktive Textur",
       "category": "powerup",
       "intent": "A steady restrained adrenaline energy texture, low airy rushing pulse and fine organic tremor, consistent level without a dramatic start or stop.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable game texture: close adrenaline power rush, rapid low pulse, fine vibrating grit, and constant aggressive momentum, clean isolated mix with no climax or final hit.",
@@ -28,6 +29,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_adrenaline_active",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_adrenaline_active.ogg",
         "asset_path": "./assets/sounds/sfx_adrenaline_active.ogg",
         "filename": "sfx_adrenaline_active.ogg",
@@ -49,6 +53,7 @@
       "name": "Luftschlag – Warnsignal",
       "category": "utility",
       "intent": "A single concise tactical warning cue, clear electronic pulse with a short tense rising accent.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one tactical warning stinger: hard electronic pulse transient, tight rising tension, compact metallic body, and clear dry finish at a distance, no speech.",
@@ -72,6 +77,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_airstrike_countdown",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_airstrike_countdown.ogg",
         "asset_path": "./assets/sounds/sfx_airstrike_countdown.ogg",
         "filename": "sfx_airstrike_countdown.ogg",
@@ -106,6 +114,7 @@
       "name": "Luftschlag – Explosion",
       "category": "explosion",
       "intent": "A single aerial bomb impact explosion, heavy direct blast, sharp debris crackle and controlled rumbling decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one aerial bomb impact: violent crack transient, dense low blast body, sharp debris spray, and a controlled rolling tail, dry isolated game sound.",
@@ -129,6 +138,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_airstrike_explosion",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_airstrike_explosion.ogg",
         "asset_path": "./assets/sounds/sfx_airstrike_explosion.ogg",
         "filename": "sfx_airstrike_explosion.ogg",
@@ -150,6 +162,7 @@
       "name": "BFG – Ladetextur",
       "category": "utility",
       "intent": "A steady powerful energy cannon charging texture, dense low electrical hum and tense fine crackle, sustained consistent intensity without a final discharge.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable BFG charge: heavy reactor hum, pressure-building low pulse, focused electrical fizz, and locked constant intensity with no discharge or end hit.",
@@ -173,6 +186,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_bfg_charge",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_bfg_charge.ogg",
         "asset_path": "./assets/sounds/sfx_bfg_charge.ogg",
         "filename": "sfx_bfg_charge.ogg",
@@ -201,6 +217,7 @@
       "name": "BFG – Flugtextur",
       "category": "utility",
       "intent": "A steady massive plasma projectile flight texture, deep airy energy rush with fine electrical crackle, stable intensity.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable plasma projectile flight: hard low whoosh body, needle-bright electrical grit, close forward motion, and steady intensity with no impact.",
@@ -224,6 +241,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_bfg_fly",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_bfg_fly.ogg",
         "asset_path": "./assets/sounds/sfx_bfg_fly.ogg",
         "filename": "sfx_bfg_fly.ogg",
@@ -245,6 +265,7 @@
       "name": "BFG – Laserimpuls",
       "category": "utility",
       "intent": "A single compact high-energy laser strike, focused bright electrical snap and brief resonant sizzling decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one focused laser strike: razor-bright snap transient, dense energy body, short sizzling tail, and clean close-mic separation.",
@@ -268,6 +289,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_bfg_laser",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_bfg_laser.ogg",
         "asset_path": "./assets/sounds/sfx_bfg_laser.ogg",
         "filename": "sfx_bfg_laser.ogg",
@@ -289,6 +313,7 @@
       "name": "Dachs – Unterirdische Bewegung",
       "category": "player",
       "intent": "A continuous close muffled digging texture through soil, fine crumbling grit, soft earth scraping and steady low rumble.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable badger tunneling: packed-soil scrape, gritty paw impacts, muffled low churn, and steady movement with no start or stop.",
@@ -312,6 +337,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_burrowed",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_burrowed.ogg",
         "asset_path": "./assets/sounds/sfx_burrowed.ogg",
         "filename": "sfx_burrowed.ogg",
@@ -352,6 +380,7 @@
       "name": "Countdown – Eins",
       "category": "ui",
       "intent": "A single dry high electronic countdown pulse, clear immediate start and compact decay, no spoken number.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one high-register countdown tick: bright digital strike, hard crisp transient, short dry body, immediate decay, no spoken number.",
@@ -375,6 +404,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_countdown_1",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_countdown_1.ogg",
         "asset_path": "./assets/sounds/sfx_countdown_1.ogg",
         "filename": "sfx_countdown_1.ogg",
@@ -396,6 +428,7 @@
       "name": "Countdown – Zwei",
       "category": "ui",
       "intent": "A single dry medium electronic countdown pulse, clear immediate start and compact decay, no spoken number.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one mid-register countdown tick: punchy digital knock, clear transient, compact neutral body, short dry decay, no spoken number.",
@@ -419,6 +452,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_countdown_2",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_countdown_2.ogg",
         "asset_path": "./assets/sounds/sfx_countdown_2.ogg",
         "filename": "sfx_countdown_2.ogg",
@@ -440,6 +476,7 @@
       "name": "Countdown – Drei",
       "category": "ui",
       "intent": "A single dry low electronic countdown pulse, clear immediate start and compact decay, no spoken number.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one low-register countdown tick: firm electronic thump, strong readable transient, compact low body, short dry decay, no spoken number.",
@@ -463,6 +500,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_countdown_3",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_countdown_3.ogg",
         "asset_path": "./assets/sounds/sfx_countdown_3.ogg",
         "filename": "sfx_countdown_3.ogg",
@@ -484,6 +524,7 @@
       "name": "Countdown – Start",
       "category": "ui",
       "intent": "A single bright decisive round-start cue, crisp upward electronic accent and short positive resonant finish, no speech.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one round-start stinger: crisp upward synth punch, bright attack, compact victorious body, and brief clean tail, no speech.",
@@ -507,6 +548,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_countdown_go",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_countdown_go.ogg",
         "asset_path": "./assets/sounds/sfx_countdown_go.ogg",
         "filename": "sfx_countdown_go.ogg",
@@ -536,6 +580,7 @@
       "name": "Punktgewinn",
       "category": "ui",
       "intent": "A single clear positive score cue, bright compact percussive chime and short satisfying resonant tail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one score confirmation: bright percussive hit, sharp attack, compact metallic body, and a short rewarding chime tail, dry and clear.",
@@ -559,6 +604,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_ctb_score",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_ctb_score.ogg",
         "asset_path": "./assets/sounds/sfx_ctb_score.ogg",
         "filename": "sfx_ctb_score.ogg",
@@ -593,6 +641,7 @@
       "name": "Dachs – Dash",
       "category": "player",
       "intent": "A single very quick forceful dash swoosh, sharp airy onset, compact body movement and short clean tail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one player dash: hard air-slice onset, tight rushing body, brief directional tail, and clean close game-SFX separation.",
@@ -616,6 +665,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_dash",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_dash.ogg",
         "asset_path": "./assets/sounds/sfx_dash.ogg",
         "filename": "sfx_dash.ogg",
@@ -656,6 +708,7 @@
       "name": "Attrappe – Enttarnung",
       "category": "utility",
       "intent": "A single decoy revelation cue, short brittle pop, loose mechanical rattle and playful but clear airy deflation.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one decoy reveal: brittle snap transient, quick wood-and-plastic rattle, sucked-air pop, and a short playful tail, no voice.",
@@ -679,6 +732,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_decoy_reveal",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_decoy_reveal.ogg",
         "asset_path": "./assets/sounds/sfx_decoy_reveal.ogg",
         "filename": "sfx_decoy_reveal.ogg",
@@ -707,6 +763,7 @@
       "name": "Doppelschaden – Aktive Textur",
       "category": "powerup",
       "intent": "A steady restrained dangerous power texture, dense low electric hum with subtle abrasive energy, stable sustained intensity.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable dangerous overcharge: pulsing low distortion, hard electrical grit, dense power body, and locked intensity with no discharge.",
@@ -730,6 +787,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_double_damage_active",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_double_damage_active.ogg",
         "asset_path": "./assets/sounds/sfx_double_damage_active.ogg",
         "filename": "sfx_double_damage_active.ogg",
@@ -751,6 +811,7 @@
       "name": "Umgebung – Einschlag",
       "category": "utility",
       "intent": "A single compact projectile impact on a hard earthy surface, sharp dry tick, small gritty debris and very short decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one projectile impact on packed earth and stone: crisp dry crack, compact gritty body, tiny debris ticks, very short tail, spatially clear.",
@@ -774,6 +835,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_environment_hit",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_environment_hit.ogg",
         "asset_path": "./assets/sounds/sfx_environment_hit.ogg",
         "filename": "sfx_environment_hit.ogg",
@@ -802,6 +866,7 @@
       "name": "Armageddon – Einschlag",
       "category": "explosion",
       "intent": "A single massive meteor impact, fierce initial crack, deep grounded explosion and crumbling rock tail, controlled rumble.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one meteor strike: brutal crack transient, huge grounded low blast body, rock fragments, and a controlled rolling tail, cinematic but bounded.",
@@ -835,6 +900,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_armageddon",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_armageddon.ogg",
         "filename": "sfx_explosion_armageddon.ogg",
@@ -863,6 +931,7 @@
       "name": "ASMD – Sekundärexplosion",
       "category": "explosion",
       "intent": "A single bursting energy orb, sharp electric rupture, expanding plasma crackle and a soft short charged decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one plasma orb burst: electric rupture transient, dense expanding energy body, sizzling particulate tail, and compact game-ready decay.",
@@ -917,6 +986,9 @@
       ],
       "repository": {
         "key": "sfx_explosion_asmd_secondary",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_explosion_asmd_secondary.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_asmd_secondary.ogg",
         "filename": "sfx_explosion_asmd_secondary.ogg",
@@ -957,6 +1029,7 @@
       "name": "HE-Explosion",
       "category": "explosion",
       "intent": "A single close high-explosive grenade detonation, immediate dense blast, short gritty debris and controlled low-frequency decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one close HE grenade detonation: sharp ignition crack, dense explosive body, gritty fragments, and a contained low thump tail.",
@@ -980,6 +1053,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_he",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_rocket.ogg",
         "filename": "sfx_explosion_rocket.ogg",
@@ -1020,6 +1096,7 @@
       "name": "Heilige Explosion",
       "category": "explosion",
       "intent": "A single radiant magical explosion, powerful bright impact, crystalline shimmer and rich but controlled fading resonance.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one radiant magic explosion: hard power crack, solid impact body, glassy crystal sparks, and a short luminous tail, no choir or speech.",
@@ -1043,6 +1120,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_holy",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_explosion_holy.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_holy.ogg",
         "filename": "sfx_explosion_holy.ogg",
@@ -1071,15 +1151,16 @@
       "name": "Mini-Raketenexplosion",
       "category": "explosion",
       "intent": "A single compact miniature rocket explosion, quick punchy blast, light granular debris and short tight decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one small rocket impact: punchy crack, compact blast body, bright metal grit, and a short tight tail with clear separation.",
-        "source": "astra",
+        "text": "TrackType: SFX, one small rocket impact: massive explosion with massive lowend, compact blast body, bright metal grit, and a short tight tail, massive sound for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
-        "duration_seconds": 3,
+        "model": "medium",
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -1104,13 +1185,16 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_mini_rocket",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_mini_rocket.ogg",
         "filename": "sfx_explosion_mini_rocket.ogg",
         "volume": 0.15,
         "shipped": true,
         "exists": true,
-        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+        "file_hash": "8eea7dec68529657691f12f9a2b4459fd5a12fcc812a32996acc44ab0f719b70",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_mini_rocket"
@@ -1138,6 +1222,7 @@
       "name": "Raketenexplosion",
       "category": "explosion",
       "intent": "A single rocket impact explosion, hard impact crack, broad explosive body and a short gritty rolling debris tail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one full rocket impact: hard crack transient, broad heavy blast body, debris rush, and a short rolling tail.",
@@ -1161,6 +1246,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_rocket",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_explosion_he.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_he.ogg",
         "filename": "sfx_explosion_he.ogg",
@@ -1195,6 +1283,7 @@
       "name": "Rauchgranate – Entfaltung",
       "category": "explosion",
       "intent": "A single smoke grenade deployment, small ignition pop followed by a soft pressurized smoke hiss that gently settles.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one smoke-grenade deployment: hard cap pop, pressurized hiss burst, small mechanical body, and a brief clean settle with no prolonged ambience.",
@@ -1218,6 +1307,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_smoke",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_explosion_smoke.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_smoke.ogg",
         "filename": "sfx_explosion_smoke.ogg",
@@ -1239,6 +1331,7 @@
       "name": "Gauss – Ladetextur",
       "category": "utility",
       "intent": "A steady electromagnetic weapon charging texture, thin focused metallic hum and tense high-frequency electrical buzz, stable intensity without firing.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable railgun charge: taut metallic hum, pulsing magnetic pressure, sharp electrical grain, and constant locked tension with no shot.",
@@ -1262,6 +1355,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_gauss_charge",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_gauss_charge.ogg",
         "asset_path": "./assets/sounds/sfx_gauss_charge.ogg",
         "filename": "sfx_gauss_charge.ogg",
@@ -1290,6 +1386,7 @@
       "name": "Trefferbestätigung",
       "category": "ui",
       "intent": "A single extremely short dry hit confirmation tick, crisp neutral click with a little compact weight, distinct without harsh piercing frequencies.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one ultra-short damage confirmation: razor-dry tick, firm compact body, neutral pitch, immediate clean stop, and strong mix readability.",
@@ -1313,6 +1410,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_hit_feedback",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_hit_feedback.ogg",
         "asset_path": "./assets/sounds/sfx_hit_feedback.ogg",
         "filename": "sfx_hit_feedback.ogg",
@@ -1341,6 +1441,7 @@
       "name": "Honigdachs – Wutaktivierung",
       "category": "utility",
       "intent": "A single short ferocious badger snarl with forceful breath and coarse animal growl, compact aggressive game cue, no human voice.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one badger rage burst: forceful snarl, rough breath attack, dense animal body, abrupt short release, no human speech.",
@@ -1364,6 +1465,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_honey_badger_rage",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_honey_badger_rage.ogg",
         "asset_path": "./assets/sounds/sfx_honey_badger_rage.ogg",
         "filename": "sfx_honey_badger_rage.ogg",
@@ -1392,6 +1496,7 @@
       "name": "Nuklear – Warnsignal",
       "category": "utility",
       "intent": "A single clear urgent electronic warning cue, sharply defined pulse with a tense compact metallic resonance.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one catastrophic warning pulse: hard low electronic hit, metallic alarm ring, urgent compact rise, clear spatial focus, no speech.",
@@ -1415,6 +1520,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_nuke_countdown",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_nuke_countdown.ogg",
         "asset_path": "./assets/sounds/sfx_nuke_countdown.ogg",
         "filename": "sfx_nuke_countdown.ogg",
@@ -1443,6 +1551,7 @@
       "name": "Nuklear – Explosion",
       "category": "explosion",
       "intent": "A single enormous explosive detonation, decisive initial crack, deep expanding blast and long controlled rolling low-frequency tail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one nuclear detonation: colossal crack transient, massive low blast body, tearing debris, and a controlled rolling tail with bounded duration.",
@@ -1466,6 +1575,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_nuke_explosion",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
         "asset_path": "./assets/sounds/sfx_nuke_explosion.ogg",
         "filename": "sfx_nuke_explosion.ogg",
@@ -1494,6 +1606,7 @@
       "name": "Audioeinstellungen – Vorschau",
       "category": "ui",
       "intent": "A single bright decisive round-start cue, crisp upward electronic accent and short positive resonant finish, no speech.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one bright options-preview ping: crisp synth strike, clean upbeat body, short resonant tail, dry UI separation, no speech.",
@@ -1517,6 +1630,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_options_preview",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_countdown_go.ogg",
         "asset_path": "./assets/sounds/sfx_countdown_go.ogg",
         "filename": "sfx_countdown_go.ogg",
@@ -1546,6 +1662,7 @@
       "name": "Rüstung – Aufnahme",
       "category": "powerup",
       "intent": "A single armor pickup cue, solid compact metallic clink with a brief positive electronic accent.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one armor pickup: hard metal-clink transient, dense steel body, short bright confirmation tail, dry and readable in combat.",
@@ -1569,6 +1686,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_pickup_armor",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_pickup_armor.ogg",
         "asset_path": "./assets/sounds/sfx_pickup_armor.ogg",
         "filename": "sfx_pickup_armor.ogg",
@@ -1590,6 +1710,7 @@
       "name": "Lebenspunkte – Aufnahme",
       "category": "powerup",
       "intent": "A single positive health pickup cue, warm short rounded pulse with a small clean bright shimmer.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one health pickup: warm solid pulse, clean rounded body, bright short sparkle, and a distinct clear UI finish.",
@@ -1613,6 +1734,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_pickup_hp",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_pickup_hp.ogg",
         "asset_path": "./assets/sounds/sfx_pickup_hp.ogg",
         "filename": "sfx_pickup_hp.ogg",
@@ -1634,6 +1758,7 @@
       "name": "Power-up – Aufnahme",
       "category": "powerup",
       "intent": "A single clear power-up pickup cue, crisp bright energy chime with a short rising shimmer and clean ending.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one power-up pickup: sharp ascending energy hit, compact punch, bright shimmering tail, and a clean decisive ending.",
@@ -1676,6 +1801,9 @@
       ],
       "repository": {
         "key": "sfx_pickup_powerup",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_pickup_powerup.ogg",
         "asset_path": "./assets/sounds/sfx_pickup_powerup.ogg",
         "filename": "sfx_pickup_powerup.ogg",
@@ -1704,6 +1832,7 @@
       "name": "Dachstunnel – Platzierung",
       "category": "utility",
       "intent": "A single rapid burrow entrance opening, earthy crumbling thud with loose grit and short soil scrape.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one burrow-entrance placement: earthy thud attack, gritty crumbling body, tight soil scrape, and a short dust tail.",
@@ -1727,6 +1856,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_place_dachstunnel",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_place_dachstunnel.ogg",
         "asset_path": "./assets/sounds/sfx_place_dachstunnel.ogg",
         "filename": "sfx_place_dachstunnel.ogg",
@@ -1755,6 +1887,7 @@
       "name": "Attrappe – Platzierung",
       "category": "utility",
       "intent": "A single lightweight decoy deployment, compact wooden mechanical clack and soft fabric settling.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one decoy deployment: hard wooden click, compact mechanism body, fabric snap, and a short settling tail.",
@@ -1778,6 +1911,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_place_decoy",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_place_decoy.ogg",
         "asset_path": "./assets/sounds/sfx_place_decoy.ogg",
         "filename": "sfx_place_decoy.ogg",
@@ -1806,6 +1942,7 @@
       "name": "Fliegenpilz – Platzierung",
       "category": "utility",
       "intent": "A single oversized mushroom placement, soft earthy thump, papery fungal rustle and subtle organic spring.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one oversized mushroom placement: damp earthy thump, elastic stalk knock, papery cap rustle, and a short organic tail.",
@@ -1829,6 +1966,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_place_fliegenpilz",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_place_fliegenpilz.ogg",
         "asset_path": "./assets/sounds/sfx_place_fliegenpilz.ogg",
         "filename": "sfx_place_fliegenpilz.ogg",
@@ -1850,6 +1990,7 @@
       "name": "Fels – Platzierung",
       "category": "utility",
       "intent": "A single heavy stone placement, solid low rock thud with a little gritty scraping and falling dust.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one heavy rock placement: solid low stone thump, sharp ground contact, gritty scrape, dust ticks, and tight decay.",
@@ -1857,7 +1998,7 @@
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
+        "model": "medium",
         "duration_seconds": 2,
         "candidate_count": 4,
         "steps": 8,
@@ -1873,6 +2014,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_place_rock",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_place_rock.ogg",
         "asset_path": "./assets/sounds/sfx_place_rock.ogg",
         "filename": "sfx_place_rock.ogg",
@@ -1931,14 +2075,15 @@
       "name": "Dachs – Tod",
       "category": "player",
       "intent": "A single short badger collapse, brief coarse animal exhale and grounded soft body thud, no speech or prolonged scream.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one badger collapse: abrupt breath hit, grounded body thud, coarse fur rustle, and a short heavy tail, no prolonged vocal.",
-        "source": "astra",
+        "text": "TrackType: SFX, short abrupt, gasping sounds of a dying animal, made for an intense video game, no prolonged vocal.",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
+        "model": "medium",
         "duration_seconds": 2,
         "candidate_count": 4,
         "steps": 8,
@@ -1954,6 +2099,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_player_death",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_player_death.ogg",
         "asset_path": "./assets/sounds/sfx_player_death.ogg",
         "filename": "sfx_player_death.ogg",
@@ -1982,6 +2130,7 @@
       "name": "Dachs – Treffer",
       "category": "player",
       "intent": "A single brief badger pain grunt and compact bodily impact, coarse short animal breath, no human speech.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one badger hit reaction: sharp pain-bark attack, compact body impact, rough breath burst, and a brief clear release, no speech.",
@@ -2005,6 +2154,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_player_hit",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_player_hit.ogg",
         "asset_path": "./assets/sounds/sfx_player_hit.ogg",
         "filename": "sfx_player_hit.ogg",
@@ -2033,6 +2185,7 @@
       "name": "Dachs – Bewegung",
       "category": "player",
       "intent": "A continuous close texture of quick light animal footsteps on compact earth, soft gritty paw impacts and faint cloth movement, consistent pace.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable fast badger footwork: crisp paw taps, compact earth grit, light body rustle, and constant forward pace with no start or stop.",
@@ -2056,6 +2209,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_player_move",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_player_move.ogg",
         "asset_path": "./assets/sounds/sfx_player_move.ogg",
         "filename": "sfx_player_move.ogg",
@@ -2090,15 +2246,16 @@
       "name": "Dachs – Spawn",
       "category": "player",
       "intent": "A single compact arrival cue, gentle airy pop followed by a short confident bright energy shimmer.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one player spawn-sound: direct loud sound, short organic sound, fast transient, shimmer tail. ",
+        "text": "TrackType: SFX, one player spawn-sound made for an intense video game: A heavy object that falls onto the forest floor with a forceful but brief impact",
         "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
-        "duration_seconds": 3,
+        "model": "medium",
+        "duration_seconds": 2,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -2138,6 +2295,9 @@
       ],
       "repository": {
         "key": "sfx_player_spawn",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_player_spawn.ogg",
         "asset_path": "./assets/sounds/sfx_player_spawn.ogg",
         "filename": "sfx_player_spawn.ogg",
@@ -2172,6 +2332,7 @@
       "name": "Schild – Aktivierung",
       "category": "utility",
       "intent": "A single protective energy shield deployment, short smooth upward energy sweep resolving into a soft solid pulse.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one shield deployment: hard rising energy sweep, firm protective pulse, bright glassy snap, and a short controlled tail.",
@@ -2195,6 +2356,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_shield_activate",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_shield_activate.ogg",
         "asset_path": "./assets/sounds/sfx_shield_activate.ogg",
         "filename": "sfx_shield_activate.ogg",
@@ -2223,6 +2387,7 @@
       "name": "Schild – Aktive Textur",
       "category": "utility",
       "intent": "A steady protective energy shield hum, smooth low resonance with subtle bright surface shimmer, even texture without start or stop.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable shield field: dense low hum, tight electrical grain, subtle bright edge shimmer, and an even active bed with no start or end.",
@@ -2246,6 +2411,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_shield_active",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_shield_active.ogg",
         "asset_path": "./assets/sounds/sfx_shield_active.ogg",
         "filename": "sfx_shield_active.ogg",
@@ -2267,6 +2435,7 @@
       "name": "Tesla – Aktivierung",
       "category": "utility",
       "intent": "A single Tesla coil power-up cue, quick rising electrical buzz culminating in a compact high-voltage snap.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one Tesla activation: rapid voltage rise, sharp coil snap, dense electrical body, and a brief energized tail.",
@@ -2290,6 +2459,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_tesla_activate",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_tesla_activate.ogg",
         "asset_path": "./assets/sounds/sfx_tesla_activate.ogg",
         "filename": "sfx_tesla_activate.ogg",
@@ -2318,6 +2490,7 @@
       "name": "Tesla – Aktive Entladung",
       "category": "utility",
       "intent": "A steady active Tesla electricity texture, dense fine high-voltage crackle and stable low electrical buzz without distinct start or stop.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable Tesla field: rapid high-voltage crackle, tight low buzz bed, intermittent crisp sparks, and no start or stop.",
@@ -2341,6 +2514,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_tesla_active_targets",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_tesla_active_targets.ogg",
         "asset_path": "./assets/sounds/sfx_tesla_active_targets.ogg",
         "filename": "sfx_tesla_active_targets.ogg",
@@ -2362,6 +2538,7 @@
       "name": "Zug – Explosion",
       "category": "explosion",
       "intent": "A single heavy locomotive explosion, sharp structural metal rupture, powerful compact blast and tumbling metallic debris tail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one gigantic locomotive explosion: metal-tearing crack, fast buildup, heavy engine blast body, big Explosion of metallic parts",
@@ -2414,6 +2591,9 @@
       ],
       "repository": {
         "key": "sfx_train_explode",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_train_explode.ogg",
         "asset_path": "./assets/sounds/sfx_train_explode.ogg",
         "filename": "sfx_train_explode.ogg",
@@ -2442,6 +2622,7 @@
       "name": "Zug – Bewegung",
       "category": "utility",
       "intent": "A continuous small heavy train rolling texture, steady low mechanical rumble, regular rail clatter and subtle metal vibration at constant speed.",
+      "musical_identity": "",
       "playback": "loop",
       "prompt": {
         "text": "TrackType: SFX, seamless loopable train motion: low engine churn, regular rail strikes, metallic vibration, steady forward rhythm, no acceleration or end hit.",
@@ -2465,6 +2646,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_train_move",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_train_move.ogg",
         "asset_path": "./assets/sounds/sfx_train_move.ogg",
         "filename": "sfx_train_move.ogg",
@@ -2499,6 +2683,7 @@
       "name": "Translocator – Teleport",
       "category": "utility",
       "intent": "A single compact teleportation effect, quick electric implosion, sharp spatial pop and short bright energy release.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one teleport: hard inward vacuum snap, spatial pop, dense electric release, and a crisp short tail.",
@@ -2522,6 +2707,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_translocator_teleport",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_translocator_teleport.ogg",
         "asset_path": "./assets/sounds/sfx_translocator_teleport.ogg",
         "filename": "sfx_translocator_teleport.ogg",
@@ -2550,6 +2738,7 @@
       "name": "Dachstunnel – Benutzung",
       "category": "utility",
       "intent": "A single quick movement through a dirt tunnel, close muffled earthy swoosh, short soil scrape and soft exit thump.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one tunnel traverse: tight dirt rush, muffled scrape body, forceful exit thump, and a compact directional tail.",
@@ -2573,6 +2762,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "sfx_use_dachstunnel",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/sfx_use_dachstunnel.ogg",
         "asset_path": "./assets/sounds/sfx_use_dachstunnel.ogg",
         "filename": "sfx_use_dachstunnel.ogg",
@@ -2601,6 +2793,7 @@
       "name": "AK-47 – Schuss",
       "category": "weapon",
       "intent": "A single forceful assault rifle shot, hard metallic attack, gritty mechanical clack and short controlled low-end punch.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one AK rifle shot: hard muzzle crack, dense midrange body, sharp bolt clack, compact low punch, dry and clear.",
@@ -2649,6 +2842,9 @@
       ],
       "repository": {
         "key": "shot_ak47",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/ak-47.ogg",
         "asset_path": "./assets/sounds/ak-47.ogg",
         "filename": "ak-47.ogg",
@@ -2683,6 +2879,7 @@
       "name": "ASMD – Primärschuss",
       "category": "weapon",
       "intent": "A single precise futuristic energy rifle discharge, sharp electric crack, compact glassy resonance and short decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one futuristic energy-rifle shot: scy-fi laser shot, energy-stile body, snappy transient, bright tight decay",
@@ -2706,6 +2903,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_asmd_primary",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/asmd-prim.ogg",
         "asset_path": "./assets/sounds/asmd-prim.ogg",
         "filename": "asmd-prim.ogg",
@@ -2740,6 +2940,7 @@
       "name": "ASMD – Energiekugel",
       "category": "weapon",
       "intent": "A single unstable plasma orb launch, rounded electric thump, buzzing energy snap and brief airy tail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one plasma-orb launch: compressed electric thump, rounded dense body, buzzing crackle, and a short forward whoosh.",
@@ -2763,6 +2964,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_asmd_secondary",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/asmd-sec.ogg",
         "asset_path": "./assets/sounds/asmd-sec.ogg",
         "filename": "asmd-sec.ogg",
@@ -2791,6 +2995,7 @@
       "name": "AWP – Schuss",
       "category": "weapon",
       "intent": "A single heavy sniper rifle shot, immediate dry explosive crack, solid low-end body and clear bolt-action detail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one heavy sniper shot: explosive dry crack, dense low body, sharp bolt kick, and a controlled short tail.",
@@ -2814,6 +3019,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_awp",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/awp.ogg",
         "asset_path": "./assets/sounds/awp.ogg",
         "filename": "awp.ogg",
@@ -2842,6 +3050,7 @@
       "name": "BFG – Schuss",
       "category": "weapon",
       "intent": "A single massive science-fiction energy cannon launch, decisive electric impact, deep controlled pulse and short charged tail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one science-fiction cannon shot: huge electric crack, heavy low pulse body, pressurized energy burst, and a compact charged tail.",
@@ -2865,6 +3074,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_bfg",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/bfg.ogg",
         "asset_path": "./assets/sounds/bfg.ogg",
         "filename": "bfg.ogg",
@@ -2893,15 +3105,16 @@
       "name": "Biss",
       "category": "weapon",
       "intent": "A single quick animal bite as an attack for a video game, tight jaw snap, small wet crunch and short aggressive body, no vocalization.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one badger bite attack: hard jaw snap, dense tooth click, short wet crunch, aggressive animal body, no vocalization.",
-        "source": "astra",
+        "text": "TrackType: SFX, An attacking animal that strikes with its claws while growling. rapid increase in volume, The sound features the growl in the background and the actual whoosh of the claws in the foreground.",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 1,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -2916,13 +3129,16 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_bite",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/bite.ogg",
         "asset_path": "./assets/sounds/bite.ogg",
         "filename": "bite.ogg",
         "volume": 0.4,
         "shipped": true,
         "exists": true,
-        "file_hash": "3ecab3dd24d9e507b6a0bc0be96c1334ce3918f5090e004bf725e55b83065ab2",
+        "file_hash": "a10398a82d4476c6bbf4fd1c1653393e08aa33f343fa03a094eff5a352853f9b",
         "file_error": null,
         "shared_keys": [
           "shot_bite"
@@ -2962,6 +3178,7 @@
       "name": "Armbrust – Schuss",
       "category": "weapon",
       "intent": "A single compact crossbow release, crisp string snap, wooden mechanical click and short bolt whoosh.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one crossbow release: sharp string snap, wooden latch crack, compact bolt whoosh, and a tight tail.",
@@ -2985,6 +3202,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_crossbow",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/crossbow.ogg",
         "asset_path": "./assets/sounds/crossbow.ogg",
         "filename": "crossbow.ogg",
@@ -3013,6 +3233,7 @@
       "name": "Leerer Abzug",
       "category": "weapon",
       "intent": "A single dry empty firearm trigger click, crisp small mechanical snap with a short clean decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one empty firearm trigger: dry mechanical click, crisp spring snap, compact metal body, and an immediate stop.",
@@ -3343,6 +3564,9 @@
       ],
       "repository": {
         "key": "shot_dry_trigger",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/dry-trigger.ogg",
         "asset_path": "./assets/sounds/dry-trigger.ogg",
         "filename": "dry-trigger.ogg",
@@ -3659,6 +3883,7 @@
       "name": "Flammenwerfer – Feuerimpuls",
       "category": "weapon",
       "intent": "A single brief flamethrower burst, immediate gas ignition pop and dense hot flame rush, one compact fire pulse.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one flamethrower burst: hard ignition pop, dense hot gas rush, forceful flame body, and an abrupt compact release.",
@@ -3682,6 +3907,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_flame",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/flame.ogg",
         "asset_path": "./assets/sounds/flame.ogg",
         "filename": "flame.ogg",
@@ -3734,6 +3962,7 @@
       "name": "Gauss – Schuss",
       "category": "weapon",
       "intent": "A single electromagnetic railgun shot, very sharp metallic electric crack, taut energy snap and tight low-end punch.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one railgun shot: brutal magnetic Weapon Sound, hard metallic transient, dense and brutal energy body with tight low punch.",
@@ -3757,6 +3986,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_gauss",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/Gauss.ogg",
         "asset_path": "./assets/sounds/Gauss.ogg",
         "filename": "Gauss.ogg",
@@ -3785,15 +4017,16 @@
       "name": "Glock – Schuss",
       "category": "weapon",
       "intent": "A single compact semi-automatic pistol shot, immediate sharp dry crack, crisp slide action and controlled short body.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one compact pistol shot: sharp dry crack, compact mid body, crisp slide snap, and a controlled short tail.",
-        "source": "astra",
+        "text": "TrackType: SFX, one compact massive pistol shot: Heavy Body, intense muzzle flash, Massive Attack, Sounds more aggressive than a normal weapon, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
-        "duration_seconds": 2,
+        "model": "small-sfx-comfyui",
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -3808,13 +4041,16 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_glock",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/glock.ogg",
         "asset_path": "./assets/sounds/glock.ogg",
         "filename": "glock.ogg",
         "volume": 0.15,
         "shipped": true,
         "exists": true,
-        "file_hash": "d6a7ba1045407c8ee9aa38187240220d78acb5b3f5f46df1299c04b7599ab2d2",
+        "file_hash": "b7bcf1623ee28129d9e26d0bf929a3bd65c64c20df9468550b5d648fb34ba6c6",
         "file_error": null,
         "shared_keys": [
           "shot_glock"
@@ -3842,6 +4078,7 @@
       "name": "Heilige Waffe – Auslösung",
       "category": "weapon",
       "intent": "A single radiant fantasy weapon launch, bright bell-like attack, short shimmering magical burst, no choir or speech.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one radiant weapon discharge: hard bell-like attack, dense bright energy body, short sparkling release, no choir or speech.",
@@ -3865,6 +4102,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_hallelujah",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/hallelujah.ogg",
         "asset_path": "./assets/sounds/hallelujah.ogg",
         "filename": "hallelujah.ogg",
@@ -3893,6 +4133,7 @@
       "name": "Hydra – Schuss",
       "category": "weapon",
       "intent": "A single heavy multi-barrel weapon discharge, dense metallic attack with a layered compact punch and fast decay.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one multi-barrel blast: layered hard cracks, dense metallic body, compact recoil clatter, and a fast tight tail.",
@@ -3916,6 +4157,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_hydra",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/hydra.ogg",
         "asset_path": "./assets/sounds/hydra.ogg",
         "filename": "hydra.ogg",
@@ -3944,6 +4188,7 @@
       "name": "Mini-Raketenwerfer – Schuss",
       "category": "weapon",
       "intent": "A single miniature rocket launch, compact ignition thump, sharp mechanical click and brief pressurized whoosh.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one miniature rocket launch: sharp ignition pop, compact pressure body, fast exhaust whoosh, and brief mechanical detail.",
@@ -3967,6 +4212,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_minirocketlauncher",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/minirocketlauncher.ogg",
         "asset_path": "./assets/sounds/minirocketlauncher.ogg",
         "filename": "minirocketlauncher.ogg",
@@ -4001,6 +4249,7 @@
       "name": "Negev – Schuss",
       "category": "weapon",
       "intent": "A single belt-fed machine gun shot, weighty dry crack, rattling mechanical action and a tight punchy tail.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one belt-fed machine-gun shot: hard flat crack, dense metal body, feed-mechanism clatter, and a tight low punch.",
@@ -4024,6 +4273,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_negev",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/negev.ogg",
         "asset_path": "./assets/sounds/negev.ogg",
         "filename": "negev.ogg",
@@ -4052,15 +4304,16 @@
       "name": "P90 – Schuss",
       "category": "weapon",
       "intent": "A single compact submachine gun shot, sharp immediate attack, crisp mechanical action and punchy controlled low end.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one compact SMG shot: sharp transient, tight punchy body, crisp cyclic mechanism tick, and a short dry tail.",
-        "source": "astra",
+        "text": "TrackType: SFX, one very compact small Rifle shot: massive sounding weapon for an intense action game, extremely aggresive and sharp transient, tight punchy body",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4094,13 +4347,16 @@
       ],
       "repository": {
         "key": "shot_p90",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/p90.ogg",
         "asset_path": "./assets/sounds/p90.ogg",
         "filename": "p90.ogg",
         "volume": 0.3,
         "shipped": true,
         "exists": true,
-        "file_hash": "5226e4454ada8c069382ee466d9efd634d3d24cb43a93999dc87d887474c7eca",
+        "file_hash": "a13ad955047bf76d90f905d4f5c8e2afc7301af8e275275f823f4fd94fea70b0",
         "file_error": null,
         "shared_keys": [
           "shot_p90"
@@ -4122,15 +4378,16 @@
       "name": "Plasma – Schuss",
       "category": "weapon",
       "intent": "A single small plasma weapon discharge, snappy electronic zap, bright charged crackle and rounded tight body.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one plasma shot: Eletric weapon Shot, compact charged body, Plasma Sounds, high energy laser weapon sound, fast decay, weapon with high energy and fast firing rate, only one shot,",
+        "text": "TrackType: SFX, one plasma shot: Eletric weapon Shot, Very Loud attack, compact and extremly short but massive sounding charged body, Plasma Sounds, high energy laser weapon sound, fast decay, weapon with high energy and fast firing rate, only one shot, made for an intense action game",
         "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4145,13 +4402,16 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_plasma",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/plasma.ogg",
         "asset_path": "./assets/sounds/plasma.ogg",
         "filename": "plasma.ogg",
         "volume": 0.2,
         "shipped": true,
         "exists": true,
-        "file_hash": "51a689dd7cc08398fa70e6343033518700b085b9a38e660cdfdd573efb6863aa",
+        "file_hash": "2279b58211483d263225e139fa51e10b99ed8a7870448266d9c842b89bbd8669",
         "file_error": null,
         "shared_keys": [
           "shot_plasma"
@@ -4197,6 +4457,7 @@
       "name": "Raketenwerfer – Schuss",
       "category": "weapon",
       "intent": "A single heavy rocket launcher firing, abrupt bassy ignition thump followed by a short forceful exhaust rush.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one extremly loud heavy rocket-launcher shot: extremly hard ignition thump with massive lowend, dense pressure body, powerful sound as it leaves the rocket launcher, followed by a flight noise that quickly fades",
@@ -4220,13 +4481,16 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_rocketlauncher",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/rocketlauncher.ogg",
         "asset_path": "./assets/sounds/rocketlauncher.ogg",
         "filename": "rocketlauncher.ogg",
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "414fbf7311b083d67d9d281a37048b78f2887949d367dd9a5f344eec967e429d",
+        "file_hash": "7ebd75762e408e830a61bbd219b93933e416834e8a34abfe047fe74f44e648bd",
         "file_error": null,
         "shared_keys": [
           "shot_rocketlauncher"
@@ -4254,15 +4518,16 @@
       "name": "Schrotflinte – Schuss",
       "category": "weapon",
       "intent": "A single shotgun blast, immediate broad dry crack, dense short body, crisp mechanical clack and restrained low end.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one heavy shotgun blast: heavy very loud compact body, Massive Lowend, shot in a large hall, made for an action Game, almost too extreme for a normal weapon",
+        "text": "TrackType: SFX, one heavy shotgun blast: heavy very loud compact body, Massive Lowend, shot in a large hall, made for an intense action Game, almost too extreme for a normal weapon",
         "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "small-sfx-comfyui",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4277,13 +4542,16 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_shotgun",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/shotgun.ogg",
         "asset_path": "./assets/sounds/shotgun.ogg",
         "filename": "shotgun.ogg",
         "volume": 0.06,
         "shipped": true,
         "exists": true,
-        "file_hash": "2da85c90e9ea5875f5985bc2a29bb385ad8a00c6197d28ebce5a36442a517d9a",
+        "file_hash": "ec318d77d62bb21d24812c5c8503a6f1aedcb2e20f90db7931915e11d10d9ec9",
         "file_error": null,
         "shared_keys": [
           "shot_shotgun"
@@ -4311,6 +4579,7 @@
       "name": "Sporenwaffe – Schuss",
       "category": "weapon",
       "intent": "A single organic spore projectile launch, damp pressurized pop, papery fungal crackle and short soft air release.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one spore-weapon launch: sharp wet pop, dense organic body, papery crackle, and a forceful short air release.",
@@ -4334,6 +4603,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_spore",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/spore.ogg",
         "asset_path": "./assets/sounds/spore.ogg",
         "filename": "spore.ogg",
@@ -4380,6 +4652,7 @@
       "name": "Wurf",
       "category": "weapon",
       "intent": "A single quick hand-thrown object swoosh, compact cloth movement and a crisp release through the air.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one thrown-projectile release: crisp hand snap, taut air slice, compact motion body, and a short directional whoosh.",
@@ -4464,6 +4737,9 @@
       ],
       "repository": {
         "key": "shot_throw",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/throw.ogg",
         "asset_path": "./assets/sounds/throw.ogg",
         "filename": "throw.ogg",
@@ -4534,6 +4810,7 @@
       "name": "Zeus – Schuss",
       "category": "weapon",
       "intent": "A single powerful electric weapon discharge, immediate lightning snap, short dense crackling burst and tight low-end impact.",
+      "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
         "text": "TrackType: SFX, one Zeus electric shot: violent lightning crack, dense high-voltage body, sharp bright edge, and a tight low impact tail.",
@@ -4557,6 +4834,9 @@
       "suggested_changes": [],
       "repository": {
         "key": "shot_zeus",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
         "target_path": "public/assets/sounds/zeus.ogg",
         "asset_path": "./assets/sounds/zeus.ogg",
         "filename": "zeus.ogg",
@@ -4589,6 +4869,128 @@
           }
         ],
         "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "music_arena": {
+      "name": "Arena-Musik",
+      "category": "music",
+      "intent": "Eigenständiger Kampf-Loop: treibend und druckvoll; wichtige Schüsse, Treffer und UI-Signale bleiben lesbar.",
+      "musical_identity": "fragdachse",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: Music, VocalType: Instrumental, 188 BPM, D minor.\n\nExtreme high-energy combat music built around heavily distorted organic percussion and aggressive low-frequency textures. Massive deep toms, frame drums and resonant hand drums play fast, relentless, tightly syncopated patterns with constant momentum and hard transient impact. Distortion is a core element of the track: saturated drums, overdriven low cello, crushed bowed bass, abrasive string textures, gritty noise layers and distorted rhythmic pulses stay prominent throughout.\n\nUse short violent motifs, repeated low-register patterns, dense rhythmic layering and constant pressure instead of long melodies or ambient passages. Keep the arrangement dark, raw, physical and mechanical-organic rather than electronic dance music.\n\nA dark forest soundscape remains audible underneath the music: strong wind through trees, rushing leaves, creaking branches, distant crows and ravens, occasional owls and a fast woodland stream. The ambience should add texture without softening the intensity.\n\nTight punchy mix, aggressive midrange, heavy low end, controlled reverb, short dark delays, very little empty space. No calm sections, no slow buildup, no dreamy pads, no EDM groove, no techno kick pattern, no bright instruments, no heroic orchestration, no vocals. Immediate full-intensity start, sustained maximum energy, loop-friendly, no final fade.",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 120,
+        "candidate_count": 2,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "music_loop",
+        "overrides": {}
+      },
+      "notes": "Produktionsvorgabe: Gesamtloop. Gemeinsame Richtung: catalog/music-identity.md. Tempo, Tonart, Loop-Übergang und Zusammenspiel mit SFX brauchen Hörfreigabe; ggf. manuelle Loop-Punkte setzen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "music_arena",
+        "kind": "music",
+        "music_role": "arena",
+        "editable": true,
+        "target_path": "public/assets/sounds/music_arena.ogg",
+        "asset_path": "./assets/sounds/music_arena.ogg",
+        "filename": "music_arena.ogg",
+        "volume": 0.8,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6663578daa99faf11f59f3a8d092296496f19c93752624afc1cfe410d3d5727b",
+        "file_error": null,
+        "shared_keys": [
+          "music_arena"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 3015,
+            "kind": "loop",
+            "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+          }
+        ],
+        "playback": "loop",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "music_lobby": {
+      "name": "Lobby-Musik",
+      "category": "music",
+      "intent": "Eigenständiger Lobby-Loop: Vorfreude, frecher Charakter und Platz für Menüs und Gespräche.",
+      "musical_identity": "fragdachse",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: Music, VocalType: Instrumental, 94 BPM, D minor.\n\nDark forest dawn background music built around powerful, driving low percussion. Continuous rhythmic momentum from deep toms, large frame drums and heavy resonant hand drums, with strong pulse, dense repeating patterns, syncopated accents and firm low-end impact. Energetic cinematic and propulsive.\n\nA clearly audible forest soundscape is the major part of the track and extremely prominent: strong wind through trees, constant rustling leaves, moving branches, distant crows and ravens, owl and eagle-owl calls, and a flowing woodland stream. These natural sounds should remain present throughout the track and occupy noticeable space in the mix.\n\nVery sparse dark harmony underneath: muted low cello, restrained low wooden flute and soft but very distorted pads. Minimal melody, no bright or cheerful lead instrument.\n\nLarge natural reverb, long atmospheric tails, soft delay and wide spatial depth. Earthy, cold, mysterious, slightly ominous and melancholic.\n\nNo techno, no EDM drums, no kick-drum pattern, no synth bass, no arpeggiators, no bright mallets, no marimba, no vocals, no heroic melody. Loop-friendly, immediate rhythmic start, no long intro, no final fade.",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 90,
+        "candidate_count": 3,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "music_loop",
+        "overrides": {}
+      },
+      "notes": "Produktionsvorgabe: Gesamtloop. Gemeinsame Richtung: catalog/music-identity.md. Tempo, Tonart, Loop-Übergang und Zusammenspiel mit SFX brauchen Hörfreigabe; ggf. manuelle Loop-Punkte setzen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "music_lobby",
+        "kind": "music",
+        "music_role": "lobby",
+        "editable": true,
+        "target_path": "public/assets/sounds/badger02.ogg",
+        "asset_path": "./assets/sounds/badger02.ogg",
+        "filename": "badger02.ogg",
+        "volume": 0.8,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6777253879ec5887553fa3c52fe7606c28506ec335f9fc4d3548aa58fc11a77b",
+        "file_error": null,
+        "shared_keys": [
+          "music_lobby"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 909,
+            "kind": "loop",
+            "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 1544,
+            "kind": "loop",
+            "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 3145,
+            "kind": "loop",
+            "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+          }
+        ],
+        "playback": "loop",
         "conflicts": []
       },
       "orphaned": false

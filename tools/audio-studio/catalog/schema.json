@@ -64,6 +64,12 @@
           "title": "Intent",
           "type": "string"
         },
+        "musical_identity": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Musical Identity",
+          "type": "string"
+        },
         "playback": {
           "default": "unknown",
           "enum": [
@@ -141,7 +147,7 @@
         },
         "duration_seconds": {
           "default": 2,
-          "maximum": 47,
+          "maximum": 380,
           "minimum": 1,
           "title": "Duration Seconds",
           "type": "integer"
@@ -181,7 +187,8 @@
             "impact",
             "explosion",
             "continuous_texture",
-            "gentle"
+            "gentle",
+            "music_loop"
           ],
           "title": "Profile",
           "type": "string"

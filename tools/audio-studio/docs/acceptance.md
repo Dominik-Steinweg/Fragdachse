@@ -2,7 +2,78 @@
 
 Geprüft am 14. September 2026 gegen das vollständig gelesene Konzept v1 und den lokalen Quellcode. **Die Implementierung ist keine bestandene Klang-/Hardwareabnahme.**
 
-## Aktuell: Small-SFX über beide Pipelines vergleichen
+## Aktuell: Lobby- und Arena-Musik über Medium/ComfyUI
+
+Lobby und Arena werden aus der zentralen `MUSIC_ASSETS`-Konfiguration in den
+bestehenden Katalog aufgenommen. Neue Musikrezepte verwenden Medium, Loop und
+`music_loop`; die Startprompts wurden per CLI mit Revisionsschutz angelegt.
+Vorhandene SFX-Autorenfelder und ausgeblendete Kopie-Hinweise wurden dabei
+auf unveränderten Inhalt geprüft. Die gemeinsame `musical_identity` ist ein
+Autorenhinweis ohne automatische Prompt-Erweiterung.
+
+Nur ein Spieleintrag wurde vorbereitet: Der Verweis auf die nicht vorhandene
+`music_arena.wav` zeigt jetzt auf `music_arena.ogg`. Es wurde kein generierter
+Track ins Spiel übernommen; Lobby-Musik wurde nicht ersetzt.
+
+**Echte lokale Generierung ausgeführt:** ComfyUI 0.35.1, vorhandenes Medium,
+derselbe feste Workflow, 8 Schritte, CFG 1. Beide WAVs sind endlich, nicht leer,
+Stereo und 44.100 Hz. Gemessen wurde die API-Laufzeit einschließlich Import;
+dies ist kein Kaltstart-Benchmark.
+
+| Rolle/Test | Angefordert / RAW | Seed | Laufzeit |
+|---|---|---|---|
+| Lobby-Prompt | 60 s / 60,000363 s | 190914 | 13,45 s |
+| Arena-Prompt | 120 s / 120,000726 s | 190915 | 16,66 s |
+
+Lokale Nachweise, einschließlich unverändertem Prompt, Graph und Datei-Hashes:
+
+- `.audio-workspace/smoke/music-medium-60s-205f27c090f0489f9842a794fa5ce8ca/`
+- `.audio-workspace/smoke/music-arena-medium-120s-de58ac4b265e456083b48ae4df0b0b01/`
+
+Diese Arbeitsdateien werden nicht versioniert. Beide RAWs erreichen 0 dBFS;
+Loop-Übergang, musikalische Eignung und mögliche bereits erzeugte Verzerrungen
+müssen gehört werden. Processing kann vorhandene Verzerrung nicht reparieren.
+
+**Processing an beiden echten RAWs bestanden:** `music_loop`, 2.000 ms
+Equal-Power-Crossfade, Ziel −16 LUFS / −1 dBTP, zusätzliche 0,1 dB Messreserve.
+Die exportierten OGGs sind 58,000363 s bzw. 118,000726 s lang. Beide messen
+−16,1 LUFS und −2,1 dBTP, einschließlich zweier Wiederholungen zur Messung des
+Loop-Übergangs. Die WAVs messen −16,0 LUFS. RAW-Hashes blieben unverändert;
+WAV, OGG, drei OGG-Wiederholungen und Rezept liegen jeweils unter
+`music-loop-v2/` in den obigen Nachweisordnern.
+
+Der erste echte Langtest deckte einen nativen libsndfile/Vorbis-Prozessabbruch
+auf, den kurze Testsignale nicht zeigten. Musik exportiert deshalb mit dem
+gebündelten FFmpeg in einem geprüften Unterprozess; der SFX-Pfad bleibt
+soundfile-first. Ein GPU-unabhängiger 60-s-Stereotest schützt den Langexport.
+Die erste unvollständige Arbeitsversion bleibt als Fehlversuch liegen und
+wurde weder veröffentlicht noch als Erfolg gewertet.
+
+**Spielprüfung:** `npm run check` bestanden: 3.629 Core-Tests,
+33 Architekturtests und Produktionsbuild. Keine Tool-Module oder Arbeitsdaten
+im Build; das Spiel bekommt keine Python-/FFmpeg-/Modellabhängigkeit.
+
+**Abschließende Tool-Prüfung:** `npm test` bestanden: **131 Python +
+16 Adapter + 9 Frontend = 156 Tests**, zwei bekannte Deprecation-Warnungen.
+Enthalten sind der gemeinsame ComfyUI-Workflow mit langem Musik-Conditioning,
+Medium-/SFX-Grenzen, Prompt-/Identitätserhalt, lange Schnittpunkte, echter
+Vorbis-Export, True-Peak-Messung, fehlendes Messwerkzeug und menschliche Freigabe.
+WAV-Ziele werden vor der Exportvorschau abgewiesen, sodass keine wirkungslose
+Freigabe den Kandidaten sperrt. Der Testlauf verwendete `UV_NO_SYNC=1`, um den
+Startbefehl der laufenden Studio-Instanz nicht zu ersetzen; Abhängigkeiten
+und Lockdatei sind aktualisiert. JS-Syntax, Schema-Parität und `git diff --check`
+wurden ebenfalls geprüft.
+
+**Nicht ausgeführt / offen:** Browser-Sicht-/Mausprüfung (kein Browserauftrag),
+subjektive Hörfreigabe einschließlich Loop-Takt/Harmonie und SFX-Überlagerung,
+echte Veröffentlichung eines Musiktracks (erfordert menschliche Auswahl),
+maximale 380-s-GPU-Generierung und erneuter GPU-Wechseltest zwischen Small/Python
+und ComfyUI. Die vorhandenen Generatoren und Workflowdateien blieben unverändert.
+Die laufende Studio-Instanz wurde nicht beendet oder zusätzlich gestartet.
+Nach Abschluss im eigenen Terminal stoppen, `uv sync --locked --inexact`,
+`npm start` und die Studio-Seite neu laden; siehe [Musikbedienung](music.md).
+
+## Vorheriger Stand: Small-SFX über beide Pipelines vergleichen
 
 Auf Folgeauftrag stehen gleichzeitig **Small-SFX (Python)** (`small-sfx`) und
 **Small-SFX (ComfyUI)** (`small-sfx-comfyui`) zur Verfügung. Medium bleibt separat

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import soundfile as sf
 
-from .catalog import CatalogService, Entry
+from .catalog import CatalogService, Entry, validate_production
 from .jobs import Jobs, now
 from .repository import Repository
 from .storage import Conflict, Store, atomic_json, read_json, sha256, within
@@ -34,7 +34,7 @@ class Studio:
     def current(self, key):
         scan = self.repository.scan()
         if key not in scan["entries"]:
-            raise Conflict("This SFX key is no longer in the game catalog")
+            raise Conflict("This audio key is no longer supported in the game catalog")
         facts = scan["entries"][key]
         if facts.get("conflicts"):
             raise Conflict("Repository conflicts: " + str(facts["conflicts"]))
@@ -57,6 +57,7 @@ class Studio:
                 author["generation_defaults"] = generation
             author = Entry.model_validate(author).model_dump()
             _, facts = self.current(key)
+            validate_production(author, facts)
             return self.jobs.submit(key, author, facts, seed=seed)
 
     def import_current(self, key):
@@ -132,6 +133,10 @@ class Studio:
         with self.store.writing():
             raw = self.audio_path(run_id, candidate_id)
             run, _ = self.candidate(run_id, candidate_id)
+            if run["repository_snapshot"].get("kind") == "music" and (playback != "loop" or profile != "music_loop"):
+                raise ValueError("Music requires loop playback and the music_loop processing profile")
+            if run["repository_snapshot"].get("kind") != "music" and profile == "music_loop":
+                raise ValueError("music_loop is reserved for repository music entries")
             defaults = run["author_snapshot"]["processing"]
             if type(replace_overrides) is not bool:
                 raise ValueError("replace_overrides must be a boolean")
@@ -181,7 +186,9 @@ class Studio:
                 key = run["key"]
                 facts = scan["entries"].get(key)
                 if not facts or facts.get("conflicts"):
-                    raise Conflict("SFX no longer resolves without conflicts")
+                    raise Conflict("Audio key no longer resolves without conflicts")
+                if not facts["target_path"].endswith(".ogg"):
+                    raise ValueError("The central game target must use .ogg before an export can be reviewed")
                 if facts["target_path"] != run["repository_snapshot"]["target_path"]:
                     raise Conflict("Target changed since the source was produced. Reimport or generate for the new target.")
                 target_identity = facts["target_path"].casefold()
@@ -193,6 +200,8 @@ class Studio:
                 if info.format != "OGG" or info.subtype != "VORBIS":
                     raise ValueError("Only actual OGG/Vorbis exports may be published")
                 version = next(v for v in candidate["versions"] if v["id"] == selected["version_id"])
+                if facts.get("kind") == "music" and (version["playback"] != "loop" or version["profile"] != "music_loop"):
+                    raise ValueError("Music must be processed with music_loop before publication")
                 if version.get("status", "complete") != "complete":
                     raise ValueError("A failed processing version cannot be published")
                 analysis = inspect_audio(source, version["playback"])

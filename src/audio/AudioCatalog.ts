@@ -49,6 +49,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   'throw.ogg',
   'zeus.mp3',
   'zeus.ogg',
+  "music_arena.ogg",
 ]);
 
 function isShippedAudioAsset(assetPath: string): boolean {
@@ -151,7 +152,7 @@ const GENERAL_ASSETS = {
 // ── Music ───────────────────────────────────────────────────────────────────
 const MUSIC_ASSETS = {
   music_lobby: './assets/sounds/badger02.ogg', 
-  music_arena: './assets/sounds/music_arena.wav',
+  music_arena: './assets/sounds/music_arena.ogg',
 } as const;
 
 export type MusicAssetKey = keyof typeof MUSIC_ASSETS;

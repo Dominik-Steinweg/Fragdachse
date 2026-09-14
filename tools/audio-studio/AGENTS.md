@@ -6,6 +6,8 @@ Für Katalogpflege zuerst `uv run --inexact audio-studio sync` ausführen, Funds
 
 Neue Einträge brauchen Soundabsicht, englischen SFX-Prompt, belegten oder ausdrücklich als Produktionsvorgabe gekennzeichneten Wiedergabemodus, Modell/Dauer/Kandidatenanzahl und Profil. Medium ist der Startwert; Small-SFX eine bewusste Alternative. Kandidaten werden nacheinander berechnet, keine Ingame-Varianten angelegt. Dynamische Verwendung nicht aus einem Namen als Loop behaupten.
 
+Musikrollen kommen aus den unterstützten `MUSIC_ASSETS`: Lobby und Arena. Dafür englische Musik-Prompts, Medium über ComfyUI, längere ganzzahlige Dauern und `music_loop` verwenden. `musical_identity` verbindet bewusst die Autorenrichtung; die Kennung und [music-identity.md](catalog/music-identity.md) werden nicht automatisch an Prompts angehängt. Keine neuen Musik-Keys oder Zielpfade im Tool erfinden. Details: [Musikproduktion](docs/music.md).
+
 Bestehende Prompts und manuelle Defaults erhalten. Änderungen mit `edit ... --propose` vorschlagen; eine ausdrückliche Benutzeranweisung zur Änderung darf unmittelbar mit `edit` umgesetzt werden. Verwaiste Einträge, Vorschläge, Herkunft und ausgeblendete Hinweise behalten. Gleiche aktuelle Hashes beweisen keine eindeutige Kopierquelle.
 
 Tool 1 erzeugt/veröffentlicht keine Game-Assets. Menschliche Veröffentlichung erfolgt im Studio anhand des tatsächlichen OGG, aktuellen Ziels und aller gemeinsam betroffenen Keys. Keine Git-Commits, Pushes, Deployments oder Cloudfallbacks als Nebenwirkung.

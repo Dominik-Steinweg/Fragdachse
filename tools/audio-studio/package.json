@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Local SFX production tools for Fragdachse",
+  "description": "Local SFX and music production tools for Fragdachse",
   "scripts": {
     "start": "uv run --inexact audio-studio serve",
     "catalog": "uv run --inexact audio-studio sync",

@@ -5,7 +5,7 @@ import copy
 import math
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .storage import Conflict, Store, atomic_json, read_json, safe_id, sha256
 from .generators import registered_model_names
@@ -26,7 +26,7 @@ class Prompt(Strict):
 
 class Generation(Strict):
     model: str = Field(default="medium", json_schema_extra={"enum": list(MODEL_NAMES)})
-    duration_seconds: int = Field(default=2, ge=1, le=47)
+    duration_seconds: int = Field(default=2, ge=1, le=380)
     candidate_count: int = Field(default=4, ge=1, le=32)
     steps: int = Field(default=8, ge=1, le=100)
     cfg_scale: float = Field(default=1, ge=0, le=20)
@@ -54,14 +54,14 @@ class Generation(Strict):
 
 
 class Processing(Strict):
-    profile: Literal["weapon_shot", "impact", "explosion", "continuous_texture", "gentle"] = "gentle"
+    profile: Literal["weapon_shot", "impact", "explosion", "continuous_texture", "gentle", "music_loop"] = "gentle"
     overrides: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("overrides")
     @classmethod
-    def valid_overrides(cls, value):
+    def valid_overrides(cls, value, info):
         from .processor import validate_overrides
-        return validate_overrides(value)
+        return validate_overrides(value, profile=info.data.get("profile"))
 
 
 class CopyNotice(Strict):
@@ -78,6 +78,7 @@ class Entry(Strict):
     name: str = ""
     category: str = "event"
     intent: str = ""
+    musical_identity: str = Field(default="", max_length=200)
     playback: Literal["oneshot", "loop", "unknown"] = "unknown"
     prompt: Prompt = Field(default_factory=Prompt)
     generation_defaults: Generation = Field(default_factory=Generation)
@@ -88,6 +89,30 @@ class Entry(Strict):
     suggested_changes: list[dict[str, Any]] = Field(default_factory=list)
     repository: dict[str, Any] = Field(default_factory=dict)
     orphaned: bool = False
+
+    @model_validator(mode="after")
+    def production_limits(self):
+        # Incomplete imported recipes stay readable/editable. Production checks
+        # model and loop readiness against fresh repository facts separately.
+        if self.repository.get("kind") != "music" and self.generation_defaults.duration_seconds > 47:
+            raise ValueError("SFX generation is limited to 47 seconds")
+        if self.repository.get("kind") != "music" and self.processing.profile == "music_loop":
+            raise ValueError("music_loop is reserved for repository music entries")
+        return self
+
+
+def validate_production(author: dict, facts: dict):
+    """Category is an author label; only repository facts select music rules."""
+    settings = author["generation_defaults"]
+    if facts.get("kind") == "music":
+        if settings["model"] != "medium":
+            raise ValueError("Music generation requires Medium through ComfyUI")
+        if author["playback"] != "loop" or author["processing"]["profile"] != "music_loop":
+            raise ValueError("Music requires loop playback and the music_loop processing profile")
+    elif settings["duration_seconds"] > 47:
+        raise ValueError("SFX generation is limited to 47 seconds")
+    elif author["processing"]["profile"] == "music_loop":
+        raise ValueError("music_loop is reserved for repository music entries")
 
 
 class Catalog(Strict):
@@ -102,7 +127,7 @@ class Catalog(Strict):
         return entries
 
 
-AUTHOR_FIELDS = {"name", "category", "intent", "playback", "prompt", "generation_defaults", "processing", "notes", "needs_revision"}
+AUTHOR_FIELDS = {"name", "category", "intent", "musical_identity", "playback", "prompt", "generation_defaults", "processing", "notes", "needs_revision"}
 
 
 class CatalogService:
@@ -127,7 +152,13 @@ class CatalogService:
             for key, facts in scan["entries"].items():
                 new = key not in data["entries"]
                 if new:
-                    data["entries"][key] = Entry(name=key).model_dump()
+                    defaults = {}
+                    if facts.get("kind") == "music":
+                        role = facts.get("music_role")
+                        defaults = dict(category="music", playback="loop", musical_identity="fragdachse",
+                            generation_defaults=Generation(duration_seconds=90 if role == "lobby" else 120, candidate_count=2),
+                            processing=Processing(profile="music_loop"))
+                    data["entries"][key] = Entry(name=key, repository=facts, **defaults).model_dump()
                 entry = data["entries"][key]
                 previous = entry["repository"]
                 # Only factual snapshots are replaced. Authors decide playback and recipes.

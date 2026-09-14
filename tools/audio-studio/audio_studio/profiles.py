@@ -72,4 +72,24 @@ PROFILES = {
         "default_crossfade_ms": 45.0,
         "auto_trim": False,
     },
+    "music_loop": {
+        "version": PROFILE_VERSION,
+        "description": "Preserves a complete musical arrangement for a long-form loop.",
+        "pre_roll_ms": 0.0,
+        "fade_in_ms": 0.0,
+        "fade_out_ms": 0.0,
+        "tail_ms": 0.0,
+        "onset_relative": 0.01,
+        "onset_floor_db": -60.0,
+        # A little headroom leaves room for codec reconstruction between
+        # loudness alignment and the final true-peak verification.
+        "peak_db": -1.0,
+        "true_peak_db": -1.0,
+        "true_peak_guard_db": 0.1,
+        "target_lufs": -16.0,
+        "default_crossfade_ms": 2000.0,
+        "default_crossfade_curve": "equal_power",
+        "auto_trim": False,
+        "loudness_align": True,
+    },
 }

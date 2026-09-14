@@ -1,7 +1,7 @@
 [project]
 name = "fragdachse-audio-studio"
 version = "0.1.0"
-description = "Local SFX catalog, production, review and constrained game publication"
+description = "Local audio catalog, production, review and constrained game publication"
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "fastapi>=0.115,<1",
@@ -11,6 +11,7 @@ dependencies = [
   "soundfile==0.13.1",
   "filelock>=3.16,<4",
   "httpx>=0.28,<1",
+  "imageio-ffmpeg>=0.6,<0.7",
 ]
 
 [project.scripts]
