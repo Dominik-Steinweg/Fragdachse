@@ -256,20 +256,32 @@ class Studio:
             atomic_json(path, plan)
             return plan
 
-    def cleanup_plan(self):
+    @staticmethod
+    def _cleanup_eligible(run, candidate, mode):
+        if mode not in {"discarded", "unprocessed"}:
+            raise ValueError("Unknown cleanup selection")
+        if run["status"] in {"queued", "loading", "generating", "cancelling"}:
+            return False
+        if candidate["favorite"] or candidate["protected"] or candidate["cleaned"]:
+            return False
+        # Even a failed processing attempt counts as having entered the next
+        # pipeline step. Do not silently discard that author's selection.
+        return not candidate["versions"] if mode == "unprocessed" else candidate["discarded"]
+
+    def cleanup_plan(self, mode="discarded"):
+        if mode not in {"discarded", "unprocessed"}:
+            raise ValueError("Unknown cleanup selection")
         items = []
         for run in self.jobs.list():
-            if run["status"] in {"queued", "loading", "generating", "cancelling"}:
-                continue
             for candidate in run["candidates"]:
-                if not candidate["discarded"] or candidate["favorite"] or candidate["protected"] or candidate["cleaned"]:
+                if not self._cleanup_eligible(run, candidate, mode):
                     continue
                 files = [{"path": candidate["path"], "hash": candidate["hash"]}]
                 files.extend(f for version in candidate["versions"] for f in version["files"].values())
-                items.append({"run_id": run["id"], "candidate_id": candidate["id"], "files": files,
+                items.append({"run_id": run["id"], "candidate_id": candidate["id"], "key": run["key"], "created_at": run["created_at"], "seed": candidate.get("seed"), "files": files,
                     "missing_files": [f["path"] for f in files if not self.store.path(f["path"]).exists()],
                     "bytes": sum(self.store.path(f["path"]).stat().st_size for f in files if self.store.path(f["path"]).is_file())})
-        plan = {"id": uuid.uuid4().hex, "items": items, "created_at": now(), "status": "preview"}
+        plan = {"id": uuid.uuid4().hex, "mode": mode, "items": items, "created_at": now(), "status": "preview"}
         self.store.save(f"cleanup/{plan['id']}.json", plan)
         return plan
 
@@ -282,11 +294,12 @@ class Studio:
             plan = read_json(path)
             if not plan or plan["status"] != "preview":
                 raise Conflict("Cleanup preview is no longer valid")
+            mode = plan.get("mode", "discarded")
             for item in plan["items"]:
-                _, candidate = self.candidate(item["run_id"], item["candidate_id"])
+                run, candidate = self.candidate(item["run_id"], item["candidate_id"])
                 current_files = [{"path": candidate["path"], "hash": candidate["hash"]}]
                 current_files.extend(f for v in candidate["versions"] for f in v["files"].values())
-                if candidate["favorite"] or candidate["protected"] or not candidate["discarded"] or current_files != item["files"]:
+                if not self._cleanup_eligible(run, candidate, mode) or current_files != item["files"]:
                     raise Conflict("Cleanup selection changed or became protected")
                 for file in item["files"]:
                     expected = None if file["path"] in item.get("missing_files", []) else file["hash"]

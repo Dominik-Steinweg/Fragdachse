@@ -10,6 +10,7 @@ vi.mock('../src/ui/UiButton', () => ({
   UiButton: class {
     root: any;
     background: any;
+    enabled = true;
     constructor(scene: any, options: any) {
       this.background = scene.add.rectangle(options.x, options.y, options.w, options.h).setInteractive();
       this.background.on('pointerdown', () => options.onClick?.());
@@ -19,7 +20,12 @@ vi.mock('../src/ui/UiButton', () => ({
     getBackground() { return this.background; }
     setLabel() { return this; }
     setIcon() { return this; }
-    setEnabled() { this.background.setInteractive(); return this; }
+    setEnabled(enabled: boolean) {
+      if (this.enabled === enabled) return this;
+      this.enabled = enabled;
+      this.background.setInteractive();
+      return this;
+    }
     setVisible(value: boolean) { this.root.setVisible(value); return this; }
     destroy() { this.root.destroy(); }
   },
@@ -140,6 +146,39 @@ describe('Lobby selection menus', () => {
     expect(keyboard.listenerCount('keydown-ESC')).toBe(0);
     click(modeButton);
     expect(settings.isOpen()).toBe(false);
+    settings.destroy();
+  });
+
+  it('restores both host setting hit areas after repeated readiness locks and host changes', () => {
+    const { scene, parent, created } = fixture();
+    let host = true;
+    const bridge = {
+      isHost: () => host, getGameMode: () => 'coop_defense', getCoopDefenseMapId: () => '1',
+      getLobbyTimeOfDayMinutes: () => 720,
+    };
+    const settings = new LobbySettingsControls(scene as any, bridge as any, parent as any);
+    const buttons = created.filter(object => object.kind === 'rectangle').slice(0, 2);
+    const expectEditable = (editable: boolean) => {
+      for (const button of buttons) {
+        expect(button.input?.enabled).toBe(editable);
+        if (button.input?.enabled) click(button);
+        expect(settings.isOpen()).toBe(editable);
+        settings.close();
+      }
+    };
+    expectEditable(true);
+    for (let round = 0; round < 3; round++) {
+      settings.setLocked(true);
+      expectEditable(false);
+      settings.setLocked(false);
+      expectEditable(true);
+    }
+    host = false;
+    settings.refresh();
+    expectEditable(false);
+    host = true;
+    settings.refresh();
+    expectEditable(true);
     settings.destroy();
   });
 

@@ -156,6 +156,40 @@ def test_cleanup_previews_exact_files_and_protects_favorites_and_lineage(studio)
     assert studio.cleanup_plan()["items"] == []
 
 
+@pytest.mark.parametrize('denials', [2, 99])
+def test_state_recovers_from_locked_run_file_without_losing_history(studio, monkeypatch, denials):
+    from audio_studio import storage
+    run = studio.import_current('sfx_one')
+    target = studio.jobs.path(run['id'])
+    before = target.read_bytes()
+    original = Path.read_text
+    remaining = [denials]
+
+    def locked(self, *args, **kwargs):
+        if self == target and remaining[0] > 0:
+            remaining[0] -= 1
+            raise PermissionError(13, 'sharing violation', str(self))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'read_text', locked)
+    monkeypatch.setattr(storage.time, 'sleep', lambda _: None)
+    with TestClient(create_app(studio), base_url='http://127.0.0.1:8765') as client:
+        response = client.get('/api/state')
+        if denials > 5:
+            assert response.status_code == 503
+            assert response.headers['Retry-After'] == '1'
+            assert 'gesperrt' in response.json()['error']
+            assert 'runs' not in response.json()
+        else:
+            assert response.status_code == 200
+            assert response.json()['runs'][0]['id'] == run['id']
+        remaining[0] = 0
+        recovered = client.get('/api/state')
+        assert recovered.status_code == 200
+        assert recovered.json()['runs'][0]['id'] == run['id']
+        assert target.read_bytes() == before
+
+
 def test_model_free_http_and_browser_origin_protection(studio):
     with TestClient(create_app(studio), base_url="http://127.0.0.1:8765") as client:
         assert client.get("/").status_code == 200

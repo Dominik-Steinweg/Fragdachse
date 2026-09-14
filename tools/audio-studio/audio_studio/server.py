@@ -49,6 +49,14 @@ def create_app(studio):
     async def conflict(request, exc):
         return JSONResponse({"error": str(exc)}, status_code=409)
 
+    @app.exception_handler(PermissionError)
+    async def storage_unavailable(request, exc):
+        return JSONResponse(
+            {"error": "Zugriff auf eine Studio-Datei vorübergehend gesperrt. Bitte kurz warten und erneut versuchen. Bleibt die Meldung bestehen, Dateiberechtigungen und sperrende Programme prüfen."},
+            status_code=503,
+            headers={"Retry-After": "1"},
+        )
+
     @app.exception_handler(ValueError)
     async def invalid(request, exc):
         return JSONResponse({"error": str(exc)}, status_code=400)
@@ -131,8 +139,8 @@ def create_app(studio):
         return studio.commit_export(body["plan_id"], confirmed=body.get("confirmed", False))
 
     @app.post("/api/cleanup/plan")
-    def cleanup_plan():
-        return studio.cleanup_plan()
+    def cleanup_plan(body: dict):
+        return studio.cleanup_plan(mode=body.get("mode", "discarded"))
 
     @app.post("/api/cleanup/commit")
     def cleanup(body: dict):

@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,20 @@ def sha256(path: Path) -> str | None:
 
 
 def read_json(path: Path, default: Any = None) -> Any:
-    return json.loads(path.read_text(encoding="utf-8-sig")) if path.exists() else default
+    # Windows can briefly deny opening a file during atomic replacement or
+    # external scanning. Retry reads only; never turn denied access into an
+    # empty catalog/history, which could subsequently overwrite real data.
+    for attempt in range(5):
+        try:
+            payload = path.read_text(encoding="utf-8-sig")
+        except FileNotFoundError:
+            return default
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.025 * 2**attempt)
+        else:
+            return json.loads(payload)
 
 
 def atomic_json(path: Path, value: Any, *, expected: str | None = None, check: bool = False):
@@ -40,9 +54,20 @@ def atomic_json(path: Path, value: Any, *, expected: str | None = None, check: b
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
-        if check and sha256(path) != expected:
-            raise Conflict(f"Concurrent edit: {path.name}. Refresh before saving.")
-        os.replace(temporary, path)
+        # Readers/scanners can briefly hold the destination open on Windows.
+        # Keep the fully flushed temporary file and the old destination intact;
+        # never fall back to truncating or deleting the destination.
+        for attempt in range(9):
+            try:
+                # Recheck after every wait so retries cannot bypass a newer edit.
+                if check and sha256(path) != expected:
+                    raise Conflict(f"Concurrent edit: {path.name}. Refresh before saving.")
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt == 8:
+                    raise
+                time.sleep(min(0.025 * 2**attempt, 0.25))
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -80,4 +105,3 @@ class Store:
     def save(self, relative: str, data: Any):
         with self.writing():
             atomic_json(self.path(relative), data)
-

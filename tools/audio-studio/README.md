@@ -114,9 +114,41 @@ Voraussetzungen treten vor dem Modellwechsel auf; Small-SFX bleibt dabei geladen
 
 ## Grenzen und Wiederherstellung
 
+### Unbenutzte RAWs gesammelt löschen
+
+Unter **Bereinigen → RAWs ohne bisherige Bearbeitung** zeigt das Studio alle
+Kandidaten ohne Bearbeitungsversion und den freigebbaren Speicherplatz.
+Eine vorherige Markierung als „verworfen“ ist dafür nicht nötig. Favoriten,
+übernommene Quellen, laufende Aufträge und bereits bearbeitete Kandidaten
+bleiben erhalten; auch eine fehlgeschlagene Bearbeitung zählt als Bearbeitung.
+Nachträgliche Änderungen machen eine alte Vorschau ungültig. Erst der
+abschließende Löschknopf entfernt die angezeigten Audiodateien. Prompts,
+Seeds und Produktionshistorie bleiben gespeichert.
+
+Alternativ bleibt **Als verworfen markierte Kandidaten** verfügbar; diese
+Auswahl kann auch deren Bearbeitungsversionen entfernen. Beide Wege betreffen
+nur die Studio-Arbeitsdateien, keine Game-Assets, Modellgewichte oder zusätzlichen
+Ausgabedateien im ComfyUI-Ordner.
+
+### Veröffentlichungsgrenze
+
 Spieländerungen laufen nur durch [adapter/index.mjs](adapter/index.mjs): freigegebenes OGG am aktuell vorgesehenen SFX- oder unterstützten Musik-Ziel und additive Pflege genau des Sets `SHIPPED_AUDIO_FILES`. Musik ist auf Lobby und Arena beschränkt. Keine Änderungen an Keys, Zuordnungen, Lautstärken, Gameplay, Build, Git-Commits oder Deployment. Medium spricht ausschließlich mit lokalem ComfyUI; kein LLM-Dienst, Prompt-Rewriting oder Cloud-Generierungsfallback.
 
 Fingerprints binden die Freigabe an den überprüften Zustand. Ein Konflikt verlangt neuen Abgleich/neue Vorschau. Das gemeinsame Schreiblock koordiniert CLI und Studio; atomare JSON-Saves erkennen externe Katalogänderungen. Fremde Hosts, Browser-Origins und Schreibanfragen ohne Sitzungstoken werden abgewiesen.
+
+Kurzzeitige Zugriffssperren beim Lesen von JSON-Dateien werden bis zu fünfmal
+versucht, mit insgesamt höchstens 375 ms Wartezeit. Bleibt der Zugriff gesperrt,
+zeigt die Oberfläche eine verständliche Meldung (HTTP 503); beim nächsten
+Statusabruf wird erneut gelesen. Gesperrte Dateien gelten niemals als leere
+Historie oder leerer Katalog. Dafür weder Auftragsdateien noch Lockdateien
+löschen. Bei einer dauerhaften Sperre Dateiberechtigungen und sperrende
+Programme prüfen.
+
+Auch das atomare Ersetzen beim Speichern wiederholt kurzzeitige Zugriffssperren
+(bis zu neun Versuche, insgesamt höchstens 1,375 Sekunden Wartezeit).
+Die vorherige JSON-Datei bleibt bis zum erfolgreichen Austausch erhalten.
+Konfliktprüfungen werden bei jedem Versuch erneut ausgeführt; dauerhafte
+Zugriffsfehler und andere Schreibfehler werden nicht verschluckt.
 
 Audio und TypeScript sind zwei Dateien. Jede Veröffentlichung schreibt Backups und einen Transaktionsnachweis unter `.audio-workspace/exports/`. Erfolg folgt erst nach Prüfung beider Änderungen. Mehrfachläufe arbeiten Ziel für Ziel; frühere erfolgreiche Veröffentlichungen bleiben bei einem späteren Fehler bestehen. Ungeklärte Transaktionen blockieren weitere Übernahmen in diesem Arbeitsbereich.
 

@@ -1656,6 +1656,9 @@ export class ArenaLifecycleCoordinator {
       if (bridge.isHost()) this.tryScheduleArenaStart();
       return;
     }
+    if (bridge.isArenaStarted()) {
+      this.ctx.gameAudioSystem.playMusic('music_arena');
+    }
     if (!view || !this.worldRuntime?.materialization?.arena || !this.worldRuntime.presentation?.layout) return;
 
     const work = this.collectWorldRenderWork(view);
@@ -3012,7 +3015,12 @@ export class ArenaLifecycleCoordinator {
     if (entersWorld) {
       this.syncLobbySurface(false);
       this.resetLocalArenaHudState();
-      this.ctx.gameAudioSystem.playMusic('music_arena');
+      if (activityDescriptor === null) {
+        this.ctx.gameAudioSystem.playMusic('music_arena');
+      } else {
+        // Die Rundenmusik beginnt erst nach dem synchronisierten Countdown.
+        this.ctx.gameAudioSystem.stopMusic();
+      }
     }
     this.syncHostLoadoutsFromCommittedSelections();
     this.localPlayerState.spectator = false;

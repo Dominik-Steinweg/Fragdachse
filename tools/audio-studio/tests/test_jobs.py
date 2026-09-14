@@ -7,6 +7,41 @@ import soundfile as sf
 from audio_studio.catalog import Entry
 from audio_studio.jobs import Jobs
 from audio_studio.storage import Store, atomic_json
+from audio_studio import storage
+
+
+def test_fourth_candidate_completes_after_transient_status_write_denial(tmp_path, monkeypatch):
+    tool = tmp_path / 'tool'
+    tool.mkdir()
+    backend = ControlledBackend()
+    backend.release.set()
+    jobs = Jobs(Store(tool, tool / 'work'), backend)
+    original = storage.os.replace
+    denied = []
+
+    def replace(source, destination):
+        if destination.name == 'generation.json':
+            record = storage.read_json(storage.Path(source))
+            if record.get('completed') == 4 and len(denied) < 3:
+                denied.append(source)
+                raise PermissionError(13, 'sharing violation', str(destination))
+        return original(source, destination)
+
+    monkeypatch.setattr(storage.os, 'replace', replace)
+    monkeypatch.setattr(storage.time, 'sleep', lambda _: None)
+    entry = Entry(playback='oneshot', prompt={'text': 'one impact'}).model_dump()
+    entry['generation_defaults']['candidate_count'] = 4
+    record = jobs.submit('sfx_one', entry, {'target_path': 'one.ogg'}, seed=23)
+    try:
+        jobs.queue.join()
+        complete = jobs.read(record['id'])
+        assert complete['status'] == 'complete'
+        assert complete['completed'] == 4
+        assert len(denied) == 3
+        assert len(backend.calls) == 4
+        assert all(jobs.store.path(c['path']).is_file() for c in complete['candidates'])
+    finally:
+        jobs.close()
 
 
 class ControlledBackend:

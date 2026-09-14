@@ -104,9 +104,11 @@ export class LobbySettingsControls {
     this.map.setLabel(getMapName(mapId, getLocale())).setVisible(coop).setEnabled(true)
       .setIcon(enabled ? 'chevron-right' : null);
     // Values remain legible for guests even though they cannot change the room settings.
-    if (!enabled) {
-      this.mode.getBackground().disableInteractive();
-      this.map.getBackground().disableInteractive();
+    // UiButton stays visually enabled, so restore its hit area explicitly on unlock:
+    // setEnabled(true) is a no-op when its logical state has not changed.
+    for (const button of [this.mode, this.map]) {
+      if (enabled) button.getBackground().setInteractive({ useHandCursor: true });
+      else button.getBackground().disableInteractive();
     }
     this.timeLabel.setText(t('ui.lobby.time', { time: formatTimeOfDay(minutes) })).setVisible(!coop);
     for (const object of [this.track, this.fill, this.thumb, this.hit]) object.setVisible(!coop && this.bridge.isHost());

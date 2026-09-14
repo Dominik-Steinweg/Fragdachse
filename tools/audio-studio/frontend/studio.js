@@ -419,11 +419,26 @@ $('review').onclick = event => work(async () => {
   }, 'primary', 'Freigegebene OGG-Dateien werden übernommen …');
   commit.disabled = true;checks.forEach(check => { check.onchange = () => { commit.disabled = !checks.every(item => item.checked); }; });content.append(commit);return 'Übernahmevorschau bereit. Die Freigabe erfolgt im Dialog.';
 }, {element: event.currentTarget, busy: 'Übernahmevorschau wird geprüft …'});
+async function showCleanupPreview(mode) {
+  const plan = await api('/api/cleanup/plan', {mode}), content = dialog('Arbeitsdateien bereinigen');
+  const unused = mode === 'unprocessed';
+  content.append(node('h3', unused ? 'RAWs ohne bisherige Bearbeitung' : 'Als verworfen markierte Kandidaten'));
+  content.append(node('p', `${plan.items.length} Kandidaten · ${(plan.items.reduce((total, item) => total + item.bytes, 0) / 1048576).toFixed(1)} MiB freigebbar. Favoriten, übernommene Quellen und laufende Aufträge sind geschützt. Historie und Prompts bleiben erhalten.`));
+  if (unused) content.append(node('p', 'Nur RAWs ohne irgendeine Bearbeitungsversion werden gelöscht. Auch eine fehlgeschlagene Bearbeitung schützt den Kandidaten in dieser Auswahl. Eine vorherige Markierung als „verworfen“ ist nicht nötig.'));
+  content.append(node('p', 'Diese Bereinigung betrifft Studio-Arbeitsdateien. Zusätzliche Ausgabedateien im ComfyUI-Ordner werden hier nicht gelöscht.', {className: 'muted'}));
+  const list = node('div');
+  for (const item of plan.items) list.append(node('p', `${state.catalog.entries[item.key]?.name || item.key} · ${date(item.created_at)} · Kandidat ${Number(item.candidate_id) + 1} · Seed ${item.seed ?? '–'} · ${(item.bytes / 1048576).toFixed(1)} MiB`));
+  content.append(details('Betroffene Kandidaten', list, true), details('Genaue Dateipfade', json(plan.items)));
+  if (plan.items.length) content.append(button(`Diese ${plan.items.length} Kandidaten endgültig löschen`, async () => { await api('/api/cleanup/commit', {plan_id: plan.id, confirmed: true});$('dialog').close();clearSelection();await refresh(true);return 'Angezeigte Audiodateien gelöscht. Historie erhalten.'; }, 'danger', 'Ausgewählte Arbeitsdateien werden bereinigt …'));
+  return 'Bereinigungsvorschau bereit. Die angezeigte Auswahl wird erst mit dem Löschknopf entfernt.';
+}
 $('cleanup').onclick = event => work(async () => {
-  const plan = await api('/api/cleanup/plan', {}), content = dialog('Verworfene Arbeitsdateien bereinigen');
-  content.append(node('p', `${plan.items.length} Kandidaten · ${(plan.items.reduce((total, item) => total + item.bytes, 0) / 1048576).toFixed(1)} MiB. Favoriten und übernommene Quellen sind geschützt. Metadaten bleiben erhalten.`), json(plan.items));
-  if (plan.items.length) content.append(button('Angezeigte Audiodateien löschen', async () => { await api('/api/cleanup/commit', {plan_id: plan.id, confirmed: true});$('dialog').close();clearSelection();await refresh(true);return 'Ausgewählte Audiodateien bereinigt. Historie erhalten.'; }, 'danger', 'Ausgewählte Arbeitsdateien werden bereinigt …'));return 'Bereinigungsvorschau bereit.';
-}, {element: event.currentTarget, busy: 'Bereinigbare Dateien werden geprüft …'});
+  const content = dialog('Arbeitsdateien bereinigen');
+  content.append(node('p', 'Auswahl prüfen und erst danach löschen. Die Vorschau zeigt Kandidaten und Speicherplatz.'),
+    button('RAWs ohne bisherige Bearbeitung', () => showCleanupPreview('unprocessed'), 'primary', 'Unbearbeitete RAW-Kandidaten werden geprüft …'),
+    button('Als verworfen markierte Kandidaten', () => showCleanupPreview('discarded'), '', 'Verworfene Kandidaten werden geprüft …'));
+  return 'Bereinigungsart auswählen.';
+}, {element: event.currentTarget});
 $('close-dialog').onclick = () => { if (!activeOperations) $('dialog').close(); };
 await work(() => refresh(true), {busy: 'Audio Studio wird geladen …'});
 let polling = false;

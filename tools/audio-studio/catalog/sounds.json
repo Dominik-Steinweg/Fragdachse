@@ -383,13 +383,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one high-register countdown tick: bright digital strike, hard crisp transient, short dry body, immediate decay, no spoken number.",
-        "source": "astra",
+        "text": "TrackType: SFX, The single word \"one\" as a spoken word in a harsh male german voice\n",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -527,13 +527,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one round-start stinger: crisp upward synth punch, bright attack, compact victorious body, and brief clean tail, no speech.",
-        "source": "astra",
+        "text": "TrackType: SFX, powerful boxing-match round-start bell. Very Low, and fuller sounding than a normal bell.  Cinematic Sound.",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -557,7 +557,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "090c1fd84de38b797906eb0c9443460e42d3dbc147788dd28b0d6b4a819d99fa",
+        "file_hash": "a364e8540f67f69bd18c9041b82081fea9f69369b41d900390bbc729d4c8dc85",
         "file_error": null,
         "shared_keys": [
           "sfx_countdown_go",
@@ -1050,7 +1050,38 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2606,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 44,
+                "kind": "unknown",
+                "excerpt": "case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 57,
+                "kind": "unknown",
+                "excerpt": "default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_he"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_explosion_he",
         "kind": "sfx",
@@ -1070,7 +1101,7 @@
         "usages": [
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2603,
+            "line": 2606,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);"
           },
@@ -1639,7 +1670,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "090c1fd84de38b797906eb0c9443460e42d3dbc147788dd28b0d6b4a819d99fa",
+        "file_hash": "a364e8540f67f69bd18c9041b82081fea9f69369b41d900390bbc729d4c8dc85",
         "file_error": null,
         "shared_keys": [
           "sfx_countdown_go",
@@ -4880,14 +4911,14 @@
       "musical_identity": "fragdachse",
       "playback": "loop",
       "prompt": {
-        "text": "TrackType: Music, VocalType: Instrumental, 188 BPM, D minor.\n\nExtreme high-energy combat music built around heavily distorted organic percussion and aggressive low-frequency textures. Massive deep toms, frame drums and resonant hand drums play fast, relentless, tightly syncopated patterns with constant momentum and hard transient impact. Distortion is a core element of the track: saturated drums, overdriven low cello, crushed bowed bass, abrasive string textures, gritty noise layers and distorted rhythmic pulses stay prominent throughout.\n\nUse short violent motifs, repeated low-register patterns, dense rhythmic layering and constant pressure instead of long melodies or ambient passages. Keep the arrangement dark, raw, physical and mechanical-organic rather than electronic dance music.\n\nA dark forest soundscape remains audible underneath the music: strong wind through trees, rushing leaves, creaking branches, distant crows and ravens, occasional owls and a fast woodland stream. The ambience should add texture without softening the intensity.\n\nTight punchy mix, aggressive midrange, heavy low end, controlled reverb, short dark delays, very little empty space. No calm sections, no slow buildup, no dreamy pads, no EDM groove, no techno kick pattern, no bright instruments, no heroic orchestration, no vocals. Immediate full-intensity start, sustained maximum energy, loop-friendly, no final fade.",
+        "text": "TrackType: Music, VocalType: Instrumental, 120 BPM, D minor with subtle Dorian color.\n\nHigh-intensity video game combat soundtrack inspired by the relentless aggression, heavy distortion and forward momentum of the DOOM game soundtrack, but with a distinctly organic forest identity.\n\nA deep, punchy four-on-the-floor bass drum provides the constant driving pulse throughout the entire track. Strong quarter-note hits in every bar, with occasional double-hit accents and syncopation. The kick should have the weight and precision of a powerful electronic club kick, but only as the rhythmic foundation. Massive low war toms, frame drums and resonant hand drums play fast, energetic acoustic patterns around it with hard transient impact and large natural reverb.\n\nUse the dense distorted energy of a modern heavy action-game soundtrack while keeping the instrumentation predominantly organic. Distortion should feel rough, physical and amplified rather than synthetic.\n\nCreate the forest character through instrumental textures. High bowed strings and noisy violin textures suggest wind through trees. Fluttering strings and brushed percussion suggest moving leaves. Harsh short violin, cello and muted brass calls evoke ravens and owls. Flowing tremolo strings, rolling hand percussion and resonant bowed textures suggest moving water.\n\nKeep these forest-like textures clearly present throughout the full-intensity arrangement. They must coexist with the driving rhythm, not appear as a separate ambient section.\n\nDense, raw, primal, energetic and slightly mysterious, but not excessively dark. Tight punchy percussion, powerful low end, large natural reverb, long organic echoes and wide spatial depth.\n\nNo synth bass, no electronic basslines, no sequenced synth pulses, no arpeggiators, no digital leads, no electronic risers, no industrial drones, no dark techno atmosphere, no EDM arrangement, no dreamy pads, no vocals.\n\n**Maximum rhythmic energy from beat one to the final beat. No intro, no atmospheric opening, no buildup, no crescendo, no gradual layering, no breakdown, no calm section, no sparse passage, no final fade. Seamless continuous gameplay loop.**",
         "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
         "duration_seconds": 120,
-        "candidate_count": 2,
+        "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
@@ -4898,7 +4929,32 @@
       "notes": "Produktionsvorgabe: Gesamtloop. Gemeinsame Richtung: catalog/music-identity.md. Tempo, Tonart, Loop-Übergang und Zusammenspiel mit SFX brauchen Hörfreigabe; ggf. manuelle Loop-Punkte setzen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/music_arena.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1660,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3019,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_arena"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "music_arena",
         "kind": "music",
@@ -4910,7 +4966,7 @@
         "volume": 0.8,
         "shipped": true,
         "exists": true,
-        "file_hash": "6663578daa99faf11f59f3a8d092296496f19c93752624afc1cfe410d3d5727b",
+        "file_hash": "350af7246bf8c381bf07c034559578004e6828061d644698b1ac0d6c517009ef",
         "file_error": null,
         "shared_keys": [
           "music_arena"
@@ -4918,7 +4974,13 @@
         "usages": [
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3015,
+            "line": 1660,
+            "kind": "loop",
+            "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 3019,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
           }
@@ -4953,7 +5015,38 @@
       "notes": "Produktionsvorgabe: Gesamtloop. Gemeinsame Richtung: catalog/music-identity.md. Tempo, Tonart, Loop-Übergang und Zusammenspiel mit SFX brauchen Hörfreigabe; ggf. manuelle Loop-Punkte setzen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/badger02.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 909,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1544,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3153,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_lobby"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "music_lobby",
         "kind": "music",
@@ -4985,7 +5078,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3145,
+            "line": 3153,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           }
