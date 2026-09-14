@@ -184,6 +184,9 @@ describe('figure source resolution and Arcade geometry', () => {
     const decoy = new DecoyEntity(scene, 1, 'p', 100, 200, 0xffffff, false);
     const preview = new BadgerPreview(scene, 100, 200, 0xffffff);
     const largePreview = new BadgerPreview(scene, 100, 200, 0xffffff, 64);
+    // Lobby and arena must sample the same idle artwork, including small alpha cutouts.
+    expect(preview.sprite.texture.key).toBe(player.displayObject!.texture.key);
+    expect(preview.sprite.frame.name).toBe(player.displayObject!.frame.name);
     for (const [entity, size] of [[player, PLAYER_SIZE], [decoy, PLAYER_SIZE],
       [preview, PLAYER_SIZE], [largePreview, 64]] as const) {
       entity.setHeldItemId('GLOCK');

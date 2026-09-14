@@ -22,10 +22,17 @@ void main() {
     vec2 radial = outTexCoord - vec2(0.5);
     float extent = max(abs(radial.x), abs(radial.y));
     vec2 edge = vec2(0.5) + radial * (0.5 / max(extent, 0.0001));
+    // Bridge narrow openings only when artwork exists on BOTH sides of the ray.
+    // This closes the gap between the fists without expanding the outer silhouette.
+    vec2 tangent = vec2(-radial.y, radial.x) / max(length(radial), 0.0001) * 0.045;
     float silhouette = source.a;
     for (int i = 1; i <= 64; i++) {
         vec2 uv = mix(outTexCoord, edge, float(i) / 64.0);
         silhouette = max(silhouette, boundedSampler(uMainSampler, uv).a);
+        float bridge = min(boundedSampler(uMainSampler, uv - tangent).a,
+                           boundedSampler(uMainSampler, uv + tangent).a);
+        silhouette = max(silhouette, bridge);
+        if (silhouette >= 0.12) break;
     }
     float outside = 1.0 - smoothstep(0.02, 0.12, silhouette);
     float halo = 0.0;

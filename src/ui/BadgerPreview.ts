@@ -2,11 +2,12 @@
  * BadgerPreview — reusable badger sprite with colored glow aura.
  *
  * Used in the lobby panel (color indicator) and potentially elsewhere.
- * Shows the 'badger' texture with a pulsing outer glow in the given color.
+ * Shows the player's spritesheet idle frame with the same outer glow as the arena.
  * Optionally tracks the mouse pointer for rotation.
  */
 import * as Phaser from 'phaser';
 import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../config';
+import { BADGER_IDLE_FRAME, BADGER_WALKING_TEXTURE_KEY } from '../animations/BadgerAnimations';
 import { HeldItemVisual } from '../entities/HeldItemVisual';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
 import { addPlayerGlow } from '../effects/PlayerGlow';
@@ -14,7 +15,7 @@ import { addPlayerGlow } from '../effects/PlayerGlow';
 const ROTATION_OFFSET = Math.PI / 2;
 
 export class BadgerPreview {
-  readonly sprite: Phaser.GameObjects.Image;
+  readonly sprite: Phaser.GameObjects.Sprite;
 
   private glowFx: GlowHandle | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
@@ -33,7 +34,7 @@ export class BadgerPreview {
   ) {
     this.colorHex = color;
 
-    this.sprite = scene.add.image(x, y, 'badger');
+    this.sprite = scene.add.sprite(x, y, BADGER_WALKING_TEXTURE_KEY, BADGER_IDLE_FRAME);
     this.sprite.setDisplaySize(displaySize * PLAYER_VISUAL_SCALE, displaySize * PLAYER_VISUAL_SCALE);
 
     // Dieselbe Zuordnung wie in der Arena, nur mit der groesseren Vorschau-Kantenlaenge: die

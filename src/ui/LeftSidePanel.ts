@@ -354,7 +354,7 @@ export class LeftSidePanel {
     this.saveMenu = new UiContextMenu(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 3, 'forest');
     this.loadoutPicker = new LoadoutSlotPicker(this.scene, this.lobbyContainer, DEPTH.OVERLAY + 2, true, 'forest');
 
-    // Internal Phaser 4 filters work on the preview within its card container.
+    // The preview shares the arena's sprite and glow renderer.
     this.badgerPreview = new BadgerPreview(
       this.scene,
       CENTER_X,

@@ -3,12 +3,12 @@
     "GLOCK": {
       "id": "GLOCK",
       "shotFeedbackProfile": "light",
-      "cooldown": 150,
-      "damage": 6,
-      "range": 500,
+      "cooldown": 250,
+      "damage": 9,
+      "range": 550,
       "fire": {
         "type": "projectile",
-        "projectileSpeed": 900,
+        "projectileSpeed": 1000,
         "projectileSize": 2,
         "projectileMaxBounces": 10
       },
