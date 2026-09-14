@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "comfyui": {
+    "base_url": "http://127.0.0.1:8188",
+    "job_timeout_seconds": 1800
+  },
+  "models": {
+    "small-sfx": {
+      "backend": "python",
+      "label": "Stable Audio 3 · Small-SFX"
+    },
+    "small-sfx-comfyui": {
+      "backend": "comfyui",
+      "label": "Stable Audio 3 · Small-SFX",
+      "workflow": "stable-audio-3-small-sfx.api.json",
+      "model_id": "stabilityai/stable-audio-3-small-sfx",
+      "model_revision": "ae12755283df9d62ca39a9b050a39a0b607b8c20",
+      "model_filename": "stable_audio_3_small_sfx.safetensors",
+      "max_duration_seconds": 120,
+      "output_node": "9",
+      "output_format": "flac",
+      "bindings": {
+        "prompt": [["3", "text"]],
+        "duration": [["5", "seconds_total"], ["6", "seconds"]],
+        "seed": [["7", "seed"]],
+        "steps": [["7", "steps"]],
+        "cfg_scale": [["7", "cfg"]],
+        "filename_prefix": [["9", "filename_prefix"]]
+      }
+    },
+    "medium": {
+      "backend": "comfyui",
+      "label": "Stable Audio 3 · Medium",
+      "workflow": "stable-audio-3-medium.api.json",
+      "model_id": "Comfy-Org/stable-audio-3",
+      "model_filename": "stable_audio_3_medium.safetensors",
+      "max_duration_seconds": 380,
+      "output_node": "9",
+      "output_format": "flac",
+      "bindings": {
+        "prompt": [["3", "text"]],
+        "duration": [["5", "seconds_total"], ["6", "seconds"]],
+        "seed": [["7", "seed"]],
+        "steps": [["7", "steps"]],
+        "cfg_scale": [["7", "cfg"]],
+        "filename_prefix": [["9", "filename_prefix"]]
+      }
+    }
+  }
+}

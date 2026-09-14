@@ -1,0 +1,241 @@
+{
+  "$defs": {
+    "CopyNotice": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source_path": {
+          "title": "Source Path",
+          "type": "string"
+        },
+        "source_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Keys",
+          "type": "array"
+        },
+        "target_path": {
+          "title": "Target Path",
+          "type": "string"
+        },
+        "file_hash": {
+          "title": "File Hash",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "hidden": {
+          "default": false,
+          "title": "Hidden",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "source_path",
+        "target_path",
+        "file_hash",
+        "reason"
+      ],
+      "title": "CopyNotice",
+      "type": "object"
+    },
+    "Entry": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "category": {
+          "default": "event",
+          "title": "Category",
+          "type": "string"
+        },
+        "intent": {
+          "default": "",
+          "title": "Intent",
+          "type": "string"
+        },
+        "playback": {
+          "default": "unknown",
+          "enum": [
+            "oneshot",
+            "loop",
+            "unknown"
+          ],
+          "title": "Playback",
+          "type": "string"
+        },
+        "prompt": {
+          "$ref": "#/$defs/Prompt"
+        },
+        "generation_defaults": {
+          "$ref": "#/$defs/Generation"
+        },
+        "processing": {
+          "$ref": "#/$defs/Processing"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        },
+        "needs_revision": {
+          "default": false,
+          "title": "Needs Revision",
+          "type": "boolean"
+        },
+        "copy_notice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyNotice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "suggested_changes": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Suggested Changes",
+          "type": "array"
+        },
+        "repository": {
+          "additionalProperties": true,
+          "title": "Repository",
+          "type": "object"
+        },
+        "orphaned": {
+          "default": false,
+          "title": "Orphaned",
+          "type": "boolean"
+        }
+      },
+      "title": "Entry",
+      "type": "object"
+    },
+    "Generation": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "default": "medium",
+          "enum": [
+            "small-sfx",
+            "small-sfx-comfyui",
+            "medium"
+          ],
+          "title": "Model",
+          "type": "string"
+        },
+        "duration_seconds": {
+          "default": 2,
+          "maximum": 47,
+          "minimum": 1,
+          "title": "Duration Seconds",
+          "type": "integer"
+        },
+        "candidate_count": {
+          "default": 4,
+          "maximum": 32,
+          "minimum": 1,
+          "title": "Candidate Count",
+          "type": "integer"
+        },
+        "steps": {
+          "default": 8,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Steps",
+          "type": "integer"
+        },
+        "cfg_scale": {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Cfg Scale",
+          "type": "number"
+        }
+      },
+      "title": "Generation",
+      "type": "object"
+    },
+    "Processing": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "default": "gentle",
+          "enum": [
+            "weapon_shot",
+            "impact",
+            "explosion",
+            "continuous_texture",
+            "gentle"
+          ],
+          "title": "Profile",
+          "type": "string"
+        },
+        "overrides": {
+          "additionalProperties": true,
+          "title": "Overrides",
+          "type": "object"
+        }
+      },
+      "title": "Processing",
+      "type": "object"
+    },
+    "Prompt": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "default": "",
+          "maxLength": 8000,
+          "title": "Text",
+          "type": "string"
+        },
+        "source": {
+          "default": "manual",
+          "title": "Source",
+          "type": "string"
+        },
+        "preserve_on_sync": {
+          "const": true,
+          "default": true,
+          "title": "Preserve On Sync",
+          "type": "boolean"
+        }
+      },
+      "title": "Prompt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "entries": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Entry"
+      },
+      "title": "Entries",
+      "type": "object"
+    }
+  },
+  "title": "Catalog",
+  "type": "object"
+}

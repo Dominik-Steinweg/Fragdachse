@@ -1,0 +1,4597 @@
+{
+  "schema_version": 1,
+  "entries": {
+    "sfx_adrenaline_active": {
+      "name": "Adrenalin – Aktive Textur",
+      "category": "powerup",
+      "intent": "A steady restrained adrenaline energy texture, low airy rushing pulse and fine organic tremor, consistent level without a dramatic start or stop.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable game texture: close adrenaline power rush, rapid low pulse, fine vibrating grit, and constant aggressive momentum, clean isolated mix with no climax or final hit.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_adrenaline_active",
+        "target_path": "public/assets/sounds/sfx_adrenaline_active.ogg",
+        "asset_path": "./assets/sounds/sfx_adrenaline_active.ogg",
+        "filename": "sfx_adrenaline_active.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_adrenaline_active"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_airstrike_countdown": {
+      "name": "Luftschlag – Warnsignal",
+      "category": "utility",
+      "intent": "A single concise tactical warning cue, clear electronic pulse with a short tense rising accent.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one tactical warning stinger: hard electronic pulse transient, tight rising tension, compact metallic body, and clear dry finish at a distance, no speech.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_airstrike_countdown",
+        "target_path": "public/assets/sounds/sfx_airstrike_countdown.ogg",
+        "asset_path": "./assets/sounds/sfx_airstrike_countdown.ogg",
+        "filename": "sfx_airstrike_countdown.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "36fa194d12d64782f1056dc06e8c643d37c515b59e3433ab29b972bfee511626",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_airstrike_countdown"
+        ],
+        "usages": [
+          {
+            "path": "src/activity/CoopMissionMapEventComposition.ts",
+            "line": 80,
+            "kind": "oneshot",
+            "excerpt": "this.options.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y);"
+          },
+          {
+            "path": "src/world/WorldSupportGameplayRuntime.ts",
+            "line": 90,
+            "kind": "oneshot",
+            "excerpt": "this.options.gameAudioSystem.playSound('sfx_airstrike_countdown', targetX, targetY);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_airstrike_explosion": {
+      "name": "Luftschlag – Explosion",
+      "category": "explosion",
+      "intent": "A single aerial bomb impact explosion, heavy direct blast, sharp debris crackle and controlled rumbling decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one aerial bomb impact: violent crack transient, dense low blast body, sharp debris spray, and a controlled rolling tail, dry isolated game sound.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_airstrike_explosion",
+        "target_path": "public/assets/sounds/sfx_airstrike_explosion.ogg",
+        "asset_path": "./assets/sounds/sfx_airstrike_explosion.ogg",
+        "filename": "sfx_airstrike_explosion.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "fc8ef4af405aeb276e8c0a126779ba655873fe6c79ffbce30b7c5ed84d7bb398",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_airstrike_explosion"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_bfg_charge": {
+      "name": "BFG – Ladetextur",
+      "category": "utility",
+      "intent": "A steady powerful energy cannon charging texture, dense low electrical hum and tense fine crackle, sustained consistent intensity without a final discharge.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable BFG charge: heavy reactor hum, pressure-building low pulse, focused electrical fizz, and locked constant intensity with no discharge or end hit.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_bfg_charge",
+        "target_path": "public/assets/sounds/sfx_bfg_charge.ogg",
+        "asset_path": "./assets/sounds/sfx_bfg_charge.ogg",
+        "filename": "sfx_bfg_charge.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_bfg_charge"
+        ],
+        "usages": [
+          {
+            "path": "src/systems/InputSystem.ts",
+            "line": 2013,
+            "kind": "loop",
+            "excerpt": "this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_bfg_charge') ?? null;"
+          }
+        ],
+        "playback": "loop",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_bfg_fly": {
+      "name": "BFG – Flugtextur",
+      "category": "utility",
+      "intent": "A steady massive plasma projectile flight texture, deep airy energy rush with fine electrical crackle, stable intensity.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable plasma projectile flight: hard low whoosh body, needle-bright electrical grit, close forward motion, and steady intensity with no impact.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_bfg_fly",
+        "target_path": "public/assets/sounds/sfx_bfg_fly.ogg",
+        "asset_path": "./assets/sounds/sfx_bfg_fly.ogg",
+        "filename": "sfx_bfg_fly.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_bfg_fly"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_bfg_laser": {
+      "name": "BFG – Laserimpuls",
+      "category": "utility",
+      "intent": "A single compact high-energy laser strike, focused bright electrical snap and brief resonant sizzling decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one focused laser strike: razor-bright snap transient, dense energy body, short sizzling tail, and clean close-mic separation.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_bfg_laser",
+        "target_path": "public/assets/sounds/sfx_bfg_laser.ogg",
+        "asset_path": "./assets/sounds/sfx_bfg_laser.ogg",
+        "filename": "sfx_bfg_laser.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_bfg_laser"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_burrowed": {
+      "name": "Dachs – Unterirdische Bewegung",
+      "category": "player",
+      "intent": "A continuous close muffled digging texture through soil, fine crumbling grit, soft earth scraping and steady low rumble.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable badger tunneling: packed-soil scrape, gritty paw impacts, muffled low churn, and steady movement with no start or stop.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_burrowed",
+        "target_path": "public/assets/sounds/sfx_burrowed.ogg",
+        "asset_path": "./assets/sounds/sfx_burrowed.ogg",
+        "filename": "sfx_burrowed.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "4b57b4abdfdae37567fb2883c8d5b14029aca49fd27cd192837411c310b40904",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_burrowed"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+            "line": 841,
+            "kind": "loop",
+            "excerpt": "const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.x, player.y, playerId);"
+          },
+          {
+            "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+            "line": 1461,
+            "kind": "loop",
+            "excerpt": "const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.x, player.y, player.id);"
+          },
+          {
+            "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+            "line": 2248,
+            "kind": "loop",
+            "excerpt": "const handle = this.audio?.startLoop('sfx_burrowed', player.x, player.y, player.id);"
+          }
+        ],
+        "playback": "loop",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_countdown_1": {
+      "name": "Countdown – Eins",
+      "category": "ui",
+      "intent": "A single dry high electronic countdown pulse, clear immediate start and compact decay, no spoken number.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one high-register countdown tick: bright digital strike, hard crisp transient, short dry body, immediate decay, no spoken number.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_countdown_1",
+        "target_path": "public/assets/sounds/sfx_countdown_1.ogg",
+        "asset_path": "./assets/sounds/sfx_countdown_1.ogg",
+        "filename": "sfx_countdown_1.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "ed4ae7cf2dba19a114437d681a5eebc3e2de36e57fec87c19e48b8090ce7f868",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_countdown_1"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_countdown_2": {
+      "name": "Countdown – Zwei",
+      "category": "ui",
+      "intent": "A single dry medium electronic countdown pulse, clear immediate start and compact decay, no spoken number.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one mid-register countdown tick: punchy digital knock, clear transient, compact neutral body, short dry decay, no spoken number.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_countdown_2",
+        "target_path": "public/assets/sounds/sfx_countdown_2.ogg",
+        "asset_path": "./assets/sounds/sfx_countdown_2.ogg",
+        "filename": "sfx_countdown_2.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "b70f02d8b0b3d10399cae26a1df9c6d9a7a1825e4d59ae317bfaec0985c06f19",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_countdown_2"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_countdown_3": {
+      "name": "Countdown – Drei",
+      "category": "ui",
+      "intent": "A single dry low electronic countdown pulse, clear immediate start and compact decay, no spoken number.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one low-register countdown tick: firm electronic thump, strong readable transient, compact low body, short dry decay, no spoken number.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_countdown_3",
+        "target_path": "public/assets/sounds/sfx_countdown_3.ogg",
+        "asset_path": "./assets/sounds/sfx_countdown_3.ogg",
+        "filename": "sfx_countdown_3.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "b20c6239f3197de58a5f96b2c581cfe767d4ac040887bfec07852b19ec2f9aa0",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_countdown_3"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_countdown_go": {
+      "name": "Countdown – Start",
+      "category": "ui",
+      "intent": "A single bright decisive round-start cue, crisp upward electronic accent and short positive resonant finish, no speech.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one round-start stinger: crisp upward synth punch, bright attack, compact victorious body, and brief clean tail, no speech.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_countdown_go",
+        "target_path": "public/assets/sounds/sfx_countdown_go.ogg",
+        "asset_path": "./assets/sounds/sfx_countdown_go.ogg",
+        "filename": "sfx_countdown_go.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "090c1fd84de38b797906eb0c9443460e42d3dbc147788dd28b0d6b4a819d99fa",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_countdown_go",
+          "sfx_options_preview"
+        ],
+        "usages": [
+          {
+            "path": "src/ui/ArenaCountdownOverlay.ts",
+            "line": 322,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem?.playLocalSound('sfx_countdown_go');"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_ctb_score": {
+      "name": "Punktgewinn",
+      "category": "ui",
+      "intent": "A single clear positive score cue, bright compact percussive chime and short satisfying resonant tail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one score confirmation: bright percussive hit, sharp attack, compact metallic body, and a short rewarding chime tail, dry and clear.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_ctb_score",
+        "target_path": "public/assets/sounds/sfx_ctb_score.ogg",
+        "asset_path": "./assets/sounds/sfx_ctb_score.ogg",
+        "filename": "sfx_ctb_score.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_ctb_score"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 425,
+            "kind": "oneshot",
+            "excerpt": "this.gameAudioSystem.playLocalSound('sfx_ctb_score');"
+          },
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 433,
+            "kind": "oneshot",
+            "excerpt": "this.gameAudioSystem.playLocalSound('sfx_ctb_score');"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_dash": {
+      "name": "Dachs – Dash",
+      "category": "player",
+      "intent": "A single very quick forceful dash swoosh, sharp airy onset, compact body movement and short clean tail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one player dash: hard air-slice onset, tight rushing body, brief directional tail, and clean close game-SFX separation.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_dash",
+        "target_path": "public/assets/sounds/sfx_dash.ogg",
+        "asset_path": "./assets/sounds/sfx_dash.ogg",
+        "filename": "sfx_dash.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "ae74b9db653cbcc6c548db610782f22cfc67afd4e9ea0acd7fa3637fffbc72e5",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_dash"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/EnemyDashVisuals.ts",
+            "line": 37,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem.playSound('sfx_dash', enemy.sprite.x, enemy.sprite.y);"
+          },
+          {
+            "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+            "line": 408,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_dash', player.x, player.y, id);"
+          },
+          {
+            "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+            "line": 744,
+            "kind": "oneshot",
+            "excerpt": "this.audio?.playSound('sfx_dash', player.x, player.y, player.id);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_decoy_reveal": {
+      "name": "Attrappe – Enttarnung",
+      "category": "utility",
+      "intent": "A single decoy revelation cue, short brittle pop, loose mechanical rattle and playful but clear airy deflation.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one decoy reveal: brittle snap transient, quick wood-and-plastic rattle, sucked-air pop, and a short playful tail, no voice.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_decoy_reveal",
+        "target_path": "public/assets/sounds/sfx_decoy_reveal.ogg",
+        "asset_path": "./assets/sounds/sfx_decoy_reveal.ogg",
+        "filename": "sfx_decoy_reveal.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_decoy_reveal"
+        ],
+        "usages": [
+          {
+            "path": "src/world/WorldCombatGameplayBinding.ts",
+            "line": 971,
+            "kind": "oneshot",
+            "excerpt": "if (player) o.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_double_damage_active": {
+      "name": "Doppelschaden – Aktive Textur",
+      "category": "powerup",
+      "intent": "A steady restrained dangerous power texture, dense low electric hum with subtle abrasive energy, stable sustained intensity.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable dangerous overcharge: pulsing low distortion, hard electrical grit, dense power body, and locked intensity with no discharge.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_double_damage_active",
+        "target_path": "public/assets/sounds/sfx_double_damage_active.ogg",
+        "asset_path": "./assets/sounds/sfx_double_damage_active.ogg",
+        "filename": "sfx_double_damage_active.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_double_damage_active"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_environment_hit": {
+      "name": "Umgebung – Einschlag",
+      "category": "utility",
+      "intent": "A single compact projectile impact on a hard earthy surface, sharp dry tick, small gritty debris and very short decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one projectile impact on packed earth and stone: crisp dry crack, compact gritty body, tiny debris ticks, very short tail, spatially clear.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "impact",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_environment_hit",
+        "target_path": "public/assets/sounds/sfx_environment_hit.ogg",
+        "asset_path": "./assets/sounds/sfx_environment_hit.ogg",
+        "filename": "sfx_environment_hit.ogg",
+        "volume": 0.9,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "416c976684648e869dc02b271a7a0f8194e8742dce2dcccbfce14c066f1f7ac7",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_environment_hit"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/EffectSystem.ts",
+            "line": 1343,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem?.playSound('sfx_environment_hit', x, y);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_armageddon": {
+      "name": "Armageddon – Einschlag",
+      "category": "explosion",
+      "intent": "A single massive meteor impact, fierce initial crack, deep grounded explosion and crumbling rock tail, controlled rumble.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one meteor strike: brutal crack transient, huge grounded low blast body, rock fragments, and a controlled rolling tail, cinematic but bounded.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": {
+        "id": "copy-sfx-explosion-armageddon-2026-09-14",
+        "source_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+        "source_keys": [
+          "sfx_nuke_explosion"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
+        "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+        "reason": "Replace the temporary Armageddon fallback with an independent byte-identical target.",
+        "hidden": false
+      },
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_armageddon",
+        "target_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_armageddon.ogg",
+        "filename": "sfx_explosion_armageddon.ogg",
+        "volume": 0.1,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_armageddon"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/MeteorRenderer.ts",
+            "line": 162,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem?.playSound('sfx_explosion_armageddon', visual.warningCircle.x, visual.warningCircle.y);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_asmd_secondary": {
+      "name": "ASMD – Sekundärexplosion",
+      "category": "explosion",
+      "intent": "A single bursting energy orb, sharp electric rupture, expanding plasma crackle and a soft short charged decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one plasma orb burst: electric rupture transient, dense expanding energy body, sizzling particulate tail, and compact game-ready decay.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_asmd_secondary.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 40,
+                "kind": "unknown",
+                "excerpt": "return strength > 0 ? { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * (0.2 + strength * 0.45) } : undefined;"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 43,
+                "kind": "unknown",
+                "excerpt": "case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 47,
+                "kind": "unknown",
+                "excerpt": "case 'lightning':   return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * 0.82 };"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_asmd_secondary"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_asmd_secondary",
+        "target_path": "public/assets/sounds/sfx_explosion_asmd_secondary.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_asmd_secondary.ogg",
+        "filename": "sfx_explosion_asmd_secondary.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_asmd_secondary"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 40,
+            "kind": "unknown",
+            "excerpt": "return strength > 0 ? { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * (0.2 + strength * 0.45) } : undefined;"
+          },
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 43,
+            "kind": "unknown",
+            "excerpt": "case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };"
+          },
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 47,
+            "kind": "unknown",
+            "excerpt": "case 'lightning':   return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * 0.82 };"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_he": {
+      "name": "HE-Explosion",
+      "category": "explosion",
+      "intent": "A single close high-explosive grenade detonation, immediate dense blast, short gritty debris and controlled low-frequency decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one close HE grenade detonation: sharp ignition crack, dense explosive body, gritty fragments, and a contained low thump tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_he",
+        "target_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_rocket.ogg",
+        "filename": "sfx_explosion_rocket.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_he"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 2603,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);"
+          },
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 44,
+            "kind": "unknown",
+            "excerpt": "case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };"
+          },
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 57,
+            "kind": "unknown",
+            "excerpt": "default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_holy": {
+      "name": "Heilige Explosion",
+      "category": "explosion",
+      "intent": "A single radiant magical explosion, powerful bright impact, crystalline shimmer and rich but controlled fading resonance.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one radiant magic explosion: hard power crack, solid impact body, glassy crystal sparks, and a short luminous tail, no choir or speech.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_holy",
+        "target_path": "public/assets/sounds/sfx_explosion_holy.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_holy.ogg",
+        "filename": "sfx_explosion_holy.ogg",
+        "volume": 0.8,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "3b552a930e43c3b504ae836379c7a44c7cb3cf02b85ef3e350df847f321482d9",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_holy"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 42,
+            "kind": "unknown",
+            "excerpt": "case 'holy':        return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_mini_rocket": {
+      "name": "Mini-Raketenexplosion",
+      "category": "explosion",
+      "intent": "A single compact miniature rocket explosion, quick punchy blast, light granular debris and short tight decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one small rocket impact: punchy crack, compact blast body, bright metal grit, and a short tight tail with clear separation.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": {
+        "id": "copy-sfx-explosion-mini-rocket-2026-09-14",
+        "source_path": "public/assets/sounds/sfx_explosion_he.ogg",
+        "source_keys": [
+          "sfx_explosion_rocket"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+        "reason": "Replace the temporary mini-rocket fallback with an independent byte-identical target.",
+        "hidden": false
+      },
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_mini_rocket",
+        "target_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_mini_rocket.ogg",
+        "filename": "sfx_explosion_mini_rocket.ogg",
+        "volume": 0.15,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_mini_rocket"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 50,
+            "kind": "unknown",
+            "excerpt": "case 'mini_rocket': return { key: 'sfx_explosion_mini_rocket',    scale: EXPLOSION_CLOSE_BOOST };"
+          },
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 51,
+            "kind": "unknown",
+            "excerpt": "case 'mini_rocket_cascade': return { key: 'sfx_explosion_mini_rocket', scale: EXPLOSION_CLOSE_BOOST };"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_rocket": {
+      "name": "Raketenexplosion",
+      "category": "explosion",
+      "intent": "A single rocket impact explosion, hard impact crack, broad explosive body and a short gritty rolling debris tail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one full rocket impact: hard crack transient, broad heavy blast body, debris rush, and a short rolling tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_rocket",
+        "target_path": "public/assets/sounds/sfx_explosion_he.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_he.ogg",
+        "filename": "sfx_explosion_he.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_rocket"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 158,
+            "kind": "unknown",
+            "excerpt": "if (soundKey === 'sfx_explosion_rocket') {"
+          },
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 49,
+            "kind": "unknown",
+            "excerpt": "case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_smoke": {
+      "name": "Rauchgranate – Entfaltung",
+      "category": "explosion",
+      "intent": "A single smoke grenade deployment, small ignition pop followed by a soft pressurized smoke hiss that gently settles.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one smoke-grenade deployment: hard cap pop, pressurized hiss burst, small mechanical body, and a brief clean settle with no prolonged ambience.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_smoke",
+        "target_path": "public/assets/sounds/sfx_explosion_smoke.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_smoke.ogg",
+        "filename": "sfx_explosion_smoke.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_smoke"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_gauss_charge": {
+      "name": "Gauss – Ladetextur",
+      "category": "utility",
+      "intent": "A steady electromagnetic weapon charging texture, thin focused metallic hum and tense high-frequency electrical buzz, stable intensity without firing.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable railgun charge: taut metallic hum, pulsing magnetic pressure, sharp electrical grain, and constant locked tension with no shot.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_gauss_charge",
+        "target_path": "public/assets/sounds/sfx_gauss_charge.ogg",
+        "asset_path": "./assets/sounds/sfx_gauss_charge.ogg",
+        "filename": "sfx_gauss_charge.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_gauss_charge"
+        ],
+        "usages": [
+          {
+            "path": "src/systems/InputSystem.ts",
+            "line": 2248,
+            "kind": "loop",
+            "excerpt": "this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_gauss_charge') ?? null;"
+          }
+        ],
+        "playback": "loop",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_hit_feedback": {
+      "name": "Trefferbestätigung",
+      "category": "ui",
+      "intent": "A single extremely short dry hit confirmation tick, crisp neutral click with a little compact weight, distinct without harsh piercing frequencies.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one ultra-short damage confirmation: razor-dry tick, firm compact body, neutral pitch, immediate clean stop, and strong mix readability.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "impact",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_hit_feedback",
+        "target_path": "public/assets/sounds/sfx_hit_feedback.ogg",
+        "asset_path": "./assets/sounds/sfx_hit_feedback.ogg",
+        "filename": "sfx_hit_feedback.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "34ea76f37006af4adf438a348b7e93bcb101141a9a3e47abdd7e632cae422240",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_hit_feedback"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 197,
+            "kind": "oneshot",
+            "excerpt": "this.playLocalSound('sfx_hit_feedback', getHitFeedbackVolumeScale(damage));"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_honey_badger_rage": {
+      "name": "Honigdachs – Wutaktivierung",
+      "category": "utility",
+      "intent": "A single short ferocious badger snarl with forceful breath and coarse animal growl, compact aggressive game cue, no human voice.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one badger rage burst: forceful snarl, rough breath attack, dense animal body, abrupt short release, no human speech.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_honey_badger_rage",
+        "target_path": "public/assets/sounds/sfx_honey_badger_rage.ogg",
+        "asset_path": "./assets/sounds/sfx_honey_badger_rage.ogg",
+        "filename": "sfx_honey_badger_rage.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_honey_badger_rage"
+        ],
+        "usages": [
+          {
+            "path": "src/systems/InputSystem.ts",
+            "line": 1847,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem?.playLocalSound('sfx_honey_badger_rage');"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_nuke_countdown": {
+      "name": "Nuklear – Warnsignal",
+      "category": "utility",
+      "intent": "A single clear urgent electronic warning cue, sharply defined pulse with a tense compact metallic resonance.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one catastrophic warning pulse: hard low electronic hit, metallic alarm ring, urgent compact rise, clear spatial focus, no speech.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_nuke_countdown",
+        "target_path": "public/assets/sounds/sfx_nuke_countdown.ogg",
+        "asset_path": "./assets/sounds/sfx_nuke_countdown.ogg",
+        "filename": "sfx_nuke_countdown.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "95794497dae89c0878370c3ce9280b6eb7c107f89b6dcc228f205834b291acde",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_nuke_countdown"
+        ],
+        "usages": [
+          {
+            "path": "src/powerups/NukeRenderer.ts",
+            "line": 124,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem?.playSound('sfx_nuke_countdown', nuke.x, nuke.y);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_nuke_explosion": {
+      "name": "Nuklear – Explosion",
+      "category": "explosion",
+      "intent": "A single enormous explosive detonation, decisive initial crack, deep expanding blast and long controlled rolling low-frequency tail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one nuclear detonation: colossal crack transient, massive low blast body, tearing debris, and a controlled rolling tail with bounded duration.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 5,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_nuke_explosion",
+        "target_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+        "asset_path": "./assets/sounds/sfx_nuke_explosion.ogg",
+        "filename": "sfx_nuke_explosion.ogg",
+        "volume": 0.9,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_nuke_explosion"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 48,
+            "kind": "unknown",
+            "excerpt": "case 'nuke':        return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_options_preview": {
+      "name": "Audioeinstellungen – Vorschau",
+      "category": "ui",
+      "intent": "A single bright decisive round-start cue, crisp upward electronic accent and short positive resonant finish, no speech.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one bright options-preview ping: crisp synth strike, clean upbeat body, short resonant tail, dry UI separation, no speech.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen. Bewusste gemeinsame Datei mit sfx_countdown_go; Übernahme betrifft beide Keys.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_options_preview",
+        "target_path": "public/assets/sounds/sfx_countdown_go.ogg",
+        "asset_path": "./assets/sounds/sfx_countdown_go.ogg",
+        "filename": "sfx_countdown_go.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "090c1fd84de38b797906eb0c9443460e42d3dbc147788dd28b0d6b4a819d99fa",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_countdown_go",
+          "sfx_options_preview"
+        ],
+        "usages": [
+          {
+            "path": "src/ui/OptionsOverlay.ts",
+            "line": 56,
+            "kind": "unknown",
+            "excerpt": "const PREVIEW_SOUND_KEY: AudioAssetKey = 'sfx_options_preview';"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_armor": {
+      "name": "Rüstung – Aufnahme",
+      "category": "powerup",
+      "intent": "A single armor pickup cue, solid compact metallic clink with a brief positive electronic accent.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one armor pickup: hard metal-clink transient, dense steel body, short bright confirmation tail, dry and readable in combat.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_armor",
+        "target_path": "public/assets/sounds/sfx_pickup_armor.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_armor.ogg",
+        "filename": "sfx_pickup_armor.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_armor"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_hp": {
+      "name": "Lebenspunkte – Aufnahme",
+      "category": "powerup",
+      "intent": "A single positive health pickup cue, warm short rounded pulse with a small clean bright shimmer.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one health pickup: warm solid pulse, clean rounded body, bright short sparkle, and a distinct clear UI finish.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_hp",
+        "target_path": "public/assets/sounds/sfx_pickup_hp.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_hp.ogg",
+        "filename": "sfx_pickup_hp.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_hp"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_powerup": {
+      "name": "Power-up – Aufnahme",
+      "category": "powerup",
+      "intent": "A single clear power-up pickup cue, crisp bright energy chime with a short rising shimmer and clean ending.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one power-up pickup: sharp ascending energy hit, compact punch, bright shimmering tail, and a clean decisive ending.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_pickup_powerup.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 635,
+                "kind": "oneshot",
+                "excerpt": "if (pickedUp) this.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_pickup_powerup"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_pickup_powerup",
+        "target_path": "public/assets/sounds/sfx_pickup_powerup.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_powerup.ogg",
+        "filename": "sfx_pickup_powerup.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_powerup"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 635,
+            "kind": "oneshot",
+            "excerpt": "if (pickedUp) this.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_place_dachstunnel": {
+      "name": "Dachstunnel – Platzierung",
+      "category": "utility",
+      "intent": "A single rapid burrow entrance opening, earthy crumbling thud with loose grit and short soil scrape.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one burrow-entrance placement: earthy thud attack, gritty crumbling body, tight soil scrape, and a short dust tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_place_dachstunnel",
+        "target_path": "public/assets/sounds/sfx_place_dachstunnel.ogg",
+        "asset_path": "./assets/sounds/sfx_place_dachstunnel.ogg",
+        "filename": "sfx_place_dachstunnel.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_place_dachstunnel"
+        ],
+        "usages": [
+          {
+            "path": "src/world/ConstructionWorldRuntime.ts",
+            "line": 625,
+            "kind": "oneshot",
+            "excerpt": "if (placed) this.options.gameAudioSystem.playSound('sfx_place_dachstunnel', originX, originY, playerId);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_place_decoy": {
+      "name": "Attrappe – Platzierung",
+      "category": "utility",
+      "intent": "A single lightweight decoy deployment, compact wooden mechanical clack and soft fabric settling.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one decoy deployment: hard wooden click, compact mechanism body, fabric snap, and a short settling tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_place_decoy",
+        "target_path": "public/assets/sounds/sfx_place_decoy.ogg",
+        "asset_path": "./assets/sounds/sfx_place_decoy.ogg",
+        "filename": "sfx_place_decoy.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_place_decoy"
+        ],
+        "usages": [
+          {
+            "path": "src/world/PlayerUtilityActionRuntime.ts",
+            "line": 649,
+            "kind": "oneshot",
+            "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_decoy', player.x, player.y, request.playerId);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_place_fliegenpilz": {
+      "name": "Fliegenpilz – Platzierung",
+      "category": "utility",
+      "intent": "A single oversized mushroom placement, soft earthy thump, papery fungal rustle and subtle organic spring.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one oversized mushroom placement: damp earthy thump, elastic stalk knock, papery cap rustle, and a short organic tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_place_fliegenpilz",
+        "target_path": "public/assets/sounds/sfx_place_fliegenpilz.ogg",
+        "asset_path": "./assets/sounds/sfx_place_fliegenpilz.ogg",
+        "filename": "sfx_place_fliegenpilz.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_place_fliegenpilz"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_place_rock": {
+      "name": "Fels – Platzierung",
+      "category": "utility",
+      "intent": "A single heavy stone placement, solid low rock thud with a little gritty scraping and falling dust.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one heavy rock placement: solid low stone thump, sharp ground contact, gritty scrape, dust ticks, and tight decay.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "impact",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_place_rock",
+        "target_path": "public/assets/sounds/sfx_place_rock.ogg",
+        "asset_path": "./assets/sounds/sfx_place_rock.ogg",
+        "filename": "sfx_place_rock.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_place_rock"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RockVisualHelper.ts",
+            "line": 162,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);"
+          },
+          {
+            "path": "src/scenes/arena/RockVisualHelper.ts",
+            "line": 230,
+            "kind": "oneshot",
+            "excerpt": "rock.turretWeaponId === 'TURRET_SPORES' ? 'sfx_place_spore_turret' : 'sfx_place_rock',"
+          },
+          {
+            "path": "src/scenes/arena/RockVisualHelper.ts",
+            "line": 237,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);"
+          },
+          {
+            "path": "src/world/ConstructionWorldRuntime.ts",
+            "line": 403,
+            "kind": "oneshot",
+            "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);"
+          },
+          {
+            "path": "src/world/ConstructionWorldRuntime.ts",
+            "line": 418,
+            "kind": "oneshot",
+            "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', player.x, player.y, playerId);"
+          },
+          {
+            "path": "src/world/ConstructionWorldRuntime.ts",
+            "line": 616,
+            "kind": "oneshot",
+            "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', targetWorld.x, targetWorld.y, playerId);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_player_death": {
+      "name": "Dachs – Tod",
+      "category": "player",
+      "intent": "A single short badger collapse, brief coarse animal exhale and grounded soft body thud, no speech or prolonged scream.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one badger collapse: abrupt breath hit, grounded body thud, coarse fur rustle, and a short heavy tail, no prolonged vocal.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_player_death",
+        "target_path": "public/assets/sounds/sfx_player_death.ogg",
+        "asset_path": "./assets/sounds/sfx_player_death.ogg",
+        "filename": "sfx_player_death.ogg",
+        "volume": 0.9,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "163d2c29622e14ad75cfaf3d7c35efa1c39eb469692c245e62764e9fc4d8dc51",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_player_death"
+        ],
+        "usages": [
+          {
+            "path": "src/world/WorldCombatGameplayBinding.ts",
+            "line": 744,
+            "kind": "oneshot",
+            "excerpt": "o.gameAudioSystem.playSound('sfx_player_death', x, y);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_player_hit": {
+      "name": "Dachs – Treffer",
+      "category": "player",
+      "intent": "A single brief badger pain grunt and compact bodily impact, coarse short animal breath, no human speech.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one badger hit reaction: sharp pain-bark attack, compact body impact, rough breath burst, and a brief clear release, no speech.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "impact",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_player_hit",
+        "target_path": "public/assets/sounds/sfx_player_hit.ogg",
+        "asset_path": "./assets/sounds/sfx_player_hit.ogg",
+        "filename": "sfx_player_hit.ogg",
+        "volume": 0.3,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "be785f76a73d42bf3b50ec71efc64e9011b2148a067d410396b6f056534b435a",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_player_hit"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 223,
+            "kind": "oneshot",
+            "excerpt": "this.playSound('sfx_player_hit', emitterX, emitterY, undefined, getHitFeedbackVolumeScale(damage));"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_player_move": {
+      "name": "Dachs – Bewegung",
+      "category": "player",
+      "intent": "A continuous close texture of quick light animal footsteps on compact earth, soft gritty paw impacts and faint cloth movement, consistent pace.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable fast badger footwork: crisp paw taps, compact earth grit, light body rustle, and constant forward pace with no start or stop.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_player_move",
+        "target_path": "public/assets/sounds/sfx_player_move.ogg",
+        "asset_path": "./assets/sounds/sfx_player_move.ogg",
+        "filename": "sfx_player_move.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "2ad9d90262ab4fda685a8f255bffc99c27fdc8156fbe3bcf558f4b71dadfcf0b",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_player_move"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+            "line": 611,
+            "kind": "loop",
+            "excerpt": "this.moveLoopHandle = this.ctx.gameAudioSystem.startLoop('sfx_player_move') ?? null;"
+          },
+          {
+            "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+            "line": 834,
+            "kind": "loop",
+            "excerpt": "this.moveLoopHandle = this.audio?.startLoop('sfx_player_move') ?? null;"
+          }
+        ],
+        "playback": "loop",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_player_spawn": {
+      "name": "Dachs – Spawn",
+      "category": "player",
+      "intent": "A single compact arrival cue, gentle airy pop followed by a short confident bright energy shimmer.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one player spawn-sound: direct loud sound, short organic sound, fast transient, shimmer tail. ",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_player_spawn.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+                "line": 373,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_player_spawn', ps.x, ps.y, id);"
+              },
+              {
+                "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+                "line": 710,
+                "kind": "oneshot",
+                "excerpt": "this.audio?.playSound('sfx_player_spawn', player.x, player.y, player.id);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_player_spawn"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_player_spawn",
+        "target_path": "public/assets/sounds/sfx_player_spawn.ogg",
+        "asset_path": "./assets/sounds/sfx_player_spawn.ogg",
+        "filename": "sfx_player_spawn.ogg",
+        "volume": 0.7,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "044f38b6e22542d828410038d0fb5df27653aeeed66b88c313170792590a8782",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_player_spawn"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+            "line": 373,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_player_spawn', ps.x, ps.y, id);"
+          },
+          {
+            "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+            "line": 710,
+            "kind": "oneshot",
+            "excerpt": "this.audio?.playSound('sfx_player_spawn', player.x, player.y, player.id);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_shield_activate": {
+      "name": "Schild – Aktivierung",
+      "category": "utility",
+      "intent": "A single protective energy shield deployment, short smooth upward energy sweep resolving into a soft solid pulse.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one shield deployment: hard rising energy sweep, firm protective pulse, bright glassy snap, and a short controlled tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_shield_activate",
+        "target_path": "public/assets/sounds/sfx_shield_activate.ogg",
+        "asset_path": "./assets/sounds/sfx_shield_activate.ogg",
+        "filename": "sfx_shield_activate.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_shield_activate"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/EnergyShieldRenderer.ts",
+            "line": 189,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem?.playSound('sfx_shield_activate', shield.x, shield.y, shield.ownerId);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_shield_active": {
+      "name": "Schild – Aktive Textur",
+      "category": "utility",
+      "intent": "A steady protective energy shield hum, smooth low resonance with subtle bright surface shimmer, even texture without start or stop.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable shield field: dense low hum, tight electrical grain, subtle bright edge shimmer, and an even active bed with no start or end.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_shield_active",
+        "target_path": "public/assets/sounds/sfx_shield_active.ogg",
+        "asset_path": "./assets/sounds/sfx_shield_active.ogg",
+        "filename": "sfx_shield_active.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_shield_active"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_tesla_activate": {
+      "name": "Tesla – Aktivierung",
+      "category": "utility",
+      "intent": "A single Tesla coil power-up cue, quick rising electrical buzz culminating in a compact high-voltage snap.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one Tesla activation: rapid voltage rise, sharp coil snap, dense electrical body, and a brief energized tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_tesla_activate",
+        "target_path": "public/assets/sounds/sfx_tesla_activate.ogg",
+        "asset_path": "./assets/sounds/sfx_tesla_activate.ogg",
+        "filename": "sfx_tesla_activate.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_tesla_activate"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/TeslaDomeRenderer.ts",
+            "line": 230,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem?.playSound('sfx_tesla_activate', dome.x, dome.y, dome.ownerId);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_tesla_active_targets": {
+      "name": "Tesla – Aktive Entladung",
+      "category": "utility",
+      "intent": "A steady active Tesla electricity texture, dense fine high-voltage crackle and stable low electrical buzz without distinct start or stop.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable Tesla field: rapid high-voltage crackle, tight low buzz bed, intermittent crisp sparks, and no start or stop.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_tesla_active_targets",
+        "target_path": "public/assets/sounds/sfx_tesla_active_targets.ogg",
+        "asset_path": "./assets/sounds/sfx_tesla_active_targets.ogg",
+        "filename": "sfx_tesla_active_targets.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_tesla_active_targets"
+        ],
+        "usages": [],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_train_explode": {
+      "name": "Zug – Explosion",
+      "category": "explosion",
+      "intent": "A single heavy locomotive explosion, sharp structural metal rupture, powerful compact blast and tumbling metallic debris tail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one gigantic locomotive explosion: metal-tearing crack, fast buildup, heavy engine blast body, big Explosion of metallic parts",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 5,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "explosion",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": {
+        "id": "copy-sfx-train-explode-2026-09-14",
+        "source_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+        "source_keys": [
+          "sfx_nuke_explosion"
+        ],
+        "target_path": "public/assets/sounds/sfx_train_explode.ogg",
+        "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+        "reason": "Replace the temporary train explosion fallback with an independent byte-identical target.",
+        "hidden": false
+      },
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_train_explode.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 624,
+                "kind": "oneshot",
+                "excerpt": "this.gameAudioSystem.playLocalSound('sfx_train_explode');"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_train_explode"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_train_explode",
+        "target_path": "public/assets/sounds/sfx_train_explode.ogg",
+        "asset_path": "./assets/sounds/sfx_train_explode.ogg",
+        "filename": "sfx_train_explode.ogg",
+        "volume": 0.2,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_train_explode"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 624,
+            "kind": "oneshot",
+            "excerpt": "this.gameAudioSystem.playLocalSound('sfx_train_explode');"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_train_move": {
+      "name": "Zug – Bewegung",
+      "category": "utility",
+      "intent": "A continuous small heavy train rolling texture, steady low mechanical rumble, regular rail clatter and subtle metal vibration at constant speed.",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable train motion: low engine churn, regular rail strikes, metallic vibration, steady forward rhythm, no acceleration or end hit.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_train_move",
+        "target_path": "public/assets/sounds/sfx_train_move.ogg",
+        "asset_path": "./assets/sounds/sfx_train_move.ogg",
+        "filename": "sfx_train_move.ogg",
+        "volume": 0.8,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "e8fd45eff0be0f71c83eb2db877e114a621e6265fb2f05fb8f128de1ee8a1627",
+        "file_error": null,
+        "shared_keys": [
+          "sfx_train_move"
+        ],
+        "usages": [
+          {
+            "path": "src/train/TrainRenderer.ts",
+            "line": 97,
+            "kind": "loop",
+            "excerpt": "this.moveLoopHandle = this.audioSystem?.startLoop('sfx_train_move', state.x, state.y) ?? null;"
+          },
+          {
+            "path": "src/train/TrainRenderer.ts",
+            "line": 144,
+            "kind": "loop",
+            "excerpt": "this.moveLoopHandle = this.audioSystem?.startLoop('sfx_train_move', state.x, state.y) ?? null;"
+          }
+        ],
+        "playback": "loop",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_translocator_teleport": {
+      "name": "Translocator – Teleport",
+      "category": "utility",
+      "intent": "A single compact teleportation effect, quick electric implosion, sharp spatial pop and short bright energy release.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one teleport: hard inward vacuum snap, spatial pop, dense electric release, and a crisp short tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_translocator_teleport",
+        "target_path": "public/assets/sounds/sfx_translocator_teleport.ogg",
+        "asset_path": "./assets/sounds/sfx_translocator_teleport.ogg",
+        "filename": "sfx_translocator_teleport.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_translocator_teleport"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 571,
+            "kind": "oneshot",
+            "excerpt": "this.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_use_dachstunnel": {
+      "name": "Dachstunnel – Benutzung",
+      "category": "utility",
+      "intent": "A single quick movement through a dirt tunnel, close muffled earthy swoosh, short soil scrape and soft exit thump.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one tunnel traverse: tight dirt rush, muffled scrape body, forceful exit thump, and a compact directional tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_use_dachstunnel",
+        "target_path": "public/assets/sounds/sfx_use_dachstunnel.ogg",
+        "asset_path": "./assets/sounds/sfx_use_dachstunnel.ogg",
+        "filename": "sfx_use_dachstunnel.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_use_dachstunnel"
+        ],
+        "usages": [
+          {
+            "path": "src/world/WorldPlayerGameplayRuntime.ts",
+            "line": 1706,
+            "kind": "oneshot",
+            "excerpt": "this.options.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_ak47": {
+      "name": "AK-47 – Schuss",
+      "category": "weapon",
+      "intent": "A single forceful assault rifle shot, hard metallic attack, gritty mechanical clack and short controlled low-end punch.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one AK rifle shot: hard muzzle crack, dense midrange body, sharp bolt clack, compact low punch, dry and clear.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/ak-47.ogg",
+            "usages": [
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 276,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_ak47\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 354,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_ak47\","
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "shot_ak47"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "shot_ak47",
+        "target_path": "public/assets/sounds/ak-47.ogg",
+        "asset_path": "./assets/sounds/ak-47.ogg",
+        "filename": "ak-47.ogg",
+        "volume": 0.4,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "d181f1fcf21260016dfc2220770411d72fad5b84f8ed41ac87552b70337adaa3",
+        "file_error": null,
+        "shared_keys": [
+          "shot_ak47"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 276,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_ak47\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 354,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_ak47\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_asmd_primary": {
+      "name": "ASMD – Primärschuss",
+      "category": "weapon",
+      "intent": "A single precise futuristic energy rifle discharge, sharp electric crack, compact glassy resonance and short decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one futuristic energy-rifle shot: scy-fi laser shot, energy-stile body, snappy transient, bright tight decay",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_asmd_primary",
+        "target_path": "public/assets/sounds/asmd-prim.ogg",
+        "asset_path": "./assets/sounds/asmd-prim.ogg",
+        "filename": "asmd-prim.ogg",
+        "volume": 0.4,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "39c4d2f5f887235976cad6c211c2619224e688e62ec67b2b26db1082383cfe3e",
+        "file_error": null,
+        "shared_keys": [
+          "shot_asmd_primary"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 43,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_asmd_primary\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 318,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_asmd_primary\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_asmd_secondary": {
+      "name": "ASMD – Energiekugel",
+      "category": "weapon",
+      "intent": "A single unstable plasma orb launch, rounded electric thump, buzzing energy snap and brief airy tail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one plasma-orb launch: compressed electric thump, rounded dense body, buzzing crackle, and a short forward whoosh.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_asmd_secondary",
+        "target_path": "public/assets/sounds/asmd-sec.ogg",
+        "asset_path": "./assets/sounds/asmd-sec.ogg",
+        "filename": "asmd-sec.ogg",
+        "volume": 0.4,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "1f86871c2554385dc5d2d59515d97ea0bb196dec242ad7c94af19c1306c78db7",
+        "file_error": null,
+        "shared_keys": [
+          "shot_asmd_secondary"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 310,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_asmd_secondary\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_awp": {
+      "name": "AWP – Schuss",
+      "category": "weapon",
+      "intent": "A single heavy sniper rifle shot, immediate dry explosive crack, solid low-end body and clear bolt-action detail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one heavy sniper shot: explosive dry crack, dense low body, sharp bolt kick, and a controlled short tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_awp",
+        "target_path": "public/assets/sounds/awp.ogg",
+        "asset_path": "./assets/sounds/awp.ogg",
+        "filename": "awp.ogg",
+        "volume": 0.4,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "c84491e0a7da50966abd91b4aaf03c499243aefb9138cd72636d9994b9535a90",
+        "file_error": null,
+        "shared_keys": [
+          "shot_awp"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 414,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_awp\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_bfg": {
+      "name": "BFG – Schuss",
+      "category": "weapon",
+      "intent": "A single massive science-fiction energy cannon launch, decisive electric impact, deep controlled pulse and short charged tail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one science-fiction cannon shot: huge electric crack, heavy low pulse body, pressurized energy burst, and a compact charged tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_bfg",
+        "target_path": "public/assets/sounds/bfg.ogg",
+        "asset_path": "./assets/sounds/bfg.ogg",
+        "filename": "bfg.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "7daa93f48952b7afca0532c110aadca762a040207ed4911aae361ab0c005f313",
+        "file_error": null,
+        "shared_keys": [
+          "shot_bfg"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/utilities-tactical.json",
+            "line": 86,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_bfg\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_bite": {
+      "name": "Biss",
+      "category": "weapon",
+      "intent": "A single quick animal bite as an attack for a video game, tight jaw snap, small wet crunch and short aggressive body, no vocalization.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one badger bite attack: hard jaw snap, dense tooth click, short wet crunch, aggressive animal body, no vocalization.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_bite",
+        "target_path": "public/assets/sounds/bite.ogg",
+        "asset_path": "./assets/sounds/bite.ogg",
+        "filename": "bite.ogg",
+        "volume": 0.4,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "3ecab3dd24d9e507b6a0bc0be96c1334ce3918f5090e004bf725e55b83065ab2",
+        "file_error": null,
+        "shared_keys": [
+          "shot_bite"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 30,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_bite\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 57,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_bite\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 156,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_bite\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 186,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_bite\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_crossbow": {
+      "name": "Armbrust – Schuss",
+      "category": "weapon",
+      "intent": "A single compact crossbow release, crisp string snap, wooden mechanical click and short bolt whoosh.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one crossbow release: sharp string snap, wooden latch crack, compact bolt whoosh, and a tight tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_crossbow",
+        "target_path": "public/assets/sounds/crossbow.ogg",
+        "asset_path": "./assets/sounds/crossbow.ogg",
+        "filename": "crossbow.ogg",
+        "volume": 0.1,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "96255be8fc9fc9db5eea65107440b7c5259ad8e5cf021249d86a894254c1f5c5",
+        "file_error": null,
+        "shared_keys": [
+          "shot_crossbow"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 178,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_crossbow\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_dry_trigger": {
+      "name": "Leerer Abzug",
+      "category": "weapon",
+      "intent": "A single dry empty firearm trigger click, crisp small mechanical snap with a short clean decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one empty firearm trigger: dry mechanical click, crisp spring snap, compact metal body, and an immediate stop.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/dry-trigger.ogg",
+            "usages": [
+              {
+                "path": "src/loadout/content/data/ultimates.json",
+                "line": 67,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 35,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 116,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 193,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 227,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 60,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 87,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 205,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 260,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 39,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 77,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 117,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 179,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 230,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 277,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 322,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 355,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 415,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 472,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 69,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 105,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 150,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 217,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 285,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 31,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 58,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 157,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 187,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 214,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 44,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 90,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 132,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 177,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 222,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 255,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 311,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 75,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 148,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 212,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 275,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 319,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 371,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-spores.json",
+                "line": 54,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-spores.json",
+                "line": 108,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-spores.json",
+                "line": 162,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-spores.json",
+                "line": 216,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 40,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 76,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 116,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "shot_dry_trigger"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "shot_dry_trigger",
+        "target_path": "public/assets/sounds/dry-trigger.ogg",
+        "asset_path": "./assets/sounds/dry-trigger.ogg",
+        "filename": "dry-trigger.ogg",
+        "volume": 0.3,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "cd6e003d994658011cb8d6fe4be6c462d80a7c3fd1f2b49ce495a1ba03cfc572",
+        "file_error": null,
+        "shared_keys": [
+          "shot_dry_trigger"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/ultimates.json",
+            "line": 67,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/utilities-grenades.json",
+            "line": 35,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/utilities-grenades.json",
+            "line": 116,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/utilities-grenades.json",
+            "line": 193,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/utilities-grenades.json",
+            "line": 227,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/utilities-tactical.json",
+            "line": 60,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/utilities-tactical.json",
+            "line": 87,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/utilities-tactical.json",
+            "line": 205,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/utilities-tactical.json",
+            "line": 260,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 39,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 77,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 117,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 179,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 230,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 277,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 322,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 355,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 415,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 472,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 69,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 105,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 150,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 217,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 285,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 31,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 58,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 157,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 187,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 214,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 44,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 90,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 132,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 177,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 222,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 255,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 311,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 75,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 148,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 212,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 275,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 319,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 371,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-spores.json",
+            "line": 54,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-spores.json",
+            "line": 108,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-spores.json",
+            "line": 162,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-spores.json",
+            "line": 216,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-support.json",
+            "line": 40,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-support.json",
+            "line": 76,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          },
+          {
+            "path": "src/loadout/content/data/weapons-support.json",
+            "line": 116,
+            "kind": "oneshot",
+            "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_flame": {
+      "name": "Flammenwerfer – Feuerimpuls",
+      "category": "weapon",
+      "intent": "A single brief flamethrower burst, immediate gas ignition pop and dense hot flame rush, one compact fire pulse.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one flamethrower burst: hard ignition pop, dense hot gas rush, forceful flame body, and an abrupt compact release.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. successKey wird aktuell als Schussimpuls verwendet: kein Runtime-Loop aus dem Namen ableiten.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_flame",
+        "target_path": "public/assets/sounds/flame.ogg",
+        "asset_path": "./assets/sounds/flame.ogg",
+        "filename": "flame.ogg",
+        "volume": 0.2,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "dd36209c9b8932d2d048b5923596747ece013ee4abcf7f23c558af0d27208f4d",
+        "file_error": null,
+        "shared_keys": [
+          "shot_flame"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 68,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_flame\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 104,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_flame\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 149,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_flame\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 216,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_flame\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-flame-air.json",
+            "line": 284,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_flame\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_gauss": {
+      "name": "Gauss – Schuss",
+      "category": "weapon",
+      "intent": "A single electromagnetic railgun shot, very sharp metallic electric crack, taut energy snap and tight low-end punch.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one railgun shot: brutal magnetic Weapon Sound, hard metallic transient, dense and brutal energy body with tight low punch.",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_gauss",
+        "target_path": "public/assets/sounds/Gauss.ogg",
+        "asset_path": "./assets/sounds/Gauss.ogg",
+        "filename": "Gauss.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "bcd6e2e9cdd8f4d119b4bbb742861149522b39e859f2a4517b4c9efd90a0cd5e",
+        "file_error": null,
+        "shared_keys": [
+          "shot_gauss"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/ultimates.json",
+            "line": 66,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_gauss\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_glock": {
+      "name": "Glock – Schuss",
+      "category": "weapon",
+      "intent": "A single compact semi-automatic pistol shot, immediate sharp dry crack, crisp slide action and controlled short body.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one compact pistol shot: sharp dry crack, compact mid body, crisp slide snap, and a controlled short tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_glock",
+        "target_path": "public/assets/sounds/glock.ogg",
+        "asset_path": "./assets/sounds/glock.ogg",
+        "filename": "glock.ogg",
+        "volume": 0.15,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "d6a7ba1045407c8ee9aa38187240220d78acb5b3f5f46df1299c04b7599ab2d2",
+        "file_error": null,
+        "shared_keys": [
+          "shot_glock"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 38,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_glock\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 116,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_glock\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_hallelujah": {
+      "name": "Heilige Waffe – Auslösung",
+      "category": "weapon",
+      "intent": "A single radiant fantasy weapon launch, bright bell-like attack, short shimmering magical burst, no choir or speech.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one radiant weapon discharge: hard bell-like attack, dense bright energy body, short sparkling release, no choir or speech.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_hallelujah",
+        "target_path": "public/assets/sounds/hallelujah.ogg",
+        "asset_path": "./assets/sounds/hallelujah.ogg",
+        "filename": "hallelujah.ogg",
+        "volume": 0.8,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "4f90ad44db636037ec540101334e8cb0606231a2ffc129d52dcbb684c45726ec",
+        "file_error": null,
+        "shared_keys": [
+          "shot_hallelujah"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/utilities-grenades.json",
+            "line": 226,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_hallelujah\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_hydra": {
+      "name": "Hydra – Schuss",
+      "category": "weapon",
+      "intent": "A single heavy multi-barrel weapon discharge, dense metallic attack with a layered compact punch and fast decay.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one multi-barrel blast: layered hard cracks, dense metallic body, compact recoil clatter, and a fast tight tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_hydra",
+        "target_path": "public/assets/sounds/hydra.ogg",
+        "asset_path": "./assets/sounds/hydra.ogg",
+        "filename": "hydra.ogg",
+        "volume": 0.3,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "65369520cc72a6158db4147b2d4ae65f7ffe54e22118e51f32b281b57266254d",
+        "file_error": null,
+        "shared_keys": [
+          "shot_hydra"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 254,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_hydra\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_minirocketlauncher": {
+      "name": "Mini-Raketenwerfer – Schuss",
+      "category": "weapon",
+      "intent": "A single miniature rocket launch, compact ignition thump, sharp mechanical click and brief pressurized whoosh.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one miniature rocket launch: sharp ignition pop, compact pressure body, fast exhaust whoosh, and brief mechanical detail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_minirocketlauncher",
+        "target_path": "public/assets/sounds/minirocketlauncher.ogg",
+        "asset_path": "./assets/sounds/minirocketlauncher.ogg",
+        "filename": "minirocketlauncher.ogg",
+        "volume": 0.3,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "edf8d8c85cf9d69c6e697c19d0f5fa3b7998453264a7406eb01f501ff37c9b9a",
+        "file_error": null,
+        "shared_keys": [
+          "shot_minirocketlauncher"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 147,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_minirocketlauncher\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 211,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_minirocketlauncher\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_negev": {
+      "name": "Negev – Schuss",
+      "category": "weapon",
+      "intent": "A single belt-fed machine gun shot, weighty dry crack, rattling mechanical action and a tight punchy tail.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one belt-fed machine-gun shot: hard flat crack, dense metal body, feed-mechanism clatter, and a tight low punch.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_negev",
+        "target_path": "public/assets/sounds/negev.ogg",
+        "asset_path": "./assets/sounds/negev.ogg",
+        "filename": "negev.ogg",
+        "volume": 0.2,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "d3c2828d652a7b215eae206bde2e9ff3a0a37c8b59db3fa0283f1fd7a43b1891",
+        "file_error": null,
+        "shared_keys": [
+          "shot_negev"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 471,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_negev\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_p90": {
+      "name": "P90 – Schuss",
+      "category": "weapon",
+      "intent": "A single compact submachine gun shot, sharp immediate attack, crisp mechanical action and punchy controlled low end.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one compact SMG shot: sharp transient, tight punchy body, crisp cyclic mechanism tick, and a short dry tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/p90.ogg",
+            "usages": [
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 229,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_p90\","
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "shot_p90"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "shot_p90",
+        "target_path": "public/assets/sounds/p90.ogg",
+        "asset_path": "./assets/sounds/p90.ogg",
+        "filename": "p90.ogg",
+        "volume": 0.3,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "5226e4454ada8c069382ee466d9efd634d3d24cb43a93999dc87d887474c7eca",
+        "file_error": null,
+        "shared_keys": [
+          "shot_p90"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 229,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_p90\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_plasma": {
+      "name": "Plasma – Schuss",
+      "category": "weapon",
+      "intent": "A single small plasma weapon discharge, snappy electronic zap, bright charged crackle and rounded tight body.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one plasma shot: Eletric weapon Shot, compact charged body, Plasma Sounds, high energy laser weapon sound, fast decay, weapon with high energy and fast firing rate, only one shot,",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_plasma",
+        "target_path": "public/assets/sounds/plasma.ogg",
+        "asset_path": "./assets/sounds/plasma.ogg",
+        "filename": "plasma.ogg",
+        "volume": 0.2,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "51a689dd7cc08398fa70e6343033518700b085b9a38e660cdfdd573efb6863aa",
+        "file_error": null,
+        "shared_keys": [
+          "shot_plasma"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 89,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_plasma\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 131,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_plasma\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 176,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_plasma\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-plasma-energy.json",
+            "line": 221,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_plasma\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-support.json",
+            "line": 115,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_plasma\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_rocketlauncher": {
+      "name": "Raketenwerfer – Schuss",
+      "category": "weapon",
+      "intent": "A single heavy rocket launcher firing, abrupt bassy ignition thump followed by a short forceful exhaust rush.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one extremly loud heavy rocket-launcher shot: extremly hard ignition thump with massive lowend, dense pressure body, powerful sound as it leaves the rocket launcher, followed by a flight noise that quickly fades",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx-comfyui",
+        "duration_seconds": 3,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_rocketlauncher",
+        "target_path": "public/assets/sounds/rocketlauncher.ogg",
+        "asset_path": "./assets/sounds/rocketlauncher.ogg",
+        "filename": "rocketlauncher.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "414fbf7311b083d67d9d281a37048b78f2887949d367dd9a5f344eec967e429d",
+        "file_error": null,
+        "shared_keys": [
+          "shot_rocketlauncher"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 74,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_rocketlauncher\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 274,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_rocketlauncher\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_shotgun": {
+      "name": "Schrotflinte – Schuss",
+      "category": "weapon",
+      "intent": "A single shotgun blast, immediate broad dry crack, dense short body, crisp mechanical clack and restrained low end.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one heavy shotgun blast: heavy very loud compact body, Massive Lowend, shot in a large hall, made for an action Game, almost too extreme for a normal weapon",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx-comfyui",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_shotgun",
+        "target_path": "public/assets/sounds/shotgun.ogg",
+        "asset_path": "./assets/sounds/shotgun.ogg",
+        "filename": "shotgun.ogg",
+        "volume": 0.06,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "2da85c90e9ea5875f5985bc2a29bb385ad8a00c6197d28ebce5a36442a517d9a",
+        "file_error": null,
+        "shared_keys": [
+          "shot_shotgun"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 76,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_shotgun\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-ballistic.json",
+            "line": 321,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_shotgun\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_spore": {
+      "name": "Sporenwaffe – Schuss",
+      "category": "weapon",
+      "intent": "A single organic spore projectile launch, damp pressurized pop, papery fungal crackle and short soft air release.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one spore-weapon launch: sharp wet pop, dense organic body, papery crackle, and a forceful short air release.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_spore",
+        "target_path": "public/assets/sounds/spore.ogg",
+        "asset_path": "./assets/sounds/spore.ogg",
+        "filename": "spore.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "e0cd06cc03edd3845a6fc27a00d27f9b1121c5d0050aff27b9b9afa84d47e609",
+        "file_error": null,
+        "shared_keys": [
+          "shot_spore"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/weapons-spores.json",
+            "line": 53,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_spore\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-spores.json",
+            "line": 107,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_spore\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-spores.json",
+            "line": 161,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_spore\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-spores.json",
+            "line": 215,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_spore\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_throw": {
+      "name": "Wurf",
+      "category": "weapon",
+      "intent": "A single quick hand-thrown object swoosh, compact cloth movement and a crisp release through the air.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one thrown-projectile release: crisp hand snap, taut air slice, compact motion body, and a short directional whoosh.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/throw.ogg",
+            "usages": [
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 34,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 115,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 192,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 59,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 204,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 370,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 39,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 56,
+                "kind": "unknown",
+                "excerpt": "case 'brood_hatch': return { key: 'shot_throw', scale: 1 };"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "shot_throw"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "shot_throw",
+        "target_path": "public/assets/sounds/throw.ogg",
+        "asset_path": "./assets/sounds/throw.ogg",
+        "filename": "throw.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "b078e97e1f9d4c301fd81e23fdde2d21837bd2e29473903b247e285a15d54554",
+        "file_error": null,
+        "shared_keys": [
+          "shot_throw"
+        ],
+        "usages": [
+          {
+            "path": "src/loadout/content/data/utilities-grenades.json",
+            "line": 34,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_throw\","
+          },
+          {
+            "path": "src/loadout/content/data/utilities-grenades.json",
+            "line": 115,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_throw\","
+          },
+          {
+            "path": "src/loadout/content/data/utilities-grenades.json",
+            "line": 192,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_throw\","
+          },
+          {
+            "path": "src/loadout/content/data/utilities-tactical.json",
+            "line": 59,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_throw\","
+          },
+          {
+            "path": "src/loadout/content/data/utilities-tactical.json",
+            "line": 204,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_throw\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-rockets.json",
+            "line": 370,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_throw\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-support.json",
+            "line": 39,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_throw\","
+          },
+          {
+            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "line": 56,
+            "kind": "unknown",
+            "excerpt": "case 'brood_hatch': return { key: 'shot_throw', scale: 1 };"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "shot_zeus": {
+      "name": "Zeus – Schuss",
+      "category": "weapon",
+      "intent": "A single powerful electric weapon discharge, immediate lightning snap, short dense crackling burst and tight low-end impact.",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one Zeus electric shot: violent lightning crack, dense high-voltage body, sharp bright edge, and a tight low impact tail.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "small-sfx",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "weapon_shot",
+        "overrides": {}
+      },
+      "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "shot_zeus",
+        "target_path": "public/assets/sounds/zeus.ogg",
+        "asset_path": "./assets/sounds/zeus.ogg",
+        "filename": "zeus.ogg",
+        "volume": 0.5,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "dd88f204bc8e0ef238cc132940f3b2886ab40be946eadc2a4910bb9e15ca7524",
+        "file_error": null,
+        "shared_keys": [
+          "shot_zeus"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/EffectSystem.ts",
+            "line": 204,
+            "kind": "oneshot",
+            "excerpt": "this.audioSystem?.playSound('shot_zeus', ball.x, ball.y, ball.playerId);"
+          },
+          {
+            "path": "src/loadout/content/data/utilities-tactical.json",
+            "line": 259,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_zeus\","
+          },
+          {
+            "path": "src/loadout/content/data/weapons-melee-bites.json",
+            "line": 213,
+            "kind": "oneshot",
+            "excerpt": "\"successKey\": \"shot_zeus\","
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    }
+  }
+}

@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fragdachse Audio Studio</title><link rel="stylesheet" href="/static/studio.css"><script type="module" src="/static/studio.js"></script></head>
+<body>
+  <header><div><span class="eyebrow">FRAGDACHSE · LOKALE PRODUKTION</span><h1>Audio Studio <span>SFX</span></h1></div><div class="toolbar"><button id="sync">Spielkatalog aktualisieren</button><button id="doctor">Modellstatus</button><button id="unload">Modell entladen</button><button id="cleanup">Bereinigen</button></div></header>
+  <div id="global-feedback" class="feedback" role="status" aria-live="polite"></div>
+  <div id="message" class="toast" role="status" aria-live="polite" hidden><span id="message-text"></span><button id="dismiss-message" aria-label="Statusmeldung schließen">×</button></div>
+  <main><aside><label for="search">Sounds suchen</label><input id="search" type="search" placeholder="Name, Key oder Bedarf"><label for="category">Kategorie</label><select id="category"><option value="">Alle Kategorien</option></select><div id="inventory-count"></div><nav id="inventory" aria-label="Soundkatalog"></nav></aside><section id="detail"><p>Spielkatalog wird geladen …</p></section></main>
+  <footer><button id="activity" class="activity">Keine laufende Generierung</button><span id="basket-count">Keine Exporte ausgewählt</span><button id="review" class="primary" disabled>Übernahme prüfen</button></footer>
+  <dialog id="dialog"><div id="dialog-content"></div><button id="close-dialog">Schließen</button></dialog>
+</body></html>

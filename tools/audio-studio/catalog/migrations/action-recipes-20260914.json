@@ -1,0 +1,1058 @@
+{
+    "schema_version":  1,
+    "migration_id":  "action-recipes-2026-09-14",
+    "reason":  "Author revision for harder, punchier action-game SFX: every catalog prompt is replaced with a source/action/production description and every preset duration is rounded up to a whole second. Existing author fields, model choices, notes, provenance, and copy notices remain unchanged.",
+    "prompt_guidance":  "Applied Stability AI Stable Audio 3 guidance: identify the source, triggered action and production/recording character; use TrackType: SFX for isolated effects.",
+    "entries":  [
+                    {
+                        "key":  "sfx_adrenaline_active",
+                        "previous_prompt":  {
+                                                "text":  "A steady restrained adrenaline energy texture, low airy rushing pulse and fine organic tremor, consistent level without a dramatic start or stop. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable game texture: close adrenaline power rush, rapid low pulse, fine vibrating grit, and constant aggressive momentum, clean isolated mix with no climax or final hit.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_airstrike_countdown",
+                        "previous_prompt":  {
+                                                "text":  "A single concise tactical warning cue, clear electronic pulse with a short tense rising accent. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one tactical warning stinger: hard electronic pulse transient, tight rising tension, compact metallic body, and clear dry finish at a distance, no speech.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_airstrike_explosion",
+                        "previous_prompt":  {
+                                                "text":  "A single aerial bomb impact explosion, heavy direct blast, sharp debris crackle and controlled rumbling decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  3,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one aerial bomb impact: violent crack transient, dense low blast body, sharp debris spray, and a controlled rolling tail, dry isolated game sound.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  3
+                    },
+                    {
+                        "key":  "sfx_bfg_charge",
+                        "previous_prompt":  {
+                                                "text":  "A steady powerful energy cannon charging texture, dense low electrical hum and tense fine crackle, sustained consistent intensity without a final discharge. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable BFG charge: heavy reactor hum, pressure-building low pulse, focused electrical fizz, and locked constant intensity with no discharge or end hit.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_bfg_fly",
+                        "previous_prompt":  {
+                                                "text":  "A steady massive plasma projectile flight texture, deep airy energy rush with fine electrical crackle, stable intensity. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable plasma projectile flight: hard low whoosh body, needle-bright electrical grit, close forward motion, and steady intensity with no impact.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_bfg_laser",
+                        "previous_prompt":  {
+                                                "text":  "A single compact high-energy laser strike, focused bright electrical snap and brief resonant sizzling decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one focused laser strike: razor-bright snap transient, dense energy body, short sizzling tail, and clean close-mic separation.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_burrowed",
+                        "previous_prompt":  {
+                                                "text":  "A continuous close muffled digging texture through soil, fine crumbling grit, soft earth scraping and steady low rumble. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable badger tunneling: packed-soil scrape, gritty paw impacts, muffled low churn, and steady movement with no start or stop.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_countdown_1",
+                        "previous_prompt":  {
+                                                "text":  "A single dry high electronic countdown pulse, clear immediate start and compact decay, no spoken number. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one high-register countdown tick: bright digital strike, hard crisp transient, short dry body, immediate decay, no spoken number.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_countdown_2",
+                        "previous_prompt":  {
+                                                "text":  "A single dry medium electronic countdown pulse, clear immediate start and compact decay, no spoken number. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one mid-register countdown tick: punchy digital knock, clear transient, compact neutral body, short dry decay, no spoken number.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_countdown_3",
+                        "previous_prompt":  {
+                                                "text":  "A single dry low electronic countdown pulse, clear immediate start and compact decay, no spoken number. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one low-register countdown tick: firm electronic thump, strong readable transient, compact low body, short dry decay, no spoken number.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_countdown_go",
+                        "previous_prompt":  {
+                                                "text":  "A single bright decisive round-start cue, crisp upward electronic accent and short positive resonant finish, no speech. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one round-start stinger: crisp upward synth punch, bright attack, compact victorious body, and brief clean tail, no speech.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_ctb_score",
+                        "previous_prompt":  {
+                                                "text":  "A single clear positive score cue, bright compact percussive chime and short satisfying resonant tail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one score confirmation: bright percussive hit, sharp attack, compact metallic body, and a short rewarding chime tail, dry and clear.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_dash",
+                        "previous_prompt":  {
+                                                "text":  "A single very quick forceful dash swoosh, sharp airy onset, compact body movement and short clean tail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one player dash: hard air-slice onset, tight rushing body, brief directional tail, and clean close game-SFX separation.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_decoy_reveal",
+                        "previous_prompt":  {
+                                                "text":  "A single decoy revelation cue, short brittle pop, loose mechanical rattle and playful but clear airy deflation. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one decoy reveal: brittle snap transient, quick wood-and-plastic rattle, sucked-air pop, and a short playful tail, no voice.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_double_damage_active",
+                        "previous_prompt":  {
+                                                "text":  "A steady restrained dangerous power texture, dense low electric hum with subtle abrasive energy, stable sustained intensity. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable dangerous overcharge: pulsing low distortion, hard electrical grit, dense power body, and locked intensity with no discharge.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_environment_hit",
+                        "previous_prompt":  {
+                                                "text":  "A single compact projectile impact on a hard earthy surface, sharp dry tick, small gritty debris and very short decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one projectile impact on packed earth and stone: crisp dry crack, compact gritty body, tiny debris ticks, very short tail, spatially clear.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_explosion_armageddon",
+                        "previous_prompt":  {
+                                                "text":  "A single massive meteor impact, fierce initial crack, deep grounded explosion and crumbling rock tail, controlled rumble. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one meteor strike: brutal crack transient, huge grounded low blast body, rock fragments, and a controlled rolling tail, cinematic but bounded.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_explosion_asmd_secondary",
+                        "previous_prompt":  {
+                                                "text":  "A single bursting energy orb, sharp electric rupture, expanding plasma crackle and a soft short charged decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  3,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one plasma orb burst: electric rupture transient, dense expanding energy body, sizzling particulate tail, and compact game-ready decay.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  3
+                    },
+                    {
+                        "key":  "sfx_explosion_he",
+                        "previous_prompt":  {
+                                                "text":  "A single close high-explosive grenade detonation, immediate dense blast, short gritty debris and controlled low-frequency decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  3,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one close HE grenade detonation: sharp ignition crack, dense explosive body, gritty fragments, and a contained low thump tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  3
+                    },
+                    {
+                        "key":  "sfx_explosion_holy",
+                        "previous_prompt":  {
+                                                "text":  "A single radiant magical explosion, powerful bright impact, crystalline shimmer and rich but controlled fading resonance. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  3,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one radiant magic explosion: hard power crack, solid impact body, glassy crystal sparks, and a short luminous tail, no choir or speech.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  3
+                    },
+                    {
+                        "key":  "sfx_explosion_mini_rocket",
+                        "previous_prompt":  {
+                                                "text":  "A single compact miniature rocket explosion, quick punchy blast, light granular debris and short tight decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  3,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one small rocket impact: punchy crack, compact blast body, bright metal grit, and a short tight tail with clear separation.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  3
+                    },
+                    {
+                        "key":  "sfx_explosion_rocket",
+                        "previous_prompt":  {
+                                                "text":  "A single rocket impact explosion, hard impact crack, broad explosive body and a short gritty rolling debris tail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  3,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one full rocket impact: hard crack transient, broad heavy blast body, debris rush, and a short rolling tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  3
+                    },
+                    {
+                        "key":  "sfx_explosion_smoke",
+                        "previous_prompt":  {
+                                                "text":  "A single smoke grenade deployment, small ignition pop followed by a soft pressurized smoke hiss that gently settles. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  3,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one smoke-grenade deployment: hard cap pop, pressurized hiss burst, small mechanical body, and a brief clean settle with no prolonged ambience.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  3
+                    },
+                    {
+                        "key":  "sfx_gauss_charge",
+                        "previous_prompt":  {
+                                                "text":  "A steady electromagnetic weapon charging texture, thin focused metallic hum and tense high-frequency electrical buzz, stable intensity without firing. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable railgun charge: taut metallic hum, pulsing magnetic pressure, sharp electrical grain, and constant locked tension with no shot.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_hit_feedback",
+                        "previous_prompt":  {
+                                                "text":  "A single extremely short dry hit confirmation tick, crisp neutral click with a little compact weight, distinct without harsh piercing frequencies. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one ultra-short damage confirmation: razor-dry tick, firm compact body, neutral pitch, immediate clean stop, and strong mix readability.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_honey_badger_rage",
+                        "previous_prompt":  {
+                                                "text":  "A single short ferocious badger snarl with forceful breath and coarse animal growl, compact aggressive game cue, no human voice. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one badger rage burst: forceful snarl, rough breath attack, dense animal body, abrupt short release, no human speech.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_nuke_countdown",
+                        "previous_prompt":  {
+                                                "text":  "A single clear urgent electronic warning cue, sharply defined pulse with a tense compact metallic resonance. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one catastrophic warning pulse: hard low electronic hit, metallic alarm ring, urgent compact rise, clear spatial focus, no speech.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_nuke_explosion",
+                        "previous_prompt":  {
+                                                "text":  "A single enormous explosive detonation, decisive initial crack, deep expanding blast and long controlled rolling low-frequency tail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  5,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one nuclear detonation: colossal crack transient, massive low blast body, tearing debris, and a controlled rolling tail with bounded duration.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  5
+                    },
+                    {
+                        "key":  "sfx_options_preview",
+                        "previous_prompt":  {
+                                                "text":  "A single bright decisive round-start cue, crisp upward electronic accent and short positive resonant finish, no speech. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one bright options-preview ping: crisp synth strike, clean upbeat body, short resonant tail, dry UI separation, no speech.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_pickup_armor",
+                        "previous_prompt":  {
+                                                "text":  "A single armor pickup cue, solid compact metallic clink with a brief positive electronic accent. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one armor pickup: hard metal-clink transient, dense steel body, short bright confirmation tail, dry and readable in combat.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_pickup_hp",
+                        "previous_prompt":  {
+                                                "text":  "A single positive health pickup cue, warm short rounded pulse with a small clean bright shimmer. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one health pickup: warm solid pulse, clean rounded body, bright short sparkle, and a distinct clear UI finish.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_pickup_powerup",
+                        "previous_prompt":  {
+                                                "text":  "A single clear power-up pickup cue, crisp bright energy chime with a short rising shimmer and clean ending. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one power-up pickup: sharp ascending energy hit, compact punch, bright shimmering tail, and a clean decisive ending.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_place_dachstunnel",
+                        "previous_prompt":  {
+                                                "text":  "A single rapid burrow entrance opening, earthy crumbling thud with loose grit and short soil scrape. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one burrow-entrance placement: earthy thud attack, gritty crumbling body, tight soil scrape, and a short dust tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_place_decoy",
+                        "previous_prompt":  {
+                                                "text":  "A single lightweight decoy deployment, compact wooden mechanical clack and soft fabric settling. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one decoy deployment: hard wooden click, compact mechanism body, fabric snap, and a short settling tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_place_fliegenpilz",
+                        "previous_prompt":  {
+                                                "text":  "A single oversized mushroom placement, soft earthy thump, papery fungal rustle and subtle organic spring. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one oversized mushroom placement: damp earthy thump, elastic stalk knock, papery cap rustle, and a short organic tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_place_rock",
+                        "previous_prompt":  {
+                                                "text":  "A single heavy stone placement, solid low rock thud with a little gritty scraping and falling dust. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one heavy rock placement: solid low stone thump, sharp ground contact, gritty scrape, dust ticks, and tight decay.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_player_death",
+                        "previous_prompt":  {
+                                                "text":  "A single short badger collapse, brief coarse animal exhale and grounded soft body thud, no speech or prolonged scream. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one badger collapse: abrupt breath hit, grounded body thud, coarse fur rustle, and a short heavy tail, no prolonged vocal.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_player_hit",
+                        "previous_prompt":  {
+                                                "text":  "A single brief badger pain grunt and compact bodily impact, coarse short animal breath, no human speech. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one badger hit reaction: sharp pain-bark attack, compact body impact, rough breath burst, and a brief clear release, no speech.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_player_move",
+                        "previous_prompt":  {
+                                                "text":  "A continuous close texture of quick light animal footsteps on compact earth, soft gritty paw impacts and faint cloth movement, consistent pace. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable fast badger footwork: crisp paw taps, compact earth grit, light body rustle, and constant forward pace with no start or stop.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_player_spawn",
+                        "previous_prompt":  {
+                                                "text":  "A single compact arrival cue, gentle airy pop followed by a short confident bright energy shimmer. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one player spawn: clean pressure pop, decisive bright energy strike, compact arrival body, and a short spatial shimmer.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_shield_activate",
+                        "previous_prompt":  {
+                                                "text":  "A single protective energy shield deployment, short smooth upward energy sweep resolving into a soft solid pulse. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one shield deployment: hard rising energy sweep, firm protective pulse, bright glassy snap, and a short controlled tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_shield_active",
+                        "previous_prompt":  {
+                                                "text":  "A steady protective energy shield hum, smooth low resonance with subtle bright surface shimmer, even texture without start or stop. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable shield field: dense low hum, tight electrical grain, subtle bright edge shimmer, and an even active bed with no start or end.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_tesla_activate",
+                        "previous_prompt":  {
+                                                "text":  "A single Tesla coil power-up cue, quick rising electrical buzz culminating in a compact high-voltage snap. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one Tesla activation: rapid voltage rise, sharp coil snap, dense electrical body, and a brief energized tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_tesla_active_targets",
+                        "previous_prompt":  {
+                                                "text":  "A steady active Tesla electricity texture, dense fine high-voltage crackle and stable low electrical buzz without distinct start or stop. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable Tesla field: rapid high-voltage crackle, tight low buzz bed, intermittent crisp sparks, and no start or stop.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_train_explode",
+                        "previous_prompt":  {
+                                                "text":  "A single heavy locomotive explosion, sharp structural metal rupture, powerful compact blast and tumbling metallic debris tail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  5,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one locomotive explosion: metal-tearing crack, heavy engine blast body, hard debris impacts, and a controlled rolling tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  5
+                    },
+                    {
+                        "key":  "sfx_train_move",
+                        "previous_prompt":  {
+                                                "text":  "A continuous small heavy train rolling texture, steady low mechanical rumble, regular rail clatter and subtle metal vibration at constant speed. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  8,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, seamless loopable train motion: low engine churn, regular rail strikes, metallic vibration, steady forward rhythm, no acceleration or end hit.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  8
+                    },
+                    {
+                        "key":  "sfx_translocator_teleport",
+                        "previous_prompt":  {
+                                                "text":  "A single compact teleportation effect, quick electric implosion, sharp spatial pop and short bright energy release. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one teleport: hard inward vacuum snap, spatial pop, dense electric release, and a crisp short tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "sfx_use_dachstunnel",
+                        "previous_prompt":  {
+                                                "text":  "A single quick movement through a dirt tunnel, close muffled earthy swoosh, short soil scrape and soft exit thump. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one tunnel traverse: tight dirt rush, muffled scrape body, forceful exit thump, and a compact directional tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_ak47",
+                        "previous_prompt":  {
+                                                "text":  "A single forceful assault rifle shot, hard metallic attack, gritty mechanical clack and short controlled low-end punch. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one AK rifle shot: hard muzzle crack, dense midrange body, sharp bolt clack, compact low punch, dry and clear.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_asmd_primary",
+                        "previous_prompt":  {
+                                                "text":  "A single-shot precise futuristic energy rifle discharge, sharp electric crack, compact glassy resonance and short decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "manual",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one futuristic energy-rifle shot: razor electric snap, hard glassy body, bright tight decay, and a clean decisive transient.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_asmd_secondary",
+                        "previous_prompt":  {
+                                                "text":  "A single unstable plasma orb launch, rounded electric thump, buzzing energy snap and brief airy tail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one plasma-orb launch: compressed electric thump, rounded dense body, buzzing crackle, and a short forward whoosh.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_awp",
+                        "previous_prompt":  {
+                                                "text":  "A single heavy sniper rifle shot, immediate dry explosive crack, solid low-end body and clear bolt-action detail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one heavy sniper shot: explosive dry crack, dense low body, sharp bolt kick, and a controlled short tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_bfg",
+                        "previous_prompt":  {
+                                                "text":  "A single massive science-fiction energy cannon launch, decisive electric impact, deep controlled pulse and short charged tail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one science-fiction cannon shot: huge electric crack, heavy low pulse body, pressurized energy burst, and a compact charged tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_bite",
+                        "previous_prompt":  {
+                                                "text":  "A single aggressive and punchy animal bite, tight jaw snap and short aggressive body, no vocalization. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "manual",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one badger bite attack: hard jaw snap, dense tooth click, short wet crunch, aggressive animal body, no vocalization.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_crossbow",
+                        "previous_prompt":  {
+                                                "text":  "A single compact crossbow release, crisp string snap, wooden mechanical click and short bolt whoosh. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one crossbow release: sharp string snap, wooden latch crack, compact bolt whoosh, and a tight tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_dry_trigger",
+                        "previous_prompt":  {
+                                                "text":  "A single dry empty firearm trigger click, crisp small mechanical snap with a short clean decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one empty firearm trigger: dry mechanical click, crisp spring snap, compact metal body, and an immediate stop.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_flame",
+                        "previous_prompt":  {
+                                                "text":  "A single brief flamethrower burst, immediate gas ignition pop and dense hot flame rush, one compact fire pulse. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one flamethrower burst: hard ignition pop, dense hot gas rush, forceful flame body, and an abrupt compact release.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_gauss",
+                        "previous_prompt":  {
+                                                "text":  "A single electromagnetic railgun shot, very sharp metallic electric crack, taut energy snap and tight low-end punch. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one railgun shot: brutal magnetic crack, hard metallic transient, dense energy body, tight low punch, and brief rail fizz.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_glock",
+                        "previous_prompt":  {
+                                                "text":  "A single compact semi-automatic pistol shot, immediate sharp dry crack, crisp slide action and controlled short body. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one compact pistol shot: sharp dry crack, compact mid body, crisp slide snap, and a controlled short tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_hallelujah",
+                        "previous_prompt":  {
+                                                "text":  "A single radiant fantasy weapon launch, bright bell-like attack, short shimmering magical burst, no choir or speech. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one radiant weapon discharge: hard bell-like attack, dense bright energy body, short sparkling release, no choir or speech.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_hydra",
+                        "previous_prompt":  {
+                                                "text":  "A single heavy multi-barrel weapon discharge, dense metallic attack with a layered compact punch and fast decay. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one multi-barrel blast: layered hard cracks, dense metallic body, compact recoil clatter, and a fast tight tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_minirocketlauncher",
+                        "previous_prompt":  {
+                                                "text":  "A single miniature rocket launch, compact ignition thump, sharp mechanical click and brief pressurized whoosh. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one miniature rocket launch: sharp ignition pop, compact pressure body, fast exhaust whoosh, and brief mechanical detail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_negev",
+                        "previous_prompt":  {
+                                                "text":  "A single belt-fed machine gun shot, weighty dry crack, rattling mechanical action and a tight punchy tail. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one belt-fed machine-gun shot: hard flat crack, dense metal body, feed-mechanism clatter, and a tight low punch.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_p90",
+                        "previous_prompt":  {
+                                                "text":  "A single compact submachine gun shot, sharp immediate attack, crisp mechanical action and punchy controlled low end. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one compact SMG shot: sharp transient, tight punchy body, crisp cyclic mechanism tick, and a short dry tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_plasma",
+                        "previous_prompt":  {
+                                                "text":  "A single small plasma weapon discharge, snappy electronic zap, bright charged crackle and rounded tight body. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one plasma shot: bright electric snap, compact charged body, gritty sizzling edge, and a rounded tight decay.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_rocketlauncher",
+                        "previous_prompt":  {
+                                                "text":  "A single heavy rocket launcher firing, abrupt bassy ignition thump followed by a short forceful exhaust rush. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one heavy rocket-launcher shot: hard ignition thump, dense pressure body, forceful exhaust rush, and a short clean tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_shotgun",
+                        "previous_prompt":  {
+                                                "text":  "A single shotgun blast, immediate broad dry crack, dense short body, crisp mechanical clack and restrained low end. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one shotgun blast: broad hard crack, heavy compact body, crisp action clack, and a restrained tight tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_spore",
+                        "previous_prompt":  {
+                                                "text":  "A single organic spore projectile launch, damp pressurized pop, papery fungal crackle and short soft air release. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one spore-weapon launch: sharp wet pop, dense organic body, papery crackle, and a forceful short air release.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_throw",
+                        "previous_prompt":  {
+                                                "text":  "A single quick hand-thrown object swoosh, compact cloth movement and a crisp release through the air. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one thrown-projectile release: crisp hand snap, taut air slice, compact motion body, and a short directional whoosh.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    },
+                    {
+                        "key":  "shot_zeus",
+                        "previous_prompt":  {
+                                                "text":  "A single powerful electric weapon discharge, immediate lightning snap, short dense crackling burst and tight low-end impact. Dry isolated game sound effect, no background ambience, no music, no spoken words.",
+                                                "source":  "astra",
+                                                "preserve_on_sync":  true
+                                            },
+                        "previous_duration_seconds":  2,
+                        "new_prompt":  {
+                                           "text":  "TrackType: SFX, one Zeus electric shot: violent lightning crack, dense high-voltage body, sharp bright edge, and a tight low impact tail.",
+                                           "source":  "astra",
+                                           "preserve_on_sync":  true
+                                       },
+                        "new_duration_seconds":  2
+                    }
+                ]
+}

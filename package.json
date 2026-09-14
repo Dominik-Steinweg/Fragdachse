@@ -17,7 +17,7 @@
     "dev": "vite",
     "dev:browser": "vite --host 127.0.0.1 --port 8090 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --pool=threads --exclude art/** --exclude tests/architecture/** --exclude tests/integration/** --exclude tests/assets/** --exclude tests/stress/** --exclude tests/balance-lab/**",
+    "test": "vitest run --pool=threads --exclude art/** --exclude tools/audio-studio/** --exclude tests/architecture/** --exclude tests/integration/** --exclude tests/assets/** --exclude tests/stress/** --exclude tests/balance-lab/**",
     "test:architecture": "vitest run --pool=threads --exclude art/** tests/architecture",
     "test:integration": "vitest run --pool=threads --exclude art/** tests/integration",
     "test:assets": "vitest run --pool=threads --exclude art/** tests/assets",

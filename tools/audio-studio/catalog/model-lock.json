@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://github.com/Stability-AI/stable-audio-3.git",
+    "ref": "main",
+    "resolved_commit": "779434a908193105335fd8d833418603625b2859",
+    "source_files": [
+      "stable_audio_3/model.py",
+      "stable_audio_3/model_configs.py",
+      "stable_audio_3/loading_utils.py"
+    ],
+    "api_verified_at": "2026-09-14"
+  },
+  "models": {
+    "medium": {
+      "repo_id": "stabilityai/stable-audio-3-medium",
+      "revision": "27b5a21b791b1b033d193a9e1e3ce78493f102f9",
+      "local_dir": "E:/Fragdachse-Audio/models/medium",
+      "files": {
+        "config": "model_config.json",
+        "checkpoint": "model.safetensors",
+        "config_sha256": "4f8846649df59167e1792d134acb6fc2bb7105227c5455300bad6cb107e20c88",
+        "checkpoint_sha256": "48d9c65e290e7bcd5194e0633bfc2424a59ee9683f5c2d58762d997b7d8ce0b5"
+      }
+    },
+    "small-sfx": {
+      "repo_id": "stabilityai/stable-audio-3-small-sfx",
+      "revision": "ae12755283df9d62ca39a9b050a39a0b607b8c20",
+      "local_dir": "E:/Fragdachse-Audio/models/small-sfx",
+      "files": {
+        "config": "model_config.json",
+        "checkpoint": "model.safetensors",
+        "config_sha256": "a8aa5d45ae3d6524d3cd4e85e0d6e7d8d401267e7c6f28214bca8aae7b77bdeb",
+        "checkpoint_sha256": "ed9cf1b6172f1a8c2921a9560c21109ff3239524563ced9dce6dcdef41e2f515"
+      }
+    }
+  },
+  "text_encoder": {
+    "repo_id": "google/t5gemma-b-b-ul2",
+    "revision": "97ea9b7e92738bb57437867277ae38e65345b8d7",
+    "local_dir": "E:/Fragdachse-Audio/models/text-encoder",
+    "snapshot_files": 18
+  },
+  "license": {
+    "name": "Stability AI Community License",
+    "url": "https://stability.ai/community-license-agreement",
+    "checkpoint_scope": "Stable Audio 3 medium and small-sfx checkpoints",
+    "acknowledged": true,
+    "acknowledged_at": "2026-09-14T11:20:50.027816+00:00",
+    "acknowledged_by": "domin"
+  }
+}

@@ -44,6 +44,8 @@ Thumbs.db
 coverage/
 public/build/
 tmp/
+.audio-workspace/
+tools/audio-studio/.audio-workspace/
 
 # Interne Notizen und ToDos
 ToDo/

@@ -1,0 +1,31 @@
+[project]
+name = "fragdachse-audio-studio"
+version = "0.1.0"
+description = "Local SFX catalog, production, review and constrained game publication"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "pydantic>=2.10,<3",
+  "numpy>=2.2.6,<3",
+  "soundfile==0.13.1",
+  "filelock>=3.16,<4",
+  "httpx>=0.28,<1",
+]
+
+[project.scripts]
+audio-studio = "audio_studio.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3,<10"]
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["audio_studio"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

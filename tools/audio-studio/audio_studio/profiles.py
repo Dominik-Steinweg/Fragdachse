@@ -1,0 +1,75 @@
+"""Authored defaults for the shared audio processor.
+
+The values are deliberately ordinary dictionaries.  The catalog and the local
+HTTP service can serialise them without importing an implementation type.
+"""
+
+PROFILE_VERSION = "1.0"
+
+PROFILES = {
+    "weapon_shot": {
+        "version": PROFILE_VERSION,
+        "description": "Immediate, compact one-shot with a protected attack.",
+        "pre_roll_ms": 3.0,
+        "fade_in_ms": 0.8,
+        "fade_out_ms": 12.0,
+        "tail_ms": 45.0,
+        "onset_relative": 0.035,
+        "onset_floor_db": -54.0,
+        "peak_db": -1.0,
+        "default_crossfade_ms": 18.0,
+        "auto_trim": True,
+    },
+    "impact": {
+        "version": PROFILE_VERSION,
+        "description": "Short impact with a modestly longer transient tail.",
+        "pre_roll_ms": 4.0,
+        "fade_in_ms": 0.8,
+        "fade_out_ms": 24.0,
+        "tail_ms": 85.0,
+        "onset_relative": 0.025,
+        "onset_floor_db": -54.0,
+        "peak_db": -1.0,
+        "default_crossfade_ms": 22.0,
+        "auto_trim": True,
+    },
+    "explosion": {
+        "version": PROFILE_VERSION,
+        "description": "Preserves the slower rise and generous tail of an explosion.",
+        "pre_roll_ms": 8.0,
+        "fade_in_ms": 1.0,
+        "fade_out_ms": 70.0,
+        "tail_ms": 180.0,
+        "onset_relative": 0.012,
+        "onset_floor_db": -58.0,
+        "peak_db": -1.0,
+        "default_crossfade_ms": 40.0,
+        "auto_trim": True,
+    },
+    "continuous_texture": {
+        "version": PROFILE_VERSION,
+        "description": "Stable loop texture; no one-shot edge fades are applied.",
+        "pre_roll_ms": 0.0,
+        "fade_in_ms": 0.0,
+        "fade_out_ms": 0.0,
+        "tail_ms": 0.0,
+        "onset_relative": 0.01,
+        "onset_floor_db": -60.0,
+        "peak_db": -1.0,
+        "default_crossfade_ms": 35.0,
+        "auto_trim": True,
+    },
+    "gentle": {
+        "version": PROFILE_VERSION,
+        "description": "Preserves a quiet prelude and gradual charge or swell.",
+        "pre_roll_ms": 10.0,
+        "fade_in_ms": 1.0,
+        "fade_out_ms": 35.0,
+        "tail_ms": 120.0,
+        "onset_relative": 0.006,
+        "onset_floor_db": -62.0,
+        "peak_db": -1.0,
+        "default_crossfade_ms": 45.0,
+        "auto_trim": False,
+    },
+}

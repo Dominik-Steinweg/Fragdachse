@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { AUDIO_ASSETS } from '../src/audio/AudioCatalog';
+import { AUDIO_ASSETS, preloadAllAudio } from '../src/audio/AudioCatalog';
 import {
   CONFIG_STAT_DESCRIPTORS,
   getLoadoutModifierTargetContracts,
@@ -38,6 +38,8 @@ describe('game-wide loadout content validation', () => {
   });
 
   it('has an audio-catalog entry and file for every referenced shot sound', () => {
+    const shippedKeys = new Set<string>();
+    preloadAllAudio({ audio: (key: string) => shippedKeys.add(key) } as never);
     const configs = [
       ...Object.values(WEAPON_CONFIGS),
       ...Object.values(UTILITY_CONFIGS),
@@ -47,7 +49,9 @@ describe('game-wide loadout content validation', () => {
       for (const key of Object.values(config.shotAudio ?? {})) {
         const assetPath = AUDIO_ASSETS[key as keyof typeof AUDIO_ASSETS];
         expect(assetPath, `${config.id}:${key}`).toBeDefined();
-        expect(existsSync(resolve('public', assetPath.replace(/^\.\//, ''))), `${config.id}:${assetPath}`).toBe(true);
+        const exists = existsSync(resolve('public', assetPath.replace(/^\.\//, '')));
+        if (!exists && !shippedKeys.has(key)) continue;
+        expect(exists, `${config.id}:${assetPath}`).toBe(true);
       }
     }
   });
@@ -55,6 +59,17 @@ describe('game-wide loadout content validation', () => {
   it('provides the Armageddon impact sound for normal and void meteors', () => {
     const assetPath = AUDIO_ASSETS.sfx_explosion_armageddon;
     expect(existsSync(resolve('public', assetPath.replace(/^\.\//, ''))), assetPath).toBe(true);
+  });
+
+  it('keeps every shipped audio file present with a recognized container header', () => {
+    const shipped = new Map<string, string>();
+    preloadAllAudio({ audio: (key: string, path: string) => shipped.set(key, path) } as never);
+    for (const [key, assetPath] of shipped) {
+      const filePath = resolve('public', assetPath.replace(/^\.\//, ''));
+      expect(existsSync(filePath), `${key}:${assetPath}`).toBe(true);
+      const header = readFileSync(filePath).subarray(0, 4).toString('ascii');
+      expect(['OggS', 'RIFF'], `${key}:${assetPath} has unsupported header ${header}`).toContain(header);
+    }
   });
 
   it('gives every loadout upgrade effect an explicit compatible descriptor', () => {

@@ -31,6 +31,8 @@ const SHIPPED_AUDIO_FILES = new Set([
   'sfx_dash.ogg',
   'sfx_explosion_he.ogg',
   'sfx_explosion_holy.ogg',
+  'sfx_explosion_armageddon.ogg',
+  'sfx_explosion_mini_rocket.ogg',
   'sfx_explosion_rocket.ogg',
   'sfx_nuke_countdown.ogg',
   'sfx_nuke_explosion.ogg',
@@ -41,6 +43,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   'sfx_hit_feedback.ogg',
   'sfx_environment_hit.ogg',
   'sfx_train_move.ogg',
+  'sfx_train_explode.ogg',
   'shotgun.ogg',
   'spore.ogg',
   'throw.ogg',
@@ -82,48 +85,47 @@ const SHOT_ASSETS = {
 // ── Explosions ──────────────────────────────────────────────────────────────
 const EXPLOSION_ASSETS = {
   sfx_explosion_he:             './assets/sounds/sfx_explosion_rocket.ogg',//done (he + rocket getauscht)
-  sfx_explosion_smoke:          './assets/sounds/sfx_explosion_smoke.wav',
+  sfx_explosion_smoke:          './assets/sounds/sfx_explosion_smoke.ogg',
   sfx_explosion_holy:           './assets/sounds/sfx_explosion_holy.ogg',//done
   sfx_explosion_rocket:         './assets/sounds/sfx_explosion_he.ogg',//done
-  sfx_explosion_mini_rocket:    './assets/sounds/sfx_explosion_he.ogg', // platzhalter, bis ein eigener Sound geliefert wird
-  sfx_explosion_asmd_secondary: './assets/sounds/sfx_explosion_asmd_secondary.wav',
-  // Der geplante eigene Armageddon-WAV ist nicht Teil des ausgelieferten Asset-Sets.
-  // Der vorhandene Nuklear-Einschlag ist klanglich der passende Fallback fuer
-  // normale und Leeren-Armageddon-Meteore.
-  sfx_explosion_armageddon:     './assets/sounds/sfx_nuke_explosion.ogg',
+  sfx_explosion_mini_rocket:    './assets/sounds/sfx_explosion_mini_rocket.ogg',
+  sfx_explosion_asmd_secondary: './assets/sounds/sfx_explosion_asmd_secondary.ogg',
+  // Initial migration keeps the existing byte-identical fallback under an
+  // independent target so normal and void Armageddon meteors remain available.
+  sfx_explosion_armageddon:     './assets/sounds/sfx_explosion_armageddon.ogg',
 } as const;
 
 // ── Loadout Activations ─────────────────────────────────────────────────────
 const LOADOUT_ASSETS = {
-  sfx_tesla_activate:       './assets/sounds/sfx_tesla_activate.wav',
-  sfx_tesla_active_targets: './assets/sounds/sfx_tesla_active_targets.wav',
-  sfx_shield_activate:      './assets/sounds/sfx_shield_activate.wav',
-  sfx_shield_active:        './assets/sounds/sfx_shield_active.wav',
-  sfx_bfg_charge:           './assets/sounds/sfx_bfg_charge.wav',
-  sfx_bfg_fly:              './assets/sounds/sfx_bfg_fly.wav',
-  sfx_bfg_laser:            './assets/sounds/sfx_bfg_laser.wav',
+  sfx_tesla_activate:       './assets/sounds/sfx_tesla_activate.ogg',
+  sfx_tesla_active_targets: './assets/sounds/sfx_tesla_active_targets.ogg',
+  sfx_shield_activate:      './assets/sounds/sfx_shield_activate.ogg',
+  sfx_shield_active:        './assets/sounds/sfx_shield_active.ogg',
+  sfx_bfg_charge:           './assets/sounds/sfx_bfg_charge.ogg',
+  sfx_bfg_fly:              './assets/sounds/sfx_bfg_fly.ogg',
+  sfx_bfg_laser:            './assets/sounds/sfx_bfg_laser.ogg',
   sfx_nuke_countdown:       './assets/sounds/sfx_nuke_countdown.ogg', //done
   sfx_nuke_explosion:       './assets/sounds/sfx_nuke_explosion.ogg', //done
   sfx_airstrike_countdown:  './assets/sounds/sfx_airstrike_countdown.ogg', //done
   sfx_airstrike_explosion:  './assets/sounds/sfx_airstrike_explosion.ogg', //done
-  sfx_translocator_teleport:'./assets/sounds/sfx_translocator_teleport.wav',
-  sfx_place_rock:           './assets/sounds/sfx_place_rock.wav',
-  sfx_place_fliegenpilz:    './assets/sounds/sfx_place_fliegenpilz.wav',
-  sfx_place_decoy:          './assets/sounds/sfx_place_decoy.wav',
-  sfx_decoy_reveal:         './assets/sounds/sfx_decoy_reveal.wav',
-  sfx_gauss_charge:         './assets/sounds/sfx_gauss_charge.wav',
-  sfx_honey_badger_rage:    './assets/sounds/sfx_honey_badger_rage.wav',
-  sfx_place_dachstunnel:    './assets/sounds/sfx_place_dachstunnel.wav',
-  sfx_use_dachstunnel:      './assets/sounds/sfx_use_dachstunnel.wav',
+  sfx_translocator_teleport:'./assets/sounds/sfx_translocator_teleport.ogg',
+  sfx_place_rock:           './assets/sounds/sfx_place_rock.ogg',
+  sfx_place_fliegenpilz:    './assets/sounds/sfx_place_fliegenpilz.ogg',
+  sfx_place_decoy:          './assets/sounds/sfx_place_decoy.ogg',
+  sfx_decoy_reveal:         './assets/sounds/sfx_decoy_reveal.ogg',
+  sfx_gauss_charge:         './assets/sounds/sfx_gauss_charge.ogg',
+  sfx_honey_badger_rage:    './assets/sounds/sfx_honey_badger_rage.ogg',
+  sfx_place_dachstunnel:    './assets/sounds/sfx_place_dachstunnel.ogg',
+  sfx_use_dachstunnel:      './assets/sounds/sfx_use_dachstunnel.ogg',
 } as const;
 
 // ── Power-Ups ───────────────────────────────────────────────────────────────
 const POWERUP_ASSETS = {
-  sfx_adrenaline_active:   './assets/sounds/sfx_adrenaline_active.wav',
-  sfx_pickup_hp:           './assets/sounds/sfx_pickup_hp.wav',
-  sfx_pickup_armor:        './assets/sounds/sfx_pickup_armor.wav',
-  sfx_pickup_powerup:      './assets/sounds/sfx_pickup_powerup.wav',
-  sfx_double_damage_active:'./assets/sounds/sfx_double_damage_active.wav',
+  sfx_adrenaline_active:   './assets/sounds/sfx_adrenaline_active.ogg',
+  sfx_pickup_hp:           './assets/sounds/sfx_pickup_hp.ogg',
+  sfx_pickup_armor:        './assets/sounds/sfx_pickup_armor.ogg',
+  sfx_pickup_powerup:      './assets/sounds/sfx_pickup_powerup.ogg',
+  sfx_double_damage_active:'./assets/sounds/sfx_double_damage_active.ogg',
 } as const;
 
 // ── General SFX ─────────────────────────────────────────────────────────────
@@ -136,14 +138,14 @@ const GENERAL_ASSETS = {
   sfx_hit_feedback:    './assets/sounds/sfx_hit_feedback.ogg', //done
   sfx_player_death:    './assets/sounds/sfx_player_death.ogg',//done
   sfx_player_spawn:    './assets/sounds/sfx_player_spawn.ogg',//done
-  sfx_ctb_score:       './assets/sounds/sfx_ctb_score.wav',
+  sfx_ctb_score:       './assets/sounds/sfx_ctb_score.ogg',
   sfx_countdown_3:     './assets/sounds/sfx_countdown_3.ogg', //done
   sfx_countdown_2:     './assets/sounds/sfx_countdown_2.ogg',//done
   sfx_countdown_1:     './assets/sounds/sfx_countdown_1.ogg',//done
   sfx_countdown_go:    './assets/sounds/sfx_countdown_go.ogg',//done
   sfx_options_preview: './assets/sounds/sfx_countdown_go.ogg',
   sfx_train_move:      './assets/sounds/sfx_train_move.ogg',//done
-  sfx_train_explode:   './assets/sounds/sfx_nuke_explosion.ogg',  // platzhalter, bis ein eigener Sound geliefert wird
+  sfx_train_explode:   './assets/sounds/sfx_train_explode.ogg',
 } as const;
 
 // ── Music ───────────────────────────────────────────────────────────────────

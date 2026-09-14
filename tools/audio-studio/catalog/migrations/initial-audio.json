@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "migration_id": "initial-audio-fallback-copies-2026-09-14",
+  "reason": "Give the three existing fallback events independent OGG targets while preserving their bytes and runtime volume/key contracts.",
+  "copies": [
+    {
+      "id": "copy-sfx-explosion-mini-rocket-2026-09-14",
+      "source_keys": ["sfx_explosion_rocket"],
+      "source_path": "public/assets/sounds/sfx_explosion_he.ogg",
+      "target_key": "sfx_explosion_mini_rocket",
+      "target_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+      "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+      "reason": "Replace the temporary mini-rocket fallback with an independent byte-identical target."
+    },
+    {
+      "id": "copy-sfx-train-explode-2026-09-14",
+      "source_keys": ["sfx_nuke_explosion"],
+      "source_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+      "target_key": "sfx_train_explode",
+      "target_path": "public/assets/sounds/sfx_train_explode.ogg",
+      "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+      "reason": "Replace the temporary train explosion fallback with an independent byte-identical target."
+    },
+    {
+      "id": "copy-sfx-explosion-armageddon-2026-09-14",
+      "source_keys": ["sfx_nuke_explosion"],
+      "source_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+      "target_key": "sfx_explosion_armageddon",
+      "target_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
+      "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+      "reason": "Replace the temporary Armageddon fallback with an independent byte-identical target."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+.venv/
+.cache/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+models/*
+.models/
+.model-runtime/
+.audio-workspace/
+*.log
+.studio.lock
+.server.lock

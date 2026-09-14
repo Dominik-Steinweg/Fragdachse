@@ -1,0 +1,19 @@
+{
+  "name": "fragdachse-audio-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local SFX production tools for Fragdachse",
+  "scripts": {
+    "start": "uv run --inexact audio-studio serve",
+    "catalog": "uv run --inexact audio-studio sync",
+    "doctor": "uv run --inexact audio-studio doctor",
+    "test": "npm run test:adapter && npm run test:frontend && npm run test:python",
+    "test:frontend": "node --test frontend/*.test.mjs",
+    "test:adapter": "node --test adapter/*.test.mjs",
+    "test:python": "uv run --inexact pytest"
+  },
+  "dependencies": {
+    "typescript": "5.6.3"
+  }
+}
