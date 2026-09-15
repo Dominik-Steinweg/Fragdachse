@@ -4748,7 +4748,7 @@
         "target_path": "public/assets/sounds/crossbow.ogg",
         "asset_path": "./assets/sounds/crossbow.ogg",
         "filename": "crossbow.ogg",
-        "volume": 0.1,
+        "volume": 0.4,
         "shipped": true,
         "exists": true,
         "file_hash": "54bcbee17d1cc09d8330dddfa95edcfb1571544d80e65ea312b2fce54178e9cf",
@@ -4776,13 +4776,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one empty firearm trigger: dry mechanical click, crisp spring snap, compact metal body, and an immediate stop.",
-        "source": "astra",
+        "text": "TrackType: SFX, one empty firearm trigger: dry mechanical single click, short and clean",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
-        "duration_seconds": 2,
+        "model": "medium",
+        "duration_seconds": 1,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -5113,7 +5113,7 @@
         "volume": 0.3,
         "shipped": true,
         "exists": true,
-        "file_hash": "cd6e003d994658011cb8d6fe4be6c462d80a7c3fd1f2b49ce495a1ba03cfc572",
+        "file_hash": "5fb1975fc7735c1bcb20b415219984d7158b39b95524e25b1d092c3ad00c80a8",
         "file_error": null,
         "shared_keys": [
           "shot_dry_trigger"
@@ -5505,13 +5505,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one railgun shot: brutal magnetic Weapon Sound, hard metallic transient, dense and brutal energy body with tight low punch.",
+        "text": "TrackType: SFX, one railgun shot: brutal magnetic sci-Fi Energy Weapon Sound, hard metallic transient, dense and brutal energy body with tight low punch.  Sounds more aggressive than a normal weapon, epic and cinematic, made for an intense action game",
         "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
-        "duration_seconds": 2,
+        "model": "medium",
+        "duration_seconds": 5,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -5535,7 +5535,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "bcd6e2e9cdd8f4d119b4bbb742861149522b39e859f2a4517b4c9efd90a0cd5e",
+        "file_hash": "b40a635fb8365195067a51ca33fecbd837415095f9aa97285e37fc8ce702fadd",
         "file_error": null,
         "shared_keys": [
           "shot_gauss"
