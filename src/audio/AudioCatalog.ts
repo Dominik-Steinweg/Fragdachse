@@ -50,6 +50,11 @@ const SHIPPED_AUDIO_FILES = new Set([
   'zeus.mp3',
   'zeus.ogg',
   "music_arena.ogg",
+  "sfx_menu_hover.ogg",
+  "sfx_menu_activate.ogg",
+  "sfx_pickup_adrenaline_essence.ogg",
+  "sfx_checkpoint_activate.ogg",
+  "sfx_objective_complete.ogg",
 ]);
 
 function isShippedAudioAsset(assetPath: string): boolean {
@@ -263,7 +268,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_use_dachstunnel:       0.5,
 
   // Power-Ups
-  sfx_pickup_adrenaline_essence: 0.5,
+  sfx_pickup_adrenaline_essence: 0.35,
   sfx_pickup_rage: 0.5,
   sfx_pickup_adrenaline: 0.5,
   sfx_pickup_double_damage: 0.5,
@@ -278,8 +283,8 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
 
   // General SFX
   sfx_enemy_death: 0.5,
-  sfx_menu_hover: 0.5,
-  sfx_menu_activate: 0.5,
+  sfx_menu_hover: 0.1,
+  sfx_menu_activate: 0.3,
   sfx_round_victory: 0.5,
   sfx_round_defeat: 0.5,
   sfx_wave_start: 0.5,

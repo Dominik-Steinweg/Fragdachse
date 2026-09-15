@@ -1562,7 +1562,7 @@
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 1,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -5700,13 +5700,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX. A single sturdy checkpoint activation cue, solid latch click and brief stable electronic beacon chirp, reassuring and compact. Isolated sound, no music, speech, ambience or repeated sequence.",
-        "source": "astra",
+        "text": "TrackType: SFX. constant, subtle and pleasant electronic confirmation sound for an action video game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -5728,9 +5728,9 @@
         "asset_path": "./assets/sounds/sfx_checkpoint_activate.ogg",
         "filename": "sfx_checkpoint_activate.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "5e541fd1c7dc2a20bcd16f33d8d8b87fbc3a956c3a78bafc9f329dd41ea2b2f8",
         "file_error": null,
         "shared_keys": [
           "sfx_checkpoint_activate"
@@ -6030,13 +6030,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX. A single tactile wooden button click with a crisp light metallic accent, immediate attack and clean short decay, subtle game interface confirmation. Isolated sound, no music, speech, ambience or repeated sequence.",
-        "source": "astra",
+        "text": "TrackType: SFX. Step on a dry branch. Isolated sound",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 1,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -6057,10 +6057,10 @@
         "target_path": "public/assets/sounds/sfx_menu_activate.ogg",
         "asset_path": "./assets/sounds/sfx_menu_activate.ogg",
         "filename": "sfx_menu_activate.ogg",
-        "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "volume": 0.3,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "8dc1e298aa2b32e099b38c47b54feb435b2c9067bcfb144abfc3ec63177b2726",
         "file_error": null,
         "shared_keys": [
           "sfx_menu_activate"
@@ -6091,13 +6091,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX. A single tiny soft wooden tick with a delicate airy edge, extremely short and restrained, clean menu hover feedback. Isolated sound, no music, speech, ambience or repeated sequence.",
-        "source": "astra",
+        "text": "TrackType: SFX. The rustling of leaves. Isolated sound",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 1,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -6118,10 +6118,10 @@
         "target_path": "public/assets/sounds/sfx_menu_hover.ogg",
         "asset_path": "./assets/sounds/sfx_menu_hover.ogg",
         "filename": "sfx_menu_hover.ogg",
-        "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "volume": 0.1,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "fd8256e0e0e3980eb84dc586fe979f7de834732ee7adaacdac58a597f1da8d1b",
         "file_error": null,
         "shared_keys": [
           "sfx_menu_hover"
@@ -6186,9 +6186,9 @@
         "asset_path": "./assets/sounds/sfx_objective_complete.ogg",
         "filename": "sfx_objective_complete.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "ebbcb9d946b5f431a10b53616716d5f497778bba7a5290c45d1c53e89edde751",
         "file_error": null,
         "shared_keys": [
           "sfx_objective_complete"
@@ -6280,14 +6280,14 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX. A single tiny liquid energy absorption pop, soft upward shimmer and rounded pulse, extremely compact and pleasant under rapid repeated pickups. Isolated sound, no music, speech, ambience or repeated sequence.",
-        "source": "astra",
+        "text": "TrackType: SFX. A single tiny liquid energy absorption slurping sound, e, extremely compact and pleasant under rapid repeated pickups. Isolated sound",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
-        "candidate_count": 4,
+        "duration_seconds": 1,
+        "candidate_count": 6,
         "steps": 8,
         "cfg_scale": 1.0
       },
@@ -6307,10 +6307,10 @@
         "target_path": "public/assets/sounds/sfx_pickup_adrenaline_essence.ogg",
         "asset_path": "./assets/sounds/sfx_pickup_adrenaline_essence.ogg",
         "filename": "sfx_pickup_adrenaline_essence.ogg",
-        "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "volume": 0.35,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "ca44b6c742ebd421a18e3faca9991b734d71a385931105d0f5b88f4a9fa0df29",
         "file_error": null,
         "shared_keys": [
           "sfx_pickup_adrenaline_essence"
