@@ -6,6 +6,10 @@ export default defineConfig(() => {
 
   return {
   base: './',
+  // Begrenzt nur den initialen Dev-Dependency-Scan; Lab-/Tool-URLs und Build bleiben unverändert.
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   server: {
     port: 8080,
   },

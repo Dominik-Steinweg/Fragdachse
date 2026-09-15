@@ -37,14 +37,21 @@ export function waterBlobDistance(mask: number, x: number, y: number): number {
 /** Static topology is shared by all chunks; neither mask generation nor waves own gameplay. */
 export class WaterSurfaceModel {
   readonly masks = new Map<string, number>();
-  constructor(private readonly cells: readonly WaterCell[]) {
+  constructor(private readonly cells: readonly WaterCell[], private readonly dimensions: { width: number; height: number }) {
     const occupied = new Set(cells.map(c => `${c.gridX},${c.gridY}`));
     for (const cell of cells) this.masks.set(`${cell.gridX},${cell.gridY}`,
-      AutoTiler.computeMask(cell.gridX, cell.gridY, (x, y) => occupied.has(`${x},${y}`)));
+      AutoTiler.computeMask(cell.gridX, cell.gridY, (x, y) =>
+        x < 0 || y < 0 || x * CELL_SIZE >= dimensions.width || y * CELL_SIZE >= dimensions.height
+        || occupied.has(`${x},${y}`)));
   }
 
   sample(x: number, y: number): number {
-    const gx = Math.floor(x / CELL_SIZE), gy = Math.floor(y / CELL_SIZE);
+    // Extend the boundary field into the bake halo so blur and shader displacement
+    // cannot introduce a shore at the map edge. Dry boundary cells stay dry.
+    x = Math.max(0, Math.min(x, this.dimensions.width));
+    y = Math.max(0, Math.min(y, this.dimensions.height));
+    const gx = Math.min(Math.floor(x / CELL_SIZE), Math.ceil(this.dimensions.width / CELL_SIZE) - 1);
+    const gy = Math.min(Math.floor(y / CELL_SIZE), Math.ceil(this.dimensions.height / CELL_SIZE) - 1);
     const mask = this.masks.get(`${gx},${gy}`);
     return mask === undefined ? -WATER_SHORE_DISTANCE : waterBlobDistance(mask, x - gx * CELL_SIZE, y - gy * CELL_SIZE);
   }

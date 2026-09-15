@@ -78,8 +78,8 @@ export function getTerrainTexturePhase(worldPosition: number, worldOffset: numbe
 
 /** The coarse ground-color lookup follows the same expanded coverage as presentation. */
 export function stampWaterSnapshot(data: Uint8Array, width: number, height: number, cells: readonly WaterCell[]): void {
-  const water = new WaterSurfaceModel(cells);
   const scale = TERRAIN_SNAPSHOT_SCALE, chunkSize = ARENA_RENDER_CHUNK_SIZE;
+  const water = new WaterSurfaceModel(cells, { width: width * scale, height: height * scale });
   for (const origin of water.getChunkOrigins(chunkSize, width * scale, height * scale)) {
     const mask = water.bake(origin.x, origin.y, chunkSize);
     const left = origin.x / scale, top = origin.y / scale;

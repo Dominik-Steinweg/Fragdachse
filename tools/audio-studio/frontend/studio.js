@@ -1,7 +1,7 @@
 import {drawWaveform, milliseconds, moveMarker, processingOverrides} from './waveform.js';
 import {jobProgress} from './progress.js';
 import {generationLabel, generationSettings} from './generation.js';
-import {isMusic, durationLimit, cutLimit, allowedModels, allowedProfiles, matchesCategory} from './production.js';
+import {isMusic, durationLimit, cutLimit, allowedModels, allowedProfiles, matchesCategory, isActiveCopy} from './production.js';
 
 const $ = id => document.getElementById(id);
 let state, key, chosen, waveform, resultWaveform, resultVersion, formRevision, formEntry;
@@ -76,7 +76,7 @@ function badges(entry) {
   if (!facts.exists) result.push(['Datei fehlt', 'warn']);
   if (!facts.shipped) result.push(['Nicht in Whitelist', 'warn']);
   if (!entry.prompt.text.trim()) result.push(['Prompt fehlt', 'warn']);
-  if (entry.copy_notice && !entry.copy_notice.hidden) result.push(['Kopie-Hinweis', 'warn']);
+  if (entry.copy_notice && !entry.copy_notice.hidden) result.push(isActiveCopy(entry) ? ['Sound-Kopie', 'warn'] : ['Kopie-Historie', '']);
   if (entry.needs_revision) result.push(['Überarbeitung', 'warn']);
   if (entry.orphaned || facts.conflicts?.length || facts.file_error) result.push(['Repository prüfen', 'error']);return result;
 }
@@ -117,7 +117,11 @@ function showSource(entry) {
   if (facts.shared_keys.length > 1) current.append(node('p', `Gemeinsame Datei für: ${facts.shared_keys.join(', ')}`, {className: 'notice'}));
   current.append(button('Game-Datei als Arbeitskopie bearbeiten', async () => { const run = await api(`/api/import/${key}`, {});await refresh();await chooseCandidate(run.id, run.candidates[0].id);showStep('process');return 'Arbeitskopie geladen. Schnitt und Ergebnis sind unter Schritt 3 bereit.'; }, '', 'Game-Datei wird importiert …'), feedback('source-feedback'));root.append(current);
   if (entry.copy_notice && !entry.copy_notice.hidden) {
-    const notice = card('Kopie-Hinweis');notice.append(node('p', `Ursprüngliche Kopie aus ${entry.copy_notice.source_path}. ${entry.copy_notice.reason}`), button('Hinweis dauerhaft ausblenden', async () => { await api(`/api/catalog/${key}/hide-notice`, {revision: state.revision});await refresh(true);return 'Kopie-Hinweis dauerhaft ausgeblendet.'; }));root.append(notice);
+    const notice = card(isActiveCopy(entry) ? 'Sound-Kopie · einzeln austauschbar' : 'Kopie-Historie');
+    notice.append(node('p', isActiveCopy(entry)
+      ? `Diese Datei ist noch die unveränderte Kopie aus ${entry.copy_notice.source_path}. Unter „Generieren“ ist der Prompt für den individuellen Ersatz vorbereitet. Eine Übernahme ersetzt nur diese Zieldatei.`
+      : `Ursprünglich kopiert aus ${entry.copy_notice.source_path}. Die aktuelle Datei entspricht nicht mehr dieser Kopie.`),
+      node('p', entry.copy_notice.reason), button('Hinweis dauerhaft ausblenden', async () => { await api(`/api/catalog/${key}/hide-notice`, {revision: state.revision});await refresh(true);return 'Kopie-Hinweis dauerhaft ausgeblendet.'; }));root.append(notice);
   }
   root.append(details('Verwendungen und Autorenhinweise', append(node('div'), json(facts.usages), node('p', entry.notes || 'Keine zusätzlichen Hinweise.'))));
   if (entry.suggested_changes.length) root.append(details(`${entry.suggested_changes.length} Änderungsvorschläge`, json(entry.suggested_changes)));
@@ -394,7 +398,7 @@ async function refresh(full = false) {
   }
   state = fresh;if (!key || !state.catalog.entries[key]) key = Object.keys(state.catalog.entries)[0];
   const categories = [...new Set(Object.values(state.catalog.entries).filter(entry => !isMusic(entry)).map(entry => entry.category))].sort(), category = $('category').value;
-  const options = [['', 'Alle Kategorien'], ['kind:music', 'Musik · Lobby & Arena'], ['kind:sfx', 'Alle SFX'], ...categories.map(item => [`category:${item}`, `SFX · ${item}`])];
+  const options = [['', 'Alle Kategorien'], ['status:copy', 'Noch verwendete Sound-Kopien'], ['kind:music', 'Musik · Lobby & Arena'], ['kind:sfx', 'Alle SFX'], ...categories.map(item => [`category:${item}`, `SFX · ${item}`])];
   $('category').replaceChildren(...options.map(([value, label]) => node('option', label, {value, selected: value === category})));
   showInventory();if (full) showDetail();else showCandidates();showJobs();
   if ($('recipe-conflict')) $('recipe-conflict').hidden = formRevision === state.revision;

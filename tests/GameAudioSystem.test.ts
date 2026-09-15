@@ -20,6 +20,22 @@ function fixture() {
 }
 
 describe('GameAudioSystem one-shot feedback', () => {
+  it('preserves the rocket overlap limiter after its sources get independent files', () => {
+    const { audio, available, sound, scene } = fixture();
+    available.add('sfx_explosion_rocket');
+    available.add('sfx_explosion_turret_rocket');
+    available.add('sfx_explosion_rocket_aftershock');
+    scene.time.now = 1000;
+    audio.playSound('sfx_explosion_rocket', 0, 0);
+    audio.playSound('sfx_explosion_turret_rocket', 0, 0);
+    audio.playSound('sfx_explosion_rocket_aftershock', 0, 0);
+    expect(sound.play).toHaveBeenCalledOnce();
+    scene.time.now += 1000;
+    audio.playSound('sfx_explosion_turret_rocket', 0, 0);
+    expect(sound.play.mock.lastCall![0]).toBe('sfx_explosion_turret_rocket');
+    audio.cleanup();
+  });
+
   it('plays exactly one explosion recording and replaces the substitute when the dedicated asset is available', () => {
     const { audio, available, sound } = fixture();
     available.add('sfx_explosion_armageddon');

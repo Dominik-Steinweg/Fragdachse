@@ -1156,7 +1156,17 @@
       },
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_asmd_secondary-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_asmd_secondary.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -1234,9 +1244,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_asmd_secondary.ogg",
         "filename": "sfx_explosion_asmd_secondary.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_asmd_secondary"
@@ -2099,6 +2109,42 @@
               "sfx_explosion_rocket"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_he.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 11,
+                "kind": "unknown",
+                "excerpt": "ROCKET_LAUNCHER: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 49,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_rocket_aftershock: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 56,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_turret_rocket: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 28,
+                "kind": "unknown",
+                "excerpt": "'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_rocket"
+            ]
+          }
         }
       ],
       "repository": {
@@ -2138,9 +2184,9 @@
           },
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 153,
+            "line": 28,
             "kind": "unknown",
-            "excerpt": "if (soundKey === 'sfx_explosion_rocket') {"
+            "excerpt": "'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',"
           }
         ],
         "playback": "unknown",
@@ -2312,6 +2358,24 @@
               "sfx_hit_feedback"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_hit_feedback.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 198,
+                "kind": "oneshot",
+                "excerpt": "this.playLocalSound('sfx_hit_feedback', getHitFeedbackVolumeScale(damage));"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_hit_feedback"
+            ]
+          }
         }
       ],
       "repository": {
@@ -2333,7 +2397,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 194,
+            "line": 198,
             "kind": "oneshot",
             "excerpt": "this.playLocalSound('sfx_hit_feedback', getHitFeedbackVolumeScale(damage));"
           }
@@ -3323,6 +3387,24 @@
               "sfx_player_hit"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_player_hit.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 224,
+                "kind": "oneshot",
+                "excerpt": "this.playSound('sfx_player_hit', emitterX, emitterY, undefined, getHitFeedbackVolumeScale(damage));"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_player_hit"
+            ]
+          }
         }
       ],
       "repository": {
@@ -3344,7 +3426,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 220,
+            "line": 224,
             "kind": "oneshot",
             "excerpt": "this.playSound('sfx_player_hit', emitterX, emitterY, undefined, getHitFeedbackVolumeScale(damage));"
           }
@@ -6941,6 +7023,36 @@
               "sfx_enemy_death"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_enemy_death.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 385,
+                "kind": "unknown",
+                "excerpt": ": key === 'sfx_enemy_death' ? 60"
+              },
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 16,
+                "kind": "unknown",
+                "excerpt": "...Object.values(PICKUP_AUDIO), 'sfx_player_death', 'sfx_enemy_death',"
+              },
+              {
+                "path": "src/combat/WorldCombatCore.ts",
+                "line": 4271,
+                "kind": "unknown",
+                "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_enemy_death"
+            ]
+          }
         }
       ],
       "repository": {
@@ -6962,7 +7074,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 381,
+            "line": 385,
             "kind": "unknown",
             "excerpt": ": key === 'sfx_enemy_death' ? 60"
           },
@@ -7296,6 +7408,36 @@
               "sfx_menu_hover"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_menu_hover.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 384,
+                "kind": "unknown",
+                "excerpt": "const windowMs = key === 'sfx_menu_hover' ? 80"
+              },
+              {
+                "path": "src/ui/UiAudio.ts",
+                "line": 4,
+                "kind": "unknown",
+                "excerpt": "playLocalSound(key: 'sfx_menu_hover' | 'sfx_menu_activate'): void;"
+              },
+              {
+                "path": "src/ui/UiAudio.ts",
+                "line": 16,
+                "kind": "oneshot",
+                "excerpt": "ports.get(scene)?.playLocalSound('sfx_menu_hover');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_menu_hover"
+            ]
+          }
         }
       ],
       "repository": {
@@ -7317,7 +7459,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 380,
+            "line": 384,
             "kind": "unknown",
             "excerpt": "const windowMs = key === 'sfx_menu_hover' ? 80"
           },
@@ -7541,6 +7683,30 @@
               "sfx_pickup_adrenaline_essence"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_pickup_adrenaline_essence.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 386,
+                "kind": "unknown",
+                "excerpt": ": key === 'sfx_pickup_adrenaline_essence' ? 110"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1239,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_pickup_adrenaline_essence');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_pickup_adrenaline_essence"
+            ]
+          }
         }
       ],
       "repository": {
@@ -7562,7 +7728,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 382,
+            "line": 386,
             "kind": "unknown",
             "excerpt": ": key === 'sfx_pickup_adrenaline_essence' ? 110"
           },
@@ -8246,14 +8412,14 @@
       "orphaned": false
     },
     "sfx_explosion_alien_plasma": {
-      "name": "sfx_explosion_alien_plasma",
-      "category": "event",
-      "intent": "",
+      "name": "Alien-Dachs – Plasmaexplosion",
+      "category": "explosion",
+      "intent": "A sharp agile alien plasma hit.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one small alien plasma burst: a fast cutting electric chirp and snap, punchy midrange energy rupture, a few bright sizzling fragments and a brief dry tail. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -8264,12 +8430,22 @@
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_alien_plasma-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_alien_plasma.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8299,9 +8475,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_alien_plasma.ogg",
         "filename": "sfx_explosion_alien_plasma.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_alien_plasma"
@@ -8320,30 +8496,40 @@
       "orphaned": false
     },
     "sfx_explosion_base_destruction": {
-      "name": "sfx_explosion_base_destruction",
-      "category": "event",
-      "intent": "",
+      "name": "Basis – Zerstörungsexplosion",
+      "category": "explosion",
+      "intent": "A heavy structural blast, recognizable as building destruction.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one heavy base structure exploding: a massive initial impact, thick explosive body, tearing metal supports and collapsing concrete, a short dense debris rumble. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_base_destruction-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_base_destruction.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8379,9 +8565,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_base_destruction.ogg",
         "filename": "sfx_explosion_base_destruction.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_base_destruction"
@@ -8406,14 +8592,14 @@
       "orphaned": false
     },
     "sfx_explosion_crossbow": {
-      "name": "sfx_explosion_crossbow",
-      "category": "event",
-      "intent": "",
+      "name": "Armbrust – Explosivbolzen",
+      "category": "explosion",
+      "intent": "A small sharp bolt detonation that stays readable among rapid hits.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one explosive crossbow bolt impact: a tight piercing snap, compact punchy blast, brittle wood and metal fragments, quick dry decay. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -8424,12 +8610,22 @@
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_crossbow-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_mini_rocket"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_crossbow.ogg",
+        "file_hash": "8eea7dec68529657691f12f9a2b4459fd5a12fcc812a32996acc44ab0f719b70",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_crossbow",
@@ -8439,10 +8635,10 @@
         "target_path": "public/assets/sounds/sfx_explosion_crossbow.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_crossbow.ogg",
         "filename": "sfx_explosion_crossbow.ogg",
-        "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "volume": 0.15,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "8eea7dec68529657691f12f9a2b4459fd5a12fcc812a32996acc44ab0f719b70",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_crossbow"
@@ -8461,14 +8657,14 @@
       "orphaned": false
     },
     "sfx_explosion_decoy": {
-      "name": "sfx_explosion_decoy",
-      "category": "event",
-      "intent": "",
+      "name": "Köder – Explosion",
+      "category": "explosion",
+      "intent": "A deceptive shell bursting into a compact explosion.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one explosive decoy shell bursting: a sharp hollow casing pop, compact low blast, brittle fragments and a tiny electronic disruption, quick dry ending. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -8479,12 +8675,22 @@
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_decoy-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_decoy.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8514,9 +8720,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_decoy.ogg",
         "filename": "sfx_explosion_decoy.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_decoy"
@@ -8535,14 +8741,14 @@
       "orphaned": false
     },
     "sfx_explosion_energy_injector": {
-      "name": "sfx_explosion_energy_injector",
-      "category": "event",
-      "intent": "",
+      "name": "Energie-Injektor – Einschlag",
+      "category": "explosion",
+      "intent": "A precise small energy discharge that does not imply a huge damaging blast.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one precise energy injector impact: a crisp electrical snap, small pressurized pulse, fine bright energy fizz and a quick clean decay, restrained low end. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -8553,12 +8759,22 @@
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_energy_injector-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_energy_injector.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8588,9 +8804,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_energy_injector.ogg",
         "filename": "sfx_explosion_energy_injector.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_energy_injector"
@@ -8609,30 +8825,40 @@
       "orphaned": false
     },
     "sfx_explosion_fireball": {
-      "name": "sfx_explosion_fireball",
-      "category": "event",
-      "intent": "",
+      "name": "Flammenwerfer – Feuerball",
+      "category": "explosion",
+      "intent": "A pressurized fireball bursting on impact.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one pressurized fireball impact: a sharp ignition pop opening into a thick roaring combustion burst, rushing flame and a brief granular ember tail. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_fireball-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_fireball.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8662,9 +8888,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_fireball.ogg",
         "filename": "sfx_explosion_fireball.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_fireball"
@@ -8683,30 +8909,40 @@
       "orphaned": false
     },
     "sfx_explosion_grave_titan_plasma": {
-      "name": "sfx_explosion_grave_titan_plasma",
-      "category": "event",
-      "intent": "",
+      "name": "Grabtitan – Void-Plasmaexplosion",
+      "category": "explosion",
+      "intent": "A weighty boss plasma detonation with deep alien character.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one massive alien plasma impact: a thunderous tearing energy crack, deep compressed pressure body, coarse electrical arcs and a short descending hollow rumble. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_grave_titan_plasma-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_grave_titan_plasma.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8736,9 +8972,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_grave_titan_plasma.ogg",
         "filename": "sfx_explosion_grave_titan_plasma.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_grave_titan_plasma"
@@ -8757,30 +8993,40 @@
       "orphaned": false
     },
     "sfx_explosion_gravity": {
-      "name": "sfx_explosion_gravity",
-      "category": "event",
-      "intent": "",
+      "name": "Gravitationsturm – Implosion",
+      "category": "explosion",
+      "intent": "An implosive gravity hit rather than a conventional blast.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one gravity projectile imploding: an immediate deep pressure snap, a tightly compressed inward rushing pull, bending low resonance and a short hollow collapse, no long buildup. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_gravity-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_gravity.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8810,9 +9056,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_gravity.ogg",
         "filename": "sfx_explosion_gravity.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_gravity"
@@ -8831,30 +9077,40 @@
       "orphaned": false
     },
     "sfx_explosion_inferno_rockets": {
-      "name": "sfx_explosion_inferno_rockets",
-      "category": "event",
-      "intent": "",
+      "name": "Inferno-Koloss – Void-Rakete",
+      "category": "explosion",
+      "intent": "A compact but menacing boss rocket blast.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one alien mini-rocket impact: a hard metallic crack, dense low blast, dark electric tearing and gritty shrapnel, short tail suitable for overlapping rocket impacts. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_inferno_rockets-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_mini_rocket"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_inferno_rockets.ogg",
+        "file_hash": "8eea7dec68529657691f12f9a2b4459fd5a12fcc812a32996acc44ab0f719b70",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8883,10 +9139,10 @@
         "target_path": "public/assets/sounds/sfx_explosion_inferno_rockets.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_inferno_rockets.ogg",
         "filename": "sfx_explosion_inferno_rockets.ogg",
-        "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "volume": 0.15,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "8eea7dec68529657691f12f9a2b4459fd5a12fcc812a32996acc44ab0f719b70",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_inferno_rockets"
@@ -8905,30 +9161,40 @@
       "orphaned": false
     },
     "sfx_explosion_kamikaze": {
-      "name": "sfx_explosion_kamikaze",
-      "category": "event",
-      "intent": "",
+      "name": "Kamikaze – Napalmexplosion",
+      "category": "explosion",
+      "intent": "A violent close incendiary detonation.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one close napalm detonation: an immediate heavy pressure slam, broad forceful fire whoomp, scattering burning material and a short rough combustion tail. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_kamikaze-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_kamikaze.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -8958,9 +9224,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_kamikaze.ogg",
         "filename": "sfx_explosion_kamikaze.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_kamikaze"
@@ -8979,30 +9245,40 @@
       "orphaned": false
     },
     "sfx_explosion_negev": {
-      "name": "sfx_explosion_negev",
-      "category": "event",
-      "intent": "",
+      "name": "Negev – Killstreak-Explosion",
+      "category": "explosion",
+      "intent": "A heavy reward detonation with hot metallic grit.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one heavy machine-gun killstreak detonation: an immediate brutal crack, dense low explosive punch, hot metallic fragments and a short smoky rolling decay. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_negev-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_negev.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_negev",
@@ -9013,9 +9289,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_negev.ogg",
         "filename": "sfx_explosion_negev.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_negev"
@@ -9034,14 +9310,14 @@
       "orphaned": false
     },
     "sfx_explosion_plasma_swarm": {
-      "name": "sfx_explosion_plasma_swarm",
-      "category": "event",
-      "intent": "",
+      "name": "Plasma – Schwarmexplosion",
+      "category": "explosion",
+      "intent": "A concentrated cluster of plasma particles rupturing as one event.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one compact plasma swarm detonation: a sharp electrical snap, dense fizzing pressure burst, fine energetic crackle and a tight fast decay. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -9052,12 +9328,22 @@
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_plasma_swarm-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_plasma_swarm.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9087,9 +9373,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_plasma_swarm.ogg",
         "filename": "sfx_explosion_plasma_swarm.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_plasma_swarm"
@@ -9108,30 +9394,40 @@
       "orphaned": false
     },
     "sfx_explosion_rock_collapse": {
-      "name": "sfx_explosion_rock_collapse",
-      "category": "event",
-      "intent": "",
+      "name": "Felsbarriere – Einsturzexplosion",
+      "category": "explosion",
+      "intent": "A stone barrier breaking outward with explosive force.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one stone barrier exploding outward: a hard rock fracture crack, deep stone impact, chunky boulders and gravel scattering, short dusty crumbling decay. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_rock_collapse-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_rock_collapse.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9161,9 +9457,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_rock_collapse.ogg",
         "filename": "sfx_explosion_rock_collapse.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_rock_collapse"
@@ -9182,14 +9478,14 @@
       "orphaned": false
     },
     "sfx_explosion_rocket_aftershock": {
-      "name": "sfx_explosion_rocket_aftershock",
-      "category": "event",
-      "intent": "",
+      "name": "Rakete – Nachbeben",
+      "category": "explosion",
+      "intent": "A smaller secondary ground explosion following a rocket hit.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one small secondary rocket ground burst: a tight dry crack, compact low punch, gravel scattering and a very short gritty decay, clearly smaller than the main rocket impact. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -9200,12 +9496,22 @@
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_rocket_aftershock-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_he.ogg",
+        "source_keys": [
+          "sfx_explosion_rocket"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_rocket_aftershock.ogg",
+        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9224,6 +9530,30 @@
               "sfx_explosion_rocket_aftershock"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_rocket_aftershock.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 19,
+                "kind": "unknown",
+                "excerpt": "'ROCKET_LAUNCHER.aftershock': 'sfx_explosion_rocket_aftershock',"
+              },
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 28,
+                "kind": "unknown",
+                "excerpt": "'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_rocket_aftershock"
+            ]
+          }
         }
       ],
       "repository": {
@@ -9235,9 +9565,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_rocket_aftershock.ogg",
         "filename": "sfx_explosion_rocket_aftershock.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_rocket_aftershock"
@@ -9248,6 +9578,12 @@
             "line": 19,
             "kind": "unknown",
             "excerpt": "'ROCKET_LAUNCHER.aftershock': 'sfx_explosion_rocket_aftershock',"
+          },
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 28,
+            "kind": "unknown",
+            "excerpt": "'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',"
           }
         ],
         "playback": "unknown",
@@ -9256,14 +9592,14 @@
       "orphaned": false
     },
     "sfx_explosion_shotgun_lightning": {
-      "name": "sfx_explosion_shotgun_lightning",
-      "category": "event",
-      "intent": "",
+      "name": "Schrotflinte – Blitzexplosion",
+      "category": "explosion",
+      "intent": "A close electrical discharge with the punch of a shotgun hit.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one compact lightning detonation at close range: an extremely sharp electric crack, punchy short thunder body, sizzling branching sparks and a tight dry decay, no rain. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -9274,12 +9610,22 @@
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_shotgun_lightning-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_shotgun_lightning.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9309,9 +9655,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_shotgun_lightning.ogg",
         "filename": "sfx_explosion_shotgun_lightning.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_shotgun_lightning"
@@ -9330,30 +9676,40 @@
       "orphaned": false
     },
     "sfx_explosion_time_bubble": {
-      "name": "sfx_explosion_time_bubble",
-      "category": "event",
-      "intent": "",
+      "name": "Zeitblase – Resonanzentladung",
+      "category": "explosion",
+      "intent": "Stored energy released through a collapsing time field.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one time field releasing stored energy: an immediate elastic pressure crack, compressed resonant energy bloom, briefly warped low resonance and a short dissipating electrical tail. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_time_bubble-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_time_bubble.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9383,9 +9739,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_time_bubble.ogg",
         "filename": "sfx_explosion_time_bubble.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_time_bubble"
@@ -9404,30 +9760,40 @@
       "orphaned": false
     },
     "sfx_explosion_timebomb": {
-      "name": "sfx_explosion_timebomb",
-      "category": "event",
-      "intent": "",
+      "name": "Zeitbombe – Detonation",
+      "category": "explosion",
+      "intent": "A clear compact explosive enemy detonation, separate from its fuse cue.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one compact high-energy timebomb detonation: a sharp casing rupture, forceful low blast, metallic fragments and a short hot crackling decay, no countdown or ticking. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_timebomb-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_timebomb.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9457,9 +9823,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_timebomb.ogg",
         "filename": "sfx_explosion_timebomb.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_timebomb"
@@ -9478,14 +9844,14 @@
       "orphaned": false
     },
     "sfx_explosion_turret_plasma": {
-      "name": "sfx_explosion_turret_plasma",
-      "category": "event",
-      "intent": "",
+      "name": "Sporenturm – Plasmaexplosion",
+      "category": "explosion",
+      "intent": "An organic and electrical plasma impact.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one organic plasma turret impact: a crisp wet electrical pop, compact pressurized rupture, fine sizzling particles and a short dry decay, no creature vocalization. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -9496,12 +9862,22 @@
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_turret_plasma-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_turret_plasma.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9531,9 +9907,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_turret_plasma.ogg",
         "filename": "sfx_explosion_turret_plasma.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_turret_plasma"
@@ -9552,30 +9928,40 @@
       "orphaned": false
     },
     "sfx_explosion_turret_rocket": {
-      "name": "sfx_explosion_turret_rocket",
-      "category": "event",
-      "intent": "",
+      "name": "Raketenturm – Einschlag",
+      "category": "explosion",
+      "intent": "A precise heavy mechanical turret rocket impact.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one automated turret rocket impact: an abrupt hard crack, tight heavy blast body, sharp metal and stone fragments, controlled short low rumble. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_turret_rocket-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_he.ogg",
+        "source_keys": [
+          "sfx_explosion_rocket"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_turret_rocket.ogg",
+        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9594,6 +9980,30 @@
               "sfx_explosion_turret_rocket"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_turret_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 26,
+                "kind": "unknown",
+                "excerpt": "TURRET_ROCKET_BURST: 'sfx_explosion_turret_rocket',"
+              },
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 28,
+                "kind": "unknown",
+                "excerpt": "'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_turret_rocket"
+            ]
+          }
         }
       ],
       "repository": {
@@ -9605,9 +10015,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_turret_rocket.ogg",
         "filename": "sfx_explosion_turret_rocket.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_turret_rocket"
@@ -9618,6 +10028,12 @@
             "line": 26,
             "kind": "unknown",
             "excerpt": "TURRET_ROCKET_BURST: 'sfx_explosion_turret_rocket',"
+          },
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 28,
+            "kind": "unknown",
+            "excerpt": "'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',"
           }
         ],
         "playback": "unknown",
@@ -9626,30 +10042,40 @@
       "orphaned": false
     },
     "sfx_explosion_void_armageddon": {
-      "name": "sfx_explosion_void_armageddon",
-      "category": "event",
-      "intent": "",
+      "name": "Void-Armageddon – Einschlag",
+      "category": "explosion",
+      "intent": "A heavy alien meteor impact, distinct from an ordinary fire meteor.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one void meteor striking stone: a violent low impact crack, deep pressure slam, dark tearing energy and granular rock debris, followed by a short hollow alien rumble. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_void_armageddon-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
+        "source_keys": [
+          "sfx_explosion_armageddon"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_void_armageddon.ogg",
+        "file_hash": "1290a364f2b8378f0aacc2e4e3e6c47bcfd3123631e3c05289f371668dea7b97",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_void_armageddon",
@@ -9660,9 +10086,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_void_armageddon.ogg",
         "filename": "sfx_explosion_void_armageddon.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "1290a364f2b8378f0aacc2e4e3e6c47bcfd3123631e3c05289f371668dea7b97",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_void_armageddon"
@@ -9681,30 +10107,40 @@
       "orphaned": false
     },
     "sfx_explosion_void_nuke": {
-      "name": "sfx_explosion_void_nuke",
-      "category": "event",
-      "intent": "",
+      "name": "Void-Nuke – Detonation",
+      "category": "explosion",
+      "intent": "A large alien nuclear detonation with clear impact and scale.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one enormous void nuclear detonation: an immediate violent impact crack, immense deep pressure wall, tearing alien energy and rolling debris, a powerful decaying sub-bass rumble. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 5,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_void_nuke-20260915",
+        "source_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+        "source_keys": [
+          "sfx_nuke_explosion"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_void_nuke.ogg",
+        "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [
         {
           "kind": "repository_changed",
@@ -9733,10 +10169,10 @@
         "target_path": "public/assets/sounds/sfx_explosion_void_nuke.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_void_nuke.ogg",
         "filename": "sfx_explosion_void_nuke.ogg",
-        "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "volume": 0.9,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_void_nuke"
@@ -9755,30 +10191,40 @@
       "orphaned": false
     },
     "sfx_explosion_turret_fireball": {
-      "name": "sfx_explosion_turret_fireball",
-      "category": "event",
-      "intent": "",
+      "name": "Flammenturm – Feuerball",
+      "category": "explosion",
+      "intent": "A controlled incendiary turret impact with a mechanical edge.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one incendiary turret fireball bursting against the ground: a hard compact pressure crack, dense flame whoomp, fine metallic grit and a short sputtering ember decay. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_turret_fireball-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_turret_fireball.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_turret_fireball",
@@ -9789,9 +10235,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_turret_fireball.ogg",
         "filename": "sfx_explosion_turret_fireball.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_turret_fireball"
@@ -9810,30 +10256,40 @@
       "orphaned": false
     },
     "sfx_explosion_void_turret_fireball": {
-      "name": "sfx_explosion_void_turret_fireball",
-      "category": "event",
-      "intent": "",
+      "name": "Void-Flammenturm – Feuerball",
+      "category": "explosion",
+      "intent": "An unnatural fire burst with a restrained alien resonance.",
       "musical_identity": "",
-      "playback": "unknown",
+      "playback": "oneshot",
       "prompt": {
-        "text": "",
-        "source": "manual",
+        "text": "TrackType: SFX, one alien incendiary turret impact: an abrupt ripping crack, compressed low flame burst, distorted energy hiss and a short hollow sizzling decay. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
+        "source": "astra",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
       },
       "processing": {
-        "profile": "gentle",
+        "profile": "explosion",
         "overrides": {}
       },
-      "notes": "",
+      "notes": "Produktionsvorgabe: einzelner Einschlag (One-Shot), klare Attacke und ausklingender Schluss. Prompt für einen individuellen Ersatz vorbereitet. Die bisherige Game-Datei ist eine unveränderte Sound-Kopie; nur nach Hörvergleich ersetzen.",
       "needs_revision": false,
-      "copy_notice": null,
+      "copy_notice": {
+        "id": "copy-sfx_explosion_void_turret_fireball-20260915",
+        "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+        "source_keys": [
+          "sfx_explosion_he"
+        ],
+        "target_path": "public/assets/sounds/sfx_explosion_void_turret_fireball.ogg",
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden.",
+        "hidden": false
+      },
       "suggested_changes": [],
       "repository": {
         "key": "sfx_explosion_void_turret_fireball",
@@ -9844,9 +10300,9 @@
         "asset_path": "./assets/sounds/sfx_explosion_void_turret_fireball.ogg",
         "filename": "sfx_explosion_void_turret_fireball.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_void_turret_fireball"

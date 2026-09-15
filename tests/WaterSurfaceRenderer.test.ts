@@ -10,8 +10,34 @@ vi.mock('phaser', () => ({
   } },
 }));
 import { WaterSurfaceRenderer } from '../src/arena/WaterSurfaceRenderer';
+import { CELL_SIZE } from '../src/config';
+import { WATER_MASK_HALO, WATER_MASK_STEP } from '../src/arena/WaterSurfaceModel';
 
 describe('Water presentation residency', () => {
+  it('continues the baked boundary using local map dimensions in an offset world', () => {
+    const putImageData = vi.fn();
+    const scene = { time: { now: 0 }, add: { existing: vi.fn() }, textures: {
+      createCanvas: () => ({ context: {
+        createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4), width: w }),
+        putImageData,
+      }, refresh: vi.fn(), setFilter: vi.fn() }), remove: vi.fn(),
+    } };
+    const width = 8 * CELL_SIZE, height = 6 * CELL_SIZE;
+    const water = Array.from({ length: 8 * 6 }, (_, i) => ({ gridX: i % 8, gridY: Math.floor(i / 8) }));
+    const renderer = new WaterSurfaceRenderer(scene as never,
+      { offsetX: -700, offsetY: 350, width, height }, water, 1);
+    renderer.updateResidency({ x: -700, y: 350, width, height });
+    expect(putImageData).toHaveBeenCalledTimes(1);
+    const pixels = putImageData.mock.calls[0][0] as { width: number; data: Uint8ClampedArray };
+    for (const [x, y] of [[-4, -4], [width + 4, height + 4], [width / 2, height / 2]]) {
+      const px = Math.floor((x + WATER_MASK_HALO) / WATER_MASK_STEP);
+      const py = Math.floor((y + WATER_MASK_HALO) / WATER_MASK_STEP);
+      expect(pixels.data[(py * pixels.width + px) * 4]).toBe(255);
+      expect(pixels.data[(py * pixels.width + px) * 4 + 2]).toBe(255);
+    }
+    renderer.destroy();
+  });
+
   it('only allocates nearby occupied chunks, reuses masks, and releases all resources on teardown', () => {
     state.objects.length = 0;
     const textures = new Set<string>();

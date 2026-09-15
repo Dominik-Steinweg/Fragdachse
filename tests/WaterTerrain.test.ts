@@ -25,7 +25,7 @@ describe('Water terrain contracts', () => {
 
   it('expands straight banks equally in every direction without changing occupancy', () => {
     const cells = Array.from({ length: 8 * 8 }, (_, i) => ({ gridX: 4 + i % 8, gridY: 4 + Math.floor(i / 8) }));
-    const model = new WaterSurfaceModel(cells), baked = model.bake(0, 0, 512);
+    const model = new WaterSurfaceModel(cells, { width: 1024, height: 1024 }), baked = model.bake(0, 0, 512);
     const geometry = new WaterGeometry(cells, metrics);
     const center = 8 * CELL_SIZE;
     const edge = 4 * CELL_SIZE + CELL_SIZE * .1 - WATER_VISUAL_EXPANSION;
@@ -40,10 +40,52 @@ describe('Water terrain contracts', () => {
     expect(readMask(baked, 4 * CELL_SIZE - 1, center, 2)).toBeGreaterThan(127);
   });
 
+  it.each([[8, 6], [12, 10]])('continues water across every edge and corner of a %i by %i map', (cols, rows) => {
+    const width = cols * CELL_SIZE, height = rows * CELL_SIZE;
+    const cells = Array.from({ length: cols * rows }, (_, i) => ({ gridX: i % cols, gridY: Math.floor(i / cols) }));
+    const model = new WaterSurfaceModel(cells, { width, height });
+    const baked = model.bake(0, 0, 512);
+    const centerDistance = readMask(baked, width / 2, height / 2, 0);
+    for (const x of [-4, 0, width / 2, width - 1, width, width + 4]) {
+      for (const y of [-4, 0, height / 2, height - 1, height, height + 4]) {
+        expect(model.sample(x, y)).toBe(model.sample(width / 2, height / 2));
+        expect(readMask(baked, x, y, 0)).toBe(centerDistance);
+        expect(readMask(baked, x, y, 2)).toBe(255);
+      }
+    }
+  });
+
+  it.each([0, 1, 2, 3])('preserves a real shoreline meeting map edge %i', edge => {
+    const size = 16 * CELL_SIZE;
+    const transform = (x: number, y: number): [number, number] => {
+      if (edge === 1) return [size - x, y];
+      if (edge === 2) return [y, x];
+      if (edge === 3) return [y, size - x];
+      return [x, y];
+    };
+    const cells = Array.from({ length: 8 * 16 }, (_, i) => {
+      const [x, y] = transform((i % 16 + .5) * CELL_SIZE, (Math.floor(i / 16) + .5) * CELL_SIZE);
+      return { gridX: Math.floor(x / CELL_SIZE), gridY: Math.floor(y / CELL_SIZE) };
+    });
+    const model = new WaterSurfaceModel(cells, { width: size, height: size });
+    const baked = model.bake(0, 0, 512);
+    for (const along of [size / 4, size / 2 - CELL_SIZE / 2, size / 2 + CELL_SIZE / 2, size * .75]) {
+      const boundary = transform(0, along), outside = transform(-4, along), inside = transform(64, along);
+      expect(model.sample(...outside)).toBe(model.sample(...boundary));
+      for (const channel of [0, 2]) {
+        expect(readMask(baked, ...boundary, channel)).toBe(readMask(baked, ...inside, channel));
+        expect(readMask(baked, ...outside, channel)).toBe(readMask(baked, ...inside, channel));
+      }
+    }
+    const wet = transform(-4, size / 4), dry = transform(-4, size * .75);
+    expect(readMask(baked, ...wet, 2)).toBe(255);
+    expect(readMask(baked, ...dry, 2)).toBe(0);
+  });
+
   it('gives a one-neighbor water tip a continuous visible mask beyond its authored cell', () => {
     const cells = Array.from({ length: 6 * 6 }, (_, i) => ({ gridX: 5 + i % 6, gridY: 5 + Math.floor(i / 6) }));
     cells.push({ gridX: 4, gridY: 8 });
-    const model = new WaterSurfaceModel(cells), baked = model.bake(0, 0, 512);
+    const model = new WaterSurfaceModel(cells, { width: 1024, height: 1024 }), baked = model.bake(0, 0, 512);
     const tipX = 4.5 * CELL_SIZE, tipY = 8.5 * CELL_SIZE;
     expect(readMask(baked, tipX, tipY, 2)).toBeGreaterThan(127);
     expect(readMask(baked, tipX, 8 * CELL_SIZE - 1, 2)).toBeGreaterThan(0);
@@ -53,15 +95,15 @@ describe('Water terrain contracts', () => {
   });
 
   it('keeps empty water empty and bounds expanded chunk residency to the world', () => {
-    const empty = new WaterSurfaceModel([]), mask = empty.bake(0, 0, 64);
+    const empty = new WaterSurfaceModel([], { width: 1024, height: 1024 }), mask = empty.bake(0, 0, 64);
     expect(empty.getChunkOrigins(512, 1024, 1024)).toEqual([]);
     expect(mask.data.every((value, i) => i % 4 === 3 ? value === 255 : value === 0)).toBe(true);
-    expect(new WaterSurfaceModel([{ gridX: 0, gridY: 0 }]).getChunkOrigins(512, 512, 512)).toEqual([{ x: 0, y: 0 }]);
+    expect(new WaterSurfaceModel([{ gridX: 0, gridY: 0 }], { width: 512, height: 512 }).getChunkOrigins(512, 512, 512)).toEqual([{ x: 0, y: 0 }]);
   });
 
   it.each([false, true])('keeps the expanded exterior bank seamless at a chunk edge (vertical: %s)', vertical => {
     const cells = Array.from({ length: 4 * 4 }, (_, i) => ({ gridX: 12 + i % 4, gridY: 12 + Math.floor(i / 4) }));
-    const model = new WaterSurfaceModel(cells);
+    const model = new WaterSurfaceModel(cells, { width: 1024, height: 1024 });
     const a = model.bake(0, 0, 512), b = model.bake(vertical ? 0 : 512, vertical ? 512 : 0, 512);
     for (let along = 370; along < 550; along += 2) for (let across = 500; across < 530; across += 2)
       for (const channel of [0, 2]) {
@@ -192,13 +234,13 @@ describe('Water terrain contracts', () => {
       expect(waterBlobDistance(mask, CELL_SIZE / 2, CELL_SIZE / 2)).toBeGreaterThan(0);
       expect(Number.isFinite(waterBlobDistance(mask, 1, 1))).toBe(true);
     }
-    const model = new WaterSurfaceModel([{ gridX: 0, gridY: 0 }, { gridX: 1, gridY: 0 }]);
+    const model = new WaterSurfaceModel([{ gridX: 0, gridY: 0 }, { gridX: 1, gridY: 0 }], { width: 1024, height: 1024 });
     expect(model.sample(CELL_SIZE - .001, CELL_SIZE / 2)).toBeCloseTo(model.sample(CELL_SIZE + .001, CELL_SIZE / 2));
   });
 
   it.each([false, true])('bakes matching mask pixels across either chunk axis (vertical: %s)', vertical => {
     const cells = Array.from({ length: 20 * 20 }, (_, i) => ({ gridX: 8 + i % 20, gridY: 8 + Math.floor(i / 20) }));
-    const model = new WaterSurfaceModel(cells);
+    const model = new WaterSurfaceModel(cells, { width: 1024, height: 1024 });
     const left = model.bake(0, 0, 512), right = model.bake(vertical ? 0 : 512, vertical ? 512 : 0, 512);
     for (let py = WATER_MASK_HALO / WATER_MASK_STEP; py < left.size - WATER_MASK_HALO / WATER_MASK_STEP; py++) {
       for (let dx = -2; dx <= 2; dx++) {

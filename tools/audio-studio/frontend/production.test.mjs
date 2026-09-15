@@ -1,7 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {allowedModels, allowedProfiles, durationLimit, matchesCategory} from './production.js';
+import {allowedModels, allowedProfiles, durationLimit, matchesCategory, isActiveCopy} from './production.js';
 import {moveMarker, processingOverrides} from './waveform.js';
+
+test('copy filtering follows recorded provenance and clears when the target is replaced', () => {
+  const copy = {copy_notice: {file_hash: 'original', hidden: false}, repository: {exists: true, file_hash: 'original'}};
+  assert.equal(isActiveCopy(copy), true);
+  assert.equal(matchesCategory(copy, 'status:copy'), true);
+  assert.equal(isActiveCopy({...copy, copy_notice: null}), false);
+  assert.equal(isActiveCopy({...copy, repository: {exists: false, file_hash: 'original'}}), false);
+  assert.equal(matchesCategory({...copy, repository: {exists: true, file_hash: 'replacement'}}, 'status:copy'), false);
+  // Hiding the explanatory notice does not change the actual file's copy status.
+  assert.equal(isActiveCopy({...copy, copy_notice: {...copy.copy_notice, hidden: true}}), true);
+});
 
 test('repository music classification selects shared Medium provider and music processing', () => {
   const music = {repository: {kind: 'music'}, category: 'custom'}, sfx = {repository: {kind: 'sfx'}, category: 'music'};

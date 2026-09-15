@@ -1,0 +1,319 @@
+{
+  "schema_version": 1,
+  "migration_id": "explosion-source-copies-20260915",
+  "reason": "Explicit user request: preserve current explosion playback through independent recorded copies, ready for individual replacement in Audio Studio.",
+  "copies": [
+    {
+      "id": "copy-sfx_explosion_void_armageddon-20260915",
+      "target_key": "sfx_explosion_void_armageddon",
+      "source_keys": [
+        "sfx_explosion_armageddon"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_void_armageddon.ogg",
+      "file_hash": "1290a364f2b8378f0aacc2e4e3e6c47bcfd3123631e3c05289f371668dea7b97",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_crossbow-20260915",
+      "target_key": "sfx_explosion_crossbow",
+      "source_keys": [
+        "sfx_explosion_mini_rocket"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_crossbow.ogg",
+      "file_hash": "8eea7dec68529657691f12f9a2b4459fd5a12fcc812a32996acc44ab0f719b70",
+      "volume_before": 0.5,
+      "volume_after": 0.15,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_negev-20260915",
+      "target_key": "sfx_explosion_negev",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_negev.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_fireball-20260915",
+      "target_key": "sfx_explosion_fireball",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_fireball.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_turret_fireball-20260915",
+      "target_key": "sfx_explosion_turret_fireball",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_turret_fireball.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_void_turret_fireball-20260915",
+      "target_key": "sfx_explosion_void_turret_fireball",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_void_turret_fireball.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_kamikaze-20260915",
+      "target_key": "sfx_explosion_kamikaze",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_kamikaze.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_rocket_aftershock-20260915",
+      "target_key": "sfx_explosion_rocket_aftershock",
+      "source_keys": [
+        "sfx_explosion_rocket"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_he.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_rocket_aftershock.ogg",
+      "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_asmd_secondary-20260915",
+      "target_key": "sfx_explosion_asmd_secondary",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_asmd_secondary.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_plasma_swarm-20260915",
+      "target_key": "sfx_explosion_plasma_swarm",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_plasma_swarm.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_grave_titan_plasma-20260915",
+      "target_key": "sfx_explosion_grave_titan_plasma",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_grave_titan_plasma.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_alien_plasma-20260915",
+      "target_key": "sfx_explosion_alien_plasma",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_alien_plasma.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_turret_plasma-20260915",
+      "target_key": "sfx_explosion_turret_plasma",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_turret_plasma.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_inferno_rockets-20260915",
+      "target_key": "sfx_explosion_inferno_rockets",
+      "source_keys": [
+        "sfx_explosion_mini_rocket"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_inferno_rockets.ogg",
+      "file_hash": "8eea7dec68529657691f12f9a2b4459fd5a12fcc812a32996acc44ab0f719b70",
+      "volume_before": 0.5,
+      "volume_after": 0.15,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_turret_rocket-20260915",
+      "target_key": "sfx_explosion_turret_rocket",
+      "source_keys": [
+        "sfx_explosion_rocket"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_he.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_turret_rocket.ogg",
+      "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_gravity-20260915",
+      "target_key": "sfx_explosion_gravity",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_gravity.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_void_nuke-20260915",
+      "target_key": "sfx_explosion_void_nuke",
+      "source_keys": [
+        "sfx_nuke_explosion"
+      ],
+      "source_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_void_nuke.ogg",
+      "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+      "volume_before": 0.5,
+      "volume_after": 0.9,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_decoy-20260915",
+      "target_key": "sfx_explosion_decoy",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_decoy.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_rock_collapse-20260915",
+      "target_key": "sfx_explosion_rock_collapse",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_rock_collapse.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_base_destruction-20260915",
+      "target_key": "sfx_explosion_base_destruction",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_base_destruction.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_shotgun_lightning-20260915",
+      "target_key": "sfx_explosion_shotgun_lightning",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_shotgun_lightning.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_energy_injector-20260915",
+      "target_key": "sfx_explosion_energy_injector",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_energy_injector.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_time_bubble-20260915",
+      "target_key": "sfx_explosion_time_bubble",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_time_bubble.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    },
+    {
+      "id": "copy-sfx_explosion_timebomb-20260915",
+      "target_key": "sfx_explosion_timebomb",
+      "source_keys": [
+        "sfx_explosion_he"
+      ],
+      "source_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+      "target_path": "public/assets/sounds/sfx_explosion_timebomb.ogg",
+      "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+      "volume_before": 0.5,
+      "volume_after": 0.5,
+      "reason": "Eigene, byte-identische Kopie des bisher tatsächlich abgespielten Ersatzsounds. Lautstärke übernommen; die Zieldatei kann unabhängig ersetzt werden."
+    }
+  ]
+}

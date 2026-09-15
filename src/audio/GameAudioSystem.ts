@@ -23,6 +23,10 @@ import { getDeferredAssets } from '../assets/DeferredAssets';
 
 const HIT_FEEDBACK_MERGE_WINDOW_MS = 30;
 const ROCKET_EXPLOSION_MERGE_WINDOW_MS = 50;
+// These sources previously shared the rocket recording and its overlap limiter.
+const ROCKET_EXPLOSION_KEYS = new Set([
+  'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',
+]);
 
 interface ListenerPosition {
   x: number;
@@ -150,7 +154,7 @@ export class GameAudioSystem {
     const finalVolume = this.getEffectsPlaybackVolume(soundKey, volumeScale, volume);
 
     if (finalVolume <= 0.001) return;
-    if (soundKey === 'sfx_explosion_rocket') {
+    if (ROCKET_EXPLOSION_KEYS.has(soundKey)) {
       if (this.scene.time.now - this.lastRocketExplosionAt < ROCKET_EXPLOSION_MERGE_WINDOW_MS) return;
       this.lastRocketExplosionAt = this.scene.time.now;
     }

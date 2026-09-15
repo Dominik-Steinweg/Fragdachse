@@ -37,4 +37,13 @@ describe('source-owned explosion audio', () => {
     expect(resolveExplosionAudio('TIME_BUBBLE', 70)?.key).toBe(EXPLOSION_AUDIO.TIME_BUBBLE);
     expect(resolveExplosionAudio('brood_hatch')?.key).toBe('shot_throw');
   });
+
+  it('loads every source through its own published asset key', () => {
+    const shipped = new Set<string>();
+    preloadAllAudio({ audio: (key: string) => shipped.add(key) } as never);
+    for (const key of Object.values(EXPLOSION_AUDIO)) {
+      expect(shipped.has(key), key).toBe(true);
+      expect(resolveAvailableExplosionKey(key, k => shipped.has(k))).toBe(key);
+    }
+  });
 });

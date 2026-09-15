@@ -17,7 +17,7 @@ export class WaterSurfaceRenderer {
   private readonly chunks = new Map<string, WaterChunk>();
   constructor(private readonly scene: Phaser.Scene, private readonly frame: ChunkWorldFrame,
     water: readonly WaterCell[], private readonly seed: number) {
-    this.model = new WaterSurfaceModel(water);
+    this.model = new WaterSurfaceModel(water, frame);
     for (const origin of this.model.getChunkOrigins(ARENA_RENDER_CHUNK_SIZE, frame.width, frame.height))
       this.occupied.add(`${origin.x / ARENA_RENDER_CHUNK_SIZE},${origin.y / ARENA_RENDER_CHUNK_SIZE}`);
   }

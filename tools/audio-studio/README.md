@@ -100,6 +100,12 @@ uv run --inexact audio-studio edit shot_p90 .audio-workspace/prompt-patch.json -
 
 ## Tool 2: Produzieren, vergleichen, freigeben
 
+Für individuelle Explosionssounds im Kategorienfilter **„Noch verwendete Sound-Kopien“**
+wählen. Diese Einträge besitzen eigene Game-Dateien mit dem bisherigen Klang und vorbereitete
+quellenspezifische Prompts unter **„Generieren“**. **„Sound-Kopie“** kennzeichnet die unveränderte
+Kopie; nach dem Austausch bleibt nur die **„Kopie-Historie“** erhalten. Die Übernahme ersetzt
+die jeweilige Zieldatei, ohne die ursprüngliche Aufnahme oder andere Explosionsquellen zu ändern.
+
 1. **Bestand:** Sound suchen, Dateizustand/Whitelist/Kopie-Hinweis prüfen und Game-Datei anhören. Gemeinsame Ziele zeigen sämtliche betroffenen Keys.
 2. **Generieren:** Prompt, Medium/Small-SFX, ganzzahlige Dauer und Anzahl wählen. Seed/Schritte stehen unter „Modellparameter & Katalogpflege“. „Speichern & generieren“ reiht einzelne Kandidaten ein. Fortschrittsbalken, Modellschritte, Fehler und Abschluss stehen direkt unter der Aktion. Beim Laden wird ein unbestimmter Balken angezeigt; 100 % gilt erst nach der RAW-Prüfung. Die feste Statusleiste führt zum aktiven Auftrag. Abbruch wartet gegebenenfalls auf den aktuellen Modellaufruf; fertige RAWs bleiben erhalten.
 3. **Arbeitskopie:** Vorhandene Game-Datei ohne Generierung importieren. Favorisieren, Verwerfen und Übernehmen sind getrennte Entscheidungen.
