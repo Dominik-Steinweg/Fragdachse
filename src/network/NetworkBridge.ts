@@ -2829,7 +2829,7 @@ export class NetworkBridge {
   }
 
   /**
-   * Debug-only: misst die tatsaechliche Groesse des Projektil-Slices auf dem Draht.
+   * Debug-only: misst die JSON-Zeichen des Projektil-Slices vor Transportkomprimierung.
    *
    * Das `JSON.stringify` hier ist der Grund fuer das Flag – es ist die einzige Stelle, an der die
    * Messung Rechenzeit kostet, und sie laeuft nur, wenn jemand die Zahl wirklich sehen will.
@@ -2873,7 +2873,7 @@ export class NetworkBridge {
       avgCharsPerTick,
       maxCharsPerTick: maxChars,
       avgActiveCount: totalCount / samples.length,
-      // Grobe Schaetzung je Empfaenger: ein Zeichen entspricht im JSON-Transport einem Byte.
+      // Unkomprimierte JSON-Schaetzung; tatsaechliche Transportbytes liefert PeerLink/WebRTC.
       estimatedKbPerSec: (avgCharsPerTick * NET_TICK_RATE_HZ) / 1024,
     };
   }

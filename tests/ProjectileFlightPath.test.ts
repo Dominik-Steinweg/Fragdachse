@@ -6,6 +6,7 @@ import { ProjectileFlightPlayback } from '../src/projectile/ProjectileFlightPlay
 import { tracerBounceDebug, captureBounceContact } from '../src/projectile/ProjectileBounceDiagnostics';
 import { encodeProjectileDynamic, decodeProjectileDynamics, countProjectileDynamics } from '../src/network/projectileSnapshotCodec';
 import type { SyncedProjectile } from '../src/types';
+import { decodeProjectileFlightPath, encodeProjectileFlightPath } from '../src/network/projectileFlightPathCodec';
 
 function curve(): ProjectileFlightPath {
   return { timeMs: 60, points: [
@@ -22,6 +23,38 @@ function projectile(path = curve()): SyncedProjectile {
 }
 
 describe('projectile flight path', () => {
+  it('encodes straight fixed-step travel with a jittering wall clock without removing temporal samples', () => {
+    const recorder = new ProjectilePathRecorder();
+    const epoch = 1_800_000_000_000;
+    recorder.begin(1, 0, 0, 60, 0, epoch);
+    for (let step = 1; step <= 60; step++) recorder.append(1, step, 0, 60, 0, epoch + Math.floor(step * 1000 / 60));
+    const path = recorder.read(1, epoch + 1000)!;
+    // Geometry alone cannot discard the actual timing of these observations.
+    expect(path.points.length).toBeGreaterThan(2);
+    const wire = encodeProjectileFlightPath(path);
+    const decoded = decodeProjectileFlightPath(wire);
+    expect(decoded).toEqual(path);
+    const legacy = path.points.flatMap(p => [p.sequence, p.timeMs, p.x, p.y, p.vx, p.vy, p.breakBefore ? 1 : 0, p.bounceSequence ?? 0]);
+    expect(wire.length).toBeLessThan(JSON.stringify(legacy).length / 2);
+    for (let t = epoch; t <= epoch + 1000; t += 7) expect(sampleProjectilePath(decoded, t)).toEqual(sampleProjectilePath(path, t));
+  });
+
+  it('round-trips exact doubles, tempo changes, breaks, equal-time contacts and irregular curves', () => {
+    for (const epoch of [0, 1_800_000_000_000]) {
+      let time = epoch;
+      const points = Array.from({ length: 128 }, (_, i) => {
+        time += i % 5;
+        return { sequence: 1 + i * 3, timeMs: time, x: Math.sin(i) * 1000.123, y: i * 0.123456789,
+          vx: i < 50 ? 1234.567 : -0.000001, vy: i < 30 ? 0 : i / 7,
+          ...(i % 19 === 0 ? { breakBefore: true } : {}), ...(i % 13 === 0 ? { bounceSequence: i + 1 } : {}) };
+      });
+      const path = { timeMs: time, points, ended: true };
+      expect(decodeProjectileFlightPath(encodeProjectileFlightPath(path))).toEqual(path);
+      const encoded = encodeProjectileFlightPath(path);
+      expect(() => decodeProjectileFlightPath(encoded.slice(0, -4))).toThrow();
+      expect(() => decodeProjectileFlightPath(encoded + 'AAAA')).toThrow();
+    }
+  });
   it('captures separated centers and the first confirmed follow point without altering flight geometry', () => {
     const run = (enabled: boolean) => {
       tracerBounceDebug.centerline = enabled;

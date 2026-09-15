@@ -20,7 +20,7 @@ Die im Arena-Runtime-Refactor migrierten Owner-Grenzen bekommen von dort die kle
 
 Einige ältere Kernsysteme bekommen weiterhin eine konkrete `NetworkBridge` per Constructor-Injection von der Composition-Grenze: `WorldCombatCore`, `InputSystem`, `HostPhysicsSystem`, `DecoySystem`, `EffectSystem`, `EnergyShieldSystem` und `BurrowSystem`. Diese Menge ist eine bewusst eingefrorene Legacy-Grenze - sie wird nicht allein für architektonische Reinheit auf Ports umgebaut, darf aber auch nicht wachsen. `LoadoutManager` ist davon getrennt und bleibt vollständig transportagnostisch; World- und Combat-Owner binden seine fachlichen Reads und Actions über Ports.
 
-Das hält Regeln testbar: Ein Test übergibt den Port direkt und braucht kein Modulmock der Bridge. [tests/WorldGameplayCompositionContracts.test.ts](../../tests/WorldGameplayCompositionContracts.test.ts) hält beide Grenzen fest - den fehlenden Singleton-Import und die eingefrorene Liste der konkreten Consumer.
+Das hält Regeln testbar: Ein Test übergibt den Port direkt und braucht kein Modulmock der Bridge. [tests/architecture/WorldGameplayCompositionContracts.test.ts](../../tests/architecture/WorldGameplayCompositionContracts.test.ts) hält beide Grenzen fest - den fehlenden Singleton-Import und die eingefrorene Liste der konkreten Consumer.
 
 ## World- und Activity-Store
 
@@ -56,6 +56,20 @@ Participation wird host-authoritativ über den zuverlässigen World-Kanal veröf
 
 Die Zuverlässigkeit kommt vom Channel, nicht aus einem Payload-Feld. Fast-Nachrichten dürfen bei geschlossener Verbindung oder Überlast verworfen werden; ein Sender darf dort keinen dauerhaften Zustandsfortschritt voraussetzen.
 
+[`PeerPacketCodec`](../../src/network/peer/PeerPacketCodec.ts) zerlegt große Nachrichten unterhalb
+des Raumprotokolls und veröffentlicht sie erst nach vollständiger Rekonstruktion. Einzelne
+Fragmente dürfen niemals als Snapshot oder Baseline angewendet werden. Die optionale verlustfreie
+Komprimierung wird beim Handshake je Link ausgehandelt. Reliable-Reihenfolge gilt auch während
+asynchroner Komprimierung und Dekomprimierung. Ein neuer oder wiederaufgenommener Client-Link
+akzeptiert Fast-Zustand erst nach seiner Welcome-Baseline.
+
+[`PeerSendQueue`](../../src/network/peer/PeerSendQueue.ts) besitzt die begrenzten Sendewarteschlangen.
+Eine angefangene Nachricht wird fertiggestellt; wartende Fast-Batches werden pro globalem bzw.
+Per-Spieler-Schlüssel ersetzt. Der Inhalt eines Snapshot-Slices wird dabei nicht zusammengeführt.
+Lokale SCTP-Größen- und Pufferfehler führen zu kleineren Fragmenten bzw. erneutem Senden und sind
+kein Verbindungsverlust. Eine erschöpfte Reliable-Warteschlange ist ein expliziter Transportfehler;
+Reliable-Befehle werden nicht still verworfen.
+
 Game-State wird als vollständiger Bootstrap oder als Delta übertragen. Bei Deltas dürfen unveränderte Slices fehlen; ein vollständiger Bootstrap muss alle erforderlichen Slices enthalten und wird durch [FullGameStateBootstrap.ts](../../src/network/FullGameStateBootstrap.ts) validiert. Nach World- oder Round-Wechsel wird der Delta-Cache zurückgesetzt.
 
 Replizierte Entities und langlebige Zustände brauchen stabile Identitäten. Bei einem neuen Zustand sind Owner, Channel, Update-Frequenz, Lebensdauer und Baseline zu klären; ein Array-Index oder eine lokale Scene-Referenz ist keine Netzidentität.
@@ -74,6 +88,9 @@ Der [`projectileSnapshotCodec`](../../src/network/projectileSnapshotCodec.ts) f�
 und optionale visuelle Overrides im statischen Vertrag. Aktive Dynamik enthält unabhängig
 decodierbare, sequenzierte Pfadhistorien mit Position, Zeit, lokaler Richtung und expliziten
 Unterbrechungen. Wiederholte Historien heilen Paketverlust; Cursor verhindern doppelte Emissionen.
+Der [`projectileFlightPathCodec`](../../src/network/projectileFlightPathCodec.ts) kodiert diese
+Historien binär und verlustfrei. Zahlenprädiktion dient ausschließlich der Speicherung; sie
+verändert weder Pfadpunkte noch deren Zeitstempel und benötigt keinen Zustand aus älteren Paketen.
 Abgeschlossene Pfade werden einschließlich Endpunkt separat von aktiven Köpfen über mehrere
 Netzwerk-Ticks nachgeliefert. Sie dürfen Restmaterial ergänzen, aber keinen Kopf wiederbeleben.
 
@@ -108,4 +125,4 @@ World-scoped RPCs verwenden den zentralen Bridge-Pfad. Keine neue Funktion darf 
 - [tests/PeerProtocol.test.ts](../../tests/PeerProtocol.test.ts)
 - [tests/PeerLink.test.ts](../../tests/PeerLink.test.ts)
 - [tests/FullGameStateBootstrap.test.ts](../../tests/FullGameStateBootstrap.test.ts)
-- [tests/WorldGameplayCompositionContracts.test.ts](../../tests/WorldGameplayCompositionContracts.test.ts)
+- [tests/architecture/WorldGameplayCompositionContracts.test.ts](../../tests/architecture/WorldGameplayCompositionContracts.test.ts)

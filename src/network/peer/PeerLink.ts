@@ -15,21 +15,21 @@
 import type { DataConnection } from 'peerjs';
 import {
   PEER_DISCONNECTED_GRACE_MS,
-  PEER_FAST_BUFFER_LIMIT_BYTES,
   PEER_FAST_CHANNEL_ID,
   PEER_FAST_CHANNEL_LABEL,
   PEER_FAST_CHANNEL_TIMEOUT_MS,
 } from '../../config';
-import { createPeerNetworkError } from './PeerSignaling';
+import { createPeerNetworkError, type PeerNetworkError } from './PeerSignaling';
 import { encodePeerMessage, parsePeerMessage, type PeerChannelKind, type PeerMessage } from './protocol';
 import type { PeerLinkLike, PeerPayloadDiagnostics } from './transport';
+import { PeerPacketAssembler, decodePeerPayload, encodePeerBytes, PEER_COMPRESSION_THRESHOLD_BYTES,
+  PEER_MESSAGE_LIMIT_BYTES, supportsPeerCompression, type EncodedPeerPayload } from './PeerPacketCodec';
+import { PeerSendQueue } from './PeerSendQueue';
 
 interface QueuedMessage {
   message: PeerMessage;
   channel: PeerChannelKind;
 }
-
-const PEER_LARGE_PAYLOAD_WARN_BYTES = 64 * 1024;
 
 export interface PeerLinkHandlers {
   onMessage: (message: PeerMessage, channel: PeerChannelKind) => void;
@@ -47,6 +47,16 @@ export class PeerLink implements PeerLinkLike {
   private disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
   private reliableClosedWarningShown = false;
   private payloadDiagnosticsSink: ((info: PeerPayloadDiagnostics) => void) | null = null;
+  private compressionAllowed = false;
+  private readonly reliablePackets = new PeerPacketAssembler(true);
+  private readonly fastPackets = new PeerPacketAssembler(false);
+  private reliableReceiveTail: Promise<void> = Promise.resolve();
+  private reliableReceiveBytes = 0;
+  private fastDecoding = false;
+  private pendingFastDecode: EncodedPeerPayload | null = null;
+  private readonly reliableSends = this.createSendQueue(false);
+  private readonly fastSends = this.createSendQueue(true);
+  closeError?: PeerNetworkError;
 
   playerId = '';
 
@@ -58,8 +68,7 @@ export class PeerLink implements PeerLinkLike {
     // Sofort lauschen, nicht erst nach open(): die Gegenseite kann ihr 'hello' schicken,
     // waehrend hier noch der schnelle Kanal aufgeht. Bis Handler gesetzt sind, wird gepuffert.
     this.connection.on('data', (data: unknown) => {
-      const message = parsePeerMessage(data);
-      if (message) this.deliver(message, 'rel');
+      this.receive(data, 'rel');
     });
     this.connection.on('close', () => this.handleRemoteClose());
     this.connection.on('error', () => this.handleRemoteClose());
@@ -103,6 +112,7 @@ export class PeerLink implements PeerLinkLike {
    */
   async open(handlers: PeerLinkHandlers): Promise<void> {
     await this.awaitReliableOpen();
+    this.bindDrain(this.connection.dataChannel, this.reliableSends);
     this.bindPeerConnectionState();
     if (this.closed) throw createPeerNetworkError('connection-failed');
     await this.openFastChannel();
@@ -116,53 +126,110 @@ export class PeerLink implements PeerLinkLike {
 
   send(message: PeerMessage, channel: PeerChannelKind): void {
     if (this.closed) return;
-    const payload = encodePeerMessage(message);
-    // `payload.length` is only an estimate (UTF-16 code units). Do not add a second encoding
-    // pass for diagnostics; exact transport bytes remain the WebRTC stats values.
-    if (payload.length >= PEER_LARGE_PAYLOAD_WARN_BYTES) {
-      console.warn(
-        `[PeerLink] Große ${channel}-Payload (geschätzt ${payload.length} Bytes, type=${message.t}, peer=${this.remotePeerId}).`,
-      );
-    }
-
     if (channel === 'fast') {
       if (this.fastChannel?.readyState !== 'open') {
         this.droppedFastMessages++;
         return;
       }
-      // Ueberlaufender Sendepuffer heisst: die Leitung kommt nicht hinterher. Bei ersetzbaren
-      // Daten ist Verwerfen richtig – der naechste Snapshot ist ohnehin aktueller.
-      if (this.fastChannel.bufferedAmount > PEER_FAST_BUFFER_LIMIT_BYTES) {
-        this.droppedFastMessages++;
-        return;
-      }
-      try {
-        this.fastChannel.send(payload);
-        this.emitPayloadDiagnostics(message, channel, payload);
-      } catch (error) {
-        this.handleRemoteClose(error);
-      }
-      return;
-    }
-
-    if (!this.connection.open) {
+    } else if (!this.connection.open) {
       if (!this.reliableClosedWarningShown) {
         this.reliableClosedWarningShown = true;
         console.warn(`[PeerLink] Reliable-Send verworfen: Verbindung nicht offen (peer=${this.remotePeerId}, type=${message.t}).`);
       }
       return;
     }
-    try {
-      this.connection.send(payload);
-      this.emitPayloadDiagnostics(message, channel, payload);
-    } catch (error) {
-      this.handleRemoteClose(error);
+    if ((message.t === 'hello' || message.t === 'welcome') && supportsPeerCompression()) {
+      message = { ...message, z: 1 };
     }
+    try {
+      const payload = encodePeerMessage(message);
+      const bytes = encodePeerBytes(payload);
+      (channel === 'fast' ? this.fastSends : this.reliableSends).enqueue({
+        message,
+        textLength: payload.length,
+        payload: bytes,
+        text: bytes.rawBytes < PEER_COMPRESSION_THRESHOLD_BYTES ? payload : undefined,
+        sent: (wireBytes, item) => this.emitPayloadDiagnostics(item.message, channel, item.textLength, wireBytes),
+      });
+    } catch (error) {
+      // A local schema/size failure is not an ICE failure. Reliable data cannot be silently
+      // dropped; expose the bounded queue/size failure explicitly if recovery is impossible.
+      this.closeError = createPeerNetworkError('transport-overloaded', error);
+      this.handleRemoteClose(this.closeError);
+    }
+  }
+
+  private createSendQueue(fast: boolean): PeerSendQueue {
+    return new PeerSendQueue({ fast,
+      channel: () => fast ? this.fastChannel : this.connection.dataChannel,
+      maxMessageSize: () => this.connection.peerConnection?.sctp?.maxMessageSize,
+      compress: () => this.compressionAllowed,
+      dropped: () => { this.droppedFastMessages++; },
+      failed: (reason, error) => {
+        if (reason === 'overload') this.closeError = createPeerNetworkError('transport-overloaded', error);
+        this.handleRemoteClose(this.closeError ?? error);
+      },
+    });
+  }
+
+  private bindDrain(channel: RTCDataChannel | undefined, queue: PeerSendQueue): void {
+    if (!channel) return;
+    channel.bufferedAmountLowThreshold = 32 * 1024;
+    channel.addEventListener('bufferedamountlow', queue.resume);
+  }
+
+  private receive(data: unknown, channel: PeerChannelKind): void {
+    if (this.closed) return;
+    const payload = typeof data === 'string' ? data
+      : (channel === 'rel' ? this.reliablePackets : this.fastPackets).accept(data);
+    if (payload === null) return;
+    if (typeof payload === 'string' && (channel === 'fast' || this.reliableReceiveBytes === 0)) {
+      this.parseAndDeliver(payload, channel); return;
+    }
+    if (channel === 'fast') {
+      this.pendingFastDecode = payload as EncodedPeerPayload;
+      void this.decodeFast();
+    } else {
+      const bytes = typeof payload === 'string' ? payload.length * 2 : payload.rawBytes;
+      this.reliableReceiveBytes += bytes;
+      if (this.reliableReceiveBytes > PEER_MESSAGE_LIMIT_BYTES * 2) {
+        this.closeError = createPeerNetworkError('transport-overloaded');
+        this.handleRemoteClose(this.closeError); return;
+      }
+      this.reliableReceiveTail = this.reliableReceiveTail.then(async () => {
+        if (this.closed) return;
+        try { this.parseAndDeliver(typeof payload === 'string' ? payload : await decodePeerPayload(payload), channel); }
+        catch (error) { console.warn('[PeerLink] Ungültige Reliable-Nachricht.', error); }
+        finally { this.reliableReceiveBytes -= bytes; }
+      });
+    }
+  }
+
+  private async decodeFast(): Promise<void> {
+    if (this.fastDecoding) return;
+    this.fastDecoding = true;
+    try {
+      while (this.pendingFastDecode && !this.closed) {
+        const payload = this.pendingFastDecode;
+        this.pendingFastDecode = null;
+        try { this.parseAndDeliver(await decodePeerPayload(payload), 'fast'); }
+        catch { /* Corrupt/lost fast message: a subsequent complete snapshot heals it. */ }
+      }
+    } finally { this.fastDecoding = false; }
+  }
+
+  private parseAndDeliver(payload: string, channel: PeerChannelKind): void {
+    if (this.closed) return;
+    const message = parsePeerMessage(payload);
+    if (!message) return;
+    if (message.t === 'hello' || message.t === 'welcome') this.compressionAllowed = message.z === 1;
+    this.deliver(message, channel);
   }
 
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.clearPackets();
     this.clearPeerConnectionMonitor();
     try {
       this.fastChannel?.close();
@@ -208,9 +275,10 @@ export class PeerLink implements PeerLinkLike {
       maxRetransmits: 0,
     });
     this.fastChannel = channel;
+    channel.binaryType = 'arraybuffer';
+    this.bindDrain(channel, this.fastSends);
     channel.addEventListener('message', (event: MessageEvent) => {
-      const message = parsePeerMessage(event.data);
-      if (message) this.deliver(message, 'fast');
+      this.receive(event.data, 'fast');
     });
 
     if (channel.readyState === 'open') {
@@ -242,11 +310,13 @@ export class PeerLink implements PeerLinkLike {
     });
   }
 
-  private emitPayloadDiagnostics(message: PeerMessage, channel: PeerChannelKind, payload: string): void {
+  private emitPayloadDiagnostics(message: PeerMessage, channel: PeerChannelKind, payloadLength: number, wireBytes: number): void {
     const sink = this.payloadDiagnosticsSink;
     if (!sink) return;
-    const globalEntries = message.t === 'b' ? (message.g ?? []) : [];
-    const gameStateEntry = globalEntries.find(([key]) => key === 'gs' || key === 'gsi');
+    const globalEntries = message.t === 'b' ? (message.g ?? [])
+      : message.t === 'welcome' ? Object.entries(message.g) : [];
+    const gameStateEntry = globalEntries.find(([key]) => key === 'gsi')
+      ?? globalEntries.find(([key]) => key === 'gs');
     const gameState: PeerPayloadDiagnostics['gameState'] = gameStateEntry
       ? gameStateEntry[0] === 'gsi' || (
         typeof gameStateEntry[1] === 'object'
@@ -257,8 +327,9 @@ export class PeerLink implements PeerLinkLike {
     sink({
       channel,
       messageType: message.t,
-      payloadLength: payload.length,
+      payloadLength,
       payloadSizeKind: 'estimated_utf16_code_units',
+      wireBytes,
       gameState,
     });
   }
@@ -273,6 +344,7 @@ export class PeerLink implements PeerLinkLike {
     if (this.closed) return;
     console.warn(`[PeerLink] Verbindung geschlossen (peer=${this.remotePeerId}).`, reason ?? 'kein Grund vom Transport');
     this.closed = true;
+    this.clearPackets();
     this.clearPeerConnectionMonitor();
     try {
       this.fastChannel?.close();
@@ -295,6 +367,14 @@ export class PeerLink implements PeerLinkLike {
     this.peerConnectionStateHandler = onStateChange;
     peerConnection.addEventListener('connectionstatechange', onStateChange);
     this.handlePeerConnectionState(peerConnection);
+  }
+
+  private clearPackets(): void {
+    this.connection.dataChannel?.removeEventListener('bufferedamountlow', this.reliableSends.resume);
+    this.fastChannel?.removeEventListener('bufferedamountlow', this.fastSends.resume);
+    this.reliableSends.close(); this.fastSends.close();
+    this.reliablePackets.clear(); this.fastPackets.clear();
+    this.pendingFastDecode = null; this.inbox = [];
   }
 
   private handlePeerConnectionState(peerConnection: RTCPeerConnection): void {

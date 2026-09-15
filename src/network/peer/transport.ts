@@ -14,6 +14,8 @@ export interface PeerPayloadDiagnostics {
   /** Existing encoded string length; no diagnostic re-encoding is performed. */
   payloadLength: number;
   payloadSizeKind: 'estimated_utf16_code_units';
+  /** Actual application bytes passed to SCTP, including fragment headers. */
+  wireBytes?: number;
   gameState: 'none' | 'delta' | 'full';
 }
 
@@ -23,6 +25,7 @@ export interface PeerLinkLike {
   readonly remotePeerId: string;
   /** Spiel-seitige Spieler-ID der Gegenseite; erst nach dem Handshake gesetzt. */
   playerId: string;
+  readonly closeError?: PeerNetworkError;
   send(message: PeerMessage, channel: PeerChannelKind): void;
   setPayloadDiagnosticsSink?(sink: ((info: PeerPayloadDiagnostics) => void) | null): void;
   close(): void;

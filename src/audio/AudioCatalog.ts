@@ -80,6 +80,10 @@ const SHIPPED_AUDIO_FILES = new Set([
   'sfx_explosion_energy_injector.ogg',
   'sfx_explosion_time_bubble.ogg',
   'sfx_explosion_timebomb.ogg',
+  "sfx_bfg_charge.ogg",
+  "sfx_bfg_fly.ogg",
+  "sfx_bfg_laser.ogg",
+  "sfx_pickup_bfg.ogg",
 ]);
 
 function isShippedAudioAsset(assetPath: string): boolean {
@@ -284,19 +288,19 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_time_bubble: 1.0,
   sfx_explosion_timebomb: 0.5,
   // Shot Sounds
-  shot_ak47:               0.4,
-  shot_asmd_primary:       0.4,
+  shot_ak47:               0.6,
+  shot_asmd_primary:       0.3,
   shot_asmd_secondary:     0.4,
   shot_crossbow:           0.1,
   shot_dry_trigger:        0.3,
   shot_gauss:              0.5,
-  shot_glock:              0.15,
+  shot_glock:              0.35,
   shot_plasma:             0.2,
   shot_shotgun:            0.36, 
   shot_bite:               0.4,
   shot_zeus:               0.5,
   shot_hydra:              0.3,
-  shot_awp:                0.4,
+  shot_awp:                0.6,
   shot_p90:                0.3,
   shot_flame:              0.2,
   shot_rocketlauncher:     0.5,
@@ -313,7 +317,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_holy:           0.8,
   sfx_explosion_rocket:         0.5,
   sfx_explosion_mini_rocket:    0.15,
-  sfx_explosion_asmd_secondary: 0.5,
+  sfx_explosion_asmd_secondary: 0.9,
   sfx_explosion_armageddon:     0.5,
 
   // Loadout Activations

@@ -107,12 +107,16 @@ export class ProjectileReplicationAdapter {
     const snapshotSerial = ++this.snapshotSerial;
     const full = this.forceFullSnapshot;
     this.forceFullSnapshot = false;
-    const refreshIds = full ? null : this.collectStaticRefreshIds(nowMs);
+    // Read the projection once: it includes copied flight histories. Refresh selection must
+    // not materialize every static/dynamic/path projection a second time each network tick.
+    const records: ProjectileReplicationRecord[] = [];
+    this.source.readProjectileReplication(record => records.push(record));
+    const refreshIds = full ? null : this.collectStaticRefreshIds(nowMs, records);
     const s: Array<number | string> = [];
     const u: Array<number | string> = [];
     this.seenIds.clear();
 
-    this.source.readProjectileReplication((record) => {
+    for (const record of records) {
       this.seenIds.add(record.id);
       // Keep the adapter correct even for a projection source that only exposes the sticky latest
       // outcome; the World runtime additionally calls recordBouncePresentation for every outcome.
@@ -136,7 +140,7 @@ export class ProjectileReplicationAdapter {
         encodeProjectileStatic(s, record.static);
       }
       encodeProjectileDynamic(u, projectDynamicWithBounceOutcomes(record.dynamic, retention?.outcomes));
-    });
+    }
 
     for (const [id, retention] of this.bounceRetentions) {
       if (this.seenIds.has(id)) continue;
@@ -173,13 +177,13 @@ export class ProjectileReplicationAdapter {
     return { s, u, ...(e.length ? { e } : {}), ...(full ? { f: 1 as const } : {}) };
   }
 
-  private collectStaticRefreshIds(nowMs: number): Set<number> | null {
+  private collectStaticRefreshIds(nowMs: number, records: readonly ProjectileReplicationRecord[]): Set<number> | null {
     const candidates: number[] = [];
-    this.source.readProjectileReplication((record) => {
+    for (const record of records) {
       if (nowMs - record.createdAt >= PROJECTILE_NET_LONG_LIVED_AGE_MS) {
         candidates.push(record.id);
       }
-    });
+    }
     if (candidates.length === 0) {
       this.refreshCursor = 0;
       return null;

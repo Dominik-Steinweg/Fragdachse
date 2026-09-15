@@ -1,5 +1,5 @@
 import { FLIGHT_SIGNATURE_FIELDS, validateFlightSignature } from '../projectile/FlightSignature';
-import { PROJECTILE_PATH_MAX_POINTS, PROJECTILE_PATH_HISTORY_MS, type ProjectilePathPoint } from '../projectile/ProjectileFlightPath';
+import { encodeProjectileFlightPath, decodeProjectileFlightPath } from './projectileFlightPathCodec';
 /**
  * Independently decodable projectile streams:
  * - s: complete static replacements, resent on spawn/change and periodically refreshed.
@@ -7,8 +7,8 @@ import { PROJECTILE_PATH_MAX_POINTS, PROJECTILE_PATH_HISTORY_MS, type Projectile
  * - u: every active head with full position/velocity and optional burn, phase, bounce and path.
  * - e: completed paths, including their final endpoint, without active-head semantics.
  *
- * A path is timeMs, endedFlag, pointCount, followed by fixed-width point records:
- * sequence, timeMs, x, y, vx, vy, breakBeforeFlag, bounceSequence (zero if absent).
+ * Each path is a lossless binary prediction stream inside a base64 string.
+ * Predictors reset per path and packet; all positions, times and points are preserved.
  * Histories are repeated for packet-loss healing; presentation cursors deduplicate sequences
  * and clip partially consumed segments by time. No decoded value depends on a prior packet.
  *
@@ -288,10 +288,7 @@ export function encodeProjectileDynamic(
       out.push(bounce.sequence, bounce.x, bounce.y, bounce.vx, bounce.vy, bounce.tracerBounce ? 1 : 0);
     }
   }
-  if (entry.flightPath) {
-    out.push(entry.flightPath.timeMs, entry.flightPath.ended ? 1 : 0, entry.flightPath.points.length);
-    for (const p of entry.flightPath.points) out.push(p.sequence, p.timeMs, p.x, p.y, p.vx, p.vy, p.breakBefore ? 1 : 0, p.bounceSequence ?? 0);
-  }
+  if (entry.flightPath) out.push(encodeProjectileFlightPath(entry.flightPath));
 }
 
 /** Dekodiert den Dynamik-Strom zurück in vollständige Einträge. */
@@ -348,26 +345,7 @@ export function decodeProjectileDynamics(
       }
       entry.bounceOutcomes = outcomes;
     }
-    if (mask & D_FLIGHT_PATH) {
-      const timeMs = stream[i++] as number, endedFlag = stream[i++], count = stream[i++] as number;
-      const ended = endedFlag === 1;
-      if (!Number.isFinite(timeMs) || (endedFlag !== 0 && endedFlag !== 1)
-        || !Number.isInteger(count) || count < 1 || count > PROJECTILE_PATH_MAX_POINTS
-        || i + count * 8 > stream.length) throw new Error('Invalid projectile path');
-      const points: ProjectilePathPoint[] = [];
-      for (let n = 0; n < count; n++) {
-        const sequence = stream[i++] as number, time = stream[i++] as number;
-        const x = stream[i++] as number, y = stream[i++] as number, vx = stream[i++] as number, vy = stream[i++] as number;
-        const breakFlag = stream[i++], bounceSequence = stream[i++] as number;
-        const breakBefore = breakFlag === 1;
-        if (![time, x, y, vx, vy].every(Number.isFinite) || !Number.isSafeInteger(sequence) || sequence <= 0
-          || time > timeMs || time < timeMs - PROJECTILE_PATH_HISTORY_MS - 0.001
-          || (breakFlag !== 0 && breakFlag !== 1) || !Number.isSafeInteger(bounceSequence) || bounceSequence < 0
-          || (n > 0 && (sequence <= points[n - 1].sequence || time < points[n - 1].timeMs))) throw new Error('Invalid projectile path point');
-        points.push({ sequence, timeMs: time, x, y, vx, vy, ...(breakBefore ? { breakBefore: true } : {}), ...(bounceSequence ? { bounceSequence } : {}) });
-      }
-      entry.flightPath = { timeMs, points, ...(ended ? { ended: true } : {}) };
-    }
+    if (mask & D_FLIGHT_PATH) entry.flightPath = decodeProjectileFlightPath(stream[i++]);
     result.push(entry);
   }
   return result;
@@ -384,7 +362,7 @@ export function countProjectileDynamics(stream: readonly (number | string)[]): n
     if (mask & D_MINI_ROCKET) i += 2;
     if (mask & D_BOUNCE) i += 6;
     if (mask & D_BOUNCE_OUTCOMES) i += 1 + Math.max(0, Math.floor(stream[i] as number)) * 6;
-    if (mask & D_FLIGHT_PATH) i += 3 + Math.max(0, Math.floor(stream[i + 2] as number)) * 8;
+    if (mask & D_FLIGHT_PATH) i += 1;
     count += 1;
   }
   return count;

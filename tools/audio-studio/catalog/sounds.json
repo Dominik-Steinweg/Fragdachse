@@ -209,13 +209,13 @@
       "musical_identity": "",
       "playback": "loop",
       "prompt": {
-        "text": "TrackType: SFX, seamless loopable BFG charge: heavy reactor hum, pressure-building low pulse, focused electrical fizz, and locked constant intensity with no discharge or end hit.",
-        "source": "astra",
+        "text": "TrackType: SFX, seamless loopable charge for a heavy energy sci-fi reactor: loud, dangerous, heavy reactor hum, extrem electrical fizz, epic and cinematic",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 8,
+        "duration_seconds": 7,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -237,9 +237,9 @@
         "asset_path": "./assets/sounds/sfx_bfg_charge.ogg",
         "filename": "sfx_bfg_charge.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "9f4cbeacd5252baea53de0d2bc4957a77c0c77eb1abbd01f09ae8916e76e03cc",
         "file_error": null,
         "shared_keys": [
           "sfx_bfg_charge"
@@ -264,8 +264,8 @@
       "musical_identity": "",
       "playback": "loop",
       "prompt": {
-        "text": "TrackType: SFX, seamless loopable plasma projectile flight: hard low whoosh body, needle-bright electrical grit, close forward motion, and steady intensity with no impact.",
-        "source": "astra",
+        "text": "TrackType: SFX, seamless loopable steady plasma Buzz, some noise, lot electric sound. epic and cinematic, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -282,7 +282,32 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_bfg_fly.ogg",
+            "usages": [
+              {
+                "path": "src/effects/BfgRenderer.ts",
+                "line": 310,
+                "kind": "loop",
+                "excerpt": "flightLoop: this.audioSystem?.startLoop('sfx_bfg_fly', x, y) ?? null,"
+              },
+              {
+                "path": "src/effects/BfgRenderer.ts",
+                "line": 321,
+                "kind": "loop",
+                "excerpt": "visual.flightLoop ??= this.audioSystem?.startLoop('sfx_bfg_fly', x, y) ?? null;"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "sfx_bfg_fly"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_bfg_fly",
         "kind": "sfx",
@@ -292,15 +317,28 @@
         "asset_path": "./assets/sounds/sfx_bfg_fly.ogg",
         "filename": "sfx_bfg_fly.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "40fbca42c605cb6b8770e5ee443f958c988ce6cb81e0f76b3a4cbbb520d0cd90",
         "file_error": null,
         "shared_keys": [
           "sfx_bfg_fly"
         ],
-        "usages": [],
-        "playback": "unknown",
+        "usages": [
+          {
+            "path": "src/effects/BfgRenderer.ts",
+            "line": 310,
+            "kind": "loop",
+            "excerpt": "flightLoop: this.audioSystem?.startLoop('sfx_bfg_fly', x, y) ?? null,"
+          },
+          {
+            "path": "src/effects/BfgRenderer.ts",
+            "line": 321,
+            "kind": "loop",
+            "excerpt": "visual.flightLoop ??= this.audioSystem?.startLoop('sfx_bfg_fly', x, y) ?? null;"
+          }
+        ],
+        "playback": "loop",
         "conflicts": []
       },
       "orphaned": false
@@ -312,13 +350,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one focused laser strike: razor-bright snap transient, dense energy body, short sizzling tail, and clean close-mic separation.",
-        "source": "astra",
+        "text": "TrackType: SFX, one focused extremly short laser strike: epic and cinematic, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 1,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -330,7 +368,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_bfg_laser.ogg",
+            "usages": [
+              {
+                "path": "src/effects/BfgRenderer.ts",
+                "line": 174,
+                "kind": "oneshot",
+                "excerpt": "'sfx_bfg_laser',"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_bfg_laser"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_bfg_laser",
         "kind": "sfx",
@@ -340,15 +397,22 @@
         "asset_path": "./assets/sounds/sfx_bfg_laser.ogg",
         "filename": "sfx_bfg_laser.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "6ebf3137d541579186fd59749145dfa37ae6cd10ff5b9d9c63f2d45502cb9ba6",
         "file_error": null,
         "shared_keys": [
           "sfx_bfg_laser"
         ],
-        "usages": [],
-        "playback": "unknown",
+        "usages": [
+          {
+            "path": "src/effects/BfgRenderer.ts",
+            "line": 174,
+            "kind": "oneshot",
+            "excerpt": "'sfx_bfg_laser',"
+          }
+        ],
+        "playback": "oneshot",
         "conflicts": []
       },
       "orphaned": false
@@ -1000,7 +1064,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_environment_hit.ogg",
+            "usages": [
+              {
+                "path": "src/effects/EffectSystem.ts",
+                "line": 1325,
+                "kind": "oneshot",
+                "excerpt": "this.audioSystem?.playSound('sfx_environment_hit', x, y);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_environment_hit"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_environment_hit",
         "kind": "sfx",
@@ -1020,7 +1103,7 @@
         "usages": [
           {
             "path": "src/effects/EffectSystem.ts",
-            "line": 1343,
+            "line": 1325,
             "kind": "oneshot",
             "excerpt": "this.audioSystem?.playSound('sfx_environment_hit', x, y);"
           }
@@ -1157,8 +1240,8 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one plasma orb burst: electric rupture transient, dense expanding energy body, sizzling particulate tail, and compact game-ready decay.",
-        "source": "astra",
+        "text": "TrackType: SFX, one plasma orb explosion: energy-style, short and abrupt, epic and cinematic, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
@@ -1261,10 +1344,10 @@
         "target_path": "public/assets/sounds/sfx_explosion_asmd_secondary.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_asmd_secondary.ogg",
         "filename": "sfx_explosion_asmd_secondary.ogg",
-        "volume": 0.5,
+        "volume": 0.9,
         "shipped": true,
         "exists": true,
-        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "file_hash": "0c79c3cf3656b9aec66c73aeb2f4ed1ec970591406fa744f18500e2ca3eac67c",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_asmd_secondary"
@@ -4253,13 +4336,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one AK rifle shot: hard muzzle crack, dense midrange body, sharp bolt clack, compact low punch, dry and clear.",
-        "source": "astra",
+        "text": "TrackType: SFX, one AK rifle shot: hard muzzle crack, dense midrange body, sharp bolt clack, compact low punch, Sounds more aggressive than a normal weapon, epic and cinematic, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4305,10 +4388,10 @@
         "target_path": "public/assets/sounds/ak-47.ogg",
         "asset_path": "./assets/sounds/ak-47.ogg",
         "filename": "ak-47.ogg",
-        "volume": 0.4,
+        "volume": 0.6,
         "shipped": true,
         "exists": true,
-        "file_hash": "d181f1fcf21260016dfc2220770411d72fad5b84f8ed41ac87552b70337adaa3",
+        "file_hash": "5b7d52ea8616ddc625b35404f268980d36e0eab430de18f11ca8d14a96d6c709",
         "file_error": null,
         "shared_keys": [
           "shot_ak47"
@@ -4339,13 +4422,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one futuristic energy-rifle shot: scy-fi laser shot, energy-stile body, snappy transient, bright tight decay",
+        "text": "TrackType: SFX, one futuristic energy-rifle shot: scy-fi laser shot, energy-style, Aggressive Energy Laser Weapon, epic and cinematic, made for an intense action game",
         "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4366,10 +4449,10 @@
         "target_path": "public/assets/sounds/asmd-prim.ogg",
         "asset_path": "./assets/sounds/asmd-prim.ogg",
         "filename": "asmd-prim.ogg",
-        "volume": 0.4,
+        "volume": 0.3,
         "shipped": true,
         "exists": true,
-        "file_hash": "39c4d2f5f887235976cad6c211c2619224e688e62ec67b2b26db1082383cfe3e",
+        "file_hash": "072c145edc24dc5e268e24d55630b3439cf0f6a4aa5082ba6db94f6d7ae3f0b5",
         "file_error": null,
         "shared_keys": [
           "shot_asmd_primary"
@@ -4400,13 +4483,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one plasma-orb launch: compressed electric thump, rounded dense body, buzzing crackle, and a short forward whoosh.",
-        "source": "astra",
+        "text": "TrackType: SFX, one  large plasma-orb launch, epic and cinematic, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
-        "duration_seconds": 2,
+        "model": "medium",
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4430,7 +4513,7 @@
         "volume": 0.4,
         "shipped": true,
         "exists": true,
-        "file_hash": "1f86871c2554385dc5d2d59515d97ea0bb196dec242ad7c94af19c1306c78db7",
+        "file_hash": "6cb08d02cde2cb993592089b6c72b845fadb0bfc04d5adebfd5e7a508737cc9b",
         "file_error": null,
         "shared_keys": [
           "shot_asmd_secondary"
@@ -4455,13 +4538,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one heavy sniper shot: explosive dry crack, dense low body, sharp bolt kick, and a controlled short tail.",
-        "source": "astra",
+        "text": "TrackType: SFX, one  extremely heavy sniper shot: Sounds more aggressive than a normal weapon, epic and cinematic, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4482,10 +4565,10 @@
         "target_path": "public/assets/sounds/awp.ogg",
         "asset_path": "./assets/sounds/awp.ogg",
         "filename": "awp.ogg",
-        "volume": 0.4,
+        "volume": 0.6,
         "shipped": true,
         "exists": true,
-        "file_hash": "c84491e0a7da50966abd91b4aaf03c499243aefb9138cd72636d9994b9535a90",
+        "file_hash": "f2ac2744caa5cab484ff3c616b41e37ec5b28c0a93e817a1aeb30a198eac7f84",
         "file_error": null,
         "shared_keys": [
           "shot_awp"
@@ -4510,13 +4593,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one science-fiction cannon shot: huge electric crack, heavy low pulse body, pressurized energy burst, and a compact charged tail.",
-        "source": "astra",
+        "text": "TrackType: SFX, big fucking gun, one giant science-fiction cannon shot: epic and cinematic, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4540,7 +4623,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "7daa93f48952b7afca0532c110aadca762a040207ed4911aae361ab0c005f313",
+        "file_hash": "9ce74274755059bf60f84edb17e65b94682d4ee35fbf8315d43254c577e13da0",
         "file_error": null,
         "shared_keys": [
           "shot_bfg"
@@ -4638,13 +4721,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one crossbow release: sharp string snap, wooden latch crack, compact bolt whoosh, and a tight tail.",
-        "source": "astra",
+        "text": "TrackType: SFX,  crossbow release, A short, sharp sound with medium body as a bolt is fired, followed by violent air turbulence, epic and cinematic, made for an intense action game",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
-        "duration_seconds": 2,
+        "model": "medium",
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -4668,7 +4751,7 @@
         "volume": 0.1,
         "shipped": true,
         "exists": true,
-        "file_hash": "96255be8fc9fc9db5eea65107440b7c5259ad8e5cf021249d86a894254c1f5c5",
+        "file_hash": "54bcbee17d1cc09d8330dddfa95edcfb1571544d80e65ea312b2fce54178e9cf",
         "file_error": null,
         "shared_keys": [
           "shot_crossbow"
@@ -5482,7 +5565,7 @@
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx-comfyui",
+        "model": "medium",
         "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
@@ -5504,10 +5587,10 @@
         "target_path": "public/assets/sounds/glock.ogg",
         "asset_path": "./assets/sounds/glock.ogg",
         "filename": "glock.ogg",
-        "volume": 0.15,
+        "volume": 0.35,
         "shipped": true,
         "exists": true,
-        "file_hash": "2821a19b174d66b3f99d5aafb75519897a877b154b9f8430778bd1af1663c046",
+        "file_hash": "588a56c1fff6721ee42146ef8a37bd151470503330f6b4f69a4050f90c5cf8fa",
         "file_error": null,
         "shared_keys": [
           "shot_glock"
@@ -6408,7 +6491,38 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/zeus.ogg",
+            "usages": [
+              {
+                "path": "src/effects/EffectSystem.ts",
+                "line": 213,
+                "kind": "oneshot",
+                "excerpt": "this.audioSystem?.playSound('shot_zeus', ball.x, ball.y, ball.playerId);"
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 259,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_zeus\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 213,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_zeus\","
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "shot_zeus"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "shot_zeus",
         "kind": "sfx",
@@ -6428,7 +6542,7 @@
         "usages": [
           {
             "path": "src/effects/EffectSystem.ts",
-            "line": 204,
+            "line": 213,
             "kind": "oneshot",
             "excerpt": "this.audioSystem?.playSound('shot_zeus', ball.x, ball.y, ball.playerId);"
           },
@@ -6571,6 +6685,42 @@
               "music_arena"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/music_arena.ogg",
+            "usages": [
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 14,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+              },
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 14,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1685,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3056,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_arena"
+            ]
+          }
         }
       ],
       "repository": {
@@ -6604,13 +6754,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1668,
+            "line": 1685,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3029,
+            "line": 3056,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
           }
@@ -6759,6 +6909,48 @@
               "music_lobby"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/badger02.ogg",
+            "usages": [
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 13,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+              },
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 13,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 915,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1569,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3190,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_lobby"
+            ]
+          }
         }
       ],
       "repository": {
@@ -6792,19 +6984,19 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 913,
+            "line": 915,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1552,
+            "line": 1569,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3163,
+            "line": 3190,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           }
@@ -6869,6 +7061,36 @@
               "sfx_boss_announce"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_boss_announce.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 815,
+                "kind": "unknown",
+                "excerpt": "this.broadcastMissionAudio('sfx_boss_announce', `boss:${spawnedAtMs}`);"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1989,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_boss_announce"
+            ]
+          }
         }
       ],
       "repository": {
@@ -6896,13 +7118,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 813,
+            "line": 815,
             "kind": "unknown",
             "excerpt": "this.broadcastMissionAudio('sfx_boss_announce', `boss:${spawnedAtMs}`);"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1971,
+            "line": 1989,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -6967,6 +7189,36 @@
               "sfx_checkpoint_activate"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_checkpoint_activate.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 824,
+                "kind": "unknown",
+                "excerpt": "onCheckpointActivated: id => this.broadcastMissionAudio('sfx_checkpoint_activate', `checkpoint:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1989,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_checkpoint_activate"
+            ]
+          }
         }
       ],
       "repository": {
@@ -6994,13 +7246,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 822,
+            "line": 824,
             "kind": "unknown",
             "excerpt": "onCheckpointActivated: id => this.broadcastMissionAudio('sfx_checkpoint_activate', `checkpoint:${id}`),"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1971,
+            "line": 1989,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -7608,6 +7860,36 @@
               "sfx_objective_complete"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_objective_complete.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 823,
+                "kind": "unknown",
+                "excerpt": "onObjectiveCompleted: id => this.broadcastMissionAudio('sfx_objective_complete', `objective:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1989,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_objective_complete"
+            ]
+          }
         }
       ],
       "repository": {
@@ -7635,13 +7917,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 821,
+            "line": 823,
             "kind": "unknown",
             "excerpt": "onObjectiveCompleted: id => this.broadcastMissionAudio('sfx_objective_complete', `objective:${id}`),"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1971,
+            "line": 1989,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -7779,6 +8061,30 @@
               "sfx_pickup_adrenaline_essence"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_pickup_adrenaline_essence.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 386,
+                "kind": "unknown",
+                "excerpt": ": key === 'sfx_pickup_adrenaline_essence' ? 110"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1255,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_pickup_adrenaline_essence');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_pickup_adrenaline_essence"
+            ]
+          }
         }
       ],
       "repository": {
@@ -7806,7 +8112,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1239,
+            "line": 1255,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_pickup_adrenaline_essence');"
           }
@@ -7823,14 +8129,14 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX. A single heavy futuristic weapon pickup, solid mechanical clunk and short green plasma energy swell, immediate dry finish, no shot or explosion. Isolated sound, no music, speech, ambience or repeated sequence.",
-        "source": "astra",
+        "text": "TrackType: SFX. A single heavy futuristic Item pickup, solid mechanical clunk, Heavy electric buzz, epic and cinematic",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
         "duration_seconds": 2,
-        "candidate_count": 4,
+        "candidate_count": 6,
         "steps": 8,
         "cfg_scale": 1.0
       },
@@ -7851,9 +8157,9 @@
         "asset_path": "./assets/sounds/sfx_pickup_bfg.ogg",
         "filename": "sfx_pickup_bfg.ogg",
         "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "9f2cd80cea9f0495d06608c34de5cf2708bae7fa7030f0ae0f6769b07bfdacbf",
         "file_error": null,
         "shared_keys": [
           "sfx_pickup_bfg"
@@ -8440,6 +8746,36 @@
               "sfx_wave_start"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_wave_start.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 822,
+                "kind": "unknown",
+                "excerpt": "onWaveStarted: id => this.broadcastMissionAudio('sfx_wave_start', `wave:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1989,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_wave_start"
+            ]
+          }
         }
       ],
       "repository": {
@@ -8467,13 +8803,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 820,
+            "line": 822,
             "kind": "unknown",
             "excerpt": "onWaveStarted: id => this.broadcastMissionAudio('sfx_wave_start', `wave:${id}`),"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1971,
+            "line": 1989,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -8626,6 +8962,30 @@
               "sfx_explosion_base_destruction"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_base_destruction.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 33,
+                "kind": "unknown",
+                "excerpt": "'environment.base_destruction': 'sfx_explosion_base_destruction',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2616,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_base_destruction', x, y, undefined, volumeScale);"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_base_destruction"
+            ]
+          }
         }
       ],
       "repository": {
@@ -8653,7 +9013,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2592,
+            "line": 2616,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_base_destruction', x, y, undefined, volumeScale);"
           }

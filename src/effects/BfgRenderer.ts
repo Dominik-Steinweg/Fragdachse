@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { COLORS, DEPTH, DEPTH_TRACE } from '../config';
 import {
   blendBeamPaths,
@@ -86,6 +87,7 @@ interface BfgBeamVisual {
 
 // ── Interner State pro BFG-Projektil ────────────────────────────────────────
 interface BfgVisual {
+  flightLoop: string | null;
   coreEmitter:  Phaser.GameObjects.Particles.ParticleEmitter;
   outerEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -105,6 +107,7 @@ interface BfgVisual {
  * Standalone-Modul – wird von der Projectile-Presentation für style='bfg' genutzt.
  */
 export class BfgRenderer {
+  private audioSystem: GameAudioSystem | null = null;
   private visuals = new Map<number, BfgVisual>();
   private readonly beams = new Map<string, BfgBeamVisual>();
   private readonly beamPool: BfgBeamVisual[] = [];
@@ -113,6 +116,10 @@ export class BfgRenderer {
 
   constructor(private readonly scene: Phaser.Scene) {
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroyAll, this);
+  }
+
+  setAudioSystem(system: GameAudioSystem): void {
+    this.audioSystem = system;
   }
 
   // ── Texturen ──────────────────────────────────────────────────────────────
@@ -159,6 +166,17 @@ export class BfgRenderer {
     if (lines.length === 0) return;
     const now = this.scene.time.now;
     const projectilePosition = this.projectilePositions.get(projectileId);
+
+    // One sound per authoritative pulse, regardless of how many targets it hits.
+    // Logarithmic gain keeps dense enemy/rock batches only slightly louder.
+    const volumeScale = 1 + Math.min(0.35, Math.log2(lines.length) * 0.08);
+    this.audioSystem?.playSound(
+      'sfx_bfg_laser',
+      projectilePosition?.x ?? lines[0].sx,
+      projectilePosition?.y ?? lines[0].sy,
+      undefined,
+      volumeScale,
+    );
 
     for (const line of lines) {
       const beamId = `${projectileId}:${this.nextBeamId++}`;
@@ -289,6 +307,7 @@ export class BfgRenderer {
       glowImage,
       glowBaseScale,
       glowPhase: id * 0.37,
+      flightLoop: this.audioSystem?.startLoop('sfx_bfg_fly', x, y) ?? null,
     });
   }
 
@@ -297,6 +316,10 @@ export class BfgRenderer {
     this.projectilePositions.set(id, { x, y });
     const visual = this.visuals.get(id);
     if (!visual) return;
+
+    // Retry if the loop could not start while muted or outside audible range.
+    visual.flightLoop ??= this.audioSystem?.startLoop('sfx_bfg_fly', x, y) ?? null;
+    this.audioSystem?.updateLoopPosition(visual.flightLoop, x, y);
 
     // Emitter-Position nachführen
     visual.coreEmitter.setPosition(x, y);
@@ -326,6 +349,8 @@ export class BfgRenderer {
     this.projectilePositions.delete(id);
     const visual = this.visuals.get(id);
     if (!visual) return;
+
+    this.audioSystem?.stopLoop(visual.flightLoop);
 
     destroyEmitter(visual.coreEmitter);
     destroyEmitter(visual.outerEmitter);

@@ -10,8 +10,8 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-// Fire-chunk bursts now carry individual landing times; older peers cannot decode them.
-export const PEER_PROTOCOL_VERSION = 15;
+// Compact flight points and bounded, optionally compressed transport frames.
+export const PEER_PROTOCOL_VERSION = 16;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';
@@ -25,6 +25,8 @@ export interface HelloMessage {
   k: string;
   /** True nur bei einer Wiederverbindung innerhalb einer bereits laufenden Client-Session. */
   r?: boolean;
+  /** Optional native lossless compression capability. Raw framing always works. */
+  z?: 1;
 }
 
 export type RejectReason = 'room-full' | 'protocol-mismatch' | 'resume-expired';
@@ -54,6 +56,7 @@ export interface WelcomeMessage {
   g: Record<string, unknown>;
   /** Vollständiger Per-Spieler-Store, außen nach Spieler-ID indiziert. */
   p: Record<string, Record<string, unknown>>;
+  z?: 1;
 }
 
 /** Host → Client: ein weiterer Spieler ist beigetreten. */
@@ -206,6 +209,7 @@ export function parsePeerMessage(raw: unknown): PeerMessage | null {
       if (!Number.isSafeInteger(value.v) || typeof value.k !== 'string' || value.k.length < 16) return null;
       const message: HelloMessage = { t: 'hello', v: value.v as number, k: value.k };
       if (value.r === true) message.r = true;
+      if (value.z === 1) message.z = 1;
       return message;
     }
     case 'reject': {
@@ -226,6 +230,7 @@ export function parsePeerMessage(raw: unknown): PeerMessage | null {
         roster,
         g: isPlainRecord(value.g) ? { ...value.g } : {},
         p: parsePlayerStates(value.p),
+        ...(value.z === 1 ? { z: 1 as const } : {}),
       };
     }
     case 'join': {

@@ -424,6 +424,7 @@ export function wireRenderersToDistortion(
 
 /** Wire GameAudioSystem to renderers that play sounds. */
 export function wireRenderersToAudioSystem(bundle: RendererBundle, audioSystem: GameAudioSystem): void {
+  bundle.bfg.setAudioSystem(audioSystem);
   bundle.teslaDome.setAudioSystem(audioSystem);
   bundle.energyShield.setAudioSystem(audioSystem);
   bundle.nuke.setAudioSystem(audioSystem);

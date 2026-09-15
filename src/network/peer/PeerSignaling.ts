@@ -26,6 +26,7 @@ export type PeerFailureKind =
   | 'invalid-room-code'
   | 'browser-unsupported'
   | 'connection-failed'
+  | 'transport-overloaded'
   | 'relay-rejected'
   | 'protocol-mismatch'
   | 'host-left'
@@ -46,7 +47,8 @@ const FAILURE_MESSAGES: Record<PeerFailureKind, string> = {
   'host-not-found': 'Host nicht gefunden. Der Raum existiert nicht mehr oder der Code ist falsch.',
   'room-code-taken': 'Kein freier Raumcode verfügbar. Bitte neu laden.',
   'browser-unsupported': 'Dieser Browser unterstützt die benötigten WebRTC-Funktionen nicht.',
-  'connection-failed': 'Direkte Verbindung zum Host nicht möglich. Netzwerk oder Firewall blockiert WebRTC.',
+  'connection-failed': 'Die WebRTC-Verbindung zum Host konnte nicht hergestellt oder wiederaufgenommen werden.',
+  'transport-overloaded': 'Der Netzwerk-Sendepfad ist überlastet. Zuverlässige Updates konnten nicht mehr gepuffert werden.',
   'relay-rejected': 'Verbindung lief über einen Relay-Server und wurde abgelehnt (Konfigurationsfehler).',
   'protocol-mismatch': 'Host und Client haben unterschiedliche Spielversionen. Beide Seiten neu laden.',
   'host-left': 'Verbindung zum Host verloren.',

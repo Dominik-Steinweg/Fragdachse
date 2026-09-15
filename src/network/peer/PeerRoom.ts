@@ -454,6 +454,9 @@ export class PeerRoom {
   // ── Nachrichtenverarbeitung ───────────────────────────────────────────────
 
   private handleMessage(link: PeerLinkLike, message: PeerMessage, channel: PeerChannelKind): void {
+    // A fragmented/compressed welcome can be overtaken by fast traffic on the other
+    // channel. Establish the new/resumed link's baseline before accepting any fast state.
+    if (!this.transport.isHost && !link.playerId && channel === 'fast') return;
     if (message.t === 'b' && channel === 'fast' && !this.acceptFastBatch(link, message)) return;
     if (message.t === 'hb') {
       this.lastHeartbeatAt.set(link, Date.now());
@@ -772,7 +775,7 @@ export class PeerRoom {
       if (this.kicked) return;
       if (this.leaving) return;
       if (this.localPlayerId.length === 0) {
-        this.rejectHandshake(createPeerNetworkError('connection-failed'));
+        this.rejectHandshake(link.closeError ?? createPeerNetworkError('connection-failed'));
         return;
       }
       this.beginReconnect();
