@@ -20,17 +20,23 @@ export interface DeathFragmentTemplate {
 }
 
 export type DeathFragmentCanvasFactory = (width: number, height: number) => HTMLCanvasElement;
+export interface DeathFragmentFrame { readonly textureKey: string; readonly frame?: string | number }
 
 /**
- * Zentrale, lazy Pixelanalyse fuer Death-Disintegration.
+ * Zentrale, vorwaermbare Pixelanalyse fuer Death-Disintegration.
  *
  * Der Cache-Schluessel ist absichtlich genau die visuelle Identitaet, die ueber das Netzwerk
  * laeuft: Texture Key plus aktueller Frame. Display-Groesse, Rotation, Entity-Tint und Seed
  * bleiben Spawnparameter und erzeugen keine zweite Analyse derselben Grafik.
  */
 export class DeathFragmentTemplateCache {
-  private readonly templates = new Map<string, DeathFragmentTemplate>();
+  private readonly templates = new Map<string, Map<string, {
+    source: Phaser.Textures.Frame; template: DeathFragmentTemplate;
+  }>>();
   private readonly createCanvas: DeathFragmentCanvasFactory;
+  private pending: readonly DeathFragmentFrame[] = [];
+  private cursor = 0;
+  private templateCount = 0;
 
   constructor(
     private readonly textures: Phaser.Textures.TextureManager,
@@ -46,21 +52,59 @@ export class DeathFragmentTemplateCache {
 
   get(textureKey: string, frame?: string | number): DeathFragmentTemplate {
     const frameKey = normalizeFrameKey(frame);
-    const key = `${textureKey}\u0000${frameKey}`;
-    const cached = this.templates.get(key);
-    if (cached) return cached;
+    // Separate maps avoid constructing a texture/frame composite string for every death.
+    let frames = this.templates.get(textureKey);
+    const cached = frames?.get(frameKey);
+    const source = this.textures.exists(textureKey) && this.textures.get(textureKey).has(frameKey)
+      ? this.textures.get(textureKey).get(frameKey) : undefined;
+    if (cached && source && cached.source === source) return cached.template;
 
     const template = this.build(textureKey, frameKey);
-    this.templates.set(key, template);
+    if (source) {
+      if (!frames) {
+        frames = new Map();
+        this.templates.set(textureKey, frames);
+      }
+      if (!cached) this.templateCount++;
+      frames.set(frameKey, { source, template });
+    } else if (cached) {
+      frames!.delete(frameKey);
+      this.templateCount--;
+      if (frames!.size === 0) this.templates.delete(textureKey);
+    }
     return template;
   }
 
+  /** A new presentation scope replaces, rather than accumulates, the resident working set. */
+  prepare(frames: readonly DeathFragmentFrame[]): void {
+    this.clear();
+    this.pending = frames;
+  }
+
+  /** One indivisible readback at a time; always yield after at most four frames or 2 ms. */
+  stepPreparation(): boolean {
+    const deadline = performance.now() + 2;
+    let count = 0;
+    while (this.cursor < this.pending.length && count++ < 4) {
+      const item = this.pending[this.cursor++];
+      this.get(item.textureKey, item.frame);
+      if (performance.now() >= deadline) break;
+    }
+    if (this.cursor === this.pending.length) this.pending = [];
+    return this.isPrepared;
+  }
+
+  get isPrepared(): boolean { return this.pending.length === 0; }
+
   get size(): number {
-    return this.templates.size;
+    return this.templateCount;
   }
 
   clear(): void {
     this.templates.clear();
+    this.templateCount = 0;
+    this.pending = [];
+    this.cursor = 0;
   }
 
   private build(textureKey: string, frameKey: string): DeathFragmentTemplate {

@@ -127,6 +127,44 @@ const death = {
 };
 
 describe('combat gore gpu renderer', () => {
+  it('prepares without emissions, reuses prepared pixels at death, and replaces its working set', () => {
+    const { renderer, stats, gpu, scene } = setup();
+    const cache = renderer.fragmentTemplateCache;
+    cache.prepare([{ textureKey: death.textureKey, frame: death.frame }]);
+    expect(cache.isPrepared).toBe(false);
+    while (!cache.stepPreparation()) { /* bounded loading ticks */ }
+    expect(stats.imageReads).toBe(1);
+    expect(gpu.buildReport().effects.every(effect => effect.spawns === 0)).toBe(true);
+    renderer.playDeath(death);
+    expect(stats.imageReads).toBe(1);
+    const first = cache.get(death.textureKey, death.frame);
+    addVisualTexture(scene, death.textureKey, death.frame);
+    expect(cache.get(death.textureKey, death.frame)).not.toBe(first);
+    expect(stats.imageReads).toBe(2);
+    cache.prepare([{ textureKey: 'not-loaded' }]);
+    cache.stepPreparation();
+    expect(cache.size).toBe(0);
+    addVisualTexture(scene, 'not-loaded');
+    expect(cache.get('not-loaded').chunks.length).toBeGreaterThan(0);
+    cache.clear();
+    expect(cache.isPrepared).toBe(true);
+    expect(cache.size).toBe(0);
+  });
+
+  it('yields large preparations and cancels the old queue on clear', () => {
+    const { renderer, stats, scene } = setup();
+    const frames = Array.from({ length: 12 }, (_, frame) => {
+      addVisualTexture(scene, `variant-${frame}`);
+      return { textureKey: `variant-${frame}` };
+    });
+    renderer.fragmentTemplateCache.prepare(frames);
+    expect(renderer.fragmentTemplateCache.stepPreparation()).toBe(false);
+    expect(stats.imageReads).toBeLessThan(frames.length);
+    renderer.fragmentTemplateCache.clear();
+    const reads = stats.imageReads;
+    renderer.fragmentTemplateCache.stepPreparation();
+    expect(stats.imageReads).toBe(reads);
+  });
   afterEach(() => {
     qualityFactors.critical = 1;
     qualityFactors.standard = 1;

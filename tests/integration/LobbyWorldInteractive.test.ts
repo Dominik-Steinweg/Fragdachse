@@ -59,6 +59,7 @@ import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { bridge } from '../../src/network/bridge';
 import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
+import { ArenaRuntime } from '../../src/scenes/arena/ArenaRuntime';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { LobbyOverlay } from '../../src/scenes/LobbyOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
@@ -633,6 +634,43 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(scene.game.events.off).toHaveBeenCalledWith('postrender', scene.syncBootReveal, scene);
   });
 
+  it('bereitet Lobby-Effekte im World-Tick vor und gibt den Bootscreen ohne Arena-Ladebarriere frei', () => {
+    const { scene, fade } = bootFixture();
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.arenaBuilt = true;
+    coordinator.combatPresentationPrepared = false;
+    coordinator.worldRuntime = {
+      update: vi.fn(), materialization: { arena: {} }, presentation: { layout: {} },
+      presentationFrame: { getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
+    };
+    let fragmentTicks = 0;
+    let xpTicks = 0;
+    coordinator.renderers = {
+      gpuVfx: { isShaderWarmupComplete: () => true },
+      combatGoreGpu: { fragmentTemplateCache: { stepPreparation: vi.fn(() => ++fragmentTicks >= 2) } },
+    };
+    coordinator.ctx = { effectSystem: { prepareXpText: vi.fn(() => ++xpTicks >= 3) } };
+    coordinator.getLocalWorldPresentation = () => ({ required: true });
+    const syncArena = vi.spyOn(coordinator, 'syncArenaLoadReady');
+    scene.arenaRuntime = Object.assign(Object.create(ArenaRuntime.prototype), { flow: coordinator });
+
+    scene.syncBootReveal();
+    for (let tick = 0; tick < 2; tick++) {
+      scene.arenaRuntime.update(16);
+      scene.syncBootReveal();
+      expect(scene.bootRevealPending).toBe(true);
+      expect(fade).not.toHaveBeenCalled();
+    }
+    scene.arenaRuntime.update(16);
+    scene.syncBootReveal();
+    expect(scene.bootRevealPending).toBe(false);
+    expect(fade).toHaveBeenCalledOnce();
+    expect(syncArena).not.toHaveBeenCalled();
+    scene.arenaRuntime.update(16);
+    expect(fragmentTicks).toBe(3);
+    expect(xpTicks).toBe(3);
+  });
+
   it('zeigt beim Boot-Reveal sofort das vollstaendige Panel und startet nach dem Fade keine Animation', async () => {
     const { scene, reveal, container, tweens, finishFade, uiScene } = bootFixture();
     expect(container).toMatchObject({ visible: true, alpha: 1, y: 0 });
@@ -763,11 +801,18 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     coordinator.arenaBuilt = true;
     coordinator.terrainSnapshotReady = true;
     coordinator.worldRuntime = {
+      update: vi.fn(),
       materialization: { arena: {} },
       presentation: { layout: {} },
       presentationFrame: { getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
     };
-    coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => warmupComplete } };
+    let fragmentsReady = false;
+    let xpReady = false;
+    const prepareFragments = vi.fn(() => fragmentsReady);
+    const prepareXp = vi.fn(() => xpReady);
+    coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => warmupComplete },
+      combatGoreGpu: { fragmentTemplateCache: { stepPreparation: prepareFragments } } };
+    coordinator.ctx = { effectSystem: { prepareXpText: prepareXp } };
     coordinator.getLocalWorldPresentation = () => ({ required: presentationRequired });
     coordinator.syncAuthoritativeRoundStartAnchors = vi.fn();
     coordinator.tryScheduleArenaStart = vi.fn();
@@ -779,10 +824,21 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const view = { x: 0, y: 0, width: 100, height: 100 };
 
     expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+    coordinator.updateWorldRuntime(16);
     coordinator.syncArenaLoadReady(view);
     expect(publishProgress).toHaveBeenLastCalledWith(7, expect.any(Number), 'rendering', false);
 
     warmupComplete = true;
+    coordinator.updateWorldRuntime(16);
+    coordinator.syncArenaLoadReady(view);
+    expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+    fragmentsReady = true;
+    coordinator.updateWorldRuntime(16);
+    coordinator.syncArenaLoadReady(view);
+    expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+    xpReady = true;
+    coordinator.updateWorldRuntime(16);
+    coordinator.syncArenaLoadReady(view);
     expect(coordinator.getWorldRevealState(view)).toEqual({ ready: true, progress: 100 });
     coordinator.syncArenaLoadReady(view);
     expect(publishProgress).toHaveBeenLastCalledWith(7, 100, 'ready', true);
@@ -790,9 +846,14 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     // A host without local presentation does not wait for renderer preparation.
     warmupComplete = false;
     presentationRequired = false;
+    prepareFragments.mockClear();
+    prepareXp.mockClear();
     expect(coordinator.getWorldRevealState(null).ready).toBe(true);
+    coordinator.updateWorldRuntime(16);
     coordinator.syncArenaLoadReady(null);
     expect(publishReady).toHaveBeenLastCalledWith(7, true);
+    expect(prepareFragments).not.toHaveBeenCalled();
+    expect(prepareXp).not.toHaveBeenCalled();
   });
 
   it.each([true, false])('withholds reveal and replicated Ready until off-camera water is prepared (host=%s)', isHost => {
@@ -814,6 +875,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       materialization: { arena }, presentation: { layout: {} }, presentationFrame: frame,
     };
     coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => true } };
+    coordinator.combatPresentationPrepared = true;
     coordinator.getLocalWorldPresentation = () => ({ required: true });
     coordinator.syncAuthoritativeRoundStartAnchors = vi.fn();
     coordinator.tryScheduleArenaStart = vi.fn();

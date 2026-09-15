@@ -1,4 +1,5 @@
 import type { MgAttritionRenderer } from './MgAttritionRenderer';
+import { CoopXpTextRenderer } from './CoopXpTextRenderer';
 import * as Phaser from 'phaser';
 import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
@@ -97,6 +98,14 @@ interface BurrowEmitterVisual {
  * Gegner genutzt; `implements` hält die dafür erwartete Signatur kompilierzeit-fest.
  */
 export class EffectSystem implements EnemyVisualSink {
+  private xpTextRenderer: CoopXpTextRenderer | null = null;
+
+  prepareXpText(): boolean {
+    this.xpTextRenderer ??= new CoopXpTextRenderer(this.scene);
+    return this.xpTextRenderer.prepare();
+  }
+
+  clearXpTexts(): void { this.xpTextRenderer?.clear(); }
   private pendingPredictedTracerIds = new Map<number, number>();
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
@@ -231,6 +240,8 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   destroy(): void {
+    this.xpTextRenderer?.destroy();
+    this.xpTextRenderer = null;
     this.clearZeusUpgrades();
     this.burrowGpuRenderer?.clearAllUnderground();
     this.damageVignetteTop?.destroy();
@@ -1153,37 +1164,8 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   playCoopDefenseXpText(x: number, y: number, xp: number): void {
-    const resolvedXp = Math.max(0, Math.floor(xp));
-    if (resolvedXp <= 0) return;
-
-    // Schriftgröße logarithmisch nach XP skalieren:
-    //   1 XP  → 18 px  
-    //  10 XP  → 33 px
-    // 100 XP  → 48 px  
-    // Formel: 18 + 15 * log10(max(1, xp))  →  Bereich 18..~60
-    const logFactor = Math.log(Math.max(1, resolvedXp)) / Math.log(10); // log10 via ln
-    const fontSize = Math.round(Math.min(60, 18 + 15 * logFactor));
-    const strokeThickness = Math.round(3 + (fontSize - 18) / 8);
-
-    const label = this.scene.add.text(x, y - 18, `+${resolvedXp} XP`, {
-      fontFamily: 'monospace',
-      fontSize: '${fontSize}px',
-      fontStyle: 'bold',
-      color: toCssColor(COLORS.GOLD_1),
-      stroke: '#241527',
-      strokeThickness,
-    });
-    label.setOrigin(0.5);
-    label.setDepth(DEPTH.OVERLAY - 5);
-
-    this.scene.tweens.add({
-      targets: label,
-      y: y - 64,
-      alpha: 0,
-      duration: 950,
-      ease: 'Quad.easeOut',
-      onComplete: () => label.destroy(),
-    });
+    this.xpTextRenderer ??= new CoopXpTextRenderer(this.scene);
+    this.xpTextRenderer.play(x, y, xp);
   }
 
   playHitscanTracer(

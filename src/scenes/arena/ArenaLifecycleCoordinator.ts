@@ -1,4 +1,5 @@
 import { getDeferredAssets } from '../../assets/DeferredAssets';
+import { collectDeathFragmentFrames } from '../../effects/gpu/DeathFragmentPreparation';
 import type Phaser from 'phaser';
 import { AdrenalineEssenceBinding } from '../../adrenalineEssence/AdrenalineEssenceBinding';
 import { ADRENALINE_ESSENCE_CONFIG } from '../../adrenalineEssence/AdrenalineEssenceConfig';
@@ -280,6 +281,7 @@ export class ArenaLifecycleCoordinator {
   private arenaTransitionInProgress = false;
   private roundStartPrepared = false;
   private preparedRoundLayout: { descriptor: WorldDescriptor; layout: ArenaLayout } | null = null;
+  private combatPresentationPrepared = false;
   private pendingHostArenaGeneration: {
     readonly roundRevision: number;
     readonly gameMode: GameMode;
@@ -1034,6 +1036,14 @@ export class ArenaLifecycleCoordinator {
     if (this.arenaExitPresentationActive) return;
     this.adrenalineEssence?.prepare();
     this.worldRuntime?.update(deltaMs);
+    // The boot reveal also waits for these resources in the LobbyWorld, where the
+    // arena-only replicated load barrier is never ticked. Keep preparation world-scoped.
+    if (!this.matchTerminated && this.arenaBuilt && this.worldRuntime
+      && !this.combatPresentationPrepared && this.getLocalWorldPresentation().required) {
+      const fragmentsReady = this.renderers.combatGoreGpu.fragmentTemplateCache.stepPreparation();
+      const xpReady = this.ctx.effectSystem.prepareXpText();
+      this.combatPresentationPrepared = fragmentsReady && xpReady;
+    }
   }
 
   getAdrenalineEssence(): AdrenalineEssenceBinding | null { return this.adrenalineEssence; }
@@ -1142,6 +1152,12 @@ export class ArenaLifecycleCoordinator {
       activity,
       worldRuntime.context.definition,
     );
+    if (this.getLocalWorldPresentation().required) {
+      this.renderers.combatGoreGpu.fragmentTemplateCache.prepare(
+        collectDeathFragmentFrames(activityConfiguration.mapConfig),
+      );
+      this.combatPresentationPrepared = false;
+    }
     if (this.coopMissionPresentationUi) {
       const presentationBinding = new CoopMissionPresentationBinding(
         activityConfiguration.mapConfig,
@@ -1326,6 +1342,7 @@ export class ArenaLifecycleCoordinator {
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
   private detachActivityRuntime(): void {
+    this.ctx.effectSystem.clearXpTexts();
     this.worldGameplay?.support?.plague?.clearTargets();
     this.ctx.stinkCloudSystem.clearPlagueVisuals();
     this.ctx.effectSystem.clearMgAttrition();
@@ -1673,7 +1690,7 @@ export class ArenaLifecycleCoordinator {
     // Die replizierte Barriere wartet zusaetzlich auf den Terrain-Farb-Snapshot; der Boot-Reveal
     // tut das ausdruecklich nicht (siehe getWorldRevealState).
     const localRenderReady = work.renderReady && this.terrainSnapshotReady
-      && this.renderers.gpuVfx.isShaderWarmupComplete();
+      && this.renderers.gpuVfx.isShaderWarmupComplete() && this.combatPresentationPrepared;
     const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, localRenderReady);
     bridge.setLocalWorldLoadProgress(
       worldRevision,
@@ -1713,7 +1730,8 @@ export class ArenaLifecycleCoordinator {
     }
     const work = this.collectWorldRenderWork(view);
     const loadProgress = resolveWorldLoadProgress(
-      work.pending, work.resident, work.renderReady && this.renderers.gpuVfx.isShaderWarmupComplete(),
+      work.pending, work.resident, work.renderReady && this.renderers.gpuVfx.isShaderWarmupComplete()
+        && this.combatPresentationPrepared,
     );
     return { ready: loadProgress.ready, progress: loadProgress.progress };
   }
@@ -2549,6 +2567,12 @@ export class ArenaLifecycleCoordinator {
     // haette die neue Instanz einen Frame lang gar keinen Teilnahmestand.
     this.hostSyncWorldParticipation();
     const presentation = this.getLocalWorldPresentation().required;
+    if (presentation) {
+      this.renderers.combatGoreGpu.fragmentTemplateCache.prepare(
+        collectDeathFragmentFrames(activityConfiguration?.mapConfig ?? coopDefenseMapConfig),
+      );
+      this.combatPresentationPrepared = false;
+    }
     this.preparedRoundLayout = null;
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 35, 'building');
     const coopDefensePersistentSpawnConfigs = activityConfiguration
@@ -2772,6 +2796,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.fireSystem.destroyAll();
     this.ctx.stinkCloudSystem.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
+    this.ctx.effectSystem.clearXpTexts();
+    this.renderers.combatGoreGpu.fragmentTemplateCache.clear();
+    this.combatPresentationPrepared = false;
     this.ctx.effectSystem.clearZeusUpgrades();
     this.ctx.effectSystem.clearMgAttrition();
     // Die Effektdarstellung der vergangenen World raeumt ihr eigener Owner ab.
