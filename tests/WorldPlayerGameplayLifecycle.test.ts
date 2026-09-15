@@ -18,6 +18,8 @@ import { CoopDefenseItemRuntimeSystem } from '../src/systems/CoopDefenseItemRunt
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
 import { ResourceSystem } from '../src/systems/ResourceSystem';
+import { POWERUP_DEFS } from '../src/powerups/PowerUpConfig';
+import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import { BurrowSystem } from '../src/systems/BurrowSystem';
 import { TunnelSystem } from '../src/systems/TunnelSystem';
 import { TurretControlSystem } from '../src/systems/TurretControlSystem';
@@ -297,6 +299,34 @@ function makeDestroyRuntime() {
 }
 
 describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', () => {
+  it('grants a Rage pickup once, bypasses gain modifiers and respects the resource cap', () => {
+    const { runtime, systems } = makeRuntime();
+    const resource = new ResourceSystem();
+    resource.initPlayer('p1');
+    resource.setRageMaxResolver(() => 500);
+    resource.setRageGainMultiplierResolver(() => 3);
+    systems.resource = resource;
+    const powerUps = new PowerUpSystem({} as never, {
+      isAlive: () => true, isBurrowed: () => false,
+    } as never, {
+      seed: 1, rocks: [], trees: [], tracks: [], dirt: [],
+      powerUpPedestals: [{ id: 1, defId: 'RAGE', gridX: 5, gridY: 5, spawnOnArenaStart: true }],
+    }, { onRagePickup: (id, amount) => runtime.grantPowerUpRage(id, amount) });
+    powerUps.setArenaStartTime(1);
+    powerUps.update(0);
+    const item = powerUps.getWorldItemSnapshot()[0];
+    expect(item.defId).toBe('RAGE');
+    expect(powerUps.tryPickup('p1', item.uid, item.x, item.y)).toBe(true);
+    expect(resource.getRage('p1')).toBe(POWERUP_DEFS.RAGE.amount);
+    expect(powerUps.tryPickup('p1', item.uid, item.x, item.y)).toBe(false);
+    expect(resource.getRage('p1')).toBe(POWERUP_DEFS.RAGE.amount);
+    expect(powerUps.getWorldItemSnapshot()).toEqual([]);
+    resource.setRage('p1', resource.getMaxRage('p1') - 1);
+    runtime.grantPowerUpRage('p1', POWERUP_DEFS.RAGE.amount!);
+    expect(resource.getRage('p1')).toBe(resource.getMaxRage('p1'));
+    powerUps.reset();
+  });
+
   it('kapselt Player-in-World-Attach je Child-System', () => {
     const { runtime, systems } = makeRuntime();
 

@@ -467,6 +467,8 @@ export type CoopDefensePowerUpRegion = 'front' | 'middle' | 'rear';
 
 export interface CoopDefenseMapPowerUpConfig {
   readonly defId: string;
+  /** Optional fixed cell; otherwise the pedestal is placed within its region. */
+  readonly anchor?: { readonly gridX: number; readonly gridY: number };
   readonly region: CoopDefensePowerUpRegion;
   readonly respawnMs: number;
   readonly spawnOnArenaStart?: boolean;
@@ -1271,7 +1273,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     surviveDurationSec,
     balanceReferenceDurationSec,
     bases,
-    powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig)),
+    powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig, arenaWidthCells, arenaHeightCells)),
     persistentSpawns: normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases),
     encounters,
     secondaryObjectives,
@@ -3535,7 +3537,15 @@ function normalizeTreeCount(treeCount: number | undefined): number | undefined {
 function normalizePowerUpConfig(
   mapId: string,
   powerUpConfig: CoopDefenseMapPowerUpConfig,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
 ): CoopDefenseMapPowerUpConfig {
+  const anchor = powerUpConfig.anchor;
+  if (anchor && (!Number.isInteger(anchor.gridX) || !Number.isInteger(anchor.gridY)
+    || anchor.gridX < 0 || anchor.gridX >= arenaWidthCells
+    || anchor.gridY < 0 || anchor.gridY >= arenaHeightCells)) {
+    throw new Error(`[coopDefenseMaps] Power-up anchor on map ${mapId} is outside the arena`);
+  }
   if (!TIMED_POWERUP_PEDESTAL_CONFIGS[powerUpConfig.defId]) {
     throw new Error(`[coopDefenseMaps] Unknown pedestal power-up on map ${mapId}: ${powerUpConfig.defId}`);
   }
@@ -3550,6 +3560,7 @@ function normalizePowerUpConfig(
   return {
     defId: powerUpConfig.defId,
     region: powerUpConfig.region,
+    ...(anchor ? { anchor: { ...anchor } } : {}),
     respawnMs: Math.max(1, Math.floor(powerUpConfig.respawnMs)),
     // Coop-Podeste durchlaufen auch vor ihrem ersten Spawn den vollen Timer.
     spawnOnArenaStart: shouldDelayFirstPedestalSpawn(powerUpConfig.defId)

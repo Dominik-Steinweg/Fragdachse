@@ -13,6 +13,7 @@ export interface WorldPowerUpRuntimeOptions {
   readonly layout: ArenaLayout;
   readonly worldMetrics: WorldMetrics;
   readonly recordPowerUpCollected: (playerId: string) => void;
+  readonly grantRage: (playerId: string, amount: number) => boolean;
   readonly addTemporaryUtility: (playerId: string, config: UtilityConfig) => boolean;
   readonly claimObjectiveReward: (objectiveId: string, playerId: string) => boolean;
   readonly reportDiagnosticEvent: (type: string, fields: Record<string, unknown>) => void;
@@ -72,6 +73,7 @@ export class WorldPowerUpRuntime implements WorldScopedBinding {
   private createSystemOptions(): PowerUpSystemOptions {
     return {
       onPickupCollected: (playerId) => this.options.recordPowerUpCollected(playerId),
+      onRagePickup: (playerId, amount) => this.options.grantRage(playerId, amount),
       onNukePickup: (playerId) => this.options.addTemporaryUtility(playerId, UTILITY_CONFIGS.NUKE),
       onNukeExploded: (x, y, radius, triggeredBy) => {
         this.options.reportDiagnosticEvent('nuke:explode', {

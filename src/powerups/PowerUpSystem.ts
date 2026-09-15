@@ -84,6 +84,7 @@ export interface ConfiguredNukeStrike {
 }
 
 export interface PowerUpSystemOptions {
+  onRagePickup?: (playerId: string, amount: number) => boolean;
   onPickupCollected?: (playerId: string) => void;
   onNukePickup?: (playerId: string) => boolean | void;
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
@@ -674,6 +675,8 @@ export class PowerUpSystem {
       case 'instant_armor':
         this.combat.addArmor(playerId, def.amount ?? 0);
         break;
+      case 'instant_rage':
+        return this.options.onRagePickup?.(playerId, def.amount ?? 0) ?? false;
       case 'buff_regen':
       case 'buff_damage': {
         const buffs = this.activeBuffs.get(playerId) ?? [];

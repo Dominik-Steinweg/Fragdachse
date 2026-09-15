@@ -322,6 +322,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadTrainMaterialAssets(this.load);
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');
     this.load.image('powerup_arm', './assets/sprites/16x16Armor.png');
+    this.load.image('powerup_rage', './assets/sprites/16x16Rage.svg');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
     this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
     this.load.image('powerup_hhg', './assets/sprites/16x16holy_grenade.png');

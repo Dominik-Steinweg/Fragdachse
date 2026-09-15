@@ -39,6 +39,7 @@ export function composeWorldPowerUp(
     layout,
     worldMetrics: world.metrics,
     recordPowerUpCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
+    grantRage: (playerId, amount) => gameplay.player?.grantPowerUpRage(playerId, amount) ?? false,
     addTemporaryUtility: (playerId, config) => (
       gameplay.player?.addTemporaryUtility(playerId, config, 1) !== null
     ),

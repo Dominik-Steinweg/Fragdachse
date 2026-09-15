@@ -2,7 +2,7 @@
 
 import { ARMOR_COLOR, COLORS } from '../config';
 
-export type PowerUpType = 'instant_heal' | 'instant_armor' | 'buff_regen' | 'buff_damage' | 'weapon_buff' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg' | 'decoy_stealth';
+export type PowerUpType = 'instant_heal' | 'instant_armor' | 'instant_rage' | 'buff_regen' | 'buff_damage' | 'weapon_buff' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg' | 'decoy_stealth';
 
 export interface PowerUpDef {
   readonly id:          string;
@@ -35,6 +35,7 @@ export function shouldDelayFirstPedestalSpawn(defId: string): boolean {
 }
 
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
+  RAGE: { id: 'RAGE', type: 'instant_rage', amount: 400, color: COLORS.RED_2, spriteKey: 'powerup_rage' },
   HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal',  amount: 999,                        color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
   ARMOR:         { id: 'ARMOR',         type: 'instant_armor', amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
   ADRENALINE:    { id: 'ADRENALINE',    type: 'buff_regen',    durationMs: 3_000, multiplier: 3.0, color: COLORS.BLUE_2,   spriteKey: 'powerup_adr' },
@@ -64,6 +65,7 @@ export const POWERUP_DEFS: Record<string, PowerUpDef> = {
 export const TIMED_POWERUP_PEDESTAL_COUNT = 4;
 
 export const TIMED_POWERUP_PEDESTAL_CONFIGS: Record<string, TimedPedestalPowerUpConfig> = {
+  RAGE: { defId: 'RAGE', weight: 0, respawnMs: 30_000, spawnOnArenaStart: true },
   HEALTH_PACK: {
     defId: 'HEALTH_PACK',
     weight: 300,

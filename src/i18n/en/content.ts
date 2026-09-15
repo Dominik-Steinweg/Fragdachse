@@ -74,6 +74,7 @@ export const enContent = {
   "construction.armor_pedestal.description": "Regularly supplies an armor power-up.",
   "powerup.HEALTH_PACK.name": "Medkit",
   "powerup.ARMOR.name": "Armor",
+  "powerup.RAGE.name": "Rage",
   "powerup.ADRENALINE.name": "Adrenaline Shot",
   "powerup.DOUBLE_DAMAGE.name": "Double Damage",
   "powerup.DECOY_STEALTH.name": "Invisibility",

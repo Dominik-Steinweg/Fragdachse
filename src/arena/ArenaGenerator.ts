@@ -1334,7 +1334,11 @@ export class ArenaGenerator {
     const pedestals: ArenaLayout['powerUpPedestals'] = [];
     for (let index = 0; index < configs.length; index++) {
       const config = configs[index];
-      const candidates = candidatesByRegion.get(config.region) ?? [];
+      const candidates = config.anchor
+        ? [...candidatesByRegion.values()].flat().filter(
+          (cell) => cell.gx === config.anchor!.gridX && cell.gy === config.anchor!.gridY,
+        )
+        : candidatesByRegion.get(config.region) ?? [];
       const available = candidates.filter(
         (candidate) => !selected.some((cell) => cell.gx === candidate.gx && cell.gy === candidate.gy),
       );

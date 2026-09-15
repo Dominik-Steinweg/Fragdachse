@@ -1565,7 +1565,15 @@
       }
     }
   ],
-  "powerUps": [],
+  "powerUps": [
+    {
+      "defId": "RAGE",
+      "region": "middle",
+      "anchor": { "gridX": 150, "gridY": 14 },
+      "respawnMs": 30000,
+      "spawnOnArenaStart": true
+    }
+  ],
   "persistentBasePreview": {
     "checkpointId": "final-extraction"
   },
@@ -1743,15 +1751,15 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 6,
+          "count": 3,
           "spawnStaggerMs": 1600,
           "spawnArea": {"gridX": 151, "gridY": 8, "widthCells": 20, "heightCells": 16}
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 3,
-          "delayMs": 6000,
-          "spawnStaggerMs": 1600,
+          "count": 24,
+          "delayMs": 4500,
+          "spawnStaggerMs": 2600,
           "spawnArea": {"gridX": 132, "gridY": 5, "widthCells": 20, "heightCells": 24}
         }
       ]
@@ -1775,16 +1783,16 @@
         {
           "enemyKind": "zombie-badger",
           "count": 8,
-          "delayMs": 4000,
+          "delayMs": 500,
           "spawnStaggerMs": 1800,
-          "spawnArea": {"gridX": 192, "gridY": 10, "widthCells": 25, "heightCells": 9}
+          "spawnArea": {"gridX": 172, "gridY": 10, "widthCells": 25, "heightCells": 9}
         },
         {
           "enemyKind": "zombie-badger",
           "count": 4,
-          "delayMs": 7000,
+          "delayMs": 1500,
           "spawnStaggerMs": 1800,
-          "spawnArea": {"gridX": 192, "gridY": 14, "widthCells": 25, "heightCells": 9}
+          "spawnArea": {"gridX": 172, "gridY": 14, "widthCells": 25, "heightCells": 9}
         }
       ]
     }

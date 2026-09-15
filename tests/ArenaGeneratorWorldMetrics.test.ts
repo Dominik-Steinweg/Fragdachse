@@ -33,7 +33,17 @@ describe('ArenaGenerator world-scoped metrics', () => {
 
       // Compare current content under matching and unrelated globals, without freezing visual tuning.
       applyArenaMetricsForMode(mode, 'ARENA', map?.arenaWidthCells, map?.arenaHeightCells);
-      const expectedFingerprint = ArenaGenerator.fingerprint(ArenaGenerator.generate(seed, input, map));
+      const layout = ArenaGenerator.generate(seed, input, map);
+      const expectedFingerprint = ArenaGenerator.fingerprint(layout);
+      for (const powerUp of map?.powerUps ?? []) {
+        if (!powerUp.anchor) continue;
+        expect(layout.powerUpPedestals).toContainEqual(expect.objectContaining({
+          defId: powerUp.defId,
+          gridX: powerUp.anchor.gridX,
+          gridY: powerUp.anchor.gridY,
+        }));
+        expect(layout.rocks).not.toContainEqual(expect.objectContaining(powerUp.anchor));
+      }
 
       applyArenaMetricsForMode('deathmatch', 'LOBBY');
       const underLobbyGlobals = ArenaGenerator.fingerprint(ArenaGenerator.generate(seed, input, map));

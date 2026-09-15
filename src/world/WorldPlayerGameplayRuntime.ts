@@ -1096,6 +1096,13 @@ export class WorldPlayerGameplayRuntime implements
     if (!this.destroyed) this.systems.flamethrowerUpgrade?.prepareProjectileBurns(nowMs, [sample]);
   }
 
+  /** Fixed pickup rewards bypass damage-based Rage gain modifiers. */
+  grantPowerUpRage(playerId: string, amount: number): boolean {
+    const resource = this.systems.resource;
+    resource.setRage(playerId, resource.getRage(playerId) + amount);
+    return true;
+  }
+
   getPortalQueryPort(): PortalQueryPort { return this.systems.translocator; }
   runHostPortalStage(nowMs: number): void {
     if (this.destroyed) return;
