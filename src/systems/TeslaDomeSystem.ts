@@ -48,6 +48,7 @@ interface ActiveTeslaDome {
   lastDrainAt: number;
   lastTickAt: number;
   activatedAt: number;
+  activationSequence: number;
   chargeStacks: number;
   /** Blickrichtung des Besitzers; die Gewitterentladung feuert in diesen Kegel. */
   aimAngle: number;
@@ -162,6 +163,7 @@ export class TeslaDomeSystem {
   private manualControlProvider: ((id: number | string, now: number) => import('./TurretControlSystem').ManualTurretControl | null) | null = null;
   setManualControlProvider(provider: typeof this.manualControlProvider): void { this.manualControlProvider = provider; }
   private readonly activeDomes = new Map<string, ActiveTeslaDome>();
+  private activationSequence = 0;
   private readonly activeConstructionDomes = new Map<number | string, ActiveConstructionTeslaDome>();
 
   private lineOfSightChecker: LineOfSightChecker | null = null;
@@ -278,6 +280,7 @@ export class TeslaDomeSystem {
       lastDrainAt: now,
       lastTickAt: now,
       activatedAt: now,
+      activationSequence: ++this.activationSequence,
       chargeStacks: 0,
       aimAngle,
       pulseSequence: 0,
@@ -393,6 +396,7 @@ export class TeslaDomeSystem {
           lastDrainAt: now,
           lastTickAt: now,
           activatedAt: now,
+          activationSequence: ++this.activationSequence,
           chargeStacks: 0,
           aimAngle: 0,
           pulseSequence: 0,
@@ -457,6 +461,7 @@ export class TeslaDomeSystem {
     return {
       ownerId,
       x: Math.round(dome.x),
+      activationSequence: dome.activationSequence,
       y: Math.round(dome.y),
       radius: this.getEffectiveRadius(dome),
       color: dome.color,

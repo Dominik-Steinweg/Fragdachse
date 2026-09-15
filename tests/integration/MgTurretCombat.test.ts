@@ -34,7 +34,7 @@ function fixture(damageable = true) {
   const players = { getPlayer: (id:string)=>id==='p1'?player:undefined, getAllPlayers:()=>[player] };
   const effects = vi.fn();
   const combat = new WorldCombatCore(players as never, { isHost:()=>true, getPlayerProfile:players.getPlayer,
-    areTeammates:()=>false, getLocalPlayerId:()=> 'p1', isEnemyPair:()=>true, broadcastEffect:effects } as never);
+    areTeammates:()=>false, getLocalPlayerId:()=> 'p1', isEnemyPair:()=>true, broadcastEffect:effects, broadcastAudioFeedback:vi.fn() } as never);
   combat.bindPlayerVitalsScope({ worldRevision:7300, runtimeGeneration:1 });
   combat.bindHostExecutionSources({ nowMs:()=>now, random:()=>.25 }); combat.initPlayer('p1'); combat.setEnemyManager(enemies);
   const status = new TargetStatusSystem();

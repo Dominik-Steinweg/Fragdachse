@@ -1,5 +1,6 @@
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, mountForestModal, ensureModalPanelTexture, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
+import { activateUi, playUiHover, playUiActivation } from './UiAudio';
 import {
   COLORS,
   DEPTH,
@@ -402,7 +403,7 @@ export class CoopDefenseUpgradesOverlay {
     const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, t('ui.upgrades.cancel'), textStyle('label', {
       color: INTENT.neutral.label,
     })).setOrigin(0.5).setScrollFactor(0);
-    cancelBtn.on('pointerdown', () => this.closeWithCancel());
+    cancelBtn.on('pointerdown', () => activateUi(this.scene, () => this.closeWithCancel()));
     attachHoverEffect(this.scene, cancelBtn, cancelLabel);
     objects.push(cancelBtn);
     objects.push(cancelLabel);
@@ -413,7 +414,7 @@ export class CoopDefenseUpgradesOverlay {
     const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, t('ui.upgrades.apply'), textStyle('label', {
       color: TEXT.accent,
     })).setOrigin(0.5).setScrollFactor(0);
-    applyBtn.on('pointerdown', () => this.closeWithApply());
+    applyBtn.on('pointerdown', () => activateUi(this.scene, () => this.closeWithApply()));
     attachHoverEffect(this.scene, applyBtn, applyLabel);
     objects.push(applyBtn);
     objects.push(applyLabel);
@@ -489,6 +490,7 @@ export class CoopDefenseUpgradesOverlay {
     this.respecButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.openRespecMenu(respecX - 230, POINTS_Y + RESPEC_H / 2 + 8);
+      if (this.respecEnabled) playUiActivation(this.scene);
     });
     objects.push(this.respecButton);
     this.respecLabel = this.scene.add.text(respecX, POINTS_Y, t('ui.upgrades.respec'), {
@@ -775,7 +777,7 @@ export class CoopDefenseUpgradesOverlay {
         enabled: entry.enabled,
         keepOpen: entry.enabled && !confirming,
         onPick: () => {
-          if (!entry.enabled) return;
+          if (!entry.enabled) return false;
           if (!confirming) {
             // Erster Klick fragt nach; erst der zweite fuehrt den Respec aus.
             this.pendingRespecAction = entry.action;
@@ -783,7 +785,7 @@ export class CoopDefenseUpgradesOverlay {
             return;
           }
           this.pendingRespecAction = null;
-          this.executeRespec(entry.action);
+          return this.executeRespec(entry.action);
         },
       };
     });
@@ -802,17 +804,16 @@ export class CoopDefenseUpgradesOverlay {
     });
   }
 
-  private executeRespec(action: RespecAction): void {
+  private executeRespec(action: RespecAction): boolean {
+    // ArenaScene owns the mutation and schedules the single coalesced refresh.
     if (action === 'category') {
       const category = this.getProgress().upgradeCategories[this.activeCategoryIndex];
-      if (category) this.onCategoryRespec(category.id);
+      return category ? this.onCategoryRespec(category.id) : false;
     } else if (action === 'class') {
-      this.onClassRespec();
+      return this.onClassRespec();
     } else {
-      this.onFullRespec();
+      return this.onFullRespec();
     }
-    // ArenaScene owns the mutation and schedules the single coalesced refresh.
-    // Do not enqueue another refresh from the overlay callback.
   }
 
   private closeRespecMenu(): void {
@@ -914,7 +915,7 @@ export class CoopDefenseUpgradesOverlay {
         this.activeCategoryIndex = 0;
         // ArenaScene.refreshStoredCoopDefenseProgress() refreshes the visible overlay
         // synchronously after changing the class. Do not enqueue a second full tree rebuild.
-        this.onSelectClass(classId);
+        activateUi(this.scene, () => this.onSelectClass(classId));
       });
       background.on('pointerover', (pointer: Phaser.Input.Pointer) => {
         this.showTooltip(
@@ -1229,11 +1230,12 @@ export class CoopDefenseUpgradesOverlay {
     this.showLoadoutHint(t('ui.upgrades.utilityEquipFailed'));
   }
 
-  private toggleTool(tool: LoadoutToolRef): void {
+  private toggleTool(tool: LoadoutToolRef): boolean {
     if (this.onToggleLoadoutTool(tool)) {
-      return;
+      return true;
     }
     this.showLoadoutHint(t('ui.upgrades.noUtilitySlots'));
+    return false;
   }
 
   /** Ein abgelehntes Ausruesten blieb bisher unkommentiert; der Hinweis steht ueber dem Block. */
@@ -1355,7 +1357,7 @@ export class CoopDefenseUpgradesOverlay {
 
       // Einheitlicher Hover-Effekt fuer alle Tabs (auch der aktive).
       attachHoverEffect(this.scene, bg, label);
-      bg.on('pointerdown', () => this.setActiveCategory(index));
+      bg.on('pointerdown', () => activateUi(this.scene, () => this.setActiveCategory(index)));
     });
   }
 
@@ -2029,6 +2031,7 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: interactionEnabled })
       .on('pointerover', (pointer: Phaser.Input.Pointer) => {
+        if (interactionEnabled) playUiHover(this.scene);
         baseRect.setAlpha(Math.min(1, baseAlpha + 0.12));
         // Einheitlicher Hover-Effekt: ganzer Knoten waechst leicht.
         this.scene.tweens.add({
@@ -2063,13 +2066,14 @@ export class CoopDefenseUpgradesOverlay {
       }).setOrigin(0.5).setScrollFactor(0);
       if (interactive) {
         toggle.setInteractive({ useHandCursor: true });
+        toggle.on('pointerover', () => playUiHover(this.scene));
         toggle.on('pointerdown', (pointer: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
           event.stopPropagation();
           if (!pointer.leftButtonDown()) return;
           if (equipTarget.kind === 'tool') {
-            this.toggleTool(equipTarget.tool);
+            activateUi(this.scene, () => this.toggleTool(equipTarget.tool));
           } else {
-            this.onSelectLoadoutItem(equipTarget.slot, equipTarget.itemId);
+            activateUi(this.scene, () => this.onSelectLoadoutItem(equipTarget.slot, equipTarget.itemId));
           }
         });
       }
@@ -2385,7 +2389,7 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private handleUpgradePointerDown(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
-    if (pointer.rightButtonDown()) this.onLevelDownUpgrade(node.id);
+    if (pointer.rightButtonDown()) activateUi(this.scene, () => this.onLevelDownUpgrade(node.id));
     else this.onLevelUpUpgrade(node.id);
   }
 

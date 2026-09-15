@@ -55,13 +55,14 @@ import { createTechnicalPhysicsBinding, createPresentation } from './ProjectileR
 
 function lifecycleFixture() {
   let now = 1000;
+  const audio = vi.fn();
   const players = new Map(['p1', 'p2'].map(id => [id,
     fakeEntity({ id, x: 100, y: 100, body: { enable: true }, setPosition: vi.fn() })]));
   const combat = new CombatSystem({
     getPlayer: (id: string) => players.get(id), getAllPlayers: () => [...players.values()],
     getWorldSpawnPoint: () => ({ x: 260, y: 42 }),
   } as unknown as PlayerManager, {
-    isHost: () => true, broadcastEffect: vi.fn(), areTeammates: () => false,
+    isHost: () => true, broadcastEffect: vi.fn(), broadcastAudioFeedback: audio, areTeammates: () => false,
     broadcastHitscanTracer: vi.fn(), broadcastMeleeSwing: vi.fn(),
     getPlayerProfile: (id: string) => players.has(id) ? { id } : undefined,
   } as unknown as NetworkBridge);
@@ -74,13 +75,32 @@ function lifecycleFixture() {
   combat.setRespawnCallback(consume); combat.setDeathCallback(death);
   combat.initPlayer('p1'); combat.initPlayer('p2');
   const kill = vi.fn(); combat.setKillCallback(kill);
-  return { combat, world, players, budget, consume, death, kill,
+  return { combat, world, players, budget, consume, death, kill, audio,
     advance: () => { now += RESPAWN_DELAY_MS; combat.advancePlayerLifecycle(now); },
     hit: () => combat.applyDamage('p2', HP_MAX * 2, false, 'p1', 'test', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' }),
   };
 }
 
 describe('Time Bubble Combat observations', () => {
+  it('announces each committed life once, before a death callback can end its World', () => {
+    const f = lifecycleFixture();
+    f.hit(); f.hit();
+    expect(f.audio).toHaveBeenCalledTimes(1);
+    expect(f.audio).toHaveBeenLastCalledWith(expect.objectContaining({
+      key: 'sfx_player_death', position: { x: 100, y: 100, emitterId: 'p2' },
+    }), true);
+    const firstLife = f.audio.mock.calls[0][0].eventId;
+    f.advance();
+    f.combat.setDeathCallback(() => {
+      expect(f.audio).toHaveBeenCalledTimes(2);
+      f.world.destroy();
+    });
+    f.hit();
+    expect(f.audio.mock.calls[1][0].eventId).not.toBe(firstLife);
+    f.world.destroy();
+    expect(f.audio).toHaveBeenCalledTimes(2);
+  });
+
   function attach(combat: CombatSystem, x = 100, y = 100) {
     const bubble = new TimeBubbleSystem();
     bubble.hostCreateBubble('p1', x, y, { type: 'time_bubble', radius: 20, duration: 2000,
@@ -497,6 +517,7 @@ describe('integrated Combat damage, reaction and Player life', () => {
     const f = lifecycleFixture();
     f.combat.setPlayerDamageTakenHandler(() => f.world.destroy());
     expect(f.hit()).toMatchObject({ kind: 'damage-applied', transition: { kind: 'dead' } });
+    expect(f.audio).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ key: 'sfx_player_death' }), true);
     expect(f.death).not.toHaveBeenCalled(); expect(f.kill).not.toHaveBeenCalled();
     f.advance(); expect(f.consume).not.toHaveBeenCalled();
   });
@@ -535,6 +556,7 @@ describe('CombatSystem respawn lifecycle', () => {
       const bridge = {
         isHost: () => true,
         broadcastEffect: vi.fn(),
+        broadcastAudioFeedback: vi.fn(),
       } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
       combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
@@ -580,7 +602,7 @@ describe('CombatSystem respawn lifecycle', () => {
         getAllPlayers: () => [player],
         getWorldSpawnPoint: () => ({ x: 512, y: 320 }),
       } as unknown as PlayerManager;
-      const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
+      const bridge = { isHost: () => true, broadcastEffect: vi.fn(), broadcastAudioFeedback: vi.fn() } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
       combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
 
@@ -618,6 +640,7 @@ describe('CombatSystem respawn lifecycle', () => {
         isHost: () => true,
         broadcastEffect: vi.fn(),
         getPlayerProfile: (id: string) => players.has(id) ? { id, name: id, colorHex: 0xffffff } : undefined,
+        broadcastAudioFeedback: vi.fn(),
         areTeammates: () => false,
       } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);

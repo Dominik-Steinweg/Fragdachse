@@ -16,7 +16,7 @@ function fixture() {
   const players = ['owner', 'ally', 'enemy'].map(id => fakeEntity({ id, x: 0, y: 0, body: { enable: true } }));
   const combat = new WorldCombatCore({ getAllPlayers: () => players, getPlayer: (id: string) => players.find(p => p.id === id) } as never,
     { isHost: () => true, areTeammates: (a: string, b: string) => a !== 'enemy' && b !== 'enemy',
-      getPlayerProfile: (id: string) => players.some(p => p.id === id) ? { id } : undefined, broadcastEffect: vi.fn() } as never);
+      getPlayerProfile: (id: string) => players.some(p => p.id === id) ? { id } : undefined, broadcastEffect: vi.fn(), broadcastAudioFeedback: vi.fn() } as never);
   const world = combat.bindPlayerVitalsScope({ worldRevision: 4, runtimeGeneration: 1 });
   combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.5 });
   combat.setPlayerMaxHpResolver(() => 1000);

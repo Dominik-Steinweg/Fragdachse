@@ -141,6 +141,7 @@ describe('Lobby World essence composition', () => {
       isHost: () => true, areTeammates: () => false,
       getPlayerProfile: (id: string) => actors.has(id) ? { id } : undefined,
       broadcastEffect: vi.fn(), broadcastHitscanTracer: vi.fn(), broadcastMeleeSwing: vi.fn(),
+      broadcastAudioFeedback: vi.fn(),
     } as unknown as NetworkBridge;
     const combat = new WorldCombatCore(playerManager, combatBridge);
     world.bind(combat.bindPlayerVitalsScope({ worldRevision: world.descriptor.worldRevision, runtimeGeneration: 9 }));
@@ -163,7 +164,7 @@ describe('Lobby World essence composition', () => {
     coordinator.worldRuntime = world;
     coordinator.worldLifecycle = { isActive: () => !world.isDestroyed() };
     coordinator.adrenalineEssence = null;
-    coordinator.ctx = { playerManager, playerStatusRing: hud };
+    coordinator.ctx = { playerManager, playerStatusRing: hud, gameAudioSystem: { playLocalSound: vi.fn() } };
     coordinator.scene = {};
     coordinator.renderers = { gpuVfx: { isSuppressed: () => false }, lighting: { setLight: vi.fn(), releaseLight: vi.fn() } };
     coordinator.worldGameplay = { combatSystem: combat, player: playerGameplay, geometry: { getQueries: () => geometry } };
@@ -312,6 +313,7 @@ describe('Coop mission combat startup', () => {
       getPlayerProfile: (id: string) => id === profile.id ? profile : undefined,
       areTeammates: () => false,
       broadcastEffect: vi.fn(),
+      broadcastAudioFeedback: vi.fn(),
     } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
 

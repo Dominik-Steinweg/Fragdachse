@@ -95,7 +95,7 @@ export interface WorldClientPresentationState {
 /** Kleine Renderer-Ports fuer die World-Projektion. */
 export interface WorldClientPresentationRenderers {
   readonly timeBubble: { syncVisuals(snapshots: readonly SyncedTimeBubble[]): void };
-  readonly teslaDome: { syncVisuals(domes: SyncedTeslaDome[]): void };
+  readonly teslaDome: { syncVisuals(domes: SyncedTeslaDome[], audioScope?: unknown): void };
   readonly energyShield: { syncVisuals(shields: SyncedEnergyShield[]): void };
   readonly guardianSpirit: { syncVisuals(snapshots: readonly SyncedGuardianSpirit[]): void };
   readonly repairDrone: {
@@ -408,7 +408,7 @@ export class WorldPresentationFrameBinding {
 
     if (state) {
       renderers.timeBubble.syncVisuals(state.timeBubbles);
-      renderers.teslaDome.syncVisuals(state.teslaDomes);
+      renderers.teslaDome.syncVisuals(state.teslaDomes, this);
       renderers.energyShield.syncVisuals(state.energyShields);
       renderers.guardianSpirit.syncVisuals(state.guardianSpirits);
       renderers.repairDrone.syncVisuals(state.repairDrones, state.placeableRocks);

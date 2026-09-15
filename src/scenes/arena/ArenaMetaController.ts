@@ -177,6 +177,8 @@ export interface ArenaMetaVictoryItemRewardResult {
 }
 
 export interface ArenaMetaControllerInput {
+  readonly playSound?: (key: 'sfx_round_victory' | 'sfx_round_defeat' | 'sfx_level_up'
+    | 'sfx_upgrade_purchased' | 'sfx_item_selected') => void;
   readonly progressStore: ArenaMetaProgressStore;
   readonly session: ArenaMetaSessionPort;
   readonly resultRead: ArenaMetaResultReadPort;
@@ -210,8 +212,12 @@ export class ArenaMetaController {
   private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
   private lastMatchResultsPresentation: MatchResultsPresentation | null = null;
   private destroyed = false;
+  private lastSoundRoundEndedAt: number;
 
-  constructor(private readonly input: ArenaMetaControllerInput) {}
+  constructor(private readonly input: ArenaMetaControllerInput) {
+    // A controller attached to historical results establishes a baseline, not a celebration.
+    this.lastSoundRoundEndedAt = input.resultRead.getRoundResults()?.[0]?.roundEndedAt ?? 0;
+  }
 
   getProgress(): CoopDefenseProgressSnapshot {
     return this.progress;
@@ -450,6 +456,7 @@ export class ArenaMetaController {
     }
 
     this.refreshAfterMutation(this.replaceLiveProfile(stored, activeClassId, nextProfile));
+    this.input.playSound?.('sfx_upgrade_purchased');
     return true;
   }
 
@@ -689,6 +696,7 @@ export class ArenaMetaController {
     }
 
     const firstResult = results[0];
+    if (results.some(result => result.roundEndedAt !== firstResult.roundEndedAt)) return;
     const mode = firstResult.gameMode ?? this.input.session.getGameMode();
     const roundState = this.input.resultRead.getRoundState();
     if (
@@ -700,6 +708,10 @@ export class ArenaMetaController {
       )
     ) return;
 
+    const freshProgress = !isCoopDefenseMode(mode)
+      || (this.getLastProcessedRoundEndedAt() ?? 0) < firstResult.roundEndedAt;
+    const outcome = resolvePersonalMatchOutcome(mode, this.input.session.getLocalPlayerId(), results, roundState);
+    if (outcome === 'syncing') return;
     const balanceFeedbackAvailable = isCoopDefenseMode(mode)
       ? options.finalizeBalanceRound?.(firstResult.roundEndedAt) ?? false
       : false;
@@ -709,12 +721,7 @@ export class ArenaMetaController {
     if (isCoopDefenseMode(mode) && !progress) return;
 
     const presentation: MatchResultsPresentation = {
-      outcome: resolvePersonalMatchOutcome(
-        mode,
-        this.input.session.getLocalPlayerId(),
-        results,
-        roundState,
-      ),
+      outcome,
       mode,
       modeLabel: getLocalizedGameModeLabel(mode),
       mapLabel: firstResult.mapName || 'Zufallsarena',
@@ -732,6 +739,16 @@ export class ArenaMetaController {
     this.input.presentation.setResultsReplayAvailable(true);
     this.matchResultsPending = false;
     this.matchResultsProgressBefore = null;
+    const freshSound = firstResult.roundEndedAt > this.lastSoundRoundEndedAt;
+    this.lastSoundRoundEndedAt = Math.max(this.lastSoundRoundEndedAt, firstResult.roundEndedAt);
+    if (freshSound && freshProgress) {
+      if (presentation.outcome === 'victory' || presentation.outcome === 'defeat') {
+        this.input.playSound?.(presentation.outcome === 'victory' ? 'sfx_round_victory' : 'sfx_round_defeat');
+      }
+      if (progress && progress.xpGained > 0 && progress.after.level > progress.before.level) {
+        this.input.playSound?.('sfx_level_up');
+      }
+    }
   }
 
   replayMatchResults(balanceFeedbackAvailable = false): void {
@@ -794,9 +811,11 @@ export class ArenaMetaController {
 
   salvageItem(uid: string): number {
     if (this.destroyed) return 0;
+    const beforeLevel = this.readStoredLevel();
     const xp = this.input.progressStore.salvageItem(uid);
     if (xp <= 0) return 0;
     this.refresh();
+    if (this.progress.level > beforeLevel) this.input.playSound?.('sfx_level_up');
     return xp;
   }
 
@@ -832,6 +851,7 @@ export class ArenaMetaController {
     action: CoopDefenseItemRewardAction = 'take',
   ): ArenaMetaItemRewardClaim | null {
     if (this.destroyed) return null;
+    const beforeLevel = this.readStoredLevel();
     const claim = this.input.progressStore.claimPendingItemReward(
       roundEndedAt,
       offerUid,
@@ -841,6 +861,8 @@ export class ArenaMetaController {
     if (!claim) return null;
 
     this.refresh();
+    this.input.playSound?.('sfx_item_selected');
+    if (claim.salvagedXp > 0 && this.progress.level > beforeLevel) this.input.playSound?.('sfx_level_up');
     if (this.input.presentation.isItemsOverlayOpen()) {
       this.input.progressStore.markItemsSeen();
       this.refresh({ refreshOverlay: false });
@@ -973,6 +995,10 @@ export class ArenaMetaController {
     if (this.destroyed) return;
     this.destroyed = true;
     this.upgradeProfileSnapshot = null;
+  }
+
+  private readStoredLevel(): number {
+    return getCoopDefenseProgressSnapshot(this.input.progressStore.getProgress().totalXp).level;
   }
 
   private setLocalReady(ready: boolean): void {

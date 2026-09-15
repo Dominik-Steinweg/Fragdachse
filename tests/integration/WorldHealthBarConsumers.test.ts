@@ -281,7 +281,7 @@ describe('World HP consumer boundaries', () => {
     });
     const combat = new CombatSystem({ getPlayer: (id: string) => players.find(p => p.id === id), getAllPlayers: () => players } as unknown as PlayerManager,
       { isHost: () => true, getPlayerProfile: (id: string) => players.find(p => p.id === id),
-        broadcastEffect: () => {}, broadcastHitscanTracer: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+        broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(), broadcastHitscanTracer: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => hostNowMs, random: () => 0.25 });
     combat.setEnemyManager(manager);
     combat.setPlayerMaxHpResolver(() => 1000);
@@ -1045,7 +1045,7 @@ describe('World HP consumer boundaries', () => {
     let playerCombatAttached = false;
     const players = { getPlayer: () => undefined, getAllPlayers: () => [], setSpawnContextProvider: () => {} } as unknown as PlayerManager;
     const combat = new CombatSystem(players,
-      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+      { isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(), areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
     const replace = () => {
       expect(movement.isHitStaggered(oldTarget!, 1234)).toBe(false);
@@ -1116,7 +1116,7 @@ describe('World HP consumer boundaries', () => {
     const parent = manager.hostSpawnAtWorld(10, 20, kind, { originId: 'encounter' });
     manager.hostSetVitalsBaseline(parent.id, 40, 100);
     const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
-      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+      { isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(), areTeammates: () => false } as unknown as NetworkBridge);
     const world = combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
     combat.setEnemyManager(manager);
     const spawned: { x: number; y: number; kind: string; originId?: string }[] = [];
@@ -1152,7 +1152,7 @@ describe('World HP consumer boundaries', () => {
     const h = harness(), manager = enemies(h);
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
     const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
-      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+      { isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(), areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 }); combat.setEnemyManager(manager);
     const observed = vi.fn(); combat.addDamageDealtObserver(observed);
     let replaced = false;
@@ -1182,7 +1182,7 @@ describe('World HP consumer boundaries', () => {
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
     const actor = { id: 'attacker', x: 0, y: 0, body: { enable: true } };
     const combat = new CombatSystem({ getPlayer: (id: string) => id === actor.id ? actor : undefined } as unknown as PlayerManager,
-      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+      { isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(), areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
     combat.setEnemyManager(manager); combat.initPlayer(actor.id);
     const observed = vi.fn(); combat.addDamageDealtObserver(observed);
@@ -1220,7 +1220,7 @@ describe('World HP consumer boundaries', () => {
     upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 100, maxHp: 100, faction: 'allied', ownerId: 'credited' });
     let now = 1000;
     const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
-      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+      { isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(), areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 }); combat.setEnemyManager(manager);
     const kill = vi.fn(); combat.setKillCallback(kill);
     combat.applyBurnHit('e1', 'e2', 2000, 10, 'fire', 'summon.fire', 'generic');
@@ -1245,7 +1245,7 @@ describe('World HP consumer boundaries', () => {
     const tick = BURN_TICK_INTERVAL_MS;
     let now = 4 * tick;
     const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
-      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+      { isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(), areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 }); combat.setEnemyManager(manager);
     const kill = vi.fn(); combat.setKillCallback(kill);
     combat.applyBurnHit('e1', 'e2', 2 * tick, 1, 'fire', 'summon.fire', 'generic');
@@ -1276,7 +1276,7 @@ describe('World HP consumer boundaries', () => {
     const tick = BURN_TICK_INTERVAL_MS;
     let now = 4 * tick;
     const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
-      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+      { isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(), areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 }); combat.setEnemyManager(manager);
     const kill = vi.fn(); combat.setKillCallback(kill);
     combat.applyBurnHit('e1', 'e2', 3 * tick, 10, 'fire', 'summon.fire', 'generic');
@@ -1297,7 +1297,7 @@ describe('World HP consumer boundaries', () => {
     const h = harness(), manager = enemies(h);
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
     const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager, {
-      isHost: () => true, broadcastEffect: () => {},
+      isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(),
     } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
     combat.setEnemyManager(manager);
@@ -1320,7 +1320,7 @@ describe('World HP consumer boundaries', () => {
       const h = harness(), manager = enemies(h);
       upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
       const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager, {
-        isHost: () => true, broadcastEffect: () => {},
+        isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(),
       } as unknown as NetworkBridge);
       combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 }); combat.setEnemyManager(manager);
       const source: CombatSource = {
@@ -1350,7 +1350,7 @@ describe('World HP consumer boundaries', () => {
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
     manager.setLethalDamageGuard(() => ({ kind: 'rescue', healing: 20 }));
     const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager, {
-      isHost: () => true, broadcastEffect: () => {},
+      isHost: () => true, broadcastEffect: () => {}, broadcastAudioFeedback: vi.fn(),
     } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
     combat.setEnemyManager(manager);

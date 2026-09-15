@@ -8,6 +8,7 @@ import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
  * Reusability-Template: gleiche Public-API wie RightSidePanel.
  */
 import * as Phaser from 'phaser';
+import { activateUi, playUiHover } from './UiAudio';
 import { FOREST } from './UiSkin';
 import { ensureForestFrame, ensureForestPanel, ensureForestButton, forestOrnament } from './forestTextures';
 import type { BackdropSurface } from '../effects/postfx/BackdropBlur';
@@ -315,7 +316,8 @@ export class LeftSidePanel {
       .rectangle(CENTER_X, BADGER_Y, BADGER_CLICK_SIZE, BADGER_CLICK_SIZE, 0x000000, 0)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.toggleColorPicker());
+      .on('pointerover', () => playUiHover(this.scene))
+      .on('pointerdown', () => activateUi(this.scene, () => this.toggleColorPicker()));
     objects.push(forestOrnament(this.scene, 'medallion', CENTER_X, BADGER_Y, 140, 140).setAlpha(0.7), this.badgerClickZone);
     const teamLeftBtn = this.createChevronButton(
       COLOR_BUTTON_X - TEAM_SELECT_ARROW_OFFSET_X,
@@ -747,7 +749,8 @@ export class LeftSidePanel {
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => { if (bg.alpha > 0.5) bg.setStrokeStyle(2, BORDER.default, 1); })
         .on('pointerout',  () => this.refreshPickerSwatches())
-        .on('pointerdown', () => this.requestColor(color));
+        .on('pointerover', () => { if (bg.alpha > 0.5) playUiHover(this.scene); })
+        .on('pointerdown', () => activateUi(this.scene, () => this.requestColor(color)));
 
       this.pickerSwatches.push({ bg, img, effect, color });
     });
@@ -1200,7 +1203,7 @@ export class LeftSidePanel {
         backgroundImage: backgrounds.rest, backgroundSize: '100% 100%',
         color: toCssColor(FOREST.text), fontFamily: FONT_DISPLAY, fontWeight: 'bold',
       });
-      button.onpointerenter = () => { button.style.backgroundImage = backgrounds.hover; };
+      button.onpointerenter = () => { button.style.backgroundImage = backgrounds.hover; playUiHover(this.scene); };
       button.onpointerleave = () => { button.style.backgroundImage = backgrounds.rest; };
       button.onpointerdown = () => { button.style.backgroundImage = backgrounds.press; };
       button.onpointerup = () => { button.style.backgroundImage = backgrounds.hover; };
@@ -1234,15 +1237,15 @@ export class LeftSidePanel {
       if (input === '') {
         inputElement.focus();
         inputElement.select();
-        return;
+        return false;
       }
       this.bridge.setLocalName(input);
       setStoredPlayerName(input);
       closePopup();
     };
 
-    confirmBtn.onclick = saveName;
-    cancelBtn.onclick  = closePopup;
+    confirmBtn.onclick = () => activateUi(this.scene, saveName);
+    cancelBtn.onclick  = () => activateUi(this.scene, closePopup);
     inputElement.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter')  saveName();
       if (e.key === 'Escape') closePopup();
@@ -1269,7 +1272,7 @@ export class LeftSidePanel {
       ensureForestButton(this.scene, width, height, 'secondary', 'rest', RADIUS.sm),
     )
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', onClick)
+      .on('pointerdown', () => activateUi(this.scene, onClick))
       .setScrollFactor(0);
     const label: CompactLabel = iconDirection
       ? this.createChevronIcon(x, y, iconDirection)

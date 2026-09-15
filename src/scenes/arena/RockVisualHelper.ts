@@ -50,6 +50,8 @@ const TEX_TURRET_AURA = '__placeable_turret_aura';
  */
 export class RockVisualHelper {
   private readonly turretVisuals = new Map<number, TurretVisualState>();
+  private readonly heardPlacements = new Set<number>();
+  private placementAudioScope: object | null = null;
   private obstaclesDirty = false;
   private obstacleVisualsRequireFullRefresh = false;
   private readonly dirtyRockIds = new Set<number>();
@@ -105,8 +107,13 @@ export class RockVisualHelper {
   materializePlaceableRockBatch(
     rocks: readonly SyncedPlaceableRock[],
     playSpawnFx: boolean,
+    playAudio = playSpawnFx,
   ): void {
     if (!this.arenaResult || !this.currentLayout) return;
+    if (this.placementAudioScope !== this.arenaResult) {
+      this.placementAudioScope = this.arenaResult;
+      this.heardPlacements.clear();
+    }
 
     const materialization = rocks.filter((rock) => rock.kind !== 'pedestal' && rock.collisionMode !== 'none');
     for (const rock of rocks) this.ensureRuntimeRockSlot(rock);
@@ -118,7 +125,10 @@ export class RockVisualHelper {
     let requiresObstacleIndexRebuild = false;
     const dirtyRockIds = new Set<number>();
     for (const rock of rocks) {
-      const effects = this.materializePlaceableRockInternal(rock, playSpawnFx);
+      const announce = playAudio && playSpawnFx && !this.heardPlacements.has(rock.id)
+        && (bridge.isHost() || rock.placementConfirmed === true);
+      this.heardPlacements.add(rock.id);
+      const effects = this.materializePlaceableRockInternal(rock, playSpawnFx, announce);
       refreshStaticShadows ||= effects.refreshStaticShadows;
       requiresObstacleIndexRebuild ||= effects.requiresObstacleIndexRebuild;
       if (effects.refreshStaticShadows || effects.hasStalePedestalProxy) dirtyRockIds.add(rock.id);
@@ -134,6 +144,7 @@ export class RockVisualHelper {
   private materializePlaceableRockInternal(
     rock: SyncedPlaceableRock,
     playSpawnFx: boolean,
+    playAudio: boolean,
   ): {
     refreshStaticShadows: boolean;
     requiresObstacleIndexRebuild: boolean;
@@ -159,7 +170,7 @@ export class RockVisualHelper {
       this.destroyTurretVisual(rock.id);
       if (playSpawnFx && presentation) {
         const world = this.gridToWorld(rock.gridX, rock.gridY);
-        this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);
+        if (playAudio) this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);
       }
       return {
         refreshStaticShadows: false,
@@ -226,7 +237,7 @@ export class RockVisualHelper {
       const world = this.gridToWorld(rock.gridX, rock.gridY);
       if (rock.kind !== 'rock') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
-        this.ctx.gameAudioSystem.playSound(
+        if (playAudio) this.ctx.gameAudioSystem.playSound(
           rock.turretWeaponId === 'TURRET_SPORES' ? 'sfx_place_spore_turret' : 'sfx_place_rock',
           world.x,
           world.y,
@@ -234,7 +245,7 @@ export class RockVisualHelper {
         );
       } else {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
-        this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);
+        if (playAudio) this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);
       }
       if (rock.ownerId === bridge.getLocalPlayerId()) {
         const shakeCfg = rock.kind !== 'rock'

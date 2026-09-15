@@ -334,7 +334,38 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_burrowed.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+                "line": 849,
+                "kind": "loop",
+                "excerpt": "const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.x, player.y, playerId);"
+              },
+              {
+                "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+                "line": 1470,
+                "kind": "loop",
+                "excerpt": "const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.x, player.y, player.id);"
+              },
+              {
+                "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+                "line": 2257,
+                "kind": "loop",
+                "excerpt": "const handle = this.audio?.startLoop('sfx_burrowed', player.x, player.y, player.id);"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "sfx_burrowed"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_burrowed",
         "kind": "sfx",
@@ -354,19 +385,19 @@
         "usages": [
           {
             "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
-            "line": 841,
+            "line": 849,
             "kind": "loop",
             "excerpt": "const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.x, player.y, playerId);"
           },
           {
             "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
-            "line": 1461,
+            "line": 1470,
             "kind": "loop",
             "excerpt": "const handle = this.ctx.gameAudioSystem.startLoop('sfx_burrowed', player.x, player.y, player.id);"
           },
           {
             "path": "src/scenes/arena/HostUpdateCoordinator.ts",
-            "line": 2248,
+            "line": 2257,
             "kind": "loop",
             "excerpt": "const handle = this.audio?.startLoop('sfx_burrowed', player.x, player.y, player.id);"
           }
@@ -662,7 +693,38 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_dash.ogg",
+            "usages": [
+              {
+                "path": "src/effects/EnemyDashVisuals.ts",
+                "line": 37,
+                "kind": "oneshot",
+                "excerpt": "this.audioSystem.playSound('sfx_dash', enemy.sprite.x, enemy.sprite.y);"
+              },
+              {
+                "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+                "line": 411,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_dash', player.x, player.y, id);"
+              },
+              {
+                "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+                "line": 747,
+                "kind": "oneshot",
+                "excerpt": "this.audio?.playSound('sfx_dash', player.x, player.y, player.id);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_dash"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_dash",
         "kind": "sfx",
@@ -688,13 +750,13 @@
           },
           {
             "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
-            "line": 408,
+            "line": 411,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_dash', player.x, player.y, id);"
           },
           {
             "path": "src/scenes/arena/HostUpdateCoordinator.ts",
-            "line": 744,
+            "line": 747,
             "kind": "oneshot",
             "excerpt": "this.audio?.playSound('sfx_dash', player.x, player.y, player.id);"
           }
@@ -729,7 +791,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_decoy_reveal.ogg",
+            "usages": [
+              {
+                "path": "src/world/WorldCombatGameplayBinding.ts",
+                "line": 970,
+                "kind": "oneshot",
+                "excerpt": "if (player) o.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_decoy_reveal"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_decoy_reveal",
         "kind": "sfx",
@@ -749,7 +830,7 @@
         "usages": [
           {
             "path": "src/world/WorldCombatGameplayBinding.ts",
-            "line": 971,
+            "line": 970,
             "kind": "oneshot",
             "excerpt": "if (player) o.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);"
           }
@@ -1080,6 +1161,36 @@
               "sfx_explosion_he"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2625,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 44,
+                "kind": "unknown",
+                "excerpt": "case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 57,
+                "kind": "unknown",
+                "excerpt": "default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_he"
+            ]
+          }
         }
       ],
       "repository": {
@@ -1101,7 +1212,7 @@
         "usages": [
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2606,
+            "line": 2625,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);"
           },
@@ -1274,7 +1385,32 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_he.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 150,
+                "kind": "unknown",
+                "excerpt": "if (soundKey === 'sfx_explosion_rocket') {"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 49,
+                "kind": "unknown",
+                "excerpt": "case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_rocket"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_explosion_rocket",
         "kind": "sfx",
@@ -1294,7 +1430,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 158,
+            "line": 150,
             "kind": "unknown",
             "excerpt": "if (soundKey === 'sfx_explosion_rocket') {"
           },
@@ -1438,7 +1574,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_hit_feedback.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 190,
+                "kind": "oneshot",
+                "excerpt": "this.playLocalSound('sfx_hit_feedback', getHitFeedbackVolumeScale(damage));"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_hit_feedback"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_hit_feedback",
         "kind": "sfx",
@@ -1458,7 +1613,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 197,
+            "line": 190,
             "kind": "oneshot",
             "excerpt": "this.playLocalSound('sfx_hit_feedback', getHitFeedbackVolumeScale(damage));"
           }
@@ -1658,7 +1813,27 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen. Bewusste gemeinsame Datei mit sfx_countdown_go; Übernahme betrifft beide Keys.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_countdown_go.ogg",
+            "usages": [
+              {
+                "path": "src/ui/OptionsOverlay.ts",
+                "line": 58,
+                "kind": "unknown",
+                "excerpt": "const PREVIEW_SOUND_KEY: AudioAssetKey = 'sfx_options_preview';"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_countdown_go",
+              "sfx_options_preview"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_options_preview",
         "kind": "sfx",
@@ -1679,7 +1854,7 @@
         "usages": [
           {
             "path": "src/ui/OptionsOverlay.ts",
-            "line": 56,
+            "line": 58,
             "kind": "unknown",
             "excerpt": "const PREVIEW_SOUND_KEY: AudioAssetKey = 'sfx_options_preview';"
           }
@@ -1714,7 +1889,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_pickup_armor.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 6,
+                "kind": "unknown",
+                "excerpt": "ARMOR: 'sfx_pickup_armor',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_pickup_armor"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_pickup_armor",
         "kind": "sfx",
@@ -1731,7 +1925,14 @@
         "shared_keys": [
           "sfx_pickup_armor"
         ],
-        "usages": [],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 6,
+            "kind": "unknown",
+            "excerpt": "ARMOR: 'sfx_pickup_armor',"
+          }
+        ],
         "playback": "unknown",
         "conflicts": []
       },
@@ -1762,7 +1963,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_pickup_hp.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 5,
+                "kind": "unknown",
+                "excerpt": "HEALTH_PACK: 'sfx_pickup_hp',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_pickup_hp"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_pickup_hp",
         "kind": "sfx",
@@ -1779,7 +1999,14 @@
         "shared_keys": [
           "sfx_pickup_hp"
         ],
-        "usages": [],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 5,
+            "kind": "unknown",
+            "excerpt": "HEALTH_PACK: 'sfx_pickup_hp',"
+          }
+        ],
         "playback": "unknown",
         "conflicts": []
       },
@@ -1828,6 +2055,17 @@
               "sfx_pickup_powerup"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_pickup_powerup.ogg",
+            "usages": [],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_pickup_powerup"
+            ]
+          }
         }
       ],
       "repository": {
@@ -1846,15 +2084,8 @@
         "shared_keys": [
           "sfx_pickup_powerup"
         ],
-        "usages": [
-          {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 635,
-            "kind": "oneshot",
-            "excerpt": "if (pickedUp) this.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);"
-          }
-        ],
-        "playback": "oneshot",
+        "usages": [],
+        "playback": "unknown",
         "conflicts": []
       },
       "orphaned": false
@@ -1884,7 +2115,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_place_dachstunnel.ogg",
+            "usages": [
+              {
+                "path": "src/world/ConstructionWorldRuntime.ts",
+                "line": 628,
+                "kind": "oneshot",
+                "excerpt": "if (placed) this.options.gameAudioSystem.playSound('sfx_place_dachstunnel', originX, originY, playerId);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_place_dachstunnel"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_place_dachstunnel",
         "kind": "sfx",
@@ -1904,7 +2154,7 @@
         "usages": [
           {
             "path": "src/world/ConstructionWorldRuntime.ts",
-            "line": 625,
+            "line": 628,
             "kind": "oneshot",
             "excerpt": "if (placed) this.options.gameAudioSystem.playSound('sfx_place_dachstunnel', originX, originY, playerId);"
           }
@@ -2042,7 +2292,56 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_place_rock.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/RockVisualHelper.ts",
+                "line": 173,
+                "kind": "oneshot",
+                "excerpt": "if (playAudio) this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);"
+              },
+              {
+                "path": "src/scenes/arena/RockVisualHelper.ts",
+                "line": 241,
+                "kind": "oneshot",
+                "excerpt": "rock.turretWeaponId === 'TURRET_SPORES' ? 'sfx_place_spore_turret' : 'sfx_place_rock',"
+              },
+              {
+                "path": "src/scenes/arena/RockVisualHelper.ts",
+                "line": 248,
+                "kind": "oneshot",
+                "excerpt": "if (playAudio) this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);"
+              },
+              {
+                "path": "src/world/ConstructionWorldRuntime.ts",
+                "line": 406,
+                "kind": "oneshot",
+                "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);"
+              },
+              {
+                "path": "src/world/ConstructionWorldRuntime.ts",
+                "line": 421,
+                "kind": "oneshot",
+                "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', player.x, player.y, playerId);"
+              },
+              {
+                "path": "src/world/ConstructionWorldRuntime.ts",
+                "line": 619,
+                "kind": "oneshot",
+                "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', targetWorld.x, targetWorld.y, playerId);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_place_rock"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_place_rock",
         "kind": "sfx",
@@ -2062,37 +2361,37 @@
         "usages": [
           {
             "path": "src/scenes/arena/RockVisualHelper.ts",
-            "line": 162,
+            "line": 173,
             "kind": "oneshot",
-            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);"
+            "excerpt": "if (playAudio) this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);"
           },
           {
             "path": "src/scenes/arena/RockVisualHelper.ts",
-            "line": 230,
+            "line": 241,
             "kind": "oneshot",
             "excerpt": "rock.turretWeaponId === 'TURRET_SPORES' ? 'sfx_place_spore_turret' : 'sfx_place_rock',"
           },
           {
             "path": "src/scenes/arena/RockVisualHelper.ts",
-            "line": 237,
+            "line": 248,
             "kind": "oneshot",
-            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);"
+            "excerpt": "if (playAudio) this.ctx.gameAudioSystem.playSound('sfx_place_rock', world.x, world.y, rock.ownerId);"
           },
           {
             "path": "src/world/ConstructionWorldRuntime.ts",
-            "line": 403,
+            "line": 406,
             "kind": "oneshot",
             "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);"
           },
           {
             "path": "src/world/ConstructionWorldRuntime.ts",
-            "line": 418,
+            "line": 421,
             "kind": "oneshot",
             "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', player.x, player.y, playerId);"
           },
           {
             "path": "src/world/ConstructionWorldRuntime.ts",
-            "line": 616,
+            "line": 619,
             "kind": "oneshot",
             "excerpt": "this.options.gameAudioSystem.playSound('sfx_place_rock', targetWorld.x, targetWorld.y, playerId);"
           }
@@ -2127,7 +2426,32 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_player_death.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 16,
+                "kind": "unknown",
+                "excerpt": "...Object.values(PICKUP_AUDIO), 'sfx_player_death', 'sfx_enemy_death',"
+              },
+              {
+                "path": "src/combat/WorldCombatCore.ts",
+                "line": 4271,
+                "kind": "unknown",
+                "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_player_death"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_player_death",
         "kind": "sfx",
@@ -2146,13 +2470,19 @@
         ],
         "usages": [
           {
-            "path": "src/world/WorldCombatGameplayBinding.ts",
-            "line": 744,
-            "kind": "oneshot",
-            "excerpt": "o.gameAudioSystem.playSound('sfx_player_death', x, y);"
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 16,
+            "kind": "unknown",
+            "excerpt": "...Object.values(PICKUP_AUDIO), 'sfx_player_death', 'sfx_enemy_death',"
+          },
+          {
+            "path": "src/combat/WorldCombatCore.ts",
+            "line": 4271,
+            "kind": "unknown",
+            "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
           }
         ],
-        "playback": "oneshot",
+        "playback": "unknown",
         "conflicts": []
       },
       "orphaned": false
@@ -2182,7 +2512,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_player_hit.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 216,
+                "kind": "oneshot",
+                "excerpt": "this.playSound('sfx_player_hit', emitterX, emitterY, undefined, getHitFeedbackVolumeScale(damage));"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_player_hit"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_player_hit",
         "kind": "sfx",
@@ -2202,7 +2551,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 223,
+            "line": 216,
             "kind": "oneshot",
             "excerpt": "this.playSound('sfx_player_hit', emitterX, emitterY, undefined, getHitFeedbackVolumeScale(damage));"
           }
@@ -2237,7 +2586,32 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_player_move.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+                "line": 614,
+                "kind": "loop",
+                "excerpt": "this.moveLoopHandle = this.ctx.gameAudioSystem.startLoop('sfx_player_move') ?? null;"
+              },
+              {
+                "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+                "line": 837,
+                "kind": "loop",
+                "excerpt": "this.moveLoopHandle = this.audio?.startLoop('sfx_player_move') ?? null;"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "sfx_player_move"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_player_move",
         "kind": "sfx",
@@ -2257,13 +2631,13 @@
         "usages": [
           {
             "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
-            "line": 611,
+            "line": 614,
             "kind": "loop",
             "excerpt": "this.moveLoopHandle = this.ctx.gameAudioSystem.startLoop('sfx_player_move') ?? null;"
           },
           {
             "path": "src/scenes/arena/HostUpdateCoordinator.ts",
-            "line": 834,
+            "line": 837,
             "kind": "loop",
             "excerpt": "this.moveLoopHandle = this.audio?.startLoop('sfx_player_move') ?? null;"
           }
@@ -2322,6 +2696,30 @@
               "sfx_player_spawn"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_player_spawn.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+                "line": 376,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_player_spawn', ps.x, ps.y, id);"
+              },
+              {
+                "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+                "line": 713,
+                "kind": "oneshot",
+                "excerpt": "this.audio?.playSound('sfx_player_spawn', player.x, player.y, player.id);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_player_spawn"
+            ]
+          }
         }
       ],
       "repository": {
@@ -2343,13 +2741,13 @@
         "usages": [
           {
             "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
-            "line": 373,
+            "line": 376,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_player_spawn', ps.x, ps.y, id);"
           },
           {
             "path": "src/scenes/arena/HostUpdateCoordinator.ts",
-            "line": 710,
+            "line": 713,
             "kind": "oneshot",
             "excerpt": "this.audio?.playSound('sfx_player_spawn', player.x, player.y, player.id);"
           }
@@ -2487,7 +2885,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_tesla_activate.ogg",
+            "usages": [
+              {
+                "path": "src/effects/TeslaDomeRenderer.ts",
+                "line": 245,
+                "kind": "oneshot",
+                "excerpt": "if (!baseline) this.audioSystem?.playSound('sfx_tesla_activate', dome.x, dome.y, dome.ownerId);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_tesla_activate"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_tesla_activate",
         "kind": "sfx",
@@ -2507,9 +2924,9 @@
         "usages": [
           {
             "path": "src/effects/TeslaDomeRenderer.ts",
-            "line": 230,
+            "line": 245,
             "kind": "oneshot",
-            "excerpt": "this.audioSystem?.playSound('sfx_tesla_activate', dome.x, dome.y, dome.ownerId);"
+            "excerpt": "if (!baseline) this.audioSystem?.playSound('sfx_tesla_activate', dome.x, dome.y, dome.ownerId);"
           }
         ],
         "playback": "oneshot",
@@ -2790,7 +3207,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_use_dachstunnel.ogg",
+            "usages": [
+              {
+                "path": "src/world/WorldPlayerGameplayRuntime.ts",
+                "line": 1713,
+                "kind": "oneshot",
+                "excerpt": "this.options.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_use_dachstunnel"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_use_dachstunnel",
         "kind": "sfx",
@@ -2810,7 +3246,7 @@
         "usages": [
           {
             "path": "src/world/WorldPlayerGameplayRuntime.ts",
-            "line": 1706,
+            "line": 1713,
             "kind": "oneshot",
             "excerpt": "this.options.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);"
           }
@@ -4844,12 +5280,12 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one Zeus electric shot: violent lightning crack, dense high-voltage body, sharp bright edge, and a tight low impact tail.",
-        "source": "astra",
+        "text": "TrackType: SFX, one Taser electric effect: violent lightning crack, dense high-voltage body, sharp bright edge, and a tight low impact tail.",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
+        "model": "medium",
         "duration_seconds": 2,
         "candidate_count": 4,
         "steps": 8,
@@ -4953,6 +5389,42 @@
               "music_arena"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/music_arena.ogg",
+            "usages": [
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 14,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+              },
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 14,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1668,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3061,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_arena"
+            ]
+          }
         }
       ],
       "repository": {
@@ -4973,14 +5445,26 @@
         ],
         "usages": [
           {
+            "path": "src/assets/DeferredAssets.ts",
+            "line": 14,
+            "kind": "unknown",
+            "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+          },
+          {
+            "path": "src/assets/DeferredAssets.ts",
+            "line": 14,
+            "kind": "unknown",
+            "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+          },
+          {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1660,
+            "line": 1668,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3019,
+            "line": 3061,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
           }
@@ -5045,6 +5529,48 @@
               "music_lobby"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/badger02.ogg",
+            "usages": [
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 13,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+              },
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 13,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 914,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1552,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3195,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_lobby"
+            ]
+          }
         }
       ],
       "repository": {
@@ -5065,25 +5591,1381 @@
         ],
         "usages": [
           {
+            "path": "src/assets/DeferredAssets.ts",
+            "line": 13,
+            "kind": "unknown",
+            "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+          },
+          {
+            "path": "src/assets/DeferredAssets.ts",
+            "line": 13,
+            "kind": "unknown",
+            "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+          },
+          {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 909,
+            "line": 914,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1544,
+            "line": 1552,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3153,
+            "line": 3195,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           }
         ],
         "playback": "loop",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_boss_announce": {
+      "name": "Bossankuendigung",
+      "category": "event",
+      "intent": "Bestaetigter Boss-Spawn fuer die Missionsteilnehmer.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single ominous boss arrival warning, deep weighty impact and brief rough rising metallic resonance, clear threatening accent with a controlled finish. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_boss_announce",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_boss_announce.ogg",
+        "asset_path": "./assets/sounds/sfx_boss_announce.ogg",
+        "filename": "sfx_boss_announce.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_boss_announce"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 17,
+            "kind": "unknown",
+            "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 814,
+            "kind": "unknown",
+            "excerpt": "this.broadcastMissionAudio('sfx_boss_announce', `boss:${spawnedAtMs}`);"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 1983,
+            "kind": "unknown",
+            "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_checkpoint_activate": {
+      "name": "Kontrollpunkt aktiviert",
+      "category": "event",
+      "intent": "Erstmaliges Aktivieren eines Kontrollpunkts.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single sturdy checkpoint activation cue, solid latch click and brief stable electronic beacon chirp, reassuring and compact. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_checkpoint_activate",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_checkpoint_activate.ogg",
+        "asset_path": "./assets/sounds/sfx_checkpoint_activate.ogg",
+        "filename": "sfx_checkpoint_activate.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_checkpoint_activate"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 17,
+            "kind": "unknown",
+            "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 823,
+            "kind": "unknown",
+            "excerpt": "onCheckpointActivated: id => this.broadcastMissionAudio('sfx_checkpoint_activate', `checkpoint:${id}`),"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 1983,
+            "kind": "unknown",
+            "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_enemy_death": {
+      "name": "Gegnertod",
+      "category": "enemy",
+      "intent": "Kurzer raeumlicher Abschluss eines bestaetigten Gegnerkills.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single compact creature collapse, dry body impact and brief rough exhale, immediate attack, unobtrusive short decay for frequent combat use. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_enemy_death",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_enemy_death.ogg",
+        "asset_path": "./assets/sounds/sfx_enemy_death.ogg",
+        "filename": "sfx_enemy_death.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_enemy_death"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 377,
+            "kind": "unknown",
+            "excerpt": ": key === 'sfx_enemy_death' ? 60"
+          },
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 16,
+            "kind": "unknown",
+            "excerpt": "...Object.values(PICKUP_AUDIO), 'sfx_player_death', 'sfx_enemy_death',"
+          },
+          {
+            "path": "src/combat/WorldCombatCore.ts",
+            "line": 4271,
+            "kind": "unknown",
+            "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_item_selected": {
+      "name": "Belohnungsitem gewaehlt",
+      "category": "ui",
+      "intent": "Ein lokaler Ton nach bestaetigter Entscheidung fuer eines der drei Belohnungsitems; ersetzt den Menueklick.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single satisfying reward item selection accent, light wooden clasp with a bright precious metallic shimmer, clean immediate attack and short resolved tail. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_item_selected.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 181,
+                "kind": "unknown",
+                "excerpt": "| 'sfx_upgrade_purchased' | 'sfx_item_selected') => void;"
+              },
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 864,
+                "kind": "oneshot",
+                "excerpt": "this.input.playSound?.('sfx_item_selected');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_item_selected"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_item_selected",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_item_selected.ogg",
+        "asset_path": "./assets/sounds/sfx_item_selected.ogg",
+        "filename": "sfx_item_selected.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_item_selected"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 181,
+            "kind": "unknown",
+            "excerpt": "| 'sfx_upgrade_purchased' | 'sfx_item_selected') => void;"
+          },
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 864,
+            "kind": "oneshot",
+            "excerpt": "this.input.playSound?.('sfx_item_selected');"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_level_up": {
+      "name": "Levelaufstieg",
+      "category": "event",
+      "intent": "Ein lokaler Ton pro XP-Verbuchung mit Levelsteigerung.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single uplifting level up accent, sparkling upward cascade ending in a warm bright resolved chime, compact and celebratory. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_level_up.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 180,
+                "kind": "unknown",
+                "excerpt": "readonly playSound?: (key: 'sfx_round_victory' | 'sfx_round_defeat' | 'sfx_level_up'"
+              },
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 749,
+                "kind": "oneshot",
+                "excerpt": "this.input.playSound?.('sfx_level_up');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 818,
+                "kind": "oneshot",
+                "excerpt": "if (this.progress.level > beforeLevel) this.input.playSound?.('sfx_level_up');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 865,
+                "kind": "oneshot",
+                "excerpt": "if (claim.salvagedXp > 0 && this.progress.level > beforeLevel) this.input.playSound?.('sfx_level_up');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_level_up"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_level_up",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_level_up.ogg",
+        "asset_path": "./assets/sounds/sfx_level_up.ogg",
+        "filename": "sfx_level_up.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_level_up"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 180,
+            "kind": "unknown",
+            "excerpt": "readonly playSound?: (key: 'sfx_round_victory' | 'sfx_round_defeat' | 'sfx_level_up'"
+          },
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 749,
+            "kind": "oneshot",
+            "excerpt": "this.input.playSound?.('sfx_level_up');"
+          },
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 818,
+            "kind": "oneshot",
+            "excerpt": "if (this.progress.level > beforeLevel) this.input.playSound?.('sfx_level_up');"
+          },
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 865,
+            "kind": "oneshot",
+            "excerpt": "if (claim.salvagedXp > 0 && this.progress.level > beforeLevel) this.input.playSound?.('sfx_level_up');"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_menu_activate": {
+      "name": "Menue Aktivierung",
+      "category": "ui",
+      "intent": "Klarer kompakter Klick nach einer akzeptierten Menueaktion.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single tactile wooden button click with a crisp light metallic accent, immediate attack and clean short decay, subtle game interface confirmation. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_menu_activate",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_menu_activate.ogg",
+        "asset_path": "./assets/sounds/sfx_menu_activate.ogg",
+        "filename": "sfx_menu_activate.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_menu_activate"
+        ],
+        "usages": [
+          {
+            "path": "src/ui/UiAudio.ts",
+            "line": 4,
+            "kind": "unknown",
+            "excerpt": "playLocalSound(key: 'sfx_menu_hover' | 'sfx_menu_activate'): void;"
+          },
+          {
+            "path": "src/ui/UiAudio.ts",
+            "line": 20,
+            "kind": "oneshot",
+            "excerpt": "ports.get(scene)?.playLocalSound('sfx_menu_activate');"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_menu_hover": {
+      "name": "Menue Hover",
+      "category": "ui",
+      "intent": "Sehr leise kurze Rueckmeldung beim Betreten eines aktiven Bedienelements.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single tiny soft wooden tick with a delicate airy edge, extremely short and restrained, clean menu hover feedback. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_menu_hover",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_menu_hover.ogg",
+        "asset_path": "./assets/sounds/sfx_menu_hover.ogg",
+        "filename": "sfx_menu_hover.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_menu_hover"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 376,
+            "kind": "unknown",
+            "excerpt": "const windowMs = key === 'sfx_menu_hover' ? 80"
+          },
+          {
+            "path": "src/ui/UiAudio.ts",
+            "line": 4,
+            "kind": "unknown",
+            "excerpt": "playLocalSound(key: 'sfx_menu_hover' | 'sfx_menu_activate'): void;"
+          },
+          {
+            "path": "src/ui/UiAudio.ts",
+            "line": 16,
+            "kind": "oneshot",
+            "excerpt": "ports.get(scene)?.playLocalSound('sfx_menu_hover');"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_objective_complete": {
+      "name": "Missionsziel erfuellt",
+      "category": "event",
+      "intent": "Bestaetigter Abschluss einer Nebenmission oder eines Missionsziels.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single clear positive objective confirmation, crisp mechanical tick followed by a warm upward chime, short satisfying resolved tail. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_objective_complete",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_objective_complete.ogg",
+        "asset_path": "./assets/sounds/sfx_objective_complete.ogg",
+        "filename": "sfx_objective_complete.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_objective_complete"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 17,
+            "kind": "unknown",
+            "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 822,
+            "kind": "unknown",
+            "excerpt": "onObjectiveCompleted: id => this.broadcastMissionAudio('sfx_objective_complete', `objective:${id}`),"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 1983,
+            "kind": "unknown",
+            "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_adrenaline": {
+      "name": "Adrenalinspritze aufgenommen",
+      "category": "powerup",
+      "intent": "Bestaetigte Aufnahme einer Adrenalinspritze.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single small syringe click followed by a quick pressurized hiss and bright energetic pulse, concise and clearly readable game pickup. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_adrenaline",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_pickup_adrenaline.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_adrenaline.ogg",
+        "filename": "sfx_pickup_adrenaline.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_adrenaline"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 8,
+            "kind": "unknown",
+            "excerpt": "ADRENALINE: 'sfx_pickup_adrenaline',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_adrenaline_essence": {
+      "name": "Adrenalin Essenz aufgenommen",
+      "category": "powerup",
+      "intent": "Gebundelte bestaetigte Essenzgutschrift beim lokalen Sammler.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single tiny liquid energy absorption pop, soft upward shimmer and rounded pulse, extremely compact and pleasant under rapid repeated pickups. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_adrenaline_essence",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_pickup_adrenaline_essence.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_adrenaline_essence.ogg",
+        "filename": "sfx_pickup_adrenaline_essence.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_adrenaline_essence"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 378,
+            "kind": "unknown",
+            "excerpt": ": key === 'sfx_pickup_adrenaline_essence' ? 110"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 1239,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_pickup_adrenaline_essence');"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_bfg": {
+      "name": "BFG aufgenommen",
+      "category": "powerup",
+      "intent": "Bestaetigte BFG-Aufnahme.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single heavy futuristic weapon pickup, solid mechanical clunk and short green plasma energy swell, immediate dry finish, no shot or explosion. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_bfg",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_pickup_bfg.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_bfg.ogg",
+        "filename": "sfx_pickup_bfg.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_bfg"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 12,
+            "kind": "unknown",
+            "excerpt": "BFG: 'sfx_pickup_bfg',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_double_damage": {
+      "name": "Doppelter Schaden aufgenommen",
+      "category": "powerup",
+      "intent": "Bestaetigte Aufnahme des Schadensbonus.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single forceful twin metallic accent fused into one compact energy pickup, strong attack and brief charged shimmer, controlled short tail. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_double_damage",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_pickup_double_damage.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_double_damage.ogg",
+        "filename": "sfx_pickup_double_damage.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_double_damage"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 9,
+            "kind": "unknown",
+            "excerpt": "DOUBLE_DAMAGE: 'sfx_pickup_double_damage',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_holy_hand_grenade": {
+      "name": "Heilige Handgranate aufgenommen",
+      "category": "powerup",
+      "intent": "Bestaetigte Aufnahme der heiligen Handgranate.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single bright sacred bell accent with a small metal clasp and gentle shimmering finish, playful but clear compact game pickup, no explosion. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_holy_hand_grenade",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_pickup_holy_hand_grenade.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_holy_hand_grenade.ogg",
+        "filename": "sfx_pickup_holy_hand_grenade.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_holy_hand_grenade"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 11,
+            "kind": "unknown",
+            "excerpt": "HOLY_HAND_GRENADE: 'sfx_pickup_holy_hand_grenade',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_nuke": {
+      "name": "Nuke aufgenommen",
+      "category": "powerup",
+      "intent": "Bestaetigte Nuke-Aufnahme, deutlich vom Einschlag unterscheidbar.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single compact heavy power pickup, deep mechanical latch and rising reactor chirp, restrained bass and short dry finish, no explosion. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_nuke",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_pickup_nuke.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_nuke.ogg",
+        "filename": "sfx_pickup_nuke.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_nuke"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 10,
+            "kind": "unknown",
+            "excerpt": "NUKE: 'sfx_pickup_nuke',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_pickup_rage": {
+      "name": "Rage aufgenommen",
+      "category": "powerup",
+      "intent": "Bestaetigte Rage-Aufnahme.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single compact raw energy intake, low organic pulse and brief rising gritty buzz, immediate and punchy with a clean finish. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_pickup_rage",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_pickup_rage.ogg",
+        "asset_path": "./assets/sounds/sfx_pickup_rage.ogg",
+        "filename": "sfx_pickup_rage.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_pickup_rage"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 7,
+            "kind": "unknown",
+            "excerpt": "RAGE: 'sfx_pickup_rage',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_round_defeat": {
+      "name": "Rundenniederlage",
+      "category": "event",
+      "intent": "Persoenliche endgueltige Niederlage; kurzer gedampfter Ergebnisakzent.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single subdued game defeat accent, descending low metallic resonance and soft heavy impact, restrained weight and a clean short ending. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_round_defeat.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 180,
+                "kind": "unknown",
+                "excerpt": "readonly playSound?: (key: 'sfx_round_victory' | 'sfx_round_defeat' | 'sfx_level_up'"
+              },
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 746,
+                "kind": "oneshot",
+                "excerpt": "this.input.playSound?.(presentation.outcome === 'victory' ? 'sfx_round_victory' : 'sfx_round_defeat');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_round_defeat"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_round_defeat",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_round_defeat.ogg",
+        "asset_path": "./assets/sounds/sfx_round_defeat.ogg",
+        "filename": "sfx_round_defeat.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_round_defeat"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 180,
+            "kind": "unknown",
+            "excerpt": "readonly playSound?: (key: 'sfx_round_victory' | 'sfx_round_defeat' | 'sfx_level_up'"
+          },
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 746,
+            "kind": "oneshot",
+            "excerpt": "this.input.playSound?.(presentation.outcome === 'victory' ? 'sfx_round_victory' : 'sfx_round_defeat');"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_round_victory": {
+      "name": "Rundensieg",
+      "category": "event",
+      "intent": "Persoenlicher endgueltiger Sieg; kurzer positiver Ergebnisakzent.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single triumphant game victory accent, bright rising metallic resonance over a warm compact impact, satisfying final resolution with a short tail. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_round_victory.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 180,
+                "kind": "unknown",
+                "excerpt": "readonly playSound?: (key: 'sfx_round_victory' | 'sfx_round_defeat' | 'sfx_level_up'"
+              },
+              {
+                "path": "src/scenes/arena/ArenaMetaController.ts",
+                "line": 746,
+                "kind": "oneshot",
+                "excerpt": "this.input.playSound?.(presentation.outcome === 'victory' ? 'sfx_round_victory' : 'sfx_round_defeat');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_round_victory"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_round_victory",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_round_victory.ogg",
+        "asset_path": "./assets/sounds/sfx_round_victory.ogg",
+        "filename": "sfx_round_victory.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_round_victory"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 180,
+            "kind": "unknown",
+            "excerpt": "readonly playSound?: (key: 'sfx_round_victory' | 'sfx_round_defeat' | 'sfx_level_up'"
+          },
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 746,
+            "kind": "oneshot",
+            "excerpt": "this.input.playSound?.(presentation.outcome === 'victory' ? 'sfx_round_victory' : 'sfx_round_defeat');"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_ultimate_ready": {
+      "name": "Ultimate bereit",
+      "category": "event",
+      "intent": "Lokales bestaetigtes Ueberschreiten der Ultimate-Ressourcenschwelle.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single distinct ability ready cue, quick focused energy rise ending in a bright clean resonant ping, short and easy to recognize in combat. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_ultimate_ready",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_ultimate_ready.ogg",
+        "asset_path": "./assets/sounds/sfx_ultimate_ready.ogg",
+        "filename": "sfx_ultimate_ready.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_ultimate_ready"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ClientUpdateCoordinator.ts",
+            "line": 697,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_ultimate_ready');"
+          },
+          {
+            "path": "src/scenes/arena/HostUpdateCoordinator.ts",
+            "line": 947,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_ultimate_ready');"
+          }
+        ],
+        "playback": "oneshot",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_upgrade_purchased": {
+      "name": "Upgrade gekauft",
+      "category": "ui",
+      "intent": "Ein lokaler Ton nach erfolgreichem Upgrade-Kauf; ersetzt den Menueklick.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single satisfying upgrade purchase confirmation, small metallic ratchet click and warm rising energy sparkle, concise tactile finish. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_upgrade_purchased",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_upgrade_purchased.ogg",
+        "asset_path": "./assets/sounds/sfx_upgrade_purchased.ogg",
+        "filename": "sfx_upgrade_purchased.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_upgrade_purchased"
+        ],
+        "usages": [
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 181,
+            "kind": "unknown",
+            "excerpt": "| 'sfx_upgrade_purchased' | 'sfx_item_selected') => void;"
+          },
+          {
+            "path": "src/scenes/arena/ArenaMetaController.ts",
+            "line": 459,
+            "kind": "oneshot",
+            "excerpt": "this.input.playSound?.('sfx_upgrade_purchased');"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_wave_start": {
+      "name": "Gegnerwelle beginnt",
+      "category": "event",
+      "intent": "Erster erfolgreicher Spawn eines Encounters fuer die Missionsteilnehmer.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX. A single concise combat wave alert, firm low percussion attack and ascending tactical metallic pulse, urgent but unobtrusive short tail. Isolated sound, no music, speech, ambience or repeated sequence.",
+        "source": "astra",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_wave_start",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_wave_start.ogg",
+        "asset_path": "./assets/sounds/sfx_wave_start.ogg",
+        "filename": "sfx_wave_start.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_wave_start"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/GameplayAudioFeedback.ts",
+            "line": 17,
+            "kind": "unknown",
+            "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 821,
+            "kind": "unknown",
+            "excerpt": "onWaveStarted: id => this.broadcastMissionAudio('sfx_wave_start', `wave:${id}`),"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 1983,
+            "kind": "unknown",
+            "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+          }
+        ],
+        "playback": "unknown",
         "conflicts": []
       },
       "orphaned": false

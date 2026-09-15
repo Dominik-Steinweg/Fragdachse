@@ -19,6 +19,7 @@ export interface CoopDefenseMissionPlayerSample {
 }
 
 export interface CoopDefenseMissionProgressSystemOptions {
+  readonly onCheckpointActivated?: (checkpointId: string) => void;
   readonly roundRevision: number;
   readonly getDefenseObjectiveState: (objectiveId: string) => CoopDefenseSecondaryObjectiveState | null;
   readonly isEncounterCleared?: (encounterId: string) => boolean;
@@ -203,6 +204,7 @@ export class CoopDefenseMissionProgressSystem {
       this.activatedAtRoundMs.set(checkpoint.id, this.elapsedRoundMs);
       this.nextCheckpointIndex += 1;
       if (checkpoint.setRespawn) this.respawnCheckpointId = checkpoint.id;
+      this.options.onCheckpointActivated?.(checkpoint.id);
       this.routeLockDefenseId = this.findCurrentRouteLock();
       changed = true;
       // Sobald dieser Checkpoint eine Mandatory Defense startet, endet die Auswertung dieses Ticks.

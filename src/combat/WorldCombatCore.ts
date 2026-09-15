@@ -1337,6 +1337,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
     // Facts are secured; end old-life status before hooks can create a new life/status.
     if (outcome.transition.kind === 'dead') {
+      this.broadcastDeathAudio(target, x, y, true);
       this.onPlayerLifeEnded?.(target);
       if (!current()) return finish();
     }
@@ -4112,6 +4113,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     };
     const isCritical = outcome.damage.isCritical;
 
+    if (result.died && targetFaction === 'hostile') this.broadcastDeathAudio(target, x, y, false);
+
     if (attackerId && attackerId !== targetId) {
       this.lastSource.set(targetId, outcome.source);
       if (visualContext) this.lastKillSource.set(targetId, {
@@ -4262,6 +4265,16 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.attributionTargets.set(id, target);
   }
 
+  private broadcastDeathAudio(target: CombatTargetRef, x: number, y: number, immediate: boolean): void {
+    const { scope, instance } = target;
+    this.bridge.broadcastAudioFeedback({
+      key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',
+      eventId: JSON.stringify(['death', scope.runtimeGeneration, target.kind, target.id,
+        instance.entityGeneration, instance.activityRevision, instance.lifeRevision]),
+      position: { x, y, emitterId: target.kind === 'player' ? String(target.id) : undefined },
+    }, immediate);
+  }
+
   private handleDeath(
     playerId: string,
     x: number,
@@ -4282,6 +4295,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     };
     if (!current()) return;
     if (!transitionCommitted && deadLife) {
+      this.broadcastDeathAudio(deadLife, x, y, true);
       this.onPlayerLifeEnded?.(deadLife);
       if (!current()) return;
     }

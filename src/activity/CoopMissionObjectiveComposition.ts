@@ -27,6 +27,8 @@ import type { WorldMetrics } from '../world/WorldMetrics';
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
 
 export interface CoopMissionObjectiveCompositionOptions {
+  readonly onObjectiveCompleted?: (objectiveId: string) => void;
+  readonly onCheckpointActivated?: (checkpointId: string) => void;
   readonly activity: CoopMissionActivityConfiguration;
   readonly humanPlayerCount: number;
   readonly worldRevision: number;
@@ -126,6 +128,7 @@ export class CoopMissionObjectiveComposition {
           }
         },
         onObjectiveCompleted: (objectiveId) => {
+          this.options.onObjectiveCompleted?.(objectiveId);
           const config = objectives.find((entry) => entry.id === objectiveId);
           this.options.grantPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);
           const reward = config?.rewards?.teamBuffOnComplete;
@@ -148,6 +151,7 @@ export class CoopMissionObjectiveComposition {
     const missionProgress = this.options.isHost && progressConfig
       ? new CoopDefenseMissionProgressSystem(progressConfig, {
         roundRevision: this.options.worldRevision,
+        onCheckpointActivated: this.options.onCheckpointActivated,
         worldMetrics: this.options.worldMetrics,
         getDefenseObjectiveState: (objectiveId) => (
           runtime.coopDefenseSecondaryObjectiveSystem?.getObjectiveState(objectiveId) ?? null

@@ -1,5 +1,6 @@
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureModalPanelTexture, mountForestModal, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
+import { activateUi } from './UiAudio';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { attachHoverEffect } from './uiHover';
@@ -224,7 +225,7 @@ export class RoomStatisticsOverlay {
       color: COLORS.GREY_1,
       align: 'center',
     })).setOrigin(0.5).setScrollFactor(0);
-    closeButton.on('pointerdown', () => this.hide());
+    closeButton.on('pointerdown', () => activateUi(this.scene, () => this.hide()));
     attachHoverEffect(this.scene, closeButton, closeLabel);
 
     backdrop.on('pointerdown', () => this.hide());

@@ -37,6 +37,7 @@ vi.mock('../../src/ui/LivingBarEffect', async importOriginal => ({
 }));
 
 import { UiButton } from '../../src/ui/UiButton';
+import { bindUiAudio } from '../../src/ui/UiAudio';
 import { LobbyPlayerProgress } from '../../src/ui/LobbyPlayerProgress';
 import { DEPTH } from '../../src/config';
 import { OptionsOverlay } from '../../src/ui/OptionsOverlay';
@@ -119,6 +120,29 @@ function sceneStub() {
 beforeEach(() => { effects.length = 0; });
 
 describe('living UI consumer ownership', () => {
+  it('sounds central buttons once at their configured activation edge and keeps rejected or disabled actions silent', () => {
+    const { scene } = sceneStub();
+    const playLocalSound = vi.fn();
+    const unbind = bindUiAudio(scene, { playLocalSound });
+    const onClick = vi.fn(() => true);
+    const button = new UiButton(scene, { x: 0, y: 0, w: 100, h: 30, onClick, activateOn: 'pointerup' });
+    const bg = button.getBackground();
+    bg.emit('pointerover'); bg.emit('pointerover');
+    expect(playLocalSound).toHaveBeenCalledExactlyOnceWith('sfx_menu_hover');
+    bg.emit('pointerup', { id: 1 });
+    expect(onClick).not.toHaveBeenCalled();
+    bg.emit('pointerdown', { id: 1 });
+    expect(onClick).not.toHaveBeenCalled();
+    bg.emit('pointerup', { id: 1 }); bg.emit('pointerup', { id: 1 });
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(playLocalSound).toHaveBeenLastCalledWith('sfx_menu_activate');
+    onClick.mockReturnValue(false);
+    bg.emit('pointerdown', { id: 1 }); bg.emit('pointerup', { id: 1 });
+    button.setEnabled(false);
+    bg.emit('pointerdown', { id: 1 }); bg.emit('pointerup', { id: 1 });
+    expect(playLocalSound).toHaveBeenCalledTimes(2);
+    unbind(); button.destroy();
+  });
   it.each(['default', 'forest'] as const)('places button decoration between face and content, including badges and hover transforms (%s)', (skin) => {
     const { scene, tweens } = sceneStub();
     const button = new UiButton(scene, { x: 400, y: 120, w: 190, h: 44, label: 'Items', icon: 'lock', skin });

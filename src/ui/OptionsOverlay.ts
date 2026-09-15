@@ -1,5 +1,6 @@
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
+import { playUiActivation, playUiHover } from './UiAudio';
 import {
   COLORS,
   DEPTH,
@@ -519,11 +520,13 @@ export class OptionsOverlay {
           this.graphicsQuality.setLevel(option.level);
           setStoredGraphicsQuality(option.level);
           this.syncQualityButtons();
+          playUiActivation(this.scene);
         });
       const label = this.scene.add.text(x, QUALITY_BUTTON_Y, t(option.label), textStyle('labelSm', {
         color: TEXT.secondary,
       })).setOrigin(0.5).setScrollFactor(0);
       this.qualityButtons.set(option.level, { background, label });
+      background.on('pointerover', () => playUiHover(this.scene));
       objects.push(background, label);
     });
 
@@ -556,6 +559,7 @@ export class OptionsOverlay {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.onLocaleSelected(option.locale))
         .on('pointerover', () => {
+          if (this.localeBinding?.canChange()) playUiHover(this.scene);
           if (!this.localeBinding?.canChange()) this.localeHint?.setText(t('ui.options.languageLobbyOnly'));
         })
         .on('pointerout', () => this.syncLocaleButtons());
@@ -581,6 +585,8 @@ export class OptionsOverlay {
     this.build();
     if (wasVisible) this.show();
     this.localeBinding?.onChanged(locale);
+    playUiActivation(this.scene);
+    playUiActivation(this.scene);
   }
 
   private syncLocaleButtons(): void {
@@ -852,6 +858,7 @@ export class OptionsOverlay {
     }
     this.hide();
     binding.leave();
+    playUiActivation(this.scene);
   }
 
   private onSpectatorButtonPressed(): void {
@@ -862,6 +869,7 @@ export class OptionsOverlay {
       return;
     }
 
+    playUiActivation(this.scene);
     if (!this.spectatorConfirmPending) {
       this.spectatorConfirmPending = true;
       this.spectatorConfirmTimer?.destroy();
@@ -887,6 +895,7 @@ export class OptionsOverlay {
       return;
     }
 
+    playUiActivation(this.scene);
     if (!this.abortConfirmPending) {
       this.abortConfirmPending = true;
       this.abortConfirmTimer?.destroy();

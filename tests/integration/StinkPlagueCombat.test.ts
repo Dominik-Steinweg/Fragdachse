@@ -26,7 +26,7 @@ function fixture(boss = false) {
   Object.assign(player,{body:{enable:true}});
   const players={ getPlayer: (id:string)=> id==='p1' && present ? player : undefined, getAllPlayers:()=> present ? [player] : [] };
   const combat=new WorldCombatCore(players as never, { isHost:()=>true, getPlayerProfile:players.getPlayer,
-    areTeammates:()=>false, getLocalPlayerId:()=> 'p1', isEnemyPair:()=>true, broadcastEffect() {} } as never);
+    areTeammates:()=>false, getLocalPlayerId:()=> 'p1', isEnemyPair:()=>true, broadcastEffect() {}, broadcastAudioFeedback: vi.fn() } as never);
   combat.bindPlayerVitalsScope({worldRevision:7300,runtimeGeneration:1}); combat.bindHostExecutionSources({nowMs:()=>now,random:()=>.25});
   combat.initPlayer('p1'); combat.setEnemyManager(enemies); combat.applyDamage('p1',50,true);
   const status=new TargetStatusSystem();

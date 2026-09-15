@@ -267,6 +267,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
         this.options.placementSystem.removeRock(pedestal.id);
         return false;
       }
+      this.options.placementSystem.confirmPlacement(pedestal.id);
       this.options.rockVisualHelper.materializePlaceableRock(pedestal, true);
       this.options.emitGridChanged({ reason: 'placeable_added', source: 'placeable_pedestal', runtime: pedestal });
       return true;
@@ -293,6 +294,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
       constructionId ? this.getOwnership(playerId) : undefined,
     );
     if (!rock) return false;
+    this.options.placementSystem.confirmPlacement(rock.id);
     this.options.rockVisualHelper.materializePlaceableRock(rock, true);
     this.registerNewPersistentPlaceable(
       rock,
@@ -343,6 +345,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     }
     const cooldownUntil = this.markConstructionUsed(playerId, canonical, hostNowMs);
     this.options.publishUtilityCooldown(playerId, cooldownUntil, canonical);
+    this.options.placementSystem.confirmPlacement(construction.id);
     this.options.rockVisualHelper.materializePlaceableRock(construction, true);
     this.registerNewPersistentPlaceable(construction, { kind: 'construction', id: canonical }, definition.footprint);
     this.options.emitGridChanged({

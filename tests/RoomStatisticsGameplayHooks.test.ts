@@ -210,7 +210,14 @@ describe('room-statistics gameplay hooks', () => {
 
     expect(system.tryPickup('p1', uid, 200, 240)).toBe(true);
     expect(collected).toHaveBeenCalledOnce();
+    expect(collected).toHaveBeenLastCalledWith('p1', { uid, defId: 'HEALTH_PACK', x: 200, y: 240 });
     expect(system.tryPickup('p1', uid, 200, 240)).toBe(false);
     expect(collected).toHaveBeenCalledOnce();
+    expect(system.tryPickup('p2', uid, 200, 240)).toBe(false);
+    const armor = (system as any).spawnPowerUpDef(POWERUP_DEFS.ARMOR, 200, 240);
+    expect(system.tryPickup('p2', armor, -1000, -1000)).toBe(false);
+    expect(collected).toHaveBeenCalledOnce();
+    expect(system.tryPickup('p2', armor, 200, 240)).toBe(true);
+    expect(collected).toHaveBeenLastCalledWith('p2', { uid: armor, defId: 'ARMOR', x: 200, y: 240 });
   });
 });

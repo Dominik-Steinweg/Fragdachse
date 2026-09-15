@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { activateUi, playUiHover } from './UiAudio';
 import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
 import { ensureForestPanel } from './forestTextures';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
@@ -17,7 +18,7 @@ export interface LoadoutPickerEntry {
   readonly selected: boolean;
   /** Liegt in einem anderen Slot derselben Gruppe und ist deshalb hier nicht waehlbar. */
   readonly disabled: boolean;
-  readonly onPick: () => void;
+  readonly onPick: () => void | boolean;
 }
 
 /** Benannter Abschnitt im Popup (z.B. "Utility 1" / "Utility 2" beim Inspector). */
@@ -266,7 +267,7 @@ export class LoadoutSlotPicker {
     this.attachRowHover(background, restState, hoverState, label);
     background.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
-      entry.onPick();
+      activateUi(this.scene, entry.onPick);
       this.close();
     });
   }
@@ -302,7 +303,7 @@ export class LoadoutSlotPicker {
     });
     background.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
-      onClear();
+      activateUi(this.scene, onClear);
       this.close();
     });
     children.push(background, label);
@@ -316,6 +317,7 @@ export class LoadoutSlotPicker {
     label?: Phaser.GameObjects.Text,
   ): void {
     background.on('pointerover', () => {
+      playUiHover(this.scene);
       background
         .setFillStyle(hoverState.fillColor, hoverState.fillAlpha)
         .setStrokeStyle(hoverState.strokeWidth, hoverState.strokeColor, hoverState.strokeAlpha);

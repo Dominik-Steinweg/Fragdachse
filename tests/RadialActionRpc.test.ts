@@ -277,7 +277,8 @@ describe('radial action RPC classification', () => {
     const pickup = bridgeMock.registerPickupPowerUpHandler.mock.calls.at(-1)?.[0];
     expect(pickup?.(7, 'p1')).toBe(true);
     expect(fixture.powerUpSystem.tryPickup).toHaveBeenCalledWith('p1', 7, 12, 34);
-    expect(fixture.gameAudioSystem.playSound).toHaveBeenCalledWith('sfx_pickup_powerup', 12, 34, 'p1');
+    // The successful PowerUpSystem receipt owns feedback, never the RPC wrapper.
+    expect(fixture.gameAudioSystem.playSound).not.toHaveBeenCalled();
 
     bridgeMock.registerTrainDestroyedHandler.mock.calls.at(-1)?.[0]?.();
     expect(fixture.train.markDestroyed).toHaveBeenCalledTimes(1);

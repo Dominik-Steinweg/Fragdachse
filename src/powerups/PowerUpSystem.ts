@@ -85,7 +85,7 @@ export interface ConfiguredNukeStrike {
 
 export interface PowerUpSystemOptions {
   onRagePickup?: (playerId: string, amount: number) => boolean;
-  onPickupCollected?: (playerId: string) => void;
+  onPickupCollected?: (playerId: string, pickup: { uid: number; defId: string; x: number; y: number }) => void;
   onNukePickup?: (playerId: string) => boolean | void;
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;
   onConfiguredNukeExploded?: (strike: SyncedNukeStrike) => void;
@@ -661,7 +661,7 @@ export class PowerUpSystem {
         this.objectiveRewardUids.delete(item.objectiveId);
       }
     }
-    this.options.onPickupCollected?.(playerId);
+    this.options.onPickupCollected?.(playerId, { uid, defId: item.def.id, x: item.x, y: item.y });
     return true;
   }
 

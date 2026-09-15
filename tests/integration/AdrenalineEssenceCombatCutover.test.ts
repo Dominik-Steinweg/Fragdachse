@@ -55,6 +55,7 @@ function glockEnemyFixture(origin = { x: 300, y: 100 }) {
     isHost: () => true, getPlayerProfile: players.getPlayer, areTeammates: () => false,
     getLocalPlayerId: () => 'p1', isEnemyPair: () => true,
     broadcastEffect: vi.fn(), broadcastHitscanTracer: vi.fn(),
+    broadcastAudioFeedback: vi.fn(),
   };
   const combat = new WorldCombatCore(players as never, network as never);
   combat.bindPlayerVitalsScope({ worldRevision: 7340, runtimeGeneration: 5 });
@@ -91,7 +92,7 @@ function glockEnemyFixture(origin = { x: 300, y: 100 }) {
     isAlive: id => combat.isAlive(id), isWeaponBlocked: () => false, isDashBurst: () => false,
   }, loadout, null, activation);
   let decoys: DecoySystem | undefined;
-  return { combat, enemy, enemies, facts, detachReward, resource,
+  return { combat, enemy, enemies, facts, detachReward, resource, network,
     addDecoyTarget() {
       enemies.hostRemoveWithoutKill(enemy.id);
       const owner = fakeEntity({ id: 'p2', x: 300, y: 100, color: 0xffffff,
@@ -125,6 +126,18 @@ function glockEnemyFixture(origin = { x: 300, y: 100 }) {
 }
 
 describe('Glock reward with independently scoped target owners', () => {
+  it('announces confirmed enemy kills even with suppressed death visuals, while administrative removal stays silent', () => {
+    const f = glockEnemyFixture();
+    f.combat.setEnemyDeathCallback(() => true);
+    const audio = f.network.broadcastAudioFeedback;
+    f.combat.applyDamage(f.enemy.id, f.enemy.getMaxHp() * 2, false, 'p1', 'test');
+    f.combat.applyDamage(f.enemy.id, 99999, false, 'p1', 'test');
+    expect(audio).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ key: 'sfx_enemy_death' }), false);
+    const next = f.enemies.hostSpawnAtWorld(320, 100, f.enemy.kind);
+    f.enemies.hostRemoveWithoutKill(next.id);
+    f.enemies.destroy();
+    expect(audio).toHaveBeenCalledOnce();
+  });
   it('scatters one real Glock enemy hit into independently grounded fractions on authored Map 1', () => {
     const { metrics, geometry, openPoints } = essenceWorldGeometry('coop_defense');
     const origin = openPoints(ADRENALINE_ESSENCE_CONFIG.scatterMaxRadius + ADRENALINE_ESSENCE_CONFIG.groundClearance)[0];

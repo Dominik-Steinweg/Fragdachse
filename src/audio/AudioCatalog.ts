@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Phaser from 'phaser';
 
 const SHIPPED_AUDIO_FILES = new Set([
   'airstrike2s.wav',
@@ -122,6 +122,13 @@ const LOADOUT_ASSETS = {
 
 // ── Power-Ups ───────────────────────────────────────────────────────────────
 const POWERUP_ASSETS = {
+  sfx_pickup_adrenaline_essence: './assets/sounds/sfx_pickup_adrenaline_essence.ogg',
+  sfx_pickup_rage: './assets/sounds/sfx_pickup_rage.ogg',
+  sfx_pickup_adrenaline: './assets/sounds/sfx_pickup_adrenaline.ogg',
+  sfx_pickup_double_damage: './assets/sounds/sfx_pickup_double_damage.ogg',
+  sfx_pickup_nuke: './assets/sounds/sfx_pickup_nuke.ogg',
+  sfx_pickup_holy_hand_grenade: './assets/sounds/sfx_pickup_holy_hand_grenade.ogg',
+  sfx_pickup_bfg: './assets/sounds/sfx_pickup_bfg.ogg',
   sfx_adrenaline_active:   './assets/sounds/sfx_adrenaline_active.ogg',
   sfx_pickup_hp:           './assets/sounds/sfx_pickup_hp.ogg',
   sfx_pickup_armor:        './assets/sounds/sfx_pickup_armor.ogg',
@@ -131,6 +138,19 @@ const POWERUP_ASSETS = {
 
 // ── General SFX ─────────────────────────────────────────────────────────────
 const GENERAL_ASSETS = {
+  sfx_enemy_death: './assets/sounds/sfx_enemy_death.ogg',
+  sfx_menu_hover: './assets/sounds/sfx_menu_hover.ogg',
+  sfx_menu_activate: './assets/sounds/sfx_menu_activate.ogg',
+  sfx_round_victory: './assets/sounds/sfx_round_victory.ogg',
+  sfx_round_defeat: './assets/sounds/sfx_round_defeat.ogg',
+  sfx_wave_start: './assets/sounds/sfx_wave_start.ogg',
+  sfx_boss_announce: './assets/sounds/sfx_boss_announce.ogg',
+  sfx_objective_complete: './assets/sounds/sfx_objective_complete.ogg',
+  sfx_checkpoint_activate: './assets/sounds/sfx_checkpoint_activate.ogg',
+  sfx_ultimate_ready: './assets/sounds/sfx_ultimate_ready.ogg',
+  sfx_level_up: './assets/sounds/sfx_level_up.ogg',
+  sfx_upgrade_purchased: './assets/sounds/sfx_upgrade_purchased.ogg',
+  sfx_item_selected: './assets/sounds/sfx_item_selected.ogg',
   sfx_player_move:     './assets/sounds/sfx_player_move.ogg', //done
   sfx_dash:            './assets/sounds/sfx_dash.ogg', //done
   sfx_burrowed:        './assets/sounds/sfx_burrowed.ogg',//done
@@ -243,6 +263,13 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_use_dachstunnel:       0.5,
 
   // Power-Ups
+  sfx_pickup_adrenaline_essence: 0.5,
+  sfx_pickup_rage: 0.5,
+  sfx_pickup_adrenaline: 0.5,
+  sfx_pickup_double_damage: 0.5,
+  sfx_pickup_nuke: 0.5,
+  sfx_pickup_holy_hand_grenade: 0.5,
+  sfx_pickup_bfg: 0.5,
   sfx_adrenaline_active:    0.5,
   sfx_pickup_hp:            0.5,
   sfx_pickup_armor:         0.5,
@@ -250,6 +277,19 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_double_damage_active: 0.5,
 
   // General SFX
+  sfx_enemy_death: 0.5,
+  sfx_menu_hover: 0.5,
+  sfx_menu_activate: 0.5,
+  sfx_round_victory: 0.5,
+  sfx_round_defeat: 0.5,
+  sfx_wave_start: 0.5,
+  sfx_boss_announce: 0.5,
+  sfx_objective_complete: 0.5,
+  sfx_checkpoint_activate: 0.5,
+  sfx_ultimate_ready: 0.5,
+  sfx_level_up: 0.5,
+  sfx_upgrade_purchased: 0.5,
+  sfx_item_selected: 0.5,
   sfx_player_move:     0.5,
   sfx_dash:            0.5,
   sfx_burrowed:        0.5,
@@ -290,7 +330,7 @@ export type ShotAudioAssetKey = keyof typeof SHOT_ASSETS;
 
 /**
  * Laedt alle Audio-Assets in den Phaser-Loader.
- * Dateien die nicht existieren werden still uebersprungen (Platzhalter-Support).
+ * Geplante Sounds bleiben ohne Ladeanfrage, bis Audio Studio ihre Datei veroeffentlicht.
  */
 export function preloadAllAudio(loader: Phaser.Loader.LoaderPlugin): void {
   for (const [key, assetPath] of Object.entries(AUDIO_ASSETS)) {

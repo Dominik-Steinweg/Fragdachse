@@ -1,4 +1,5 @@
 import { bridge } from '../../network/bridge';
+import { PICKUP_AUDIO } from '../../audio/GameplayAudioFeedback';
 import { PLAYER_COLORS } from '../../config';
 import { getStoredLocalOwnerId } from '../../utils/localPreferences';
 import { emitArenaMapGridChanged, emitArenaRockDestroyed } from './ArenaEvents';
@@ -39,6 +40,11 @@ export function composeWorldPowerUp(
     layout,
     worldMetrics: world.metrics,
     recordPowerUpCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
+    onPickupCollected: (playerId, pickup) => {
+      const key = PICKUP_AUDIO[pickup.defId];
+      if (!key || bridge.getCurrentWorldRevision() !== world.descriptor.worldRevision) return;
+      bridge.broadcastAudioFeedback({ key, eventId: `pickup:${pickup.uid}`, recipientId: playerId });
+    },
     grantRage: (playerId, amount) => gameplay.player?.grantPowerUpRage(playerId, amount) ?? false,
     addTemporaryUtility: (playerId, config) => (
       gameplay.player?.addTemporaryUtility(playerId, config, 1) !== null

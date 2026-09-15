@@ -1,5 +1,6 @@
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
+import { playUiActivation, playUiHover } from './UiAudio';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import {
   COOP_DEFENSE_ITEM_SLOTS,
@@ -175,9 +176,9 @@ export class CoopDefenseItemsOverlay {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly getState: () => CoopDefenseItemsOverlayState,
-    private readonly onEquip: (uid: string) => void,
-    private readonly onUnequip: (slot: CoopDefenseItemSlot) => void,
-    private readonly onSalvage: (uid: string) => void,
+    private readonly onEquip: (uid: string) => boolean | void,
+    private readonly onUnequip: (slot: CoopDefenseItemSlot) => boolean | void,
+    private readonly onSalvage: (uid: string) => number | void,
     private readonly onOpenPendingReward: () => void,
     private readonly onClose: () => void,
   ) {}
@@ -451,6 +452,7 @@ export class CoopDefenseItemsOverlay {
     sortButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.sortMode = this.sortMode === 'rarity' ? 'itemLevel' : 'rarity';
+      playUiActivation(this.scene);
       this.closeTransientLayers();
       this.refresh();
     });
@@ -467,6 +469,7 @@ export class CoopDefenseItemsOverlay {
     })).setOrigin(0.5).setScrollFactor(0);
     closeButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
+      playUiActivation(this.scene);
       this.hide();
       this.onClose();
     });
@@ -538,6 +541,7 @@ export class CoopDefenseItemsOverlay {
       cell.hovered = true;
       this.applyCellTexture(cell);
       if (!cell.item || this.contextMenu?.isOpen()) return;
+      playUiHover(this.scene);
       this.showCellTooltip(cell, pointer);
     });
     cell.frame.on('pointermove', (pointer: Phaser.Input.Pointer) => this.tooltip?.move(pointer));
@@ -562,6 +566,7 @@ export class CoopDefenseItemsOverlay {
         return;
       }
       if (cell.item) {
+        playUiActivation(this.scene);
         // Die Koordinaten sofort kopieren: Phaser aktualisiert das Pointer-Objekt beim Klick
         // auf die Menuezeile. Die Bestaetigung muss trotzdem am urspruenglichen Anker bleiben.
         this.openCellMenu(
@@ -658,16 +663,18 @@ export class CoopDefenseItemsOverlay {
             label: t('ui.items.drop'),
             color: COLORS.GREY_1,
             onPick: () => {
-              this.onUnequip(cell.slot);
+              const accepted = this.onUnequip(cell.slot);
               this.refresh();
+              return accepted;
             },
           }
           : {
             label: t('ui.items.equip'),
             color: COLORS.GREEN_2,
             onPick: () => {
-              this.onEquip(item.uid);
+              const accepted = this.onEquip(item.uid);
               this.refresh();
+              return accepted;
             },
           },
         {
@@ -687,8 +694,9 @@ export class CoopDefenseItemsOverlay {
             // Getragene Teile lassen sich nicht direkt zerlegen; die Persistenz verweigert das
             // bewusst. Deshalb erst ablegen, dann zerlegen.
             if (cell.equipmentSlot) this.onUnequip(cell.slot);
-            this.onSalvage(item.uid);
+            const xp = this.onSalvage(item.uid);
             this.refresh();
+            return xp !== 0;
           },
         },
       ],

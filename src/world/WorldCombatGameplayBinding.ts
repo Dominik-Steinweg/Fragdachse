@@ -741,7 +741,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.dropBeer(playerId, x, y);
       if (!current()) return;
       o.network.stats.recordPlayerDeath(playerId);
-      o.gameAudioSystem.playSound('sfx_player_death', x, y);
     });
     combat.setKillCallback((killerId, victimId, sourceId, x, y, source) => {
       const generation = this.activityGeneration;

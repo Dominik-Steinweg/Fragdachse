@@ -811,12 +811,16 @@ export class ArenaLifecycleCoordinator {
       getNowMs: () => Date.now(),
       onDiagnosticEvent: (type, fields) => this.runtimeDiagnosticEventSink?.(type, fields),
       onBossSpawned: (spawnedAtMs) => {
+        this.broadcastMissionAudio('sfx_boss_announce', `boss:${spawnedAtMs}`);
         this.runtimeDiagnosticEventSink?.('boss:spawn', { spawnedAtMs });
         const current = bridge.getRoundState();
         if (!current || current.status !== 'active') return;
         bridge.publishRoundState({ ...current, coopDefenseBossSpawnedAtMs: spawnedAtMs });
       },
       visualSink: this.ctx.effectSystem,
+      onWaveStarted: id => this.broadcastMissionAudio('sfx_wave_start', `wave:${id}`),
+      onObjectiveCompleted: id => this.broadcastMissionAudio('sfx_objective_complete', `objective:${id}`),
+      onCheckpointActivated: id => this.broadcastMissionAudio('sfx_checkpoint_activate', `checkpoint:${id}`),
       entityBurnGpuController: this.renderers.entityBurnGpu,
       getHealthBarRenderer: () => allowsWorldPresentationSurface(this.getLocalWorldPresentation(), 'worldCamera')
         ? this.renderers.healthBars : null,
@@ -1230,7 +1234,10 @@ export class ArenaLifecycleCoordinator {
         }, new AdrenalineEssenceLighting(this.renderers.lighting));
         const hud = new AdrenalineEssencePresentation({
           setEssenceIncoming: value => this.ctx.playerStatusRing?.setEssenceIncoming?.(value),
-          notifyEssenceArrival: (value, completionAgeMs) => this.ctx.playerStatusRing?.notifyEssenceArrival?.(value, completionAgeMs),
+          notifyEssenceArrival: (value, completionAgeMs) => {
+            this.ctx.playerStatusRing?.notifyEssenceArrival?.(value, completionAgeMs);
+            this.ctx.gameAudioSystem.playLocalSound('sfx_pickup_adrenaline_essence');
+          },
         });
         return {
           sync: (state, receipts, now, localId) => {
@@ -1970,6 +1977,16 @@ export class ArenaLifecycleCoordinator {
     // zurücksetzt) und es kann keine neue Runde durch stehengebliebene Ready-Flags sofort starten.
     bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
+  }
+
+  private broadcastMissionAudio(
+    key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',
+    eventId: string,
+  ): void {
+    const activity = bridge.getActivityDescriptor();
+    if (activity?.kind !== 'coop-mission') return;
+    // Dispatch before a completed objective can synchronously conclude its Activity.
+    bridge.broadcastAudioFeedback({ key, eventId, activityRevision: activity.activityRevision }, true);
   }
 
   /**

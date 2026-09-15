@@ -41,6 +41,7 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
       send: vi.fn(),
       broadcast: vi.fn(),
       broadcastEffect: vi.fn(),
+      broadcastAudioFeedback: vi.fn(),
       areTeammates: vi.fn().mockReturnValue(false),
     };
 

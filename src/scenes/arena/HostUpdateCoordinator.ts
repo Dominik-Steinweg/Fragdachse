@@ -10,6 +10,7 @@ import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefi
 import { getActiveConstructionToolRefs, getConstructionAccessContext } from '../../systems/ConstructionAccessResolver';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
+import { UltimateReadyFeedback } from '../../audio/GameplayAudioFeedback';
 import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import { isVelocityMoving }  from '../../loadout/SpreadMath';
 import { dequantizeAngle }   from '../../utils/angle';
@@ -153,6 +154,7 @@ function emptyHostUpdatePerformanceMetrics(): HostUpdatePerformanceMetrics {
  * area-effects, turrets, train, armageddon meteors, and state publishing.
  */
 export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort {
+  private readonly ultimateReadyFeedback = new UltimateReadyFeedback();
   private active = true;
   private netTickAccumulator = 0;
   private leaderboardSignature = '';
@@ -310,6 +312,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
 
   resetPerRound(): void {
+    this.ultimateReadyFeedback.reset();
     this.active = true;
     this.netTickAccumulator = 0;
     this.leaderboardSignature = '';
@@ -523,7 +526,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const teslaDomes = countdownActive ? [] : (this.combatSystems?.teslaDome?.hostUpdate(now) ?? []);
     const energyShields = countdownActive ? [] : (this.combatSystems?.energyShield?.hostUpdate(now) ?? []);
     this.visuals?.timeBubble.syncVisuals(timeBubbles);
-    this.visuals?.teslaDome.syncVisuals(teslaDomes);
+    this.visuals?.teslaDome.syncVisuals(teslaDomes, bridge.getCurrentWorldRevision());
     this.visuals?.energyShield.syncVisuals(energyShields);
 
     if (fireDamageTick) {
@@ -937,6 +940,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           })
           : 0,
       });
+      const readyIdentity = `${bridge.getCurrentWorldRevision()}:${bridge.getActivityDescriptor()?.activityRevision ?? 'world'}:${localId}:${hudData.ultimateId}`;
+      if (!this.ctx.getWorldCombatCore()!.isAlive(localId)) this.ultimateReadyFeedback.reset();
+      else if (this.ultimateReadyFeedback.update(readyIdentity, hudData.rage, hudData.ultimateRequiredRage)
+        && this.presentationActive) {
+        this.ctx.gameAudioSystem.playLocalSound('sfx_ultimate_ready');
+      }
       this.localPlayerState.alive    = this.ctx.getWorldCombatCore()!.isAlive(localId);
       this.localPlayerState.burrowed = playerFrame?.isBurrowed ?? false;
       // Das World-HUD ist eine Darstellungsflaeche. Ohne lokale World-Presentation entsteht

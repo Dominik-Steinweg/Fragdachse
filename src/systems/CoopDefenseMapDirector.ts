@@ -30,6 +30,7 @@ const ENCOUNTER_CLEARED_HOLD_MS = 800;
 export type CoopDefenseMapDirectorMode = 'scheduled' | 'repel-assault';
 
 export interface CoopDefenseMapDirectorOptions {
+  readonly onWaveStarted?: (encounterId: string) => void;
   /** A3: Clear wird ausschliesslich ueber die vom Encounter registrierten IDs bestimmt. */
   readonly mode?: CoopDefenseMapDirectorMode;
   /** Scheduled-Encounter sind Support-Inhalt; nur `repel-assault` darf dauerhaft complete zeigen. */
@@ -117,7 +118,7 @@ export class CoopDefenseMapDirector {
   constructor(
     private readonly encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
     private readonly spawnGroup: CoopDefenseEncounterSpawnHandler,
-    options: CoopDefenseMapDirectorOptions = {},
+    private readonly options: CoopDefenseMapDirectorOptions = {},
   ) {
     this.mode = options.mode ?? 'scheduled';
     this.showComplete = options.showComplete ?? true;
@@ -767,6 +768,7 @@ export class CoopDefenseMapDirector {
       state.groupsExecuted[groupIndex] = state.groupSpawnedCounts[groupIndex] >= group.count;
       if (group.count > 0 && state.firstGroupSpawnedAtMs === null) {
         state.firstGroupSpawnedAtMs = this.elapsedMs;
+        this.options.onWaveStarted?.(state.encounterId);
       }
       this.onDiagnosticEvent?.('wave:spawn', {
         encounterId: state.encounterId,
@@ -789,7 +791,10 @@ export class CoopDefenseMapDirector {
     state.groupSpawnedCounts[groupIndex] = Math.min(group.count, state.groupSpawnedCounts[groupIndex] + spawnedCount);
     state.groupsExecuted[groupIndex] = state.groupSpawnedCounts[groupIndex] >= group.count;
     if (spawnedCount > 0) {
-      if (state.firstGroupSpawnedAtMs === null) state.firstGroupSpawnedAtMs = this.elapsedMs;
+      if (state.firstGroupSpawnedAtMs === null) {
+        state.firstGroupSpawnedAtMs = this.elapsedMs;
+        this.options.onWaveStarted?.(state.encounterId);
+      }
       state.groupNoProgressMs[groupIndex] = 0;
       this.onDiagnosticEvent?.('wave:spawn', {
         encounterId: state.encounterId,

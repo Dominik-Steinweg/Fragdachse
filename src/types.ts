@@ -305,6 +305,8 @@ export interface SyncedTeslaDomeTarget {
 }
 
 export interface SyncedTeslaDome {
+  /** One identity per actual activation; visual reconstruction must not announce it again. */
+  activationSequence?: number;
   ownerId: string;
   x: number;
   y: number;
@@ -1741,6 +1743,8 @@ export interface SyncedRockSnapshot {
 }
 
 export interface SyncedPlaceableRock extends TurretAimConfig {
+  /** Set only after a player's placement succeeds; absent for restored/materialized structures. */
+  placementConfirmed?: true;
   id: number;
   kind: PlaceableKind;
   gridX: number;

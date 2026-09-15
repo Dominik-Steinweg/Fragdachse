@@ -726,6 +726,7 @@ describe('CombatSystem actual damage callbacks', () => {
       getGameMode: vi.fn(() => 'deathmatch'),
       getActiveGameMode: vi.fn(() => 'deathmatch'),
       broadcastEffect: vi.fn(),
+      broadcastAudioFeedback: vi.fn(),
     } as unknown as NetworkBridge;
     const combat = new CombatSystem(
       { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager,
@@ -753,6 +754,7 @@ describe('CombatSystem actual damage callbacks', () => {
       isHost: vi.fn(() => true),
       areTeammates: vi.fn(() => false),
       broadcastEffect: vi.fn(),
+      broadcastAudioFeedback: vi.fn(),
     } as unknown as NetworkBridge;
     const combat = new CombatSystem(
       {

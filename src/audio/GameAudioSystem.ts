@@ -48,6 +48,7 @@ interface ActiveLoop {
  */
 export class GameAudioSystem {
   private loopCounter = 0;
+  private readonly lastFeedbackAt = new Map<string, number>();
   private lastRocketExplosionAt = -Infinity;
   private readonly activeLoops = new Map<string, ActiveLoop>();
   private currentMusic: Phaser.Sound.BaseSound | null = null;
@@ -136,6 +137,7 @@ export class GameAudioSystem {
     volumeScale = 1,
   ): void {
     if (isMusicAudioKey(soundKey)) return;
+    if (!this.admitOneShot(soundKey)) return;
     if (!SOUND_ENABLED || !soundKey || !this.scene.cache.audio.exists(soundKey)) return;
 
     const isLocal = emitterId !== undefined && emitterId === this.getLocalPlayerId();
@@ -163,6 +165,7 @@ export class GameAudioSystem {
    */
   playLocalSound(soundKey: AudioKey | undefined, volumeScale = 1): void {
     if (isMusicAudioKey(soundKey)) return;
+    if (!this.admitOneShot(soundKey)) return;
     if (!SOUND_ENABLED || !soundKey || !this.scene.cache.audio.exists(soundKey)) return;
 
     const finalVolume = this.getEffectsPlaybackVolume(soundKey, volumeScale);
@@ -367,6 +370,23 @@ export class GameAudioSystem {
   }
 
   // ── Spatial Audio ─────────────────────────────────────────────────────────
+
+  private admitOneShot(key: string | undefined): boolean {
+    if (!key || this.disposed) return false;
+    const windowMs = key === 'sfx_menu_hover' ? 80
+      : key === 'sfx_enemy_death' ? 60
+        : key === 'sfx_pickup_adrenaline_essence' ? 110
+          : key.startsWith('sfx_pickup_') ? 80 : 0;
+    if (windowMs > 0) {
+      const now = this.scene.time.now;
+      if (now - (this.lastFeedbackAt.get(key) ?? -Infinity) < windowMs) return false;
+      this.lastFeedbackAt.set(key, now);
+    }
+    // Never let the HTML5 backend queue old one-shots until unlock/refocus.
+    const manager = this.scene.sound as Phaser.Sound.WebAudioSoundManager;
+    return !manager.locked && (!manager.context || manager.context.state === 'running')
+      && (typeof document === 'undefined' || document.visibilityState !== 'hidden');
+  }
 
   private resolveSpatialPlayback(emitterX: number, emitterY: number): { volume: number; pan: number } {
     const listener = this.getListenerPosition();

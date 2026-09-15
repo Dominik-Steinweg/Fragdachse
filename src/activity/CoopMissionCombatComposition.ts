@@ -71,6 +71,7 @@ export interface CoopMissionCombatCompositionOptions {
   readonly healthBars?: WorldHealthBarRenderer | null;
   readonly entityBurnGpuController: EntityBurnGpuController | null;
   readonly onBossSpawned?: (spawnedAtMs: number) => void;
+  readonly onWaveStarted?: (encounterId: string) => void;
   readonly onDiagnosticEvent?: (type: string, fields: Record<string, unknown>) => void;
 }
 
@@ -269,6 +270,7 @@ export class CoopMissionCombatComposition {
           },
           removeEnemy: (enemyId) => enemyManager.hostRemoveWithoutKill(enemyId) !== null,
           onDiagnosticEvent: this.options.onDiagnosticEvent,
+          onWaveStarted: this.options.onWaveStarted,
         },
       )
       : null;

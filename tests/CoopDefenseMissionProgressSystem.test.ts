@@ -31,6 +31,7 @@ function config(): ResolvedCoopDefenseMapMissionProgressConfig {
 
 describe('CoopDefenseMissionProgressSystem', () => {
   it('activates every ordered checkpoint crossed by one fast movement segment', () => {
+    const activated = vi.fn();
     const fastRoute: ResolvedCoopDefenseMapMissionProgressConfig = {
       checkpoints: [2, 5, 8].map((gridX, index) => ({
         id: `checkpoint-${index}`,
@@ -44,6 +45,7 @@ describe('CoopDefenseMissionProgressSystem', () => {
     };
     const system = new CoopDefenseMissionProgressSystem(fastRoute, {
       roundRevision: 1,
+      onCheckpointActivated: activated,
       getDefenseObjectiveState: () => null,
       worldMetrics: TEST_WORLD_METRICS,
     });
@@ -53,6 +55,9 @@ describe('CoopDefenseMissionProgressSystem', () => {
 
     expect(fastRoute.checkpoints.every(({ id }) => system.isCheckpointActivated(id))).toBe(true);
     expect(system.isRouteComplete()).toBe(true);
+    system.getPresentationState();
+    system.hostUpdate(16, false, [{ playerId: 'p1', ...world(10), eligible: true }]);
+    expect(activated.mock.calls.map(call => call[0])).toEqual(fastRoute.checkpoints.map(c => c.id));
   });
 
   it('detects a fast segment, stops at the mandatory gate and unlocks on success', () => {

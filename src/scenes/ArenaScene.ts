@@ -1,6 +1,7 @@
 import { getDeferredAssets } from '../assets/DeferredAssets';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import * as Phaser from 'phaser';
+import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
 import { getForestModalSurfaces, preloadForestModalAssets } from '../ui/ForestModal';
 import { preloadForestAssets } from '../ui/LobbyForestAssets';
@@ -520,6 +521,14 @@ export class ArenaScene extends Phaser.Scene {
       getStoredMusicVolume(),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => gameAudioSystem.cleanup());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, bindUiAudio(this, gameAudioSystem));
+    bridge.registerAudioFeedbackHandler(event => {
+      if (event.position) {
+        gameAudioSystem.playSound(event.key, event.position.x, event.position.y, event.position.emitterId);
+      } else {
+        gameAudioSystem.playLocalSound(event.key);
+      }
+    });
     const unsubscribeDeferredAssets = getDeferredAssets(this).subscribe(state => {
       bridge.setLocalDeferredAssetsReady(state.ready);
     });
@@ -620,6 +629,7 @@ export class ArenaScene extends Phaser.Scene {
       },
     );
     this.meta = new ArenaMetaController({
+      playSound: key => gameAudioSystem.playLocalSound(key),
       progressStore: createArenaMetaProgressStore(),
       session: {
         getGamePhase: () => bridge.getGamePhase(),
@@ -761,9 +771,9 @@ export class ArenaScene extends Phaser.Scene {
     this.itemsOverlay = new CoopDefenseItemsOverlay(
       this,
       () => this.meta!.getItemsOverlayState(),
-      (uid) => { this.meta?.equipItem(uid); },
-      (slot) => { this.meta?.unequipItem(slot); },
-      (uid) => { this.meta?.salvageItem(uid); },
+      (uid) => this.meta?.equipItem(uid) ?? false,
+      (slot) => this.meta?.unequipItem(slot) ?? false,
+      (uid) => this.meta?.salvageItem(uid) ?? 0,
       () => this.meta?.openItemRewardOverlay(),
       () => this.lobbyOverlay.setReadyButtonState(false),
     );

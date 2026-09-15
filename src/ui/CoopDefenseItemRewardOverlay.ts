@@ -1,5 +1,6 @@
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal, ensureTintedSectionTexture } from './ForestModal';
 import * as Phaser from 'phaser';
+import { playUiActivation, playUiHover } from './UiAudio';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import {
   getCoopDefenseItemRarityDefinition,
@@ -221,6 +222,7 @@ export class CoopDefenseItemRewardOverlay {
     })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
     this.backButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
+      playUiActivation(this.scene);
       this.showOffers();
     });
     attachHoverEffect(this.scene, this.backButton, this.backLabel);
@@ -236,6 +238,7 @@ export class CoopDefenseItemRewardOverlay {
     })).setOrigin(0.5).setScrollFactor(0);
     this.footerButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
+      playUiActivation(this.scene);
       this.hide();
       this.onClosed();
     });
@@ -440,6 +443,7 @@ export class CoopDefenseItemRewardOverlay {
     })).setOrigin(1, 0.5).setScrollFactor(0);
 
     // Linksbuendige Zeilen skalieren beim Hover unschoen; stattdessen die Fuellung aufhellen.
+    frame.on('pointerover', () => playUiHover(this.scene));
     frame.on('pointerover', () => frame.setTexture(ensureFlatPanelTexture(
       this.scene, TEX_SALVAGE_ROW_HOT, SALVAGE_ROW_W, SALVAGE_ROW_H, BORDER.subtle, COLORS.GOLD_2,
     )));

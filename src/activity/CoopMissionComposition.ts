@@ -116,6 +116,9 @@ export interface CoopMissionCompositionOptions {
   readonly getNowMs: () => number;
   readonly onDiagnosticEvent: (type: string, fields: Record<string, unknown>) => void;
   readonly onBossSpawned: (spawnedAtMs: number) => void;
+  readonly onWaveStarted?: (encounterId: string) => void;
+  readonly onObjectiveCompleted?: (objectiveId: string) => void;
+  readonly onCheckpointActivated?: (checkpointId: string) => void;
   readonly visualSink: EnemyVisualSink | null;
   readonly getHealthBarRenderer?: () => WorldHealthBarRenderer | null;
   readonly entityBurnGpuController: EntityBurnGpuController | null;
@@ -175,6 +178,7 @@ export class CoopMissionComposition {
       healthBars: this.options.getHealthBarRenderer?.(),
       entityBurnGpuController: this.options.entityBurnGpuController,
       onBossSpawned: this.options.onBossSpawned,
+      onWaveStarted: this.options.onWaveStarted,
       onDiagnosticEvent: this.options.onDiagnosticEvent,
     }).materialize(runtime);
   }
@@ -232,6 +236,8 @@ export class CoopMissionComposition {
       getSpectatorIds: this.options.getSpectatorIds,
       isPlayerBurrowed: this.options.isPlayerBurrowed,
       publishMissionProgress: this.options.publishMissionProgress,
+      onObjectiveCompleted: this.options.onObjectiveCompleted,
+      onCheckpointActivated: this.options.onCheckpointActivated,
       broadcastCarryDeliveredFx: this.options.broadcastCarryDeliveredFx,
       patchBarrierCells: this.options.patchBarrierCells,
       markLightDirty: this.options.markLightDirty,

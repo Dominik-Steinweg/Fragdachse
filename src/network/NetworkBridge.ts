@@ -1,4 +1,5 @@
 import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
+import { GameplayAudioCursor, isGameplayAudioEvent, type GameplayAudioCue, type GameplayAudioEvent } from '../audio/GameplayAudioFeedback';
 import { encodeMgAttrition, decodeMgAttrition } from './mgAttritionCodec';
 import { emptyMgAttritionSnapshot, type MgAttritionSnapshot } from '../systems/MgAttritionRuntime';
 import { EMPTY_ZEUS_SNAPSHOT, type ZeusSnapshot } from '../systems/ZeusRuntime';
@@ -786,6 +787,10 @@ export class NetworkBridge {
   private effectHandler: EffectHandler | null = null;
   // Pro Frame gesammelte Treffer-/Todes-Effekte und XP-Popups (Host), gebündelt via flushEffects().
   private pendingEffects: SyncedCombatEffect[] = [];
+  private pendingAudioFeedback: GameplayAudioEvent[] = [];
+  private audioFeedbackSequence = 0;
+  private audioFeedbackFlushScheduled = false;
+  private readonly audioFeedbackCursor = new GameplayAudioCursor();
   private pendingXpPopups: { x: number; y: number; xp: number }[] = [];
   private hitscanTracerHandler: HitscanTracerHandler | null = null;
   private dashHandler: DashHandler | null = null;
@@ -3643,6 +3648,51 @@ export class NetworkBridge {
         effectHandler(effects[i]);
       }
       return undefined;
+    });
+  }
+
+  /** Confirmed one-shots only. The reliable broadcast includes the host exactly once. */
+  broadcastAudioFeedback(cue: GameplayAudioCue, immediate = false): void {
+    const wr = this.getCurrentWorldRevision();
+    if (!this.isHost() || wr === null) return;
+    this.pendingAudioFeedback.push({ ...cue, wr, sequence: ++this.audioFeedbackSequence });
+    if (immediate) {
+      this.flushAudioFeedback();
+    } else if (!this.audioFeedbackFlushScheduled) {
+      this.audioFeedbackFlushScheduled = true;
+      const session = getActiveSession();
+      // One batch for the synchronous simulation step, including mass kills and pickups.
+      queueMicrotask(() => {
+        this.audioFeedbackFlushScheduled = false;
+        if (getActiveSession() !== session) { this.pendingAudioFeedback = []; return; }
+        this.flushAudioFeedback();
+      });
+    }
+  }
+
+  private flushAudioFeedback(): void {
+    if (!getActiveSession()) { this.pendingAudioFeedback = []; return; }
+    const wr = this.getCurrentWorldRevision();
+    const ar = this.getActivityDescriptor()?.activityRevision;
+    const events = this.pendingAudioFeedback.filter(event => event.wr === wr
+      && (event.activityRevision === undefined || event.activityRevision === ar));
+    this.pendingAudioFeedback = [];
+    if (events.length > 0) this.broadcastGameplayEvent('audiofx', events);
+  }
+
+  registerAudioFeedbackHandler(handler: (event: GameplayAudioEvent) => void): void {
+    this.registerAllRpcHandler('audiofx', data => {
+      if (!Array.isArray(data)) return;
+      for (const event of data) {
+        if (!this.acceptsWorldRpc(event) || !isGameplayAudioEvent(event)) continue;
+        if (!this.audioFeedbackCursor.accept(event, this.getCurrentWorldRevision(),
+          this.getActivityDescriptor()?.activityRevision ?? null, this.getLocalPlayerId())) continue;
+        const participation = this.getLocalWorldParticipation();
+        if (participation !== 'interactive' && participation !== 'observer') continue;
+        if (event.activityRevision !== undefined && participation !== 'observer'
+          && !this.canPlayerReceiveRoundRewards(this.getLocalPlayerId())) continue;
+        handler(event);
+      }
     });
   }
 

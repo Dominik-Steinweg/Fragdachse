@@ -5,6 +5,7 @@ import {
 } from '../src/scenes/arena/ArenaMetaController';
 import { getStoredCoopDefenseProgress } from '../src/utils/localPreferences';
 import { levelUpCoopDefenseUpgrade } from '../src/utils/coopDefenseUpgrades';
+import { getCoopDefenseXpThresholdForLevel } from '../src/utils/coopDefenseProgression';
 
 function makeInput(): {
   controller: ArenaMetaController;
@@ -12,8 +13,10 @@ function makeInput(): {
   session: ArenaMetaControllerInput['session'];
   resultRead: ArenaMetaControllerInput['resultRead'];
   presentation: ArenaMetaControllerInput['presentation'];
+  playSound: ReturnType<typeof vi.fn>;
 } {
   const stored = getStoredCoopDefenseProgress();
+  const playSound = vi.fn();
   const store: ArenaMetaControllerInput['progressStore'] = {
     getProgress: vi.fn(() => stored),
     restoreProgress: vi.fn(),
@@ -89,7 +92,8 @@ function makeInput(): {
     setResultsReplayAvailable: vi.fn(),
   };
   return {
-    controller: new ArenaMetaController({ progressStore: store, session, resultRead, presentation }),
+    controller: new ArenaMetaController({ progressStore: store, session, resultRead, presentation, playSound }),
+    playSound,
     store,
     session,
     resultRead,
@@ -159,7 +163,7 @@ describe('ArenaMetaController', () => {
   });
 
   it('verarbeitet autoritative Match Results und dedupliziert persoenliche Verbuchung', () => {
-    const { controller, store, resultRead, presentation } = makeInput();
+    const { controller, store, resultRead, presentation, playSound } = makeInput();
     let current = getStoredCoopDefenseProgress();
     vi.mocked(store.getProgress).mockImplementation(() => current);
     vi.mocked(store.addCoopDefenseXp).mockImplementation((amount) => {
@@ -178,7 +182,7 @@ describe('ArenaMetaController', () => {
       roundEndedAt: 42,
       gameMode: 'coop_defense',
       mapName: 'Map 1',
-      sharedXp: 25,
+      sharedXp: getCoopDefenseXpThresholdForLevel(5),
     }]);
     vi.mocked(resultRead.getRoundState).mockReturnValue({
       status: 'defeat',
@@ -201,6 +205,41 @@ describe('ArenaMetaController', () => {
     controller.replayMatchResults();
     expect(presentation.showMatchResultsReplay).toHaveBeenCalledTimes(1);
     expect(store.addCoopDefenseXp).toHaveBeenCalledTimes(1);
+    expect(playSound.mock.calls).toEqual([['sfx_round_defeat'], ['sfx_level_up']]);
+  });
+
+  it.each(['victory', 'defeat', 'aborted'] as const)('waits for matching final results and keeps technical outcomes silent (%s)', status => {
+    const { controller, resultRead, playSound } = makeInput();
+    const result = { id: 'local', name: 'Local', colorHex: 0xffffff, frags: 0, teamId: null,
+      roundEndedAt: 42, gameMode: 'coop_defense' as const, mapName: 'Map', sharedXp: 0 };
+    vi.mocked(resultRead.getRoundResults).mockReturnValue([result]);
+    vi.mocked(resultRead.getRoundState).mockReturnValue({ status, roundStartTime: 1, endedAt: 41, coopDefenseMapId: '1' });
+    controller.beginMatchResults(); controller.tryFinalizeMatchResults();
+    expect(playSound).not.toHaveBeenCalled();
+    vi.mocked(resultRead.getRoundState).mockReturnValue({ status, roundStartTime: 1, endedAt: 42, coopDefenseMapId: '1' });
+    controller.tryFinalizeMatchResults(); controller.tryFinalizeMatchResults(); controller.replayMatchResults();
+    expect(playSound.mock.calls).toEqual(status === 'aborted' ? [] : [[`sfx_round_${status}`]]);
+  });
+
+  it('announces committed upgrades and reward claims, and XP level increases only after a real credit', () => {
+    const { controller, store, playSound } = makeInput();
+    const stored = getStoredCoopDefenseProgress();
+    vi.mocked(store.getProgress).mockReturnValue(stored);
+    stored.totalXp = getCoopDefenseXpThresholdForLevel(20);
+    controller.refresh();
+    expect(playSound).not.toHaveBeenCalled();
+    expect(controller.levelUpUpgrade('does-not-exist')).toBe(false);
+    expect(controller.levelUpUpgrade('unlock_rock_barrier')).toBe(true);
+    expect(playSound.mock.calls).toEqual([['sfx_upgrade_purchased']]);
+    vi.mocked(store.claimPendingItemReward).mockReturnValueOnce({ acquired: null, salvagedXp: 0 }).mockReturnValue(null);
+    controller.claimItemReward(42, 'offer'); controller.claimItemReward(42, 'offer');
+    expect(playSound.mock.calls).toEqual([['sfx_upgrade_purchased'], ['sfx_item_selected']]);
+    vi.mocked(store.salvageItem).mockImplementationOnce(() => {
+      stored.totalXp = getCoopDefenseXpThresholdForLevel(25); return 1000;
+    }).mockReturnValue(0);
+    controller.salvageItem('item'); controller.salvageItem('item');
+    controller.setDebugProgress(999999, 0, '1'); controller.refresh();
+    expect(playSound.mock.calls).toEqual([['sfx_upgrade_purchased'], ['sfx_item_selected'], ['sfx_level_up']]);
   });
 
 });

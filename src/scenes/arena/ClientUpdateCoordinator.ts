@@ -15,6 +15,7 @@ import { getHitscanRangeToCursor } from '../../loadout/WeaponFireExecutor';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from '../../loadout/HeldItemVisuals';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
+import { UltimateReadyFeedback } from '../../audio/GameplayAudioFeedback';
 import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import type {
   CoopMissionActivityStep,
@@ -125,6 +126,7 @@ export interface ClientActivityFramePort {
  */
 export class ClientUpdateCoordinator {
   private lastGameStateVersion = -1;
+  private readonly ultimateReadyFeedback = new UltimateReadyFeedback();
   private readonly damagedStaticRockIds = new Set<number>();
   private readonly prevAliveStates      = new Map<string, boolean>();
   private readonly prevDashPhases       = new Map<string, number>();
@@ -351,6 +353,7 @@ export class ClientUpdateCoordinator {
     const lerpFactor = 1 - Math.exp(-delta / NET_SMOOTH_TIME_MS);
 
     const currentVersion = bridge.getGameStateVersion();
+    const firstWorldSnapshot = this.lastGameStateVersion === -1;
     const isNewData = currentVersion !== this.lastGameStateVersion;
     if (isNewData) this.lastGameStateVersion = currentVersion;
     const snapshotMs = this.performanceMetricsEnabled ? performance.now() - startedAt : 0;
@@ -486,7 +489,7 @@ export class ClientUpdateCoordinator {
 
       if (this.placementSystem) {
         const placementChanges = this.placementSystem.syncFromSnapshot(state.placeableRocks ?? []);
-        this.rockVisualHelper.materializePlaceableRockBatch(placementChanges.added, true);
+        this.rockVisualHelper.materializePlaceableRockBatch(placementChanges.added, true, !firstWorldSnapshot);
         for (const rock of placementChanges.added) {
           emitArenaMapGridChanged(this.scene.game.events, {
             reason: 'placeable_added',
@@ -688,6 +691,11 @@ export class ClientUpdateCoordinator {
           ? this.getLocalConstructionCapacity()
           : 0,
       });
+      const readyIdentity = `${bridge.getCurrentWorldRevision()}:${bridge.getActivityDescriptor()?.activityRevision ?? 'world'}:${localId2}:${hudData.ultimateId}`;
+      if (!localState.alive) this.ultimateReadyFeedback.reset();
+      else if (this.ultimateReadyFeedback.update(readyIdentity, localState.rage, localUltimateConfig.rageRequired)) {
+        this.ctx.gameAudioSystem.playLocalSound('sfx_ultimate_ready');
+      }
       this.localPlayerState.alive    = localState.alive;
       this.localPlayerState.burrowed = localState.isBurrowed;
       this.ctx.leftPanel.updateArenaHUD(hudData);
@@ -1408,6 +1416,7 @@ export class ClientUpdateCoordinator {
 
   resetPerRound(): void {
     this.lastGameStateVersion = -1;
+    this.ultimateReadyFeedback.reset();
     // Zwischen zwei Runden kann das Lobby-Menue den lokalen Spielstand geaendert haben.
     this.refreshStoredProgressFallback();
     this.damagedStaticRockIds.clear();

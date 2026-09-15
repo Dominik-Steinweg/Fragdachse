@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { activateUi, playUiHover } from './UiAudio';
 import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
 import { ensureForestPanel } from './forestTextures';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config';
@@ -20,7 +21,7 @@ export interface UiContextMenuEntry {
   readonly color: number;
   /** Deaktivierte Eintraege bleiben sichtbar, reagieren aber nicht auf Klicks. */
   readonly enabled?: boolean;
-  readonly onPick: () => void;
+  readonly onPick: () => void | boolean;
   /** Haelt das Menue offen, z.B. wenn ein Eintrag erst noch eine Bestaetigung verlangt. */
   readonly keepOpen?: boolean;
 }
@@ -117,6 +118,7 @@ export class UiContextMenu {
         .setScrollFactor(0)
         .setInteractive({ useHandCursor: enabled });
       row.on('pointerover', () => {
+        if (enabled) playUiHover(this.scene);
         if (enabled) row.setFillStyle(this.skin === 'forest' ? FOREST.raised : COLORS.GREY_6, 1);
       });
       row.on('pointerout', () => row.setFillStyle(fill, enabled ? 0.9 : 0.55));
@@ -126,7 +128,7 @@ export class UiContextMenu {
         // Erst schliessen, dann handeln: die Aktion darf das Menue mit neuen Eintraegen
         // sofort wieder oeffnen (Bestaetigungsschritt beim Zerlegen).
         if (!entry.keepOpen) this.close();
-        entry.onPick();
+        activateUi(this.scene, entry.onPick);
       });
       children.push(
         row,

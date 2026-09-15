@@ -29,7 +29,7 @@ describe('smoke confirmed Combat integration', () => {
     const player = fakeEntity({ id: 'p1', x: 150, y: 100, color: 0xffffff });
     const players = { getPlayer: (id: string) => id === 'p1' ? player : undefined, getAllPlayers: () => [player] };
     const network = { isHost: () => true, getPlayerProfile: players.getPlayer, areTeammates: () => false,
-      getLocalPlayerId: () => 'p1', isEnemyPair: () => true, broadcastEffect: vi.fn() };
+      getLocalPlayerId: () => 'p1', isEnemyPair: () => true, broadcastEffect: vi.fn(), broadcastAudioFeedback: vi.fn() };
     const combat = new WorldCombatCore(players as never, network as never);
     combat.bindPlayerVitalsScope({ worldRevision: 7340, runtimeGeneration: 5 });
     combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 });

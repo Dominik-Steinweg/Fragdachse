@@ -123,6 +123,15 @@ function spreadEnemies(
 }
 
 describe('Tesla dome adrenaline drain', () => {
+  it('replicates a stable activation identity, increasing it only after actual reactivation', () => {
+    const { system } = makeSystem();
+    const config = makeConfig(['enemies']);
+    const first = advance(system, config, 100)!;
+    expect(first.activationSequence).toBeGreaterThan(0);
+    expect(advance(system, config, 101)!.activationSequence).toBe(first.activationSequence);
+    system.hostDeactivateForPlayer('player-1');
+    expect(advance(system, config, 102)!.activationSequence).toBeGreaterThan(first.activationSequence!);
+  });
   it('gates construction ticks by manual fire without catch-up or cadence gain and preserves carrier LOS', () => {
     const f = makeSystem();
     const config = makeTurretConfig(['enemies']);

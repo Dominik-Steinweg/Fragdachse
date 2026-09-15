@@ -14,6 +14,7 @@
  * anschliessend einmal `promoteToClarityCamera` auf der Wurzel des Overlays auf.
  */
 import * as Phaser from 'phaser';
+import { activateUi, playUiHover } from './UiAudio';
 import { buttonSkinSpec, type UiSkin } from './UiSkin';
 import { ensureForestButton, ensureForestActionButton } from './forestTextures';
 import {
@@ -58,7 +59,7 @@ export interface UiButtonOptions {
   /** Selection fields align the value left and the disclosure icon at the right edge. */
   trailingIcon?: boolean;
   radius?: number;
-  onClick?: () => void;
+  onClick?: () => void | boolean;
   /**
    * `pointerup` ist noetig, wo der Browser eine echte Nutzergeste verlangt (Vollbild). Der
    * Button merkt sich dann seinen eigenen `pointerdown` und ignoriert fremde Loslass-Ereignisse,
@@ -389,6 +390,7 @@ export class UiButton {
   private bindPointer(): void {
     this.bg.on('pointerover', () => {
       if (!this.interactive()) return;
+      if (!this.hovered) playUiHover(this.scene);
       this.hovered = true;
       this.refreshState();
       this.tweenScale(BUTTON_SCALE.hover);
@@ -411,7 +413,7 @@ export class UiButton {
         this.ownPointerIds.add(pointer.id);
         return;
       }
-      this.options.onClick?.();
+      activateUi(this.scene, () => this.options.onClick?.());
     });
 
     this.bg.on('pointerup', (pointer: Phaser.Input.Pointer) => {
@@ -423,7 +425,7 @@ export class UiButton {
       // Nur ein Loslassen, zu dem dieser Button auch das Druecken gesehen hat.
       if (!this.ownPointerIds.delete(pointer.id) || !wasPressed) return;
       if (!this.interactive()) return;
-      this.options.onClick?.();
+      activateUi(this.scene, () => this.options.onClick?.());
     });
   }
 

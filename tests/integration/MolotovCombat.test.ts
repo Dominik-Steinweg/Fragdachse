@@ -42,7 +42,7 @@ function fixture() {
   const player = fakeEntity({ id: 'owner', x: 150, y: 100, color: 0xffffff });
   const players = { getPlayer: (id: string) => id === 'owner' ? player : undefined, getAllPlayers: () => [player] };
   const network = { isHost: () => true, getPlayerProfile: players.getPlayer, isEnemyPair: () => true,
-    broadcastEffect: vi.fn(), broadcastKill: vi.fn(), recordPlayerDamage: vi.fn(), recordWeaponHit: vi.fn(), recordWeaponDamage: vi.fn() };
+    broadcastAudioFeedback: vi.fn(), broadcastEffect: vi.fn(), broadcastKill: vi.fn(), recordPlayerDamage: vi.fn(), recordWeaponHit: vi.fn(), recordWeaponDamage: vi.fn() };
   const combat = new WorldCombatCore(players as never, network as never);
   combat.bindPlayerVitalsScope({ worldRevision: 8000, runtimeGeneration: 1 });
   combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 });

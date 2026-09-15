@@ -328,7 +328,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     currentTrain = train;
     binding.syncClientWorldPresentation(state, 16, false, { cells: [] }, []);
     expect(renderers.timeBubble.syncVisuals).toHaveBeenCalledWith(state.timeBubbles);
-    expect(renderers.teslaDome.syncVisuals).toHaveBeenCalledWith(state.teslaDomes);
+    expect(renderers.teslaDome.syncVisuals).toHaveBeenCalledWith(state.teslaDomes, binding);
     expect(renderers.repairDrone.syncVisuals).toHaveBeenCalledWith(
       state.repairDrones,
       state.placeableRocks,

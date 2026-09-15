@@ -631,9 +631,7 @@ export class RpcCoordinator {
       if (!this.capabilities.get(playerId).canInteract) return false;
       const player = this.playerManager.getPlayer(playerId);
       if (!player) return false;
-      const pickedUp = this.playerLoadout.tryPickupPowerUp(playerId, uid, player.x, player.y);
-      if (pickedUp) this.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);
-      return pickedUp;
+      return this.playerLoadout.tryPickupPowerUp(playerId, uid, player.x, player.y);
     });
   }
 }

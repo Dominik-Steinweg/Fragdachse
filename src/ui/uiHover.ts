@@ -6,6 +6,7 @@
  * feuern keine Pointer-Events).
  */
 import * as Phaser from 'phaser';
+import { playUiHover } from './UiAudio';
 import { BUTTON_SCALE, MOTION } from './uiTheme';
 
 export function attachHoverEffect(
@@ -48,6 +49,7 @@ export function attachHoverEffect(
   button.on('pointerover', () => {
     if (opts?.isEnabled && !opts.isEnabled()) return;
     if (!hovered) {
+      playUiHover(scene);
       hoverTween?.remove();
       snapshotRestScales();
       hovered = true;

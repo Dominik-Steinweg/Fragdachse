@@ -16,7 +16,8 @@ describe('CoopDefenseMapDirector', () => {
 
   it('does not count down time as encounter time and starts exactly once', () => {
     const spawnGroup = vi.fn();
-    const director = new CoopDefenseMapDirector(encounters, spawnGroup);
+    const started = vi.fn();
+    const director = new CoopDefenseMapDirector(encounters, spawnGroup, { onWaveStarted: started });
 
     director.hostUpdate(1_000, true);
     expect(spawnGroup).not.toHaveBeenCalled();
@@ -28,6 +29,21 @@ describe('CoopDefenseMapDirector', () => {
     expect(spawnGroup).toHaveBeenCalledTimes(1);
     director.hostUpdate(10_000, false);
     expect(spawnGroup).toHaveBeenCalledTimes(2);
+    expect(started).toHaveBeenCalledExactlyOnceWith('opening');
+  });
+
+  it('does not announce failed spawn attempts or later groups as new waves', () => {
+    const started = vi.fn();
+    let successful = false;
+    let uid = 0;
+    const director = new CoopDefenseMapDirector(encounters, (_kind, count) => successful
+      ? Array.from({ length: count }, () => `enemy-${++uid}`) : [], { onWaveStarted: started });
+    director.hostUpdate(1000, false);
+    expect(started).not.toHaveBeenCalled();
+    successful = true;
+    director.hostUpdate(1000, false);
+    director.hostUpdate(1000, false);
+    expect(started).toHaveBeenCalledExactlyOnceWith('opening');
   });
 
   it('fires delayed groups at relative times and does not lose groups on large deltas', () => {

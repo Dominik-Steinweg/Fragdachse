@@ -32,6 +32,7 @@ function fixture() {
   Object.assign(player, { physicsProxy: player });
   const players = { getPlayer: (id: string) => id === 'p1' ? player : undefined, getAllPlayers: () => [player] };
   const network = { isHost: () => true, getPlayerProfile: players.getPlayer, areTeammates: () => false,
+    broadcastAudioFeedback: vi.fn(),
     getWorldParticipation: () => 'interactive', getPlayerInput: () => ({ dx: 1, dy: 0 }),
     getLocalPlayerId: () => 'p1', isEnemyPair: () => true, broadcastEffect: vi.fn(), broadcastMeleeSwing: vi.fn() };
   const combat = new WorldCombatCore(players as never, network as never);

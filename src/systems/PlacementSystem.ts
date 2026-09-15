@@ -203,6 +203,12 @@ export class PlacementSystem {
       .map((rock) => ({ ...rock }));
   }
 
+  /** Confirmation is distinct from initial materialization and persistent-base restoration. */
+  confirmPlacement(id: number): void {
+    const rock = this.runtimeRocks.get(id);
+    if (rock) rock.placementConfirmed = true;
+  }
+
   update(now: number): SyncedPlaceableRock[] {
     const expired: SyncedPlaceableRock[] = [];
     for (const rock of this.runtimeRocks.values()) {

@@ -86,6 +86,9 @@ const OVERCHARGE_FLASH_MS = 190;
 
 export class TeslaDomeRenderer {
   private readonly visuals = new Map<string, TeslaDomeVisual>();
+  private readonly heardActivations = new Map<string, number>();
+  private audioScope: unknown;
+  private audioPrimed = false;
   private readonly configs = new Map<string, WeaponConfig & { fire: TeslaDomeWeaponFireConfig }>();
   private audioSystem: GameAudioSystem | null = null;
   private lighting: LightingSystem | null = null;
@@ -211,7 +214,14 @@ export class TeslaDomeRenderer {
     this.configs.delete(ownerId);
   }
 
-  syncVisuals(domes: SyncedTeslaDome[]): void {
+  syncVisuals(domes: SyncedTeslaDome[], audioScope?: unknown): void {
+    if (audioScope !== this.audioScope) {
+      this.audioScope = audioScope;
+      this.audioPrimed = false;
+      this.heardActivations.clear();
+    }
+    const baseline = !this.audioPrimed;
+    this.audioPrimed = true;
     this.turretAnimations?.syncTesla(domes);
     const activeIds = new Set(domes.map(dome => dome.ownerId));
 
@@ -227,7 +237,12 @@ export class TeslaDomeRenderer {
       if (!visual) {
         visual = this.createVisual(dome, this.resolveWeaponConfig(dome));
         this.visuals.set(dome.ownerId, visual);
-        this.audioSystem?.playSound('sfx_tesla_activate', dome.x, dome.y, dome.ownerId);
+      }
+
+      const activation = dome.activationSequence;
+      if (activation !== undefined && activation > (this.heardActivations.get(dome.ownerId) ?? -1)) {
+        this.heardActivations.set(dome.ownerId, activation);
+        if (!baseline) this.audioSystem?.playSound('sfx_tesla_activate', dome.x, dome.y, dome.ownerId);
       }
 
       visual.config = this.resolveWeaponConfig(dome) ?? visual.config;

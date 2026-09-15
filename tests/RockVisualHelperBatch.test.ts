@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../src/network/bridge', () => ({ bridge: { isHost: () => false, getLocalPlayerId: () => 'other-player' } }));
 
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('./fakeArenaRenderScene');
@@ -19,6 +20,7 @@ import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { RockVisualHelper } from '../src/scenes/arena/RockVisualHelper';
 import type { ArenaBuilderResult } from '../src/arena/ArenaBuilder';
 import { RockVisualStateStore } from '../src/arena/rocks/RockVisualState';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 
 const OWNER_ID = 'client-owner';
 const OWNER_COLOR = 0x52d273;
@@ -128,7 +130,7 @@ function createFixture(order: readonly number[], materialize = true) {
     null,
     {
       getWorldRuntime: () => ({
-        context: null,
+        context: { metrics: resolveActiveArenaWorldMetrics() },
         materialization: {
           arena: result,
           placement: ctx.placementSystem,
@@ -178,6 +180,20 @@ function expectedState(
 }
 
 describe('RockVisualHelper client snapshot materialization', () => {
+  it('sounds only confirmed new placements, never initial snapshots, restoration or repeated materialization', () => {
+    const f = createFixture([0, 1, 2], false);
+    // GPU dust allocation is unrelated to admission of the placement audio.
+    vi.spyOn(f.helper as any, 'playRockDustBurst').mockImplementation(() => {});
+    const [initial, restored, placed] = f.changes.added;
+    initial.placementConfirmed = true;
+    placed.placementConfirmed = true;
+    f.helper.materializePlaceableRockBatch([initial], true, false);
+    f.helper.materializePlaceableRockBatch([restored], true);
+    expect(f.ctx.gameAudioSystem.playSound).not.toHaveBeenCalled();
+    f.helper.materializePlaceableRockBatch([placed], true);
+    f.helper.materializePlaceableRockBatch([initial, restored, placed], true);
+    expect(f.ctx.gameAudioSystem.playSound).toHaveBeenCalledExactlyOnceWith('sfx_place_rock', expect.any(Number), expect.any(Number), OWNER_ID);
+  });
   it('materializes adjacent rock_barrier snapshot additions from one complete grid', () => {
     const fixture = createFixture([0, 1, 2]);
 

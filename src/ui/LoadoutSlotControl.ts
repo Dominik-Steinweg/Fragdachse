@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { activateUi, playUiHover } from './UiAudio';
 import { FOREST, type UiSkin } from './UiSkin';
 import { COLORS } from '../config';
 import type { LoadoutItemPresentation } from '../loadout/LoadoutCatalog';
@@ -286,6 +287,7 @@ export function createLoadoutSlotControl(
   if (enabled) {
     hitArea.setInteractive({ useHandCursor: true })
       .on('pointerover', (pointer: Phaser.Input.Pointer) => {
+        playUiHover(scene);
         if (!options.hoverGroup) {
           scene.tweens.add({ targets: root, scaleX: 1.04, scaleY: 1.04, duration: 90, ease: 'Sine.easeOut' });
           if (hoverOutline) scene.tweens.add({ targets: hoverOutline, alpha: 0.72, duration: 90, ease: 'Sine.easeOut' });
@@ -312,7 +314,7 @@ export function createLoadoutSlotControl(
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation();
-        options.onClick(options.x);
+        activateUi(scene, () => options.onClick(options.x));
       });
   }
   root.add(hitArea);

@@ -1,5 +1,6 @@
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
+import { activateUi } from './UiAudio';
 import { resolvePersistentBaseBuildAreaForStage } from '../persistentBase/PersistentBaseCore';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { getLocalizedTeamLabel } from '../i18n/gameModePresentation';
@@ -829,7 +830,7 @@ export class MatchResultsOverlay {
       // Das Overlay verschwindet sofort. Die Abbruchmarkierung verhindert, dass ein
       // darunterliegendes Lobby-Objekt denselben Pointerdown ebenfalls verarbeitet.
       event?.stopPropagation();
-      this.continueToLobby();
+      activateUi(this.scene, () => this.continueToLobby());
     });
     attachHoverEffect(this.scene, this.continueButton, this.continueLabel);
 
@@ -841,7 +842,7 @@ export class MatchResultsOverlay {
     })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
     this.balanceFeedbackButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
-      this.onBalanceFeedback();
+      activateUi(this.scene, () => this.onBalanceFeedback());
     });
     attachHoverEffect(this.scene, this.balanceFeedbackButton, this.balanceFeedbackLabel);
 
