@@ -127,7 +127,6 @@ import { isArenaTransitionReady } from './ArenaTransitionReadiness';
 import { isValidPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import { WorldLifecycle } from '../../world/WorldLifecycle';
 import { WorldPresentationHandoff } from '../../world/WorldPresentationHandoff';
-import { ArenaExitEntityPresentation } from '../../world/ArenaExitEntityPresentation';
 import {
   PersistentBaseWorldBinding,
 } from '../../world/PersistentBaseWorldBinding';
@@ -567,8 +566,8 @@ export class ArenaLifecycleCoordinator {
     },
     emitPersistentRestoreAdded: (runtime) => { this.persistentBase.emitPersistentRestoreAdded(runtime); },
   };
-  /** Reine Player-/Enemy-Snapshots waehrend des sichtbaren Match-Exit-Fades. */
-  private arenaExitEntityPresentation: ArenaExitEntityPresentation | null = null;
+  /** Vollstaendige Arena bleibt bis zur gerenderten Auswertung gebunden, ohne Simulation. */
+  private arenaExitPresentationActive = false;
   /** Baut das feste PlayerWorldRuntime-Rezept aus konkreten Scene-Operationen. */
   private composePlayerRuntime(): PlayerWorldRuntime {
     return composePlayerWorldRuntime({
@@ -1032,6 +1031,7 @@ export class ArenaLifecycleCoordinator {
    * damit ausdruecklich ohne Sonderpfad.
    */
   updateWorldRuntime(deltaMs: number): void {
+    if (this.arenaExitPresentationActive) return;
     this.adrenalineEssence?.prepare();
     this.worldRuntime?.update(deltaMs);
   }
@@ -1381,7 +1381,7 @@ export class ArenaLifecycleCoordinator {
     const deferredMatchToLobby = deferArenaToLobby
       && bridge.getGamePhase() === 'LOBBY'
       && this.lastPhase === 'ARENA';
-    if (deferredMatchToLobby && this.arenaExitEntityPresentation) return;
+    if (deferredMatchToLobby) return;
     const world = bridge.getWorldDescriptor();
     if (!world) {
       if (this.arenaBuilt
@@ -1956,21 +1956,9 @@ export class ArenaLifecycleCoordinator {
       this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
     }
     bridge.publishCoopDefenseRespawnBudgetState(null);
-    // Ein regulaerer Ausgang blendet die letzte Ansicht aus. Sie wird hier eingefroren, weil die
-    // World-Instanz gleich endet und Player- wie Enemy-Runtime mit ihr fallen; der Fade zeigt
-    // danach ausschliesslich diese Projektion.
-    if (roundConclusion === 'victory' || roundConclusion === 'defeat') {
-      this.captureArenaExitEntityPresentation();
-    }
-    // Diese Match-World endet hier gemeinsam mit ihrem Durchlauf. Ohne Phase, Activity und World bleibt kein
-    // replizierter Weltzustand stehen, den eine spaetere Instanz faelschlich uebernehmen koennte.
-    this.worldLifecycle.endInstance();
-    this.clearWorldAdmission();
-    this.lobbyWorldModeAtRevision = null;
-    this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
-    this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
-    this.pendingLobbyWorldReinstance = false;
-    this.pendingLobbyWorldPresentationRebuild = false;
+    // Die Abrechnung ist verbindlich; den vollstaendigen Abbau besitzt weiterhin
+    // onTransitionToLobby, nach Fade und gerenderter Ergebnisansicht.
+    this.beginArenaExitPresentation();
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
@@ -2303,7 +2291,7 @@ export class ArenaLifecycleCoordinator {
    * ohne selbst an ihr teilzunehmen – dann entsteht bei ihm keine World-Presentation.
    */
   getLocalWorldPresentation(): WorldPresentationRequirement {
-    if (this.arenaExitEntityPresentation && this.worldPresentationHandoff.pending) {
+    if (this.arenaExitPresentationActive) {
       return {
         required: true,
         mode: 'interactive',
@@ -2321,44 +2309,23 @@ export class ArenaLifecycleCoordinator {
   }
 
   isArenaExitPresentationActive(): boolean {
-    return this.arenaExitEntityPresentation !== null
-      && this.worldPresentationHandoff.pending !== null;
+    return this.arenaExitPresentationActive;
   }
 
   /**
-   * Friert das letzte Entity-Bild ein und beendet danach sofort jede lokale Gameplay-Runtime.
-   * Der World-Handoff behaelt nur die reine Darstellung; die Snapshots tragen keine Physics.
+   * Haelt die gesamte Arena, sperrt aber Simulation und autoritative Aktionen.
    */
   beginArenaExitPresentation(): void {
-    // Auf dem Client steht die World hier noch; der Host hat sie mit dem Rundenabschluss bereits
-    // beendet und sein Bild dort eingefroren. Beide Wege enden in derselben Projektion.
-    this.captureArenaExitEntityPresentation();
-    this.synchronizeLocalWorldLifecycle(null);
-    this.tearDownArena(true);
-  }
-
-  /**
-   * Friert das aktuelle Entity-Bild als reine Darstellung ein.
-   *
-   * Sie muss stehen, **bevor** die World-Instanz endet: Player- und Enemy-Runtime fallen mit ihr,
-   * und ein sichtbarer Exit verlaengert keine Gameplay-Lifetime, sondern zeigt nur noch diese
-   * physik- und managerfreie Projektion. Idempotent – wer zuerst kommt, friert ein.
-   */
-  private captureArenaExitEntityPresentation(): void {
-    if (this.arenaExitEntityPresentation) return;
-    const playerSprites = this.ctx.playerManager.getAllPlayers()
-      .map((player) => player.displayObject)
-      .filter((sprite): sprite is Phaser.GameObjects.Sprite => sprite !== null);
-    const enemySprites = (this.coopMissionRuntime?.enemyManager?.getAllEnemies() ?? []).map((enemy) => enemy.sprite);
-    this.arenaExitEntityPresentation = new ArenaExitEntityPresentation(
-      this.scene,
-      [...playerSprites, ...enemySprites],
-    );
+    if (this.arenaExitPresentationActive) return;
+    this.arenaExitPresentationActive = true;
+    this.hostUpdate.setActive(false);
+    this.scene.physics.world.pause();
   }
 
   private clearArenaExitPresentation(): void {
-    this.arenaExitEntityPresentation?.destroy();
-    this.arenaExitEntityPresentation = null;
+    if (!this.arenaExitPresentationActive) return;
+    this.arenaExitPresentationActive = false;
+    this.scene.physics.world.resume();
   }
 
   /**
@@ -2393,7 +2360,7 @@ export class ArenaLifecycleCoordinator {
    */
   getPlayerCapabilities(playerId: string): PlayerCapabilities {
     const capabilities = resolvePlayerCapabilities({
-      participation: this.getWorldParticipation(playerId),
+      participation: this.arenaExitPresentationActive ? 'none' : this.getWorldParticipation(playerId),
       activityKind: this.worldLifecycle.activity.kind,
       worldCombatAllowed: this.worldLifecycle.activity.kind !== null
         || this.worldRuntime?.context.definition?.actionPolicy?.combat === true,
@@ -2771,6 +2738,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(preserveAuthoredPresentation = false): void {
+    this.clearArenaExitPresentation();
     // Mit der World fallen ihre Spieler. Das gilt fuer jede Instanz und auf jedem Peer: ein
     // Testgelaende-Teilnehmer darf beim Matchstart genauso wenig stehen bleiben wie ein
     // Rundenteilnehmer beim Rundenende. Der Abbau laeuft vor dem Fachsystem-Cleanup, weil die
@@ -3198,7 +3166,6 @@ export class ArenaLifecycleCoordinator {
     // trotzdem exklusiv in diesem vollstaendigen Lobby-Uebergang.
     this.synchronizeLocalWorldLifecycle(null);
     this.tearDownArena();
-    this.clearArenaExitPresentation();
     this.syncLobbyTimeOfDay();
 
     this.syncLobbySurface(true);

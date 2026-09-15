@@ -950,13 +950,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one meteor strike: brutal crack transient, huge grounded low blast body, rock fragments, and a controlled rolling tail, cinematic but bounded.",
-        "source": "astra",
+        "text": "TrackType: SFX, one meteor explosion: brutal crack transient, huge grounded low blast body, rock fragments, and a controlled rolling tail, cinematic but bounded.",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "small-sfx",
-        "duration_seconds": 2,
+        "model": "medium",
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -1191,6 +1191,36 @@
               "sfx_explosion_he"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2592,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 44,
+                "kind": "unknown",
+                "excerpt": "case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 57,
+                "kind": "unknown",
+                "excerpt": "default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_he"
+            ]
+          }
         }
       ],
       "repository": {
@@ -1212,7 +1242,7 @@
         "usages": [
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2625,
+            "line": 2592,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);"
           },
@@ -2568,14 +2598,14 @@
       "musical_identity": "",
       "playback": "loop",
       "prompt": {
-        "text": "TrackType: SFX, seamless loopable fast badger footwork: crisp paw taps, compact earth grit, light body rustle, and constant forward pace with no start or stop.",
-        "source": "astra",
+        "text": "TrackType: SFX, fast constant running footsteps: taps in leafs and dirt, compact deep earth grit, constant forward pace with no start or stop.",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
         "duration_seconds": 8,
-        "candidate_count": 4,
+        "candidate_count": 6,
         "steps": 8,
         "cfg_scale": 1.0
       },
@@ -2620,10 +2650,10 @@
         "target_path": "public/assets/sounds/sfx_player_move.ogg",
         "asset_path": "./assets/sounds/sfx_player_move.ogg",
         "filename": "sfx_player_move.ogg",
-        "volume": 0.5,
+        "volume": 0.25,
         "shipped": true,
         "exists": true,
-        "file_hash": "2ad9d90262ab4fda685a8f255bffc99c27fdc8156fbe3bcf558f4b71dadfcf0b",
+        "file_hash": "91e0523ab65938ef076ec4dbc277b43c718f221292ddbf36e86dea1a495249a6",
         "file_error": null,
         "shared_keys": [
           "sfx_player_move"
@@ -5425,6 +5455,42 @@
               "music_arena"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/music_arena.ogg",
+            "usages": [
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 14,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+              },
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 14,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1668,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3029,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_arena"
+            ]
+          }
         }
       ],
       "repository": {
@@ -5464,7 +5530,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3061,
+            "line": 3029,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
           }
@@ -5571,6 +5637,48 @@
               "music_lobby"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/badger02.ogg",
+            "usages": [
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 13,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+              },
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 13,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 913,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1552,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3163,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_lobby"
+            ]
+          }
         }
       ],
       "repository": {
@@ -5604,7 +5712,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 914,
+            "line": 913,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           },
@@ -5616,7 +5724,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3195,
+            "line": 3163,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           }
@@ -5651,7 +5759,38 @@
       "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_boss_announce.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 813,
+                "kind": "unknown",
+                "excerpt": "this.broadcastMissionAudio('sfx_boss_announce', `boss:${spawnedAtMs}`);"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1971,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_boss_announce"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_boss_announce",
         "kind": "sfx",
@@ -5677,13 +5816,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 814,
+            "line": 813,
             "kind": "unknown",
             "excerpt": "this.broadcastMissionAudio('sfx_boss_announce', `boss:${spawnedAtMs}`);"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1983,
+            "line": 1971,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -5718,7 +5857,38 @@
       "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_checkpoint_activate.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 822,
+                "kind": "unknown",
+                "excerpt": "onCheckpointActivated: id => this.broadcastMissionAudio('sfx_checkpoint_activate', `checkpoint:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1971,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_checkpoint_activate"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_checkpoint_activate",
         "kind": "sfx",
@@ -5744,13 +5914,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 823,
+            "line": 822,
             "kind": "unknown",
             "excerpt": "onCheckpointActivated: id => this.broadcastMissionAudio('sfx_checkpoint_activate', `checkpoint:${id}`),"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1983,
+            "line": 1971,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -5794,10 +5964,10 @@
         "target_path": "public/assets/sounds/sfx_enemy_death.ogg",
         "asset_path": "./assets/sounds/sfx_enemy_death.ogg",
         "filename": "sfx_enemy_death.ogg",
-        "volume": 0.5,
-        "shipped": false,
-        "exists": false,
-        "file_hash": null,
+        "volume": 0.25,
+        "shipped": true,
+        "exists": true,
+        "file_hash": "f1793ee63316ce83be9ee194bfcdbd1e41a76f22c648f5f966c43af8c8ae070a",
         "file_error": null,
         "shared_keys": [
           "sfx_enemy_death"
@@ -6176,7 +6346,38 @@
       "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_objective_complete.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 821,
+                "kind": "unknown",
+                "excerpt": "onObjectiveCompleted: id => this.broadcastMissionAudio('sfx_objective_complete', `objective:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1971,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_objective_complete"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_objective_complete",
         "kind": "sfx",
@@ -6202,13 +6403,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 822,
+            "line": 821,
             "kind": "unknown",
             "excerpt": "onObjectiveCompleted: id => this.broadcastMissionAudio('sfx_objective_complete', `objective:${id}`),"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1983,
+            "line": 1971,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -6928,7 +7129,38 @@
       "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_wave_start.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 820,
+                "kind": "unknown",
+                "excerpt": "onWaveStarted: id => this.broadcastMissionAudio('sfx_wave_start', `wave:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1971,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_wave_start"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_wave_start",
         "kind": "sfx",
@@ -6954,13 +7186,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 821,
+            "line": 820,
             "kind": "unknown",
             "excerpt": "onWaveStarted: id => this.broadcastMissionAudio('sfx_wave_start', `wave:${id}`),"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1983,
+            "line": 1971,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }

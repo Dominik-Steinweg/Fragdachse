@@ -258,6 +258,9 @@ export class ArenaScene extends Phaser.Scene {
   private roomStatisticsOverlay: RoomStatisticsOverlay | null = null;
   private arenaExitFadeOverlay: ArenaExitFadeOverlay | null = null;
   private arenaExitFadeComplete = false;
+  private arenaExitResultsStarted = false;
+  private arenaExitResultsRendered = false;
+  private arenaExitRenderListener: (() => void) | null = null;
   private arenaExitOutcomeWaitStartedAt = 0;
   /** Nur das Angebot der gerade abgeschlossenen Runde darf automatisch erscheinen. */
   private lastObservedGamePhase: GamePhase | null = null;
@@ -780,7 +783,7 @@ export class ArenaScene extends Phaser.Scene {
     this.itemsOverlay.build();
     this.matchResultsOverlay = new MatchResultsOverlay(this, () => {
       // Die Netzwerkphase ist bereits LOBBY. Der lokale Layer gibt lediglich die darunter
-      // vorbereitete Lobby frei; Ready bleibt durch den Host-Reset weiterhin false.
+      // Lobby frei, auch wenn ihr Aufbau noch laeuft; Ready bleibt weiterhin false.
       this.lobbyOverlay.setReadyButtonState(false);
       // Nur der Reward dieser Runde folgt direkt auf die Auswertung. Altbestand bleibt bewusst
       // im Item-Menue und wird nicht nach einem Match ohne neuen Drop aufgezwungen.
@@ -795,6 +798,7 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaExitFadeOverlay = new ArenaExitFadeOverlay(this);
     this.arenaExitFadeOverlay.build();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.cancelArenaExitRenderWait();
       this.arenaExitFadeOverlay?.destroy();
       this.arenaExitFadeOverlay = null;
       this.matchResultsOverlay?.destroy();
@@ -1316,11 +1320,16 @@ export class ArenaScene extends Phaser.Scene {
     const deferArenaExit = this.weaponBalanceLabPreviousMapId === null
       && this.syncArenaExitFade(phase);
     this.arenaRuntime.detectPhaseChange(deferArenaExit);
-    // Eine World ohne Activity haengt an keinem Phasenwechsel; sie entsteht und vergeht mit
-    // ihrem eigenen Kanal. Der Host haelt waehrend der Lobby genau eine LobbyWorld offen; jeder
-    // Peer baut sie danach ueber denselben Kanal wie jede Match-World. Waehrend des lokalen
-    // Arena-Exit-Fades bleibt nur die freigegebene Match-Presentation sichtbar; ihre Runtime ist
-    // bereits vollstaendig beendet.
+    // Auch spaete Netzwerk-Deskriptoren duerfen waehrend des Fades weder Membership
+    // noch Activity, Kamera oder Beleuchtung auf den Lobbyzustand umstellen.
+    if (deferArenaExit) {
+      this.inputBindings?.updateFrame({
+        enabled: false, gameplayActive: false, countdownActive: false,
+        uiBlocking: true, diagnosticsArena: false,
+      });
+      this.renderers.gpuVfx.update(delta);
+      return;
+    }
     if (!deferArenaExit) this.arenaRuntime.hostSyncLobbyWorld();
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
@@ -1704,7 +1713,9 @@ export class ArenaScene extends Phaser.Scene {
     );
     if (!terminated && presentationPolicy.showLobby) {
       diagnosticsFrame?.begin('lobbyUi');
-      if (enteredLobbyFromArena && !returningFromWeaponBalanceLab) this.meta?.beginMatchResults();
+      if (enteredLobbyFromArena && !returningFromWeaponBalanceLab && !this.arenaExitResultsStarted) {
+        this.meta?.beginMatchResults();
+      }
       if (this.meta?.isMatchResultsPending()) {
         this.meta.tryFinalizeMatchResults({
           finalizeBalanceRound: (roundEndedAt) => {
@@ -1808,7 +1819,7 @@ export class ArenaScene extends Phaser.Scene {
         const coopRoundOutcome = this.arenaRuntime.runHostFrame(delta, gameplayActive);
         if (coopRoundOutcome) {
           // Die Momentaufnahme der Runde entsteht vor ihrem Abschluss: `hostCompleteRound()`
-          // beendet die World-Instanz, und danach gibt es weder Basen noch Spielerzustand.
+          // verbucht den Endstand noch vor dem spaeteren World-Abbau.
           this.prepareCoopDefenseBalanceRound(coopRoundOutcome);
           this.arenaRuntime.hostCompleteRound(coopRoundOutcome);
         } else if (!isCoopDefenseMode(configuredGameMode) && !countdownActive && secs <= 0) {
@@ -2414,7 +2425,7 @@ export class ArenaScene extends Phaser.Scene {
       || (
         phase === 'LOBBY'
         && this.lastObservedGamePhase === 'ARENA'
-        && !this.arenaExitFadeComplete
+        && (!this.arenaExitFadeComplete || !this.arenaExitResultsRendered)
       );
     const worldMode = inArena ? this.resolveConfiguredGameMode('ARENA') : bridge.getGameMode();
     const mapId = inArena && isCoopDefenseMode(worldMode)
@@ -2428,7 +2439,6 @@ export class ArenaScene extends Phaser.Scene {
     const localWounded = inArena
       && !this.localPlayerState.spectator
       && !bridge.isLocalSpectator()
-      // Exit presentation outlives the World combat runtime; it has no wounded body to grade.
       && (this.ctx?.getWorldCombatCore()?.isAlive(localId) ?? false);
 
     return {
@@ -2551,13 +2561,20 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Haelt den sichtbaren Lobby-Uebergang, waehrend World-/Activity-Gameplay bereits beendet ist.
-   * Nur World-Presentation und eingefrorene Player-/Enemy-Snapshots bleiben bis zum Fade-Ende.
-   */
+  private cancelArenaExitRenderWait(): void {
+    if (this.arenaExitRenderListener) {
+      this.game.events.off(Phaser.Core.Events.POST_RENDER, this.arenaExitRenderListener);
+      this.arenaExitRenderListener = null;
+    }
+  }
+
+  /** Der bestehende Exit wartet auf Fade-Ende und einen Render der Ergebnisansicht. */
   private syncArenaExitFade(phase: GamePhase): boolean {
     if (phase === 'ARENA') {
+      this.cancelArenaExitRenderWait();
       this.arenaExitFadeComplete = false;
+      this.arenaExitResultsStarted = false;
+      this.arenaExitResultsRendered = false;
       this.arenaExitOutcomeWaitStartedAt = 0;
       this.arenaExitFadeOverlay?.hide();
       return false;
@@ -2566,10 +2583,15 @@ export class ArenaScene extends Phaser.Scene {
       phase !== 'LOBBY'
       || this.lastObservedGamePhase !== 'ARENA'
       || this.arenaRuntime.isMatchTerminated()
-      || this.arenaExitFadeComplete
     ) {
+      this.cancelArenaExitRenderWait();
+      this.arenaExitFadeOverlay?.hide();
       return false;
     }
+    if (this.arenaExitFadeComplete) {
+      return this.arenaExitResultsStarted && !this.arenaExitResultsRendered;
+    }
+    this.arenaRuntime.beginArenaExitPresentation();
     if (this.arenaExitFadeOverlay?.isActive()) return true;
 
     const results = bridge.getRoundResults();
@@ -2592,9 +2614,24 @@ export class ArenaScene extends Phaser.Scene {
         this.arenaExitFadeComplete = true;
         return false;
       }
-      this.arenaRuntime.beginArenaExitPresentation();
       overlay.play(outcome, () => {
+        if (this.arenaRuntime.isMatchTerminated() || this.arenaExitResultsStarted) return;
         this.arenaExitFadeComplete = true;
+        this.arenaExitResultsStarted = true;
+        this.meta?.beginMatchResults();
+        this.meta?.tryFinalizeMatchResults({
+          finalizeBalanceRound: (roundEndedAt) => {
+            this.coopDefenseBalanceTracker.finalizePendingRound(roundEndedAt);
+            return this.coopDefenseBalanceTracker.hasRound(roundEndedAt);
+          },
+        });
+        overlay.hide();
+        // Nur den naechsten Update freigeben: kein Abbau im Tween- oder Render-Callback.
+        this.arenaExitRenderListener = () => {
+          this.arenaExitRenderListener = null;
+          this.arenaExitResultsRendered = true;
+        };
+        this.game.events.once(Phaser.Core.Events.POST_RENDER, this.arenaExitRenderListener);
       });
       return true;
     }

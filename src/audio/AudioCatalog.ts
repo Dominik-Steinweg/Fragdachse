@@ -55,6 +55,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   "sfx_pickup_adrenaline_essence.ogg",
   "sfx_checkpoint_activate.ogg",
   "sfx_objective_complete.ogg",
+  "sfx_enemy_death.ogg",
 ]);
 
 function isShippedAudioAsset(assetPath: string): boolean {
@@ -282,7 +283,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_double_damage_active: 0.5,
 
   // General SFX
-  sfx_enemy_death: 0.5,
+  sfx_enemy_death: 0.25,
   sfx_menu_hover: 0.1,
   sfx_menu_activate: 0.3,
   sfx_round_victory: 0.5,
@@ -295,7 +296,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_level_up: 0.5,
   sfx_upgrade_purchased: 0.5,
   sfx_item_selected: 0.5,
-  sfx_player_move:     0.5,
+  sfx_player_move:     0.25,
   sfx_dash:            0.5,
   sfx_burrowed:        0.5,
   sfx_player_hit:      0.3,
