@@ -82,12 +82,27 @@ export type ProjectileCollisionTargetSink = (
 /**
  * Schmale, allokationsarme Zielabfrage der Collision-Verarbeitung.
  *
- * Sie liefert World-/Combat-Ziele einmal pro Stage; die Provider-Reihenfolge ist unerheblich.
+ * Bewegliche Ziele behalten die bisherigen Stage-Snapshots; statische World-Ziele werden
+ * räumlich und mit aktuellen Geometrieänderungen abgefragt. Die Provider-Reihenfolge ist unerheblich.
  * Die Runtime ordnet nur tatsächliche Trefferkandidaten und sieht keine fremden Entity-Objekte.
  * Projectile-Interaktionen laufen separat beim Runtime-Owner, nicht über diese Target-Sicht.
  */
 export interface ProjectileCollisionTargetQueryPort {
+  /** Snapshot targets (Combat and moving World objects), at the existing stage boundaries. */
   readCollisionTargets(sink: ProjectileCollisionTargetSink): void;
+  /** Optional World subset, read afresh for each real segment; never a second target snapshot. */
+  queryWorldCollisionTargets?(region: ProjectileCollisionRegion, sink: ProjectileCollisionTargetSink): void;
+}
+
+/** Conservative search envelope. Exact collision rules remain with the collision processor. */
+export interface ProjectileCollisionRegion {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  padding: number;
+  /** Normal sweeps use circumscribed target circles; grenade contacts use rectangles. */
+  sweepCircles: boolean;
 }
 
 /** Gemeinsamer Contract-Typ für Tests und World-Adapter, ohne Entity-Objekte zu leaken. */

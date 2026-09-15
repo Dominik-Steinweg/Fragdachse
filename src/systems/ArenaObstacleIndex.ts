@@ -6,6 +6,7 @@ import { obstacleClassFor, obstacleBlocks, segmentRectInterval, type ObstacleCla
 
 const BUCKET_SIZE = 128;
 const TANGENCY_EPSILON_PX = 0.000001;
+const ignoreCircle = (): boolean => false;
 
 export const OBSTACLE_ROCK = 1;
 export const OBSTACLE_BASE = 2;
@@ -175,6 +176,8 @@ export class ArenaObstacleIndex {
   private rectKind = new Uint8Array(0);
   private rectRockIndex = new Int32Array(0);
   private rectCount = 0;
+  /** Largest circumscribed rock-circle overhang beyond its indexed rectangle. */
+  private rockCircleOverhang = 0;
 
   /** Kreis-Hindernisse als flaches [cx,cy,r]. */
   private circleData = new Float64Array(0);
@@ -257,6 +260,18 @@ export class ArenaObstacleIndex {
     this.dirty = true;
   }
 
+  /** Release World references immediately, even if no later query triggers a rebuild. */
+  clear(): void {
+    this.rectSource.length = 0;
+    this.circleSource.length = 0;
+    this.builtRocks = null; this.builtTrunks = null; this.builtBases = null; this.builtBarriers = null;
+    this.scratchBounds = null;
+    this.rectCount = 0; this.circleCount = 0;
+    this.bucketCols = 0; this.bucketRows = 0;
+    this.rockCircleOverhang = 0;
+    this.dirty = true;
+  }
+
   /**
    * Baut den Index explizit fuer den verborgenen Rundenaufbau. Der erste echte LoS-/Hitscan-
    * Query muss dadurch keinen Voll-Rebuild mehr synchron im Gameplay-Frame ausloesen.
@@ -264,6 +279,25 @@ export class ArenaObstacleIndex {
    */
   prepare(): void {
     if (this.needsRebuild()) this.rebuild();
+  }
+
+  private nextQueryStamp(): number {
+    // Keep stamps representable by entryStamp's Int32 storage, also in long-lived Worlds.
+    if (this.queryStamp === 0x7fffffff) {
+      this.entryStamp.fill(0);
+      this.queryStamp = 0;
+    }
+    return ++this.queryStamp;
+  }
+
+  /** Reuses the World buckets, including target-circle extents of the projectile narrow phase. */
+  queryProjectileSegment(
+    sx: number, sy: number, ex: number, ey: number, padding: number,
+    sweepCircles: boolean, visitRect: ObstacleRectVisitor,
+  ): void {
+    this.prepare();
+    this.querySegment(sx, sy, ex, ey, visitRect, ignoreCircle,
+      padding + (sweepCircles ? this.rockCircleOverhang : 0));
   }
 
   /**
@@ -289,7 +323,7 @@ export class ArenaObstacleIndex {
     const maxRow = Math.min(this.bucketRows - 1, Math.floor((maxY - this.originY) / BUCKET_SIZE));
     if (minCol > maxCol || minRow > maxRow) return false;
 
-    const stamp = ++this.queryStamp;
+    const stamp = this.nextQueryStamp();
     for (let row = minRow; row <= maxRow; row += 1) {
       for (let col = minCol; col <= maxCol; col += 1) {
         const bucket = row * this.bucketCols + col;
@@ -366,7 +400,7 @@ export class ArenaObstacleIndex {
 
     // Ein Hindernis kann in mehreren Buckets liegen; ein Stempel pro Query genügt, damit
     // der Besucher es nur einmal sieht.
-    const stamp = ++this.queryStamp;
+    const stamp = this.nextQueryStamp();
 
     for (let row = minRow; row <= maxRow; row += 1) {
       const bucketTop = this.originY + row * BUCKET_SIZE;
@@ -447,6 +481,7 @@ export class ArenaObstacleIndex {
   }
 
   private collectObstacles(): void {
+    this.rockCircleOverhang = 0;
     const rocks = this.sources.rocks();
     const trunks = this.sources.trunks();
     const bases = this.sources.bases();
@@ -531,6 +566,12 @@ export class ArenaObstacleIndex {
     this.rectData[offset + 1] = bounds.top;
     this.rectData[offset + 2] = bounds.right;
     this.rectData[offset + 3] = bounds.bottom;
+    if (this.rectKind[rectIndex] === OBSTACLE_ROCK) {
+      const halfWidth = (bounds.right - bounds.left) * 0.5;
+      const halfHeight = (bounds.bottom - bounds.top) * 0.5;
+      this.rockCircleOverhang = Math.max(this.rockCircleOverhang,
+        Math.hypot(halfWidth, halfHeight) - Math.min(halfWidth, halfHeight));
+    }
   }
 
   private buildBuckets(): void {

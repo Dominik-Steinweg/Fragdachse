@@ -13,6 +13,8 @@ vi.mock('phaser', () => ({
 }));
 
 import { RockGridIndex } from '../src/arena/RockGridIndex';
+import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
+import { collisionRock } from './projectileCollisionFixture';
 import type { CombatTargetRef } from '../src/combat/CombatScope';
 import {
   CELL_SIZE,
@@ -132,6 +134,7 @@ function createFixture(options: {
   readonly applyTeslaRockDamage?: (index: number, damage: number, ownerId: string) => void;
   readonly targetStatusSystem?: TargetStatusSystem | null;
   readonly baseManager?: BaseManager;
+  readonly getWorldGeometryBinding?: WorldCombatGameplayBindingOptions['getWorldGeometryBinding'];
 }): TurretFixture {
   const playerManager = {
     getAllPlayers: () => options.players as readonly PlayerEntity[] as PlayerEntity[],
@@ -301,7 +304,7 @@ function createFixture(options: {
         getFocusTarget: () => null,
         getTurretDamageMultiplierAt: () => options.turretDamageMultiplier,
       } as never,
-    getWorldGeometryBinding: () => null,
+    getWorldGeometryBinding: options.getWorldGeometryBinding ?? (() => null),
     getPersistentBaseId: () => undefined,
     getConstructionMuzzleOffset: (constructionId) => (
       constructionId === 'rocket_turret' ? COOP_DEFENSE_CONSTRUCTIONS.rocket_turret.muzzleOffset : undefined
@@ -498,7 +501,8 @@ describe('WorldCombatGameplayBinding projectile target geometry', () => {
       .mock.calls.at(-1)![0]!;
     const readBase = (): { x: number; y: number; left: number } => {
       let target: { x: number; y: number; left: number } | undefined;
-      query.readCollisionTargets((kind, _id, _ownerId, x, y, _radius, left) => {
+      query.queryWorldCollisionTargets!({ startX: 0, startY: 0, endX: 160, endY: 30,
+        padding: 10, sweepCircles: true }, (kind, _id, _ownerId, x, y, _radius, left) => {
         if (kind === 'base') target = { x, y, left };
       });
       if (!target) throw new Error('Expected active base target');
@@ -511,6 +515,46 @@ describe('WorldCombatGameplayBinding projectile target geometry', () => {
     generation += 1;
     expect(readBase()).toEqual({ x: 120, y: 20, left: 110 });
     fixture.binding.destroy();
+  });
+
+  it('queries the shared index and Placement grid with canonical IDs, live relocation and teardown', () => {
+    const placement = createPlacement({ getAllPlayers: () => [] } as never);
+    const turret = placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS.rocket_turret,
+      10, 10, 0, 'owner', 1)!;
+    const pedestal = placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS.medic_pedestal,
+      11, 10, 0, 'owner', 1)!;
+    expect(turret).toBeTruthy(); expect(pedestal).toBeTruthy();
+    const metrics = resolveActiveArenaWorldMetrics();
+    const cx = metrics.offsetX + 10.5 * CELL_SIZE, cy = metrics.offsetY + 10.5 * CELL_SIZE;
+    const rocks = [collisionRock(cx, cy)];
+    rocks.length = 10;
+    rocks[9] = collisionRock(cx - CELL_SIZE, cy);
+    const index = new ArenaObstacleIndex({ rocks: () => rocks, trunks: () => null, bases: () => null,
+      bounds: () => ({ offsetX: metrics.offsetX, offsetY: metrics.offsetY, width: metrics.widthPx, height: metrics.heightPx }) });
+    const fixture = createFixture({ players: [], enemies: [], placementSystem: placement,
+      getWorldGeometryBinding: () => ({ queryProjectileObstacles: (...args: Parameters<ArenaObstacleIndex['queryProjectileSegment']>) =>
+        index.queryProjectileSegment(...args) }) as never });
+    const query = fixture.projectileInteraction.setProjectileCollisionTargetQueryPort.mock.calls.at(-1)![0]!;
+    const read = () => {
+      const result: Array<{ id: string | number; obstacleKind: unknown }> = [];
+      query.queryWorldCollisionTargets!({ startX: cx - 100, startY: cy, endX: cx + 100, endY: cy,
+        padding: 8, sweepCircles: true }, (kind, id, _owner, _x, _y, _radius, _l, _t, _r, _b, obstacleKind) => {
+        if (kind === 'rock') result.push({ id, obstacleKind });
+      });
+      return result;
+    };
+    expect(read()).toEqual(expect.arrayContaining([{ id: turret.id, obstacleKind: 'turret' },
+      { id: pedestal.id, obstacleKind: 'pedestal' }, { id: 9, obstacleKind: 'rock' }]));
+    expect(read().filter(r => r.id === turret.id)).toHaveLength(1);
+    const oldReads = rocks[9].reads;
+    rocks[9].active = false;
+    placement.syncFromSnapshot([{ ...turret, gridX: 20 }, pedestal]);
+    expect(read().map(r => r.id)).toEqual([pedestal.id]);
+    expect(rocks[9].reads).toBe(oldReads);
+    placement.removeRock(pedestal.id);
+    expect(read()).toEqual([]);
+    fixture.binding.destroy();
+    expect(read()).toEqual([]);
   });
 });
 

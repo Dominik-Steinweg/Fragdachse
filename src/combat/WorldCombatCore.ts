@@ -383,6 +383,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private readonly hitscanLine       = new Phaser.Geom.Line();
   /** Scratch-Segment der Projectile-Blockerabfrage. */
   private readonly projectileBlockerLine = new Phaser.Geom.Line();
+  private readonly projectileTargetBounds = new Phaser.Geom.Rectangle();
   private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
   private readonly lineOfFireLine    = new Phaser.Geom.Line();  // Scratch-Linie für die Blockerprüfung der Schusslinie
@@ -1799,7 +1800,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (!this.isPlayerTargetable(player.id)) continue;
       if (!this.isAlive(player.id)) continue;
       if (this.burrowSystem?.isBurrowed(player.id)) continue;
-      const bounds = player.getBounds();
+      const bounds = player.getBounds(this.projectileTargetBounds);
       sink(
         'player', player.id, player.id,
         player.x, player.y, PLAYER_SIZE * 0.5,
@@ -1808,7 +1809,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!enemy.sprite.active || !this.isAlive(enemy.id)) continue;
-      const bounds = enemy.sprite.getBounds();
+      const bounds = enemy.sprite.getBounds(this.projectileTargetBounds);
       sink(
         'enemy', enemy.id, enemy.id,
         enemy.sprite.x, enemy.sprite.y,

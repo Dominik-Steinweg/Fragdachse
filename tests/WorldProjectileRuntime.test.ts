@@ -257,6 +257,24 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     runtime.destroy();
   });
 
+  it('queries World candidates only on the real portal prefixes and remainder', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'portal', ownerId: 'owner',
+      a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0.6, createdAt: 0, expiresAt: 2000 }], isPortalFriendly: () => true });
+    const segments: Array<{ startX: number; endX: number }> = [];
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: () => {},
+      queryWorldCollisionTargets: region => segments.push({ startX: region.startX, endX: region.endX }) });
+    const id = runtime.spawnProjectile(baseRequest({ collisionMode: 'sweep' }))!;
+    physics.handles.get(id)!.sprite.x = 100;
+    runtime.runHostPortalStage(1000); runtime.runHostInteractionStage(1000);
+    expect(segments.some(s => s.startX < 50)).toBe(true);
+    expect(segments.some(s => s.startX > 400)).toBe(true);
+    expect(segments.every(s => Math.abs(s.endX - s.startX) <= 100)).toBe(true);
+    expect(segments.some(s => s.startX < 300 && s.endX > 300)).toBe(false);
+    runtime.destroy();
+  });
+
   it('charges a bubble before an inner direct hit consumes the projectile, without modifying its payload', () => {
     const { runtime } = createRuntimeHarness();
     const bubble = new TimeBubbleSystem();

@@ -1,3 +1,4 @@
+import { OBSTACLE_ROCK } from '../systems/ArenaObstacleIndex';
 import { turretAimConfig } from '../config/turretAim';
 import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 import type { BaseManager } from '../entities/BaseManager';
@@ -1145,41 +1146,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     o.projectileInteraction.setProjectileCollisionTargetQueryPort({
       readCollisionTargets: (sink) => {
-        // Combat contributes only its own canonical subset. World-owned objects are added here
-        // with one ref per physical entity; runtime constructions deliberately use the shared
-        // `rock` representation and are never emitted again as `construction`.
+        if (this.destroyed) return;
         o.combatSystem.readCollisionTargets(sink);
-        for (const rock of o.getRockTargets()) {
-          if (!rock.active) continue;
-          const left = rock.left ?? rock.x - CELL_SIZE * 0.5;
-          const top = rock.top ?? rock.y - CELL_SIZE * 0.5;
-          const right = rock.right ?? rock.x + CELL_SIZE * 0.5;
-          const bottom = rock.bottom ?? rock.y + CELL_SIZE * 0.5;
-          sink(
-            'rock', rock.id ?? rock.index, '__world__', rock.x, rock.y,
-            Math.hypot(right - left, bottom - top) * 0.5,
-            left, top, right, bottom,
-            'rock',
-          );
-        }
-        for (const rock of o.placementSystem.getAllRuntimeRocks()) {
-          if (rock.collisionMode === 'none') continue;
-          const x = o.worldMetrics.offsetX + (rock.gridX + 0.5) * CELL_SIZE;
-          const y = o.worldMetrics.offsetY + (rock.gridY + 0.5) * CELL_SIZE;
-          const half = CELL_SIZE * 0.5;
-          sink(
-            'rock', rock.id, '__world__', x, y, half * Math.SQRT2,
-            x - half, y - half, x + half, y + half, rock.kind,
-          );
-        }
-        this.ensureProjectileBaseGeometry();
-        for (const base of this.projectileBaseGeometry) {
-          if (base.base.isInert()) continue;
-          sink(
-            'base', base.base.id, '__world__', base.x, base.y, base.radius,
-            base.left, base.top, base.right, base.bottom,
-          );
-        }
         const train = o.getWorldTrain();
         const segments = train?.getActiveSegmentPositions() ?? [];
         if (segments.length > 0) {
@@ -1200,6 +1168,49 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             Math.hypot(right - left, bottom - top) * 0.5,
             left, top, right, bottom,
           );
+        }
+      },
+      queryWorldCollisionTargets: (region, sink) => {
+        if (this.destroyed) return;
+        o.getWorldGeometryBinding()?.queryProjectileObstacles(
+          region.startX, region.startY, region.endX, region.endY, region.padding, region.sweepCircles,
+          (kind, id, left, top, right, bottom) => {
+            if (kind !== OBSTACLE_ROCK || o.placementSystem.getRuntimeRock(id)) return false;
+            sink('rock', id, '__world__', (left + right) * 0.5, (top + bottom) * 0.5,
+              Math.hypot(right - left, bottom - top) * 0.5, left, top, right, bottom, 'rock');
+            return false;
+          });
+        // Placement's existing cell index includes targetable pedestals without a proxy.
+        // Runtime kinds keep their authored cell geometry and a single canonical identity.
+        const half = CELL_SIZE * 0.5;
+        const padding = region.padding + (region.sweepCircles ? half * (Math.SQRT2 - 1) : 0);
+        const left = Math.min(region.startX, region.endX) - padding;
+        const top = Math.min(region.startY, region.endY) - padding;
+        const right = Math.max(region.startX, region.endX) + padding;
+        const bottom = Math.max(region.startY, region.endY) + padding;
+        const metrics = o.worldMetrics;
+        const minCol = Math.max(0, Math.floor((left - metrics.offsetX) / CELL_SIZE) - 1);
+        const maxCol = Math.min(metrics.gridCols - 1, Math.floor((right - metrics.offsetX) / CELL_SIZE));
+        const minRow = Math.max(0, Math.floor((top - metrics.offsetY) / CELL_SIZE) - 1);
+        const maxRow = Math.min(metrics.gridRows - 1, Math.floor((bottom - metrics.offsetY) / CELL_SIZE));
+        for (let row = minRow; row <= maxRow; row++) for (let col = minCol; col <= maxCol; col++) {
+          const rock = o.placementSystem.getRuntimeRockAt(col, row);
+          if (!rock || rock.collisionMode === 'none') continue;
+          const x = metrics.offsetX + (rock.gridX + 0.5) * CELL_SIZE;
+          const y = metrics.offsetY + (rock.gridY + 0.5) * CELL_SIZE;
+          sink('rock', rock.id, '__world__', x, y, half * Math.SQRT2,
+            x - half, y - half, x + half, y + half, rock.kind);
+        }
+        this.ensureProjectileBaseGeometry();
+        for (const base of this.projectileBaseGeometry) {
+          if (base.base.isInert()) continue;
+          // Union of circle and rectangle stays conservative for all exact base-contact modes.
+          if (Math.max(base.right, base.x + base.radius) < left
+            || Math.min(base.left, base.x - base.radius) > right
+            || Math.max(base.bottom, base.y + base.radius) < top
+            || Math.min(base.top, base.y - base.radius) > bottom) continue;
+          sink('base', base.base.id, '__world__', base.x, base.y, base.radius,
+            base.left, base.top, base.right, base.bottom);
         }
       },
     });

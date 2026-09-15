@@ -23,7 +23,7 @@ import type { ArenaLayout } from '../types';
 import type { WorldMaterialization } from './WorldMaterialization';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 import type { WorldScopedBinding } from './WorldRuntime';
-import type { ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
+import type { ArenaObstacleIndex, ObstacleRectVisitor } from '../systems/ArenaObstacleIndex';
 import { createWorldGeometryQueries, type WorldGeometryQueries, type WorldTargetGeometry } from './WorldGeometryQueries';
 
 export interface WorldGeometryBindingInput {
@@ -165,6 +165,13 @@ export class WorldGeometryBinding implements WorldScopedBinding {
   /** Short alias used by neutral composition code. */
   getQueries(): WorldGeometryQueries { return this.geometryQueries; }
 
+  /** Projectile broad phase uses this binding's sole World index, including live invalidation. */
+  queryProjectileObstacles(sx: number, sy: number, ex: number, ey: number, padding: number,
+    sweepCircles: boolean, visit: ObstacleRectVisitor): void {
+    if (this.destroyed) return;
+    this.obstacleIndex.queryProjectileSegment(sx, sy, ex, ey, padding, sweepCircles, visit);
+  }
+
   /** Aktualisiert den world-lokalen Brandhindernisindex bei einer aktivierten Basis. */
   setBase(baseId: string, bounds: readonly Phaser.Geom.Rectangle[]): void {
     if (this.destroyed) return;
@@ -252,6 +259,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       combatSystem.setBaseManager(null);
       combatSystem.setBaseObstacles(null);
       combatSystem.setArenaObstacles(null, null);
+      this.obstacleIndex.clear();
       combatSystem.setWorldMetrics(null);
       playerManager.setWorldGeometry(null);
     }

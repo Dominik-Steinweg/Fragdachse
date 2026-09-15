@@ -77,7 +77,9 @@ function createSceneScopedCollaborators() {
     arenaObstacles: undefined as unknown,
     baseManager: undefined as unknown,
     setWorldMetrics(value: unknown) { this.worldMetrics = value; },
-    claimObstacleIndex() { return this.obstacleIndex = { setWaterGeometry: vi.fn() }; },
+    claimObstacleIndex() { return this.obstacleIndex = {
+      setWaterGeometry: vi.fn(), clear: vi.fn(), queryProjectileSegment: vi.fn(),
+    }; },
     setArenaObstacles(rocks: unknown, trunks: unknown) { this.arenaObstacles = [rocks, trunks]; },
     setBaseObstacles: vi.fn(),
     setBaseManager(value: unknown) { this.baseManager = value; },
@@ -241,6 +243,20 @@ describe('WorldGeometryBinding – Lifetime-Symmetrie', () => {
     const boundIndex = shared.projectileRuntime.setObstacleIndex.mock.calls[0]?.[0];
     expect(boundIndex).toBe(shared.combatSystem.obstacleIndex);
     expect(shared.projectileRuntime.setObstacleIndex).toHaveBeenCalledWith(boundIndex);
+  });
+
+  it('stops spatial projectile reads and releases index references at World teardown', () => {
+    const shared = createSceneScopedCollaborators();
+    const binding = createBinding(shared, { gridX: 2, gridY: 2 });
+    const index = shared.combatSystem.obstacleIndex as { queryProjectileSegment: ReturnType<typeof vi.fn>;
+      clear: ReturnType<typeof vi.fn> };
+    const visit = () => false;
+    binding.queryProjectileObstacles(-100, 20, 1000, 20, 60, true, visit);
+    expect(index.queryProjectileSegment).toHaveBeenCalledExactlyOnceWith(-100, 20, 1000, 20, 60, true, visit);
+    binding.destroy();
+    expect(index.clear).toHaveBeenCalledOnce();
+    binding.queryProjectileObstacles(-100, 20, 1000, 20, 60, true, visit);
+    expect(index.queryProjectileSegment).toHaveBeenCalledOnce();
   });
 
   it('loest beim destroy() jede installierte Referenz wieder auf', () => {

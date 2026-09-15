@@ -632,7 +632,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "a364e8540f67f69bd18c9041b82081fea9f69369b41d900390bbc729d4c8dc85",
+        "file_hash": "7fbf984f9a6812ba852b255a5ec924bdc44d128e52eedd4d889be7c1b05f8527",
         "file_error": null,
         "shared_keys": [
           "sfx_countdown_go",
@@ -878,6 +878,24 @@
               "sfx_decoy_reveal"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_decoy_reveal.ogg",
+            "usages": [
+              {
+                "path": "src/world/WorldCombatGameplayBinding.ts",
+                "line": 971,
+                "kind": "oneshot",
+                "excerpt": "if (player) o.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_decoy_reveal"
+            ]
+          }
         }
       ],
       "repository": {
@@ -899,7 +917,7 @@
         "usages": [
           {
             "path": "src/world/WorldCombatGameplayBinding.ts",
-            "line": 970,
+            "line": 971,
             "kind": "oneshot",
             "excerpt": "if (player) o.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);"
           }
@@ -2634,13 +2652,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one bright options-preview ping: crisp synth strike, clean upbeat body, short resonant tail, dry UI separation, no speech.",
-        "source": "astra",
+        "text": "TrackType: SFX, Short Step on a dry branch. Isolated sound",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 2,
+        "duration_seconds": 1,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -2684,7 +2702,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "a364e8540f67f69bd18c9041b82081fea9f69369b41d900390bbc729d4c8dc85",
+        "file_hash": "7fbf984f9a6812ba852b255a5ec924bdc44d128e52eedd4d889be7c1b05f8527",
         "file_error": null,
         "shared_keys": [
           "sfx_countdown_go",
@@ -3289,6 +3307,30 @@
               "sfx_player_death"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_player_death.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 16,
+                "kind": "unknown",
+                "excerpt": "...Object.values(PICKUP_AUDIO), 'sfx_player_death', 'sfx_enemy_death',"
+              },
+              {
+                "path": "src/combat/WorldCombatCore.ts",
+                "line": 4272,
+                "kind": "unknown",
+                "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_player_death"
+            ]
+          }
         }
       ],
       "repository": {
@@ -3316,7 +3358,7 @@
           },
           {
             "path": "src/combat/WorldCombatCore.ts",
-            "line": 4271,
+            "line": 4272,
             "kind": "unknown",
             "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
           }
@@ -5465,7 +5507,7 @@
         "volume": 0.15,
         "shipped": true,
         "exists": true,
-        "file_hash": "b7bcf1623ee28129d9e26d0bf929a3bd65c64c20df9468550b5d648fb34ba6c6",
+        "file_hash": "2821a19b174d66b3f99d5aafb75519897a877b154b9f8430778bd1af1663c046",
         "file_error": null,
         "shared_keys": [
           "shot_glock"
@@ -5963,7 +6005,7 @@
         "target_path": "public/assets/sounds/shotgun.ogg",
         "asset_path": "./assets/sounds/shotgun.ogg",
         "filename": "shotgun.ogg",
-        "volume": 0.06,
+        "volume": 0.36,
         "shipped": true,
         "exists": true,
         "file_hash": "ec318d77d62bb21d24812c5c8503a6f1aedcb2e20f90db7931915e11d10d9ec9",
@@ -7053,6 +7095,36 @@
               "sfx_enemy_death"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_enemy_death.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 385,
+                "kind": "unknown",
+                "excerpt": ": key === 'sfx_enemy_death' ? 60"
+              },
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 16,
+                "kind": "unknown",
+                "excerpt": "...Object.values(PICKUP_AUDIO), 'sfx_player_death', 'sfx_enemy_death',"
+              },
+              {
+                "path": "src/combat/WorldCombatCore.ts",
+                "line": 4272,
+                "kind": "unknown",
+                "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_enemy_death"
+            ]
+          }
         }
       ],
       "repository": {
@@ -7086,7 +7158,7 @@
           },
           {
             "path": "src/combat/WorldCombatCore.ts",
-            "line": 4271,
+            "line": 4272,
             "kind": "unknown",
             "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
           }
@@ -9682,13 +9754,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one time field releasing stored energy: an immediate elastic pressure crack, compressed resonant energy bloom, briefly warped low resonance and a short dissipating electrical tail. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
-        "source": "astra",
+        "text": "TrackType: SFX, one massive Sci-Fi Bubble releasing stored energy: Bubble Bursting, warped low resonance. Single isolated event, epic, cinematic, action-game sound",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 3,
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -9738,10 +9810,10 @@
         "target_path": "public/assets/sounds/sfx_explosion_time_bubble.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_time_bubble.ogg",
         "filename": "sfx_explosion_time_bubble.ogg",
-        "volume": 0.5,
+        "volume": 1,
         "shipped": true,
         "exists": true,
-        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "file_hash": "4c82d2f4da80305368ad0fbac755e783312255a429c4f58019f2c5020563172b",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_time_bubble"
@@ -9766,7 +9838,7 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one high-energy sci-fi detonation played backwards: a sharp casing rupture, forceful low blast, no countdown or ticking. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom",
+        "text": "TrackType: SFX, one high-energy detonation, a sharp casing rupture, forceful low blast, no countdown or ticking. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom",
         "source": "manual",
         "preserve_on_sync": true
       },
@@ -9825,7 +9897,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "a71c9ca76db5bbdf134a1f248ab2a1d16ca6e4c1dbc3914a5b8fc377d26e1dd3",
+        "file_hash": "3977d8186d0812d66f05afe830c66bdb119c234856261528ef4bc1ba7019edf3",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_timebomb"

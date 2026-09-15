@@ -1,0 +1,435 @@
+{
+  "date": "2026-09-15",
+  "baselineCommit": "31e7888c9fa99d5d488df6fa8fed8b05b0ac0295",
+  "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+  "node": "v24.14.0",
+  "platform": "win32",
+  "seed": 731,
+  "warmupFrames": 10,
+  "measuredFrames": 50,
+  "repetitions": 3,
+  "before": [
+    {
+      "mode": "full",
+      "node": "v24.14.0",
+      "rockCount": 4000,
+      "projectileCount": 0,
+      "repetitions": [
+        {
+          "medianMs": 2.292900000000145,
+          "p95Ms": 3.267799999999852,
+          "buildMs": 3.6743999999998778,
+          "rebuildMs": 2.5679999999999836,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 0
+        },
+        {
+          "medianMs": 1.4039999999999964,
+          "p95Ms": 2.6096999999999753,
+          "buildMs": 1.7528999999999542,
+          "rebuildMs": 1.0087000000000899,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 0
+        },
+        {
+          "medianMs": 1.858600000000024,
+          "p95Ms": 4.062199999999848,
+          "buildMs": 0.9631999999999152,
+          "rebuildMs": 0.7889999999999873,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 0
+        }
+      ]
+    },
+    {
+      "mode": "full",
+      "node": "v24.14.0",
+      "rockCount": 4000,
+      "projectileCount": 8,
+      "repetitions": [
+        {
+          "medianMs": 4.086900000000014,
+          "p95Ms": 7.657400000000052,
+          "buildMs": 0.608600000000024,
+          "rebuildMs": 0.6709999999998217,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 720
+        },
+        {
+          "medianMs": 3.02599999999984,
+          "p95Ms": 4.906299999999874,
+          "buildMs": 2.1239000000000487,
+          "rebuildMs": 0.5336999999999534,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 720
+        },
+        {
+          "medianMs": 2.1646999999998116,
+          "p95Ms": 2.437800000000152,
+          "buildMs": 0.4461999999998625,
+          "rebuildMs": 0.4432000000001608,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 720
+        }
+      ]
+    },
+    {
+      "mode": "full",
+      "node": "v24.14.0",
+      "rockCount": 4000,
+      "projectileCount": 1500,
+      "repetitions": [
+        {
+          "medianMs": 277.66519999999946,
+          "p95Ms": 329.58599999999933,
+          "buildMs": 0.43029999999998836,
+          "rebuildMs": 0.40249999999969077,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 112680
+        },
+        {
+          "medianMs": 274.4375,
+          "p95Ms": 310.7448000000004,
+          "buildMs": 0.5362000000022817,
+          "rebuildMs": 0.4220000000022992,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 112680
+        },
+        {
+          "medianMs": 274.73389999999927,
+          "p95Ms": 326.508600000001,
+          "buildMs": 1.382000000005064,
+          "rebuildMs": 0.42150000000401633,
+          "boundsReads": 240000,
+          "emitted": 240000,
+          "contacts": 112680
+        }
+      ]
+    },
+    {
+      "mode": "full",
+      "node": "v24.14.0",
+      "rockCount": 20000,
+      "projectileCount": 0,
+      "repetitions": [
+        {
+          "medianMs": 8.204899999996996,
+          "p95Ms": 15.378499999998894,
+          "buildMs": 2.6251000000047497,
+          "rebuildMs": 2.1045000000012806,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 0
+        },
+        {
+          "medianMs": 7.483099999997648,
+          "p95Ms": 10.279300000001967,
+          "buildMs": 3.3792000000030384,
+          "rebuildMs": 2.145700000000943,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 0
+        },
+        {
+          "medianMs": 10.047099999996135,
+          "p95Ms": 14.758800000003248,
+          "buildMs": 2.194499999997788,
+          "rebuildMs": 1.9654999999984284,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 0
+        }
+      ]
+    },
+    {
+      "mode": "full",
+      "node": "v24.14.0",
+      "rockCount": 20000,
+      "projectileCount": 8,
+      "repetitions": [
+        {
+          "medianMs": 16.524099999995087,
+          "p95Ms": 24.442300000002433,
+          "buildMs": 8.953699999998207,
+          "rebuildMs": 3.656699999999546,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 720
+        },
+        {
+          "medianMs": 16.01690000000235,
+          "p95Ms": 25.721099999995204,
+          "buildMs": 2.85570000000007,
+          "rebuildMs": 1.8463000000047032,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 720
+        },
+        {
+          "medianMs": 15.052600000002712,
+          "p95Ms": 24.91599999999744,
+          "buildMs": 2.881600000000617,
+          "rebuildMs": 2.0078000000066822,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 720
+        }
+      ]
+    },
+    {
+      "mode": "full",
+      "node": "v24.14.0",
+      "rockCount": 20000,
+      "projectileCount": 1500,
+      "repetitions": [
+        {
+          "medianMs": 1444.306499999977,
+          "p95Ms": 1608.2934999999998,
+          "buildMs": 2.7050000000017462,
+          "rebuildMs": 2.1055000000051223,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 135000
+        },
+        {
+          "medianMs": 1383.6925000000047,
+          "p95Ms": 1699.5630999999994,
+          "buildMs": 2.9284000000043306,
+          "rebuildMs": 3.2747999999846797,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 135000
+        },
+        {
+          "medianMs": 1371.9005999999936,
+          "p95Ms": 1622.6523999999627,
+          "buildMs": 3.849000000016531,
+          "rebuildMs": 2.90769999998156,
+          "boundsReads": 1200000,
+          "emitted": 1200000,
+          "contacts": 135000
+        }
+      ]
+    }
+  ],
+  "after": [
+    {
+      "mode": "spatial",
+      "node": "v24.14.0",
+      "rockCount": 4000,
+      "projectileCount": 0,
+      "repetitions": [
+        {
+          "medianMs": 0.00029999999992469384,
+          "p95Ms": 0.0007000000000516593,
+          "buildMs": 3.532600000000002,
+          "rebuildMs": 1.67999999999995,
+          "boundsReads": 0,
+          "emitted": 0,
+          "contacts": 0
+        },
+        {
+          "medianMs": 0.00020000000006348273,
+          "p95Ms": 0.0003000000000383807,
+          "buildMs": 1.217999999999961,
+          "rebuildMs": 0.865099999999984,
+          "boundsReads": 0,
+          "emitted": 0,
+          "contacts": 0
+        },
+        {
+          "medianMs": 0.00029999999992469384,
+          "p95Ms": 0.0004000000000132786,
+          "buildMs": 0.9791999999999916,
+          "rebuildMs": 0.6884999999999764,
+          "boundsReads": 0,
+          "emitted": 0,
+          "contacts": 0
+        }
+      ]
+    },
+    {
+      "mode": "spatial",
+      "node": "v24.14.0",
+      "rockCount": 4000,
+      "projectileCount": 8,
+      "repetitions": [
+        {
+          "medianMs": 0.05089999999995598,
+          "p95Ms": 0.11029999999993834,
+          "buildMs": 0.6096999999999753,
+          "rebuildMs": 0.5906999999999698,
+          "boundsReads": 0,
+          "emitted": 3420,
+          "contacts": 720
+        },
+        {
+          "medianMs": 0.0402000000000271,
+          "p95Ms": 0.07079999999996289,
+          "buildMs": 0.5008000000000266,
+          "rebuildMs": 0.4451999999999998,
+          "boundsReads": 0,
+          "emitted": 3420,
+          "contacts": 720
+        },
+        {
+          "medianMs": 0.03700000000003456,
+          "p95Ms": 0.049200000000041655,
+          "buildMs": 0.46070000000008804,
+          "rebuildMs": 0.4461000000000013,
+          "boundsReads": 0,
+          "emitted": 3420,
+          "contacts": 720
+        }
+      ]
+    },
+    {
+      "mode": "spatial",
+      "node": "v24.14.0",
+      "rockCount": 4000,
+      "projectileCount": 1500,
+      "repetitions": [
+        {
+          "medianMs": 6.038999999999987,
+          "p95Ms": 6.771200000000135,
+          "buildMs": 0.4616999999999507,
+          "rebuildMs": 0.4633999999999787,
+          "boundsReads": 0,
+          "emitted": 555780,
+          "contacts": 112680
+        },
+        {
+          "medianMs": 5.519999999999982,
+          "p95Ms": 5.7327999999999975,
+          "buildMs": 0.8633000000002085,
+          "rebuildMs": 0.7399000000000342,
+          "boundsReads": 0,
+          "emitted": 555780,
+          "contacts": 112680
+        },
+        {
+          "medianMs": 5.476199999999835,
+          "p95Ms": 5.9336000000000695,
+          "buildMs": 0.5107000000000426,
+          "rebuildMs": 0.48099999999999454,
+          "boundsReads": 0,
+          "emitted": 555780,
+          "contacts": 112680
+        }
+      ]
+    },
+    {
+      "mode": "spatial",
+      "node": "v24.14.0",
+      "rockCount": 20000,
+      "projectileCount": 0,
+      "repetitions": [
+        {
+          "medianMs": 0.0001999999999497959,
+          "p95Ms": 0.00029999999992469384,
+          "buildMs": 2.5825999999999567,
+          "rebuildMs": 2.1949999999999363,
+          "boundsReads": 0,
+          "emitted": 0,
+          "contacts": 0
+        },
+        {
+          "medianMs": 0.0001999999999497959,
+          "p95Ms": 0.0003000000001520675,
+          "buildMs": 2.519999999999982,
+          "rebuildMs": 2.170900000000074,
+          "boundsReads": 0,
+          "emitted": 0,
+          "contacts": 0
+        },
+        {
+          "medianMs": 0.0001999999999497959,
+          "p95Ms": 0.00029999999992469384,
+          "buildMs": 2.2659000000001015,
+          "rebuildMs": 2.5157999999998992,
+          "boundsReads": 0,
+          "emitted": 0,
+          "contacts": 0
+        }
+      ]
+    },
+    {
+      "mode": "spatial",
+      "node": "v24.14.0",
+      "rockCount": 20000,
+      "projectileCount": 8,
+      "repetitions": [
+        {
+          "medianMs": 0.0466999999998734,
+          "p95Ms": 0.05259999999998399,
+          "buildMs": 2.6581999999998516,
+          "rebuildMs": 3.5947000000001026,
+          "boundsReads": 0,
+          "emitted": 3420,
+          "contacts": 720
+        },
+        {
+          "medianMs": 0.023300000000062937,
+          "p95Ms": 0.02419999999983702,
+          "buildMs": 3.6743999999998778,
+          "rebuildMs": 2.3050000000000637,
+          "boundsReads": 0,
+          "emitted": 3420,
+          "contacts": 720
+        },
+        {
+          "medianMs": 0.023299999999835563,
+          "p95Ms": 0.03370000000018081,
+          "buildMs": 2.3786999999999807,
+          "rebuildMs": 2.0751999999999953,
+          "boundsReads": 0,
+          "emitted": 3420,
+          "contacts": 720
+        }
+      ]
+    },
+    {
+      "mode": "spatial",
+      "node": "v24.14.0",
+      "rockCount": 20000,
+      "projectileCount": 1500,
+      "repetitions": [
+        {
+          "medianMs": 7.19380000000001,
+          "p95Ms": 10.334100000000035,
+          "buildMs": 2.6188999999999396,
+          "rebuildMs": 2.212299999999914,
+          "boundsReads": 0,
+          "emitted": 663660,
+          "contacts": 135000
+        },
+        {
+          "medianMs": 6.595400000000154,
+          "p95Ms": 7.280999999999949,
+          "buildMs": 3.434899999999743,
+          "rebuildMs": 2.4306000000001404,
+          "boundsReads": 0,
+          "emitted": 663660,
+          "contacts": 135000
+        },
+        {
+          "medianMs": 6.522599999999784,
+          "p95Ms": 6.945999999999913,
+          "buildMs": 2.312800000000152,
+          "rebuildMs": 2.0989999999997053,
+          "boundsReads": 0,
+          "emitted": 663660,
+          "contacts": 135000
+        }
+      ]
+    }
+  ]
+}

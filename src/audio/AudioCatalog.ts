@@ -281,7 +281,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_base_destruction: 0.5,
   sfx_explosion_shotgun_lightning: 0.5,
   sfx_explosion_energy_injector: 0.5,
-  sfx_explosion_time_bubble: 0.5,
+  sfx_explosion_time_bubble: 1.0,
   sfx_explosion_timebomb: 0.5,
   // Shot Sounds
   shot_ak47:               0.4,
@@ -292,7 +292,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   shot_gauss:              0.5,
   shot_glock:              0.15,
   shot_plasma:             0.2,
-  shot_shotgun:            0.06, 
+  shot_shotgun:            0.36, 
   shot_bite:               0.4,
   shot_zeus:               0.5,
   shot_hydra:              0.3,

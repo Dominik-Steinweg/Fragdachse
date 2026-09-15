@@ -315,7 +315,7 @@ describe('projectile performance paths', () => {
     expect(recorder.read(1, 1200)).toBeUndefined();
   });
 
-  it('damages each obstacle once per flame and scales turret rocks independently', () => {
+  it('damages each high obstacle once per flame and skips low turret rocks', () => {
     const { runtime, physics } = createProjectileRuntimeTestWorld();
     const hits: Array<{ id: number; damage: number; ownerId: string }> = [];
     runtime.setRockHitCallback((id, damage, ownerId) => hits.push({ id, damage, ownerId }));
@@ -327,11 +327,13 @@ describe('projectile performance paths', () => {
     const turretFlame = spawnRequest(runtime, { flight: { isFlame: true, flamePiercing: true }, interaction: { directHit: { damage: 20, rockDamageMult: 0 } } });
     physics.emit(projectilePhysicsContact(turretFlame, { kind: 'rock', id: 0 }));
     physics.emit(projectilePhysicsContact(turretFlame, { kind: 'rock', id: 0 }));
-    expect(hits).toEqual([{ id: 0, damage: 20, ownerId: 'shooter' }]);
+    // Low turrets do not admit direct-fire contacts, including synthetic physics reports.
+    expect(hits).toEqual([]);
     runtime.setObstacleKindResolver(() => undefined);
     const secondFlame = spawnRequest(runtime, { flight: { isFlame: true, flamePiercing: true }, interaction: { directHit: { damage: 20, rockDamageMult: 0.25 } } });
     physics.emit(projectilePhysicsContact(secondFlame, { kind: 'rock', id: 0 }));
-    expect(hits[1]).toMatchObject({ id: 0, damage: 5 });
+    physics.emit(projectilePhysicsContact(secondFlame, { kind: 'rock', id: 0 }));
+    expect(hits).toEqual([{ id: 0, damage: 5, ownerId: 'shooter' }]);
   });
   it('deduplicates multi-cell hostile base contacts and keeps zero rock damage', () => {
     const { runtime, physics } = createProjectileRuntimeTestWorld();

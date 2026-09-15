@@ -274,20 +274,7 @@ export function composeWorldCombatGameplay(
     syncActiveBaseIds,
     getMissionBarrierObstacles: () => flow.getCoopMissionRuntime()?.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
     getRockTargets: () => arenaResult.rockPhysicsProxies.flatMap((rock, index) => (
-      rock && rock.active ? (() => {
-        const bounds = rock.getBounds();
-        return [{
-          id: index,
-          index,
-          active: true,
-          x: rock.x,
-          y: rock.y,
-          left: bounds.left,
-          top: bounds.top,
-          right: bounds.right,
-          bottom: bounds.bottom,
-        }];
-      })() : []
+      rock?.active ? [{ index, active: true, x: rock.x, y: rock.y }] : []
     )),
     getWorldTrain: () => gameplay.train,
     getWorldMutation: () => gameplay.worldMutation,
