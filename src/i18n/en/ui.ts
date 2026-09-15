@@ -1,4 +1,6 @@
 export const enUi = {
+  "ui.lobby.deferredLoading": "Loading game content …",
+  "ui.lobby.deferredFailed": "Required game content could not be loaded.",
   "ui.turretControl.enter": "Shift: Man turret",
   "ui.stinkCloud.active": "Active",
   "ui.stinkCloud.cooldown": "Cooldown",

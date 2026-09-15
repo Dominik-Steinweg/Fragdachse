@@ -1,3 +1,5 @@
+import { getDeferredAssets } from '../assets/DeferredAssets';
+import { DeferredAssetIndicator } from '../ui/DeferredAssetIndicator';
 import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
 import { getCoopDefenseToolCapacity } from '../utils/coopDefenseUpgrades';
 /**
@@ -192,6 +194,7 @@ export class LobbyOverlay {
    * Erst spaetere Lobby-Auftritte und neue Spieler erhalten eine Eintrittsanimation.
    */
   private bootPreparing = true;
+  private deferredIndicator: DeferredAssetIndicator | null = null;
   private readyGlow: GlowHandle | null = null;
   private readyGlowTween: Phaser.Tweens.Tween | null = null;
   private progress: LobbyPlayerProgress | null = null;
@@ -465,6 +468,8 @@ export class LobbyOverlay {
     this.cardContent = this.scene.add.container(0, 0, objects).setScrollFactor(0);
     // Late roster rows stay below the frame; transient menus are added above it to the root.
     this.container = this.scene.add.container(0, 0, [this.cardContent, cardFrame]).setDepth(DEPTH.OVERLAY);
+    this.deferredIndicator = new DeferredAssetIndicator(this.scene, GAME_WIDTH / 2, GAME_HEIGHT - 24);
+    this.container.add(this.deferredIndicator.root);
     promoteToClarityCamera(this.scene, this.container);
     this.settings = new LobbySettingsControls(this.scene, this.bridge, this.cardContent, this.container);
     this.rosterScroller = new LobbyRosterScroller(this.scene, this.container,
@@ -516,6 +521,8 @@ export class LobbyOverlay {
   }
 
   private teardown(): void {
+    this.deferredIndicator?.destroy();
+    this.deferredIndicator = null;
     this.settings?.destroy(); this.settings = null;
     this.rosterScroller?.destroy(); this.rosterScroller = null;
     this.progress?.destroy(); this.progress = null;
@@ -664,9 +671,10 @@ export class LobbyOverlay {
     return this.connectionEnded;
   }
 
-  /** Gibt nur kuenftige Auftrittsanimationen frei; der fertig gerenderte Boot-Frame bleibt stehen. */
+  /** Nach dem Boot-Fade: Asset-Phase und kuenftige Auftritte freigeben, den Boot-Frame stehen lassen. */
   completeBootReveal(): void {
     this.bootPreparing = false;
+    if (this.visible) getDeferredAssets(this.scene).start();
   }
 
   /**
@@ -684,7 +692,10 @@ export class LobbyOverlay {
       delay: LOBBY_CARD_MOTION.enterDelay,
       duration: LOBBY_CARD_MOTION.enterDuration,
       ease: 'Back.easeOut',
-      onComplete: () => { this.entranceTween = null; },
+      onComplete: () => {
+        this.entranceTween = null;
+        if (this.visible && !this.bootPreparing) getDeferredAssets(this.scene).start();
+      },
     });
   }
 

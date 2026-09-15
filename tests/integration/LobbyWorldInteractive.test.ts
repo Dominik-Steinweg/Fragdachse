@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
+import { getDeferredAssets } from '../../src/assets/DeferredAssets';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -547,7 +549,12 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const container = new DisplayObject();
     const add = () => new DisplayObject();
     const tweens = { add: vi.fn((_config: any) => ({ remove: vi.fn() })), killTweensOf: vi.fn() };
-    const scene = { add: { image: add, text: add, circle: add, container: add }, tweens };
+    const scene = {
+      add: { image: add, text: add, circle: add, container: add }, tweens,
+      events: new EventEmitter(),
+      cache: { audio: { exists: () => false } },
+      load: Object.assign(new EventEmitter(), { audio: vi.fn(), isLoading: () => false, start: vi.fn() }),
+    };
     const noop = () => {};
     const overlay = new LobbyOverlay(
       scene as any, { getLocalPlayerId: () => 'local' } as any,
@@ -579,6 +586,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     overlay.overlay.show();
     const scene = Object.create(ArenaScene.prototype) as any;
     scene.bootRevealPending = true;
+    scene.sys = { isActive: () => true };
     scene.time = { now: 0 };
     scene.game = { events: { off: vi.fn() } };
     scene.cameras = {
@@ -623,14 +631,17 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
   });
 
   it('zeigt beim Boot-Reveal sofort das vollstaendige Panel und startet nach dem Fade keine Animation', async () => {
-    const { scene, reveal, container, tweens, finishFade } = bootFixture();
+    const { scene, reveal, container, tweens, finishFade, uiScene } = bootFixture();
     expect(container).toMatchObject({ visible: true, alpha: 1, y: 0 });
     expect(tweens.add).not.toHaveBeenCalled();
     reveal.ready = true;
     scene.syncBootReveal();
     expect(container).toMatchObject({ visible: true, alpha: 1, y: 0 });
+    expect(uiScene.load.start).not.toHaveBeenCalled();
     finishFade();
     await Promise.resolve();
+    expect(uiScene.load.start).toHaveBeenCalledOnce();
+    expect(uiScene.load.audio).toHaveBeenCalledTimes(2);
     expect(tweens.add).not.toHaveBeenCalled();
     expect(container).toMatchObject({ visible: true, alpha: 1, y: 0 });
   });
@@ -642,6 +653,81 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(scene.arenaRuntime.getWorldRevealState).not.toHaveBeenCalled();
     expect(scene.bootRevealPending).toBe(false);
     expect(fade).toHaveBeenCalledOnce();
+  });
+
+  it('starts deferred loading only after a visible lobby entrance finishes and reuses it on return', () => {
+    const { overlay, tweens, uiScene } = overlayFixture();
+    overlay.visible = false;
+    overlay.bootPreparing = false;
+    overlay.show();
+    expect(uiScene.load.start).not.toHaveBeenCalled();
+    tweens.add.mock.calls[0][0].onComplete();
+    expect(getDeferredAssets(uiScene as any).getState().status).toBe('loading');
+    expect(uiScene.load.start).toHaveBeenCalledOnce();
+    overlay.hide(); overlay.show();
+    tweens.add.mock.calls.at(-1)![0].onComplete();
+    expect(uiScene.load.start).toHaveBeenCalledOnce();
+  });
+
+  it('does not release a hidden lobby from a late boot fade callback', async () => {
+    const { scene, reveal, finishFade, overlay, uiScene } = bootFixture();
+    reveal.ready = true;
+    scene.syncBootReveal();
+    overlay.hide();
+    finishFade();
+    await Promise.resolve();
+    expect(uiScene.load.start).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('waits for assets before a direct arena build without consuming transition retries (host=%s)', async (host) => {
+    const { uiScene } = overlayFixture();
+    const callbacks: Array<() => void> = [];
+    const scene = Object.assign(uiScene, { time: { delayedCall: vi.fn((_delay: number, callback: () => void) => {
+      callbacks.push(callback);
+    }) } });
+    const world = { worldRevision: 77, definitionId: 'world:coop-defense:1', seed: 77,
+      generatorVersion: 1, layoutFingerprint: 'test-world' };
+    vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue(world);
+    vi.spyOn(bridge, 'getActiveGameMode').mockReturnValue('coop_defense');
+    vi.spyOn(bridge, 'getActivityDescriptor').mockReturnValue({
+      worldRevision: 77, activityRevision: 77, kind: 'coop-mission', definitionId: 'activity:coop-mission:1',
+    });
+    vi.spyOn(bridge, 'getGamePhase').mockReturnValue('ARENA');
+    vi.spyOn(bridge, 'getRoundState').mockReturnValue({ status: 'active', roundStartTime: 0 });
+    vi.spyOn(bridge, 'getArenaStartTime').mockReturnValue(0);
+    vi.spyOn(bridge, 'getRoundParticipation').mockReturnValue({
+      roundRevision: 77, roundStartTime: 0, participantIds: ['local'], spectatorIds: [],
+    });
+    vi.spyOn(bridge, 'getWorldParticipationState').mockReturnValue({ worldRevision: 77, participants: { local: 'joining' } });
+    vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('local');
+    vi.spyOn(bridge, 'isHost').mockReturnValue(host);
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    Object.assign(coordinator, {
+      scene, layoutRetryCount: 0,
+      ctx: { gameAudioSystem: { stopMusic: vi.fn() }, arenaCountdown: { showLoading: vi.fn() } },
+      lobbyOverlay: { hide: vi.fn(), lockButton: vi.fn() },
+      hostSyncWorldParticipation: vi.fn(), terminateMatch: vi.fn(),
+      // Stop at the first consumer of deferred content; the full World build has its own suite.
+      synchronizeLocalWorldLifecycle: vi.fn(() => { throw new Error('consumer boundary'); }),
+    });
+    coordinator.onTransitionToArena();
+    expect(scene.load.start).toHaveBeenCalledOnce();
+    // This exceeds the existing descriptor retry budget, representing an arbitrarily slow load.
+    for (let i = 0; i < 2000; i++) callbacks.shift()!();
+    expect(coordinator.layoutRetryCount).toBe(0);
+    expect(coordinator.terminateMatch).not.toHaveBeenCalled();
+    expect(coordinator.synchronizeLocalWorldLifecycle).not.toHaveBeenCalled();
+    if (host) expect(coordinator.hostSyncWorldParticipation).toHaveBeenCalled();
+    scene.cache.audio.exists = () => true;
+    scene.load.emit('filecomplete', 'music_lobby', 'audio');
+    scene.load.emit('filecomplete', 'music_arena', 'audio');
+    scene.load.emit('complete');
+    await Promise.resolve();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    callbacks.shift()!();
+    expect(coordinator.synchronizeLocalWorldLifecycle).toHaveBeenCalledOnce();
+    expect(callbacks).toHaveLength(0);
+    expect(scene.load.start).toHaveBeenCalledOnce();
   });
 
   it.each(['showHostDisconnectedMessage', 'showArenaFailureMessage'] as const)(
@@ -683,6 +769,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     coordinator.syncAuthoritativeRoundStartAnchors = vi.fn();
     coordinator.tryScheduleArenaStart = vi.fn();
     vi.spyOn(bridge, 'isHost').mockReturnValue(true);
+    vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(false);
     vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue({ worldRevision: 7 } as any);
     const publishProgress = vi.spyOn(bridge, 'setLocalWorldLoadProgress').mockImplementation(() => {});
     const publishReady = vi.spyOn(bridge, 'setLocalWorldLoadReady').mockImplementation(() => {});

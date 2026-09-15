@@ -1,3 +1,4 @@
+import { getDeferredAssets } from '../assets/DeferredAssets';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import * as Phaser from 'phaser';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
@@ -519,6 +520,10 @@ export class ArenaScene extends Phaser.Scene {
       getStoredMusicVolume(),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => gameAudioSystem.cleanup());
+    const unsubscribeDeferredAssets = getDeferredAssets(this).subscribe(state => {
+      bridge.setLocalDeferredAssetsReady(state.ready);
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubscribeDeferredAssets);
     const smokeSystem      = new SmokeSystem(this);
     const fireSystem       = new FireSystem(this);
     this.diagnostics?.subscribeDiagnostics((enabled) => {
@@ -2530,9 +2535,10 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.bootRevealPending = false;
     this.game.events.off(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
-    this.lobbyOverlay.completeBootReveal();
     BootScreen.setProgress(1);
-    void BootScreen.fadeOut();
+    void BootScreen.fadeOut().then(() => {
+      if (this.sys.isActive()) this.lobbyOverlay.completeBootReveal();
+    });
   }
 
   /**

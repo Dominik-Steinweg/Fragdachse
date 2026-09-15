@@ -1,3 +1,4 @@
+import { getDeferredAssets } from '../../assets/DeferredAssets';
 import type Phaser from 'phaser';
 import { AdrenalineEssenceBinding } from '../../adrenalineEssence/AdrenalineEssenceBinding';
 import { ADRENALINE_ESSENCE_CONFIG } from '../../adrenalineEssence/AdrenalineEssenceConfig';
@@ -1713,7 +1714,7 @@ export class ArenaLifecycleCoordinator {
   /**
    * World Loading und Round Loading sind getrennte Bedingungen.
    *
-   * Die replizierte Ladebarriere beantwortet nur: steht die World bei allen Teilnehmern? Ob die
+   * Die Startbarriere verlangt World- und Asset-Bereitschaft aller aktiven Teilnehmer. Ob die
    * Runde starten darf, entscheidet zusaetzlich der host-lokale Rundenaufbau – Spawns und
    * Startup-Caches. Eine World ohne Activity waere fertig geladen, ohne dass je eine Runde
    * beginnt; genau deshalb duerfen beide Bedingungen nicht in einem Flag stecken.
@@ -1721,7 +1722,8 @@ export class ArenaLifecycleCoordinator {
   private tryScheduleArenaStart(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     if (bridge.getArenaStartTime() > 0) return;
-    if (!bridge.areWorldParticipantsLoadReady()) return;
+    if (!getDeferredAssets(this.scene).getState().ready) return;
+    if (!bridge.areWorldParticipantsLoadReady(true)) return;
     if (!this.prepareRoundStart(Date.now())) return;
 
     const arenaStartTime = resolveArenaStartTime(Date.now());
@@ -2906,6 +2908,9 @@ export class ArenaLifecycleCoordinator {
       this.lobbyOverlay.lockButton();
       this.lobbyOverlay.hide();
     }
+    if (entersWorld || bridge.getGamePhase() === 'ARENA') {
+      this.ctx.gameAudioSystem.stopMusic();
+    }
     // In ARENA ist die World erst mit ihrer Activity, dem aktiven Round-State und der passenden
     // RoundParticipation vollstaendig. Nur echte Activity-lose Worlds (z. B. die Lobby) duerfen
     // ausserhalb der ARENA-Phase ohne Activity aufgebaut werden.
@@ -2955,6 +2960,26 @@ export class ArenaLifecycleCoordinator {
       return;
     }
     this.layoutRetryCount = 0;
+
+    // A direct join has no lobby reveal to start this phase. Wait before constructing consumers.
+    // This wait is separate from the descriptor retry budget and terrain snapshot watchdog.
+    if (bridge.getGamePhase() === 'ARENA'
+      || !isLobbyWorldDefinitionId(worldDescriptor.definitionId)) {
+      const assets = getDeferredAssets(this.scene);
+      assets.start();
+      if (!assets.getState().ready) {
+        if (assets.getState().status === 'error') {
+          this.arenaTransitionInProgress = false;
+          this.terminateMatch(t('ui.lobby.deferredFailed'));
+          return;
+        }
+        this.scene.time.delayedCall(50, () => {
+          this.arenaTransitionInProgress = false;
+          if (!this.matchTerminated) this.onTransitionToArena();
+        });
+        return;
+      }
+    }
 
     const { mode: layoutMode, mapConfig: coopDefenseMapConfig } = resolveWorldCompositionProfile(
       worldDescriptor,

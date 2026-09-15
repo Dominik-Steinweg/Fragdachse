@@ -180,6 +180,7 @@ const KEY_PLACEMENT_PREVIEW = 'ppv';
 const KEY_PLAYERS      = 'plr';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
 const KEY_WORLD_LOAD_READY = 'wlr'; // per-player reliable: WorldLoadReadyState
+const KEY_DEFERRED_ASSETS_READY = 'dar'; // per-player reliable, independent of lobby ready/world revision
 const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeigename
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
@@ -1801,15 +1802,25 @@ export class NetworkBridge {
    *
    * Sie haengt an der World, nicht an der Runde - eine World ohne Activity laedt genauso. Wer
    * nicht teilnimmt, laedt sie auch nicht und wird deshalb nicht erwartet.
+   * Der Arenastart verlangt zusaetzlich die unabhaengige zweite Asset-Phase derselben Teilnehmer.
    */
-  areWorldParticipantsLoadReady(): boolean {
+  areWorldParticipantsLoadReady(includeDeferredAssets = false): boolean {
     if (!isHost()) return false;
     const world = this.getWorldDescriptor();
     if (!world) return false;
     const connected = new Set([...this.connectedPlayers.keys(), this.getLocalPlayerId()]);
     const participants = this.getWorldParticipants().filter((id) => connected.has(id));
     if (participants.length === 0) return false;
-    return participants.every((id) => this.getPlayerWorldLoadReady(id, world.worldRevision));
+    return participants.every((id) => this.getPlayerWorldLoadReady(id, world.worldRevision)
+      && (!includeDeferredAssets || this.playerStateMap.get(id)?.getState(KEY_DEFERRED_ASSETS_READY) === true));
+  }
+
+  /** Scene-lokale Asset-Bereitschaft; bleibt bei Runden-/World-Wechseln erhalten. */
+  setLocalDeferredAssetsReady(ready: boolean): void {
+    const player = myPlayer();
+    if (player.getState(KEY_DEFERRED_ASSETS_READY) !== ready) {
+      player.setState(KEY_DEFERRED_ASSETS_READY, ready, true);
+    }
   }
 
   /** Host-only: setzt einen spaeter beigetretenen Roster-Eintrag auf Spectator. */

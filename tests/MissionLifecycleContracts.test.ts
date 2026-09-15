@@ -150,6 +150,17 @@ describe('mission lifecycle – Start und Freigabe', () => {
       setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
       expect(host.areWorldParticipantsLoadReady()).toBe(true);
 
+      // World-ready and player-ready do not imply that the second asset phase is ready.
+      host.setLocalReady(true);
+      expect(host.getPlayerReady(host.getLocalPlayerId())).toBe(true);
+      expect(host.areWorldParticipantsLoadReady(true)).toBe(false);
+      host.setLocalDeferredAssetsReady(true);
+      expect(host.areWorldParticipantsLoadReady(true)).toBe(false);
+      setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
+      client.setLocalDeferredAssetsReady(true);
+      setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+      expect(host.areWorldParticipantsLoadReady(true)).toBe(true);
+
       const now = 1_000_000;
       const arenaStartTime = resolveArenaStartTime(now);
       host.setArenaStartTime(arenaStartTime);

@@ -1,4 +1,6 @@
 export const deUi = {
+  "ui.lobby.deferredLoading": "Spielinhalte werden nachgeladen …",
+  "ui.lobby.deferredFailed": "Erforderliche Spielinhalte konnten nicht geladen werden.",
   "ui.turretControl.enter": "Shift: Bemannen",
   "ui.stinkCloud.active": "Aktiv",
   "ui.stinkCloud.cooldown": "Abklingzeit",

@@ -694,7 +694,8 @@ function writeBalanceLabDocument(document: CoopDefenseBalanceLabDocument): void 
 function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV2 | null {
   if (!isRecord(raw) || (raw.schemaVersion !== 1 && raw.schemaVersion !== LOCAL_SETTINGS_SCHEMA_VERSION)) return null;
   if (!isRecord(raw.audio) || !isRecord(raw.graphics)) return null;
-  const { masterVolume, effectsVolume, musicVolume } = raw.audio;
+  const { masterVolume, effectsVolume } = raw.audio;
+  const musicVolume = raw.audio.musicVolume === undefined ? SOUND_MUSIC_VOLUME : raw.audio.musicVolume;
   if (![masterVolume, effectsVolume, musicVolume].every((value) => (
     typeof value === 'number' && Number.isFinite(value)
   ))) return null;

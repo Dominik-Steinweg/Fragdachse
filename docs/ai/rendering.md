@@ -16,6 +16,20 @@ Rendering visualisiert World- und Activity-Zustand, besitzt aber keine Gameplay-
 
 [PresentationPolicy.ts](../../src/world/PresentationPolicy.ts) und [InputPolicy.ts](../../src/world/InputPolicy.ts) sind reine Ableitungen. Sie entscheiden nicht über Host-Autorität, Treffer oder Ressourcen.
 
+## Zweite Asset-Ladephase und Musik
+
+[DeferredAssets.ts](../../src/assets/DeferredAssets.ts) besitzt die zweite Ladephase fuer die
+Lebensdauer der ArenaScene. Nur zum Lobby-Reveal unnoetige Inhalte gehoeren in `DEFERRED_ASSETS`.
+Lobby-Freigabe und direkte Arena-Einstiege starten denselben idempotenten Owner; UI und Audio
+beobachten ihn. Audio ist erst nach Phasers Verarbeitung/Decodierung verwendbar. Browser-Freigabe,
+Lautstaerke und Wiedergabe gehoeren dagegen allein dem Audio-System und sind keine Ladebedingungen.
+
+Der Arenastart erweitert die World-Ladebarriere um die separat zu Spieler-Ready und World-Revision
+replizierte Asset-Bereitschaft aller verbundenen aktiven World-Teilnehmer. Der lokale Arena-Aufbau
+wartet vor der ersten Verwendung nachgeladener Inhalte; dieses Warten verbraucht keine
+Descriptor- oder Terrain-Timeouts. Nur explizit optionale Inhalte duerfen nach begrenzten
+Fehlversuchen fehlen; erforderliche Inhalte geben die Barriere bei Fehlern nicht frei.
+
 ## Designraum und Koordinaten
 
 [src/graphics/RenderResolution.ts](../../src/graphics/RenderResolution.ts) hält Designraum, Renderauflösung, Device-Pixel-Ratio und Pointer-Umrechnung zusammen. Kamera und Canvas skalieren gemeinsam; die Kamera beginnt im Designraum am vereinbarten Ursprung, damit Screen-fixed UI und World-Inhalt nicht auseinanderdriften.

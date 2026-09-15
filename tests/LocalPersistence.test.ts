@@ -13,6 +13,8 @@ import {
   getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
+  getStoredMusicVolume,
+  setStoredMusicVolume,
   getStoredPlayerName,
   getStoredLocale,
   importStoredGameProgressJson,
@@ -99,6 +101,39 @@ describe('local progress generation', () => {
     invalidateLocalStorageCache();
     expect(getStoredGraphicsQuality()).toBe('high');
     expect(getStoredMasterVolume()).toBe(0.2);
+  });
+
+  it('enables unconfigured music while preserving saved volume including mute', () => {
+    expect(getStoredMusicVolume()).toBeGreaterThan(0);
+    setStoredMusicVolume(0);
+    invalidateLocalStorageCache();
+    expect(getStoredMusicVolume()).toBe(0);
+    setStoredMusicVolume(0.27);
+    invalidateLocalStorageCache();
+    expect(getStoredMusicVolume()).toBe(0.27);
+  });
+
+  it('fills unconfigured music in current settings without resetting other saved settings', () => {
+    storage.setItem(LOCAL_SETTINGS_STORAGE_KEY, JSON.stringify({
+      schemaVersion: 2, locale: 'de', audio: { masterVolume: 0, effectsVolume: 0.3 },
+      graphics: { quality: 'low' },
+    }));
+    expect(getStoredMusicVolume()).toBeGreaterThan(0);
+    expect(getStoredMasterVolume()).toBe(0);
+    expect(getStoredGraphicsQuality()).toBe('low');
+  });
+
+  it('fills missing legacy music settings but preserves an explicit legacy mute', () => {
+    storage.setItem(LEGACY_LOCAL_PREFERENCES_KEY, JSON.stringify({
+      version: 18, audio: { masterVolume: 0.2, effectsVolume: 0.3 },
+    }));
+    expect(getStoredMusicVolume()).toBeGreaterThan(0);
+    storage.clear();
+    invalidateLocalStorageCache();
+    storage.setItem(LEGACY_LOCAL_PREFERENCES_KEY, JSON.stringify({
+      version: 18, audio: { masterVolume: 0.2, effectsVolume: 0.3, musicVolume: 0 },
+    }));
+    expect(getStoredMusicVolume()).toBe(0);
   });
 
   it('migrates a legacy utility once and preserves an explicit empty tool selection', () => {

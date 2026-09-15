@@ -88,8 +88,7 @@ class ForestUiPreview extends Phaser.Scene {
       const volume = { master: .75, effects: .65, music: .4 };
       const audio = { getMasterVolume: () => volume.master, getEffectsVolume: () => volume.effects, getMusicVolume: () => volume.music,
         setMasterVolume: (v: number) => { volume.master = v; }, setEffectsVolume: (v: number) => { volume.effects = v; },
-        setMusicVolume: (v: number) => { volume.music = v; }, playLocalSound: () => status('Audio-Vorschau ausgelöst'),
-        subscribeMusicLoadState: (listener: (state: null) => void) => { listener(null); return () => {}; } } as unknown as GameAudioSystem;
+        setMusicVolume: (v: number) => { volume.music = v; }, playLocalSound: () => status('Audio-Vorschau ausgelöst') } as unknown as GameAudioSystem;
       const overlay = new OptionsOverlay(this, audio, this.quality); this.overlay = overlay;
       overlay.setAbortMatchBinding({ canAbort: () => !locked && variant !== 'client', abort: closed });
       overlay.setSpectatorMatchBinding({ canSpectate: () => !locked, spectate: closed });
