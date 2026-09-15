@@ -1360,15 +1360,17 @@ export class ArenaScene extends Phaser.Scene {
       presentationPolicy,
     } = frame;
 
-    // The camera must already be positioned while the world is hidden, because its initial view
-    // defines the startup working set that the load barrier waits for.
-    this.arenaRuntime.presentation.syncWorldCamera(delta, presentationPolicy.showWorld);
+    // Loading work must run under the veil: visibility itself waits for the ready barrier.
+    // The same prepared camera view defines both startup residency and the subsequent reveal.
+    const prepareWorldSurfaces = presentationPolicy.showWorld
+      || (arenaLoading && worldActive && localWorldPresentation.required && !terminated);
+    this.arenaRuntime.presentation.syncWorldCamera(delta, prepareWorldSurfaces);
     // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
     // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
     // dazukommt.
-    if (presentationPolicy.showWorld) {
-      this.arenaRuntime.presentation.syncWorldSurfaceResidency(presentationPolicy.showWorld);
+    if (prepareWorldSurfaces) {
+      this.arenaRuntime.presentation.syncWorldSurfaceResidency(prepareWorldSurfaces);
     }
     // Der Owner loest die zentrale Policy auf und taktet den vorhandenen InputSystem; die Scene
     // liefert nur den bereits orchestrierten World-/Round-/UI-Framekontext.

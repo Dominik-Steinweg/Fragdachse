@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { getDeferredAssets } from '../../src/assets/DeferredAssets';
+import { WaterSurfaceRenderer } from '../../src/arena/WaterSurfaceRenderer';
+import { ArenaBuilder } from '../../src/arena/ArenaBuilder';
+import { WorldPresentationFrameBinding } from '../../src/world/WorldPresentationFrameBinding';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -790,6 +793,76 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(coordinator.getWorldRevealState(null).ready).toBe(true);
     coordinator.syncArenaLoadReady(null);
     expect(publishReady).toHaveBeenLastCalledWith(7, true);
+  });
+
+  it.each([true, false])('withholds reveal and replicated Ready until off-camera water is prepared (host=%s)', isHost => {
+    const water = new WaterSurfaceRenderer({} as never,
+      { offsetX: 0, offsetY: 0, width: 4096, height: 512 },
+      [{ gridX: 1, gridY: 1 }, { gridX: 111, gridY: 1 }], 1);
+    const arena = { waterSurface: water, groundSurface: { isReadyForView: () => true, getWorkingSet: () => null },
+      rockOverlaySurface: { isReadyForView: () => true, getWorkingSet: () => null } };
+    const camera = { scrollX: 0, scrollY: 0, width: 100, height: 100, originX: 0, originY: 0, zoom: 1 };
+    const frame = new WorldPresentationFrameBinding({ getArenaResult: () => arena,
+      scene: { cameras: { main: camera } },
+      lighting: { setDynamicOccluderSource: () => {} },
+      shadow: { getStaticSurfaceWorkingSet: () => null, isStaticReadyForView: () => true,
+        updateStaticResidency: () => {} } } as never);
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.arenaBuilt = true;
+    coordinator.terrainSnapshotReady = true;
+    coordinator.worldRuntime = {
+      materialization: { arena }, presentation: { layout: {} }, presentationFrame: frame,
+    };
+    coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => true } };
+    coordinator.getLocalWorldPresentation = () => ({ required: true });
+    coordinator.syncAuthoritativeRoundStartAnchors = vi.fn();
+    coordinator.tryScheduleArenaStart = vi.fn();
+    vi.spyOn(bridge, 'isHost').mockReturnValue(isHost);
+    vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(false);
+    vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue({ worldRevision: 7 } as any);
+    const publish = vi.spyOn(bridge, 'setLocalWorldLoadProgress').mockImplementation(() => {});
+    const view = { x: 0, y: 0, width: 100, height: 100 };
+    // Run the actual Scene update through surface preparation. Stop at the following input
+    // boundary to keep this fixture independent of unrelated gameplay/HUD consumers.
+    const afterSurfaces = new Error('frame reached input');
+    const scene = Object.create(ArenaScene.prototype) as any;
+    const presentation = resolveWorldPresentation({ participation: 'interactive', worldActive: true });
+    const policy = resolvePresentationPolicy({ inLobby: false, worldPresentation: presentation,
+      worldVisible: false, gameplayActive: false, roundRole: 'participant', matchTerminated: false,
+      spectatorPanAvailable: true });
+    expect(policy.showWorld).toBe(false);
+    scene.resolveArenaFrameSignals = () => ({ arenaLoading: true, worldActive: true,
+      localWorldPresentation: presentation, presentationPolicy: policy, terminated: false });
+    scene.arenaRuntime = { detectPhaseChange: () => {}, hostSyncLobbyWorld: () => {}, syncRoomOwners: () => {},
+      detectWorldChange: () => {}, update: () => {}, presentation: {
+        syncWorldCamera: vi.fn(), syncWorldSurfaceResidency: (active: boolean) => frame.syncSurfaceResidency(active),
+      } };
+    scene.inputBindings = { updateFrame: () => { throw afterSurfaces; } };
+    vi.spyOn(bridge, 'updateNetwork').mockImplementation(() => {});
+    vi.spyOn(bridge, 'getGamePhase').mockReturnValue('ARENA');
+    // GPU residency is covered separately; retain real CPU preparation and ready aggregation.
+    vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
+    const prepare = water.prepareMasks;
+    vi.spyOn(water, 'prepareMasks').mockImplementation(() => prepare.call(water, 0));
+    const tick = () => expect(() => scene.update(0, 16)).toThrow(afterSurfaces);
+    try {
+      tick();
+      expect(water.prepareMasks).toHaveBeenCalledOnce();
+      expect(scene.arenaRuntime.presentation.syncWorldCamera).toHaveBeenLastCalledWith(16, true);
+      for (let i = 0; i < 2000 && water.getPreparationState().completed === 0; i++) tick();
+      expect(water.getPreparationState().completed).toBeGreaterThan(0);
+      expect(water.getPreparationState().pending).toBeGreaterThan(0);
+      expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+      coordinator.syncArenaLoadReady(view);
+      expect(publish).toHaveBeenLastCalledWith(7, expect.any(Number), 'rendering', false);
+      for (let i = 0; i < 2000 && !water.isPrepared(); i++) tick();
+      expect(water.isPrepared()).toBe(true);
+      expect(coordinator.getWorldRevealState(view).ready).toBe(true);
+      coordinator.syncArenaLoadReady(view);
+      expect(publish).toHaveBeenLastCalledWith(7, 100, 'ready', true);
+      water.destroy();
+      expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+    } finally { water.destroy(); }
   });
 
   it('laesst die Reveal-Abfrage nicht auf runden- oder netzseitige Bedingungen warten', () => {

@@ -363,13 +363,14 @@ export class WorldPresentationFrameBinding {
    * in den Arena-Update-Pfad, direkt nachdem die Kamera ihren finalen Scroll fuer diesen
    * Zeitpunkt hat (siehe `syncCamera`), mit Sicherheitsrand vor dem spaeteren Kamera-Feedback.
    *
-   * Laeuft ausschliesslich, waehrend diese World dargestellt wird – ohne Darstellung bleibt der
+   * Laeuft auch verdeckt waehrend des Ladens der lokalen Presentation. Ohne Presentation bleibt der
    * zuletzt residente Stand unangetastet stehen, die Welt verschwindet also nicht, sie waechst
    * nur nicht mit. Nach `destroy()` wirkungslos.
    */
   syncSurfaceResidency(showWorld: boolean): void {
     if (this.destroyed || !showWorld) return;
     const worldView = getVisibleWorldView(this.input.scene.cameras.main);
+    this.input.getArenaResult()?.waterSurface?.prepareMasks();
     ArenaBuilder.updateSurfaceResidency(this.input.getArenaResult(), worldView);
     const wildlife = this.input.getArenaResult()?.wildlife;
     if (wildlife) {
@@ -447,13 +448,16 @@ export class WorldPresentationFrameBinding {
     const groundWork = arenaResult?.groundSurface?.getWorkingSet(view, true) ?? null;
     const rockOverlayWork = arenaResult?.rockOverlaySurface?.getWorkingSet(view, true) ?? null;
     const shadowWork = this.input.shadow.getStaticSurfaceWorkingSet(view, true);
+    const waterWork = arenaResult?.waterSurface?.getPreparationState();
     return {
       pending: (groundWork?.pendingWork ?? 0)
         + (rockOverlayWork?.pendingWork ?? 0)
-        + (shadowWork?.pendingWork ?? 0),
+        + (shadowWork?.pendingWork ?? 0)
+        + (waterWork?.pending ?? 0),
       resident: (groundWork?.residentChunks ?? 0)
         + (rockOverlayWork?.residentChunks ?? 0)
-        + (shadowWork?.residentChunks ?? 0),
+        + (shadowWork?.residentChunks ?? 0)
+        + (waterWork?.completed ?? 0),
       // Surface-Readiness bleibt die Authority; Working-Set-Daten liefern nur den
       // view-bezogenen Fortschritt.
       renderReady: ArenaBuilder.isSurfaceWorkingSetReady(arenaResult, view)

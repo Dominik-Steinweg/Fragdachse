@@ -531,12 +531,13 @@ export class ArenaBuilder {
   /**
    * Startup-ready means that both streamed ground surfaces have all visible and prefetched
    * chunks, including their render targets, fully baked. The large map outside this working set
-   * remains ordinary runtime streaming.
+   * remains ordinary runtime streaming. Water CPU masks must be prepared for the entire World.
    */
   static isSurfaceWorkingSetReady(result: ArenaBuilderResult | null, view: ChunkWorldRect): boolean {
     if (!result?.groundSurface || !result.rockOverlaySurface) return false;
     return result.groundSurface.isReadyForView(view, true)
-      && result.rockOverlaySurface.isReadyForView(view, true);
+      && result.rockOverlaySurface.isReadyForView(view, true)
+      && (result.waterSurface?.isPrepared() ?? true);
   }
 
 

@@ -9484,13 +9484,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one small secondary rocket ground burst: a tight dry crack, compact low punch, gravel scattering and a very short gritty decay, clearly smaller than the main rocket impact. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
-        "source": "astra",
+        "text": "TrackType: SFX, one small secondary rocket explosion: compact low punch, single isolated event, detailed action-game sound",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
-        "model": "medium",
-        "duration_seconds": 2,
+        "model": "small-sfx-comfyui",
+        "duration_seconds": 3,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -9567,7 +9567,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "03f49534bff8eb2cf09097fbb2ecc609a57c96dd12de382ba3c4ca2528368583",
+        "file_hash": "ddf85872dc4520ed910d8e85dd1a76bda8653bdc5d1fab14be7c12674b6b20f3",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_rocket_aftershock"
@@ -9766,13 +9766,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one compact high-energy timebomb detonation: a sharp casing rupture, forceful low blast, metallic fragments and a short hot crackling decay, no countdown or ticking. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom, no music, speech or background ambience.",
-        "source": "astra",
+        "text": "TrackType: SFX, one high-energy sci-fi detonation played backwards: a sharp casing rupture, forceful low blast, no countdown or ticking. Single isolated event, immediate attack, punchy detailed action-game sound, clean headroom",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 3,
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -9825,7 +9825,7 @@
         "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
+        "file_hash": "a71c9ca76db5bbdf134a1f248ab2a1d16ca6e4c1dbc3914a5b8fc377d26e1dd3",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_timebomb"

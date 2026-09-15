@@ -3,26 +3,60 @@ import { DEPTH } from '../config';
 import type { WaterCell } from '../types';
 import { ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX,
   type ChunkWorldFrame, type ChunkWorldRect } from './chunks/ArenaChunkGrid';
-import { WaterSurfaceModel, WATER_MASK_HALO } from './WaterSurfaceModel';
+import { WaterSurfaceModel, WATER_MASK_HALO, type WaterMask } from './WaterSurfaceModel';
 import { WATER_FRAGMENT, WATER_SHADER_NAME } from './waterSurfaceShader';
 
 let nextWaterSurfaceId = 0;
 interface WaterChunk { x: number; y: number; quad: Phaser.GameObjects.Shader; key: string }
 
-/** One quad and one immutable packed mask per resident water chunk, owned by World presentation. */
+/** World-lifetime CPU masks; only camera-resident chunks own textures and shaders. */
 export class WaterSurfaceRenderer {
   private readonly id = nextWaterSurfaceId++;
-  private readonly model: WaterSurfaceModel;
-  private readonly occupied = new Set<string>();
+  private preparation: Generator<void, void> | null = null;
+  private readonly masks = new Map<string, WaterMask>();
+  private readonly totalMasks: number;
+  private destroyed = false;
   private readonly chunks = new Map<string, WaterChunk>();
   constructor(private readonly scene: Phaser.Scene, private readonly frame: ChunkWorldFrame,
     water: readonly WaterCell[], private readonly seed: number) {
-    this.model = new WaterSurfaceModel(water, frame);
-    for (const origin of this.model.getChunkOrigins(ARENA_RENDER_CHUNK_SIZE, frame.width, frame.height))
-      this.occupied.add(`${origin.x / ARENA_RENDER_CHUNK_SIZE},${origin.y / ARENA_RENDER_CHUNK_SIZE}`);
+    const model = new WaterSurfaceModel(water, frame);
+    const origins = model.getChunkOrigins(ARENA_RENDER_CHUNK_SIZE, frame.width, frame.height);
+    this.totalMasks = origins.length;
+    if (origins.length) this.preparation = this.bakeMasks(model, origins);
+  }
+
+  private *bakeMasks(model: WaterSurfaceModel, origins: { x: number; y: number }[]): Generator<void, void> {
+    for (const { x, y } of origins) {
+      const mask = yield* model.bakeSteps(x, y, ARENA_RENDER_CHUNK_SIZE);
+      this.masks.set(`${x / ARENA_RENDER_CHUNK_SIZE},${y / ARENA_RENDER_CHUNK_SIZE}`, mask);
+      yield;
+    }
+  }
+
+  /** Called once per presentation frame before residency, while the load barrier is closed.
+   * Returning to the scene loop gives the loading UI an actual rendered frame between batches.
+   * No callbacks survive teardown; a handoff holds (and later resumes) this same owner.
+   */
+  prepareMasks(budgetMs = 4): void {
+    if (this.destroyed || !this.preparation) return;
+    const deadline = performance.now() + budgetMs;
+    do {
+      if (this.preparation.next().done) {
+        this.preparation = null;
+        return;
+      }
+    } while (performance.now() < deadline);
+  }
+
+  isPrepared(): boolean { return !this.destroyed && this.preparation === null; }
+
+  getPreparationState(): { pending: number; completed: number; bytes: number } {
+    const bytes = this.masks.size * (this.masks.values().next().value?.data.byteLength ?? 0);
+    return { pending: this.destroyed ? 0 : this.totalMasks - this.masks.size, completed: this.masks.size, bytes };
   }
 
   updateResidency(view: ChunkWorldRect): void {
+    if (!this.isPrepared()) return;
     const size = ARENA_RENDER_CHUNK_SIZE;
     const intersects = (x: number, y: number, margin: number): boolean => x + size >= view.x - margin
       && y + size >= view.y - margin && x <= view.x + view.width + margin && y <= view.y + view.height + margin;
@@ -37,8 +71,9 @@ export class WaterSurfaceRenderer {
     const maxY = Math.min(Math.ceil(this.frame.height / size) - 1, Math.floor((view.y + view.height + margin - this.frame.offsetY) / size));
     for (let cy = minY; cy <= maxY; cy++) for (let cx = minX; cx <= maxX; cx++) {
       const id = `${cx},${cy}`;
-      if (!this.occupied.has(id) || this.chunks.has(id)) continue;
-      const mask = this.model.bake(cx * size, cy * size, size);
+      if (this.chunks.has(id)) continue;
+      const mask = this.masks.get(id);
+      if (!mask) continue;
       const key = `__water_${this.id}_${id}`;
       const texture = this.scene.textures.createCanvas(key, mask.size, mask.size);
       if (!texture) throw new Error('[WaterSurfaceRenderer] Cannot allocate mask');
@@ -61,6 +96,11 @@ export class WaterSurfaceRenderer {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.preparation?.return();
+    this.preparation = null;
+    this.masks.clear();
     for (const chunk of this.chunks.values()) { chunk.quad.destroy(); this.scene.textures.remove(chunk.key); }
     this.chunks.clear();
   }

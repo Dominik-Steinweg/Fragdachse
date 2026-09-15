@@ -9,6 +9,8 @@ vi.mock('phaser', async () => {
 
 import type { ArenaBuilderResult } from '../../src/arena/ArenaBuilder';
 import { ArenaBuilder } from '../../src/arena/ArenaBuilder';
+import { WaterSurfaceRenderer } from '../../src/arena/WaterSurfaceRenderer';
+import { WaterSurfaceModel } from '../../src/arena/WaterSurfaceModel';
 import { applyArenaWorldMetrics, type ArenaMetricsProfile } from '../../src/config';
 import type { ArenaLayout } from '../../src/types';
 import { WorldLifecycle, type WorldLifecycleSink } from '../../src/world/WorldLifecycle';
@@ -382,6 +384,50 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     expect(updateSurfaceResidency).toHaveBeenCalledTimes(1);
 
     updateSurfaceResidency.mockRestore();
+  });
+
+  it('prepares all water over frames, pauses in handoff, and resumes without losing masks', () => {
+    const scene = fakeScene();
+    const water = new WaterSurfaceRenderer(scene,
+      { offsetX: 0, offsetY: 0, width: 4096, height: 512 },
+      [{ gridX: 1, gridY: 1 }, { gridX: 111, gridY: 1 }], 1);
+    const arena = { waterSurface: water, groundSurface: { isReadyForView: () => true },
+      rockOverlaySurface: { isReadyForView: () => true } } as unknown as ArenaBuilderResult;
+    const input = fakeBindingInput(scene, { getArenaResult: () => arena });
+    const frame = new WorldPresentationFrameBinding(input);
+    const presentation = new WorldPresentationBinding({} as ArenaLayout, arena,
+      { destroyPresentation: () => water.destroy() });
+    const handoff = new WorldPresentationHandoff();
+    const residency = vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
+    const bake = vi.spyOn(WaterSurfaceModel.prototype, 'bakeSteps');
+    const prepare = water.prepareMasks;
+    vi.spyOn(water, 'prepareMasks').mockImplementation(() => prepare.call(water, 0));
+    const view = { x: 0, y: 0, width: 100, height: 100 };
+    try {
+      expect(ArenaBuilder.isSurfaceWorkingSetReady(arena, view)).toBe(false);
+      frame.syncSurfaceResidency(true);
+      expect(water.getPreparationState().completed).toBe(0);
+      while (water.getPreparationState().completed === 0) frame.syncSurfaceResidency(true);
+      expect(ArenaBuilder.isSurfaceWorkingSetReady(arena, view)).toBe(false);
+      expect(water.getPreparationState().pending).toBeGreaterThan(0); // off-camera pond
+      frame.destroy();
+      handoff.release(presentation);
+      const held = water.getPreparationState();
+      frame.syncSurfaceResidency(true);
+      expect(water.getPreparationState()).toEqual(held);
+      expect(handoff.adopt()).toBe(presentation);
+      const nextFrame = new WorldPresentationFrameBinding(input);
+      while (!water.isPrepared()) nextFrame.syncSurfaceResidency(true);
+      expect(ArenaBuilder.isSurfaceWorkingSetReady(arena, view)).toBe(true);
+      expect(bake).toHaveBeenCalledTimes(water.getPreparationState().completed);
+      nextFrame.destroy();
+      handoff.release(presentation);
+      handoff.discard();
+      expect(water.getPreparationState()).toEqual({ completed: 0, pending: 0, bytes: 0 });
+      expect(presentation.isDestroyed()).toBe(true);
+    } finally {
+      residency.mockRestore(); bake.mockRestore(); water.destroy();
+    }
   });
 
   it('ticks wildlife in an empty preview, reads visible players, and stops before presentation handoff', () => {

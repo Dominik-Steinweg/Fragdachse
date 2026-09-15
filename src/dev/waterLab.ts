@@ -198,6 +198,7 @@ class WaterLab extends Phaser.Scene {
       this.body.setVelocity(direction.dx * scale, direction.dy * scale);
     }
     this.actor.setPosition(this.proxy.x, this.proxy.y);
+    this.surface.prepareMasks();
     this.surface.updateResidency(this.cameras.main.worldView);
   }
 }

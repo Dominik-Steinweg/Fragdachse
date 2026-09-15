@@ -122,6 +122,7 @@ class WildlifeLab extends Phaser.Scene {
     }
     const players = this.actor.visible ? [{ id: 'probe', x: this.actor.x, y: this.actor.y }] : [];
     const view = this.cameras.main.worldView;
+    this.water.prepareMasks();
     this.water.updateResidency(view);
     this.wildlife.update(delta, players, view);
     const animals = this.wildlife.model.animals;

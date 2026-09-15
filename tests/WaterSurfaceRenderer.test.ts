@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ objects: [] as { destroy: ReturnType<typeof vi.fn> }[] }));
 vi.mock('phaser', () => ({
   Textures: { FilterMode: { LINEAR: 1 } }, BlendModes: { NORMAL: 0 },
@@ -11,7 +11,13 @@ vi.mock('phaser', () => ({
 }));
 import { WaterSurfaceRenderer } from '../src/arena/WaterSurfaceRenderer';
 import { CELL_SIZE } from '../src/config';
-import { WATER_MASK_HALO, WATER_MASK_STEP } from '../src/arena/WaterSurfaceModel';
+import { WaterSurfaceModel, WATER_MASK_HALO, WATER_MASK_STEP } from '../src/arena/WaterSurfaceModel';
+
+afterEach(() => vi.restoreAllMocks());
+
+function prepare(renderer: WaterSurfaceRenderer): void {
+  while (!renderer.isPrepared()) renderer.prepareMasks();
+}
 
 describe('Water presentation residency', () => {
   it('continues the baked boundary using local map dimensions in an offset world', () => {
@@ -26,6 +32,7 @@ describe('Water presentation residency', () => {
     const water = Array.from({ length: 8 * 6 }, (_, i) => ({ gridX: i % 8, gridY: Math.floor(i / 8) }));
     const renderer = new WaterSurfaceRenderer(scene as never,
       { offsetX: -700, offsetY: 350, width, height }, water, 1);
+    prepare(renderer);
     renderer.updateResidency({ x: -700, y: 350, width, height });
     expect(putImageData).toHaveBeenCalledTimes(1);
     const pixels = putImageData.mock.calls[0][0] as { width: number; data: Uint8ClampedArray };
@@ -53,6 +60,15 @@ describe('Water presentation residency', () => {
       { offsetX: 100, offsetY: 50, width: 4096, height: 1024 },
       [{ gridX: 15, gridY: 15 }, { gridX: 16, gridY: 15 }, { gridX: 16, gridY: 16 }, { gridX: 100, gridY: 15 }], 1);
     const near = { x: 100, y: 50, width: 800, height: 700 };
+    const bake = vi.spyOn(WaterSurfaceModel.prototype, 'bake');
+    const steps = vi.spyOn(WaterSurfaceModel.prototype, 'bakeSteps');
+    renderer.updateResidency(near);
+    expect(createCanvas).not.toHaveBeenCalled();
+    expect(steps).not.toHaveBeenCalled();
+    prepare(renderer);
+    const prepared = renderer.getPreparationState();
+    expect(prepared.pending).toBe(0);
+    expect(steps).toHaveBeenCalledTimes(prepared.completed);
     renderer.updateResidency(near);
     const initial = createCanvas.mock.calls.length;
     expect(initial).toBeGreaterThan(1);
@@ -63,7 +79,12 @@ describe('Water presentation residency', () => {
     // The far pond ends at y=512: its soft bank also occupies the next chunk row.
     expect(textures.size).toBe(2);
     renderer.updateResidency(near);
+    expect(renderer.getPreparationState()).toEqual(prepared);
+    expect(steps).toHaveBeenCalledTimes(prepared.completed);
+    expect(bake).not.toHaveBeenCalled();
     renderer.destroy(); renderer.destroy();
+    renderer.prepareMasks(); renderer.updateResidency(near);
+    expect(renderer.getPreparationState()).toEqual({ pending: 0, completed: 0, bytes: 0 });
     expect(textures.size).toBe(0);
     expect(state.objects.every(object => object.destroy.mock.calls.length === 1)).toBe(true);
   });
@@ -78,6 +99,7 @@ describe('Water presentation residency', () => {
     } };
     const renderer = new WaterSurfaceRenderer(scene as never,
       { offsetX: 100, offsetY: 50, width: 1024, height: 512 }, [{ gridX: 15, gridY: 8 }], 1);
+    prepare(renderer);
     renderer.updateResidency({ x: 100, y: 50, width: 1024, height: 512 });
     expect(state.objects).toEqual([
       expect.objectContaining({ x: 356, y: 306 }),
@@ -85,5 +107,33 @@ describe('Water presentation residency', () => {
     ]);
     renderer.destroy();
     expect(state.objects.every(object => object.destroy.mock.calls.length === 1)).toBe(true);
+  });
+  it('needs no work or resources for a dry world', () => {
+    const bake = vi.spyOn(WaterSurfaceModel.prototype, 'bakeSteps');
+    const renderer = new WaterSurfaceRenderer({} as never,
+      { offsetX: 0, offsetY: 0, width: 8192, height: 8192 }, [], 1);
+    expect(renderer.isPrepared()).toBe(true);
+    renderer.prepareMasks();
+    renderer.updateResidency({ x: 0, y: 0, width: 8192, height: 8192 });
+    expect(renderer.getPreparationState()).toEqual({ pending: 0, completed: 0, bytes: 0 });
+    renderer.destroy();
+    expect(bake).not.toHaveBeenCalled();
+  });
+
+  it('releases completed masks and suspended scratch work when loading is aborted', () => {
+    const renderer = new WaterSurfaceRenderer({} as never,
+      { offsetX: 0, offsetY: 0, width: 2048, height: 512 },
+      [{ gridX: 1, gridY: 1 }, { gridX: 50, gridY: 1 }], 1);
+    // Zero budget advances exactly one row batch, so cancellation also covers a partial bake.
+    while (renderer.getPreparationState().completed === 0) renderer.prepareMasks(0);
+    renderer.prepareMasks(0);
+    renderer.prepareMasks(0);
+    expect(renderer.isPrepared()).toBe(false);
+    const steps = vi.spyOn(WaterSurfaceModel.prototype, 'bakeSteps');
+    renderer.destroy();
+    renderer.prepareMasks();
+    expect(renderer.isPrepared()).toBe(false);
+    expect(renderer.getPreparationState()).toEqual({ pending: 0, completed: 0, bytes: 0 });
+    expect(steps).not.toHaveBeenCalled();
   });
 });
