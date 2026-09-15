@@ -121,7 +121,7 @@ export function composeWorldPlayerGameplay(
         broadcastPortalCollapse: (pair, radius) => bridge.broadcastPortalCollapse(pair, radius),
         getPlayerColor: (playerId) => bridge.getPlayerColor(playerId),
         broadcastTranslocatorFlash: (x, y, color, phase, ownerId) => bridge.broadcastTranslocatorFlash(x, y, color, phase, ownerId),
-        broadcastExplosionEffect: (x, y, radius, color, visualStyle) => bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle),
+        broadcastExplosionEffect: (x, y, radius, color, visualStyle, chargeDamage, audioSourceId) => bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle, chargeDamage, audioSourceId),
         broadcastShotFx: (event) => bridge.broadcastShotFx(event),
         broadcastFireChunkEffect: (x, y, targets, landsAt, visualStyle) => bridge.broadcastFireChunkEffect(x, y, targets, landsAt, visualStyle),
         broadcastMiniRocketCollectionEffect: (x, y, color) => bridge.broadcastMiniRocketCollectionEffect(x, y, color),

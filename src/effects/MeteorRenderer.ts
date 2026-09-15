@@ -3,7 +3,6 @@ import type { SyncedMeteorStrike } from '../types';
 import { DEPTH, DEPTH_FX, VOID_PALETTE } from '../config';
 import { circleZone, makeAdditive, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
-import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from './camera/cameraFeedbackPresets';
 
@@ -55,7 +54,6 @@ export class MeteorRenderer {
   private visuals = new Map<number, MeteorWarningVisual>();
   /** IDs die beim letzten sync() aktiv waren – zum Erkennen des Einschlags */
   private previousIds = new Set<number>();
-  private audioSystem: GameAudioSystem | null = null;
   private cameraFeedback: CameraFeedbackController | null = null;
 
   constructor(scene: Phaser.Scene) {
@@ -66,11 +64,7 @@ export class MeteorRenderer {
     this.cameraFeedback = controller;
   }
 
-  setAudioSystem(system: GameAudioSystem): void {
-    this.audioSystem = system;
-  }
-
-  // ── Texturen ──────────────────────────────────────────────────────────────
+// ── Texturen ──────────────────────────────────────────────────────────────
 
   generateTextures(): void {
     const texMgr = this.scene.textures;
@@ -159,7 +153,6 @@ export class MeteorRenderer {
       // Wenn der Meteor gerade verschwunden ist → Einschlag (nicht bei bereits explodierten)
       if (this.previousIds.has(id)) {
         this.playImpactEffect(visual);
-        this.audioSystem?.playSound('sfx_explosion_armageddon', visual.warningCircle.x, visual.warningCircle.y);
       }
 
       this.destroyWarningVisual(visual);

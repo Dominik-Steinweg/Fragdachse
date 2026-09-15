@@ -1,3 +1,5 @@
+import { resolveAvailableExplosionKey } from './ExplosionAudio';
+import type { AudioAssetKey } from './AudioCatalog';
 import * as Phaser from 'phaser';
 import {
   SHOT_AUDIO_PAN_RANGE,
@@ -137,6 +139,7 @@ export class GameAudioSystem {
     volumeScale = 1,
   ): void {
     if (isMusicAudioKey(soundKey)) return;
+    if (soundKey) soundKey = resolveAvailableExplosionKey(soundKey as AudioAssetKey, key => this.scene.cache.audio.exists(key));
     if (!this.admitOneShot(soundKey)) return;
     if (!SOUND_ENABLED || !soundKey || !this.scene.cache.audio.exists(soundKey)) return;
 
@@ -165,6 +168,7 @@ export class GameAudioSystem {
    */
   playLocalSound(soundKey: AudioKey | undefined, volumeScale = 1): void {
     if (isMusicAudioKey(soundKey)) return;
+    if (soundKey) soundKey = resolveAvailableExplosionKey(soundKey as AudioAssetKey, key => this.scene.cache.audio.exists(key));
     if (!this.admitOneShot(soundKey)) return;
     if (!SOUND_ENABLED || !soundKey || !this.scene.cache.audio.exists(soundKey)) return;
 

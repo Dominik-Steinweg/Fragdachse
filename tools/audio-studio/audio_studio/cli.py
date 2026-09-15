@@ -32,6 +32,8 @@ def main():
     serve = commands.add_parser("serve", help="Start one local server and open the Studio")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--no-open", action="store_true")
+    stop = commands.add_parser("stop", help="Stop this project's Studio, including after its HTTP port closes")
+    stop.add_argument("--force", action="store_true", help="Force a verified Windows owner to exit if graceful stop stalls")
     commands.add_parser("doctor", help="Report actual local model and hardware prerequisites")
     smoke = commands.add_parser("smoke", help="Attempt a real local generation; never publishes")
     from .generators import registered_model_names
@@ -43,7 +45,10 @@ def main():
     recover.add_argument("transaction_id")
     args = parser.parse_args()
     try:
-        if args.command == "schema":
+        if args.command == "stop":
+            from .server_control import stop_server
+            result = stop_server(tool, force=args.force)
+        elif args.command == "schema":
             from .catalog import Catalog
             result = Catalog.model_json_schema()
         elif args.command == "doctor":
@@ -84,17 +89,45 @@ def main():
             elif args.command == "serve":
                 import uvicorn
                 from .server import create_app
+                from .server_control import ServerOwner
+
+                owner = ServerOwner(tool)
+
+                class StudioServer(uvicorn.Server):
+                    def handle_exit(self, sig, frame):
+                        super().handle_exit(sig, frame)
+                        owner.request_stop()
+
+                server = StudioServer(uvicorn.Config(create_app(studio), host="127.0.0.1",
+                                                    port=args.port, workers=1, timeout_graceful_shutdown=5))
+                owner.on_stop = lambda: setattr(server, "should_exit", True)
                 # One server/model owner even if two different workspace settings are used.
-                with FileLock(str(tool / ".server.lock"), timeout=0):
+                with owner:
                     studio.jobs.recover_interrupted()
                     studio.catalog.sync()
-                    if not args.no_open:
-                        threading.Timer(1, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}")).start()
-                    uvicorn.run(create_app(studio), host="127.0.0.1", port=args.port, workers=1)
+                    if owner.stopping.is_set():
+                        return
+                    browser_timer = None
+                    try:
+                        if not args.no_open:
+                            browser_timer = threading.Timer(1, lambda: None if owner.stopping.is_set()
+                                                            else webbrowser.open(f"http://127.0.0.1:{args.port}"))
+                            browser_timer.daemon = True
+                            browser_timer.start()
+                        server.run()
+                    finally:
+                        if browser_timer:
+                            browser_timer.cancel()
                 return
         print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
-    except Timeout:
-        print("Another Studio instance or writer owns this local project lock.", file=sys.stderr)
+    except KeyboardInterrupt:
+        return
+    except Timeout as exc:
+        if Path(exc.lock_file).name == ".server.lock":
+            print("Audio Studio is already running or still shutting down. Run npm stop, "
+                  "then npm start. If stuck: npm stop -- --force.", file=sys.stderr)
+        else:
+            print("Another Studio writer holds .studio.lock. Wait for its operation to finish and retry.", file=sys.stderr)
         raise SystemExit(1)
     except Exception as exc:
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)

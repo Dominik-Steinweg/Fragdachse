@@ -515,6 +515,8 @@ export type OverchargeFieldEffect = ReinforcementMatrixEffect;
 
 /** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
 export interface ProjectileExplosionConfig {
+  /** Presentation source when combat attribution groups several weapons together. */
+  readonly audioSourceId?: string;
   readonly rocketSupport?: RocketExplosionSupport;
   readonly excludeFriendlyPlayers?: boolean;
   readonly radius: number;

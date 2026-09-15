@@ -802,7 +802,7 @@ export class ArenaLifecycleCoordinator {
       markLightDirty: () => this.worldRuntime?.materialization?.lightOccluders?.markDirty(),
       grantPersistentBaseRewards: (rewardIds) => this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds),
       removeEnemyFromPlayerItems: (enemyId) => this.worldPlayerGameplayRuntime?.getPlayerCombatIntegrationPort().reactions.removeEnemy(enemyId),
-      broadcastExplosion: (x, y, radius, style) => bridge.broadcastExplosionEffect(x, y, radius, 0xb82fff, style),
+      broadcastExplosion: (x, y, radius, style) => bridge.broadcastExplosionEffect(x, y, radius, 0xb82fff, style, undefined, style === 'timebomb_pop' ? 'silent' : 'enemy.timebomb'),
       broadcastCorpseMarker: (corpseId, x, y, enemySize, lifetimeMs) => (
         bridge.broadcastCorpseMarker(corpseId, x, y, enemySize, lifetimeMs)
       ),
@@ -2589,7 +2589,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.effectSystem.playExplosionEffect(x, y, radius, color);
         },
         playExplosionSound: (x, y, volumeScale) => {
-          this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);
+          this.ctx.gameAudioSystem.playSound('sfx_explosion_base_destruction', x, y, undefined, volumeScale);
         },
         playFireChunks: (x, y, targets, landsAt, now) => {
           this.renderers.flamethrowerUpgrades.playFireChunkBurst(x, y, targets.map(target => ({ ...target, landsAt })), now, now);

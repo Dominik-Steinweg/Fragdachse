@@ -10,3 +10,5 @@ models/*
 *.log
 .studio.lock
 .server.lock
+.server-state.json
+.server-stop.json

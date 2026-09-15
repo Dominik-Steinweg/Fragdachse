@@ -38,5 +38,7 @@ export interface WeaponReactionNetworkPort {
     radius: number,
     color?: number,
     visualStyle?: ExplosionVisualStyle,
+    chargeDamage?: number,
+    audioSourceId?: string,
   ): void;
 }

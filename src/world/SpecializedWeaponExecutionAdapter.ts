@@ -82,6 +82,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
             trainDamageMult: 1.15,
           },
           explosion: {
+            audioSourceId: config.id,
             radius: fireball?.explosionRadius ?? 120,
             maxDamage: fireball?.explosionMaxDamage ?? 90,
             minDamage: fireball?.explosionMinDamage ?? 20,

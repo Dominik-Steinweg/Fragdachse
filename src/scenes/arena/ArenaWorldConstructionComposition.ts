@@ -54,7 +54,7 @@ export function composeWorldPowerUp(
     ),
     reportDiagnosticEvent: (type, fields) => flow.onDiagnosticEvent(type, fields),
     broadcastExplosion: (x, y, radius, color, style) => (
-      bridge.broadcastExplosionEffect(x, y, radius, color, style)
+      bridge.broadcastExplosionEffect(x, y, radius, color, style, undefined, style === 'void_nuke' ? 'enemy.void_nuke' : 'environment.nuke')
     ),
     applyNukeEnvironmentDamage: (x, y, radius, triggeredBy) => (
       hostUpdate.applyNukeEnvironmentDamage(x, y, radius, triggeredBy)
@@ -164,7 +164,7 @@ export function composeWorldConstruction(
           point.x, point.y, runtime.enemyDestroyedExplosionRadius ?? 0,
           runtime.enemyDestroyedExplosionKnockback ?? 0, runtime.ownerId, 0,
         );
-        try { bridge.broadcastExplosionEffect(point.x, point.y, runtime.enemyDestroyedExplosionRadius ?? 0); }
+        try { bridge.broadcastExplosionEffect(point.x, point.y, runtime.enemyDestroyedExplosionRadius ?? 0, undefined, undefined, undefined, 'environment.rock_collapse'); }
         catch (error) { console.error('[ConstructionWorldRuntime] Collapse presentation failed', error); }
       }
       if (runtime.kind === 'rock' && (cause === 'damage' || cause === 'decay')) {

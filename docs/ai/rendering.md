@@ -16,6 +16,14 @@ Rendering visualisiert World- und Activity-Zustand, besitzt aber keine Gameplay-
 
 [PresentationPolicy.ts](../../src/world/PresentationPolicy.ts) und [InputPolicy.ts](../../src/world/InputPolicy.ts) sind reine Ableitungen. Sie entscheiden nicht über Host-Autorität, Treffer oder Ressourcen.
 
+## Explosions-Audio
+
+Explosions-Audio wird unabhängig vom `ExplosionVisualStyle` über die Quell-ID im
+`broadcastExplosionEffect`-Ereignis aufgelöst. [ExplosionAudio.ts](../../src/audio/ExplosionAudio.ts)
+besitzt die Zuordnung und explizite Ersatzaufnahmen für noch unveröffentlichte Sounds.
+Meteor-Snapshots steuern nur die Darstellung; der Einschlags-Sound kommt einmalig über den
+Explosions-RPC, damit Snapshot-Entfernungen keinen zweiten Sound auslösen.
+
 ## Zweite Asset-Ladephase und Musik
 
 [DeferredAssets.ts](../../src/assets/DeferredAssets.ts) besitzt die zweite Ladephase fuer die

@@ -135,7 +135,7 @@ export interface WorldCombatNetworkPort {
   readonly effects: {
     readonly broadcastCoopDefenseXpPopup: (x: number, y: number, xp: number) => void;
     readonly broadcastSlimeBloomEffect: (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
-    readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, style?: ExplosionVisualStyle, chargeDamage?: number) => void;
+    readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, style?: ExplosionVisualStyle, chargeDamage?: number, audioSourceId?: string) => void;
     readonly broadcastBfgLaserBatch: (
       lines: readonly { sx: number; sy: number; ex: number; ey: number }[],
       color: number,
@@ -869,7 +869,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             { kind: 'outgoing-modifier', multiplier: 1, resolvedAt: 'execution' },
           ] },
         });
-        o.network.effects.broadcastExplosionEffect(release.x, release.y, release.radius, 0xff5b18, 'time_bubble_release', release.charge);
+        o.network.effects.broadcastExplosionEffect(release.x, release.y, release.radius, 0xff5b18, 'time_bubble_release', release.charge, 'TIME_BUBBLE');
       }, now);
     });
     if (o.projectileUtility) o.getPlayerCombatIntegration()?.utility.setTimeBubblePort?.({
@@ -984,7 +984,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       });
       o.hostPhysics.applyRadialImpulse(x, y, radius, cfg.explosionKnockback ?? 0, decoy.ownerId, 0, 260,
         targetId => o.combatSystem.canDamageTarget(decoy.ownerId, targetId));
-      o.network.effects.broadcastExplosionEffect(x, y, radius);
+      o.network.effects.broadcastExplosionEffect(x, y, radius, undefined, undefined, undefined, 'environment.decoy_explosion');
       o.getPlayerCombatIntegration()?.fireChunks?.hostCreateFireChunkBurst(
         decoy.ownerId, x, y, cfg.fireChunkBurst, `decoy:${decoy.id}`, now);
     });

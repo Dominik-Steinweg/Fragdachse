@@ -135,7 +135,44 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_airstrike_explosion.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 28,
+                "kind": "unknown",
+                "excerpt": "'environment.airstrike': 'sfx_airstrike_explosion',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_airstrike_explosion"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_airstrike_explosion.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 30,
+                "kind": "unknown",
+                "excerpt": "'environment.airstrike': 'sfx_airstrike_explosion',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_airstrike_explosion"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_airstrike_explosion",
         "kind": "sfx",
@@ -152,7 +189,14 @@
         "shared_keys": [
           "sfx_airstrike_explosion"
         ],
-        "usages": [],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 30,
+            "kind": "unknown",
+            "excerpt": "'environment.airstrike': 'sfx_airstrike_explosion',"
+          }
+        ],
         "playback": "unknown",
         "conflicts": []
       },
@@ -632,7 +676,32 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_ctb_score.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 393,
+                "kind": "oneshot",
+                "excerpt": "this.gameAudioSystem.playLocalSound('sfx_ctb_score');"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 401,
+                "kind": "oneshot",
+                "excerpt": "this.gameAudioSystem.playLocalSound('sfx_ctb_score');"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_ctb_score"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_ctb_score",
         "kind": "sfx",
@@ -652,13 +721,13 @@
         "usages": [
           {
             "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 425,
+            "line": 393,
             "kind": "oneshot",
             "excerpt": "this.gameAudioSystem.playLocalSound('sfx_ctb_score');"
           },
           {
             "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 433,
+            "line": 401,
             "kind": "oneshot",
             "excerpt": "this.gameAudioSystem.playLocalSound('sfx_ctb_score');"
           }
@@ -950,13 +1019,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one meteor explosion: brutal crack transient, huge grounded low blast body, rock fragments, and a controlled rolling tail, cinematic but bounded.",
+        "text": "TrackType: SFX, one meteor explosion: cinematic and epic\n",
         "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 3,
+        "duration_seconds": 4,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -978,7 +1047,56 @@
         "reason": "Replace the temporary Armageddon fallback with an independent byte-identical target.",
         "hidden": false
       },
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 9,
+                "kind": "unknown",
+                "excerpt": "ARMAGEDDON: 'sfx_explosion_armageddon',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 40,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_void_armageddon: 'sfx_explosion_armageddon',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_armageddon"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 9,
+                "kind": "unknown",
+                "excerpt": "ARMAGEDDON: 'sfx_explosion_armageddon',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 42,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_void_armageddon: 'sfx_explosion_armageddon',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_armageddon"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_explosion_armageddon",
         "kind": "sfx",
@@ -987,23 +1105,29 @@
         "target_path": "public/assets/sounds/sfx_explosion_armageddon.ogg",
         "asset_path": "./assets/sounds/sfx_explosion_armageddon.ogg",
         "filename": "sfx_explosion_armageddon.ogg",
-        "volume": 0.1,
+        "volume": 0.5,
         "shipped": true,
         "exists": true,
-        "file_hash": "16c3937b0e433840cefb2618db274678f157d226f7f4f24f95604c542df577e4",
+        "file_hash": "1290a364f2b8378f0aacc2e4e3e6c47bcfd3123631e3c05289f371668dea7b97",
         "file_error": null,
         "shared_keys": [
           "sfx_explosion_armageddon"
         ],
         "usages": [
           {
-            "path": "src/effects/MeteorRenderer.ts",
-            "line": 162,
-            "kind": "oneshot",
-            "excerpt": "this.audioSystem?.playSound('sfx_explosion_armageddon', visual.warningCircle.x, visual.warningCircle.y);"
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 9,
+            "kind": "unknown",
+            "excerpt": "ARMAGEDDON: 'sfx_explosion_armageddon',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 42,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_void_armageddon: 'sfx_explosion_armageddon',"
           }
         ],
-        "playback": "oneshot",
+        "playback": "unknown",
         "conflicts": []
       },
       "orphaned": false
@@ -1063,6 +1187,42 @@
               "sfx_explosion_asmd_secondary"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_asmd_secondary.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 18,
+                "kind": "unknown",
+                "excerpt": "ASMD_SEC: 'sfx_explosion_asmd_secondary',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_asmd_secondary"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_asmd_secondary.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 20,
+                "kind": "unknown",
+                "excerpt": "ASMD_SEC: 'sfx_explosion_asmd_secondary',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_asmd_secondary"
+            ]
+          }
         }
       ],
       "repository": {
@@ -1083,22 +1243,10 @@
         ],
         "usages": [
           {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 40,
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 20,
             "kind": "unknown",
-            "excerpt": "return strength > 0 ? { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * (0.2 + strength * 0.45) } : undefined;"
-          },
-          {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 43,
-            "kind": "unknown",
-            "excerpt": "case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };"
-          },
-          {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 47,
-            "kind": "unknown",
-            "excerpt": "case 'lightning':   return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * 0.82 };"
+            "excerpt": "ASMD_SEC: 'sfx_explosion_asmd_secondary',"
           }
         ],
         "playback": "unknown",
@@ -1221,6 +1369,258 @@
               "sfx_explosion_he"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 7,
+                "kind": "unknown",
+                "excerpt": "HE_GRENADE: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 42,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_negev: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 43,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_fireball: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 44,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_kamikaze: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 46,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_asmd_secondary: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 47,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_plasma_swarm: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 48,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_grave_titan_plasma: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 49,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_alien_plasma: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 50,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_turret_plasma: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 53,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_gravity: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 55,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_decoy: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 56,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_rock_collapse: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 57,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_base_destruction: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 58,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_shotgun_lightning: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 59,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_energy_injector: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 60,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_time_bubble: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 61,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_timebomb: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 67,
+                "kind": "unknown",
+                "excerpt": "const key = EXPLOSION_AUDIO[sourceId as keyof typeof EXPLOSION_AUDIO] ?? 'sfx_explosion_he';"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_he"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 7,
+                "kind": "unknown",
+                "excerpt": "HE_GRENADE: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 44,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_negev: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 45,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_fireball: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 46,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_turret_fireball: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 47,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_void_turret_fireball: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 48,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_kamikaze: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 50,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_asmd_secondary: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 51,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_plasma_swarm: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 52,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_grave_titan_plasma: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 53,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_alien_plasma: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 54,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_turret_plasma: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 57,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_gravity: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 59,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_decoy: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 60,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_rock_collapse: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 61,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_base_destruction: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 62,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_shotgun_lightning: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 63,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_energy_injector: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 64,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_time_bubble: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 65,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_timebomb: 'sfx_explosion_he',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 71,
+                "kind": "unknown",
+                "excerpt": "const key = EXPLOSION_AUDIO[sourceId as keyof typeof EXPLOSION_AUDIO] ?? 'sfx_explosion_he';"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_he"
+            ]
+          }
         }
       ],
       "repository": {
@@ -1241,22 +1641,124 @@
         ],
         "usages": [
           {
-            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2592,
-            "kind": "oneshot",
-            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);"
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 7,
+            "kind": "unknown",
+            "excerpt": "HE_GRENADE: 'sfx_explosion_he',"
           },
           {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "path": "src/audio/ExplosionAudio.ts",
             "line": 44,
             "kind": "unknown",
-            "excerpt": "case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };"
+            "excerpt": "sfx_explosion_negev: 'sfx_explosion_he',"
           },
           {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 45,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_fireball: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 46,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_turret_fireball: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 47,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_void_turret_fireball: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 48,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_kamikaze: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 50,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_asmd_secondary: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 51,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_plasma_swarm: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 52,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_grave_titan_plasma: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 53,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_alien_plasma: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 54,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_turret_plasma: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
             "line": 57,
             "kind": "unknown",
-            "excerpt": "default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };"
+            "excerpt": "sfx_explosion_gravity: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 59,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_decoy: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 60,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_rock_collapse: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 61,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_base_destruction: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 62,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_shotgun_lightning: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 63,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_energy_injector: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 64,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_time_bubble: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 65,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_timebomb: 'sfx_explosion_he',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 71,
+            "kind": "unknown",
+            "excerpt": "const key = EXPLOSION_AUDIO[sourceId as keyof typeof EXPLOSION_AUDIO] ?? 'sfx_explosion_he';"
           }
         ],
         "playback": "unknown",
@@ -1289,7 +1791,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_holy.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 8,
+                "kind": "unknown",
+                "excerpt": "HOLY_HAND_GRENADE: 'sfx_explosion_holy',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_holy"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_explosion_holy",
         "kind": "sfx",
@@ -1308,10 +1829,10 @@
         ],
         "usages": [
           {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 42,
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 8,
             "kind": "unknown",
-            "excerpt": "case 'holy':        return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };"
+            "excerpt": "HOLY_HAND_GRENADE: 'sfx_explosion_holy',"
           }
         ],
         "playback": "unknown",
@@ -1354,7 +1875,68 @@
         "reason": "Replace the temporary mini-rocket fallback with an independent byte-identical target.",
         "hidden": false
       },
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 12,
+                "kind": "unknown",
+                "excerpt": "MINI_ROCKET_LAUNCHER: 'sfx_explosion_mini_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 41,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_crossbow: 'sfx_explosion_mini_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 51,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_inferno_rockets: 'sfx_explosion_mini_rocket',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_mini_rocket"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_mini_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 12,
+                "kind": "unknown",
+                "excerpt": "MINI_ROCKET_LAUNCHER: 'sfx_explosion_mini_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 43,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_crossbow: 'sfx_explosion_mini_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 55,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_inferno_rockets: 'sfx_explosion_mini_rocket',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_mini_rocket"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_explosion_mini_rocket",
         "kind": "sfx",
@@ -1373,16 +1955,22 @@
         ],
         "usages": [
           {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 50,
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 12,
             "kind": "unknown",
-            "excerpt": "case 'mini_rocket': return { key: 'sfx_explosion_mini_rocket',    scale: EXPLOSION_CLOSE_BOOST };"
+            "excerpt": "MINI_ROCKET_LAUNCHER: 'sfx_explosion_mini_rocket',"
           },
           {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 51,
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 43,
             "kind": "unknown",
-            "excerpt": "case 'mini_rocket_cascade': return { key: 'sfx_explosion_mini_rocket', scale: EXPLOSION_CLOSE_BOOST };"
+            "excerpt": "sfx_explosion_crossbow: 'sfx_explosion_mini_rocket',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 55,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_inferno_rockets: 'sfx_explosion_mini_rocket',"
           }
         ],
         "playback": "unknown",
@@ -1439,6 +2027,78 @@
               "sfx_explosion_rocket"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_he.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 11,
+                "kind": "unknown",
+                "excerpt": "ROCKET_LAUNCHER: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 45,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_rocket_aftershock: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 52,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_turret_rocket: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 153,
+                "kind": "unknown",
+                "excerpt": "if (soundKey === 'sfx_explosion_rocket') {"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_rocket"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_he.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 11,
+                "kind": "unknown",
+                "excerpt": "ROCKET_LAUNCHER: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 49,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_rocket_aftershock: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 56,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_turret_rocket: 'sfx_explosion_rocket',"
+              },
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 153,
+                "kind": "unknown",
+                "excerpt": "if (soundKey === 'sfx_explosion_rocket') {"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_rocket"
+            ]
+          }
         }
       ],
       "repository": {
@@ -1459,16 +2119,28 @@
         ],
         "usages": [
           {
-            "path": "src/audio/GameAudioSystem.ts",
-            "line": 150,
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 11,
             "kind": "unknown",
-            "excerpt": "if (soundKey === 'sfx_explosion_rocket') {"
+            "excerpt": "ROCKET_LAUNCHER: 'sfx_explosion_rocket',"
           },
           {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
+            "path": "src/audio/ExplosionAudio.ts",
             "line": 49,
             "kind": "unknown",
-            "excerpt": "case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };"
+            "excerpt": "sfx_explosion_rocket_aftershock: 'sfx_explosion_rocket',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 56,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_turret_rocket: 'sfx_explosion_rocket',"
+          },
+          {
+            "path": "src/audio/GameAudioSystem.ts",
+            "line": 153,
+            "kind": "unknown",
+            "excerpt": "if (soundKey === 'sfx_explosion_rocket') {"
           }
         ],
         "playback": "unknown",
@@ -1622,6 +2294,24 @@
               "sfx_hit_feedback"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_hit_feedback.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 194,
+                "kind": "oneshot",
+                "excerpt": "this.playLocalSound('sfx_hit_feedback', getHitFeedbackVolumeScale(damage));"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_hit_feedback"
+            ]
+          }
         }
       ],
       "repository": {
@@ -1643,7 +2333,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 190,
+            "line": 194,
             "kind": "oneshot",
             "excerpt": "this.playLocalSound('sfx_hit_feedback', getHitFeedbackVolumeScale(damage));"
           }
@@ -1788,7 +2478,56 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen. Die statische Zuordnung ist unvollständig oder dynamisch; der Wiedergabemodus ist eine Produktionsvorgabe und vor Freigabe an der tatsächlichen Verwendung zu prüfen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 26,
+                "kind": "unknown",
+                "excerpt": "'environment.nuke': 'sfx_nuke_explosion',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 54,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_void_nuke: 'sfx_nuke_explosion',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_nuke_explosion"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_nuke_explosion.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 28,
+                "kind": "unknown",
+                "excerpt": "'environment.nuke': 'sfx_nuke_explosion',"
+              },
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 58,
+                "kind": "unknown",
+                "excerpt": "sfx_explosion_void_nuke: 'sfx_nuke_explosion',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_nuke_explosion"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_nuke_explosion",
         "kind": "sfx",
@@ -1807,10 +2546,16 @@
         ],
         "usages": [
           {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 48,
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 28,
             "kind": "unknown",
-            "excerpt": "case 'nuke':        return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };"
+            "excerpt": "'environment.nuke': 'sfx_nuke_explosion',"
+          },
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 58,
+            "kind": "unknown",
+            "excerpt": "sfx_explosion_void_nuke: 'sfx_nuke_explosion',"
           }
         ],
         "playback": "unknown",
@@ -2560,6 +3305,24 @@
               "sfx_player_hit"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_player_hit.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 220,
+                "kind": "oneshot",
+                "excerpt": "this.playSound('sfx_player_hit', emitterX, emitterY, undefined, getHitFeedbackVolumeScale(damage));"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_player_hit"
+            ]
+          }
         }
       ],
       "repository": {
@@ -2581,7 +3344,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 216,
+            "line": 220,
             "kind": "oneshot",
             "excerpt": "this.playSound('sfx_player_hit', emitterX, emitterY, undefined, getHitFeedbackVolumeScale(damage));"
           }
@@ -3065,6 +3828,54 @@
               "sfx_train_explode"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_train_explode.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 36,
+                "kind": "unknown",
+                "excerpt": "'environment.train': 'sfx_train_explode',"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 592,
+                "kind": "oneshot",
+                "excerpt": "this.gameAudioSystem.playLocalSound('sfx_train_explode');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_train_explode"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_train_explode.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 38,
+                "kind": "unknown",
+                "excerpt": "'environment.train': 'sfx_train_explode',"
+              },
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 592,
+                "kind": "oneshot",
+                "excerpt": "this.gameAudioSystem.playLocalSound('sfx_train_explode');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_train_explode"
+            ]
+          }
         }
       ],
       "repository": {
@@ -3085,13 +3896,19 @@
         ],
         "usages": [
           {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 38,
+            "kind": "unknown",
+            "excerpt": "'environment.train': 'sfx_train_explode',"
+          },
+          {
             "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 624,
+            "line": 592,
             "kind": "oneshot",
             "excerpt": "this.gameAudioSystem.playLocalSound('sfx_train_explode');"
           }
         ],
-        "playback": "oneshot",
+        "playback": "unknown",
         "conflicts": []
       },
       "orphaned": false
@@ -3182,7 +3999,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_translocator_teleport.ogg",
+            "usages": [
+              {
+                "path": "src/scenes/arena/RpcCoordinator.ts",
+                "line": 539,
+                "kind": "oneshot",
+                "excerpt": "this.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_translocator_teleport"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_translocator_teleport",
         "kind": "sfx",
@@ -3202,7 +4038,7 @@
         "usages": [
           {
             "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 571,
+            "line": 539,
             "kind": "oneshot",
             "excerpt": "this.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);"
           }
@@ -5230,6 +6066,126 @@
               "shot_throw"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/throw.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 66,
+                "kind": "unknown",
+                "excerpt": "if (sourceId === 'brood_hatch') return { key: 'shot_throw', scale: 1 };"
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 34,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 115,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 192,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 59,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 204,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 370,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 39,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "shot_throw"
+            ]
+          }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/throw.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 70,
+                "kind": "unknown",
+                "excerpt": "if (sourceId === 'brood_hatch') return { key: 'shot_throw', scale: 1 };"
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 34,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 115,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 192,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 59,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 204,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 370,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 39,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_throw\","
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "shot_throw"
+            ]
+          }
         }
       ],
       "repository": {
@@ -5249,6 +6205,12 @@
           "shot_throw"
         ],
         "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 70,
+            "kind": "unknown",
+            "excerpt": "if (sourceId === 'brood_hatch') return { key: 'shot_throw', scale: 1 };"
+          },
           {
             "path": "src/loadout/content/data/utilities-grenades.json",
             "line": 34,
@@ -5290,12 +6252,6 @@
             "line": 39,
             "kind": "oneshot",
             "excerpt": "\"successKey\": \"shot_throw\","
-          },
-          {
-            "path": "src/scenes/arena/RpcCoordinator.ts",
-            "line": 56,
-            "kind": "unknown",
-            "excerpt": "case 'brood_hatch': return { key: 'shot_throw', scale: 1 };"
           }
         ],
         "playback": "unknown",
@@ -5955,7 +6911,38 @@
       "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_enemy_death.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 381,
+                "kind": "unknown",
+                "excerpt": ": key === 'sfx_enemy_death' ? 60"
+              },
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 16,
+                "kind": "unknown",
+                "excerpt": "...Object.values(PICKUP_AUDIO), 'sfx_player_death', 'sfx_enemy_death',"
+              },
+              {
+                "path": "src/combat/WorldCombatCore.ts",
+                "line": 4271,
+                "kind": "unknown",
+                "excerpt": "key: target.kind === 'player' ? 'sfx_player_death' : 'sfx_enemy_death',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_enemy_death"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_enemy_death",
         "kind": "sfx",
@@ -5964,7 +6951,7 @@
         "target_path": "public/assets/sounds/sfx_enemy_death.ogg",
         "asset_path": "./assets/sounds/sfx_enemy_death.ogg",
         "filename": "sfx_enemy_death.ogg",
-        "volume": 0.25,
+        "volume": 0.45,
         "shipped": true,
         "exists": true,
         "file_hash": "f1793ee63316ce83be9ee194bfcdbd1e41a76f22c648f5f966c43af8c8ae070a",
@@ -5975,7 +6962,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 377,
+            "line": 381,
             "kind": "unknown",
             "excerpt": ": key === 'sfx_enemy_death' ? 60"
           },
@@ -6279,7 +7266,38 @@
       "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_menu_hover.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 380,
+                "kind": "unknown",
+                "excerpt": "const windowMs = key === 'sfx_menu_hover' ? 80"
+              },
+              {
+                "path": "src/ui/UiAudio.ts",
+                "line": 4,
+                "kind": "unknown",
+                "excerpt": "playLocalSound(key: 'sfx_menu_hover' | 'sfx_menu_activate'): void;"
+              },
+              {
+                "path": "src/ui/UiAudio.ts",
+                "line": 16,
+                "kind": "oneshot",
+                "excerpt": "ports.get(scene)?.playLocalSound('sfx_menu_hover');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_menu_hover"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_menu_hover",
         "kind": "sfx",
@@ -6299,7 +7317,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 376,
+            "line": 380,
             "kind": "unknown",
             "excerpt": "const windowMs = key === 'sfx_menu_hover' ? 80"
           },
@@ -6386,7 +7404,7 @@
         "target_path": "public/assets/sounds/sfx_objective_complete.ogg",
         "asset_path": "./assets/sounds/sfx_objective_complete.ogg",
         "filename": "sfx_objective_complete.ogg",
-        "volume": 0.5,
+        "volume": 0.7,
         "shipped": true,
         "exists": true,
         "file_hash": "ebbcb9d946b5f431a10b53616716d5f497778bba7a5290c45d1c53e89edde751",
@@ -6499,7 +7517,32 @@
       "notes": "One-Shot-Verwendung im Spiel bestaetigt. Produktionsrezept vorbereitet; keine Audiodatei erzeugt. Vor Uebernahme anhoeren und Dauer sowie Pegel pruefen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_pickup_adrenaline_essence.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 382,
+                "kind": "unknown",
+                "excerpt": ": key === 'sfx_pickup_adrenaline_essence' ? 110"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1239,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_pickup_adrenaline_essence');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_pickup_adrenaline_essence"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_pickup_adrenaline_essence",
         "kind": "sfx",
@@ -6508,7 +7551,7 @@
         "target_path": "public/assets/sounds/sfx_pickup_adrenaline_essence.ogg",
         "asset_path": "./assets/sounds/sfx_pickup_adrenaline_essence.ogg",
         "filename": "sfx_pickup_adrenaline_essence.ogg",
-        "volume": 0.35,
+        "volume": 0.45,
         "shipped": true,
         "exists": true,
         "file_hash": "ca44b6c742ebd421a18e3faca9991b734d71a385931105d0f5b88f4a9fa0df29",
@@ -6519,7 +7562,7 @@
         "usages": [
           {
             "path": "src/audio/GameAudioSystem.ts",
-            "line": 378,
+            "line": 382,
             "kind": "unknown",
             "excerpt": ": key === 'sfx_pickup_adrenaline_essence' ? 110"
           },
@@ -7195,6 +8238,1625 @@
             "line": 1971,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_alien_plasma": {
+      "name": "sfx_explosion_alien_plasma",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_alien_plasma.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 23,
+                "kind": "unknown",
+                "excerpt": "'ALIEN_BADGER_PLASMA:swarm-explosion': 'sfx_explosion_alien_plasma',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_alien_plasma"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_alien_plasma",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_alien_plasma.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_alien_plasma.ogg",
+        "filename": "sfx_explosion_alien_plasma.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_alien_plasma"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 23,
+            "kind": "unknown",
+            "excerpt": "'ALIEN_BADGER_PLASMA:swarm-explosion': 'sfx_explosion_alien_plasma',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_base_destruction": {
+      "name": "sfx_explosion_base_destruction",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_base_destruction.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 33,
+                "kind": "unknown",
+                "excerpt": "'environment.base_destruction': 'sfx_explosion_base_destruction',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2592,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_base_destruction', x, y, undefined, volumeScale);"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_base_destruction"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_base_destruction",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_base_destruction.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_base_destruction.ogg",
+        "filename": "sfx_explosion_base_destruction.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_base_destruction"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 33,
+            "kind": "unknown",
+            "excerpt": "'environment.base_destruction': 'sfx_explosion_base_destruction',"
+          },
+          {
+            "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+            "line": 2592,
+            "kind": "oneshot",
+            "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_base_destruction', x, y, undefined, volumeScale);"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_crossbow": {
+      "name": "sfx_explosion_crossbow",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_crossbow",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_crossbow.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_crossbow.ogg",
+        "filename": "sfx_explosion_crossbow.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_crossbow"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 13,
+            "kind": "unknown",
+            "excerpt": "XBOW: 'sfx_explosion_crossbow',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_decoy": {
+      "name": "sfx_explosion_decoy",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_decoy.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 31,
+                "kind": "unknown",
+                "excerpt": "'environment.decoy_explosion': 'sfx_explosion_decoy',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_decoy"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_decoy",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_decoy.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_decoy.ogg",
+        "filename": "sfx_explosion_decoy.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_decoy"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 31,
+            "kind": "unknown",
+            "excerpt": "'environment.decoy_explosion': 'sfx_explosion_decoy',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_energy_injector": {
+      "name": "sfx_explosion_energy_injector",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_energy_injector.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 35,
+                "kind": "unknown",
+                "excerpt": "ENERGY_INJECTOR: 'sfx_explosion_energy_injector',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_energy_injector"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_energy_injector",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_energy_injector.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_energy_injector.ogg",
+        "filename": "sfx_explosion_energy_injector.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_energy_injector"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 35,
+            "kind": "unknown",
+            "excerpt": "ENERGY_INJECTOR: 'sfx_explosion_energy_injector',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_fireball": {
+      "name": "sfx_explosion_fireball",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_fireball.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 15,
+                "kind": "unknown",
+                "excerpt": "FLAMETHROWER: 'sfx_explosion_fireball',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_fireball"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_fireball",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_fireball.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_fireball.ogg",
+        "filename": "sfx_explosion_fireball.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_fireball"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 15,
+            "kind": "unknown",
+            "excerpt": "FLAMETHROWER: 'sfx_explosion_fireball',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_grave_titan_plasma": {
+      "name": "sfx_explosion_grave_titan_plasma",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_grave_titan_plasma.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 22,
+                "kind": "unknown",
+                "excerpt": "'GRAVE_TITAN_VOID_PLASMA:swarm-explosion': 'sfx_explosion_grave_titan_plasma',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_grave_titan_plasma"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_grave_titan_plasma",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_grave_titan_plasma.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_grave_titan_plasma.ogg",
+        "filename": "sfx_explosion_grave_titan_plasma.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_grave_titan_plasma"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 22,
+            "kind": "unknown",
+            "excerpt": "'GRAVE_TITAN_VOID_PLASMA:swarm-explosion': 'sfx_explosion_grave_titan_plasma',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_gravity": {
+      "name": "sfx_explosion_gravity",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_gravity.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 27,
+                "kind": "unknown",
+                "excerpt": "TURRET_GRAVITY: 'sfx_explosion_gravity',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_gravity"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_gravity",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_gravity.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_gravity.ogg",
+        "filename": "sfx_explosion_gravity.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_gravity"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 27,
+            "kind": "unknown",
+            "excerpt": "TURRET_GRAVITY: 'sfx_explosion_gravity',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_inferno_rockets": {
+      "name": "sfx_explosion_inferno_rockets",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_inferno_rockets.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 25,
+                "kind": "unknown",
+                "excerpt": "INFERNO_COLOSSUS_VOID_ROCKETS: 'sfx_explosion_inferno_rockets',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_inferno_rockets"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_inferno_rockets",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_inferno_rockets.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_inferno_rockets.ogg",
+        "filename": "sfx_explosion_inferno_rockets.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_inferno_rockets"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 25,
+            "kind": "unknown",
+            "excerpt": "INFERNO_COLOSSUS_VOID_ROCKETS: 'sfx_explosion_inferno_rockets',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_kamikaze": {
+      "name": "sfx_explosion_kamikaze",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_kamikaze.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 18,
+                "kind": "unknown",
+                "excerpt": "'ground_fire.kamikaze_napalm': 'sfx_explosion_kamikaze',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_kamikaze"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_kamikaze",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_kamikaze.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_kamikaze.ogg",
+        "filename": "sfx_explosion_kamikaze.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_kamikaze"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 18,
+            "kind": "unknown",
+            "excerpt": "'ground_fire.kamikaze_napalm': 'sfx_explosion_kamikaze',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_negev": {
+      "name": "sfx_explosion_negev",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_negev",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_negev.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_negev.ogg",
+        "filename": "sfx_explosion_negev.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_negev"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 14,
+            "kind": "unknown",
+            "excerpt": "NEGEV: 'sfx_explosion_negev',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_plasma_swarm": {
+      "name": "sfx_explosion_plasma_swarm",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_plasma_swarm.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 21,
+                "kind": "unknown",
+                "excerpt": "'PLASMA:swarm-explosion': 'sfx_explosion_plasma_swarm',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_plasma_swarm"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_plasma_swarm",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_plasma_swarm.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_plasma_swarm.ogg",
+        "filename": "sfx_explosion_plasma_swarm.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_plasma_swarm"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 21,
+            "kind": "unknown",
+            "excerpt": "'PLASMA:swarm-explosion': 'sfx_explosion_plasma_swarm',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_rock_collapse": {
+      "name": "sfx_explosion_rock_collapse",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_rock_collapse.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 32,
+                "kind": "unknown",
+                "excerpt": "'environment.rock_collapse': 'sfx_explosion_rock_collapse',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_rock_collapse"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_rock_collapse",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_rock_collapse.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_rock_collapse.ogg",
+        "filename": "sfx_explosion_rock_collapse.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_rock_collapse"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 32,
+            "kind": "unknown",
+            "excerpt": "'environment.rock_collapse': 'sfx_explosion_rock_collapse',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_rocket_aftershock": {
+      "name": "sfx_explosion_rocket_aftershock",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_rocket_aftershock.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 19,
+                "kind": "unknown",
+                "excerpt": "'ROCKET_LAUNCHER.aftershock': 'sfx_explosion_rocket_aftershock',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_rocket_aftershock"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_rocket_aftershock",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_rocket_aftershock.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_rocket_aftershock.ogg",
+        "filename": "sfx_explosion_rocket_aftershock.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_rocket_aftershock"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 19,
+            "kind": "unknown",
+            "excerpt": "'ROCKET_LAUNCHER.aftershock': 'sfx_explosion_rocket_aftershock',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_shotgun_lightning": {
+      "name": "sfx_explosion_shotgun_lightning",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_shotgun_lightning.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 34,
+                "kind": "unknown",
+                "excerpt": "'weapon.shotgun_lightning': 'sfx_explosion_shotgun_lightning',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_shotgun_lightning"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_shotgun_lightning",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_shotgun_lightning.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_shotgun_lightning.ogg",
+        "filename": "sfx_explosion_shotgun_lightning.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_shotgun_lightning"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 34,
+            "kind": "unknown",
+            "excerpt": "'weapon.shotgun_lightning': 'sfx_explosion_shotgun_lightning',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_time_bubble": {
+      "name": "sfx_explosion_time_bubble",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_time_bubble.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 36,
+                "kind": "unknown",
+                "excerpt": "TIME_BUBBLE: 'sfx_explosion_time_bubble',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_time_bubble"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_time_bubble",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_time_bubble.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_time_bubble.ogg",
+        "filename": "sfx_explosion_time_bubble.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_time_bubble"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 36,
+            "kind": "unknown",
+            "excerpt": "TIME_BUBBLE: 'sfx_explosion_time_bubble',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_timebomb": {
+      "name": "sfx_explosion_timebomb",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_timebomb.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 37,
+                "kind": "unknown",
+                "excerpt": "'enemy.timebomb': 'sfx_explosion_timebomb',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_timebomb"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_timebomb",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_timebomb.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_timebomb.ogg",
+        "filename": "sfx_explosion_timebomb.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_timebomb"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 37,
+            "kind": "unknown",
+            "excerpt": "'enemy.timebomb': 'sfx_explosion_timebomb',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_turret_plasma": {
+      "name": "sfx_explosion_turret_plasma",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_turret_plasma.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 24,
+                "kind": "unknown",
+                "excerpt": "'SPORE_TURRET_PLASMA:swarm-explosion': 'sfx_explosion_turret_plasma',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_turret_plasma"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_turret_plasma",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_turret_plasma.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_turret_plasma.ogg",
+        "filename": "sfx_explosion_turret_plasma.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_turret_plasma"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 24,
+            "kind": "unknown",
+            "excerpt": "'SPORE_TURRET_PLASMA:swarm-explosion': 'sfx_explosion_turret_plasma',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_turret_rocket": {
+      "name": "sfx_explosion_turret_rocket",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_turret_rocket.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 26,
+                "kind": "unknown",
+                "excerpt": "TURRET_ROCKET_BURST: 'sfx_explosion_turret_rocket',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_turret_rocket"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_turret_rocket",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_turret_rocket.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_turret_rocket.ogg",
+        "filename": "sfx_explosion_turret_rocket.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_turret_rocket"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 26,
+            "kind": "unknown",
+            "excerpt": "TURRET_ROCKET_BURST: 'sfx_explosion_turret_rocket',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_void_armageddon": {
+      "name": "sfx_explosion_void_armageddon",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_void_armageddon",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_void_armageddon.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_void_armageddon.ogg",
+        "filename": "sfx_explosion_void_armageddon.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_void_armageddon"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 10,
+            "kind": "unknown",
+            "excerpt": "'enemy.void_meteor': 'sfx_explosion_void_armageddon',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_void_nuke": {
+      "name": "sfx_explosion_void_nuke",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_void_nuke.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 29,
+                "kind": "unknown",
+                "excerpt": "'enemy.void_nuke': 'sfx_explosion_void_nuke',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_void_nuke"
+            ]
+          }
+        }
+      ],
+      "repository": {
+        "key": "sfx_explosion_void_nuke",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_void_nuke.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_void_nuke.ogg",
+        "filename": "sfx_explosion_void_nuke.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_void_nuke"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 29,
+            "kind": "unknown",
+            "excerpt": "'enemy.void_nuke': 'sfx_explosion_void_nuke',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_turret_fireball": {
+      "name": "sfx_explosion_turret_fireball",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_turret_fireball",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_turret_fireball.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_turret_fireball.ogg",
+        "filename": "sfx_explosion_turret_fireball.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_turret_fireball"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 16,
+            "kind": "unknown",
+            "excerpt": "TURRET_FLAME: 'sfx_explosion_turret_fireball',"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_explosion_void_turret_fireball": {
+      "name": "sfx_explosion_void_turret_fireball",
+      "category": "event",
+      "intent": "",
+      "musical_identity": "",
+      "playback": "unknown",
+      "prompt": {
+        "text": "",
+        "source": "manual",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_explosion_void_turret_fireball",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_explosion_void_turret_fireball.ogg",
+        "asset_path": "./assets/sounds/sfx_explosion_void_turret_fireball.ogg",
+        "filename": "sfx_explosion_void_turret_fireball.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_explosion_void_turret_fireball"
+        ],
+        "usages": [
+          {
+            "path": "src/audio/ExplosionAudio.ts",
+            "line": 17,
+            "kind": "unknown",
+            "excerpt": "TURRET_VOID_FLAME: 'sfx_explosion_void_turret_fireball',"
           }
         ],
         "playback": "unknown",

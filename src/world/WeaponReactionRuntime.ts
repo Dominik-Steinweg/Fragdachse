@@ -84,7 +84,7 @@ export class WeaponReactionRuntime implements WeaponReactionPort {
         killSource: { shotgunLightningGeneration: event.generation },
       });
       if (this.destroyed) return;
-      this.options.network.broadcastExplosionEffect(event.x, event.y, radius, 0x78dfff, 'lightning');
+      this.options.network.broadcastExplosionEffect(event.x, event.y, radius, 0x78dfff, 'lightning', undefined, 'weapon.shotgun_lightning');
     }
   }
 

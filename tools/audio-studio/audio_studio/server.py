@@ -18,8 +18,10 @@ def create_app(studio):
 
     @asynccontextmanager
     async def lifespan(app):
-        yield
-        studio.jobs.close()
+        try:
+            yield
+        finally:
+            studio.jobs.close()
 
     app = FastAPI(title="Fragdachse Audio Studio", docs_url=None, redoc_url=None, lifespan=lifespan)
 

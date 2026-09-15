@@ -129,7 +129,7 @@ export interface WorldPlayerGameplayNetworkPort {
       phase: 'start' | 'end',
       ownerId: string,
     ) => void;
-    readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
+    readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle, chargeDamage?: number, audioSourceId?: string) => void;
     readonly broadcastShotFx: (event: WeaponShotFeedbackEvent) => void;
     readonly broadcastFireChunkEffect: (
       x: number,
@@ -675,7 +675,7 @@ export class WorldPlayerGameplayRuntime implements
       options.fireSystem,
       (playerId) => burrow.isBurrowed(playerId),
       (firstPlayerId, secondPlayerId) => !options.relationship.isEnemyPair(firstPlayerId, secondPlayerId),
-      (x, y, radius) => options.network.presentation.broadcastExplosionEffect(x, y, radius, 0xff6600),
+      (x, y, radius) => options.network.presentation.broadcastExplosionEffect(x, y, radius, 0xff6600, undefined, undefined, 'ground_fire.kamikaze_napalm'),
       (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
       (x, y, targets, landsAt, visualStyle) => options.network.presentation.broadcastFireChunkEffect(
         x,
@@ -694,7 +694,7 @@ export class WorldPlayerGameplayRuntime implements
         explode: landing => {
           options.combatSystem.applyExplosionDamage(landing.x, landing.y, landing.effect, landing.ownerId,
             'weapon2', 'ROCKET_LAUNCHER.aftershock', landing.source);
-          options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket');
+          options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket', undefined, 'ROCKET_LAUNCHER.aftershock');
         },
       },
     );
@@ -725,7 +725,7 @@ export class WorldPlayerGameplayRuntime implements
       combatSystem: options.combatSystem,
       physicsSystem: options.hostPhysics,
       onKillstreakExplosion: (event) => {
-        options.network.presentation.broadcastExplosionEffect(event.x, event.y, event.radius, 0xff8a2d);
+        options.network.presentation.broadcastExplosionEffect(event.x, event.y, event.radius, 0xff8a2d, undefined, undefined, 'NEGEV');
         flamethrowerUpgrade?.hostCreateFireChunkBurst(event.ownerId, event.x, event.y, {
           count: event.kills,
           searchRadius: event.radius,

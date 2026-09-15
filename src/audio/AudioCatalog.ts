@@ -91,6 +91,29 @@ const SHOT_ASSETS = {
 
 // ── Explosions ──────────────────────────────────────────────────────────────
 const EXPLOSION_ASSETS = {
+  sfx_explosion_turret_fireball: './assets/sounds/sfx_explosion_turret_fireball.ogg',
+  sfx_explosion_void_turret_fireball: './assets/sounds/sfx_explosion_void_turret_fireball.ogg',
+  sfx_explosion_void_armageddon: './assets/sounds/sfx_explosion_void_armageddon.ogg',
+  sfx_explosion_crossbow: './assets/sounds/sfx_explosion_crossbow.ogg',
+  sfx_explosion_negev: './assets/sounds/sfx_explosion_negev.ogg',
+  sfx_explosion_fireball: './assets/sounds/sfx_explosion_fireball.ogg',
+  sfx_explosion_kamikaze: './assets/sounds/sfx_explosion_kamikaze.ogg',
+  sfx_explosion_rocket_aftershock: './assets/sounds/sfx_explosion_rocket_aftershock.ogg',
+  sfx_explosion_plasma_swarm: './assets/sounds/sfx_explosion_plasma_swarm.ogg',
+  sfx_explosion_grave_titan_plasma: './assets/sounds/sfx_explosion_grave_titan_plasma.ogg',
+  sfx_explosion_alien_plasma: './assets/sounds/sfx_explosion_alien_plasma.ogg',
+  sfx_explosion_turret_plasma: './assets/sounds/sfx_explosion_turret_plasma.ogg',
+  sfx_explosion_inferno_rockets: './assets/sounds/sfx_explosion_inferno_rockets.ogg',
+  sfx_explosion_turret_rocket: './assets/sounds/sfx_explosion_turret_rocket.ogg',
+  sfx_explosion_gravity: './assets/sounds/sfx_explosion_gravity.ogg',
+  sfx_explosion_void_nuke: './assets/sounds/sfx_explosion_void_nuke.ogg',
+  sfx_explosion_decoy: './assets/sounds/sfx_explosion_decoy.ogg',
+  sfx_explosion_rock_collapse: './assets/sounds/sfx_explosion_rock_collapse.ogg',
+  sfx_explosion_base_destruction: './assets/sounds/sfx_explosion_base_destruction.ogg',
+  sfx_explosion_shotgun_lightning: './assets/sounds/sfx_explosion_shotgun_lightning.ogg',
+  sfx_explosion_energy_injector: './assets/sounds/sfx_explosion_energy_injector.ogg',
+  sfx_explosion_time_bubble: './assets/sounds/sfx_explosion_time_bubble.ogg',
+  sfx_explosion_timebomb: './assets/sounds/sfx_explosion_timebomb.ogg',
   sfx_explosion_he:             './assets/sounds/sfx_explosion_rocket.ogg',//done (he + rocket getauscht)
   sfx_explosion_smoke:          './assets/sounds/sfx_explosion_smoke.ogg',
   sfx_explosion_holy:           './assets/sounds/sfx_explosion_holy.ogg',//done
@@ -213,6 +236,29 @@ export function getMusicAssetPath(key: MusicAssetKey): string {
  * d.h. halb so laut wie bisher.
  */
 export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
+  sfx_explosion_turret_fireball: 0.5,
+  sfx_explosion_void_turret_fireball: 0.5,
+  sfx_explosion_void_armageddon: 0.5,
+  sfx_explosion_crossbow: 0.5,
+  sfx_explosion_negev: 0.5,
+  sfx_explosion_fireball: 0.5,
+  sfx_explosion_kamikaze: 0.5,
+  sfx_explosion_rocket_aftershock: 0.5,
+  sfx_explosion_plasma_swarm: 0.5,
+  sfx_explosion_grave_titan_plasma: 0.5,
+  sfx_explosion_alien_plasma: 0.5,
+  sfx_explosion_turret_plasma: 0.5,
+  sfx_explosion_inferno_rockets: 0.5,
+  sfx_explosion_turret_rocket: 0.5,
+  sfx_explosion_gravity: 0.5,
+  sfx_explosion_void_nuke: 0.5,
+  sfx_explosion_decoy: 0.5,
+  sfx_explosion_rock_collapse: 0.5,
+  sfx_explosion_base_destruction: 0.5,
+  sfx_explosion_shotgun_lightning: 0.5,
+  sfx_explosion_energy_injector: 0.5,
+  sfx_explosion_time_bubble: 0.5,
+  sfx_explosion_timebomb: 0.5,
   // Shot Sounds
   shot_ak47:               0.4,
   shot_asmd_primary:       0.4,
@@ -244,7 +290,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_rocket:         0.5,
   sfx_explosion_mini_rocket:    0.15,
   sfx_explosion_asmd_secondary: 0.5,
-  sfx_explosion_armageddon:     0.1,
+  sfx_explosion_armageddon:     0.5,
 
   // Loadout Activations
   sfx_tesla_activate:        0.5,
@@ -269,7 +315,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_use_dachstunnel:       0.5,
 
   // Power-Ups
-  sfx_pickup_adrenaline_essence: 0.35,
+  sfx_pickup_adrenaline_essence: 0.45,
   sfx_pickup_rage: 0.5,
   sfx_pickup_adrenaline: 0.5,
   sfx_pickup_double_damage: 0.5,
@@ -283,14 +329,14 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_double_damage_active: 0.5,
 
   // General SFX
-  sfx_enemy_death: 0.25,
+  sfx_enemy_death: 0.45,
   sfx_menu_hover: 0.1,
   sfx_menu_activate: 0.3,
   sfx_round_victory: 0.5,
   sfx_round_defeat: 0.5,
   sfx_wave_start: 0.5,
   sfx_boss_announce: 0.5,
-  sfx_objective_complete: 0.5,
+  sfx_objective_complete: 0.7,
   sfx_checkpoint_activate: 0.5,
   sfx_ultimate_ready: 0.5,
   sfx_level_up: 0.5,

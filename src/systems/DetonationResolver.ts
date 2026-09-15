@@ -40,6 +40,7 @@ export interface DetonationEffectSink {
   playExplosion(
     x: number, y: number, radius: number, color: number | undefined,
     visualStyle: ExplosionVisualStyle | undefined,
+    sourceId: string,
   ): void;
   /** Optionale Schaden-über-Zeit-Fläche am Detonationsort. */
   spawnDotArea(
@@ -94,6 +95,7 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
     event.x, event.y, effect.aoeRadius,
     effect.explosionColor ?? detonatorColor,
     effect.explosionVisualStyle,
+    event.sourceId,
   );
 
   sink.spawnDotArea(

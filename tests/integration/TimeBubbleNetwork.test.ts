@@ -35,13 +35,13 @@ describe('TimeBubble reliable utility state without an Activity', () => {
       expect(client.getLatestGameState()!.timeBubbles[0].charge).toBe(bubble.charge);
       const late = connect(await addClientRoom(network));
       expect(late.getLatestGameState()!.timeBubbles).toEqual([bubble]);
-      use(hostRoom); host.broadcastExplosionEffect(bubble.x, bubble.y, bubble.radius, 0xff5b18, 'time_bubble_release', bubble.charge);
-      expect(released).toHaveBeenCalledExactlyOnceWith(bubble.x, bubble.y, bubble.radius, 0xff5b18, 'time_bubble_release', bubble.charge);
+      use(hostRoom); host.broadcastExplosionEffect(bubble.x, bubble.y, bubble.radius, 0xff5b18, 'time_bubble_release', bubble.charge, 'TIME_BUBBLE');
+      expect(released).toHaveBeenCalledExactlyOnceWith(bubble.x, bubble.y, bubble.radius, 0xff5b18, 'time_bubble_release', bubble.charge, 'TIME_BUBBLE');
       publish({ ...base, timeBubbles: [] });
       expect(client.getLatestGameState()!.timeBubbles).toEqual([]);
       expect(released).toHaveBeenCalledTimes(1);
       use(hostRoom); host.broadcastExplosionEffect(0, 0, 10);
-      expect(released).toHaveBeenLastCalledWith(0, 0, 10, undefined, undefined);
+      expect(released).toHaveBeenLastCalledWith(0, 0, 10, undefined, undefined, undefined, 'generic');
       host.publishWorldAndActivity({ ...world, worldRevision: 2 }, null);
       use(clientRoom); expect(client.getLatestGameState()).toBeUndefined();
     } finally { clearActiveSession(); }

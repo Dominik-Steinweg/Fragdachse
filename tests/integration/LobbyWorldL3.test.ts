@@ -339,7 +339,7 @@ describe('LobbyWorld L3 – Preview ist passiv, aber aktuell', () => {
       { full: true, count: 2, upserts: [{ id: 7, hp: 80 }], removals: [8] },
       [construction],
     ), true);
-    host.broadcastExplosionEffect(120, 160, 48, 0xffaa44, 'rocket');
+    host.broadcastExplosionEffect(120, 160, 48, 0xffaa44, 'rocket', undefined, 'ROCKET_LAUNCHER');
 
     useRoom(previewRoom);
     let state = preview.getLatestGameState();
@@ -348,7 +348,7 @@ describe('LobbyWorld L3 – Preview ist passiv, aber aktuell', () => {
     expect(state?.rocks).toEqual([{ id: 7, hp: 80 }]);
     expect(state?.rockRemovals).toEqual([8]);
     expect(state?.placeableRocks).toEqual([construction]);
-    expect(explosionFx).toHaveBeenCalledWith(120, 160, 48, 0xffaa44, 'rocket');
+    expect(explosionFx).toHaveBeenCalledWith(120, 160, 48, 0xffaa44, 'rocket', undefined, 'ROCKET_LAUNCHER');
 
     // Movement, Death/Respawn und Dismantle bleiben normale World-Snapshots.
     useRoom(hostRoom);

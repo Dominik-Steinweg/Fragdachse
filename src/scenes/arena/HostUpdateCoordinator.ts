@@ -651,7 +651,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           allowTeamDamage: true,
           damageTarget: 'player-side',
         }, `void-armageddon:${mi.ownerId}`, 'ultimate', 'environment.void_meteor');
-        bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xa631ff, 'energy');
+        bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xa631ff, 'energy', undefined, 'enemy.void_meteor');
       } else {
         this.ctx.getWorldCombatCore()!.applyAoeDamage(
           mi.x, mi.y, mi.radius, mi.damage, mi.ownerId,
@@ -670,7 +670,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           mi.rockDamageMult, mi.trainDamageMult, mi.ownerId,
           mi.damageFalloff,
         );
-        bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622);
+        bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622, undefined, undefined, 'ARMAGEDDON');
       }
       this.playerGameplayRuntime?.hostCreateFireChunkBurst(
         mi.ownerId,
@@ -1408,7 +1408,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         );
       }
     }
-    bridge.broadcastExplosionEffect(x, y, effect.offsetPx * 2, effect.color, 'brood_hatch');
+    bridge.broadcastExplosionEffect(x, y, effect.offsetPx * 2, effect.color, 'brood_hatch', undefined, 'brood_hatch');
   }
 
   resolveProjectileExplosion(request: ProjectileExplosionRequest): ProjectileExplosionOutcome {
@@ -1462,7 +1462,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       );
       const combatSource = this.ctx.getWorldCombatCore()!.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'projectile.explosion', 'explosion', request.provenance, request.projectileId);
       this.applyExplosionEnvironmentDamage(request.x, request.y, effect, ownerId, combatSource);
-      bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, effect.color, effect.visualStyle);
+      bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, effect.color, effect.visualStyle, undefined, effect.audioSourceId ?? request.provenance.weaponSourceId);
       const groundFire = effect.groundFire;
       if (groundFire && groundFire.radius > 0 && groundFire.lingerDuration > 0) {
         this.ctx.fireSystem.hostCreateZone(request.x, request.y, groundFire, ownerId, combatSource);
@@ -1530,7 +1530,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         combat.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'weapon.grenade', 'explosion', request.provenance, request.projectileId),
       );
       if (this.worldRuntime !== world || this.ctx.getWorldCombatCore() !== combat) return;
-      bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, undefined, effect.visualStyle);
+      bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, undefined, effect.visualStyle, undefined, request.provenance.weaponSourceId);
       return;
     }
     if (effect.type === 'spawn_enemy') {
@@ -1843,8 +1843,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     applyEnvironmentDamage: (x, y, radius, damage, rockMult, trainMult, attackerId, falloff) => {
       this.applyAoeEnvironmentDamage(x, y, radius, damage, rockMult, trainMult, attackerId, falloff);
     },
-    playExplosion: (x, y, radius, color, visualStyle) => {
-      bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle);
+    playExplosion: (x, y, radius, color, visualStyle, sourceId) => {
+      bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle, undefined, sourceId);
     },
     // Optionale Schaden-über-Zeit-Fläche am Detonationsort (z.B. ASMD-Sekundär-Upgrade).
     spawnDotArea: (dot, x, y, explosionRadius, ownerId, ownerColor) => {
@@ -2189,7 +2189,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         now,
       );
     }
-    bridge.broadcastExplosionEffect(x, y, 18, payload.color, 'energy');
+    bridge.broadcastExplosionEffect(x, y, 18, payload.color, 'energy', undefined, 'ENERGY_INJECTOR');
   }
 
   private findTurretById(turretId: AutomatedTurretId): AutomatedTurret | undefined {
@@ -2219,7 +2219,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
 
   private emitRegenerationEffect(x: number, y: number, color: number): void {
-    bridge.broadcastExplosionEffect(x, y, SUPPORT_REGENERATION_EFFECT_RADIUS, color, 'regeneration');
+    bridge.broadcastExplosionEffect(x, y, SUPPORT_REGENERATION_EFFECT_RADIUS, color, 'regeneration', undefined, 'silent');
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

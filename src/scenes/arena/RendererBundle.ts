@@ -427,5 +427,4 @@ export function wireRenderersToAudioSystem(bundle: RendererBundle, audioSystem: 
   bundle.teslaDome.setAudioSystem(audioSystem);
   bundle.energyShield.setAudioSystem(audioSystem);
   bundle.nuke.setAudioSystem(audioSystem);
-  bundle.meteor.setAudioSystem(audioSystem);
 }

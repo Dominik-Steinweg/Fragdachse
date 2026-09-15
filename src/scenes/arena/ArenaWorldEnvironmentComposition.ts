@@ -159,7 +159,7 @@ export function composeWorldTrain(
       effects: {
         broadcastTrainBurrowSparks: (x, y) => bridge.broadcastTrainBurrowSparks(x, y),
         broadcastExplosionEffect: (x, y, radius, color, visualStyle) => (
-          bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle)
+          bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle, undefined, 'silent')
         ),
       },
     },
@@ -223,7 +223,7 @@ export function composeWorldSupportGameplay(
     rockGrid: arenaResult.rockGrid,
     stinkCloudSystem: ctx.stinkCloudSystem,
     reportDiagnosticEvent: (type, fields) => flow.onDiagnosticEvent(type, fields),
-    broadcastExplosion: (x, y, radius, color, style) => bridge.broadcastExplosionEffect(x, y, radius, color, style),
+    broadcastExplosion: (x, y, radius, color, style) => bridge.broadcastExplosionEffect(x, y, radius, color, style, undefined, 'environment.airstrike'),
     applyAirstrikeEnvironmentDamage: (x, y, radius, config, triggeredBy) => (
       hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, config, triggeredBy)
     ),

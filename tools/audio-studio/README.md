@@ -35,6 +35,32 @@ wegen unterschiedlicher Sampler keine garantierten identischen Audiodaten.
 uv run --inexact audio-studio serve --no-open
 ```
 
+### Beenden und Neustarten
+
+`Strg+C` beendet das Studio. Alternativ in einem zweiten Terminal im selben Ordner:
+
+```powershell
+npm stop
+npm restart
+```
+
+`npm stop` funktioniert auch dann, wenn der HTTP-Port bereits geschlossen ist. Der Server
+hat bis zu 15 Sekunden für den Shutdown; danach beendet ein Watchdog den eigenen Prozess,
+damit eine blockierte Anfrage oder Modellbereinigung die Projektsperre nicht dauerhaft hält.
+Ein bereits gestopptes Studio ist kein Fehler. Für einen festhängenden Windows-Prozess:
+
+```powershell
+npm stop -- --force
+npm start
+```
+
+Der erzwungene Stop prüft Projekt, Instanz und Prozess-Erstellungszeit; andere Python-Prozesse
+und ComfyUI werden nicht beendet. Fertige Kandidaten bleiben erhalten, unvollständige Jobs
+werden beim nächsten Start als unterbrochen markiert. Die Lockdateien nicht manuell löschen:
+Entscheidend ist die Betriebssystem-Sperre des laufenden Prozesses, nicht die Existenz der Datei.
+Instanzen einer älteren Studio-Version ohne Prozessmetadaten müssen einmalig über ihr
+ursprüngliches Terminal bzw. den identifizierten Studio-Prozess beendet werden.
+
 Unter Linux/WSL dieselben Befehle im dortigen Checkout verwenden. Eine Windows-`.venv` funktioniert nicht unter Linux. WSL wurde auf diesem Rechner nicht verifiziert. Das Studio kann ohne Modell vorhandene Dateien zeigen und bearbeiten; erst **Generieren** benötigt dessen Laufzeit, Lizenzfreigabe und lokale Gewichte. `--inexact` erhält zusätzlich installierte Modellpakete, die ein gewöhnliches `uv sync` wieder entfernen könnte.
 
 ## Tool 1: Katalog mit Codex/Astra pflegen

@@ -20,6 +20,19 @@ function fixture() {
 }
 
 describe('GameAudioSystem one-shot feedback', () => {
+  it('plays exactly one explosion recording and replaces the substitute when the dedicated asset is available', () => {
+    const { audio, available, sound } = fixture();
+    available.add('sfx_explosion_armageddon');
+    audio.playSound('sfx_explosion_void_armageddon', 0, 0);
+    expect(sound.play).toHaveBeenCalledOnce();
+    expect(sound.play.mock.lastCall![0]).toBe('sfx_explosion_armageddon');
+    available.add('sfx_explosion_void_armageddon');
+    audio.playSound('sfx_explosion_void_armageddon', 0, 0);
+    expect(sound.play).toHaveBeenCalledTimes(2);
+    expect(sound.play.mock.lastCall![0]).toBe('sfx_explosion_void_armageddon');
+    audio.cleanup();
+  });
+
   it('loads only published catalog assets and silently drops missing or locked feedback without backlog', () => {
     const load = vi.fn();
     preloadAllAudio({ audio: load } as never);

@@ -71,7 +71,7 @@ describe('WeaponReactionRuntime – Shotgun Lightning und einfache Kill-Reaktion
         killSource: { shotgunLightningGeneration: 0 },
       }),
     );
-    expect(network.broadcastExplosionEffect).toHaveBeenCalledWith(10, 20, 80, 0x78dfff, 'lightning');
+    expect(network.broadcastExplosionEffect).toHaveBeenCalledWith(10, 20, 80, 0x78dfff, 'lightning', undefined, 'weapon.shotgun_lightning');
   });
 
   it('erhält Chain-Generation und Retention für Lightning-Kills', () => {

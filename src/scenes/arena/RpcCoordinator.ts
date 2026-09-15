@@ -12,8 +12,8 @@ import type { DecoySystem } from '../../systems/DecoySystem';
 import type { EffectSystem } from '../../effects/EffectSystem';
 import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
-import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
-import { resonanceReleaseStrength } from '../../effects/timeBubbleResonanceVisual';
+import type { LoadoutUseParams } from '../../types';
+import { resolveExplosionAudio } from '../../audio/ExplosionAudio';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { isValidPlayerActionAttemptId } from '../../world/PlayerActionRuntime';
 import type {
@@ -25,38 +25,6 @@ import type {
   TrainRpcPort,
   WorldParticipationRpcPort,
 } from './ArenaRpcPorts';
-
-// SHOT_AUDIO_REMOTE_CLOSE_VOLUME (0.58) caps all spatial sounds at ~58 % volume even at
-// distance 0.  Explosions are world events, not remote-player gunshots, so we compensate
-// with a per-type scale so they can reach full volume when close to the listener.
-// scale = 1 / SHOT_AUDIO_REMOTE_CLOSE_VOLUME ≈ 1.72 lets a close explosion hit 1.0
-// (Phaser clamps finalVolume to [0, 1] anyway, so there is no clipping risk).
-const EXPLOSION_CLOSE_BOOST = 1 / 0.58; // ≈ 1.72
-
-function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle, chargeDamage?: number): { key: string; scale: number } | undefined {
-  switch (visualStyle) {
-    case 'time_bubble_release': {
-      const strength = resonanceReleaseStrength(chargeDamage);
-      return strength > 0 ? { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * (0.2 + strength * 0.45) } : undefined;
-    }
-    case 'holy':        return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };
-    case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };
-    case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };
-    case 'timebomb_pop': return undefined;
-    case 'regeneration': return undefined;
-    case 'lightning':   return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * 0.82 };
-    case 'nuke':        return { key: 'sfx_nuke_explosion',           scale: EXPLOSION_CLOSE_BOOST };
-    case 'rocket':      return { key: 'sfx_explosion_rocket',         scale: EXPLOSION_CLOSE_BOOST };
-    case 'mini_rocket': return { key: 'sfx_explosion_mini_rocket',    scale: EXPLOSION_CLOSE_BOOST };
-    case 'mini_rocket_cascade': return { key: 'sfx_explosion_mini_rocket', scale: EXPLOSION_CLOSE_BOOST };
-    case 'train':       return undefined; // sound handled separately via playLocalSound('sfx_train_explode')
-    // Aus der Brutbombe schluepft ein Dachs, es explodiert nichts – deshalb der Wurfgeraeusch-Sound
-    // statt eines Explosionsknalls. Kein EXPLOSION_CLOSE_BOOST: er soll genauso klingen wie eine
-    // geworfene Granate, nicht wie ein Welt-Ereignis.
-    case 'brood_hatch': return { key: 'shot_throw', scale: 1 };
-    default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
-  }
-}
 
 /**
  * Registers all bridge RPC handlers in one place.
@@ -435,10 +403,10 @@ export class RpcCoordinator {
   }
 
   private registerExplosionEffectHandler(): void {
-    bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle, chargeDamage) => {
+    bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle, chargeDamage, audioSourceId) => {
       if (chargeDamage === undefined) this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
       else this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle, chargeDamage);
-      const audio = resolveExplosionAudio(visualStyle, chargeDamage);
+      const audio = resolveExplosionAudio(audioSourceId ?? 'generic', chargeDamage);
       if (audio) this.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);
       // Die Nuke pulst nicht von hier: ihre Detonation ist Phase B der Choreografie, die das
       // Effektsystem startet. Ein Puls daneben liefe doppelt.
