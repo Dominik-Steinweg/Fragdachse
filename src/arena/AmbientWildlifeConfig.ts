@@ -2,13 +2,17 @@
 export const AMBIENT_WILDLIFE = {
   visualScale: 1.3,
   butterfly: { size: 5.2, speed: 4, fleeSpeed: 18, alertRadius: 64, turnRate: 2.4, maxCount: 120, density: .85, animationRate: 14 },
-  snake: { size: 24, speed: 9, fleeSpeed: 32, alertRadius: 96, turnRate: 1.6, maxCount: 96 },
+  snake: { size: 24, speed: 9, fleeSpeed: 32, alertRadius: 96, turnRate: 1.6, maxCount: 96,
+    treeOccupancy: .25, groupChance: .04, thirdSnakeChance: .15 },
   fish: { size: 4.5, speed: 11, fleeSpeed: 96, alertRadius: 160, turnRate: 3, maxCount: 96, density: .8 },
   shotRadiusScale: 2,
   shotAlertSeconds: 1.6,
   butterflyFlightSeconds: 5,
   butterflyRestSeconds: 30,
   snakeSizes: [.85, 1, 1.22],
+  snakeVisual: { scale: 1.2, segments: 28, waveAmplitude: 2.1, waveLength: 7.2,
+    tongueColor: 0xb84b58, tongueLength: 2.2, tongueWidth: .28,
+    tonguePeriod: 4, tongueJitter: 1.7, tongueMinDuration: .2, tongueMaxDuration: .35 },
   snakeColors: [
     { name: 'Olivgrün', body: 0x424b2c, head: 0x58603b, pattern: 0x303820, highlight: 0x73764a },
     { name: 'Erdbraun', body: 0x594431, head: 0x6c5339, pattern: 0x382d24, highlight: 0x8c7050 },

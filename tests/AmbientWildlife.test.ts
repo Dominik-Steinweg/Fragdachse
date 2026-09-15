@@ -1,18 +1,95 @@
 import { describe, expect, it } from 'vitest';
 import { AmbientWildlifeModel, type WildlifeKind } from '../src/arena/AmbientWildlifeModel';
 import { AMBIENT_WILDLIFE } from '../src/arena/AmbientWildlifeConfig';
-import { createWildlifeAppearance, writeFishMemberPose } from '../src/arena/AmbientWildlifeAppearance';
+import { createWildlifeAppearance, snakeTongueExtension, writeSnakeBodyPose, writeFishMemberPose } from '../src/arena/AmbientWildlifeAppearance';
 import { CANOPY_RADIUS, CELL_SIZE } from '../src/config';
 import type { ArenaLayout } from '../src/types';
 
 const frame = { offsetX: 147, offsetY: 83, width: 1280, height: 960 };
 function layout(): ArenaLayout {
-  return { seed: 873, trees: [{ gridX: 8, gridY: 12 }, { gridX: 34, gridY: 19 }],
+  return { seed: 882, trees: [{ gridX: 8, gridY: 12 }, { gridX: 34, gridY: 19 }],
     rocks: [{ gridX: 7, gridY: 9 }], dirt: [{ gridX: 6, gridY: 5 }], tracks: [], powerUpPedestals: [],
     water: Array.from({ length: 120 }, (_, i) => ({ gridX: 14 + i % 12, gridY: 8 + Math.floor(i / 12) })) };
 }
 
 describe('cosmetic wildlife', () => {
+  it('uses sparse seeded tree occupancy with rare shared homes and a global population cap', () => {
+    const trees = Array.from({ length: 256 }, (_, i) => ({ gridX: 8 + (i % 16) * 10, gridY: 8 + Math.floor(i / 16) * 10 }));
+    const habitat: ArenaLayout = { seed: 0, trees, rocks: [], dirt: [], tracks: [], powerUpPedestals: [] };
+    const world = { offsetX: 0, offsetY: 0, width: 16384, height: 16384 };
+    let occupied = 0, shared = 0;
+    for (let seed = 0; seed < 20; seed++) {
+      const model = new AmbientWildlifeModel({ ...habitat, seed }, world);
+      const snakes = model.animals.filter(a => a.kind === 'snake');
+      const homes = new Map<string, number>();
+      for (const snake of snakes) {
+        const home = `${snake.homeX},${snake.homeY}`;
+        homes.set(home, (homes.get(home) ?? 0) + 1);
+        expect(model.contains(snake, snake.x, snake.y)).toBe(true);
+      }
+      occupied += homes.size;
+      shared += [...homes.values()].filter(count => count > 1).length;
+      expect(new Set(snakes.map(a => `${a.x},${a.y}`)).size).toBe(snakes.length);
+      if (seed === 0) {
+        const reordered = new AmbientWildlifeModel({ ...habitat, trees: [...trees].reverse() }, world);
+        expect(reordered.animals.filter(a => a.kind === 'snake')).toEqual(snakes);
+      }
+    }
+    // Check configured probabilities over a broad sample, without freezing tuning literals.
+    const samples = trees.length * 20, probability = AMBIENT_WILDLIFE.snake.treeOccupancy;
+    expect(Math.abs(occupied - samples * probability)).toBeLessThan(5 * Math.sqrt(samples * probability * (1 - probability)));
+    const groupChance = AMBIENT_WILDLIFE.snake.groupChance;
+    expect(shared).toBeGreaterThan(0);
+    expect(Math.abs(shared - occupied * groupChance)).toBeLessThan(5 * Math.sqrt(occupied * groupChance * (1 - groupChance)));
+    const dense = new AmbientWildlifeModel({ ...habitat, trees: Array.from({ length: 2048 }, (_, i) => ({
+      gridX: 8 + (i % 64) * 7, gridY: 8 + Math.floor(i / 64) * 7,
+    })) }, world);
+    expect(dense.animals.filter(a => a.kind === 'snake')).toHaveLength(AMBIENT_WILDLIFE.snake.maxCount);
+  });
+
+  it('retracts the tongue completely between individually varied, recurring flicks', () => {
+    const signatures: string[] = [];
+    for (const variation of [.03, .37, .81]) {
+      let visible = 0, hidden = 0, pulses = 0, previous = 0;
+      const starts: number[] = [];
+      for (let i = 0; i < 6000; i++) {
+        const extension = snakeTongueExtension(i * .01, variation);
+        expect(extension).toBeGreaterThanOrEqual(0);
+        expect(extension).toBeLessThanOrEqual(1);
+        if (extension > 0) {
+          visible++;
+          if (previous === 0) { pulses++; starts.push(i); }
+        } else hidden++;
+        if (i > 0) expect(Math.abs(extension - previous)).toBeLessThan(.4);
+        previous = extension;
+      }
+      expect(pulses).toBeGreaterThan(2);
+      expect(hidden).toBeGreaterThan(visible * 5);
+      expect(new Set(starts.slice(1).map((start, i) => start - starts[i])).size).toBeGreaterThan(1);
+      signatures.push(starts.join(','));
+    }
+    expect(new Set(signatures).size).toBe(signatures.length);
+  });
+
+  it('keeps the complete animated snake and extended tongue inside habitat clearance', () => {
+    const pose = { x: 0, y: 0, halfWidth: 0 };
+    for (let size = 0; size < AMBIENT_WILDLIFE.snakeSizes.length; size++) {
+      const style = createWildlifeAppearance('snake', (size + .5) / AMBIENT_WILDLIFE.snakeSizes.length, .5, 0);
+      for (let phase = 0; phase < 30; phase++) {
+        for (let segment = 0; segment <= AMBIENT_WILDLIFE.snakeVisual.segments; segment++) {
+          writeSnakeBodyPose(style, phase * .37, segment / AMBIENT_WILDLIFE.snakeVisual.segments, pose);
+          for (const side of [-1, 1]) for (const shadow of [0, 1]) {
+            expect(Math.hypot(pose.x + shadow * .5, pose.y + side * pose.halfWidth + shadow * .65)
+              * AMBIENT_WILDLIFE.visualScale).toBeLessThan(style.footprint);
+          }
+        }
+      }
+      const tuning = AMBIENT_WILDLIFE.snakeVisual;
+      expect(Math.hypot((1.45 + tuning.tongueLength) * tuning.scale, .36 * style.widthScale)
+        * AMBIENT_WILDLIFE.visualScale).toBeLessThan(style.footprint);
+    }
+  });
+
   it('derives habitats from any layout without modifying it or needing players', () => {
     const source = layout(), before = JSON.stringify(source);
     const model = new AmbientWildlifeModel(source, frame);

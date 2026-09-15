@@ -4,7 +4,8 @@ import { registerGraphicsObject } from '../effects/EffectUtils';
 import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
-import { writeFishMemberPose, type FishMemberPose } from './AmbientWildlifeAppearance';
+import { snakeTongueExtension, writeSnakeBodyPose, writeFishMemberPose, type FishMemberPose,
+  type SnakeBodyPose } from './AmbientWildlifeAppearance';
 import { AmbientWildlifeModel, type WildlifeAnimal, type WildlifePlayer } from './AmbientWildlifeModel';
 
 /** Two bounded, batched vector layers; tiny silhouettes animate at actual world scale. */
@@ -13,6 +14,8 @@ export class AmbientWildlifeRenderer {
   private readonly ground: Phaser.GameObjects.Graphics;
   private readonly fish: Phaser.GameObjects.Graphics;
   private destroyed = false;
+  private visualTime = 0;
+  private readonly snakePose: SnakeBodyPose = { x: 0, y: 0, halfWidth: 0 };
   private readonly fishPose: FishMemberPose = { x: 0, y: 0, length: 0 };
 
   constructor(scene: Phaser.Scene, frame: ChunkWorldFrame, layout: ArenaLayout) {
@@ -25,6 +28,7 @@ export class AmbientWildlifeRenderer {
 
   update(deltaMs: number, players: readonly WildlifePlayer[], view: ChunkWorldRect): void {
     if (this.destroyed) return;
+    this.visualTime += Math.max(0, Math.min(deltaMs / 1000, .05));
     this.model.update(deltaMs, players, view);
     this.ground.clear(); this.fish.clear();
     for (const a of this.model.animals) {
@@ -62,31 +66,52 @@ export class AmbientWildlifeRenderer {
   }
 
   private drawSnake(g: Phaser.GameObjects.Graphics, a: WildlifeAnimal): void {
-    const length = a.appearance.length;
+    const tuning = TUNING.snakeVisual;
     const colors = TUNING.snakeColors[a.appearance.colorIndex];
-    g.scaleCanvas(1, a.appearance.widthScale);
+    const pose = this.snakePose, segments = tuning.segments;
     // A continuous tapered ribbon keeps the tiny tail from breaking into beads.
     for (const shadow of [true, false]) {
       g.fillStyle(shadow ? 0x20271d : colors.body, shadow ? .25 : .98);
       g.beginPath();
-      for (let i = 0; i <= 26; i++) {
-        const t = (i <= 13 ? i : 26 - i) / 13;
-        const side = i <= 13 ? 1 : -1;
-        const x = -t * length + (shadow ? .5 : 0);
-        const y = Math.sin(a.animation - t * 7.2) * Math.sin(t * Math.PI * .8) * 2.1
-          + side * (.04 + (1 - t) * .85) + (shadow ? .65 : 0);
+      for (let i = 0; i <= segments * 2; i++) {
+        const t = (i <= segments ? i : segments * 2 - i) / segments;
+        const side = i <= segments ? 1 : -1;
+        writeSnakeBodyPose(a.appearance, a.animation, t, pose);
+        const x = pose.x + (shadow ? .5 : 0);
+        const y = pose.y + side * pose.halfWidth + (shadow ? .65 : 0);
         if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
       }
       g.closePath(); g.fillPath();
     }
-    for (let i = 1; i < 6; i++) {
-      const t = i / 7;
-      const y = Math.sin(a.animation - t * 7.2) * Math.sin(t * Math.PI * .8) * 2.1;
-      g.fillStyle(i % 2 ? colors.pattern : colors.highlight, .45);
-      g.fillEllipse(-t * length, y - .12, .8, (1 - t) * .7, 4);
+    // A tapered dorsal ribbon follows the same wave, including near the tail.
+    g.fillStyle(colors.highlight, .3); g.beginPath();
+    for (let i = 0; i <= segments * 2; i++) {
+      const t = (i <= segments ? i : segments * 2 - i) / segments;
+      writeSnakeBodyPose(a.appearance, a.animation, t, pose);
+      const y = pose.y + (i <= segments ? .15 : -.35) * pose.halfWidth;
+      if (i === 0) g.moveTo(pose.x, y); else g.lineTo(pose.x, y);
     }
-    g.fillStyle(colors.head, 1); g.fillEllipse(.15, 0, 2.5, 1.65, 8);
-    g.fillStyle(0x283325, .9); g.fillEllipse(.8, -.48, .4, .4, 4); g.fillEllipse(.8, .48, .4, .4, 4);
+    g.closePath(); g.fillPath();
+    for (let i = 1; i < 11; i++) {
+      writeSnakeBodyPose(a.appearance, a.animation, i / 12, pose);
+      g.fillStyle(colors.pattern, .55);
+      g.fillEllipse(pose.x, pose.y + pose.halfWidth * .35, .85, pose.halfWidth * .7, 8);
+    }
+    g.save(); g.scaleCanvas(tuning.scale, a.appearance.widthScale);
+    const extension = snakeTongueExtension(this.visualTime, a.variation);
+    if (extension > 0) {
+      const root = 1.45, tip = root + tuning.tongueLength * extension;
+      const fork = tip - .65 * extension;
+      g.lineStyle(tuning.tongueWidth, tuning.tongueColor, .95);
+      g.beginPath(); g.moveTo(root, 0); g.lineTo(fork, 0);
+      g.lineTo(tip, -.36 * extension); g.moveTo(fork, 0); g.lineTo(tip, .36 * extension);
+      g.strokePath();
+    }
+    g.fillStyle(colors.head, 1); g.fillEllipse(.15, 0, 2.8, 1.65, 16);
+    g.fillStyle(colors.highlight, .3); g.fillEllipse(.3, -.15, 1.8, .65, 12);
+    g.fillStyle(0x20291c, .95);
+    g.fillEllipse(.85, -.57, .35, .33, 8); g.fillEllipse(.85, .57, .35, .33, 8);
+    g.restore();
   }
 
   private drawSchool(g: Phaser.GameObjects.Graphics, a: WildlifeAnimal): void {

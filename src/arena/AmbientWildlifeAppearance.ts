@@ -16,8 +16,8 @@ export function createWildlifeAppearance(kind: WildlifeKind, sizeRoll: number, c
   groupRoll: number): WildlifeAppearance {
   if (kind === 'snake') {
     const scale = TUNING.snakeSizes[Math.floor(sizeRoll * TUNING.snakeSizes.length)];
-    const length = TUNING.snake.size * scale;
-    return { length, widthScale: .8 + scale * .2, colorIndex: Math.floor(colorRoll * TUNING.snakeColors.length),
+    const length = TUNING.snake.size * scale * TUNING.snakeVisual.scale;
+    return { length, widthScale: (.8 + scale * .2) * TUNING.snakeVisual.scale, colorIndex: Math.floor(colorRoll * TUNING.snakeColors.length),
       groupIndex: 0, count: 1, spread: 0, footprint: length * TUNING.visualScale + 2 };
   }
   if (kind === 'fish') {
@@ -35,6 +35,35 @@ export function createWildlifeAppearance(kind: WildlifeKind, sizeRoll: number, c
 }
 
 export interface FishMemberPose { x: number; y: number; length: number }
+
+export interface SnakeBodyPose { x: number; y: number; halfWidth: number }
+
+/** Head-anchored travelling wave shared by the silhouette and dorsal markings. */
+export function writeSnakeBodyPose(appearance: WildlifeAppearance, animation: number,
+  t: number, out: SnakeBodyPose): void {
+  out.x = -t * appearance.length;
+  out.y = Math.sin(animation - t * TUNING.snakeVisual.waveLength)
+    * Math.sin(t * Math.PI * .8) * TUNING.snakeVisual.waveAmplitude * appearance.widthScale;
+  out.halfWidth = (.025 + .86 * Math.pow(1 - t, .7) * (.72 + .28 * Math.sin(Math.min(t * 5, 1) * Math.PI / 2)))
+    * appearance.widthScale;
+}
+
+/** Stateless, individually offset pulses; time is independent of locomotion speed. */
+export function snakeTongueExtension(time: number, variation: number): number {
+  const tuning = TUNING.snakeVisual;
+  const shifted = time + variation * tuning.tonguePeriod;
+  const cycle = Math.floor(shifted / tuning.tonguePeriod);
+  const roll = (salt: number): number => {
+    const value = Math.sin(cycle * 127.1 + variation * 311.7 + salt) * 43758.5453;
+    return value - Math.floor(value);
+  };
+  const start = .3 + roll(17) * tuning.tongueJitter;
+  const duration = tuning.tongueMinDuration + roll(53) * (tuning.tongueMaxDuration - tuning.tongueMinDuration);
+  const phase = (shifted - cycle * tuning.tonguePeriod - start) / duration;
+  if (phase <= 0 || phase >= 1) return 0;
+  // Quick extension, a small flicker at the tip, and complete retraction.
+  return Math.pow(Math.sin(Math.PI * phase), .7) * (.94 + .06 * Math.cos(phase * Math.PI * 6));
+}
 
 /** A loose radial formation keeps pairs centred and single fish on their own pivot. */
 export function writeFishMemberPose(appearance: WildlifeAppearance, animation: number, variation: number,

@@ -103,16 +103,29 @@ export class AmbientWildlifeModel {
     // maps too. A tiny patch that supports only one butterfly keeps that one.
     this.animals.sort((a, b) => random(a.homeX, a.homeY, 850) - random(b.homeX, b.homeY, 850));
     this.animals.length = Math.min(this.animals.length, Math.max(1, Math.floor(this.animals.length * TUNING.butterfly.density)));
-    const treeStride = Math.max(1, Math.ceil(this.trees.length / TUNING.snake.maxCount));
-    for (let i = 0; i < this.trees.length; i += treeStride) {
-      const tree = this.trees[i];
-      const appearance = appearanceAt('snake', tree.x, tree.y);
-      for (let attempt = 0; attempt < 16; attempt++) {
-        const angle = random(i, attempt, 861) * TAU;
-        const radius = CANOPY_RADIUS * (.76 + random(i, attempt, 862) * .27);
-        const x = tree.x + Math.cos(angle) * radius, y = tree.y + Math.sin(angle) * radius;
-        if (!this.isLand(x, y, appearance.footprint)) continue;
-        add('snake', x, y, tree.x, tree.y, appearance); break;
+    // Seeded occupancy keeps most trees empty; rare shared homes remain possible.
+    // Seeded priority also spreads the population cap without depending on authored order.
+    const snakeTrees = this.trees.filter(tree => random(tree.x, tree.y, 863) < TUNING.snake.treeOccupancy)
+      .sort((a, b) => random(a.x, a.y, 864) - random(b.x, b.y, 864));
+    let snakeCount = 0;
+    for (const tree of snakeTrees) {
+      if (snakeCount >= TUNING.snake.maxCount) break;
+      const count = random(tree.x, tree.y, 865) < TUNING.snake.groupChance
+        ? 2 + Number(random(tree.x, tree.y, 866) < TUNING.snake.thirdSnakeChance) : 1;
+      const members: WildlifeAnimal[] = [];
+      for (let member = 0; member < count && snakeCount < TUNING.snake.maxCount; member++) {
+        const appearance = createWildlifeAppearance('snake', random(tree.x, tree.y, 811 + member * 100),
+          random(tree.x, tree.y, 812 + member * 100), 0);
+        for (let attempt = 0; attempt < 16; attempt++) {
+          const salt = member * 100 + attempt * 2;
+          const angle = random(tree.x, tree.y, 900 + salt) * TAU;
+          const radius = Math.min(CANOPY_RADIUS * (.76 + random(tree.x, tree.y, 901 + salt) * .27),
+            CANOPY_RADIUS * 1.5 - appearance.footprint - 1);
+          const x = tree.x + Math.cos(angle) * radius, y = tree.y + Math.sin(angle) * radius;
+          if (!this.isLand(x, y, appearance.footprint)
+            || members.some(other => Math.hypot(x - other.x, y - other.y) < 12)) continue;
+          members.push(add('snake', x, y, tree.x, tree.y, appearance)); snakeCount++; break;
+        }
       }
     }
     const schoolHomes: { x: number; y: number }[] = [];
