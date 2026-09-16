@@ -37,4 +37,6 @@ export interface BreachPlan {
   readonly nextBlocker: string | null;
   readonly approach: NavigationPoint | null;
   readonly costSeconds: number;
+  /** Search endpoint used to revalidate openings without a currently free goal region. */
+  readonly goalIndex?: number;
 }

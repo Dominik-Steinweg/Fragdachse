@@ -25,6 +25,7 @@ interface EnemyAttackCandidate {
   readonly targetId?: string;
   readonly targetRef?: EnemyAiTargetRef;
   readonly obstacle?: RockPhysicsProxy;
+  readonly obstacleIndex?: number;
 }
 
 interface SustainedEnemyAttackState {
@@ -304,6 +305,8 @@ export class CoopDefenseEnemyAttackSystem {
           targetY: target.targetY,
           targetId: target.targetId,
           targetRef: target.targetRef,
+          obstacle: target.obstacle,
+          obstacleIndex: target.obstacleIndex,
         },
       },
       now,
@@ -322,7 +325,11 @@ export class CoopDefenseEnemyAttackSystem {
     const { attackWeapon, target } = attack;
     const committedLivingAttack = committed && (target.targetRef?.kind === 'player' || target.targetRef?.kind === 'decoy' || target.kind === 'ally');
     if (this.intents && target.kind !== 'train' && !committedLivingAttack) {
-      const id = target.kind === 'obstacle' ? String((this.getRockObjects() ?? []).indexOf(target.obstacle ?? null))
+      if (target.kind === 'obstacle' && (target.obstacleIndex === undefined
+        || this.getRockObjects()?.[target.obstacleIndex] !== target.obstacle || !target.obstacle?.active)) {
+        this.abortCombat(enemy, now); return;
+      }
+      const id = target.kind === 'obstacle' ? String(target.obstacleIndex)
         : target.targetRef?.id ?? target.targetId ?? '';
       const kind = target.kind === 'base' || target.kind === 'obstacle' ? target.kind : target.targetRef?.kind ?? target.kind;
       if (!this.intents.allowsAttack(enemy.id, kind, id, attackWeapon.targetMode)) {
@@ -413,13 +420,13 @@ export class CoopDefenseEnemyAttackSystem {
           : this.findLivingTargetWithLock(enemy, weapon.config.range, now);
       } else if (intent?.attackContext === 'breach' && attackWeapon.targetMode !== 'players') {
         const blocker = this.intents.getBreach(enemy.id)?.nextBlocker;
-        target = blocker?.startsWith('base:') ? this.findNearestBaseTarget(enemy, weapon.config.range)
-          : this.findNearestObstacleTarget(enemy, weapon.config.range, now);
+        if (blocker?.startsWith('base:')) target = this.findNearestBaseTarget(enemy, weapon.config.range, blocker.slice(5));
+        else if (blocker?.startsWith('rock:')) target = this.findNearestObstacleTarget(enemy, weapon.config.range, now, Number(blocker.slice(5)));
       } else if (ref && intent?.attackContext === 'primary') {
         if (ref.kind === 'base' && attackWeapon.targetMode !== 'players' && attackWeapon.targetMode !== 'rocks') {
-          target = this.findNearestBaseTarget(enemy, weapon.config.range);
+          target = this.findNearestBaseTarget(enemy, weapon.config.range, ref.id);
         } else if (ref.kind === 'armed-construct' && attackWeapon.targetMode !== 'players') {
-          target = this.findNearestArmedConstructTarget(enemy, weapon.config.range);
+          target = this.findNearestArmedConstructTarget(enemy, weapon.config.range, Number(ref.id));
         } else if (ref.kind !== 'base' && ref.kind !== 'ally' && attackWeapon.targetMode !== 'structures' && attackWeapon.targetMode !== 'rocks') {
           target = this.buildPlayerLikeTargetCandidate(enemy, ref, weapon.config.range);
         }
@@ -626,12 +633,15 @@ export class CoopDefenseEnemyAttackSystem {
     return this.isBetterCandidate(obstacle, best) ? obstacle : best;
   }
 
-  private findNearestBaseTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
+  private findNearestBaseTarget(enemy: EnemyEntity, range: number, knownId?: string): EnemyAttackCandidate | null {
     let best: EnemyAttackCandidate | null = null;
     const strategicTarget = getCoopDefenseEnemyConfig(enemy.kind).movementTarget;
 
     // Gegnerbasen sind fuer Zombies kein Ziel; sie gehoeren derselben Fraktion.
-    for (const base of this.baseManager.getBasesByFaction('friendly')) {
+    const knownBase = knownId === undefined ? undefined : this.baseManager.getBase(knownId);
+    const bases = knownId === undefined ? this.baseManager.getBasesByFaction('friendly')
+      : knownBase?.faction === 'friendly' ? [knownBase] : [];
+    for (const base of bases) {
       if (this.intents && !this.intents.allowsAttack(enemy.id, 'base', base.id, 'all')) continue;
       if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
       if (
@@ -663,11 +673,14 @@ export class CoopDefenseEnemyAttackSystem {
     return best;
   }
 
-  private findNearestArmedConstructTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
+  private findNearestArmedConstructTarget(enemy: EnemyEntity, range: number, knownId?: number): EnemyAttackCandidate | null {
     if (getCoopDefenseEnemyConfig(enemy.kind).movementTarget !== 'players-and-armed-constructs') return null;
     const rockObjects = this.getRockObjects() ?? [];
     let best: EnemyAttackCandidate | null = null;
-    for (const construction of this.placementSystem?.getAllRuntimeRocks() ?? []) {
+    const knownConstruction = knownId === undefined ? undefined : this.placementSystem?.getRuntimeRock(knownId);
+    const constructions = knownId === undefined ? this.placementSystem?.getAllRuntimeRocks() ?? []
+      : knownConstruction ? [knownConstruction] : [];
+    for (const construction of constructions) {
       if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(construction.id), 'all')) continue;
       if (construction.hp <= 0 || construction.kind !== 'turret') continue;
       const obstacle = rockObjects[construction.id];
@@ -689,16 +702,21 @@ export class CoopDefenseEnemyAttackSystem {
         targetX: obstacle.x,
         targetY: obstacle.y,
         obstacle,
+        obstacleIndex: construction.id,
       };
       if (this.isBetterCandidate(candidate, best)) best = candidate;
     }
     return best;
   }
 
-  private findNearestObstacleTarget(enemy: EnemyEntity, range: number, now: number): EnemyAttackCandidate | null {
+  private findNearestObstacleTarget(enemy: EnemyEntity, range: number, now: number, knownIndex?: number): EnemyAttackCandidate | null {
     if (!this.isObstacleAttackUnlocked(enemy)) return null;
 
     const rockObjects = this.getRockObjects() ?? [];
+    if (knownIndex !== undefined) {
+      const obstacle = rockObjects[knownIndex];
+      return obstacle ? this.buildObstacleCandidate(enemy, obstacle, rockObjects, range, knownIndex) : null;
+    }
     let best: EnemyAttackCandidate | null = null;
     for (let index = 0; index < rockObjects.length; index += 1) {
       const rock = rockObjects[index];
@@ -737,6 +755,7 @@ export class CoopDefenseEnemyAttackSystem {
       targetX: obstacle.x,
       targetY: obstacle.y,
       obstacle,
+      obstacleIndex: index,
     };
   }
 
@@ -845,7 +864,7 @@ export class CoopDefenseEnemyAttackSystem {
     if (target.kind === 'armed-construct') {
       const obstacle = this.getRockObjects()?.[Number(target.id)];
       if (!obstacle?.active) return null;
-      return { kind: 'obstacle', priority: 2, distance, targetX: position.x, targetY: position.y, obstacle, targetRef };
+      return { kind: 'obstacle', priority: 2, distance, targetX: position.x, targetY: position.y, obstacle, obstacleIndex: Number(target.id), targetRef };
     }
     if (target.kind === 'armed-base' || target.kind === 'armed-outpost') {
       return { kind: 'base', priority: 2, distance, targetX: position.x, targetY: position.y, targetRef };

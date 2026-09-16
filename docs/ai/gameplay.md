@@ -32,7 +32,9 @@ Ein Waffenmodus `all` erlaubt keinen strategischen Zielwechsel; ausdrücklich ko
 und bereits verbindlich begonnene Fähigkeiten behalten ihre eigenen Verträge.
 
 Die Navigation leitet ihre Körpergeometrie aus der aktuellen World ab. Ein Worker-Ergebnis wird zusammen
-mit Profil, Zielzuordnung und Generation aktiviert. Physische Änderungen sperren veraltete Routen sofort.
+mit Profil, Zielzuordnung und Generation aktiviert. Physische Änderungen entziehen veralteten Routen
+sofort ihre Erreichbarkeits- und Durchbruchsaussage. Ein Fortsatz zum selben Ziel darf weiterführen,
+wenn der aktuelle Körperanschluss und jedes vorgeschlagene Segment gegen die neue Geometrie frei sind.
 `pending`, ein ungültiger Anschluss oder Gedränge beweisen keine Unerreichbarkeit und erlauben keinen
 Durchbruchsangriff. Ein solcher Angriff benötigt einen aktuellen Auftrag für das konkrete beschädigbare
 Hindernis und die Rechte der Einheit; der Schaden läuft weiterhin durch Combat. Dies sichern
@@ -50,6 +52,10 @@ nicht an fertig berechneten Wegkosten. Bei unveränderter Topologie prüft die N
 angeforderten Angriffsplätze gegen diese Regionen. Ein Durchbruchsauftrag bleibt bei Zielbewegung
 innerhalb derselben Zielregion gültig; ein frei erreichbarer Zielbereich hebt ihn sofort auf.
 Die Suche verwendet dabei die aktuellen Zielanschlüsse, keine veralteten Ziele des Kostenfeldes.
+Fehlen einem gültigen Ziel sämtliche freien Angriffsplätze, prüft die Durchbruchssuche mögliche
+Angriffsplätze nach einer hypothetischen Öffnung. Ein aktueller freier Startanschluss bleibt erforderlich;
+die Öffnung muss sowohl Körperfreiheit als auch Reichweite und Sicht zum Ziel herstellen.
+Ein tatsächlich ungültiges Ziel wird dadurch nicht zum Durchbruchsziel.
 
 Ein `pending`-Ergebnis kann einen sicheren Bewegungsfortsatz tragen. Dieser bleibt an dasselbe Ziel
 gebunden und erteilt keine Durchbruchserlaubnis. Eine direkte Verbindung zu einem aktuellen Angriffsbereich
@@ -60,6 +66,9 @@ Die Verträge sind in [CoopDefenseSpawnExecutor.test.ts](../../tests/CoopDefense
 Nekromantie behält Entity-Lifetime, Besitzerbindung und Leash. Ihre gewöhnliche Bewegung benutzt dieselbe
 körpergerechte Navigation wie feindliche Einheiten. Interne Felder, Dichte und Suchzustände sind
 hostlokale Activity-Ressourcen und werden nicht repliziert.
+Die Nachbarschaft liest einen gemeinsamen Positionsstand und die zuletzt physikalisch angewendeten
+Geschwindigkeiten, einschließlich Statusfaktoren und Impulsen. Eingebuddelte, inaktive und physikalisch
+deaktivierte Einheiten sind keine gewöhnlichen Bewegungsnachbarn.
 
 ## RoundParticipation bleibt separat
 

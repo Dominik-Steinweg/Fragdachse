@@ -236,6 +236,12 @@ export class EnemyEntity {
     return { vx: this.desiredVelocityX, vy: this.desiredVelocityY };
   }
 
+  /** Last physical velocity, after status factors, dash, stun and external impulses. */
+  getAppliedVelocity(): { vx: number; vy: number } {
+    const body = this.authoritative ? this.sprite.body as Phaser.Physics.Arcade.Body | null : null;
+    return { vx: body?.velocity.x ?? 0, vy: body?.velocity.y ?? 0 };
+  }
+
   /**
    * True, wenn die Wegfindung dem Gegner in diesem Frame keine Route liefern konnte – er steht
    * also nicht freiwillig still, sondern hängt fest. Wird vom EnemyManager gesetzt und vom

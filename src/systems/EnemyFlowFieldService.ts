@@ -254,12 +254,11 @@ export class EnemyFlowFieldService {
     return this.querySnapshotNavigation(x, y, snapshot, version, geometry);
   }
 
-  /** Only fixed-target consumers may use this hint while the same target moves. It grants no
-   * reachability or attack authority and never survives a physical topology change. */
+  /** Fixed-target steering hint only: every segment is checked against current geometry.
+   * Old costs may guide local motion after a mutation, but grant no reachability or attack authority. */
   querySteeringContinuation(x: number, y: number): { x: number; y: number } | null {
     const version = this.view.version(), snapshot = this.view.snapshot(), geometry = this.view.geometry();
-    if (!snapshot || !geometry || snapshot.topologyVersion !== version.topology
-      || !geometry.isFree(x, y, this.view.bodyRadius)) return null;
+    if (!snapshot || !geometry || !geometry.isFree(x, y, this.view.bodyRadius)) return null;
     const route = this.querySnapshotNavigation(x, y, snapshot, { ...version, goal: snapshot.goalVersion }, geometry);
     return route.status === 'ready' ? route.waypoint : null;
   }
@@ -342,6 +341,13 @@ export class EnemyFlowFieldService {
     return { region, reachable: false };
   }
   getNavigationSnapshot() { return this.view.snapshot(); }
+  /** A valid live start attachment even when no attack position is currently free. */
+  getStartRegion(x: number, y: number): number | null {
+    const snapshot = this.view.snapshot(), geometry = this.view.geometry();
+    if (!snapshot?.regions || !geometry || snapshot.topologyVersion !== this.view.version().topology) return null;
+    if (!geometry.isFree(x, y, this.view.bodyRadius)) return 0;
+    return this.connectCurrentGoals(x, y, snapshot, geometry).region;
+  }
   getBodyRadius(): number { return this.view.bodyRadius; }
 
   getCostAt(gridX: number, gridY: number): number {

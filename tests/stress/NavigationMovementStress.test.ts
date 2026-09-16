@@ -61,6 +61,8 @@ describe.skipIf(!enabled)('Navigation movement under sustained load', () => {
         for (const unit of units) {
           const { vx, vy } = unit.getDesiredVelocity(), x = unit.sprite.x, y = unit.sprite.y;
           const nx = x + vx * dt / 1000, ny = y + vy * dt / 1000;
+          // Mirror the executed velocity for the next physical neighbor snapshot.
+          (unit.sprite.body as { setVelocity(x: number, y: number): void }).setVelocity(vx, vy);
           // Instrumented body sweep: reject unsafe proposals and count them. No combat/physics timing claim.
           if (!geometry.canMove(x, y, nx, ny, unit.getSize() / 2)) { unsafeSegments++; stationaryMs += dt; }
           else { unit.sprite.setPosition(nx, ny); if (Math.hypot(nx - x, ny - y) < .1) stationaryMs += dt; }

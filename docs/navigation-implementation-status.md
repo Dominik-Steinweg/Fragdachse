@@ -12,6 +12,10 @@ Commit `0179efb622b7c0d048d269b38527529636ba90e9` erhalten.
 Die produktive Navigation einschließlich Worker und Inline-Fallback sowie die
 gezielten Verhaltenstests bleiben bestehen.
 
+Das [Fehler- und Performance-Review vom 16. September 2026](navigation-review.md)
+ergänzt Korrekturen für vollständig eingeschlossene Ziele, entfernte
+Weltänderungen, Durchbruchssuche, Nachbarschaft und Entscheidungsbudget.
+
 ## Produktiver Umfang
 
 - Eine Activity-eigene Zielabsicht verbindet Gegner und Nekromantie-Verbündete.
@@ -51,8 +55,10 @@ dürfen weiterhin ohne Spawn bleiben.
 
 Bei bewegten Zielen läuft eine sichere Fortsetzung zum selben Ziel oder ein
 geometrisch bestätigter direkter Anschluss weiter, während neue Felder ausstehen.
-Geänderte Ziel-IDs oder physische Topologie übernehmen keine fremde bzw. veraltete
-Route. Der Integrationstest mit 360 bewegten Spielerpositionen und Zielwechsel
+Geänderte Ziel-IDs übernehmen keine fremde Route. Bei geänderter Topologie darf
+das alte Feld nur sichere, gegen die aktuelle Geometrie geprüfte Bewegungssegmente
+liefern; es erteilt keine Erreichbarkeits- oder Durchbruchsaussage.
+Der Integrationstest mit 360 bewegten Spielerpositionen und Zielwechsel
 zeigte keine zusätzlichen Bewegungspausen. Ausstehende Wegkosten allein
 blockieren bei bestätigter freier Regionsverbindung auch keine Spawns.
 

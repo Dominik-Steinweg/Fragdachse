@@ -9,6 +9,15 @@ const geometry = (obstacles: NavigationObstacle[] = []) => new NavigationGeometr
 const neighbor = (id: string, x: number, y: number, radius = 15) => ({ id, x, y, radius, vx: 0, vy: 0 });
 
 describe('Shared enemy and ally locomotion', () => {
+  it('includes a fast approaching physical neighbor outside the ordinary walking horizon', () => {
+    const movement = new EnemyLocomotion(), world = geometry();
+    movement.begin([{ ...neighbor('dash', 145, 64), vx: -450 }], world, 16);
+    const crossing = movement.solve({ ...body, previousVx: 100 });
+    expect(crossing.neighborsVisited).toBe(1);
+    movement.begin([], world, 16);
+    expect(crossing.vx).toBeLessThan(movement.solve({ ...body, previousVx: 100 }).vx);
+  });
+
   it('uses both body radii and removes departed neighbors from the next snapshot', () => {
     const movement = new EnemyLocomotion(), world = geometry();
     movement.begin([neighbor('b', 96, 64, 28)], world, 16);

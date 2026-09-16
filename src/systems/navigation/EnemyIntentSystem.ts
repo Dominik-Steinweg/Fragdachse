@@ -13,7 +13,8 @@ import { AttackPositionReservations } from './AttackPositionReservations';
 import { NavigationDensity } from './NavigationDensity';
 
 type Target = NonNullable<EnemyIntent['target']> & NavigationPoint & { radius?: number; objectId?: string };
-interface SharedField { readonly id: string; readonly field: EnemyFlowFieldService; signature: string; usedAt: number }
+interface SharedField { readonly id: string; readonly field: EnemyFlowFieldService; signature: string; usedAt: number;
+  sealedGoals: readonly number[]; acceptsOpenedGoal: ((index: number, opened: ReadonlySet<string>) => boolean) | undefined }
 interface Decision {
   intent: EnemyIntent; field: EnemyFlowFieldService; target: Target; breach: BreachPlan | null; enemy: EnemyEntity;
   readonly queryX: number; readonly queryY: number; readonly querySnapshot: FlowFieldSnapshot | null;
@@ -71,7 +72,7 @@ export class EnemyIntentSystem {
       queryX: enemy.sprite.x, queryY: enemy.sprite.y, querySnapshot: field.getNavigationSnapshot(),
       intent: { target, point: destination, reason: 'follow', selectedAt: this.now, navigation,
         attackContext: this.hasFreeApproach(navigation) ? 'primary' : 'none' } };
-    if (navigation.status === 'unreachable') this.prepareBreach(enemy, decision, geometry);
+    if (navigation.status === 'unreachable' || navigation.status === 'invalid-goal') this.prepareBreach(enemy, decision, geometry);
     this.decisions.set(enemy.id, decision);
     return decision.intent.navigation;
   }
@@ -84,8 +85,7 @@ export class EnemyIntentSystem {
       || this.obstacleHp?.(decision.enemy, plan.nextBlocker) == null) return null;
     let best: (NavigationPoint & { objectId: string }) | null = null, distance = Infinity;
     const sx = decision.enemy.sprite.x, sy = decision.enemy.sprite.y;
-    for (const shape of geometry.snapshot.obstacles) {
-      if (shape.id !== plan.nextBlocker) continue;
+    for (const shape of geometry.getObject(plan.nextBlocker)) {
       const { x, y } = navigationAttackPoint(shape, sx, sy);
       const d = Math.hypot(x - sx, y - sy);
       if (d >= distance || !geometry.canMove(sx, sy, x, y, 0, new Set([shape.id]))) continue;
@@ -125,28 +125,35 @@ export class EnemyIntentSystem {
       const config = getCoopDefenseEnemyConfig(enemy.kind), decoy = this.decoys?.getTarget(enemy.id);
       let reason: EnemyIntent['reason'] = decoy ? 'decoy' : config.movementTarget === 'bases' ? 'siege'
         : config.movementTarget === 'players' ? 'player' : 'strategic';
-      const candidates: Target[] = decoy ? [decoy] : config.movementTarget === 'bases' && baseTargets.length
-        ? baseTargets : this.catalog.getCandidates(config.movementTarget === 'players-and-armed-constructs'
-          ? 'players-and-armed-constructs' : 'player-threats')
-          .filter(target => !this.perception || this.perception(enemy, target.x, target.y, visibilityRange))
-          .map(target => this.catalogTarget(target));
       const prior = this.decisions.get(enemy.id);
-      // Strategic scans are staggered; final body safety still runs every simulation frame.
-      // Invalid targets and topology bypass the scan interval.
-      if (prior && (prior.intent.navigation.status === 'ready'
+      // Cheap live validation precedes candidate construction. Blocked/pending routes still
+      // refresh their bound target each frame without rescanning every strategic alternative.
+      const resolved = prior && prior.target.kind !== 'base' && prior.target.kind !== 'ally'
+        ? this.catalog.resolve(prior.target) : null;
+      const bound: Target | null = decoy ? (prior?.target.id === decoy.id ? decoy : null)
+        : prior?.target.kind === 'base' ? baseTargets.find(target => target.id === prior.target.id) ?? null
+        : resolved && (!this.perception || this.perception(enemy, resolved.x, resolved.y, visibilityRange)) ? this.catalogTarget(resolved) : null;
+      const topologyChanged = prior?.intent.navigation.topology !== this.coordinator.getTopologyVersion();
+      const scan = !prior || !bound || prior.intent.reason !== reason
+        || (ordinaryScans < scanBudget && (topologyChanged || now >= (this.nextDecisionAt.get(enemy.id) ?? 0)));
+      if (!scan && prior && (prior.intent.navigation.status === 'ready'
         || (prior.intent.navigation.status === 'pending' && prior.intent.navigation.continuation
           && prior.field.getNavigationSnapshot()?.goalVersion !== prior.intent.navigation.goal))
-        && !prior.breach && prior.intent.reason === reason
-        && (now < (this.nextDecisionAt.get(enemy.id) ?? 0) || ordinaryScans >= scanBudget)
-        && prior.intent.navigation.topology === this.coordinator.getTopologyVersion()
-        && candidates.some(target => target.kind === prior.target.kind && target.id === prior.target.id)) {
+        && !prior.breach && !topologyChanged) {
         const entry = this.fieldEntries.get(prior.field);
         if (entry) entry.usedAt = this.frame;
         continue;
       }
-      ordinaryScans++;
-      const phase = [...enemy.id].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0) % 5;
-      this.nextDecisionAt.set(enemy.id, now + 80 + phase * 8);
+      const candidates: Target[] = !scan && bound ? [bound] : decoy ? [decoy]
+        : config.movementTarget === 'bases' && baseTargets.length ? baseTargets
+        : this.catalog.getCandidates(config.movementTarget === 'players-and-armed-constructs' ? 'players-and-armed-constructs' : 'player-threats')
+          .filter(target => !this.perception || this.perception(enemy, target.x, target.y, visibilityRange))
+          .map(target => this.catalogTarget(target));
+      if (scan) {
+        ordinaryScans++;
+        const phase = [...enemy.id].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0) % 5;
+        this.nextDecisionAt.set(enemy.id, now + 80 + phase * 8);
+      }
       let chosen = this.choose(enemy, candidates, geometry, now, prior);
       if (!decoy && config.movementTarget !== 'bases'
         && !chosen) {
@@ -176,7 +183,7 @@ export class EnemyIntentSystem {
         attackContext: reason !== 'memory' && this.hasFreeApproach(chosen.navigation) ? 'primary' : 'none', navigation: chosen.navigation };
       const decision: Decision = { enemy, intent, field: chosen.field, target: chosen.target, breach: null,
         queryX: enemy.sprite.x, queryY: enemy.sprite.y, querySnapshot: chosen.field.getNavigationSnapshot() };
-      if (chosen.navigation.status === 'unreachable' && reason !== 'memory') this.prepareBreach(enemy, decision, geometry);
+      if ((chosen.navigation.status === 'unreachable' || chosen.navigation.status === 'invalid-goal') && reason !== 'memory') this.prepareBreach(enemy, decision, geometry);
       else if (chosen.navigation.status === 'ready' && reason !== 'memory') {
         const snapshot = chosen.field.getNavigationSnapshot();
         const point = snapshot && this.positions.select(enemy.id, `${chosen.target.kind}:${chosen.target.id}`,
@@ -267,15 +274,15 @@ export class EnemyIntentSystem {
     if (!entry) {
       const id = `intent:${key}`;
       entry = { id, field: EnemyFlowFieldService.fromView(this.coordinator.registerField(id,
-        { goalMode: 'dynamic', bodyRadius: radius })), signature: '', usedAt: this.frame };
+        { goalMode: 'dynamic', bodyRadius: radius })), signature: '', usedAt: this.frame, sealedGoals: [], acceptsOpenedGoal: undefined };
       this.fields.set(key, entry); this.fieldEntries.set(entry.field, entry);
     }
     entry.usedAt = this.frame;
     const signature = `${this.coordinator.getTopologyVersion()}:${Math.round(target.x / 8)}:${Math.round(target.y / 8)}`;
     if (signature === entry.signature) return entry.field;
     entry.signature = signature;
-    const m = this.coordinator.metrics, goals = new Set<number>();
-    const shapes = target.objectId ? geometry.snapshot.obstacles.filter(obstacle => obstacle.id === target.objectId) : [];
+    const m = this.coordinator.metrics, goals = new Set<number>(), potential = new Set<number>();
+    const shapes = target.objectId ? geometry.getObject(target.objectId) : [];
     const opened = new Set(target.objectId ? [target.objectId] : []);
     const centers = shapes.length && target.kind !== 'armed-construct' ? shapes.map(shape => shape.shape === 'rect'
       ? { left: shape.left, top: shape.top, right: shape.right, bottom: shape.bottom }
@@ -291,20 +298,42 @@ export class EnemyIntentSystem {
         if (goals.has(index)) continue;
         const point = navigationPoint(m, index);
         const tx = Math.max(box.left, Math.min(box.right, point.x)), ty = Math.max(box.top, Math.min(box.bottom, point.y));
-        if (Math.hypot(point.x - tx, point.y - ty) > range || !geometry.isFree(point.x, point.y, radius)
+        if (Math.hypot(point.x - tx, point.y - ty) > range || !geometry.contains(point.x, point.y, radius)) continue;
+        potential.add(index);
+        if (!geometry.isFree(point.x, point.y, radius)
           || !geometry.canMove(point.x, point.y, tx, ty, 0, opened)) continue;
         goals.add(index);
       }
     }
+    // A live target in a cramped pocket is different from an invalid/out-of-world target.
+    const validTarget = shapes.length > 0 || geometry.isFree(target.x, target.y, target.radius ?? 0);
+    entry.sealedGoals = !goals.size && validTarget ? [...potential] : [];
+    entry.acceptsOpenedGoal = entry.sealedGoals.length ? (index, removed) => {
+      const point = navigationPoint(m, index);
+      if (!geometry.isFree(point.x, point.y, radius, removed)) return false;
+      const transparent = target.objectId ? new Set([...removed, target.objectId]) : removed;
+      return centers.some(box => {
+        const tx = Math.max(box.left, Math.min(box.right, point.x)), ty = Math.max(box.top, Math.min(box.bottom, point.y));
+        return Math.hypot(point.x - tx, point.y - ty) <= range && geometry.canMove(point.x, point.y, tx, ty, 0, transparent);
+      });
+    } : undefined;
     this.coordinator.setGoalCells(entry.id, Int32Array.from(goals));
     return entry.field;
   }
 
   private prepareBreach(enemy: EnemyEntity, decision: Decision, geometry: NavigationGeometry): void {
-    const route = decision.intent.navigation;
+    let route = decision.intent.navigation;
+    const entry = this.fieldEntries.get(decision.field);
+    const sealed = route.status === 'invalid-goal' && !!entry?.sealedGoals.length;
+    if (sealed) {
+      const region = decision.field.getStartRegion(enemy.sprite.x, enemy.sprite.y);
+      if (!region) return;
+      route = { ...route, status: 'unreachable', region };
+      decision.intent = { ...decision.intent, navigation: route };
+    }
     if (route.status !== 'unreachable') return;
     const snapshot = decision.field.getNavigationSnapshot(), cell = decision.field.worldToGrid(enemy.sprite.x, enemy.sprite.y);
-    const goals = decision.field.getCurrentGoalIndexes();
+    const goals = sealed ? entry!.sealedGoals : decision.field.getCurrentGoalIndexes();
     if (!snapshot || !cell || !goals?.length) return;
     const m = this.coordinator.metrics;
     let startIndex = -1;
@@ -320,7 +349,7 @@ export class EnemyIntentSystem {
       const config = attack.weapon.config;
       return `${config.id}:${attack.targetMode}:${config.damage}:${config.cooldown}:${config.baseDamageMult ?? 1}:${config.rockDamageMult ?? 1}`;
     }).sort().join(',')}`;
-    let goalRegions = this.goalRegions.get(goals);
+    let goalRegions = sealed ? 'sealed' : this.goalRegions.get(goals);
     if (goalRegions === undefined) {
       goalRegions = [...new Set(goals.map(index => snapshot.regions?.[index] ?? 0))].sort((a, b) => a - b).join(',');
       this.goalRegions.set(goals, goalRegions);
@@ -330,6 +359,7 @@ export class EnemyIntentSystem {
     const key = `${decision.target.kind}:${decision.target.id}:${route.region}:${route.profile}:${route.topology}:goals:${goalRegions}:${rights}`;
     decision.breach = this.planner.request(key, { version: route, startIndex, startRegion: route.region,
       goals, radius: enemy.getSize() / 2, speed: enemy.getMoveSpeed(),
+      acceptsGoal: sealed ? entry!.acceptsOpenedGoal : undefined,
       attackRangeFor: id => Math.max(0, ...weapons.filter(attack => {
         const config = attack.weapon.config;
         return config.damage > 0 && !(id.startsWith('base:') && attack.targetMode === 'rocks')

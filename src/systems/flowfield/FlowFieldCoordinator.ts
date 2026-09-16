@@ -416,7 +416,14 @@ export class FlowFieldCoordinator {
     if (this.geometryProvider && this.geometryDirty) {
       this.geometryCache = new NavigationGeometry(this.geometryProvider());
       this.geometryDirty = false;
-      if (this.initialized) this.pendingPatches.push({ t: 'geometry', geometry: this.geometryCache.snapshot });
+      if (this.initialized) {
+        // Only the latest complete projection matters to the next worker job. Live collision
+        // readers may have materialized several intermediate worlds while a job was in flight.
+        const pending = this.pendingPatches.findIndex(patch => patch.t === 'geometry');
+        const patch: FlowFieldPatch = { t: 'geometry', geometry: this.geometryCache.snapshot };
+        if (pending >= 0) this.pendingPatches[pending] = patch;
+        else this.pendingPatches.push(patch);
+      }
     }
     return this.geometryCache;
   }

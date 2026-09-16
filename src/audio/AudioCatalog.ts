@@ -304,7 +304,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   shot_p90:                0.3,
   shot_flame:              0.2,
   shot_rocketlauncher:     0.5,
-  shot_minirocketlauncher: 0.3,
+  shot_minirocketlauncher: 0.45,
   shot_spore:              0.5,
   shot_negev:              0.2,
   shot_throw:              0.5,
@@ -316,7 +316,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_smoke:          0.5,
   sfx_explosion_holy:           0.8,
   sfx_explosion_rocket:         0.5,
-  sfx_explosion_mini_rocket:    0.15,
+  sfx_explosion_mini_rocket:    0.3,
   sfx_explosion_asmd_secondary: 0.9,
   sfx_explosion_armageddon:     0.5,
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { navigationTestWorld } from './navigationTestWorld';
 import { segmentObstacleDistanceSq, type NavigationObstacle } from '../src/systems/navigation/NavigationGeometry';
 
@@ -6,6 +6,23 @@ const wall = (id: string, left: number, top: number, right: number, bottom: numb
   ({ id, kind: 'barrier', shape: 'rect', left, top, right, bottom });
 
 describe('Body graph and current geometry', () => {
+  it('sends only the newest geometry while retaining immediate physical collision checks', () => {
+    const world = navigationTestWorld(); world.goal(224, 128); world.flush();
+    const post = vi.spyOn(world.runner, 'post');
+    for (let i = 0; i < 10; i++) {
+      world.snapshot.obstacles = [wall(`change:${i}`, 112, 0, 144, 256)];
+      world.coordinator.invalidateGeometry();
+      expect(world.coordinator.getGeometry()!.isFree(128, 128, 15)).toBe(false);
+    }
+    world.coordinator.advance(100); world.coordinator.advance(1);
+    const jobs = post.mock.calls.map(([message]) => message).filter(message => message.type === 'job');
+    const patches = jobs.flatMap(job => job.patches).filter(patch => patch.t === 'geometry');
+    expect(patches).toHaveLength(1);
+    expect(patches[0].geometry.obstacles[0].id).toBe('change:9');
+    expect(world.field.queryNavigation(32, 128).status).toBe('unreachable');
+    world.destroy();
+  });
+
   it('routes a 30px body through a 32px corridor and its right-angle turn', () => {
     const world = navigationTestWorld([wall('top', 0, 0, 256, 32), wall('bottom', 0, 64, 160, 256),
       wall('right', 192, 64, 256, 256)]);

@@ -16,17 +16,19 @@ export class EnemyLocomotion {
   private neighborsExamined = 0;
   private waitingNeighborsObserved = 0;
   private maxRadius = 0;
+  private maxNeighborSpeed = 0;
   private geometry: NavigationGeometry | null = null;
   private deltaSeconds = 0;
 
   begin(neighbors: readonly Neighbor[], geometry: NavigationGeometry, deltaMs: number): void {
     for (const bucket of this.buckets.values()) { bucket.length = 0; this.pool.push(bucket); }
-    this.buckets.clear(); this.maxRadius = 0;
+    this.buckets.clear(); this.maxRadius = 0; this.maxNeighborSpeed = 0;
     this.geometry = geometry; this.deltaSeconds = Math.min(0.1, Math.max(0, deltaMs / 1000));
     this.elapsedMs += Math.max(0, deltaMs);
     this.neighborsById.clear();
     for (const neighbor of neighbors) {
       this.neighborsById.set(neighbor.id, neighbor); this.maxRadius = Math.max(this.maxRadius, neighbor.radius);
+      this.maxNeighborSpeed = Math.max(this.maxNeighborSpeed, Math.hypot(neighbor.vx, neighbor.vy));
       const key = `${Math.floor(neighbor.x / CELL)},${Math.floor(neighbor.y / CELL)}`;
       let bucket = this.buckets.get(key);
       if (!bucket) { bucket = this.pool.pop() ?? []; this.buckets.set(key, bucket); }
@@ -69,7 +71,7 @@ export class EnemyLocomotion {
     history.crowdNeighbors = undefined;
 
     const neighbors: Neighbor[] = [];
-    const range = radius + this.maxRadius + speed * 0.16 + 8;
+    const range = radius + this.maxRadius + (speed + this.maxNeighborSpeed) * 0.16 + 8;
     const rangeSq = range * range;
     for (let row = Math.floor((y - range) / CELL); row <= Math.floor((y + range) / CELL); row++) {
       for (let col = Math.floor((x - range) / CELL); col <= Math.floor((x + range) / CELL); col++) {

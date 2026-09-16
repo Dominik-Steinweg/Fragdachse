@@ -21,6 +21,25 @@ function settle(world: ReturnType<typeof navigationTestWorld>, enemies: EnemyEnt
 }
 
 describe('Shared strategic intent and demolition permission', () => {
+  it.each([30, 56])('opens a sealed target pocket without an initially free attack position for a %ipx body', size => {
+    const world = navigationTestWorld([
+      rect('rock:top', 128, 48, 240, 114), rect('rock:bottom', 128, 142, 240, 208),
+      rect('rock:left', 128, 114, 178, 142), rect('rock:right', 206, 114, 240, 142),
+      rect('rock:outer', 96, 0, 128, 256),
+    ]);
+    const unit = enemy('rabid-badger', 'sealed', 48, 128);
+    unit.getSize = () => size;
+    world.intents.setObstacleIntegrityResolver(() => 1);
+    world.catalog.updateTargets([{ kind: 'player', id: 'inside', x: 192, y: 128 }]);
+    for (let step = 0; step < 200 && world.intents.getBreach(unit.id)?.status !== 'ready'; step++) settle(world, [unit], step * 100);
+    expect(world.intents.getBreach(unit.id)?.status).toBe('ready');
+    expect(world.intents.getBreach(unit.id)?.nextBlocker).toBe('rock:outer');
+    world.catalog.updateTargets([{ kind: 'player', id: 'outside-world', x: 1000, y: 1000 }]);
+    settle(world, [unit], 30000);
+    expect(world.intents.getBreach(unit.id)).toBeNull();
+    world.destroy();
+  });
+
   it('continues safe pursuit while a moving player makes the next field pending', () => {
     const world = navigationTestWorld(), unit = enemy();
     world.catalog.updateTargets([{ kind: 'player', id: 'runner', x: 224, y: 128 }]);
@@ -66,7 +85,7 @@ describe('Shared strategic intent and demolition permission', () => {
     world.destroy();
   });
 
-  it('retains a safe corner route but drops it for new geometry or a different target', () => {
+  it('retains only currently safe corner segments and never borrows another target route', () => {
     const world = navigationTestWorld([rect('corner', 96, 64, 144, 192)]), unit = enemy();
     world.catalog.updateTargets([{ kind: 'player', id: 'runner', x: 224, y: 128 }]); settle(world, [unit]);
     world.catalog.updateTargets([{ kind: 'player', id: 'runner', x: 224, y: 144 }]); world.intents.update([unit], 200);
@@ -82,7 +101,11 @@ describe('Shared strategic intent and demolition permission', () => {
     world.snapshot.obstacles.push(rect('sealed', 96, 0, 144, 64)); world.coordinator.invalidateGeometry();
     world.intents.update([unit], 202);
     const changed = world.intents.get(unit.id)!.navigation;
-    expect(changed.status === 'pending' && changed.continuation).toBeUndefined();
+    expect(changed.status).toBe('pending');
+    if (changed.status === 'pending' && changed.continuation) {
+      expect(world.geometry().canMove(unit.sprite.x, unit.sprite.y, changed.continuation.x, changed.continuation.y, unit.getSize() / 2)).toBe(true);
+    }
+    expect(world.intents.allowsAttack(unit.id, 'obstacle', 'corner', 'all')).toBe(false);
     world.destroy();
   });
 

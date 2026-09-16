@@ -417,9 +417,12 @@ export class EnemyManager {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     this.movementFeedback.clear();
     const geometry = baseFlowFieldService?.getNavigationGeometry();
-    if (geometry) this.locomotion.begin([...this.enemies.values()].map(enemy => ({
+    if (geometry) this.locomotion.begin([...this.enemies.values()]
+      .filter(enemy => enemy.sprite.active && !enemy.isBurrowed() && !burrowSystem?.isBurrowed(enemy.id)
+        && (enemy.sprite.body as Phaser.Physics.Arcade.Body | null)?.enable !== false)
+      .map(enemy => ({
       id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y, radius: enemy.getSize() / 2,
-      vx: enemy.getDesiredVelocity().vx, vy: enemy.getDesiredVelocity().vy,
+      ...enemy.getAppliedVelocity(),
       routeCost: this.intents?.get(enemy.id)?.navigation.status === 'ready'
         ? (this.intents.get(enemy.id)!.navigation as Extract<import('../systems/navigation/NavigationContracts').NavigationResult, { status: 'ready' }>).cost : undefined,
     })), geometry, deltaMs);

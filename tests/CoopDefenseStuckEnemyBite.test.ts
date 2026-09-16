@@ -23,6 +23,7 @@ import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecutionAdapter';
+import type { EnemyIntentSystem } from '../src/systems/navigation/EnemyIntentSystem';
 
 // Kennwerte des Pyro-Dachses aus der Gegner-Registry.
 const PYRO_BADGER_CONFIG = getCoopDefenseEnemyConfig('pyro-badger');
@@ -99,6 +100,7 @@ function createSystem(
   enemy: EnemyEntity,
   rock: { x: number; y: number; active: boolean },
   players: readonly TestPlayer[] = [fakeEntity({ id: 'p1', x: 400, y: 100, active: true })],
+  rocks: readonly (typeof rock | null)[] = [rock],
 ) {
   const firedWeaponIds: string[] = [];
   const firedTargetPositions: Array<{ x: number; y: number }> = [];
@@ -134,13 +136,38 @@ function createSystem(
         return true;
       },
     } as unknown as AutomatedWeaponExecution,
-    () => [rock as unknown as Phaser.GameObjects.Image],
+    () => rocks as readonly (Phaser.GameObjects.Image | null)[],
   );
 
   return { system, firedWeaponIds, firedTargetPositions };
 }
 
 describe('Enemy stuck in a rock', () => {
+  it('attacks only the known opening blocker without reading unrelated obstacles, and rechecks permission', () => {
+    const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: true });
+    const rock = { x: 128, y: 100, active: true };
+    let unrelatedReads = 0;
+    const rocks = new Proxy(Array.from({ length: 1000 }, (_, index) => index === 800 ? rock : null), {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property) && property !== '800') unrelatedReads++;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    let permitted = true;
+    const { system, firedWeaponIds } = createSystem(enemy, rock, [], rocks);
+    system.setIntents({
+      get: () => ({ attackContext: 'breach', reason: 'player' }),
+      getBreach: () => ({ status: 'ready', nextBlocker: 'rock:800' }),
+      allowsAttack: (_enemy: string, kind: string, id: string) => permitted && kind === 'obstacle' && id === '800',
+    } as unknown as EnemyIntentSystem);
+    system.hostUpdate(16, 1000);
+    expect(firedWeaponIds).toEqual(['PYRO_BADGER_BITE']);
+    expect(unrelatedReads).toBe(0);
+    permitted = false;
+    system.hostUpdate(16, 10000);
+    expect(firedWeaponIds).toHaveLength(1);
+  });
+
   it('blocks regular attacks without overwriting an earlier special-movement decision', () => {
     const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false });
     const stopMovement = vi.fn();

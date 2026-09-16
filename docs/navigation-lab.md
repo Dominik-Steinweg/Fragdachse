@@ -125,6 +125,19 @@ bildet Kampf oder Arcade-Gleiten nicht nach.
 
 ## Weitere Verhaltenstests
 
+Für gezielte Messungen von Zielentscheidung, Durchbruchssuche und Worker-Datenmenge:
+
+```powershell
+$env:NAVIGATION_REVIEW = 'after'
+node node_modules/vitest/vitest.mjs run --pool=threads --exclude build/** tests/stress/NavigationReview.test.ts
+Remove-Item Env:NAVIGATION_REVIEW
+```
+
+Das misst ausschließlich den aktuellen Stand und schreibt
+`build/navigation-results/review-after.json`. Keine Darstellung, keine
+Kampfeffekte, keine hardwareabhängigen Timing-Assertions. Die Messgrenzen und
+Ergebnisse stehen im [Navigationsreview](navigation-review.md).
+
 Die bestehenden Suiten schützen Zielbindung, Köder, Rauch, Angriffe, Fähigkeiten,
 Fraktionen, Activity-Lifetime und Netzwerk. Navigationstests prüfen Körperfreiheit,
 Rasterausrichtung, Worker-Generationen, ausstehende Routen, Angriffserlaubnis,

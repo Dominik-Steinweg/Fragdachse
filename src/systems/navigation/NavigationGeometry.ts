@@ -51,6 +51,7 @@ export function segmentObstacleDistanceSq(ax: number, ay: number, bx: number, by
 /** Shared by worker graph construction, start/goal connections, locomotion and simulated openings. */
 export class NavigationGeometry {
   private readonly buckets = new Map<number, number[]>();
+  private readonly objects = new Map<string, NavigationObstacle[]>();
   private readonly stamps: Uint32Array;
   private stamp = 0;
   private readonly columns: number;
@@ -58,6 +59,8 @@ export class NavigationGeometry {
     this.columns = Math.ceil((snapshot.right - snapshot.left) / BUCKET) + 2;
     this.stamps = new Uint32Array(snapshot.obstacles.length);
     snapshot.obstacles.forEach((obstacle, index) => {
+      const shapes = this.objects.get(obstacle.id);
+      if (shapes) shapes.push(obstacle); else this.objects.set(obstacle.id, [obstacle]);
       const l = obstacle.shape === 'rect' ? obstacle.left : obstacle.x - obstacle.radius;
       const r = obstacle.shape === 'rect' ? obstacle.right : obstacle.x + obstacle.radius;
       const t = obstacle.shape === 'rect' ? obstacle.top : obstacle.y - obstacle.radius;
@@ -71,6 +74,8 @@ export class NavigationGeometry {
   }
   private col(x: number): number { return Math.floor((x - this.snapshot.left) / BUCKET) + 1; }
   private row(y: number): number { return Math.floor((y - this.snapshot.top) / BUCKET) + 1; }
+  getObject(id: string): readonly NavigationObstacle[] { return this.objects.get(id) ?? []; }
+  getObjectIds(): IterableIterator<string> { return this.objects.keys(); }
   contains(x: number, y: number, radius: number): boolean {
     const b = this.snapshot;
     return Number.isFinite(x + y + radius) && radius >= 0 && x - radius >= b.left - EPSILON
