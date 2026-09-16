@@ -22,7 +22,8 @@ if (!params.has('session')) params.set('session', String(Date.now()));
 const scenario = navigationScenario(params.get('scenario') ?? 'rock-field');
 const spawnAudit = params.get('spawnAudit') === '1';
 const pursuit = params.get('pursuit') === '1';
-if (spawnAudit && params.has('suite')) throw new Error('Spawn audit is separate from performance comparisons');
+if (params.has('suite') && params.get('suite') !== 'reference') throw new Error('Unknown navigation suite');
+if (spawnAudit && params.has('suite')) throw new Error('Spawn audit runs separately from the scenario suite');
 const mapId = spawnAudit ? params.get('map') ?? '1' : scenario.mapId;
 const count = Math.max(1, Math.min(1000, Number(params.get('count') ?? 100)));
 const seed = Number(params.get('seed') ?? 183);
@@ -44,8 +45,7 @@ const environment = { build: __NAVIGATION_BUILD_ID__, scenarioVersion: NAVIGATIO
   mutations: params.get('mutations') === '1',
   scenario: scenario.id, seed, count, warmupMs, durationMs, userAgent: navigator.userAgent,
   devicePixelRatio, hardwareConcurrency: navigator.hardwareConcurrency, enemyConfig, weaponConfig: WEAPON_CONFIGS,
-  hardware: null as unknown, gpu: null as unknown, session: params.get('session'), pair: Number(params.get('pair') ?? 0),
-  phase: Number(params.get('phase') ?? 0), suite: params.get('suite'),
+  hardware: null as unknown, gpu: null as unknown, session: params.get('session'), suite: params.get('suite'),
   graphicsQuality: getStoredGraphicsQuality(), repeat: Number(params.get('repeat') ?? 0),
   viewport: { width: innerWidth, height: innerHeight }, renderResolution: { width: 0, height: 0 },
   initialLoadout: null as unknown };
@@ -155,20 +155,6 @@ function finish(): void {
     body: JSON.stringify(report) }).then(async response => {
       if (!response.ok) throw new Error(await response.text());
       status.value = `Gespeichert: ${(await response.json()).saved}`;
-      if (params.get('suite') === 'paired') {
-        const repetitions = Number(params.get('repetitions') ?? 3);
-        const phase = environment.phase === 0 ? 1 : 0;
-        let pair = environment.pair + (phase === 0 ? 1 : 0);
-        let index = NAVIGATION_LAB_SCENARIOS.findIndex(entry => entry.id === scenario.id);
-        if (pair >= repetitions) { pair = 0; index++; }
-        if (index < NAVIGATION_LAB_SCENARIOS.length) {
-          params.set('pair', String(pair)); params.set('phase', String(phase));
-          params.set('scenario', NAVIGATION_LAB_SCENARIOS[index].id);
-          const variant = (pair + phase) % 2 === 0 ? 'baseline' : 'candidate';
-          location.href = `/build/navigation-${variant}/navigation-lab.html?${params}`;
-        }
-        return;
-      }
       if (params.get('suite') === 'reference') {
         const scenarios = NAVIGATION_LAB_SCENARIOS;
         const index = scenarios.findIndex(entry => entry.id === scenario.id);
@@ -379,7 +365,7 @@ class NavigationArena extends ArenaScene {
               }
             }
             document.querySelector('#navigation-state')!.textContent = enemies.slice(0, 16).map(e =>
-              `${e.id} ${e.intent?.target?.id ?? e.target ?? '–'} · ${e.intent?.navigation.status ?? 'Baseline'} · ${e.intent?.attackContext ?? '–'} · ${e.movement?.waitReason ?? '–'}`).join('\n');
+              `${e.id} ${e.intent?.target?.id ?? e.target ?? '–'} · ${e.intent?.navigation.status ?? '–'} · ${e.intent?.attackContext ?? '–'} · ${e.movement?.waitReason ?? '–'}`).join('\n');
           }
         }
         if (state === 'warmup' && elapsed >= warmupMs) {
@@ -405,7 +391,7 @@ class NavigationArena extends ArenaScene {
         observeGeometryChange();
         const renderCpuMs = port!.getRenderCpuMs();
         sample('sceneCpuMs', sceneCpuMs); sample('renderCpuMs', renderCpuMs);
-        // Complete Game.step and Arcade costs are from the previous completed frame in both builds.
+        // Complete Game.step and Arcade costs are from the previous completed frame.
         sample('frameCpuMs', frameCpuMs); sample('arcadeCpuMs', arcadeCpuMs);
         const wallAt = performance.now(); sample('frameMs', wallAt - lastWallAt); lastWallAt = wallAt;
         for (const [key, value] of Object.entries(port!.getPerformance())) if (typeof value === 'number') sample(key, value);

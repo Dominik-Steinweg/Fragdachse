@@ -9,7 +9,7 @@ import { cpus, platform, release, totalmem } from 'node:os';
 
 export default defineConfig(({ mode }) => {
   const buildTimestamp = new Date().toISOString();
-  const navigationBuild = mode === 'navigation-baseline' || mode === 'navigation-candidate';
+  const navigationBuild = mode === 'navigation-lab';
   const sourceHash = createHash('sha256');
   if (navigationBuild) {
     const visit = (directory: string): void => {
@@ -34,10 +34,10 @@ export default defineConfig(({ mode }) => {
         response.end(JSON.stringify({ cpu: cpus()[0]?.model, logicalCores: cpus().length,
           os: `${platform()} ${release()}`, memoryBytes: totalmem() }));
       });
-      // Built comparisons must not receive Vite's client or reload when source files change.
+      // A built profiling run must not reload when source files change.
       server.middlewares.use((request, response, next) => {
         const path = request.url?.split('?')[0];
-        if (!path || !/^\/build\/navigation-(baseline|candidate)\/navigation-lab\.html$/.test(path)) return next();
+        if (path !== '/build/navigation-lab/navigation-lab.html') return next();
         void readFile(resolve(`.${path}`)).then(html => {
           response.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' }); response.end(html);
         }).catch(next);

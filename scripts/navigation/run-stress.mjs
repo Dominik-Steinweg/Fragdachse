@@ -14,9 +14,9 @@ function sourceIdentity(root) {
   visit('src');
   return hash.digest('hex');
 }
-const identities = { baseline: sourceIdentity('build/navigation-baseline-source'), candidate: sourceIdentity('.') };
+const sourceHash = sourceIdentity('.');
 const result = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', '--pool=threads',
-  'tests/stress/NavigationComparison.test.ts'], { stdio: 'inherit',
-  env: { ...process.env, NAVIGATION_SOURCE_IDENTITIES: JSON.stringify(identities), NAVIGATION_COMPARE: '1', NAVIGATION_SMOKE: process.argv.includes('--smoke') ? '1' : '0',
-    NAVIGATION_DENSITY_ABLATION: process.argv.includes('--density') ? '1' : '0' } });
+  '--exclude', 'build/**', 'tests/stress/NavigationMovementStress.test.ts'], { stdio: 'inherit',
+  env: { ...process.env, NAVIGATION_SOURCE_IDENTITY: sourceHash, NAVIGATION_STRESS: '1',
+    NAVIGATION_SMOKE: process.argv.includes('--smoke') ? '1' : '0' } });
 process.exitCode = result.status ?? 1;
