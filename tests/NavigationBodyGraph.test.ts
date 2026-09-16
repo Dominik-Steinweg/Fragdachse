@@ -1,11 +1,35 @@
 import { describe, it, expect, vi } from 'vitest';
 import { navigationTestWorld } from './navigationTestWorld';
 import { segmentObstacleDistanceSq, type NavigationObstacle } from '../src/systems/navigation/NavigationGeometry';
+import { EnemyLocomotion } from '../src/systems/navigation/EnemyLocomotion';
 
 const wall = (id: string, left: number, top: number, right: number, bottom: number): NavigationObstacle =>
   ({ id, kind: 'barrier', shape: 'rect', left, top, right, bottom });
 
 describe('Body graph and current geometry', () => {
+  it('finishes a subpixel waypoint attachment before turning through a narrow rock corner', () => {
+    // Reduced from a generated Map 3 corridor: the diagonal is body-safe at the
+    // waypoint, but remains blocked when stopping almost a pixel before it.
+    const world = navigationTestWorld([wall('top', 64, 96, 160, 128), wall('corner', 96, 160, 128, 192)], [], 11);
+    world.goal(48, 208); world.flush();
+    const geometry = world.geometry(), movement = new EnemyLocomotion(), dt = 1000 / 60;
+    let x = 96.98, y = 144.15, vx = 0, vy = 0;
+    for (let step = 0; step < 180 && Math.hypot(x - 48, y - 208) > 2; step++) {
+      const route = world.field.queryNavigation(x, y);
+      expect(route.status).toBe('ready');
+      if (route.status !== 'ready') break;
+      movement.begin([{ id: 'unit', x, y, radius: 11, vx, vy }], geometry, dt);
+      const feedback = movement.solve({ id: 'unit', x, y, radius: 11, speed: 180, waypoint: route.waypoint,
+        previousVx: vx, previousVy: vy, priority: 'ordinary' });
+      vx = feedback.vx; vy = feedback.vy;
+      const nx = x + vx * dt / 1000, ny = y + vy * dt / 1000;
+      expect(geometry.canMove(x, y, nx, ny, 11)).toBe(true);
+      x = nx; y = ny;
+    }
+    expect(Math.hypot(x - 48, y - 208)).toBeLessThanOrEqual(2);
+    world.destroy();
+  });
+
   it('sends only the newest geometry while retaining immediate physical collision checks', () => {
     const world = navigationTestWorld(); world.goal(224, 128); world.flush();
     const post = vi.spyOn(world.runner, 'post');

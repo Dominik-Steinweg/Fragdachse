@@ -24,6 +24,8 @@ import { resolveCoopDefenseWorldMetrics, worldCellCenter } from '../../src/world
 import { NAVIGATION_BENCHMARK_SEEDS } from '../../src/debug/navigationLab/scenarios';
 import { SPAWN_FRONTS } from '../../src/utils/spawnFront';
 import { healthBarTestScene } from '../healthBarTestScene';
+import { EnemyAiTargetCatalog } from '../../src/systems/EnemyAiTargetCatalog';
+import { EnemyIntentSystem } from '../../src/systems/navigation/EnemyIntentSystem';
 
 function spawnWorld(mapId: string, seed: number) {
   const map = getCoopDefenseMapConfig(mapId), metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
@@ -75,6 +77,65 @@ function spawnWorld(mapId: string, seed: number) {
 }
 
 describe('Authored spawns with body navigation', () => {
+  it('pursues players through generated Map 3 rock layouts without persistent solitary stops', () => {
+    const reports: unknown[] = [], failures: unknown[] = [];
+    const layouts: { seed: number; fingerprint: string }[] = [], skipped: unknown[] = [];
+    for (const seed of NAVIGATION_BENCHMARK_SEEDS) {
+      const world = spawnWorld('3', seed), geometry = world.coordinator.getGeometry()!;
+      layouts.push({ seed, fingerprint: ArenaGenerator.fingerprint(world.layout) });
+      const catalog = new EnemyAiTargetCatalog(), intents = new EnemyIntentSystem(world.coordinator, catalog);
+      world.manager.setNavigationIntents(intents);
+      const free: { x: number; y: number }[] = [];
+      for (let y = 1; y < world.metrics.gridRows - 1; y++) for (let x = 1; x < world.metrics.gridCols - 1; x++) {
+        const point = worldCellCenter(world.metrics, x, y);
+        if (geometry.isFree(point.x, point.y, 15)) free.push(point);
+      }
+      for (const fraction of [.2, .5, .8]) {
+        const target = free[Math.floor(free.length * fraction)];
+        const targetRadius = 12;
+        catalog.updateTargets([{ kind: 'player', id: 'runner', radius: targetRadius, ...target }]);
+        for (let sample = 0; sample < 16; sample++) {
+          const start = free[Math.floor((sample + .5) * free.length / 16)];
+          const unit = world.manager.hostSpawnAtWorld(start.x, start.y, 'rabid-badger');
+          intents.update([unit], 0); world.coordinator.prepareNow(); intents.update([unit], 120);
+          const route = intents.get(unit.id)?.navigation;
+          if (route?.status !== 'ready') { skipped.push({ seed, start, target, route }); world.clear(); continue; }
+          let arrived = false, stillMs = 0, unsafe = 0;
+          const attackRange = unit.getAttackWeapons()[0].weapon.config.range;
+          const dt = 1000 / 60;
+          for (let step = 0; step < 1800; step++) {
+            const now = 240 + step * dt;
+            world.coordinator.advance(dt); intents.update([unit], now);
+            world.manager.hostUpdateMovement(world.field, world.field, world.field, null, false, now, dt);
+            const { vx, vy } = unit.getDesiredVelocity(), x = unit.sprite.x, y = unit.sprite.y;
+            const nx = x + vx * dt / 1000, ny = y + vy * dt / 1000;
+            if (!geometry.canMove(x, y, nx, ny, unit.getSize() / 2)) { unsafe++; break; }
+            unit.setPosition(nx, ny);
+            (unit.sprite.body as { setVelocity(x: number, y: number): void }).setVelocity(vx, vy);
+            if (Math.hypot(nx - target.x, ny - target.y) <= attackRange + targetRadius
+              && geometry.canMove(nx, ny, target.x, target.y, 0)) { arrived = true; break; }
+            stillMs = Math.hypot(nx - x, ny - y) < .05 ? stillMs + dt : 0;
+            if (stillMs >= 10000) break;
+          }
+          const result = { seed, start, target, arrived, unsafe, stillMs, position: { x: unit.sprite.x, y: unit.sprite.y },
+            intent: intents.get(unit.id), movement: world.manager.getMovementFeedback(unit.id),
+            nearbyObstacles: !arrived ? geometry.snapshot.obstacles.filter(shape => shape.shape === 'rect'
+              && Math.abs((shape.left + shape.right) / 2 - unit.sprite.x) < 48
+              && Math.abs((shape.top + shape.bottom) / 2 - unit.sprite.y) < 48) : undefined };
+          reports.push(result);
+          if (!arrived || unsafe) failures.push(result);
+          world.clear();
+        }
+      }
+      intents.clear(); world.destroy();
+    }
+    mkdirSync('build/navigation-results', { recursive: true });
+    writeFileSync('build/navigation-results/map3-pursuit.json', JSON.stringify({ scenarioVersion: 1, mapId: '3',
+      scope: 'Generated World geometry, productive intents/locomotion, isolated body sweeps; no Arcade or combat execution.',
+      layouts, skipped, reports, failures }, null, 2));
+    expect(failures, JSON.stringify(failures.slice(0, 3))).toHaveLength(0);
+  }, 180000);
+
   it('materializes normal enemies inside current free geometry across every map and ten seeds', () => {
     const reports: unknown[] = [];
     for (let id = 0; id <= 17; id++) for (const seed of NAVIGATION_BENCHMARK_SEEDS) {

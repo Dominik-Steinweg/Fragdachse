@@ -12,7 +12,7 @@ export interface ProjectileLifecycleDependencies {
   release(projectile: ProjectileRuntimeRecord): void;
   isCurrent(projectile: ProjectileRuntimeRecord): boolean;
   shouldSweepRocks(projectile: ProjectileRuntimeRecord): boolean;
-  sweepRocks(projectile: ProjectileRuntimeRecord): void;
+  sweepRocks(projectile: ProjectileRuntimeRecord, rangeBeforeStep?: number): void;
   advanceCarrier?(projectile: ProjectileRuntimeRecord): void;
   updateHoming(projectile: ProjectileRuntimeRecord, simulatedAgeMs: number): void;
   onImpact(projectile: ProjectileRuntimeRecord, x: number, y: number): void;
@@ -262,7 +262,7 @@ export class ProjectileLifecycleProcessor {
     }
 
     if (this.deps.shouldSweepRocks(proj)) {
-      this.deps.sweepRocks(proj);
+      this.deps.sweepRocks(proj, coreStage.rangeBeforeStep.get(proj.id));
       if (proj.pendingDestroy) {
         this.deps.release(proj);
         return false;

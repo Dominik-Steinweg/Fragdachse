@@ -7,6 +7,8 @@ import { advanceSpeedVariation, createSpeedVariation } from './ProjectileSpeedVa
 
 /** Core results consumed by the world owner's downstream lifecycle stage. */
 export interface ProjectileCoreStageResult {
+  /** Range before provisional movement, for contacts resolved later in this step. */
+  readonly rangeBeforeStep: ReadonlyMap<number, number>;
   readonly lifetimeExpiredIds: ReadonlySet<number>;
   readonly grenadeExpiredIds: ReadonlySet<number>;
   readonly rangeDepletedIds: ReadonlySet<number>;
@@ -22,6 +24,7 @@ export interface ProjectileCoreStageResult {
  * effects and presentation are consumed by their dedicated downstream owners.
  */
 export class ProjectileFlightProcessor {
+  private readonly rangeBeforeStep = new Map<number, number>();
   private readonly lifetimeExpiredIds = new Set<number>();
   private readonly grenadeExpiredIds = new Set<number>();
   private readonly rangeDepletedIds = new Set<number>();
@@ -31,6 +34,7 @@ export class ProjectileFlightProcessor {
   private timeFieldPort: ProjectileTimeFieldPort | null = null;
 
   private readonly result: ProjectileCoreStageResult = {
+    rangeBeforeStep: this.rangeBeforeStep,
     lifetimeExpiredIds: this.lifetimeExpiredIds,
     grenadeExpiredIds: this.grenadeExpiredIds,
     rangeDepletedIds: this.rangeDepletedIds,
@@ -44,6 +48,7 @@ export class ProjectileFlightProcessor {
   }
 
   run(projectiles: readonly ProjectileRuntimeRecord[], deltaMs: number, nowMs: number): ProjectileCoreStageResult {
+    this.rangeBeforeStep.clear();
     this.lifetimeExpiredIds.clear();
     this.grenadeExpiredIds.clear();
     this.rangeDepletedIds.clear();
@@ -59,6 +64,7 @@ export class ProjectileFlightProcessor {
   }
 
   reset(): void {
+    this.rangeBeforeStep.clear();
     this.lifetimeExpiredIds.clear();
     this.grenadeExpiredIds.clear();
     this.rangeDepletedIds.clear();
@@ -162,6 +168,7 @@ export class ProjectileFlightProcessor {
 
   private decrementRange(projectile: ProjectileRuntimeRecord): void {
     if (projectile.remainingRangePx === undefined) return;
+    this.rangeBeforeStep.set(projectile.id, projectile.remainingRangePx);
     const dx = projectile.physics.sprite.x - projectile.lastX;
     const dy = projectile.physics.sprite.y - projectile.lastY;
     const distance = Math.hypot(dx, dy);

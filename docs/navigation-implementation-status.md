@@ -69,6 +69,17 @@ Ein Wechsel des Zielbereichs verwendet aktuelle Angriffsplätze; ein freier Weg
 hebt den Auftrag sofort auf. Gezielte Regressionstests prüfen den bewegten Spieler
 hinter einer Felswand einschließlich verzögert gelieferter Feldberechnungen.
 
+Ein weiterer Stillstand auf Map 3 ließ sich auf die Ankunftstoleranz an
+Zwischenpunkten zurückführen: Knapp ein Pixel vor einer engen Felsecke wurde
+bereits angehalten, obwohl der nächste körpergerechte Wegabschnitt erst näher
+am Rasterpunkt frei war. Die lokale Bewegung läuft Zwischenpunkte jetzt bis
+auf numerische Toleranz an. Der Mapaufbau bleibt unverändert. In 480
+Verfolgungen über zehn generierte Map-3-Layouts sanken dauerhafte Stillstände
+von neun auf null; alle Einheiten erreichten einen freien Angriffsbereich ohne
+unsichere Bewegung. Ein reduzierter Felseckenfall schützt dieselbe Regression
+unabhängig vom Mapgenerator. Die Prüfung verwendet den Body-Sweep-Harness,
+keinen Browser oder vollständigen Arcade-/Kampflauf.
+
 Alle 90 kontrollierten Bewegungsfälle erreichten mit sämtlichen Einheiten das
 Ziel, ohne unsichere Bewegungsvorschläge. Bei 100 Einheiten lag die Navigation
 im damaligen Inline-Harness bei etwa 0,50–0,58 ms p95 pro Simulationsschritt.

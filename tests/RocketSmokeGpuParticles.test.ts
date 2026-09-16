@@ -19,6 +19,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 
 import { RocketRenderer } from '../src/effects/RocketRenderer';
 import { TracerRenderer } from '../src/effects/TracerRenderer';
+import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { ProjectileBurnRenderer } from '../src/effects/ProjectileBurnRenderer';
 import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
@@ -150,12 +151,15 @@ describe('gpu vfx eased base', () => {
     tracer.destroyAll();
   });
 
-  it('preserves shared knot ages across separately delivered physics observations', () => {
+  it.each([
+    { name: 'automatic', config: { profile: 'automatic', moteAmount: 0 } as FlightSignatureConfig },
+    { name: 'Hydra', config: WEAPON_CONFIGS.HYDRA.tracerConfig! },
+  ])('preserves continuous $name ribbons and shared ages across separately delivered observations', ({ config }) => {
     const { scene, registry } = setup();
     const create = vi.spyOn(registry, 'createFlightRibbon');
     const tracer = new TracerRenderer(scene as never);
     tracer.registerGpuVfx(registry);
-    tracer.createTracer(1, 0, 0, { profile: 'automatic', moteAmount: 0 }, 0xffaa00);
+    tracer.createTracer(1, 0, 0, config, 0xffaa00);
     const points = [
       { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0 },
       { sequence: 2, timeMs: 16, x: 8, y: 0, vx: 1000, vy: 0 },

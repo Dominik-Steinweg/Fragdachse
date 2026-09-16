@@ -125,6 +125,18 @@ bildet Kampf oder Arcade-Gleiten nicht nach.
 
 ## Weitere Verhaltenstests
 
+`tests/stress/NavigationSpawns.test.ts` prüft zusätzlich 480 einzelne
+Rabid-Badger-Verfolgungen über zehn echte Map-3-Layouts, je drei Spielerziele
+und 16 Startpunkte. Ein gültiger Angriffsbereich zählt als Ankunft;
+dauerhafte Stillstände außerhalb dieses Bereichs und unsichere Körperbewegungen
+sind Fehler. Der Bericht `build/navigation-results/map3-pursuit.json` enthält
+Layout-Fingerprints, Start-/Zielpositionen und bei Fehlern den lokalen Zustand.
+Gezielter Lauf:
+
+```text
+node node_modules/vitest/vitest.mjs run --pool=threads --exclude build/** tests/stress/NavigationSpawns.test.ts -t "pursues players"
+```
+
 Für gezielte Messungen von Zielentscheidung, Durchbruchssuche und Worker-Datenmenge:
 
 ```powershell

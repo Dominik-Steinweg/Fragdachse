@@ -24,10 +24,6 @@ interface HydraVisual {
   coreEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   shellEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   moteEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  wakeEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  lastTrailX: number;
-  lastTrailY: number;
-  lastTrailAt: number;
 }
 
 export class HydraRenderer {
@@ -206,21 +202,6 @@ export class HydraRenderer {
       emitting: true,
     }, DEPTH.PROJECTILES + 0.95, undefined, 'hydra');
 
-    const wakeEmitter = createEmitter(this.scene, x, y, TEX_HYDRA_WISP, {
-      lifespan: { min: 220, max: 420 },
-      frequency: 18,
-      quantity: 1,
-      speedX: { min: -12, max: 12 },
-      speedY: { min: -12, max: 12 },
-      scaleX: { start: 0.6, end: 0.12 },
-      scaleY: { start: 0.32, end: 0.08 },
-      rotate: { min: -8, max: 8 },
-      alpha: { start: 0.12, end: 0 },
-      tint: [mixColors(color, 0xffffff, 0.04), color, mixColors(color, 0x07101b, 0.18)],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: true,
-    }, DEPTH.PROJECTILES - 0.05, undefined, 'hydra');
-
     this.visuals.set(id, {
       glow,
       membrane,
@@ -228,10 +209,6 @@ export class HydraRenderer {
       coreEmitter,
       shellEmitter,
       moteEmitter,
-      wakeEmitter,
-      lastTrailX: x,
-      lastTrailY: y,
-      lastTrailAt: this.scene.time.now,
     });
 
     this.updateVisual(id, x, y, size, 0, 0, color);
@@ -249,9 +226,6 @@ export class HydraRenderer {
     const drift = Math.sin(this.scene.time.now * 0.014 + id * 0.63);
     const heading = Math.atan2(vy, vx);
     const spread = Math.max(size * 0.54, 6.5);
-    const wakeDistance = Math.max(size * 1.95, 20);
-    const wakeX = x - nx * wakeDistance + -ny * drift * Math.max(size * 0.08, 1.4);
-    const wakeY = y - ny * wakeDistance + nx * drift * Math.max(size * 0.08, 1.4);
 
     visual.glow.setPosition(x, y);
     visual.glow.setScale(Math.max(size / 13.8, 0.78) * (1.04 + pulse * 0.06));
@@ -282,19 +256,6 @@ export class HydraRenderer {
     setCircleEmitZone(visual.moteEmitter, spread * 0.46, 2, true);
     visual.moteEmitter.setParticleScale(Math.max(size / 30, 0.18), 0.04);
 
-    visual.wakeEmitter.setPosition(wakeX, wakeY);
-    visual.wakeEmitter.setAngle(Phaser.Math.RadToDeg(heading) + 180);
-    setCircleEmitZone(visual.wakeEmitter, Math.max(size * 0.08, 1.6), 1, true);
-    visual.wakeEmitter.setParticleScale(Math.max(size / 22, 0.26), 0.08);
-
-    const now = this.scene.time.now;
-    const distance = Phaser.Math.Distance.Between(visual.lastTrailX, visual.lastTrailY, wakeX, wakeY);
-    if (distance >= Math.max(size * 0.7, 8) || now - visual.lastTrailAt >= 34) {
-      this.spawnTrailWisp(wakeX, wakeY, size, heading + Math.PI, color);
-      visual.lastTrailX = wakeX;
-      visual.lastTrailY = wakeY;
-      visual.lastTrailAt = now;
-    }
   }
 
   destroyVisual(id: number): void {
@@ -304,7 +265,6 @@ export class HydraRenderer {
     destroyEmitter(visual.coreEmitter);
     destroyEmitter(visual.shellEmitter);
     destroyEmitter(visual.moteEmitter);
-    destroyEmitter(visual.wakeEmitter);
     visual.glow.destroy();
     visual.cluster.destroy();
     visual.membrane.destroy();
@@ -463,29 +423,4 @@ export class HydraRenderer {
     }
   }
 
-  private spawnTrailWisp(x: number, y: number, size: number, rotation: number, color: number): void {
-    const wisp = this.scene.add.image(x, y, TEX_HYDRA_WISP)
-      .setDepth(DEPTH.PROJECTILES - 0.2)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0.4)
-      .setTint(mixColors(color, 0xffffff, 0.04))
-      .setScale(Math.max(size / 20, 0.48), Math.max(size / 36, 0.12))
-      .setRotation(rotation + Phaser.Math.FloatBetween(-0.3, 0.3));
-
-    this.trailWisps.add(wisp);
-    this.scene.tweens.add({
-      targets: wisp,
-      alpha: 0,
-      scaleX: wisp.scaleX * 1.45,
-      scaleY: wisp.scaleY * 1.08,
-      x: x + Phaser.Math.Between(-6, 6),
-      y: y + Phaser.Math.Between(-6, 6),
-      duration: 1000,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        this.trailWisps.delete(wisp);
-        wisp.destroy();
-      },
-    });
-  }
 }

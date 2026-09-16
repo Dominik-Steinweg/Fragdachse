@@ -95,7 +95,7 @@ function baseRequest(
       burn: { canReceiveFireImbue: cfg.canReceiveFireImbue },
       pathEffect: { kind: cfg.pathEffectKind, awpCorridor: { halfWidth: cfg.awpCorridorHalfWidth, damage: cfg.awpCorridorDamage } },
     },
-    presentation: { color: cfg.color, ownerColor: cfg.ownerColor, tracer: cfg.tracerConfig },
+    presentation: { color: cfg.color, ownerColor: cfg.ownerColor, tracer: cfg.tracerConfig, style: cfg.projectileStyle },
   };
 }
 
@@ -1057,20 +1057,24 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     expect(physics.released).toHaveLength(1);
   });
 
-  it('materializes Hydra children on the following interaction stage', () => {
+  it.each(['world-boundary', 'rock', 'base'] as const)('materializes Hydra children after a %s contact on the following interaction stage', (target) => {
     const { runtime, physics } = createRuntimeHarness();
+    runtime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
     const parentId = runtime.spawnProjectile(baseRequest({
       size: 10,
       damage: 20,
-      maxBounces: 2,
+      maxBounces: 1,
       splitCount: 2,
       splitSpread: 30,
       splitFactor: 1,
       remainingRangePx: 100,
       sourceId: 'weapon.HYDRA',
+      collisionMode: 'sweep',
+      projectileStyle: 'hydra',
     }));
+    runtime.getNetSnapshot();
 
-    physics.emit({
+    if (target === 'world-boundary') physics.emit({
       projectileId: parentId,
       target: { kind: 'world-boundary' },
       x: 0,
@@ -1079,14 +1083,47 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
       velocityY: 0,
       source: 'world-boundary',
     });
+    else {
+      const handle = physics.handles.get(parentId!)!;
+      handle.sprite.x = 30;
+      physics.observe(parentId!, 30, 0, 100, 0);
+      vi.mocked(physics.binding.findNearestRockSweep).mockReturnValueOnce({
+        rockIndex: 0, ...(target === 'base' ? { baseId: 'base-1' } : {}),
+        x: 20, y: 0, normalX: -1, normalY: 0,
+      });
+      runtime.runHostProjectileStage(16, 1_000);
+    }
 
     expect(runtime.activeCount).toBe(0);
+    if (target !== 'world-boundary') {
+      const ended = decodeProjectileDynamics(runtime.getNetSnapshot()?.e ?? []).find(record => record.id === parentId);
+      expect(ended?.flightPath?.ended).toBe(true);
+      expect(ended?.flightPath?.points.at(-1)).toMatchObject({ x: 20, y: 0 });
+    }
     runtime.runHostInteractionStage(1_000);
     expect(runtime.activeCount).toBe(0);
     runtime.runHostInteractionStage(1_016);
     expect(runtime.activeCount).toBe(2);
     expect(physics.specs).toHaveLength(3);
     expect(physics.specs.slice(1).every((spec) => spec.mechanics.worldBounds)).toBe(true);
+    if (target !== 'world-boundary') {
+      expect(physics.specs.slice(1).every(spec => spec.velocityX < 0)).toBe(true);
+      expect(physics.specs.slice(1).every(spec => spec.x + spec.bodyWidth / 2 < 20 && spec.y === 0)).toBe(true);
+      // Only travel up to contact spends range, even if Physics overshot the wall.
+      const child = physics.handles.get(physics.specs[1].id)!;
+      child.sprite.x -= 60;
+      runtime.runHostProjectileStage(16, 1_032);
+      expect(runtime.activeCount).toBe(2);
+      child.sprite.x -= 21;
+      runtime.runHostProjectileStage(16, 1_048);
+      expect(runtime.activeCount).toBe(1);
+    }
+    const lastChild = physics.specs[2];
+    physics.emit({ projectileId: lastChild.id, target: { kind: 'world-boundary' },
+      x: lastChild.x, y: lastChild.y, velocityX: 100, velocityY: 0, source: 'world-boundary' });
+    runtime.runHostInteractionStage(1_064);
+    runtime.runHostInteractionStage(1_080);
+    expect(physics.specs).toHaveLength(3); // Children inherit the already spent bounce.
     runtime.destroy();
   });
 

@@ -5,6 +5,7 @@ vi.mock('phaser', () => ({}));
 import { ProjectileClientReplica } from '../src/projectile/ProjectileClientReplica';
 import { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
 import type { SyncedProjectile } from '../src/types';
+import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 
 function projectile(overrides: Partial<SyncedProjectile> = {}): SyncedProjectile {
   return {
@@ -40,6 +41,23 @@ function passiveRenderer(): Record<string, unknown> {
 }
 
 describe('ProjectilePresentationRuntime', () => {
+  it('feeds Hydra wake with confirmed segments once, including final history', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never);
+    const tracer = { ...passiveRenderer(), has: () => false };
+    runtime.bindRenderers({ tracer } as never, null);
+    const shot = projectile({ style: 'hydra', tracer: WEAPON_CONFIGS.HYDRA.tracerConfig,
+      flightPath: { timeMs: 120, ended: true, points: [
+      { sequence: 1, timeMs: 100, x: 40, y: 80, vx: 100, vy: -100, breakBefore: true },
+      { sequence: 2, timeMs: 120, x: 42, y: 78, vx: 100, vy: -100 },
+    ] } });
+    runtime.presentFinalPath(shot);
+    runtime.presentFinalPath(shot);
+    expect(tracer.createTracer).toHaveBeenCalledWith(shot.id, shot.x, shot.y, shot.tracer, shot.color);
+    expect(tracer.addSegment).toHaveBeenCalledExactlyOnceWith(shot.id, expect.objectContaining({
+      from: expect.objectContaining({ x: 40, y: 80 }), to: expect.objectContaining({ x: 42, y: 78 }),
+    }), false);
+    runtime.releaseWorldPresentation();
+  });
   it('presents replicated prism heads and trails without a firing flash and releases them', () => {
     const runtime = new ProjectilePresentationRuntime({} as never);
     const replica = new ProjectileClientReplica();

@@ -250,6 +250,19 @@
       "spreadRecoveryRate": 5,
       "spreadRecoverySpeed": 100,
       "projectileStyle": "hydra",
+      "tracerConfig": {
+        "profile": "light",
+        "coreIntensity": 0.35,
+        "coreWidth": 2,
+        "coreLength": 12,
+        "wakeIntensity": 0.4,
+        "wakePersistence": 500,
+        "wakeSpread": 4,
+        "heatContrast": 0.15,
+        "wakeTurbulence": 0.22,
+        "moteAmount": 0,
+        "speedResponse": 0.3
+      },
       "shotAudio": {
         "successKey": "shot_hydra",
         "failureKey": "shot_dry_trigger"

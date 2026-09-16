@@ -52,7 +52,9 @@ export class EnemyLocomotion {
     const history = { x, y, targetX: waypoint.x, targetY: waypoint.y, stalled,
       retryAt: prior?.retryAt ?? 0, geometry, crowdNeighbors: prior?.crowdNeighbors };
     this.previous.set(request.id, history);
-    if (distance < 1) return result(0, 0, 'arrival', progress);
+    // A waypoint may be the precise attachment needed to turn around a rock corner.
+    // Stopping a pixel short can leave the following body sweep permanently blocked.
+    if (distance < 1e-3) return result(0, 0, 'arrival', progress);
     const dt = this.deltaSeconds;
     if (dt <= 0 || speed <= 0) return result(0, 0, 'arrival', progress);
     if (!geometry.isFree(x, y, radius)) return this.recover(request, geometry, dt, progress);

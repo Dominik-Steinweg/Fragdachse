@@ -144,6 +144,43 @@ function rock(x: number): RockPhysicsProxy {
 }
 
 describe('technical Phaser boundary with the authoritative runtime', () => {
+  it.each((['rock', 'base'] as const).flatMap(kind => [0.15, 1.53].flatMap(angle =>
+    [1.5, 2.4].map(factor => ({ kind, angle, factor })))))
+  ('splits Hydra once at a tiled $kind (angle $angle, factor $factor) and clears the surface', ({ kind, angle, factor }) => {
+    const { binding, runtime, doubles } = fixture();
+    const cells = [64, 96, 128, 160, 192].map(y => ({ active: true,
+      getData: () => 'hydra-base', getBounds: () => new Phaser.Geom.Rectangle(128, y, 32, 32),
+    }));
+    if (kind === 'rock') binding.setRockGroup(null, cells as unknown as RockPhysicsProxy[], null);
+    else binding.setBaseGroup({ getChildren: () => cells } as unknown as Phaser.Physics.Arcade.StaticGroup);
+    binding.setObstacleIndex(new ArenaObstacleIndex({
+      bounds: () => ({ offsetX: 0, offsetY: 0, width: 1024, height: 512 }),
+      rocks: () => kind === 'rock' ? cells as unknown as RockPhysicsProxy[] : [],
+      trunks: () => null, bases: () => kind === 'base' ? cells as never : null,
+    }));
+    const hits = vi.fn();
+    runtime.setRockHitCallback(hits); runtime.setBaseHitCallback(hits);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, origin: { x: 168.5, y: 164, angle: Math.PI + angle },
+      flight: { ...spawn.flight, speed: 300, size: 16, lifetimeMs: 5000, remainingRangePx: 1500,
+        maxBounces: 3, split: { count: 2, spread: 5, speedFactor: factor } },
+      presentation: { color: 0xffffff, style: 'hydra' } });
+    for (let step = 1; step <= 45; step++) {
+      for (const { sprite, body } of doubles.handles.values()) if (sprite.active) {
+        sprite.x += body.velocity.x * 0.016; sprite.y += body.velocity.y * 0.016;
+      }
+      runtime.runHostInteractionStage(step * 16);
+      runtime.runHostProjectileStage(16, step * 16);
+    }
+    expect(hits).toHaveBeenCalledOnce();
+    expect(runtime.activeCount).toBe(2);
+    expect(doubles.specs).toHaveLength(3);
+    for (const { sprite, body } of doubles.handles.values()) if (sprite.active) {
+      expect(body.velocity.x).toBeGreaterThan(0);
+      expect(sprite.x - body.width / 2).toBeGreaterThan(160);
+    }
+    runtime.destroy();
+  });
   it('hits a figure behind several low walls without spending penetration on the walls', () => {
     const { binding, runtime, doubles } = fixture();
     const walls = [20, 40, 60].map(x => Object.assign(rock(x), { obstacleClass: 'low' as const }));

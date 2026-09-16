@@ -365,7 +365,7 @@ export class WorldProjectileRuntime implements
       release: (projectile) => this.releaseProjectile(projectile),
       isCurrent: (projectile) => this.projectiles.getById(projectile.id) === projectile,
       shouldSweepRocks: (projectile) => this.shouldSweepRocks(projectile),
-      sweepRocks: (projectile) => this.sweepRocks(projectile),
+      sweepRocks: (projectile, rangeBeforeStep) => this.sweepRocks(projectile, rangeBeforeStep),
       updateHoming: (projectile, simulatedAgeMs) => { this.updateProjectileHoming(projectile, simulatedAgeMs); },
       onImpact: (projectile, x, y) => this.projectileImpactEventCallback?.(this.createImpactSource(projectile, x, y)),
       onNaturalFlameExpiry: (projectile) => this.naturalFlameExpiryCallback?.(this.createImpactSource(projectile) as ProjectileFlameExpiryEvent),
@@ -808,6 +808,7 @@ export class WorldProjectileRuntime implements
     flightPosition: { readonly x: number; readonly y: number }): void {
     if (this.queueHydraSplit(
       projectile.id, x, y, projectile.physics.body.velocity.x, projectile.physics.body.velocity.y,
+      undefined, flightPosition,
     )) return;
     projectile.bounceCount += 1;
     if (worldBoundary) this.playAuthoritativeBouncePresentation(
@@ -831,7 +832,7 @@ export class WorldProjectileRuntime implements
       && !projectile.bounceProcessedThisStep;
   }
 
-  private sweepRocks(projectile: ProjectileRuntimeRecord): void {
+  private sweepRocks(projectile: ProjectileRuntimeRecord, rangeBeforeStep?: number): void {
     const segmentLength = Math.hypot(projectile.physics.sprite.x - projectile.lastX, projectile.physics.sprite.y - projectile.lastY);
     if (segmentLength <= 0.5) return;
     const hit = this.physicsBinding.findNearestRockSweep(
@@ -856,7 +857,6 @@ export class WorldProjectileRuntime implements
       nextVx *= frictionMultiplier;
       nextVy *= frictionMultiplier;
     }
-    projectile.bounceCount += 1;
     projectile.bounceProcessedThisStep = true;
     projectile.velocityAfterFirstBounce = { x: nextVx, y: nextVy };
     const resolution = this.resolveWorldImpactCandidate(projectile, {
@@ -870,6 +870,14 @@ export class WorldProjectileRuntime implements
     // bounce replication or reset a body whose lifetime already ended.
     if (resolution.technicalContactConsumed || projectile.pendingDestroy
       || !this.projectiles.activeRecords.has(projectile)) return;
+    // Swept contacts must run the same split rule as Physics collider contacts,
+    // before incrementing the inherited bounce count.
+    if (this.queueHydraSplit(projectile.id, hit.x, hit.y, nextVx, nextVy, rangeBeforeStep, {
+      x: hit.centerX ?? hit.x + Math.sign(hit.normalX) * projectile.physics.body.width / 2,
+      y: hit.centerY ?? hit.y + Math.sign(hit.normalY) * projectile.physics.body.height / 2,
+      normalX: hit.normalX, normalY: hit.normalY,
+    })) return;
+    projectile.bounceCount += 1;
     const offsetDistance = projectile.bounceCount > projectile.maxBounces ? 0
       : hit.centerX !== undefined ? 0.5 : Math.max(projectile.physics.sprite.displayWidth * 0.5 + 0.5, 1);
     const flightPosition = {
@@ -1323,6 +1331,8 @@ export class WorldProjectileRuntime implements
     impactY: number,
     outgoingVx: number,
     outgoingVy: number,
+    rangeBeforeStep?: number,
+    splitOrigin?: { readonly x: number; readonly y: number; readonly normalX?: number; readonly normalY?: number },
   ): boolean {
     if (this.destroyed) return false;
     const projectile = this.projectiles.getById(projectileId);
@@ -1330,6 +1340,9 @@ export class WorldProjectileRuntime implements
 
     const splitCount = Math.max(0, Math.floor(projectile.spec.flight.split.count ?? 0));
     if (splitCount <= 0) return false;
+
+    // End the parent's confirmed trail at contact, never at the swept frame's overshoot.
+    this.flightContactPoints.set(projectile.id, { x: impactX, y: impactY });
 
     const nextBounceCount = projectile.bounceCount + 1;
     const outgoingSpeed = Math.hypot(outgoingVx, outgoingVy);
@@ -1342,12 +1355,19 @@ export class WorldProjectileRuntime implements
       ) ?? projectile.timeBubbleFactor ?? 1,
     );
     const childBaseSpeed = outgoingSpeed / timeBubbleFactor;
-    const remainingRangePx = this.getRemainingRangeAfterImpact(projectile, impactX, impactY);
+    const remainingRangePx = this.getRemainingRangeAfterImpact(projectile, impactX, impactY, rangeBeforeStep);
     const childAngles = this.getHydraSplitAngles(
       Math.atan2(outgoingVy, outgoingVx),
       splitCount,
       projectile.spec.flight.split.spread ?? 0,
-    );
+    ).map(angle => {
+      // A grazing split fan can point back into its own contact face. Reflect that
+      // component as part of this one impact instead of causing another split.
+      let vx = Math.cos(angle), vy = Math.sin(angle);
+      if (vx * (splitOrigin?.normalX ?? 0) < 0) vx = -vx;
+      if (vy * (splitOrigin?.normalY ?? 0) < 0) vy = -vy;
+      return Math.atan2(vy, vx);
+    });
 
     // Hydra owns the bounce terminal: a failed split is still consumed exactly as before.
     if (nextBounceCount > projectile.maxBounces
@@ -1382,83 +1402,88 @@ export class WorldProjectileRuntime implements
     this.queueProjectileDestroy(projectile.id);
 
     for (const childAngle of childAngles) {
+      const cfg: ProjectileSpawnConfig = {
+        ...createInheritedProjectilePayload(projectile),
+        speed: childBaseSpeed,
+        size: childSize,
+        damage: childDamage,
+        color: projectile.presentation.color,
+        allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
+        ownerColor: projectile.presentation.ownerColor,
+        lifetime: childLifetime,
+        maxBounces: projectile.maxBounces,
+        isGrenade: projectile.spec.flight.isGrenade,
+        isTranslocatorPuck: projectile.spec.flight.isTranslocatorPuck,
+        collisionMode: projectile.spec.flight.collisionMode,
+        adrenalinGain: childAdrenalinGain,
+        sourceId: projectile.provenance.weaponSourceId ?? 'weapon.unknown',
+        explosion: projectile.interaction.explosion,
+        enemyHitExplosion: projectile.spec.interaction.enemyHitExplosion,
+        impactCloud: projectile.spec.interaction.impactCloud,
+        sporeVisualVariant: projectile.presentation.sporeVisualVariant,
+        homing: projectile.spec.flight.split.homing ?? projectile.spec.flight.homing,
+        projectileVisualScale: projectile.presentation.projectileVisualScale,
+        smokeTrailColor: projectile.presentation.smokeTrailColor,
+        fuseTime: projectile.spec.flight.fuseTime,
+        grenadeEffect: projectile.spec.interaction.grenadeEffect,
+        projectileStyle: projectile.presentation.projectileStyle,
+        bulletVisualPreset: projectile.presentation.bulletVisualPreset,
+        grenadeVisualPreset: projectile.presentation.grenadeVisualPreset,
+        energyBallVariant: projectile.presentation.energyBallVariant,
+        tracerConfig: projectile.presentation.tracerConfig,
+        detonable: projectile.spec.interaction.detonable,
+        detonator: projectile.spec.interaction.detonator,
+        rockDamageMult: projectile.spec.interaction.directHit.rockDamageMult,
+        trainDamageMult: projectile.spec.interaction.directHit.trainDamageMult,
+        baseDamageMult: projectile.spec.interaction.directHit.baseDamageMult,
+        isFlame: projectile.spec.flight.isFlame,
+        hitboxGrowRate: projectile.spec.flight.hitboxGrowth.growRatePerSec,
+        hitboxMaxSize: projectile.spec.flight.hitboxGrowth.maxSize,
+        velocityDecay: projectile.spec.flight.drag.velocityDecayPerSec,
+        burnDurationMs: projectile.spec.interaction.burn.burnDurationMs,
+        burnDamagePerTick: projectile.spec.interaction.burn.burnDamagePerTick,
+        projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
+        leafBlowerMinKnockback: projectile.spec.interaction.impulse.leafBlowerMinKnockback,
+        leafBlowerMaxKnockback: projectile.spec.interaction.impulse.leafBlowerMaxKnockback,
+        leafBlowerSelfPush: projectile.spec.interaction.impulse.leafBlowerSelfPush,
+        isBfg: projectile.spec.flight.isBfg,
+        piercesTargets: projectile.spec.flight.piercesTargets,
+        penetrationCount: projectile.interaction.penetrationRemaining,
+        penetrationDamageRetention: projectile.spec.flight.penetration.damageRetention,
+        penetratesRocks: projectile.spec.flight.penetration.penetratesRocks,
+        flamePiercing: projectile.contacts.flamePierceHitIds !== undefined,
+        leafBlowerDeflectsProjectiles: projectile.spec.interaction.impulse.leafBlowerDeflectsProjectiles,
+        proximityPulse: projectile.spec.interaction.proximityPulse,
+        gaussChainRadius: projectile.spec.interaction.directHit.gaussChainRadius,
+        gaussChainDamageFactor: projectile.spec.interaction.directHit.gaussChainDamageFactor,
+        frictionDelayMs: projectile.spec.flight.drag.frictionDelayMs,
+        airFrictionDecayPerSec: projectile.spec.flight.drag.airFrictionDecayPerSec,
+        bounceFrictionMultiplier: projectile.spec.flight.drag.bounceFrictionMultiplier,
+        stopSpeedThreshold: projectile.spec.flight.drag.stopSpeedThreshold,
+        sourceSlot: projectile.provenance.sourceSlot,
+        shotAudioKey: projectile.presentation.shotAudioKey,
+        splitCount: projectile.spec.flight.split.count,
+        splitSpread: projectile.spec.flight.split.spread,
+        splitFactor: projectile.spec.flight.split.speedFactor,
+        splitHoming: projectile.spec.flight.split.homing,
+        initialBounceCount: nextBounceCount,
+        remainingRangePx,
+        suppressSpawnFx: true,
+      };
+      const body = resolveProjectileBodyProfile(cfg, childAngle);
+      // The contact belongs to FX/damage. Children need an exterior center, including
+      // their own body extent: spawning on the surface causes immediate re-entry.
+      const origin = splitOrigin ?? { x: impactX, y: impactY };
+      const x = origin.x + Math.sign(origin.normalX ?? 0)
+        * (Math.max(0, body.width - projectile.physics.body.width) / 2 + 0.5);
+      const y = origin.y + Math.sign(origin.normalY ?? 0)
+        * (Math.max(0, body.height - projectile.physics.body.height) / 2 + 0.5);
       this.pendingNextStageSpawns.push({
-        x: impactX,
-        y: impactY,
-        angle: childAngle,
-        hostNowMs: nowMs,
-        provenance: childProvenance,
+        x, y, angle: childAngle, hostNowMs: nowMs, provenance: childProvenance,
         readyAfterCompletedStages: this.hasStartedInteractionStage
           ? this.completedInteractionStages
           : this.completedInteractionStages + 1,
-        cfg: {
-          ...createInheritedProjectilePayload(projectile),
-          speed: childBaseSpeed,
-          size: childSize,
-          damage: childDamage,
-          color: projectile.presentation.color,
-          allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
-          ownerColor: projectile.presentation.ownerColor,
-          lifetime: childLifetime,
-          maxBounces: projectile.maxBounces,
-          isGrenade: projectile.spec.flight.isGrenade,
-          isTranslocatorPuck: projectile.spec.flight.isTranslocatorPuck,
-          collisionMode: projectile.spec.flight.collisionMode,
-          adrenalinGain: childAdrenalinGain,
-          sourceId: projectile.provenance.weaponSourceId ?? 'weapon.unknown',
-          explosion: projectile.interaction.explosion,
-          enemyHitExplosion: projectile.spec.interaction.enemyHitExplosion,
-          impactCloud: projectile.spec.interaction.impactCloud,
-          sporeVisualVariant: projectile.presentation.sporeVisualVariant,
-          homing: projectile.spec.flight.split.homing ?? projectile.spec.flight.homing,
-          projectileVisualScale: projectile.presentation.projectileVisualScale,
-          smokeTrailColor: projectile.presentation.smokeTrailColor,
-          fuseTime: projectile.spec.flight.fuseTime,
-          grenadeEffect: projectile.spec.interaction.grenadeEffect,
-          projectileStyle: projectile.presentation.projectileStyle,
-          bulletVisualPreset: projectile.presentation.bulletVisualPreset,
-          grenadeVisualPreset: projectile.presentation.grenadeVisualPreset,
-          energyBallVariant: projectile.presentation.energyBallVariant,
-          tracerConfig: projectile.presentation.tracerConfig,
-          detonable: projectile.spec.interaction.detonable,
-          detonator: projectile.spec.interaction.detonator,
-          rockDamageMult: projectile.spec.interaction.directHit.rockDamageMult,
-          trainDamageMult: projectile.spec.interaction.directHit.trainDamageMult,
-          baseDamageMult: projectile.spec.interaction.directHit.baseDamageMult,
-          isFlame: projectile.spec.flight.isFlame,
-          hitboxGrowRate: projectile.spec.flight.hitboxGrowth.growRatePerSec,
-          hitboxMaxSize: projectile.spec.flight.hitboxGrowth.maxSize,
-          velocityDecay: projectile.spec.flight.drag.velocityDecayPerSec,
-          burnDurationMs: projectile.spec.interaction.burn.burnDurationMs,
-          burnDamagePerTick: projectile.spec.interaction.burn.burnDamagePerTick,
-          projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
-          leafBlowerMinKnockback: projectile.spec.interaction.impulse.leafBlowerMinKnockback,
-          leafBlowerMaxKnockback: projectile.spec.interaction.impulse.leafBlowerMaxKnockback,
-          leafBlowerSelfPush: projectile.spec.interaction.impulse.leafBlowerSelfPush,
-          isBfg: projectile.spec.flight.isBfg,
-          piercesTargets: projectile.spec.flight.piercesTargets,
-          penetrationCount: projectile.interaction.penetrationRemaining,
-          penetrationDamageRetention: projectile.spec.flight.penetration.damageRetention,
-          penetratesRocks: projectile.spec.flight.penetration.penetratesRocks,
-          flamePiercing: projectile.contacts.flamePierceHitIds !== undefined,
-          leafBlowerDeflectsProjectiles: projectile.spec.interaction.impulse.leafBlowerDeflectsProjectiles,
-          proximityPulse: projectile.spec.interaction.proximityPulse,
-          gaussChainRadius: projectile.spec.interaction.directHit.gaussChainRadius,
-          gaussChainDamageFactor: projectile.spec.interaction.directHit.gaussChainDamageFactor,
-          frictionDelayMs: projectile.spec.flight.drag.frictionDelayMs,
-          airFrictionDecayPerSec: projectile.spec.flight.drag.airFrictionDecayPerSec,
-          bounceFrictionMultiplier: projectile.spec.flight.drag.bounceFrictionMultiplier,
-          stopSpeedThreshold: projectile.spec.flight.drag.stopSpeedThreshold,
-          sourceSlot: projectile.provenance.sourceSlot,
-          shotAudioKey: projectile.presentation.shotAudioKey,
-          splitCount: projectile.spec.flight.split.count,
-          splitSpread: projectile.spec.flight.split.spread,
-          splitFactor: projectile.spec.flight.split.speedFactor,
-          splitHoming: projectile.spec.flight.split.homing,
-          initialBounceCount: nextBounceCount,
-          remainingRangePx,
-          suppressSpawnFx: true,
-        },
+        cfg,
       });
     }
 
@@ -2112,8 +2137,9 @@ export class WorldProjectileRuntime implements
     projectile: ProjectileRuntimeRecord,
     impactX: number,
     impactY: number,
+    rangeBeforeStep?: number,
   ): number {
-    const baseRange = projectile.remainingRangePx
+    const baseRange = rangeBeforeStep ?? projectile.remainingRangePx
       ?? (Math.max(projectile.spec.flight.speed ?? Math.hypot(
         projectile.physics.body.velocity.x,
         projectile.physics.body.velocity.y,
@@ -2780,7 +2806,7 @@ export class WorldProjectileRuntime implements
         record.appliedAirFrictionDecay = effectiveDecay;
       }
     }
-    if (cfg.tracerConfig || cfg.projectileStyle === 'rocket' || cfg.canReceiveFireImbue
+    if (cfg.tracerConfig || cfg.projectileStyle === 'rocket' || cfg.projectileStyle === 'hydra' || cfg.canReceiveFireImbue
       || (cfg.burnDurationMs ?? 0) > 0) {
       this.flightPaths.begin(id, resolvedSpawn.x, resolvedSpawn.y, handle.body.velocity.x, handle.body.velocity.y, hostNowMs);
     }
