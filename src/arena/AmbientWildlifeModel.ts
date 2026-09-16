@@ -3,7 +3,8 @@ import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { hashSeededCell01 } from './CellHash';
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
-import { createWildlifeAppearance, type WildlifeAppearance, type WildlifeKind } from './AmbientWildlifeAppearance';
+import { createWildlifeAppearance, isWingedInsect, type WildlifeAppearance, type WildlifeKind } from './AmbientWildlifeAppearance';
+import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 
 export type { WildlifeKind } from './AmbientWildlifeAppearance';
 export type FishPhase = 'swimming' | 'fleeing' | 'diving' | 'hidden' | 'emerging';
@@ -29,6 +30,8 @@ export interface WildlifeAnimal {
   alertCooldown: number;
   fleeing: boolean;
   resting: boolean;
+  diurnalActive: boolean;
+  retireTime: number;
   readonly shot: { x: number; y: number; until: number };
 }
 interface PlayerMotion { x: number; y: number; movingUntil: number; seen: number }
@@ -49,6 +52,7 @@ export class AmbientWildlifeModel {
   private readonly players = new Map<string, PlayerMotion>();
   private time = 0;
   private frameId = 0;
+  private daylightInitialized = false;
 
   constructor(layout: ArenaLayout, private readonly frame: ChunkWorldFrame) {
     for (const c of layout.water ?? []) this.water.add(key(c.gridX, c.gridY));
@@ -72,7 +76,8 @@ export class AmbientWildlifeModel {
       createWildlifeAppearance(kind, random(x, y, 811), random(x, y, 812), groupRoll);
     const add = (kind: WildlifeKind, x: number, y: number, homeX = x, homeY = y,
       appearance = appearanceAt(kind, x, y)): WildlifeAnimal => {
-      const variation = random(x, y, 803), phaseOffset = random(x, y, 809) * TAU;
+      const salt = kind === 'moth' ? 1000 : kind === 'firefly' ? 2000 : 0;
+      const variation = random(x, y, 803 + salt), phaseOffset = random(x, y, 809 + salt) * TAU;
       const resting = kind === 'butterfly' && random(x, y, 804)
         < TUNING.butterflyRestSeconds / (TUNING.butterflyRestSeconds + TUNING.butterflyFlightSeconds);
       const calmTime = kind === 'butterfly'
@@ -81,7 +86,9 @@ export class AmbientWildlifeModel {
       const animal: WildlifeAnimal = { kind, x, y, homeX, homeY, variation, phaseOffset, appearance,
         angle: phaseOffset, turnSpeed: 0, avoidanceAngle: null, speed: resting ? 0 : TUNING[kind].speed, animation: phaseOffset, opacity: 1,
         fishPhase: 'swimming', phaseTime: 0, calmTime, alertCooldown: 0, fleeing: false,
-        resting, shot: { x: 0, y: 0, until: 0 } };
+        resting, diurnalActive: kind !== 'moth' && kind !== 'firefly', retireTime: 0,
+        shot: { x: 0, y: 0, until: 0 } };
+      if (!animal.diurnalActive) animal.opacity = 0;
       this.animals.push(animal);
       return animal;
     };
@@ -103,6 +110,18 @@ export class AmbientWildlifeModel {
     // maps too. A tiny patch that supports only one butterfly keeps that one.
     this.animals.sort((a, b) => random(a.homeX, a.homeY, 850) - random(b.homeX, b.homeY, 850));
     this.animals.length = Math.min(this.animals.length, Math.max(1, Math.floor(this.animals.length * TUNING.butterfly.density)));
+    const insectHomes = this.animals.slice();
+    for (const kind of ['moth', 'firefly'] as const) {
+      // Density also thins small habitats that never reach the population cap.
+      const count = Math.min(TUNING[kind].maxCount, Math.ceil(insectHomes.length * TUNING[kind].density));
+      for (const home of insectHomes.slice(0, count)) {
+        const salt = kind === 'moth' ? 1500 : 2500;
+        const x = home.x + (random(home.x, home.y, salt) - .5) * 96;
+        const y = home.y + (random(home.x, home.y, salt + 1) - .5) * 96;
+        if (this.isGrass(x, y)) add(kind, x, y);
+        else add(kind, home.x, home.y);
+      }
+    }
     // Seeded occupancy keeps most trees empty; rare shared homes remain possible.
     // Seeded priority also spreads the population cap without depending on authored order.
     const snakeTrees = this.trees.filter(tree => random(tree.x, tree.y, 863) < TUNING.snake.treeOccupancy)
@@ -187,7 +206,7 @@ export class AmbientWildlifeModel {
 
   contains(animal: WildlifeAnimal, x: number, y: number): boolean {
     if (animal.kind === 'fish') return this.isDeepWater(x, y, animal.appearance.footprint);
-    if (animal.kind === 'butterfly') return this.isGrass(x, y);
+    if (isWingedInsect(animal.kind)) return this.isGrass(x, y);
     const roamingRadius = Math.min(CANOPY_RADIUS + 8, CANOPY_RADIUS * 1.5 - animal.appearance.footprint);
     return Math.hypot(x - animal.homeX, y - animal.homeY) <= roamingRadius
       && this.isLand(x, y, animal.appearance.footprint);
@@ -206,7 +225,8 @@ export class AmbientWildlifeModel {
     }
   }
 
-  update(deltaMs: number, players: readonly WildlifePlayer[], view?: ChunkWorldRect): void {
+  update(deltaMs: number, players: readonly WildlifePlayer[], view?: ChunkWorldRect,
+    timeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES): void {
     const dt = Math.max(0, Math.min(deltaMs / 1000, .05));
     this.time += dt; this.frameId++;
     for (const p of players) {
@@ -217,16 +237,19 @@ export class AmbientWildlifeModel {
       } else this.players.set(p.id, { x: p.x, y: p.y, movingUntil: 0, seen: this.frameId });
     }
     for (const [id, p] of this.players) if (p.seen !== this.frameId) this.players.delete(id);
+    const minutes = normalizeTimeOfDay(timeOfDayMinutes);
     for (const animal of this.animals) {
+      // Daylight transitions must also complete outside the camera's simulation window.
+      if (isWingedInsect(animal.kind) && !this.updateInsectDaylight(animal, minutes, dt)) continue;
       // Offscreen state is retained without per-animal animation or habitat queries.
       if (view && (animal.x < view.x - 192 || animal.y < view.y - 192
         || animal.x > view.x + view.width + 192 || animal.y > view.y + view.height + 192)) continue;
       const tuning = TUNING[animal.kind];
       let threat: { x: number; y: number } | undefined, distance = tuning.alertRadius as number;
       for (const p of this.players.values()) {
-        // Butterflies also take off for a nearby stationary player and cannot
-        // settle again beside them. Other animals retain movement sensitivity.
-        if (animal.kind !== 'butterfly' && p.movingUntil <= this.time) continue;
+        // Active insects also react to stationary players and cannot settle
+        // beside them. Ground/water animals retain movement sensitivity.
+        if (!isWingedInsect(animal.kind) && p.movingUntil <= this.time) continue;
         const d = Math.hypot(animal.x - p.x, animal.y - p.y);
         if (d < distance) { distance = d; threat = p; }
       }
@@ -237,8 +260,8 @@ export class AmbientWildlifeModel {
       if (animal.kind === 'fish') this.updateFish(animal, dt, !!threat);
       animal.fleeing = animal.kind === 'fish'
         ? animal.fishPhase === 'fleeing' || (animal.fishPhase === 'diving' && animal.fleeing) : !!threat;
-      if (animal.kind === 'butterfly') {
-        this.updateButterfly(animal, dt, !!threat);
+      if (animal.kind === 'butterfly' || animal.kind === 'moth') {
+        this.updateWingedRest(animal, dt, !!threat);
         if (animal.resting) { animal.speed = 0; animal.turnSpeed = 0; continue; }
       }
       const desiredSpeed = animal.fleeing ? tuning.fleeSpeed : tuning.speed;
@@ -249,11 +272,41 @@ export class AmbientWildlifeModel {
       let desiredAngle = animal.angle + wander * .25;
       if (threat && animal.fleeing) desiredAngle = Math.atan2(animal.y - threat.y, animal.x - threat.x);
       this.move(animal, desiredAngle, dt);
-      animal.animation += dt * (animal.kind === 'butterfly' ? TUNING.butterfly.animationRate : 5 + animal.speed * .25);
+      animal.animation += dt * (isWingedInsect(animal.kind) ? TUNING[animal.kind].animationRate : 5 + animal.speed * .25);
     }
+    this.daylightInitialized = true;
   }
 
-  private updateButterfly(a: WildlifeAnimal, dt: number, disturbed: boolean): void {
+  private updateInsectDaylight(a: WildlifeAnimal, minutes: number, dt: number): boolean {
+    const firefly = a.kind === 'firefly';
+    const morning = firefly ? TUNING.fireflyDawn : TUNING.insectMorning;
+    const evening = firefly ? TUNING.fireflyNight : TUNING.insectEvening;
+    const rise = morning[0] + (morning[1] - morning[0]) * a.variation;
+    const set = evening[0] + (evening[1] - evening[0]) * a.phaseOffset / TAU;
+    const daytime = minutes >= rise && minutes < set;
+    const active = a.kind === 'butterfly' ? daytime : !daytime;
+    if (!this.daylightInitialized) {
+      a.opacity = active ? 1 : 0;
+      a.diurnalActive = active;
+    }
+    if (active !== a.diurnalActive) {
+      a.diurnalActive = active;
+      a.retireTime = active || firefly ? 0 : TUNING.insectSettleSeconds * (.7 + a.variation * .6);
+      a.resting = !active;
+      a.fleeing = false;
+      if (active) a.calmTime = TUNING.butterflyFlightSeconds * (.7 + a.variation * .6);
+    }
+    if (!active) {
+      a.resting = true; a.speed = 0; a.turnSpeed = 0; a.fleeing = false;
+      if (a.retireTime > 0) a.retireTime = Math.max(0, a.retireTime - dt);
+      else a.opacity = Math.max(0, a.opacity - dt / TUNING.insectFadeSeconds);
+      return false;
+    }
+    a.opacity = Math.min(1, a.opacity + dt / TUNING.insectFadeSeconds);
+    return true;
+  }
+
+  private updateWingedRest(a: WildlifeAnimal, dt: number, disturbed: boolean): void {
     if (disturbed) {
       a.resting = false;
       a.calmTime = TUNING.butterflyFlightSeconds * (.7 + a.variation * .6);

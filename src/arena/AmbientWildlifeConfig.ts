@@ -2,6 +2,17 @@
 export const AMBIENT_WILDLIFE = {
   visualScale: 1.3,
   butterfly: { size: 5.2, speed: 4, fleeSpeed: 18, alertRadius: 64, turnRate: 2.4, maxCount: 120, density: .85, animationRate: 14 },
+  moth: { size: 6.5, speed: 5, fleeSpeed: 72, alertRadius: 64, turnRate: 4.8, maxCount: 90, density: 1, animationRate: 17 },
+  firefly: { size: 2.4, speed: 4.5, fleeSpeed: 72, alertRadius: 112, turnRate: 6, maxCount: 40, density: .3, animationRate: 12 },
+  // World minutes: each insect chooses its own point inside these windows.
+  insectMorning: [7 * 60, 8 * 60 + 30],
+  insectEvening: [18 * 60 + 15, 19 * 60 + 45],
+  fireflyDawn: [5 * 60, 6 * 60],
+  fireflyNight: [21 * 60, 22 * 60],
+  insectSettleSeconds: 2,
+  insectFadeSeconds: 3,
+  fireflyGlowRadius: 20,
+  mothColors: [0x928779, 0xa69a82, 0x827d75, 0x9b927f, 0x867967],
   snake: { size: 24, speed: 9, fleeSpeed: 32, alertRadius: 96, turnRate: 1.6, maxCount: 96,
     treeOccupancy: .25, groupChance: .04, thirdSnakeChance: .15 },
   fish: { size: 4.5, speed: 11, fleeSpeed: 96, alertRadius: 160, turnRate: 3, maxCount: 96, density: .8 },

@@ -368,7 +368,11 @@ export class WorldPresentationFrameBinding {
    * nur nicht mit. Nach `destroy()` wirkungslos.
    */
   syncSurfaceResidency(showWorld: boolean): void {
-    if (this.destroyed || !showWorld) return;
+    if (this.destroyed) return;
+    if (!showWorld) {
+      this.input.getArenaResult()?.wildlife?.clearLights();
+      return;
+    }
     const worldView = getVisibleWorldView(this.input.scene.cameras.main);
     this.input.getArenaResult()?.waterSurface?.prepareMasks();
     ArenaBuilder.updateSurfaceResidency(this.input.getArenaResult(), worldView);
@@ -380,7 +384,8 @@ export class WorldPresentationFrameBinding {
         if (player.active && sprite?.visible && sprite.alpha > .1)
           this.wildlifePlayers.push({ id: player.id, x: sprite.x, y: sprite.y });
       }
-      wildlife.update(this.input.scene.game.loop.delta, this.wildlifePlayers, worldView);
+      wildlife.update(this.input.scene.game.loop.delta, this.wildlifePlayers, worldView,
+        this.input.lighting.getTimeOfDayMinutes(), this.input.lighting);
     }
     this.input.shadow.updateStaticResidency(worldView);
   }
@@ -610,6 +615,7 @@ export class WorldPresentationFrameBinding {
     if (this.destroyed) return;
     this.destroyed = true;
     this.wildlifePlayers.length = 0;
+    this.input.getArenaResult()?.wildlife?.clearLights();
     this.clearConstructionOwnership();
     if (this.input.healthBarScope) this.input.healthBars?.closeWorld(this.input.healthBarScope);
     this.input.movementEffects?.closeWorld(this);

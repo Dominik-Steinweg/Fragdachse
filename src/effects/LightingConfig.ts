@@ -114,6 +114,20 @@ export interface LightPreset {
  * gemeinsam – ein Preset braucht deshalb keine eigene Tag-/Nachtunterscheidung mehr.
  */
 export const LIGHT_PRESETS = {
+  /** Small ambient ground lights; gameplay lights always win the shared render budget. */
+  firefly: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 100,
+    color: 0xc9e94a,
+    intensity: 0.45,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 0,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
   /** Small pooled pickup lights; the shared sky state controls their daylight attenuation. */
   adrenalineEssence: {
     enabled: true,

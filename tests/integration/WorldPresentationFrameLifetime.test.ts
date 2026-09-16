@@ -151,6 +151,7 @@ function fakeBindingInput(
       clear: vi.fn(),
     } as never,
     lighting: {
+      getTimeOfDayMinutes: () => 22 * 60,
       setDynamicOccluderSource: vi.fn(),
       clearDynamicOccluderSource: vi.fn(),
       resolveCanopyTint: vi.fn(() => 0),
@@ -432,7 +433,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
 
   it('ticks wildlife in an empty preview, reads visible players, and stops before presentation handoff', () => {
     const scene = Object.assign(fakeScene(), { game: { loop: { delta: 16 } } });
-    const wildlife = { update: vi.fn(), notifyShot: vi.fn(), destroy: vi.fn() };
+    const wildlife = { update: vi.fn(), notifyShot: vi.fn(), clearLights: vi.fn(), destroy: vi.fn() };
     const arena = { wildlife } as unknown as ArenaBuilderResult;
     const players: { id: string; active: boolean; displayObject: object | null }[] = [];
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
@@ -443,19 +444,21 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     const residency = vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
     try {
       binding.syncSurfaceResidency(true);
-      expect(wildlife.update).toHaveBeenLastCalledWith(16, [], expect.any(Object));
+      expect(wildlife.update).toHaveBeenLastCalledWith(16, [], expect.any(Object), 22 * 60, expect.any(Object));
       players.push({ id: 'visible', active: true, displayObject: { visible: true, alpha: 1, x: 120, y: 90 } },
         { id: 'hidden', active: true, displayObject: { visible: false, alpha: 1, x: 0, y: 0 } },
         { id: 'absent', active: false, displayObject: null });
       binding.syncSurfaceResidency(true);
-      expect(wildlife.update).toHaveBeenLastCalledWith(16, [{ id: 'visible', x: 120, y: 90 }], expect.any(Object));
+      expect(wildlife.update).toHaveBeenLastCalledWith(16, [{ id: 'visible', x: 120, y: 90 }], expect.any(Object), 22 * 60, expect.any(Object));
       binding.notifyWildlifeShot('visible');
       binding.notifyWildlifeShot('hidden');
       binding.notifyWildlifeShot('absent');
       binding.notifyWildlifeShot('unknown');
       expect(wildlife.notifyShot).toHaveBeenCalledExactlyOnceWith(120, 90);
       binding.syncSurfaceResidency(false);
+      expect(wildlife.clearLights).toHaveBeenCalledOnce();
       binding.destroy(); binding.syncSurfaceResidency(true);
+      expect(wildlife.clearLights).toHaveBeenCalledTimes(2);
       expect(wildlife.update).toHaveBeenCalledTimes(2);
       binding.notifyWildlifeShot('visible');
       expect(wildlife.notifyShot).toHaveBeenCalledTimes(1);

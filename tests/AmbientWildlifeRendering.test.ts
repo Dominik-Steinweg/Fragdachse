@@ -9,6 +9,7 @@ import { AmbientWildlifeRenderer } from '../src/arena/AmbientWildlifeRenderer';
 import { AmbientWildlifeModel, type WildlifeAnimal } from '../src/arena/AmbientWildlifeModel';
 import { AMBIENT_WILDLIFE as TUNING } from '../src/arena/AmbientWildlifeConfig';
 import { createWildlifeAppearance, writeSnakeBodyPose } from '../src/arena/AmbientWildlifeAppearance';
+import { DEPTH, DEPTH_LIGHTING } from '../src/config';
 
 const view = { x: 0, y: 0, width: 1024, height: 1024 };
 const frame = { offsetX: 0, offsetY: 0, width: 1024, height: 1024 };
@@ -16,6 +17,54 @@ const layout = { seed: 882, trees: [{ gridX: 8, gridY: 12 }], rocks: [], dirt: [
   water: Array.from({ length: 120 }, (_, i) => ({ gridX: 14 + i % 12, gridY: 8 + Math.floor(i / 12) })) };
 
 describe('retained wildlife rendering', () => {
+  it('illuminates visible fireflies and releases lights on culling, dawn and teardown', () => {
+    const harness = wildlifeScene();
+    const renderer = new AmbientWildlifeRenderer(harness.scene, frame, layout);
+    const lighting = { setLight: vi.fn(), releaseLight: vi.fn() };
+    const update = (minutes = 0, camera = view) => renderer.update(50, [], camera, minutes, lighting);
+    update();
+    expect(lighting.setLight.mock.calls.length).toBeGreaterThan(0);
+    const [key, preset, x, y, overrides] = lighting.setLight.mock.calls[0];
+    expect(preset).toBe('firefly');
+    expect(renderer.model.animals.some(a => a.kind === 'firefly' && a.x === x && a.y === y)).toBe(true);
+    expect(overrides.intensity).toBeGreaterThan(0);
+    update(0, { ...view, x: 10000 });
+    expect(lighting.releaseLight).toHaveBeenCalledWith(key, { immediate: true });
+    lighting.releaseLight.mockClear();
+    update();
+    for (let i = 0; i < 200; i++) update(12 * 60);
+    expect(lighting.releaseLight).toHaveBeenCalledWith(key, { immediate: true });
+    for (let i = 0; i < 200; i++) update();
+    lighting.releaseLight.mockClear();
+    renderer.clearLights();
+    expect(lighting.releaseLight).toHaveBeenCalledWith(key, { immediate: true });
+    update();
+    lighting.releaseLight.mockClear();
+    renderer.destroy();
+    expect(lighting.releaseLight).toHaveBeenCalledWith(key, { immediate: true });
+    const releases = lighting.releaseLight.mock.calls.length;
+    renderer.destroy(); update();
+    expect(lighting.releaseLight).toHaveBeenCalledTimes(releases);
+  });
+
+  it.each(['butterfly', 'moth', 'firefly'] as const)('fades the entire %s silhouette and halo', kind => {
+    const animal = new AmbientWildlifeModel(layout, frame).animals.find(a => a.kind === kind)!;
+    const batches: number[][] = [];
+    const harness = wildlifeScene((_ctx, indices, _vertices, colors) =>
+      batches.push(Array.from(indices, i => colors[i] >>> 24)));
+    const layer = createAmbientWildlifeLayer(harness.scene, [prepareWildlifeVisual(animal)], 4, 'test');
+    animal.opacity = 1;
+    layer.updatePose(view, 0); harness.render();
+    animal.opacity = .5;
+    layer.updatePose(view, 0); harness.render();
+    expect(batches[0].some(alpha => alpha > 0)).toBe(true);
+    expect(batches[1].every((alpha, i) => Math.abs(alpha - batches[0][i] / 2) <= 1)).toBe(true);
+    animal.opacity = 0;
+    layer.updatePose(view, 0); harness.render();
+    expect(batches).toHaveLength(2);
+    layer.destroy();
+  });
+
   it('culls before sampling, reuses topology, and resumes at the current phase without a stale frame', () => {
     const animal = new AmbientWildlifeModel(layout, frame).animals[0];
     const visual = prepareWildlifeVisual(animal), sample = vi.spyOn(visual, 'sample');
@@ -57,11 +106,13 @@ describe('retained wildlife rendering', () => {
     }
   });
 
-  it('leaves model movement, shot reactions and offscreen semantics identical and owns two layers', () => {
+  it('preserves model semantics and owns self-lit fireflies below the canopies', () => {
     const harness = wildlifeScene();
     const renderer = new AmbientWildlifeRenderer(harness.scene, frame, layout);
     const model = new AmbientWildlifeModel(layout, frame);
-    expect(harness.scene.objects).toHaveLength(2);
+    const glow = harness.scene.objects.find((o: any) => o.name === 'ambient-wildlife-fireflies');
+    expect(glow.depth).toBeGreaterThan(DEPTH_LIGHTING);
+    expect(glow.depth).toBeLessThan(DEPTH.CANOPY);
     for (let i = 0; i < 30; i++) {
       const players = [{ id: 'p', x: 350 + i, y: 400 }];
       if (i === 5) { renderer.notifyShot(400, 400); model.notifyShot(400, 400); }

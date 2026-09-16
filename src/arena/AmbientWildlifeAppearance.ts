@@ -1,6 +1,15 @@
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
 
-export type WildlifeKind = 'butterfly' | 'snake' | 'fish';
+export type WildlifeKind = 'butterfly' | 'moth' | 'firefly' | 'snake' | 'fish';
+export function isWingedInsect(kind: WildlifeKind): kind is 'butterfly' | 'moth' | 'firefly' {
+  return kind === 'butterfly' || kind === 'moth' || kind === 'firefly';
+}
+
+/** Shared pulse for the visible halo and its illumination of the ground. */
+export function fireflyGlowStrength(time: number, variation: number, phaseOffset: number): number {
+  return .55 + .45 * (.5 + .5 * Math.sin(time * (1.5 + variation) + phaseOffset));
+}
+
 /** Immutable local appearance shared by drawing and habitat clearance. */
 export interface WildlifeAppearance {
   readonly length: number;
@@ -30,8 +39,10 @@ export function createWildlifeAppearance(kind: WildlifeKind, sizeRoll: number, c
       groupIndex, count: group.minCount + Math.floor(sizeRoll * (group.maxCount - group.minCount + 1)),
       spread: group.spread, footprint };
   }
-  return { length: TUNING.butterfly.size, widthScale: 1, colorIndex: Math.floor(colorRoll * TUNING.butterflyColors.length),
-    groupIndex: 0, count: 1, spread: 0, footprint: 6 };
+  const colors = kind === 'moth' ? TUNING.mothColors : TUNING.butterflyColors;
+  return { length: TUNING[kind].size, widthScale: 1, colorIndex: Math.floor(colorRoll * colors.length),
+    groupIndex: 0, count: 1, spread: 0,
+    footprint: kind === 'firefly' ? TUNING.fireflyGlowRadius * TUNING.visualScale + 2 : 6 };
 }
 
 export interface FishMemberPose { x: number; y: number; length: number }

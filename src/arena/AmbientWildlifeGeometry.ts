@@ -1,5 +1,5 @@
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
-import { snakeTongueExtension, writeFishMemberPose, writeSnakeBodyPose } from './AmbientWildlifeAppearance';
+import { fireflyGlowStrength, snakeTongueExtension, writeFishMemberPose, writeSnakeBodyPose } from './AmbientWildlifeAppearance';
 import type { WildlifeAnimal } from './AmbientWildlifeModel';
 
 /** Wildlife-local retained mesh. Topology, ellipse samples and line thickness are built once. */
@@ -78,19 +78,54 @@ function butterflyVisual(animal: WildlifeAnimal): WildlifeVisual {
   mesh.pose();
   mesh.fill(0x24372a, .17); mesh.ellipse(-1, 2, 3.4, 1.6, 8);
   const wings = mesh.pose();
+  const moth = animal.kind === 'moth';
+  const colors = moth ? TUNING.mothColors : TUNING.butterflyColors;
+  const size = animal.appearance.length / TUNING.butterfly.size;
   const width = TUNING.butterfly.size * .48;
   for (let side = -1; side <= 1; side += 2) {
     mesh.fill(0x555047, .7); mesh.ellipse(.5, side * width * .52, 3.5, width, 8);
-    mesh.fill(TUNING.butterflyColors[animal.appearance.colorIndex], .95);
+    mesh.fill(colors[animal.appearance.colorIndex], .95);
     mesh.ellipse(.65, side * width * .55, 2.9, width * .8, 8);
     mesh.ellipse(-1.2, side * width * .43, 1.9, width * .72, 8);
-    mesh.fill(0xfff5d9, .62); mesh.ellipse(1, side * width * .7, .8, width * .25, 6);
+    mesh.fill(moth ? 0xc1b7a2 : 0xfff5d9, moth ? .3 : .62);
+    mesh.ellipse(1, side * width * .7, .8, width * .25, 6);
+    if (moth) {
+      mesh.fill(0x5e574d, .5); mesh.ellipse(.15, side * width * .62, .6, width * .3, 6);
+    }
   }
   const body = mesh.pose();
   mesh.fill(0x454139, .95); mesh.line(-1.6, 0, 1.8, 0, .55);
+  for (let i = 0; i < mesh.xy.length; i++) mesh.xy[i] *= size;
+  mesh.opacityPower.fill(1);
   return { animal, mesh, sample: () => {
     mesh.poses[wings].sy = .28 + .72 * (.5 - .5 * Math.cos(animal.animation * 2));
     mesh.poses[wings].y = mesh.poses[body].y = Math.sin(animal.animation * .19) * .75;
+  } };
+}
+
+function fireflyVisual(animal: WildlifeAnimal): WildlifeVisual {
+  const mesh = new WildlifeMesh();
+  mesh.pose();
+  // A soft visible halo supplements the ground illumination in the shared lightmap.
+  const haloEnd = 6;
+  for (let i = 0; i < haloEnd; i++) {
+    const radius = TUNING.fireflyGlowRadius * (1 - i / (haloEnd + 1));
+    mesh.fill(0xb9e641, .022 + i * .006, 1);
+    mesh.ellipse(-.7, 0, radius * 2, radius * 2, 16);
+  }
+  const haloVertices = mesh.alpha.length;
+  const wings = mesh.pose();
+  mesh.fill(0xb8bf94, .32, 1);
+  mesh.ellipse(.2, -.7, 2, .9, 8); mesh.ellipse(.2, .7, 2, .9, 8);
+  mesh.pose();
+  mesh.fill(0x525b35, .9, 1); mesh.ellipse(.2, 0, animal.appearance.length, .9, 10);
+  mesh.fill(0xc8ed43, .95, 1); mesh.ellipse(-.7, 0, 1.5, 1.2, 10);
+  mesh.fill(0xdff569, 1, 1); mesh.ellipse(-.8, 0, .7, .65, 8);
+  const baseAlpha = mesh.alpha.slice(0, haloVertices);
+  return { animal, mesh, sample: time => {
+    const pulse = fireflyGlowStrength(time, animal.variation, animal.phaseOffset);
+    for (let i = 0; i < haloVertices; i++) mesh.alpha[i] = baseAlpha[i] * pulse;
+    mesh.poses[wings].sy = .4 + .6 * Math.abs(Math.sin(animal.animation));
   } };
 }
 
@@ -185,11 +220,12 @@ function fishVisual(animal: WildlifeAnimal): WildlifeVisual {
 
 /** Called during ArenaBuilder's covered World construction, never on visibility changes. */
 export function prepareWildlifeVisual(animal: WildlifeAnimal): WildlifeVisual {
-  return animal.kind === 'butterfly' ? butterflyVisual(animal)
+  return animal.kind === 'butterfly' || animal.kind === 'moth' ? butterflyVisual(animal)
+    : animal.kind === 'firefly' ? fireflyVisual(animal)
     : animal.kind === 'snake' ? snakeVisual(animal) : fishVisual(animal);
 }
 
-/** Small construction-local cache: five butterfly palettes and the authored snake sizes/palettes.
+/** Small construction-local cache: insect palettes and the authored snake sizes/palettes.
  * Fish have individual lengths and formation seeds; their meshes are still retained, not cached.
  */
 export function prepareWildlifeVisuals(animals: readonly WildlifeAnimal[]): WildlifeVisual[] {
