@@ -10,10 +10,10 @@
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
+    "start": { "type": "time", "atMs": 30000 },
+    "repeatAfterExitMs": 30000
   }],
-  "balanceReferenceDurationSec": 75,
+  "balanceReferenceDurationSec": 120,
   "objective": "repel-assault",
   "bases": [],
   "persistentBase": {
@@ -47,7 +47,7 @@
       "start": {"type": "after-previous"},
       "restAfterMs": 3000,
       "groups": [
-        {"enemyKind": "demon-badger", "count": 6, "front": "west"},
+        {"enemyKind": "zombie-badger", "count": 12, "front": "west"},
         {"enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "east"}
       ]
     },
@@ -55,11 +55,40 @@
       "id": "rabid-breakthrough",
       "start": {"type": "after-previous"},
       "groups": [
-        {"enemyKind": "demon-badger", "count": 6, "front": "west"},
         {"enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west"},
-        {"enemyKind": "zombie-badger", "count": 8, "delayMs": 1800, "front": "east"}
+        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1800, "front": "east"}
       ],
       "restAfterMs": 3000
-    }
+    },
+    {
+      "id": "restless-mix2",
+      "start": {"type": "after-previous"},
+      "groups": [
+        {"enemyKind": "demon-badger", "count": 3, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 3, "delayMs": 400, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 3, "delayMs": 800, "front": "east"},
+        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1200, "front": "east"}
+      ],
+      "restAfterMs": 3000
+    },
+    {
+      "id": "restless-mix3",
+      "start": {"type": "after-previous"},
+      "groups": [
+        {"enemyKind": "zombie-badger", "count": 12, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 4, "delayMs": 400, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 4, "delayMs": 800, "front": "east"},
+        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1200, "front": "east"}
+      ],
+      "restAfterMs": 3000
+    },
+    {
+      "id": "final-rabid",
+      "start": {"type": "after-previous"},
+      "groups": [
+        {"enemyKind": "rabid-badger", "count": 9, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 9, "delayMs": 800, "front": "east"}
+      ]
+    }              
   ]
 }

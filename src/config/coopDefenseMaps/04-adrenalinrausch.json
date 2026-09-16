@@ -1,6 +1,6 @@
 {
   "mapId": "4",
-  "arenaWidthCells": 82,
+  "arenaWidthCells": 92,
   "arenaHeightCells": 38,
   "timeOfDay": "06:00",
   "tutorialPersistent": true,
@@ -9,10 +9,10 @@
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
+    "start": { "type": "time", "atMs": 30000 },
+    "repeatAfterExitMs": 30000
   }],
-  "balanceReferenceDurationSec": 85,
+  "balanceReferenceDurationSec": 120,
   "objective": "repel-assault",
   "bases": [
     {
@@ -63,7 +63,7 @@
           "id": "bfg-station",
           "cellOffset": {"gridX": -2, "gridY": 1},
           "defId": "BFG",
-          "respawnMs": 15000,
+          "respawnMs": 30000,
           "spawnOnArenaStart": false
         }
       ]
@@ -83,7 +83,7 @@
     {
       "id": "adrenaline-opening",
       "start": {"type": "time", "atMs": 0},
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         {"enemyKind": "zombie-badger", "count": 8, "front": "west"},
         {"enemyKind": "zombie-badger", "count": 22, "delayMs": 16000, "spawnStaggerMs": 250, "front": "west"},
@@ -93,20 +93,48 @@
     {
       "id": "adrenaline-rush",
       "start": {"type": "after-previous"},
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
-        {"enemyKind": "demon-badger", "count": 10, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "west"}
+        {"enemyKind": "demon-badger", "count": 12, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 6, "delayMs": 900, "front": "west"}
       ]
     },
     {
-      "id": "adrenaline-finale",
+      "id": "adrenaline-mass",
       "start": {"type": "after-previous"},
+      "restAfterMs": 3000,
       "groups": [
-        {"enemyKind": "zombie-badger", "count": 15, "front": "west"},
+        {"enemyKind": "zombie-badger", "count": 25, "front": "west"},
         {"enemyKind": "demon-badger", "count": 10, "delayMs": 1000, "front": "west"},
         {"enemyKind": "rabid-badger", "count": 6, "delayMs": 1800, "front": "west"}
       ]
-    }
+    },
+    {
+      "id": "adrenaline-rush2",
+      "start": {"type": "after-previous"},
+      "restAfterMs": 3000,
+      "groups": [
+        {"enemyKind": "demon-badger", "count": 10, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 8, "delayMs": 900, "front": "west"}
+      ]
+    },
+    {
+      "id": "adrenaline-mass2",
+      "start": {"type": "after-previous"},
+      "restAfterMs": 3000,
+      "groups": [
+        {"enemyKind": "zombie-badger", "count": 45, "front": "west"}
+      ]
+    },    
+    {
+      "id": "adrenaline-final",
+      "start": {"type": "after-previous"},
+      "restAfterMs": 3000,
+      "groups": [
+        {"enemyKind": "zombie-badger", "count": 15, "front": "west"},
+        {"enemyKind": "demon-badger", "count": 10, "delayMs": 1000, "front": "west"},
+        {"enemyKind": "rabid-badger", "count": 10, "delayMs": 1200, "front": "west"}
+      ]
+    }   
   ]
 }

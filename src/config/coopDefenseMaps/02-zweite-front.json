@@ -13,11 +13,11 @@
       "type": "train",
       "start": {
         "type": "after-encounter",
-        "encounterId": "west-introduction"
+        "encounterId": "north-arrival"
       }
     }
   ],
-  "balanceReferenceDurationSec": 60,
+  "balanceReferenceDurationSec": 120,
   "objective": "repel-assault",
   "bases": [],
   "powerUps": [],
@@ -32,7 +32,7 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 7,
+          "count": 9,
           "front": "west"
         }
       ]
@@ -72,6 +72,56 @@
           "enemyKind": "demon-badger",
           "count": 5,
           "delayMs": 1000,
+          "front": "east"
+        }
+      ]
+    },
+    {
+      "id": "two-front-crossfire2",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 12,
+          "front": "west"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 12,
+          "delayMs": 2000,
+          "front": "east"
+        }
+      ]
+    },
+    {
+      "id": "final-crossfire",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "front": "west"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "delayMs": 2000,
+          "front": "west"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 2000,
+          "front": "east"
+        },
+       {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "delayMs": 2000,
           "front": "east"
         }
       ]
