@@ -284,6 +284,16 @@ export interface ArenaDiagnosticsInput {
  * herein, exakt wie es die Scene heute schon selbst haelt.
  */
 export class ArenaDiagnosticsController {
+  getRenderCpuMs(): number { return this.runtimeProfiler?.takeLastRenderSubmitMs() ?? 0; }
+
+  startScenarioRecording(environment: Record<string, unknown>): void {
+    this.runtimeProfiler?.startRecording(environment);
+  }
+
+  stopScenarioRecording(): import('./ArenaRuntimeProfiler').ArenaPerformanceReport | null {
+    this.runtimeProfiler?.stopRecording();
+    return this.runtimeProfiler?.buildReport() ?? null;
+  }
   private runtimeProfiler: ArenaRuntimeProfiler | null;
   private attribution: ReturnType<typeof getArenaVisualAttribution> | null;
   private performanceAblation: PerformanceAblationController | null;

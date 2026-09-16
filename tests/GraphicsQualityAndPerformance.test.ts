@@ -451,6 +451,20 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     expect(report?.summaries.gpu.samplesCompleted).toBe(0);
   });
 
+  it('measures render CPU without requiring GPU timer support', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const game = fakeGame(new FakeGlContext());
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+    profiler.setLiveDiagnosticsEnabled(true);
+    game.emit('prerender');
+    now = 107.5;
+    game.emit('postrender');
+    expect(profiler.takeLastRenderSubmitMs()).toBe(7.5);
+    profiler.destroy();
+  });
+
   it('nutzt den WebGL2-Timer über EXT_disjoint_timer_query_webgl2', () => {
     vi.spyOn(performance, 'now').mockReturnValue(100);
     const gl = new FakeGlContext();

@@ -14,6 +14,9 @@
  */
 import type { ArenaLayout } from '../types';
 import type { BaseSpec } from '../arena/BaseRegistry';
+import type { NavigationResult, NavigationVersion } from './navigation/NavigationContracts';
+import type { NavigationGeometry } from './navigation/NavigationGeometry';
+import { navigationPoint } from './navigation/NavigationGraph';
 import { COOP_DEFENSE_FLOW_FIELD_REBUILD_INTERVAL_MS } from '../config';
 import {
   ARENA_MAP_GRID_CHANGED_EVENT,
@@ -33,6 +36,7 @@ import {
 import {
   FlowFieldCoordinator,
   type FlowFieldFieldView,
+  type FlowFieldSnapshot,
 } from './flowfield/FlowFieldCoordinator';
 import { InlineFlowFieldRunner } from './flowfield/FlowFieldRunner';
 import {
@@ -49,6 +53,7 @@ export interface EnemyFlowFieldMetrics {
   readonly cellSize: number;
   readonly arenaOffsetX: number;
   readonly arenaOffsetY: number;
+  readonly pointOffset?: number;
 }
 
 export interface EnemyFlowFieldGridCell {
@@ -113,6 +118,9 @@ export class EnemyFlowFieldService {
   static readonly NEIGHBOR_DIRECTIONS = NEIGHBOR_DIRECTIONS;
 
   private readonly view: FlowFieldFieldView;
+  private connectionGoals: Int32Array | null = null;
+  private connectionSnapshot: FlowFieldSnapshot | null = null;
+  private readonly connectedGoalRegions = new Set<number>();
   private readonly self: SelfDrivenState | null;
   private readonly pathHeap = new FlowFieldMinHeap();
   private debugOverlayCallback: ((renderer: EnemyFlowFieldDebugRenderer) => void) | null = null;
@@ -209,8 +217,9 @@ export class EnemyFlowFieldService {
 
   worldToGrid(worldX: number, worldY: number): EnemyFlowFieldGridCell | null {
     const metrics = this.view.metrics;
-    const gridX = Math.floor((worldX - metrics.arenaOffsetX) / metrics.cellSize);
-    const gridY = Math.floor((worldY - metrics.arenaOffsetY) / metrics.cellSize);
+    const offset = metrics.pointOffset === 0 ? 0.5 : 0;
+    const gridX = Math.floor((worldX - metrics.arenaOffsetX) / metrics.cellSize + offset);
+    const gridY = Math.floor((worldY - metrics.arenaOffsetY) / metrics.cellSize + offset);
     if (!this.isInBounds(gridX, gridY)) return null;
     return { gridX, gridY };
   }
@@ -219,12 +228,94 @@ export class EnemyFlowFieldService {
     if (!this.isInBounds(gridX, gridY)) return null;
     const metrics = this.view.metrics;
     return {
-      x: metrics.arenaOffsetX + gridX * metrics.cellSize + metrics.cellSize * 0.5,
-      y: metrics.arenaOffsetY + gridY * metrics.cellSize + metrics.cellSize * 0.5,
+      x: metrics.arenaOffsetX + (gridX + (metrics.pointOffset ?? 0.5)) * metrics.cellSize,
+      y: metrics.arenaOffsetY + (gridY + (metrics.pointOffset ?? 0.5)) * metrics.cellSize,
     };
   }
 
   // ---- Topologie ----
+
+  /** A current, body-safe start connection; pending work can never be interpreted as a blockade. */
+  queryNavigation(x: number, y: number): NavigationResult {
+    const version = this.view.version(), snapshot = this.view.snapshot(), geometry = this.view.geometry();
+    const radius = this.view.bodyRadius;
+    if (!geometry || !geometry.isFree(x, y, radius)) return { ...version, status: 'invalid-start' };
+    if (!snapshot || snapshot.topologyVersion !== version.topology || snapshot.goalVersion !== version.goal) return { ...version, status: 'pending' };
+    return this.querySnapshotNavigation(x, y, snapshot, version, geometry);
+  }
+
+  /** Only fixed-target consumers may use this hint while the same target moves. It grants no
+   * reachability or attack authority and never survives a physical topology change. */
+  querySteeringContinuation(x: number, y: number): { x: number; y: number } | null {
+    const version = this.view.version(), snapshot = this.view.snapshot(), geometry = this.view.geometry();
+    if (!snapshot || !geometry || snapshot.topologyVersion !== version.topology
+      || !geometry.isFree(x, y, this.view.bodyRadius)) return null;
+    const route = this.querySnapshotNavigation(x, y, snapshot, { ...version, goal: snapshot.goalVersion }, geometry);
+    return route.status === 'ready' ? route.waypoint : null;
+  }
+
+  private querySnapshotNavigation(x: number, y: number, snapshot: FlowFieldSnapshot,
+    version: NavigationVersion, geometry: NavigationGeometry): NavigationResult {
+    const radius = this.view.bodyRadius;
+    if (!snapshot.goalIndexes.length) return { ...version, status: 'invalid-goal' };
+    const cell = this.worldToGrid(x, y);
+    if (!cell) return { ...version, status: 'invalid-start' };
+    let best = -1, bestCost = Infinity, region = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const gx = cell.gridX + dx, gy = cell.gridY + dy;
+      if (!this.isInBounds(gx, gy)) continue;
+      const index = this.toIndex(gx, gy), point = navigationPoint(this.view.metrics, index);
+      if (!snapshot.profileTraversable?.[index]) continue;
+      const cost = snapshot.integrationField[index] + Math.hypot(x - point.x, y - point.y) * this.view.tuning.groundCost;
+      // Once a safe connection exists, a more expensive connection cannot improve the result.
+      if (best >= 0 && cost >= bestCost) continue;
+      if (!geometry.canMove(x, y, point.x, point.y, radius)) continue;
+      region = snapshot.regions?.[index] ?? 0;
+      if (cost < bestCost) { bestCost = cost; best = index; }
+    }
+    if (best < 0) return region ? { ...version, status: 'unreachable', region } : { ...version, status: 'invalid-start' };
+    let waypoint = navigationPoint(this.view.metrics, best);
+    for (let step = 0; step < 4; step++) {
+      const vx = snapshot.vectorField[best * 2], vy = snapshot.vectorField[best * 2 + 1];
+      if (!vx && !vy) break;
+      const next = best + Math.sign(vx) + Math.sign(vy) * this.view.metrics.cols;
+      const point = navigationPoint(this.view.metrics, next);
+      if (!geometry.canMove(x, y, point.x, point.y, radius)) break;
+      waypoint = point; best = next;
+    }
+    return { ...version, status: 'ready', waypoint, cost: bestCost, region: snapshot.regions?.[best] ?? region };
+  }
+
+  getNavigationGeometry() { return this.view.geometry(); }
+  /** Connectivity is independent of integration costs. Goal motion can therefore admit a spawn
+   * before its new cost field arrives; changed physical geometry must await a current graph. */
+  canReachCurrentGoals(x: number, y: number): boolean | null {
+    const snapshot = this.view.snapshot(), geometry = this.view.geometry(), version = this.view.version();
+    if (!snapshot?.regions || !geometry || snapshot.topologyVersion !== version.topology) return null;
+    if (!geometry.isFree(x, y, this.view.bodyRadius)) return false;
+    const goals = this.view.requestedGoals();
+    if (goals !== this.connectionGoals || snapshot !== this.connectionSnapshot) {
+      this.connectionGoals = goals; this.connectionSnapshot = snapshot; this.connectedGoalRegions.clear();
+      for (const goal of goals) if (snapshot.profileTraversable?.[goal] && !this.view.isGoalSuppressed(goal)) {
+        const region = snapshot.regions[goal];
+        if (region) this.connectedGoalRegions.add(region);
+      }
+    }
+    if (!this.connectedGoalRegions.size) return false;
+    const cell = this.worldToGrid(x, y);
+    if (!cell) return false;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const gx = cell.gridX + dx, gy = cell.gridY + dy;
+      if (!this.isInBounds(gx, gy)) continue;
+      const index = this.toIndex(gx, gy);
+      if (!this.connectedGoalRegions.has(snapshot.regions[index])) continue;
+      const point = navigationPoint(this.view.metrics, index);
+      if (geometry.canMove(x, y, point.x, point.y, this.view.bodyRadius)) return true;
+    }
+    return false;
+  }
+  getNavigationSnapshot() { return this.view.snapshot(); }
+  getBodyRadius(): number { return this.view.bodyRadius; }
 
   getCostAt(gridX: number, gridY: number): number {
     if (!this.isInBounds(gridX, gridY)) return this.view.tuning.trunkCost;
@@ -364,6 +455,8 @@ export class EnemyFlowFieldService {
    * Einheit die letzten Meter stur in eine Basiswand und bleibt dort stehen.
    */
   hasWalkableLine(fromWorldX: number, fromWorldY: number, toWorldX: number, toWorldY: number): boolean {
+    const geometry = this.view.geometry();
+    if (geometry) return geometry.canMove(fromWorldX, fromWorldY, toWorldX, toWorldY, 0);
     const deltaX = toWorldX - fromWorldX;
     const deltaY = toWorldY - fromWorldY;
     const distance = Math.hypot(deltaX, deltaY);
@@ -379,11 +472,15 @@ export class EnemyFlowFieldService {
 
   /** Prueft Mittelpunkt plus vier kardinale und vier diagonale Randpunkte eines Kreiskoerpers. */
   isCircleGroundFreeAt(worldX: number, worldY: number, radius: number): boolean {
+    const geometry = this.view.geometry();
+    if (geometry) return geometry.isFree(worldX, worldY, radius);
     return this.isCircleClearAt(worldX, worldY, radius, false);
   }
 
   /** Prueft Kreisfreiheit und ob alle Randproben im aktuellen Flowfield erreichbar sind. */
   isCircleFlowReachableAt(worldX: number, worldY: number, radius: number): boolean {
+    const geometry = this.view.geometry();
+    if (geometry) return geometry.isFree(worldX, worldY, radius) && this.queryNavigation(worldX, worldY).status === 'ready';
     return this.isCircleClearAt(worldX, worldY, radius, true);
   }
 
@@ -404,6 +501,9 @@ export class EnemyFlowFieldService {
     radius: number,
     requireReachable = false,
   ): boolean {
+    const geometry = this.view.geometry();
+    if (geometry) return geometry.canMove(fromWorldX, fromWorldY, toWorldX, toWorldY, radius)
+      && (!requireReachable || this.queryNavigation(toWorldX, toWorldY).status === 'ready');
     if (
       !Number.isFinite(fromWorldX)
       || !Number.isFinite(fromWorldY)

@@ -22,7 +22,7 @@ import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatC
 
 const MOVE_SPEED = 175;
 
-function createSystem(playerX: number, isFreeGround: () => boolean = () => true) {
+function createSystem(playerX: number, isFreeGround: () => boolean = () => true, sight = () => true) {
   const enemy = fakeEntity({ id: 'e1',
     kind: 'pyro-badger',
     faction: 'hostile', x: 0, y: 0, active: true, isBurrowed: () => false,
@@ -42,7 +42,7 @@ function createSystem(playerX: number, isFreeGround: () => boolean = () => true)
       isAlive: () => true,
       isBurrowed: () => false,
       canDamageTarget: () => true,
-      hasLineOfSight: () => true,
+      hasLineOfSight: sight,
     } as unknown as CombatSystem,
     () => isFreeGround(),
   );
@@ -62,7 +62,9 @@ describe('Enemy combat positioning', () => {
   });
 
   it('lets the pathfinding close the gap while the player is still far away', () => {
-    expect(createSystem(positioning.preferredDistancePx + positioning.toleranceP + 50)).toBeNull();
+    const sight = vi.fn(() => true);
+    expect(createSystem(positioning.preferredDistancePx + positioning.toleranceP + 50, () => true, sight)).toBeNull();
+    expect(sight).not.toHaveBeenCalled();
   });
 
   it('holds position inside the tolerance band so the enemy can shoot', () => {

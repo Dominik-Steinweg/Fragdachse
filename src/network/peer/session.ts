@@ -5,12 +5,13 @@
  * Dieser Halter überbrückt das – so wie zuvor die globalen Zustandsfunktionen der abgelösten
  * Bibliothek. Zugriff vor `setActiveSession()` ist ein Programmierfehler und wirft.
  */
-import type { PeerJsTransport } from './PeerJsTransport';
+import type { PeerRoomTransport } from './transport';
+import type { DiagnosableLink } from './TransportDiagnostics';
 import type { PeerRoom } from './PeerRoom';
 
 export interface PeerSession {
   room: PeerRoom;
-  transport: PeerJsTransport;
+  transport: PeerRoomTransport & { getLinks(): DiagnosableLink[] };
   roomCode: string;
 }
 

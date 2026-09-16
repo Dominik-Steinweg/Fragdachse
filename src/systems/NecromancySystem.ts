@@ -328,6 +328,8 @@ export class NecromancySystem {
     now: number,
     deltaMs: number,
   ): void {
+    const route = this.enemyManager.routeAlly(ally, `ally:${ownerId}:${destination.target?.id ?? 'follow'}`,
+      destination, destination.target ? Math.max(16, ...ally.getAttackWeapons().map(attack => attack.weapon.config.range)) : 32);
     if (!ally.isAttackMovementPaused(now)) {
       // Beim Angriff zählt das Ziel selbst, beim Rückweg der eigene Platz im Gefolge-Ring.
       const anchor = destination.target
@@ -337,7 +339,10 @@ export class NecromancySystem {
       const dy = anchor.y - ally.sprite.y;
       const length = Math.hypot(dx, dy);
       if (length > FOLLOW_ARRIVAL_PX) {
-        const flowDirection = this.getFlowDirection(ownerId, ally);
+        const waypoint = route?.status === 'ready' ? route.waypoint : route?.status === 'pending' ? route.continuation : null;
+        const flowDirection = route ? waypoint
+          ? { x: waypoint.x - ally.sprite.x, y: waypoint.y - ally.sprite.y } : null
+          : this.getFlowDirection(ownerId, ally);
         if (flowDirection === null) {
           ally.stopMovement();
         } else {
@@ -347,22 +352,34 @@ export class NecromancySystem {
           // während das Flowfield ihn sauber herumführt.
           const steerDirectly = flowDirection === undefined
             || (length <= FOLLOW_DIRECT_STEER_PX && this.hasClearPathToAnchor(ownerId, ally, anchor));
-          const directionX = steerDirectly ? dx / length : flowDirection.x;
-          const directionY = steerDirectly ? dy / length : flowDirection.y;
-          const desiredVx = directionX * ally.getMoveSpeed();
-          const desiredVy = directionY * ally.getMoveSpeed();
-          const current = ally.getDesiredVelocity();
-          const lerp = 1 - Math.exp(-STEER_RESPONSIVENESS * Math.min(100, Math.max(0, deltaMs)) / 1000);
-          ally.setDesiredVelocity(
-            Phaser.Math.Linear(current.vx, desiredVx, lerp),
-            Phaser.Math.Linear(current.vy, desiredVy, lerp),
-          );
+          const waypoint = steerDirectly ? anchor : route?.status === 'ready' ? route.waypoint
+            : { x: ally.sprite.x + flowDirection.x * 48, y: ally.sprite.y + flowDirection.y * 48 };
+          this.enemyManager.moveNormally(ally, waypoint, ally.getMoveSpeed());
         }
       } else {
         ally.stopMovement();
       }
     }
 
+    const breach = this.enemyManager.getBreachAttackPoint(ally.id);
+    if (breach && ally.canScanForAttack(now)) {
+      ally.scheduleNextAttackScan(now);
+      const category = breach.objectId.startsWith('base:') ? 'bases' : 'rocks';
+      for (const attack of ally.getAttackWeapons()) {
+        const weapon = attack.weapon, config = weapon.config;
+        if (attack.targetMode === 'players' || (category === 'bases' && attack.targetMode === 'rocks') || config.damage <= 0
+          || (category === 'bases' ? config.baseDamageMult ?? 1 : config.rockDamageMult ?? 1) <= 0
+          || (config.fire.type === 'melee' && config.fire.damageTargets && !config.fire.damageTargets.includes(category))
+          || !ally.isWeaponReady(weapon, now) || Math.hypot(breach.x - ally.sprite.x, breach.y - ally.sprite.y) > config.range) continue;
+        const angle = Math.atan2(breach.y - ally.sprite.y, breach.x - ally.sprite.x);
+        if (this.weaponExecution.fire(config, { x: ally.sprite.x, y: ally.sprite.y, angle, targetX: breach.x, targetY: breach.y,
+          ownerId: ally.id, ownerColor: ownerColor || COLORS.GREEN_2 })) {
+          ally.faceAngle(angle); ally.pauseAttackMovement(now); ally.recordWeaponUse(weapon, now);
+        }
+        return;
+      }
+      return;
+    }
     if (!destination.target?.sprite.active || !this.combatSystem.isAlive(destination.target.id) || !ally.canScanForAttack(now)) return;
     ally.scheduleNextAttackScan(now);
     for (const attackWeapon of ally.getAttackWeapons()) {

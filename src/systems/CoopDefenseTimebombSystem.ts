@@ -121,6 +121,12 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
 
     const targetX = state.lastTargetX;
     const targetY = state.lastTargetY;
+    if (this.enemyManager.hasNavigationIntents()) {
+      const route = this.enemyManager.routeAlly(enemy, `committed:${state.target?.kind ?? 'memory'}:${state.target?.id ?? enemy.id}`,
+        { x: targetX, y: targetY }, Math.max(16, config.fuseDistancePx));
+      if (!route || route.status !== 'ready') return { vx: 0, vy: 0 };
+      return this.enemyManager.moveNormally(enemy, route.waypoint, enemy.getMoveSpeed() * config.chaseSpeedMultiplier);
+    }
     let steerX = targetX;
     let steerY = targetY;
     const from = this.strategicFlowField.worldToGrid(enemy.sprite.x, enemy.sprite.y);
@@ -271,8 +277,10 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     // Praeferenz, setzt das nicht mehr den individuellen Aktivierungstimer zurueck.
     const decoy = this.decoyTargets?.getTarget(enemy.id);
     if (decoy && (state.target?.kind !== 'decoy' || state.target.id !== decoy.id)) this.resetLineOfSight(state);
-    const target = decoy ?? state.target
-      ?? this.strategicTargets.selectTarget('players-and-armed-constructs', enemy.sprite.x, enemy.sprite.y);
+    const intentRef = this.enemyManager.getNavigationIntent(enemy.id)?.target;
+    const primary = intentRef && intentRef.kind !== 'base' && intentRef.kind !== 'ally' ? intentRef : null;
+    const target = decoy ?? state.target ?? (this.enemyManager.hasNavigationIntents() ? primary
+      : this.strategicTargets.selectTarget('players-and-armed-constructs', enemy.sprite.x, enemy.sprite.y));
     if (!target) {
       this.resetLineOfSight(state);
       return;
@@ -451,8 +459,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
   private damageConstructions(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {
     for (const construction of this.placementSystem.getAllRuntimeRocks()) {
       if (construction.hp <= 0 || construction.kind !== 'turret') continue;
-      const world = this.strategicFlowField.gridToWorld(construction.gridX, construction.gridY);
-      if (!world) continue;
+      const world = this.placementSystem.getWorldPointForCell(construction.gridX, construction.gridY);
       const distance = Math.hypot(world.x - x, world.y - y);
       if (distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));

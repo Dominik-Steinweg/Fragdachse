@@ -13,8 +13,92 @@ import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager, EnemySpawnOptions } from '../src/entities/EnemyManager';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { CoopDefenseSpawnExecutor } from '../src/systems/CoopDefenseSpawnExecutor';
-import type { EnemyFlowFieldService } from '../src/systems/EnemyFlowFieldService';
+import { EnemyFlowFieldService } from '../src/systems/EnemyFlowFieldService';
 import { SPAWN_FRONTS, type SpawnFront } from '../src/utils/spawnFront';
+import { navigationTestWorld } from './navigationTestWorld';
+import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
+import { resolveActiveArenaWorldMetrics, resolveCoopDefenseWorldMetrics, worldCellCenter } from '../src/world/WorldMetrics';
+
+describe('Spawn coordinates across World and navigation grids', () => {
+  function setup() {
+    const world = navigationTestWorld();
+    const metrics = { ...resolveCoopDefenseWorldMetrics(8, 8), gridCols: 8, gridRows: 8,
+      widthPx: 256, heightPx: 256, offsetX: 0, offsetY: 0, maxX: 256, maxY: 256 };
+    const spawned: { x: number; y: number; radius: number }[] = [];
+    const spawn = (x: number, y: number, kind: Parameters<typeof getCoopDefenseEnemyConfig>[0]) => {
+      spawned.push({ x, y, radius: getCoopDefenseEnemyConfig(kind).size / 2 });
+      return { id: `spawn-${spawned.length}` };
+    };
+    const manager = { getAllEnemies: () => [], hostSpawnAtWorld: spawn,
+      hostSpawnDummyAt: (gx: number, gy: number, kind: Parameters<typeof getCoopDefenseEnemyConfig>[0]) => {
+        const p = worldCellCenter(metrics, gx, gy); return spawn(p.x, p.y, kind);
+      } } as unknown as EnemyManager;
+    world.goal(176, 176); world.flush();
+    return { ...world, metrics, spawned, manager,
+      executor: new CoopDefenseSpawnExecutor(manager, world.field, metrics, undefined, world.field) };
+  }
+
+  it('spawns at the checked world position on every front with a finer navigation grid', () => {
+    const world = setup();
+    for (const front of SPAWN_FRONTS) {
+      expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'front', front)).toHaveLength(1);
+      const p = world.spawned.at(-1)!;
+      expect(world.geometry().isFree(p.x, p.y, p.radius), front).toBe(true);
+    }
+    world.destroy();
+  });
+
+  it('reads authored late-encounter areas in World cells, not navigation indices', () => {
+    const world = setup();
+    world.snapshot.obstacles.push({ id: 'rock:wrong-area', kind: 'rock', shape: 'rect', left: 64, top: 64, right: 128, bottom: 128, destructible: true });
+    world.coordinator.invalidateGeometry(); world.flush();
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'late', 'west',
+      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 })).toHaveLength(1);
+    expect(world.spawned[0]).toMatchObject({ x: 176, y: 176 });
+    world.destroy();
+  });
+
+  it('rejects a free center when the actual boss body overlaps neighboring rock', () => {
+    const world = setup();
+    world.snapshot.obstacles.push({ id: 'rock:neighbor', kind: 'rock', shape: 'rect', left: 192, top: 160, right: 224, bottom: 192, destructible: true });
+    world.coordinator.invalidateGeometry(); world.flush();
+    expect(world.executor.hostSpawnEncounterGroup('grave-titan', 1, 'boss', 'west',
+      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 })).toHaveLength(0);
+    expect(world.spawned).toHaveLength(0);
+    world.destroy();
+  });
+
+  it('uses live physical geometry while a replacement navigation field is still pending', () => {
+    const world = setup();
+    world.snapshot.obstacles.push({ id: 'rock:new', kind: 'rock', shape: 'rect', left: 160, top: 160, right: 192, bottom: 192, destructible: true });
+    world.coordinator.invalidateGeometry();
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'blocked', 'west',
+      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 })).toHaveLength(0);
+    world.destroy();
+  });
+
+  it('spawns while moving goals await a new field, using current connected regions', () => {
+    const world = setup();
+    world.goal(224, 176);
+    expect(world.field.queryNavigation(48, 48).status).toBe('pending');
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'moving', 'west')).toHaveLength(1);
+    world.snapshot.obstacles.push({ id: 'new-wall', kind: 'barrier', shape: 'rect', left: 96, top: 0, right: 128, bottom: 256 });
+    world.coordinator.invalidateGeometry(); world.flush();
+    world.goal(208, 192);
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'wrong-region', 'west')).toHaveLength(0);
+    world.destroy();
+  });
+
+  it('keeps buried arrivals on the World border and bosses inside the checked arena', () => {
+    const world = setup();
+    expect(world.executor.hostSpawnBoss('grave-titan')).toBe(true);
+    const boss = world.spawned[0];
+    expect(world.geometry().isFree(boss.x, boss.y, boss.radius)).toBe(true);
+    expect(world.executor.hostSpawnEncounterGroup('alien-badger', 1, 'burrow', 'east')).toHaveLength(1);
+    expect(world.spawned.at(-1)?.x).toBe(240);
+    world.destroy();
+  });
+});
 
 interface SpawnRecord {
   readonly gridX: number;
@@ -28,14 +112,17 @@ function createExecutor(
   getIntegrationValueAt: (gridX: number, gridY: number) => number = () => 0,
   playerFlowFieldService?: EnemyFlowFieldService,
 ) {
+  const metrics = resolveActiveArenaWorldMetrics();
+  const worldToGrid = (x: number, y: number) => ({ gridX: Math.floor((x - metrics.offsetX) / 32), gridY: Math.floor((y - metrics.offsetY) / 32) });
   const enemyManager = {
     getAllEnemies: () => [],
-    hostSpawnDummyAt: (
-      gridX: number,
-      gridY: number,
+    hostSpawnAtWorld: (
+      x: number,
+      y: number,
       _kind: string,
       options: EnemySpawnOptions = {},
     ) => {
+      const { gridX, gridY } = worldToGrid(x, y);
       records.push({ gridX, gridY, options });
       return fakeEntity({ id: `spawn-${records.length}`, x: gridX * 32, y: gridY * 32, getCollisionRadius: () => 12 }) as unknown as EnemyEntity;
     },
@@ -49,9 +136,16 @@ function createExecutor(
     getGoalCells: () => [],
     getCols: () => GRID_COLS,
     getRows: () => GRID_ROWS,
+    worldToGrid,
+    getNavigationGeometry: () => null,
+    isCircleGroundFreeAt: (x: number, y: number) => { const c = worldToGrid(x, y); return isTraversableAt(c.gridX, c.gridY); },
     gridToWorld: (gridX: number, gridY: number) => ({ x: gridX * 32, y: gridY * 32 }),
   } as unknown as EnemyFlowFieldService;
-  return new CoopDefenseSpawnExecutor(enemyManager, flowField, undefined, playerFlowFieldService);
+  if (playerFlowFieldService) Object.assign(playerFlowFieldService, {
+    worldToGrid, getNavigationGeometry: () => null,
+    isCircleGroundFreeAt: (x: number, y: number) => { const c = worldToGrid(x, y); return playerFlowFieldService.isTraversableAt(c.gridX, c.gridY); },
+  });
+  return new CoopDefenseSpawnExecutor(enemyManager, flowField, metrics, undefined, playerFlowFieldService);
 }
 
 function expectOnFront(record: SpawnRecord, front: SpawnFront): void {

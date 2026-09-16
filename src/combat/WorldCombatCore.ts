@@ -858,6 +858,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       widthPx: DEFAULT_ARENA_WIDTH,
       heightPx: DEFAULT_ARENA_HEIGHT,
     };
+    // Scene synchronization may repeat unchanged World metrics every frame. Rebuilding the
+    // complete obstacle index is necessary only when the physical bounds actually change.
+    if (this.obstacleBounds.offsetX === resolved.offsetX && this.obstacleBounds.offsetY === resolved.offsetY
+      && this.obstacleBounds.width === resolved.widthPx && this.obstacleBounds.height === resolved.heightPx) return;
     this.obstacleBounds.offsetX = resolved.offsetX;
     this.obstacleBounds.offsetY = resolved.offsetY;
     this.obstacleBounds.width = resolved.widthPx;

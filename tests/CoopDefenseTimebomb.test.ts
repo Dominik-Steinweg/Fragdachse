@@ -49,6 +49,8 @@ describe('Zeitbombendachs', () => {
       return null;
     });
     const enemyManager = {
+      getNavigationIntent: () => null,
+      hasNavigationIntents: () => false,
       getHostileEnemies: () => enemyActive ? [enemy] : [],
       hostRemoveWithoutKill,
       getEnemy: () => enemyActive ? enemy : undefined,
@@ -75,6 +77,7 @@ describe('Zeitbombendachs', () => {
     const applyRadialImpulse = vi.fn();
     const applyBaseDamage = vi.fn();
     const decoyDamage = vi.fn();
+    const constructionDamage = vi.fn();
     const sound = vi.fn();
     const system = new CoopDefenseTimebombSystem(
       enemyManager,
@@ -89,12 +92,14 @@ describe('Zeitbombendachs', () => {
         }],
         applyDamage: applyBaseDamage,
       } as unknown as BaseManager,
-      { getAllRuntimeRocks: () => [] } as unknown as PlacementSystem,
+      { getAllRuntimeRocks: () => [{ id: 5, hp: 100, kind: 'turret', gridX: 4, gridY: 0 }],
+        getWorldPointForCell: () => ({ x: 76, y: 0 }),
+      } as unknown as PlacementSystem,
       combat,
       strategicTargets,
       strategicFlow,
       fireChunks,
-      { playExplosion, applyRadialImpulse, damageConstruction: vi.fn(), sound },
+      { playExplosion, applyRadialImpulse, damageConstruction: constructionDamage, sound },
       {
         getHostTargets: () => [fakeEntity({ id: 7, active: true, x: 60, y: 0 })],
         applyDamage: decoyDamage,
@@ -126,6 +131,8 @@ describe('Zeitbombendachs', () => {
     expect(baseDamage).toBeGreaterThan(0);
     expect(baseDamage).toBeLessThanOrEqual(timebomb.explosionDamage);
     expect(applyBaseDamage).not.toHaveBeenCalled();
+    // Construction coordinates belong to the World, independently of navigation spacing.
+    expect(constructionDamage).toHaveBeenCalledWith(5, expect.any(Number), 'e1');
     expect(decoyDamage).toHaveBeenCalledWith(
       7,
       expect.any(Number),
@@ -150,6 +157,8 @@ describe('Zeitbombendachs', () => {
       stopMovement: vi.fn() }) as unknown as EnemyEntity;
     const system = new CoopDefenseTimebombSystem(
       {
+        getNavigationIntent: () => null,
+        hasNavigationIntents: () => false,
         getHostileEnemies: () => [enemy],
         getEnemy: () => enemy,
       } as unknown as EnemyManager,
@@ -210,6 +219,8 @@ describe('Zeitbombendachs', () => {
     }));
     const system = new CoopDefenseTimebombSystem(
       {
+        getNavigationIntent: () => null,
+        hasNavigationIntents: () => false,
         getHostileEnemies: () => [enemy],
         getEnemy: () => enemy,
       } as unknown as EnemyManager,
@@ -269,6 +280,8 @@ describe('Zeitbombendachs', () => {
     const hasWalkableCircleLine = vi.fn(() => true);
     const system = new CoopDefenseTimebombSystem(
       {
+        getNavigationIntent: () => null,
+        hasNavigationIntents: () => false,
         getHostileEnemies: () => [enemy],
         getEnemy: () => enemy,
       } as unknown as EnemyManager,

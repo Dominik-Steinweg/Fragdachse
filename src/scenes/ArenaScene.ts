@@ -204,6 +204,38 @@ type ArenaFrameSignals = Readonly<{
 }>;
 
 export class ArenaScene extends Phaser.Scene {
+  /** Explicit control surface for a separately booted, local-only analysis arena. */
+  createNavigationLabPort(): import('../debug/navigationLab/NavigationLabPort').NavigationLabPort {
+    return {
+      ...this.arenaRuntime.navigationLabPort,
+      start: (mapId, seed, loadout) => {
+        if (!bridge.isHost() || bridge.getConnectedPlayers().length !== 1
+          || bridge.getGamePhase() !== 'LOBBY') throw new Error('Navigation lab requires a solo lobby');
+        bridge.setGameMode('coop_defense');
+        bridge.setCoopDefenseMapId(mapId);
+        this.arenaRuntime.navigationLabPort.setNextRoundSeed(seed);
+        bridge.setLocalReadyWithCommittedLoadout(loadout);
+        this.arenaRuntime.setIsLocalReady(true);
+      },
+      fireAt: (x, y, sequence) => {
+        const player = this.arenaRuntime.navigationLabPort.getPlayerPosition();
+        if (!player) return;
+        this.arenaRuntime.weaponBalanceLabPort.useWeaponAction('weapon1', bridge.getLocalPlayerId(),
+          Math.atan2(y - player.y, x - player.x), x, y, bridge.getSynchronizedNow(), sequence, true);
+      },
+      startRecording: environment => {
+        this.diagnostics?.startScenarioRecording(environment);
+        this.hostUpdate.setDetailedPerformanceMetricsEnabled(true);
+      },
+      stopRecording: () => {
+        const report = this.diagnostics?.stopScenarioRecording() ?? null;
+        this.hostUpdate.setDetailedPerformanceMetricsEnabled(false);
+        return report;
+      },
+      getPerformance: () => ({ ...this.hostUpdate.getPerformanceMetrics() }),
+      getRenderCpuMs: () => this.diagnostics?.getRenderCpuMs() ?? 0,
+    };
+  }
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
   private arenaClipMask: WebGLRectMaskTexture | null = null;

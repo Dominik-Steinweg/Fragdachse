@@ -73,6 +73,13 @@ const SUPPORT_TURRET_GRAZE_RADIUS = 24;
 const SUPPORT_REGENERATION_EFFECT_RADIUS = 30;
 
 export interface HostUpdatePerformanceMetrics {
+  navIntentMs?: number;
+  enemySpecialMs?: number;
+  enemyPositioningMs?: number;
+  enemyMovementMs?: number;
+  enemyAlliesMs?: number;
+  enemyAbilitiesMs?: number;
+  enemyAttacksMs?: number;
   totalMs: number;
   enemyAiMs: number;
   /**
@@ -289,6 +296,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // performance.now() pair around every simulation subsystem.
     this.performanceMetricsEnabled = false;
     if (!enabled) this.lastPerformance = emptyHostUpdatePerformanceMetrics();
+  }
+
+  /** Opt-in only for controlled measurements; ordinary diagnostics stay coarse. */
+  setDetailedPerformanceMetricsEnabled(enabled: boolean): void {
+    this.coarsePerformanceMetricsEnabled = enabled;
+    this.performanceMetricsEnabled = enabled;
   }
 
   setClassicTrainSpawned(v: boolean): void { this.classicTrainSpawned = v; }

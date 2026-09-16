@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fragdachse – Navigation Lab</title><base href="/">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101716;color:#e7eee8;font:13px system-ui}
+header{height:54px;display:flex;align-items:center;gap:8px;padding:8px;background:#20302a}
+button,select{font:inherit;padding:7px;background:#30463b;color:inherit;border:1px solid #728578;border-radius:4px}
+output{margin-left:8px}#game-container{position:fixed;inset:54px 0 0}details{position:fixed;right:12px;bottom:12px;z-index:999;background:#17221eee;max-width:560px;padding:10px;max-height:70vh;overflow:auto}pre{white-space:pre-wrap}
+#diagnostics{position:fixed;top:65px;right:12px;z-index:1000;width:420px;background:#101716ed;padding:12px;max-height:70vh;overflow:auto}#navigation-map{width:100%;height:210px;background:#24312c}#navigation-state{font-size:11px}
+</style></head><body><header><strong>Navigation Lab</strong><select id="scenario" aria-label="Szenario"></select>
+<button id="start">Start</button><button id="pause">Pause / Weiter</button><button id="step">Einzelschritt</button>
+<button id="restart">Neustart</button><button id="export">JSON exportieren</button><label><input type="checkbox" id="overlay">Navigation</label><output id="status">Initialisierung …</output></header>
+<aside id="diagnostics" hidden><strong>Ziele, Routen und Körperfreiheit</strong><p>Grün: frei · Rot: Überschneidung · Blau: Routenabschnitt. Diagnoseansicht schließt Performanceabnahme aus.</p><svg id="navigation-map"></svg><pre id="navigation-state"></pre></aside>
+<div id="game-container"></div><details><summary>Ergebnisse</summary><pre id="results">Noch keine Messung.</pre></details>
+<script type="module" src="/src/dev/navigationLab.ts"></script></body></html>

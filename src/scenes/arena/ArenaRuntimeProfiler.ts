@@ -493,6 +493,7 @@ export class ArenaRuntimeProfiler {
   private readonly renderPipelineDrawCalls: number[] = [];
   private readonly renderPipelineBatchFlushes: number[] = [];
   private lastRenderSubmitMs = 0;
+  private renderStartedAtMs = 0;
   private lastDrawCallCount = 0;
   private gameEventsInstalled = false;
   private rockDestroyBurstCount = 0;
@@ -509,6 +510,7 @@ export class ArenaRuntimeProfiler {
 
   private readonly onPreRender = (): void => {
     if (!this.diagnosticsActive) return;
+    this.renderStartedAtMs = performance.now();
     this.frameDrawCallCounter = 0;
     this.frameBatchFlushCounter = 0;
     if (!this.recording || !this.gpuTimer) return;
@@ -528,6 +530,7 @@ export class ArenaRuntimeProfiler {
 
   private readonly onPostRender = (): void => {
     if (!this.diagnosticsActive) return;
+    this.lastRenderSubmitMs = Math.max(0, performance.now() - this.renderStartedAtMs);
     const renderer = this.game?.renderer as unknown as RendererCounterLike | undefined;
     if (this.renderCounterBackend === 'canvas' && renderer?.drawCount !== undefined) {
       this.lastDrawCallCount = renderer.drawCount;

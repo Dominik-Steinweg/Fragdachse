@@ -116,7 +116,8 @@ function detachRequest(request: FlowFieldRequest): FlowFieldRequest {
   return {
     ...request,
     patches: request.patches.map((patch) => (
-      patch.t === 'rock-resync' ? { ...patch, rockOccupancy: copyOf(patch.rockOccupancy) }
+      patch.t === 'density' ? { ...patch, costs: copyOf(patch.costs) }
+        : patch.t === 'rock-resync' ? { ...patch, rockOccupancy: copyOf(patch.rockOccupancy) }
         : patch.t === 'barrier-resync' ? { ...patch, barrierOccupancy: copyOf(patch.barrierOccupancy) }
           : patch
     )),
@@ -127,6 +128,8 @@ function detachRequest(request: FlowFieldRequest): FlowFieldRequest {
       vectorBuffer: field.vectorBuffer?.slice(0),
       goalSourceBuffer: field.goalSourceBuffer?.slice(0),
       traversableBuffer: field.traversableBuffer?.slice(0),
+      edgeBuffer: field.edgeBuffer?.slice(0),
+      regionBuffer: field.regionBuffer?.slice(0),
     })),
   };
 }
@@ -141,6 +144,8 @@ function detachResult(result: FlowFieldResultMessage): FlowFieldResultMessage {
       vectorField: copyOf(field.vectorField),
       goalSourceField: copyOf(field.goalSourceField),
       profileTraversable: field.profileTraversable ? copyOf(field.profileTraversable) : null,
+      edges: field.edges ? copyOf(field.edges) : undefined,
+      regions: field.regions ? copyOf(field.regions) : undefined,
     })),
   };
 }

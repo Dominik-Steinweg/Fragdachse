@@ -27,7 +27,7 @@ export function decoyInput(overrides: Partial<Parameters<DecoyRuntime['activate'
   return { ownerId: 'owner', position: { x: 240, y: 176 }, config: resolvedDecoy({}),
     hp: 17, maxHp: 120, armor: 9, maxArmor: 100, color: 0xffffff, rotation: 0.3, speed: 80, now: 1000, ...overrides };
 }
-export function decoyTargetHarness() {
+export function decoyTargetHarness(getMovementTarget?: (id: string) => { kind: string; id: string } | null) {
   const metrics = { cols: 24, rows: 16, cellSize: 32, arenaOffsetX: 0, arenaOffsetY: 0 };
   const layout = { seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] } as unknown as ArenaLayout;
   const runner = new InlineFlowFieldRunner(true);
@@ -42,6 +42,7 @@ export function decoyTargetHarness() {
   const attackTargets = new Map<string, EnemyAiTargetRef>();
   let visible = true;
   const targets = new CoopDefenseDecoyTargetSystem({ coordinator, strategicTargets: strategic,
+    getMovementTarget,
     getEnemies: () => enemies, getAttackTarget: id => attackTargets.get(id) ?? null,
     isEnemyOfOwner: () => true, canSee: () => visible });
   const runtime = new DecoyRuntime();

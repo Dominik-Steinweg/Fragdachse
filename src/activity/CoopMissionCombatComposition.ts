@@ -24,6 +24,7 @@ import { CoopDefenseMapDirector } from '../systems/CoopDefenseMapDirector';
 import { CoopDefensePersistentPressureSystem } from '../systems/CoopDefensePersistentPressureSystem';
 import { CoopDefenseSpawnExecutor } from '../systems/CoopDefenseSpawnExecutor';
 import { EnemyAiTargetCatalog } from '../systems/EnemyAiTargetCatalog';
+import { EnemyIntentSystem } from '../systems/navigation/EnemyIntentSystem';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import { EnemyStrategicTargetService, type PreparedStrategicTargets } from '../systems/EnemyStrategicTargetService';
 import {
@@ -52,6 +53,7 @@ interface BaseStatePort {
 }
 
 export interface CoopMissionCombatCompositionOptions {
+  readonly geometryProvider?: () => import('../systems/navigation/NavigationGeometry').NavigationGeometrySnapshot;
   readonly scene: Phaser.Scene;
   /** Already validated against the current WorldDefinition; mapConfig is only its adapter. */
   readonly activity: CoopMissionActivityConfiguration;
@@ -126,21 +128,33 @@ export class CoopMissionCombatComposition {
     const bossClearanceCells = bossConfig
       ? Math.ceil(Math.max(0, bossConfig.size * 0.5 - CELL_SIZE * 0.5) / CELL_SIZE)
       : 0;
-    const metrics: FlowFieldMetrics = {
+    const worldGridMetrics: FlowFieldMetrics = {
       cols: this.options.worldMetrics.gridCols,
       rows: this.options.worldMetrics.gridRows,
       cellSize: CELL_SIZE,
       arenaOffsetX: this.options.worldMetrics.offsetX,
       arenaOffsetY: this.options.worldMetrics.offsetY,
     };
+    const exact = this.options.geometryProvider !== undefined;
+    const metrics: FlowFieldMetrics = exact ? { ...worldGridMetrics,
+      cols: worldGridMetrics.cols * 2 + 1, rows: worldGridMetrics.rows * 2 + 1,
+      cellSize: 16, pointOffset: 0 } : worldGridMetrics;
+    const worldTerrain = buildStaticKindRaster(this.options.layout, worldGridMetrics);
+    const terrain = exact ? new Uint8Array(metrics.cols * metrics.rows) : worldTerrain;
+    if (exact) for (let y = 0; y < metrics.rows; y++) for (let x = 0; x < metrics.cols; x++) {
+      terrain[y * metrics.cols + x] = worldTerrain[Math.min(worldGridMetrics.rows - 1, Math.floor(y / 2))
+        * worldGridMetrics.cols + Math.min(worldGridMetrics.cols - 1, Math.floor(x / 2))];
+    }
     const flowFieldCoordinator = new FlowFieldCoordinator({
       metrics,
       tuning: createFlowFieldTuning(),
-      staticKind: buildStaticKindRaster(this.options.layout, metrics),
-      bases: buildBaseDescriptors(this.options.getBaseSpecs()),
+      staticKind: terrain,
+      bases: buildBaseDescriptors(this.options.getBaseSpecs()).map(base => exact
+        ? { ...base, cellCoords: base.cellCoords.map(coordinate => coordinate * 2 + 1) } : base),
       activeBaseIds: this.options.getActiveBaseIds(),
-      obstacleCellProvider: this.options.obstacleCellProvider,
-      barrierCells: this.options.barrierCells,
+      obstacleCellProvider: exact ? () => [] : this.options.obstacleCellProvider,
+      barrierCells: exact ? [] : this.options.barrierCells,
+      geometryProvider: this.options.geometryProvider,
       runner: createFlowFieldRunner(),
       navTickIntervalMs: COOP_DEFENSE_NAV_TICK_INTERVAL_MS,
       generationId: this.options.nextGenerationId(),
@@ -166,6 +180,7 @@ export class CoopMissionCombatComposition {
         flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.boss, {
           goalMode: bossConfig.movementTarget === 'players' ? 'dynamic-fallback-bases' : 'bases',
           clearanceCells: bossClearanceCells,
+          bodyRadius: bossConfig.size / 2,
         }),
       )
       : null;
@@ -186,6 +201,7 @@ export class CoopMissionCombatComposition {
       });
 
     const navigation: CoopMissionNavigationRuntime = {
+      intents: exact ? new EnemyIntentSystem(flowFieldCoordinator, enemyAiTargetCatalog) : null,
       coordinator: flowFieldCoordinator,
       enemy: enemyFlowFieldService,
       player: enemyPlayerFlowFieldService,
@@ -214,6 +230,7 @@ export class CoopMissionCombatComposition {
     const spawnExecutor = new CoopDefenseSpawnExecutor(
       enemyManager,
       navigation.enemy,
+      this.options.worldMetrics,
       navigation.boss,
       navigation.player,
       navigation.strategic,

@@ -23,6 +23,8 @@ export interface FlowFieldMetrics {
   readonly cellSize: number;
   readonly arenaOffsetX: number;
   readonly arenaOffsetY: number;
+  /** Zero denotes world-aligned navigation points; omitted for authored cell rasters. */
+  readonly pointOffset?: number;
 }
 
 /** Kostentabelle des Rasters; entspricht den `COOP_DEFENSE_FLOW_FIELD_*`-Konstanten. */
@@ -64,7 +66,7 @@ const DESTRUCTIBLE_BY_CODE = Uint8Array.of(0, 1, 0, 0, 0, 0, 0, 0, 0);
  */
 const WALL_BY_CODE = Uint8Array.of(0, 0, 1, 0, 0, 0, 1, 1, 1);
 
-export const INTEGRATION_INFINITY = 999999;
+export const INTEGRATION_INFINITY = Number.POSITIVE_INFINITY;
 
 export const NEIGHBOR_DIRECTIONS = [
   [1, 0], [-1, 0], [0, 1], [0, -1],      // cardinal
@@ -75,7 +77,7 @@ export const NEIGHBOR_MOVE_FACTORS = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.S
 
 export function buildCostByCode(tuning: FlowFieldTuning): Uint32Array {
   const costs = new Uint32Array(CELL_KINDS_BY_CODE.length);
-  costs[CELL_CODE.water] = INTEGRATION_INFINITY;
+  costs[CELL_CODE.water] = 0xffffffff;
   costs[CELL_CODE.ground] = tuning.groundCost;
   costs[CELL_CODE.rock] = tuning.rockCost;
   costs[CELL_CODE.trunk] = tuning.trunkCost;
@@ -224,6 +226,9 @@ export function buildNeighborLookups(metrics: FlowFieldMetrics): FlowFieldNeighb
 // ---- Topologie ----
 
 export interface FlowFieldTopology {
+  edges?: Uint8Array;
+  distanceScale?: number;
+  density?: Float32Array;
   readonly costs: Uint32Array;
   readonly kindCodes: Uint8Array;
   readonly traversable: Uint8Array;
@@ -480,6 +485,7 @@ export function isReachableNeighborIndex(
   const lookupIndex = currentIndex * 8 + direction;
   const neighborIndex = lookups.neighborIndices[lookupIndex];
   if (neighborIndex < 0 || topology.traversable[neighborIndex] !== 1) return false;
+  if (topology.edges) return (topology.edges[currentIndex] & (1 << direction)) !== 0;
   if (direction < 4) return true;
   const guardA = lookups.diagonalGuardA[lookupIndex];
   const guardB = lookups.diagonalGuardB[lookupIndex];
@@ -502,7 +508,7 @@ export function getTransitionCost(
   nextIndex: number,
   direction: number,
 ): number {
-  const nextCost = topology.costs[nextIndex];
+  const nextCost = topology.costs[nextIndex] * (1 + (topology.density?.[nextIndex] ?? 0));
   if (
     tuning.trackLongitudinalCost <= 0
     || topology.kindCodes[currentIndex] !== CELL_CODE.track
@@ -646,7 +652,7 @@ export function computeIntegrationField(
       if (!isReachableNeighborIndex(topology, lookups, currentIndex, direction)) continue;
       const neighborIndex = lookups.neighborIndices[neighborBase + direction];
       const neighborCost = getTransitionCost(topology, tuning, currentIndex, neighborIndex, direction);
-      const newValue = Math.fround(currentValue + neighborCost * NEIGHBOR_MOVE_FACTORS[direction]);
+      const newValue = Math.fround(currentValue + neighborCost * NEIGHBOR_MOVE_FACTORS[direction] * (topology.distanceScale ?? 1));
 
       if (
         newValue < integrationField[neighborIndex]

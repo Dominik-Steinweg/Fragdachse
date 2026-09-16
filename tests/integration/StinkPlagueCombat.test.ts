@@ -7,6 +7,7 @@ vi.mock('phaser', async () => {
 });
 import { WorldCombatCore } from '../../src/combat/WorldCombatCore';
 import { WorldStinkPlagueBinding } from '../../src/world/WorldStinkPlagueBinding';
+import { NavigationGeometry } from '../../src/systems/navigation/NavigationGeometry';
 import { EnemyManager } from '../../src/entities/EnemyManager';
 import { TargetStatusSystem, VULNERABILITY_INCOMING_DAMAGE_BONUS } from '../../src/systems/TargetStatusSystem';
 import { SlimeTrailSystem } from '../../src/systems/SlimeTrailSystem';
@@ -16,6 +17,9 @@ import { healthBarTestScene } from '../healthBarTestScene';
 import { fakeEntity } from '../fakeEntity';
 import { plagueSource } from '../StinkPlagueTestHelper';
 
+const emptyGeometry = new NavigationGeometry({ left: 0, top: 0, right: 2000, bottom: 2000, obstacles: [] });
+const emptyFlow = () => ({ getNavigationGeometry: () => emptyGeometry, hasGoalCells: () => true, worldToGrid: () => null,
+  queryNavigation: () => ({ status: 'invalid-goal' }) });
 function fixture(boss = false) {
   let now=0, present=true;
   const scene=healthBarTestScene().scene, kind=COOP_DEFENSE_ENEMY_KINDS[0];
@@ -60,7 +64,7 @@ describe('plague confirmed combat and slime integration',()=> {
       const source=plagueSource('p1',{pandemicEnabled:1});
       f.infect(carrier,source);
       f.binding.spread(0);
-      const flow={hasGoalCells:()=>true,worldToGrid:()=>null};
+      const flow=emptyFlow();
       const move=(locked=false,special:any=null,smoke:any=null,decoy:any=null)=>f.enemies.hostUpdateMovement(flow as never,null,null,null,
         locked,100,1000,null,null,null,null,null,special,smoke,decoy);
       carrier.pauseAttackMovement(0,.5,500);move();
@@ -86,8 +90,9 @@ describe('plague confirmed combat and slime integration',()=> {
     const f=fixture(true);try {
       const carrier=f.spawn(300,300);f.spawn(450,300);f.infect(carrier,plagueSource('p1',{pandemicEnabled:1}));f.binding.spread(0);
       const positioning={getMovementOverride:()=>({vx:0,vy:11})};
-      f.enemies.hostUpdateMovement({hasGoalCells:()=>true} as never,null,null,null,false,100,1000,null,null,null,null,positioning);
-      expect(carrier.getDesiredVelocity()).toEqual({vx:0,vy:11});
+      f.enemies.hostUpdateMovement(emptyFlow() as never,null,null,null,false,100,1000,null,null,null,null,positioning);
+      expect(carrier.getDesiredVelocity().vx).toBeCloseTo(0);
+      expect(carrier.getDesiredVelocity().vy).toBeCloseTo(11);
       expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
       expect(f.slime.hostUpdate(100).cells).not.toHaveLength(0);
       expect(f.slime.getEnemyMovementFactor(carrier.id,100)).toBeCloseTo(1-f.baseline.slowFraction);
@@ -102,7 +107,7 @@ describe('plague confirmed combat and slime integration',()=> {
       // Before movement starts, the carrier can be affected by its own trail.
       f.slime.hostUpdate(0);
       expect(f.slime.getEnemyMovementFactor(carrier.id,0)).toBeCloseTo(1-f.baseline.slowFraction);
-      const flow={hasGoalCells:()=>true,worldToGrid:()=>null};
+      const flow=emptyFlow();
       f.enemies.hostUpdateMovement(flow as never,null,null,null,false,100,1000);
       expect(carrier.getDesiredVelocity().vx/carrier.getMoveSpeed()).toBeCloseTo(1+source.config.pursuitMoveSpeedBonus,2);
       expect(f.slime.getEnemyMovementFactor(carrier.id,100)).toBe(1);
@@ -125,7 +130,7 @@ describe('plague confirmed combat and slime integration',()=> {
     const f=fixture();try {
       const carrier=f.spawn(300,300), target=f.spawn(700,300);
       f.infect(carrier,plagueSource('p1',{pandemicEnabled:1}));f.binding.spread(0);
-      const flow={hasGoalCells:()=>true,worldToGrid:()=>null};
+      const flow=emptyFlow();
       const move=(locked=false)=>f.enemies.hostUpdateMovement(flow as never,null,null,null,locked,100,1000);
       move();expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(true);
       carrier.setDashPhase(1);expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);

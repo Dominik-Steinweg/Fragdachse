@@ -95,6 +95,7 @@ import { createWorldGeometryQueries } from '../src/world/WorldGeometryQueries';
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
+import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 
 const TRACK_X = 500;
 const SEGMENT_WIDTH = 44;
@@ -127,6 +128,20 @@ function makeCombatSystem(): CombatSystem {
 }
 
 describe('CombatSystem.hasClearLineOfFire', () => {
+  it('reuses the obstacle index for unchanged World bounds and rebuilds for changed bounds', () => {
+    const system = makeCombatSystem(), metrics = resolveCoopDefenseWorldMetrics(64, 32);
+    const index = system.getObstacleIndex();
+    system.setWorldMetrics(metrics);
+    index.prepare();
+    const initial = index.getWorkCounters().obstacleRebuilds;
+    system.setWorldMetrics({ ...metrics });
+    index.prepare();
+    expect(index.getWorkCounters().obstacleRebuilds).toBe(initial);
+    system.setWorldMetrics({ ...metrics, offsetX: metrics.offsetX + 32 });
+    index.prepare();
+    expect(index.getWorkCounters().obstacleRebuilds).toBe(initial + 1);
+  });
+
   it.each([10, 70, 530])('segments hitscan before real blockers without tracing the portal gap (%s)', wall => {
     const system = makeCombatSystem();
     system.setPortalQueryPort({ getPortalPairs: () => [{ id: 'pair', ownerId: 'owner',

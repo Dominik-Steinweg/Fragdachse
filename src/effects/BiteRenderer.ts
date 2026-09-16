@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH_TRACE, isPointInsideArena } from '../config';
-import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, registerGraphicsObject } from './EffectUtils';
+import { createEmitter, killAllAndResetParticlePositions, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, registerGraphicsObject } from './EffectUtils';
+import { createStaticPolygonGraphics, type StaticPolygonLayer } from './StaticPolygonGraphics';
 
 const TEX_BITE_HAZE = '__bite_haze';
 const TEX_BITE_DROPLET = '__bite_droplet';
@@ -8,6 +9,8 @@ const TEX_BITE_FLECK = '__bite_fleck';
 const TEX_BITE_MIST = '__bite_mist';
 
 const BITE_LINGER_MS = 285;
+const CONTOUR_VARIANTS = 32;
+const CONTOUR_CONFIGURATIONS = 16;
 
 const BITE_PALETTE = {
   shadow:  0x140608,
@@ -33,7 +36,24 @@ interface ClawPath {
 }
 
 export class BiteRenderer {
+  private volumeBlood?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private volumeFlecks?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private impactBlood?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private impactChips?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly contours = new Map<string, ClawPath[][]>();
+  private readonly fillLayers = new WeakMap<readonly ClawPath[], Map<string, readonly StaticPolygonLayer[]>>();
+  private readonly clawSamples = new WeakMap<ClawPath, readonly {
+    x: number; y: number; normalX: number; normalY: number; width: number; leftNoise: number; rightNoise: number;
+  }[]>();
   constructor(private readonly scene: Phaser.Scene) {}
+
+  /** Scene-owned emitters retain their pools; a World handoff clears all live particles. */
+  clear(): void {
+    for (const emitter of [this.volumeBlood, this.volumeFlecks, this.impactBlood, this.impactChips]) {
+      if (emitter) killAllAndResetParticlePositions(emitter);
+    }
+    this.contours.clear();
+  }
 
   generateTextures(): void {
     fillRadialGradientTexture(this.scene.textures, TEX_BITE_HAZE, 112, [
@@ -87,15 +107,18 @@ export class BiteRenderer {
     const resolvedRange = Math.max(range, 24);
     const halfArcRad = Phaser.Math.DegToRad(Math.max(arcDegrees, 10) * 0.5);
     const rotationJitter = Phaser.Math.FloatBetween(-halfArcRad * 0.08, halfArcRad * 0.08);
-    const clawPaths = this.buildClawPaths(resolvedRange, halfArcRad);
+    const clawPaths = this.contourVariant(`swing:${resolvedRange}:${halfArcRad}`,
+      () => this.buildClawPaths(resolvedRange, halfArcRad));
     const slash = this.scene.add.container(x, y);
     slash.setDepth(DEPTH_TRACE + 0.04);
     slash.setRotation(angle + rotationJitter);
 
     slash.add([
-      this.createClawFillLayer(clawPaths, BITE_PALETTE.shadow, 0.96, 1.08, 1.08),
-      this.createClawFillLayer(clawPaths, BITE_PALETTE.deepRed, 0.86, 0.76, 0.92),
-      this.createClawFillLayer(clawPaths, BITE_PALETTE.gore, 0.54, 0.5, 0.62),
+      this.createClawFillLayer(clawPaths, [
+        [BITE_PALETTE.shadow, 0.96, 1.08, 1.08],
+        [BITE_PALETTE.deepRed, 0.86, 0.76, 0.92],
+        [BITE_PALETTE.gore, 0.54, 0.5, 0.62],
+      ]),
       this.createClawStrokeLayer(clawPaths, BITE_PALETTE.hot, 0.34, 0.08, 0.18),
       this.createOriginMist(clawPaths),
     ]);
@@ -124,6 +147,17 @@ export class BiteRenderer {
     const centerClaw = clawPaths[1];
     const tip = this.toWorldPoint(centerClaw.endX, centerClaw.endY, x, y, angle + rotationJitter);
     this.playAirSnap(tip.x, tip.y, angle + rotationJitter, centerClaw.widthMid);
+  }
+
+  /** Bounded procedural variety; only immutable shape data is shared between live effects. */
+  private contourVariant(key: string, create: () => ClawPath[]): ClawPath[] {
+    let variants = this.contours.get(key);
+    if (!variants) {
+      if (this.contours.size >= CONTOUR_CONFIGURATIONS) this.contours.delete(this.contours.keys().next().value!);
+      variants = []; this.contours.set(key, variants);
+    }
+    if (variants.length < CONTOUR_VARIANTS) { const paths = create(); variants.push(paths); return paths; }
+    return variants[Math.floor(Math.random() * variants.length)];
   }
 
   private buildClawPaths(range: number, halfArcRad: number): ClawPath[] {
@@ -181,21 +215,22 @@ export class BiteRenderer {
 
   private createClawFillLayer(
     clawPaths: readonly ClawPath[],
-    color: number,
-    alpha: number,
-    widthScale: number,
-    roughnessScale: number,
-    xOffset = 0,
-    yOffset = 0,
+    layers: readonly (readonly [color: number, opacity: number, widthScale: number,
+      roughnessScale: number, xOffset?: number, yOffset?: number])[],
   ): Phaser.GameObjects.Graphics {
-    const gfx = this.scene.add.graphics();
+    let variants = this.fillLayers.get(clawPaths);
+    if (!variants) { variants = new Map(); this.fillLayers.set(clawPaths, variants); }
+    const key = layers.map(layer => layer.join(',')).join(';');
+    let prepared = variants.get(key);
+    if (!prepared) {
+      prepared = layers.map(([color, opacity, widthScale, roughnessScale, xOffset = 0, yOffset = 0]) => ({
+        color, opacity, polygons: clawPaths.map(claw => this.buildClawPolygon(claw, widthScale, roughnessScale, xOffset, yOffset)),
+      }));
+      variants.set(key, prepared);
+    }
+    const gfx = createStaticPolygonGraphics(this.scene, prepared);
     registerGraphicsObject(this.scene, 'biteEffects', gfx);
     gfx.setBlendMode(Phaser.BlendModes.NORMAL);
-
-    for (const claw of clawPaths) {
-      this.fillClawShape(gfx, claw, color, alpha, widthScale, roughnessScale, xOffset, yOffset);
-    }
-
     return gfx;
   }
 
@@ -250,8 +285,10 @@ export class BiteRenderer {
     wake.setDepth(DEPTH_TRACE + 0.08);
     wake.setRotation(angle);
     wake.add([
-      this.createClawFillLayer(clawPaths, BITE_PALETTE.shadow, 0.18, 1.02, 0.78, -3.2, 2.2),
-      this.createClawFillLayer(clawPaths, BITE_PALETTE.deepRed, 0.2, 0.66, 0.56, -1.8, 1.1),
+      this.createClawFillLayer(clawPaths, [
+        [BITE_PALETTE.shadow, 0.18, 1.02, 0.78, -3.2, 2.2],
+        [BITE_PALETTE.deepRed, 0.2, 0.66, 0.56, -1.8, 1.1],
+      ]),
     ]);
 
     this.scene.tweens.add({
@@ -276,7 +313,7 @@ export class BiteRenderer {
     hitPlayer: boolean,
     bloodEffectMultiplier: number,
   ): void {
-    const blood = createEmitter(this.scene, 0, 0, TEX_BITE_DROPLET, {
+    const blood = this.volumeBlood ??= createEmitter(this.scene, 0, 0, TEX_BITE_DROPLET, {
       lifespan: { min: 95, max: 210 },
       quantity: 1,
       frequency: -1,
@@ -288,7 +325,7 @@ export class BiteRenderer {
       emitting: false,
     }, DEPTH_TRACE + 0.1, undefined, 'bite');
 
-    const flecks = createEmitter(this.scene, 0, 0, TEX_BITE_FLECK, {
+    const flecks = this.volumeFlecks ??= createEmitter(this.scene, 0, 0, TEX_BITE_FLECK, {
       lifespan: { min: 80, max: 170 },
       quantity: 1,
       frequency: -1,
@@ -312,10 +349,6 @@ export class BiteRenderer {
       }
     }
 
-    this.scene.time.delayedCall(300, () => {
-      destroyEmitter(blood);
-      destroyEmitter(flecks);
-    });
   }
 
   private playImpactBurst(
@@ -329,14 +362,16 @@ export class BiteRenderer {
     if (!isPointInsideArena(impactX, impactY)) return;
 
     const impactSize = Math.max(24, range * 0.52);
-    const clawPaths = this.buildImpactClawPaths(impactSize);
+    const clawPaths = this.contourVariant(`impact:${impactSize}`, () => this.buildImpactClawPaths(impactSize));
     const mark = this.scene.add.container(impactX, impactY);
     mark.setDepth(DEPTH_TRACE + 0.14);
     mark.setRotation(angle + (halfArcRad * 0.04) + Phaser.Math.FloatBetween(-0.05, 0.05));
     mark.add([
-      this.createClawFillLayer(clawPaths, BITE_PALETTE.shadow, 0.92, 1.02, 1),
-      this.createClawFillLayer(clawPaths, BITE_PALETTE.deepRed, 0.8, 0.72, 0.86),
-      this.createClawFillLayer(clawPaths, BITE_PALETTE.gore, 0.52, 0.46, 0.52),
+      this.createClawFillLayer(clawPaths, [
+        [BITE_PALETTE.shadow, 0.92, 1.02, 1],
+        [BITE_PALETTE.deepRed, 0.8, 0.72, 0.86],
+        [BITE_PALETTE.gore, 0.52, 0.46, 0.52],
+      ]),
       this.createClawStrokeLayer(clawPaths, BITE_PALETTE.hot, 0.28, 0.08, 0.16),
     ]);
 
@@ -368,7 +403,7 @@ export class BiteRenderer {
       },
     });
 
-    const blood = createEmitter(this.scene, impactX, impactY, TEX_BITE_DROPLET, {
+    const blood = this.impactBlood ??= createEmitter(this.scene, 0, 0, TEX_BITE_DROPLET, {
       lifespan: { min: 110, max: 260 },
       quantity: Math.round(24 * bloodEffectMultiplier),
       frequency: -1,
@@ -380,9 +415,11 @@ export class BiteRenderer {
       blendMode: Phaser.BlendModes.NORMAL,
       emitting: false,
     }, DEPTH_TRACE + 0.16, undefined, 'bite');
-    blood.explode(Math.round(24 * bloodEffectMultiplier));
+    // Angle is emit-only in Phaser: existing particles keep their velocity when the next bite fires.
+    blood.setEmitterAngle({ min: Phaser.Math.RadToDeg(angle) - 42, max: Phaser.Math.RadToDeg(angle) + 42 });
+    blood.explode(Math.round(24 * bloodEffectMultiplier), impactX, impactY);
 
-    const chips = createEmitter(this.scene, impactX, impactY, TEX_BITE_FLECK, {
+    const chips = this.impactChips ??= createEmitter(this.scene, 0, 0, TEX_BITE_FLECK, {
       lifespan: { min: 80, max: 180 },
       quantity: 16,
       frequency: -1,
@@ -395,12 +432,7 @@ export class BiteRenderer {
       blendMode: Phaser.BlendModes.ADD,
       emitting: false,
     }, DEPTH_TRACE + 0.17, undefined, 'bite');
-    chips.explode(16);
-
-    this.scene.time.delayedCall(320, () => {
-      destroyEmitter(blood);
-      destroyEmitter(chips);
-    });
+    chips.explode(16, impactX, impactY);
   }
 
   private playAirSnap(
@@ -434,29 +466,31 @@ export class BiteRenderer {
     });
   }
 
-  private fillClawShape(
-    gfx: Phaser.GameObjects.Graphics,
+  private buildClawPolygon(
     claw: ClawPath,
-    color: number,
-    alpha: number,
     widthScale: number,
     roughnessScale: number,
     xOffset: number,
     yOffset: number,
-  ): void {
+  ): { x: number; y: number }[] {
     const left: Array<{ x: number; y: number }> = [];
     const right: Array<{ x: number; y: number }> = [];
     const segments = 14;
-
-    for (let index = 0; index <= segments; index++) {
-      const t = index / segments;
-      const point = this.sampleQuadratic(claw, t);
-      const tangent = this.sampleQuadraticTangent(claw, t);
-      const normalX = -tangent.y;
-      const normalY = tangent.x;
-      const halfWidth = this.getClawWidthAt(claw, t) * widthScale * 0.5;
-      const leftOffset = Math.max(0.25, halfWidth + this.getJaggedOffset(claw, index, 1, t, roughnessScale));
-      const rightOffset = Math.max(0.25, halfWidth + this.getJaggedOffset(claw, index, -1, t, roughnessScale));
+    let samples = this.clawSamples.get(claw);
+    if (!samples) {
+      // All colored layers share the same immutable curve, tangent and noise samples.
+      samples = Array.from({ length: segments + 1 }, (_, index) => {
+        const t = index / segments, point = this.sampleQuadratic(claw, t), tangent = this.sampleQuadraticTangent(claw, t);
+        return { ...point, normalX: -tangent.y, normalY: tangent.x, width: this.getClawWidthAt(claw, t),
+          leftNoise: this.getJaggedOffset(claw, index, 1, t, 1), rightNoise: this.getJaggedOffset(claw, index, -1, t, 1) };
+      });
+      this.clawSamples.set(claw, samples);
+    }
+    for (const point of samples) {
+      const { normalX, normalY } = point;
+      const halfWidth = point.width * widthScale * 0.5;
+      const leftOffset = Math.max(0.25, halfWidth + point.leftNoise * roughnessScale);
+      const rightOffset = Math.max(0.25, halfWidth + point.rightNoise * roughnessScale);
 
       left.push({
         x: point.x + xOffset + (normalX * leftOffset),
@@ -475,15 +509,7 @@ export class BiteRenderer {
       y: claw.endY + yOffset + (endTangent.y * tipExtension),
     };
 
-    const points = [...left, tip, ...right];
-    gfx.fillStyle(color, alpha);
-    gfx.beginPath();
-    gfx.moveTo(points[0].x, points[0].y);
-    for (let index = 1; index < points.length; index++) {
-      gfx.lineTo(points[index].x, points[index].y);
-    }
-    gfx.closePath();
-    gfx.fillPath();
+    return [...left, tip, ...right];
   }
 
   private getClawWidthAt(claw: ClawPath, t: number): number {

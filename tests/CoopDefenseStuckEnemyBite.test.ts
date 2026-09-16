@@ -157,7 +157,7 @@ describe('Enemy stuck in a rock', () => {
     expect(firedWeaponIds).toEqual([]);
   });
 
-  it('bites the rock once it has been unable to move for the obstacle delay', () => {
+  it('does not authorize obstacle damage from a stationary timer', () => {
     // Genau die Klemme aus dem Bug: die Wegfindung findet keine Route (Mittelpunkt in einer
     // Felszelle), deshalb wird die Wunschgeschwindigkeit auf 0 gesetzt – der Gegner steht still.
     const enemy = createStuckEnemy({ wantsToMove: false, pathBlocked: true });
@@ -171,7 +171,7 @@ describe('Enemy stuck in a rock', () => {
     }
 
     expect(firedWeaponIds).toContain('PYRO_BADGER_GLOCK');
-    expect(firedWeaponIds).toContain('PYRO_BADGER_BITE');
+    expect(firedWeaponIds).not.toContain('PYRO_BADGER_BITE');
   });
 
   it('leaves rocks alone while the enemy is still making progress', () => {

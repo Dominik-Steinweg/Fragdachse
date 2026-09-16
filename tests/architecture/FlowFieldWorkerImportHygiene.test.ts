@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -16,6 +16,8 @@ const WORKER_GRAPH_FILES = [
   'src/systems/flowfield/FlowFieldProtocol.ts',
   'src/systems/flowfield/FlowFieldEngine.ts',
   'src/systems/flowfield/FlowFieldWorker.ts',
+  'src/systems/navigation/NavigationGeometry.ts',
+  'src/systems/navigation/NavigationGraph.ts',
 ];
 
 const FORBIDDEN_IMPORT_PATTERNS: ReadonlyArray<{ readonly label: string; readonly test: RegExp }> = [
@@ -52,10 +54,10 @@ describe('Flow field worker import hygiene', () => {
             `${file} must not import ${forbidden.label} (found "${specifier}")`,
           ).toBe(false);
         }
-        // Positiv formuliert: nur relative Geschwister im selben Verzeichnis.
+        // Every dependency must stay inside the explicitly verified pure worker graph.
         expect(
-          specifier.startsWith('./'),
-          `${file} may only import relative siblings (found "${specifier}")`,
+          WORKER_GRAPH_FILES.some(candidate => resolve(candidate) === resolve(dirname(file), `${specifier}.ts`)),
+          `${file} may only import verified worker-safe modules (found "${specifier}")`,
         ).toBe(true);
       }
     });

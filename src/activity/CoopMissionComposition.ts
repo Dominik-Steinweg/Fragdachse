@@ -49,6 +49,8 @@ import type { TranslocatorProjectilePort } from '../projectile/ProjectileExterna
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 
 export interface CoopMissionCompositionOptions {
+  readonly getNavigationGeometry?: () => import('../systems/navigation/NavigationGeometry').NavigationGeometrySnapshot;
+  readonly getNavigationObstacleIntegrity?: (enemy: import('../entities/EnemyEntity').EnemyEntity, id: string) => number | null;
   readonly scene: Phaser.Scene;
   readonly getWorld: () => WorldRuntimeContext | null;
   readonly getLayout: () => ArenaLayout | null;
@@ -171,6 +173,7 @@ export class CoopMissionComposition {
         ?? new Set(world.bases.map((spec) => spec.id)),
       getBase: (baseId) => baseManager?.getBase(baseId) ?? null,
       obstacleCellProvider,
+      geometryProvider: this.options.getNavigationGeometry,
       barrierCells: missionProgressConfig?.barriers.flatMap((barrier) => barrier.cells) ?? [],
       nextGenerationId: this.options.nextGenerationId,
       visualSink: this.options.visualSink,
@@ -181,6 +184,7 @@ export class CoopMissionComposition {
       onWaveStarted: this.options.onWaveStarted,
       onDiagnosticEvent: this.options.onDiagnosticEvent,
     }).materialize(runtime);
+    if (this.options.getNavigationObstacleIntegrity) runtime.enemyIntents?.setObstacleIntegrityResolver(this.options.getNavigationObstacleIntegrity);
   }
 
   /** Materializes dependent Activity children after the core combat owner exists. */

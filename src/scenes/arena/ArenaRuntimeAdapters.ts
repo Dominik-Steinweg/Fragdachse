@@ -1,4 +1,7 @@
 import type { PlayerManager } from '../../entities/PlayerManager';
+import { getCoopDefenseMapConfig, resolveCoopDefenseMapEncounterConfigs } from '../../config/coopDefenseMaps';
+import type { NavigationLabWorldPort } from '../../debug/navigationLab/NavigationLabPort';
+import type { EnemyIntent, MovementFeedback } from '../../systems/navigation/NavigationContracts';
 import { bridge } from '../../network/bridge';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
@@ -26,6 +29,131 @@ export function createArenaFlowFieldDebugPort(service: EnemyFlowFieldService): E
     setRefreshListener: (listener) => service.registerDebugOverlayCallback(
       listener ? () => listener() : null,
     ),
+  };
+}
+
+/** Scenario commands use the current lifecycle owner, never retained managers from an old round. */
+export function createNavigationLabWorldPort(
+  flow: ArenaLifecycleCoordinator, players: PlayerManager,
+): NavigationLabWorldPort {
+  const geometry = () => flow.getWorldGeometryBinding()?.getQueries();
+  const spawnCases = () => resolveCoopDefenseMapEncounterConfigs(getCoopDefenseMapConfig(bridge.getCoopDefenseMapId()), 1)
+    .flatMap(encounter => encounter.groups.map((group, i) => ({ id: `${encounter.id}/${i}`, group })));
+  const freePositions = (radius: number): { x: number; y: number }[] => {
+    const queries = geometry();
+    if (!queries) return [];
+    const metrics = queries.metrics;
+    const result: { x: number; y: number }[] = [];
+    for (let row = 1; row < metrics.gridRows - 1; row++) {
+      for (let col = 1; col < metrics.gridCols - 1; col++) {
+        const x = metrics.offsetX + col * 32 + 16, y = metrics.offsetY + row * 32 + 16;
+        if (!queries.isCircleBlocked(x, y, radius)) result.push({ x, y });
+      }
+    }
+    return result;
+  };
+  return {
+    getAuthoredSpawnCases: () => {
+      const metrics = flow.getWorldRuntime()?.context.metrics;
+      if (!metrics) return [];
+      return spawnCases().map(({ id, group }) => ({ id, kind: group.enemyKind,
+        target: { x: metrics.offsetX + (group.spawnArea ? group.spawnArea.gridX + group.spawnArea.widthCells / 2 : 2) * 32,
+          y: metrics.offsetY + (group.spawnArea ? group.spawnArea.gridY + group.spawnArea.heightCells / 2 : metrics.gridRows / 2) * 32 } }));
+    },
+    spawnAuthoredCase: id => {
+      const runtime = flow.getCoopMissionRuntime();
+      if (!runtime?.analysisScenarioActive || !bridge.isHost()) return [];
+      const entry = spawnCases().find(entry => entry.id === id);
+      return entry ? runtime.coopDefenseSpawnExecutor?.hostSpawnEncounterGroup(entry.group.enemyKind, 1,
+        'navigation-spawn-audit', entry.group.front, entry.group.spawnArea) ?? [] : [];
+    },
+    setNextRoundSeed: seed => flow.setNextScenarioSeed(seed),
+    isReady: () => flow.getCoopMissionRuntime()?.enemyManager != null
+      && bridge.getGamePhase() === 'ARENA' && !bridge.isArenaCountdownActive()
+      && bridge.getArenaStartTime() > 0,
+    setScenarioActive: active => {
+      const runtime = flow.getCoopMissionRuntime();
+      if (runtime) {
+        if (active && !runtime.analysisScenarioActive) {
+          // A fixed, damageable reference target survives simultaneous volleys. This is a lab fixture.
+          flow.getWorldCombatCore()?.setPlayerMaxHpResolver(() => 1_000_000);
+          flow.getWorldCombatCore()?.heal(bridge.getLocalPlayerId(), 1_000_000);
+        }
+        runtime.analysisScenarioActive = active;
+      }
+    },
+    getMetrics: () => flow.getWorldRuntime()?.context.metrics ?? null,
+    getFreePositions: freePositions,
+    getGeometry: () => flow.getWorldGeometryBinding()?.snapshotMovementGeometry() ?? null,
+    getGeometryFingerprint: () => {
+      let hash = 2166136261;
+      const serialized = JSON.stringify(flow.getWorldGeometryBinding()?.snapshotMovementGeometry() ?? null);
+      for (let i = 0; i < serialized.length; i++) hash = Math.imul(hash ^ serialized.charCodeAt(i), 16777619);
+      return (hash >>> 0).toString(16);
+    },
+    getNavigationMetrics: (): Record<string, number> => {
+      const d = flow.getCoopMissionRuntime()?.flowFieldCoordinator?.getDiagnostics();
+      if (!d) return {};
+      const manager = flow.getCoopMissionRuntime()?.enemyManager as unknown as { getNavigationWorkCounters?: () => Record<string, number> } | undefined;
+      return { ...manager?.getNavigationWorkCounters?.(), ...flow.getWorldGeometryBinding()?.getObstacleWorkCounters(), fields: Object.keys(d.fields).length, dispatchedJobs: d.dispatchedJobs, completedJobs: d.completedJobs,
+        droppedStale: d.droppedStale, workerComputeTotalMs: d.workerComputeTotalMs, workerComputeMaxMs: d.workerComputeMaxMs,
+        roundTripMaxMs: d.roundTripMaxMs, backlogTicks: d.backlogTicks,
+        maxPendingAgeMs: Math.max(0, ...Object.values(d.fields).map(f => f.recomputePendingAgeMs ?? 0)) };
+    },
+    observeCombatantDamage: observer => flow.getWorldCombatCore()?.addDamageDealtObserver(observer) ?? (() => {}),
+    setDensityEnabled: enabled => {
+      const runtime = flow.getCoopMissionRuntime() as unknown as { enemyIntents?: { setDensityEnabled(value: boolean): void } } | null;
+      runtime?.enemyIntents?.setDensityEnabled(enabled);
+    },
+    destroyScenarioRock: id => {
+      if (!flow.getCoopMissionRuntime()?.analysisScenarioActive || !bridge.isHost()) return false;
+      const outcome = flow.getWorldObjectMutationRuntime()?.applyResolvedDamage(
+        'rock', id, 1_000_000, bridge.getLocalPlayerId(), 'navigation-lab.geometry-change');
+      return outcome?.kind === 'damage-applied';
+    },
+    spawnEnemy: (x, y, kind, allied) => {
+      const manager = flow.getCoopMissionRuntime()?.enemyManager;
+      if (!manager) return null;
+      const enemy = allied
+        ? manager.hostSpawnAllyAtWorld(x, y, kind, bridge.getLocalPlayerId(), 0x79cb72, 1)
+        : manager.hostSpawnAtWorld(x, y, kind, { originId: 'navigation-lab' });
+      return enemy.id;
+    },
+    removeEnemies: () => {
+      const manager = flow.getCoopMissionRuntime()?.enemyManager;
+      for (const enemy of manager?.getAllEnemies() ?? []) manager?.hostRemoveEnemy(enemy.id);
+    },
+    readEnemies: () => {
+      const runtime = flow.getCoopMissionRuntime(), now = bridge.getSynchronizedNow();
+      // Optional observation keeps exactly the same lab adapter usable in the frozen baseline.
+      const navigation = runtime?.enemyManager as unknown as {
+        getNavigationIntent?: (id: string) => EnemyIntent | null;
+        getMovementFeedback?: (id: string) => MovementFeedback | null;
+      } | undefined;
+      return (runtime?.enemyManager?.getAllEnemies() ?? []).map(enemy => {
+        const velocity = enemy.getDesiredVelocity();
+        const target = runtime?.coopDefenseEnemyAttackSystem?.getCurrentTarget(enemy.id, now);
+        return { id: enemy.id, kind: enemy.kind, faction: enemy.faction,
+          x: enemy.sprite.x, y: enemy.sprite.y, radius: enemy.getCollisionRadius(),
+          vx: velocity.vx, vy: velocity.vy, moving: enemy.wantsToMove(),
+          blocked: enemy.isPathBlocked(), attacking: enemy.isAttackMovementPaused(now),
+          hp: enemy.getHp(), target: target ? `${target.kind}:${target.id}` : null,
+          bodyFree: !geometry()?.isCircleBlocked(enemy.sprite.x, enemy.sprite.y, enemy.getCollisionRadius()),
+          special: enemy.isBurrowed() || enemy.getDashPhase() > 0,
+          intent: navigation?.getNavigationIntent?.(enemy.id), movement: navigation?.getMovementFeedback?.(enemy.id) };
+      });
+    },
+    getPlayerPosition: () => {
+      const player = players.getPlayer(bridge.getLocalPlayerId());
+      return player ? { x: player.x, y: player.y,
+        alive: flow.getWorldCombatCore()?.isAlive(player.id) ?? false } : null;
+    },
+    placePlayer: (x, y) => {
+      const id = bridge.getLocalPlayerId();
+      players.getPlayer(id)?.setPosition(x, y);
+      const combat = flow.getWorldCombatCore();
+      combat?.heal(id, combat.getMaxHp(id));
+    },
   };
 }
 

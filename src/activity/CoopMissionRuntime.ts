@@ -43,6 +43,7 @@ import {
 } from './CoopMissionHostUpdate';
 
 export interface CoopMissionNavigationRuntime {
+  readonly intents?: import('../systems/navigation/EnemyIntentSystem').EnemyIntentSystem | null;
   readonly coordinator: FlowFieldCoordinator;
   readonly enemy: EnemyFlowFieldService;
   readonly player: EnemyFlowFieldService;
@@ -172,6 +173,8 @@ export interface CoopMissionScopedBinding {
  * bleiben ausserhalb dieses Teardowns.
  */
 export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityStep {
+  /** Explicit lab-owned population; gameplay still uses the ordinary host simulation. */
+  analysisScenarioActive = false;
   private baseVoidFireOwner: import('../systems/BaseVoidFireSystem').BaseVoidFireSystem | null = null;
 
   setBaseVoidFire(system: import('../systems/BaseVoidFireSystem').BaseVoidFireSystem): void {
@@ -212,6 +215,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   get coopDefenseDecoyTargetSystem(): CoopDefenseDecoyTargetSystem | null { return this.enemyBehaviourOwner?.decoyTargets ?? null; }
   get enemyManager(): EnemyManager | null { return this.enemyOwner; }
   get flowFieldCoordinator(): FlowFieldCoordinator | null { return this.navigationOwner?.coordinator ?? null; }
+  get enemyIntents() { return this.navigationOwner?.intents ?? null; }
   get enemyFlowFieldService(): EnemyFlowFieldService | null { return this.navigationOwner?.enemy ?? null; }
   get enemyPlayerFlowFieldService(): EnemyFlowFieldService | null { return this.navigationOwner?.player ?? null; }
   get enemyStrategicFlowFieldService(): EnemyFlowFieldService | null { return this.navigationOwner?.strategic ?? null; }
@@ -302,6 +306,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   setNavigation(runtime: CoopMissionNavigationRuntime): void {
     this.claimEmptySlot('navigation runtime', this.navigationOwner);
     this.navigationOwner = runtime;
+    this.enemyOwner?.setNavigationIntents(runtime.intents ?? null);
     this.publishBindings();
   }
 
@@ -428,7 +433,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
    * Uebergaenge.
    */
   hostResolveCompletion(): CoopMissionOutcome | null {
-    if (this.destroyed) return null;
+    if (this.destroyed || this.analysisScenarioActive) return null;
     return this.objectiveOwner?.roundState?.update() ?? null;
   }
 
@@ -512,6 +517,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.enemyOwner?.setVisualSink(null);
 
     this.navigationOwner?.strategicTarget.clear();
+    this.navigationOwner?.intents?.clear();
     this.navigationOwner?.targetCatalog.clear();
     this.navigationOwner?.enemy.destroy();
     this.navigationOwner?.player.destroy();

@@ -12,6 +12,7 @@ import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { COLORS, PLAYER_SIZE } from '../config';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
+import type { EnemyIntentSystem } from './navigation/EnemyIntentSystem';
 
 type EnemyAttackTargetKind = 'base' | 'player' | 'decoy' | 'ally' | 'train' | 'obstacle';
 
@@ -49,24 +50,6 @@ interface MeleeWindupState {
   readonly executeAt: number;
 }
 
-interface EnemyMovementProgressState {
-  anchorX: number;
-  anchorY: number;
-  /**
-   * Aufsummierte Zeit ohne Ortsveränderung, in der der Gegner laufen wollte oder von der
-   * Wegfindung keine Route bekam. Freiwilliges Stehenbleiben – Angriffspause, Gefechtsabstand –
-   * zählt bewusst nicht mit, setzt den Zähler aber auch nicht zurück: Ein dauerfeuernder
-   * Fernkämpfer würde sonst nie bemerken, dass er in einem Felsen klemmt.
-   */
-  blockedMs: number;
-  clearingObstacle: RockPhysicsProxy | null;
-}
-
-interface EnemyObstacleContactState {
-  readonly obstacle: RockPhysicsProxy;
-  readonly lastContactAt: number;
-}
-
 /** Laufende Salve eines Gegners; pro Gegner kann nur eine Waffe gleichzeitig salvieren. */
 interface EnemySalvoState {
   readonly weaponId: string;
@@ -78,10 +61,10 @@ interface EnemySalvoState {
 }
 
 export class CoopDefenseEnemyAttackSystem {
+  private intents: EnemyIntentSystem | null = null;
+  setIntents(intents: EnemyIntentSystem | null): void { this.intents = intents; }
   private decoyTargets: DecoyTargetPort | null = null;
   setDecoyTargets(port: DecoyTargetPort | null): void { this.decoyTargets = port; }
-  private static readonly MOVEMENT_PROGRESS_DISTANCE_PX = 4;
-  private static readonly OBSTACLE_CONTACT_FRESHNESS_MS = 150;
   /**
    * Hysterese der Mindest-Zieldistanz: eine bereits laufende Salve darf bis zu dieser Strecke
    * unterhalb ihrer Untergrenze weiterfeuern. Ohne den Puffer bricht ein Gegner seine Salve ab,
@@ -102,8 +85,6 @@ export class CoopDefenseEnemyAttackSystem {
   private readonly salvoStates = new Map<string, EnemySalvoState>();
   private readonly playerTargetLocks = new Map<string, PlayerTargetLockState>();
   private readonly meleeWindups = new Map<string, MeleeWindupState>();
-  private readonly movementProgress = new Map<string, EnemyMovementProgressState>();
-  private readonly obstacleContacts = new Map<string, EnemyObstacleContactState>();
   private readonly lastAttackTargets = new Map<string, EnemyAttackCandidate>();
   private actionBlockedChecker: ((enemyId: string) => boolean) | null = null;
 
@@ -129,11 +110,6 @@ export class CoopDefenseEnemyAttackSystem {
 
   setActionBlockedChecker(checker: ((enemyId: string) => boolean) | null): void {
     this.actionBlockedChecker = checker;
-  }
-
-  recordObstacleContact(enemyId: string, obstacle: RockPhysicsProxy, now: number): void {
-    if (!obstacle.active || !this.enemyManager.hasEnemy(enemyId)) return;
-    this.obstacleContacts.set(enemyId, { obstacle, lastContactAt: now });
   }
 
   hostUpdate(delta: number, now: number): void {
@@ -175,12 +151,10 @@ export class CoopDefenseEnemyAttackSystem {
       }
 
       if (this.meleeWindups.has(enemy.id)) {
-        this.resetMovementProgress(enemy);
         this.updateMeleeWindup(enemy, now);
         continue;
       }
 
-      this.updateMovementProgress(enemy, delta, now);
 
       // Eine laufende Salve haelt ihren eigenen Takt. Ohne diesen Vorrang wuerde sie auf das
       // Zielscan-Raster des Gegners einrasten und langsamer feuern als konfiguriert.
@@ -198,7 +172,7 @@ export class CoopDefenseEnemyAttackSystem {
         continue;
       }
 
-      this.fireAttack(enemy, attack, now);
+      this.fireAttack(enemy, attack, now, undefined, sustained.active);
     }
 
     this.cleanupInactiveEnemies(activeEnemyIds);
@@ -215,8 +189,6 @@ export class CoopDefenseEnemyAttackSystem {
     this.playerTargetLocks.delete(enemy.id);
     this.lastAttackTargets.delete(enemy.id);
     this.meleeWindups.delete(enemy.id);
-    this.obstacleContacts.delete(enemy.id);
-    this.resetMovementProgress(enemy);
   }
 
   /** Beendet eine laufende Salve und sperrt ihre Waffe fuer die konfigurierte Pause. */
@@ -254,7 +226,7 @@ export class CoopDefenseEnemyAttackSystem {
       : this.resolveWeaponTarget(enemy, attackWeapon, now, state.shotsFired);
     if (!target) return false;
 
-    this.fireAttack(enemy, { attackWeapon, target }, now);
+    this.fireAttack(enemy, { attackWeapon, target }, now, undefined, obscured || !!committed);
     return true;
   }
 
@@ -291,7 +263,6 @@ export class CoopDefenseEnemyAttackSystem {
       executeAt: now + attack.attackWeapon.playerMeleeWindupMs,
     });
     if (targetRef) this.decoyTargets?.usedTarget(enemy.id, targetRef);
-    this.resetMovementProgress(enemy);
     enemy.stopMovement();
     enemy.faceAngle(aimAngle);
   }
@@ -337,6 +308,7 @@ export class CoopDefenseEnemyAttackSystem {
       },
       now,
       state.aimAngle,
+      true,
     );
   }
 
@@ -345,8 +317,18 @@ export class CoopDefenseEnemyAttackSystem {
     attack: SelectedEnemyAttack,
     now: number,
     forcedAngle?: number,
+    committed = false,
   ): void {
     const { attackWeapon, target } = attack;
+    const committedLivingAttack = committed && (target.targetRef?.kind === 'player' || target.targetRef?.kind === 'decoy' || target.kind === 'ally');
+    if (this.intents && target.kind !== 'train' && !committedLivingAttack) {
+      const id = target.kind === 'obstacle' ? String((this.getRockObjects() ?? []).indexOf(target.obstacle ?? null))
+        : target.targetRef?.id ?? target.targetId ?? '';
+      const kind = target.kind === 'base' || target.kind === 'obstacle' ? target.kind : target.targetRef?.kind ?? target.kind;
+      if (!this.intents.allowsAttack(enemy.id, kind, id, attackWeapon.targetMode)) {
+        this.abortCombat(enemy, now); return;
+      }
+    }
     const weapon = attackWeapon.weapon;
     const angle = forcedAngle ?? Phaser.Math.Angle.Between(
       enemy.sprite.x,
@@ -372,7 +354,6 @@ export class CoopDefenseEnemyAttackSystem {
     enemy.recordWeaponUse(weapon, now);
     this.lastAttackTargets.set(enemy.id, { ...attack.target });
     this.advanceSalvo(enemy, attackWeapon, now);
-    this.updateObstacleClearingState(enemy, target);
 
     const existingSustainedAttack = this.sustainedAttacks.get(enemy.id);
     if (existingSustainedAttack) {
@@ -414,18 +395,6 @@ export class CoopDefenseEnemyAttackSystem {
     if (shotsFired >= salvo.count) this.finishSalvo(enemy, now);
   }
 
-  /**
-   * Merkt sich den Felsen, an dem der Gegner gerade arbeitet. Bewusst ohne Reset des
-   * Blockier-Zählers: ein festhängender Fernkämpfer schießt weiter auf Spieler und würde sich
-   * sonst mit jedem Schuss selbst wieder als „nicht blockiert" einstufen.
-   */
-  private updateObstacleClearingState(enemy: EnemyEntity, target: EnemyAttackCandidate): void {
-    const progress = this.ensureMovementProgress(enemy);
-    progress.clearingObstacle = target.kind === 'obstacle' && target.obstacle?.active
-      ? target.obstacle
-      : null;
-  }
-
   /** Bestes Ziel einer einzelnen Waffe nach ihrem Zielmodus, inklusive Zug und Mindestdistanz. */
   private resolveWeaponTarget(
     enemy: EnemyEntity,
@@ -434,6 +403,31 @@ export class CoopDefenseEnemyAttackSystem {
     salvoShotIndex?: number,
   ): EnemyAttackCandidate | null {
     const weapon = attackWeapon.weapon;
+    if (this.intents) {
+      const intent = this.intents.get(enemy.id), ref = intent?.target;
+      let target: EnemyAttackCandidate | null = null;
+      const secondary = attackWeapon.targetMode === 'players' && intent?.reason === 'siege';
+      if (secondary) {
+        target = attackWeapon.salvo?.targetDistribution === 'round_robin'
+          ? this.findDistributedPlayerTarget(enemy, weapon.config.range, attackWeapon.minTargetDistancePx, salvoShotIndex ?? 0)
+          : this.findLivingTargetWithLock(enemy, weapon.config.range, now);
+      } else if (intent?.attackContext === 'breach' && attackWeapon.targetMode !== 'players') {
+        const blocker = this.intents.getBreach(enemy.id)?.nextBlocker;
+        target = blocker?.startsWith('base:') ? this.findNearestBaseTarget(enemy, weapon.config.range)
+          : this.findNearestObstacleTarget(enemy, weapon.config.range, now);
+      } else if (ref && intent?.attackContext === 'primary') {
+        if (ref.kind === 'base' && attackWeapon.targetMode !== 'players' && attackWeapon.targetMode !== 'rocks') {
+          target = this.findNearestBaseTarget(enemy, weapon.config.range);
+        } else if (ref.kind === 'armed-construct' && attackWeapon.targetMode !== 'players') {
+          target = this.findNearestArmedConstructTarget(enemy, weapon.config.range);
+        } else if (ref.kind !== 'base' && ref.kind !== 'ally' && attackWeapon.targetMode !== 'structures' && attackWeapon.targetMode !== 'rocks') {
+          target = this.buildPlayerLikeTargetCandidate(enemy, ref, weapon.config.range);
+        }
+      }
+      const train = (weapon.config.trainDamageMult ?? 1) > 0 ? this.findTrainTarget(enemy, weapon.config.range) : null;
+      if (this.isBetterCandidate(train, target)) target = train;
+      return target && this.isWithinWeaponMinDistance(enemy, attackWeapon, target) ? target : null;
+    }
     const decoy = this.decoyTargets?.getTarget(enemy.id);
     if (decoy) {
       const target = this.buildPlayerLikeTargetCandidate(enemy, decoy, weapon.config.range);
@@ -638,6 +632,7 @@ export class CoopDefenseEnemyAttackSystem {
 
     // Gegnerbasen sind fuer Zombies kein Ziel; sie gehoeren derselben Fraktion.
     for (const base of this.baseManager.getBasesByFaction('friendly')) {
+      if (this.intents && !this.intents.allowsAttack(enemy.id, 'base', base.id, 'all')) continue;
       if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
       if (
         strategicTarget === 'players-and-armed-constructs'
@@ -654,6 +649,7 @@ export class CoopDefenseEnemyAttackSystem {
 
       const candidate: EnemyAttackCandidate = {
         kind: 'base',
+        targetId: base.id,
         priority: strategicTarget === 'players-and-armed-constructs' ? 2 : 1,
         distance,
         targetX,
@@ -672,6 +668,7 @@ export class CoopDefenseEnemyAttackSystem {
     const rockObjects = this.getRockObjects() ?? [];
     let best: EnemyAttackCandidate | null = null;
     for (const construction of this.placementSystem?.getAllRuntimeRocks() ?? []) {
+      if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(construction.id), 'all')) continue;
       if (construction.hp <= 0 || construction.kind !== 'turret') continue;
       const obstacle = rockObjects[construction.id];
       if (!obstacle?.active) continue;
@@ -702,20 +699,6 @@ export class CoopDefenseEnemyAttackSystem {
     if (!this.isObstacleAttackUnlocked(enemy)) return null;
 
     const rockObjects = this.getRockObjects() ?? [];
-    const progress = this.movementProgress.get(enemy.id);
-    const clearingCandidate = progress?.clearingObstacle
-      ? this.buildObstacleCandidate(enemy, progress.clearingObstacle, rockObjects, range)
-      : null;
-    if (clearingCandidate) return clearingCandidate;
-
-    const contact = this.obstacleContacts.get(enemy.id);
-    if (contact && now - contact.lastContactAt <= CoopDefenseEnemyAttackSystem.OBSTACLE_CONTACT_FRESHNESS_MS) {
-      const contactCandidate = this.buildObstacleCandidate(enemy, contact.obstacle, rockObjects, range);
-      if (contactCandidate) return contactCandidate;
-    } else if (contact) {
-      this.obstacleContacts.delete(enemy.id);
-    }
-
     let best: EnemyAttackCandidate | null = null;
     for (let index = 0; index < rockObjects.length; index += 1) {
       const rock = rockObjects[index];
@@ -740,6 +723,7 @@ export class CoopDefenseEnemyAttackSystem {
     if (!obstacle.active) return null;
     const index = knownIndex ?? rockObjects.indexOf(obstacle);
     if (index < 0) return null;
+    if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(index), 'all')) return null;
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
     if (distance > range) return null;
@@ -929,60 +913,8 @@ export class CoopDefenseEnemyAttackSystem {
     };
   }
 
-  private updateMovementProgress(enemy: EnemyEntity, delta: number, now: number): void {
-    const progress = this.ensureMovementProgress(enemy);
-    if (progress.clearingObstacle && !progress.clearingObstacle.active) {
-      this.resetMovementProgress(enemy);
-      return;
-    }
-
-    const movedDistance = Phaser.Math.Distance.Between(
-      progress.anchorX,
-      progress.anchorY,
-      enemy.sprite.x,
-      enemy.sprite.y,
-    );
-    if (movedDistance >= CoopDefenseEnemyAttackSystem.MOVEMENT_PROGRESS_DISTANCE_PX) {
-      this.resetMovementProgress(enemy);
-      return;
-    }
-
-    // Ein Gegner ohne Route steht auch dann fest, wenn seine Wunschgeschwindigkeit auf 0
-    // gesetzt wurde – genau das ist der Fall, wenn ihn die Kollisionsauflösung mit dem
-    // Mittelpunkt in eine Felszelle geschoben hat.
-    if (enemy.wantsToMove() || enemy.isPathBlocked()) {
-      progress.blockedMs += Math.max(0, delta);
-    }
-  }
-
   private isObstacleAttackUnlocked(enemy: EnemyEntity): boolean {
-    const progress = this.movementProgress.get(enemy.id);
-    if (!progress) return false;
-    if (progress.clearingObstacle?.active) return true;
-    return progress.blockedMs >= enemy.getObstacleAttackDelayMs();
-  }
-
-  private ensureMovementProgress(enemy: EnemyEntity): EnemyMovementProgressState {
-    let progress = this.movementProgress.get(enemy.id);
-    if (!progress) {
-      progress = {
-        anchorX: enemy.sprite.x,
-        anchorY: enemy.sprite.y,
-        blockedMs: 0,
-        clearingObstacle: null,
-      };
-      this.movementProgress.set(enemy.id, progress);
-    }
-    return progress;
-  }
-
-  private resetMovementProgress(enemy: EnemyEntity): void {
-    this.movementProgress.set(enemy.id, {
-      anchorX: enemy.sprite.x,
-      anchorY: enemy.sprite.y,
-      blockedMs: 0,
-      clearingObstacle: null,
-    });
+    return this.intents?.getBreach(enemy.id)?.status === 'ready';
   }
 
   private cleanupInactiveEnemies(activeEnemyIds: ReadonlySet<string>): void {
@@ -991,8 +923,6 @@ export class CoopDefenseEnemyAttackSystem {
     this.deleteInactiveEntries(this.salvoStates, activeEnemyIds);
     this.deleteInactiveEntries(this.playerTargetLocks, activeEnemyIds);
     this.deleteInactiveEntries(this.meleeWindups, activeEnemyIds);
-    this.deleteInactiveEntries(this.movementProgress, activeEnemyIds);
-    this.deleteInactiveEntries(this.obstacleContacts, activeEnemyIds);
   }
 
   private deleteInactiveEntries<T>(entries: Map<string, T>, activeEnemyIds: ReadonlySet<string>): void {

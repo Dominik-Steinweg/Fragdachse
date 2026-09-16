@@ -11,6 +11,9 @@ import {
 } from '../config';
 import type { DecoyTargetPort } from '../systems/CoopDefenseDecoyTargetSystem';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
+import { EnemyLocomotion } from '../systems/navigation/EnemyLocomotion';
+import type { EnemyIntentSystem } from '../systems/navigation/EnemyIntentSystem';
+import type { MovementFeedback } from '../systems/navigation/NavigationContracts';
 import { resolveEnemySmokeConfusion, type EnemySmokeConfusionState } from '../systems/EnemySmokeConfusion';
 import { GROUND_FIRE_CELL_SIZE, type FireSystem, type WildfireSourceInfo } from '../effects/FireSystem';
 import type { SmokePerceptionPort } from '../systems/SmokeRules';
@@ -46,10 +49,6 @@ let nextEnemyCombatOwnerGeneration = 1;
 
 const STEER_RESPONSIVENESS = 8;
 const SPAWN_LANE_JITTER_PX = CELL_SIZE * 0.3;
-const SEPARATION_RADIUS_PX = CELL_SIZE * 2;
-const SEPARATION_RADIUS_SQ = SEPARATION_RADIUS_PX * SEPARATION_RADIUS_PX;
-const SEPARATION_STRENGTH = 0.6;
-const WALL_ADJACENT_SEPARATION_MULTIPLIER = 0.1;
 const NO_SEPARATION = { x: 0, y: 0 } as const;
 
 function captureEnemyDeathVisual(enemy: EnemyEntity): Pick<
@@ -164,6 +163,35 @@ export interface EnemySpawnOptions {
 }
 
 export class EnemyManager {
+  private intents: EnemyIntentSystem | null = null;
+  private readonly locomotion = new EnemyLocomotion();
+  private readonly movementFeedback = new Map<string, MovementFeedback>();
+  setNavigationIntents(intents: EnemyIntentSystem | null): void { this.intents = intents; }
+  getNavigationIntent(enemyId: string) { return this.intents?.get(enemyId) ?? null; }
+  hasNavigationIntents(): boolean { return this.intents !== null; }
+  isIntentTarget(enemyId: string, kind: string, id: string, explicitPlayerSideAction = false): boolean {
+    if (!this.intents) return true;
+    const intent = this.intents.get(enemyId);
+    return (explicitPlayerSideAction && intent?.reason === 'siege')
+      || (intent?.target?.kind === kind && intent.target.id === id);
+  }
+  getMovementFeedback(enemyId: string) { return this.movementFeedback.get(enemyId) ?? null; }
+  getNavigationWorkCounters() { return { ...this.locomotion.getWorkCounters(), ...this.intents?.getWorkCounters() }; }
+  getBreachAttackPoint(enemyId: string) { return this.intents?.getBreachAttackPoint(enemyId) ?? null; }
+  routeAlly(enemy: EnemyEntity, key: string, destination: { x: number; y: number }, range: number) {
+    return (enemy.faction === 'allied' ? this.intents?.routeAlly(enemy, key, destination, range)
+      : this.intents?.routeTo(key, enemy.sprite.x, enemy.sprite.y, enemy.getSize() / 2, destination, range)) ?? null;
+  }
+  moveNormally(enemy: EnemyEntity, waypoint: { x: number; y: number } | null, speed: number): MovementFeedback {
+    const previous = enemy.getDesiredVelocity();
+    const navigation = this.intents?.get(enemy.id)?.navigation;
+    const result = this.locomotion.solve({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
+      radius: enemy.getSize() / 2, speed, waypoint, priority: 'ordinary', previousVx: previous.vx, previousVy: previous.vy,
+      routeCost: navigation?.status === 'ready' ? navigation.cost : undefined });
+    this.movementFeedback.set(enemy.id, result);
+    enemy.setDesiredVelocity(result.vx, result.vy);
+    return result;
+  }
   private readonly committedDeathWork = new WeakMap<CombatDamageMutationOutcome, (isCurrent: () => boolean) => void>();
   private combatActive = true;
   /** Distinguishes rebuilt Activity owners until P4 supplies the full World/Activity target binding. */
@@ -206,12 +234,6 @@ export class EnemyManager {
     return this.smokePerception.canSee(enemyId, enemy.sprite.x, enemy.sprite.y, x, y, range, this.smokeNow);
   }
   private readonly smokeConfusionStates = new Map<string, EnemySmokeConfusionState>();
-  private readonly separationVector = { x: 0, y: 0 };
-  // --- Persistent separation grid (recycled across frames to avoid per-frame Map/Array allocations) ---
-  private readonly separationGrid = new Map<number, EnemyEntity[]>();
-  private readonly separationBucketPool: EnemyEntity[][] = [];
-  /** Counts frames since last pool-cleanup to avoid running it every frame. */
-  private separationGridCleanupCounter = 0;
   private onEnemySpawned: ((enemy: EnemyEntity, options?: EnemySpawnOptions) => void) | null = null;
   private lethalDamageGuard: EnemyLethalDamageGuard | null = null;
   private visualSink: EnemyVisualSink | null = null;
@@ -393,7 +415,14 @@ export class EnemyManager {
   ): void {
     this.plaguePursuers.clear();
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
-    const separationGrid = this.buildSeparationGrid();
+    this.movementFeedback.clear();
+    const geometry = baseFlowFieldService?.getNavigationGeometry();
+    if (geometry) this.locomotion.begin([...this.enemies.values()].map(enemy => ({
+      id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y, radius: enemy.getSize() / 2,
+      vx: enemy.getDesiredVelocity().vx, vy: enemy.getDesiredVelocity().vy,
+      routeCost: this.intents?.get(enemy.id)?.navigation.status === 'ready'
+        ? (this.intents.get(enemy.id)!.navigation as Extract<import('../systems/navigation/NavigationContracts').NavigationResult, { status: 'ready' }>).cost : undefined,
+    })), geometry, deltaMs);
     // Basislose Vorstoss-Karten haben kein gueltiges Basisziel. Basisorientierte Gegner folgen
     // dann dem vorhandenen Spieler-Flowfield; eine zweite Navigation entsteht dabei nicht.
     const baseTargetFlowFieldService = baseFlowFieldService?.hasGoalCells() === false
@@ -402,9 +431,7 @@ export class EnemyManager {
 
     for (const enemy of this.enemies.values()) {
       if (enemy.faction === 'allied') continue;
-      // Standardfall: der Gegner hat eine Route. Nur die Zweige, die ihn wirklich ohne Weg
-      // stehen lassen, setzen die Markierung – daran erkennt das Angriffssystem, dass ein
-      // reglos stehender Gegner festhängt und einen Felsen wegbeißen darf.
+      // Observational only. Obstacle damage requires a separate, current breach authorization.
       enemy.setPathBlocked(false);
       const config = this.resolvedConfigs[enemy.kind];
       const isBurrowed = burrowSystem?.isBurrowed(enemy.id) ?? false;
@@ -487,8 +514,8 @@ export class EnemyManager {
       const infectionTarget = !config.isBoss && !decoyTarget && !smokeSystem?.getConfusion(enemy.id, now)
         ? this.plagueMovement?.getTarget(enemy.id, now) : null;
       if (infectionTarget) {
-        if (this.steerEnemyTowards(enemy, infectionTarget.x, infectionTarget.y, lerpT, now, activeTrainAwareness,
-          attackMovementFactor * (1 + infectionTarget.speedBonus))) this.plaguePursuers.add(enemy.id);
+        const move = this.moveNormally(enemy, infectionTarget, enemy.getMoveSpeed() * attackMovementFactor * (1 + infectionTarget.speedBonus));
+        if (move.vx || move.vy) this.plaguePursuers.add(enemy.id);
         continue;
       }
 
@@ -504,141 +531,33 @@ export class EnemyManager {
           now,
         );
         if (!decision?.override && decoyTarget) decoyTargets?.usedTarget(enemy.id);
-        enemy.setDesiredVelocity(
-          decision?.override ? decision.vx : positioningOverride.vx * attackMovementFactor,
-          decision?.override ? decision.vy : positioningOverride.vy * attackMovementFactor,
-        );
+        if (decision?.override) enemy.setDesiredVelocity(decision.vx, decision.vy);
+        else this.moveNormally(enemy, { x: enemy.sprite.x + positioningOverride.vx * 0.25,
+          y: enemy.sprite.y + positioningOverride.vy * 0.25 },
+          Math.hypot(positioningOverride.vx, positioningOverride.vy) * attackMovementFactor);
         continue;
       }
 
-      const gridCell = primaryFlowFieldService.worldToGrid(enemy.sprite.x, enemy.sprite.y);
-      if (!gridCell) {
-        enemy.setPathBlocked(true);
-        enemy.stopMovement();
-        continue;
+      const flowFieldService = this.intents?.getField(enemy.id) ?? primaryFlowFieldService;
+      if (this.intents && !this.intents.get(enemy.id)) { enemy.stopMovement(); continue; }
+      const route = this.intents?.get(enemy.id)?.navigation ?? flowFieldService.queryNavigation(enemy.sprite.x, enemy.sprite.y);
+      enemy.setPathBlocked(route.status === 'unreachable' || route.status === 'invalid-start');
+      let waypoint = route.status === 'ready' ? route.waypoint : route.status === 'pending' ? route.continuation ?? null : null;
+      const gridCell = flowFieldService.worldToGrid(enemy.sprite.x, enemy.sprite.y);
+      if (waypoint && gridCell) {
+        const direction = this.normalizeDirection(waypoint.x - enemy.sprite.x, waypoint.y - enemy.sprite.y);
+        const confused = resolveEnemySmokeConfusion(this.smokeConfusionStates, enemy.id, enemy.sprite.x, enemy.sprite.y,
+          smokeSystem ?? null, flowFieldService, gridCell.gridX, gridCell.gridY, direction, now);
+        if (confused) waypoint = { x: enemy.sprite.x + confused.x * 48, y: enemy.sprite.y + confused.y * 48 };
       }
-
-      let flowFieldService = primaryFlowFieldService;
-      let integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
-      if (
-        config.isBoss
-        && !decoyTarget
-        && flowFieldService !== baseTargetFlowFieldService
-        && baseTargetFlowFieldService
-        && integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY
-      ) {
-        flowFieldService = baseTargetFlowFieldService;
-        integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
-      }
-
-      // Steht ein Gegner auf einer Zelle ohne Route – etwa weil ihn Kollisionsauflösung,
-      // Rückstoß oder ein Ausweichschritt mit dem Mittelpunkt in eine Felszelle geschoben hat –,
-      // steuert er zur nächsten erreichbaren Zelle zurück. Ohne diese Rückholung bliebe er dort
-      // für immer stehen: keine Bewegung heißt auch keine neue Zelle.
-      if (integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY) {
-        const recoveryTarget = flowFieldService.findNearestReachableWorldPosition(gridCell.gridX, gridCell.gridY);
-        if (!recoveryTarget) {
-          enemy.setPathBlocked(true);
-          enemy.stopMovement();
-          continue;
-        }
-
-        this.steerEnemyTowards(
-          enemy,
-          recoveryTarget.x,
-          recoveryTarget.y,
-          lerpT,
-          now,
-          activeTrainAwareness,
-          attackMovementFactor,
-        );
-        continue;
-      }
-
-      const confused = Boolean(smokeSystem?.getConfusion(enemy.id, now));
-      if (integrationValue <= 0 && !confused) {
-        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) {
-          if (decoyTarget) decoyTargets?.usedTarget(enemy.id);
-          enemy.stopMovement();
-        }
-        continue;
-      }
-
-      const vector = flowFieldService.getVectorAt(gridCell.gridX, gridCell.gridY);
-      if (vector.x === 0 && vector.y === 0 && !confused) {
-        enemy.setPathBlocked(true);
-        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) enemy.stopMovement();
-        continue;
-      }
-
-      const speed = enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor;
-      // Der grobe Zellvektor reicht auf freier Flaeche. Direkt an einer Basiswand nicht: Der Gegner
-      // steht durch Kollisionsaufloesung und Separation meist am Zellrand, und ein achsenparalleler
-      // Vektor druckt ihn von dort in die Wand statt an ihr vorbei. Zusaetzlich springt die
-      // Vektorrichtung beim Wechsel zwischen zwei Randzellen, was ihn an Ort und Stelle zappeln
-      // laesst. In Wandnaehe wird deshalb – wie beim Boss – der Mittelpunkt der naechsten Zelle
-      // angesteuert; der liegt garantiert eine halbe Zelle von jedem Hindernis entfernt.
-      const useWaypointSteering = config.isBoss
-        || flowFieldService.isWallAdjacentAt(gridCell.gridX, gridCell.gridY);
-      // Der einzelne Boss braucht keine Separation. Bei normalen Gegnern bleibt sie in
-      // Wandnaehe fast wirkungslos, damit der Wegpunkt nicht seitlich in die Wand gedrueckt wird.
-      const separation = config.isBoss ? NO_SEPARATION : this.computeSeparation(enemy, separationGrid);
-      const separationMultiplier = useWaypointSteering ? WALL_ADJACENT_SEPARATION_MULTIPLIER : 1;
-      const waypoint = useWaypointSteering
-        ? flowFieldService.getNextCellWorldPosition(gridCell.gridX, gridCell.gridY)
-        : null;
-      const steerDirection = waypoint
-        ? this.normalizeDirection(waypoint.x - enemy.sprite.x, waypoint.y - enemy.sprite.y)
-        : vector;
-      // Steht der Gegner exakt auf dem Wegpunkt, liefert die Normalisierung 0/0. Dann traegt der
-      // Zellvektor weiter, statt die Bewegung fuer einen Frame auf die Separation zu reduzieren.
-      const waypointDirection = steerDirection.x === 0 && steerDirection.y === 0 ? vector : steerDirection;
-      const navigationDirection = resolveEnemySmokeConfusion(
-        this.smokeConfusionStates,
-        enemy.id,
-        enemy.sprite.x,
-        enemy.sprite.y,
-        smokeSystem ?? null,
-        flowFieldService,
-        gridCell.gridX,
-        gridCell.gridY,
-        waypointDirection,
-        now,
-      ) ?? waypointDirection;
-      let targetVx = waypointDirection.x * speed
-        + separation.x * SEPARATION_STRENGTH * separationMultiplier * speed;
-      let targetVy = waypointDirection.y * speed
-        + separation.y * SEPARATION_STRENGTH * separationMultiplier * speed;
-
-      if (navigationDirection !== waypointDirection) {
-        targetVx = navigationDirection.x * speed
-          + separation.x * SEPARATION_STRENGTH * separationMultiplier * speed;
-        targetVy = navigationDirection.y * speed
-          + separation.y * SEPARATION_STRENGTH * separationMultiplier * speed;
-      }
-
-      const targetSpeed = Math.hypot(targetVx, targetVy);
-      if (targetSpeed > speed) {
-        const scale = speed / targetSpeed;
-        targetVx *= scale;
-        targetVy *= scale;
-      }
-
-      const current = enemy.getDesiredVelocity();
-      const decision = activeTrainAwareness?.resolveMovement(enemy, targetVx, targetVy, now);
-      if (decoyTarget && !decision?.override && navigationDirection === waypointDirection) decoyTargets?.usedTarget(enemy.id);
-      if (decision?.override) {
-        enemy.setDesiredVelocity(decision.vx, decision.vy);
-      } else {
-        enemy.setDesiredVelocity(
-          Phaser.Math.Linear(current.vx, targetVx, lerpT),
-          Phaser.Math.Linear(current.vy, targetVy, lerpT),
-        );
-      }
+      // Embedded starts use overlap-reducing local recovery, never an arbitrary reachable-cell jump.
+      if (route.status === 'invalid-start') waypoint = { x: enemy.sprite.x + 1, y: enemy.sprite.y };
+      const feedback = this.moveNormally(enemy, waypoint, enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor);
+      const train = activeTrainAwareness?.resolveMovement(enemy, feedback.vx, feedback.vy, now);
+      if (train?.override) enemy.setDesiredVelocity(train.vx, train.vy);
+      else if (decoyTarget && route.status === 'ready') decoyTargets?.usedTarget(enemy.id);
     }
   }
-
-
   private captureWildfireDeath(enemyId: string): import('../types').MolotovWildfireDeath | undefined {
     const state = this.wildfirePanicStates.get(enemyId);
     if (!state?.deathBurst) return undefined;
@@ -735,135 +654,10 @@ export class EnemyManager {
     return state;
   }
 
-  private steerEnemyTowards(
-    enemy: EnemyEntity,
-    targetX: number,
-    targetY: number,
-    lerpT: number,
-    now: number,
-    trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
-    speedFactor = 1,
-  ): boolean {
-    const direction = this.normalizeDirection(targetX - enemy.sprite.x, targetY - enemy.sprite.y);
-    const speed = enemy.getMoveSpeed() * speedFactor;
-    const targetVx = direction.x * speed;
-    const targetVy = direction.y * speed;
-    const decision = trainAwarenessSystem?.resolveMovement(enemy, targetVx, targetVy, now);
-    if (decision?.override) {
-      enemy.setDesiredVelocity(decision.vx, decision.vy);
-      return false;
-    }
-    const current = enemy.getDesiredVelocity();
-    enemy.setDesiredVelocity(
-      Phaser.Math.Linear(current.vx, targetVx, lerpT),
-      Phaser.Math.Linear(current.vy, targetVy, lerpT),
-    );
-    return targetVx !== 0 || targetVy !== 0;
-  }
-
-  private applyTrainAwarenessOverride(
-    enemy: EnemyEntity,
-    intendedVx: number,
-    intendedVy: number,
-    now: number,
-    trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
-  ): boolean {
-    const decision = trainAwarenessSystem?.resolveMovement(enemy, intendedVx, intendedVy, now);
-    if (!decision?.override) return false;
-    enemy.setDesiredVelocity(decision.vx, decision.vy);
-    return true;
-  }
-
   private normalizeDirection(x: number, y: number): { x: number; y: number } {
     const length = Math.hypot(x, y);
     if (length <= 0.001) return { x: 0, y: 0 };
     return { x: x / length, y: y / length };
-  }
-
-  /**
-   * Baut ein Spatial-Hash-Grid mit Zellengröße = Separations-Radius.
-   * Dadurch wird die Nachbarsuche in {@link computeSeparation} von O(N²) auf ~O(N) reduziert:
-   * Nur die 3×3 umliegenden Zellen können Gegner innerhalb des Radius enthalten.
-   *
-   * Die Map und die Bucket-Arrays werden über Frames hinweg wiederverwendet, um im Hotpath
-   * keine temporären Allokationen zu erzeugen.
-   */
-  private buildSeparationGrid(): Map<number, EnemyEntity[]> {
-    const grid = this.separationGrid;
-    const pool = this.separationBucketPool;
-
-    // Alle bestehenden Buckets leeren und in den Pool zurückgeben.
-    for (const bucket of grid.values()) {
-      bucket.length = 0;
-      pool.push(bucket);
-    }
-    grid.clear();
-
-    // Gegner in recycelte oder (nur initial) neue Buckets einsortieren.
-    for (const enemy of this.enemies.values()) {
-      const key = this.separationCellKey(enemy.sprite.x, enemy.sprite.y);
-      const bucket = grid.get(key);
-      if (bucket) {
-        bucket.push(enemy);
-      } else {
-        const newBucket = pool.length > 0 ? pool.pop()! : [];
-        newBucket.push(enemy);
-        grid.set(key, newBucket);
-      }
-    }
-
-    // Periodischer Cleanup: Wenn der Pool nach Gegnerschwund dauerhaft viele leere
-    // Buckets hält, wird er alle 300 Frames auf das Doppelte der aktuellen Grid-Größe gekürzt.
-    this.separationGridCleanupCounter += 1;
-    if (this.separationGridCleanupCounter >= 300) {
-      this.separationGridCleanupCounter = 0;
-      const maxPoolSize = grid.size * 2;
-      if (pool.length > maxPoolSize) {
-        pool.length = maxPoolSize;
-      }
-    }
-
-    return grid;
-  }
-
-  private separationCellKey(x: number, y: number): number {
-    const cellX = Math.floor(x / SEPARATION_RADIUS_PX);
-    const cellY = Math.floor(y / SEPARATION_RADIUS_PX);
-    // Cantor-artige Paarung in eine einzelne Number-Key (vermeidet String-Allokationen).
-    return (cellX + 0x8000) * 0x10000 + (cellY + 0x8000);
-  }
-
-  private computeSeparation(enemy: EnemyEntity, grid: Map<number, EnemyEntity[]>): { x: number; y: number } {
-    let pushX = 0;
-    let pushY = 0;
-
-    const cellX = Math.floor(enemy.sprite.x / SEPARATION_RADIUS_PX);
-    const cellY = Math.floor(enemy.sprite.y / SEPARATION_RADIUS_PX);
-
-    for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
-      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
-        const bucket = grid.get(((cellX + offsetX) + 0x8000) * 0x10000 + ((cellY + offsetY) + 0x8000));
-        if (!bucket) continue;
-
-        for (const other of bucket) {
-          if (other === enemy) continue;
-          const dx = enemy.sprite.x - other.sprite.x;
-          const dy = enemy.sprite.y - other.sprite.y;
-          const distanceSq = dx * dx + dy * dy;
-          if (distanceSq <= 0 || distanceSq >= SEPARATION_RADIUS_SQ) continue;
-
-          const distance = Math.sqrt(distanceSq);
-
-          const weight = (1 - distance / SEPARATION_RADIUS_PX) / distance;
-          pushX += dx * weight;
-          pushY += dy * weight;
-        }
-      }
-    }
-
-    this.separationVector.x = pushX;
-    this.separationVector.y = pushY;
-    return this.separationVector;
   }
 
   getNetSnapshot(): SyncedEnemySnapshot {
@@ -1388,6 +1182,7 @@ export class EnemyManager {
   }
 
   destroy(): void {
+    this.locomotion.clear(); this.movementFeedback.clear(); this.intents = null;
     this.waterGeometry = null;
     this.combatActive = false;
     this.plagueMovement = null;
@@ -1402,9 +1197,6 @@ export class EnemyManager {
     this.smokeConfusionStates.clear();
     this.netSnapshotCache.clear();
     this.pendingRemovals.clear();
-    this.separationGrid.clear();
-    this.separationBucketPool.length = 0;
-    this.separationGridCleanupCounter = 0;
     this.nextEnemyIdSeq = 1;
     this.remoteSnapshotSeen = false;
     this.ticksSinceActiveList = ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;

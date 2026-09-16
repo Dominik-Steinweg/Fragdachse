@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { decoyTargetHarness, resolvedDecoy } from './DecoyTestHelper';
 
 describe('shared Decoy targeting', () => {
+  it('captures the shared intent instead of inferring another target from a global field', () => {
+    const h = decoyTargetHarness(id => id === 'follower' ? { kind: 'player', id: 'owner' } : null);
+    h.enemy('follower'); h.enemy('unbound', { movementFieldId: 'player' });
+    h.targets.prepareOrdinaryGoals([{ kind: 'player', id: 'owner', x: 240, y: 176,
+      goalCells: [{ gridX: 7, gridY: 5 }] }]);
+    const decoy = h.spawn(); h.step();
+    expect(h.targets.getTarget('follower')?.id).toBe(String(decoy.id));
+    expect(h.targets.getTarget('unbound')).toBeNull(); h.close();
+  });
+
   it('captures owner attack and active-field movement targets before stealth invalidates them', () => {
     const h = decoyTargetHarness();
     let visible = true;

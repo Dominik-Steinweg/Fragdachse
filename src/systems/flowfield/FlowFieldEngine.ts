@@ -38,10 +38,15 @@ import {
   type FlowFieldResultField,
   type FlowFieldResultMessage,
 } from './FlowFieldProtocol';
+import { NavigationGeometry } from '../navigation/NavigationGeometry';
+import { buildNavigationGraph, navigationPoint, type NavigationGraph } from '../navigation/NavigationGraph';
+import { segmentObstacleDistanceSq } from '../navigation/NavigationGeometry';
 
 interface EngineProfile {
   readonly profileId: string;
   readonly clearanceCells: number;
+  readonly bodyRadius?: number;
+  graph?: NavigationGraph;
   readonly topology: FlowFieldTopology;
   counts: FlowFieldTopologyCounts;
   /** Sammelt Einzelzellen bis zum naechsten Job; nur fuer Profile ohne Clearance gueltig. */
@@ -61,9 +66,13 @@ export class FlowFieldEngine {
   private readonly fields = new Map<string, FlowFieldFieldDescriptor>();
   private readonly heap = new FlowFieldMinHeap();
   private generationId = -1;
+  private geometry: NavigationGeometry | null = null;
+  private density: Float32Array | undefined;
 
   init(message: FlowFieldInitMessage): void {
     this.metrics = message.metrics;
+    this.geometry = message.geometry ? new NavigationGeometry(message.geometry) : null;
+    this.density = undefined;
     this.tuning = message.tuning;
     this.costByCode = buildCostByCode(message.tuning);
     this.lookups = buildNeighborLookups(message.metrics);
@@ -85,6 +94,7 @@ export class FlowFieldEngine {
       this.profiles.set(descriptor.profileId, {
         profileId: descriptor.profileId,
         clearanceCells: descriptor.clearanceCells,
+        bodyRadius: descriptor.bodyRadius,
         topology: createTopology(totalCells),
         counts: { traversableCells: 0, blockedCells: totalCells, countsByKind: createEmptyCounts() },
         pendingCells: new Set<number>(),
@@ -148,6 +158,7 @@ export class FlowFieldEngine {
     const totalCells = totalCellsOf(metrics);
 
     const goalIndexes = this.resolveGoalIndexes(descriptor, profile, jobField.goals);
+    profile.topology.density = this.density;
     const target = {
       integrationField: viewFloat32(jobField.integrationBuffer, totalCells),
       vectorField: viewFloat32(jobField.vectorBuffer, totalCells * 2),
@@ -158,7 +169,7 @@ export class FlowFieldEngine {
     computeVectorField(target, profile.topology, lookups, metrics);
 
     let profileTraversable: Uint8Array | null = null;
-    if (profile.clearanceCells > 0) {
+    if (profile.clearanceCells > 0 || profile.graph) {
       // Der Main Thread spiegelt nur das Standardprofil selbst. Ein Clearance-Profil bekommt sein
       // erodiertes `traversable` deshalb gemeinsam mit dem Feld - beides aus derselben Topologie.
       profileTraversable = viewUint8(jobField.traversableBuffer, totalCells);
@@ -173,6 +184,8 @@ export class FlowFieldEngine {
       vectorField: target.vectorField,
       goalSourceField: target.goalSourceField,
       profileTraversable,
+      edges: profile.graph ? copyUint8(profile.graph.edges, jobField.edgeBuffer) : undefined,
+      regions: profile.graph ? copyInt32(profile.graph.regions, jobField.regionBuffer) : undefined,
     };
   }
 
@@ -183,9 +196,28 @@ export class FlowFieldEngine {
   ): number[] {
     const metrics = this.metrics!;
     if (descriptor.goalMode !== 'bases') {
-      const dynamicGoals = normalizeGoalIndexes(rawGoals, profile.topology, metrics);
+      const dynamicGoals = this.geometry ? [...new Set(rawGoals)].filter(index => index >= 0
+        && index < totalCellsOf(metrics) && profile.topology.traversable[index] === 1).sort((a, b) => a - b)
+        : normalizeGoalIndexes(rawGoals, profile.topology, metrics);
       if (descriptor.goalMode === 'dynamic') return dynamicGoals;
       if (dynamicGoals.length > 0) return dynamicGoals;
+    }
+    if (this.geometry && profile.graph) {
+      const goals = new Set<number>(), radius = profile.graph.radius;
+      const ids = new Set(this.bases.filter(base => base.isGoalSource && this.activeBaseIds.has(base.id)).map(base => `base:${base.id}`));
+      for (const obstacle of this.geometry.snapshot.obstacles) {
+        if (!ids.has(obstacle.id) || obstacle.shape !== 'rect') continue;
+        const distance = radius + metrics.cellSize;
+        const left = Math.max(0, Math.floor((obstacle.left - distance - metrics.arenaOffsetX) / metrics.cellSize));
+        const right = Math.min(metrics.cols - 1, Math.ceil((obstacle.right + distance - metrics.arenaOffsetX) / metrics.cellSize));
+        const top = Math.max(0, Math.floor((obstacle.top - distance - metrics.arenaOffsetY) / metrics.cellSize));
+        const bottom = Math.min(metrics.rows - 1, Math.ceil((obstacle.bottom + distance - metrics.arenaOffsetY) / metrics.cellSize));
+        for (let y = top; y <= bottom; y++) for (let x = left; x <= right; x++) {
+          const index = y * metrics.cols + x, p = navigationPoint(metrics, index);
+          if (profile.graph.traversable[index] && segmentObstacleDistanceSq(p.x, p.y, p.x, p.y, obstacle) <= distance ** 2) goals.add(index);
+        }
+      }
+      return [...goals].sort((a, b) => a - b);
     }
     return computeBaseGoalIndexes(
       this.bases,
@@ -200,6 +232,20 @@ export class FlowFieldEngine {
     const metrics = this.metrics!;
     const sources = this.sources!;
     switch (patch.t) {
+      case 'density': this.density = patch.costs; return;
+      case 'geometry': {
+        this.geometry = new NavigationGeometry(patch.geometry);
+        this.markAllProfilesForFullReclassify();
+        return;
+      }
+      case 'profile-add': {
+        const descriptor = patch.profile;
+        this.profiles.set(descriptor.profileId, { ...descriptor,
+          topology: createTopology(totalCellsOf(metrics)),
+          counts: { traversableCells: 0, blockedCells: totalCellsOf(metrics), countsByKind: createEmptyCounts() },
+          pendingCells: new Set(), needsFullReclassify: true });
+        return;
+      }
       case 'cell': {
         if (patch.index < 0 || patch.index >= totalCellsOf(metrics)) return;
         sources.rockOccupancy[patch.index] = patch.occupied;
@@ -273,8 +319,21 @@ export class FlowFieldEngine {
           metrics,
           this.costByCode,
           tuning,
-          profile.clearanceCells,
+          this.geometry ? 0 : profile.clearanceCells,
         );
+        if (this.geometry) {
+          profile.graph = buildNavigationGraph(metrics, this.geometry, profile.bodyRadius ?? 15,
+            lookups, profile.topology);
+          let traversableCells = 0;
+          for (const free of profile.graph.traversable) traversableCells += free;
+          profile.counts = { ...profile.counts, traversableCells, blockedCells: totalCellsOf(metrics) - traversableCells };
+          // Blocked sample locations may lie in terrain cells; exact geometry alone decides connectivity.
+          for (let i = 0; i < profile.topology.costs.length; i++) {
+            if (profile.graph.traversable[i] && profile.topology.costs[i] > tuning.trackCost + tuning.wallAdjacentCost) {
+              profile.topology.costs[i] = tuning.groundCost;
+            }
+          }
+        }
         profile.needsFullReclassify = false;
         profile.pendingCells.clear();
         continue;
@@ -310,6 +369,12 @@ function viewUint8(buffer: ArrayBuffer | undefined, length: number): Uint8Array 
   return new Uint8Array(length);
 }
 
+function copyUint8(source: Uint8Array, buffer?: ArrayBuffer): Uint8Array {
+  const result = viewUint8(buffer, source.length); result.set(source); return result;
+}
+function copyInt32(source: Int32Array, buffer?: ArrayBuffer): Int32Array {
+  const result = viewInt32(buffer, source.length); result.set(source); return result;
+}
 function now(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }

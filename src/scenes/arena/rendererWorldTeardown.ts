@@ -18,6 +18,7 @@ export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): 
   bundle.reinforcementMatrix.destroyAll();
   bundle.energyInjector.destroyAll();
   bundle.plasmaBurner.clear();
+  bundle.bite.clear();
   bundle.remoteControl.destroyAll();
   bundle.teslaDome.destroyAll();
   bundle.teslaNova.destroyAll();

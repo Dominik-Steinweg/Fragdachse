@@ -24,6 +24,37 @@ World-Zustand umfasst dauerhafte Geometrie, Basen, World-Sites, World-Identität
 
 World Loading ist an worldRevision gebunden. Round Loading wartet auf die World-Readiness und die für den Aktivitätsstart nötigen Teilnehmer, bleibt aber ein eigener Vertrag. Siehe [WorldLoadReady.ts](../../src/world/WorldLoadReady.ts) und [WorldRoundLoadingContracts.test.ts](../../tests/WorldRoundLoadingContracts.test.ts).
 
+## KI-Absicht und Navigation
+
+Die Coop-Activity besitzt die gemeinsame Zielentscheidung im [EnemyIntentSystem](../../src/systems/navigation/EnemyIntentSystem.ts).
+Gewöhnliche Gegnerbewegung, Gefechtspositionierung und neue gezielte Angriffe lesen dieselbe Zielbindung.
+Ein Waffenmodus `all` erlaubt keinen strategischen Zielwechsel; ausdrücklich konfigurierte Nebenaktionen
+und bereits verbindlich begonnene Fähigkeiten behalten ihre eigenen Verträge.
+
+Die Navigation leitet ihre Körpergeometrie aus der aktuellen World ab. Ein Worker-Ergebnis wird zusammen
+mit Profil, Zielzuordnung und Generation aktiviert. Physische Änderungen sperren veraltete Routen sofort.
+`pending`, ein ungültiger Anschluss oder Gedränge beweisen keine Unerreichbarkeit und erlauben keinen
+Durchbruchsangriff. Ein solcher Angriff benötigt einen aktuellen Auftrag für das konkrete beschädigbare
+Hindernis und die Rechte der Einheit; der Schaden läuft weiterhin durch Combat. Dies sichern
+[EnemyIntentAndBreach.test.ts](../../tests/EnemyIntentAndBreach.test.ts) und
+[NavigationBodyGraph.test.ts](../../tests/NavigationBodyGraph.test.ts).
+
+Authored Spawn-Bereiche und Konstrukte bleiben im 32-px-Weltraster. Navigationsindizes gehören
+zum separaten Punktraster und dürfen nicht als World-Zellen materialisiert werden. Der Spawn-Executor
+prüft den vollständigen Körper an genau der Position, die er erzeugt; ungeprüfter Jitter ist dort unzulässig.
+Bei bewegten Zielen darf die aktuelle Regionsverbindung einen Spawn vor Abschluss der neuen Wegkosten
+bestätigen. Eine neue physische Topologie benötigt dagegen einen passenden Graphen.
+
+Ein `pending`-Ergebnis kann einen sicheren Bewegungsfortsatz tragen. Dieser bleibt an dasselbe Ziel
+gebunden und erteilt keine Durchbruchserlaubnis. Eine direkte Verbindung zu einem aktuellen Angriffsbereich
+kann die normale Zielerlaubnis bestätigen; ein Fortsatz aus dem vorigen Feld allein kann dies nicht.
+Die Verträge sind in [CoopDefenseSpawnExecutor.test.ts](../../tests/CoopDefenseSpawnExecutor.test.ts) und
+[NavigationPursuit.test.ts](../../tests/integration/NavigationPursuit.test.ts) abgesichert.
+
+Nekromantie behält Entity-Lifetime, Besitzerbindung und Leash. Ihre gewöhnliche Bewegung benutzt dieselbe
+körpergerechte Navigation wie feindliche Einheiten. Interne Felder, Dichte und Suchzustände sind
+hostlokale Activity-Ressourcen und werden nicht repliziert.
+
 ## RoundParticipation bleibt separat
 
 [RoundParticipationPolicy.ts](../../src/scenes/arena/RoundParticipationPolicy.ts) bildet den Teilnehmer-Snapshot einer laufenden Runde ab und ist nicht mit WorldParticipation zu vermischen:

@@ -40,6 +40,7 @@ export interface CoopDefenseDecoyTargetOptions {
   readonly coordinator: FlowFieldCoordinator;
   readonly getEnemies: () => readonly DecoyEnemyTargetSubject[];
   readonly getAttackTarget: (enemyId: string) => EnemyAiTargetRef | null;
+  readonly getMovementTarget?: (enemyId: string) => { readonly kind: string; readonly id: string } | null;
   readonly isEnemyOfOwner: (enemyId: string, ownerId: string) => boolean;
   readonly canSee: (enemy: DecoyEnemyTargetSubject, x: number, y: number, range: number) => boolean;
   readonly strategicTargets: EnemyStrategicTargetService;
@@ -57,6 +58,7 @@ export class CoopDefenseDecoyTargetSystem implements DecoyTargetPort {
   private readonly releaseMappings: Array<() => void> = [];
 
   constructor(private readonly options: CoopDefenseDecoyTargetOptions) {
+    if (options.getMovementTarget) return;
     for (const id of [ENEMY_FLOW_FIELD_IDS.player, ENEMY_FLOW_FIELD_IDS.boss]) {
       const view = options.coordinator.getFieldView(id);
       if (!view) continue;
@@ -77,7 +79,8 @@ export class CoopDefenseDecoyTargetSystem implements DecoyTargetPort {
       const attack = this.options.getAttackTarget(enemy.id);
       const targets = enemy.movementFieldId === ENEMY_FLOW_FIELD_IDS.strategic
         ? this.options.strategicTargets : this.ordinaryTargets.get(enemy.movementFieldId);
-      const movement = targets?.selectFlowTarget(enemy.x, enemy.y);
+      const movement = this.options.getMovementTarget
+        ? this.options.getMovementTarget(enemy.id) : targets?.selectFlowTarget(enemy.x, enemy.y);
       if ((attack?.kind === 'player' && attack.id === ownerId)
         || (movement?.kind === 'player' && movement.id === ownerId)) followers.add(enemy.id);
     }

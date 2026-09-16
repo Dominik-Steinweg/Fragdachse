@@ -130,6 +130,7 @@ export class CoopMissionEnemyBehaviourComposition {
     const decoyTargets = coordinator && runtime.enemyStrategicTargetService ? new CoopDefenseDecoyTargetSystem({
       coordinator,
       strategicTargets: runtime.enemyStrategicTargetService,
+      getMovementTarget: runtime.enemyIntents ? enemyId => runtime.enemyIntents?.get(enemyId)?.target ?? null : undefined,
       getEnemies: () => enemyManager.getAllEnemies().map(enemy => {
         const config = getCoopDefenseEnemyConfig(enemy.kind);
         const movementFieldId = config.movementTarget === 'players-and-armed-constructs'
@@ -152,6 +153,9 @@ export class CoopMissionEnemyBehaviourComposition {
         && this.options.combatSystem.hasLineOfSight(enemy.x, enemy.y, x, y),
     }) : null;
     attack.setDecoyTargets(decoyTargets);
+    attack.setIntents(runtime.enemyIntents);
+    runtime.enemyIntents?.setDecoys(decoyTargets);
+    runtime.enemyIntents?.setPerception((enemy, x, y, range) => enemyManager.canSeeThroughSmoke(enemy.id, x, y, range));
     combatPositioning.setDecoyTargets(decoyTargets);
     ability.setDecoyTargets(decoyTargets);
 
@@ -170,9 +174,6 @@ export class CoopMissionEnemyBehaviourComposition {
         if (decoyTargets) for (const decoy of this.options.decoySystem?.runtime.values() ?? []) decoyTargets.activated(decoy);
         enemyManager.setEnemySpawnedCallback((enemy: EnemyEntity, options) => {
           burrow.notifyEnemySpawned(enemy, options);
-        });
-        this.options.hostPhysics.setEnemyRockContactCallback((enemyId, rock, now) => {
-          attack.recordObstacleContact(enemyId, rock, now);
         });
       },
       detach: () => {

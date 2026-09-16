@@ -1,7 +1,7 @@
 /**
  * Nachrichtenvertrag zwischen `FlowFieldCoordinator` (Main Thread) und `FlowFieldEngine` (Worker).
  *
- * Teil des Worker-Graphen: importiert ausschliesslich den Kernel. Alles, was hier steht, muss
+ * Teil des Worker-Graphen: verwendet nur reine Kernel- und Geometrie-Typen. Alles, was hier steht, muss
  * strukturklonbar sein - keine Closures, keine Klasseninstanzen, keine Phaser-Objekte.
  */
 import type {
@@ -9,14 +9,16 @@ import type {
   FlowFieldMetrics,
   FlowFieldTuning,
 } from './FlowFieldKernel';
+import type { NavigationGeometrySnapshot } from '../navigation/NavigationGeometry';
 
-export const FLOW_FIELD_PROTOCOL_VERSION = 2;
+export const FLOW_FIELD_PROTOCOL_VERSION = 3;
 
 export type FlowFieldGoalMode = 'bases' | 'dynamic' | 'dynamic-fallback-bases';
 
 export interface FlowFieldProfileDescriptor {
   readonly profileId: string;
   readonly clearanceCells: number;
+  readonly bodyRadius?: number;
 }
 
 export interface FlowFieldFieldDescriptor {
@@ -38,6 +40,7 @@ export interface FlowFieldInitMessage {
   readonly activeBaseIds: readonly string[];
   readonly profiles: readonly FlowFieldProfileDescriptor[];
   readonly fields: readonly FlowFieldFieldDescriptor[];
+  readonly geometry?: NavigationGeometrySnapshot;
 }
 
 /**
@@ -45,6 +48,9 @@ export interface FlowFieldInitMessage {
  * und aktualisiert nur eine Rasterzelle; die beiden anderen erzwingen eine Neuklassifikation.
  */
 export type FlowFieldPatch =
+  | { readonly t: 'density'; readonly costs: Float32Array }
+  | { readonly t: 'geometry'; readonly geometry: NavigationGeometrySnapshot }
+  | { readonly t: 'profile-add'; readonly profile: FlowFieldProfileDescriptor }
   | { readonly t: 'cell'; readonly index: number; readonly occupied: 0 | 1 }
   | { readonly t: 'rock-resync'; readonly rockOccupancy: Uint8Array }
   | { readonly t: 'barrier-resync'; readonly barrierOccupancy: Uint8Array }
@@ -62,6 +68,8 @@ export interface FlowFieldJobField {
   readonly vectorBuffer?: ArrayBuffer;
   readonly goalSourceBuffer?: ArrayBuffer;
   readonly traversableBuffer?: ArrayBuffer;
+  readonly edgeBuffer?: ArrayBuffer;
+  readonly regionBuffer?: ArrayBuffer;
 }
 
 export interface FlowFieldJobMessage {
@@ -89,6 +97,8 @@ export interface FlowFieldResultField {
    * spiegelt der Main Thread selbst und braucht hier nichts.
    */
   readonly profileTraversable: Uint8Array | null;
+  readonly edges?: Uint8Array;
+  readonly regions?: Int32Array;
 }
 
 export interface FlowFieldResultMessage {
@@ -120,6 +130,8 @@ export function collectResultTransferables(result: FlowFieldResultMessage): Arra
     transfer.push(field.goalSourceField.buffer as ArrayBuffer);
     transfer.push(field.goalIndexes.buffer as ArrayBuffer);
     if (field.profileTraversable) transfer.push(field.profileTraversable.buffer as ArrayBuffer);
+    if (field.edges) transfer.push(field.edges.buffer as ArrayBuffer);
+    if (field.regions) transfer.push(field.regions.buffer as ArrayBuffer);
   }
   return transfer;
 }
@@ -135,6 +147,7 @@ export function collectRequestTransferables(request: FlowFieldRequest): ArrayBuf
   }
   const transfer: ArrayBuffer[] = [];
   for (const patch of request.patches) {
+    if (patch.t === 'density') transfer.push(patch.costs.buffer as ArrayBuffer);
     if (patch.t === 'rock-resync') transfer.push(patch.rockOccupancy.buffer as ArrayBuffer);
     if (patch.t === 'barrier-resync') transfer.push(patch.barrierOccupancy.buffer as ArrayBuffer);
   }
@@ -144,6 +157,8 @@ export function collectRequestTransferables(request: FlowFieldRequest): ArrayBuf
     if (field.vectorBuffer) transfer.push(field.vectorBuffer);
     if (field.goalSourceBuffer) transfer.push(field.goalSourceBuffer);
     if (field.traversableBuffer) transfer.push(field.traversableBuffer);
+    if (field.edgeBuffer) transfer.push(field.edgeBuffer);
+    if (field.regionBuffer) transfer.push(field.regionBuffer);
   }
   return transfer;
 }

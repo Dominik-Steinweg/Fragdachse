@@ -33,6 +33,7 @@ import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatC
 import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';
 import { EnemyAiTargetCatalog } from '../src/systems/EnemyAiTargetCatalog';
+import type { EnemyIntentSystem } from '../src/systems/navigation/EnemyIntentSystem';
 import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecutionAdapter';
 
 const COLOSSUS = getCoopDefenseEnemyConfig('inferno-colossus');
@@ -260,6 +261,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     expect(shots).toHaveLength(0);
     vi.mocked(enemyManager.canSeeThroughSmoke).mockReturnValue(false);
     player.x = 600;
+    system.setIntents({ allowsAttack: () => false } as unknown as EnemyIntentSystem);
     system.hostUpdate(16, 1000 + windupMs);
     expect(shots).toEqual([{ weaponId: bite.weapon.config.id, targetX: 110, targetY: 100 }]);
   });
@@ -275,6 +277,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     runAttackFrames(f.system, 1000, 1200);
     expect(f.shots.length).toBeGreaterThan(0);
     const count = f.shots.length, last = f.shots[count - 1];
+    f.system.setIntents({ allowsAttack: () => false, get: () => null } as unknown as EnemyIntentSystem);
     player.y = 200;
     visibility.mockImplementation((_id, _x, y) => y !== 200);
     runAttackFrames(f.system, 1200, 1200 + SALVO.intervalMs * SALVO.count);
@@ -388,7 +391,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
       .toContain('INFERNO_COLOSSUS_FLAMETHROWER');
   });
 
-  it('beisst waehrend der Salvenpause weiter Felsen frei, statt festzuhaengen', () => {
+  it('authorizes no rock bite merely because a salvo is paused', () => {
     const enemy = createColossus();
     const rock = { x: 140, y: 100, active: true } as unknown as Phaser.GameObjects.Image;
     const shots: FiredShot[] = [];
@@ -430,7 +433,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     const shotsAfterSalvo = shots.length;
     runAttackFrames(system, pauseStart, pauseStart + SALVO.cooldownMs);
 
-    expect(shots.slice(shotsAfterSalvo).map(shot => shot.weaponId)).toContain('INFERNO_COLOSSUS_BITE');
+    expect(shots.slice(shotsAfterSalvo).map(shot => shot.weaponId)).not.toContain('INFERNO_COLOSSUS_BITE');
   });
 });
 

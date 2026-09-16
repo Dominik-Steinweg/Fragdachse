@@ -430,6 +430,7 @@ export class CoopDefenseVoidHunterSystem {
     let best: { ref: EnemyAiTargetRef; x: number; y: number; distanceSq: number } | null = null;
     if (this.targetCatalog) {
       this.targetCatalog.forEachTarget('player-like-threats', (target) => {
+        if (!this.enemyManager.isIntentTarget(enemy.id, target.kind, target.id)) return;
         const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
         const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
         if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, VOID_HUNTER_GAUSS.range)) return;

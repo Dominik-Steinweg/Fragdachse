@@ -42,6 +42,7 @@ function createSystem(
   const spawnPuck = vi.fn().mockReturnValue(7);
   const spawnProjectile = vi.fn().mockReturnValue(8);
   const enemyManager = {
+    isIntentTarget: () => true,
     canSeeThroughSmoke: () => true,
     getAllEnemies: () => [enemy],
   } as unknown as EnemyManager;

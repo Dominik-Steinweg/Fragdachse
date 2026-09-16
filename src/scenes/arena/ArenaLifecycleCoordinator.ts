@@ -1,4 +1,5 @@
 import { getDeferredAssets } from '../../assets/DeferredAssets';
+import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { collectDeathFragmentFrames } from '../../effects/gpu/DeathFragmentPreparation';
 import type Phaser from 'phaser';
 import { AdrenalineEssenceBinding } from '../../adrenalineEssence/AdrenalineEssenceBinding';
@@ -731,6 +732,32 @@ export class ArenaLifecycleCoordinator {
     });
     this.coopMissionComposition = new CoopMissionComposition({
       scene,
+      getNavigationGeometry: () => {
+        if (!this.worldGeometryBinding) throw new Error('Navigation requires materialized World geometry');
+        return this.worldGeometryBinding.snapshotMovementGeometry();
+      },
+      getNavigationObstacleIntegrity: (enemy, id) => {
+        const materialization = this.worldRuntime?.materialization;
+          if (!materialization) return null;
+          if (id.startsWith('rock:')) {
+            const index = Number(id.slice(5));
+            if (materialization.rocks?.isIndestructible(index)) return null;
+            const placed = materialization.placement?.getRuntimeRock(index);
+            if (placed?.indestructible || (placed?.constructionId
+              && getCoopDefenseConstructionDefinition(placed.constructionId).indestructible)) return null;
+            if (placed && this.combatSystem && !this.combatSystem.canDamageStructure(
+              this.combatSystem.captureWorldDamageSource(enemy.id, 'navigation.breach'), placed.ownerId)) return null;
+          const state = materialization.placement?.readIntegrity(index) ?? materialization.rocks?.readIntegrity(index);
+          return state && !state.destroyed ? state.integrity : null;
+        }
+          if (id.startsWith('base:')) {
+            const base = materialization.bases?.getBase(id.slice(5));
+            if (!base || base.isInert() || !this.combatSystem) return null;
+            return this.combatSystem.canDamageStructure(this.combatSystem.captureWorldDamageSource(enemy.id, 'navigation.breach'),
+              undefined, base.faction) ? base.getHp() : null;
+        }
+        return null;
+      },
       getWorld: () => this.worldRuntime?.context ?? null,
       getLayout: () => this.worldRuntime?.presentation?.layout ?? null,
       getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
@@ -1574,6 +1601,14 @@ export class ArenaLifecycleCoordinator {
 
   // ── Host helpers called from ArenaScene.update() ─────────────────────────
 
+  private nextScenarioSeed: number | null = null;
+
+  /** A scenario supplies a seed, then takes the same loading/participation path as a match. */
+  setNextScenarioSeed(seed: number): void {
+    if (!Number.isSafeInteger(seed)) throw new Error('Scenario seed must be a safe integer');
+    this.nextScenarioSeed = seed;
+  }
+
   hostCheckReadyToStart(): void {
     // Defensiv: eine Runde darf ausschließlich aus einer sauberen LOBBY-Phase heraus starten.
     if (bridge.getGamePhase() !== 'LOBBY') return;
@@ -1631,7 +1666,8 @@ export class ArenaLifecycleCoordinator {
     bridge.setRoundEndTime(0);
     bridge.requestFullGameState();
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
-    const seed = Date.now();
+    const seed = this.nextScenarioSeed ?? Date.now();
+    this.nextScenarioSeed = null;
     // The phase and participation state deliberately become visible before the expensive
     // generator/fingerprint step. The next scene tick installs the loading veil and schedules
     // generation, so a host never blocks the lobby while still reporting LOBBY.

@@ -93,8 +93,10 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
     enemy: EnemyEntity,
     positioning: CoopDefenseEnemyCombatPositioningConfig,
   ): { x: number; y: number; distance: number } | null {
+    const maxDistance = positioning.preferredDistancePx + positioning.toleranceP;
     const decoy = this.decoyTargets?.getTarget(enemy.id);
     if (decoy) {
+      if (Math.hypot(decoy.x - enemy.sprite.x, decoy.y - enemy.sprite.y) > maxDistance) return null;
       if (!this.enemyManager.canSeeThroughSmoke(enemy.id, decoy.x, decoy.y, positioning.preferredDistancePx + positioning.toleranceP)
         || (positioning.requireLineOfSight && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, decoy.x, decoy.y))) return null;
       return { x: decoy.x, y: decoy.y, distance: Math.hypot(decoy.x - enemy.sprite.x, decoy.y - enemy.sprite.y) };
@@ -103,8 +105,10 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
 
     if (this.targetCatalog) {
       this.targetCatalog.forEachTarget('player-like-threats', (target) => {
+        if (!this.enemyManager.isIntentTarget(enemy.id, target.kind, target.id)) return;
         const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
+        if (distance > maxDistance) return;
         if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, positioning.preferredDistancePx + positioning.toleranceP)) return;
         if (best && distance >= best.distance) return;
         if (
@@ -119,6 +123,7 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
         if (this.combatSystem.isBurrowed(player.id)) continue;
         if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
+        if (distance > maxDistance) continue;
         if (!this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, positioning.preferredDistancePx + positioning.toleranceP)) continue;
         if (best && distance >= best.distance) continue;
         if (

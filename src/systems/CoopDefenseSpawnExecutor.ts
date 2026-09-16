@@ -9,6 +9,7 @@ import type { CoopDefenseMapSpawnAreaConfig } from '../config/coopDefenseMaps';
 import type { SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
+import { worldCellCenter, type WorldMetrics } from '../world/WorldMetrics';
 
 const RECENT_CELL_MEMORY = 12;
 const MIN_INTRA_GROUP_DISTANCE_CELLS = 2;
@@ -27,10 +28,12 @@ interface SpawnCell {
 export class CoopDefenseSpawnExecutor {
   private readonly recentCells: string[] = [];
   private exhaustionWarned = false;
+  private waitingForNavigation = false;
 
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly flowFieldService: EnemyFlowFieldService,
+    private readonly metrics: WorldMetrics,
     private readonly bossFlowFieldService?: EnemyFlowFieldService | null,
     private readonly playerFlowFieldService?: EnemyFlowFieldService | null,
     private readonly strategicFlowFieldService?: EnemyFlowFieldService | null,
@@ -90,7 +93,8 @@ export class CoopDefenseSpawnExecutor {
     }
 
     const pick = Phaser.Math.RND.pick(candidates);
-    this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind);
+    const world = worldCellCenter(this.metrics, pick.gridX, pick.gridY);
+    this.enemyManager.hostSpawnAtWorld(world.x, world.y, kind);
     this.pushRecent(this.key(pick.gridX, pick.gridY));
     return true;
   }
@@ -122,7 +126,10 @@ export class CoopDefenseSpawnExecutor {
       }
 
       const pick = Phaser.Math.RND.pick(candidates);
-      const enemy = this.enemyManager.hostSpawnDummyAt(pick.gridX, pick.gridY, kind, spawnOptions);
+      // Selection and materialization use the same World point. Adding unchecked jitter here
+      // would move a valid body back into neighboring geometry.
+      const world = worldCellCenter(this.metrics, pick.gridX, pick.gridY);
+      const enemy = this.enemyManager.hostSpawnAtWorld(world.x, world.y, kind, spawnOptions);
       spawnedEnemyIds.push(enemy.id);
       this.pushRecent(this.key(pick.gridX, pick.gridY));
       candidates = candidates.filter(
@@ -139,6 +146,7 @@ export class CoopDefenseSpawnExecutor {
     flowFieldService: EnemyFlowFieldService,
     spawnArea?: CoopDefenseMapSpawnAreaConfig,
   ): SpawnCell[] {
+    this.waitingForNavigation = false;
     if (getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge) {
       return this.collectEdgeBurrowCandidates(kind, front, flowFieldService);
     }
@@ -147,22 +155,34 @@ export class CoopDefenseSpawnExecutor {
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
     const cells: SpawnCell[] = [];
     const edgeBand = spawnArea ? this.getAuthoredBand(spawnArea) : this.getEdgeBand(front);
-    const allowPlayerTargetWithoutGoals = this.isPlayerTarget(kind)
+    const allowPlayerTargetWithoutGoals = (this.isPlayerTarget(kind) || flowFieldService === this.playerFlowFieldService)
       && (flowFieldService.getGoalCells?.().length ?? 0) === 0;
     for (let gridX = edgeBand.minGridX; gridX <= edgeBand.maxGridX; gridX += 1) {
       for (let gridY = edgeBand.minGridY; gridY <= edgeBand.maxGridY; gridY += 1) {
-        if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;
-        if (
-          !allowPlayerTargetWithoutGoals
-          && flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY
-        ) continue;
-        const world = flowFieldService.gridToWorld(gridX, gridY);
-        if (!world) continue;
+        const world = worldCellCenter(this.metrics, gridX, gridY);
+        if (!flowFieldService.isCircleGroundFreeAt(world.x, world.y, spawnRadius)) continue;
+        if (!this.isReachable(world.x, world.y, flowFieldService, allowPlayerTargetWithoutGoals)) continue;
         if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) continue;
         cells.push({ gridX, gridY });
       }
     }
     return cells;
+  }
+
+  private isReachable(x: number, y: number, field: EnemyFlowFieldService, allowWithoutGoals = false): boolean {
+    if (allowWithoutGoals) return true;
+    if (field.getNavigationGeometry()) {
+      const result = field.queryNavigation(x, y);
+      if (result.status === 'pending') {
+        const connected = field.canReachCurrentGoals(x, y);
+        if (connected !== null) return connected;
+        this.waitingForNavigation = true;
+      }
+      return result.status === 'ready';
+    }
+    const cell = field.worldToGrid(x, y);
+    return !!cell && field.isTraversableAt(cell.gridX, cell.gridY)
+      && field.getIntegrationValueAt(cell.gridX, cell.gridY) < EnemyFlowFieldService.INTEGRATION_INFINITY;
   }
 
   private resolveSpawnFlowField(kind: CoopDefenseEnemyKind): EnemyFlowFieldService {
@@ -201,9 +221,9 @@ export class CoopDefenseSpawnExecutor {
     let shortestDigCells = Number.POSITIVE_INFINITY;
 
     for (const cell of this.getEdgeLine(front)) {
-      const world = flowFieldService.gridToWorld(cell.gridX, cell.gridY);
-      if (!world || this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) continue;
-      const digCells = this.measureEdgeDigDistance(front, cell, flowFieldService);
+      const world = worldCellCenter(this.metrics, cell.gridX, cell.gridY);
+      if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) continue;
+      const digCells = this.measureEdgeDigDistance(front, cell, flowFieldService, spawnRadius);
       if (digCells === null) continue;
       shortestDigCells = Math.min(shortestDigCells, digCells);
       edgeCells.push({ cell, digCells });
@@ -220,26 +240,29 @@ export class CoopDefenseSpawnExecutor {
     front: SpawnFront,
     edgeCell: SpawnCell,
     flowFieldService: EnemyFlowFieldService,
+    radius: number,
   ): number | null {
     const inward = getFrontInwardStep(front);
-    const cols = flowFieldService.getCols();
-    const rows = flowFieldService.getRows();
+    const cols = this.metrics.gridCols;
+    const rows = this.metrics.gridRows;
     const maxDistance = front === 'west' || front === 'east' ? cols : rows;
     for (let distance = 0; distance < maxDistance; distance += 1) {
       const gridX = edgeCell.gridX + inward.x * distance;
       const gridY = edgeCell.gridY + inward.y * distance;
       if (gridX < 0 || gridX >= cols || gridY < 0 || gridY >= rows) break;
-      if (flowFieldService.getKindAt(gridX, gridY) === 'water') return null;
-      if (!flowFieldService.isTraversableAt(gridX, gridY)) continue;
-      if (flowFieldService.getIntegrationValueAt(gridX, gridY) >= EnemyFlowFieldService.INTEGRATION_INFINITY) continue;
+      const world = worldCellCenter(this.metrics, gridX, gridY);
+      const cell = flowFieldService.worldToGrid(world.x, world.y);
+      if (!cell || flowFieldService.getKindAt(cell.gridX, cell.gridY) === 'water') return null;
+      if (!flowFieldService.isCircleGroundFreeAt(world.x, world.y, radius)) continue;
+      if (!this.isReachable(world.x, world.y, flowFieldService)) continue;
       return distance;
     }
     return null;
   }
 
   private getEdgeLine(front: SpawnFront): SpawnCell[] {
-    const cols = this.flowFieldService.getCols();
-    const rows = this.flowFieldService.getRows();
+    const cols = this.metrics.gridCols;
+    const rows = this.metrics.gridRows;
     if (front === 'west' || front === 'east') {
       const gridX = front === 'west' ? 0 : cols - 1;
       return Array.from({ length: rows }, (_, gridY) => ({ gridX, gridY }));
@@ -255,8 +278,8 @@ export class CoopDefenseSpawnExecutor {
   private getAuthoredBand(
     area: CoopDefenseMapSpawnAreaConfig,
   ): { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number } {
-    const cols = this.flowFieldService.getCols();
-    const rows = this.flowFieldService.getRows();
+    const cols = this.metrics.gridCols;
+    const rows = this.metrics.gridRows;
     return {
       minGridX: Math.max(0, area.gridX),
       maxGridX: Math.min(cols - 1, area.gridX + area.widthCells - 1),
@@ -266,8 +289,8 @@ export class CoopDefenseSpawnExecutor {
   }
 
   private getEdgeBand(front: SpawnFront): { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number } {
-    const cols = this.flowFieldService.getCols();
-    const rows = this.flowFieldService.getRows();
+    const cols = this.metrics.gridCols;
+    const rows = this.metrics.gridRows;
     const depthX = Math.min(Math.max(2, Math.floor(cols * EDGE_BAND_RATIO)), cols - 1);
     const depthY = Math.min(Math.max(2, Math.floor(rows * EDGE_BAND_RATIO)), rows - 1);
     switch (front) {
@@ -297,6 +320,8 @@ export class CoopDefenseSpawnExecutor {
   }
 
   private warnExhausted(): void {
+    // A pending Worker result is not evidence of a physically exhausted spawn area.
+    if (this.waitingForNavigation) return;
     if (this.exhaustionWarned) return;
     this.exhaustionWarned = true;
     console.warn('[CoopDefenseSpawnExecutor] Keine freien Spawn-Zellen an der authored Arena-Front mehr.');

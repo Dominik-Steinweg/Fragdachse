@@ -82,6 +82,13 @@ export interface CoopMissionHostUpdatePort {
 
 /** Optionaler Messpunkt der Navigation; ohne Diagnose bleibt er ungenutzt. */
 export interface CoopMissionNavigationMetrics {
+  navIntentMs?: number;
+  enemySpecialMs?: number;
+  enemyPositioningMs?: number;
+  enemyMovementMs?: number;
+  enemyAlliesMs?: number;
+  enemyAbilitiesMs?: number;
+  enemyAttacksMs?: number;
   navFlowFieldMs: number;
   navWorkerComputeMs: number;
 }
@@ -119,15 +126,20 @@ export class CoopMissionHostUpdate {
     weaponBalanceLabActive: boolean,
     metrics: CoopMissionNavigationMetrics | null = null,
   ): void {
-    this.runProgressPhase(deltaMs, nowMs, countdownActive, weaponBalanceLabActive);
+    if (!this.runtime.analysisScenarioActive) {
+      this.runProgressPhase(deltaMs, nowMs, countdownActive, weaponBalanceLabActive);
+    }
     const navStartedAt = metrics ? performance.now() : 0;
     this.updateFlowFields(nowMs, deltaMs);
     if (metrics) {
       metrics.navFlowFieldMs = performance.now() - navStartedAt;
       metrics.navWorkerComputeMs = this.runtime.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0;
     }
+    const intentStarted = metrics ? performance.now() : 0;
     this.runtime.coopDefenseDecoyTargetSystem?.updateLocks();
-    this.runCombatPhase(deltaMs, nowMs, countdownActive, weaponBalanceLabActive);
+    this.runtime.enemyIntents?.update(this.runtime.enemyManager?.getAllEnemies() ?? [], nowMs);
+    if (metrics) metrics.navIntentMs = performance.now() - intentStarted;
+    this.runCombatPhase(deltaMs, nowMs, countdownActive, weaponBalanceLabActive, metrics);
   }
 
   /** Einmaliger synchroner Erstaufbau der Navigation im verborgenen Ladezustand. */
@@ -183,13 +195,17 @@ export class CoopMissionHostUpdate {
     nowMs: number,
     countdownActive: boolean,
     weaponBalanceLabActive: boolean,
+    metrics: CoopMissionNavigationMetrics | null,
   ): void {
+    let measuredAt = metrics ? performance.now() : 0;
     if (!countdownActive) this.runtime.coopDefenseTimebombSystem?.hostUpdate(nowMs);
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.runtime.coopDefenseEnemyBurrowSystem?.hostUpdate(nowMs);
+    if (metrics) { metrics.enemySpecialMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
     // Wegfindung im selben Frame.
     if (!countdownActive) this.runtime.coopDefenseEnemyCombatPositioningSystem?.hostUpdate();
+    if (metrics) { metrics.enemyPositioningMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     this.runtime.enemyManager?.hostUpdateMovement(
       this.runtime.enemyFlowFieldService,
       this.runtime.enemyPlayerFlowFieldService,
@@ -207,11 +223,15 @@ export class CoopMissionHostUpdate {
       this.port.getSmokeSystem(),
       this.runtime.coopDefenseDecoyTargetSystem,
     );
+    if (metrics) { metrics.enemyMovementMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     if (!countdownActive) this.runtime.necromancySystem?.hostUpdate(nowMs, deltaMs);
+    if (metrics) { metrics.enemyAlliesMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     if (!countdownActive && !weaponBalanceLabActive) {
       this.runtime.coopDefenseVoidHunterSystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseEnemyAbilitySystem?.hostUpdate(nowMs);
+      if (metrics) { metrics.enemyAbilitiesMs = performance.now() - measuredAt; measuredAt = performance.now(); }
       this.runtime.coopDefenseEnemyAttackSystem?.hostUpdate(deltaMs, nowMs);
+      if (metrics) metrics.enemyAttacksMs = performance.now() - measuredAt;
     }
   }
 
@@ -309,7 +329,9 @@ export class CoopMissionHostUpdate {
 
       if (strategicGrid) {
         for (const construction of this.port.getArmedConstructions()) {
-          const world = strategicGrid.gridToWorld(construction.gridX, construction.gridY);
+          const metrics = flowFieldCoordinator?.metrics;
+          const world = metrics ? { x: metrics.arenaOffsetX + (construction.gridX + 0.5) * 32,
+            y: metrics.arenaOffsetY + (construction.gridY + 0.5) * 32 } : null;
           if (!world) continue;
           candidates.push({
             kind: 'armed-construct',
@@ -320,7 +342,7 @@ export class CoopMissionHostUpdate {
             y: world.y,
             goalCells: buildAdjacentGoalCells([
               { gridX: construction.gridX, gridY: construction.gridY },
-            ]),
+            ], strategicGrid),
             isTargetable: construction.isTargetable,
           });
         }
@@ -332,14 +354,14 @@ export class CoopMissionHostUpdate {
             id: outpost.id,
             x: outpost.x,
             y: outpost.y,
-            goalCells: buildAdjacentGoalCells(outpost.cells),
+            goalCells: buildAdjacentGoalCells(outpost.cells, strategicGrid),
             resolvePosition: (fromX, fromY) => outpost.resolveSurfacePoint(fromX, fromY),
             isTargetable: outpost.isTargetable,
           });
         }
       }
       targetCatalog.updateTargets(candidates);
-      if (strategicFlowFieldService && strategicTargetService && flowFieldCoordinator) {
+      if (!this.runtime.enemyIntents && strategicFlowFieldService && strategicTargetService && flowFieldCoordinator) {
         // Zielzuordnung und Zielmenge reisen als ein Paket: Der Coordinator uebernimmt die
         // Zuordnung erst in dem Moment, in dem er das daraus gerechnete Feld aktiviert.
         const prepared = strategicTargetService.prepareTargets(targetCatalog.getStrategicCandidates().filter(target => target.kind !== 'decoy'));
@@ -407,13 +429,19 @@ function advanceFlowFields(
 
 function buildAdjacentGoalCells(
   occupiedCells: readonly { gridX: number; gridY: number }[],
+  field: import('../systems/EnemyFlowFieldService').EnemyFlowFieldService,
 ): { gridX: number; gridY: number }[] {
   const result: { gridX: number; gridY: number }[] = [];
   for (const cell of occupiedCells) {
     for (let dy = -1; dy <= 1; dy += 1) {
       for (let dx = -1; dx <= 1; dx += 1) {
         if (dx === 0 && dy === 0) continue;
-        result.push({ gridX: cell.gridX + dx, gridY: cell.gridY + dy });
+        const origin = field.gridToWorld(0, 0);
+        if (!origin) continue;
+        const offset = field.getCellSize() === 16 ? 0 : 16;
+        const goal = field.worldToGrid(origin.x - offset + (cell.gridX + dx + 0.5) * 32,
+          origin.y - offset + (cell.gridY + dy + 0.5) * 32);
+        if (goal) result.push(goal);
       }
     }
   }

@@ -46,6 +46,8 @@ import {
   type FlowFieldResultMessage,
 } from './FlowFieldProtocol';
 import { InlineFlowFieldRunner, type FlowFieldRunner, type FlowFieldRunnerKind } from './FlowFieldRunner';
+import { NavigationGeometry, type NavigationGeometrySnapshot } from '../navigation/NavigationGeometry';
+import type { FlowFieldProfileDescriptor } from './FlowFieldProtocol';
 
 /**
  * Feld-IDs der Runtime-Flowfields. Ally-Felder sind pro Spieler und tragen deshalb einen Praefix
@@ -72,6 +74,8 @@ export interface FlowFieldSnapshot {
   readonly goalIndexes: Int32Array;
   /** Nur bei Clearance-Profilen: das erodierte `traversable` zu genau diesem Feld. */
   readonly profileTraversable: Uint8Array | null;
+  readonly edges?: Uint8Array;
+  readonly regions?: Int32Array;
 }
 
 /** Lesefenster eines Feldes. Die Fassade haelt genau dieses Objekt und liest immer den aktuellen Stand. */
@@ -80,6 +84,10 @@ export interface FlowFieldFieldView {
   readonly metrics: FlowFieldMetrics;
   readonly tuning: FlowFieldTuning;
   readonly lookups: FlowFieldNeighborLookups;
+  readonly profileId: string;
+  readonly bodyRadius: number;
+  version(): { generation: number; topology: number; goal: number; profile: string };
+  geometry(): NavigationGeometry | null;
   /**
    * Topologie fuer dieses Feld. Basis sind immer die Spiegelarrays des Standardprofils; ein
    * Clearance-Profil ueberschreibt daraus nur `traversable`. `costs`/`wallAdjacent` weichen im
@@ -88,6 +96,7 @@ export interface FlowFieldFieldView {
    */
   topology(): FlowFieldTopology;
   snapshot(): FlowFieldSnapshot | null;
+  requestedGoals(): Int32Array;
   counts(): FlowFieldTopologyCounts;
   /** Setzt die Zielmenge dieses Feldes; gerechnet wird erst am naechsten Nav-Tick. */
   setGoals(goalIndexes: ArrayLike<number>, payload?: unknown): void;
@@ -114,6 +123,7 @@ export interface FlowFieldPathWorkspace {
 export interface FlowFieldFieldOptions {
   readonly goalMode: FlowFieldGoalMode;
   readonly clearanceCells?: number;
+  readonly bodyRadius?: number;
   /** Nav-Ticks zwischen zwei Dispatches dieses Feldes. 1 = jeder Tick. */
   readonly tickDivisor?: number;
 }
@@ -131,6 +141,7 @@ export interface FlowFieldCoordinatorOptions {
   readonly runner?: FlowFieldRunner;
   readonly navTickIntervalMs: number;
   readonly generationId?: number;
+  readonly geometryProvider?: () => NavigationGeometrySnapshot;
 }
 
 export interface FlowFieldDiagnostics {
@@ -178,6 +189,8 @@ interface BufferPool {
   vector: ArrayBuffer[];
   goalSource: ArrayBuffer[];
   traversable: ArrayBuffer[];
+  edges: ArrayBuffer[];
+  regions: ArrayBuffer[];
 }
 
 interface CoordinatorField {
@@ -224,7 +237,10 @@ export class FlowFieldCoordinator {
   private readonly navTickIntervalMs: number;
   private readonly workspaces = new Map<string, FlowFieldPathWorkspace>();
   private readonly fields = new Map<string, CoordinatorField>();
-  private readonly clearanceProfiles = new Set<number>([0]);
+  private readonly profiles = new Map<string, FlowFieldProfileDescriptor>();
+  private readonly geometryProvider?: () => NavigationGeometrySnapshot;
+  private geometryCache: NavigationGeometry | null = null;
+  private geometryDirty = true;
   private readonly suppressedGoalIndexes = new Set<number>();
 
   private runner: FlowFieldRunner;
@@ -262,6 +278,7 @@ export class FlowFieldCoordinator {
 
   constructor(options: FlowFieldCoordinatorOptions) {
     this.metrics = options.metrics;
+    this.geometryProvider = options.geometryProvider;
     this.tuning = options.tuning;
     this.costByCode = buildCostByCode(options.tuning);
     this.lookups = buildNeighborLookups(options.metrics);
@@ -295,17 +312,19 @@ export class FlowFieldCoordinator {
   // ---- Felder ----
 
   registerField(fieldId: string, options: FlowFieldFieldOptions): FlowFieldFieldView {
+    if (this.fields.has(fieldId)) throw new Error(`Duplicate navigation field: ${fieldId}`);
     const clearanceCells = Math.max(0, Math.floor(options.clearanceCells ?? 0));
-    if (this.initialized && !this.clearanceProfiles.has(clearanceCells)) {
-      // Profile stehen in der Init-Nachricht. Nachtraegliche Felder (Ally) verwenden deshalb ein
-      // bereits bekanntes Profil; alles andere waere ein Verdrahtungsfehler.
-      throw new Error(`flowfield profile clearance:${clearanceCells} was not declared before init`);
+    const bodyRadius = this.geometryProvider ? options.bodyRadius ?? 15 + clearanceCells * 32 : undefined;
+    const profileId = bodyRadius === undefined ? profileIdFor(clearanceCells) : `body:${bodyRadius}`;
+    if (!this.profiles.has(profileId)) {
+      const profile = { profileId, clearanceCells, bodyRadius };
+      this.profiles.set(profileId, profile);
+      if (this.initialized) this.pendingPatches.push({ t: 'profile-add', profile });
     }
-    this.clearanceProfiles.add(clearanceCells);
 
     const descriptor: FlowFieldFieldDescriptor = {
       fieldId,
-      profileId: profileIdFor(clearanceCells),
+      profileId,
       goalMode: options.goalMode,
     };
     const field: CoordinatorField = {
@@ -327,7 +346,7 @@ export class FlowFieldCoordinator {
       lastActivatedAtMs: 0,
       recomputeRequestedAtMs: null,
       activationListeners: new Set(),
-      pool: { integration: [], vector: [], goalSource: [], traversable: [] },
+      pool: { integration: [], vector: [], goalSource: [], traversable: [], edges: [], regions: [] },
       view: undefined as unknown as FlowFieldFieldView,
     };
     (field as { view: FlowFieldFieldView }).view = this.createView(field);
@@ -346,6 +365,8 @@ export class FlowFieldCoordinator {
     field.pool.vector.length = 0;
     field.pool.goalSource.length = 0;
     field.pool.traversable.length = 0;
+    field.pool.edges.length = 0;
+    field.pool.regions.length = 0;
     if (this.initialized) this.pendingPatches.push({ t: 'field-remove', fieldId });
   }
 
@@ -383,8 +404,26 @@ export class FlowFieldCoordinator {
 
   // ---- Topologie ----
 
+  /** Invalidate at the physical mutation, coalesce the actual snapshot until its first reader. */
+  invalidateGeometry(): void {
+    if (!this.geometryProvider || this.geometryDirty) return;
+    this.geometryDirty = true;
+    this.topologyVersion++;
+    this.markFieldsRecomputeRequested();
+  }
+
+  getGeometry(): NavigationGeometry | null {
+    if (this.geometryProvider && this.geometryDirty) {
+      this.geometryCache = new NavigationGeometry(this.geometryProvider());
+      this.geometryDirty = false;
+      if (this.initialized) this.pendingPatches.push({ t: 'geometry', geometry: this.geometryCache.snapshot });
+    }
+    return this.geometryCache;
+  }
+
   /** Einzelzellenereignis mit Koordinate: der haeufige Fall, O(9) im Spiegel. */
   patchCell(gridX: number, gridY: number, occupied: boolean): void {
+    if (this.geometryProvider) { this.invalidateGeometry(); return; }
     if (gridX < 0 || gridX >= this.metrics.cols || gridY < 0 || gridY >= this.metrics.rows) return;
     const index = gridY * this.metrics.cols + gridX;
     const next = occupied ? 1 : 0;
@@ -402,6 +441,7 @@ export class FlowFieldCoordinator {
 
   /** Gebuendelte Gate-Aenderung; ein Worker-Patch deckt alle Zellen desselben Zustandswechsels ab. */
   patchBarrierCells(changes: readonly { gridX: number; gridY: number; occupied: boolean }[]): void {
+    if (this.geometryProvider) { this.invalidateGeometry(); return; }
     const touched: number[] = [];
     for (const change of changes) {
       if (change.gridX < 0 || change.gridX >= this.metrics.cols
@@ -424,6 +464,7 @@ export class FlowFieldCoordinator {
 
   /** Koordinatenloses Ereignis: Hindernisbestand neu lesen und komplett neu klassifizieren. */
   requestFullResync(): void {
+    if (this.geometryProvider) { this.invalidateGeometry(); return; }
     this.refreshRockOccupancyFromProvider();
     this.counts = this.classifyMirror();
     this.topologyVersion += 1;
@@ -440,6 +481,7 @@ export class FlowFieldCoordinator {
    */
   setActiveBaseIds(ids: ReadonlySet<string>): void {
     if (sameIds(ids, this.activeBaseIds)) return;
+    this.invalidateGeometry();
     const goalsBefore = computeBaseGoalIndexes(this.bases, this.activeBaseIds, 0, this.topology, this.metrics);
 
     this.activeBaseIds = new Set(ids);
@@ -467,6 +509,12 @@ export class FlowFieldCoordinator {
    */
   advance(deltaMs: number): void {
     if (this.destroyed) return;
+    this.getGeometry();
+    if (this.completedBatch) {
+      const batch = this.completedBatch; this.completedBatch = null;
+      if (batch.topologyVersion === this.topologyVersion) this.activateBatch(batch);
+      else { this.recycleResult(batch); this.droppedStale++; }
+    }
     this.accumulatorMs = Math.min(
       this.accumulatorMs + Math.max(0, deltaMs),
       this.navTickIntervalMs * MAX_ACCUMULATED_TICKS,
@@ -625,7 +673,9 @@ export class FlowFieldCoordinator {
         integrationBuffer: field.pool.integration.pop(),
         vectorBuffer: field.pool.vector.pop(),
         goalSourceBuffer: field.pool.goalSource.pop(),
-        traversableBuffer: field.clearanceCells > 0 ? field.pool.traversable.pop() : undefined,
+        traversableBuffer: field.pool.traversable.pop(),
+        edgeBuffer: field.pool.edges.pop(),
+        regionBuffer: field.pool.regions.pop(),
       });
     }
 
@@ -708,7 +758,7 @@ export class FlowFieldCoordinator {
 
     for (const resultField of batch.fields) {
       const field = this.fields.get(resultField.fieldId);
-      if (!field) {
+      if (!field || resultField.goalVersion !== field.goalVersion || batch.topologyVersion !== this.topologyVersion) {
         this.recycleOrphan(resultField);
         continue;
       }
@@ -721,6 +771,8 @@ export class FlowFieldCoordinator {
         goalSourceField: resultField.goalSourceField,
         goalIndexes: resultField.goalIndexes,
         profileTraversable: resultField.profileTraversable,
+        edges: resultField.edges,
+        regions: resultField.regions,
       };
       field.lastActivatedAtMs = nowMs();
       if (this.needsRecompute(field)) field.recomputeRequestedAtMs ??= field.lastActivatedAtMs;
@@ -735,6 +787,8 @@ export class FlowFieldCoordinator {
       if (snapshot.profileTraversable) {
         field.pool.traversable.push(snapshot.profileTraversable.buffer as ArrayBuffer);
       }
+      if (snapshot.edges) field.pool.edges.push(snapshot.edges.buffer as ArrayBuffer);
+      if (snapshot.regions) field.pool.regions.push(snapshot.regions.buffer as ArrayBuffer);
     }
 
     this.suppressedGoalIndexes.clear();
@@ -757,6 +811,8 @@ export class FlowFieldCoordinator {
     if (resultField.profileTraversable) {
       field.pool.traversable.push(resultField.profileTraversable.buffer as ArrayBuffer);
     }
+    if (resultField.edges) field.pool.edges.push(resultField.edges.buffer as ArrayBuffer);
+    if (resultField.regions) field.pool.regions.push(resultField.regions.buffer as ArrayBuffer);
   }
 
   // ---- Substrat ----
@@ -803,11 +859,13 @@ export class FlowFieldCoordinator {
 
   private ensureInitialized(): void {
     if (this.initialized) return;
+    const init = this.buildInitMessage();
     this.initialized = true;
-    this.runner.post(this.buildInitMessage());
+    this.runner.post(init);
   }
 
   private buildInitMessage() {
+    const geometry = this.getGeometry()?.snapshot;
     return {
       type: 'init' as const,
       protocolVersion: FLOW_FIELD_PROTOCOL_VERSION,
@@ -820,10 +878,8 @@ export class FlowFieldCoordinator {
       barrierOccupancy: this.sources.barrierOccupancy.slice(),
       bases: this.bases,
       activeBaseIds: [...this.activeBaseIds],
-      profiles: [...this.clearanceProfiles].map((clearanceCells) => ({
-        profileId: profileIdFor(clearanceCells),
-        clearanceCells,
-      })),
+      profiles: [...this.profiles.values()],
+      geometry,
       fields: [...this.fields.values()].map((field) => field.descriptor),
     };
   }
@@ -869,9 +925,14 @@ export class FlowFieldCoordinator {
       metrics: this.metrics,
       tuning: this.tuning,
       lookups: this.lookups,
+      profileId: field.descriptor.profileId,
+      bodyRadius: this.profiles.get(field.descriptor.profileId)?.bodyRadius ?? 0,
+      version: () => ({ generation: this.generationId, topology: this.topologyVersion,
+        goal: field.goalVersion + (!sameIndexes(field.dispatchedGoals, field.rawGoals) ? 1 : 0), profile: field.descriptor.profileId }),
+      geometry: () => this.getGeometry(),
       topology: () => {
         const profileTraversable = field.activeSnapshot?.profileTraversable ?? null;
-        if (field.clearanceCells === 0 || profileTraversable === null) return this.topology;
+        if (profileTraversable === null) return this.topology;
         if (profileTraversable !== cachedTraversable) {
           cachedTraversable = profileTraversable;
           cachedTopology = {
@@ -880,11 +941,14 @@ export class FlowFieldCoordinator {
             destructible: this.topology.destructible,
             wallAdjacent: this.topology.wallAdjacent,
             traversable: profileTraversable,
+            edges: field.activeSnapshot?.edges,
+            distanceScale: this.geometryProvider ? this.metrics.cellSize : undefined,
           };
         }
         return cachedTopology;
       },
       snapshot: () => field.activeSnapshot,
+      requestedGoals: () => field.descriptor.goalMode === 'dynamic' ? field.rawGoals : field.activeSnapshot?.goalIndexes ?? field.rawGoals,
       counts: () => this.counts,
       setGoals: (goalIndexes, payload) => {
         const nextGoals = sortedUnique(goalIndexes);
@@ -992,6 +1056,19 @@ export class FlowFieldCoordinator {
 
   getTopologyVersion(): number {
     return this.topologyVersion;
+  }
+
+  setDensityCosts(costs: Float32Array): void {
+    if (costs.length !== this.metrics.cols * this.metrics.rows || costs.some(value => !Number.isFinite(value) || value < 0 || value > 2)) {
+      throw new Error('Density must contain finite bounded navigation penalties');
+    }
+    this.pendingPatches = this.pendingPatches.filter(patch => patch.t !== 'density');
+    this.pendingPatches.push({ t: 'density', costs });
+    for (const field of this.fields.values()) field.dispatchedTopologyVersion = -1;
+  }
+
+  getBaseTargetIds(): readonly string[] {
+    return this.bases.filter(base => base.isGoalSource && this.activeBaseIds.has(base.id)).map(base => base.id);
   }
 
   destroy(): void {

@@ -165,6 +165,13 @@ export class WorldGeometryBinding implements WorldScopedBinding {
   /** Short alias used by neutral composition code. */
   getQueries(): WorldGeometryQueries { return this.geometryQueries; }
 
+  snapshotMovementGeometry() {
+    if (this.destroyed) throw new Error('Navigation cannot read a destroyed World');
+    return this.obstacleIndex.snapshotMovementGeometry();
+  }
+
+  getObstacleWorkCounters() { return this.obstacleIndex.getWorkCounters(); }
+
   /** Projectile broad phase uses this binding's sole World index, including live invalidation. */
   queryProjectileObstacles(sx: number, sy: number, ex: number, ey: number, padding: number,
     sweepCircles: boolean, visit: ObstacleRectVisitor): void {

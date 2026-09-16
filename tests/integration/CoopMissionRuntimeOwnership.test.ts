@@ -62,7 +62,8 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
     });
 
     const enemyManager = {
-      setLethalDamageGuard: (value: unknown) => { calls.push(`enemy:lethal:${String(value)}`); },
+      setNavigationIntents: () => {},
+        setLethalDamageGuard: (value: unknown) => { calls.push(`enemy:lethal:${String(value)}`); },
       setEnemySpawnedCallback: (value: unknown) => { calls.push(`enemy:spawn:${String(value)}`); },
       destroy: () => { calls.push('enemy:destroy'); },
       setVisualSink: (value: unknown) => { calls.push(`enemy:visual:${String(value)}`); },
@@ -168,6 +169,7 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
       const id = ++generation;
       runtime.setEnemyManager({
         destroy: () => { calls.push(`enemy:${id}:destroy`); },
+        setNavigationIntents: () => {},
         setLethalDamageGuard: () => {},
         setEnemySpawnedCallback: () => {},
         setVisualSink: () => {},
@@ -209,6 +211,7 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
 
     const materialize = (runtime: CoopMissionRuntime, label: string) => {
       const enemy = {
+        setNavigationIntents: () => {},
         setLethalDamageGuard: () => {},
         setEnemySpawnedCallback: () => {},
         destroy: () => { calls.push(`${label}:enemy`); },

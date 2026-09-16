@@ -792,6 +792,7 @@ export class CoopDefenseEnemyAbilitySystem {
   ): ThrowTarget | null {
     let best: ThrowTarget | null = null;
     this.targetCatalog?.forEachTarget('player-like-threats', (target) => {
+      if (!lockedTarget && !this.enemyManager.isIntentTarget(enemy.id, target.kind, target.id, true)) return;
       if (lockedTarget && (lockedTarget.kind !== target.kind || lockedTarget.id !== target.id)) return;
       const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);

@@ -1,4 +1,5 @@
 import type { WaterGeometry } from '../arena/WaterGeometry';
+import type { NavigationGeometrySnapshot, NavigationObstacle } from './navigation/NavigationGeometry';
 // Nur Typ-Import: dieses Modul soll ohne Phaser-Laufzeit (und damit ohne DOM) nutzbar
 // und testbar bleiben. Alle Phaser-Aufrufe laufen über die übergebenen Objekte.
 import type * as Phaser from 'phaser';
@@ -169,6 +170,39 @@ function circlesOverlap(
  * Quell-Arrays ausgetauscht wird oder seine Länge ändert.
  */
 export class ArenaObstacleIndex {
+  private rebuildCount = 0;
+  private segmentCandidateCount = 0;
+  getWorkCounters(): { obstacleRebuilds: number; obstacleSegmentCandidates: number } {
+    return { obstacleRebuilds: this.rebuildCount, obstacleSegmentCandidates: this.segmentCandidateCount };
+  }
+  /** Numeric copy for asynchronous navigation, sourced from the same bodies as physical queries. */
+  snapshotMovementGeometry(): NavigationGeometrySnapshot {
+    if (this.needsRebuild()) this.rebuild();
+    const bounds = this.sources.bounds();
+    const obstacles: NavigationObstacle[] = [];
+    for (let i = 0; i < this.rectCount; i++) {
+      const source = this.rectSource[i];
+      if (!source.active) continue;
+      const kind = this.rectKind[i] === OBSTACLE_BASE ? 'base' : this.rectKind[i] === OBSTACLE_BARRIER ? 'barrier' : 'rock';
+      const j = i * 4;
+      const id = kind === 'base' ? `base:${String(source.getData?.('baseId'))}`
+        : kind === 'rock' ? `rock:${this.rectRockIndex[i]}` : `barrier:${this.rectData[j]}:${this.rectData[j + 1]}`;
+      obstacles.push({ shape: 'rect', id, kind, left: this.rectData[j], top: this.rectData[j + 1],
+        right: this.rectData[j + 2], bottom: this.rectData[j + 3] });
+    }
+    for (let i = 0; i < this.circleSource.length; i++) {
+      if (!this.circleSource[i].active) continue;
+      obstacles.push({ shape: 'circle', id: `trunk:${i}`, kind: 'trunk', x: this.circleData[i * 3],
+        y: this.circleData[i * 3 + 1], radius: this.circleData[i * 3 + 2] });
+    }
+    for (const cell of this.waterGeometry?.water ?? []) {
+      const x = bounds.offsetX + cell.gridX * 32, y = bounds.offsetY + cell.gridY * 32;
+      obstacles.push({ shape: 'rect', id: `water:${cell.gridX}:${cell.gridY}`, kind: 'water',
+        left: x, top: y, right: x + 32, bottom: y + 32 });
+    }
+    return { left: bounds.offsetX, top: bounds.offsetY, right: bounds.offsetX + bounds.width,
+      bottom: bounds.offsetY + bounds.height, obstacles };
+  }
   /** Rechteck-Hindernisse als flaches [l,t,r,b]. */
   private rectData = new Float64Array(0);
   /** Live-Referenz je Rechteck, um `active` beim Query zu prüfen. */
@@ -427,6 +461,7 @@ export class ArenaObstacleIndex {
           if (entry < this.rectCount) {
             if (!this.rectSource[entry]?.active) continue;
             const offset = entry * 4;
+            this.segmentCandidateCount++;
             const stop = visitRect(
               this.rectKind[entry] as typeof OBSTACLE_ROCK | typeof OBSTACLE_BASE | typeof OBSTACLE_BARRIER,
               this.rectRockIndex[entry],
@@ -441,6 +476,7 @@ export class ArenaObstacleIndex {
             const circle = entry - this.rectCount;
             if (!this.circleSource[circle]?.active) continue;
             const offset = circle * 3;
+            this.segmentCandidateCount++;
             const stop = visitCircle(
               this.circleData[offset],
               this.circleData[offset + 1],
@@ -475,6 +511,7 @@ export class ArenaObstacleIndex {
   }
 
   private rebuild(): void {
+    this.rebuildCount++;
     this.dirty = false;
     this.collectObstacles();
     this.buildBuckets();
