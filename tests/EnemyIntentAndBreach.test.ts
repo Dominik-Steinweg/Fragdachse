@@ -140,14 +140,16 @@ describe('Shared strategic intent and demolition permission', () => {
     settle(world, enemies, 4000); expect(world.intents.getBreach(enemies[0].id)).toBeNull(); world.destroy();
   });
 
-  it('finishes an opening while the enclosed target moves within the same goal region', () => {
+  it('finishes and retains an opening while target movement keeps replacement fields pending', () => {
     const world = navigationTestWorld([rect('rock:0', 112, 0, 144, 256)]), unit = enemy();
     world.intents.setObstacleIntegrityResolver(() => 10);
     let ready = false;
-    for (let step = 0; step < 30 && !ready; step++) {
+    for (let step = 0; step < 180; step++) {
       world.catalog.updateTargets([{ kind: 'player', id: 'moving', x: 224, y: step % 2 ? 176 : 80 }]);
-      settle(world, [unit], step * 100);
-      ready = world.intents.getBreach(unit.id)?.status === 'ready';
+      world.coordinator.advance(1000 / 60);
+      world.intents.update([unit], step * 1000 / 60);
+      if (ready) expect(world.intents.allowsAttack(unit.id, 'obstacle', '0', 'all')).toBe(true);
+      ready ||= world.intents.getBreach(unit.id)?.status === 'ready';
     }
     expect(ready).toBe(true);
     expect(world.intents.getBreach(unit.id)?.nextBlocker).toBe('rock:0');
@@ -157,6 +159,23 @@ describe('Shared strategic intent and demolition permission', () => {
     settle(world, [unit], 3200);
     expect(world.intents.get(unit.id)?.navigation.status).toBe('ready');
     expect(world.intents.getBreach(unit.id)).toBeNull();
+    world.destroy();
+  });
+
+  it('replans toward the current disconnected goal region before replacement costs arrive', () => {
+    const world = navigationTestWorld([rect('rock:left', 64, 0, 96, 256), rect('rock:right', 160, 0, 192, 256)]);
+    const unit = enemy('rabid-badger', 'middle', 128, 128);
+    world.intents.setObstacleIntegrityResolver(() => 10);
+    world.catalog.updateTargets([{ kind: 'player', id: 'moving', x: 224, y: 128 }]);
+    for (let step = 0; step < 40; step++) settle(world, [unit], step * 100);
+    expect(world.intents.getBreach(unit.id)?.nextBlocker).toBe('rock:right');
+    world.catalog.updateTargets([{ kind: 'player', id: 'moving', x: 32, y: 128 }]);
+    for (let step = 0; step < 40; step++) {
+      world.intents.update([unit], 4000 + step * 16);
+      expect(world.intents.allowsAttack(unit.id, 'obstacle', 'right', 'all')).toBe(false);
+    }
+    expect(world.intents.getBreach(unit.id)?.nextBlocker).toBe('rock:left');
+    expect(world.intents.allowsAttack(unit.id, 'obstacle', 'left', 'all')).toBe(true);
     world.destroy();
   });
 });

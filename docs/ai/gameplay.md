@@ -45,6 +45,12 @@ prüft den vollständigen Körper an genau der Position, die er erzeugt; ungepr�
 Bei bewegten Zielen darf die aktuelle Regionsverbindung einen Spawn vor Abschluss der neuen Wegkosten
 bestätigen. Eine neue physische Topologie benötigt dagegen einen passenden Graphen.
 
+Auch bestätigte Unerreichbarkeit hängt an aktuellen Körperregionen und gültigen Start-/Zielanschlüssen,
+nicht an fertig berechneten Wegkosten. Bei unveränderter Topologie prüft die Navigation die aktuell
+angeforderten Angriffsplätze gegen diese Regionen. Ein Durchbruchsauftrag bleibt bei Zielbewegung
+innerhalb derselben Zielregion gültig; ein frei erreichbarer Zielbereich hebt ihn sofort auf.
+Die Suche verwendet dabei die aktuellen Zielanschlüsse, keine veralteten Ziele des Kostenfeldes.
+
 Ein `pending`-Ergebnis kann einen sicheren Bewegungsfortsatz tragen. Dieser bleibt an dasselbe Ziel
 gebunden und erteilt keine Durchbruchserlaubnis. Eine direkte Verbindung zu einem aktuellen Angriffsbereich
 kann die normale Zielerlaubnis bestätigen; ein Fortsatz aus dem vorigen Feld allein kann dies nicht.

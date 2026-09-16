@@ -46,8 +46,13 @@ describe('Body graph and current geometry', () => {
     world.flush();
     expect(world.field.queryNavigation(32, 128).status).toBe('unreachable');
     expect(world.field.queryNavigation(128, 128).status).toBe('invalid-start');
-    world.goal(128, 128);
+    // Target motion changes costs, not body connectivity. No completed replacement is needed.
+    world.goal(224, 192);
+    expect(world.field.queryNavigation(32, 128).status).toBe('unreachable');
+    world.goal(32, 192);
     expect(world.field.queryNavigation(32, 128).status).toBe('pending');
+    world.goal(128, 128);
+    expect(world.field.queryNavigation(32, 128).status).toBe('invalid-goal');
     world.flush(); expect(world.field.queryNavigation(32, 128).status).toBe('invalid-goal'); world.destroy();
   });
 

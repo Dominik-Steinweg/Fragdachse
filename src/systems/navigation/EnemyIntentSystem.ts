@@ -26,7 +26,7 @@ export class EnemyIntentSystem {
   private readonly fieldEntries = new WeakMap<EnemyFlowFieldService, SharedField>();
   private readonly fields = new Map<string, SharedField>();
   private readonly planner = new BreachPlanner();
-  private readonly goalRegions = new WeakMap<FlowFieldSnapshot, string>();
+  private readonly goalRegions = new WeakMap<readonly number[], string>();
   private readonly positions = new AttackPositionReservations();
   private readonly lastSeen = new Map<string, Target>();
   private perception: ((enemy: EnemyEntity, x: number, y: number, range: number) => boolean) | null = null;
@@ -304,7 +304,8 @@ export class EnemyIntentSystem {
     const route = decision.intent.navigation;
     if (route.status !== 'unreachable') return;
     const snapshot = decision.field.getNavigationSnapshot(), cell = decision.field.worldToGrid(enemy.sprite.x, enemy.sprite.y);
-    if (!snapshot || !cell) return;
+    const goals = decision.field.getCurrentGoalIndexes();
+    if (!snapshot || !cell || !goals?.length) return;
     const m = this.coordinator.metrics;
     let startIndex = -1;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -319,16 +320,16 @@ export class EnemyIntentSystem {
       const config = attack.weapon.config;
       return `${config.id}:${attack.targetMode}:${config.damage}:${config.cooldown}:${config.baseDamageMult ?? 1}:${config.rockDamageMult ?? 1}`;
     }).sort().join(',')}`;
-    let goalRegions = this.goalRegions.get(snapshot);
+    let goalRegions = this.goalRegions.get(goals);
     if (goalRegions === undefined) {
-      goalRegions = [...new Set(snapshot.goalIndexes.map(index => snapshot.regions?.[index] ?? 0))].sort((a, b) => a - b).join(',');
-      this.goalRegions.set(snapshot, goalRegions);
+      goalRegions = [...new Set(goals.map(index => snapshot.regions?.[index] ?? 0))].sort((a, b) => a - b).join(',');
+      this.goalRegions.set(goals, goalRegions);
     }
     // Within an unchanged body-connected goal region, the previous endpoint still has a free
     // continuation to a current attack position. Moving targets must not starve the shared search.
     const key = `${decision.target.kind}:${decision.target.id}:${route.region}:${route.profile}:${route.topology}:goals:${goalRegions}:${rights}`;
     decision.breach = this.planner.request(key, { version: route, startIndex, startRegion: route.region,
-      goals: [...snapshot.goalIndexes], radius: enemy.getSize() / 2, speed: enemy.getMoveSpeed(),
+      goals, radius: enemy.getSize() / 2, speed: enemy.getMoveSpeed(),
       attackRangeFor: id => Math.max(0, ...weapons.filter(attack => {
         const config = attack.weapon.config;
         return config.damage > 0 && !(id.startsWith('base:') && attack.targetMode === 'rocks')

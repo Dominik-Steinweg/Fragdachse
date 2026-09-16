@@ -56,6 +56,13 @@ Route. Der Integrationstest mit 360 bewegten Spielerpositionen und Zielwechsel
 zeigte keine zusätzlichen Bewegungspausen. Ausstehende Wegkosten allein
 blockieren bei bestätigter freier Regionsverbindung auch keine Spawns.
 
+Dies gilt auch für notwendige Durchbrüche: Die aktuelle Regionsverbindung bestätigt
+die Blockade unabhängig von ausstehenden Wegkosten. Bewegung innerhalb desselben
+eingeschlossenen Zielbereichs unterbricht weder Anmarsch noch Angriffserlaubnis.
+Ein Wechsel des Zielbereichs verwendet aktuelle Angriffsplätze; ein freier Weg
+hebt den Auftrag sofort auf. Gezielte Regressionstests prüfen den bewegten Spieler
+hinter einer Felswand einschließlich verzögert gelieferter Feldberechnungen.
+
 Alle 90 kontrollierten Bewegungsfälle erreichten mit sämtlichen Einheiten das
 Ziel, ohne unsichere Bewegungsvorschläge. Bei 100 Einheiten lag die Navigation
 im damaligen Inline-Harness bei etwa 0,50–0,58 ms p95 pro Simulationsschritt.

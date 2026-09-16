@@ -120,6 +120,7 @@ export class EnemyFlowFieldService {
   private readonly view: FlowFieldFieldView;
   private connectionGoals: Int32Array | null = null;
   private connectionSnapshot: FlowFieldSnapshot | null = null;
+  private connectionGoalIndexes: readonly number[] = [];
   private readonly connectedGoalRegions = new Set<number>();
   private readonly self: SelfDrivenState | null;
   private readonly pathHeap = new FlowFieldMinHeap();
@@ -235,12 +236,21 @@ export class EnemyFlowFieldService {
 
   // ---- Topologie ----
 
-  /** A current, body-safe start connection; pending work can never be interpreted as a blockade. */
+  /** A blockade needs current body connectivity, but not completed integration costs. */
   queryNavigation(x: number, y: number): NavigationResult {
     const version = this.view.version(), snapshot = this.view.snapshot(), geometry = this.view.geometry();
     const radius = this.view.bodyRadius;
     if (!geometry || !geometry.isFree(x, y, radius)) return { ...version, status: 'invalid-start' };
-    if (!snapshot || snapshot.topologyVersion !== version.topology || snapshot.goalVersion !== version.goal) return { ...version, status: 'pending' };
+    if (!snapshot || snapshot.topologyVersion !== version.topology) return { ...version, status: 'pending' };
+    if (snapshot.goalVersion !== version.goal) {
+      const goals = this.getCurrentGoalIndexes();
+      if (!goals) return { ...version, status: 'pending' };
+      if (!goals.length) return { ...version, status: 'invalid-goal' };
+      const connection = this.connectCurrentGoals(x, y, snapshot, geometry);
+      if (!connection.region) return { ...version, status: 'invalid-start' };
+      return connection.reachable ? { ...version, status: 'pending' }
+        : { ...version, status: 'unreachable', region: connection.region };
+    }
     return this.querySnapshotNavigation(x, y, snapshot, version, geometry);
   }
 
@@ -293,26 +303,43 @@ export class EnemyFlowFieldService {
     const snapshot = this.view.snapshot(), geometry = this.view.geometry(), version = this.view.version();
     if (!snapshot?.regions || !geometry || snapshot.topologyVersion !== version.topology) return null;
     if (!geometry.isFree(x, y, this.view.bodyRadius)) return false;
+    if (!this.getCurrentGoalIndexes()?.length) return false;
+    return this.connectCurrentGoals(x, y, snapshot, geometry).reachable;
+  }
+
+  /** Current requested attack positions on the live body graph, independent of older cost goals. */
+  getCurrentGoalIndexes(): readonly number[] | null {
+    const snapshot = this.view.snapshot();
+    if (!snapshot?.regions || snapshot.topologyVersion !== this.view.version().topology) return null;
     const goals = this.view.requestedGoals();
     if (goals !== this.connectionGoals || snapshot !== this.connectionSnapshot) {
       this.connectionGoals = goals; this.connectionSnapshot = snapshot; this.connectedGoalRegions.clear();
+      const indexes: number[] = [];
       for (const goal of goals) if (snapshot.profileTraversable?.[goal] && !this.view.isGoalSuppressed(goal)) {
         const region = snapshot.regions[goal];
-        if (region) this.connectedGoalRegions.add(region);
+        if (region) { this.connectedGoalRegions.add(region); indexes.push(goal); }
       }
+      this.connectionGoalIndexes = indexes;
     }
-    if (!this.connectedGoalRegions.size) return false;
+    return this.connectionGoalIndexes;
+  }
+
+  private connectCurrentGoals(x: number, y: number, snapshot: FlowFieldSnapshot, geometry: NavigationGeometry):
+    { region: number; reachable: boolean } {
     const cell = this.worldToGrid(x, y);
-    if (!cell) return false;
+    if (!cell) return { region: 0, reachable: false };
+    let region = 0;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const gx = cell.gridX + dx, gy = cell.gridY + dy;
       if (!this.isInBounds(gx, gy)) continue;
-      const index = this.toIndex(gx, gy);
-      if (!this.connectedGoalRegions.has(snapshot.regions[index])) continue;
+      const index = this.toIndex(gx, gy), candidate = snapshot.regions?.[index] ?? 0;
+      if (!candidate || !snapshot.profileTraversable?.[index]) continue;
       const point = navigationPoint(this.view.metrics, index);
-      if (geometry.canMove(x, y, point.x, point.y, this.view.bodyRadius)) return true;
+      if (!geometry.canMove(x, y, point.x, point.y, this.view.bodyRadius)) continue;
+      region = candidate;
+      if (this.connectedGoalRegions.has(region)) return { region, reachable: true };
     }
-    return false;
+    return { region, reachable: false };
   }
   getNavigationSnapshot() { return this.view.snapshot(); }
   getBodyRadius(): number { return this.view.bodyRadius; }
