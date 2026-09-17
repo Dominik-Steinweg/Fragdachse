@@ -78,8 +78,7 @@ function butterflyVisual(animal: WildlifeAnimal): WildlifeVisual {
   mesh.pose();
   mesh.fill(0x24372a, .17); mesh.ellipse(-1, 2, 3.4, 1.6, 8);
   const wings = mesh.pose();
-  const moth = animal.kind === 'moth';
-  const colors = moth ? TUNING.mothColors : TUNING.butterflyColors;
+  const colors = TUNING.butterflyColors;
   const size = animal.appearance.length / TUNING.butterfly.size;
   const width = TUNING.butterfly.size * .48;
   for (let side = -1; side <= 1; side += 2) {
@@ -87,14 +86,54 @@ function butterflyVisual(animal: WildlifeAnimal): WildlifeVisual {
     mesh.fill(colors[animal.appearance.colorIndex], .95);
     mesh.ellipse(.65, side * width * .55, 2.9, width * .8, 8);
     mesh.ellipse(-1.2, side * width * .43, 1.9, width * .72, 8);
-    mesh.fill(moth ? 0xc1b7a2 : 0xfff5d9, moth ? .3 : .62);
+    mesh.fill(0xfff5d9, .62);
     mesh.ellipse(1, side * width * .7, .8, width * .25, 6);
-    if (moth) {
-      mesh.fill(0x5e574d, .5); mesh.ellipse(.15, side * width * .62, .6, width * .3, 6);
-    }
   }
   const body = mesh.pose();
   mesh.fill(0x454139, .95); mesh.line(-1.6, 0, 1.8, 0, .55);
+  for (let i = 0; i < mesh.xy.length; i++) mesh.xy[i] *= size;
+  mesh.opacityPower.fill(1);
+  return { animal, mesh, sample: () => {
+    mesh.poses[wings].sy = .28 + .72 * (.5 - .5 * Math.cos(animal.animation * 2));
+    mesh.poses[wings].y = mesh.poses[body].y = Math.sin(animal.animation * .19) * .75;
+  } };
+}
+
+function mothVisual(animal: WildlifeAnimal): WildlifeVisual {
+  const mesh = new WildlifeMesh();
+  const size = animal.appearance.length / TUNING.moth.size;
+  mesh.pose();
+  mesh.fill(0x24372a, .17); mesh.ellipse(-1, 2, 4.2, 2, 8);
+  const wings = mesh.pose();
+  for (const side of [-1, 1]) {
+    // Swept forewings form a broad, angular mantle instead of butterfly lobes.
+    mesh.fill(0x706657, .95);
+    mesh.ellipse(-1.4, side * 1.2, 2.7, 2.3, 8);
+    mesh.fill(TUNING.mothColors[animal.appearance.colorIndex], .98);
+    mesh.triangle(1.5, side * .25, .35, side * 3.25, -2.65, side * 2.25);
+    mesh.triangle(1.5, side * .25, -2.65, side * 2.25, -1.65, side * .2);
+    // Muted transverse bands read as wing markings even at gameplay scale.
+    mesh.fill(0x574f46, .65);
+    mesh.line(.5, side * 1.65, -.75, side * 2.1, .32);
+    mesh.line(-.75, side * 2.1, -2.1, side * 1.5, .32);
+    mesh.fill(0xd0c3a9, .55);
+    mesh.line(.1, side * 2.7, -1.15, side * 2.65, .22);
+    mesh.ellipse(.2, side * 1.15, .6, .45, 6);
+  }
+  const body = mesh.pose();
+  mesh.fill(0x5d554a, .98); mesh.ellipse(-.8, 0, 3.5, 1.15, 10);
+  mesh.fill(0xb4a58b, .6); mesh.ellipse(.6, 0, 2.1, 1.7, 10);
+  mesh.fill(0x8e806c, 1); mesh.ellipse(.65, 0, 1.7, 1.35, 10);
+  mesh.fill(0xc3b397, .65); mesh.ellipse(.85, -.15, 1.1, .65, 8);
+  mesh.fill(0x665c4e, 1); mesh.ellipse(1.7, 0, 1, .9, 8);
+  for (const side of [-1, 1]) {
+    mesh.fill(0xb9ab90, .9);
+    mesh.line(1.9, side * .25, 2.95, side * 1, .18);
+    for (let i = 0; i < 3; i++) {
+      const x = 2.1 + i * .25, y = side * (.4 + i * .18);
+      mesh.line(x, y, x - .08, y + side * .38, .14);
+    }
+  }
   for (let i = 0; i < mesh.xy.length; i++) mesh.xy[i] *= size;
   mesh.opacityPower.fill(1);
   return { animal, mesh, sample: () => {
@@ -238,7 +277,8 @@ function fishVisual(animal: WildlifeAnimal): WildlifeVisual {
 
 /** Called during ArenaBuilder's covered World construction, never on visibility changes. */
 export function prepareWildlifeVisual(animal: WildlifeAnimal): WildlifeVisual {
-  return animal.kind === 'butterfly' || animal.kind === 'moth' ? butterflyVisual(animal)
+  return animal.kind === 'butterfly' ? butterflyVisual(animal)
+    : animal.kind === 'moth' ? mothVisual(animal)
     : animal.kind === 'firefly' ? fireflyVisual(animal)
     : animal.kind === 'snake' ? snakeVisual(animal) : fishVisual(animal);
 }
