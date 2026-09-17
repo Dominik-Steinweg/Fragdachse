@@ -6,8 +6,17 @@ export function isWingedInsect(kind: WildlifeKind): kind is 'butterfly' | 'moth'
 }
 
 /** Shared pulse for the visible halo and its illumination of the ground. */
-export function fireflyGlowStrength(time: number, variation: number, phaseOffset: number): number {
-  return .55 + .45 * (.5 + .5 * Math.sin(time * (1.5 + variation) + phaseOffset));
+export function fireflyGlowStrength(time: number, variation: number, phaseOffset: number,
+  speed: number = TUNING.firefly.speed): number {
+  const wave = .5 + .5 * Math.sin(time * (1.5 + variation) / 3 + phaseOffset);
+  // Individual phases and periods, with a quiet interval between soft flashes.
+  const pulse = .08 + .92 * wave * wave * wave;
+  // The model already eases speed into and out of flight. Follow that continuous
+  // state rather than switching brightness abruptly with the fleeing flag.
+  const flight = Math.max(0, Math.min(1,
+    (speed - TUNING.firefly.speed) / (TUNING.firefly.fleeSpeed - TUNING.firefly.speed)));
+  const blend = flight * flight * (3 - 2 * flight);
+  return pulse + (1 - pulse) * blend;
 }
 
 /** Immutable local appearance shared by drawing and habitat clearance. */

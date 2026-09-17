@@ -484,6 +484,18 @@ export class ArenaRuntime {
     this.flow.hostCheckReadyToStart();
   }
 
+  isArenaEntryProtected(): boolean {
+    return this.flow.isArenaEntryProtected();
+  }
+
+  isArenaEntryLoading(): boolean {
+    return this.flow.isArenaEntryLoading();
+  }
+
+  syncArenaEntryTransition(): void {
+    this.flow.syncArenaEntryTransition();
+  }
+
   hostCompleteRound(coopRoundOutcome?: CoopMissionOutcome): void {
     this.flow.hostCompleteRound(coopRoundOutcome);
   }

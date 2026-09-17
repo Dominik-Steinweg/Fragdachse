@@ -8,7 +8,7 @@ import { createAmbientWildlifeLayer } from '../src/arena/AmbientWildlifeLayer';
 import { AmbientWildlifeRenderer } from '../src/arena/AmbientWildlifeRenderer';
 import { AmbientWildlifeModel, type WildlifeAnimal } from '../src/arena/AmbientWildlifeModel';
 import { AMBIENT_WILDLIFE as TUNING } from '../src/arena/AmbientWildlifeConfig';
-import { createWildlifeAppearance, writeSnakeBodyPose } from '../src/arena/AmbientWildlifeAppearance';
+import { createWildlifeAppearance, fireflyGlowStrength, writeSnakeBodyPose } from '../src/arena/AmbientWildlifeAppearance';
 import { DEPTH, DEPTH_LIGHTING } from '../src/config';
 
 const view = { x: 0, y: 0, width: 1024, height: 1024 };
@@ -17,6 +17,38 @@ const layout = { seed: 882, trees: [{ gridX: 8, gridY: 12 }], rocks: [], dirt: [
   water: Array.from({ length: 120 }, (_, i) => ({ gridX: 14 + i % 12, gridY: 8 + Math.floor(i / 12) })) };
 
 describe('retained wildlife rendering', () => {
+  it('smoothly blends the individual pulse into steady flight illumination and back', () => {
+    const { speed, fleeSpeed } = TUNING.firefly;
+    for (const time of [0, 1, 4, 9]) {
+      const pulse = fireflyGlowStrength(time, .4, 2);
+      const strengths = [0, .001, .25, .5, .75, .999, 1].map(blend =>
+        fireflyGlowStrength(time, .4, 2, speed + (fleeSpeed - speed) * blend));
+      expect(strengths[0]).toBe(pulse);
+      expect(strengths[strengths.length - 1]).toBe(1);
+      expect(strengths.every((value, i) => i === 0 || value >= strengths[i - 1])).toBe(true);
+      expect(strengths[1] - pulse).toBeLessThan(.00001);
+      expect(1 - strengths[strengths.length - 2]).toBeLessThan(.00001);
+      expect(fireflyGlowStrength(time, .4, 2, speed)).toBe(pulse);
+    }
+  });
+
+  it('keeps individual firefly pulses deterministic and their halo in phase with illumination', () => {
+    const animals = new AmbientWildlifeModel(layout, frame).animals.filter(a => a.kind === 'firefly');
+    const pulses = animals.map(a => [0, 1, 2, 4].map(t => fireflyGlowStrength(t, a.variation, a.phaseOffset)));
+    expect(new Set(pulses.map(p => p.join(','))).size).toBeGreaterThan(1);
+    for (const animal of animals) {
+      const visual = prepareWildlifeVisual(animal);
+      const initial = visual.mesh.alpha[0];
+      for (const time of [0, 1, 2, 4, 0]) {
+        const pulse = fireflyGlowStrength(time, animal.variation, animal.phaseOffset);
+        expect(pulse).toBeGreaterThanOrEqual(0);
+        expect(pulse).toBeLessThanOrEqual(1);
+        visual.sample(time);
+        expect(visual.mesh.alpha[0]).toBeCloseTo(initial * pulse);
+      }
+    }
+  });
+
   it('illuminates visible fireflies and releases lights on culling, dawn and teardown', () => {
     const harness = wildlifeScene();
     const renderer = new AmbientWildlifeRenderer(harness.scene, frame, layout);

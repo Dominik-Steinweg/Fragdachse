@@ -15,6 +15,7 @@ import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import type { CameraPostFxController } from '../effects/postfx/CameraPostFxController';
 import { t } from '../i18n';
 import type { ArenaLoadStage } from '../types';
+import { LOBBY_CARD_MOTION } from './LobbyLayout';
 import {
   RADIAL_FOCUS_SOFTNESS_PX,
   resolveRadialFocusFrame,
@@ -88,6 +89,7 @@ export class ArenaCountdownOverlay {
   private readonly baseY = GAME_HEIGHT / 2;
   private lastFallbackFrameKey: string | null = null;
   private destroyed = false;
+  private loadingCoveredCallbacks: Array<() => void> = [];
 
   constructor(
     private scene: Phaser.Scene,
@@ -195,8 +197,12 @@ export class ArenaCountdownOverlay {
   }
 
   /** Full-screen loading veil used while local chunks and round systems are being prepared. */
-  showLoading(): void {
-    if (this.mode === 'loading') return;
+  showLoading(transition?: { fadeBackdrop: boolean; onCovered: () => void }): void {
+    if (transition) this.loadingCoveredCallbacks.push(transition.onCovered);
+    if (this.mode === 'loading') {
+      if (this.isLoadingBackdropCovered()) this.notifyLoadingCovered();
+      return;
+    }
     this.resetOverlayState(CLOSED_VEIL_RADIUS_PX, VEIL_ALPHA);
     this.mode = 'loading';
     this.unlockAtMs = 0;
@@ -205,7 +211,16 @@ export class ArenaCountdownOverlay {
     this.focusFallback.setVisible(false);
     this.scene.tweens.killTweensOf(this.loadingBackdrop);
     this.scene.tweens.killTweensOf(this.loadingRoot);
-    this.loadingBackdrop.setVisible(true).setAlpha(1);
+    this.loadingBackdrop.setVisible(true).setAlpha(transition?.fadeBackdrop ? 0 : 1);
+    if (transition?.fadeBackdrop) {
+      this.scene.tweens.add({
+        targets: this.loadingBackdrop,
+        alpha: 1,
+        duration: LOBBY_CARD_MOTION.exitDuration,
+        ease: 'Sine.easeInOut',
+        onComplete: () => this.notifyLoadingCovered(),
+      });
+    } else this.notifyLoadingCovered();
     this.loadingRoot.setVisible(true).setAlpha(0);
     this.scene.tweens.add({
       targets: this.loadingRoot,
@@ -213,6 +228,17 @@ export class ArenaCountdownOverlay {
       duration: 180,
       ease: 'Sine.easeOut',
     });
+  }
+
+  /** Read at POST_RENDER: alpha alone is not proof that a loading frame was drawn. */
+  isLoadingBackdropCovered(): boolean {
+    return !this.destroyed && this.mode === 'loading'
+      && this.loadingBackdrop.visible && this.loadingBackdrop.alpha === 1;
+  }
+
+  private notifyLoadingCovered(): void {
+    const callbacks = this.loadingCoveredCallbacks.splice(0);
+    for (const callback of callbacks) callback();
   }
 
   updateLoadingScreen(state: ArenaLoadingScreenState): void {
@@ -362,6 +388,7 @@ export class ArenaCountdownOverlay {
   }
 
   clear(): void {
+    this.loadingCoveredCallbacks.length = 0;
     this.mode = 'hidden';
     this.unlockAtMs = 0;
     this.scene.tweens.killTweensOf(this.loadingBackdrop);
@@ -377,6 +404,7 @@ export class ArenaCountdownOverlay {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.loadingCoveredCallbacks.length = 0;
     this.stopTextTweens();
     this.scene.tweens.killTweensOf(this.loadingBackdrop);
     this.scene.tweens.killTweensOf(this.loadingRoot);

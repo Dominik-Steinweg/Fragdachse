@@ -1,7 +1,7 @@
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { collectDeathFragmentFrames } from '../../effects/gpu/DeathFragmentPreparation';
-import type Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { AdrenalineEssenceBinding } from '../../adrenalineEssence/AdrenalineEssenceBinding';
 import { ADRENALINE_ESSENCE_CONFIG } from '../../adrenalineEssence/AdrenalineEssenceConfig';
 import { AdrenalineEssenceGpuRenderer } from '../../adrenalineEssence/AdrenalineEssenceGpuRenderer';
@@ -280,6 +280,16 @@ export class ArenaLifecycleCoordinator {
   private terrainSnapshotRetryCount = 0;
   /** Verhindert parallelen Re-Eintritt in `onTransitionToArena()` durch Timer-Retry und `detectWorldChange()`. */
   private arenaTransitionInProgress = false;
+  /** Local presentation gate; never a second network readiness barrier. */
+  private arenaEntry: {
+    generation: number;
+    revision: number | null;
+    stage: 'animating' | 'render' | 'rendered' | 'released';
+    physicsWasPaused: boolean;
+  } | null = null;
+  private arenaTransitionGeneration = 0;
+  private arenaEntryRenderListener: (() => void) | null = null;
+  private arenaTransitionRetry: Phaser.Time.TimerEvent | null = null;
   private roundStartPrepared = false;
   private preparedRoundLayout: { descriptor: WorldDescriptor; layout: ArenaLayout } | null = null;
   private combatPresentationPrepared = false;
@@ -933,6 +943,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   initialize(): void {
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cancelArenaEntry());
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.lastPhase = bridge.getGamePhase();
@@ -947,8 +958,10 @@ export class ArenaLifecycleCoordinator {
     // detectPhaseChange() will never see LOBBY→ARENA. Schedule the transition
     // on the next frame so all create()-time setup (RPC, callbacks) completes first.
     if (this.lastPhase === 'ARENA') {
+      const generation = this.arenaTransitionGeneration;
       this.scene.time.delayedCall(0, () => {
-        if (bridge.getGamePhase() === 'ARENA' && !this.arenaBuilt && !this.matchTerminated) {
+        if (generation === this.arenaTransitionGeneration
+          && bridge.getGamePhase() === 'ARENA' && !this.arenaBuilt && !this.matchTerminated) {
           this.onTransitionToArena();
         }
       });
@@ -969,7 +982,11 @@ export class ArenaLifecycleCoordinator {
     if (current === this.lastPhase) {
       // Safety net: if we've been in ARENA for >5s without having built the
       // arena, something went wrong during the transition — recover gracefully.
-      if (current === 'ARENA' && !this.arenaBuilt) {
+      if (current === 'ARENA' && !this.arenaBuilt && !this.isArenaEntryProtected()) {
+        if (this.arenaEntry && !getDeferredAssets(this.scene).getState().ready) {
+          this.arenaEnteredAt = 0;
+          return;
+        }
         const now = Date.now();
         if (this.arenaEnteredAt === 0) {
           this.arenaEnteredAt = now;
@@ -1060,7 +1077,7 @@ export class ArenaLifecycleCoordinator {
    * damit ausdruecklich ohne Sonderpfad.
    */
   updateWorldRuntime(deltaMs: number): void {
-    if (this.arenaExitPresentationActive) return;
+    if (this.arenaExitPresentationActive || this.isArenaEntryProtected()) return;
     this.adrenalineEssence?.prepare();
     this.worldRuntime?.update(deltaMs);
     // The boot reveal also waits for these resources in the LobbyWorld, where the
@@ -1428,6 +1445,7 @@ export class ArenaLifecycleCoordinator {
    */
   detectWorldChange(deferArenaToLobby = false): void {
     if (this.matchTerminated) return;
+    if (this.isArenaEntryProtected()) return;
     const deferredMatchToLobby = deferArenaToLobby
       && bridge.getGamePhase() === 'LOBBY'
       && this.lastPhase === 'ARENA';
@@ -1643,23 +1661,13 @@ export class ArenaLifecycleCoordinator {
     const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
       ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
       : null;
-    applyArenaMetricsForMode(
-      bridge.getGameMode(),
-      'ARENA',
-      coopDefenseMapConfig?.arenaWidthCells,
-      coopDefenseMapConfig?.arenaHeightCells,
-    );
     // Enter ARENA with no gameplay timestamp yet. The round revision is the identity used by
     // the separate local arena-load barrier; it must not be confused with Lobby Ready or with
     // the later authoritative gameplay start timestamp.
     // Keep the revision monotone even when an abort/restart happens within the same millisecond;
     // a stale reliable acknowledgement must never be able to match a new round by coincidence.
-    // Die LobbyWorld endet mit dem Matchstart. Ohne diesen Schnitt haelten Host und Clients im
-    // Wartefenster bis zum Match-Descriptor die Lobby-Instanz fuer die Rundenwelt. Ihre
-    // Teilnehmer fallen mit ihr - kein Testgelaende-Spieler reist in die Match-World mit.
-    this.detachAllWorldPlayers();
-    this.worldLifecycle.endInstance();
-    this.clearWorldAdmission();
+    // Die lokale LobbyWorld bleibt bis zum gerenderten Ladebild erhalten. Netzwerkvorbereitung
+    // darf bereits laufen; Abbau, Metrikwechsel und Generierung folgen erst hinter dem Gate.
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
@@ -1705,15 +1713,18 @@ export class ArenaLifecycleCoordinator {
     };
     bridge.publishRoundState(roundState);
     bridge.setGamePhase('ARENA');
+    this.onTransitionToArena();
   }
 
   /** Called after the shared chunk scheduler has had its frame budget. */
   syncArenaLoadReady(view: WorldViewRect | null): void {
-    if (this.matchTerminated || !this.arenaBuilt) return;
-    this.syncAuthoritativeRoundStartAnchors();
+    if (this.matchTerminated || !this.arenaBuilt || this.isArenaEntryProtected()) return;
     // Der Ladezustand gehoert zur World-Instanz, nicht zur Runde.
-    const worldRevision = bridge.getWorldDescriptor()?.worldRevision ?? 0;
-    if (worldRevision <= 0) return;
+    const loadedWorld = bridge.getWorldDescriptor();
+    const worldRevision = loadedWorld?.worldRevision ?? 0;
+    if (worldRevision <= 0 || worldRevision !== this.builtWorldRevision) return;
+    if (this.arenaEntry && isLobbyWorldDefinitionId(loadedWorld?.definitionId ?? '')) return;
+    this.syncAuthoritativeRoundStartAnchors();
 
     // Ohne lokale World-Presentation gibt es nichts darzustellen und damit nichts zu laden.
     // Ein Host, der eine Shared World nur simuliert, ist sofort bereit.
@@ -2208,6 +2219,7 @@ export class ArenaLifecycleCoordinator {
    */
   canSelfAdmitToWorld(): boolean {
     return bridge.getGamePhase() === 'LOBBY'
+      && !this.isArenaEntryProtected()
       && this.worldLifecycle.isActive()
       && this.arenaBuilt
       && !this.matchTerminated
@@ -2396,7 +2408,7 @@ export class ArenaLifecycleCoordinator {
    * ohne Runde: Rundenflaechen (Timer, Missionsziele, Ergebnis) bleiben aus, weil keine
    * Activity laeuft, nicht weil hier eine zweite Regel sie ausblendet.
    */
-  syncLobbySurface(showLobby: boolean): void {
+  syncLobbySurface(showLobby: boolean, onExitComplete?: () => void): void {
     if (this.lobbySurfaceShown === showLobby) return;
     this.lobbySurfaceShown = showLobby;
     if (showLobby) {
@@ -2406,8 +2418,10 @@ export class ArenaLifecycleCoordinator {
       this.ctx.centerHUD.transitionToLobby();
       return;
     }
-    this.lobbyOverlay.hide();
-    this.ctx.leftPanel.transitionToGame();
+    let pending = 2;
+    const finished = onExitComplete ? () => { if (--pending === 0) onExitComplete(); } : undefined;
+    this.lobbyOverlay.hide(finished, onExitComplete !== undefined);
+    this.ctx.leftPanel.transitionToGame(finished);
     this.ctx.rightPanel.transitionToGame();
     this.ctx.centerHUD.transitionToGame();
   }
@@ -2420,7 +2434,8 @@ export class ArenaLifecycleCoordinator {
    */
   getPlayerCapabilities(playerId: string): PlayerCapabilities {
     const capabilities = resolvePlayerCapabilities({
-      participation: this.arenaExitPresentationActive ? 'none' : this.getWorldParticipation(playerId),
+      participation: this.arenaExitPresentationActive || this.isArenaEntryProtected()
+        ? 'none' : this.getWorldParticipation(playerId),
       activityKind: this.worldLifecycle.activity.kind,
       worldCombatAllowed: this.worldLifecycle.activity.kind !== null
         || this.worldRuntime?.context.definition?.actionPolicy?.combat === true,
@@ -2505,6 +2520,7 @@ export class ArenaLifecycleCoordinator {
     // Ein Abbruch beendet auch einen laufenden Arena-Uebergang samt Retry-Kette; sonst bliebe
     // der Re-Eintritts-Guard nach einem Abbruch im Retry-Fenster dauerhaft gesetzt.
     this.arenaTransitionInProgress = false;
+    this.cancelArenaEntry();
     if (this.matchTerminated) return;
     this.matchTerminated = true;
     this.arenaBuilt = false;
@@ -2871,6 +2887,141 @@ export class ArenaLifecycleCoordinator {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
+  isArenaEntryProtected(): boolean {
+    return !!this.arenaEntry && this.arenaEntry.stage !== 'released';
+  }
+
+  isArenaEntryLoading(): boolean {
+    return !!this.arenaEntry && !this.localArenaLoadReady;
+  }
+
+  private requiresArenaEntry(): boolean {
+    const incoming = bridge.getWorldDescriptor();
+    return bridge.getGamePhase() === 'ARENA'
+      || (!!incoming && !isLobbyWorldDefinitionId(incoming.definitionId)
+        && isLobbyWorldDefinitionId(this.worldLifecycle.descriptor?.definitionId ?? ''));
+  }
+
+  private getArenaEntryRevision(): number | null {
+    return bridge.getRoundParticipation()?.roundRevision
+      ?? bridge.getActivityDescriptor()?.activityRevision
+      ?? null;
+  }
+
+  /** Called only by the Scene update: POST_RENDER never runs the build continuation itself. */
+  syncArenaEntryTransition(): void {
+    const entry = this.arenaEntry;
+    if (!entry) return;
+    if (this.matchTerminated || !this.requiresArenaEntry()
+      || (this.lastPhase === 'ARENA' && bridge.getGamePhase() === 'LOBBY')) {
+      this.cancelArenaEntry();
+      return;
+    }
+    const revision = this.getArenaEntryRevision();
+    if (revision !== null && entry.revision !== null && revision > entry.revision) {
+      this.ensureArenaEntry();
+      return;
+    }
+    if (entry.revision === null) entry.revision = revision;
+    if (entry.stage !== 'rendered') return;
+    entry.stage = 'released';
+    if (!entry.physicsWasPaused) this.scene.physics.world.resume();
+    this.arenaEnteredAt = Date.now();
+    this.onTransitionToArena();
+  }
+
+  private ensureArenaEntry(): boolean {
+    if (this.arenaEntry && this.lastPhase === 'ARENA' && bridge.getGamePhase() === 'LOBBY') {
+      this.cancelArenaEntry();
+      return false;
+    }
+    if (!this.requiresArenaEntry()) return true;
+    if (this.arenaEntry) {
+      const revision = this.getArenaEntryRevision();
+      if (revision !== null && this.arenaEntry.revision !== null && revision > this.arenaEntry.revision) {
+        if (this.isArenaEntryProtected()) {
+          // New target, same unfinished visual exit. Never skip still-visible cards merely
+          // because a newer network revision arrived during their animation.
+          this.arenaEntry.revision = revision;
+          this.arenaEntry.generation = ++this.arenaTransitionGeneration;
+          this.arenaTransitionRetry?.remove(false);
+          this.arenaTransitionRetry = null;
+          this.cancelPendingHostArenaGeneration();
+          this.arenaTransitionInProgress = false;
+          return false;
+        }
+        this.cancelArenaEntry();
+      } else {
+        if (this.arenaEntry.revision === null) this.arenaEntry.revision = revision;
+        if (revision !== null && this.arenaEntry.revision !== null && revision < this.arenaEntry.revision) return false;
+        return this.arenaEntry.stage === 'released';
+      }
+    }
+
+    const entry = this.arenaEntry = {
+      generation: ++this.arenaTransitionGeneration,
+      revision: this.getArenaEntryRevision(),
+      stage: 'animating' as 'animating' | 'render' | 'rendered' | 'released',
+      physicsWasPaused: this.scene.physics.world.isPaused,
+    };
+    this.hostUpdate.setActive(false);
+    this.scene.physics.world.pause();
+    this.localArenaLoadReady = false;
+    this.lobbyOverlay.lockButton();
+    this.ctx.gameAudioSystem.stopMusic();
+    const visibleLobby = this.lobbySurfaceShown && this.lobbyOverlay.isPresented();
+    let pending = visibleLobby ? 2 : 1;
+    const complete = () => {
+      if (this.arenaEntry !== entry || entry.generation !== this.arenaTransitionGeneration) return;
+      if (--pending !== 0) return;
+      entry.stage = 'render';
+      this.arenaEntryRenderListener = () => {
+        if (this.arenaEntry !== entry || entry.generation !== this.arenaTransitionGeneration) return;
+        if (!this.scene.sys.isActive() || !this.scene.sys.isVisible()
+          || !this.ctx.arenaCountdown?.isLoadingBackdropCovered()) return;
+        this.removeArenaEntryRenderListener();
+        entry.stage = 'rendered';
+      };
+      this.scene.game.events.on(Phaser.Core.Events.POST_RENDER, this.arenaEntryRenderListener);
+    };
+    if (visibleLobby) this.syncLobbySurface(false, complete);
+    else this.syncLobbySurface(false);
+    this.ctx.arenaCountdown?.showLoading({ fadeBackdrop: visibleLobby, onCovered: complete });
+    // Starting downloads is idempotent and independent of the local World replacement.
+    getDeferredAssets(this.scene).start();
+    return false;
+  }
+
+  private removeArenaEntryRenderListener(): void {
+    if (!this.arenaEntryRenderListener) return;
+    this.scene.game.events.off(Phaser.Core.Events.POST_RENDER, this.arenaEntryRenderListener);
+    this.arenaEntryRenderListener = null;
+  }
+
+  private cancelArenaEntry(): void {
+    ++this.arenaTransitionGeneration;
+    this.removeArenaEntryRenderListener();
+    this.arenaTransitionRetry?.remove(false);
+    this.arenaTransitionRetry = null;
+    this.cancelPendingHostArenaGeneration();
+    if (this.arenaEntry && this.arenaEntry.stage !== 'released' && !this.arenaEntry.physicsWasPaused) {
+      this.scene.physics.world.resume();
+    }
+    this.arenaEntry = null;
+    this.arenaTransitionInProgress = false;
+    this.layoutRetryCount = 0;
+  }
+
+  private retryArenaTransition(delay: number): void {
+    const generation = this.arenaTransitionGeneration;
+    this.arenaTransitionRetry = this.scene.time.delayedCall(delay, () => {
+      if (generation !== this.arenaTransitionGeneration || this.matchTerminated) return;
+      this.arenaTransitionRetry = null;
+      this.arenaTransitionInProgress = false;
+      this.onTransitionToArena();
+    });
+  }
+
   private scheduleHostArenaGeneration(request: {
     readonly roundRevision: number;
     readonly gameMode: GameMode;
@@ -2878,16 +3029,19 @@ export class ArenaLifecycleCoordinator {
     readonly seed: number;
     readonly worldParameters: WorldParameters | undefined;
   }): void {
-    if (this.hostArenaGenerationTimer) return;
+    if (this.hostArenaGenerationTimer || this.isArenaEntryProtected()) return;
+    const generation = this.arenaTransitionGeneration;
 
     this.hostArenaGenerationTimer = this.scene.time.delayedCall(0, () => {
-      this.hostArenaGenerationTimer = null;
-      if (this.pendingHostArenaGeneration !== request
+      if (generation !== this.arenaTransitionGeneration
+        || this.isArenaEntryProtected()
+        || this.pendingHostArenaGeneration !== request
         || this.matchTerminated
         || bridge.getGamePhase() !== 'ARENA'
         || bridge.getRoundParticipation()?.roundRevision !== request.roundRevision) {
         return;
       }
+      this.hostArenaGenerationTimer = null;
 
       // Keep the technical loading stage explicit while the synchronous generator runs. The
       // phase/overlay was already committed in the preceding frame; this callback is the only
@@ -2895,6 +3049,10 @@ export class ArenaLifecycleCoordinator {
       this.pendingHostArenaGeneration = null;
       bridge.setLocalWorldLoadProgress(request.roundRevision, 10, 'generating');
       try {
+        // Erst hinter dem gerenderten Ladeschirm die Lobby beenden; keine zweite World.
+        this.synchronizeLocalWorldLifecycle(null);
+        this.arenaBuilt = false;
+        this.builtWorldRevision = 0;
         applyArenaMetricsForMode(
           request.gameMode,
           'ARENA',
@@ -2946,6 +3104,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   private onTransitionToArena(): void {
+    if (this.matchTerminated || !this.ensureArenaEntry()) return;
     // Der Retry-Timer (delayedCall unten) und `detectWorldChange()` im Update-Loop koennen am
     // selben Frame feuern. Ohne Guard wuerde ein doppelter Eintritt den laufenden Snapshot
     // invalidieren und einen zweiten Build starten, der den ersten zerstoerten Scratch erbt.
@@ -2972,6 +3131,12 @@ export class ArenaLifecycleCoordinator {
     const activityDescriptor = bridge.getActivityDescriptor();
     const roundState = bridge.getRoundState();
     const participation = bridge.getRoundParticipation();
+    if (bridge.getGamePhase() === 'ARENA' && worldDescriptor
+      && this.arenaBuilt && this.builtWorldRevision === worldDescriptor.worldRevision
+      && activityDescriptor !== null) {
+      this.arenaTransitionInProgress = false;
+      return;
+    }
     if (bridge.isHost() && bridge.getGamePhase() === 'ARENA') {
       // `publishWorldAndActivity()` intentionally published an empty participation snapshot.
       // Fill it from the host's authoritative admission before the shared readiness barrier.
@@ -3007,10 +3172,7 @@ export class ArenaLifecycleCoordinator {
       // Der Guard bleibt ueber das Retry-Fenster gesetzt und faellt erst, wenn dieser Timer
       // selbst wieder eintritt. So bleibt die Retry-Kette exklusiv: `detectWorldChange()` kann
       // waehrenddessen keinen zweiten, konkurrierenden Uebergang starten.
-      this.scene.time.delayedCall(16, () => {
-        this.arenaTransitionInProgress = false;
-        this.onTransitionToArena();
-      });
+      this.retryArenaTransition(16);
       return;
     }
     this.layoutRetryCount = 0;
@@ -3027,10 +3189,7 @@ export class ArenaLifecycleCoordinator {
           this.terminateMatch(t('ui.lobby.deferredFailed'));
           return;
         }
-        this.scene.time.delayedCall(50, () => {
-          this.arenaTransitionInProgress = false;
-          if (!this.matchTerminated) this.onTransitionToArena();
-        });
+        this.retryArenaTransition(50);
         return;
       }
     }
@@ -3214,6 +3373,7 @@ export class ArenaLifecycleCoordinator {
 
   private onTransitionToLobby(): void {
     this.arenaTransitionInProgress = false;
+    this.cancelArenaEntry();
     this.arenaBuilt = false;
     this.builtWorldRevision = 0;
     this.arenaEnteredAt = 0;

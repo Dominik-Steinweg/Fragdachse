@@ -1362,10 +1362,16 @@ export class ArenaScene extends Phaser.Scene {
     diagnosticsFrame?.end('networkUpdate');
     diagnosticsFrame?.mark('networkEnd');
 
+    this.arenaRuntime.syncArenaEntryTransition();
+
     const phase = bridge.getGamePhase();
     const deferArenaExit = this.weaponBalanceLabPreviousMapId === null
       && this.syncArenaExitFade(phase);
     this.arenaRuntime.detectPhaseChange(deferArenaExit);
+    if (this.arenaRuntime.isArenaEntryProtected()) {
+      this.updateProtectedArenaEntry(delta);
+      return;
+    }
     // Auch spaete Netzwerk-Deskriptoren duerfen waehrend des Fades weder Membership
     // noch Activity, Kamera oder Beleuchtung auf den Lobbyzustand umstellen.
     if (deferArenaExit) {
@@ -1381,6 +1387,10 @@ export class ArenaScene extends Phaser.Scene {
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
     this.arenaRuntime.syncRoomOwners();
     this.arenaRuntime.detectWorldChange(deferArenaExit);
+    if (this.arenaRuntime.isArenaEntryProtected()) {
+      this.updateProtectedArenaEntry(delta);
+      return;
+    }
     // Erst steht fest, welche World lokal laeuft - dann taktet ihre Runtime. Sie taktet nur die
     // eigenen Child-Owner; Rundenphase und Rolle entscheiden darueber nichts.
     this.arenaRuntime.update(delta);
@@ -1442,6 +1452,11 @@ export class ArenaScene extends Phaser.Scene {
       returningFromWeaponBalanceLab,
       diagnosticsFrame,
     );
+    // hostCheckReadyToStart can start the exit inside the lobby frame above.
+    if (this.arenaRuntime.isArenaEntryProtected()) {
+      this.updateProtectedArenaEntry(delta);
+      return;
+    }
 
     if (!deferArenaExit) this.lastObservedGamePhase = phase;
     diagnosticsFrame?.mark('sceneStateEnd');
@@ -1637,6 +1652,19 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  /** Keep the last Lobby frame intact while Phaser's independent UI tweens keep ticking. */
+  private updateProtectedArenaEntry(delta: number): void {
+    this.inputBindings?.updateFrame({
+      enabled: false, gameplayActive: false, countdownActive: false,
+      uiBlocking: true, diagnosticsArena: false,
+    });
+    this.ctx.arenaCountdown?.updateLoadingScreen(this.getArenaLoadingScreenState());
+    this.renderers.gpuVfx.update(delta);
+    ChunkedRenderSurface.flushBakeBudget(this);
+    bridge.flushNetwork();
+    this.lastObservedGamePhase = bridge.getGamePhase();
+  }
+
   private resolveArenaFrameSignals(
     phase: GamePhase,
     deferArenaExit: boolean,
@@ -1654,7 +1682,7 @@ export class ArenaScene extends Phaser.Scene {
     if (returningFromWeaponBalanceLab) this.restoreMapAfterWeaponBalanceLab();
 
     const inGame = phase === 'ARENA';
-    const arenaLoading = bridge.isArenaLoading();
+    const arenaLoading = bridge.isArenaLoading() || this.arenaRuntime.isArenaEntryLoading();
     const arenaVisible = bridge.isArenaCountdownVisible() || deferArenaExit;
     const countdownActive = bridge.isArenaCountdownActive();
     const terminated = this.arenaRuntime.isMatchTerminated();
@@ -2077,7 +2105,9 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    if (bridge.isArenaLoading()) {
+    // A late join can receive the running round before its own World is resident. Keep the
+    // existing loading veil until local readiness, then use the unchanged synchronized time.
+    if (bridge.isArenaLoading() || this.arenaRuntime.isArenaEntryLoading()) {
       this.localPlayerState.overlayTrackedAlive = null;
       this.ctx.arenaCountdown.showLoading();
       this.ctx.arenaCountdown.updateLoadingScreen(this.getArenaLoadingScreenState());

@@ -118,7 +118,7 @@ export const LIGHT_PRESETS = {
   firefly: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 100,
+    radiusPx: 115,
     color: 0xc9e94a,
     intensity: 0.45,
     durationMs: 0,

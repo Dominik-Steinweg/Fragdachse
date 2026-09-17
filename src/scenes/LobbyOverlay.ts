@@ -155,6 +155,7 @@ type PlayerRow = {
 
 export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
+  private exitingWithWorldButton = false;
   private cardContent:    Phaser.GameObjects.Container | null = null;
   private systemBar:      Phaser.GameObjects.Container | null = null;
   /** Austritt aus dem Testgelaende; unabhaengig vom Lobby-Panel sichtbar. */
@@ -521,6 +522,7 @@ export class LobbyOverlay {
   }
 
   private teardown(): void {
+    this.cancelExit();
     this.deferredIndicator?.destroy();
     this.deferredIndicator = null;
     this.settings?.destroy(); this.settings = null;
@@ -587,6 +589,7 @@ export class LobbyOverlay {
   }
 
   show(): void {
+    this.cancelExit();
     const wasVisible = this.visible;
     this.visible = true;
     this.container?.setVisible(true);
@@ -613,6 +616,11 @@ export class LobbyOverlay {
   }
 
   private updateWorldEntryButtons(): void {
+    if (this.exitingWithWorldButton) {
+      this.testAreaBtn?.setEnabled(false);
+      this.worldExitBtn?.setEnabled(false);
+      return;
+    }
     const showEntry = this.visible && !this.worldEntryInside;
     const showExit = this.worldEntryAvailable && this.worldEntryInside;
 
@@ -625,8 +633,9 @@ export class LobbyOverlay {
     this.worldExitBtn?.setEnabled(showExit && !this.connectionEnded);
   }
 
-  hide(): void {
-    if (!this.visible) return;
+  hide(onComplete?: () => void, moveWorldButton = false): void {
+    if (!this.visible) { onComplete?.(); return; }
+    this.exitingWithWorldButton = moveWorldButton;
     this.visible = false;
     this.settings?.close();
     this.rosterScroller?.reset();
@@ -637,16 +646,29 @@ export class LobbyOverlay {
     this.entranceTween?.remove();
     this.entranceTween = null;
     this.stopReadyGlow();
-    if (this.container) this.entranceTween = this.scene.tweens.add({
-      targets: this.container, y: GAME_HEIGHT,
-      duration: LOBBY_CARD_MOTION.exitDuration, ease: 'Power2.easeIn',
+    const targets = [this.container, ...(moveWorldButton ? [this.worldExitBar] : [])]
+      .filter((target): target is Phaser.GameObjects.Container => target !== null);
+    if (targets.length > 0) this.entranceTween = this.scene.tweens.add({
+      targets, y: GAME_HEIGHT,
+      duration: LOBBY_CARD_MOTION.exitDuration, ease: LOBBY_CARD_MOTION.exitEase,
       onComplete: () => {
         this.container?.setVisible(false);
         this.progress?.setVisible(false);
+        if (moveWorldButton) this.worldExitBar?.setVisible(false);
         this.entranceTween = null;
+        onComplete?.();
       },
     });
+    else onComplete?.();
     this.updateWorldEntryButtons();
+  }
+
+  private cancelExit(): void {
+    if (!this.exitingWithWorldButton) return;
+    this.entranceTween?.remove();
+    this.entranceTween = null;
+    this.exitingWithWorldButton = false;
+    this.worldExitBar?.setY(0);
   }
 
   /** Endgueltiger Scene-Abbau; build() verwendet denselben idempotenten Pfad. */
@@ -657,6 +679,10 @@ export class LobbyOverlay {
 
   isVisible(): boolean {
     return this.visible;
+  }
+
+  isPresented(): boolean {
+    return this.visible && !this.bootPreparing && this.container?.visible === true;
   }
 
   isRevealComplete(): boolean {

@@ -11,7 +11,7 @@ export const AMBIENT_WILDLIFE = {
   fireflyNight: [21 * 60, 22 * 60],
   insectSettleSeconds: 2,
   insectFadeSeconds: 3,
-  fireflyGlowRadius: 20,
+  fireflyGlowRadius: 23,
   mothColors: [0x928779, 0xa69a82, 0x827d75, 0x9b927f, 0x867967],
   snake: { size: 24, speed: 9, fleeSpeed: 32, alertRadius: 96, turnRate: 1.6, maxCount: 96,
     treeOccupancy: .25, groupChance: .04, thirdSnakeChance: .15 },

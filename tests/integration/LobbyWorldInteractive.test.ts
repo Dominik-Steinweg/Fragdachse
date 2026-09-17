@@ -744,7 +744,9 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     vi.spyOn(bridge, 'isHost').mockReturnValue(host);
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
     Object.assign(coordinator, {
-      scene, layoutRetryCount: 0,
+      scene, layoutRetryCount: 0, arenaTransitionGeneration: 0,
+      // This test begins after the opaque loading frame; entry rendering has its own suite.
+      arenaEntry: { stage: 'released', revision: 77 },
       ctx: { gameAudioSystem: { stopMusic: vi.fn() }, arenaCountdown: { showLoading: vi.fn() } },
       lobbyOverlay: { hide: vi.fn(), lockButton: vi.fn() },
       hostSyncWorldParticipation: vi.fn(), terminateMatch: vi.fn(),
@@ -799,6 +801,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     let presentationRequired = true;
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
     coordinator.arenaBuilt = true;
+    coordinator.builtWorldRevision = 7;
     coordinator.terrainSnapshotReady = true;
     coordinator.worldRuntime = {
       update: vi.fn(),
@@ -898,6 +901,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     coordinator.worldRuntime = {
       materialization: { arena }, presentation: { layout: {} }, presentationFrame: frame,
     };
+    coordinator.builtWorldRevision = 7;
     coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => true } };
     coordinator.combatPresentationPrepared = true;
     coordinator.getLocalWorldPresentation = () => ({ required: true });
@@ -919,7 +923,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(policy.showWorld).toBe(false);
     scene.resolveArenaFrameSignals = () => ({ arenaLoading: true, worldActive: true,
       localWorldPresentation: presentation, presentationPolicy: policy, terminated: false });
-    scene.arenaRuntime = { detectPhaseChange: () => {}, hostSyncLobbyWorld: () => {}, syncRoomOwners: () => {},
+    scene.arenaRuntime = { syncArenaEntryTransition: () => {}, isArenaEntryProtected: () => false,
+      detectPhaseChange: () => {}, hostSyncLobbyWorld: () => {}, syncRoomOwners: () => {},
       detectWorldChange: () => {}, update: () => {}, presentation: {
         syncWorldCamera: vi.fn(), syncWorldSurfaceResidency: (active: boolean) => frame.syncSurfaceResidency(active),
       } };
@@ -986,7 +991,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
 
     overlay.hide();
     const exit = tweens.add.mock.calls[0][0];
-    expect(exit.targets).toBe(container);
+    expect(exit.targets).toContain(container);
     expect(exit.y).toBeGreaterThan(0);
     expect(container.visible).toBe(true); // The card remains rendered throughout its exit.
     const exitTween = tweens.add.mock.results[0].value;
@@ -1038,6 +1043,40 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(player.badgerPreview.setVisible).toHaveBeenLastCalledWith(true);
   });
 
+  it('moves the middle button with both cards and keeps it visible but disabled through World updates', () => {
+    const { overlay, container, tweens, uiScene } = overlayFixture();
+    overlay.bootPreparing = false;
+    overlay.worldExitBar = new DisplayObject();
+    overlay.testAreaBtn = new DisplayObject();
+    overlay.worldExitBtn = new DisplayObject();
+    const enable = vi.spyOn(overlay.testAreaBtn, 'setEnabled');
+    overlay.show();
+    tweens.add.mockClear();
+    const left = Object.create(LeftSidePanel.prototype) as any;
+    Object.assign(left, { scene: uiScene, lobbyContainer: new DisplayObject(), gameContainer: new DisplayObject(),
+      closeColorPicker: vi.fn(), closeNameEditPopup: vi.fn(), initArenaHUD: vi.fn(),
+      arenaHUD: { setPresentationActive: vi.fn() } });
+    const cardDone = vi.fn(); const leftDone = vi.fn();
+    overlay.hide(cardDone, true); left.transitionToGame(leftDone);
+    const exit = tweens.add.mock.calls[0][0];
+    const leftExit = tweens.add.mock.calls[1][0];
+    expect(exit.targets).toEqual([container, overlay.worldExitBar]);
+    expect(leftExit).toMatchObject({ duration: exit.duration, ease: exit.ease, y: exit.y });
+    expect(exit.delay ?? 0).toBe(0); expect(leftExit.delay ?? 0).toBe(0);
+    overlay.setWorldEntryState(null);
+    expect(overlay.testAreaBtn.visible).toBe(true);
+    expect(overlay.worldExitBar.visible).toBe(true);
+    expect(enable).toHaveBeenLastCalledWith(false);
+    expect(cardDone).not.toHaveBeenCalled(); expect(leftDone).not.toHaveBeenCalled();
+    exit.onComplete(); leftExit.onComplete();
+    expect(cardDone).toHaveBeenCalledOnce(); expect(leftDone).toHaveBeenCalledOnce();
+    expect(overlay.worldExitBar.visible).toBe(false);
+    overlay.worldExitBar.y = exit.y;
+    overlay.show();
+    expect(overlay.worldExitBar.y).toBe(0);
+    expect(overlay.worldExitBar.visible).toBe(true);
+  });
+
   it('zeigt beide Ergebnisaktionen gemeinsam erst bei verfuegbarer Rundenauswertung', () => {
     const { overlay } = overlayFixture();
     overlay.replayBtn = new DisplayObject();
@@ -1072,11 +1111,6 @@ describe('LobbyWorld – World-Ende raeumt ihre Teilnehmer', () => {
     expect(start).toBeGreaterThanOrEqual(0);
     // Der Abbau steht ganz vorn: die Detach-Module brauchen die Fachsysteme noch.
     expect(lifecycle.slice(start, start + 600)).toContain('this.detachAllWorldPlayers();');
-    // Und der Matchstart schneidet die LobbyWorld samt Teilnehmern ab. Der Zeilenumbruch bleibt
-    // offen: Ob die Arbeitskopie mit LF oder CRLF ausgecheckt ist, ist keine Aussage ueber den
-    // Lifecycle.
-    expect(lifecycle).toMatch(
-      / {4}this\.detachAllWorldPlayers\(\);\r?\n {4}this\.worldLifecycle\.endInstance\(\);/,
-    );
+    // Matchstart ordering is exercised by ArenaEntryLifecycle, including its render gate.
   });
 });

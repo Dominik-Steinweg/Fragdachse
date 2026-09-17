@@ -67,7 +67,7 @@ export class AmbientWildlifeRenderer {
       const visible = a.opacity > .005 && a.x + radius >= view.x && a.y + radius >= view.y
         && a.x - radius <= view.x + view.width && a.y - radius <= view.y + view.height;
       if (visible) {
-        const pulse = fireflyGlowStrength(this.visualTime, a.variation, a.phaseOffset);
+        const pulse = fireflyGlowStrength(this.visualTime, a.variation, a.phaseOffset, a.speed);
         this.lighting.setLight(source.key, 'firefly', a.x, a.y, { intensity: preset.intensity * a.opacity * pulse });
       } else if (source.active) this.lighting.releaseLight(source.key, { immediate: true });
       source.active = visible;

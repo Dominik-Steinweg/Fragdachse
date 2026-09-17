@@ -38,7 +38,7 @@ export const LOBBY_PLAYER_FOOTER = {
 } as const;
 export const LOBBY_WORLD_BUTTON = { x: GAME_WIDTH / 2, y: LOBBY_CARD.systemY, w: 280, h: 80 } as const;
 export const LOBBY_ROSTER_ROW_STEP = 56;
-export const LOBBY_CARD_MOTION = { exitDuration: 350, enterDuration: 500, enterDelay: 100 } as const;
+export const LOBBY_CARD_MOTION = { exitDuration: 300, exitEase: 'Power2.easeIn', enterDuration: 500, enterDelay: 100 } as const;
 /** The monochrome art stays behind the roster, independent of occupied slots and scrolling. */
 export function getLobbyReliefBounds() {
   const width = LOBBY_CARD.contentWidth - 24;

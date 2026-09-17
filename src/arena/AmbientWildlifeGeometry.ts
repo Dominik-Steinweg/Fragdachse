@@ -106,12 +106,28 @@ function butterflyVisual(animal: WildlifeAnimal): WildlifeVisual {
 function fireflyVisual(animal: WildlifeAnimal): WildlifeVisual {
   const mesh = new WildlifeMesh();
   mesh.pose();
-  // A soft visible halo supplements the ground illumination in the shared lightmap.
-  const haloEnd = 6;
-  for (let i = 0; i < haloEnd; i++) {
-    const radius = TUNING.fireflyGlowRadius * (1 - i / (haloEnd + 1));
-    mesh.fill(0xb9e641, .022 + i * .006, 1);
-    mesh.ellipse(-.7, 0, radius * 2, radius * 2, 16);
+  // Shared vertices interpolate alpha across non-overlapping annuli. Unlike
+  // stacked filled discs, this has no opacity steps and shades each pixel once.
+  const segments = 16, rings = 3;
+  mesh.fill(0xb9e641, .2, 1);
+  const center = mesh.vertex(-.7, 0);
+  for (let ring = 1; ring <= rings; ring++) {
+    const t = ring / rings, radius = TUNING.fireflyGlowRadius * t;
+    mesh.fill(0xb9e641, .2 * (1 - t) * (1 - t), 1);
+    const start = mesh.channels.length;
+    for (let i = 0; i < segments; i++) {
+      const angle = i / segments * Math.PI * 2;
+      mesh.vertex(-.7 + Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+    for (let i = 0; i < segments; i++) {
+      const next = (i + 1) % segments;
+      if (ring === 1) mesh.indices.push(center, start + i, start + next);
+      else {
+        const previous = start - segments;
+        mesh.indices.push(previous + i, start + i, start + next,
+          previous + i, start + next, previous + next);
+      }
+    }
   }
   const haloVertices = mesh.alpha.length;
   const wings = mesh.pose();
@@ -119,12 +135,14 @@ function fireflyVisual(animal: WildlifeAnimal): WildlifeVisual {
   mesh.ellipse(.2, -.7, 2, .9, 8); mesh.ellipse(.2, .7, 2, .9, 8);
   mesh.pose();
   mesh.fill(0x525b35, .9, 1); mesh.ellipse(.2, 0, animal.appearance.length, .9, 10);
+  const glowStart = mesh.alpha.length;
   mesh.fill(0xc8ed43, .95, 1); mesh.ellipse(-.7, 0, 1.5, 1.2, 10);
   mesh.fill(0xdff569, 1, 1); mesh.ellipse(-.8, 0, .7, .65, 8);
-  const baseAlpha = mesh.alpha.slice(0, haloVertices);
+  const baseAlpha = mesh.alpha.slice();
   return { animal, mesh, sample: time => {
-    const pulse = fireflyGlowStrength(time, animal.variation, animal.phaseOffset);
+    const pulse = fireflyGlowStrength(time, animal.variation, animal.phaseOffset, animal.speed);
     for (let i = 0; i < haloVertices; i++) mesh.alpha[i] = baseAlpha[i] * pulse;
+    for (let i = glowStart; i < baseAlpha.length; i++) mesh.alpha[i] = baseAlpha[i] * pulse;
     mesh.poses[wings].sy = .4 + .6 * Math.abs(Math.sin(animal.animation));
   } };
 }

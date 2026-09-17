@@ -473,7 +473,7 @@ export class LeftSidePanel {
   /** Added controls inherit the card motion and remain behind its outer ivy frame. */
   getLobbyContentContainer(): Phaser.GameObjects.Container { return this.lobbyContent; }
 
-  transitionToGame(): void {
+  transitionToGame(onComplete?: () => void): void {
     this.saveMenu?.close();
     this.loadoutPicker?.close();
     this.closeColorPicker();
@@ -496,8 +496,12 @@ export class LeftSidePanel {
       targets:  this.lobbyContainer,
       y:        GAME_HEIGHT,
       duration: LOBBY_CARD_MOTION.exitDuration,
-      ease:     'Power2.easeIn',
-      onComplete: () => { this.lobbyContainer.setVisible(false); this.badgerPreview?.setVisible(false); },
+      ease:     LOBBY_CARD_MOTION.exitEase,
+      onComplete: () => {
+        this.lobbyContainer.setVisible(false);
+        this.badgerPreview?.setVisible(false);
+        onComplete?.();
+      },
     });
   }
 

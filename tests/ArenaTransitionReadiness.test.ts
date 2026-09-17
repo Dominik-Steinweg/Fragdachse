@@ -446,29 +446,7 @@ describe('ArenaLifecycleCoordinator – TerrainSnapshotLifecycle', () => {
     expect(body).toContain("this.terminateMatch(t('ui.lobby.terrainSnapshotStartFailed'));");
   });
 
-  it('haelt onTransitionToArena gegen Re-Eintritt aus Retry-Timer und detectWorldChange', () => {
-    const body = transitionBody();
-    expect(source).toContain('private arenaTransitionInProgress = false;');
-    expect(body.indexOf('if (this.arenaTransitionInProgress) return;'))
-      .toBeGreaterThan(-1);
-    expect(body.indexOf('if (this.arenaTransitionInProgress) return;'))
-      .toBeLessThan(body.indexOf('this.arenaTransitionInProgress = true;'));
-    // Der Retry haelt den Guard bis zum eigenen Feuern; jeder andere Ausgang gibt ihn frei.
-    expect(body).toContain([
-      'this.scene.time.delayedCall(16, () => {',
-      '        this.arenaTransitionInProgress = false;',
-      '        this.onTransitionToArena();',
-      '      });',
-    ].join(NL));
-    expect(body).toContain([
-      'this.hostUpdate.setActive(activityDescriptor === null);',
-      '    this.arenaTransitionInProgress = false;',
-    ].join(NL));
-    expect(source).toContain([
-      '      && worldDescriptor?.worldRevision !== pendingHostGeneration.roundRevision) {',
-      '      this.arenaTransitionInProgress = false;',
-    ].join(NL));
-  });
+  // Re-entry and stale retries are covered as behavior in integration/ArenaEntryLifecycle.
 
   it('gibt den Guard auf jedem Ausstieg aus dem Arena-Uebergang frei', () => {
     expect(source).toContain([
