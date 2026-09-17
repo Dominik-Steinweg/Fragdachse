@@ -1,4 +1,6 @@
 import type * as Phaser from 'phaser';
+import { RuntimeFrameProbe, type RuntimeFrameWork } from './RuntimeFrameProbe';
+import { RuntimeRenderCounters } from './RuntimeRenderCounters';
 import type { GraphicsQuality } from '../../graphics/GraphicsQuality';
 import { ABLATION_CODES, ABLATION_LABELS, type AblationCategory, type AblationSegment } from './PerformanceAblation';
 import type { GpuVfxReport } from '../../effects/gpu/GpuVfxProfiler';
@@ -134,6 +136,8 @@ export interface ArenaRuntimeWindowSummary {
 export interface PerformanceGpuSample {
   /** Session-relative main-thread time of the render frame that issued the query. */
   atMs: number;
+  /** CPU submission end, not a timestamp of completion on the GPU. */
+  submissionEndMs?: number;
   renderFrame: number;
   durationMs: number;
 }
@@ -144,14 +148,17 @@ export interface RuntimeFrameCaptureOptions {
   maxDurationMs: number;
 }
 export type RuntimeCapturedFrame = [frameId: number, atMs: number, deltaMs: number,
-  roleCpuMs: number, renderSubmitMs: number | null, enemies: number, projectiles: number];
+  roleCpuMs: number | null, renderSubmitMs: number | null, enemies: number | null, projectiles: number | null];
 
 export type GpuTimerBackend = 'webgl2_ext' | 'webgl1_ext' | 'unsupported' | 'unavailable';
 export type RenderCounterBackend = 'webgl' | 'canvas' | 'unsupported' | 'unavailable';
 
 export interface RenderPipelineSummary {
   backend: RenderCounterBackend;
-  drawCalls: MetricSummary | 'unsupported';
+  drawCalls: MetricSummary | 'unsupported' | 'unavailable';
+  status: 'supported' | 'unsupported' | 'invalid';
+  scope: string;
+  methods: string[];
   phaserBatchFlushes: MetricSummary | 'unsupported';
   pipelineChanges: 'unsupported';
   textureBatchChanges: 'unsupported';
@@ -171,12 +178,14 @@ export interface CompanionSeriesSample {
 }
 
 export interface ArenaPerformanceReport {
-  schemaVersion: 8;
+  schemaVersion: 9;
   frameCapture?: {
+    version: 2;
     timestampPhase: 'frame-start';
     startedAtPerformanceMs: number;
     columns: readonly string[];
     frames: RuntimeCapturedFrame[];
+    work: RuntimeFrameWork[];
     truncated: boolean;
     autoStopped: boolean;
   };
@@ -312,6 +321,7 @@ export interface PhaserFrameLifecycleMetrics {
 interface PendingGpuQuery {
   query: unknown;
   atMs: number;
+  submissionEndMs?: number;
   renderFrame: number;
 }
 
@@ -434,6 +444,11 @@ function sampleContext(sample: ArenaRuntimeSample): Record<string, unknown> {
 }
 
 export class ArenaRuntimeProfiler {
+  private frameProbe: RuntimeFrameProbe | null = null;
+  private probeScene: Phaser.Scene | null = null;
+  private frameWork: RuntimeFrameWork[] = [];
+  private glCounters: RuntimeRenderCounters | null = null;
+  private countersStarted = false;
   private frameCaptureOptions: RuntimeFrameCaptureOptions | null = null;
   private capturedFrames: RuntimeCapturedFrame[] = [];
   private capturedFramesTruncated = false;
@@ -506,7 +521,6 @@ export class ArenaRuntimeProfiler {
   private renderCounterDrawCallsSupported = false;
   private renderCounterBatchFlushesSupported = false;
   private renderCounterWasEnabled = false;
-  private frameDrawCallCounter = 0;
   private frameBatchFlushCounter = 0;
   private lastBatchFlushCount = 0;
   private readonly renderPipelineDrawCalls: number[] = [];
@@ -530,10 +544,9 @@ export class ArenaRuntimeProfiler {
   private readonly onPreRender = (): void => {
     if (!this.diagnosticsActive) return;
     this.renderStartedAtMs = performance.now();
-    this.frameDrawCallCounter = 0;
-    this.frameBatchFlushCounter = 0;
+    if (!this.countersStarted) this.onPreStep();
     if (!this.recording) return;
-    this.renderFrame += 1;
+    if (!this.frameProbe?.frameId) this.renderFrame += 1;
     if (!this.gpuTimer) return;
     this.pollGpuQueries();
     if (this.renderFrame % GPU_QUERY_INTERVAL_FRAMES !== 0) return;
@@ -551,19 +564,26 @@ export class ArenaRuntimeProfiler {
   private readonly onPostRender = (): void => {
     if (!this.diagnosticsActive) return;
     this.lastRenderSubmitMs = Math.max(0, performance.now() - this.renderStartedAtMs);
+    this.frameProbe?.addSpan('renderSubmit', this.renderStartedAtMs, performance.now());
     const captured = this.capturedFrames[this.capturedFrames.length - 1];
     if (this.recording && captured?.[0] === this.renderFrame) captured[4] = this.lastRenderSubmitMs;
     const renderer = this.game?.renderer as unknown as RendererCounterLike | undefined;
     if (this.renderCounterBackend === 'canvas' && renderer?.drawCount !== undefined) {
       this.lastDrawCallCount = renderer.drawCount;
     } else {
-      this.lastDrawCallCount = this.frameDrawCallCounter;
+      this.lastDrawCallCount = this.glCounters?.snapshot().drawCalls ?? Number.NaN;
+    }
+    if (!this.frameProbe && Number.isFinite(this.lastDrawCallCount)) {
+      this.addInterval('drawCallCount', this.lastDrawCallCount);
+      this.renderPipelineDrawCalls.push(this.lastDrawCallCount);
     }
     this.lastBatchFlushCount = this.frameBatchFlushCounter;
+    this.countersStarted = false;
     if (!this.recording || !this.gpuTimer || !this.activeGpuQuery) return;
     const timer = this.gpuTimer;
     if (timer.backend === 'webgl2_ext') timer.webgl2?.endQuery(timer.target);
     else timer.webgl1Extension?.endQueryEXT(timer.target);
+    this.activeGpuQuery.submissionEndMs = performance.now() - this.recordingStartedAtMs;
     if (this.pendingGpuQueries.length >= MAX_PENDING_GPU_QUERIES) {
       this.deleteGpuQuery(timer, this.activeGpuQuery.query);
       this.pendingGpuQueriesDropped += 1;
@@ -572,6 +592,18 @@ export class ArenaRuntimeProfiler {
     }
     this.activeGpuQuery = null;
   };
+
+  private readonly onPreStep = (): void => {
+    if (this.frameProbe?.frameId && this.countersStarted) return;
+    this.glCounters?.reset();
+    this.frameBatchFlushCounter = 0;
+    this.countersStarted = true;
+  };
+
+  attachScene(scene: Phaser.Scene): void { this.probeScene = scene; }
+  addFrameScope(target: object, method: string, scope: string): void { this.frameProbe?.scope(target, method, scope); }
+  markVisualStart(): void { this.frameProbe?.markVisualStart(); }
+  markVisualEnd(): void { this.frameProbe?.markVisualEnd(); }
 
   private readonly onRockDestroyed = (event: ArenaRockDestroyedEvent): void => {
     if (!this.recording) return;
@@ -686,11 +718,14 @@ export class ArenaRuntimeProfiler {
     const frameMs = Number.isFinite(sample.rawDeltaMs) && sample.rawDeltaMs > 0 ? sample.rawDeltaMs : sample.deltaMs;
     const roleCpuMs = Math.max(0, sample.roleStepMs);
     if (this.recording && this.frameCaptureOptions) {
-      if (this.capturedFrames.length >= this.frameCaptureOptions.maxFrames) {
+      const current = this.capturedFrames[this.capturedFrames.length - 1];
+      if (this.frameProbe?.frameId && current?.[0] === this.frameProbe.frameId) {
+        current[3] = roleCpuMs; current[5] = sample.enemyCount; current[6] = sample.projectileCount;
+      } else if (this.capturedFrames.length >= this.frameCaptureOptions.maxFrames) {
         this.capturedFramesTruncated = true;
       } else {
         const frameStart = this.game?.loop?.now ?? now;
-        this.capturedFrames.push([this.renderFrame + 1, frameStart - this.recordingStartedAtMs,
+        this.capturedFrames.push([this.frameProbe?.frameId ?? this.renderFrame + 1, frameStart - this.recordingStartedAtMs,
           frameMs, roleCpuMs, null, sample.enemyCount, sample.projectileCount]);
       }
     }
@@ -721,10 +756,6 @@ export class ArenaRuntimeProfiler {
     this.addInterval('frameCount', 1);
     this.addInterval('frameTimeTotalMs', frameMs);
     this.addInterval('frameTimeMaxMs', frameMs, true);
-    if (this.renderCounterDrawCallsSupported) {
-      this.addInterval('drawCallCount', Math.max(0, sample.drawCallCount));
-      this.renderPipelineDrawCalls.push(Math.max(0, sample.drawCallCount));
-    }
     if (this.renderCounterBatchFlushesSupported) {
       this.addInterval('phaserBatchFlushCount', Math.max(0, this.lastBatchFlushCount));
       this.renderPipelineBatchFlushes.push(Math.max(0, this.lastBatchFlushCount));
@@ -811,6 +842,7 @@ export class ArenaRuntimeProfiler {
     }
     this.frameCaptureOptions = capture ?? null;
     this.capturedFrames = [];
+    this.frameWork = [];
     this.capturedFramesTruncated = false;
     const now = performance.now();
     this.recording = true;
@@ -876,7 +908,6 @@ export class ArenaRuntimeProfiler {
     // Render cadence belongs to the recording, not to each scene sample. Resetting it
     // in record() prevents the sparse GPU timer from ever reaching its query frame.
     this.renderFrame = 0;
-    this.frameDrawCallCounter = 0;
     this.frameBatchFlushCounter = 0;
     this.lastDrawCallCount = 0;
     this.lastBatchFlushCount = 0;
@@ -891,10 +922,35 @@ export class ArenaRuntimeProfiler {
     for (const listener of this.recordingLifecycleListeners) listener(true, this.recordingId);
     this.safeMark(`FD:session:start:${this.sessionId}`);
     this.syncDiagnosticsLifecycle();
+    if (capture && this.game?.loop) {
+      this.frameProbe = new RuntimeFrameProbe(this.recordingStartedAtMs, this.game.loop, () => {
+        this.countersStarted = false; this.onPreStep();
+        const id = ++this.renderFrame;
+        const loop = this.game!.loop;
+        if (this.capturedFrames.length < capture.maxFrames) {
+          // Capture at callback entry, including early-return/loading frames and the final partial callback.
+          this.capturedFrames.push([id, loop.now - this.recordingStartedAtMs, loop.rawDelta, null, null, null, null]);
+        } else this.capturedFramesTruncated = true;
+        return id;
+      }, work => {
+        const counts = this.glCounters?.snapshot();
+        work.drawCalls = counts?.drawCalls ?? null; work.offscreenDrawCalls = counts?.offscreenDrawCalls ?? null;
+        if (work.complete && work.drawCalls !== null) {
+          this.addInterval('drawCallCount', work.drawCalls);
+          this.renderPipelineDrawCalls.push(work.drawCalls);
+        }
+        if (this.frameWork.length < capture.maxFrames) this.frameWork.push(work);
+        else this.capturedFramesTruncated = true;
+      });
+      if (this.probeScene) this.frameProbe.scene(this.probeScene);
+      if (this.game.scene) this.frameProbe.scope(this.game.scene, 'update', 'sceneManager');
+      if (this.game.renderer) this.frameProbe.scope(this.game.renderer, 'preRender', 'rendererSetup');
+    }
   }
 
   stopRecording(autoStopped = false): void {
     if (!this.recording) return;
+    this.frameProbe?.stop(); this.frameProbe = null;
     const now = performance.now();
     this.finalizeRockDestroyWave();
     const finalContext = this.pendingContextSample ? sampleContext(this.pendingContextSample) : this.pendingContext;
@@ -993,12 +1049,14 @@ export class ArenaRuntimeProfiler {
     const frameSummary = this.frozenFrameSummary ?? this.buildFrameSummary(true);
     const frozenAttribution = this.frozenAttribution;
     return {
-      schemaVersion: 8,
+      schemaVersion: 9,
       ...(this.frameCaptureOptions ? { frameCapture: {
+        version: 2 as const,
         timestampPhase: 'frame-start',
         startedAtPerformanceMs: this.recordingStartedAtMs,
         columns: ['frameId', 'atMs', 'deltaMs', 'roleCpuMs', 'renderSubmitMs', 'enemies', 'projectiles'],
         frames: this.capturedFrames,
+        work: this.frameWork,
         truncated: this.capturedFramesTruncated,
         autoStopped: this.autoStopped,
       } } : {}),
@@ -1114,7 +1172,7 @@ export class ArenaRuntimeProfiler {
         liveHudEnabled: this.liveHudEnabled,
         gpuTimerEnabled: this.gpuTimerWasEnabled,
         drawCallHooksEnabled: this.renderCounterWasEnabled,
-        glDiagnosticHooksEnabled: false,
+        glDiagnosticHooksEnabled: this.renderCounterWasEnabled,
         semanticSamplingHz: 1000 / SERIES_INTERVAL_MS,
         networkBytes: {
           transport: 'exact_webrtc_stats',
@@ -1375,9 +1433,13 @@ export class ArenaRuntimeProfiler {
   }
 
   private buildRenderPipelineSummary(): RenderPipelineSummary {
+    const status = this.glCounters?.snapshot().status ?? (this.renderCounterDrawCallsSupported ? 'supported' : 'unsupported');
     return {
       backend: this.renderCounterBackend,
-      drawCalls: this.renderCounterDrawCallsSupported
+      status,
+      scope: 'GL submissions on the game context, including instancing and offscreen framebuffers; no GPU work or primitive count. Frame scopes exclude asynchronous calls outside the game callback.',
+      methods: this.glCounters?.methods ?? [],
+      drawCalls: status === 'invalid' || (status === 'supported' && !this.renderPipelineDrawCalls.length) ? 'unavailable' : this.renderCounterDrawCallsSupported
         ? summarize(this.renderPipelineDrawCalls)
         : 'unsupported',
       phaserBatchFlushes: this.renderCounterBatchFlushesSupported
@@ -1415,6 +1477,7 @@ export class ArenaRuntimeProfiler {
     if (!this.game || this.gameEventsInstalled) return;
     this.setupGpuTimer();
     this.setupRenderCounters();
+    this.game.events.on('prestep', this.onPreStep);
     this.game.events.on(GAME_PRE_RENDER_EVENT, this.onPreRender);
     this.game.events.on(GAME_POST_RENDER_EVENT, this.onPostRender);
     this.game.events.on(ARENA_ROCK_DESTROYED_EVENT, this.onRockDestroyed);
@@ -1424,6 +1487,7 @@ export class ArenaRuntimeProfiler {
   private removeGameDiagnostics(): void {
     if (this.game && this.gameEventsInstalled) {
       this.game.events.off(GAME_PRE_RENDER_EVENT, this.onPreRender);
+      this.game.events.off('prestep', this.onPreStep);
       this.game.events.off(GAME_POST_RENDER_EVENT, this.onPostRender);
       this.game.events.off(ARENA_ROCK_DESTROYED_EVENT, this.onRockDestroyed);
     }
@@ -1525,7 +1589,12 @@ export class ArenaRuntimeProfiler {
       const nanoseconds = timer.backend === 'webgl2_ext'
         ? timer.webgl2?.getQueryParameter(pending.query as WebGLQuery, timer.webgl2.QUERY_RESULT) as number
         : timer.webgl1Extension?.getQueryObjectEXT(pending.query, timer.webgl1Extension.QUERY_RESULT_EXT) as number;
-      const durationMs = Number.isFinite(nanoseconds) ? nanoseconds / 1_000_000 : 0;
+      if (!Number.isFinite(nanoseconds) || nanoseconds < 0) {
+        this.pendingGpuQueriesDropped += 1;
+        this.deleteGpuQuery(timer, pending.query);
+        continue;
+      }
+      const durationMs = nanoseconds / 1_000_000;
       this.gpuSamples.push({ ...pending, durationMs });
       this.addInterval('gpuCompletedCount', 1);
       this.addInterval('gpuDurationTotalMs', durationMs);
@@ -1556,7 +1625,7 @@ export class ArenaRuntimeProfiler {
 
   /**
    * Installs instance-scoped Phaser renderer hooks only while diagnosis is active. WebGL draw
-   * calls are counted at Phaser's renderer boundary; batch flushes use Phaser's own BatchHandler
+   * calls are counted at the actual GL context boundary; batch flushes use Phaser's own BatchHandler
    * nodes. Pipeline and texture-batch transitions intentionally stay unsupported here.
    */
   private setupRenderCounters(): void {
@@ -1570,22 +1639,10 @@ export class ArenaRuntimeProfiler {
       batchFlushesSupported: false,
     };
 
-    // Phaser 4 submits both indexed geometry and instanced sprites/batches here.
-    for (const method of ['drawElements', 'drawInstancedArrays'] as const) {
-      const original = renderer[method];
-      if (typeof original !== 'function') continue;
-      const hadOwnMethod = Object.prototype.hasOwnProperty.call(renderer, method);
-      renderer[method] = (...args: unknown[]): unknown => {
-        if (this.diagnosticsActive) this.frameDrawCallCounter += 1;
-        return original.apply(renderer, args);
-      };
-      hooks.restoreDrawMethods.push(() => {
-        if (hadOwnMethod) renderer[method] = original;
-        else delete renderer[method];
-      });
-    }
-    if (hooks.restoreDrawMethods.length > 0) {
-      hooks.drawCallsSupported = true;
+    if (renderer.gl) {
+      this.glCounters = new RuntimeRenderCounters(renderer.gl);
+      hooks.restoreDrawMethods.push(() => { this.glCounters?.stop(); this.glCounters = null; });
+      hooks.drawCallsSupported = this.glCounters.snapshot().status === 'supported';
       this.renderCounterBackend = 'webgl';
     } else if (typeof renderer.drawCount === 'number') {
       hooks.drawCallsSupported = true;

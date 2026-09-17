@@ -199,7 +199,7 @@ export async function analyzeTrace(events, result, windows, resolveSource = asyn
     && !output.some(w => w.threads.some(t => t.role === 'main' && t.self.length))) {
     throw new Error('No attributable CPU samples from the game main thread');
   }
-  return { version: 2, clockOffsetMs: offset, cpuSamples: samples, reorderedDeltas, windows: output,
+  return { version: 3, clockOffsetMs: offset, cpuSamples: samples, reorderedDeltas, windows: output,
     notes: [...(result.request.captureProfile === 'reduced' ? ['In diesem reduzierten Profil wurde kein JS-Sampling aufgenommen; Funktions- und Aufrufkettenanteile sind nicht verfügbar.'] : []),
       'CPU-Zeiten aus Sampling sind Schätzungen. Inklusive Zeiten sind verschachtelt und nicht addierbar.',
       'Sample-Zeitstempel werden vor der Intervallbildung sortiert; ungemessene Profilränder erhalten keine künstliche Dauer.',

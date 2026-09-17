@@ -15,6 +15,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
   players: PlayerManager, diagnostics: ArenaDiagnosticsController,
   setInput: (angle: number, trigger: WeaponSlot | null) => void,
   isLobbyRevealed: () => boolean): PerformanceLabGamePort {
+  diagnostics.addFrameScope(flow, 'runHostFrame', 'gameplay');
+  diagnostics.addFrameScope(flow, 'runClientFrame', 'gameplay');
   const targets = new Map<string, { x: number; y: number }>();
   let previousMap = bridge.getCoopDefenseMapId(), previousMode = bridge.getGameMode();
   let playerPosition = { x: 1000, y: 540 }, aimPosition = { x: 1220, y: 540 };

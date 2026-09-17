@@ -9,6 +9,8 @@ import {
   setStoredGraphicsQuality,
 } from '../src/utils/localPreferences';
 import { ArenaRuntimeProfiler, type ArenaRuntimeSample } from '../src/scenes/arena/ArenaRuntimeProfiler';
+import { RuntimeFrameProbe, type RuntimeFrameWork } from '../src/scenes/arena/RuntimeFrameProbe';
+import { RuntimeRenderCounters } from '../src/scenes/arena/RuntimeRenderCounters';
 import { ABLATION_CODES, ABLATION_LABELS } from '../src/scenes/arena/PerformanceAblation';
 
 class MemoryStorage implements Storage {
@@ -260,6 +262,74 @@ describe('graphics quality preferences and profiles', () => {
 });
 
 describe('ArenaRuntimeProfiler Companion collector', () => {
+  it('captures callback intervals even without a scene sample, and marks an interrupted callback partial', () => {
+    let now = 0, stop = false;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const game = fakeGame(new FakeGlContext());
+    const profiler = new ArenaRuntimeProfiler();
+    const callback = () => {
+      if (stop) { profiler.stopRecording(); return; }
+      game.emit('prestep'); // No record(): e.g. an early return while changing Worlds.
+      now += 2; game.emit('prerender'); now += 3; game.emit('postrender');
+    };
+    game.loop.callback = callback;
+    profiler.attachGame(game as never); profiler.startRecording({}, { maxFrames: 10, maxDurationMs: 1000 });
+    now = 16; Object.assign(game.loop, { now, rawDelta: 16 }); game.loop.callback(16, 16);
+    stop = true; now = 32; Object.assign(game.loop, { now, rawDelta: 16 }); game.loop.callback(32, 16);
+    const capture = profiler.buildReport()!.frameCapture!;
+    expect(capture.frames.map(f => [f[0], f[1], f[2], f[5]])).toEqual([[1, 16, 16, null], [2, 32, 16, null]]);
+    expect(capture.work.map(w => w.complete)).toEqual([true, false]);
+    expect(game.loop.callback).toBe(callback); profiler.destroy();
+  });
+  it('measures POST_UPDATE inside the whole callback and restores the original receiver and lifecycle', () => {
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const scene = { sys: {
+      sceneUpdate() { expect(this).toBe(scene); now += 3; },
+      events: { emit(name: string) { if (name === 'postupdate') now += 188; return true; } },
+    } };
+    const original = () => { scene.sys.sceneUpdate.call(scene as never); scene.sys.events.emit('postupdate'); now += 2; };
+    const loop = { callback: original }, work: RuntimeFrameWork[] = [];
+    const probe = new RuntimeFrameProbe(0, loop, () => 1, w => work.push(w));
+    probe.scene(scene);
+    // SceneManager assigns the update after create() returns and before emitting CREATE.
+    const updated = function (this: unknown) { expect(this).toBe(scene); now += 3; };
+    scene.sys.sceneUpdate = updated; scene.sys.events.emit('create');
+    loop.callback(); probe.stop();
+    expect(loop.callback).toBe(original);
+    expect(scene.sys.sceneUpdate).toBe(updated);
+    expect(work[0]).toMatchObject({ fromMs: 0, toMs: 193, complete: true });
+    expect(work[0].spans).toContainEqual({ scope: 'scenePostUpdate', fromMs: 3, toMs: 191 });
+    loop.callback(); expect(work).toHaveLength(1);
+  });
+
+  it('counts direct, instanced and offscreen GL calls once, without losing pre-render work', () => {
+    const extension = { drawArraysInstancedANGLE: vi.fn(() => 7), drawElementsInstancedANGLE: vi.fn() };
+    const originalDraw = vi.fn();
+    const gl = { FRAMEBUFFER: 1, FRAMEBUFFER_BINDING: 2, DRAW_FRAMEBUFFER: 3,
+      getParameter: () => null, getExtension: () => extension, bindFramebuffer: vi.fn(),
+      drawArrays: originalDraw, drawElements: vi.fn(), drawArraysInstanced: () => extension.drawArraysInstancedANGLE(),
+      drawElementsInstanced: vi.fn() };
+    const counter = new RuntimeRenderCounters(gl);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, {}); gl.drawElements();
+    expect(gl.drawArraysInstanced()).toBe(7);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.drawArrays(); gl.drawElementsInstanced();
+    expect(counter.snapshot()).toEqual({ status: 'supported', drawCalls: 4, offscreenDrawCalls: 2 });
+    counter.reset(); expect(counter.snapshot().drawCalls).toBe(0);
+    counter.stop(); expect(gl.drawArrays).toBe(originalDraw);
+  });
+
+  it('exports unavailable counters for unsupported, lost or externally replaced GL hooks', () => {
+    expect(new RuntimeRenderCounters({}).snapshot().drawCalls).toBeNull();
+    const gl = { drawArrays: vi.fn(), drawElements: vi.fn(), isContextLost: () => false };
+    const counter = new RuntimeRenderCounters(gl);
+    gl.drawArrays = vi.fn();
+    expect(counter.snapshot()).toMatchObject({ status: 'invalid', drawCalls: null });
+    const replacement = gl.drawArrays; counter.stop(); expect(gl.drawArrays).toBe(replacement);
+    const lost = new RuntimeRenderCounters({ ...gl, isContextLost: () => true });
+    expect(lost.snapshot()).toMatchObject({ status: 'invalid', drawCalls: null }); lost.stop();
+  });
+
   it('captures raw frames and associates submission/GPU timing with the issuing render frame', () => {
     let now = 100;
     vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -347,7 +417,7 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     profiler.stopRecording();
 
     const report = profiler.buildReport();
-    expect(report?.schemaVersion).toBe(8);
+    expect(report?.schemaVersion).toBe(9);
     expect(report?.session.id).toMatch(/^\S+$/);
     expect(report?.session.durationMs).toBe(5_100);
     expect(report?.session.syncMarkerCount).toBe(1);
@@ -604,7 +674,7 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     expect(report?.summaries.gpu.frameTime).toEqual({ avg: 1, p95: 1, p99: 1, peak: 1 });
   });
 
-  it('exportiert Draw Calls und Phaser-Batch-Flushes ohne GL-Aufzeichnung', () => {
+  it('exports actual GL submissions and batch flushes instead of companion placeholder zeros', () => {
     vi.spyOn(performance, 'now').mockReturnValue(0);
     const gl = new FakeGlContext();
     const game = fakeGame(gl);
@@ -618,10 +688,11 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
       drawInstancedArrays: (count: number) => number;
       renderNodes: { _nodes: Record<string, typeof node>; getNode(name: string): typeof node };
     };
-    const originalDrawElements = vi.fn();
+    const originalDrawElements = vi.fn(() => gl.drawElements(6));
     const rendererPrototype = {
       drawInstancedArrays(this: unknown, count: number): number {
         expect(this).toBe(renderer);
+        gl.drawArrays(count);
         return count;
       },
     };
@@ -639,7 +710,7 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     expect(renderer.drawInstancedArrays(30)).toBe(30);
     node.run();
     game.emit('postrender');
-    profiler.record(sample({ drawCallCount: profiler.takeLastDrawCallCount() }));
+    profiler.record(sample({ drawCallCount: 0 }));
     profiler.stopRecording();
 
     const pipeline = profiler.buildReport()?.summaries.renderPipeline;

@@ -21,9 +21,9 @@ for (const c of result.cases) {
   if (c.durationA !== undefined && c.durationB !== undefined) {
     lines.push(`Aktives Fenster: ${(c.durationA / 1000).toFixed(3)} s → ${(c.durationB / 1000).toFixed(3)} s.\n`);
   }
-  lines.push('| Messgröße | A ms | B ms | Differenz ms | Differenz % |', '|---|---:|---:|---:|---:|');
+  lines.push('| Messgröße | Einheit | A | B | Differenz | Differenz % |', '|---|---|---:|---:|---:|---:|');
   for (const [group, metrics] of Object.entries(c.differences ?? {})) for (const [key, d] of Object.entries(metrics)) {
-    if (d) lines.push(`| ${group}.${key} | ${d.before.toFixed(3)} | ${d.after.toFixed(3)} | ${d.absolute.toFixed(3)} | ${d.percent?.toFixed(2) ?? 'n/a'} |`);
+    if (d) lines.push(`| ${group}.${key} | ${group.endsWith('Calls') ? 'Aufrufe' : 'ms'} | ${d.before.toFixed(3)} | ${d.after.toFixed(3)} | ${d.absolute.toFixed(3)} | ${d.percent?.toFixed(2) ?? 'n/a'} |`);
   }
   if (c.loadChanged) lines.push('\nLast A/B:\n', '```json', JSON.stringify({ a: c.loadA, b: c.loadB }, null, 2), '```');
 }

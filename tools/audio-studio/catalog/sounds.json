@@ -227,7 +227,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_bfg_charge.ogg",
+            "usages": [
+              {
+                "path": "src/systems/InputSystem.ts",
+                "line": 2021,
+                "kind": "loop",
+                "excerpt": "this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_bfg_charge') ?? null;"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "sfx_bfg_charge"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_bfg_charge",
         "kind": "sfx",
@@ -247,7 +266,7 @@
         "usages": [
           {
             "path": "src/systems/InputSystem.ts",
-            "line": 2013,
+            "line": 2021,
             "kind": "loop",
             "excerpt": "this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_bfg_charge') ?? null;"
           }
@@ -2428,7 +2447,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_gauss_charge.ogg",
+            "usages": [
+              {
+                "path": "src/systems/InputSystem.ts",
+                "line": 2256,
+                "kind": "loop",
+                "excerpt": "this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_gauss_charge') ?? null;"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "sfx_gauss_charge"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_gauss_charge",
         "kind": "sfx",
@@ -2448,7 +2486,7 @@
         "usages": [
           {
             "path": "src/systems/InputSystem.ts",
-            "line": 2248,
+            "line": 2256,
             "kind": "loop",
             "excerpt": "this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_gauss_charge') ?? null;"
           }
@@ -2593,7 +2631,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_honey_badger_rage.ogg",
+            "usages": [
+              {
+                "path": "src/systems/InputSystem.ts",
+                "line": 1855,
+                "kind": "oneshot",
+                "excerpt": "this.audioSystem?.playLocalSound('sfx_honey_badger_rage');"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_honey_badger_rage"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "sfx_honey_badger_rage",
         "kind": "sfx",
@@ -2613,7 +2670,7 @@
         "usages": [
           {
             "path": "src/systems/InputSystem.ts",
-            "line": 1847,
+            "line": 1855,
             "kind": "oneshot",
             "excerpt": "this.audioSystem?.playLocalSound('sfx_honey_badger_rage');"
           }
@@ -4430,6 +4487,24 @@
               "sfx_use_dachstunnel"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_use_dachstunnel.ogg",
+            "usages": [
+              {
+                "path": "src/world/WorldPlayerGameplayRuntime.ts",
+                "line": 1718,
+                "kind": "oneshot",
+                "excerpt": "this.options.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_use_dachstunnel"
+            ]
+          }
         }
       ],
       "repository": {
@@ -4451,7 +4526,7 @@
         "usages": [
           {
             "path": "src/world/WorldPlayerGameplayRuntime.ts",
-            "line": 1713,
+            "line": 1718,
             "kind": "oneshot",
             "excerpt": "this.options.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);"
           }
@@ -4633,7 +4708,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/asmd-sec.ogg",
+            "usages": [
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 323,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_asmd_secondary\","
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "shot_asmd_secondary"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "shot_asmd_secondary",
         "kind": "sfx",
@@ -4653,7 +4747,7 @@
         "usages": [
           {
             "path": "src/loadout/content/data/weapons-plasma-energy.json",
-            "line": 310,
+            "line": 323,
             "kind": "oneshot",
             "excerpt": "\"successKey\": \"shot_asmd_secondary\","
           }
@@ -5232,6 +5326,312 @@
               "shot_dry_trigger"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/dry-trigger.ogg",
+            "usages": [
+              {
+                "path": "src/loadout/content/data/ultimates.json",
+                "line": 67,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 35,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 116,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 193,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-grenades.json",
+                "line": 227,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 60,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 87,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 205,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 260,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 39,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 77,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 117,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 179,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 230,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 277,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 322,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 355,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 415,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-ballistic.json",
+                "line": 472,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 69,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 105,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 150,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 217,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-flame-air.json",
+                "line": 285,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 31,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 58,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 157,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 187,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 214,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 44,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 90,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 132,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 177,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 222,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 268,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 324,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 75,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 148,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 212,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 275,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 319,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-rockets.json",
+                "line": 371,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-spores.json",
+                "line": 54,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-spores.json",
+                "line": 108,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-spores.json",
+                "line": 162,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-spores.json",
+                "line": 216,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 40,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 76,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              },
+              {
+                "path": "src/loadout/content/data/weapons-support.json",
+                "line": 116,
+                "kind": "oneshot",
+                "excerpt": "\"failureKey\": \"shot_dry_trigger\""
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "shot_dry_trigger"
+            ]
+          }
         }
       ],
       "repository": {
@@ -5457,13 +5857,13 @@
           },
           {
             "path": "src/loadout/content/data/weapons-plasma-energy.json",
-            "line": 255,
+            "line": 268,
             "kind": "oneshot",
             "excerpt": "\"failureKey\": \"shot_dry_trigger\""
           },
           {
             "path": "src/loadout/content/data/weapons-plasma-energy.json",
-            "line": 311,
+            "line": 324,
             "kind": "oneshot",
             "excerpt": "\"failureKey\": \"shot_dry_trigger\""
           },
@@ -5826,7 +6226,26 @@
       "notes": "Erstes Produktionsrezept aus der Codex/Astra-Sitzung; Klang und Lautstärke am aktuellen Game-Sound vergleichen.",
       "needs_revision": false,
       "copy_notice": null,
-      "suggested_changes": [],
+      "suggested_changes": [
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/hydra.ogg",
+            "usages": [
+              {
+                "path": "src/loadout/content/data/weapons-plasma-energy.json",
+                "line": 267,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_hydra\","
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "shot_hydra"
+            ]
+          }
+        }
+      ],
       "repository": {
         "key": "shot_hydra",
         "kind": "sfx",
@@ -5846,7 +6265,7 @@
         "usages": [
           {
             "path": "src/loadout/content/data/weapons-plasma-energy.json",
-            "line": 254,
+            "line": 267,
             "kind": "oneshot",
             "excerpt": "\"successKey\": \"shot_hydra\","
           }
@@ -6889,6 +7308,42 @@
               "music_arena"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/music_arena.ogg",
+            "usages": [
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 14,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+              },
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 14,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1727,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3098,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_arena"
+            ]
+          }
         }
       ],
       "repository": {
@@ -6922,13 +7377,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1721,
+            "line": 1727,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3092,
+            "line": 3098,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_arena');"
           }
@@ -7161,6 +7616,48 @@
               "music_lobby"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/badger02.ogg",
+            "usages": [
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 13,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+              },
+              {
+                "path": "src/assets/DeferredAssets.ts",
+                "line": 13,
+                "kind": "unknown",
+                "excerpt": "{ key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 942,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1602,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 3232,
+                "kind": "loop",
+                "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
+              }
+            ],
+            "playback": "loop",
+            "shared_keys": [
+              "music_lobby"
+            ]
+          }
         }
       ],
       "repository": {
@@ -7200,13 +7697,13 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1596,
+            "line": 1602,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 3226,
+            "line": 3232,
             "kind": "loop",
             "excerpt": "this.ctx.gameAudioSystem.playMusic('music_lobby');"
           }
@@ -7331,6 +7828,36 @@
               "sfx_boss_announce"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_boss_announce.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 842,
+                "kind": "unknown",
+                "excerpt": "this.broadcastMissionAudio('sfx_boss_announce', `boss:${spawnedAtMs}`);"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2031,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_boss_announce"
+            ]
+          }
         }
       ],
       "repository": {
@@ -7364,7 +7891,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2025,
+            "line": 2031,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -7489,6 +8016,36 @@
               "sfx_checkpoint_activate"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_checkpoint_activate.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 851,
+                "kind": "unknown",
+                "excerpt": "onCheckpointActivated: id => this.broadcastMissionAudio('sfx_checkpoint_activate', `checkpoint:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2031,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_checkpoint_activate"
+            ]
+          }
         }
       ],
       "repository": {
@@ -7522,7 +8079,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2025,
+            "line": 2031,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -8220,6 +8777,36 @@
               "sfx_objective_complete"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_objective_complete.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 850,
+                "kind": "unknown",
+                "excerpt": "onObjectiveCompleted: id => this.broadcastMissionAudio('sfx_objective_complete', `objective:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2031,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_objective_complete"
+            ]
+          }
         }
       ],
       "repository": {
@@ -8253,7 +8840,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2025,
+            "line": 2031,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -8439,6 +9026,30 @@
               "sfx_pickup_adrenaline_essence"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_pickup_adrenaline_essence.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameAudioSystem.ts",
+                "line": 386,
+                "kind": "unknown",
+                "excerpt": ": key === 'sfx_pickup_adrenaline_essence' ? 110"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 1288,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_pickup_adrenaline_essence');"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_pickup_adrenaline_essence"
+            ]
+          }
         }
       ],
       "repository": {
@@ -8466,7 +9077,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 1282,
+            "line": 1288,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playLocalSound('sfx_pickup_adrenaline_essence');"
           }
@@ -9185,6 +9796,36 @@
               "sfx_wave_start"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_wave_start.ogg",
+            "usages": [
+              {
+                "path": "src/audio/GameplayAudioFeedback.ts",
+                "line": 17,
+                "kind": "unknown",
+                "excerpt": "'sfx_wave_start', 'sfx_boss_announce', 'sfx_objective_complete', 'sfx_checkpoint_activate',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 849,
+                "kind": "unknown",
+                "excerpt": "onWaveStarted: id => this.broadcastMissionAudio('sfx_wave_start', `wave:${id}`),"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2031,
+                "kind": "unknown",
+                "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_wave_start"
+            ]
+          }
         }
       ],
       "repository": {
@@ -9218,7 +9859,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2025,
+            "line": 2031,
             "kind": "unknown",
             "excerpt": "key: 'sfx_wave_start' | 'sfx_boss_announce' | 'sfx_objective_complete' | 'sfx_checkpoint_activate',"
           }
@@ -9419,6 +10060,30 @@
               "sfx_explosion_base_destruction"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_explosion_base_destruction.ogg",
+            "usages": [
+              {
+                "path": "src/audio/ExplosionAudio.ts",
+                "line": 33,
+                "kind": "unknown",
+                "excerpt": "'environment.base_destruction': 'sfx_explosion_base_destruction',"
+              },
+              {
+                "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
+                "line": 2658,
+                "kind": "oneshot",
+                "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_base_destruction', x, y, undefined, volumeScale);"
+              }
+            ],
+            "playback": "unknown",
+            "shared_keys": [
+              "sfx_explosion_base_destruction"
+            ]
+          }
         }
       ],
       "repository": {
@@ -9446,7 +10111,7 @@
           },
           {
             "path": "src/scenes/arena/ArenaLifecycleCoordinator.ts",
-            "line": 2652,
+            "line": 2658,
             "kind": "oneshot",
             "excerpt": "this.ctx.gameAudioSystem.playSound('sfx_explosion_base_destruction', x, y, undefined, volumeScale);"
           }

@@ -185,7 +185,7 @@ async function run() {
     devices: manifest.gpu.devices, renderer: manifest.gpu.auxAttributes?.glRenderer,
     vendor: manifest.gpu.auxAttributes?.glVendor,
   } : 'unavailable';
-  manifest.captureProfileVersion = 5;
+  manifest.captureProfileVersion = 6;
   const categories = ['devtools.timeline', 'blink.user_timing', 'v8'];
   if (request.captureProfile === 'standard') categories.push('disabled-by-default-v8.cpu_profiler');
   manifest.traceCategories = categories;
@@ -245,7 +245,7 @@ async function run() {
   manifest.status = 'analyzing'; manifest.scenarioVersion = result.scenarioVersion; manifest.environment = result.environment;
   await saveManifest();
   await writeFile(join(directory, 'fragdachse-trace.json'), JSON.stringify(result));
-  const summary = { schemaVersion: 1, windows: summarizeWindows(result) };
+  const summary = { schemaVersion: 2, windows: summarizeWindows(result) };
   console.log('Aufzeichnung beendet; Berichte und Source-Maps werden ausgewertet…');
   const trace = await analyzeTrace(traceEvents(rawTrace, abortController.signal), result, summary.windows, await createSourceResolver(buildDirectory), abortController.signal);
   await writeReports(directory, manifest, summary, trace, buildDirectory);

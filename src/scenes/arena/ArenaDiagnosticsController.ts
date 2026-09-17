@@ -355,6 +355,7 @@ export class ArenaDiagnosticsController {
     this.attribution = attribution;
     profiler.setAttributionSource(attribution);
     profiler.attachGame(input.game);
+    profiler.attachScene(input.scene);
 
     const payloadDiagnosticsSink: PayloadDiagnosticsSink = (info: PayloadDiagnosticsInfo) => {
       this.runtimeProfiler?.recordNetworkPayload(info);
@@ -426,6 +427,9 @@ export class ArenaDiagnosticsController {
     return this.runtimeProfiler?.isDiagnosticsActive() ?? false;
   }
 
+  addFrameScope(target: object, method: string, scope: string): void { this.runtimeProfiler?.addFrameScope(target, method, scope); }
+  markVisualStart(): void { this.runtimeProfiler?.markVisualStart(); }
+
   /** Fuer `ArenaLifecycleCoordinator.setRuntimeDiagnosticEventSink`. */
   getSemanticEventSink(): (type: string, fields?: Record<string, unknown>) => void {
     return (type, fields) => this.runtimeProfiler?.recordSemanticEvent(type, fields);
@@ -494,6 +498,7 @@ export class ArenaDiagnosticsController {
    */
   endFrame(input: ArenaDiagnosticsFrameInput): void {
     if (this.destroyed) return;
+    this.runtimeProfiler?.markVisualEnd();
     const frame = this.frame;
     this.frame = null;
     if (frame) {

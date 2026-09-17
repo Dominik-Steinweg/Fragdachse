@@ -1485,6 +1485,7 @@ export class ArenaScene extends Phaser.Scene {
     diagnosticsFrame?.end('arenaPanel');
 
     diagnosticsFrame?.mark('visualStart');
+    if (companionDiagnosticsActive) this.diagnostics?.markVisualStart();
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     // Der GPU-Partikel-Tick haengt bewusst nicht am Zustands-Sync: auf Clients laufen die

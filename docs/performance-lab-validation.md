@@ -3,7 +3,64 @@
 Die ausführbaren Fälle und die Bedienung stehen in [performance-lab.md](performance-lab.md).
 Diese Datei dokumentiert praktische Prüfungen; sie ist kein Vertrag der Projektarchitektur.
 
-## Messkette
+## Messzuordnung und Auswertung: Abnahme von Profil v6
+
+Die Überarbeitung vom 17. September 2026 verwendet Spielreport-Schema 9,
+`frameCapture.version: 2`, Summary-/Vergleichsformat 2 und Sampling-Belegformat 3.
+Die folgenden kurzen Läufe wurden über `perf:chrome` mit sichtbarem Chrome,
+frischem Profil, 1920 × 1080 CSS-Pixeln, DPR 1 und hoher Grafikqualität vollständig abgelegt.
+Während der Aufnahmen liefen keine Builds oder Tests.
+
+Die beiden abschließenden Läufe verwenden denselben unveränderlichen Quellhash
+`3346fecef96d827f08e9237bde51988d3e9eff96d39c11a71736b85d541ee6a3` und Standardprofil v6:
+
+| Lauf | Beobachtung im erzeugten Bericht |
+|---|---|
+| [utility.smoke](../build/performance-results/2026-09-17T21-11-16.867Z-dddc9e96/cases/utility.smoke.md) | 199,9 ms Frame-Abstand; zugehöriger Callback 198 ms, davon 189 ms in `POST_UPDATE`. Sampling zeigt 186,59 ms in `_completeProgram`; die Aufrufkette enthält den archivierten Projektaufrufer `SmokeSystem.renderFrame`, Zeile 108. Host-/Render-Teilzeiten allein erklären diesen Hänger nicht. |
+| [combat.day](../build/performance-results/2026-09-17T21-09-27.355Z-f79e4093/cases/combat.day.md) | Vier Wellen. Erster/letzter Zeitabschnitt: 93,52 → 42,50 FPS, medianer Frame-Abstand 12,1 → 24,2 ms, medianer Gegnerbestand 42 → 151, medianer Projektilbestand 23 → 70. Einzelhänger, Verschlechterung und Dauerlast erscheinen gemeinsam im Kurzbericht. |
+
+Der Smoke-Bericht hält das vorbereitungsübergreifende Intervall von 60,5 ms vollständig fest;
+nur 35,8 ms davon überlappen das aktive Fenster. Es geht nicht in dessen Frame-Percentile ein.
+Der echte Erstverwendungshänger innerhalb des Fensters bleibt dagegen erhalten. Die unabhängig
+zugeordneten CPU-Bereiche zeigen auch enthaltene Teilaufrufe eines grenzüberschreitenden Callbacks.
+Die Reporttabellen nennen ihre jeweiligen Stichprobengrößen und warnen vor dem Verrechnen
+unterschiedlicher Percentile oder verschachtelter Bereiche.
+
+Die GL-Zählung liefert im abschließenden Smoke-Fenster einen Median von 133 Aufrufen je
+vollständig enthaltenem Callback, davon 118 mit Offscreen-Framebuffer. Im Kampffenster sind
+es 206 beziehungsweise 190. Diese Werte zählen native API-Submissions, keine erfolgreichen
+GPU-Pixel oder sichtbaren Objekte. Unterstützte Nullwerte und fehlende/ungültige Messungen
+werden getrennt behandelt.
+
+Ein früherer Lauf derselben Instrumentierung,
+`2026-09-17T21-04-22.356Z-3f15bc45`, zeigte einen 260,5-ms-Smoke-Hänger mit 249 ms in
+`POST_UPDATE`. Danach wurden ausschließlich Darstellung und Abschnittsbildung nachgebessert.
+Der [CLI-Vergleich beider Smoke-Läufe](../build/performance-results/comparison-1789679636229/comparison.md)
+erzeugte Zeit- und Zählerdifferenzen und wies die tatsächlichen Lastunterschiede aus.
+Die unterschiedliche Hängerdauer ist kein Optimierungsnachweis. Ein
+[Vergleich mit der älteren v5-Aufnahme](../build/performance-results/comparison-1789679636402/comparison.md)
+kennzeichnete die inkompatible Messsemantik und berechnete dafür keine Messwertdifferenzen.
+
+Aktuelle automatisierte Prüfung:
+
+- `npm run check`: 3825 Core-Tests bestanden, dieselben zwei bereits bei der V1-Erstabnahme
+  belegten Fehler in `TrainMapEvent.test.ts`; dadurch stoppt das kombinierte Gate vor Build/Architecture.
+- Abschließende gezielte Suite: 36 Tests bestanden, einschließlich zweier anschließend ergänzter
+  Regressionstests. Geschützt sind Phasengrenzen, ungekürzte lange Hänger, Erstverwendung in
+  `POST_UPDATE`, GPU-Submission-Zuordnung, Verlaufstabellen, GL-/Instancing-/Offscreen-Zählung,
+  ungültige Hooks, Wiederherstellung und der Phaser-Scene-Start.
+- Separat: 492 Integrationstests und 35 Architecture-Tests bestanden.
+- Öffentlicher Build und der durch den Runner erstellte Lab-Build erfolgreich.
+
+Verbleibende Grenzen: Bereichszeiten sind Wall-Zeiten einschließlich möglicher GC-, Treiber-
+und Schedulingkosten. Die GPU-Abfrage umfasst weiterhin nur `PRE_RENDER` bis `POST_RENDER`;
+früheres Offscreen-Rendering wird über CPU-Bereiche und GL-Zähler sichtbar, ist aber nicht in
+diesem GPU-Zeitwert enthalten. Sampling und überlappende Worker-/GC-Aktivität sind keine
+alleinigen Ursachenbeweise. Der zusätzliche Instrumentierungsaufwand wurde hier nicht isoliert
+quantifiziert; die alten Gegenmessungen unten gelten für die damalige Instrumentierung.
+Ein neuer zehnminütiger Gesamtlauf war nicht Teil dieser gezielten Folgeabnahme.
+
+## V1-Erstabnahme: Messkette
 
 - Das Grund-Lab wurde dreimal mit unverändertem Quellhash
   `8d99d5861e1aafd36739e5fa7ed48b676c845bf9ebe5b452e76564f357929391` ausgeführt.
@@ -124,7 +181,7 @@ Frame-Abstände, Arbeitszeiten und tatsächliche Last müssen getrennt beurteilt
 Der CLI-Vergleich kennzeichnete das abweichende Aufnahmeprofil und die anderen Trace-Kategorien
 korrekt als unterschiedliche Messbedingungen. Es erfolgte kein Signifikanztest.
 
-## Automatisierte Prüfungen
+## Automatisierte Prüfungen der V1-Erstabnahme
 
 - Core: 3819 Tests bestanden; zwei bestehende Fehler in `TrainMapEvent.test.ts`.
 - Integration: 492 Tests bestanden, einschließlich Diagnose-Abschluss, World-Wechsel,

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gzipSync } from 'node:zlib';
-import { metric, summarizeWindows, compareResults } from '../scripts/performance/metrics.mjs';
+import { metric, summarizeWindows, compareResults, findings } from '../scripts/performance/metrics.mjs';
 import { analyzeTrace, createSourceResolver, traceEvents } from '../scripts/performance/trace.mjs';
 import { acquireOwned } from '../scripts/performance/lifecycle.mjs';
 
@@ -46,19 +46,87 @@ describe('Performance lab offline evidence', () => {
   it('computes percentiles from frames, preserves long hangs and marks missing GPU timings', () => {
     expect(metric([1, 2, 3, 4, 600])).toMatchObject({ median: 3, p99: 600, maximum: 600 });
     const result = { windows: [{ id: 'a', fromMs: 100, toMs: 200 }], game: {
-      frameCapture: { startedAtPerformanceMs: 100, frames: [[1, 5, 600, 2, null, 3, 4], [2, 200, 10, 2, 1, 3, 4]] },
+      frameCapture: { version: 2, startedAtPerformanceMs: 100, frames: [[1, 5, 600, 2, null, 3, 4], [2, 50, 20, 2, 1, 3, 4], [3, 200, 10, 2, 1, 3, 4]] },
       series: { gpuSamples: [] }, session: {}, summaries: { gpu: { status: 'unsupported' } },
     } };
     const [window] = summarizeWindows(result);
     expect(window.frame.count).toBe(1);
-    expect(window.frame.maximum).toBe(600);
+    expect(window.frame.maximum).toBe(20);
+    expect(window.boundaryIntervals[0]).toMatchObject({ durationMs: 600, overlapMs: 5, fromMs: -495, toMs: 105 });
+    expect(window.spikes[0].durationMs).toBe(600);
     expect(window.renderSubmit).toBeNull();
     expect(window.gpu).toBeNull();
     expect(window.gpuStatus).toBe('unsupported');
     const gpu = summarizeWindows({ ...result, game: { ...result.game, series: { gpuSamples: [
-      { renderFrame: 1, atMs: 999, durationMs: 7 }, { renderFrame: 2, atMs: 5, durationMs: 100 },
+      { renderFrame: 1, atMs: 10, submissionEndMs: 20, durationMs: 7 },
+      { renderFrame: 2, atMs: 999, submissionEndMs: 1002, durationMs: 100 },
+      { renderFrame: 3, atMs: 95, submissionEndMs: 105, durationMs: 50 },
     ] } } });
     expect(gpu[0].gpu).toMatchObject({ count: 1, average: 7 });
+    expect(gpu[0].gpuBoundary).toHaveLength(1);
+  });
+
+  it('keeps first-use POST_UPDATE cost visible and joins a hang to the preceding callback', () => {
+    const result = { windows: [{ id: 'prepare', kind: 'preparation', fromMs: 0, toMs: 10 },
+      { id: 'smoke', kind: 'measurement', fromMs: 10, toMs: 400 }], game: {
+      frameCapture: { version: 2, startedAtPerformanceMs: 0,
+        frames: [[1, 0, 16, 2, 10, 4, 5], [2, 220, 220, 2, 1, 8, 9], [3, 236, 16, 2, 1, 8, 9]], work: [
+          { frameId: 1, fromMs: 0, toMs: 218, complete: true, drawCalls: 9, offscreenDrawCalls: 6, spans: [
+            { scope: 'sceneManager', fromMs: 1, toMs: 208 }, { scope: 'sceneUpdate', fromMs: 2, toMs: 8 },
+            { scope: 'gameplay', fromMs: 3, toMs: 5 }, { scope: 'scenePostUpdate', fromMs: 20, toMs: 208 },
+            { scope: 'renderSubmit', fromMs: 208, toMs: 218 }] },
+          { frameId: 2, fromMs: 220, toMs: 224, complete: true, drawCalls: 4, offscreenDrawCalls: 0,
+            spans: [{ scope: 'gameplay', fromMs: 221, toMs: 223 }] },
+        ] }, series: { gpuSamples: [] }, session: {}, summaries: { gpu: { status: 'unsupported' } },
+    } };
+    const [prep, smoke] = summarizeWindows(result);
+    expect(smoke.frame).toMatchObject({ count: 1, maximum: 16 });
+    expect(smoke.costs.scopes.scenePostUpdate.maximum).toBe(188);
+    expect(smoke.costs.scopes.gameplay.maximum).toBe(2);
+    expect(smoke.spikes[0].work.callbacks.map(c => c.frameId)).toEqual([1]);
+    expect(smoke.spikes[0].work.outsideCapturedCallbacksMs).toBe(2);
+    expect(smoke.spikes[0].enemies).toBe(4);
+    expect(smoke.boundaryIntervals[0].frameId).toBe(prep.boundaryIntervals[0].frameId);
+    expect(smoke.drawCalls.maximum).toBe(4);
+  });
+
+  it('assigns intervals ending on a phase boundary to the preceding phase and keeps long contained frames', () => {
+    const result = { windows: [{ id: 'a', fromMs: 0, toMs: 600 }, { id: 'b', fromMs: 600, toMs: 616 }], game: {
+      frameCapture: { version: 2, startedAtPerformanceMs: 0, frames: [[1, 600, 600, 2, 1, 1, 2], [2, 616, 16, 2, 1, 1, 2]] },
+      series: { gpuSamples: [] }, session: {}, summaries: { gpu: { status: 'unsupported' } },
+    } };
+    const [a, b] = summarizeWindows(result);
+    expect(a.frame.maximum).toBe(600); expect(b.frame.maximum).toBe(16);
+    expect(a.boundaryIntervals).toEqual([]); expect(b.boundaryIntervals).toEqual([]);
+  });
+
+  it('does not let persistent load findings crowd out stalls and transitions', () => {
+    const windows = Array.from({ length: 10 }, (_, n) => ({ id: `load${n}`, kind: 'measurement', frame: { median: 30, p95: 40 }, spikes: [] }));
+    windows.push({ id: 'smoke', kind: 'measurement', frame: { median: 5, p95: 6 },
+      spikes: [{ frameId: 1, durationMs: 188, fromMs: 0, toMs: 188 }] } as any);
+    windows.push({ id: 'load', kind: 'preparation', durationMs: 3000, overlappingFrame: { maximum: 500 } } as any);
+    expect(findings(windows).slice(0, 3).map(f => f.type)).toEqual(['Einzelhänger', 'Dauerlast', 'Laden / Übergang']);
+    const a = { manifest: {}, summary: { schemaVersion: 1, windows: [{ id: 'x', kind: 'measurement' }] } };
+    const b = { ...a, summary: { ...a.summary, schemaVersion: 2 } };
+    expect(compareResults(a, b).cases[0].status).toBe('incompatible-measurement');
+  });
+
+  it('exposes worsening frame pace and growing actual load in readable time sections', () => {
+    const frames: number[][] = [];
+    for (let at = 0, id = 0; at < 8000;) {
+      const delta = at < 4000 ? 10 : 30; at += delta;
+      frames.push([++id, at, delta, 1, 1, at < 4000 ? 40 : 120, at < 4000 ? 2 : 20]);
+    }
+    const result = { windows: [{ id: 'combat', kind: 'measurement', fromMs: 0, toMs: 8010 }], game: {
+      frameCapture: { version: 2, startedAtPerformanceMs: 0, frames }, series: { gpuSamples: [] }, session: {}, summaries: { gpu: { status: 'unsupported' } },
+    } };
+    const [window] = summarizeWindows(result);
+    expect(window.trend.ratio).toBe(3);
+    expect(window.trend.first.enemies.median).toBe(40);
+    expect(window.trend.last.enemies.median).toBe(120);
+    expect(window.sections.at(-1).toMs).toBe(8010);
+    expect(window.sections.at(-1).toMs - window.sections.at(-1).fromMs).toBeGreaterThan(1000);
+    expect(findings([window]).some(f => f.type === 'Verschlechterung im Verlauf')).toBe(true);
   });
 
   it('flags changed conditions and actual load instead of automatically claiming an improvement', () => {

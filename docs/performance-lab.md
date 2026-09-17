@@ -42,7 +42,7 @@ vollständige `.gz`-Aufnahme erhalten. Fehlgeschlagene Ergebnisordner tragen ihr
 Dieses Profil dient einer groben Gegenmessung und liefert keine gesampelten Aufrufstapel.
 Es ist im Vergleich ausdrücklich eine andere Messbedingung.
 
-Aufnahmeprofil v5 verwendet einen begrenzten Chrome-Trace-Puffer von 1.200.000 KiB und aktiviert
+Aufnahmeprofil v6 verwendet einen begrenzten Chrome-Trace-Puffer von 1.200.000 KiB und aktiviert
 JS-Sampling über die entsprechende Trace-Kategorie. Der Pufferfüllstand wird überwacht;
 nahe der Kapazitätsgrenze scheitert der Lauf ausdrücklich. Die Speicherstrategie folgt dem
 [TracingManager der Chrome DevTools](https://github.com/ChromeDevTools/devtools-frontend/blob/main/front_end/services/tracing/TracingManager.ts).
@@ -105,13 +105,64 @@ verweist relativ auf seinen Build, lesbaren Projektquellstand, Source-Maps und d
 Abhängigkeitsquellen. Beim Weitergeben beide Verzeichnisse mit ihrer relativen Struktur erhalten.
 Ein neuer Build überschreibt keine frühere erfolgreiche Aufnahme.
 
-CPU-Sampling liefert geschätzte Zeitanteile. Inklusive Zeiten enthalten aufgerufene Funktionen
-und dürfen nicht addiert werden. Host-Schritt, Render-Submission und GPU-Zeit werden getrennt
-ausgewiesen. GPU-Werte gehören zum Renderframe, der die asynchrone Messung gestartet hat.
-Fehlende GPU-Unterstützung und unaufgelöste Samples erscheinen ausdrücklich als nicht verfügbar
-beziehungsweise unaufgelöst. Der frühe Boot besitzt vor Initialisierung des Spielprofilers nur
-Chrome-Daten. Einzelne Frames können Phasengrenzen überschreiten; Hängerfenster behalten ihren
-vollständigen Frame-Abstand. Ein regelmäßiger Frame-Abstand allein belegt keinen CPU-Engpass.
+Ab Profil v6 verwenden Spielreport-Schema 9, `frameCapture.version: 2`, Summary-/Vergleichsformat 2
+und Sampling-Belegformat 3 eine ausdrücklich getrennte Messsemantik. Alte Aufnahmen bleiben
+lesbar; `perf:compare` berechnet keine Zeitdifferenzen zwischen inkompatiblen Summary-Versionen.
+Für einen Vorher/Nachher-Vergleich beide Quellstände mit derselben Messinstrumentierung aufnehmen.
+
+Ein bei rAF-Zeit `t` beobachtetes Delta `d` beschreibt `[t-d, t]`. Die CPU-Arbeit dieses
+Callbacks liegt danach. Die Aufnahme hält deshalb Frame-Intervalle und gemessene Callback-/
+Bereichsgrenzen getrennt. Auch Ladeframes mit vorzeitigem Scene-Return werden am Callback-Eingang
+erfasst. Frame-Statistik und FPS einer Phase verwenden nur vollständig enthaltene Intervalle.
+Grenzintervalle stehen zusätzlich mit voller Dauer, Überlappungsdauer, Frame-ID und allen
+betroffenen Phasen im Bericht. Dieselbe ID in zwei Berichten ist dasselbe Ereignis.
+Hänger werden nicht gekürzt, anteilig umgerechnet oder als erste Frames pauschal verworfen.
+Erstverwendungskosten bleiben anhand ihrer echten Bereichszeit sichtbar, auch wenn das
+zugehörige Frame-Intervall eine Vorbereitungsgrenze überschreitet.
+
+Die Kostenübersicht misst Wall-Zeit im Spiel-Callback, SceneManager, Arena-Scene-Systemen,
+`Scene.update`, dem Host-/Client-Schritt, dem visuellen Update-Abschnitt, `POST_UPDATE`,
+Renderer-Vorbereitung und Render-Submission. Die Elternbeziehung steht an jeder Zeile:
+übergeordnete und enthaltene Zeiten niemals addieren. Die manuell getaktete Host-Physik ist
+im Gameplay-Schritt enthalten; automatische Phaser-Physik gehört zu den Scene-Systemen.
+`POST_UPDATE` umfasst visuelle Updates und weitere dort registrierte Systeme, einschließlich
+Offscreen-Zeichnen und Shader-Erstinitialisierung. Der visuelle Update-Abschnitt enthält auch
+UI, Bakes und den abschließenden Netzwerk-Flush; er ist kein reines GPU-/Effektmaß.
+Der Rest von `Scene.update` und der nicht weiter aufgeteilte Callback-Rest werden ausdrücklich
+ausgewiesen. Weitere Scenes liegen in der übergeordneten SceneManager-Zeit.
+Jeder Bereich verwendet seine eigenen Zeitgrenzen: Ein Teilaufruf kann vollständig in einer
+Phase liegen, während sein Elternaufruf die Grenze kreuzt. Die Stichproben können sich deshalb
+unterscheiden; Maxima und Percentile verschiedener Zeilen ergeben keine Zeitbilanz.
+
+Die Bereichszeiten schließen GC, Treiberwartezeit und OS-Unterbrechungen ein. Sie messen keine
+CPU-Auslastung. Browserarbeit, andere Tasks und Scheduling außerhalb des Spiel-Callbacks sind
+nicht durch diese Bereiche erklärt. Hängerberichte zeigen diese nicht abgedeckte Intervallzeit
+und passende Chrome-Aufrufketten. Worker laufen parallel; überlappende Worker-/GC-Ereignisse
+oder gesampeltes Idle allein beweisen keine Ursache. CPU-Sampling bleibt eine Schätzung.
+Der frühe Boot besitzt vor Initialisierung des Spielprofilers ausschließlich Chrome-Daten.
+
+GPU-Werte werden über Start und Ende des auslösenden CPU-Submission-Bereichs zugeordnet,
+unabhängig vom späteren Ergebnisabruf. Die echte GPU-Ausführungszeitachse wird nicht rekonstruiert.
+Der vorhandene asynchrone Timer erfasst weiterhin nur `PRE_RENDER` bis `POST_RENDER`;
+frühere Offscreen-Arbeit liegt außerhalb dieses GPU-Maßes. Grenzübergreifende Queries werden
+separat gespeichert. GPU-Zeit, Worker-Zeit, Callback-Wall-Zeit und Frame-Abstand sind nicht addierbar.
+
+Renderzähler beobachten die nativen `drawArrays`-/`drawElements`-Aufrufe, WebGL2-Instancing
+und gegebenenfalls ANGLE-Instancing des Spielkontexts. Aliasaufrufe zählen einmal. Ein
+mitverfolgtes Draw-Framebuffer kennzeichnet Offscreen-Aufrufe; die Zählung beginnt vor dem
+Scene-Update und umfasst damit auch `POST_UPDATE`. Sie zählt API-Submissions, keine sichtbaren
+Objekte, Dreiecke oder erfolgreichen GPU-Pixel. Kein `getError`, `finish` oder `readPixels`
+wird eingefügt. Nicht unterstützte Hooks, Kontextverlust und ersetzte Hooks liefern
+„nicht verfügbar“; nur eine gültig beobachtete Null wird als 0 ausgegeben. Asynchrone Aufrufe
+außerhalb des Spiel-Callbacks sind nicht Teil der phasenbezogenen Callback-Zähler.
+
+Die Kurzberichte berücksichtigen abwechselnd Messprobleme, Einzelhänger, Verschlechterung
+im Verlauf, Dauerlast und Lade-/Übergangskosten. Zweissekundenabschnitte zeigen FPS,
+Frame-Verteilung und Gegner-/Projektilbestände; Abschnittsgrenzen schneiden keine Hänger ab.
+Die Verlaufsheuristik vergleicht ausreichend belegte Anfangs-/Endabschnitte, ohne Trendtest oder
+Ursachenbehauptung. Bekannte Ursachen sind erst durch Prüfung von Aufrufketten und Quellcode
+zu begründen. Die zusätzlichen Hooks existieren nur bei aktiver Diagnose, die Bereichsaufnahme
+nur bei expliziter Frame-Aufzeichnung; es gibt keine Objekt-Scans und keine Zeitabfrage pro Draw Call.
 
 `actions` zählt akzeptierte Aufrufe des produktiven Aktionspfads. Bei gehaltenen Waffen sind
 darunter auch Aktualisierungen des Haltezustands; diese Zahl ist keine Schusszahl.
