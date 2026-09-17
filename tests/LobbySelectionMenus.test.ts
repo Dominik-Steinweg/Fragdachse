@@ -113,6 +113,38 @@ function options(count = 20): LoadoutPickerOptions {
 const click = (object: Display) => object.emit('pointerdown', {}, 0, 0, { stopPropagation: vi.fn() });
 
 describe('Lobby selection menus', () => {
+  it('keeps dragging the time across value refreshes and stops on release or a readiness lock', () => {
+    const { scene, parent, input } = fixture();
+    let minutes = 720;
+    const bridge = {
+      isHost: () => true, getGameMode: () => 'deathmatch', getCoopDefenseMapId: () => '1',
+      getLobbyTimeOfDayMinutes: () => minutes,
+      setLobbyTimeOfDayMinutes: vi.fn((next: number) => { minutes = next; }),
+    };
+    const settings = new LobbySettingsControls(scene as any, bridge as any, parent as any);
+    const slider = parent.children.find(object => object.kind === 'rectangle' && object.input?.enabled)!;
+    const pointer = (fraction: number) => ({ x: slider.x + slider.width * fraction });
+    slider.emit('pointerdown', pointer(0));
+    const start = minutes;
+    input.emit('pointermove', pointer(0.4));
+    expect(minutes).toBeGreaterThan(start);
+    const middle = minutes;
+    input.emit('pointermove', pointer(0.8));
+    expect(minutes).toBeGreaterThan(middle);
+    input.emit('pointerup', pointer(0.8));
+    bridge.setLobbyTimeOfDayMinutes.mockClear();
+    input.emit('pointermove', pointer(0.2));
+    expect(bridge.setLobbyTimeOfDayMinutes).not.toHaveBeenCalled();
+
+    slider.emit('pointerdown', pointer(0.4));
+    settings.setLocked(true);
+    settings.setLocked(false);
+    bridge.setLobbyTimeOfDayMinutes.mockClear();
+    input.emit('pointermove', pointer(0.8));
+    expect(bridge.setLobbyTimeOfDayMinutes).not.toHaveBeenCalled();
+    settings.destroy();
+  });
+
   it('allows host selection while rejecting guests and closing choices on a readiness lock', () => {
     const { scene, parent, created, keyboard } = fixture();
     let host = false;

@@ -41,6 +41,7 @@ export class LobbySettingsControls {
   private locked = false;
   private dragging = false;
   private signature = '';
+  private interactionSignature = '';
 
   constructor(private readonly scene: Phaser.Scene, private readonly bridge: NetworkBridge,
     parent: Phaser.GameObjects.Container, popupParent = parent) {
@@ -92,9 +93,12 @@ export class LobbySettingsControls {
     const mode = this.bridge.getGameMode();
     const mapId = this.bridge.getCoopDefenseMapId();
     const minutes = this.bridge.getLobbyTimeOfDayMinutes();
-    const signature = `${mode}|${mapId}|${getLocale()}|${this.canEdit()}|${minutes}`;
+    const interactionSignature = `${mode}|${mapId}|${getLocale()}|${this.canEdit()}`;
+    const signature = `${interactionSignature}|${minutes}`;
     if (signature === this.signature) return;
-    if (signature !== this.signature) this.close();
+    // Updating the dragged value must not cancel the active gesture.
+    if (interactionSignature !== this.interactionSignature) this.close();
+    this.interactionSignature = interactionSignature;
     this.signature = signature;
     const coop = isCoopDefenseMode(mode);
     const enabled = this.canEdit();
