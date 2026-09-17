@@ -42,7 +42,7 @@ export const LOBBY_CARD_MOTION = { exitDuration: 350, enterDuration: 500, enterD
 /** The monochrome art stays behind the roster, independent of occupied slots and scrolling. */
 export function getLobbyReliefBounds() {
   const width = LOBBY_CARD.contentWidth - 24;
-  const height = width * FOREST_ASSETS.relief.crop.height / FOREST_ASSETS.relief.crop.width;
+  const height = width * FOREST_ASSETS.relief.sourceHeight / FOREST_ASSETS.relief.sourceWidth;
   return { x: LOBBY_CARD.left + LOBBY_CARD.width / 2,
     y: LOBBY_CARD.footerTop - 8 - height / 2, width, height };
 }

@@ -1,15 +1,16 @@
 import type * as Phaser from 'phaser';
+import exports from './lobbyForestExports.json';
 
+/** Generated runtime files; sourceWidth/sourceHeight retain the authored trim's coordinate system. */
 export const FOREST_ASSETS = {
-  frame: { key: 'lobby_forest_frame', file: 'frame.png' },
-  wood: { key: 'lobby_forest_wood', file: 'wood.png' },
-  buttonFrame: { key: 'lobby_forest_button_frame', file: 'button-frame.png',
-    crop: { x: 15, y: 177, width: 2141, height: 366 }, corner: 128 },
-  leaves: { key: 'lobby_forest_leaves', file: 'leaves.png' },
-  medallion: { key: 'lobby_forest_medallion', file: 'medallion.png' },
-  relief: { key: 'lobby_forest_relief', file: 'relief.png', crop: { x: 18, y: 189, width: 1504, height: 656 } },
-  ready: { key: 'lobby_forest_ready', file: 'ready.png', crop: { x: 21, y: 217, width: 2129, height: 288 } },
-  world: { key: 'lobby_forest_world', file: 'world.png', crop: { x: 24, y: 72, width: 2015, height: 569 } },
+  frame: { key: 'lobby_forest_frame', ...exports.frame },
+  wood: { key: 'lobby_forest_wood', ...exports.wood },
+  buttonFrame: { key: 'lobby_forest_button_frame', ...exports.buttonFrame, corner: 128 },
+  leaves: { key: 'lobby_forest_leaves', ...exports.leaves },
+  medallion: { key: 'lobby_forest_medallion', ...exports.medallion },
+  relief: { key: 'lobby_forest_relief', ...exports.relief },
+  ready: { key: 'lobby_forest_ready', ...exports.ready },
+  world: { key: 'lobby_forest_world', ...exports.world },
 } as const;
 
 export function preloadForestAssets(loader: Phaser.Loader.LoaderPlugin): void {

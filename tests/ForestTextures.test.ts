@@ -8,7 +8,7 @@ import { FOREST_ASSETS } from '../src/ui/LobbyForestAssets';
 function fixture() {
   const textures = new Map<string, any>();
   for (const asset of Object.values(FOREST_ASSETS)) {
-    textures.set(asset.key, { getSourceImage: () => ({ width: 1000, height: 1500 }) });
+    textures.set(asset.key, { getSourceImage: () => ({ width: asset.width, height: asset.height }) });
   }
   const createCanvas = vi.fn((key: string, width: number, height: number) => {
     const context = {
@@ -42,7 +42,8 @@ describe('forest texture ownership and reuse', () => {
   });
 
   it('fits icon and wide wood buttons with undistorted corners and clipped edge repeats', () => {
-    const image = { width: 2172, height: 724 } as HTMLImageElement;
+    const asset = FOREST_ASSETS.buttonFrame;
+    const image = { width: asset.width, height: asset.height } as HTMLImageElement;
     const drawImage = vi.fn();
     const ctx = { drawImage } as unknown as CanvasRenderingContext2D;
     let cornerWidth: number | undefined;
@@ -50,11 +51,11 @@ describe('forest texture ownership and reuse', () => {
       drawImage.mockClear();
       drawForestButtonFrame(ctx, image, width, height);
       for (const [, sx, sy, sw, sh, dx, dy, dw, dh] of drawImage.mock.calls) {
-        expect(dw / sw).toBeCloseTo(dh / sh);
+        expect(dw / (sw * asset.sourceWidth / image.width)).toBeCloseTo(dh / (sh * asset.sourceHeight / image.height));
         expect(sx).toBeGreaterThanOrEqual(0);
         expect(sy).toBeGreaterThanOrEqual(0);
-        expect(sx + sw).toBeLessThanOrEqual(image.width);
-        expect(sy + sh).toBeLessThanOrEqual(image.height);
+        expect(sx + sw).toBeLessThanOrEqual(image.width + 1e-9);
+        expect(sy + sh).toBeLessThanOrEqual(image.height + 1e-9);
         expect(dx).toBeGreaterThanOrEqual(0);
         expect(dy).toBeGreaterThanOrEqual(0);
         expect(dx + dw).toBeLessThanOrEqual(width);
@@ -64,6 +65,11 @@ describe('forest texture ownership and reuse', () => {
       const [, , , , , , , dw] = drawImage.mock.calls[0];
       cornerWidth ??= dw;
       expect(dw).toBe(cornerWidth);
+      // Export resolution changes sampling only, never corner sizes or grain repeat positions.
+      const exportedCalls = drawImage.mock.calls.map(call => call.slice(5));
+      drawImage.mockClear();
+      drawForestButtonFrame(ctx, { width: asset.sourceWidth, height: asset.sourceHeight } as HTMLImageElement, width, height);
+      expect(drawImage.mock.calls.map(call => call.slice(5))).toEqual(exportedCalls);
     }
   });
 
@@ -75,8 +81,8 @@ describe('forest texture ownership and reuse', () => {
         const key = ensureForestActionButton(scene, 484, 80, frame, intent, state);
         expect(keys.has(key)).toBe(false);
         keys.add(key);
-        const [, , , sw, sh, dx, dy, dw, dh] = textures.get(key).context.drawImage.mock.calls[0];
-        expect(dw / dh).toBeCloseTo(sw / sh);
+        const [, dx, dy, dw, dh] = textures.get(key).context.drawImage.mock.calls[0];
+        expect(dw / dh).toBeCloseTo(FOREST_ASSETS[frame].sourceWidth / FOREST_ASSETS[frame].sourceHeight);
         expect(dx).toBeGreaterThanOrEqual(0);
         expect(dy).toBeGreaterThanOrEqual(0);
         expect(dx + dw).toBeLessThanOrEqual(484);
@@ -85,6 +91,16 @@ describe('forest texture ownership and reuse', () => {
         expect(ensureForestActionButton(scene, 484, 80, frame, intent, state)).toBe(key);
         expect(createCanvas).toHaveBeenCalledTimes(count);
       }
+    }
+  });
+  it('keeps wood grain repeat lengths in buttons, panels and the world sign after resizing', () => {
+    const { scene, textures } = fixture();
+    const keys = [ensureForestButton(scene, 220, 44, 'neutral', 'rest'),
+      ensureForestPanel(scene, 300, 180), ensureForestActionButton(scene, 280, 80, 'world', 'neutral', 'rest')];
+    for (const key of keys) {
+      const [sx, sy] = textures.get(key).context.scale.mock.calls[0];
+      expect(sx * FOREST_ASSETS.wood.width).toBeCloseTo(.35 * FOREST_ASSETS.wood.sourceWidth);
+      expect(sy * FOREST_ASSETS.wood.height).toBeCloseTo(.35 * FOREST_ASSETS.wood.sourceHeight);
     }
   });
   it('keeps size, material, intent and pointer state in separate cache entries', () => {

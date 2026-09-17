@@ -1,0 +1,58 @@
+{
+  "frame": {
+    "file": "runtime/frame.webp",
+    "width": 1062,
+    "height": 1482,
+    "sourceWidth": 1062,
+    "sourceHeight": 1482
+  },
+  "wood": {
+    "file": "runtime/wood.webp",
+    "width": 896,
+    "height": 896,
+    "sourceWidth": 1254,
+    "sourceHeight": 1254
+  },
+  "buttonFrame": {
+    "file": "runtime/button-frame.webp",
+    "width": 536,
+    "height": 92,
+    "sourceWidth": 2141,
+    "sourceHeight": 366
+  },
+  "leaves": {
+    "file": "runtime/leaves.webp",
+    "width": 128,
+    "height": 128,
+    "sourceWidth": 1254,
+    "sourceHeight": 1254
+  },
+  "medallion": {
+    "file": "runtime/medallion.webp",
+    "width": 320,
+    "height": 320,
+    "sourceWidth": 1254,
+    "sourceHeight": 1254
+  },
+  "relief": {
+    "file": "runtime/relief.webp",
+    "width": 940,
+    "height": 410,
+    "sourceWidth": 1504,
+    "sourceHeight": 656
+  },
+  "ready": {
+    "file": "runtime/ready.webp",
+    "width": 1065,
+    "height": 144,
+    "sourceWidth": 2129,
+    "sourceHeight": 288
+  },
+  "world": {
+    "file": "runtime/world.webp",
+    "width": 640,
+    "height": 181,
+    "sourceWidth": 2015,
+    "sourceHeight": 569
+  }
+}

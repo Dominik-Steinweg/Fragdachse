@@ -40,9 +40,10 @@ function paintWood(scene: Phaser.Scene, texture: Phaser.Textures.CanvasTexture, 
   context.globalAlpha = alpha;
   const pattern = context.createPattern(image, 'repeat');
   if (pattern) {
-    context.scale(0.35, 0.35);
+    const scale = 0.35 * FOREST_ASSETS.wood.sourceWidth / image.width;
+    context.scale(scale, scale);
     context.fillStyle = pattern;
-    context.fillRect(0, 0, w / 0.35, h / 0.35);
+    context.fillRect(0, 0, w / scale, h / scale);
   }
   context.restore();
   texture.refresh();
@@ -85,13 +86,16 @@ export function ensureForestButton(scene: Phaser.Scene, w: number, h: number, in
 /** Fixed corners and cropped repeats keep timber grain and pegs undistorted at every button size. */
 export function drawForestButtonFrame(ctx: CanvasRenderingContext2D, image: HTMLImageElement,
   width: number, height: number): void {
-  const { crop, corner } = FOREST_ASSETS.buttonFrame;
+  const { sourceWidth, sourceHeight, corner } = FOREST_ASSETS.buttonFrame;
+  // Compose in authored pixels, then map samples to the cropped/resized export.
+  // Independent axes compensate integer rounding without changing the grain's proportions.
+  const pixelX = image.width / sourceWidth, pixelY = image.height / sourceHeight;
   const cap = Math.min(8, width / 2, height / 2);
   const scale = cap / corner;
-  const sx = [crop.x, crop.x + corner, crop.x + crop.width - corner];
-  const sy = [crop.y, crop.y + corner, crop.y + crop.height - corner];
-  const sw = [corner, crop.width - corner * 2, corner];
-  const sh = [corner, crop.height - corner * 2, corner];
+  const sx = [0, corner, sourceWidth - corner];
+  const sy = [0, corner, sourceHeight - corner];
+  const sw = [corner, sourceWidth - corner * 2, corner];
+  const sh = [corner, sourceHeight - corner * 2, corner];
   const dx = [0, cap, width - cap], dy = [0, cap, height - cap];
   const dw = [cap, width - cap * 2, cap], dh = [cap, height - cap * 2, cap];
   ctx.imageSmoothingEnabled = true;
@@ -101,17 +105,19 @@ export function drawForestButtonFrame(ctx: CanvasRenderingContext2D, image: HTML
     for (let y = 0; y < dh[row]; y += sh[row] * scale) for (let x = 0; x < dw[col]; x += sw[col] * scale) {
       const tileW = Math.min(sw[col] * scale, dw[col] - x);
       const tileH = Math.min(sh[row] * scale, dh[row] - y);
-      ctx.drawImage(image, sx[col], sy[row], tileW / scale, tileH / scale,
+      ctx.drawImage(image, sx[col] * pixelX, sy[row] * pixelY, tileW / scale * pixelX, tileH / scale * pixelY,
         dx[col] + x, dy[row] + y, tileW, tileH);
     }
   }
 }
 
-/** Source-space trim excludes transparent generation margins; artwork always scales uniformly. */
+/** Authored trim dimensions preserve proportions independently of export pixel rounding. */
 const ACTION_FRAME_SOURCE = {
-  ready: { ...FOREST_ASSETS.ready.crop, insetX: 0.065, insetTop: 0.19, insetBottom: 0.19 },
+  ready: { width: FOREST_ASSETS.ready.sourceWidth, height: FOREST_ASSETS.ready.sourceHeight,
+    insetX: 0.065, insetTop: 0.19, insetBottom: 0.19 },
   // The branch opening is lower than the foliage silhouette's centre. Fill underneath both rails.
-  world: { ...FOREST_ASSETS.world.crop, insetX: 0.12, insetTop: 0.27, insetBottom: 0.20 },
+  world: { width: FOREST_ASSETS.world.sourceWidth, height: FOREST_ASSETS.world.sourceHeight,
+    insetX: 0.12, insetTop: 0.27, insetBottom: 0.20 },
 } as const;
 
 export function ensureForestActionButton(scene: Phaser.Scene, w: number, h: number,
@@ -137,15 +143,17 @@ export function ensureForestActionButton(scene: Phaser.Scene, w: number, h: numb
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, w, h);
   if (frame === 'world' && scene.textures.exists(FOREST_ASSETS.wood.key)) {
-    const pattern = ctx.createPattern(scene.textures.get(FOREST_ASSETS.wood.key).getSourceImage() as HTMLImageElement, 'repeat');
-    if (pattern) { ctx.globalAlpha = .45; ctx.fillStyle = pattern; ctx.scale(.35, .35); ctx.fillRect(0, 0, w / .35, h / .35); }
+    const image = scene.textures.get(FOREST_ASSETS.wood.key).getSourceImage() as HTMLImageElement;
+    const pattern = ctx.createPattern(image, 'repeat');
+    const scale = .35 * FOREST_ASSETS.wood.sourceWidth / image.width;
+    if (pattern) { ctx.globalAlpha = .45; ctx.fillStyle = pattern; ctx.scale(scale, scale); ctx.fillRect(0, 0, w / scale, h / scale); }
   }
   ctx.restore();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   if (scene.textures.exists(FOREST_ASSETS[frame].key)) ctx.drawImage(
     scene.textures.get(FOREST_ASSETS[frame].key).getSourceImage() as HTMLImageElement,
-    source.x, source.y, source.width, source.height, dx, dy, dw, dh);
+    dx, dy, dw, dh);
   texture.refresh();
   return key;
 }
@@ -180,10 +188,7 @@ export function forestOrnament(scene: Phaser.Scene, asset: 'leaves' | 'medallion
     texture.context.imageSmoothingEnabled = true;
     texture.context.imageSmoothingQuality = 'high';
     const image = scene.textures.get(FOREST_ASSETS[asset].key).getSourceImage() as HTMLImageElement;
-    if (asset === 'relief') {
-      const crop = FOREST_ASSETS.relief.crop;
-      texture.context.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, w * 2, h * 2);
-    } else texture.context.drawImage(image, 0, 0, w * 2, h * 2);
+    texture.context.drawImage(image, 0, 0, w * 2, h * 2);
     texture.refresh();
   }
   return scene.add.image(x, y, key).setDisplaySize(w, h).setScrollFactor(0);

@@ -7,15 +7,19 @@ import { FOREST_ASSETS, preloadForestAssets } from '../../src/ui/LobbyForestAsse
 const root = resolve(__dirname, '../../public/assets/ui/lobby-forest');
 
 describe('lobby forest artwork', () => {
-  it('preloads each shipped PNG and records its generation prompt', async () => {
+  it('preloads only exported artwork and retains its original and generation prompt', async () => {
     const image = vi.fn();
     preloadForestAssets({ image } as any);
     const prompts = JSON.parse(readFileSync(resolve(root, 'prompts.json'), 'utf8'));
     for (const [name, asset] of Object.entries(FOREST_ASSETS)) {
       const metadata = await sharp(resolve(root, asset.file)).metadata();
-      expect(metadata.format).toBe('png');
-      expect(metadata.width).toBeGreaterThan(0);
-      expect(metadata.height).toBeGreaterThan(0);
+      expect(['png', 'webp']).toContain(metadata.format);
+      expect(asset.file.startsWith('runtime/')).toBe(true);
+      expect(metadata.width).toBe(asset.width);
+      expect(metadata.height).toBe(asset.height);
+      const original = resolve(root, asset.file.replace('runtime/', '').replace(/\.(png|webp)$/, '.png'));
+      expect((await sharp(original).metadata()).format).toBe('png');
+      expect(readFileSync(resolve(root, asset.file)).length).toBeLessThan(readFileSync(original).length);
       expect(image).toHaveBeenCalledWith(asset.key, './assets/ui/lobby-forest/' + asset.file);
       expect(prompts.assets.some((entry: { key: string; prompt: string }) => entry.key === name && entry.prompt.length > 0)).toBe(true);
     }
@@ -26,13 +30,9 @@ describe('lobby forest artwork', () => {
     const source = sharp(resolve(root, FOREST_ASSETS[name].file));
     const { width, height, hasAlpha } = await source.metadata();
     expect(hasAlpha).toBe(true);
-    const asset = FOREST_ASSETS[name];
-    // Opening coordinates belong to the rendered art, excluding unused generation margins.
-    const bounds = 'crop' in asset ? asset.crop : { x: 0, y: 0, width: width!, height: height! };
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width!);
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(height!);
-    const alpha = await source.extract({ left: bounds.x + Math.floor(bounds.width * .4), top: bounds.y + Math.floor(bounds.height * .4),
-      width: Math.floor(bounds.width * .2), height: Math.floor(bounds.height * .2) }).extractChannel('alpha').raw().toBuffer();
+    // Generation margins have already been trimmed by the exporter.
+    const alpha = await source.extract({ left: Math.floor(width! * .4), top: Math.floor(height! * .4),
+      width: Math.floor(width! * .2), height: Math.floor(height! * .2) }).extractChannel('alpha').raw().toBuffer();
     // Generated cutouts can retain a one-step alpha quantisation residue (1/255).
     // Reject any backing or visible haze in the opening while tolerating that residue.
     expect(alpha.every(value => value <= 1)).toBe(true);
