@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { beginPerformanceBoot, labMarker, failPerformanceLab } from './debug/performanceLab/boot';
 import { bridge }         from './network/bridge';
 import { NetworkBridge }  from './network/NetworkBridge';
 import { PeerNetworkError } from './network/peer';
@@ -100,8 +101,10 @@ function installPageLeave(): void {
 }
 
 async function boot(): Promise<void> {
+  if (__PERFORMANCE_LAB__) beginPerformanceBoot();
   const startupContext = createWebGLStartupContext();
   if (!startupContext) {
+    if (__PERFORMANCE_LAB__) failPerformanceLab('WebGL startup context unavailable');
     showBootError(
       t('ui.boot.webglRequiredDetail'),
       false,
@@ -125,6 +128,7 @@ async function boot(): Promise<void> {
   // 1. Raum eroeffnen oder dem Raum aus dem URL-Hash beitreten. Blockiert, bis die direkte
   //    WebRTC-Verbindung steht bzw. endgueltig gescheitert ist – es gibt keinen Fallback.
   await NetworkBridge.connect();
+  if (__PERFORMANCE_LAB__) labMarker('network-connected');
 
   // 2. Bridge aktivieren (einmalig – registriert Roster-Listener und RPC-Namen)
   bridge.activate();
@@ -177,6 +181,7 @@ async function boot(): Promise<void> {
 }
 
 boot().catch((error: unknown) => {
+  if (__PERFORMANCE_LAB__) failPerformanceLab(error);
   console.error(error);
   if (isWebGLStartupError(error)) {
     showBootError(

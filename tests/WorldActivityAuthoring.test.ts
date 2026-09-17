@@ -6,6 +6,8 @@ import {
   WEAPON_BALANCE_LAB_MAP_ID,
   getCoopDefenseMapConfig,
   normalizeCoopDefenseMapConfig,
+  registerDiagnosticMap,
+  isDiagnosticMapId,
 } from '../src/config/coopDefenseMaps';
 import type { AuthoredScenario } from '../src/config/authoring/AuthoredScenario';
 import {
@@ -36,6 +38,25 @@ import {
 } from '../src/config/authoring/authoredScenarios';
 import { resolveWorldPersistentBaseAnchorBase } from '../src/config/authoring/WorldDefinition';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+
+it('refreshes cached authoring for late diagnostic maps without changing the campaign', () => {
+  const map = { ...getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID), mapId: 'late-diagnostic' };
+  const worldId = getWorldDefinitionId(map.mapId);
+  const activityId = getCoopMissionDefinitionId(map.mapId);
+  expect(getWorldDefinition(worldId)).toBeNull();
+  expect(getActivityDefinition(activityId)).toBeNull();
+  const unregister = registerDiagnosticMap(map);
+  try {
+    expect(getWorldDefinition(worldId)?.sourceMapId).toBe(map.mapId);
+    expect(getActivityDefinition(activityId)?.worldDefinitionId).toBe(worldId);
+    expect(isDiagnosticMapId(map.mapId)).toBe(true);
+    expect(COOP_DEFENSE_MAP_CONFIGS.some(entry => entry.mapId === map.mapId)).toBe(false);
+    expect(() => registerDiagnosticMap(map)).toThrow('Duplicate map');
+  } finally { unregister(); unregister(); }
+  expect(getWorldDefinition(worldId)).toBeNull();
+  expect(getActivityDefinition(activityId)).toBeNull();
+  expect(isDiagnosticMapId(map.mapId)).toBe(false);
+});
 
 it('preserves authored base aiming through normalization, world round-trip and runtime resolution', () => {
   const makeMap = (speed: number | undefined = 85) => ({

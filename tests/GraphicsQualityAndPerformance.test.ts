@@ -260,6 +260,44 @@ describe('graphics quality preferences and profiles', () => {
 });
 
 describe('ArenaRuntimeProfiler Companion collector', () => {
+  it('captures raw frames and associates submission/GPU timing with the issuing render frame', () => {
+    let now = 100;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const game = fakeGame(new FakeGlContext());
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+    profiler.startRecording({}, { maxFrames: 10, maxDurationMs: 10_000 });
+    for (let frame = 0; frame < 5; frame++) {
+      now += 17;
+      Object.assign(game, { loop: { now: now - 3 } });
+      profiler.record(sample({ rawDeltaMs: frame === 2 ? 600 : 17, deltaMs: 16 }));
+      game.emit('prerender'); now += 2; game.emit('postrender');
+    }
+    profiler.stopRecording();
+    const report = profiler.buildReport()!;
+    expect(report.frameCapture?.frames.map(f => f[0])).toEqual([1, 2, 3, 4, 5]);
+    expect(report.frameCapture?.frames[0][1]).toBe(14);
+    expect(report.frameCapture?.frames[2][2]).toBe(600);
+    expect(report.frameCapture?.frames.map(f => f[4])).toEqual([2, 2, 2, 2, 2]);
+    expect(report.series.gpuSamples[0].renderFrame).toBe(4);
+    expect(report.frameCapture?.truncated).toBe(false);
+    profiler.destroy();
+  });
+
+  it('reports frame overflow and custom duration stops without silently discarding evidence', () => {
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.startRecording({}, { maxFrames: 1, maxDurationMs: 100 });
+    now = 50; profiler.record(sample());
+    now = 101; profiler.record(sample());
+    expect(profiler.isRecording()).toBe(false);
+    expect(profiler.buildReport()?.frameCapture).toMatchObject({ truncated: true, autoStopped: true });
+    profiler.startRecording(); profiler.stopRecording();
+    expect(profiler.buildReport()?.frameCapture).toBeUndefined();
+    profiler.destroy();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();

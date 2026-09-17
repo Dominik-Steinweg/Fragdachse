@@ -856,6 +856,30 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(prepareXp).not.toHaveBeenCalled();
   });
 
+  it('keeps both Scene camera passes on the prepared World while the loading veil hides it', () => {
+    const scene = Object.create(ArenaScene.prototype) as any;
+    const stop = new Error('after second camera pass');
+    const camera = vi.fn();
+    const noop = () => {};
+    const presentation = new Proxy({ syncWorldCamera: camera,
+      syncCoopMissionPresentation: () => { throw stop; } }, { get: (target, key) => (target as any)[key] ?? noop });
+    scene.arenaRuntime = new Proxy({ presentation }, { get: (target, key) => (target as any)[key] ?? noop });
+    scene.resolveArenaFrameSignals = () => ({ inGame: true, arenaLoading: true, worldActive: true,
+      activityActive: true, localWorldPresentation: { required: true },
+      presentationPolicy: { showWorld: false, worldMode: 'hidden' }, terminated: false, spectator: false });
+    scene.syncArenaExitFade = () => false;
+    for (const method of ['syncArenaLobbyFrame', 'runArenaWorldWithoutActivityFrame', 'runArenaRoleFrame', 'syncArenaPanelOverlayState']) scene[method] = noop;
+    scene.inputBindings = { updateFrame: noop };
+    scene.ctx = {};
+    scene.cameras = { main: { scrollX: 800, scrollY: 900, width: 1920, height: 1080, originX: 0, originY: 0, zoom: 1 } };
+    scene.renderers = { movement: { captureFrame: noop }, gpuVfx: { update: noop } };
+    vi.spyOn(bridge, 'getGamePhase').mockReturnValue('ARENA');
+    vi.spyOn(bridge, 'updateNetwork').mockImplementation(noop);
+    vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+    expect(() => scene.update(0, 16)).toThrow(stop);
+    expect(camera.mock.calls).toEqual([[16, true], [16, true]]);
+  });
+
   it.each([true, false])('withholds reveal and replicated Ready until off-camera water is prepared (host=%s)', isHost => {
     const water = new WaterSurfaceRenderer({} as never,
       { offsetX: 0, offsetY: 0, width: 4096, height: 512 },
@@ -948,9 +972,11 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(container.children.length).toBeGreaterThan(0);
     expect(container.children.every((object) => object.alpha === 1)).toBe(true);
     expect(tweens.add).not.toHaveBeenCalled();
+    expect(overlay.isRevealComplete()).toBe(false);
 
     overlay.completeBootReveal();
     overlay.show();
+    expect(overlay.isRevealComplete()).toBe(true);
     expect(tweens.add).not.toHaveBeenCalled();
     overlay.addPlayerRow({ id: 'guest', name: 'Guest', colorHex: 0xffffff });
     expect(overlay.cardContent.children).toHaveLength(2);
@@ -968,6 +994,9 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(exitTween.remove).toHaveBeenCalledOnce();
     expect(tweens.add).toHaveBeenCalledTimes(2);
     expect(tweens.add.mock.calls[1][0]).toMatchObject({ targets: container, alpha: 1, y: 0 });
+    expect(overlay.isRevealComplete()).toBe(false);
+    tweens.add.mock.calls[1][0].onComplete();
+    expect(overlay.isRevealComplete()).toBe(true);
   });
 
   it('slides both cards together and only hides the preview and progression after exiting', () => {

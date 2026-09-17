@@ -10,6 +10,7 @@ import { cpus, platform, release, totalmem } from 'node:os';
 export default defineConfig(({ mode }) => {
   const buildTimestamp = new Date().toISOString();
   const navigationBuild = mode === 'navigation-lab';
+  const performanceBuild = mode === 'performance-lab';
   const sourceHash = createHash('sha256');
   if (navigationBuild) {
     const visit = (directory: string): void => {
@@ -81,6 +82,7 @@ export default defineConfig(({ mode }) => {
     format: 'es' as const,
   },
   build: {
+    ...(performanceBuild ? { outDir: process.env.FD_PERFORMANCE_BUILD_DIR || 'build/performance-lab', copyPublicDir: false } : {}),
     ...(navigationBuild ? { outDir: `build/${mode}`, copyPublicDir: false } : {}),
     target: 'es2020',
     chunkSizeWarningLimit: 5000,
@@ -100,6 +102,7 @@ export default defineConfig(({ mode }) => {
     }
   },
   define: {
+    __PERFORMANCE_LAB__: JSON.stringify(performanceBuild),
     __NAVIGATION_BUILD_ID__: JSON.stringify(navigationBuildId),
     __GAME_VERSION__: JSON.stringify(gameVersion.version),
     __BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp),

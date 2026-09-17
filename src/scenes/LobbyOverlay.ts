@@ -659,6 +659,10 @@ export class LobbyOverlay {
     return this.visible;
   }
 
+  isRevealComplete(): boolean {
+    return this.visible && !this.bootPreparing && this.entranceTween === null && this.container?.visible === true;
+  }
+
   getBackdropSurface(): BackdropSurface | null {
     if (!this.container?.visible) return null;
     return { x: PANEL_X + LOBBY_CARD.glassInset, y: PANEL_Y + LOBBY_CARD.glassInset + this.container.y,

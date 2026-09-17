@@ -286,8 +286,8 @@ export interface ArenaDiagnosticsInput {
 export class ArenaDiagnosticsController {
   getRenderCpuMs(): number { return this.runtimeProfiler?.takeLastRenderSubmitMs() ?? 0; }
 
-  startScenarioRecording(environment: Record<string, unknown>): void {
-    this.runtimeProfiler?.startRecording(environment);
+  startScenarioRecording(environment: Record<string, unknown>, capture?: import('./ArenaRuntimeProfiler').RuntimeFrameCaptureOptions): void {
+    this.runtimeProfiler?.startRecording(environment, capture);
   }
 
   stopScenarioRecording(): import('./ArenaRuntimeProfiler').ArenaPerformanceReport | null {

@@ -295,6 +295,13 @@ export class InputSystem {
 
   // Aktueller Aim-Winkel (Radiant, für Rotation-Sync)
   private currentAimAngle = 0;
+  private diagnosticTrigger: 'weapon1' | 'weapon2' | null = null;
+
+  /** Explicit lab input source, read by the same sustained-weapon owner as physical input. */
+  setDiagnosticInput(angle: number, trigger: 'weapon1' | 'weapon2' | null): void {
+    this.currentAimAngle = angle;
+    this.diagnosticTrigger = trigger;
+  }
 
   // Lokaler Zustand vom Host empfangen
   private localIsStunned  = false;
@@ -1189,7 +1196,8 @@ export class InputSystem {
 
   /** Jeden Frame: WASD + Dash + Burrow + Loadout lesen, RPCs senden. */
   isWeaponTriggerHeld(slot: 'weapon1' | 'weapon2'): boolean {
-    return this.inputEnabled && this.firingWeaponSlot === slot;
+    return (typeof __PERFORMANCE_LAB__ !== 'undefined' && __PERFORMANCE_LAB__ && this.diagnosticTrigger === slot)
+      || (this.inputEnabled && this.firingWeaponSlot === slot);
   }
 
   update(): void {

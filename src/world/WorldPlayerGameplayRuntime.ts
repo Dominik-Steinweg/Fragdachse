@@ -1000,12 +1000,17 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.burrow.setStinkCloudSystem(system);
   }
 
+  interruptPlayerActions(playerId: string, nowMs: number): void {
+    if (this.destroyed) return;
+    this.systems.heldAction.clearPlayer(playerId);
+    this.systems.sustainedWeaponBehavior.interruptCombat(playerId);
+    this.systems.ultimateBehavior.interruptCombat(playerId, nowMs);
+  }
+
   private interruptStunnedActions(nowMs: number): void {
     for (const player of this.options.playerManager.getAllPlayers()) {
       if (!this.options.combatSystem.isStunned?.(player.id, nowMs)) continue;
-      this.systems.heldAction.clearPlayer(player.id);
-      this.systems.sustainedWeaponBehavior.interruptCombat(player.id);
-      this.systems.ultimateBehavior.interruptCombat(player.id, nowMs);
+      this.interruptPlayerActions(player.id, nowMs);
     }
   }
 

@@ -203,6 +203,8 @@ type ArenaFrameSignals = Readonly<{
   presentationPolicy: ReturnType<typeof resolvePresentationPolicy>;
 }>;
 
+import { startPerformanceCapture, attachPerformanceLab, performanceLobbyRevealed, updatePerformanceLab, failPerformanceLab } from '../debug/performanceLab/boot';
+
 export class ArenaScene extends Phaser.Scene {
   /** Explicit control surface for a separately booted, local-only analysis arena. */
   createNavigationLabPort(): import('../debug/navigationLab/NavigationLabPort').NavigationLabPort {
@@ -444,7 +446,8 @@ export class ArenaScene extends Phaser.Scene {
       uninstallTextResolution();
     });
 
-    this.graphicsQuality = new GraphicsQualityController(getStoredGraphicsQuality());
+    this.graphicsQuality = new GraphicsQualityController(
+      __PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__ ? 'high' : getStoredGraphicsQuality());
     this.graphicsQuality.attach(this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.graphicsQuality.destroy());
     this.graphicsQuality.subscribe((profile) => {
@@ -532,6 +535,7 @@ export class ArenaScene extends Phaser.Scene {
     registerTurretAnimations(this.anims);
 
     bridge.clearPlayerCallbacks();
+    if (__PERFORMANCE_LAB__ && this.diagnostics) startPerformanceCapture(this.diagnostics);
 
     // ── Static arena (never destroyed) ────────────────────────────────────
     this.arenaBuilder = new ArenaBuilder(this);
@@ -1079,6 +1083,16 @@ export class ArenaScene extends Phaser.Scene {
       getSpectatorCameraInput: () => this.inputBindings?.getSpectatorCameraInput(),
     });
     this.arenaRuntime.setRuntimeDiagnosticEventSink(this.diagnostics?.getSemanticEventSink() ?? null);
+    if (__PERFORMANCE_LAB__) {
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        if (window.__FD_PERF__ && !['failed', 'complete'].includes(window.__FD_PERF__.state)) failPerformanceLab('Scene shutdown during capture');
+      });
+      attachPerformanceLab(async () => {
+        const { createPerformanceLabGamePort } = await import('../debug/performanceLab/gamePort');
+        return createPerformanceLabGamePort(this, this.arenaRuntime, playerManager, this.diagnostics!,
+          (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger), () => this.lobbyOverlay.isRevealComplete());
+      }, () => (this.sound as Phaser.Sound.WebAudioSoundManager).context?.state ?? 'unavailable');
+    }
     this.weaponBalanceLabRuntime = new WeaponBalanceLabRuntime(
       () => this.ctx,
       this.arenaRuntime.weaponBalanceLabPort,
@@ -1411,12 +1425,13 @@ export class ArenaScene extends Phaser.Scene {
       gameplayActive: worldActive && (!activityActive || gameplayActive),
       countdownActive,
       uiBlocking: optionsOpen,
-      diagnosticsArena: weaponBalanceLabArena,
+      diagnosticsArena: weaponBalanceLabArena || (__PERFORMANCE_LAB__ && !!window.__FD_PERF_REQUEST__),
     });
     if (worldActive && localWorldPresentation.required && countdownActive) {
       this.syncCountdownPlayerPresentation();
     }
     diagnosticsFrame?.mark('inputEnd');
+    if (__PERFORMANCE_LAB__) updatePerformanceLab();
 
     this.syncArenaLobbyFrame(
       phase,
@@ -1500,7 +1515,7 @@ export class ArenaScene extends Phaser.Scene {
     // Keep the camera active while the arena is hidden behind the loading veil. Its position is
     // part of the local startup working set and must not be reset to the lobby origin before the
     // readiness check at the end of the frame.
-    this.arenaRuntime.presentation.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
+    this.arenaRuntime.presentation.syncWorldCamera(spectator ? 0 : delta, prepareWorldSurfaces);
     const coopDefensePresentationActive = inRoundWorld && isCoopDefenseMode(configuredGameMode);
     this.arenaRuntime.presentation.syncCoopMissionPresentation(delta, coopDefensePresentationActive);
     this.syncSpectatorPlayerNames(inArena);
@@ -2592,6 +2607,7 @@ export class ArenaScene extends Phaser.Scene {
     BootScreen.setProgress(1);
     void BootScreen.fadeOut().then(() => {
       if (this.sys.isActive()) this.lobbyOverlay.completeBootReveal();
+      if (__PERFORMANCE_LAB__ && this.sys.isActive()) performanceLobbyRevealed();
     });
   }
 

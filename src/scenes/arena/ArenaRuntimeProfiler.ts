@@ -138,6 +138,14 @@ export interface PerformanceGpuSample {
   durationMs: number;
 }
 
+/** Opt-in, loss-detecting frame capture. Times share the recording's monotonic origin. */
+export interface RuntimeFrameCaptureOptions {
+  maxFrames: number;
+  maxDurationMs: number;
+}
+export type RuntimeCapturedFrame = [frameId: number, atMs: number, deltaMs: number,
+  roleCpuMs: number, renderSubmitMs: number | null, enemies: number, projectiles: number];
+
 export type GpuTimerBackend = 'webgl2_ext' | 'webgl1_ext' | 'unsupported' | 'unavailable';
 export type RenderCounterBackend = 'webgl' | 'canvas' | 'unsupported' | 'unavailable';
 
@@ -164,6 +172,14 @@ export interface CompanionSeriesSample {
 
 export interface ArenaPerformanceReport {
   schemaVersion: 8;
+  frameCapture?: {
+    timestampPhase: 'frame-start';
+    startedAtPerformanceMs: number;
+    columns: readonly string[];
+    frames: RuntimeCapturedFrame[];
+    truncated: boolean;
+    autoStopped: boolean;
+  };
   recordingId: number;
   createdAt: string;
   session: {
@@ -418,6 +434,9 @@ function sampleContext(sample: ArenaRuntimeSample): Record<string, unknown> {
 }
 
 export class ArenaRuntimeProfiler {
+  private frameCaptureOptions: RuntimeFrameCaptureOptions | null = null;
+  private capturedFrames: RuntimeCapturedFrame[] = [];
+  private capturedFramesTruncated = false;
   private game: Phaser.Game | null = null;
   private gpuTimer: GpuTimerSupport | null = null;
   private recording = false;
@@ -513,8 +532,9 @@ export class ArenaRuntimeProfiler {
     this.renderStartedAtMs = performance.now();
     this.frameDrawCallCounter = 0;
     this.frameBatchFlushCounter = 0;
-    if (!this.recording || !this.gpuTimer) return;
+    if (!this.recording) return;
     this.renderFrame += 1;
+    if (!this.gpuTimer) return;
     this.pollGpuQueries();
     if (this.renderFrame % GPU_QUERY_INTERVAL_FRAMES !== 0) return;
     const timer = this.gpuTimer;
@@ -531,6 +551,8 @@ export class ArenaRuntimeProfiler {
   private readonly onPostRender = (): void => {
     if (!this.diagnosticsActive) return;
     this.lastRenderSubmitMs = Math.max(0, performance.now() - this.renderStartedAtMs);
+    const captured = this.capturedFrames[this.capturedFrames.length - 1];
+    if (this.recording && captured?.[0] === this.renderFrame) captured[4] = this.lastRenderSubmitMs;
     const renderer = this.game?.renderer as unknown as RendererCounterLike | undefined;
     if (this.renderCounterBackend === 'canvas' && renderer?.drawCount !== undefined) {
       this.lastDrawCallCount = renderer.drawCount;
@@ -663,6 +685,15 @@ export class ArenaRuntimeProfiler {
     this.finalizeRockDestroyWaveIfIdle(now);
     const frameMs = Number.isFinite(sample.rawDeltaMs) && sample.rawDeltaMs > 0 ? sample.rawDeltaMs : sample.deltaMs;
     const roleCpuMs = Math.max(0, sample.roleStepMs);
+    if (this.recording && this.frameCaptureOptions) {
+      if (this.capturedFrames.length >= this.frameCaptureOptions.maxFrames) {
+        this.capturedFramesTruncated = true;
+      } else {
+        const frameStart = this.game?.loop?.now ?? now;
+        this.capturedFrames.push([this.renderFrame + 1, frameStart - this.recordingStartedAtMs,
+          frameMs, roleCpuMs, null, sample.enemyCount, sample.projectileCount]);
+      }
+    }
     const snapshotCount = numberDetail(sample, 'newNetworkSnapshotCount')
       + numberDetail(sample, 'hostNetworkTickCount');
     const snapshotBytes = numberDetail(sample, 'snapshotBytes') + this.pendingSnapshotBytesTotal;
@@ -758,7 +789,7 @@ export class ArenaRuntimeProfiler {
       if (now >= this.nextSeriesAtMs) this.flushSeries(now);
       this.recorderCosts.push(performance.now() - startedAt);
       if (this.recorderCosts.length > 256) this.recorderCosts.shift();
-      if (now - this.recordingStartedAtMs >= 30 * 60 * 1000) this.stopRecording(true);
+      if (now - this.recordingStartedAtMs >= (this.frameCaptureOptions?.maxDurationMs ?? 30 * 60 * 1000)) this.stopRecording(true);
     }
     if (this.liveHudEnabled && (this.latestSummary === null || now >= this.nextLiveSummaryAtMs)) {
       this.latestSummary = this.buildLiveSummary(now, sample);
@@ -772,8 +803,15 @@ export class ArenaRuntimeProfiler {
     }
   }
 
-  startRecording(environment: Record<string, unknown> = {}): void {
+  startRecording(environment: Record<string, unknown> = {}, capture?: RuntimeFrameCaptureOptions): void {
     if (this.recording) return;
+    if (capture && (!Number.isSafeInteger(capture.maxFrames) || capture.maxFrames < 1
+      || !Number.isFinite(capture.maxDurationMs) || capture.maxDurationMs <= 0)) {
+      throw new Error('Invalid frame capture limits');
+    }
+    this.frameCaptureOptions = capture ?? null;
+    this.capturedFrames = [];
+    this.capturedFramesTruncated = false;
     const now = performance.now();
     this.recording = true;
     this.recordingId += 1;
@@ -956,6 +994,14 @@ export class ArenaRuntimeProfiler {
     const frozenAttribution = this.frozenAttribution;
     return {
       schemaVersion: 8,
+      ...(this.frameCaptureOptions ? { frameCapture: {
+        timestampPhase: 'frame-start',
+        startedAtPerformanceMs: this.recordingStartedAtMs,
+        columns: ['frameId', 'atMs', 'deltaMs', 'roleCpuMs', 'renderSubmitMs', 'enemies', 'projectiles'],
+        frames: this.capturedFrames,
+        truncated: this.capturedFramesTruncated,
+        autoStopped: this.autoStopped,
+      } } : {}),
       recordingId: this.recordingId,
       createdAt: new Date().toISOString(),
       session: {

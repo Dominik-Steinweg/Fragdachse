@@ -1,0 +1,131 @@
+{
+  "GLOCK": {
+    "slot": "weapon1",
+    "upgrades": {
+      "unlock_glock": 1
+    }
+  },
+  "P90": {
+    "slot": "weapon2",
+    "upgrades": {
+      "unlock_p90": 1,
+      "p90_range": 3,
+      "p90_adrenaline_cost": 3,
+      "p90_damage": 3,
+      "p90_accuracy": 1,
+      "p90_bullet_storm_spread": 1,
+      "p90_bullet_storm": 1,
+      "p90_homing_overdrive": 1,
+      "p90_homing_turn": 3,
+      "p90_homing_cooldown": 3
+    }
+  },
+  "PLASMA": {
+    "slot": "weapon1",
+    "upgrades": {
+      "unlock_plasma": 1,
+      "plasma_homing_turn": 3,
+      "plasma_adrenalin_gain": 3,
+      "plasma_swarm": 1,
+      "plasma_swarm_discharge": 3
+    }
+  },
+  "MINI_ROCKET_LAUNCHER": {
+    "slot": "weapon2",
+    "upgrades": {
+      "unlock_mini_rocket_launcher": 1,
+      "mini_rocket_long_range_drive": 1,
+      "mini_rocket_thermobaric_charge": 3,
+      "mini_rocket_launcher_homing_turn": 3,
+      "mini_rocket_launcher_explosion_damage": 3,
+      "mini_rocket_triple_detonation": 1,
+      "mini_rocket_cascade_charge": 3,
+      "mini_rocket_homecoming_protocol": 1,
+      "mini_rocket_adrenaline_recovery": 3,
+      "mini_rocket_armor_recovery": 3
+    }
+  },
+  "SHOTGUN": {
+    "slot": "weapon2",
+    "upgrades": {
+      "unlock_shotgun": 1,
+      "shotgun_brake_load": 3,
+      "shotgun_lightning_blast": 1,
+      "shotgun_lightning_slow": 1,
+      "shotgun_round_shot": 5,
+      "shotgun_proximity_damage": 3,
+      "shotgun_range": 3,
+      "shotgun_thunder_avalanche": 1,
+      "shotgun_lightning_radius": 3,
+      "shotgun_lightning_damage": 3
+    }
+  },
+  "ASMD_PRIM": {
+    "slot": "weapon1",
+    "upgrades": {
+      "unlock_asmd_primary": 1
+    }
+  },
+  "BITE": {
+    "slot": "weapon1",
+    "upgrades": {
+      "unlock_bite": 1
+    }
+  },
+  "ROCKET_LAUNCHER": {
+    "slot": "weapon2",
+    "upgrades": {
+      "unlock_rocket_launcher": 1
+    }
+  },
+  "TESLA_DOME": {
+    "slot": "weapon2",
+    "upgrades": {
+      "unlock_tesla_dome": 1
+    }
+  },
+  "FLAMETHROWER": {
+    "slot": "weapon2",
+    "upgrades": {
+      "unlock_flamethrower": 1
+    }
+  },
+  "HE_GRENADE": {
+    "slot": "utility",
+    "upgrades": {
+      "unlock_he_grenade": 1
+    }
+  },
+  "MOLOTOV_GRENADE": {
+    "slot": "utility",
+    "upgrades": {
+      "unlock_molotov_grenade": 1,
+      "molotov_grenade_radius": 3,
+      "molotov_grenade_duration": 3,
+      "molotov_burn_damage": 3,
+      "molotov_burn_duration": 3,
+      "molotov_wildfire_chunks": 3,
+      "molotov_wildfire": 1,
+      "molotov_firewalker": 3
+    }
+  },
+  "SMOKE_GRENADE": {
+    "slot": "utility",
+    "upgrades": {
+      "unlock_smoke_grenade": 1,
+      "smoke_grenade_radius": 3,
+      "smoke_grenade_duration": 3,
+      "smoke_grenade_disorientation": 3,
+      "smoke_grenade_vulnerability": 1,
+      "smoke_grenade_discharge": 3,
+      "smoke_grenade_storm": 1,
+      "smoke_grenade_growth": 3
+    }
+  },
+  "ARMAGEDDON": {
+    "slot": "ultimate",
+    "upgrades": {
+      "unlock_armageddon": 1
+    }
+  }
+}

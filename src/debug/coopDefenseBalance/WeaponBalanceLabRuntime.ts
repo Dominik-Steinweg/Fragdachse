@@ -29,7 +29,7 @@ export interface WeaponBalanceLabWorldPort {
   getProjectileDiagnostics(): ProjectileDiagnosticsReadPort | null;
   getEssenceAccounting?(): RuntimeBenchmarkEssenceSnapshot | null;
   isReady(): boolean;
-  spawnTarget(x: number, y: number): { id: string } | null;
+  spawnTarget(x: number, y: number, hp?: number): { id: string } | null;
   pinTarget(id: string, x: number, y: number): void;
   observeAdrenalineDrain(listener: (playerId: string, drained: number) => void): (() => void) | null;
   observeAdrenalineGain(listener: (playerId: string, gained: number) => void): (() => void) | null;

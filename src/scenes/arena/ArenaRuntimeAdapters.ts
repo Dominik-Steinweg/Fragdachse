@@ -423,13 +423,13 @@ export function createWeaponBalanceLabWorldPort(
       const enemyManager = flow.getCoopMissionRuntime()?.enemyManager;
       return playerGameplay != null && enemyManager != null;
     },
-    spawnTarget: (x, y) => {
+    spawnTarget: (x, y, hp = 1_000_000_000) => {
       const enemyManager = flow.getCoopMissionRuntime()?.enemyManager;
       if (!enemyManager) return null;
       const enemy = enemyManager.hostSpawnAtWorld(x, y, 'zombie-badger', {
         originId: 'weapon-balance-lab',
       });
-      enemyManager.hostSetVitalsBaseline(enemy.id, 1_000_000_000, 1_000_000_000);
+      enemyManager.hostSetVitalsBaseline(enemy.id, hp, hp);
       enemy.setPosition(x, y);
       enemy.body.setVelocity(0, 0);
       return { id: enemy.id };

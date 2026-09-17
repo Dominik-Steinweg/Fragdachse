@@ -900,6 +900,29 @@ export function getCoopDefenseMapConfig(mapId: string): CoopDefenseMapConfig {
   return MAPS_BY_ID.get(mapId) ?? getDefaultCoopDefenseMapConfig();
 }
 
+const diagnosticMapIds = new Set<string>([WEAPON_BALANCE_LAB_MAP_ID]);
+let diagnosticMapRevision = 0;
+export function getDiagnosticMapRevision(): number { return diagnosticMapRevision; }
+export function getDiagnosticMapConfigs(): readonly CoopDefenseMapConfig[] {
+  return [...diagnosticMapIds].map(id => MAPS_BY_ID.get(id)!);
+}
+
+/** Internal diagnostic composition; authored content never joins the campaign. */
+export function registerDiagnosticMap(config: CoopDefenseMapConfig): () => void {
+  if (MAPS_BY_ID.has(config.mapId)) throw new Error(`Duplicate map: ${config.mapId}`);
+  MAPS_BY_ID.set(config.mapId, normalizeCoopDefenseMapConfig(config));
+  diagnosticMapIds.add(config.mapId);
+  diagnosticMapRevision++;
+  return () => {
+    if (!diagnosticMapIds.delete(config.mapId)) return;
+    MAPS_BY_ID.delete(config.mapId); diagnosticMapRevision++;
+  };
+}
+
+export function isDiagnosticMapId(mapId: string): boolean {
+  return diagnosticMapIds.has(mapId);
+}
+
 export function getCoopDefenseCampaignAudit(): readonly CoopDefenseCampaignAuditEntry[] {
   return COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => ({
     mapId: mapConfig.mapId,

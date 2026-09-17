@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "perf:chrome": "node scripts/performance/run.mjs",
+    "perf:compare": "node scripts/performance/compare.mjs",
+    "build:perf-lab": "tsc && vite build --mode performance-lab",
     "ai:sync": "node scripts/sync-ai-skills.mjs",
     "assets:preview": "node scripts/asset-pipeline/preview-v2.mjs",
     "audio:convert": "node scripts/convert-audio.mjs",
@@ -38,9 +41,12 @@
     "valibot": "^1.4.2"
   },
   "devDependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
     "gh-pages": "^6.3.0",
     "jimp": "^1.6.1",
+    "playwright-core": "^1.63.0",
     "sharp": "^0.33.5",
+    "stream-json": "^3.6.0",
     "typescript": "~5.6.0",
     "vite": "^6.0.0",
     "vitest": "^3.2.4"

@@ -28,7 +28,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import {
   resolveCoopDefenseActivityBaseOverlays,
 } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isDiagnosticMapId, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode, getArenaMetricsProfile } from '../../config';
 import type { ArenaContext }          from './ArenaContext';
@@ -1090,6 +1090,12 @@ export class ArenaLifecycleCoordinator {
   getWorldPowerUpRuntime(): WorldPowerUpRuntime | null { return this.worldPowerUpRuntime; }
   getConstructionWorldRuntime(): ConstructionWorldRuntime | null { return this.constructionWorldRuntime; }
   getWorldSupportGameplayRuntime(): WorldSupportGameplayRuntime | null { return this.worldGameplay?.support ?? null; }
+
+  getWorldLoadingDiagnostics() {
+    return { terrainSnapshotReady: this.terrainSnapshotReady, combatPresentationPrepared: this.combatPresentationPrepared,
+      shaderWarmupReady: this.renderers.gpuVfx.isShaderWarmupComplete(), localArenaLoadReady: this.localArenaLoadReady,
+      roundStartPrepared: this.roundStartPrepared, terrainSnapshotRetryCount: this.terrainSnapshotRetryCount };
+  }
   getCoopMissionRuntime(): CoopMissionRuntime | null { return this.coopMissionRuntime; }
   getCaptureTheBeerActivityRuntime(): CaptureTheBeerActivityRuntime | null {
     return this.captureTheBeerActivityRuntime;
@@ -2050,7 +2056,7 @@ export class ArenaLifecycleCoordinator {
   hostDiscardRound(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const mapId = this.resolveConfiguredCoopDefenseMapId();
-    if (!isWeaponBalanceLabMapId(mapId)) return;
+    if (!isDiagnosticMapId(mapId)) return;
     this.persistentBase.rollbackPersistentBaseMissionIfActive();
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);

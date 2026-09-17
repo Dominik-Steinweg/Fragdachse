@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import type { ArenaContext } from './ArenaContext';
 import type { RendererBundle } from './RendererBundle';
 import type { RockVisualHelper } from './RockVisualHelper';
@@ -628,6 +629,48 @@ export class ArenaRuntime {
 
   getPowerUpPedestalSnapshot(): SyncedPowerUpPedestal[] {
     return this.flow.getWorldPowerUpRuntime()?.system?.getPedestalSnapshot() ?? [];
+  }
+
+  /** Read-only diagnostic projection; owners are resolved again after every World handoff. */
+  getScenarioObservation() {
+    const now = this.getSynchronizedNow();
+    return {
+      train: this.flow.getWorldTrainRuntime()?.getCurrentTrain()?.getNetSnapshot() ?? null,
+      mapEvents: this.flow.getCoopMissionRuntime()?.coopDefenseMapEventDirector?.getPresentationState() ?? null,
+      powerUps: this.flow.getWorldPowerUpRuntime()?.system?.getWorldItemSnapshot() ?? [],
+      nukes: this.flow.getWorldPowerUpRuntime()?.system?.getNukeSnapshot().length ?? 0,
+      smoke: this.flow.getWorldSupportGameplayRuntime()?.smoke.runtime.getSnapshots(now).length ?? 0,
+      meteors: this.flow.getWorldSupportGameplayRuntime()?.systems.armageddon.getSnapshot().length ?? 0,
+      burningCells: this.ctx.fireSystem.getGroundState().cells.length,
+      lights: this.renderers.lighting.getDebugStats(),
+      constructions: this.flow.getWorldRuntime()?.materialization?.placement?.getAllRuntimeRocks() ?? [],
+    };
+  }
+
+  getScenarioEnvironmentCounts() {
+    const arena = this.flow.getWorldRuntime()?.materialization?.arena;
+    return { trees: arena?.trunkBodies.length ?? 0, wildlife: arena?.wildlife?.model.animals.length ?? 0 };
+  }
+
+  getScenarioLoadingState() {
+    const arena = this.flow.getWorldRuntime()?.materialization?.arena;
+    const view = getVisibleWorldView(this.scene.cameras.main);
+    return { ...this.flow.getWorldLoadingDiagnostics(), ground: arena?.groundSurface?.getWorkingSet(view, true),
+      overlay: arena?.rockOverlaySurface?.getWorkingSet(view, true),
+      water: arena?.waterSurface?.getPreparationState(),
+      work: this.flow.getWorldRuntime()?.presentationFrame?.getWorldRenderWork(view) };
+  }
+
+  observeScenarioWorldDamage(observer: Parameters<import('../../world/WorldObjectMutationRuntime').WorldObjectMutationRuntime['observeDamageCommitted']>[0]): () => void {
+    return this.flow.getWorldObjectMutationRuntime()?.observeDamageCommitted(observer) ?? (() => {});
+  }
+
+  prepareScenarioRage(): void {
+    this.flow.getWorldPlayerGameplayRuntime()?.grantPowerUpRage(this.getLocalPlayerId(), 1_000_000);
+  }
+
+  stopScenarioUltimate(): void {
+    this.flow.getWorldPlayerGameplayRuntime()?.interruptPlayerActions(this.getLocalPlayerId(), this.getSynchronizedNow());
   }
 
   getMaxBossPhase(): number {

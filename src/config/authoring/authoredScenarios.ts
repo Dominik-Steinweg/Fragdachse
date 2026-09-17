@@ -1,6 +1,7 @@
 import {
   COOP_DEFENSE_MAP_CONFIGS,
-  WEAPON_BALANCE_LAB_MAP_ID,
+  getDiagnosticMapConfigs,
+  getDiagnosticMapRevision,
   getCoopDefenseMapConfig,
 } from '../coopDefenseMaps';
 import type { ActivityDefinition } from './ActivityDefinition';
@@ -20,18 +21,29 @@ import type { WorldDefinition } from './WorldDefinition';
 let cachedScenarios: readonly AuthoredScenario[] | null = null;
 let cachedWorldsById: ReadonlyMap<string, WorldDefinition> | null = null;
 let cachedActivitiesById: ReadonlyMap<string, ActivityDefinition> | null = null;
+let cachedDiagnosticRevision = -1;
+
+function syncDiagnosticRegistry(): void {
+  const revision = getDiagnosticMapRevision();
+  if (revision === cachedDiagnosticRevision) return;
+  cachedDiagnosticRevision = revision;
+  cachedScenarios = null;
+  cachedWorldsById = null;
+  cachedActivitiesById = null;
+}
 
 function buildScenarios(): readonly AuthoredScenario[] {
   const mapConfigs = [
     ...COOP_DEFENSE_MAP_CONFIGS,
     // Die interne Diagnose-Map ist bewusst nicht Teil der Kampagnenregistry, besitzt aber
     // dieselbe getrennte Authoring-Sicht.
-    getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID),
+    ...getDiagnosticMapConfigs(),
   ];
   return mapConfigs.map(toAuthoredScenario);
 }
 
 export function getAuthoredScenarios(): readonly AuthoredScenario[] {
+  syncDiagnosticRegistry();
   cachedScenarios ??= buildScenarios();
   return cachedScenarios;
 }
@@ -60,11 +72,13 @@ export function getAuthoredActivityDefinitions(): readonly ActivityDefinition[] 
 }
 
 export function getWorldDefinition(worldDefinitionId: string): WorldDefinition | null {
+  syncDiagnosticRegistry();
   cachedWorldsById ??= new Map(getAuthoredWorldDefinitions().map((world) => [world.id, world]));
   return cachedWorldsById.get(worldDefinitionId) ?? null;
 }
 
 export function getActivityDefinition(activityDefinitionId: string): ActivityDefinition | null {
+  syncDiagnosticRegistry();
   cachedActivitiesById ??= new Map(getAuthoredActivityDefinitions().map((activity) => [activity.id, activity]));
   return cachedActivitiesById.get(activityDefinitionId) ?? null;
 }

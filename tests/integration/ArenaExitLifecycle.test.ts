@@ -45,6 +45,7 @@ import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
 import { ResultApplication } from '../../src/activity/ResultApplication';
 import { bridge } from '../../src/network/bridge';
+import { registerDiagnosticMap, getCoopDefenseMapConfig, WEAPON_BALANCE_LAB_MAP_ID } from '../../src/config/coopDefenseMaps';
 
 function fixture(host: boolean, outcome = 'victory') {
   let phase = 'LOBBY';
@@ -82,6 +83,24 @@ function fixture(host: boolean, outcome = 'victory') {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
+  it('discards a dynamically registered diagnostic round without results, rewards or persistence commits', () => {
+    const unregister = registerDiagnosticMap({ ...getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID), mapId: 'performance-exit-test' });
+    try {
+      const { flow, setPhase } = fixture(true);
+      setPhase('ARENA');
+      flow.resolveConfiguredCoopDefenseMapId = () => 'performance-exit-test';
+      for (const key of ['publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
+        'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+        'publishRoundState', 'publishRoundResults'] as const) vi.spyOn(bridge, key).mockImplementation(() => {});
+      flow.hostDiscardRound(); flow.hostDiscardRound();
+      expect(bridge.getGamePhase()).toBe('LOBBY');
+      expect(bridge.publishRoundResults).toHaveBeenCalledWith([]);
+      expect(flow.hostSaveRoundResults).not.toHaveBeenCalled();
+      expect(flow.persistentBase.applyRoundConclusion).not.toHaveBeenCalled();
+      expect(flow.persistentBase.rollbackPersistentBaseMissionIfActive).toHaveBeenCalledOnce();
+      expect(flow.worldLifecycle.endInstance).toHaveBeenCalledOnce();
+    } finally { unregister(); }
+  });
   it.each([[true, 'victory'], [false, 'victory'], [true, 'defeat'], [false, 'defeat']] as const)('haelt Host=%s bei %s bis zum Render', (host, outcome) => {
     const { scene, flow, events, completeFade } = fixture(host, outcome);
     Object.assign(flow, {
