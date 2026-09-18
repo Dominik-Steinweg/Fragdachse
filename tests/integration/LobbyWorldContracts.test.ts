@@ -9,6 +9,7 @@ import {
   isLobbyBaseReservedCell,
 } from '../../src/arena/LobbyWorldLayout';
 import { RockHpRegistry } from '../../src/arena/RockHpRegistry';
+import { SHOOTING_RANGE, insideRangeRect } from '../../src/shootingRange/ShootingRangeLayout';
 import { getWorldDefinition } from '../../src/config/authoring/authoredScenarios';
 import {
   LOBBY_PERSISTENT_BASE_ID,
@@ -141,8 +142,19 @@ describe('LobbyWorld – authored Geometrie', () => {
     expect(layout.rocks.every(rock => !rock.indestructible)).toBe(true);
   });
 
-  it('belebt beide Seiten auch hinter den Karten und verwendet keine UI-Spawn-Sperren', () => {
-    for (const side of [(x: number) => x < 10, (x: number) => x >= 50]) {
+  it('haelt den Schiessstand frei und belebt die verbleibende Landschaft ohne UI-Spawn-Sperren', () => {
+    for (const cell of [...layout.rocks, ...layout.trees]) {
+      expect(insideRangeRect(cell.gridX, cell.gridY, SHOOTING_RANGE.clearArea)).toBe(false);
+    }
+    const boardCells = [];
+    for (let y = SHOOTING_RANGE.board.minY; y <= SHOOTING_RANGE.board.maxY; y++) {
+      for (let x = SHOOTING_RANGE.board.minX; x <= SHOOTING_RANGE.board.maxX; x++) boardCells.push([x, y]);
+    }
+    for (const [x, y] of [...SHOOTING_RANGE.targets, ...Object.values(SHOOTING_RANGE.controls), ...boardCells]) {
+      expect(layout.water?.some(cell => cell.gridX === x && cell.gridY === y)).toBe(false);
+      expect(isLobbyBaseReservedCell(x, y)).toBe(false);
+    }
+    for (const side of [(x: number) => x >= 50]) {
       expect(layout.rocks.some(cell => side(cell.gridX) && cell.gridY > 9 && cell.gridY < 28)).toBe(true);
       expect(layout.decals?.some(cell => side(cell.gridX) && cell.gridY > 9 && cell.gridY < 28)).toBe(true);
     }

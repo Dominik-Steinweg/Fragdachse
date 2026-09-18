@@ -1514,6 +1514,11 @@ export class WorldPlayerGameplayRuntime implements
   getTurretControlState(playerId: string): import('../types').TurretControlState | undefined { return this.turretControl.getState(playerId); }
   getManualTurretControl(id: number | string, now: number) { return this.turretControl.getManualControl(id, now); }
   requestTurretControl(id: string, request: import('../types').TurretControlRequest): boolean { return this.turretControl.request(id, request); }
+  bindArtificialAdrenalineSupply(eligible: (id: string) => boolean): { destroy: () => void } {
+    this.systems.resource.setArtificialAdrenalineSupply(eligible);
+    return { destroy: () => this.systems.resource.setArtificialAdrenalineSupply(null) };
+  }
+  refreshArtificialAdrenalineSupply(): void { this.systems.resource.refreshArtificialAdrenalineSupply(); }
   reconcileTurretControl(): void { this.turretControl.reconcile(); }
 
   isStunned(playerId: string): boolean {

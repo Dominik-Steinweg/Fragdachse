@@ -38,6 +38,12 @@ import { fakeEntity } from '../fakeEntity';
 import { AdrenalineEssenceBinding } from '../../src/adrenalineEssence/AdrenalineEssenceBinding';
 import { ADRENALINE_ESSENCE_CONFIG } from '../../src/adrenalineEssence/AdrenalineEssenceConfig';
 import { essenceWorldGeometry } from '../essenceWorldGeometry';
+import { ShootingRangeWorldBinding } from '../../src/shootingRange/ShootingRangeWorldBinding';
+import { SHOOTING_RANGE } from '../../src/shootingRange/ShootingRangeLayout';
+import { resolveActiveArenaWorldMetrics } from '../../src/world/WorldMetrics';
+import { CELL_SIZE } from '../../src/config';
+import { NecromancySystem } from '../../src/systems/NecromancySystem';
+import { navigationTestWorld } from '../navigationTestWorld';
 
 function glockEnemyFixture(origin = { x: 300, y: 100 }) {
   const scene = healthBarTestScene().scene;
@@ -92,7 +98,20 @@ function glockEnemyFixture(origin = { x: 300, y: 100 }) {
     isAlive: id => combat.isAlive(id), isWeaponBlocked: () => false, isDashBurst: () => false,
   }, loadout, null, activation);
   let decoys: DecoySystem | undefined;
-  return { combat, enemy, enemies, facts, detachReward, resource, network,
+  return { combat, enemy, enemies, facts, detachReward, resource, network, players,
+    addRange(getPlayerIds = () => ['p1']) {
+      enemies.hostRemoveWithoutKill(enemy.id);
+      const existing = scene.physics.add.existing;
+      scene.physics.add.existing = (object: { body: object }) => {
+        existing(object); Object.assign(object.body, { setImmovable() {} });
+      };
+      const [gx, gy] = SHOOTING_RANGE.targets[0];
+      const metrics = { ...resolveActiveArenaWorldMetrics(),
+        offsetX: origin.x - (gx + 0.5) * CELL_SIZE, offsetY: origin.y - (gy + 0.5) * CELL_SIZE };
+      const range = new ShootingRangeWorldBinding(enemies, metrics, combat, true, getPlayerIds);
+      range.runtime.request({ control: 'power', action: 'enable', session: 0 }, 1000);
+      return range;
+    },
     addDecoyTarget() {
       enemies.hostRemoveWithoutKill(enemy.id);
       const owner = fakeEntity({ id: 'p2', x: 300, y: 100, color: 0xffffff,
@@ -124,6 +143,96 @@ function glockEnemyFixture(origin = { x: 300, y: 100 }) {
     destroy() { projectiles.destroy(); enemies.destroy(); decoys?.clearAll(); },
   };
 }
+
+describe('training targets through the real weapon and enemy combat owners', () => {
+  it('keeps ground queries and personal ally navigation bound through lobby joins, departures and cleanup', () => {
+    let players = ['p1'];
+    const f = glockEnemyFixture({ x: 128, y: 96 }), range = f.addRange(() => players);
+    const nav = navigationTestWorld([{ id: 'pond', kind: 'water', shape: 'rect', left: 32, top: 128, right: 64, bottom: 224 }]);
+    range.navigation = nav.coordinator; range.ground = nav.field; range.intents = nav.intents;
+    range.prepareHostStep(100, 1000); nav.flush();
+    expect(range.ground.isCircleGroundFreeAt(128, 96, 10)).toBe(true);
+    expect(range.ground.isCircleGroundFreeAt(48, 160, 10)).toBe(false);
+    expect(range.ground.hasWalkableCircleLine(96, 96, 192, 96, 10)).toBe(true);
+    expect(range.ground.hasWalkableCircleLine(48, 96, 48, 240, 10)).toBe(false);
+    expect(range.allyFlowFields.has('p1')).toBe(true);
+    players = ['p1', 'late']; range.prepareHostStep(100, 1100);
+    expect(range.allyFlowFields.has('late')).toBe(true);
+    players = ['late']; range.prepareHostStep(100, 1200);
+    expect(range.allyFlowFields.has('p1')).toBe(false);
+    expect(nav.coordinator.getFieldView('ally:p1')).toBeNull();
+    range.runtime.request({ control: 'power', action: 'disable', session: range.snapshot().session }, 1200);
+    expect(range.allyFlowFields.has('late')).toBe(true);
+    range.destroy(); expect(range.allyFlowFields.size).toBe(0); f.destroy();
+  });
+
+  it('counts Glock, status and terminal HP loss once, excluding damage outside registered targets', () => {
+    const f = glockEnemyFixture(), range = f.addRange();
+    let now = 1000;
+    f.combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 });
+    const id = range.snapshot().targets[0]!.id;
+    const enemy = f.enemies.getEnemy(id)!;
+    Object.assign(enemy.sprite, { getBounds: () => ({ left: 290, top: 90, right: 310, bottom: 110 }) });
+    expect(enemy.getHp()).toBe(SHOOTING_RANGE.targetHp);
+    f.fire();
+    expect(enemy.getHp()).toBeLessThan(SHOOTING_RANGE.targetHp);
+    const afterWeapon = enemy.getHp();
+    f.combat.applyBurnHit(id, 'p1', 4000, 1, 'training-burn', 'MOLOTOV');
+    expect(f.combat.getBurnStackCount(id, now)).toBeGreaterThan(0);
+    now = 1500; f.combat.advanceStatuses(now);
+    expect(enemy.getHp()).toBeLessThan(afterWeapon);
+    const outside = f.enemies.hostSpawnAtWorld(1000, 1000, enemy.kind);
+    f.combat.applyDamage(outside.id, 5, false, 'p1', 'outside');
+    f.combat.applyDamage(id, SHOOTING_RANGE.targetHp * 3, false, 'p1', 'terminal');
+    range.finishHostStep(now);
+    expect(range.snapshot().dps).toBe(SHOOTING_RANGE.targetHp);
+    const next = range.snapshot().targets[0]!;
+    expect(next.id).not.toBe(id);
+    expect(f.combat.getBurnStackCount(next.id, now)).toBe(0);
+    expect(f.enemies.getEnemy(next.id)!.getHp()).toBe(SHOOTING_RANGE.targetHp);
+    range.destroy(); f.destroy();
+  });
+
+  it('finishes nested explosion deaths before respawn and preserves normal resurrected allies on disable', () => {
+    const f = glockEnemyFixture(), range = f.addRange();
+    f.players.getPlayer('p1')!.active = true;
+    range.runtime.request({ control: 'plus', action: 'add', session: range.snapshot().session }, 1000);
+    range.necromancy = new NecromancySystem(f.players as never, f.enemies, f.combat,
+      { fire: () => false } as never, new Map(), (_id, stat, base) =>
+        stat === 'player.necromancy.enabled' || stat === 'player.necromancy.maxAllies' ? 1 : base);
+    const corpses = vi.fn();
+    range.necromancy.setCorpseSink({ onCorpseAdded: corpses, onCorpseRemoved() {} });
+    f.combat.setEnemyDeathCallback((_id, _x, _y, _burns, death) => {
+      if (death) range.necromancy!.recordEnemyDeath(death, 1000);
+    });
+    const explosion = { radius: 500, maxDamage: 1000, minDamage: 1000, damageTarget: 'enemies' } as const;
+    const kills = vi.fn(() => f.combat.applyExplosionDamage(300, 100, explosion, 'p1'));
+    f.combat.setKillCallback(kills);
+    const first = range.snapshot().targets[0]!;
+    const target = f.enemies.getEnemy(first.id)!;
+    target.setPosition(500, 500); target.setDesiredVelocity(200, 200);
+    expect([target.sprite.x, target.sprite.y]).toEqual([300, 100]);
+    expect(target.getDesiredVelocity()).toEqual({ vx: 0, vy: 0 });
+    f.combat.applyExplosionDamage(300, 100, explosion, 'p1');
+    expect(kills).toHaveBeenCalledTimes(2); expect(corpses).toHaveBeenCalledTimes(2);
+    expect(f.enemies.getAllEnemies()).toHaveLength(0);
+    range.finishHostStep(1000);
+    expect(range.snapshot().dps).toBe(SHOOTING_RANGE.targetHp * 2);
+    expect(f.enemies.getAllEnemies()).toHaveLength(2);
+    range.prepareHostStep(16, 1000);
+    const allies = f.enemies.getAlliedEnemies('p1');
+    expect(allies).toHaveLength(1);
+    expect(range.isTrainingTarget(allies[0].id)).toBe(false);
+    allies[0].setPosition(350, 100);
+    expect(allies[0].sprite.x).toBe(350);
+    range.runtime.request({ control: 'power', action: 'disable', session: range.snapshot().session }, 1000);
+    expect(f.enemies.getAllEnemies()).toEqual(allies);
+    expect(kills).toHaveBeenCalledTimes(2);
+    range.prepareHostStep(16, 1100);
+    expect(f.enemies.getAlliedEnemies('p1')).toHaveLength(1);
+    range.destroy(); expect(f.enemies.getAllEnemies()).toHaveLength(0); f.destroy();
+  });
+});
 
 describe('Glock reward with independently scoped target owners', () => {
   it('announces confirmed enemy kills even with suppressed death visuals, while administrative removal stays silent', () => {

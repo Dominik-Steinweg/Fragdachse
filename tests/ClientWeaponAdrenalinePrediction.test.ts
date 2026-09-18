@@ -69,6 +69,22 @@ function makeCoordinator(authoritativeAdrenaline?: () => number): TestCoordinato
 }
 
 describe('client weapon adrenaline prediction', () => {
+  it('keeps affordable firing available during range supply despite multiple unacknowledged spends', () => {
+    const coordinator = makeCoordinator();
+    let inside = true;
+    coordinator.ctx = { playerManager: { getPlayer: () => ({ active: true, x: 10, y: 20 }) } };
+    coordinator.setWorldFramePort({ getWorldRuntime: () => null, getTargetingRuntime: () => null,
+      getShootingRange: () => ({ suppliesPosition: () => inside }) as never });
+    vi.spyOn(coordinator, 'getLocalMaxAdrenaline').mockReturnValue(150);
+    for (const id of [1, 2, 3]) coordinator.pendingAdrenalineSpends.set(id, {
+      worldRevision: 1, predictionId: id, amount: 80, status: 'pending',
+    });
+    expect(coordinator.getLocalAdrenaline()).toBe(150);
+    inside = false;
+    expect(coordinator.getLocalAdrenaline()).toBe(0);
+    testState.predictionAck = 3; testState.adrenaline = 150; testState.adrenalineRevision++;
+    expect(coordinator.getLocalAdrenaline()).toBe(150);
+  });
   beforeEach(() => {
     testState.isHost = false;
     testState.worldRevision = 1;

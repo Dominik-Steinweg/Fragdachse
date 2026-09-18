@@ -1,6 +1,7 @@
 import type { TurretControlInput, TurretControlRequest, TurretControlState } from '../types';
 import type { AutomatedTurret, AutomatedTurretId } from './TurretSystem';
 import { CELL_SIZE, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID } from '../config';
+import { interactionCandidateScore, selectInteractionCandidate, WORLD_INTERACTION_RULES } from './WorldInteractionSelection';
 
 export function isFriendlyTurret(playerId: string, turret: AutomatedTurret, isEnemyPair: (a: string, b: string) => boolean): boolean {
   if (turret.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) return false;
@@ -8,7 +9,7 @@ export function isFriendlyTurret(playerId: string, turret: AutomatedTurret, isEn
 }
 
 export const TURRET_CONTROL_RULES = {
-  range: 100, minimumScore: 0.45, switchMargin: 0.05, inputTimeoutMs: 500,
+  range: 100, ...WORLD_INTERACTION_RULES, inputTimeoutMs: 500,
 } as const;
 
 export interface TurretControlActor { readonly x: number; readonly y: number; readonly angle: number }
@@ -50,23 +51,16 @@ export interface ManualTurretControl {
 }
 
 export function turretCandidateScore(actor: TurretControlActor, turret: Pick<AutomatedTurret, 'x' | 'y'>): number {
-  const distance = Math.hypot(turret.x - actor.x, turret.y - actor.y);
-  if (!Number.isFinite(distance) || !Number.isFinite(actor.angle) || distance > TURRET_CONTROL_RULES.range) return -Infinity;
-  const angle = distance === 0 ? actor.angle : Math.atan2(turret.y - actor.y, turret.x - actor.x);
-  return 0.8 * (Math.cos(angle - actor.angle) + 1) / 2 + 0.2 * (1 - distance / TURRET_CONTROL_RULES.range);
+  return interactionCandidateScore(actor, { ...turret, radius: TURRET_CONTROL_RULES.range });
 }
 
 export function selectTurretCandidate(
   actor: TurretControlActor, turrets: readonly AutomatedTurret[], currentId: AutomatedTurretId | null,
   eligible: (turret: AutomatedTurret) => boolean,
 ): AutomatedTurret | null {
-  const candidates = turrets.filter(eligible).map(turret => ({ turret, score: turretCandidateScore(actor, turret) }))
-    .filter(candidate => candidate.score >= TURRET_CONTROL_RULES.minimumScore)
-    .sort((a, b) => b.score - a.score || `${typeof a.turret.id}:${a.turret.id}`.localeCompare(`${typeof b.turret.id}:${b.turret.id}`));
-  const best = candidates[0];
-  const current = candidates.find(candidate => candidate.turret.id === currentId);
-  return current && best && best.score < current.score + TURRET_CONTROL_RULES.switchMargin
-    ? current.turret : best?.turret ?? null;
+  return selectInteractionCandidate(actor, turrets.filter(eligible).map(turret => ({
+    ...turret, turret, key: `${typeof turret.id}:${turret.id}`, radius: TURRET_CONTROL_RULES.range,
+  })), currentId === null ? null : `${typeof currentId}:${currentId}`)?.turret ?? null;
 }
 
 interface Occupancy {

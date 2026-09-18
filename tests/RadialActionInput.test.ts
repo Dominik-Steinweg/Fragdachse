@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
 
 vi.mock('phaser', () => ({
   Math: {
@@ -6,7 +7,12 @@ vi.mock('phaser', () => ({
   },
   Input: {
     Keyboard: {
-      JustDown: (key: { justDown?: boolean }) => key.justDown === true,
+      KeyCodes: Object.fromEntries(['W', 'A', 'S', 'D', 'SPACE', 'SHIFT', 'E', 'Q', 'R', 'B', 'N'].map(code => [code, code])),
+      JustDown: (key: { justDown?: boolean; consumeEdge?: boolean }) => {
+        const down = key.justDown === true;
+        if (key.consumeEdge) key.justDown = false;
+        return down;
+      },
       JustUp: (key: { justUp?: boolean }) => key.justUp === true,
     },
   },
@@ -18,7 +24,15 @@ vi.mock('../src/graphics/cameraBaseScroll', () => ({
 }));
 
 import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
+vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
+  isOpen = false;
+  close() {}
+  destroy() {}
+} }));
 import { InputSystem } from '../src/systems/InputSystem';
+import { ShootingRangeRuntime } from '../src/shootingRange/ShootingRangeRuntime';
+import { shootingRangeControlPosition } from '../src/shootingRange/ShootingRangeLayout';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 
 interface TestKey {
   isDown: boolean;
@@ -30,7 +44,7 @@ function key(): TestKey {
   return { isDown: false, justDown: false, justUp: false };
 }
 
-function createSystem() {
+function createSystem(position = { x: 0, y: 0 }) {
   const pointerState = { left: false, right: false };
   const pointer = {
     x: 80,
@@ -50,7 +64,7 @@ function createSystem() {
     getLocalPlayerId: () => 'p1',
   };
   const scene = { input: { activePointer: pointer } };
-  const system = new InputSystem(scene as never, bridge as never, () => ({ x: 0, y: 0 } as never));
+  const system = new InputSystem(scene as never, bridge as never, () => (position as never));
   const keys = {
     keyW: key(), keyA: key(), keyS: key(), keyD: key(), keySpace: key(), keyShift: key(),
     keyE: key(), keyQ: key(), keyR: key(), keyB: key(), keyN: key(),
@@ -59,8 +73,86 @@ function createSystem() {
     localBurrowPhase: 'idle',
     radialEnabled: true,
   });
-  return { system, keys, bridge, pointerState };
+  Object.assign(keys.keyShift, { consumeEdge: true });
+  return { system, keys, bridge, pointerState, scene };
 }
+
+describe('shared Shift interaction', () => {
+  function interactions() {
+    const metrics = resolveActiveArenaWorldMetrics();
+    const power = shootingRangeControlPosition(metrics, 'power');
+    const f = createSystem({ x: power.x - 50, y: power.y });
+    const range = new ShootingRangeRuntime({ spawn: () => ({ id: 'training', generation: 1 }), remove() {}, alive: () => true });
+    const sendRange = vi.fn(), sendTurret = vi.fn(), burrow = vi.fn();
+    Object.assign(f.bridge, { getWorldDescriptor: () => ({ worldRevision: 1 }),
+      getLocalWorldParticipation: () => 'interactive', sendShootingRangeRequest: sendRange,
+      sendTurretControlRequest: sendTurret, sendBurrowRequest: burrow, isEnemyPair: () => false });
+    f.system.setupShootingRangeProvider(() => ({ metrics, snapshot: () => range.snapshot() } as never));
+    return { ...f, power, range, sendRange, sendTurret, burrow };
+  }
+
+  it('selects a switch without turret unlock and executes the displayed candidate once while held', () => {
+    const f = interactions();
+    f.system.setupTurretControlProviders({ getTurrets: () => [], getState: () => undefined, isEnabled: () => false });
+    expect(f.system.getInteractionCandidate()).toMatchObject({ kind: 'shooting-range', request: { action: 'enable' } });
+    f.keys.keyShift.isDown = true; f.keys.keyShift.justDown = true;
+    f.system.update(); f.system.update();
+    expect(f.sendRange).toHaveBeenCalledExactlyOnceWith({ control: 'power', action: 'enable', session: 0 });
+    expect(f.burrow).not.toHaveBeenCalled();
+  });
+
+  it('lets a better aligned turret compete with switches, and consumes invalidated candidates without fallback', () => {
+    const f = interactions();
+    let turrets = [{ id: 1, x: f.power.x - 20, y: f.power.y, ownerId: 'p1', ownerColor: 1 }];
+    f.system.setupTurretControlProviders({ getTurrets: () => turrets, getState: () => undefined, isEnabled: () => true });
+    expect(f.system.getInteractionCandidate()).toMatchObject({ kind: 'turret' });
+    turrets = [];
+    f.keys.keyShift.justDown = true; f.system.update();
+    expect(f.sendTurret).not.toHaveBeenCalled(); expect(f.sendRange).not.toHaveBeenCalled(); expect(f.burrow).not.toHaveBeenCalled();
+  });
+
+  it('retains a complete short Shift tap between frames, drops locked presses and unbinds on shutdown', () => {
+    const f = interactions();
+    const keyboard = new Map<string, TestKey & EventEmitter>();
+    Object.assign(f.scene.input, { keyboard: { addKey: (code: string) => {
+      const button = Object.assign(new EventEmitter(), key(), { consumeEdge: true });
+      keyboard.set(code, button); return button;
+    } } });
+    const events = new EventEmitter();
+    Object.assign(f.scene, { events, game: { events: new EventEmitter() } });
+    f.system.setup();
+    f.system.getInteractionCandidate();
+    const shift = keyboard.get('SHIFT')!;
+    shift.isDown = true; shift.justDown = true; shift.emit('down');
+    // Phaser's key-up clears the edge before the next game update.
+    shift.isDown = false; shift.justDown = false;
+    f.system.update(); f.system.update();
+    expect(f.sendRange).toHaveBeenCalledOnce();
+    f.system.setInputEnabled(false);
+    shift.isDown = true; shift.justDown = true; shift.emit('down');
+    // No input update while the enclosing world frame is disabled.
+    f.system.setInputEnabled(true); f.system.getInteractionCandidate(); f.system.update();
+    expect(f.sendRange).toHaveBeenCalledOnce();
+    expect(f.burrow).not.toHaveBeenCalled();
+    events.emit('shutdown');
+    expect(shift.listenerCount('down')).toBe(0);
+  });
+
+  it('consumes Shift during surface locks and radial menus and gives emerging precedence', () => {
+    const f = interactions();
+    f.system.getInteractionCandidate(); f.system.setInputEnabled(false);
+    f.keys.keyShift.justDown = true; f.system.update();
+    f.system.setInputEnabled(true); f.system.getInteractionCandidate(); f.system.update();
+    expect(f.sendRange).not.toHaveBeenCalled(); expect(f.burrow).not.toHaveBeenCalled();
+    Object.assign(f.system, { radialActionMenu: { isOpen: true } });
+    f.keys.keyShift.justDown = true; f.system.update();
+    expect(f.sendRange).not.toHaveBeenCalled();
+    Object.assign(f.system, { radialActionMenu: null, localBurrowPhase: 'underground' });
+    f.keys.keyShift.justDown = true; f.system.update();
+    expect(f.burrow).toHaveBeenCalledExactlyOnceWith(false);
+    expect(f.sendRange).not.toHaveBeenCalled();
+  });
+});
 
 describe('Radial Menu V2 input', () => {
   it('exposes global dismantle from the first E-down frame, never selection alone, and clears on release or input lock', () => {

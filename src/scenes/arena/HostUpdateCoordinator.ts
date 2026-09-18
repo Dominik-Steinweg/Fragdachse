@@ -105,6 +105,8 @@ export interface HostUpdatePerformanceMetrics {
 
 /** World-owned reads needed by the host frame, scoped to this coordinator. */
 export interface HostWorldFramePort {
+  getEnemyManager?(): import('../../entities/EnemyManager').EnemyManager | null;
+  getShootingRange?(): import('../../shootingRange/ShootingRangeWorldBinding').ShootingRangeWorldBinding | null;
   getWorldRuntime(): WorldRuntime | null;
   getTrainRuntime(): WorldTrainRuntime | null;
   getWorldMutationRuntime(): WorldObjectMutationRuntime | null;
@@ -256,7 +258,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
   private get trainManager() { return this.worldFramePort?.getTrainRuntime()?.getCurrentTrain() ?? null; }
   private get coopMissionRuntime() { return this.activityFramePort?.getCoopMissionRuntime() ?? null; }
-  private get enemyManager() { return this.coopMissionRuntime?.enemyManager ?? null; }
+  private get enemyManager() { return this.worldFramePort?.getEnemyManager?.() ?? this.coopMissionRuntime?.enemyManager ?? null; }
   private get captureTheBeerSystem() { return this.activityFramePort?.getCaptureTheBeerRuntime()?.system ?? null; }
 
   private activityStep(): CoopMissionActivityStep | null {
@@ -403,6 +405,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // Activity; dieser Frame kennt nur den Schritt.
     if (coopMission) {
       this.activityStep()?.hostSimulationStep(delta, now, countdownActive, weaponBalanceLabActive, metrics);
+    }
+    if (!countdownActive) {
+      this.worldFramePort?.getShootingRange?.()?.prepareHostStep(delta, now);
+      this.playerGameplayRuntime?.refreshArtificialAdrenalineSupply();
     }
     if (metrics) metrics.enemyAiMs = performance.now() - phaseStartedAt;
 
@@ -789,15 +795,15 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const nukes       = this.powerUpSystem?.getNukeSnapshot()      ?? [];
     this.effects?.syncZeusUpgrades(this.zeusBinding?.snapshot(now) ?? { balls: [], ground: [], stuns: [] }, now, (id, kind) => {
       if (kind === 'player') { const p = this.ctx.playerManager.getPlayer(id); return p?.active && !this.playerGameplayRuntime?.isControllingTurret(id) ? { x: p.x, y: p.y, radius: p.getCollisionRadius() } : null; }
-      const e = this.coopMissionRuntime?.enemyManager?.getEnemy(id);
+      const e = this.enemyManager?.getEnemy(id);
       return e?.sprite.active && e.getHp() > 0 && !e.isBurrowed() ? { x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius() } : null;
     });
     this.ctx.smokeSystem.syncVisuals(this.smokeBinding?.runtime.getSnapshots(now) ?? [], now);
     this.ctx.smokeSystem.syncTargetVisuals(this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [], now,
-      id => this.coopMissionRuntime?.enemyManager?.getEnemy(id)?.getStatusVisualTarget() ?? null);
+      id => this.enemyManager?.getEnemy(id)?.getStatusVisualTarget() ?? null);
     this.ctx.stinkCloudSystem.syncPlagueVisuals(this.plagueBinding?.runtime.getSnapshot(now)
       ?? { targets: [], transfers: [], transferSequence: 0 }, now, id => {
-      const manager = this.coopMissionRuntime?.enemyManager;
+      const manager = this.enemyManager;
       const visual = manager?.getEnemy(id)?.getStatusVisualTarget();
       return visual ? { ...visual, entityGeneration: manager?.getCombatTargetRef(id)?.instance.entityGeneration } : null;
     });
@@ -989,6 +995,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // ── Network tick throttle ─────────────────────────────────────────────
     this.netTickAccumulator += delta;
     if (this.netTickAccumulator < NET_TICK_INTERVAL_MS) {
+      this.worldFramePort?.getShootingRange?.()?.finishHostStep(now);
       if (metrics) {
         metrics.totalMs = performance.now() - startedAt;
         this.lastPerformance = metrics;
@@ -1033,6 +1040,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
     this.targetingSystems?.reinforcementMatrix?.update(now);
     this.targetingSystems?.energyInjector?.update(now);
+
+    // Expiring constructions can trigger damage too. Respawn only after their death reactions.
+    this.worldFramePort?.getShootingRange?.()?.finishHostStep(now);
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.ctx.playerManager.getAllPlayers()) {
@@ -1143,6 +1153,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       players,
       projectiles,
       enemies: this.enemyManager?.getNetSnapshot() ?? null,
+      shootingRange: this.worldFramePort?.getShootingRange?.()?.snapshot() ?? null,
       // Delta-Snapshot inline (einmal pro Net-Tick, nach dem Throttle): der Aufruf VERBRAUCHT
       // die gesammelten Removals und HP-Änderungen. Weiter oben im Frame aufgerufen, würden
       // sie auf den ~2 von 3 Frames ohne Net-Tick ersatzlos verfallen.
@@ -1410,7 +1421,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       // Scheitert die Übernahme (Abfänger inzwischen tot), schlüpft die Brut regulär feindlich –
       // die Bombe soll nicht stillschweigend verpuffen.
       const captured = capturedByPlayer
-        ? this.coopMissionRuntime?.necromancySystem?.captureAlly(ownerId, spawnX, spawnY, effect.enemyKind) ?? null
+        ? (this.worldFramePort?.getShootingRange?.()?.necromancy ?? this.coopMissionRuntime?.necromancySystem)?.captureAlly(ownerId, spawnX, spawnY, effect.enemyKind) ?? null
         : null;
       if (!captured) {
         enemyManager.hostSpawnAtWorld(

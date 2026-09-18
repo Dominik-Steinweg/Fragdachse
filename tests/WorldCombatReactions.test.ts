@@ -7,10 +7,11 @@ import type { CombatTargetRef } from '../src/combat/CombatScope';
 const playerLife: CombatTargetRef = { kind: 'player', id: 'credited',
   scope: { worldRevision: 1, runtimeGeneration: 1 }, instance: { entityGeneration: 1, lifeRevision: 1 } };
 
-function fixture() {
+function fixture(training = false) {
   const damage = vi.fn(), xp = vi.fn(), frag = vi.fn(), popup = vi.fn(), itemKill = vi.fn(), registerKill = vi.fn();
   const owner = new WorldCombatReactions({
-    isCoopMission: () => true, isActivityActive: () => true,
+    isCoopMission: () => !training, isActivityActive: () => !training,
+    isTrainingTarget: () => training,
     combatSystem: { applyDamage: damage, isCurrentCombatantTarget: () => true } as never,
     getPlayerCombatIntegration: () => ({
       resource: { addAdrenaline: vi.fn() }, modifier: { getClassDefinition: () => null },
@@ -31,6 +32,17 @@ function fixture() {
 }
 
 describe('World Combat reaction policies', () => {
+  it('keeps training weapon and item kill reactions without recording kills or awarding XP', () => {
+    const f = fixture(true);
+    f.owner.handleKill('credited', 'training-target', 'glock', 10, 20, {
+      enemyKind: COOP_DEFENSE_ENEMY_KINDS[0], victimFaction: 'hostile', victimKind: 'enemy', nowMs: 1234,
+    }, () => true);
+    expect(f.registerKill).toHaveBeenCalledOnce();
+    expect(f.itemKill).toHaveBeenCalledOnce();
+    expect(f.frag).not.toHaveBeenCalled();
+    expect(f.xp).not.toHaveBeenCalled();
+    expect(f.popup).not.toHaveBeenCalled();
+  });
   it('does not re-reflect reflected damage even when an item proposes another reflection', () => {
     const f = fixture();
     f.owner.handlePlayerDamageTaken('credited', 'source', 10, 0, 'reflect', 1000, playerLife, () => true);

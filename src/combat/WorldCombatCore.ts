@@ -967,6 +967,18 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   setEnemyLifeEndedHandler(handler: ((target: CombatTargetRef) => void) | null): void {
     this.onEnemyLifeEnded = handler;
   }
+
+  /** End a removed enemy incarnation without death, rewards or combat reactions. */
+  releaseRemovedEnemy(target: CombatTargetRef): void {
+    if (target.kind !== 'enemy' || this.isCurrentCombatantTarget(target)) return;
+    this.movementStatus?.clearMovementStatus(target);
+    this.plasmaSwarmMechanic?.clearTarget(target);
+    this.burnStatus.clearBurn(target);
+    this.onEnemyLifeEnded?.(target);
+    this.lastSource.delete(String(target.id));
+    this.lastKillSource.delete(String(target.id));
+    this.attributionTargets.delete(String(target.id));
+  }
   /** Uebergibt die zentrale Verwundbarkeit an den Host, wenn ein Projektil sie auf Treffer setzt. */
   setApplyVulnerabilityHandler(handler: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null): void {
     this.onApplyVulnerability = handler;
@@ -2560,6 +2572,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       explosionSlowFraction: Math.max(0, spec.explosionSlowFraction ?? 0),
       color: COLORS.GREEN_2,
       ownerColor: COLORS.GREEN_2,
+      ...request.plasmaSwarmSource,
       baseDamageMult: request.directHit.baseDamageMult,
     };
   }

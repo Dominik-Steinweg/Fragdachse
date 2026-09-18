@@ -4,7 +4,7 @@
  */
 export const FULL_GAME_STATE_SLICE_KEYS = [
   'zs', 'p', 'j', 'e', 'r', 'br', 'oc', 'ei', 'fi', 'rc', 'dc', 's', 'sx', 'pl', 'f', 'sc', 'tb', 'td',
-  'es', 'g', 'rd', 'sl', 'vu', 'st', 'fg', 'u', 'pd', 'n', 'ak', 'mt', 'tn', 't', 'b', 'cb', 'cc', 'ae',
+  'es', 'g', 'rd', 'sl', 'vu', 'st', 'fg', 'u', 'pd', 'n', 'ak', 'mt', 'tn', 't', 'b', 'cb', 'cc', 'ae', 'sr',
 ] as const;
 
 export function isCompleteGameStatePayload(raw: unknown): raw is Record<string, unknown> {

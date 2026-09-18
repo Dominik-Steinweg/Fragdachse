@@ -1270,6 +1270,7 @@ export class ArenaScene extends Phaser.Scene {
       }
     });
     this.arenaRuntime.initialize();
+    inputSystem.setupShootingRangeProvider(() => this.arenaRuntime.getShootingRange());
     inputSystem.setupTurretControlProviders({
       getTurrets: () => this.arenaRuntime.getTurretDefinitions(),
       getState: id => bridge.isHost() ? this.arenaRuntime.getTurretControlState(id) : bridge.getLatestGameState()?.players[id]?.turretControl,
@@ -1608,9 +1609,8 @@ export class ArenaScene extends Phaser.Scene {
           : bridge.getLatestGameState()?.players[profile.id]?.turretControl;
         return state ? [{ id: String(state.turretId), color: profile.colorHex }] : [];
       }),
-      this.ctx.inputSystem.getTurretCandidate(),
-      t('ui.turretControl.enter'),
     );
+    this.renderers.interactions.sync(this.ctx.inputSystem.getInteractionCandidate());
 
     const {
       showAim,

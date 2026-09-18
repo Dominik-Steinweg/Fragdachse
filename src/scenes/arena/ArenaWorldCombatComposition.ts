@@ -231,7 +231,8 @@ export function composeWorldCombatGameplay(
     },
     getWorldParticipation: (playerId) => flow.getWorldParticipation(playerId),
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
-    getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+    getEnemyManager: () => gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager ?? null,
+    isTrainingTarget: id => gameplay.shootingRange?.isTrainingTarget(id) ?? false,
     getPlayerCombatIntegration: () => gameplay.player?.getPlayerCombatIntegrationPort() ?? null,
     getManualTurretControl: (id, now) => gameplay.player?.getManualTurretControl(id, now) ?? null,
     bindPlayerShieldBuffPort: (port) => gameplay.player?.bindShieldBuffPort(port),
@@ -249,6 +250,7 @@ export function composeWorldCombatGameplay(
       input.worldRuntime,
       rockVisualHelper,
       target,
+      gameplay.shootingRange?.enemies,
     ),
     resolveObstacleDamage: (rockId, damage, attackerId) => resolveObstacleDamage(
       combatSystem,
@@ -279,7 +281,7 @@ export function composeWorldCombatGameplay(
     getWorldTrain: () => gameplay.train,
     getWorldMutation: () => gameplay.worldMutation,
     getTimebombSystem: () => flow.getCoopMissionRuntime()?.coopDefenseTimebombSystem ?? null,
-    getNecromancySystem: () => flow.getCoopMissionRuntime()?.necromancySystem ?? null,
+    getNecromancySystem: () => gameplay.shootingRange?.necromancy ?? flow.getCoopMissionRuntime()?.necromancySystem ?? null,
     hostUpdate: hostUpdate,
     createEnergyShieldSystem: (resource, shield) => new EnergyShieldSystem(ctx.playerManager, resource, bridge, shield),
     network: {

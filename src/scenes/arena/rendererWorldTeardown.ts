@@ -11,6 +11,7 @@ export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): 
   bundle.translocatorTeleport?.destroy();
   bundle.movement.clear();
   bundle.turretAnimations.clear();
+  bundle.interactions.clear();
   bundle.burrowGpu.clearAllUnderground();
   bundle.burrowGpu.clear();
   bundle.timeBubble.destroyAll();

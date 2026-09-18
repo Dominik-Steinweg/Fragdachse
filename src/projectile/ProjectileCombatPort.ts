@@ -82,6 +82,10 @@ export interface ProjectileDirectImpactRequest {
   readonly velocity: { readonly x: number; readonly y: number };
   readonly provenance: ProjectileProvenance;
   readonly directHit: ProjectileDirectHitSpec;
+  /** Resolved parent properties retained across the Plasma reaction boundary. */
+  readonly plasmaSwarmSource?: Pick<ProjectilePlasmaSwarmImpact,
+    'normalSize' | 'normalRange' | 'color' | 'ownerColor' | 'homing'
+    | 'projectileStyle' | 'energyBallVariant' | 'tracerConfig'>;
   readonly augments: readonly (ProjectileInteractionAugment | ProjectileEnergyInjectorAugment)[];
 }
 

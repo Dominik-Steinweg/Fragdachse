@@ -75,6 +75,7 @@ export class EnemyEntity {
   readonly originId?: string;
 
   private readonly authoritative: boolean;
+  private stationary = false;
   private readonly config: ResolvedCoopDefenseEnemyConfig;
   private readonly attackWeapons: readonly EnemyAttackWeapon[];
   private healthBars: WorldHealthBarRenderer | null = null;
@@ -191,6 +192,7 @@ export class EnemyEntity {
   }
 
   setPosition(x: number, y: number): void {
+    if (this.stationary) return;
     this.movementRevision++;
     this.movementCorrectionRemaining = 0;
     this.targetX = x;
@@ -203,6 +205,16 @@ export class EnemyEntity {
   }
 
   get positionRevision(): number { return this.movementRevision; }
+
+  /** A host-owned fixed target keeps its position even through portals and external impulses. */
+  setStationary(stationary: boolean): void {
+    this.stationary = stationary;
+    if (this.authoritative) {
+      this.body.moves = !stationary;
+      this.body.setImmovable(stationary);
+      if (stationary) this.stopMovement();
+    }
+  }
 
   private remotePositionRevision = -1;
   setTargetPosition(x: number, y: number, revision?: number): void {
@@ -225,6 +237,7 @@ export class EnemyEntity {
 
   setDesiredVelocity(vx: number, vy: number): void {
     if (!this.authoritative) return;
+    if (this.stationary) { vx = 0; vy = 0; }
     this.desiredVelocityX = vx;
     this.desiredVelocityY = vy;
     if ((vx !== 0 || vy !== 0) && !this.isAttackMovementPaused(Date.now())) {
@@ -272,6 +285,7 @@ export class EnemyEntity {
    * eingebuddelt, unsichtbar oder tot ist; statische Gegnerarten ignorieren den Aufruf.
    */
   setWalking(walking: boolean): void {
+    if (this.stationary) walking = false;
     if (this.walkingRequested === walking) return;
     this.walkingRequested = walking;
     this.syncWalkingAnimation();

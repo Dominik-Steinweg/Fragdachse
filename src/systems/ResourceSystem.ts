@@ -28,6 +28,7 @@ export class ResourceSystem {
   private adrenalineGainMultiplierResolver: ((id: string) => number) | null = null;
   private adrenalineCostMultiplierResolver: ((id: string) => number) | null = null;
   private adrenalineSpawnFullResolver: ((id: string) => boolean) | null = null;
+  private artificialSupply: ((id: string) => boolean) | null = null;
   private readonly adrenalineDrainObservers = new Set<(
     playerId: string,
     requestedAmount: number,
@@ -47,6 +48,13 @@ export class ResourceSystem {
   setAdrenalineGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineGainMultiplierResolver = resolver; }
   setAdrenalineCostMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineCostMultiplierResolver = resolver; }
   setAdrenalineSpawnFullResolver(resolver: ((id: string) => boolean) | null): void { this.adrenalineSpawnFullResolver = resolver; }
+  /** Artificial supply is a resource policy, not natural gain or a cost discount. */
+  setArtificialAdrenalineSupply(resolver: ((id: string) => boolean) | null): void { this.artificialSupply = resolver; }
+  refreshArtificialAdrenalineSupply(): void {
+    for (const id of this.adrenaline.keys()) {
+      if (this.artificialSupply?.(id)) this.writeAdrenaline(id, this.getMaxAdrenaline(id));
+    }
+  }
   addAdrenalineDrainObserver(observer: (
     playerId: string,
     requestedAmount: number,
@@ -90,6 +98,7 @@ export class ResourceSystem {
   }
 
   getAdrenaline(id: string): number {
+    if (this.adrenaline.has(id) && this.artificialSupply?.(id)) return this.getMaxAdrenaline(id);
     return this.adrenaline.get(id) ?? 0;
   }
 
@@ -129,7 +138,7 @@ export class ResourceSystem {
    */
   addAdrenaline(id: string, amount: number): void {
     const adjustedAmount = amount > 0 ? amount * Math.max(0, this.adrenalineGainMultiplierResolver?.(id) ?? 1) : amount;
-    const previous = this.adrenaline.get(id) ?? 0;
+    const previous = this.getAdrenaline(id);
     const cur = Math.min(this.getMaxAdrenaline(id), previous + adjustedAmount);
     this.writeAdrenaline(id, cur);
     const gainedAmount = cur - previous;
@@ -156,7 +165,7 @@ export class ResourceSystem {
   /** Atomically apply an already resolved gain; collector modifiers never apply a second time. */
   commitResolvedAdrenalineGain(id: string, resolvedAmount: number): number {
     if (!this.adrenaline.has(id) || !Number.isFinite(resolvedAmount) || resolvedAmount <= 0) return 0;
-    const previous = this.adrenaline.get(id)!;
+    const previous = this.getAdrenaline(id);
     const availableGain = Math.min(resolvedAmount, Math.max(0, this.getMaxAdrenaline(id) - previous));
     const next = previous + availableGain;
     // Consume the capped transaction amount once the stored resource increases. Re-subtracting
@@ -189,7 +198,7 @@ export class ResourceSystem {
    */
   drainAdrenaline(id: string, amount: number, nowMs: number): void {
     const adjustedAmount = this.resolveAdrenalineCost(id, amount);
-    const previous = this.adrenaline.get(id) ?? 0;
+    const previous = this.getAdrenaline(id);
     const cur = Math.max(0, previous - adjustedAmount);
     this.writeAdrenaline(id, cur);
     const drainedAmount = previous - cur;
@@ -200,6 +209,7 @@ export class ResourceSystem {
     if ((this.powerUpSystem?.getRegenMultiplier(id) ?? 1) === 1) {
       this.regenPausedUntil.set(id, nowMs + ADRENALINE_REGEN_PAUSE_MS);
     }
+    if (this.artificialSupply?.(id)) this.writeAdrenaline(id, this.getMaxAdrenaline(id));
   }
 
   /**

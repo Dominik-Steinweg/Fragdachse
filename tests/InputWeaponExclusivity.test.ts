@@ -119,6 +119,8 @@ describe('weapon input exclusivity', () => {
     let available = true;
     f.system.setupTurretControlProviders({ isEnabled: () => true, getState: () => state,
       getTurrets: () => available ? [{ id: 1, x: 60, y: 0, ownerId: 'friend', ownerColor: 1 }] : [] });
+    Object.assign(f.bridge, { getWorldDescriptor: () => ({ worldRevision: 1 }), getLocalWorldParticipation: () => 'interactive' });
+    f.system.getInteractionCandidate();
     const keys = f.system as any;
     keys.keyShift.justDown = true; keys.keySpace.justDown = true;
     f.system.update();

@@ -483,6 +483,6 @@ export function createArenaStrategicTargetsPort(
     getHostSnapshot: (now) => (
       flow.getWorldPlayerGameplayRuntime()?.getAk47StrategicTargetNetSnapshot(now) ?? []
     ),
-    getEnemyVisual: (enemyId) => flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(enemyId) ?? null,
+    getEnemyVisual: (enemyId) => flow.getWorldEnemyManager()?.getEnemy(enemyId) ?? null,
   };
 }

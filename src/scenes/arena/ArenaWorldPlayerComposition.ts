@@ -68,7 +68,7 @@ export function composeWorldPlayerGameplay(
     placementSystem,
     gameAudioSystem: ctx.gameAudioSystem,
     worldMetrics: world.metrics,
-    getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+    getEnemyManager: () => gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager ?? null,
     getTargetStatusSystem: () => gameplay.targeting?.systems.targetStatus ?? null,
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),

@@ -1,8 +1,8 @@
 import type * as Phaser from 'phaser';
 import { addPlayerGlow } from './PlayerGlow';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
-import { DEPTH } from '../config';
-import { registerGraphicsObject } from './EffectUtils';
+
+
 import { NET_TICK_INTERVAL_MS } from '../config';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
 import { turretAngleDifference } from '../utils/turretAngle';
@@ -24,11 +24,7 @@ interface Binding {
 
 /** Scene-owned presentation bindings; every binding ends with its world sprite. */
 export class TurretAnimationController {
-  private controlMarker: Phaser.GameObjects.Graphics | null = null;
-  private controlLabel: Phaser.GameObjects.Text | null = null;
-  private markedId: string | null = null;
-
-  syncControl(occupants: readonly { id: string; color: number }[], candidate: { id: string | number; x: number; y: number } | null, label: string): void {
+  syncControl(occupants: readonly { id: string; color: number }[]): void {
     const colors = new Map(occupants.map(occupant => [occupant.id, occupant.color]));
     for (const [id, binding] of this.bindings) {
       const color = colors.get(id);
@@ -37,20 +33,7 @@ export class TurretAnimationController {
       binding.controlColor = color;
       binding.controlGlow = color === undefined ? null : addPlayerGlow(binding.sprite, color, 1.4, 10);
     }
-    const sprite = candidate ? this.bindings.get(String(candidate.id))?.sprite : undefined;
-    this.markedId = candidate ? String(candidate.id) : null;
-    if (!candidate || !sprite?.active) { this.controlMarker?.setVisible(false); this.controlLabel?.setVisible(false); return; }
-    if (!this.controlMarker) {
-      this.controlMarker = sprite.scene.add.graphics().setDepth(DEPTH.PROJECTILES + 2);
-      registerGraphicsObject(sprite.scene, 'weaponTelegraphs', this.controlMarker);
-      this.controlLabel = sprite.scene.add.text(0, 0, '', { fontFamily: 'Arial', fontSize: '13px', color: '#ffffff',
-        backgroundColor: '#13262c', padding: { x: 7, y: 4 } }).setOrigin(0.5, 0).setDepth(DEPTH.PROJECTILES + 3);
-    }
-    const radius = Math.max(24, Math.max(sprite.displayWidth, sprite.displayHeight) * 0.48);
-    this.controlMarker.clear().setPosition(candidate.x, candidate.y).setVisible(true)
-      .lineStyle(6, 0x102128, 0.9).strokeCircle(0, 0, radius)
-      .lineStyle(3, 0x86f6ff, 1).strokeCircle(0, 0, radius);
-    this.controlLabel!.setText(label).setPosition(candidate.x, candidate.y + radius + 8).setVisible(true);
+
   }
   private readonly bindings = new Map<string, Binding>();
   private readonly activeTesla = new Set<string>();
@@ -69,11 +52,6 @@ export class TurretAnimationController {
   }
 
   unbind(id: string): void {
-    if (this.markedId === id) {
-      this.controlMarker?.setVisible(false);
-      this.controlLabel?.setVisible(false);
-      this.markedId = null;
-    }
     const binding = this.bindings.get(id);
     if (!binding) return;
     this.bindings.delete(id);
@@ -154,8 +132,6 @@ export class TurretAnimationController {
   }
 
   clear(): void {
-    this.controlMarker?.destroy(); this.controlMarker = null;
-    this.controlLabel?.destroy(); this.controlLabel = null;
     for (const id of this.bindings.keys()) this.unbind(id);
     this.activeTesla.clear();
     this.now = 0;

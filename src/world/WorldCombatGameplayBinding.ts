@@ -230,6 +230,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getWorldParticipation: (playerId: string) => WorldParticipation;
   readonly getPlayerCapabilities: (playerId: string) => { canUseCombat: boolean };
   readonly getEnemyManager: () => EnemyManager | null;
+  readonly isTrainingTarget?: (id: string) => boolean;
   readonly getPlayerCombatIntegration: () => PlayerCombatIntegrationPort | null;
   readonly automatedWeaponExecution: AutomatedWeaponExecution | null;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
@@ -647,6 +648,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         () => !this.destroyed && generation === this.activityGeneration);
     });
     combat.setDamageDealtHandler((targetType, targetId, attackerId, damage, _kind, targetFaction) => {
+      if (targetType === 'enemy' && o.isTrainingTarget?.(targetId)) return;
       if (!o.network.authority.isHost() || !attackerId || attackerId === targetId || damage <= 0) return;
       if (!o.network.authority.getPlayerProfile(attackerId)) return;
       if (targetType === 'enemy') {

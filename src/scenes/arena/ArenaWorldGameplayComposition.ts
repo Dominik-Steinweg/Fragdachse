@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import { composeShootingRangeEnemies, bindShootingRangeGameplay } from './ArenaShootingRangeComposition';
+import type { ShootingRangeWorldBinding } from '../../shootingRange/ShootingRangeWorldBinding';
 import { bridge } from '../../network/bridge';
 import {
   composeWorldGeometry,
@@ -145,6 +147,7 @@ export interface ArenaWorldGameplayCompositionInput {
  * der Owner selbst geleert.
  */
 export class ArenaWorldGameplay {
+  shootingRange: ShootingRangeWorldBinding | null = null;
   /** Concrete Combat core and lifecycle boundary are created once per local World runtime. */
   combatSystem: WorldCombatCore | null = null;
   combatRuntime: WorldCombatRuntime | null = null;
@@ -184,6 +187,7 @@ export function composeArenaWorldGameplay(
     flow.materializeActivityCore(activityDescriptor, coopMissionRuntime, layout);
   }
   composeWorldTrain(input, gameplay);
+  composeShootingRangeEnemies(input, gameplay);
   if (bridge.isHost()) composeWorldPlayerGameplay(input, gameplay);
   composeWorldCombatGameplay(input, gameplay);
   if (!coopMissionRuntime) {
@@ -199,5 +203,6 @@ export function composeArenaWorldGameplay(
     composeWorldSupportGameplay(input, gameplay);
   }
   activateWorldCombatRuntime(input, gameplay);
+  bindShootingRangeGameplay(input, gameplay);
   return gameplay;
 }

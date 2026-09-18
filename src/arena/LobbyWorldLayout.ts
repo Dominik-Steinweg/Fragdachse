@@ -16,6 +16,7 @@ import {
 } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
 import { createOrganicDirtMargin } from './OrganicDirtMargin';
+import { SHOOTING_RANGE } from '../shootingRange/ShootingRangeLayout';
 
 /**
  * Authored Geometrie der LobbyWorld.
@@ -471,7 +472,7 @@ function waterPatch(startX: number, startY: number, rows: readonly string[]): Wa
 }
 
 const lobbyWater: WaterCell[] = [
-  ...waterPatch(5, 15, [
+  ...waterPatch(1, 26, [
     '.###..',
     '#####.',
     '######',
@@ -512,7 +513,7 @@ const ambientRocks: RockCell[] = excludeWater(excludeRectCells(
       { gridX: GRID_COLS - 1, gridY: GRID_ROWS - 1 },
     ],
   ),
-  [BASE_CLEAR_ZONE, titleRockGapZone],
+  [BASE_CLEAR_ZONE, titleRockGapZone, SHOOTING_RANGE.clearArea],
 )).filter(cell => !ambientRockCutouts.has(cellKey(cell.gridX, cell.gridY)));
 
 const titleTreeClearZone: GridRect = {
@@ -536,7 +537,7 @@ const lobbyRocks: RockCell[] = mergeUnique<RockCell>(titleRocks, ambientRocks);
 
 const lobbyTrees: TreeCell[] = excludeRectCells(
   points<TreeCell>([[1, 4], [12, 18], [1, 23], [15, 31], [57, 4], [44, 13], [44, 27], [59, 24], [51, 31]]),
-  [BASE_CLEAR_ZONE, titleTreeClearZone],
+  [BASE_CLEAR_ZONE, titleTreeClearZone, SHOOTING_RANGE.clearArea],
 );
 
 const lobbyDirt: DirtCell[] = excludeWater(mergeUnique<DirtCell>(

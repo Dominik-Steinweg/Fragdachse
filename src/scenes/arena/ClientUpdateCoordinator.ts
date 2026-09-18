@@ -100,6 +100,7 @@ export interface ClientUpdatePerformanceMetrics {
 
 /** World-owned reads needed by the client frame, scoped to this coordinator. */
 export interface ClientWorldFramePort {
+  getShootingRange?(): import('../../shootingRange/ShootingRangeWorldBinding').ShootingRangeWorldBinding | null;
   getWorldRuntime(): WorldRuntime | null;
   getTargetingRuntime(): WorldTargetingRuntime | null;
 }
@@ -356,6 +357,12 @@ export class ClientUpdateCoordinator {
     const firstWorldSnapshot = this.lastGameStateVersion === -1;
     const isNewData = currentVersion !== this.lastGameStateVersion;
     if (isNewData) this.lastGameStateVersion = currentVersion;
+    const shootingRange = this.worldFramePort?.getShootingRange?.();
+    if (shootingRange && isNewData) {
+      shootingRange.acceptSnapshot(state.shootingRange);
+      shootingRange.enemies.applySnapshot(state.enemies);
+    }
+    shootingRange?.enemies.updateClientInterpolation(lerpFactor);
     const snapshotMs = this.performanceMetricsEnabled ? performance.now() - startedAt : 0;
     let playersMs = 0;
     let projectilesEffectsMs = 0;
@@ -962,6 +969,11 @@ export class ClientUpdateCoordinator {
     }
     this.ensureCurrentPredictionWorld();
     this.reconcileAuthoritativeAdrenalineFromSnapshot();
+    const range = this.worldFramePort?.getShootingRange?.();
+    const local = range ? this.ctx.playerManager.getPlayer(localId) : null;
+    if (local?.active && range?.suppliesPosition(local.x, local.y)) {
+      return this.getLocalMaxAdrenaline();
+    }
     const baseline = this.authoritativeAdrenaline;
     if (!baseline) return 0;
     let pending = 0;

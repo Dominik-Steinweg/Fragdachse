@@ -2,6 +2,36 @@ import { describe, expect, it, vi } from 'vitest';
 import { ResourceSystem } from '../src/systems/ResourceSystem';
 
 describe('ResourceSystem diagnostic observers', () => {
+  it('supplies consecutive paid actions without natural gain events and stops supplying on exit', () => {
+    const resources = new ResourceSystem();
+    resources.initPlayer('player');
+    resources.setAdrenaline('player', 0);
+    let eligible = true;
+    resources.setArtificialAdrenalineSupply(() => eligible);
+    const gain = vi.fn(), drain = vi.fn();
+    resources.addAdrenalineGainObserver(gain);
+    resources.addAdrenalineDrainObserver(drain);
+    const maximum = resources.getMaxAdrenaline('player');
+    for (let action = 0; action < 4; action++) {
+      expect(resources.getAdrenaline('player')).toBe(maximum);
+      resources.drainAdrenaline('player', maximum * 0.75, 1000);
+    }
+    expect(drain).toHaveBeenCalledTimes(4);
+    expect(drain).toHaveBeenLastCalledWith('player', maximum * 0.75, maximum * 0.75);
+    expect(resources.getRegenPausedUntil('player')).toBeGreaterThan(1000);
+    resources.refreshArtificialAdrenalineSupply();
+    expect(gain).not.toHaveBeenCalled();
+    expect(resources.commitResolvedAdrenalineGain('player', 5)).toBe(0);
+    expect(gain).toHaveBeenLastCalledWith('player', 5, 0);
+    eligible = false;
+    resources.drainAdrenaline('player', maximum * 0.75, 1000);
+    expect(resources.getAdrenaline('player')).toBe(maximum * 0.25);
+    resources.refreshArtificialAdrenalineSupply();
+    expect(resources.getAdrenaline('player')).toBe(maximum * 0.25);
+    resources.removePlayer('player');
+    eligible = true;
+    expect(resources.getAdrenaline('player')).toBe(0);
+  });
   it('consumes representable fractional arrivals in every order without manufacturing rounded residuals', () => {
     const share = 3.5 / 3;
     const fragments = [share, share, 3.5 - share * 2];

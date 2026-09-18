@@ -2,13 +2,14 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import type * as Phaser from 'phaser';
 import { TurretAnimationController } from '../src/effects/TurretAnimationController';
+import { WorldInteractionRenderer } from '../src/effects/WorldInteractionRenderer';
 import { getTurretVisualSpec } from '../src/config/turretVisuals';
 import { pipelineAnimationKey } from '../src/config/pipelineAssets';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { NET_TICK_INTERVAL_MS } from '../src/config';
 import type { SyncedTeslaDome } from '../src/types';
 
-vi.mock('phaser', () => ({}));
+vi.mock('phaser', () => ({ Math: { Vector2: class { constructor(public x: number, public y: number) {} } } }));
 const glowFx = vi.hoisted(() => ({ add: vi.fn(() => ({})), remove: vi.fn() }));
 vi.mock('../src/effects/PlayerGlow', () => ({ addPlayerGlow: glowFx.add }));
 vi.mock('../src/utils/phaserFx', () => ({ removeInternalFx: glowFx.remove }));
@@ -42,7 +43,7 @@ describe('turret animation lifecycle', () => {
     glowFx.add.mockClear(); glowFx.remove.mockClear();
     const element = () => {
       const view: any = { visible: true, destroy: vi.fn() };
-      for (const method of ['setDepth', 'setOrigin', 'clear', 'setPosition', 'lineStyle', 'strokeCircle', 'setText']) view[method] = vi.fn(() => view);
+      for (const method of ['setDepth', 'setOrigin', 'clear', 'setPosition', 'lineStyle', 'strokePoints', 'setText']) view[method] = vi.fn(() => view);
       view.setVisible = (visible: boolean) => { view.visible = visible; return view; };
       return view;
     };
@@ -50,19 +51,23 @@ describe('turret animation lifecycle', () => {
     const scene = { add: { graphics: () => marker, text: () => label } };
     const turret = sprite(); Object.assign(turret.view, { scene, displayWidth: 48, displayHeight: 48 });
     const controller = new TurretAnimationController(); controller.bind('7', turret.phaser, 'TURRET_TESLA');
-    controller.syncControl([], { id: 7, x: 20, y: 30 }, 'Shift: Bemannen');
+    const selection = new WorldInteractionRenderer(scene as never);
+    selection.sync({ kind: 'turret', key: 'turret:7', x: 20, y: 30, radius: 100,
+      label: 'Shift: Bemannen', worldRevision: 1, turret: { id: 7, x: 20, y: 30, ownerId: 'p1', ownerColor: 1 } });
+    controller.syncControl([]);
     expect(marker.visible).toBe(true); expect(label.setText).toHaveBeenCalledWith('Shift: Bemannen');
-    controller.syncControl([{ id: '7', color: 0x22ddff }], null, '');
+    controller.syncControl([{ id: '7', color: 0x22ddff }]); selection.sync(null);
     expect(marker.visible).toBe(false); expect(label.visible).toBe(false);
     expect(glowFx.add).toHaveBeenCalledWith(turret.phaser, 0x22ddff, expect.any(Number), expect.any(Number));
     const [, , scale, strength] = glowFx.add.mock.calls[0]; expect(scale).toBeGreaterThan(1); expect(strength).toBeGreaterThan(4);
-    controller.syncControl([{ id: '7', color: 0x22ddff }], null, ''); expect(glowFx.add).toHaveBeenCalledOnce();
-    controller.syncControl([], null, ''); expect(glowFx.remove).toHaveBeenCalledOnce();
-    controller.syncControl([{ id: '7', color: 1 }], { id: 7, x: 20, y: 30 }, '');
+    controller.syncControl([{ id: '7', color: 0x22ddff }]); expect(glowFx.add).toHaveBeenCalledOnce();
+    controller.syncControl([]); expect(glowFx.remove).toHaveBeenCalledOnce();
+    controller.syncControl([{ id: '7', color: 1 }]);
     controller.unbind('7'); expect(marker.visible).toBe(false); expect(glowFx.remove).toHaveBeenCalledTimes(2);
     controller.bind('7', turret.phaser, 'TURRET_TESLA');
-    controller.syncControl([{ id: '7', color: 1 }], null, '');
+    controller.syncControl([{ id: '7', color: 1 }]);
     controller.clear(); expect(glowFx.remove).toHaveBeenCalledTimes(3);
+    selection.clear(); selection.clear();
     expect(marker.destroy).toHaveBeenCalledOnce(); expect(label.destroy).toHaveBeenCalledOnce();
   });
   it.each(['7', 'base:turret'])('interpolates confirmed poses across wrap and holds on packet loss (%s)', id => {

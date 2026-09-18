@@ -45,6 +45,8 @@ export interface PlacementSyncResult {
 }
 
 export class PlacementSystem {
+  private buildReservation: ((gridX: number, gridY: number) => boolean) | null = null;
+  setBuildReservation(resolver: typeof this.buildReservation): void { this.buildReservation = resolver; }
   private readonly layout: ArenaLayout;
   private readonly rockGrid: RockGridIndex;
   /** Authored Coop-Defense base footprint; empty outside the mode or without bases. */
@@ -390,6 +392,7 @@ export class PlacementSystem {
     for (const cell of cells) {
       const tx = gridX + cell.dx;
       const ty = gridY + cell.dy;
+      if (this.buildReservation?.(tx, ty)) return undefined;
       if (tx < 0 || tx >= this.metrics.gridCols || ty < 0 || ty >= this.metrics.gridRows) return undefined;
       if (this.waterCells.has(this.key(tx, ty))) return undefined;
       const occupiedId = this.rockGrid.getIndex(tx, ty);
@@ -1018,6 +1021,7 @@ export class PlacementSystem {
     for (const cell of footprint) {
       const tx = gx + cell.dx;
       const ty = gy + cell.dy;
+      if (this.buildReservation?.(tx, ty)) return false;
       if (tx < 0 || tx >= this.metrics.gridCols || ty < 0 || ty >= this.metrics.gridRows) return false;
       if (!allowPersistentBaseCells && isCoopDefenseBaseCell(tx, ty, this.coopDefenseBases)) return false;
       if (this.rockGrid.isOccupied(tx, ty)) {

@@ -99,7 +99,7 @@ export function composeWorldGeometry(
         return player?.active ? { x: player.x, y: player.y, hitRadius: player.getHitRadius() } : null;
       }
       if (targetType === 'enemy') {
-        const enemy = flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(targetId);
+        const enemy = (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager)?.getEnemy(targetId);
         return enemy?.sprite.active
           ? { x: enemy.sprite.x, y: enemy.sprite.y, hitRadius: enemy.getCollisionRadius() }
           : null;
@@ -163,7 +163,7 @@ export function composeWorldTrain(
         ),
       },
     },
-    getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+    getEnemyManager: () => (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager) ?? null,
     isPlayerBurrowed: (playerId) => gameplay.player?.isBurrowed(playerId) ?? false,
     getTimeBubbleSystem: () => gameplay.combat?.systems?.timeBubble ?? null,
     setTranslocatorTrainManager: (train) => gameplay.player?.setTranslocatorTrainManager(train),
@@ -197,14 +197,14 @@ export function composeWorldSupportGameplay(
     const m = world.metrics;
     return x - size / 2 >= m.offsetX && y - size / 2 >= m.offsetY
       && x + size / 2 <= m.maxX && y + size / 2 <= m.maxY
-      && (flow.getCoopMissionRuntime()?.enemyFlowFieldService?.isCircleGroundFreeAt(x, y, size / 2) ?? false);
+      && ((gameplay.shootingRange?.ground ?? flow.getCoopMissionRuntime()?.enemyFlowFieldService)?.isCircleGroundFreeAt(x, y, size / 2) ?? false);
   });
   const supportGameplayRuntime = new WorldSupportGameplayRuntime({
-    zeus: new WorldZeusBinding(combatSystem, ctx.playerManager, () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+    zeus: new WorldZeusBinding(combatSystem, ctx.playerManager, () => (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager) ?? null,
       ctx.hostPhysics, gameplay.projectiles, gameplay.player.getPlayerCombatIntegrationPort().utility),
     plague: new WorldStinkPlagueBinding({
-      combat: combatSystem, getEnemies: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
-      getNavigation: () => flow.getCoopMissionRuntime()?.enemyFlowFieldService ?? null,
+      combat: combatSystem, getEnemies: () => (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager) ?? null,
+      getNavigation: () => gameplay.shootingRange?.ground ?? flow.getCoopMissionRuntime()?.enemyFlowFieldService ?? null,
       status: gameplay.targeting!.systems.targetStatus,
       slimeTrail: slime,
       isPlayerPresent: playerId => ctx.playerManager.getPlayer(playerId) !== undefined,
@@ -212,7 +212,7 @@ export function composeWorldSupportGameplay(
       deathBurst: (enemyId, x, y, now, contribution) => slime?.handleEnemyDeath(enemyId, x, y, now, contribution) ?? null,
       publishBurst: burst => bridge.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets),
     }),
-    smoke: new WorldSmokeBinding(combatSystem, () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+    smoke: new WorldSmokeBinding(combatSystem, () => (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager) ?? null,
       gameplay.targeting!.systems.targetStatus, gameplay.projectiles),
     playerManager: ctx.playerManager,
     projectileExternalInteraction: gameplay.projectiles,

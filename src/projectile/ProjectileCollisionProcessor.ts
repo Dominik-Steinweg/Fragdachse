@@ -665,6 +665,16 @@ function createDirectImpactRequest(
     impact: { x: candidate.x, y: candidate.y },
     velocity: { x: record.physics.body.velocity.x, y: record.physics.body.velocity.y },
     provenance: record.provenance,
+    plasmaSwarmSource: record.spec.interaction.directHit.plasmaSwarmEnabled === true ? {
+      normalSize: record.hitboxSize ?? record.physics.sprite.displayWidth,
+      normalRange: record.spec.flight.speed * record.spec.flight.lifetimeMs / 1000,
+      color: record.presentation.color,
+      ownerColor: record.presentation.ownerColor,
+      homing: record.spec.flight.homing,
+      projectileStyle: record.presentation.projectileStyle,
+      energyBallVariant: record.presentation.energyBallVariant,
+      tracerConfig: record.presentation.tracerConfig,
+    } : undefined,
     directHit: {
       damage: record.damage,
       appliedSourceDamageFactors: record.spec.interaction.directHit.appliedSourceDamageFactors,

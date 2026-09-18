@@ -10,8 +10,8 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-// Compact flight points and bounded, optionally compressed transport frames.
-export const PEER_PROTOCOL_VERSION = 16;
+// World shooting range snapshots and revision-bound interaction requests.
+export const PEER_PROTOCOL_VERSION = 17;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

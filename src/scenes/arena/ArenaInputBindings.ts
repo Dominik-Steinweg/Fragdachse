@@ -891,6 +891,7 @@ export class ArenaInputBindings {
    */
   updateFrame(frame: ArenaInputFrameState): void {
     if (!frame.enabled) {
+      this.input.inputSystem.setTurretInputEnabled?.(false);
       this.input.inputSystem.setAimEnabled(false);
       this.input.inputSystem.setInputEnabled(false);
       return;

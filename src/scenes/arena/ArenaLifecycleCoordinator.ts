@@ -1095,6 +1095,12 @@ export class ArenaLifecycleCoordinator {
 
   /** Direkter Zugriff auf die tatsaechlichen Runtime-Owner fuer Scene-/Coordinator-Consumer. */
   getWorldRuntime(): WorldRuntime | null { return this.worldRuntime; }
+  getShootingRange(): import('../../shootingRange/ShootingRangeWorldBinding').ShootingRangeWorldBinding | null {
+    return this.worldGameplay?.shootingRange ?? null;
+  }
+  getWorldEnemyManager(): import('../../entities/EnemyManager').EnemyManager | null {
+    return this.worldGameplay?.shootingRange?.enemies ?? this.coopMissionRuntime?.enemyManager ?? null;
+  }
   getWorldTargetingRuntime(): WorldTargetingRuntime | null { return this.worldGameplay?.targeting ?? null; }
   getWorldGeometryBinding(): WorldGeometryBinding | null { return this.worldGeometryBinding; }
   getWorldTrainRuntime(): WorldTrainRuntime | null { return this.worldTrainRuntime; }

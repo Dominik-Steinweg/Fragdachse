@@ -89,6 +89,7 @@ export function resolveTargetFootprint(
   worldRuntime: WorldRuntime | null,
   rockVisualHelper: RockVisualHelper,
   target: TargetStatusTarget,
+  worldEnemies?: import('../../entities/EnemyManager').EnemyManager,
 ): TargetFootprint | null {
   if (target.targetType === 'player') {
     const player = playerManager.getPlayer(target.targetId);
@@ -97,7 +98,7 @@ export function resolveTargetFootprint(
     return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };
   }
   if (target.targetType === 'enemy') {
-    const enemy = coopMissionRuntime?.enemyManager?.getEnemy(target.targetId);
+    const enemy = (worldEnemies ?? coopMissionRuntime?.enemyManager)?.getEnemy(target.targetId);
     if (!enemy?.sprite.active) return null;
     const bounds = enemy.sprite.getBounds();
     return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };

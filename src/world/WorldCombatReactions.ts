@@ -16,6 +16,7 @@ export interface WorldCombatReactionOptions {
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly isCoopMission: () => boolean;
   readonly isActivityActive: () => boolean;
+  readonly isTrainingTarget?: (id: string) => boolean;
 }
 
 /** Concrete ordered gameplay reactions to committed Combat facts. */
@@ -58,6 +59,7 @@ export class WorldCombatReactions {
     const victimProfile = o.network.authority.getPlayerProfile(victimId);
     const victimIsPlayer = source?.victimKind === 'player' || !!victimProfile;
     const hostileEnemy = source?.victimFaction === 'hostile';
+    const training = o.isTrainingTarget?.(victimId) ?? false;
     const enemyXp = hostileEnemy && source?.enemyKind ? getCoopDefenseEnemyXp(source.enemyKind) : 0;
     const eligibleKiller = source?.provenance
       ? source.provenance.attribution.kind === 'player' && !!killerProfile : !!killerProfile;
@@ -66,30 +68,30 @@ export class WorldCombatReactions {
     if (eligibleKiller) {
       o.getPlayerCombatIntegration()?.reactions.registerKill({ killerId, victimId, sourceId, x, y, source: reactionSource });
       if (!current()) return;
-      if (hostileEnemy && o.isCoopMission()) {
+      if (hostileEnemy && (o.isCoopMission() || training)) {
         o.getPlayerCombatIntegration()?.reactions.handleCoopDefenseItemKill(killerId, victimId, x, y,
           source?.nowMs ?? 0, source?.damageOrigin);
         if (!current()) return;
       }
     }
 
-    if (eligibleKiller && (hostileEnemy || victimIsPlayer)) {
+    if (!training && eligibleKiller && (hostileEnemy || victimIsPlayer)) {
       o.network.stats.incrementPlayerFrags(killerId);
       if (hostileEnemy) o.network.stats.recordPlayerKill(killerId, 'pve');
       else if (o.network.authority.isEnemyPair(killerId, victimId)) o.network.stats.recordPlayerKill(killerId, 'pvp');
     }
     if (!current()) return;
-    if (hostileEnemy && o.isCoopMission()) {
+    if (hostileEnemy && (o.isCoopMission() || training)) {
       const eligibleReward = eligibleKiller ? o.network.round.canPlayerReceiveRoundRewards(killerId)
         : source?.provenance?.gameplaySource.id === COOP_DEFENSE_BASE_TURRET_OWNER_ID
           && o.network.authority.getConnectedPlayers().some(profile => o.network.round.canPlayerReceiveRoundRewards(profile.id));
-      if (eligibleReward && enemyXp > 0) {
+      if (!training && eligibleReward && enemyXp > 0) {
         o.network.round.addCoopDefenseRoundXp(enemyXp);
         if (!current()) return;
         o.network.effects.broadcastCoopDefenseXpPopup(x, y, enemyXp);
       }
       if (!current()) return;
-      o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, enemyXp, x, y);
+      if (!training) o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, enemyXp, x, y);
       if (!current()) return;
       for (const profile of o.network.authority.getConnectedPlayers()) {
         const playerCombat = o.getPlayerCombatIntegration();

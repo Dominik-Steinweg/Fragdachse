@@ -65,12 +65,14 @@ import { TrainRenderer }       from '../../train/TrainRenderer';
 import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { OwnerVisualSource } from '../../entities/OwnerVisualSource';
 import type { EffectSystem }      from '../../effects/EffectSystem';
+import { WorldInteractionRenderer } from '../../effects/WorldInteractionRenderer';
 import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
 import type { LocalDistortionComposer } from '../../effects/distortion/LocalDistortionComposer';
 import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 
 /** All visual renderers grouped together. World-dependent renderers start as null. */
 export interface RendererBundle {
+  interactions: WorldInteractionRenderer;
   healthBars: WorldHealthBarRenderer;
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
@@ -385,11 +387,14 @@ export function* createRendererBundleSteps(
   // `WorldProjectileRuntime.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   const healthBars = new WorldHealthBarRenderer(scene);
+  const interactions = new WorldInteractionRenderer(scene);
+  cleanup.push(() => interactions.clear());
   const constructionOwnershipMotes = new ConstructionOwnershipMoteRenderer(gpuVfx);
   cleanup.push(() => constructionOwnershipMotes.destroy());
   const movement = new MovementEffectsRenderer(gpuVfx, burrowGpu);
   cleanup.push(() => movement.destroy());
   return {
+    interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,

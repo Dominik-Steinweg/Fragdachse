@@ -245,6 +245,8 @@ export class ArenaRuntime {
       () => this.flow.getAdrenalineEssence()?.getDiagnostics() ?? null,
     );
     this.hostUpdate.setWorldFramePort({
+      getEnemyManager: () => this.flow.getWorldEnemyManager(),
+      getShootingRange: () => this.flow.getShootingRange(),
       getWorldRuntime: () => this.flow.getWorldRuntime(),
       getTrainRuntime: () => this.flow.getWorldTrainRuntime(),
       getWorldMutationRuntime: () => this.flow.getWorldObjectMutationRuntime(),
@@ -267,6 +269,7 @@ export class ArenaRuntime {
       getCaptureTheBeerRuntime: () => this.flow.getCaptureTheBeerActivityRuntime(),
     });
     this.clientUpdate.setWorldFramePort({
+      getShootingRange: () => this.flow.getShootingRange(),
       getWorldRuntime: () => this.flow.getWorldRuntime(),
       getTargetingRuntime: () => this.flow.getWorldTargetingRuntime(),
     });
@@ -276,7 +279,7 @@ export class ArenaRuntime {
     });
     this.clientUpdate.setActivityFramePort({
       getEnemyStatusVisual: id => {
-        const manager = this.flow.getCoopMissionRuntime()?.enemyManager;
+        const manager = this.flow.getWorldEnemyManager();
         const visual = manager?.getEnemy(id)?.getStatusVisualTarget();
         return visual ? { ...visual, entityGeneration: manager?.getCombatTargetRef(id)?.instance.entityGeneration } : null;
       },
@@ -618,6 +621,9 @@ export class ArenaRuntime {
   getWorldMetrics(): WorldMetrics | null {
     return this.flow.getWorldRuntime()?.context?.metrics ?? null;
   }
+  getShootingRange(): import('../../shootingRange/ShootingRangeWorldBinding').ShootingRangeWorldBinding | null {
+    return this.flow.getShootingRange();
+  }
 
   getWorldDescriptor(): WorldDescriptor | null {
     return this.flow.getWorldRuntime()?.context?.descriptor ?? null;
@@ -686,7 +692,7 @@ export class ArenaRuntime {
   }
 
   getMaxBossPhase(): number {
-    return this.flow.getCoopMissionRuntime()?.enemyManager?.getMaxBossPhase() ?? 0;
+    return this.flow.getWorldEnemyManager()?.getMaxBossPhase() ?? 0;
   }
 
   getConstructionCapacityForPlayer(playerId: string): number | undefined {
@@ -715,19 +721,19 @@ export class ArenaRuntime {
   }
 
   getCombatEnemyVisuals(): readonly EnemyVisualSource[] {
-    return this.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [];
+    return this.flow.getWorldEnemyManager()?.getAllEnemies() ?? [];
   }
 
   getMovementEnemyVisuals() {
-    return this.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [];
+    return this.flow.getWorldEnemyManager()?.getAllEnemies() ?? [];
   }
 
   syncEnemyHostVisuals(): void {
-    this.flow.getCoopMissionRuntime()?.enemyManager?.syncHostVisuals();
+    this.flow.getWorldEnemyManager()?.syncHostVisuals();
   }
 
   getEnemyCount(): number {
-    return this.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies().length ?? 0;
+    return this.flow.getWorldEnemyManager()?.getAllEnemies().length ?? 0;
   }
 
   getHostTunnelSnapshot(): readonly SyncedTunnel[] {
@@ -740,7 +746,7 @@ export class ArenaRuntime {
     knockbackFactor: number;
     isLocalPlayer: false;
   } | null {
-    const enemy = this.flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(targetId);
+    const enemy = this.flow.getWorldEnemyManager()?.getEnemy(targetId);
     if (!enemy) return null;
     return {
       sprite: enemy.sprite,

@@ -1,5 +1,11 @@
 import { UtilityChargePrediction } from '../loadout/UtilityChargePrediction';
-import { selectTurretCandidate, isFriendlyTurret } from './TurretControlSystem';
+import { isFriendlyTurret, TURRET_CONTROL_RULES } from './TurretControlSystem';
+import { selectInteractionCandidate, interactionCandidateScore, WORLD_INTERACTION_RULES } from './WorldInteractionSelection';
+import type { WorldInteractionCandidate } from './WorldInteractionCandidate';
+import type { ShootingRangeWorldBinding } from '../shootingRange/ShootingRangeWorldBinding';
+import { SHOOTING_RANGE, SHOOTING_RANGE_CONTROLS, shootingRangeControlPosition } from '../shootingRange/ShootingRangeLayout';
+import { shootingRangeAction } from '../shootingRange/ShootingRangeContracts';
+import { t } from '../i18n';
 import type { AutomatedTurret } from './TurretSystem';
 import type { TurretControlState } from '../types';
 import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
@@ -99,27 +105,66 @@ export class InputSystem {
     isEnabled: () => boolean;
   } | null = null;
   private turretInputEnabled = false;
-  private turretCandidateId: number | string | null = null;
+  private interactionCandidate: WorldInteractionCandidate | null = null;
+  private getShootingRange: (() => ShootingRangeWorldBinding | null) | null = null;
+  setupShootingRangeProvider(provider: () => ShootingRangeWorldBinding | null): void { this.getShootingRange = provider; }
   private previousTurretRevision: number | null = null;
 
   setupTurretControlProviders(providers: NonNullable<InputSystem['turretProviders']>): void { this.turretProviders = providers; }
   getTurretControlState(): TurretControlState | undefined { return this.turretProviders?.getState(this.bridge.getLocalPlayerId()); }
-  setTurretInputEnabled(enabled: boolean): void { this.turretInputEnabled = enabled; }
-  getTurretCandidate(): AutomatedTurret | null {
+  setTurretInputEnabled(enabled: boolean): void {
+    if (enabled && !this.turretInputEnabled && !this.inputEnabled) this.discardShiftPress();
+    this.turretInputEnabled = enabled;
+  }
+  private discardShiftPress(): void {
+    this.shiftPressPending = false;
+    if (this.keyShift) Phaser.Input.Keyboard.JustDown(this.keyShift);
+  }
+  private getInteractionCandidates(): WorldInteractionCandidate[] {
     const providers = this.turretProviders, sprite = this.getLocalSprite();
-    if (!providers || !sprite || !this.inputEnabled || !providers.isEnabled() || this.getTurretControlState()
+    if (!sprite || !this.inputEnabled || this.radialActionMenu?.isOpen || this.getTurretControlState()
       || this.localIsStunned || this.localBurrowPhase !== 'idle' || this.localDashPhase !== 0) {
-      this.turretCandidateId = null; return null;
+      return [];
     }
     const id = this.bridge.getLocalPlayerId();
+    const worldRevision = this.bridge.getWorldDescriptor()?.worldRevision;
+    if (worldRevision === undefined) return [];
     const occupied = new Set((this.bridge.getConnectedPlayers?.() ?? []).flatMap(player => {
-      const state = providers.getState(player.id); return state ? [state.turretId] : [];
+      const state = providers?.getState(player.id); return state ? [state.turretId] : [];
     }));
-    const candidate = selectTurretCandidate({ x: sprite.x, y: sprite.y, angle: this.currentAimAngle },
-      providers.getTurrets(), this.turretCandidateId,
-      turret => !occupied.has(turret.id) && isFriendlyTurret(id, turret, (a, b) => this.bridge.isEnemyPair(a, b)));
-    this.turretCandidateId = candidate?.id ?? null;
-    return candidate;
+    const candidates: WorldInteractionCandidate[] = providers?.isEnabled() ? providers.getTurrets()
+      .filter(turret => !occupied.has(turret.id) && isFriendlyTurret(id, turret, (a, b) => this.bridge.isEnemyPair(a, b)))
+      .map(turret => ({ kind: 'turret', key: `turret:${typeof turret.id}:${turret.id}`, x: turret.x, y: turret.y,
+        radius: TURRET_CONTROL_RULES.range, turret, label: t('ui.turretControl.enter'), worldRevision })) : [];
+    const range = this.getShootingRange?.();
+    if (range) {
+      const state = range.snapshot();
+      for (const control of SHOOTING_RANGE_CONTROLS) {
+        const action = shootingRangeAction(state, control);
+        if (!action) continue;
+        candidates.push({ kind: 'shooting-range', key: `range:${state.session}:${control}:${action}`,
+          ...shootingRangeControlPosition(range.metrics, control), radius: SHOOTING_RANGE.interactionRadius,
+          label: t(`ui.shootingRange.${action}`), request: { control, action, session: state.session }, worldRevision });
+      }
+    }
+    return candidates;
+  }
+  /** Called by presentation after input; the next key edge consumes exactly this displayed choice. */
+  getInteractionCandidate(): WorldInteractionCandidate | null {
+    const sprite = this.getLocalSprite();
+    this.interactionCandidate = sprite ? selectInteractionCandidate(
+      { x: sprite.x, y: sprite.y, angle: this.currentAimAngle }, this.getInteractionCandidates(), this.interactionCandidate?.key ?? null,
+    ) : null;
+    return this.interactionCandidate;
+  }
+  private executeDisplayedInteraction(candidate: WorldInteractionCandidate): void {
+    const current = this.getInteractionCandidates().find(entry => entry.key === candidate.key && entry.worldRevision === candidate.worldRevision);
+    const sprite = this.getLocalSprite();
+    if (!current || !sprite || interactionCandidateScore({ x: sprite.x, y: sprite.y, angle: this.currentAimAngle }, current)
+      < WORLD_INTERACTION_RULES.minimumScore) return;
+    this.cancelRocketMagazine();
+    if (candidate.kind === 'turret') this.bridge.sendTurretControlRequest({ action: 'enter', turretId: candidate.turret.id });
+    else this.bridge.sendShootingRangeRequest(candidate.request);
   }
   private rocketMagazineId: number | null = null;
   private rocketRequiresRelease = false;
@@ -174,6 +219,7 @@ export class InputSystem {
   private keyD!:     Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
   private keyShift!: Phaser.Input.Keyboard.Key;
+  private shiftPressPending = false;
   private keyE!:     Phaser.Input.Keyboard.Key;
   private keyQ!:     Phaser.Input.Keyboard.Key;
   private keyR!:     Phaser.Input.Keyboard.Key;
@@ -330,6 +376,11 @@ export class InputSystem {
     this.keyD     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.D, false);
     this.keySpace = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyShift = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    // Phaser clears JustDown on key-up. Retain short taps that complete between two frames.
+    const latchShiftPress = () => {
+      if (this.inputEnabled || this.turretInputEnabled) this.shiftPressPending = true;
+    };
+    this.keyShift.on('down', latchShiftPress);
     this.keyE     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E, false);
     this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
     this.keyR     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.R, false);
@@ -342,6 +393,8 @@ export class InputSystem {
     this.scene.game.events.on('blur', cancelOnInputLoss);
     this.scene.game.events.on('hidden', cancelOnInputLoss);
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.keyShift.off('down', latchShiftPress);
+      this.shiftPressPending = false;
       cancelOnInputLoss();
       this.scene.game.events.off('blur', cancelOnInputLoss);
       this.scene.game.events.off('hidden', cancelOnInputLoss);
@@ -909,11 +962,14 @@ export class InputSystem {
     this.inputEnabled = enabled;
     this.radialEnabled = allowRadial;
     if (enabled && !wasEnabled) {
+      if (!this.turretInputEnabled) this.discardShiftPress();
       // Der Gesture, der die UI verlassen und Gameplay aktiviert hat, gehoert weiterhin der UI.
       // Das gilt fuer alle aktuell gehaltenen Pointerbuttons, nicht nur fuer Waffe 1.
       this.consumedPointerButtons = this.scene.input.activePointer?.buttons ?? 0;
     }
     if (!enabled) {
+      if (!this.turretInputEnabled) this.discardShiftPress();
+      this.interactionCandidate = null;
       this.localDashPhase = 0;
       this.dashCooldownUntil = 0;
       this.predictedUtilityCooldownUntil.clear();
@@ -1203,6 +1259,10 @@ export class InputSystem {
   update(): void {
     this.firingWeaponSlot = null;
     try {
+    // Consume every edge even while a surface or participation lock blocks world actions.
+    const shiftDown = Phaser.Input.Keyboard.JustDown(this.keyShift);
+    const shiftPressed = this.shiftPressPending || shiftDown;
+    this.shiftPressPending = false;
     // Die Scene schaltet den lokalen Input zusaetzlich ab; dieser Rollencheck verhindert, dass
     // bereits gedrueckte Tasten oder Debug-/Placement-Hotkeys beim Spectator noch Aktionen
     // erzeugen, bevor der naechste Snapshot die Entity entfernt.
@@ -1235,7 +1295,7 @@ export class InputSystem {
       this.bridge.sendLocalInput({ dx: 0, dy: 0, aim: quantizeAngle(this.currentAimAngle), dashHeld: false,
         turretControl: { ...turretState, targetX: aimTarget?.x ?? 0, targetY: aimTarget?.y ?? 0,
           fireHeld: this.turretInputEnabled && !!aimTarget && pointer.leftButtonDown() } });
-      if (this.turretInputEnabled && Phaser.Input.Keyboard.JustDown(this.keyShift)) {
+      if (this.turretInputEnabled && !this.radialActionMenu?.isOpen && shiftPressed) {
         this.bridge.sendTurretControlRequest({ action: 'exit', ...turretState });
       }
       this.placementPreviewState = null;
@@ -1268,11 +1328,11 @@ export class InputSystem {
     this.bridge.sendLocalInput(input);
 
     // Resolve Shift before Dash, radial menus and every loadout action.
-    if (this.inputEnabled && Phaser.Input.Keyboard.JustDown(this.keyShift)) {
-      const candidate = this.getTurretCandidate();
-      if (candidate) {
-        this.cancelRocketMagazine();
-        this.bridge.sendTurretControlRequest({ action: 'enter', turretId: candidate.id });
+    if (this.inputEnabled && shiftPressed) {
+      if (this.radialActionMenu?.isOpen) return;
+      const candidate = this.interactionCandidate;
+      if (this.localBurrowPhase === 'idle' && candidate) {
+        this.executeDisplayedInteraction(candidate);
         return;
       }
       if (!this.localIsStunned) {

@@ -26,6 +26,8 @@ import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeSta
  */
 import { isActivityOfWorld, parseActivityDescriptor, type ActivityDescriptor } from '../world/ActivityDescriptor';
 import { resolveActiveGameMode } from '../world/arenaDescriptorAdapter';
+import { parseShootingRangeRequest } from '../shootingRange/ShootingRangeContracts';
+import { encodeShootingRange, decodeShootingRange } from './shootingRangeCodec';
 import {
   normalizeWorldLoadProgress,
   parseWorldLoadReadyState,
@@ -313,6 +315,7 @@ export interface RoundState {
 }
 
 export interface GameState {
+  shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   /** Activity-scoped independent delta stream; consumed only by the passive essence replica. */
   adrenalineEssence?: EssenceSnapshot | null;
   /** World-Instanz, zu der dieser Snapshot gehoert. */
@@ -359,6 +362,7 @@ export interface GameState {
 }
 
 interface OutboundGameState {
+  shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   mgAttrition?: MgAttritionSnapshot;
   adrenalineEssence?: EssenceSnapshot | null;
   /** Optionaler Test-/Host-Anker; die Bridge schreibt immer die aktuelle World-Revision. */
@@ -796,6 +800,7 @@ export class NetworkBridge {
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
   private turretControlHandler: ((id: string, request: import('../types').TurretControlRequest) => boolean) | null = null;
+  private shootingRangeHandler: ((id: string, request: import('../shootingRange/ShootingRangeContracts').ShootingRangeRequest) => boolean) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
   private trainBurrowSparksHandler: TrainBurrowSparksHandler | null = null;
   private burrowVisualHandler: BurrowVisualHandler | null = null;
@@ -1015,8 +1020,9 @@ export class NetworkBridge {
         // Der Rosterbeitritt ist bereits bekannt, die Runde bleibt aber unveraendert: Der neue
         // Spieler bekommt nur die Spectator-Rolle und einen verlaesslichen Full-Snapshot.
         this.hostRegisterLateJoiner(state.id);
-        this.requestFullGameState();
       }
+      // Interactive lobby Worlds also own enemies and complete display history.
+      if (isHost() && this.getWorldDescriptor()) this.requestFullGameState();
       this.joinCbs.forEach(cb => cb(profile));
       this.hostPublishLobbySync();
     });
@@ -1582,6 +1588,22 @@ export class NetworkBridge {
     if (this.getWorldActionRevision() === null) return;
     if (isHost()) { this.turretControlHandler?.(myPlayer().id, request); return; }
     this.sendWorldRpc('turret-control', { ...request });
+  }
+
+  sendShootingRangeRequest(request: import('../shootingRange/ShootingRangeContracts').ShootingRangeRequest): void {
+    if (this.getWorldActionRevision() === null) return;
+    if (isHost()) { this.shootingRangeHandler?.(myPlayer().id, request); return; }
+    this.sendWorldRpc('shooting-range', { ...request });
+  }
+
+  registerShootingRangeHandler(handler: typeof this.shootingRangeHandler): void {
+    this.shootingRangeHandler = handler;
+    this.registerHostRpcHandler('shooting-range', (data: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !this.acceptsWorldRpc(data) || !data || typeof data !== 'object') return false;
+      const request = parseShootingRangeRequest(data);
+      if (!request) return false;
+      return this.shootingRangeHandler?.(caller.id, request) ?? false;
+    });
   }
 
   registerTurretControlHandler(handler: typeof this.turretControlHandler): void {
@@ -2786,6 +2808,7 @@ export class NetworkBridge {
       _s: ++this.publishSeq,
     };
     payload.rt = state.roundStartTime;
+    payload.sr = encodeShootingRange(state.shootingRange);
     if (state.adrenalineEssence !== undefined) payload.ae = state.adrenalineEssence ? encodeEssenceSnapshot(state.adrenalineEssence) : null;
     // Fehlender Schluessel heisst hier "keine aktiven Projektile": der Dynamik-Strom fuehrt jeden
     // Tick alle aktiven Projektile, ein leerer Snapshot kann also nur eine leere Arena bedeuten.
@@ -2894,6 +2917,7 @@ export class NetworkBridge {
       _s: ++this.publishSeq,
       _full: true,
       ae: state.adrenalineEssence ? encodeEssenceSnapshot(state.adrenalineEssence) : null,
+      sr: encodeShootingRange(state.shootingRange),
       rt: state.roundStartTime,
       j: state.projectiles ?? EMPTY_FULL_PROJECTILE_SNAPSHOT,
       e: state.enemies,
@@ -3015,6 +3039,7 @@ export class NetworkBridge {
         raw.j as SyncedProjectileSnapshot | undefined,
       ),
       enemies:       (raw.e as SyncedEnemySnapshot | undefined) ?? null,
+      shootingRange: decodeShootingRange(raw.sr),
       rocks:         nextRocks,
       rockRemovals:  rockSnapshot?.removals ?? [],
       placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],

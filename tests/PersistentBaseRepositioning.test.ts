@@ -19,6 +19,7 @@ import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseR
 import { sanitizePersistentBaseMoveRequest } from '../src/persistentBase/PersistentBaseMove';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { SHOOTING_RANGE, isShootingRangeBuildReserved } from '../src/shootingRange/ShootingRangeLayout';
 import type { ArenaLayout, SyncedPlaceableRock } from '../src/types';
 import type { PersistentConstruction, PersistentPlayerBaseContribution } from '../src/persistentBase/PersistentBaseTypes';
 
@@ -93,6 +94,24 @@ function contributionWith(construction: PersistentConstruction): PersistentPlaye
 const MISSION = { worldRevision: 21, activityRevision: 7 } as const;
 
 describe('PlacementSystem – atomarer Relocate-Pfad', () => {
+  it('reserves range targets, board and access for both preview and placement/move, while leaving gaps buildable', () => {
+    const placement = createPlacement();
+    placement.setBuildReservation(isShootingRangeBuildReserved);
+    const cfg = getCoopDefenseConstructionDefinition('rock_barrier');
+    const source = placeRock(placement, 20, 20);
+    const reserved = [...SHOOTING_RANGE.targets, [SHOOTING_RANGE.board.minX, SHOOTING_RANGE.board.minY],
+      ...SHOOTING_RANGE.access.map(rect => [rect.minX, rect.minY])];
+    for (const [x, y] of reserved) {
+      const target = worldPoint(x, y);
+      expect(placement.getConstructionPlacementPreview(cfg, target.x, target.y, target.x, target.y)?.isValid).toBe(false);
+      expect(placement.tryPlaceConstruction(cfg, 200, OWNER_ID, 1, target.x, target.y, target.x, target.y)).toBeNull();
+      expect(placement.relocateRock(source.id, x, y, 0, SINGLE_CELL)).toBeUndefined();
+    }
+    const [x, y] = SHOOTING_RANGE.targets[0];
+    expect(isShootingRangeBuildReserved(x + 1, y)).toBe(false);
+    expect(placeRock(placement, x + 1, y)).toBeDefined();
+    expect(placement.getRuntimeRockAt(20, 20)?.id).toBe(source.id);
+  });
   it('behaelt Runtime-ID, HP und Besitz und gibt die Quellzelle frei', () => {
     const placement = createPlacement();
     const rock = placeRock(placement, 20, 20);
