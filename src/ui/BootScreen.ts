@@ -6,6 +6,7 @@
  */
 
 import type { BootLoaderState } from './BootLoaderProgress';
+import { t } from '../i18n';
 
 export const BOOT_ERROR_EVENT = 'arena-boot-error';
 export interface BootDiagnostics {
@@ -58,6 +59,9 @@ export class BootScreen {
 
   static recordStep(name: string, durationMs: number): void {
     this.diagnostics?.steps.push({ name, durationMs });
+    if (this.diagnostics?.phase === 'preparation' && name !== 'commit') {
+      this.setDetail(t('ui.boot.preparationProgress', { count: this.diagnostics.steps.length }));
+    }
   }
 
   static setDetail(text: string): void {
@@ -83,6 +87,7 @@ export class BootScreen {
       if (!Number.isFinite(ratio)) return;
       if (this.progressElement !== fillEl) { this.progressElement = fillEl; this.progress = 0; }
       fillEl.classList.remove(INDETERMINATE_CLASS);
+      fillEl.classList.add('boot-bar-measured');
       this.progress = Math.max(this.progress, Math.min(1, ratio));
       fillEl.style.transform = `scaleX(${this.progress})`;
     }

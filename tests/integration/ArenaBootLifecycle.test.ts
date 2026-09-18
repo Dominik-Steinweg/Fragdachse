@@ -14,6 +14,7 @@ vi.mock('phaser', () => ({
 import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { bridge } from '../../src/network/bridge';
 import { BootScreen, BOOT_ERROR_EVENT } from '../../src/ui/BootScreen';
+import { t } from '../../src/i18n';
 
 describe('Arena startup readiness and cancellation', () => {
   let now: number;
@@ -37,7 +38,9 @@ describe('Arena startup readiness and cancellation', () => {
     vi.spyOn(bridge, 'getGamePhase').mockReturnValue(phase);
     const networkUpdate = vi.spyOn(bridge, 'updateNetwork').mockImplementation(() => {});
     const fade = vi.spyOn(BootScreen, 'fadeOut').mockResolvedValue();
-    const runtime = { terminateMatch: vi.fn(), getWorldRevealState: vi.fn(() => ({ ready: false, progress: 70 })) };
+    const runtime = { terminateMatch: vi.fn(), getWorldRevealState: vi.fn((): {
+      ready: boolean; progress: number; pendingRenderWork?: number;
+    } => ({ ready: false, progress: 70 })) };
     const lobby = { hasTerminalFailure: vi.fn(() => false), showHostDisconnectedMessage: vi.fn(), completeBootReveal: vi.fn() };
     const work = vi.fn();
     Object.assign(scene, {
@@ -69,6 +72,17 @@ describe('Arena startup readiness and cancellation', () => {
     expect(f.scene.initializationReady).toBe(true);
     expect(f.scene.sys.resume).toHaveBeenCalledOnce();
     f.gameEvents.emit('postrender');
+    expect(f.fade).not.toHaveBeenCalled();
+    expect(f.scene.input.enabled).toBe(false);
+    const detail = vi.spyOn(BootScreen, 'setDetail');
+    f.runtime.getWorldRevealState.mockReturnValue({ ready: false, progress: 80,
+      pendingRenderWork: 6 });
+    f.gameEvents.emit('postrender');
+    expect(detail).toHaveBeenLastCalledWith(t('ui.boot.landscapeProgress', { count: 6 }));
+    f.runtime.getWorldRevealState.mockReturnValue({ ready: false, progress: 95,
+      pendingRenderWork: 0 });
+    f.gameEvents.emit('postrender');
+    expect(detail).toHaveBeenLastCalledWith(t('ui.boot.finishingPresentation'));
     expect(f.fade).not.toHaveBeenCalled();
     expect(f.scene.input.enabled).toBe(false);
     f.runtime.getWorldRevealState.mockReturnValue({ ready: true, progress: 100 });

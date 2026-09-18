@@ -831,7 +831,9 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const publishReady = vi.spyOn(bridge, 'setLocalWorldLoadReady').mockImplementation(() => {});
     const view = { x: 0, y: 0, width: 100, height: 100 };
 
-    expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+    expect(coordinator.getWorldRevealState(view)).toMatchObject({
+      ready: false, pendingRenderWork: 0,
+    });
     coordinator.updateWorldRuntime(16);
     coordinator.syncArenaLoadReady(view);
     expect(publishProgress).toHaveBeenLastCalledWith(7, expect.any(Number), 'rendering', false);
@@ -973,8 +975,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     const start = lifecycle.indexOf('  getWorldRevealState(view: WorldViewRect | null)');
     expect(start).toBeGreaterThan(0);
-    // Bis zur Schlusszeile der Methode - sie ist zugleich die Aussage, die hier zaehlt.
-    const end = lifecycle.indexOf('return { ready: loadProgress.ready', start);
+    // Bis zur schliessenden Methodenklammer, unabhaengig von den Rueckgabefeldern.
+    const end = start + lifecycle.slice(start).search(/\r?\n {2}\}\r?\n/);
     expect(end).toBeGreaterThan(start);
     const body = lifecycle.slice(start, end);
     // Der Terrain-Farb-Snapshot ist asynchron und beim Reveal unsichtbar; er darf nicht halten.

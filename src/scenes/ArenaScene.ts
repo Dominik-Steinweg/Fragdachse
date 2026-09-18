@@ -324,7 +324,7 @@ export class ArenaScene extends Phaser.Scene {
     }, () => {
       BootScreen.phase('preparation');
       BootScreen.setStatus(t('ui.boot.preparingLobby'));
-      BootScreen.setDetail('');
+      BootScreen.setDetail(t('ui.boot.preparingSystems'));
       BootScreen.setIndeterminate(true);
     });
     onBootSceneTeardown(this.events, cleanupLoader);
@@ -458,6 +458,7 @@ export class ArenaScene extends Phaser.Scene {
         this.initializationReady = true;
         this.bootPreparation = null;
         BootScreen.phase('reveal');
+        BootScreen.setDetail(t('ui.boot.preparingLandscape'));
         if (pendingFailure !== null) onFailure(pendingFailure);
         if (kicked) onKicked();
         this.sys.setVisible(true);
@@ -2682,6 +2683,11 @@ export class ArenaScene extends Phaser.Scene {
       ? this.arenaRuntime.getWorldRevealState(getVisibleWorldView(this.cameras.main))
       : { ready: true, progress: 100 };
     if (!reveal.ready) {
+      const pending = reveal.pendingRenderWork;
+      const detailKey = pending === undefined ? 'ui.boot.preparingLandscape'
+        : pending > 0 ? 'ui.boot.landscapeProgress' : 'ui.boot.finishingPresentation';
+      BootScreen.setDetail(t(detailKey,
+        pending === undefined ? undefined : { count: pending }));
       BootScreen.setIndeterminate(true);
       return;
     }

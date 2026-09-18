@@ -1773,7 +1773,9 @@ export class ArenaLifecycleCoordinator {
    * sieht. Der Terrain-Farb-Snapshot speist nur den Leaf-Blower, laeuft asynchron und darf den
    * Reveal deshalb nicht aufhalten; Runden- und Netzbedingungen haben hier ohnehin keinen Platz.
    */
-  getWorldRevealState(view: WorldViewRect | null): { ready: boolean; progress: number } {
+  getWorldRevealState(view: WorldViewRect | null): {
+    ready: boolean; progress: number; pendingRenderWork?: number;
+  } {
     // Ein technischer Abbruch zeigt seine eigene Meldung; der Ladescreen darf sie nicht verdecken.
     if (this.matchTerminated) return { ready: true, progress: 100 };
     // Wer nichts darstellt, hat nichts zu zeigen und damit nichts abzuwarten.
@@ -1789,7 +1791,9 @@ export class ArenaLifecycleCoordinator {
       work.pending, work.resident, work.renderReady && this.renderers.gpuVfx.isShaderWarmupComplete()
         && this.combatPresentationPrepared,
     );
-    return { ready: loadProgress.ready, progress: loadProgress.progress };
+    return loadProgress.ready
+      ? { ready: true, progress: loadProgress.progress }
+      : { ready: false, progress: loadProgress.progress, pendingRenderWork: work.pending };
   }
 
   /**

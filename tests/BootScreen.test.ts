@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { BootScreen } from '../src/ui/BootScreen';
+import { t } from '../src/i18n';
 
 class MockElement {
   id: string = '';
@@ -85,6 +86,25 @@ describe('BootScreen DOM controller', () => {
     expect(bootStatus.textContent).toBe('Verbindung wird aufgebaut …');
   });
 
+  it('counts completed preparation work independently of asset progress and resets on a new boot', () => {
+    const detail = createMockElement('boot-detail');
+    BootScreen.begin();
+    BootScreen.setProgress(1);
+    BootScreen.phase('preparation');
+    BootScreen.recordStep('interface', 12);
+    BootScreen.recordStep('effects', 4);
+    expect(detail.textContent).toBe(t('ui.boot.preparationProgress', { count: 2 }));
+    expect(bootBarFill.style.transform).toBe('scaleX(1)');
+    BootScreen.phase('reveal');
+    BootScreen.setDetail('Landscape');
+    BootScreen.recordStep('commit', 1);
+    expect(detail.textContent).toBe('Landscape');
+    BootScreen.begin();
+    BootScreen.phase('preparation');
+    BootScreen.recordStep('interface', 12);
+    expect(detail.textContent).toBe(t('ui.boot.preparationProgress', { count: 1 }));
+  });
+
   it('sets determinate progress and removes indeterminate class', () => {
     expect(bootBarFill.classList.contains('boot-bar-indeterminate')).toBe(true);
 
@@ -109,6 +129,7 @@ describe('BootScreen DOM controller', () => {
     BootScreen.setIndeterminate(true);
     expect(bootBarFill.classList.contains('boot-bar-indeterminate')).toBe(true);
     expect(bootBarFill.style.transform).toBe('scaleX(0.5)');
+    expect(bootBarFill.classList.contains('boot-bar-measured')).toBe(true);
 
     BootScreen.setIndeterminate(false);
     expect(bootBarFill.classList.contains('boot-bar-indeterminate')).toBe(false);

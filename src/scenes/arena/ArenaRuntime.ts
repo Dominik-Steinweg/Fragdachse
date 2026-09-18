@@ -568,7 +568,7 @@ export class ArenaRuntime {
     this.flow.beginArenaExitPresentation();
   }
 
-  getWorldRevealState(visibleWorldView: WorldViewRect | null): { ready: boolean; progress: number } {
+  getWorldRevealState(visibleWorldView: WorldViewRect | null) {
     return this.flow.getWorldRevealState(visibleWorldView);
   }
 
