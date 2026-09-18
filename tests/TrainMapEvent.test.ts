@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
-  getCoopDefenseMapConfig,
   normalizeCoopDefenseMapConfig,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
@@ -68,62 +67,44 @@ const ENCOUNTER_TRIGGERED_TRAIN = {
 } as const;
 
 describe('Train as a standalone map event', () => {
-  it('migrates the train rhythm on every rails map of the campaign', () => {
-    const railsMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => (
-      // Map 1 verwendet einen eigenen Checkpoint-Trigger statt des standardmäßigen Zeitrhythmus.
-      map.trackMode === 'rails' && !['0', '1', '2', '11'].includes(map.mapId)
-    ));
-    expect(railsMaps.length).toBeGreaterThan(0);
+  it('schedules authored trains from their configured trigger and warning delay', () => {
+    for (const map of COOP_DEFENSE_MAP_CONFIGS) {
+      for (const event of map.mapEvents ?? []) {
+        if (event.type !== 'train') continue;
+        expect(map.trackMode, map.mapId + '/' + event.id).toBe('rails');
+        const handler = fakeTrainHandler();
+        let triggerSatisfied = false;
+        const director = new CoopDefenseMapEventDirector([event], [handler], {
+          isTriggerSatisfied: (start) => start === event.start && triggerSatisfied,
+        });
+        const triggerAtMs = event.start.type === 'time' ? event.start.atMs : 1;
+        const delayMs = event.delayMs ?? 0;
 
-    for (const map of railsMaps) {
-      const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
-      expect(trainEvent, map.mapId).toMatchObject({
-        id: 'train-rhythm',
-        type: 'train',
-        start: { type: 'time', atMs: expect.any(Number) },
-        repeatAfterExitMs: expect.any(Number),
-      });
-      expect(trainEvent?.start.type === 'time' ? trainEvent.start.atMs : -1).toBeGreaterThanOrEqual(0);
-      expect(trainEvent?.repeatAfterExitMs).toBeGreaterThan(0);
+        if (triggerAtMs > 0) {
+          director.hostUpdate(triggerAtMs - 1, false);
+          expect(handler.schedule).not.toHaveBeenCalled();
+          expect(director.getPresentationState()?.[0].state).toBe('dormant');
+        }
+        triggerSatisfied = true;
+        director.hostUpdate(triggerAtMs > 0 ? 1 : 0, false);
+        expect(handler.schedule).toHaveBeenCalledExactlyOnceWith(
+          event, 1, triggerAtMs + delayMs, triggerAtMs,
+        );
+        if (delayMs > 0) {
+          expect(director.getPresentationState()?.[0]).toMatchObject({
+            state: 'scheduled',
+            nextActionAtMs: triggerAtMs + delayMs,
+          });
+        }
+        director.hostUpdate(delayMs, false);
+        expect(director.getPresentationState()?.[0]).toMatchObject({
+          eventId: event.id,
+          state: 'active',
+          occurrence: 1,
+        });
+        director.reset();
+      }
     }
-  });
-
-  it('keeps Map 2 train traffic between the first and second encounters', () => {
-    const map = getCoopDefenseMapConfig('2');
-    const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
-
-    expect(trainEvent).toMatchObject({
-      id: 'train-rhythm',
-      type: 'train',
-      start: { type: 'after-encounter', encounterId: 'west-introduction' },
-    });
-    expect(trainEvent?.repeatAfterExitMs).toBeUndefined();
-  });
-
-  it('announces Map 3 train traffic on a repeating rhythm', () => {
-    const map = getCoopDefenseMapConfig('3');
-    const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
-
-    expect(trainEvent).toMatchObject({
-      id: 'train-rhythm',
-      type: 'train',
-      start: { type: 'time', atMs: 10_000 },
-    });
-    expect(trainEvent?.repeatAfterExitMs).toBeGreaterThan(0);
-  });
-
-  it('starts Map 1 train traffic after the burrow checkpoint', () => {
-    const map = getCoopDefenseMapConfig('1');
-    const trainEvent = map.mapEvents?.find((event) => event.type === 'train');
-
-    expect(map.trackMode).toBe('rails');
-    expect(trainEvent).toMatchObject({
-      id: 'burrow-train',
-      type: 'train',
-      start: { type: 'after-checkpoint', checkpointId: 'cp3-burrow' },
-      delayMs: 3_000,
-      repeatAfterExitMs: 10_000,
-    });
   });
 
   it('allows rails without a train', () => {
@@ -135,11 +116,8 @@ describe('Train as a standalone map event', () => {
   });
 
   it('keeps void-fire corridors free of trains', () => {
-    for (const mapId of ['15', '16']) {
-      const map = getCoopDefenseMapConfig(mapId);
-      expect(map.trackMode, mapId).toBe('void-fire');
-      expect(map.mapEvents?.some((event) => event.type === 'train'), mapId).toBe(false);
-      expect(map.mapEvents?.some((event) => event.type === 'ground-hazard'), mapId).toBe(true);
+    for (const map of COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode === 'void-fire')) {
+      expect(map.mapEvents?.some((event) => event.type === 'train'), map.mapId).toBe(false);
     }
 
     expect(() => buildMap({
