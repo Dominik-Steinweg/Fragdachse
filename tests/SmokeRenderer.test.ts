@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', async () => ({ ...(await import('./fakeArenaRenderScene')).createFakePhaserModule(),
+  Utils: { Array: { Remove: (values: unknown[], value: unknown) => { const index = values.indexOf(value); if (index >= 0) values.splice(index, 1); } } },
   Scenes: { Events: { POST_UPDATE: 'postupdate', SHUTDOWN: 'shutdown' } }, Textures: { FilterMode: { LINEAR: 1 } } }));
 vi.mock('../src/effects/EffectUtils', () => ({
   circleZone: () => ({}), edgeZone: () => ({}), ensureCanvasTexture() {},
@@ -16,6 +17,88 @@ import { SmokeBodyEffect, VulnerableBodyEffect } from '../src/effects/SmokeBodyE
 import { DEPTH } from '../src/config';
 
 describe('shared smoke presentation', () => {
+  it.each([true, false])('prepares the real material without visible draws and releases private GPU resources (parallel=%s)', parallel => {
+    const scene = healthBarTestScene().scene;
+    const config = { skipUnreadyShaders: false };
+    const vao = { destroy: vi.fn() }, buffer = {};
+    const gpu = { gl: { getExtension: vi.fn(() => parallel ? {} : null) }, game: { config }, parallelShaderCompileExtension: null,
+      glVAOWrappers: [vao], deleteBuffer: vi.fn() };
+    scene.renderer = gpu;
+    let ready = !parallel;
+    const suite = { vao };
+    const programManager = { programs: {} as Record<string, typeof suite>, getCurrentProgramSuite: vi.fn(() => {
+      expect(config.skipUnreadyShaders).toBe(parallel);
+      if (!ready) return null;
+      programManager.programs.smoke = suite;
+      return suite;
+    }) };
+    const quad = Object.assign(new HealthTestObject(scene), {
+      renderNode: { renderer: gpu, programManager, vertexBufferLayout: { buffer } },
+    });
+    scene.add.shader = vi.fn(() => quad);
+    const scratch = Object.assign(new HealthTestObject(scene), {
+      capture: vi.fn(), render: vi.fn(() => {
+        expect(scratch.visible).toBe(false);
+        expect(quad.visible).toBe(false);
+        expect(ready).toBe(true);
+      }),
+    });
+    scene.add.renderTexture = vi.fn(() => scratch);
+    const smoke = new SmokeSystem(scene);
+    expect(smoke.prepare()).toBe(false);
+    if (parallel) {
+      expect(smoke.prepare()).toBe(false);
+      expect(config.skipUnreadyShaders).toBe(false);
+      expect(scratch.render).not.toHaveBeenCalled();
+    }
+    ready = true;
+    expect(smoke.prepare()).toBe(false);
+    expect(config.skipUnreadyShaders).toBe(false);
+    expect(smoke.prepare()).toBe(true);
+    expect(scratch.capture).toHaveBeenCalledWith(quad, expect.objectContaining({ visible: true }));
+    expect(scratch.render).toHaveBeenCalledOnce();
+    expect(quad.active).toBe(false); expect(scratch.active).toBe(false);
+    expect(vao.destroy).toHaveBeenCalledOnce(); expect(gpu.glVAOWrappers).toEqual([]);
+    expect(gpu.deleteBuffer).toHaveBeenCalledWith(buffer);
+    smoke.destroyAll();
+    expect(smoke.prepare()).toBe(true);
+    expect(scene.add.shader).toHaveBeenCalledOnce();
+    expect(gpu.gl.getExtension).toHaveBeenCalledExactlyOnceWith('KHR_parallel_shader_compile');
+  });
+
+  it.each(['shutdown', 'compile-error'])('releases an unfinished warmup on %s', reason => {
+    const scene = healthBarTestScene().scene;
+    let shutdown = () => {};
+    scene.events.once = (_event: string, callback: Function, owner: unknown) => { shutdown = () => callback.call(owner); };
+    const config = { skipUnreadyShaders: false };
+    const gpu = { gl: {}, game: { config }, parallelShaderCompileExtension: {}, deleteBuffer: vi.fn(), glVAOWrappers: [] };
+    scene.renderer = gpu;
+    const programs = { programs: {}, getCurrentProgramSuite: vi.fn(() => { throw new Error('link failure'); }) };
+    const quad = Object.assign(new HealthTestObject(scene), {
+      renderNode: { renderer: gpu, programManager: programs, vertexBufferLayout: { buffer: {} } },
+    });
+    scene.add.shader = () => quad;
+    const smoke = new SmokeSystem(scene);
+    expect(smoke.prepare()).toBe(false);
+    if (reason === 'shutdown') {
+      // Phaser's DisplayList receives SHUTDOWN first and Shader.preDestroy drops the node.
+      quad.destroy();
+      Object.assign(quad, { renderNode: null });
+      shutdown();
+    }
+    else {
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(smoke.prepare()).toBe(true);
+      expect(config.skipUnreadyShaders).toBe(false);
+      expect(warning).toHaveBeenCalledOnce();
+      warning.mockRestore();
+      shutdown();
+    }
+    expect(quad.active).toBe(false);
+    expect(gpu.deleteBuffer).toHaveBeenCalledOnce();
+    expect(programs.getCurrentProgramSuite).toHaveBeenCalledTimes(reason === 'shutdown' ? 0 : 1);
+  });
+
   it('layers body statuses independently below smoke, with only diffuse charge above it', () => {
     const { scene, cosmetic } = healthBarTestScene();
     const sprite = new HealthTestObject(scene, 150, 190).setDepth(DEPTH.PLAYERS).setTexture('enemy', 'walk-2');

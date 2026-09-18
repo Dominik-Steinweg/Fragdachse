@@ -1,30 +1,105 @@
-import { describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, MULTIPLY: 1 } }));
+vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, MULTIPLY: 1 },
+  Scenes: { Events: { POST_UPDATE: 'postupdate', SHUTDOWN: 'shutdown' } } }));
 import {
   copyRgbRegion,
   getTerrainSnapshotRegions,
   getTerrainTexturePhase,
   stampWaterSnapshot,
+  TerrainColorSnapshotBuilder,
 } from '../src/arena/TerrainColorSnapshotBuilder';
 import { TerrainColorSnapshot } from '../src/arena/TerrainColorSnapshot';
-import { WATER_COLOR } from '../src/arena/WaterSurfaceModel';
+import { WATER_COLOR, WaterSurfaceModel } from '../src/arena/WaterSurfaceModel';
+import { WaterSurfaceRenderer } from '../src/arena/WaterSurfaceRenderer';
 import { DIRT_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { stampBlobSurfaceMottle } from '../src/arena/BlobSurfaceMottle';
 import { stampGroundCover } from '../src/arena/GroundCoverLayer';
 
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+function snapshotBuildFixture() {
+  class ReadbackImage {}
+  vi.stubGlobal('HTMLImageElement', ReadbackImage);
+  vi.stubGlobal('document', { createElement: () => ({ getContext: () => ({
+    drawImage() {}, getImageData: () => ({ data: new Uint8ClampedArray([17, 17, 17, 255]) }),
+  }) }) });
+  const events = new EventEmitter();
+  let readback: (image: ReadbackImage) => void = () => {};
+  let current = true, prepared = false;
+  const scratch = { camera: { setOrigin() {} }, setOrigin() { return this; },
+    setVisible() { return this; }, setScrollFactor() { return this; }, destroy: vi.fn(),
+    snapshotArea: vi.fn((_x, _y, _width, _height, callback) => { readback = callback; }),
+  };
+  const masks = [{ x: 0, y: 0, mask: { size: 128, data: new Uint8ClampedArray(128 * 128 * 4).fill(255) } }];
+  const water = { isPrepared: () => prepared, getPreparedMasks: vi.fn(() => masks) };
+  const onReadbackComplete = vi.fn();
+  vi.spyOn(TerrainColorSnapshotBuilder.prototype as any, 'renderRegion').mockImplementation(() => {});
+  const builder = new TerrainColorSnapshotBuilder({
+    scene: { events, add: { renderTexture: () => scratch } }, mode: 'deathmatch', layout: {},
+    worldMetrics: { widthPx: 4, heightPx: 4, offsetX: 100, offsetY: 200 },
+    arenaResult: { waterSurface: water }, isCurrent: () => current, onReadbackComplete,
+  } as any);
+  return { builder, events, scratch, water, onReadbackComplete,
+    frame: () => events.emit('postupdate'), read: () => readback(new ReadbackImage()),
+    invalidate: () => { current = false; }, prepare: () => { prepared = true; } };
+}
+
 describe('TerrainColorSnapshot', () => {
+  it('waits for shared masks after readback and releases all loading callbacks on completion', async () => {
+    const f = snapshotBuildFixture();
+    const done = vi.fn();
+    const result = f.builder.build().then(snapshot => { done(); return snapshot; });
+    f.frame(); f.read();
+    expect(f.onReadbackComplete).toHaveBeenCalledOnce();
+    for (let frame = 0; frame < 3; frame++) f.frame();
+    await Promise.resolve();
+    expect(done).not.toHaveBeenCalled(); expect(f.water.getPreparedMasks).not.toHaveBeenCalled();
+    f.prepare(); f.frame(); f.frame();
+    expect((await result).sample(102, 202)).toBe(WATER_COLOR);
+    expect(f.water.getPreparedMasks).toHaveBeenCalledOnce();
+    expect(f.scratch.destroy).toHaveBeenCalledOnce();
+    expect(f.events.eventNames()).toEqual([]);
+  });
+
+  it.each(['revision', 'shutdown'])('cancels pending readback on %s and ignores a late callback', async reason => {
+    const f = snapshotBuildFixture();
+    const rejected = expect(f.builder.build()).rejects.toThrow('cancelled');
+    f.frame();
+    if (reason === 'shutdown') f.events.emit('shutdown'); else { f.invalidate(); f.frame(); }
+    await rejected;
+    f.read(); f.prepare(); f.frame();
+    expect(f.water.getPreparedMasks).not.toHaveBeenCalled();
+    expect(f.scratch.destroy).toHaveBeenCalledOnce();
+    expect(f.events.eventNames()).toEqual([]);
+  });
+
   it('stamps expanded water across chunk boundaries while retaining dry ground', () => {
     const cells = Array.from({ length: 4 * 4 }, (_, i) => ({ gridX: 12 + i % 4, gridY: 12 + Math.floor(i / 4) }));
     const data = new Uint8Array(256 * 256 * 3).fill(17);
-    stampWaterSnapshot(data, 256, 256, cells);
+    const renderer = new WaterSurfaceRenderer({} as never,
+      { width: 1024, height: 1024, offsetX: 100, offsetY: 200 }, cells, 1);
+    while (!renderer.isPrepared()) renderer.prepareMasks();
+    const bake = vi.spyOn(WaterSurfaceModel.prototype, 'bakeSteps');
+    const masks = [...renderer.getPreparedMasks()];
+    const beforeMasks = masks.map(({ mask }) => Array.from(mask.data));
+    const work = stampWaterSnapshot(data, 256, 256, renderer.getPreparedMasks());
+    expect(work.next().done).toBe(false);
+    expect(data.every(value => value === 17)).toBe(true);
+    for (const _ of work) { /* loading slices */ }
     const snapshot = new TerrainColorSnapshot(256, 256, 100, 200, data);
     expect(snapshot.sample(100 + 514, 200 + 448)).toBe(WATER_COLOR);
     expect(snapshot.sample(100 + 448, 200 + 514)).toBe(WATER_COLOR);
     expect(snapshot.sample(100 + 540, 200 + 448)).toBe(0x111111);
     const before = data.slice();
-    stampWaterSnapshot(data, 256, 256, []);
+    for (const _ of stampWaterSnapshot(data, 256, 256, [])) { /* dry world */ }
     expect(data).toEqual(before);
+    expect(bake).not.toHaveBeenCalled();
+    expect(masks.map(({ mask }) => Array.from(mask.data))).toEqual(beforeMasks);
+    bake.mockRestore();
+    renderer.destroy();
+    expect(() => [...renderer.getPreparedMasks()]).toThrow('not prepared');
   });
   it('uses fixed 1:4 RGB coordinates with explicit world offsets', () => {
     const data = new Uint8Array([1, 2, 3, 4, 5, 6]);

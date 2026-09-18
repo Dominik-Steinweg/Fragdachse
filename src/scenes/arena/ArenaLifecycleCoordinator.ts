@@ -1086,7 +1086,8 @@ export class ArenaLifecycleCoordinator {
       && !this.combatPresentationPrepared && this.getLocalWorldPresentation().required) {
       const fragmentsReady = this.renderers.combatGoreGpu.fragmentTemplateCache.stepPreparation();
       const xpReady = this.ctx.effectSystem.prepareXpText();
-      this.combatPresentationPrepared = fragmentsReady && xpReady;
+      const smokeReady = this.ctx.smokeSystem.prepare();
+      this.combatPresentationPrepared = fragmentsReady && xpReady && smokeReady;
     }
   }
 
@@ -1751,7 +1752,9 @@ export class ArenaLifecycleCoordinator {
       loadProgress.stage,
       loadProgress.ready,
     );
-    this.localArenaLoadReady = loadProgress.ready;
+    // Entry readiness stays latched until the World/entry is reset. Ongoing chunk streaming
+    // still publishes its current progress, but must not reopen loading and replay the countdown.
+    this.localArenaLoadReady ||= loadProgress.ready;
 
     if (bridge.isHost()) this.tryScheduleArenaStart();
   }
@@ -3306,6 +3309,10 @@ export class ArenaLifecycleCoordinator {
         layout,
         arenaResult,
         worldMetrics: world.metrics,
+        isCurrent,
+        // The watchdog guards asynchronous GPU readback, not the independently budgeted
+        // World mask preparation. Large worlds must not restart valid work while waiting.
+        onReadbackComplete: () => timeoutTimer.remove(false),
       }).build();
     } catch (error) {
       console.error('[ArenaLifecycleCoordinator] Terrain-Farb-Snapshot konnte nicht gestartet werden:', error);

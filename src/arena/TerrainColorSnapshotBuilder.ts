@@ -1,4 +1,4 @@
-import { WaterSurfaceModel, WATER_COLOR, WATER_MASK_HALO, WATER_MASK_STEP } from './WaterSurfaceModel';
+import { WATER_COLOR, WATER_MASK_HALO, WATER_MASK_STEP, type WaterMaskView } from './WaterSurfaceModel';
 import { ARENA_RENDER_CHUNK_SIZE } from './chunks/ArenaChunkGrid';
 import * as Phaser from 'phaser';
 import {
@@ -8,7 +8,7 @@ import {
   getCaptureTheBeerBaseWorldBounds,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
-import type { ArenaLayout, GameMode, WaterCell } from '../types';
+import type { ArenaLayout, GameMode } from '../types';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { resolveArenaBackgroundSpec } from './ArenaBackground';
 import type { ArenaBuilderResult, RockWorldFrame } from './ArenaBuilder';
@@ -32,6 +32,8 @@ export interface TerrainColorSnapshotBuildOptions {
   readonly layout: ArenaLayout;
   readonly arenaResult: ArenaBuilderResult;
   readonly worldMetrics: WorldMetrics;
+  readonly isCurrent?: () => boolean;
+  readonly onReadbackComplete?: () => void;
 }
 
 export interface TerrainSnapshotRegion extends GroundSnapshotRegion {
@@ -77,13 +79,14 @@ export function getTerrainTexturePhase(worldPosition: number, worldOffset: numbe
 }
 
 /** The coarse ground-color lookup follows the same expanded coverage as presentation. */
-export function stampWaterSnapshot(data: Uint8Array, width: number, height: number, cells: readonly WaterCell[]): void {
+export function* stampWaterSnapshot(data: Uint8Array, width: number, height: number,
+  masks: Iterable<{ readonly x: number; readonly y: number; readonly mask: WaterMaskView }>): Generator<void, void> {
   const scale = TERRAIN_SNAPSHOT_SCALE, chunkSize = ARENA_RENDER_CHUNK_SIZE;
-  const water = new WaterSurfaceModel(cells, { width: width * scale, height: height * scale });
-  for (const origin of water.getChunkOrigins(chunkSize, width * scale, height * scale)) {
-    const mask = water.bake(origin.x, origin.y, chunkSize);
+  for (const origin of masks) {
+    const mask = origin.mask;
     const left = origin.x / scale, top = origin.y / scale;
-    for (let y = top; y < Math.min(height, top + chunkSize / scale); y++)
+    for (let y = top; y < Math.min(height, top + chunkSize / scale); y++) {
+      if ((y - top) % 8 === 0) yield;
       for (let x = left; x < Math.min(width, left + chunkSize / scale); x++) {
         const mx = Math.floor(((x + .5) * scale - origin.x + WATER_MASK_HALO) / WATER_MASK_STEP);
         const my = Math.floor(((y + .5) * scale - origin.y + WATER_MASK_HALO) / WATER_MASK_STEP);
@@ -91,6 +94,7 @@ export function stampWaterSnapshot(data: Uint8Array, width: number, height: numb
         const i = (y * width + x) * 3;
         data[i] = WATER_COLOR >> 16; data[i + 1] = WATER_COLOR >> 8 & 255; data[i + 2] = WATER_COLOR & 255;
       }
+    }
   }
 }
 
@@ -137,28 +141,42 @@ export class TerrainColorSnapshotBuilder {
     );
 
     return new Promise<TerrainColorSnapshot>((resolve, reject) => {
-      const finishWithError = (error: unknown): void => {
+      let settled = false;
+      let reading = false;
+      let regionIndex = 0;
+      let waterWork: Generator<void, void> | null = null;
+      const water = this.options.arenaResult.waterSurface;
+      const events = this.options.scene.events;
+      const cleanup = (): void => {
+        settled = true;
+        events.off(Phaser.Scenes.Events.POST_UPDATE, step);
+        events.off(Phaser.Scenes.Events.SHUTDOWN, cancel);
+        waterWork?.return();
+        waterWork = null;
         this.scratch.destroy();
+      };
+      const finishWithError = (error: unknown): void => {
+        if (settled) return;
+        cleanup();
         reject(error);
       };
+      const cancel = (): void => finishWithError(new Error('[TerrainColorSnapshot] Build cancelled.'));
       const readRegion = (index: number): void => {
-        if (index >= this.regions.length) {
-          this.scratch.destroy();
-          stampWaterSnapshot(data, this.width, this.height, this.options.layout.water ?? []);
-          resolve(snapshot);
-          return;
-        }
-
+        reading = true;
         const region = this.regions[index];
         try {
           this.renderRegion(region);
           this.scratch.snapshotArea(0, 0, region.pixelWidth, region.pixelHeight, (image) => {
+            if (settled) return;
+            if (this.options.isCurrent?.() === false) { cancel(); return; }
             try {
               if (!(image instanceof HTMLImageElement)) {
                 throw new Error('[TerrainColorSnapshot] Snapshot lieferte kein Bild.');
               }
               copySnapshotImage(image, data, this.width, region);
-              readRegion(index + 1);
+              regionIndex = index + 1;
+              reading = false;
+              if (regionIndex === this.regions.length) this.options.onReadbackComplete?.();
             } catch (error) {
               finishWithError(error);
             }
@@ -167,7 +185,23 @@ export class TerrainColorSnapshotBuilder {
           finishWithError(error);
         }
       };
-      readRegion(0);
+      const step = (): void => {
+        if (settled) return;
+        if (this.options.isCurrent?.() === false) { cancel(); return; }
+        if (reading) return;
+        try {
+          if (regionIndex < this.regions.length) { readRegion(regionIndex); return; }
+          // Preparation is advanced by the World presentation frame, never duplicated here.
+          if (water && !water.isPrepared()) return;
+          waterWork ??= stampWaterSnapshot(data, this.width, this.height, water?.getPreparedMasks() ?? []);
+          const deadline = performance.now() + 4;
+          do {
+            if (waterWork.next().done) { cleanup(); resolve(snapshot); return; }
+          } while (performance.now() < deadline);
+        } catch (error) { finishWithError(error); }
+      };
+      events.on(Phaser.Scenes.Events.POST_UPDATE, step);
+      events.once(Phaser.Scenes.Events.SHUTDOWN, cancel);
     });
   }
 

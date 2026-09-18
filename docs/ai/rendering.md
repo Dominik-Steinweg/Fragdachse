@@ -24,6 +24,23 @@ besitzt die Zuordnung und explizite Ersatzaufnahmen für noch unveröffentlichte
 Meteor-Snapshots steuern nur die Darstellung; der Einschlags-Sound kommt einmalig über den
 Explosions-RPC, damit Snapshot-Entfernungen keinen zweiten Sound auslösen.
 
+## Initialer Boot und Lobby-Bereitschaft
+
+`ArenaScene.create()` startet den budgetierten Aufbau; Phasers `CREATE` bedeutet noch keine
+Systembereitschaft. Die Scene bleibt waehrenddessen pausiert und unsichtbar, Eingaben gesperrt.
+Gameplay-/Effekt-Callbacks werden erst nach Aufbau ihrer Abhaengigkeiten ohne weiteren
+Yield registriert; Verbindungsfehler und Kick werden bis dahin gehalten. Neue Startschritte
+muessen ihren Cleanup vor dem naechsten Yield fuer Shutdown und direkten Destroy besitzen.
+Erst der abgeschlossene Aufbau erlaubt Updates. Der DOM-Bootscreen bleibt bis zur bestehenden
+World-Reveal-Barriere nach einem Render bestehen; Direktbeitritte gehen weiterhin an den
+Arena-Ladeschleier.
+
+[BootLoaderProgress.ts](../../src/ui/BootLoaderProgress.ts) beruecksichtigt Download- und
+Verarbeitungswarteschlangen gemeinsam; Phasers Download-`PROGRESS` allein ist keine
+Asset-Bereitschaft. Der Balken zaehlt abgeschlossene Dateien, keine geschaetzte Restzeit.
+Unmessbare Vorbereitungsarbeit zeigt Aktivitaet. `window.__FD_BOOT__` haelt Phasenzeitpunkte,
+gemessene Aufbauabschnitte und die aktuell noch verarbeiteten Dateien fuer lokale Diagnose.
+
 ## Zweite Asset-Ladephase und Musik
 
 [DeferredAssets.ts](../../src/assets/DeferredAssets.ts) besitzt die zweite Ladephase fuer die
@@ -62,7 +79,10 @@ Vorbereitung in begrenzten Arbeitspaketen; Residency liest ausschliesslich ferti
 Der Cache lebt mit der `WorldPresentationBinding`, bleibt bei GPU-Eviction und Handoff erhalten
 und wird beim Presentation-Teardown zusammen mit angefangener Bake-Arbeit freigegeben. Ein
 Handoff pausiert die Vorbereitung bis zur Adoption. Worlds ohne lokale Presentation tragen
-keine Wasser-Renderkosten. Die Verträge sichern
+keine Wasser-Renderkosten. Der Terrain-Farbsnapshot liest dieselben fertigen CPU-Masken
+ueber eine schreibgeschuetzte Sicht und uebertraegt ihre Deckung in budgetierten Ladeabschnitten;
+er backt keine zweite Wassergeometrie. Snapshot-Abbruch loest nur seine eigene Arbeit, nicht
+den World-Maskencache. Die Verträge sichern
 [WaterSurfaceRenderer.test.ts](../../tests/WaterSurfaceRenderer.test.ts),
 [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresentationFrameLifetime.test.ts)
 und [LobbyWorldInteractive.test.ts](../../tests/integration/LobbyWorldInteractive.test.ts).

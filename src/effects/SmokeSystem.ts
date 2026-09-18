@@ -21,6 +21,7 @@ const QUALITY = { high: { scale: 1, detail: 2 }, medium: { scale: 0.5, detail: 1
 
 interface SmokeCloudVisual {
   quad: Phaser.GameObjects.Shader;
+  readonly renderNode: Phaser.GameObjects.Shader['renderNode'];
   lightKey: string;
   uniforms: { time: number; seed: number; detail: number; pixels: number; opacity: number;
     weather: ReturnType<typeof sampleSmokeWeather> };
@@ -45,6 +46,66 @@ export class SmokeSystem {
   private readonly animationOrigins = new Map<number, number>();
   private surfaceWidth = 0;
   private surfaceHeight = 0;
+  private preparation: 'new' | 'compile' | 'draw' | 'complete' = 'new';
+  private preparationVisual: SmokeCloudVisual | null = null;
+
+  /** One loading-frame step. Phaser's ShaderQuad config is fixed for this material:
+   * getCurrentProgramSuite() is exactly the program request made by capture/render.
+   * Poll KHR completion without a blocking LINK_STATUS query while linking is pending.
+   */
+  prepare(): boolean {
+    try { return this.stepPreparation(); }
+    catch (error) {
+      if (this.preparationVisual) this.destroyVisual(this.preparationVisual);
+      this.preparationVisual = null;
+      this.preparation = 'complete';
+      console.warn('[SmokeSystem] Shader preparation failed; using the normal render path.', error);
+      return true;
+    }
+  }
+
+  private stepPreparation(): boolean {
+    if (this.preparation === 'complete') return true;
+    const renderer = this.scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    if (!renderer?.gl) { this.preparation = 'complete'; return true; }
+    if (!this.preparationVisual) {
+      // Phaser only requests KHR during boot when the global skip flag is enabled.
+      // Discover it here as well, without enabling shader pop-in for the rest of the game.
+      if (!renderer.parallelShaderCompileExtension) {
+        const extension = renderer.gl.getExtension('KHR_parallel_shader_compile');
+        if (extension) renderer.parallelShaderCompileExtension = extension;
+      }
+      this.preparationVisual = this.createVisual({ id: -1, x: 0, y: 0, radius: 1 });
+      this.preparation = 'compile';
+      return false;
+    }
+    const quad = this.preparationVisual.quad;
+    if (this.preparation === 'compile') {
+      // Phaser itself mutates this flag when the extension is absent, despite its readonly d.ts.
+      const config = renderer.game.config as { skipUnreadyShaders: boolean };
+      const previous = config.skipUnreadyShaders;
+      try {
+        // Scope the opt-in to this material; other renderers retain their existing behavior.
+        config.skipUnreadyShaders = !!renderer.parallelShaderCompileExtension;
+        if (quad.renderNode.programManager.getCurrentProgramSuite()) this.preparation = 'draw';
+      } finally { config.skipUnreadyShaders = previous; }
+      return false;
+    }
+    // Exercise the actual offscreen composition path only after the program is ready.
+    // The scratch surface and quad are invisible on every camera and carry no game state.
+    const scratch = this.scene.add.renderTexture(0, 0, 1, 1).setVisible(false);
+    try {
+      const capture = { x: 0.5, y: 0.5, visible: true };
+      scratch.capture(quad, capture);
+      scratch.render();
+    } finally {
+      scratch.destroy();
+      this.destroyVisual(this.preparationVisual);
+      this.preparationVisual = null;
+    }
+    this.preparation = 'complete';
+    return true;
+  }
 
   constructor(private readonly scene: Phaser.Scene) {
     this.ensureSmokeTextures();
@@ -97,6 +158,9 @@ export class SmokeSystem {
   private shutdown(): void {
     this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.renderFrame, this);
     this.destroyAll();
+    if (this.preparationVisual) this.destroyVisual(this.preparationVisual);
+    this.preparationVisual = null;
+    this.preparation = 'complete';
     this.lighting = null;
   }
 
@@ -164,7 +228,7 @@ export class SmokeSystem {
     this.updateStatusEffects(now);
   }
 
-  private createVisual(cloud: SyncedSmokeCloud): SmokeCloudVisual {
+  private createVisual(cloud: Pick<SyncedSmokeCloud, 'id' | 'x' | 'y' | 'radius'>): SmokeCloudVisual {
     const seed = createSeededRandom((cloud.id + 1) * 0x9e3779b9)() * 997;
     const uniforms = { time: 0, seed, detail: 2, pixels: 1, opacity: 1, weather: sampleSmokeWeather(0, seed) };
     const quad = this.scene.add.shader({
@@ -178,11 +242,24 @@ export class SmokeSystem {
       },
     }, cloud.x, cloud.y, cloud.radius * 2, cloud.radius * 2, [TEX_BODY_A, TEX_WISP]).setOrigin(0.5).setVisible(false);
     registerGraphicsObject(this.scene, 'smokeClouds', quad, () => quad.active);
-    return { quad, uniforms, lightKey: 'smoke-weather-' + cloud.id };
+    return { quad, renderNode: quad.renderNode, uniforms, lightKey: 'smoke-weather-' + cloud.id };
   }
 
   private destroyVisual(visual: SmokeCloudVisual): void {
     this.lighting?.releaseLight(visual.lightKey, { immediate: true });
+    // Phaser 4.2.1 Shader.preDestroy only drops renderNode. Its private buffers/VAOs
+    // must be released explicitly; the factory owns the shared compiled program.
+    // Scene display-list shutdown may already have destroyed the quad and nulled its node.
+    const node = visual.renderNode;
+    if (node) {
+      const renderer = node.renderer;
+      for (const suite of Object.values(node.programManager.programs)) {
+        Phaser.Utils.Array.Remove(renderer.glVAOWrappers, suite.vao);
+        suite.vao.destroy();
+      }
+      node.programManager.programs = {};
+      renderer.deleteBuffer(node.vertexBufferLayout.buffer);
+    }
     visual.quad.destroy();
   }
 

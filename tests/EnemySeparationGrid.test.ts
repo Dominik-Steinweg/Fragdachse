@@ -9,6 +9,34 @@ const geometry = (obstacles: NavigationObstacle[] = []) => new NavigationGeometr
 const neighbor = (id: string, x: number, y: number, radius = 15) => ({ id, x, y, radius, vx: 0, vy: 0 });
 
 describe('Shared enemy and ally locomotion', () => {
+  it('keeps broad-phase reuse equivalent to exact sweeps for mixed shapes and world boundaries', () => {
+    const world = geometry([
+      { id: 'wall', kind: 'rock', shape: 'rect', left: 96, right: 128, top: 80, bottom: 176 },
+      { id: 'trunk', kind: 'trunk', shape: 'circle', x: 56, y: 120, radius: 12 },
+    ]);
+    for (const radius of [0, 8, 15, 30]) for (const [x, y] of [[64, 64], [88, 80], [16, 220], [96 - 1e-7, 100]]) {
+      const candidates: NavigationObstacle[] = [];
+      world.visit(x - 120, y - 120, x + 120, y + 120, radius, obstacle => { candidates.push(obstacle); return false; });
+      for (let angle = 0; angle < 32; angle++) for (const length of [0, 1, 16, 60, 120]) {
+        const bx = x + Math.cos(angle * Math.PI / 16) * length;
+        const by = y + Math.sin(angle * Math.PI / 16) * length;
+        expect(world.canMoveAgainst(x, y, bx, by, radius, candidates)).toBe(world.canMove(x, y, bx, by, radius));
+      }
+    }
+  });
+
+  it('does not overwrite another unit’s crowd-wait snapshot when reusing scratch lists', () => {
+    const world = geometry(), movement = new EnemyLocomotion();
+    const self = neighbor('a', body.x, body.y);
+    const ring = Array.from({ length: 16 }, (_, index) => neighbor(`b${index}`,
+      body.x + Math.cos(index * Math.PI / 8) * 20, body.y + Math.sin(index * Math.PI / 8) * 20));
+    movement.begin([self, ...ring], world, 16);
+    expect(movement.solve(body).waitReason).toBe('crowd');
+    movement.solve({ ...body, id: 'far', x: 220, y: 220, waypoint: { x: 220, y: 200 } });
+    movement.begin([self], world, 16);
+    expect(movement.solve(body).vx).toBeGreaterThan(0);
+  });
+
   it('includes a fast approaching physical neighbor outside the ordinary walking horizon', () => {
     const movement = new EnemyLocomotion(), world = geometry();
     movement.begin([{ ...neighbor('dash', 145, 64), vx: -450 }], world, 16);

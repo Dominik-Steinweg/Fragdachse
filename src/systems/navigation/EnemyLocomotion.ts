@@ -1,9 +1,13 @@
 import type { LocomotionRequest, MovementFeedback } from './NavigationContracts';
-import { NavigationGeometry, segmentObstacleDistanceSq } from './NavigationGeometry';
+import { NavigationGeometry, segmentObstacleDistanceSq, type NavigationObstacle } from './NavigationGeometry';
 
 interface Neighbor { readonly id: string; readonly x: number; readonly y: number; readonly radius: number; readonly vx: number; readonly vy: number; readonly routeCost?: number }
 const ANGLES = [0, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2];
+const RECOVERY_ANGLES = [...ANGLES, Math.PI * 0.75, -Math.PI * 0.75, Math.PI];
+const SPEED_SCALES = [1, 0.45];
 const CELL = 96;
+interface Conflict { dx: number; dy: number; vx: number; vy: number; separation: number;
+  separationSq: number; existingOverlap: number; weight: number }
 
 /** One consistent position/velocity snapshot for both hostile and allied ordinary movement. */
 export class EnemyLocomotion {
@@ -19,6 +23,12 @@ export class EnemyLocomotion {
   private maxNeighborSpeed = 0;
   private geometry: NavigationGeometry | null = null;
   private deltaSeconds = 0;
+  private readonly nearby: Neighbor[] = [];
+  private readonly conflicts: Conflict[] = [];
+  private readonly movementObstacles: NavigationObstacle[] = [];
+  private readonly collectMovementObstacle = (obstacle: NavigationObstacle): boolean => {
+    this.movementObstacles.push(obstacle); return false;
+  };
 
   begin(neighbors: readonly Neighbor[], geometry: NavigationGeometry, deltaMs: number): void {
     for (const bucket of this.buckets.values()) { bucket.length = 0; this.pool.push(bucket); }
@@ -57,7 +67,14 @@ export class EnemyLocomotion {
     if (distance < 1e-3) return result(0, 0, 'arrival', progress);
     const dt = this.deltaSeconds;
     if (dt <= 0 || speed <= 0) return result(0, 0, 'arrival', progress);
-    if (!geometry.isFree(x, y, radius)) return this.recover(request, geometry, dt, progress);
+    const horizon = Math.max(dt, 0.12);
+    const blend = Math.min(1, dt * 14);
+    // Every smoothed candidate lies inside this envelope, including previous dash/impulse
+    // velocities. Query buckets once, then retain the exact capsule test for each heading.
+    const reach = (Math.hypot(request.previousVx, request.previousVy) * (1 - blend) + speed * blend) * horizon;
+    this.movementObstacles.length = 0;
+    geometry.visit(x - reach, y - reach, x + reach, y + reach, radius, this.collectMovementObstacle);
+    if (!geometry.canMoveAgainst(x, y, x, y, radius, this.movementObstacles)) return this.recover(request, geometry, dt, progress);
     // Waiting is safe while a static crowd stays unchanged. Observe its members every frame,
     // so movement or removal wakes the unit before the bounded recovery retry expires.
     if (sameTarget && progress < .1 && prior?.geometry === geometry && this.elapsedMs < history.retryAt
@@ -72,12 +89,15 @@ export class EnemyLocomotion {
     history.retryAt = 0;
     history.crowdNeighbors = undefined;
 
-    const neighbors: Neighbor[] = [];
+    const neighbors = this.nearby;
+    neighbors.length = 0;
     const range = radius + this.maxRadius + (speed + this.maxNeighborSpeed) * 0.16 + 8;
     const rangeSq = range * range;
     for (let row = Math.floor((y - range) / CELL); row <= Math.floor((y + range) / CELL); row++) {
       for (let col = Math.floor((x - range) / CELL); col <= Math.floor((x + range) / CELL); col++) {
-        for (const neighbor of this.buckets.get(`${col},${row}`) ?? []) {
+        const bucket = this.buckets.get(`${col},${row}`);
+        if (!bucket) continue;
+        for (const neighbor of bucket) {
           if (neighbor.id === request.id) continue;
           this.neighborsExamined++;
           const dx = neighbor.x - x, dy = neighbor.y - y;
@@ -88,29 +108,32 @@ export class EnemyLocomotion {
         }
       }
     }
-    const conflicts = neighbors.map(neighbor => {
+    const conflicts = this.conflicts;
+    for (let index = 0; index < neighbors.length; index++) {
+      const neighbor = neighbors[index];
       const dx = x - neighbor.x, dy = y - neighbor.y, separation = radius + neighbor.radius + 2;
       const precedes = request.routeCost !== undefined && neighbor.routeCost !== undefined
         && (request.routeCost < neighbor.routeCost - 2 || (Math.abs(request.routeCost - neighbor.routeCost) <= 2 && request.id < neighbor.id));
-      return { dx, dy, vx: neighbor.vx, vy: neighbor.vy, separation, separationSq: separation * separation,
-        existingOverlap: Math.max(0, separation - Math.sqrt(dx * dx + dy * dy)),
-        weight: neighbor.radius ** 2 / (radius ** 2 + neighbor.radius ** 2) * (precedes ? .06 : 1) / 5 };
-    });
+      const conflict = conflicts[index] ?? (conflicts[index] = {} as Conflict);
+      conflict.dx = dx; conflict.dy = dy; conflict.vx = neighbor.vx; conflict.vy = neighbor.vy;
+      conflict.separation = separation; conflict.separationSq = separation * separation;
+      conflict.existingOverlap = Math.max(0, separation - Math.sqrt(dx * dx + dy * dy));
+      conflict.weight = neighbor.radius ** 2 / (radius ** 2 + neighbor.radius ** 2) * (precedes ? .06 : 1) / 5;
+    }
     const heading = Math.atan2(waypoint.y - y, waypoint.x - x);
     let bestScore = -0.05, bestVx = 0, bestVy = 0, safeCandidate = false;
-    const angles = stalled > 0.8 ? [...ANGLES, Math.PI * 0.75, -Math.PI * 0.75, Math.PI] : ANGLES;
-    for (const angle of angles) for (const scale of [1, 0.45]) {
+    const angles = stalled > 0.8 ? RECOVERY_ANGLES : ANGLES;
+    for (const angle of angles) for (const scale of SPEED_SCALES) {
       const velocity = Math.min(speed * scale, distance / dt);
       const desiredX = Math.cos(heading + angle) * velocity, desiredY = Math.sin(heading + angle) * velocity;
       // Smoothing is included in the safety check, rather than applied after collision avoidance.
-      const blend = Math.min(1, dt * 14);
       const vx = request.previousVx + (desiredX - request.previousVx) * blend;
       const vy = request.previousVy + (desiredY - request.previousVy) * blend;
-      const horizon = Math.max(dt, 0.12);
-      if (!geometry.canMove(x, y, x + vx * horizon, y + vy * horizon, radius)) continue;
+      if (!geometry.canMoveAgainst(x, y, x + vx * horizon, y + vy * horizon, radius, this.movementObstacles)) continue;
       safeCandidate = true;
       let penalty = 0;
-      for (const neighbor of conflicts) {
+      for (let index = 0; index < neighbors.length; index++) {
+        const neighbor = conflicts[index];
         const dx = neighbor.dx + (vx - neighbor.vx) * horizon, dy = neighbor.dy + (vy - neighbor.vy) * horizon;
         const lengthSq = dx * dx + dy * dy;
         const overlap = lengthSq < neighbor.separationSq ? neighbor.separation - Math.sqrt(lengthSq) : 0;
@@ -124,7 +147,7 @@ export class EnemyLocomotion {
     }
     if (!bestVx && !bestVy && safeCandidate) {
       history.retryAt = this.elapsedMs + 250;
-      history.crowdNeighbors = neighbors;
+      history.crowdNeighbors = neighbors.slice();
     }
     return result(bestVx, bestVy, bestVx || bestVy ? 'none' : safeCandidate ? 'crowd' : 'geometry', progress, neighbors.length);
   }
@@ -153,5 +176,6 @@ export class EnemyLocomotion {
   clear(): void {
     this.previous.clear(); this.buckets.clear(); this.neighborsById.clear(); this.pool.length = 0; this.geometry = null;
     this.elapsedMs = 0; this.neighborsExamined = 0; this.waitingNeighborsObserved = 0;
+    this.nearby.length = 0; this.conflicts.length = 0; this.movementObstacles.length = 0;
   }
 }

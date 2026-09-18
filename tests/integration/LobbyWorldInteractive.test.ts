@@ -590,6 +590,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     overlay.overlay.show();
     const scene = Object.create(ArenaScene.prototype) as any;
     scene.bootRevealPending = true;
+    scene.initializationReady = true;
+    scene.input = { enabled: false, keyboard: { enabled: false } };
     scene.sys = { isActive: () => true };
     scene.time = { now: 0 };
     scene.game = { events: { off: vi.fn() } };
@@ -607,7 +609,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const create = scene.slice(scene.indexOf('  create(): void {'), scene.indexOf('  update('));
     expect(create).toContain('this.game.events.on(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this)');
     expect(create).toMatch(
-      /this\.events\.once\(Phaser\.Scenes\.Events\.SHUTDOWN, \(\) => \{\s*this\.game\.events\.off\(Phaser\.Core\.Events\.POST_RENDER, this\.syncBootReveal, this\)/,
+      /onBootSceneTeardown\(this\.events, \(\) => \{\s*this\.game\.events\.off\(Phaser\.Core\.Events\.POST_RENDER, this\.syncBootReveal, this\)/,
     );
     const update = scene.slice(scene.indexOf('  update('), scene.indexOf('  private syncBootReveal('));
     expect(update).not.toMatch(/this\.syncBootReveal\(/);
@@ -621,7 +623,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       expect(scene.bootRevealPending).toBe(true);
       expect(fade).not.toHaveBeenCalled();
       expect(scene.game.events.off).not.toHaveBeenCalled();
-      expect(progress.mock.lastCall?.[0]).toBeLessThan(1);
+      expect(progress).not.toHaveBeenCalled(); // Unmeasured work does not invent a percentage.
     }
     expect(scene.arenaRuntime.getWorldRevealState).toHaveBeenCalledWith({
       x: 90, y: 120, width: 640, height: 360, centerX: 410, centerY: 300,
@@ -649,7 +651,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       gpuVfx: { isShaderWarmupComplete: () => true },
       combatGoreGpu: { fragmentTemplateCache: { stepPreparation: vi.fn(() => ++fragmentTicks >= 2) } },
     };
-    coordinator.ctx = { effectSystem: { prepareXpText: vi.fn(() => ++xpTicks >= 3) } };
+    coordinator.ctx = { effectSystem: { prepareXpText: vi.fn(() => ++xpTicks >= 3) },
+      smokeSystem: { prepare: () => true } };
     coordinator.getLocalWorldPresentation = () => ({ required: true });
     const syncArena = vi.spyOn(coordinator, 'syncArenaLoadReady');
     scene.arenaRuntime = Object.assign(Object.create(ArenaRuntime.prototype), { flow: coordinator });
@@ -811,11 +814,13 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     };
     let fragmentsReady = false;
     let xpReady = false;
+    let smokeReady = false;
     const prepareFragments = vi.fn(() => fragmentsReady);
     const prepareXp = vi.fn(() => xpReady);
     coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => warmupComplete },
       combatGoreGpu: { fragmentTemplateCache: { stepPreparation: prepareFragments } } };
-    coordinator.ctx = { effectSystem: { prepareXpText: prepareXp } };
+    const prepareSmoke = vi.fn(() => smokeReady);
+    coordinator.ctx = { effectSystem: { prepareXpText: prepareXp }, smokeSystem: { prepare: prepareSmoke } };
     coordinator.getLocalWorldPresentation = () => ({ required: presentationRequired });
     coordinator.syncAuthoritativeRoundStartAnchors = vi.fn();
     coordinator.tryScheduleArenaStart = vi.fn();
@@ -842,6 +847,10 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     xpReady = true;
     coordinator.updateWorldRuntime(16);
     coordinator.syncArenaLoadReady(view);
+    expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+    smokeReady = true;
+    coordinator.updateWorldRuntime(16);
+    coordinator.syncArenaLoadReady(view);
     expect(coordinator.getWorldRevealState(view)).toEqual({ ready: true, progress: 100 });
     coordinator.syncArenaLoadReady(view);
     expect(publishProgress).toHaveBeenLastCalledWith(7, 100, 'ready', true);
@@ -851,16 +860,19 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     presentationRequired = false;
     prepareFragments.mockClear();
     prepareXp.mockClear();
+    prepareSmoke.mockClear();
     expect(coordinator.getWorldRevealState(null).ready).toBe(true);
     coordinator.updateWorldRuntime(16);
     coordinator.syncArenaLoadReady(null);
     expect(publishReady).toHaveBeenLastCalledWith(7, true);
     expect(prepareFragments).not.toHaveBeenCalled();
     expect(prepareXp).not.toHaveBeenCalled();
+    expect(prepareSmoke).not.toHaveBeenCalled();
   });
 
   it('keeps both Scene camera passes on the prepared World while the loading veil hides it', () => {
     const scene = Object.create(ArenaScene.prototype) as any;
+    scene.initializationReady = true;
     const stop = new Error('after second camera pass');
     const camera = vi.fn();
     const noop = () => {};
@@ -916,6 +928,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     // boundary to keep this fixture independent of unrelated gameplay/HUD consumers.
     const afterSurfaces = new Error('frame reached input');
     const scene = Object.create(ArenaScene.prototype) as any;
+    scene.initializationReady = true;
     const presentation = resolveWorldPresentation({ participation: 'interactive', worldActive: true });
     const policy = resolvePresentationPolicy({ inLobby: false, worldPresentation: presentation,
       worldVisible: false, gameplayActive: false, roundRole: 'participant', matchTerminated: false,

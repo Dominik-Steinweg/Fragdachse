@@ -9,7 +9,7 @@ import { initialRenderSize, installRenderResolution } from './graphics/RenderRes
 import { FULLSCREEN_TARGET_ID, installFullscreenSupport } from './ui/fullscreen';
 import { loadUiFonts } from './ui/uiFonts';
 import { validateGameContentReferences } from './loadout/content/GameContentValidation';
-import { BootScreen }     from './ui/BootScreen';
+import { BootScreen, BOOT_ERROR_EVENT } from './ui/BootScreen';
 import { t } from './i18n';
 import { createWebGLStartupContext } from './utils/webglContext';
 
@@ -174,13 +174,17 @@ async function boot(): Promise<void> {
   // 4. Renderauflösung an die dargestellte Fläche binden und dort halten (Fenstergröße,
   //    Vollbild, Zoomstufe des Browsers). Erst ab READY – vorher hat der ScaleManager weder
   //    Canvas noch vermessene Eltern-Box, seine Anzeigegröße wäre also 0.
+  game.events.once(BOOT_ERROR_EVENT, (error: unknown) => {
+    game.destroy(true);
+    handleBootError(error);
+  });
   game.events.once(Phaser.Core.Events.READY, () => {
     installRenderResolution(game);
     installFullscreenSupport(game);
   });
 }
 
-boot().catch((error: unknown) => {
+function handleBootError(error: unknown): void {
   if (__PERFORMANCE_LAB__) failPerformanceLab(error);
   console.error(error);
   if (isWebGLStartupError(error)) {
@@ -200,4 +204,6 @@ boot().catch((error: unknown) => {
     window.location.hash.startsWith('#r=')
       && (!(error instanceof PeerNetworkError) || error.kind !== 'invalid-room-code'),
   );
-});
+}
+
+void boot().catch(handleBootError);

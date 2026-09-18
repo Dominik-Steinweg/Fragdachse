@@ -11,6 +11,7 @@ const WATER_BLUR_WEIGHTS = Array.from({ length: WATER_MASK_BLUR_RADIUS * 2 + 1 }
   (_, i) => Math.exp(-.5 * ((i - WATER_MASK_BLUR_RADIUS) / 4.5) ** 2));
 const WATER_BLUR_SUM = WATER_BLUR_WEIGHTS.reduce((a, b) => a + b, 0);
 export interface WaterMask { size: number; data: Uint8ClampedArray }
+export interface WaterMaskView { readonly size: number; readonly data: Readonly<ArrayLike<number>> }
 export const WATER_MASK_HALO = WATER_SHORE_DISTANCE + WATER_VISUAL_EXPANSION + (WATER_MASK_BLUR_RADIUS + 2) * WATER_MASK_STEP;
 // The shader displaces the mask lookup by at most 4 world pixels per axis.
 const WATER_RENDER_MARGIN = WATER_VISUAL_EXPANSION + WATER_MASK_BLUR_RADIUS * WATER_MASK_STEP + 4 + WATER_MASK_STEP;

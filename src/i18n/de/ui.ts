@@ -251,6 +251,8 @@ export const deUi = {
   "ui.boot.connecting": "Verbindung wird aufgebaut …",
   "ui.boot.loadingData": "Spieldaten werden geladen …",
   "ui.boot.preparingLobby": "Lobby wird vorbereitet …",
+  "ui.boot.processingData": "Spieldaten werden verarbeitet …",
+  "ui.boot.assetProgress": "Downloads: {downloaded}/{total} · Verarbeitet: {processed}/{total}",
   "ui.boot.reconnecting": "Verbindung wird wiederhergestellt …",
   "ui.reward.persistentBaseUnlocked": "NEUE FUNKTION FREIGESCHALTET: PERSISTENTE BASIS",
   "ui.reward.persistentBaseUnlockedHint": "Ihr besitzt ab jetzt eine eigene Basis. Sie steht auf dem Übungsplatz und ist auf jeder weiteren Karte eure Hauptbasis.",

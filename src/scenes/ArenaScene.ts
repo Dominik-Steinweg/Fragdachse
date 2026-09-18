@@ -80,7 +80,9 @@ import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
 import { LobbyOverlay }          from './LobbyOverlay';
-import { BootScreen }             from '../ui/BootScreen';
+import { BootScreen, BOOT_ERROR_EVENT } from '../ui/BootScreen';
+import { BootPreparation, onBootSceneTeardown } from '../ui/BootPreparation';
+import { observeBootLoader } from '../ui/BootLoaderProgress';
 import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
   ARENA_COUNTDOWN_SEC, ARENA_DURATION_SEC,
@@ -166,18 +168,13 @@ import {
   ArenaCombatPresentationController,
   CoopMissionPresentationInfrastructure,
   GaussWarningRenderer,
-  createRendererBundle,
+  createRendererBundleSteps,
   wireRenderersToEffectSystem,
   wireRenderersToAudioSystem,
   wireRenderersToCameraFeedback,
   wireRenderersToDistortion,
 } from './arena';
 
-/**
- * Anteil des Bootscreen-Balkens, den der Asset-Preload einnimmt. Das restliche Fuenftel gehoert
- * der Reveal-Barriere, damit der Balken ueber beide Phasen monoton bleibt.
- */
-const BOOT_PRELOAD_PROGRESS_SHARE = 0.8;
 
 /**
  * Reine, immutable Frame-Signale fuer die Scene-Orchestrierung. Das Objekt traegt keine
@@ -300,6 +297,8 @@ export class ArenaScene extends Phaser.Scene {
   private lastObservedGamePhase: GamePhase | null = null;
   /** Solange gesetzt, deckt der Bootscreen die Lobby noch ab (siehe `syncBootReveal`). */
   private bootRevealPending = true;
+  private initializationReady = false;
+  private bootPreparation: BootPreparation | null = null;
   private itemRewardOverlay: CoopDefenseItemRewardOverlay | null = null;
   private itemsOverlay: CoopDefenseItemsOverlay | null = null;
   private lastLobbySidebarSignature: string | null = null;
@@ -310,24 +309,25 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   preload(): void {
+    BootScreen.begin();
     BootScreen.setStatus(t('ui.boot.loadingData'));
     BootScreen.setProgress(0);
-
-    const onProgress = (ratio: number) => {
-      BootScreen.setProgress(ratio * BOOT_PRELOAD_PROGRESS_SHARE);
-    };
-
-    const cleanupLoader = () => {
-      this.load.off(Phaser.Loader.Events.PROGRESS, onProgress);
-    };
-
-    this.load.on(Phaser.Loader.Events.PROGRESS, onProgress);
-    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      cleanupLoader();
+    const cleanupLoader = observeBootLoader(this.load, (state) => {
+      BootScreen.recordLoader(state);
+      BootScreen.setProgress(state.total ? state.processed / state.total : 0);
+      BootScreen.setIndeterminate(true);
+      BootScreen.setStatus(t(state.downloaded === state.total && state.total > 0
+        ? 'ui.boot.processingData' : 'ui.boot.loadingData'));
+      BootScreen.setDetail(t('ui.boot.assetProgress', {
+        downloaded: state.downloaded, processed: state.processed, total: state.total,
+      }));
+    }, () => {
+      BootScreen.phase('preparation');
       BootScreen.setStatus(t('ui.boot.preparingLobby'));
-      BootScreen.setProgress(BOOT_PRELOAD_PROGRESS_SHARE);
+      BootScreen.setDetail('');
+      BootScreen.setIndeterminate(true);
     });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupLoader);
+    onBootSceneTeardown(this.events, cleanupLoader);
 
     preloadAllAudio(this.load);
     preloadForestAssets(this.load);
@@ -419,6 +419,102 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.initializationReady = false;
+    this.bootRevealPending = true;
+    this.input.enabled = false;
+    if (this.input.keyboard) this.input.keyboard.enabled = false;
+    this.sys.setVisible(false);
+    // Phaser ignores create() promises and marks the scene RUNNING afterwards. Pause on
+    // CREATE instead, so timers, physics and event-driven systems cannot tick partial state.
+    this.events.once(Phaser.Scenes.Events.CREATE, () => this.sys.pause());
+    bridge.clearPlayerCallbacks();
+    let pendingFailure: string | null = null;
+    let kicked = false;
+    const onFailure = (message: string) => {
+      if (!this.initializationReady) { pendingFailure = message; return; }
+      if (bridge.getGamePhase() === 'ARENA') this.meta?.abortMatchResults(message);
+      this.arenaRuntime.terminateMatch(message);
+    };
+    const onKicked = () => {
+      if (!this.initializationReady) { kicked = true; return; }
+      this.lobbyOverlay.showHostDisconnectedMessage(t('ui.lobby.kickedFromRoom'));
+    };
+    const removeFailure = bridge.onNetworkFailure(onFailure);
+    const removeKicked = bridge.onKicked(onKicked);
+    const cancel = () => {
+      this.initializationReady = false;
+      this.bootPreparation?.cancel();
+      this.bootPreparation = null;
+      removeFailure(); removeKicked();
+      bridge.clearPlayerCallbacks();
+      this.game.events.off(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
+      if (this.bootRevealPending) BootScreen.phase('cancelled');
+      BootScreen.dismissImmediate();
+    };
+    onBootSceneTeardown(this.events, cancel);
+    this.bootPreparation = new BootPreparation(this.prepareLobby(),
+      (name, durationMs) => BootScreen.recordStep(name, durationMs),
+      () => {
+        this.initializationReady = true;
+        this.bootPreparation = null;
+        BootScreen.phase('reveal');
+        if (pendingFailure !== null) onFailure(pendingFailure);
+        if (kicked) onKicked();
+        this.sys.setVisible(true);
+        this.sys.resume();
+      },
+      error => {
+        this.initializationReady = false;
+        BootScreen.phase('failed', error);
+        try { this.sys.shutdown(); }
+        finally { this.game.events.emit(BOOT_ERROR_EVENT, error); }
+      });
+    this.bootPreparation.start();
+  }
+
+  private *prepareLobby(): Generator<string, void> {
+    onBootSceneTeardown(this.events, () => {
+      this.cancelArenaExitRenderWait();
+      this.arenaExitFadeOverlay?.destroy();
+      this.arenaExitFadeOverlay = null;
+      this.matchResultsOverlay?.destroy();
+      this.coopDefenseBalanceReportOverlay?.destroy();
+      this.coopDefenseBalanceReportOverlay = null;
+      this.roomStatisticsOverlay?.destroy();
+      this.roomStatisticsOverlay = null;
+      this.itemRewardOverlay?.destroy();
+      this.itemsOverlay?.destroy();
+    });
+    onBootSceneTeardown(this.events, () => {
+      this.lobbyOverlay?.destroy();
+      this.aimPresentation?.destroy();
+      this.aimPresentation = null;
+      this.renderers?.healthBars.destroy();
+      this.combatPresentation?.destroy();
+      this.combatPresentation = null;
+      this.persistentBaseVisuals?.destroy();
+      this.persistentBasePreviewRenderer?.destroy();
+      this.timeOfDayDebugOverlay?.destroy();
+      this.timeOfDayDebugOverlay = null;
+      this.weaponBalanceLabRuntime?.cancel();
+      this.weaponBalanceLabOverlay?.destroy();
+      this.weaponBalanceLabOverlay = null;
+      this.coopDefenseDebugOverlay?.destroy();
+      this.coopDefenseDebugOverlay = null;
+      this.coopDefenseUpgradesOverlay?.destroy();
+      this.coopDefenseUpgradesOverlay = null;
+      this.meta?.destroy();
+      this.meta = null;
+      // Der Ring lebt so lange wie die Szene. Ohne diesen Aufruf bliebe seine
+      // Qualitaets-Subscription im szenenuebergreifenden GraphicsQualityController haengen.
+      this.playerStatusRing?.destroy();
+      this.playerStatusRing = null;
+      this.coopMissionPresentation?.destroy();
+      this.captureTheBeerPresentation?.destroy();
+      this.removeReconnectStatusListener?.();
+      this.removeReconnectStatusListener = null;
+    });
+
     applyArenaMetricsForMode(
       bridge.getGameMode(),
       bridge.getGamePhase(),
@@ -433,7 +529,7 @@ export class ArenaScene extends Phaser.Scene {
     this.clarityCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height, false, 'clarity');
     this.clarityRegistry = new ClarityCameraRegistry(this, this.cameras.main, this.clarityCamera);
     this.clarityRegistry.install();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    onBootSceneTeardown(this.events, () => {
       this.clarityRegistry?.destroy();
       this.clarityRegistry = null;
       this.clarityCamera = null;
@@ -441,7 +537,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bindCameraToDesignSpace();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.bindCameraToDesignSpace, this);
     const uninstallTextResolution = installTextResolution(this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    onBootSceneTeardown(this.events, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.bindCameraToDesignSpace, this);
       uninstallTextResolution();
     });
@@ -449,13 +545,13 @@ export class ArenaScene extends Phaser.Scene {
     this.graphicsQuality = new GraphicsQualityController(
       __PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__ ? 'high' : getStoredGraphicsQuality());
     this.graphicsQuality.attach(this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.graphicsQuality.destroy());
+    onBootSceneTeardown(this.events, () => this.graphicsQuality.destroy());
     this.graphicsQuality.subscribe((profile) => {
       getRenderResolutionController()?.setMaxRenderScale(profile.maxRenderScale);
     });
     getRenderResolutionController()?.setMaxRenderScale(this.graphicsQuality.getProfile().maxRenderScale);
     installSharedGlowSystem(this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => destroySharedGlowSystem(this));
+    onBootSceneTeardown(this.events, () => destroySharedGlowSystem(this));
     this.diagnostics = new ArenaDiagnosticsController({
       scene: this,
       game: this.game,
@@ -513,7 +609,7 @@ export class ArenaScene extends Phaser.Scene {
         aimGraphicsCommandCount: this.aimPresentation?.getAimGraphicsCommandCount() ?? 0,
       }),
     });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    onBootSceneTeardown(this.events, () => {
       this.diagnostics?.destroy();
       this.diagnostics = null;
     });
@@ -534,7 +630,7 @@ export class ArenaScene extends Phaser.Scene {
     registerBadgerAnimations(this.anims);
     registerTurretAnimations(this.anims);
 
-    bridge.clearPlayerCallbacks();
+    yield 'cameras-and-diagnostics';
     if (__PERFORMANCE_LAB__ && this.diagnostics) startPerformanceCapture(this.diagnostics);
 
     // ── Static arena (never destroyed) ────────────────────────────────────
@@ -559,19 +655,12 @@ export class ArenaScene extends Phaser.Scene {
       getStoredEffectsVolume(),
       getStoredMusicVolume(),
     );
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => gameAudioSystem.cleanup());
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, bindUiAudio(this, gameAudioSystem));
-    bridge.registerAudioFeedbackHandler(event => {
-      if (event.position) {
-        gameAudioSystem.playSound(event.key, event.position.x, event.position.y, event.position.emitterId);
-      } else {
-        gameAudioSystem.playLocalSound(event.key);
-      }
-    });
+    onBootSceneTeardown(this.events, () => gameAudioSystem.cleanup());
+    onBootSceneTeardown(this.events, bindUiAudio(this, gameAudioSystem));
     const unsubscribeDeferredAssets = getDeferredAssets(this).subscribe(state => {
       bridge.setLocalDeferredAssetsReady(state.ready);
     });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubscribeDeferredAssets);
+    onBootSceneTeardown(this.events, unsubscribeDeferredAssets);
     const smokeSystem      = new SmokeSystem(this);
     const fireSystem       = new FireSystem(this);
     this.diagnostics?.subscribeDiagnostics((enabled) => {
@@ -614,10 +703,12 @@ export class ArenaScene extends Phaser.Scene {
       return this.arenaRuntime?.getEnemySilhouette(targetId) ?? null;
     });
     effectSystem.setHitFeedbackRenderer(this.visualFeedback.hitFeedback);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    onBootSceneTeardown(this.events, () => {
       this.visualFeedback?.destroy();
       this.visualFeedback = null;
     });
+
+    yield 'scene-systems';
 
     // ── UI (scene-lifetime) ────────────────────────────────────────────────
     const leftPanel  = new LeftSidePanel(
@@ -628,6 +719,8 @@ export class ArenaScene extends Phaser.Scene {
       () => this.handleImportedGameProgress(),
     );
     leftPanel.build();
+    onBootSceneTeardown(this.events, () => leftPanel.destroy());
+    yield 'left-panel';
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
     this.coopMissionPresentation = new CoopMissionPresentationInfrastructure(this);
@@ -775,6 +868,7 @@ export class ArenaScene extends Phaser.Scene {
       (minutes, settled) => this.applyDebugTimeOfDay(minutes, settled),
       () => this.clearDebugTimeOfDay(),
     );
+    yield 'hud-and-meta';
     this.coopDefenseUpgradesOverlay = new CoopDefenseUpgradesOverlay(
       this,
       () => this.meta!.getProgress(),
@@ -795,6 +889,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.meta?.applyUpgradeChanges(),
     );
     this.coopDefenseUpgradesOverlay.build();
+    yield 'upgrade-overlay';
     this.itemRewardOverlay = new CoopDefenseItemRewardOverlay(
       this,
       (roundEndedAt, offerUid, salvageUid, action) => Boolean(
@@ -807,6 +902,7 @@ export class ArenaScene extends Phaser.Scene {
       },
     );
     this.itemRewardOverlay.build();
+    yield "reward-overlay";
     this.itemsOverlay = new CoopDefenseItemsOverlay(
       this,
       () => this.meta!.getItemsOverlayState(),
@@ -817,6 +913,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.lobbyOverlay.setReadyButtonState(false),
     );
     this.itemsOverlay.build();
+    yield "items-overlay";
     this.matchResultsOverlay = new MatchResultsOverlay(this, () => {
       // Die Netzwerkphase ist bereits LOBBY. Der lokale Layer gibt lediglich die darunter
       // Lobby frei, auch wenn ihr Aufbau noch laeuft; Ready bleibt weiterhin false.
@@ -829,22 +926,13 @@ export class ArenaScene extends Phaser.Scene {
       );
     }, () => this.openBalanceFeedback());
     this.matchResultsOverlay.build();
+    yield "results-overlay";
     this.roomStatisticsOverlay = new RoomStatisticsOverlay(this);
     this.roomStatisticsOverlay.build();
+    yield "statistics-overlay";
     this.arenaExitFadeOverlay = new ArenaExitFadeOverlay(this);
     this.arenaExitFadeOverlay.build();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.cancelArenaExitRenderWait();
-      this.arenaExitFadeOverlay?.destroy();
-      this.arenaExitFadeOverlay = null;
-      this.matchResultsOverlay?.destroy();
-      this.coopDefenseBalanceReportOverlay?.destroy();
-      this.coopDefenseBalanceReportOverlay = null;
-      this.roomStatisticsOverlay?.destroy();
-      this.roomStatisticsOverlay = null;
-      this.itemRewardOverlay?.destroy();
-      this.itemsOverlay?.destroy();
-    });
+
 
     const arenaCountdown = new ArenaCountdownOverlay(
       this,
@@ -868,19 +956,12 @@ export class ArenaScene extends Phaser.Scene {
     };
 
     // ── Renderers ─────────────────────────────────────────────────────────
-    this.renderers = createRendererBundle(this, playerManager);
+    yield 'context';
+    this.renderers = yield* createRendererBundleSteps(this, playerManager);
     this.captureTheBeerPresentation = new CaptureTheBeerPresentationBinding(this.renderers.beer);
     // Der Profiler entsteht vor dem Renderer-Bundle; die GPU-VFX-Statistik wird deshalb hier
     // nachgereicht. Ohne sie fehlen Lanes und Effekte im Performance-Export vollstaendig.
     this.diagnostics?.attachGpuVfx(this.renderers.gpuVfx);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.renderers?.explosionGpu.clearPending();
-      this.renderers?.combatGoreGpu.destroy();
-      this.renderers?.movement.destroy();
-      this.renderers?.burrowGpu.destroy();
-      this.renderers?.constructionOwnershipMotes.destroy();
-      this.renderers?.gpuVfx.destroy();
-    });
     this.diagnostics?.subscribeDiagnostics((enabled) => {
       const detailed = enabled && this.diagnostics?.wantsDetailedSampling() === true;
       this.renderers?.lighting.setPerformanceMetricsEnabled(detailed);
@@ -912,7 +993,6 @@ export class ArenaScene extends Phaser.Scene {
     );
     inputSystem.setCameraFeedback(this.visualFeedback.camera);
 
-    effectSystem.setup(() => { aimSystem.notifyConfirmedHit(); });
 
     // ── Shared state & helpers ─────────────────────────────────────────────
     this.localPlayerState = new LocalPlayerState();
@@ -1009,6 +1089,8 @@ export class ArenaScene extends Phaser.Scene {
       this.clientUpdate?.setPerformanceMetricsEnabled(enabled);
     });
 
+    yield 'renderer-bindings-and-coordinators';
+
     // ── Lobby overlay & room-quality ───────────────────────────────────────
     this.lobbyOverlay = new LobbyOverlay(
       this, bridge,
@@ -1027,6 +1109,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel.getLobbyContentContainer(),
     );
     this.lobbyOverlay.build();
+    yield 'lobby-overlay';
     this.lobbyOverlay.setResultsReplayHandler(() => {
       const presentation = this.meta?.getLastMatchResultsPresentation();
       const roundEndedAt = presentation?.leaderboard[0]?.roundEndedAt ?? null;
@@ -1047,7 +1130,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel.getBackdropSurface(),
       ...getForestModalSurfaces(this),
     ]);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobbyBackdrop.destroy());
+    onBootSceneTeardown(this.events, () => lobbyBackdrop.destroy());
     leftPanel.setLocaleSelectionBinding({
       canChange: () => bridge.getGamePhase() === 'LOBBY',
       onChanged: () => {
@@ -1062,6 +1145,9 @@ export class ArenaScene extends Phaser.Scene {
 
     this.roomQualityMonitor = new RoomQualityMonitor(bridge);
 
+    yield 'lobby-bindings';
+
+    // No checkpoints from here through commit: publish callbacks only with all dependencies built.
     // ── RPC + Lifecycle coordinators ──────────────────────────────────────
     this.arenaRuntime   = new ArenaRuntime({
       scene: this,
@@ -1084,7 +1170,7 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.arenaRuntime.setRuntimeDiagnosticEventSink(this.diagnostics?.getSemanticEventSink() ?? null);
     if (__PERFORMANCE_LAB__) {
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      onBootSceneTeardown(this.events, () => {
         if (window.__FD_PERF__ && !['failed', 'complete'].includes(window.__FD_PERF__.state)) failPerformanceLab('Scene shutdown during capture');
       });
       attachPerformanceLab(async () => {
@@ -1141,6 +1227,14 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaRuntime.rpcPorts.train,
       () => bridge.getSynchronizedNow(),
     );
+    bridge.registerAudioFeedbackHandler(event => {
+      if (event.position) {
+        gameAudioSystem.playSound(event.key, event.position.x, event.position.y, event.position.emitterId);
+      } else {
+        gameAudioSystem.playLocalSound(event.key);
+      }
+    });
+    effectSystem.setup(() => { aimSystem.notifyConfirmedHit(); });
     this.rpcCoordinator.registerAll();
     // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).
     leftPanel.setAbortMatchBinding({
@@ -1163,9 +1257,6 @@ export class ArenaScene extends Phaser.Scene {
     bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
     bridge.onSpectatorEntered(id => this.arenaRuntime.handleSpectatorEntered(id));
-    bridge.onKicked(() => {
-      this.lobbyOverlay.showHostDisconnectedMessage(t('ui.lobby.kickedFromRoom'));
-    });
     this.removeReconnectStatusListener = bridge.onReconnectStatus((status) => {
       if (status.state === 'reconnecting' || status.state === 'resumed') {
         this.coopMissionPresentation.resetMapEventsForHydration();
@@ -1177,15 +1268,6 @@ export class ArenaScene extends Phaser.Scene {
         this.arenaRuntime.handleGuestSessionOwnerRemoved(status.playerId);
       }
     });
-    // Verbindungsabbruch: es gibt keinen Hostwechsel und keinen Ersatztransport, die Partie
-    // endet mit der konkreten Ursache statt still weiterzulaufen.
-    bridge.onNetworkFailure(message => {
-      if (bridge.getGamePhase() === 'ARENA') {
-        this.meta?.abortMatchResults(message);
-      }
-      this.arenaRuntime.terminateMatch(message);
-    });
-
     this.arenaRuntime.initialize();
     inputSystem.setupTurretControlProviders({
       getTurrets: () => this.arenaRuntime.getTurretDefinitions(),
@@ -1301,38 +1383,9 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.inputBindings = inputBindings;
     inputBindings.setup();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    onBootSceneTeardown(this.events, () => {
       inputBindings.destroy();
       if (this.inputBindings === inputBindings) this.inputBindings = null;
-    });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.lobbyOverlay?.destroy();
-      this.aimPresentation?.destroy();
-      this.aimPresentation = null;
-      this.renderers.healthBars.destroy();
-      this.combatPresentation?.destroy();
-      this.combatPresentation = null;
-      this.persistentBaseVisuals?.destroy();
-      this.persistentBasePreviewRenderer?.destroy();
-      this.timeOfDayDebugOverlay?.destroy();
-      this.timeOfDayDebugOverlay = null;
-      this.weaponBalanceLabRuntime?.cancel();
-      this.weaponBalanceLabOverlay?.destroy();
-      this.weaponBalanceLabOverlay = null;
-      this.coopDefenseDebugOverlay?.destroy();
-      this.coopDefenseDebugOverlay = null;
-      this.coopDefenseUpgradesOverlay?.destroy();
-      this.coopDefenseUpgradesOverlay = null;
-      this.meta?.destroy();
-      this.meta = null;
-      // Der Ring lebt so lange wie die Szene. Ohne diesen Aufruf bliebe seine
-      // Qualitaets-Subscription im szenenuebergreifenden GraphicsQualityController haengen.
-      this.playerStatusRing?.destroy();
-      this.playerStatusRing = null;
-      this.coopMissionPresentation.destroy();
-      this.captureTheBeerPresentation?.destroy();
-      this.removeReconnectStatusListener?.();
-      this.removeReconnectStatusListener = null;
     });
     bridge.sendPingToHost();
     this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
@@ -1344,13 +1397,14 @@ export class ArenaScene extends Phaser.Scene {
     // Erst nach dem Rendern pruefen: auch UI, Kamera und die in diesem Frame gebackenen
     // Flaechen muessen bereits im fertigen Bild stehen, bevor der Bootscreen weicht.
     this.game.events.on(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    onBootSceneTeardown(this.events, () => {
       this.game.events.off(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
       BootScreen.dismissImmediate();
     });
   }
 
   update(_time: number, delta: number): void {
+    if (!this.initializationReady) return;
     const companionDiagnosticsActive = this.diagnostics?.isDiagnosticsActive() ?? false;
     const diagnosticsFrame: ArenaDiagnosticsFrame | null = this.diagnostics?.beginFrame() ?? null;
     // Vor allem anderen, damit die Diagnose-Zaehlungen weiter unten den abgeschalteten
@@ -2621,19 +2675,20 @@ export class ArenaScene extends Phaser.Scene {
    * Nur ein fertiger Ausschnitt oder ein expliziter Abbruch gibt ihn frei, keine Zeitfrist.
    */
   private syncBootReveal(): void {
+    if (!this.initializationReady || !this.bootRevealPending) return;
     // Ein terminaler Lobby-Fehler muss auch ohne World sichtbar werden. Wer mitten in eine
     // laufende Partie kommt, bekommt stattdessen den eigenen Ladeschleier der Arena.
     const reveal = bridge.getGamePhase() === 'LOBBY' && !this.lobbyOverlay.hasTerminalFailure()
       ? this.arenaRuntime.getWorldRevealState(getVisibleWorldView(this.cameras.main))
       : { ready: true, progress: 100 };
     if (!reveal.ready) {
-      const share = Phaser.Math.Clamp((reveal.progress - 70) / 30, 0, 1);
-      BootScreen.setProgress(
-        BOOT_PRELOAD_PROGRESS_SHARE + (1 - BOOT_PRELOAD_PROGRESS_SHARE) * share,
-      );
+      BootScreen.setIndeterminate(true);
       return;
     }
     this.bootRevealPending = false;
+    BootScreen.phase('ready');
+    this.input.enabled = true;
+    if (this.input.keyboard) this.input.keyboard.enabled = true;
     this.game.events.off(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
     BootScreen.setProgress(1);
     void BootScreen.fadeOut().then(() => {

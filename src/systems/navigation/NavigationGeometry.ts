@@ -14,6 +14,13 @@ export interface NavigationPoint { readonly x: number; readonly y: number }
 const EPSILON = 1e-6;
 const BUCKET = 64;
 
+function overlapsBounds(obstacle: NavigationObstacle, left: number, top: number, right: number, bottom: number): boolean {
+  return obstacle.shape === 'rect'
+    ? obstacle.right >= left && obstacle.left <= right && obstacle.bottom >= top && obstacle.top <= bottom
+    : obstacle.x + obstacle.radius >= left && obstacle.x - obstacle.radius <= right
+      && obstacle.y + obstacle.radius >= top && obstacle.y - obstacle.radius <= bottom;
+}
+
 function pointSegmentDistanceSq(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
   const dx = bx - ax, dy = by - ay, lengthSq = dx * dx + dy * dy;
   const t = lengthSq ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq)) : 0;
@@ -97,6 +104,22 @@ export class NavigationGeometry {
     });
     return !blocked;
   }
+
+  /** Exact narrow phase for a caller-owned conservative broad-phase envelope.
+   * Reusing candidates never bypasses world bounds or the swept capsule test.
+   */
+  canMoveAgainst(ax: number, ay: number, bx: number, by: number, radius: number,
+    obstacles: readonly NavigationObstacle[]): boolean {
+    if (!this.contains(ax, ay, radius) || !this.contains(bx, by, radius)) return false;
+    const threshold = Math.max(EPSILON, radius - EPSILON) ** 2;
+    const left = Math.min(ax, bx) - radius, right = Math.max(ax, bx) + radius;
+    const top = Math.min(ay, by) - radius, bottom = Math.max(ay, by) + radius;
+    for (const obstacle of obstacles) {
+      if (!overlapsBounds(obstacle, left, top, right, bottom)) continue;
+      if (segmentObstacleDistanceSq(ax, ay, bx, by, obstacle) < threshold) return false;
+    }
+    return true;
+  }
   visit(ax: number, ay: number, bx: number, by: number, radius: number,
     visitor: (obstacle: NavigationObstacle) => boolean): void {
     if (++this.stamp >= 0xffffffff) { this.stamps.fill(0); this.stamp = 1; }
@@ -111,10 +134,7 @@ export class NavigationGeometry {
           if (this.stamps[index] === this.stamp) continue;
           this.stamps[index] = this.stamp;
           const obstacle = this.snapshot.obstacles[index];
-          if (obstacle.shape === 'rect') {
-            if (obstacle.right < left || obstacle.left > right || obstacle.bottom < top || obstacle.top > bottom) continue;
-          } else if (obstacle.x + obstacle.radius < left || obstacle.x - obstacle.radius > right
-            || obstacle.y + obstacle.radius < top || obstacle.y - obstacle.radius > bottom) continue;
+          if (!overlapsBounds(obstacle, left, top, right, bottom)) continue;
           if (visitor(obstacle)) return;
         }
       }

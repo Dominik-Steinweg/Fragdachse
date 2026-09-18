@@ -3,7 +3,7 @@ import { DEPTH } from '../config';
 import type { WaterCell } from '../types';
 import { ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX,
   type ChunkWorldFrame, type ChunkWorldRect } from './chunks/ArenaChunkGrid';
-import { WaterSurfaceModel, WATER_MASK_HALO, type WaterMask } from './WaterSurfaceModel';
+import { WaterSurfaceModel, WATER_MASK_HALO, type WaterMask, type WaterMaskView } from './WaterSurfaceModel';
 import { WATER_FRAGMENT, WATER_SHADER_NAME } from './waterSurfaceShader';
 
 let nextWaterSurfaceId = 0;
@@ -49,6 +49,15 @@ export class WaterSurfaceRenderer {
   }
 
   isPrepared(): boolean { return !this.destroyed && this.preparation === null; }
+
+  /** Borrow the immutable CPU masks. The presentation owner retains their lifetime. */
+  *getPreparedMasks(): Generator<{ readonly x: number; readonly y: number; readonly mask: WaterMaskView }> {
+    if (!this.isPrepared()) throw new Error('[WaterSurfaceRenderer] Masks are not prepared');
+    for (const [key, mask] of this.masks) {
+      const [cx, cy] = key.split(',').map(Number);
+      yield { x: cx * ARENA_RENDER_CHUNK_SIZE, y: cy * ARENA_RENDER_CHUNK_SIZE, mask };
+    }
+  }
 
   getPreparationState(): { pending: number; completed: number; bytes: number } {
     const bytes = this.masks.size * (this.masks.values().next().value?.data.byteLength ?? 0);

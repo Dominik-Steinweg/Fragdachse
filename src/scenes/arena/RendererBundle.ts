@@ -1,3 +1,4 @@
+import { onBootSceneTeardown } from '../../ui/BootPreparation';
 import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
 import { TurretAnimationController } from '../../effects/TurretAnimationController';
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
@@ -136,87 +137,124 @@ export interface RendererBundle {
   translocatorTeleport: TranslocatorTeleportRenderer | null;
 }
 
+/** Synchronous entry point for callers that already own their scheduling. */
+export function createRendererBundle(scene: Phaser.Scene, owners: OwnerVisualSource): RendererBundle {
+  const steps = createRendererBundleSteps(scene, owners);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
 /** Create and generate textures for all scene-lifetime renderers. */
-export function createRendererBundle(
+export function* createRendererBundleSteps(
   scene: Phaser.Scene,
   owners: OwnerVisualSource,
-): RendererBundle {
+): Generator<string, RendererBundle> {
+  // Register ownership before the first checkpoint, including cancellation of a partial bundle.
+  const cleanup: Array<() => void> = [];
+  onBootSceneTeardown(scene.events, () => {
+    for (const dispose of cleanup.reverse()) dispose();
+  });
   // Vor allen Renderern: das Backend baut den geteilten Atlas und alle Render-Lanes. Beides
   // muss stehen, bevor ein Effekt sich anmeldet – Frames, die erst nach dem Layer entstehen,
   // existieren fuer dessen Shader nicht.
   const gpuVfx = new GpuVfxSystem(scene);
+  cleanup.push(() => gpuVfx.destroy());
+  yield 'renderers/gpu-atlas-and-lanes';
   const burrowGpu = new BurrowGpuRenderer(gpuVfx);
+  cleanup.push(() => burrowGpu.destroy());
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
   // melden sich hier an, statt je Brand eigene Emitter oder Callbacks zu erzeugen.
   const entityBurnGpu = new EntityBurnGpuController(gpuVfx);
   const mgAttrition = new MgAttritionRenderer(scene, gpuVfx);
   const combatGoreGpu = new CombatGoreGpuRenderer(scene);
+  cleanup.push(() => combatGoreGpu.destroy());
   combatGoreGpu.registerGpuVfx(gpuVfx);
   const explosionGpu = new ExplosionGpuRenderer();
+  cleanup.push(() => explosionGpu.clearPending());
   explosionGpu.registerGpuVfx(gpuVfx);
 
   const bullet = new BulletRenderer(scene);
   bullet.generateTextures();
+  yield 'renderers/bullet';
 
   const asmdPrimary = new AsmdPrimaryRenderer(scene);
   asmdPrimary.generateTextures();
+  yield 'renderers/asmdPrimary';
 
   const plasmaBurner = new PlasmaBurnerRenderer(scene);
   plasmaBurner.generateTextures();
+  yield 'renderers/plasmaBurner';
   plasmaBurner.setOwnerVisualStateProvider((ownerId) => owners.getOwnerVisualState(ownerId));
 
   const bite = new BiteRenderer(scene);
   bite.generateTextures();
+  yield 'renderers/bite';
 
   const blackHole = new BlackHoleRenderer(scene);
   blackHole.generateTextures();
+  yield 'renderers/blackHole';
 
   const zeusTaser = new ZeusTaserRenderer(scene);
   zeusTaser.registerGpuVfx(gpuVfx);
   zeusTaser.generateTextures();
+  yield 'renderers/zeusTaser';
 
   const flame = new FlameRenderer(scene);
   flame.generateTextures();
+  yield 'renderers/flame';
   flame.registerGpuVfx(gpuVfx);
 
   const leafBlower = new LeafBlowerRenderer(scene);
   leafBlower.generateTextures();
+  yield 'renderers/leafBlower';
   leafBlower.registerGpuVfx(gpuVfx);
 
   const bfg = new BfgRenderer(scene);
   bfg.generateTextures();
+  yield 'renderers/bfg';
 
   const energyBall = new EnergyBallRenderer(scene);
   energyBall.generateTextures();
+  yield 'renderers/energyBall';
 
   const hydra = new HydraRenderer(scene);
   hydra.generateTextures();
+  yield 'renderers/hydra';
 
   const gauss = new GaussRenderer(scene);
   gauss.generateTextures();
+  yield 'renderers/gauss';
 
   const energyShield = new EnergyShieldRenderer(scene);
   energyShield.generateTextures();
+  yield 'renderers/energyShield';
 
   const turretAnimations = new TurretAnimationController();
   const teslaDome = new TeslaDomeRenderer(scene, turretAnimations);
   teslaDome.generateTextures();
+  yield 'renderers/teslaDome';
 
   // Blitznova und Gewitterprojektile sind eigene Effektfamilien, haengen aber am selben Feldpuls.
   const teslaNova = new TeslaNovaRenderer(scene);
   teslaNova.generateTextures();
+  yield 'renderers/teslaNova';
   teslaDome.setNovaRenderer(teslaNova);
 
   const teslaBolt = new TeslaBoltRenderer(scene);
   teslaBolt.generateTextures();
+  yield 'renderers/teslaBolt';
 
   const healingAura = new HealingAuraRenderer(scene);
   healingAura.generateTextures();
+  yield 'renderers/healingAura';
 
   const guardianSpirit = new GuardianSpiritRenderer(scene);
   guardianSpirit.generateTextures();
+  yield 'renderers/guardianSpirit';
   const repairDrone = new RepairDroneRenderer(scene);
   repairDrone.generateTextures();
+  yield 'renderers/repairDrone';
 
   const slimeTrail = new SlimeTrailRenderer(scene);
   const corpseMarker = new CorpseMarkerRenderer(scene);
@@ -228,38 +266,49 @@ export function createRendererBundle(
 
   const miniTeslaDome = new MiniTeslaDomeRenderer(scene);
   miniTeslaDome.generateTextures();
+  yield 'renderers/miniTeslaDome';
 
   const timeBubble = new TimeBubbleRenderer(scene);
   timeBubble.generateTextures();
+  yield 'renderers/timeBubble';
 
   const reinforcementMatrix = new ReinforcementMatrixRenderer(scene);
   reinforcementMatrix.generateTextures();
+  yield 'renderers/reinforcementMatrix';
 
   const energyInjector = new EnergyInjectorRenderer(scene);
   energyInjector.generateTextures();
+  yield 'renderers/energyInjector';
 
   const remoteControl = new RemoteControlRenderer(scene);
   remoteControl.generateTextures();
+  yield 'renderers/remoteControl';
 
   const holyGrenade = new HolyGrenadeRenderer(scene);
   holyGrenade.generateTextures();
+  yield 'renderers/holyGrenade';
 
   const rocket = new RocketRenderer(scene);
   rocket.generateTextures();
+  yield 'renderers/rocket';
   rocket.registerGpuVfx(gpuVfx);
   const fireball = new FireballRenderer(scene);
 
   const spore = new SporeRenderer(scene);
   spore.generateTextures();
+  yield 'renderers/spore';
 
   const grenade = new GrenadeRenderer(scene);
   grenade.generateTextures();
+  yield 'renderers/grenade';
 
   const translocatorPuck = new TranslocatorPuckRenderer(scene);
   translocatorPuck.generateTextures();
+  yield 'renderers/translocatorPuck';
 
   const beer = new CaptureTheBeerRenderer(scene);
   beer.generateTextures();
+  yield 'renderers/beer';
 
   const tracer = new TracerRenderer(scene);
   tracer.registerGpuVfx(gpuVfx);
@@ -268,32 +317,41 @@ export function createRendererBundle(
   muzzleFlash.setOwnerVisualSource(owners);
   muzzleFlash.registerGpuVfx(gpuVfx);
   muzzleFlash.generateTextures();
+  yield 'renderers/muzzleFlash';
 
   const nuke = new NukeRenderer(scene);
   nuke.generateTextures();
+  yield 'renderers/nuke';
 
   const airstrike = new AirstrikeRenderer(scene);
   airstrike.generateTextures();
+  yield 'renderers/airstrike';
   // Geteilte Render-Lanes fuer alle Strikes, szenenlebenslang wie die Texturen.
   airstrike.registerGpuVfx(gpuVfx);
 
   const encounterTelegraph = new CoopDefenseEncounterTelegraphRenderer(scene);
   encounterTelegraph.generateTextures();
+  yield 'renderers/encounterTelegraph';
 
   const secondaryObjectiveMarkers = new CoopDefenseSecondaryObjectiveMarkerRenderer(scene);
   secondaryObjectiveMarkers.build();
+  yield 'renderers/secondaryObjectiveMarkers';
   const missionProgress = new CoopDefenseMissionProgressRenderer(scene);
   const carryZones = new CoopDefenseCarryZoneRenderer(scene);
   const ak47StrategicTargets = new Ak47StrategicTargetRenderer(scene);
   ak47StrategicTargets.build();
+  yield 'renderers/ak47StrategicTargets';
   const objectiveRepairDrones = new CoopDefenseObjectiveRepairDroneRenderer(scene);
   objectiveRepairDrones.build();
+  yield 'renderers/objectiveRepairDrones';
 
   const meteor = new MeteorRenderer(scene);
   meteor.generateTextures();
+  yield 'renderers/meteor';
 
   const rockDestruction = new RockDestructionRenderer(scene);
   rockDestruction.generateTextures();
+  yield 'renderers/rockDestruction';
 
   const powerUp = new PowerUpRenderer(scene);
   powerUp.registerGpuVfx(gpuVfx);
@@ -301,7 +359,9 @@ export function createRendererBundle(
 
   // Dynamische Beleuchtung: scene-lifetime wie der Schatten. Die Lichtquellen melden
   // sich selbst an, deshalb kennen die einzelnen Renderer das System direkt.
+  yield 'renderers/shadows';
   const lighting = new LightingSystem(scene);
+  yield 'renderers/lighting';
   muzzleFlash.setLightingSystem(lighting);
   flame.setLightingSystem(lighting);
   projectileBurn.setLightingSystem(lighting);
@@ -324,15 +384,20 @@ export function createRendererBundle(
   // Projektil-Eigenleuchten läuft nicht hier, sondern zentral über
   // `WorldProjectileRuntime.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
+  const healthBars = new WorldHealthBarRenderer(scene);
+  const constructionOwnershipMotes = new ConstructionOwnershipMoteRenderer(gpuVfx);
+  cleanup.push(() => constructionOwnershipMotes.destroy());
+  const movement = new MovementEffectsRenderer(gpuVfx, burrowGpu);
+  cleanup.push(() => movement.destroy());
   return {
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
-    healthBars: new WorldHealthBarRenderer(scene),
+    healthBars,
     gpuVfx,
-    constructionOwnershipMotes: new ConstructionOwnershipMoteRenderer(gpuVfx),
-    movement: new MovementEffectsRenderer(gpuVfx, burrowGpu),
+    constructionOwnershipMotes,
+    movement,
     burrowGpu,
     combatGoreGpu,
     entityBurnGpu,

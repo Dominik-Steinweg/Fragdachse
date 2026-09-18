@@ -72,6 +72,7 @@ function fixture(host: boolean, outcome = 'victory') {
   const scene = Object.create(ArenaScene.prototype) as any;
   const events = new EventEmitter();
   Object.assign(scene, {
+    initializationReady: true,
     arenaRuntime: flow, lastObservedGamePhase: 'ARENA', weaponBalanceLabPreviousMapId: null,
     arenaExitFadeComplete: false, arenaExitResultsStarted: false, arenaExitResultsRendered: false,
     arenaExitRenderListener: null, arenaExitOutcomeWaitStartedAt: 0, game: { events }, time: { now: 100 },

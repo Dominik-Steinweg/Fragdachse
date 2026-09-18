@@ -1031,8 +1031,12 @@ export class NetworkBridge {
   }
 
   /** Meldet den Abriss der Verbindung (Host weg, Broker weg, kein direkter Weg moeglich). */
-  onNetworkFailure(callback: (message: string) => void): void {
+  onNetworkFailure(callback: (message: string) => void): () => void {
     this.networkFailureCbs.push(callback);
+    return () => {
+      const index = this.networkFailureCbs.indexOf(callback);
+      if (index >= 0) this.networkFailureCbs.splice(index, 1);
+    };
   }
 
   onReconnectStatus(callback: (status: PeerReconnectStatus) => void): () => void {
@@ -1060,8 +1064,12 @@ export class NetworkBridge {
     for (const players of this.weapon2PredictionStates.values()) players.delete(playerId);
   }
 
-  onKicked(callback: () => void): void {
+  onKicked(callback: () => void): () => void {
     this.kickedCbs.push(callback);
+    return () => {
+      const index = this.kickedCbs.indexOf(callback);
+      if (index >= 0) this.kickedCbs.splice(index, 1);
+    };
   }
 
   /** Aktuelle Transportkennzahlen je Verbindung. Fuer Debug-Overlay und Lobby-Anzeige. */

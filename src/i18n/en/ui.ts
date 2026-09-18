@@ -251,6 +251,8 @@ export const enUi = {
   "ui.boot.connecting": "Connecting …",
   "ui.boot.loadingData": "Loading game data …",
   "ui.boot.preparingLobby": "Preparing lobby …",
+  "ui.boot.processingData": "Processing game data …",
+  "ui.boot.assetProgress": "Downloads: {downloaded}/{total} · Processed: {processed}/{total}",
   "ui.boot.reconnecting": "Restoring connection …",
   "ui.reward.persistentBaseUnlocked": "NEW FEATURE UNLOCKED: YOUR BASE",
   "ui.reward.persistentBaseUnlockedHint": "You now own a permanent base. It stands in the training grounds and is your main base on every later map.",

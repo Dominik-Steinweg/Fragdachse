@@ -332,7 +332,7 @@ describe('Lobby exit gates local Arena work', () => {
     f.events.emit('postrender'); f.flow.syncArenaEntryTransition();
     const scene = Object.create(ArenaScene.prototype) as any;
     Object.assign(f.countdown, { update: vi.fn(), syncTo: vi.fn(), isLoading: () => true });
-    Object.assign(scene, { ctx: f.flow.ctx, arenaRuntime: f.flow,
+    Object.assign(scene, { initializationReady: true, ctx: f.flow.ctx, arenaRuntime: f.flow,
       localPlayerState: { alive: true }, getArenaLoadingScreenState: () => ({}) });
     vi.spyOn(bridge, 'isArenaLoading').mockReturnValue(false);
     vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(true);
@@ -340,6 +340,52 @@ describe('Lobby exit gates local Arena work', () => {
     expect(f.countdown.syncTo).not.toHaveBeenCalled();
     f.flow.localArenaLoadReady = true;
     scene.syncArenaFogOverlay(1000, true, false);
+    expect(f.countdown.syncTo).toHaveBeenCalledOnce();
+  });
+
+  it('does not replay the entry reveal when streaming becomes pending after initial readiness', () => {
+    const f = fixture(false, false); f.receiveTarget(); f.flow.onTransitionToArena();
+    f.events.emit('postrender'); f.flow.syncArenaEntryTransition();
+    let renderReady = false;
+    Object.assign(f.flow, {
+      getLocalWorldPresentation: () => ({ required: true }),
+      syncAuthoritativeRoundStartAnchors: vi.fn(),
+      terrainSnapshotReady: true, combatPresentationPrepared: true,
+      renderers: { gpuVfx: { isShaderWarmupComplete: () => true } },
+      worldRuntime: {
+        materialization: { arena: {} }, presentation: { layout: {} },
+        presentationFrame: { getWorldRenderWork: () => ({ pending: renderReady ? 0 : 1, resident: 1, renderReady }) },
+      },
+    });
+    let loading = true;
+    Object.assign(f.countdown, {
+      update: vi.fn(), isLoading: () => loading,
+      syncTo: vi.fn(() => { loading = false; }),
+      showLoading: vi.fn(() => { loading = true; }),
+    });
+    const scene = Object.create(ArenaScene.prototype) as any;
+    Object.assign(scene, { initializationReady: true, ctx: f.flow.ctx, arenaRuntime: f.flow,
+      localPlayerState: { alive: true }, getArenaLoadingScreenState: () => ({}) });
+    vi.spyOn(bridge, 'isArenaLoading').mockReturnValue(false);
+    vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(true);
+    vi.spyOn(bridge, 'isLocalSpectator').mockReturnValue(false);
+    const view = { x: 0, y: 0, width: 100, height: 100 };
+    const frame = () => {
+      f.flow.syncArenaLoadReady(view);
+      scene.syncArenaFogOverlay(1000, true, false);
+    };
+    frame();
+    expect(f.countdown.syncTo).not.toHaveBeenCalled();
+    renderReady = true;
+    frame();
+    expect(f.countdown.syncTo).toHaveBeenCalledOnce();
+    f.countdown.showLoading.mockClear();
+    renderReady = false;
+    frame();
+    expect(bridge.setLocalWorldLoadProgress).toHaveBeenLastCalledWith(20, expect.any(Number), expect.any(String), false);
+    expect(f.countdown.showLoading).not.toHaveBeenCalled();
+    renderReady = true;
+    frame();
     expect(f.countdown.syncTo).toHaveBeenCalledOnce();
   });
 
@@ -372,7 +418,7 @@ describe('Lobby exit gates local Arena work', () => {
   it('runs only the small render budget and networking in the protected Scene frame', () => {
     const f = fixture(); f.flow.onTransitionToArena();
     const scene = Object.create(ArenaScene.prototype) as any;
-    Object.assign(scene, { ctx: f.flow.ctx, arenaRuntime: f.flow,
+    Object.assign(scene, { initializationReady: true, ctx: f.flow.ctx, arenaRuntime: f.flow,
       weaponBalanceLabPreviousMapId: null, syncArenaExitFade: () => false,
       inputBindings: { updateFrame: vi.fn() }, renderers: { gpuVfx: { update: vi.fn() } },
       getArenaLoadingScreenState: () => ({}), resolveArenaFrameSignals: vi.fn() });

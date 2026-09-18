@@ -25,7 +25,11 @@ class MockElement {
     this.eventListeners[event].push({ handler, once: options?.once });
   }
 
-  dispatchEvent(event: { type: string }) {
+  removeEventListener(event: string, handler: (ev?: unknown) => void) {
+    this.eventListeners[event] = (this.eventListeners[event] ?? []).filter(item => item.handler !== handler);
+  }
+
+  dispatchEvent(event: { type: string; target?: MockElement; propertyName?: string }) {
     const list = this.eventListeners[event.type] ?? [];
     for (const item of [...list]) {
       item.handler(event);
@@ -86,16 +90,16 @@ describe('BootScreen DOM controller', () => {
 
     BootScreen.setProgress(0.45, 'Spieldaten werden geladen …');
     expect(bootBarFill.classList.contains('boot-bar-indeterminate')).toBe(false);
-    expect(bootBarFill.style.width).toBe('45.0%');
+    expect(bootBarFill.style.transform).toBe('scaleX(0.45)');
     expect(bootStatus.textContent).toBe('Spieldaten werden geladen …');
   });
 
   it('clamps progress ratio between 0 and 1', () => {
     BootScreen.setProgress(-0.5);
-    expect(bootBarFill.style.width).toBe('0.0%');
+    expect(bootBarFill.style.transform).toBe('scaleX(0)');
 
     BootScreen.setProgress(1.5);
-    expect(bootBarFill.style.width).toBe('100.0%');
+    expect(bootBarFill.style.transform).toBe('scaleX(1)');
   });
 
   it('switches indeterminate state on and off', () => {
@@ -104,10 +108,21 @@ describe('BootScreen DOM controller', () => {
 
     BootScreen.setIndeterminate(true);
     expect(bootBarFill.classList.contains('boot-bar-indeterminate')).toBe(true);
-    expect(bootBarFill.style.width).toBe('');
+    expect(bootBarFill.style.transform).toBe('scaleX(0.5)');
 
     BootScreen.setIndeterminate(false);
     expect(bootBarFill.classList.contains('boot-bar-indeterminate')).toBe(false);
+  });
+
+  it('never retreats or invents progress during unmeasured work', () => {
+    BootScreen.setProgress(.6);
+    BootScreen.setProgress(.4);
+    BootScreen.setProgress(Number.NaN);
+    BootScreen.setIndeterminate();
+    expect(bootBarFill.style.transform).toBe('scaleX(0.6)');
+    BootScreen.setIndeterminate(false);
+    expect(bootBarFill.style.transform).toBe('scaleX(0.6)');
+    expect(bootBarFill.style.width).toBeUndefined();
   });
 
   it('dismisses immediately and removes element from DOM', () => {
@@ -120,7 +135,9 @@ describe('BootScreen DOM controller', () => {
     const fadePromise = BootScreen.fadeOut(50);
     expect(bootScreen.classList.contains('boot-screen-fade-out')).toBe(true);
 
-    bootScreen.dispatchEvent({ type: 'transitionend' });
+    bootScreen.dispatchEvent({ type: 'transitionend', target: bootBarFill, propertyName: 'transform' });
+    expect(mockElements.has('boot-screen')).toBe(true);
+    bootScreen.dispatchEvent({ type: 'transitionend', target: bootScreen, propertyName: 'opacity' });
     await fadePromise;
 
     expect(mockElements.has('boot-screen')).toBe(false);
