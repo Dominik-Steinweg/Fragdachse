@@ -181,6 +181,7 @@ describe('LobbyWorld – authored Geometrie', () => {
     }
     expect(lakes).toHaveLength(2);
     const [left, right] = lakes.sort((a, b) => a[0].gridX - b[0].gridX);
+    expect(left.some(cell => cell.gridX === 0 && cell.gridY === LOBBY_WORLD_HEIGHT_CELLS - 1)).toBe(true);
     expect(right.length).toBeGreaterThan(left.length);
     for (const cell of water) expect(isLobbyBaseReservedCell(cell.gridX, cell.gridY)).toBe(false);
     const waterKeys = new Set(water.map(key));

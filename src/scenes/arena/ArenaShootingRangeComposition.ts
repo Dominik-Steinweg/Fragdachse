@@ -28,7 +28,7 @@ export function composeShootingRangeEnemies(input: ArenaWorldGameplayComposition
     () => bridge.getConnectedPlayers().map(player => player.id));
   gameplay.shootingRange = range;
   const renderer = new ShootingRangeRenderer(input.scene, input.world.metrics);
-  input.worldRuntime.bind({ update: () => renderer.sync(range.snapshot()), destroy: () => renderer.destroy() });
+  input.worldRuntime.bind({ update: () => renderer.sync(range.snapshot(), bridge.getSynchronizedNow()), destroy: () => renderer.destroy() });
   input.placementSystem.setBuildReservation(isShootingRangeBuildReserved);
   input.worldRuntime.bind({ destroy: () => {
     input.placementSystem.setBuildReservation(null);
@@ -74,7 +74,7 @@ export function bindShootingRangeGameplay(input: ArenaWorldGameplayCompositionIn
       || player.isControllingTurret(id) || player.getBurrowPhase(id) !== 'idle'
       || combat.isStunned(id, bridge.getSynchronizedNow()) || ctx.hostPhysics.getDashPhase(id) !== 0 || ctx.hostPhysics.hasForcedMovement(id)) return false;
     const position = shootingRangeControlPosition(metrics, request.control);
-    if (interactionCandidateScore({ x: entity.x, y: entity.y, angle: entity.rotation },
+    if (interactionCandidateScore({ x: entity.x, y: entity.y, angle: entity.getAimAngle() },
       { ...position, radius: SHOOTING_RANGE.interactionRadius }) < WORLD_INTERACTION_RULES.minimumScore) return false;
     const accepted = range.runtime.request(request, bridge.getSynchronizedNow());
     player.refreshArtificialAdrenalineSupply();

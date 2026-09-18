@@ -445,8 +445,6 @@ const ambientRockAnchors: readonly RockClusterAnchor[] = [
   { gridX: 56.8, gridY: 27.5, radiusX: 1.8, radiusY: 1.1, lobeCount: 3 },
   { gridX: 54.1, gridY: 12.6, radiusX: 2.2, radiusY: 2.2, lobeCount: 4 },
   { gridX: 57.3, gridY: 30.4, radiusX: 4.8, radiusY: 3.6 },
-  { gridX: 3.3, gridY: 30.8, radiusX: 3.3, radiusY: 2.3 },
-  { gridX: 5.5, gridY: 28.8, radiusX: 3.0, radiusY: 2.3 },
   { gridX: 38.4, gridY: GRID_ROWS, radiusX: 3.8, radiusY: 4.1, lobeCount: 1 },
   { gridX: 41.8, gridY: 6.8, radiusX: 2.5, radiusY: 1.5 },
   { gridX: 59.0, gridY: 6.4, radiusX: 2.2, radiusY: 1.4 },
@@ -472,13 +470,13 @@ function waterPatch(startX: number, startY: number, rows: readonly string[]): Wa
 }
 
 const lobbyWater: WaterCell[] = [
-  ...waterPatch(1, 26, [
-    '.###..',
-    '#####.',
-    '######',
-    '######',
-    '.#####',
-    '..###.',
+  ...waterPatch(0, 27, [
+    '#####......',
+    '#######....',
+    '########...',
+    '##########.',
+    '###########',
+    '###########',
   ]),
   ...waterPatch(45, 15, [
     '...#####....',
@@ -509,7 +507,6 @@ const ambientRocks: RockCell[] = excludeWater(excludeRectCells(
       [20, GRID_ROWS - 1], [21, GRID_ROWS - 1], [22, GRID_ROWS - 1],
     ]),
     [
-      { gridX: 0, gridY: GRID_ROWS - 1 },
       { gridX: GRID_COLS - 1, gridY: GRID_ROWS - 1 },
     ],
   ),

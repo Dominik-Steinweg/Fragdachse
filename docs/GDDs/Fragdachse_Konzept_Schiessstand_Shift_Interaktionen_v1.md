@@ -1,6 +1,6 @@
 # Fragdachse – Schießstand im Übungsplatz und gemeinsame Shift-Interaktionen
 
-**Version:** 1.2  
+**Version:** 1.3
 **Stand:** 18. September 2026  
 **Status:** Abgestimmtes Funktionskonzept für die erste Umsetzung
 
@@ -39,7 +39,7 @@ Die DPS ist eine Orientierung, kein abschließendes Balanceurteil. Reichweite, R
 
 Die bestehende Lobby soll zunächst nicht vergrößert werden. Die reservierten Bereiche für den Schriftzug und die persistente Basis bleiben erhalten.
 
-Der kleine linke Teich wird **ganz nach links unten in die Ecke** verlegt. Felsen, Bäume und andere Landschaftselemente im künftigen Schießstandbereich werden so umgestellt, dass eine zusammenhängende nutzbare Fläche entsteht. Der Teich liegt außerhalb der Gegner- und Bewegungsfläche.
+Der linke See füllt die **untere linke Ecke bis an beide Kartenränder**; die bisherigen Felsreste dort entfallen. Tafel, Schalter und Ziele sind um eine Rasterzelle nach unten versetzt. Die unterste Kartenzeile wird nicht als Schießstand-Nutzfläche verwendet. Der See liegt außerhalb der Gegner- und Bewegungsfläche.
 
 Die Schussbahn bleibt auch bei ausgeschaltetem Schießstand eine freie Lichtung. Es sollen nicht bei jedem Einschalten Felsen oder Wasser als vermeintlich normale Hindernisse verschwinden.
 
@@ -58,6 +58,8 @@ Es gibt keine feste Schützenposition. Spieler können näher an die Ziele heran
 Die Bedienung rechts oben liegt außerhalb der eigentlichen Schussbahn. Vier jeweils ein Rasterfeld große Mauer-Objekte stehen unmittelbar nebeneinander: von links nach rechts Adrenalinversorgung, Gegner −, Gegner +, Schießstand. Kleine aufliegende Piktogramme zeigen ihre Funktion; Beschriftungen erscheinen nur in der Shift-Aktionshilfe. Die Reihe endet vor der persistenten Basisreserve. Zugang und unmittelbare Bedienpunkte dürfen nicht durch Konstrukte zugestellt werden. Die Tafel links oben wächst nach rechts und verwendet die vorhandene Holztextur mit Button-Rahmen.
 
 Die konkrete Größe und die Abstände werden beim Aufbau an die vorhandene Geometrie angepasst. Ziel ist ein kompakter Schadensschießstand, keine lange Reichweitenteststrecke. Zwischen Gegnern, Kartenrand und Teich bleibt Abstand. Eine zusätzliche Wand direkt hinter den Zielen wird nicht allein als optischer Abschluss eingeführt, da sie Abpraller oder Explosionen verändern könnte.
+
+Die Piktogramme sind transparente, orthografische Metall-Inlays mit verwittertem Messingrand auf den vorhandenen Mauersockeln. Sie werden nur so groß wie für ihre Lesbarkeit nötig dargestellt. Lebende Trainingsziele erhalten einen weichen rötlichen Bodenschein. Die aktive Versorgung wird durch sehr dezente Eckakzente und Lichtflecken im Cyanblau der Adrenalin-Essenz angezeigt; ein durchgehender Rahmen entfällt.
 
 ## 4. Gemeinsame Shift-Interaktionslogik
 
@@ -161,14 +163,14 @@ Gezählt wird der gesamte tatsächlich verursachte Schaden **an den aktuell zum 
 
 Es gibt keine Aufteilung nach Waffe, Spieler oder Schadensart. Schaden an anderen Weltobjekten oder Spielern geht nicht ein. Bei mehreren Gegnern wird der Gesamtschaden summiert, **nicht durch die Gegnerzahl geteilt**.
 
-Solo lässt sich ein eigener Build prüfen; gemeinsam lassen sich auch Teamkombinationen ausprobieren. Für einen ungestörten Einzeltest sprechen sich die Spieler selbst ab. Die Tafel zeigt keine Überschrift und keine erklärende DPS-Beschriftung.
+Solo lässt sich ein eigener Build prüfen; gemeinsam lassen sich auch Teamkombinationen ausprobieren. Für einen ungestörten Einzeltest sprechen sich die Spieler selbst ab. Die Tafel zeigt keine Überschrift; die große Zahl erhält das kurze Präfix „DPS: “.
 
 ### 7.2 Sichtbare Informationen
 
 | Anzeige | Inhalt |
 |---|---|
-| **Große DPS-Zahl** | Schaden über die letzte Sekunde, ohne zusätzliche Beschriftung. |
-| **Vergrößerter Graph** | Verlauf dieser DPS über die letzten 10 Sekunden. Genau eine Linie mit Skalierung. |
+| **Große DPS-Zahl** | „DPS: “ und der Schaden über die letzte Sekunde als schnell lesbarer grober Indikator. |
+| **Vergrößerter Graph** | Verlauf dieser DPS über die letzten 10 Sekunden. Eine feine Linie, dezente Flächenfüllung, zurückhaltendes Raster und Zeitachse. |
 
 Die untere Statuszeile mit Gegnerzahl und Versorgung entfällt. Die Versorgung bleibt durch das Schalter-Piktogramm und die Markierung des Testbereichs erkennbar.
 
@@ -178,7 +180,7 @@ Zusätzliche Ressourcenstatistiken entfallen. Die künstliche Versorgung darf ni
 
 ### 7.3 Berechnung und Darstellung
 
-Als Startparameter gelten ein gleitendes **1-Sekunden-Fenster**, **10 Sekunden Verlauf** und etwa **vier Anzeigeaktualisierungen pro Sekunde**. Diese Darstellungsparameter können nach dem ersten Sichttest angepasst werden, ohne daraus Benutzeroptionen zu machen.
+Es gelten ein gleitendes **1-Sekunden-Fenster** und **10 Sekunden Verlauf**. Der Host erfasst Verlaufspunkte alle **100 ms**. Das Diagramm bewegt sich zwischen bestätigten Punkten kontinuierlich; 200 ms Anzeigeverzögerung ermöglichen lineare Interpolation ohne erfundene Spitzen oder Extrapolation fehlender Pakete. Die große Zahl wird ruhiger, etwa viermal pro Sekunde aktualisiert.
 
 ```text
 DPS(t) = Summe des Schadens an Trainingsgegnern in (t − 1 s, t] / 1 s

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ShootingRangeRuntime } from '../src/shootingRange/ShootingRangeRuntime';
 import { shootingRangeAction, parseShootingRangeRequest, type ShootingRangeControl } from '../src/shootingRange/ShootingRangeContracts';
 import { SHOOTING_RANGE } from '../src/shootingRange/ShootingRangeLayout';
+import { shootingRangeChartPoints } from '../src/shootingRange/ShootingRangeChart';
 import { decodeShootingRange, encodeShootingRange } from '../src/network/shootingRangeCodec';
 
 function fixture() {
@@ -23,6 +24,21 @@ function fixture() {
 }
 
 describe('Lobby shooting range', () => {
+  it('scrolls between confirmed samples without overshooting or extrapolating missing packets', () => {
+    const state = fixture().runtime.snapshot();
+    const interval = SHOOTING_RANGE.sampleIntervalMs;
+    state.samples = [{ at: 0, dps: 0 }, { at: interval, dps: 100 }, { at: interval * 2, dps: 0 }];
+    const halfway = shootingRangeChartPoints(state, interval * 3.5);
+    expect(halfway.at(-1)).toEqual({ x: 1, value: 50 });
+    expect(halfway.every(point => point.x >= 0 && point.x <= 1 && point.value >= 0 && point.value <= 100)).toBe(true);
+    const later = shootingRangeChartPoints(state, interval * 3.75);
+    expect(later[0].x).toBeLessThan(halfway[0].x);
+    expect(later.at(-1)?.value).toBeCloseTo(25);
+    expect(shootingRangeChartPoints(state, interval * 100)).toEqual(shootingRangeChartPoints(state, interval * 4));
+    state.samples = [];
+    expect(shootingRangeChartPoints(state, 1000)).toEqual([]);
+  });
+
   it('preserves surviving slots while adding/removing, and replaces a defeated group only at step end', () => {
     const f = fixture();
     expect(f.runtime.snapshot()).toMatchObject({ enabled: false, targets: [], samples: [] });
@@ -78,16 +94,18 @@ describe('Lobby shooting range', () => {
     f.runtime.finishHostStep(0);
     expect(f.runtime.snapshot().dps).toBe(100);
     const next = f.runtime.snapshot().targets[0]!;
-    f.runtime.recordDamage(target, 99999, 250);
-    f.runtime.recordDamage(next, 20, 250);
-    f.press('plus', 250); f.press('supply', 250);
-    f.runtime.finishHostStep(250);
+    f.runtime.recordDamage(target, 99999, 300);
+    f.runtime.recordDamage(next, 20, 300);
+    f.press('plus', 300); f.press('supply', 300);
+    f.runtime.finishHostStep(300);
     expect(f.runtime.snapshot()).toMatchObject({ dps: 120, scale: 200 });
     f.runtime.finishHostStep(1000);
     expect(f.runtime.snapshot().dps).toBe(20);
-    f.runtime.finishHostStep(1250);
+    f.runtime.finishHostStep(1300);
     expect(f.runtime.snapshot()).toMatchObject({ dps: 0, scale: 200 });
-    expect(f.runtime.snapshot().samples.map(sample => sample.dps)).toEqual([100, 120, 120, 120, 20, 0]);
+    expect(f.runtime.snapshot().samples).toEqual(expect.arrayContaining([
+      { at: 0, dps: 100 }, { at: 300, dps: 120 }, { at: 1000, dps: 20 }, { at: 1300, dps: 0 },
+    ]));
     f.runtime.finishHostStep(12000);
     expect(f.runtime.snapshot().samples).toHaveLength(SHOOTING_RANGE.historyMs / SHOOTING_RANGE.sampleIntervalMs + 1);
     expect(f.runtime.snapshot().samples.every(sample => sample.dps === 0)).toBe(true);
@@ -105,7 +123,7 @@ describe('Lobby shooting range', () => {
     f.runtime.finishHostStep(500);
     const lateJoin = decodeShootingRange(encodeShootingRange(f.runtime.snapshot()));
     expect(lateJoin).toEqual(f.runtime.snapshot());
-    expect(lateJoin!.samples).toHaveLength(3);
+    expect(lateJoin!.samples).toHaveLength(500 / SHOOTING_RANGE.sampleIntervalMs + 1);
     expect(first!.samples).toHaveLength(1);
     expect(lateJoin!.targets[0]).toBeNull();
     expect(decodeShootingRange([0, 1, 100000, 0, [], 0, 100, null, []])).toBeNull();

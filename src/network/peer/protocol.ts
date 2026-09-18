@@ -10,8 +10,8 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-// World shooting range snapshots and revision-bound interaction requests.
-export const PEER_PROTOCOL_VERSION = 17;
+// Shooting range history uses implicit timestamps at 100 ms intervals.
+export const PEER_PROTOCOL_VERSION = 18;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

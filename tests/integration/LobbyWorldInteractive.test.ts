@@ -60,6 +60,12 @@ import { bridge } from '../../src/network/bridge';
 import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
 import { ArenaRuntime } from '../../src/scenes/arena/ArenaRuntime';
+import { bindShootingRangeGameplay } from '../../src/scenes/arena/ArenaShootingRangeComposition';
+import { ShootingRangeRuntime } from '../../src/shootingRange/ShootingRangeRuntime';
+import { SHOOTING_RANGE, shootingRangeControlPosition } from '../../src/shootingRange/ShootingRangeLayout';
+import { shootingRangeAction } from '../../src/shootingRange/ShootingRangeContracts';
+import { resolveWorldMetrics } from '../../src/world/WorldMetrics';
+import { getAimAngleFromPlayerSpriteRotation, getPlayerSpriteRotationFromAimAngle } from '../../src/config';
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { LobbyOverlay } from '../../src/scenes/LobbyOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
@@ -113,6 +119,56 @@ function capabilitiesFor(participation: 'none' | 'interactive' | 'observer'): Re
 }
 
 describe('LobbyWorld – Eintritt und Austritt', () => {
+  it('accepts the displayed switch from every direction throughout the interaction radius', () => {
+    const metrics = resolveWorldMetrics(getAuthoredWorldMetricsProfile(60, 33));
+    const position = shootingRangeControlPosition(metrics, 'supply');
+    const entity = { active: true, x: position.x, y: position.y, rotation: 0,
+      getAimAngle() { return getAimAngleFromPlayerSpriteRotation(this.rotation); } };
+    let nextId = 0;
+    const runtime = new ShootingRangeRuntime({ spawn: () => ({ id: `target-${++nextId}`, generation: nextId }),
+      remove() {}, alive: () => true });
+    const range = { runtime, enemies: { setNavigationIntents() {}, setLethalDamageGuard() {} },
+      allyFlowFields: new Map(), navigation: null as { destroy(): void } | null };
+    const bindings: { destroy(): void }[] = [];
+    const supply = { destroy: vi.fn() };
+    vi.spyOn(bridge, 'isHost').mockReturnValue(true);
+    vi.spyOn(bridge, 'getWorldParticipation').mockReturnValue('interactive');
+    vi.spyOn(bridge, 'isArenaCountdownActive').mockReturnValue(false);
+    vi.spyOn(bridge, 'getSynchronizedNow').mockReturnValue(1000);
+    const register = vi.spyOn(bridge, 'registerShootingRangeHandler').mockImplementation(() => {});
+    try {
+      bindShootingRangeGameplay({ world: { metrics }, ctx: { playerManager: { getPlayer: () => entity },
+        hostPhysics: { getDashPhase: () => 0, hasForcedMovement: () => false } },
+        flow: { getPlayerCapabilities: () => ({ canInteract: true }) },
+        worldRuntime: { bind: (binding: { destroy(): void }) => bindings.push(binding) },
+      } as never, { shootingRange: range, combatRuntime: { scope: { runtimeGeneration: 1 } },
+        combatSystem: { isAlive: () => true, isStunned: () => false },
+        player: { bindArtificialAdrenalineSupply: () => supply, refreshArtificialAdrenalineSupply() {},
+          isControllingTurret: () => false, getBurrowPhase: () => 'idle' },
+      } as never);
+      const handler = register.mock.calls[0][0]!;
+      const press = () => handler('local', { session: runtime.snapshot().session, control: 'supply',
+        action: shootingRangeAction(runtime.snapshot(), 'supply')! });
+      for (let i = 0; i < 8; i++) {
+        const aim = i * Math.PI / 4;
+        entity.rotation = getPlayerSpriteRotationFromAimAngle(aim);
+        entity.x = position.x - Math.cos(aim) * SHOOTING_RANGE.interactionRadius * 0.98;
+        entity.y = position.y - Math.sin(aim) * SHOOTING_RANGE.interactionRadius * 0.98;
+        expect(press(), `aim ${aim}`).toBe(true);
+      }
+      entity.x = position.x - SHOOTING_RANGE.interactionRadius - 1;
+      entity.y = position.y;
+      entity.rotation = getPlayerSpriteRotationFromAimAngle(0);
+      expect(press()).toBe(false);
+    } finally {
+      bindings.forEach(binding => binding.destroy());
+      expect(supply.destroy).toHaveBeenCalledOnce();
+      range.navigation?.destroy();
+      runtime.destroy();
+      vi.restoreAllMocks();
+    }
+  });
+
   it('erlaubt Selbstaufnahme nur, weil die World es ausdruecklich sagt', () => {
     expect(LOBBY_WORLD.participationPolicy?.selfAdmit).toBe(true);
     // Eine Match-World nimmt ausschliesslich auf, wen ihre Activity aufnimmt.

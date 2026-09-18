@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
 import { ShootingRangeRuntime } from '../../src/shootingRange/ShootingRangeRuntime';
+import { SHOOTING_RANGE } from '../../src/shootingRange/ShootingRangeLayout';
 import { FakeNetwork, createHostRoom, addClientRoom, type TestRoom } from '../fakePeerNetwork';
 
 describe('shooting range World requests and replication', () => {
@@ -53,7 +54,7 @@ describe('shooting range World requests and replication', () => {
       publish(500, true); // The next host frame fulfills the existing late-join full-state request.
       use(lateRoom);
       expect(late.getLatestGameState()?.shootingRange).toEqual(runtime.snapshot());
-      expect(late.getLatestGameState()?.shootingRange?.samples).toHaveLength(3);
+      expect(late.getLatestGameState()?.shootingRange?.samples).toHaveLength(500 / SHOOTING_RANGE.sampleIntervalMs + 1);
       use(hostRoom); host.publishWorldAndActivity({ ...world, worldRevision: 2 }, null);
       expect(await clientRoom.room.callHost('shooting-range', { wr: 1, session: 1, control: 'power', action: 'disable' }, 500)).toBe(false);
       expect(received).toHaveLength(3);

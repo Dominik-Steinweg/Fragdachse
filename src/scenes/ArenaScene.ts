@@ -1,4 +1,5 @@
 import { getDeferredAssets } from '../assets/DeferredAssets';
+import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import * as Phaser from 'phaser';
 import { bindUiAudio } from '../ui/UiAudio';
@@ -340,6 +341,9 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('bg_tracks', './assets/sprites/BahnstreckeSchienen.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('walls', './assets/sprites/walls47blob.png', { frameWidth: 32, frameHeight: 32 });
+    for (const control of SHOOTING_RANGE_CONTROLS) {
+      this.load.image(`shooting-range-${control}`, `./assets/shooting-range/${control}.png`);
+    }
     this.load.spritesheet('mission_barrier', './assets/sprites/missionbarrier47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('rock_mottle', './assets/sprites/rocks47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
