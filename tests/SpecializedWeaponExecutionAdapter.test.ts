@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
-import { FIREBALL_FLAME_SPEED_FACTOR, FIREBALL_FLAME_RANGE_FACTOR } from '../src/config';
+import { FIREBALL_FLAME_SPEED_FACTOR, FIREBALL_FLAME_RANGE_FACTOR, FIREBALL_FLAME_BURN_DAMAGE_FACTOR } from '../src/config';
 import { SpecializedWeaponExecutionAdapter } from '../src/world/SpecializedWeaponExecutionAdapter';
 import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 
@@ -31,14 +31,19 @@ describe('SpecializedWeaponExecutionAdapter – unmittelbare Spezialschüsse (4C
     const decay = normal.fire.velocityDecay;
     const distance = emission.flame.flight.speed * (Math.pow(decay, seconds) - 1) / Math.log(decay);
     expect(distance).toBeCloseTo(normal.range * FIREBALL_FLAME_RANGE_FACTOR);
-    expect(emission.flame.interaction.burn).toEqual(ordinary.interaction.burn);
+    expect(ordinary.interaction.burn?.damagePerTick).toBe(normal.fire.burnDamagePerTick);
+    expect(emission.flame.interaction.burn).toEqual({ ...ordinary.interaction.burn,
+      damagePerTick: normal.fire.burnDamagePerTick * FIREBALL_FLAME_BURN_DAMAGE_FACTOR });
     expect(emission.flame.interaction.directHit?.damage).toBe(normal.damage * 2);
     expect(emission.flame.flameExpiryGround).toMatchObject({ durationMs: 2300, igniteProjectiles: true,
-      burn: { damagePerTick: 3, durationMs: normal.fire.burnDurationMs } });
+      burn: { damagePerTick: normal.fire.burnDamagePerTick * FIREBALL_FLAME_BURN_DAMAGE_FACTOR,
+        durationMs: normal.fire.burnDurationMs } });
     expect(emission.flame).not.toHaveProperty('flameEmission');
     expect(emission.flame.presentation.style).toBe('flame');
     expect(fireball.interaction.pathEffect?.kind).toBe('fireball');
     expect(fireball.interaction.explosion?.fireChunkBurst).toMatchObject({ count: 3, igniteCenter: true });
+    expect(fireball.interaction.explosion?.burnOnHit).toEqual({
+      damagePerTick: base.fire.burnDamagePerTick, durationMs: base.fire.burnDurationMs });
   });
   it('führt Flamethrower, Leaf Blower, Reinforcement Matrix und Energy Injector über eine Capability aus', () => {
     const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 1);

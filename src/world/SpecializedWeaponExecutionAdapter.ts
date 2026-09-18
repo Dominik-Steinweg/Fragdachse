@@ -1,4 +1,4 @@
-import { FIREBALL_FLAME_ROTATION_DEGREES_PER_SECOND, FIREBALL_FLAME_SPEED_FACTOR, FIREBALL_FLAME_RANGE_FACTOR } from '../config';
+import { FIREBALL_FLAME_ROTATION_DEGREES_PER_SECOND, FIREBALL_FLAME_SPEED_FACTOR, FIREBALL_FLAME_RANGE_FACTOR, FIREBALL_FLAME_BURN_DAMAGE_FACTOR } from '../config';
 import type { ProjectileSpawnRequest } from '../projectile/ProjectileSpawnRequest';
 import { createPrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
 import type {
@@ -61,7 +61,9 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
       const flame = flameConfig?.fire.type === 'flamethrower'
         ? this.createFlame(
           { ...flameConfig, range: flameConfig.range * FIREBALL_FLAME_RANGE_FACTOR },
-          { ...flameConfig.fire, projectileSpeed: flameConfig.fire.projectileSpeed * FIREBALL_FLAME_SPEED_FACTOR },
+          { ...flameConfig.fire,
+            projectileSpeed: flameConfig.fire.projectileSpeed * FIREBALL_FLAME_SPEED_FACTOR,
+            burnDamagePerTick: flameConfig.fire.burnDamagePerTick * FIREBALL_FLAME_BURN_DAMAGE_FACTOR },
           { ...params, gameplayMuzzleOrigin: undefined, visualMuzzleOrigin: undefined },
         )
         : undefined;

@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../config';
 import { formatNumber, getLocale } from '../i18n';
-import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
 import { ESSENCE_PALETTE } from '../adrenalineEssence/AdrenalineEssencePresentation';
 import { ensureForestButton } from '../ui/forestTextures';
 import { worldCellCenter, type WorldMetrics } from '../world/WorldMetrics';
@@ -13,7 +12,6 @@ import { fillRadialGradientTexture, registerGraphicsObject } from './EffectUtils
 /** Bounded world props and ground accents, without collision or gameplay writes. */
 export class ShootingRangeRenderer {
   private readonly ground: Phaser.GameObjects.Graphics;
-  private readonly controlProps: Phaser.GameObjects.Image[];
   private readonly controlIcons: Phaser.GameObjects.Image[];
   private readonly targetGlows: Phaser.GameObjects.Image[];
   private readonly supplyGlows: Phaser.GameObjects.Image[];
@@ -28,15 +26,10 @@ export class ShootingRangeRenderer {
 
   constructor(private readonly scene: Phaser.Scene, private readonly metrics: WorldMetrics) {
     this.ground = this.graphics(DEPTH.DECALS + 0.1);
-    this.controlProps = SHOOTING_RANGE_CONTROLS.map(control => {
-      const point = shootingRangeControlPosition(metrics, control);
-      return scene.add.image(point.x, point.y, 'walls', AutoTiler.getFrame(0, ROCK_AUTOTILE))
-        .setDisplaySize(CELL_SIZE, CELL_SIZE).setDepth(DEPTH.ROCKS);
-    });
     this.controlIcons = SHOOTING_RANGE_CONTROLS.map(control => {
       const point = shootingRangeControlPosition(metrics, control);
       return scene.add.image(point.x, point.y, `shooting-range-${control}`)
-        .setDisplaySize(26, 26).setDepth(DEPTH.ROCKS + 0.1);
+        .setDisplaySize(CELL_SIZE, CELL_SIZE).setDepth(DEPTH.ROCKS + 0.1);
     });
     fillRadialGradientTexture(scene.textures, 'shooting-range-target-glow', 96, [
       [0, 'rgba(241,83,72,0)'], [0.35, 'rgba(241,83,72,0.02)'],
@@ -146,14 +139,13 @@ export class ShootingRangeRenderer {
       const visible = control === 'power' || state.enabled;
       const available = shootingRangeAction(state, control) !== null;
       const active = control === 'power' ? state.enabled : control === 'supply' ? state.supply : available;
-      this.controlProps[index].setVisible(visible).setTint(available ? 0xffffff : 0x969c91);
       this.controlIcons[index].setVisible(visible).setTint(!available ? 0x747b72 : active ? 0xffffff : 0xa0a69e);
     });
   }
 
   destroy(): void {
     this.ground.destroy(); this.panel.destroy(true);
-    for (const props of [this.controlProps, this.controlIcons, this.targetGlows, this.supplyGlows]) props.forEach(prop => prop.destroy());
+    for (const props of [this.controlIcons, this.targetGlows, this.supplyGlows]) props.forEach(prop => prop.destroy());
   }
   private graphics(depth: number): Phaser.GameObjects.Graphics {
     const graphics = this.scene.add.graphics().setDepth(depth);

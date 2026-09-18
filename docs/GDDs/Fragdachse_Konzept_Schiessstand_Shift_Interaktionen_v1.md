@@ -59,7 +59,7 @@ Die Bedienung rechts oben liegt außerhalb der eigentlichen Schussbahn. Vier jew
 
 Die konkrete Größe und die Abstände werden beim Aufbau an die vorhandene Geometrie angepasst. Ziel ist ein kompakter Schadensschießstand, keine lange Reichweitenteststrecke. Zwischen Gegnern, Kartenrand und Teich bleibt Abstand. Eine zusätzliche Wand direkt hinter den Zielen wird nicht allein als optischer Abschluss eingeführt, da sie Abpraller oder Explosionen verändern könnte.
 
-Die Piktogramme sind transparente, orthografische Holztafeln mit Wurzeln, Moos und Efeu auf den vorhandenen Mauersockeln. Der Adrenalin-Blitz besteht aus cyanblauem Harz. Sie werden nur so groß wie für ihre Lesbarkeit nötig dargestellt. Lebende Trainingsziele erhalten einen weichen rötlichen Bodenschein. Die aktive Versorgung wird durch sehr dezente Eckakzente und Lichtflecken im Cyanblau der Adrenalin-Essenz angezeigt; ein durchgehender Rahmen entfällt.
+Die Piktogramme sind transparente, orthografische Holztafeln mit Wurzeln, Moos und Efeu. Sie füllen jeweils ein Rasterfeld ohne sichtbaren grauen Mauersockel. Der Adrenalin-Blitz besteht aus cyanblauem Harz. Lebende Trainingsziele erhalten einen weichen rötlichen Bodenschein. Die aktive Versorgung wird durch sehr dezente Eckakzente und Lichtflecken im Cyanblau der Adrenalin-Essenz angezeigt; ein durchgehender Rahmen entfällt.
 
 ## 4. Gemeinsame Shift-Interaktionslogik
 
