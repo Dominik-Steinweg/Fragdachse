@@ -1,4 +1,6 @@
 import { fakeEntity } from './fakeEntity';
+import { getPlayerSpriteRotationFromAimAngle } from '../src/config';
+import { ShootingRangeRuntime } from '../src/shootingRange/ShootingRangeRuntime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -217,7 +219,7 @@ function makeTargetFixture(focus: any) {
     fakeEntity({ id: 'near', kind: 'zombie-badger', faction: 'hostile', x: 1000, y: 0, rotation: 0, active: true, getHp: () => 100, isBurrowed: () => false }),
     fakeEntity({ id: 'far', kind: 'inferno-colossus', faction: 'hostile', x: 300, y: 300, rotation: 0, active: true, getHp: () => 100, isBurrowed: () => false }),
   ] as any[];
-  const player = fakeEntity({ id: 'p1', x: 0, y: 0, rotation: 0 }) as any;
+  const player = fakeEntity({ id: 'p1', x: 0, y: 0, rotation: getPlayerSpriteRotationFromAimAngle(0) }) as any;
   const enemyManager = {
     getAllEnemies: () => enemies,
     getEnemy: (id: string) => enemies.find(enemy => enemy.id === id),
@@ -308,6 +310,43 @@ function makeRendererFixture() {
 }
 
 describe('AK-47 Strategische Ziele', () => {
+  it('marks training targets, grants the hit bonus and reselects fresh identities after a range respawn', () => {
+    const { enemies, system, behavior } = makeTargetFixture({ strategicTargetEnabled: 1,
+      strategicTargetDamageBonus: 0.25, targetPrioritizationEnabled: 0, explosiveTargetAcquisitionLevel: 1 });
+    enemies.length = 0;
+    let generation = 0;
+    const range = new ShootingRangeRuntime({
+      spawn: () => {
+        const id = `training-${++generation}`;
+        enemies.push(fakeEntity({ id, kind: 'zombie-badger', faction: 'hostile', x: 100, y: 0,
+          active: true, getHp: () => 100, isBurrowed: () => false }));
+        return { id, generation };
+      },
+      alive: target => enemies.some(enemy => enemy.id === target.id && enemy.active && enemy.getHp() > 0),
+      remove: target => { enemies.find(enemy => enemy.id === target.id).active = false; },
+    });
+    range.request({ session: 0, control: 'power', action: 'enable' }, 0);
+    const original = range.snapshot().targets[0]!;
+    system.hostUpdate(0);
+    expect(system.isCurrentTarget('p1', original.id)).toBe(true);
+    expect(system.handleDirectAk47EnemyHit(projectile(1), original.id, 1)).toEqual({
+      damageMultiplier: 1.25, explosionRadius: 35, explosionDamageFraction: 0.2,
+    });
+    expect(behavior.registerStrategicTargetHit).toHaveBeenCalledOnce();
+    enemies[0].getHp = () => 0;
+    range.finishHostStep(10);
+    const replacement = range.snapshot().targets[0]!;
+    expect(replacement.id).not.toBe(original.id);
+    system.hostUpdate(10);
+    expect(system.getNetSnapshot(10)).toEqual([]);
+    system.hostUpdate(210);
+    expect(system.isCurrentTarget('p1', replacement.id)).toBe(true);
+    range.request({ session: range.snapshot().session, control: 'power', action: 'disable' }, 220);
+    system.hostUpdate(220);
+    expect(system.getNetSnapshot(220)).toEqual([]);
+    range.destroy();
+  });
+
   it('stays active permanently once unlocked and debounces a replacement target for exactly 200ms after death', () => {
     const { enemies, system } = makeTargetFixture({
       strategicTargetEnabled: 1,

@@ -6,6 +6,7 @@ import type { ProjectileAk47DirectImpact, ProjectileAk47HitContext } from '../pr
 import type { CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { Ak47BehaviorPort, Ak47LoadoutReadPort } from '../loadout/Ak47BehaviorPort';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
+import { getAimAngleFromPlayerSpriteRotation } from '../config';
 
 const TARGET_RESELECT_DEBOUNCE_MS = 200;
 const TARGET_HIT_CONFIRMATION_MS = 150;
@@ -140,7 +141,7 @@ export class Ak47StrategicTargetSystem {
   private chooseTarget(playerId: string, prioritized: boolean): string | null {
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return null;
-    const candidates = this.getCandidates(playerId, player.x, player.y, player.rotation);
+    const candidates = this.getCandidates(playerId, player.x, player.y, getAimAngleFromPlayerSpriteRotation(player.rotation));
     if (candidates.length === 0) return null;
 
     if (!prioritized) {

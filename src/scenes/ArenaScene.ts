@@ -1580,12 +1580,11 @@ export class ArenaScene extends Phaser.Scene {
     // und Platzierungsvorschau gehoeren deshalb der interaktiven Darstellung, nicht der blossen
     // Sichtbarkeit.
     const worldInteractive = presentationPolicy.worldMode === 'interactive';
-    // Und Rundenpraesentation - Missionsansagen, Encounter, Zug, strategische Ziele - haengt
+    // AK-Zielhilfe gehoert zur interaktiven World, auch ohne laufende Mission im Schiessstand.
+    this.combatPresentation?.syncStrategicTargets(presentationPolicy.worldMode);
+    // Und Rundenpraesentation - Missionsansagen, Encounter, Zug - haengt
     // zusaetzlich an der Activity: interaktiv zu spielen heisst nicht, dass eine Runde laeuft.
     const inRoundWorld = worldInteractive && activityActive;
-    this.combatPresentation?.syncStrategicTargets(
-      inRoundWorld && isCoopDefenseMode(configuredGameMode),
-    );
     // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
     // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
     // Keep the camera active while the arena is hidden behind the loading veil. Its position is

@@ -1,4 +1,5 @@
 import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
+import type { WorldPresentationMode } from '../../world/WorldPresentation';
 import type {
   SyncedAk47StrategicTarget,
   SyncedEnergyInjectorEffect,
@@ -99,8 +100,9 @@ export class ArenaCombatPresentationController {
   }
 
   /** Synchronisiert das AK-Ziel an seiner etablierten Position vor Kamera-Feedback. */
-  syncStrategicTargets(active: boolean): void {
+  syncStrategicTargets(worldMode: WorldPresentationMode): void {
     if (this.destroyed) return;
+    const active = worldMode === 'interactive';
     const now = this.sources.getSynchronizedNow();
     const localPlayerId = this.sources.getLocalPlayerId();
     const targets = active ? this.sources.getStrategicTargets(now) : [];

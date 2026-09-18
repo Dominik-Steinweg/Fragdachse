@@ -212,17 +212,22 @@ describe('ArenaCombatPresentationController', () => {
     expect(harness.sources.updateVisualFeedback).not.toHaveBeenCalled();
   });
 
-  it('ordnet Strategic Targets dem Combat-Presentation-Controller zu', () => {
+  it.each(['interactive', 'preview', 'none'] as const)('zeigt Strategic Targets nur in der interaktiven World (%s)', worldMode => {
     const harness = makeCombatController();
-    harness.controller.syncStrategicTargets(true);
-
-    expect(harness.sources.getStrategicTargets).toHaveBeenCalledWith(1000);
+    const target = { ownerId: 'local', enemyId: 'training-1', confirmationUntil: 0 };
+    const enemy = { id: 'training-1' } as never;
+    vi.mocked(harness.sources.getStrategicTargets).mockReturnValue([target]);
+    vi.mocked(harness.sources.getStrategicTargetEnemy).mockReturnValue(enemy);
+    harness.controller.syncStrategicTargets(worldMode);
+    const active = worldMode === 'interactive';
+    if (active) expect(harness.sources.getStrategicTargets).toHaveBeenCalledWith(1000);
+    else expect(harness.sources.getStrategicTargets).not.toHaveBeenCalled();
     expect(harness.renderers.ak47StrategicTargets.sync).toHaveBeenCalledWith(
-      [],
-      null,
+      active ? [target] : [],
+      active ? enemy : null,
       'local',
       1000,
-      true,
+      active,
     );
   });
 });
