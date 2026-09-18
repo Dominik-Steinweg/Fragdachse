@@ -1,6 +1,7 @@
 # Schießstand-Schalter
 
-Vier mit dem eingebauten Imagegen-Tool erzeugte, orthografische Metall-Piktogramme.
+Vier mit dem eingebauten Imagegen-Tool erzeugte, orthografische Holz-Piktogramme
+mit Wurzelrahmen, Moos und Efeu. Der Adrenalin-Blitz besteht aus cyanblauem Harz.
 Die finalen Prompts stehen in [prompts.json](prompts.json).
 
 Runtime-Dateien: `public/assets/shooting-range/{supply,minus,plus,power}.png`.

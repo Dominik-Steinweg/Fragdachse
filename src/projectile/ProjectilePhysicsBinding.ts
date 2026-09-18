@@ -331,7 +331,9 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
             && obstacleBlocks(this.obstacleIndex!.getRockClass(rockIndex), options.purpose ?? 'physical')
             && !(this.obstacleIndex!.getRockClass(rockIndex) === 'low' && options.purpose === 'support'
               && options.acceptsLowTarget && !options.acceptsLowTarget(rockIndex))) consider(rockIndex, left, top, right, bottom);
-          else if (kind === OBSTACLE_BARRIER) consider(0, left, top, right, bottom, undefined, true);
+          else if (kind === OBSTACLE_BARRIER && obstacleBlocks(source.obstacleClass ?? 'veryHigh', options.purpose ?? 'physical')) {
+            consider(0, left, top, right, bottom, undefined, true);
+          }
           else if (kind === OBSTACLE_BASE && includeBases) {
             const baseId = (source as { getData?: (key: string) => unknown }).getData?.('baseId');
             if (typeof baseId === 'string' && baseId) consider(0, left, top, right, bottom, baseId);
@@ -492,7 +494,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       const id = object === undefined ? -1 : rockIndex(object);
       return id >= 0 ? { kind: 'rock', id } : null;
     }, spec.mechanics.rock, spec.mechanics.rockContactMode, spec.mechanics.stopOnRockContact,
-    (object) => rockIndex(object) !== spec.mechanics.ignoreRockIndex);
+    (object) => rockIndex(object) >= 0 && rockIndex(object) !== spec.mechanics.ignoreRockIndex);
     register(this.trunkGroup, () => ({ kind: 'trunk' }), spec.mechanics.trunk,
       spec.mechanics.trunkContactMode, spec.mechanics.stopOnTrunkContact);
     register(this.baseGroup, (object) => {

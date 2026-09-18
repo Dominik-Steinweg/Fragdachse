@@ -61,9 +61,12 @@ void main() {
     if (uDetail > .5) fine += (noise(q*7.3-drift*2.1)-.5)*.08*smoothstep(45.0,130.0,uPixels);
     if (uDetail > 1.5) fine += (noise(q*15.7+drift*2.4)-.5)*.04*smoothstep(100.0,240.0,uPixels);
     float rolling = smoothstep(.25,.86,crown*.82+folds*.18+fine);
-    // Keep the entire gameplay disc occupied; only the last narrow band feathers out.
-    float fringe = noise(p*9.0+offset-drift);
-    float coverage = 1.0-smoothstep(.90+.045*fringe,1.0,r);
+    // Broad lobes and finer wisps move independently, on every detail tier.
+    // Keep the core filled and finish fading inside the quad's circular cutoff.
+    float edgeLobes = smoothstep(.2,.8,noise(p*3.4+offset+drift*.8+warp*.3));
+    float fringe = noise(p*11.0+offset+31.7-drift*1.15+warp*.2);
+    float edgeRadius = .89+.07*edgeLobes+.025*fringe;
+    float coverage = 1.0-smoothstep(edgeRadius-.105,edgeRadius,r);
     vec3 normal = vec3(0,0,1);
 #ifdef GL_OES_standard_derivatives
     normal = normalize(vec3(-dFdx(crown)*uPixels*.009,-dFdy(crown)*uPixels*.009,1.0));

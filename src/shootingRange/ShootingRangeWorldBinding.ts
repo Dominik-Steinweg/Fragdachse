@@ -9,12 +9,14 @@ import { allyFlowFieldId, type FlowFieldCoordinator } from '../systems/flowfield
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import type { EnemyIntentSystem } from '../systems/navigation/EnemyIntentSystem';
 import { ShootingRangeRuntime } from './ShootingRangeRuntime';
+import type { ShootingRangeControlBodies } from './ShootingRangeControlBodies';
 import { SHOOTING_RANGE, isInsideShootingRange } from './ShootingRangeLayout';
 import type { ShootingRangeState } from './ShootingRangeContracts';
 
 /** Lobby-owned enemies and training state. Summoned allies share the ordinary enemy plumbing. */
 export class ShootingRangeWorldBinding {
   readonly runtime: ShootingRangeRuntime;
+  controlBodies: ShootingRangeControlBodies | null = null;
   necromancy: NecromancySystem | null = null;
   navigation: FlowFieldCoordinator | null = null;
   ground: EnemyFlowFieldService | null = null;
@@ -48,7 +50,10 @@ export class ShootingRangeWorldBinding {
     }) : () => {};
   }
   snapshot(): ShootingRangeState { return this.authoritative ? this.runtime.snapshot() : this.replica ?? this.runtime.snapshot(); }
-  acceptSnapshot(state: ShootingRangeState | null | undefined): void { this.replica = state ?? null; }
+  acceptSnapshot(state: ShootingRangeState | null | undefined): void {
+    this.replica = state ?? null;
+    this.controlBodies?.sync(this.snapshot().enabled);
+  }
   isTrainingTarget(id: string): boolean {
     return this.authoritative ? this.runtime.isTrainingTarget(id) : this.replica?.targets.some(target => target?.id === id) ?? false;
   }
@@ -58,6 +63,7 @@ export class ShootingRangeWorldBinding {
   }
   prepareHostStep(delta: number, now: number): void {
     if (this.destroyed || !this.authoritative) return;
+    this.controlBodies?.sync(this.runtime.snapshot().enabled);
     if (this.navigation) {
       const present = new Set(this.getPlayerIds());
       for (const id of present) if (!this.allyFlowFields.has(id)) {
@@ -97,6 +103,8 @@ export class ShootingRangeWorldBinding {
     this.destroyed = true;
     this.stopObserving();
     this.runtime.destroy();
+    this.controlBodies?.destroy();
+    this.controlBodies = null;
     this.necromancy?.clear();
     this.necromancy?.setCorpseSink(null);
     this.intents?.clear();

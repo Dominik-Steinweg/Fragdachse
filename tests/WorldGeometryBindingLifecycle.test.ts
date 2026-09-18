@@ -78,7 +78,7 @@ function createSceneScopedCollaborators() {
     baseManager: undefined as unknown,
     setWorldMetrics(value: unknown) { this.worldMetrics = value; },
     claimObstacleIndex() { return this.obstacleIndex = {
-      setWaterGeometry: vi.fn(), clear: vi.fn(), queryProjectileSegment: vi.fn(),
+      setWaterGeometry: vi.fn(), setWorldProps: vi.fn(), clear: vi.fn(), queryProjectileSegment: vi.fn(),
     }; },
     setArenaObstacles(rocks: unknown, trunks: unknown) { this.arenaObstacles = [rocks, trunks]; },
     setBaseObstacles: vi.fn(),

@@ -226,6 +226,26 @@ describe('CombatSystem.resolveSafeHitscanStart', () => {
 });
 
 describe('WorldGeometryQueries – headless read-only boundary', () => {
+  it('keeps world controls physical, reads visibility live and preserves independent mission barriers', () => {
+    const control = { active: true, obstacleClass: 'low' as const,
+      getBounds: () => new Phaser.Geom.Rectangle(20, -10, 10, 20) };
+    const gate = { active: false, getBounds: () => new Phaser.Geom.Rectangle(70, -10, 10, 20) };
+    const index = new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 200 }),
+      rocks: () => null, bases: () => null, trunks: () => null, barriers: () => [gate] });
+    index.setWorldProps([control]);
+    const geometry = new CombatGeometry(index);
+    const line = new Phaser.Geom.Line().setTo(0, 0, 100, 0);
+    expect(geometry.nearestObstacleHit(line, { purpose: 'directFire' })).toBeNull();
+    expect(geometry.nearestObstacleHit(line, { purpose: 'physical' })).toMatchObject({ kind: 'barrier', x: 20 });
+    control.active = false;
+    expect(geometry.nearestObstacleHit(line, { purpose: 'physical' })).toBeNull();
+    control.active = true;
+    gate.active = true;
+    expect(geometry.nearestObstacleHit(line, { purpose: 'directFire' })).toMatchObject({ x: 70 });
+    index.setWorldProps([]);
+    expect(geometry.nearestObstacleHit(line, { purpose: 'physical' })).toMatchObject({ x: 70 });
+  });
+
   it('separates direct fire and support from physical blocking and reads gate state live', () => {
     const walls = [20, 40].map(x => ({ active: true, obstacleClass: 'low' as const,
       getBounds: () => new Phaser.Geom.Rectangle(x, -10, 10, 20) }));

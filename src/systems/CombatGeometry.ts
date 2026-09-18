@@ -185,6 +185,8 @@ export class CombatGeometry {
 
   private ignoresRect(kind: number, rockIndex: number, source: ObstacleRectBody,
     options: ObstacleTraceOptions, enter: number, carrierExit: number): boolean {
+    if (kind !== OBSTACLE_ROCK && source.obstacleClass
+      && !obstacleBlocks(source.obstacleClass, options.purpose ?? 'physical')) return true;
     if (kind === OBSTACLE_ROCK) {
       if (rockIndex === options.skipRockIndex || options.ignoreRocks) return true;
       const height = this.obstacleIndex.getRockClass(rockIndex);

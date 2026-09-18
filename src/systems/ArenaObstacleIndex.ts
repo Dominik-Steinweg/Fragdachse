@@ -250,6 +250,27 @@ export class ArenaObstacleIndex {
   private scratchBounds: Phaser.Geom.Rectangle | null = null;
 
   private waterGeometry: WaterGeometry | null = null;
+  private worldProps: readonly ObstacleRectBody[] = [];
+  private barrierSource: readonly ObstacleRectBody[] | null = null;
+  private barrierSourceLength = -1;
+  private combinedBarriers: readonly ObstacleRectBody[] = [];
+
+  /** Fixed World interactables share the index, without becoming damageable rocks or Activity resources. */
+  setWorldProps(props: readonly ObstacleRectBody[]): void {
+    this.worldProps = props;
+    this.barrierSourceLength = -1;
+    this.markDirty();
+  }
+
+  private getBarriers(): readonly ObstacleRectBody[] {
+    const barriers = this.sources.barriers?.() ?? null;
+    if (barriers !== this.barrierSource || (barriers?.length ?? 0) !== this.barrierSourceLength) {
+      this.barrierSource = barriers;
+      this.barrierSourceLength = barriers?.length ?? 0;
+      this.combinedBarriers = [...(barriers ?? []), ...this.worldProps];
+    }
+    return this.combinedBarriers;
+  }
 
   setWaterGeometry(water: WaterGeometry | null): void { this.waterGeometry = water; }
 
@@ -494,7 +515,7 @@ export class ArenaObstacleIndex {
     const rocks = this.sources.rocks();
     const trunks = this.sources.trunks();
     const bases = this.sources.bases();
-    const barriers = this.sources.barriers?.() ?? null;
+    const barriers = this.getBarriers();
     const bounds = this.sources.bounds();
     return rocks !== this.builtRocks
       || trunks !== this.builtTrunks
@@ -522,7 +543,7 @@ export class ArenaObstacleIndex {
     const rocks = this.sources.rocks();
     const trunks = this.sources.trunks();
     const bases = this.sources.bases();
-    const barriers = this.sources.barriers?.() ?? null;
+    const barriers = this.getBarriers();
     this.builtRocks = rocks;
     this.builtTrunks = trunks;
     this.builtBases = bases;

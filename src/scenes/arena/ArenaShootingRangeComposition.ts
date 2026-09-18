@@ -4,6 +4,7 @@ import { isLobbyWorldDefinitionId } from '../../config/authoring/lobbyWorld';
 import { EnemyManager } from '../../entities/EnemyManager';
 import { WaterGeometry } from '../../arena/WaterGeometry';
 import { ShootingRangeWorldBinding } from '../../shootingRange/ShootingRangeWorldBinding';
+import { ShootingRangeControlBodies } from '../../shootingRange/ShootingRangeControlBodies';
 import { SHOOTING_RANGE, shootingRangeControlPosition, isShootingRangeBuildReserved } from '../../shootingRange/ShootingRangeLayout';
 import { interactionCandidateScore, WORLD_INTERACTION_RULES } from '../../systems/WorldInteractionSelection';
 import { NecromancySystem } from '../../systems/NecromancySystem';
@@ -27,11 +28,15 @@ export function composeShootingRangeEnemies(input: ArenaWorldGameplayComposition
   const range = new ShootingRangeWorldBinding(enemies, input.world.metrics, gameplay.combatSystem!, bridge.isHost(),
     () => bridge.getConnectedPlayers().map(player => player.id));
   gameplay.shootingRange = range;
+  range.controlBodies = new ShootingRangeControlBodies(input.scene, input.world.metrics, input.arenaResult.rockGroup,
+    () => range.navigation?.invalidateGeometry());
+  gameplay.geometry!.setWorldProps(range.controlBodies.bodies);
   const renderer = new ShootingRangeRenderer(input.scene, input.world.metrics);
   input.worldRuntime.bind({ update: () => renderer.sync(range.snapshot(), bridge.getSynchronizedNow()), destroy: () => renderer.destroy() });
   input.placementSystem.setBuildReservation(isShootingRangeBuildReserved);
   input.worldRuntime.bind({ destroy: () => {
     input.placementSystem.setBuildReservation(null);
+    gameplay.geometry?.setWorldProps([]);
     range.destroy();
     if (gameplay.shootingRange === range) gameplay.shootingRange = null;
   } });
@@ -77,9 +82,9 @@ export function bindShootingRangeGameplay(input: ArenaWorldGameplayCompositionIn
     if (interactionCandidateScore({ x: entity.x, y: entity.y, angle: entity.getAimAngle() },
       { ...position, radius: SHOOTING_RANGE.interactionRadius }) < WORLD_INTERACTION_RULES.minimumScore) return false;
     const accepted = range.runtime.request(request, bridge.getSynchronizedNow());
+    range.controlBodies?.sync(range.runtime.snapshot().enabled);
     player.refreshArtificialAdrenalineSupply();
     return accepted;
   });
   worldRuntime.bind({ destroy: () => { bridge.registerShootingRangeHandler(null); supply.destroy(); } });
-  range.runtime.request({ control: 'power', action: 'enable', session: 0 }, bridge.getSynchronizedNow());
 }

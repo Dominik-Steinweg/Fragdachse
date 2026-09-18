@@ -147,6 +147,9 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
           isControllingTurret: () => false, getBurrowPhase: () => 'idle' },
       } as never);
       const handler = register.mock.calls[0][0]!;
+      expect(runtime.snapshot().enabled).toBe(false);
+      entity.rotation = getPlayerSpriteRotationFromAimAngle(0);
+      expect(handler('local', { session: 0, control: 'power', action: 'enable' })).toBe(true);
       const press = () => handler('local', { session: runtime.snapshot().session, control: 'supply',
         action: shootingRangeAction(runtime.snapshot(), 'supply')! });
       for (let i = 0; i < 8; i++) {

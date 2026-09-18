@@ -23,7 +23,7 @@ import type { ArenaLayout } from '../types';
 import type { WorldMaterialization } from './WorldMaterialization';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 import type { WorldScopedBinding } from './WorldRuntime';
-import type { ArenaObstacleIndex, ObstacleRectVisitor } from '../systems/ArenaObstacleIndex';
+import type { ArenaObstacleIndex, ObstacleRectVisitor, ObstacleRectBody } from '../systems/ArenaObstacleIndex';
 import { createWorldGeometryQueries, type WorldGeometryQueries, type WorldTargetGeometry } from './WorldGeometryQueries';
 
 export interface WorldGeometryBindingInput {
@@ -65,6 +65,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
   private readonly bindingToken = {};
   private readonly gridListener: (event: ArenaMapGridChangedEvent) => void;
   private destroyed = false;
+  private worldProps: readonly ObstacleRectBody[] = [];
 
   constructor(private readonly input: WorldGeometryBindingInput) {
     const {
@@ -135,6 +136,13 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       const rockId = arena.rockGrid.getIndex(gridX, gridY);
       if (rockId >= 0 && arena.rockPhysicsProxies[rockId]?.active === true) return true;
       if (baseManager?.isMovementBlockedCell(gridX, gridY) === true) return true;
+      const x = world.metrics.offsetX + (gridX + 0.5) * CELL_SIZE;
+      const y = world.metrics.offsetY + (gridY + 0.5) * CELL_SIZE;
+      if (this.worldProps.some(prop => {
+        if (!prop.active) return false;
+        const bounds = prop.getBounds();
+        return x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
+      })) return true;
       return input.getBarrierCellBlocked(gridX, gridY);
     });
 
@@ -161,6 +169,12 @@ export class WorldGeometryBinding implements WorldScopedBinding {
 
   /** Read-only geometry capability for host queries and passive client previews. */
   getGeometryQueries(): WorldGeometryQueries { return this.geometryQueries; }
+
+  setWorldProps(props: readonly ObstacleRectBody[]): void {
+    if (this.destroyed) return;
+    this.worldProps = props;
+    this.obstacleIndex.setWorldProps(props);
+  }
 
   /** Short alias used by neutral composition code. */
   getQueries(): WorldGeometryQueries { return this.geometryQueries; }
@@ -249,6 +263,8 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.gridListener);
     this.fireObstacles.reset();
     if (ownsGeometry) {
+      this.worldProps = [];
+      this.obstacleIndex.setWorldProps([]);
       this.obstacleIndex.setWaterGeometry(null);
       hostPhysics.setWaterGeometry(null);
       fireSystem.setGroundResolvers(null, null);

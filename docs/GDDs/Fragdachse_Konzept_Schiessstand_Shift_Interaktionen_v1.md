@@ -59,7 +59,7 @@ Die Bedienung rechts oben liegt außerhalb der eigentlichen Schussbahn. Vier jew
 
 Die konkrete Größe und die Abstände werden beim Aufbau an die vorhandene Geometrie angepasst. Ziel ist ein kompakter Schadensschießstand, keine lange Reichweitenteststrecke. Zwischen Gegnern, Kartenrand und Teich bleibt Abstand. Eine zusätzliche Wand direkt hinter den Zielen wird nicht allein als optischer Abschluss eingeführt, da sie Abpraller oder Explosionen verändern könnte.
 
-Die Piktogramme sind transparente, orthografische Metall-Inlays mit verwittertem Messingrand auf den vorhandenen Mauersockeln. Sie werden nur so groß wie für ihre Lesbarkeit nötig dargestellt. Lebende Trainingsziele erhalten einen weichen rötlichen Bodenschein. Die aktive Versorgung wird durch sehr dezente Eckakzente und Lichtflecken im Cyanblau der Adrenalin-Essenz angezeigt; ein durchgehender Rahmen entfällt.
+Die Piktogramme sind transparente, orthografische Holztafeln mit Wurzeln, Moos und Efeu auf den vorhandenen Mauersockeln. Der Adrenalin-Blitz besteht aus cyanblauem Harz. Sie werden nur so groß wie für ihre Lesbarkeit nötig dargestellt. Lebende Trainingsziele erhalten einen weichen rötlichen Bodenschein. Die aktive Versorgung wird durch sehr dezente Eckakzente und Lichtflecken im Cyanblau der Adrenalin-Essenz angezeigt; ein durchgehender Rahmen entfällt.
 
 ## 4. Gemeinsame Shift-Interaktionslogik
 
@@ -119,7 +119,7 @@ Es gibt kein Auslösen durch Darüberlaufen, keine zusätzliche Bestätigung, ke
 
 ### 5.2 Start- und Rücksetzverhalten
 
-Beim Start der Lobby-World ist der **Schießstand aktiv, mit einem Gegner, ausgeschalteter Adrenalinversorgung und leerer Anzeige.** Erneutes Einschalten beginnt wieder mit genau diesen Werten.
+Beim Start der Lobby-World ist der **Schießstand ausgeschaltet**. Einschalten beginnt mit einem Gegner, ausgeschalteter Adrenalinversorgung und leerer Anzeige. Erneutes Einschalten beginnt wieder mit genau diesen Werten.
 
 Beim Einschalten erscheinen Trainingsziele, Anzeigen und die weiteren Bedienelemente. Beim Ausschalten werden die Trainingsziele entfernt, die Versorgung beendet und der kurzzeitige Messpuffer verworfen. Das Entfernen ist **kein Kill** und löst keine Todes-, Belohnungs- oder Fortschrittsereignisse aus.
 
@@ -137,7 +137,7 @@ Alle Ziele verwenden denselben klar definierten Trainingsgegner. Start mit einem
 
 Zehn feste Zielplätze liegen in zwei Spalten mit jeweils fünf Positionen. Die ersten fünf Ziele stehen dicht zusammen, mit einer Rasterzelle Abstand, und werden vom mittleren Ziel aus nach oben und unten ergänzt. Die weiteren fünf Ziele stehen weiter links hinter dieser Gruppe und haben größere Abstände untereinander. Plus ergänzt sofort einen Platz samt Gegner. Minus entfernt den letzten Platz gegebenenfalls mitsamt seinem lebenden Gegner, ohne Kill. Andere Gegner behalten Position, HP und Status. Bereits tote Plätze bleiben bis zum vollständigen Gruppenwechsel leer.
 
-Zielplätze, Tafel und Bedienwege bleiben auch bei ausgeschaltetem Stand gegen Platzieren und Verschieben von Konstrukten gesperrt. Vorschau und Host-Prüfung verwenden dieselbe Sperre. Zwischenräume bleiben bebaubar. Tafel und Schalter erhalten keine schussblockierende oder zerstörbare Geometrie.
+Zielplätze, Tafel und Bedienwege bleiben auch bei ausgeschaltetem Stand gegen Platzieren und Verschieben von Konstrukten gesperrt. Vorschau und Host-Prüfung verwenden dieselbe Sperre. Zwischenräume bleiben bebaubar. Die Tafel hat keine Kollisionsgeometrie. Sichtbare Schalter haben unzerstörbare, niedrige Hitboxen wie Mauern und Türme: Sie blockieren Bewegung und physische Projektile, lassen normale direkte Schüsse aber passieren. Verborgene Schalter kollidieren nicht.
 
 Die Abstände sollen Flächenschaden und Ketteneffekte sinnvoll ausprobieren lassen, ohne die Ziele künstlich auf einen Punkt zu stapeln. Eine Auswahl verschiedener Formationen ist nicht vorgesehen.
 
