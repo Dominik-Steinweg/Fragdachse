@@ -353,10 +353,26 @@ export class ProjectileCollisionProcessor {
         // Ein Sweep-Frame verarbeitet alle zulässigen Kandidaten entlang des Segments; ein
         // nicht-penetrativer Kontakt beendet ihn im Ergebnis, statt auf Overlap zurückzufallen.
         this.processSweep(record, nowMs, deps);
+        this.advanceSwarmOriginExit(record);
         return;
       }
     }
     this.processOverlap(record, nowMs, deps);
+    this.advanceSwarmOriginExit(record);
+  }
+
+  /** Release only after the whole contact segment, including its exit face, was processed. */
+  private advanceSwarmOriginExit(record: ProjectileRuntimeRecord): void {
+    const lineage = record.provenance.lineage;
+    if (!lineage?.plasmaSwarmChild || !lineage.plasmaSwarmOriginEnemyId || record.contacts.swarmOriginExited) return;
+    const origin = this.targetSlotsByPhysicalKey.get(`enemy:${lineage.plasmaSwarmOriginEnemyId}`);
+    const sprite = record.physics.sprite;
+    // Both collision paths must be clear: overlap uses bounds, sweep an expanded circle.
+    const radius = (origin?.radius ?? 0) + Math.max(sprite.displayWidth, sprite.displayHeight) * 0.5;
+    if (!origin || (!overlaps(sprite.getBounds(this.overlapBounds), origin)
+      && Math.hypot(sprite.x - origin.x, sprite.y - origin.y) > radius)) {
+      record.contacts.swarmOriginExited = true;
+    }
   }
 
   private processSweep(
@@ -384,9 +400,6 @@ export class ProjectileCollisionProcessor {
     for (let index = 0; index < this.targetCount; index += 1) {
       const slot = this.targetPool[index];
       if (!this.inSearchRegion(slot)) {
-        // This eligibility check also advances swarm-origin exit state, even for distant targets.
-        if (slot.kind === 'enemy' && record.provenance.lineage?.plasmaSwarmOriginEnemyId === slot.id)
-          this.isCandidateAllowed(record, slot, deps);
         continue;
       }
       if (!this.isCandidateAllowed(record, slot, deps)) continue;
@@ -479,11 +492,9 @@ export class ProjectileCollisionProcessor {
     for (let index = 0; index < this.targetCount; index += 1) {
       const slot = this.targetPool[index];
       if (!this.inSearchRegion(slot)) {
-        if (slot.kind === 'enemy' && record.provenance.lineage?.plasmaSwarmOriginEnemyId === slot.id)
-          this.isCandidateAllowed(record, slot, deps, bounds);
         continue;
       }
-      if (!this.isCandidateAllowed(record, slot, deps, bounds)) continue;
+      if (!this.isCandidateAllowed(record, slot, deps)) continue;
       if (!overlaps(bounds, slot)) continue;
       if (deps.worldTargetHit?.(record, slot.ref, record.physics.sprite.x, record.physics.sprite.y,
         record.physics.sprite.x, record.physics.sprite.y) === null) continue;
@@ -491,7 +502,7 @@ export class ProjectileCollisionProcessor {
     }
     this.sortOverlapCandidates(record);
     for (const slot of this.overlapCandidates) {
-      if (!this.isCandidateAllowed(record, slot, deps, bounds)) continue;
+      if (!this.isCandidateAllowed(record, slot, deps)) continue;
       const outcome = this.applyCandidate(
         record,
         {
@@ -537,7 +548,6 @@ export class ProjectileCollisionProcessor {
     record: ProjectileRuntimeRecord,
     slot: CollisionTargetSlot,
     deps: ProjectileCollisionDependencies,
-    overlapBounds?: { left: number; right: number; top: number; bottom: number },
   ): boolean {
     if (slot.kind !== 'base' && slot.kind !== 'rock' && record.provenance.allegiance.ownerId === slot.ownerId) return false;
     if (deps.allowsWorldContact?.(record, slot.ref) === false) return false;
@@ -561,18 +571,12 @@ export class ProjectileCollisionProcessor {
     const exclusionKey = slot.exclusionKey;
     if (exclusionKey !== null && record.interaction.multiExplosionExcludedTargetKeys?.has(exclusionKey)) return false;
 
-    if (slot.kind === 'enemy' && !record.contacts.swarmOriginExited && record.provenance.lineage?.plasmaSwarmOriginEnemyId === slot.id) {
-      const stillInsideOrigin = overlapBounds !== undefined && overlaps(overlapBounds, slot);
-      if (shouldIgnorePlasmaSwarmOriginHit(
+    if (slot.kind === 'enemy' && shouldIgnorePlasmaSwarmOriginHit(
         { plasmaSwarmProjectile: record.provenance.lineage?.plasmaSwarmChild },
         record.provenance.lineage?.plasmaSwarmOriginEnemyId,
         slot.id,
-        !stillInsideOrigin,
-      )) {
-        return false;
-      }
-      if (!stillInsideOrigin) record.contacts.swarmOriginExited = true;
-    }
+        record.contacts.swarmOriginExited === true,
+      )) return false;
 
     // Köder sind reine Ablenkziele und kennen keine Beziehungsprüfung.
     if (isCombatTarget(slot.kind) && deps.targetability

@@ -705,7 +705,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         const target = source ? worldMutation.resolveTarget('base', baseId) : null;
         const factor = source && target ? this.mgTurret?.multiplier(source, target, combat.getHostTime()) ?? 1 : 1;
         outcome = worldMutation.applyResolvedDamage('base', baseId, damage * factor, attackerId,
-          source?.authoredSourceId ?? 'combat.base', source?.origin === 'ground' ? 'ground' : source?.origin === 'burn' ? 'burn' : 'direct', sourceSlot, source);
+          source?.authoredSourceId ?? 'combat.base', source && source.origin !== 'support' ? source.origin : 'direct', sourceSlot, source);
       } finally {
         this.baseObjectiveCommit = previousCommit;
       }

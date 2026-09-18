@@ -144,6 +144,7 @@ type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlay
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string, now?: number): void };
 
 interface AoeDamageOptions {
+  damageKind?: Extract<CombatDamageKind, 'explosion' | 'ground'>;
   source?: CombatSource;
   /** Explicit source resolution, e.g. a reservoir whose accumulated damage must not be amplified again. */
   damageBasis?: Extract<CombatDamageBasis, { kind: 'source-resolved' }>;
@@ -249,7 +250,7 @@ function toDamageOptions(
       sourceSlot: options.sourceSlot ?? options.source.sourceSlot,
       allegiance: options.allowTeamDamage === undefined ? options.source.allegiance
         : { ...options.source.allegiance, allowTeamDamage: options.allowTeamDamage } } : undefined,
-    sourceSlot: options?.sourceSlot,
+    sourceSlot: options?.sourceSlot ?? options?.source?.sourceSlot,
     allowCritical: options?.allowCritical,
     damageKind,
   };
@@ -1535,11 +1536,13 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     options?: AoeDamageOptions,
   ): void {
     const derivedFrom = options?.derivedFrom;
+    const damageKind = options?.damageKind ?? 'explosion';
+    const sourceSlot = options?.sourceSlot ?? options?.source?.sourceSlot;
     damage = options?.damageBasis?.amount ?? damage;
-    if (!options?.category || options.category === 'explosion') {
+    if (damageKind === 'explosion' && (!options?.category || options.category === 'explosion')) {
       this.bubbleChargePort?.observeExplosion(x, y, radius, damage, this.hostFrameNowMs, options?.damageFalloff);
     }
-    const runtimeMultiplier = derivedFrom || options?.damageBasis ? 1 : this.getPlayerRuntimeDamageMultiplier(ownerId, options?.sourceSlot);
+    const runtimeMultiplier = derivedFrom || options?.damageBasis ? 1 : this.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot);
     const runtimeDamage = damage * runtimeMultiplier;
     const runtimeFalloff = options?.damageFalloff
       ? { ...options.damageFalloff, minDamage: options.damageFalloff.minDamage * runtimeMultiplier }
@@ -1563,24 +1566,24 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         ? createDerivedDamageBasis(derivedFrom, roundedDamage / derivedFrom.actualDamage)
         : undefined;
 
-      const category = options?.category ?? 'explosion';
+      const category = options?.category ?? (damageKind === 'ground' ? 'damage_over_time' : 'explosion');
       if (this.shouldBlockWithShield(player.id, category, roundedDamage, x, y)) continue;
       this.applyDamage(player.id, roundedDamage, false, ownerId, options?.sourceId ?? 'weapon.grenade', {
         sourceX: x,
         sourceY: y,
         ...options?.killSource,
       }, {
-        ...toDamageOptions(options, 'explosion'),
+        ...toDamageOptions(options, damageKind),
         ...(options?.damageBasis ? { basis: { ...options.damageBasis, amount: roundedDamage } } : {}),
         ...(derivedBasis ? {
           basis: derivedBasis,
-          source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: 'explosion' as const },
+          source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: damageKind },
         } : {}),
       });
     }
 
     this.applyRadialHostileBaseDamage(
-      x, y, radius, damage, ownerId, options?.damageFalloff, options?.sourceSlot,
+      x, y, radius, damage, ownerId, options?.damageFalloff, sourceSlot,
       options?.baseDamageMult, options?.damageBasis?.sourceFactors ?? derivedFrom?.damage.sourceFactors,
       options?.source,
     );
@@ -1607,11 +1610,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         sourceY: y,
         ...options?.killSource,
       }, {
-        ...toDamageOptions(options, 'explosion'),
+        ...toDamageOptions(options, damageKind),
         ...(options?.damageBasis ? { basis: { ...options.damageBasis, amount: roundedDamage } } : {}),
         ...(derivedBasis ? {
           basis: derivedBasis,
-          source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: 'explosion' as const },
+          source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: damageKind },
         } : {}),
       });
     }

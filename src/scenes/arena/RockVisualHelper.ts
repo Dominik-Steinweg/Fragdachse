@@ -22,6 +22,7 @@ import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
+import { createSingleOwnerProvenance } from '../../projectile/ProjectileSpawnRequest';
 
 export interface RockVisualWorldPort {
   readonly getWorldRuntime: () => WorldRuntime | null;
@@ -531,6 +532,10 @@ export class RockVisualHelper {
       cloud.baseDamageMult ?? 1,
       cloud.visualVariant ?? 'spore',
       this.ctx.getWorldCombatCore()!.getHostTime(),
+      this.ctx.getWorldCombatCore()!.captureWorldDamageSource(rock.ownerId, turretCfg.weaponId, 'ground',
+        createSingleOwnerProvenance(rock.ownerId, {
+          weaponSourceId: turretCfg.weaponId, sourceSlot: 'utility', sourceTurretId: String(rock.id),
+        })),
     );
   }
 

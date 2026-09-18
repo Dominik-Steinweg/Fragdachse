@@ -2397,8 +2397,15 @@ export class WorldProjectileRuntime implements
       get shotOptions() { return runtime.shotOptions(projectile); },
       get ownerId() { return projectile.provenance.allegiance.ownerId; },
       homing: projectile.spec.flight.homing!,
-      isTargetClaimed: projectile.spec.flight.homingExcludedCircle?.bubbleId === undefined ? undefined : (id, type) => {
-        const group = projectile.spec.flight.homingExcludedCircle!.bubbleId!;
+      isTargetAllowed: (id, type) => !(type === 'enemies'
+        && projectile.provenance.lineage?.plasmaSwarmChild
+        && projectile.provenance.lineage.plasmaSwarmOriginEnemyId === id
+        && !projectile.contacts.swarmOriginExited),
+      isTargetClaimed: (id, type) => {
+        if (type === 'enemies' && projectile.provenance.lineage?.plasmaSwarmChild
+          && projectile.provenance.lineage.plasmaSwarmOriginEnemyId === id) return true;
+        const group = projectile.spec.flight.homingExcludedCircle?.bubbleId;
+        if (group === undefined) return false;
         const claims = runtime.prismTargetClaims.get(group)?.get(`${type}:${id}`);
         return claims !== undefined && claims.size > (claims.has(projectile.id) ? 1 : 0);
       },

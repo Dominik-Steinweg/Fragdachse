@@ -200,8 +200,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   ) {
     this.ctx.fireSystem?.setCombatSourceResolver?.((ownerId, sourceId, provenance) =>
       this.ctx.getWorldCombatCore()?.captureWorldDamageSource(ownerId, sourceId, 'ground', provenance));
-    this.ctx.stinkCloudSystem?.setCombatSourceResolver?.(ownerId =>
-      this.ctx.getWorldCombatCore()?.captureWorldDamageSource(ownerId, 'weapon.stink_cloud', 'ground'));
+    this.ctx.stinkCloudSystem?.setCombatSourceResolver?.(ownerId => {
+      const source = this.ctx.getWorldCombatCore()?.captureWorldDamageSource(ownerId, 'weapon.stink_cloud', 'ground');
+      return source ? { ...source, sourceSlot: 'utility' } : undefined;
+    });
     this.blackHoleSystem = new BlackHoleSystem(
       () => this.enemyManager,
       this.ctx.hostPhysics,
@@ -637,8 +639,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.plagueBinding?.applyPrimaryContact(ev, now);
       this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
         category: 'damage_over_time',
-        sourceId: 'weapon.stink_cloud',
-        sourceSlot: 'utility',
+        damageKind: 'ground',
+        sourceId: ev.combatSource?.authoredSourceId ?? 'weapon.stink_cloud',
+        sourceSlot: ev.combatSource ? ev.combatSource.sourceSlot : 'utility',
         baseDamageMult: ev.baseDamageMult,
         source: ev.combatSource,
       });
@@ -1382,6 +1385,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     explosionRadius: number,
     ownerId: string,
     ownerColor: number,
+    sourceId: string,
+    sourceSlot: LoadoutSlot | undefined,
   ): void {
     if (!dot || dot.damagePerTick <= 0 || dot.durationMs <= 0) return;
     this.ctx.stinkCloudSystem.hostCreateStationaryCloud(
@@ -1392,6 +1397,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       dot.baseDamageMult ?? 1,
       dot.style,
       this.ctx.getWorldCombatCore()!.getHostTime(),
+      { ...this.ctx.getWorldCombatCore()!.captureWorldDamageSource(ownerId, sourceId, 'ground'), sourceSlot },
     );
   }
 
@@ -1871,8 +1877,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle, undefined, sourceId);
     },
     // Optionale Schaden-über-Zeit-Fläche am Detonationsort (z.B. ASMD-Sekundär-Upgrade).
-    spawnDotArea: (dot, x, y, explosionRadius, ownerId, ownerColor) => {
-      this.spawnDotAreaFromExplosion(dot, x, y, explosionRadius, ownerId, ownerColor);
+    spawnDotArea: (dot, x, y, explosionRadius, ownerId, ownerColor, sourceId, sourceSlot) => {
+      this.spawnDotAreaFromExplosion(dot, x, y, explosionRadius, ownerId, ownerColor, sourceId, sourceSlot);
     },
     resolveOwnerColor: (ownerId) => bridge.getPlayerColor(ownerId),
   };

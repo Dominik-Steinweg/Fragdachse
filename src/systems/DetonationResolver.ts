@@ -47,6 +47,7 @@ export interface DetonationEffectSink {
     dot: DamageOverTimeAreaConfig | undefined,
     x: number, y: number, explosionRadius: number,
     ownerId: string, ownerColor: number,
+    sourceId: string, sourceSlot: LoadoutSlot | undefined,
   ): void;
   /** Farbe des Detonator-Besitzers; `undefined`, wenn unbekannt. */
   resolveOwnerColor(ownerId: string): number | undefined;
@@ -101,6 +102,7 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
   sink.spawnDotArea(
     effect.dotArea, event.x, event.y, effect.aoeRadius,
     event.detonatorOwnerId, detonatorColor ?? 0xffffff,
+    event.sourceId, event.sourceSlot,
   );
 }
 

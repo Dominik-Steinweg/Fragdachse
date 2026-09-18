@@ -119,6 +119,8 @@ export interface CombatDamageApplicationOptions {
 
 /** Explicit radial-effect modifiers used by migrated world/activity consumers. */
 export interface CombatAoeDamageOptions {
+  readonly damageKind?: Extract<CombatDamageKind, 'explosion' | 'ground'>;
+  readonly source?: CombatSource;
   readonly category?: ShieldBlockCategory;
   readonly allowTeamDamage?: boolean;
   readonly sourceId?: string;
