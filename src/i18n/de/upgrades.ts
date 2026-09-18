@@ -330,7 +330,7 @@ export const deUpgrades = {
   "upgrade.flamethrower_kamikaze_molotov_bonuses.name": "Napalm-Mischung",
   "upgrade.flamethrower_kamikaze_molotov_bonuses.description": "Kamikaze-Napalm verwendet die vollständig geskillte Molotov-Konfiguration des Spielers, einschließlich Lauffeuer.",
   "upgrade.flamethrower_fireball.name": "Feuerball-Werfer",
-  "upgrade.flamethrower_fireball.description": "Wandelt den Flammenwerfer in einen langsamer feuernden, großen Feuerball um, der bei Kontakt explodiert und Ziele in Brand setzt.",
+  "upgrade.flamethrower_fireball.description": "Wandelt den Flammenwerfer in einen großen Feuerball um, der rotierend Flammen ausstößt, bei Kontakt explodiert und Ziele in Brand setzt.",
   "upgrade.flamethrower_fireball_trail.name": "Brennende Spur",
   "upgrade.flamethrower_fireball_trail.description": "Der Feuerball hinterlässt während des Flugs lang brennenden Boden.",
   "upgrade.flamethrower_fireball_chunks.name": "Brennende Brocken",

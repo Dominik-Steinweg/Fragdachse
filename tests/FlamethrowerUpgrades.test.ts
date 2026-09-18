@@ -34,6 +34,28 @@ function maxProfile(upgradeIds: readonly string[]): CoopDefenseUpgradeProfile {
 }
 
 describe('Flamethrower fireball coop-defense upgrade', () => {
+  it('uses captured expiry ground after a weapon change, and does not fall back for disabled ground', () => {
+    const refresh = vi.fn();
+    const readWeapon = vi.fn(() => undefined);
+    const system = new FlamethrowerUpgradeSystem(
+      { getAllPlayers: () => [] } as never, null, { getTravelSamples: () => [] }, {} as never,
+      { isAlive: () => false } as never,
+      { getEquippedWeaponConfig: readWeapon } as never,
+      { hostRefreshGroundCell: refresh } as never,
+      () => false, () => true, () => {}, (_id, _stat, value) => value, () => {},
+    );
+    const event = { ownerId: 'owner', x: 12, y: 34,
+      provenance: createSingleOwnerProvenance('owner'),
+      flameExpiryGround: { durationMs: 1234, burn: { durationMs: 567, damagePerTick: 2 },
+        baseDamageMult: 1.5, igniteProjectiles: true } };
+    system.handleNaturalFlameExpiry(event as never, 100);
+    expect(refresh).toHaveBeenCalledWith(12, 34, expect.objectContaining({
+      durationMs: 1234, burn: event.flameExpiryGround.burn, baseDamageMult: 1.5, igniteProjectiles: true,
+    }), 100);
+    system.handleNaturalFlameExpiry({ ...event, flameExpiryGround: { ...event.flameExpiryGround, durationMs: 0 } } as never, 200);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(readWeapon).not.toHaveBeenCalled();
+  });
   it.each([false, true])('inherits the complete Molotov effect only with Napalm Mixture (%s)', inherit => {
     const createZone = vi.fn();
     const base = WEAPON_CONFIGS.FLAMETHROWER;
@@ -58,7 +80,7 @@ describe('Flamethrower fireball coop-defense upgrade', () => {
       expect(effect.wildfire).toBeUndefined();
     }
   });
-  it('keeps continuous-fire adrenaline consumption per time equal to the base weapon', () => {
+  it('resolves fireball cost independently and preserves normal flame modifiers', () => {
     const base = WEAPON_CONFIGS.FLAMETHROWER;
     const upgradeIds = [
       'unlock_flamethrower',
@@ -77,11 +99,25 @@ describe('Flamethrower fireball coop-defense upgrade', () => {
     if (resolved.fire.type !== 'flamethrower') throw new Error('Expected flamethrower config');
     expect(resolved.fire.fireball?.enabled).toBeGreaterThan(0);
     expect(resolved.cooldown).toBeGreaterThan(0);
-    const expectedPreCompensationCost = (
-      base.adrenalinCost + (totals.additive['weapon2.adrenalinCost'] ?? 0)
-    ) * (1 + (totals.percentage['weapon2.adrenalinCost'] ?? 0));
-    expect(resolved.adrenalinCost / resolved.cooldown)
-      .toBeCloseTo(expectedPreCompensationCost / base.cooldown);
+    const conversion = getCoopDefenseUpgradeDefinition('flamethrower_fireball')!;
+    const conversionCost = conversion.effects.find(effect => effect.stat.endsWith('.adrenalinCost'))!.value;
+    expect(resolved.adrenalinCost).toBeCloseTo((base.adrenalinCost + conversionCost)
+      * (1 + (totals.percentage['weapon.FLAMETHROWER.adrenalinCost'] ?? 0)));
+    const faster = applyCoopDefenseModifiersToWeaponConfig(base, 'weapon2', {
+      additive: totals.additive, percentage: { ...totals.percentage, 'weapon2.fireRate': 0.25 },
+    });
+    expect(faster.adrenalinCost).toBe(resolved.adrenalinCost);
+    expect(faster.cooldown).toBeLessThan(resolved.cooldown);
+    expect(faster.fireballFlameConfig!.cooldown).toBeLessThan(resolved.fireballFlameConfig!.cooldown);
+    const normalTotals = { additive: { ...totals.additive }, percentage: { ...totals.percentage } };
+    for (const effect of conversion.effects) {
+      const bucket = effect.mode === 'add_per_level' ? normalTotals.additive : normalTotals.percentage;
+      bucket[effect.stat] = (bucket[effect.stat] ?? 0) - effect.value;
+    }
+    const normal = applyCoopDefenseModifiersToWeaponConfig(base, 'weapon2', normalTotals);
+    expect(resolved.fireballFlameConfig).toEqual(normal);
+    expect(normal.fire.type === 'flamethrower' && normal.fire.burningGround?.createOnFlameExpiry).toBeGreaterThan(0);
+    expect(normal.fireballFlameConfig).toBeUndefined();
   });
 
   it('characterizes pre-combat fire imbue for a projectile crossing friendly ground fire', () => {

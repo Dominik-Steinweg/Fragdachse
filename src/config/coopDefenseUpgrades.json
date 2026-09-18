@@ -3680,7 +3680,12 @@
                                                                 {
                                                                     "stat":  "weapon.FLAMETHROWER.cooldown",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  1430
+                                                                    "value":  1030
+                                                                },
+                                                                {
+                                                                    "stat":  "weapon.FLAMETHROWER.adrenalinCost",
+                                                                    "mode":  "add_per_level",
+                                                                    "value":  29.5
                                                                 },
                                                                 {
                                                                     "stat":  "weapon.FLAMETHROWER.damage",
@@ -3690,7 +3695,7 @@
                                                                 {
                                                                     "stat":  "weapon.FLAMETHROWER.range",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  450
+                                                                    "value":  150
                                                                 },
                                                                 {
                                                                     "stat":  "weapon.FLAMETHROWER.fire.fireball.enabled",

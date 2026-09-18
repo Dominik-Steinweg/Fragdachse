@@ -671,6 +671,7 @@ export interface SyncedProjectile {
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   /** Visuelle Quellenkennung; insbesondere für owner-/quellenabhängige Flame-Ketten. */
   sourceTurretId?: string;
+  flameStreamKey?: string;
   /** Reiner VFX-Ursprung; x/y ist hier die replizierte tatsächliche Projektilposition. */
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
@@ -709,6 +710,7 @@ export interface SyncedProjectileStatic {
   ownerColor?: number;
   /** Visuelle Quellenkennung; bleibt bei Static-Updates derselben Projectile-ID explizit. */
   sourceTurretId?: string;
+  flameStreamKey?: string;
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number;
   smokeTrailColor?: number;
@@ -1217,6 +1219,7 @@ export interface ProjectileSpawnConfig {
   piercesTargets?: boolean;
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
   sourceTurretId?: string;
+  flameStreamKey?: string;
   smokeTrailColor?: number;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
   grenadeEffect?:  GrenadeEffectConfig;

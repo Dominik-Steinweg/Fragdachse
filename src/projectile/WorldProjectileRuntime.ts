@@ -368,7 +368,7 @@ export class WorldProjectileRuntime implements
       sweepRocks: (projectile, rangeBeforeStep) => this.sweepRocks(projectile, rangeBeforeStep),
       updateHoming: (projectile, simulatedAgeMs) => { this.updateProjectileHoming(projectile, simulatedAgeMs); },
       onImpact: (projectile, x, y) => this.projectileImpactEventCallback?.(this.createImpactSource(projectile, x, y)),
-      onNaturalFlameExpiry: (projectile) => this.naturalFlameExpiryCallback?.(this.createImpactSource(projectile) as ProjectileFlameExpiryEvent),
+      onNaturalFlameExpiry: (projectile) => this.naturalFlameExpiryCallback?.({ ...this.createImpactSource(projectile), flameExpiryGround: projectile.flameExpiryGround }),
       onProximityPulse: (projectile) => this.proximityPulseCallback?.(this.createImpactSource(projectile)),
       onSpentDestruction: (projectile) => this.miniRocketDestroyedCallback?.(this.createImpactSource(projectile)),
     };
@@ -426,6 +426,7 @@ export class WorldProjectileRuntime implements
             && (projectile.interaction.burnAugment?.burn?.damagePerTick ?? 0) > 0)
         ),
         sourceTurretId: projectile.provenance.sourceTurretId,
+        flameStreamKey: projectile.presentation.flameStreamKey,
         flightPath,
       });
     }
@@ -1253,6 +1254,7 @@ export class WorldProjectileRuntime implements
         allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
         ownerColor: projectile.presentation.ownerColor,
         sourceTurretId: projectile.provenance.sourceTurretId,
+        flameStreamKey: projectile.presentation.flameStreamKey,
         visualMuzzleOrigin: projectile.presentation.visualMuzzleOrigin,
         projectileVisualScale: projectile.presentation.projectileVisualScale,
         smokeTrailColor: projectile.presentation.smokeTrailColor,
@@ -1285,16 +1287,84 @@ export class WorldProjectileRuntime implements
     };
   }
 
+  private readonly flameSteps = new Map<number, { fromAge: number; toAge: number; fromX: number; fromY: number; toX: number; toY: number }>();
+
   spawnProjectile(request: ProjectileSpawnRequest): ProjectileSpawnResult {
     if (this.destroyed) return null;
     const { origin } = request;
-    return this.spawnResolved(
+    const id = this.spawnResolved(
       origin.x,
       origin.y,
       origin.angle,
       toProjectileSpawnConfig(request),
       request.provenance,
     );
+    const record = this.projectiles.getById(id)!;
+    record.flameExpiryGround = request.flameExpiryGround;
+    const emission = request.flameEmission;
+    if (emission && emission.intervalMs > 0 && Number.isFinite(emission.intervalMs)) {
+      record.flameEmission = { spec: emission, startAngle: origin.angle, nextAtMs: emission.intervalMs };
+      this.emitFireballFlame(record, 0, record.lastX, record.lastY);
+    }
+    return id;
+  }
+
+  private emitFireballFlame(parent: ProjectileRuntimeRecord, ageMs: number, x: number, y: number, provenance = parent.provenance): void {
+    const emission = parent.flameEmission!;
+    const flame = emission.spec.flame;
+    this.spawnProjectile({
+      ...flame,
+      flameEmission: undefined,
+      interaction: scalePortalDamagePayload(flame.interaction, portalDamageMultiplier(provenance.portalDamage)),
+      origin: { x, y, angle: emission.startAngle + ageMs / 1000 * emission.spec.angularSpeedRadiansPerSecond },
+      provenance: { ...provenance, weaponSourceId: flame.provenance.weaponSourceId,
+        primaryHitReward: undefined,
+        lineage: { ...provenance.lineage, parentProjectileId: parent.id } },
+      presentation: { ...flame.presentation, flameStreamKey: `fireball:${parent.id}` },
+    });
+  }
+
+  private finishFlameStep(parent: ProjectileRuntimeRecord, terminal = false): void {
+    const step = this.flameSteps.get(parent.id);
+    this.flameSteps.delete(parent.id);
+    const emitter = parent.flameEmission;
+    if (!step || !emitter || this.destroyed) return;
+    const contact = this.flightContactPoints.get(parent.id);
+    const segments = [...(parent.portalTravel ?? []).map(sample => ({
+      fromX: sample.fromX, fromY: sample.fromY, toX: sample.toX, toY: sample.toY,
+      provenance: sample.provenance,
+    }))];
+    const prefix = segments[segments.length - 1];
+    // A contact before transfer already ended the last prefix: do not count it twice.
+    if (!prefix || prefix.fromX !== step.fromX || prefix.fromY !== step.fromY) {
+      segments.push({ fromX: step.fromX, fromY: step.fromY, toX: step.toX, toY: step.toY, provenance: parent.provenance });
+    }
+    const fullDistance = emitter.portalStepDistancePx
+      ?? segments.reduce((sum, segment) => sum + Math.hypot(segment.toX - segment.fromX, segment.toY - segment.fromY), 0);
+    emitter.portalStepDistancePx = undefined;
+    if (contact) { segments[segments.length - 1].toX = contact.x; segments[segments.length - 1].toY = contact.y; }
+    const distance = segments.reduce((sum, segment) => sum + Math.hypot(segment.toX - segment.fromX, segment.toY - segment.fromY), 0);
+    const endAge = Math.min(parent.spec.flight.lifetimeMs, step.fromAge + (step.toAge - step.fromAge)
+      * (contact && fullDistance > 0 ? Math.min(1, distance / fullDistance) : 1));
+    const exclusiveEnd = terminal || endAge >= parent.spec.flight.lifetimeMs;
+    while (emitter.nextAtMs < endAge || (!exclusiveEnd && emitter.nextAtMs <= endAge)) {
+      const age = emitter.nextAtMs;
+      emitter.nextAtMs += emitter.spec.intervalMs;
+      const fraction = Math.max(0, Math.min(1, (age - step.fromAge) / Math.max(0.000001, step.toAge - step.fromAge)));
+      let remaining = fraction * fullDistance;
+      let x = segments[0].fromX, y = segments[0].fromY;
+      let provenance = segments[0].provenance;
+      for (const segment of segments) {
+        const length = Math.hypot(segment.toX - segment.fromX, segment.toY - segment.fromY);
+        const t = length > 0 ? Math.min(1, remaining / length) : 1;
+        x = segment.fromX + (segment.toX - segment.fromX) * t;
+        y = segment.fromY + (segment.toY - segment.fromY) * t;
+        provenance = segment.provenance;
+        if (remaining <= length) break;
+        remaining -= length;
+      }
+      this.emitFireballFlame(parent, age, x, y, provenance);
+    }
   }
 
   destroyProjectile(id: ProjectileId): void {
@@ -1491,6 +1561,7 @@ export class WorldProjectileRuntime implements
   }
 
   private releaseProjectile(record: ProjectileRuntimeRecord): void {
+    this.finishFlameStep(record, true);
     this.removePrismTargetClaim(record.id);
     if (this.projectiles.getById(record.id) !== record) return;
     const handle = record.physics;
@@ -1743,8 +1814,24 @@ export class WorldProjectileRuntime implements
     if (this.destroyed) return emptyHostStageResult();
     this.setHostFrameTime(nowMs);
     this.captureDebugFlightSteps('before-flight');
+    for (const parent of this.projectiles.stepOrder) {
+      if (!parent.flameEmission) continue;
+      const fromAge = parent.simulatedAgeMs ?? 0;
+      this.flameSteps.set(parent.id, { fromAge,
+        toAge: fromAge + Math.max(0, deltaMs * (parent.timeBubbleFactor ?? 1)),
+        fromX: parent.lastX, fromY: parent.lastY, toX: parent.physics.sprite.x, toY: parent.physics.sprite.y });
+    }
     const coreStage = this.flightProcessor.run(this.projectiles.stepOrder, deltaMs, nowMs);
+    for (const parent of this.projectiles.stepOrder) {
+      const step = this.flameSteps.get(parent.id);
+      if (step && !parent.pendingDestroy) step.toAge = parent.simulatedAgeMs ?? step.toAge;
+    }
     const stage = this.lifecycleProcessor.run(this.projectiles.stepOrder, coreStage);
+    for (const id of this.flameSteps.keys()) {
+      const parent = this.projectiles.getById(id);
+      if (parent) this.finishFlameStep(parent, parent.pendingDestroy === true);
+    }
+    this.flameSteps.clear();
     this.captureDebugFlightSteps('after-flight');
     if (this.destroyed) return emptyHostStageResult();
     this.runMiniRocketStateStage();
@@ -1870,6 +1957,7 @@ export class WorldProjectileRuntime implements
       const gates = record.portalGates ??= new Map();
       let from = { x: record.lastX, y: record.lastY };
       let end = { x: record.physics.sprite.x, y: record.physics.sprite.y };
+      if (record.flameEmission) record.flameEmission.portalStepDistancePx = Math.hypot(end.x - from.x, end.y - from.y);
       releasePortalGates(gates, from);
       const zeroProgress = new Set<string>();
       while (!record.pendingDestroy && this.projectiles.activeRecords.has(record)) {
@@ -2760,6 +2848,7 @@ export class WorldProjectileRuntime implements
         },
       },
       presentation: {
+        flameStreamKey: cfg.flameStreamKey,
         color: cfg.color,
         ownerColor: cfg.ownerColor,
         visualMuzzleOrigin: cfg.visualMuzzleOrigin,

@@ -25,6 +25,7 @@ export interface ProjectileClientReplicaState {
   readonly sporeVisualVariant?: 'spore' | 'spore_void';
   readonly ownerColor?: number;
   readonly sourceTurretId?: string;
+  readonly flameStreamKey?: string;
   readonly projectileVisualScale?: number;
   readonly isDecaying: boolean;
   readonly velocityDecay: number;
@@ -172,6 +173,7 @@ function createReplicaState(
     sporeVisualVariant: projectile.sporeVisualVariant,
     ownerColor: projectile.ownerColor,
     sourceTurretId: projectile.sourceTurretId,
+    flameStreamKey: projectile.flameStreamKey,
     projectileVisualScale: projectile.projectileVisualScale,
     isDecaying: projectile.style === 'flame' || projectile.style === 'leaf_blower',
     velocityDecay: projectile.velocityDecay ?? 1,

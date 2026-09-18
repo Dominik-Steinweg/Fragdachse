@@ -63,6 +63,7 @@ export interface ProjectileImpactSource {
 }
 
 export interface ProjectileFlameExpiryEvent extends ProjectileImpactSource {
+  readonly flameExpiryGround?: import('./ProjectileSpawnRequest').ProjectileFlameExpiryGround;
   readonly x: number;
   readonly y: number;
 }

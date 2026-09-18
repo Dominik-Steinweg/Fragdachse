@@ -1261,3 +1261,8 @@ export const PEER_DIAGNOSTICS_SAMPLE_WINDOW = 60;
 export const PEER_DIAGNOSTICS_BACKPRESSURE_BYTES = 64 * 1024;
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.
+
+/** Clockwise rotation per second of simulated fireball time. */
+export const FIREBALL_FLAME_ROTATION_DEGREES_PER_SECOND = 180;
+export const FIREBALL_FLAME_SPEED_FACTOR = 0.7;
+export const FIREBALL_FLAME_RANGE_FACTOR = 0.5;

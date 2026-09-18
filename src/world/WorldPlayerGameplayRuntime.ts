@@ -739,6 +739,8 @@ export class WorldPlayerGameplayRuntime implements
       },
     });
     const weaponActivation = new PlayerWeaponActivationRuntime({
+      getRuntimeDamageMultiplier: (id, slot, nowMs) => loadout.getWeaponDamageMultiplier(id, slot, nowMs)
+        * (options.getPowerUpSystem()?.getDamageMultiplier(id) ?? 1),
       playerManager: {
         getPlayer: (playerId) => {
           const player = options.playerManager.getPlayer(playerId);

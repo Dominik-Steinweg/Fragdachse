@@ -22,6 +22,14 @@ import type { ProjectileSpeedVariationState } from './ProjectileSpeedVariation';
 
 /** Private authoritative state: never exported through a gameplay boundary. */
 export interface ProjectileRuntimeRecord {
+  flameExpiryGround?: import('./ProjectileSpawnRequest').ProjectileFlameExpiryGround;
+  flameEmission?: {
+    readonly spec: import('./ProjectileSpawnRequest').ProjectileFlameEmission;
+    readonly startAngle: number;
+    nextAtMs: number;
+    /** Pre-portal travel length; excludes jumps and survives a contact on a prefix. */
+    portalStepDistancePx?: number;
+  };
   distanceScaling?: { distance: number; committed: number; startX: number; startY: number;
     range: number; x: number; y: number; factor: number };
   /** Consumed on first full carrier exit; never replicated or inherited by children. */
@@ -149,6 +157,7 @@ export interface ProjectileResolvedInteraction {
   };
 }
 export interface ProjectilePresentationMetadata {
+  readonly flameStreamKey?: string;
   readonly color: number;
   readonly ownerColor?: number;
   readonly visualMuzzleOrigin?: { x: number; y: number };

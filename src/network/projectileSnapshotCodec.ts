@@ -46,6 +46,7 @@ const S_SPORE_VARIANT = 1024;
 const S_AUDIO = 2048;
 const S_FLAGS = 4096;          // Bit0 allowTeamDamage, Bit1 suppressSpawnFx
 const S_TRACER = 8192;
+const S_FLAME_STREAM = 32768;
 const S_SOURCE_TURRET = 16384; // appended: source-sensitive presentation chain key
 
 const FLAG_ALLOW_TEAM_DAMAGE = 1;
@@ -147,6 +148,7 @@ export function encodeProjectileStatic(
   if (flags !== 0) mask |= S_FLAGS;
   if (entry.tracer !== undefined) mask |= S_TRACER;
   if (entry.sourceTurretId !== undefined) mask |= S_SOURCE_TURRET;
+  if (entry.flameStreamKey !== undefined) mask |= S_FLAME_STREAM;
 
   out.push(entry.id, mask, entry.ownerId);
   if (mask & S_STYLE) out.push(indexIn(PROJECTILE_STYLES, entry.style));
@@ -177,6 +179,7 @@ export function encodeProjectileStatic(
     FLIGHT_SIGNATURE_FIELDS.forEach((field, index) => { if (fields & (1 << index)) out.push(tracer[field] as number); });
   }
   if (mask & S_SOURCE_TURRET) out.push(entry.sourceTurretId as string);
+  if (mask & S_FLAME_STREAM) out.push(entry.flameStreamKey as string);
 }
 
 /** Dekodiert den Statik-Strom zurück in Vollersatz-Einträge. */
@@ -227,6 +230,7 @@ export function decodeProjectileStatics(
       entry.tracer = tracer as unknown as TracerConfig;
     }
     if (mask & S_SOURCE_TURRET) entry.sourceTurretId = stream[i++] as string;
+    if (mask & S_FLAME_STREAM) entry.flameStreamKey = stream[i++] as string;
     result.push(entry);
   }
   return result;
@@ -418,6 +422,7 @@ export function applyProjectileSnapshot(
       allowTeamDamage: shared.allowTeamDamage,
       ownerColor: shared.ownerColor,
       sourceTurretId: shared.sourceTurretId,
+      flameStreamKey: shared.flameStreamKey,
       visualMuzzleOrigin: shared.visualMuzzleOrigin,
       projectileVisualScale: shared.projectileVisualScale,
       smokeTrailColor: shared.smokeTrailColor,

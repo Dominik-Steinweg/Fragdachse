@@ -147,6 +147,12 @@ Rocket-Smoke und Projectile-Burn teilen den neutralen Distanz-Sampler, besitzen 
 Paletten und Lebenszeiten. Rocket-Exhaust bleibt zeitbasiert an der dargestellten Triebwerksposition.
 Kopfgebundene Akzente gehören weiterhin den spezialisierten Projectile-Renderern.
 
+Flammenketten verwenden den optionalen, replizierten `flameStreamKey` aus dem
+Projectile-Presentation-Vertrag. Unabhängige bewegliche Quellen desselben Besitzers benötigen
+unterschiedliche Schlüssel; ohne expliziten Schlüssel bleibt die Zuordnung zum Quellturm oder
+Besitzer bestehen. Dieser Darstellungsschlüssel verändert weder Provenance noch Team oder
+Schadenszuordnung. Den Vertrag sichern die Projectile-Snapshot- und Presentation-Runtime-Tests.
+
 Flight-Material wird nach dem GPU-Retire-Sweep emittiert: zuerst alle kritischen Cores, danach Wake
 und Dekoration. Historische Spawns setzen GPU-Animationsalter und Pool-Restlebenszeit gemeinsam;
 abgelaufenes Material wird verworfen. Core und Haupt-Wake verwenden zusammenhängende GPU-Ribbons:

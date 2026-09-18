@@ -45,6 +45,7 @@ describe('Projektil-Statik-Codec', () => {
       allowTeamDamage: true,
       ownerColor: 0xff0000,
       sourceTurretId: 'turret-42',
+      flameStreamKey: 'fireball:123',
       visualMuzzleOrigin: { x: 1230.5, y: 570.25 },
       projectileVisualScale: 1.4,
       smokeTrailColor: 0x336699,

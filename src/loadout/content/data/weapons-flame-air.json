@@ -33,8 +33,8 @@
         },
         "fireball": {
           "enabled": 0,
-          "projectileSpeed": 450,
-          "projectileSize": 28,
+          "projectileSpeed": 100,
+          "projectileSize": 32,
           "explosionRadius": 120,
           "explosionMaxDamage": 90,
           "explosionMinDamage": 20,

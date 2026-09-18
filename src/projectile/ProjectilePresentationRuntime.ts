@@ -51,6 +51,7 @@ export type ProjectilePresentationState = Readonly<Pick<SyncedProjectile,
   | 'color'
   | 'ownerColor'
   | 'sourceTurretId'
+  | 'flameStreamKey'
   | 'projectileVisualScale'
   | 'smokeTrailColor'
   | 'style'
@@ -140,6 +141,7 @@ export class ProjectilePresentationRuntime {
     color: number;
     ownerColor?: number;
     sourceTurretId?: string;
+    flameStreamKey?: string;
   }>();
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -336,17 +338,19 @@ export class ProjectilePresentationRuntime {
   }
 
   /** Rebuild cached visuals when a stable ID receives new owner/source appearance metadata. */
-  private refreshOwnershipAppearance(projectile: Pick<ProjectilePresentationState, 'id' | 'ownerId' | 'color' | 'ownerColor' | 'sourceTurretId'>): boolean {
+  private refreshOwnershipAppearance(projectile: Pick<ProjectilePresentationState, 'id' | 'ownerId' | 'color' | 'ownerColor' | 'sourceTurretId' | 'flameStreamKey'>): boolean {
     const previous = this.ownershipAppearance.get(projectile.id);
     if (previous?.ownerId === projectile.ownerId
       && previous.color === projectile.color
       && previous.ownerColor === projectile.ownerColor
-      && previous.sourceTurretId === projectile.sourceTurretId) return false;
+      && previous.sourceTurretId === projectile.sourceTurretId
+      && previous.flameStreamKey === projectile.flameStreamKey) return false;
     this.ownershipAppearance.set(projectile.id, {
       ownerId: projectile.ownerId,
       color: projectile.color,
       ownerColor: projectile.ownerColor,
       sourceTurretId: projectile.sourceTurretId,
+      flameStreamKey: projectile.flameStreamKey,
     });
     if (!previous) return false;
     this.bulletRenderer?.destroyVisual(projectile.id);
@@ -394,7 +398,7 @@ export class ProjectilePresentationRuntime {
       switch (style) {
         case 'flame':
           if (this.flameRenderer) {
-            if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, x, y, size, projectile.color, projectile.sourceTurretId ?? projectile.ownerId);
+            if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, x, y, size, projectile.color, projectile.flameStreamKey ?? projectile.sourceTurretId ?? projectile.ownerId);
             this.flameRenderer.updateVisual(id, x, y, size, vx, vy);
           }
           break;
@@ -651,7 +655,7 @@ export class ProjectilePresentationRuntime {
         if (!this.leafBlowerRenderer.has(id)) this.leafBlowerRenderer.createVisual(id, proj.x, proj.y, proj.size);
         this.leafBlowerRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (proj.style === 'flame' && this.flameRenderer) {
-        if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, proj.sourceTurretId ?? proj.ownerId);
+        if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, proj.flameStreamKey ?? proj.sourceTurretId ?? proj.ownerId);
         this.flameRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if ((proj.style === 'awp' || proj.style === 'gauss') && this.bulletRenderer) {
         if (!this.bulletRenderer.has(id)) this.bulletRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);

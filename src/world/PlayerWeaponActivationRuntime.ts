@@ -64,6 +64,7 @@ export interface PlayerWeaponActivationPhysicsPort {
 }
 
 export interface PlayerWeaponActivationRuntimeOptions {
+  readonly getRuntimeDamageMultiplier?: (playerId: string, slot: WeaponSlot, nowMs: number) => number;
   readonly playerManager: PlayerWeaponActivationPlayerPort;
   readonly loadout: PlayerWeaponActivationLoadoutPort;
   readonly resourceSystem: PlayerWeaponActivationResourcePort;
@@ -190,6 +191,9 @@ export class PlayerWeaponActivationRuntime {
     const adrenalineGainBasis = this.options.resourceSystem.captureAdrenalineGainBasis?.(request.playerId);
     const primaryHitRewardScope = this.options.capturePrimaryHitRewardScope?.() ?? null;
     const primaryHitRewardOrigin = Object.freeze({ x: player.x, y: player.y });
+    const flameRuntimeDamageMultiplier = cfg.fireballFlameConfig
+      ? this.options.getRuntimeDamageMultiplier?.(request.playerId, request.slot, request.nowMs) ?? 1
+      : undefined;
     const shotPlan = prepaidRocketSalvo && cfg.rocketLauncher ? {
       shots: rocketSalvoAngles(prepaidRocketSalvo.count, request.angle, cfg.rocketLauncher.salvoAngleDegrees,
         prepaidRocketSalvo.focused ? cfg.rocketLauncher.focusAngleFactor : 1)
@@ -222,6 +226,7 @@ export class PlayerWeaponActivationRuntime {
         adrenalineGainBasis,
         primaryHitRewardScope,
         primaryHitRewardOrigin,
+        flameRuntimeDamageMultiplier,
       );
       if (fired) didFire = true;
     }
@@ -264,6 +269,7 @@ export class PlayerWeaponActivationRuntime {
           adrenalineGainBasis,
           primaryHitRewardScope,
           primaryHitRewardOrigin,
+          flameRuntimeDamageMultiplier,
         );
         this.dispatchWeaponFire(
           sideCfg,
@@ -281,6 +287,7 @@ export class PlayerWeaponActivationRuntime {
           adrenalineGainBasis,
           primaryHitRewardScope,
           primaryHitRewardOrigin,
+          flameRuntimeDamageMultiplier,
         );
       }
     }
@@ -344,6 +351,7 @@ export class PlayerWeaponActivationRuntime {
     adrenalineGainBasis?: AdrenalineGainBasis | null,
     primaryHitRewardScope?: PrimaryHitRewardScope | null,
     primaryHitRewardOrigin?: { readonly x: number; readonly y: number },
+    flameRuntimeDamageMultiplier?: number,
   ): boolean {
     const visualMuzzleOrigin = this.getVisualMuzzleOrigin(playerId, config.id);
     switch (config.fire.type) {
@@ -358,6 +366,7 @@ export class PlayerWeaponActivationRuntime {
       case 'reinforcement_matrix':
       case 'energy_injector':
         return this.options.specializedWeaponExecution.fire(config, {
+          flameRuntimeDamageMultiplier,
           x,
           y,
           angle,

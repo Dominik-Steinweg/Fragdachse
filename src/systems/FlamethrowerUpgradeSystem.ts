@@ -217,6 +217,18 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   }
 
   handleNaturalFlameExpiry(projectile: ProjectileFlameExpiryEvent, now: number): void {
+    const captured = projectile.flameExpiryGround;
+    if (captured) {
+      if (captured.durationMs > 0) this.fireSystem.hostRefreshGroundCell(projectile.x, projectile.y, {
+        sourceKey: 'flamethrower:' + projectile.ownerId, ownerId: projectile.ownerId,
+        ...captured,
+        burn: { ...captured.burn, damagePerTick: captured.burn.damagePerTick * portalDamageMultiplier(projectile.provenance.portalDamage) },
+        sourceId: 'ground_fire.flamethrower',
+        combatSource: this.fireSystem.captureCombatSource?.(projectile.provenance.allegiance.ownerId,
+          'ground_fire.flamethrower', projectile.provenance),
+      }, now);
+      return;
+    }
     const owner = this.getEquippedFlameOwner(projectile.ownerId);
     if (!owner || (owner.fire.burningGround?.createOnFlameExpiry ?? 0) <= 0) return;
     if ((owner.fire.burningGround?.durationMs ?? 0) <= 0) return;

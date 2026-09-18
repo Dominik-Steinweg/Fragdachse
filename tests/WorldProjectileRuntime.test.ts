@@ -45,6 +45,8 @@ import { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
 import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
+import { SpecializedWeaponExecutionAdapter } from '../src/world/SpecializedWeaponExecutionAdapter';
+import { PlayerWeaponActivationRuntime } from '../src/world/PlayerWeaponActivationRuntime';
 import type { ProjectileDirectImpactRequest } from '../src/projectile/ProjectileCombatPort';
 import {
   createTechnicalPhysicsBinding,
@@ -137,6 +139,155 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  function emitterRequest(lifetimeMs = 1_000): ProjectileSpawnRequest {
+    const flame = baseRequest({ speed: 400, size: 14, lifetime: 2_000, projectileStyle: 'flame' });
+    return { ...baseRequest(), origin: { x: 0, y: 0, angle: 0.3 },
+      flight: { ...baseRequest().flight, lifetimeMs, speed: 100 },
+      provenance: { gameplaySourceId: 'player', attributionId: 'player', allegiance: { ownerId: 'player', allianceId: 'blue' } },
+      interaction: { explosion: baseExplosion() },
+      flameEmission: { intervalMs: 100, angularSpeedRadiansPerSecond: Math.PI / 2,
+        flame: { ...flame, flight: { ...flame.flight, isFlame: true },
+          flameExpiryGround: { durationMs: 1234, burn: { durationMs: 1000, damagePerTick: 2 }, baseDamageMult: 1, igniteProjectiles: false } } },
+      presentation: { color: 1, style: 'fireball' } };
+  }
+
+  it('starts immediately and emits one independent flame per interval with inherited provenance', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const parent = runtime.spawnProjectile(emitterRequest())!;
+    expect(physics.specs).toHaveLength(2);
+    expect(physics.specs[1]).toMatchObject({ x: 0, y: 0, size: 14 });
+    expect(Math.atan2(physics.specs[1].velocityY, physics.specs[1].velocityX)).toBeCloseTo(0.3);
+    physics.handles.get(parent)!.sprite.x = 35;
+    runtime.runHostProjectileStage(350, 1350);
+    expect(physics.specs).toHaveLength(5);
+    for (let i = 2; i < 5; i++) {
+      const flame = physics.specs[i];
+      expect(flame.x).toBeCloseTo((i - 1) * 10);
+      expect(Math.hypot(flame.velocityX, flame.velocityY)).toBeCloseTo(400);
+      expect(Math.atan2(flame.velocityY, flame.velocityX)).toBeCloseTo(0.3 + (i - 1) * 0.1 * Math.PI / 2);
+    }
+    const records: import('../src/projectile/ProjectileReplicationAdapter').ProjectileReplicationRecord[] = [];
+    runtime.readProjectileReplication(record => records.push(record));
+    expect(records.filter(record => record.static.style === 'flame')).toHaveLength(4);
+    expect(records.filter(record => record.static.style === 'flame').every(record =>
+      record.static.ownerId === 'player' && record.static.flameStreamKey === `fireball:${parent}`)).toBe(true);
+    // The first child expires normally after the parent is explicitly removed.
+    const expiry = vi.fn();
+    runtime.setNaturalFlameExpiryCallback(expiry);
+    runtime.destroyProjectile(parent);
+    const count = physics.specs.length;
+    runtime.runHostProjectileStage(2100, 3450);
+    expect(physics.specs).toHaveLength(count);
+    expect(expiry).toHaveBeenCalledTimes(4);
+    expect(expiry.mock.calls[0][0]).toMatchObject({ flameExpiryGround: { durationMs: 1234 },
+      provenance: { attributionId: 'player', allegiance: { allianceId: 'blue' }, lineage: { parentProjectileId: parent } } });
+  });
+
+  it('commits player resources and cooldown only once while child flames continue independently', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const base = WEAPON_CONFIGS.FLAMETHROWER;
+    if (base.fire.type !== 'flamethrower') throw new Error('Expected flames');
+    const config = { ...base, adrenalinCost: 30, cooldown: 900, fireballFlameConfig: base,
+      fire: { ...base.fire, fireball: { ...base.fire.fireball!, enabled: 1 } } };
+    const drain = vi.fn(), recordUse = vi.fn(), spread = vi.fn(), feedback = vi.fn(), fired = vi.fn();
+    const activation = new PlayerWeaponActivationRuntime({
+      playerManager: { getPlayer: () => ({ x: 0, y: 0, color: 1 }) },
+      loadout: { isWeaponOnCooldown: () => false, getDynamicSpread: () => 0, addWeaponSpread: spread,
+        recordWeaponUse: recordUse, noteWeaponUsed: vi.fn() },
+      resourceSystem: { captureAdrenalineGainBasis: () => null, resolveAdrenalineCost: (_id, cost) => cost,
+        getAdrenaline: () => 100, drainAdrenaline: drain },
+      weaponExecution: { fire: () => false },
+      specializedWeaponExecution: new SpecializedWeaponExecutionAdapter(runtime),
+      broadcastShotFx: feedback, registerWeaponFired: fired,
+      getRuntimeDamageMultiplier: () => 2,
+    });
+    expect(activation.activateWeapon({ playerId: 'player', slot: 'weapon2', config,
+      x: 0, y: 0, angle: 0, targetX: 100, targetY: 0, nowMs: 1000 })).toEqual({ ok: true });
+    activation.noteWeaponFired('player', 'weapon2', 1000);
+    const parent = physics.specs[0];
+    expect(physics.specs[1].x).toBe(parent.x);
+    expect(physics.specs[1].y).toBe(parent.y);
+    const firstFlame = physics.specs[1];
+    const parentSpeed = Math.hypot(parent.velocityX, parent.velocityY);
+    // The initial direction is forwards; relative speed is authored tuning.
+    expect((firstFlame.velocityX * parent.velocityX + firstFlame.velocityY * parent.velocityY) / parentSpeed)
+      .toBeGreaterThan(0);
+    expect(firstFlame.velocityX * parent.velocityY - firstFlame.velocityY * parent.velocityX).toBeCloseTo(0);
+    runtime.runHostProjectileStage(300, 1300);
+    expect(physics.specs.length).toBeGreaterThan(2);
+    for (const effect of [drain, recordUse, spread, feedback, fired]) expect(effect).toHaveBeenCalledOnce();
+    expect(drain).toHaveBeenCalledWith('player', config.adrenalinCost, 1000);
+  });
+
+  it('produces the same emission sequence for partitioned frames and slowed projectile time', () => {
+    const run = (steps: number[], factor: number) => {
+      const { runtime, physics } = createRuntimeHarness();
+      runtime.setProjectileTimeFieldPort({ getMovementFactor: () => factor });
+      const parent = runtime.spawnProjectile(emitterRequest())!;
+      let time = 1000;
+      for (const step of steps) {
+        time += step;
+        physics.handles.get(parent)!.sprite.x += step / 10 * factor;
+        runtime.runHostProjectileStage(step, time);
+      }
+      return physics.specs.slice(1).map(spec => ({ x: spec.x, y: spec.y,
+        angle: Math.atan2(spec.velocityY, spec.velocityX) }));
+    };
+    const expected = run([400], 1);
+    for (const actual of [run([40, 60, 75, 25, 100, 100], 1), run([800], 0.5)]) {
+      expect(actual).toHaveLength(expected.length);
+      actual.forEach((spec, i) => {
+        expect(spec.x).toBeCloseTo(expected[i].x);
+        expect(spec.angle).toBeCloseTo(expected[i].angle);
+      });
+    }
+    expect(run([800], 0)).toHaveLength(1);
+  });
+
+  it('clips catch-up emission at lifetime and keeps different parents in separate streams', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const first = runtime.spawnProjectile(emitterRequest(250))!;
+    const second = runtime.spawnProjectile(emitterRequest(250))!;
+    physics.handles.get(first)!.sprite.x = 40;
+    physics.handles.get(second)!.sprite.x = 40;
+    runtime.runHostProjectileStage(400, 1400);
+    expect(physics.specs).toHaveLength(8); // Two parents, each with t=0,100,200 flames.
+    const keys = new Set<string>();
+    runtime.readProjectileReplication(record => keys.add(record.static.flameStreamKey!));
+    expect(keys).toEqual(new Set([`fireball:${first}`, `fireball:${second}`]));
+    runtime.runHostProjectileStage(400, 1800);
+    expect(physics.specs).toHaveLength(8);
+    runtime.destroy();
+    expect(physics.released).toHaveLength(8);
+    expect(new Set(physics.released).size).toBe(8);
+  });
+
+  it('stops catch-up at a world contact while preserving the explosion', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const parent = runtime.spawnProjectile(emitterRequest())!;
+    physics.handles.get(parent)!.sprite.x = 40;
+    physics.emit({ projectileId: parent, target: { kind: 'world-boundary' }, x: 25, y: 0,
+      velocityX: 100, velocityY: 0, source: 'world-boundary' });
+    const stage = runtime.runHostProjectileStage(400, 1400);
+    expect(physics.specs).toHaveLength(4); // Immediate flame plus 100 and 200 ms, contact at 250 ms.
+    expect(stage.projectileExplosions).toHaveLength(1);
+    runtime.runHostProjectileStage(400, 1800);
+    expect(physics.specs).toHaveLength(4);
+  });
+
+  it('emits only on real travel segments across a portal, never inside the teleport gap', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'portal', ownerId: 'player',
+      a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0.6, createdAt: 0, expiresAt: 5000 }], isPortalFriendly: () => true });
+    const parent = runtime.spawnProjectile(emitterRequest(2000))!;
+    physics.handles.get(parent)!.sprite.x = 100;
+    runtime.runHostPortalStage(2000);
+    runtime.runHostProjectileStage(1000, 2000);
+    expect(physics.specs.slice(1).map(spec => Math.round(spec.x))).toEqual([
+      0, 10, 20, 30, 490, 500, 510, 520, 530, 540, 550,
+    ]);
+  });
   it('carries opt-in random tempo through the spawn boundary independently for each projectile', () => {
     const { runtime, physics } = createRuntimeHarness();
     const request = baseRequest({ speed: 250 });

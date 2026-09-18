@@ -138,6 +138,8 @@ export interface WeaponFireOptions {
 
 /** Aufrufkontext eines einzelnen Schusses. */
 export interface WeaponFireParams {
+  /** Captured only for fireball child flames; normal attacks retain their existing damage path. */
+  readonly flameRuntimeDamageMultiplier?: number;
   readonly adrenalineGainBasis?: AdrenalineGainBasis | null;
   readonly primaryHitRewardScope?: PrimaryHitRewardScope | null;
   readonly primaryHitRewardOrigin?: { readonly x: number; readonly y: number };
@@ -322,12 +324,12 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
           spread:      config.splitSpread,
           speedFactor: config.splitFactor,
           homing: (config.splitHomingEnabled ?? 0) > 0 ? {
-            acquireDelayMs: 0,
+            acquireDelayMs: 200,
             searchRadius: 500,
             // Wie die Basis-Waffen: Splitter treten in großer Zahl auf, und jede Zielsuche
             // kostet eine Sichtlinienprüfung je geprüftem Kandidaten.
             retargetIntervalMs: 100,
-            maxTurnDegreesPerStep: 20,
+            maxTurnDegreesPerStep: 16,
             targetTypes: ['players', 'enemies', 'bases'],
             requireLineOfSight: true,
             excludeOwner: true,

@@ -1,3 +1,5 @@
+import { FIREBALL_FLAME_ROTATION_DEGREES_PER_SECOND, FIREBALL_FLAME_SPEED_FACTOR, FIREBALL_FLAME_RANGE_FACTOR } from '../config';
+import type { ProjectileSpawnRequest } from '../projectile/ProjectileSpawnRequest';
 import { createPrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
 import type {
   EnergyInjectorWeaponFireConfig,
@@ -55,7 +57,30 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         baseDamageMult: config.baseDamageMult ?? 1,
       };
       const chunkCount = Math.max(0, Math.floor(fireball?.chunkCount ?? 0));
+      const flameConfig = config.fireballFlameConfig;
+      const flame = flameConfig?.fire.type === 'flamethrower'
+        ? this.createFlame(
+          { ...flameConfig, range: flameConfig.range * FIREBALL_FLAME_RANGE_FACTOR },
+          { ...flameConfig.fire, projectileSpeed: flameConfig.fire.projectileSpeed * FIREBALL_FLAME_SPEED_FACTOR },
+          { ...params, gameplayMuzzleOrigin: undefined, visualMuzzleOrigin: undefined },
+        )
+        : undefined;
+      const ground = flameConfig?.fire.type === 'flamethrower' ? flameConfig.fire.burningGround : undefined;
       this.projectileSpawn.spawnProjectile({
+        flameEmission: flame && flameConfig ? {
+          intervalMs: flameConfig.cooldown,
+          angularSpeedRadiansPerSecond: FIREBALL_FLAME_ROTATION_DEGREES_PER_SECOND * Math.PI / 180,
+          flame: { ...flame, interaction: { ...flame.interaction, directHit: {
+            ...flame.interaction.directHit,
+            damage: (flame.interaction.directHit?.damage ?? 0) * (params.flameRuntimeDamageMultiplier ?? 1),
+            appliedSourceDamageFactors: [{ kind: 'runtime-power', multiplier: params.flameRuntimeDamageMultiplier ?? 1, resolvedAt: 'execution' }],
+          } }, flameExpiryGround: {
+            durationMs: (ground?.createOnFlameExpiry ?? 0) > 0 ? ground?.durationMs ?? 0 : 0,
+            burn: { durationMs: flame.interaction.burn?.durationMs ?? 0, damagePerTick: flame.interaction.burn?.damagePerTick ?? 0 },
+            igniteProjectiles: (ground?.igniteProjectiles ?? 0) > 0,
+            baseDamageMult: flameConfig.baseDamageMult ?? 1,
+          }, presentation: { ...flame.presentation, shotAudioKey: undefined, suppressSpawnFx: true } },
+        } : undefined,
         origin: { x: params.x, y: params.y, angle: params.angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
         flight: {
           speed: fireball?.projectileSpeed ?? 450,
@@ -116,8 +141,14 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
       return true;
     }
 
+    this.projectileSpawn.spawnProjectile(this.createFlame(config, fireConfig, params));
+    return true;
+  }
+
+  private createFlame(config: WeaponConfig, fireConfig: FlamethrowerWeaponFireConfig, params: WeaponFireParams): ProjectileSpawnRequest {
+    const sourceSlot = resolveSourceSlot(params);
     const lifetime = calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
-    this.projectileSpawn.spawnProjectile({
+    return {
       origin: { x: params.x, y: params.y, angle: params.angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
       flight: {
         speed: fireConfig.projectileSpeed,
@@ -161,8 +192,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         shotAudioKey: config.shotAudio?.successKey,
         visualMuzzleOrigin: params.visualMuzzleOrigin,
       },
-    });
-    return true;
+    };
   }
 
   private fireLeafBlower(

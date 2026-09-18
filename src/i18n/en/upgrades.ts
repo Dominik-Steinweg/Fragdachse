@@ -330,7 +330,7 @@ export const enUpgrades = {
   "upgrade.flamethrower_kamikaze_molotov_bonuses.name": "Flamethrower Kamikaze Molotov Bonuses",
   "upgrade.flamethrower_kamikaze_molotov_bonuses.description": "Kamikaze Napalm uses your fully upgraded Molotov setup, including Wildfire.",
   "upgrade.flamethrower_fireball.name": "Flamethrower Fireball",
-  "upgrade.flamethrower_fireball.description": "Turns the Flamethrower into a slower-firing, oversized fireball that exploof the on contact and ignites targets.",
+  "upgrade.flamethrower_fireball.description": "Turns the Flamethrower into a large fireball that emits rotating flames, explodes on contact and ignites targets.",
   "upgrade.flamethrower_fireball_trail.name": "Flamethrower Fireball Trail",
   "upgrade.flamethrower_fireball_trail.description": "The fireball leaves burning ground for while it is in flight.",
   "upgrade.flamethrower_fireball_chunks.name": "Flamethrower Fireball Chunks",

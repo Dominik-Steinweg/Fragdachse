@@ -23,6 +23,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     appliedSourceDamageFactors: directHit?.appliedSourceDamageFactors,
     color:  presentation.color,
     sourceTurretId: request.provenance.sourceTurretId,
+    flameStreamKey: presentation.flameStreamKey,
     lifetime:   flight.lifetimeMs,
     maxBounces: flight.maxBounces,
     isGrenade:  flight.isGrenade,

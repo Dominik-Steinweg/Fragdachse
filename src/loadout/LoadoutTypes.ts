@@ -223,6 +223,8 @@ export type WeaponFireConfig =
   | EnergyInjectorWeaponFireConfig;
 
 export interface WeaponConfigShape {
+  /** Resolved normal flames captured before the fireball conversion. Runtime-only. */
+  readonly fireballFlameConfig?: WeaponConfigShape;
   readonly rocketLauncher?: import('./RocketLauncherConfig').RocketLauncherConfig;
   readonly id: string;
   readonly cooldown: number;            // ms zwischen zwei Schüssen

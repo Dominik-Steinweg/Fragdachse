@@ -231,6 +231,12 @@ describe('ProjectilePresentationRuntime', () => {
 
     expect(flame.destroyVisual).toHaveBeenCalledWith(7);
     expect(flame.createVisual).toHaveBeenLastCalledWith(7, 100, 200, 12, 0x123456, 'turret-b');
+    runtime.presentClientFrame(replica.sync([
+      projectile({ style: 'flame', flameStreamKey: 'fireball:1' }),
+      projectile({ id: 8, style: 'flame', flameStreamKey: 'fireball:2' }),
+    ], 1200));
+    expect(flame.createVisual).toHaveBeenCalledWith(7, 100, 200, 12, expect.any(Number), 'fireball:1');
+    expect(flame.createVisual).toHaveBeenCalledWith(8, 100, 200, 12, expect.any(Number), 'fireball:2');
   });
 
   it('presents the authoritative impact point instead of the following snapshot position', () => {

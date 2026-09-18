@@ -1,10 +1,45 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { FIREBALL_FLAME_SPEED_FACTOR, FIREBALL_FLAME_RANGE_FACTOR } from '../src/config';
 import { SpecializedWeaponExecutionAdapter } from '../src/world/SpecializedWeaponExecutionAdapter';
 import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 
 describe('SpecializedWeaponExecutionAdapter – unmittelbare Spezialschüsse (4C)', () => {
+  it('uses the normal flame payload for emission, including expiry ground, without recursive execution', () => {
+    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 1);
+    const adapter = new SpecializedWeaponExecutionAdapter({ spawnProjectile });
+    const base = WEAPON_CONFIGS.FLAMETHROWER;
+    if (base.fire.type !== 'flamethrower') throw new Error('Expected flames');
+    const normal = { ...base, damage: 7, range: 430, cooldown: 43,
+      fire: { ...base.fire, piercingCount: 1, burnDamagePerTick: 3,
+        burningGround: { cellSize: 32, durationMs: 2300, igniteProjectiles: 1, createOnFlameExpiry: 1 } } };
+    const params = { x: 10, y: 20, angle: 0.7, targetX: 100, targetY: 20,
+      ownerId: 'owner', ownerColor: 123, sourceSlot: 'weapon2' as const };
+    adapter.fire(normal, params);
+    adapter.fire({ ...base, damage: 100, cooldown: 1700, range: 900, fireballFlameConfig: normal,
+      fire: { ...base.fire, fireball: { ...base.fire.fireball!, enabled: 1, trailEnabled: 1, chunkCount: 3 } } },
+    { ...params, flameRuntimeDamageMultiplier: 2 });
+    expect(spawnProjectile).toHaveBeenCalledTimes(2);
+    const ordinary = spawnProjectile.mock.calls[0][0];
+    const fireball = spawnProjectile.mock.calls[1][0];
+    const emission = fireball.flameEmission!;
+    expect(emission.intervalMs).toBe(normal.cooldown);
+    expect(emission.flame.flight).toEqual({ ...ordinary.flight,
+      speed: ordinary.flight.speed * FIREBALL_FLAME_SPEED_FACTOR, lifetimeMs: expect.any(Number) });
+    const seconds = emission.flame.flight.lifetimeMs / 1000;
+    const decay = normal.fire.velocityDecay;
+    const distance = emission.flame.flight.speed * (Math.pow(decay, seconds) - 1) / Math.log(decay);
+    expect(distance).toBeCloseTo(normal.range * FIREBALL_FLAME_RANGE_FACTOR);
+    expect(emission.flame.interaction.burn).toEqual(ordinary.interaction.burn);
+    expect(emission.flame.interaction.directHit?.damage).toBe(normal.damage * 2);
+    expect(emission.flame.flameExpiryGround).toMatchObject({ durationMs: 2300, igniteProjectiles: true,
+      burn: { damagePerTick: 3, durationMs: normal.fire.burnDurationMs } });
+    expect(emission.flame).not.toHaveProperty('flameEmission');
+    expect(emission.flame.presentation.style).toBe('flame');
+    expect(fireball.interaction.pathEffect?.kind).toBe('fireball');
+    expect(fireball.interaction.explosion?.fireChunkBurst).toMatchObject({ count: 3, igniteCenter: true });
+  });
   it('führt Flamethrower, Leaf Blower, Reinforcement Matrix und Energy Injector über eine Capability aus', () => {
     const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 1);
     const adapter = new SpecializedWeaponExecutionAdapter({ spawnProjectile });

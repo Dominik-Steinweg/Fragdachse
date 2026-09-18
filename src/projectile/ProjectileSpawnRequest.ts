@@ -27,14 +27,29 @@ import type { ProjectileId } from './ProjectileSpawnPort';
 import type { PrimaryHitAdrenalineRewardIntent } from '../combat/PrimaryHitReward';
 import type { PortalDamageContext } from '../systems/PortalTraversal';
 
+/** Captured child payload; the World projectile owner schedules it in simulated time. */
+export interface ProjectileFlameEmission {
+  readonly intervalMs: number;
+  readonly angularSpeedRadiansPerSecond: number;
+  readonly flame: Omit<ProjectileSpawnRequest, 'flameEmission'>;
+}
+
+export interface ProjectileFlameExpiryGround {
+  readonly durationMs: number;
+  readonly burn: BurnOnHitConfig;
+  readonly igniteProjectiles: boolean;
+  readonly baseDamageMult: number;
+}
+
 /**
  * Aufgelöster Spawn-Auftrag der oberen Execution-Grenze.
  *
- * Der Auftrag trennt die vier fachlich verschiedenen Dimensionen eines Projectiles – Ursprung,
- * Flug, Herkunft und Wirkung – von den rein passiven Darstellungsdaten. Er beschreibt Semantik,
- * keinen Lifecycle: Identity, Simulation und Teardown gehören der Projectile-Runtime.
+ * Der Auftrag trennt Ursprung, Flug, Herkunft und Wirkung von passiven Darstellungsdaten.
+ * Identity, Simulation und Teardown gehören der Projectile-Runtime.
  */
 export interface ProjectileSpawnRequest {
+  readonly flameEmission?: ProjectileFlameEmission;
+  readonly flameExpiryGround?: ProjectileFlameExpiryGround;
   readonly origin: ProjectileSpawnOrigin;
   readonly flight: ProjectileFlightSpec;
   readonly provenance: ProjectileProvenance;
@@ -383,6 +398,7 @@ export interface ProjectileSupportSpec {
  * opaque: kein Processor, Resolver oder Combat-Pfad verzweigt auf ein Feld dieses Descriptors.
  */
 export interface ProjectilePresentationDescriptor {
+  readonly flameStreamKey?: string;
   readonly color: number;
   readonly style?: ProjectileStyle;
   /** Spielerfarbe des Schützen für projektilspezifische Akzente. */

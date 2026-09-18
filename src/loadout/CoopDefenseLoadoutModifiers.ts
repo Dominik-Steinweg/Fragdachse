@@ -1,3 +1,4 @@
+import upgradeContent from '../config/coopDefenseUpgrades.json';
 import type { LoadoutSlot } from '../types';
 import { validateResolvedUltimate, validateResolvedUtility, validateResolvedWeapon } from './content/LoadoutSchemas';
 import { EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS } from './ExplicitLoadoutModifierDescriptors';
@@ -1095,14 +1096,16 @@ export function applyCoopDefenseModifiersToWeaponConfig(
       return resolved;
     }
 
-    // Der Feuerball feuert langsamer, soll bei Dauerfeuer aber denselben
-    // Adrenalinverbrauch pro Zeit haben. Den Faktor aus den effektiven und
-    // ursprünglichen Cooldowns ableiten, damit spätere Feuerratenänderungen
-    // automatisch mitgezogen werden.
-    return {
-      ...resolved,
-      adrenalinCost: resolved.adrenalinCost * (resolved.cooldown / baseConfig.cooldown),
-    };
+    // Remove only the authored conversion contributions, not dependent upgrades.
+    const conversion = upgradeContent.categories.map(category => category.upgrades
+      .find(upgrade => upgrade.id === 'flamethrower_fireball')).find(Boolean)!;
+    const flameTotals = { additive: { ...totals.additive }, percentage: { ...totals.percentage } };
+    for (const effect of conversion.effects ?? []) {
+      const bucket = effect.mode === 'add_per_level' ? flameTotals.additive : flameTotals.percentage;
+      // Partial modifier sources (e.g. capability probes) need not contain the whole upgrade.
+      if (bucket[effect.stat] !== undefined) bucket[effect.stat] -= effect.value;
+    }
+    return { ...resolved, fireballFlameConfig: applyConfiguredStats(baseConfig, 'weapon', slot, flameTotals) };
   });
 }
 
