@@ -105,16 +105,25 @@
     }
     .boot-bar-fill {
       height: 100%;
-      width: 0%;
+      width: 100%;
+      transform: scaleX(0);
+      transform-origin: left;
       background: linear-gradient(90deg, #be772b 0%, #e8c170 50%, #be772b 100%);
       background-size: 200% 100%;
-      animation: boot-shimmer 2s linear infinite;
       border-radius: 1px;
-      transition: width 0.12s ease-out;
+      transition: transform 0.18s ease-out;
     }
     .boot-bar-fill.boot-bar-indeterminate {
-      width: 35% !important;
-      animation: boot-indeterminate 1.4s ease-in-out infinite alternate, boot-shimmer 2s linear infinite;
+      animation: boot-activity 1.4s ease-in-out infinite alternate;
+    }
+    .boot-bar-wrap:has(.boot-bar-indeterminate)::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: #e8c170;
+      opacity: .25;
+      transform-origin: left;
+      animation: boot-indeterminate 1.4s ease-in-out infinite alternate;
     }
     .boot-status {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -125,17 +134,27 @@
       letter-spacing: 0.5px;
       text-align: center;
     }
-    @keyframes boot-indeterminate {
-      0% { transform: translateX(0%); }
-      100% { transform: translateX(185%); }
+    .boot-detail {
+      font: 11px 'JetBrains Mono', ui-monospace, monospace;
+      color: #8d9898;
+      min-height: 16px;
     }
-    @keyframes boot-shimmer {
-      0% { background-position: 100% 0; }
-      100% { background-position: -100% 0; }
+    @keyframes boot-indeterminate {
+      from { transform: translateX(0) scaleX(.25); }
+      to { transform: translateX(75%) scaleX(.25); }
+    }
+    @keyframes boot-activity {
+      from { opacity: .45; }
+      to { opacity: .8; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .boot-bar-fill { transition: none; }
+      .boot-bar-fill.boot-bar-indeterminate,
+      .boot-bar-wrap:has(.boot-bar-indeterminate)::after { animation: none; }
     }
   </style>
-  <script type="module" crossorigin src="./assets/index-iX7Pgebt.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/vendor-DEzBKQBv.js">
+  <script type="module" crossorigin src="./assets/index-CJrghkxv.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/vendor-BOlbk14v.js">
 </head>
 <body>
   <div id="game-container">
@@ -146,6 +165,7 @@
           <div id="boot-bar-fill" class="boot-bar-fill boot-bar-indeterminate"></div>
         </div>
         <div id="boot-status" class="boot-status">&nbsp;</div>
+        <div id="boot-detail" class="boot-detail"></div>
       </div>
     </div>
   </div>
