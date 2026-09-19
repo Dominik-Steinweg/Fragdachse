@@ -490,7 +490,7 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     id: GpuVfxEffectId.BloodCore,
     label: 'blood.core',
     lane: GpuVfxLaneId.GoreNormal,
-    frame: GpuVfxFrameId.BloodStain,
+    frame: GpuVfxFrameId.BloodStreak,
     importance: 'critical',
     release: 'linger',
   },

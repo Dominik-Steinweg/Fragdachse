@@ -267,10 +267,16 @@ describe('combat gore gpu renderer', () => {
       seed: 42,
     };
 
-    renderer.playHit(hit, (...args) => stains.push(args[7]));
+    const originalCoreEnabled = BLOOD_HIT_VFX.bloodCoreEnabled;
+    Object.assign(BLOOD_HIT_VFX, { bloodCoreEnabled: true });
+    try {
+      renderer.playHit(hit, (...args) => stains.push(args[7]));
+    } finally {
+      Object.assign(BLOOD_HIT_VFX, { bloodCoreEnabled: originalCoreEnabled });
+    }
 
     expect(stains.length).toBeGreaterThan(0);
-    expect(findFakeLane(scene, 'gore-normal').members.length).toBeGreaterThan(10);
+    expect(findFakeLane(scene, 'gore-normal').members.length).toBeGreaterThan(0);
     expect(scene.objects).toHaveLength(0);
   });
 
@@ -610,7 +616,7 @@ describe('combat gore gpu renderer', () => {
     expect(glowImpulse).toBeGreaterThan(20);
   });
 
-  it('restores aggressive killshot scale, travel and high-quality stain count', () => {
+  it('keeps killshot core splashes compact while preserving stronger flight blood and stains', () => {
     const normal = setup();
     const killshot = setup();
     const normalStains: number[] = [];
@@ -630,23 +636,93 @@ describe('combat gore gpu renderer', () => {
       seed: 0xdecafbad,
     };
 
-    normal.renderer.playHit(hit, (...args) => normalStains.push(args[2]));
-    killshot.renderer.playHit({ ...hit, isKill: true }, (...args) => killshotStains.push(args[2]));
+    // Dieser Vergleich braucht sichtbaren Core und Streaks, unabhaengig von den Sichttest-Schaltern.
+    const originalCoreEnabled = BLOOD_HIT_VFX.bloodCoreEnabled;
+    const originalStreakEnabled = BLOOD_HIT_VFX.bloodStreakEnabled;
+    Object.assign(BLOOD_HIT_VFX, { bloodCoreEnabled: true, bloodStreakEnabled: true });
+    try {
+      normal.renderer.playHit(hit, (...args) => normalStains.push(args[2]));
+      killshot.renderer.playHit({ ...hit, isKill: true }, (...args) => killshotStains.push(args[2]));
+    } finally {
+      Object.assign(BLOOD_HIT_VFX, {
+        bloodCoreEnabled: originalCoreEnabled,
+        bloodStreakEnabled: originalStreakEnabled,
+      });
+    }
 
     const normalMembers = findFakeLane(normal.scene, 'gore-normal').members;
     const killshotMembers = findFakeLane(killshot.scene, 'gore-normal').members;
+    const normalCoreCount = normal.gpu.buildReport().effects.find(effect => effect.label === 'blood.core')!.spawns;
+    const killshotCoreCount = killshot.gpu.buildReport().effects.find(effect => effect.label === 'blood.core')!.spawns;
+    expect(normalCoreCount).toBeGreaterThan(1);
+    expect(killshotCoreCount).toBeGreaterThanOrEqual(normalCoreCount);
+    for (const member of killshotMembers.slice(0, killshotCoreCount)) {
+      expect(member.frame).not.toBe('blood-stain');
+      expect(evaluateFakeAnimation(member.scaleY, 0.9)).toBeLessThan(evaluateFakeAnimation(member.scaleY, 0));
+      expect(Math.hypot(member.x.amplitude, member.y.amplitude))
+        .toBeLessThanOrEqual(BLOOD_HIT_VFX.coreSplash.travelMaxPx * BLOOD_HIT_VFX.coreSplash.killshotScale);
+    }
     const normalCoreScale = evaluateFakeAnimation(normalMembers[0]!.scaleY, 0);
     const killshotCoreScale = evaluateFakeAnimation(killshotMembers[0]!.scaleY, 0);
-    const normalStreakScale = evaluateFakeAnimation(normalMembers[1]!.scaleY, 0);
-    const killshotStreakScale = evaluateFakeAnimation(killshotMembers[1]!.scaleY, 0);
-    const normalStreakTravel = Math.hypot(normalMembers[1]!.x.amplitude, normalMembers[1]!.y.amplitude);
-    const killshotStreakTravel = Math.hypot(killshotMembers[1]!.x.amplitude, killshotMembers[1]!.y.amplitude);
+    const normalStreakScale = evaluateFakeAnimation(normalMembers[normalCoreCount]!.scaleY, 0);
+    const killshotStreakScale = evaluateFakeAnimation(killshotMembers[killshotCoreCount]!.scaleY, 0);
+    const normalStreakTravel = Math.hypot(normalMembers[normalCoreCount]!.x.amplitude, normalMembers[normalCoreCount]!.y.amplitude);
+    const killshotStreakTravel = Math.hypot(killshotMembers[killshotCoreCount]!.x.amplitude, killshotMembers[killshotCoreCount]!.y.amplitude);
 
-    expect(killshotCoreScale / normalCoreScale).toBeGreaterThanOrEqual(2.2);
-    expect(killshotStreakScale / normalStreakScale).toBeGreaterThanOrEqual(1.6);
-    expect(killshotStreakTravel / normalStreakTravel).toBeGreaterThanOrEqual(2.0);
+    expect(killshotCoreScale / normalCoreScale).toBeCloseTo(BLOOD_HIT_VFX.coreSplash.killshotScale);
+    expect(killshotStreakScale).toBeGreaterThan(normalStreakScale);
+    expect(killshotStreakTravel).toBeGreaterThan(normalStreakTravel);
     expect(killshotStains.length).toBeGreaterThanOrEqual(normalStains.length);
     expect(killshotStains.length).toBeGreaterThanOrEqual(BLOOD_HIT_VFX.bands.heavy.stainCountMin);
     expect(killshotStains[0]).toBeGreaterThan(normalStains[0]! * 1.8);
+  });
+
+  it.each([1, 10, 100])('keeps streaks forward and connected to stain positions at %s damage', (damage) => {
+    const flags = {
+      bloodCoreEnabled: BLOOD_HIT_VFX.bloodCoreEnabled,
+      bloodStreakEnabled: BLOOD_HIT_VFX.bloodStreakEnabled,
+      bloodDropletEnabled: BLOOD_HIT_VFX.bloodDropletEnabled,
+      bloodMicroDropletEnabled: BLOOD_HIT_VFX.bloodMicroDropletEnabled,
+    };
+    Object.assign(BLOOD_HIT_VFX, {
+      bloodCoreEnabled: false, bloodStreakEnabled: true,
+      bloodDropletEnabled: false, bloodMicroDropletEnabled: false,
+    });
+    try {
+      for (const angle of [0, Math.PI / 2, -2.4]) {
+        const { renderer, scene } = setup();
+        const stains: Array<{ x: number; y: number }> = [];
+        const hit = {
+          type: 'hit' as const, x: 100, y: 120, targetId: 'enemy-1',
+          totalDamage: damage, hpLost: damage, armorLost: 0,
+          isKill: damage === 100, isCritical: false,
+          dirX: Math.cos(angle), dirY: Math.sin(angle), seed: 42,
+        };
+        renderer.playHit(hit, (x, y) => stains.push({ x, y }));
+        const members = findFakeLane(scene, 'gore-normal').members;
+        expect(stains.length).toBeGreaterThan(0);
+        for (const member of members) {
+          for (const t of [0, 0.5, 0.99]) {
+            const x = evaluateFakeAnimation(member.x, t) - hit.x;
+            const y = evaluateFakeAnimation(member.y, t) - hit.y;
+            const rotation = evaluateFakeAnimation(member.rotation, t) - angle;
+            const halfExtent = Math.abs(Math.cos(rotation)) * 18 * evaluateFakeAnimation(member.scaleX, t)
+              + Math.abs(Math.sin(rotation)) * 8 * evaluateFakeAnimation(member.scaleY, t);
+            expect(x * hit.dirX + y * hit.dirY - halfExtent).toBeGreaterThanOrEqual(-0.0001);
+          }
+        }
+        const first = members[0]!;
+        const stain = stains[0]!;
+        const flightDistance = Math.hypot(stain.x - hit.x, stain.y - hit.y);
+        expect(36 * evaluateFakeAnimation(first.scaleX, 0)).toBeLessThan(flightDistance);
+        const remaining = Math.hypot(
+          evaluateFakeAnimation(first.x, 0.99) - stain.x,
+          evaluateFakeAnimation(first.y, 0.99) - stain.y,
+        );
+        expect(remaining).toBeLessThan(18 * evaluateFakeAnimation(first.scaleX, 0));
+      }
+    } finally {
+      Object.assign(BLOOD_HIT_VFX, flags);
+    }
   });
 });

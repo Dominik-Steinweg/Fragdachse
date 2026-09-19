@@ -49,19 +49,41 @@ export function ensureBloodHitTextures(target: Phaser.Scene | Phaser.Textures.Te
   });
 
   ensureCanvasTexture(textures, TEX_BLOOD_STREAK, 36, 16, (ctx) => {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    // Duenne, aufgerissene Fahne mit schwerem Tropfenkopf in +X-Richtung.
+    // Transparente Luecken und Seitenarme brechen die bisherige Ellipsen-Silhouette.
+    ctx.fillStyle = 'rgba(255,255,255,0.94)';
     ctx.beginPath();
-    ctx.ellipse(20, 8, 12, 3.6, 0, 0, Math.PI * 2);
+    ctx.moveTo(3, 8.2);
+    ctx.bezierCurveTo(11, 7.8, 14, 6.4, 20, 7);
+    ctx.bezierCurveTo(17, 5.8, 16, 3.2, 13, 2.3);
+    ctx.bezierCurveTo(19, 3.1, 20, 5.3, 24, 5.2);
+    ctx.bezierCurveTo(28, 3.2, 32.5, 5, 32, 8);
+    ctx.bezierCurveTo(32.8, 11.3, 28.4, 12.4, 25, 10.8);
+    ctx.bezierCurveTo(21, 10.4, 21, 13.2, 17, 13.8);
+    ctx.bezierCurveTo(19, 11.6, 19, 10.3, 16, 9.8);
+    ctx.bezierCurveTo(12, 9.3, 8, 8.4, 3, 8.2);
+    ctx.closePath();
     ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.68)';
+    // Abgeloeste, ebenfalls zugespitzte Sekundaertropfen statt kreisfoermigem Nebel.
+    ctx.fillStyle = 'rgba(255,255,255,0.76)';
     ctx.beginPath();
-    ctx.ellipse(11, 8, 8, 2.7, 0, 0, Math.PI * 2);
+    ctx.moveTo(5, 4);
+    ctx.bezierCurveTo(8, 3.7, 11, 4.3, 10, 5.5);
+    ctx.bezierCurveTo(8.7, 6.2, 7, 4.7, 5, 4);
+    ctx.moveTo(9, 12);
+    ctx.bezierCurveTo(12, 10.4, 14.2, 11.4, 13, 12.6);
+    ctx.bezierCurveTo(12, 13.2, 10, 12, 9, 12);
+    ctx.moveTo(32.5, 3);
+    ctx.bezierCurveTo(35.8, 2.2, 35.6, 5.2, 34, 4.5);
+    ctx.closePath();
     ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.46)';
+    // Dezente Materialmodulation innerhalb des Tropfenkopfs, kein Glow.
+    ctx.fillStyle = 'rgba(160,160,160,0.4)';
     ctx.beginPath();
-    ctx.ellipse(5, 8, 4, 1.8, 0, 0, Math.PI * 2);
+    ctx.moveTo(21, 8.5);
+    ctx.bezierCurveTo(26, 8.8, 28, 7.8, 30.5, 8.4);
+    ctx.bezierCurveTo(30, 10.5, 25, 10.7, 21, 8.5);
+    ctx.closePath();
     ctx.fill();
   });
 

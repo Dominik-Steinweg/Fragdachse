@@ -265,6 +265,10 @@ export class CombatGoreGpuRenderer {
 
     const rng = createSeededRandom(effect.seed);
     const band = getBloodBand(effect.totalDamage);
+    const boostDroplets = effect.totalDamage > BLOOD_HIT_VFX.bands.tiny.maxDamage;
+    const dropletCountBoost = boostDroplets ? BLOOD_HIT_VFX.dropletBoost.count : 1;
+    const dropletScaleBoost = boostDroplets ? BLOOD_HIT_VFX.dropletBoost.scale : 1;
+    const dropletDurationBoost = boostDroplets ? BLOOD_HIT_VFX.dropletBoost.duration : 1;
     const killshot = effect.isKill;
     const baseDirectionLength = Math.hypot(effect.dirX, effect.dirY);
     const baseAngle = baseDirectionLength > 0.0001
@@ -275,34 +279,45 @@ export class CombatGoreGpuRenderer {
     const originX = effect.x + directionX * BLOOD_HIT_VFX.spawnPushPx;
     const originY = effect.y + directionY * BLOOD_HIT_VFX.spawnPushPx;
     const nowMs = gpu.now();
-    const coreTint = pickBloodTint(rng);
-    const coreIntensity = killshot
-      ? BLOOD_HIT_VFX.killshotMultiplier
-      : (effect.isCritical ? 1.1 : 1);
-
-    if (this.scaleBurst(GpuVfxEffectId.BloodCore, 1) > 0) {
-      coreSpec.lifeMs = BLOOD_HIT_VFX.coreSplashDurationMs;
-      coreSpec.x = originX;
-      coreSpec.y = originY;
-      coreSpec.vx = directionX * (killshot ? 16 : 7);
-      coreSpec.vy = directionY * (killshot ? 16 : 7);
+    const core = BLOOD_HIT_VFX.coreSplash;
+    // Eigener Zufallsstrom: mehr Core-Partikel veraendern weder Flugblut noch Bodenflecken.
+    const coreRng = createSeededRandom(effect.seed ^ 0x6b10c0);
+    const tinyHit = effect.totalDamage <= BLOOD_HIT_VFX.bands.tiny.maxDamage;
+    const coreRequested = tinyHit ? core.tinyCount : core.count + (killshot ? core.killshotExtraCount : 0);
+    const coreCount = this.scaleBurst(GpuVfxEffectId.BloodCore, coreRequested);
+    const coreIntensity = (tinyHit ? 0.6 : 1) * (killshot ? core.killshotScale : 1);
+    for (let index = 0; index < coreCount; index += 1) {
+      const angle = baseAngle + randomBetween(coreRng, -0.85, 0.85);
+      const lateral = randomBetween(coreRng, -core.spawnRadiusPx, core.spawnRadiusPx);
+      const forward = randomBetween(coreRng, -1, 2);
+      const travel = randomBetween(coreRng, core.travelMinPx, core.travelMaxPx) * coreIntensity;
+      const duration = randomBetween(coreRng, core.durationMinMs, core.durationMaxMs);
+      const filament = index % 3 === 2;
+      coreSpec.lifeMs = duration;
+      coreSpec.x = effect.x + directionX * forward - directionY * lateral;
+      coreSpec.y = effect.y + directionY * forward + directionX * lateral;
+      coreSpec.vx = Math.cos(angle) * travel * 1000 / duration;
+      coreSpec.vy = Math.sin(angle) * travel * 1000 / duration;
       coreSpec.positionEase = GpuVfxEase.QuadOut;
       coreSpec.yMode = GpuVfxEase.Linear;
       coreSpec.gravityFactor = 1;
-      coreSpec.rotation = (rng() - 0.5) * 0.4;
-      coreSpec.angularVelocity = (rng() - 0.5) * 0.9;
-      coreSpec.scaleStart = BLOOD_HIT_VFX.coreSplashScale * coreIntensity;
-      coreSpec.scaleEnd = coreSpec.scaleStart * 1.28;
+      coreSpec.rotation = angle + randomBetween(coreRng, -0.3, 0.3);
+      coreSpec.angularVelocity = randomBetween(coreRng, -1.5, 1.5);
+      coreSpec.scaleStart = randomBetween(coreRng, core.scaleMin, core.scaleMax)
+        * coreIntensity * (filament ? 0.55 : 1);
+      coreSpec.scaleEnd = coreSpec.scaleStart * (filament ? 0.25 : 0.62);
       coreSpec.scaleEase = GpuVfxEase.QuadOut;
-      coreSpec.stretchStart = 1;
-      coreSpec.stretchEnd = 1;
-      coreSpec.alphaStart = BLOOD_HIT_VFX.coreSplashAlpha;
+      coreSpec.stretchStart = filament ? 1.6 : randomBetween(coreRng, 0.65, 1.05);
+      coreSpec.stretchEnd = coreSpec.stretchStart * 0.7;
+      coreSpec.alphaStart = core.alpha * randomBetween(coreRng, 0.85, 1);
       coreSpec.alphaEnd = 0;
-      coreSpec.alphaEase = GpuVfxEase.QuadOut;
-      coreSpec.tint = coreTint;
+      coreSpec.alphaEase = GpuVfxEase.CubicIn;
+      coreSpec.tint = pickBloodTint(coreRng);
       coreSpec.tintBlendStart = 1;
       coreSpec.tintBlendEnd = 1;
-      gpu.spawn(coreSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      if (BLOOD_HIT_VFX.bloodCoreEnabled) {
+        gpu.spawn(coreSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      }
     }
 
     const spreadScale = killshot ? 1.38 : (effect.isCritical ? 1.14 : 1);
@@ -317,51 +332,57 @@ export class CombatGoreGpuRenderer {
 
     const streakCount = this.scaleBurst(GpuVfxEffectId.BloodStreak, streakRequested);
     for (let index = 0; index < streakCount; index += 1) {
-      const angle = baseAngle + degToRad((rng() - 0.5) * band.spreadDeg * 2 * spreadScale);
+      const angle = baseAngle + degToRad((rng() - 0.5) * Math.min(60, band.spreadDeg * spreadScale) * 2);
       const direction = { x: Math.cos(angle), y: Math.sin(angle) };
-      const lateralX = -direction.y;
-      const lateralY = direction.x;
-      const lateral = (rng() - 0.5) * BLOOD_HIT_VFX.lateralJitterPx;
-      const startX = originX + lateralX * lateral;
-      const startY = originY + lateralY * lateral;
       const travel = randomBetween(rng, band.travelMinPx, band.travelMaxPx)
         * (killshot
           ? BLOOD_HIT_VFX.killshot.streakTravelScale
           : effect.isCritical ? 1.08 : 1);
-      const endX = startX + direction.x * travel + lateralX * (rng() - 0.5) * (killshot ? 20 : 14);
-      const endY = startY + direction.y * travel + lateralY * (rng() - 0.5) * (killshot ? 20 : 14);
+      const endX = effect.x + direction.x * travel;
+      const endY = effect.y + direction.y * travel;
       const duration = randomBetween(rng, band.flightMinMs, band.flightMaxMs)
         * (killshot ? 0.9 : 1);
-      const speed = Math.hypot(endX - startX, endY - startY) * 1000 / Math.max(1, duration);
-      const scale = randomBetween(rng, band.streakScaleMin, band.streakScaleMax)
-        * 1.1
+      const authoredScale = randomBetween(rng, band.streakScaleMin, band.streakScaleMax)
         * (killshot ? BLOOD_HIT_VFX.killshot.streakScale : 1);
-      const stretchStart = clamp(0.98 + speed / 115, 1, killshot ? 2.9 : 2.55);
+      // 36x16-Textur: Die sichtbare Fahne bleibt ein Teil ihrer tatsaechlichen Flugstrecke.
+      const length = Math.min(travel * 0.48, 36 * authoredScale);
+      const thickness = Math.min(8 * authoredScale, length * 0.28);
+      const scale = thickness / 16;
+      const stretchStart = length / (36 * scale);
+      const endLength = length * 0.32;
+      // Mittiger Sprite-Anker: auch die gedrehten Ecken duerfen nicht hinter dem Einschuss liegen.
+      const startDistance = length * 0.5 + thickness * 0.5 * Math.abs(Math.tan(angle - baseAngle));
+      const endDistance = travel - endLength * 0.5;
+      const startX = effect.x + direction.x * startDistance;
+      const startY = effect.y + direction.y * startDistance;
       const leaveStain = stainsCreated < stainCount && (index < stainCount || rng() > 0.45);
       if (leaveStain) stainsCreated += 1;
 
       streakSpec.lifeMs = duration;
       streakSpec.x = startX;
       streakSpec.y = startY;
-      streakSpec.vx = (endX - startX) * 1000 / Math.max(1, duration);
-      streakSpec.vy = (endY - startY) * 1000 / Math.max(1, duration);
+      streakSpec.vx = direction.x * (endDistance - startDistance) * 1000 / Math.max(1, duration);
+      streakSpec.vy = direction.y * (endDistance - startDistance) * 1000 / Math.max(1, duration);
       streakSpec.positionEase = GpuVfxEase.QuadOut;
       streakSpec.yMode = GpuVfxEase.Linear;
       streakSpec.gravityFactor = 1;
       streakSpec.rotation = angle;
-      streakSpec.angularVelocity = (rng() - 0.5) * (killshot ? 2.1 : 1.4);
+      streakSpec.angularVelocity = 0;
       streakSpec.scaleStart = scale;
-      streakSpec.scaleEnd = scale * 0.72;
+      streakSpec.scaleEnd = scale * 0.5;
       streakSpec.scaleEase = GpuVfxEase.QuadOut;
       streakSpec.stretchStart = stretchStart;
-      streakSpec.stretchEnd = Math.max(0.78, stretchStart * 0.48);
+      streakSpec.stretchEnd = stretchStart * 0.64;
       streakSpec.alphaStart = 0.98;
       streakSpec.alphaEnd = 0;
-      streakSpec.alphaEase = GpuVfxEase.QuadOut;
+      streakSpec.alphaEase = GpuVfxEase.CubicIn;
       streakSpec.tint = pickBloodTint(rng);
       streakSpec.tintBlendStart = 1;
       streakSpec.tintBlendEnd = 1;
-      gpu.spawn(streakSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      // Nur die Darstellung abschalten; RNG und Bodenflecken bleiben fuer den Vergleich gleich.
+      if (BLOOD_HIT_VFX.bloodStreakEnabled) {
+        gpu.spawn(streakSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      }
 
       if (leaveStain && onBloodStain) {
         onBloodStain(
@@ -378,7 +399,9 @@ export class CombatGoreGpuRenderer {
       }
     }
 
-    const dropletCount = this.scaleBurst(GpuVfxEffectId.BloodDroplet, dropletRequested);
+    const dropletCount = this.scaleBurst(
+      GpuVfxEffectId.BloodDroplet, Math.round(dropletRequested * dropletCountBoost),
+    );
     for (let index = 0; index < dropletCount; index += 1) {
       const angle = baseAngle + degToRad(
         (rng() - 0.5) * Math.max(14, band.spreadDeg * 1.35) * 2 * spreadScale,
@@ -388,7 +411,8 @@ export class CombatGoreGpuRenderer {
         * (killshot ? BLOOD_HIT_VFX.killshot.dropletTravelScale : 1);
       const startX = effect.x + direction.x * BLOOD_HIT_VFX.spawnPushPx * 0.7;
       const startY = effect.y + direction.y * BLOOD_HIT_VFX.spawnPushPx * 0.7;
-      const duration = randomBetween(rng, band.flightMinMs, band.flightMaxMs) * 0.82;
+      const duration = randomBetween(rng, band.flightMinMs, band.flightMaxMs)
+        * 0.82 * dropletDurationBoost;
       const endX = startX + direction.x * travel;
       const endY = startY + direction.y * travel;
 
@@ -404,24 +428,29 @@ export class CombatGoreGpuRenderer {
       dropletSpec.angularVelocity = (rng() - 0.5) * (killshot ? 4.4 : 3.1);
       dropletSpec.scaleStart = randomBetween(rng, band.dropletScaleMin, band.dropletScaleMax)
         * 1.1
+        * dropletScaleBoost
         * (killshot ? BLOOD_HIT_VFX.killshot.dropletScale : 1);
       dropletSpec.scaleEnd = dropletSpec.scaleStart * 0.42;
       dropletSpec.scaleEase = GpuVfxEase.QuadOut;
       dropletSpec.stretchStart = 1;
       dropletSpec.stretchEnd = 1;
-      dropletSpec.alphaStart = 0.9;
+      dropletSpec.alphaStart = boostDroplets ? 1 : 0.9;
       dropletSpec.alphaEnd = 0;
       dropletSpec.alphaEase = GpuVfxEase.QuadOut;
       dropletSpec.tint = pickBloodTint(rng);
       dropletSpec.tintBlendStart = 1;
       dropletSpec.tintBlendEnd = 1;
-      gpu.spawn(dropletSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      if (BLOOD_HIT_VFX.bloodDropletEnabled) {
+        gpu.spawn(dropletSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      }
     }
 
     const microRequested = killshot
       ? randomInt(rng, 4, 8)
       : Math.max(1, Math.round(dropletRequested * (effect.isCritical ? 0.3 : 0.16)));
-    const microCount = this.scaleBurst(GpuVfxEffectId.BloodMicroDroplet, microRequested);
+    const microCount = this.scaleBurst(
+      GpuVfxEffectId.BloodMicroDroplet, Math.round(microRequested * dropletCountBoost),
+    );
     for (let index = 0; index < microCount; index += 1) {
       const angle = baseAngle + degToRad((rng() - 0.5) * (killshot ? 115 : 80));
       const direction = { x: Math.cos(angle), y: Math.sin(angle) };
@@ -429,7 +458,7 @@ export class CombatGoreGpuRenderer {
         * (killshot ? 1.2 : 0.92);
       const startX = originX + direction.x * randomBetween(rng, 0, 4);
       const startY = originY + direction.y * randomBetween(rng, 0, 4);
-      const duration = randomBetween(rng, 80, 150);
+      const duration = randomBetween(rng, 80, 150) * dropletDurationBoost;
 
       microSpec.lifeMs = duration;
       microSpec.x = startX;
@@ -442,18 +471,21 @@ export class CombatGoreGpuRenderer {
       microSpec.rotation = angle + (rng() - 0.5) * 1.5;
       microSpec.angularVelocity = (rng() - 0.5) * 7.5;
       microSpec.scaleStart = randomBetween(rng, 0.22, 0.42)
+        * dropletScaleBoost
         * (killshot ? BLOOD_HIT_VFX.killshot.microDropletScale : 1);
       microSpec.scaleEnd = microSpec.scaleStart * 0.28;
       microSpec.scaleEase = GpuVfxEase.QuadOut;
       microSpec.stretchStart = rng() < 0.28 ? randomBetween(rng, 1.1, 1.7) : 1;
       microSpec.stretchEnd = microSpec.stretchStart * 0.62;
-      microSpec.alphaStart = 0.82;
+      microSpec.alphaStart = boostDroplets ? 1 : 0.82;
       microSpec.alphaEnd = 0;
       microSpec.alphaEase = GpuVfxEase.QuadOut;
       microSpec.tint = pickBloodTint(rng);
       microSpec.tintBlendStart = 1;
       microSpec.tintBlendEnd = 1;
-      gpu.spawn(microSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      if (BLOOD_HIT_VFX.bloodMicroDropletEnabled) {
+        gpu.spawn(microSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      }
     }
   }
 
@@ -691,6 +723,7 @@ function resolveDeathProfile(maxDimension: number, chunkCount: number): DeathPro
 }
 
 function getBloodBand(totalDamage: number) {
+  if (totalDamage <= BLOOD_HIT_VFX.bands.tiny.maxDamage) return BLOOD_HIT_VFX.bands.tiny;
   if (totalDamage <= BLOOD_HIT_VFX.bands.light.maxDamage) return BLOOD_HIT_VFX.bands.light;
   if (totalDamage <= BLOOD_HIT_VFX.bands.medium.maxDamage) return BLOOD_HIT_VFX.bands.medium;
   return BLOOD_HIT_VFX.bands.heavy;
