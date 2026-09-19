@@ -80,6 +80,22 @@ describe('Shared enemy and ally locomotion', () => {
     expect(movement.solve(body).vx).toBeGreaterThan(0);
   });
 
+  it('keeps dense neighbor visibility equivalent across mixed obstacles and geometry replacement', () => {
+    const walls = geometry([
+      { id: 'wall', kind: 'barrier', shape: 'rect', left: 80, right: 84, top: 0, bottom: 120 },
+      { id: 'trunk', kind: 'trunk', shape: 'circle', x: 55, y: 90, radius: 8 },
+    ]);
+    const crowd = Array.from({ length: 24 }, (_, i) => neighbor(`n${i}`,
+      body.x + Math.cos(i * Math.PI / 12) * 35, body.y + Math.sin(i * Math.PI / 12) * 35));
+    const movement = new EnemyLocomotion();
+    for (const world of [walls, geometry(), walls]) {
+      const visible = crowd.filter(n => world.canMove(body.x, body.y, n.x, n.y, 0));
+      const reference = new EnemyLocomotion();
+      movement.begin(crowd, world, 16); reference.begin(visible, world, 16);
+      expect(movement.solve(body)).toEqual(reference.solve(body));
+    }
+  });
+
   it('checks the final smoothed velocity against the entire body corridor', () => {
     const world = geometry([{ id: 'wall', kind: 'barrier', shape: 'rect', left: 80, right: 96, top: 0, bottom: 256 }]);
     const movement = new EnemyLocomotion(); movement.begin([], world, 16);

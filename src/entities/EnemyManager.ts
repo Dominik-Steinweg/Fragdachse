@@ -199,7 +199,7 @@ export class EnemyManager {
     worldRevision: 1,
     runtimeGeneration: nextEnemyCombatOwnerGeneration++,
   });
-  private readonly enemyGenerations = new Map<string, number>();
+  private readonly enemyTargets = new Map<string, CombatTargetRef>();
   private nextEnemyGeneration = 1;
   private mutationOutcomeSequence = 0;
   private readonly scene: Phaser.Scene;
@@ -378,7 +378,7 @@ export class EnemyManager {
     enemy.setEntityBurnGpuController(this.burnGpu);
     enemy.setHealthBarRenderer(this.healthBars);
     this.enemies.set(id, enemy);
-    this.enemyGenerations.set(id, this.nextEnemyGeneration++);
+    this.registerCombatTarget(id, this.nextEnemyGeneration++);
     this.playSpawnEffect(enemy, options);
     this.onEnemySpawned?.(enemy, options);
     return enemy;
@@ -832,14 +832,16 @@ export class EnemyManager {
   }
 
   getCombatTargetRef(id: string): CombatTargetRef | null {
-    const generation = this.enemyGenerations.get(id);
-    if (!this.enemies.has(id) || generation === undefined) return null;
-    return Object.freeze({
+    return this.enemyTargets.get(id) ?? null;
+  }
+
+  private registerCombatTarget(id: string, generation: number): void {
+    this.enemyTargets.set(id, Object.freeze({
       kind: 'enemy' as const,
       id,
       scope: this.combatScope,
       instance: Object.freeze({ entityGeneration: generation }),
-    });
+    }));
   }
 
   commitDamage(request: TargetDamageMutationRequest): CombatDamageMutationOutcome {
@@ -1138,7 +1140,7 @@ export class EnemyManager {
     this.visualSink?.clearBurrowState(id);
     enemy.destroy();
     this.enemies.delete(id);
-    this.enemyGenerations.delete(id);
+    this.enemyTargets.delete(id);
   }
 
   syncHostVisuals(): void {
@@ -1195,7 +1197,7 @@ export class EnemyManager {
       enemy.destroy();
     }
     this.enemies.clear();
-    this.enemyGenerations.clear();
+    this.enemyTargets.clear();
     this.wildfirePanicStates.clear();
     this.smokeConfusionStates.clear();
     this.netSnapshotCache.clear();
@@ -1229,7 +1231,7 @@ export class EnemyManager {
     const snapshot = enemy.getNetSnapshot();
     return {
       ...snapshot,
-      entityGeneration: this.enemyGenerations.get(enemy.id),
+      entityGeneration: this.enemyTargets.get(enemy.id)?.instance.entityGeneration,
       x: Math.round(snapshot.x),
       y: Math.round(snapshot.y),
       rot: Math.round(snapshot.rot * 100) / 100,
@@ -1315,7 +1317,7 @@ export class EnemyManager {
 
   private applyRemoteSnapshot(remote: SyncedEnemyDeltaState): void {
     let enemy = this.enemies.get(remote.id);
-    if (enemy && remote.entityGeneration !== undefined && remote.entityGeneration !== this.enemyGenerations.get(remote.id)) {
+    if (enemy && remote.entityGeneration !== undefined && remote.entityGeneration !== this.enemyTargets.get(remote.id)?.instance.entityGeneration) {
       this.destroyEnemyEntity(remote.id, enemy); enemy = undefined;
     }
     if (!enemy) {
@@ -1349,7 +1351,7 @@ export class EnemyManager {
         remote.gaussAimAngle ?? rotation,
       );
       this.enemies.set(remote.id, enemy);
-      this.enemyGenerations.set(remote.id, remote.entityGeneration ?? this.nextEnemyGeneration++);
+      this.registerCombatTarget(remote.id, remote.entityGeneration ?? this.nextEnemyGeneration++);
       if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy, {});
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
       if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);

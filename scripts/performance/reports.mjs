@@ -94,6 +94,12 @@ export async function writeReports(directory, manifest, summary, trace, buildDir
         caseLines.push(`### ${label}\n`, '| Funktion und Quellstelle | Geschätzte ms | Anteil % |', '|---|---:|---:|');
         for (const f of thread[key].slice(0, 12)) caseLines.push(`| ${renderSource(f)} | ${number(f.ms)} | ${number(f.percent)} |`);
       }
+      caseLines.push('\n### Projekt-Hotspots\n',
+        'Separat vor der Top-Limitierung ausgewählt, damit Engine-Aufrufe die Projektfunktionen nicht verdrängen. Inklusive Zeit enthält aufgerufene Bibliotheken; Anteile beziehen sich weiterhin auf die gesamte Thread-Stichprobe. Diese Tabellen sind alternative Ansichten derselben Samples und nicht addierbar.\n');
+      for (const [key, label] of [['projectSelf', 'Projekt-Eigenzeit'], ['projectInclusive', 'Projekt inklusive Aufrufen']]) {
+        caseLines.push(`#### ${label}\n`, '| Funktion und Quellstelle | Geschätzte ms | Anteil % |', '|---|---:|---:|');
+        for (const f of thread[key] ?? []) caseLines.push(`| ${renderSource(f)} | ${number(f.ms)} | ${number(f.percent)} |`);
+      }
       caseLines.push('\n### Häufigste Aufrufketten\n');
       for (const stack of thread.stacks.slice(0, 5)) caseLines.push(`- ${number(stack.ms)} ms: ${stackDescription(stack, renderSource)}`);
     }

@@ -14,12 +14,61 @@ import { getSoundVolume, preloadAllAudio, AUDIO_ASSETS } from '../src/audio/Audi
 function fixture() {
   const available = new Set<string>();
   const sound = Object.assign(new EventEmitter(), { play: vi.fn(), locked: false, context: { state: 'running' } });
+  const voices: { key: string; isPlaying: boolean; isPaused: boolean; pendingRemove: boolean;
+    play: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> }[] = [];
+  const add = vi.fn((key: string) => {
+    const voice = { key, isPlaying: false, isPaused: false, pendingRemove: false,
+      play: vi.fn((config: unknown) => { voice.isPlaying = true; sound.play(key, config); return true; }),
+      destroy: vi.fn(() => { voice.pendingRemove = true; voice.isPlaying = false; }) };
+    voices.push(voice);
+    return voice;
+  });
+  Object.assign(sound, { add });
   const scene = { sound, time: { now: 0 }, cache: { audio: { exists: (key: string) => available.has(key) } } };
   const audio = new GameAudioSystem(scene as never, () => 'local', () => ({ x: 0, y: 0 }), 0.8, 0.5, 0);
-  return { available, scene, sound, audio };
+  return { available, scene, sound, audio, voices, add };
 }
 
 describe('GameAudioSystem one-shot feedback', () => {
+  it('reuses finished voices with fresh spatial settings without interrupting active or paused sounds', () => {
+    const { audio, available, sound, voices, add } = fixture();
+    available.add('sfx_player_death');
+    audio.playSound('sfx_player_death', 500, 0, 'remote');
+    audio.playLocalSound('sfx_player_death');
+    expect(add).toHaveBeenCalledTimes(2);
+    voices[0].isPlaying = false;
+    voices[0].isPaused = true;
+    audio.playLocalSound('sfx_player_death');
+    expect(add).toHaveBeenCalledTimes(3);
+    voices[0].isPaused = false;
+    audio.setEffectsVolume(0.25);
+    audio.playLocalSound('sfx_player_death');
+    expect(add).toHaveBeenCalledTimes(3);
+    expect(voices[0].play).toHaveBeenLastCalledWith({ volume: 0.8 * 0.25 * getSoundVolume('sfx_player_death'), pan: 0 });
+    expect(sound.play).toHaveBeenCalledTimes(4);
+    voices[0].destroy();
+    audio.playLocalSound('sfx_player_death');
+    expect(voices[0].play).toHaveBeenCalledTimes(2);
+    audio.cleanup();
+    expect(voices.every(voice => voice.pendingRemove)).toBe(true);
+  });
+
+  it('bounds retained voices while preserving every admitted overlapping sound and the HTML5 fallback', () => {
+    const { audio, available, sound, voices, add } = fixture();
+    available.add('sfx_player_death');
+    for (let i = 0; i < 200; i++) audio.playLocalSound('sfx_player_death');
+    expect(sound.play).toHaveBeenCalledTimes(200);
+    expect(add.mock.calls.length).toBeGreaterThan(0);
+    expect(add.mock.calls.length).toBeLessThan(200);
+    const retained = voices.length;
+    sound.context = undefined as never;
+    audio.playLocalSound('sfx_player_death');
+    expect(sound.play).toHaveBeenCalledTimes(201);
+    expect(voices).toHaveLength(retained);
+    audio.cleanup();
+    expect(voices.every(voice => voice.pendingRemove)).toBe(true);
+  });
+
   it('preserves the rocket overlap limiter after its sources get independent files', () => {
     const { audio, available, sound, scene } = fixture();
     available.add('sfx_explosion_rocket');

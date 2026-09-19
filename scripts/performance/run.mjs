@@ -11,7 +11,7 @@ import { createGzip } from 'node:zlib';
 import { summarizeWindows } from './metrics.mjs';
 import { analyzeTrace, traceEvents, createSourceResolver, archiveDependencySources } from './trace.mjs';
 import { writeReports } from './reports.mjs';
-import { acquireOwned } from './lifecycle.mjs';
+import { acquireOwned, preserveFailedChromeTrace } from './lifecycle.mjs';
 
 function options(args) {
   const value = { caseId: 'standard', timeoutMs: 25 * 60_000, captureProfile: 'standard' };
@@ -267,6 +267,20 @@ try {
   clearTimeout(timeout);
   clearInterval(statusTimer);
   if (buildProcess && buildProcess.exitCode === null) buildProcess.kill();
+  if (manifest.status === 'failed' && tracing && traceSession) {
+    tracing = false;
+    console.log('Abgebrochenen Chrome-Trace zur Fehlerdiagnose sichern…');
+    const partialTrace = join(directory, 'chrome-trace.partial.json');
+    try {
+      const details = await preserveFailedChromeTrace(traceSession, partialTrace);
+      manifest.partialChromeTrace = { file: 'chrome-trace.partial.json', ...details,
+        note: 'Unvollständiger fehlgeschlagener Lauf; kein Eingang für perf:compare.' };
+      await pipeline(createReadStream(partialTrace), createGzip(), createWriteStream(`${partialTrace}.gz`));
+      manifest.partialChromeTrace.file += '.gz';
+      await unlink(partialTrace);
+    } catch (error) { manifest.partialChromeTraceError = String(error); }
+    await saveManifest();
+  }
   if (manifest.status === 'failed' && context) {
     await bounded(context.pages()[0]?.evaluate(() => window.__FD_PERF__?.cancel('Runner beendet den Lauf')), 2000, 'Lab cleanup timeout').catch(() => {});
   }

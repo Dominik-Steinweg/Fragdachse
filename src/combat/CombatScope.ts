@@ -103,9 +103,13 @@ export function isSameCombatTargetInstance(left: CombatTargetRef, right: CombatT
     && left.instance.lifeRevision === right.instance.lifeRevision;
 }
 
+const immutableTargetKeys = new WeakMap<CombatTargetRef, string>();
+
 /** Stable only for this concrete target instance; not a wire key or global registry id. */
 export function combatTargetInstanceKey(target: CombatTargetRef): string {
-  return JSON.stringify([
+  const cached = immutableTargetKeys.get(target);
+  if (cached !== undefined) return cached;
+  const key = JSON.stringify([
     target.scope.worldRevision,
     target.scope.runtimeGeneration,
     target.kind,
@@ -114,4 +118,10 @@ export function combatTargetInstanceKey(target: CombatTargetRef): string {
     target.instance.activityRevision ?? null,
     target.instance.lifeRevision ?? null,
   ]);
+  // Some boundary callers provide mutable projections. Only deeply immutable identity
+  // records can retain a key; the WeakMap cannot extend an entity/runtime lifetime.
+  if (Object.isFrozen(target) && Object.isFrozen(target.scope) && Object.isFrozen(target.instance)) {
+    immutableTargetKeys.set(target, key);
+  }
+  return key;
 }

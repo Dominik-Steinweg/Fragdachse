@@ -20,7 +20,9 @@ export class AttackPositionReservations {
       const index = snapshot.goalIndexes[i];
       if (snapshot.regions?.[index] !== region) continue;
       const point = navigationPoint(metrics, index), distance = Math.hypot(point.x - x, point.y - y);
-      if (distance > 144 || !geometry.canMove(x, y, point.x, point.y, radius)) continue;
+      // Every lease adds a non-negative penalty. Distance alone can already rule out a
+      // candidate; ties retain the first goal, exactly as the final strict comparison does.
+      if (distance >= bestScore || distance > 144 || !geometry.canMove(x, y, point.x, point.y, radius)) continue;
       let score = distance;
       for (const [otherId, lease] of this.leases) {
         if (otherId === id || lease.target !== target || lease.until <= now) continue;
@@ -29,6 +31,7 @@ export class AttackPositionReservations {
         if (Math.abs(dx) >= separation || Math.abs(dy) >= separation) continue;
         const overlap = Math.max(0, separation - Math.hypot(dx, dy));
         score += overlap * 5;
+        if (score >= bestScore) break;
       }
       if (score < bestScore) { bestScore = score; best = point; }
     }

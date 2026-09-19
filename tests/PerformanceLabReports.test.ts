@@ -1,13 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, unlink, rmdir } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gzipSync } from 'node:zlib';
 import { metric, summarizeWindows, compareResults, findings } from '../scripts/performance/metrics.mjs';
 import { analyzeTrace, createSourceResolver, traceEvents } from '../scripts/performance/trace.mjs';
-import { acquireOwned } from '../scripts/performance/lifecycle.mjs';
+import { acquireOwned, preserveFailedChromeTrace } from '../scripts/performance/lifecycle.mjs';
 
 describe('Performance lab offline evidence', () => {
+  it('salvages a failed trace independently of the lost page and retains its data-loss flag', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'fd-partial-trace-')), path = join(directory, 'partial.json');
+    const session = Object.assign(new EventEmitter(), { send: async (method: string) => {
+      if (method === 'Tracing.end') session.emit('Tracing.tracingComplete', { stream: 'trace', dataLossOccurred: true });
+      if (method === 'IO.read') return { data: Buffer.from('{"traceEvents":[]}').toString('base64'), base64Encoded: true, eof: true };
+      return {};
+    } });
+    try {
+      expect(await preserveFailedChromeTrace(session, path)).toEqual({ dataLossOccurred: true });
+      expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({ traceEvents: [] });
+      expect(session.listenerCount('Tracing.tracingComplete')).toBe(0);
+    } finally { await unlink(path); await rmdir(directory); }
+  });
+
+  it('bounds failed-trace recovery and removes listeners when Chrome no longer answers', async () => {
+    const session = Object.assign(new EventEmitter(), { send: () => new Promise(() => {}) });
+    await expect(preserveFailedChromeTrace(session, 'unused.json', 5)).rejects.toThrow('timeout');
+    expect(session.listenerCount('Tracing.tracingComplete')).toBe(0);
+  });
+
   it('closes resources that finish opening after the run has already timed out', async () => {
     const abort = new AbortController();
     let ready!: (value: object) => void;
@@ -169,6 +190,28 @@ describe('Performance lab offline evidence', () => {
 
   it('rejects traces without synchronization markers', async () => {
     await expect(analyzeTrace([], { request: { runId: 'r' }, markers: [] }, [])).rejects.toThrow('synchronization');
+  });
+  it('keeps project hotspots even when engine frames fill the inclusive ranking', async () => {
+    const nodes = Array.from({ length: 25 }, (_, index) => ({ id: index + 1, parent: index || undefined,
+      callFrame: { functionName: `engine-${index}` } }));
+    nodes.push({ id: 26, parent: 25, callFrame: { functionName: 'game' } });
+    const result = { request: { runId: 'r', captureProfile: 'standard' },
+      markers: [{ name: 'boot-start', atMs: 0 }, { name: 'run-end', atMs: 100 }] };
+    const events = [
+      { name: 'FD:lab:r:boot-start', pid: 1, tid: 10, ts: 1_000_000 },
+      { name: 'FD:lab:r:run-end', pid: 1, tid: 10, ts: 1_100_000 },
+      { name: 'Profile', pid: 1, tid: 10, id: 1, args: { data: { startTime: 1_000_000 } } },
+      { name: 'ProfileChunk', pid: 1, tid: 10, id: 1, ts: 1_100_000, args: { data: {
+        cpuProfile: { nodes, samples: [25, 26, 26] }, timeDeltas: [0, 60_000, 40_000] } } },
+    ];
+    const report = await analyzeTrace(events, result, [{ id: 'a', fromMs: 0, toMs: 100, spikes: [] }],
+      async frame => ({ ...frame, name: frame.functionName, mapped: true,
+        snapshot: frame.functionName === 'game' ? 'source/src/game.ts' : 'source/dependencies/engine.js' }));
+    const thread = report.windows[0].threads[0];
+    expect(thread.inclusive).toHaveLength(20);
+    expect(thread.inclusive.some(frame => frame.name === 'game')).toBe(false);
+    expect(thread.projectInclusive).toEqual([expect.objectContaining({ name: 'game', ms: 40, percent: 40 })]);
+    expect(thread.projectSelf).toEqual(thread.projectInclusive);
   });
   it('honors cancellation during offline trace processing', async () => {
     const controller = new AbortController();

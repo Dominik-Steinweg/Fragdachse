@@ -23,6 +23,8 @@ import { getDeferredAssets } from '../assets/DeferredAssets';
 
 const HIT_FEEDBACK_MERGE_WINDOW_MS = 30;
 const ROCKET_EXPLOSION_MERGE_WINDOW_MS = 50;
+const ONE_SHOT_VOICES_PER_KEY = 8;
+const ONE_SHOT_VOICES_TOTAL = 64;
 // These sources previously shared the rocket recording and its overlap limiter.
 const ROCKET_EXPLOSION_KEYS = new Set([
   'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',
@@ -57,6 +59,8 @@ export class GameAudioSystem {
   private readonly lastFeedbackAt = new Map<string, number>();
   private lastRocketExplosionAt = -Infinity;
   private readonly activeLoops = new Map<string, ActiveLoop>();
+  private readonly oneShotVoices = new Map<string, Phaser.Sound.BaseSound[]>();
+  private oneShotVoiceCount = 0;
   private currentMusic: Phaser.Sound.BaseSound | null = null;
   private currentMusicKey: MusicAssetKey | null = null;
   private requestedMusicKey: MusicAssetKey | null = null;
@@ -159,7 +163,7 @@ export class GameAudioSystem {
       this.lastRocketExplosionAt = this.scene.time.now;
     }
 
-    this.scene.sound.play(soundKey, {
+    this.playOneShot(soundKey, {
       volume: Phaser.Math.Clamp(finalVolume, 0, 1),
       pan: Phaser.Math.Clamp(pan, -1, 1),
     });
@@ -179,7 +183,7 @@ export class GameAudioSystem {
     const finalVolume = this.getEffectsPlaybackVolume(soundKey, volumeScale);
     if (finalVolume <= 0.001) return;
 
-    this.scene.sound.play(soundKey, {
+    this.playOneShot(soundKey, {
       volume: Phaser.Math.Clamp(finalVolume, 0, 1),
       pan: 0,
     });
@@ -355,6 +359,9 @@ export class GameAudioSystem {
       this.stopLoop(handle);
     }
     this.activeLoops.clear();
+    for (const voices of this.oneShotVoices.values()) for (const voice of voices) voice.destroy();
+    this.oneShotVoices.clear();
+    this.oneShotVoiceCount = 0;
     this.stopMusic();
     this.disposed = true;
     this.unsubscribeAssets();
@@ -378,6 +385,31 @@ export class GameAudioSystem {
   }
 
   // ── Spatial Audio ─────────────────────────────────────────────────────────
+
+  private playOneShot(key: string, config: Phaser.Types.Sound.SoundConfig): void {
+    // Reuse WebAudio gain/pan nodes, while each play still creates its own buffer source.
+    // HTML5 retains Phaser's instance/unlock handling. Capacity limits retained voices,
+    // never audible overlap: overflow uses the normal auto-destroying one-shot path.
+    const manager = this.scene.sound as Phaser.Sound.WebAudioSoundManager;
+    if (!manager.context) { this.scene.sound.play(key, config); return; }
+    let voices = this.oneShotVoices.get(key);
+    if (!voices) { voices = []; this.oneShotVoices.set(key, voices); }
+    for (let i = voices.length - 1; i >= 0; i--) {
+      if (voices[i].pendingRemove) { voices.splice(i, 1); this.oneShotVoiceCount--; }
+    }
+    let voice = voices.find(candidate => !candidate.isPlaying && !candidate.isPaused);
+    if (!voice && voices.length < ONE_SHOT_VOICES_PER_KEY && this.oneShotVoiceCount < ONE_SHOT_VOICES_TOTAL) {
+      voice = this.scene.sound.add(key);
+      voices.push(voice);
+      this.oneShotVoiceCount++;
+    }
+    if (voice) {
+      // BaseSound.play resets seek/delay and applies this call's volume and pan.
+      if (!voice.play(config)) voice.destroy();
+    } else {
+      this.scene.sound.play(key, config);
+    }
+  }
 
   private admitOneShot(key: string | undefined): boolean {
     if (!key || this.disposed) return false;

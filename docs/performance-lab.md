@@ -37,6 +37,9 @@ Standard sind 1500 Sekunden. Ein Fehler führt zu einem erfolglosen Lauf, nicht 
 Vor dem Start muss mindestens 1 GiB frei sein; längere Aufnahmen benötigen zusätzlichen Platz
 für den zunächst unkomprimierten Trace. Nach erfolgreicher Komprimierung bleibt nur die
 vollständige `.gz`-Aufnahme erhalten. Fehlgeschlagene Ergebnisordner tragen ihren Fehler im Manifest.
+Bei einem Abbruch versucht der Runner, den noch verfügbaren Chrome-Puffer als
+`chrome-trace.partial.json.gz` zu sichern. Dieser Diagnosebeleg bleibt ausdrücklich unvollständig;
+das Manifest bleibt `failed`, und `perf:compare` akzeptiert ihn nicht als Vergleichslauf.
 
 `reduced` schaltet ausschließlich Chromes JS-Sampling ab. Der Spielprofiler bleibt gleich.
 Dieses Profil dient einer groben Gegenmessung und liefert keine gesampelten Aufrufstapel.
@@ -159,6 +162,10 @@ außerhalb des Spiel-Callbacks sind nicht Teil der phasenbezogenen Callback-Zäh
 Die Kurzberichte berücksichtigen abwechselnd Messprobleme, Einzelhänger, Verschlechterung
 im Verlauf, Dauerlast und Lade-/Übergangskosten. Zweissekundenabschnitte zeigen FPS,
 Frame-Verteilung und Gegner-/Projektilbestände; Abschnittsgrenzen schneiden keine Hänger ab.
+Die separaten Projekt-Hotspots wählen Funktionen vor der Top-Limitierung anhand ihrer
+archivierten Projektquellen aus. Damit verdrängen Engine-Aufrufe die Projektfunktionen nicht.
+Eigenzeit und inklusive Zeit verwenden dieselben Samples und denselben Nenner wie die
+gesamte Thread-Ansicht; die Ansichten sind nicht addierbar und ändern die Aufnahme nicht.
 Die Verlaufsheuristik vergleicht ausreichend belegte Anfangs-/Endabschnitte, ohne Trendtest oder
 Ursachenbehauptung. Bekannte Ursachen sind erst durch Prüfung von Aufrufketten und Quellcode
 zu begründen. Die zusätzlichen Hooks existieren nur bei aktiver Diagnose, die Bereichsaufnahme

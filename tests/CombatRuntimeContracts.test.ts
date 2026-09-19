@@ -104,6 +104,22 @@ describe('Combat scope and provenance contracts', () => {
     expect(isSameCombatTargetInstance(target, reused)).toBe(false);
     expect(combatTargetInstanceKey(target)).not.toBe(combatTargetInstanceKey(reused));
   });
+
+  it('keeps keys equivalent for immutable identities without caching mutable nested projections', () => {
+    const frozen = Object.freeze({ ...target, scope: Object.freeze({ ...scope }),
+      instance: Object.freeze({ ...target.instance }) });
+    expect(combatTargetInstanceKey(frozen)).toBe(combatTargetInstanceKey(target));
+
+    const mutableScope = { ...scope }, mutableInstance = { ...target.instance };
+    const projection = Object.freeze({ ...target, scope: mutableScope, instance: mutableInstance });
+    const initial = combatTargetInstanceKey(projection);
+    mutableInstance.entityGeneration++;
+    const replaced = combatTargetInstanceKey(projection);
+    expect(replaced).not.toBe(initial);
+    mutableScope.runtimeGeneration++;
+    expect(combatTargetInstanceKey(projection)).not.toBe(replaced);
+    expect(combatTargetInstanceKey(frozen)).toBe(initial);
+  });
 });
 
 describe('Combat damage origin contracts', () => {

@@ -43,13 +43,26 @@ export function waterBlobDistance(mask: number, x: number, y: number): number {
 
 /** Static topology is shared by all chunks; neither mask generation nor waves own gameplay. */
 export class WaterSurfaceModel {
-  readonly masks = new Map<string, number>();
+  private readonly masks: Int16Array;
+  private readonly columns: number;
+  private readonly rows: number;
   constructor(private readonly cells: readonly WaterCell[], private readonly dimensions: { width: number; height: number }) {
+    this.columns = Math.ceil(dimensions.width / CELL_SIZE);
+    this.rows = Math.ceil(dimensions.height / CELL_SIZE);
+    // Sampling touches every mask pixel, including the halo. Index the immutable topology
+    // directly instead of allocating and hashing a coordinate string for every pixel.
+    this.masks = new Int16Array(this.columns * this.rows).fill(-1);
     const occupied = new Set(cells.map(c => `${c.gridX},${c.gridY}`));
-    for (const cell of cells) this.masks.set(`${cell.gridX},${cell.gridY}`,
+    for (const cell of cells) this.masks[cell.gridY * this.columns + cell.gridX] =
       AutoTiler.computeMask(cell.gridX, cell.gridY, (x, y) =>
         x < 0 || y < 0 || x * CELL_SIZE >= dimensions.width || y * CELL_SIZE >= dimensions.height
-        || occupied.has(`${x},${y}`)));
+        || occupied.has(`${x},${y}`));
+  }
+
+  getMask(gridX: number, gridY: number): number | undefined {
+    if (gridX < 0 || gridY < 0 || gridX >= this.columns || gridY >= this.rows) return undefined;
+    const mask = this.masks[gridY * this.columns + gridX];
+    return mask < 0 ? undefined : mask;
   }
 
   sample(x: number, y: number): number {
@@ -57,10 +70,10 @@ export class WaterSurfaceModel {
     // cannot introduce a shore at the map edge. Dry boundary cells stay dry.
     x = Math.max(0, Math.min(x, this.dimensions.width));
     y = Math.max(0, Math.min(y, this.dimensions.height));
-    const gx = Math.min(Math.floor(x / CELL_SIZE), Math.ceil(this.dimensions.width / CELL_SIZE) - 1);
-    const gy = Math.min(Math.floor(y / CELL_SIZE), Math.ceil(this.dimensions.height / CELL_SIZE) - 1);
-    const mask = this.masks.get(`${gx},${gy}`);
-    return mask === undefined ? -WATER_SHORE_DISTANCE : waterBlobDistance(mask, x - gx * CELL_SIZE, y - gy * CELL_SIZE);
+    const gx = Math.min(Math.floor(x / CELL_SIZE), this.columns - 1);
+    const gy = Math.min(Math.floor(y / CELL_SIZE), this.rows - 1);
+    const mask = this.masks[gy * this.columns + gx];
+    return mask === undefined || mask < 0 ? -WATER_SHORE_DISTANCE : waterBlobDistance(mask, x - gx * CELL_SIZE, y - gy * CELL_SIZE);
   }
 
   /** Include the soft bank in neighboring chunks, clipped to the presentation world. */
@@ -109,18 +122,30 @@ export class WaterSurfaceModel {
     // Analytic distances seed subpixel shore contacts on both sides of the contour.
     for (const direction of [1, -1]) {
       const start = direction === 1 ? 0 : size - 1, end = direction === 1 ? size : -1;
-      const neighbors = [[-direction, 0, step], [0, -direction, step],
-        [-direction, -direction, step * Math.SQRT2], [direction, -direction, step * Math.SQRT2]];
+      const diagonalCost = step * Math.SQRT2;
       for (let py = start; py !== end; py += direction) {
         if (py % 8 === 0) yield;
+        const row = py * size, previousRow = row - direction * size;
+        const hasPreviousRow = py !== start;
         for (let px = start; px !== end; px += direction) {
-          const i = py * size + px;
-          for (const [dx, dy, cost] of neighbors) {
-            const nx = px + dx, ny = py + dy;
-            if (nx >= 0 && ny >= 0 && nx < size && ny < size) {
-              const neighbor = ny * size + nx;
-              distance[i] = Math.min(distance[i], distance[neighbor] + cost);
-              outside[i] = Math.min(outside[i], outside[neighbor] + cost);
+          const i = row + px;
+          // Keep the original neighbor order and Float32 stores exactly. The four fixed
+          // neighbors do not need nested iterable/destructuring work for each pixel.
+          if (px !== start) {
+            distance[i] = Math.min(distance[i], distance[i - direction] + step);
+            outside[i] = Math.min(outside[i], outside[i - direction] + step);
+          }
+          if (hasPreviousRow) {
+            const above = previousRow + px;
+            distance[i] = Math.min(distance[i], distance[above] + step);
+            outside[i] = Math.min(outside[i], outside[above] + step);
+            if (px !== start) {
+              distance[i] = Math.min(distance[i], distance[above - direction] + diagonalCost);
+              outside[i] = Math.min(outside[i], outside[above - direction] + diagonalCost);
+            }
+            if (px + direction !== end) {
+              distance[i] = Math.min(distance[i], distance[above + direction] + diagonalCost);
+              outside[i] = Math.min(outside[i], outside[above + direction] + diagonalCost);
             }
           }
         }
@@ -141,18 +166,22 @@ export class WaterSurfaceModel {
     for (const channel of [0, 2]) {
       for (let py = radius; py < size - radius; py++) {
         if (py % 8 === 0) yield;
+        const row = py * size;
         for (let px = radius; px < size - radius; px++) {
           let value = 0;
-          for (let dx = -radius; dx <= radius; dx++) value += data[(py * size + px + dx) * 4 + channel] * weights[dx + radius];
-          horizontal[py * size + px] = value / sum;
+          const first = (row + px - radius) * 4 + channel;
+          for (let tap = 0; tap < weights.length; tap++) value += data[first + tap * 4] * weights[tap];
+          horizontal[row + px] = value / sum;
         }
       }
       for (let py = radius * 2; py < size - radius * 2; py++) {
         if (py % 8 === 0) yield;
+        const row = py * size;
         for (let px = radius * 2; px < size - radius * 2; px++) {
           let value = 0;
-          for (let dy = -radius; dy <= radius; dy++) value += horizontal[(py + dy) * size + px] * weights[dy + radius];
-          data[(py * size + px) * 4 + channel] = Math.round(value / sum);
+          const first = row + px - radius * size;
+          for (let tap = 0; tap < weights.length; tap++) value += horizontal[first + tap * size] * weights[tap];
+          data[(row + px) * 4 + channel] = Math.round(value / sum);
         }
       }
     }

@@ -36,6 +36,20 @@ function fixture() {
 }
 
 describe('keyed light lifecycle', () => {
+  it('keeps canopy falloff circular, including square bounds and distant light sources', () => {
+    const { lighting } = fixture();
+    const ambient = lighting.resolveCanopyTint(100, 100);
+    lighting.setLight('near', 'adrenalineEssence', 100, 100, { radiusPx: 100, intensity: 1 });
+    lighting.setLight('far', 'adrenalineEssence', 1000, 1000, { radiusPx: 100, intensity: 1 });
+    lighting.update();
+    expect(lighting.resolveCanopyTint(100, 100)).not.toBe(ambient);
+    expect(lighting.resolveCanopyTint(150, 100)).not.toBe(ambient);
+    for (const [x, y] of [[0, 100], [200, 100], [100, 0], [100, 200], [175, 175], [300, 300]]) {
+      expect(lighting.resolveCanopyTint(x, y)).toBe(ambient);
+    }
+    lighting.destroy();
+  });
+
   it('keeps normal release fading, but immediate release removes active and already fading lights', () => {
     const { scene, lighting, stamps } = fixture();
     lighting.setLight('pickup', 'adrenalineEssence', 100, 100);

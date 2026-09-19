@@ -26,8 +26,12 @@ export class EnemyLocomotion {
   private readonly nearby: Neighbor[] = [];
   private readonly conflicts: Conflict[] = [];
   private readonly movementObstacles: NavigationObstacle[] = [];
+  private readonly neighborObstacles: NavigationObstacle[] = [];
   private readonly collectMovementObstacle = (obstacle: NavigationObstacle): boolean => {
     this.movementObstacles.push(obstacle); return false;
+  };
+  private readonly collectNeighborObstacle = (obstacle: NavigationObstacle): boolean => {
+    this.neighborObstacles.push(obstacle); return false;
   };
 
   begin(neighbors: readonly Neighbor[], geometry: NavigationGeometry, deltaMs: number): void {
@@ -102,12 +106,25 @@ export class EnemyLocomotion {
           this.neighborsExamined++;
           const dx = neighbor.x - x, dy = neighbor.y - y;
           if (dx * dx + dy * dy > rangeSq) continue;
-          // Bodies separated by geometry exert no social force through the wall.
-          if (!geometry.canMove(x, y, neighbor.x, neighbor.y, 0)) continue;
           neighbors.push(neighbor);
         }
       }
     }
+    // All neighbor sight lines lie inside this envelope. A dense crowd reuses one
+    // broad phase; sparse groups keep the cheaper individual segment queries.
+    const reuseBroadPhase = neighbors.length > 4;
+    if (reuseBroadPhase) {
+      this.neighborObstacles.length = 0;
+      geometry.visit(x - range, y - range, x + range, y + range, 0, this.collectNeighborObstacle);
+    }
+    let visibleNeighbors = 0;
+    for (const neighbor of neighbors) {
+      // Bodies separated by geometry exert no social force through the wall.
+      if (reuseBroadPhase
+        ? geometry.canMoveAgainst(x, y, neighbor.x, neighbor.y, 0, this.neighborObstacles)
+        : geometry.canMove(x, y, neighbor.x, neighbor.y, 0)) neighbors[visibleNeighbors++] = neighbor;
+    }
+    neighbors.length = visibleNeighbors;
     const conflicts = this.conflicts;
     for (let index = 0; index < neighbors.length; index++) {
       const neighbor = neighbors[index];
@@ -177,5 +194,6 @@ export class EnemyLocomotion {
     this.previous.clear(); this.buckets.clear(); this.neighborsById.clear(); this.pool.length = 0; this.geometry = null;
     this.elapsedMs = 0; this.neighborsExamined = 0; this.waitingNeighborsObserved = 0;
     this.nearby.length = 0; this.conflicts.length = 0; this.movementObstacles.length = 0;
+    this.neighborObstacles.length = 0;
   }
 }

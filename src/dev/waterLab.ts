@@ -76,7 +76,7 @@ class WaterLab extends Phaser.Scene {
     const maxY = (Math.max(...water.map(c => c.gridY)) + 1) * CELL_SIZE;
     const centerX = (minX + maxX) / 2, centerY = (minY + maxY) / 2;
     const model = new WaterSurfaceModel(water, { width, height });
-    const tip = water.find(c => [1, 4, 16, 64].includes(model.masks.get(`${c.gridX},${c.gridY}`)!));
+    const tip = water.find(c => [1, 4, 16, 64].includes(model.getMask(c.gridX, c.gridY)!));
     this.startX = this.fixtureIndex === 0 ? 400 : minX - 64;
     this.startY = this.fixtureIndex === 0 ? 432 : ((tip?.gridY ?? Math.floor(centerY / CELL_SIZE)) + .5) * CELL_SIZE;
     this.farX = this.fixtureIndex === 0 ? 1040 : maxX + 64;

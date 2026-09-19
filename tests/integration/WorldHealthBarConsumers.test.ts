@@ -99,6 +99,26 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it('invalidates immutable enemy identities on replacement, removal and owner teardown', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100, entityGeneration: 4 });
+    const original = manager.getCombatTargetRef('e1')!;
+    expect(Object.isFrozen(original)).toBe(true);
+    expect(Object.isFrozen(original.scope)).toBe(true);
+    expect(Object.isFrozen(original.instance)).toBe(true);
+    upsert(manager, { id: 'e1', kind, x: 15, y: 20, hp: 90, maxHp: 100, entityGeneration: 4 });
+    expect(manager.getCombatTargetRef('e1')).toEqual(original);
+    upsert(manager, { id: 'e1', kind, x: 15, y: 20, hp: 100, maxHp: 100, entityGeneration: 5 });
+    expect(manager.getCombatTargetRef('e1')!.instance.entityGeneration).toBe(5);
+    expect(manager.readCombatVitals(original)).toBeNull();
+    manager.applySnapshot({ u: [], r: [1] });
+    expect(manager.getCombatTargetRef('e1')).toBeNull();
+    upsert(manager, { id: 'e1', kind, x: 15, y: 20, hp: 100, maxHp: 100, entityGeneration: 6 });
+    manager.destroy();
+    expect(manager.getCombatTargetRef('e1')).toBeNull();
+    h.renderer.destroy();
+  });
+
   it('digs head-first while keeping the runtime body stable and the entry pose intact across movement sync', () => {
     const h = harness();
     const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,

@@ -170,13 +170,17 @@ export async function analyzeTrace(events, result, windows, resolveSource = asyn
     for (let j = 0; j < aggregateWindows.length; j++) {
       const a = aggregates[j];
       if (!a.total) continue;
-      const top = map => [...map].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([id, ms]) => ({ ...functions.get(id), ms, percent: ms / a.total * 100 }));
+      const top = (map, projectOnly = false) => [...map]
+        .filter(([id]) => !projectOnly || functions.get(id).snapshot?.startsWith('source/src/'))
+        .sort((a, b) => b[1] - a[1]).slice(0, 20)
+        .map(([id, ms]) => ({ ...functions.get(id), ms, percent: ms / a.total * 100 }));
       const target = aggregateWindows[j];
       const section = target.recurringIndex !== undefined ? output[target.index].recurringSpikes[target.recurringIndex]
         : target.spikeIndex === undefined ? output[target.index] : output[target.index].spikes[target.spikeIndex];
       (section.threads ??= []).push({ pid: p.pid, tid: p.tid, name: threadNames.get(`${p.pid}:${p.tid}`) ?? 'unknown',
         role: p.tid === gameThread?.tid ? 'main' : 'worker',
         sampledMs: a.total, unknownMs: a.unknown, unresolvedJsMs: a.unresolved, states: a.states, self: top(a.self), inclusive: top(a.inclusive),
+        projectSelf: top(a.self, true), projectInclusive: top(a.inclusive, true),
         stacks: [...a.stacks].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([key, ms]) => ({ ms, frames: key.split('/').map(id => functions.get(Number(id))) })) });
     }
   }

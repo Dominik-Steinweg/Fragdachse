@@ -3,6 +3,25 @@ import { navigationTestWorld } from './navigationTestWorld';
 import { AttackPositionReservations } from '../src/systems/navigation/AttackPositionReservations';
 
 describe('Soft navigation costs and attack positions', () => {
+  it('preserves goal order on equal scores and still accounts for occupied alternatives', () => {
+    const world = navigationTestWorld();
+    const goals = [6 * 17 + 8, 10 * 17 + 8];
+    world.coordinator.setGoalCells('test', goals); world.flush();
+    const route = world.field.queryNavigation(64, 128), snapshot = world.field.getNavigationSnapshot()!;
+    if (route.status !== 'ready') throw new Error('fixture');
+    const places = new AttackPositionReservations();
+    const choose = (id: string, order: number[]) => places.select(id, 'target', 64, 128, 15, route.region, 0,
+      { ...snapshot, goalIndexes: new Int32Array(order) }, world.metrics, world.geometry());
+    const first = choose('one', goals);
+    const second = choose('two', goals);
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(second).not.toEqual(first);
+    places.clear();
+    expect(choose('three', [...goals].reverse())).toEqual(second);
+    world.destroy();
+  });
+
   it('keeps hard connectivity when density changes and rejects non-finite penalties', () => {
     const world = navigationTestWorld(); world.goal(224, 128); world.flush();
     const before = world.field.queryNavigation(32, 128);

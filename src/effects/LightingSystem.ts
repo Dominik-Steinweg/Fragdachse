@@ -392,6 +392,9 @@ export class LightingSystem {
       if (light.effectiveIntensity <= 0) continue;
       const dx = x - light.x;
       const dy = y - light.y;
+      // Most canopy/light pairs are far apart. Reject the enclosing square before
+      // evaluating the exact radial falloff; in-range tint arithmetic stays identical.
+      if (Math.abs(dx) >= light.radiusPx || Math.abs(dy) >= light.radiusPx) continue;
       const distance = Math.hypot(dx, dy);
       if (distance >= light.radiusPx) continue;
 

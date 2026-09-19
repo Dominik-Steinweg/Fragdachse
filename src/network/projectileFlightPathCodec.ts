@@ -48,6 +48,9 @@ class PathBytes {
   }
   writeFloat(value: number, prediction: number): void {
     if (!Number.isFinite(value)) throw new Error('Invalid projectile path number');
+    // Exact predictions have no residual bytes. Preserve the sign of zero just as the
+    // IEEE-754 XOR path does, without writing/scanning two DataViews for the common case.
+    if (Object.is(value, prediction)) { this.write(0); return; }
     this.value.setFloat64(0, value); this.prediction.setFloat64(0, prediction);
     let first = 0, last = 7;
     while (first < 8 && this.value.getUint8(first) === this.prediction.getUint8(first)) first++;
@@ -72,7 +75,7 @@ class PathBytes {
 
 export function encodeProjectileFlightPath(path: ProjectileFlightPath): string {
   if (!path.points.length || path.points.length > PROJECTILE_PATH_MAX_POINTS) throw new Error('Invalid projectile path count');
-  const writer = new PathBytes(new Uint8Array(MAX_BYTES));
+  const writer = new PathBytes(new Uint8Array(12 + path.points.length * 80));
   writer.writeFloat(path.timeMs, 0);
   writer.write(path.ended ? 1 : 0); writer.write(path.points.length);
   let previous: ProjectilePathPoint | undefined, before: ProjectilePathPoint | undefined;
