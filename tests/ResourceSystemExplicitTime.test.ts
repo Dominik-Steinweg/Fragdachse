@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADRENALINE_MAX,
+  ADRENALINE_REGEN_MAX,
   ADRENALINE_REGEN_PAUSE_MS,
   ADRENALINE_REGEN_PER_SEC,
 } from '../src/config';
@@ -53,16 +54,54 @@ describe('ResourceSystem – explizite Zeit und Regeneration', () => {
 
     // Ab Pausen-Ende: regeneriert 1 Sekunde mit Standard-Rate
     resources.regenTick('p1', 1_000, pauseEnd);
-    expect(resources.getAdrenaline('p1')).toBe(30 + ADRENALINE_REGEN_PER_SEC);
+    expect(resources.getAdrenaline('p1')).toBe(Math.min(ADRENALINE_REGEN_MAX, 30 + ADRENALINE_REGEN_PER_SEC));
   });
 
-  it('deckelt passive Regeneration auf das Maximum', () => {
+  it('deckelt auch erhoehte natuerliche Regeneration auf die Regenerationsgrenze', () => {
     const resources = new ResourceSystem();
     resources.initPlayer('p1');
-    resources.setAdrenaline('p1', ADRENALINE_MAX - 1);
+    resources.setAdrenaline('p1', ADRENALINE_REGEN_MAX - 1);
+    resources.setAdrenalineRegenRateResolver(() => ADRENALINE_MAX);
 
     resources.regenTick('p1', 5_000, 10_000);
+    expect(resources.getAdrenaline('p1')).toBe(ADRENALINE_REGEN_MAX);
+  });
+
+  it('laesst Spritzen bis zum Gesamtmaximum auffuellen und erhaelt den Vorrat nach Ablauf', () => {
+    const resources = new ResourceSystem();
+    resources.initPlayer('p1');
+    resources.setAdrenaline('p1', ADRENALINE_REGEN_MAX);
+    resources.setPowerUpSystem({ getRegenMultiplier: () => 2 });
+    resources.regenTick('p1', 1_000, 10_000);
+    expect(resources.getAdrenaline('p1')).toBe(ADRENALINE_REGEN_MAX + ADRENALINE_REGEN_PER_SEC * 2);
+    resources.regenTick('p1', ADRENALINE_MAX / ADRENALINE_REGEN_PER_SEC * 1000, 20_000);
     expect(resources.getAdrenaline('p1')).toBe(ADRENALINE_MAX);
+    resources.setPowerUpSystem(null);
+    resources.drainAdrenaline('p1', 1, 30_000);
+    const revision = resources.getAdrenalineRevision('p1');
+    resources.regenTick('p1', 5_000, 30_000 + ADRENALINE_REGEN_PAUSE_MS);
+    expect(resources.getAdrenaline('p1')).toBe(ADRENALINE_MAX - 1);
+    expect(resources.getAdrenalineRevision('p1')).toBe(revision);
+  });
+
+  it('laesst Belohnungen und Essenz ueber die Regenerationsgrenze hinaus auffuellen', () => {
+    const resources = new ResourceSystem();
+    resources.initPlayer('p1');
+    resources.setAdrenaline('p1', ADRENALINE_REGEN_MAX);
+    resources.addAdrenaline('p1', 10);
+    expect(resources.getAdrenaline('p1')).toBe(ADRENALINE_REGEN_MAX + 10);
+    expect(resources.commitResolvedAdrenalineGain('p1', ADRENALINE_MAX)).toBe(ADRENALINE_MAX - ADRENALINE_REGEN_MAX - 10);
+    expect(resources.getAdrenaline('p1')).toBe(ADRENALINE_MAX);
+  });
+
+  it('respektiert ein niedrigeres Spielermaximum auch bei Regeneration', () => {
+    const resources = new ResourceSystem();
+    const maximum = ADRENALINE_REGEN_MAX / 2;
+    resources.setAdrenalineMaxResolver(() => maximum);
+    resources.initPlayer('p1');
+    resources.setAdrenaline('p1', maximum - 1);
+    resources.regenTick('p1', 5_000, 10_000);
+    expect(resources.getAdrenaline('p1')).toBe(maximum);
   });
 
   it('beruecksichtigt benutzerdefinierte Regen-Raten und PowerUp-Multiplikatoren', () => {

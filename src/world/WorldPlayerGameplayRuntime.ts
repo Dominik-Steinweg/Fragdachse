@@ -2,7 +2,7 @@ import { MolotovUpgradeSystem } from '../systems/MolotovUpgradeSystem';
 import { TurretControlSystem, resolveTurretExit } from '../systems/TurretControlSystem';
 import { dequantizeAngle } from '../utils/angle';
 import type { AutomatedTurret } from '../systems/TurretSystem';
-import { PLAYER_SIZE } from '../config';
+import { ADRENALINE_MAX, ADRENALINE_REGEN_PER_SEC, PLAYER_SIZE } from '../config';
 import type { WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
 import { captureCoopDefenseOutgoingDamage } from '../utils/coopDefenseStats';
 import type { PrimaryHitRewardScopeReadPort } from '../combat/PrimaryHitReward';
@@ -1680,9 +1680,9 @@ export class WorldPlayerGameplayRuntime implements
     playerModifier: CoopDefensePlayerModifierSystem,
     itemRuntime: CoopDefenseItemRuntimeSystem,
   ): void {
-    resource.setAdrenalineMaxResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.maxAdrenaline', 100));
+    resource.setAdrenalineMaxResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.maxAdrenaline', ADRENALINE_MAX));
     resource.setAdrenalineRegenRateResolver((playerId, nowMs) => {
-      const base = playerModifier.getResolvedStat(playerId, 'player.adrenalineRegenRate', 10);
+      const base = playerModifier.getResolvedStat(playerId, 'player.adrenalineRegenRate', ADRENALINE_REGEN_PER_SEC);
       return base
         * this.options.decoySystem.getStealthAdrenalineMultiplier(playerId)
         * itemRuntime.getAdrenalineRegenMultiplier(playerId, nowMs)

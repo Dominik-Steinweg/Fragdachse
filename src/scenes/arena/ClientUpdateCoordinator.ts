@@ -5,7 +5,7 @@ import type Phaser from 'phaser';
 import { bridge }          from '../../network/bridge';
 import type { GameState }  from '../../network/NetworkBridge';
 import { dequantizeAngle } from '../../utils/angle';
-import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, PLAYER_SIZE, PLAYER_VISUAL_SIZE, getTopDownMuzzleOrigin } from '../../config';
+import { ADRENALINE_MAX, NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, PLAYER_SIZE, PLAYER_VISUAL_SIZE, getTopDownMuzzleOrigin } from '../../config';
 import { isVelocityMoving } from '../../loadout/SpreadMath';
 import { getUtilityConfigForMode, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
@@ -946,7 +946,7 @@ export class ClientUpdateCoordinator {
   }
 
   getLocalMaxAdrenaline(): number {
-    return this.getResolvedLocalPlayerStat('player.maxAdrenaline', 100);
+    return this.getResolvedLocalPlayerStat('player.maxAdrenaline', ADRENALINE_MAX);
   }
 
   getLocalMaxArmor(): number {

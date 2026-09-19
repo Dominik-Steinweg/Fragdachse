@@ -53,6 +53,27 @@ const LIVING_CAP_FEATHER = 1.0;
 const AMBIENT_CAP_RADIUS = 4.2;
 const AMBIENT_CAP_FEATHER = 1.2;
 
+// Shared by the shader and polygon fallback.
+// Separate colors preserve a navy rim while giving the core and halo real luminance contrast.
+export const STATUS_RING_NATURAL_ADRENALINE_PALETTE = {
+  dark: 0x102d60,
+  mid: 0x285fb5,
+  light: 0x2e67d1,
+} as const;
+function glslColor(color: number): string {
+  return `vec3(${[16, 8, 0].map(shift => (((color >> shift) & 255) / 255).toFixed(5)).join(', ')})`;
+}
+export const STATUS_RING_ADRENALINE_TRANSITION_FRACTION = 0.075;
+const ADRENALINE_TINT_GLSL = [
+  'uniform vec2 uAdrenalineTransition;',
+  'vec3 adrenalineTint(vec3 tint, vec3 naturalTint, int index, float position) {',
+  '  if (index != 1 || uAdrenalineTransition.x < 0.0) return tint;',
+  '  float blend = smoothstep(uAdrenalineTransition.x,',
+  '    uAdrenalineTransition.x + uAdrenalineTransition.y, position);',
+  '  return mix(naturalTint, tint, blend);',
+  '}',
+].join('\n');
+
 const RING_MASK_GLSL = [
   'float bandMask(float radius, float inner, float outer, float innerFeather, float outerFeather) {',
   '  float innerFade = smoothstep(inner - innerFeather, inner, radius);',
@@ -118,6 +139,7 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   LIVING_FIELD_GLSL,
   'uniform float uAmbientPulse;',
   RING_MASK_GLSL,
+  ADRENALINE_TINT_GLSL,
   'void main () {',
   // ShaderQuad uses WebGL texture coordinates (y=1 at the visual top). Convert them to the
   // same screen-space axes as `degToRadFromTop` in PlayerStatusRing (x right, y down).
@@ -150,6 +172,9 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   // Auch knapp vor dem Startwinkel kann noch der weiche Blobrand liegen. In den signierten
   // Bereich zurueckfalten, damit segmentMask() beide Enden symmetrisch auslaufen laesst.
   '    float signedRel = rel > 3.14159265359 ? rel - ' + TAU + ' : rel;',
+  '    vec3 tintMid = adrenalineTint(uSegmentTintMid[i], ' + glslColor(STATUS_RING_NATURAL_ADRENALINE_PALETTE.mid) + ', i, clamp(signedRel, 0.0, width));',
+  '    vec3 tintLight = adrenalineTint(uSegmentTintLight[i], ' + glslColor(STATUS_RING_NATURAL_ADRENALINE_PALETTE.light) + ', i, clamp(signedRel, 0.0, width));',
+  '    vec3 tintDark = adrenalineTint(uSegmentTintDark[i], ' + glslColor(STATUS_RING_NATURAL_ADRENALINE_PALETTE.dark) + ', i, clamp(signedRel, 0.0, width));',
   `    float sectorValue = segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
   `    float activity = 1.0 + band.z * ${(ACTIVE_GAIN - 1).toFixed(3)};`,
   `    float gain = ${FIELD_GAIN.toFixed(3)} * activity * band.w;`,
@@ -174,8 +199,8 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
   `    float glowSector = segmentMask(signedRel, width, ${SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
   '    float glowCoverage = (glowWide * glowWideAlpha + glowMid * glowMidAlpha + glowNear * 0.1)',
   '      * uAmbientPulse;',
-  '    accum += (uSegmentTintMid[i] * glowWide * glowWideAlpha',
-  '      + uSegmentTintLight[i] * (glowMid * glowMidAlpha + glowNear * 0.1))',
+  '    accum += (tintMid * glowWide * glowWideAlpha',
+  '      + tintLight * (glowMid * glowMidAlpha + glowNear * 0.1))',
   '      * uAmbientPulse;',
   '    coverage += glowCoverage;',
   `    float coreValue = core * roundedSegmentMask(local, radius, arc.x, arc.y, arc.z, arc.w,
@@ -184,8 +209,8 @@ export const STATUS_RING_FRAGMENT_SOURCE = [
       sectorValue, ${OUTER_INNER_FEATHER.toFixed(1)}, ${LIVING_CAP_RADIUS.toFixed(1)}, ${LIVING_CAP_FEATHER.toFixed(1)}) * gain;`,
   // Die frueheren Tint-Listen waren [mid, dark, mid] fuer die Kern- und [dark, dark, mid] fuer
   // die Aussenschicht — im Mittel zwei Drittel mid bzw. zwei Drittel dark.
-  '    accum += mix(uSegmentTintDark[i], uSegmentTintMid[i], 0.67) * coreValue;',
-  '    accum += mix(uSegmentTintMid[i], uSegmentTintDark[i], 0.67) * outerValue;',
+  '    accum += mix(tintDark, tintMid, 0.67) * coreValue;',
+  '    accum += mix(tintMid, tintDark, 0.67) * outerValue;',
   '    coverage += coreValue + outerValue;',
   '  }',
   // Vormultipliziert: `accum` ist bereits Farbe mal Deckung.
@@ -206,6 +231,7 @@ export const STATUS_RING_FILL_FRAGMENT_SOURCE = [
   '#endif',
   'varying vec2 outTexCoord;',
   'uniform float uAlpha;',
+  'uniform float uAdrenalineFlash;',
   'uniform vec2 uSize;',
   `uniform vec4 uSegmentArc[${STATUS_RING_SEGMENT_COUNT}];`,
   `uniform vec4 uSegmentFill[${STATUS_RING_SEGMENT_COUNT}];`,
@@ -213,6 +239,7 @@ export const STATUS_RING_FILL_FRAGMENT_SOURCE = [
   `uniform vec3 uSegmentTintLight[${STATUS_RING_SEGMENT_COUNT}];`,
   `uniform vec3 uSegmentTintDark[${STATUS_RING_SEGMENT_COUNT}];`,
   RING_MASK_GLSL,
+  ADRENALINE_TINT_GLSL,
   'vec4 over(vec4 dst, vec3 srcColor, float srcAlpha) {',
   '  srcAlpha = clamp(srcAlpha, 0.0, 1.0);',
   '  float remaining = 1.0 - srcAlpha;',
@@ -233,6 +260,9 @@ export const STATUS_RING_FILL_FRAGMENT_SOURCE = [
   `    float start = mod(arc.x + ${TAU}, ${TAU});`,
   `    float rel = arc.y >= 0.0 ? mod(angle - start + ${TAU}, ${TAU}) : mod(start - angle + ${TAU}, ${TAU});`,
   '    float signedRel = rel > 3.14159265359 ? rel - ' + TAU + ' : rel;',
+  '    vec3 tintMid = adrenalineTint(uSegmentTintMid[i], ' + glslColor(STATUS_RING_NATURAL_ADRENALINE_PALETTE.mid) + ', i, clamp(signedRel, 0.0, width));',
+  '    vec3 tintLight = adrenalineTint(uSegmentTintLight[i], ' + glslColor(STATUS_RING_NATURAL_ADRENALINE_PALETTE.light) + ', i, clamp(signedRel, 0.0, width));',
+  '    vec3 tintDark = adrenalineTint(uSegmentTintDark[i], ' + glslColor(STATUS_RING_NATURAL_ADRENALINE_PALETTE.dark) + ', i, clamp(signedRel, 0.0, width));',
   `    float sector = segmentMask(signedRel, width, ${FILL_SEGMENT_END_FEATHER_RAD.toFixed(4)});`,
   // The small radial feather is deliberately close to one pixel: it removes polygon stair-steps
   // while keeping the authored six-pixel ring crisp.
@@ -244,9 +274,14 @@ export const STATUS_RING_FILL_FRAGMENT_SOURCE = [
       ${FILL_EDGE_FEATHER_PX.toFixed(2)}, (highlightOuter - highlightInner) * 0.5, ${FILL_EDGE_FEATHER_PX.toFixed(2)});`,
   `    float darkEdge = roundedSegmentMask(local, radius, arc.x, arc.y, fill.y - 1.4, fill.y, sector,
       ${FILL_EDGE_FEATHER_PX.toFixed(2)}, 0.7, ${FILL_EDGE_FEATHER_PX.toFixed(2)});`,
-  '    accum = over(accum, uSegmentTintMid[i], ring * fill.z);',
-  '    accum = over(accum, uSegmentTintLight[i], highlight * fill.w);',
-  '    accum = over(accum, uSegmentTintDark[i], darkEdge * 0.24);',
+  '    accum = over(accum, tintMid, ring * fill.z);',
+  '    accum = over(accum, tintLight, highlight * fill.w);',
+  '    accum = over(accum, tintDark, darkEdge * 0.24);',
+  // Reuse the exact rounded fill masks and local palette; never flash unfilled reserve.
+  '    if (i == 1) {',
+  '      accum = over(accum, tintLight, ring * uAdrenalineFlash * 0.42);',
+  '      accum = over(accum, tintLight, highlight * uAdrenalineFlash * 0.28);',
+  '    }',
   '  }',
   // Phaser's NORMAL blend uses ONE as source factor; keep the accumulated color premultiplied.
   '  gl_FragColor = vec4(clamp(accum.rgb, 0.0, 1.0) * uAlpha, clamp(accum.a, 0.0, 1.0) * uAlpha);',

@@ -4,7 +4,7 @@ import { getUtilityRechargeFraction } from '../../loadout/UtilityChargeState';
 import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { EMPTY_FULL_PROJECTILE_SNAPSHOT } from '../../network/projectileSnapshotCodec';
-import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config';
+import { ADRENALINE_MAX, NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
 import { getActiveConstructionToolRefs, getConstructionAccessContext } from '../../systems/ConstructionAccessResolver';
@@ -922,7 +922,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         armor:                   this.ctx.getWorldCombatCore()!.getArmor(localId),
         maxArmor:                playerFrame?.maxArmor ?? 100,
         adrenaline:              playerFrame?.adrenaline ?? 0,
-        maxAdrenaline:           playerFrame?.maxAdrenaline ?? 100,
+        maxAdrenaline:           playerFrame?.maxAdrenaline ?? ADRENALINE_MAX,
         rage:                    playerFrame?.rage ?? 0,
         maxRage:                 playerFrame?.maxRage ?? 600,
         isUltimateActive:        playerFrame?.isUltimateActive ?? false,

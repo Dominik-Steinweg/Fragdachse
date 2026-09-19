@@ -1,5 +1,6 @@
 import {
   ADRENALINE_MAX,
+  ADRENALINE_REGEN_MAX,
   ADRENALINE_START,
   ADRENALINE_REGEN_PER_SEC,
   ADRENALINE_REGEN_PAUSE_MS,
@@ -239,10 +240,14 @@ export class ResourceSystem {
   regenTick(id: string, delta: number, nowMs: number): void {
     if (nowMs < (this.regenPausedUntil.get(id) ?? 0)) return;
     const regenMult = this.powerUpSystem?.getRegenMultiplier(id) ?? 1;
+    // Spritzen koennen den Reservevorrat fuellen; natuerliche Regeneration nicht.
+    const regenMax = Math.min(this.getMaxAdrenaline(id), regenMult > 1 ? Infinity : ADRENALINE_REGEN_MAX);
+    const previous = this.adrenaline.get(id) ?? 0;
+    if (previous >= regenMax) return;
     const regenRate = this.adrenalineRegenRateResolver?.(id, nowMs) ?? ADRENALINE_REGEN_PER_SEC;
     const cur = Math.min(
-      this.getMaxAdrenaline(id),
-      (this.adrenaline.get(id) ?? 0) + regenRate * regenMult * delta / 1000,
+      regenMax,
+      previous + regenRate * regenMult * delta / 1000,
     );
     this.writeAdrenaline(id, cur);
   }

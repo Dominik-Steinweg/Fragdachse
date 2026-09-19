@@ -21,6 +21,7 @@ vi.mock('../../src/world/WorldPlayerGameplayRuntime', async importOriginal => {
 import { composeWorldPlayerGameplay } from '../../src/scenes/arena/ArenaWorldPlayerComposition';
 import { TimeBubbleSystem } from '../../src/systems/TimeBubbleSystem';
 import { ResourceSystem } from '../../src/systems/ResourceSystem';
+import { ADRENALINE_REGEN_MAX, ADRENALINE_REGEN_PER_SEC } from '../../src/config';
 import { UTILITY_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../src/loadout/CoopDefenseLoadoutModifiers';
 import { getCoopDefenseResolvedEffectTotals, getCoopDefenseUpgradeDefinition } from '../../src/utils/coopDefenseUpgrades';
@@ -65,13 +66,14 @@ describe('Resonance Flow through World composition and passive regeneration', ()
       ultimateBehavior: { update() {} }, tunnel: { update() {} },
     });
     resource.initPlayer(player.id);
-    const regen = (now: number, delta = 100) => {
+    const regenDelta = 1000 / Math.max(1, ADRENALINE_REGEN_PER_SEC);
+    const regen = (now: number, delta = regenDelta) => {
       resource.setAdrenaline(player.id, 0);
       runtime.runHostPrePhysicsStage(delta, now, false);
       return resource.getAdrenaline(player.id);
     };
     const baseRegen = regen(1000);
-    expect(baseRegen).toBeGreaterThan(0); // combat binding is installed later in the World graph
+    expect(baseRegen).toBeCloseTo(ADRENALINE_REGEN_PER_SEC * regenDelta / 1000);
     gameplay.combat = { systems: { timeBubble: bubbles } };
     const start = 2000;
     const id = bubbles.hostCreateBubble(player.id, 0, 0, { type: 'time_bubble',
@@ -95,7 +97,7 @@ describe('Resonance Flow through World composition and passive regeneration', ()
     burrowed = true;
     expect(regen(pauseEnd + 1)).toBe(0);
     burrowed = false;
-    expect(regen(pauseEnd + 2, 100000)).toBe(resource.getMaxAdrenaline(player.id));
+    expect(regen(pauseEnd + 2, 100000)).toBe(Math.min(ADRENALINE_REGEN_MAX, resource.getMaxAdrenaline(player.id)));
     expect(bubbles.hostUpdate(pauseEnd + 2)[0].charge).toBe(config.chargeCapacity);
     expect(regen(start + config.bubbleDuration)).toBeCloseTo(baseRegen * otherMultiplier ** 2);
     bubbles.removeBubble(id, start + config.bubbleDuration, true);

@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import {
+  ADRENALINE_REGEN_MAX,
   ARMOR_COLOR,
   COLORS,
   DEPTH,
@@ -8,6 +9,8 @@ import {
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { fillRadialGradientTexture, registerGraphicsObject } from '../effects/EffectUtils';
 import {
+  STATUS_RING_ADRENALINE_TRANSITION_FRACTION,
+  STATUS_RING_NATURAL_ADRENALINE_PALETTE,
   STATUS_RING_FILL_FRAGMENT_SOURCE,
   STATUS_RING_FILL_SHADER_NAME,
   STATUS_RING_FRAGMENT_SOURCE,
@@ -15,7 +18,7 @@ import {
   STATUS_RING_SHADER_NAME,
 } from '../effects/living/statusRingShader';
 import type { LocalArenaHudData } from './LocalArenaHudData';
-import { ESSENCE_PALETTE, EssenceArrivalBurst } from '../adrenalineEssence/AdrenalineEssencePresentation';
+import { EssenceArrivalBurst } from '../adrenalineEssence/AdrenalineEssencePresentation';
 
 type SegmentKey = 'hp' | 'adrenaline' | 'rage';
 
@@ -71,7 +74,6 @@ const MAX_SPARKS = 9;
 
 const PAL_HP: SegmentPalette = { dark: COLORS.GREEN_3, mid: 0x00cc44, light: COLORS.GREEN_1, spark: 0xffffff };
 const PAL_ADR: SegmentPalette = { dark: COLORS.BLUE_3, mid: COLORS.BLUE_2, light: COLORS.BLUE_1, spark: 0xffffff };
-const PAL_ESSENCE: SegmentPalette = { dark: ESSENCE_PALETTE.rim, mid: ESSENCE_PALETTE.body, light: ESSENCE_PALETTE.light, spark: ESSENCE_PALETTE.light };
 const PAL_ADR_LOW: SegmentPalette = { dark: 0x5e1720, mid: COLORS.RED_3, light: 0xff9a8a, spark: 0xffffff };
 const PAL_RAGE: SegmentPalette = { dark: COLORS.RED_3, mid: COLORS.RED_2, light: COLORS.RED_1, spark: 0xffffff };
 const PAL_ARMOR: SegmentPalette = { dark: COLORS.GOLD_3, mid: ARMOR_COLOR, light: COLORS.GOLD_1, spark: COLORS.GREY_1 };
@@ -98,6 +100,8 @@ function fillArcPolygon(
   outerRadius: number,
   color: number,
   alpha: number,
+  roundStart = false,
+  roundEnd = false,
 ): void {
   graphics.fillStyle(color, alpha);
   graphics.beginPath();
@@ -109,10 +113,29 @@ function fillArcPolygon(
     if (index === 0) graphics.moveTo(x, y);
     else graphics.lineTo(x, y);
   }
+  const capRadius = (outerRadius - innerRadius) / 2;
+  const centerRadius = (outerRadius + innerRadius) / 2;
+  const direction = Math.sign(endAngle - startAngle);
+  if (roundEnd) {
+    const end = degToRadFromTop(endAngle);
+    for (let step = 1; step <= 12; step++) {
+      const angle = end + direction * Math.PI * step / 12;
+      graphics.lineTo(Math.cos(end) * centerRadius + Math.cos(angle) * capRadius,
+        Math.sin(end) * centerRadius + Math.sin(angle) * capRadius);
+    }
+  }
   for (let index = POLY_STEPS; index >= 0; index -= 1) {
     const angle = Phaser.Math.Linear(startAngle, endAngle, index / POLY_STEPS);
     const rad = degToRadFromTop(angle);
     graphics.lineTo(Math.cos(rad) * innerRadius, Math.sin(rad) * innerRadius);
+  }
+  if (roundStart) {
+    const start = degToRadFromTop(startAngle);
+    for (let step = 1; step <= 12; step++) {
+      const angle = start + direction * Math.PI + direction * Math.PI * step / 12;
+      graphics.lineTo(Math.cos(start) * centerRadius + Math.cos(angle) * capRadius,
+        Math.sin(start) * centerRadius + Math.sin(angle) * capRadius);
+    }
   }
   graphics.closePath();
   graphics.fillPath();
@@ -221,6 +244,8 @@ export class PlayerStatusRing {
   private readonly segmentTintMid = new Float32Array(STATUS_RING_SEGMENT_COUNT * 3);
   private readonly segmentTintLight = new Float32Array(STATUS_RING_SEGMENT_COUNT * 3);
   private readonly segmentTintDark = new Float32Array(STATUS_RING_SEGMENT_COUNT * 3);
+  private readonly adrenalineTransition = new Float32Array(2);
+  private adrenalineFlash = 0;
   private livingElapsedSec = 0;
   private ambientPulse = 1;
 
@@ -426,6 +451,7 @@ export class PlayerStatusRing {
         fragmentSource: STATUS_RING_FRAGMENT_SOURCE,
         setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
           setUniform('uTime', this.livingElapsedSec);
+          setUniform('uAdrenalineTransition', this.adrenalineTransition);
           setUniform('uAlpha', LIVING_QUAD_ALPHA);
           setUniform('uAmbientPulse', this.ambientPulse);
           setUniform('uSize', [STATUS_RING_TEXTURE_SIZE, STATUS_RING_TEXTURE_SIZE]);
@@ -459,6 +485,8 @@ export class PlayerStatusRing {
         fragmentSource: STATUS_RING_FILL_FRAGMENT_SOURCE,
         setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
           setUniform('uAlpha', 1);
+          setUniform('uAdrenalineFlash', this.adrenalineFlash);
+          setUniform('uAdrenalineTransition', this.adrenalineTransition);
           setUniform('uSize', [STATUS_RING_TEXTURE_SIZE, STATUS_RING_TEXTURE_SIZE]);
           setUniform('uSegmentArc[0]', this.segmentArc);
           setUniform('uSegmentFill[0]', this.segmentFill);
@@ -527,7 +555,7 @@ export class PlayerStatusRing {
       | (this.essenceIncomingValue > 0 || this.essenceIncomingFadeUntil > now ? 128 : 0)
       | (this.essenceArrival.until > now ? 256 : 0);
     const quantize = (value: number) => Math.round(clamp01(value) * 128);
-    const signature = `${quantize(this.hpFrac)}:${quantize(this.hpTrailFrac)}:${quantize(this.adrFrac)}:${quantize(this.rageFrac)}:${quantize(this.armorFrac)}:${flags}`;
+    const signature = `${quantize(this.hpFrac)}:${quantize(this.hpTrailFrac)}:${quantize(this.adrFrac)}:${quantize(this.rageFrac)}:${quantize(this.armorFrac)}:${this.getNaturalAdrenalineFraction()}:${flags}`;
     if (signature !== this.lastGraphicsSignature || (animated && now >= this.nextAnimatedGraphicsAt)) {
       this.warningGraphics.clear();
       this.glowGraphics.clear();
@@ -569,22 +597,18 @@ export class PlayerStatusRing {
       this.essenceIncomingFadeStrength * clamp01((this.essenceIncomingFadeUntil - now) / 140));
     if (incoming > 0.005) {
       const shimmer = 0.78 + 0.22 * Math.sin(now * 0.012);
-      // Only the outer rim lights: an empty resource stays visibly empty during the flight.
-      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], 1,
-        RING_OUTER_RADIUS + 0.8, RING_OUTER_RADIUS + 3.2, ESSENCE_PALETTE.halo, incoming * shimmer * 0.34);
-      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], 1,
-        RING_OUTER_RADIUS + 1.2, RING_OUTER_RADIUS + 1.8, ESSENCE_PALETTE.light, incoming * shimmer * 0.43);
+      // Follow only the confirmed fill, including its palette and rounded ends.
+      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], this.adrFrac,
+        RING_OUTER_RADIUS + 0.8, RING_OUTER_RADIUS + 3.2, PAL_ADR.mid, incoming * shimmer * 0.22);
+      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], this.adrFrac,
+        RING_OUTER_RADIUS + 1.2, RING_OUTER_RADIUS + 1.8, PAL_ADR.light, incoming * shimmer * 0.28);
     }
     const essenceBurst = clamp01((this.essenceArrival.until - now) / BURST_MS);
-    if (essenceBurst > 0.005) {
+    if (!this.fillQuad && essenceBurst > 0.005) {
       const strength = 0.3 + 0.7 * (1 - Math.exp(-this.essenceArrival.value / 10));
-      const expansion = 5 * (1 - essenceBurst);
-      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], Math.max(this.adrFrac, 0.06),
-        RING_INNER_RADIUS - expansion * 0.4, RING_OUTER_RADIUS + 2 + expansion,
-        ESSENCE_PALETTE.halo, essenceBurst * strength * 0.4);
-      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], Math.max(this.adrFrac, 0.06),
-        RING_INNER_RADIUS + 0.7, RING_OUTER_RADIUS + 0.7,
-        ESSENCE_PALETTE.light, essenceBurst * strength * 0.57);
+      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], this.adrFrac,
+        RING_INNER_RADIUS, RING_OUTER_RADIUS,
+        PAL_ADR.light, essenceBurst * strength * 0.32);
     }
     // Auf Canvas bzw. wenn Shader-Quads nicht verfuegbar sind, bleibt der bisherige
     // Polygon-Fallback aktiv. Im WebGL-Pfad liegt der permanente Ambient-Glow im livingQuad.
@@ -722,6 +746,13 @@ export class PlayerStatusRing {
 
   /** Befuellt die gemeinsamen Segmentdaten fuer den Basis-Fill und den Living-/Glow-Quad. */
   private syncRingSegments(now: number): void {
+    const burst = clamp01((this.essenceArrival.until - now) / BURST_MS);
+    this.adrenalineFlash = burst * burst * (0.3 + 0.7 * (1 - Math.exp(-this.essenceArrival.value / 10)));
+    const fullWidth = Phaser.Math.DegToRad(Math.abs(SEGMENTS[0].fillEndAngle - SEGMENTS[0].fillStartAngle));
+    const naturalFraction = this.getNaturalAdrenalineFraction();
+    this.adrenalineTransition[0] = this.isAdrenalineInsufficientForWeapon2() ? -1
+      : fullWidth * (naturalFraction >= 1 ? 2 : naturalFraction);
+    this.adrenalineTransition[1] = fullWidth * STATUS_RING_ADRENALINE_TRANSITION_FRACTION;
     this.livingElapsedSec = now / 1000;
     this.ambientPulse = 0.88 + Math.sin(now * 0.0035) * 0.12;
     const hpFlash = clamp01((this.hpFlashUntil - now) / FLASH_MS);
@@ -821,8 +852,8 @@ export class PlayerStatusRing {
     const essenceBurst = clamp01((this.essenceArrival.until - now) / BURST_MS);
     const adrBurst = Math.max(essenceBurst, clamp01((this.adrBurstUntil - now) / BURST_MS));
     if (adrBurst > 0.01) {
-      this.placeEndpointSparks(SEGMENTS[0], Math.max(this.adrFrac, essenceBurst > 0 ? 0.035 : 0),
-        essenceBurst > 0 ? PAL_ESSENCE : PAL_ADR, 0.22 + adrBurst * 0.42, now, 3);
+      this.placeEndpointSparks(SEGMENTS[0], this.adrFrac,
+        PAL_ADR, 0.16 + adrBurst * 0.28, now, 3);
     }
     if (this.adrenalineBoostActive) {
       this.placeEndpointSparks(SEGMENTS[0], Math.max(this.adrFrac, 0.08), PAL_ADR, 0.24, now + 190, 2);
@@ -863,7 +894,11 @@ export class PlayerStatusRing {
       image.setVisible(true);
       image.setPosition(Math.cos(rad) * radius, Math.sin(rad) * radius);
       image.setDisplaySize(size * 2, size * 2);
-      image.setTint(palette.light);
+      image.setTint(segment.key === 'adrenaline'
+        ? this.isAdrenalineInsufficientForWeapon2() ? PAL_ADR_LOW.light
+        : this.getAdrenalineTint(palette.light, Math.min(fraction,
+          clamp01((offsetAngle - segment.fillStartAngle) / (segment.fillEndAngle - segment.fillStartAngle))))
+        : palette.light);
       image.setAlpha(alpha);
     }
   }
@@ -879,6 +914,34 @@ export class PlayerStatusRing {
   ): void {
     const section = this.getFilledSection(segment, fraction);
     if (!section) return;
+    if (segment.key === 'adrenaline' && this.isAdrenalineInsufficientForWeapon2()) {
+      if (color === PAL_ADR.mid) color = PAL_ADR_LOW.mid;
+      else if (color === PAL_ADR.light) color = PAL_ADR_LOW.light;
+      else if (color === PAL_ADR.dark) color = PAL_ADR_LOW.dark;
+    }
+    // Match the shader's absolute resource gradient, including transient blue glows.
+    // Red warnings and essence arrival flashes retain their own colors.
+    if (segment.key === 'adrenaline' && !this.isAdrenalineInsufficientForWeapon2()
+      && (color === PAL_ADR.mid || color === PAL_ADR.light || color === PAL_ADR.dark)) {
+      const natural = this.getNaturalAdrenalineFraction();
+      const feather = STATUS_RING_ADRENALINE_TRANSITION_FRACTION;
+      const filled = clamp01(fraction);
+      const cuts = [0, Math.min(filled, natural)];
+      for (let step = 1; step <= 8; step++) {
+        cuts.push(Math.min(filled, natural + feather * step / 8));
+      }
+      cuts.push(filled);
+      for (let step = 1; step < cuts.length; step++) {
+        const from = cuts[step - 1], to = cuts[step];
+        if (to <= from) continue;
+        const tint = this.getAdrenalineTint(color, (from + to) / 2);
+        fillArcPolygon(graphics,
+          Phaser.Math.Linear(segment.fillStartAngle, segment.fillEndAngle, from),
+          Phaser.Math.Linear(segment.fillStartAngle, segment.fillEndAngle, to),
+          innerRadius, outerRadius, tint, alpha, from === 0, to === filled);
+      }
+      return;
+    }
     fillArcPolygon(
       graphics,
       section.startAngle,
@@ -887,7 +950,29 @@ export class PlayerStatusRing {
       outerRadius,
       color,
       alpha,
+      segment.key === 'adrenaline',
+      segment.key === 'adrenaline',
     );
+  }
+
+  private getNaturalAdrenalineFraction(): number {
+    return clamp01(ADRENALINE_REGEN_MAX / Math.max(1, this.latestData?.maxAdrenaline ?? ADRENALINE_REGEN_MAX));
+  }
+
+  private getAdrenalineTint(color: number, position: number): number {
+    const natural = this.getNaturalAdrenalineFraction();
+    const t = natural >= 1 ? 0 : clamp01((position - natural) / STATUS_RING_ADRENALINE_TRANSITION_FRACTION);
+    const blend = t * t * (3 - 2 * t);
+    const naturalColor = color === PAL_ADR.light ? STATUS_RING_NATURAL_ADRENALINE_PALETTE.light
+      : color === PAL_ADR.dark ? STATUS_RING_NATURAL_ADRENALINE_PALETTE.dark
+      : STATUS_RING_NATURAL_ADRENALINE_PALETTE.mid;
+    let tint = 0;
+    for (let channel = 0; channel < 3; channel++) {
+      const shift = 16 - channel * 8;
+      const naturalChannel = (naturalColor >> shift) & 255;
+      tint |= Math.round(naturalChannel + (((color >> shift) & 255) - naturalChannel) * blend) << shift;
+    }
+    return tint;
   }
 
   private getFilledSection(segment: SegmentConfig, fraction: number): AngleSection | null {

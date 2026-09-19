@@ -21,7 +21,7 @@ export const ADRENALINE_ESSENCE_CONFIG: AdrenalineEssenceConfig = Object.freeze(
   groundLifetimeMs: 8_000,
   mergeWindowMs: 150,
   mergeRadius: 32,
-  magnetRadius: 160,
+  magnetRadius: 200,
   transferMinMs: 120,
   transferMaxMs: 300,
   dedupeRetentionMs: 30_000,
