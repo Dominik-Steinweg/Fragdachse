@@ -63,7 +63,7 @@ export const STATUS_RING_NATURAL_ADRENALINE_PALETTE = {
 function glslColor(color: number): string {
   return `vec3(${[16, 8, 0].map(shift => (((color >> shift) & 255) / 255).toFixed(5)).join(', ')})`;
 }
-export const STATUS_RING_ADRENALINE_TRANSITION_FRACTION = 0.075;
+export const STATUS_RING_ADRENALINE_TRANSITION_FRACTION = 0.22;
 const ADRENALINE_TINT_GLSL = [
   'uniform vec2 uAdrenalineTransition;',
   'vec3 adrenalineTint(vec3 tint, vec3 naturalTint, int index, float position) {',

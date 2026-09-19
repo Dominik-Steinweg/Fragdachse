@@ -1304,7 +1304,8 @@ export class ArenaLifecycleCoordinator {
         const renderer = new AdrenalineEssenceGpuRenderer(this.scene, playerId => {
           const player = this.ctx.playerManager.getPlayer(playerId);
           return player ?? null;
-        }, new AdrenalineEssenceLighting(this.renderers.lighting));
+        }, new AdrenalineEssenceLighting(this.renderers.lighting), playerId =>
+          playerId === bridge.getLocalPlayerId() ? this.ctx.playerStatusRing?.getEssenceArrivalPoint?.() : null);
         const hud = new AdrenalineEssencePresentation({
           setEssenceIncoming: value => this.ctx.playerStatusRing?.setEssenceIncoming?.(value),
           notifyEssenceArrival: (value, completionAgeMs) => {

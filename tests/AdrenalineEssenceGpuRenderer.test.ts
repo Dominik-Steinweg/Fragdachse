@@ -21,7 +21,8 @@ function state(clusters: EssenceClusterSnapshot[], transfers: EssenceTransferSna
 function latestMember(layer: FakeGpuLayer, slot: number) {
   return layer.members[layer.edited.lastIndexOf(slot)];
 }
-function setup(lighting?: ConstructorParameters<typeof AdrenalineEssenceGpuRenderer>[2]) {
+function setup(lighting?: ConstructorParameters<typeof AdrenalineEssenceGpuRenderer>[2],
+  arrivalTarget?: ConstructorParameters<typeof AdrenalineEssenceGpuRenderer>[3]) {
   const scene = makeFakeGpuVfxScene();
   const factory = scene.add.spriteGPULayer;
   scene.add.spriteGPULayer = (key, size) => {
@@ -32,11 +33,37 @@ function setup(lighting?: ConstructorParameters<typeof AdrenalineEssenceGpuRende
     });
   };
   const target = { x: 180, y: 100 };
-  const renderer = new AdrenalineEssenceGpuRenderer(scene as never, () => target, lighting);
+  const renderer = new AdrenalineEssenceGpuRenderer(scene as never, () => target, lighting, arrivalTarget);
   return { scene, renderer, target, body: findFakeLane(scene, 'adrenaline-essence-body'), glow: findFakeLane(scene, 'adrenaline-essence-glow') };
 }
 
 describe('AdrenalineEssenceGpuRenderer ownership and visual semantics', () => {
+  it('follows the live ring fill target and uses it for confirmed arrival', () => {
+    const destination = { x: 210, y: 130 };
+    const lighting = { update: vi.fn(), clear: vi.fn(), destroy: vi.fn() };
+    const { renderer } = setup(lighting, () => destination);
+    const transfer: EssenceTransferSnapshot = {
+      id: 'tip', clusterId: 'c1', accessGroup: { kind: 'coop' }, playerId: 'local',
+      lifeRevision: 1, participationRevision: 1, value: 1, sourceX: 100, sourceY: 100,
+      targetX: 180, targetY: 100, startedAt: 200, arrivalAt: 500, seed: 17,
+    };
+    const expectAtTip = () => {
+      const source = lighting.update.mock.lastCall![0].find((s: { id: string }) => s.id === 't:tip');
+      expect(source.x).toBeCloseTo(destination.x);
+      expect(source.y).toBeCloseTo(destination.y);
+    };
+    renderer.update(state([], [transfer]), 500);
+    expectAtTip();
+    destination.x = 190; destination.y = 80;
+    renderer.update(state([], [transfer], 2), 510);
+    expectAtTip();
+    renderer.update(state([], [], 3), 520, [{
+      ...transfer, completedAt: 520, resourceRevision: 1,
+      worldRevision: 1, activityRevision: 1, status: 'committed',
+      creditedValue: 1, returnedValue: 0, expiredValue: 0,
+    }]);
+    expectAtTip();
+  });
   beforeEach(() => { settings.quality = 'high'; });
 
   it('reuses two GPU layers and stable source slots from ejection to grounded upserts', () => {

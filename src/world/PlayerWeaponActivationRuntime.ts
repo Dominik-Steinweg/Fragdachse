@@ -57,6 +57,7 @@ export interface PlayerWeaponActivationResourcePort {
   resolveAdrenalineCost(playerId: string, baseCost: number): number;
   getAdrenaline(playerId: string): number;
   drainAdrenaline(playerId: string, amount: number, nowMs: number): void;
+  pauseAdrenalineRegen(playerId: string, nowMs: number): void;
 }
 
 export interface PlayerWeaponActivationPhysicsPort {
@@ -325,6 +326,7 @@ export class PlayerWeaponActivationRuntime {
   /** Applies post-dispatch observations that remain owned by the equipped Loadout. */
   noteWeaponFired(playerId: string, slot: WeaponSlot, nowMs: number): void {
     if (this.destroyed) return;
+    if (slot === 'weapon1') this.options.resourceSystem.pauseAdrenalineRegen(playerId, nowMs);
     if (slot === 'weapon2') this.options.registerWeaponFired?.(playerId, slot, nowMs);
     this.options.loadout.noteWeaponUsed(playerId, slot, nowMs);
   }

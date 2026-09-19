@@ -8,6 +8,24 @@ import {
 import { ResourceSystem } from '../src/systems/ResourceSystem';
 
 describe('ResourceSystem – explizite Zeit und Regeneration', () => {
+  it('erneuert eine Schusspause ohne Verbrauch und respektiert die Spritze', () => {
+    const resources = new ResourceSystem();
+    resources.initPlayer('p1');
+    resources.setAdrenaline('p1', 20);
+    const revision = resources.getAdrenalineRevision('p1');
+    resources.pauseAdrenalineRegen('p1', 1000);
+    resources.pauseAdrenalineRegen('p1', 1100);
+    const pauseEnd = 1100 + ADRENALINE_REGEN_PAUSE_MS;
+    expect(resources.getRegenPausedUntil('p1')).toBe(pauseEnd);
+    resources.regenTick('p1', 100, pauseEnd - 1);
+    expect(resources.getAdrenaline('p1')).toBe(20);
+    expect(resources.getAdrenalineRevision('p1')).toBe(revision);
+    resources.regenTick('p1', 100, pauseEnd);
+    expect(resources.getAdrenaline('p1')).toBeGreaterThan(20);
+    resources.setPowerUpSystem({ getRegenMultiplier: () => 2 });
+    resources.pauseAdrenalineRegen('p1', pauseEnd + 1000);
+    expect(resources.getRegenPausedUntil('p1')).toBe(pauseEnd);
+  });
   it('setzt die Regen-Pause exakt auf nowMs + ADRENALINE_REGEN_PAUSE_MS beim Drain', () => {
     const resources = new ResourceSystem();
     resources.initPlayer('p1');

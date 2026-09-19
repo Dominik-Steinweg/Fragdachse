@@ -261,6 +261,7 @@ export class PlayerStatusRing {
   private hpTrailStartAt = 0;
 
   private adrFrac = 0;
+  private readonly essenceArrivalPoint = { x: 0, y: 0 };
   private prevAdrFrac = 0;
   private rageFrac = 0;
   private prevRageFrac = 0;
@@ -345,6 +346,18 @@ export class PlayerStatusRing {
       this.essenceIncomingFadeUntil = 0;
       this.essenceArrival.clear();
     }
+  }
+
+  /** Cosmetic flight destination at the current adrenaline fill tip in world space. */
+  getEssenceArrivalPoint(): { x: number; y: number } | null {
+    const sprite = this.getLocalSprite();
+    if (!this.active || !this.latestData || !sprite) return null;
+    const segment = SEGMENTS[0];
+    const angle = degToRadFromTop(Phaser.Math.Linear(segment.fillStartAngle, segment.fillEndAngle, this.adrFrac));
+    const radius = (RING_INNER_RADIUS + RING_OUTER_RADIUS) / 2;
+    this.essenceArrivalPoint.x = sprite.x + Math.cos(angle) * radius;
+    this.essenceArrivalPoint.y = sprite.y + Math.sin(angle) * radius;
+    return this.essenceArrivalPoint;
   }
 
   /** This is an unquantified shimmer, never anticipated resource fill. */

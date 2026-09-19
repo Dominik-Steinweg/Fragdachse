@@ -195,7 +195,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
       loadout: { isWeaponOnCooldown: () => false, getDynamicSpread: () => 0, addWeaponSpread: spread,
         recordWeaponUse: recordUse, noteWeaponUsed: vi.fn() },
       resourceSystem: { captureAdrenalineGainBasis: () => null, resolveAdrenalineCost: (_id, cost) => cost,
-        getAdrenaline: () => 100, drainAdrenaline: drain },
+        getAdrenaline: () => 100, drainAdrenaline: drain, pauseAdrenalineRegen: vi.fn() },
       weaponExecution: { fire: () => false },
       specializedWeaponExecution: new SpecializedWeaponExecutionAdapter(runtime),
       broadcastShotFx: feedback, registerWeaponFired: fired,

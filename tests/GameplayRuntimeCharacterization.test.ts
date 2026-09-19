@@ -72,6 +72,7 @@ function makeWeaponUseManager(options: {
       resolveAdrenalineCost: vi.fn((_id: string, amount: number) => options.adrenalineCost ?? amount),
       getAdrenaline: vi.fn(() => options.adrenaline ?? 100),
       drainAdrenaline: drain,
+      pauseAdrenalineRegen: vi.fn(),
     },
     weaponExecution: { fire: dispatch },
     capturePrimaryHitRewardScope: options.captureRewardScope,

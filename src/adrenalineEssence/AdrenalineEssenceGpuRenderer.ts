@@ -122,6 +122,7 @@ export class AdrenalineEssenceGpuRenderer {
     private readonly scene: Phaser.Scene,
     private readonly getPlayerPosition: (playerId: string) => EssencePoint | null | undefined,
     private readonly lighting?: EssenceLightingPresentation,
+    private readonly getArrivalTarget?: (playerId: string) => EssencePoint | null | undefined,
   ) {
     buildGpuVfxAtlas(scene);
     this.glow = scene.add.spriteGPULayer(GPU_VFX_ATLAS_KEY, this.capacity * GLOW_STRIDE);
@@ -525,6 +526,12 @@ export class AdrenalineEssenceGpuRenderer {
   }
 
   private playerTarget(playerId: string, fallbackX: number, fallbackY: number): EssencePoint {
+    const arrival = this.getArrivalTarget?.(playerId);
+    if (arrival) {
+      this.target.x = arrival.x;
+      this.target.y = arrival.y;
+      return this.target;
+    }
     const position = this.getPlayerPosition(playerId);
     this.target.x = (position?.x ?? fallbackX) + RING_RADIUS * 0.866;
     this.target.y = (position?.y ?? fallbackY) - RING_RADIUS * 0.5;

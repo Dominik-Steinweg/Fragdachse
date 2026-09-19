@@ -206,11 +206,16 @@ export class ResourceSystem {
     for (const observer of this.adrenalineDrainObservers) {
       observer(id, amount, drainedAmount);
     }
+    this.pauseAdrenalineRegen(id, nowMs);
+    if (this.artificialSupply?.(id)) this.writeAdrenaline(id, this.getMaxAdrenaline(id));
+  }
+
+  /** Pausiert passive Regeneration ohne Ressourcenverbrauch, etwa nach einem Primaerschuss. */
+  pauseAdrenalineRegen(id: string, nowMs: number): void {
     // Regen-Pause nicht setzen, wenn Adrenalinspritze aktiv ist
     if ((this.powerUpSystem?.getRegenMultiplier(id) ?? 1) === 1) {
       this.regenPausedUntil.set(id, nowMs + ADRENALINE_REGEN_PAUSE_MS);
     }
-    if (this.artificialSupply?.(id)) this.writeAdrenaline(id, this.getMaxAdrenaline(id));
   }
 
   /**

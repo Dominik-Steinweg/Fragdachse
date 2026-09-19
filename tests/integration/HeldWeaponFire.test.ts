@@ -205,7 +205,7 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number, r
   const execution = new WorldWeaponExecutionRuntime({ combatSystem: combat, projectileSpawn: {
     spawnProjectile: (request: unknown) => { projectiles.push(request); return { uid: projectiles.length }; },
   } as never });
-  const resourceSystem = { getAdrenaline: () => 100, resolveAdrenalineCost: () => resourceCost, drainAdrenaline: vi.fn() };
+  const resourceSystem = { getAdrenaline: () => 100, resolveAdrenalineCost: () => resourceCost, drainAdrenaline: vi.fn(), pauseAdrenalineRegen: vi.fn() };
   const recoil = vi.fn();
   const activation = new PlayerWeaponActivationRuntime({
     playerManager: playerManager as never,
@@ -301,6 +301,17 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number, r
 afterEach(() => vi.restoreAllMocks());
 
 describe('held weapon fire at the authoritative cooldown boundary', () => {
+  it.each([false, true])('pauses regeneration only for confirmed primary shots (client=%s)', remote => {
+    const f = fixture(remote);
+    f.setResourceCost(0);
+    f.shoot(1000, 0, true);
+    expect(f.resourceSystem.pauseAdrenalineRegen).toHaveBeenCalledExactlyOnceWith('shooter', 1000);
+    expect(f.resourceSystem.drainAdrenaline).not.toHaveBeenCalled();
+    f.shoot(1001, 0);
+    expect(f.resourceSystem.pauseAdrenalineRegen).toHaveBeenCalledTimes(1);
+    f.shoot(1000 + f.config.cooldown, 0);
+    expect(f.resourceSystem.pauseAdrenalineRegen).toHaveBeenCalledTimes(2);
+  });
   it.each([false, true])('keeps hitscan geometry unchanged when the player visual grows (client=%s)', remote => {
     const baseline = fixture(remote);
     baseline.setShooterDisplaySize(PLAYER_SIZE);
@@ -401,6 +412,7 @@ describe('held weapon fire at the authoritative cooldown boundary', () => {
     f.shoot(1_001, 0, false, 0, { scopeHolding: true });
     expect(f.commits).not.toHaveBeenCalled();
     expect(f.hud).not.toHaveBeenCalled();
+    expect(f.resourceSystem.pauseAdrenalineRegen).not.toHaveBeenCalled();
     f.shoot(1_002, 0);
     expect(f.commits).toHaveBeenCalledTimes(1);
     expect(f.localEffects.audioSystem.playSound).toHaveBeenCalledTimes(1);

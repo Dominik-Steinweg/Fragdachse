@@ -21,6 +21,7 @@ interface PlayerStatusRingLike {
   setActive(active: boolean): void;
   update(data: LocalArenaHudData): void;
   setEssenceIncoming?(value: number): void;
+  getEssenceArrivalPoint?(): { x: number; y: number } | null;
   notifyEssenceArrival?(creditedValue: number, completionAgeMs?: number): void;
 }
 
