@@ -125,7 +125,7 @@
         },
         {
           "enemyKind": "rabid-badger",
-          "count": 4,
+          "count": 8,
           "delayMs": 700,
           "spawnArea": {"gridX": 79, "gridY": 19, "widthCells": 4, "heightCells": 6}
         }
@@ -138,13 +138,13 @@
       "groups": [
         {
           "enemyKind": "spore-warden",
-          "count": 4,
+          "count": 5,
           "delayMs": 3000,
           "front": "east"
         },
         {
           "enemyKind": "spore-warden",
-          "count": 4,
+          "count": 5,
           "front": "west"
         }
       ]
@@ -161,7 +161,7 @@
         },
         {
           "enemyKind": "demon-badger",
-          "count": 6,
+          "count": 8,
           "front": "west"
         },        
         {
@@ -185,7 +185,7 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 32,
+          "count": 48,
           "front": "east"
         },
         {
