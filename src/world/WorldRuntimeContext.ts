@@ -1,3 +1,4 @@
+import { resolvePersistentBaseMaxHp } from '../persistentBase/PersistentBaseHealth';
 import { resolveWorldBases, type BaseSpec } from '../arena/BaseRegistry';
 import type { ArenaMetricsProfile } from '../config';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
@@ -85,9 +86,16 @@ export function createWorldRuntimeContext(input: WorldRuntimeContextInput): Worl
   // Parameter. Geometrie und Basisstelle folgen derselben Antwort, damit eine gesperrte World
   // nicht doch die Kollisionszellen einer Basis traegt, die es fuer sie nicht gibt.
   const includePersistentBaseCore = descriptor.parameters?.persistentBaseUnlocked === true;
-  const bases = definition
+  let bases = definition
     ? resolveWorldBases(definition, metrics, { includePersistentBaseCore })
     : [];
+  const baseId = definition?.persistentBaseSite?.baseId;
+  if (includePersistentBaseCore && baseId) {
+    const rewards = descriptor.parameters?.persistentBaseHealthRewards;
+    if (!rewards) throw new Error('[WorldRuntimeContext] Persistent base requires replicated health rewards');
+    const hpMax = resolvePersistentBaseMaxHp(rewards);
+    bases = bases.map((base) => base.id === baseId ? { ...base, hpMax, startHp: hpMax } : base);
+  }
   return {
     descriptor,
     definition,

@@ -15,7 +15,7 @@ Der Adapter normalisiert nicht erneut, materialisiert keine Defaults und ersetzt
 
 Eine Activity referenziert ihre World über worldDefinitionId und liefert keine alternative Layout- oder Metrics-Quelle. Dadurch kann dieselbe World ohne Activity geladen, angezeigt oder activity-unabhängig resident gehalten werden.
 
-Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt nur die Stelle des Basiskerns: baseId, Anker, Ausrichtung und Grunddauerhaftigkeit. Sie authoriert keine Build Area; diese wird ausschließlich aus der host-autoritativ eingefrorenen `PersistentBaseAreaStage` über `resolvePersistentBaseBuildAreaForStage()` abgeleitet. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den `bases`-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in `bases` beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
+Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt nur die Stelle des Basiskerns: baseId, Anker und Ausrichtung. Sie authoriert keine Build Area; diese wird ausschließlich aus der host-autoritativ eingefrorenen `PersistentBaseAreaStage` über `resolvePersistentBaseBuildAreaForStage()` abgeleitet. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den `bases`-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in `bases` beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
 
 **Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel den Default für `front`; zusammen mit einer authored `spawnArea` kann ein zweiter Lauf an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
 
@@ -100,6 +100,23 @@ keine Bewegungsgrenze für persönliche Konstruktionen. Base-owned Rewards behal
 Platzierungsdomain. Maßgeblich sind
 [`ConstructionWorldRuntime.movePersonalConstruction`](../../src/world/ConstructionWorldRuntime.ts)
 und [`PersistentBaseManagementAllClasses.test.ts`](../../tests/integration/PersistentBaseManagementAllClasses.test.ts).
+
+## Dauerhafte Basis-HP
+
+Die maximale Gesundheit der persistenten Basis gehört ihrem persönlichen Ausbau und wird nicht
+je Karte authoriert. `PersistentBaseHealth` löst den gemeinsamen Grundwert und die unabhängigen,
+einmaligen HP-Belohnungen auf. Der Host friert seine Freischaltungen in
+`WorldParameters.persistentBaseHealthRewards` ein; `WorldRuntimeContext` leitet daraus die HP
+der Basis ab. Clients und Late Join verwenden ausschließlich diesen replizierten Stand.
+Missions-Overlays übernehmen für den persistenten Kern dieselben maximalen und vollen Start-HP,
+unabhängig von der Spielerzahl. Andere Basen behalten ihre authored Werte und Skalierung.
+
+Ein berechtigter Rundenteilnehmer erhält seine persönliche HP-Belohnung über den bestehenden
+Sieg-/Meta-Fortschrittsablauf. Sie wirkt in der nächsten World-Instanz, nicht rückwirkend in der
+abgeschlossenen Mission. Es handelt sich um einen automatischen Ausbau ohne platzierbares Objekt.
+Maßgeblich sind [PersistentBaseHealth.ts](../../src/persistentBase/PersistentBaseHealth.ts),
+[WorldRuntimeContextContracts.test.ts](../../tests/WorldRuntimeContextContracts.test.ts) und
+[ArenaMetaController.test.ts](../../tests/ArenaMetaController.test.ts).
 
 ## Erweiterung einer Mission
 

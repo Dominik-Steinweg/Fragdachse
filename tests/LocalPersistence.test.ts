@@ -8,6 +8,8 @@ import {
   getStoredLocalOwnerId,
   getStoredPersistentBaseState,
   getStoredPersistentBaseAreaStage,
+  getStoredPersistentBaseHealthRewards,
+  unlockStoredPersistentBaseHealthAfterVictory,
   getStoredPersonalBaseContribution,
   setStoredPersonalBaseContribution,
   getStoredCoopDefenseProgress,
@@ -71,6 +73,50 @@ describe('local progress generation', () => {
   afterEach(() => {
     invalidateLocalStorageCache();
     vi.unstubAllGlobals();
+  });
+
+  it('grants independent health rewards once and preserves them through export, import and reset', () => {
+    expect(getStoredPersistentBaseHealthRewards()).toEqual([]);
+    expect(unlockStoredPersistentBaseHealthAfterVictory('3')).toBe(true);
+    expect(unlockStoredPersistentBaseHealthAfterVictory('3')).toBe(false);
+    expect(unlockStoredPersistentBaseHealthAfterVictory('7')).toBe(false);
+    expect(getStoredPersistentBaseHealthRewards()).toEqual(['map-3']);
+    expect(unlockStoredPersistentBaseHealthAfterVictory('2')).toBe(true);
+    const exported = exportStoredGameProgressJson();
+    resetStoredCoopDefenseCharacter();
+    expect(getStoredPersistentBaseHealthRewards()).toEqual([]);
+    expect(importStoredGameProgressJson(exported).ok).toBe(true);
+    expect(getStoredPersistentBaseHealthRewards()).toEqual(['map-3', 'map-2']);
+    invalidateLocalStorageCache();
+    expect(getStoredPersistentBaseHealthRewards()).toEqual(['map-3', 'map-2']);
+  });
+
+  it.each([
+    ['2', []], ['3', ['map-2']], ['4', ['map-2', 'map-3']], ['17', ['map-2', 'map-3']],
+  ])('migrates V5 saves and exports at campaign map %s', (highest, rewards) => {
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    exported.formatVersion = 5;
+    exported.progress.schemaVersion = 5;
+    exported.progress.coopDefense.highestUnlockedMapId = highest;
+    delete exported.progress.coopDefense.persistentBaseHealthRewards;
+    storage.setItem(LOCAL_PROGRESS_STORAGE_KEY, JSON.stringify(exported.progress));
+    invalidateLocalStorageCache();
+    expect(getStoredPersistentBaseHealthRewards()).toEqual(rewards);
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredPersistentBaseHealthRewards()).toEqual(rewards);
+  });
+
+  it('does not infer HP rewards from campaign unlocks in the current format and rejects corrupt rewards atomically', () => {
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    exported.progress.coopDefense.highestUnlockedMapId = '17';
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredPersistentBaseHealthRewards()).toEqual([]);
+    const before = exportStoredGameProgressJson();
+    for (const invalid of [['map-2', 'map-2'], ['unknown'], 500, null]) {
+      exported.progress.coopDefense.persistentBaseHealthRewards = invalid;
+      expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(false);
+      expect(JSON.parse(exportStoredGameProgressJson()).progress).toEqual(JSON.parse(before).progress);
+    }
   });
 
   it('resets alpha progress once while preserving legacy device settings', () => {

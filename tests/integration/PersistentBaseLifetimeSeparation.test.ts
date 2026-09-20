@@ -41,7 +41,7 @@ const WORLD: WorldDescriptor = {
   generatorVersion: 3,
   layoutFingerprint: 'deadbeef',
   parameters: {
-    persistentBaseUnlocked: true,
+    persistentBaseUnlocked: true, persistentBaseHealthRewards: [],
     persistentBaseAreaStage: 1,
   },
 };

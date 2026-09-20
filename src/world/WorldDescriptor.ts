@@ -1,3 +1,4 @@
+import { isPersistentBaseHealthRewards, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
 import {
   isPersistentBaseAreaStage,
   type PersistentBaseAreaStage,
@@ -49,6 +50,7 @@ export interface WorldParameters {
   readonly persistentBaseUnlocked?: boolean;
   /** Semantische, fuer diese World-Instanz eingefrorene Area-Stufe der persistenten Basis. */
   readonly persistentBaseAreaStage?: PersistentBaseAreaStage;
+  readonly persistentBaseHealthRewards?: readonly PersistentBaseHealthReward[];
 }
 
 /**
@@ -69,6 +71,7 @@ export function isProceduralWorldDefinitionId(definitionId: string): boolean {
 export const WORLD_PARAMETER_FIELDS = [
   'persistentBaseUnlocked',
   'persistentBaseAreaStage',
+  'persistentBaseHealthRewards',
 ] as const satisfies readonly (keyof WorldParameters)[];
 
 /**
@@ -84,6 +87,8 @@ export function parseWorldDescriptor(raw: unknown): WorldDescriptor | null {
   if (!isSafeInteger(candidate.generatorVersion)) return null;
   if (typeof candidate.layoutFingerprint !== 'string' || candidate.layoutFingerprint.length === 0) return null;
   const parameters = parseWorldParameters(candidate.parameters);
+  if (candidate.parameters?.persistentBaseHealthRewards !== undefined
+    && !isPersistentBaseHealthRewards(candidate.parameters.persistentBaseHealthRewards)) return null;
   const descriptor: WorldDescriptor = {
     worldRevision: candidate.worldRevision,
     definitionId: candidate.definitionId,
@@ -112,7 +117,13 @@ export function haveSameWorldParameters(
   left: WorldParameters | undefined,
   right: WorldParameters | undefined,
 ): boolean {
-  return WORLD_PARAMETER_FIELDS.every((field) => (left?.[field] ?? null) === (right?.[field] ?? null));
+  return WORLD_PARAMETER_FIELDS.every((field) => {
+    if (field !== 'persistentBaseHealthRewards') return (left?.[field] ?? null) === (right?.[field] ?? null);
+    const a = left?.[field];
+    const b = right?.[field];
+    if (!a || !b) return a === b;
+    return a.length === b.length && a.every((reward) => b.includes(reward));
+  });
 }
 
 /**
@@ -136,7 +147,11 @@ export function hasPersistentBaseConfigurationChanged(
 ): boolean {
   return hasPersistentBaseUnlockStatusChanged(left, right)
     || (left?.parameters?.persistentBaseAreaStage ?? null)
-      !== (right?.parameters?.persistentBaseAreaStage ?? null);
+      !== (right?.parameters?.persistentBaseAreaStage ?? null)
+    || !haveSameWorldParameters(
+      { persistentBaseHealthRewards: left?.parameters?.persistentBaseHealthRewards },
+      { persistentBaseHealthRewards: right?.parameters?.persistentBaseHealthRewards },
+    );
 }
 
 /**
@@ -150,8 +165,14 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
   const parameters: {
     persistentBaseUnlocked?: boolean;
     persistentBaseAreaStage?: PersistentBaseAreaStage;
+    persistentBaseHealthRewards?: PersistentBaseHealthReward[];
   } = {};
 
+  const healthRewards = candidate.persistentBaseHealthRewards;
+  if (healthRewards !== undefined) {
+    if (!isPersistentBaseHealthRewards(healthRewards)) return null;
+    parameters.persistentBaseHealthRewards = [...healthRewards];
+  }
   const unlocked = candidate.persistentBaseUnlocked;
   if (unlocked !== undefined) {
     if (typeof unlocked !== 'boolean') return null;

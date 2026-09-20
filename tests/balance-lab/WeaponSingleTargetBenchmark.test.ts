@@ -202,15 +202,19 @@ describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () =>
 
       expect(result.weaponId).toBe('P90');
       // Unter optimaler Trigger Discipline bei 150px Distanz feuert die P90 kontrollierte Salven
-      expect(result.shotsFired).toBe(69);
-      expect(result.hits).toBe(69);
+      expect(result.shotsFired).toBe(103);
+      expect(result.hits).toBe(103);
       expect(result.hitRate).toBe(1.0);
-      expect(result.totalDamage).toBe(69 * p90Config.damage);
-      expect(result.dps).toBeCloseTo((69 * p90Config.damage) / 30, 2);
+      // Der letzte Treffer liegt nach dem Messfenster und zählt nur zum Tail.
+      expect(result.measurementTargetHits).toBe(102);
+      expect(result.totalDamage).toBe(102 * p90Config.damage);
+      expect(result.damageYieldIncludingTail).toBe(103 * p90Config.damage);
+      expect(result.tailDamage).toBe(p90Config.damage);
+      expect(result.dps).toBeCloseTo((102 * p90Config.damage) / 30, 2);
 
-      // Adrenalinverbrauch: 69 Schuss * 4 Adrenalin = 276
-      expect(result.adrenalineSpent).toBe(69 * 4);
-      expect(result.adrenalineSpentPerSec).toBeCloseTo(276 / 30, 2);
+      // Jeder abgefeuerte Schuss verbraucht die authored Adrenalinkosten.
+      expect(result.adrenalineSpent).toBe(103 * p90Config.adrenalinCost);
+      expect(result.adrenalineSpentPerSec).toBeCloseTo((103 * p90Config.adrenalinCost) / 30, 2);
       expect(result.adrenalineGenerated).toBe(0);
 
       // Schadensereignisse tragen reale Schadenswerte und CombatDamageKind 'direct'
@@ -226,7 +230,7 @@ describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () =>
       expect(asmdConfig.fire.type).toBe('hitscan');
       expect(asmdConfig.damage).toBe(10);
       expect(asmdConfig.cooldown).toBe(600);
-      expect(asmdConfig.adrenalinGain).toBe(8);
+      expect(asmdConfig.adrenalinGain).toBe(16);
 
       const result = runWeaponSingleTargetBenchmark({
         weaponId: 'ASMD_PRIM',
@@ -241,8 +245,8 @@ describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () =>
       expect(result.totalDamage).toBe(50 * asmdConfig.damage);
       expect(result.dps).toBeCloseTo((50 * 10) / 30, 2);
 
-      expect(result.adrenalineGenerated).toBe(50 * 8);
-      expect(result.adrenalineGeneratedPerSec).toBeCloseTo(400 / 30, 2);
+      expect(result.adrenalineGenerated).toBe(50 * asmdConfig.adrenalinGain);
+      expect(result.adrenalineGeneratedPerSec).toBeCloseTo((50 * asmdConfig.adrenalinGain) / 30, 2);
       expect(result.adrenalineSpent).toBe(0);
 
       expect(result.damageEvents.length).toBe(50);
@@ -257,7 +261,7 @@ describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () =>
       expect(biteConfig.fire.type).toBe('melee');
       expect(biteConfig.damage).toBe(50);
       expect(biteConfig.cooldown).toBe(350);
-      expect(biteConfig.adrenalinGain).toBe(50);
+      expect(biteConfig.adrenalinGain).toBe(100);
 
       const result = runWeaponSingleTargetBenchmark({
         weaponId: 'BITE',
@@ -272,8 +276,8 @@ describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () =>
       expect(result.totalDamage).toBe(86 * biteConfig.damage);
       expect(result.dps).toBeCloseTo((86 * 50) / 30, 2);
 
-      expect(result.adrenalineGenerated).toBe(86 * 50);
-      expect(result.adrenalineGeneratedPerSec).toBeCloseTo(4300 / 30, 2);
+      expect(result.adrenalineGenerated).toBe(86 * biteConfig.adrenalinGain);
+      expect(result.adrenalineGeneratedPerSec).toBeCloseTo((86 * biteConfig.adrenalinGain) / 30, 2);
       expect(result.adrenalineSpent).toBe(0);
 
       expect(result.damageEvents.length).toBe(86);

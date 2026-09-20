@@ -44,6 +44,8 @@ import { plagueSource } from '../StinkPlagueTestHelper';
 import { mgOwner } from '../MgTurretTestHelper';
 import { RockVisualHelper } from '../../src/scenes/arena/RockVisualHelper';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import type { ProjectileStyle } from '../../src/types';
+import type { ProjectileReplicationRecord } from '../../src/projectile/ProjectileReplicationAdapter';
 
 function fixture(training = false) {
   clock.now = 1000;
@@ -134,6 +136,64 @@ function cloudHost(f: ReturnType<typeof fixture>) {
 }
 
 describe('shared swarm collision and homing', () => {
+  it('preserves opaque presentation through collision, combat and swarm spawn; only the capability enables gameplay', () => {
+    const run = (style: ProjectileStyle, enabled: boolean) => {
+      const f = fixture();
+      const random = vi.spyOn(Math, 'random').mockReturnValue(0.25);
+      try {
+        const presentation = { style, color: 0x123456, ownerColor: 0xabcdef,
+          energyBallVariant: 'plasma' as const, tracer: { profile: 'automatic' as const } };
+        const impacts = vi.spyOn(f.combat, 'resolveDirectImpact');
+        const swarm = vi.fn(impact => f.projectiles.applyPlasmaSwarmImpact(impact));
+        f.combat.setPlasmaSwarmReactionHandler(swarm);
+        const hp = f.enemy.getHp();
+        const id = f.projectiles.spawnProjectile({
+          origin: { x: 250, y: 100, angle: 0 },
+          provenance: createSingleOwnerProvenance('p1', { weaponSourceId: 'PLASMA', sourceSlot: 'weapon2' }),
+          flight: { speed: 400, size: 8, lifetimeMs: 2500, maxBounces: 0, isGrenade: false },
+          interaction: { directHit: { damage: 20, plasmaSwarm: enabled ? {} : undefined } },
+          presentation,
+        })!;
+        expect(id).not.toBeNull();
+        f.move([id], 300);
+        expect(impacts).toHaveBeenCalledOnce();
+        expect(impacts.mock.calls[0][0].target).toMatchObject({ kind: 'enemy', id: f.enemy.id });
+        const children: ProjectileReplicationRecord[] = [];
+        f.projectiles.readProjectileReplication(record => children.push(record));
+        if (enabled) {
+          expect(swarm).toHaveBeenCalledOnce();
+          expect(children.length).toBeGreaterThan(0);
+          expect(children).toHaveLength(swarm.mock.calls[0][0].projectileCount);
+          for (const child of children) expect(child.static).toMatchObject(presentation);
+          for (const child of f.projectiles.getThreatSamples()) {
+            expect(child.provenance.lineage).toMatchObject({ parentProjectileId: id, plasmaSwarmChild: true });
+          }
+        } else {
+          expect(swarm).not.toHaveBeenCalled();
+          expect(children).toEqual([]);
+        }
+        // Exercise the children's real collision/damage path as well as their spawn.
+        const childIds = children.map(child => child.id);
+        if (enabled) {
+          f.move(childIds, 400);
+          f.move(childIds, 300);
+          expect(impacts.mock.calls.length).toBeGreaterThan(1);
+          expect(swarm).toHaveBeenCalledOnce();
+        }
+        return { damage: hp - f.enemy.getHp(), hits: impacts.mock.calls.map(([request]) => request.directHit),
+          children: children.map(child => child.dynamic), physics: f.physics.specs };
+      } finally { random.mockRestore(); f.destroy(); }
+    };
+    // Plasma-looking metadata alone cannot grant a gameplay capability; unrelated
+    // presentation styles cannot suppress or change an explicitly granted swarm.
+    const styles = ['energy_ball', 'bullet', 'rocket'] as const;
+    for (const enabled of [false, true]) {
+      const results = styles.map(style => run(style, enabled));
+      expect(results[0].damage).toBeGreaterThan(0);
+      for (const result of results.slice(1)) expect(result).toEqual(results[0]);
+    }
+  });
+
   it.each([false, true])('protects spawn, partial overlap and the entire exit sweep, then permits return (training=%s)', training => {
     const f = fixture(training);
     try {

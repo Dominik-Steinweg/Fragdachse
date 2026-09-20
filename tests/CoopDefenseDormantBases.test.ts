@@ -787,7 +787,6 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(map.persistentBase).toEqual({
       baseId: 'coop-base-rear',
       anchor: { gridX: 49, gridY: 22 },
-      hpMax: 1650,
     });
     expect(authored).toEqual([]);
     expect(linked).toEqual([]);

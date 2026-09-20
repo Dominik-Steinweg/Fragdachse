@@ -180,8 +180,7 @@
     "anchor": {
       "gridX": 99,
       "gridY": 20
-    },
-    "hpMax": 1650
+    }
   },
   "encounters": [
     {

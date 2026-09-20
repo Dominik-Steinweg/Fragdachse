@@ -689,7 +689,6 @@ export interface CoopDefenseMapPersistentBaseConfig {
   readonly anchor: PersistentBaseAnchor;
   /** Ohne Angabe die kanonische Ausrichtung. */
   readonly orientation?: PersistentBaseOrientation;
-  readonly hpMax: number;
 }
 
 /**
@@ -1389,8 +1388,8 @@ function normalizePersistentBaseConfig(
   if (config.orientation !== undefined && !isPersistentBaseOrientation(config.orientation)) {
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an unknown orientation`);
   }
-  if (!Number.isFinite(config.hpMax) || config.hpMax <= 0) {
-    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs a positive hpMax`);
+  if ('hpMax' in config) {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} cannot author hpMax`);
   }
 
   const reservationRadius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
@@ -1408,7 +1407,6 @@ function normalizePersistentBaseConfig(
     baseId,
     anchor: { gridX: anchor.gridX, gridY: anchor.gridY },
     ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
-    hpMax: config.hpMax,
   };
   return { site, base: normalizeBaseConfig(buildPersistentBaseCoreBaseConfig(site)) };
 }

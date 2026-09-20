@@ -43,6 +43,96 @@ const projections = new Set([
   'ProjectileClientReplica.ts', 'ProjectileReplicationAdapter.ts', 'ProjectilePresentationRuntime.ts',
 ]);
 
+/** Local AST guard: opaque copies are legal; interpreting style as a decision is not.
+ * Track local scalar aliases by symbol so renaming/destructuring cannot hide a decision.
+ * This is not interprocedural data-flow analysis; the runtime contract is tested separately.
+ */
+function styleDecisions(source: ts.SourceFile): string[] {
+  const options = { noLib: true, noResolve: true };
+  const host = ts.createCompilerHost(options);
+  host.getSourceFile = file => file === source.fileName ? source : undefined;
+  const checker = ts.createProgram([source.fileName], options, host).getTypeChecker();
+  const all = nodes(source);
+  const aliases = new Set<ts.Symbol>();
+  const isStyleKey = (node: ts.Node) => (ts.isIdentifier(node) || ts.isStringLiteral(node))
+    && node.text === 'projectileStyle';
+  const readsStyle = (node: ts.Node): boolean => {
+    if (ts.isPropertyAccessExpression(node) && isStyleKey(node.name)) return true;
+    if (ts.isElementAccessExpression(node) && isStyleKey(node.argumentExpression)) return true;
+    if (ts.isIdentifier(node)) {
+      if (ts.isPropertyAssignment(node.parent) && node.parent.name === node) return false;
+      return node.text === 'projectileStyle' || aliases.has(checker.getSymbolAtLocation(node)!);
+    }
+    // A metadata envelope is not itself a scalar style value.
+    if (ts.isObjectLiteralExpression(node)) return false;
+    return ts.forEachChild(node, readsStyle) === true;
+  };
+  let changed: boolean;
+  do {
+    changed = false;
+    for (const node of all) {
+      const name = ts.isVariableDeclaration(node) && node.initializer && readsStyle(node.initializer)
+        ? node.name
+        : ts.isBindingElement(node) && isStyleKey(node.propertyName ?? node.name) ? node.name
+        : ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+          && readsStyle(node.right) ? node.left : undefined;
+      if (!name || !ts.isIdentifier(name)) continue;
+      const symbol = checker.getSymbolAtLocation(name);
+      if (symbol && !aliases.has(symbol)) { aliases.add(symbol); changed = true; }
+    }
+  } while (changed);
+  return all.filter(node => {
+    if (ts.isIfStatement(node) || ts.isSwitchStatement(node) || ts.isWhileStatement(node)
+      || ts.isDoStatement(node)) return readsStyle(node.expression);
+    if (ts.isConditionalExpression(node)) return readsStyle(node.condition);
+    if (ts.isForStatement(node)) return !!node.condition && readsStyle(node.condition);
+    if (ts.isElementAccessExpression(node)) return readsStyle(node.argumentExpression);
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      // Inspecting the style itself or testing membership is not opaque transport.
+      return readsStyle(node.expression.expression)
+        || ['includes', 'indexOf', 'has'].includes(node.expression.name.text) && node.arguments.some(readsStyle);
+    }
+    if (ts.isBinaryExpression(node)) {
+      // Assignment and nullish metadata defaults preserve the opaque value.
+      return ![ts.SyntaxKind.EqualsToken, ts.SyntaxKind.QuestionQuestionToken].includes(node.operatorToken.kind)
+        && (readsStyle(node.left) || readsStyle(node.right));
+    }
+    if (ts.isPrefixUnaryExpression(node)) return readsStyle(node.operand);
+    return false;
+  }).map(node => node.getText(source));
+}
+
+describe('style decision AST guard', () => {
+  it.each([
+    'send({ projectileStyle: record.presentation.projectileStyle });',
+    'const style = record["projectileStyle"]; send({ projectileStyle: style });',
+    'const { projectileStyle: style } = record; return { projectileStyle: style };',
+    'return enabled ? { projectileStyle: record.projectileStyle } : undefined;',
+    'return { projectileStyle: record.projectileStyle ?? "bullet" };',
+    'send({ ...record.presentation });',
+    'const style = record.projectileStyle; function other(style: boolean) { if (style) hit(); }',
+  ])('allows opaque forwarding: %s', code => {
+    expect(styleDecisions(ts.createSourceFile('fixture.ts', code, ts.ScriptTarget.Latest, true))).toEqual([]);
+  });
+
+  it.each([
+    'if (record.projectileStyle === "ball") hit();',
+    'switch (record["projectileStyle"]) { case "ball": hit(); }',
+    'return record.projectileStyle ? 10 : 20;',
+    'record.projectileStyle && hit();',
+    'const style = record.projectileStyle; const alias = style; if (alias) hit();',
+    'const { projectileStyle: style } = record; switch (style) { case "ball": hit(); }',
+    'let style; style = record.projectileStyle; return style === "ball";',
+    'return damageByStyle[record.projectileStyle];',
+    'return ["ball", "energy_ball"].includes(record.projectileStyle);',
+    'const style = record.projectileStyle; return style.startsWith("energy");',
+    'while (record.projectileStyle) hit();',
+    'return !record.projectileStyle;',
+  ])('rejects style decisions: %s', code => {
+    expect(styleDecisions(ts.createSourceFile('fixture.ts', code, ts.ScriptTarget.Latest, true)).length).toBeGreaterThan(0);
+  });
+});
+
 describe('Projectile Runtime – ownership and dependency ratchets', () => {
   it('rejects legacy authority and record APIs throughout production', () => {
     for (const source of production) {
@@ -113,7 +203,7 @@ describe('Projectile Runtime – ownership and dependency ratchets', () => {
 
   it('keeps style dispatch out of collision, flight, combat and guidance', () => {
     for (const source of production.filter(source => /\/(Projectile(FlightProcessor|CollisionProcessor|LifecycleProcessor|MiniRocketProcessor|HomingController)|WorldCombatCore)\.ts$/.test(source.fileName))) {
-      expect(identifiers(source).has('projectileStyle'), source.fileName).toBe(false);
+      expect(styleDecisions(source), source.fileName).toEqual([]);
     }
   });
 

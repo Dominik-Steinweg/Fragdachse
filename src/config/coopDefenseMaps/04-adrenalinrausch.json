@@ -74,8 +74,7 @@
     "anchor": {
       "gridX": 69,
       "gridY": 19
-    },
-    "hpMax": 1650
+    }
   },
   "persistentBaseRewardsOnVictory": ["base_adrenaline_pedestal"],
   "powerUps": [],

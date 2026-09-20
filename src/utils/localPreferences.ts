@@ -1,3 +1,4 @@
+import { getPersistentBaseHealthReward, isPersistentBaseHealthRewards, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
 import { getLoadoutUtilityId, loadoutToolFromId } from '../loadout/LoadoutTools';
 import { setLoadoutToolSlots } from './coopDefenseUpgrades';
 import { SOUND_MASTER_VOLUME, SOUND_MUSIC_VOLUME, SOUND_SFX_VOLUME } from '../config';
@@ -99,11 +100,12 @@ import {
 /** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
 export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
 export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
+// Stable key retained so the decoder can migrate existing V5 documents in place.
 export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v5';
 export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
-export const LOCAL_PROGRESS_SCHEMA_VERSION = 5;
+export const LOCAL_PROGRESS_SCHEMA_VERSION = 6;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
-export const LOCAL_PROGRESS_EXPORT_VERSION = 5;
+export const LOCAL_PROGRESS_EXPORT_VERSION = 6;
 export const LOCAL_BALANCE_LAB_STORAGE_KEY = COOP_DEFENSE_BALANCE_STORAGE_KEY;
 export const LOCAL_BALANCE_LAB_SCHEMA_VERSION = COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
@@ -133,6 +135,7 @@ export interface CoopDefenseProgressPreferences {
   persistentBaseUnlocked: boolean;
   /** Semantische Ausbau-Stufe; niemals aus der aktuellen oder hoechsten Map rekonstruiert. */
   persistentBaseAreaStage: PersistentBaseAreaStage;
+  persistentBaseHealthRewards: PersistentBaseHealthReward[];
   /** Personal reward ownership; never used as host placement authority. */
   persistentBaseRewardUnlocks: PersistentBaseRewardId[];
   /**
@@ -215,7 +218,7 @@ interface LocalSettingsDocumentV2 {
 }
 
 export interface LocalProgressDocument {
-  schemaVersion: 5;
+  schemaVersion: 6;
   profile: LocalPreferences['profile'];
   loadout: LocalPreferences['loadout'];
   coopDefense: {
@@ -232,6 +235,7 @@ export interface LocalProgressDocument {
     itemsUnlocked: boolean;
     persistentBaseUnlocked: boolean;
     persistentBaseAreaStage: PersistentBaseAreaStage;
+    persistentBaseHealthRewards: PersistentBaseHealthReward[];
     persistentBaseRewardUnlocks: PersistentBaseRewardId[];
     items: CoopDefenseItem[];
     equippedItemIds: CoopDefenseEquippedItemIds;
@@ -286,6 +290,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   itemsUnlocked: false,
   persistentBaseUnlocked: false,
   persistentBaseAreaStage: DEFAULT_PERSISTENT_BASE_AREA_STAGE,
+  persistentBaseHealthRewards: [],
   persistentBaseRewardUnlocks: [],
   items: [],
   equippedItemIds: {},
@@ -771,6 +776,15 @@ function sanitizeCompactProfile(raw: unknown): CompactUpgradeProfile | null {
 }
 
 function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' | 'loadout' | 'loadoutByClass' | 'progression'> | null {
+  if (isRecord(raw) && raw.schemaVersion === 5 && isRecord(raw.coopDefense)) {
+    const highest = raw.coopDefense.highestUnlockedMapId;
+    const rewards: PersistentBaseHealthReward[] = [];
+    if (typeof highest === 'string') {
+      if (isCoopDefenseMapUnlocked('3', highest)) rewards.push('map-2');
+      if (isCoopDefenseMapUnlocked('4', highest)) rewards.push('map-3');
+    }
+    raw = { ...raw, schemaVersion: 6, coopDefense: { ...raw.coopDefense, persistentBaseHealthRewards: rewards } };
+  }
   if (!isRecord(raw) || raw.schemaVersion !== LOCAL_PROGRESS_SCHEMA_VERSION) return null;
   const document = raw as unknown as LocalProgressDocument;
   if (!document || !isRecord(document.profile) || !isValidLoadoutRecord(document.loadout)
@@ -787,6 +801,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.classesUnlocked !== 'boolean'
     || typeof coop.itemsUnlocked !== 'boolean'
     || typeof coop.persistentBaseUnlocked !== 'boolean'
+    || !isPersistentBaseHealthRewards(coop.persistentBaseHealthRewards)
     || !isPersistentBaseAreaStage(coop.persistentBaseAreaStage)
     || !Array.isArray(coop.persistentBaseRewardUnlocks)
     || !Array.isArray(coop.items)
@@ -906,6 +921,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         ),
         persistentBaseUnlocked: coop.persistentBaseUnlocked,
         persistentBaseAreaStage: coop.persistentBaseAreaStage,
+        persistentBaseHealthRewards: [...coop.persistentBaseHealthRewards],
         persistentBaseRewardUnlocks,
         items,
         equippedItemIds,
@@ -963,6 +979,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
       itemsUnlocked: progress.itemsUnlocked,
       persistentBaseUnlocked: progress.persistentBaseUnlocked,
       persistentBaseAreaStage: progress.persistentBaseAreaStage,
+      persistentBaseHealthRewards: [...progress.persistentBaseHealthRewards],
       persistentBaseRewardUnlocks: [...progress.persistentBaseRewardUnlocks],
       items: [...progress.items],
       equippedItemIds: { ...progress.equippedItemIds },
@@ -1123,7 +1140,7 @@ export function importStoredGameProgressJson(json: string): LocalProgressTransfe
     return { ok: false, messageKey: 'ui.lobby.saveInvalidJson' };
   }
   if (!isRecord(parsed) || parsed.format !== LOCAL_PROGRESS_EXPORT_FORMAT
-    || parsed.formatVersion !== LOCAL_PROGRESS_EXPORT_VERSION
+    || (parsed.formatVersion !== LOCAL_PROGRESS_EXPORT_VERSION && parsed.formatVersion !== 5)
     || typeof parsed.exportedAt !== 'string' || !Number.isFinite(Date.parse(parsed.exportedAt))
     || !('progress' in parsed)) {
     return { ok: false, messageKey: 'ui.lobby.saveIncompatible' };
@@ -1394,6 +1411,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     itemsUnlocked: progress.itemsUnlocked,
     persistentBaseUnlocked: progress.persistentBaseUnlocked,
     persistentBaseAreaStage: progress.persistentBaseAreaStage,
+    persistentBaseHealthRewards: [...progress.persistentBaseHealthRewards],
     persistentBaseRewardUnlocks: [...progress.persistentBaseRewardUnlocks],
     unseenItems: progress.unseenItems,
     persistentBase: clonePersistentBaseState(progress.persistentBase),
@@ -1510,7 +1528,7 @@ export function getStoredPersistentBaseState(): PersistentBaseState {
   return clonePersistentBaseState(readPreferences().progression.coopDefense.persistentBase);
 }
 
-/** Atomically replaces only the committed persistent-base value inside the V5 progress document. */
+/** Atomically replaces only the committed persistent-base value inside the progress document. */
 export function setStoredPersistentBaseState(state: PersistentBaseState): void {
   const sanitized = sanitizePersistentBaseState(state);
   if (!sanitized) return;
@@ -2369,4 +2387,20 @@ export function markStoredCoopDefenseBossMapCompleted(mapId: string): boolean {
     },
   });
   return true;
+}
+
+/** Grants an independent HP reward once to an eligible local victory participant. */
+export function unlockStoredPersistentBaseHealthAfterVictory(mapId: string): boolean {
+  const reward = getPersistentBaseHealthReward(mapId);
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  if (!reward || progress.persistentBaseHealthRewards.includes(reward)) return false;
+  writePreferences({ ...current, progression: { ...current.progression, coopDefense: {
+    ...progress, persistentBaseHealthRewards: [...progress.persistentBaseHealthRewards, reward],
+  } } });
+  return true;
+}
+
+export function getStoredPersistentBaseHealthRewards(): PersistentBaseHealthReward[] {
+  return [...readPreferences().progression.coopDefense.persistentBaseHealthRewards];
 }

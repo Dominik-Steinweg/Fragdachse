@@ -701,7 +701,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     const unlockedDescriptor = createAuthoredWorldDescriptor(
       LOBBY_WORLD_DEFINITION_ID,
       7316,
-      { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 },
+      { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 },
     );
     const definition = getLobbyWorldDefinition();
     const metricsProfile = getAuthoredWorldMetricsProfile(
@@ -749,12 +749,12 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     const stage0Descriptor = createAuthoredWorldDescriptor(
       LOBBY_WORLD_DEFINITION_ID,
       7318,
-      { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 },
+      { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 },
     );
     const stage1Descriptor = createAuthoredWorldDescriptor(
       LOBBY_WORLD_DEFINITION_ID,
       7319,
-      { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
+      { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 1 },
     );
     const definition = getLobbyWorldDefinition();
     const metricsProfile = getAuthoredWorldMetricsProfile(
@@ -781,8 +781,26 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
 
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     expect(lifecycle).toContain('lobbyWorldPersistentBaseAreaStageAtRevision');
-    expect(lifecycle).toContain('resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage)');
+    expect(lifecycle).toContain('resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage, persistentBaseHealthRewards)');
     expect(lifecycle).toContain('hasPersistentBaseConfigurationChanged(');
+  });
+
+  it('applies HP upgrades only to the replacement lobby World', () => {
+    const createWorld = (rewards: ('map-2' | 'map-3')[], revision: number) => {
+      const descriptor = createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, revision, {
+        persistentBaseUnlocked: true, persistentBaseAreaStage: 0, persistentBaseHealthRewards: rewards,
+      });
+      return createWorldRuntimeContext({
+        descriptor, definition: LOBBY_WORLD,
+        metricsProfile: getAuthoredWorldMetricsProfile(LOBBY_WORLD.metrics.widthCells, LOBBY_WORLD.metrics.heightCells),
+      });
+    };
+    const previous = createWorld([], 7318);
+    const upgraded = createWorld(['map-2'], 7319);
+    expect(previous.persistentBaseSite?.base.hpMax).toBe(2500);
+    expect(upgraded.persistentBaseSite?.base.hpMax).toBe(3000);
+    expect(hasPersistentBaseConfigurationChanged(previous.descriptor, upgraded.descriptor)).toBe(true);
+    expect(previous.persistentBaseSite?.base.hpMax).toBe(2500);
   });
 
   it('trennt Orchestrierung, Teardown und Presentation-Rebind', () => {

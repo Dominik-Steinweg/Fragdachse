@@ -1,3 +1,4 @@
+import { PERSISTENT_BASE_HEALTH_REWARD_HP, resolvePersistentBaseMaxHp } from '../../persistentBase/PersistentBaseHealth';
 import { getLoadoutUtilityId, loadoutToolFromId } from '../../loadout/LoadoutTools';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../../config/coopDefenseItems';
@@ -85,6 +86,7 @@ export interface ArenaMetaProgressStore {
   unlockCoopDefenseMapAfterVictory(completedMapId: string): boolean;
   unlockPersistentBaseAfterVictory(completedMapId: string): boolean;
   unlockPersistentBaseAreaStageAfterVictory(completedMapId: string): boolean;
+  unlockPersistentBaseHealthAfterVictory(completedMapId: string): boolean;
   setPersistentBaseUnlocked(unlocked: boolean): boolean;
   setPersistentBaseAreaStage(areaStage: PersistentBaseAreaStage): boolean;
   grantPersistentBaseRewards(rewardIds: readonly PersistentBaseRewardId[]): readonly PersistentBaseRewardId[];
@@ -952,6 +954,7 @@ export class ArenaMetaController {
     let unlockedItems = false;
     let unlockedPersistentBase = false;
     let unlockedPersistentBaseAreaStage = false;
+    let unlockedPersistentBaseHealth = false;
     if (roundState.status === 'victory' && completedMapId) {
       const completedMapConfig = getCoopDefenseMapConfig(completedMapId);
       if (completedMapConfig.boss) {
@@ -970,6 +973,7 @@ export class ArenaMetaController {
       // Persoenliches Entitlement, getrennt vom room-langlebigen Working-State der Basis.
       unlockedPersistentBase = this.input.progressStore.unlockPersistentBaseAfterVictory(completedMapId);
       unlockedPersistentBaseAreaStage = this.input.progressStore.unlockPersistentBaseAreaStageAfterVictory(completedMapId);
+      unlockedPersistentBaseHealth = this.input.progressStore.unlockPersistentBaseHealthAfterVictory(completedMapId);
       unlockedNewMap = this.input.progressStore.unlockCoopDefenseMapAfterVictory(completedMapId);
     }
 
@@ -988,6 +992,10 @@ export class ArenaMetaController {
       unlockedPersistentBase,
       unlockedPersistentBaseAreaStage,
       unlockedPersistentBaseAreaStage ? this.storedProgress?.persistentBaseAreaStage : undefined,
+      unlockedPersistentBaseHealth && this.storedProgress ? {
+        bonusHp: PERSISTENT_BASE_HEALTH_REWARD_HP,
+        maxHp: resolvePersistentBaseMaxHp(this.storedProgress.persistentBaseHealthRewards),
+      } : undefined,
     );
   }
 

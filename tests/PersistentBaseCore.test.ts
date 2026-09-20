@@ -1,3 +1,4 @@
+import { PERSISTENT_BASE_INITIAL_HP } from '../src/persistentBase/PersistentBaseHealth';
 import { describe, expect, it } from 'vitest';
 import {
   CANONICAL_PERSISTENT_BASE_CORE_CELLS,
@@ -221,7 +222,7 @@ describe('PersistentBaseCore – dieselbe Basis an verschiedenen Ankern', () => 
 });
 
 describe('PersistentBaseCore – Uebergang in den Basisvertrag', () => {
-  const site = { baseId: 'core-under-test', anchor: { gridX: 30, gridY: 16 }, hpMax: 4200 } as const;
+  const site = { baseId: 'core-under-test', anchor: { gridX: 30, gridY: 16 } } as const;
 
   function worldWithCore(): WorldDefinition {
     return {
@@ -237,7 +238,7 @@ describe('PersistentBaseCore – Uebergang in den Basisvertrag', () => {
   it('erzeugt eine friendly Main-Base mit den Kernzellen', () => {
     const base = buildPersistentBaseCoreBaseConfig(site);
     expect(base.id).toBe('core-under-test');
-    expect(base.hpMax).toBe(4200);
+    expect(base.hpMax).toBe(PERSISTENT_BASE_INITIAL_HP);
     expect(base.faction).toBe('friendly');
     expect(base.role).toBe('main');
     expect(base.anchor).toEqual({ kind: 'grid', gridX: 27, gridY: 13 });

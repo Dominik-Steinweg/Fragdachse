@@ -39,6 +39,7 @@ export interface MatchProgressDelta {
   /** Dieser Sieg hat die aktive Persistent-Base-Area erweitert. */
   persistentBaseAreaStageUnlocked: boolean;
   persistentBaseAreaStage?: PersistentBaseAreaStage;
+  persistentBaseHealthReward?: { readonly bonusHp: number; readonly maxHp: number };
 }
 
 /** Ein angebotenes Item samt allem, was der Auswahlbildschirm dafuer braucht. */
@@ -144,6 +145,7 @@ export function createMatchProgressDelta(
   persistentBaseUnlocked = false,
   persistentBaseAreaStageUnlocked = false,
   persistentBaseAreaStage?: PersistentBaseAreaStage,
+  persistentBaseHealthReward?: MatchProgressDelta['persistentBaseHealthReward'],
 ): MatchProgressDelta {
   return {
     before,
@@ -158,6 +160,7 @@ export function createMatchProgressDelta(
     persistentBaseUnlocked,
     persistentBaseAreaStageUnlocked,
     persistentBaseAreaStage,
+    persistentBaseHealthReward,
   };
 }
 

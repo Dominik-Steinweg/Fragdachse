@@ -1,3 +1,6 @@
+import { ensureLoadingPanel } from './loadingScreenTextures';
+import { LOADING_FOREST } from './LoadingScreenAssets';
+import { FONT_MONO, FONT_DISPLAY } from './uiTheme';
 import * as Phaser from 'phaser';
 import {
   GAME_WIDTH,
@@ -62,8 +65,10 @@ export class ArenaCountdownOverlay {
   private readonly focusFallbackTexture: Phaser.Textures.CanvasTexture;
   private readonly focusFallback: Phaser.GameObjects.Image;
   private readonly text: Phaser.GameObjects.Text;
-  private readonly loadingBackdrop: Phaser.GameObjects.Rectangle;
+  private readonly loadingBackdrop: Phaser.GameObjects.Container;
+  private readonly loadingForest: Phaser.GameObjects.Image;
   private readonly loadingRoot: Phaser.GameObjects.Container;
+  private readonly loadingPanel: Phaser.GameObjects.Image;
   private readonly loadingTitle: Phaser.GameObjects.Text;
   private readonly loadingSubtitle: Phaser.GameObjects.Text;
   private readonly loadingBars: Phaser.GameObjects.Graphics;
@@ -128,8 +133,12 @@ export class ArenaCountdownOverlay {
       .setScrollFactor(0)
       .setVisible(false);
 
-    this.loadingBackdrop = scene.add.rectangle(this.baseX, this.baseY, GAME_WIDTH, GAME_HEIGHT, 0x030406, 1)
-      .setOrigin(0.5)
+    this.loadingForest = scene.add.image(0, 0, '__WHITE').setVisible(false);
+    this.refreshLoadingForest();
+    scene.load.on(`filecomplete-image-${LOADING_FOREST.key}`, this.refreshLoadingForest);
+    this.loadingBackdrop = scene.add.container(this.baseX, this.baseY, [
+      scene.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x101a14, 1), this.loadingForest,
+    ])
       .setDepth(DEPTH.OVERLAY - 4)
       .setScrollFactor(0)
       .setVisible(false);
@@ -139,29 +148,31 @@ export class ArenaCountdownOverlay {
       .setScrollFactor(0)
       .setVisible(false)
       .setAlpha(0);
-    this.loadingTitle = scene.add.text(this.baseX, 160, t('ui.arena.loading.title'), {
-      fontFamily: 'monospace', fontSize: '58px', fontStyle: 'bold',
-      color: toCssColor(COLORS.GOLD_1),
+    this.loadingPanel = scene.add.image(this.baseX, 132, ensureLoadingPanel(scene, 1080, 264)).setDisplaySize(1080, 264);
+    this.loadingRoot.add(this.loadingPanel);
+    this.loadingTitle = scene.add.text(this.baseX, 60, t('ui.arena.loading.title'), {
+      fontFamily: FONT_DISPLAY, fontSize: '36px', fontStyle: 'bold',
+      color: '#ded5ad',
     }).setOrigin(0.5);
-    this.loadingSubtitle = scene.add.text(this.baseX, 225, '', {
-      fontFamily: 'monospace', fontSize: '25px', color: toCssColor(COLORS.GREY_3),
+    this.loadingSubtitle = scene.add.text(this.baseX, 108, '', {
+      fontFamily: FONT_DISPLAY, fontSize: '21px', color: '#a5af91',
     }).setOrigin(0.5);
-    const loadingStatus = scene.add.text(510, 285, t('ui.arena.loading.status'), {
-      fontFamily: 'monospace', fontSize: '20px', color: toCssColor(COLORS.GREY_4),
+    const loadingStatus = scene.add.text(510, 154, t('ui.arena.loading.status'), {
+      fontFamily: FONT_DISPLAY, fontSize: '17px', color: '#8e9a7e',
     }).setOrigin(0, 0.5);
     this.loadingBars = scene.add.graphics();
     this.loadingRoot.add([this.loadingTitle, this.loadingSubtitle, loadingStatus, this.loadingBars]);
     for (let index = 0; index < 12; index += 1) {
-      const y = 330 + index * 54;
+      const y = 200 + index * 54;
       const row = {
         name: scene.add.text(510, y, '', {
-          fontFamily: 'monospace', fontSize: '23px', color: toCssColor(COLORS.GREY_1),
+          fontFamily: FONT_DISPLAY, fontSize: '21px', color: toCssColor(COLORS.GREY_1),
         }).setOrigin(0, 0.5),
-        status: scene.add.text(800, y, '', {
-          fontFamily: 'monospace', fontSize: '18px', color: toCssColor(COLORS.GREY_4),
+        status: scene.add.text(940, y, '', {
+          fontFamily: FONT_DISPLAY, fontSize: '18px', color: toCssColor(COLORS.GREY_4),
         }).setOrigin(0, 0.5),
-        progress: scene.add.text(1390, y, '', {
-          fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+        progress: scene.add.text(1410, y, '', {
+          fontFamily: FONT_MONO, fontSize: '19px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
         }).setOrigin(1, 0.5),
       };
       this.loadingRows.push(row);
@@ -173,6 +184,12 @@ export class ArenaCountdownOverlay {
     promoteToClarityCamera(scene, this.loadingRoot);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
   }
+
+  private readonly refreshLoadingForest = (): void => {
+    if (this.scene.textures.exists(LOADING_FOREST.key)) {
+      this.loadingForest.setTexture(LOADING_FOREST.key).setDisplaySize(GAME_WIDTH, GAME_HEIGHT).setVisible(true);
+    }
+  };
 
   setAudioSystem(system: GameAudioSystem | null): void {
     this.audioSystem = system;
@@ -244,7 +261,10 @@ export class ArenaCountdownOverlay {
   updateLoadingScreen(state: ArenaLoadingScreenState): void {
     if (this.mode !== 'loading') return;
     this.loadingTitle.setText(t('ui.arena.loading.title'));
-    this.loadingSubtitle.setText(`${state.modeLabel}  ·  ${state.mapLabel}`);
+    this.loadingSubtitle.setText(state.modeLabel === state.mapLabel ? state.modeLabel : `${state.modeLabel}  ·  ${state.mapLabel}`);
+    const height = 210 + Math.max(1, Math.min(state.players.length, this.loadingRows.length)) * 54;
+    this.loadingPanel.setTexture(ensureLoadingPanel(this.scene, 1080, height)).setDisplaySize(1080, height).setY(height / 2);
+    this.loadingRoot.setY((GAME_HEIGHT - height) / 2);
     this.loadingBars.clear();
     for (let index = 0; index < this.loadingRows.length; index += 1) {
       const row = this.loadingRows[index];
@@ -256,15 +276,16 @@ export class ArenaCountdownOverlay {
         continue;
       }
       const progress = Math.max(0, Math.min(100, Math.round(player.progress)));
-      const y = 330 + index * 54;
+      const y = 200 + index * 54;
       const color = toCssColor(player.colorHex);
-      row.name.setVisible(true).setText(player.name).setColor(color);
+      row.name.setVisible(true).setText(player.name).setColor(color).setScale(1);
+      if (row.name.width > 390) row.name.setScale(390 / row.name.width);
       row.status.setVisible(true).setText(t(`ui.arena.loading.${player.stage}`));
       row.progress.setVisible(true).setText(`${progress}%`).setColor(player.ready ? toCssColor(COLORS.GREEN_1) : color);
-      this.loadingBars.fillStyle(0x182027, 1).fillRoundedRect(510, y + 18, 820, 10, 5);
+      this.loadingBars.fillStyle(0x0e1711, 1).fillRoundedRect(510, y + 18, 900, 10, 5);
       if (progress > 0) {
-        this.loadingBars.fillStyle(player.ready ? COLORS.GREEN_1 : player.colorHex, 1)
-          .fillRoundedRect(510, y + 18, 820 * progress / 100, 10, 5);
+        this.loadingBars.fillStyle(player.ready ? 0xb5c982 : 0x718c4c, 1)
+          .fillRoundedRect(510, y + 18, 900 * progress / 100, 10, 5);
       }
     }
   }
@@ -411,7 +432,8 @@ export class ArenaCountdownOverlay {
     this.postFx?.setRadialFocus(null);
     this.focusFallback.destroy();
     this.text.destroy();
-    this.loadingBackdrop.destroy();
+    this.scene.load.off(`filecomplete-image-${LOADING_FOREST.key}`, this.refreshLoadingForest);
+    this.loadingBackdrop.destroy(true);
     this.loadingRoot.destroy(true);
     if (this.scene.textures.exists(FOCUS_FALLBACK_TEXTURE_KEY)) {
       this.scene.textures.remove(FOCUS_FALLBACK_TEXTURE_KEY);

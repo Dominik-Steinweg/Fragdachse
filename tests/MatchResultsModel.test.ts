@@ -6,7 +6,7 @@ import {
   resolvePersonalMatchOutcome,
   sortMatchLeaderboard,
 } from '../src/ui/MatchResultsModel';
-import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
+import { getCoopDefenseProgressSnapshot, getCoopDefenseXpThresholdForLevel } from '../src/utils/coopDefenseProgression';
 import { COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT } from '../src/config/coopDefenseItems';
 import type { CoopDefenseItem } from '../src/types';
 
@@ -79,8 +79,9 @@ describe('MatchResultsModel', () => {
     ]).map((entry) => entry.id)).toEqual(['p1', 'p2', 'p3']);
 
     const before = getCoopDefenseProgressSnapshot(0);
-    const after = getCoopDefenseProgressSnapshot(100);
-    const delta = createMatchProgressDelta(before, after, 100, 'Map 2');
+    const xpGained = getCoopDefenseXpThresholdForLevel(before.level + 2);
+    const after = getCoopDefenseProgressSnapshot(xpGained);
+    const delta = createMatchProgressDelta(before, after, xpGained, 'Map 2');
     const levelUps = delta.after.level - delta.before.level;
     expect(levelUps).toBeGreaterThan(1);
     expect(delta.newSkillPoints).toBe(levelUps);

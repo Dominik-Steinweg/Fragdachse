@@ -1,3 +1,6 @@
+import { UPGRADE_HEADER, UPGRADE_CONTROLS } from '../ui/UpgradeForestAssets';
+import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
+import { LOADING_FOREST } from '../ui/LoadingScreenAssets';
 import * as Phaser from 'phaser';
 import { HelpOverlay } from '../ui/HelpOverlay';
 import { OptionsOverlay } from '../ui/OptionsOverlay';
@@ -35,8 +38,11 @@ class ForestUiPreview extends Phaser.Scene {
   private overlay: Overlay | null = null;
   private quality = new GraphicsQualityController('high');
   preload(): void {
+    this.load.image(LOADING_FOREST.key, LOADING_FOREST.url);
     preloadForestAssets(this.load);
     preloadForestModalAssets(this.load);
+    for (const asset of UPGRADE_CONTROLS) this.load.image(asset.key, asset.url);
+    this.load.image(UPGRADE_HEADER.key, UPGRADE_HEADER.url);
     this.load.image(MATCH_RESULTS_TITLE.key, MATCH_RESULTS_TITLE.url);
     this.load.image(MATCH_RESULTS_BANNER.key, MATCH_RESULTS_BANNER.url);
     this.load.image(MATCH_RESULTS_BACKGROUND.key, MATCH_RESULTS_BACKGROUND.url);
@@ -86,7 +92,23 @@ class ForestUiPreview extends Phaser.Scene {
     const offers = COOP_DEFENSE_ITEM_SLOTS.slice(0, 3).map(slot => rollCoopDefenseItem(slot, 5, null, random));
     const reward = () => createMatchItemRewardPresentation(pending ? { roundEndedAt: 100, mapId: '17', offers } : null,
       items, equipped, { index: 0, size: 3 });
-    if (menu === 'help') {
+    if (menu === 'loading') {
+      const overlay = new ArenaCountdownOverlay(this, () => undefined);
+      let timer: Phaser.Time.TimerEvent | undefined;
+      this.overlay = { build: () => undefined, hide: () => overlay.clear(), destroy: () => { timer?.remove(); overlay.destroy(); } };
+      overlay.showLoading({ fadeBackdrop: true, onCovered: () => status('Ladefläche deckt die Welt vollständig ab') });
+      let step = 0;
+      const update = (): void => {
+        overlay.updateLoadingScreen({ modeLabel: 'Dachs vs. Zombies', mapLabel: 'Map 4 – Adrenalinrausch',
+          players: Array.from({ length: variant === 'full' ? 12 : 1 }, (_, i) => {
+            const progress = Math.min(100, step + i * 7);
+            return { id: String(i), name: i === 0 ? 'NeMe' : `Walddachs ${i + 1}`, colorHex: 0xc7bc82,
+              progress, ready: progress === 100, stage: progress === 100 ? 'ready' : progress < 30 ? 'generating' : progress < 70 ? 'building' : 'rendering' };
+          }) });
+        step = (step + 1) % 121;
+      };
+      update(); timer = this.time.addEvent({ delay: 100, loop: true, callback: update });
+    } else if (menu === 'help') {
       const overlay = new HelpOverlay(this); this.overlay = overlay; overlay.build(); overlay.show();
     } else if (menu === 'options') {
       const volume = { master: .75, effects: .65, music: .4 };

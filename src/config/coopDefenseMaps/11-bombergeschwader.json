@@ -27,8 +27,7 @@
     "anchor": {
       "gridX": 25,
       "gridY": 21
-    },
-    "hpMax": 1650
+    }
   },
   "powerUps": [
     {

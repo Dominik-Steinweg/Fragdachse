@@ -189,8 +189,7 @@
     "anchor": {
       "gridX": 67,
       "gridY": 18
-    },
-    "hpMax": 1650
+    }
   },
   "persistentBaseRewardsOnVictory": ["base_health_pedestal"],
   "powerUps": [],

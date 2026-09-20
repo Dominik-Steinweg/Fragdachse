@@ -89,8 +89,7 @@
     "anchor": {
       "gridX": 49,
       "gridY": 22
-    },
-    "hpMax": 1650
+    }
   },
   "persistentBaseRewardsOnVictory": ["base_spore_turret"],
   "powerUps": [

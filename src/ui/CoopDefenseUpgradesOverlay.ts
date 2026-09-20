@@ -1,5 +1,9 @@
+import { UPGRADE_HEADER, UPGRADE_CONTROLS } from './UpgradeForestAssets';
+import { MATCH_RESULTS_BACKGROUND } from './MatchResultsAssets';
+import { ensureResultsTitle } from './matchResultsTextures';
+import { ensureUpgradeSurface, ensureUpgradeIcon, ensureUpgradeFrame, ensureUpgradeXpFrame, ensureUpgradeApply } from './upgradeForestTextures';
 import { BUTTON_CURSOR } from './gameCursor';
-import { toCssColor, BORDER, SURFACE, TEXT, textStyle, mountForestModal, ensureModalPanelTexture, ensureGlossyButtonTexture } from './ForestModal';
+import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureModalFrame, ensureModalPanelTexture, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
 import { activateUi, playUiHover, playUiActivation } from './UiAudio';
 import {
@@ -84,52 +88,50 @@ const NODE_TEX_RADIUS = 12;
 const XP_BAR_TEX_KEY = '_ccd_xpbar';
 const TREE_BACKGROUND_TEX_KEY = '_ccd_tree_background';
 
-const PANEL_W = GAME_WIDTH - 60;
-const PANEL_H = GAME_HEIGHT - 16;
+const PANEL_W = GAME_WIDTH - 16;
+const PANEL_H = GAME_HEIGHT - 8;
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
-const TITLE_Y = CY - PANEL_H / 2 + 78;
-const SUBTITLE_Y = TITLE_Y + 32;
-const BAR_W = PANEL_W - 140;
-const BAR_H = 18;
+const TITLE_Y = 76;
+const SUBTITLE_Y = 140;
+const BAR_W = PANEL_W - 112;
+const BAR_H = 22;
 const BAR_X = CX - BAR_W / 2;
-const BAR_Y = SUBTITLE_Y + 28;
+const BAR_Y = SUBTITLE_Y + 40;
 const HEADER_DIVIDER_Y = BAR_Y + 18;
-const HEADER_DIVIDER_W = 360;
-const POINTS_Y = HEADER_DIVIDER_Y + 18;
-const POINTS_CHIP_W = 520;
-const POINTS_CHIP_H = 40;
+const POINTS_Y = HEADER_DIVIDER_Y + 34;
+const POINTS_CHIP_W = 610;
+const POINTS_CHIP_H = 48;
 const RESPEC_W = 180;
 const RESPEC_H = 38;
 // Untere Button-Leiste (Abbruch / Uebernehmen) + Hinweiszeile darunter.
-const ACTION_BTN_W = 220;
+const ACTION_BTN_W = 260;
 const ACTION_BTN_H = 50;
 const ACTION_BTN_GAP = 40;
-const ACTION_BTN_Y = CY + PANEL_H / 2 - 112;
-const FOOTER_Y = CY + PANEL_H / 2 - 76;
+const ACTION_BTN_Y = CY + PANEL_H / 2 - 94;
+const FOOTER_Y = CY + PANEL_H / 2 - 58;
 // Die feste Steuerungshinweiszeile bleibt unter jedem Upgrade-Tooltip lesbar.
 const TOOLTIP_BOTTOM = FOOTER_Y - 16;
 
-const CLASS_ROW_Y = POINTS_Y + 50;
-const CLASS_BUTTON_W = 250;
+const CLASS_ROW_Y = POINTS_Y + 62;
+const CLASS_BUTTON_W = 280;
 const CLASS_BUTTON_H = 52;
 const CLASS_BUTTON_GAP = 20;
 // Loadout-Block: Jede Kategorie bekommt eine Spaltenkarte, die Slot und Tab zusammenfasst.
 // Deshalb liegt die Kartenoberkante ueber der Slot-Zeile und die Unterkante unter den Tabs.
-const LOADOUT_LABEL_Y = CLASS_ROW_Y + 42;
-const LOADOUT_CARD_TOP = CLASS_ROW_Y + 42;
+const LOADOUT_LABEL_Y = CLASS_ROW_Y + 36;
+const LOADOUT_CARD_TOP = CLASS_ROW_Y + 36;
 const LOADOUT_SLOT_SIZE = 56;
 const LOADOUT_SLOT_GAP = 8;
 const LOADOUT_ROW_Y = LOADOUT_CARD_TOP + 12 + LOADOUT_SLOT_SIZE / 2;
-const LOADOUT_CARD_RADIUS = 12;
 const TAB_TOP = LOADOUT_ROW_Y + LOADOUT_SLOT_SIZE / 2 + 14;
-const TAB_H = 36;
+const TAB_H = 44;
 const TAB_GAP = 12;
-const TAB_MAX_W = 240;
+const TAB_MAX_W = 278;
 
-const CONTENT_TOP = TAB_TOP + TAB_H + 20;
+const CONTENT_TOP = TAB_TOP + TAB_H + 14;
 const CONTENT_BOTTOM = ACTION_BTN_Y - ACTION_BTN_H / 2 - 16;
-const CONTENT_W = PANEL_W - 140;
+const CONTENT_W = PANEL_W - 112;
 const CONTENT_X = CX - CONTENT_W / 2;
 const CONTENT_H = CONTENT_BOTTOM - CONTENT_TOP;
 const CONTENT_Y = CONTENT_TOP + CONTENT_H / 2;
@@ -144,7 +146,7 @@ const ICON_SIZE = 32;
 const BOSS_FRAME_SIZE = 56;
 const BOSS_BADGE_SIZE = 20;
 const NODE_GAP_X = 18;
-const NODE_GAP_Y = 26;
+const NODE_GAP_Y = 24;
 const ROW_GAP = 26;
 const ITEM_LANE_GAP_X = 18;
 const ITEM_LANE_PADDING_X = 6;
@@ -312,6 +314,7 @@ export class CoopDefenseUpgradesOverlay {
   private fullRespecEnabled = false;
   private progressFill: Phaser.GameObjects.Image | null = null;
   private xpBarEffect: LivingBarEffect | null = null;
+  private xpLabel: Phaser.GameObjects.Text | null = null;
   private contentBg: Phaser.GameObjects.Image | null = null;
   private tabsContainer: Phaser.GameObjects.Container | null = null;
   private classContainer: Phaser.GameObjects.Container | null = null;
@@ -393,6 +396,23 @@ export class CoopDefenseUpgradesOverlay {
       .setScrollFactor(0)
       .setInteractive();
     objects.push(panel);
+    const forest = this.scene.add.image(CX, CY, '__WHITE').setScrollFactor(0).setVisible(false);
+    const header = this.scene.add.image(CX, 82, '__WHITE').setScrollFactor(0).setVisible(false);
+    objects.push(forest, this.scene.add.image(CX, CY, ensureModalFrame(this.scene, PANEL_W, PANEL_H))
+      .setDisplaySize(PANEL_W, PANEL_H).setScrollFactor(0), header);
+    let refreshControls = () => {};
+    const refreshArt = (key?: string) => {
+      if (this.scene.textures.exists(MATCH_RESULTS_BACKGROUND.key)) {
+        forest.setTexture(MATCH_RESULTS_BACKGROUND.key).setTint(0x9ca98d).setDisplaySize(PANEL_W - 104, PANEL_H - 112).setVisible(true);
+      }
+      if (this.scene.textures.exists(UPGRADE_HEADER.key)) {
+        header.setTexture(UPGRADE_HEADER.key).setDisplaySize(600, 150).setVisible(true);
+      }
+      this.pointsChip?.setTexture(this.ensurePointsChipTexture(true)).setDisplaySize(POINTS_CHIP_W, POINTS_CHIP_H);
+      if (UPGRADE_CONTROLS.some(asset => asset.key === key)) refreshControls();
+    };
+    refreshArt();
+    this.scene.load.on('filecomplete', refreshArt);
 
     // Untere Button-Leiste: Abbruch (verwirft) + Uebernehmen (bestaetigt).
     const cancelX = CX - ACTION_BTN_GAP / 2 - ACTION_BTN_W / 2;
@@ -401,9 +421,7 @@ export class CoopDefenseUpgradesOverlay {
     const cancelBtn = this.scene.add.image(cancelX, ACTION_BTN_Y, this.ensureActionButtonTexture('cancel'))
       .setScrollFactor(0)
       .setInteractive({ cursor: BUTTON_CURSOR });
-    const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, t('ui.upgrades.cancel'), textStyle('label', {
-      color: INTENT.neutral.label,
-    })).setOrigin(0.5).setScrollFactor(0);
+    const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, t('ui.upgrades.cancel'), { ...textStyle('label', { color: INTENT.neutral.label }), fontSize: '22px' }).setOrigin(0.5).setScrollFactor(0);
     cancelBtn.on('pointerdown', () => activateUi(this.scene, () => this.closeWithCancel()));
     attachHoverEffect(this.scene, cancelBtn, cancelLabel);
     objects.push(cancelBtn);
@@ -412,20 +430,18 @@ export class CoopDefenseUpgradesOverlay {
     const applyBtn = this.scene.add.image(applyX, ACTION_BTN_Y, this.ensureActionButtonTexture('apply'))
       .setScrollFactor(0)
       .setInteractive({ cursor: BUTTON_CURSOR });
-    const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, t('ui.upgrades.apply'), textStyle('label', {
-      color: TEXT.accent,
-    })).setOrigin(0.5).setScrollFactor(0);
+    const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, t('ui.upgrades.apply'), { ...textStyle('label', { color: 0xf3ffca }), fontSize: '22px' }).setOrigin(0.5).setScrollFactor(0);
     applyBtn.on('pointerdown', () => activateUi(this.scene, () => this.closeWithApply()));
     attachHoverEffect(this.scene, applyBtn, applyLabel);
     objects.push(applyBtn);
     objects.push(applyLabel);
 
     objects.push(
-      this.scene.add.text(CX, TITLE_Y, t('ui.upgrades.title'), textStyle('display'))
+      this.scene.add.text(CX, TITLE_Y, t('ui.upgrades.title').toLocaleUpperCase(), { ...textStyle('display'), fontSize: '52px', color: '#e3edaf', stroke: '#10170c', strokeThickness: 5 })
         .setOrigin(0.5).setScrollFactor(0),
     );
 
-    // Level und XP-Balken tragen ihre Zahlen im Mouse-over, damit der Kopfbereich schmal bleibt.
+    // Level sitzt mittig auf der unteren Holzleiste; XP bleiben zusätzlich direkt im Balken lesbar.
     this.levelText = this.scene.add.text(CX, SUBTITLE_Y, t('ui.upgrades.levelTitle', { level: 1 }), {
       fontSize: '22px', fontFamily: FONT_MONO, fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
     }).setOrigin(0.5).setScrollFactor(0);
@@ -436,6 +452,7 @@ export class CoopDefenseUpgradesOverlay {
     );
     objects.push(this.levelText);
 
+    const xpFrame = this.scene.add.image(CX, BAR_Y, ensureUpgradeXpFrame(this.scene, BAR_W, BAR_H)).setScrollFactor(0);
     const barBackground = this.scene.add.rectangle(CX, BAR_Y, BAR_W, BAR_H, SURFACE.sunken, 0.95)
       .setStrokeStyle(1, COLORS.GREY_4)
       .setScrollFactor(0);
@@ -444,8 +461,7 @@ export class CoopDefenseUpgradesOverlay {
       () => t('ui.upgrades.levelProgress'),
       () => {
         const progress = this.getProgress();
-        const remaining = Math.max(0, progress.nextLevelXp - progress.totalXp);
-        return t('ui.upgrades.xpToNext', { xp: remaining, level: progress.level + 1 });
+        return `${progress.xpIntoLevel} / ${progress.nextLevelXp - progress.currentLevelStartXp} XP · ${t('ui.upgrades.levelTitle', { level: progress.level })}`;
       },
     );
     objects.push(barBackground);
@@ -463,19 +479,17 @@ export class CoopDefenseUpgradesOverlay {
       .setOrigin(0, 0.5)
       .setScrollFactor(0);
     this.progressFill.setCrop(0, 0, BAR_W, BAR_H);
-    objects.push(this.progressFill);
-
-    // Schlichte Trennlinie zwischen Level-Fortschritt und Upgrade-Punkten.
-    objects.push(
-      this.scene.add.rectangle(CX, HEADER_DIVIDER_Y, HEADER_DIVIDER_W, 1, COLORS.GREY_5, 0.6)
-        .setScrollFactor(0),
-    );
+    objects.push(this.progressFill, xpFrame);
+    this.xpLabel = this.scene.add.text(BAR_X + BAR_W - 12, BAR_Y, '', {
+      fontFamily: FONT_MONO, fontSize: '17px', color: '#f0efd1', stroke: '#101a10', strokeThickness: 4,
+    }).setOrigin(1, .5).setScrollFactor(0);
+    objects.push(this.xpLabel);
 
     // Eingefasster, flacher "Status"-Chip fuer verfuegbare Upgrade-Punkte.
     // Bewusst matt/flach gehalten, damit er nicht wie ein drueckbarer Button wirkt.
     const pointsChipX = CX;
     this.pointsChip = this.scene.add.image(pointsChipX, POINTS_Y, this.ensurePointsChipTexture(true))
-      .setScrollFactor(0);
+      .setDisplaySize(POINTS_CHIP_W, POINTS_CHIP_H).setScrollFactor(0);
     objects.push(this.pointsChip);
 
     this.pointsText = this.scene.add.text(pointsChipX, POINTS_Y, t('ui.upgrades.points', { points: 0 }), {
@@ -515,6 +529,7 @@ export class CoopDefenseUpgradesOverlay {
     this.contentBg = this.scene.add.image(CX, CONTENT_Y, this.ensureContentBgTexture(COLORS.GREY_5))
       .setScrollFactor(0);
     objects.push(this.contentBg);
+    objects.push(this.scene.add.image(CX, CONTENT_Y, ensureUpgradeFrame(this.scene, CONTENT_W + 36, CONTENT_H + 32)).setScrollFactor(0));
 
     // Statische Lanes und Connectoren liegen getrennt von den dynamischen Nodes. Der
     // Hintergrund kann dadurch als ein einziges gebackenes Bild bestehen bleiben, wenn
@@ -541,7 +556,16 @@ export class CoopDefenseUpgradesOverlay {
     this.container = this.scene.add.container(0, 0, objects)
       .setDepth(DEPTH.OVERLAY + 1);
     this.container.setVisible(false);
-    mountForestModal(this.scene, this.container, PANEL_W, PANEL_H, [tooltipRoot]);
+    this.container.bringToTop(tooltipRoot);
+    this.container.once('destroy', () => this.scene.load.off('filecomplete', refreshArt));
+    refreshControls = () => {
+      xpFrame.setTexture(ensureUpgradeXpFrame(this.scene, BAR_W, BAR_H));
+      applyBtn.setTexture(this.ensureActionButtonTexture('apply'));
+      const progress = this.getProgress();
+      this.renderClasses(progress.classId, progress.unlockedClassIds);
+      this.renderLoadoutRow(progress);
+      this.renderTabs(progress);
+    };
     promoteToClarityCamera(this.scene, this.container);
     this.picker = new LoadoutSlotPicker(this.scene, this.container, DEPTH.OVERLAY + 2, false, 'forest');
     this.respecMenu = new UiContextMenu(this.scene, this.container, undefined, 'forest');
@@ -582,6 +606,8 @@ export class CoopDefenseUpgradesOverlay {
 
     this.levelText.setText(t('ui.upgrades.levelTitle', { level: progress.level }));
 
+    this.xpLabel?.setText(t('ui.upgrades.xpToNext', { xp: Math.max(0, progress.nextLevelXp - progress.totalXp), level: progress.level + 1 }));
+
     const hasPoints = progress.availableUpgradePoints > 0 || progress.availableBossPoints > 0;
     this.pointsText.setText(
       t('ui.upgrades.pointsSummary', {
@@ -591,7 +617,7 @@ export class CoopDefenseUpgradesOverlay {
       }),
     );
     this.pointsText.setColor(toCssColor(hasPoints ? TEXT.accent : TEXT.muted));
-    this.pointsChip?.setTexture(this.ensurePointsChipTexture(hasPoints));
+    this.pointsChip?.setTexture(this.ensurePointsChipTexture(hasPoints)).setDisplaySize(POINTS_CHIP_W, POINTS_CHIP_H);
 
     const fillW = Math.max(0.001, BAR_W * progress.levelProgressFraction);
     this.progressFill.setCrop(0, 0, fillW, BAR_H);
@@ -935,34 +961,7 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private ensureClassButtonTexture(accentColor: number, isActive: boolean): string {
-    if (isActive) {
-      return this.ensureRoundedTexture({
-        key: `_ccdclass_${accentColor.toString(16)}_on`,
-        w: CLASS_BUTTON_W,
-        h: CLASS_BUTTON_H,
-        radius: 12,
-        topColor: lerpColor(accentColor, 0xffffff, 0.22),
-        bottomColor: lerpColor(accentColor, 0x000000, 0.34),
-        fillAlpha: 0.97,
-        strokeColor: lerpColor(accentColor, 0xffffff, 0.3),
-        strokeAlpha: 0.95,
-        strokeWidth: 2,
-        highlightAlpha: 0.3,
-      });
-    }
-    return this.ensureRoundedTexture({
-      key: `_ccdclass_${accentColor.toString(16)}_off`,
-      w: CLASS_BUTTON_W,
-      h: CLASS_BUTTON_H,
-      radius: 12,
-      topColor: lerpColor(SURFACE.raised, accentColor, 0.4),
-      bottomColor: lerpColor(SURFACE.sunken, accentColor, 0.26),
-      fillAlpha: 0.9,
-      strokeColor: lerpColor(COLORS.GREY_5, accentColor, 0.55),
-      strokeAlpha: 0.75,
-      strokeWidth: 1.5,
-      highlightAlpha: 0.08,
-    });
+    return ensureUpgradeSurface(this.scene, CLASS_BUTTON_W, CLASS_BUTTON_H, accentColor, isActive);
   }
 
   /**
@@ -1258,20 +1257,7 @@ export class CoopDefenseUpgradesOverlay {
     accentColor: number,
     isActive: boolean,
   ): string {
-    const w = Math.round(width);
-    return this.ensureRoundedTexture({
-      key: `_ccdcard_${w}_${Math.round(height)}_${accentColor.toString(16)}_${isActive ? 'on' : 'off'}`,
-      w,
-      h: height,
-      radius: LOADOUT_CARD_RADIUS,
-      topColor: lerpColor(SURFACE.raised, accentColor, isActive ? 0.34 : 0.2),
-      bottomColor: lerpColor(SURFACE.sunken, accentColor, isActive ? 0.2 : 0.1),
-      fillAlpha: isActive ? 0.8 : 0.6,
-      strokeColor: accentColor,
-      strokeAlpha: isActive ? 0.85 : 0.4,
-      strokeWidth: isActive ? 2 : 1.5,
-      highlightAlpha: isActive ? 0.1 : 0.05,
-    });
+    return ensureUpgradeSurface(this.scene, Math.round(width), Math.round(height), accentColor, isActive, true);
   }
 
   private clearTabDecorations(): void {
@@ -1324,7 +1310,7 @@ export class CoopDefenseUpgradesOverlay {
       const centerX = this.getTabCenterX(layout, index);
 
       const tabTexKey = this.ensureTabTexture(tabW, visuals, isActive);
-      const restAlpha = isActive ? 1 : 0.7;
+      const restAlpha = isActive ? 1 : 0.9;
       const bg = this.scene.add.image(centerX, TAB_TOP + TAB_H / 2, tabTexKey)
         .setScrollFactor(0)
         .setAlpha(restAlpha)
@@ -1363,38 +1349,7 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private ensureTabTexture(tabW: number, visuals: CategoryVisuals, isActive: boolean): string {
-    const w = Math.max(1, Math.round(tabW));
-    // Lebendige Kategorie-Farbe (connector ist deutlich gesaettigter als nodeBase).
-    const tabColor = visuals.connector;
-    if (isActive) {
-      return this.ensureRoundedTexture({
-        key: `_ccdtab_${w}_${tabColor.toString(16)}_on`,
-        w,
-        h: TAB_H,
-        radius: 10,
-        topColor: lerpColor(tabColor, 0xffffff, 0.2),
-        bottomColor: lerpColor(tabColor, 0x000000, 0.34),
-        fillAlpha: 0.97,
-        strokeColor: lerpColor(visuals.title, 0xffffff, 0.12),
-        strokeAlpha: 0.95,
-        strokeWidth: 2,
-        highlightAlpha: 0.3,
-      });
-    }
-    // Passiv: gedimmt, aber mit klar erkennbarer Kategorie-Farbe.
-    return this.ensureRoundedTexture({
-      key: `_ccdtab_${w}_${tabColor.toString(16)}_off`,
-      w,
-      h: TAB_H,
-      radius: 10,
-      topColor: lerpColor(SURFACE.raised, tabColor, 0.45),
-      bottomColor: lerpColor(SURFACE.sunken, tabColor, 0.32),
-      fillAlpha: 0.9,
-      strokeColor: lerpColor(COLORS.GREY_5, tabColor, 0.55),
-      strokeAlpha: 0.75,
-      strokeWidth: 1.5,
-      highlightAlpha: 0.08,
-    });
+    return ensureUpgradeSurface(this.scene, Math.round(tabW), TAB_H, visuals.connector, isActive);
   }
 
   private clearNodeDecorations(): void {
@@ -1452,7 +1407,7 @@ export class CoopDefenseUpgradesOverlay {
     const placedById = new Map<string, PlacedNode>();
     const itemLanes: PlacedItemLane[] = [];
 
-    let rowTopY = CONTENT_TOP + 12;
+    let rowTopY = CONTENT_TOP + 28;
     for (const row of rows) {
       const rowLeftX = CONTENT_X + Math.max(0, (CONTENT_W - row.totalWidthPx) / 2);
       const itemLaneHeightPx = row.maxDepth * ROW_UNIT - NODE_GAP_Y + ITEM_LANE_PADDING_Y * 2;
@@ -1546,21 +1501,22 @@ export class CoopDefenseUpgradesOverlay {
   ): void {
     for (const lane of lanes) {
       const left = lane.x - lane.width / 2;
-      const top = lane.y - lane.height / 2;
+      const top = CONTENT_TOP + 12;
+      const height = CONTENT_H - 24;
       const radius = 14;
 
       // A soft, layered edge keeps each item group legible without turning the
       // upgrade tree into a grid of heavy cards.
-      graphics.fillStyle(0x000000, 0.12);
-      graphics.fillRoundedRect(left + 1, top + 2, lane.width - 2, lane.height, radius);
+      graphics.fillStyle(0x111b15, 0.70);
+      graphics.fillRoundedRect(left + 1, top + 2, lane.width - 2, height, radius);
       graphics.fillStyle(visuals.divider, 0.06);
-      graphics.fillRoundedRect(left, top, lane.width, lane.height, radius);
-      graphics.fillStyle(visuals.laneFill, 0.17);
-      graphics.fillRoundedRect(left + 1, top + 1, lane.width - 2, lane.height - 2, radius - 1);
-      graphics.lineStyle(1, visuals.divider, 0.2);
-      graphics.strokeRoundedRect(left + 0.5, top + 0.5, lane.width - 1, lane.height - 1, radius);
+      graphics.fillRoundedRect(left, top, lane.width, height, radius);
+      graphics.fillStyle(visuals.laneFill, 0.08);
+      graphics.fillRoundedRect(left + 1, top + 1, lane.width - 2, height - 2, radius - 1);
+      graphics.lineStyle(1, 0x839950, 0.55);
+      graphics.strokeRoundedRect(left + 0.5, top + 0.5, lane.width - 1, height - 1, radius);
       graphics.lineStyle(1, 0xffffff, 0.035);
-      graphics.strokeRoundedRect(left + 2, top + 2, lane.width - 4, lane.height - 4, radius - 2);
+      graphics.strokeRoundedRect(left + 2, top + 2, lane.width - 4, height - 4, radius - 2);
     }
   }
 
@@ -1861,18 +1817,17 @@ export class CoopDefenseUpgradesOverlay {
 
     const isBaseUnlock = node.kind === 'unlock' && node.startingLevel > 0 && !node.refundable;
     const interactionEnabled = node.canLevelUp || node.canLevelDown;
-    const isLocked = !node.unlocked && node.level <= 0;
+    const isLocked = node.level <= 0 && !node.canLevelUp;
     const isActive = node.level > 0;
     const isBossUpgrade = node.bossPointCostPerLevel > 0;
-    const bossPointAvailable = node.bossPointRequirementMet || isActive;
-    const bossAccentColor = bossPointAvailable ? COLORS.GOLD_1 : COLORS.RED_2;
+    const bossAccentColor = isActive ? COLORS.GOLD_1 : isLocked ? 0x424646 : 0x8d9690;
     const progressFraction = node.maxLevel > 0
       ? Phaser.Math.Clamp(node.level / node.maxLevel, 0, 1)
       : 0;
-    const nodeBaseColor = isBaseUnlock ? BASE_UNLOCK_NODE_FILL : visuals.nodeBase;
-    const nodeStrokeColor = isBaseUnlock ? BASE_UNLOCK_NODE_STROKE : visuals.nodeStroke;
+    const nodeBaseColor = !isActive ? (isLocked ? 0x202323 : 0x444a47) : isBaseUnlock ? BASE_UNLOCK_NODE_FILL : visuals.nodeBase;
+    const nodeStrokeColor = !isActive ? (isLocked ? 0x414544 : 0x7b8580) : isBaseUnlock ? BASE_UNLOCK_NODE_STROKE : 0xc4df83;
     const nodeActiveColor = isBaseUnlock ? BASE_UNLOCK_NODE_ACTIVE : visuals.nodeActive;
-    const baseAlpha = isLocked ? 0.34 : isActive ? 1 : 0.82;
+    const baseAlpha = isLocked ? 0.65 : 1;
 
     const iconKey = this.getNodeTextureKey(node);
     // Nicht registrierte Upgrades liefern bewusst keinen Texture-Key. In diesem Fall bleibt der
@@ -1976,14 +1931,14 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     if (hasIcon && iconKey !== null) {
-      const uiIconKey = getLoadoutIconTextureKey(this.scene, iconKey);
+      const uiIconKey = ensureUpgradeIcon(this.scene, getLoadoutIconTextureKey(this.scene, iconKey), isActive, isLocked);
       const icon = fitLoadoutIcon(
         this.scene.add.image(0, 0, uiIconKey),
         ICON_SIZE,
         ICON_SIZE,
       )
         .setScrollFactor(0)
-        .setAlpha(isLocked ? 0.4 : 1);
+        .setAlpha(isLocked ? 0.5 : 1);
       nodeGroup.add(icon);
     } else {
       const fallback = this.scene.add.text(0, 0, node.label, {
@@ -2243,102 +2198,18 @@ export class CoopDefenseUpgradesOverlay {
     return key;
   }
 
-  /** Generic glassy rounded-rect texture (shared by panel, content area and tabs). */
-  private ensureRoundedTexture(params: {
-    key: string;
-    w: number;
-    h: number;
-    radius: number;
-    topColor: number;
-    bottomColor: number;
-    fillAlpha: number;
-    strokeColor: number;
-    strokeAlpha: number;
-    strokeWidth: number;
-    highlightAlpha: number;
-  }): string {
-    if (this.scene.textures.exists(params.key)) return params.key;
-
-    const w = Math.max(1, Math.round(params.w));
-    const h = Math.max(1, Math.round(params.h));
-    const ct = this.scene.textures.createCanvas(params.key, w, h);
-    if (!ct) return params.key;
-    const ctx = ct.context;
-    ctx.clearRect(0, 0, w, h);
-
-    const inset = Math.max(1, params.strokeWidth);
-    const rectW = w - inset * 2;
-    const rectH = h - inset * 2;
-
-    roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, rgbStr(params.topColor, params.fillAlpha));
-    grad.addColorStop(1, rgbStr(params.bottomColor, params.fillAlpha));
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    if (params.highlightAlpha > 0) {
-      ctx.save();
-      roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
-      ctx.clip();
-      const hi = ctx.createLinearGradient(0, 0, 0, h * 0.55);
-      hi.addColorStop(0, `rgba(255,255,255,${params.highlightAlpha})`);
-      hi.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = hi;
-      ctx.fillRect(0, 0, w, h * 0.55);
-      ctx.restore();
-    }
-
-    if (params.strokeAlpha > 0) {
-      roundRectPath(ctx, inset, inset, rectW, rectH, params.radius);
-      ctx.lineWidth = params.strokeWidth;
-      ctx.strokeStyle = rgbStr(params.strokeColor, params.strokeAlpha);
-      ctx.stroke();
-    }
-
-    ct.refresh();
-    return params.key;
-  }
-
   private ensurePanelTexture(): string {
     return ensureModalPanelTexture(this.scene, "upgrades", PANEL_W, PANEL_H);
   }
 
   private ensureActionButtonTexture(kind: 'cancel' | 'apply'): string {
+    if (kind === 'apply') return ensureUpgradeApply(this.scene, ACTION_BTN_W, ACTION_BTN_H);
     return ensureGlossyButtonTexture(this.scene, kind, ACTION_BTN_W, ACTION_BTN_H,
-      kind === 'apply' ? INTENT.primary.fill : INTENT.neutral.fill);
+      INTENT.neutral.fill);
   }
 
-  private ensurePointsChipTexture(active: boolean): string {
-    // Flach, ohne Glanz-Highlight -> klar als Status-Anzeige (kein Button) lesbar.
-    if (active) {
-      return this.ensureRoundedTexture({
-        key: '_ccd_points_on',
-        w: POINTS_CHIP_W,
-        h: POINTS_CHIP_H,
-        radius: 10,
-        topColor: lerpColor(SURFACE.raised, TEXT.accent, 0.08),
-        bottomColor: lerpColor(SURFACE.sunken, TEXT.accent, 0.04),
-        fillAlpha: 0.55,
-        strokeColor: BORDER.default,
-        strokeAlpha: 0.6,
-        strokeWidth: 1.5,
-        highlightAlpha: 0,
-      });
-    }
-    return this.ensureRoundedTexture({
-      key: '_ccd_points_off',
-      w: POINTS_CHIP_W,
-      h: POINTS_CHIP_H,
-      radius: 10,
-      topColor: SURFACE.raised,
-      bottomColor: SURFACE.sunken,
-      fillAlpha: 0.45,
-      strokeColor: BORDER.subtle,
-      strokeAlpha: 0.5,
-      strokeWidth: 1.5,
-      highlightAlpha: 0,
-    });
+  private ensurePointsChipTexture(_active: boolean): string {
+    return ensureResultsTitle(this.scene, POINTS_CHIP_W, POINTS_CHIP_H);
   }
 
   private ensureRespecButtonTexture(): string {
@@ -2364,8 +2235,8 @@ export class CoopDefenseUpgradesOverlay {
     // Dunkler Grund, sanft in die Kategoriefarbe getoent.
     roundRectPath(ctx, inset, inset, rectW, rectH, radius);
     const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, rgbStr(lerpColor(SURFACE.raised, color, 0.22), 0.55));
-    grad.addColorStop(1, rgbStr(lerpColor(SURFACE.sunken, color, 0.08), 0.6));
+    grad.addColorStop(0, rgbStr(lerpColor(SURFACE.raised, color, 0.08), 0.78));
+    grad.addColorStop(1, rgbStr(lerpColor(SURFACE.sunken, color, 0.03), 0.60));
     ctx.fillStyle = grad;
     ctx.fill();
 
@@ -2374,7 +2245,7 @@ export class CoopDefenseUpgradesOverlay {
     roundRectPath(ctx, inset, inset, rectW, rectH, radius);
     ctx.clip();
     const rad = ctx.createRadialGradient(w / 2, h * 0.02, 0, w / 2, h * 0.02, w * 0.62);
-    rad.addColorStop(0, rgbStr(color, 0.16));
+    rad.addColorStop(0, rgbStr(color, 0.045));
     rad.addColorStop(1, rgbStr(color, 0));
     ctx.fillStyle = rad;
     ctx.fillRect(0, 0, w, h);

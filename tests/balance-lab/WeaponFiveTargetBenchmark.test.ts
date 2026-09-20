@@ -337,7 +337,7 @@ describe('Weapon Balance Lab V0.9 – Measurement Semantics & Static Five-Target
     expect(chainRun.chainDps).toBeGreaterThan(0);
     expect(chainRun.damageEvents.some((event) => event.damageKind === 'direct')).toBe(true);
     expect(chainRun.damageEvents.some((event) => event.damageKind === 'chain')).toBe(true);
-    expect(chainRun.adrenalineGenerated).toBe(8 * (1 + chainRun.damageEvents.filter((event) => event.damageKind === 'chain').length));
+    expect(chainRun.adrenalineGenerated).toBe(chainConfig.adrenalinGain * (1 + chainRun.damageEvents.filter((event) => event.damageKind === 'chain').length));
 
     const singleTargetChain = runWeaponSingleTargetBenchmark({
       weaponId: chainConfig.id,

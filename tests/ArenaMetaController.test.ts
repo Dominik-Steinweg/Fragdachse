@@ -35,6 +35,7 @@ function makeInput(): {
     unlockCoopDefenseMapAfterVictory: vi.fn(),
     unlockPersistentBaseAfterVictory: vi.fn(),
     unlockPersistentBaseAreaStageAfterVictory: vi.fn(),
+    unlockPersistentBaseHealthAfterVictory: vi.fn(),
     setPersistentBaseUnlocked: vi.fn(),
     setPersistentBaseAreaStage: vi.fn(),
     grantPersistentBaseRewards: vi.fn(),
@@ -219,6 +220,38 @@ describe('ArenaMetaController', () => {
     vi.mocked(resultRead.getRoundState).mockReturnValue({ status, roundStartTime: 1, endedAt: 42, coopDefenseMapId: '1' });
     controller.tryFinalizeMatchResults(); controller.tryFinalizeMatchResults(); controller.replayMatchResults();
     expect(playSound.mock.calls).toEqual(status === 'aborted' ? [] : [[`sfx_round_${status}`]]);
+  });
+
+  it.each([
+    { status: 'victory' as const, eligible: true, host: true },
+    { status: 'victory' as const, eligible: true, host: false },
+    { status: 'defeat' as const, eligible: true, host: true },
+    { status: 'victory' as const, eligible: false, host: false },
+  ])('grants HP only to eligible winners ($status, eligible=$eligible, host=$host)', ({ status, eligible, host }) => {
+    const { controller, store, resultRead, session } = makeInput();
+    vi.mocked(resultRead.isLocalRoundResultEligible).mockReturnValue(eligible);
+    vi.mocked(session.isHost).mockReturnValue(host);
+    const progress = { ...getStoredCoopDefenseProgress(), persistentBaseHealthRewards: [] as ('map-2' | 'map-3')[] };
+    vi.mocked(store.getProgress).mockReturnValue(progress);
+    vi.mocked(store.unlockPersistentBaseHealthAfterVictory).mockImplementation(() => {
+      if (progress.persistentBaseHealthRewards.length) return false;
+      progress.persistentBaseHealthRewards.push('map-2');
+      return true;
+    });
+    vi.mocked(resultRead.getRoundResults).mockReturnValue([{
+      id: 'local', name: 'Local', colorHex: 0xffffff, frags: 0, teamId: null,
+      roundEndedAt: 42, gameMode: 'coop_defense', mapName: 'Map 2', sharedXp: 0,
+    }]);
+    vi.mocked(resultRead.getRoundState).mockReturnValue({ status, roundStartTime: 1, endedAt: 42, coopDefenseMapId: '2' });
+    controller.refresh();
+    controller.beginMatchResults();
+    controller.tryFinalizeMatchResults();
+    expect(controller.getLastMatchResultsPresentation()?.progress?.persistentBaseHealthReward)
+      .toEqual(status === 'victory' && eligible ? { bonusHp: 500, maxHp: 3000 } : undefined);
+    expect(store.unlockPersistentBaseHealthAfterVictory).toHaveBeenCalledTimes(status === 'victory' && eligible ? 1 : 0);
+    controller.beginMatchResults();
+    controller.tryFinalizeMatchResults();
+    expect(controller.getLastMatchResultsPresentation()?.progress?.persistentBaseHealthReward).toBeUndefined();
   });
 
   it('announces committed upgrades and reward claims, and XP level increases only after a real credit', () => {

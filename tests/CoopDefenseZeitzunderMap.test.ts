@@ -30,7 +30,6 @@ describe('Map 16 - Zeitzünder', () => {
       persistentBase: {
         baseId: 'coop-base-rear',
         anchor: { gridX: 91, gridY: 19 },
-        hpMax: 1650,
       },
     });
     expect(rearBase?.hpMax).toBeGreaterThan(0);

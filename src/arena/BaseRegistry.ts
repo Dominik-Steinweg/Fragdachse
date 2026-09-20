@@ -422,11 +422,12 @@ export function resolveCoopDefenseActivityBaseOverlays(
   mapConfig: ArenaGenerationMapConfig,
   humanPlayerCount = 1,
   worldMetrics?: WorldMetrics,
+  persistentBase?: BaseSpec | null,
 ): readonly BaseActivityOverlay[] {
   return resolveCoopDefenseActivityBases(mapConfig, humanPlayerCount, worldMetrics).map((base) => ({
     baseId: base.id,
-    hpMax: base.hpMax,
-    startHp: base.startHp ?? base.hpMax,
+    hpMax: persistentBase?.id === base.id ? persistentBase.hpMax : base.hpMax,
+    startHp: persistentBase?.id === base.id ? persistentBase.hpMax : base.startHp ?? base.hpMax,
     dormant: base.dormant === true,
     ...(base.dormantObjectiveId === undefined ? {} : { dormantObjectiveId: base.dormantObjectiveId }),
     powerUpPedestals: base.powerUpPedestals,

@@ -58,7 +58,7 @@ function lobbyWorldContextFor(mode: GameMode, persistentBaseUnlocked: boolean) {
       LOBBY_WORLD_DEFINITION_ID,
       ownsPersistentBase ? 9 : 10,
       ownsPersistentBase
-        ? { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 }
+        ? { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 }
         : undefined,
     ),
     metricsProfile: getAuthoredWorldMetricsProfile(
@@ -291,7 +291,7 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     const definition = getLobbyWorldDefinition();
     const world = createWorldRuntimeContext({
       descriptor: createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 8, {
-        persistentBaseUnlocked: true,
+        persistentBaseUnlocked: true, persistentBaseHealthRewards: [],
         persistentBaseAreaStage: 0,
       }),
       metricsProfile: getAuthoredWorldMetricsProfile(

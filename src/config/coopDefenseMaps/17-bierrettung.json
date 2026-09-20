@@ -106,8 +106,7 @@
     "anchor": {
       "gridX": 99,
       "gridY": 21
-    },
-    "hpMax": 1650
+    }
   },
   "powerUps": [
     { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },

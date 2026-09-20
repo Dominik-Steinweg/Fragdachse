@@ -216,8 +216,7 @@
     "anchor": {
       "gridX": 47,
       "gridY": 20
-    },
-    "hpMax": 1650
+    }
   },
   "powerUps": [],
   "encounters": [

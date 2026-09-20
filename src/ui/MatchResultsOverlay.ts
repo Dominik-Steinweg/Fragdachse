@@ -1512,6 +1512,14 @@ function describeRewards(
       tooltip: t('ui.reward.persistentBaseUnlockedHint'),
     });
   }
+  if (progress.persistentBaseHealthReward) {
+    descriptors.push({
+      glyph: '♥',
+      label: t('ui.reward.persistentBaseHealth', progress.persistentBaseHealthReward),
+      color: COLORS.GOLD_1,
+      tooltip: t('ui.reward.persistentBaseHealthHint'),
+    });
+  }
   if (progress.persistentBaseAreaStageUnlocked) {
     const area = resolvePersistentBaseBuildAreaForStage(progress.persistentBaseAreaStage ?? 1);
     descriptors.push({

@@ -51,7 +51,6 @@ const LOBBY_PERSISTENT_BASE_SITE: WorldPersistentBaseSiteDefinition = {
   anchor: { gridX: LOBBY_SPAWN_FOCUS_CELL.gridX, gridY: LOBBY_SPAWN_FOCUS_CELL.gridY },
   // Ohne Activity nimmt der Kern ohnehin keinen Schaden; der Wert ist die Grunddauerhaftigkeit
   // des Bauwerks, nicht die HP eines Missionsziels.
-  hpMax: 5000,
 };
 
 const LOBBY_WORLD_DEFINITION: WorldDefinition = {

@@ -47,7 +47,7 @@ describe('Coverage Report Regression & Source of Truth', () => {
       expect(result.dps).toBeCloseTo(4300 / 30, 2); // 143.333...
     });
 
-    it('P90 Base erzielt exakt 69 Treffer / 552 Schaden in 30s (18.4 DPS)', () => {
+    it('P90 Base zählt 102 Treffer im Messfenster und einen weiteren im Tail', () => {
       const result = runWeaponSingleTargetBenchmark({
         weaponId: 'P90',
         sourceSlot: 'weapon2',
@@ -55,10 +55,13 @@ describe('Coverage Report Regression & Source of Truth', () => {
         seed: 1,
       });
 
-      expect(result.shotsFired).toBe(69);
-      expect(result.hits).toBe(69);
-      expect(result.totalDamage).toBe(552);
-      expect(result.dps).toBeCloseTo(18.4, 2);
+      expect(result.shotsFired).toBe(103);
+      expect(result.hits).toBe(103);
+      expect(result.measurementTargetHits).toBe(102);
+      expect(result.totalDamage).toBe(816);
+      expect(result.damageYieldIncludingTail).toBe(824);
+      expect(result.tailDamage).toBe(8);
+      expect(result.dps).toBeCloseTo(27.2, 2);
     });
 
     it('ASMD_PRIM Base erzielt exakt 50 Treffer / 500 Schaden in 30s (~16.67 DPS)', () => {
@@ -75,7 +78,7 @@ describe('Coverage Report Regression & Source of Truth', () => {
       expect(result.dps).toBeCloseTo(500 / 30, 2); // 16.666...
     });
 
-    it('GLOCK Base zaehlt den Treffer an der Window-Grenze nicht in ST-DPS (402 Schaden / 13.4 DPS)', () => {
+    it('GLOCK Base erzielt 67 Treffer / 603 Schaden in 30s (20.1 DPS)', () => {
       const result = runWeaponSingleTargetBenchmark({
         weaponId: 'GLOCK',
         sourceSlot: 'weapon1',
@@ -83,11 +86,11 @@ describe('Coverage Report Regression & Source of Truth', () => {
         seed: 1,
       });
 
-      expect(result.shotsFired).toBe(68);
-      expect(result.hits).toBe(68);
-      expect(result.totalDamage).toBe(402);
-      expect(result.damageYieldIncludingTail).toBe(408);
-      expect(result.dps).toBeCloseTo(13.4, 2);
+      expect(result.shotsFired).toBe(67);
+      expect(result.hits).toBe(67);
+      expect(result.totalDamage).toBe(603);
+      expect(result.damageYieldIncludingTail).toBe(603);
+      expect(result.dps).toBeCloseTo(20.1, 2);
     });
   });
 
@@ -114,7 +117,7 @@ describe('Coverage Report Regression & Source of Truth', () => {
       // P90 Base im Report prüfen
       const p90Data = data.weapons.find((w) => w.weaponId === 'P90')!;
       const p90Base = p90Data.stages.find((s) => s.stage === 'base')!;
-      expect(p90Base.expectedDps).toBeCloseTo(18.4, 1);
+      expect(p90Base.expectedDps).toBeCloseTo(27.2, 1);
       expect(p90Base.provenMaximum).toBe(true);
 
       // Markdown-Generierung testen
@@ -128,9 +131,9 @@ describe('Coverage Report Regression & Source of Truth', () => {
       });
 
       expect(md).toContain('| **BITE** | `weapon1` | 143.3 DPS');
-      expect(md).toContain('| **P90** | `weapon2` | 18.4 DPS');
+      expect(md).toContain('| **P90** | `weapon2` | 27.2 DPS');
       expect(md).toContain('| **ASMD_PRIM** | `weapon1` | 16.7 DPS');
-      expect(md).toContain('| **GLOCK** | `weapon1` | 13.4 DPS');
+      expect(md).toContain('| **GLOCK** | `weapon1` | 20.1 DPS');
     }, 45000);
   });
 });

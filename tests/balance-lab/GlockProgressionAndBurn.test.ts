@@ -203,16 +203,15 @@ describe('Glock Single-Target Progression & Shared Burn Verification', () => {
       const late = progression.stages.find((s) => s.stage === 'late')!;
       const endgame = progression.stages.find((s) => s.stage === 'endgame')!;
 
-      // Base: reine Direktschüsse (6 Schaden, die neue Window-Grenze zaehlt den
-      // Treffer exakt am Ende nicht mehr mit: ~13.4 DPS statt des alten ~13.6-Werts)
-      expect(base.bestSupportedExpectedDps).toBeCloseTo(13.4, 1);
+      // Base: 67 Direkttreffer mit je 9 Schaden in 30 Sekunden.
+      expect(base.bestSupportedExpectedDps).toBeCloseTo(20.1, 1);
       expect(base.provenMaximum).toBe(true);
 
       // Early (3 Punkte): Glock hat keine Direktschadens-Upgrades in Early.
-      expect(early.bestSupportedExpectedDps).toBeCloseTo(13.4, 1);
+      expect(early.bestSupportedExpectedDps).toBeCloseTo(20.1, 1);
       expect(early.provenMaximum).toBe(true);
 
-      // Mid (5 normal / 1 boss): glock_burning_bullets (Boss) schaltet Brand frei -> massiver DPS-Sprung auf ~104.6 DPS!
+      // Mid (5 normal / 1 boss): glock_burning_bullets (Boss) steigert den Schaden durch Brand.
       expect(mid.bestSupportedExpectedDps).toBeGreaterThan(early.bestSupportedExpectedDps * 2);
       expect(mid.bestSupportedBuild?.levels.glock_burning_bullets).toBe(1);
       expect(mid.bestSupportedBuild?.levels.glock_burning_bullets_damage).toBe(3);

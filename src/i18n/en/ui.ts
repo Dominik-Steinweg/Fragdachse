@@ -275,6 +275,8 @@ export const enUi = {
   "ui.boot.processingData": "Processing game data …",
   "ui.boot.assetProgress": "Downloads: {downloaded}/{total} · Processed: {processed}/{total}",
   "ui.boot.reconnecting": "Restoring connection …",
+  "ui.reward.persistentBaseHealth": "BASE REINFORCED: +{bonusHp} MAX HP · {maxHp} HP",
+  "ui.reward.persistentBaseHealthHint": "The upgrade takes effect on your next base visit or mission start.",
   "ui.reward.persistentBaseUnlocked": "NEW FEATURE UNLOCKED: YOUR BASE",
   "ui.reward.persistentBaseUnlockedHint": "You now own a permanent base. It stands in the training grounds and is your main base on every later map.",
   "ui.reward.persistentBaseAreaExpanded": "BASE AREA EXPANDED",

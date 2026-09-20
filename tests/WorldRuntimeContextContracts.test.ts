@@ -1,3 +1,4 @@
+import { type PersistentBaseHealthReward } from '../src/persistentBase/PersistentBaseHealth';
 import { describe, expect, it } from 'vitest';
 import * as config from '../src/config';
 import { applyArenaMetricsForMode, getArenaMetricsProfile } from '../src/config';
@@ -11,7 +12,7 @@ import {
   findWorldBase,
   isValidPersistentBaseSite,
 } from '../src/world/WorldRuntimeContext';
-import { resolveCoopDefenseActivityBases } from '../src/arena/BaseRegistry';
+import { resolveCoopDefenseActivityBases, resolveCoopDefenseActivityBaseOverlays } from '../src/arena/BaseRegistry';
 
 /**
  * Der kanonische Kontext einer World-Instanz.
@@ -43,7 +44,7 @@ function contextForMap(mapId: string, overrides: Partial<WorldDescriptor> = {}) 
       // Freischaltung traegt die Instanz den Kern gar nicht, ohne die Area-Stufe schlaegt der Aufbau
       // bewusst fehl (siehe eigene Tests).
       ...(mapConfig.persistentBase
-        ? { parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 } }
+        ? { parameters: { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 } }
         : {}),
       ...overrides,
     }),
@@ -159,7 +160,7 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
 
   it('loest die persistente Basisstelle aus den eigenen Basen und dem World-Parameter auf', () => {
     const withParameter = contextForMap('17', {
-      parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
+      parameters: { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 1 },
     });
     expect(withParameter.persistentBaseSite).toMatchObject({
       baseId: 'coop-base-rear',
@@ -185,7 +186,7 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     const definition = toWorldDefinition(mapConfig);
     const world = createWorldRuntimeContext({
       descriptor: descriptorFor(definition.id, {
-        parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
+        parameters: { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 1 },
       }),
       metricsProfile: getArenaMetricsProfile(
         'coop_defense',
@@ -275,7 +276,7 @@ describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
     // Aufbau brachte Map 16 mit.
     expect(() => createWorldRuntimeContext({
       descriptor: descriptorFor('world:coop-defense:17', {
-        parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 },
+        parameters: { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 },
       }),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
       definition: toWorldDefinition(getCoopDefenseMapConfig('16')),
@@ -293,7 +294,7 @@ describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
     // Uebertragungsfehler wuerden still zwei verschiedene Welten.
     expect(() => createWorldRuntimeContext({
       descriptor: descriptorFor('world:coop-defense:17', {
-        parameters: { persistentBaseUnlocked: true },
+        parameters: { persistentBaseUnlocked: true, persistentBaseHealthRewards: [] },
       }),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
       definition: toWorldDefinition(getCoopDefenseMapConfig('17')),
@@ -324,4 +325,36 @@ describe('WorldRuntimeContext – Unabhaengigkeit von der Lobby', () => {
     }
   });
 
+});
+
+describe('Persistent base health is host-owned World configuration', () => {
+  it.each<{ rewards: PersistentBaseHealthReward[]; expectedHp: number }>([
+    { rewards: [], expectedHp: 2500 },
+    { rewards: ['map-2'], expectedHp: 3000 },
+    { rewards: ['map-3'], expectedHp: 3000 },
+    { rewards: ['map-2', 'map-3'], expectedHp: 3500 },
+  ])(
+    'uses $expectedHp HP on every map, for every player count and on late join', ({ rewards, expectedHp }) => {
+      for (const map of COOP_DEFENSE_MAP_CONFIGS.filter((candidate) => candidate.persistentBase)) {
+        const parameters = { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 as const, persistentBaseHealthRewards: rewards };
+        const host = contextForMap(map.mapId, { parameters });
+        const client = contextForMap(map.mapId, { parameters: JSON.parse(JSON.stringify(parameters)) });
+        const base = host.persistentBaseSite!.base;
+        expect(base.hpMax).toBe(expectedHp);
+        expect(client.persistentBaseSite!.base.hpMax).toBe(expectedHp);
+        const baseline = contextForMap(map.mapId);
+        expect(host.bases.filter((b) => b.id !== base.id)).toEqual(baseline.bases.filter((b) => b.id !== base.id));
+        for (const players of [1, 4]) {
+          const overlay = resolveCoopDefenseActivityBaseOverlays(map, players, host.metrics, base)
+            .find((entry) => entry.baseId === base.id);
+          expect(overlay).toMatchObject({ hpMax: expectedHp, startHp: expectedHp });
+        }
+      }
+    },
+  );
+
+  it('rejects an unlocked base without the host health configuration', () => {
+    expect(() => contextForMap('2', { parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 } }))
+      .toThrow(/requires replicated health rewards/);
+  });
 });

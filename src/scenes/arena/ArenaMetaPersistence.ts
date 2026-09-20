@@ -27,6 +27,7 @@ import {
   unlockStoredCoopDefenseItemsAfterVictory,
   unlockStoredPersistentBaseAfterVictory,
   unlockStoredPersistentBaseAreaStageAfterVictory,
+  unlockStoredPersistentBaseHealthAfterVictory,
 } from '../../utils/localPreferences';
 import type { ArenaMetaProgressStore } from './ArenaMetaController';
 
@@ -53,6 +54,7 @@ export function createArenaMetaProgressStore(): ArenaMetaProgressStore {
     unlockCoopDefenseMapAfterVictory: unlockStoredCoopDefenseMapAfterVictory,
     unlockPersistentBaseAfterVictory: unlockStoredPersistentBaseAfterVictory,
     unlockPersistentBaseAreaStageAfterVictory: unlockStoredPersistentBaseAreaStageAfterVictory,
+    unlockPersistentBaseHealthAfterVictory: unlockStoredPersistentBaseHealthAfterVictory,
     setPersistentBaseUnlocked: setStoredPersistentBaseUnlocked,
     setPersistentBaseAreaStage: setStoredPersistentBaseAreaStage,
     grantPersistentBaseRewards: grantStoredPersistentBaseRewards,

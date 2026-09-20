@@ -175,8 +175,8 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     for (const parameters of [
       { persistentBaseUnlocked: true },
       { persistentBaseUnlocked: false },
-      { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
-      { persistentBaseUnlocked: true, persistentBaseAreaStage: 2 },
+      { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 1 },
+      { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 2 },
     ]) {
       const descriptor = { ...world, parameters };
       expect(parseWorldDescriptor(JSON.parse(JSON.stringify(descriptor)))).toEqual(descriptor);
@@ -265,5 +265,18 @@ describe('World-Revision – gemeinsame Quelle und zentrale Verwerfungsregel', (
     expect(isCurrentWorldRevision(12, 13)).toBe(false);
     expect(isCurrentWorldRevision(12, '12')).toBe(false);
     expect(isCurrentWorldRevision(12, undefined)).toBe(false);
+  });
+});
+
+describe('Persistent base health replication', () => {
+  it('compares rewards by value and treats upgrades as a new World configuration', () => {
+    const host = worldDescriptor({ parameters: { persistentBaseHealthRewards: ['map-2', 'map-3'] } });
+    const client = parseWorldDescriptor(JSON.parse(JSON.stringify(host)))!;
+    expect(isSameWorldInstance(host, client)).toBe(true);
+    expect(isSameWorldInstance(host, { ...host, parameters: { persistentBaseHealthRewards: ['map-3', 'map-2'] } })).toBe(true);
+    expect(isSameWorldInstance(host, { ...host, parameters: { persistentBaseHealthRewards: ['map-2'] } })).toBe(false);
+    for (const rewards of [['map-2', 'map-2'], ['unknown'], 500, null]) {
+      expect(parseWorldDescriptor({ ...host, parameters: { persistentBaseHealthRewards: rewards } })).toBeNull();
+    }
   });
 });

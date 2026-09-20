@@ -48,7 +48,7 @@ const WORLD: WorldDescriptor = {
   seed: 2201,
   generatorVersion: 1,
   layoutFingerprint: 'step-22-proof',
-  parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
+  parameters: { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 1 },
 };
 
 const LAYOUT: ArenaLayout = {

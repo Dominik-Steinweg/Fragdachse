@@ -1,3 +1,4 @@
+import { PERSISTENT_BASE_INITIAL_HP } from './PersistentBaseHealth';
 import type {
   CoopBaseAnchor,
   CoopBaseCellOffset,
@@ -315,7 +316,6 @@ export interface PersistentBaseCoreSite {
   readonly baseId: string;
   readonly anchor: PersistentBaseAnchor;
   readonly orientation?: PersistentBaseOrientation;
-  readonly hpMax: number;
 }
 
 /** Gitterursprung der 7x7-Grundflaeche, also die obere linke Zelle ihrer Bounding-Box. */
@@ -340,7 +340,7 @@ export function buildPersistentBaseCoreBaseConfig(site: PersistentBaseCoreSite):
   };
   return {
     id: site.baseId,
-    hpMax: site.hpMax,
+    hpMax: PERSISTENT_BASE_INITIAL_HP,
     faction: 'friendly',
     role: 'main',
     anchor,

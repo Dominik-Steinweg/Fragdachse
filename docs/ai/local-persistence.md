@@ -34,6 +34,16 @@ Ein Client darf nur einen host-bestätigten Beitrag speichern. Ohne diese Regel 
 
 Runtime-IDs, HP, Cooldowns, temporäre Activity-Daten und Renderobjekte gehören nicht in den Blueprint. Der WorldRuntimeContext liefert Site, Kern und World-Geometrie; die lokale Progress-Grenze liefert den dauerhaften Beitrag, und die Runtime/Working Copy den aktuellen bearbeitbaren Zustand.
 
+Die unabhängigen HP-Belohnungen werden als Freischaltungen im persönlichen Coop-Fortschritt
+gespeichert, getrennt von Bau-Beiträgen und aktuellen Schadens-HP. Der Decoder migriert
+Progress-/Exportformat V5 nach V6: Der damalige Kartenfortschritt liefert einmalig die bereits
+verdienten HP-Belohnungen. Aktuelle Dokumente verwenden ausschließlich die expliziten
+Freischaltungen; Kartenfreischaltungen werden danach nicht mehr in HP-Boni umgedeutet.
+Der bestehende Speicher-Key bleibt für diese gerichtete Migration erhalten. Import und lokales
+Lesen verwenden denselben Decoder; ungültige aktuelle Belohnungslisten werden abgelehnt.
+[LocalPersistence.test.ts](../../tests/LocalPersistence.test.ts) schützt Migration,
+Import/Export, Einmaligkeit und Reset.
+
 ## Cache, Fehler und Lebensdauer
 
 Die Speicherfunktionen dürfen einen Cache verwenden, müssen ihn bei Schreib- oder Reset-Operationen gezielt invalidieren und dürfen fehlgeschlagene Persistenz nicht in einen unbrauchbaren In-Memory-Zustand überführen. Cache- und Save-Lifetime ist von ArenaScene-, World- und Activity-Lifetime getrennt.

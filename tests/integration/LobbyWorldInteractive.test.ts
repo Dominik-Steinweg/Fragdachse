@@ -616,7 +616,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       add: { image: add, text: add, circle: add, container: add }, tweens,
       events: new EventEmitter(),
       cache: { audio: { exists: () => false } },
-      load: Object.assign(new EventEmitter(), { audio: vi.fn(), isLoading: () => false, start: vi.fn() }),
+      textures: { exists: () => false },
+      load: Object.assign(new EventEmitter(), { audio: vi.fn(), image: vi.fn(), isLoading: () => false, start: vi.fn() }),
     };
     const noop = () => {};
     const overlay = new LobbyOverlay(
@@ -824,6 +825,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(coordinator.synchronizeLocalWorldLifecycle).not.toHaveBeenCalled();
     if (host) expect(coordinator.hostSyncWorldParticipation).toHaveBeenCalled();
     scene.cache.audio.exists = () => true;
+    scene.textures.exists = () => true;
     scene.load.emit('filecomplete', 'music_lobby', 'audio');
     scene.load.emit('filecomplete', 'music_arena', 'audio');
     scene.load.emit('complete');
