@@ -3,6 +3,26 @@ import { describe, expect, it } from 'vitest';
 import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
 
 describe('HostHeldActionSystem', () => {
+  it('keeps a fully charged gate ready until a late release and consumes it once', () => {
+    const system = new HostHeldActionSystem();
+    const identity = { temporaryUtilityInstanceId: 'bfg-a' };
+    system.start('p1', 'gate-long', 'charged_gate', 1_000, 5_000, identity);
+    system.clearExpired(65_000);
+
+    expect(system.consume('p1', 'gate-long', 'charged_gate', 1_000, 65_000, identity))
+      .toEqual({ elapsedMs: 60_000, chargeFraction: 1 });
+    expect(system.consume('p1', 'gate-long', 'charged_gate', 1_000, 65_000, identity)).toBeNull();
+  });
+
+  it.each(['cancel', 'clearPlayer', 'reset'] as const)('invalidates a long gate hold on %s', (cleanup) => {
+    const system = new HostHeldActionSystem();
+    system.start('p1', 'gate-long', 'charged_gate', 1_000, 5_000);
+    system.clearExpired(65_000);
+    if (cleanup === 'reset') system.reset();
+    else system[cleanup]('p1');
+    expect(system.consume('p1', 'gate-long', 'charged_gate', 1_000, 65_000)).toBeNull();
+  });
+
   it('computes charge from host time and exposes an early gate commit', () => {
     const system = new HostHeldActionSystem();
     expect(system.start('p1', 'gate-1', 'charged_gate', 1_000, 5_000)).toBe(true);

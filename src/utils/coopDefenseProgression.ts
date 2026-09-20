@@ -31,8 +31,8 @@ import {
   getUpgradeName,
 } from '../i18n/upgradePresentation';
 
-const FIRST_LEVEL_UP_XP = 10;
-const XP_INCREASE_PER_LEVEL = 25;
+const FIRST_LEVEL_UP_XP = 20;
+const XP_INCREASE_PER_LEVEL = 80;
 
 export interface CoopDefenseProgressSnapshot {
   classId: CoopDefenseClassId;
@@ -113,9 +113,13 @@ export function getCoopDefenseXpThresholdForLevel(level: number): number {
 
 export function getCoopDefenseLevelForXp(totalXp: number): number {
   const safeXp = sanitizeXp(totalXp);
-  // threshold(n) = n * (20 + 25 * (n - 1)) / 2 = (25n² - 5n) / 2,
+  // Invert threshold(n) = n * (2 * first + (n - 1) * increase) / 2,
   // where n is the number of completed level-ups.
-  const completedLevelUps = Math.floor((5 + Math.sqrt(25 + 200 * safeXp)) / 50);
+  const linearCoefficient = 2 * FIRST_LEVEL_UP_XP - XP_INCREASE_PER_LEVEL;
+  const completedLevelUps = Math.floor(
+    (-linearCoefficient + Math.sqrt(linearCoefficient ** 2 + 8 * XP_INCREASE_PER_LEVEL * safeXp))
+    / (2 * XP_INCREASE_PER_LEVEL),
+  );
   return Math.max(1, completedLevelUps + 1);
 }
 

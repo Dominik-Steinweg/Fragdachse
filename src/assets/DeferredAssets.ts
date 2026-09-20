@@ -1,5 +1,6 @@
 import type * as Phaser from 'phaser';
 import { getMusicAssetPath } from '../audio/AudioCatalog';
+import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from '../ui/MatchResultsAssets';
 
 /** Only assets unnecessary for revealing the lobby belong here. Required assets fail closed. */
 export interface DeferredAsset {
@@ -10,6 +11,9 @@ export interface DeferredAsset {
 }
 
 export const DEFERRED_ASSETS: readonly DeferredAsset[] = [
+  { ...MATCH_RESULTS_TITLE, type: 'image', optional: true },
+  { ...MATCH_RESULTS_BANNER, type: 'image', optional: true },
+  { ...MATCH_RESULTS_BACKGROUND, type: 'image', optional: true },
   { key: 'music_lobby', type: 'audio', url: getMusicAssetPath('music_lobby'), optional: true },
   { key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },
 ];

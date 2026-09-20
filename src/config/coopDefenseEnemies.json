@@ -64,7 +64,7 @@
       "id": "grave-titan",
       "pawCount": 4,
       "maxHp": 1800,
-      "xp": 150,
+      "xp": 300,
       "size": 56,
       "moveSpeed": 48,
       "knockbackFactor": 0.15,

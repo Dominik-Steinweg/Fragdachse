@@ -52,7 +52,11 @@ export class HostHeldActionSystem {
       ...(identity ? { identity: cloneHeldActionIdentity(identity) } : {}),
       expectedDurationMs,
       startedAtHostMs: hostNowMs,
-      timeoutAtHostMs: hostNowMs + Math.max(1, expectedDurationMs) + ACTION_TIMEOUT_GRACE_MS,
+      // Gate charges stay ready until release; fullChargeDuration is a minimum,
+      // not a deadline. Cancel/player cleanup/reset still invalidate the hold.
+      timeoutAtHostMs: kind === 'charged_gate'
+        ? Infinity
+        : hostNowMs + Math.max(1, expectedDurationMs) + ACTION_TIMEOUT_GRACE_MS,
     });
     return true;
   }

@@ -7,6 +7,7 @@ import { CoopDefenseItemRewardOverlay } from '../ui/CoopDefenseItemRewardOverlay
 import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
 import { RoomStatisticsOverlay } from '../ui/RoomStatisticsOverlay';
 import { preloadForestAssets } from '../ui/LobbyForestAssets';
+import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from '../ui/MatchResultsAssets';
 import { getForestModalSurfaces, preloadForestModalAssets } from '../ui/ForestModal';
 import { ClarityCameraRegistry } from '../scenes/arena/ClarityCameraRegistry';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
@@ -36,6 +37,9 @@ class ForestUiPreview extends Phaser.Scene {
   preload(): void {
     preloadForestAssets(this.load);
     preloadForestModalAssets(this.load);
+    this.load.image(MATCH_RESULTS_TITLE.key, MATCH_RESULTS_TITLE.url);
+    this.load.image(MATCH_RESULTS_BANNER.key, MATCH_RESULTS_BANNER.url);
+    this.load.image(MATCH_RESULTS_BACKGROUND.key, MATCH_RESULTS_BACKGROUND.url);
     this.load.image('preview-grass', '/assets/sprites/gras_bg_tile.png');
     const keys = new Set<string>();
     const icon = (key: string | null, folder = 'Loadout'): void => {
@@ -130,15 +134,18 @@ class ForestUiPreview extends Phaser.Scene {
       const overlay = new RoomStatisticsOverlay(this); this.overlay = overlay; overlay.build(); overlay.show(rows);
     } else {
       const overlay = new MatchResultsOverlay(this, closed); this.overlay = overlay; overlay.build();
-      const before = getCoopDefenseProgressSnapshot(87000, undefined, 12, 'inspector_gadachs', false);
-      const after = getCoopDefenseProgressSnapshot(90000, undefined, 15);
-      const presentation: MatchResultsPresentation = { outcome: variant === 'defeat' ? 'defeat' : 'victory',
-        mode: 'coop_defense', modeLabel: 'Dachs vs. Zombies', mapLabel: 'Map 17 – Bierrettung', localPlayerId: 'p0',
-        leaderboard: Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, name: i === 0 ? 'Dachs mit außergewöhnlich langem Namen' : `Walddachs ${i + 1}`,
+      const solo = variant === 'solo', pvp = variant === 'pvp';
+      const before = getCoopDefenseProgressSnapshot(solo ? 349 : 87000, undefined, solo ? 3 : 12, 'inspector_gadachs', false);
+      const after = getCoopDefenseProgressSnapshot(solo ? 646 : 90000, undefined, solo ? 4 : 15);
+      const presentation: MatchResultsPresentation = { outcome: variant === 'defeat' ? 'defeat' : pvp ? 'draw' : 'victory',
+        mode: pvp ? 'deathmatch' : 'coop_defense', modeLabel: pvp ? 'Deathmatch' : 'Dachs vs. Zombies',
+        mapLabel: solo ? 'Map 4 – Adrenalinrausch' : 'Map 17 – Bierrettung', localPlayerId: 'p0',
+        leaderboard: Array.from({ length: solo ? 1 : 12 }, (_, i) => ({ id: `p${i}`, name: solo ? 'NeMe' : i === 0 ? 'Dachs mit außergewöhnlich langem Namen' : `Walddachs ${i + 1}`,
           colorHex: [0xbcba75, 0x67b6bd, 0xc47368][i % 3], teamId: null, frags: 120 - i * 7,
           roundEndedAt: 100, gameMode: 'coop_defense', mapName: '17' })),
-        progress: createMatchProgressDelta(before, after, 3000, 'Map 18 – Bahnhof', true, true, true),
-        technicalMessage: null, itemReward: reward() };
+        progress: pvp ? null : createMatchProgressDelta(before, after, solo ? 297 : 3000,
+          solo ? 'Map 5 – Grufttitan' : 'Map 18 – Bahnhof', !solo, !solo, !solo),
+        technicalMessage: null, itemReward: solo || pvp ? null : reward() };
       if (variant === 'sync') overlay.showSyncing(presentation.modeLabel, presentation.mapLabel);
       else if (variant === 'technical') overlay.showTechnicalAbort(select('locale').value === 'en'
         ? 'The connection to the host was interrupted.' : 'Die Verbindung zum Host wurde unterbrochen.');

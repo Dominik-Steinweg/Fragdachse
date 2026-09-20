@@ -19,7 +19,8 @@ class FakeLoader extends EventEmitter {
   start(): void { this.loading = true; }
   async finish(): Promise<void> { this.loading = false; this.emit('complete'); await Promise.resolve(); }
 }
-function setup(cached: string[] = []) {
+// Music cases isolate the audio lifecycle with unrelated deferred images already cached.
+function setup(cached: string[] = DEFERRED_ASSETS.filter(asset => asset.type === 'image').map(asset => asset.key)) {
   const cache = new Set(cached), loader = new FakeLoader(), sounds: any[] = [], tweens: any[] = [];
   const sound = Object.assign(new EventEmitter(), {
     locked: false, pauseOnBlur: true,
@@ -37,15 +38,23 @@ function setup(cached: string[] = []) {
     tweens: { add: vi.fn((config: any) => { tweens.push(config); return { remove: vi.fn() }; }) },
   } as unknown as Phaser.Scene;
   const assets = getDeferredAssets(scene);
-  const complete = (key: string) => { cache.add(key); loader.emit('filecomplete', key, 'audio'); };
+  const assetType = (key: string) => DEFERRED_ASSETS.find(asset => asset.key === key)?.type ?? 'audio';
+  const complete = (key: string) => { cache.add(key); loader.emit('filecomplete', key, assetType(key)); };
   const progress = (key: string, loaded: number, total: number) => loader.emit('fileprogress', {
-    key, type: 'audio', bytesLoaded: loaded, bytesTotal: total,
+    key, type: assetType(key), bytesLoaded: loaded, bytesTotal: total,
   });
   return { scene, assets, loader, sound, sounds, tweens, complete, progress };
 }
 afterEach(() => vi.unstubAllGlobals());
 
 describe('central second asset phase', () => {
+  it('loads result artwork in the shared second phase and accepts its image completion events', async () => {
+    const h = setup([]); h.assets.start();
+    expect(h.loader.queued.map(file => file.key)).toEqual(DEFERRED_ASSETS.map(asset => asset.key));
+    for (const asset of DEFERRED_ASSETS) h.complete(asset.key);
+    await h.loader.finish();
+    expect(h.assets.getState()).toMatchObject({ ready: true, failedKeys: [] });
+  });
   it('excludes both music tracks from initial preload and enables music by default', () => {
     const { loader } = setup(); preloadAllAudio(loader as unknown as Phaser.Loader.LoaderPlugin);
     for (const asset of DEFERRED_ASSETS) expect(loader.queued.some(file => file.key === asset.key)).toBe(false);

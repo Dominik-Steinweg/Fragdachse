@@ -1,4 +1,6 @@
-import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
+import { ensureResultsBanner, ensureResultsPanel, ensureResultsTitle } from './matchResultsTextures';
+import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from './MatchResultsAssets';
+import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalFrame } from './ForestModal';
 import * as Phaser from 'phaser';
 import { activateUi } from './UiAudio';
 import { resolvePersistentBaseBuildAreaForStage } from '../persistentBase/PersistentBaseCore';
@@ -43,9 +45,7 @@ import {
 import { formatNumber, getLocale, t } from '../i18n';
 
 // ── Layout ───────────────────────────────────────────────────────────────────
-// Der Ergebnis-Layer nutzt dieselbe Formsprache wie Upgrade-, Options- und Help-Overlay:
-// eine modale Flaeche mit Goldrand, darin zwei getoente Sektionen. Nur der Ergebnisstreifen
-// im Kopf traegt die Ausgangsfarbe (Sieg/Niederlage/Unentschieden).
+// The framed woodland illustration covers the interior; the world is visible outside.
 
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
@@ -59,43 +59,40 @@ const PANEL_PAD = 68;
 const CONTENT_LEFT = PANEL_LEFT + PANEL_PAD;
 const CONTENT_RIGHT = PANEL_RIGHT - PANEL_PAD;
 
-const BANNER_W = 800;
-const BANNER_H = 80;
-const BANNER_Y = 148;
-const META_Y = 214;
+const BANNER_W = 720;
+const BANNER_H = 190;
+const BANNER_Y = 140;
+const META_Y = 238;
 
-const SECTION_TOP = 260;
-const SECTION_BOTTOM = 938;
+const SECTION_TOP = 280;
+const SECTION_BOTTOM = 936;
 const SECTION_H = SECTION_BOTTOM - SECTION_TOP;
-const SECTION_CY = SECTION_TOP + SECTION_H / 2;
-const SECTION_GAP = 24;
+const SECTION_GAP = 18;
 
 const LEFT_X = CONTENT_LEFT;
 const LEFT_W = 1000;
 const LEFT_CX = LEFT_X + LEFT_W / 2;
 const RIGHT_X = LEFT_X + LEFT_W + SECTION_GAP;
 const RIGHT_W = CONTENT_RIGHT - RIGHT_X;
-const RIGHT_CX = RIGHT_X + RIGHT_W / 2;
 
-const SECTION_TITLE_Y = SECTION_TOP + 30;
 
-const ROW_INSET = 20;
+const ROW_INSET = 38;
 const ROW_W = LEFT_W - ROW_INSET * 2;
 const ROW_H = 40;
 const ROW_GAP = 3;
-const ROW_START_Y = 376;
+const ROW_START_Y = 404;
 const MAX_ROWS = 12;
 const MEDAL_SIZE = 32;
 const MEDAL_X = LEFT_X + 52;
 const NAME_X = LEFT_X + 96;
-const TEAM_X = LEFT_X + 700;
+const TEAM_X = LEFT_X + 652;
 const SCORE_X = LEFT_X + LEFT_W - ROW_INSET - 20;
-const HEADER_ROW_Y = 332;
-const HEADER_DIVIDER_Y = 356;
+const HEADER_ROW_Y = 356;
+const HEADER_DIVIDER_Y = 376;
 
-const CHIP_X = RIGHT_X + 36;
-const CHIP_W = RIGHT_W - 72;
-const CHIP_H = 44;
+const CHIP_X = RIGHT_X + 48;
+const CHIP_W = RIGHT_W - 96;
+const CHIP_H = 40;
 const CHIP_CX = CHIP_X + CHIP_W / 2;
 const CHIP_STRIDE = 74;
 const BADGE_SIZE = 30;
@@ -103,39 +100,34 @@ const CHIP_LABEL_W = CHIP_W - BADGE_SIZE - 70;
 
 const BAR_X = CHIP_X;
 const BAR_W = CHIP_W;
-const BAR_H = 22;
-const BAR_Y = 376;
-const LEVEL_ROW_Y = 322;
-const XP_TEXT_Y = 408;
-const PROGRESS_DIVIDER_Y = 446;
-const REWARD_TITLE_Y = 484;
-const REWARD_START_Y = 530;
+const BAR_H = 30;
+const BAR_Y = 402;
+const LEVEL_ROW_Y = 360;
+const XP_TEXT_Y = 440;
+const PROGRESS_BOTTOM = 486;
+const REWARDS_TOP = 500;
+const REWARD_START_Y = 588;
 const MAX_REWARD_CHIPS = 8;
 /** Unterkante, an der die Belohnungsliste enden muss – daraus folgt der Zeilenabstand. */
-const REWARD_LIMIT_Y = SECTION_BOTTOM - 8;
+const REWARD_LIMIT_Y = SECTION_BOTTOM - 26;
 /** Vorschau der drei angebotenen Teile, rechts in der Item-Zeile. */
 const OFFER_PREVIEW_SIZE = 36;
 const OFFER_PREVIEW_GAP = 8;
 const MAX_OFFER_PREVIEWS = 3;
 const OFFER_PREVIEW_BLOCK_W = MAX_OFFER_PREVIEWS * (OFFER_PREVIEW_SIZE + OFFER_PREVIEW_GAP);
 
-const SUMMARY_START_Y = 330;
+const SUMMARY_START_Y = 384;
 const MAX_SUMMARY_CHIPS = 5;
 
 const FOOTER_Y = GAME_HEIGHT - 92;
-const CONTINUE_W = 270;
+const CONTINUE_W = 310;
 const CONTINUE_H = 56;
 const CONTINUE_X = CONTENT_RIGHT - CONTINUE_W / 2;
 const FEEDBACK_W = 250;
 const FEEDBACK_X = CONTENT_RIGHT - CONTINUE_W - 16 - FEEDBACK_W / 2;
 
-const PANEL_BG = SURFACE.modal;
-const PANEL_ACCENT = BORDER.default;
 const LOCAL_ROW_ACCENT = COLORS.GOLD_2;
 
-const TEX_PANEL = '_mro_panel';
-const TEX_SECTION_LEFT = '_mro_section_left';
-const TEX_SECTION_RIGHT = '_mro_section_right';
 const TEX_CONTINUE = '_mro_continue';
 const TEX_SPARK = '_mro_spark';
 const TEX_SHARD = '_mro_shard';
@@ -215,8 +207,9 @@ interface OfferPreview {
 
 export class MatchResultsOverlay {
   private container: Phaser.GameObjects.Container | null = null;
+  private forestBackground: Phaser.GameObjects.Image | null = null;
+  private titleSigns: { image: Phaser.GameObjects.Image; w: number; h: number }[] = [];
   private modalFrame: Phaser.GameObjects.Image | null = null;
-  private panel: Phaser.GameObjects.Image | null = null;
   private banner: Phaser.GameObjects.Image | null = null;
   private outcomeText: Phaser.GameObjects.Text | null = null;
   private outcomeFlash: Phaser.GameObjects.Text | null = null;
@@ -286,22 +279,17 @@ export class MatchResultsOverlay {
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
-    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.84)
+    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0)
       .setScrollFactor(0)
       .setInteractive();
     backdrop.on('pointerdown', () => this.skipAnimations());
     objects.push(backdrop);
-
-    this.panel = this.scene.add.image(
-      CX,
-      CY,
-      ensureModalPanelTexture(this.scene, TEX_PANEL, PANEL_W, PANEL_H, PANEL_BG, PANEL_ACCENT),
-    ).setScrollFactor(0).setInteractive();
-    // Die Flaeche deckt fast den ganzen Bildschirm ab. Ohne eigenen Handler waere der
-    // Klick zum Ueberspringen praktisch nur noch am Bildrand erreichbar; der Weiter-Button
-    // liegt darueber und faengt seine Klicks weiterhin selbst ab.
-    this.panel.on('pointerdown', () => this.skipAnimations());
-    objects.push(this.panel);
+    // Opaque interior even while deferred artwork is still loading.
+    objects.push(this.scene.add.rectangle(CX, CY, PANEL_W - 80, PANEL_H - 80, 0x152015).setScrollFactor(0));
+    this.forestBackground = this.scene.add.image(CX, CY, '__WHITE')
+      .setDisplaySize(PANEL_W - 80, PANEL_H - 80).setScrollFactor(0).setVisible(false);
+    objects.push(this.forestBackground);
+    this.refreshBackgroundArt();
 
     objects.push(this.buildHeader());
     this.leaderboardGroup = this.buildLeaderboardPanel();
@@ -344,7 +332,14 @@ export class MatchResultsOverlay {
     this.rewardTooltip = new UiTooltip(this.scene, 480, TEXT.accent, GAME_HEIGHT - 24, 'forest');
     const tooltipRoot = this.rewardTooltip.build();
     this.container.add(tooltipRoot);
-    this.modalFrame = mountForestModal(this.scene, this.container, PANEL_W, PANEL_H, [tooltipRoot]);
+    // The opaque illustrated interior is independent of the world outside the frame.
+    this.modalFrame = this.scene.add.image(CX, CY, ensureModalFrame(this.scene, PANEL_W, PANEL_H))
+      .setDisplaySize(PANEL_W, PANEL_H).setScrollFactor(0);
+    this.container.add(this.modalFrame);
+    this.container.bringToTop(tooltipRoot);
+    this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_BANNER.key}`, this.refreshBannerArt);
+    this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_BACKGROUND.key}`, this.refreshBackgroundArt);
+    this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_TITLE.key}`, this.refreshTitleArt);
     promoteToClarityCamera(this.scene, this.container);
 
     // Der lebendige XP-Balken braucht den Container und entsteht deshalb erst hier.
@@ -373,9 +368,9 @@ export class MatchResultsOverlay {
 
     this.applyAccent(OUTCOME_STYLE.syncing.color);
     this.container!.setVisible(true).setAlpha(1);
-    this.panel?.setScale(1);
     this.modalFrame?.setScale(0.5);
-    this.outcomeText?.setText(t(OUTCOME_STYLE.syncing.labelKey)).setScale(1).setAlpha(1);
+    this.setOutcomeLabel(t(OUTCOME_STYLE.syncing.labelKey));
+    this.outcomeText?.setScale(1).setAlpha(1);
     this.outcomeFlash?.setVisible(false);
     this.metaText?.setText(`${modeLabel.toUpperCase()}  •  ${mapLabel.toUpperCase()}`).setAlpha(1);
 
@@ -397,7 +392,7 @@ export class MatchResultsOverlay {
     this.syncing = false;
     const style = OUTCOME_STYLE.aborted;
     this.applyAccent(style.color);
-    this.outcomeText?.setText(t('ui.results.aborted'));
+    this.setOutcomeLabel(t('ui.results.aborted'));
     this.syncText?.setText(message || t('ui.results.connectionEnded'));
     // Ohne laufende Synchronisierung gibt es nichts zu drehen.
     this.syncSpinner?.setVisible(false);
@@ -435,10 +430,10 @@ export class MatchResultsOverlay {
     // Der Backdrop gehoert ab dem ersten sichtbaren Frame dem Results-Screen. Die innere
     // Sequenz animiert weiterhin Panel, Text und Belohnungen separat.
     this.container!.setVisible(true).setAlpha(1);
-    this.panel?.setScale(0.96);
-    this.modalFrame?.setScale(0.48);
-    this.outcomeText?.setText(t(style.labelKey)).setAlpha(0).setScale(0.7);
-    this.outcomeFlash?.setText(t(style.labelKey)).setAlpha(0).setScale(1).setVisible(false);
+    this.modalFrame?.setScale(0.5);
+    this.setOutcomeLabel(t(style.labelKey));
+    this.outcomeText?.setAlpha(0).setScale(0.7);
+    this.outcomeFlash?.setAlpha(0).setScale(1).setVisible(false);
     this.metaText
       ?.setText(`${presentation.modeLabel.toUpperCase()}  •  ${presentation.mapLabel.toUpperCase()}`)
       .setAlpha(0);
@@ -497,7 +492,11 @@ export class MatchResultsOverlay {
     this.xpBarEffect = null;
     this.container?.destroy(true);
     this.container = null;
-    this.panel = null;
+    this.scene.load.off(`filecomplete-image-${MATCH_RESULTS_BANNER.key}`, this.refreshBannerArt);
+    this.scene.load.off(`filecomplete-image-${MATCH_RESULTS_BACKGROUND.key}`, this.refreshBackgroundArt);
+    this.scene.load.off(`filecomplete-image-${MATCH_RESULTS_TITLE.key}`, this.refreshTitleArt);
+    this.titleSigns = [];
+    this.forestBackground = null;
     this.modalFrame = null;
     this.banner = null;
     this.outcomeText = null;
@@ -562,12 +561,12 @@ export class MatchResultsOverlay {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(false);
 
-    this.banner = this.scene.add.image(CX, BANNER_Y, this.ensureBannerTexture(OUTCOME_STYLE.syncing.color))
+    this.banner = this.scene.add.image(CX, BANNER_Y, ensureResultsBanner(this.scene, BANNER_W, BANNER_H))
       .setScrollFactor(0);
 
     this.outcomeText = this.scene.add.text(CX, BANNER_Y, t('ui.results.syncing'), {
       fontFamily: FONT_MONO,
-      fontSize: '58px',
+      fontSize: '70px',
       fontStyle: 'bold',
       color: toCssColor(COLORS.GREY_1),
       stroke: rgbStr(COLORS.GREY_10),
@@ -578,7 +577,7 @@ export class MatchResultsOverlay {
     // Aufschlag-Moment, ohne die eigentliche Beschriftung zu verfremden.
     this.outcomeFlash = this.scene.add.text(CX, BANNER_Y, t('ui.results.syncing'), {
       fontFamily: FONT_MONO,
-      fontSize: '58px',
+      fontSize: '70px',
       fontStyle: 'bold',
       color: '#ffffff',
     }).setOrigin(0.5).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
@@ -595,6 +594,7 @@ export class MatchResultsOverlay {
       this.banner,
       this.outcomeText,
       this.outcomeFlash,
+      this.createTitleSign(CX, META_Y, 760, 38),
       this.metaText,
     ]).setScrollFactor(0);
   }
@@ -603,12 +603,7 @@ export class MatchResultsOverlay {
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     objects.push(
-      this.scene.add.image(LEFT_CX, SECTION_CY, ensureFlatPanelTexture(
-        this.scene, TEX_SECTION_LEFT, LEFT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
-        { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
-      )).setScrollFactor(0),
-      this.scene.add.text(LEFT_X + 30, SECTION_TITLE_Y, t('ui.results.leaderboard'), textStyle('subtitle'))
-        .setOrigin(0, 0.5).setScrollFactor(0),
+      ...this.section(LEFT_X, SECTION_TOP, LEFT_W, SECTION_H, t('ui.results.leaderboard'), 380),
       this.columnLabel(MEDAL_X, HEADER_ROW_Y, t('ui.results.rank'), 0.5),
       this.columnLabel(NAME_X, HEADER_ROW_Y, t('ui.results.player'), 0),
       this.columnLabel(TEAM_X, HEADER_ROW_Y, t('ui.results.team'), 0),
@@ -648,12 +643,8 @@ export class MatchResultsOverlay {
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     objects.push(
-      this.scene.add.image(RIGHT_CX, SECTION_CY, ensureFlatPanelTexture(
-        this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
-        { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
-      )).setScrollFactor(0),
-      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, t('ui.results.progress'), textStyle('subtitle'))
-        .setOrigin(0, 0.5).setScrollFactor(0),
+      ...this.section(RIGHT_X, SECTION_TOP, RIGHT_W, PROGRESS_BOTTOM - SECTION_TOP, t('ui.results.progress')),
+      ...this.section(RIGHT_X, REWARDS_TOP, RIGHT_W, SECTION_BOTTOM - REWARDS_TOP, t('ui.results.rewards')),
     );
 
     this.levelText = this.scene.add.text(CHIP_X, LEVEL_ROW_Y, t('ui.results.level', { level: 1 }), {
@@ -682,14 +673,6 @@ export class MatchResultsOverlay {
       fontFamily: FONT_MONO, fontSize: '16px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_3),
     }).setOrigin(0.5).setScrollFactor(0);
     objects.push(this.xpFill, this.xpFlash, this.xpText);
-
-    objects.push(
-      this.scene.add.rectangle(CHIP_CX, PROGRESS_DIVIDER_Y, CHIP_W, 1, COLORS.GREY_5, 0.55)
-        .setScrollFactor(0),
-      this.scene.add.text(CHIP_X, REWARD_TITLE_Y, t('ui.results.rewards'), {
-        fontFamily: FONT_MONO, fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_2),
-      }).setOrigin(0, 0.5).setScrollFactor(0),
-    );
 
     for (let index = 0; index < MAX_REWARD_CHIPS; index++) {
       const chip = this.buildRewardChip(REWARD_START_Y + index * CHIP_STRIDE);
@@ -768,12 +751,7 @@ export class MatchResultsOverlay {
   private buildSummaryPanel(): Phaser.GameObjects.Container {
     const objects: Phaser.GameObjects.GameObject[] = [];
     objects.push(
-      this.scene.add.image(RIGHT_CX, SECTION_CY, ensureFlatPanelTexture(
-        this.scene, TEX_SECTION_RIGHT, RIGHT_W, SECTION_H, SURFACE.raised, BORDER.subtle,
-        { radius: 16, fillAlpha: 0.96, strokeAlpha: 0.85 },
-      )).setScrollFactor(0),
-      this.scene.add.text(RIGHT_X + 30, SECTION_TITLE_Y, t('ui.results.summary'), textStyle('subtitle'))
-        .setOrigin(0, 0.5).setScrollFactor(0),
+      ...this.section(RIGHT_X, SECTION_TOP, RIGHT_W, SECTION_H, t('ui.results.summary')),
     );
 
     for (let index = 0; index < MAX_SUMMARY_CHIPS; index++) {
@@ -810,7 +788,9 @@ export class MatchResultsOverlay {
       align: 'center',
       wordWrap: { width: 900 },
     }).setOrigin(0.5).setScrollFactor(0);
-    return this.scene.add.container(0, 0, [this.syncSpinner, this.syncText])
+    const surface = this.scene.add.image(CX, CY, ensureResultsPanel(this.scene, 1100, 340))
+      .setDisplaySize(1100, 340).setScrollFactor(0);
+    return this.scene.add.container(0, 0, [surface, this.syncSpinner, this.syncText])
       .setScrollFactor(0)
       .setVisible(false);
   }
@@ -860,7 +840,7 @@ export class MatchResultsOverlay {
 
   /** Faerbt Kopfstreifen, Druckwelle und Partikel auf die Ausgangsfarbe um. */
   private applyAccent(accent: number): void {
-    this.banner?.setTexture(this.ensureBannerTexture(accent));
+    this.refreshBannerArt();
     this.outcomeText?.setColor(toCssColor(lerpColor(accent, 0xffffff, 0.4)));
     this.shockRing?.setTint(accent);
     this.syncSpinner?.setTint(accent);
@@ -1016,15 +996,8 @@ export class MatchResultsOverlay {
   // ── Sequenz ────────────────────────────────────────────────────────────────
 
   private startSequence(style: OutcomeStyle): void {
-    // 1. Panel fährt heran, waehrend der opake Results-Backdrop bereits den Bildschirm besitzt.
-    this.addTween({
-      targets: this.panel,
-      scale: 1,
-      duration: 420,
-      ease: 'Back.easeOut',
-    });
+    // The illustrated frame stays fixed while the result animates.
 
-    this.addTween({ targets: this.modalFrame, scale: 0.5, duration: 420, ease: 'Back.easeOut' });
 
     // 2. Ergebnis schlägt ein: Schrift springt auf, Druckwelle und Funken markieren den Moment.
     this.addTween({
@@ -1288,7 +1261,6 @@ export class MatchResultsOverlay {
     this.stopSequence();
 
     this.container?.setAlpha(1);
-    this.panel?.setScale(1);
     this.modalFrame?.setScale(0.5);
     this.outcomeText?.setAlpha(1).setScale(1);
     this.outcomeFlash?.setVisible(false);
@@ -1385,20 +1357,45 @@ export class MatchResultsOverlay {
 
   // ── Texturen ───────────────────────────────────────────────────────────────
 
-  private ensureBannerTexture(accent: number): string {
-    return ensureRoundedTexture(this.scene, {
-      key: `_mro_banner_${accent.toString(16)}`,
-      w: BANNER_W,
-      h: BANNER_H,
-      radius: 18,
-      topColor: lerpColor(SURFACE.raised, accent, 0.34),
-      bottomColor: lerpColor(SURFACE.sunken, accent, 0.14),
-      fillAlpha: 0.94,
-      strokeColor: accent,
-      strokeAlpha: 0.9,
-      strokeWidth: 2,
-      highlightAlpha: 0.12,
-    });
+  private createTitleSign(x: number, y: number, w: number, h: number): Phaser.GameObjects.Image {
+    const image = this.scene.add.image(x, y, ensureResultsTitle(this.scene, w, h))
+      .setDisplaySize(w, h).setScrollFactor(0);
+    this.titleSigns.push({ image, w, h });
+    return image;
+  }
+
+  private readonly refreshTitleArt = (): void => {
+    for (const { image, w, h } of this.titleSigns) {
+      image.setTexture(ensureResultsTitle(this.scene, w, h)).setDisplaySize(w, h);
+    }
+  };
+
+  private readonly refreshBackgroundArt = (): void => {
+    if (!this.scene.textures.exists(MATCH_RESULTS_BACKGROUND.key)) return;
+    this.forestBackground?.setTexture(MATCH_RESULTS_BACKGROUND.key)
+      .setDisplaySize(PANEL_W - 80, PANEL_H - 80).setVisible(true);
+  };
+
+  private readonly refreshBannerArt = (): void => {
+    this.banner?.setTexture(ensureResultsBanner(this.scene, BANNER_W, BANNER_H));
+  };
+
+  private setOutcomeLabel(label: string): void {
+    if (!this.outcomeText) return;
+    this.outcomeText.setText(label).setFontSize(70);
+    const size = Math.floor(70 * Math.min(1, 530 / this.outcomeText.width));
+    this.outcomeText.setFontSize(size);
+    this.outcomeFlash?.setText(label).setFontSize(size);
+  }
+
+  private section(x: number, y: number, w: number, h: number, title: string, titleWidth = 300): Phaser.GameObjects.GameObject[] {
+    return [
+      this.scene.add.image(x + w / 2, y + h / 2, ensureResultsPanel(this.scene, w, h))
+        .setDisplaySize(w, h).setScrollFactor(0),
+      this.createTitleSign(x + 48 + titleWidth / 2, y + 30, titleWidth, 48),
+      this.scene.add.text(x + 82, y + 30, title, textStyle('subtitle'))
+        .setOrigin(0, 0.5).setScrollFactor(0),
+    ];
   }
 
   private ensureRowTexture(variant: 'even' | 'odd' | 'local'): string {

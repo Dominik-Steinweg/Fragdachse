@@ -66,18 +66,18 @@
         {
           "enemyKind": "zombie-badger",
           "count": 5,
+          "delayMs": 4000,
           "front": "west"
         },
         {
           "enemyKind": "demon-badger",
           "count": 5,
-          "delayMs": 1000,
           "front": "east"
         }
       ]
     },
     {
-      "id": "two-front-crossfire2",
+      "id": "one-front",
       "start": {
         "type": "after-previous"
       },
@@ -91,7 +91,7 @@
           "enemyKind": "zombie-badger",
           "count": 12,
           "delayMs": 2000,
-          "front": "east"
+          "front": "west"
         }
       ]
     },
@@ -115,14 +115,14 @@
         {
           "enemyKind": "zombie-badger",
           "count": 8,
-          "delayMs": 2000,
+          "delayMs": 4000,
           "front": "east"
         },
        {
           "enemyKind": "demon-badger",
           "count": 2,
           "delayMs": 2000,
-          "front": "east"
+          "front": "west"
         }
       ]
     }
