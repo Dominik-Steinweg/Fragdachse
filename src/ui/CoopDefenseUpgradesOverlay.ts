@@ -93,11 +93,11 @@ const PANEL_H = GAME_HEIGHT - 8;
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 const TITLE_Y = 76;
-const SUBTITLE_Y = 140;
+const SUBTITLE_Y = 136;
 const BAR_W = PANEL_W - 112;
 const BAR_H = 22;
 const BAR_X = CX - BAR_W / 2;
-const BAR_Y = SUBTITLE_Y + 40;
+const BAR_Y = 180;
 const HEADER_DIVIDER_Y = BAR_Y + 18;
 const POINTS_Y = HEADER_DIVIDER_Y + 34;
 const POINTS_CHIP_W = 610;
@@ -109,9 +109,8 @@ const ACTION_BTN_W = 260;
 const ACTION_BTN_H = 50;
 const ACTION_BTN_GAP = 40;
 const ACTION_BTN_Y = CY + PANEL_H / 2 - 94;
-const FOOTER_Y = CY + PANEL_H / 2 - 58;
-// Die feste Steuerungshinweiszeile bleibt unter jedem Upgrade-Tooltip lesbar.
-const TOOLTIP_BOTTOM = FOOTER_Y - 16;
+// Tooltips bleiben innerhalb des unteren Bildschirmrands.
+const TOOLTIP_BOTTOM = CY + PANEL_H / 2 - 74;
 
 const CLASS_ROW_Y = POINTS_Y + 62;
 const CLASS_BUTTON_W = 280;
@@ -454,7 +453,6 @@ export class CoopDefenseUpgradesOverlay {
 
     const xpFrame = this.scene.add.image(CX, BAR_Y, ensureUpgradeXpFrame(this.scene, BAR_W, BAR_H)).setScrollFactor(0);
     const barBackground = this.scene.add.rectangle(CX, BAR_Y, BAR_W, BAR_H, SURFACE.sunken, 0.95)
-      .setStrokeStyle(1, COLORS.GREY_4)
       .setScrollFactor(0);
     this.attachInfoTooltip(
       barBackground,
@@ -546,11 +544,6 @@ export class CoopDefenseUpgradesOverlay {
       tooltipRoot
         // Ueber dem Auswahl-Popup (OVERLAY + 2), damit Slot-Erklaerungen sichtbar bleiben.
         .setDepth(DEPTH.OVERLAY + 3),
-    );
-
-    objects.push(
-      this.scene.add.text(CX, FOOTER_Y, t('ui.upgrades.controlsHint'), textStyle('caption'))
-        .setOrigin(0.5).setScrollFactor(0),
     );
 
     this.container = this.scene.add.container(0, 0, objects)
@@ -2217,7 +2210,7 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private ensureContentBgTexture(color: number): string {
-    const key = `_ccd_contentbg_${color.toString(16)}`;
+    const key = `_ccd_contentbg_uniform_60_${color.toString(16)}`;
     if (this.scene.textures.exists(key)) return key;
 
     const w = Math.max(1, Math.round(CONTENT_W));
@@ -2232,24 +2225,10 @@ export class CoopDefenseUpgradesOverlay {
     const rectW = w - inset * 2;
     const rectH = h - inset * 2;
 
-    // Dunkler Grund, sanft in die Kategoriefarbe getoent.
+    // Einheitliche leichte Tönung; die einzelnen Upgrade-Spalten besitzen ihre eigene Deckkraft.
     roundRectPath(ctx, inset, inset, rectW, rectH, radius);
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, rgbStr(lerpColor(SURFACE.raised, color, 0.08), 0.78));
-    grad.addColorStop(1, rgbStr(lerpColor(SURFACE.sunken, color, 0.03), 0.60));
-    ctx.fillStyle = grad;
+    ctx.fillStyle = rgbStr(lerpColor(SURFACE.sunken, color, 0.03), 0.60);
     ctx.fill();
-
-    // Weicher radialer Schimmer oben fuer einen ansprechenderen Look.
-    ctx.save();
-    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
-    ctx.clip();
-    const rad = ctx.createRadialGradient(w / 2, h * 0.02, 0, w / 2, h * 0.02, w * 0.62);
-    rad.addColorStop(0, rgbStr(color, 0.045));
-    rad.addColorStop(1, rgbStr(color, 0));
-    ctx.fillStyle = rad;
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
 
     roundRectPath(ctx, inset, inset, rectW, rectH, radius);
     ctx.lineWidth = 1.5;

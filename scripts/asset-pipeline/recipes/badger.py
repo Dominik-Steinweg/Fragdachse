@@ -34,6 +34,7 @@ def build(c, style=None):
     glint = c.material('Warm eye reflection', (.89, .9, .78))
     feet = c.material('Soft grey foot fur', style['footColor'], 'organic') if 'footColor' in style else dark
     # Feet point north under the vertical body; no south-facing shoe shapes.
+    ear_materials = []
     for side in [-1, 1]:
         limb = parts['left_leg' if side == -1 else 'right_leg']
         if style.get('clawedPaws'):
@@ -106,6 +107,14 @@ def build(c, style=None):
             blend = min(1, (-y-.2)/.6)
             blend = blend*blend*(3-2*blend)
             v.co.y = (1-blend)*v.co.y - blend*abs(y)**.64
+        if style.get('cursorFace'):
+            # A tapered muzzle and broad rear cheek ruff, seen straight overhead.
+            # Small swept lobes articulate fur without changing the camera.
+            angle = math.atan2(x, y)
+            ruff = max(0, 1 - abs(y + .30)/.85)
+            v.co.x *= 1 - .12*max(0, y) + .035*ruff*math.sin(angle*19)**3
+            if y < 0:
+                v.co.y += .018*math.cos(angle*23)**3
     if style.get('combatFace'):
         from badger_face_parts import sculpt_crown
         sculpt_crown(head)
@@ -145,15 +154,22 @@ def build(c, style=None):
     mix.inputs[2].default_value = (.008, .012, .015, 1)
     l.new(mix.outputs[0], bs.inputs['Base Color'])
     c.strengths.append(n['Surface detail strength'].inputs[0])
-    c.box('Flat nose', (0, .601, 1.93), (.205, .095, .060), black, .029)
+    nose = c.box('Flat nose', (0, .601, 1.93), (.205, .095, .060), black, .029)
+    if style.get('cursorFace'):
+        # Broad leathery nose, with rounded shoulders instead of a square cap.
+        for vertex in nose.data.vertices:
+            vertex.co.x *= 1.08 - .18*max(0, -vertex.co.y/.0475)
     if combat:
         from badger_face_parts import eye_sockets
-        eye_sockets(head, style.get('eyeSouthOffset', 0))
+        eye_sockets(head, style.get('eyeSouthOffset', 0), style.get('cursorFace', False))
+    if style.get('cursorFace'):
+        from badger_fur_parts import cheek_locks
+        cheek_locks(c, head, ivory, dark)
     for side in [-1, 1]:
         fierce = style.get('fierceEyes', False)
         if combat:
             from badger_face_parts import combat_eye
-            combat_eye(c, side, dark, head, style.get('eyeSouthOffset', 0))
+            combat_eye(c, side, dark, head, style.get('eyeSouthOffset', 0), style.get('cursorFace', False))
         else:
             eye = c.ell('Eye', (side*.175, .345, 2.064), (.096, .050, .027) if fierce else (.075, .049, .027), black)
             eye.rotation_euler.z = side*(-.18 if fierce else .27)
@@ -161,6 +177,10 @@ def build(c, style=None):
             brow = c.ell('Forehead-side brow', (side*.175, .298 if fierce else .282, 2.105), (.103, .022, .014) if fierce else (.080, .020, .014), dark)
             brow.rotation_euler.z = side*(-.38 if fierce else .27)
         ear_y = style.get('earSouthOffset', 0)
+        if style.get('cursorFace'):
+            from badger_fur_parts import folded_ear
+            ear_materials.append(folded_ear(c, side, ivory, head).data.materials[0])
+            continue
         ear = c.ell('Laid-back dark ear', (side*.29925, .025-ear_y, 2.044), (.060, .094, .030), dark)
         ear.rotation_euler.z = side*.30
         crease = c.ell('Ear crease', (side*.30425, .035-ear_y, 2.071), (.020, .048, .007), black)
@@ -188,6 +208,9 @@ def build(c, style=None):
     if style.get('paintedFur'):
         from badger_material_parts import painted_coat
         coat = {'body': fur, 'dark': dark, 'head': m, 'tail': tail_fur, 'feet': feet}
+        if style.get('cursorFace'):
+            coat['headTufts'] = ivory
+            coat.update({f'earFur{i}': material for i, material in enumerate(ear_materials)})
         if 'bodyFur' in c.images:
             # Ears share the old dark material: isolate grips before remapping fur.
             hand_fur = dark.copy()

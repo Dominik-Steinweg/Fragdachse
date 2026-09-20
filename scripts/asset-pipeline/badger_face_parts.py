@@ -13,7 +13,7 @@ def sculpt_crown(head):
             vertex.co.z = min(z, crown)
 
 
-def eye_sockets(head, south_offset=0):
+def eye_sockets(head, south_offset=0, cursor=False):
     """Blend soft dark hollows directly into the existing facial material."""
     bpy.context.view_layer.update()
     coordinates = head.data.attributes.new('FD_EyeRestPosition', 'FLOAT_VECTOR', 'POINT')
@@ -39,7 +39,7 @@ def eye_sockets(head, south_offset=0):
 
     absolute_x = scalar('ABSOLUTE', components.outputs['X'])
     authored_y = scalar('ADD', components.outputs['Y'], south_offset)
-    x = scalar('SUBTRACT', absolute_x, .168)
+    x = scalar('SUBTRACT', absolute_x, .143 if cursor else .168)
     y = scalar('SUBTRACT', scalar('SUBTRACT', authored_y, .369), scalar('MULTIPLY', x, -.44))
     orbital_y = scalar('ADD', authored_y, scalar('MULTIPLY', x, .65))
 
@@ -53,9 +53,13 @@ def eye_sockets(head, south_offset=0):
     outline.name = 'Organic inner and outer orbital band boundaries'
     outline.color_ramp.interpolation = 'B_SPLINE'
     outline.color_ramp.elements.remove(outline.color_ramp.elements[1])
-    for i, (position, inner, outer) in enumerate([
+    boundaries_authored = [
             (0, .110, .290), (.25, .087, .326), (.48, .045, .344),
-            (.70, .080, .327), (1, .115, .225)]):
+            (.70, .080, .327), (1, .115, .225)]
+    if cursor:
+        boundaries_authored = [(0, .135, .305), (.25, .108, .322),
+                              (.48, .065, .308), (.70, .090, .297), (1, .140, .225)]
+    for i, (position, inner, outer) in enumerate(boundaries_authored):
         element = outline.color_ramp.elements[0] if i == 0 else outline.color_ramp.elements.new(position)
         element.position, element.color = position, (inner, outer, 0, 1)
     links.new(region_y.outputs['Result'], outline.inputs[0])
@@ -129,13 +133,14 @@ def eye_sockets(head, south_offset=0):
     original = bs.inputs['Base Color'].links[0].from_socket
     socket = nodes.new('ShaderNodeMixRGB')
     socket.name = 'Painted black eye recesses'
-    links.new(falloff.outputs[0], socket.inputs[0])
+    recess = scalar('MULTIPLY', falloff.outputs[0], original_mask.outputs[0]) if cursor else falloff.outputs[0]
+    links.new(recess, socket.inputs[0])
     links.new(original, socket.inputs[1])
     socket.inputs[2].default_value = (.0020, .0026, .0032, 1)
     links.new(socket.outputs[0], bs.inputs['Base Color'])
 
 
-def combat_eye(ctx, side, dark, head, south_offset=0):
+def combat_eye(ctx, side, dark, head, south_offset=0, amber=False):
     """Organic white aperture and fur hood conform to the unchanged skull."""
     bpy.context.view_layer.update()
     transform = head.matrix_world.copy()
@@ -168,26 +173,52 @@ def combat_eye(ctx, side, dark, head, south_offset=0):
         links.new(scale.outputs[0], square.inputs[0]); links.new(scale.outputs[0], square.inputs[1])
         return square.outputs[0]
     radius = nodes.new('ShaderNodeMath'); radius.operation = 'ADD'
-    links.new(iris_axis(separate.outputs['X'], .48, .34), radius.inputs[0])
-    links.new(iris_axis(separate.outputs['Y'], .99, .48), radius.inputs[1])
+    links.new(iris_axis(separate.outputs['X'], .48, .14 if amber else .34), radius.inputs[0])
+    links.new(iris_axis(separate.outputs['Y'], .62 if amber else .99, .40 if amber else .48), radius.inputs[1])
     iris = nodes.new('ShaderNodeValToRGB')
     iris.name = 'North-facing near-black iris clipped by eyelids'
     iris.color_ramp.elements[0].position = .95
     iris.color_ramp.elements[0].color = (.0015, .0020, .0025, 1)
     iris.color_ramp.elements[1].position = 1.04
     iris.color_ramp.elements[1].color = (.96, .96, .96, 1)
-    links.new(radius.outputs[0], iris.inputs[0]); links.new(iris.outputs[0], bs.inputs['Base Color'])
+    if amber:
+        white.name = 'Matte amber iris with north-facing dark pupil'
+        iris.name = 'Golden cursor eye with elongated dark pupil'
+        iris.color_ramp.elements[0].position = .095
+        iris.color_ramp.elements[1].position = .115
+        iris.color_ramp.elements[1].color = (.95, .46, .035, 1)
+        edge = iris.color_ramp.elements.new(.85)
+        edge.color = (.24, .075, .006, 1)
+        normalized = nodes.new('ShaderNodeMath'); normalized.operation = 'MULTIPLY'
+        links.new(radius.outputs[0], normalized.inputs[0]); normalized.inputs[1].default_value = .1
+        links.new(normalized.outputs[0], iris.inputs[0])
+    else:
+        links.new(radius.outputs[0], iris.inputs[0])
+    links.new(iris.outputs[0], bs.inputs['Base Color'])
+    if amber:
+        fleck = nodes.new('ShaderNodeMath'); fleck.operation = 'ADD'
+        links.new(iris_axis(separate.outputs['X'], .60, .095), fleck.inputs[0])
+        links.new(iris_axis(separate.outputs['Y'], .62, .060), fleck.inputs[1])
+        mark = nodes.new('ShaderNodeMath'); mark.operation = 'LESS_THAN'
+        links.new(fleck.outputs[0], mark.inputs[0]); mark.inputs[1].default_value = 1
+        paint = nodes.new('ShaderNodeMixRGB'); paint.name = 'Small painted amber-eye accent'
+        links.new(mark.outputs[0], paint.inputs[0]); links.new(iris.outputs[0], paint.inputs[1])
+        paint.inputs[2].default_value = (.98, .84, .43, 1)
+        links.new(paint.outputs[0], bs.inputs['Base Color'])
     vertices, faces = [], []
     eye_uv = []
     columns, rows = 40, 8
     for i in range(columns+1):
         t = i/columns
-        x = side*(.07506 + .18988*t)
+        x = side*((.078 + .155*t) if amber else (.07506 + .18988*t))
         # +Y is north: the outer corner must fall south (down in the image).
         # Steeper around the same midpoint, with a modestly smaller aperture.
         center = .38942 - .08084*t
         fullness = math.sin(math.pi*t)**.75
         lower, upper = center+.02605*fullness, center+.08095*fullness
+        if amber:
+            center = .384 - .062*t
+            lower, upper = center-.011*fullness, center+.073*fullness
         for j in range(rows+1):
             y = lower + (upper-lower)*j/rows - south_offset
             vertices.append((x, y, surface(x, y)+.003))
@@ -207,7 +238,7 @@ def combat_eye(ctx, side, dark, head, south_offset=0):
     mesh.materials.append(white)
     for polygon in mesh.polygons:
         polygon.use_smooth = True
-    eye['facePart'] = 'eye-white'
+    eye['facePart'] = 'eye-amber' if amber else 'eye-white'
     eye['irisDirection'] = 'north'
 
     # The low, curved rear hood is rooted in the skull instead of floating on it.
@@ -225,5 +256,24 @@ def combat_eye(ctx, side, dark, head, south_offset=0):
         t = (x+1)/2
         px = side*(.05341 + .23218*t)
         py = .39806 - .09212*t + .020*math.sin(math.pi*t) - .026 + .025*y - south_offset
+        if amber:
+            px = side*(.067 + .175*t)
+            py = .384 - .062*t + .075*max(0, math.sin(math.pi*t))**.75 + .014*y - south_offset
         vertex.co = (px, py, surface(px, py)+.012*z-.008)
     brow['facePart'] = 'eye-brow'
+
+    if amber:
+        # The ear-facing (south) lid follows the aperture on the skull. A thin,
+        # tapered fold just overlaps the iris without forming a raised eye rim.
+        lid_material = brow_material.copy()
+        lid_material.name = 'Subtle charcoal ear-facing eyelid'
+        lid_material.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value = (.006, .008, .010, 1)
+        lid = ctx.ell('Ear-facing upper eyelid', (0, 0, 0), (1, 1, 1), lid_material)
+        for vertex in lid.data.vertices:
+            x, y, z = vertex.co
+            t = (x+1)/2
+            fullness = max(0, math.sin(math.pi*t))**.75
+            px = side*(.078 + .155*t)
+            py = .384 - .062*t - .011*fullness + .003*fullness + .006*y - south_offset
+            vertex.co = (px, py, surface(px, py)+.005+.004*z)
+        lid['facePart'] = 'eye-lid'
