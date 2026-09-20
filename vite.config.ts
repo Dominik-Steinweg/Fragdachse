@@ -1,5 +1,5 @@
 import gameVersion from './game-version.json';
-import { defineConfig } from 'vite';
+import { defineConfig, normalizePath } from 'vite';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
@@ -75,6 +75,18 @@ export default defineConfig(({ mode }) => {
   },
   server: {
     port: 8080,
+    // Den Spieleinstieg vor der ersten Browser-Anfrage transformieren. Die wenigen
+    // zentralen Module stoßen auch die Vorverarbeitung ihrer statischen Imports an.
+    warmup: {
+      clientFiles: ['./src/main.ts', './src/scenes/ArenaScene.ts'],
+    },
+    watch: {
+      // Offline-Art, Lab-Ergebnisse und lokale Caches gehören nicht zum HMR-Graphen.
+      // Vite beachtet .gitignore hier nicht; sonst überwacht es auch diese Bäume.
+      // Root-relative Auswahl: src/ und public/ bleiben vollständig überwacht.
+      ignored: ['art', 'build', '.cache', 'tmp', '.tmp', 'fragdachse_drive', 'uv-cache-audio']
+        .map(directory => `${normalizePath(resolve(directory))}/**`),
+    },
   },
   // Der Flowfield-Worker wird als ES-Modul geladen (`new Worker(..., { type: 'module' })`).
   // Rollups Default für Worker ist IIFE und würde dessen Imports brechen.
