@@ -176,9 +176,8 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 6,
-          "delayMs": 200,
-          "spawnStaggerMs": 60,
+          "count": 22,
+          "spawnStaggerMs": 160,
           "spawnArea": {
             "gridX": 57,
             "gridY": 44,
@@ -188,9 +187,9 @@
         },
         {
           "enemyKind": "demon-badger",
-          "count": 2,
-          "delayMs": 6600,
-          "spawnStaggerMs": 60,
+          "count": 6,
+          "delayMs": 1200,
+          "spawnStaggerMs": 160,
           "spawnArea": {
             "gridX": 57,
             "gridY": 44,
@@ -221,20 +220,7 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 5,
-          "delayMs": 200,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 122,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
-          "enemyKind": "demon-badger",
-          "count": 2,
-          "delayMs": 7057,
+          "count": 48,
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 122,
@@ -245,9 +231,20 @@
         },
         {
           "enemyKind": "rabid-badger",
-          "count": 2,
-          "delayMs": 8581,
+          "count": 4,
+          "delayMs": 1200,
           "spawnStaggerMs": 60,
+          "spawnArea": {
+            "gridX": 122,
+            "gridY": 7,
+            "widthCells": 5,
+            "heightCells": 3
+          }
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 2,
+          "spawnStaggerMs": 1200,
           "spawnArea": {
             "gridX": 122,
             "gridY": 7,
@@ -267,7 +264,6 @@
         {
           "enemyKind": "plague-medic",
           "count": 1,
-          "delayMs": 1200,
           "spawnStaggerMs": 0,
           "spawnArea": {
             "gridX": 122,
@@ -277,21 +273,9 @@
           }
         },
         {
-          "enemyKind": "zombie-badger",
-          "count": 4,
-          "delayMs": 1400,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 122,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
           "enemyKind": "demon-badger",
-          "count": 3,
-          "delayMs": 8257,
+          "count": 8,
+          "delayMs": 1200,          
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 122,
@@ -302,8 +286,8 @@
         },
         {
           "enemyKind": "rabid-badger",
-          "count": 2,
-          "delayMs": 9781,
+          "count": 8,
+          "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 122,
@@ -314,8 +298,7 @@
         },
         {
           "enemyKind": "spore-warden",
-          "count": 1,
-          "delayMs": 5514,
+          "count": 2,
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 122,
@@ -347,45 +330,8 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 4,
-          "delayMs": 200,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 187,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
-          "enemyKind": "demon-badger",
-          "count": 3,
-          "delayMs": 7057,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 187,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
-          "enemyKind": "rabid-badger",
-          "count": 2,
-          "delayMs": 8581,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 187,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
-          "enemyKind": "spore-warden",
-          "count": 1,
-          "delayMs": 4314,
-          "spawnStaggerMs": 60,
+          "count": 76,
+          "spawnStaggerMs": 560,
           "spawnArea": {
             "gridX": 187,
             "gridY": 44,
@@ -405,7 +351,6 @@
         {
           "enemyKind": "plague-medic",
           "count": 1,
-          "delayMs": 1200,
           "spawnStaggerMs": 0,
           "spawnArea": {
             "gridX": 187,
@@ -415,45 +360,8 @@
           }
         },
         {
-          "enemyKind": "zombie-badger",
-          "count": 3,
-          "delayMs": 1400,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 187,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
-          "enemyKind": "demon-badger",
-          "count": 3,
-          "delayMs": 8257,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 187,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
-          "enemyKind": "rabid-badger",
-          "count": 3,
-          "delayMs": 9781,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 187,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
           "enemyKind": "spore-warden",
-          "count": 2,
-          "delayMs": 5514,
+          "count": 6,
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 187,
@@ -485,7 +393,7 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 4,
+          "count": 16,
           "delayMs": 200,
           "spawnStaggerMs": 60,
           "spawnArea": {
@@ -497,8 +405,8 @@
         },
         {
           "enemyKind": "demon-badger",
-          "count": 3,
-          "delayMs": 6600,
+          "count": 12,
+          "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 252,
@@ -509,8 +417,8 @@
         },
         {
           "enemyKind": "rabid-badger",
-          "count": 3,
-          "delayMs": 8022,
+          "count": 4,
+          "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 252,
@@ -521,8 +429,7 @@
         },
         {
           "enemyKind": "spore-warden",
-          "count": 1,
-          "delayMs": 4040,
+          "count": 2,
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 252,
@@ -554,7 +461,7 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 3,
+          "count": 48,
           "delayMs": 1400,
           "spawnStaggerMs": 60,
           "spawnArea": {
@@ -568,30 +475,6 @@
           "enemyKind": "demon-badger",
           "count": 4,
           "delayMs": 7800,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
-          "enemyKind": "rabid-badger",
-          "count": 3,
-          "delayMs": 9222,
-          "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
-            "widthCells": 5,
-            "heightCells": 3
-          }
-        },
-        {
-          "enemyKind": "spore-warden",
-          "count": 2,
-          "delayMs": 5240,
           "spawnStaggerMs": 60,
           "spawnArea": {
             "gridX": 252,
@@ -611,7 +494,7 @@
       "groups": [
         {
           "enemyKind": "plague-medic",
-          "count": 1,
+          "count": 3,
           "delayMs": 1200,
           "spawnStaggerMs": 0,
           "spawnArea": {
@@ -623,7 +506,7 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 2,
+          "count": 48,
           "delayMs": 1400,
           "spawnStaggerMs": 60,
           "spawnArea": {
@@ -659,7 +542,7 @@
         },
         {
           "enemyKind": "spore-warden",
-          "count": 3,
+          "count": 2,
           "delayMs": 5240,
           "spawnStaggerMs": 60,
           "spawnArea": {
