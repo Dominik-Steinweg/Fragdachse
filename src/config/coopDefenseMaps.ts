@@ -338,6 +338,12 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
 export type CoopDefenseSecondaryObjectiveConfig = CoopDefenseMapSecondaryObjectiveConfig;
 export type ResolvedCoopDefenseSecondaryObjectiveConfig = ResolvedCoopDefenseMapSecondaryObjectiveConfig;
 
+export type CoopDefenseMapMissionCheckpointCompletion =
+  | { readonly type: 'on-entry' }
+  | { readonly type: 'after-encounter'; readonly encounterId: string }
+  | { readonly type: 'wall-piece-destroyed'; readonly wallId: string }
+  | { readonly type: 'right-of-wall'; readonly wallId: string };
+
 export interface CoopDefenseMapMissionCheckpointConfig {
   readonly id: string;
   readonly gridX: number;
@@ -345,6 +351,7 @@ export interface CoopDefenseMapMissionCheckpointConfig {
   /** Radius in Rasterzellen; Standard 1. */
   readonly radiusCells?: number;
   readonly setRespawn?: boolean;
+  readonly completeOn?: CoopDefenseMapMissionCheckpointCompletion;
 }
 
 export interface ResolvedCoopDefenseMapMissionCheckpointConfig extends CoopDefenseMapMissionCheckpointConfig {
@@ -1233,6 +1240,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     arenaHeightCells,
     encounters ?? [],
     secondaryObjectives ?? [],
+    mapConfig.rockWalls ?? [],
   );
   const persistentBasePreview = normalizePersistentBasePreviewConfig(
     mapConfig.mapId,
@@ -2903,6 +2911,7 @@ type MissionDependencyNode =
   | `encounter:${string}`
   | `event:${string}`
   | `checkpoint:${string}`
+  | `checkpoint-complete:${string}`
   | `defense:${string}`
   | `objective:${string}`;
 
@@ -3031,13 +3040,20 @@ function validateMissionDependencyGraph(
     }
   }
 
-  for (const checkpoint of mission?.checkpoints ?? []) {
-    addNode(`checkpoint:${checkpoint.id}`);
+  const checkpoints = mission?.checkpoints ?? [];
+  for (const [index, checkpoint] of checkpoints.entries()) {
+    const complete = `checkpoint-complete:${checkpoint.id}` as const;
+    addDependency(`checkpoint:${checkpoint.id}`, complete);
+    if (index > 0) addDependency(`checkpoint-complete:${checkpoints[index - 1].id}`, `checkpoint:${checkpoint.id}`);
+    if (checkpoint.completeOn?.type === 'after-encounter') {
+      addDependency(`encounter:${checkpoint.completeOn.encounterId}`, complete);
+    }
   }
   for (const defense of mission?.mandatoryDefenses ?? []) {
     const defenseNode = `defense:${defense.id}` as const;
     addDependency(`checkpoint:${defense.checkpointId}`, defenseNode);
     addDependency(`objective:${defense.objectiveId}`, defenseNode);
+    addDependency(defenseNode, `checkpoint-complete:${defense.checkpointId}`);
   }
 
   for (const objective of objectives) {
@@ -3180,6 +3196,7 @@ function normalizeMissionProgressConfig(
   arenaHeightCells: number,
   encounters: readonly CoopDefenseMapEncounterConfig[],
   objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+  rockWalls: readonly CoopDefenseMapRockWallConfig[],
 ): ResolvedCoopDefenseMapMissionProgressConfig | undefined {
   if (config === undefined) return undefined;
   if (!Array.isArray(config.checkpoints) || config.checkpoints.length === 0) {
@@ -3205,8 +3222,30 @@ function normalizeMissionProgressConfig(
     if (typeof radiusCells !== 'number' || !Number.isFinite(radiusCells) || radiusCells <= 0) {
       throw new Error(`[coopDefenseMaps] Mission checkpoint ${mapId}:${id} needs a positive radiusCells`);
     }
+    const completeOn = checkpoint.completeOn;
+    if (completeOn !== undefined) {
+      if (!completeOn || typeof completeOn !== 'object') {
+        throw new Error(`[coopDefenseMaps] Invalid checkpoint completion on ${mapId}:${id}`);
+      }
+      switch (completeOn.type) {
+        case 'on-entry': break;
+        case 'after-encounter':
+          if (!encounters.some((encounter) => encounter.id === completeOn.encounterId)) {
+            throw new Error(`[coopDefenseMaps] Checkpoint ${mapId}:${id} references unknown encounter`);
+          }
+          break;
+        case 'wall-piece-destroyed':
+        case 'right-of-wall':
+          if (!rockWalls.some((wall) => wall.id === completeOn.wallId)) {
+            throw new Error(`[coopDefenseMaps] Checkpoint ${mapId}:${id} references unknown wall`);
+          }
+          break;
+        default: throw new Error(`[coopDefenseMaps] Invalid checkpoint completion on ${mapId}:${id}`);
+      }
+    }
     return {
       id,
+      ...(completeOn ? { completeOn: { ...completeOn } } : {}),
       gridX: checkpoint.gridX,
       gridY: checkpoint.gridY,
       radiusCells,

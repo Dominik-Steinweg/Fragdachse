@@ -742,6 +742,7 @@ export class ArenaLifecycleCoordinator {
     });
     this.coopMissionComposition = new CoopMissionComposition({
       scene,
+      isAuthoredRockDestroyed: (id) => this.worldRuntime?.materialization?.rocks?.readIntegrity(id)?.destroyed === true,
       getNavigationGeometry: () => {
         if (!this.worldGeometryBinding) throw new Error('Navigation requires materialized World geometry');
         return this.worldGeometryBinding.snapshotMovementGeometry();

@@ -133,6 +133,10 @@ export interface CoopDefenseMissionProgressPresentationState {
     checkpointId: string;
     activatedAtRoundMs: number;
   }[];
+  completedCheckpoints: readonly {
+    checkpointId: string;
+    completedAtRoundMs: number;
+  }[];
   nextCheckpointId: string | null;
   respawnCheckpointId: string | null;
   routeLockDefenseId: string | null;

@@ -27,6 +27,8 @@ import type { WorldMetrics } from '../world/WorldMetrics';
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
 
 export interface CoopMissionObjectiveCompositionOptions {
+  readonly authoredRocks: readonly { gridX: number; gridY: number }[];
+  readonly isAuthoredRockDestroyed: (id: number) => boolean;
   readonly onObjectiveCompleted?: (objectiveId: string) => void;
   readonly onCheckpointActivated?: (checkpointId: string) => void;
   readonly activity: CoopMissionActivityConfiguration;
@@ -62,6 +64,13 @@ export class CoopMissionObjectiveComposition {
     const objectives = resolveCoopDefenseMapSecondaryObjectives(mapConfig, this.options.humanPlayerCount);
     const progressConfig = resolveCoopDefenseMapMissionProgress(mapConfig);
     const baseManager = this.options.baseManager;
+    const wallRockIds = new Map((mapConfig.rockWalls ?? []).map((wall) => [
+      wall.id,
+      this.options.authoredRocks.flatMap((rock, id) => (
+        rock.gridX >= wall.gridX && rock.gridX < wall.gridX + wall.widthCells
+        && rock.gridY >= wall.gridY && rock.gridY < wall.gridY + wall.heightCells ? [id] : []
+      )),
+    ]));
     const barriers = progressConfig
       ? new CoopDefenseMissionBarrierManager(this.options.scene, progressConfig, this.options.worldMetrics, {
         physicsGroup: this.options.physicsGroup,
@@ -157,6 +166,10 @@ export class CoopMissionObjectiveComposition {
           runtime.coopDefenseSecondaryObjectiveSystem?.getObjectiveState(objectiveId) ?? null
         ),
         isEncounterCleared: (encounterId) => runtime.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false,
+        rockWalls: mapConfig.rockWalls,
+        isWallPieceDestroyed: (wallId) => (
+          wallRockIds.get(wallId)?.some(this.options.isAuthoredRockDestroyed) ?? false
+        ),
         onPresentationChanged: (state) => {
           barriers?.syncPresentationState(state);
           this.options.publishMissionProgress(state);

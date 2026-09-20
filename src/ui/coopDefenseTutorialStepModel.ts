@@ -21,6 +21,7 @@ export function getVisibleCoopDefenseTutorialStepId(
   steps: readonly ResolvedCoopDefenseMapTutorialStepConfig[],
   activatedCheckpoints: readonly CoopDefenseTutorialStepActivation[],
   roundElapsedMs: number,
+  completedCheckpoints: readonly { readonly checkpointId: string }[],
 ): string | null {
   let visibleStep: ResolvedCoopDefenseMapTutorialStepConfig | null = null;
   let visibleActivatedAtRoundMs = -1;
@@ -29,8 +30,8 @@ export function getVisibleCoopDefenseTutorialStepId(
     const activation = activatedCheckpoints.find(({ checkpointId }) => checkpointId === step.checkpointId);
     if (!activation) continue;
 
-    const activeUntilRoundMs = activation.activatedAtRoundMs + step.durationMs;
-    if (roundElapsedMs < activation.activatedAtRoundMs || roundElapsedMs >= activeUntilRoundMs) continue;
+    if (roundElapsedMs < activation.activatedAtRoundMs
+      || completedCheckpoints.some(({ checkpointId }) => checkpointId === step.checkpointId)) continue;
 
     if (activation.activatedAtRoundMs >= visibleActivatedAtRoundMs) {
       visibleStep = step;

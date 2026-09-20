@@ -189,7 +189,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
         : null,
       advance: this.mapConfig.objective === 'advance'
         ? {
-          activatedCheckpoints: missionProgress?.activatedCheckpoints.length ?? 0,
+          completedCheckpoints: missionProgress?.completedCheckpoints.length ?? 0,
           totalCheckpoints: resolveCoopDefenseMapMissionProgress(this.mapConfig)?.checkpoints.length ?? 0,
           routeComplete: missionProgress?.routeComplete === true,
         }
@@ -288,6 +288,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       steps,
       missionProgress.activatedCheckpoints,
       roundElapsedMs,
+      missionProgress.completedCheckpoints,
     );
     const visibleStep = visibleStepId === null
       ? null

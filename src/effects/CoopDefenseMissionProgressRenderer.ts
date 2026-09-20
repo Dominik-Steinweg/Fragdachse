@@ -7,6 +7,7 @@ import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { registerGraphicsObject } from './EffectUtils';
 import {
   CHECKPOINT_ACTIVATION_MS,
+  CHECKPOINT_COMPLETION_MS,
   CHECKPOINT_FRAGMENT_SOURCE,
   CHECKPOINT_PADDING,
   CHECKPOINT_SHADER_NAME,
@@ -20,6 +21,7 @@ interface CheckpointVisual {
   next: boolean;
   opacity: number;
   activatedAtMs: number | null;
+  completedAtMs: number | null;
 }
 
 function writeColor(target: Float32Array, color: number): void {
@@ -76,14 +78,18 @@ export class CoopDefenseMissionProgressRenderer {
     const activated = new Map(state.activatedCheckpoints.map(({ checkpointId, activatedAtRoundMs }) => [
       checkpointId, activatedAtRoundMs,
     ]));
+    const completed = new Map(state.completedCheckpoints.map(({ checkpointId, completedAtRoundMs }) => [
+      checkpointId, completedAtRoundMs,
+    ]));
     for (const visual of this.checkpoints) {
       visual.activatedAtMs = activated.get(visual.id) ?? null;
+      visual.completedAtMs = completed.get(visual.id) ?? null;
       const reached = visual.activatedAtMs !== null;
+      const done = visual.completedAtMs !== null;
       visual.next = !reached && state.nextCheckpointId === visual.id;
-      writeColor(visual.color, visual.extraction
-        ? (reached ? COLORS.GREEN_2 : COLORS.GREEN_3)
-        : visual.next ? COLORS.GOLD_1 : reached ? COLORS.BLUE_3 : COLORS.BLUE_4);
-      visual.opacity = visual.next ? 0.9 : reached ? 0.3 : visual.extraction ? 0.38 : 0.16;
+      visual.quad.setVisible(reached || visual.next);
+      writeColor(visual.color, done ? COLORS.GREEN_2 : visual.next ? COLORS.GOLD_1 : COLORS.BLUE_3);
+      visual.opacity = done ? 0.3 : visual.next ? 0.9 : reached ? 0.7 : 0;
     }
 
     this.syncBarriers(config, state);
@@ -128,7 +134,10 @@ export class CoopDefenseMissionProgressRenderer {
             setUniform: (name: string, value: unknown) => void,
             drawingContext: Phaser.Renderer.WebGL.DrawingContext,
           ) => {
-            const ageMs = visual.activatedAtMs === null ? -1 : this.elapsedMs - visual.activatedAtMs;
+            // Completion owns the feedback, including checkpoints completed on entry.
+            const ageMs = visual.activatedAtMs === null || visual.completedAtMs !== null
+              ? -1 : this.elapsedMs - visual.activatedAtMs;
+            const completionAgeMs = visual.completedAtMs === null ? -1 : this.elapsedMs - visual.completedAtMs;
             const camera = drawingContext.camera;
             setUniform('uSize', size);
             setUniform('uRadius', radius);
@@ -140,6 +149,8 @@ export class CoopDefenseMissionProgressRenderer {
             setUniform('uOpacity', visual.opacity);
             setUniform('uActivationAge', ageMs >= 0 && ageMs < CHECKPOINT_ACTIVATION_MS
               ? ageMs / CHECKPOINT_ACTIVATION_MS : -1);
+            setUniform('uCompletionAge', completionAgeMs >= 0 && completionAgeMs < CHECKPOINT_COMPLETION_MS
+              ? completionAgeMs / CHECKPOINT_COMPLETION_MS : -1);
             setUniform('uAmbientCount', this.ambientCount);
             setUniform('uBurstCount', this.burstCount);
             setUniform('uColor', visual.color);
@@ -153,7 +164,7 @@ export class CoopDefenseMissionProgressRenderer {
       );
       const visual: CheckpointVisual = {
         id: checkpoint.id, quad, extraction, color: new Float32Array(3),
-        next: false, opacity: 0, activatedAtMs: null,
+        next: false, opacity: 0, activatedAtMs: null, completedAtMs: null,
       };
       quad.setOrigin(0.5).setDepth(DEPTH.ROCKS - 0.5).setBlendMode(Phaser.BlendModes.NORMAL);
       // Direct display-list children retain normal camera culling and world-camera assignment.

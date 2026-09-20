@@ -155,6 +155,93 @@ function route(): ResolvedCoopDefenseMapMissionProgressConfig {
 }
 
 describe('advance extraction', () => {
+  it('starts once on entry and accepts prefulfilled conditions only after the predecessor completes', () => {
+    let cleared = false;
+    const starts: string[] = [];
+    const config = route();
+    const system = new CoopDefenseMissionProgressSystem({
+      ...config, mandatoryDefenses: [],
+      checkpoints: config.checkpoints.map((checkpoint, index) => ({
+        ...checkpoint, setRespawn: true,
+        completeOn: index === 0
+          ? { type: 'after-encounter' as const, encounterId: 'wave' }
+          : { type: 'wall-piece-destroyed' as const, wallId: 'wall' },
+      })),
+    }, {
+      roundRevision: 1, worldMetrics: TEST_WORLD_METRICS,
+      getDefenseObjectiveState: () => null,
+      isEncounterCleared: () => cleared,
+      isWallPieceDestroyed: () => true,
+      onCheckpointActivated: (id) => starts.push(id),
+    });
+    const sample = (x: number) => [{ playerId: 'p1', ...world(x), eligible: true }];
+    system.hostUpdate(16, false, sample(2));
+    expect(system.getPresentationState()).toMatchObject({
+      nextCheckpointId: null, completedCheckpoints: [], respawnCheckpointId: 'entry',
+    });
+    system.hostUpdate(16, false, sample(9));
+    expect(starts).toEqual(['entry']);
+    cleared = true;
+    system.hostUpdate(16, true, sample(9));
+    expect(system.isCheckpointCompleted('entry')).toBe(false);
+    system.hostUpdate(16, false, sample(9));
+    expect(system.getPresentationState().nextCheckpointId).toBe('camp');
+    expect(system.isCheckpointActivated('camp')).toBe(false);
+    system.hostUpdate(16, false, sample(5));
+    expect(system.isCheckpointCompleted('camp')).toBe(true);
+    system.hostUpdate(16, false, sample(8));
+    expect(system.isRouteComplete()).toBe(true);
+    system.hostUpdate(16, false, sample(8));
+    expect(starts).toEqual(['entry', 'camp', 'extraction']);
+    system.reset();
+    expect(system.getPresentationState()).toMatchObject({
+      activatedCheckpoints: [], completedCheckpoints: [], nextCheckpointId: 'entry', routeComplete: false,
+    });
+  });
+
+  it('requires a destroyed wall piece and a living player strictly beyond the outer wall edge', () => {
+    let destroyed = false;
+    const config = route();
+    const wall = { id: 'wall', gridX: 6, gridY: 1, widthCells: 2, heightCells: 3 };
+    const system = new CoopDefenseMissionProgressSystem({
+      ...config, mandatoryDefenses: [],
+      checkpoints: config.checkpoints.slice(0, 2).map((checkpoint, index) => ({
+        ...checkpoint,
+        completeOn: { type: index === 0 ? 'wall-piece-destroyed' as const : 'right-of-wall' as const, wallId: wall.id },
+      })),
+    }, {
+      roundRevision: 1, worldMetrics: TEST_WORLD_METRICS, rockWalls: [wall],
+      getDefenseObjectiveState: () => null, isWallPieceDestroyed: () => destroyed,
+    });
+    system.hostUpdate(16, false, [{ playerId: 'p1', ...world(2), eligible: true }]);
+    expect(system.isCheckpointCompleted('entry')).toBe(false);
+    destroyed = true;
+    system.hostUpdate(16, false, [{ playerId: 'p1', ...world(5), eligible: true }]);
+    expect(system.isCheckpointActivated('camp')).toBe(true);
+    const edge = TEST_WORLD_METRICS.offsetX + (wall.gridX + wall.widthCells) * CELL_SIZE;
+    const samples = (x: number, eligible = true) => [{ playerId: 'p2', x, y: world(2).y, eligible }];
+    system.hostUpdate(16, false, samples(edge + 1, false));
+    system.hostUpdate(16, false, samples(edge));
+    expect(system.isRouteComplete()).toBe(false);
+    system.resetPlayerPosition('p2', edge + 1, world(2).y);
+    system.hostUpdate(16, false, samples(edge + 1));
+    expect(system.isRouteComplete()).toBe(false);
+    system.hostUpdate(16, false, samples(edge + 1));
+    expect(system.isRouteComplete()).toBe(true);
+  });
+
+  it('does not complete wall conditions without a world reader or wall geometry', () => {
+    for (const type of ['wall-piece-destroyed', 'right-of-wall'] as const) {
+      const config = route();
+      const system = new CoopDefenseMissionProgressSystem({ ...config, mandatoryDefenses: [],
+        checkpoints: [{ ...config.checkpoints[0], completeOn: { type, wallId: 'missing' } }],
+      }, { roundRevision: 1, getDefenseObjectiveState: () => null, worldMetrics: TEST_WORLD_METRICS });
+      system.hostUpdate(16, false, [{ playerId: 'p1', ...world(2), eligible: true }]);
+      expect(system.isCheckpointActivated('entry')).toBe(true);
+      expect(system.isRouteComplete()).toBe(false);
+    }
+  });
+
   it('completes the route only at the final checkpoint and only for a living participant', () => {
     const system = new CoopDefenseMissionProgressSystem(route(), {
       roundRevision: 1,
@@ -329,6 +416,27 @@ function makeAdvanceMap(overrides: Partial<CoopDefenseMapConfig> = {}): CoopDefe
 }
 
 describe('advance map validation', () => {
+  it('rejects unknown completion references and cyclic checkpoint completion dependencies', () => {
+    const base = makeAdvanceMap();
+    const checkpoints = base.missionProgress!.checkpoints;
+    for (const completeOn of [
+      { type: 'after-encounter' as const, encounterId: 'missing' },
+      { type: 'wall-piece-destroyed' as const, wallId: 'missing' },
+      { type: 'right-of-wall' as const, wallId: 'missing' },
+    ]) {
+      expect(() => normalizeCoopDefenseMapConfig({ ...base,
+        missionProgress: { checkpoints: [{ ...checkpoints[0], completeOn }, checkpoints[1]] },
+      })).toThrow(/references unknown/);
+    }
+    expect(() => normalizeCoopDefenseMapConfig({ ...base,
+      missionProgress: { checkpoints: [{ ...checkpoints[0],
+        completeOn: { type: 'after-encounter', encounterId: 'later' },
+      }, checkpoints[1]] },
+      encounters: [{ id: 'later', start: { type: 'after-checkpoint', checkpointId: checkpoints[1].id },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }] }],
+    })).toThrow(/cycl/i);
+  });
+
   it('accepts an advance map without any friendly main base', () => {
     const normalized = normalizeCoopDefenseMapConfig(makeAdvanceMap());
     expect(normalized.objective).toBe('advance');
@@ -390,7 +498,7 @@ describe('advance presentation', () => {
   it('shows the advance title with the checkpoint progress', () => {
     const model = buildMainObjectiveViewModel({
       ...baseInput,
-      advance: { activatedCheckpoints: 3, totalCheckpoints: 6, routeComplete: false },
+      advance: { completedCheckpoints: 3, totalCheckpoints: 6, routeComplete: false },
     });
     expect(model.title).toBe('VORSTOSS');
     expect(model.progressLabel).toBe('3 / 6');
@@ -400,11 +508,11 @@ describe('advance presentation', () => {
   it('names the extraction once the final checkpoint is the remaining one', () => {
     expect(buildMainObjectiveViewModel({
       ...baseInput,
-      advance: { activatedCheckpoints: 5, totalCheckpoints: 6, routeComplete: false },
+      advance: { completedCheckpoints: 5, totalCheckpoints: 6, routeComplete: false },
     }).progressLabel).toBe('5 / 6 · EXTRAKTION');
     expect(buildMainObjectiveViewModel({
       ...baseInput,
-      advance: { activatedCheckpoints: 6, totalCheckpoints: 6, routeComplete: true },
+      advance: { completedCheckpoints: 6, totalCheckpoints: 6, routeComplete: true },
     }).progressLabel).toBe('6 / 6 · EXTRAKTION');
   });
 

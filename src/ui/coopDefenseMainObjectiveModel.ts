@@ -16,7 +16,7 @@ export interface MainObjectiveBaseProgress {
 
 /** Vorstoss: die authored Checkpoint-Reihenfolge ist die Route, ihr letzter Punkt die Extraktion. */
 export interface MainObjectiveAdvanceProgress {
-  readonly activatedCheckpoints: number;
+  readonly completedCheckpoints: number;
   readonly totalCheckpoints: number;
   readonly routeComplete: boolean;
 }
@@ -80,17 +80,17 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
 
   if (input.objective === 'advance') {
     const total = Math.max(1, Math.floor(input.advance?.totalCheckpoints ?? 0));
-    const activated = Math.max(0, Math.min(total, Math.floor(input.advance?.activatedCheckpoints ?? 0)));
+    const completed = Math.max(0, Math.min(total, Math.floor(input.advance?.completedCheckpoints ?? 0)));
     // Der letzte Checkpoint ist die Extraktion; sie wird ab dem finalen Abschnitt mitgenannt.
-    const onFinalLeg = input.advance?.routeComplete === true || activated >= total - 1;
-    const progressLabel = `${formatNumber(activated, getLocale())} / ${formatNumber(total, getLocale())}`;
+    const onFinalLeg = input.advance?.routeComplete === true || completed >= total - 1;
+    const progressLabel = `${formatNumber(completed, getLocale())} / ${formatNumber(total, getLocale())}`;
     return {
       id,
       title: t('ui.mainObjective.advance'),
       progressLabel: onFinalLeg
         ? `${progressLabel} · ${t('ui.mainObjective.extraction')}`
         : progressLabel,
-      progress: clamp01(activated / total),
+      progress: clamp01(completed / total),
     };
   }
 

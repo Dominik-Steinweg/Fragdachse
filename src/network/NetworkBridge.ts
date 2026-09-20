@@ -647,6 +647,7 @@ function sanitizeMissionProgressPresentationState(
   if (!Number.isSafeInteger(state.roundRevision) || (state.roundRevision ?? 0) <= 0
     || !Number.isSafeInteger(state.missionRevision) || (state.missionRevision ?? -1) < 0
     || !Array.isArray(state.activatedCheckpoints) || state.activatedCheckpoints.length > 128
+    || !Array.isArray(state.completedCheckpoints) || state.completedCheckpoints.length > 128
     || !Array.isArray(state.resolvedDefenses) || state.resolvedDefenses.length > 64
     || !Array.isArray(state.barriers) || state.barriers.length > 128
     || !isValidNullableMissionId(state.nextCheckpointId)
@@ -657,12 +658,29 @@ function sanitizeMissionProgressPresentationState(
   const checkpointIds = new Set<string>();
   const activatedCheckpoints: CoopDefenseMissionProgressPresentationState['activatedCheckpoints'][number][] = [];
   for (const rawCheckpoint of state.activatedCheckpoints) {
+    if (!rawCheckpoint || typeof rawCheckpoint !== 'object') return null;
     const checkpoint = rawCheckpoint as Partial<CoopDefenseMissionProgressPresentationState['activatedCheckpoints'][number]>;
     if (!isValidMissionId(checkpoint.checkpointId) || checkpointIds.has(checkpoint.checkpointId)
       || !isFiniteNumber(checkpoint.activatedAtRoundMs) || checkpoint.activatedAtRoundMs < 0) return null;
     checkpointIds.add(checkpoint.checkpointId);
     activatedCheckpoints.push({ checkpointId: checkpoint.checkpointId, activatedAtRoundMs: checkpoint.activatedAtRoundMs });
   }
+
+  const completedIds = new Set<string>();
+  const completedCheckpoints: CoopDefenseMissionProgressPresentationState['completedCheckpoints'][number][] = [];
+  for (const checkpoint of state.completedCheckpoints) {
+    if (!checkpoint || !isValidMissionId(checkpoint.checkpointId)
+      || completedIds.has(checkpoint.checkpointId) || !checkpointIds.has(checkpoint.checkpointId)
+      || !isFiniteNumber(checkpoint.completedAtRoundMs)
+      || checkpoint.completedAtRoundMs < activatedCheckpoints.find(
+        ({ checkpointId }) => checkpointId === checkpoint.checkpointId,
+      )!.activatedAtRoundMs) return null;
+    completedIds.add(checkpoint.checkpointId);
+    completedCheckpoints.push({ checkpointId: checkpoint.checkpointId, completedAtRoundMs: checkpoint.completedAtRoundMs });
+  }
+  if (state.nextCheckpointId !== null && checkpointIds.has(state.nextCheckpointId!)) return null;
+  if (state.routeComplete && (state.nextCheckpointId !== null
+    || completedIds.size !== checkpointIds.size || completedIds.size === 0)) return null;
 
   const defenseIds = new Set<string>();
   const resolvedDefenses: CoopDefenseMissionProgressPresentationState['resolvedDefenses'][number][] = [];
@@ -693,6 +711,7 @@ function sanitizeMissionProgressPresentationState(
     roundRevision: state.roundRevision as number,
     missionRevision: state.missionRevision as number,
     activatedCheckpoints,
+    completedCheckpoints,
     nextCheckpointId: state.nextCheckpointId ?? null,
     respawnCheckpointId: state.respawnCheckpointId ?? null,
     routeLockDefenseId: state.routeLockDefenseId ?? null,

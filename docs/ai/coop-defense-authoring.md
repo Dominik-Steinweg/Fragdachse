@@ -33,6 +33,22 @@ Fachliche Zeit folgt der Activity-/Round-Simulation und den replizierten Zustän
 
 `after-defense` bedeutet, dass die referenzierte Defense terminal aufgelöst ist: `completed` oder `failed`. Es bedeutet nicht „nach erfolgreicher Defense“. Ob ein fehlgeschlagenes Hold die gesamte Mission beendet, entscheidet separat das authored Flag `failureEndsMission`.
 
+## Checkpoint-Fortschritt
+
+Checkpoint-Aktivierung und -Abschluss sind getrennte host-autoritative Zustände des
+`CoopDefenseMissionProgressSystem`. Nur der Abschluss gibt den nächsten Checkpoint frei;
+das Betreten durch einen berechtigten lebenden Teilnehmer aktiviert ihn für das gesamte Team,
+startet `after-checkpoint`-Trigger und setzt gegebenenfalls den Respawn-Fokus. `completeOn`
+beschreibt die zusätzliche Abschlussbedingung; ohne sie genügt Betreten. Zugeordnete Mandatory
+Defenses müssen vorher terminal aufgelöst sein; eine missionsbeendende Niederlage zählt nicht
+als Checkpoint-Abschluss. Bereits erfüllte Bedingungen dürfen nach Aktivierung sofort abschließen.
+
+Mauerbedingungen referenzieren World-Mauern per ID. Zerstörung liest die ursprünglichen Fels-IDs
+und deren kanonischen World-Zustand, keine Renderobjekte oder nachträglich platzierten Steine.
+Fehlende World-Daten erfüllen keine Bedingung. Der Missionssnapshot repliziert Aktivierungs- und
+Abschlusszeitpunkte; `nextCheckpointId` ist während einer offenen Aufgabe `null`. Marker, HUD
+und Tutorial leiten ihren Zustand daraus ab; sie treffen keine eigenen Fortschrittsentscheidungen.
+
 ## Persistente Base
 
 Die persistente Base ist eine World-Site. Ihre sichtbare Runtime-Zusammensetzung entsteht aus der authored Site und den persönlichen Beiträgen der anwesenden Spieler:

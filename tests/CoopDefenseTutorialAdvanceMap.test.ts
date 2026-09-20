@@ -21,6 +21,7 @@ import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { getCoopDefenseTutorialRockRegion } from '../src/config/coopDefenseTutorial';
 import { getMapTutorial, getMapTutorialStep } from '../src/i18n/contentPresentation';
 import { CoopDefenseMissionProgressSystem } from '../src/systems/CoopDefenseMissionProgressSystem';
+import { CoopDefenseMapDirector } from '../src/systems/CoopDefenseMapDirector';
 import { CoopDefenseRoundStateSystem } from '../src/systems/CoopDefenseRoundStateSystem';
 import type { BaseManager } from '../src/entities/BaseManager';
 import {
@@ -564,12 +565,98 @@ describe('Map 1 as the guided advance tutorial', () => {
     expect(system.isBarrierOpen('extraction-gate')).toBe(true);
   });
 
+  it('waits for every staggered opening spawn before completing the first checkpoint', () => {
+    applyMapMetrics();
+    const enemies = new Set<string>();
+    let nextId = 0;
+    const encounters = resolveCoopDefenseMapEncounterConfigs(MAP, 1);
+    const opening = encounters.find(({ id }) => id === 'cp1-first-contact')!;
+    const director = new CoopDefenseMapDirector(encounters, (_kind, count) => {
+      const ids = Array.from({ length: count }, () => `enemy-${++nextId}`);
+      ids.forEach(id => enemies.add(id));
+      return ids;
+    }, {
+      random: () => 1,
+      isEnemyActive: (id) => enemies.has(id),
+      isEncounterStartSatisfied: (start) => start.type === 'after-checkpoint'
+        && system.isCheckpointActivated(start.checkpointId),
+    });
+    const system = new CoopDefenseMissionProgressSystem(MISSION, {
+      roundRevision: 1, worldMetrics: TEST_WORLD_METRICS,
+      getDefenseObjectiveState: () => null,
+      isEncounterCleared: (id) => director.isEncounterCleared(id),
+    });
+    const first = MISSION.checkpoints[0];
+    const sample = [{ playerId: 'p1', ...worldCenterOf(first.gridX, first.gridY), eligible: true }];
+    system.hostUpdate(0, false, sample);
+    director.hostUpdate(0, false);
+    enemies.clear();
+    director.hostUpdate(0, false);
+    system.hostUpdate(0, false, sample);
+    expect(system.isCheckpointCompleted(first.id)).toBe(false);
+    expect(system.getPresentationState().nextCheckpointId).toBeNull();
+    const spawnWindow = Math.max(...opening.groups.map(group => (group.delayMs ?? 0) + (group.spawnStaggerMs ?? 0)));
+    director.hostUpdate(spawnWindow + 1, false);
+    for (let index = 0; index < opening.groups.reduce((sum, group) => sum + group.count, 0); index++) {
+      director.hostUpdate(0, false);
+    }
+    expect(director.isEncounterSpawnComplete(opening.id)).toBe(true);
+    system.hostUpdate(spawnWindow + 1, false, sample);
+    expect(system.isCheckpointCompleted(first.id)).toBe(false);
+    enemies.clear();
+    director.hostUpdate(1, false);
+    system.hostUpdate(1, false, sample);
+    expect(system.isCheckpointCompleted(first.id)).toBe(true);
+    expect(system.getPresentationState().nextCheckpointId).toBe(MISSION.checkpoints[1].id);
+  });
+
+  it('completes the authored route only after each task and the successful defense', () => {
+    applyMapMetrics();
+    const cleared = new Set<string>();
+    let wallDestroyed = false;
+    let defense: 'active' | 'completed' = 'active';
+    const system = new CoopDefenseMissionProgressSystem(MISSION, {
+      roundRevision: 1, worldMetrics: TEST_WORLD_METRICS, rockWalls: MAP.rockWalls,
+      getDefenseObjectiveState: () => defense,
+      isEncounterCleared: (id) => cleared.has(id),
+      isWallPieceDestroyed: (id) => id === 'utility-wall' && wallDestroyed,
+    });
+    const enter = (index: number) => {
+      const cp = MISSION.checkpoints[index];
+      system.hostUpdate(16, false, [{ playerId: 'p1', ...worldCenterOf(cp.gridX, cp.gridY), eligible: true }]);
+    };
+    enter(0);
+    enter(1);
+    expect(system.isCheckpointActivated(MISSION.checkpoints[1].id)).toBe(false);
+    cleared.add('cp1-first-contact');
+    enter(1);
+    expect(system.isCheckpointCompleted(MISSION.checkpoints[1].id)).toBe(false);
+    wallDestroyed = true;
+    enter(2);
+    expect(system.isCheckpointActivated(MISSION.checkpoints[2].id)).toBe(true);
+    expect(system.isCheckpointCompleted(MISSION.checkpoints[2].id)).toBe(false);
+    enter(3);
+    expect(system.isCheckpointCompleted(MISSION.checkpoints[2].id)).toBe(true);
+    expect(system.isCheckpointCompleted(MISSION.checkpoints[3].id)).toBe(false);
+    cleared.add('cp4-pressure');
+    enter(4);
+    expect(system.getPresentationState().nextCheckpointId).toBeNull();
+    enter(5);
+    expect(system.isRouteComplete()).toBe(false);
+    defense = 'completed';
+    enter(5);
+    expect(system.isRouteComplete()).toBe(true);
+    expect(system.getPresentationState().completedCheckpoints).toHaveLength(MISSION.checkpoints.length);
+  });
+
   it('ends the mission when the authored mandatory defence fails', () => {
     let objectiveState: 'active' | 'completed' | 'failed' = 'active';
     const system = new CoopDefenseMissionProgressSystem(MISSION, {
       roundRevision: 1,
       getDefenseObjectiveState: () => objectiveState,
-      isEncounterCleared: () => false,
+      isEncounterCleared: () => true,
+      isWallPieceDestroyed: () => true,
+      rockWalls: MAP.rockWalls,
       worldMetrics: TEST_WORLD_METRICS,
     });
     applyMapMetrics();
@@ -586,6 +673,8 @@ describe('Map 1 as the guided advance tutorial', () => {
     objectiveState = 'failed';
     system.hostUpdate(16, false, []);
     expect(system.isMissionFailed()).toBe(true);
+    expect(system.isCheckpointCompleted('cp5-base-defense')).toBe(false);
+    expect(system.getPresentationState().nextCheckpointId).toBeNull();
 
     const roundState = new CoopDefenseRoundStateSystem({
       baseManager: emptyBaseManager(),
@@ -601,6 +690,7 @@ describe('Map 1 as the guided advance tutorial', () => {
   it('leaves an unflagged mandatory defence on the existing resolved-is-enough semantics', () => {
     const system = new CoopDefenseMissionProgressSystem({
       ...MISSION,
+      checkpoints: [MISSION.checkpoints[4]],
       mandatoryDefenses: MISSION.mandatoryDefenses.map((defense) => ({
         ...defense,
         failureEndsMission: false,
@@ -616,6 +706,10 @@ describe('Map 1 as the guided advance tutorial', () => {
     system.resetPlayerPosition('p1', point.x, point.y);
     system.hostUpdate(16, false, [{ playerId: 'p1', ...point, eligible: true }]);
     system.hostUpdate(16, false, [{ playerId: 'p1', ...point, eligible: true }]);
+    expect(system.isCheckpointActivated(MISSION.checkpoints[4].id)).toBe(true);
+    expect(system.isCheckpointCompleted(MISSION.checkpoints[4].id)).toBe(false);
+    system.hostUpdate(16, false, [{ playerId: 'p1', ...point, eligible: true }]);
+    expect(system.isCheckpointCompleted(MISSION.checkpoints[4].id)).toBe(true);
     expect(system.isMissionFailed()).toBe(false);
   });
 
@@ -625,16 +719,19 @@ describe('Map 1 as the guided advance tutorial', () => {
     const activatedCheckpoints = [{ checkpointId: 'cp1-adrenaline', activatedAtRoundMs: 1_000 }];
 
     // Keine lokale Spielerposition ist Teil der Projektion: alle Clients erhalten denselben Text.
-    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 999)).toBeNull();
-    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 1_000)).toBe('map01-adrenaline');
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 999, [])).toBeNull();
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 1_000, [])).toBe('map01-adrenaline');
 
-    // Standzeit laeuft ab; danach wird nichts mehr angezeigt.
+    // Eine offene Aufgabe bleibt sichtbar, auch nach der bisherigen Standzeit.
     const durationMs = steps[0].durationMs;
-    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 1_000 + durationMs)).toBeNull();
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 1_000 + durationMs, [])).toBe('map01-adrenaline');
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 1_000 + durationMs,
+      [{ checkpointId: 'cp1-adrenaline' }])).toBeNull();
 
     // Der naechste gemeinsame Checkpoint uebernimmt die Anzeige, sobald er aktiviert wurde.
     activatedCheckpoints.push({ checkpointId: 'cp2-utility', activatedAtRoundMs: 20_000 });
-    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 20_001)).toBe('map01-utility');
+    expect(getVisibleCoopDefenseTutorialStepId(steps, activatedCheckpoints, 20_001,
+      [{ checkpointId: 'cp1-adrenaline' }])).toBe('map01-utility');
   });
 
   it('rejects tutorial steps and spawn areas that the map cannot back', () => {

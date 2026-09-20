@@ -1,8 +1,9 @@
 /** Analytic ground light and particles share one quad; no per-particle CPU state. */
 export const CHECKPOINT_SHADER_NAME = 'FragdachseCheckpointMarker';
-// Burst travel <= 26 px, plus its soft halo. Also included in Phaser's camera culling bounds.
+// Burst/wave travel <= 26 px, plus soft halos. Also included in camera culling bounds.
 export const CHECKPOINT_PADDING = 36;
 export const CHECKPOINT_ACTIVATION_MS = 1_000;
+export const CHECKPOINT_COMPLETION_MS = 1_400;
 
 export const CHECKPOINT_FRAGMENT_SOURCE = `
 #pragma phaserTemplate(shaderName)
@@ -24,6 +25,7 @@ uniform float uNext;
 uniform float uExtraction;
 uniform float uOpacity;
 uniform float uActivationAge;
+uniform float uCompletionAge;
 uniform float uAmbientCount;
 uniform float uBurstCount;
 uniform vec3 uColor;
@@ -73,9 +75,14 @@ void main() {
     float edge = r - uRadius;
     float breath = 0.5 + 0.5 * sin(uTime * TAU / 3.0);
     float activated = step(0.0, uActivationAge) * (1.0 - step(1.0, uActivationAge));
+    float completed = step(0.0, uCompletionAge) * (1.0 - step(1.0, uCompletionAge));
+    float completionPulse = completed * (1.0 - smoothstep(0.08, 0.8, uCompletionAge));
     float release = activated * (1.0 - smoothstep(0.15, 1.0, uActivationAge));
     vec3 color = mix(uColor, uActivationColor, release);
+    vec3 successColor = mix(uColor, vec3(0.82, 1.0, 0.9), 0.42);
+    color = mix(color, successColor, completionPulse * 0.55);
     float strength = mix(uOpacity, 0.86, release);
+    strength = mix(strength, 1.0, completionPulse);
     strength *= mix(1.0, 0.86 + 0.14 * breath, uNext);
     vec4 result = vec4(0.0);
 
@@ -101,6 +108,35 @@ void main() {
         float waveRadius = uRadius * (1.0 - (1.0 - t) * (1.0 - t));
         float fade = sin(t * 3.14159265);
         over(result, uActivationColor, stroke(r - waveRadius, 1.1, aa + 2.0) * fade * 0.42 * inside);
+    }
+
+    // A mint-green release wave and a briefly drawn checkmark announce task completion.
+    // The fixed interaction boundary stays in place; these transient rings dissolve outside it.
+    // Primary feedback remains readable even when low quality disables the sparkles.
+    if (completed > 0.5) {
+        float t = uCompletionAge;
+        float travel = 1.0 - pow(1.0 - t, 3.0);
+        float waveEdge = r - mix(uRadius * 0.82, uRadius + 24.0, travel);
+        float fade = (1.0 - smoothstep(0.12, 0.95, t));
+        float waveGlow = 1.0 - smoothstep(0.0, 9.0, abs(waveEdge));
+        over(result, uColor, waveGlow * waveGlow * fade * 0.45);
+        over(result, successColor, stroke(waveEdge, mix(2.0, 0.6, t), aa) * fade * 0.85);
+        over(result, uColor, stroke(waveEdge + 7.0, 0.6, aa + 0.5) * fade * 0.28);
+        over(result, uColor, inside * (1.0 - r / max(uRadius, 1.0)) * completionPulse * 0.14);
+
+        float iconSize = min(19.0, uRadius * 0.3);
+        // Phaser Shader UVs start bottom-left; p flips Y to screen coordinates (down is positive).
+        vec2 a = vec2(-0.65, 0.0) * iconSize;
+        vec2 b = vec2(-0.15, 0.45) * iconSize;
+        vec2 c = vec2(0.8, -0.6) * iconSize;
+        float shortArm = clamp(t / 0.12, 0.0, 1.0);
+        float longArm = clamp((t - 0.1) / 0.18, 0.0, 1.0);
+        float mark = segmentDistance(p, a, mix(a, b, shortArm));
+        if (longArm > 0.0) mark = min(mark, segmentDistance(p, b, mix(b, c, longArm)));
+        float markFade = smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(0.55, 0.95, t));
+        float markGlow = 1.0 - smoothstep(0.0, 6.0, mark);
+        over(result, uColor, markGlow * markGlow * markFade * 0.4);
+        over(result, successColor, stroke(mark, 1.5, aa) * markFade * 0.95);
     }
 
     if (uNext > 0.5) {
@@ -143,18 +179,20 @@ void main() {
         }
     }
 
-    if (activated > 0.5 && uBurstCount > 0.0 && edge > -12.0 && edge < 35.0) {
+    if ((activated > 0.5 || completed > 0.5) && uBurstCount > 0.0 && edge > -12.0 && edge < 35.0) {
+        float burstAge = completed > 0.5 ? uCompletionAge : uActivationAge;
+        vec3 burstColor = completed > 0.5 ? successColor : uActivationColor;
         float cell = floor(angle / TAU * uBurstCount);
         for (int neighbor = -1; neighbor <= 1; neighbor++) {
             float id = mod(cell + float(neighbor) + uBurstCount, uBurstCount);
             vec3 h = checkpointHash(vec3(id, uSeed, 43.0));
-            float t = clamp(uActivationAge / mix(0.7, 1.0, h.y), 0.0, 1.0);
+            float t = clamp(burstAge / mix(0.7, 1.0, h.y), 0.0, 1.0);
             float theta = (id + 0.2 + 0.6 * h.x + 0.1 * t) * TAU / uBurstCount;
             float radius = uRadius - 3.0 + mix(18.0, 29.0, h.z) * (1.0 - (1.0 - t) * (1.0 - t));
             float opacity = smoothstep(0.0, 0.06, t) * (1.0 - smoothstep(0.12, 1.0, t));
             float size = min(mix(1.1, 2.0, h.z), uRadius * TAU / uBurstCount * 0.09);
             mote(result, p, vec2(cos(theta), sin(theta)) * radius, size,
-                opacity * 0.9, uActivationColor, aa);
+                opacity * 0.9, burstColor, aa);
         }
     }
     gl_FragColor = result;

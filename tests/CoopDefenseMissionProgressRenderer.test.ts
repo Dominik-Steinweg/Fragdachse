@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, DEPTH } from '../src/config';
 import type { ResolvedCoopDefenseMapMissionProgressConfig } from '../src/config/coopDefenseMaps';
 import type { CoopDefenseMissionProgressPresentationState } from '../src/types';
-import { CHECKPOINT_ACTIVATION_MS } from '../src/effects/checkpointMarkerShader';
+import { CHECKPOINT_ACTIVATION_MS, CHECKPOINT_COMPLETION_MS } from '../src/effects/checkpointMarkerShader';
 import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../src/arena/AutoTiler';
 
 const quality = vi.hoisted(() => ({ level: 'high' }));
@@ -14,6 +14,7 @@ vi.mock('phaser', () => {
     originX = 0.5;
     originY = 0.5;
     destroyed = false;
+    visible = true;
     constructor(
       public scene: unknown,
       public config: { setupUniforms: (set: (name: string, value: unknown) => void, context: unknown) => void },
@@ -22,6 +23,7 @@ vi.mock('phaser', () => {
     setOrigin(v: number) { this.originX = v; this.originY = v; return this; }
     setDepth(v: number) { this.depth = v; return this; }
     setBlendMode() { return this; }
+    setVisible(value: boolean) { this.visible = value; return this; }
     destroy() { this.destroyed = true; }
     uniforms(zoom = 1): Record<string, number | number[]> {
       const values: Record<string, number | number[]> = {};
@@ -37,6 +39,7 @@ vi.mock('phaser', () => {
 import { CoopDefenseMissionProgressRenderer } from '../src/effects/CoopDefenseMissionProgressRenderer';
 
 interface Quad {
+  visible: boolean;
   x: number; y: number; width: number; height: number; depth: number;
   destroyed: boolean;
   uniforms(zoom?: number): Record<string, number | number[]>;
@@ -62,6 +65,7 @@ function makeConfig(): ResolvedCoopDefenseMapMissionProgressConfig {
 function makeState(): CoopDefenseMissionProgressPresentationState {
   return {
     roundRevision: 1, missionRevision: 0, activatedCheckpoints: [], nextCheckpointId: 'entry',
+    completedCheckpoints: [],
     respawnCheckpointId: null, routeLockDefenseId: null, resolvedDefenses: [],
     barriers: [{ barrierId: 'gate', open: false }], routeComplete: false,
   };
@@ -134,6 +138,35 @@ describe('CoopDefenseMissionProgressRenderer', () => {
     expect(first.destroyed).toBe(false);
   });
 
+  it('hides future checkpoints and distinguishes available, active and completed markers for late readers', () => {
+    const { renderer, quads } = setup();
+    const config = makeConfig();
+    const state = makeState();
+    renderer.sync(config, state, 0, true);
+    expect(quads.map(quad => quad.visible)).toEqual([true, false, false]);
+    const available = quads[0].uniforms().uColor;
+    state.missionRevision++;
+    state.activatedCheckpoints = [{ checkpointId: 'entry', activatedAtRoundMs: 100 }];
+    state.nextCheckpointId = null;
+    renderer.sync(config, state, 200, true);
+    const active = quads[0].uniforms().uColor as number[];
+    expect(active).not.toEqual(available);
+    expect(active[2]).toBeGreaterThan(active[0]);
+    expect(quads[1].visible).toBe(false);
+    state.missionRevision++;
+    state.completedCheckpoints = [{ checkpointId: 'entry', completedAtRoundMs: 300 }];
+    state.nextCheckpointId = 'middle';
+    renderer.sync(config, state, 400, true);
+    const completed = quads[0].uniforms().uColor as number[];
+    expect(completed[1]).toBeGreaterThan(completed[0]);
+    expect(completed[1]).toBeGreaterThan(completed[2]);
+    expect(quads.map(quad => quad.visible)).toEqual([true, true, false]);
+    const late = setup();
+    late.renderer.sync(config, state, 10_000, true);
+    expect(late.quads.map(quad => quad.visible)).toEqual([true, true, false]);
+    expect(late.quads[0].uniforms().uColor).toEqual(completed);
+  });
+
   it('derives acquisition feedback from the authoritative timestamp, including late joins and repeated snapshots', () => {
     const { renderer, quads, images } = setup();
     const config = makeConfig();
@@ -145,14 +178,14 @@ describe('CoopDefenseMissionProgressRenderer', () => {
     const activatedAt = 5_000;
     state.missionRevision++;
     state.activatedCheckpoints = [{ checkpointId: 'entry', activatedAtRoundMs: activatedAt }];
-    state.nextCheckpointId = 'middle';
+    state.nextCheckpointId = null;
     state.barriers = [{ barrierId: 'gate', open: true }];
     renderer.sync(config, state, activatedAt + CHECKPOINT_ACTIVATION_MS * 0.2, true);
     const justReached = quads[0].uniforms();
     expect(justReached.uNext).toBe(0);
     expect(justReached.uActivationAge).toBeCloseTo(0.2);
     expect(justReached.uColor).not.toEqual(waiting.uColor);
-    expect(quads[1].uniforms().uNext).toBe(1);
+    expect(quads[1].uniforms().uNext).toBe(0);
     expect(images.every(image => image.destroyed)).toBe(true);
     renderer.sync(config, { ...state }, activatedAt + CHECKPOINT_ACTIVATION_MS * 0.6, true);
     expect(quads[0].uniforms().uActivationAge).toBeCloseTo(0.6);
@@ -165,6 +198,55 @@ describe('CoopDefenseMissionProgressRenderer', () => {
     const old = setup();
     old.renderer.sync(config, state, activatedAt + CHECKPOINT_ACTIVATION_MS * 10, true);
     expect(old.quads[0].uniforms().uActivationAge).toBe(-1);
+  });
+
+  it('plays completion from host time without replaying on repeated snapshots, late join or visibility changes', () => {
+    const { renderer, quads } = setup();
+    const config = makeConfig();
+    const state = makeState();
+    state.activatedCheckpoints = [{ checkpointId: 'entry', activatedAtRoundMs: 100 }];
+    state.nextCheckpointId = null;
+    renderer.sync(config, state, 200, true);
+    expect(quads[0].uniforms().uCompletionAge).toBe(-1);
+    const completedAt = 10_000;
+    state.missionRevision++;
+    state.completedCheckpoints = [{ checkpointId: 'entry', completedAtRoundMs: completedAt }];
+    state.nextCheckpointId = 'middle';
+    renderer.sync(config, state, completedAt - 1, true);
+    expect(quads[0].uniforms().uCompletionAge).toBe(-1);
+    renderer.sync(config, state, completedAt, true);
+    expect(quads[0].uniforms()).toMatchObject({ uCompletionAge: 0, uActivationAge: -1 });
+    renderer.sync(config, { ...state }, completedAt + CHECKPOINT_COMPLETION_MS * 0.4, true);
+    expect(quads[0].uniforms().uCompletionAge).toBeCloseTo(0.4);
+    const late = setup();
+    late.renderer.sync(config, state, completedAt + CHECKPOINT_COMPLETION_MS * 0.4, true);
+    expect(late.quads[0].uniforms().uCompletionAge).toBeCloseTo(0.4);
+    quality.level = 'low';
+    renderer.sync(config, state, completedAt + CHECKPOINT_COMPLETION_MS * 0.6, true);
+    expect(quads[0].uniforms()).toMatchObject({ uBurstCount: 0, uCompletionAge: 0.6 });
+    expect(quads).toHaveLength(config.checkpoints.length);
+    renderer.sync(config, state, completedAt + CHECKPOINT_COMPLETION_MS, true);
+    expect(quads[0].uniforms().uCompletionAge).toBe(-1);
+    renderer.sync(config, state, completedAt + CHECKPOINT_COMPLETION_MS, false);
+    expect(quads.every(quad => quad.destroyed)).toBe(true);
+    renderer.sync(config, state, completedAt + CHECKPOINT_COMPLETION_MS * 2, true);
+    expect(quads[config.checkpoints.length].uniforms().uCompletionAge).toBe(-1);
+    const old = setup();
+    old.renderer.sync(config, state, completedAt + CHECKPOINT_COMPLETION_MS * 3, true);
+    expect(old.quads[0].uniforms().uCompletionAge).toBe(-1);
+  });
+
+  it('gives completion priority over acquisition when both occur together and resets feedback with the round', () => {
+    const { renderer, quads } = setup();
+    const config = makeConfig();
+    const state = makeState();
+    state.activatedCheckpoints = [{ checkpointId: 'entry', activatedAtRoundMs: 100 }];
+    state.completedCheckpoints = [{ checkpointId: 'entry', completedAtRoundMs: 100 }];
+    renderer.sync(config, state, 100, true);
+    expect(quads[0].uniforms()).toMatchObject({ uActivationAge: -1, uCompletionAge: 0 });
+    renderer.sync(config, { ...makeState(), roundRevision: 2 }, 0, true);
+    expect(quads[0].destroyed).toBe(true);
+    expect(quads[config.checkpoints.length].uniforms()).toMatchObject({ uActivationAge: -1, uCompletionAge: -1 });
   });
 
   it('rebuilds on config and round changes even with identical mission revisions', () => {

@@ -1602,6 +1602,7 @@
     "checkpoints": [
       {
         "id": "cp1-adrenaline",
+        "completeOn": { "type": "after-encounter", "encounterId": "cp1-first-contact" },
         "gridX": 44,
         "gridY": 20,
         "radiusCells": 4,
@@ -1609,6 +1610,7 @@
       },
       {
         "id": "cp2-utility",
+        "completeOn": { "type": "wall-piece-destroyed", "wallId": "utility-wall" },
         "gridX": 78,
         "gridY": 15,
         "radiusCells": 4,
@@ -1616,6 +1618,7 @@
       },
       {
         "id": "cp3-burrow",
+        "completeOn": { "type": "right-of-wall", "wallId": "burrow-wall" },
         "gridX": 111,
         "gridY": 19,
         "radiusCells": 4,
@@ -1623,6 +1626,7 @@
       },
       {
         "id": "cp4-rage",
+        "completeOn": { "type": "after-encounter", "encounterId": "cp4-pressure" },
         "gridX": 148,
         "gridY": 14,
         "radiusCells": 5,

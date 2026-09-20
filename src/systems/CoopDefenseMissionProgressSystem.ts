@@ -1,6 +1,7 @@
 import { CELL_SIZE } from '../config';
 import type {
   CoopDefenseMapMissionBarrierOpenTrigger,
+  CoopDefenseMapRockWallConfig,
   ResolvedCoopDefenseMapMissionProgressConfig,
 } from '../config/coopDefenseMaps';
 import type {
@@ -23,6 +24,8 @@ export interface CoopDefenseMissionProgressSystemOptions {
   readonly roundRevision: number;
   readonly getDefenseObjectiveState: (objectiveId: string) => CoopDefenseSecondaryObjectiveState | null;
   readonly isEncounterCleared?: (encounterId: string) => boolean;
+  readonly isWallPieceDestroyed?: (wallId: string) => boolean;
+  readonly rockWalls?: readonly CoopDefenseMapRockWallConfig[];
   /** Reliable snapshot seam; wird nur bei semantischen Aenderungen aufgerufen. */
   readonly onPresentationChanged?: (state: CoopDefenseMissionProgressPresentationState) => void;
   /** World-Geometrie fuer die authored Checkpoint-Koordinaten. */
@@ -53,6 +56,7 @@ export class CoopDefenseMissionProgressSystem {
   private routeLockDefenseId: string | null = null;
   private routeComplete = false;
   private readonly activatedAtRoundMs = new Map<string, number>();
+  private readonly completedAtRoundMs = new Map<string, number>();
   private readonly resolvedDefenses = new Map<string, ResolvedDefenseState>();
   private readonly barrierOpen = new Map<string, boolean>();
   private readonly previousPositions = new Map<string, PlayerPosition>();
@@ -80,19 +84,25 @@ export class CoopDefenseMissionProgressSystem {
     if (changed) this.routeLockDefenseId = this.findCurrentRouteLock();
 
     const eligibleIds = new Set<string>();
+    const movements: { from: PlayerPosition; to: CoopDefenseMissionPlayerSample }[] = [];
     for (const sample of samples) {
       if (!sample.eligible || !Number.isFinite(sample.x) || !Number.isFinite(sample.y)) continue;
       eligibleIds.add(sample.playerId);
       const previous = this.previousPositions.get(sample.playerId);
       this.previousPositions.set(sample.playerId, { x: sample.x, y: sample.y });
       if (this.suppressNextSample.delete(sample.playerId)) continue;
-      if (countdownActive || this.routeLockDefenseId !== null || this.routeComplete) continue;
-      if (this.activateCrossedCheckpoints(previous ?? sample, sample)) {
-        changed = true;
-      }
+      movements.push({ from: previous ?? sample, to: sample });
     }
     for (const playerId of this.previousPositions.keys()) {
       if (!eligibleIds.has(playerId)) this.previousPositions.delete(playerId);
+    }
+
+    if (!countdownActive && !this.isMissionFailed()) {
+      const participants = movements.map(({ to }) => to);
+      if (this.completeCurrentCheckpoint(participants)) changed = true;
+      for (const { from, to } of movements) {
+        if (this.activateCrossedCheckpoints(from, to, participants)) changed = true;
+      }
     }
 
     if (this.refreshBarriers()) changed = true;
@@ -117,6 +127,10 @@ export class CoopDefenseMissionProgressSystem {
 
   isCheckpointActivated(id: string): boolean {
     return this.activatedAtRoundMs.has(id);
+  }
+
+  isCheckpointCompleted(id: string): boolean {
+    return this.completedAtRoundMs.has(id);
   }
 
   isDefenseResolved(id: string): boolean {
@@ -166,7 +180,11 @@ export class CoopDefenseMissionProgressSystem {
       activatedCheckpoints: this.config.checkpoints
         .filter(({ id }) => this.activatedAtRoundMs.has(id))
         .map(({ id }) => ({ checkpointId: id, activatedAtRoundMs: this.activatedAtRoundMs.get(id) ?? 0 })),
-      nextCheckpointId: this.config.checkpoints[this.nextCheckpointIndex]?.id ?? null,
+      completedCheckpoints: this.config.checkpoints
+        .filter(({ id }) => this.completedAtRoundMs.has(id))
+        .map(({ id }) => ({ checkpointId: id, completedAtRoundMs: this.completedAtRoundMs.get(id)! })),
+      nextCheckpointId: this.activatedAtRoundMs.has(this.config.checkpoints[this.nextCheckpointIndex]?.id)
+        ? null : this.config.checkpoints[this.nextCheckpointIndex]?.id ?? null,
       respawnCheckpointId: this.respawnCheckpointId,
       routeLockDefenseId: this.routeLockDefenseId,
       resolvedDefenses: this.config.mandatoryDefenses
@@ -185,31 +203,55 @@ export class CoopDefenseMissionProgressSystem {
     this.routeLockDefenseId = null;
     this.routeComplete = false;
     this.activatedAtRoundMs.clear();
+    this.completedAtRoundMs.clear();
     this.resolvedDefenses.clear();
     this.previousPositions.clear();
     this.suppressNextSample.clear();
     for (const barrier of this.config.barriers) this.barrierOpen.set(barrier.id, false);
   }
 
-  private activateCrossedCheckpoints(from: PlayerPosition, to: PlayerPosition): boolean {
+  private activateCrossedCheckpoints(
+    from: PlayerPosition,
+    to: PlayerPosition,
+    participants: readonly CoopDefenseMissionPlayerSample[],
+  ): boolean {
     let changed = false;
     while (this.routeLockDefenseId === null) {
       const checkpoint = this.config.checkpoints[this.nextCheckpointIndex];
-      if (!checkpoint) break;
+      if (!checkpoint || this.isCheckpointActivated(checkpoint.id)) break;
       const centerX = this.worldMetrics.offsetX + (checkpoint.gridX + 0.5) * CELL_SIZE;
       const centerY = this.worldMetrics.offsetY + (checkpoint.gridY + 0.5) * CELL_SIZE;
       const radius = checkpoint.radiusCells * CELL_SIZE;
       if (!segmentTouchesCircle(from.x, from.y, to.x, to.y, centerX, centerY, radius)) break;
 
       this.activatedAtRoundMs.set(checkpoint.id, this.elapsedRoundMs);
-      this.nextCheckpointIndex += 1;
       if (checkpoint.setRespawn) this.respawnCheckpointId = checkpoint.id;
       this.options.onCheckpointActivated?.(checkpoint.id);
       this.routeLockDefenseId = this.findCurrentRouteLock();
       changed = true;
-      // Sobald dieser Checkpoint eine Mandatory Defense startet, endet die Auswertung dieses Ticks.
+      if (!this.completeCurrentCheckpoint(participants)) break;
     }
     return changed;
+  }
+
+  private completeCurrentCheckpoint(participants: readonly CoopDefenseMissionPlayerSample[]): boolean {
+    const checkpoint = this.config.checkpoints[this.nextCheckpointIndex];
+    if (!checkpoint || !this.isCheckpointActivated(checkpoint.id)
+      || this.routeLockDefenseId !== null || this.isMissionFailed()) return false;
+    const condition = checkpoint.completeOn;
+    if (condition?.type === 'after-encounter'
+      && this.options.isEncounterCleared?.(condition.encounterId) !== true) return false;
+    if (condition?.type === 'wall-piece-destroyed'
+      && this.options.isWallPieceDestroyed?.(condition.wallId) !== true) return false;
+    if (condition?.type === 'right-of-wall') {
+      const wall = this.options.rockWalls?.find(({ id }) => id === condition.wallId);
+      if (!wall || !participants.some(({ x }) => (
+        x > this.worldMetrics.offsetX + (wall.gridX + wall.widthCells) * CELL_SIZE
+      ))) return false;
+    }
+    this.completedAtRoundMs.set(checkpoint.id, this.elapsedRoundMs);
+    this.nextCheckpointIndex += 1;
+    return true;
   }
 
   private findCurrentRouteLock(): string | null {

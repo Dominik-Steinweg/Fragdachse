@@ -54,6 +54,7 @@ export interface CoopMissionCompositionOptions {
   readonly scene: Phaser.Scene;
   readonly getWorld: () => WorldRuntimeContext | null;
   readonly getLayout: () => ArenaLayout | null;
+  readonly isAuthoredRockDestroyed: (id: number) => boolean;
   readonly getArenaResult: () => ArenaBuilderResult | null;
   readonly getBaseManager: () => BaseManager | null;
   readonly getPlayerManager: () => PlayerManager;
@@ -223,6 +224,8 @@ export class CoopMissionComposition {
 
     new CoopMissionObjectiveComposition({
       activity,
+      authoredRocks: layout.rocks,
+      isAuthoredRockDestroyed: this.options.isAuthoredRockDestroyed,
       humanPlayerCount,
       worldRevision: world.descriptor.worldRevision,
       worldMetrics: world.metrics,

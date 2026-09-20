@@ -813,6 +813,7 @@ describe('Coop defense secondary objectives', () => {
       roundRevision: 42,
       missionRevision: 3,
       activatedCheckpoints: [{ checkpointId: 'entry', activatedAtRoundMs: 1_250 }],
+      completedCheckpoints: [{ checkpointId: 'entry', completedAtRoundMs: 4_500 }],
       nextCheckpointId: 'exit',
       respawnCheckpointId: 'entry',
       routeLockDefenseId: null,
@@ -824,6 +825,24 @@ describe('Coop defense secondary objectives', () => {
 
     const lateBridge = new NetworkBridge();
     expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toEqual(snapshot);
+
+    for (const completedCheckpoints of [
+      [{ checkpointId: 'entry', completedAtRoundMs: -1 }],
+      [{ checkpointId: 'entry', completedAtRoundMs: 1_000 }],
+      [{ checkpointId: 'entry', completedAtRoundMs: Number.NaN }],
+      [{ checkpointId: 'missing', completedAtRoundMs: 5_000 }],
+      [snapshot.completedCheckpoints[0], snapshot.completedCheckpoints[0]],
+      [null],
+      undefined,
+    ]) {
+      globalState.set('cmp', { ...snapshot, completedCheckpoints });
+      expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+    }
+    const open = { ...snapshot, completedCheckpoints: [], nextCheckpointId: null };
+    globalState.set('cmp', open);
+    expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toEqual(open);
+    globalState.set('cmp', { ...open, routeComplete: true });
+    expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
 
     globalState.set('cmp', { ...snapshot, activatedCheckpoints: [{ checkpointId: 'entry', activatedAtRoundMs: -1 }] });
     expect(lateBridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
@@ -841,6 +860,7 @@ describe('Coop defense secondary objectives', () => {
       roundRevision: 42,
       missionRevision: 3,
       activatedCheckpoints: [],
+      completedCheckpoints: [],
       nextCheckpointId: null,
       respawnCheckpointId: null,
       routeLockDefenseId: null,
@@ -864,6 +884,7 @@ describe('Coop defense secondary objectives', () => {
       roundRevision: 42,
       missionRevision: 1,
       activatedCheckpoints: [],
+      completedCheckpoints: [],
       nextCheckpointId: null,
       respawnCheckpointId: null,
       routeLockDefenseId: null,
@@ -888,6 +909,7 @@ describe('Coop defense secondary objectives', () => {
       roundRevision: 42,
       missionRevision: 1,
       activatedCheckpoints: [],
+      completedCheckpoints: [],
       nextCheckpointId: null,
       respawnCheckpointId: null,
       routeLockDefenseId: null,
@@ -912,6 +934,7 @@ describe('Coop defense secondary objectives', () => {
       roundRevision: 42,
       missionRevision: 1,
       activatedCheckpoints: [],
+      completedCheckpoints: [],
       nextCheckpointId: null,
       respawnCheckpointId: null,
       routeLockDefenseId: null,
