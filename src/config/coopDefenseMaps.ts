@@ -715,6 +715,19 @@ export interface ResolvedCoopDefenseMapTutorialStepConfig extends CoopDefenseMap
   readonly durationMs: number;
 }
 
+/** Compact authored rectangles; dimensions count cells from the inclusive origin. */
+export interface CoopDefenseMapWaterAreaConfig {
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly widthCells: number;
+  readonly heightCells: number;
+}
+
+/** Input-only shorthand. Normalization expands areas into the World-owned water cells. */
+export interface CoopDefenseMapAuthoringConfig extends CoopDefenseMapConfig {
+  readonly waterAreas?: readonly CoopDefenseMapWaterAreaConfig[];
+}
+
 export interface CoopDefenseMapConfig {
   readonly water?: readonly import('../types').WaterCell[];
   readonly mapId: string;
@@ -873,13 +886,13 @@ export function resolveCoopDefenseMapTutorialSteps(
   return (mapConfig.tutorialSteps ?? []) as readonly ResolvedCoopDefenseMapTutorialStepConfig[];
 }
 
-interface CoopDefenseMapRegistryFile {
+interface CoopDefenseMapRegistryFile<T extends CoopDefenseMapConfig = CoopDefenseMapConfig> {
   readonly defaultMapId: string;
-  readonly maps: readonly CoopDefenseMapConfig[];
+  readonly maps: readonly T[];
 }
 
 const NORMALIZED_COOP_DEFENSE_MAP_REGISTRY = normalizeMapRegistry(
-  COOP_DEFENSE_MAP_REGISTRY as CoopDefenseMapRegistryFile,
+  COOP_DEFENSE_MAP_REGISTRY as CoopDefenseMapRegistryFile<CoopDefenseMapAuthoringConfig>,
 );
 
 /** Interne Debug-Map; bewusst nicht Teil der auswählbaren Kampagnenregistry. */
@@ -914,7 +927,7 @@ export function getDiagnosticMapConfigs(): readonly CoopDefenseMapConfig[] {
 }
 
 /** Internal diagnostic composition; authored content never joins the campaign. */
-export function registerDiagnosticMap(config: CoopDefenseMapConfig): () => void {
+export function registerDiagnosticMap(config: CoopDefenseMapAuthoringConfig): () => void {
   if (MAPS_BY_ID.has(config.mapId)) throw new Error(`Duplicate map: ${config.mapId}`);
   MAPS_BY_ID.set(config.mapId, normalizeCoopDefenseMapConfig(config));
   diagnosticMapIds.add(config.mapId);
@@ -1131,7 +1144,7 @@ function getEnemyLifecycleXp(kind: CoopDefenseEnemyKind, ancestors = new Set<str
   );
 }
 
-function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefenseMapRegistryFile {
+function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile<CoopDefenseMapAuthoringConfig>): CoopDefenseMapRegistryFile {
   const maps = registry.maps.map(normalizeCoopDefenseMapConfig);
   const uniqueMapIds = new Set<string>();
   for (const mapConfig of maps) {
@@ -1154,7 +1167,7 @@ function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefense
   };
 }
 
-export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConfig {
+export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoringConfig): CoopDefenseMapConfig {
   const uniqueBaseIds = new Set<string>();
   const authoredBases = mapConfig.bases.map((baseConfig) => {
     if (uniqueBaseIds.has(baseConfig.id)) {
@@ -1267,7 +1280,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     arenaWidthCells,
     arenaHeightCells,
   );
-  const water = normalizeWaterCells(mapConfig.water, arenaWidthCells, arenaHeightCells, bases, rockWalls, missionProgress, trackPosition);
+  const water = normalizeWaterCells(mapConfig.water, mapConfig.waterAreas, arenaWidthCells, arenaHeightCells, bases, rockWalls, missionProgress, trackPosition);
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -3914,12 +3927,13 @@ function normalizePersistentSpawnSource(
 
 /** Water is permanent World geometry; invalid authored overlaps are errors, never silently clipped. */
 function normalizeWaterCells(
-  cells: CoopDefenseMapConfig['water'], cols: number, rows: number,
+  cells: CoopDefenseMapConfig['water'], areas: CoopDefenseMapAuthoringConfig['waterAreas'], cols: number, rows: number,
   bases: readonly CoopBaseConfig[], walls: readonly CoopDefenseMapRockWallConfig[] | undefined,
   mission: ResolvedCoopDefenseMapMissionProgressConfig | undefined, tracks: CoopDefenseMapTrackPosition,
 ): CoopDefenseMapConfig['water'] {
-  if (cells === undefined) return undefined;
-  if (!Array.isArray(cells)) throw new Error('[coopDefenseMaps] Water must be an array');
+  if (cells === undefined && areas === undefined) return undefined;
+  if (cells !== undefined && !Array.isArray(cells)) throw new Error('[coopDefenseMaps] Water must be an array');
+  if (areas !== undefined && !Array.isArray(areas)) throw new Error('[coopDefenseMaps] Water areas must be an array');
   const blocked = new Set<string>();
   for (const base of bases) {
     const { width, height } = getBaseShapeDimensions(base.shape);
@@ -3939,7 +3953,7 @@ function normalizeWaterCells(
         if ((x - checkpoint.gridX) ** 2 + (y - checkpoint.gridY) ** 2 <= radius ** 2) blocked.add(x + '_' + y);
   }
   const seen = new Set<string>();
-  return cells.map(cell => {
+  const result = (cells ?? []).map(cell => {
     if (!cell || !Number.isInteger(cell.gridX) || !Number.isInteger(cell.gridY)
       || cell.gridX < 0 || cell.gridY < 0 || cell.gridX >= cols || cell.gridY >= rows)
       throw new Error('[coopDefenseMaps] Water cell outside arena or non-integer');
@@ -3951,4 +3965,24 @@ function normalizeWaterCells(
     seen.add(key);
     return { gridX: cell.gridX, gridY: cell.gridY };
   });
+  for (const area of areas ?? []) {
+    if (!area || ![area.gridX, area.gridY, area.widthCells, area.heightCells].every(Number.isSafeInteger)
+      || area.gridX < 0 || area.gridY < 0 || area.widthCells <= 0 || area.heightCells <= 0
+      || area.gridX + area.widthCells > cols || area.gridY + area.heightCells > rows) {
+      throw new Error('[coopDefenseMaps] Invalid water area: expected an in-bounds rectangle with positive integer dimensions');
+    }
+    for (let y = area.gridY; y < area.gridY + area.heightCells; y++) {
+      for (let x = area.gridX; x < area.gridX + area.widthCells; x++) {
+        const key = x + '_' + y;
+        if (blocked.has(key)) throw new Error('[coopDefenseMaps] Water overlaps authored structure: ' + key);
+        if (typeof tracks === 'object' && (x === tracks.gridX || x === tracks.gridX + 1))
+          throw new Error('[coopDefenseMaps] Water overlaps authored railway: ' + key);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push({ gridX: x, gridY: y });
+      }
+    }
+  }
+  // Canonical order makes equivalent area unions independent of rectangle order.
+  return areas === undefined ? result : result.sort((a, b) => a.gridY - b.gridY || a.gridX - b.gridX);
 }

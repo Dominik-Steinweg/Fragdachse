@@ -160,10 +160,10 @@ describe('Authored spawns with body navigation', () => {
     writeFileSync('build/navigation-results/spawn-maps.json', JSON.stringify({ scenarioVersion: 1, reports }, null, 2));
   }, 180_000);
 
-  it('runs every Map 1 encounter including delayed waves against the real generated geometry and mission barriers', () => {
+  it.each(['1', '7'])('runs every Map %s encounter including delayed waves against the real generated geometry and mission barriers', mapId => {
     const reports: unknown[] = [];
     for (const seed of NAVIGATION_BENCHMARK_SEEDS) {
-      const world = spawnWorld('1', seed), checkpoints = world.route!.checkpoints;
+      const world = spawnWorld(mapId, seed), checkpoints = world.route!.checkpoints;
       let reached = -1;
       for (const encounter of resolveCoopDefenseMapEncounterConfigs(world.map, 1)) {
         if (encounter.start.type === 'after-checkpoint') {
@@ -188,6 +188,7 @@ describe('Authored spawns with body navigation', () => {
       }
       world.destroy();
     }
-    writeFileSync('build/navigation-results/spawn-map1-encounters.json', JSON.stringify({ scenarioVersion: 1, reports }, null, 2));
+    mkdirSync('build/navigation-results', { recursive: true });
+    writeFileSync(`build/navigation-results/spawn-map${mapId}-encounters.json`, JSON.stringify({ scenarioVersion: 1, reports }, null, 2));
   }, 180_000);
 });

@@ -114,7 +114,6 @@ export const deContent = {
   "map.4.tutorial": "Am vorderen Stützpunkt findet ihr Adrenalin und eine BFG, die sich erst aufladen muss. Nutzt sie gegen dichte Gegnergruppen und schützt die Versorgungspodeste.",
   "map.5.tutorial": "Boss-Maps enden erst, wenn der Boss fällt. Der erste Sieg bringt einen Boss-Punkt. Nach dieser Map werden Dachs Nukem und Dachs of Steel freigeschaltet. Inspector bleibt gesperrt.",
   "map.6.tutorial": "Drei kleine Sporenturm-Vorposten sichern die Zugänge zur Basis. Kämpft in ihrer Reichweite und wechselt zwischen den Fronten, wenn der Druck steigt.",
-  "map.7.tutorial": "Rückt über die Wasserübergänge nach Osten bis zur Extraktion vor. An jedem Kampfcheckpoint versorgt euch ein Heilvorposten; es gibt keine Respawns. Schaltet Seuchenheiler früh aus, damit sie die übrigen Gegner nicht am Leben halten.",
   "map.8.tutorial": "Rettet die beschädigten Raketenturm-Vorposten bis zum Ende des markierten HOLD-Angriffs, um den Raketenturm dauerhaft freizuschalten. Scheitert der Hold, könnt ihr die Hauptmission trotzdem gewinnen.",
   "map.9.tutorial": "Keine Basis. Kein Rückzug. Überlebt 120 Sekunden. Die Gegner jagen ausschließlich euch; jeder Spieler hat nur zwei Respawns.",
   "map.11.tutorial": "Feindliche Luftangriffe werden vor dem Einschlag markiert. Bleibt in Bewegung und verlasst die Zielzonen rechtzeitig.",

@@ -93,7 +93,7 @@ const ALL_MAP_CONFIGS = [
   getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID),
 ];
 
-it.each(['0', '1'])('keeps authored water on the World through the complete Map %s round-trip', (mapId) => {
+it.each(['0', '1', '7'])('keeps authored water on the World through the complete Map %s round-trip', (mapId) => {
   const map = getCoopDefenseMapConfig(mapId);
   const scenario = toAuthoredScenario(map);
   expect(scenario.world.terrain.water).toEqual(map.water);

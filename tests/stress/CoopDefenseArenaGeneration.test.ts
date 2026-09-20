@@ -82,6 +82,12 @@ describe('Coop defense arena generation', () => {
         const closed = new Set(route.barriers.filter(barrier => barrier.openOn.type === 'after-encounter'
           && !cleared.has(barrier.openOn.encounterId)).flatMap(barrier => barrier.cells.map(cell => `${cell.gridX}:${cell.gridY}`)));
         const reachable = flood(checkpoint.gridX, checkpoint.gridY, closed);
+        if (index === route.checkpoints.length - 1) {
+          for (const pickup of campaign.powerUps) {
+            if (pickup.anchor) expect(reachable.has(`${pickup.anchor.gridX}:${pickup.anchor.gridY}`),
+              `${id}/${seed}/${pickup.defId} reachable without digging`).toBe(true);
+          }
+        }
         expect(reachable.size, `${id}/${seed}/${checkpoint.id}`).toBeGreaterThan(0);
         const previous = route.checkpoints[index - 1] ?? route.startArea!;
         expect([...reachable].some(key => {
@@ -90,22 +96,34 @@ describe('Coop defense arena generation', () => {
         }), `${id}/${seed}/${checkpoint.id} approach`).toBe(true);
         const encounter = campaign.encounters?.find(entry => entry.start.type === 'after-checkpoint'
           && entry.start.checkpointId === checkpoint.id);
+        const waves = encounter ? [encounter] : [];
+        for (let waveIndex = 0; waveIndex < waves.length; waveIndex++) {
+          waves.push(...(campaign.encounters ?? []).filter(entry => entry.start.type === 'after-encounter'
+            && entry.start.encounterId === waves[waveIndex].id));
+        }
         if (encounter) {
           const extraction = route.checkpoints.at(-1)!;
           expect(reachable.has(`${extraction.gridX}:${extraction.gridY}`)).toBe(false);
-          for (const group of encounter.groups) {
+          for (const wave of waves) for (const group of wave.groups) {
             const area = group.spawnArea!;
             expect([...reachable].some(key => {
               const [x, y] = key.split(':').map(Number);
               return x >= area.gridX && x < area.gridX + area.widthCells && y >= area.gridY && y < area.gridY + area.heightCells;
-            }), `${id}/${seed}/${encounter.id} spawn`).toBe(true);
+            }), `${id}/${seed}/${wave.id} spawn`).toBe(true);
           }
         }
         progress.hostUpdate(16, false, [{ playerId: 'p', eligible: true,
           x: metrics.offsetX + (checkpoint.gridX + .5) * CELL_SIZE,
           y: metrics.offsetY + (checkpoint.gridY + .5) * CELL_SIZE }]);
         expect(progress.isCheckpointActivated(checkpoint.id)).toBe(true);
-        if (encounter) { expect(progress.isRouteComplete()).toBe(false); cleared.add(encounter.id); }
+        for (const wave of waves) {
+          expect(progress.isRouteComplete()).toBe(false);
+          if (checkpoint.completeOn?.type === 'after-encounter') {
+            expect(progress.getPresentationState().nextCheckpointId).toBeNull();
+          }
+          cleared.add(wave.id);
+          progress.hostUpdate(16, false, []);
+        }
       }
       expect(progress.isRouteComplete()).toBe(true);
       if (id === '7') expect(progress.getRespawnCheckpointId()).toBeNull();

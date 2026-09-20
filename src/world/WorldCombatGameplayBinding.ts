@@ -750,7 +750,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       killReactions.handleKill(killerId, victimId, sourceId, x, y, source,
         () => !this.destroyed && generation === this.activityGeneration);
     });
-    o.projectileEvents.setProjectileImpactCallback((projectile: ProjectileImpactSource) => o.spawnImpactCloud(projectile));
+    o.projectileEvents.setProjectileImpactCallback((projectile: ProjectileImpactSource) => {
+      if (this.destroyed || !o.network.authority.isHost()) return;
+      // Arcade contacts may arrive between host frames, including trunk/barrier impacts.
+      combat.runHostExecution(() => o.spawnImpactCloud(projectile));
+    });
     hostPhysics.setEnemyManager(o.getEnemyManager());
     this.bindHostPhysics(hostPhysics);
     combat.setDecoySystem(o.decoySystem);

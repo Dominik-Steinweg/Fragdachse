@@ -10,6 +10,7 @@ import { resolveWorldMetrics } from '../src/world/WorldMetrics';
 import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
+import type { CoopDefenseMapAuthoringConfig } from '../src/config/coopDefenseMaps';
 
 const metrics = resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', 400, 80));
 const cell = { gridX: 8, gridY: 8 };
@@ -17,6 +18,64 @@ const x = metrics.offsetX + (cell.gridX + .5) * CELL_SIZE;
 const y = metrics.offsetY + (cell.gridY + .5) * CELL_SIZE;
 
 describe('Water terrain contracts', () => {
+  const areaMap: CoopDefenseMapAuthoringConfig = {
+    mapId: 'area-test', arenaWidthCells: 60, arenaHeightCells: 40, balanceReferenceDurationSec: 60,
+    bases: [], powerUps: [], objective: 'survive', surviveDurationSec: 60, respawnsPerPlayer: 0,
+  };
+
+  it('expands area unions and individual cells deterministically without retaining authoring shorthand', () => {
+    const areas = [
+      { gridX: 8, gridY: 8, widthCells: 2, heightCells: 2 },
+      { gridX: 9, gridY: 9, widthCells: 2, heightCells: 1 },
+    ];
+    const input = { ...areaMap, water: [cell, { gridX: 7, gridY: 8 }], waterAreas: areas };
+    const before = JSON.stringify(input);
+    const normalized = normalizeCoopDefenseMapConfig(input);
+    expect(normalized.water).toEqual([
+      { gridX: 7, gridY: 8 }, { gridX: 8, gridY: 8 }, { gridX: 9, gridY: 8 },
+      { gridX: 8, gridY: 9 }, { gridX: 9, gridY: 9 }, { gridX: 10, gridY: 9 },
+    ]);
+    expect(normalizeCoopDefenseMapConfig({ ...input, waterAreas: [...areas].reverse() }).water).toEqual(normalized.water);
+    expect(normalized).not.toHaveProperty('waterAreas');
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  it.each([
+    null, {}, [null],
+    [{ gridX: -1, gridY: 0, widthCells: 1, heightCells: 1 }],
+    [{ gridX: 0.5, gridY: 0, widthCells: 1, heightCells: 1 }],
+    [{ gridX: 0, gridY: 0, widthCells: 0, heightCells: 1 }],
+    [{ gridX: 0, gridY: 0, widthCells: 1, heightCells: -1 }],
+    [{ gridX: 0, gridY: 0, widthCells: 1, heightCells: 1.5 }],
+    [{ gridX: 59, gridY: 0, widthCells: 2, heightCells: 1 }],
+    [{ gridX: 0, gridY: 39, widthCells: 1, heightCells: 2 }],
+    [{ gridX: 0, gridY: 0, widthCells: Number.MAX_SAFE_INTEGER, heightCells: 1 }],
+  ].map(waterAreas => ({ waterAreas })))('rejects malformed or out-of-bounds water areas: $waterAreas', ({ waterAreas }) => {
+    expect(() => normalizeCoopDefenseMapConfig({ ...areaMap,
+      waterAreas: waterAreas as CoopDefenseMapAuthoringConfig['waterAreas'],
+    })).toThrow(/water/i);
+  });
+
+  it('validates expanded cells against structures and railways instead of clipping areas', () => {
+    const waterAreas = [{ gridX: 8, gridY: 8, widthCells: 2, heightCells: 2 }];
+    expect(() => normalizeCoopDefenseMapConfig({ ...areaMap, waterAreas,
+      trackPosition: { kind: 'grid', gridX: 9 },
+    })).toThrow(/Water overlaps authored railway/);
+    expect(() => normalizeCoopDefenseMapConfig({ ...areaMap, waterAreas,
+      bases: [{ id: 'outpost', role: 'outpost', hpMax: 100,
+        anchor: { kind: 'grid', gridX: 9, gridY: 9 },
+        shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 } }],
+    })).toThrow(/Water overlaps authored structure/);
+  });
+
+  it('supports empty areas and rectangles touching the outer map edge', () => {
+    expect(normalizeCoopDefenseMapConfig(areaMap).water).toBeUndefined();
+    expect(normalizeCoopDefenseMapConfig({ ...areaMap, waterAreas: [] }).water).toEqual([]);
+    expect(normalizeCoopDefenseMapConfig({ ...areaMap,
+      waterAreas: [{ gridX: 59, gridY: 39, widthCells: 1, heightCells: 1 }],
+    }).water).toEqual([{ gridX: 59, gridY: 39 }]);
+  });
+
   const readMask = (mask: ReturnType<WaterSurfaceModel['bake']>, x: number, y: number, channel: number): number => {
     const px = Math.floor((x + WATER_MASK_HALO) / WATER_MASK_STEP);
     const py = Math.floor((y + WATER_MASK_HALO) / WATER_MASK_STEP);

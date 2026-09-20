@@ -19,6 +19,21 @@ Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseM
 
 **Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel den Default für `front`; zusammen mit einer authored `spawnArea` kann ein zweiter Lauf an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
 
+## Wasser-Authoring
+
+`CoopDefenseMapAuthoringConfig` erlaubt neben `water`-Einzelzellen kompakte `waterAreas`:
+`{ "gridX": 10, "gridY": 5, "widthCells": 12, "heightCells": 8 }` beschreibt ein Rechteck
+ab der eingeschlossenen Startzelle mit ganzzahligen, positiven Abmessungen. Bereiche dürfen
+sich untereinander und mit Einzelzellen überlappen; sie bilden eine Vereinigungsmenge.
+Explizit doppelte Einzelzellen bleiben ein Authoring-Fehler. Außerhalb der Map liegende Bereiche
+und Überschneidungen mit geschützter Geometrie werden abgelehnt, nicht abgeschnitten.
+
+`normalizeCoopDefenseMapConfig()` löst Bereiche einmalig in nach Zeile und Spalte sortierte
+Wasserzellen auf. Die normalisierte `CoopDefenseMapConfig`, World-Adapter und Runtime kennen
+nur `water`; `waterAreas` wird nicht weitergereicht. Reine Einzelzellenlisten behalten ihre
+bisherige Reihenfolge. Maßgeblich sind `tests/WaterTerrain.test.ts` und
+`tests/WorldActivityAuthoring.test.ts`.
+
 ## Basen und Overlays
 
 Eine Basis ist zunächst World-Geometrie und World-Identität: Position, Form, Faction, Rolle, maximale Struktur, Turrets und Spawn-Zentrum gehören zur World. Startzustand, Spieler-Skalierung, Dormancy und missionsbezogene Pedestals sind Activity-Overlay.

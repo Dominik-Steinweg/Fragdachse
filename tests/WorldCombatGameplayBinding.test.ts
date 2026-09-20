@@ -135,6 +135,7 @@ function createFixture(options: {
   readonly targetStatusSystem?: TargetStatusSystem | null;
   readonly baseManager?: BaseManager;
   readonly getWorldGeometryBinding?: WorldCombatGameplayBindingOptions['getWorldGeometryBinding'];
+  readonly spawnImpactCloud?: WorldCombatGameplayBindingOptions['spawnImpactCloud'];
 }): TurretFixture {
   const playerManager = {
     getAllPlayers: () => options.players as readonly PlayerEntity[] as PlayerEntity[],
@@ -313,7 +314,7 @@ function createFixture(options: {
     resolveObstacleDamage: () => 0,
     getWorldMutation: () => null,
     updateTurretAngle: vi.fn(),
-    spawnImpactCloud: vi.fn(),
+    spawnImpactCloud: options.spawnImpactCloud ?? vi.fn(),
     resetPlayerPosition: vi.fn(),
     dropBeer: vi.fn(),
     dropCarryForPlayer: vi.fn(),
@@ -415,6 +416,29 @@ describe('personal MG profile and World lifetime', () => {
 });
 
 describe('WorldCombatGameplayBinding projectile target geometry', () => {
+  it('creates physics impact clouds between host frames in a host scope and ignores detached callbacks', () => {
+    let inHostExecution = false;
+    const times: number[] = [];
+    const f = createFixture({ players: [], enemies: [],
+      spawnImpactCloud: () => times.push(f.combatSystem.getHostTime()),
+    });
+    vi.mocked(f.combatSystem.runHostExecution).mockImplementation(work => {
+      inHostExecution = true;
+      try { return work(); } finally { inHostExecution = false; }
+    });
+    vi.mocked(f.combatSystem.getHostTime).mockImplementation(() => {
+      if (!inHostExecution) throw Error('Missing active Host execution context');
+      return 1234;
+    });
+    const callback = vi.mocked(f.projectileEvents.setProjectileImpactCallback as (...args: any[]) => void).mock.calls[0][0];
+    expect(() => callback({ projectileId: 7 })).not.toThrow();
+    expect(times).toEqual([1234]);
+    expect(inHostExecution).toBe(false);
+    f.binding.destroy();
+    expect(() => callback({ projectileId: 7 })).not.toThrow();
+    expect(times).toEqual([1234]);
+  });
+
   it('silently removes a charged utility bubble outside host execution during teardown', () => {
     const f = createFixture({ players: [], enemies: [] });
     const port = vi.mocked(f.playerCombat.utility.setTimeBubblePort!).mock.calls[0][0]!;
