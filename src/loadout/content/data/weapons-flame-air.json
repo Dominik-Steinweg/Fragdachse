@@ -132,7 +132,7 @@
       "hitSlowDurationMs": 2000,
       "hitVulnerabilityDurationMs": 2000,
       "adrenalinCost": 0,
-      "adrenalinGain": 10,
+      "adrenalinGain": 20,
       "spreadStanding": 6,
       "spreadMoving": 10,
       "spreadPerShot": 0.2,

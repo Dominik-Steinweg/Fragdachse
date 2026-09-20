@@ -18,10 +18,10 @@ export interface AdrenalineEssenceConfig {
 export const ADRENALINE_ESSENCE_CONFIG: AdrenalineEssenceConfig = Object.freeze({
   landingMinMs: 150,
   landingMaxMs: 250,
-  groundLifetimeMs: 8_000,
+  groundLifetimeMs: 12_000,
   mergeWindowMs: 150,
   mergeRadius: 32,
-  magnetRadius: 200,
+  magnetRadius: 260,
   transferMinMs: 120,
   transferMaxMs: 300,
   dedupeRetentionMs: 30_000,

@@ -14,7 +14,7 @@
         "weapon1"
       ],
       "adrenalinCost": 0,
-      "adrenalinGain": 50,
+      "adrenalinGain": 100,
       "hitHeal": 0,
       "hitAdrenaline": 0,
       "bloodEffectMultiplier": 1,

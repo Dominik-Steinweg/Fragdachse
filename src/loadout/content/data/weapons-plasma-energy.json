@@ -15,7 +15,7 @@
         "weapon1"
       ],
       "adrenalinCost": 0,
-      "adrenalinGain": 8,
+      "adrenalinGain": 16,
       "spreadStanding": 0,
       "spreadMoving": 0,
       "spreadPerShot": 0,
@@ -75,7 +75,7 @@
         "weapon1"
       ],
       "adrenalinCost": 0,
-      "adrenalinGain": 3,
+      "adrenalinGain": 6,
       "spreadStanding": 15,
       "spreadMoving": 15,
       "spreadPerShot": 0,
@@ -238,7 +238,7 @@
         "weapon1"
       ],
       "adrenalinCost": 0,
-      "adrenalinGain": 12,
+      "adrenalinGain": 24,
       "spreadStanding": 0,
       "spreadMoving": 0,
       "spreadPerShot": 0,
