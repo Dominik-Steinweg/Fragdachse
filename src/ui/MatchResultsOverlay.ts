@@ -1,3 +1,4 @@
+import { ensureForestActionButton } from './forestTextures';
 import { BUTTON_CURSOR } from './gameCursor';
 import { ensureResultsBanner, ensureResultsPanel, ensureResultsTitle } from './matchResultsTextures';
 import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from './MatchResultsAssets';
@@ -61,9 +62,9 @@ const CONTENT_LEFT = PANEL_LEFT + PANEL_PAD;
 const CONTENT_RIGHT = PANEL_RIGHT - PANEL_PAD;
 
 const BANNER_W = 720;
-const BANNER_H = 190;
-const BANNER_Y = 140;
-const META_Y = 238;
+const BANNER_H = 170;
+const BANNER_Y = 132;
+const META_Y = 254;
 
 const SECTION_TOP = 280;
 const SECTION_BOTTOM = 936;
@@ -121,15 +122,14 @@ const SUMMARY_START_Y = 384;
 const MAX_SUMMARY_CHIPS = 5;
 
 const FOOTER_Y = GAME_HEIGHT - 92;
-const CONTINUE_W = 310;
-const CONTINUE_H = 56;
+const CONTINUE_W = 430;
+const CONTINUE_H = 80;
 const CONTINUE_X = CONTENT_RIGHT - CONTINUE_W / 2;
 const FEEDBACK_W = 250;
 const FEEDBACK_X = CONTENT_RIGHT - CONTINUE_W - 16 - FEEDBACK_W / 2;
 
 const LOCAL_ROW_ACCENT = COLORS.GOLD_2;
 
-const TEX_CONTINUE = '_mro_continue';
 const TEX_SPARK = '_mro_spark';
 const TEX_SHARD = '_mro_shard';
 const TEX_RING = '_mro_ring';
@@ -595,7 +595,7 @@ export class MatchResultsOverlay {
       this.banner,
       this.outcomeText,
       this.outcomeFlash,
-      this.createTitleSign(CX, META_Y, 760, 38),
+      this.createTitleSign(CX, META_Y, 720, 38),
       this.metaText,
     ]).setScrollFactor(0);
   }
@@ -801,12 +801,10 @@ export class MatchResultsOverlay {
       fontFamily: FONT_MONO, fontSize: '14px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_5),
     }).setOrigin(0, 0.5).setScrollFactor(0);
 
-    this.continueButton = this.scene.add.image(CONTINUE_X, FOOTER_Y, ensureGlossyButtonTexture(
-      this.scene, TEX_CONTINUE, CONTINUE_W, CONTINUE_H, INTENT.primary.fill, INTENT.primary.stroke,
+    this.continueButton = this.scene.add.image(CONTINUE_X, FOOTER_Y, ensureForestActionButton(
+      this.scene, CONTINUE_W, CONTINUE_H, 'ready', 'primary', 'rest',
     )).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
-    this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, t('ui.results.continueLobby'), textStyle('label', {
-      color: TEXT.accent,
-    })).setOrigin(0.5).setScrollFactor(0);
+    this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, t('ui.results.continueLobby'), textStyle('subtitle')).setColor('#142015').setOrigin(0.5).setScrollFactor(0);
     this.continueButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       // Das Overlay verschwindet sofort. Die Abbruchmarkierung verhindert, dass ein
       // darunterliegendes Lobby-Objekt denselben Pointerdown ebenfalls verarbeitet.
@@ -814,9 +812,13 @@ export class MatchResultsOverlay {
       activateUi(this.scene, () => this.continueToLobby());
     });
     attachHoverEffect(this.scene, this.continueButton, this.continueLabel);
+    this.continueButton.on('pointerover', () => this.continueButton?.setTexture(
+      ensureForestActionButton(this.scene, CONTINUE_W, CONTINUE_H, 'ready', 'primary', 'hover')));
+    this.continueButton.on('pointerout', () => this.continueButton?.setTexture(
+      ensureForestActionButton(this.scene, CONTINUE_W, CONTINUE_H, 'ready', 'primary', 'rest')));
 
     this.balanceFeedbackButton = this.scene.add.image(FEEDBACK_X, FOOTER_Y, ensureGlossyButtonTexture(
-      this.scene, '_mro_balance_feedback', FEEDBACK_W, CONTINUE_H, INTENT.secondary.fill, INTENT.secondary.stroke,
+      this.scene, '_mro_balance_feedback', FEEDBACK_W, 56, INTENT.secondary.fill, INTENT.secondary.stroke,
     )).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR }).setVisible(false);
     this.balanceFeedbackLabel = this.scene.add.text(FEEDBACK_X, FOOTER_Y, t('ui.results.balanceFeedback'), textStyle('label', {
       color: INTENT.secondary.label,
@@ -1393,8 +1395,8 @@ export class MatchResultsOverlay {
     return [
       this.scene.add.image(x + w / 2, y + h / 2, ensureResultsPanel(this.scene, w, h))
         .setDisplaySize(w, h).setScrollFactor(0),
-      this.createTitleSign(x + 48 + titleWidth / 2, y + 30, titleWidth, 48),
-      this.scene.add.text(x + 82, y + 30, title, textStyle('subtitle'))
+      this.createTitleSign(x + 48 + titleWidth / 2, y + 24, titleWidth, 48),
+      this.scene.add.text(x + 82, y + 24, title, textStyle('subtitle'))
         .setOrigin(0, 0.5).setScrollFactor(0),
     ];
   }

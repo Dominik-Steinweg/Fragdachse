@@ -3,10 +3,10 @@ import { drawModalFrame, MODAL_FRAME_ASSET } from './ForestModal';
 import { MATCH_RESULTS_BANNER, MATCH_RESULTS_TITLE } from './MatchResultsAssets';
 import { ensureForestButton } from './forestTextures';
 
-/** Fixed end caps preserve the carved corners and nails across all label widths. */
+/** Fixed end caps preserve the carved corners and integrated ivy across all label widths. */
 export function ensureResultsTitle(scene: Phaser.Scene, w: number, h: number): string {
   const ready = scene.textures.exists(MATCH_RESULTS_TITLE.key);
-  const key = `_results_title_art_${ready}_${w}x${h}`;
+  const key = `_results_title_v2_${ready}_${w}x${h}`;
   if (scene.textures.exists(key)) return key;
   const texture = scene.textures.createCanvas(key, w * 2, h * 2)!;
   const ctx = texture.context;
@@ -15,7 +15,7 @@ export function ensureResultsTitle(scene: Phaser.Scene, w: number, h: number): s
   ctx.imageSmoothingQuality = 'high';
   if (ready) {
     const image = scene.textures.get(MATCH_RESULTS_TITLE.key).getSourceImage() as HTMLImageElement;
-    const sourceCap = Math.round(image.height * 0.6);
+    const sourceCap = Math.round(image.height * 0.75);
     const cap = sourceCap * h / image.height;
     ctx.drawImage(image, 0, 0, sourceCap, image.height, 0, 0, cap, h);
     ctx.drawImage(image, sourceCap, 0, image.width - 2 * sourceCap, image.height,

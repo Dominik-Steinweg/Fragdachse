@@ -2,9 +2,11 @@
 
 Created with the built-in Imagegen tool. Exact prompts and export settings are in
 [prompts.json](prompts.json). The source PNGs retain the generated transparency;
-the game uses only the two 48 x 48 PNGs. Both use hotspot `(10, 8)` at the leading
-claw tip. Both have five short toes, dark horn claws and compact short fur.
-Button hover gently spreads the toes and brightens the silver fur highlights.
+the game uses only the two 48 x 48 PNGs. Both use hotspot `(8, 6)` at the nose.
+Default is the selected Wild Bruiser (variant 5 from `art/cursor-variants`): a
+broad, rugged badger head with black-white stripes, bristled fur and fierce amber
+eyes. Button hover retains the same head with orange eyes, warm fur highlights
+and a strong orange-gold contour for a clear change at cursor size.
 
 Re-export from the repository root:
 

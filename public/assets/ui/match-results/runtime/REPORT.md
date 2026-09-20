@@ -8,4 +8,4 @@ Selected webp: 595798 bytes (65.8% smaller).
 
 Opaque forest background: 2455566 → 201972 bytes; WebP quality 86, 1600 × 900.
 
-Section title: 753841 → 133182 bytes; lossless WebP, 1000 × 124.
+Section title: 1123725 → 175736 bytes; lossless WebP, 1000 × 149.

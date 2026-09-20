@@ -20,12 +20,12 @@ const backgroundSource = await readFile(new URL('forest-background.png', assets)
 const background = await sharp(backgroundSource).resize({ width: 1600, withoutEnlargement: true })
   .webp({ quality: 86, effort: 6 }).toBuffer({ resolveWithObject: true });
 await writeFile(new URL('runtime/forest-background.webp', assets), background.data);
-const titleSource = await readFile(new URL('section-title.png', assets));
+const titleSource = await readFile(new URL('section-title-v2.png', assets));
 const title = await sharp(titleSource).trim().resize({ width: 1000, withoutEnlargement: true })
   .webp({ lossless: true, effort: 6 }).toBuffer({ resolveWithObject: true });
-await writeFile(new URL('runtime/section-title.webp', assets), title.data);
+await writeFile(new URL('runtime/section-title-v2.webp', assets), title.data);
 await writeFile(new URL('src/ui/matchResultsExports.json', root), JSON.stringify({ title: {
-  file: 'runtime/section-title.webp', width: title.info.width, height: title.info.height,
+  file: 'runtime/section-title-v2.webp', width: title.info.width, height: title.info.height,
 }, background: {
   file: 'runtime/forest-background.webp', width: background.info.width, height: background.info.height,
 }, banner: {
