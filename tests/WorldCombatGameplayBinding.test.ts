@@ -14,7 +14,9 @@ vi.mock('phaser', () => ({
 
 import { RockGridIndex } from '../src/arena/RockGridIndex';
 import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
-import { collisionRock } from './projectileCollisionFixture';
+import { collisionRock, collisionRecord } from './projectileCollisionFixture';
+import { ProjectileCollisionProcessor } from '../src/projectile/ProjectileCollisionProcessor';
+import { TRAIN } from '../src/train/TrainConfig';
 import type { CombatTargetRef } from '../src/combat/CombatScope';
 import {
   CELL_SIZE,
@@ -135,6 +137,7 @@ function createFixture(options: {
   readonly targetStatusSystem?: TargetStatusSystem | null;
   readonly baseManager?: BaseManager;
   readonly getWorldGeometryBinding?: WorldCombatGameplayBindingOptions['getWorldGeometryBinding'];
+  readonly getWorldTrain?: WorldCombatGameplayBindingOptions['getWorldTrain'];
   readonly spawnImpactCloud?: WorldCombatGameplayBindingOptions['spawnImpactCloud'];
 }): TurretFixture {
   const playerManager = {
@@ -327,7 +330,7 @@ function createFixture(options: {
     syncActiveBaseIds: vi.fn(),
     getMissionBarrierObstacles: () => null,
     getRockTargets: () => options.rockTargets ?? [],
-    getWorldTrain: () => null,
+    getWorldTrain: options.getWorldTrain ?? (() => null),
     getTimebombSystem: () => null,
     getNecromancySystem: () => null,
     hostUpdate: methodBag({
@@ -416,6 +419,53 @@ describe('personal MG profile and World lifetime', () => {
 });
 
 describe('WorldCombatGameplayBinding projectile target geometry', () => {
+  it('uses actual train segments for sweeps and overlaps under one damage identity', () => {
+    const wagonY = TRAIN.LOCO_HEIGHT / 2 + 40 + TRAIN.WAGON_HEIGHT / 2;
+    let segments = [{ x: 0, y: 0 }, { x: 0, y: wagonY }];
+    const f = createFixture({ players: [], enemies: [], getWorldTrain: () => ({
+      getActiveSegmentPositions: () => segments,
+    }) as never });
+    const query = f.projectileInteraction.setProjectileCollisionTargetQueryPort.mock.calls.at(-1)![0]!;
+    const exact = query.getWorldTargetHit!;
+    const target = { kind: 'train', id: 'main' } as const;
+    const half = TRAIN.HITBOX_WIDTH / 2;
+    const gapY = TRAIN.LOCO_HEIGHT / 2 + 20;
+    expect(exact(target, -100, gapY, 100, gapY, 2, 2)).toBeNull();
+    expect(exact(target, half + 10, -200, half + 10, wagonY + 200, 2, 2)).toBeNull();
+    expect(exact(target, 0, gapY, 0, gapY, 2, 2)).toBeNull();
+    expect(exact(target, half + 1, 0, half + 1, 0, 2, 2)).not.toBeNull();
+    expect(exact(target, -100, 0, 100, 0, 2, 3)).toMatchObject({
+      x: -half, y: 0, centerX: -half - 2, distance: 100 - half - 2, normal: { x: -1, y: 0 },
+    });
+    expect(exact(target, 100, 0, -100, 0, 2, 3)).toMatchObject({ x: half, normal: { x: 1, y: 0 } });
+    const bottom = wagonY + TRAIN.WAGON_HEIGHT / 2;
+    expect(exact(target, 0, bottom + 100, 0, -200, 2, 3)).toMatchObject({
+      x: 0, y: bottom, distance: 97, normal: { x: 0, y: 1 },
+    });
+    // A wide projectile intersects both segments, but produces one canonical candidate.
+    for (const mode of ['sweep', 'overlap'] as const) {
+      for (const size of [4, 50]) {
+        const processor = new ProjectileCollisionProcessor();
+        const impact = vi.fn((_record: import('../src/projectile/ProjectileRuntimeRecord').ProjectileRuntimeRecord,
+          _candidate: import('../src/projectile/ProjectileTargetPort').ProjectileImpactCandidate) => 'passed' as const);
+        const record = collisionRecord(1, -100, gapY, mode === 'sweep' ? 100 : 0, gapY, size, mode);
+        processor.run([record], 0, { targetQuery: query, targetability: null, worldBlocker: null,
+          directImpact: null, destroyProjectile: vi.fn(), applyDefense: vi.fn(), resolveWorldImpact: impact,
+          worldTargetHit: (r, t, sx, sy, ex, ey) => exact(t, sx, sy, ex, ey,
+            r.physics.body.width / 2, r.physics.body.height / 2) });
+        expect(impact).toHaveBeenCalledTimes(size === 4 ? 0 : 1);
+        if (size === 50) {
+          expect(impact.mock.calls[0][1].target).toEqual(target);
+          if (mode === 'sweep') expect(impact.mock.calls[0][1]).toMatchObject({
+            x: -half, normal: { x: -1, y: 0 }, distanceAlongTravel: 100 - half - 25,
+          });
+        }
+      }
+    }
+    segments = [];
+    expect(exact(target, -100, 0, 100, 0, 2, 2)).toBeNull();
+    f.binding.destroy();
+  });
   it('creates physics impact clouds between host frames in a host scope and ignores detached callbacks', () => {
     let inHostExecution = false;
     const times: number[] = [];

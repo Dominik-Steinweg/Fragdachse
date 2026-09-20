@@ -345,9 +345,21 @@ export class WorldProjectileRuntime implements
     this.collisionDependencies = {
       shotOptions: record => this.shotOptions(record),
       allowsWorldContact: (record, target) => this.allowsWorldContact(record, target),
-      worldTargetHit: (record, target, sx, sy, ex, ey) => target.kind === 'base'
-        ? this.physicsBinding.getObstacleGeometry?.()?.baseHit(target.id, sx, sy, ex, ey,
-          record.physics.body.width / 2, record.physics.body.height / 2, record.sourceCarrierBaseId) : undefined,
+      worldTargetHit: (record, target, sx, sy, ex, ey) => {
+        if (target.kind === 'base') return this.physicsBinding.getObstacleGeometry?.()?.baseHit(
+          target.id, sx, sy, ex, ey, record.physics.body.width / 2, record.physics.body.height / 2,
+          record.sourceCarrierBaseId);
+        if (target.kind !== 'train') return undefined;
+        const query = this.collisionTargetQueryPort;
+        if (sx === ex && sy === ey) {
+          const bounds = record.physics.sprite.getBounds();
+          const x = (bounds.left + bounds.right) / 2, y = (bounds.top + bounds.bottom) / 2;
+          return query?.getWorldTargetHit?.(target, x, y, x, y,
+            (bounds.right - bounds.left) / 2, (bounds.bottom - bounds.top) / 2);
+        }
+        return query?.getWorldTargetHit?.(target, sx, sy, ex, ey,
+          record.physics.body.width / 2, record.physics.body.height / 2);
+      },
       onGrenadeContact: (record, candidate) => this.resolveGrenadeContact(record, candidate),
       get targetQuery() { return runtime.collisionTargetQueryPort; },
       get targetability() { return runtime.targetabilityPort; },

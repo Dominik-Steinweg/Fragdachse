@@ -58,6 +58,9 @@ interface SweepCandidate {
   x: number;
   y: number;
   distance: number;
+  centerX?: number;
+  centerY?: number;
+  normal?: { readonly x: number; readonly y: number };
 }
 
 /** Was der Owner für die Kandidatenverarbeitung bereitstellt. */
@@ -65,7 +68,7 @@ export interface ProjectileCollisionDependencies {
   shotOptions?(record: ProjectileRuntimeRecord): import('../systems/ObstacleRules').ObstacleShotOptions;
   allowsWorldContact?(record: ProjectileRuntimeRecord, target: ProjectileTargetRef): boolean;
   worldTargetHit?(record: ProjectileRuntimeRecord, target: ProjectileTargetRef,
-    sx: number, sy: number, ex: number, ey: number): { x: number; y: number; distance: number } | null | undefined;
+    sx: number, sy: number, ex: number, ey: number): import('./ProjectileTargetPort').ProjectileWorldTargetHit | null | undefined;
   onGrenadeContact?(record: ProjectileRuntimeRecord, candidate: ProjectileImpactCandidate): void;
   readonly targetQuery: ProjectileCollisionTargetQueryPort | null;
   readonly targetability: ProjectileTargetabilityPort | null;
@@ -332,10 +335,12 @@ export class ProjectileCollisionProcessor {
       && Math.min(slot.top, slot.y - slot.radius) <= Math.max(r.startY, r.endY) + r.padding;
   }
 
-  private pushSweepCandidate(slot: CollisionTargetSlot, x: number, y: number, distance: number): void {
+  private pushSweepCandidate(slot: CollisionTargetSlot, x: number, y: number, distance: number,
+    exact?: import('./ProjectileTargetPort').ProjectileWorldTargetHit | null): void {
     const index = this.sweepCandidates.length;
     const candidate = this.sweepCandidatePool[index] ??= { slot, x, y, distance };
     candidate.slot = slot; candidate.x = x; candidate.y = y; candidate.distance = distance;
+    candidate.centerX = exact?.centerX; candidate.centerY = exact?.centerY; candidate.normal = exact?.normal;
     this.sweepCandidates.push(candidate);
   }
 
@@ -418,7 +423,7 @@ export class ProjectileCollisionProcessor {
       // Ein näherer Weltblocker verhindert den Treffer, gleiche Distanz bleibt durch die
       // kanonische Zielreihenfolge definiert.
       if (blockerDistance !== null && blockerDistance < hit.distance - 0.000001) continue;
-      this.pushSweepCandidate(slot, hit.x, hit.y, hit.distance);
+      this.pushSweepCandidate(slot, hit.x, hit.y, hit.distance, worldHit);
     }
     this.sortSweepCandidates();
     for (const candidate of this.sweepCandidates) {
@@ -427,7 +432,7 @@ export class ProjectileCollisionProcessor {
       // läuft die Kandidatenliste weiter; ein normaler Treffer beendet sie im applyCandidate.
       const velocityX = record.physics.body.velocity.x;
       const velocityY = record.physics.body.velocity.y;
-      record.physics.body.reset(candidate.x, candidate.y);
+      record.physics.body.reset(candidate.centerX ?? candidate.x, candidate.centerY ?? candidate.y);
       record.physics.body.setVelocity(velocityX, velocityY);
       const outcome = this.applyCandidate(
         record,
@@ -437,6 +442,7 @@ export class ProjectileCollisionProcessor {
           x: candidate.x,
           y: candidate.y,
           distanceAlongTravel: candidate.distance,
+          normal: candidate.normal,
           source: 'sweep',
         },
         nowMs,
@@ -448,8 +454,8 @@ export class ProjectileCollisionProcessor {
       // projectile itself (for example through a local redirect or lifecycle transition). This
       // deliberately avoids restoring over mutations that belong to applyCandidate().
       if (!record.pendingDestroy && record.physics.body.enable
-        && Math.abs(record.physics.sprite.x - candidate.x) <= 0.000001
-        && Math.abs(record.physics.sprite.y - candidate.y) <= 0.000001) {
+        && Math.abs(record.physics.sprite.x - (candidate.centerX ?? candidate.x)) <= 0.000001
+        && Math.abs(record.physics.sprite.y - (candidate.centerY ?? candidate.y)) <= 0.000001) {
         const nextVelocityX = record.physics.body.velocity.x;
         const nextVelocityY = record.physics.body.velocity.y;
         record.physics.body.reset(endX, endY);

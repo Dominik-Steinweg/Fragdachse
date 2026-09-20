@@ -139,6 +139,31 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it.each(['sweep', 'overlap'] as const)('honors exact train misses and deduplicates accepted %s contacts', collisionMode => {
+    const { runtime, physics } = createRuntimeHarness();
+    const damage = vi.fn();
+    runtime.setTrainImpactPort({ resolveTrainImpact: damage });
+    let accepts = false;
+    const exact = vi.fn(() => accepts ? {
+      x: 20, y: 0, centerX: 16, centerY: 0, distance: 16, normal: { x: -1, y: 0 },
+    } : null);
+    runtime.setProjectileCollisionTargetQueryPort({ getWorldTargetHit: exact,
+      readCollisionTargets: sink => sink('train', 'main', 'train', 50, 0, 100, 20, -100, 80, 100) });
+    const id = runtime.spawnProjectile(baseRequest({ collisionMode }))!;
+    const handle = physics.handles.get(id)!;
+    handle.sprite.x = 50;
+    runtime.runHostInteractionStage(1000);
+    expect(exact).toHaveBeenCalled();
+    expect(damage).not.toHaveBeenCalled();
+    expect(handle.sprite.x).toBe(50);
+    accepts = true;
+    runtime.runHostInteractionStage(1001);
+    expect(damage).toHaveBeenCalledExactlyOnceWith({ damage: 10, attributionId: 'owner' });
+    physics.emit({ projectileId: id, target: { kind: 'train', id: 'main' }, x: 20, y: 0,
+      velocityX: 100, velocityY: 0, source: 'physics-collider' });
+    expect(damage).toHaveBeenCalledOnce();
+    runtime.destroy();
+  });
   function emitterRequest(lifetimeMs = 1_000): ProjectileSpawnRequest {
     const flame = baseRequest({ speed: 400, size: 14, lifetime: 2_000, projectileStyle: 'flame' });
     return { ...baseRequest(), origin: { x: 0, y: 0, angle: 0.3 },

@@ -95,6 +95,8 @@ import {
 import { getBaseDestructionBlast } from '../effects/BaseDestructionPlan';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type TeslaDomeWeaponFireConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
 import { TRAIN } from '../train/TrainConfig';
+import { segmentRectInterval } from '../systems/ObstacleRules';
+import type { ProjectileWorldTargetHit } from '../projectile/ProjectileTargetPort';
 import { TeslaDomeSystem as ConcreteTeslaDomeSystem } from '../systems/TeslaDomeSystem';
 import { EnergyShieldSystem as ConcreteEnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import { ShieldBuffSystem as ConcreteShieldBuffSystem } from '../systems/ShieldBuffSystem';
@@ -1151,12 +1153,43 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         && (o.isHomingTargetValid?.(id, type, ownerId) ?? true),
     });
     o.projectileInteraction.setProjectileCollisionTargetQueryPort({
+      getWorldTargetHit: (target, sx, sy, ex, ey, halfWidth, halfHeight) => {
+        if (target.kind !== 'train') return undefined;
+        if (this.destroyed || target.id !== 'main') return null;
+        let best: ProjectileWorldTargetHit | null = null;
+        const segments = o.getWorldTrain()?.getActiveSegmentPositions() ?? [];
+        for (let index = 0; index < segments.length; index++) {
+          const segment = segments[index];
+          const height = index === 0 ? TRAIN.LOCO_HEIGHT : TRAIN.WAGON_HEIGHT;
+          const left = segment.x - TRAIN.HITBOX_WIDTH / 2;
+          const right = segment.x + TRAIN.HITBOX_WIDTH / 2;
+          const top = segment.y - height / 2, bottom = segment.y + height / 2;
+          const interval = segmentRectInterval(sx, sy, ex, ey,
+            left - halfWidth, top - halfHeight, right + halfWidth, bottom + halfHeight);
+          if (!interval) continue;
+          const fraction = Math.max(0, interval.enter);
+          const distance = Math.hypot(ex - sx, ey - sy) * fraction;
+          if (best && best.distance <= distance) continue;
+          const centerX = sx + (ex - sx) * fraction, centerY = sy + (ey - sy) * fraction;
+          // The closest inflated face is the entry face, also for a starting overlap.
+          const faces = [Math.abs(centerX - (left - halfWidth)), Math.abs(centerX - (right + halfWidth)),
+            Math.abs(centerY - (top - halfHeight)), Math.abs(centerY - (bottom + halfHeight))];
+          const face = faces.indexOf(Math.min(...faces));
+          const normal = { x: face === 0 ? -1 : face === 1 ? 1 : 0,
+            y: face === 2 ? -1 : face === 3 ? 1 : 0 };
+          best = { centerX, centerY, distance, normal,
+            x: face === 0 ? left : face === 1 ? right : Math.max(left, Math.min(right, centerX)),
+            y: face === 2 ? top : face === 3 ? bottom : Math.max(top, Math.min(bottom, centerY)) };
+        }
+        return best;
+      },
       readCollisionTargets: (sink) => {
         if (this.destroyed) return;
         o.combatSystem.readCollisionTargets(sink);
         const train = o.getWorldTrain();
         const segments = train?.getActiveSegmentPositions() ?? [];
         if (segments.length > 0) {
+          // One damage identity and conservative envelope; getWorldTargetHit checks the segments.
           let left = Number.POSITIVE_INFINITY;
           let top = Number.POSITIVE_INFINITY;
           let right = Number.NEGATIVE_INFINITY;

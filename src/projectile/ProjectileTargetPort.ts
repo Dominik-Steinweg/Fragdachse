@@ -88,10 +88,24 @@ export type ProjectileCollisionTargetSink = (
  * Projectile-Interaktionen laufen separat beim Runtime-Owner, nicht über diese Target-Sicht.
  */
 export interface ProjectileCollisionTargetQueryPort {
+  /** undefined: no exact geometry; null: exact miss, never use the aggregate envelope. */
+  getWorldTargetHit?(target: ProjectileTargetRef, sx: number, sy: number, ex: number, ey: number,
+    halfWidth: number, halfHeight: number): ProjectileWorldTargetHit | null | undefined;
   /** Snapshot targets (Combat and moving World objects), at the existing stage boundaries. */
   readCollisionTargets(sink: ProjectileCollisionTargetSink): void;
   /** Optional World subset, read afresh for each real segment; never a second target snapshot. */
   queryWorldCollisionTargets?(region: ProjectileCollisionRegion, sink: ProjectileCollisionTargetSink): void;
+}
+
+export interface ProjectileWorldTargetHit {
+  /** Target surface anchor; the projectile center can differ for a finite footprint. */
+  readonly x: number;
+  readonly y: number;
+  /** Distance traveled by the projectile center to first contact. */
+  readonly distance: number;
+  readonly centerX?: number;
+  readonly centerY?: number;
+  readonly normal?: { readonly x: number; readonly y: number };
 }
 
 /** Conservative search envelope. Exact collision rules remain with the collision processor. */
