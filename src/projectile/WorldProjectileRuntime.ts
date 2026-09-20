@@ -1927,12 +1927,17 @@ export class WorldProjectileRuntime implements
     hit: import('./ProjectilePhysicsBinding').ProjectileRockSweepHit, nowMs: number): void {
     const body = record.physics.body;
     const vx = body.velocity.x, vy = body.velocity.y;
-    body.reset(hit.x, hit.y); body.setVelocity(vx, vy);
+    // Cell sweeps distinguish the projectile center from the surface impact point.
+    // Placing the center on the surface embeds the body and causes repeated contacts.
+    const centerX = hit.centerX ?? hit.x, centerY = hit.centerY ?? hit.y;
+    body.reset(centerX, centerY); body.setVelocity(vx, vy);
     this.collisionProcessor.run([record], nowMs, this.collisionDependencies);
     if (record.pendingDestroy || !this.projectiles.activeRecords.has(record)) return;
     const dot = vx * hit.normalX + vy * hit.normalY;
-    body.reset(hit.x + hit.normalX * 0.01, hit.y + hit.normalY * 0.01);
-    body.setVelocity(vx - 2 * dot * hit.normalX, vy - 2 * dot * hit.normalY);
+    body.reset(centerX + hit.normalX * 0.01, centerY + hit.normalY * 0.01);
+    // Barrier corner normals encode two entered cell faces, not a unit normal.
+    if (hit.kind === 'barrier') body.setVelocity(hit.normalX ? -vx : vx, hit.normalY ? -vy : vy);
+    else body.setVelocity(vx - 2 * dot * hit.normalX, vy - 2 * dot * hit.normalY);
     this.reportPhysicsContact({ projectileId: record.id,
       target: hit.kind === 'train' ? { kind: 'train', id: 'main' } : { kind: hit.kind! },
       x: hit.x, y: hit.y, flightPosition: { x: record.physics.sprite.x, y: record.physics.sprite.y },

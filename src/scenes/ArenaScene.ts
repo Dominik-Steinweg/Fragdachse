@@ -1425,6 +1425,10 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaRuntime.syncArenaEntryTransition();
 
     const phase = bridge.getGamePhase();
+    const rewardRoundState = bridge.getRoundState();
+    if (phase === 'ARENA' && rewardRoundState?.status === 'active') {
+      this.meta?.captureRoundRewardBaseline(rewardRoundState.roundStartTime);
+    }
     const deferArenaExit = this.weaponBalanceLabPreviousMapId === null
       && this.syncArenaExitFade(phase);
     this.arenaRuntime.detectPhaseChange(deferArenaExit);
@@ -2763,6 +2767,7 @@ export class ArenaScene extends Phaser.Scene {
         if (this.arenaRuntime.isMatchTerminated() || this.arenaExitResultsStarted) return;
         this.arenaExitFadeComplete = true;
         this.arenaExitResultsStarted = true;
+        this.arenaRuntime.syncRoomOwners();
         this.meta?.beginMatchResults();
         this.meta?.tryFinalizeMatchResults({
           finalizeBalanceRound: (roundEndedAt) => {

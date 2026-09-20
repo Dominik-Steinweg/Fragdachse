@@ -68,19 +68,19 @@ export function ensureGlossyButtonTexture(scene: Phaser.Scene, _key: string, w: 
   return ensureForestButton(scene, w, h, danger ? 'danger' : attention ? 'attention' : 'neutral', 'rest');
 }
 
-type ModalRecord = { root: Phaser.GameObjects.Container; w: number; h: number };
+type ModalRecord = { root: Phaser.GameObjects.Container; w: number; h: number; backdrop: 'panel' | 'screen' };
 const modalSurfaces = new WeakMap<Phaser.Scene, Set<ModalRecord>>();
 
 /** Decoration is a sibling above content. Callers supply transient layers to keep above the frame. */
 export function mountForestModal(scene: Phaser.Scene, root: Phaser.GameObjects.Container, w: number, h: number,
-  transient: Phaser.GameObjects.GameObject[] = []): Phaser.GameObjects.Image {
+  transient: Phaser.GameObjects.GameObject[] = [], backdrop: 'panel' | 'screen' = 'panel'): Phaser.GameObjects.Image {
   const frame = scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, ensureModalFrame(scene, w, h))
     .setDisplaySize(w, h).setScrollFactor(0);
   root.add(frame);
   for (const child of transient) root.bringToTop(child);
   const records = modalSurfaces.get(scene) ?? new Set<ModalRecord>();
   modalSurfaces.set(scene, records);
-  const record = { root, w, h };
+  const record = { root, w, h, backdrop };
   records.add(record);
   root.once('destroy', () => records.delete(record));
   return frame;
@@ -88,8 +88,10 @@ export function mountForestModal(scene: Phaser.Scene, root: Phaser.GameObjects.C
 
 export function getForestModalSurfaces(scene: Phaser.Scene): BackdropSurface[] {
   return [...(modalSurfaces.get(scene) ?? [])].filter(({ root }) => root.visible && root.alpha > 0)
-    .map(({ root, w, h }) => ({ x: (GAME_WIDTH - w) / 2 + 40 + root.x, y: (GAME_HEIGHT - h) / 2 + 40 + root.y,
-      width: w - 80, height: h - 80, radius: 24, alpha: root.alpha }));
+    .map(({ root, w, h, backdrop }) => backdrop === 'screen'
+      ? { x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT, radius: 0, alpha: root.alpha }
+      : { x: (GAME_WIDTH - w) / 2 + 40 + root.x, y: (GAME_HEIGHT - h) / 2 + 40 + root.y,
+        width: w - 80, height: h - 80, radius: 24, alpha: root.alpha });
 }
 
 export function toCssColor(color: number): string { return baseToCssColor(skinTextColor('forest', color)); }

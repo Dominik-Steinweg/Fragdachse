@@ -62,7 +62,7 @@ describe('Coop defense arena generation', () => {
       const metrics = resolveActiveArenaWorldMetrics();
       const layout = generateArenaWithActiveMetrics(seed, campaign);
       const route = resolveCoopDefenseMapMissionProgress(campaign)!;
-      const occupied = new Set([...layout.rocks, ...layout.trees,
+      const occupied = new Set([...layout.rocks, ...layout.trees, ...(layout.water ?? []),
         ...resolveCoopDefenseBases(campaign).flatMap(base => base.cells)].map(cell => `${cell.gridX}:${cell.gridY}`));
       const cleared = new Set<string>();
       const progress = new CoopDefenseMissionProgressSystem(route, { roundRevision: 1, worldMetrics: metrics,

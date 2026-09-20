@@ -894,6 +894,7 @@ export class PlacementSystem {
       isValid,
       frame: cfg.placeable.kind === 'turret' ? AutoTiler.getFrame(mask, ROCK_AUTOTILE) : 0,
       range: cfg.placeable.range,
+      targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
       kind: cfg.placeable.kind,
       sourceSlot: 'utility',
       powerUpDefId: cfg.type === 'placeable_pedestal' ? cfg.powerUpDefId : undefined,

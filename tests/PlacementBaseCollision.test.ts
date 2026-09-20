@@ -83,6 +83,8 @@ describe('turret aim configuration in placement snapshots', () => {
     const definition = COOP_DEFENSE_CONSTRUCTIONS[id];
     const host = createPlacement();
     const origin = world(9, 10), target = world(10, 10);
+    expect(host.getConstructionPlacementPreview(definition, origin.x, origin.y, target.x, target.y))
+      .toMatchObject({ targetRange: definition.targetRange });
     const placed = host.tryPlaceConstruction(definition, definition.maxHp, 'owner', 0xffffff,
       origin.x, origin.y, target.x, target.y)!;
     const expected = { rotationSpeedDegPerSec: definition.rotationSpeedDegPerSec, aimToleranceDeg: definition.aimToleranceDeg };
@@ -103,7 +105,11 @@ describe('turret aim configuration in placement snapshots', () => {
     const host = createPlacement();
     const utility = getUtilityConfigForMode('SPORE_TURRET', 'coop-defense');
     if (utility.type !== 'placeable_turret') throw new Error('expected turret');
-    const configured = { ...utility, placeable: { ...utility.placeable, rotationSpeedDegPerSec: 70, aimToleranceDeg: 2 } };
+    const configured = { ...utility, placeable: { ...utility.placeable, rotationSpeedDegPerSec: 70, aimToleranceDeg: 2,
+      targetRange: utility.placeable.targetRange * 1.5 } };
+    const target = world(10, 10);
+    expect(host.getPlacementPreview(configured, target.x, target.y, target.x, target.y))
+      .toMatchObject({ targetRange: configured.placeable.targetRange });
     expect(host.materializePersistentPlaceable(configured, 10, 10, 0.5, 'owner', 1))
       .toMatchObject({ rotationSpeedDegPerSec: 70, aimToleranceDeg: 2, angle: 0.5 });
     expect(host.materializePersistentPlaceable(utility, 12, 10, 0.5, 'owner', 1)?.rotationSpeedDegPerSec).toBeUndefined();

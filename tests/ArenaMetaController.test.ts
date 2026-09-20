@@ -103,6 +103,48 @@ function makeInput(): {
 }
 
 describe('ArenaMetaController', () => {
+  it.each([true, false])('shows newly persisted round rewards for host=%s, including replay but excluding later rounds', (host) => {
+    const { controller, store, session, resultRead, presentation } = makeInput();
+    vi.mocked(session.isHost).mockReturnValue(host);
+    const progress = getStoredCoopDefenseProgress();
+    progress.persistentBaseRewardUnlocks = ['base_health_pedestal'];
+    vi.mocked(store.getProgress).mockReturnValue(progress);
+    vi.mocked(store.markCoopDefenseRoundProcessed).mockImplementation((endedAt) => {
+      progress.lastProcessedRoundEndedAt = endedAt;
+    });
+    controller.captureRoundRewardBaseline(1);
+    progress.persistentBaseRewardUnlocks.push('base_spore_turret', 'base_adrenaline_pedestal');
+    // Repeated frames must not replace the start-of-round baseline after a grant.
+    controller.captureRoundRewardBaseline(1);
+    vi.mocked(resultRead.getRoundResults).mockReturnValue([{
+      id: 'local', name: 'Local', colorHex: 0xffffff, frags: 0, teamId: null,
+      roundEndedAt: 42, gameMode: 'coop_defense', mapName: 'Map', sharedXp: 0,
+    }]);
+    vi.mocked(resultRead.getRoundState).mockReturnValue({ status: 'victory', roundStartTime: 1, endedAt: 42, coopDefenseMapId: '1' });
+    controller.refresh();
+    controller.beginMatchResults();
+    controller.tryFinalizeMatchResults();
+    const expected = ['base_spore_turret', 'base_adrenaline_pedestal'];
+    expect(controller.getLastMatchResultsPresentation()?.progress?.newlyUnlockedBaseRewardIds).toEqual(expected);
+    controller.replayMatchResults();
+    expect(presentation.showMatchResultsReplay).toHaveBeenCalledWith(expect.objectContaining({
+      progress: expect.objectContaining({ newlyUnlockedBaseRewardIds: expected }),
+    }));
+    controller.beginMatchResults();
+    controller.tryFinalizeMatchResults();
+    expect(controller.getLastMatchResultsPresentation()?.progress?.newlyUnlockedBaseRewardIds).toEqual([]);
+
+    controller.captureRoundRewardBaseline(50);
+    vi.mocked(resultRead.getRoundResults).mockReturnValue([{
+      id: 'local', name: 'Local', colorHex: 0xffffff, frags: 0, teamId: null,
+      roundEndedAt: 90, gameMode: 'coop_defense', mapName: 'Map', sharedXp: 0,
+    }]);
+    vi.mocked(resultRead.getRoundState).mockReturnValue({ status: 'victory', roundStartTime: 50, endedAt: 90, coopDefenseMapId: '1' });
+    controller.beginMatchResults();
+    controller.tryFinalizeMatchResults();
+    expect(controller.getLastMatchResultsPresentation()?.progress?.newlyUnlockedBaseRewardIds).toEqual([]);
+  });
+
   it('leitet Progress-Readstand und Loadout-Reconciliation ueber kleine Ports', () => {
     const { controller, session, presentation } = makeInput();
 

@@ -5,6 +5,7 @@ import type { ArenaContext } from './ArenaContext';
 import type { RockVisualHelper } from './RockVisualHelper';
 import {
   COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
+  getCoopDefenseConstructionDefinition,
 } from '../../config/coopDefenseConstructions';
 import { isCoopDefenseMode } from '../../gameModes';
 import type { GameMode, LoadoutUseResult, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
@@ -463,6 +464,9 @@ export class ArenaPersistentBaseSession {
       && !duplicateCell
       && conflictAllowed
       && placementSystem.canMaterializePersistentBaseRewardCell(targetCell.gridX, targetCell.gridY, true);
+    const construction = definition.gameplaySource.kind === 'construction-definition'
+      ? getCoopDefenseConstructionDefinition(definition.gameplaySource.constructionId)
+      : undefined;
     return {
       angle,
       targetX: targetCell.x,
@@ -472,6 +476,7 @@ export class ArenaPersistentBaseSession {
       isValid,
       frame: 0,
       range: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
+      targetRange: construction?.kind === 'turret' ? construction.targetRange : undefined,
       kind: definition.category === 'baseTurret' ? 'turret' : 'pedestal',
       sourceSlot: 'utility',
       constructionId: definition.gameplaySource.kind === 'construction-definition'
@@ -811,6 +816,7 @@ export class ArenaPersistentBaseSession {
       isValid,
       frame: 0,
       range: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
+      targetRange: source.kind === 'turret' ? source.targetRange : undefined,
       kind: definition.category === 'baseTurret' ? 'turret' : 'pedestal',
       sourceSlot: 'utility',
       constructionId: definition.gameplaySource.kind === 'construction-definition'

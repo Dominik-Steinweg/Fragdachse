@@ -484,7 +484,6 @@ const GRAPHICS_ARC_LEGACY_SOURCES: Readonly<Record<string, string>> = {
   'src/entities/BaseEntity.ts': 'Einmalig gezeichnete Basismarkierung, kein Pro-Frame-Pfad.',
   'src/scenes/arena/GaussWarningRenderer.ts': 'Emitterglow der Fremdspieler, noch nicht umgestellt.',
   'src/scenes/arena/PlacementPreviewRenderer.ts': 'Platzierungsvorschau, noch nicht umgestellt.',
-  'src/scenes/arena/RockVisualHelper.ts': 'Reichweitenkreis, noch nicht umgestellt.',
   'src/ui/CoopDefenseObjectiveAnnouncement.ts': 'Einmalig gezeichneter Rahmenschmuck, kein Pro-Frame-Pfad.',
   'src/ui/HostileBaseIndicator.ts': 'Pfeilspitze, noch nicht umgestellt.',
   'src/ui/RadialActionMenu.ts': 'Radialmenue, zeichnet nur bei geoeffnetem Menue.',

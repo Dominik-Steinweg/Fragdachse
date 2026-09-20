@@ -1,5 +1,6 @@
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
 import type { PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseItemSlot, GameMode, TeamId } from '../types';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import { getLocale } from '../i18n';
@@ -40,6 +41,7 @@ export interface MatchProgressDelta {
   persistentBaseAreaStageUnlocked: boolean;
   persistentBaseAreaStage?: PersistentBaseAreaStage;
   persistentBaseHealthReward?: { readonly bonusHp: number; readonly maxHp: number };
+  newlyUnlockedBaseRewardIds: readonly PersistentBaseRewardId[];
 }
 
 /** Ein angebotenes Item samt allem, was der Auswahlbildschirm dafuer braucht. */
@@ -146,6 +148,7 @@ export function createMatchProgressDelta(
   persistentBaseAreaStageUnlocked = false,
   persistentBaseAreaStage?: PersistentBaseAreaStage,
   persistentBaseHealthReward?: MatchProgressDelta['persistentBaseHealthReward'],
+  newlyUnlockedBaseRewardIds: readonly PersistentBaseRewardId[] = [],
 ): MatchProgressDelta {
   return {
     before,
@@ -161,6 +164,7 @@ export function createMatchProgressDelta(
     persistentBaseAreaStageUnlocked,
     persistentBaseAreaStage,
     persistentBaseHealthReward,
+    newlyUnlockedBaseRewardIds: [...newlyUnlockedBaseRewardIds],
   };
 }
 

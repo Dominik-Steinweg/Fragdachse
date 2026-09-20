@@ -9,7 +9,7 @@ import type { PlaceableTurretUtilityConfig, PlaceableUtilityConfig, PlaceableRoc
 import { WEAPON_CONFIGS }   from '../../loadout/LoadoutConfig';
 import { bridge }           from '../../network/bridge';
 import { CELL_SIZE, COLORS, DEPTH, ROCK_HP_MAX } from '../../config';
-import { createEmitter, destroyEmitter, fillRadialGradientTexture, registerGraphicsObject } from '../../effects/EffectUtils';
+import { createEmitter, destroyEmitter, fillRadialGradientTexture } from '../../effects/EffectUtils';
 import type { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { LightingSystem } from '../../effects/LightingSystem';
@@ -34,7 +34,6 @@ export interface RockVisualWorldPort {
 interface TurretVisualState {
   image:     Phaser.GameObjects.Sprite;
   aura:      Phaser.GameObjects.Image;
-  rangeCircle: Phaser.GameObjects.Graphics;
 
   healthBar: HealthBarHandle | null;
   constructionId?: SyncedPlaceableRock['constructionId'];
@@ -398,13 +397,9 @@ export class RockVisualHelper {
         .setDisplaySize(visualSpec.displaySize, visualSpec.displaySize)
         .setDepth(DEPTH.ROCKS + 0.2);
 
-      const rangeCircle = this.scene.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
-      registerGraphicsObject(this.scene, 'rockTools', rangeCircle);
-
       visual = {
         image,
         aura,
-        rangeCircle,
         healthBar: null,
         constructionId: rock.constructionId,
         turretWeaponId: rock.turretWeaponId,
@@ -430,16 +425,6 @@ export class RockVisualHelper {
       .setVisible(visual.image.visible);
     visual.constructionId = rock.constructionId;
     visual.turretWeaponId = rock.turretWeaponId;
-    visual.rangeCircle.clear();
-    visual.rangeCircle.lineStyle(1.4, rock.ownerColor, 0.48);
-    if (rock.kind === 'turret') {
-      visual.rangeCircle.strokeCircle(
-        world.x,
-        world.y,
-        rock.targetRange ?? this.getPlaceableTurretConfig(rock).placeable.targetRange,
-      );
-    }
-    visual.rangeCircle.setVisible(!rock.constructionId || rock.turretWeaponId === 'TURRET_SPORES');
 
     if (!indestructible && !this.healthBars?.isValid(visual.healthBar)) {
       visual.healthBar = this.healthBars?.bind(TURRET_HEALTH_BAR_STYLE, rock.hp, rock.maxHp,
@@ -495,7 +480,6 @@ export class RockVisualHelper {
     if (!visual) return;
     visual.image.destroy();
     visual.aura.destroy();
-    visual.rangeCircle.destroy();
     this.healthBars?.release(visual.healthBar);
     this.turretVisuals.delete(id);
   }

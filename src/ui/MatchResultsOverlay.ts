@@ -2,10 +2,11 @@ import { ensureForestActionButton } from './forestTextures';
 import { BUTTON_CURSOR } from './gameCursor';
 import { ensureResultsBanner, ensureResultsPanel, ensureResultsTitle } from './matchResultsTextures';
 import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from './MatchResultsAssets';
-import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalFrame } from './ForestModal';
+import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
 import { activateUi } from './UiAudio';
 import { resolvePersistentBaseBuildAreaForStage } from '../persistentBase/PersistentBaseCore';
+import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { getLocalizedTeamLabel } from '../i18n/gameModePresentation';
 import {
@@ -280,7 +281,7 @@ export class MatchResultsOverlay {
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
-    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0)
+    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.85)
       .setScrollFactor(0)
       .setInteractive();
     backdrop.on('pointerdown', () => this.skipAnimations());
@@ -333,11 +334,8 @@ export class MatchResultsOverlay {
     this.rewardTooltip = new UiTooltip(this.scene, 480, TEXT.accent, GAME_HEIGHT - 24, 'forest');
     const tooltipRoot = this.rewardTooltip.build();
     this.container.add(tooltipRoot);
-    // The opaque illustrated interior is independent of the world outside the frame.
-    this.modalFrame = this.scene.add.image(CX, CY, ensureModalFrame(this.scene, PANEL_W, PANEL_H))
-      .setDisplaySize(PANEL_W, PANEL_H).setScrollFactor(0);
-    this.container.add(this.modalFrame);
-    this.container.bringToTop(tooltipRoot);
+    // Blur the world camera; the illustrated interior and frame stay on the sharp UI camera.
+    this.modalFrame = mountForestModal(this.scene, this.container, PANEL_W, PANEL_H, [tooltipRoot], 'screen');
     this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_BANNER.key}`, this.refreshBannerArt);
     this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_BACKGROUND.key}`, this.refreshBackgroundArt);
     this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_TITLE.key}`, this.refreshTitleArt);
@@ -1504,6 +1502,15 @@ function describeRewards(
   itemReward: MatchItemRewardPresentation | null,
 ): RewardDescriptor[] {
   const descriptors: RewardDescriptor[] = [];
+  for (const rewardId of progress.newlyUnlockedBaseRewardIds) {
+    const definition = getPersistentBaseRewardDefinition(rewardId);
+    descriptors.push({
+      glyph: '🔓',
+      label: t('ui.reward.baseRewardUnlocked', { reward: t(definition.presentation.labelKey) }),
+      color: COLORS.GOLD_1,
+      tooltip: t('ui.reward.baseRewardUnlockedHint'),
+    });
+  }
   if (progress.persistentBaseUnlocked) {
     descriptors.push({
       glyph: '🏰',

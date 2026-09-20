@@ -215,6 +215,35 @@ describe('technical Phaser boundary with the authoritative runtime', () => {
     }
   });
 
+  it.each(['face', 'corner'] as const)('clears a mission gate %s after bouncing without gaining speed or bouncing again', contact => {
+    const { binding, runtime, doubles } = fixture();
+    const gate = { active: true, getBounds: () => new Phaser.Geom.Rectangle(50, 50, 32, 32) };
+    binding.setObstacleIndex(new ArenaObstacleIndex({
+      bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 1000 }),
+      rocks: () => null, trunks: () => null, bases: () => null, barriers: () => [gate],
+    }));
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, origin: { x: 0, y: contact === 'face' ? 66 : 0,
+      angle: contact === 'face' ? 0 : Math.PI / 4 },
+      flight: { ...spawn.flight, collisionMode: 'sweep' } });
+    const { sprite, body } = doubles.handles.get(0)!;
+    const incoming = { x: body.velocity.x, y: body.velocity.y };
+    sprite.x = 70;
+    if (contact === 'corner') sprite.y = 70;
+    runtime.runHostInteractionStage(16); runtime.runHostProjectileStage(16, 16);
+    expect(sprite.x + body.width / 2).toBeLessThan(50);
+    if (contact === 'corner') expect(sprite.y + body.height / 2).toBeLessThan(50);
+    expect(body.velocity.x).toBeCloseTo(-incoming.x);
+    expect(body.velocity.y).toBeCloseTo(contact === 'face' ? incoming.y : -incoming.y);
+    for (let step = 2; step <= 5; step++) {
+      sprite.x += body.velocity.x * 0.016; sprite.y += body.velocity.y * 0.016;
+      runtime.runHostInteractionStage(step * 16); runtime.runHostProjectileStage(16, step * 16);
+      expect(body.velocity.x).toBeCloseTo(-incoming.x);
+      expect(runtime.activeCount).toBe(1);
+    }
+    runtime.destroy();
+  });
+
   it.each(['portal', 'redirect'] as const)('revokes an active carrier exemption on %s', transfer => {
     const { binding, runtime, doubles, scene } = fixture();
     scene.physics.world.bounds.setTo(-100, -100, 1000, 500);

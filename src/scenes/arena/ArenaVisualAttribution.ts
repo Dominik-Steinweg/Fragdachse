@@ -99,7 +99,7 @@ export const GRAPHICS_FAMILIES = {
   zeusTaserEffects: ['ZeusTaserRenderer'],
   baseMarkers: ['BaseEntity', 'ArenaBuilder', 'HostileBaseIndicator', 'WorldHealthBarRenderer'],
   placementPreview: ['PlacementPreviewRenderer', 'PersistentBaseVisuals'],
-  rockTools: ['RockVisualHelper', 'WorldHealthBarRenderer'],
+  rockTools: ['WorldHealthBarRenderer'],
   gameplayHud: ['ArenaHUD', 'CenterHUD', 'CoopDefenseSecondaryObjectiveHud'],
 } as const;
 

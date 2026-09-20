@@ -215,6 +215,8 @@ export class ArenaMetaController {
   private lastMatchResultsPresentation: MatchResultsPresentation | null = null;
   private destroyed = false;
   private lastSoundRoundEndedAt: number;
+  private rewardBaselineRoundStartedAt: number | null = null;
+  private baseRewardIdsBeforeRound: readonly PersistentBaseRewardId[] = [];
 
   constructor(private readonly input: ArenaMetaControllerInput) {
     // A controller attached to historical results establishes a baseline, not a celebration.
@@ -223,6 +225,13 @@ export class ArenaMetaController {
 
   getProgress(): CoopDefenseProgressSnapshot {
     return this.progress;
+  }
+
+  /** Capture before host grants or client confirmations mutate personal persistence. */
+  captureRoundRewardBaseline(roundStartedAt: number): void {
+    if (this.destroyed || this.rewardBaselineRoundStartedAt === roundStartedAt) return;
+    this.rewardBaselineRoundStartedAt = roundStartedAt;
+    this.baseRewardIdsBeforeRound = [...this.input.progressStore.getProgress().persistentBaseRewardUnlocks];
   }
 
   /** Liefert den zuletzt validierten Stand; der Adapter bleibt die dauerhafte Wahrheit. */
@@ -996,6 +1005,10 @@ export class ArenaMetaController {
         bonusHp: PERSISTENT_BASE_HEALTH_REWARD_HP,
         maxHp: resolvePersistentBaseMaxHp(this.storedProgress.persistentBaseHealthRewards),
       } : undefined,
+      this.rewardBaselineRoundStartedAt === roundState.roundStartTime
+        ? this.input.progressStore.getProgress().persistentBaseRewardUnlocks.filter(
+          (rewardId) => !this.baseRewardIdsBeforeRound.includes(rewardId),
+        ) : [],
     );
   }
 

@@ -295,6 +295,8 @@ export const deUi = {
   "ui.reward.bossUpgrade": "BOSS-UPGRADE VERFÜGBAR",
   "ui.reward.mapUnlocked": "FREIGESCHALTET: {map}",
   "ui.reward.noNewUnlocks": "KEINE NEUEN FREISCHALTUNGEN",
+  "ui.reward.baseRewardUnlocked": "BASIS-BELOHNUNG: {reward}",
+  "ui.reward.baseRewardUnlockedHint": "Neu freigeschaltet! Du kannst diese Belohnung in deiner persistenten Basis über das Radialmenü platzieren.",
   "ui.direction.west": "WEST",
   "ui.direction.north": "NORD",
   "ui.direction.east": "OST",

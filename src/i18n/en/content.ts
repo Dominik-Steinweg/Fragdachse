@@ -114,7 +114,7 @@ export const enContent = {
   "map.4.tutorial": "The forward outpost supplies adrenaline and a BFG that needs time to charge. Use it against dense groups and protect the supply pedestals.",
   "map.5.tutorial": "Boss maps end only when the boss falls. Your first victory grants a boss point. This map unlocks Dachs Nukem and Dachs of Steel; Inspector stays locked.",
   "map.6.tutorial": "Three small spore turret outposts cover the approaches to the base. Fight within their range and move between fronts as the pressure shifts.",
-  "map.7.tutorial": "Push west to extraction. Health pedestals provide supplies; there are no respawns. Take out Plague Medics early so they cannot keep the other enemies alive.",
+  "map.7.tutorial": "Push east across the waterways to extraction. One health outpost at each combat checkpoint provides supplies; there are no respawns. Take out Plague Medics early so they cannot keep the other enemies alive.",
   "map.8.tutorial": "Keep the damaged rocket turret outposts alive until the marked HOLD assault ends to unlock the rocket turret permanently. You can still win the main mission if the Hold fails.",
   "map.9.tutorial": "No base. No retreat. Survive for 120 seconds. Enemies hunt you exclusively, and each player gets only two respawns.",
   "map.11.tutorial": "Enemy airstrikes are marked before impact. Keep moving and leave the target zones in time.",

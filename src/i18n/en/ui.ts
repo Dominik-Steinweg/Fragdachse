@@ -295,6 +295,8 @@ export const enUi = {
   "ui.reward.bossUpgrade": "BOSS UPGRADE AVAILABLE",
   "ui.reward.mapUnlocked": "UNLOCKED: {map}",
   "ui.reward.noNewUnlocks": "NO NEW UNLOCKS",
+  "ui.reward.baseRewardUnlocked": "BASE REWARD: {reward}",
+  "ui.reward.baseRewardUnlockedHint": "Newly unlocked! You can place this reward in your persistent base using the radial menu.",
   "ui.direction.west": "WEST",
   "ui.direction.north": "NORTH",
   "ui.direction.east": "EAST",
