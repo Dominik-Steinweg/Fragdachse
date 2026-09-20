@@ -1,0 +1,21 @@
+{
+  "tool": "Built-in image_gen",
+  "date": "2026-09-20",
+  "selectedVariant": 5,
+  "default": "Single isolated European badger HEAD for a 48px game mouse cursor, transparent alpha background. Orthographic dorsal top-down view, small black nose points diagonally UPPER LEFT, broad compact head toward bottom right. Head only, no neck/body/paws. Bold recognizable black-white badger face stripes, simple readable shapes, restrained painterly shading, minimal fur detail, small pale edge for dark-background visibility. Mature battle-ready animal, NOT cute, NO big round eyes, no smile, no chibi, no plush toy look. Both eyes visible, narrow but high-contrast amber slits. Polished stylized woodland arena-shooter art. Nose click tip, entire head in frame, square composition, 7 percent transparent padding. No text, no props, no blood, no backdrop or cast shadow. VARIANT 5 — WILD BRUISER: very broad short powerful head, coarse stylized bristling cheek tufts and raised central fur ridge. Eyes fierce bright amber under an angry low brow, both visible. Ears pinned back. Closed jaws, no smile. Compact wedge with a short nose and strong high-contrast WHITE forehead blaze, rugged charcoal side stripes. Subtle warm-gray shading, big brush planes and angular fur clumps, no tiny hair detail. More feral and aggressive than disciplined soldier, but recognizable European badger, no fantasy horns or clothing. SINGLE face, single nose, symmetric anatomy in diagonal overhead orientation.",
+  "defaultReference": "art/cursor-variants/variant-5-source.png",
+  "hover": "Create the BUTTON-HOVER state of this exact Wild Bruiser European badger head game cursor. Preserve the selected character, rugged broad head, bold black-white stripes, coarse angular fur tufts, top-down view, upper-left nose direction, exact scale and exact nose position. It must look like the same battle-ready badger, never cute. Make hover IMMEDIATELY DISTINCT at 48x48 pixels: add a strong SOLID orange-gold outer contour, about 45 pixels thick for a 1280px image, closely following the silhouette (no separate ring or blurry glow). Keep a thin dark inner boundary for contrast. Sharpen the angry brows and make BOTH narrowed eyes vivid molten orange with bright gold centers, no cartoon round eyes. Warm amber highlights on cheek tips, keep white forehead ivory and black eye stripes black. Slightly more bristled fur, fierce focused expression, closed mouth, no smile. No equipment, no letters, no symbols, no particles, no fire, no body, no background or cast shadow. Truly transparent alpha. One matching head cursor only. Preserve complete head and contour within frame.",
+  "export": {
+    "size": 48,
+    "hotspot": [
+      8,
+      6
+    ],
+    "resampling": "sharp Lanczos3",
+    "alpha": "preserved",
+    "sources": [
+      "badger-default-source.png",
+      "badger-hover-source.png"
+    ]
+  }
+}

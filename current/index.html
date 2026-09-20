@@ -110,20 +110,15 @@
       transform-origin: left;
       background: linear-gradient(90deg, #be772b 0%, #e8c170 50%, #be772b 100%);
       background-size: 200% 100%;
+      animation: boot-shimmer 2s linear infinite;
       border-radius: 1px;
       transition: transform 0.18s ease-out;
     }
-    .boot-bar-fill.boot-bar-indeterminate {
-      animation: boot-activity 1.4s ease-in-out infinite alternate;
-    }
-    .boot-bar-wrap:has(.boot-bar-indeterminate)::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: #e8c170;
-      opacity: .25;
-      transform-origin: left;
-      animation: boot-indeterminate 1.4s ease-in-out infinite alternate;
+    /* Before measured progress exists, move the original 35% gold segment.
+       Afterwards the same fill only shimmers, including during lobby preparation. */
+    .boot-bar-fill.boot-bar-indeterminate:not(.boot-bar-measured) {
+      animation: boot-indeterminate 1.4s ease-in-out infinite alternate, boot-shimmer 2s linear infinite;
+      transition: none;
     }
     .boot-status {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -140,20 +135,20 @@
       min-height: 16px;
     }
     @keyframes boot-indeterminate {
-      from { transform: translateX(0) scaleX(.25); }
-      to { transform: translateX(75%) scaleX(.25); }
+      from { transform: translateX(0) scaleX(.35); }
+      to { transform: translateX(64.75%) scaleX(.35); }
     }
-    @keyframes boot-activity {
-      from { opacity: .45; }
-      to { opacity: .8; }
+    @keyframes boot-shimmer {
+      from { background-position: 100% 0; }
+      to { background-position: -100% 0; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .boot-bar-fill { transition: none; }
-      .boot-bar-fill.boot-bar-indeterminate,
-      .boot-bar-wrap:has(.boot-bar-indeterminate)::after { animation: none; }
+      .boot-bar-fill,
+      .boot-bar-fill.boot-bar-indeterminate:not(.boot-bar-measured) { transition: none; animation: none; }
+      .boot-bar-fill.boot-bar-indeterminate:not(.boot-bar-measured) { transform: scaleX(.35); }
     }
   </style>
-  <script type="module" crossorigin src="./assets/index-CJrghkxv.js"></script>
+  <script type="module" crossorigin src="./assets/index-DznH0WOK.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/vendor-BOlbk14v.js">
 </head>
 <body>
