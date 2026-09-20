@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
 /**
  * LeftSidePanel – linkes Arena-HUD und rechts angeordnete Spielerkarte der Lobby.
@@ -277,7 +278,7 @@ export class LeftSidePanel {
     this.localNameText = this.scene.add.text(CENTER_X, NAME_VALUE_Y, '', NAME_FONT)
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
+      .setInteractive({ cursor: BUTTON_CURSOR })
       .on('pointerup', (pointer: Phaser.Input.Pointer) => this.openSaveMenu(pointer));
     objects.push(this.localNameText);
 
@@ -315,7 +316,7 @@ export class LeftSidePanel {
     this.badgerClickZone = this.scene.add
       .rectangle(CENTER_X, BADGER_Y, BADGER_CLICK_SIZE, BADGER_CLICK_SIZE, 0x000000, 0)
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
+      .setInteractive({ cursor: BUTTON_CURSOR })
       .on('pointerover', () => playUiHover(this.scene))
       .on('pointerdown', () => activateUi(this.scene, () => this.toggleColorPicker()));
     objects.push(forestOrnament(this.scene, 'medallion', CENTER_X, BADGER_Y, 140, 140).setAlpha(0.7), this.badgerClickZone);
@@ -750,7 +751,7 @@ export class LeftSidePanel {
       );
 
       // Interactive zone on top
-      bg.setInteractive({ useHandCursor: true })
+      bg.setInteractive({ cursor: BUTTON_CURSOR })
         .on('pointerover', () => { if (bg.alpha > 0.5) bg.setStrokeStyle(2, BORDER.default, 1); })
         .on('pointerout',  () => this.refreshPickerSwatches())
         .on('pointerover', () => { if (bg.alpha > 0.5) playUiHover(this.scene); })
@@ -819,7 +820,7 @@ export class LeftSidePanel {
       else effect.stop();
 
       if (isClickable) {
-        bg.setInteractive({ useHandCursor: true });
+        bg.setInteractive({ cursor: BUTTON_CURSOR });
       } else {
         bg.disableInteractive();
       }
@@ -1203,7 +1204,7 @@ export class LeftSidePanel {
       ]));
       Object.assign(button.style, {
         width: `${width}px`, height: '36px', padding: '0', border: 'none',
-        fontSize: '13px', cursor: 'pointer', backgroundColor: 'transparent',
+        fontSize: '13px', cursor: BUTTON_CURSOR, backgroundColor: 'transparent',
         backgroundImage: backgrounds.rest, backgroundSize: '100% 100%',
         color: toCssColor(FOREST.text), fontFamily: FONT_DISPLAY, fontWeight: 'bold',
       });
@@ -1275,7 +1276,7 @@ export class LeftSidePanel {
       y,
       ensureForestButton(this.scene, width, height, 'secondary', 'rest', RADIUS.sm),
     )
-      .setInteractive({ useHandCursor: true })
+      .setInteractive({ cursor: BUTTON_CURSOR })
       .on('pointerdown', () => activateUi(this.scene, onClick))
       .setScrollFactor(0);
     const label: CompactLabel = iconDirection
@@ -1336,7 +1337,7 @@ export class LeftSidePanel {
   ): void {
     control.button.setVisible(visible).setAlpha(alpha);
     control.label.setVisible(visible).setAlpha(alpha);
-    if (enabled) control.button.setInteractive({ useHandCursor: true });
+    if (enabled) control.button.setInteractive({ cursor: BUTTON_CURSOR });
     else control.button.disableInteractive();
   }
 
@@ -1348,7 +1349,7 @@ export class LeftSidePanel {
     const enabled = !this.lobbyFieldsLocked;
     if (this.editBtn) {
       this.editBtn.setVisible(enabled).setAlpha(enabled ? 1 : 0);
-      if (enabled) this.editBtn.setInteractive({ useHandCursor: true });
+      if (enabled) this.editBtn.setInteractive({ cursor: BUTTON_CURSOR });
       else this.editBtn.disableInteractive();
     }
     this.editBtnLabel?.setVisible(enabled).setAlpha(enabled ? 1 : 0);
@@ -1358,7 +1359,7 @@ export class LeftSidePanel {
     const mode = this.bridge.getGameMode();
     const enabled = !this.lobbyFieldsLocked && !usesTeamColors(mode);
     this.badgerClickZone.setAlpha(enabled ? 1 : 0);
-    if (enabled) this.badgerClickZone.setInteractive({ useHandCursor: true });
+    if (enabled) this.badgerClickZone.setInteractive({ cursor: BUTTON_CURSOR });
     else this.badgerClickZone.disableInteractive();
 
     const visible = !usesTeamColors(mode) && !this.lobbyFieldsLocked;
@@ -1368,7 +1369,7 @@ export class LeftSidePanel {
       .setVisible(visible)
       .setAlpha(visible ? 1 : 0)
       .setText(t('ui.lobby.editColor'));
-    if (enabled) this.colorEditBtn?.setInteractive({ useHandCursor: true });
+    if (enabled) this.colorEditBtn?.setInteractive({ cursor: BUTTON_CURSOR });
     else this.colorEditBtn?.disableInteractive();
   }
 

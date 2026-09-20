@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { COLORS, toCssColor } from '../config';
 import { getOverlayRoot } from './fullscreen';
 import type {
@@ -194,7 +195,7 @@ export class PerformanceDiagnosticsOverlay {
       borderRadius: '3px',
       background: '#292929',
       color: '#f1f1f1',
-      cursor: 'pointer',
+      cursor: BUTTON_CURSOR,
       font: 'inherit',
     });
     return button;

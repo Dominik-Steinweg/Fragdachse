@@ -1,3 +1,4 @@
+import { BADGER_CURSOR } from './gameCursor';
 import * as Phaser from 'phaser';
 import { RocketMagazineIndicator } from './RocketMagazineIndicator';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
@@ -92,6 +93,8 @@ export class AimSystem {
   ) {
     this.visuals = new AimVisuals(scene);
     this.spreadModel = new AimSpreadModel(getWeaponConfig);
+    this.scene.input.setDefaultCursor(BADGER_CURSOR);
+    this.appliedCursor = BADGER_CURSOR;
   }
 
   setActiveSlot(slot: WeaponSlot): void {
@@ -134,7 +137,7 @@ export class AimSystem {
     ultimatePreview?: UltimateChargePreviewState,
   ): void {
     // Nur bei Wechsel setzen: der Aufruf schreibt in den Canvas-Style und ist kein No-Op.
-    const cursor = hideSystemCursor ? 'none' : 'default';
+    const cursor = hideSystemCursor ? 'none' : BADGER_CURSOR;
     if (cursor !== this.appliedCursor) {
       this.scene.input.setDefaultCursor(cursor);
       this.appliedCursor = cursor;
@@ -261,8 +264,8 @@ export class AimSystem {
 
   destroy(): void {
     this.rocketIndicator?.destroy();
-    this.scene.input.setDefaultCursor('default');
-    this.appliedCursor = 'default';
+    this.scene.input.setDefaultCursor(BADGER_CURSOR);
+    this.appliedCursor = BADGER_CURSOR;
     this.visuals.destroy();
   }
 

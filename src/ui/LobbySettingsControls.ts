@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import * as Phaser from 'phaser';
 import { FOREST } from './UiSkin';
 import { COLORS, DEPTH } from '../config';
@@ -57,7 +58,7 @@ export class LobbySettingsControls {
     this.fill = scene.add.rectangle(VALUE_LEFT, MAP_Y + 12, 1, 5, COLORS.GREEN_3).setOrigin(0, 0.5);
     this.thumb = scene.add.circle(VALUE_LEFT, MAP_Y + 12, 7, COLORS.GREY_3);
     this.hit = scene.add.rectangle(VALUE_LEFT, MAP_Y + 12, VALUE_W, 28, 0, 0)
-      .setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+      .setOrigin(0, 0.5).setInteractive({ cursor: BUTTON_CURSOR });
     this.hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!this.canEdit() || isCoopDefenseMode(this.bridge.getGameMode())) return;
       this.dragging = true;
@@ -111,7 +112,7 @@ export class LobbySettingsControls {
     // UiButton stays visually enabled, so restore its hit area explicitly on unlock:
     // setEnabled(true) is a no-op when its logical state has not changed.
     for (const button of [this.mode, this.map]) {
-      if (enabled) button.getBackground().setInteractive({ useHandCursor: true });
+      if (enabled) button.getBackground().setInteractive({ cursor: BUTTON_CURSOR });
       else button.getBackground().disableInteractive();
     }
     this.timeLabel.setText(t('ui.lobby.time', { time: formatTimeOfDay(minutes) })).setVisible(!coop);

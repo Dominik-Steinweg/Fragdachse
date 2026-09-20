@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import * as Phaser from 'phaser';
 import { activateUi, playUiHover } from './UiAudio';
 import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
@@ -116,7 +117,7 @@ export class UiContextMenu {
         .setOrigin(0, 0)
         .setStrokeStyle(1, entryColor, enabled ? 0.75 : 0.35)
         .setScrollFactor(0)
-        .setInteractive({ useHandCursor: enabled });
+        .setInteractive({ cursor: enabled ? BUTTON_CURSOR : undefined });
       row.on('pointerover', () => {
         if (enabled) playUiHover(this.scene);
         if (enabled) row.setFillStyle(this.skin === 'forest' ? FOREST.raised : COLORS.GREY_6, 1);

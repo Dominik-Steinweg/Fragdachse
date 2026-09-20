@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import type { WeaponSlot } from '../types';
 import {
   loadRuntimeBenchmarkResults,
@@ -102,7 +103,7 @@ export class WeaponBalanceLabOverlay {
     const jsonButton = document.createElement('button'); jsonButton.textContent = 'JSON exportieren';
     const csvButton = document.createElement('button'); csvButton.textContent = 'CSV exportieren';
     for (const button of [startButton, closeButton, jsonButton, csvButton]) {
-      Object.assign(button.style, { padding: '8px 12px', cursor: 'pointer' });
+      Object.assign(button.style, { padding: '8px 12px', cursor: BUTTON_CURSOR });
     }
     startButton.onclick = () => {
       const measurementMs = Math.max(2_000, Math.min(60_000, Number(duration.value) * 1000));

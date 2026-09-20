@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { COLORS, toCssColor } from '../config';
 import { getOverlayRoot } from './fullscreen';
 import {
@@ -32,7 +33,7 @@ function makeButton(label: string, onClick: () => void): HTMLButtonElement {
     borderRadius: '3px',
     background: toCssColor(COLORS.GREY_8),
     color: toCssColor(COLORS.GREY_1),
-    cursor: 'pointer',
+    cursor: BUTTON_CURSOR,
     font: 'inherit',
   });
   return button;

@@ -1,0 +1,20 @@
+{
+  "tool": "Built-in image_gen",
+  "date": "2026-09-20",
+  "default": "Create a completely new anatomically credible European badger forepaw as a premium game cursor PNG, transparent alpha background. A compact real animal paw, NOT a monster hand. Orthographic dorsal view directly down onto the back of the paw. The short wrist is lower-right, the rounded row of five toes faces upper-left. All five SHORT stout toes are adjacent in a shallow natural arc, no thumb sticking sideways, no human finger, no single extended digit. Five slender muted horn-gray digging claws, fairly straight with slight gentle curve and pointed ends; modest length about one quarter of the paw length, consistent scale, never massive ivory tusks or eagle talons. Broad low paw with very short dense charcoal brown-gray fur, subtle silver guard hairs, restrained soft natural diffuse shading. Clearly separate small claws from fur, avoid long fluffy fur and oversized cuff. Realistic proportions and silhouette take priority over texture. Museum-quality natural-history illustration polished for a modern top-down woodland game, no black outlines. Entire isolated paw visible with transparent padding. Square image. Paw axis from bottom right to top left, foremost central claw is upper-left and defines the pointing tip. No palm pads, no arm, no body, no head, no text, no border, no shadow on ground, no glow, no jewelry. One paw only. Must read clearly reduced to 48x48 pixels.",
+  "defaultCorrection": "Correct this asset's anatomy. It currently shows four claws and an elongated mitten shape. Make a compact European badger forepaw with EXACTLY FIVE distinct visible toes and five slim digging claws in a shallow arc at its front. Add the missing small outer fifth toe on right edge. Shorten the furry palm/wrist region by 35 percent so the silhouette is a compact broad paw, not a long mitten. Claws should be slim pointed dark horn, not thick conical spikes. Preserve realistic short charcoal-gray fur and dorsal orthographic view, upper-left claw direction. No exaggerated fingers, no isolated thumb, no cuff, no jewelry, no glow. One small naturally shaped paw for a 48px mouse cursor, truly transparent background.",
+  "hover": "Create the matching button-hover variant of this exact badger paw cursor. Retain anatomically natural compact five-toed forepaw, all FIVE dark horn digging claws, dorsal top-down view, short dense gray fur. Gently spread the outer toes a little as a badger placing its paw, not a hand gesture. NO human pointing finger and no exaggerated extended claw. Keep the upper-left leading claw tip at the same location and the wrist in the same place as reference. Slightly brighter neutral silver fur highlights across back of paw and restrained warm natural highlights on claws to distinguish hover. No golden outline, no glow. Keep same proportions and silhouette size, natural believable animal anatomy, clear tiny 48px readability. Transparent alpha background, one isolated paw only, no shadow or additional objects.",
+  "export": {
+    "size": 48,
+    "hotspot": [
+      10,
+      8
+    ],
+    "resampling": "sharp Lanczos3",
+    "alpha": "preserved",
+    "sources": [
+      "badger-default-source.png",
+      "badger-hover-source.png"
+    ]
+  }
+}

@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { COLORS, toCssColor } from '../config';
 import { getOverlayRoot } from './fullscreen';
 import { MINUTES_PER_DAY, formatTimeOfDay } from '../effects/TimeOfDay';
@@ -77,7 +78,7 @@ export class TimeOfDayDebugOverlay {
       width: '100%',
       boxSizing: 'border-box',
       margin: '0 0 10px',
-      cursor: 'pointer',
+      cursor: BUTTON_CURSOR,
       accentColor: toCssColor(COLORS.GOLD_1),
     });
 
@@ -98,7 +99,7 @@ export class TimeOfDayDebugOverlay {
       border: `1px solid ${toCssColor(COLORS.GREY_5)}`,
       backgroundColor: toCssColor(COLORS.GREY_9),
       color: toCssColor(COLORS.GREY_1),
-      cursor: 'pointer',
+      cursor: BUTTON_CURSOR,
       fontFamily: 'monospace',
       fontWeight: 'bold',
       fontSize: '11px',

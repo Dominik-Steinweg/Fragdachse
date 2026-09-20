@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
 import { playUiActivation, playUiHover } from './UiAudio';
@@ -206,7 +207,7 @@ export class CoopDefenseItemsOverlay {
 
     this.rewardHint = this.scene.add.text(CX, REWARD_HINT_Y, '', textStyle('label', {
       color: TEXT.accent,
-    })).setOrigin(0.5).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    })).setOrigin(0.5).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     this.rewardHint.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       if (this.getState().pendingRewardCount > 0) this.onOpenPendingReward();
@@ -445,7 +446,7 @@ export class CoopDefenseItemsOverlay {
     const sortButton = this.scene.add.image(
       sortX, FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_SORT, SORT_BTN_W, FOOTER_BTN_H, INTENT.secondary.fill, INTENT.secondary.stroke),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     this.sortLabel = this.scene.add.text(sortX, FOOTER_Y, '', textStyle('labelSm', {
       color: INTENT.secondary.label,
     })).setOrigin(0.5).setScrollFactor(0);
@@ -463,7 +464,7 @@ export class CoopDefenseItemsOverlay {
     const closeButton = this.scene.add.image(
       closeX, FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_FOOTER, FOOTER_BTN_W, FOOTER_BTN_H, INTENT.neutral.fill, INTENT.neutral.stroke),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     const closeLabel = this.scene.add.text(closeX, FOOTER_Y, t('ui.items.close'), textStyle('label', {
       color: INTENT.neutral.label,
     })).setOrigin(0.5).setScrollFactor(0);

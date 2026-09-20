@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './ui/gameCursor';
 import * as Phaser from 'phaser';
 import { beginPerformanceBoot, labMarker, failPerformanceLab } from './debug/performanceLab/boot';
 import { bridge }         from './network/bridge';
@@ -50,7 +51,7 @@ function showBootError(message: string, canRejoin: boolean, options: BootErrorOp
       rejoin.textContent = t('ui.boot.rejoin');
       rejoin.style.cssText = [
         'padding:10px 18px', 'font-family:monospace', 'font-size:15px', 'font-weight:bold',
-        'cursor:pointer', 'color:#e8e2d4', 'background:#31506a', 'border:1px solid #6389a8',
+        `cursor:${BUTTON_CURSOR}`, 'color:#e8e2d4', 'background:#31506a', 'border:1px solid #6389a8',
       ].join(';');
       rejoin.onclick = () => rejoinCurrentRoom();
       panel.appendChild(rejoin);
@@ -60,7 +61,7 @@ function showBootError(message: string, canRejoin: boolean, options: BootErrorOp
     restart.textContent = t('ui.boot.newRoom');
     restart.style.cssText = [
       'padding:10px 18px', 'font-family:monospace', 'font-size:15px', 'font-weight:bold',
-      'cursor:pointer', 'color:#e8e2d4', 'background:#3c5a3c', 'border:1px solid #6f9a6f',
+      `cursor:${BUTTON_CURSOR}`, 'color:#e8e2d4', 'background:#3c5a3c', 'border:1px solid #6f9a6f',
     ].join(';');
     restart.onclick = () => restartWithNewRoom();
     panel.appendChild(restart);

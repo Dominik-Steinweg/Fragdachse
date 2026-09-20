@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 /**
  * UiButton – der gemeinsame Button der gesamten Oberflaeche.
  *
@@ -124,7 +125,7 @@ export class UiButton {
     this.layoutContent();
     this.applyIntentVisuals();
 
-    this.bg.setInteractive({ useHandCursor: true });
+    this.bg.setInteractive({ cursor: BUTTON_CURSOR });
     this.bindPointer();
 
     if (options.activateOn === 'pointerup') {
@@ -214,7 +215,7 @@ export class UiButton {
     // Hover, Press und Ausloesen ohnehin. Ein `disableInteractive()` wuerde daneben auch die
     // Pointer-Ereignisse abschneiden, an denen externe Erklaerungs-Tooltips haengen (gesperrte
     // Buttons sind genau die, die einen Hinweis brauchen).
-    this.bg.setInteractive({ useHandCursor: enabled });
+    this.bg.setInteractive({ cursor: enabled ? BUTTON_CURSOR : undefined });
     this.applyIntentVisuals();
     return this;
   }

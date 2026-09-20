@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import * as Phaser from 'phaser';
 import { activateUi, playUiHover } from './UiAudio';
 import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
@@ -263,7 +264,7 @@ export class LoadoutSlotPicker {
 
     if (entry.disabled) return;
 
-    background.setInteractive({ useHandCursor: true });
+    background.setInteractive({ cursor: BUTTON_CURSOR });
     this.attachRowHover(background, restState, hoverState, label);
     background.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
@@ -284,7 +285,7 @@ export class LoadoutSlotPicker {
       .setOrigin(0, 0)
       .setStrokeStyle(1, COLORS.RED_3, 0.85)
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ cursor: BUTTON_CURSOR });
     const label = this.scene.add.text(x + width / 2, y + ENTRY_H / 2, text, textStyle('labelSm', {
       color: COLORS.RED_2,
     })).setOrigin(0.5).setScrollFactor(0);

@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
 import { playUiActivation, playUiHover } from './UiAudio';
@@ -515,7 +516,7 @@ export class OptionsOverlay {
       const x = startX + index * (QUALITY_BUTTON_W + QUALITY_BUTTON_GAP);
       const background = this.scene.add.image(x, QUALITY_BUTTON_Y, this.selectionTexture(QUALITY_BUTTON_W, QUALITY_BUTTON_H, false))
         .setScrollFactor(0)
-        .setInteractive({ useHandCursor: true })
+        .setInteractive({ cursor: BUTTON_CURSOR })
         .on('pointerdown', () => {
           this.graphicsQuality.setLevel(option.level);
           setStoredGraphicsQuality(option.level);
@@ -556,7 +557,7 @@ export class OptionsOverlay {
     for (const [index, option] of locales.entries()) {
       const x = startX + index * (LOCALE_BUTTON_W + LOCALE_BUTTON_GAP);
       const background = this.scene.add.image(x, LOCALE_BUTTON_Y, this.selectionTexture(LOCALE_BUTTON_W, LOCALE_BUTTON_H, false)).setScrollFactor(0)
-        .setInteractive({ useHandCursor: true })
+        .setInteractive({ cursor: BUTTON_CURSOR })
         .on('pointerdown', () => this.onLocaleSelected(option.locale))
         .on('pointerover', () => {
           if (this.localeBinding?.canChange()) playUiHover(this.scene);
@@ -597,7 +598,7 @@ export class OptionsOverlay {
       state.background
         .setTexture(this.selectionTexture(LOCALE_BUTTON_W, LOCALE_BUTTON_H, active))
         .setAlpha(canChange ? 1 : 0.55)
-        .setInteractive({ useHandCursor: canChange });
+        .setInteractive({ cursor: canChange ? BUTTON_CURSOR : undefined });
       state.label.setColor(toCssColor(canChange && active ? TEXT.primary : TEXT.secondary)).setAlpha(canChange ? 1 : 0.55);
     }
     this.localeHint?.setText(canChange ? '' : t('ui.options.languageLobbyOnly'));
@@ -647,7 +648,7 @@ export class OptionsOverlay {
 
     const hitArea = this.scene.add.rectangle(CX, definition.trackY, TRACK_W + 30, 44, 0x000000, 0)
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true })
+      .setInteractive({ cursor: BUTTON_CURSOR })
       .on('pointerdown', (pointer: Phaser.Input.Pointer) => {
         this.draggingSliderKey = definition.key;
         this.applyPointerValue(definition.key, pointer.x, true);
@@ -701,7 +702,7 @@ export class OptionsOverlay {
       ),
     ).setScrollFactor(0)
       .setVisible(false)
-      .setInteractive({ useHandCursor: true })
+      .setInteractive({ cursor: BUTTON_CURSOR })
       .on('pointerdown', () => this.onSpectatorButtonPressed());
 
     this.spectatorLabel = this.scene.add.text(CX, SPECTATOR_BUTTON_Y, '', textStyle('label', {
@@ -724,7 +725,7 @@ export class OptionsOverlay {
       ),
     ).setScrollFactor(0)
       .setVisible(false)
-      .setInteractive({ useHandCursor: true })
+      .setInteractive({ cursor: BUTTON_CURSOR })
       .on('pointerdown', () => this.onWorldLeaveButtonPressed());
 
     this.worldLeaveLabel = this.scene.add.text(CX, SPECTATOR_BUTTON_Y, '', textStyle('label', {
@@ -747,7 +748,7 @@ export class OptionsOverlay {
       ),
     ).setScrollFactor(0)
       .setVisible(false)
-      .setInteractive({ useHandCursor: true })
+      .setInteractive({ cursor: BUTTON_CURSOR })
       .on('pointerdown', () => this.onAbortButtonPressed());
 
     this.abortLabel = this.scene.add.text(CX, ABORT_BUTTON_Y, '', textStyle('label', {
@@ -814,7 +815,7 @@ export class OptionsOverlay {
     if (!spectatorAvailable) {
       this.spectatorButton?.disableInteractive();
     } else {
-      this.spectatorButton?.setInteractive({ useHandCursor: true });
+      this.spectatorButton?.setInteractive({ cursor: BUTTON_CURSOR });
       this.spectatorLabel
         ?.setText(this.spectatorConfirmPending ? t('ui.match.spectateConfirm') : t('ui.match.spectate'))
         .setColor(toCssColor(this.spectatorConfirmPending ? COLORS.BLUE_1 : COLORS.GREY_1));
@@ -827,7 +828,7 @@ export class OptionsOverlay {
     if (!worldLeaveAvailable) {
       this.worldLeaveButton?.disableInteractive();
     } else {
-      this.worldLeaveButton?.setInteractive({ useHandCursor: true });
+      this.worldLeaveButton?.setInteractive({ cursor: BUTTON_CURSOR });
       this.worldLeaveLabel
         ?.setText(t('ui.lobby.returnToLobby'))
         .setColor(toCssColor(COLORS.GREY_1));
@@ -838,7 +839,7 @@ export class OptionsOverlay {
     if (!abortAvailable) {
       this.abortButton?.disableInteractive();
     } else {
-      this.abortButton?.setInteractive({ useHandCursor: true });
+      this.abortButton?.setInteractive({ cursor: BUTTON_CURSOR });
       this.abortLabel
         ?.setText(this.abortConfirmPending ? t('ui.match.abortConfirm') : t('ui.match.abort'))
         .setColor(toCssColor(this.abortConfirmPending ? COLORS.RED_1 : COLORS.GREY_1));

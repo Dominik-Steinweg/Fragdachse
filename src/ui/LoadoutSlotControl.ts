@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import * as Phaser from 'phaser';
 import { activateUi, playUiHover } from './UiAudio';
 import { FOREST, type UiSkin } from './UiSkin';
@@ -285,7 +286,7 @@ export function createLoadoutSlotControl(
     }
   }, (pointer) => Phaser.Geom.Rectangle.Contains(root.getBounds(), pointer.worldX, pointer.worldY));
   if (enabled) {
-    hitArea.setInteractive({ useHandCursor: true })
+    hitArea.setInteractive({ cursor: BUTTON_CURSOR })
       .on('pointerover', (pointer: Phaser.Input.Pointer) => {
         playUiHover(scene);
         if (!options.hoverGroup) {

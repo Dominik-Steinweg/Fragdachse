@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from '../ui/gameCursor';
 import { getDeferredAssets } from '../assets/DeferredAssets';
 import { DeferredAssetIndicator } from '../ui/DeferredAssetIndicator';
 import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
@@ -1221,7 +1222,7 @@ export class LobbyOverlay {
   }
 
   private setPlayerRowInteractive(playerId: string, bg: Phaser.GameObjects.Image): void {
-    if (this.canKickPlayer(playerId)) bg.setInteractive({ useHandCursor: true });
+    if (this.canKickPlayer(playerId)) bg.setInteractive({ cursor: BUTTON_CURSOR });
     else bg.disableInteractive();
   }
 

@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, mountForestModal, ensureModalPanelTexture, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
 import { activateUi, playUiHover, playUiActivation } from './UiAudio';
@@ -399,7 +400,7 @@ export class CoopDefenseUpgradesOverlay {
 
     const cancelBtn = this.scene.add.image(cancelX, ACTION_BTN_Y, this.ensureActionButtonTexture('cancel'))
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ cursor: BUTTON_CURSOR });
     const cancelLabel = this.scene.add.text(cancelX, ACTION_BTN_Y, t('ui.upgrades.cancel'), textStyle('label', {
       color: INTENT.neutral.label,
     })).setOrigin(0.5).setScrollFactor(0);
@@ -410,7 +411,7 @@ export class CoopDefenseUpgradesOverlay {
 
     const applyBtn = this.scene.add.image(applyX, ACTION_BTN_Y, this.ensureActionButtonTexture('apply'))
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ cursor: BUTTON_CURSOR });
     const applyLabel = this.scene.add.text(applyX, ACTION_BTN_Y, t('ui.upgrades.apply'), textStyle('label', {
       color: TEXT.accent,
     })).setOrigin(0.5).setScrollFactor(0);
@@ -486,7 +487,7 @@ export class CoopDefenseUpgradesOverlay {
     const respecX = BAR_X + BAR_W - RESPEC_W / 2;
     this.respecButton = this.scene.add.image(respecX, POINTS_Y, this.ensureRespecButtonTexture())
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ cursor: BUTTON_CURSOR });
     this.respecButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       this.openRespecMenu(respecX - 230, POINTS_Y + RESPEC_H / 2 + 8);
@@ -874,7 +875,7 @@ export class CoopDefenseUpgradesOverlay {
       const background = this.scene.add.image(centerX, CLASS_ROW_Y, this.ensureClassButtonTexture(accentColor, active))
         .setScrollFactor(0)
         .setAlpha(classUnlocked ? (active ? 1 : 0.82) : 0.48)
-        .setInteractive({ useHandCursor: classUnlocked });
+        .setInteractive({ cursor: classUnlocked ? BUTTON_CURSOR : undefined });
 
       // Aktiv: dunkler Text auf lebendiger Klassenfarbe; passiv: heller Text auf gedimmtem Grund.
       const name = this.scene.add.text(0, -10, className, {
@@ -1327,7 +1328,7 @@ export class CoopDefenseUpgradesOverlay {
       const bg = this.scene.add.image(centerX, TAB_TOP + TAB_H / 2, tabTexKey)
         .setScrollFactor(0)
         .setAlpha(restAlpha)
-        .setInteractive({ useHandCursor: true });
+        .setInteractive({ cursor: BUTTON_CURSOR });
       this.tabsContainer!.add(bg);
 
       if (isActive) {
@@ -2029,7 +2030,7 @@ export class CoopDefenseUpgradesOverlay {
 
     const hitArea = this.scene.add.rectangle(0, 0, NODE_W, NODE_H, 0x000000, 0.001)
       .setScrollFactor(0)
-      .setInteractive({ useHandCursor: interactionEnabled })
+      .setInteractive({ cursor: interactionEnabled ? BUTTON_CURSOR : undefined })
       .on('pointerover', (pointer: Phaser.Input.Pointer) => {
         if (interactionEnabled) playUiHover(this.scene);
         baseRect.setAlpha(Math.min(1, baseAlpha + 0.12));
@@ -2065,7 +2066,7 @@ export class CoopDefenseUpgradesOverlay {
         color: toCssColor(equipped ? COLORS.GREY_10 : COLORS.GREY_1),
       }).setOrigin(0.5).setScrollFactor(0);
       if (interactive) {
-        toggle.setInteractive({ useHandCursor: true });
+        toggle.setInteractive({ cursor: BUTTON_CURSOR });
         toggle.on('pointerover', () => playUiHover(this.scene));
         toggle.on('pointerdown', (pointer: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
           event.stopPropagation();

@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import * as Phaser from 'phaser';
 import { FOREST } from './UiSkin';
 import { toDesignSpace } from '../graphics/RenderResolution';
@@ -20,7 +21,7 @@ export class LobbyRosterScroller {
     this.track = scene.add.rectangle(x, LOBBY_CARD.rosterTop, 4, this.height, FOREST.border, 0.35).setOrigin(0.5, 0);
     this.thumb = scene.add.rectangle(x, LOBBY_CARD.rosterTop, 6, 32, FOREST.muted).setOrigin(0.5, 0);
     this.hit = scene.add.rectangle(x, LOBBY_CARD.rosterTop, 16, this.height, 0, 0)
-      .setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+      .setOrigin(0.5, 0).setInteractive({ cursor: BUTTON_CURSOR });
     for (const object of [this.track, this.thumb, this.hit]) object.setScrollFactor(0);
     parent.add([this.track, this.thumb, this.hit]);
     this.hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {

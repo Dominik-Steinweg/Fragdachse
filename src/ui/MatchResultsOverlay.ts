@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { ensureResultsBanner, ensureResultsPanel, ensureResultsTitle } from './matchResultsTextures';
 import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from './MatchResultsAssets';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalFrame } from './ForestModal';
@@ -802,7 +803,7 @@ export class MatchResultsOverlay {
 
     this.continueButton = this.scene.add.image(CONTINUE_X, FOOTER_Y, ensureGlossyButtonTexture(
       this.scene, TEX_CONTINUE, CONTINUE_W, CONTINUE_H, INTENT.primary.fill, INTENT.primary.stroke,
-    )).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    )).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     this.continueLabel = this.scene.add.text(CONTINUE_X, FOOTER_Y, t('ui.results.continueLobby'), textStyle('label', {
       color: TEXT.accent,
     })).setOrigin(0.5).setScrollFactor(0);
@@ -816,7 +817,7 @@ export class MatchResultsOverlay {
 
     this.balanceFeedbackButton = this.scene.add.image(FEEDBACK_X, FOOTER_Y, ensureGlossyButtonTexture(
       this.scene, '_mro_balance_feedback', FEEDBACK_W, CONTINUE_H, INTENT.secondary.fill, INTENT.secondary.stroke,
-    )).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
+    )).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR }).setVisible(false);
     this.balanceFeedbackLabel = this.scene.add.text(FEEDBACK_X, FOOTER_Y, t('ui.results.balanceFeedback'), textStyle('label', {
       color: INTENT.secondary.label,
     })).setOrigin(0.5).setScrollFactor(0).setVisible(false);

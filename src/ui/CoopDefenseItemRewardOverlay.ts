@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal, ensureTintedSectionTexture } from './ForestModal';
 import * as Phaser from 'phaser';
 import { playUiActivation, playUiHover } from './UiAudio';
@@ -216,7 +217,7 @@ export class CoopDefenseItemRewardOverlay {
       CX - PANEL_W / 2 + 88 + FOOTER_BUTTON_W / 2,
       FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, INTENT.ghost.fill, INTENT.ghost.stroke),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR }).setVisible(false);
     this.backLabel = this.scene.add.text(this.backButton.x, FOOTER_Y, t('ui.items.rewardBack'), textStyle('label', {
       color: INTENT.ghost.label,
     })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
@@ -232,7 +233,7 @@ export class CoopDefenseItemRewardOverlay {
       CX + PANEL_W / 2 - 88 - FOOTER_BUTTON_W / 2,
       FOOTER_Y,
       ensureGlossyButtonTexture(this.scene, TEX_FOOTER_BUTTON, FOOTER_BUTTON_W, FOOTER_BUTTON_H, INTENT.ghost.fill, INTENT.ghost.stroke),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     this.footerLabel = this.scene.add.text(this.footerButton.x, FOOTER_Y, t('ui.items.rewardLater'), textStyle('label', {
       color: INTENT.ghost.label,
     })).setOrigin(0.5).setScrollFactor(0);
@@ -354,7 +355,7 @@ export class CoopDefenseItemRewardOverlay {
       -CARD_W / 2 + CARD_PAD + CARD_EQUIPPED_ICON / 2,
       CARD_EQUIPPED_DY,
       ensureCoopDefenseItemCellTexture(this.scene, CARD_EQUIPPED_ICON, CARD_EQUIPPED_ICON, BORDER.subtle, 'empty'),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true }).setVisible(false);
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR }).setVisible(false);
     const equippedIcon = this.scene.add.image(
       -CARD_W / 2 + CARD_PAD + CARD_EQUIPPED_ICON / 2,
       CARD_EQUIPPED_DY,
@@ -380,7 +381,7 @@ export class CoopDefenseItemRewardOverlay {
       -(CARD_ACTION_W + CARD_BUTTON_GAP) / 2,
       CARD_BUTTON_DY,
       ensureGlossyButtonTexture(this.scene, TEX_TAKE_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, INTENT.secondary.fill, INTENT.secondary.stroke),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     const takeLabel = this.scene.add.text(
       takeButton.x,
       CARD_BUTTON_DY,
@@ -398,7 +399,7 @@ export class CoopDefenseItemRewardOverlay {
       (CARD_ACTION_W + CARD_BUTTON_GAP) / 2,
       CARD_BUTTON_DY,
       ensureGlossyButtonTexture(this.scene, TEX_EQUIP_BUTTON, CARD_ACTION_W, CARD_BUTTON_H, INTENT.primary.fill, INTENT.primary.stroke),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     const equipLabel = this.scene.add.text(equipButton.x, CARD_BUTTON_DY, t('ui.items.rewardEquip'), textStyle('labelSm', {
       color: TEXT.accent,
     })).setOrigin(0.5).setScrollFactor(0);
@@ -428,7 +429,7 @@ export class CoopDefenseItemRewardOverlay {
       0,
       0,
       ensureFlatPanelTexture(this.scene, TEX_SALVAGE_ROW, SALVAGE_ROW_W, SALVAGE_ROW_H, SURFACE.raised, COLORS.GREY_5),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     const icon = this.scene.add.image(-SALVAGE_ROW_W / 2 + 18 + SALVAGE_ICON / 2, 0, resolveCoopDefenseItemIconTexture(
       this.scene, 'armor', 1, SALVAGE_ICON,
     )).setDisplaySize(SALVAGE_ICON, SALVAGE_ICON).setScrollFactor(0);

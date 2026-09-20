@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureModalPanelTexture, mountForestModal, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
 import { activateUi } from './UiAudio';
@@ -220,7 +221,7 @@ export class RoomStatisticsOverlay {
       CX,
       CLOSE_Y,
       ensureGlossyButtonTexture(this.scene, TEX_CLOSE, CLOSE_W, CLOSE_H, SURFACE.raised, COLORS.GREY_4),
-    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    ).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     const closeLabel = this.scene.add.text(CX, CLOSE_Y, t('ui.common.close').toUpperCase(), textStyle('label', {
       color: COLORS.GREY_1,
       align: 'center',
@@ -249,7 +250,7 @@ export class RoomStatisticsOverlay {
     const scrollX = TABLE_LEFT + TABLE_W + 12;
     this.scrollTrack = this.scene.add.rectangle(scrollX, VIEWPORT_TOP, 4, MAX_VIEWPORT_H, BORDER.subtle, .5).setOrigin(.5, 0).setScrollFactor(0);
     this.scrollThumb = this.scene.add.rectangle(scrollX, VIEWPORT_TOP, 6, 40, TEXT.muted).setOrigin(.5, 0).setScrollFactor(0);
-    this.scrollHit = this.scene.add.rectangle(scrollX, VIEWPORT_TOP, 18, MAX_VIEWPORT_H, 0, 0).setOrigin(.5, 0).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.scrollHit = this.scene.add.rectangle(scrollX, VIEWPORT_TOP, 18, MAX_VIEWPORT_H, 0, 0).setOrigin(.5, 0).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR });
     this.scrollHit.on('pointerdown', (pointer: Phaser.Input.Pointer) => { this.dragging = true; this.dragScroll(pointer); });
     this.container.add([this.scrollTrack, this.scrollThumb, this.scrollHit]);
     this.scene.input.on('wheel', this.wheel);

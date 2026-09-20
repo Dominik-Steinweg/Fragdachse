@@ -1,3 +1,4 @@
+import { BUTTON_CURSOR } from './gameCursor';
 import { COLORS, toCssColor } from '../config';
 import { COOP_DEFENSE_MAP_CONFIGS } from '../config/coopDefenseMaps';
 import { COOP_DEFENSE_TEST_MAP_ID } from '../config/coopDefenseMapUnlocks';
@@ -147,7 +148,7 @@ export class CoopDefenseDebugOverlay {
           intent === 'positive' ? COLORS.GREEN_4 : intent === 'danger' ? COLORS.RED_4 : COLORS.GREY_9,
         ),
         color: toCssColor(COLORS.GREY_1),
-        cursor: 'pointer',
+        cursor: BUTTON_CURSOR,
         fontFamily: 'monospace',
         fontSize: '11px',
         fontWeight: 'bold',
@@ -427,7 +428,7 @@ export class CoopDefenseDebugOverlay {
       gap: '7px',
       color: toCssColor(COLORS.GREY_2),
       fontSize: '12px',
-      cursor: 'pointer',
+      cursor: BUTTON_CURSOR,
     });
     const balanceCheckbox = document.createElement('input');
     balanceCheckbox.type = 'checkbox';
