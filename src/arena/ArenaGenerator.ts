@@ -104,7 +104,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 8;
+export const ARENA_GENERATOR_VERSION = 9;
 
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
@@ -148,6 +148,7 @@ export class ArenaGenerator {
   private constructor(private readonly input: ArenaGenerationInput) {}
 
   private readonly waterKeys = new Set<number>();
+  private pedestalFailure = '';
 
   private get metrics(): WorldMetrics {
     return this.input.metrics;
@@ -197,6 +198,8 @@ export class ArenaGenerator {
       this.waterKeys.add(this.cellKey(cell.gridX, cell.gridY));
     }
     const authoredRockWallCells = this.collectRockWallCells(coopMapConfig?.rockWalls);
+    const failures = new Map<string, number>();
+    const failedAttempt = (reason: string) => failures.set(reason, (failures.get(reason) ?? 0) + 1);
 
     for (let attempt = 0; attempt < 100; attempt++) {
       const rng = this.makePrng(seed + attempt);
@@ -219,6 +222,13 @@ export class ArenaGenerator {
       );
       const trackCols = generatedTrackLayout.trackCols;
       const tracks = coopMapConfig?.trackMode === 'void-fire' ? [] : generatedTrackLayout.tracks;
+      // Authored and mode-default track positions are deterministic; another seed cannot move them.
+      if (attempt === 0 && coopMapConfig) {
+        const fixedTracks = coopMapConfig.trackMode === 'none' || coopMapConfig.trackPosition !== undefined
+          || this.input.coopDefenseBasesActive || this.input.captureTheBeerBasesActive;
+        this.validateFixedPedestals(coopMapConfig, coopBaseSpecs ?? [], missionBarrierCells,
+          authoredRockWallCells, missionCheckpointCells, fixedTracks ? trackCols : undefined);
+      }
 
       // --- Cellular Automata Felsen-Platzierung ---
 
@@ -334,7 +344,10 @@ export class ArenaGenerator {
       // einer Exception endet), wird die günstigste Verbindung zwischen den Regionen nachgefräst.
       for (const cell of water) blocked[cell.gridY][cell.gridX] = true;
       // Tutorial cores remain solid; retry if no connection around them is possible.
-      if (!this.ensureConnected(blocked, rocks, tutorialRockCoreCells)) continue;
+      if (!this.ensureConnected(blocked, rocks, tutorialRockCoreCells)) {
+        failedAttempt('Freie Flächen lassen sich nicht verbinden (Wasser oder geschützte Felsen)');
+        continue;
+      }
 
       // Bäume auf verbleibenden freien Zellen platzieren.
       // Mindestabstand zum Arena-Rand: ceil(CANOPY_RADIUS / CELL_SIZE) Zellen,
@@ -413,6 +426,7 @@ export class ArenaGenerator {
       ) {
         // Ein selten unguenstiges Fels-/Baum-Layout wird vollstaendig verworfen. So gelangen
         // keine authored Spawn-Ziele in eine lange notwendige Gleisfahrt.
+        failedAttempt('Keine zulässige Spawn-zu-Basis-Route über die Gleise');
         continue;
       }
 
@@ -493,7 +507,10 @@ export class ArenaGenerator {
       // Eine Coop-Map soll exakt die konfigurierten Podeste erhalten. Falls der aktuelle
       // prozedurale Versuch in einem Bereich keinen freien Platz lässt, wird die Arena
       // mit dem nächsten Seed-Versuch neu erzeugt.
-      if (powerUpPedestals === null) continue;
+      if (powerUpPedestals === null) {
+        failedAttempt(this.pedestalFailure);
+        continue;
+      }
       const groundHazardZones = this.generateGroundHazardZones(
         rng,
         blocked,
@@ -508,7 +525,10 @@ export class ArenaGenerator {
       // an derselben Zufallsgeometrie wie Felsen und Podeste. Authored Rechtecke und Zellenlisten
       // fallen dagegen ohne Layout-Retry aus (siehe generateGroundHazardZones) -- ein
       // ungluecklich gesetztes Rechteck darf die Runde nicht am Start hindern.
-      if (groundHazardZones === null) continue;
+      if (groundHazardZones === null) {
+        failedAttempt('Kein Platz für prozedurale Bodengefahren');
+        continue;
+      }
       const decals = this.generateDecals(
         this.makeDecalPrng(seed + attempt),
         rocks,
@@ -538,7 +558,8 @@ export class ArenaGenerator {
     }
 
     throw new Error(
-      `ArenaGenerator: Konnte nach 100 Versuchen kein konnektives Layout generieren (seed=${seed})`,
+      `ArenaGenerator: ${coopMapConfig ? `Map ${coopMapConfig.mapId}, ` : ''}kein gültiges Layout nach 100 Versuchen (seed=${seed}). `
+      + [...failures].map(([reason, count]) => `${count}× ${reason}`).join('; '),
     );
   }
 
@@ -1276,6 +1297,47 @@ export class ArenaGenerator {
     return { cells: tutorialRockCells, coreCells };
   }
 
+  /** Reject fixed geometry conflicts before spending seeds on procedural terrain. */
+  private validateFixedPedestals(
+    map: ArenaGenerationMapConfig,
+    bases: readonly BaseSpec[],
+    barriers: ReadonlySet<string>,
+    walls: ReadonlySet<string>,
+    checkpoints: ReadonlySet<string>,
+    trackCols?: ReadonlySet<number>,
+  ): void {
+    const fixed = [
+      ...(map.powerUps ?? []).flatMap((config, index) => config.anchor ? [{
+        ...config.anchor, label: `powerUps[${index}] (${config.defId})`, margin: POWERUP_PEDESTAL_CONFIG.edgePaddingCells,
+      }] : []),
+      ...resolveCoopDefenseActivityBases(map, 1, this.metrics).flatMap(base => base.powerUpPedestals.map(config => ({
+        gridX: config.gridX, gridY: config.gridY, label: `Basis ${base.id}, Podest ${config.id}`, margin: 0,
+      }))),
+    ];
+    const occupied = new Map<string, string>();
+    for (const { gridX: x, gridY: y, label, margin } of fixed) {
+      const key = `${x}_${y}`;
+      const base = bases.find(candidate => isCoopDefenseBaseCell(x, y, [candidate]));
+      let reason: string | undefined;
+      if (!Number.isInteger(x) || !Number.isInteger(y)
+        || x < margin || y < margin || x >= this.metrics.gridCols - margin || y >= this.metrics.gridRows - margin) {
+        reason = `außerhalb der zulässigen Podestfläche (Randabstand ${margin} Zellen)`;
+      } else if (occupied.has(key)) reason = `bereits durch ${occupied.get(key)} belegt`;
+      else if (this.waterKeys.has(this.cellKey(x, y))) reason = 'durch Wasser belegt';
+      else if (base) reason = `durch Basis ${base.id} belegt`;
+      else if (this.isCaptureTheBeerBaseCell(x, y)) reason = 'durch Capture-the-Beer-Basis belegt';
+      else if (barriers.has(key)) reason = 'durch Missionsbarriere belegt';
+      else if (trackCols?.has(x)) reason = 'durch seedunabhängige Gleisspalte belegt';
+      else if ((trackCols !== undefined || map.trackMode === 'none') && walls.has(key)
+        && !checkpoints.has(key) && !this.isReservedBaseObstacleCell(x, y, bases)) reason = 'durch authored Felswand belegt';
+      if (reason) {
+        throw new Error(`ArenaGenerator: Map ${map.mapId}, ${label} bei (${x}, ${y}): ${reason}. `
+          + 'Seedunabhängiger Konflikt; keine weiteren Generierungsversuche.');
+      }
+      occupied.set(key, label);
+    }
+  }
+
   private generateRandomPowerUpPedestals(
     rng: () => number,
     blocked: boolean[][],
@@ -1292,7 +1354,7 @@ export class ArenaGenerator {
       for (let gx = margin; gx < this.metrics.gridCols - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
-        if (this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)) continue;
+        if (this.isReservedBaseSurfaceCell(gx, gy, coopBaseSpecs)) continue;
         if (middleThirdRegion && !isGridCellInArenaRegion(middleThirdRegion, gx, gy)) continue;
         candidates.push({ gx, gy });
       }
@@ -1316,6 +1378,7 @@ export class ArenaGenerator {
     trackCols: Set<number>,
     configs: readonly CoopDefenseMapPowerUpConfig[],
     coopBaseSpecs?: readonly BaseSpec[],
+    linkedCells: ReadonlySet<number> = new Set(),
   ): ArenaLayout['powerUpPedestals'] | null {
     const margin = POWERUP_PEDESTAL_CONFIG.edgePaddingCells;
     const candidatesByRegion = new Map<CoopDefensePowerUpRegion, Array<{ gx: number; gy: number }>>([
@@ -1328,7 +1391,9 @@ export class ArenaGenerator {
       for (let gx = margin; gx < this.metrics.gridCols - margin; gx++) {
         if (blocked[gy][gx]) continue;
         if (trackCols.has(gx)) continue;
-        if (this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)) continue;
+        // Pedestals may sit next to bases; only the actual occupied footprint is excluded.
+        if (this.isReservedBaseSurfaceCell(gx, gy, coopBaseSpecs)) continue;
+        if (linkedCells.has(this.cellKey(gx, gy))) continue;
         candidatesByRegion.get(this.getPowerUpRegion(gx))!.push({ gx, gy });
       }
     }
@@ -1343,10 +1408,17 @@ export class ArenaGenerator {
         )
         : candidatesByRegion.get(config.region) ?? [];
       const available = candidates.filter(
-        (candidate) => !selected.some((cell) => cell.gx === candidate.gx && cell.gy === candidate.gy),
+        (candidate) => !selected.some((cell) => cell.gx === candidate.gx && cell.gy === candidate.gy)
+          && !configs.some((other, otherIndex) => otherIndex !== index
+            && other.anchor?.gridX === candidate.gx && other.anchor.gridY === candidate.gy),
       );
       const cell = this.pickConfiguredPedestalCell(rng, available, selected);
-      if (!cell) return null;
+      if (!cell) {
+        this.pedestalFailure = `Power-Up-Podest powerUps[${index}] (${config.defId}): `
+          + (config.anchor ? `Position (${config.anchor.gridX}, ${config.anchor.gridY}) im Layout blockiert`
+            : `keine freie Position in Region ${config.region}`);
+        return null;
+      }
 
       selected.push(cell);
       pedestals.push({
@@ -1369,30 +1441,36 @@ export class ArenaGenerator {
     mapConfig: ArenaGenerationMapConfig,
     coopBaseSpecs: readonly BaseSpec[],
   ): ArenaLayout['powerUpPedestals'] | null {
+    const activityBases = resolveCoopDefenseActivityBases(mapConfig, 1, this.metrics);
     const pedestals = this.generateConfiguredPowerUpPedestals(
       rng,
       blocked,
       trackCols,
       mapConfig.powerUps ?? [],
       coopBaseSpecs,
+      new Set(activityBases.flatMap(base => base.powerUpPedestals.map(config => this.cellKey(config.gridX, config.gridY)))),
     );
     if (pedestals === null) return null;
 
     const occupied = new Set(pedestals.map((pedestal) => this.cellKey(pedestal.gridX, pedestal.gridY)));
     // Base geometry remains World-owned. Authored linked pedestals are Activity-owned and are
     // deliberately stripped by resolveCoopDefenseBases, so resolve that overlay separately.
-    for (const base of resolveCoopDefenseActivityBases(mapConfig, 1, this.metrics)) {
+    for (const base of activityBases) {
       for (const config of base.powerUpPedestals) {
         const key = this.cellKey(config.gridX, config.gridY);
         if (trackCols.has(config.gridX)) {
-          throw new Error(`[ArenaGenerator] Linked pedestal ${config.id} overlaps the railway`);
+          this.pedestalFailure = `Basis ${base.id}, Podest ${config.id} bei (${config.gridX}, ${config.gridY}): durch Gleise blockiert`;
+          return null;
         }
         if (occupied.has(key)) {
           throw new Error(`[ArenaGenerator] Multiple power-up pedestals occupy cell ${config.gridX},${config.gridY}`);
         }
         // Ein weit außerhalb der Basis konfiguriertes Podest kann auf prozeduralen Bewuchs
         // treffen. In diesem Fall wird der nächste Arena-Versuch verwendet.
-        if (blocked[config.gridY][config.gridX]) return null;
+        if (blocked[config.gridY][config.gridX]) {
+          this.pedestalFailure = `Basis ${base.id}, Podest ${config.id} bei (${config.gridX}, ${config.gridY}): im Layout blockiert`;
+          return null;
+        }
 
         occupied.add(key);
         pedestals.push({

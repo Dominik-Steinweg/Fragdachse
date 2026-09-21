@@ -13,11 +13,13 @@ import { at, array, object, set, type JsonObject, type Path } from '../../shared
 import type { MapDocumentSession } from '../document/MapDocumentSession';
 import { activeSpawnFronts, FRONT_LABELS, type SpawnFrontSource } from '../../shared/spawns';
 import type { SpawnFront } from '../../../../src/types';
+import { isEditableFireFront } from '../../shared/editPolicy';
 
 export const LAYERS: Record<string, { label: string; color: string }> = {
   terrain: { label: 'Felsen / Boden', color: '#79838a' }, water: { label: 'Wasser', color: '#3eaddb' }, trees: { label: 'Bäume', color: '#5c9b63' },
   tracks: { label: 'Gleise', color: '#a8a19a' }, structures: { label: 'Basen / Podeste', color: '#edba73' },
   powerups: { label: 'Power-Ups', color: '#94e2b5' },
+  hazards: { label: 'Feuerfronten', color: '#ef985e' },
   mission: { label: 'Mission / Checkpoints', color: '#ce91e8' }, corridors: { label: 'Korridore', color: '#c4d897' },
   walls: { label: 'Felswände', color: '#e89973' }, tutorial: { label: 'Tutorial-Flächen', color: '#edcd66' }, spawns: { label: 'Spawngebiete', color: '#f3768f' },
   fronts: { label: 'Aktive Spawnfronten', color: '#60d8ed' },
@@ -99,7 +101,12 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
   array(draft.encounters).forEach((e, i) => array(e.groups).forEach((g, j) => {
     if (g.spawnArea) rect(`spawn:${e.id}:${session.key(['encounters', i, 'groups'], j)}`, `${e.id} · ${g.enemyKind} · Gruppe ${j + 1}`, ['encounters', i, 'groups', j, 'spawnArea'], 'spawns');
   }));
-  array(draft.mapEvents).forEach((e, i) => { if (object(e.area).widthCells !== undefined) rect(`event:${e.id}`, `Ereignis · ${e.id} (schreibgeschützt)`, ['mapEvents', i, 'area'], 'mission', true); });
+  array(draft.mapEvents).forEach((e, i) => {
+    if (object(e.area).widthCells === undefined) return;
+    const editable = isEditableFireFront(e);
+    rect(`event:${e.id}`, editable ? `Feuerfront · ${e.id}` : `Ereignis · ${e.id} (schreibgeschützt)`,
+      ['mapEvents', i, 'area'], e.type === 'ground-hazard' ? 'hazards' : 'mission', !editable);
+  });
   const preview = object(draft.persistentBasePreview);
   if (preview.checkpointId) {
     const index = array(mission.checkpoints).findIndex(c => c.id === preview.checkpointId);

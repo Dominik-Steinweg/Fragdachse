@@ -6,6 +6,7 @@ import { button, confirmEdit, element, heading, numberField, propertySelect, typ
 import { LAYERS, mapObjects, type MapObject } from './objects';
 import { MapCanvas, type DrawTool, type Rect } from './MapCanvas';
 import { addPowerUpControls, powerUpControls, trackControls } from './ContentControls';
+import { fireFrontControls } from './FireFrontControls';
 
 export class MapView {
   readonly canvas: MapCanvas;
@@ -16,7 +17,7 @@ export class MapView {
   private readonly toolbar = element('div', 'map-tools');
   constructor(private readonly env: EditorEnvironment) {
     this.canvas = new MapCanvas(env, () => this.renderSidebars(), (tool, rect, end, start) => this.draw(tool, rect, end, start));
-    this.middle.append(this.toolbar, this.canvas.container, element('div', 'canvas-hint', 'Ziehen: verschieben · Griffe: skalieren / Wegpunkte · Mausrad: Zoom · Rechts/Mitte: verschieben · Escape: abbrechen'));
+    this.middle.append(this.toolbar, this.canvas.container, element('div', 'canvas-hint', 'Ziehen: verschieben · Griffe: skalieren / Wegpunkte · Alt+Klick: überlappende Objekte · Mausrad: Zoom · Rechts/Mitte: verschieben · Escape: abbrechen'));
     this.root.append(this.list, this.middle, this.properties); this.render();
   }
   destroy(): void { this.canvas.destroy(); }
@@ -113,6 +114,7 @@ export class MapView {
         if (at(env.session.draft, item.path) !== undefined) box.append(button('Standardanker wiederherstellen', () => { env.session.change(item.path, undefined); env.changed(); }));
       }
     }
+    if (item.layer === 'hazards') box.append(fireFrontControls(env, item));
     if (['waterAreas', 'rockWalls', 'rockField'].includes(String(item.path[0]))) {
       box.append(button('Duplizieren', () => this.duplicate(item)), button('Löschen', () => this.remove(item), 'danger'));
     }

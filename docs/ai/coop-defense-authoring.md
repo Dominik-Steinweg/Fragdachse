@@ -37,9 +37,14 @@ bisherige Reihenfolge. Maßgeblich sind `tests/WaterTerrain.test.ts` und
 Wasserfreiräume und Überschneidungen werden zentral durch
 `src/config/coopDefenseWater.ts` geprüft. Map-Normalisierung (einschließlich Editor-Speichern)
 und Arena-Generierung verwenden dieselbe Prüfung. Der Wasserfreiraum gewöhnlicher Basen
-ist unabhängig vom Schutzabstand für Felsen, Bäume und Podeste; die persistente Basis behält
+ist unabhängig vom Schutzabstand für Felsen und Bäume; die persistente Basis behält
 ihren eigenen Kernfreiraum und die vollständige kreisförmige Reservierung. Maßgeblich sind
 auch `tests/MapEditorFileStore.test.ts` für die Parität von Speichern und Vorschau.
+
+Power-Up-Podeste benötigen keinen Basis-Schutzabstand; die tatsächlich belegten Basiszellen
+bleiben ausgeschlossen. Feste Podestpositionen werden im Arena-Generator vor der prozeduralen
+Terrain-Erzeugung auf seedunabhängige Geometriekonflikte geprüft. Maßgeblich sind
+`src/arena/ArenaGenerator.ts` und `tests/MapEditorPreview.test.ts`.
 
 ## Basen und Overlays
 

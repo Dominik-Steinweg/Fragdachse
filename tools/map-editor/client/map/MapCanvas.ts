@@ -4,6 +4,7 @@ import type { PreviewResult } from '../preview/generate';
 import { LAYERS, mapMetrics, mapObjects, moveMapObject, type MapObject } from './objects';
 import { getSpawnFrontInwardVector } from '../../../../src/utils/spawnFront';
 import { FRONT_LABELS } from '../../shared/spawns';
+import { pickMapObject } from './selection';
 
 export type DrawTool = 'select' | 'pan' | 'waterArea' | 'rockWall' | 'corridor' | 'waterPaint' | 'waterErase' | 'selected';
 export interface Rect { gridX: number; gridY: number; widthCells: number; heightCells: number }
@@ -64,7 +65,7 @@ export class MapCanvas {
     make('terrain', result.layout.rocks, '#657176'); make('water', result.layout.water ?? [], '#245f7c');
     make('trees', result.layout.trees, '#60946a'); make('tracks', result.layout.tracks, '#a19a7f', 2);
     make('powerups', result.layout.powerUpPedestals, '#94e2b5');
-    make('mission', result.layout.groundHazardZones?.flatMap(z => z.cells) ?? [], '#985b7e');
+    make('hazards', result.layout.groundHazardZones?.flatMap(z => z.cells) ?? [], LAYERS.hazards.color);
     this.paint(); this.selected();
   }
   paint(): void {
@@ -76,7 +77,9 @@ export class MapCanvas {
     c.fillStyle = '#111a1c'; c.fillRect(0, 0, width, height); c.translate(this.panX, this.panY); c.scale(this.scale, this.scale); c.imageSmoothingEnabled = false;
     const draft = this.drag?.temporary ?? this.env.session.draft, m = mapMetrics(draft);
     c.fillStyle = '#243132'; c.fillRect(0, 0, m.gridCols, m.gridRows);
-    for (const [key, canvas] of this.raster) if (this.layers.has(key)) c.drawImage(canvas, 0, 0);
+    for (const [key, canvas] of this.raster) if (this.layers.has(key)) {
+      c.save(); if (key === 'hazards') c.globalAlpha = .2; c.drawImage(canvas, 0, 0); c.restore();
+    }
     c.strokeStyle = '#647170'; c.lineWidth = 1 / this.scale; c.strokeRect(0, 0, m.gridCols, m.gridRows);
     if (this.scale >= 8 && this.snap) {
       c.strokeStyle = '#ffffff0b'; c.beginPath();
@@ -87,7 +90,11 @@ export class MapCanvas {
     }
     // Authored single cells remain visible before regeneration.
     if (this.layers.has('water')) { c.fillStyle = '#48b7e6aa'; for (const cell of (draft.water ?? []) as { gridX: number; gridY: number }[]) c.fillRect(cell.gridX, cell.gridY, 1, 1); }
-    for (const item of mapObjects(this.env.session, draft, this.preview)) if (!item.hidden && this.layers.has(item.layer)) this.paintObject(c, item, item.id === this.env.session.selection);
+    const items = mapObjects(this.env.session, draft, this.preview);
+    // Paint fire-front areas below the objects that can be selected through them.
+    for (const item of [...items.filter(i => i.layer === 'hazards'), ...items.filter(i => i.layer !== 'hazards')]) {
+      if (!item.hidden && this.layers.has(item.layer)) this.paintObject(c, item, item.id === this.env.session.selection);
+    }
     const drag = this.drag;
     if (drag && ['waterArea', 'rockWall', 'selected', 'corridor'].includes(drag.mode)) {
       const end = this.lastWorld; c.strokeStyle = '#f5d08b'; c.lineWidth = 2 / this.scale; c.setLineDash([5 / this.scale, 3 / this.scale]);
@@ -160,13 +167,9 @@ export class MapCanvas {
     let item = items.find(i => i.id === this.env.session.selection), vertex = -1, corner = -1;
     const near = (p: { x: number; y: number }) => Math.hypot(p.x - start.x, p.y - start.y) * this.scale < 9;
     if (mode === 'select') {
-      if (item?.kind === 'corridor') vertex = item.points?.findIndex(p => near({ x: p.x + 0.5, y: p.y + 0.5 })) ?? -1;
-      if (item?.kind === 'rect' && !item.readonly) corner = this.corners(item).findIndex(near);
-      if (vertex < 0 && corner < 0) item = [...items].reverse().find(i => {
-        if (i.kind === 'corridor') return i.points?.some((p, n) => { const previous = i.points?.[n - 1]; if (!previous) return near(p); const dx = p.x - previous.x, dy = p.y - previous.y, length = dx * dx + dy * dy; const t = Math.max(0, Math.min(1, ((start.x - previous.x) * dx + (start.y - previous.y) * dy) / (length || 1))); return near({ x: previous.x + t * dx, y: previous.y + t * dy }); });
-        if (i.kind === 'point') return Math.hypot(start.x - i.x - .5, start.y - i.y - .5) < (i.radius ?? 1);
-        return start.x >= i.x && start.x <= i.x + i.w && start.y >= i.y && start.y <= i.y + i.h;
-      });
+      if (!e.altKey && item?.kind === 'corridor') vertex = item.points?.findIndex(p => near({ x: p.x + 0.5, y: p.y + 0.5 })) ?? -1;
+      if (!e.altKey && item?.kind === 'rect' && !item.readonly) corner = this.corners(item).findIndex(near);
+      if (vertex < 0 && corner < 0) item = pickMapObject(items, start, this.scale, e.altKey ? this.env.session.selection : undefined);
       this.env.session.selection = item?.id ?? null;
       if (!item) mode = 'pan';
       this.selected();

@@ -6,7 +6,7 @@ import { validateDocument } from '../tools/map-editor/shared/validation';
 import { assertSupportedMapEdit } from '../tools/map-editor/shared/editPolicy';
 import { updateJsonText } from '../tools/map-editor/server/jsonText';
 import { collectCoopDefenseMapReferences } from '../src/config/coopDefenseMapReferences';
-import { clone, type JsonObject } from '../tools/map-editor/shared/json';
+import { at, clone, object, set, type JsonObject } from '../tools/map-editor/shared/json';
 import { activeSpawnFronts, setGroupSpawn, setPersistentSpawnSource } from '../tools/map-editor/shared/spawns';
 
 function load(file = sources.maps[0].file): LoadedMap {
@@ -16,6 +16,59 @@ function load(file = sources.maps[0].file): LoadedMap {
 }
 
 describe('Map editor authoring documents', () => {
+  it('edits only fire-front geometry and timing while retaining event identity, behavior and extensions', () => {
+    const loaded = load('14-brandschneise.json');
+    const event = object(at(loaded.document, ['mapEvents', 0]));
+    event.extension = { keep: true }; object(event.area).extension = 'keep'; object(event.spread).extension = 'keep';
+    const session = new MapDocumentSession(loaded.sourceKey, loaded);
+    session.transact('Feuerfront', draft => {
+      set(draft, ['mapEvents', 0, 'area', 'widthCells'], 25);
+      set(draft, ['mapEvents', 0, 'start', 'atMs'], 12345);
+      set(draft, ['mapEvents', 0, 'delayMs'], 1500);
+      set(draft, ['mapEvents', 0, 'spread', 'durationMs'], 45000);
+      set(draft, ['mapEvents', 0, 'spread', 'warningLeadMs'], 2000);
+      set(draft, ['mapEvents', 0, 'spread', 'roughnessCells'], 1);
+      set(draft, ['mapEvents', 0, 'effect', 'burnDurationMs'], 3500);
+    });
+    expect(() => assertSupportedMapEdit(loaded.document, session.draft)).not.toThrow();
+    expect(validateDocument(session.draft).normalized?.mapEvents?.[0]).toMatchObject({
+      start: { type: 'time', atMs: 12345 }, delayMs: 1500, area: { widthCells: 25 },
+      spread: { durationMs: 45000, warningLeadMs: 2000, roughnessCells: 1 }, effect: { burnDurationMs: 3500 },
+    });
+    expect(object(at(session.draft, ['mapEvents', 0])).extension).toEqual({ keep: true });
+    session.undo(); expect(session.draft).toEqual(loaded.document); session.redo();
+    for (const path of [['id'], ['type'], ['start', 'type'], ['area', 'type'], ['area', 'baseClearanceCells'],
+      ['spread', 'direction'], ['effect', 'sourceId'], ['effect', 'burnDamagePerTick'], ['spread', 'extension']]) {
+      const invalid = clone(session.draft); set(invalid, ['mapEvents', 0, ...path], 'changed');
+      expect(() => assertSupportedMapEdit(loaded.document, invalid)).toThrow();
+    }
+    const added = clone(session.draft); (added.mapEvents as JsonObject[]).push(clone(event));
+    expect(() => assertSupportedMapEdit(loaded.document, added)).toThrow();
+    const removed = clone(session.draft); removed.mapEvents = [];
+    expect(() => assertSupportedMapEdit(loaded.document, removed)).toThrow();
+    const other = clone(loaded.document); other.mapEvents = [{ id: 'train', type: 'train', start: { type: 'time', atMs: 100 } }];
+    const changed = clone(other); set(changed, ['mapEvents', 0, 'start', 'atMs'], 200);
+    expect(() => assertSupportedMapEdit(other, changed)).toThrow('Schreibgeschützt');
+    const triggered = clone(loaded.document); set(triggered, ['mapEvents', 0, 'start'], { type: 'after-encounter', encounterId: 'wave' });
+    const retimed = clone(triggered); set(retimed, ['mapEvents', 0, 'delayMs'], 2500);
+    expect(() => assertSupportedMapEdit(triggered, retimed)).not.toThrow();
+    set(retimed, ['mapEvents', 0, 'start', 'atMs'], 100);
+    expect(() => assertSupportedMapEdit(triggered, retimed)).toThrow('Schreibgeschützt');
+  });
+
+  it('rejects invalid fire-front sizes and times before either saving or generation', () => {
+    for (const [path, value] of [
+      [['area', 'widthCells'], 0], [['area', 'heightCells'], 1.5], [['area', 'gridX'], -1],
+      [['start', 'atMs'], -1], [['delayMs'], -1], [['spread', 'durationMs'], 0],
+      [['spread', 'warningLeadMs'], -1], [['spread', 'roughnessCells'], 1000], [['effect', 'burnDurationMs'], 0],
+    ] as const) {
+      const draft = load('14-brandschneise.json').document;
+      set(draft, ['mapEvents', 0, ...path], value);
+      const result = validateDocument(draft);
+      expect(result.normalized, path.join('.')).toBeUndefined();
+      expect(result.issues.some(issue => issue.severity === 'error'), path.join('.')).toBe(true);
+    }
+  });
   it('switches permanent sources atomically, preserving extensions and updating active fronts through undo', () => {
     const loaded = load(); loaded.document.encounters = []; delete loaded.document.boss;
     loaded.document.persistentSpawns = [{ id: 'pressure', enemyKind: 'zombie-badger', intervalMs: 2000, countPerTick: 2, front: 'north', source: { type: 'map', extension: 'keep' }, extension: { keep: true } }];

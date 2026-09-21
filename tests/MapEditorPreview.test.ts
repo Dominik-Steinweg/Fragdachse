@@ -6,8 +6,9 @@ import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 import { generatePreview } from '../tools/map-editor/client/preview/generate';
 import { geometryRevision, PreviewController } from '../tools/map-editor/client/preview/PreviewController';
 import { MapDocumentSession } from '../tools/map-editor/client/document/MapDocumentSession';
-import { mapObjects, moveMapObject } from '../tools/map-editor/client/map/objects';
-import { clone, type JsonObject } from '../tools/map-editor/shared/json';
+import { mapObjects, moveMapObject, type MapObject } from '../tools/map-editor/client/map/objects';
+import { clone, set, type JsonObject } from '../tools/map-editor/shared/json';
+import { pickMapObject } from '../tools/map-editor/client/map/selection';
 import { planTutorialSweep } from '../src/systems/CoopDefenseAirstrikeEventHandler';
 import { applyArenaMetricsForMode, CELL_SIZE } from '../src/config';
 import { COOP_DEFENSE_ENEMY_KINDS, getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
@@ -19,6 +20,75 @@ afterEach(() => { vi.unstubAllGlobals(); applyArenaMetricsForMode('deathmatch', 
 describe('map editor geometry and real generator', () => {
   const contentMap = (): JsonObject => ({ mapId: 'editor-content-test', balanceReferenceDurationSec: 60, objective: 'survive', surviveDurationSec: 60, respawnsPerPlayer: 0, bases: [], powerUps: [], rockFillRatio: 0, treeCount: 0 });
   const sessionFor = (document: JsonObject) => new MapDocumentSession('map.json', { sourceKey: 'map.json', mapId: String(document.mapId), document, revision: 'r', text: JSON.stringify(document) });
+  it('moves and resizes a fire front through its authored area, undo and the real generator', () => {
+    const document = contentMap(); document.trackMode = 'none';
+    document.mapEvents = [{ id: 'front', type: 'ground-hazard', start: { type: 'time', atMs: 15000 },
+      area: { type: 'rectangle', gridX: 3, gridY: 4, widthCells: 20, heightCells: 10, baseClearanceCells: 0, extension: 'keep' },
+      spread: { direction: 'left-to-right', durationMs: 90000, roughnessCells: 1, warningLeadMs: 1000 },
+      effect: { visualStyle: 'void', burnDurationMs: 2000, burnDamagePerTick: .5, sourceId: 'test' },
+    }];
+    const session = sessionFor(document), item = mapObjects(session).find(i => i.id === 'event:front')!;
+    expect(item).toMatchObject({ label: 'Feuerfront · front', layer: 'hazards', readonly: false, kind: 'rect' });
+    const previousRevision = geometryRevision(document);
+    session.transact('move', draft => moveMapObject(draft, item, 4, 2));
+    session.change([...item.path, 'widthCells'], 25);
+    expect(geometryRevision(session.draft)).not.toBe(previousRevision);
+    expect(mapObjects(session).find(i => i.id === item.id)).toMatchObject({ x: 7, y: 6, w: 25, h: 10 });
+    const result = generatePreview(session.draft, 183), zone = result.layout.groundHazardZones?.find(zone => zone.eventId === 'front');
+    expect(zone?.cells.length).toBeGreaterThan(0);
+    expect(zone?.cells.every(cell => cell.gridX >= 7 && cell.gridX < 32 && cell.gridY >= 6 && cell.gridY < 16)).toBe(true);
+    expect(zone?.cells.some(cell => cell.gridX >= 27)).toBe(true);
+    session.undo(); session.undo(); expect(session.draft).toEqual(document);
+    session.redo(); session.redo();
+    const resized = clone(session.draft); set(session.draft, ['mapEvents', 0, 'spread', 'durationMs'], 45000);
+    expect(generatePreview(session.draft, 183).layout.groundHazardZones).toEqual(result.layout.groundHazardZones);
+    expect(geometryRevision(session.draft)).not.toBe(geometryRevision(resized));
+  });
+
+  it('selects foreground objects through fire fronts and cycles overlapping targets with Alt-click', () => {
+    const front: MapObject = { id: 'fire', label: 'Feuerfront', layer: 'hazards', path: ['mapEvents', 0, 'area'], kind: 'rect', x: 0, y: 0, w: 30, h: 30 };
+    const base: MapObject = { id: 'base', label: 'Basis', layer: 'structures', path: ['bases', 0, 'anchor'], kind: 'base', x: 10, y: 10, w: 2, h: 2 };
+    const corridor: MapObject = { id: 'corridor', label: 'Korridor', layer: 'corridors', path: [], kind: 'corridor', x: 3, y: 5, w: 1, h: 1, points: [{ x: 3, y: 5 }, { x: 20, y: 5 }] };
+    const items = [base, corridor, front];
+    for (const scale of [2, 16, 60]) {
+      expect(pickMapObject(items, { x: 11, y: 11 }, scale)?.id).toBe('base');
+      expect(pickMapObject(items, { x: 15, y: 5.5 }, scale)?.id).toBe('corridor');
+      expect(pickMapObject(items, { x: 11, y: 11 }, scale, 'base')?.id).toBe('fire');
+      expect(pickMapObject(items, { x: 11, y: 11 }, scale, 'fire')?.id).toBe('base');
+    }
+    expect(pickMapObject(items, { x: 29, y: 29 }, 16)?.id).toBe('fire');
+    expect(pickMapObject(items, { x: 35, y: 35 }, 16)).toBeUndefined();
+    expect(pickMapObject([base, { ...front, hidden: true }], { x: 29, y: 29 }, 16)).toBeUndefined();
+    expect(pickMapObject([base, corridor], { x: 11, y: 11 }, 16)?.id).toBe('base');
+  });
+  it('allows fixed pedestals next to a base while preserving its occupied footprint', () => {
+    const document = contentMap(); document.trackMode = 'none';
+    document.bases = [{ id: 'base', hpMax: 100, anchor: { kind: 'grid', gridX: 10, gridY: 10 },
+      shape: { kind: 'rectangle', widthCells: 2, heightCells: 2 } }];
+    document.powerUps = [{ defId: 'HEALTH_PACK', region: 'front', respawnMs: 5000, anchor: { gridX: 9, gridY: 10 } }];
+    expect(generatePreview(document, 1234).layout.powerUpPedestals).toContainEqual(expect.objectContaining({
+      defId: 'HEALTH_PACK', gridX: 9, gridY: 10,
+    }));
+    (document.powerUps as JsonObject[])[0].anchor = { gridX: 10, gridY: 10 };
+    expect(() => generatePreview(document, 1234)).toThrow(/powerUps\[0\].*\(10, 10\).*Basis base.*Seedunabhängiger Konflikt/);
+  });
+  it.each([
+    ['water', /Wasser/], ['railway', /Gleisspalte/], ['duplicate', /bereits durch powerUps\[0\]/], ['edge', /Randabstand/],
+    ['wall', /Felswand/],
+  ] as const)('reports a fixed %s conflict as seed-independent', (kind, reason) => {
+    const document = contentMap(); document.trackMode = 'none';
+    document.powerUps = [{ defId: 'ARMOR', region: 'front', respawnMs: 5000, anchor: { gridX: 10, gridY: 10 } }];
+    if (kind === 'water') document.water = [{ gridX: 10, gridY: 10 }];
+    if (kind === 'railway') { document.trackMode = 'rails'; document.trackPosition = { kind: 'grid', gridX: 10 }; }
+    if (kind === 'duplicate') (document.powerUps as JsonObject[]).push(clone((document.powerUps as JsonObject[])[0]));
+    if (kind === 'edge') (document.powerUps as JsonObject[])[0].anchor = { gridX: 0, gridY: 10 };
+    if (kind === 'wall') document.rockWalls = [{ id: 'wall', gridX: 10, gridY: 10, widthCells: 1, heightCells: 1 }];
+    const map = normalizeCoopDefenseMapConfig(document as never);
+    const metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
+    const generate = () => ArenaGenerator.generate(1234, resolveArenaGenerationInput('coop_defense', metrics), map);
+    expect(generate).toThrow(reason);
+    expect(generate).toThrow(/Seedunabhängiger Konflikt; keine weiteren Generierungsversuche/);
+  });
   it('shows only defined map fronts while retaining separate spawn areas and every source reference', () => {
     const document = contentMap(); document.arenaWidthCells = 100; document.arenaHeightCells = 50;
     document.encounters = [{ id: 'waves', groups: [

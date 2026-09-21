@@ -1,14 +1,25 @@
 import { object, stable, type JsonObject } from './json';
 
-type Rule = true | { [key: string]: Rule } | { $items: Rule; $mutable: boolean; $id?: string };
+type ResolvedRule = true | { [key: string]: Rule } | { $items: Rule; $mutable: boolean; $id?: string };
+type Rule = ResolvedRule | ((value: unknown) => ResolvedRule | undefined);
 const point: Rule = { gridX: true, gridY: true };
 const rect: Rule = { ...point as object, widthCells: true, heightCells: true };
 const trigger: Rule = { type: true, atMs: true, encounterId: true, checkpointId: true, defenseId: true, eventId: true, phase: true, baseId: true };
 const group: Rule = { enemyKind: true, count: true, delayMs: true, spawnStaggerMs: true, front: true, spawnArea: rect };
+export function isEditableFireFront(value: unknown): boolean {
+  const event = object(value);
+  return event.type === 'ground-hazard' && object(event.area).type === 'rectangle' && event.spread !== undefined;
+}
+const fireFront: ResolvedRule = {
+  area: rect, start: value => object(value).type === 'time' ? { atMs: true } : undefined, delayMs: true,
+  spread: { durationMs: true, warningLeadMs: true, roughnessCells: true },
+  effect: { burnDurationMs: true },
+};
 const policy: Rule = {
   arenaWidthCells: true, arenaHeightCells: true, rockFillRatio: true, treeCount: true,
   trackMode: true, trackPosition: true,
   balanceReferenceDurationSec: true,
+  mapEvents: { $items: value => isEditableFireFront(value) ? fireFront : undefined, $mutable: false, $id: 'id' },
   persistentSpawns: { $items: { id: true, enemyKind: true, intervalMs: true, countPerTick: true, startAtMs: true,
     source: { type: true, baseId: true }, front: true }, $mutable: true, $id: 'id' },
   powerUps: { $items: { defId: true, anchor: point, region: true, respawnMs: true, spawnOnArenaStart: true }, $mutable: true },
@@ -29,11 +40,14 @@ const policy: Rule = {
 };
 
 /** Whether a scalar belongs to the editor's supported authoring surface. */
-export function isEditableMapField(path: readonly string[]): boolean {
+export function isEditableMapField(path: readonly string[], document: JsonObject): boolean {
   let rule: Rule | undefined = policy;
+  let value: unknown = document;
   for (const part of path) {
+    if (typeof rule === 'function') rule = rule(value);
     if (!rule || rule === true) return false;
     rule = '$items' in rule ? rule.$items as Rule : rule[part];
+    value = Array.isArray(value) ? value[Number(part)] : object(value)[part];
   }
   return rule === true;
 }
@@ -41,7 +55,9 @@ export function isEditableMapField(path: readonly string[]): boolean {
 /** Protects fields outside the supported authoring surface, including unknown extension fields. */
 export function assertSupportedMapEdit(before: JsonObject, after: JsonObject): void {
   const check = (old: unknown, next: unknown, rule: Rule | undefined, path: string): void => {
-    if (stable(old) === stable(next) || rule === true) return;
+    if (stable(old) === stable(next)) return;
+    if (typeof rule === 'function') rule = rule(old);
+    if (rule === true) return;
     if (!rule) throw Error(`Schreibgeschütztes Feld geändert: ${path}`);
     if ('$items' in rule) {
       const listRule = rule as { $items: Rule; $mutable: boolean; $id?: string };

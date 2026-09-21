@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, relative } from 'node:path';
 import { MapFileStore } from '../tools/map-editor/server/MapFileStore';
 import { validateDocument } from '../tools/map-editor/shared/validation';
-import { clone } from '../tools/map-editor/shared/json';
+import { clone, set } from '../tools/map-editor/shared/json';
 import { assertSupportedMapEdit } from '../tools/map-editor/shared/editPolicy';
 import { generatePreview } from '../tools/map-editor/client/preview/generate';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../src/config/persistentBase';
@@ -17,14 +17,31 @@ afterEach(async () => {
     await rm(folder, { recursive: true, force: true });
   }
 });
-async function setup(replace?: ConstructorParameters<typeof MapFileStore>[3]) {
+async function setup(replace?: ConstructorParameters<typeof MapFileStore>[3], source = '00-test.json') {
   const directory = await mkdtemp(join(tmpdir(), 'fd-map-editor-')); folders.push(directory);
-  const text = await readFile(new URL('../src/config/coopDefenseMaps/00-test.json', import.meta.url), 'utf8');
+  const text = await readFile(new URL(`../src/config/coopDefenseMaps/${source}`, import.meta.url), 'utf8');
   await writeFile(join(directory, 'map.json'), text);
-  const store = new MapFileStore(directory, [{ file: 'map.json', mapId: '0' }], validateDocument, replace);
+  const store = new MapFileStore(directory, [{ file: 'map.json', mapId: JSON.parse(text).mapId }], validateDocument, replace);
   return { store, directory, original: text, loaded: await store.load('map.json') };
 }
 describe('Map editor local file replacement', () => {
+  it('round-trips fire-front bounds and times without materializing defaults or replacing protected effect fields', async () => {
+    const { store, loaded, directory } = await setup(undefined, '14-brandschneise.json');
+    const next = clone(loaded.document);
+    set(next, ['mapEvents', 0, 'area', 'widthCells'], 25);
+    set(next, ['mapEvents', 0, 'area', 'heightCells'], 30);
+    set(next, ['mapEvents', 0, 'start', 'atMs'], 12500);
+    set(next, ['mapEvents', 0, 'delayMs'], undefined);
+    set(next, ['mapEvents', 0, 'spread', 'durationMs'], 45000);
+    set(next, ['mapEvents', 0, 'spread', 'warningLeadMs'], 1000);
+    set(next, ['mapEvents', 0, 'effect', 'burnDurationMs'], 2500);
+    const saved = await store.save('map.json', loaded.revision, next);
+    expect((await store.load('map.json')).document).toEqual(next);
+    expect(JSON.parse(await readFile(join(directory, 'map.json'), 'utf8'))).toEqual(next);
+    const invalid = clone(next); set(invalid, ['mapEvents', 0, 'spread', 'durationMs'], 0);
+    await expect(store.save('map.json', saved.revision, invalid)).rejects.toThrow(/spread/);
+    expect((await store.load('map.json')).document).toEqual(next);
+  });
   it('does not touch an unchanged file and saves the authoring document without defaults', async () => {
     const { store, loaded, directory } = await setup();
     expect(await store.save('map.json', loaded.revision, loaded.document)).toEqual(loaded);

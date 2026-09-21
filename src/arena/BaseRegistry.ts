@@ -540,7 +540,7 @@ export function getBaseRewardPickupWorldPosition(
 /**
  * Räumlicher Schutz-Radius um eine Coop-Basis (Chebyshev-Distanz in Zellen
  * relativ zur Bounding-Box), innerhalb dessen KEINE bewegungs-blockierenden
- * Elemente platziert werden (Felsen, Bäume, Power-Up-Podeste).
+ * Felsen oder Bäume platziert werden. Power-Up-Podeste benötigen keinen Schutzabstand.
  *
  * Dirt und Decals sind rein visuell und blockieren die Bewegung nicht; sie
  * dürfen weiterhin im Schutz-Radius erscheinen (siehe ArenaGenerator.isReservedBaseSurfaceCell).

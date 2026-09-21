@@ -1,10 +1,10 @@
 {
   "mapId": "14",
-  "arenaWidthCells": 60,
+  "arenaWidthCells": 90,
   "arenaHeightCells": 42,
   "timeOfDay": "20:30",
   "tutorialDurationMs": 10000,
-  "tutorialAnchor": { "gridX": 29, "gridY": 6 },
+  "tutorialAnchor": { "gridX": 76, "gridY": 2 },
   "mapEvents": [
     {
       "id": "brandschneise-firefront",
@@ -25,7 +25,7 @@
   "respawnsPerPlayer": 2,
   "balanceReferenceDurationSec": 120,
   "objective": "survive",
-  "trackMode": "void-fire",
+  "trackMode": "none",
   "rockField": {
     "corridorRadiusCells": 1.35,
     "corridorRadiusVarianceCells": 0.4,
@@ -65,10 +65,10 @@
       {
         "id": "rear-north",
         "points": [
-          {"gridX": 30, "gridY": 12},
+          {"gridX": 30, "gridY": 15},
           {"gridX": 36, "gridY": 14},
-          {"gridX": 44, "gridY": 12},
-          {"gridX": 51, "gridY": 14}
+          {"gridX": 55, "gridY": 10},
+          {"gridX": 66, "gridY": 14}
         ]
       },
       {
@@ -78,7 +78,7 @@
           {"gridX": 32, "gridY": 7},
           {"gridX": 38, "gridY": 13},
           {"gridX": 47, "gridY": 16},
-          {"gridX": 55, "gridY": 16}
+          {"gridX": 64, "gridY": 18}
         ]
       },
       {
@@ -86,18 +86,18 @@
         "points": [
           {"gridX": 30, "gridY": 39},
           {"gridX": 32, "gridY": 32},
-          {"gridX": 38, "gridY": 26},
-          {"gridX": 47, "gridY": 23},
-          {"gridX": 55, "gridY": 23}
+          {"gridX": 47, "gridY": 22},
+          {"gridX": 61, "gridY": 30},
+          {"gridX": 66, "gridY": 23}
         ]
       },
       {
         "id": "rear-south",
         "points": [
-          {"gridX": 30, "gridY": 19},
-          {"gridX": 38, "gridY": 26},
-          {"gridX": 46, "gridY": 25},
-          {"gridX": 51, "gridY": 21}
+          {"gridX": 11, "gridY": 35},
+          {"gridX": 29, "gridY": 26},
+          {"gridX": 47, "gridY": 31},
+          {"gridX": 58, "gridY": 27}
         ]
       },
       {
@@ -106,9 +106,9 @@
           {"gridX": 3, "gridY": 20},
           {"gridX": 13, "gridY": 20},
           {"gridX": 25, "gridY": 20},
-          {"gridX": 36, "gridY": 20},
+          {"gridX": 37, "gridY": 17},
           {"gridX": 47, "gridY": 20},
-          {"gridX": 56, "gridY": 20}
+          {"gridX": 64, "gridY": 21}
         ]
       }
     ]
@@ -119,7 +119,7 @@
       "hpMax": 1300,
       "anchor": {
         "kind": "center-offset",
-        "dxCells": -7,
+        "dxCells": 4,
         "dyCells": -1
       },
       "shape": {
@@ -181,8 +181,8 @@
       "hpMax": 800,
       "anchor": {
         "kind": "grid",
-        "gridX": 18,
-        "gridY": 22
+        "gridX": 43,
+        "gridY": 20
       },
       "shape": {
         "kind": "rectangle",
@@ -214,7 +214,7 @@
   "persistentBase": {
     "baseId": "coop-base-rear",
     "anchor": {
-      "gridX": 47,
+      "gridX": 71,
       "gridY": 20
     }
   },

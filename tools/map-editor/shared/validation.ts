@@ -8,7 +8,7 @@ import { getMapTutorial } from '../../../src/i18n/contentPresentation';
 import type { CoopBaseConfig } from '../../../src/config/coopDefenseMapAuthoring';
 import { normalizeCoopDefenseArenaWidthCells, normalizeCoopDefenseArenaHeightCells } from '../../../src/config';
 import { array, object, type JsonObject } from './json';
-import { isEditableMapField } from './editPolicy';
+import { isEditableFireFront, isEditableMapField } from './editPolicy';
 
 export interface Issue { severity: 'error' | 'warning'; code: string; path: string; message: string }
 export interface Validation { issues: Issue[]; normalized?: CoopDefenseMapConfig }
@@ -30,7 +30,7 @@ export function validateDocument(draft: JsonObject): Validation {
     const o = object(value);
     for (const [key, v] of Object.entries(o)) {
       const p = `${path}/${key}`;
-      const editable = isEditableMapField(p.split('/').slice(1));
+      const editable = isEditableMapField(p.split('/').slice(1), draft);
       if (editable) {
       if (typeof v === 'number' && !Number.isFinite(v)) error(p, 'Endliche Zahl erforderlich.', 'number');
       if (['gridX', 'gridY', 'widthCells', 'heightCells', 'count', 'countPerTick', 'intervalMs', 'startAtMs', 'balanceReferenceDurationSec', 'treeCount', 'dxCells', 'dyCells', 'edgeInsetCells'].includes(key)
@@ -44,7 +44,7 @@ export function validateDocument(draft: JsonObject): Validation {
     }
     // World-cell coordinates; base shapes and their local mounts are offsets, not map positions.
     const local = /^\/bases\/\d+\/(shape|turrets|powerUpPedestals|spawnCenter)(\/|$)/.test(path);
-    const worldPosition = isEditableMapField(`${path}/gridX`.split('/').slice(1))
+    const worldPosition = isEditableMapField(`${path}/gridX`.split('/').slice(1), draft)
       || /^\/(missionProgress\/barriers\/\d+\/cells\/\d+|mapEvents\/\d+\/area|trackPosition)$/.test(path);
     if (!local && worldPosition && typeof o.gridX === 'number' && typeof o.gridY === 'number') {
       if (o.gridX < 0 || o.gridY < 0 || o.gridX + Number(o.widthCells ?? 1) > metrics.gridCols || o.gridY + Number(o.heightCells ?? 1) > metrics.gridRows) {
@@ -53,6 +53,13 @@ export function validateDocument(draft: JsonObject): Validation {
     }
   };
   visit(draft, '');
+  array(draft.mapEvents).forEach((event, i) => {
+    if (!isEditableFireFront(event)) return;
+    const spread = object(event.spread), area = object(event.area);
+    if (Number(spread.roughnessCells) >= Number(area.widthCells) / Math.PI) {
+      error(`/mapEvents/${i}/spread/roughnessCells`, 'Die Unregelmäßigkeit muss kleiner als die Breite / π sein. Feuerfront verbreitern oder Unregelmäßigkeit verringern.');
+    }
+  });
   if (draft.rockFillRatio !== undefined && (typeof draft.rockFillRatio !== 'number' || draft.rockFillRatio < 0 || draft.rockFillRatio > MAX_ROCK_FILL_RATIO)) error('/rockFillRatio', `Felsdichte muss zwischen 0 und ${MAX_ROCK_FILL_RATIO} liegen.`);
   const rockField = object(draft.rockField);
   const corridorRadius = (value: unknown, path: string) => { if (typeof value === 'number' && value < MIN_CORRIDOR_RADIUS_CELLS) error(path, `Korridorradius muss mindestens ${MIN_CORRIDOR_RADIUS_CELLS} betragen.`); };
