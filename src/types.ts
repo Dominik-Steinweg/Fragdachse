@@ -370,7 +370,7 @@ export type ProjectilePathEffectKind = 'awp' | 'fireball';
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'awp_charged' | 'awp_corridor' | 'gauss' | 'negev' | 'time_prism';
 
 /** Data-driven Preset fuer klassische geworfene Granaten. */
-export type GrenadeVisualPreset = 'he' | 'he_cluster_shard' | 'he_demolition_shard' | 'smoke' | 'molotov' | 'time_bubble' | 'fur_ball';
+export type GrenadeVisualPreset = 'he' | 'he_cluster_shard' | 'he_demolition_shard' | 'smoke' | 'molotov' | 'molotov_void' | 'time_bubble' | 'fur_ball';
 
 /** Visuelles Preset fuer Hitscan-Strahlen. */
 export type HitscanVisualPreset = 'default' | 'asmd_primary' | 'plasma_burner';

@@ -351,7 +351,7 @@ describe('Projektil-Snapshot-Zusammenfuehrung', () => {
   });
 });
 
-it.each(['he_cluster_shard', 'he_demolition_shard'] as const)('round-trips %s without an HE body fallback', grenadeVisualPreset => {
+it.each(['he_cluster_shard', 'he_demolition_shard', 'molotov_void'] as const)('round-trips %s without an HE body fallback', grenadeVisualPreset => {
   expect(roundTripStatic({ id: 1, ownerId: 'p1', style: 'grenade', grenadeVisualPreset }))
     .toEqual({ id: 1, ownerId: 'p1', style: 'grenade', grenadeVisualPreset });
 });

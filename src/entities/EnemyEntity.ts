@@ -876,9 +876,9 @@ export class EnemyEntity {
   }
 
   /**
-   * Telegraph des Void-Brandsatzes: ein lila Ring, der ueber die Ausholzeit auf den Koerper
-   * zusammenlaeuft. Bewusst ein einzelnes, additiv gezeichnetes Element ohne Partikel – es soll
-   * die eine Sekunde Standzeit lesbar machen, nicht mit dem Bosseigenleuchten konkurrieren.
+   * Telegraph des Void-Brandsatzes: ein heller lila Ring, der sich waehrend der Ausholzeit
+   * zusammenzieht, aber ausserhalb der Koerpersilhouette sichtbar bleibt. Er liegt vor dem
+   * Sprite, damit auch ein bereits stehender Boss seinen bevorstehenden Wurf ankuendigt.
    * Der Fortschritt kommt aus dem replizierten Ladekanal und gilt deshalb auf Host und Clients.
    */
   private syncVoidMolotovWindupVisuals(): void {
@@ -889,15 +889,14 @@ export class EnemyEntity {
 
     if (!this.voidMolotovWindupRing) {
       this.voidMolotovWindupRing = this.sprite.scene.add.circle(this.sprite.x, this.sprite.y, this.config.size * 0.5);
-      this.voidMolotovWindupRing.setStrokeStyle(3, VOID_FIRE_COLOR, 0.95);
-      this.voidMolotovWindupRing.setDepth(DEPTH.PLAYERS - 0.06);
-      makeAdditive(this.voidMolotovWindupRing);
+      this.voidMolotovWindupRing.setStrokeStyle(3, VOID_FIRE_COLOR, 1);
       registerGraphicsObject(this.sprite.scene, 'enemyStatus', this.voidMolotovWindupRing);
     }
     const progress = this.gaussChargeProgress;
     this.voidMolotovWindupRing.setPosition(this.sprite.x, this.sprite.y);
-    this.voidMolotovWindupRing.setScale(Phaser.Math.Linear(2.4, 1, progress));
-    this.voidMolotovWindupRing.setAlpha(emissiveAlpha(0.35 + progress * 0.6));
+    this.voidMolotovWindupRing.setDepth(this.sprite.depth + 0.01);
+    this.voidMolotovWindupRing.setScale(Phaser.Math.Linear(2.4, 1.6, progress));
+    this.voidMolotovWindupRing.setAlpha(emissiveAlpha(0.8 + progress * 0.2));
   }
 
   private destroyVoidMolotovWindupVisuals(): void {

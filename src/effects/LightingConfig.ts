@@ -839,6 +839,9 @@ export function getProjectileLightSpec(
     case 'translocator_puck':
       return { preset: 'teleportFlash', baseRadiusPx: 52, radiusPerSizePx: 1.6 };
     case 'grenade':
+      if (grenadeVisualPreset === 'molotov_void') {
+        return { preset: 'voidFlameProjectile', baseRadiusPx: 52, radiusPerSizePx: 2.2 };
+      }
       if (grenadeVisualPreset === 'molotov') {
         // Brennt im Flug bereits sichtbar. `ProjectileBurnRenderer` überspringt Granaten,
         // das Licht muss also von hier kommen.

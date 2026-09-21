@@ -2,22 +2,106 @@
   "mapId": "10",
   "arenaWidthCells": 96,
   "timeOfDay": "22:45",
-  "rockFillRatio": 0.1,
-  "trackPosition": "center",
+  "rockFillRatio": 0.17,
+  "trackPosition": {
+    "kind": "grid",
+    "gridX": 89
+  },
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
-    "start": { "type": "time", "atMs": 20000 },
+    "start": { "type": "time", "atMs": 60000 },
     "repeatAfterExitMs": 20000
   }],
   "balanceReferenceDurationSec": 145,
   "objective": "defeat-boss",
-  "bases": [],
+  "bases": [
+    {
+      "id": "friendly-outpost-plasma-west",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 900,
+      "anchor": { "kind": "grid", "gridX": 32, "gridY": 18 },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 1,
+        "heightCells": 1
+      },
+      "turrets": [
+        {
+          "id": "plasma",
+          "cellOffset": { "gridX": 0, "gridY": 0 },
+          "mountSide": "front",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        }
+      ]
+    },
+    {
+      "id": "friendly-outpost-plasma-east",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 900,
+      "anchor": { "kind": "grid", "gridX": 54, "gridY": 18 },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 1,
+        "heightCells": 1
+      },
+      "turrets": [
+        {
+          "id": "plasma",
+          "cellOffset": { "gridX": 0, "gridY": 0 },
+          "mountSide": "front",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        }
+      ]
+    },
+    {
+      "id": "friendly-outpost-plasma-west-south",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 900,
+      "anchor": { "kind": "grid", "gridX": 32, "gridY": 30 },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 1,
+        "heightCells": 1
+      },
+      "turrets": [
+        {
+          "id": "plasma",
+          "cellOffset": { "gridX": 0, "gridY": 0 },
+          "mountSide": "front",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        }
+      ]
+    },
+    {
+      "id": "friendly-outpost-plasma-east-south",
+      "role": "outpost",
+      "faction": "friendly",
+      "hpMax": 900,
+      "anchor": { "kind": "grid", "gridX": 54, "gridY": 30 },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 1,
+        "heightCells": 1
+      },
+      "turrets": [
+        {
+          "id": "plasma",
+          "cellOffset": { "gridX": 0, "gridY": 0 },
+          "mountSide": "front",
+          "weaponId": "SPORE_TURRET_PLASMA"
+        }
+      ]
+    }
+  ],
   "persistentBase": {
     "baseId": "coop-base-middle",
     "anchor": {
       "gridX": 43,
-      "gridY": 16
+      "gridY": 24
     }
   },
   "powerUps": [
@@ -47,30 +131,96 @@
   "encounters": [
     {
       "id": "inferno-opening-support",
-      "start": { "type": "time", "atMs": 0 },
+      "start": {
+        "type": "time",
+        "atMs": 0
+      },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 4, "delayMs": 4000, "front": "east" },
-        { "enemyKind": "spore-warden", "count": 2, "delayMs": 1300, "front": "west" }
+        {
+          "enemyKind": "zombie-badger",
+          "count": 12,
+          "front": "west"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 4,
+          "delayMs": 4000,
+          "front": "east"
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 2,
+          "delayMs": 1300,
+          "front": "west"
+        }
       ]
     },
-        {
+    {
       "id": "inferno-phase-support",
-      "start": { "type": "time", "atMs": 30000 },
+      "start": {
+        "type": "time",
+        "atMs": 30000
+      },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 20, "front": "north" },
-        { "enemyKind": "spore-warden", "count": 1, "delayMs": 1300, "front": "east" },
-        { "enemyKind": "demon-badger", "count": 14, "front": "south" }
+        {
+          "enemyKind": "zombie-badger",
+          "count": 20,
+          "front": "north"
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 1,
+          "delayMs": 1300,
+          "front": "east"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 14,
+          "front": "south"
+        }
+      ]
+    },
+    {
+      "id": "encounter-1",
+      "start": {
+        "type": "time",
+        "atMs": 50000
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 30,
+          "spawnStaggerMs": 20000
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 30,
+          "front": "east",
+          "spawnStaggerMs": 20000
+        }
       ]
     },
     {
       "id": "inferno-phase-support2",
-      "start": { "type": "time", "atMs": 50000 },
+      "start": {
+        "type": "time",
+        "atMs": 80000
+      },
       "groups": [
-        { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1300, "front": "east" }
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 3,
+          "front": "west"
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 3,
+          "delayMs": 1300,
+          "front": "east"
+        }
       ]
     }
   ],
-  "persistentSpawns": []
+  "persistentSpawns": [],
+  "arenaHeightCells": 47
 }

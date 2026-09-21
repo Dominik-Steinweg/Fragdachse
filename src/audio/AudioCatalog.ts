@@ -272,7 +272,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_fireball: 0.5,
   sfx_explosion_kamikaze: 0.5,
   sfx_explosion_rocket_aftershock: 0.5,
-  sfx_explosion_plasma_swarm: 0.5,
+  sfx_explosion_plasma_swarm: 0.6,
   sfx_explosion_grave_titan_plasma: 0.5,
   sfx_explosion_alien_plasma: 0.5,
   sfx_explosion_turret_plasma: 0.5,

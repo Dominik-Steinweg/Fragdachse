@@ -542,6 +542,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
       },
       presentation: {
         color: VOID_FIRE_COLOR,
+        grenadePreset: 'molotov_void',
       },
     });
   });

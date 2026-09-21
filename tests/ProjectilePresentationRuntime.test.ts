@@ -285,7 +285,7 @@ describe('ProjectilePresentationRuntime', () => {
   });
 });
 
-it.each(['he_cluster_shard', 'he_demolition_shard'] as const)('presents confirmed %s and cleans up', grenadeVisualPreset => {
+it.each(['he_cluster_shard', 'he_demolition_shard', 'molotov_void'] as const)('presents confirmed %s and cleans up', grenadeVisualPreset => {
   const runtime = new ProjectilePresentationRuntime({} as never);
   const renderer = { ...passiveRenderer(), has: () => false };
   runtime.bindRenderers({ grenade: renderer } as never, null);

@@ -672,7 +672,7 @@ export class CoopDefenseEnemyAbilitySystem {
         color: VOID_FIRE_COLOR,
         ownerColor: VOID_FIRE_COLOR,
         style: utility.projectileStyle,
-        grenadePreset: utility.grenadeVisualPreset,
+        grenadePreset: 'molotov_void',
       },
     });
   }

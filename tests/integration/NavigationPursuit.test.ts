@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('phaser', async () => (await import('../fakeArenaRenderScene')).createFakePhaserModule());
+vi.mock('phaser', async () => {
+  const phaser = (await import('../fakeArenaRenderScene')).createFakePhaserModule();
+  return { ...phaser, Math: { ...phaser.Math, Angle: { ...phaser.Math.Angle,
+    Wrap: (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle)),
+  } } };
+});
 import { EnemyManager } from '../../src/entities/EnemyManager';
 import { resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
 import { healthBarTestScene } from '../healthBarTestScene';
@@ -12,13 +17,15 @@ import { EnemyIntentSystem } from '../../src/systems/navigation/EnemyIntentSyste
 import type { NavigationObstacle } from '../../src/systems/navigation/NavigationGeometry';
 import { navigationTestWorld } from '../navigationTestWorld';
 import { CoopDefenseEnemyAttackSystem } from '../../src/systems/CoopDefenseEnemyAttackSystem';
+import { CoopDefenseEnemyAbilitySystem } from '../../src/systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefenseEnemyCombatPositioningSystem } from '../../src/systems/CoopDefenseEnemyCombatPositioningSystem';
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyKind } from '../../src/config/coopDefenseEnemies';
 
 describe('Combat movement and hidden-player pursuit', () => {
   function combatWorld(kind: CoopDefenseEnemyKind = 'rabid-badger',
     world: Pick<ReturnType<typeof navigationTestWorld>, 'catalog' | 'intents' | 'field' | 'flush' | 'destroy'> = navigationTestWorld()) {
-    const manager = new EnemyManager(healthBarTestScene().scene, resolveCoopDefenseEnemyConfigs(1));
+    const scene = healthBarTestScene().scene;
+    const manager = new EnemyManager(scene, resolveCoopDefenseEnemyConfigs(1));
     manager.setNavigationIntents(world.intents);
     const unit = manager.hostSpawnAtWorld(64, 128, kind);
     const player = { id: 'p', x: 96, y: 128, active: true };
@@ -42,7 +49,7 @@ describe('Combat movement and hidden-player pursuit', () => {
       manager.hostUpdateMovement(world.field, world.field, world.field, null, false, now, 16,
         null, null, null, null, usePositioning ? positioning : null, special, null, null, attacks);
     };
-    return { world, manager, unit, player, attacks, positioning, shots, observe, move,
+    return { world, scene, players, combat, manager, unit, player, attacks, positioning, shots, observe, move,
       bury: () => { buried = true; }, blockSight: () => { sight = false; },
       destroy: () => { manager.destroy(); world.destroy(); } };
   }
@@ -127,6 +134,60 @@ describe('Combat movement and hidden-player pursuit', () => {
     expect(w.unit.getDesiredVelocity()).toEqual({ vx: 0, vy: 0 });
     expect(w.unit.getAimAngle()).toBeCloseTo(Math.PI / 2);
     w.destroy();
+  });
+
+  it('announces the actual molotov windup on host and client and suppresses weapons until the throw', () => {
+    const w = combatWorld('inferno-colossus');
+    const config = getCoopDefenseEnemyConfig(w.unit.kind).voidMolotov!;
+    const spawnProjectile = vi.fn();
+    const ability = new CoopDefenseEnemyAbilitySystem(w.manager, w.players, { spawnProjectile },
+      w.combat as ConstructorParameters<typeof CoopDefenseEnemyAbilitySystem>[3], null,
+      {} as ConstructorParameters<typeof CoopDefenseEnemyAbilitySystem>[5], null,
+      { hostRefreshGroundCellsAlongSweptCircle: vi.fn() } as unknown as ConstructorParameters<typeof CoopDefenseEnemyAbilitySystem>[7],
+      { broadcastTranslocatorFlash: vi.fn() }, w.world.catalog);
+    w.attacks.setActionBlockedChecker(id => ability.blocksRegularAttacks(id));
+    const clientScene = healthBarTestScene().scene;
+    const client = new EnemyManager(clientScene, resolveCoopDefenseEnemyConfigs(1));
+    const hostCircles = vi.spyOn(w.scene.add, 'circle');
+    const clientCircles = vi.spyOn(clientScene.add, 'circle');
+    const tick = (now: number) => {
+      w.observe(now); w.move(now, undefined, true);
+      ability.hostUpdate(now); w.attacks.hostUpdate(16, now);
+      w.manager.syncHostVisuals();
+      client.applySnapshot(w.manager.getNetSnapshot()); client.updateClientInterpolation(1);
+    };
+    try {
+      w.player.x = w.unit.sprite.x + (config.minRange + config.maxRange) / 2;
+      tick(1000);
+      const start = 1000 + config.cooldownMs;
+      tick(start);
+      const hostRing = hostCircles.mock.results.at(-1)!.value;
+      const clientRing = clientCircles.mock.results.at(-1)!.value;
+      const startScale = hostRing.scaleX;
+      w.shots.mockClear();
+      for (const elapsed of [0, config.windupMs / 2, config.windupMs - 1]) {
+        tick(start + elapsed);
+        expect(w.unit.getSpecialAction()).toBe('void-molotov-windup');
+        expect(client.getEnemy(w.unit.id)!.getSpecialAction()).toBe('void-molotov-windup');
+        expect(w.unit.getDesiredVelocity()).toEqual({ vx: 0, vy: 0 });
+        expect(w.unit.getAttackMovementSpeedFactor(start + elapsed)).toBe(0);
+        for (const ring of [hostRing, clientRing]) {
+          expect(ring.active && ring.visible).toBe(true);
+          expect(ring.alpha).toBeGreaterThan(0);
+          expect(ring.depth).toBeGreaterThan(w.unit.sprite.depth);
+          // The warning must remain outside the rotated square silhouette until release.
+          expect(ring.scaleX).toBeGreaterThan(Math.SQRT2);
+        }
+        expect(spawnProjectile).not.toHaveBeenCalled();
+        expect(w.shots).not.toHaveBeenCalled();
+      }
+      expect(hostRing.scaleX).toBeLessThan(startScale);
+      tick(start + config.windupMs);
+      expect(spawnProjectile).toHaveBeenCalledTimes(1);
+      expect(w.unit.getSpecialAction()).toBe('none');
+      expect(client.getEnemy(w.unit.id)!.getSpecialAction()).toBe('none');
+      expect(hostRing.active || clientRing.active).toBe(false);
+    } finally { ability.clear(); client.destroy(); w.destroy(); }
   });
 
   it.each([0, 8])('the colossus approaches into flame range, holds and resumes pursuit with %i frames of field latency', resultDelay => {
