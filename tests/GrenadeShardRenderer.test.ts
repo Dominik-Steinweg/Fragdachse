@@ -41,7 +41,7 @@ describe('exploding shard presentation', () => {
 });
 
 describe('molotov flight presentation', () => {
-  it.each(['molotov', 'molotov_void'] as const)('renders %s with its own bottle, moving trail and complete teardown', preset => {
+  it.each(['molotov', 'molotov_void'] as const)('renders %s with its own body, moving trail and complete teardown', preset => {
     const scene = makeFakeGpuVfxScene();
     const images: Array<{ key: string; object: ReturnType<typeof makeFakeDisplayObject> }> = [];
     scene.add.image = (_x, _y, key) => {
@@ -55,17 +55,17 @@ describe('molotov flight presentation', () => {
     const renderer = new GrenadeRenderer(scene as never);
     renderer.generateTextures();
     renderer.createVisual(1, 0, 0, 10, preset);
-    const bottle = images.find(image => image.key === `__grenade_body_${preset}`)!;
+    const body = images.find(image => image.key === `__grenade_body_${preset}`)!;
     const detail = images.find(image => image.key === `__grenade_detail_${preset}`)!;
-    expect(bottle).toBeDefined();
+    expect(body).toBeDefined();
     expect(detail).toBeDefined();
-    expect(scene.textures.exists(bottle.key)).toBe(true);
+    expect(scene.textures.exists(body.key)).toBe(true);
     expect(scene.textures.exists(detail.key)).toBe(true);
     const trail = scene.emitters[0];
     trail.setPosition = vi.fn(() => trail);
     scene.time.now = 100;
     renderer.updateVisual(1, 100, 50, 10, 100, 0);
-    expect(bottle.object.setPosition).toHaveBeenLastCalledWith(100, 50);
+    expect(body.object.setPosition).toHaveBeenLastCalledWith(100, 50);
     expect(detail.object.setPosition).toHaveBeenLastCalledWith(100, 50);
     expect(trail.setPosition).toHaveBeenCalled();
     // An additional short-lived flame puff marks the travelled path.

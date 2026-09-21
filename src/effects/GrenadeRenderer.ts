@@ -119,7 +119,7 @@ const PRESETS: Record<GrenadeVisualPreset, GrenadePresetConfig> = {
     trailTints:      [0xffffff, 0xffee50, 0xff8018],
   },
   molotov_void: {
-    bodyScale:       1.0,
+    bodyScale:       0.8,
     glowTint:        VOID_FIRE_COLOR,
     glowAlpha:       0.8,
     glowScale:       1.9,
@@ -197,7 +197,7 @@ export class GrenadeRenderer {
     ensureExplosionChunkTexture(this.scene);
     this.generateSmokeTextures(textures);
     this.generateMolotovTextures(textures);
-    this.generateMolotovTextures(textures, 'molotov_void');
+    this.generateVoidOrbTextures(textures);
     this.generateTimeBubbleTextures(textures);
     this.generateFurBallTextures(textures);
   }
@@ -260,9 +260,11 @@ export class GrenadeRenderer {
 
     visual.glow.setPosition(x, y).setScale(baseScale * cfg.glowScale).setRotation(-spin * 0.18);
 
-    // All three grenade types tumble freely – bottles spin just like HE/Smoke.
-    visual.body.setPosition(x, y).setScale(baseScale).setRotation(spin);
-    visual.detail?.setPosition(x, y).setScale(baseScale).setRotation(spin);
+    const isVoidOrb = visual.preset === 'molotov_void';
+    const pulse = isVoidOrb ? 1 + Math.sin(this.scene.time.now * 0.014 + id) * 0.06 : 1;
+    // The containment shell turns slowly while its burning corona swirls independently.
+    visual.body.setPosition(x, y).setScale(baseScale).setRotation(isVoidOrb ? spin * 0.25 : spin);
+    visual.detail?.setPosition(x, y).setScale(baseScale * pulse).setRotation(isVoidOrb ? -spin * 0.6 : spin);
 
     visual.trail.setPosition(tailX, tailY);
 
@@ -271,7 +273,7 @@ export class GrenadeRenderer {
       const dist = Phaser.Math.Distance.Between(visual.lastFireX, visual.lastFireY, tailX, tailY);
       // Spawn small ember puffs at moderate intervals – not as dense as rocket smoke.
       if (dist >= Math.max(size * 0.55, 6) || now - visual.lastFireAt >= 38) {
-        this.spawnFirePuff(tailX, tailY, size, visual.preset === 'molotov_void');
+        this.spawnFirePuff(tailX, tailY, size, isVoidOrb, angle);
         visual.lastFireX  = tailX;
         visual.lastFireY  = tailY;
         visual.lastFireAt = now;
@@ -279,14 +281,15 @@ export class GrenadeRenderer {
     }
   }
 
-  private spawnFirePuff(x: number, y: number, size: number, isVoid: boolean): void {
+  private spawnFirePuff(x: number, y: number, size: number, isVoid: boolean, angle: number): void {
     // Small ember/glow puff – noticeable but much subtler than rocket smoke.
-    const puff = this.scene.add.image(x, y, isVoid ? TEX_GRENADE_GLOW : TEX_MOLOTOV_FIRE_PUFF)
+    const puff = this.scene.add.image(x, y, isVoid ? SPARK_KEYS.molotov_void : TEX_MOLOTOV_FIRE_PUFF)
       .setDepth(isVoid ? DEPTH.PROJECTILES - 0.3 : DEPTH.FIRE)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setTint(isVoid ? VOID_FIRE_COLOR : 0xffffff)
       .setAlpha(0.68)
-      .setScale(Math.max(size / 46, 0.14));
+      .setRotation(isVoid ? angle + Math.PI : 0)
+      .setScale(isVoid ? Math.max(size / 24, 0.3) : Math.max(size / 46, 0.14));
 
     this.firePuffs.add(puff);
 
@@ -445,27 +448,21 @@ export class GrenadeRenderer {
     });
   }
 
-  private generateMolotovTextures(
-    textures: Phaser.Textures.TextureManager,
-    preset: 'molotov' | 'molotov_void' = 'molotov',
-  ): void {
-    // Shared bottle silhouette; recolor the glass and wick at source so a runtime
-    // multiply tint cannot turn the amber texture into a nearly black bottle.
-    const ink = (warm: string, violet: string) => preset === 'molotov_void' ? violet : warm;
-    ensureCanvasTexture(textures, BODY_KEYS[preset], 28, 46, (ctx) => {
+  private generateMolotovTextures(textures: Phaser.Textures.TextureManager): void {
+    ensureCanvasTexture(textures, BODY_KEYS.molotov, 28, 46, (ctx) => {
       // Bottle body (wider lower section)
       const bg = ctx.createLinearGradient(4, 0, 24, 0);
-      bg.addColorStop(0,    ink('rgba(56,24,6,1.0)', 'rgba(49,12,78,1.0)'));
-      bg.addColorStop(0.18, ink('rgba(152,80,20,0.98)', 'rgba(134,40,206,0.98)'));
-      bg.addColorStop(0.44, ink('rgba(188,112,34,0.96)', 'rgba(192,92,255,0.96)'));
-      bg.addColorStop(0.72, ink('rgba(128,64,14,0.98)', 'rgba(115,27,179,0.98)'));
-      bg.addColorStop(1,    ink('rgba(44,18,4,1.0)', 'rgba(36,10,56,1.0)'));
+      bg.addColorStop(0,    'rgba(56,24,6,1.0)');
+      bg.addColorStop(0.18, 'rgba(152,80,20,0.98)');
+      bg.addColorStop(0.44, 'rgba(188,112,34,0.96)');
+      bg.addColorStop(0.72, 'rgba(128,64,14,0.98)');
+      bg.addColorStop(1,    'rgba(44,18,4,1.0)');
       ctx.fillStyle = bg;
       ctx.beginPath();
       ctx.roundRect(5, 22, 18, 20, 8);
       ctx.fill();
       // Shoulder taper (connecting neck to body)
-      ctx.fillStyle = ink('rgba(140,74,18,0.96)', 'rgba(143,48,219,0.96)');
+      ctx.fillStyle = 'rgba(140,74,18,0.96)';
       ctx.beginPath();
       ctx.moveTo(5,  30);
       ctx.lineTo(9,  22);
@@ -475,62 +472,137 @@ export class GrenadeRenderer {
       ctx.fill();
       // Neck
       const ng = ctx.createLinearGradient(8, 0, 20, 0);
-      ng.addColorStop(0,    ink('rgba(64,28,6,1.0)', 'rgba(62,18,96,1.0)'));
-      ng.addColorStop(0.28, ink('rgba(160,92,26,0.96)', 'rgba(166,62,238,0.96)'));
-      ng.addColorStop(0.68, ink('rgba(136,76,16,0.96)', 'rgba(125,35,193,0.96)'));
-      ng.addColorStop(1,    ink('rgba(50,20,4,1.0)', 'rgba(46,12,73,1.0)'));
+      ng.addColorStop(0,    'rgba(64,28,6,1.0)');
+      ng.addColorStop(0.28, 'rgba(160,92,26,0.96)');
+      ng.addColorStop(0.68, 'rgba(136,76,16,0.96)');
+      ng.addColorStop(1,    'rgba(50,20,4,1.0)');
       ctx.fillStyle = ng;
       ctx.beginPath();
       ctx.roundRect(10, 10, 8, 14, 2);
       ctx.fill();
       // Bottle mouth
-      ctx.fillStyle = ink('rgba(72,32,8,1.0)', 'rgba(74,24,112,1.0)');
+      ctx.fillStyle = 'rgba(72,32,8,1.0)';
       ctx.fillRect(11, 5, 6, 7);
     });
 
     // Detail: glass highlights, liquid level line, burning wick with flame.
-    ensureCanvasTexture(textures, DETAIL_KEYS[preset]!, 28, 46, (ctx) => {
+    ensureCanvasTexture(textures, DETAIL_KEYS.molotov!, 28, 46, (ctx) => {
       // Glass highlight on left side of bottle body
-      ctx.fillStyle = ink('rgba(224,182,118,0.28)', 'rgba(217,140,255,0.6)');
+      ctx.fillStyle = 'rgba(224,182,118,0.28)';
       ctx.fillRect(6, 25, 3, 14);
-      ctx.fillStyle = ink('rgba(244,206,148,0.16)', 'rgba(222,165,255,0.4)');
+      ctx.fillStyle = 'rgba(244,206,148,0.16)';
       ctx.fillRect(6, 25, 5, 7);
       // Liquid level inside bottle
-      ctx.strokeStyle = ink('rgba(238,184,80,0.48)', 'rgba(199,108,255,0.8)');
+      ctx.strokeStyle = 'rgba(238,184,80,0.48)';
       ctx.lineWidth   = 1;
       ctx.beginPath();
       ctx.moveTo(6,  32);
       ctx.lineTo(22, 32);
       ctx.stroke();
       // Wick cloth (at bottle mouth)
-      ctx.fillStyle = ink('rgba(172,114,38,0.92)', 'rgba(148,72,214,0.92)');
+      ctx.fillStyle = 'rgba(172,114,38,0.92)';
       ctx.fillRect(11, 3, 6, 4);
       // Flame – bright inner core
-      ctx.fillStyle = ink('rgba(255,246,90,0.94)', 'rgba(217,140,255,0.98)');
+      ctx.fillStyle = 'rgba(255,246,90,0.94)';
       ctx.beginPath();
       ctx.ellipse(14, 0, 3, 4, 0, 0, Math.PI * 2);
       ctx.fill();
       // Flame – orange mid
-      ctx.fillStyle = ink('rgba(255,172,18,0.78)', 'rgba(179,71,255,0.9)');
+      ctx.fillStyle = 'rgba(255,172,18,0.78)';
       ctx.beginPath();
       ctx.ellipse(12, -1, 2.2, 3.2, -0.28, 0, Math.PI * 2);
       ctx.fill();
       // Flame – red outer tip
-      ctx.fillStyle = ink('rgba(255,72,8,0.54)', 'rgba(111,22,168,0.7)');
+      ctx.fillStyle = 'rgba(255,72,8,0.54)';
       ctx.beginPath();
       ctx.ellipse(16, -1, 2, 3, 0.28, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    ensureCanvasTexture(textures, SPARK_KEYS[preset], 12, 12, (ctx) => {
+    ensureCanvasTexture(textures, SPARK_KEYS.molotov, 12, 12, (ctx) => {
       const g = ctx.createRadialGradient(6, 6, 0, 6, 6, 6);
-      // Neutral violet-source spark retains the palette when tinted by the emitter.
-      g.addColorStop(0,    ink('rgba(255,255,204,1.0)', 'rgba(255,255,255,1.0)'));
-      g.addColorStop(0.34, ink('rgba(255,200,56,0.80)', 'rgba(255,255,255,0.80)'));
-      g.addColorStop(0.68, ink('rgba(255,96,10,0.38)', 'rgba(255,255,255,0.38)'));
-      g.addColorStop(1,    ink('rgba(200,48,0,0.0)', 'rgba(255,255,255,0.0)'));
+      g.addColorStop(0,    'rgba(255,255,204,1.0)');
+      g.addColorStop(0.34, 'rgba(255,200,56,0.80)');
+      g.addColorStop(0.68, 'rgba(255,96,10,0.38)');
+      g.addColorStop(1,    'rgba(200,48,0,0.0)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, 12, 12);
+    });
+  }
+
+  private generateVoidOrbTextures(textures: Phaser.Textures.TextureManager): void {
+    // A round containment shell and exposed plasma core, viewed directly from above.
+    ensureCanvasTexture(textures, BODY_KEYS.molotov_void, 64, 64, (ctx) => {
+      const shell = ctx.createRadialGradient(28, 27, 2, 32, 32, 22);
+      shell.addColorStop(0, '#a44bdf');
+      shell.addColorStop(0.55, '#541b83');
+      shell.addColorStop(0.85, '#240a38');
+      shell.addColorStop(1, '#6f16a8');
+      ctx.fillStyle = shell;
+      ctx.beginPath();
+      ctx.arc(32, 32, 22, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Broken concentric conductors give the sphere a technological silhouette.
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        const start = i * Math.PI * 2 / 3;
+        ctx.strokeStyle = '#b347ff';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(32, 32, 19, start, start + 1.5);
+        ctx.stroke();
+        ctx.strokeStyle = '#d98cff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(32, 32, 14, start + 0.3, start + 1.2);
+        ctx.stroke();
+      }
+      const core = ctx.createRadialGradient(31, 31, 1, 32, 32, 12);
+      core.addColorStop(0, '#e6adff');
+      core.addColorStop(0.3, '#d98cff');
+      core.addColorStop(0.7, '#b347ff');
+      core.addColorStop(1, 'rgba(111,22,168,0)');
+      ctx.fillStyle = core;
+      ctx.fillRect(20, 20, 24, 24);
+    });
+
+    // Curled flame tongues surround the shell, with a transparent center for the core.
+    ensureCanvasTexture(textures, DETAIL_KEYS.molotov_void!, 64, 64, (ctx) => {
+      ctx.translate(32, 32);
+      for (let i = 0; i < 7; i++) {
+        ctx.save();
+        ctx.rotate(i * Math.PI * 2 / 7);
+        const tip = 27 + (i % 3) * 1.5;
+        const flame = ctx.createLinearGradient(14, 0, tip, 0);
+        flame.addColorStop(0, 'rgba(217,140,255,0.85)');
+        flame.addColorStop(0.45, 'rgba(179,71,255,0.75)');
+        flame.addColorStop(1, 'rgba(111,22,168,0)');
+        ctx.fillStyle = flame;
+        ctx.beginPath();
+        ctx.moveTo(16, -5);
+        ctx.bezierCurveTo(23, -9, tip - 3, -3, tip, 5);
+        ctx.bezierCurveTo(tip - 7, -1, 21, 6, 16, 4);
+        ctx.quadraticCurveTo(21, 0, 16, -5);
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+
+    // Neutral flame wisps receive the shared Void palette at runtime.
+    ensureCanvasTexture(textures, SPARK_KEYS.molotov_void, 28, 28, (ctx) => {
+      const flame = ctx.createRadialGradient(9, 14, 1, 13, 14, 14);
+      flame.addColorStop(0, 'rgba(255,255,255,0.95)');
+      flame.addColorStop(0.45, 'rgba(255,255,255,0.6)');
+      flame.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = flame;
+      ctx.beginPath();
+      ctx.moveTo(3, 14);
+      ctx.bezierCurveTo(4, 5, 16, 5, 26, 3);
+      ctx.quadraticCurveTo(17, 12, 25, 17);
+      ctx.bezierCurveTo(13, 14, 12, 26, 5, 20);
+      ctx.quadraticCurveTo(2, 18, 3, 14);
+      ctx.fill();
     });
   }
 

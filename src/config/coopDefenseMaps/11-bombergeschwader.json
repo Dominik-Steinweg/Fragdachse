@@ -59,7 +59,7 @@
         "type": "time",
         "atMs": 0
       },
-      "restAfterMs": 5000,
+      "restAfterMs": 3000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
@@ -69,7 +69,7 @@
         {
           "enemyKind": "demon-badger",
           "count": 3,
-          "delayMs": 1200,
+          "delayMs": 0,
           "front": "south"
         }
       ]
@@ -80,7 +80,7 @@
         "type": "after-event",
         "eventId": "opening-barrage"
       },
-      "restAfterMs": 5500,
+      "restAfterMs": 3000,
       "groups": [
         {
           "enemyKind": "spore-warden",
@@ -89,19 +89,20 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 24,
-          "front": "north"
+          "count": 48,
+          "front": "north",
+          "spawnStaggerMs": 9000
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
-          "delayMs": 900,
+          "delayMs": 4000,
           "front": "north"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "delayMs": 1800,
+          "delayMs": 6000,
           "front": "north"
         }
       ]
@@ -111,24 +112,32 @@
       "start": {
         "type": "after-previous"
       },
-      "restAfterMs": 5500,
+      "restAfterMs": 3000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
           "count": 15,
-          "front": "north"
+          "front": "north",
+          "spawnStaggerMs": 5000
         },
         {
           "enemyKind": "demon-badger",
-          "count": 3,
+          "count": 24,
           "delayMs": 700,
-          "front": "north"
+          "front": "north",
+          "spawnStaggerMs": 7000
         },
         {
           "enemyKind": "void-stalker",
           "count": 2,
           "delayMs": 1600,
-          "front": "north"
+          "front": "north",
+          "spawnStaggerMs": 8000
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 12,
+          "spawnStaggerMs": 7000
         }
       ]
     },
@@ -137,26 +146,53 @@
       "start": {
         "type": "after-previous"
       },
-      "restAfterMs": 5500,
+      "restAfterMs": 3000,
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 40,
-          "front": "north"
+          "count": 60,
+          "front": "north",
+          "spawnStaggerMs": 6000
         },
         {
           "enemyKind": "demon-badger",
           "count": 30,
           "delayMs": 700,
-          "front": "north"
+          "front": "north",
+          "spawnStaggerMs": 6000
         },
         {
           "enemyKind": "spore-warden",
           "count": 3,
-          "front": "north"
+          "front": "north",
+          "spawnStaggerMs": 6000
         }
       ]
-    },    
+    },
+    {
+      "id": "encounter-1",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 40,
+          "spawnStaggerMs": 8000
+        },
+        {
+          "enemyKind": "plague-medic",
+          "count": 5,
+          "spawnStaggerMs": 8000
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 7,
+          "spawnStaggerMs": 8000
+        }
+      ],
+      "restAfterMs": 3000
+    },
     {
       "id": "final-bombing-run",
       "start": {
@@ -165,37 +201,47 @@
       "groups": [
         {
           "enemyKind": "spore-warden",
-          "count": 3,
+          "count": 2,
           "front": "north"
         },
         {
           "enemyKind": "spore-warden",
-          "count": 1,
-          "front": "south"
+          "count": 2,
+          "front": "south",
+          "spawnStaggerMs": 4000
         },
         {
           "enemyKind": "void-stalker",
           "count": 2,
           "delayMs": 800,
-          "front": "north"
+          "front": "north",
+          "spawnStaggerMs": 4000
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
           "delayMs": 800,
-          "front": "south"
+          "front": "south",
+          "spawnStaggerMs": 4000
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
           "delayMs": 1700,
-          "front": "north"
+          "front": "north",
+          "spawnStaggerMs": 4000
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
           "delayMs": 1700,
-          "front": "south"
+          "front": "south",
+          "spawnStaggerMs": 4000
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 24,
+          "spawnStaggerMs": 8000
         }
       ]
     }
