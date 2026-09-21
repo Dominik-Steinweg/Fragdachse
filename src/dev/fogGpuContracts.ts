@@ -37,11 +37,24 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     const view = { x: 0, y: 0, width: 1024, height: 512 };
     field.render(view, 512, 256, 'normal', 1);
     field.prepare(view, time);
-    field.step([{ x: 50, y: 100, endX: 150, endY: 100, radius: 4, strength: .13, priority: 10, kind: 'projectile' }], [.8, .8], tuning, time += FOG.stepMs);
+    field.step([{ x: 50, y: 100, endX: 150, endY: 100, radius: 4, strength: FOG.smallProjectileStrength, priority: 10, kind: 'projectile' }], [.8, .8], tuning, time += FOG.stepMs);
     field.render(view, 512, 256, 'normal', 1);
     const fineTrail = field.readTrail(100, 100), outsideTrail = field.readTrail(100, 116);
-    steps(11); field.render(view, 512, 256, 'normal', 1);
+    steps(30); field.render(view, 512, 256, 'normal', 1);
+    const sustainedTrail = field.readTrail(100, 100);
+    steps(Math.ceil(FOG.trailMs / FOG.stepMs)); field.render(view, 512, 256, 'normal', 1);
     const expiredTrail = field.readTrail(100, 100);
+    for (let i = 0; i < 40; i++) {
+      const point = (n: number) => ({ x: 50 + n * 9, y: 330 - n * 5, timeMs: n * 20, sequence: n + 1, vx: 450, vy: -250 });
+      field.trails.addPath({ from: point(i), to: point(i + 1), ageMs: 800 - (i + 1) * 20 }, 71, time);
+    }
+    steps(1); field.render(view, 512, 256, 'normal', 1);
+    const diagonalTrace = Array.from({ length: 19 }, (_, i) => field.readTrail(50 + (i + 1) * 18, 330 - (i + 1) * 10));
+    const joinedTraceCount = field.trails.size;
+    const frontBefore = field.readDensity(140, 220).density, backBefore = field.readDensity(60, 220).density;
+    field.prepare(view, time);
+    field.step([{ x: 100, y: 220, endX: 101, endY: 220, radius: 100, arcDegrees: 90, strength: .85, kind: 'melee', priority: 80 }], [.8, .8], tuning, time += FOG.stepMs);
+    const frontAfter = field.readDensity(140, 220).density, backAfter = field.readDensity(60, 220).density;
     const cachedBefore = field.readDensity(100, 100);
     const remoteView = { x: 920, y: 0, width: 50, height: 100 };
     terrain.removeObstacle('rock');
@@ -52,13 +65,19 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     const cachedAfter = field.readDensity(100, 100);
     field.prepare(view, time); field.step([], [.8, .8], tuning, time += FOG.stepMs);
     const reopenedCached = field.readDensity(292, 260), blockedCached = field.readDensity(140, 140);
+    const obstacleFlow = checkObstacleFlow(scene);
     const checks = {
+      ...obstacleFlow.checks,
       cachedTerrainEditsPreserveOtherCells: cachedBefore.density === cachedAfter.density,
       cachedEditsAppliedBeforeResume: reopenedCached.density === 0 && !reopenedCached.reached && blockedCached.density === 0,
       thinTraceWithoutWideLane: fineTrail > 0 && outsideTrail === 0,
+      smallTraceSurvivesOneSecond: sustainedTrail > .02,
+      diagonalTraceHasNoGaps: diagonalTrace.every(v => v > .1),
+      straightPathUsesOneTrace: joinedTraceCount === 1,
       traceExpiresOnGpu: expiredTrail === 0,
+      meleeOnlyClearsFacingSector: frontAfter < frontBefore * .7 && backAfter > backBefore * .8,
       velocityEncodingPreservesWind: Math.abs(initialVelocity[0] - tuning.windX) < .05 && Math.abs(initialVelocity[1]) < .05,
-      stableUniformFlow: neighbourhood.every(p => Math.abs(p.velocity[0] - tuning.windX) < .05 && Math.abs(p.velocity[1]) < .05),
+      boundedFiniteFlow: neighbourhood.every(p => p.velocity.every(Number.isFinite) && Math.abs(p.velocity[0]) + Math.abs(p.velocity[1]) <= FOG.maxSpeed + .01),
       noNumericalCheckerboard: Math.max(...neighbourhood.map(p => p.density)) - Math.min(...neighbourhood.map(p => p.density)) < .2,
       baselineExists: initial.density > .01 && initial.reached,
       barriersEmpty: wall.density === 0 && !wall.reached,
@@ -70,6 +89,30 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
       readbackIsNonDestructive: beforeRead.density === afterRead.density && beforeRead.density > 0,
     };
     return { passed: Object.values(checks).every(Boolean), checks,
-      readings: { initial, initialVelocity, wall, isolated, openingCenter, openingEdge, entered, reblocked, beforeRead, afterRead, neighbourhood } };
+      readings: { initial, initialVelocity, wall, isolated, openingCenter, openingEdge, entered, reblocked, beforeRead, afterRead, neighbourhood,
+        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings } };
   } finally { field.destroy(); terrain.clear(); }
+}
+
+/** Compare the same seeded flow with/without a finite wall, beyond its first grid row. */
+function checkObstacleFlow(scene: Phaser.Scene) {
+  const frame = { offsetX: 0, offsetY: 0, width: 512, height: 512 };
+  const view = { x: 0, y: 0, width: 512, height: 512 };
+  const tuning = { ...fogTuning(183), windX: 24, windY: 0 };
+  const baseline = new FogTerrainModel(frame, []), blocked = new FogTerrainModel(frame, []);
+  blocked.setObstacle('rock', Array.from({ length: 12 }, (_, i) => ({ gridX: 10 + i % 2, gridY: 5 + Math.floor(i / 2) })), true);
+  const control = new FogGpuField(scene, baseline, 183, tuning, 0);
+  const obstacle = new FogGpuField(scene, blocked, 183, tuning, 0);
+  try {
+    for (let i = 0; i < 360; i++) for (const field of [control, obstacle]) {
+      field.prepare(view, i * FOG.stepMs); field.step([], [.8, .8], tuning, (i + 1) * FOG.stepMs);
+    }
+    const band = [244, 276, 300].map(x => ({ x, extraDensity: [208, 240, 272].reduce((sum, y) =>
+      sum + obstacle.readDensity(x, y).density - control.readDensity(x, y).density, 0) / 3 }));
+    const corner = [308, 332, 356].map(x => ({ x, withRock: obstacle.readVelocity(x, 148), withoutRock: control.readVelocity(x, 148) }));
+    return { checks: {
+      accumulationExtendsBeyondFirstRow: band.filter(p => p.x <= 276).some(p => p.extraDensity > .01),
+      cornerFlowIsDeflected: corner.some(p => Math.abs(p.withRock[1]) > Math.abs(p.withoutRock[1]) + 1),
+    }, readings: { band, corner } };
+  } finally { control.destroy(); obstacle.destroy(); baseline.clear(); blocked.clear(); }
 }

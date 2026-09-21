@@ -1,8 +1,50 @@
 # Bodennebel V1 – Prüfbericht
 
-Stand: 21. September 2026, Arbeitsstand auf Basis von `3356afb4`.
+Erstabnahme: 21. September 2026, Arbeitsstand auf Basis von `3356afb4`.
 Bedienung und Architektur: [Bodennebel-Lab](ground-fog-lab.md).
 Einzelne Messläufe: [Benchmarkdaten](ground-fog-benchmark.json).
+
+## Nachabstimmung am 22. September 2026
+
+Ausgangspunkt dieser Änderung ist `ec0dcbaf` (Fog 0.1). Lauf, Dash und Projektilreaktionen
+wurden verstärkt; Hitscan und Nahkampf sind angebunden. Druckausgleich auf der GPU
+verbreitert Ansammlungen vor Felsen und verstärkt die seitliche Strömung an Ecken.
+
+Der gemeldete P90-/Glock-Fehler hatte zwei Ursachen: einzelne Löcher im groben Feld und
+eine zu grobe Tile-Zuordnung der vielen kurzen Diagonalsegmente. Kleine Projektile nutzen
+jetzt durchgehende, pro Projektil zusammengefasste GPU-Spuren mit stetigem Alter. Nur wirklich
+berührte Tiles werden belegt. Die sichtbare Nachwirkung läuft über 3,2 Sekunden aus;
+Richtungswechsel und echte Unterbrechungen werden weiterhin berücksichtigt.
+
+**GPU-Prüfung: 21 Verträge bestanden.** Ergänzt wurden gerichteter Nahkampf, Nachwirkung
+kleiner Spuren nach einer Sekunde, lückenlose Diagonalen, Zusammenfassung gerader Wege,
+breiterer Stau und abgelenkte Eckströmung. Die Druckreaktion ersetzt die frühere Annahme
+überall unveränderter Windgeschwindigkeit; begrenzte, endliche Geschwindigkeit bleibt geprüft.
+Die kontrollierte Diagonale bestand aus 40 Eingangssegmenten und belegte einen gespeicherten
+Abschnitt. Alle 19 Auslesepunkte waren belegt, mit stetiger Abschwächung entlang der Spur.
+In der Hindernis-Fixture lag die zusätzliche Dichte noch 76 Pixel vor dem Fels bei etwa 0,032.
+
+Im sichtbaren Lab wurde P90-Dauerfeuer als schwenkender Fächer geprüft: durchgehende
+Linien, ungefähr 52–56 gespeicherte Abschnitte, keine verworfenen Eingaben und keine
+lokalen Überläufe. Die Zählung bleibt während laufenden Feuers und anschließenden Auslaufens
+begrenzt. Glock und Hitscan wurden zusätzlich auf Mittel als durchgehende Fächer ohne
+lokale Überläufe angesehen. Lauf, Dash, Plasma und der gerichtete Nahkampf wurden mit
+dem Produktionsrenderer geprüft. Einzelschuss sowie getrennte Lauf-/Dash-Auswahl sind
+im Lab reproduzierbar. Der Nahkampfkegel ist zusätzlich durch den GPU-Vergleich seiner
+Vorder- und Rückseite abgesichert.
+
+Die nachfolgenden neun Leistungsläufe dokumentieren **den Stand vor dieser Nachabstimmung**.
+Sie wurden für die neue Druckberechnung und Spurzusammenfassung nicht erneut als vollständige
+Messreihe durchgeführt und sind keine aktuellen Kostenangaben dieser Änderungen.
+
+Aktuelle automatisierte Prüfung: 60 gezielte Tests bestanden; im vollständigen Core-Lauf
+4.038 bestanden und dieselben drei vorhandenen Map-Fehler. Der vollständige Integrationslauf
+enthält weiterhin die zehn bereits dokumentierten Fehler. Die gezielt betroffenen
+HeldWeaponFire- und WorldPresentationFrameLifetime-Suiten sowie die Architekturprüfung
+bestehen. Die erste parallele Ausführung hatte zwei zusätzliche Timeouts; beide betroffenen
+Dateien und der anschließende Core-Lauf bestanden ohne diese Timeouts. Produktionsbuild,
+Lab-Build und `git diff --check` bestanden; alle 21 GPU-Verträge wurden mit dem finalen
+Shader erneut erfolgreich ausgeführt.
 
 ## Optische Abstimmung
 

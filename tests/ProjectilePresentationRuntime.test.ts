@@ -52,6 +52,7 @@ describe('ProjectilePresentationRuntime', () => {
       { sequence: 5, timeMs: 30, x: 90, y: 95, vx: 0, vy: 1000 },
     ] } });
     runtime.presentFinalPath(shot); const count = sink.mock.calls.length;
+    expect(sink.mock.calls.every(call => call[3] === shot.id)).toBe(true);
     runtime.presentFinalPath(shot); expect(sink).toHaveBeenCalledTimes(count);
     const paths = sink.mock.calls.map(([s]) => [s.from.x, s.from.y, s.to.x, s.to.y]);
     expect(paths).toContainEqual([0, 0, 10, 0]); expect(paths).toContainEqual([10, 0, 10, 10]);

@@ -20,8 +20,10 @@ durch den Map-Editor belegt; verwendet wurde `npm run dev:browser -- --port 8092
   Bei der Basis verschwindet die Kollision sofort, die Produktionsoberfläche in zeitversetzten Zellen.
 - **Laufen / Dash:** Wiederholbarer Lauf mit schnellem Abschnitt und anschließendem Stillstand;
   daneben bewegt sich ein größerer Gegner. **Teleport** unterbricht die Quellrevision.
-- **Dauerfeuer:** P90, Schrot, große Geschosse, Abpraller oder 12-ms-Geschosse.
+- **Dauerfeuer / Einzelschuss:** P90, Glock, Schrot, große Geschosse, Abpraller oder 12-ms-Geschosse.
   Alle Wegstücke laufen durch `ProjectilePathCursor`, einschließlich des Abschlusssegments.
+  Hitscan und Nahkampf sind zusätzlich auswählbar. Gerade, diagonale und schwenkende
+  Fächerschüsse dienen der Spurprüfung; Lauf und Dash lassen sich einzeln wiederholen.
 - **Kamerapfad:** Hin- und Rückweg durch die World; **Zoom** enthält auch einen extremen
   Sichtbereich zur Kapazitätsprüfung. **Kamerawackeln** nutzt den gemeinsamen Camera-Feedback-Owner.
 - **Pause / Einzelschritt / Langer Frame:** Fortschreibung, Impulsalter und Materialzeit prüfen.
@@ -40,10 +42,22 @@ Das entspricht ungefähr den vorherigen Reglern nahe ihrem Maximum. Die gemeinsa
 Deckkraftgrenze bleibt 0,30; Lichtmap und Tageskurve gelten weiterhin.
 Zentrale Werte stehen in `src/effects/groundFog/FogConfig.ts`.
 
-Kleine Geschosse benötigen zusätzlich die feine GPU-Maske: Das 8-Pixel-Feld verlor
-schmale, rasterparallel verlaufende P90-Spuren. Die Ergänzung verwendet höchstens
-2.048 bestätigte Segmente, berechnet Abstand und Alter im Shader und moduliert ausschließlich
-vorhandene Dichte. Sie verbreitert den Transportkanal nicht und entfällt bei niedriger Qualität.
+Kleine Geschosse verwenden die feine GPU-Maske: Das 8-Pixel-Feld erzeugte bei schmalen
+Spuren punktförmige Löcher. Bestätigte, gerade Flugsegmente derselben Projektilidentität
+werden deshalb unabhängig vom groben Impulsbudget zusammengefasst. Abpraller und
+Unterbrechungen bleiben getrennt. Höchstens 2.048 gespeicherte Abschnitte und 64 tatsächlich
+berührende Abschnitte pro Tile begrenzen die Last. Diagonalen belegen keine unberührten
+Tiles innerhalb ihres umschließenden Rechtecks. Abstand, stetiges Alter entlang der Strecke
+und Auslaufen über 3,2 Sekunden werden auf der GPU berechnet; überlappende Endkappen
+bilden keine dunklen Knoten. Die Maske moduliert ausschließlich vorhandene Dichte und
+entfällt bei niedriger Qualität. Das Lab zeigt Spurbelegung und lokale Überläufe separat.
+
+Die Reaktionsabstimmung vom 22. September erhöht den Eingangsimpuls beim Laufen um
+Faktor 9 und beim Dash um Faktor 1,35 (jeweils mit Sättigung). Größere Projektile erhalten
+einen moderaten Zuschlag. Hitscan nutzt den gemeinsamen Tracer-Eingang nach dessen
+Prediction-Deduplizierung; Nahkampf wirkt als gerichteter Sektor, auch bei Biss und Taser.
+GPU-Druckausgleich und Bewegungsaustausch über offene Zellflächen verbreitern den Stau
+vor Hindernissen und tragen die abgelenkte Strömung über die Ecken weiter.
 
 ## Eigentümer und Datenfluss
 

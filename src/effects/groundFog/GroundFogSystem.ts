@@ -14,7 +14,7 @@ interface Motion { id: string; x: number; y: number; revision: number; frame: nu
 export interface FogDiagnostics {
   status: string; cpuMs: number; activeChunks: number; cachedChunks: number; bytes: number;
   pendingImpulses: number; submittedImpulses: number; droppedImpulses: number; steps: number;
-  gpuMs: number | null; gpuSample: number;
+  gpuMs: number | null; gpuSample: number; trailSegments: number; trailTileOverflow: number;
 }
 
 /** One local World's cosmetic state. No global clock, gameplay writes, or network messages. */
@@ -32,6 +32,9 @@ export class GroundFogSystem {
   private surfaces: readonly Phaser.GameObjects.Image[] = [];
   private gpu: FogGpuField | null = null;
   private accumulator = 0;
+  private readonly fineInputs: { segment: ProjectileTrailSegment; sourceId: number }[] = [];
+  private fineDropped = 0;
+  private nextHitscan = -1;
   private elapsed = 0;
   private density: readonly [number, number] | null = null;
   private readonly tracks = new Map<MovementVisualSource, Motion>();
@@ -40,7 +43,7 @@ export class GroundFogSystem {
   private destroyed = false;
   private failed = '';
   private stats: FogDiagnostics = { status: 'preparing', cpuMs: 0, activeChunks: 0, cachedChunks: 0, bytes: 0,
-    pendingImpulses: 0, submittedImpulses: 0, droppedImpulses: 0, steps: 0, gpuMs: null, gpuSample: 0 };
+    pendingImpulses: 0, submittedImpulses: 0, droppedImpulses: 0, steps: 0, gpuMs: null, gpuSample: 0, trailSegments: 0, trailTileOverflow: 0 };
   private readonly onContextRestore = (): void => { this.releaseGpu(); this.failed = ''; this.stats.status = 'preparing'; };
   constructor(private readonly scene: Phaser.Scene, readonly frame: FogFrame, readonly seed: number,
     water: readonly WaterCell[], strength = DEFAULT_FOG_STRENGTH) {
@@ -54,14 +57,36 @@ export class GroundFogSystem {
       : style === 'nuke' || style === 'void_nuke' ? 1.15 : 1;
     this.impulses.add({ x, y, endX: x, endY: y, radius: radius * 1.3, strength: Math.min(.95, (.4 + radius / 500) * scale), kind: 'explosion', priority: 100 + radius });
   }
-  addProjectile(segment: ProjectileTrailSegment, size: number, style: string): void {
-    if (!this.active || !this.reactions || this.quality === 'low' || segment.ageMs > 220 || segment.to.breakBefore) return;
+  addProjectile(segment: ProjectileTrailSegment, size: number, style: string, sourceId = 0): void {
+    if (!this.active || !this.reactions || this.quality === 'low' || segment.ageMs > FOG.trailMs) return;
     const large = ['rocket', 'fireball', 'plasma', 'bfg', 'energy_ball', 'hydra'].includes(style);
     const { from, to } = segment;
-    if (!Number.isFinite(from.x + from.y + to.x + to.y) || from === to) return;
+    if (!Number.isFinite(from.x + from.y + to.x + to.y)) return;
+    if (!large) {
+      // Confirmed small paths bypass the coarse impulse quota, retaining breaks and IDs.
+      if (this.fineInputs.length < FOG.trailCapacity) this.fineInputs.push({ segment, sourceId });
+      else this.fineDropped++;
+      return;
+    }
+    if (from === to || to.breakBefore || segment.ageMs > 220) return;
     this.impulses.add({ x: from.x, y: from.y, endX: to.x, endY: to.y,
-      radius: large ? Math.max(9, Math.min(28, size * 1.1)) : 4,
-      strength: large ? .36 : .13, kind: 'projectile', priority: large ? 55 : 10 });
+      radius: Math.max(9, Math.min(28, size * 1.1)),
+      strength: FOG.largeProjectileStrength, kind: 'projectile', priority: 55 });
+  }
+  addHitscan(x: number, y: number, endX: number, endY: number, thickness: number): void {
+    if (!this.active || !this.reactions || this.quality === 'low') return;
+    if (thickness <= 3) {
+      const from = { x, y, timeMs: this.elapsed, sequence: 1, vx: 0, vy: 0 };
+      this.addProjectile({ from, to: { ...from, x: endX, y: endY, sequence: 2 }, ageMs: 0 }, thickness, 'bullet', this.nextHitscan--);
+      return;
+    }
+    this.impulses.add({ x, y, endX, endY, radius: Math.max(4, Math.min(18, thickness * 1.5)),
+      strength: FOG.smallProjectileStrength, kind: 'projectile', priority: 55 });
+  }
+  addMelee(x: number, y: number, angle: number, arcDegrees: number, range: number): void {
+    if (!this.active || !this.reactions || !Number.isFinite(angle + arcDegrees + range) || arcDegrees <= 0) return;
+    this.impulses.add({ x, y, endX: x + Math.cos(angle), endY: y + Math.sin(angle), radius: range,
+      strength: .85, kind: 'melee', priority: 80, arcDegrees: Math.min(360, arcDegrees) });
   }
   captureMotion(delta: number, players: readonly MovementVisualSource[], enemies: readonly MovementVisualSource[], view: FogRect): void {
     if (!this.active || !this.reactions || delta <= 0 || delta > 150) { this.tracks.clear(); return; }
@@ -76,8 +101,9 @@ export class GroundFogSystem {
       if (before && before.id === s.id && before.revision === s.revision && distance > .08
         && distance < Math.max(s.size * 4, delta * (s.mode === 'dash' ? 2.8 : 1))) {
         const speed = distance / delta * 1000;
-        this.impulses.add({ x: before.x, y: before.y, endX: s.x, endY: s.y, radius: Math.max(10, s.size * .55),
-          strength: Math.min(.5, distance / Math.max(24, s.size) * (.1 + speed / 1700)),
+        const dash = s.mode === 'dash';
+        this.impulses.add({ x: before.x, y: before.y, endX: s.x, endY: s.y, radius: Math.max(14, s.size * (dash ? .70 : .68)),
+          strength: Math.min(dash ? .68 : .62, distance / Math.max(24, s.size) * (.1 + speed / 1700) * (dash ? FOG.dashGain : FOG.motionGain)),
           kind: 'motion', priority: player ? 90 : 40 + Math.min(30, s.size / 4) });
       }
       if (before) { before.id = s.id; before.x = s.x; before.y = s.y; before.revision = s.revision; before.frame = this.motionFrame; }
@@ -90,7 +116,7 @@ export class GroundFogSystem {
   update(delta: number, minutes: number, view: FogRect, visible = true): void {
     const start = performance.now(); this.stats.steps = 0;
     if (!this.active) { this.releaseGpu(); this.stats.status = this.failed || 'off'; this.stats.cpuMs = performance.now() - start; return; }
-    if (!visible) { this.gpu?.hide(); this.impulses.clear(); this.tracks.clear(); return; }
+    if (!visible) { this.gpu?.hide(); this.impulses.clear(); this.fineInputs.length = 0; this.tracks.clear(); return; }
     const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     if (!renderer?.gl || typeof Phaser.GameObjects?.Shader !== 'function') { this.failed = this.stats.status = 'WebGL unavailable'; return; }
     try {
@@ -111,6 +137,10 @@ export class GroundFogSystem {
         if (delta > 0) this.elapsed += FOG.stepMs;
         this.accumulator -= FOG.stepMs;
         const expanded = { x: view.x - FOG.margin, y: view.y - FOG.margin, width: view.width + FOG.margin * 2, height: view.height + FOG.margin * 2 };
+        if (delta > 0) {
+          for (const input of this.fineInputs) this.gpu.trails.addPath(input.segment, input.sourceId, this.elapsed);
+          this.fineInputs.length = 0;
+        }
         this.gpu.step(delta > 0 ? this.impulses.drain(this.quality, expanded) : [], this.density, this.tuning, this.elapsed, delta <= 0); this.stats.steps++;
       }
       const camera = this.scene.cameras.main, scale = this.quality === 'low' ? .25 : .5;
@@ -122,7 +152,8 @@ export class GroundFogSystem {
       const active = [...this.gpu.residency.chunks.values()].filter(c => c.active).length;
       Object.assign(this.stats, { status: this.gpu.residency.overflow ? 'view capacity exceeded' : 'ready',
         activeChunks: active, cachedChunks: this.gpu.residency.chunks.size - active, bytes: this.gpu.bytes,
-        submittedImpulses: this.gpu.submitted, droppedImpulses: this.impulses.dropped + this.gpu.dropped + this.gpu.trails.dropped, pendingImpulses: this.impulses.size });
+        submittedImpulses: this.gpu.submitted, droppedImpulses: this.impulses.dropped + this.gpu.dropped + this.gpu.trails.dropped + this.fineDropped,
+        pendingImpulses: this.impulses.size + this.fineInputs.length, trailSegments: this.gpu.trails.size, trailTileOverflow: this.gpu.trails.tileOverflow });
     } catch (error) {
       this.timer?.end();
       this.failed = `Fog unavailable: ${error instanceof Error ? error.message : String(error)}`;
@@ -137,11 +168,11 @@ export class GroundFogSystem {
     if (this.stats.status === 'preparing') { this.update(0, minutes, view); this.gpu?.hide(); }
     return this.stats.status !== 'preparing';
   }
-  freeze(): void { this.impulses.clear(); this.tracks.clear(); }
+  freeze(): void { this.impulses.clear(); this.fineInputs.length = 0; this.tracks.clear(); }
   private releaseGpu(): void {
-    this.gpu?.destroy(); this.gpu = null; this.accumulator = 0; this.impulses.clear(); this.tracks.clear();
+    this.gpu?.destroy(); this.gpu = null; this.accumulator = 0; this.impulses.clear(); this.fineInputs.length = 0; this.tracks.clear();
     this.timer?.destroy(); this.timer = null; this.stats.gpuMs = null;
-    this.stats.activeChunks = this.stats.cachedChunks = this.stats.bytes = this.stats.pendingImpulses = this.stats.submittedImpulses = 0;
+    this.stats.activeChunks = this.stats.cachedChunks = this.stats.bytes = this.stats.pendingImpulses = this.stats.submittedImpulses = this.stats.trailSegments = this.stats.trailTileOverflow = 0;
   }
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;

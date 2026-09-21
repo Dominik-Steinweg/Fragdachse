@@ -81,6 +81,45 @@ function makeSystem(playerTarget: (targetId: string) => boolean) {
 }
 
 describe('EffectSystem player death animation', () => {
+  it('observes predicted hitscan once, skips its echo and disconnects only the owning fog sink', () => {
+    const system = Object.create(EffectSystem.prototype) as EffectSystem;
+    Object.assign(system, { scene: { time: { now: 10 } }, bridge: { getLocalPlayerId: () => 'local' },
+      ensureTextures: vi.fn(), emitHitscanBeamLight: vi.fn(), pendingPredictedTracerIds: new Map(), processedSyncedTracerKeys: new Map(),
+      asmdPrimaryRenderer: { playTracer: vi.fn() } });
+    const sink = { hitscan: vi.fn(), melee: vi.fn() }, replacement = { hitscan: vi.fn(), melee: vi.fn() };
+    const release = system.bindGroundFogCombat(sink);
+    system.playPredictedHitscanTracer(300, 300, 600, 300, 0xffffff, 2, 7, 'none', 'asmd_primary');
+    system.playSyncedHitscanTracer({ startX: 300, startY: 300, endX: 600, endY: 300, color: 0xffffff,
+      thickness: 2, shooterId: 'local', shotId: 7, visualPreset: 'asmd_primary' });
+    expect(sink.hitscan).toHaveBeenCalledExactlyOnceWith(300, 300, 600, 300, 2);
+    const releaseReplacement = system.bindGroundFogCombat(replacement); release();
+    system.playHitscanTracer(300, 300, 600, 300, 0xffffff, 2, 'none', 'asmd_primary');
+    expect(replacement.hitscan).toHaveBeenCalledOnce();
+    releaseReplacement(); system.playHitscanTracer(300, 300, 600, 300, 0xffffff, 2, 'none', 'asmd_primary');
+    expect(replacement.hitscan).toHaveBeenCalledOnce();
+  });
+  it('observes bite and taser after swing deduplication, including their specialized VFX paths', () => {
+    const system = Object.create(EffectSystem.prototype) as EffectSystem;
+    Object.assign(system, { scene: { time: { now: 10 } }, processedMeleeSwingKeys: new Map(),
+      biteRenderer: { playSwing: vi.fn() }, zeusTaserRenderer: { playSwing: vi.fn() } });
+    const sink = { hitscan: vi.fn(), melee: vi.fn() }; system.bindGroundFogCombat(sink);
+    for (const [swingId, visualPreset] of [[1, 'bite'], [2, 'zeus_taser']] as const) {
+      const swing = { shooterId: 'player', swingId, visualPreset, x: 300, y: 300, angle: .5, arcDegrees: 90, range: 100, color: 0xffffff };
+      system.playSyncedMeleeSwing(swing); system.playSyncedMeleeSwing(swing);
+    }
+    expect(sink.melee).toHaveBeenCalledTimes(2);
+    expect(sink.melee).toHaveBeenLastCalledWith(300, 300, .5, 90, 100);
+  });
+  it('observes the generic melee entry before rendering and releases its sink', () => {
+    const system = Object.create(EffectSystem.prototype) as EffectSystem;
+    const stop = new Error('graphics gate');
+    Object.assign(system, { scene: { add: { graphics: () => { throw stop; } } } });
+    const sink = { hitscan: vi.fn(), melee: vi.fn() }, release = system.bindGroundFogCombat(sink);
+    expect(() => system.playMeleeSwingEffect(300, 300, 0, 90, 100, 0xffffff)).toThrow(stop);
+    expect(sink.melee).toHaveBeenCalledExactlyOnceWith(300, 300, 0, 90, 100);
+    release(); expect(() => system.playMeleeSwingEffect(300, 300, 0, 90, 100, 0xffffff)).toThrow(stop);
+    expect(sink.melee).toHaveBeenCalledOnce();
+  });
   it('delivers destructive fog impulses before individual VFX gates and detaches their owner', () => {
     const system = Object.create(EffectSystem.prototype) as EffectSystem;
     const sink = vi.fn(), stop = new Error('VFX preparation gate');

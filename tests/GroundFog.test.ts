@@ -14,6 +14,40 @@ import { ARENA_MAP_GRID_CHANGED_EVENT } from '../src/scenes/arena/ArenaEvents';
 const frame = { offsetX: 80, offsetY: 40, width: 40960, height: 8192 };
 const view = { x: 100, y: 60, width: 1000, height: 700 };
 describe('ground fog bounded world state', () => {
+  it('keeps melee sectors distinct and applies the projectile quality gate to hitscan', () => {
+    const fog = new GroundFogSystem({ sys: { renderer: { on: vi.fn(), off: vi.fn() } } } as never, frame, 1, []);
+    fog.addMelee(300, 300, 0, 90, 100); fog.addMelee(300, 300, Math.PI / 2, 90, 100);
+    const sectors = fog.impulses.drain('high', view);
+    expect(sectors).toHaveLength(2); expect(sectors.every(p => p.kind === 'melee')).toBe(true);
+    expect(sectors[0].endX).toBeGreaterThan(sectors[0].x); expect(sectors[1].endY).toBeGreaterThan(sectors[1].y);
+    fog.quality = 'low'; fog.addHitscan(300, 300, 900, 300, 2); expect(fog.impulses.size).toBe(0);
+    fog.addMelee(300, 300, 0, 90, 100); expect(fog.impulses.size).toBe(1); fog.impulses.clear();
+    fog.enabled = false; fog.addMelee(300, 300, 0, 90, 100); expect(fog.impulses.size).toBe(0);
+    fog.enabled = true; fog.reactions = false; fog.addHitscan(300, 300, 900, 300, 2); expect(fog.impulses.size).toBe(0);
+    fog.destroy();
+  });
+  it('coalesces confirmed straight flight per source and bins diagonal geometry without exhausting nearby tiles', () => {
+    const trails = new FogTrailSegments({ offsetX: 0, offsetY: 0, width: 2048, height: 2048 });
+    for (let shot = 0; shot < 40; shot++) for (let i = 0; i < 30; i++) {
+      const point = (n: number) => ({ x: 100 + n * 30, y: 100 + shot * .1 + n * 30, timeMs: shot * 40 + n * 16, sequence: n + 1, vx: 1875, vy: 1875 });
+      trails.addPath({ from: point(i), to: point(i + 1), ageMs: 0 }, shot, shot * 40 + (i + 1) * 16);
+    }
+    trails.prepare(2040); expect(trails.size).toBe(40); expect(trails.dropped).toBe(0); expect(trails.tileOverflow).toBe(0);
+    // An unrelated tile inside the diagonal's bounding rectangle receives no commands.
+    const offLineTile = 1 * trails.columns + 6;
+    expect(trails.bins.slice(offLineTile * FOG.trailsPerTile * 4, (offLineTile + 1) * FOG.trailsPerTile * 4).some(Boolean)).toBe(false);
+    trails.prepare(2040 + FOG.trailMs); expect(trails.size).toBe(0);
+  });
+  it('keeps bounce pivots, disconnected histories and overlapping projectile identities separate', () => {
+    const trails = new FogTrailSegments(frame);
+    const p = (x: number, y: number, timeMs: number) => ({ x, y, timeMs, sequence: timeMs, vx: 1000, vy: 0 });
+    const add = (from: ReturnType<typeof p>, to: ReturnType<typeof p>, id = 1) => trails.addPath({ from, to, ageMs: 0 }, id, to.timeMs);
+    add(p(100, 100, 0), p(120, 100, 20)); add(p(120, 100, 20), p(140, 100, 40));
+    add(p(140, 100, 40), p(140, 120, 60));
+    const restart = { ...p(300, 300, 70), breakBefore: true }; add(restart, restart);
+    add(p(300, 300, 70), p(320, 300, 90)); add(p(300, 300, 70), p(320, 300, 90), 2);
+    trails.prepare(90); expect(trails.size).toBe(4);
+  });
   it('bounds fine traces, expires them on world time and clears them on teardown', () => {
     const trails = new FogTrailSegments(frame);
     const p = { x: 100, y: 100, endX: 150, endY: 100, radius: 4, strength: .1, priority: 10, kind: 'projectile' as const };
@@ -27,8 +61,8 @@ describe('ground fog bounded world state', () => {
     const events = new EventEmitter(), renderer = { on: vi.fn(), off: vi.fn() };
     const scene = { game: { events }, sys: { renderer } };
     const fog = new GroundFogSystem(scene as never, frame, 1, []);
-    const releaseExplosion = vi.fn(), releaseProjectile = vi.fn();
-    const effects = { bindGroundFogExplosion: vi.fn(() => releaseExplosion) };
+    const releaseExplosion = vi.fn(), releaseProjectile = vi.fn(), releaseCombat = vi.fn();
+    const effects = { bindGroundFogExplosion: vi.fn(() => releaseExplosion), bindGroundFogCombat: vi.fn(() => releaseCombat) };
     const cell = { gridX: 1, gridY: 1 }, gone = { gridX: 2, gridY: 1 };
     const binding = new WorldGroundFogBinding(scene as never, fog, { rocks: [cell, gone] } as never,
       { rockPhysicsProxies: [{ active: true }, { active: false }] } as never, effects);
@@ -48,7 +82,7 @@ describe('ground fog bounded world state', () => {
     expect(placement.getAllRuntimeRocks).not.toHaveBeenCalled();
     binding.destroy(); binding.destroy();
     expect(events.listenerCount(ARENA_MAP_GRID_CHANGED_EVENT)).toBe(0);
-    expect(releaseExplosion).toHaveBeenCalledTimes(1); expect(releaseProjectile).toHaveBeenCalledTimes(1);
+    expect(releaseExplosion).toHaveBeenCalledTimes(1); expect(releaseProjectile).toHaveBeenCalledTimes(1); expect(releaseCombat).toHaveBeenCalledTimes(1);
     expect(fog.terrain.opened.some(Boolean)).toBe(true); fog.destroy();
   });
   it('batches dirty cells, keeps overlapping blockers closed and remembers openings after acknowledgement', () => {

@@ -208,7 +208,9 @@ export class FogGpuField {
       encode(this.commands.data, (256 + i) * 4 + 2, (p.endY - frame.offsetY) / frame.height * 65535);
       encode(this.commands.data, (512 + i) * 4, p.radius / 4096 * 65535);
       this.commands.data[(512 + i) * 4 + 2] = Math.round(p.strength * 255);
-      this.commands.data[(512 + i) * 4 + 3] = p.kind === 'explosion' ? 255 : 0;
+      this.commands.data[(512 + i) * 4 + 3] = p.kind === 'explosion' ? 255 : p.kind === 'melee' ? 128 : 0;
+      encode(this.commands.data, (768 + i) * 4, (Math.cos((p.arcDegrees ?? 0) * Math.PI / 360) * .5 + .5) * 65535);
+      encode(this.commands.data, (768 + i) * 4 + 2, (Math.atan2(p.endY - p.y, p.endX - p.x) / (Math.PI * 2) + .5) * 65535);
     });
     for (const c of this.residency.chunks.values()) {
       for (const [i, [dx, dy]] of [[-1, 0], [1, 0], [0, -1], [0, 1]].entries()) {
@@ -243,7 +245,8 @@ export class FogGpuField {
       this.trailCommands.data.set(this.trails.commands); this.trailCommands.upload();
       this.trailBins.data.set(this.trails.bins); this.trailBins.upload();
     }
-    this.uploadMeta(impulses);
+    // Sub-cell bullet wakes use the continuous mask, not circular holes in the 8px field.
+    this.uploadMeta(impulses.filter(p => p.kind !== 'projectile' || p.radius > 4));
     const next = 1 - this.current;
     this.draw(this.impulse, this.states[this.current], this.velocities[this.current]);
     this.draw(this.velocities[next], this.states[this.current], this.velocities[this.current]);
@@ -271,7 +274,7 @@ export class FogGpuField {
       this.surfaceMask?.destroy(); this.surfaceMask = null;
     }
     if (quality !== 'low') {
-      this.trailCommands ??= this.makeData('trailCommands', FOG.trailCapacity, 3);
+      this.trailCommands ??= this.makeData('trailCommands', FOG.trailCapacity, 4);
       this.trailBins ??= this.makeData('trailBins', 1024, this.trails.binsHeight);
       if (!this.trailMask || this.trailMask.width !== w || this.trailMask.height !== h) {
         if (this.trailMask) destroyFogShader(this.trailMask);

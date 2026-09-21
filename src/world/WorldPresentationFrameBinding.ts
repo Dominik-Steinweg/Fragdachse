@@ -151,7 +151,7 @@ export interface WorldPresentationFrameBindingInput {
     readonly getSystem: () => GroundFogSystem | null;
     readonly getBases: () => BaseManager | null;
     readonly getProjectiles: () => ProjectilePresentationRuntime | null;
-    readonly effects: Pick<EffectSystem, 'bindGroundFogExplosion'>;
+    readonly effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>;
   };
   readonly constructionOwnership?: {
     readonly motes: Pick<ConstructionOwnershipMoteRenderer, 'openWorld' | 'closeWorld' | 'captureFrame'>;

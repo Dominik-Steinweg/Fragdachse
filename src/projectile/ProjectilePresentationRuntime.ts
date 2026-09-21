@@ -103,8 +103,8 @@ export interface ProjectilePresentationRenderers {
  * erzeugt aber selbst keine Gameplay-Entscheidung und schreibt keinen Runtime-State zurück.
  */
 export class ProjectilePresentationRuntime {
-  private groundFogSegment: ((segment: ProjectileTrailSegment, size: number, style: string) => void) | null = null;
-  bindGroundFogSegments(sink: (segment: ProjectileTrailSegment, size: number, style: string) => void): () => void {
+  private groundFogSegment: ((segment: ProjectileTrailSegment, size: number, style: string, sourceId: number) => void) | null = null;
+  bindGroundFogSegments(sink: (segment: ProjectileTrailSegment, size: number, style: string, sourceId: number) => void): () => void {
     this.groundFogSegment = sink;
     return () => { if (this.groundFogSegment === sink) this.groundFogSegment = null; };
   }
@@ -593,7 +593,7 @@ export class ProjectilePresentationRuntime {
     let cursor = this.pathCursors.get(projectile.id);
     if (!cursor) { cursor = new ProjectilePathCursor(); this.pathCursors.set(projectile.id, cursor); }
     cursor.consume(path, this.pathTimes.get(projectile.id) ?? path.timeMs, segment => {
-      this.groundFogSegment?.(segment, projectile.size, projectile.style ?? 'bullet');
+      this.groundFogSegment?.(segment, projectile.size, projectile.style ?? 'bullet', projectile.id);
       this.tracerRenderer?.addSegment?.(projectile.id, segment, projectile.bulletVisualPreset === 'awp_corridor');
       if (projectile.style === 'rocket') this.rocketRenderer?.emitTrailSegment?.(projectile.id, segment,
         projectile.size, projectile.projectileVisualScale ?? 1, projectile.miniRocketPhase === 'return' ? projectile.ownerColor ?? projectile.color : projectile.smokeTrailColor ?? projectile.ownerColor ?? projectile.color);

@@ -17,6 +17,7 @@ export class WorldGroundFogBinding {
   private projectileOwner: ProjectilePresentationRuntime | null = null;
   private releaseProjectile: (() => void) | null = null;
   private readonly releaseExplosion: () => void;
+  private readonly releaseCombat: () => void;
   private destroyed = false;
   private readonly listener = (event: ArenaMapGridChangedEvent): void => {
     if (event.source === 'placeable_pedestal') return;
@@ -29,20 +30,24 @@ export class WorldGroundFogBinding {
     else this.pending.set(`${event.source === 'static_rock' ? 'rock' : 'construction'}:${event.obstacleId}`, event);
   };
   constructor(private readonly scene: Phaser.Scene, readonly fog: GroundFogSystem,
-    layout: ArenaLayout, arena: ArenaBuilderResult, effects: Pick<EffectSystem, 'bindGroundFogExplosion'>) {
+    layout: ArenaLayout, arena: ArenaBuilderResult, effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>) {
     layout.rocks.forEach((cell, id) => {
       if (arena.rockPhysicsProxies[id]?.active) fog.terrain.setObstacle(`rock:${id}`, [cell], true);
       else fog.terrain.markOpened([cell]);
     });
     scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, this.listener);
     this.releaseExplosion = effects.bindGroundFogExplosion((x, y, radius, style) => fog.addExplosion(x, y, radius, style));
+    this.releaseCombat = effects.bindGroundFogCombat({
+      hitscan: (x, y, endX, endY, thickness) => fog.addHitscan(x, y, endX, endY, thickness),
+      melee: (x, y, angle, arc, range) => fog.addMelee(x, y, angle, arc, range),
+    });
   }
   sync(placement: Pick<PlacementSystem, 'getAllRuntimeRocks'> | null, bases: BaseManager | null,
     projectiles: ProjectilePresentationRuntime | null): void {
     if (this.destroyed) return;
     if (this.projectileOwner !== projectiles) {
       this.releaseProjectile?.(); this.projectileOwner = projectiles;
-      this.releaseProjectile = projectiles?.bindGroundFogSegments((s, size, style) => this.fog.addProjectile(s, size, style)) ?? null;
+      this.releaseProjectile = projectiles?.bindGroundFogSegments((s, size, style, id) => this.fog.addProjectile(s, size, style, id)) ?? null;
     }
     for (const event of this.pending.values()) {
       if (event.source === 'static_rock') this.fog.terrain.removeObstacle(`rock:${event.obstacleId}`);
@@ -74,7 +79,7 @@ export class WorldGroundFogBinding {
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;
     this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.listener);
-    this.releaseExplosion(); this.releaseProjectile?.(); this.projectileOwner = null;
+    this.releaseExplosion(); this.releaseCombat(); this.releaseProjectile?.(); this.projectileOwner = null;
     this.pending.clear(); this.placeableIds.clear(); this.fog.freeze();
   }
 }

@@ -93,11 +93,21 @@ interface BurrowEmitterVisual {
   dust: Phaser.GameObjects.Particles.ParticleEmitter;
 }
 
+export interface GroundFogCombatSink {
+  hitscan(x: number, y: number, endX: number, endY: number, thickness: number): void;
+  melee(x: number, y: number, angle: number, arcDegrees: number, range: number): void;
+}
+
 /**
  * Die Buddel-Effekte werden nicht nur für Spieler, sondern auch für eingebuddelte Coop-Defense-
  * Gegner genutzt; `implements` hält die dafür erwartete Signatur kompilierzeit-fest.
  */
 export class EffectSystem implements EnemyVisualSink {
+  private groundFogCombat: GroundFogCombatSink | null = null;
+  bindGroundFogCombat(sink: GroundFogCombatSink): () => void {
+    this.groundFogCombat = sink;
+    return () => { if (this.groundFogCombat === sink) this.groundFogCombat = null; };
+  }
   private groundFogExplosion: ((x: number, y: number, radius: number, style: ExplosionVisualStyle) => void) | null = null;
   bindGroundFogExplosion(sink: (x: number, y: number, radius: number, style: ExplosionVisualStyle) => void): () => void {
     this.groundFogExplosion = sink;
@@ -1189,6 +1199,7 @@ export class EffectSystem implements EnemyVisualSink {
     const clippedEnd = clipPointToArenaRay(startX, startY, endX, endY);
     const renderEndX = clippedEnd.x;
     const renderEndY = clippedEnd.y;
+    this.groundFogCombat?.hitscan(startX, startY, renderEndX, renderEndY, thickness);
     const clippedDx = renderEndX - endX;
     const clippedDy = renderEndY - endY;
     const clippedByArena = (clippedDx * clippedDx) + (clippedDy * clippedDy) > 0.25;
@@ -1390,6 +1401,7 @@ export class EffectSystem implements EnemyVisualSink {
     range:       number,
     playerColor: number,
   ): void {
+    this.groundFogCombat?.melee(x, y, angle, arcDegrees, range);
     const palette    = getBeamPaletteForPlayerColor(playerColor);
     const halfArcRad = (arcDegrees * Math.PI / 180) / 2;
     const startAngle = angle - halfArcRad;
@@ -1466,6 +1478,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.audioSystem?.playSound(swing.shotAudioKey, swing.x, swing.y, swing.shooterId);
 
     if (swing.visualPreset === 'bite' && this.biteRenderer) {
+      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range);
       this.biteRenderer.playSwing(
         swing.x,
         swing.y,
@@ -1482,6 +1495,7 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     if (swing.visualPreset === 'zeus_taser' && this.zeusTaserRenderer) {
+      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range);
       // Nur der Taser leuchtet. Ein Biss und der Standard-Swing sind mechanische
       // Nahkampfschläge ohne eigene Emission und bekommen bewusst kein Licht.
       this.lighting?.pulse('electricArc', swing.x, swing.y, {

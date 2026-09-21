@@ -5,7 +5,10 @@ export const FOG = {
   stepMs: 1000 / 30, maxSteps: 2, maxSpeed: 144,
   impulses: { high: 256, medium: 128, low: 32 },
   impulsesPerChunk: 16,
-  trailCapacity: 2048, trailMs: 320, trailTile: 128, trailsPerTile: 32,
+  trailCapacity: 2048, trailMs: 3200, trailDecayMs: 1100, trailRadius: 5, trailTile: 128, trailsPerTile: 64,
+  motionGain: 9, dashGain: 1.35,
+  smallProjectileStrength: .48, largeProjectileStrength: .43,
+  pressureGain: 38, momentumMix: .10, windRelaxation: .035,
   densityScale: 1.85,
   materialMargin: 64,
 } as const;

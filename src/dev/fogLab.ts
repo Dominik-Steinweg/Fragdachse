@@ -20,7 +20,7 @@ import { DEPTH } from '../config';
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const value = (id: string): string => element<HTMLInputElement>(id).value;
 const number = (id: string): number => Number(value(id));
-const controlIds = ['scenario', 'seed', 'mode', 'quality', 'time', 'strength', 'debug', 'opacity', 'detail', 'windX', 'windY', 'reaction', 'weapon'];
+const controlIds = ['scenario', 'seed', 'mode', 'quality', 'time', 'strength', 'debug', 'opacity', 'detail', 'windX', 'windY', 'reaction', 'weapon', 'motionPattern', 'shotPattern'];
 const query = new URLSearchParams(location.search);
 for (const id of controlIds) if (query.has(id)) element<HTMLInputElement>(id).value = query.get(id)!;
 const frame = { offsetX: 0, offsetY: 0, width: 8192, height: 3072 };
@@ -43,6 +43,7 @@ class FogLab extends Phaser.Scene {
   private advance = 0;
   private motion = false;
   private firing = false;
+  private fireOnce = false;
   private pan = false;
   private revision = 0;
   private actor!: Phaser.GameObjects.Image;
@@ -51,7 +52,8 @@ class FogLab extends Phaser.Scene {
   private readonly enemySample = createMovementVisualSample();
   private readonly playerSource: MovementVisualSource = { readMovementVisualSample: out => Object.assign(out, this.playerSample) };
   private readonly enemySource: MovementVisualSource = { readMovementVisualSample: out => Object.assign(out, this.enemySample) };
-  private shots: { image: Phaser.GameObjects.Rectangle; y: number; age: number; born: number; style: string; index: number; points: ProjectilePathPoint[]; cursor: ProjectilePathCursor }[] = [];
+  private shots: { id: number; angle: number; image: Phaser.GameObjects.Rectangle; y: number; age: number; born: number; style: string; index: number; points: ProjectilePathPoint[]; cursor: ProjectilePathCursor }[] = [];
+  private nextProjectileId = 1;
   private nextShot = 0;
   private nextExplosion = 0;
   private disposers: (() => void)[] = [];
@@ -71,6 +73,7 @@ class FogLab extends Phaser.Scene {
     frame.width = value('scenario') === 'camera' ? 12288 : 8192;
     frame.height = value('scenario') === 'camera' ? 4096 : 3072;
     this.elapsed = 0; this.shots = []; this.nextShot = 0; this.nextExplosion = 4000; this.obstacles.clear(); this.fadingBase = []; this.advance = 0;
+    this.fireOnce = false; this.nextProjectileId = 1;
     if (!this.bench) { this.motion = this.firing = this.pan = this.paused = false; }
     element('pause').textContent = this.paused ? 'Weiter' : 'Pause';
     element('shots').textContent = this.firing ? 'Feuer stoppen' : 'Dauerfeuer';
@@ -127,6 +130,7 @@ class FogLab extends Phaser.Scene {
     bind('motion', () => { this.motion = !this.motion; });
     bind('teleport', () => { this.revision++; this.actor.x += 400; this.playerSample.x = this.actor.x; this.playerSample.revision = this.revision; });
     bind('shots', () => { this.firing = !this.firing; element('shots').textContent = this.firing ? 'Feuer stoppen' : 'Dauerfeuer'; });
+    bind('fire', () => { this.fireOnce = true; });
     bind('pan', () => { this.pan = !this.pan; });
     let zoom = 0;
     bind('zoom', () => { const z = [1, .75, 1.5, .2][++zoom % 4]; this.cameras.main.setZoom(z); element('zoom').textContent = `Zoom ${Math.round(z * 100)} %`; });
@@ -168,26 +172,31 @@ class FogLab extends Phaser.Scene {
     for (const image of images) this.fadingBase.push({ image, removeAt: this.elapsed + 200 + Math.hypot(image.x - 1050, image.y - 650) * 12 });
   }
   private tickShots(dt: number): void {
-    if (this.firing && this.elapsed >= this.nextShot) {
-      this.nextShot = this.elapsed + (value('weapon') === 'p90' ? 65 : 230);
+    if (this.fireOnce || (this.firing && this.elapsed >= this.nextShot)) {
+      this.fireOnce = false;
+      this.nextShot = this.elapsed + (value('weapon') === 'p90' ? 65 : value('weapon') === 'melee' ? 900 : 230);
       const count = value('weapon') === 'shotgun' ? 8 : 1;
       for (let i = 0; i < count; i++) {
-        const y = 480 + i * 10, style = value('weapon');
-        this.shots.push({ image: this.add.rectangle(250, y, style === 'p90' ? 8 : 16, 3, 0xffd695).setDepth(DEPTH.PROJECTILES),
+        const pattern = value('shotPattern'), id = this.nextProjectileId++;
+        const angle = pattern === 'fan' ? -.75 + Math.sin(id * .31) * .45 : pattern === 'diagonal' ? -.65 : 0;
+        const y = (pattern === 'straight' ? 480 : 1000) + i * 10, style = value('weapon');
+        if (style === 'hitscan') { this.fog.addHitscan(250, y, 250 + Math.cos(angle) * 1150, y + Math.sin(angle) * 1150, 2); continue; }
+        if (style === 'melee') { this.fog.addMelee(this.actor.x, this.actor.y, -.35, 110, 135); continue; }
+        this.shots.push({ id, angle, image: this.add.rectangle(250, y, style === 'p90' || style === 'glock' ? 8 : 16, 3, 0xffd695).setRotation(angle).setDepth(DEPTH.PROJECTILES),
           y, age: 0, born: this.elapsed, style, index: i, cursor: new ProjectilePathCursor(),
-          points: [{ sequence: 1, timeMs: this.elapsed, x: 250, y, vx: 2100, vy: 0, breakBefore: true }] });
+          points: [{ sequence: 1, timeMs: this.elapsed, x: 250, y, vx: Math.cos(angle) * 2100, vy: Math.sin(angle) * 2100, breakBefore: true }] });
       }
     }
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const p = this.shots[i], old = p.age; p.age += dt;
       const speed = p.style === 'rocket' ? .75 : 2.1;
       const point = (age: number): ProjectilePathPoint => ({ sequence: p.points.length + 1, timeMs: p.born + age,
-        x: 250 + speed * age, y: p.y + (p.style === 'bounce' ? Math.max(0, age - 220) * .8 : p.index * age * .015), vx: speed * 1000, vy: 0 });
+        x: 250 + Math.cos(p.angle) * speed * age, y: p.y + Math.sin(p.angle) * speed * age + (p.style === 'bounce' ? Math.max(0, age - 220) * .8 : p.index * age * .015), vx: Math.cos(p.angle) * speed * 1000, vy: Math.sin(p.angle) * speed * 1000 });
       const lifetime = p.style === 'short' ? 12 : 560, end = Math.min(p.age, lifetime);
       if (p.style === 'bounce' && old < 220 && end > 220) p.points.push({ ...point(220), bounceSequence: 1 });
       p.points.push(point(end));
       p.cursor.consume({ timeMs: p.born + end, points: p.points, ended: p.age >= lifetime }, p.born + end,
-        segment => this.fog.addProjectile(segment, ['p90', 'shotgun', 'short', 'bounce'].includes(p.style) ? 3 : 12, p.style));
+        segment => this.fog.addProjectile(segment, ['p90', 'glock', 'shotgun', 'short', 'bounce'].includes(p.style) ? 3 : 12, p.style, p.id));
       const head = p.points[p.points.length - 1]; p.image.setPosition(head.x, head.y);
       if (p.age >= lifetime) { p.image.destroy(); this.shots.splice(i, 1); }
     }
@@ -200,11 +209,14 @@ class FogLab extends Phaser.Scene {
       700 + (1 - Math.cos(this.elapsed / 4700)) * (frame.height - 1500) / 2);
     this.baseScroll = { x: camera.scrollX, y: camera.scrollY };
     if (this.motion && dt) {
-      const phase = this.elapsed % 7000, dash = phase >= 3200 && phase < 3500;
-      const distance = phase < 3200 ? phase * .15 : phase < 3500 ? 480 + (phase - 3200) : phase < 6000 ? 780 - (phase - 3500) * .312 : 0;
+      const phase = this.elapsed % 7000, pattern = value('motionPattern');
+      const dash = pattern === 'dash' || (pattern === 'cycle' && phase >= 3200 && phase < 3500);
+      const travel = this.elapsed * (dash ? 1 : .15) % 1560;
+      const distance = pattern !== 'cycle' ? (travel < 780 ? travel : 1560 - travel)
+        : phase < 3200 ? phase * .15 : phase < 3500 ? 480 + (phase - 3200) : phase < 6000 ? 780 - (phase - 3500) * .312 : 0;
       this.actor.setPosition(350 + distance, 740);
       this.enemy.setPosition(780 + Math.sin(this.elapsed / 1600) * 500, 850);
-      Object.assign(this.playerSample, { x: this.actor.x, y: this.actor.y, mode: dash ? 'dash' : phase >= 6000 ? 'idle' : 'walk' });
+      Object.assign(this.playerSample, { x: this.actor.x, y: this.actor.y, mode: dash ? 'dash' : pattern === 'cycle' && phase >= 6000 ? 'idle' : 'walk' });
       Object.assign(this.enemySample, { x: this.enemy.x, y: this.enemy.y });
     }
     const view = { x: camera.scrollX + camera.width * (1 - 1 / camera.zoom) / 2,
@@ -231,7 +243,7 @@ class FogLab extends Phaser.Scene {
     }] }, this.elapsed);
     element('clock').textContent = `${Math.floor(number('time') / 60).toString().padStart(2, '0')}:${(number('time') % 60).toString().padStart(2, '0')}`;
     const stats = this.fog.getDiagnostics();
-    element('status').textContent = `${stats.status} · ${(this.elapsed / 1000).toFixed(1)} s\nCPU Submission ${stats.cpuMs.toFixed(2)} ms · ${stats.gpuMs === null ? 'GPU-Zeit nicht verfügbar' : `GPU ${stats.gpuMs.toFixed(2)} ms`}\nChunks ${stats.activeChunks} aktiv / ${stats.cachedChunks} Cache · ${(stats.bytes / 1048576).toFixed(1)} MiB\nImpulse ${stats.submittedImpulses} / ${stats.pendingImpulses} wartend / ${stats.droppedImpulses} verworfen`;
+    element('status').textContent = `${stats.status} · ${(this.elapsed / 1000).toFixed(1)} s\nCPU Submission ${stats.cpuMs.toFixed(2)} ms · ${stats.gpuMs === null ? 'GPU-Zeit nicht verfügbar' : `GPU ${stats.gpuMs.toFixed(2)} ms`}\nChunks ${stats.activeChunks} aktiv / ${stats.cachedChunks} Cache · ${(stats.bytes / 1048576).toFixed(1)} MiB\nImpulse ${stats.submittedImpulses} / ${stats.pendingImpulses} wartend / ${stats.droppedImpulses} verworfen\nSpuren ${stats.trailSegments} / ${stats.trailTileOverflow} lokale Überläufe`;
     const now = performance.now(), measuredFrame = now - this.lastFrameAt; this.lastFrameAt = now;
     if (this.bench) this.measure(measuredFrame, stats.cpuMs);
   }

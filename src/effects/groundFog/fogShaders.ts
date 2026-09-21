@@ -83,23 +83,48 @@ void main() {
    float power=spec.b*uReaction;
    vec2 direction=away/max(dist,1.0);
    bool explosion=spec.a>.75;
-   force+=(direction+(explosion?vec2(0):line/max(length(line),1.0)*.2))*weight*power*(explosion?130.0:36.0);
-   clear+=weight*power*(explosion?2.8:.48);
+   bool melee=spec.a>.25 && !explosion;
+   if(melee) {
+     vec4 sector=texture2D(uCommands,uv+vec2(0,.75));
+     float angle=(unpack16(sector.ba)-.5)*6.2831853;
+     vec2 facing=vec2(cos(angle),sin(angle));
+     away=world-start;dist=length(away);direction=away/max(dist,1.0);
+     float edge=unpack16(sector.rg)*2.0-1.0;
+     float angularWeight=edge<-.9999?1.0:smoothstep(edge-.001,min(1.0,edge+.12),dot(direction,facing));
+     weight=(1.0-smoothstep(radius*.6,radius,dist))*angularWeight;
+     direction+=vec2(-direction.y,direction.x)*.45;
+   }
+   force+=(direction+(explosion || melee?vec2(0):line/max(length(line),1.0)*.2))*weight*power*(explosion?130.0:melee?65.0:36.0);
+   clear+=weight*power*(explosion?2.8:melee?1.25:.48);
  }
  gl_FragColor=vec4(floor(clamp(force/SPEED*127.0+128.0,1.0,255.0)+.5)/255.0,1.0-exp(-clear),clamp(clear,0.0,1.0));
 }
 `;
 export const FOG_VELOCITY_FRAGMENT = FOG_GLSL + `
+float pressure(float slot,vec2 p) {
+ return max(0.0,unpack16(state(slot,p).rg)-targetDensity(slot,p,terrain(slot,p).g)-.04);
+}
+void flowFace(float slot,vec2 p,vec2 direction,float ownPressure,vec2 ownVelocity,inout vec2 push,inout vec2 mixing) {
+ vec2 q=p;float n=neighbour(slot,q,direction);
+ if(n<0.0 || terrain(n,q).r<.5) return;
+ // Compression spreads upstream and sideways through open faces only. Momentum
+ // follows the same topology, carrying the deflected stream beyond a rock corner.
+ push+=direction*(ownPressure-pressure(n,q));
+ mixing+=velocity(n,q)-ownVelocity;
+}
 void main() {
  float slot;vec2 p;address(slot,p);vec2 uv=cellUV(slot,p);
  if(meta(slot,2.0).r<.5 || (uInitialize>.5 && meta(slot,2.0).g<.5)) {gl_FragColor=texture2D(uVelocity,flip(uv));return;}
  if(terrain(slot,p).r<.5) {gl_FragColor=vec4(pack16(.5),pack16(.5));return;}
  vec4 impulse=texture2D(uImpulse,flip(uv));
- vec2 v=mix(velocity(slot,p),uWind,.055)+(impulse.rg*255.0-128.0)/127.0*SPEED;
+ vec2 old=velocity(slot,p),push=vec2(0),mixing=vec2(0);float compressed=pressure(slot,p);
+ flowFace(slot,p,vec2(-1,0),compressed,old,push,mixing);flowFace(slot,p,vec2(1,0),compressed,old,push,mixing);
+ flowFace(slot,p,vec2(0,-1),compressed,old,push,mixing);flowFace(slot,p,vec2(0,1),compressed,old,push,mixing);
+ vec2 v=mix(old,uWind,${FOG.windRelaxation})+mixing*${FOG.momentumMix}*.25+push*${FOG.pressureGain}.0
+   +(impulse.rg*255.0-128.0)/127.0*SPEED;
  // L1 CFL <= .6: even an extreme explosion never skips a cell.
  v*=min(1.0,144.0/max(144.0,abs(v.x)+abs(v.y)));
- // Solid faces are rejected by exchange(). Velocity remains cell-local;
- // it is never sampled across a closed face or advected through an obstacle.
+ // Solid faces are rejected in both flowFace() and exchange().
  gl_FragColor=vec4(pack16(v.x/SPEED*.5+.5),pack16(v.y/SPEED*.5+.5));
 }
 `;
@@ -130,7 +155,7 @@ void main() {
  float inhibition=max(before.a*.95,impulse.a);
  d=max(0.0,d+change);
  float target=targetDensity(slot,p,mask.g);
- if(arrived>.5) d=mix(d,target,(target<d?.015:.0025)*(1.0-inhibition));
+ if(arrived>.5) d=mix(d,target,(target<d?.004:.0025)*(1.0-inhibition));
  gl_FragColor=vec4(pack16(d),arrived,inhibition);
 }
 `;
@@ -192,7 +217,7 @@ precision highp float;
 varying vec2 outTexCoord;
 uniform sampler2D uCommands,uBins;
 uniform vec2 uWorldSize,uViewOrigin,uViewSize;
-uniform float uTrailTime,uTrailCols,uTrailBinsHeight;
+uniform float uTrailTime,uTrailCols,uTrailBinsHeight,uReaction;
 float decode(vec2 v) {return dot(v,vec2(65280.,255.));}
 void main() {
  vec2 world=uViewOrigin+vec2(outTexCoord.x,1.-outTexCoord.y)*uViewSize;
@@ -205,14 +230,18 @@ void main() {
    float index=decode(texture2D(uBins,vec2((mod(address,1024.)+.5)/1024.,(floor(address/1024.)+.5)/uTrailBinsHeight)).rg)-1.;
    if(index<0.) break;
    float x=(index+.5)/${FOG.trailCapacity}.;
-   vec4 a=texture2D(uCommands,vec2(x,1./6.)),b=texture2D(uCommands,vec2(x,.5)),c=texture2D(uCommands,vec2(x,5./6.));
+   vec4 a=texture2D(uCommands,vec2(x,.125)),b=texture2D(uCommands,vec2(x,.375)),c=texture2D(uCommands,vec2(x,.625));
+   float strength=texture2D(uCommands,vec2(x,.875)).r;
    vec2 start=vec2(decode(a.rg),decode(a.ba))/65535.*uWorldSize,end=vec2(decode(b.rg),decode(b.ba))/65535.*uWorldSize;
    vec2 line=end-start;
    float t=clamp(dot(world-start,line)/max(.001,dot(line,line)),0.,1.);
    float distance=length(world-mix(start,end,t));
-   float age=mod(uTrailTime-decode(c.rg)+60000.,60000.);
-   amount+=(1.-smoothstep(.5,3.,distance))*exp(-age/95.)*(1.-smoothstep(220.,${FOG.trailMs}.,age))*c.b*3.;
+   float duration=mod(decode(c.ba)-decode(c.rg)+60000.,60000.);
+   float age=mod(uTrailTime-decode(c.rg)-t*duration+60000.,60000.);
+   // max joins overlapping capsules without dark circular knots at frame boundaries.
+   amount=max(amount,(1.-smoothstep(1.,${FOG.trailRadius}.,distance))*exp(-age/${FOG.trailDecayMs}.)
+     *(1.-smoothstep(${FOG.trailMs * .7}.,${FOG.trailMs}.,age))*strength*4.5*uReaction);
  }
- gl_FragColor=vec4(min(.65,1.-exp(-amount)),0,0,1);
+ gl_FragColor=vec4(min(.90,1.-exp(-amount)),0,0,1);
 }
 `;
