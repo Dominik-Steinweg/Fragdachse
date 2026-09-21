@@ -35,7 +35,7 @@ export class MapCanvas {
     this.canvas.onpointermove = e => this.move(e);
     this.canvas.onpointerup = e => this.up(e);
     this.canvas.onpointercancel = () => { this.drag = null; this.paint(); };
-    this.canvas.onkeydown = e => { if (e.key === 'Escape') { this.drag = null; this.tool = 'select'; this.paint(); } };
+    this.canvas.onkeydown = e => { if (e.key === 'Escape') { this.drag = null; this.tool = 'select'; this.env.changed(); } };
     this.canvas.addEventListener('wheel', e => {
       e.preventDefault(); const p = this.screen(e), world = this.world(p);
       this.scale = Math.max(0.4, Math.min(65, this.scale * Math.exp(-e.deltaY * 0.001)));

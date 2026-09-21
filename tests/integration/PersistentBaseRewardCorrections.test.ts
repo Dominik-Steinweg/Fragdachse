@@ -474,12 +474,15 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
     });
 
     objectiveSystem.hostUpdate(1, false);
-    expect(objectiveSystem.getObjectiveState(objective.id)).toBe('dormant');
+    expect(objectiveSystem.getObjectiveState(objective.id)).toBe('active');
     clearedEncounters.add('reveal');
     objectiveSystem.hostUpdate(1, false);
     expect(objectiveSystem.getObjectiveState(objective.id)).toBe('active');
     clearedEncounters.add('defend');
     objectiveSystem.hostUpdate(1, false);
+    expect(completed).toEqual([]);
+    objectiveSystem.completeVictoryHolds();
+    objectiveSystem.completeVictoryHolds();
 
     expect(completed).toEqual(['hold-supply-base']);
     expect(getStoredPersistentBaseRewardUnlocks()).toEqual(['base_holy_hand_grenade_pedestal']);

@@ -18,6 +18,14 @@ export function setGroupSpawn(draft: JsonObject, path: Path, mode: string): void
   set(draft, [...path, 'spawnArea'], mode === 'area' ? group.spawnArea ?? { gridX: 0, gridY: 0, widthCells: 4, heightCells: 4 } : undefined);
 }
 
+/** Switching source keeps extension fields but removes incompatible base/front selectors. */
+export function setPersistentSpawnSource(draft: JsonObject, index: number, type: 'map' | 'base', baseId?: string): void {
+  const path: Path = ['persistentSpawns', index];
+  set(draft, [...path, 'source', 'type'], type);
+  set(draft, [...path, 'source', 'baseId'], type === 'base' ? baseId : undefined);
+  if (type === 'base') set(draft, [...path, 'front'], undefined);
+}
+
 export interface SpawnFrontSource { label: string; path: Path }
 export interface ActiveSpawnFront { front: SpawnFront; sources: SpawnFrontSource[] }
 

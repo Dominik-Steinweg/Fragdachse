@@ -84,8 +84,8 @@ describe('Persistent-Base-Reward-Authoring', () => {
     expect(map.encounters?.map((encounter) => encounter.id)).toEqual(['reveal', 'defend', 'closing']);
     expect(objective).toMatchObject({
       type: 'hold',
-      start: { type: 'after-encounter', encounterId: 'reveal' },
-      holdUntil: { type: 'after-encounter', encounterId: 'defend' },
+      start: { type: 'time', atMs: 0 },
+      holdUntilVictory: true,
       targets: ['supply-base'],
       targetGoal: 1,
       rewards: {

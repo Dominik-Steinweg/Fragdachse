@@ -33,11 +33,11 @@ export function validateDocument(draft: JsonObject): Validation {
       const editable = isEditableMapField(p.split('/').slice(1));
       if (editable) {
       if (typeof v === 'number' && !Number.isFinite(v)) error(p, 'Endliche Zahl erforderlich.', 'number');
-      if (['gridX', 'gridY', 'widthCells', 'heightCells', 'count', 'treeCount', 'dxCells', 'dyCells', 'edgeInsetCells'].includes(key)
+      if (['gridX', 'gridY', 'widthCells', 'heightCells', 'count', 'countPerTick', 'intervalMs', 'startAtMs', 'balanceReferenceDurationSec', 'treeCount', 'dxCells', 'dyCells', 'edgeInsetCells'].includes(key)
         && (typeof v !== 'number' || !Number.isInteger(v))) error(p, 'Ganzzahl erforderlich.', 'integer');
       if ((key.endsWith('Ms') || ['count', 'treeCount', 'edgeInsetCells', 'corridorRadiusVarianceCells', 'corridorWanderCells', 'waypointJitterCells'].includes(key))
         && (typeof v !== 'number' || v < 0)) error(p, 'Nichtnegative Zahl erforderlich.', 'number');
-      if (['widthCells', 'heightCells', 'radiusCells', 'corridorRadiusCells', 'rockDensityScale'].includes(key)
+      if (['widthCells', 'heightCells', 'radiusCells', 'corridorRadiusCells', 'rockDensityScale', 'countPerTick', 'intervalMs', 'balanceReferenceDurationSec'].includes(key)
         && (typeof v !== 'number' || v <= 0)) error(p, 'Positive Zahl erforderlich.', 'number');
       }
       visit(v, p);
@@ -63,6 +63,9 @@ export function validateDocument(draft: JsonObject): Validation {
     const life = resolveEnemyLifecycleTotals(String(g.enemyKind));
     for (const message of life.issues) error(`/encounters/${i}/groups/${j}/enemyKind`, message, 'lifecycle');
   }));
+  array(draft.persistentSpawns).forEach((spawn, i) => {
+    for (const message of resolveEnemyLifecycleTotals(String(spawn.enemyKind)).issues) error(`/persistentSpawns/${i}/enemyKind`, message, 'lifecycle');
+  });
   if (draft.boss) for (const message of resolveEnemyLifecycleTotals(String(object(draft.boss).enemyKind)).issues) error('/boss/enemyKind', message, 'lifecycle');
   try {
     const map = draft as unknown as CoopDefenseMapAuthoringConfig;

@@ -28,6 +28,7 @@ import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 import type { GameMode } from '../types';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import { WaterGeometry } from './WaterGeometry';
+import { normalizeCoopDefenseWater } from '../config/coopDefenseWater';
 import { DECAL_SIZE } from './DecalConfig';
 
 // ── Felsfeld-Gänge ──────────────────────────────────────────────────────────
@@ -187,14 +188,12 @@ export class ArenaGenerator {
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
     // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
     // bewusst gesetztes Band als abgeschnürte Tasche und fräste es wieder auf.
-    const water = (coopMapConfig?.water ?? []).map(cell => ({ ...cell }));
+    const water = coopMapConfig
+      ? normalizeCoopDefenseWater(coopMapConfig, this.metrics.gridCols, this.metrics.gridRows) ?? []
+      : [];
     const waterGeometry = new WaterGeometry(water, this.metrics);
     for (const cell of water) {
-      if (!Number.isInteger(cell.gridX) || !Number.isInteger(cell.gridY) || cell.gridX < 0 || cell.gridY < 0
-        || cell.gridX >= this.metrics.gridCols || cell.gridY >= this.metrics.gridRows
-        || this.isReservedBaseObstacleCell(cell.gridX, cell.gridY, coopBaseSpecs)
-        || missionBarrierCells.has(cell.gridX + '_' + cell.gridY)
-        || missionCheckpointCells.has(cell.gridX + '_' + cell.gridY)) throw new Error('[ArenaGenerator] Invalid water cell');
+      if (this.isCaptureTheBeerBaseCell(cell.gridX, cell.gridY)) throw new Error('[ArenaGenerator] Invalid water cell in Capture the Beer base');
       this.waterKeys.add(this.cellKey(cell.gridX, cell.gridY));
     }
     const authoredRockWallCells = this.collectRockWallCells(coopMapConfig?.rockWalls);

@@ -67,6 +67,13 @@ summary{cursor:pointer;color:#c5d0cc;font-size:11px;margin-bottom:8px}
 .encounter-table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);padding:9px;background:#223033;position:sticky;top:0;z-index:1}
 .encounter-table td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
 .encounter-table tr.selected{background:#302f27}
+.encounter-table tr.persistent-row{background:#282536;border-left:3px solid #bfa0e9}
+.encounter-table tr.persistent-row.selected{background:#3b3151}
+.persistent-label{display:block;margin-top:5px;color:#cdb2ee}
+.persistent-card{border-left:3px solid #bfa0e9}
+.persistent-metric,.persistent-action{color:#d1b5f6}
+.planning-duration{margin:0 0 0 auto;min-width:190px}
+.planning-duration>small{display:none}
 .encounter-table .field{min-width:100px;max-width:215px}
 .encounter-table .field>span{display:none}
 .row-actions{min-width:125px}

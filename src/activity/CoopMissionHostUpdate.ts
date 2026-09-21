@@ -144,6 +144,9 @@ export class CoopMissionHostUpdate {
 
   /** Einmaliger synchroner Erstaufbau der Navigation im verborgenen Ladezustand. */
   prepareStartupCaches(nowMs: number): void {
+    this.runtime.coopDefenseSecondaryObjectiveSystem?.hostUpdate(0, false);
+    this.publishSecondaryObjectivePresentation();
+    this.port.syncDormantBaseStates();
     this.updateFlowFields(nowMs, 0, true);
   }
 

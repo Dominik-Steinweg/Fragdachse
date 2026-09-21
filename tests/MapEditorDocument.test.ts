@@ -7,7 +7,7 @@ import { assertSupportedMapEdit } from '../tools/map-editor/shared/editPolicy';
 import { updateJsonText } from '../tools/map-editor/server/jsonText';
 import { collectCoopDefenseMapReferences } from '../src/config/coopDefenseMapReferences';
 import { clone, type JsonObject } from '../tools/map-editor/shared/json';
-import { setGroupSpawn } from '../tools/map-editor/shared/spawns';
+import { activeSpawnFronts, setGroupSpawn, setPersistentSpawnSource } from '../tools/map-editor/shared/spawns';
 
 function load(file = sources.maps[0].file): LoadedMap {
   const text = readFileSync(new URL(`../src/config/coopDefenseMaps/${file}`, import.meta.url), 'utf8');
@@ -16,6 +16,30 @@ function load(file = sources.maps[0].file): LoadedMap {
 }
 
 describe('Map editor authoring documents', () => {
+  it('switches permanent sources atomically, preserving extensions and updating active fronts through undo', () => {
+    const loaded = load(); loaded.document.encounters = []; delete loaded.document.boss;
+    loaded.document.persistentSpawns = [{ id: 'pressure', enemyKind: 'zombie-badger', intervalMs: 2000, countPerTick: 2, front: 'north', source: { type: 'map', extension: 'keep' }, extension: { keep: true } }];
+    const session = new MapDocumentSession(loaded.sourceKey, loaded);
+    session.transact('bind base', draft => setPersistentSpawnSource(draft, 0, 'base', 'spawn-base'));
+    expect((session.draft.persistentSpawns as JsonObject[])[0]).toMatchObject({ source: { type: 'base', baseId: 'spawn-base', extension: 'keep' }, extension: { keep: true } });
+    expect((session.draft.persistentSpawns as JsonObject[])[0]).not.toHaveProperty('front');
+    expect(activeSpawnFronts(session.draft)).toEqual([]);
+    expect(() => assertSupportedMapEdit(loaded.document, session.draft)).not.toThrow();
+    session.undo(); expect(activeSpawnFronts(session.draft).map(f => f.front)).toEqual(['north']);
+    session.redo(); session.transact('map source', draft => setPersistentSpawnSource(draft, 0, 'map'));
+    expect((session.draft.persistentSpawns as JsonObject[])[0].source).toEqual({ type: 'map', extension: 'keep' });
+    expect(activeSpawnFronts(session.draft).map(f => f.front)).toEqual(['west']);
+    expect(() => assertSupportedMapEdit(loaded.document, session.draft)).not.toThrow();
+    ((session.draft.persistentSpawns as JsonObject[])[0].source as JsonObject).extension = 'changed';
+    expect(() => assertSupportedMapEdit(loaded.document, session.draft)).toThrow('Schreibgeschützt');
+  });
+  it('rejects invalid permanent spawn numbers rather than silently rounding or clamping them', () => {
+    const draft = load().document;
+    draft.persistentSpawns = [{ id: 'pressure', enemyKind: 'zombie-badger', countPerTick: 0, intervalMs: 0, startAtMs: -1, source: { type: 'map' } }];
+    draft.balanceReferenceDurationSec = 0.5;
+    const paths = validateDocument(draft).issues.filter(i => i.severity === 'error').map(i => i.path);
+    expect(paths).toEqual(expect.arrayContaining(['/persistentSpawns/0/countPerTick', '/persistentSpawns/0/intervalMs', '/persistentSpawns/0/startAtMs', '/balanceReferenceDurationSec']));
+  });
   it('edits repeated enemy kinds independently and switches between area and front without losing other group data', () => {
     const loaded = load();
     const area = { gridX: 3, gridY: 4, widthCells: 5, heightCells: 6 };

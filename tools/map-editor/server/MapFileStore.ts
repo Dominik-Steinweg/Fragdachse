@@ -15,6 +15,7 @@ export class MapFileStore {
     readonly sources: readonly { file: string; mapId: string }[],
     private readonly validate: (document: JsonObject) => Validation | Promise<Validation>,
     private readonly replaceFile: typeof rename = rename,
+    private readonly checkEdit: (before: JsonObject, after: JsonObject) => void | Promise<void> = assertSupportedMapEdit,
   ) {}
   private async file(key: string): Promise<{ path: string; mapId: string }> {
     const source = this.sources.find(s => s.file === key);
@@ -44,7 +45,7 @@ export class MapFileStore {
     try { current = await this.load(key); } catch { throw new FileConflict('Quelldatei ist nicht mehr lesbar. Entwurf sichern und Datei prüfen.'); }
     if (current.revision !== revision) throw new FileConflict('Die Datei wurde außerhalb des Editors geändert. Entwurf sichern oder bewusst neu laden.');
     if (stable(current.document) === stable(document)) return current;
-    assertSupportedMapEdit(current.document, document);
+    await this.checkEdit(current.document, document);
     const result = await this.validate(document);
     const errors = result.issues.filter(i => i.severity === 'error');
     if (!result.normalized || errors.length) throw Error(errors.map(i => `${i.path}: ${i.message}`).join('\n') || 'Ungültiger Entwurf');

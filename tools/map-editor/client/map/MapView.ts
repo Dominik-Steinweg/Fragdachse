@@ -134,7 +134,8 @@ export class MapView {
         array(object(draft.rockField).corridors).push(c);
       });
     }
-    this.canvas.tool = 'select'; env.changed();
+    if (tool !== 'waterArea') this.canvas.tool = 'select';
+    env.changed();
   }
   private duplicate(item: MapObject): void {
     const { env } = this, parent = item.path.slice(0, -1), index = Number(item.path.at(-1)), list = array(at(env.session.draft, parent));

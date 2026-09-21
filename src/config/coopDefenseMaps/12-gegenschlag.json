@@ -29,7 +29,7 @@
       "anchor": {
         "kind": "center-offset",
         "dxCells": 0,
-        "dyCells": -4
+        "dyCells": -3
       },
       "shape": {
         "kind": "cells",
@@ -86,7 +86,7 @@
       "hpMax": 1000,
       "anchor": {
         "kind": "left-center",
-        "edgeInsetCells": 10
+        "edgeInsetCells": 8
       },
       "shape": {
         "kind": "cells",
@@ -142,14 +142,30 @@
       "hpMax": 1400,
       "anchor": {
         "kind": "grid",
-        "gridX": 20,
-        "gridY": 28
+        "gridX": 59,
+        "gridY": 15
       },
       "shape": {
-        "kind": "rectangle",
-        "widthCells": 2,
-        "heightCells": 2
-      }
+        "kind": "cells",
+        "cells": [
+          { "gridX": 0, "gridY": 0 },
+          { "gridX": 1, "gridY": 0 },
+          { "gridX": 1, "gridY": 1 },
+          { "gridX": 2, "gridY": 1 },
+          { "gridX": 2, "gridY": 2 },
+          { "gridX": 1, "gridY": 3 },
+          { "gridX": 2, "gridY": 3 },
+          { "gridX": 0, "gridY": 4 },
+          { "gridX": 1, "gridY": 4 }
+        ]
+      },
+      "powerUpPedestals": [{
+        "id": "holy-hand-grenade-station",
+        "cellOffset": { "gridX": 1, "gridY": 2 },
+        "defId": "HOLY_HAND_GRENADE",
+        "respawnMs": 30000,
+        "spawnOnArenaStart": true
+      }]
     },
     {
       "id": "friendly-outpost-rocket",
@@ -157,7 +173,7 @@
       "hpMax": 900,
       "anchor": {
         "kind": "grid",
-        "gridX": 52,
+        "gridX": 39,
         "gridY": 20
       },
       "shape": {
@@ -176,13 +192,26 @@
           "weaponId": "TURRET_ROCKET_BURST"
         }
       ]
+    },
+    {
+      "id": "friendly-outpost-rocket-south",
+      "role": "outpost",
+      "hpMax": 900,
+      "anchor": { "kind": "grid", "gridX": 40, "gridY": 12 },
+      "shape": { "kind": "rectangle", "widthCells": 1, "heightCells": 1 },
+      "turrets": [{
+        "id": "rocket",
+        "cellOffset": { "gridX": 0, "gridY": 0 },
+        "mountSide": "front",
+        "weaponId": "TURRET_ROCKET_BURST"
+      }]
     }
   ],
   "persistentBase": {
     "baseId": "coop-base-rear",
     "anchor": {
       "gridX": 99,
-      "gridY": 20
+      "gridY": 19
     }
   },
   "encounters": [
@@ -214,8 +243,8 @@
     {
       "id": "hold-supply-base",
       "type": "hold",
-      "start": { "type": "after-encounter", "encounterId": "reveal" },
-      "holdUntil": { "type": "after-encounter", "encounterId": "defend" },
+      "start": { "type": "time", "atMs": 0 },
+      "holdUntilVictory": true,
       "targets": ["supply-base"],
       "rewards": {
         "repairTargetOnComplete": false,
@@ -228,13 +257,21 @@
       "defId": "HEALTH_PACK",
       "region": "front",
       "respawnMs": 5000,
-      "spawnOnArenaStart": true
+      "spawnOnArenaStart": true,
+      "anchor": {
+        "gridX": 20,
+        "gridY": 19
+      }
     },
     {
       "defId": "HEALTH_PACK",
       "region": "middle",
       "respawnMs": 5000,
-      "spawnOnArenaStart": true
+      "spawnOnArenaStart": true,
+      "anchor": {
+        "gridX": 49,
+        "gridY": 20
+      }
     },
     {
       "defId": "ARMOR",
@@ -248,7 +285,7 @@
       "id": "map-12-pressure-0",
       "enemyKind": "zombie-badger",
       "intervalMs": 15000,
-      "countPerTick": 7,
+      "countPerTick": 12,
       "startAtMs": 0,
       "source": {
         "type": "map"
@@ -258,7 +295,7 @@
       "id": "map-12-pressure-1",
       "enemyKind": "demon-badger",
       "intervalMs": 15000,
-      "countPerTick": 7,
+      "countPerTick": 3,
       "startAtMs": 15000,
       "source": {
         "type": "map"
@@ -288,7 +325,7 @@
       "id": "map-12-pressure-4",
       "enemyKind": "alien-badger",
       "intervalMs": 30000,
-      "countPerTick": 2,
+      "countPerTick": 1,
       "startAtMs": 0,
       "source": {
         "type": "map"
@@ -298,7 +335,7 @@
       "id": "map-12-pressure-5",
       "enemyKind": "alien-badger",
       "intervalMs": 30000,
-      "countPerTick": 4,
+      "countPerTick": 3,
       "startAtMs": 15000,
       "source": {
         "type": "map"
@@ -307,6 +344,243 @@
   ],
   "tutorialAnchor": {
     "gridX": 56,
-    "gridY": 3
-  }
+    "gridY": 1
+  },
+  "waterAreas": [
+    {
+      "gridX": 27,
+      "gridY": 0,
+      "widthCells": 7,
+      "heightCells": 11
+    },
+    {
+      "gridX": 34,
+      "gridY": 24,
+      "widthCells": 10,
+      "heightCells": 13
+    },
+    {
+      "gridX": 41,
+      "gridY": 37,
+      "widthCells": 9,
+      "heightCells": 4
+    },
+    {
+      "gridX": 30,
+      "gridY": 11,
+      "widthCells": 7,
+      "heightCells": 6
+    },
+    {
+      "gridX": 44,
+      "gridY": 30,
+      "widthCells": 3,
+      "heightCells": 7
+    },
+    {
+      "gridX": 38,
+      "gridY": 37,
+      "widthCells": 3,
+      "heightCells": 2
+    },
+    {
+      "gridX": 29,
+      "gridY": 24,
+      "widthCells": 5,
+      "heightCells": 5
+    },
+    {
+      "gridX": 32,
+      "gridY": 29,
+      "widthCells": 2,
+      "heightCells": 4
+    },
+    {
+      "gridX": 25,
+      "gridY": 24,
+      "widthCells": 4,
+      "heightCells": 2
+    },
+    {
+      "gridX": 27,
+      "gridY": 22,
+      "widthCells": 4,
+      "heightCells": 2
+    },
+    {
+      "gridX": 33,
+      "gridY": 23,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 42,
+      "gridY": 18,
+      "widthCells": 5,
+      "heightCells": 6
+    },
+    {
+      "gridX": 44,
+      "gridY": 24,
+      "widthCells": 6,
+      "heightCells": 2
+    },
+    {
+      "gridX": 34,
+      "gridY": 8,
+      "widthCells": 6,
+      "heightCells": 3
+    },
+    {
+      "gridX": 37,
+      "gridY": 11,
+      "widthCells": 2,
+      "heightCells": 4
+    },
+    {
+      "gridX": 21,
+      "gridY": 11,
+      "widthCells": 9,
+      "heightCells": 2
+    },
+    {
+      "gridX": 24,
+      "gridY": 2,
+      "widthCells": 3,
+      "heightCells": 9
+    },
+    {
+      "gridX": 22,
+      "gridY": 4,
+      "widthCells": 2,
+      "heightCells": 7
+    },
+    {
+      "gridX": 34,
+      "gridY": 2,
+      "widthCells": 3,
+      "heightCells": 6
+    },
+    {
+      "gridX": 37,
+      "gridY": 5,
+      "widthCells": 1,
+      "heightCells": 3
+    },
+    {
+      "gridX": 74,
+      "gridY": 0,
+      "widthCells": 4,
+      "heightCells": 14
+    },
+    {
+      "gridX": 77,
+      "gridY": 14,
+      "widthCells": 4,
+      "heightCells": 9
+    },
+    {
+      "gridX": 75,
+      "gridY": 14,
+      "widthCells": 2,
+      "heightCells": 6
+    },
+    {
+      "gridX": 76,
+      "gridY": 23,
+      "widthCells": 4,
+      "heightCells": 10
+    },
+    {
+      "gridX": 68,
+      "gridY": 29,
+      "widthCells": 8,
+      "heightCells": 7
+    },
+    {
+      "gridX": 59,
+      "gridY": 34,
+      "widthCells": 9,
+      "heightCells": 2
+    },
+    {
+      "gridX": 62,
+      "gridY": 31,
+      "widthCells": 6,
+      "heightCells": 3
+    },
+    {
+      "gridX": 73,
+      "gridY": 25,
+      "widthCells": 3,
+      "heightCells": 4
+    },
+    {
+      "gridX": 78,
+      "gridY": 7,
+      "widthCells": 2,
+      "heightCells": 7
+    },
+    {
+      "gridX": 78,
+      "gridY": 0,
+      "widthCells": 1,
+      "heightCells": 7
+    },
+    {
+      "gridX": 73,
+      "gridY": 0,
+      "widthCells": 1,
+      "heightCells": 7
+    },
+    {
+      "gridX": 70,
+      "gridY": 12,
+      "widthCells": 4,
+      "heightCells": 3
+    },
+    {
+      "gridX": 74,
+      "gridY": 14,
+      "widthCells": 1,
+      "heightCells": 4
+    },
+    {
+      "gridX": 71,
+      "gridY": 15,
+      "widthCells": 3,
+      "heightCells": 2
+    },
+    {
+      "gridX": 81,
+      "gridY": 14,
+      "widthCells": 1,
+      "heightCells": 4
+    },
+    {
+      "gridX": 80,
+      "gridY": 27,
+      "widthCells": 2,
+      "heightCells": 3
+    },
+    {
+      "gridX": 76,
+      "gridY": 33,
+      "widthCells": 2,
+      "heightCells": 2
+    },
+    {
+      "gridX": 79,
+      "gridY": 3,
+      "widthCells": 2,
+      "heightCells": 3
+    },
+    {
+      "gridX": 79,
+      "gridY": 1,
+      "widthCells": 3,
+      "heightCells": 2
+    }
+  ],
+  "treeCount": 7
 }

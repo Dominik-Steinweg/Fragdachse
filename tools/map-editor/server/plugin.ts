@@ -12,6 +12,10 @@ export function mapEditorApi(projectRoot: string): Plugin {
       const store = new MapFileStore(resolve(projectRoot, 'src/config/coopDefenseMaps'), sources.maps, async draft => {
         const rules = await server.ssrLoadModule(resolve(projectRoot, 'tools/map-editor/shared/validation.ts'));
         return rules.validateDocument(draft);
+      }, undefined, async (before, after) => {
+        // Use the live module graph, just like validation; the config bundle can retain old rules.
+        const policy = await server.ssrLoadModule(resolve(projectRoot, 'tools/map-editor/shared/editPolicy.ts'));
+        policy.assertSupportedMapEdit(before, after);
       });
       server.middlewares.use('/api/', (request, response) => {
         const send = (status: number, data: unknown) => { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); response.end(JSON.stringify(data)); };

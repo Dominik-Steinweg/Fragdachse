@@ -660,6 +660,9 @@ export class ArenaLifecycleCoordinator {
    * Die Closures bilden die Infrastrukturgrenze; der Owner selbst kennt weder Bridge noch Scene.
    */
   private readonly resultApplication = new ResultApplication({
+    completeVictoryHolds: () => {
+      this.coopMissionRuntime?.coopDefenseSecondaryObjectiveSystem?.completeVictoryHolds();
+    },
     getCurrentActivity: () => this.worldLifecycle.activity.descriptor,
     resolveVictoryRewardIds: (definitionId) => (
       getActivityDefinition(definitionId)?.persistentBaseRewardsOnVictory ?? []

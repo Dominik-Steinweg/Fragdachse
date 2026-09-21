@@ -8,6 +8,9 @@ const group: Rule = { enemyKind: true, count: true, delayMs: true, spawnStaggerM
 const policy: Rule = {
   arenaWidthCells: true, arenaHeightCells: true, rockFillRatio: true, treeCount: true,
   trackMode: true, trackPosition: true,
+  balanceReferenceDurationSec: true,
+  persistentSpawns: { $items: { id: true, enemyKind: true, intervalMs: true, countPerTick: true, startAtMs: true,
+    source: { type: true, baseId: true }, front: true }, $mutable: true, $id: 'id' },
   powerUps: { $items: { defId: true, anchor: point, region: true, respawnMs: true, spawnOnArenaStart: true }, $mutable: true },
   rockField: { fillMode: true, corridorRadiusCells: true, corridorRadiusVarianceCells: true, corridorWanderCells: true,
     waypointJitterCells: true, rockDensityScale: true,

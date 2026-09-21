@@ -27,6 +27,7 @@ function createHarness(activity: ActivityDescriptor | null = ACTIVITY_A): {
   const calls: string[] = [];
   const rewards: readonly PersistentBaseRewardId[] = ['base_health_pedestal'];
   const port: ResultApplicationPort = {
+    completeVictoryHolds: () => { calls.push('complete-victory-holds'); },
     getCurrentActivity: () => currentActivity,
     resolveVictoryRewardIds: (definitionId) => {
       calls.push(`resolve-rewards:${definitionId}`);
@@ -83,6 +84,7 @@ describe('result application', () => {
 
     expect(harness.application.apply(completion, 9_000)).toBe(true);
     expect(harness.calls).toEqual([
+      'complete-victory-holds',
       'resolve-rewards:activity:coop-mission:7',
       'grant:base_health_pedestal',
       'base:commit:21:7',
@@ -91,7 +93,7 @@ describe('result application', () => {
     ]);
 
     expect(harness.application.apply(completion, 9_001)).toBe(false);
-    expect(harness.calls).toHaveLength(5);
+    expect(harness.calls).toHaveLength(6);
   });
 
   for (const conclusion of ['defeat', 'aborted'] as const) {

@@ -88,9 +88,14 @@ function render(): void {
   if (!validation.issues.length) issuesHost.append(element('span', 'valid', '● Entwurf fachlich gültig'));
 }
 function navigateIssue(path: Path): void {
-  if (path[0] === 'encounters') {
+  if (path[0] === 'persistentSpawns') {
+    switchView('encounters'); const spawns = env?.session.draft.persistentSpawns as { id: string }[];
+    if (spawns?.[Number(path[1])]) { encounterView!.selectedPersistentId = spawns[Number(path[1])].id; render(); }
+  } else if (path[0] === 'balanceReferenceDurationSec') {
+    switchView('encounters');
+  } else if (path[0] === 'encounters') {
     switchView('encounters'); const encounters = env?.session.draft.encounters as { id: string }[];
-    if (encounters?.[Number(path[1])]) { encounterView!.selectedId = encounters[Number(path[1])].id; render(); }
+    if (encounters?.[Number(path[1])]) { encounterView!.selectedId = encounters[Number(path[1])].id; encounterView!.selectedPersistentId = null; render(); }
   } else { switchView('map'); for (let n = path.length; n > 0; n--) mapView?.open(path.slice(0, n)); }
 }
 function renderStatus(): void {
@@ -113,6 +118,8 @@ async function save(): Promise<void> {
   if (!result.normalized || !session.dirty) return;
   saving = true; renderStatus();
   try {
+    // A local server restart must not force a page reload that would discard the open draft.
+    token = (await api<{ token: string }>('/api/session')).token;
     const saved = await api<LoadedMap>(`/api/maps/${encodeURIComponent(session.sourceKey)}`, { method: 'PUT', headers: { 'content-type': 'application/json', 'x-map-editor-token': token }, body: JSON.stringify({ revision: session.revision, document: clone(session.draft) }) });
     session.acceptSaved(saved); if (env.session === session) showMessage('Projektdatei gespeichert.');
   } catch (error) { showMessage(error instanceof Error ? error.message : String(error)); }

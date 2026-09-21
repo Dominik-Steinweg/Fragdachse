@@ -1,4 +1,5 @@
 import { resolveEnemyLifecycleTotals } from './coopDefenseEnemyLifecycle';
+import { normalizeCoopDefenseWater } from './coopDefenseWater';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import {
   getCoopDefenseEnemyConfig,
@@ -298,10 +299,12 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   /**
-   * Nur fuer `hold` und dort Pflicht: Zeitpunkt, bis zu dem die Ziele leben muessen. Hold besitzt
+   * Nur fuer `hold`: alternativ zu holdDurationMs/holdUntilVictory der Zeitpunkt, bis zu dem die Ziele leben muessen. Hold besitzt
    * keinen Hintergrundzustand – dieses Fenster ist zugleich sein Fokusfenster.
    */
   readonly holdUntil?: CoopDefenseMapEncounterStart;
+  /** Hold targets must survive until the main mission is won. */
+  readonly holdUntilVictory?: true;
   /** Nur fuer `hold`: relative Dauer ab tatsaechlicher Aktivierung in Host-Rundenzeit. */
   readonly holdDurationMs?: number;
   /** Nur fuer `hold`: Mindestanzahl der Zielbasen, die das Haltefenster ueberleben muessen. */
@@ -324,6 +327,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   readonly holdUntil?: CoopDefenseMapEncounterStart;
+  readonly holdUntilVictory?: true;
   readonly holdDurationMs?: number;
   readonly requiredSurvivors?: number;
   readonly targets: readonly string[];
@@ -951,6 +955,7 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     start: objective.start,
     ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
     ...(objective.holdUntil ? { holdUntil: objective.holdUntil } : {}),
+    ...(objective.holdUntilVictory ? { holdUntilVictory: objective.holdUntilVictory } : {}),
     ...(objective.holdDurationMs === undefined ? {} : { holdDurationMs: objective.holdDurationMs }),
     ...(objective.requiredSurvivors === undefined ? {} : { requiredSurvivors: objective.requiredSurvivors }),
     targets: [...(objective.targets ?? [])],
@@ -1021,10 +1026,18 @@ function getScheduledPersistentSpawnXp(
   spawn: ResolvedCoopDefenseMapPersistentSpawnConfig,
   durationMs: number,
 ): number {
+  return getCoopDefensePersistentSpawnCount(spawn, durationMs) * getEnemyLifecycleXp(spawn.enemyKind);
+}
+
+/** Planning window [0, durationMs): includes the initial spawn, excludes a tick at the endpoint. */
+export function getCoopDefensePersistentSpawnCount(
+  spawn: Pick<ResolvedCoopDefenseMapPersistentSpawnConfig, 'startAtMs' | 'intervalMs' | 'countPerTick'>,
+  durationMs: number,
+): number {
   const activeDurationMs = Math.max(0, durationMs - spawn.startAtMs);
   if (activeDurationMs <= 0 || spawn.countPerTick <= 0) return 0;
   const tickCount = Math.max(1, Math.ceil(activeDurationMs / spawn.intervalMs));
-  return tickCount * spawn.countPerTick * getEnemyLifecycleXp(spawn.enemyKind);
+  return tickCount * spawn.countPerTick;
 }
 
 function getEnemyLifecycleXp(kind: CoopDefenseEnemyKind): number {
@@ -1146,7 +1159,10 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     arenaWidthCells,
     arenaHeightCells,
   );
-  const water = normalizeWaterCells(mapConfig.water, mapConfig.waterAreas, arenaWidthCells, arenaHeightCells, bases, rockWalls, missionProgress, trackMode === 'none' ? undefined : trackPosition);
+  const water = normalizeCoopDefenseWater({
+    water: mapConfig.water, waterAreas: mapConfig.waterAreas,
+    bases, persistentBase, rockWalls, missionProgress, trackMode, trackPosition,
+  }, arenaWidthCells, arenaHeightCells);
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -1312,47 +1328,6 @@ function normalizePersistentBasePreviewConfig(
     checkpointId,
     ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
   };
-}
-
-function getBaseShapeDimensions(shape: CoopBaseShape): { width: number; height: number } {
-  if (shape.kind === 'rectangle') {
-    return { width: Math.max(1, shape.widthCells), height: Math.max(1, shape.heightCells) };
-  }
-  let width = 1;
-  let height = 1;
-  for (const cell of shape.cells) {
-    width = Math.max(width, cell.gridX + 1);
-    height = Math.max(height, cell.gridY + 1);
-  }
-  return { width, height };
-}
-
-function getBaseOriginForArena(
-  anchor: CoopBaseAnchor,
-  width: number,
-  height: number,
-  arenaWidthCells: number,
-  arenaHeightCells: number,
-): { gridX: number; gridY: number } {
-  switch (anchor.kind) {
-    case 'right-center':
-      return {
-        gridX: arenaWidthCells - width - Math.max(0, anchor.edgeInsetCells),
-        gridY: Math.floor((arenaHeightCells - height) / 2),
-      };
-    case 'left-center':
-      return {
-        gridX: Math.max(0, anchor.edgeInsetCells),
-        gridY: Math.floor((arenaHeightCells - height) / 2),
-      };
-    case 'center-offset':
-      return {
-        gridX: Math.floor((arenaWidthCells - width) / 2) + anchor.dxCells,
-        gridY: Math.floor((arenaHeightCells - height) / 2) + anchor.dyCells,
-      };
-    case 'grid':
-      return { gridX: anchor.gridX, gridY: anchor.gridY };
-  }
 }
 
 function normalizeSurviveDurationSec(
@@ -1536,12 +1511,15 @@ function normalizeSecondaryObjectiveConfigs(
 
     // Hold ist binaer und besitzt keinen Hintergrundzustand: mindestens ein authored Ziel und ein
     // Haltefenster statt eines Fokusfensters. Ohne requiredSurvivors muessen alle Targets leben.
+    if (objective.holdUntilVictory !== undefined && objective.holdUntilVictory !== true) {
+      throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} has invalid holdUntilVictory`);
+    }
     if (objective.type === 'hold') {
       const hasHoldUntil = objective.holdUntil !== undefined;
       const hasHoldDuration = objective.holdDurationMs !== undefined;
-      if (hasHoldUntil === hasHoldDuration) {
+      if (Number(hasHoldUntil) + Number(hasHoldDuration) + Number(objective.holdUntilVictory === true) !== 1) {
         throw new Error(
-          `[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs exactly one of holdUntil or holdDurationMs`,
+          `[coopDefenseMaps] Hold secondary objective ${mapId}:${id} needs exactly one of holdUntil or holdDurationMs or holdUntilVictory`,
         );
       }
       if (objective.focusUntil !== undefined) {
@@ -1558,6 +1536,9 @@ function normalizeSecondaryObjectiveConfigs(
     } else {
       if (objective.holdUntil !== undefined) {
         throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare holdUntil`);
+      }
+      if (objective.holdUntilVictory !== undefined) {
+        throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare holdUntilVictory`);
       }
       if (objective.holdDurationMs !== undefined) {
         throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${id} must not declare holdDurationMs`);
@@ -1608,6 +1589,9 @@ function normalizeSecondaryObjectiveConfigs(
       ...(objective.holdUntil === undefined
         ? {}
         : { holdUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.holdUntil, 'holdUntil', context) }),
+      ...(objective.holdUntilVictory === undefined
+        ? {}
+        : { holdUntilVictory: objective.holdUntilVictory }),
       ...(objective.holdDurationMs === undefined
         ? {}
         : { holdDurationMs: normalizePositiveMilliseconds(mapId, id, objective.holdDurationMs, 'holdDurationMs') }),
@@ -3789,66 +3773,4 @@ function normalizePersistentSpawnSource(
     throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${spawnId} needs a spawn-point base: ${baseId}`);
   }
   return { type: 'base', baseId };
-}
-
-/** Water is permanent World geometry; invalid authored overlaps are errors, never silently clipped. */
-function normalizeWaterCells(
-  cells: CoopDefenseMapConfig['water'], areas: CoopDefenseMapAuthoringConfig['waterAreas'], cols: number, rows: number,
-  bases: readonly CoopBaseConfig[], walls: readonly CoopDefenseMapRockWallConfig[] | undefined,
-  mission: ResolvedCoopDefenseMapMissionProgressConfig | undefined, tracks: CoopDefenseMapTrackPosition | undefined,
-): CoopDefenseMapConfig['water'] {
-  if (cells === undefined && areas === undefined) return undefined;
-  if (cells !== undefined && !Array.isArray(cells)) throw new Error('[coopDefenseMaps] Water must be an array');
-  if (areas !== undefined && !Array.isArray(areas)) throw new Error('[coopDefenseMaps] Water areas must be an array');
-  const blocked = new Set<string>();
-  for (const base of bases) {
-    const { width, height } = getBaseShapeDimensions(base.shape);
-    const origin = getBaseOriginForArena(base.anchor, width, height, cols, rows);
-    const offsets = base.shape.kind === 'rectangle'
-      ? Array.from({ length: width * height }, (_, i) => ({ gridX: i % width, gridY: Math.floor(i / width) }))
-      : base.shape.cells;
-    for (const cell of offsets) blocked.add((origin.gridX + cell.gridX) + '_' + (origin.gridY + cell.gridY));
-  }
-  for (const wall of walls ?? []) for (let y = wall.gridY; y < wall.gridY + wall.heightCells; y++)
-    for (let x = wall.gridX; x < wall.gridX + wall.widthCells; x++) blocked.add(x + '_' + y);
-  for (const barrier of mission?.barriers ?? []) for (const cell of barrier.cells) blocked.add(cell.gridX + '_' + cell.gridY);
-  for (const checkpoint of [...(mission?.checkpoints ?? []), ...(mission?.startArea ? [mission.startArea] : [])]) {
-    const radius = checkpoint.radiusCells ?? 1;
-    for (let y = Math.max(0, Math.ceil(checkpoint.gridY - radius)); y <= Math.min(rows - 1, Math.floor(checkpoint.gridY + radius)); y++)
-      for (let x = Math.max(0, Math.ceil(checkpoint.gridX - radius)); x <= Math.min(cols - 1, Math.floor(checkpoint.gridX + radius)); x++)
-        if ((x - checkpoint.gridX) ** 2 + (y - checkpoint.gridY) ** 2 <= radius ** 2) blocked.add(x + '_' + y);
-  }
-  const seen = new Set<string>();
-  const result = (cells ?? []).map(cell => {
-    if (!cell || !Number.isInteger(cell.gridX) || !Number.isInteger(cell.gridY)
-      || cell.gridX < 0 || cell.gridY < 0 || cell.gridX >= cols || cell.gridY >= rows)
-      throw new Error('[coopDefenseMaps] Water cell outside arena or non-integer');
-    const key = cell.gridX + '_' + cell.gridY;
-    if (seen.has(key)) throw new Error('[coopDefenseMaps] Duplicate water cell: ' + key);
-    if (blocked.has(key)) throw new Error('[coopDefenseMaps] Water overlaps authored structure: ' + key);
-    if (typeof tracks === 'object' && (cell.gridX === tracks.gridX || cell.gridX === tracks.gridX + 1))
-      throw new Error('[coopDefenseMaps] Water overlaps authored railway: ' + key);
-    seen.add(key);
-    return { gridX: cell.gridX, gridY: cell.gridY };
-  });
-  for (const area of areas ?? []) {
-    if (!area || ![area.gridX, area.gridY, area.widthCells, area.heightCells].every(Number.isSafeInteger)
-      || area.gridX < 0 || area.gridY < 0 || area.widthCells <= 0 || area.heightCells <= 0
-      || area.gridX + area.widthCells > cols || area.gridY + area.heightCells > rows) {
-      throw new Error('[coopDefenseMaps] Invalid water area: expected an in-bounds rectangle with positive integer dimensions');
-    }
-    for (let y = area.gridY; y < area.gridY + area.heightCells; y++) {
-      for (let x = area.gridX; x < area.gridX + area.widthCells; x++) {
-        const key = x + '_' + y;
-        if (blocked.has(key)) throw new Error('[coopDefenseMaps] Water overlaps authored structure: ' + key);
-        if (typeof tracks === 'object' && (x === tracks.gridX || x === tracks.gridX + 1))
-          throw new Error('[coopDefenseMaps] Water overlaps authored railway: ' + key);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        result.push({ gridX: x, gridY: y });
-      }
-    }
-  }
-  // Canonical order makes equivalent area unions independent of rectangle order.
-  return areas === undefined ? result : result.sort((a, b) => a.gridY - b.gridY || a.gridX - b.gridX);
 }

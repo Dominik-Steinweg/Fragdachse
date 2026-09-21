@@ -34,6 +34,13 @@ nur `water`; `waterAreas` wird nicht weitergereicht. Reine Einzelzellenlisten be
 bisherige Reihenfolge. Maßgeblich sind `tests/WaterTerrain.test.ts` und
 `tests/WorldActivityAuthoring.test.ts`.
 
+Wasserfreiräume und Überschneidungen werden zentral durch
+`src/config/coopDefenseWater.ts` geprüft. Map-Normalisierung (einschließlich Editor-Speichern)
+und Arena-Generierung verwenden dieselbe Prüfung. Der Wasserfreiraum gewöhnlicher Basen
+ist unabhängig vom Schutzabstand für Felsen, Bäume und Podeste; die persistente Basis behält
+ihren eigenen Kernfreiraum und die vollständige kreisförmige Reservierung. Maßgeblich sind
+auch `tests/MapEditorFileStore.test.ts` für die Parität von Speichern und Vorschau.
+
 ## Basen und Overlays
 
 Eine Basis ist zunächst World-Geometrie und World-Identität: Position, Form, Faction, Rolle, maximale Struktur, Turrets und Spawn-Zentrum gehören zur World. Startzustand, Spieler-Skalierung, Dormancy und missionsbezogene Pedestals sind Activity-Overlay.

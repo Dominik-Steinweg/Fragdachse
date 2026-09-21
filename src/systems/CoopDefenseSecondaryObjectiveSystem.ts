@@ -127,6 +127,19 @@ export class CoopDefenseSecondaryObjectiveSystem {
     }
   }
 
+  /** Host mission victory, before reward consumers are torn down. */
+  completeVictoryHolds(): void {
+    for (const state of this.objectiveStates) {
+      if (state.state !== 'active' || state.config.type !== 'hold' || !state.config.holdUntilVictory) continue;
+      if (this.getHoldSurvivorCount(state) < this.getRequiredSurvivors(state)) {
+        this.failObjective(state);
+      } else {
+        this.completeObjective(state);
+        this.onHoldCompleted?.(state.config.id);
+      }
+    }
+  }
+
   reset(): void {
     this.elapsedMs = 0;
     this.focusedObjectiveIndex = null;

@@ -449,7 +449,8 @@ describe('Coop defense map progression', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS) {
       for (const objective of map.secondaryObjectives ?? []) {
         if (objective.type !== 'hold') continue;
-        expect(objective.holdUntil, `${map.mapId}:${objective.id} has no holdUntil`).toBeDefined();
+        expect([objective.holdUntil, objective.holdDurationMs, objective.holdUntilVictory]
+          .filter((value) => value !== undefined)).toHaveLength(1);
         expect(objective.focusUntil).toBeUndefined();
         expect(objective.targets.length).toBeGreaterThan(0);
         expect(objective.requiredSurvivors ?? objective.targets.length)

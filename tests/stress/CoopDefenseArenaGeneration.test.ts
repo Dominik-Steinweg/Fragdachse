@@ -225,12 +225,13 @@ describe('Coop defense arena generation', () => {
       )))
         - COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS - 2,
     );
-    const safeMap = { ...map, trackPosition: { kind: 'grid' as const, gridX: safeGridX } };
+    // This fixture relocates tracks independently of the campaign's authored ponds.
+    const safeMap = { ...map, water: [], trackPosition: { kind: 'grid' as const, gridX: safeGridX } };
     const safeLayout = generateArenaWithActiveMetrics(2_003, safeMap);
     expect(safeLayout.tracks[0]?.gridX).toBe(safeGridX);
 
     const overlappingGridX = baseSpecs[0]?.region.minGridX ?? safeGridX;
-    const overlappingMap = { ...map, trackPosition: { kind: 'grid' as const, gridX: overlappingGridX } };
+    const overlappingMap = { ...map, water: [], trackPosition: { kind: 'grid' as const, gridX: overlappingGridX } };
     expect(() => generateArenaWithActiveMetrics(2_004, overlappingMap)).toThrow(/overlaps a base or its clearance/);
   });
 
@@ -238,6 +239,8 @@ describe('Coop defense arena generation', () => {
     const barrierCell = { gridX: 4, gridY: 4 };
     const missionMap = {
       ...map,
+      // The synthetic barrier needs dry ground, independently of campaign water authoring.
+      water: [],
       missionProgress: {
         checkpoints: [{ id: 'entry', gridX: 3, gridY: 4, radiusCells: 0.5, setRespawn: false }],
         mandatoryDefenses: [],

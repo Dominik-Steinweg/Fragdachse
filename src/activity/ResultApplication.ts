@@ -18,6 +18,7 @@ export interface ResultApplicationPort {
   readonly getCurrentActivity: () => ActivityDescriptor | null;
   readonly resolveVictoryRewardIds: (definitionId: string) => readonly PersistentBaseRewardId[];
   readonly grantPersistentBaseRewards: (rewardIds: readonly PersistentBaseRewardId[]) => void;
+  readonly completeVictoryHolds?: () => void;
   readonly applyPersistentBaseOutcome: (
     outcome: PersistentBaseRoundOutcome,
     identity: PersistentBaseTransactionIdentity,
@@ -49,6 +50,7 @@ export class ResultApplication {
 
     const conclusion = getCoopMissionConclusion(completion);
     if (conclusion === 'victory') {
+      this.port.completeVictoryHolds?.();
       this.port.grantPersistentBaseRewards(
         this.port.resolveVictoryRewardIds(completion.definitionId),
       );

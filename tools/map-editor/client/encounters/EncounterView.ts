@@ -7,6 +7,8 @@ import { DEFAULT_SPAWN_FRONT, SPAWN_FRONTS } from '../../../../src/utils/spawnFr
 import { array, clone, object, uniqueId, type JsonObject, type Path } from '../../shared/json';
 import { validateDocument } from '../../shared/validation';
 import { FRONT_LABELS, setGroupSpawn, spawnsAtEdge } from '../../shared/spawns';
+import { persistentSpawnXp } from '../../shared/persistentSpawnXp';
+import { persistentSpawnEditor } from './PersistentSpawnEditor';
 import { button, confirmEdit, element, heading, numberField, selectField, type EditorEnvironment } from '../ui';
 
 export function encounterXp(encounter: JsonObject): { xp: number; direct: number; follow: number; count: number; complete: boolean; dynamic: boolean } {
@@ -24,28 +26,37 @@ export function encounterXp(encounter: JsonObject): { xp: number; direct: number
 
 export class EncounterView {
   selectedId: string | null = null;
+  selectedPersistentId: string | null = null;
   search = '';
   private current: HTMLElement | null = null;
   constructor(private readonly env: EditorEnvironment) {}
   render(): HTMLElement {
     const scrolls = [...(this.current?.querySelectorAll<HTMLElement>('[data-scroll]') ?? [])].map(e => e.scrollTop);
-    const env = this.env, draft = env.session.draft, encounters = array(draft.encounters);
+    const env = this.env, draft = env.session.draft, encounters = array(draft.encounters), persistent = array(draft.persistentSpawns);
     if (!encounters.some(e => e.id === this.selectedId)) this.selectedId = String(encounters[0]?.id ?? '') || null;
+    if (!persistent.some(e => e.id === this.selectedPersistentId)) this.selectedPersistentId = null;
+    if (!this.selectedId && !this.selectedPersistentId) this.selectedPersistentId = String(persistent[0]?.id ?? '') || null;
     const root = element('div', 'encounter-content');
-    root.append(heading('Encounter', 'Dokumentreihenfolge · konfigurierte Mengen · Referenz: 1 Spieler'));
+    root.append(heading('Encounter & permanente Spawns', 'Endliche Encounter in Dokumentreihenfolge · permanente Quellen violett · Referenz: 1 Spieler'));
     const actions = element('div', 'toolbar');
     actions.append(button('+ Encounter', () => {
       const id = uniqueId(encounters, 'encounter');
       env.session.splice(['encounters'], encounters.length, 0, [{ id, start: encounters.length ? { type: 'after-previous' } : { type: 'time', atMs: 0 }, groups: [] }]);
-      this.selectedId = id; env.changed();
-    })); root.append(actions);
+      this.selectedId = id; this.selectedPersistentId = null; env.changed();
+    }), button('+ Permanente Quelle', () => {
+      const id = uniqueId(persistent, 'persistent-spawn');
+      env.session.splice(['persistentSpawns'], persistent.length, 0, [{ id, enemyKind: COOP_DEFENSE_ENEMY_KINDS.find(kind => !getCoopDefenseEnemyConfig(kind).isBoss)!, countPerTick: 1, intervalMs: 10000, source: { type: 'map' } }]);
+      this.selectedPersistentId = id; env.changed();
+    }, 'persistent-action'));
+    const planning = numberField(env, 'Geplante Rundenzeit (s)', ['balanceReferenceDurationSec'], { min: 1 });
+    planning.classList.add('planning-duration'); actions.append(planning); root.append(actions);
     const table = element('table', 'encounter-table');
     const thead = element('thead'); const head = element('tr');
-    for (const label of ['Encounter', 'Startbedingung', 'Pause danach (s)', 'Gegner', 'Feste XP', 'Aktionen']) head.append(element('th', '', label));
+    for (const label of ['Encounter / Quelle', 'Startbedingung', 'Pause / Intervall (s)', 'Gegner', 'XP', 'Aktionen']) head.append(element('th', '', label));
     thead.append(head); table.append(thead); const body = element('tbody');
     encounters.forEach((encounter, index) => {
-      const row = element('tr', encounter.id === this.selectedId ? 'selected' : ''); const xp = encounterXp(encounter);
-      const id = element('td'); id.append(button(`${index + 1}. ${encounter.id}`, () => { this.selectedId = String(encounter.id); env.changed(); }, 'text-button')); row.append(id);
+      const row = element('tr', !this.selectedPersistentId && encounter.id === this.selectedId ? 'selected' : ''); const xp = encounterXp(encounter);
+      const id = element('td'); id.append(button(`${index + 1}. ${encounter.id}`, () => { this.selectedId = String(encounter.id); this.selectedPersistentId = null; env.changed(); }, 'text-button')); row.append(id);
       const start = element('td'); start.append(this.triggerEditor(index, object(encounter.start))); row.append(start);
       const pause = element('td'); const effective = index < encounters.length - 1 && (draft.objective === 'repel-assault' || object(encounters[index + 1]?.start).type === 'after-previous');
       pause.append(numberField(env, 'Pause', ['encounters', index, 'restAfterMs'], { fallback: 0, min: 0, step: 0.001, scale: 1000, optional: true, disabled: !effective }));
@@ -58,14 +69,30 @@ export class EncounterView {
           const candidate = [...encounters]; candidate.splice(index + 1, 0, copy);
           const changes = this.previousChanges(encounters, candidate);
           if (changes && !await confirmEdit(changes + '\n\nKopie an dieser Position einfügen?')) return;
-          env.session.splice(['encounters'], index + 1, 0, [copy]); this.selectedId = String(copy.id); env.changed();
+          env.session.splice(['encounters'], index + 1, 0, [copy]); this.selectedId = String(copy.id); this.selectedPersistentId = null; env.changed();
         }),
         button('Löschen', () => this.remove(index), 'danger')); row.append(ops); body.append(row);
+    });
+    persistent.forEach((spawn, index) => {
+      const row = element('tr', `persistent-row${spawn.id === this.selectedPersistentId ? ' selected' : ''}`);
+      const xp = persistentSpawnXp(spawn, draft.balanceReferenceDurationSec), id = element('td');
+      id.append(button(`∞ ${spawn.id}`, () => { this.selectedPersistentId = String(spawn.id); env.changed(); }, 'text-button'), element('small', 'persistent-label', `Permanent · ${getEnemyName(String(spawn.enemyKind), 'de')}`));
+      row.append(id, element('td', '', `Ab ${Number(spawn.startAtMs ?? 0) / 1000} s`), element('td', '', `Alle ${Number(spawn.intervalMs) / 1000} s · ${spawn.countPerTick} Gegner`),
+        element('td', 'numeric', `${xp.count} geplant`), element('td', 'numeric', `${xp.xp} geplant${xp.complete ? '' : ' (unvollständig)'}${xp.dynamic ? ' + dynamisch' : ''}`));
+      const ops = element('td', 'row-actions');
+      ops.append(button('Kopie', () => {
+        const copy = clone(spawn); copy.id = uniqueId(persistent, String(spawn.id));
+        env.session.splice(['persistentSpawns'], index + 1, 0, [copy]); this.selectedPersistentId = String(copy.id); env.changed();
+      }), button('Löschen', () => { env.session.splice(['persistentSpawns'], index, 1); env.changed(); }, 'danger'));
+      row.append(ops); body.append(row);
     }); table.append(body);
     const overview = element('div', 'encounter-overview'); overview.dataset.scroll = ''; overview.append(table); root.append(overview);
     const index = encounters.findIndex(e => e.id === this.selectedId);
     const detail = element('div', 'encounter-detail');
-    if (index >= 0) detail.append(this.enemyList(index, encounters[index]));
+    const persistentIndex = persistent.findIndex(e => e.id === this.selectedPersistentId);
+    if (persistentIndex >= 0) detail.append(persistentSpawnEditor(env, persistentIndex, persistent[persistentIndex]));
+    else if (index >= 0) detail.append(this.enemyList(index, encounters[index]));
+    else detail.append(heading('Noch keine Encounter oder permanenten Quellen', 'Über die Schaltflächen oben neue Einträge anlegen.'));
     detail.append(this.summary(encounters));
     for (const card of detail.querySelectorAll<HTMLElement>('.card')) card.dataset.scroll = '';
     root.append(detail); this.current = root;
@@ -181,10 +208,16 @@ export class EncounterView {
     const { env } = this, draft = env.session.draft, box = element('section', 'card');
     box.append(heading('XP-Potenzial & Boss', '1 Spieler · keine garantierte individuelle Ausbeute'));
     const values = encounters.map(encounterXp), sum = values.reduce((total, e) => total + e.xp, 0);
-    box.append(element('p', 'metric', `Encounter: ${sum} XP${values.every(e => e.complete) ? '' : ' · unvollständig'}`));
-    const selected = encounters.find(e => e.id === this.selectedId);
-    if (selected) { const xp = encounterXp(selected); box.append(element('p', '', `Auswahl: ${xp.xp} XP · ${xp.direct} direkt + ${xp.follow} feste Folge-XP`)); }
-    const boss = object(draft.boss);
+    const persistent = array(draft.persistentSpawns), estimates = persistent.map(spawn => persistentSpawnXp(spawn, draft.balanceReferenceDurationSec));
+    const persistentXp = estimates.reduce((total, e) => total + e.xp, 0), boss = object(draft.boss);
+    const bossLife = draft.boss ? resolveEnemyLifecycleTotals(String(boss.enemyKind)) : null;
+    const complete = [...values, ...estimates].every(e => e.complete) && (!bossLife || bossLife.complete);
+    box.append(element('p', 'metric', `Gegner gesamt: ${sum + persistentXp + (bossLife?.xp ?? 0)} XP${complete ? '' : ' · unvollständig'}`),
+      element('p', '', `Encounter: ${sum} feste XP`), element('p', 'persistent-metric', `Permanente Quellen: ${persistentXp} Plan-XP · ${estimates.reduce((total, e) => total + e.count, 0)} Gegner`),
+      element('p', 'muted', `Planung bis ${draft.balanceReferenceDurationSec} s: erster Spawn zur Startzeit, danach im Intervall; Spawns genau am Planende zählen nicht. Alle Quellen bleiben aktiv, alle Gegner werden besiegt. Dynamische Beschwörungen sind nicht eingerechnet.`),
+      element('p', 'muted', `Die geplante Rundenzeit beeinflusst die XP-/Drop-Referenz, nicht das Missionsende.${draft.objective === 'survive' ? ` Überlebensziel: ${draft.surviveDurationSec} s.` : ''}`));
+    const selected = this.selectedPersistentId ? persistent.find(e => e.id === this.selectedPersistentId) : encounters.find(e => e.id === this.selectedId);
+    if (selected) { const xp = this.selectedPersistentId ? persistentSpawnXp(selected, draft.balanceReferenceDurationSec) : encounterXp(selected); box.append(element('p', '', `Auswahl: ${xp.xp} XP · ${xp.direct} direkt + ${xp.follow} feste Folge-XP`)); }
     if (draft.boss) {
       const life = resolveEnemyLifecycleTotals(String(boss.enemyKind)); box.append(element('p', '', `Boss separat: ${life.xp} XP${life.complete ? '' : ' · unvollständig'}`));
       box.append(selectField('Bossart', String(boss.enemyKind), COOP_DEFENSE_ENEMY_KINDS.filter(k => getCoopDefenseEnemyConfig(k).isBoss).map(value => ({ value, label: getEnemyName(value, 'de') })), value => { env.session.change(['boss', 'enemyKind'], value); env.changed(); }),
@@ -193,9 +226,9 @@ export class EncounterView {
     } else box.append(button('+ Boss', () => { env.session.change(['boss'], { enemyKind: COOP_DEFENSE_ENEMY_KINDS.find(k => getCoopDefenseEnemyConfig(k).isBoss)!, spawnAtMs: 0 }); env.changed(); }, '', draft.objective !== 'defeat-boss'));
     const rewards = array(draft.secondaryObjectives).reduce((sum, o) => sum + Number(object(o.rewards).xpPerTarget ?? 0) * Number(o.targetGoal ?? array(o.targets).length), 0);
     box.append(element('p', '', `Weitere feste XP: ${rewards} · Nebenzielbelohnungen, bedingt erreichbar`));
-    const dynamic = [...new Set(encounters.flatMap(e => array(e.groups)).filter(g => resolveEnemyLifecycleTotals(String(g.enemyKind)).dynamic).map(g => String(g.enemyKind)))];
+    const dynamic = [...new Set([...encounters.flatMap(e => array(e.groups)), ...persistent].filter(g => resolveEnemyLifecycleTotals(String(g.enemyKind)).dynamic).map(g => String(g.enemyKind)))];
     if (draft.boss && resolveEnemyLifecycleTotals(String(boss.enemyKind)).dynamic) dynamic.push(`Boss ${boss.enemyKind}`);
-    box.append(element('p', 'muted', `Dynamische Zusatz-XP: ${dynamic.length ? dynamic.join(', ') : 'keine Beschwörer in Encountern/Boss'}; ${array(draft.persistentSpawns).length} permanente Quellen. Keine exakte Hochrechnung.`));
+    box.append(element('p', 'muted', `Dynamische Zusatz-XP: ${dynamic.length ? dynamic.join(', ') : 'keine Beschwörer konfiguriert'}.`));
     return box;
   }
 }

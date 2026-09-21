@@ -11,6 +11,28 @@ import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../src/conf
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 
+describe('holds until main mission victory', () => {
+  it.each([false, true])('grants once only if the target survives (destroyed: %s)', (destroyed) => {
+    const map = normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
+      id: 'protect-until-victory', type: 'hold', start: { type: 'time', atMs: 0 },
+      holdUntilVictory: true, targets: ['friendly-outpost'],
+    }]));
+    const completed: string[] = [];
+    const system = new CoopDefenseSecondaryObjectiveSystem(resolveCoopDefenseMapSecondaryObjectives(map), {
+      onHoldCompleted: (id) => completed.push(id),
+    });
+    system.hostUpdate(0, false);
+    expect(system.getObjectiveState('protect-until-victory')).toBe('active');
+    system.hostUpdate(1_000_000, false);
+    expect(completed).toEqual([]);
+    if (destroyed) system.reportTargetDestroyed('protect-until-victory', 'friendly-outpost');
+    system.completeVictoryHolds();
+    system.completeVictoryHolds();
+    expect(completed).toEqual(destroyed ? [] : ['protect-until-victory']);
+    expect(system.getObjectiveState('protect-until-victory')).toBe(destroyed ? 'failed' : 'completed');
+  });
+});
+
 /** Eine Hauptbasis plus zwei dormante Missionsstrukturen; jede muss von genau einem Objective referenziert werden. */
 const TEST_BASES: CoopDefenseMapConfig['bases'] = [
   {

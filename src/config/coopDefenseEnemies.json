@@ -351,7 +351,7 @@
       "id": "pyro-badger",
       "pawCount": 2,
       "maxHp": 500,
-      "xp": 110,
+      "xp": 50,
       "size": 30,
       "moveSpeed": 175,
       "knockbackFactor": 0.6,

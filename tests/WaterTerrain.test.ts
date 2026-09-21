@@ -11,6 +11,8 @@ import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
 import type { CoopDefenseMapAuthoringConfig } from '../src/config/coopDefenseMaps';
+import { isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../src/config/persistentBase';
 
 const metrics = resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', 400, 80));
 const cell = { gridX: 8, gridY: 8 };
@@ -74,6 +76,57 @@ describe('Water terrain contracts', () => {
     expect(normalizeCoopDefenseMapConfig({ ...areaMap,
       waterAreas: [{ gridX: 59, gridY: 39, widthCells: 1, heightCells: 1 }],
     }).water).toEqual([{ gridX: 59, gridY: 39 }]);
+  });
+
+  it.each(['main', 'outpost', 'spawn-point'] as const)('keeps one dry cell around a %s in authoring and generation, including corners and courtyards', role => {
+    const raw: CoopDefenseMapAuthoringConfig = {
+      ...areaMap, trackMode: 'none', rockFillRatio: 0, treeCount: 0,
+      bases: [{ id: 'base', role, faction: role === 'spawn-point' ? 'hostile' : 'friendly', hpMax: 100,
+        anchor: { kind: 'grid', gridX: 30, gridY: 20 },
+        shape: { kind: 'cells', cells: Array.from({ length: 9 }, (_, i) => ({ gridX: i % 3, gridY: Math.floor(i / 3) })).filter(c => c.gridX !== 1 || c.gridY !== 1) },
+        ...(role === 'spawn-point' ? { spawnCenter: { gridX: 1, gridY: 1 } } : {}),
+      }],
+    };
+    const map = normalizeCoopDefenseMapConfig(raw);
+    const input = resolveArenaGenerationInput('coop_defense', resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells)));
+    const ring = (minX: number, maxX: number, minY: number, maxY: number) => [
+      [minX, minY], [31, minY], [maxX, minY], [minX, 21], [maxX, 21], [minX, maxY], [31, maxY], [maxX, maxY],
+    ].map(([gridX, gridY]) => ({ gridX, gridY }));
+    const allowed = ring(28, 34, 18, 24);
+    expect(normalizeCoopDefenseMapConfig({ ...raw, water: allowed }).water).toEqual(allowed);
+    expect(ArenaGenerator.generate(183, input, { ...map, water: allowed }).water).toEqual(allowed);
+    for (const cell of [...ring(29, 33, 19, 23), { gridX: 31, gridY: 21 }]) {
+      expect(() => normalizeCoopDefenseMapConfig({ ...raw, water: [cell] })).toThrow(/base clearance/);
+      expect(() => normalizeCoopDefenseMapConfig({ ...raw, waterAreas: [{ ...cell, widthCells: 1, heightCells: 1 }] })).toThrow(/base clearance/);
+      expect(() => ArenaGenerator.generate(183, input, { ...map, water: [cell] })).toThrow(/base clearance/);
+    }
+  });
+
+  it('preserves the persistent core clearance and circular reservation in authoring and generation', () => {
+    const raw: CoopDefenseMapAuthoringConfig = {
+      ...areaMap, trackMode: 'none', rockFillRatio: 0, treeCount: 0,
+      persistentBase: { baseId: 'home', anchor: { gridX: 30, gridY: 20 } },
+    };
+    const map = normalizeCoopDefenseMapConfig(raw);
+    const mapMetrics = resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells));
+    const input = resolveArenaGenerationInput('coop_defense', mapMetrics);
+    const bases = resolveCoopDefenseBases(map, mapMetrics);
+    const radius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
+    const diagonal = Math.floor(radius / Math.SQRT2);
+    const allowed = [];
+    for (const [dx, dy] of [[0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius],
+      [radius + 1, 0], [0, -radius - 1], [diagonal, diagonal], [diagonal + 1, diagonal + 1]]) {
+      const cell = { gridX: 30 + dx, gridY: 20 + dy };
+      const protectedCell = isCoopDefenseBaseObstacleClearanceCell(cell.gridX, cell.gridY, bases)
+        || isPersistentBaseReservationCell(cell.gridX, cell.gridY, bases);
+      if (protectedCell) {
+        expect(() => normalizeCoopDefenseMapConfig({ ...raw, waterAreas: [{ ...cell, widthCells: 1, heightCells: 1 }] })).toThrow(/Water overlaps/);
+        expect(() => ArenaGenerator.generate(183, input, { ...map, water: [cell] })).toThrow(/Water overlaps/);
+      } else allowed.push(cell);
+    }
+    expect(allowed.length).toBeGreaterThan(0);
+    expect(normalizeCoopDefenseMapConfig({ ...raw, water: allowed }).water).toEqual(allowed);
+    expect(ArenaGenerator.generate(183, input, { ...map, water: allowed }).water).toEqual(allowed);
   });
 
   const readMask = (mask: ReturnType<WaterSurfaceModel['bake']>, x: number, y: number, channel: number): number => {
