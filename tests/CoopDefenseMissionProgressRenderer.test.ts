@@ -200,7 +200,7 @@ describe('CoopDefenseMissionProgressRenderer', () => {
     expect(old.quads[0].uniforms().uActivationAge).toBe(-1);
   });
 
-  it('plays completion from host time without replaying on repeated snapshots, late join or visibility changes', () => {
+  it('plays completion once without replaying on repeated snapshots, late join or visibility changes', () => {
     const { renderer, quads } = setup();
     const config = makeConfig();
     const state = makeState();
@@ -212,8 +212,6 @@ describe('CoopDefenseMissionProgressRenderer', () => {
     state.missionRevision++;
     state.completedCheckpoints = [{ checkpointId: 'entry', completedAtRoundMs: completedAt }];
     state.nextCheckpointId = 'middle';
-    renderer.sync(config, state, completedAt - 1, true);
-    expect(quads[0].uniforms().uCompletionAge).toBe(-1);
     renderer.sync(config, state, completedAt, true);
     expect(quads[0].uniforms()).toMatchObject({ uCompletionAge: 0, uActivationAge: -1 });
     renderer.sync(config, { ...state }, completedAt + CHECKPOINT_COMPLETION_MS * 0.4, true);
@@ -234,6 +232,27 @@ describe('CoopDefenseMissionProgressRenderer', () => {
     const old = setup();
     old.renderer.sync(config, state, completedAt + CHECKPOINT_COMPLETION_MS * 3, true);
     expect(old.quads[0].uniforms().uCompletionAge).toBe(-1);
+  });
+
+  it.each([30_000, 90_000])('plays an observed completion when presentation time is %i and simulation time differs', (presentationTime) => {
+    const { renderer, quads } = setup();
+    const config = makeConfig();
+    const state = makeState();
+    state.activatedCheckpoints = [{ checkpointId: 'entry', activatedAtRoundMs: 100 }];
+    state.nextCheckpointId = null;
+    renderer.sync(config, state, presentationTime - 100, true);
+    state.completedCheckpoints = [{ checkpointId: 'entry', completedAtRoundMs: 60_000 }];
+    state.missionRevision++;
+    renderer.sync(config, state, presentationTime, true);
+    expect(quads[0].uniforms().uCompletionAge).toBe(0);
+    // Both identical snapshots and unrelated semantic updates retain the original FX start.
+    renderer.sync(config, state, presentationTime + CHECKPOINT_COMPLETION_MS * 0.25, true);
+    expect(quads[0].uniforms().uCompletionAge).toBeCloseTo(0.25);
+    state.missionRevision++;
+    renderer.sync(config, state, presentationTime + CHECKPOINT_COMPLETION_MS * 0.5, true);
+    expect(quads[0].uniforms().uCompletionAge).toBeCloseTo(0.5);
+    renderer.sync(config, state, presentationTime + CHECKPOINT_COMPLETION_MS, true);
+    expect(quads[0].uniforms().uCompletionAge).toBe(-1);
   });
 
   it('gives completion priority over acquisition when both occur together and resets feedback with the round', () => {

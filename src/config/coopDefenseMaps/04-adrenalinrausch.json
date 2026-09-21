@@ -5,7 +5,10 @@
   "timeOfDay": "06:00",
   "tutorialPersistent": true,
   "rockFillRatio": 0.3,
-  "trackPosition": "center",
+  "trackPosition": {
+    "kind": "grid",
+    "gridX": 63
+  },
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
@@ -18,7 +21,7 @@
     {
       "id": "coop-base-middle",
       "hpMax": 1050,
-      "anchor": {"kind": "center-offset", "dxCells": -4, "dyCells": 1},
+      "anchor": {"kind": "center-offset", "dxCells": -2, "dyCells": 1},
       "shape": {
         "kind": "cells",
         "cells": [
@@ -72,7 +75,7 @@
   "persistentBase": {
     "baseId": "coop-base-rear",
     "anchor": {
-      "gridX": 69,
+      "gridX": 77,
       "gridY": 19
     }
   },
@@ -135,5 +138,140 @@
         {"enemyKind": "rabid-badger", "count": 10, "delayMs": 1200, "front": "west"}
       ]
     }   
-  ]
+  ],
+  "waterAreas": [
+    {
+      "gridX": 28,
+      "gridY": 25,
+      "widthCells": 7,
+      "heightCells": 7
+    }
+  ],
+  "water": [
+    {
+      "gridX": 27,
+      "gridY": 26
+    },
+    {
+      "gridX": 27,
+      "gridY": 27
+    },
+    {
+      "gridX": 27,
+      "gridY": 28
+    },
+    {
+      "gridX": 27,
+      "gridY": 29
+    },
+    {
+      "gridX": 27,
+      "gridY": 30
+    },
+    {
+      "gridX": 26,
+      "gridY": 28
+    },
+    {
+      "gridX": 26,
+      "gridY": 29
+    },
+    {
+      "gridX": 29,
+      "gridY": 32
+    },
+    {
+      "gridX": 30,
+      "gridY": 32
+    },
+    {
+      "gridX": 31,
+      "gridY": 32
+    },
+    {
+      "gridX": 32,
+      "gridY": 32
+    },
+    {
+      "gridX": 33,
+      "gridY": 32
+    },
+    {
+      "gridX": 34,
+      "gridY": 32
+    },
+    {
+      "gridX": 35,
+      "gridY": 32
+    },
+    {
+      "gridX": 35,
+      "gridY": 31
+    },
+    {
+      "gridX": 35,
+      "gridY": 30
+    },
+    {
+      "gridX": 35,
+      "gridY": 29
+    },
+    {
+      "gridX": 35,
+      "gridY": 28
+    },
+    {
+      "gridX": 35,
+      "gridY": 27
+    },
+    {
+      "gridX": 30,
+      "gridY": 24
+    },
+    {
+      "gridX": 31,
+      "gridY": 24
+    },
+    {
+      "gridX": 32,
+      "gridY": 24
+    },
+    {
+      "gridX": 33,
+      "gridY": 24
+    },
+    {
+      "gridX": 31,
+      "gridY": 23
+    },
+    {
+      "gridX": 30,
+      "gridY": 23
+    },
+    {
+      "gridX": 29,
+      "gridY": 24
+    },
+    {
+      "gridX": 36,
+      "gridY": 29
+    },
+    {
+      "gridX": 36,
+      "gridY": 30
+    },
+    {
+      "gridX": 33,
+      "gridY": 33
+    },
+    {
+      "gridX": 34,
+      "gridY": 33
+    },
+    {
+      "gridX": 32,
+      "gridY": 33
+    }
+  ],
+  "treeCount": 9
 }

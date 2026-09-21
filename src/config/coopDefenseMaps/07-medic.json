@@ -168,7 +168,7 @@
           "delayMs": 0,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 57,
+            "gridX": 42,
             "gridY": 44,
             "widthCells": 5,
             "heightCells": 3
@@ -179,7 +179,7 @@
           "count": 22,
           "spawnStaggerMs": 160,
           "spawnArea": {
-            "gridX": 57,
+            "gridX": 42,
             "gridY": 44,
             "widthCells": 5,
             "heightCells": 3
@@ -191,7 +191,7 @@
           "delayMs": 1200,
           "spawnStaggerMs": 160,
           "spawnArea": {
-            "gridX": 57,
+            "gridX": 42,
             "gridY": 44,
             "widthCells": 5,
             "heightCells": 3
@@ -212,7 +212,7 @@
           "delayMs": 0,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 122,
+            "gridX": 129,
             "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
@@ -223,7 +223,7 @@
           "count": 32,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 122,
+            "gridX": 129,
             "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
@@ -235,7 +235,7 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 122,
+            "gridX": 129,
             "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
@@ -246,7 +246,7 @@
           "count": 1,
           "spawnStaggerMs": 1200,
           "spawnArea": {
-            "gridX": 122,
+            "gridX": 129,
             "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
@@ -266,7 +266,7 @@
           "count": 1,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 122,
+            "gridX": 129,
             "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
@@ -278,7 +278,7 @@
           "delayMs": 1200,          
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 122,
+            "gridX": 129,
             "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
@@ -290,7 +290,7 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 122,
+            "gridX": 129,
             "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
@@ -301,7 +301,7 @@
           "count": 2,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 122,
+            "gridX": 129,
             "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
@@ -322,7 +322,7 @@
           "delayMs": 0,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 187,
+            "gridX": 193,
             "gridY": 44,
             "widthCells": 5,
             "heightCells": 3
@@ -333,7 +333,7 @@
           "count": 76,
           "spawnStaggerMs": 560,
           "spawnArea": {
-            "gridX": 187,
+            "gridX": 193,
             "gridY": 44,
             "widthCells": 5,
             "heightCells": 3
@@ -353,7 +353,7 @@
           "count": 1,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 187,
+            "gridX": 193,
             "gridY": 44,
             "widthCells": 5,
             "heightCells": 3
@@ -364,7 +364,7 @@
           "count": 8,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 187,
+            "gridX": 193,
             "gridY": 44,
             "widthCells": 5,
             "heightCells": 3
@@ -385,8 +385,8 @@
           "delayMs": 0,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -397,8 +397,8 @@
           "delayMs": 200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -409,8 +409,8 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -421,8 +421,8 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -432,8 +432,8 @@
           "count": 1,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -452,8 +452,8 @@
           "count": 1,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -463,8 +463,8 @@
           "count": 48,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -475,8 +475,8 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -496,8 +496,8 @@
           "delayMs": 1200,
           "spawnStaggerMs": 600,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -507,8 +507,8 @@
           "count": 48,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -519,8 +519,8 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -531,8 +531,8 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -542,8 +542,8 @@
           "count": 2,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 252,
-            "gridY": 6,
+            "gridX": 241,
+            "gridY": 7,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -606,7 +606,7 @@
         "id": "medic-1-approach",
         "radiusCells": 3.5,
         "points": [
-          { "gridX": 59, "gridY": 45 },
+          { "gridX": 44, "gridY": 45 },
           { "gridX": 59, "gridY": 17 }
         ]
       },
@@ -622,7 +622,7 @@
         "id": "medic-2-approach",
         "radiusCells": 3.5,
         "points": [
-          { "gridX": 124, "gridY": 8 },
+          { "gridX": 129, "gridY": 8 },
           { "gridX": 124, "gridY": 38 }
         ]
       },
@@ -638,7 +638,7 @@
         "id": "medic-3-approach",
         "radiusCells": 3.5,
         "points": [
-          { "gridX": 189, "gridY": 45 },
+          { "gridX": 195, "gridY": 45 },
           { "gridX": 189, "gridY": 15 }
         ]
       },
@@ -654,8 +654,8 @@
         "id": "medic-4-approach",
         "radiusCells": 3.5,
         "points": [
-          { "gridX": 254, "gridY": 7 },
-          { "gridX": 254, "gridY": 35 }
+          { "gridX": 244, "gridY": 9 },
+          { "gridX": 253, "gridY": 34 }
         ]
       },
       {
@@ -670,32 +670,32 @@
         "id": "medic-1-staging",
         "radiusCells": 4,
         "points": [
-          { "gridX": 57, "gridY": 45 },
-          { "gridX": 61, "gridY": 45 }
+          { "gridX": 42, "gridY": 45 },
+          { "gridX": 46, "gridY": 45 }
         ]
       },
       {
         "id": "medic-2-staging",
         "radiusCells": 4,
         "points": [
-          { "gridX": 122, "gridY": 8 },
-          { "gridX": 126, "gridY": 8 }
+          { "gridX": 129, "gridY": 8 },
+          { "gridX": 133, "gridY": 8 }
         ]
       },
       {
         "id": "medic-3-staging",
         "radiusCells": 4,
         "points": [
-          { "gridX": 187, "gridY": 45 },
-          { "gridX": 191, "gridY": 45 }
+          { "gridX": 193, "gridY": 45 },
+          { "gridX": 197, "gridY": 45 }
         ]
       },
       {
         "id": "medic-4-staging",
         "radiusCells": 4,
         "points": [
-          { "gridX": 252, "gridY": 7 },
-          { "gridX": 256, "gridY": 7 }
+          { "gridX": 240, "gridY": 9 },
+          { "gridX": 244, "gridY": 9 }
         ]
       },
       {
@@ -730,7 +730,7 @@
       {
         "id": "advance-1",
         "gridX": 59,
-        "gridY": 17,
+        "gridY": 15,
         "radiusCells": 5,
         "setRespawn": false,
         "completeOn": {
@@ -839,157 +839,1021 @@
     ]
   },
   "waterAreas": [
-    {"gridX": 25, "gridY": 0, "widthCells": 264, "heightCells": 2},
-    {"gridX": 26, "gridY": 2, "widthCells": 264, "heightCells": 1},
-    {"gridX": 26, "gridY": 3, "widthCells": 90, "heightCells": 1},
-    {"gridX": 131, "gridY": 3, "widthCells": 32, "heightCells": 1},
-    {"gridX": 176, "gridY": 3, "widthCells": 75, "heightCells": 1},
-    {"gridX": 263, "gridY": 3, "widthCells": 27, "heightCells": 1},
-    {"gridX": 26, "gridY": 4, "widthCells": 83, "heightCells": 1},
-    {"gridX": 136, "gridY": 4, "widthCells": 25, "heightCells": 2},
-    {"gridX": 184, "gridY": 4, "widthCells": 37, "heightCells": 1},
-    {"gridX": 229, "gridY": 4, "widthCells": 15, "heightCells": 1},
-    {"gridX": 265, "gridY": 4, "widthCells": 25, "heightCells": 2},
-    {"gridX": 27, "gridY": 5, "widthCells": 42, "heightCells": 2},
-    {"gridX": 70, "gridY": 5, "widthCells": 25, "heightCells": 1},
-    {"gridX": 196, "gridY": 5, "widthCells": 25, "heightCells": 1},
-    {"gridX": 71, "gridY": 6, "widthCells": 23, "heightCells": 1},
-    {"gridX": 136, "gridY": 6, "widthCells": 23, "heightCells": 2},
-    {"gridX": 197, "gridY": 6, "widthCells": 23, "heightCells": 2},
-    {"gridX": 267, "gridY": 6, "widthCells": 23, "heightCells": 2},
-    {"gridX": 27, "gridY": 7, "widthCells": 12, "heightCells": 5},
-    {"gridX": 72, "gridY": 7, "widthCells": 23, "heightCells": 1},
-    {"gridX": 73, "gridY": 8, "widthCells": 21, "heightCells": 1},
-    {"gridX": 136, "gridY": 8, "widthCells": 21, "heightCells": 2},
-    {"gridX": 198, "gridY": 8, "widthCells": 21, "heightCells": 1},
-    {"gridX": 269, "gridY": 8, "widthCells": 21, "heightCells": 3},
-    {"gridX": 74, "gridY": 9, "widthCells": 21, "heightCells": 2},
-    {"gridX": 199, "gridY": 9, "widthCells": 21, "heightCells": 2},
-    {"gridX": 135, "gridY": 10, "widthCells": 21, "heightCells": 1},
-    {"gridX": 75, "gridY": 11, "widthCells": 19, "heightCells": 4},
-    {"gridX": 136, "gridY": 11, "widthCells": 19, "heightCells": 1},
-    {"gridX": 200, "gridY": 11, "widthCells": 19, "heightCells": 1},
-    {"gridX": 270, "gridY": 11, "widthCells": 19, "heightCells": 3},
-    {"gridX": 26, "gridY": 12, "widthCells": 12, "heightCells": 3},
-    {"gridX": 135, "gridY": 12, "widthCells": 19, "heightCells": 2},
-    {"gridX": 201, "gridY": 12, "widthCells": 19, "heightCells": 1},
-    {"gridX": 134, "gridY": 14, "widthCells": 19, "heightCells": 15},
-    {"gridX": 269, "gridY": 14, "widthCells": 19, "heightCells": 6},
-    {"gridX": 25, "gridY": 15, "widthCells": 12, "heightCells": 2},
-    {"gridX": 24, "gridY": 17, "widthCells": 12, "heightCells": 3},
-    {"gridX": 133, "gridY": 17, "widthCells": 1, "heightCells": 10},
-    {"gridX": 153, "gridY": 17, "widthCells": 1, "heightCells": 19},
-    {"gridX": 267, "gridY": 17, "widthCells": 2, "heightCells": 16},
-    {"gridX": 203, "gridY": 18, "widthCells": 21, "heightCells": 14},
-    {"gridX": 132, "gridY": 19, "widthCells": 1, "heightCells": 4},
-    {"gridX": 154, "gridY": 19, "widthCells": 1, "heightCells": 17},
-    {"gridX": 202, "gridY": 19, "widthCells": 1, "heightCells": 1},
-    {"gridX": 224, "gridY": 19, "widthCells": 1, "heightCells": 11},
-    {"gridX": 265, "gridY": 19, "widthCells": 2, "heightCells": 14},
-    {"gridX": 23, "gridY": 20, "widthCells": 12, "heightCells": 8},
-    {"gridX": 70, "gridY": 20, "widthCells": 23, "heightCells": 3},
-    {"gridX": 225, "gridY": 20, "widthCells": 1, "heightCells": 10},
-    {"gridX": 264, "gridY": 20, "widthCells": 1, "heightCells": 13},
-    {"gridX": 269, "gridY": 20, "widthCells": 18, "heightCells": 10},
-    {"gridX": 69, "gridY": 21, "widthCells": 1, "heightCells": 13},
-    {"gridX": 93, "gridY": 21, "widthCells": 1, "heightCells": 1},
-    {"gridX": 155, "gridY": 21, "widthCells": 2, "heightCells": 15},
-    {"gridX": 202, "gridY": 21, "widthCells": 1, "heightCells": 35},
-    {"gridX": 226, "gridY": 21, "widthCells": 1, "heightCells": 7},
-    {"gridX": 263, "gridY": 21, "widthCells": 1, "heightCells": 12},
-    {"gridX": 287, "gridY": 21, "widthCells": 1, "heightCells": 1},
-    {"gridX": 68, "gridY": 22, "widthCells": 1, "heightCells": 12},
-    {"gridX": 262, "gridY": 22, "widthCells": 1, "heightCells": 10},
-    {"gridX": 67, "gridY": 23, "widthCells": 1, "heightCells": 9},
-    {"gridX": 70, "gridY": 23, "widthCells": 22, "heightCells": 7},
-    {"gridX": 157, "gridY": 23, "widthCells": 1, "heightCells": 13},
-    {"gridX": 66, "gridY": 24, "widthCells": 1, "heightCells": 8},
-    {"gridX": 92, "gridY": 24, "widthCells": 1, "heightCells": 2},
-    {"gridX": 132, "gridY": 24, "widthCells": 1, "heightCells": 1},
-    {"gridX": 158, "gridY": 24, "widthCells": 1, "heightCells": 12},
-    {"gridX": 201, "gridY": 24, "widthCells": 1, "heightCells": 32},
-    {"gridX": 227, "gridY": 24, "widthCells": 1, "heightCells": 2},
-    {"gridX": 261, "gridY": 24, "widthCells": 1, "heightCells": 7},
-    {"gridX": 287, "gridY": 24, "widthCells": 1, "heightCells": 1},
-    {"gridX": 159, "gridY": 25, "widthCells": 1, "heightCells": 11},
-    {"gridX": 260, "gridY": 25, "widthCells": 1, "heightCells": 5},
-    {"gridX": 65, "gridY": 26, "widthCells": 1, "heightCells": 4},
-    {"gridX": 200, "gridY": 26, "widthCells": 1, "heightCells": 30},
-    {"gridX": 160, "gridY": 27, "widthCells": 1, "heightCells": 7},
-    {"gridX": 199, "gridY": 28, "widthCells": 1, "heightCells": 14},
-    {"gridX": 135, "gridY": 29, "widthCells": 18, "heightCells": 1},
-    {"gridX": 161, "gridY": 29, "widthCells": 1, "heightCells": 1},
-    {"gridX": 70, "gridY": 30, "widthCells": 21, "heightCells": 6},
-    {"gridX": 136, "gridY": 30, "widthCells": 17, "heightCells": 1},
-    {"gridX": 269, "gridY": 30, "widthCells": 17, "heightCells": 3},
-    {"gridX": 137, "gridY": 31, "widthCells": 16, "heightCells": 1},
-    {"gridX": 161, "gridY": 31, "widthCells": 1, "heightCells": 1},
-    {"gridX": 286, "gridY": 31, "widthCells": 1, "heightCells": 1},
-    {"gridX": 138, "gridY": 32, "widthCells": 15, "heightCells": 2},
-    {"gridX": 203, "gridY": 32, "widthCells": 19, "heightCells": 2},
-    {"gridX": 26, "gridY": 33, "widthCells": 12, "heightCells": 3},
-    {"gridX": 139, "gridY": 34, "widthCells": 14, "heightCells": 2},
-    {"gridX": 203, "gridY": 34, "widthCells": 17, "heightCells": 2},
-    {"gridX": 27, "gridY": 36, "widthCells": 12, "heightCells": 7},
-    {"gridX": 71, "gridY": 36, "widthCells": 21, "heightCells": 1},
-    {"gridX": 198, "gridY": 36, "widthCells": 1, "heightCells": 1},
-    {"gridX": 203, "gridY": 36, "widthCells": 16, "heightCells": 1},
-    {"gridX": 72, "gridY": 37, "widthCells": 19, "heightCells": 1},
-    {"gridX": 203, "gridY": 37, "widthCells": 15, "heightCells": 19},
-    {"gridX": 73, "gridY": 38, "widthCells": 19, "heightCells": 2},
-    {"gridX": 268, "gridY": 38, "widthCells": 19, "heightCells": 1},
-    {"gridX": 269, "gridY": 39, "widthCells": 19, "heightCells": 2},
-    {"gridX": 74, "gridY": 40, "widthCells": 19, "heightCells": 2},
-    {"gridX": 137, "gridY": 41, "widthCells": 19, "heightCells": 15},
-    {"gridX": 270, "gridY": 41, "widthCells": 19, "heightCells": 14},
-    {"gridX": 75, "gridY": 42, "widthCells": 19, "heightCells": 14},
-    {"gridX": 218, "gridY": 42, "widthCells": 1, "heightCells": 14},
-    {"gridX": 26, "gridY": 43, "widthCells": 12, "heightCells": 3},
-    {"gridX": 74, "gridY": 43, "widthCells": 1, "heightCells": 13},
-    {"gridX": 94, "gridY": 43, "widthCells": 1, "heightCells": 13},
-    {"gridX": 135, "gridY": 43, "widthCells": 2, "heightCells": 13},
-    {"gridX": 199, "gridY": 43, "widthCells": 1, "heightCells": 5},
-    {"gridX": 219, "gridY": 43, "widthCells": 1, "heightCells": 13},
-    {"gridX": 269, "gridY": 43, "widthCells": 1, "heightCells": 13},
-    {"gridX": 289, "gridY": 43, "widthCells": 1, "heightCells": 10},
-    {"gridX": 73, "gridY": 45, "widthCells": 1, "heightCells": 11},
-    {"gridX": 95, "gridY": 45, "widthCells": 1, "heightCells": 11},
-    {"gridX": 133, "gridY": 45, "widthCells": 2, "heightCells": 11},
-    {"gridX": 220, "gridY": 45, "widthCells": 2, "heightCells": 11},
-    {"gridX": 268, "gridY": 45, "widthCells": 1, "heightCells": 11},
-    {"gridX": 290, "gridY": 45, "widthCells": 1, "heightCells": 7},
-    {"gridX": 25, "gridY": 46, "widthCells": 12, "heightCells": 3},
-    {"gridX": 72, "gridY": 47, "widthCells": 1, "heightCells": 9},
-    {"gridX": 96, "gridY": 47, "widthCells": 1, "heightCells": 2},
-    {"gridX": 131, "gridY": 47, "widthCells": 2, "heightCells": 9},
-    {"gridX": 222, "gridY": 47, "widthCells": 2, "heightCells": 9},
-    {"gridX": 266, "gridY": 47, "widthCells": 2, "heightCells": 9},
-    {"gridX": 224, "gridY": 48, "widthCells": 1, "heightCells": 8},
-    {"gridX": 24, "gridY": 49, "widthCells": 12, "heightCells": 3},
-    {"gridX": 71, "gridY": 49, "widthCells": 1, "heightCells": 7},
-    {"gridX": 37, "gridY": 50, "widthCells": 32, "heightCells": 6},
-    {"gridX": 70, "gridY": 50, "widthCells": 1, "heightCells": 6},
-    {"gridX": 96, "gridY": 50, "widthCells": 1, "heightCells": 6},
-    {"gridX": 130, "gridY": 50, "widthCells": 1, "heightCells": 6},
-    {"gridX": 156, "gridY": 50, "widthCells": 1, "heightCells": 6},
-    {"gridX": 225, "gridY": 50, "widthCells": 2, "heightCells": 6},
-    {"gridX": 264, "gridY": 50, "widthCells": 2, "heightCells": 6},
-    {"gridX": 69, "gridY": 51, "widthCells": 1, "heightCells": 5},
-    {"gridX": 97, "gridY": 51, "widthCells": 12, "heightCells": 5},
-    {"gridX": 184, "gridY": 51, "widthCells": 15, "heightCells": 5},
-    {"gridX": 229, "gridY": 51, "widthCells": 15, "heightCells": 5},
-    {"gridX": 23, "gridY": 52, "widthCells": 12, "heightCells": 4},
-    {"gridX": 109, "gridY": 52, "widthCells": 7, "heightCells": 4},
-    {"gridX": 157, "gridY": 52, "widthCells": 4, "heightCells": 4},
-    {"gridX": 176, "gridY": 52, "widthCells": 8, "heightCells": 4},
-    {"gridX": 199, "gridY": 52, "widthCells": 1, "heightCells": 4},
-    {"gridX": 227, "gridY": 52, "widthCells": 2, "heightCells": 4},
-    {"gridX": 244, "gridY": 52, "widthCells": 7, "heightCells": 4},
-    {"gridX": 263, "gridY": 52, "widthCells": 1, "heightCells": 4},
-    {"gridX": 35, "gridY": 53, "widthCells": 2, "heightCells": 3},
-    {"gridX": 116, "gridY": 53, "widthCells": 14, "heightCells": 3},
-    {"gridX": 161, "gridY": 53, "widthCells": 15, "heightCells": 3},
-    {"gridX": 251, "gridY": 53, "widthCells": 12, "heightCells": 3},
-    {"gridX": 270, "gridY": 55, "widthCells": 18, "heightCells": 1}
+    {
+      "gridX": 25,
+      "gridY": 0,
+      "widthCells": 264,
+      "heightCells": 2
+    },
+    {
+      "gridX": 26,
+      "gridY": 2,
+      "widthCells": 264,
+      "heightCells": 1
+    },
+    {
+      "gridX": 26,
+      "gridY": 3,
+      "widthCells": 90,
+      "heightCells": 1
+    },
+    {
+      "gridX": 131,
+      "gridY": 3,
+      "widthCells": 32,
+      "heightCells": 1
+    },
+    {
+      "gridX": 176,
+      "gridY": 3,
+      "widthCells": 75,
+      "heightCells": 1
+    },
+    {
+      "gridX": 263,
+      "gridY": 3,
+      "widthCells": 27,
+      "heightCells": 1
+    },
+    {
+      "gridX": 26,
+      "gridY": 4,
+      "widthCells": 83,
+      "heightCells": 1
+    },
+    {
+      "gridX": 136,
+      "gridY": 4,
+      "widthCells": 25,
+      "heightCells": 2
+    },
+    {
+      "gridX": 184,
+      "gridY": 4,
+      "widthCells": 37,
+      "heightCells": 1
+    },
+    {
+      "gridX": 229,
+      "gridY": 4,
+      "widthCells": 15,
+      "heightCells": 1
+    },
+    {
+      "gridX": 265,
+      "gridY": 4,
+      "widthCells": 25,
+      "heightCells": 2
+    },
+    {
+      "gridX": 27,
+      "gridY": 5,
+      "widthCells": 42,
+      "heightCells": 2
+    },
+    {
+      "gridX": 70,
+      "gridY": 5,
+      "widthCells": 25,
+      "heightCells": 1
+    },
+    {
+      "gridX": 196,
+      "gridY": 5,
+      "widthCells": 25,
+      "heightCells": 1
+    },
+    {
+      "gridX": 71,
+      "gridY": 6,
+      "widthCells": 23,
+      "heightCells": 1
+    },
+    {
+      "gridX": 136,
+      "gridY": 6,
+      "widthCells": 23,
+      "heightCells": 2
+    },
+    {
+      "gridX": 197,
+      "gridY": 6,
+      "widthCells": 23,
+      "heightCells": 2
+    },
+    {
+      "gridX": 267,
+      "gridY": 6,
+      "widthCells": 23,
+      "heightCells": 2
+    },
+    {
+      "gridX": 27,
+      "gridY": 7,
+      "widthCells": 12,
+      "heightCells": 5
+    },
+    {
+      "gridX": 72,
+      "gridY": 7,
+      "widthCells": 23,
+      "heightCells": 1
+    },
+    {
+      "gridX": 73,
+      "gridY": 8,
+      "widthCells": 21,
+      "heightCells": 1
+    },
+    {
+      "gridX": 136,
+      "gridY": 8,
+      "widthCells": 21,
+      "heightCells": 2
+    },
+    {
+      "gridX": 198,
+      "gridY": 8,
+      "widthCells": 21,
+      "heightCells": 1
+    },
+    {
+      "gridX": 269,
+      "gridY": 8,
+      "widthCells": 21,
+      "heightCells": 3
+    },
+    {
+      "gridX": 74,
+      "gridY": 9,
+      "widthCells": 21,
+      "heightCells": 2
+    },
+    {
+      "gridX": 199,
+      "gridY": 9,
+      "widthCells": 21,
+      "heightCells": 2
+    },
+    {
+      "gridX": 135,
+      "gridY": 10,
+      "widthCells": 21,
+      "heightCells": 1
+    },
+    {
+      "gridX": 75,
+      "gridY": 11,
+      "widthCells": 19,
+      "heightCells": 4
+    },
+    {
+      "gridX": 136,
+      "gridY": 11,
+      "widthCells": 19,
+      "heightCells": 1
+    },
+    {
+      "gridX": 200,
+      "gridY": 11,
+      "widthCells": 19,
+      "heightCells": 1
+    },
+    {
+      "gridX": 270,
+      "gridY": 11,
+      "widthCells": 19,
+      "heightCells": 3
+    },
+    {
+      "gridX": 26,
+      "gridY": 12,
+      "widthCells": 12,
+      "heightCells": 3
+    },
+    {
+      "gridX": 135,
+      "gridY": 12,
+      "widthCells": 19,
+      "heightCells": 2
+    },
+    {
+      "gridX": 201,
+      "gridY": 12,
+      "widthCells": 19,
+      "heightCells": 1
+    },
+    {
+      "gridX": 134,
+      "gridY": 14,
+      "widthCells": 19,
+      "heightCells": 15
+    },
+    {
+      "gridX": 269,
+      "gridY": 14,
+      "widthCells": 19,
+      "heightCells": 6
+    },
+    {
+      "gridX": 25,
+      "gridY": 15,
+      "widthCells": 12,
+      "heightCells": 2
+    },
+    {
+      "gridX": 24,
+      "gridY": 17,
+      "widthCells": 12,
+      "heightCells": 3
+    },
+    {
+      "gridX": 133,
+      "gridY": 17,
+      "widthCells": 1,
+      "heightCells": 10
+    },
+    {
+      "gridX": 153,
+      "gridY": 17,
+      "widthCells": 1,
+      "heightCells": 19
+    },
+    {
+      "gridX": 267,
+      "gridY": 17,
+      "widthCells": 2,
+      "heightCells": 16
+    },
+    {
+      "gridX": 203,
+      "gridY": 18,
+      "widthCells": 21,
+      "heightCells": 14
+    },
+    {
+      "gridX": 132,
+      "gridY": 19,
+      "widthCells": 1,
+      "heightCells": 4
+    },
+    {
+      "gridX": 154,
+      "gridY": 19,
+      "widthCells": 1,
+      "heightCells": 17
+    },
+    {
+      "gridX": 202,
+      "gridY": 19,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 224,
+      "gridY": 19,
+      "widthCells": 1,
+      "heightCells": 11
+    },
+    {
+      "gridX": 265,
+      "gridY": 19,
+      "widthCells": 2,
+      "heightCells": 14
+    },
+    {
+      "gridX": 23,
+      "gridY": 20,
+      "widthCells": 12,
+      "heightCells": 8
+    },
+    {
+      "gridX": 70,
+      "gridY": 20,
+      "widthCells": 23,
+      "heightCells": 3
+    },
+    {
+      "gridX": 225,
+      "gridY": 20,
+      "widthCells": 1,
+      "heightCells": 10
+    },
+    {
+      "gridX": 264,
+      "gridY": 20,
+      "widthCells": 1,
+      "heightCells": 13
+    },
+    {
+      "gridX": 269,
+      "gridY": 20,
+      "widthCells": 18,
+      "heightCells": 10
+    },
+    {
+      "gridX": 69,
+      "gridY": 21,
+      "widthCells": 1,
+      "heightCells": 13
+    },
+    {
+      "gridX": 93,
+      "gridY": 21,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 155,
+      "gridY": 21,
+      "widthCells": 2,
+      "heightCells": 15
+    },
+    {
+      "gridX": 202,
+      "gridY": 21,
+      "widthCells": 1,
+      "heightCells": 35
+    },
+    {
+      "gridX": 226,
+      "gridY": 21,
+      "widthCells": 1,
+      "heightCells": 7
+    },
+    {
+      "gridX": 263,
+      "gridY": 21,
+      "widthCells": 1,
+      "heightCells": 12
+    },
+    {
+      "gridX": 287,
+      "gridY": 21,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 68,
+      "gridY": 22,
+      "widthCells": 1,
+      "heightCells": 12
+    },
+    {
+      "gridX": 262,
+      "gridY": 22,
+      "widthCells": 1,
+      "heightCells": 10
+    },
+    {
+      "gridX": 67,
+      "gridY": 23,
+      "widthCells": 1,
+      "heightCells": 9
+    },
+    {
+      "gridX": 70,
+      "gridY": 23,
+      "widthCells": 22,
+      "heightCells": 7
+    },
+    {
+      "gridX": 157,
+      "gridY": 23,
+      "widthCells": 1,
+      "heightCells": 13
+    },
+    {
+      "gridX": 66,
+      "gridY": 24,
+      "widthCells": 1,
+      "heightCells": 8
+    },
+    {
+      "gridX": 92,
+      "gridY": 24,
+      "widthCells": 1,
+      "heightCells": 2
+    },
+    {
+      "gridX": 132,
+      "gridY": 24,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 158,
+      "gridY": 24,
+      "widthCells": 1,
+      "heightCells": 12
+    },
+    {
+      "gridX": 201,
+      "gridY": 24,
+      "widthCells": 1,
+      "heightCells": 32
+    },
+    {
+      "gridX": 227,
+      "gridY": 24,
+      "widthCells": 1,
+      "heightCells": 2
+    },
+    {
+      "gridX": 261,
+      "gridY": 24,
+      "widthCells": 1,
+      "heightCells": 7
+    },
+    {
+      "gridX": 287,
+      "gridY": 24,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 159,
+      "gridY": 25,
+      "widthCells": 1,
+      "heightCells": 11
+    },
+    {
+      "gridX": 260,
+      "gridY": 25,
+      "widthCells": 1,
+      "heightCells": 5
+    },
+    {
+      "gridX": 65,
+      "gridY": 26,
+      "widthCells": 1,
+      "heightCells": 4
+    },
+    {
+      "gridX": 200,
+      "gridY": 26,
+      "widthCells": 1,
+      "heightCells": 30
+    },
+    {
+      "gridX": 160,
+      "gridY": 27,
+      "widthCells": 1,
+      "heightCells": 7
+    },
+    {
+      "gridX": 199,
+      "gridY": 28,
+      "widthCells": 1,
+      "heightCells": 14
+    },
+    {
+      "gridX": 135,
+      "gridY": 29,
+      "widthCells": 18,
+      "heightCells": 1
+    },
+    {
+      "gridX": 161,
+      "gridY": 29,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 70,
+      "gridY": 30,
+      "widthCells": 21,
+      "heightCells": 6
+    },
+    {
+      "gridX": 136,
+      "gridY": 30,
+      "widthCells": 17,
+      "heightCells": 1
+    },
+    {
+      "gridX": 269,
+      "gridY": 30,
+      "widthCells": 17,
+      "heightCells": 3
+    },
+    {
+      "gridX": 137,
+      "gridY": 31,
+      "widthCells": 16,
+      "heightCells": 1
+    },
+    {
+      "gridX": 161,
+      "gridY": 31,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 286,
+      "gridY": 31,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 138,
+      "gridY": 32,
+      "widthCells": 15,
+      "heightCells": 2
+    },
+    {
+      "gridX": 203,
+      "gridY": 32,
+      "widthCells": 19,
+      "heightCells": 2
+    },
+    {
+      "gridX": 26,
+      "gridY": 33,
+      "widthCells": 12,
+      "heightCells": 3
+    },
+    {
+      "gridX": 139,
+      "gridY": 34,
+      "widthCells": 14,
+      "heightCells": 2
+    },
+    {
+      "gridX": 203,
+      "gridY": 34,
+      "widthCells": 17,
+      "heightCells": 2
+    },
+    {
+      "gridX": 27,
+      "gridY": 36,
+      "widthCells": 12,
+      "heightCells": 7
+    },
+    {
+      "gridX": 71,
+      "gridY": 36,
+      "widthCells": 21,
+      "heightCells": 1
+    },
+    {
+      "gridX": 198,
+      "gridY": 36,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 203,
+      "gridY": 36,
+      "widthCells": 16,
+      "heightCells": 1
+    },
+    {
+      "gridX": 72,
+      "gridY": 37,
+      "widthCells": 19,
+      "heightCells": 1
+    },
+    {
+      "gridX": 203,
+      "gridY": 37,
+      "widthCells": 15,
+      "heightCells": 19
+    },
+    {
+      "gridX": 73,
+      "gridY": 38,
+      "widthCells": 19,
+      "heightCells": 2
+    },
+    {
+      "gridX": 268,
+      "gridY": 38,
+      "widthCells": 19,
+      "heightCells": 1
+    },
+    {
+      "gridX": 269,
+      "gridY": 39,
+      "widthCells": 19,
+      "heightCells": 2
+    },
+    {
+      "gridX": 74,
+      "gridY": 40,
+      "widthCells": 19,
+      "heightCells": 2
+    },
+    {
+      "gridX": 137,
+      "gridY": 41,
+      "widthCells": 19,
+      "heightCells": 15
+    },
+    {
+      "gridX": 270,
+      "gridY": 41,
+      "widthCells": 19,
+      "heightCells": 14
+    },
+    {
+      "gridX": 75,
+      "gridY": 42,
+      "widthCells": 19,
+      "heightCells": 14
+    },
+    {
+      "gridX": 218,
+      "gridY": 42,
+      "widthCells": 1,
+      "heightCells": 14
+    },
+    {
+      "gridX": 26,
+      "gridY": 43,
+      "widthCells": 12,
+      "heightCells": 3
+    },
+    {
+      "gridX": 74,
+      "gridY": 43,
+      "widthCells": 1,
+      "heightCells": 13
+    },
+    {
+      "gridX": 94,
+      "gridY": 43,
+      "widthCells": 1,
+      "heightCells": 13
+    },
+    {
+      "gridX": 135,
+      "gridY": 43,
+      "widthCells": 2,
+      "heightCells": 13
+    },
+    {
+      "gridX": 199,
+      "gridY": 43,
+      "widthCells": 1,
+      "heightCells": 5
+    },
+    {
+      "gridX": 219,
+      "gridY": 43,
+      "widthCells": 1,
+      "heightCells": 13
+    },
+    {
+      "gridX": 269,
+      "gridY": 43,
+      "widthCells": 1,
+      "heightCells": 13
+    },
+    {
+      "gridX": 289,
+      "gridY": 43,
+      "widthCells": 1,
+      "heightCells": 10
+    },
+    {
+      "gridX": 73,
+      "gridY": 45,
+      "widthCells": 1,
+      "heightCells": 11
+    },
+    {
+      "gridX": 95,
+      "gridY": 45,
+      "widthCells": 1,
+      "heightCells": 11
+    },
+    {
+      "gridX": 133,
+      "gridY": 45,
+      "widthCells": 2,
+      "heightCells": 11
+    },
+    {
+      "gridX": 220,
+      "gridY": 45,
+      "widthCells": 2,
+      "heightCells": 11
+    },
+    {
+      "gridX": 268,
+      "gridY": 45,
+      "widthCells": 1,
+      "heightCells": 11
+    },
+    {
+      "gridX": 290,
+      "gridY": 45,
+      "widthCells": 1,
+      "heightCells": 7
+    },
+    {
+      "gridX": 25,
+      "gridY": 46,
+      "widthCells": 12,
+      "heightCells": 3
+    },
+    {
+      "gridX": 72,
+      "gridY": 47,
+      "widthCells": 1,
+      "heightCells": 9
+    },
+    {
+      "gridX": 96,
+      "gridY": 47,
+      "widthCells": 1,
+      "heightCells": 2
+    },
+    {
+      "gridX": 131,
+      "gridY": 47,
+      "widthCells": 2,
+      "heightCells": 9
+    },
+    {
+      "gridX": 222,
+      "gridY": 47,
+      "widthCells": 2,
+      "heightCells": 9
+    },
+    {
+      "gridX": 266,
+      "gridY": 47,
+      "widthCells": 2,
+      "heightCells": 9
+    },
+    {
+      "gridX": 224,
+      "gridY": 48,
+      "widthCells": 1,
+      "heightCells": 8
+    },
+    {
+      "gridX": 24,
+      "gridY": 49,
+      "widthCells": 12,
+      "heightCells": 3
+    },
+    {
+      "gridX": 71,
+      "gridY": 49,
+      "widthCells": 1,
+      "heightCells": 7
+    },
+    {
+      "gridX": 37,
+      "gridY": 50,
+      "widthCells": 32,
+      "heightCells": 6
+    },
+    {
+      "gridX": 70,
+      "gridY": 50,
+      "widthCells": 1,
+      "heightCells": 6
+    },
+    {
+      "gridX": 96,
+      "gridY": 50,
+      "widthCells": 1,
+      "heightCells": 6
+    },
+    {
+      "gridX": 130,
+      "gridY": 50,
+      "widthCells": 1,
+      "heightCells": 6
+    },
+    {
+      "gridX": 156,
+      "gridY": 50,
+      "widthCells": 1,
+      "heightCells": 6
+    },
+    {
+      "gridX": 225,
+      "gridY": 50,
+      "widthCells": 2,
+      "heightCells": 6
+    },
+    {
+      "gridX": 264,
+      "gridY": 50,
+      "widthCells": 2,
+      "heightCells": 6
+    },
+    {
+      "gridX": 69,
+      "gridY": 51,
+      "widthCells": 1,
+      "heightCells": 5
+    },
+    {
+      "gridX": 97,
+      "gridY": 51,
+      "widthCells": 12,
+      "heightCells": 5
+    },
+    {
+      "gridX": 184,
+      "gridY": 51,
+      "widthCells": 15,
+      "heightCells": 5
+    },
+    {
+      "gridX": 229,
+      "gridY": 51,
+      "widthCells": 15,
+      "heightCells": 5
+    },
+    {
+      "gridX": 23,
+      "gridY": 52,
+      "widthCells": 12,
+      "heightCells": 4
+    },
+    {
+      "gridX": 109,
+      "gridY": 52,
+      "widthCells": 7,
+      "heightCells": 4
+    },
+    {
+      "gridX": 157,
+      "gridY": 52,
+      "widthCells": 4,
+      "heightCells": 4
+    },
+    {
+      "gridX": 176,
+      "gridY": 52,
+      "widthCells": 8,
+      "heightCells": 4
+    },
+    {
+      "gridX": 199,
+      "gridY": 52,
+      "widthCells": 1,
+      "heightCells": 4
+    },
+    {
+      "gridX": 227,
+      "gridY": 52,
+      "widthCells": 2,
+      "heightCells": 4
+    },
+    {
+      "gridX": 244,
+      "gridY": 52,
+      "widthCells": 7,
+      "heightCells": 4
+    },
+    {
+      "gridX": 263,
+      "gridY": 52,
+      "widthCells": 1,
+      "heightCells": 4
+    },
+    {
+      "gridX": 35,
+      "gridY": 53,
+      "widthCells": 2,
+      "heightCells": 3
+    },
+    {
+      "gridX": 116,
+      "gridY": 53,
+      "widthCells": 14,
+      "heightCells": 3
+    },
+    {
+      "gridX": 161,
+      "gridY": 53,
+      "widthCells": 15,
+      "heightCells": 3
+    },
+    {
+      "gridX": 251,
+      "gridY": 53,
+      "widthCells": 12,
+      "heightCells": 3
+    },
+    {
+      "gridX": 270,
+      "gridY": 55,
+      "widthCells": 18,
+      "heightCells": 1
+    },
+    {
+      "gridX": 59,
+      "gridY": 27,
+      "widthCells": 6,
+      "heightCells": 3
+    }
+  ],
+  "water": [
+    {
+      "gridX": 61,
+      "gridY": 30
+    },
+    {
+      "gridX": 62,
+      "gridY": 30
+    },
+    {
+      "gridX": 63,
+      "gridY": 30
+    },
+    {
+      "gridX": 64,
+      "gridY": 30
+    },
+    {
+      "gridX": 65,
+      "gridY": 30
+    },
+    {
+      "gridX": 64,
+      "gridY": 31
+    },
+    {
+      "gridX": 65,
+      "gridY": 31
+    },
+    {
+      "gridX": 67,
+      "gridY": 32
+    },
+    {
+      "gridX": 58,
+      "gridY": 28
+    },
+    {
+      "gridX": 58,
+      "gridY": 27
+    },
+    {
+      "gridX": 59,
+      "gridY": 27
+    },
+    {
+      "gridX": 59,
+      "gridY": 26
+    },
+    {
+      "gridX": 60,
+      "gridY": 26
+    },
+    {
+      "gridX": 61,
+      "gridY": 26
+    },
+    {
+      "gridX": 62,
+      "gridY": 26
+    },
+    {
+      "gridX": 63,
+      "gridY": 26
+    },
+    {
+      "gridX": 64,
+      "gridY": 26
+    },
+    {
+      "gridX": 62,
+      "gridY": 25
+    },
+    {
+      "gridX": 63,
+      "gridY": 25
+    },
+    {
+      "gridX": 64,
+      "gridY": 25
+    },
+    {
+      "gridX": 65,
+      "gridY": 25
+    },
+    {
+      "gridX": 62,
+      "gridY": 24
+    },
+    {
+      "gridX": 63,
+      "gridY": 24
+    },
+    {
+      "gridX": 63,
+      "gridY": 23
+    }
   ]
 }

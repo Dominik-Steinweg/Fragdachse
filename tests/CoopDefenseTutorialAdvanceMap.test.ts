@@ -150,12 +150,15 @@ describe('Map 1 as the guided advance tutorial', () => {
 
   it.each([1, 42, 4242])('keeps tutorial rock banks intact through the nearby map edge (seed %i)', (seed) => {
     applyMapMetrics();
-    const steps = resolveCoopDefenseMapTutorialSteps(MAP);
+    const steps = [
+      { id: 'start', anchor: MAP.tutorialAnchor!, showControls: MAP.tutorialShowControls },
+      ...resolveCoopDefenseMapTutorialSteps(MAP).map((step) => ({ ...step, showControls: false })),
+    ];
     const layout = generateArenaWithActiveMetrics(seed, MAP);
     const rocks = new Set(layout.rocks.map(cellKey));
     const trackColumns = new Set(layout.tracks.flatMap(({ gridX }) => [gridX, gridX + 1]));
     for (const step of steps) {
-      const region = getCoopDefenseTutorialRockRegion(false, step.anchor);
+      const region = getCoopDefenseTutorialRockRegion(step.showControls, step.anchor);
       expect(layout.water?.some((cell) => (
         cell.gridX >= region.minGridX && cell.gridX <= region.maxGridX
         && cell.gridY >= region.minGridY && cell.gridY <= region.maxGridY

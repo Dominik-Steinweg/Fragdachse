@@ -5,6 +5,7 @@ import { array, at, clone, object, set, uniqueId, type JsonObject, type Path } f
 import { button, confirmEdit, element, heading, numberField, propertySelect, type EditorEnvironment } from '../ui';
 import { LAYERS, mapObjects, type MapObject } from './objects';
 import { MapCanvas, type DrawTool, type Rect } from './MapCanvas';
+import { addPowerUpControls, powerUpControls, trackControls } from './ContentControls';
 
 export class MapView {
   readonly canvas: MapCanvas;
@@ -21,7 +22,7 @@ export class MapView {
   destroy(): void { this.canvas.destroy(); }
   render(): HTMLElement { this.renderTools(); this.renderSidebars(); this.canvas.paint(); return this.root; }
   open(path: Path): void {
-    const item = mapObjects(this.env.session).find(i => JSON.stringify(i.path) === JSON.stringify(path));
+    const item = mapObjects(this.env.session, this.env.session.draft, this.canvas.previewResult).find(i => JSON.stringify(i.path) === JSON.stringify(path));
     if (!item) return;
     this.env.session.selection = item.id; this.canvas.layers.add(item.layer); this.canvas.tool = 'select'; this.canvas.focus(item); this.render();
   }
@@ -33,7 +34,7 @@ export class MapView {
   }
   private renderSidebars(): void {
     const listScroll = this.list.scrollTop, propertyScroll = this.properties.scrollTop;
-    const { env } = this, items = mapObjects(env.session);
+    const { env } = this, items = mapObjects(env.session, env.session.draft, this.canvas.previewResult);
     this.list.replaceChildren(heading('Vorgaben', 'Bearbeitbare Quellen über dem generierten Layout'));
     this.list.append(button('Map & Gelände', () => { env.session.selection = null; this.renderSidebars(); this.canvas.paint(); }, !env.session.selection ? 'object active' : 'object'));
     const layers = element('details', 'layer-list'); layers.open = true; layers.append(element('summary', '', 'Sichtbare Ebenen'));
@@ -68,12 +69,15 @@ export class MapView {
       for (const [key, label, fallback, min] of fields) box.append(numberField(env, label, ['rockField', key], { min, step: .01, fallback, optional: fallback !== undefined }));
       box.append(button('Felsfeld einschließlich Korridoren entfernen', async () => { if (await confirmEdit('Felsfeld und seine Korridore aus dem Entwurf entfernen?')) { env.session.change(['rockField'], undefined); env.changed(); } }, 'danger'));
     } else box.append(element('p', 'muted', 'Ein erster Korridor legt ein organisches Felsfeld an: Radius 3, Varianz 0,6, Wanderung 1 und Wegpunktstreuung 1. Die Werte sind anschließend bearbeitbar.'));
+    box.append(trackControls(env, mapObjects(env.session, draft, this.canvas.previewResult).find(item => item.kind === 'track')), addPowerUpControls(env));
     return box;
   }
   private objectProperties(item: MapObject): HTMLElement {
     const { env } = this, box = element('div'), value = object(at(env.session.draft, item.path));
     box.append(heading(item.label, '/' + item.path.join('/')));
     if (item.readonly) { box.append(element('p', 'muted', 'Diese Missionsvorgabe wird in V1 angezeigt und geprüft; ihre Funktion bleibt unverändert.')); return box; }
+    if (item.kind === 'track') { box.append(trackControls(env, item)); return box; }
+    if (item.kind === 'powerup') { box.append(powerUpControls(env, item)); return box; }
     if (item.kind === 'corridor') {
       box.append(numberField(env, 'Radius (Zellen)', [...item.path, 'radiusCells'], { min: MIN_CORRIDOR_RADIUS_CELLS, step: .01, fallback: Number(object(env.session.draft.rockField).corridorRadiusCells), optional: true }));
       array(value.points).forEach((point, i) => {

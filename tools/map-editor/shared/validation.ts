@@ -73,6 +73,10 @@ export function validateDocument(draft: JsonObject): Validation {
     array(draft.bases).forEach((base, i) => {
       const { width, height, minGridX: x, minGridY: y } = resolveCoopDefenseBasePlacement(base as unknown as CoopBaseConfig, metrics);
       if (x < 0 || y < 0 || x + width > metrics.gridCols || y + height > metrics.gridRows) error(`/bases/${i}/anchor`, 'Basis würde an der Map-Grenze begrenzt.', 'bounds');
+      array(base.powerUpPedestals).forEach((pedestal, j) => {
+        const offset = object(pedestal.cellOffset), px = x + Number(offset.gridX), py = y + Number(offset.gridY);
+        if (px < 0 || py < 0 || px >= metrics.gridCols || py >= metrics.gridRows) error(`/bases/${i}/powerUpPedestals/${j}/cellOffset`, 'Power-Up liegt außerhalb der Map.', 'bounds');
+      });
     });
     const tutorials = [
       ...(getMapTutorial(map.mapId, 'de') ? [{ anchor: map.tutorialAnchor, controls: map.tutorialShowControls === true, path: '/tutorialAnchor' }] : []),

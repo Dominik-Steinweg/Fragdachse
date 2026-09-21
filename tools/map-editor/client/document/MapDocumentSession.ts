@@ -58,6 +58,13 @@ export class MapDocumentSession {
     }, () => this.keys[this.keyName(path)]?.splice(index, remove, ...values.map(() => `item-${this.nextKey++}`)));
   }
   undo(): void { const previous = this.past.pop(); if (previous) { this.future.push(this.snapshot(previous.label)); this.restore(previous); } }
+  removeIndices(path: Path, indices: number[]): void {
+    const sorted = [...new Set(indices)].sort((a, b) => b - a);
+    this.transact('Objekte entfernen', d => {
+      const entries = at(d, path) as Json[];
+      for (const index of sorted) entries.splice(index, 1);
+    }, () => { for (const index of sorted) this.keys[this.keyName(path)]?.splice(index, 1); });
+  }
   redo(): void { const next = this.future.pop(); if (next) { this.past.push(this.snapshot(next.label)); this.restore(next); } }
   acceptSaved(saved: LoadedMap): void {
     // A response acknowledges the sent snapshot, never any edits made while it was in flight.

@@ -480,7 +480,7 @@ export interface CoopDefenseMapPowerUpConfig {
   readonly spawnOnArenaStart?: boolean;
 }
 
-export type CoopDefenseMapTrackMode = 'rails' | 'void-fire';
+export type CoopDefenseMapTrackMode = 'rails' | 'void-fire' | 'none';
 
 /** Authoring-Position der zweispaltigen vertikalen Gleise. */
 export type CoopDefenseMapTrackPosition =
@@ -780,7 +780,7 @@ export interface CoopDefenseMapConfig {
    */
   readonly tutorialSteps?: readonly ResolvedCoopDefenseMapTutorialStepConfig[]
     | readonly CoopDefenseMapTutorialStepConfig[];
-  /** Standard `rails`; `void-fire` reserviert denselben Korridor, erzeugt aber keine Gleise. */
+  /** Standard `rails`; `void-fire` reserviert den Korridor ohne Gleise; `none` reserviert keinen Korridor. */
   readonly trackMode?: CoopDefenseMapTrackMode;
   /** Position der zweispaltigen Gleise; Standard `center`. `gridX` bezeichnet die linke Spalte. */
   readonly trackPosition?: CoopDefenseMapTrackPosition;
@@ -1080,7 +1080,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     arenaWidthCells,
     arenaHeightCells,
   });
-  const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
+  const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'none' ? 'none' : mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
   const trackPosition = normalizeTrackPosition(
     mapConfig.mapId,
     mapConfig.trackPosition,
@@ -1146,7 +1146,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     arenaWidthCells,
     arenaHeightCells,
   );
-  const water = normalizeWaterCells(mapConfig.water, mapConfig.waterAreas, arenaWidthCells, arenaHeightCells, bases, rockWalls, missionProgress, trackPosition);
+  const water = normalizeWaterCells(mapConfig.water, mapConfig.waterAreas, arenaWidthCells, arenaHeightCells, bases, rockWalls, missionProgress, trackMode === 'none' ? undefined : trackPosition);
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -3795,7 +3795,7 @@ function normalizePersistentSpawnSource(
 function normalizeWaterCells(
   cells: CoopDefenseMapConfig['water'], areas: CoopDefenseMapAuthoringConfig['waterAreas'], cols: number, rows: number,
   bases: readonly CoopBaseConfig[], walls: readonly CoopDefenseMapRockWallConfig[] | undefined,
-  mission: ResolvedCoopDefenseMapMissionProgressConfig | undefined, tracks: CoopDefenseMapTrackPosition,
+  mission: ResolvedCoopDefenseMapMissionProgressConfig | undefined, tracks: CoopDefenseMapTrackPosition | undefined,
 ): CoopDefenseMapConfig['water'] {
   if (cells === undefined && areas === undefined) return undefined;
   if (cells !== undefined && !Array.isArray(cells)) throw new Error('[coopDefenseMaps] Water must be an array');

@@ -4,6 +4,7 @@ import { resolveCoopDefenseWorldMetrics } from '../../../../src/world/WorldMetri
 import { COOP_DEFENSE_MODE } from '../../../../src/gameModes';
 import { validateDocument } from '../../shared/validation';
 import type { JsonObject } from '../../shared/json';
+import { geometryRevision } from './PreviewController';
 
 export function generatePreview(draft: JsonObject, seed: number) {
   const result = validateDocument(draft);
@@ -12,7 +13,7 @@ export function generatePreview(draft: JsonObject, seed: number) {
   const metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
   const started = performance.now();
   const layout = ArenaGenerator.generate(seed, resolveArenaGenerationInput(COOP_DEFENSE_MODE, metrics), map);
-  return { layout, metrics, bases: resolveCoopDefenseBases(map, metrics),
+  return { layout, metrics, bases: resolveCoopDefenseBases(map, metrics), sourceRevision: geometryRevision(draft),
     requestedSeed: seed, fingerprint: ArenaGenerator.fingerprint(layout), version: ARENA_GENERATOR_VERSION,
     elapsedMs: performance.now() - started };
 }

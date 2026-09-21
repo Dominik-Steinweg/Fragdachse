@@ -107,7 +107,7 @@ export function getCoopDefenseTutorialRockRegion(
   };
 }
 
-/** Backing formation, including the closed pocket behind an edge-mounted panel. */
+/** Authored panels join the top or bottom map edge so no walkable pocket remains behind them. */
 export function getCoopDefenseTutorialBackingRegion(
   showControls: boolean,
   anchor: CoopDefenseTutorialAnchor | undefined,
@@ -115,8 +115,8 @@ export function getCoopDefenseTutorialBackingRegion(
 ): ReturnType<typeof getCoopDefenseTutorialRockRegion> {
   const region = getCoopDefenseTutorialRockRegion(showControls, anchor, metrics);
   if (anchor) {
-    if (region.minGridY <= COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS) region.minGridY = 0;
-    if (region.maxGridY >= metrics.gridRows - 1 - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS) region.maxGridY = metrics.gridRows - 1;
+    if (anchor.gridY < metrics.gridRows / 2) region.minGridY = 0;
+    else region.maxGridY = metrics.gridRows - 1;
   }
   return region;
 }

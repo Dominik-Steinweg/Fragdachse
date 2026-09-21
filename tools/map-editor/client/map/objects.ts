@@ -5,7 +5,9 @@ import { resolveCoopDefenseBasePlacement } from '../../../../src/arena/BaseRegis
 import { buildPersistentBaseCoreBaseConfig } from '../../../../src/persistentBase/PersistentBaseCore';
 import { DEFAULT_PERSISTENT_BASE_ORIENTATION, type PersistentBaseOrientation } from '../../../../src/persistentBase/PersistentBaseCore';
 import { COOP_DEFENSE_TUTORIAL_PANEL_WIDTH, COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS, getCoopDefenseTutorialPanelHeight, getCoopDefenseTutorialPanelCenterX, getCoopDefenseTutorialPanelTopY, getCoopDefenseTutorialBackingRegion } from '../../../../src/config/coopDefenseTutorial';
-import { getMapTutorial } from '../../../../src/i18n/contentPresentation';
+import { getMapTutorial, getPowerUpName } from '../../../../src/i18n/contentPresentation';
+import { geometryRevision } from '../preview/PreviewController';
+import type { PreviewResult } from '../preview/generate';
 import type { CoopBaseConfig } from '../../../../src/config/coopDefenseMapAuthoring';
 import { at, array, object, set, type JsonObject, type Path } from '../../shared/json';
 import type { MapDocumentSession } from '../document/MapDocumentSession';
@@ -13,12 +15,14 @@ import type { MapDocumentSession } from '../document/MapDocumentSession';
 export const LAYERS: Record<string, { label: string; color: string }> = {
   terrain: { label: 'Felsen / Boden', color: '#79838a' }, water: { label: 'Wasser', color: '#3eaddb' }, trees: { label: 'Bäume', color: '#5c9b63' },
   tracks: { label: 'Gleise', color: '#a8a19a' }, structures: { label: 'Basen / Podeste', color: '#edba73' },
+  powerups: { label: 'Power-Ups', color: '#94e2b5' },
   mission: { label: 'Mission / Checkpoints', color: '#ce91e8' }, corridors: { label: 'Korridore', color: '#c4d897' },
   walls: { label: 'Felswände', color: '#e89973' }, tutorial: { label: 'Tutorial-Flächen', color: '#edcd66' }, spawns: { label: 'Spawngebiete', color: '#f3768f' },
 };
 export interface MapObject {
   id: string; label: string; path: Path; layer: string;
-  kind: 'rect' | 'point' | 'corridor' | 'tutorial' | 'base';
+  kind: 'rect' | 'point' | 'corridor' | 'tutorial' | 'base' | 'powerup' | 'track';
+  powerUpPath?: Path; hidden?: boolean;
   x: number; y: number; w: number; h: number;
   points?: { x: number; y: number }[]; radius?: number;
   readonly?: boolean; cells?: { gridX: number; gridY: number }[];
@@ -26,8 +30,18 @@ export interface MapObject {
 }
 export function mapMetrics(draft: JsonObject) { return resolveCoopDefenseWorldMetrics(draft.arenaWidthCells as number | undefined, draft.arenaHeightCells as number | undefined); }
 
-export function mapObjects(session: MapDocumentSession, draft = session.draft): MapObject[] {
+export function mapObjects(session: MapDocumentSession, draft = session.draft, generated?: PreviewResult | null): MapObject[] {
   const items: MapObject[] = [], metrics = mapMetrics(draft);
+  const current = generated?.sourceRevision === geometryRevision(draft) ? generated : undefined;
+  if (draft.trackMode !== 'none') {
+    const fixed = object(draft.trackPosition).gridX;
+    const x = typeof fixed === 'number' ? fixed : current?.layout.tracks[0]?.gridX;
+    items.push({ id: 'tracks', label: draft.trackMode === 'void-fire' ? 'Void-Korridor' : 'Gleise', path: ['trackPosition'], layer: 'tracks', kind: 'track', x: x ?? Math.floor(metrics.gridCols / 2), y: 0, w: 2, h: metrics.gridRows, hidden: x === undefined });
+  }
+  array(draft.powerUps).forEach((p, i) => {
+    const anchor = p.anchor ? object(p.anchor) : current?.layout.powerUpPedestals.find(pedestal => pedestal.id === i + 1 && !pedestal.linkedBaseId);
+    items.push({ id: `powerup:${session.key(['powerUps'], i)}`, label: `${getPowerUpName(String(p.defId), 'de')} · ${i + 1}${p.anchor ? '' : ' (automatisch)'}`, path: ['powerUps', i, 'anchor'], powerUpPath: ['powerUps', i], layer: 'powerups', kind: 'powerup', x: Number(anchor?.gridX ?? Math.floor(metrics.gridCols / 2)), y: Number(anchor?.gridY ?? Math.floor(metrics.gridRows / 2)), w: 1, h: 1, hidden: !anchor });
+  });
   const rect = (id: string, label: string, path: Path, layer: string, readonly = false) => {
     const r = object(at(draft, path)); items.push({ id, label, path, layer, kind: 'rect', x: Number(r.gridX ?? 0), y: Number(r.gridY ?? 0), w: Number(r.widthCells ?? 1), h: Number(r.heightCells ?? 1), readonly });
   };
@@ -63,6 +77,10 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft): 
     try {
       const p = resolveCoopDefenseBasePlacement(b as unknown as CoopBaseConfig, metrics);
       items.push({ id: `base:${b.id}`, label: `Basis · ${b.id}`, path: ['bases', i, 'anchor'], layer: 'structures', kind: 'base', x: p.minGridX, y: p.minGridY, w: p.width, h: p.height, cells: p.cells.map(c => ({ gridX: p.minGridX + c.gridX, gridY: p.minGridY + c.gridY })) });
+      array(b.powerUpPedestals).forEach((powerUp, j) => {
+        const offset = object(powerUp.cellOffset);
+        items.push({ id: `base-powerup:${b.id}:${powerUp.id}`, label: `${getPowerUpName(String(powerUp.defId), 'de')} · Basis ${b.id}`, path: ['bases', i, 'powerUpPedestals', j, 'cellOffset'], powerUpPath: ['bases', i, 'powerUpPedestals', j], layer: 'powerups', kind: 'powerup', x: p.minGridX + Number(offset.gridX), y: p.minGridY + Number(offset.gridY), w: 1, h: 1 });
+      });
     } catch { /* The validation panel retains malformed base diagnostics. */ }
   });
   if (draft.persistentBase) {
@@ -91,6 +109,9 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft): 
 
 export function moveMapObject(draft: JsonObject, item: MapObject, dx: number, dy: number, vertex = -1): void {
   if (item.readonly) return;
+  if (item.kind === 'track') {
+    set(draft, item.path, { ...object(at(draft, item.path)), kind: 'grid', gridX: Math.round(item.x + dx) }); return;
+  }
   const value = object(at(draft, item.path));
   if (item.kind === 'corridor') {
     const points = array(value.points);

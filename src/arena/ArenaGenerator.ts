@@ -103,7 +103,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 6;
+export const ARENA_GENERATOR_VERSION = 8;
 
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
@@ -206,7 +206,9 @@ export class ArenaGenerator {
       );
 
       // --- Gleise zuerst generieren (vor Felsen) ---
-      const generatedTrackLayout = this.generateTracks(
+      const generatedTrackLayout = coopMapConfig?.trackMode === 'none'
+        ? { trackCols: new Set<number>(), tracks: [] }
+        : this.generateTracks(
         rng,
         // Void-fire keeps its authored centered hazard corridor even though no train track is
         // rendered. All other Coop maps keep a free cell between the railway and every base.
@@ -265,6 +267,7 @@ export class ArenaGenerator {
       // Organische Felsfelder erhalten die CA-Formationen; geschlossene Felder ersetzen sie.
       // Beide fräsen die authored Route frei, bevor die Tutorial-Flächen gestempelt werden.
       let tutorialRockCells: Set<string> | null = null;
+      let tutorialRockCoreCells: ReadonlySet<number> = new Set();
       if (coopMapConfig?.rockField) {
         this.applyRockField(
           map,
@@ -274,7 +277,7 @@ export class ArenaGenerator {
         );
       }
       if (coopMapConfig && getMapTutorial(coopMapConfig.mapId, 'de')) {
-        tutorialRockCells = this.applyTutorialRockFormation(
+        const formation = this.applyTutorialRockFormation(
           map,
           trackCols,
           rng,
@@ -285,6 +288,8 @@ export class ArenaGenerator {
             step.anchor ? [step.anchor] : []
           )),
         );
+        tutorialRockCells = formation.cells;
+        tutorialRockCoreCells = formation.coreCells;
       }
       // Checkpoint-Kreise sind authored Lauf- und Triggerflächen. Der Kern wird garantiert
       // freigeschnitten; ein unregelmäßiger Rand hält die Felsformation organisch statt ein
@@ -293,6 +298,7 @@ export class ArenaGenerator {
         map,
         coopMapConfig?.missionProgress?.checkpoints ?? [],
         rng,
+        tutorialRockCoreCells,
       );
 
       // 3. map auf blocked übertragen und rocks-Array befüllen
@@ -328,7 +334,8 @@ export class ArenaGenerator {
       // zu verwerfen (was bei höherem rockFillRatio schnell alle 100 Versuche verbraucht und in
       // einer Exception endet), wird die günstigste Verbindung zwischen den Regionen nachgefräst.
       for (const cell of water) blocked[cell.gridY][cell.gridX] = true;
-      this.ensureConnected(blocked, rocks);
+      // Tutorial cores remain solid; retry if no connection around them is possible.
+      if (!this.ensureConnected(blocked, rocks, tutorialRockCoreCells)) continue;
 
       // Bäume auf verbleibenden freien Zellen platzieren.
       // Mindestabstand zum Arena-Rand: ceil(CANOPY_RADIUS / CELL_SIZE) Zellen,
@@ -1052,6 +1059,7 @@ export class ArenaGenerator {
     map: boolean[][],
     checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[],
     rng: () => number,
+    protectedCells: ReadonlySet<number>,
   ): void {
     for (const checkpoint of checkpoints) {
       const radiusCells = checkpoint.radiusCells ?? 1;
@@ -1072,6 +1080,8 @@ export class ArenaGenerator {
           const dy = gridY + 0.5 - centerY;
           const distance = Math.hypot(dx, dy);
           if (distance <= radiusCells) continue;
+          // Only the required checkpoint core takes precedence over tutorial backing.
+          if (protectedCells.has(this.cellKey(gridX, gridY))) continue;
 
           const angle = Math.atan2(dy, dx);
           const edgeVariation = 0.52
@@ -1230,8 +1240,9 @@ export class ArenaGenerator {
     coopBaseSpecs?: readonly BaseSpec[],
     tutorialAnchor?: CoopDefenseMapTutorialAnchorConfig,
     tutorialStepAnchors: readonly CoopDefenseMapTutorialAnchorConfig[] = [],
-  ): Set<string> {
+  ): { cells: Set<string>; coreCells: Set<number> } {
     const tutorialRockCells = new Set<string>();
+    const coreCells = new Set<number>();
     // Gemeinsamer Generator; das Starttutorial behält seine bisherige Formation samt
     // Tutorial-Rüstungsdrop-Marker. Neue lokale Steps bekommen denselben World-Space-Unterbau,
     // aber ausschließlich normale Felsen ohne Sondermarker.
@@ -1257,12 +1268,13 @@ export class ArenaGenerator {
           trackCols.has(gx) || this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs)
         ),
       });
-      for (const { gridX, gridY } of cells) {
+      for (const { gridX, gridY, ring } of cells) {
         map[gridY][gridX] = true;
         tutorialRockCells.add(`${gridX}_${gridY}`);
+        if (ring === 0) coreCells.add(this.cellKey(gridX, gridY));
       }
     }
-    return tutorialRockCells;
+    return { cells: tutorialRockCells, coreCells };
   }
 
   private generateRandomPowerUpPedestals(
@@ -1935,9 +1947,14 @@ export class ArenaGenerator {
    * wenigsten neu zu fräsenden Fels-Zellen gesucht wird (siehe `findCheapestPath`). Bei höheren
    * `rockFillRatio`-Werten kann die CA-Verteilung vereinzelt Taschen abschnüren – ohne dieses
    * Nachfräsen würde `generate()` dafür alle 100 Versuche verbrauchen und mit einer Exception
-   * abbrechen.
+   * abbrechen. Wasser und Tutorial-Kerne werden nie durchbrochen; fehlt ein erlaubter Pfad,
+   * meldet die Prüfung false und der Aufrufer versucht ein neues Layout.
    */
-  private ensureConnected(blocked: boolean[][], rocks: RockCell[]): void {
+  private ensureConnected(
+    blocked: boolean[][],
+    rocks: RockCell[],
+    protectedCells: ReadonlySet<number>,
+  ): boolean {
     const rockIndexByKey = new Map<number, number>();
     rocks.forEach((rock, index) => rockIndexByKey.set(this.cellKey(rock.gridX, rock.gridY), index));
 
@@ -1945,14 +1962,14 @@ export class ArenaGenerator {
     // Regionen zu einer, mehr als this.metrics.gridRows * this.metrics.gridCols Regionen kann es nie geben.
     for (let guard = 0; guard < this.metrics.gridRows * this.metrics.gridCols; guard++) {
       const components = this.findFreeComponents(blocked);
-      if (components.length <= 1) return;
+      if (components.length <= 1) return true;
 
       components.sort((a, b) => b.length - a.length);
       const main = components[0];
       const other = components[1];
-      const path = this.findCheapestPath(blocked, other, main);
+      const path = this.findCheapestPath(blocked, other, main, protectedCells);
 
-      if (path.length === 0) throw new Error('[ArenaGenerator] Water disconnects walkable terrain');
+      if (path.length === 0) return false;
       for (const [gx, gy] of path) {
         if (!blocked[gy][gx]) continue;
         blocked[gy][gx] = false;
@@ -1968,6 +1985,7 @@ export class ArenaGenerator {
         rockIndexByKey.delete(key);
       }
     }
+    return false;
   }
 
   /** Alle zusammenhängenden Regionen freier (nicht blockierter) Zellen (4-connected). */
@@ -2011,6 +2029,7 @@ export class ArenaGenerator {
     blocked: boolean[][],
     sourceCells: ReadonlyArray<[number, number]>,
     targetCells: ReadonlyArray<[number, number]>,
+    protectedCells: ReadonlySet<number>,
   ): Array<[number, number]> {
     const targetSet = new Set(targetCells.map(([gx, gy]) => this.cellKey(gx, gy)));
     const dist: number[][] = Array.from({ length: this.metrics.gridRows }, () => new Array(this.metrics.gridCols).fill(Infinity));
@@ -2041,6 +2060,7 @@ export class ArenaGenerator {
         const ny = cy + dy;
         if (nx < 0 || nx >= this.metrics.gridCols || ny < 0 || ny >= this.metrics.gridRows) continue;
         if (this.waterKeys.has(this.cellKey(nx, ny))) continue;
+        if (blocked[ny][nx] && protectedCells.has(this.cellKey(nx, ny))) continue;
         const weight = blocked[ny][nx] ? 1 : 0;
         const nextDist = d + weight;
         if (nextDist < dist[ny][nx]) {

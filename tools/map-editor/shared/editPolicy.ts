@@ -7,6 +7,8 @@ const trigger: Rule = { type: true, atMs: true, encounterId: true, checkpointId:
 const group: Rule = { enemyKind: true, count: true, delayMs: true, spawnStaggerMs: true, front: true, spawnArea: rect };
 const policy: Rule = {
   arenaWidthCells: true, arenaHeightCells: true, rockFillRatio: true, treeCount: true,
+  trackMode: true, trackPosition: true,
+  powerUps: { $items: { defId: true, anchor: point, region: true, respawnMs: true, spawnOnArenaStart: true }, $mutable: true },
   rockField: { fillMode: true, corridorRadiusCells: true, corridorRadiusVarianceCells: true, corridorWanderCells: true,
     waypointJitterCells: true, rockDensityScale: true,
     corridors: { $items: { id: true, radiusCells: true, points: { $items: point, $mutable: true } }, $mutable: true, $id: 'id' } },
@@ -14,7 +16,8 @@ const policy: Rule = {
   rockWalls: { $items: { ...rect as object, id: true }, $mutable: true, $id: 'id' },
   tutorialAnchor: point, tutorialSteps: { $items: { anchor: point }, $mutable: false, $id: 'id' },
   persistentBase: { anchor: point },
-  bases: { $items: { anchor: { kind: true, gridX: true, gridY: true, dxCells: true, dyCells: true, edgeInsetCells: true } }, $mutable: false, $id: 'id' },
+  bases: { $items: { anchor: { kind: true, gridX: true, gridY: true, dxCells: true, dyCells: true, edgeInsetCells: true },
+    powerUpPedestals: { $items: { defId: true, cellOffset: point }, $mutable: false, $id: 'id' } }, $mutable: false, $id: 'id' },
   missionProgress: { startArea: { ...point as object, radiusCells: true },
     checkpoints: { $items: { ...point as object, radiusCells: true }, $mutable: false, $id: 'id' } },
   secondaryObjectives: { $items: { carry: { spawnZone: rect, deliveryZone: rect } }, $mutable: false, $id: 'id' },

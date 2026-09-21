@@ -108,7 +108,7 @@
     "baseId": "coop-base-rear",
     "anchor": {
       "gridX": 79,
-      "gridY": 25
+      "gridY": 26
     }
   },
   "powerUps": [
@@ -137,7 +137,7 @@
       "start": { "type": "time", "atMs": 3000 },
       "restAfterMs": 3000,
       "groups": [
-        { "enemyKind": "void-stalker", "count": 1, "front": "west" },
+        { "enemyKind": "void-stalker", "count": 2, "front": "west" },
         { "enemyKind": "spore-warden", "count": 6, "front": "west" },
         { "enemyKind": "zombie-badger", "count": 16, "front": "west" },
         { "enemyKind": "zombie-badger", "count": 16, "front": "north" },
@@ -190,6 +190,259 @@
   ],
   "tutorialAnchor": {
     "gridX": 78,
-    "gridY": 8
-  }
+    "gridY": 6
+  },
+  "waterAreas": [
+    {
+      "gridX": 78,
+      "gridY": 41,
+      "widthCells": 14,
+      "heightCells": 11
+    },
+    {
+      "gridX": 63,
+      "gridY": 41,
+      "widthCells": 15,
+      "heightCells": 3
+    },
+    {
+      "gridX": 64,
+      "gridY": 40,
+      "widthCells": 10,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 40,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 89,
+      "gridY": 38,
+      "widthCells": 3,
+      "heightCells": 3
+    },
+    {
+      "gridX": 71,
+      "gridY": 44,
+      "widthCells": 7,
+      "heightCells": 3
+    }
+  ],
+  "water": [
+    {
+      "gridX": 62,
+      "gridY": 42
+    },
+    {
+      "gridX": 62,
+      "gridY": 43
+    },
+    {
+      "gridX": 62,
+      "gridY": 44
+    },
+    {
+      "gridX": 63,
+      "gridY": 44
+    },
+    {
+      "gridX": 64,
+      "gridY": 44
+    },
+    {
+      "gridX": 65,
+      "gridY": 44
+    },
+    {
+      "gridX": 66,
+      "gridY": 44
+    },
+    {
+      "gridX": 67,
+      "gridY": 44
+    },
+    {
+      "gridX": 67,
+      "gridY": 45
+    },
+    {
+      "gridX": 68,
+      "gridY": 45
+    },
+    {
+      "gridX": 69,
+      "gridY": 45
+    },
+    {
+      "gridX": 69,
+      "gridY": 44
+    },
+    {
+      "gridX": 68,
+      "gridY": 44
+    },
+    {
+      "gridX": 70,
+      "gridY": 45
+    },
+    {
+      "gridX": 70,
+      "gridY": 46
+    },
+    {
+      "gridX": 70,
+      "gridY": 44
+    },
+    {
+      "gridX": 69,
+      "gridY": 46
+    },
+    {
+      "gridX": 69,
+      "gridY": 47
+    },
+    {
+      "gridX": 70,
+      "gridY": 47
+    },
+    {
+      "gridX": 71,
+      "gridY": 47
+    },
+    {
+      "gridX": 72,
+      "gridY": 47
+    },
+    {
+      "gridX": 73,
+      "gridY": 47
+    },
+    {
+      "gridX": 74,
+      "gridY": 47
+    },
+    {
+      "gridX": 75,
+      "gridY": 47
+    },
+    {
+      "gridX": 75,
+      "gridY": 48
+    },
+    {
+      "gridX": 74,
+      "gridY": 48
+    },
+    {
+      "gridX": 73,
+      "gridY": 48
+    },
+    {
+      "gridX": 76,
+      "gridY": 48
+    },
+    {
+      "gridX": 76,
+      "gridY": 47
+    },
+    {
+      "gridX": 77,
+      "gridY": 48
+    },
+    {
+      "gridX": 77,
+      "gridY": 49
+    },
+    {
+      "gridX": 77,
+      "gridY": 47
+    },
+    {
+      "gridX": 76,
+      "gridY": 49
+    },
+    {
+      "gridX": 75,
+      "gridY": 49
+    },
+    {
+      "gridX": 76,
+      "gridY": 50
+    },
+    {
+      "gridX": 77,
+      "gridY": 50
+    },
+    {
+      "gridX": 77,
+      "gridY": 51
+    },
+    {
+      "gridX": 76,
+      "gridY": 51
+    },
+    {
+      "gridX": 70,
+      "gridY": 48
+    },
+    {
+      "gridX": 69,
+      "gridY": 48
+    },
+    {
+      "gridX": 69,
+      "gridY": 49
+    },
+    {
+      "gridX": 68,
+      "gridY": 49
+    },
+    {
+      "gridX": 68,
+      "gridY": 48
+    },
+    {
+      "gridX": 68,
+      "gridY": 47
+    },
+    {
+      "gridX": 67,
+      "gridY": 48
+    },
+    {
+      "gridX": 67,
+      "gridY": 49
+    },
+    {
+      "gridX": 88,
+      "gridY": 39
+    },
+    {
+      "gridX": 88,
+      "gridY": 38
+    },
+    {
+      "gridX": 90,
+      "gridY": 37
+    },
+    {
+      "gridX": 89,
+      "gridY": 37
+    },
+    {
+      "gridX": 89,
+      "gridY": 36
+    },
+    {
+      "gridX": 90,
+      "gridY": 36
+    },
+    {
+      "gridX": 91,
+      "gridY": 37
+    }
+  ],
+  "treeCount": 7
 }

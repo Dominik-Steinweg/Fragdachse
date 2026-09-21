@@ -113,6 +113,7 @@ summary{cursor:pointer;color:#c5d0cc;font-size:11px;margin-bottom:8px}
 .enemy-row>:nth-child(4){grid-column:2;grid-row:2;font-size:11px}
 .enemy-row>:nth-child(5){grid-column:3;grid-row:1;font-size:12px}
 .enemy-row>:nth-child(6){grid-column:3;grid-row:2}
+.enemy-row>:nth-child(7){grid-column:3;grid-row:3}
 .encounter-detail .toolbar{position:sticky;top:-18px;background:#1c292c;padding:8px 0;z-index:2;flex-wrap:wrap}
 
 

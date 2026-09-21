@@ -35,6 +35,8 @@ Die registryfreien Map-Typen und Normalisierungsregeln liegen in [coopDefenseMap
 
 Besonders wichtig ist die Base-Trennung: dauerhafte Geometrie, Fraktion, Rolle, Anker und Spawn-Zentrum sind World-Inhalt; Missionsfaktoren, Dormancy und Power-Up-Flächen sind Activity-Overlay. Neue Felder werden dem fachlichen Owner zugeordnet, nicht einfach in beide Modelle kopiert.
 
+Gleismodi unterscheiden sichtbare Schienen und reservierte Geometrie: `rails` erzeugt beides, `void-fire` reserviert den Korridor ohne Schienen, `none` erzeugt weder Schienen noch eine Korridorreservierung. Eine gespeicherte `trackPosition` bleibt bei `none` erhalten, sperrt aber keine Wasserzellen. Zugereignisse sind ausschließlich mit `rails` gültig; Werkzeuge dürfen sie beim Abschalten der Gleise nicht stillschweigend entfernen. Die Normalisierung und Generatorprüfungen in `MapEditorPreview.test.ts` sichern diese Grenze.
+
 ## Lobby
 
 Die Lobby ist eine normale authored World mit world:lobby. Sie hat keine authored Activity, keine Sonder-Scene und keine Ambient-Simulationsarchitektur. World-Definition und Layout werden über die normalen Resolver und Renderer verarbeitet. Siehe [lobbyWorld.ts](../../src/config/authoring/lobbyWorld.ts) und [LobbyWorldLayout.ts](../../src/arena/LobbyWorldLayout.ts).

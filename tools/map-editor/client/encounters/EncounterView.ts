@@ -24,7 +24,6 @@ export function encounterXp(encounter: JsonObject): { xp: number; direct: number
 export class EncounterView {
   selectedId: string | null = null;
   search = '';
-  usedOnly = false;
   expanded = new Set<string>();
   private current: HTMLElement | null = null;
   constructor(private readonly env: EditorEnvironment) {}
@@ -121,17 +120,28 @@ export class EncounterView {
     env.session.splice(['encounters'], index, 1); env.changed();
   }
   private enemyList(index: number, encounter: JsonObject): HTMLElement {
-    const { env } = this, box = element('section', 'card'); box.append(heading(String(encounter.id), 'Alle Gegnerarten · 0 = nicht enthalten · Mehrere Gruppen bleiben getrennt'));
+    const { env } = this, box = element('section', 'card'); box.append(heading(String(encounter.id), 'Vorhandene Gegnerarten · Mehrere Gruppen bleiben getrennt'));
     const filters = element('div', 'toolbar'); const search = element('input'); search.type = 'search'; search.placeholder = 'Gegner suchen'; search.value = this.search;
     search.onchange = () => { this.search = search.value; env.changed(); };
     search.onkeydown = event => { if (event.key === 'Enter') { this.search = search.value; env.changed(); } };
-    filters.append(search, button(this.usedOnly ? 'Alle Arten anzeigen' : 'Nur verwendete anzeigen', () => { this.usedOnly = !this.usedOnly; env.changed(); })); box.append(filters);
+    filters.append(search); box.append(filters);
     const groups = array(encounter.groups);
+    const available = COOP_DEFENSE_ENEMY_KINDS.filter(kind => !getCoopDefenseEnemyConfig(kind).isBoss && !groups.some(g => g.enemyKind === kind));
+    let addition = available[0];
+    if (addition) {
+      const add = element('div', 'toolbar');
+      add.append(selectField('Neue Gegnerart', addition, available.map(value => ({ value, label: getEnemyName(value, 'de') })), value => { addition = value as typeof addition; }),
+        button('Gegnerart hinzufügen', () => {
+          env.session.splice(['encounters', index, 'groups'], groups.length, 0, [{ enemyKind: addition, count: 1 }]);
+          this.search = ''; this.expanded.add(addition); env.changed();
+        })); box.append(add);
+    }
+    if (!groups.length) box.append(element('p', 'muted', 'Noch keine Gegnerarten. Über die Auswahl eine Art hinzufügen.'));
     const list = element('div', 'enemy-list');
-    for (const kind of COOP_DEFENSE_ENEMY_KINDS) {
+    for (const kind of COOP_DEFENSE_ENEMY_KINDS.filter(kind => groups.some(g => g.enemyKind === kind))) {
       const config = getCoopDefenseEnemyConfig(kind), name = getEnemyName(kind, 'de');
       const indices = groups.flatMap((g, i) => g.enemyKind === kind ? [i] : []);
-      if (this.usedOnly && !indices.length || this.search && !`${name} ${kind}`.toLowerCase().includes(this.search.toLowerCase())) continue;
+      if (this.search && !`${name} ${kind}`.toLowerCase().includes(this.search.toLowerCase())) continue;
       const row = element('div', 'enemy-row'); const life = resolveEnemyLifecycleTotals(kind);
       const total = indices.reduce((sum, i) => sum + Number(groups[i].count), 0);
       row.append(element('strong', '', name), element('small', 'muted', kind));
@@ -144,6 +154,9 @@ export class EncounterView {
       row.append(element('span', 'numeric', `${config.xp} direkt / Gegner`), element('span', 'numeric', `${total * life.xp} XP (${total * life.followXp} Folge)${life.dynamic ? ' + dynamisch' : ''}`));
       if (config.isBoss) row.append(element('small', 'muted', 'Nur im Boss-Slot'));
       else row.append(button(`${this.expanded.has(kind) ? '−' : '+'} Gruppen`, () => { this.expanded.has(kind) ? this.expanded.delete(kind) : this.expanded.add(kind); env.changed(); }));
+      row.append(button('Gegnerart löschen', () => {
+        env.session.removeIndices(['encounters', index, 'groups'], indices); this.expanded.delete(kind); env.changed();
+      }, 'danger'));
       list.append(row);
       if (this.expanded.has(kind) && !config.isBoss) {
         indices.forEach(groupIndex => list.append(this.groupEditor(index, groupIndex, groups[groupIndex])));

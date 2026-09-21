@@ -16,8 +16,59 @@ import { resolveCoopDefenseMapMissionProgress } from '../../src/config/coopDefen
 import { CoopDefenseMissionProgressSystem } from '../../src/systems/CoopDefenseMissionProgressSystem';
 import { resolveActiveArenaWorldMetrics } from '../../src/world/WorldMetrics';
 import { CELL_SIZE } from '../../src/config';
+import { getCoopDefenseTutorialRockRegion } from '../../src/config/coopDefenseTutorial';
 
 describe('Coop defense arena generation', () => {
+  it('preserves tutorial banks and the checkpoint route across seeds', () => {
+    const tutorial = getCoopDefenseMapConfig('1');
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', tutorial.arenaWidthCells, tutorial.arenaHeightCells);
+    const panels = [
+      { anchor: tutorial.tutorialAnchor!, showControls: tutorial.tutorialShowControls },
+      ...tutorial.tutorialSteps!.map(step => ({ anchor: step.anchor!, showControls: false })),
+    ];
+    const route = resolveCoopDefenseMapMissionProgress(tutorial)!;
+    for (let seed = 1; seed <= 100; seed++) {
+      const layout = generateArenaWithActiveMetrics(seed, tutorial);
+      const rocks = new Map(layout.rocks.map(cell => [`${cell.gridX}:${cell.gridY}`, cell]));
+      const tracks = new Set(layout.tracks.flatMap(cell => [cell.gridX, cell.gridX + 1]));
+      for (const panel of panels) {
+        const region = getCoopDefenseTutorialRockRegion(panel.showControls, panel.anchor);
+        const minY = panel.anchor.gridY < GRID_ROWS / 2 ? 0 : region.minGridY;
+        const maxY = panel.anchor.gridY < GRID_ROWS / 2 ? region.maxGridY : GRID_ROWS - 1;
+        for (let y = minY; y <= maxY; y++) for (let x = region.minGridX; x <= region.maxGridX; x++) {
+          if (tracks.has(x)) continue;
+          const rock = rocks.get(`${x}:${y}`);
+          expect(rock, `seed ${seed} tutorial rock ${x}:${y}`).toBeDefined();
+          expect(rock?.indestructible).not.toBe(true);
+        }
+      }
+      // After the authored learning walls are destroyed, every checkpoint must be reachable.
+      const blocked = new Set([...layout.rocks, ...layout.trees, ...(layout.water ?? []),
+        ...resolveCoopDefenseBases(tutorial).flatMap(base => base.cells)].map(cell => `${cell.gridX}:${cell.gridY}`));
+      for (const wall of tutorial.rockWalls ?? []) {
+        for (let y = wall.gridY; y < wall.gridY + wall.heightCells; y++) {
+          for (let x = wall.gridX; x < wall.gridX + wall.widthCells; x++) blocked.delete(`${x}:${y}`);
+        }
+      }
+      const reached = new Set<string>();
+      const queue = [route.startArea!];
+      for (let i = 0; i < queue.length; i++) {
+        const cell = queue[i];
+        const key = `${cell.gridX}:${cell.gridY}`;
+        if (cell.gridX < 0 || cell.gridX >= GRID_COLS || cell.gridY < 0 || cell.gridY >= GRID_ROWS
+          || blocked.has(key) || reached.has(key)) continue;
+        reached.add(key);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          queue.push({ ...cell, gridX: cell.gridX + dx, gridY: cell.gridY + dy });
+        }
+      }
+      for (const checkpoint of route.checkpoints) {
+        expect(reached.has(`${checkpoint.gridX}:${checkpoint.gridY}`), `seed ${seed} ${checkpoint.id}`).toBe(true);
+      }
+    }
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
+  }, 120_000);
+
   it('keeps a two-cell dry walk around the authored test pond across seeds', () => {
     const pondMap = getCoopDefenseMapConfig('0');
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', pondMap.arenaWidthCells, pondMap.arenaHeightCells);

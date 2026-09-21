@@ -5,7 +5,7 @@
   "timeOfDay": "22:30",
   "objective": "defeat-boss",
   "rockFillRatio": 0.2,
-  "trackPosition": "center",
+  "trackPosition": "left",
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
@@ -65,7 +65,7 @@
     "baseId": "coop-base-rear",
     "anchor": {
       "gridX": 61,
-      "gridY": 18
+      "gridY": 19
     }
   },
   "powerUps": [
@@ -134,5 +134,310 @@
       ]
     }
   ],
-  "persistentSpawns": []
+  "persistentSpawns": [],
+  "trackMode": "rails",
+  "tutorialAnchor": {
+    "gridX": 35,
+    "gridY": 5
+  },
+  "waterAreas": [
+    {
+      "gridX": 0,
+      "gridY": 30,
+      "widthCells": 22,
+      "heightCells": 7
+    },
+    {
+      "gridX": 22,
+      "gridY": 32,
+      "widthCells": 6,
+      "heightCells": 5
+    },
+    {
+      "gridX": 11,
+      "gridY": 24,
+      "widthCells": 5,
+      "heightCells": 6
+    },
+    {
+      "gridX": 0,
+      "gridY": 27,
+      "widthCells": 4,
+      "heightCells": 3
+    }
+  ],
+  "water": [
+    {
+      "gridX": 16,
+      "gridY": 26
+    },
+    {
+      "gridX": 16,
+      "gridY": 27
+    },
+    {
+      "gridX": 16,
+      "gridY": 28
+    },
+    {
+      "gridX": 16,
+      "gridY": 29
+    },
+    {
+      "gridX": 17,
+      "gridY": 29
+    },
+    {
+      "gridX": 18,
+      "gridY": 29
+    },
+    {
+      "gridX": 18,
+      "gridY": 28
+    },
+    {
+      "gridX": 17,
+      "gridY": 28
+    },
+    {
+      "gridX": 17,
+      "gridY": 27
+    },
+    {
+      "gridX": 18,
+      "gridY": 27
+    },
+    {
+      "gridX": 19,
+      "gridY": 28
+    },
+    {
+      "gridX": 19,
+      "gridY": 29
+    },
+    {
+      "gridX": 20,
+      "gridY": 29
+    },
+    {
+      "gridX": 22,
+      "gridY": 30
+    },
+    {
+      "gridX": 23,
+      "gridY": 30
+    },
+    {
+      "gridX": 23,
+      "gridY": 31
+    },
+    {
+      "gridX": 22,
+      "gridY": 31
+    },
+    {
+      "gridX": 24,
+      "gridY": 31
+    },
+    {
+      "gridX": 25,
+      "gridY": 31
+    },
+    {
+      "gridX": 27,
+      "gridY": 31
+    },
+    {
+      "gridX": 28,
+      "gridY": 32
+    },
+    {
+      "gridX": 28,
+      "gridY": 33
+    },
+    {
+      "gridX": 28,
+      "gridY": 35
+    },
+    {
+      "gridX": 29,
+      "gridY": 33
+    },
+    {
+      "gridX": 29,
+      "gridY": 34
+    },
+    {
+      "gridX": 28,
+      "gridY": 34
+    },
+    {
+      "gridX": 28,
+      "gridY": 36
+    },
+    {
+      "gridX": 10,
+      "gridY": 25
+    },
+    {
+      "gridX": 10,
+      "gridY": 26
+    },
+    {
+      "gridX": 9,
+      "gridY": 26
+    },
+    {
+      "gridX": 9,
+      "gridY": 27
+    },
+    {
+      "gridX": 9,
+      "gridY": 28
+    },
+    {
+      "gridX": 8,
+      "gridY": 28
+    },
+    {
+      "gridX": 8,
+      "gridY": 29
+    },
+    {
+      "gridX": 7,
+      "gridY": 29
+    },
+    {
+      "gridX": 9,
+      "gridY": 29
+    },
+    {
+      "gridX": 10,
+      "gridY": 29
+    },
+    {
+      "gridX": 10,
+      "gridY": 28
+    },
+    {
+      "gridX": 10,
+      "gridY": 27
+    },
+    {
+      "gridX": 1,
+      "gridY": 26
+    },
+    {
+      "gridX": 0,
+      "gridY": 26
+    },
+    {
+      "gridX": 0,
+      "gridY": 25
+    },
+    {
+      "gridX": 4,
+      "gridY": 28
+    },
+    {
+      "gridX": 4,
+      "gridY": 29
+    },
+    {
+      "gridX": 5,
+      "gridY": 29
+    },
+    {
+      "gridX": 6,
+      "gridY": 29
+    },
+    {
+      "gridX": 4,
+      "gridY": 27
+    },
+    {
+      "gridX": 2,
+      "gridY": 26
+    },
+    {
+      "gridX": 3,
+      "gridY": 26
+    },
+    {
+      "gridX": 4,
+      "gridY": 26
+    },
+    {
+      "gridX": 5,
+      "gridY": 27
+    },
+    {
+      "gridX": 5,
+      "gridY": 28
+    },
+    {
+      "gridX": 6,
+      "gridY": 28
+    },
+    {
+      "gridX": 2,
+      "gridY": 25
+    },
+    {
+      "gridX": 1,
+      "gridY": 25
+    },
+    {
+      "gridX": 1,
+      "gridY": 24
+    },
+    {
+      "gridX": 2,
+      "gridY": 24
+    },
+    {
+      "gridX": 2,
+      "gridY": 23
+    },
+    {
+      "gridX": 3,
+      "gridY": 24
+    },
+    {
+      "gridX": 3,
+      "gridY": 25
+    },
+    {
+      "gridX": 4,
+      "gridY": 25
+    },
+    {
+      "gridX": 6,
+      "gridY": 25
+    },
+    {
+      "gridX": 5,
+      "gridY": 25
+    },
+    {
+      "gridX": 5,
+      "gridY": 26
+    },
+    {
+      "gridX": 6,
+      "gridY": 26
+    },
+    {
+      "gridX": 6,
+      "gridY": 24
+    },
+    {
+      "gridX": 5,
+      "gridY": 24
+    },
+    {
+      "gridX": 7,
+      "gridY": 25
+    }
+  ]
 }

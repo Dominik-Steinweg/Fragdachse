@@ -7,7 +7,7 @@ import { generatePreview } from '../tools/map-editor/client/preview/generate';
 import { geometryRevision, PreviewController } from '../tools/map-editor/client/preview/PreviewController';
 import { MapDocumentSession } from '../tools/map-editor/client/document/MapDocumentSession';
 import { mapObjects, moveMapObject } from '../tools/map-editor/client/map/objects';
-import { clone } from '../tools/map-editor/shared/json';
+import { clone, type JsonObject } from '../tools/map-editor/shared/json';
 import { planTutorialSweep } from '../src/systems/CoopDefenseAirstrikeEventHandler';
 import { applyArenaMetricsForMode, CELL_SIZE } from '../src/config';
 
@@ -15,6 +15,44 @@ const raw = () => JSON.parse(readFileSync(new URL('../src/config/coopDefenseMaps
 afterEach(() => { vi.unstubAllGlobals(); applyArenaMetricsForMode('deathmatch', 'LOBBY'); });
 
 describe('map editor geometry and real generator', () => {
+  const contentMap = (): JsonObject => ({ mapId: 'editor-content-test', balanceReferenceDurationSec: 60, objective: 'survive', surviveDurationSec: 60, respawnsPerPlayer: 0, bases: [], powerUps: [], rockFillRatio: 0, treeCount: 0 });
+  const sessionFor = (document: JsonObject) => new MapDocumentSession('map.json', { sourceKey: 'map.json', mapId: String(document.mapId), document, revision: 'r', text: JSON.stringify(document) });
+  it('disables the entire railway reservation while retaining its position and rejecting train events', () => {
+    const document = contentMap(); document.trackMode = 'none'; document.trackPosition = { kind: 'grid', gridX: 10 };
+    document.waterAreas = [{ gridX: 10, gridY: 5, widthCells: 2, heightCells: 2 }];
+    const result = generatePreview(document, 1234);
+    expect(result.layout.tracks).toEqual([]); expect(result.layout.water).toHaveLength(4);
+    document.trackMode = 'rails'; expect(() => generatePreview(document, 1234)).toThrow(/railway/);
+    document.trackMode = 'none'; document.mapEvents = [{ id: 'train', type: 'train', start: { type: 'time', atMs: 0 } }];
+    expect(() => generatePreview(document, 1234)).toThrow(/train event but no rails/);
+  });
+  it('moves railways horizontally and regenerates at the authored column', () => {
+    const session = sessionFor(contentMap()), preview = generatePreview(session.draft, 1234);
+    const item = mapObjects(session, session.draft, preview).find(i => i.kind === 'track')!;
+    session.transact('drag', draft => moveMapObject(draft, item, 3, 5));
+    expect(session.draft.trackPosition).toEqual({ kind: 'grid', gridX: item.x + 3 });
+    const moved = generatePreview(session.draft, 1234);
+    expect(moved.layout.tracks.every(track => track.gridX === item.x + 3)).toBe(true);
+    session.undo(); expect(session.draft.trackPosition).toBeUndefined();
+  });
+  it('pins automatic power-ups to dragged cells and preserves linked offsets, unknown fields and undo', () => {
+    const document = contentMap(); document.trackMode = 'none';
+    document.powerUps = [{ defId: 'ARMOR', region: 'middle', respawnMs: 5000, extension: 'keep' }];
+    const session = sessionFor(document), preview = generatePreview(document, 1234);
+    const item = mapObjects(session, session.draft, preview).find(i => i.kind === 'powerup')!;
+    expect(item.hidden).toBe(false);
+    session.transact('drag', draft => moveMapObject(draft, item, 1, 0));
+    (session.draft.powerUps as JsonObject[])[0].defId = 'HEALTH_PACK';
+    const moved = generatePreview(session.draft, 1234);
+    expect(moved.layout.powerUpPedestals[0]).toMatchObject({ defId: 'HEALTH_PACK', gridX: item.x + 1, gridY: item.y });
+    expect((session.draft.powerUps as JsonObject[])[0].extension).toBe('keep');
+    session.undo(); expect(session.draft).toEqual(document);
+    session.draft.bases = [{ id: 'b', anchor: { kind: 'grid', gridX: 10, gridY: 10 }, shape: { kind: 'rectangle', widthCells: 2, heightCells: 2 }, powerUpPedestals: [{ id: 'p', defId: 'ARMOR', cellOffset: { gridX: 2, gridY: 0 } }] }];
+    const linked = mapObjects(session).find(i => i.id === 'base-powerup:b:p')!;
+    expect(linked.x).toBe(12); expect(linked.y).toBe(10);
+    moveMapObject(session.draft, linked, 3, -1);
+    expect(mapObjects(session).find(i => i.id === linked.id)).toMatchObject({ x: 15, y: 9 });
+  });
   it('uses the same full map and explicit metrics as runtime generation', () => {
     const draft = raw(), normalized = normalizeCoopDefenseMapConfig(clone(draft));
     const metrics = resolveCoopDefenseWorldMetrics(normalized.arenaWidthCells, normalized.arenaHeightCells);

@@ -20,6 +20,7 @@ export class MapCanvas {
   private drag: Drag | null = null;
   private raster = new Map<string, HTMLCanvasElement>();
   private preview: PreviewResult | null = null;
+  get previewResult(): PreviewResult | null { return this.preview; }
   private observer: ResizeObserver;
   constructor(private readonly env: EditorEnvironment, private readonly selected: () => void,
     private readonly draw: (tool: DrawTool, rect: Rect, end: { x: number; y: number }, start: { x: number; y: number }) => void) {
@@ -46,6 +47,7 @@ export class MapCanvas {
     this.panX = (this.canvas.clientWidth - m.gridCols * this.scale) / 2; this.panY = (this.canvas.clientHeight - m.gridRows * this.scale) / 2; this.paint();
   }
   focus(item: MapObject): void {
+    if (item.hidden) return;
     this.panX = this.canvas.clientWidth / 2 - (item.x + item.w / 2) * this.scale;
     this.panY = this.canvas.clientHeight / 2 - (item.y + item.h / 2) * this.scale; this.paint();
   }
@@ -59,9 +61,9 @@ export class MapCanvas {
     };
     make('terrain', result.layout.rocks, '#657176'); make('water', result.layout.water ?? [], '#245f7c');
     make('trees', result.layout.trees, '#60946a'); make('tracks', result.layout.tracks, '#a19a7f', 2);
-    make('structures', result.layout.powerUpPedestals, '#e1b86b');
+    make('powerups', result.layout.powerUpPedestals, '#94e2b5');
     make('mission', result.layout.groundHazardZones?.flatMap(z => z.cells) ?? [], '#985b7e');
-    this.paint();
+    this.paint(); this.selected();
   }
   paint(): void {
     const width = this.canvas.clientWidth, height = this.canvas.clientHeight;
@@ -83,7 +85,7 @@ export class MapCanvas {
     }
     // Authored single cells remain visible before regeneration.
     if (this.layers.has('water')) { c.fillStyle = '#48b7e6aa'; for (const cell of (draft.water ?? []) as { gridX: number; gridY: number }[]) c.fillRect(cell.gridX, cell.gridY, 1, 1); }
-    for (const item of mapObjects(this.env.session, draft)) if (this.layers.has(item.layer)) this.paintObject(c, item, item.id === this.env.session.selection);
+    for (const item of mapObjects(this.env.session, draft, this.preview)) if (!item.hidden && this.layers.has(item.layer)) this.paintObject(c, item, item.id === this.env.session.selection);
     const drag = this.drag;
     if (drag && ['waterArea', 'rockWall', 'selected', 'corridor'].includes(drag.mode)) {
       const end = this.lastWorld; c.strokeStyle = '#f5d08b'; c.lineWidth = 2 / this.scale; c.setLineDash([5 / this.scale, 3 / this.scale]);
@@ -127,7 +129,7 @@ export class MapCanvas {
     if (!commitFocused()) return; e.preventDefault(); this.canvas.focus(); this.canvas.setPointerCapture(e.pointerId);
     const screen = this.screen(e), start = this.world(screen); this.lastWorld = start;
     let mode = e.button !== 0 ? 'pan' as DrawTool : this.tool;
-    const items = mapObjects(this.env.session).filter(i => this.layers.has(i.layer));
+    const items = mapObjects(this.env.session, this.env.session.draft, this.preview).filter(i => !i.hidden && this.layers.has(i.layer));
     let item = items.find(i => i.id === this.env.session.selection), vertex = -1, corner = -1;
     const near = (p: { x: number; y: number }) => Math.hypot(p.x - start.x, p.y - start.y) * this.scale < 9;
     if (mode === 'select') {

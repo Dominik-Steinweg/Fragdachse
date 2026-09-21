@@ -1693,7 +1693,7 @@
     {
       "id": "map01-utility",
       "checkpointId": "cp2-utility",
-      "anchor": { "gridX": 71, "gridY": 6 }
+      "anchor": { "gridX": 71, "gridY": 4 }
     },
     {
       "id": "map01-burrow",
@@ -1757,7 +1757,7 @@
           "enemyKind": "zombie-badger",
           "count": 3,
           "spawnStaggerMs": 1600,
-          "spawnArea": {"gridX": 151, "gridY": 8, "widthCells": 20, "heightCells": 16}
+          "spawnArea": {"gridX": 132, "gridY": 8, "widthCells": 20, "heightCells": 16}
         },
         {
           "enemyKind": "zombie-badger",

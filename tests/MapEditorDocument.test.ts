@@ -57,6 +57,30 @@ describe('Map editor authoring documents', () => {
     expect(JSON.parse(result)).toEqual(parsed); expect(result).toContain('"unknown": { "a": [1,2] }');
     delete parsed.treeCount; expect(JSON.parse(updateJsonText(result, parsed))).toEqual(parsed);
   });
+  it('removes all groups of a kind atomically without changing other selection keys or metadata', () => {
+    const loaded = load();
+    loaded.document.encounters = [{ id: 'a', groups: [{ enemyKind: 'one', count: 1 }, { enemyKind: 'two', count: 3, future: 'keep' }, { enemyKind: 'one', count: 2 }] }];
+    const session = new MapDocumentSession(loaded.sourceKey, loaded), path = ['encounters', 0, 'groups'];
+    const keptKey = session.key(path, 1);
+    session.removeIndices(path, [0, 2]);
+    expect((session.draft.encounters as JsonObject[])[0].groups).toEqual([{ enemyKind: 'two', count: 3, future: 'keep' }]);
+    expect(session.key(path, 0)).toBe(keptKey);
+    session.undo(); expect(session.draft).toEqual(loaded.document); expect(session.key(path, 1)).toBe(keptKey);
+    expect(session.canUndo).toBe(false);
+    session.redo(); expect(session.key(path, 0)).toBe(keptKey);
+  });
+  it('permits power-up and track edits while protecting linked pedestal identity and timing', () => {
+    const before: JsonObject = { powerUps: [{ defId: 'ARMOR', region: 'front', respawnMs: 5000, extension: 'keep' }], bases: [{ id: 'base', powerUpPedestals: [{ id: 'p', defId: 'ARMOR', cellOffset: { gridX: 0, gridY: 0 }, respawnMs: 1000 }] }] };
+    const after = clone(before);
+    after.trackMode = 'none'; after.trackPosition = { kind: 'grid', gridX: 10 };
+    (after.powerUps as JsonObject[])[0].anchor = { gridX: 15, gridY: 8 };
+    (after.powerUps as JsonObject[])[0].defId = 'HEALTH_PACK';
+    const linked = ((after.bases as JsonObject[])[0].powerUpPedestals as JsonObject[])[0];
+    linked.defId = 'HEALTH_PACK'; linked.cellOffset = { gridX: -2, gridY: 3 };
+    expect(() => assertSupportedMapEdit(before, after)).not.toThrow();
+    linked.respawnMs = 2000; expect(() => assertSupportedMapEdit(before, after)).toThrow();
+    linked.respawnMs = 1000; linked.id = 'replacement'; expect(() => assertSupportedMapEdit(before, after)).toThrow();
+  });
   it('rejects unsupported edits but permits preserved extension fields and copied groups', () => {
     const before = load().document; before.extension = { keep: true };
     let after = clone(before); after.treeCount = 1; expect(() => assertSupportedMapEdit(before, after)).not.toThrow();

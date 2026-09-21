@@ -38,6 +38,15 @@ describe('Map editor local file replacement', () => {
     await expect(store.save('map.json', loaded.revision, next)).rejects.toMatchObject({ status: 409 });
     expect(await readFile(join(directory, 'map.json'), 'utf8')).toBe(externallyEdited);
   });
+  it('round-trips new power-up anchors and disabled tracks through the protected writer', async () => {
+    const { store, loaded } = await setup();
+    const next = clone(loaded.document); next.trackMode = 'none'; next.trackPosition = { kind: 'grid', gridX: 12 };
+    next.powerUps = [{ defId: 'HEALTH_PACK', region: 'middle', anchor: { gridX: 15, gridY: 8 }, respawnMs: 5000 }];
+    const saved = await store.save('map.json', loaded.revision, next);
+    expect((await store.load('map.json')).document).toEqual(next);
+    const removed = clone(saved.document); removed.powerUps = [];
+    expect((await store.save('map.json', saved.revision, removed)).document.powerUps).toEqual([]);
+  });
   it('retains the original if atomic replacement fails and removes the prepared temporary file', async () => {
     const replace = vi.fn(async () => { throw Error('Sharing violation'); });
     const { store, loaded, directory, original } = await setup(replace);

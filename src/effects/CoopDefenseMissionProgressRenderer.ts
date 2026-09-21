@@ -22,6 +22,7 @@ interface CheckpointVisual {
   opacity: number;
   activatedAtMs: number | null;
   completedAtMs: number | null;
+  completionFxStartedAtMs: number | null;
 }
 
 function writeColor(target: Float32Array, color: number): void {
@@ -73,6 +74,7 @@ export class CoopDefenseMissionProgressRenderer {
     this.ambientCount = quality === 'low' ? 0 : quality === 'medium' ? 6 : 12;
     this.burstCount = this.ambientCount * 2;
     if (this.missionRevision === state.missionRevision) return;
+    const hadSnapshot = this.missionRevision !== -1;
     this.missionRevision = state.missionRevision;
 
     const activated = new Map(state.activatedCheckpoints.map(({ checkpointId, activatedAtRoundMs }) => [
@@ -82,8 +84,16 @@ export class CoopDefenseMissionProgressRenderer {
       checkpointId, completedAtRoundMs,
     ]));
     for (const visual of this.checkpoints) {
+      const completedAtMs = completed.get(visual.id) ?? null;
+      if (completedAtMs === null) {
+        visual.completionFxStartedAtMs = null;
+      } else if (visual.completedAtMs === null) {
+        // Simulation time can drift from the wall clock used by presentation. An observed
+        // transition must play now; an initial/late-join snapshot must not replay old events.
+        visual.completionFxStartedAtMs = hadSnapshot ? this.elapsedMs : completedAtMs;
+      }
       visual.activatedAtMs = activated.get(visual.id) ?? null;
-      visual.completedAtMs = completed.get(visual.id) ?? null;
+      visual.completedAtMs = completedAtMs;
       const reached = visual.activatedAtMs !== null;
       const done = visual.completedAtMs !== null;
       visual.next = !reached && state.nextCheckpointId === visual.id;
@@ -137,7 +147,8 @@ export class CoopDefenseMissionProgressRenderer {
             // Completion owns the feedback, including checkpoints completed on entry.
             const ageMs = visual.activatedAtMs === null || visual.completedAtMs !== null
               ? -1 : this.elapsedMs - visual.activatedAtMs;
-            const completionAgeMs = visual.completedAtMs === null ? -1 : this.elapsedMs - visual.completedAtMs;
+            const completionAgeMs = visual.completionFxStartedAtMs === null
+              ? -1 : this.elapsedMs - visual.completionFxStartedAtMs;
             const camera = drawingContext.camera;
             setUniform('uSize', size);
             setUniform('uRadius', radius);
@@ -164,7 +175,7 @@ export class CoopDefenseMissionProgressRenderer {
       );
       const visual: CheckpointVisual = {
         id: checkpoint.id, quad, extraction, color: new Float32Array(3),
-        next: false, opacity: 0, activatedAtMs: null, completedAtMs: null,
+        next: false, opacity: 0, activatedAtMs: null, completedAtMs: null, completionFxStartedAtMs: null,
       };
       quad.setOrigin(0.5).setDepth(DEPTH.ROCKS - 0.5).setBlendMode(Phaser.BlendModes.NORMAL);
       // Direct display-list children retain normal camera culling and world-camera assignment.
