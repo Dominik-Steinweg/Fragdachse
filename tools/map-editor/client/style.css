@@ -73,13 +73,6 @@ summary{cursor:pointer;color:#c5d0cc;font-size:11px;margin-bottom:8px}
 .row-actions button{font-size:10px;padding:5px;margin:2px}
 .card{padding:18px;border:1px solid var(--line);border-radius:7px;background:#1c292c;margin:20px 0}
 .card> .field{max-width:300px}
-.enemy-row{display:grid;grid-template-columns:minmax(130px,1.4fr) minmax(90px,1fr) 155px minmax(90px,.8fr) minmax(160px,1.1fr) 100px;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
-.enemy-row .field{margin:0}
-.enemy-row .field>span,.enemy-row .field>small{display:none}
-.enemy-row strong{font-weight:500}
-.group-row{padding:14px 16px;margin:8px 0 12px 28px;background:#162124;border-left:2px solid var(--accent);display:flex;align-items:center;gap:15px;flex-wrap:wrap}
-.group-row .field{width:135px;margin:0}
-.group-row button{font-size:11px;max-width:170px}
 .metric{font-size:24px;color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums}
 .diagnostics{padding:10px 18px;border-top:1px solid var(--line);max-height:180px;overflow:auto;background:#172124}
 .message{white-space:pre-wrap;font:12px/1.5 inherit;color:#f0c18d;margin:3px 0 10px}
@@ -90,7 +83,6 @@ summary{cursor:pointer;color:#c5d0cc;font-size:11px;margin-bottom:8px}
 .error{color:#ed9b99}
 @media(max-width:1150px){.map-workspace{grid-template-columns:185px minmax(300px,1fr) 245px}
 .file-info{display:block;order:1;flex-basis:100%;max-width:none}
-.enemy-row{grid-template-columns:1fr 90px 140px 100px 170px 80px}
 .app-header{padding:10px}
 .brand{min-width:145px}
 }
@@ -106,14 +98,6 @@ summary{cursor:pointer;color:#c5d0cc;font-size:11px;margin-bottom:8px}
 .encounter-overview{max-height:32vh;min-height:125px;overflow:auto;flex-shrink:0}
 .encounter-detail{display:grid;grid-template-columns:minmax(400px,1fr) 290px;gap:16px;flex:1;min-height:240px}
 .encounter-detail>.card{overflow:auto;min-height:0;margin:14px 0 0}
-.encounter-detail .enemy-row{grid-template-columns:minmax(90px,1.3fr) minmax(90px,1fr) minmax(100px,1.2fr);gap:7px 14px}
-.enemy-row>:nth-child(1){grid-column:1;grid-row:1}
-.enemy-row>:nth-child(2){grid-column:1;grid-row:2;overflow-wrap:anywhere}
-.enemy-row>:nth-child(3){grid-column:2;grid-row:1}
-.enemy-row>:nth-child(4){grid-column:2;grid-row:2;font-size:11px}
-.enemy-row>:nth-child(5){grid-column:3;grid-row:1;font-size:12px}
-.enemy-row>:nth-child(6){grid-column:3;grid-row:2}
-.enemy-row>:nth-child(7){grid-column:3;grid-row:3}
 .encounter-detail .toolbar{position:sticky;top:-18px;background:#1c292c;padding:8px 0;z-index:2;flex-wrap:wrap}
 
 
@@ -128,3 +112,13 @@ summary{cursor:pointer;color:#c5d0cc;font-size:11px;margin-bottom:8px}
 .diagnostics{max-height:23vh}
 
 .confirmation{background:#1c292c;color:#e4e7e0;border:1px solid #edba73;border-radius:8px;padding:24px;max-width:540px}.confirmation::backdrop{background:#0009}.confirmation-message{white-space:pre-wrap;line-height:1.6}.confirmation .toolbar{justify-content:flex-end;margin-bottom:0}
+.enemy-group{margin:12px 0;padding:14px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:5px;background:#162124}
+.enemy-group .section-heading{margin-bottom:12px}
+.enemy-group h2{font-size:14px}
+.group-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px}
+.group-fields .field{margin:0 0 6px}
+.spawn-area-fields{border-top:1px solid var(--line);padding-top:12px;margin-top:6px;grid-template-columns:repeat(2,minmax(100px,1fr))}
+.group-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.group-actions button{font-size:11px}
+.enemy-group p{font-size:11px}
+.property-panel li{margin-bottom:10px;overflow-wrap:anywhere;line-height:1.5}

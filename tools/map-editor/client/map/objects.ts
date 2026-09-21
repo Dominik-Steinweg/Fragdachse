@@ -11,6 +11,8 @@ import type { PreviewResult } from '../preview/generate';
 import type { CoopBaseConfig } from '../../../../src/config/coopDefenseMapAuthoring';
 import { at, array, object, set, type JsonObject, type Path } from '../../shared/json';
 import type { MapDocumentSession } from '../document/MapDocumentSession';
+import { activeSpawnFronts, FRONT_LABELS, type SpawnFrontSource } from '../../shared/spawns';
+import type { SpawnFront } from '../../../../src/types';
 
 export const LAYERS: Record<string, { label: string; color: string }> = {
   terrain: { label: 'Felsen / Boden', color: '#79838a' }, water: { label: 'Wasser', color: '#3eaddb' }, trees: { label: 'Bäume', color: '#5c9b63' },
@@ -18,10 +20,12 @@ export const LAYERS: Record<string, { label: string; color: string }> = {
   powerups: { label: 'Power-Ups', color: '#94e2b5' },
   mission: { label: 'Mission / Checkpoints', color: '#ce91e8' }, corridors: { label: 'Korridore', color: '#c4d897' },
   walls: { label: 'Felswände', color: '#e89973' }, tutorial: { label: 'Tutorial-Flächen', color: '#edcd66' }, spawns: { label: 'Spawngebiete', color: '#f3768f' },
+  fronts: { label: 'Aktive Spawnfronten', color: '#60d8ed' },
 };
 export interface MapObject {
   id: string; label: string; path: Path; layer: string;
-  kind: 'rect' | 'point' | 'corridor' | 'tutorial' | 'base' | 'powerup' | 'track';
+  kind: 'rect' | 'point' | 'corridor' | 'tutorial' | 'base' | 'powerup' | 'track' | 'front';
+  front?: SpawnFront; sources?: SpawnFrontSource[];
   powerUpPath?: Path; hidden?: boolean;
   x: number; y: number; w: number; h: number;
   points?: { x: number; y: number }[]; radius?: number;
@@ -103,6 +107,13 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
       const c = array(mission.checkpoints)[index];
       items.push({ id: 'persistent-preview', label: 'Basisvorschau → zugehöriger Checkpoint', path: ['missionProgress', 'checkpoints', index], layer: 'structures', kind: 'point', x: Number(c.gridX), y: Number(c.gridY), w: 1, h: 1, radius: 3 });
     }
+  }
+  for (const { front, sources } of activeSpawnFronts(draft)) {
+    const vertical = front === 'west' || front === 'east';
+    items.push({ id: `front:${front}`, label: `Spawnfront ${FRONT_LABELS[front]} · ${sources.length} ${sources.length === 1 ? 'Quelle' : 'Quellen'}`, path: sources[0].path,
+      layer: 'fronts', kind: 'front', front, sources, readonly: true,
+      x: front === 'east' ? metrics.gridCols - 1 : 0, y: front === 'south' ? metrics.gridRows - 1 : 0,
+      w: vertical ? 1 : metrics.gridCols, h: vertical ? metrics.gridRows : 1 });
   }
   return items;
 }

@@ -10,6 +10,8 @@ import { mapObjects, moveMapObject } from '../tools/map-editor/client/map/object
 import { clone, type JsonObject } from '../tools/map-editor/shared/json';
 import { planTutorialSweep } from '../src/systems/CoopDefenseAirstrikeEventHandler';
 import { applyArenaMetricsForMode, CELL_SIZE } from '../src/config';
+import { COOP_DEFENSE_ENEMY_KINDS, getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
+import { activeSpawnFronts } from '../tools/map-editor/shared/spawns';
 
 const raw = () => JSON.parse(readFileSync(new URL('../src/config/coopDefenseMaps/11-bombergeschwader.json', import.meta.url), 'utf8'));
 afterEach(() => { vi.unstubAllGlobals(); applyArenaMetricsForMode('deathmatch', 'LOBBY'); });
@@ -17,6 +19,39 @@ afterEach(() => { vi.unstubAllGlobals(); applyArenaMetricsForMode('deathmatch', 
 describe('map editor geometry and real generator', () => {
   const contentMap = (): JsonObject => ({ mapId: 'editor-content-test', balanceReferenceDurationSec: 60, objective: 'survive', surviveDurationSec: 60, respawnsPerPlayer: 0, bases: [], powerUps: [], rockFillRatio: 0, treeCount: 0 });
   const sessionFor = (document: JsonObject) => new MapDocumentSession('map.json', { sourceKey: 'map.json', mapId: String(document.mapId), document, revision: 'r', text: JSON.stringify(document) });
+  it('shows only defined map fronts while retaining separate spawn areas and every source reference', () => {
+    const document = contentMap(); document.arenaWidthCells = 100; document.arenaHeightCells = 50;
+    document.encounters = [{ id: 'waves', groups: [
+      { enemyKind: 'zombie-badger', count: 1 },
+      { enemyKind: 'zombie-badger', count: 2, front: 'north' },
+      { enemyKind: 'zombie-badger', count: 3, front: 'north' },
+      { enemyKind: 'zombie-badger', count: 4, spawnArea: { gridX: 3, gridY: 4, widthCells: 5, heightCells: 6 } },
+    ] }];
+    document.persistentSpawns = [
+      { id: 'east-source', enemyKind: 'zombie-badger', countPerTick: 1, source: { type: 'map' }, front: 'east' },
+      { id: 'base-source', enemyKind: 'zombie-badger', countPerTick: 1, source: { type: 'base', baseId: 'base' }, front: 'south' },
+    ];
+    document.boss = { enemyKind: COOP_DEFENSE_ENEMY_KINDS.find(kind => getCoopDefenseEnemyConfig(kind).isBoss)! };
+    const session = sessionFor(document), before = clone(document), items = mapObjects(session);
+    const fronts = items.filter(item => item.kind === 'front');
+    expect(fronts.map(item => item.front)).toEqual(['west', 'north', 'east']);
+    expect(fronts.find(item => item.front === 'north')).toMatchObject({ x: 0, y: 0, w: 100, h: 1, sources: [{ path: ['encounters', 0, 'groups', 1, 'front'] }, { path: ['encounters', 0, 'groups', 2, 'front'] }] });
+    expect(fronts.find(item => item.front === 'east')).toMatchObject({ x: 99, y: 0, w: 1, h: 50 });
+    expect(fronts.find(item => item.front === 'west')?.sources).toHaveLength(2);
+    expect(items.filter(item => item.layer === 'spawns')).toHaveLength(1);
+    moveMapObject(session.draft, fronts[0], 2, 3); expect(session.draft).toEqual(before);
+    session.change(['encounters', 0, 'groups', 1, 'front'], 'south');
+    expect(activeSpawnFronts(session.draft).map(item => item.front)).toEqual(['west', 'north', 'east', 'south']);
+    session.removeIndices(['encounters', 0, 'groups'], [1, 2]);
+    expect(activeSpawnFronts(session.draft).map(item => item.front)).toEqual(['west', 'east']);
+    session.undo(); expect(activeSpawnFronts(session.draft).map(item => item.front)).toContain('south');
+  });
+  it('accounts for edge-burrow enemies even when an ineffective spawn area is authored', () => {
+    const kind = COOP_DEFENSE_ENEMY_KINDS.find(kind => getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge)!;
+    expect(kind).toBeDefined();
+    const document = contentMap(); document.encounters = [{ id: 'edge', groups: [{ enemyKind: kind, count: 1, spawnArea: { gridX: 5, gridY: 5, widthCells: 3, heightCells: 3 } }] }];
+    expect(activeSpawnFronts(document).map(item => item.front)).toEqual(['west']);
+  });
   it('disables the entire railway reservation while retaining its position and rejecting train events', () => {
     const document = contentMap(); document.trackMode = 'none'; document.trackPosition = { kind: 'grid', gridX: 10 };
     document.waterAreas = [{ gridX: 10, gridY: 5, widthCells: 2, heightCells: 2 }];

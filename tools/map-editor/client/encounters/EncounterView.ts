@@ -4,8 +4,9 @@ import { DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS, type CoopDefenseMapAut
 import { collectCoopDefenseMapReferences, getCoopDefenseReferenceTargets } from '../../../../src/config/coopDefenseMapReferences';
 import { getEnemyName } from '../../../../src/i18n/contentPresentation';
 import { DEFAULT_SPAWN_FRONT, SPAWN_FRONTS } from '../../../../src/utils/spawnFront';
-import { array, at, clone, object, set, uniqueId, type JsonObject, type Path } from '../../shared/json';
+import { array, clone, object, uniqueId, type JsonObject, type Path } from '../../shared/json';
 import { validateDocument } from '../../shared/validation';
+import { FRONT_LABELS, setGroupSpawn, spawnsAtEdge } from '../../shared/spawns';
 import { button, confirmEdit, element, heading, numberField, selectField, type EditorEnvironment } from '../ui';
 
 export function encounterXp(encounter: JsonObject): { xp: number; direct: number; follow: number; count: number; complete: boolean; dynamic: boolean } {
@@ -24,7 +25,6 @@ export function encounterXp(encounter: JsonObject): { xp: number; direct: number
 export class EncounterView {
   selectedId: string | null = null;
   search = '';
-  expanded = new Set<string>();
   private current: HTMLElement | null = null;
   constructor(private readonly env: EditorEnvironment) {}
   render(): HTMLElement {
@@ -120,66 +120,62 @@ export class EncounterView {
     env.session.splice(['encounters'], index, 1); env.changed();
   }
   private enemyList(index: number, encounter: JsonObject): HTMLElement {
-    const { env } = this, box = element('section', 'card'); box.append(heading(String(encounter.id), 'Vorhandene Gegnerarten · Mehrere Gruppen bleiben getrennt'));
-    const filters = element('div', 'toolbar'); const search = element('input'); search.type = 'search'; search.placeholder = 'Gegner suchen'; search.value = this.search;
+    const { env } = this, box = element('section', 'card');
+    box.append(heading(String(encounter.id), 'Jede Gegnergruppe einzeln · Reihenfolge wie in der Map-Definition'));
+    const filters = element('div', 'toolbar'), search = element('input');
+    search.type = 'search'; search.placeholder = 'Gegner suchen'; search.value = this.search;
     search.onchange = () => { this.search = search.value; env.changed(); };
     search.onkeydown = event => { if (event.key === 'Enter') { this.search = search.value; env.changed(); } };
-    filters.append(search); box.append(filters);
-    const groups = array(encounter.groups);
-    const available = COOP_DEFENSE_ENEMY_KINDS.filter(kind => !getCoopDefenseEnemyConfig(kind).isBoss && !groups.some(g => g.enemyKind === kind));
+    filters.append(search);
+    const groups = array(encounter.groups), available = COOP_DEFENSE_ENEMY_KINDS.filter(kind => !getCoopDefenseEnemyConfig(kind).isBoss);
     let addition = available[0];
-    if (addition) {
-      const add = element('div', 'toolbar');
-      add.append(selectField('Neue Gegnerart', addition, available.map(value => ({ value, label: getEnemyName(value, 'de') })), value => { addition = value as typeof addition; }),
-        button('Gegnerart hinzufügen', () => {
-          env.session.splice(['encounters', index, 'groups'], groups.length, 0, [{ enemyKind: addition, count: 1 }]);
-          this.search = ''; this.expanded.add(addition); env.changed();
-        })); box.append(add);
-    }
-    if (!groups.length) box.append(element('p', 'muted', 'Noch keine Gegnerarten. Über die Auswahl eine Art hinzufügen.'));
+    filters.append(selectField('Gegnerart für neue Gruppe', addition, available.map(value => ({ value, label: getEnemyName(value, 'de') })), value => { addition = value as typeof addition; }),
+      button('Gegnergruppe hinzufügen', () => {
+        env.session.splice(['encounters', index, 'groups'], groups.length, 0, [{ enemyKind: addition, count: 1 }]);
+        this.search = ''; env.changed();
+      })); box.append(filters);
+    if (!groups.length) box.append(element('p', 'muted', 'Noch keine Gegnergruppen. Über die Auswahl eine Gruppe hinzufügen.'));
     const list = element('div', 'enemy-list');
-    for (const kind of COOP_DEFENSE_ENEMY_KINDS.filter(kind => groups.some(g => g.enemyKind === kind))) {
-      const config = getCoopDefenseEnemyConfig(kind), name = getEnemyName(kind, 'de');
-      const indices = groups.flatMap((g, i) => g.enemyKind === kind ? [i] : []);
-      if (this.search && !`${name} ${kind}`.toLowerCase().includes(this.search.toLowerCase())) continue;
-      const row = element('div', 'enemy-row'); const life = resolveEnemyLifecycleTotals(kind);
-      const total = indices.reduce((sum, i) => sum + Number(groups[i].count), 0);
-      row.append(element('strong', '', name), element('small', 'muted', kind));
-      if (indices.length > 1) row.append(element('span', 'numeric', `${total} · ${indices.length} Spawn-Gruppen`));
-      else row.append(numberField(env, 'Menge', ['enemy-count', encounter.id as string, kind], { read: total, min: 0, disabled: config.isBoss, write: value => {
-        const count = value ?? 0;
-        if (indices.length) { if (count === 0) env.session.splice(['encounters', index, 'groups'], indices[0], 1); else env.session.change(['encounters', index, 'groups', indices[0], 'count'], count); }
-        else if (count > 0) env.session.splice(['encounters', index, 'groups'], groups.length, 0, [{ enemyKind: kind, count }]);
-      } }));
-      row.append(element('span', 'numeric', `${config.xp} direkt / Gegner`), element('span', 'numeric', `${total * life.xp} XP (${total * life.followXp} Folge)${life.dynamic ? ' + dynamisch' : ''}`));
-      if (config.isBoss) row.append(element('small', 'muted', 'Nur im Boss-Slot'));
-      else row.append(button(`${this.expanded.has(kind) ? '−' : '+'} Gruppen`, () => { this.expanded.has(kind) ? this.expanded.delete(kind) : this.expanded.add(kind); env.changed(); }));
-      row.append(button('Gegnerart löschen', () => {
-        env.session.removeIndices(['encounters', index, 'groups'], indices); this.expanded.delete(kind); env.changed();
-      }, 'danger'));
-      list.append(row);
-      if (this.expanded.has(kind) && !config.isBoss) {
-        indices.forEach(groupIndex => list.append(this.groupEditor(index, groupIndex, groups[groupIndex])));
-        list.append(button(`+ ${name}: weitere Gruppe (Standardfront ${DEFAULT_SPAWN_FRONT})`, () => {
-          env.session.splice(['encounters', index, 'groups'], groups.length, 0, [{ enemyKind: kind, count: 1 }]); env.changed();
-        }, 'text-button'));
-      }
-    }
+    groups.forEach((group, groupIndex) => {
+      if (this.search && !`${getEnemyName(String(group.enemyKind), 'de')} ${group.enemyKind}`.toLowerCase().includes(this.search.toLowerCase())) return;
+      list.append(this.groupEditor(index, groupIndex, group));
+    });
+    if (groups.length && !list.childElementCount) list.append(element('p', 'muted', 'Keine Gegnergruppe passt zur Suche.'));
     box.append(list); return box;
   }
   private groupEditor(encounter: number, index: number, group: JsonObject): HTMLElement {
-    const { env } = this, path: Path = ['encounters', encounter, 'groups', index], row = element('div', 'group-row');
-    row.append(numberField(env, `Gruppe ${index + 1}: Menge`, [...path, 'count'], { min: 1 }),
-      numberField(env, 'Verzögerung (s)', [...path, 'delayMs'], { fallback: 0, min: 0, scale: 1000, step: 0.001, optional: true }),
+    const { env } = this, path: Path = ['encounters', encounter, 'groups', index], row = element('section', 'enemy-group');
+    const title = `Gruppe ${index + 1} · ${getEnemyName(String(group.enemyKind), 'de')}`;
+    row.setAttribute('role', 'group'); row.setAttribute('aria-label', title);
+    const life = encounterXp({ groups: [group] });
+    row.append(heading(title, `${life.count} Gegner · ${life.xp} XP${life.complete ? '' : ' (unvollständig)'}${life.dynamic ? ' + dynamisch' : ''}`));
+    const fields = element('div', 'group-fields');
+    const kinds = COOP_DEFENSE_ENEMY_KINDS.filter(kind => !getCoopDefenseEnemyConfig(kind).isBoss);
+    fields.append(selectField('Gegnerart', String(group.enemyKind), kinds.map(value => ({ value, label: getEnemyName(value, 'de') })), value => {
+      env.session.change([...path, 'enemyKind'], value); env.changed();
+    }), numberField(env, 'Menge', [...path, 'count'], { min: 1 }),
+      numberField(env, 'Delay (s)', [...path, 'delayMs'], { fallback: 0, min: 0, scale: 1000, step: 0.001, optional: true }),
       numberField(env, 'Spawnfenster (s)', [...path, 'spawnStaggerMs'], { fallback: DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS, min: 0, scale: 1000, step: 0.001, optional: true }),
-      selectField('Spawnvorgabe', group.spawnArea ? 'area' : String(group.front ?? DEFAULT_SPAWN_FRONT), [{ value: 'area', label: 'Rechteckiges Gebiet' }, ...SPAWN_FRONTS.map(value => ({ value, label: `${value}${group.front === undefined && value === DEFAULT_SPAWN_FRONT ? ' (Standard)' : ''}` }))], value => {
-        env.session.transact('Spawnvorgabe ändern', d => {
-          set(d, [...path, 'front'], value === 'area' ? undefined : value);
-          set(d, [...path, 'spawnArea'], value === 'area' ? { gridX: 0, gridY: 0, widthCells: 4, heightCells: 4 } : undefined);
-        }); env.changed();
+      selectField('Front / Spawn-Area', group.spawnArea ? 'area' : String(group.front ?? DEFAULT_SPAWN_FRONT), [
+        { value: 'area', label: 'Spawn-Area (Rechteck)' },
+        ...SPAWN_FRONTS.map(value => ({ value, label: `${FRONT_LABELS[value]}${group.front === undefined && value === DEFAULT_SPAWN_FRONT ? ' (Standard)' : ''}` })),
+      ], value => {
+        env.session.transact('Spawnvorgabe ändern', draft => setGroupSpawn(draft, path, value)); env.changed();
       }));
-    if (group.spawnArea) row.append(button('Spawngebiet auf Karte bearbeiten', () => env.openMap([...path, 'spawnArea'])));
-    row.append(button('Gruppe entfernen', () => { env.session.splice(['encounters', encounter, 'groups'], index, 1); env.changed(); }, 'danger')); return row;
+    row.append(fields);
+    if (group.spawnArea) {
+      const area = element('div', 'group-fields spawn-area-fields');
+      for (const [key, label] of [['gridX', 'Spawn-Area X'], ['gridY', 'Spawn-Area Y'], ['widthCells', 'Spawn-Area Breite'], ['heightCells', 'Spawn-Area Höhe']]) {
+        area.append(numberField(env, label, [...path, 'spawnArea', key], { min: key === 'gridX' || key === 'gridY' ? 0 : 1 }));
+      }
+      row.append(area);
+      if (spawnsAtEdge(group)) row.append(element('p', 'muted', 'Dieser Gegnertyp gräbt sich am Kartenrand ein. Seine Spawn-Area ist im Spiel unwirksam; er verwendet die Standardfront Westen.'));
+    }
+    const actions = element('div', 'group-actions');
+    actions.append(button(group.spawnArea ? 'Spawn-Area auf Karte bearbeiten' : 'Front auf Karte zeigen', () => env.openMap([...path, group.spawnArea ? 'spawnArea' : 'front'])),
+      button('Gruppe duplizieren', () => { env.session.splice(['encounters', encounter, 'groups'], index + 1, 0, [clone(group)]); env.changed(); }),
+      button('Gruppe löschen', () => { env.session.splice(['encounters', encounter, 'groups'], index, 1); env.changed(); }, 'danger'));
+    row.append(actions); return row;
   }
   private summary(encounters: JsonObject[]): HTMLElement {
     const { env } = this, draft = env.session.draft, box = element('section', 'card');

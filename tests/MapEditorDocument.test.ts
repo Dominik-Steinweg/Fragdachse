@@ -7,6 +7,7 @@ import { assertSupportedMapEdit } from '../tools/map-editor/shared/editPolicy';
 import { updateJsonText } from '../tools/map-editor/server/jsonText';
 import { collectCoopDefenseMapReferences } from '../src/config/coopDefenseMapReferences';
 import { clone, type JsonObject } from '../tools/map-editor/shared/json';
+import { setGroupSpawn } from '../tools/map-editor/shared/spawns';
 
 function load(file = sources.maps[0].file): LoadedMap {
   const text = readFileSync(new URL(`../src/config/coopDefenseMaps/${file}`, import.meta.url), 'utf8');
@@ -15,6 +16,26 @@ function load(file = sources.maps[0].file): LoadedMap {
 }
 
 describe('Map editor authoring documents', () => {
+  it('edits repeated enemy kinds independently and switches between area and front without losing other group data', () => {
+    const loaded = load();
+    const area = { gridX: 3, gridY: 4, widthCells: 5, heightCells: 6 };
+    loaded.document.encounters = [{ id: 'separate', groups: [
+      { enemyKind: 'zombie-badger', count: 2, front: 'north', delayMs: 1000 },
+      { enemyKind: 'zombie-badger', count: 3, spawnArea: area, delayMs: 2000, spawnStaggerMs: 500, extension: 'keep' },
+    ] }];
+    const session = new MapDocumentSession(loaded.sourceKey, loaded), path = ['encounters', 0, 'groups', 1];
+    const groups = () => (session.draft.encounters as JsonObject[])[0].groups as JsonObject[];
+    session.transact('front', draft => setGroupSpawn(draft, path, 'east'));
+    expect(groups()[0]).toEqual({ enemyKind: 'zombie-badger', count: 2, front: 'north', delayMs: 1000 });
+    expect(groups()[1]).toEqual({ enemyKind: 'zombie-badger', count: 3, front: 'east', delayMs: 2000, spawnStaggerMs: 500, extension: 'keep' });
+    session.undo(); expect(groups()[1].spawnArea).toEqual(area);
+    session.transact('area', draft => setGroupSpawn(draft, path, 'area'));
+    expect(groups()[1].spawnArea).toEqual(area); expect(groups()[1].front).toBeUndefined();
+    session.change([...path, 'delayMs'], 2500); session.change([...path, 'spawnArea', 'gridX'], 7);
+    expect(groups()[0].delayMs).toBe(1000); expect(groups()[1].delayMs).toBe(2500);
+    expect(groups()[1].spawnArea).toEqual({ ...area, gridX: 7 });
+    expect(() => assertSupportedMapEdit(loaded.document, session.draft)).not.toThrow();
+  });
   it('accepts all existing registered authoring documents without materializing defaults', () => {
     for (const source of sources.maps) {
       const { document } = load(source.file), before = clone(document);

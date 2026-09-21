@@ -1,16 +1,11 @@
 {
   "mapId": "8",
-  "arenaWidthCells": 92,
+  "arenaWidthCells": 110,
   "arenaHeightCells": 52,
   "timeOfDay": "20:45",
   "rockFillRatio": 0.18,
-  "trackPosition": "left",
-  "mapEvents": [{
-    "id": "train-rhythm",
-    "type": "train",
-    "start": { "type": "time", "atMs": 10000 },
-    "repeatAfterExitMs": 10000
-  }],
+  "trackMode": "none",
+  "mapEvents": [],
   "balanceReferenceDurationSec": 140,
   "objective": "repel-assault",
   "bases": [
@@ -134,43 +129,165 @@
   "encounters": [
     {
       "id": "dimension-west",
-      "start": { "type": "time", "atMs": 3000 },
+      "start": {
+        "type": "time",
+        "atMs": 3000
+      },
       "restAfterMs": 3000,
       "groups": [
-        { "enemyKind": "void-stalker", "count": 2, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 6, "front": "west" },
-        { "enemyKind": "zombie-badger", "count": 16, "front": "west" },
-        { "enemyKind": "zombie-badger", "count": 16, "front": "north" },
-        { "enemyKind": "zombie-badger", "count": 16, "front": "south" }
+        {
+          "enemyKind": "void-stalker",
+          "count": 2,
+          "front": "west",
+          "spawnStaggerMs": 3000
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 6,
+          "front": "west"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 16,
+          "front": "west"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 16,
+          "front": "west",
+          "delayMs": 2000
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 16,
+          "front": "west",
+          "delayMs": 4000
+        }
       ]
     },
     {
       "id": "dimension-north",
-      "start": { "type": "after-previous" },
+      "start": {
+        "type": "after-previous"
+      },
       "restAfterMs": 3000,
       "groups": [
-        { "enemyKind": "void-stalker", "count": 2, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 7, "front": "north" },
-        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "north" }
+        {
+          "enemyKind": "void-stalker",
+          "count": 2,
+          "front": "west"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 24,
+          "front": "west",
+          "spawnStaggerMs": 4000
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 4,
+          "delayMs": 2000,
+          "front": "west",
+          "spawnStaggerMs": 3000
+        }
       ]
     },
     {
       "id": "dimension-south",
-      "start": { "type": "after-previous" },
+      "start": {
+        "type": "after-previous"
+      },
       "restAfterMs": 3000,
       "groups": [
-        { "enemyKind": "void-stalker", "count": 4, "front": "south" },
-        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1100, "front": "north" },
-        { "enemyKind": "spore-warden", "count": 3, "delayMs": 1200, "front": "north" }
+        {
+          "enemyKind": "void-stalker",
+          "count": 4,
+          "front": "west",
+          "spawnStaggerMs": 6000
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 8,
+          "delayMs": 1000,
+          "front": "west",
+          "spawnStaggerMs": 5000
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 4,
+          "delayMs": 1000,
+          "front": "west",
+          "spawnStaggerMs": 5000
+        }
+      ]
+    },
+    {
+      "id": "encounter-1",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 80,
+          "spawnStaggerMs": 7000
+        }
+      ]
+    },
+    {
+      "id": "encounter-2",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "plague-medic",
+          "count": 3,
+          "spawnStaggerMs": 3000
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 6,
+          "spawnStaggerMs": 3000
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 1,
+          "spawnStaggerMs": 3000
+        }
       ]
     },
     {
       "id": "dimension-collapse",
-      "start": { "type": "after-previous" },
+      "start": {
+        "type": "after-previous"
+      },
       "groups": [
-        { "enemyKind": "void-stalker", "count": 5, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 4, "delayMs": 900, "front": "south" },
-        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1800, "front": "north" }
+        {
+          "enemyKind": "void-stalker",
+          "count": 1,
+          "front": "west",
+          "spawnStaggerMs": 4000
+        },
+        {
+          "enemyKind": "spore-warden",
+          "count": 4,
+          "delayMs": 0,
+          "front": "west",
+          "spawnStaggerMs": 4000
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 20,
+          "delayMs": 0,
+          "front": "west",
+          "spawnStaggerMs": 4000
+        },
+        {
+          "enemyKind": "plague-medic",
+          "count": 2,
+          "spawnStaggerMs": 4000
+        }
       ]
     }
   ],
@@ -228,6 +345,72 @@
       "gridY": 44,
       "widthCells": 7,
       "heightCells": 3
+    },
+    {
+      "gridX": 33,
+      "gridY": 13,
+      "widthCells": 9,
+      "heightCells": 13
+    },
+    {
+      "gridX": 35,
+      "gridY": 32,
+      "widthCells": 9,
+      "heightCells": 7
+    },
+    {
+      "gridX": 30,
+      "gridY": 17,
+      "widthCells": 3,
+      "heightCells": 5
+    },
+    {
+      "gridX": 42,
+      "gridY": 11,
+      "widthCells": 6,
+      "heightCells": 7
+    },
+    {
+      "gridX": 42,
+      "gridY": 30,
+      "widthCells": 5,
+      "heightCells": 2
+    },
+    {
+      "gridX": 44,
+      "gridY": 32,
+      "widthCells": 2,
+      "heightCells": 6
+    },
+    {
+      "gridX": 30,
+      "gridY": 35,
+      "widthCells": 5,
+      "heightCells": 3
+    },
+    {
+      "gridX": 52,
+      "gridY": 3,
+      "widthCells": 11,
+      "heightCells": 7
+    },
+    {
+      "gridX": 54,
+      "gridY": 10,
+      "widthCells": 8,
+      "heightCells": 3
+    },
+    {
+      "gridX": 92,
+      "gridY": 44,
+      "widthCells": 6,
+      "heightCells": 8
+    },
+    {
+      "gridX": 92,
+      "gridY": 40,
+      "widthCells": 4,
+      "heightCells": 4
     }
   ],
   "water": [
@@ -442,7 +625,788 @@
     {
       "gridX": 91,
       "gridY": 37
+    },
+    {
+      "gridX": 32,
+      "gridY": 23
+    },
+    {
+      "gridX": 32,
+      "gridY": 22
+    },
+    {
+      "gridX": 31,
+      "gridY": 22
+    },
+    {
+      "gridX": 29,
+      "gridY": 20
+    },
+    {
+      "gridX": 29,
+      "gridY": 19
+    },
+    {
+      "gridX": 28,
+      "gridY": 19
+    },
+    {
+      "gridX": 28,
+      "gridY": 18
+    },
+    {
+      "gridX": 29,
+      "gridY": 18
+    },
+    {
+      "gridX": 29,
+      "gridY": 17
+    },
+    {
+      "gridX": 31,
+      "gridY": 16
+    },
+    {
+      "gridX": 31,
+      "gridY": 15
+    },
+    {
+      "gridX": 32,
+      "gridY": 15
+    },
+    {
+      "gridX": 32,
+      "gridY": 16
+    },
+    {
+      "gridX": 32,
+      "gridY": 14
+    },
+    {
+      "gridX": 34,
+      "gridY": 12
+    },
+    {
+      "gridX": 35,
+      "gridY": 12
+    },
+    {
+      "gridX": 35,
+      "gridY": 11
+    },
+    {
+      "gridX": 36,
+      "gridY": 11
+    },
+    {
+      "gridX": 36,
+      "gridY": 10
+    },
+    {
+      "gridX": 36,
+      "gridY": 12
+    },
+    {
+      "gridX": 37,
+      "gridY": 11
+    },
+    {
+      "gridX": 38,
+      "gridY": 11
+    },
+    {
+      "gridX": 38,
+      "gridY": 12
+    },
+    {
+      "gridX": 37,
+      "gridY": 12
+    },
+    {
+      "gridX": 37,
+      "gridY": 10
+    },
+    {
+      "gridX": 37,
+      "gridY": 9
+    },
+    {
+      "gridX": 38,
+      "gridY": 10
+    },
+    {
+      "gridX": 39,
+      "gridY": 11
+    },
+    {
+      "gridX": 39,
+      "gridY": 12
+    },
+    {
+      "gridX": 41,
+      "gridY": 12
+    },
+    {
+      "gridX": 42,
+      "gridY": 10
+    },
+    {
+      "gridX": 46,
+      "gridY": 10
+    },
+    {
+      "gridX": 47,
+      "gridY": 10
+    },
+    {
+      "gridX": 47,
+      "gridY": 9
+    },
+    {
+      "gridX": 48,
+      "gridY": 11
+    },
+    {
+      "gridX": 48,
+      "gridY": 13
+    },
+    {
+      "gridX": 48,
+      "gridY": 14
+    },
+    {
+      "gridX": 48,
+      "gridY": 16
+    },
+    {
+      "gridX": 49,
+      "gridY": 16
+    },
+    {
+      "gridX": 49,
+      "gridY": 17
+    },
+    {
+      "gridX": 48,
+      "gridY": 17
+    },
+    {
+      "gridX": 48,
+      "gridY": 18
+    },
+    {
+      "gridX": 49,
+      "gridY": 18
+    },
+    {
+      "gridX": 49,
+      "gridY": 19
+    },
+    {
+      "gridX": 48,
+      "gridY": 19
+    },
+    {
+      "gridX": 47,
+      "gridY": 18
+    },
+    {
+      "gridX": 47,
+      "gridY": 19
+    },
+    {
+      "gridX": 48,
+      "gridY": 20
+    },
+    {
+      "gridX": 49,
+      "gridY": 20
+    },
+    {
+      "gridX": 50,
+      "gridY": 18
+    },
+    {
+      "gridX": 50,
+      "gridY": 17
+    },
+    {
+      "gridX": 50,
+      "gridY": 19
+    },
+    {
+      "gridX": 46,
+      "gridY": 18
+    },
+    {
+      "gridX": 44,
+      "gridY": 18
+    },
+    {
+      "gridX": 45,
+      "gridY": 18
+    },
+    {
+      "gridX": 45,
+      "gridY": 19
+    },
+    {
+      "gridX": 42,
+      "gridY": 19
+    },
+    {
+      "gridX": 42,
+      "gridY": 20
+    },
+    {
+      "gridX": 43,
+      "gridY": 20
+    },
+    {
+      "gridX": 42,
+      "gridY": 21
+    },
+    {
+      "gridX": 43,
+      "gridY": 22
+    },
+    {
+      "gridX": 42,
+      "gridY": 22
+    },
+    {
+      "gridX": 42,
+      "gridY": 23
+    },
+    {
+      "gridX": 43,
+      "gridY": 23
+    },
+    {
+      "gridX": 42,
+      "gridY": 24
+    },
+    {
+      "gridX": 42,
+      "gridY": 25
+    },
+    {
+      "gridX": 43,
+      "gridY": 25
+    },
+    {
+      "gridX": 42,
+      "gridY": 29
+    },
+    {
+      "gridX": 43,
+      "gridY": 29
+    },
+    {
+      "gridX": 44,
+      "gridY": 29
+    },
+    {
+      "gridX": 44,
+      "gridY": 28
+    },
+    {
+      "gridX": 45,
+      "gridY": 29
+    },
+    {
+      "gridX": 46,
+      "gridY": 29
+    },
+    {
+      "gridX": 47,
+      "gridY": 31
+    },
+    {
+      "gridX": 47,
+      "gridY": 32
+    },
+    {
+      "gridX": 46,
+      "gridY": 32
+    },
+    {
+      "gridX": 46,
+      "gridY": 33
+    },
+    {
+      "gridX": 46,
+      "gridY": 36
+    },
+    {
+      "gridX": 46,
+      "gridY": 37
+    },
+    {
+      "gridX": 47,
+      "gridY": 37
+    },
+    {
+      "gridX": 47,
+      "gridY": 38
+    },
+    {
+      "gridX": 48,
+      "gridY": 38
+    },
+    {
+      "gridX": 46,
+      "gridY": 38
+    },
+    {
+      "gridX": 45,
+      "gridY": 38
+    },
+    {
+      "gridX": 45,
+      "gridY": 39
+    },
+    {
+      "gridX": 46,
+      "gridY": 39
+    },
+    {
+      "gridX": 42,
+      "gridY": 39
+    },
+    {
+      "gridX": 41,
+      "gridY": 39
+    },
+    {
+      "gridX": 40,
+      "gridY": 40
+    },
+    {
+      "gridX": 39,
+      "gridY": 39
+    },
+    {
+      "gridX": 40,
+      "gridY": 39
+    },
+    {
+      "gridX": 40,
+      "gridY": 41
+    },
+    {
+      "gridX": 39,
+      "gridY": 41
+    },
+    {
+      "gridX": 39,
+      "gridY": 40
+    },
+    {
+      "gridX": 38,
+      "gridY": 39
+    },
+    {
+      "gridX": 34,
+      "gridY": 38
+    },
+    {
+      "gridX": 34,
+      "gridY": 39
+    },
+    {
+      "gridX": 35,
+      "gridY": 39
+    },
+    {
+      "gridX": 36,
+      "gridY": 39
+    },
+    {
+      "gridX": 35,
+      "gridY": 40
+    },
+    {
+      "gridX": 34,
+      "gridY": 40
+    },
+    {
+      "gridX": 29,
+      "gridY": 37
+    },
+    {
+      "gridX": 29,
+      "gridY": 38
+    },
+    {
+      "gridX": 30,
+      "gridY": 38
+    },
+    {
+      "gridX": 30,
+      "gridY": 39
+    },
+    {
+      "gridX": 29,
+      "gridY": 39
+    },
+    {
+      "gridX": 28,
+      "gridY": 38
+    },
+    {
+      "gridX": 29,
+      "gridY": 34
+    },
+    {
+      "gridX": 30,
+      "gridY": 34
+    },
+    {
+      "gridX": 31,
+      "gridY": 34
+    },
+    {
+      "gridX": 32,
+      "gridY": 34
+    },
+    {
+      "gridX": 33,
+      "gridY": 33
+    },
+    {
+      "gridX": 34,
+      "gridY": 33
+    },
+    {
+      "gridX": 34,
+      "gridY": 32
+    },
+    {
+      "gridX": 33,
+      "gridY": 34
+    },
+    {
+      "gridX": 34,
+      "gridY": 34
+    },
+    {
+      "gridX": 35,
+      "gridY": 31
+    },
+    {
+      "gridX": 35,
+      "gridY": 30
+    },
+    {
+      "gridX": 36,
+      "gridY": 30
+    },
+    {
+      "gridX": 37,
+      "gridY": 31
+    },
+    {
+      "gridX": 37,
+      "gridY": 30
+    },
+    {
+      "gridX": 38,
+      "gridY": 30
+    },
+    {
+      "gridX": 38,
+      "gridY": 29
+    },
+    {
+      "gridX": 37,
+      "gridY": 29
+    },
+    {
+      "gridX": 36,
+      "gridY": 31
+    },
+    {
+      "gridX": 38,
+      "gridY": 31
+    },
+    {
+      "gridX": 39,
+      "gridY": 31
+    },
+    {
+      "gridX": 39,
+      "gridY": 30
+    },
+    {
+      "gridX": 40,
+      "gridY": 31
+    },
+    {
+      "gridX": 41,
+      "gridY": 30
+    },
+    {
+      "gridX": 41,
+      "gridY": 31
+    },
+    {
+      "gridX": 45,
+      "gridY": 28
+    },
+    {
+      "gridX": 46,
+      "gridY": 28
+    },
+    {
+      "gridX": 46,
+      "gridY": 27
+    },
+    {
+      "gridX": 47,
+      "gridY": 28
+    },
+    {
+      "gridX": 47,
+      "gridY": 29
+    },
+    {
+      "gridX": 47,
+      "gridY": 30
+    },
+    {
+      "gridX": 48,
+      "gridY": 28
+    },
+    {
+      "gridX": 48,
+      "gridY": 29
+    },
+    {
+      "gridX": 49,
+      "gridY": 29
+    },
+    {
+      "gridX": 56,
+      "gridY": 13
+    },
+    {
+      "gridX": 55,
+      "gridY": 13
+    },
+    {
+      "gridX": 55,
+      "gridY": 14
+    },
+    {
+      "gridX": 62,
+      "gridY": 10
+    },
+    {
+      "gridX": 61,
+      "gridY": 2
+    },
+    {
+      "gridX": 60,
+      "gridY": 2
+    },
+    {
+      "gridX": 59,
+      "gridY": 2
+    },
+    {
+      "gridX": 59,
+      "gridY": 1
+    },
+    {
+      "gridX": 58,
+      "gridY": 2
+    },
+    {
+      "gridX": 57,
+      "gridY": 2
+    },
+    {
+      "gridX": 57,
+      "gridY": 1
+    },
+    {
+      "gridX": 58,
+      "gridY": 1
+    },
+    {
+      "gridX": 59,
+      "gridY": 0
+    },
+    {
+      "gridX": 58,
+      "gridY": 0
+    },
+    {
+      "gridX": 56,
+      "gridY": 1
+    },
+    {
+      "gridX": 55,
+      "gridY": 2
+    },
+    {
+      "gridX": 54,
+      "gridY": 2
+    },
+    {
+      "gridX": 56,
+      "gridY": 2
+    },
+    {
+      "gridX": 62,
+      "gridY": 2
+    },
+    {
+      "gridX": 54,
+      "gridY": 1
+    },
+    {
+      "gridX": 55,
+      "gridY": 1
+    },
+    {
+      "gridX": 55,
+      "gridY": 0
+    },
+    {
+      "gridX": 56,
+      "gridY": 0
+    },
+    {
+      "gridX": 53,
+      "gridY": 2
+    },
+    {
+      "gridX": 52,
+      "gridY": 2
+    },
+    {
+      "gridX": 51,
+      "gridY": 5
+    },
+    {
+      "gridX": 51,
+      "gridY": 4
+    },
+    {
+      "gridX": 50,
+      "gridY": 4
+    },
+    {
+      "gridX": 50,
+      "gridY": 3
+    },
+    {
+      "gridX": 49,
+      "gridY": 3
+    },
+    {
+      "gridX": 51,
+      "gridY": 3
+    },
+    {
+      "gridX": 51,
+      "gridY": 7
+    },
+    {
+      "gridX": 53,
+      "gridY": 10
+    },
+    {
+      "gridX": 51,
+      "gridY": 6
+    },
+    {
+      "gridX": 50,
+      "gridY": 5
+    },
+    {
+      "gridX": 49,
+      "gridY": 5
+    },
+    {
+      "gridX": 49,
+      "gridY": 4
+    },
+    {
+      "gridX": 51,
+      "gridY": 2
+    },
+    {
+      "gridX": 50,
+      "gridY": 2
+    },
+    {
+      "gridX": 48,
+      "gridY": 4
+    },
+    {
+      "gridX": 92,
+      "gridY": 38
+    },
+    {
+      "gridX": 92,
+      "gridY": 39
+    },
+    {
+      "gridX": 93,
+      "gridY": 39
+    },
+    {
+      "gridX": 96,
+      "gridY": 42
+    },
+    {
+      "gridX": 96,
+      "gridY": 43
+    },
+    {
+      "gridX": 97,
+      "gridY": 43
+    },
+    {
+      "gridX": 98,
+      "gridY": 45
+    },
+    {
+      "gridX": 98,
+      "gridY": 46
+    },
+    {
+      "gridX": 99,
+      "gridY": 46
+    },
+    {
+      "gridX": 99,
+      "gridY": 47
+    },
+    {
+      "gridX": 98,
+      "gridY": 47
+    },
+    {
+      "gridX": 98,
+      "gridY": 48
+    },
+    {
+      "gridX": 98,
+      "gridY": 51
     }
   ],
-  "treeCount": 7
+  "treeCount": 7,
+  "rockWalls": [
+    {
+      "id": "wall-1",
+      "gridX": 63,
+      "gridY": 0,
+      "widthCells": 2,
+      "heightCells": 14
+    }
+  ]
 }

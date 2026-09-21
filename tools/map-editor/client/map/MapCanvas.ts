@@ -2,6 +2,8 @@ import { at, clone, set, type JsonObject } from '../../shared/json';
 import { commitFocused, element, type EditorEnvironment } from '../ui';
 import type { PreviewResult } from '../preview/generate';
 import { LAYERS, mapMetrics, mapObjects, moveMapObject, type MapObject } from './objects';
+import { getSpawnFrontInwardVector } from '../../../../src/utils/spawnFront';
+import { FRONT_LABELS } from '../../shared/spawns';
 
 export type DrawTool = 'select' | 'pan' | 'waterArea' | 'rockWall' | 'corridor' | 'waterPaint' | 'waterErase' | 'selected';
 export interface Rect { gridX: number; gridY: number; widthCells: number; heightCells: number }
@@ -94,6 +96,7 @@ export class MapCanvas {
     }
   }
   private paintObject(c: CanvasRenderingContext2D, item: MapObject, selected: boolean): void {
+    if (item.kind === 'front') { this.paintFront(c, item, selected); return; }
     const color = LAYERS[item.layer].color; c.strokeStyle = selected ? '#fff3cc' : color; c.fillStyle = color + '20'; c.lineWidth = (selected ? 2 : 1) / this.scale;
     if (item.readonly) c.setLineDash([4 / this.scale, 3 / this.scale]);
     if (item.reservationRadius !== undefined) {
@@ -121,6 +124,30 @@ export class MapCanvas {
     if (selected || this.scale > 14) { c.font = `${11 / this.scale}px system-ui`; c.fillStyle = '#eee7d7'; c.fillText(item.label, item.x, item.y - 5 / this.scale); }
   }
   private lastWorld = { x: 0, y: 0 };
+  private paintFront(c: CanvasRenderingContext2D, item: MapObject, selected: boolean): void {
+    if (!item.front) return;
+    const inward = getSpawnFrontInwardVector(item.front), vertical = inward.x !== 0;
+    const x = item.x + item.w / 2, y = item.y + item.h / 2;
+    const color = selected ? '#fff3cc' : LAYERS.fronts.color;
+    c.save(); c.setLineDash([]); c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 3 / this.scale;
+    c.beginPath();
+    if (vertical) { c.moveTo(x, item.y); c.lineTo(x, item.y + item.h); }
+    else { c.moveTo(item.x, y); c.lineTo(item.x + item.w, y); }
+    c.stroke();
+    const length = 18 / this.scale, wing = 5 / this.scale;
+    for (const fraction of [.25, .5, .75]) {
+      const sx = vertical ? x : item.x + item.w * fraction, sy = vertical ? item.y + item.h * fraction : y;
+      const tx = sx + inward.x * length, ty = sy + inward.y * length;
+      c.beginPath(); c.moveTo(sx, sy); c.lineTo(tx, ty);
+      c.moveTo(tx - inward.x * wing - inward.y * wing, ty - inward.y * wing + inward.x * wing);
+      c.lineTo(tx, ty); c.lineTo(tx - inward.x * wing + inward.y * wing, ty - inward.y * wing - inward.x * wing); c.stroke();
+    }
+    const tx = x + inward.x * 25 / this.scale, ty = y + inward.y * 25 / this.scale;
+    c.font = `600 ${12 / this.scale}px system-ui`; c.textBaseline = 'middle';
+    c.textAlign = inward.x > 0 ? 'left' : inward.x < 0 ? 'right' : 'center';
+    c.lineWidth = 4 / this.scale; c.strokeStyle = '#111a1c';
+    c.strokeText(FRONT_LABELS[item.front], tx, ty); c.fillText(FRONT_LABELS[item.front], tx, ty); c.restore();
+  }
   private screen(e: MouseEvent) { const bounds = this.canvas.getBoundingClientRect(); return { x: e.clientX - bounds.left, y: e.clientY - bounds.top }; }
   private world(p: { x: number; y: number }) { return { x: (p.x - this.panX) / this.scale, y: (p.y - this.panY) / this.scale }; }
   private corners(i: MapObject) { return [{ x: i.x, y: i.y }, { x: i.x + i.w, y: i.y }, { x: i.x + i.w, y: i.y + i.h }, { x: i.x, y: i.y + i.h }]; }

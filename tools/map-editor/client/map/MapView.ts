@@ -22,7 +22,8 @@ export class MapView {
   destroy(): void { this.canvas.destroy(); }
   render(): HTMLElement { this.renderTools(); this.renderSidebars(); this.canvas.paint(); return this.root; }
   open(path: Path): void {
-    const item = mapObjects(this.env.session, this.env.session.draft, this.canvas.previewResult).find(i => JSON.stringify(i.path) === JSON.stringify(path));
+    const item = mapObjects(this.env.session, this.env.session.draft, this.canvas.previewResult).find(i => JSON.stringify(i.path) === JSON.stringify(path)
+      || i.sources?.some(source => JSON.stringify(source.path) === JSON.stringify(path)));
     if (!item) return;
     this.env.session.selection = item.id; this.canvas.layers.add(item.layer); this.canvas.tool = 'select'; this.canvas.focus(item); this.render();
   }
@@ -75,6 +76,12 @@ export class MapView {
   private objectProperties(item: MapObject): HTMLElement {
     const { env } = this, box = element('div'), value = object(at(env.session.draft, item.path));
     box.append(heading(item.label, '/' + item.path.join('/')));
+    if (item.kind === 'front') {
+      box.append(element('p', 'muted', 'Diese Front wird von den folgenden Definitionen verwendet. Die Markierung zeigt die Richtung; freie Spawnzellen hängen vom erzeugten Gelände ab. Fronten einer Gruppe lassen sich in „Encounter & XP“ ändern.'));
+      const sources = element('ul');
+      for (const source of item.sources ?? []) sources.append(element('li', '', source.label));
+      box.append(sources); return box;
+    }
     if (item.readonly) { box.append(element('p', 'muted', 'Diese Missionsvorgabe wird in V1 angezeigt und geprüft; ihre Funktion bleibt unverändert.')); return box; }
     if (item.kind === 'track') { box.append(trackControls(env, item)); return box; }
     if (item.kind === 'powerup') { box.append(powerUpControls(env, item)); return box; }
