@@ -131,6 +131,19 @@ describe('Coop Defense Balance Lab', () => {
     expect(snapshot.dynamicFactors.some((entry) => entry.includes('spawnThrow'))).toBe(true);
   });
 
+  it('counts encounters after a dynamic encounter and keeps the separate boss counted once', () => {
+    const dynamicKind = Object.keys(COOP_DEFENSE_ENEMY_CONFIGS).find(kind => COOP_DEFENSE_ENEMY_CONFIGS[kind].spawnThrow)!;
+    const regularKind = Object.keys(COOP_DEFENSE_ENEMY_CONFIGS).find(kind => !COOP_DEFENSE_ENEMY_CONFIGS[kind].isBoss && !COOP_DEFENSE_ENEMY_CONFIGS[kind].spawnThrow)!;
+    const source = COOP_DEFENSE_MAP_CONFIGS.find(map => map.boss)!;
+    const map = { ...source, encounters: [
+      { id: 'dynamic', start: { type: 'time' as const, atMs: 0 }, groups: [{ enemyKind: dynamicKind, count: 1 }] },
+      { id: 'later', start: { type: 'after-previous' as const }, groups: [{ enemyKind: regularKind, count: 3 }] },
+    ] };
+    const snapshot = buildCoopDefenseBalanceMapSnapshot(map);
+    expect(snapshot.finiteEnemyXp).toBe(resolveEnemyLifecycleTotals(dynamicKind).xp
+      + 3 * resolveEnemyLifecycleTotals(regularKind).xp + resolveEnemyLifecycleTotals(source.boss!.enemyKind).xp);
+  });
+
   it('hält Map-Signaturen bei reinen Textänderungen stabil, aber nicht bei Balanceänderungen', () => {
     const map = COOP_DEFENSE_MAP_CONFIGS[1];
     const displayOnly = { ...map, displayName: `${map.displayName} Test`, tutorialText: `${map.tutorialText ?? ''} Test` };

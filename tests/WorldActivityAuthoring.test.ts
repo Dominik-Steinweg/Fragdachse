@@ -102,7 +102,7 @@ it.each(['0', '1', '7'])('keeps authored water on the World through the complete
 
 /** Feldnamen eines authored Interfaces – die Quelle, die aufgeteilt wird. */
 function collectInterfaceFields(interfaceName: string): string[] {
-  const source = readFileSync(resolve(process.cwd(), 'src/config/coopDefenseMaps.ts'), 'utf8');
+  const source = readFileSync(resolve(process.cwd(), 'src/config/coopDefenseMapAuthoring.ts'), 'utf8');
   const start = source.indexOf(`export interface ${interfaceName} {`);
   expect(start, `${interfaceName} interface must exist`).toBeGreaterThan(0);
   const end = source.indexOf('\n}', start);

@@ -30,11 +30,13 @@
     "build": "tsc && vite build",
     "nav:stress": "node scripts/navigation/run-stress.mjs",
     "build:nav-lab": "tsc && vite build --mode navigation-lab",
-    "check": "npm test && npm run test:architecture && npm run build",
+    "check": "npm test && npm run test:architecture && npm run build && npm run build:map-editor",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
-    "deploy:current": "npm run build && gh-pages -d dist -e current --add"
+    "deploy:current": "npm run build && gh-pages -d dist -e current --add",
+    "map:editor": "vite --config tools/map-editor/vite.config.ts --open",
+    "build:map-editor": "tsc -p tools/map-editor/tsconfig.json && vite build --config tools/map-editor/vite.config.ts"
   },
   "dependencies": {
     "peerjs": "^1.5.5",
@@ -43,6 +45,7 @@
   },
   "devDependencies": {
     "@jridgewell/trace-mapping": "^0.3.31",
+    "@types/node": "^24.13.6",
     "gh-pages": "^6.3.0",
     "jimp": "^1.6.1",
     "playwright-core": "^1.63.0",

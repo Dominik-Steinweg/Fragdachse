@@ -20,7 +20,7 @@ import type {
 } from '../config/coopDefenseMaps';
 import {
   COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS,
-  getCoopDefenseTutorialRockRegion,
+  getCoopDefenseTutorialBackingRegion,
 } from '../config/coopDefenseTutorial';
 import { getMapTutorial } from '../i18n/contentPresentation';
 import { createOrganicDirtMargin } from './OrganicDirtMargin';
@@ -1244,15 +1244,7 @@ export class ArenaGenerator {
       const anchorKey = anchor ? `${anchor.gridX}_${anchor.gridY}` : 'default';
       if (seenAnchors.has(anchorKey)) continue;
       seenAnchors.add(anchorKey);
-      const region = getCoopDefenseTutorialRockRegion(showControls, anchor, this.metrics);
-      if (anchor) {
-        // Close thin pockets behind edge-mounted panels before connectivity repair can
-        // cut artificial access tunnels through their backing rock.
-        if (region.minGridY <= COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS) region.minGridY = 0;
-        if (region.maxGridY >= this.metrics.gridRows - 1 - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS) {
-          region.maxGridY = this.metrics.gridRows - 1;
-        }
-      }
+      const region = getCoopDefenseTutorialBackingRegion(showControls, anchor, this.metrics);
       const cells = generateSolidRockFormation(rng, {
         // Only the opening panel contains controls; step panels reserve their actual short footprint.
         region,

@@ -1,3 +1,5 @@
+import { resolveEnemyLifecycleTotals, emptyEnemyLifecycleTotals, type EnemyLifecycleTotals } from '../../config/coopDefenseEnemyLifecycle';
+export { resolveEnemyLifecycleTotals } from '../../config/coopDefenseEnemyLifecycle';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
   resolveCoopDefenseMapEncounterConfigs,
@@ -115,15 +117,7 @@ function balanceSignatureInput(value: unknown): unknown {
   return canonicalizeBalanceIdentifiers(stripPresentationOnly(value));
 }
 
-interface EnemyLifecycleTotals extends BalanceEnemyTotals {
-  readonly enemyKinds: Set<string>;
-  readonly mechanicTags: Set<string>;
-  readonly dynamic: boolean;
-}
-
-function emptyTotals(): EnemyLifecycleTotals {
-  return { count: 0, hp: 0, xp: 0, enemyKinds: new Set(), mechanicTags: new Set(), dynamic: false };
-}
+const emptyTotals = emptyEnemyLifecycleTotals;
 
 function addTotals(target: {
   count: number;
@@ -139,61 +133,12 @@ function addTotals(target: {
   for (const tag of source.mechanicTags) target.mechanicTags.add(tag);
 }
 
-function enemyMechanicTags(config: ResolvedCoopDefenseEnemyConfig): Set<string> {
-  const tags = new Set<string>();
-  if (config.deathSpawns?.length) tags.add('deathSpawns');
-  if (config.spawnThrow) tags.add('spawnThrow');
-  if (config.dodge) tags.add('dodge');
-  if (config.burrow) tags.add('burrow');
-  if (config.timebomb) tags.add('timebomb');
-  if (config.translocator) tags.add('translocator');
-  if (config.voidHunterBoss) tags.add('boss-phases');
-  if (config.voidFireChunks || config.voidFireTrail || config.voidMolotov) tags.add('void-fire');
-  if (config.stinkAura) tags.add('stink-aura');
-  if (config.combatPositioning) tags.add('combat-positioning');
-  if (config.weapons.some((weapon) => weapon.salvo)) tags.add('salvo');
-  return tags;
-}
-
-/** Rechnet den deterministischen Lifecycle inklusive deathSpawns, aber ohne spawnThrow hoch. */
-export function resolveEnemyLifecycleTotals(
-  kind: CoopDefenseEnemyKind,
-  enemies: Record<string, ResolvedCoopDefenseEnemyConfig> = resolveCoopDefenseEnemyConfigs(1),
-  ancestors = new Set<string>(),
-): EnemyLifecycleTotals {
-  const config = enemies[kind] ?? getCoopDefenseEnemyConfig(kind);
-  const totals: {
-    count: number;
-    hp: number;
-    xp: number;
-    enemyKinds: Set<string>;
-    mechanicTags: Set<string>;
-  } = {
-    count: 1,
-    hp: Math.max(0, config.maxHp),
-    xp: Math.max(0, config.xp),
-    enemyKinds: new Set([kind]),
-    mechanicTags: enemyMechanicTags(config),
-  };
-  let dynamic = config.spawnThrow !== undefined;
-  if (ancestors.has(kind)) {
-    return { ...totals, dynamic };
-  }
-  const nextAncestors = new Set(ancestors).add(kind);
-  for (const spawn of config.deathSpawns ?? []) {
-    if (spawn.count <= 0) continue;
-    const child = resolveEnemyLifecycleTotals(spawn.enemyKind, enemies, nextAncestors);
-    addTotals(totals, child, spawn.count);
-    dynamic ||= child.dynamic;
-  }
-  return { ...totals, dynamic };
-}
-
 function multiplyTotals(kind: string, count: number, enemies: Record<string, ResolvedCoopDefenseEnemyConfig>): EnemyLifecycleTotals {
   const base = resolveEnemyLifecycleTotals(kind, enemies);
   const result = emptyTotals();
   addTotals(result, base, Math.max(0, count));
-  return { ...result, dynamic: base.dynamic };
+  return { ...result, directXp: base.directXp * Math.max(0, count), followXp: base.followXp * Math.max(0, count),
+    dynamic: base.dynamic, complete: base.complete, issues: base.issues };
 }
 
 function addEncounterTotals(
@@ -335,7 +280,10 @@ export function buildCoopDefenseBalanceMapSnapshot(mapConfig: CoopDefenseMapConf
   const persistentSpawns = resolveCoopDefenseMapPersistentSpawnConfigs(mapConfig, 1);
   const finite = { count: 0, hp: 0, xp: 0, enemyKinds: new Set<string>(), mechanicTags: new Set<string>() };
   let dynamic = false;
-  for (const encounter of encounters) dynamic ||= addEncounterTotals(finite, encounter, enemies);
+  for (const encounter of encounters) {
+    const encounterDynamic = addEncounterTotals(finite, encounter, enemies);
+    dynamic ||= encounterDynamic;
+  }
   if (mapConfig.boss) {
     const boss = multiplyTotals(mapConfig.boss.enemyKind, 1, enemies);
     addTotals(finite, boss);

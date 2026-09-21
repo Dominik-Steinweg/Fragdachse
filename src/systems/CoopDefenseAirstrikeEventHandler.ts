@@ -1,7 +1,7 @@
 import {
   CELL_SIZE,
 } from '../config';
-import { getCoopDefenseTutorialRockRegion } from '../config/coopDefenseTutorial';
+import { getCoopDefenseTutorialRockRegion, type CoopDefenseTutorialAnchor } from '../config/coopDefenseTutorial';
 import { ULTIMATE_CONFIGS, type AirstrikeUltimateConfig } from '../loadout/LoadoutConfig';
 import type {
   CoopDefenseMapAirstrikeArea,
@@ -78,6 +78,7 @@ export interface CoopDefenseAirstrikeEventHandlerDeps {
   /** World-Grenzen fuer die Positionierung authored Ereignisse. */
   readonly worldMetrics?: WorldMetrics;
   readonly tutorialShowControls?: boolean;
+  readonly tutorialAnchor?: CoopDefenseTutorialAnchor;
   readonly random?: AirstrikeRandom;
   readonly getNowMs: () => number;
 }
@@ -216,6 +217,7 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
           event.strikeCount,
           random,
           this.getWorldMetrics(),
+          this.deps.tutorialAnchor,
         );
       case 'player-hunt': {
         const target = planPlayerHunt(
@@ -256,8 +258,9 @@ export function planTutorialSweep(
   authoredStrikeCount: number | undefined,
   random: AirstrikeRandom = Math.random,
   worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(arenaWidthCells, arenaHeightCells),
+  tutorialAnchor?: CoopDefenseTutorialAnchor,
 ): readonly PlannedAirstrikePoint[] {
-  const region = getCoopDefenseTutorialRockRegion(showControls);
+  const region = getCoopDefenseTutorialRockRegion(showControls, tutorialAnchor, worldMetrics);
   const minGridX = Math.max(0, Math.min(arenaWidthCells - 1, region.minGridX - 1));
   const maxGridX = Math.max(minGridX, Math.min(arenaWidthCells - 1, region.maxGridX + 1));
   const minGridY = Math.max(

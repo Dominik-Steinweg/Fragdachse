@@ -26,10 +26,11 @@ export interface CoopDefenseTutorialAnchor {
   readonly gridY: number;
 }
 
-export function getCoopDefenseTutorialPanelTopY(anchor?: CoopDefenseTutorialAnchor): number {
+export function getCoopDefenseTutorialPanelTopY(anchor?: CoopDefenseTutorialAnchor, metrics?: Pick<WorldMetrics, 'offsetY'>): number {
+  const offsetY = metrics?.offsetY ?? ARENA_OFFSET_Y;
   return anchor
-    ? ARENA_OFFSET_Y + anchor.gridY * CELL_SIZE
-    : ARENA_OFFSET_Y + COOP_DEFENSE_TUTORIAL_PANEL_TOP_OFFSET_Y;
+    ? offsetY + anchor.gridY * CELL_SIZE
+    : offsetY + COOP_DEFENSE_TUTORIAL_PANEL_TOP_OFFSET_Y;
 }
 export const COOP_DEFENSE_TUTORIAL_PANEL_WIDTH = 840;
 export const COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT = 168;
@@ -53,10 +54,11 @@ export const COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X = 180;
 export const COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X = 400;
 
 /** Weltmitte der aktuell aktiven Arena; folgt den pro Map angewendeten Arena-Metriken. */
-export function getCoopDefenseTutorialPanelCenterX(anchor?: CoopDefenseTutorialAnchor): number {
+export function getCoopDefenseTutorialPanelCenterX(anchor?: CoopDefenseTutorialAnchor, metrics?: Pick<WorldMetrics, 'offsetX' | 'widthPx'>): number {
+  const offsetX = metrics?.offsetX ?? ARENA_OFFSET_X;
   return anchor
-    ? ARENA_OFFSET_X + (anchor.gridX + 0.5) * CELL_SIZE
-    : ARENA_OFFSET_X + ARENA_WIDTH / 2;
+    ? offsetX + (anchor.gridX + 0.5) * CELL_SIZE
+    : offsetX + (metrics?.widthPx ?? ARENA_WIDTH) / 2;
 }
 
 /**
@@ -103,4 +105,18 @@ export function getCoopDefenseTutorialRockRegion(
     minGridY: Math.max(0, Math.floor((top - offsetY) / CELL_SIZE)),
     maxGridY: Math.min(gridRows - 1, Math.ceil((bottom - offsetY) / CELL_SIZE) - 1),
   };
+}
+
+/** Backing formation, including the closed pocket behind an edge-mounted panel. */
+export function getCoopDefenseTutorialBackingRegion(
+  showControls: boolean,
+  anchor: CoopDefenseTutorialAnchor | undefined,
+  metrics: Pick<WorldMetrics, 'offsetX' | 'offsetY' | 'widthPx' | 'gridCols' | 'gridRows'>,
+): ReturnType<typeof getCoopDefenseTutorialRockRegion> {
+  const region = getCoopDefenseTutorialRockRegion(showControls, anchor, metrics);
+  if (anchor) {
+    if (region.minGridY <= COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS) region.minGridY = 0;
+    if (region.maxGridY >= metrics.gridRows - 1 - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS) region.maxGridY = metrics.gridRows - 1;
+  }
+  return region;
 }

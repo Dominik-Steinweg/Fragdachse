@@ -20,7 +20,7 @@
       "dormant": true,
       "startHpFactor": 0.25,
       "hpMax": 1200,
-      "anchor": {"kind": "grid", "gridX": 20, "gridY": 16},
+      "anchor": {"kind": "grid", "gridX": 63, "gridY": 17},
       "shape": {
         "kind": "cells",
         "cells": [
@@ -48,7 +48,7 @@
       "dormant": true,
       "startHpFactor": 0.25,
       "hpMax": 2000,
-      "anchor": {"kind": "grid", "gridX": 20, "gridY": 23},
+      "anchor": {"kind": "grid", "gridX": 63, "gridY": 23},
       "shape": {
         "kind": "cells",
         "cells": [
@@ -82,7 +82,7 @@
       "dormant": true,
       "startHpFactor": 0.25,
       "hpMax": 1200,
-      "anchor": {"kind": "grid", "gridX": 20, "gridY": 31},
+      "anchor": {"kind": "grid", "gridX": 63, "gridY": 31},
       "shape": {
         "kind": "cells",
         "cells": [
@@ -187,5 +187,9 @@
         "persistentBaseRewardsOnComplete": ["base_rocket_turret"]
       }
     }
-  ]
+  ],
+  "tutorialAnchor": {
+    "gridX": 78,
+    "gridY": 8
+  }
 }

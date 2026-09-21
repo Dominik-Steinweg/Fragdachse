@@ -17,27 +17,22 @@ import map15 from './15-leerenjaeger.json';
 import map16 from './16-zeitzuender.json';
 import map17 from './17-bierrettung.json';
 
-/** Statische Kampagnenregistry; die Reihenfolge ist fachlich relevant. */
+import sources from '../coopDefenseMapSources.json';
+
+const files: Record<string, unknown> = {
+  '00-test.json': map00, '01-feuertaufe.json': map01,
+  '02-zweite-front.json': map02, '03-rastlos.json': map03,
+  '04-adrenalinrausch.json': map04, '05-grufttitan.json': map05,
+  '06-sporenfront.json': map06, '07-medic.json': map07,
+  '08-dimensionsbruch.json': map08, '09-ueberleben.json': map09,
+  '10-flammenkoloss.json': map10, '11-bombergeschwader.json': map11,
+  '12-gegenschlag.json': map12, '13-brutbomben.json': map13,
+  '14-brandschneise.json': map14, '15-leerenjaeger.json': map15,
+  '16-zeitzuender.json': map16, '17-bierrettung.json': map17,
+};
+
+/** File ownership and campaign ordering are shared with the local map editor. */
 export const COOP_DEFENSE_MAP_REGISTRY = {
-  defaultMapId: '1',
-  maps: [
-    map00,
-    map01,
-    map02,
-    map03,
-    map04,
-    map05,
-    map06,
-    map07,
-    map08,
-    map09,
-    map10,
-    map11,
-    map12,
-    map13,
-    map14,
-    map15,
-    map16,
-    map17,
-  ],
-} as const;
+  defaultMapId: sources.defaultMapId,
+  maps: sources.maps.map(source => files[source.file]),
+};

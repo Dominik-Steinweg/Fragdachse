@@ -31,6 +31,8 @@ Definitionen werden über Registry- und Loader-Grenzen aufgelöst. Wire- und Rea
 
 Der [Coop-Defense-Adapter](../../src/config/authoring/coopDefenseAuthoringAdapter.ts) nimmt den bereits normalisierten und validierten Map-Vertrag entgegen und projiziert ihn in World- und Activity-Verträge beziehungsweise wieder zurück. Er führt selbst keine fachliche Normalisierung durch, materialisiert keine Defaults und ersetzt keine Validierung; die Round-Trip-Tests schützen die verlustfreie Feldzuordnung. `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Bereits normalisierte Configs dürfen nicht erneut normalisiert werden.
 
+Die registryfreien Map-Typen und Normalisierungsregeln liegen in [coopDefenseMapAuthoring.ts](../../src/config/coopDefenseMapAuthoring.ts); [coopDefenseMaps.ts](../../src/config/coopDefenseMaps.ts) lädt die Kampagnenregistry und exportiert diese Verträge weiterhin. [coopDefenseMapSources.json](../../src/config/coopDefenseMapSources.json) besitzt die gemeinsame Zuordnung von Map-ID, Quelldatei und Kampagnenreihenfolge. Authoring-Werkzeuge bearbeiten und speichern ausschließlich den Rohentwurf; expandierte Wasserflächen, injizierte persistente Basen und materialisierte Defaults aus normalisierten Kopien dürfen nicht in die Quelldatei zurückfließen. Die Dokument-, Datei- und Generator-Paritätstests des Map-Editors sichern diese Grenze.
+
 Besonders wichtig ist die Base-Trennung: dauerhafte Geometrie, Fraktion, Rolle, Anker und Spawn-Zentrum sind World-Inhalt; Missionsfaktoren, Dormancy und Power-Up-Flächen sind Activity-Overlay. Neue Felder werden dem fachlichen Owner zugeordnet, nicht einfach in beide Modelle kopiert.
 
 ## Lobby

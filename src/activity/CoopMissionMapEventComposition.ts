@@ -83,6 +83,7 @@ export class CoopMissionMapEventComposition {
         arenaHeightCells: this.options.worldMetrics.gridRows,
         worldMetrics: this.options.worldMetrics,
         tutorialShowControls: this.options.activity.mapConfig.tutorialShowControls,
+        tutorialAnchor: this.options.activity.mapConfig.tutorialAnchor,
         getNowMs: this.options.getNowMs,
       });
       handlers.push(airstrikeHandler);

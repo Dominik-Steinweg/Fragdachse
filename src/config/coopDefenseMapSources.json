@@ -1,0 +1,23 @@
+{
+  "defaultMapId": "1",
+  "maps": [
+    { "file": "00-test.json", "mapId": "0" },
+    { "file": "01-feuertaufe.json", "mapId": "1" },
+    { "file": "02-zweite-front.json", "mapId": "2" },
+    { "file": "03-rastlos.json", "mapId": "3" },
+    { "file": "04-adrenalinrausch.json", "mapId": "4" },
+    { "file": "05-grufttitan.json", "mapId": "5" },
+    { "file": "06-sporenfront.json", "mapId": "6" },
+    { "file": "07-medic.json", "mapId": "7" },
+    { "file": "08-dimensionsbruch.json", "mapId": "8" },
+    { "file": "09-ueberleben.json", "mapId": "9" },
+    { "file": "10-flammenkoloss.json", "mapId": "10" },
+    { "file": "11-bombergeschwader.json", "mapId": "11" },
+    { "file": "12-gegenschlag.json", "mapId": "12" },
+    { "file": "13-brutbomben.json", "mapId": "13" },
+    { "file": "14-brandschneise.json", "mapId": "14" },
+    { "file": "15-leerenjaeger.json", "mapId": "15" },
+    { "file": "16-zeitzuender.json", "mapId": "16" },
+    { "file": "17-bierrettung.json", "mapId": "17" }
+  ]
+}

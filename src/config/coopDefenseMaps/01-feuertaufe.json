@@ -1693,7 +1693,7 @@
     {
       "id": "map01-utility",
       "checkpointId": "cp2-utility",
-      "anchor": { "gridX": 78, "gridY": 1 }
+      "anchor": { "gridX": 71, "gridY": 6 }
     },
     {
       "id": "map01-burrow",

@@ -16,7 +16,7 @@ import {
   type CoopBaseTurretWeaponId,
   type CoopDefenseMapConfig,
   DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER,
-} from '../config/coopDefenseMaps';
+} from '../config/coopDefenseMapAuthoring';
 import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../config/persistentBase';
 import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
@@ -185,14 +185,21 @@ function clampOriginToGrid(
   return { minGridX, minGridY };
 }
 
+/** Unclamped authoring geometry. Editors must report invalid placement before runtime clipping. */
+export function resolveCoopDefenseBasePlacement(config: CoopBaseConfig, metrics: WorldMetrics) {
+  const shape = resolveShape(config.shape);
+  return { ...shape, ...resolveAnchorOrigin(config.anchor, shape.width, shape.height, metrics) };
+}
+
 function resolveBaseSpec(
   config: CoopBaseConfig,
   humanPlayerCount: number,
   metrics: WorldMetrics,
   dormantObjectiveId?: string,
 ): BaseSpec {
-  const { cells: relativeCells, width, height } = resolveShape(config.shape);
-  const origin = resolveAnchorOrigin(config.anchor, width, height, metrics);
+  const placement = resolveCoopDefenseBasePlacement(config, metrics);
+  const { cells: relativeCells, width, height } = placement;
+  const origin = placement;
   const { minGridX, minGridY } = clampOriginToGrid(origin.minGridX, origin.minGridY, width, height, metrics);
 
   const absoluteCells = relativeCells
