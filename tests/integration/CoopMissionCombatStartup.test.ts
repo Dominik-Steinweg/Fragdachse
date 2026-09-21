@@ -96,7 +96,7 @@ import type { PlayerManager } from '../../src/entities/PlayerManager';
 import type { ActivityDescriptor } from '../../src/world/ActivityDescriptor';
 import { fakeEntity } from '../fakeEntity';
 import { WorldRuntime } from '../../src/world/WorldRuntime';
-import { resolveWorldMetrics } from '../../src/world/WorldMetrics';
+import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
 import { createWorldGeometryQueries } from '../../src/world/WorldGeometryQueries';
 import { WorldPlayerGameplayRuntime } from '../../src/world/WorldPlayerGameplayRuntime';
 import { ResourceSystem } from '../../src/systems/ResourceSystem';
@@ -111,6 +111,9 @@ import type { PrimaryHitAdrenalineRewardFact } from '../../src/combat/PrimaryHit
 import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
 import { essenceWorldGeometry } from '../essenceWorldGeometry';
 import { ADRENALINE_ESSENCE_CONFIG } from '../../src/adrenalineEssence/AdrenalineEssenceConfig';
+import { CoopMissionComposition, type CoopMissionCompositionOptions } from '../../src/activity/CoopMissionComposition';
+import type { CoopMissionActivityConfiguration } from '../../src/activity/CoopMissionActivityConfig';
+import survivalMap from '../../src/config/coopDefenseMaps/09-ueberleben.json';
 
 const activity: ActivityDescriptor = {
   activityRevision: 2,
@@ -118,6 +121,89 @@ const activity: ActivityDescriptor = {
   kind: 'coop-mission',
   definitionId: 'activity:coop-mission:1',
 };
+
+describe('Coop mission without bases', () => {
+  function createMission(participantIds = ['local'], respawnsPerPlayer = 1) {
+    let secondsLeft = 10;
+    const runtime = new CoopMissionRuntime(activity);
+    const enemyManager = {
+      setEnemySpawnedCallback: vi.fn(), setNavigationIntents: vi.fn(),
+      setLethalDamageGuard: vi.fn(), setVisualSink: vi.fn(), destroy: vi.fn(),
+      getAllEnemies: () => [],
+    };
+    runtime.setEnemyManager(enemyManager as never);
+    const releaseTrain = vi.fn();
+    const setResolvedCallback = vi.fn();
+    const composition = new CoopMissionComposition({
+      getWorld: () => ({
+        descriptor: { worldRevision: 1 }, bases: [],
+        metrics: resolveCoopDefenseWorldMetrics(survivalMap.arenaWidthCells, survivalMap.arenaHeightCells),
+      }),
+      getLayout: () => ({ rocks: [], tracks: [] }), getArenaResult: () => ({}),
+      getBaseManager: () => null, getHumanPlayerCount: () => 1, isHost: () => true,
+      getPlayerManager: () => ({ getAllPlayers: () => [] }), getWorldCombatCore: () => ({}),
+      getPowerUpSystem: () => null, getTemporaryUtilityPort: () => null,
+      getAutomatedWeaponExecution: () => ({ fire: vi.fn() }), getPlacementSystem: () => ({}),
+      getProjectileSpawnPort: () => ({}), getProjectileThreatReadPort: () => ({}),
+      getTranslocatorProjectilePort: () => ({}), getPlayerWorldRuntime: () => null,
+      getParticipantIds: () => participantIds, publishRespawnBudget: vi.fn(), publishMissionProgress: vi.fn(),
+      getConnectedPlayerIds: () => participantIds, getSpectatorIds: () => [],
+      getSecondsLeft: () => secondsLeft,
+      releaseMissionObjectives: vi.fn(),
+      getHostPhysics: () => ({ setEnemyRockContactCallback: vi.fn() }),
+      getEnergyShieldSystem: () => null, getStinkCloudSystem: () => ({}),
+      getPlayerFireChunkPort: () => null, getFireSystem: () => ({}), getDecoySystem: () => null,
+      getArmageddonSystem: () => null, getPlayerModifierReadPort: () => null,
+      getAirstrikeSystem: () => ({ setResolvedCallback, clearAuthoredActivityStrikes: vi.fn() }),
+      getGameAudioSystem: () => ({}),
+      train: { releaseActivityTrain: releaseTrain },
+    } as unknown as CoopMissionCompositionOptions);
+    composition.materializeDependents({
+      definitionId: 'activity:coop-mission:9', mapConfig: { ...survivalMap, respawnsPerPlayer },
+    } as CoopMissionActivityConfiguration, runtime);
+    for (const playerId of participantIds) runtime.playerActivity!.attach(playerId);
+    return { runtime, enemyManager, setResolvedCallback, releaseTrain,
+      expireTimer: () => { secondsLeft = 0; } };
+  }
+
+  it('materializes attacks, abilities and authored events and releases their bindings', () => {
+    const { runtime, enemyManager, setResolvedCallback, releaseTrain } = createMission();
+    expect(runtime.coopDefenseEnemyAttackSystem).not.toBeNull();
+    expect(runtime.coopDefenseEnemyAbilitySystem).not.toBeNull();
+    expect(runtime.coopDefenseMapEventDirector).not.toBeNull();
+    runtime.coopDefenseEnemyAttackSystem!.hostUpdate(16, 1000);
+    runtime.destroy();
+    expect(enemyManager.setEnemySpawnedCallback).toHaveBeenLastCalledWith(null);
+    expect(setResolvedCallback).toHaveBeenLastCalledWith(null);
+    expect(releaseTrain).toHaveBeenCalled();
+  });
+
+  it.each([['solo'], ['host', 'client']])('ends a baseless mission only after every participant loses their last life (%s)', (...participantIds) => {
+    const { runtime, expireTimer } = createMission(participantIds);
+    expect(runtime.hostResolveCompletion()).toBeNull();
+    for (const playerId of participantIds) {
+      runtime.playerActivity!.handlePlayerDeath(playerId);
+      expect(runtime.hostResolveCompletion()).toBeNull();
+      expect(runtime.playerActivity!.consumeRespawn(playerId)).toBe(true);
+      expect(runtime.hostResolveCompletion()).toBeNull();
+      runtime.playerActivity!.handlePlayerDeath(playerId);
+      if (playerId !== participantIds.at(-1)) expect(runtime.hostResolveCompletion()).toBeNull();
+    }
+    expireTimer();
+    expect(runtime.hostResolveCompletion()).toBe('defeat');
+    expect(runtime.hostResolveCompletion()).toBeNull();
+    runtime.destroy();
+  });
+
+  it('wins a baseless survival mission when its timer expires with a living player', () => {
+    const { runtime, expireTimer } = createMission();
+    expect(runtime.hostResolveCompletion()).toBeNull();
+    expireTimer();
+    expect(runtime.hostResolveCompletion()).toBe('victory');
+    expect(runtime.hostResolveCompletion()).toBeNull();
+    runtime.destroy();
+  });
+});
 
 describe('Lobby World essence composition', () => {
   function lobbyFixture(definitionId = 'world:lobby') {

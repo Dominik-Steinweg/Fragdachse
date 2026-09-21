@@ -18,7 +18,7 @@ import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecution
 export interface CoopMissionEnemySupportCompositionOptions {
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatActivityPort;
-  readonly baseManager: BaseManager;
+  readonly baseManager: BaseManager | null;
   readonly placementSystem: PlacementSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly weaponExecution: AutomatedWeaponExecution;

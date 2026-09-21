@@ -28,6 +28,8 @@ export interface EnemyAiTargetCandidate extends EnemyAiTargetRef {
   readonly resolvePosition?: (fromX: number, fromY: number) => { x: number; y: number } | null;
   /** Cheap live validity check used by locks and homing between catalog refreshes. */
   readonly isTargetable?: () => boolean;
+  /** Identity/lifetime check for an observed position; never grants live position or attack access. */
+  readonly canRetainMemory?: () => boolean;
 }
 
 /**
@@ -89,6 +91,12 @@ export class EnemyAiTargetCatalog {
 
   isTargetValid(ref: EnemyAiTargetRef): boolean {
     return this.resolve(ref) !== null;
+  }
+
+  canRetainMemory(ref: EnemyAiTargetRef): boolean {
+    const target = this.targets.get(this.key(ref));
+    return !!target && ref.kind === 'player' && !this.getPlayerReplacement(ref.id)
+      && (target.canRetainMemory?.() ?? this.isTargetable(target));
   }
 
   getPlayerReplacement(playerId: string): EnemyAiTargetCandidate | null {

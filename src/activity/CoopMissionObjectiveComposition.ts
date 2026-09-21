@@ -193,7 +193,7 @@ export class CoopMissionObjectiveComposition {
         onDeliveredFx: (x, y) => this.options.broadcastCarryDeliveredFx(x, y),
       })
       : null;
-    const roundState = this.options.isHost && baseManager
+    const roundState = this.options.isHost
       ? this.createRoundState(runtime, baseManager)
       : null;
     const teamBuff = this.options.isHost ? new CoopDefenseTeamBuffSystem() : null;
@@ -211,7 +211,7 @@ export class CoopMissionObjectiveComposition {
 
   private createRoundState(
     runtime: CoopMissionRuntime,
-    baseManager: BaseManager,
+    baseManager: BaseManager | null,
   ): CoopDefenseRoundStateSystem {
     const objective = this.options.activity.mapConfig.objective;
     return new CoopDefenseRoundStateSystem({

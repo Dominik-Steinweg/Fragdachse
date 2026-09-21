@@ -247,7 +247,7 @@
         },
         {
           "enemyKind": "spore-warden",
-          "count": 6,
+          "count": 7,
           "spawnStaggerMs": 3000
         },
         {
@@ -265,7 +265,7 @@
       "groups": [
         {
           "enemyKind": "void-stalker",
-          "count": 1,
+          "count": 3,
           "front": "west",
           "spawnStaggerMs": 4000
         },

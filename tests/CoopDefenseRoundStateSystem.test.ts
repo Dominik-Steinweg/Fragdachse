@@ -30,6 +30,22 @@ function friendly(...hpValues: number[]): FakeBase[] {
 }
 
 describe('CoopDefenseRoundStateSystem', () => {
+  it.each(['survive', 'advance'] as const)('resolves %s without a base manager', (objective) => {
+    let wiped = false;
+    const system = new CoopDefenseRoundStateSystem({
+      baseManager: null,
+      objective,
+      getSecondsLeft: () => 10,
+      isTeamWipedOut: () => wiped,
+      isAdvanceComplete: () => false,
+    });
+    system.applyDebugBaseDamage(50);
+    expect(system.update()).toBeNull();
+    wiped = true;
+    expect(system.update()).toBe('defeat');
+    expect(system.update()).toBeNull();
+  });
+
   it('does not lose a survival map when its optional base anchor is destroyed', () => {
     expect(new CoopDefenseRoundStateSystem({
       baseManager: createBaseManager(friendly(0, 500)),

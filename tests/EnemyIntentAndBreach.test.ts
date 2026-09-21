@@ -204,6 +204,78 @@ describe('Shared strategic intent and demolition permission', () => {
 });
 
 describe('Navigation authority across lifetime and faction changes', () => {
+  it.each(['rabid-badger', COOP_DEFENSE_ENEMY_KINDS.find(kind => getCoopDefenseEnemyConfig(kind).movementTarget === 'bases')!] as const)(
+    '%s remembers the last observation before burrowing, waits on arrival and reacquires on emergence', kind => {
+      const world = navigationTestWorld(), unit = enemy(kind);
+      let burrowed = false;
+      const publish = (x: number, y: number) => world.catalog.updateTargets([{
+        kind: 'player', id: 'p', x, y, isTargetable: () => !burrowed, canRetainMemory: () => true,
+      }]);
+      publish(208, 128); settle(world, [unit]);
+      publish(216, 144); world.intents.update([unit], 2);
+      burrowed = true; publish(80, 224); settle(world, [unit], 3);
+      expect(world.intents.get(unit.id)).toMatchObject({ reason: 'memory', target: null,
+        point: { x: 216, y: 144 }, attackContext: 'none' });
+      expect(world.intents.allowsAttack(unit.id, 'player', 'p', 'all')).toBe(false);
+      expect(world.intents.getBreach(unit.id)).toBeNull();
+      publish(32, 32); settle(world, [unit], 200);
+      expect(world.intents.get(unit.id)?.point).toMatchObject({ x: 216, y: 144 });
+      unit.sprite.x = 216; unit.sprite.y = 144;
+      world.intents.update([unit], 300);
+      expect(world.intents.get(unit.id)).toBeNull();
+      world.intents.update([unit], 400);
+      expect(world.intents.get(unit.id)).toBeNull();
+      burrowed = false; settle(world, [unit], 500);
+      expect(world.intents.get(unit.id)?.target).toEqual({ kind: 'player', id: 'p' });
+      world.destroy();
+    });
+
+  it('prefers another visible player and then a base over pursuit memory', () => {
+    const world = navigationTestWorld([rect('base:main', 64, 48, 96, 80, 'base')],
+      [{ id: 'main', isGoalSource: true, cellCoords: Int32Array.of(5, 4) }]), unit = enemy();
+    let burrowed = false;
+    const player = { kind: 'player' as const, id: 'p', x: 208, y: 128,
+      isTargetable: () => !burrowed, canRetainMemory: () => true };
+    world.catalog.updateTargets([player]); settle(world, [unit]);
+    burrowed = true;
+    world.catalog.updateTargets([player, { kind: 'player', id: 'other', x: 208, y: 224 }]);
+    settle(world, [unit], 200);
+    expect(world.intents.get(unit.id)?.target).toEqual({ kind: 'player', id: 'other' });
+    world.catalog.updateTargets([player]); settle(world, [unit], 400);
+    expect(world.intents.get(unit.id)).toMatchObject({ reason: 'fallback-base', target: { kind: 'base', id: 'main' } });
+    world.destroy();
+  });
+
+  it.each(['death', 'removal', 'replacement', 'clear', 'enemy-removal'] as const)('discards pursuit memory on %s', invalidation => {
+    const world = navigationTestWorld(), unit = enemy();
+    let targetable = true, retain = true;
+    const player = { kind: 'player' as const, id: 'p', x: 208, y: 128,
+      isTargetable: () => targetable, canRetainMemory: () => retain };
+    world.catalog.updateTargets([player]); settle(world, [unit]);
+    targetable = false; settle(world, [unit], 200);
+    expect(world.intents.get(unit.id)?.reason).toBe('memory');
+    if (invalidation === 'death') retain = false;
+    if (invalidation === 'removal') world.catalog.updateTargets([]);
+    if (invalidation === 'replacement') world.catalog.updateTargets([player,
+      { kind: 'armed-base', id: 'carrier', x: 208, y: 128, representedPlayerIds: ['p'] }]);
+    if (invalidation === 'clear') world.intents.clear();
+    if (invalidation === 'enemy-removal') world.intents.update([], 250);
+    settle(world, [unit], 300);
+    expect(world.intents.get(unit.id)?.reason).not.toBe('memory');
+    world.catalog.updateTargets([{ ...player, canRetainMemory: () => true }]);
+    settle(world, [unit], 400);
+    expect(world.intents.get(unit.id)).toBeNull();
+    world.destroy();
+  });
+
+  it('does not invent a pursuit position for an unobserved underground player', () => {
+    const world = navigationTestWorld(), unit = enemy();
+    world.catalog.updateTargets([{ kind: 'player', id: 'hidden', x: 208, y: 128,
+      isTargetable: () => false, canRetainMemory: () => true }]);
+    settle(world, [unit]);
+    expect(world.intents.get(unit.id)).toBeNull();
+    world.destroy();
+  });
   it('drops a missing player immediately, including inside the decision interval', () => {
     const world = navigationTestWorld(), enemies = Array.from({ length: 30 }, (_, index) => enemy('rabid-badger', `e${index}`));
     world.catalog.updateTargets([{ kind: 'player', id: 'player', x: 224, y: 128 }]);

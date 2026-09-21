@@ -25,35 +25,141 @@
   "encounters": [
     {
       "id": "survival-opening",
-      "start": { "type": "time", "atMs": 0 },
+      "start": {
+        "type": "time",
+        "atMs": 0
+      },
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 12, "front": "west" },
-        { "enemyKind": "void-stalker", "count": 2, "delayMs": 700, "front": "east" }
+        {
+          "enemyKind": "zombie-badger",
+          "count": 48,
+          "front": "west",
+          "spawnStaggerMs": 18000
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "delayMs": 3000,
+          "front": "east"
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "delayMs": 3000,
+          "front": "west"
+        }
       ]
     },
     {
       "id": "survival-escalation",
-      "start": { "type": "time", "atMs": 24000 },
+      "start": {
+        "type": "time",
+        "atMs": 24000
+      },
       "groups": [
-        { "enemyKind": "stink-broodmother", "count": 2, "front": "north" },
-        { "enemyKind": "rabid-badger", "count": 10, "delayMs": 900, "front": "south" }
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "front": "north"
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "front": "south"
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 10,
+          "delayMs": 3000,
+          "front": "south"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 24,
+          "spawnStaggerMs": 12000,
+          "delayMs": 6000
+        }
       ]
     },
     {
       "id": "survival-brood",
-      "start": { "type": "time", "atMs": 56000 },
+      "start": {
+        "type": "time",
+        "atMs": 56000
+      },
       "groups": [
-        { "enemyKind": "stink-broodmother", "count": 2, "front": "west" },
-        { "enemyKind": "void-stalker", "count": 2, "delayMs": 1200, "front": "east" }
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "front": "west"
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "front": "east"
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "front": "south"
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 1,
+          "delayMs": 1200,
+          "front": "east"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 40,
+          "spawnStaggerMs": 18000
+        }
       ]
     },
     {
       "id": "survival-last-stand",
-      "start": { "type": "time", "atMs": 86000 },
+      "start": {
+        "type": "time",
+        "atMs": 86000
+      },
       "groups": [
-        { "enemyKind": "stink-broodmother", "count": 2, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 20, "delayMs": 800, "front": "north" },
-        { "enemyKind": "void-stalker", "count": 2, "delayMs": 1400, "front": "south" }
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 3,
+          "front": "west",
+          "spawnStaggerMs": 2000
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "front": "west",
+          "spawnStaggerMs": 2000
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "front": "east",
+          "spawnStaggerMs": 2000
+        },
+        {
+          "enemyKind": "stink-broodmother",
+          "count": 1,
+          "front": "north",
+          "spawnStaggerMs": 2000
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 24,
+          "delayMs": 0,
+          "front": "north",
+          "spawnStaggerMs": 20000
+        },
+        {
+          "enemyKind": "void-stalker",
+          "count": 1,
+          "delayMs": 6000,
+          "front": "south"
+        }
       ]
     }
   ],

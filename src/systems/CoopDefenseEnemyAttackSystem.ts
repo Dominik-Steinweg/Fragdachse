@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../entities/EnemyEntity';
-import type { EnemyManager } from '../entities/EnemyManager';
+import type { EnemyCombatMovementSource, EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatActorStatePort, CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from './CoopDefenseEnemyTrainAwarenessSystem';
@@ -61,7 +61,7 @@ interface EnemySalvoState {
   expiresAt: number;
 }
 
-export class CoopDefenseEnemyAttackSystem {
+export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   private intents: EnemyIntentSystem | null = null;
   setIntents(intents: EnemyIntentSystem | null): void { this.intents = intents; }
   private decoyTargets: DecoyTargetPort | null = null;
@@ -92,7 +92,7 @@ export class CoopDefenseEnemyAttackSystem {
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
-    private readonly baseManager: BaseManager,
+    private readonly baseManager: BaseManager | null,
     private readonly combatSystem: CombatActorStatePort & CombatGeometryPort & CombatRelationshipQueryPort,
     private readonly weaponExecution: AutomatedWeaponExecution,
     private readonly getRockObjects: () => readonly (RockPhysicsProxy | null)[] | null,
@@ -111,6 +111,40 @@ export class CoopDefenseEnemyAttackSystem {
 
   setActionBlockedChecker(checker: ((enemyId: string) => boolean) | null): void {
     this.actionBlockedChecker = checker;
+  }
+
+  /** No scan, cooldown, lock or salvo mutation: locomotion reads this before moving the enemy. */
+  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean } | null {
+    if (!enemy.sprite.active || enemy.faction !== 'hostile' || enemy.isBurrowed()
+      || this.combatSystem.isStunned?.(enemy.id, now) || this.actionBlockedChecker?.(enemy.id)
+      || this.enemyManager.isEnemyPanicking(enemy.id) || this.trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) return null;
+
+    const windup = this.meleeWindups.get(enemy.id);
+    if (windup) return { aimAngle: windup.aimAngle, holdPosition: true };
+    const salvo = this.salvoStates.get(enemy.id);
+    const sustained = this.sustainedAttacks.get(enemy.id);
+    const committedWeaponId = salvo && now < salvo.expiresAt ? salvo.weaponId
+      : sustained && (now < sustained.fireUntil || sustained.lastShotAt < sustained.fireUntil) ? sustained.weaponId : null;
+    for (const attackWeapon of enemy.getAttackWeapons()) {
+      if (committedWeaponId && attackWeapon.weapon.config.id !== committedWeaponId) continue;
+      const fire = attackWeapon.weapon.config.fire.type;
+      if (fire === 'healing_aura' || fire === 'tesla_dome') continue;
+      const range = attackWeapon.weapon.config.range;
+      const frozen = committedWeaponId ? salvo?.target ?? this.lastAttackTargets.get(enemy.id) : undefined;
+      const obscured = frozen && this.isAttackTargetObscured(enemy, frozen, range);
+      const committedDecoy = salvo && (this.decoyTargets?.getTarget(enemy.id) || salvo.target.targetRef?.kind === 'decoy');
+      const target = obscured ? frozen
+        : committedDecoy ? (salvo.target.targetRef ? this.buildPlayerLikeTargetCandidate(enemy, salvo.target.targetRef, range) : null) ?? salvo.target
+        : committedWeaponId === sustained?.weaponId && sustained?.targetRef
+          ? this.buildPlayerLikeTargetCandidate(enemy, sustained.targetRef, range)
+          : this.resolveWeaponTarget(enemy, attackWeapon, now, salvo?.shotsFired, false);
+      if (!target || (!obscured && !this.isWithinWeaponMinDistance(enemy, attackWeapon, target))) continue;
+      return {
+        aimAngle: Math.atan2(target.targetY - enemy.sprite.y, target.targetX - enemy.sprite.x),
+        holdPosition: attackWeapon.attackMovementSpeedFactor <= 0,
+      };
+    }
+    return null;
   }
 
   hostUpdate(delta: number, now: number): void {
@@ -408,6 +442,7 @@ export class CoopDefenseEnemyAttackSystem {
     attackWeapon: EnemyAttackWeapon,
     now: number,
     salvoShotIndex?: number,
+    updateLock = true,
   ): EnemyAttackCandidate | null {
     const weapon = attackWeapon.weapon;
     if (this.intents) {
@@ -417,7 +452,7 @@ export class CoopDefenseEnemyAttackSystem {
       if (secondary) {
         target = attackWeapon.salvo?.targetDistribution === 'round_robin'
           ? this.findDistributedPlayerTarget(enemy, weapon.config.range, attackWeapon.minTargetDistancePx, salvoShotIndex ?? 0)
-          : this.findLivingTargetWithLock(enemy, weapon.config.range, now);
+          : this.findLivingTargetWithLock(enemy, weapon.config.range, now, updateLock);
       } else if (intent?.attackContext === 'breach' && attackWeapon.targetMode !== 'players') {
         const blocker = this.intents.getBreach(enemy.id)?.nextBlocker;
         if (blocker?.startsWith('base:')) target = this.findNearestBaseTarget(enemy, weapon.config.range, blocker.slice(5));
@@ -450,12 +485,12 @@ export class CoopDefenseEnemyAttackSystem {
         salvoShotIndex ?? 0,
       )
       : attackWeapon.targetMode === 'players'
-        ? this.findLivingTargetWithLock(enemy, weapon.config.range, now)
+        ? this.findLivingTargetWithLock(enemy, weapon.config.range, now, updateLock)
       : attackWeapon.targetMode === 'rocks'
         ? this.findNearestObstacleTarget(enemy, weapon.config.range, now)
         : attackWeapon.targetMode === 'structures'
           ? this.selectStructureTarget(enemy, weapon.config.range, now)
-          : this.selectTarget(enemy, weapon.config.range, now);
+          : this.selectTarget(enemy, weapon.config.range, now, updateLock);
     const trainTarget = (weapon.config.trainDamageMult ?? 1) > 0
       ? this.findTrainTarget(enemy, weapon.config.range)
       : null;
@@ -607,7 +642,7 @@ export class CoopDefenseEnemyAttackSystem {
     return !this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, range);
   }
 
-  private selectTarget(enemy: EnemyEntity, range: number, now: number): EnemyAttackCandidate | null {
+  private selectTarget(enemy: EnemyEntity, range: number, now: number, updateLock = true): EnemyAttackCandidate | null {
     let best = this.findNearestBaseTarget(enemy, range);
 
     const armedConstruct = this.findNearestArmedConstructTarget(enemy, range);
@@ -618,7 +653,7 @@ export class CoopDefenseEnemyAttackSystem {
       best = obstacle;
     }
 
-    const livingTarget = this.findLivingTargetWithLock(enemy, range, now);
+    const livingTarget = this.findLivingTargetWithLock(enemy, range, now, updateLock);
     if (this.isBetterCandidate(livingTarget, best)) {
       best = livingTarget;
     }
@@ -638,8 +673,8 @@ export class CoopDefenseEnemyAttackSystem {
     const strategicTarget = getCoopDefenseEnemyConfig(enemy.kind).movementTarget;
 
     // Gegnerbasen sind fuer Zombies kein Ziel; sie gehoeren derselben Fraktion.
-    const knownBase = knownId === undefined ? undefined : this.baseManager.getBase(knownId);
-    const bases = knownId === undefined ? this.baseManager.getBasesByFaction('friendly')
+    const knownBase = knownId === undefined ? undefined : this.baseManager?.getBase(knownId);
+    const bases = knownId === undefined ? this.baseManager?.getBasesByFaction('friendly') ?? []
       : knownBase?.faction === 'friendly' ? [knownBase] : [];
     for (const base of bases) {
       if (this.intents && !this.intents.allowsAttack(enemy.id, 'base', base.id, 'all')) continue;
@@ -795,12 +830,13 @@ export class CoopDefenseEnemyAttackSystem {
     enemy: EnemyEntity,
     range: number,
     now: number,
+    updateLock = true,
   ): EnemyAttackCandidate | null {
-    const lockedTarget = this.getLockedPlayerTarget(enemy, range, now);
+    const lockedTarget = this.getLockedPlayerTarget(enemy, range, now, updateLock);
     if (lockedTarget) return lockedTarget;
 
     const target = this.findNearestLivingTarget(enemy, range);
-    if (target?.targetRef) {
+    if (target?.targetRef && updateLock) {
       this.playerTargetLocks.set(enemy.id, {
         targetRef: target.targetRef,
         lockedUntil: now + CoopDefenseEnemyAttackSystem.PLAYER_TARGET_LOCK_DURATION_MS,
@@ -813,16 +849,17 @@ export class CoopDefenseEnemyAttackSystem {
     enemy: EnemyEntity,
     range: number,
     now: number,
+    updateLock = true,
   ): EnemyAttackCandidate | null {
     const lock = this.playerTargetLocks.get(enemy.id);
     if (!lock) return null;
     if (now >= lock.lockedUntil) {
-      this.playerTargetLocks.delete(enemy.id);
+      if (updateLock) this.playerTargetLocks.delete(enemy.id);
       return null;
     }
 
     const target = this.buildPlayerLikeTargetCandidate(enemy, lock.targetRef, range);
-    if (!target) this.playerTargetLocks.delete(enemy.id);
+    if (!target && updateLock) this.playerTargetLocks.delete(enemy.id);
     return target;
   }
 

@@ -303,6 +303,12 @@
       "obstacleAttackDelayMs": 250,
       "imageKey": "enemy_inferno_colossus",
       "isBoss": true,
+      "combatPositioning": {
+        "preferredDistancePx": 320,
+        "toleranceP": 16,
+        "retreatSpeedFactor": 0,
+        "requireLineOfSight": true
+      },
       "glow": { "color": 12799231, "sizeFactor": 1.65, "alpha": 1, "lightRadiusPx": 265, "lightIntensity": 1 },
       "voidFireChunks": {
         "count": 20,

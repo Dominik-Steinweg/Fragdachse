@@ -260,7 +260,7 @@ export class CoopMissionComposition {
       publishRespawnBudget: this.options.publishRespawnBudget,
     }).materialize(runtime);
 
-    if (!this.options.isHost() || !runtime.enemyManager || !baseManager || !placementSystem || !weaponExecution
+    if (!this.options.isHost() || !runtime.enemyManager || !placementSystem || !weaponExecution
       || !projectileSpawnPort
       || !projectileThreatReadPort || !translocatorProjectilePort) return;
     new CoopMissionEnemyBehaviourComposition({
@@ -310,7 +310,7 @@ export class CoopMissionComposition {
     }).materialize(runtime);
 
     const fire = this.options.getFireSystem();
-    runtime.setBaseVoidFire(new BaseVoidFireSystem({
+    if (baseManager) runtime.setBaseVoidFire(new BaseVoidFireSystem({
       getBases: () => baseManager.getBases(),
       getContacts: (baseId, now) => collectBaseFireContacts(fire,
         baseManager.getBase(baseId)?.spec.cells ?? [], world.metrics, now),

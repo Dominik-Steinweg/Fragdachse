@@ -197,6 +197,21 @@ function runAttackFrames(
 }
 
 describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
+  it('movement queries preserve weapon clocks and locks and keep moving attacks mobile', () => {
+    const enemy = createColossus();
+    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 800, y: 100, active: true })]);
+    const weapon = enemy.getAttackWeapons().find(attack => attack.salvo)!;
+    expect(system.getCombatMovement(enemy, 1000)).toEqual({ aimAngle: 0, holdPosition: weapon.attackMovementSpeedFactor <= 0 });
+    expect(system.getCurrentTarget(enemy.id, 1000)).toBeNull();
+    expect(enemy.canScanForAttack(1000)).toBe(true);
+    expect(enemy.isWeaponReady(weapon.weapon, 1000)).toBe(true);
+    expect(shots).toEqual([]);
+    system.hostUpdate(16, 1000);
+    for (let now = 1001; now < 1000 + SALVO.intervalMs; now++) system.getCombatMovement(enemy, now);
+    expect(shots).toHaveLength(1);
+    system.hostUpdate(16, 1000 + SALVO.intervalMs);
+    expect(shots).toHaveLength(2);
+  });
   it.each(['armed-construct', 'armed-outpost', 'armed-base'] as const)('player-only weapons acquire real %s references and still respect cover', kind => {
     const enemy = createColossus(100, 100, 'players'), catalog = new EnemyAiTargetCatalog();
     const ref = { kind, id: kind === 'armed-construct' ? '0' : 'base' };

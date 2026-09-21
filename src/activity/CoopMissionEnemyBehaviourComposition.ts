@@ -33,7 +33,7 @@ export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly translocatorProjectilePort: TranslocatorProjectilePort;
   readonly combatSystem: CombatActivityPort;
   readonly hostPhysics: HostPhysicsSystem;
-  readonly baseManager: BaseManager;
+  readonly baseManager: BaseManager | null;
   readonly weaponExecution: AutomatedWeaponExecution;
   readonly placementSystem: PlacementSystem;
   readonly energyShieldSystem: EnergyShieldSystem | null;

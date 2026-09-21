@@ -17,6 +17,24 @@ function candidate(
 }
 
 describe('EnemyAiTargetCatalog', () => {
+  it('retains memory eligibility without exposing a burrowed player', () => {
+    const catalog = new EnemyAiTargetCatalog();
+    let alive = true, burrowed = false;
+    const player = { ...candidate('player', 'p', () => alive && !burrowed), canRetainMemory: () => alive };
+    catalog.updateTargets([player]);
+    burrowed = true;
+    expect(catalog.canRetainMemory(player)).toBe(true);
+    expect(catalog.resolve(player)).toBeNull();
+    expect(catalog.getPosition(player, 0, 0)).toBeNull();
+    expect(catalog.getCandidates('players')).toEqual([]);
+    alive = false;
+    expect(catalog.canRetainMemory(player)).toBe(false);
+    alive = true;
+    catalog.updateTargets([player, { ...candidate('armed-base', 'carrier', () => true), representedPlayerIds: ['p'] }]);
+    expect(catalog.canRetainMemory(player)).toBe(false);
+    catalog.clear();
+    expect(catalog.canRetainMemory(player)).toBe(false);
+  });
   it('replaces mounted players with one real carrier target while keeping pure player groups unambiguous', () => {
     let mounted = false;
     const catalog = new EnemyAiTargetCatalog();

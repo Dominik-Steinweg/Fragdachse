@@ -31,6 +31,20 @@ Gewöhnliche Gegnerbewegung, Gefechtspositionierung und neue gezielte Angriffe l
 Ein Waffenmodus `all` erlaubt keinen strategischen Zielwechsel; ausdrücklich konfigurierte Nebenaktionen
 und bereits verbindlich begonnene Fähigkeiten behalten ihre eigenen Verträge.
 
+Das Angriffssystem liefert vor der gewöhnlichen Bewegung eine lesende Gefechtsvorgabe aus
+denselben Ziel-, Reichweiten- und Sichtprüfungen wie die Angriffsausführung. Cooldown und Scan-Takt
+heben eine gültige Standposition nicht auf; die Abfrage verbraucht keine Waffenzeit oder Ziel-Locks.
+Gewollter Rückzug, bewegliche Angriffe und exklusive Aktionen behalten ihre Bewegungsverträge.
+Gefechtsausrichtung und Angriffspausen verwenden die fachliche Host-Zeit.
+
+Verfolgungsgedächtnis gehört dem `EnemyIntentSystem`. Der Zielkatalog trennt dafür die Erlaubnis,
+eine beobachtete Spielerposition zu behalten, vom Zugriff auf ein aktuelles Angriffsziel.
+Einbuddeln erhält nur die Erinnerung; unterirdische Positionen aktualisieren sie nicht.
+Andere gültige Ziele und geeignete Basisziele haben Vorrang. Eine Erinnerung erlaubt Bewegung
+zum beobachteten Ort, aber weder neue Angriffe noch Durchbruchsaufträge. Ankunft, Tod, Entfernung,
+Zielersatz und Activity-Teardown beenden die Erinnerung. Dies prüfen die bestehenden
+Intent-Tests und [NavigationPursuit.test.ts](../../tests/integration/NavigationPursuit.test.ts).
+
 Die Navigation leitet ihre Körpergeometrie aus der aktuellen World ab. Ein Worker-Ergebnis wird zusammen
 mit Profil, Zielzuordnung und Generation aktiviert. Physische Änderungen entziehen veralteten Routen
 sofort ihre Erreichbarkeits- und Durchbruchsaussage. Ein Fortsatz zum selben Ziel darf weiterführen,

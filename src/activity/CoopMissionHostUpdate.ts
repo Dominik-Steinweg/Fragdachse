@@ -222,6 +222,7 @@ export class CoopMissionHostUpdate {
       this.runtime.coopDefenseTimebombSystem,
       this.port.getSmokeSystem(),
       this.runtime.coopDefenseDecoyTargetSystem,
+      this.runtime.coopDefenseEnemyAttackSystem,
     );
     if (metrics) { metrics.enemyMovementMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     if (!countdownActive) this.runtime.necromancySystem?.hostUpdate(nowMs, deltaMs);
@@ -302,6 +303,12 @@ export class CoopMissionHostUpdate {
           y: player.y,
           goalCells: goal ? [goal] : [],
           resolvePosition: () => this.port.getPlayerPosition(player.id),
+          canRetainMemory: () => (
+            player.active
+            && this.port.isPlayerAlive(player.id)
+            && !this.port.isPlayerStealthed(player.id)
+            && (this.port.isPlayerTargetable?.(player.id) ?? true)
+          ),
           isTargetable: () => (
             player.active
             && this.port.isPlayerAlive(player.id)

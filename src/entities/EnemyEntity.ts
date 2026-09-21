@@ -235,12 +235,14 @@ export class EnemyEntity {
     this.targetY = y;
   }
 
-  setDesiredVelocity(vx: number, vy: number): void {
+  setDesiredVelocity(vx: number, vy: number, now?: number, aimAngle?: number): void {
     if (!this.authoritative) return;
     if (this.stationary) { vx = 0; vy = 0; }
     this.desiredVelocityX = vx;
     this.desiredVelocityY = vy;
-    if ((vx !== 0 || vy !== 0) && !this.isAttackMovementPaused(Date.now())) {
+    if (aimAngle !== undefined) {
+      this.faceAngle(aimAngle);
+    } else if ((vx !== 0 || vy !== 0) && (now === undefined || !this.isAttackMovementPaused(now))) {
       this.faceAngle(Math.atan2(vy, vx));
     }
   }

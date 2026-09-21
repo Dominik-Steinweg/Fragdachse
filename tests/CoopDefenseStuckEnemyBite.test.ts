@@ -101,6 +101,7 @@ function createSystem(
   rock: { x: number; y: number; active: boolean },
   players: readonly TestPlayer[] = [fakeEntity({ id: 'p1', x: 400, y: 100, active: true })],
   rocks: readonly (typeof rock | null)[] = [rock],
+  baseManager: BaseManager | null = { getBases: () => [], getBasesByFaction: () => [] } as unknown as BaseManager,
 ) {
   const firedWeaponIds: string[] = [];
   const firedTargetPositions: Array<{ x: number; y: number }> = [];
@@ -121,7 +122,7 @@ function createSystem(
       getAllPlayers: () => players,
       getPlayer: (id: string) => players.find(player => player.id === id),
     } as unknown as PlayerManager,
-    { getBases: () => [], getBasesByFaction: () => [] } as unknown as BaseManager,
+    baseManager,
     {
       isAlive: () => true,
       isBurrowed: () => false,
@@ -143,6 +144,17 @@ function createSystem(
 }
 
 describe('Enemy stuck in a rock', () => {
+  it('fires at players without a base manager, including weapons that scan all target kinds', () => {
+    const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false }, 'all');
+    const player = fakeEntity({ id: 'p1', x: 400, y: 100, active: true });
+    const { system, firedWeaponIds, firedTargetPositions } = createSystem(
+      enemy, { x: 128, y: 100, active: false }, [player], [], null,
+    );
+    system.hostUpdate(16, 1000);
+    expect(firedWeaponIds).toContain(WEAPON_CONFIGS.PYRO_BADGER_GLOCK.id);
+    expect(firedTargetPositions).toContainEqual({ x: player.x, y: player.y });
+  });
+
   it('attacks only the known opening blocker without reading unrelated obstacles, and rechecks permission', () => {
     const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: true });
     const rock = { x: 128, y: 100, active: true };

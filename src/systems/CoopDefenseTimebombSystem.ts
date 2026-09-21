@@ -72,7 +72,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
-    private readonly baseManager: BaseManager,
+    private readonly baseManager: BaseManager | null,
     private readonly placementSystem: PlacementSystem,
     private readonly combatSystem: CombatActorStatePort & CombatDamageEffectPort & CombatGeometryPort,
     private readonly strategicTargets: EnemyStrategicTargetService,
@@ -468,7 +468,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
   }
 
   private damageArmedOutposts(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {
-    for (const base of this.baseManager.getBasesByFaction('friendly')) {
+    for (const base of this.baseManager?.getBasesByFaction('friendly') ?? []) {
       const represented = this.strategicTargets.resolve({ kind: base.role === 'outpost' ? 'armed-outpost' : 'armed-base', id: base.id })?.representedPlayerIds?.length;
       if ((base.isInert?.() ?? false) || base.getHp() <= 0
         || (!represented && (base.role !== 'outpost' || base.getTurrets().length === 0))) continue;

@@ -3,7 +3,7 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { RoundOutcome } from '../types';
 
 export interface CoopDefenseRoundStateSystemOptions {
-  readonly baseManager: BaseManager;
+  readonly baseManager: BaseManager | null;
   /** Explizites Map-Ziel; es gibt keinen impliziten Fallback. */
   readonly objective: CoopDefenseMapObjective;
   readonly getSecondsLeft: () => number;
@@ -36,7 +36,7 @@ export interface CoopDefenseRoundStateSystemOptions {
  */
 export class CoopDefenseRoundStateSystem {
   private concluded = false;
-  private readonly baseManager: BaseManager;
+  private readonly baseManager: BaseManager | null;
   private readonly objective: CoopDefenseMapObjective;
   private readonly getSecondsLeft: () => number;
   private readonly isBossDefeated: () => boolean;
@@ -121,7 +121,7 @@ export class CoopDefenseRoundStateSystem {
   }
 
   applyDebugBaseDamage(amount: number): void {
-    if (amount <= 0 || this.concluded) return;
+    if (amount <= 0 || this.concluded || !this.baseManager) return;
 
     const manager = this.baseManager as BaseManager & {
       getMainBasesByFaction?: (faction: 'friendly' | 'hostile') => readonly { id: string; getHp: () => number }[];
@@ -134,6 +134,7 @@ export class CoopDefenseRoundStateSystem {
   }
 
   private getTotalMainBaseHp(faction: 'friendly' | 'hostile'): number {
+    if (!this.baseManager) return 0;
     const manager = this.baseManager as BaseManager & {
       getTotalMainBaseHp?: (baseFaction: 'friendly' | 'hostile') => number;
     };
@@ -143,6 +144,7 @@ export class CoopDefenseRoundStateSystem {
   }
 
   private hasMainBase(faction: 'friendly' | 'hostile'): boolean {
+    if (!this.baseManager) return false;
     const manager = this.baseManager as BaseManager & {
       getMainBasesByFaction?: (baseFaction: 'friendly' | 'hostile') => readonly unknown[];
     };

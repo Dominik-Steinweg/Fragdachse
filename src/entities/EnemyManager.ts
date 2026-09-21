@@ -128,6 +128,11 @@ export interface EnemyCombatPositioningSource {
   getMovementOverride(enemyId: string): { vx: number; vy: number } | null;
 }
 
+/** Read-only combat decision, evaluated before ordinary movement without advancing weapons. */
+export interface EnemyCombatMovementSource {
+  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean } | null;
+}
+
 /** Exklusive Spezialbewegung, die normale KI-Zweige fuer diesen Frame ersetzt. */
 export interface EnemySpecialMovementSource {
   getMovementOverride(enemy: EnemyEntity, now: number): { vx: number; vy: number } | null;
@@ -166,6 +171,7 @@ export class EnemyManager {
   private intents: EnemyIntentSystem | null = null;
   private readonly locomotion = new EnemyLocomotion();
   private readonly movementFeedback = new Map<string, MovementFeedback>();
+  private movementNow = 0;
   setNavigationIntents(intents: EnemyIntentSystem | null): void { this.intents = intents; }
   getNavigationIntent(enemyId: string) { return this.intents?.get(enemyId) ?? null; }
   hasNavigationIntents(): boolean { return this.intents !== null; }
@@ -182,14 +188,15 @@ export class EnemyManager {
     return (enemy.faction === 'allied' ? this.intents?.routeAlly(enemy, key, destination, range)
       : this.intents?.routeTo(key, enemy.sprite.x, enemy.sprite.y, enemy.getSize() / 2, destination, range)) ?? null;
   }
-  moveNormally(enemy: EnemyEntity, waypoint: { x: number; y: number } | null, speed: number): MovementFeedback {
+  moveNormally(enemy: EnemyEntity, waypoint: { x: number; y: number } | null, speed: number,
+    aimAngle?: number, priority: 'ordinary' | 'attack' = 'ordinary'): MovementFeedback {
     const previous = enemy.getDesiredVelocity();
     const navigation = this.intents?.get(enemy.id)?.navigation;
     const result = this.locomotion.solve({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
-      radius: enemy.getSize() / 2, speed, waypoint, priority: 'ordinary', previousVx: previous.vx, previousVy: previous.vy,
+      radius: enemy.getSize() / 2, speed, waypoint, priority, previousVx: previous.vx, previousVy: previous.vy,
       routeCost: navigation?.status === 'ready' ? navigation.cost : undefined });
     this.movementFeedback.set(enemy.id, result);
-    enemy.setDesiredVelocity(result.vx, result.vy);
+    enemy.setDesiredVelocity(result.vx, result.vy, this.movementNow, aimAngle);
     return result;
   }
   private readonly committedDeathWork = new WeakMap<CombatDamageMutationOutcome, (isCurrent: () => boolean) => void>();
@@ -412,7 +419,9 @@ export class EnemyManager {
     specialMovementSource?: EnemySpecialMovementSource | null,
     smokeSystem?: SmokePerceptionPort | null,
     decoyTargets?: DecoyTargetPort | null,
+    combatMovementSource?: EnemyCombatMovementSource | null,
   ): void {
+    this.movementNow = now;
     this.plaguePursuers.clear();
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     this.movementFeedback.clear();
@@ -464,13 +473,14 @@ export class EnemyManager {
         enemy.setDesiredVelocity(
           forcedBurrowDirection.x * burrowSpeed,
           forcedBurrowDirection.y * burrowSpeed,
+          now,
         );
         continue;
       }
 
       const specialMovement = specialMovementSource?.getMovementOverride(enemy, now) ?? null;
       if (specialMovement) {
-        enemy.setDesiredVelocity(specialMovement.vx, specialMovement.vy);
+        enemy.setDesiredVelocity(specialMovement.vx, specialMovement.vy, now);
         continue;
       }
 
@@ -489,6 +499,7 @@ export class EnemyManager {
         enemy.setDesiredVelocity(
           decision?.override ? decision.vx : Phaser.Math.Linear(current.vx, targetVx, lerpT),
           decision?.override ? decision.vy : Phaser.Math.Linear(current.vy, targetVy, lerpT),
+          now,
         );
         continue;
       }
@@ -502,14 +513,18 @@ export class EnemyManager {
       // Angriffspause: Waffen ohne eigenen Bewegungsfaktor halten den Gegner wie bisher komplett
       // an. Waffen mit Faktor > 0 lassen ihn dagegen gebremst weiterlaufen – die Blickrichtung
       // bleibt dabei am Ziel, weil die Pause weiterhin aktiv ist.
-      const attackMovementFactor = enemy.getAttackMovementSpeedFactor(now);
+      const specialAction = enemy.getSpecialAction() !== 'none';
+      const combatMovement = specialAction ? null : combatMovementSource?.getCombatMovement(enemy, now) ?? null;
+      const attackMovementFactor = !combatMovementSource || combatMovement || specialAction
+        ? enemy.getAttackMovementSpeedFactor(now) : 1;
       if (attackMovementFactor <= 0 && enemy.isAttackMovementPaused(now)) {
         const current = enemy.getDesiredVelocity();
         const trainDecision = activeTrainAwareness?.resolveMovement(enemy, current.vx, current.vy, now);
         if (trainDecision?.override && activeTrainAwareness?.blocksRegularAttacks(enemy.id)) {
-          enemy.setDesiredVelocity(trainDecision.vx, trainDecision.vy);
+          enemy.setDesiredVelocity(trainDecision.vx, trainDecision.vy, now);
         } else {
           enemy.stopMovement();
+          if (combatMovement) enemy.faceAngle(combatMovement.aimAngle);
         }
         continue;
       }
@@ -534,10 +549,17 @@ export class EnemyManager {
           now,
         );
         if (!decision?.override && decoyTarget) decoyTargets?.usedTarget(enemy.id);
-        if (decision?.override) enemy.setDesiredVelocity(decision.vx, decision.vy);
+        if (decision?.override) enemy.setDesiredVelocity(decision.vx, decision.vy, now);
         else this.moveNormally(enemy, { x: enemy.sprite.x + positioningOverride.vx * 0.25,
           y: enemy.sprite.y + positioningOverride.vy * 0.25 },
-          Math.hypot(positioningOverride.vx, positioningOverride.vy) * attackMovementFactor);
+          Math.hypot(positioningOverride.vx, positioningOverride.vy) * attackMovementFactor, combatMovement?.aimAngle);
+        continue;
+      }
+
+      if (combatMovement?.holdPosition && !smokeSystem?.getConfusion(enemy.id, now)) {
+        const train = activeTrainAwareness?.resolveMovement(enemy, 0, 0, now);
+        if (train?.override) enemy.setDesiredVelocity(train.vx, train.vy, now);
+        else this.moveNormally(enemy, null, 0, combatMovement.aimAngle, 'attack');
         continue;
       }
 
@@ -555,9 +577,10 @@ export class EnemyManager {
       }
       // Embedded starts use overlap-reducing local recovery, never an arbitrary reachable-cell jump.
       if (route.status === 'invalid-start') waypoint = { x: enemy.sprite.x + 1, y: enemy.sprite.y };
-      const feedback = this.moveNormally(enemy, waypoint, enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor);
+      const feedback = this.moveNormally(enemy, waypoint, enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor,
+        combatMovement?.aimAngle);
       const train = activeTrainAwareness?.resolveMovement(enemy, feedback.vx, feedback.vy, now);
-      if (train?.override) enemy.setDesiredVelocity(train.vx, train.vy);
+      if (train?.override) enemy.setDesiredVelocity(train.vx, train.vy, now);
       else if (decoyTarget && route.status === 'ready') decoyTargets?.usedTarget(enemy.id);
     }
   }

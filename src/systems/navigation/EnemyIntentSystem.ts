@@ -133,6 +133,10 @@ export class EnemyIntentSystem {
       const bound: Target | null = decoy ? (prior?.target.id === decoy.id ? decoy : null)
         : prior?.target.kind === 'base' ? baseTargets.find(target => target.id === prior.target.id) ?? null
         : resolved && (!this.perception || this.perception(enemy, resolved.x, resolved.y, visibilityRange)) ? this.catalogTarget(resolved) : null;
+      const remembered = this.lastSeen.get(enemy.id);
+      if (remembered?.kind === 'player' && !this.catalog.canRetainMemory(remembered)) this.lastSeen.delete(enemy.id);
+      // Observe the bound player every frame, including frames that reuse the strategic decision.
+      if (bound?.kind === 'player') this.lastSeen.set(enemy.id, { ...bound });
       const topologyChanged = prior?.intent.navigation.topology !== this.coordinator.getTopologyVersion();
       const scan = !prior || !bound || prior.intent.reason !== reason
         || (ordinaryScans < scanBudget && (topologyChanged || now >= (this.nextDecisionAt.get(enemy.id) ?? 0)));
@@ -164,15 +168,16 @@ export class EnemyIntentSystem {
         const fallback = canAttackBase ? this.choose(enemy, baseTargets, geometry, now, prior) : null;
         if (fallback?.navigation.status === 'ready' || (!chosen && fallback)) { chosen = fallback; reason = 'fallback-base'; }
       }
-      if (!chosen && !decoy && config.movementTarget !== 'bases') {
+      if (!chosen && !decoy) {
         const memory = this.lastSeen.get(enemy.id);
-        // Target removal (death, lost targetability, Activity teardown) erases ordinary pursuit memory.
-        // Obscured but still valid targets retain only a previously observed position.
-        if (memory?.kind === 'player' && this.catalog.isTargetValid(memory)
-          && Math.hypot(enemy.sprite.x - memory.x, enemy.sprite.y - memory.y) > 24) {
+        // Burrowing retains identity, never the player's current underground position.
+        if (memory?.kind === 'player' && this.catalog.canRetainMemory(memory)
+          && Math.hypot(enemy.sprite.x - memory.x, enemy.sprite.y - memory.y) > Math.max(24, enemy.getSize() / 2 + 1)) {
           const target: Target = { ...memory, id: `memory:${memory.id}:${Math.round(memory.x / 8)}:${Math.round(memory.y / 8)}` };
           const field = this.fieldFor(target, enemy.getSize() / 2, 16, geometry);
-          chosen = { target, field, navigation: field.queryNavigation(enemy.sprite.x, enemy.sprite.y) }; reason = 'memory';
+          const navigation = this.continueMovement(field.queryNavigation(enemy.sprite.x, enemy.sprite.y), field,
+            enemy.sprite.x, enemy.sprite.y, target, enemy.getSize() / 2, 16, geometry);
+          chosen = { target, field, navigation }; reason = 'memory';
         } else this.lastSeen.delete(enemy.id);
       }
       if (!chosen) { this.decisions.delete(enemy.id); continue; }
