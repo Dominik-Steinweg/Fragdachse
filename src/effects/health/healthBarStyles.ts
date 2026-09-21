@@ -39,7 +39,7 @@ export function playerHealthBarStyle(enemy: boolean): HealthBarStyle {
 }
 export function baseHealthBarStyle(width: number, color: number): HealthBarStyle {
   return { family: 'baseMarkers', visibility: 'alive', width, height: COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
-    backgroundDepth: DEPTH.BASES + 1, fillDepth: DEPTH.BASES + 2,
+    backgroundDepth: DEPTH.GROUND_FOG + .5, fillDepth: DEPTH.GROUND_FOG + .7,
     healthy: color, hurt: color, critical: color, stroke: COLORS.GREY_6 };
 }
 export const TURRET_HEALTH_BAR_STYLE: HealthBarStyle = {

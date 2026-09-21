@@ -192,6 +192,7 @@ interface LocalPreferences {
   loadoutByClass: Partial<Record<CoopDefenseClassId, Partial<Record<LoadoutSlot, string>>>>;
   graphics: {
     quality: GraphicsQuality;
+    groundFogEnabled: boolean;
   };
   progression: {
     coopDefense: CoopDefenseProgressPreferences;
@@ -335,6 +336,7 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
   loadoutByClass: {},
   graphics: {
     quality: 'high',
+    groundFogEnabled: true,
   },
   progression: {
     coopDefense: {
@@ -713,7 +715,7 @@ function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV2 | null 
       effectsVolume: clampAudioVolume(effectsVolume as number),
       musicVolume: clampAudioVolume(musicVolume as number),
     },
-    graphics: { quality: raw.graphics.quality },
+    graphics: { quality: raw.graphics.quality, groundFogEnabled: raw.graphics.groundFogEnabled !== false },
   };
 }
 
@@ -736,7 +738,7 @@ function readLegacySettings(raw: string | null): LocalSettingsDocumentV2 | null 
         musicVolume: typeof audio.musicVolume === 'number' && Number.isFinite(audio.musicVolume)
           ? clampAudioVolume(audio.musicVolume) : SOUND_MUSIC_VOLUME,
       },
-      graphics: { quality: isGraphicsQuality(graphics.quality) ? graphics.quality : 'high' },
+      graphics: { quality: isGraphicsQuality(graphics.quality) ? graphics.quality : 'high', groundFogEnabled: graphics.groundFogEnabled !== false },
     };
   } catch { return null; }
 }
@@ -2307,8 +2309,13 @@ export function getStoredGraphicsQuality(): GraphicsQuality {
 export function setStoredGraphicsQuality(quality: GraphicsQuality): void {
   updatePreferences((current) => ({
     ...current,
-    graphics: { quality },
+    graphics: { ...current.graphics, quality },
   }));
+}
+
+export function getStoredGroundFogEnabled(): boolean { return readPreferences().graphics.groundFogEnabled; }
+export function setStoredGroundFogEnabled(groundFogEnabled: boolean): void {
+  updatePreferences(current => ({ ...current, graphics: { ...current.graphics, groundFogEnabled } }));
 }
 
 /** Overrides the locally stored XP, boss points and map unlock level for the cheat/debug menu. */

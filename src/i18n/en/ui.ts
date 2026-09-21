@@ -119,6 +119,7 @@ export const enUi = {
   "ui.lobby.utilityRad": "UTILITY WHEEL",
   "ui.options.title": "OPTIONS",
   "ui.options.graphics": "Graphics quality",
+  "ui.options.groundFog": "Ground fog",
   "ui.options.audio": "Audio",
   "ui.options.language": "Language",
   "ui.options.german": "Deutsch",

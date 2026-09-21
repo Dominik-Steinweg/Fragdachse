@@ -74,11 +74,11 @@ export class CoopDefenseCarryZoneRenderer {
   private createVisual(objectiveId: string): CarryZoneVisual {
     const spawn = this.scene.add.image(0, 0, 'mission_carry_spawn_zone')
       .setOrigin(0.5)
-      .setDepth(DEPTH.BASES - 0.15)
+      .setDepth(DEPTH.GROUND_FOG + 0.05)
       .setVisible(false);
     const delivery = this.scene.add.image(0, 0, 'mission_carry_delivery_zone')
       .setOrigin(0.5)
-      .setDepth(DEPTH.BASES - 0.1)
+      .setDepth(DEPTH.GROUND_FOG + 0.1)
       .setVisible(false);
     const visual = { spawn, delivery };
     this.visuals.set(objectiveId, visual);

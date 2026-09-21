@@ -65,6 +65,8 @@ export interface WorldDefinition {
   readonly persistentBaseSite?: WorldPersistentBaseSiteDefinition;
   /** Statische Arena-Uhrzeit als `"HH:MM"`. Laufzeitverlaeufe gehoeren zur Activity. */
   readonly initialTimeOfDay: string;
+  /** Cosmetic local ground fog; omitted = 1, zero disables it. */
+  readonly fogStrength?: number;
 }
 
 /** Bevorzugte Startzelle einer World. */

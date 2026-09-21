@@ -1,5 +1,6 @@
 import type { ArenaPresentationResult } from '../arena/ArenaBuilder';
 import type { ArenaLayout } from '../types';
+import type { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
 
 /**
  * Die lokale Darstellung genau einer World-Runtime.
@@ -19,6 +20,7 @@ export interface WorldPresentationSink {
 }
 
 export class WorldPresentationBinding {
+  groundFog: GroundFogSystem | null = null;
   private destroyed = false;
 
   constructor(
@@ -37,6 +39,7 @@ export class WorldPresentationBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.groundFog?.destroy(); this.groundFog = null;
     this.sink.destroyPresentation(this.arena);
   }
 }

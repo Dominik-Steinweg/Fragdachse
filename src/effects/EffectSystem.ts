@@ -98,6 +98,11 @@ interface BurrowEmitterVisual {
  * Gegner genutzt; `implements` hält die dafür erwartete Signatur kompilierzeit-fest.
  */
 export class EffectSystem implements EnemyVisualSink {
+  private groundFogExplosion: ((x: number, y: number, radius: number, style: ExplosionVisualStyle) => void) | null = null;
+  bindGroundFogExplosion(sink: (x: number, y: number, radius: number, style: ExplosionVisualStyle) => void): () => void {
+    this.groundFogExplosion = sink;
+    return () => { if (this.groundFogExplosion === sink) this.groundFogExplosion = null; };
+  }
   private xpTextRenderer: CoopXpTextRenderer | null = null;
 
   prepareXpText(): boolean {
@@ -753,6 +758,7 @@ export class EffectSystem implements EnemyVisualSink {
    * @param visualStyle  Default | holy | energy
    */
   playExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle: ExplosionVisualStyle = 'default', chargeDamage?: number): void {
+    if (isDestructiveExplosionStyle(visualStyle)) this.groundFogExplosion?.(x, y, radius, visualStyle);
     this.ensureTextures();
     if (visualStyle === 'time_bubble_release') {
       const strength = resonanceReleaseStrength(chargeDamage);

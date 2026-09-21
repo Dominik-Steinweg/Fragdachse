@@ -41,6 +41,26 @@ function passiveRenderer(): Record<string, unknown> {
 }
 
 describe('ProjectilePresentationRuntime', () => {
+  it('shares confirmed bounce and terminal segments with fog once and releases the world sink', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never), sink = vi.fn();
+    const release = runtime.bindGroundFogSegments(sink);
+    const shot = projectile({ flightPath: { timeMs: 30, ended: true, points: [
+      { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0, breakBefore: true },
+      { sequence: 2, timeMs: 10, x: 10, y: 0, vx: 0, vy: 1000, bounceSequence: 1 },
+      { sequence: 3, timeMs: 20, x: 10, y: 10, vx: 0, vy: 1000 },
+      { sequence: 4, timeMs: 25, x: 90, y: 90, vx: 0, vy: 1000, breakBefore: true },
+      { sequence: 5, timeMs: 30, x: 90, y: 95, vx: 0, vy: 1000 },
+    ] } });
+    runtime.presentFinalPath(shot); const count = sink.mock.calls.length;
+    runtime.presentFinalPath(shot); expect(sink).toHaveBeenCalledTimes(count);
+    const paths = sink.mock.calls.map(([s]) => [s.from.x, s.from.y, s.to.x, s.to.y]);
+    expect(paths).toContainEqual([0, 0, 10, 0]); expect(paths).toContainEqual([10, 0, 10, 10]);
+    expect(paths).toContainEqual([90, 90, 90, 95]); expect(paths).not.toContainEqual([10, 10, 90, 90]);
+    const next = vi.fn(); runtime.bindGroundFogSegments(next); release();
+    runtime.presentFinalPath({ ...shot, id: 8 }); expect(next).toHaveBeenCalled();
+    runtime.releaseWorldPresentation(); runtime.presentFinalPath({ ...shot, id: 9 });
+    expect(sink).toHaveBeenCalledTimes(count); expect(next).toHaveBeenCalledTimes(count);
+  });
   it('feeds Hydra wake with confirmed segments once, including final history', () => {
     const runtime = new ProjectilePresentationRuntime({} as never);
     const tracer = { ...passiveRenderer(), has: () => false };

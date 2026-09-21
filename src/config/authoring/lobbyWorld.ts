@@ -76,6 +76,7 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   // Die tatsaechliche Lobby-Uhrzeit ist host-autoritativ und wird beim Aufbau gelesen; dieser
   // Wert ist nur die Grundstimmung der World selbst.
   initialTimeOfDay: '12:00',
+  fogStrength: 0,
 };
 
 export function getLobbyWorldDefinition(): WorldDefinition {

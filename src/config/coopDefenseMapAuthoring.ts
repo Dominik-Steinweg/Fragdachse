@@ -1,4 +1,5 @@
 import { resolveEnemyLifecycleTotals } from './coopDefenseEnemyLifecycle';
+import { normalizeFogStrength } from './groundFog';
 import { normalizeCoopDefenseWater } from './coopDefenseWater';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import {
@@ -802,6 +803,7 @@ export interface CoopDefenseMapConfig {
    * reliable RoundState-Anker.
    */
   readonly timeOfDay?: string;
+  readonly fogStrength?: number;
   /** Optionale kontinuierliche bzw. gescriptete Laufzeitsteuerung; ohne Angabe bleibt die Map statisch. */
   readonly dynamicTimeOfDay?: CoopDefenseDynamicTimeOfDayConfig;
   /** Echte Rundendauer; nur fuer `survive` gesetzt und siegrelevant. */
@@ -1194,6 +1196,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     trackPosition,
     mapEvents,
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
+    fogStrength: normalizeFogStrength(mapConfig.fogStrength),
     dynamicTimeOfDay: normalizeDynamicTimeOfDayConfig(mapConfig.mapId, mapConfig.dynamicTimeOfDay, boss),
     surviveDurationSec,
     balanceReferenceDurationSec,

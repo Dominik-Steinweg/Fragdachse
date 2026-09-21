@@ -136,6 +136,7 @@ export function composeWorldConstruction(
     emitGridChanged: (event) => emitArenaMapGridChanged(scene.game.events, {
       reason: event.reason,
       source: event.source,
+      ...(event.removedObstacles ? { removedObstacles: event.removedObstacles.map(({ id, gridX, gridY }) => ({ id, gridX, gridY })) } : {}),
       ...(event.runtime ? {
         obstacleId: event.runtime.id,
         gridX: event.runtime.gridX,

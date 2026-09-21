@@ -105,6 +105,8 @@ export const DEPTH = {
   BASES: 4,
   DECALS: 5,
   WATER: 5.2,
+  /** Cosmetic ground mist, lit once by the world lightmap. */
+  GROUND_FOG: 5.3,
   ROCKS: 9,
   /**
    * Grossflaechiges Moos auf dem Felsbestand. Liegt ueber der Materialstoerung des Felsens

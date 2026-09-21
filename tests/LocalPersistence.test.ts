@@ -142,7 +142,7 @@ describe('local progress generation', () => {
     }));
     expect(getStoredGraphicsQuality()).toBe('low');
     expect(getStoredMasterVolume()).toBe(0.2);
-    expect(JSON.parse(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)!).graphics).toEqual({ quality: 'low' });
+    expect(JSON.parse(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)!).graphics).toEqual({ quality: 'low', groundFogEnabled: true });
     setStoredGraphicsQuality('high');
     invalidateLocalStorageCache();
     expect(getStoredGraphicsQuality()).toBe('high');

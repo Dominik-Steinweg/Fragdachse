@@ -398,6 +398,12 @@ export class ArenaLifecycleCoordinator {
       // Activity (LobbyWorld). Er traegt die aktive World-Display-Verdrahtung und faellt vor dem
       // Handoff dieser World.
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
+        groundFog: {
+          getSystem: () => this.worldRuntime?.presentation?.groundFog ?? null,
+          getBases: () => this.worldRuntime?.materialization?.bases ?? null,
+          getProjectiles: () => this.worldGameplay?.projectiles?.getPresentationRuntime() ?? null,
+          effects: this.ctx.effectSystem,
+        },
         constructionOwnership: {
           motes: this.renderers.constructionOwnershipMotes,
           getPlacement: () => this.worldRuntime?.materialization?.placement ?? null,

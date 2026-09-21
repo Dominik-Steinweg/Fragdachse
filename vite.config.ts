@@ -10,6 +10,7 @@ import { cpus, platform, release, totalmem } from 'node:os';
 export default defineConfig(({ mode }) => {
   const buildTimestamp = new Date().toISOString();
   const navigationBuild = mode === 'navigation-lab';
+  const fogBuild = mode === 'fog-lab';
   const performanceBuild = mode === 'performance-lab';
   const sourceHash = createHash('sha256');
   if (navigationBuild) {
@@ -38,7 +39,7 @@ export default defineConfig(({ mode }) => {
       // A built profiling run must not reload when source files change.
       server.middlewares.use((request, response, next) => {
         const path = request.url?.split('?')[0];
-        if (path !== '/build/navigation-lab/navigation-lab.html') return next();
+        if (path !== '/build/navigation-lab/navigation-lab.html' && path !== '/build/fog-lab/fog-lab.html') return next();
         void readFile(resolve(`.${path}`)).then(html => {
           response.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' }); response.end(html);
         }).catch(next);
@@ -96,6 +97,7 @@ export default defineConfig(({ mode }) => {
   build: {
     ...(performanceBuild ? { outDir: process.env.FD_PERFORMANCE_BUILD_DIR || 'build/performance-lab', copyPublicDir: false } : {}),
     ...(navigationBuild ? { outDir: `build/${mode}`, copyPublicDir: false } : {}),
+    ...(fogBuild ? { outDir: 'build/fog-lab', copyPublicDir: false } : {}),
     target: 'es2020',
     chunkSizeWarningLimit: 5000,
     // Ohne Source-Maps lösen Chrome-Profile und die Long-Animation-Frame-Attribution des
@@ -105,6 +107,7 @@ export default defineConfig(({ mode }) => {
     sourcemap: true,
     rollupOptions: {
       ...(navigationBuild ? { input: 'navigation-lab.html' } : {}),
+      ...(fogBuild ? { input: 'fog-lab.html' } : {}),
       output: {
         manualChunks: {
           // Packt Phaser und PeerJS in eine eigene Datei namens "vendor"

@@ -22,7 +22,7 @@ const SHADOW_ALPHA = 0.3;
  * Leichen gehören zum Boden: knapp über Gras, Dirt und den gebackenen Decals, aber unter Felsen,
  * Spielern, Gegnern, Projektilen und allen Effekten.
  */
-const DEPTH_CORPSE_CROSS = DEPTH.DECALS + 0.1;
+const DEPTH_CORPSE_CROSS = DEPTH.GROUND_FOG + 0.1;
 const DEPTH_CORPSE_CROSS_SHADOW = DEPTH_CORPSE_CROSS - 0.01;
 
 interface CorpseMarkerVisual {

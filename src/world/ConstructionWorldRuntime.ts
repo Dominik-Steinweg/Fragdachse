@@ -89,6 +89,7 @@ export interface ConstructionWorldRuntimeOptions {
     readonly reason: 'placeable_added' | 'placeable_removed' | 'placeables_batch_removed';
     readonly source: 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal';
     readonly runtime?: SyncedPlaceableRock;
+    readonly removedObstacles?: readonly SyncedPlaceableRock[];
   }) => void;
   readonly relocatePresentation: (previous: SyncedPlaceableRock, next: SyncedPlaceableRock) => void;
   readonly reconcilePersistentBaseWorld: () => void;
@@ -417,7 +418,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     const removed = this.options.placementSystem.removeOwnedConstructions(playerId, this.getOwnership(playerId));
     for (const construction of removed) this.finalizeDismantledConstruction(construction, false);
     if (removed.length > 0) {
-      this.options.emitGridChanged({ reason: 'placeables_batch_removed', source: 'placeable_rock' });
+      this.options.emitGridChanged({ reason: 'placeables_batch_removed', source: 'placeable_rock', removedObstacles: removed });
       this.options.gameAudioSystem.playSound('sfx_place_rock', player.x, player.y, playerId);
     }
     return { ok: true };

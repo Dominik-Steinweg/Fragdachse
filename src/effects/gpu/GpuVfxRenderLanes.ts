@@ -724,7 +724,7 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
   },
   {
     id: GpuVfxLaneId.ElectricGround, label: 'electric-ground',
-    depth: DEPTH.DECALS + 0.2, blendMode: Phaser.BlendModes.ADD,
+    depth: DEPTH.GROUND_FOG + 0.15, blendMode: Phaser.BlendModes.ADD,
     eases: [GpuVfxEase.Linear], capacity: ZEUS_FX.groundCapacity, maxLifetimeMs: ZEUS_FX.bedLifeMs,
     order: 'add-over-opaque', reserveCritical: ZEUS_FX.coreReserve,
     rationale: 'The connected electrical footprint stays below rocks and actors. It cannot share the above-rock fire band.',

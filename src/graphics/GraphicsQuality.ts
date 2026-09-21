@@ -238,6 +238,7 @@ interface TrackedFilter {
 const controllers = new WeakMap<Phaser.Scene, GraphicsQualityController>();
 
 export class GraphicsQualityController {
+  private groundFogEnabled = true;
   private level: GraphicsQuality;
   private readonly listeners = new Set<QualityListener>();
   private readonly emitters = new Map<Phaser.GameObjects.Particles.ParticleEmitter, TrackedEmitter>();
@@ -388,6 +389,9 @@ export class GraphicsQualityController {
     this.filters.add(tracked);
     this.applyFilterProfile(tracked);
   }
+
+  getGroundFogEnabled(): boolean { return this.groundFogEnabled; }
+  setGroundFogEnabled(enabled: boolean): void { this.groundFogEnabled = enabled; }
 
   trackSharedGlow(
     target: { once?: (event: string, listener: () => void) => void; off?: (event: string, listener: () => void) => void },

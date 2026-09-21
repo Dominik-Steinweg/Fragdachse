@@ -16,6 +16,13 @@ function load(file = sources.maps[0].file): LoadedMap {
 }
 
 describe('Map editor authoring documents', () => {
+  it('accepts optional fog strength and validates its shared range', () => {
+    const loaded = load(), draft = clone(loaded.document); draft.fogStrength = 0;
+    expect(() => assertSupportedMapEdit(loaded.document, draft)).not.toThrow();
+    expect(validateDocument(draft).issues.filter(i => i.severity === 'error')).toEqual([]);
+    draft.fogStrength = 2.1; expect(validateDocument(draft).issues.some(i => i.severity === 'error')).toBe(true);
+    delete draft.fogStrength; expect(validateDocument(draft).issues.filter(i => i.severity === 'error')).toEqual([]);
+  });
   it('edits only fire-front geometry and timing while retaining event identity, behavior and extensions', () => {
     const loaded = load('14-brandschneise.json');
     const event = object(at(loaded.document, ['mapEvents', 0]));

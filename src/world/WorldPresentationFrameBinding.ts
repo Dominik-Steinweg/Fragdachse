@@ -1,4 +1,11 @@
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
+import type { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
+import type { MovementVisualSource } from '../effects/MovementStepSampler';
+import type { BaseManager } from '../entities/BaseManager';
+import type { ProjectilePresentationRuntime } from '../projectile/ProjectilePresentationRuntime';
+import type { EffectSystem } from '../effects/EffectSystem';
+import { getGraphicsQualityController } from '../graphics/GraphicsQuality';
+import { WorldGroundFogBinding } from './WorldGroundFogBinding';
 import type { WildlifePlayer } from '../arena/AmbientWildlifeModel';
 import type { MovementEffectsRenderer } from '../effects/MovementEffectsRenderer';
 import type { BurrowGpuRenderer } from '../effects/BurrowGpuRenderer';
@@ -140,6 +147,12 @@ export interface WorldClientPresentationRenderers {
  * schmalen, benannten Ports dieses Inputs. Activity-Presentation bleibt ausserhalb dieses Owners.
  */
 export interface WorldPresentationFrameBindingInput {
+  readonly groundFog?: {
+    readonly getSystem: () => GroundFogSystem | null;
+    readonly getBases: () => BaseManager | null;
+    readonly getProjectiles: () => ProjectilePresentationRuntime | null;
+    readonly effects: Pick<EffectSystem, 'bindGroundFogExplosion'>;
+  };
   readonly constructionOwnership?: {
     readonly motes: Pick<ConstructionOwnershipMoteRenderer, 'openWorld' | 'closeWorld' | 'captureFrame'>;
     readonly getPlacement: () => Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getOwnedConstructions'> | null;
@@ -212,6 +225,7 @@ export function resetWorldCameraBase(scene: Phaser.Scene): void {
 }
 
 export class WorldPresentationFrameBinding {
+  private fogBinding: WorldGroundFogBinding | null = null;
   private ownershipMarkers: ConstructionOwnershipGpuSystem | null = null;
   private ownershipScope: object | null = null;
   private readonly ownedConstructionIds = new Set<number>();
@@ -369,6 +383,13 @@ export class WorldPresentationFrameBinding {
    */
   syncSurfaceResidency(showWorld: boolean): void {
     if (this.destroyed) return;
+    const fog = this.prepareGroundFog();
+    if (fog) {
+      const quality = getGraphicsQualityController(this.input.scene);
+      fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
+      fog.setSurfaceImages([...this.input.getBaseShadowCells()]);
+      fog.prepare(this.input.lighting.getTimeOfDayMinutes(), getVisibleWorldView(this.input.scene.cameras.main));
+    }
     if (!showWorld) {
       this.input.getArenaResult()?.wildlife?.clearLights();
       return;
@@ -388,6 +409,32 @@ export class WorldPresentationFrameBinding {
         this.input.lighting.getTimeOfDayMinutes(), this.input.lighting);
     }
     this.input.shadow.updateStaticResidency(worldView);
+  }
+
+  /** Reconcile local terrain before preparation or simulation of this World. */
+  private prepareGroundFog(): GroundFogSystem | null {
+    const input = this.input.groundFog, fog = input?.getSystem() ?? null;
+    const arena = this.input.getArenaResult(), layout = this.input.getWorldLayout();
+    if (fog && input && arena && layout) {
+      if (this.fogBinding?.fog !== fog) {
+        this.fogBinding?.destroy();
+        this.fogBinding = new WorldGroundFogBinding(this.input.scene, fog, layout, arena, input.effects);
+      }
+      this.fogBinding.sync(this.input.constructionOwnership?.getPlacement() ?? null, input.getBases(), input.getProjectiles());
+    }
+    return fog;
+  }
+
+  /** Runs after host/client pose presentation; independent of footprint budgets. */
+  syncGroundFog(deltaMs: number, showWorld: boolean, enemies: readonly MovementVisualSource[]): void {
+    if (this.destroyed) return;
+    const fog = this.prepareGroundFog(); if (!fog) return;
+    const quality = getGraphicsQualityController(this.input.scene);
+    fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
+    const view = getVisibleWorldView(this.input.scene.cameras.main);
+    fog.captureMotion(deltaMs, showWorld ? this.input.getPlayers() : [], showWorld ? enemies : [], view);
+    fog.setSurfaceImages([...this.input.getBaseShadowCells()]);
+    fog.update(deltaMs, this.input.lighting.getTimeOfDayMinutes(), view, showWorld);
   }
 
   /** Shot feedback observes only this World's displayed players and ends before handoff. */
@@ -466,7 +513,8 @@ export class WorldPresentationFrameBinding {
       // Surface-Readiness bleibt die Authority; Working-Set-Daten liefern nur den
       // view-bezogenen Fortschritt.
       renderReady: ArenaBuilder.isSurfaceWorkingSetReady(arenaResult, view)
-        && this.input.shadow.isStaticReadyForView(view, true),
+        && this.input.shadow.isStaticReadyForView(view, true)
+        && this.input.groundFog?.getSystem()?.getDiagnostics().status !== 'preparing',
     };
   }
 
@@ -614,6 +662,7 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.fogBinding?.destroy(); this.fogBinding = null;
     this.wildlifePlayers.length = 0;
     this.input.getArenaResult()?.wildlife?.clearLights();
     this.clearConstructionOwnership();

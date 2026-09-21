@@ -30,6 +30,7 @@
     "build": "tsc && vite build",
     "nav:stress": "node scripts/navigation/run-stress.mjs",
     "build:nav-lab": "tsc && vite build --mode navigation-lab",
+    "build:fog-lab": "tsc && vite build --mode fog-lab",
     "check": "npm test && npm run test:architecture && npm run build && npm run build:map-editor",
     "preview": "vite preview",
     "predeploy": "npm run build",

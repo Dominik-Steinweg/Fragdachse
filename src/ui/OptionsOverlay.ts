@@ -20,6 +20,7 @@ import { INTENT } from './uiTheme';
 import {
   setStoredEffectsVolume,
   setStoredGraphicsQuality,
+  setStoredGroundFogEnabled,
   setStoredMasterVolume,
   setStoredMusicVolume,
 } from '../utils/localPreferences';
@@ -66,7 +67,7 @@ const AUDIO_HEADING_CONTENT_GAP = 18;
 const GRAPHICS_HEADER_Y = QUALITY_BUTTON_Y - GRAPHICS_HEADING_CONTENT_GAP;
 const AUDIO_HEADER_Y = CY - 84 - AUDIO_HEADING_CONTENT_GAP;
 const GRAPHICS_BLOCK_TOP = GRAPHICS_HEADER_Y - 20;
-const GRAPHICS_BLOCK_BOTTOM = QUALITY_BUTTON_Y + QUALITY_BUTTON_H / 2 + 10;
+const GRAPHICS_BLOCK_BOTTOM = QUALITY_BUTTON_Y + 61;
 const AUDIO_BLOCK_TOP = GRAPHICS_BLOCK_BOTTOM + 8;
 const AUDIO_BLOCK_BOTTOM = MUSIC_LOAD_BAR_Y + 16;
 const LOCALE_HEADING_Y = CY - 312;
@@ -215,6 +216,7 @@ export class OptionsOverlay {
   private dimRect: Phaser.GameObjects.Rectangle | null = null;
   private readonly sliders = new Map<VolumeSliderKey, SliderState>();
   private readonly qualityButtons = new Map<GraphicsQuality, QualityButtonState>();
+  private fogButton: QualityButtonState | null = null;
   private readonly localeButtons = new Map<Locale, LocaleButtonState>();
   private visible = false;
   private visibilityTween: Phaser.Tweens.Tween | null = null;
@@ -286,7 +288,7 @@ export class OptionsOverlay {
       slider.fillEffect.destroy();
     }
     this.sliders.clear();
-    this.qualityButtons.clear();
+    this.qualityButtons.clear(); this.fogButton = null;
     this.localeButtons.clear();
     this.container?.destroy(true);
     this.container = null;
@@ -465,7 +467,7 @@ export class OptionsOverlay {
       slider.fillEffect.destroy();
     }
     this.sliders.clear();
-    this.qualityButtons.clear();
+    this.qualityButtons.clear(); this.fogButton = null;
     this.localeButtons.clear();
     this.container?.destroy(true);
     this.container = null;
@@ -508,6 +510,15 @@ export class OptionsOverlay {
   }
 
   private buildQualitySelector(objects: Phaser.GameObjects.GameObject[]): void {
+    const y = QUALITY_BUTTON_Y + 44;
+    const background = this.scene.add.image(CX, y, this.selectionTexture(230, 28, false)).setScrollFactor(0)
+      .setInteractive({ cursor: BUTTON_CURSOR }).on('pointerdown', () => {
+        const enabled = !this.graphicsQuality.getGroundFogEnabled();
+        this.graphicsQuality.setGroundFogEnabled(enabled); setStoredGroundFogEnabled(enabled);
+        this.syncQualityButtons(); playUiActivation(this.scene);
+      });
+    const label = this.scene.add.text(CX, y, '', textStyle('labelSm', { color: TEXT.secondary })).setOrigin(.5).setScrollFactor(0);
+    this.fogButton = { background, label }; objects.push(background, label);
     const totalWidth = QUALITY_OPTIONS.length * QUALITY_BUTTON_W
       + (QUALITY_OPTIONS.length - 1) * QUALITY_BUTTON_GAP;
     const startX = CX - totalWidth / 2 + QUALITY_BUTTON_W / 2;
@@ -534,6 +545,11 @@ export class OptionsOverlay {
   }
 
   private syncQualityButtons(): void {
+    if (this.fogButton) {
+      const enabled = this.graphicsQuality.getGroundFogEnabled();
+      this.fogButton.background.setTexture(this.selectionTexture(230, 28, enabled));
+      this.fogButton.label.setText(`${enabled ? '☑' : '☐'} ${t('ui.options.groundFog')}`);
+    }
     const selected = this.graphicsQuality.getLevel();
     for (const [level, state] of this.qualityButtons) {
       const active = level === selected;

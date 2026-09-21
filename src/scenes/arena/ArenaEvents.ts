@@ -18,6 +18,8 @@ export interface ArenaMapGridChangedEvent {
   readonly gridY?: number;
   /** Runtime provenance: collisionless placeables reserve placement cells but not obstacles. */
   readonly collisionMode?: 'obstacle' | 'none';
+  /** Local batch provenance; consumers can update only the removed cells. */
+  readonly removedObstacles?: readonly { readonly id: number; readonly gridX: number; readonly gridY: number }[];
 }
 
 export interface ArenaRockDestroyedEvent {

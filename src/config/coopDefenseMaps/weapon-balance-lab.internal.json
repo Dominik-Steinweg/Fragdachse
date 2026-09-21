@@ -3,6 +3,7 @@
   "arenaWidthCells": 60,
   "arenaHeightCells": 33,
   "timeOfDay": "12:00",
+  "fogStrength": 0,
   "rockFillRatio": 0,
   "treeCount": 0,
   "trackMode": "rails",

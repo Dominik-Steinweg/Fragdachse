@@ -81,6 +81,17 @@ function makeSystem(playerTarget: (targetId: string) => boolean) {
 }
 
 describe('EffectSystem player death animation', () => {
+  it('delivers destructive fog impulses before individual VFX gates and detaches their owner', () => {
+    const system = Object.create(EffectSystem.prototype) as EffectSystem;
+    const sink = vi.fn(), stop = new Error('VFX preparation gate');
+    Object.assign(system, { ensureTextures: () => { throw stop; } });
+    const release = system.bindGroundFogExplosion(sink);
+    expect(() => system.playExplosionEffect(10, 20, 50, undefined, 'mini_rocket')).toThrow(stop);
+    expect(sink).toHaveBeenCalledExactlyOnceWith(10, 20, 50, 'mini_rocket');
+    expect(() => system.playExplosionEffect(10, 20, 50, undefined, 'regeneration')).toThrow(stop);
+    release(); expect(() => system.playExplosionEffect(10, 20, 50)).toThrow(stop);
+    expect(sink).toHaveBeenCalledTimes(1);
+  });
   it('starts GPU death and the temporary player ghost together', () => {
     const { gpu, internals, scene, sprites } = makeSystem((targetId) => targetId === 'player-1');
     const effect = makeEffect('player-1');

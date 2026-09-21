@@ -43,6 +43,7 @@ export const WORLD_SOURCE_FIELDS = [
   'trackMode',
   'trackPosition',
   'timeOfDay',
+  'fogStrength',
   'persistentBase',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
 
@@ -136,6 +137,7 @@ export function toWorldDefinition(mapConfig: ArenaGenerationMapConfig): WorldDef
     actionPolicy: { combat: false },
     persistentBaseSite: mapConfig.persistentBase,
     initialTimeOfDay: resolved.timeOfDay,
+    fogStrength: mapConfig.fogStrength,
   };
 }
 
@@ -158,6 +160,7 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
     trackPosition: world.tracks?.position,
     persistentBase: world.persistentBaseSite,
     bases: world.bases.map((base) => toCoopBaseConfig(base, undefined)),
+    fogStrength: world.fogStrength,
     powerUps: [],
   };
 }
@@ -239,6 +242,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     mapEvents: activity.mapEvents,
     // Nur hier setzt sich eine Basis wieder aus Bauwerk und Missionsanteil zusammen.
     timeOfDay: world.initialTimeOfDay,
+    fogStrength: world.fogStrength,
     dynamicTimeOfDay: activity.dynamicTimeOfDay,
     surviveDurationSec: activity.surviveDurationSec,
     balanceReferenceDurationSec: activity.balanceReferenceDurationSec,

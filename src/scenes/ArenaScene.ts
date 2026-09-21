@@ -111,6 +111,7 @@ import { createArenaMetaProgressStore } from './arena/ArenaMetaPersistence';
 import {
   getStoredEffectsVolume,
   getStoredGraphicsQuality,
+  getStoredGroundFogEnabled,
   getStoredMasterVolume,
   getStoredMusicVolume,
 } from '../utils/localPreferences';
@@ -549,6 +550,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.graphicsQuality = new GraphicsQualityController(
       __PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__ ? 'high' : getStoredGraphicsQuality());
+    this.graphicsQuality.setGroundFogEnabled(!__PERFORMANCE_LAB__ && getStoredGroundFogEnabled());
     this.graphicsQuality.attach(this);
     onBootSceneTeardown(this.events, () => this.graphicsQuality.destroy());
     this.graphicsQuality.subscribe((profile) => {
@@ -1578,6 +1580,7 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.visualFeedback?.weaponFire.update();
     this.arenaRuntime.presentation.syncConstructionOwnership(presentationPolicy.showWorld);
+    this.arenaRuntime.presentation.syncGroundFog(delta, presentationPolicy.showWorld);
     this.renderers.gpuVfx.update(delta);
     const inArena = presentationPolicy.showWorld;
     // Eine Preview zeigt die Welt, ohne dass dieser Peer in ihr steht. Zielhilfe, Systemcursor

@@ -119,6 +119,7 @@ export const deUi = {
   "ui.lobby.utilityRad": "UTILITY-RAD",
   "ui.options.title": "OPTIONEN",
   "ui.options.graphics": "Grafikqualität",
+  "ui.options.groundFog": "Bodennebel",
   "ui.options.audio": "Audio",
   "ui.options.language": "Sprache",
   "ui.options.german": "Deutsch",

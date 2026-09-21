@@ -93,6 +93,19 @@ const ALL_MAP_CONFIGS = [
   getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID),
 ];
 
+it('normalizes fog strength once and preserves it through the World roundtrip', () => {
+  const map = JSON.parse(readFileSync(resolve(process.cwd(), 'src/config/coopDefenseMaps/weapon-balance-lab.internal.json'), 'utf8'));
+  expect(normalizeCoopDefenseMapConfig({ ...map, fogStrength: undefined }).fogStrength).toBe(1);
+  for (const strength of [0, .4, 2]) {
+    const normalized = normalizeCoopDefenseMapConfig({ ...map, fogStrength: strength });
+    const scenario = toAuthoredScenario(normalized);
+    expect(scenario.world.fogStrength).toBe(strength);
+    expect(toCoopDefenseMapConfig(scenario).fogStrength).toBe(strength);
+  }
+  for (const strength of [-1, 3, NaN, Infinity]) expect(() => normalizeCoopDefenseMapConfig({ ...map, fogStrength: strength })).toThrow('fogStrength');
+  expect(getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID).fogStrength).toBe(0);
+});
+
 it.each(['0', '1', '7'])('keeps authored water on the World through the complete Map %s round-trip', (mapId) => {
   const map = getCoopDefenseMapConfig(mapId);
   const scenario = toAuthoredScenario(map);
@@ -175,7 +188,7 @@ describe('World-/Activity-Authoring – Partition', () => {
         expect(serialized.includes(`"${missionField}"`), `${world.id} leaks ${missionField}`).toBe(false);
       }
       expect(Object.keys(world).sort()).toEqual([
-        'actionPolicy', 'bases', 'id', 'initialTimeOfDay', 'metrics', 'persistentBaseSite', 'sourceMapId', 'terrain', 'tracks',
+        'actionPolicy', 'bases', 'fogStrength', 'id', 'initialTimeOfDay', 'metrics', 'persistentBaseSite', 'sourceMapId', 'terrain', 'tracks',
       ]);
       for (const base of world.bases) {
         expect(Object.keys(base).sort(), `${world.id}/${base.id}`).toEqual([

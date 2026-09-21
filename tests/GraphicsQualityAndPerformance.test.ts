@@ -6,6 +6,7 @@ import {
 } from '../src/graphics/GraphicsQuality';
 import {
   getStoredGraphicsQuality,
+  getStoredGroundFogEnabled, setStoredGroundFogEnabled,
   setStoredGraphicsQuality,
 } from '../src/utils/localPreferences';
 import { ArenaRuntimeProfiler, type ArenaRuntimeSample } from '../src/scenes/arena/ArenaRuntimeProfiler';
@@ -196,6 +197,10 @@ describe('graphics quality preferences and profiles', () => {
     expect(getStoredGraphicsQuality()).toBe('high');
     setStoredGraphicsQuality('low');
     expect(getStoredGraphicsQuality()).toBe('low');
+    expect(getStoredGroundFogEnabled()).toBe(true);
+    setStoredGroundFogEnabled(false); setStoredGraphicsQuality('medium');
+    expect(getStoredGroundFogEnabled()).toBe(false); expect(getStoredGraphicsQuality()).toBe('medium');
+    setStoredGroundFogEnabled(true); expect(getStoredGraphicsQuality()).toBe('medium');
   });
 
   it('defines progressively smaller visual budgets without changing gameplay state', () => {

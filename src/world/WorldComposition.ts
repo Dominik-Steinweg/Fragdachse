@@ -1,4 +1,6 @@
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
+import { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
+import { DEFAULT_FOG_STRENGTH } from '../config/groundFog';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
@@ -267,6 +269,13 @@ export function materializeWorldComposition(
     )
     : null;
   materialization.setBases(baseManager);
+  // A reused terrain presentation belongs to a new World, including its fog history.
+  presentation.groundFog?.destroy();
+  presentation.groundFog = presentationRequired
+    ? new GroundFogSystem(input.scene, { offsetX: world.metrics.offsetX, offsetY: world.metrics.offsetY,
+      width: world.metrics.widthPx, height: world.metrics.heightPx }, world.descriptor.seed,
+      layout.water ?? [], world.definition?.fogStrength ?? DEFAULT_FOG_STRENGTH)
+    : null;
   baseManager?.setLightingSystem(input.lighting);
   if (input.createRockRegistry) materialization.setRocks(new RockRegistry(layout));
 

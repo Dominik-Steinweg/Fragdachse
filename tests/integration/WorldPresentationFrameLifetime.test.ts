@@ -656,6 +656,8 @@ describe('Detach-Reihenfolge – FrameBinding faellt vor dem Handoff, der Handof
     const owner = runtime();
     owner.bindPresentationFrame(spyingBinding(calls));
     const shown = presentationBinding(() => { calls.push('presentation:destroy'); });
+    const fog = { destroy: vi.fn() };
+    shown.groundFog = fog as never;
     owner.setPresentation(shown);
 
     const handoff = new WorldPresentationHandoff();
@@ -667,6 +669,9 @@ describe('Detach-Reihenfolge – FrameBinding faellt vor dem Handoff, der Handof
     expect(handoff.pending).toBe(shown);
     expect(shown.isDestroyed()).toBe(false);
     expect(calls).toEqual(['frame:destroy']);
+    expect(fog.destroy).not.toHaveBeenCalled();
+    handoff.discard(); handoff.discard();
+    expect(fog.destroy).toHaveBeenCalledTimes(1);
   });
 });
 
