@@ -1636,7 +1636,7 @@
         "footColor": [0.055, 0.067, 0.075],
         "upperBodyMotion": "stable-grip"
       },
-      "orthoScale": 2.1,
+      "orthoScale": 2.2,
       "collisionDiameter": 32,
       "materialVariants": {
         "calm": {

@@ -21,6 +21,11 @@ def painted_coat(ctx, groups, materials, settings):
                 radius = math.hypot(x, y)
                 angle = math.atan2(x, -y)
                 item.vector = (-.10 + .95 * radius, .92 - .40 * angle, 0) if body_roles else (-.10 + .78 * radius, .08 + .46 * angle, 0)
+                # The integrated back has lengthwise locks, transitioning to
+                # arm flow across the deltoids instead of wrapping into a ring.
+                torso = max(0, min(1, (.65 - abs(p.x))/.25)) * max(0, min(1, (.12-p.y)/.20))
+                torso = torso*torso*(3-2*torso)
+                item.vector = item.vector.lerp((.48 + .60*p.x, .50 + .60*p.y, 0), torso)
             else:
                 # Broad north/south tufts on the face, legs, thumbs and tail.
                 item.vector = (.48 + .60 * p.x, .50 + .60 * p.y, 0)

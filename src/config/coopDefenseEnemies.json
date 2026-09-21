@@ -126,7 +126,7 @@
     {
       "id": "plague-medic",
       "pawCount": 4,
-      "maxHp": 100,
+      "maxHp": 180,
       "xp": 10,
       "size": 30,
       "moveSpeed": 70,

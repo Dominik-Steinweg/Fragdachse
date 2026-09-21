@@ -46,17 +46,19 @@ def build(c, style=None):
     c.ell('Pelvis', (0, -.26, .87), (.47, .29, .26), fur)
     c.ell('Standing torso', (0, -.17, 1.22), (.54, .39, .45), fur)
     c.ell('Small pale south tail', (0, -.60, .95), (.0855, .1496, .115), tail_fur)
-    arms = [c.ell('Shoulder mantle', (0, -.215, 1.5), (.68, .403, .22), fur)]
+    # Restore the compact v2-x torso volumes, joining the stronger arms into
+    # this low shoulder mantle rather than adding separate back/flank bulges.
+    upper_body = [c.ell('Compact shoulder mantle', (0, -.215, 1.5), (.66, .395, .22), fur)]
     for side in [-1, 1]:
-        arms.append(c.ell('Broad rear torso muscle', (side*.22, -.41, 1.51), (.31, .18, .17), fur))
+        upper_body.append(c.ell('Broad rear torso muscle', (side*.22, -.41, 1.51), (.31, .18, .17), fur))
     for side in [-1, 1]:
         end_y = .76 if side == 1 else .85
-        arms.append(c.ell('Deltoid', (side * .49, -.21, 1.44), (.23, .25, .20), fur))
-        # Explicit elbow separates a longer upper arm from the shorter forearm.
-        # Tangents agree at the elbow; hand locations and the root stay fixed.
-        pts = [Vector((side * .49, -.25, 1.47)), Vector((side * .72, -.16, 1.45)),
-               Vector((side * .79, .15, 1.47)), Vector((side * .66, .35, 1.49)),
-               Vector((side * .53, .55, 1.51)), Vector((side * .29, .66, 1.52)),
+        arms = [c.ell('Deltoid', (side * .49, -.18, 1.48), (.24, .235, .22), fur)]
+        # Separate muscle bellies taper into a compact elbow. The modest change
+        # of direction at that joint interrupts the former hose-like arc.
+        pts = [Vector((side * .53, -.17, 1.49)), Vector((side * .69, -.07, 1.50)),
+               Vector((side * .77, .21, 1.49)), Vector((side * .68, .40, 1.47)),
+               Vector((side * .55, .55, 1.51)), Vector((side * .29, .66, 1.52)),
                Vector((side * .13, end_y, 1.54))]
         vs, fs = [], []
         rings = 80
@@ -70,7 +72,9 @@ def build(c, style=None):
             tangent = (3*u*u*(segment[1]-segment[0])+6*u*t*(segment[2]-segment[1])+3*t*t*(segment[3]-segment[2])).normalized()
             normal = tangent.cross(Vector((0, 0, 1))).normalized()
             binormal = tangent.cross(normal).normalized()
-            radius = (.175 + .034*math.sin(math.pi*t)) if upper else (.175*u + .073*t + .037*math.sin(math.pi*t))
+            # Peak bulk sits in the proximal/middle upper arm. A moderate joint
+            # taper connects it smoothly to the smaller forearm muscle belly.
+            radius = (.195*u + .130*t + .095*math.sin(math.pi*t)**1.1*(1-.40*t)) if upper else (.130*u + .078*t + .065*math.sin(math.pi*t))
             if not upper:
                 # Slim only the forearm belly, preserving elbow and wrist joins.
                 radius *= 1 - .06*math.sin(math.pi*t)**2
@@ -90,12 +94,20 @@ def build(c, style=None):
         c.scene.collection.objects.link(ob)
         mesh.materials.append(fur)
         arms.append(ob)
+        upper_body.extend(arms)
         hand = c.box('Weapon-ready grip', (side*.13, end_y+.035, 1.55), (.17, .18, .13), dark, .048)
         hand.rotation_euler.z = side*.20
-        hands = [hand, c.ell('Folded thumb', (side*.065, end_y+.01, 1.585), (.037, .07, .035), fur)]
+        fingers = [hand]
+        # Low finger knuckles give the closed weapon grip a paw silhouette.
+        for finger in range(3):
+            fingers.append(c.ell('Folded paw knuckle',
+                               (side*.13 + (finger-1)*.044, end_y+.095, 1.592),
+                               (.030, .035, .027), dark))
+        hands = [c.union('Sculpted weapon-ready paw', fingers),
+                 c.ell('Folded thumb', (side*.065, end_y+.01, 1.585), (.037, .07, .035), fur)]
         parts['arms'].extend(hands)
         parts['hands'].extend(hands)
-    parts['arms'].append(c.union('Continuous mantle and arms', arms))
+    parts['arms'].append(c.union('Integrated muscular torso shoulders and arms', upper_body))
     before_head = set(c.scene.objects)
     # Grow around the fixed north tip; rear rounding changes only on the south half.
     head = c.ell('Broad cheeked compact skull', (0, .1056, 1.85), (.42525, .4944, .23), ivory)
@@ -162,9 +174,6 @@ def build(c, style=None):
     if combat:
         from badger_face_parts import eye_sockets
         eye_sockets(head, style.get('eyeSouthOffset', 0), style.get('cursorFace', False))
-    if style.get('cursorFace'):
-        from badger_fur_parts import cheek_locks
-        cheek_locks(c, head, ivory, dark)
     for side in [-1, 1]:
         fierce = style.get('fierceEyes', False)
         if combat:
@@ -192,10 +201,10 @@ def build(c, style=None):
         x, y = abs(p.x), p.y
         # Painted recess at the elbow and behind the skull, with broad irregular
         # shoulder highlights. Surface normals supply the outer muscle falloff.
-        elbow = math.exp(-((x-.66)/.14)**2 - ((y-.35)/.12)**2)
+        elbow = math.exp(-((x-.68)/.10)**2 - ((y-.40)/.070)**2)
         neck = math.exp(-((x-.34)/.14)**2 - ((y+.27)/.14)**2)
         shoulder = math.exp(-((x-.60)/.19)**2 - ((y+.16)/.20)**2)
-        return .93 - .25*elbow - .13*neck + .07*shoulder
+        return .93 - .10*elbow - .13*neck + .07*shoulder
     for ob in c.scene.objects:
         if ob.type == 'MESH' and any(slot.material == fur for slot in ob.material_slots):
             c.paint_form_mask(ob, mask)

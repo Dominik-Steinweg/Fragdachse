@@ -1251,7 +1251,7 @@
       "gameIds": [
         "player"
       ],
-      "revision": "v2-x",
+      "revision": "v2-ae",
       "variant": "rich",
       "sourceSize": 128,
       "textureKey": "badger",
@@ -1297,8 +1297,8 @@
         }
       ],
       "hashes": {
-        "idle": "7ca882eb518b84ba4b85058426b915e35c6f0da772da5ecc9e71af2c46e00690",
-        "sheet": "e0112db85b232a21f49970eaf80db6806535238b69751b9919ce129fec9c4e09"
+        "idle": "9027109af63aca865d58b897dbe3fae7d1bd03a024683e8e21f7167bff0af402",
+        "sheet": "519b0d9979ed1e27b77beab46c2f5916767a7d2f3c4f25650e6f997923af9859"
       }
     }
   ]
