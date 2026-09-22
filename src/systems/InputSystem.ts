@@ -2288,6 +2288,7 @@ export class InputSystem {
       anchorX: preview.anchorX,
       anchorY: preview.anchorY,
       constructionId: preview.constructionId,
+      turretWeaponId: preview.turretWeaponId,
       powerUpDefId: preview.powerUpDefId,
     };
   }

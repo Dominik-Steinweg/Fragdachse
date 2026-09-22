@@ -22,6 +22,7 @@ import type {
 import { wireProjectileRenderers } from './RendererBundle';
 import { WorldCombatCore } from '../../combat/WorldCombatCore';
 import { WorldCombatRuntime } from '../../combat/WorldCombatRuntime';
+import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
 
 /**
  * Der world-owned Owner der autoritativen Projectile-Registry.
@@ -161,6 +162,11 @@ export function composeWorldCombatGameplay(
 
       return {
         fires: latestState?.fires ?? [],
+        burningGroundCells: ctx.fireSystem.getGroundState().cells.map((cell) => ({
+          x: (cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE,
+          y: (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE,
+          radius: GROUND_FIRE_CELL_SIZE * Math.SQRT2 / 2,
+        })),
         stinkClouds: latestState?.stinkClouds ?? [],
         teslaDomes: latestState?.teslaDomes ?? [],
         nukes: latestState?.nukes ?? [],
@@ -203,6 +209,8 @@ export function composeWorldCombatGameplay(
               return {
                 x: enemy.sprite.x,
                 y: enemy.sprite.y,
+                isBoss: enemy.isBoss(),
+                collisionRadius: enemy.getCollisionRadius(),
                 attackRange: Math.max(
                   0,
                   ...enemy.getAttackWeapons().map((attackWeapon) => (

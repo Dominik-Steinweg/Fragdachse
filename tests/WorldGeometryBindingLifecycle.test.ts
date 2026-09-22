@@ -26,6 +26,9 @@ vi.mock('phaser', () => {
 import { GROUND_FIRE_CELL_SIZE } from '../src/effects/FireSystem';
 import { ARENA_MAP_GRID_CHANGED_EVENT } from '../src/scenes/arena/ArenaEvents';
 import { WorldGeometryBinding, type WorldGeometryBindingInput } from '../src/world/WorldGeometryBinding';
+import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
+import type { WorldPersistentBaseSite } from '../src/world/WorldRuntimeContext';
+import { CELL_SIZE } from '../src/config';
 
 const CELL = 64;
 
@@ -73,13 +76,14 @@ function createSceneScopedCollaborators() {
 
   const combatSystem = {
     worldMetrics: undefined as unknown,
-    obstacleIndex: undefined as unknown,
+    obstacleIndex: new ArenaObstacleIndex({
+      bounds: () => ({ offsetX: 0, offsetY: 0, width: 640, height: 640 }),
+      rocks: () => [], trunks: () => [], bases: () => [],
+    }),
     arenaObstacles: undefined as unknown,
     baseManager: undefined as unknown,
     setWorldMetrics(value: unknown) { this.worldMetrics = value; },
-    claimObstacleIndex() { return this.obstacleIndex = {
-      setWaterGeometry: vi.fn(), setWorldProps: vi.fn(), clear: vi.fn(), queryProjectileSegment: vi.fn(),
-    }; },
+    claimObstacleIndex() { return this.obstacleIndex; },
     setArenaObstacles(rocks: unknown, trunks: unknown) { this.arenaObstacles = [rocks, trunks]; },
     setBaseObstacles: vi.fn(),
     setBaseManager(value: unknown) { this.baseManager = value; },
@@ -146,6 +150,7 @@ function createBinding(
   rockCell: { gridX: number; gridY: number } | null,
   onDestroy?: (binding: WorldGeometryBinding) => void,
   baseGroup: unknown = null,
+  persistentBaseSite: WorldPersistentBaseSite | null = null,
 ): WorldGeometryBinding {
   const rockBounds = rockCell
     ? {
@@ -161,6 +166,7 @@ function createBinding(
     scene: shared.scene,
     world: {
       definition: null,
+      persistentBaseSite,
       metrics: { offsetX: 0, offsetY: 0, widthPx: 640, heightPx: 640 },
     },
     layout: [],
@@ -206,6 +212,25 @@ function isFireCellBlocked(shared: SceneScoped, gridX: number, gridY: number): b
 }
 
 describe('WorldGeometryBinding – Lifetime-Symmetrie', () => {
+  it('binds only the persistent core envelope and clears permission across worlds', () => {
+    const shared = createSceneScopedCollaborators();
+    const site = { baseId: 'home',
+      base: { region: { minGridX: 1, minGridY: 1, maxGridX: 3, maxGridY: 3 } },
+      buildArea: { kind: 'radius', radiusCells: 20 },
+    } as WorldPersistentBaseSite;
+    const worldA = createBinding(shared, null, undefined, null, site);
+    const index = shared.combatSystem.obstacleIndex;
+    const start = CELL_SIZE * 1.5, inside = CELL_SIZE * 3.5, outside = CELL_SIZE * 4.5;
+    expect(index.carrierExitFraction('home', start, start, inside, start)).toBeGreaterThan(1);
+    expect(index.carrierExitFraction('home', start, start, outside, start)).toBeLessThan(1);
+    expect(index.carrierExitFraction('other', start, start, inside, start)).toBe(-1);
+    worldA.destroy();
+    expect(index.carrierExitFraction('home', start, start, inside, start)).toBe(-1);
+    const worldB = createBinding(shared, null);
+    expect(index.carrierExitFraction('home', start, start, inside, start)).toBe(-1);
+    worldB.destroy();
+  });
+
   it('installiert die World-Sicht der scene-langlebigen Consumer', () => {
     const shared = createSceneScopedCollaborators();
     createBinding(shared, { gridX: 2, gridY: 2 });
@@ -248,8 +273,9 @@ describe('WorldGeometryBinding – Lifetime-Symmetrie', () => {
   it('stops spatial projectile reads and releases index references at World teardown', () => {
     const shared = createSceneScopedCollaborators();
     const binding = createBinding(shared, { gridX: 2, gridY: 2 });
-    const index = shared.combatSystem.obstacleIndex as { queryProjectileSegment: ReturnType<typeof vi.fn>;
-      clear: ReturnType<typeof vi.fn> };
+    const index = shared.combatSystem.obstacleIndex;
+    vi.spyOn(index, 'queryProjectileSegment');
+    vi.spyOn(index, 'clear');
     const visit = () => false;
     binding.queryProjectileObstacles(-100, 20, 1000, 20, 60, true, visit);
     expect(index.queryProjectileSegment).toHaveBeenCalledExactlyOnceWith(-100, 20, 1000, 20, 60, true, visit);

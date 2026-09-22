@@ -379,6 +379,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('powerup_bfg', './assets/sprites/16x16bfg.png');
     this.load.image('mission_reward_pedestal', './assets/sprites/mission_reward_pedestal.png');
     this.load.image('mission_reward_pickup', './assets/sprites/mission_reward_pickup.png');
+    this.load.image('reward_plasma_turret', './assets/sprites/rewards/plasma_turret.png');
     this.load.image('mission_carry_spawn_zone', './assets/sprites/objectives/mission_carry_spawn_zone.png');
     this.load.image('mission_carry_delivery_zone', './assets/sprites/objectives/mission_carry_delivery_zone.png');
     // Die waffenlose Fassung der Figur. Die getragene Waffe ist seit `HeldItemVisual` ein eigenes

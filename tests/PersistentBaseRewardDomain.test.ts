@@ -21,6 +21,7 @@ describe('Persistent Base Reward-Katalog', () => {
     expect(PERSISTENT_BASE_REWARD_DEFINITIONS.map((definition) => definition.id)).toEqual([
       'base_rage_pedestal',
       'base_plasma_turret',
+      'base_plasma_turret_2',
       'base_adrenaline_pedestal',
       'base_spore_turret',
       'base_health_pedestal',
@@ -157,6 +158,24 @@ describe('PersistentBaseRewardState', () => {
 });
 
 describe('PersistentBaseRewardStore', () => {
+  it('keeps two rewards for the same turret independently placeable and persistent', () => {
+    const unlocks = ['base_plasma_turret', 'base_plasma_turret_2'] as const;
+    const store = new PersistentBaseRewardStore();
+    expect(getPersistentBaseRewardDefinition(unlocks[0]).gameplaySource)
+      .toEqual(getPersistentBaseRewardDefinition(unlocks[1]).gameplaySource);
+    for (const [index, rewardId] of unlocks.entries()) {
+      expect(store.canPlaceReward(rewardId, unlocks)).toBe(true);
+      expect(store.placeReward({ rewardId, relativeGridX: index, relativeGridY: 0, angle: 0 })).toBe(true);
+      expect(store.canPlaceReward(rewardId, unlocks)).toBe(false);
+    }
+    const restored = new PersistentBaseRewardStore(store.getState());
+    expect(restored.getState().placements.map(p => p.rewardId)).toEqual(unlocks);
+    expect(restored.dismantleReward(unlocks[0])).toBe(true);
+    expect(restored.canPlaceReward(unlocks[0], unlocks)).toBe(true);
+    expect(restored.canPlaceReward(unlocks[1], unlocks)).toBe(false);
+    expect(restored.getState().placements.map(p => p.rewardId)).toEqual([unlocks[1]]);
+  });
+
   it('commits lobby changes and rolls mission changes back or forward', () => {
     const session = new PersistentBaseRoomSession();
     const store = session.rewards;

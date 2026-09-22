@@ -168,10 +168,10 @@
           "delayMs": 0,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 42,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 40,
+            "gridY": 39,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -179,10 +179,10 @@
           "count": 22,
           "spawnStaggerMs": 160,
           "spawnArea": {
-            "gridX": 42,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 40,
+            "gridY": 39,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -191,10 +191,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 160,
           "spawnArea": {
-            "gridX": 42,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 40,
+            "gridY": 39,
+            "widthCells": 16,
+            "heightCells": 10
           }
         }
       ]
@@ -212,10 +212,10 @@
           "delayMs": 0,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 129,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 117,
+            "gridY": 5,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -223,10 +223,10 @@
           "count": 32,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 129,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 117,
+            "gridY": 5,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -235,10 +235,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 129,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 117,
+            "gridY": 5,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -246,10 +246,10 @@
           "count": 1,
           "spawnStaggerMs": 1200,
           "spawnArea": {
-            "gridX": 129,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 117,
+            "gridY": 5,
+            "widthCells": 16,
+            "heightCells": 10
           }
         }
       ]
@@ -266,10 +266,10 @@
           "count": 1,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 129,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 117,
+            "gridY": 5,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -278,10 +278,10 @@
           "delayMs": 1200,          
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 129,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 117,
+            "gridY": 5,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -290,10 +290,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 129,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 117,
+            "gridY": 5,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -301,10 +301,10 @@
           "count": 2,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 129,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 117,
+            "gridY": 5,
+            "widthCells": 16,
+            "heightCells": 10
           }
         }
       ]
@@ -322,10 +322,10 @@
           "delayMs": 0,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 193,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 181,
+            "gridY": 41,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -333,10 +333,10 @@
           "count": 76,
           "spawnStaggerMs": 560,
           "spawnArea": {
-            "gridX": 193,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 181,
+            "gridY": 41,
+            "widthCells": 16,
+            "heightCells": 10
           }
         }
       ]
@@ -353,10 +353,10 @@
           "count": 1,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 193,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 181,
+            "gridY": 41,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -364,10 +364,10 @@
           "count": 8,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 193,
-            "gridY": 44,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 181,
+            "gridY": 41,
+            "widthCells": 16,
+            "heightCells": 10
           }
         }
       ]
@@ -385,10 +385,10 @@
           "delayMs": 0,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -397,10 +397,10 @@
           "delayMs": 200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -409,10 +409,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -421,10 +421,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -432,10 +432,10 @@
           "count": 1,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         }
       ]
@@ -452,10 +452,10 @@
           "count": 1,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -463,10 +463,10 @@
           "count": 48,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -475,10 +475,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         }
       ]
@@ -496,10 +496,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 600,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -507,10 +507,10 @@
           "count": 48,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -519,10 +519,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -531,10 +531,10 @@
           "delayMs": 1200,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         },
         {
@@ -542,10 +542,10 @@
           "count": 2,
           "spawnStaggerMs": 60,
           "spawnArea": {
-            "gridX": 241,
-            "gridY": 7,
-            "widthCells": 5,
-            "heightCells": 3
+            "gridX": 237,
+            "gridY": 6,
+            "widthCells": 16,
+            "heightCells": 10
           }
         }
       ]
@@ -638,7 +638,7 @@
         "id": "medic-3-approach",
         "radiusCells": 3.5,
         "points": [
-          { "gridX": 195, "gridY": 45 },
+          { "gridX": 192, "gridY": 45 },
           { "gridX": 189, "gridY": 15 }
         ]
       },

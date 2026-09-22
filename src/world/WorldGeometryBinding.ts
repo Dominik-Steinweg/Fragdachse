@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { WaterGeometry } from '../arena/WaterGeometry';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
-import type { BaseSpec } from '../arena/BaseRegistry';
+import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { CELL_SIZE } from '../config';
 import { FireObstacleIndex } from '../effects/FireObstacleIndex';
 import { GROUND_FIRE_CELL_SIZE, type FireSystem } from '../effects/FireSystem';
@@ -89,6 +89,11 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     // WorldCombatCore created this sole index before the World existed. Binding claims that
     // instance after installing the World arrays; Projectile and Queries receive the same object.
     this.obstacleIndex = combatSystem.claimObstacleIndex(this.bindingToken);
+    const carrierSite = world.persistentBaseSite;
+    this.obstacleIndex.setCarrierOverflightArea(carrierSite ? {
+      baseId: carrierSite.baseId,
+      ...getBaseWorldBounds(carrierSite.base.region, world.metrics),
+    } : null);
     const water = new WaterGeometry(layout.water ?? [], world.metrics);
     this.obstacleIndex.setWaterGeometry(water);
     this.geometryQueries = createWorldGeometryQueries({

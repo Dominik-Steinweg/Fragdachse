@@ -160,6 +160,11 @@ nutzen ihre `baseId`; persistente Dachtürme erhalten die Zuordnung beim Materia
 Base-Site. Die Bauzone allein erteilt keine Freigabe. Die Projectile-Runtime beendet ihre
 hostseitige Freigabe beim ersten vollständigen Austritt des Körpers aus der anfänglich
 zusammenhängend durchquerten Zellfläche, auch innerhalb eines Frames oder in eine Nische.
+Für die persistente Basis umfasst die Freigabe stattdessen das umschließende Rechteck aller
+vier Kernecken einschließlich der Zwischenräume, unabhängig von Erweiterungen der Bauzone.
+Erst der vollständige Austritt aus dieser Grundfläche beendet sie; ein späterer Wiedereintritt
+erteilt keine neue Freigabe. `WorldGeometryBinding` bindet diese Überflugfläche an die World,
+und der gemeinsame Hindernisindex entfernt sie beim Abbau. Sie ersetzt keine Kollisionszellen.
 Portaltransport und Reflexion beenden sie ebenfalls; Folgegeschosse erben sie nicht.
 Basis-Rechtecke zur Vorauswahl ersetzen niemals die tatsächlichen Zellen als Treffergeometrie.
 

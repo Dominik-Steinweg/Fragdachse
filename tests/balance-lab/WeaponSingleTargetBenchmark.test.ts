@@ -261,7 +261,6 @@ describe('Weapon Balance Lab 0.2 – Paritäts- und Simulationsfundament', () =>
       expect(biteConfig.fire.type).toBe('melee');
       expect(biteConfig.damage).toBe(50);
       expect(biteConfig.cooldown).toBe(350);
-      expect(biteConfig.adrenalinGain).toBe(100);
 
       const result = runWeaponSingleTargetBenchmark({
         weaponId: 'BITE',

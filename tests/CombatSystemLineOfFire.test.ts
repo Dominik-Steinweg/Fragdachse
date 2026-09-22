@@ -282,6 +282,42 @@ describe('WorldGeometryQueries – headless read-only boundary', () => {
       .toMatchObject({ kind: 'base', baseId: 'carrier', x: 91 });
   });
 
+  it('allows carrier fire across all persistent corners without changing actual blockers', () => {
+    const cells = [0, 96].flatMap(x => [0, 96].map(y => ({ active: true, getData: () => 'carrier',
+      getBounds: () => new Phaser.Geom.Rectangle(x, y, 32, 32) })));
+    const foreign = { active: false, getData: () => 'foreign',
+      getBounds: () => new Phaser.Geom.Rectangle(64, 0, 16, 32) };
+    const rock = { active: false, getBounds: () => new Phaser.Geom.Rectangle(48, 0, 16, 32) };
+    const index = new ArenaObstacleIndex({
+      bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 300 }),
+      rocks: () => [rock], bases: () => [...cells, foreign], trunks: () => [] });
+    index.setCarrierOverflightArea({ baseId: 'carrier', x: 0, y: 0, width: 128, height: 128 });
+    const geometry = new CombatGeometry(index);
+    const shot = { purpose: 'directFire' as const, sourceCarrierBaseId: 'carrier', halfWidth: 5, halfHeight: 2 };
+    for (const [x, y] of [[120, 16], [16, 120], [120, 120]]) {
+      const line = new Phaser.Geom.Line().setTo(16, 16, x, y);
+      expect(geometry.nearestObstacleHit(line, shot)).toBeNull();
+      expect(geometry.hasLineOfSight(16, 16, x, y, shot)).toBe(true);
+      expect(geometry.baseHit('carrier', 16, 16, x, y, 5, 2, 'carrier')).toBeNull();
+    }
+    expect(geometry.carrierExitFraction(64, 16, 131, 16, 'carrier', 5, 2)).toBeGreaterThan(1);
+    expect(geometry.carrierExitFraction(64, 16, 140, 16, 'carrier', 5, 2)).toBeLessThan(1);
+    expect(geometry.carrierExitFraction(140, 16, 100, 16, 'carrier', 5, 2)).toBe(-1);
+    expect(geometry.hasLineOfSight(-20, 64, 150, 64)).toBe(true);
+    expect(geometry.hasLineOfSight(64, 16, 120, 16)).toBe(false);
+    expect(geometry.hasLineOfSight(64, 16, 120, 16, { ...shot, sourceCarrierBaseId: 'foreign' })).toBe(false);
+    foreign.active = true;
+    index.markDirty();
+    expect(geometry.nearestObstacleHit(new Phaser.Geom.Line().setTo(16, 16, 150, 16), shot))
+      .toMatchObject({ kind: 'base', baseId: 'foreign' });
+    rock.active = true;
+    index.markDirty();
+    expect(geometry.nearestObstacleHit(new Phaser.Geom.Line().setTo(16, 16, 150, 16), shot))
+      .toMatchObject({ kind: 'rock' });
+    index.clear();
+    expect(geometry.carrierExitFraction(64, 16, 120, 16, 'carrier', 5, 2)).toBe(-1);
+  });
+
   it('produces the same blocker and safe-muzzle result without a CombatSystem instance', () => {
     const rock = {
       active: true,

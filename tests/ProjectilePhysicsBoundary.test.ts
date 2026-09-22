@@ -316,6 +316,40 @@ describe('technical Phaser boundary with the authoritative runtime', () => {
     runtime.destroy();
   });
 
+  it.each(['sweep', 'physics', 'overlap'] as const)('retains persistent carrier permission across gaps until the whole body exits (%s)', collisionMode => {
+    const { binding, runtime, doubles, contacts } = fixture();
+    const cells = [0, 96].map(x => ({ active: true, getData: () => 'carrier',
+      getBounds: () => new Phaser.Geom.Rectangle(x, 0, 32, 32) }));
+    binding.setBaseGroup({ getChildren: () => cells } as never);
+    const index = new ArenaObstacleIndex({ bounds: () => ({ offsetX: -100, offsetY: -100, width: 1000, height: 300 }),
+      rocks: () => null, trunks: () => null, bases: () => cells });
+    index.setCarrierOverflightArea({ baseId: 'carrier', x: 0, y: 0, width: 128, height: 128 });
+    binding.setObstacleIndex(index);
+    const hit = vi.fn(); runtime.setBaseHitCallback(hit);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, origin: { x: 16, y: 16, angle: 0 },
+      flight: { ...spawn.flight, collisionMode, collisionFilter: { sourceCarrierBaseId: 'carrier' } } });
+    const handle = doubles.handles.get(0)!;
+    let now = 0;
+    for (const x of [64, 110, 128 + handle.body.width / 4, 110, 150]) {
+      handle.sprite.x = x;
+      now += 16;
+      runtime.runHostInteractionStage(now); runtime.runHostProjectileStage(16, now);
+      expect(hit).not.toHaveBeenCalled();
+      expect(runtime.activeCount).toBe(1);
+    }
+    handle.body.setVelocity(-100, 0); handle.sprite.x = 110;
+    if (collisionMode !== 'sweep') {
+      const contact = contacts.find(contact => contact.process?.(handle.sprite, cells[1]));
+      expect(contact).toBeDefined();
+      contact?.callback(handle.sprite, cells[1]);
+    }
+    runtime.runHostInteractionStage(now + 16); runtime.runHostProjectileStage(16, now + 16);
+    expect(hit).toHaveBeenCalledOnce();
+    expect(hit.mock.calls[0][0]).toBe('carrier');
+    runtime.destroy();
+  });
+
   it('delivers one injector support contact to the first eligible low target', () => {
     const { binding, runtime, doubles } = fixture();
     const walls = [20, 40, 60].map(x => Object.assign(rock(x), { obstacleClass: 'low' as const }));

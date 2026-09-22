@@ -56,6 +56,15 @@ export interface ArenaObstacleBounds {
   readonly height: number;
 }
 
+/** Permission envelope only; never used as collision geometry. */
+export interface CarrierOverflightArea {
+  readonly baseId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 /**
  * Besucher für ein Rechteck-Hindernis auf dem Segment.
  * Rückgabe `true` bricht die Traversierung ab (Frühausstieg für reine Ja/Nein-Prüfungen).
@@ -250,6 +259,7 @@ export class ArenaObstacleIndex {
   private scratchBounds: Phaser.Geom.Rectangle | null = null;
 
   private waterGeometry: WaterGeometry | null = null;
+  private carrierOverflightArea: CarrierOverflightArea | null = null;
   private worldProps: readonly ObstacleRectBody[] = [];
   private barrierSource: readonly ObstacleRectBody[] | null = null;
   private barrierSourceLength = -1;
@@ -274,6 +284,10 @@ export class ArenaObstacleIndex {
 
   setWaterGeometry(water: WaterGeometry | null): void { this.waterGeometry = water; }
 
+  setCarrierOverflightArea(area: CarrierOverflightArea | null): void {
+    this.carrierOverflightArea = area;
+  }
+
   constructor(private readonly sources: ArenaObstacleSources) {}
 
   getRockClass(index: number): ObstacleClass {
@@ -287,12 +301,19 @@ export class ArenaObstacleIndex {
     return typeof id === 'string' && id.length > 0 ? id : undefined;
   }
 
-  /** First exit from the source-connected union, including the travelling body's extent.
+  /** First exit from the carrier envelope or source-connected union, including the body's extent.
    * -1 means the segment starts outside; >= 1 means it has not fully left during this segment.
    */
   carrierExitFraction(baseId: string | undefined, sx: number, sy: number, ex: number, ey: number,
     halfWidth = 0, halfHeight = halfWidth): number {
     if (!baseId) return -1;
+    const area = this.carrierOverflightArea;
+    if (area?.baseId === baseId) {
+      const interval = segmentRectInterval(sx, sy, ex, ey,
+        area.x - halfWidth, area.y - halfHeight,
+        area.x + area.width + halfWidth, area.y + area.height + halfHeight);
+      return interval && interval.enter <= 0 ? interval.exit : -1;
+    }
     const intervals: { enter: number; exit: number }[] = [];
     this.querySegment(sx, sy, ex, ey, (kind, _id, left, top, right, bottom, source) => {
       if (kind !== OBSTACLE_BASE || this.getBaseId(source) !== baseId) return false;
@@ -317,6 +338,7 @@ export class ArenaObstacleIndex {
 
   /** Release World references immediately, even if no later query triggers a rebuild. */
   clear(): void {
+    this.carrierOverflightArea = null;
     this.rectSource.length = 0;
     this.circleSource.length = 0;
     this.builtRocks = null; this.builtTrunks = null; this.builtBases = null; this.builtBarriers = null;

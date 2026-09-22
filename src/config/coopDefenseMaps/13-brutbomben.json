@@ -84,7 +84,7 @@
           },
           "defId": "ADRENALINE",
           "respawnMs": 20000,
-          "spawnOnArenaStart": false
+          "spawnOnArenaStart": true
         }
       ]
     },

@@ -44,7 +44,15 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDe
     gameplaySource: { kind: 'construction-definition', constructionId: 'spore_turret', weaponId: 'SPORE_TURRET_PLASMA' },
     initialState: { respawnMs: null, spawnOnArenaStart: true },
     placementRule: 'base-surface',
-    presentation: { labelKey: 'reward.plasma_turret.name', iconKey: 'UPGRADE_UNLOCK_SPORE_TURRET' },
+    presentation: { labelKey: 'reward.plasma_turret.name', iconKey: 'reward_plasma_turret' },
+  },
+  {
+    id: 'base_plasma_turret_2',
+    category: 'baseTurret',
+    gameplaySource: { kind: 'construction-definition', constructionId: 'spore_turret', weaponId: 'SPORE_TURRET_PLASMA' },
+    initialState: { respawnMs: null, spawnOnArenaStart: true },
+    placementRule: 'base-surface',
+    presentation: { labelKey: 'reward.plasma_turret.name', iconKey: 'reward_plasma_turret' },
   },
   {
     id: 'base_adrenaline_pedestal',

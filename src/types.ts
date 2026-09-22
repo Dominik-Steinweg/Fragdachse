@@ -199,6 +199,8 @@ export interface PlacementPreviewNetState {
   anchorX?: number;
   anchorY?: number;
   constructionId?: ConstructionId;
+  /** Resolved weapon variant for placement and relocation visuals. */
+  turretWeaponId?: TurretWeaponId;
   /** Missions-Podest: welches Power-Up auf dem Runtime-Podest erscheinen wird. */
   powerUpDefId?: string;
 }
@@ -1157,6 +1159,8 @@ export interface UtilityPlacementPreviewState {
   anchorGridY?: number;
   sourceSlot?: 'weapon2' | 'utility' | 'ultimate';
   constructionId?: ConstructionId;
+  /** Resolved weapon variant for placement and relocation visuals. */
+  turretWeaponId?: TurretWeaponId;
   /** Missions-Podest: welches Power-Up auf dem Runtime-Podest erscheint. */
   powerUpDefId?: string;
   /**

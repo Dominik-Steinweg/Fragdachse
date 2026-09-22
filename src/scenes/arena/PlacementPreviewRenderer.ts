@@ -137,9 +137,9 @@ export class PlacementPreviewRenderer {
         if (preview.kind === 'rock') image.setFrame(preview.frame);
       }
       if (preview.kind === 'turret') {
-        const spec = this.getTurretPreviewSpec(preview.constructionId);
+        const spec = this.getTurretPreviewSpec(preview);
         const transform = getTurretVisualTransform(spec, preview.targetX, preview.targetY, preview.angle);
-        this.ensureTurretPreviewImage(undefined, preview.constructionId)
+        this.ensureTurretPreviewImage(undefined, preview)
           .setPosition(transform.x, transform.y)
           .setRotation(transform.rotation)
           .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
@@ -286,9 +286,9 @@ export class PlacementPreviewRenderer {
           if (preview.kind === 'rock' || preview.kind === 'turret') image.setFrame(preview.frame);
         }
         if (preview.kind === 'turret') {
-          const spec = this.getTurretPreviewSpec(preview.constructionId);
+          const spec = this.getTurretPreviewSpec(preview);
           const transform = getTurretVisualTransform(spec, preview.x, preview.y, 0);
-          this.ensureTurretPreviewImage(playerId, preview.constructionId)
+          this.ensureTurretPreviewImage(playerId, preview)
             .setPosition(transform.x, transform.y)
             .setRotation(transform.rotation)
             .setAlpha(preview.isValid ? 0.38 : 0.18)
@@ -485,7 +485,12 @@ export class PlacementPreviewRenderer {
     graphics.strokeCircle(x, y, renderInnerRadius - 2);
   }
 
-  private getTurretPreviewSpec(constructionId?: PlacementPreviewNetState['constructionId']) {
+  private getTurretPreviewSpec(preview: Pick<PlacementPreviewNetState, 'constructionId' | 'turretWeaponId'>) {
+    const { constructionId, turretWeaponId } = preview;
+    if (turretWeaponId) {
+      const spec = getTurretVisualSpec(turretWeaponId);
+      if (spec) return spec;
+    }
     if (constructionId) {
       const definition = getCoopDefenseConstructionDefinition(constructionId);
       if (definition.kind === 'turret') return getTurretVisualSpec(definition.weaponId);
@@ -495,9 +500,9 @@ export class PlacementPreviewRenderer {
 
   private ensureTurretPreviewImage(
     playerId: string | undefined,
-    constructionId?: PlacementPreviewNetState['constructionId'],
+    preview: Pick<PlacementPreviewNetState, 'constructionId' | 'turretWeaponId'>,
   ): Phaser.GameObjects.Image {
-    const spec = this.getTurretPreviewSpec(constructionId);
+    const spec = this.getTurretPreviewSpec(preview);
     if (playerId === undefined) {
       if (!this.localTurretPreviewImage) {
         this.localTurretPreviewImage = this.scene.add.image(0, 0, spec.textureKey)

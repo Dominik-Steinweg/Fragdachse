@@ -58,6 +58,7 @@ function fixture(host: boolean, outcome = 'victory') {
     worldLifecycle: { activity: { descriptor: null, kind: 'pvp' }, endInstance: vi.fn(), syncObservedActivity: vi.fn() },
     worldRuntime: { update: vi.fn(), activity: { runtime: null } },
     persistentBase: { applyRoundConclusion: vi.fn(), rollbackPersistentBaseMissionIfActive: vi.fn() },
+    syncRoomOwners: vi.fn(),
     hostSaveRoundResults: vi.fn(), publishRoundConclusion: vi.fn(), clearCoopMissionPresentationState: vi.fn(), clearWorldAdmission: vi.fn(),
   });
   vi.spyOn(bridge, 'isHost').mockReturnValue(host);

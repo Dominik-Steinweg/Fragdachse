@@ -617,6 +617,7 @@ function isSamePlacementPreview(
     && left.anchorX === right.anchorX
     && left.anchorY === right.anchorY
     && left.constructionId === right.constructionId
+    && left.turretWeaponId === right.turretWeaponId
     && left.powerUpDefId === right.powerUpDefId;
 }
 

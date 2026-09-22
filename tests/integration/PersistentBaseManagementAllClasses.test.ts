@@ -343,6 +343,28 @@ function moveRequest(
 }
 
 describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
+  it.each(['base_plasma_turret', 'base_plasma_turret_2'] as const)(
+    'preserves the plasma weapon in placement and move previews for %s', (rewardId) => {
+      grantStoredPersistentBaseRewards([rewardId]);
+      const { coordinator, placementSystem, playerId } = createHarness('assault_dachs');
+      coordinator.isPersistentBaseRuntimeActive = () => true;
+      const target = rewardCell(-1, 1);
+      const targetWorld = worldCellCenter(METRICS, target.gridX, target.gridY);
+      expect(coordinator.getPersistentBaseRewardPlacementPreview(
+        playerId, rewardId, targetWorld.x, targetWorld.y,
+      )).toMatchObject({ kind: 'turret', constructionId: 'spore_turret', turretWeaponId: 'SPORE_TURRET_PLASMA' });
+      const cell = rewardCell(1, 0);
+      const source = placementSystem.materializePersistentBaseReward(
+        getCoopDefenseConstructionDefinition('spore_turret'), rewardId,
+        cell.gridX, cell.gridY, 0, playerId, 0xffffff,
+      );
+      expect(source).not.toBeNull();
+      expect(coordinator.getPersistentBaseMoveTargetPreview(
+        playerId, source!.id, targetWorld.x, targetWorld.y,
+      )).toMatchObject({ mode: 'move-target', turretWeaponId: source!.turretWeaponId });
+    },
+  );
+
   it('verwendet beim Client die replizierte Verfuegbarkeit fuer die Move-Quellvorschau', () => {
     const harness = createHarness('assault_dachs');
     const { coordinator, placementSystem, playerId } = harness;

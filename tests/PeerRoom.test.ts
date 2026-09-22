@@ -775,6 +775,15 @@ describe('NetworkBridge placement preview presence', () => {
       expect(observerRoom.room.getPlayerState('p1', 'ppv')).toEqual(preview);
 
       senderRoom.transport.links[0].sent.length = 0;
+      const plasmaPreview = { ...preview, turretWeaponId: 'SPORE_TURRET_PLASMA' as const };
+      sender.sendLocalPlacementPreview(plasmaPreview);
+      senderRoom.room.update();
+      host.room.update();
+      expect(observerRoom.room.getPlayerState('p1', 'ppv')).toEqual(plasmaPreview);
+      sender.sendLocalPlacementPreview(preview);
+      senderRoom.room.update();
+      host.room.update();
+      senderRoom.transport.links[0].sent.length = 0;
       sender.sendLocalPlacementPreview(preview);
       senderRoom.room.update();
       expect(senderRoom.transport.links[0].sent.some(entry => entry.message.t === 'b')).toBe(false);

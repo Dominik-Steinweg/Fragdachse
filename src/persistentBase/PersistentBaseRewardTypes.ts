@@ -7,6 +7,7 @@ import type { PersistentBaseMutationIdentity } from './PersistentBaseTransaction
 export const PERSISTENT_BASE_REWARD_IDS = [
   'base_rage_pedestal',
   'base_plasma_turret',
+  'base_plasma_turret_2',
   'base_adrenaline_pedestal',
   'base_spore_turret',
   'base_health_pedestal',

@@ -574,6 +574,9 @@ export class ArenaPersistentBaseSession {
       powerUpDefId: definition.gameplaySource.kind === 'power-up-definition'
         ? definition.gameplaySource.powerUpDefId
         : undefined,
+      turretWeaponId: definition.gameplaySource.kind === 'construction-definition'
+        ? definition.gameplaySource.weaponId
+        : undefined,
       mode: 'place',
     };
   }
@@ -671,7 +674,7 @@ export class ArenaPersistentBaseSession {
       source.id,
     );
     if (!preview) return undefined;
-    return { ...preview, mode: 'move-target', sourceRuntimeId };
+    return { ...preview, mode: 'move-target', sourceRuntimeId, turretWeaponId: source.turretWeaponId };
   }
 
   /** Sendet eine Zielvorschau ueber den dedizierten Move-Pfad zum Host. */
@@ -915,6 +918,7 @@ export class ArenaPersistentBaseSession {
         ? definition.gameplaySource.powerUpDefId
         : undefined,
       mode: 'move-target',
+      turretWeaponId: source.turretWeaponId,
       sourceRuntimeId: source.id,
     };
   }

@@ -18,6 +18,7 @@ import type { LightingSystem } from '../effects/LightingSystem';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import {
   CELL_SIZE,
+  PLAYER_SIZE,
   type ArenaGridRegion,
   getCaptureTheBeerBaseRegion,
   getCaptureTheBeerTeamSpawnRegion,
@@ -41,6 +42,9 @@ const COOP_BASE_MAX_PREFERRED_SPAWN_DISTANCE_PX = CELL_SIZE * 14;
 const COOP_ENEMY_ATTACK_HARD_BUFFER_PX = CELL_SIZE * 2;
 /** Soft-Buffer darüber hinaus: noch unbequem nah, aber zulässig wenn nichts besseres existiert. */
 const COOP_ENEMY_ATTACK_SOFT_BUFFER_PX = CELL_SIZE * 4;
+/** Bosse brauchen unabhängig von ihrer Fernkampfreichweite Platz um ihren Körper. */
+const COOP_BOSS_HARD_CLEARANCE_PX = CELL_SIZE * 4;
+const COOP_BOSS_SOFT_CLEARANCE_PX = CELL_SIZE * 3;
 const EFFECT_SAFE_BUFFER_PX = Math.round(CELL_SIZE * 0.5);
 const WARNING_SAFE_BUFFER_PX = CELL_SIZE;
 const TURRET_SAFE_BUFFER_PX = CELL_SIZE;
@@ -68,13 +72,22 @@ interface SpawnEnemyThreatSnapshot {
   y: number;
   /** Effektive Angriffsreichweite des Gegners in Pixel (0 = harmlos). */
   attackRange: number;
+  isBoss?: boolean;
+  collisionRadius?: number;
   /** Nächstgelegene lebende Coop-Basis, auf die der Gegner zuläuft. */
   targetBaseId?: string;
   targetBaseDistance?: number;
 }
 
+interface SpawnGroundFireCellSnapshot {
+  x: number;
+  y: number;
+  radius: number;
+}
+
 interface SpawnContextSnapshot {
   readonly fires: readonly SyncedFireZone[];
+  readonly burningGroundCells?: readonly SpawnGroundFireCellSnapshot[];
   readonly stinkClouds: readonly SyncedStinkCloud[];
   readonly teslaDomes: readonly SyncedTeslaDome[];
   readonly nukes: readonly SyncedNukeStrike[];
@@ -111,6 +124,8 @@ interface SpawnEvaluation {
   softTurretHits: number;
   hardEnemyHits: number;
   softEnemyHits: number;
+  hardBossHits: number;
+  softBossHits: number;
   projectilePenalty: number;
   score: number;
 }
@@ -365,13 +380,47 @@ export class PlayerManager implements OwnerVisualSource {
       : evaluations;
     // Ein Fokus ist nur eine Praeferenz. Sind alle nahen Kandidaten hart gefaehrdet, faellt die
     // Auswahl auf die vollstaendige sichere Bewertung zurueck.
-    const focusedChoice = this.pickSpawnWithFallbacks(focusedEvaluations, !hasPreferredFocus);
+    const focusedChoice = this.pickSpawnWithFallbacks(focusedEvaluations);
     if (focusedChoice) return focusedChoice;
 
-    const globalChoice = focusedEvaluations === evaluations
+    // Eine basisnahe Stelle bei normalen Gegnern ist besser als ein Spawn direkt am Boss.
+    const nearOrdinaryEnemies = coopDefenseBase && spawnContext.enemyThreats?.some((enemy) => enemy.isBoss)
+      ? this.pickCandidate(focusedEvaluations.filter((evaluation) => (
+        evaluation.hardDangerHits === 0
+        && evaluation.softDangerHits === 0
+        && evaluation.hardBossHits === 0
+        && evaluation.softBossHits === 0
+        && evaluation.hardTurretHits === 0
+      )))
+      : null;
+    if (nearOrdinaryEnemies) return nearOrdinaryEnemies;
+
+    const globalSafeChoice = focusedEvaluations === evaluations
       ? null
       : this.pickSpawnWithFallbacks(evaluations);
-    return globalChoice ?? this.getEmergencySpawnOutsideGroundHazard();
+    if (globalSafeChoice) return globalSafeChoice;
+
+    const fallbackTiers = [
+      (evaluation: SpawnEvaluation) => evaluation.hardDangerHits === 0
+        && evaluation.softDangerHits === 0 && evaluation.hardBossHits === 0
+        && evaluation.softBossHits === 0 && evaluation.hardTurretHits === 0,
+      (evaluation: SpawnEvaluation) => evaluation.hardDangerHits === 0 && evaluation.hardBossHits === 0,
+      (evaluation: SpawnEvaluation) => evaluation.hardDangerHits === 0,
+      (_evaluation: SpawnEvaluation) => true,
+    ];
+    for (const accepts of fallbackTiers) {
+      const focusedFallback = this.pickCandidate(focusedEvaluations.filter((evaluation) => (
+        accepts(evaluation) && this.meetsOpponentThreshold(evaluation, MIN_OPPONENT_DISTANCE_PX)
+      )));
+      if (focusedFallback) return focusedFallback;
+      if (focusedEvaluations !== evaluations) {
+        const globalFallback = this.pickCandidate(evaluations.filter((evaluation) => (
+          accepts(evaluation) && this.meetsOpponentThreshold(evaluation, MIN_OPPONENT_DISTANCE_PX)
+        )));
+        if (globalFallback) return globalFallback;
+      }
+    }
+    return this.pickCandidate(evaluations) ?? this.getEmergencySpawnOutsideGroundHazard();
   }
 
   /**
@@ -395,10 +444,7 @@ export class PlayerManager implements OwnerVisualSource {
     };
   }
 
-  private pickSpawnWithFallbacks(
-    evaluations: readonly SpawnEvaluation[],
-    allowDangerousFallbacks = true,
-  ): { x: number; y: number } | null {
+  private pickSpawnWithFallbacks(evaluations: readonly SpawnEvaluation[]): { x: number; y: number } | null {
     if (evaluations.length === 0) return null;
     const relaxedThresholds = this.buildRelaxedOpponentThresholds();
 
@@ -410,6 +456,8 @@ export class PlayerManager implements OwnerVisualSource {
         && evaluation.softTurretHits === 0
         && evaluation.hardEnemyHits === 0
         && evaluation.softEnemyHits === 0
+        && evaluation.hardBossHits === 0
+        && evaluation.softBossHits === 0
         && this.meetsOpponentThreshold(evaluation, threshold)
       ));
       const strictChoice = this.pickCandidate(strictMatches);
@@ -419,6 +467,7 @@ export class PlayerManager implements OwnerVisualSource {
         evaluation.hardDangerHits === 0
         && evaluation.hardTurretHits === 0
         && evaluation.hardEnemyHits === 0
+        && evaluation.hardBossHits === 0
         && this.meetsOpponentThreshold(evaluation, threshold)
       ));
       const softenedChoice = this.pickCandidate(softenedMatches);
@@ -429,17 +478,11 @@ export class PlayerManager implements OwnerVisualSource {
       evaluation.hardDangerHits === 0
       && evaluation.hardTurretHits === 0
       && evaluation.hardEnemyHits === 0
+      && evaluation.hardBossHits === 0
       && this.meetsOpponentThreshold(evaluation, MIN_OPPONENT_DISTANCE_PX)
     )));
     if (safeChoice) return safeChoice;
-    if (!allowDangerousFallbacks) return null;
-
-    const minimumChoice = this.pickCandidate(evaluations.filter((evaluation) => (
-      this.meetsOpponentThreshold(evaluation, MIN_OPPONENT_DISTANCE_PX)
-    )));
-    if (minimumChoice) return minimumChoice;
-
-    return this.pickCandidate(evaluations);
+    return null;
   }
 
   private buildBlockedCells(
@@ -663,6 +706,7 @@ export class PlayerManager implements OwnerVisualSource {
     }
 
     const fireDanger = this.countZoneDanger(candidate, spawnContext.fires, EFFECT_SAFE_BUFFER_PX);
+    const groundFireDanger = this.countGroundFireDanger(candidate, spawnContext.burningGroundCells ?? []);
     const stinkDanger = this.countZoneDanger(candidate, spawnContext.stinkClouds, EFFECT_SAFE_BUFFER_PX);
     const teslaDanger = this.countZoneDanger(candidate, spawnContext.teslaDomes, WARNING_SAFE_BUFFER_PX);
     const nukeDanger = this.countZoneDanger(candidate, spawnContext.nukes, WARNING_SAFE_BUFFER_PX);
@@ -720,6 +764,10 @@ export class PlayerManager implements OwnerVisualSource {
     score -= turretDanger.hardHits * 2800;
     score -= enemyDanger.softHits * 340;
     score -= enemyDanger.hardHits * 3000;
+    score -= enemyDanger.softBossHits * 700;
+    score -= enemyDanger.hardBossHits * 6000;
+    score -= groundFireDanger.softHits * 260;
+    score -= groundFireDanger.hardHits * 2600;
 
     return {
       candidate,
@@ -728,12 +776,14 @@ export class PlayerManager implements OwnerVisualSource {
       nearestOpponentDistance,
       nearestProjectileDistance: projectileDanger.nearestDistance,
       edgeDistance,
-      hardDangerHits: fireDanger.hardHits + stinkDanger.hardHits + teslaDanger.hardHits + nukeDanger.hardHits + meteorDanger.hardHits,
-      softDangerHits: fireDanger.softHits + stinkDanger.softHits + teslaDanger.softHits + nukeDanger.softHits + meteorDanger.softHits,
+      hardDangerHits: fireDanger.hardHits + groundFireDanger.hardHits + stinkDanger.hardHits + teslaDanger.hardHits + nukeDanger.hardHits + meteorDanger.hardHits,
+      softDangerHits: fireDanger.softHits + groundFireDanger.softHits + stinkDanger.softHits + teslaDanger.softHits + nukeDanger.softHits + meteorDanger.softHits,
       hardTurretHits: turretDanger.hardHits,
       softTurretHits: turretDanger.softHits,
       hardEnemyHits: enemyDanger.hardHits,
       softEnemyHits: enemyDanger.softHits,
+      hardBossHits: enemyDanger.hardBossHits,
+      softBossHits: enemyDanger.softBossHits,
       projectilePenalty: projectileDanger.penalty,
       score,
     };
@@ -791,12 +841,20 @@ export class PlayerManager implements OwnerVisualSource {
   private countEnemyAttackDanger(
     candidate: SpawnCandidate,
     enemies: readonly SpawnEnemyThreatSnapshot[],
-  ): { hardHits: number; softHits: number } {
+  ): { hardHits: number; softHits: number; hardBossHits: number; softBossHits: number } {
     let hardHits = 0;
     let softHits = 0;
+    let hardBossHits = 0;
+    let softBossHits = 0;
     for (const enemy of enemies) {
-      if (enemy.attackRange <= 0) continue;
       const distance = Phaser.Math.Distance.Between(candidate.worldX, candidate.worldY, enemy.x, enemy.y);
+      if (enemy.isBoss) {
+        const hardLimit = (enemy.collisionRadius ?? 0) + PLAYER_SIZE / 2 + COOP_BOSS_HARD_CLEARANCE_PX;
+        if (distance <= hardLimit) hardBossHits += 1;
+        else if (distance <= hardLimit + COOP_BOSS_SOFT_CLEARANCE_PX) softBossHits += 1;
+        continue;
+      }
+      if (enemy.attackRange <= 0) continue;
       const hardLimit = enemy.attackRange + COOP_ENEMY_ATTACK_HARD_BUFFER_PX;
       if (distance <= hardLimit) {
         hardHits += 1;
@@ -805,6 +863,25 @@ export class PlayerManager implements OwnerVisualSource {
       if (distance <= hardLimit + COOP_ENEMY_ATTACK_SOFT_BUFFER_PX) {
         softHits += 1;
       }
+    }
+    return { hardHits, softHits, hardBossHits, softBossHits };
+  }
+
+  private countGroundFireDanger(
+    candidate: SpawnCandidate,
+    cells: readonly SpawnGroundFireCellSnapshot[],
+  ): { hardHits: number; softHits: number } {
+    let hardHits = 0;
+    let softHits = 0;
+    for (const cell of cells) {
+      const hardLimit = cell.radius + PLAYER_SIZE / 2;
+      const softLimit = hardLimit + CELL_SIZE;
+      const dx = candidate.worldX - cell.x;
+      const dy = candidate.worldY - cell.y;
+      if (Math.abs(dx) > softLimit || Math.abs(dy) > softLimit) continue;
+      const distance = Math.hypot(dx, dy);
+      if (distance <= hardLimit) hardHits += 1;
+      else if (distance <= softLimit) softHits += 1;
     }
     return { hardHits, softHits };
   }

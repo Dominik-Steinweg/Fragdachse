@@ -952,6 +952,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     scene.cameras = { main: { scrollX: 800, scrollY: 900, width: 1920, height: 1080, originX: 0, originY: 0, zoom: 1 } };
     scene.renderers = { movement: { captureFrame: noop }, gpuVfx: { update: noop } };
     vi.spyOn(bridge, 'getGamePhase').mockReturnValue('ARENA');
+    vi.spyOn(bridge, 'getRoundState').mockReturnValue(null);
     vi.spyOn(bridge, 'updateNetwork').mockImplementation(noop);
     vi.spyOn(bridge, 'isHost').mockReturnValue(false);
     expect(() => scene.update(0, 16)).toThrow(stop);
@@ -965,7 +966,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const arena = { waterSurface: water, groundSurface: { isReadyForView: () => true, getWorkingSet: () => null },
       rockOverlaySurface: { isReadyForView: () => true, getWorkingSet: () => null } };
     const camera = { scrollX: 0, scrollY: 0, width: 100, height: 100, originX: 0, originY: 0, zoom: 1 };
-    const frame = new WorldPresentationFrameBinding({ getArenaResult: () => arena,
+    const frame = new WorldPresentationFrameBinding({ getArenaResult: () => arena, getWorldLayout: () => null,
       scene: { cameras: { main: camera } },
       lighting: { setDynamicOccluderSource: () => {} },
       shadow: { getStaticSurfaceWorkingSet: () => null, isStaticReadyForView: () => true,
@@ -1007,6 +1008,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     scene.inputBindings = { updateFrame: () => { throw afterSurfaces; } };
     vi.spyOn(bridge, 'updateNetwork').mockImplementation(() => {});
     vi.spyOn(bridge, 'getGamePhase').mockReturnValue('ARENA');
+    vi.spyOn(bridge, 'getRoundState').mockReturnValue(null);
     // GPU residency is covered separately; retain real CPU preparation and ready aggregation.
     vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
     const prepare = water.prepareMasks;
