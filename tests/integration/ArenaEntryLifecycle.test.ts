@@ -22,6 +22,7 @@ import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { ArenaGenerator } from '../../src/arena/ArenaGenerator';
 import { ChunkedRenderSurface } from '../../src/arena/chunks/ChunkedRenderSurface';
 import { ArenaCountdownOverlay } from '../../src/ui/ArenaCountdownOverlay';
+import { MatchResultsOverlay } from '../../src/ui/MatchResultsOverlay';
 import { bridge } from '../../src/network/bridge';
 import * as config from '../../src/config';
 
@@ -106,6 +107,124 @@ function fixture(host = false, visibleLobby = true) {
 
 beforeEach(() => { assets.getState.mockReturnValue({ ready: true, status: 'ready' }); assets.start.mockClear(); });
 afterEach(() => vi.restoreAllMocks());
+
+describe('solo defeat restart from results', () => {
+  function restartFixture() {
+    const scene = Object.create(ArenaScene.prototype) as any;
+    const net = { phase: 'LOBBY', map: '2', acceptStart: true };
+    const result = { id: 'local', roundEndedAt: 42 };
+    const presentation = { outcome: 'defeat', mode: 'coop_defense', leaderboard: [result] };
+    const round = { status: 'defeat', endedAt: 42, roundStartTime: 1, coopDefenseMapId: '1' };
+    const commit = { currentProgress: true };
+    const runtime = {
+      isMatchTerminated: () => false, isArenaEntryProtected: () => false,
+      getIsLocalReady: () => false, setIsLocalReady: vi.fn(),
+      hostCheckReadyToStart: vi.fn(() => { if (net.acceptStart) net.phase = 'ARENA'; }),
+    };
+    Object.assign(scene, {
+      lastObservedGamePhase: 'LOBBY', baseEditor: null, arenaRuntime: runtime,
+      buildLocalCommittedLoadoutSnapshot: vi.fn(() => commit),
+      lobbyOverlay: { showReadySyncNotice: vi.fn(), setReadyButtonState: vi.fn() },
+      meta: { isMatchResultsPending: () => false, getLastMatchResultsPresentation: () => presentation,
+        hasNewRoundRewards: () => false, isAfterRoundFlowActive: () => true,
+        cancelAfterRoundFlow: vi.fn() },
+    });
+    vi.spyOn(bridge, 'isHost').mockReturnValue(true);
+    vi.spyOn(bridge, 'getGamePhase').mockImplementation(() => net.phase as any);
+    vi.spyOn(bridge, 'getGameMode').mockReturnValue('coop_defense');
+    vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('local');
+    vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue(['local']);
+    vi.spyOn(bridge, 'getRoundState').mockImplementation(() => round as any);
+    vi.spyOn(bridge, 'getRoundResults').mockReturnValue([result] as any);
+    vi.spyOn(bridge, 'setCoopDefenseMapId').mockImplementation(map => { net.map = map; });
+    vi.spyOn(bridge, 'getLobbySyncConsistency').mockReturnValue({ consistent: true, issues: [] } as any);
+    vi.spyOn(bridge, 'setLocalReadyWithCommittedLoadout').mockImplementation(() => {});
+    vi.spyOn(bridge, 'setLocalReady').mockImplementation(() => {});
+    const onContinue = vi.fn();
+    const state = { available: true, hasNewRewards: false };
+    const overlay = new MatchResultsOverlay({} as any, onContinue, undefined, {
+      getState: () => ({ available: state.available && scene.canRestartDefeatedMap(), hasNewRewards: state.hasNewRewards }),
+      restart: () => scene.restartDefeatedMap(),
+    });
+    const control = () => ({ visible: false, text: '',
+      setVisible(value: boolean) { this.visible = value; return this; },
+      setText(value: string) { this.text = value; return this; },
+    });
+    // Headless controls preserve the result screen's actual action and cleanup behavior.
+    const button = control(); const notice = control();
+    Object.assign(overlay, { visible: true, presentation, restartButton: button,
+      restartLabel: control(), restartNotice: notice });
+    scene.matchResultsOverlay = overlay;
+    overlay.refreshRestartState();
+    return { scene, overlay: overlay as any, runtime, net, state, presentation, round,
+      onContinue, commit, button, notice };
+  }
+
+  it('restarts the defeated map once with a fresh commit and skips the menu continuation', () => {
+    const f = restartFixture();
+    // The normal Ready action must still respect the after-round menu lock.
+    f.scene.onReadyToggled();
+    expect(bridge.setLocalReadyWithCommittedLoadout).not.toHaveBeenCalled();
+    f.overlay.restartMap(); f.overlay.restartMap();
+    expect(f.net).toMatchObject({ map: '1', phase: 'ARENA' });
+    expect(bridge.setLocalReadyWithCommittedLoadout).toHaveBeenCalledExactlyOnceWith(f.commit);
+    expect(f.runtime.hostCheckReadyToStart).toHaveBeenCalledOnce();
+    expect(f.scene.meta.cancelAfterRoundFlow).toHaveBeenCalledOnce();
+    expect(f.overlay.isVisible()).toBe(false);
+    expect(f.onContinue).not.toHaveBeenCalled();
+  });
+
+  it('confirms fresh rewards and clears confirmation when another player joins', () => {
+    const f = restartFixture(); f.state.hasNewRewards = true;
+    f.overlay.restartMap();
+    expect(f.notice.visible).toBe(true);
+    expect(f.runtime.hostCheckReadyToStart).not.toHaveBeenCalled();
+    vi.mocked(bridge.getConnectedPlayerIds).mockReturnValue(['local', 'remote']);
+    f.overlay.restartMap();
+    expect(f.button.visible).toBe(false);
+    expect(f.notice.visible).toBe(false);
+    vi.mocked(bridge.getConnectedPlayerIds).mockReturnValue(['local']);
+    f.overlay.restartMap();
+    expect(f.runtime.hostCheckReadyToStart).not.toHaveBeenCalled();
+    f.overlay.restartMap();
+    expect(f.net.phase).toBe('ARENA');
+  });
+
+  it.each(['quality', 'sync'])('leaves rewards and Continue intact on a blocked start (%s)', blocker => {
+    const f = restartFixture(); f.net.acceptStart = false;
+    if (blocker === 'sync') {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.mocked(bridge.getLobbySyncConsistency).mockReturnValue({ consistent: false, issues: ['roster'] } as any);
+    }
+    f.overlay.restartMap();
+    expect(f.net.phase).toBe('LOBBY');
+    expect(bridge.setLocalReady).toHaveBeenCalledWith(false);
+    expect(f.scene.meta.cancelAfterRoundFlow).not.toHaveBeenCalled();
+    expect(f.overlay.isVisible()).toBe(true);
+    expect(f.notice.visible).toBe(true);
+    f.overlay.continueToLobby();
+    expect(f.onContinue).toHaveBeenCalledOnce();
+  });
+
+  it.each(['client', 'multiplayer', 'victory', 'aborted', 'syncing', 'replay', 'stale', 'exit', 'base'])
+    ('does not expose or execute restart for %s', reason => {
+      const f = restartFixture();
+      if (reason === 'client') vi.mocked(bridge.isHost).mockReturnValue(false);
+      if (reason === 'multiplayer') vi.mocked(bridge.getConnectedPlayerIds).mockReturnValue(['local', 'remote']);
+      if (['victory', 'aborted', 'syncing'].includes(reason)) f.presentation.outcome = reason;
+      if (reason === 'replay') f.overlay.replayOnly = true;
+      if (reason === 'stale') f.round.endedAt++;
+      if (reason === 'exit') f.scene.lastObservedGamePhase = 'ARENA';
+      if (reason === 'base') f.scene.baseEditor = {};
+      f.overlay.refreshRestartState(); f.overlay.restartMap();
+      expect(f.button.visible).toBe(false);
+      expect(f.runtime.hostCheckReadyToStart).not.toHaveBeenCalled();
+      if (reason === 'replay') {
+        f.overlay.continueToLobby();
+        expect(f.onContinue).not.toHaveBeenCalled();
+      }
+    });
+});
 
 describe('loading backdrop transition', () => {
   class Surface {

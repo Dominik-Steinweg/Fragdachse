@@ -3,6 +3,8 @@ import type { RoundResult, RoundState } from '../src/network/NetworkBridge';
 import {
   createMatchItemRewardPresentation,
   createMatchProgressDelta,
+  hasNewMatchRewards,
+  type MatchResultsPresentation,
   resolvePersonalMatchOutcome,
   sortMatchLeaderboard,
 } from '../src/ui/MatchResultsModel';
@@ -30,6 +32,26 @@ function result(
 }
 
 describe('MatchResultsModel', () => {
+  it('requires restart confirmation for new rewards, but not XP alone or old unspent points', () => {
+    const before = getCoopDefenseProgressSnapshot(getCoopDefenseXpThresholdForLevel(3));
+    const after = getCoopDefenseProgressSnapshot(before.totalXp + 1);
+    const progress = createMatchProgressDelta(before, after, 1, null);
+    const presentation: MatchResultsPresentation = {
+      outcome: 'defeat', mode: 'coop_defense', modeLabel: '', mapLabel: '',
+      localPlayerId: 'local', leaderboard: [], technicalMessage: null, itemReward: null, progress,
+    };
+    expect(hasNewMatchRewards(presentation)).toBe(false);
+    for (const reward of [
+      { after: { ...after, level: before.level + 1 } }, { newSkillPoints: 1 }, { newBossPoints: 1 },
+      { unlockedMapName: 'Next map' }, { classesUnlocked: true }, { itemsUnlocked: true },
+      { persistentBaseUnlocked: true }, { persistentBaseAreaStageUnlocked: true },
+      { persistentBaseHealthReward: { bonusHp: 1, maxHp: 2 } },
+    ]) expect(hasNewMatchRewards({ ...presentation, progress: { ...progress, ...reward } })).toBe(true);
+    expect(hasNewMatchRewards({ ...presentation, progress: null, itemReward: {
+      roundEndedAt: 1, queueIndex: 1, queueSize: 1, epicGuaranteeCount: 0, options: [],
+    } })).toBe(true);
+  });
+
   it('resolves a unique free-for-all winner and a tied draw personally', () => {
     expect(resolvePersonalMatchOutcome(
       'deathmatch',

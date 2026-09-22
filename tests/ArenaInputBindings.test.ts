@@ -220,6 +220,18 @@ describe('ArenaInputBindings', () => {
     expect(onFlowFieldDebugHotkey).toHaveBeenCalledWith('flowfield_players');
   });
 
+  it('routes Escape on results to the normal continuation without leaving the lobby World', () => {
+    const { binding, handlers, hotkeys } = makeInput();
+    binding.setup();
+    vi.mocked(hotkeys.isMatchResultsVisible).mockReturnValue(true);
+    const event = { repeat: false, preventDefault: vi.fn() } as unknown as KeyboardEvent;
+    handlers.get('keydown-ESC')?.(event);
+    expect(hotkeys.hideMatchResults).toHaveBeenCalledOnce();
+    expect(hotkeys.requestLocalLobbyWorldLeave).not.toHaveBeenCalled();
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    binding.destroy();
+  });
+
   it('respektiert ESC-Blockierung und entfernt eigene Listener/Keys idempotent', () => {
     const { binding, keyboard, keys, handlers, hotkeys, debugCallback, onFlowFieldDebugHotkey } = makeInput();
     binding.setup();

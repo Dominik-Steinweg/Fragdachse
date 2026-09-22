@@ -128,6 +128,8 @@ const CONTINUE_H = 80;
 const CONTINUE_X = CONTENT_RIGHT - CONTINUE_W / 2;
 const FEEDBACK_W = 250;
 const FEEDBACK_X = CONTENT_RIGHT - CONTINUE_W - 16 - FEEDBACK_W / 2;
+const RESTART_W = 360;
+const RESTART_X = FEEDBACK_X - FEEDBACK_W / 2 - 16 - RESTART_W / 2;
 
 const LOCAL_ROW_ACCENT = COLORS.GOLD_2;
 
@@ -207,6 +209,11 @@ interface OfferPreview {
   icon: Phaser.GameObjects.Image;
 }
 
+export interface MatchResultsRestartActions {
+  getState(): { available: boolean; hasNewRewards: boolean };
+  restart(): boolean;
+}
+
 export class MatchResultsOverlay {
   private container: Phaser.GameObjects.Container | null = null;
   private forestBackground: Phaser.GameObjects.Image | null = null;
@@ -245,6 +252,11 @@ export class MatchResultsOverlay {
   private balanceFeedbackButton: Phaser.GameObjects.Image | null = null;
   private balanceFeedbackLabel: Phaser.GameObjects.Text | null = null;
   private hintText: Phaser.GameObjects.Text | null = null;
+  private restartButton: Phaser.GameObjects.Image | null = null;
+  private restartLabel: Phaser.GameObjects.Text | null = null;
+  private restartNotice: Phaser.GameObjects.Text | null = null;
+  private restartAvailable = false;
+  private restartConfirmed = false;
 
   private sparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private shardEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
@@ -273,6 +285,7 @@ export class MatchResultsOverlay {
     private readonly scene: Phaser.Scene,
     private readonly onContinue: () => void,
     private readonly onBalanceFeedback: () => void = () => undefined,
+    private readonly restartActions?: MatchResultsRestartActions,
   ) {}
 
   build(): void {
@@ -364,6 +377,7 @@ export class MatchResultsOverlay {
     this.syncing = true;
     this.sequenceComplete = true;
     this.presentation = null;
+    this.resetRestart();
 
     this.applyAccent(OUTCOME_STYLE.syncing.color);
     this.container!.setVisible(true).setAlpha(1);
@@ -422,6 +436,7 @@ export class MatchResultsOverlay {
     this.syncing = presentation.outcome === 'syncing';
     this.sequenceComplete = false;
     this.presentation = presentation;
+    this.resetRestart();
 
     const style = OUTCOME_STYLE[presentation.outcome];
     this.applyAccent(style.color);
@@ -450,6 +465,53 @@ export class MatchResultsOverlay {
     this.populateSummary(presentation);
     this.startIdleAnimations(style.color, false);
     this.startSequence(style);
+    this.refreshRestartState();
+  }
+
+  /** Scene owns eligibility; this layer additionally excludes historical results. */
+  refreshRestartState(): void {
+    this.restartAvailable = this.visible && !this.syncing && !this.replayOnly
+      && this.presentation?.outcome === 'defeat' && this.presentation.mode === 'coop_defense'
+      && (this.restartActions?.getState().available ?? false);
+    this.restartButton?.setVisible(this.restartAvailable);
+    this.restartLabel?.setVisible(this.restartAvailable);
+    if (!this.restartAvailable) {
+      this.restartConfirmed = false;
+      this.restartNotice?.setVisible(false);
+    }
+    this.restartLabel?.setText(t(this.restartConfirmed ? 'ui.results.restartConfirm' : 'ui.results.restart'));
+  }
+
+  private resetRestart(): void {
+    this.restartAvailable = false;
+    this.restartConfirmed = false;
+    this.restartButton?.setVisible(false);
+    this.restartLabel?.setVisible(false);
+    this.restartNotice?.setVisible(false);
+  }
+
+  private restartMap(): void {
+    this.refreshRestartState();
+    if (!this.restartAvailable || !this.restartActions) return;
+    if (!this.restartConfirmed && this.restartActions.getState().hasNewRewards) {
+      this.restartConfirmed = true;
+      this.showRestartNotice('ui.results.restartRewardsWarning');
+      this.refreshRestartState();
+      return;
+    }
+    if (this.restartActions.restart()) {
+      // Do not run onContinue: that would open the after-round menus and reset Ready.
+      this.hide();
+    } else {
+      this.restartConfirmed = false;
+      this.refreshRestartState();
+      if (this.restartAvailable) this.showRestartNotice('ui.results.restartBlocked');
+    }
+  }
+
+  private showRestartNotice(key: string): void {
+    this.hintText?.setVisible(false);
+    this.restartNotice?.setText(t(key)).setVisible(true);
   }
 
   isVisible(): boolean {
@@ -468,6 +530,7 @@ export class MatchResultsOverlay {
   }
 
   hide(): void {
+    this.resetRestart();
     this.rewardTooltip?.hide();
     this.stopSequence();
     this.stopIdleAnimations();
@@ -479,6 +542,7 @@ export class MatchResultsOverlay {
   }
 
   destroy(): void {
+    this.resetRestart();
     this.rewardTooltip?.destroy();
     this.rewardTooltip = null;
     this.stopSequence();
@@ -523,6 +587,9 @@ export class MatchResultsOverlay {
     this.balanceFeedbackButton = null;
     this.balanceFeedbackLabel = null;
     this.hintText = null;
+    this.restartButton = null;
+    this.restartLabel = null;
+    this.restartNotice = null;
     this.visible = false;
     this.balanceFeedbackAvailable = false;
   }
@@ -827,7 +894,25 @@ export class MatchResultsOverlay {
     });
     attachHoverEffect(this.scene, this.balanceFeedbackButton, this.balanceFeedbackLabel);
 
-    return this.scene.add.container(0, 0, [this.hintText, this.balanceFeedbackButton, this.balanceFeedbackLabel, this.continueButton, this.continueLabel])
+    this.restartButton = this.scene.add.image(RESTART_X, FOOTER_Y, ensureGlossyButtonTexture(
+      this.scene, '_mro_restart', RESTART_W, CONTINUE_H, INTENT.secondary.fill, INTENT.secondary.stroke,
+    )).setScrollFactor(0).setInteractive({ cursor: BUTTON_CURSOR }).setVisible(false);
+    this.restartLabel = this.scene.add.text(RESTART_X, FOOTER_Y, t('ui.results.restart'), textStyle('subtitle', {
+      color: INTENT.secondary.label,
+    })).setOrigin(0.5).setScrollFactor(0).setVisible(false);
+    this.restartButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+      event?.stopPropagation();
+      activateUi(this.scene, () => this.restartMap());
+    });
+    attachHoverEffect(this.scene, this.restartButton, this.restartLabel);
+    this.restartNotice = this.scene.add.text(CONTENT_LEFT + 6, FOOTER_Y, '', {
+      fontFamily: FONT_MONO, fontSize: '16px', color: toCssColor(COLORS.GOLD_2),
+      wordWrap: { width: RESTART_X - RESTART_W / 2 - CONTENT_LEFT - 30 },
+    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
+
+    return this.scene.add.container(0, 0, [this.hintText, this.restartNotice,
+      this.restartButton, this.restartLabel, this.balanceFeedbackButton, this.balanceFeedbackLabel,
+      this.continueButton, this.continueLabel])
       .setScrollFactor(0);
   }
 

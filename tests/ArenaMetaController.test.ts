@@ -105,6 +105,41 @@ function makeInput(): {
 }
 
 describe('ArenaMetaController', () => {
+  it.each([false, true])('detects new round rewards and cancels even deferred menus without changing progress (levelUp=%s)', levelUp => {
+    const { controller, store, resultRead, presentation, session } = makeInput();
+    const progress = getStoredCoopDefenseProgress();
+    progress.persistentBaseRewardUnlocks = ['base_spore_turret'];
+    vi.mocked(store.getProgress).mockImplementation(() => structuredClone(progress));
+    vi.mocked(store.addCoopDefenseXp).mockImplementation(xp => { progress.totalXp += xp; return progress.totalXp; });
+    vi.mocked(store.markCoopDefenseRoundProcessed).mockImplementation(endedAt => { progress.lastProcessedRoundEndedAt = endedAt; });
+    controller.refresh();
+    controller.captureRoundRewardBaseline(1);
+    controller.beginMatchResults();
+    vi.mocked(resultRead.getRoundResults).mockReturnValue([{
+      id: 'local', name: 'Local', colorHex: 0xffffff, frags: 0, teamId: null,
+      roundEndedAt: 42, gameMode: 'coop_defense', mapName: 'Map',
+      sharedXp: levelUp ? getCoopDefenseXpThresholdForLevel(2) : 1,
+    }]);
+    vi.mocked(resultRead.getRoundState).mockReturnValue({ status: 'defeat', roundStartTime: 1, endedAt: 42, coopDefenseMapId: '1' });
+    controller.tryFinalizeMatchResults();
+    expect(controller.hasNewRoundRewards()).toBe(levelUp);
+    // A grant received after the results were built still requires confirmation; old grants do not.
+    progress.persistentBaseRewardUnlocks = ['base_spore_turret', 'base_health_pedestal'];
+    expect(controller.hasNewRoundRewards()).toBe(true);
+    vi.mocked(session.isAuthoritativeLocalReady).mockReturnValue(true);
+    controller.startAfterRoundFlow();
+    const saved = structuredClone(progress);
+    controller.cancelAfterRoundFlow();
+    vi.mocked(session.isAuthoritativeLocalReady).mockReturnValue(false);
+    controller.refreshLobbyProjection();
+    controller.startAfterRoundFlow();
+    expect(controller.isAfterRoundFlowActive()).toBe(false);
+    expect(presentation.showUpgradeOverlay).not.toHaveBeenCalled();
+    expect(presentation.showItemRewardOverlay).not.toHaveBeenCalled();
+    expect(presentation.showBaseOverlay).not.toHaveBeenCalled();
+    expect(progress).toEqual(saved);
+  });
+
   it.each([true, false])('offers upgrades after results and a base reward only to the host (host=%s)', host => {
     const { controller, store, resultRead, presentation, session } = makeInput();
     vi.mocked(session.isHost).mockReturnValue(host);

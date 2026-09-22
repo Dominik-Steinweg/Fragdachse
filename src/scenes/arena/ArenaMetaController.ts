@@ -50,6 +50,7 @@ import type { CoopDefenseProgressPreferences } from '../../utils/localPreference
 import {
   createMatchItemRewardPresentation,
   createMatchProgressDelta,
+  hasNewMatchRewards,
   resolveCoopDefenseEpicGuaranteeCount,
   resolvePersonalMatchOutcome,
   sortMatchLeaderboard,
@@ -788,6 +789,18 @@ export class ArenaMetaController {
   }
 
   isAfterRoundFlowActive(): boolean { return this.afterRound.active; }
+
+  hasNewRoundRewards(): boolean {
+    const presentation = this.lastMatchResultsPresentation;
+    if (this.destroyed || this.matchResultsPending || !presentation) return false;
+    if (hasNewMatchRewards(presentation)) return true;
+    // Grants may arrive after the results were presented. Only compare a captured round.
+    const roundState = this.input.resultRead.getRoundState();
+    return this.rewardBaselineRoundStartedAt !== null
+      && this.rewardBaselineRoundStartedAt === roundState?.roundStartTime
+      && this.input.progressStore.getProgress().persistentBaseRewardUnlocks
+        .some(id => !this.baseRewardIdsBeforeRound.includes(id));
+  }
 
   startAfterRoundFlow(): void {
     if (this.destroyed) return;

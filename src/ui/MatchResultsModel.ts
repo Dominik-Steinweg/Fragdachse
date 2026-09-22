@@ -84,6 +84,19 @@ export interface MatchResultsPresentation {
   itemReward: MatchItemRewardPresentation | null;
 }
 
+/** XP alone and rewards from older rounds do not require a restart confirmation. */
+export function hasNewMatchRewards(presentation: MatchResultsPresentation): boolean {
+  const progress = presentation.progress;
+  return presentation.itemReward !== null || !!(progress && (
+    progress.after.level > progress.before.level
+    || progress.newSkillPoints > 0 || progress.newBossPoints > 0
+    || progress.unlockedMapName !== null || progress.classesUnlocked
+    || progress.newlyUnlockedClassIds.length > 0 || progress.itemsUnlocked
+    || progress.persistentBaseUnlocked || progress.persistentBaseAreaStageUnlocked
+    || progress.persistentBaseHealthReward || progress.newlyUnlockedBaseRewardIds.length > 0
+  ));
+}
+
 export function sortMatchLeaderboard(results: readonly RoundResult[]): RoundResult[] {
   return [...results].sort((a, b) => {
     if (typeof a.teamScore === 'number' || typeof b.teamScore === 'number') {

@@ -936,7 +936,13 @@ export class ArenaScene extends Phaser.Scene {
       // Lobby frei, auch wenn ihr Aufbau noch laeuft; Ready bleibt weiterhin false.
       this.lobbyOverlay.setReadyButtonState(false);
       this.meta?.startAfterRoundFlow();
-    }, () => this.openBalanceFeedback());
+    }, () => this.openBalanceFeedback(), {
+      getState: () => ({
+        available: this.canRestartDefeatedMap(),
+        hasNewRewards: this.meta?.hasNewRoundRewards() ?? false,
+      }),
+      restart: () => this.restartDefeatedMap(),
+    });
     this.matchResultsOverlay.build();
     yield "results-overlay";
     this.roomStatisticsOverlay = new RoomStatisticsOverlay(this);
@@ -1843,6 +1849,7 @@ export class ArenaScene extends Phaser.Scene {
     returningFromWeaponBalanceLab: boolean,
     diagnosticsFrame: ArenaDiagnosticsFrame | null,
   ): void {
+    this.matchResultsOverlay?.refreshRestartState();
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
     // Weltlicht der Lobby haengt an der Raumphase, nicht an der Oberflaeche: wer das
     // Testgelaende betritt, sieht dieselbe host-autoritative Uhrzeit wie alle anderen.
@@ -2177,20 +2184,8 @@ export class ArenaScene extends Phaser.Scene {
     if (this.baseEditor || this.meta?.isAfterRoundFlowActive()) return;
     const nowReady = !this.arenaRuntime.getIsLocalReady();
     if (nowReady) {
-      // Frühwarnung gegen Lobby-Desync (Bug A/B): Nur bereit machen, wenn dieser Client mit dem
-      // host-autoritativen Lobby-Stand aufgeschlossen ist (Spieler-Roster, Modus, Coop-Map). Sonst
-      // könnte er einen Mitspieler nicht rendern oder ein für den Modus ungültiges Loadout committen.
-      // Weiches Blockieren (kein Dauerblock) + Logging; löst sich, sobald der Stand konvergiert.
-      const lobbySync = bridge.getLobbySyncConsistency();
-      if (!lobbySync.consistent) {
-        console.warn(
-          `[LobbySync] BEREIT blockiert – lokaler Stand weicht vom Host ab: ${lobbySync.issues.join(' | ')}. `
-          + `Lokal bekannt: [${bridge.getConnectedPlayerIds().join(', ')}].`,
-        );
-        this.lobbyOverlay.showReadySyncNotice();
-        return;
-      }
-      bridge.setLocalReadyWithCommittedLoadout(this.buildLocalCommittedLoadoutSnapshot());
+      this.commitLocalReady();
+      return;
     } else {
       bridge.setLocalReady(false);
       if (this.weaponBalanceLabRuntime.isActive() && isWeaponBalanceLabMapId(bridge.getCoopDefenseMapId())) {
@@ -2198,6 +2193,55 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
     this.arenaRuntime.setIsLocalReady(nowReady);
+  }
+
+  /** Shared Ready validation; menu guards remain with the initiating action. */
+  private commitLocalReady(): boolean {
+    const lobbySync = bridge.getLobbySyncConsistency();
+    if (!lobbySync.consistent) {
+      console.warn(
+        `[LobbySync] BEREIT blockiert – lokaler Stand weicht vom Host ab: ${lobbySync.issues.join(' | ')}. `
+        + `Lokal bekannt: [${bridge.getConnectedPlayerIds().join(', ')}].`,
+      );
+      this.lobbyOverlay.showReadySyncNotice();
+      return false;
+    }
+    bridge.setLocalReadyWithCommittedLoadout(this.buildLocalCommittedLoadoutSnapshot());
+    this.arenaRuntime.setIsLocalReady(true);
+    return true;
+  }
+
+  private canRestartDefeatedMap(): boolean {
+    if (!this.matchResultsOverlay?.isVisible() || this.meta?.isMatchResultsPending()
+      || this.baseEditor || this.lastObservedGamePhase !== 'LOBBY'
+      || bridge.getGamePhase() !== 'LOBBY' || !bridge.isHost()
+      || this.arenaRuntime.isMatchTerminated() || this.arenaRuntime.isArenaEntryProtected()
+      || !isCoopDefenseMode(bridge.getGameMode())) return false;
+    const players = bridge.getConnectedPlayerIds();
+    if (players.length !== 1 || players[0] !== bridge.getLocalPlayerId()) return false;
+    const presentation = this.meta?.getLastMatchResultsPresentation();
+    const round = bridge.getRoundState();
+    const results = bridge.getRoundResults();
+    return presentation?.outcome === 'defeat' && isCoopDefenseMode(presentation.mode)
+      && round?.status === 'defeat' && !!round.coopDefenseMapId && !!round.endedAt
+      && presentation.leaderboard.length > 0 && !!results?.length
+      && presentation.leaderboard.every(result => result.roundEndedAt === round.endedAt)
+      && results.every(result => result.roundEndedAt === round.endedAt);
+  }
+
+  private restartDefeatedMap(): boolean {
+    if (!this.canRestartDefeatedMap()) return false;
+    bridge.setCoopDefenseMapId(bridge.getRoundState()!.coopDefenseMapId!);
+    if (this.commitLocalReady()) this.arenaRuntime.hostCheckReadyToStart();
+    if (bridge.getGamePhase() !== 'ARENA') {
+      // No queued retry: normal Continue must still be able to show all earned rewards.
+      bridge.setLocalReady(false);
+      this.arenaRuntime.setIsLocalReady(false);
+      this.lobbyOverlay.setReadyButtonState(false);
+      return false;
+    }
+    this.meta?.cancelAfterRoundFlow();
+    return true;
   }
 
   /** Hält die lokale Lobby-Projektion nach einer Aktion im Coop-Debug-Overlay synchron. */
