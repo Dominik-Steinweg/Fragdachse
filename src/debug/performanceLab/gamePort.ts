@@ -10,6 +10,8 @@ import { quantizeAngle } from '../../utils/angle';
 import { REFERENCE_SEED } from './referenceMap';
 import { getVisibleWorldView, isWorldPointInsideView } from '../../ui/HostileBaseIndicator';
 import { PERFORMANCE_FIXTURE as fixture } from './fixtures';
+import { CELL_SIZE } from '../../config';
+import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
 
 export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRuntime,
   players: PlayerManager, diagnostics: ArenaDiagnosticsController,
@@ -67,7 +69,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       nextResourceAt = performance.now() + fixture.resourceRefillIntervalMs;
     }
   };
-  const observe = () => {
+  const observe = (measureVoidFire = false) => {
     const now = performance.now();
     peak('projectilePeak', flow.getWorldProjectileRuntime()?.getDebugActiveProjectileCount() ?? 0);
     if (flow.getWorldProjectileRuntime()?.hasActiveBfgProjectile()) peak('bfgObserved', 1);
@@ -78,6 +80,23 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (window.__FD_PERF__) window.__FD_PERF__.detail = { ...counters, mapEvents: state.mapEvents };
     peak('smokePeak', state.smoke); peak('meteorPeak', state.meteors); peak('nukePeak', state.nukes);
     peak('burningCellsPeak', state.burningCells);
+    if (preparedId === 'hazards.void-fire') {
+      const view = getVisibleWorldView(scene.cameras.main);
+      let total = 0, visible = 0;
+      for (const cell of state.burningGround.cells) {
+        if (cell.visualStyle !== 'void') continue;
+        total++;
+        if (isWorldPointInsideView((cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE,
+          (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE, view)) visible++;
+      }
+      counters.voidFireCells = total;
+      peak('voidFireCellsPeak', total); peak('visibleVoidFireCellsPeak', visible);
+      if (measureVoidFire) {
+        add('voidFireMeasurementSamples');
+        counters.voidFireCellsMin = Math.min(counters.voidFireCellsMin ?? total, total);
+        counters.visibleVoidFireCellsMin = Math.min(counters.visibleVoidFireCellsMin ?? visible, visible);
+      }
+    }
     peak('activeLightsPeak', state.lights.activeLights); peak('renderedLightsPeak', state.lights.renderedLights);
     if (preparedId.startsWith('combat.')) {
       const waterProbe = point(86, 72);
@@ -137,8 +156,10 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     Object.assign(counters, flow.getScenarioEnvironmentCounts());
     stopped = false; lastTrainY = null; lastObservationAt = 0; caseStart = performance.now();
     flow.navigationLabPort.setScenarioActive(true);
-    // The environment case keeps the ordinary authored event scheduler (including the train).
-    if (test.kind === 'environment') flow.navigationLabPort.setScenarioActive(false);
+    // Authored environment/hazard cases keep the ordinary event scheduler.
+    if (test.kind === 'environment' || test.kind === 'hazard') flow.navigationLabPort.setScenarioActive(false);
+    if (test.kind === 'hazard') counters.expectedVoidFireCells = fixture.voidFire.area.widthCells
+      * fixture.voidFire.area.heightCells * (CELL_SIZE / GROUND_FIRE_CELL_SIZE) ** 2;
     const snapshot = flow.navigationLabPort.getGeometry();
     if (!snapshot) throw new Error('Reference geometry unavailable');
     geometry = new NavigationGeometry(snapshot);
@@ -198,6 +219,12 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (prepared) return true;
     const now = performance.now();
     observe();
+    if (test.kind === 'hazard' && counters.voidFireCells !== counters.expectedVoidFireCells) {
+      if (now - preparationAt > fixture.voidFire.preparationTimeoutMs) {
+        throw new Error(`${test.id}: full VoidFire load missing (${counters.voidFireCells ?? 0}/${counters.expectedVoidFireCells})`);
+      }
+      return false;
+    }
     if (test.kind === 'pickup' && !temporaryId) {
       // Normal proximity pickup can already have collected the authored item on this frame.
       temporaryId = bridge.getPlayerTemporaryUtilityInstances(localId()).find(p => p.utilityId === test.itemId)?.instanceId;
@@ -330,7 +357,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         event('performance:recovery-late-spawns', { count });
         flow.navigationLabPort.removeEnemies();
       }
-      maintainTargets(); observe();
+      maintainTargets(); observe(test.kind === 'hazard' && stage === 'measure');
       if (stage === 'tail') { input(); return; }
       if ((test.kind === 'construction' || test.kind === 'combat') && builds === 4) startSiege();
       if (test.kind === 'pickup' && elapsed > 12_000) {
@@ -382,6 +409,11 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     readSubphases: () => subphases,
     verifyCase(test) {
       observe();
+      if (test.kind === 'hazard' && (!(counters.voidFireMeasurementSamples > 0)
+        || counters.voidFireCellsMin !== counters.expectedVoidFireCells
+        || counters.voidFireCells !== counters.expectedVoidFireCells || !(counters.visibleVoidFireCellsMin > 0))) {
+        throw new Error(`${test.id}: sustained visible VoidFire load missing: ${JSON.stringify(counters)}`);
+      }
       for (const kind of test.requiredDamageKinds ?? []) {
         if (!(counters[`damage.${kind}`] > 0)) throw new Error(`${test.id}: required ${kind} damage was not observed`);
       }

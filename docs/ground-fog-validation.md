@@ -4,6 +4,9 @@ Erstabnahme: 21. September 2026, Arbeitsstand auf Basis von `3356afb4`.
 Bedienung und Architektur: [Bodennebel-Lab](ground-fog-lab.md).
 Einzelne Messläufe: [Benchmarkdaten](ground-fog-benchmark.json).
 
+Aktuelle Überarbeitung ab `f16aa9ed`: [Dauerfeuer, Strömungswaffen und Zug](ground-fog-load-validation.md).
+Die folgenden Messungen und Tile-Aussagen dokumentieren die früheren Arbeitsstände.
+
 ## Nachabstimmung am 22. September 2026
 
 Ausgangspunkt dieser Änderung ist `ec0dcbaf` (Fog 0.1). Lauf, Dash und Projektilreaktionen

@@ -94,8 +94,8 @@ interface BurrowEmitterVisual {
 }
 
 export interface GroundFogCombatSink {
-  hitscan(x: number, y: number, endX: number, endY: number, thickness: number): void;
-  melee(x: number, y: number, angle: number, arcDegrees: number, range: number): void;
+  hitscan(x: number, y: number, endX: number, endY: number, thickness: number, weaponSourceId?: string): void;
+  melee(x: number, y: number, angle: number, arcDegrees: number, range: number, weaponSourceId?: string): void;
 }
 
 /**
@@ -393,7 +393,7 @@ export class EffectSystem implements EnemyVisualSink {
       }
     });
 
-    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, visualStartX, visualStartY) => {
+    this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, visualStartX, visualStartY, weaponSourceId) => {
       this.playSyncedHitscanTracer({
         startX,
         startY,
@@ -408,6 +408,7 @@ export class EffectSystem implements EnemyVisualSink {
         shotAudioKey,
         visualStartX,
         visualStartY,
+        weaponSourceId,
       });
     });
 
@@ -1194,12 +1195,13 @@ export class EffectSystem implements EnemyVisualSink {
     impactKind: HitscanImpactKind = 'environment',
     visualPreset: HitscanVisualPreset = 'default',
     beamId?: string,
+    weaponSourceId?: string,
   ): void {
     this.ensureTextures();
     const clippedEnd = clipPointToArenaRay(startX, startY, endX, endY);
     const renderEndX = clippedEnd.x;
     const renderEndY = clippedEnd.y;
-    this.groundFogCombat?.hitscan(startX, startY, renderEndX, renderEndY, thickness);
+    this.groundFogCombat?.hitscan(startX, startY, renderEndX, renderEndY, thickness, weaponSourceId);
     const clippedDx = renderEndX - endX;
     const clippedDy = renderEndY - endY;
     const clippedByArena = (clippedDx * clippedDx) + (clippedDy * clippedDy) > 0.25;
@@ -1257,6 +1259,7 @@ export class EffectSystem implements EnemyVisualSink {
     impactKind: HitscanImpactKind = 'environment',
     visualPreset: HitscanVisualPreset = 'default',
     shotAudioKey?: string,
+    weaponSourceId?: string,
   ): void {
     this.pendingPredictedTracerIds.set(shotId, this.scene.time.now + 1000);
     this.audioSystem?.playSound(shotAudioKey, startX, startY, this.bridge.getLocalPlayerId());
@@ -1270,6 +1273,7 @@ export class EffectSystem implements EnemyVisualSink {
       impactKind,
       visualPreset,
       this.bridge.getLocalPlayerId(),
+      weaponSourceId,
     );
   }
 
@@ -1289,6 +1293,7 @@ export class EffectSystem implements EnemyVisualSink {
       impactKind ?? 'environment',
       visualPreset,
       shooterId,
+      trace.weaponSourceId,
     );
   }
 
@@ -1400,8 +1405,9 @@ export class EffectSystem implements EnemyVisualSink {
     arcDegrees:  number,
     range:       number,
     playerColor: number,
+    weaponSourceId?: string,
   ): void {
-    this.groundFogCombat?.melee(x, y, angle, arcDegrees, range);
+    this.groundFogCombat?.melee(x, y, angle, arcDegrees, range, weaponSourceId);
     const palette    = getBeamPaletteForPlayerColor(playerColor);
     const halfArcRad = (arcDegrees * Math.PI / 180) / 2;
     const startAngle = angle - halfArcRad;
@@ -1478,7 +1484,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.audioSystem?.playSound(swing.shotAudioKey, swing.x, swing.y, swing.shooterId);
 
     if (swing.visualPreset === 'bite' && this.biteRenderer) {
-      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range);
+      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
       this.biteRenderer.playSwing(
         swing.x,
         swing.y,
@@ -1495,7 +1501,7 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     if (swing.visualPreset === 'zeus_taser' && this.zeusTaserRenderer) {
-      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range);
+      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
       // Nur der Taser leuchtet. Ein Biss und der Standard-Swing sind mechanische
       // Nahkampfschläge ohne eigene Emission und bekommen bewusst kein Licht.
       this.lighting?.pulse('electricArc', swing.x, swing.y, {
@@ -1519,6 +1525,7 @@ export class EffectSystem implements EnemyVisualSink {
       swing.x, swing.y,
       swing.angle, swing.arcDegrees, swing.range,
       swing.color,
+      swing.weaponSourceId,
     );
   }
 

@@ -2710,6 +2710,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
 
     this.queueHitscanTrace({
+      weaponSourceId: sourceId,
       startX: Math.round(startX),
       startY: Math.round(startY),
       endX: Math.round(trace.endX),
@@ -3399,7 +3400,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     );
 
     // Swing-VFX für alle Clients in die Replikations-Queue einreihen
-    this.queueMeleeSwing({ x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY, bloodEffectMultiplier, shotAudioKey });
+    this.queueMeleeSwing({ weaponSourceId: sourceId, x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY, bloodEffectMultiplier, shotAudioKey });
     return true;
   }
 
@@ -3816,7 +3817,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.bridge.broadcastHitscanTracer(
       trace.startX, trace.startY, trace.endX, trace.endY,
       trace.color, trace.thickness, trace.impactKind, trace.visualPreset, trace.shooterId, trace.shotId, trace.shotAudioKey,
-      trace.visualStartX, trace.visualStartY,
+      trace.visualStartX, trace.visualStartY, trace.weaponSourceId,
     );
     // Lokale Wiedergabe auf dem Host (EffectSystem bekommt das RPC auch)
   }

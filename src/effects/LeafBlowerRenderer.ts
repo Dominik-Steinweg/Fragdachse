@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { getLeafBlowerVisualSize } from './ProjectileVisualSize';
 import { CELL_SIZE } from '../config';
 import type { ArenaLayout } from '../types';
 import { createLeafBlowerMaterialSampler, type LeafBlowerMaterial, type LeafBlowerMaterialSampler } from './LeafBlowerMaterial';
@@ -22,8 +23,6 @@ const DUST_PARTICLE_LIFESPAN_MAX_MS = 650;
 const DUST_PARTICLE_ALPHA = 0.62;
 const GRASS_BROWN_CHANCE = 0.05;
 const DIRT_BROWN_CHANCE = 0.90;
-const LEAF_BLOWER_VISUAL_SIZE_SCALE = 4.7;
-const LEAF_BLOWER_VISUAL_SIZE_OFFSET = -12;
 
 const SPAWN_CIRCLE = new Phaser.Geom.Circle();
 const SPAWN_POINT = new Phaser.Math.Vector2();
@@ -214,7 +213,7 @@ export class LeafBlowerRenderer {
     const system = this.gpuVfx;
     if (!system) return;
 
-    const visualSize = getVisualSize(visual.size);
+    const visualSize = getLeafBlowerVisualSize(visual.size);
     const speed = Math.max(1, Math.hypot(visual.vx, visual.vy));
     const dirX = visual.vx / speed;
     const dirY = visual.vy / speed;
@@ -256,7 +255,7 @@ export class LeafBlowerRenderer {
     const snapshot = this.terrainSnapshot;
     if (!system || !snapshot) return;
 
-    const visualSize = getVisualSize(visual.size);
+    const visualSize = getLeafBlowerVisualSize(visual.size);
     const speed = Math.max(1, Math.hypot(visual.vx, visual.vy));
     const dirX = visual.vx / speed;
     const dirY = visual.vy / speed;
@@ -330,8 +329,4 @@ function compensateChannel(visible: number, source: number): number {
 
 function pickLeafTint(brownChance: number): number {
   return pickGpuVfxTint(Math.random() < brownChance ? LEAF_BROWN_TINTS : LEAF_GREEN_TINTS);
-}
-
-function getVisualSize(size: number): number {
-  return Math.max(size * LEAF_BLOWER_VISUAL_SIZE_SCALE + LEAF_BLOWER_VISUAL_SIZE_OFFSET, size);
 }

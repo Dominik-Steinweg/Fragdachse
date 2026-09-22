@@ -211,37 +211,49 @@ void main() {
 }
 `;
 
-export const FOG_TRAIL_FRAGMENT = `
-#pragma phaserTemplate(shaderName)
+export const FOG_TRAIL_VERTEX = `
 precision highp float;
-varying vec2 outTexCoord;
-uniform sampler2D uCommands,uBins;
-uniform vec2 uWorldSize,uViewOrigin,uViewSize;
-uniform float uTrailTime,uTrailCols,uTrailBinsHeight,uReaction;
+attribute vec2 inPosition,inTexCoord;
+uniform vec2 uViewOrigin,uViewSize;
+varying vec2 outWorld;
+varying float outIndex,outArc;
+void main() {
+ outWorld=inPosition;outIndex=inTexCoord.x;outArc=inTexCoord.y;
+ gl_Position=vec4((inPosition-uViewOrigin)/uViewSize*vec2(2.,-2.)+vec2(-1.,1.),0.,1.);
+}
+`;
+export const FOG_TRAIL_FRAGMENT = `
+precision highp float;
+varying vec2 outWorld;
+varying float outIndex,outArc;
+uniform sampler2D uCommands;
+uniform vec2 uWorldSize;
+uniform float uTrailTime,uReaction;
 float decode(vec2 v) {return dot(v,vec2(65280.,255.));}
 void main() {
- vec2 world=uViewOrigin+vec2(outTexCoord.x,1.-outTexCoord.y)*uViewSize;
- if(any(lessThan(world,vec2(0))) || any(greaterThanEqual(world,uWorldSize))) {gl_FragColor=vec4(0);return;}
- vec2 tile=floor(world/${FOG.trailTile}.);
- float base=(tile.y*uTrailCols+tile.x)*${FOG.trailsPerTile}.;
- float amount=0.;
- for(int i=0;i<${FOG.trailsPerTile};i++) {
-   float address=base+float(i);
-   float index=decode(texture2D(uBins,vec2((mod(address,1024.)+.5)/1024.,(floor(address/1024.)+.5)/uTrailBinsHeight)).rg)-1.;
-   if(index<0.) break;
-   float x=(index+.5)/${FOG.trailCapacity}.;
-   vec4 a=texture2D(uCommands,vec2(x,.125)),b=texture2D(uCommands,vec2(x,.375)),c=texture2D(uCommands,vec2(x,.625));
-   float strength=texture2D(uCommands,vec2(x,.875)).r;
-   vec2 start=vec2(decode(a.rg),decode(a.ba))/65535.*uWorldSize,end=vec2(decode(b.rg),decode(b.ba))/65535.*uWorldSize;
-   vec2 line=end-start;
-   float t=clamp(dot(world-start,line)/max(.001,dot(line,line)),0.,1.);
-   float distance=length(world-mix(start,end,t));
-   float duration=mod(decode(c.ba)-decode(c.rg)+60000.,60000.);
-   float age=mod(uTrailTime-decode(c.rg)-t*duration+60000.,60000.);
-   // max joins overlapping capsules without dark circular knots at frame boundaries.
-   amount=max(amount,(1.-smoothstep(1.,${FOG.trailRadius}.,distance))*exp(-age/${FOG.trailDecayMs}.)
-     *(1.-smoothstep(${FOG.trailMs * .7}.,${FOG.trailMs}.,age))*strength*4.5*uReaction);
+ float index=floor(outIndex+.5);
+ vec2 uv=vec2((mod(index,${FOG.trailTextureWidth}.)+.5)/${FOG.trailTextureWidth}.,(floor(index/${FOG.trailTextureWidth}.)*5.+.5)/${FOG.trailCapacity / FOG.trailTextureWidth * 5}.);
+ vec2 row=vec2(0.,1./${FOG.trailCapacity / FOG.trailTextureWidth * 5}.);
+ vec4 a=texture2D(uCommands,uv),b=texture2D(uCommands,uv+row),c=texture2D(uCommands,uv+row*2.);
+ vec4 profile=texture2D(uCommands,uv+row*3.),radii=texture2D(uCommands,uv+row*4.);
+ vec2 start=vec2(decode(a.rg),decode(a.ba))/65535.*uWorldSize,end=vec2(decode(b.rg),decode(b.ba))/65535.*uWorldSize;
+ vec2 line=end-start;
+ float t=clamp(dot(outWorld-start,line)/max(.001,dot(line,line)),0.,1.);
+ float radius=mix(decode(radii.rg),decode(radii.ba),t)/16.;
+ float distance=length(outWorld-mix(start,end,t));
+ float sector=1.;
+ if(outArc>0.) {
+   vec2 delta=outWorld-start;
+   distance=length(delta);t=0.;
+   float facing=dot(delta,line)/max(.001,distance*length(line));
+   float halfAngle=radians(outArc*.5);
+   sector=outArc>=359.9?1.:smoothstep(cos(halfAngle),cos(max(0.,halfAngle-.08)),facing);
  }
+ float duration=mod(decode(c.ba)-decode(c.rg)+60000.,60000.);
+ float age=mod(uTrailTime-decode(c.rg)-t*duration+60000.,60000.);
+ float life=decode(profile.gb),decay=max(1.,profile.a*life);
+ float amount=sector*(1.-smoothstep(radius*.2,max(.01,radius),distance))*exp(-age/decay)
+   *(1.-smoothstep(life*.7,life,age))*profile.r*4.5*uReaction;
  gl_FragColor=vec4(min(.90,1.-exp(-amount)),0,0,1);
 }
 `;

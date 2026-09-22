@@ -11,6 +11,7 @@ import type {
 
 /** Nichtautoritativer, rendererfreier Zustand eines replizierten Projectiles. */
 export interface ProjectileClientReplicaState {
+  readonly weaponSourceId?: string;
   readonly serverX: number;
   readonly serverY: number;
   readonly vx: number;
@@ -167,6 +168,7 @@ function createReplicaState(
     color: projectile.color,
     receivedAt,
     style: projectile.style,
+    weaponSourceId: projectile.weaponSourceId,
     bulletVisualPreset: projectile.bulletVisualPreset,
     grenadeVisualPreset: projectile.grenadeVisualPreset,
     energyBallVariant: projectile.energyBallVariant,

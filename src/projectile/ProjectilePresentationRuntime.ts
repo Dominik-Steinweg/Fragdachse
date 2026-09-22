@@ -1,5 +1,5 @@
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
-import { ProjectilePathCursor, type ProjectileTrailSegment } from './ProjectileFlightPath';
+import { ProjectilePathCursor, type ProjectilePathPoint, type ProjectileTrailSegment } from './ProjectileFlightPath';
 import { tracerBounceDebug } from '../effects/TracerBounceDebugSettings';
 import { TracerBounceDebugOverlay } from '../effects/TracerBounceDebugOverlay';
 import { ProjectileFlightPlayback } from './ProjectileFlightPlayback';
@@ -43,6 +43,7 @@ import {
 export type ProjectilePresentationState = Readonly<Pick<SyncedProjectile,
   'id'
   | 'ownerId'
+  | 'weaponSourceId'
   | 'x'
   | 'y'
   | 'vx'
@@ -103,10 +104,12 @@ export interface ProjectilePresentationRenderers {
  * erzeugt aber selbst keine Gameplay-Entscheidung und schreibt keinen Runtime-State zurück.
  */
 export class ProjectilePresentationRuntime {
-  private groundFogSegment: ((segment: ProjectileTrailSegment, size: number, style: string, sourceId: number) => void) | null = null;
-  bindGroundFogSegments(sink: (segment: ProjectileTrailSegment, size: number, style: string, sourceId: number) => void): () => void {
+  private groundFogSegment: ((segment: ProjectileTrailSegment, size: number, style: string, sourceId: number, weaponSourceId?: string) => void) | null = null;
+  private readonly groundFogPoses = new Map<number, ProjectilePathPoint>();
+  bindGroundFogSegments(sink: (segment: ProjectileTrailSegment, size: number, style: string, sourceId: number, weaponSourceId?: string) => void): () => void {
+    this.groundFogPoses.clear();
     this.groundFogSegment = sink;
-    return () => { if (this.groundFogSegment === sink) this.groundFogSegment = null; };
+    return () => { if (this.groundFogSegment === sink) { this.groundFogSegment = null; this.groundFogPoses.clear(); } };
   }
   private turretAnimations: TurretAnimationController | null = null;
   private clientTurretBaselineReceived = false;
@@ -301,6 +304,7 @@ export class ProjectilePresentationRuntime {
   }
 
   destroyProjectileVisuals(projectile: ProjectilePresentationDespawnState): void {
+    this.groundFogPoses.delete(projectile.id);
     this.ownershipAppearance.delete(projectile.id);
     this.pathCursors.delete(projectile.id);
     this.pathTimes.delete(projectile.id);
@@ -358,6 +362,7 @@ export class ProjectilePresentationRuntime {
       flameStreamKey: projectile.flameStreamKey,
     });
     if (!previous) return false;
+    this.groundFogPoses.delete(projectile.id);
     this.bulletRenderer?.destroyVisual(projectile.id);
     this.gaussRenderer?.destroyVisual(projectile.id);
     this.rocketRenderer?.destroyVisual(projectile.id);
@@ -377,7 +382,7 @@ export class ProjectilePresentationRuntime {
     return true;
   }
 
-  syncHostRenderers(projectiles: readonly ProjectilePresentationState[]): void {
+  syncHostRenderers(projectiles: readonly ProjectilePresentationState[], presentationTime = performance.now()): void {
     const burningProjectiles = this.activeBurningProjectileIds;
     burningProjectiles.clear();
     for (const projectile of projectiles) {
@@ -399,6 +404,7 @@ export class ProjectilePresentationRuntime {
       this.projectileBurnRenderer?.sync(id, x, y, size, burning, projectile.projectileBurnVisualStyle);
       if (burning) burningProjectiles.add(id);
       this.consumeFlightPath(projectile);
+      if (!projectile.flightPath) this.sampleGroundFogPose(projectile, presentationTime);
       if (style === 'bullet' || style === 'awp' || style === 'gauss') this.bulletRenderer?.syncToBody(id, x, y, vx, vy);
       switch (style) {
         case 'flame':
@@ -586,6 +592,7 @@ export class ProjectilePresentationRuntime {
   private consumeFlightPath(projectile: ProjectilePresentationState): void {
     const path = projectile.flightPath;
     if (!path) return;
+    this.groundFogPoses.delete(projectile.id);
     if (tracerBounceDebug.centerline) {
       (this.bounceDebugOverlay ??= new TracerBounceDebugOverlay(this.scene))
         .observe(projectile.id, path, this.pathTimes.get(projectile.id) ?? path.timeMs);
@@ -593,13 +600,28 @@ export class ProjectilePresentationRuntime {
     let cursor = this.pathCursors.get(projectile.id);
     if (!cursor) { cursor = new ProjectilePathCursor(); this.pathCursors.set(projectile.id, cursor); }
     cursor.consume(path, this.pathTimes.get(projectile.id) ?? path.timeMs, segment => {
-      this.groundFogSegment?.(segment, projectile.size, projectile.style ?? 'bullet', projectile.id);
+      this.groundFogSegment?.(segment, projectile.size, projectile.style ?? 'bullet', projectile.id, projectile.weaponSourceId);
       this.tracerRenderer?.addSegment?.(projectile.id, segment, projectile.bulletVisualPreset === 'awp_corridor');
       if (projectile.style === 'rocket') this.rocketRenderer?.emitTrailSegment?.(projectile.id, segment,
         projectile.size, projectile.projectileVisualScale ?? 1, projectile.miniRocketPhase === 'return' ? projectile.ownerColor ?? projectile.color : projectile.smokeTrailColor ?? projectile.ownerColor ?? projectile.color);
       if (projectile.burning) this.projectileBurnRenderer?.emitTrailSegment?.(projectile.id, segment,
         projectile.size, projectile.projectileBurnVisualStyle);
     });
+  }
+
+  /** History-free projectiles follow the displayed pose; confirmed paths take precedence. */
+  private sampleGroundFogPose(projectile: Pick<ProjectilePresentationState, 'id' | 'style' | 'x' | 'y' | 'vx' | 'vy' | 'size' | 'weaponSourceId'>, now: number): void {
+    if (!this.groundFogSegment) return;
+    const { id, x, y, vx, vy, size } = projectile;
+    if (![x, y, vx, vy, size, now].every(Number.isFinite)) { this.groundFogPoses.delete(id); return; }
+    const before = this.groundFogPoses.get(id), dt = before ? now - before.timeMs : 0;
+    const distance = before ? Math.hypot(x - before.x, y - before.y) : 0;
+    const connected = before !== undefined && dt > 0 && dt <= 150
+      && distance <= Math.max(64, Math.max(Math.hypot(before.vx, before.vy), Math.hypot(vx, vy)) * dt / 1000 * 3);
+    const point: ProjectilePathPoint = { x, y, vx, vy, timeMs: now, sequence: (before?.sequence ?? 0) + 1,
+      ...(connected ? {} : { breakBefore: true }) };
+    if (connected && distance > .001) this.groundFogSegment({ from: before, to: point, ageMs: 0 }, size, projectile.style ?? 'bullet', id, projectile.weaponSourceId);
+    this.groundFogPoses.set(id, point);
   }
 
   private drawClientFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
@@ -695,6 +717,7 @@ export class ProjectilePresentationRuntime {
         );
       }
       this.consumeFlightPath(proj);
+      if (update.isNew && !proj.flightPath) this.sampleGroundFogPose(proj, update.state.receivedAt);
       this.projectileBurnRenderer?.sync(id, proj.x, proj.y, proj.size, proj.burning === true, proj.projectileBurnVisualStyle);
       if (proj.burning) burningIds.add(id);
     }
@@ -707,6 +730,7 @@ export class ProjectilePresentationRuntime {
     removedStates: ReadonlyMap<number, ProjectileClientReplicaState>,
     newProjectileIds: ReadonlySet<number>,
   ): void {
+    for (const id of this.groundFogPoses.keys()) if (!activeIds.has(id)) this.groundFogPoses.delete(id);
     const incomingHydras = data.filter((projectile) => projectile.style === 'hydra');
     const newIncomingHydraIds = new Set(incomingHydras.filter((projectile) => newProjectileIds.has(projectile.id)).map((projectile) => projectile.id));
     for (const [id, sprite] of this.clientVisuals) {
@@ -774,11 +798,13 @@ export class ProjectilePresentationRuntime {
       else this.clientVisuals.get(id)?.setPosition(x, y);
 
       this.projectileBurnRenderer?.sync(id, x, y, state.size, state.burning, state.projectileBurnVisualStyle);
+      this.sampleGroundFogPose({ id, style: state.style, weaponSourceId: state.weaponSourceId, x, y, vx: velocityX, vy: velocityY, size: state.size }, now);
     });
   }
 
   releaseWorldPresentation(): void {
     this.groundFogSegment = null;
+    this.groundFogPoses.clear();
     this.clientTurretBaselineReceived = false;
     this.turretAnimations = null;
     this.bounceDebugOverlay?.destroy(); this.bounceDebugOverlay = null;

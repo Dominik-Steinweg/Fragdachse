@@ -1,0 +1,97 @@
+{
+  "settings": {
+    "scenario": "projectiles",
+    "seed": 183,
+    "mode": "full",
+    "quality": "high",
+    "time": 480,
+    "strength": 1,
+    "opacity": 0.5,
+    "detail": 0.65,
+    "windX": 12,
+    "windY": 4,
+    "reaction": 1,
+    "weapon": "p90",
+    "motionPattern": "cycle",
+    "shotPattern": "fan",
+    "shooters": 4,
+    "pellets": 3
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "warmupSeconds": 10,
+  "measurementSeconds": 30,
+  "runs": [
+    {
+      "cpu": {
+        "median": 0.4,
+        "p95": 0.8,
+        "p99": 0.9
+      },
+      "gpu": {
+        "median": 0.88064,
+        "p95": 2.93888,
+        "p99": 3.948544
+      },
+      "frame": {
+        "median": 16.5,
+        "p95": 17.5,
+        "p99": 18,
+        "count": 1815
+      },
+      "bytes": 23593216,
+      "traceCount": 540,
+      "localOverflow": 3250,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "cpu": {
+        "median": 0.4,
+        "p95": 0.8,
+        "p99": 0.9
+      },
+      "gpu": {
+        "median": 0.896,
+        "p95": 2.925568,
+        "p99": 4.051968
+      },
+      "frame": {
+        "median": 16.5,
+        "p95": 17.5,
+        "p99": 17.9,
+        "count": 1817
+      },
+      "bytes": 23593216,
+      "traceCount": 540,
+      "localOverflow": 3248,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "cpu": {
+        "median": 0.4,
+        "p95": 0.8,
+        "p99": 0.9
+      },
+      "gpu": {
+        "median": 0.914432,
+        "p95": 2.946048,
+        "p99": 3.872768
+      },
+      "frame": {
+        "median": 16.5,
+        "p95": 17.5,
+        "p99": 18.1,
+        "count": 1814
+      },
+      "bytes": 23593216,
+      "traceCount": 540,
+      "localOverflow": 3260,
+      "dropped": 0,
+      "validCadence": true
+    }
+  ]
+}

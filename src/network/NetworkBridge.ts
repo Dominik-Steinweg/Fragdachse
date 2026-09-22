@@ -552,6 +552,7 @@ type HitscanTracerHandler = (
   shotAudioKey?: ShotAudioKey,
   visualStartX?: number,
   visualStartY?: number,
+  weaponSourceId?: string,
 ) => void;
 type DashHandler = (playerId: string, dx: number, dy: number) => void;
 type BurrowHandler = (playerId: string, wantsBurrowed: boolean) => void;
@@ -3775,8 +3776,9 @@ export class NetworkBridge {
     shotAudioKey?: ShotAudioKey,
     visualStartX?: number,
     visualStartY?: number,
+    weaponSourceId?: string,
   ): void {
-    this.broadcastGameplayEvent('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, ik: impactKind, vp: visualPreset, id: shooterId, sid: shotId, sa: shotAudioKey, vsx: visualStartX, vsy: visualStartY });
+    this.broadcastGameplayEvent('htfx', { sx: startX, sy: startY, ex: endX, ey: endY, c: color, t: thickness, ik: impactKind, vp: visualPreset, id: shooterId, sid: shotId, sa: shotAudioKey, vsx: visualStartX, vsy: visualStartY, wid: weaponSourceId });
   }
 
   registerHitscanTracerHandler(handler: HitscanTracerHandler): void {
@@ -3784,7 +3786,7 @@ export class NetworkBridge {
     this.registerAllRpcHandler('htfx', async (data: unknown): Promise<unknown> => {
       const hitscanTracerHandler = this.hitscanTracerHandler;
       if (!hitscanTracerHandler) return undefined;
-      const { sx, sy, ex, ey, c, t, ik, vp, id, sid, sa, vsx, vsy } = data as {
+      const { sx, sy, ex, ey, c, t, ik, vp, id, sid, sa, vsx, vsy, wid } = data as {
         sx: number;
         sy: number;
         ex: number;
@@ -3798,8 +3800,9 @@ export class NetworkBridge {
         sa?: ShotAudioKey;
         vsx?: number;
         vsy?: number;
+        wid?: string;
       };
-      hitscanTracerHandler(sx, sy, ex, ey, c, t, ik, vp, id, sid, sa, vsx, vsy);
+      hitscanTracerHandler(sx, sy, ex, ey, c, t, ik, vp, id, sid, sa, vsx, vsy, wid);
       return undefined;
     });
   }

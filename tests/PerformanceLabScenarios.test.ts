@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { allPerformanceCases, resolvePerformanceCases, registerReferenceMap } from '../src/debug/performanceLab/scenarios';
 import { isCoopDefenseReadyLoadoutComplete } from '../src/loadout/LoadoutRules';
 import { getCoopDefenseMapConfig, isDiagnosticMapId } from '../src/config/coopDefenseMaps';
-import { PERFORMANCE_MAP_ID } from '../src/debug/performanceLab/referenceMap';
+import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID } from '../src/debug/performanceLab/referenceMap';
 
 describe('Performance reference fixtures', () => {
   it('resolves every frozen build through legal ready contracts and supports independent cases', () => {
@@ -18,6 +18,10 @@ describe('Performance reference fixtures', () => {
   it('validates the internal reference maps and unregisters them without a persistent base', () => {
     const cleanup = registerReferenceMap();
     try {
+      for (const id of new Set(allPerformanceCases().map(test => test.mapId ?? PERFORMANCE_MAP_ID))) {
+        expect(getCoopDefenseMapConfig(id).mapId).toBe(id);
+        expect(isDiagnosticMapId(id)).toBe(true);
+      }
       const map = getCoopDefenseMapConfig(PERFORMANCE_MAP_ID);
       expect(map.persistentBase).toBeUndefined();
       expect(map.water?.length).toBeGreaterThan(0);
@@ -25,5 +29,6 @@ describe('Performance reference fixtures', () => {
       expect(isDiagnosticMapId(PERFORMANCE_MAP_ID)).toBe(true);
     } finally { cleanup(); }
     expect(isDiagnosticMapId(PERFORMANCE_MAP_ID)).toBe(false);
+    expect(isDiagnosticMapId(VOID_FIRE_MAP_ID)).toBe(false);
   });
 });

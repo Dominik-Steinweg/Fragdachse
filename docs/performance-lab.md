@@ -19,6 +19,7 @@ npm run perf:chrome
 npm run perf:chrome -- --case weapon.plasma
 npm run perf:chrome -- --case destruction.bfg --duration-seconds 60
 npm run perf:chrome -- --case combat.day-night
+npm run perf:chrome -- --case hazards.void-fire
 npm run perf:chrome -- --case weapon.glock --capture-profile reduced
 npm run perf:compare -- <Ergebnisordner-A> <Ergebnisordner-B>
 ```
@@ -59,6 +60,7 @@ Sichtbare Gameplay-Last und Spieltakte ändern sich durch die Profilauswahl nich
 | `destruction.single` | Einzelzerstörung mit Glock |
 | `destruction.nuke`, `destruction.bfg` | Reguläres Pickup, Aktivierung/Aufladen, eigenes dichtes Felsfeld und freigeräumte Route |
 | `enemies.low`, `enemies.medium`, `enemies.high` | Drei feste Gegnerbestände mit gleicher Artenmischung und Spielerbewegung |
+| `hazards.void-fire` | Dauerhafte VoidFire-Front in der Größe des Endzustands von Map 14, danach 30 Sekunden volle Feuerlast |
 | `weapon.glock`, `weapon.p90`, `weapon.plasma`, `weapon.mini-rockets`, `weapon.shotgun` | Baseline beziehungsweise explizit voll ausgebaute Waffen |
 | `weapon.asmd`, `weapon.bite`, `weapon.rocket`, `weapon.tesla`, `weapon.flame` | Basis-Builds einschließlich gehaltener Waffen |
 | `utility.he`, `utility.molotov`, `utility.smoke` | HE-Basis sowie volle Molotov-/Smoke-Builds mit regulärem Werfen |
@@ -79,6 +81,18 @@ unbewaffneten feindlichen Außenposten außerhalb der Messbereiche. Dieser aktiv
 Coop-Komposition für Gegnerverhalten und Kartenereignisse. Eine persönliche persistente Basis
 existiert dort nicht. Nuke/BFG folgen auch beim ersten Erscheinen ihrem regulären Spawn-Timer.
 Der Zug erscheint nur im Umgebungstest, niemals in den Tag-/Nachtfenstern.
+
+`hazards.void-fire` ist auch in `standard` enthalten. Seine eigene Referenzkarten-Variante
+erzeugt über den regulären Ground-Hazard-Handler eine Front über 59 × 42 Kartenzellen,
+also 9.912 Feuerzellen im 16-Pixel-Raster. Die Ausbreitung dauert fünf Sekunden statt der
+90 Sekunden auf Map 14; sie zählt zur Vorbereitung. Erst die vollständig aktive Fläche
+startet das Messfenster. Tageszeit ist wie auf Map 14 20:30 Uhr. Bäume, das untere Gewässer,
+Pickups und die beiden inneren Felsfelder entfallen, damit die Feuerlast reproduzierbar
+vollständig entsteht; die äußere Felsreserve bleibt bestehen. Es gibt keine Gegnerwellen.
+Der Fall isoliert damit die hohe VoidFire-Last und bildet keine vollständige Map-14-Runde nach.
+`expectedVoidFireCells`, `voidFireCellsMin` und `visibleVoidFireCellsMin` belegen Sollbestand,
+kleinsten beobachteten Bestand und Sichtbarkeit während der Messung. Fehlende, abnehmende
+oder vollständig unsichtbare Feuerlast lässt den Lauf scheitern.
 
 Lastmengen, Ziel-HP und Mindestbestände stehen in `fixtures.ts`, die Karte in `referenceMap.ts`,
 Zeiten und Fallverträge in `scenarios.ts`. `build-presets.json` hält die erlaubten Upgrade-IDs

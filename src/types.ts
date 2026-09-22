@@ -662,6 +662,8 @@ export interface ProjectileBouncePresentation {
 
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
+  /** Exact authored source for local presentation settings. */
+  weaponSourceId?: string;
   flightPath?: import('./projectile/ProjectileFlightPath').ProjectileFlightPath;
   id:      number;
   ownerId: string;
@@ -707,6 +709,8 @@ export interface SyncedProjectile {
  * IMMER vollstaendig – ein fehlendes Feld heisst `undefined`, nicht "unveraendert".
  */
 export interface SyncedProjectileStatic {
+  /** Exact authored source for local presentation settings. */
+  weaponSourceId?: string;
   id:      number;
   ownerId: string;
   color?:  number;
@@ -775,6 +779,8 @@ export interface SyncedProjectileSnapshot {
 export type HitscanImpactKind = 'none' | 'player' | 'environment';
 
 export interface SyncedHitscanTrace {
+  /** Exact authored source for local presentation settings. */
+  weaponSourceId?: string;
   startX:     number;
   startY:     number;
   endX:       number;
@@ -831,6 +837,8 @@ export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect;
 
 /** Kurzlebiger Melee-Swing für VFX-Replikation (Host → Clients, unreliable). */
 export interface SyncedMeleeSwing {
+  /** Exact authored source for local presentation settings. */
+  weaponSourceId?: string;
   swingId:    number;   // pro Session eindeutig, für Client-Deduplizierung
   x:          number;
   y:          number;

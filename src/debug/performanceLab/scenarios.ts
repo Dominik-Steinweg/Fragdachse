@@ -1,9 +1,9 @@
 import type { WeaponSlot } from '../../types';
 import type { PerformanceCase } from './contracts';
 import { buildPerformanceLoadout as build, presets, type PresetItem } from './loadouts';
-import { PERFORMANCE_MAP_ID } from './referenceMap';
+import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID } from './referenceMap';
 export { PERFORMANCE_MAP_ID, REFERENCE_SEED, registerReferenceMap } from './referenceMap';
-export const SCENARIO_VERSION = 'reference-1-candidate.3';
+export const SCENARIO_VERSION = 'reference-1-candidate.4';
 
 export function allPerformanceCases(): PerformanceCase[] {
   const glock = build('GLOCK');
@@ -25,6 +25,7 @@ export function allPerformanceCases(): PerformanceCase[] {
     base('enemies.low', 6000, 'enemies', { enemyCount: 40 }),
     base('enemies.medium', 8000, 'enemies', { enemyCount: 120 }),
     base('enemies.high', 10_000, 'enemies', { enemyCount: 240 }),
+    base('hazards.void-fire', 30_000, 'hazard', { mapId: VOID_FIRE_MAP_ID }),
     ...weapons.map(([id, item, duration]) => {
       const loadout = build(item), slot = presets[item].slot as WeaponSlot;
       const cfg = loadout.effective[slot];

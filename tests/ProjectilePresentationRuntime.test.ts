@@ -41,6 +41,50 @@ function passiveRenderer(): Record<string, unknown> {
 }
 
 describe('ProjectilePresentationRuntime', () => {
+  it('samples host leaf-blower fog from displayed poses without requiring replicated flight history', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never), sink = vi.fn();
+    const release = runtime.bindGroundFogSegments(sink);
+    const shot = projectile({ style: 'leaf_blower', vx: 480 });
+    runtime.syncHostRenderers([shot], 1000);
+    runtime.syncHostRenderers([{ ...shot, x: 108, size: 24 }], 1016);
+    expect(sink).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      from: expect.objectContaining({ x: 100 }), to: expect.objectContaining({ x: 108 }), ageMs: 0,
+    }), 24, 'leaf_blower', shot.id);
+    runtime.syncHostRenderers([{ ...shot, x: 108 }], 1032);
+    expect(sink).toHaveBeenCalledTimes(1);
+    runtime.syncHostRenderers([{ ...shot, x: 2000 }], 1048);
+    runtime.syncHostRenderers([{ ...shot, x: 2008 }], 1064);
+    expect(sink).toHaveBeenCalledTimes(2);
+    expect(sink.mock.lastCall![0].from).toMatchObject({ x: 2000, breakBefore: true });
+    runtime.destroyProjectileVisuals({ ...shot, x: 2008 });
+    runtime.syncHostRenderers([shot], 1080);
+    runtime.syncHostRenderers([{ ...shot, x: 108 }], 2000);
+    expect(sink).toHaveBeenCalledTimes(2);
+    release(); runtime.syncHostRenderers([{ ...shot, x: 116 }], 2016);
+    runtime.bindGroundFogSegments(sink); runtime.syncHostRenderers([{ ...shot, x: 124 }], 2032);
+    expect(sink).toHaveBeenCalledTimes(2);
+    runtime.releaseWorldPresentation();
+  });
+  it('samples client leaf-blower fog at the same extrapolated pose and size as its renderer', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never), replica = new ProjectileClientReplica(), sink = vi.fn();
+    const leaf = passiveRenderer();
+    runtime.bindRenderers({ leafBlower: leaf } as never, null);
+    runtime.bindGroundFogSegments(sink);
+    const shot = projectile({ style: 'leaf_blower', vx: 480, velocityDecay: .5, suppressSpawnFx: true });
+    runtime.presentClientFrame(replica.sync([shot], 1000));
+    runtime.extrapolateClient(replica, 1000); runtime.extrapolateClient(replica, 1016);
+    expect(sink).toHaveBeenCalledOnce();
+    const pose = (leaf.updateVisual as ReturnType<typeof vi.fn>).mock.lastCall!;
+    expect(sink.mock.lastCall![0].to).toMatchObject({ x: pose[1], y: pose[2] });
+    expect(sink.mock.lastCall!.slice(1)).toEqual([pose[3], 'leaf_blower', shot.id]);
+    runtime.presentClientFrame(replica.sync([{ ...shot, x: 112, size: 24 }], 1032));
+    runtime.extrapolateClient(replica, 1040);
+    expect(sink.mock.lastCall![1]).toBe(24);
+    runtime.presentClientFrame(replica.sync([], 1048));
+    runtime.presentClientFrame(replica.sync([shot], 1064)); runtime.extrapolateClient(replica, 1064);
+    expect(sink).toHaveBeenCalledTimes(2);
+    runtime.releaseWorldPresentation();
+  });
   it('shares confirmed bounce and terminal segments with fog once and releases the world sink', () => {
     const runtime = new ProjectilePresentationRuntime({} as never), sink = vi.fn();
     const release = runtime.bindGroundFogSegments(sink);

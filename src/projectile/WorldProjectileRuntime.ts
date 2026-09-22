@@ -410,6 +410,7 @@ export class WorldProjectileRuntime implements
       states.push({
         id: projectile.id,
         ownerId: projectile.provenance.allegiance.ownerId,
+        weaponSourceId: projectile.provenance.weaponSourceId,
         x: pathHead?.x ?? sprite.x,
         y: pathHead?.y ?? sprite.y,
         vx: projectile.physics.body.velocity.x,
@@ -1262,6 +1263,7 @@ export class WorldProjectileRuntime implements
       static: {
         id: projectile.id,
         ownerId: projectile.provenance.allegiance.ownerId,
+        weaponSourceId: projectile.provenance.weaponSourceId,
         color: projectile.presentation.color,
         allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
         ownerColor: projectile.presentation.ownerColor,

@@ -10,8 +10,8 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-// Shooting range history uses implicit timestamps at 100 ms intervals.
-export const PEER_PROTOCOL_VERSION = 19;
+// Projectile statics include the authored source ID for local presentation.
+export const PEER_PROTOCOL_VERSION = 20;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

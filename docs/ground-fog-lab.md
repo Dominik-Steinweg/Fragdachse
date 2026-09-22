@@ -24,6 +24,11 @@ durch den Map-Editor belegt; verwendet wurde `npm run dev:browser -- --port 8092
   Alle Wegstücke laufen durch `ProjectilePathCursor`, einschließlich des Abschlusssegments.
   Hitscan und Nahkampf sind zusätzlich auswählbar. Gerade, diagonale und schwenkende
   Fächerschüsse dienen der Spurprüfung; Lauf und Dash lassen sich einzeln wiederholen.
+- **Schützen / Projektile pro Schuss:** Bis zu vier gleichzeitige P90-Schützen mit je drei
+  Projektilen. P90-Takt, Geschwindigkeit und Reichweite stammen aus dem Waffen-Authoring.
+  Die Stresssuite ergänzt wiederholte Richtungswechsel zu den sichtbaren Fächern.
+- **Flammenwerfer / Laubbläser:** Wachsende Spurbreite mit den Produktions-VFX zum Vergleich.
+  **Zug / Nachlauf** spielt eine RB-54-Durchfahrt; Pause und Einzelschritt erlauben feste Ansichten.
 - **Kamerapfad:** Hin- und Rückweg durch die World; **Zoom** enthält auch einen extremen
   Sichtbereich zur Kapazitätsprüfung. **Kamerawackeln** nutzt den gemeinsamen Camera-Feedback-Owner.
 - **Pause / Einzelschritt / Langer Frame:** Fortschreibung, Impulsalter und Materialzeit prüfen.
@@ -45,12 +50,28 @@ Zentrale Werte stehen in `src/effects/groundFog/FogConfig.ts`.
 Kleine Geschosse verwenden die feine GPU-Maske: Das 8-Pixel-Feld erzeugte bei schmalen
 Spuren punktförmige Löcher. Bestätigte, gerade Flugsegmente derselben Projektilidentität
 werden deshalb unabhängig vom groben Impulsbudget zusammengefasst. Abpraller und
-Unterbrechungen bleiben getrennt. Höchstens 2.048 gespeicherte Abschnitte und 64 tatsächlich
-berührende Abschnitte pro Tile begrenzen die Last. Diagonalen belegen keine unberührten
-Tiles innerhalb ihres umschließenden Rechtecks. Abstand, stetiges Alter entlang der Strecke
-und Auslaufen über 3,2 Sekunden werden auf der GPU berechnet; überlappende Endkappen
-bilden keine dunklen Knoten. Die Maske moduliert ausschließlich vorhandene Dichte und
-entfällt bei niedriger Qualität. Das Lab zeigt Spurbelegung und lokale Überläufe separat.
+Unterbrechungen bleiben getrennt. Höchstens 8.192 gespeicherte Abschnitte begrenzen die Last;
+ein lokales Tile-Limit existiert nicht mehr. Ein GPU-Aufruf zeichnet die tatsächlich sichtbaren
+Kapsel-Flächen. Eine Maximum-Verknüpfung verhindert dunkle Knoten an Endkappen und Kreuzungen.
+Die RGBA8-Kommandotextur ist 1.024 Pixel breit; es werden keine Float-Renderziele benötigt.
+WebGL 1 benötigt `EXT_blend_minmax`, WebGL 2 bietet diese Verknüpfung direkt. Fehlt sie,
+greift die vorhandene Abschaltung bei fehlenden Nebel-Fähigkeiten.
+Abstand, stetiges Alter und Auslaufen über 3,2 Sekunden bleiben auf der GPU. Zeitstempel
+werden niemals in die Zukunft gerundet. Unveränderte Geometrie wird nicht erneut hochgeladen.
+Die Maske moduliert ausschließlich vorhandene Dichte und entfällt bei niedriger Qualität.
+Das Lab zeigt gespeicherte und sichtbare Abschnitte, Zeichnungsaufrufe und verworfene Eingaben.
+
+Flamme und Laubbläser verwenden eine mit der Projektilgröße wachsende, weiche Spurbreite.
+Der Laubbläser teilt seine Größenfunktion mit dem Partikelrenderer.
+Er hat im Spiel keine replizierte Flugbahn. `ProjectilePresentationRuntime`
+liefert dafür lokale Segmente aus der tatsächlich dargestellten Host-/Client-Pose.
+Das Lab verwendet denselben Weg. Stillstand, Positionssprünge, Entfernen und World-Wechsel
+erzeugen keine verbindenden Ersatzspuren; es werden keine zusätzlichen Netzwerkdaten erzeugt.
+
+Die Zugspur ist ungefähr
+1,7 Zugbreiten breit und klingt über zehn Sekunden aus. Lokfront und Zugende liefern dafür
+Segmente aus der dargestellten, auch auf Clients interpolierten Zugposition. Zusätzlich
+verdrängen sie das grobe Nebelfeld; diese Feldreaktion bleibt auch auf Niedrig aktiv.
 
 Die Reaktionsabstimmung vom 22. September erhöht den Eingangsimpuls beim Laufen um
 Faktor 9 und beim Dash um Faktor 1,35 (jeweils mit Sättigung). Größere Projektile erhalten
@@ -69,6 +90,8 @@ bereits gezeichnete Bild eingefroren bleibt. Der endgültige Presentation-Teardo
 `FogTerrainModel` hält Sperren, Dirty-Zellen und das Öffnungsjournal. `FogResidency` verwaltet
 weltfeste Slots. `FogGpuField` führt die RGBA8-Ping-Pong-Pässe aus. `FogImpulses` und
 `FogTrailSegments` enthalten begrenzte Beobachtungen, keine CPU-Nebelsimulation.
+`FogTrailRenderer` zeichnet die Spurmaske als begrenzten Geometrie-Batch über Phasers
+WebGL-Zustandswrapper. Seine Puffer gehören zum GPU-Feld und enden mit dessen Lifetime.
 
 Transport erfolgt über vier offene Zellflächen. Gepackte 16-Bit-Werte werden vor
 Interpolation dekodiert; Datenpässe verwenden Nearest-Sampling, kein Blending und kein Dithering.
@@ -98,4 +121,6 @@ CPU-Submission und optionale asynchrone GPU-Timer werden getrennt berichtet. Ung
 Disjoint-Abfragen werden verworfen. Ohne Extension steht ausdrücklich „GPU-Zeit nicht verfügbar“.
 Bei ausgeschaltetem Nebel werden keine Nebelpässe ausgeführt und keine GPU-Zeit abgefragt.
 
-Messwerte und Prüfstatus stehen in [ground-fog-validation.md](ground-fog-validation.md).
+Aktuelle Lastmesswerte und Prüfstatus stehen in
+[ground-fog-load-validation.md](ground-fog-load-validation.md), frühere Abnahmen in
+[ground-fog-validation.md](ground-fog-validation.md).

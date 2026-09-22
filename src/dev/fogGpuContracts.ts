@@ -66,8 +66,10 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     field.prepare(view, time); field.step([], [.8, .8], tuning, time += FOG.stepMs);
     const reopenedCached = field.readDensity(292, 260), blockedCached = field.readDensity(140, 140);
     const obstacleFlow = checkObstacleFlow(scene);
+    const traceLoad = checkTraceLoad(field, view, tuning, time);
     const checks = {
       ...obstacleFlow.checks,
+      ...traceLoad.checks,
       cachedTerrainEditsPreserveOtherCells: cachedBefore.density === cachedAfter.density,
       cachedEditsAppliedBeforeResume: reopenedCached.density === 0 && !reopenedCached.reached && blockedCached.density === 0,
       thinTraceWithoutWideLane: fineTrail > 0 && outsideTrail === 0,
@@ -90,7 +92,7 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     };
     return { passed: Object.values(checks).every(Boolean), checks,
       readings: { initial, initialVelocity, wall, isolated, openingCenter, openingEdge, entered, reblocked, beforeRead, afterRead, neighbourhood,
-        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings } };
+        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings, traceLoad: traceLoad.readings } };
   } finally { field.destroy(); terrain.clear(); }
 }
 
@@ -115,4 +117,46 @@ function checkObstacleFlow(scene: Phaser.Scene) {
       cornerFlowIsDeflected: corner.some(p => Math.abs(p.withRock[1]) > Math.abs(p.withoutRock[1]) + 1),
     }, readings: { band, corner } };
   } finally { control.destroy(); obstacle.destroy(); baseline.clear(); blocked.clear(); }
+}
+
+/** Controlled readbacks are outside all performance runs. Includes the old 64/tile failure. */
+function checkTraceLoad(field: FogGpuField, view: { x: number; y: number; width: number; height: number }, tuning: ReturnType<typeof fogTuning>, start: number) {
+  field.trails.clear();
+  const input = { x: 20, y: 100, endX: 460, endY: 100, radius: 5, strength: FOG.smallProjectileStrength, kind: 'projectile' as const, priority: 10 };
+  const render = (now: number): void => { field.step([], [.8, .8], tuning, now); field.render(view, 1024, 512, 'normal', 1); };
+  field.trails.add(input, start); render(start);
+  const single = field.readTrail(40, 100);
+  field.trails.add(input, start); render(start);
+  const duplicate = field.readTrail(40, 100);
+  render(start + 1000); const oldBefore = field.readTrail(40, 100);
+  for (let i = 0; i < 768; i++) field.trails.add({ ...input, x: 80, y: 90 + i % 30, endY: 90 + i % 30 }, start + 1000);
+  render(start + 1000);
+  const oldAfter = field.readTrail(40, 100), newest = field.readTrail(300, 90), traceCount = field.trails.size;
+  const p = (x: number, timeMs: number) => ({ x, y: 400, timeMs, sequence: 1, vx: 100, vy: 0 });
+  field.trails.addPath({ from: p(30, 0), to: p(100, 100), ageMs: 0 }, 812,
+    start + 1000, { radius: 10, strength: .7, lifeMs: FOG.trailMs, decayMs: FOG.trailDecayMs });
+  field.trails.addPath({ from: p(100, 100), to: p(300, 500), ageMs: 0 }, 812,
+    start + 1400, { radius: 50, strength: .7, lifeMs: FOG.trailMs, decayMs: FOG.trailDecayMs });
+  render(start + 1400);
+  const narrow = field.readTrail(60, 425), wide = field.readTrail(285, 425);
+  field.trails.add({ ...input, x: 100, endX: 450, y: 300, endY: 300 }, start + 1400,
+    { radius: 55, strength: .8, lifeMs: FOG.trainTrailMs, decayMs: FOG.trainTrailDecayMs });
+  render(start + 1400 + FOG.trailMs + 500);
+  const train = field.readTrail(200, 330), bulletGone = field.readTrail(40, 100);
+  render(start + 1400 + FOG.trainTrailMs + 1);
+  const trainGone = field.readTrail(200, 330);
+  field.trails.clear();
+  const cappedTime = start + 1400 + FOG.trainTrailMs + 100;
+  field.trails.addPath({ from: p(30, 0), to: p(100, 20), ageMs: 0 }, 900, cappedTime);
+  field.trails.addPath({ from: p(100, 20), to: p(300, 200), ageMs: 0 }, 900, cappedTime + 66);
+  render(cappedTime + 66);
+  const cappedTip = field.readTrail(295, 400);
+  return { checks: {
+    overlappingCapsulesPreserveSingleTrace: single > .1 && Math.abs(single - duplicate) <= 1 / 255,
+    crowdedTileRetainsOlderTrace: oldAfter === oldBefore && oldAfter > .1 && newest > .1 && traceCount === 770,
+    streamWidthGrowsAlongPath: narrow === 0 && wide > .1,
+    trainWakeOutlastsSmallTraces: train > .1 && bulletGone === 0,
+    trainWakeExpires: trainGone === 0,
+    cappedClockKeepsTraceTip: cappedTip > .5,
+  }, readings: { single, duplicate, oldBefore, oldAfter, newest, traceCount, narrow, wide, train, bulletGone, trainGone, cappedTip } };
 }

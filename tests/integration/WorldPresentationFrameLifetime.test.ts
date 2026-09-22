@@ -181,6 +181,23 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  it('feeds ground fog the displayed train pose and disconnects it when hidden or destroyed', () => {
+    const gpuScene = makeFakeGpuVfxScene();
+    const scene = Object.assign(gpuScene, { cameras: { main: fakeCamera() } });
+    const fog = { captureMotion: vi.fn(), captureTrain: vi.fn(), setSurfaceImages: vi.fn(), update: vi.fn() };
+    const pose = { alive: true, x: 500, y: 700, dir: 1 as const, hp: 100, maxHp: 100 };
+    const visual = { getShadowState: vi.fn(() => pose), computeSegYs: vi.fn(() => [700, 500, 240]) };
+    const input = fakeBindingInput(scene as never, {
+      groundFog: { getSystem: () => fog as never, getBases: () => null, getProjectiles: () => null, effects: {} as never },
+      getTrainVisual: () => visual,
+    });
+    const binding = new WorldPresentationFrameBinding(input);
+    binding.syncGroundFog(33, true, []);
+    expect(fog.captureTrain).toHaveBeenLastCalledWith(33, pose, [700, 500, 240]);
+    binding.syncGroundFog(33, false, []); expect(fog.captureTrain).toHaveBeenLastCalledWith(33, null, []);
+    binding.destroy(); fog.captureTrain.mockClear(); binding.syncGroundFog(33, true, []);
+    expect(fog.captureTrain).not.toHaveBeenCalled();
+  });
   const ownershipModes = ['isConstructionPlacementActive', 'isDismantlePlacementActive',
     'isGlobalDismantleHoldActive', 'isPersistentRewardPlacementActive', 'isRepositionActive'] as const;
 

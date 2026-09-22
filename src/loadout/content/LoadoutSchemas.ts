@@ -1,3 +1,4 @@
+import { MAX_FOG_TRAIL_FACTOR } from '../../config/fogTrail';
 import { validateRocketLauncherConfig } from '../RocketLauncherConfig';
 import { validateStinkPlagueConfig } from '../StinkPlagueConfig';
 import { validateTurretAimConfig } from '../../config/turretAim';
@@ -209,6 +210,11 @@ function validateNumericContracts(value: unknown, path: string, issues: string[]
 }
 
 function validateCommonConfig(record: Record<string, unknown>, issues: string[]): void {
+  for (const key of ['fogTrailWidthFactor', 'fogTrailDurationFactor']) {
+    const value = record[key];
+    if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_FOG_TRAIL_FACTOR))
+      issues.push('$.' + key + ': expected finite factor from 0 to ' + MAX_FOG_TRAIL_FACTOR);
+  }
   if (record.tracerConfig !== undefined && !validateFlightSignature(record.tracerConfig)) {
     issues.push('tracerConfig: Ungueltiges Flight-Signature-Profil oder Tuning');
   }

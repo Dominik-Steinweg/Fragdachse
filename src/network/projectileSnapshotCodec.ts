@@ -32,6 +32,7 @@ import type {
 } from '../types';
 
 // ── Statik-Maske ────────────────────────────────────────────────────────────
+const S_WEAPON_SOURCE = 65536;
 const S_STYLE = 1;
 const S_COLOR = 2;
 const S_OWNER_COLOR = 4;
@@ -134,6 +135,7 @@ export function encodeProjectileStatic(
     | (entry.suppressSpawnFx ? FLAG_SUPPRESS_SPAWN_FX : 0);
 
   let mask = 0;
+  if (entry.weaponSourceId !== undefined) mask |= S_WEAPON_SOURCE;
   if (entry.style !== undefined) mask |= S_STYLE;
   if (entry.color !== undefined) mask |= S_COLOR;
   if (entry.ownerColor !== undefined) mask |= S_OWNER_COLOR;
@@ -181,6 +183,7 @@ export function encodeProjectileStatic(
   }
   if (mask & S_SOURCE_TURRET) out.push(entry.sourceTurretId as string);
   if (mask & S_FLAME_STREAM) out.push(entry.flameStreamKey as string);
+  if (mask & S_WEAPON_SOURCE) out.push(entry.weaponSourceId as string);
 }
 
 /** Dekodiert den Statik-Strom zurück in Vollersatz-Einträge. */
@@ -232,6 +235,7 @@ export function decodeProjectileStatics(
     }
     if (mask & S_SOURCE_TURRET) entry.sourceTurretId = stream[i++] as string;
     if (mask & S_FLAME_STREAM) entry.flameStreamKey = stream[i++] as string;
+    if (mask & S_WEAPON_SOURCE) entry.weaponSourceId = stream[i++] as string;
     result.push(entry);
   }
   return result;
@@ -425,6 +429,7 @@ export function applyProjectileSnapshot(
       sourceTurretId: shared.sourceTurretId,
       flameStreamKey: shared.flameStreamKey,
       visualMuzzleOrigin: shared.visualMuzzleOrigin,
+      weaponSourceId: shared.weaponSourceId,
       projectileVisualScale: shared.projectileVisualScale,
       smokeTrailColor: shared.smokeTrailColor,
       style: shared.style,

@@ -17,7 +17,7 @@ function options(args) {
   const value = { caseId: 'standard', timeoutMs: 25 * 60_000, captureProfile: 'standard' };
   for (let i = 0; i < args.length; i += 2) {
     const flag = args[i], arg = args[i + 1];
-    if (flag === '--help') { console.log('perf:chrome [--case CASE-ID] [--duration-seconds N] [--timeout-seconds N] [--capture-profile standard|reduced]\nCases: environment.route, destruction.single/nuke/bfg, enemies.low/medium/high, weapon.glock/p90/plasma/mini-rockets/shotgun/asmd/bite/rocket/tesla/flame, utility.he/molotov/smoke, construction.defense, ultimate.armageddon, combat.day/night/day-night, recovery.idle'); process.exit(0); }
+    if (flag === '--help') { console.log('perf:chrome [--case CASE-ID] [--duration-seconds N] [--timeout-seconds N] [--capture-profile standard|reduced]\nCases: environment.route, destruction.single/nuke/bfg, enemies.low/medium/high, hazards.void-fire, weapon.glock/p90/plasma/mini-rockets/shotgun/asmd/bite/rocket/tesla/flame, utility.he/molotov/smoke, construction.defense, ultimate.armageddon, combat.day/night/day-night, recovery.idle'); process.exit(0); }
     if (!arg) throw new Error(`Missing argument for ${flag}`);
     if (flag === '--case') value.caseId = arg;
     else if (flag === '--duration-seconds' || flag === '--timeout-seconds') {

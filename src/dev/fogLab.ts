@@ -8,6 +8,7 @@ import { LightingSystem } from '../effects/LightingSystem';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { createMovementVisualSample, type MovementVisualSource } from '../effects/MovementStepSampler';
 import { ProjectilePathCursor, type ProjectilePathPoint } from '../projectile/ProjectileFlightPath';
+import { ProjectilePresentationRuntime } from '../projectile/ProjectilePresentationRuntime';
 import { createBaseSurfaceImages } from '../entities/BaseVisuals';
 import { resolveWorldMetrics } from '../world/WorldMetrics';
 import { SmokeSystem } from '../effects/SmokeSystem';
@@ -16,11 +17,19 @@ import { AdrenalineEssenceGpuRenderer } from '../adrenalineEssence/AdrenalineEss
 import { CameraFeedbackController } from '../effects/camera/CameraFeedbackController';
 import { impactHeavy } from '../effects/camera/cameraFeedbackPresets';
 import { DEPTH } from '../config';
+import ballisticContent from '../loadout/content/data/weapons-ballistic.json';
+import streamContent from '../loadout/content/data/weapons-flame-air.json';
+import { FlameRenderer } from '../effects/FlameRenderer';
+import { LeafBlowerRenderer } from '../effects/LeafBlowerRenderer';
+import { GpuVfxSystem } from '../effects/gpu/GpuVfxSystem';
+import { TerrainColorSnapshot } from '../arena/TerrainColorSnapshot';
+import { TrainRenderer, preloadTrainMaterialAssets } from '../train/TrainRenderer';
+import { TRAIN } from '../train/TrainConfig';
 
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const value = (id: string): string => element<HTMLInputElement>(id).value;
 const number = (id: string): number => Number(value(id));
-const controlIds = ['scenario', 'seed', 'mode', 'quality', 'time', 'strength', 'debug', 'opacity', 'detail', 'windX', 'windY', 'reaction', 'weapon', 'motionPattern', 'shotPattern'];
+const controlIds = ['scenario', 'seed', 'mode', 'quality', 'time', 'strength', 'debug', 'opacity', 'detail', 'windX', 'windY', 'reaction', 'weapon', 'motionPattern', 'shotPattern', 'shooters', 'pellets'];
 const query = new URLSearchParams(location.search);
 for (const id of controlIds) if (query.has(id)) element<HTMLInputElement>(id).value = query.get(id)!;
 const frame = { offsetX: 0, offsetY: 0, width: 8192, height: 3072 };
@@ -36,6 +45,11 @@ class FogLab extends Phaser.Scene {
   private fadingBase: { image: Phaser.GameObjects.Image; removeAt: number }[] = [];
   private quality!: GraphicsQualityController;
   private cameraFeedback!: CameraFeedbackController;
+  private flame: FlameRenderer | null = null;
+  private leaf: LeafBlowerRenderer | null = null;
+  private leafPresentation: ProjectilePresentationRuntime | null = null;
+  private gpuVfx: GpuVfxSystem | null = null;
+  private train: TrainRenderer | null = null;
   private baseScroll = { x: 0, y: 0 };
   private obstacles = new Map<string, Phaser.GameObjects.Image[]>();
   private elapsed = 0;
@@ -61,6 +75,7 @@ class FogLab extends Phaser.Scene {
   private lastFrameAt = 0;
   private bench: { variant: number; run: number; start: number; samples: number[]; frames: number[]; gpu: number[]; gpuSample: number; results: unknown[]; settings: Record<string, string> } | null = null;
   preload(): void {
+    preloadTrainMaterialAssets(this.load);
     this.load.image('fog-grass', '/assets/sprites/gras_bg_tile.png');
     this.load.image('fog-detail', '/assets/sprites/gras_detail_tile.png');
     this.load.image('powerup_hp', '/assets/sprites/16x16HP.png');
@@ -88,6 +103,16 @@ class FogLab extends Phaser.Scene {
     this.fog = new GroundFogSystem(this, frame, number('seed'), water);
     this.fog.measureGpu = true;
     const scenario = value('scenario');
+    if (scenario === 'train') this.train = new TrainRenderer(this);
+    if (value('weapon') === 'flame' || value('weapon') === 'leaf_blower') {
+      this.gpuVfx = new GpuVfxSystem(this);
+      this.flame = new FlameRenderer(this); this.flame.generateTextures(); this.flame.registerGpuVfx(this.gpuVfx);
+      this.leaf = new LeafBlowerRenderer(this); this.leaf.generateTextures(); this.leaf.registerGpuVfx(this.gpuVfx);
+      this.leaf.setTerrainMaterialLayout({ dirt: cells(27, 9, 14, 24), tracks: [] });
+      this.leaf.setTerrainColorSnapshot(new TerrainColorSnapshot(1, 1, 0, 0, new Uint8Array([95, 112, 66])));
+      this.leafPresentation = new ProjectilePresentationRuntime(this);
+      this.leafPresentation.bindGroundFogSegments((segment, size, style, id) => this.fog.addProjectile(segment, size, style, id));
+    }
     this.addObstacle('wall', cells(47, 5, 2, 33).filter(c => scenario !== 'barrier' || c.gridY !== 20));
     if (scenario === 'nuke') this.addObstacle('target', cells(25, 11, 19, 19));
     else if (scenario === 'base') {
@@ -124,6 +149,7 @@ class FogLab extends Phaser.Scene {
     bind('longframe', () => { this.advance = 2000; });
     bind('reset', () => this.scene.restart()); bind('scenario', () => this.scene.restart(), 'change');
     bind('seed', () => this.scene.restart(), 'change');
+    bind('weapon', () => { if (this.gpuVfx || value('weapon') === 'flame' || value('weapon') === 'leaf_blower') this.scene.restart(); }, 'change');
     bind('destroy', () => this.openTarget());
     bind('explode', () => { this.openTarget(); this.fog.addExplosion(1050, 650, scenario === 'nuke' ? 420 : 140); });
     bind('build', () => this.obstacles.has('construction') ? this.removeObstacle('construction') : this.addObstacle('construction', cells(23, 18, 5, 5)));
@@ -138,18 +164,23 @@ class FogLab extends Phaser.Scene {
     bind('url', () => { const params = new URLSearchParams(); for (const id of controlIds) params.set(id, value(id)); history.replaceState(null, '', `?${params}`); });
     bind('export', () => this.export());
     bind('verify', () => this.verify());
-    bind('benchmark', () => {
+    const startBenchmark = (variant: number): void => {
       if (this.bench) return;
-      this.report = null; this.bench = { variant: 0, run: 0, start: performance.now(), samples: [], frames: [], gpu: [], gpuSample: -1, results: [], settings: this.settings() };
-      this.motion = this.firing = true; this.pan = false; this.paused = false; element<HTMLInputElement>('mode').value = 'off';
+      this.report = null; this.bench = { variant, run: 0, start: performance.now(), samples: [], frames: [], gpu: [], gpuSample: -1, results: [], settings: this.settings() };
+      this.motion = this.firing = true; this.pan = false; this.paused = false; element<HTMLInputElement>('mode').value = variant === 2 ? 'full' : 'off';
       document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input,select,button').forEach(el => { el.disabled = true; });
       this.scene.restart();
-    });
+    };
+    bind('benchmark', () => startBenchmark(0));
+    bind('benchmarkFull', () => startBenchmark(2));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.disposers.forEach(dispose => dispose()); this.disposers = [];
       this.pickups?.clear(); this.pickups = null; this.smoke?.destroyAll(); this.smoke = null;
       this.essence?.destroy(); this.essence = null;
       this.cameraFeedback.destroy();
+      this.flame?.destroyAll(); this.flame = null; this.leaf?.destroyAll(); this.leaf = null;
+      this.leafPresentation?.releaseWorldPresentation(); this.leafPresentation = null;
+      this.gpuVfx?.destroy(); this.gpuVfx = null; this.train?.destroy(); this.train = null;
       this.fog.destroy(); this.water.destroy(); this.light.destroy(); this.quality.destroy();
     });
   }
@@ -174,31 +205,56 @@ class FogLab extends Phaser.Scene {
   private tickShots(dt: number): void {
     if (this.fireOnce || (this.firing && this.elapsed >= this.nextShot)) {
       this.fireOnce = false;
-      this.nextShot = this.elapsed + (value('weapon') === 'p90' ? 65 : value('weapon') === 'melee' ? 900 : 230);
-      const count = value('weapon') === 'shotgun' ? 8 : 1;
+      const stream = value('weapon') === 'flame' ? streamContent.weapons.FLAMETHROWER : value('weapon') === 'leaf_blower' ? streamContent.weapons.LEAF_BLOWER : null;
+      this.nextShot = this.elapsed + (stream?.cooldown ?? (value('weapon') === 'p90' ? ballisticContent.weapons.P90.cooldown : value('weapon') === 'melee' ? 900 : 230));
+      const pelletCount = value('weapon') === 'shotgun' ? 8 : number('pellets');
+      const count = pelletCount * number('shooters');
       for (let i = 0; i < count; i++) {
         const pattern = value('shotPattern'), id = this.nextProjectileId++;
-        const angle = pattern === 'fan' ? -.75 + Math.sin(id * .31) * .45 : pattern === 'diagonal' ? -.65 : 0;
-        const y = (pattern === 'straight' ? 480 : 1000) + i * 10, style = value('weapon');
+        const shooter = Math.floor(i / pelletCount), pellet = i % pelletCount;
+        const spread = (pellet - (pelletCount - 1) / 2) * .055;
+        const angle = (pattern === 'fan' ? -.75 + Math.sin(this.elapsed / 1300 + shooter * .8) * .45 : pattern === 'diagonal' ? -.65 : 0) + spread;
+        const y = (pattern === 'straight' ? 480 : 1000) + shooter * 26, style = value('weapon');
         if (style === 'hitscan') { this.fog.addHitscan(250, y, 250 + Math.cos(angle) * 1150, y + Math.sin(angle) * 1150, 2); continue; }
         if (style === 'melee') { this.fog.addMelee(this.actor.x, this.actor.y, -.35, 110, 135); continue; }
         this.shots.push({ id, angle, image: this.add.rectangle(250, y, style === 'p90' || style === 'glock' ? 8 : 16, 3, 0xffd695).setRotation(angle).setDepth(DEPTH.PROJECTILES),
           y, age: 0, born: this.elapsed, style, index: i, cursor: new ProjectilePathCursor(),
-          points: [{ sequence: 1, timeMs: this.elapsed, x: 250, y, vx: Math.cos(angle) * 2100, vy: Math.sin(angle) * 2100, breakBefore: true }] });
+          points: [{ sequence: 1, timeMs: this.elapsed, x: 250, y, vx: Math.cos(angle) * 1200, vy: Math.sin(angle) * 1200, breakBefore: true }] });
       }
     }
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const p = this.shots[i], old = p.age; p.age += dt;
-      const speed = p.style === 'rocket' ? .75 : 2.1;
+      const stream = p.style === 'flame' ? streamContent.weapons.FLAMETHROWER : p.style === 'leaf_blower' ? streamContent.weapons.LEAF_BLOWER : null;
+      const speed = p.style === 'p90' ? ballisticContent.weapons.P90.fire.projectileSpeed / 1000 : p.style === 'rocket' ? .75 : 2.1;
+      const travel = (age: number): number => stream
+        ? stream.fire.projectileSpeed * (Math.pow(stream.fire.velocityDecay, age / 1000) - 1) / Math.log(stream.fire.velocityDecay)
+        : speed * age;
       const point = (age: number): ProjectilePathPoint => ({ sequence: p.points.length + 1, timeMs: p.born + age,
-        x: 250 + Math.cos(p.angle) * speed * age, y: p.y + Math.sin(p.angle) * speed * age + (p.style === 'bounce' ? Math.max(0, age - 220) * .8 : p.index * age * .015), vx: Math.cos(p.angle) * speed * 1000, vy: Math.sin(p.angle) * speed * 1000 });
-      const lifetime = p.style === 'short' ? 12 : 560, end = Math.min(p.age, lifetime);
+        x: 250 + Math.cos(p.angle) * travel(age), y: p.y + Math.sin(p.angle) * travel(age) + (p.style === 'bounce' ? Math.max(0, age - 220) * .8 : 0), vx: Math.cos(p.angle) * speed * 1000, vy: Math.sin(p.angle) * speed * 1000 });
+      const lifetime = stream ? Math.log(1 + stream.range * Math.log(stream.fire.velocityDecay) / stream.fire.projectileSpeed) / Math.log(stream.fire.velocityDecay) * 1000
+        : p.style === 'short' ? 12 : p.style === 'p90' ? ballisticContent.weapons.P90.range / speed : 560, end = Math.min(p.age, lifetime);
+      const size = stream ? Math.min(stream.fire.hitboxEndSize, stream.fire.hitboxStartSize + stream.fire.hitboxGrowRate * end / 1000)
+        : ['p90', 'glock', 'shotgun', 'short', 'bounce'].includes(p.style) ? 3 : 12;
       if (p.style === 'bounce' && old < 220 && end > 220) p.points.push({ ...point(220), bounceSequence: 1 });
       p.points.push(point(end));
-      p.cursor.consume({ timeMs: p.born + end, points: p.points, ended: p.age >= lifetime }, p.born + end,
-        segment => this.fog.addProjectile(segment, ['p90', 'glock', 'shotgun', 'short', 'bounce'].includes(p.style) ? 3 : 12, p.style, p.id));
       const head = p.points[p.points.length - 1]; p.image.setPosition(head.x, head.y);
-      if (p.age >= lifetime) { p.image.destroy(); this.shots.splice(i, 1); }
+      if (p.style === 'leaf_blower') {
+        // Match the game's history-free stream path instead of inventing replicated flight data.
+        const pose = { ...head, id: p.id, size, style: 'leaf_blower' as const, ownerId: 'lab', color: 0xb8caa3 };
+        this.leafPresentation!.syncHostRenderers([pose], this.elapsed);
+        if (p.age >= lifetime) this.leafPresentation!.destroyProjectileVisuals(pose);
+      } else p.cursor.consume({ timeMs: p.born + end, points: p.points, ended: p.age >= lifetime }, p.born + end,
+        segment => this.fog.addProjectile(segment, size, p.style, p.id));
+      if (stream) {
+        p.image.setVisible(false);
+        if (p.style === 'flame') {
+          if (!this.flame!.has(p.id)) this.flame!.createVisual(p.id, head.x, head.y, size, 0xff9933, `lab:${Math.floor(p.index / number('pellets'))}`);
+          this.flame!.updateVisual(p.id, head.x, head.y, size, head.vx, head.vy);
+        } else {
+          this.leaf!.createVisual(p.id, head.x, head.y, size); this.leaf!.updateVisual(p.id, head.x, head.y, size, head.vx, head.vy);
+        }
+      }
+      if (p.age >= lifetime) { this.flame?.destroyVisual(p.id); this.leaf?.destroyVisual(p.id); p.image.destroy(); this.shots.splice(i, 1); }
     }
   }
   update(_time: number, rawDelta: number): void {
@@ -227,6 +283,13 @@ class FogLab extends Phaser.Scene {
     this.quality.setLevel(this.fog.quality);
     this.water.prepareMasks(); this.water.updateResidency(view);
     if (dt) { this.fog.captureMotion(dt, [this.playerSource], [this.enemySource], view); this.tickShots(Math.min(dt, 67)); }
+    if (this.train) {
+      const y = -100 + this.elapsed / 1000 * TRAIN.SPEED;
+      this.train.update({ alive: y < frame.height + TRAIN.WAGON_COUNT * (TRAIN.WAGON_HEIGHT + TRAIN.SEGMENT_GAP), x: 1260, y, dir: 1, hp: TRAIN.HP_MAX, maxHp: TRAIN.HP_MAX });
+      const state = this.train.getShadowState();
+      if (dt) this.fog.captureTrain(dt, state, state ? this.train.computeSegYs(state.y, state.dir) : []);
+    }
+    this.gpuVfx?.update(dt);
     if (this.bench && this.elapsed >= this.nextExplosion) { this.nextExplosion += 4000; this.fog.addExplosion(1080, 800, 180); }
     for (const cell of this.fadingBase) if (cell.image.active && cell.removeAt <= this.elapsed) cell.image.destroy();
     this.fadingBase = this.fadingBase.filter(cell => cell.image.active);
@@ -243,7 +306,7 @@ class FogLab extends Phaser.Scene {
     }] }, this.elapsed);
     element('clock').textContent = `${Math.floor(number('time') / 60).toString().padStart(2, '0')}:${(number('time') % 60).toString().padStart(2, '0')}`;
     const stats = this.fog.getDiagnostics();
-    element('status').textContent = `${stats.status} · ${(this.elapsed / 1000).toFixed(1)} s\nCPU Submission ${stats.cpuMs.toFixed(2)} ms · ${stats.gpuMs === null ? 'GPU-Zeit nicht verfügbar' : `GPU ${stats.gpuMs.toFixed(2)} ms`}\nChunks ${stats.activeChunks} aktiv / ${stats.cachedChunks} Cache · ${(stats.bytes / 1048576).toFixed(1)} MiB\nImpulse ${stats.submittedImpulses} / ${stats.pendingImpulses} wartend / ${stats.droppedImpulses} verworfen\nSpuren ${stats.trailSegments} / ${stats.trailTileOverflow} lokale Überläufe`;
+    element('status').textContent = `${stats.status} · ${(this.elapsed / 1000).toFixed(1)} s\nCPU Submission ${stats.cpuMs.toFixed(2)} ms · ${stats.gpuMs === null ? 'GPU-Zeit nicht verfügbar' : `GPU ${stats.gpuMs.toFixed(2)} ms`}\nChunks ${stats.activeChunks} aktiv / ${stats.cachedChunks} Cache · ${(stats.bytes / 1048576).toFixed(1)} MiB\nImpulse ${stats.submittedImpulses} / ${stats.pendingImpulses} wartend / ${stats.droppedImpulses} verworfen\nSpuren ${stats.trailSegments} / ${stats.visibleTraces} sichtbar · ${stats.trailDrawCalls} Draw`;
     const now = performance.now(), measuredFrame = now - this.lastFrameAt; this.lastFrameAt = now;
     if (this.bench) this.measure(measuredFrame, stats.cpuMs);
   }

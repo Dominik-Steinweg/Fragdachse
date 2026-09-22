@@ -26,17 +26,29 @@ describe('ground fog bounded world state', () => {
     fog.enabled = true; fog.reactions = false; fog.addHitscan(300, 300, 900, 300, 2); expect(fog.impulses.size).toBe(0);
     fog.destroy();
   });
-  it('coalesces confirmed straight flight per source and bins diagonal geometry without exhausting nearby tiles', () => {
+  it('coalesces confirmed straight flight per source and culls untouched viewports', () => {
     const trails = new FogTrailSegments({ offsetX: 0, offsetY: 0, width: 2048, height: 2048 });
     for (let shot = 0; shot < 40; shot++) for (let i = 0; i < 30; i++) {
       const point = (n: number) => ({ x: 100 + n * 30, y: 100 + shot * .1 + n * 30, timeMs: shot * 40 + n * 16, sequence: n + 1, vx: 1875, vy: 1875 });
       trails.addPath({ from: point(i), to: point(i + 1), ageMs: 0 }, shot, shot * 40 + (i + 1) * 16);
     }
-    trails.prepare(2040); expect(trails.size).toBe(40); expect(trails.dropped).toBe(0); expect(trails.tileOverflow).toBe(0);
-    // An unrelated tile inside the diagonal's bounding rectangle receives no commands.
-    const offLineTile = 1 * trails.columns + 6;
-    expect(trails.bins.slice(offLineTile * FOG.trailsPerTile * 4, (offLineTile + 1) * FOG.trailsPerTile * 4).some(Boolean)).toBe(false);
+    trails.prepare(2040); expect(trails.size).toBe(40); expect(trails.dropped).toBe(0);
+    const vertices = new Float32Array(FOG.trailCapacity * 24);
+    expect(trails.writeVertices(vertices, { x: 1400, y: 100, width: 50, height: 50 })).toBe(0);
+    expect(trails.writeVertices(vertices, { x: 0, y: 0, width: 2048, height: 2048 })).toBe(trails.size * 6);
     trails.prepare(2040 + FOG.trailMs); expect(trails.size).toBe(0);
+  });
+  it('keeps coalesced tips visible when source time outruns the capped fog clock', () => {
+    const trails = new FogTrailSegments(frame);
+    const p = (x: number, timeMs: number) => ({ x, y: 100, timeMs, sequence: timeMs, vx: 1000, vy: 0 });
+    trails.addPath({ from: p(100, 0), to: p(120, 20), ageMs: 0 }, 1, 33.3);
+    trails.addPath({ from: p(120, 20), to: p(300, 200), ageMs: 0 }, 1, 99.9);
+    expect(trails.size).toBe(1);
+    const end = FOG.trailTextureWidth * 4 * 2 + 2;
+    const endAt = trails.commands[end] * 256 + trails.commands[end + 1];
+    expect(endAt).toBeLessThanOrEqual(99.9);
+    expect(99.9 - endAt).toBeLessThan(1);
+    trails.prepare(99.9 + FOG.trailMs); expect(trails.size).toBe(0);
   });
   it('keeps bounce pivots, disconnected histories and overlapping projectile identities separate', () => {
     const trails = new FogTrailSegments(frame);
@@ -54,8 +66,31 @@ describe('ground fog bounded world state', () => {
     for (let i = 0; i < FOG.trailCapacity + 10; i++) trails.add(p, 100);
     trails.prepare(100); expect(trails.size).toBe(FOG.trailCapacity); expect(trails.dropped).toBe(10);
     trails.prepare(100); expect(trails.size).toBe(FOG.trailCapacity);
-    trails.prepare(100 + FOG.trailMs); expect(trails.size).toBe(0); expect(trails.bins.some(Boolean)).toBe(false);
+    trails.prepare(100 + FOG.trailMs); expect(trails.size).toBe(0);
     trails.add(p, 500); trails.clear(); trails.prepare(500); expect(trails.size).toBe(0);
+  });
+  it('keeps a longer wake alive while short traces expire and reuses their slots', () => {
+    const trails = new FogTrailSegments(frame);
+    const p = { x: 100, y: 100, endX: 150, endY: 100, radius: 40, strength: .8, priority: 95, kind: 'motion' as const };
+    trails.add(p, 0, { radius: 40, strength: .8, lifeMs: FOG.trainTrailMs, decayMs: FOG.trainTrailDecayMs });
+    for (let wave = 0; wave < 3; wave++) {
+      for (let i = 0; i < FOG.trailCapacity - 1; i++) trails.add(p, wave * (FOG.trailMs + 1));
+      trails.prepare((wave + 1) * (FOG.trailMs + 1));
+      expect(trails.size).toBe(1); expect(trails.dropped).toBe(0);
+    }
+    trails.prepare(FOG.trainTrailMs + 1); expect(trails.size).toBe(0);
+  });
+  it('observes train front/rear motion but breaks histories on pause, respawn and teleport', () => {
+    const fog = new GroundFogSystem({ sys: { renderer: { on: vi.fn(), off: vi.fn() } } } as never, frame, 1, []);
+    const train = { alive: true, x: 500, y: 500, dir: 1 as const, hp: 100, maxHp: 100 };
+    const tick = (delta = 33) => fog.captureTrain(delta, train, [train.y, train.y - 200]);
+    tick(); tick(); expect(fog.impulses.size).toBe(0);
+    train.y += 20; tick(); expect(fog.impulses.size).toBe(2); fog.impulses.clear();
+    train.y += 1000; tick(); expect(fog.impulses.size).toBe(0);
+    tick(0); train.y += 20; tick(); expect(fog.impulses.size).toBe(0);
+    train.alive = false; tick(); train.alive = true; train.y = 500; tick(); expect(fog.impulses.size).toBe(0);
+    train.y += 20; tick(); expect(fog.impulses.size).toBe(2); fog.freeze(); tick(); expect(fog.impulses.size).toBe(0);
+    fog.destroy();
   });
   it('seeds late joins, batches terrain events and disconnects all input owners before handoff', () => {
     const events = new EventEmitter(), renderer = { on: vi.fn(), off: vi.fn() };

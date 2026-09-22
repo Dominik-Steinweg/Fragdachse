@@ -1620,6 +1620,7 @@ export class ClientUpdateCoordinator {
         : (trace.hitObstacle ? 'environment' : 'none'),
       config.fire.visualPreset,
       config.shotAudio?.successKey,
+      config.id,
     );
 
     return shotId;

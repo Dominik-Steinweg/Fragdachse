@@ -55,7 +55,7 @@ export interface PerformanceCase {
   minimumActions: number;
   slot: WeaponSlot;
   commit: LoadoutCommitSnapshot;
-  kind?: 'weapon' | 'utility' | 'pickup' | 'environment' | 'enemies' | 'construction' | 'combat' | 'recovery';
+  kind?: 'weapon' | 'utility' | 'pickup' | 'environment' | 'enemies' | 'construction' | 'combat' | 'recovery' | 'hazard';
   itemId?: string;
   mapId?: string;
   targetDistance?: number;

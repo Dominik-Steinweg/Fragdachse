@@ -10,4 +10,11 @@ export const PERFORMANCE_FIXTURE = {
   combatWaveIntervalMs: 7500,
   observationIntervalMs: 100,
   resourceRefillIntervalMs: 250,
+  // Map 14's final firefront footprint; freeze the load independently of campaign tuning.
+  voidFire: {
+    area: { type: 'rectangle', gridX: 35, gridY: 40, widthCells: 59, heightCells: 42, baseClearanceCells: 0 },
+    spread: { direction: 'left-to-right', durationMs: 5000, roughnessCells: 3, warningLeadMs: 1000 },
+    effect: { visualStyle: 'void', burnDurationMs: 2000, burnDamagePerTick: 0.5, sourceId: 'ground_fire.void_hunter' },
+    preparationTimeoutMs: 30_000,
+  },
 } as const;

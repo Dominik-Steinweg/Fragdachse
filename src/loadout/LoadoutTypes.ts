@@ -1,3 +1,4 @@
+import type { FogTrailModifiers } from '../config/fogTrail';
 import type { TurretAimConfig } from '../config/turretAim';
 import type { WeaponFeedbackProfileId } from '../config/weaponFeedback';
 import type { DamageZoneVisualStyle, EnergyInjectorConstructionEffect, GroundFireVisualStyle, TimeBubblePrismEmitterConfig } from '../types';
@@ -222,7 +223,7 @@ export type WeaponFireConfig =
   | ReinforcementMatrixWeaponFireConfig
   | EnergyInjectorWeaponFireConfig;
 
-export interface WeaponConfigShape {
+export interface WeaponConfigShape extends FogTrailModifiers {
   /** Resolved normal flames captured before the fireball conversion. Runtime-only. */
   readonly fireballFlameConfig?: WeaponConfigShape;
   readonly rocketLauncher?: import('./RocketLauncherConfig').RocketLauncherConfig;
@@ -516,7 +517,7 @@ export interface PlaceableTunnelPlacementConfig {
   readonly ownerTintStrength: number;
 }
 
-export interface BaseUtilityConfig {
+export interface BaseUtilityConfig extends FogTrailModifiers {
   readonly charges?: { readonly maxCharges: number; readonly burstLockoutMs: number };
   readonly id: string;
   readonly type: UtilityType;
@@ -766,7 +767,7 @@ export interface BuffAuraConfig {
   readonly lingerMs?: number;
 }
 
-interface BaseUltimateConfig {
+interface BaseUltimateConfig extends FogTrailModifiers {
   readonly id: string;
   readonly cooldown: number;          // ms (0 = rage-gated, kein Zeitcooldown)
   readonly rageRequired: number;      // Mindest-Rage zum Aktivieren

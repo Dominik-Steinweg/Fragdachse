@@ -1,0 +1,284 @@
+{
+  "settings": {
+    "scenario": "projectiles",
+    "seed": 183,
+    "mode": "full",
+    "quality": "high",
+    "time": 480,
+    "strength": 1,
+    "opacity": 0.5,
+    "detail": 0.65,
+    "windX": 12,
+    "windY": 4,
+    "reaction": 1,
+    "weapon": "p90",
+    "motionPattern": "cycle",
+    "shotPattern": "fan",
+    "shooters": 4,
+    "pellets": 3
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "warmupSeconds": 10,
+  "measurementSeconds": 30,
+  "percentilesOrder": [
+    "median",
+    "p95",
+    "p99"
+  ],
+  "notes": [
+    "CPU/frame milliseconds rounded to 0.1ms for reporting; GPU milliseconds retained.",
+    "Off/ambient runs preceded the final capped-clock fix; their paths are unchanged.",
+    "Full runs are repeated after the capped-clock fix."
+  ],
+  "results": [
+    {
+      "mode": "off",
+      "run": 1,
+      "cpu": [
+        0,
+        0,
+        0.1
+      ],
+      "frame": [
+        16.5,
+        17.2,
+        17.6
+      ],
+      "count": 1813,
+      "gpu": null,
+      "bytes": 0,
+      "activeChunks": 0,
+      "cachedChunks": 0,
+      "traceCount": 0,
+      "visibleTraces": 0,
+      "trailDrawCalls": 0,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "mode": "off",
+      "run": 2,
+      "cpu": [
+        0,
+        0,
+        0.1
+      ],
+      "frame": [
+        16.5,
+        17.2,
+        17.6
+      ],
+      "count": 1810,
+      "gpu": null,
+      "bytes": 0,
+      "activeChunks": 0,
+      "cachedChunks": 0,
+      "traceCount": 0,
+      "visibleTraces": 0,
+      "trailDrawCalls": 0,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "mode": "off",
+      "run": 3,
+      "cpu": [
+        0,
+        0,
+        0.1
+      ],
+      "frame": [
+        16.4,
+        17.1,
+        17.5
+      ],
+      "count": 1817,
+      "gpu": null,
+      "bytes": 0,
+      "activeChunks": 0,
+      "cachedChunks": 0,
+      "traceCount": 0,
+      "visibleTraces": 0,
+      "trailDrawCalls": 0,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "mode": "ambient",
+      "run": 1,
+      "cpu": [
+        0.3,
+        0.4,
+        0.5
+      ],
+      "frame": [
+        16.5,
+        17.2,
+        17.6
+      ],
+      "count": 1809,
+      "gpu": [
+        0.384,
+        2.711552,
+        3.631104
+      ],
+      "gpuCount": 1809,
+      "bytes": 24117504,
+      "activeChunks": 20,
+      "cachedChunks": 0,
+      "traceCount": 0,
+      "visibleTraces": 0,
+      "trailDrawCalls": 0,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "mode": "ambient",
+      "run": 2,
+      "cpu": [
+        0.3,
+        0.4,
+        0.5
+      ],
+      "frame": [
+        16.5,
+        17.2,
+        17.6
+      ],
+      "count": 1808,
+      "gpu": [
+        0.38912,
+        2.87232,
+        3.663872
+      ],
+      "gpuCount": 1807,
+      "bytes": 24117504,
+      "activeChunks": 20,
+      "cachedChunks": 0,
+      "traceCount": 0,
+      "visibleTraces": 0,
+      "trailDrawCalls": 0,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "mode": "ambient",
+      "run": 3,
+      "cpu": [
+        0.3,
+        0.4,
+        0.5
+      ],
+      "frame": [
+        16.5,
+        17.2,
+        17.5
+      ],
+      "count": 1811,
+      "gpu": [
+        0.751616,
+        2.955264,
+        3.96288
+      ],
+      "gpuCount": 1808,
+      "bytes": 24117504,
+      "activeChunks": 20,
+      "cachedChunks": 0,
+      "traceCount": 0,
+      "visibleTraces": 0,
+      "trailDrawCalls": 0,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "mode": "full",
+      "run": 1,
+      "cpu": [
+        0.4,
+        0.6,
+        0.7
+      ],
+      "frame": [
+        16.5,
+        17.3,
+        17.7
+      ],
+      "count": 1817,
+      "gpu": [
+        0.571392,
+        3.079168,
+        4.609024
+      ],
+      "gpuCount": 1816,
+      "bytes": 24117504,
+      "activeChunks": 20,
+      "cachedChunks": 0,
+      "traceCount": 540,
+      "visibleTraces": 540,
+      "trailDrawCalls": 1,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "mode": "full",
+      "run": 2,
+      "cpu": [
+        0.4,
+        0.6,
+        0.7
+      ],
+      "frame": [
+        16.5,
+        17.3,
+        17.7
+      ],
+      "count": 1815,
+      "gpu": [
+        0.58368,
+        3.072,
+        3.919872
+      ],
+      "gpuCount": 1815,
+      "bytes": 24117504,
+      "activeChunks": 20,
+      "cachedChunks": 0,
+      "traceCount": 540,
+      "visibleTraces": 540,
+      "trailDrawCalls": 1,
+      "dropped": 0,
+      "validCadence": true
+    },
+    {
+      "mode": "full",
+      "run": 3,
+      "cpu": [
+        0.4,
+        0.6,
+        0.7
+      ],
+      "frame": [
+        16.5,
+        17.3,
+        17.9
+      ],
+      "count": 1813,
+      "gpu": [
+        0.589824,
+        3.119104,
+        4.61824
+      ],
+      "gpuCount": 1813,
+      "bytes": 24117504,
+      "activeChunks": 20,
+      "cachedChunks": 0,
+      "traceCount": 540,
+      "visibleTraces": 540,
+      "trailDrawCalls": 1,
+      "dropped": 0,
+      "validCadence": true
+    }
+  ]
+}

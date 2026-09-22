@@ -653,6 +653,7 @@ export class ArenaRuntime {
   /** Read-only diagnostic projection; owners are resolved again after every World handoff. */
   getScenarioObservation() {
     const now = this.getSynchronizedNow();
+    const burningGround = this.ctx.fireSystem.getGroundState();
     return {
       train: this.flow.getWorldTrainRuntime()?.getCurrentTrain()?.getNetSnapshot() ?? null,
       mapEvents: this.flow.getCoopMissionRuntime()?.coopDefenseMapEventDirector?.getPresentationState() ?? null,
@@ -660,7 +661,8 @@ export class ArenaRuntime {
       nukes: this.flow.getWorldPowerUpRuntime()?.system?.getNukeSnapshot().length ?? 0,
       smoke: this.flow.getWorldSupportGameplayRuntime()?.smoke.runtime.getSnapshots(now).length ?? 0,
       meteors: this.flow.getWorldSupportGameplayRuntime()?.systems.armageddon.getSnapshot().length ?? 0,
-      burningCells: this.ctx.fireSystem.getGroundState().cells.length,
+      burningCells: burningGround.cells.length,
+      burningGround,
       lights: this.renderers.lighting.getDebugStats(),
       constructions: this.flow.getWorldRuntime()?.materialization?.placement?.getAllRuntimeRocks() ?? [],
     };

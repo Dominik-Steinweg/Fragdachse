@@ -3,8 +3,9 @@ import { FOG, FOG_DEBUG, type FogDebug, type FogRect, type FogTuning, type FogQu
 import { FogTerrainModel } from './FogTerrainModel';
 import { FogResidency } from './FogResidency';
 import type { FogImpulse } from './FogImpulses';
-import { FOG_DENSITY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_MATERIAL_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT } from './fogShaders';
+import { FOG_DENSITY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_MATERIAL_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
 import { FogTrailSegments } from './FogTrailSegments';
+import { FogTrailRenderer } from './FogTrailRenderer';
 
 const SIDE = FOG.chunkSize / FOG.cellSize;
 const WIDTH = SIDE * FOG.atlasCols, HEIGHT = SIDE * FOG.atlasRows, SLOTS = FOG.atlasCols * FOG.atlasRows;
@@ -64,7 +65,8 @@ export class FogGpuField {
   private surfaceMask: Phaser.GameObjects.RenderTexture | null = null;
   private trailMask: Phaser.GameObjects.Shader | null = null;
   private trailCommands: FogDataTexture | null = null;
-  private trailBins: FogDataTexture | null = null;
+  private trailRenderer: FogTrailRenderer | null = null;
+  private trailVersion = -1;
   readonly trails: FogTrailSegments;
   private readonly resources: (() => void)[] = [];
   private readonly dither: boolean;
@@ -91,7 +93,7 @@ export class FogGpuField {
     this.trails = new FogTrailSegments(terrain.frame);
     const gl = (scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer).gl;
     this.dither = gl.isEnabled(gl.DITHER);
-    if (gl.getParameter(gl.MAX_TEXTURE_SIZE) < Math.max(WIDTH, HEIGHT, FOG.trailCapacity, this.trails.binsHeight)
+    if (gl.getParameter(gl.MAX_TEXTURE_SIZE) < Math.max(WIDTH, HEIGHT, FOG.trailTextureWidth)
       || gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) < 8
       || !gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT)?.precision) throw new Error('Required RGBA8 shader capabilities unavailable');
     try {
@@ -112,10 +114,11 @@ export class FogGpuField {
     const texture = new FogDataTexture(this.scene, this.prefix + name, width, height);
     this.resources.push(() => texture.destroy()); return texture;
   }
-  private makePass(name: string, fragment: string, width: number, height: number): Phaser.GameObjects.Shader {
+  private makePass(name: string, fragment: string, width: number, height: number, vertexSource?: string): Phaser.GameObjects.Shader {
     const shader = new Phaser.GameObjects.Shader(this.scene, {
       name: `GroundFog_${name.replace(/[01]$/, '')}`, shaderName: `GroundFog_${name.replace(/[01]$/, '')}`,
       fragmentSource: fragment,
+      vertexSource,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
         for (const [i, uniform] of ['uState', 'uVelocity', 'uTerrain', 'uMeta', 'uCommands', 'uBins', 'uImpulse', 'uLookup'].entries()) set(uniform, i);
         set('uWorldSize', [this.terrain.frame.width, this.terrain.frame.height]);
@@ -128,8 +131,7 @@ export class FogGpuField {
         set('uOpacity', this.tuning.opacity); set('uDetail', this.tuning.detail);
         set('uDebug', FOG_DEBUG.indexOf(this.debug)); set('uInterpolation', this.interpolation);
         set('uHasSurface', this.hasSurfaces ? 1 : 0); set('uQuality', this.quality === 'high' ? 2 : this.quality === 'medium' ? 1 : 0);
-        set('uHasTrails', this.trailMask && this.quality !== 'low' ? 1 : 0);
-        set('uTrailTime', this.elapsed % 60000); set('uTrailCols', this.trails.columns); set('uTrailBinsHeight', this.trails.binsHeight);
+        set('uHasTrails', this.trailMask ? 1 : 0);
       },
     }, 0, 0, width, height, Array(8).fill('__DEFAULT'));
     try {
@@ -152,10 +154,7 @@ export class FogGpuField {
     if (shader === this.material) {
       shader.textures[4] = this.velocities[this.current].texture!;
       shader.textures[5] = this.surfaceMask?.texture ?? this.scene.textures.get('__DEFAULT');
-      if (this.debug === 'normal' && this.quality !== 'low' && this.trailMask) shader.textures[6] = this.trailMask.texture!;
-    }
-    if (shader === this.trailMask) {
-      shader.textures[4] = this.trailCommands!.texture; shader.textures[5] = this.trailBins!.texture;
+      if (this.debug === 'normal' && this.trailMask) shader.textures[6] = this.trailMask.texture!;
     }
     // Never bind the output as an input, even when that sampler was optimized out.
     for (let i = 0; i < shader.textures.length; i++) if (shader.textures[i] === shader.texture)
@@ -241,10 +240,6 @@ export class FogGpuField {
     this.density = density; this.tuning = tuning; this.elapsed = elapsed; this.initializeOnly = initializeOnly;
     for (const p of impulses) if (p.kind === 'projectile' && p.radius <= 4) this.trails.add(p, elapsed);
     this.trails.prepare(elapsed);
-    if (this.trailCommands && this.trailBins) {
-      this.trailCommands.data.set(this.trails.commands); this.trailCommands.upload();
-      this.trailBins.data.set(this.trails.bins); this.trailBins.upload();
-    }
     // Sub-cell bullet wakes use the continuous mask, not circular holes in the 8px field.
     this.uploadMeta(impulses.filter(p => p.kind !== 'projectile' || p.radius > 4));
     const next = 1 - this.current;
@@ -273,15 +268,18 @@ export class FogGpuField {
       this.display = this.scene.add.image(view.x, view.y, this.material.texture!).setOrigin(0).setDepth(this.depth);
       this.surfaceMask?.destroy(); this.surfaceMask = null;
     }
-    if (quality !== 'low') {
-      this.trailCommands ??= this.makeData('trailCommands', FOG.trailCapacity, 4);
-      this.trailBins ??= this.makeData('trailBins', 1024, this.trails.binsHeight);
+    if (quality !== 'low' || this.trails.size > 0 || this.trailMask) {
+      this.trailCommands ??= this.makeData('trailCommands', FOG.trailTextureWidth, FOG.trailCapacity / FOG.trailTextureWidth * 5);
+      if (this.trailVersion !== this.trails.version) {
+        this.trailCommands.data.set(this.trails.commands); this.trailCommands.upload(); this.trailVersion = this.trails.version;
+      }
       if (!this.trailMask || this.trailMask.width !== w || this.trailMask.height !== h) {
         if (this.trailMask) destroyFogShader(this.trailMask);
-        this.trailMask = this.makePass('trails', FOG_TRAIL_FRAGMENT, w, h);
+        this.trailMask = this.makePass('trails', FOG_TRAIL_FRAGMENT, w, h, FOG_TRAIL_VERTEX);
         this.trailMask.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
+        this.trailRenderer = new FogTrailRenderer(this.trailMask, this.terrain.frame);
       }
-      this.draw(this.trailMask, this.states[this.current], this.velocities[this.current]);
+      this.trailRenderer!.draw(this.trails, view, this.elapsed, this.tuning.reaction, this.trailCommands.texture, quality !== 'low');
     }
     this.hasSurfaces = surfaces.length > 0;
     if (this.hasSurfaces) {
@@ -302,6 +300,8 @@ export class FogGpuField {
     this.display!.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setVisible(true);
   }
   hide(): void { this.display?.setVisible(false); }
+  get trailDrawCalls(): number { return this.trailRenderer?.drawCalls ?? 0; }
+  get visibleTraces(): number { return this.trailRenderer?.visibleTraces ?? 0; }
   /** Explicit lab diagnostic only; never used by simulation, residency or ordinary rendering. */
   readDensity(worldX: number, worldY: number): { density: number; reached: boolean } {
     const pixel = this.readPixel(worldX, worldY, this.states[this.current]);
@@ -339,7 +339,7 @@ export class FogGpuField {
       + this.lookup.data.length + (this.material ? this.material.width * this.material.height * 4 : 0)
       + (this.surfaceMask ? this.surfaceMask.width * this.surfaceMask.height * 4 : 0)
       + (this.trailMask ? this.trailMask.width * this.trailMask.height * 4 : 0)
-      + (this.trailCommands?.data.length ?? 0) + (this.trailBins?.data.length ?? 0);
+      + (this.trailCommands?.data.length ?? 0) + (this.trailRenderer ? FOG.trailCapacity * 6 * 16 : 0);
   }
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;

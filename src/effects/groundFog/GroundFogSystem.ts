@@ -1,7 +1,11 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
 import { DEFAULT_FOG_STRENGTH } from '../../config/groundFog';
-import type { WaterCell, ExplosionVisualStyle } from '../../types';
+import { fogTrailFactor, type FogTrailModifiers } from '../../config/fogTrail';
+import type { WaterCell, ExplosionVisualStyle, SyncedTrainState } from '../../types';
+import { TRAIN } from '../../train/TrainConfig';
+import { getStreamFogRadius } from '../ProjectileVisualSize';
+import type { FogTrailProfile } from './FogTrailSegments';
 import { createMovementVisualSample, type MovementVisualSource } from '../MovementStepSampler';
 import type { ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
 import { FOG, fogDensityAt, fogTuning, type FogDebug, type FogFrame, type FogQuality, type FogRect, type FogTuning } from './FogConfig';
@@ -15,6 +19,7 @@ export interface FogDiagnostics {
   status: string; cpuMs: number; activeChunks: number; cachedChunks: number; bytes: number;
   pendingImpulses: number; submittedImpulses: number; droppedImpulses: number; steps: number;
   gpuMs: number | null; gpuSample: number; trailSegments: number; trailTileOverflow: number;
+  trailDrawCalls: number; visibleTraces: number;
 }
 
 /** One local World's cosmetic state. No global clock, gameplay writes, or network messages. */
@@ -32,7 +37,10 @@ export class GroundFogSystem {
   private surfaces: readonly Phaser.GameObjects.Image[] = [];
   private gpu: FogGpuField | null = null;
   private accumulator = 0;
-  private readonly fineInputs: { segment: ProjectileTrailSegment; sourceId: number }[] = [];
+  private readonly fineInputs: { segment: ProjectileTrailSegment; sourceId: number | string; profile?: FogTrailProfile }[] = [];
+  private trainBefore: { x: number; front: number; rear: number; dir: number; time: number } | null = null;
+  private trainGeneration = 0;
+  private trainTime = 0;
   private fineDropped = 0;
   private nextHitscan = -1;
   private elapsed = 0;
@@ -43,7 +51,7 @@ export class GroundFogSystem {
   private destroyed = false;
   private failed = '';
   private stats: FogDiagnostics = { status: 'preparing', cpuMs: 0, activeChunks: 0, cachedChunks: 0, bytes: 0,
-    pendingImpulses: 0, submittedImpulses: 0, droppedImpulses: 0, steps: 0, gpuMs: null, gpuSample: 0, trailSegments: 0, trailTileOverflow: 0 };
+    pendingImpulses: 0, submittedImpulses: 0, droppedImpulses: 0, steps: 0, gpuMs: null, gpuSample: 0, trailSegments: 0, trailTileOverflow: 0, trailDrawCalls: 0, visibleTraces: 0 };
   private readonly onContextRestore = (): void => { this.releaseGpu(); this.failed = ''; this.stats.status = 'preparing'; };
   constructor(private readonly scene: Phaser.Scene, readonly frame: FogFrame, readonly seed: number,
     water: readonly WaterCell[], strength = DEFAULT_FOG_STRENGTH) {
@@ -57,36 +65,56 @@ export class GroundFogSystem {
       : style === 'nuke' || style === 'void_nuke' ? 1.15 : 1;
     this.impulses.add({ x, y, endX: x, endY: y, radius: radius * 1.3, strength: Math.min(.95, (.4 + radius / 500) * scale), kind: 'explosion', priority: 100 + radius });
   }
-  addProjectile(segment: ProjectileTrailSegment, size: number, style: string, sourceId = 0): void {
-    if (!this.active || !this.reactions || this.quality === 'low' || segment.ageMs > FOG.trailMs) return;
+  addProjectile(segment: ProjectileTrailSegment, size: number, style: string, sourceId = 0, modifiers: FogTrailModifiers = {}): void {
+    if (!this.active || !this.reactions || this.quality === 'low') return;
     const large = ['rocket', 'fireball', 'plasma', 'bfg', 'energy_ball', 'hydra'].includes(style);
     const { from, to } = segment;
     if (!Number.isFinite(from.x + from.y + to.x + to.y)) return;
-    if (!large) {
-      // Confirmed small paths bypass the coarse impulse quota, retaining breaks and IDs.
-      if (this.fineInputs.length < FOG.trailCapacity) this.fineInputs.push({ segment, sourceId });
-      else this.fineDropped++;
-      return;
-    }
-    if (from === to || to.breakBefore || segment.ageMs > 220) return;
-    this.impulses.add({ x: from.x, y: from.y, endX: to.x, endY: to.y,
-      radius: Math.max(9, Math.min(28, size * 1.1)),
-      strength: FOG.largeProjectileStrength, kind: 'projectile', priority: 55 });
+    const streamRadius = getStreamFogRadius(style, size);
+    const radius = streamRadius ?? (large ? Math.max(9, Math.min(28, size * 1.1)) : FOG.trailRadius);
+    const strength = streamRadius !== null ? .55 : large ? FOG.largeProjectileStrength : FOG.smallProjectileStrength;
+    this.queueWeaponTrail(segment, sourceId, radius, strength, modifiers);
   }
-  addHitscan(x: number, y: number, endX: number, endY: number, thickness: number): void {
+  private queueWeaponTrail(segment: ProjectileTrailSegment, sourceId: number | string, radius: number, strength: number, modifiers: FogTrailModifiers, arcDegrees?: number): void {
+    const width = fogTrailFactor(modifiers.fogTrailWidthFactor), duration = fogTrailFactor(modifiers.fogTrailDurationFactor);
+    if (!width || !duration || segment.ageMs > FOG.trailMs * duration) return;
+    const profile: FogTrailProfile = { radius: radius * width, strength, lifeMs: FOG.trailMs * duration, decayMs: FOG.trailDecayMs * duration, arcDegrees };
+    if (this.fineInputs.length < FOG.trailCapacity) this.fineInputs.push({ segment, sourceId, profile });
+    else this.fineDropped++;
+  }
+  addHitscan(x: number, y: number, endX: number, endY: number, thickness: number, modifiers: FogTrailModifiers = {}): void {
     if (!this.active || !this.reactions || this.quality === 'low') return;
-    if (thickness <= 3) {
-      const from = { x, y, timeMs: this.elapsed, sequence: 1, vx: 0, vy: 0 };
-      this.addProjectile({ from, to: { ...from, x: endX, y: endY, sequence: 2 }, ageMs: 0 }, thickness, 'bullet', this.nextHitscan--);
-      return;
-    }
-    this.impulses.add({ x, y, endX, endY, radius: Math.max(4, Math.min(18, thickness * 1.5)),
-      strength: FOG.smallProjectileStrength, kind: 'projectile', priority: 55 });
+    const from = { x, y, timeMs: this.elapsed, sequence: 1, vx: 0, vy: 0 };
+    this.queueWeaponTrail({ from, to: { ...from, x: endX, y: endY, sequence: 2 }, ageMs: 0 }, this.nextHitscan--,
+      thickness <= 3 ? FOG.trailRadius : Math.max(4, Math.min(18, thickness * 1.5)), FOG.smallProjectileStrength, modifiers);
   }
-  addMelee(x: number, y: number, angle: number, arcDegrees: number, range: number): void {
+  /** Observe the same interpolated pose as TrainRenderer, with no gameplay/network writes. */
+  captureTrain(delta: number, train: SyncedTrainState | null, segmentYs: readonly number[]): void {
+    if (!this.active || !this.reactions || delta <= 0 || delta > 150 || !train?.alive || !segmentYs.length) {
+      this.trainBefore = null; return;
+    }
+    this.trainTime += delta;
+    const front = segmentYs[0] + train.dir * TRAIN.LOCO_HEIGHT / 2;
+    const rear = segmentYs[segmentYs.length - 1] - train.dir * TRAIN.WAGON_HEIGHT / 2;
+    const before = this.trainBefore, distance = before ? Math.abs(front - before.front) : 0;
+    if (before && train.x === before.x && train.dir === before.dir && distance > .05 && distance < Math.max(128, delta * 2)) {
+      const radius = TRAIN.VISUAL_WIDTH * .85;
+      for (const [part, y, oldY] of [['front', front, before.front], ['rear', rear, before.rear]] as const) {
+        const from = { x: train.x, y: oldY, timeMs: before.time, sequence: 1, vx: 0, vy: train.dir * TRAIN.SPEED };
+        const segment = { from, to: { ...from, y, timeMs: this.trainTime, sequence: 2 }, ageMs: 0 };
+        if (this.quality !== 'low' && this.fineInputs.length < FOG.trailCapacity)
+          this.fineInputs.push({ segment, sourceId: `train:${this.trainGeneration}:${part}`,
+            profile: { radius, strength: .8, lifeMs: FOG.trainTrailMs, decayMs: FOG.trainTrailDecayMs } });
+        this.impulses.add({ x: train.x, y: oldY, endX: train.x, endY: y, radius, strength: .8, kind: 'motion', priority: 95 });
+      }
+    } else if (!before || distance >= Math.max(128, delta * 2) || train.dir !== before.dir || train.x !== before.x) this.trainGeneration++;
+    this.trainBefore = { x: train.x, front, rear, dir: train.dir, time: this.trainTime };
+  }
+  addMelee(x: number, y: number, angle: number, arcDegrees: number, range: number, modifiers: FogTrailModifiers = {}): void {
     if (!this.active || !this.reactions || !Number.isFinite(angle + arcDegrees + range) || arcDegrees <= 0) return;
-    this.impulses.add({ x, y, endX: x + Math.cos(angle), endY: y + Math.sin(angle), radius: range,
-      strength: .85, kind: 'melee', priority: 80, arcDegrees: Math.min(360, arcDegrees) });
+    const from = { x, y, timeMs: this.elapsed, sequence: 1, vx: 0, vy: 0 };
+    this.queueWeaponTrail({ from, to: { ...from, x: x + Math.cos(angle), y: y + Math.sin(angle), sequence: 2 }, ageMs: 0 },
+      this.nextHitscan--, range, .85, modifiers, Math.min(360, arcDegrees));
   }
   captureMotion(delta: number, players: readonly MovementVisualSource[], enemies: readonly MovementVisualSource[], view: FogRect): void {
     if (!this.active || !this.reactions || delta <= 0 || delta > 150) { this.tracks.clear(); return; }
@@ -116,7 +144,7 @@ export class GroundFogSystem {
   update(delta: number, minutes: number, view: FogRect, visible = true): void {
     const start = performance.now(); this.stats.steps = 0;
     if (!this.active) { this.releaseGpu(); this.stats.status = this.failed || 'off'; this.stats.cpuMs = performance.now() - start; return; }
-    if (!visible) { this.gpu?.hide(); this.impulses.clear(); this.fineInputs.length = 0; this.tracks.clear(); return; }
+    if (!visible) { this.gpu?.hide(); this.freeze(); return; }
     const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     if (!renderer?.gl || typeof Phaser.GameObjects?.Shader !== 'function') { this.failed = this.stats.status = 'WebGL unavailable'; return; }
     try {
@@ -138,7 +166,7 @@ export class GroundFogSystem {
         this.accumulator -= FOG.stepMs;
         const expanded = { x: view.x - FOG.margin, y: view.y - FOG.margin, width: view.width + FOG.margin * 2, height: view.height + FOG.margin * 2 };
         if (delta > 0) {
-          for (const input of this.fineInputs) this.gpu.trails.addPath(input.segment, input.sourceId, this.elapsed);
+          for (const input of this.fineInputs) this.gpu.trails.addPath(input.segment, input.sourceId, this.elapsed, input.profile);
           this.fineInputs.length = 0;
         }
         this.gpu.step(delta > 0 ? this.impulses.drain(this.quality, expanded) : [], this.density, this.tuning, this.elapsed, delta <= 0); this.stats.steps++;
@@ -153,7 +181,8 @@ export class GroundFogSystem {
       Object.assign(this.stats, { status: this.gpu.residency.overflow ? 'view capacity exceeded' : 'ready',
         activeChunks: active, cachedChunks: this.gpu.residency.chunks.size - active, bytes: this.gpu.bytes,
         submittedImpulses: this.gpu.submitted, droppedImpulses: this.impulses.dropped + this.gpu.dropped + this.gpu.trails.dropped + this.fineDropped,
-        pendingImpulses: this.impulses.size + this.fineInputs.length, trailSegments: this.gpu.trails.size, trailTileOverflow: this.gpu.trails.tileOverflow });
+        pendingImpulses: this.impulses.size + this.fineInputs.length, trailSegments: this.gpu.trails.size, trailTileOverflow: 0,
+        trailDrawCalls: this.gpu.trailDrawCalls, visibleTraces: this.gpu.visibleTraces });
     } catch (error) {
       this.timer?.end();
       this.failed = `Fog unavailable: ${error instanceof Error ? error.message : String(error)}`;
@@ -162,17 +191,17 @@ export class GroundFogSystem {
     this.stats.cpuMs = performance.now() - start;
   }
   readDensity(x: number, y: number): { density: number; reached: boolean } { return this.gpu?.readDensity(x, y) ?? { density: 0, reached: false }; }
-  getDiagnostics(): Readonly<FogDiagnostics> { return this.stats; }
+  getDiagnostics(): Readonly<FogDiagnostics> { this.stats.pendingImpulses = this.impulses.size + this.fineInputs.length; return this.stats; }
   setSurfaceImages(images: readonly Phaser.GameObjects.Image[]): void { this.surfaces = images; }
   prepare(minutes: number, view: FogRect): boolean {
     if (this.stats.status === 'preparing') { this.update(0, minutes, view); this.gpu?.hide(); }
     return this.stats.status !== 'preparing';
   }
-  freeze(): void { this.impulses.clear(); this.fineInputs.length = 0; this.tracks.clear(); }
+  freeze(): void { this.impulses.clear(); this.fineInputs.length = 0; this.tracks.clear(); this.trainBefore = null; }
   private releaseGpu(): void {
-    this.gpu?.destroy(); this.gpu = null; this.accumulator = 0; this.impulses.clear(); this.fineInputs.length = 0; this.tracks.clear();
+    this.gpu?.destroy(); this.gpu = null; this.accumulator = 0; this.freeze();
     this.timer?.destroy(); this.timer = null; this.stats.gpuMs = null;
-    this.stats.activeChunks = this.stats.cachedChunks = this.stats.bytes = this.stats.pendingImpulses = this.stats.submittedImpulses = this.stats.trailSegments = this.stats.trailTileOverflow = 0;
+    this.stats.activeChunks = this.stats.cachedChunks = this.stats.bytes = this.stats.pendingImpulses = this.stats.submittedImpulses = this.stats.trailSegments = this.stats.trailTileOverflow = this.stats.trailDrawCalls = this.stats.visibleTraces = 0;
   }
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;

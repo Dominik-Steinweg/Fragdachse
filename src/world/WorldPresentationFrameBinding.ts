@@ -202,7 +202,7 @@ export interface WorldPresentationFrameBindingInput {
   readonly getProjectileLightSamples: () => readonly ProjectileLightSample[];
   readonly getTrainState: (inRoundWorld: boolean) => SyncedTrainState | null;
   readonly getLiveTrainSegments: (inRoundWorld: boolean) => readonly TrainSegmentRect[] | null;
-  readonly getTrainVisual: () => Pick<TrainRenderer, 'computeSegYs'> | null;
+  readonly getTrainVisual: () => Pick<TrainRenderer, 'computeSegYs' | 'getShadowState'> | null;
   readonly syncTurretLights: (inArena: boolean) => void;
   readonly syncBaseLights: (inArena: boolean) => void;
   readonly getBaseShadowCells: () => Iterable<Phaser.GameObjects.Image>;
@@ -433,6 +433,9 @@ export class WorldPresentationFrameBinding {
     fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
     const view = getVisibleWorldView(this.input.scene.cameras.main);
     fog.captureMotion(deltaMs, showWorld ? this.input.getPlayers() : [], showWorld ? enemies : [], view);
+    const trainRenderer = showWorld ? this.input.getTrainVisual() : null;
+    const train = trainRenderer?.getShadowState() ?? null;
+    fog.captureTrain(deltaMs, train, train && trainRenderer ? trainRenderer.computeSegYs(train.y, train.dir) : []);
     fog.setSurfaceImages([...this.input.getBaseShadowCells()]);
     fog.update(deltaMs, this.input.lighting.getTimeOfDayMinutes(), view, showWorld);
   }
