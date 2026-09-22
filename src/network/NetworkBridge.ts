@@ -115,7 +115,7 @@ import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, normalizeConstructionId } from '..
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
-import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
+import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
 import type { TemporaryUtilityInstanceDescriptor } from '../types';
 import type { RoundConclusion } from '../types';
@@ -1150,7 +1150,7 @@ export class NetworkBridge {
     // Alte/neu erstellte Raeume besitzen den optionalen Key noch nicht. Einmalig mit dem
     // Default anlegen, damit auch Clients den Slider sofort als autoritativen Zustand sehen.
     if (getState(KEY_TIME_OF_DAY) === undefined) {
-      setState(KEY_TIME_OF_DAY, DEFAULT_TIME_OF_DAY_MINUTES, true);
+      setState(KEY_TIME_OF_DAY, DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, true);
     }
     setState(KEY_LOBBY_SYNC, {
       m: this.getGameMode(),
@@ -1301,7 +1301,7 @@ export class NetworkBridge {
   /** Host-gesteuerte Uhrzeit der Lobby, in Minuten seit Mitternacht. */
   getLobbyTimeOfDayMinutes(): number {
     const stateValue = getState(KEY_TIME_OF_DAY);
-    return normalizeTimeOfDay(typeof stateValue === 'number' ? stateValue : DEFAULT_TIME_OF_DAY_MINUTES);
+    return normalizeTimeOfDay(typeof stateValue === 'number' ? stateValue : DEFAULT_LOBBY_TIME_OF_DAY_MINUTES);
   }
 
   /** Setzt die Lobby-Uhrzeit und macht sie fuer alle Clients reliable sichtbar. */

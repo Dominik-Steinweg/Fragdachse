@@ -20,8 +20,11 @@
 
 export const MINUTES_PER_DAY = 24 * 60;
 
-/** Mittag: weißes Ambient, keine Lightmap-Kosten. Gilt für alle Nicht-Coop-Modi. */
+/** Neutraler Rückfall für Beleuchtung und Maps ohne eigene Zeitvorgabe. */
 export const DEFAULT_TIME_OF_DAY_MINUTES = 12 * 60;
+
+/** Anfangszeit neuer Lobbys, unabhängig vom gewählten Spielmodus. */
+export const DEFAULT_LOBBY_TIME_OF_DAY_MINUTES = 8 * 60;
 
 export interface SkyState {
   /** Grundhelligkeit der Lightmap. `0xffffff` = Composite ist ein No-Op. */

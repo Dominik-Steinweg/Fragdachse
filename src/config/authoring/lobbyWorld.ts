@@ -4,6 +4,7 @@ import {
   LOBBY_WORLD_WIDTH_CELLS,
 } from '../../arena/LobbyWorldLayout';
 import { buildPersistentBaseCoreBaseConfig } from '../../persistentBase/PersistentBaseCore';
+import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, formatTimeOfDay } from '../../effects/TimeOfDay';
 import type { WorldDefinition, WorldPersistentBaseSiteDefinition } from './WorldDefinition';
 
 /**
@@ -75,7 +76,7 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   spawnFocusCell: LOBBY_SPAWN_FOCUS_CELL,
   // Die tatsaechliche Lobby-Uhrzeit ist host-autoritativ und wird beim Aufbau gelesen; dieser
   // Wert ist nur die Grundstimmung der World selbst.
-  initialTimeOfDay: '12:00',
+  initialTimeOfDay: formatTimeOfDay(DEFAULT_LOBBY_TIME_OF_DAY_MINUTES),
 };
 
 export function getLobbyWorldDefinition(): WorldDefinition {
