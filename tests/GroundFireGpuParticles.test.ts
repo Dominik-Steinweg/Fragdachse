@@ -58,6 +58,25 @@ afterEach(() => {
 });
 
 describe('GroundFire GPU particles', () => {
+  it('reuses unchanged snapshot cells without rescanning while advancing their expiry clock', () => {
+    const { system, renderer } = setup();
+    let cellReads = 0;
+    const groundCells = cells(6, 4).map(cell => ({
+      ...cell,
+      get gridX() { cellReads++; return cell.gridX; },
+    }));
+    renderer.syncGround({ cells: groundCells }, 0);
+    system.update(0);
+    expect(cellReads).toBeGreaterThan(0);
+    expect(system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount).toBeGreaterThan(0);
+
+    cellReads = 0;
+    renderer.syncGround({ cells: groundCells }, 100_001);
+    expect(cellReads).toBe(0);
+    system.update(10_000);
+    expect(system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount).toBe(0);
+  });
+
   it('starts a new surface at steady density with staggered particle ages', () => {
     const { system, renderer, lane } = setup();
     renderer.syncGround({ cells: cells(12, 8) }, 0);
@@ -233,7 +252,8 @@ describe('GroundFire GPU particles', () => {
 
   it('clears every living GroundFire member without destroying the shared lane', () => {
     const { scene, system, renderer, lane } = setup();
-    renderer.syncGround({ cells: cells(6, 4) }, 0);
+    const snapshot = { cells: cells(6, 4) };
+    renderer.syncGround(snapshot, 0);
     for (let frame = 0; frame < 80; frame += 1) system.update(16);
     const spawned = lane.edited.length;
     expect(spawned).toBeGreaterThan(0);
@@ -242,5 +262,9 @@ describe('GroundFire GPU particles', () => {
 
     expect(lane.patched.length).toBe(spawned);
     expect(scene.layers).toHaveLength(GPU_VFX_LANES.length);
+
+    renderer.syncGround(snapshot, 1_280);
+    system.update(0);
+    expect(system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount).toBeGreaterThan(0);
   });
 });

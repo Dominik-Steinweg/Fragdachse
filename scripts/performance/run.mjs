@@ -27,7 +27,7 @@ function options(args) {
     } else if (flag === '--capture-profile' && ['standard', 'reduced'].includes(arg)) value.captureProfile = arg;
     else throw new Error(`Unknown option: ${flag}`);
   }
-  if (!/^(standard|environment\.route|destruction\.(single|nuke|bfg)|enemies\.(low|medium|high)|weapon\.(glock|p90|plasma|mini-rockets|shotgun|asmd|bite|rocket|tesla|flame)|utility\.(he|molotov|smoke)|construction\.defense|ultimate\.armageddon|combat\.(day|night|day-night)|recovery\.idle)$/.test(value.caseId)) throw new Error(`Unknown case: ${value.caseId}`);
+  if (!/^(standard|environment\.route|destruction\.(single|nuke|bfg)|enemies\.(low|medium|high)|hazards\.void-fire|weapon\.(glock|p90|plasma|mini-rockets|shotgun|asmd|bite|rocket|tesla|flame)|utility\.(he|molotov|smoke)|construction\.defense|ultimate\.armageddon|combat\.(day|night|day-night)|recovery\.idle)$/.test(value.caseId)) throw new Error(`Unknown case: ${value.caseId}`);
   if (value.durationMs && (['standard', 'combat.day-night'].includes(value.caseId) || value.durationMs + 60_000 > value.timeoutMs)) throw new Error('Duration requires an individual case and at least 60 seconds of timeout headroom');
   return value;
 }

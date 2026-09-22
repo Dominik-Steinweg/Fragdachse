@@ -57,6 +57,67 @@ describe('Shared enemy and ally locomotion', () => {
     expect(free.vx).toBeGreaterThan(crowded.vx);
   });
 
+  it('preserves steering across negative spatial boundaries and repeated snapshot resets', () => {
+    const world = new NavigationGeometry({ left: -512, top: -512, right: 512, bottom: 512, obstacles: [] });
+    const population = (x: number, y: number) => [
+      neighbor('front', x + 30, y), neighbor('behind', x - 42, y - 20),
+      neighbor('diagonal', x + 42, y + 30), neighbor('beside', x - 22, y + 42),
+      neighbor('distant', x + 300, y + 300),
+    ];
+    const request = (x: number, y: number): LocomotionRequest => ({ ...body, x, y, waypoint: { x: x + 116, y } });
+    const reference = new EnemyLocomotion();
+    reference.begin(population(body.x, body.y), world, 16);
+    const expected = reference.solve(body);
+    expect(expected.neighborsVisited).toBe(4);
+
+    const movement = new EnemyLocomotion();
+    // Translate the same local encounter across row and column boundaries, including
+    // the origin. Rebuilding the spatial index must neither lose nor retain neighbors.
+    const positions = [[-97, 95], [-96, 96], [-95, 97], [-1, -97], [0, -96],
+      [1, -95], [95, -1], [96, 0], [97, 1]];
+    for (let pass = 0; pass < 2; pass++) {
+      for (const [x, y] of positions) {
+        movement.begin([], world, 16);
+        const free = movement.solve(request(x, y));
+        expect(free.neighborsVisited).toBe(0);
+        expect(free.vx).toBeGreaterThan(expected.vx);
+        movement.begin(population(x, y), world, 16);
+        expect(movement.solve(request(x, y))).toEqual(expected);
+      }
+      movement.clear();
+      expect(movement.solve(body).waitReason).toBe('exclusive');
+    }
+  });
+
+  it('accounts for later overlap relief before rejecting a steering candidate', () => {
+    const world = geometry();
+    const front = neighbor('front', 86, 64, 10), rear = neighbor('rear', 54, 64, 10);
+    const steer = (neighbors: ReturnType<typeof neighbor>[]) => {
+      const movement = new EnemyLocomotion();
+      movement.begin(neighbors, world, 100);
+      return movement.solve({ ...body, radius: 10 });
+    };
+    // Both neighbors occupy one spatial bucket. The front adds predicted pressure;
+    // leaving the initial overlap at the rear makes a diagonal worthwhile afterward.
+    const pressureFirst = steer([front, rear]);
+    const reliefFirst = steer([rear, front]);
+    expect(pressureFirst).toEqual(reliefFirst);
+    expect(pressureFirst).toMatchObject({ waitReason: 'none', neighborsVisited: 2 });
+    expect(pressureFirst.vx).toBeGreaterThan(0);
+    expect(pressureFirst.vy).toBeGreaterThan(pressureFirst.vx);
+  });
+
+  it('keeps an unobstructed straight continuation while smoothing a reversed velocity', () => {
+    const movement = new EnemyLocomotion(), world = geometry();
+    // This visible neighbor contributes no pressure. Reversing existing momentum
+    // still moves away from the waypoint briefly, but must not trigger a crowd stop.
+    movement.begin([neighbor('beside', 64, 110)], world, 16);
+    const result = movement.solve({ ...body, previousVx: -100 });
+    expect(result).toMatchObject({ waitReason: 'none', neighborsVisited: 1, vy: 0 });
+    expect(result.vx).toBeLessThan(0);
+    expect(world.canMove(body.x, body.y, body.x + result.vx * .016, body.y, body.radius)).toBe(true);
+  });
+
   it('ignores a neighbor on the opposite side of a wall', () => {
     const world = geometry([{ id: 'wall', kind: 'barrier', shape: 'rect', left: 80, right: 84, top: 0, bottom: 256 }]);
     const movement = new EnemyLocomotion();

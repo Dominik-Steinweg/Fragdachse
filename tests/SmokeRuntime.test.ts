@@ -2,6 +2,42 @@ import { describe, expect, it } from 'vitest';
 import { smokeHarness, smokeEffect, smokeTarget, smokeSource, smokeDamage } from './SmokeTestHelper';
 
 describe('smoke perception and lifetime', () => {
+  it('keeps target refresh active for aftereffects, charges and deduplication after the cloud ends', () => {
+    const { runtime, status, charge, spawn } = smokeHarness();
+    const target = smokeTarget();
+    const config = smokeEffect({ aftereffectMs: 500, chargeDurationMs: 800,
+      dischargeCooldownMs: 20, vulnerabilityEnabled: 1 }, { lingerDuration: 100, dissipateDuration: 50 });
+    expect(runtime.needsTargetRefresh()).toBe(false);
+    const cloud = runtime.createCloud(0, 0, config, smokeSource(), 0);
+    expect(runtime.needsTargetRefresh()).toBe(true);
+    runtime.updateExposure([target], 100);
+    charge(target, cloud, 100);
+
+    runtime.updateExposure([smokeTarget('enemy-1', 200)], 300);
+    expect(runtime.getSnapshots(300)).toEqual([]);
+    expect(runtime.needsTargetRefresh()).toBe(true);
+    expect(runtime.getConfusion('enemy-1', 300)).not.toBeNull();
+    expect(status.isVulnerable({ targetType: 'enemy', targetId: 'enemy-1' }, 300)).toBe(true);
+    const hit = smokeDamage(target, smokeSource(), 'after-cloud-hit');
+    runtime.onDamage(hit, 200, 0, 300);
+    expect(spawn).toHaveBeenCalledTimes(config.behavior.dischargeCount);
+    runtime.updateExposure([smokeTarget('enemy-1', 200)], 400);
+    runtime.onDamage(hit, 200, 0, 400);
+    expect(spawn).toHaveBeenCalledTimes(config.behavior.dischargeCount);
+
+    runtime.updateExposure([smokeTarget('enemy-1', 200)], 701);
+    expect(runtime.getConfusion('enemy-1', 701)).toBeNull();
+    expect(status.isVulnerable({ targetType: 'enemy', targetId: 'enemy-1' }, 701)).toBe(false);
+    expect(runtime.getTargetSnapshots(701)[0].chargedUntil).toBe(900);
+    runtime.updateExposure([smokeTarget('enemy-1', 200, 0, false, 2)], 702);
+    runtime.onDamage(smokeDamage(smokeTarget('enemy-1', 200, 0, false, 2)), 200, 0, 703);
+    expect(spawn).toHaveBeenCalledTimes(config.behavior.dischargeCount);
+    runtime.clearTargets();
+    expect(runtime.needsTargetRefresh()).toBe(false);
+    runtime.destroy();
+    expect(runtime.needsTargetRefresh()).toBe(false);
+  });
+
   it('uses one dominant exposure for movement and recovery while preserving weaker R2 tails', () => {
     const { runtime, status } = smokeHarness();
     const strong = runtime.createCloud(0, 0, smokeEffect({ confusionFraction: 0.8, aftereffectMs: 200, nearSightPx: 20 }), smokeSource(), 0);

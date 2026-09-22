@@ -33,6 +33,29 @@ vi.mock('phaser', () => ({
 import { FireSystem } from '../src/effects/FireSystem';
 
 describe('FireSystem visual styles and damage targets', () => {
+  it('publishes stable cell snapshots and replaces them without mutating earlier values', () => {
+    const fire = new FireSystem({} as Phaser.Scene);
+    const options = { sourceKey: 'stable-ground', ownerId: 'p0', durationMs: 5_000 };
+    fire.hostRefreshGroundCell(300, 300, options, 1_000);
+    const initial = fire.getGroundState();
+    expect(fire.hostUpdate(1_100).ground.cells).toBe(initial.cells);
+
+    fire.hostSetGroundWarnings('warning', [{ gridX: 20, gridY: 20, activatesAt: 2_000 }]);
+    const withWarnings = fire.getGroundState();
+    expect(withWarnings).not.toBe(initial);
+    expect(withWarnings.cells).toBe(initial.cells);
+
+    fire.hostRefreshGroundCell(300, 300, options, 1_200);
+    const refreshed = fire.getGroundState();
+    expect(refreshed.cells).not.toBe(initial.cells);
+    expect(refreshed.cells[0].expiresAt).toBe(6_200);
+    expect(initial.cells[0].expiresAt).toBe(6_000);
+    fire.hostRemoveGroundSourcesBySourceKey(options.sourceKey);
+    expect(fire.getGroundState().cells).toEqual([]);
+    expect(refreshed.cells).toHaveLength(1);
+    fire.destroyAll();
+  });
+
   it('retains the captured source for ground damage after the attacker is removed', () => {
     const fire = new FireSystem({} as Phaser.Scene);
     const source = { gameplaySource: { kind: 'player' as const, id: 'owner' },

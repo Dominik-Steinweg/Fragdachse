@@ -128,7 +128,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         && Math.hypot(p.x - playerPosition.x, p.y - playerPosition.y) < fixture.enemySpawnRadius.max);
     if (candidates.length < count) throw new Error('Insufficient fixed enemy spawn positions');
     // Stable dispersion and species mix. Population never depends on achieved FPS.
-    // All four species pursue players on a map without an allied mission base.
+    // All fixture species pursue players on a map without an allied mission base.
     const kinds = fixture.enemyKinds;
     for (let i = 0; i < count; i++) {
       const p = candidates[Math.floor(i * candidates.length / count)];

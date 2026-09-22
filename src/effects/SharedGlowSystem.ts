@@ -67,6 +67,7 @@ interface GlowBandBuffer {
   readonly textureKey: string;
   readonly texture: Phaser.Textures.DynamicTexture;
   readonly image: Phaser.GameObjects.Image;
+  hasSource: boolean;
   readonly blur: {
     active: boolean;
     quality: number;
@@ -151,6 +152,7 @@ export class SharedGlowSystem {
   private readonly unsubscribeQuality: (() => void) | null;
   private readonly onPostUpdate: () => void;
   private readonly onShutdown: () => void;
+  private readonly captureBounds = new Phaser.Geom.Rectangle();
 
   constructor(private readonly scene: Phaser.Scene) {
     this.onPostUpdate = () => this.flush();
@@ -214,19 +216,8 @@ export class SharedGlowSystem {
       return;
     }
 
-    const buffers = [this.world, this.clarity];
-    for (const buffer of buffers) {
-      if (!buffer) continue;
-      configureTextureCamera(buffer.near.texture, buffer === this.world ? 'world' : 'clarity', profile.sharedGlow.bufferScale, this.scene.cameras.main);
-      configureTextureCamera(buffer.far?.texture ?? buffer.near.texture, buffer === this.world ? 'world' : 'clarity', profile.sharedGlow.bufferScale, this.scene.cameras.main);
-      buffer.near.texture.clear();
-      buffer.far?.texture.clear();
-    }
-
-    const bandHasSource = {
-      world: { near: false, far: false },
-      clarity: { near: false, far: false },
-    };
+    this.resetBandSources(this.world);
+    this.resetBandSources(this.clarity);
 
     for (const record of this.records.values()) {
       const handle = record.handle;
@@ -247,6 +238,7 @@ export class SharedGlowSystem {
       // consulting target.willRender(camera) here can reject valid world sprites because the
       // capture is rendered through a separate DynamicTexture camera/display list.
       if (!camera) continue;
+      if (this.isOutsideCapture(record.target, cameraMode, profile.sharedGlow.bufferScale)) continue;
 
       const weights = resolveSharedGlowBandWeights(record.distance);
       const alpha = resolveSharedGlowAlpha(handle.outerStrength) * resolveSharedGlowTargetAlpha(target);
@@ -254,31 +246,81 @@ export class SharedGlowSystem {
       const destination = cameraMode === 'world' ? this.world : this.clarity;
       if (!destination) continue;
 
-      const capture = (texture: Phaser.Textures.DynamicTexture, weight: number): void => {
+      const capture = (band: GlowBandBuffer, weight: number): void => {
         if (weight <= 0) return;
-        texture.capture(record.target, {
+        // An unused band's previous pixels remain private and invisible. Clear exactly
+        // when it receives its next source, never accumulating commands in empty frames.
+        if (!band.hasSource) {
+          configureTextureCamera(band.texture, cameraMode, profile.sharedGlow.bufferScale, this.scene.cameras.main);
+          band.texture.clear();
+          band.hasSource = true;
+        }
+        band.texture.capture(record.target, {
           transform: 'world',
           alpha: alpha * weight,
           tint: handle.color,
         });
       };
 
-      capture(destination.near.texture, weights.near);
-      bandHasSource[cameraMode].near ||= weights.near > 0;
+      capture(destination.near, weights.near);
       if (destination.far && weights.far > 0) {
-        capture(destination.far.texture, weights.far);
-        bandHasSource[cameraMode].far = true;
+        capture(destination.far, weights.far);
       }
     }
 
-    for (const buffer of buffers) {
-      if (!buffer) continue;
-      buffer.near.texture.render();
-      buffer.far?.texture.render();
-    }
+    this.renderBands(this.world);
+    this.renderBands(this.clarity);
+  }
 
-    this.setBandVisibility(this.world, bandHasSource.world);
-    this.setBandVisibility(this.clarity, bandHasSource.clarity);
+  private isOutsideCapture(target: Phaser.GameObjects.GameObject, cameraMode: 'world' | 'clarity', bufferScale: number): boolean {
+    // Only standard unfiltered quads have a known conservative bound. Custom effects,
+    // render steps, cropped frames and unusual transforms retain the full capture path.
+    const image = target as Phaser.GameObjects.Image & { renderWebGL?: unknown; _renderSteps?: readonly unknown[] };
+    const prototype = (target.type === 'Image' ? Phaser.GameObjects.Image?.prototype
+      : target.type === 'Sprite' ? Phaser.GameObjects.Sprite?.prototype : undefined) as typeof image | undefined;
+    if (!prototype || typeof image.renderWebGL !== 'function'
+      || typeof image.getBounds !== 'function' || image.getBounds !== prototype.getBounds
+      || image.renderWebGL !== prototype.renderWebGL || image.renderWebGLStep !== prototype.renderWebGLStep
+      || image.scaleX < 0 || image.scaleY < 0 || image.isCropped
+      || image.frame?.source?.resolution !== 1 || (image.frame.customPivot && (image.flipX || image.flipY))) return false;
+    // Image bounds use normalized origins and frame size, while the render quad uses
+    // displayOrigin. A separately changed logical size can make those disagree.
+    if (image.displayOriginX !== image.originX * image.frame.realWidth
+      || image.displayOriginY !== image.originY * image.frame.realHeight) return false;
+    const containerPrototype = Phaser.GameObjects.Container?.prototype;
+    for (let parent = image.parentContainer; parent; parent = parent.parentContainer) {
+      if (!containerPrototype || parent.getBoundsTransformMatrix !== containerPrototype.getBoundsTransformMatrix
+        || parent.getWorldTransformMatrix !== containerPrototype.getWorldTransformMatrix) return false;
+    }
+    const steps = image._renderSteps;
+    if (!steps || steps.length !== 1 || steps[0] !== image.renderWebGL) return false;
+    const customRenderNodes = image.customRenderNodes as Record<string, unknown>;
+    for (const key in customRenderNodes) if (customRenderNodes[key]) return false;
+    const bounds = image.getBounds(this.captureBounds);
+    const camera = this.scene.cameras.main;
+    const x = bounds.x - (cameraMode === 'world' ? camera.scrollX * image.scrollFactorX : 0);
+    const y = bounds.y - (cameraMode === 'world' ? camera.scrollY * image.scrollFactorY : 0);
+    const right = x + bounds.width, bottom = y + bounds.height;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(right) || !Number.isFinite(bottom)
+      || bounds.width < 0 || bounds.height < 0 || !(bufferScale > 0)) return false;
+    // Capture is clipped to the design-sized input before the band's blur is applied.
+    // Two output pixels retain the edge even when Phaser rounds transformed vertices.
+    const margin = 2 / bufferScale;
+    return right < -margin || bottom < -margin || x > GAME_WIDTH + margin || y > GAME_HEIGHT + margin;
+  }
+
+  private resetBandSources(buffer: GlowCameraBuffer | null): void {
+    if (!buffer) return;
+    buffer.near.hasSource = false;
+    if (buffer.far) buffer.far.hasSource = false;
+  }
+
+  private renderBands(buffer: GlowCameraBuffer | null): void {
+    if (!buffer) return;
+    if (buffer.near.hasSource) buffer.near.texture.render();
+    if (buffer.far?.hasSource) buffer.far.texture.render();
+    buffer.near.image.setVisible(buffer.near.hasSource);
+    buffer.far?.image.setVisible(buffer.far.hasSource);
   }
 
   destroy(): void {
@@ -343,7 +385,7 @@ export class SharedGlowSystem {
       settings.steps,
     ) as GlowBandBuffer['blur'];
     blur.active = true;
-    return { textureKey: key, texture, image, blur };
+    return { textureKey: key, texture, image, blur, hasSource: false };
   }
 
   private setBuffersVisible(visible: boolean): void {
@@ -352,13 +394,6 @@ export class SharedGlowSystem {
     this.clarity?.near.image.setVisible(visible);
     this.clarity?.far?.image.setVisible(visible);
   }
-
-  private setBandVisibility(buffer: GlowCameraBuffer | null, visible: { near: boolean; far: boolean }): void {
-    if (!buffer) return;
-    buffer.near.image.setVisible(visible.near);
-    buffer.far?.image.setVisible(visible.far);
-  }
-
   private destroyBuffers(): void {
     destroyBandBuffer(this.scene, this.world?.near ?? null);
     destroyBandBuffer(this.scene, this.world?.far ?? null);

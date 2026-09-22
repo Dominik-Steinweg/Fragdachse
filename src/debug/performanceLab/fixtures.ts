@@ -2,7 +2,8 @@
 export const PERFORMANCE_FIXTURE = {
   targetHp: 100_000,
   weaponEnemyCount: 16,
-  enemyKinds: ['rabid-badger', 'thrower-badger', 'alien-badger', 'pyro-badger'],
+  // Summoners would grow the population during a fixed-load enemy case.
+  enemyKinds: ['rabid-badger', 'alien-badger', 'pyro-badger'],
   enemySpawnRadius: { min: 230, max: 650 },
   minimumGlobalRocks: 3500,
   remainingGlobalRocks: 1500,

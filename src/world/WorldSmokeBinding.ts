@@ -30,6 +30,7 @@ export class WorldSmokeBinding {
   refresh(now: number): void {
     const manager = this.getEnemies();
     manager?.setSmokePerception(this.runtime, now);
+    if (!this.runtime.needsTargetRefresh()) return;
     const targets: SmokeTarget[] = [];
     for (const enemy of manager?.getHostileEnemies() ?? []) {
       const ref = manager!.getCombatTargetRef(enemy.id);

@@ -2778,6 +2778,7 @@ export class NetworkBridge {
   private burningGroundPublishTicks = 0;
   private lastPublishedGroundHadWarnings = false;
   private readonly lastPublishedBurningGround = new Map<number, EncodedBurningGroundCell>();
+  private lastPublishedGroundCells: readonly SyncedBurningGroundSnapshot['cells'][number][] | null = null;
   // Client-seitiger Statik-Cache der Projektile. Nur die Statik wird gecacht – die Dynamik kommt
   // jeden Tick vollstaendig, weshalb es keinen SyncedProjectile-Cache braucht.
   private readonly projectileStaticCache = new Map<number, SyncedProjectileStatic>();
@@ -2804,6 +2805,7 @@ export class NetworkBridge {
     this.burningGroundPublishTicks = 0;
     this.lastPublishedGroundHadWarnings = false;
     this.lastPublishedBurningGround.clear();
+    this.lastPublishedGroundCells = null;
     this.projectileStaticCache.clear();
     this.mapEventPresentationCache = null;
     this.secondaryObjectivePresentationCache = null;
@@ -3488,11 +3490,19 @@ export class NetworkBridge {
 
   private buildBurningGroundDelta(snapshot: SyncedBurningGroundSnapshot): EncodedBurningGroundDelta | null {
     this.burningGroundPublishTicks++;
-    const current = new Map<number, EncodedBurningGroundCell>();
-    for (const cell of snapshot.cells) current.set(cell.id, encodeBurningGroundCell(cell));
-
     const sendFull = this.burningGroundPublishTicks === 1
       || this.burningGroundPublishTicks % NET_TICK_RATE_HZ === 0;
+    // FireSystem replaces cell arrays on change. Preserve warning refresh/clears and the
+    // periodic loss-repair snapshot even while the persistent geometry stays unchanged.
+    if (!sendFull && snapshot.cells === this.lastPublishedGroundCells) {
+      const hadWarnings = this.lastPublishedGroundHadWarnings;
+      this.lastPublishedGroundHadWarnings = !!snapshot.warnings?.length;
+      return hadWarnings || this.lastPublishedGroundHadWarnings ? { w: snapshot.warnings ?? [] } : null;
+    }
+    const current = new Map<number, EncodedBurningGroundCell>();
+    for (const cell of snapshot.cells) current.set(cell.id, encodeBurningGroundCell(cell));
+    this.lastPublishedGroundCells = snapshot.cells;
+
     if (sendFull) {
       this.lastPublishedGroundHadWarnings = !!snapshot.warnings?.length;
       this.lastPublishedBurningGround.clear();
@@ -3532,6 +3542,7 @@ export class NetworkBridge {
       this.lastPublishedBurningGround.set(cell.id, encoded);
       return encoded;
     });
+    this.lastPublishedGroundCells = snapshot.cells;
     return { f: full, w: snapshot.warnings ?? [] };
   }
 

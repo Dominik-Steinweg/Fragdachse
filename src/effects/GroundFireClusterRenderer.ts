@@ -270,6 +270,7 @@ export class GroundFireClusterRenderer {
   private readonly activeLightKeys = new Set<string>();
   private readonly lightRanking: GroundFireLightRecord[] = [];
   private snapshotSignature = '';
+  private snapshotCells: readonly SyncedBurningGroundCell[] | null = null;
   private readonly knownCells = new Map<string, number>();
   private readonly pendingIgnitions = new Set<string>();
   private ignitionCells: readonly GroundFireCellField[] = [];
@@ -369,6 +370,10 @@ export class GroundFireClusterRenderer {
 
   syncGround(snapshot: SyncedBurningGroundSnapshot, now = Date.now()): void {
     this.synchronizedNow = now;
+    // Snapshot producers replace the cells array when values change. Host frames between
+    // changes can reuse the resolved surface without allocating and sorting a full signature.
+    if (snapshot.cells === this.snapshotCells) return;
+    this.snapshotCells = snapshot.cells;
     const signature = groundFireCellsSignature(snapshot.cells);
     if (signature === this.snapshotSignature) return;
     this.snapshotSignature = signature;
@@ -453,6 +458,7 @@ export class GroundFireClusterRenderer {
   clear(): void {
     this.clusters.clear();
     this.snapshotSignature = '';
+    this.snapshotCells = null;
     this.knownCells.clear();
     this.pendingIgnitions.clear();
     this.ignitionCells = [];

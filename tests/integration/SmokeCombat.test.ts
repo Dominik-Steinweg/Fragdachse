@@ -15,9 +15,41 @@ import { TargetStatusSystem } from '../../src/systems/TargetStatusSystem';
 import { COOP_DEFENSE_ENEMY_KINDS, resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
 import { healthBarTestScene } from '../healthBarTestScene';
 import { fakeEntity } from '../fakeEntity';
-import { smokeEffect } from '../SmokeTestHelper';
+import { smokeEffect, smokeTarget } from '../SmokeTestHelper';
 
 describe('smoke confirmed Combat integration', () => {
+  it('leaves an unused smoke binding dormant and activates on the first cloud', () => {
+    const target = smokeTarget();
+    const enemy = { id: String(target.ref.id), sprite: { active: true, x: 0, y: 0 },
+      getHp: () => 100, isBoss: () => false };
+    const enemies = { setSmokePerception: vi.fn(), getHostileEnemies: vi.fn(() => [enemy]),
+      getCombatTargetRef: vi.fn(() => target.ref) };
+    const unsubscribe = vi.fn();
+    const combat = { observeEnemyDamageCommitted: () => unsubscribe, hasLineOfSight: () => true,
+      hasVisibleSegmentFrom: () => true, applyDamage: vi.fn() };
+    const status = new TargetStatusSystem();
+    const contributions = vi.spyOn(status, 'setVulnerabilityContribution');
+    const binding = new WorldSmokeBinding(combat as never, () => enemies as never, status, { spawnProjectile: vi.fn() });
+    try {
+      binding.refresh(0);
+      binding.step(20);
+      binding.refresh(40);
+      expect(enemies.getHostileEnemies).not.toHaveBeenCalled();
+      expect(enemies.getCombatTargetRef).not.toHaveBeenCalled();
+      expect(contributions).not.toHaveBeenCalled();
+      expect(enemies.setSmokePerception).toHaveBeenLastCalledWith(binding.runtime, 40);
+
+      binding.createCloud({ projectileId: 1, x: 0, y: 0, effect: smokeEffect({ vulnerabilityEnabled: 1 }),
+        provenance: { gameplaySourceId: 'p1', attributionId: 'p1', allegiance: { ownerId: 'p1', kind: 'player' }, sourceSlot: 'utility' } }, 40);
+      binding.refresh(140);
+      expect(enemies.getCombatTargetRef).toHaveBeenCalledWith(enemy.id);
+      expect(binding.runtime.getConfusion(enemy.id, 140)).not.toBeNull();
+      expect(status.isVulnerable({ targetType: 'enemy', targetId: enemy.id }, 140)).toBe(true);
+    } finally { binding.destroy(); }
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(enemies.setSmokePerception).toHaveBeenLastCalledWith(null, 0);
+  });
+
   it.each(['storm', 'friendly-hit'] as const)('secures a lethal %s before cleanup and tears down the world observer', trigger => {
     let now = 0;
     const scene = healthBarTestScene().scene;

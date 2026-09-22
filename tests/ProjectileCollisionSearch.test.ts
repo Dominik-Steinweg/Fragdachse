@@ -52,6 +52,8 @@ describe('spatial projectile candidates', () => {
     const emit = (sink: ProjectileCollisionTargetSink, order: number[]) => {
       for (const id of order) sink('rock', id, 'world', positions[id], 0, 8,
         positions[id] - 8, -8, positions[id] + 8, 8, 'rock');
+      for (let id = 100; id < 180; id++) sink('rock', id, 'world', id * 256, 0,
+        8, id * 256 - 8, -8, id * 256 + 8, 8, 'rock');
     };
     for (const order of [[0, 1, 2, 3, 4], [4, 3, 2, 1, 0], [1, 3, 0, 4, 2]]) {
       const full = execution({ readCollisionTargets: sink => emit(sink, order) });
@@ -60,8 +62,10 @@ describe('spatial projectile candidates', () => {
         // Duplicate reports from cells/adapters still give one hit chance.
         emit(sink, order);
       } });
-      full.processor.run([collisionRecord(1, 0, 0, 30, 0, 12, mode)], 0, full.deps);
-      spatial.processor.run([collisionRecord(1, 0, 0, 30, 0, 12, mode)], 0, spatial.deps);
+      for (const run of [full, spatial]) run.processor.withTargetSnapshot(() => {
+        run.processor.run(Array.from({ length: 32 }, (_, id) => collisionRecord(-id, 0, -1000, 30, -1000, 12, mode)), 0, run.deps);
+        run.processor.run([collisionRecord(1, 0, 0, 30, 0, 12, mode)], 0, run.deps);
+      });
       expect(spatial.hits).toEqual(full.hits);
       expect(spatial.hits.map(h => h.id)).toEqual([4, 0, 1, 2, 3]);
     }
@@ -74,6 +78,8 @@ describe('spatial projectile candidates', () => {
       const query = { ...port, readCollisionTargets: (sink: ProjectileCollisionTargetSink) => {
         port.readCollisionTargets(sink);
         for (const x of [50, 200]) sink('enemy', String(x), 'enemy', x, 0, 8, x - 8, -8, x + 8, 8);
+        for (let id = 0; id < 80; id++) sink('enemy', `far:${id}`, 'enemy', 4096 + id * 256, 0,
+          8, 4088 + id * 256, -8, 4104 + id * 256, 8);
       } };
       const run = execution(query);
       const contacts: number[] = [];
@@ -83,7 +89,10 @@ describe('spatial projectile candidates', () => {
       const deps = { ...run.deps, targetability: { getGrenadeContactRole: (_source: unknown, target: { kind: string }) =>
         target.kind === 'enemy' ? 'character' : null } as never,
       onGrenadeContact: (_record: unknown, hit: { target: { id: string | number } }) => contacts.push(Number(hit.target.id)) };
-      run.processor.run([record], 0, deps);
+      run.processor.withTargetSnapshot(() => {
+        run.processor.run(Array.from({ length: 32 }, (_, id) => collisionRecord(-id, 0, -1000, 30, -1000)), 0, deps);
+        run.processor.run([record], 0, deps);
+      });
       result.push(contacts);
     }
     expect(result).toEqual([[50], [50]]);
@@ -150,6 +159,93 @@ describe('spatial projectile candidates', () => {
       expect(spatial.hits).toEqual(full.hits);
     }
     expect(spatial.hits.length).toBeGreaterThan(0);
+  });
+
+  it.each(['sweep', 'overlap'] as const)('keeps indexed snapshot %s geometry equal to an unfiltered local query', mode => {
+    const rocks = Array.from({ length: 100 }, (_, id) => collisionRock(
+      (id % 10 - 5) * 256, (Math.floor(id / 10) - 5) * 256, 24, 16));
+    // A circle extends beyond its thin AABB; an enormous body must not require a huge cell grid.
+    rocks.push(collisionRock(-128, -128, 256, 8), collisionRock(4096, 0, 16384, 8));
+    const w = world(rocks);
+    const indexed = execution(w.full);
+    const linear = execution({ readCollisionTargets: () => {},
+      queryWorldCollisionTargets: (_region, sink) => w.full.readCollisionTargets(sink) });
+    const cases = [[-300, -64, 50, -64, 8], [-260, -260, -250, -250, 16],
+      [-128, -128, -128, -128, 16], [-132, -256, -124, 0, 8], [0, 0, 0, 0, 16384],
+      [-100000, 0, 100000, 0, 12], [Number.MAX_VALUE, 0, Number.MAX_VALUE, 0, 12]];
+    for (let repeat = 0; repeat < 2; repeat++) {
+      indexed.processor.withTargetSnapshot(() => linear.processor.withTargetSnapshot(() => {
+        for (const run of [indexed, linear]) run.processor.run(Array.from({ length: 32 }, (_, id) =>
+          collisionRecord(-id, 0, -20000, 30, -20000, 12, mode)), 0, run.deps);
+        for (const [id, [sx, sy, ex, ey, size]] of cases.entries()) {
+          indexed.hits.length = 0; linear.hits.length = 0;
+          indexed.processor.run([collisionRecord(id, sx, sy, ex, ey, size, mode)], 0, indexed.deps);
+          linear.processor.run([collisionRecord(id, sx, sy, ex, ey, size, mode)], 0, linear.deps);
+          expect(indexed.hits).toEqual(linear.hits);
+          const expected = rocks.flatMap((rock, targetId) => {
+            if (mode === 'sweep' && Math.hypot(ex - sx, ey - sy) > 0.5) {
+              return resolveProjectileTargetImpact({ startX: sx, startY: sy, endX: ex, endY: ey,
+                targetX: rock.x, targetY: rock.y, radius: Math.hypot(rock.width, rock.height) / 2 + size / 2,
+                ignoreStartingOverlap: true }) ? [targetId] : [];
+            }
+            return ex - size / 2 < rock.x + rock.width / 2 && ex + size / 2 > rock.x - rock.width / 2
+              && ey - size / 2 < rock.y + rock.height / 2 && ey + size / 2 > rock.y - rock.height / 2 ? [targetId] : [];
+          });
+          expect(indexed.hits.map(hit => Number(hit.id)).sort((a, b) => a - b)).toEqual(expected);
+        }
+      }));
+      indexed.processor.reset(); linear.processor.reset();
+    }
+  });
+
+  it('reindexes a snapshot target refined by a live World query across cell boundaries', () => {
+    let x = 4096;
+    const read = vi.fn((sink: ProjectileCollisionTargetSink) => {
+      for (let id = 0; id < 80; id++) sink('rock', id, 'world', 4096 + id * 256, 0,
+        8, 4088 + id * 256, -8, 4104 + id * 256, 8, 'rock');
+    });
+    const run = execution({ readCollisionTargets: read, queryWorldCollisionTargets: (_region, sink) => {
+      sink('construction', '0', 'world', x, 0, 8, x - 8, -8, x + 8, 8);
+    } });
+    run.processor.withTargetSnapshot(() => {
+      run.processor.run(Array.from({ length: 32 }, (_, id) => collisionRecord(-id)), 0, run.deps);
+      run.processor.run([collisionRecord(1)], 0, run.deps);
+      x = 64;
+      run.processor.run([collisionRecord(2)], 0, run.deps);
+      x = -4096;
+      run.processor.run([collisionRecord(3)], 0, run.deps);
+      run.processor.run([collisionRecord(4, -4200, 0, -4000, 0)], 0, run.deps);
+    });
+    expect(read).toHaveBeenCalledOnce();
+    expect(run.hits.map(hit => [hit.projectile, hit.kind, hit.id])).toEqual([[2, 'rock', 0], [4, 'rock', 0]]);
+  });
+
+  it('visits new same-stage projectiles using frozen indexed positions and live targetability', () => {
+    let x = 64, alive = true;
+    const read = vi.fn((sink: ProjectileCollisionTargetSink) => {
+      sink('enemy', 'near', 'enemy', x, 0, 8, x - 8, -8, x + 8, 8);
+      for (let id = 0; id < 80; id++) sink('enemy', String(id), 'enemy', 4096 + id * 256, 0,
+        8, 4088 + id * 256, -8, 4104 + id * 256, 8);
+    });
+    const run = execution({ readCollisionTargets: read });
+    const live = new Set([collisionRecord(1)]);
+    const hits: number[] = [];
+    const deps = { ...run.deps, targetability: { canDamage: () => alive } as never,
+      directImpact: { resolveDirectImpact: (request: { projectileId: number }) => {
+        hits.push(request.projectileId);
+        x = 8192;
+        if (request.projectileId === 1) live.add(collisionRecord(2));
+        else { alive = false; live.add(collisionRecord(3)); }
+        return { accepted: false };
+      } } as never };
+    run.processor.withTargetSnapshot(() => {
+      run.processor.run(Array.from({ length: 32 }, (_, id) => collisionRecord(-id, 0, -1000, 30, -1000)), 0, deps);
+      run.processor.run(live, 0, deps);
+    });
+    expect(read).toHaveBeenCalledOnce(); expect(hits).toEqual([1, 2]);
+    alive = true;
+    run.processor.run([collisionRecord(4)], 0, deps);
+    expect(read).toHaveBeenCalledTimes(2); expect(hits).toEqual([1, 2]);
   });
 
   it('sees removal, movement, additions and replaced World arrays on the next same-stage projectile', () => {

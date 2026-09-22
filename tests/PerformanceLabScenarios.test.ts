@@ -3,8 +3,18 @@ import { allPerformanceCases, resolvePerformanceCases, registerReferenceMap } fr
 import { isCoopDefenseReadyLoadoutComplete } from '../src/loadout/LoadoutRules';
 import { getCoopDefenseMapConfig, isDiagnosticMapId } from '../src/config/coopDefenseMaps';
 import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID } from '../src/debug/performanceLab/referenceMap';
+import { PERFORMANCE_FIXTURE } from '../src/debug/performanceLab/fixtures';
+import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 
 describe('Performance reference fixtures', () => {
+  it('keeps fixed enemy loads free of population-growing abilities', () => {
+    for (const kind of PERFORMANCE_FIXTURE.enemyKinds) {
+      const config = getCoopDefenseEnemyConfig(kind);
+      expect(config.spawnThrow, kind).toBeUndefined();
+      expect(config.deathSpawns ?? [], kind).toHaveLength(0);
+    }
+  });
+
   it('resolves every frozen build through legal ready contracts and supports independent cases', () => {
     const cases = allPerformanceCases();
     expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);

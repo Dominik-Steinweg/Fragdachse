@@ -71,6 +71,11 @@ export class SmokeRuntime implements SmokePerceptionPort {
     return id;
   }
 
+  /** Retained targets still need lifetime cleanup and damage deduplication after clouds expire. */
+  needsTargetRefresh(): boolean {
+    return this.clouds.size > 0 || this.targets.size > 0;
+  }
+
   updateExposure(targets: readonly SmokeTarget[], now: number): void {
     if (this.destroyed) return;
     for (const [id, cloud] of this.clouds) {

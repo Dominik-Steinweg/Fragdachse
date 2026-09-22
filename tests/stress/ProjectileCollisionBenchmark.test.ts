@@ -6,7 +6,7 @@ import type { ProjectileCollisionTargetQueryPort, ProjectileCollisionTargetSink 
 import { collisionRecord, collisionRock } from '../projectileCollisionFixture';
 
 // Explicit opt-in: ordinary stress runs execute the parity tests, not this measurement matrix.
-it.skipIf(!process.env.PROJECTILE_BENCH)('measures rock preparation and collision search', () => {
+it.skipIf(!process.env.PROJECTILE_BENCH || process.env.PROJECTILE_BENCH === 'dynamic')('measures rock preparation and collision search', () => {
   const optimized = process.env.PROJECTILE_BENCH === 'spatial';
   for (const rockCount of [4000, 20000]) for (const projectileCount of [0, 8, 1500]) {
     const repetitions = [];
@@ -66,5 +66,57 @@ it.skipIf(!process.env.PROJECTILE_BENCH)('measures rock preparation and collisio
     }
     console.info('PROJECTILE_BENCH', JSON.stringify({ mode: process.env.PROJECTILE_BENCH,
       node: process.version, rockCount, projectileCount, repetitions }));
+  }
+}, 1_800_000);
+
+it.skipIf(process.env.PROJECTILE_BENCH !== 'dynamic')('measures stage-snapshot projectile search', async () => {
+  // A caller may supply an archived processor for a local before/after run; no old solver is retained here.
+  const Processor: typeof ProjectileCollisionProcessor = process.env.PROJECTILE_BENCH_BASELINE
+    ? (await import(process.env.PROJECTILE_BENCH_BASELINE)).ProjectileCollisionProcessor
+    : ProjectileCollisionProcessor;
+  for (const targetCount of [16, 240, 700]) for (const projectileCount of [1, 8, 150, 1500]) {
+    const repetitions = [];
+    for (let repeat = 0; repeat < 3; repeat++) {
+      let seed = 731;
+      const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+      const targets = Array.from({ length: targetCount }, (_, id) => ({
+        id: String(id), x: (id % 30) * 48 + random() * 16, y: Math.floor(id / 30) * 48 + random() * 16,
+      }));
+      const records = Array.from({ length: projectileCount }, (_, id) => {
+        const x = random() * (Math.min(targetCount, 30) * 48 - 120);
+        const y = random() * Math.ceil(targetCount / 30) * 48;
+        return collisionRecord(id, x, y, x + 120, y + 16, 12, id % 2 ? 'overlap' : 'sweep');
+      });
+      let contacts = 0, contactHash = 0;
+      const targetQuery: ProjectileCollisionTargetQueryPort = { readCollisionTargets: sink => {
+        for (const target of targets) sink('enemy', target.id, 'enemy', target.x, target.y, 20,
+          target.x - 16, target.y - 12, target.x + 16, target.y + 12);
+      } };
+      const deps = { targetQuery, targetability: null, worldBlocker: null,
+        directImpact: { resolveDirectImpact: (request: { projectileId: number; target: { id: string } }) => {
+          contacts++;
+          contactHash = (Math.imul(contactHash, 31) + request.projectileId * 997 + Number(request.target.id)) >>> 0;
+          return { accepted: false };
+        } } as never,
+        destroyProjectile: () => {}, applyDefense: () => {} };
+      const processor = new Processor();
+      const samples: number[] = [];
+      let expectedContacts = -1, expectedHash = -1;
+      for (let frame = 0; frame < 60; frame++) {
+        contacts = 0; contactHash = 0;
+        const start = performance.now(); processor.run(records, frame * 16, deps);
+        const ms = performance.now() - start;
+        if (frame === 0) { expectedContacts = contacts; expectedHash = contactHash; }
+        expect(contacts).toBe(expectedContacts); expect(contactHash).toBe(expectedHash);
+        if (frame >= 10) samples.push(ms);
+      }
+      if (projectileCount >= 150) expect(contacts).toBeGreaterThan(0);
+      samples.sort((a, b) => a - b);
+      repetitions.push({ medianMs: samples[25], p95Ms: samples[47], contacts, contactHash });
+      processor.reset();
+    }
+    console.info('PROJECTILE_BENCH', JSON.stringify({ mode: 'dynamic',
+      implementation: process.env.PROJECTILE_BENCH_BASELINE ? 'baseline' : 'current',
+      node: process.version, targetCount, projectileCount, repetitions }));
   }
 }, 1_800_000);

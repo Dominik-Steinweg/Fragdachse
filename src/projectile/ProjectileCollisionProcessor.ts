@@ -34,6 +34,7 @@ type CollisionCandidate = Omit<ProjectileImpactCandidate, 'target'> & { readonly
 
 /** Gepoolter Slot der Frame-Zielsicht; die Runtime hält keine fremden Entity-Objekte. */
 interface CollisionTargetSlot {
+  index: number;
   kind: CollisionTargetKind;
   id: string;
   numericId: number;
@@ -101,6 +102,108 @@ export type ProjectileCollisionOutcome = 'ignored' | 'passed' | 'consumed';
 /** Unterhalb dieser Streckenlänge bleibt es beim Overlap-Test. */
 const MIN_SWEEP_TRAVEL_PX = 0.5;
 
+/** Broadphase over the existing stage snapshot, including both collision-shape envelopes. */
+class SnapshotTargetIndex {
+  private readonly rows = new Map<number, Map<number, number[]>>();
+  private readonly rowPool: Map<number, number[]>[] = [];
+  private readonly bucketPool: number[][] = [];
+  private readonly unbounded: number[] = [];
+  private stamps = new Uint32Array(0);
+  private queryStamp = 0;
+  private count = 0;
+
+  build(slots: readonly CollisionTargetSlot[], count: number): void {
+    this.rows.clear();
+    for (const row of this.rowPool) row.clear();
+    for (const bucket of this.bucketPool) bucket.length = 0;
+    this.unbounded.length = 0;
+    this.count = count;
+    if (count < 32) return;
+    if (this.stamps.length < count) this.stamps = new Uint32Array(count);
+    let rowCount = 0, bucketCount = 0;
+    for (let index = 0; index < count; index++) {
+      const slot = slots[index];
+      const left = Math.floor(Math.min(slot.left, slot.x - slot.radius) / 128);
+      const right = Math.floor(Math.max(slot.right, slot.x + slot.radius) / 128);
+      const top = Math.floor(Math.min(slot.top, slot.y - slot.radius) / 128);
+      const bottom = Math.floor(Math.max(slot.bottom, slot.y + slot.radius) / 128);
+      // Oversized/invalid envelopes stay conservative without creating unbounded cell loops.
+      if (!finiteCellRange(left, top, right, bottom, 64)) {
+        this.unbounded.push(index);
+        continue;
+      }
+      for (let y = top; y <= bottom; y++) {
+        let row = this.rows.get(y);
+        if (!row) {
+          row = this.rowPool[rowCount] ??= new Map();
+          rowCount++;
+          this.rows.set(y, row);
+        }
+        for (let x = left; x <= right; x++) {
+          let bucket = row.get(x);
+          if (!bucket) {
+            bucket = this.bucketPool[bucketCount] ??= [];
+            bucketCount++;
+            row.set(x, bucket);
+          }
+          bucket.push(index);
+        }
+      }
+    }
+  }
+
+  query(slots: readonly CollisionTargetSlot[], region: ProjectileCollisionRegion,
+    result: CollisionTargetSlot[]): void {
+    result.length = 0;
+    const left = Math.floor((Math.min(region.startX, region.endX) - region.padding) / 128);
+    const right = Math.floor((Math.max(region.startX, region.endX) + region.padding) / 128);
+    const top = Math.floor((Math.min(region.startY, region.endY) - region.padding) / 128);
+    const bottom = Math.floor((Math.max(region.startY, region.endY) + region.padding) / 128);
+    if (this.count < 32 || !finiteCellRange(left, top, right, bottom, this.count)) {
+      for (let index = 0; index < this.count; index++) result.push(slots[index]);
+      return;
+    }
+    if (++this.queryStamp > 0x7fffffff) {
+      this.stamps.fill(0);
+      this.queryStamp = 1;
+    }
+    const stamp = this.queryStamp;
+    for (let y = top; y <= bottom; y++) {
+      const row = this.rows.get(y);
+      if (!row) continue;
+      for (let x = left; x <= right; x++) {
+        const bucket = row.get(x);
+        if (!bucket) continue;
+        for (const index of bucket) {
+          if (this.stamps[index] === stamp) continue;
+          this.stamps[index] = stamp;
+          result.push(slots[index]);
+        }
+      }
+    }
+    for (const index of this.unbounded) result.push(slots[index]);
+    // Keep callback/contact-memory evaluation in the original snapshot order as well as hits.
+    result.sort((a, b) => a.index - b.index);
+  }
+
+  clear(): void {
+    this.rows.clear();
+    this.rowPool.length = 0;
+    this.bucketPool.length = 0;
+    this.unbounded.length = 0;
+    this.stamps = new Uint32Array(0);
+    this.queryStamp = 0;
+    this.count = 0;
+  }
+}
+
+function finiteCellRange(left: number, top: number, right: number, bottom: number,
+  maxCells: number): boolean {
+  return Number.isSafeInteger(left) && Number.isSafeInteger(top)
+    && Number.isSafeInteger(right) && Number.isSafeInteger(bottom)
+    && right >= left && bottom >= top && (right - left + 1) * (bottom - top + 1) <= maxCells;
+}
+
 /** Inflated footprint sweep, returning the actual target surface as the contact anchor. */
 function grenadeRectangleContact(sx: number, sy: number, ex: number, ey: number,
   slot: CollisionTargetSlot, radius: number): { x: number; y: number; distance: number } | null {
@@ -132,6 +235,12 @@ function grenadeRectangleContact(sx: number, sy: number, ex: number, ey: number,
  */
 export class ProjectileCollisionProcessor {
   private readonly targetPool: CollisionTargetSlot[] = [];
+  private readonly snapshotIndex = new SnapshotTargetIndex();
+  private readonly searchCandidates: CollisionTargetSlot[] = [];
+  private searchTargets: readonly CollisionTargetSlot[] = this.targetPool;
+  private searchTargetCount = 0;
+  private snapshotQueryCount = 0;
+  private snapshotIndexDirty = true;
   private readonly targetSlotsByPhysicalKey = new Map<string, CollisionTargetSlot>();
   private readonly overlapCandidates: CollisionTargetSlot[] = [];
   private readonly sweepCandidates: SweepCandidate[] = [];
@@ -176,6 +285,11 @@ export class ProjectileCollisionProcessor {
       // A shared runtime rock is canonical even if a construction adapter reported it first.
       this.replaceSlotRef(slot, createTargetRef(kind, id, obstacleKind));
     }
+    // A live World adapter may refine a physical key already present in the stage snapshot.
+    if (slot.index < this.snapshotTargetCount && (slot.x !== x || slot.y !== y || slot.radius !== radius
+      || slot.left !== left || slot.top !== top || slot.right !== right || slot.bottom !== bottom)) {
+      this.snapshotIndexDirty = true;
+    }
     slot.ownerId = ownerId;
     slot.x = x;
     slot.y = y;
@@ -219,6 +333,12 @@ export class ProjectileCollisionProcessor {
   /** Gibt die gepoolte Frame-Sicht frei. */
   reset(): void {
     this.targetPool.length = 0;
+    this.snapshotIndex.clear();
+    this.searchCandidates.length = 0;
+    this.searchTargets = this.targetPool;
+    this.searchTargetCount = 0;
+    this.snapshotQueryCount = 0;
+    this.snapshotIndexDirty = true;
     this.targetSlotsByPhysicalKey.clear();
     this.overlapCandidates.length = 0;
     this.sweepCandidates.length = 0;
@@ -240,8 +360,8 @@ export class ProjectileCollisionProcessor {
     let blocker = deps.worldBlocker?.getNearestBlockerDistance(sx, sy, ex, ey, false, { purpose: 'physical' }) ?? Infinity;
     const candidates = this.sweepCandidates;
     candidates.length = 0;
-    for (let i = 0; i < this.targetCount; i++) {
-      const slot = this.targetPool[i];
+    for (let index = 0; index < this.searchTargetCount; index++) {
+      const slot = this.searchTargets[index];
       if (!this.inSearchRegion(slot)) continue;
       const character = slot.kind === 'player' || slot.kind === 'enemy';
       if (slot.kind === 'decoy') continue;
@@ -268,9 +388,12 @@ export class ProjectileCollisionProcessor {
 
   private readTargets(port: ProjectileCollisionTargetQueryPort): void {
     this.targetCount = 0;
+    this.snapshotTargetCount = 0;
+    this.snapshotQueryCount = 0;
     this.targetSlotsByPhysicalKey.clear();
     port.readCollisionTargets(this.emitTarget);
     this.snapshotTargetCount = this.targetCount;
+    this.snapshotIndexDirty = true;
   }
 
   private acquireSlot(kind: CollisionTargetKind, id: string | number,
@@ -278,6 +401,7 @@ export class ProjectileCollisionProcessor {
     let slot = this.targetPool[this.targetCount];
     if (!slot) {
       slot = {
+        index: this.targetCount,
         kind,
         id: '',
         numericId: 0,
@@ -294,6 +418,7 @@ export class ProjectileCollisionProcessor {
       };
       this.targetPool[this.targetCount] = slot;
     }
+    slot.index = this.targetCount;
     const normalizedId = kind === 'rock' || kind === 'decoy' ? Number(id) : id;
     if (!slot.key || slot.kind !== kind || slot.ref.id !== normalizedId
       || (kind === 'rock' && slot.ref.kind === 'rock' && slot.ref.obstacleKind !== obstacleKind)) {
@@ -324,6 +449,22 @@ export class ProjectileCollisionProcessor {
     }
     this.targetCount = this.snapshotTargetCount;
     deps.targetQuery?.queryWorldCollisionTargets?.(region, this.emitTarget);
+    // Single shots and small snapshots do not amortize a grid build or a candidate-array copy.
+    if (this.snapshotTargetCount < 32 || ++this.snapshotQueryCount <= 8) {
+      this.searchTargets = this.targetPool;
+      this.searchTargetCount = this.targetCount;
+      return;
+    }
+    if (this.snapshotIndexDirty) {
+      this.snapshotIndex.build(this.targetPool, this.snapshotTargetCount);
+      this.snapshotIndexDirty = false;
+    }
+    this.snapshotIndex.query(this.targetPool, region, this.searchCandidates);
+    for (let index = this.snapshotTargetCount; index < this.targetCount; index++) {
+      this.searchCandidates.push(this.targetPool[index]);
+    }
+    this.searchTargets = this.searchCandidates;
+    this.searchTargetCount = this.searchCandidates.length;
   }
 
   private inSearchRegion(slot: CollisionTargetSlot): boolean {
@@ -402,8 +543,8 @@ export class ProjectileCollisionProcessor {
 
     this.prepareWorldTargets(deps, startX, startY, endX, endY, projectileRadius, true);
     this.sweepCandidates.length = 0;
-    for (let index = 0; index < this.targetCount; index += 1) {
-      const slot = this.targetPool[index];
+    for (let index = 0; index < this.searchTargetCount; index++) {
+      const slot = this.searchTargets[index];
       if (!this.inSearchRegion(slot)) {
         continue;
       }
@@ -495,8 +636,8 @@ export class ProjectileCollisionProcessor {
       (bounds.top + bounds.bottom) * 0.5,
       Math.max(bounds.right - bounds.left, bounds.bottom - bounds.top) * 0.5, false);
     this.overlapCandidates.length = 0;
-    for (let index = 0; index < this.targetCount; index += 1) {
-      const slot = this.targetPool[index];
+    for (let index = 0; index < this.searchTargetCount; index++) {
+      const slot = this.searchTargets[index];
       if (!this.inSearchRegion(slot)) {
         continue;
       }

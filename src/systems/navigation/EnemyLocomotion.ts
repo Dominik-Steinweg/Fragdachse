@@ -11,7 +11,9 @@ interface Conflict { dx: number; dy: number; vx: number; vy: number; separation:
 
 /** One consistent position/velocity snapshot for both hostile and allied ordinary movement. */
 export class EnemyLocomotion {
-  private readonly buckets = new Map<string, Neighbor[]>();
+  private readonly buckets = new Map<number, Map<number, Neighbor[]>>();
+  private readonly rowPool: Map<number, Neighbor[]>[] = [];
+  private readonly activeBuckets: Neighbor[][] = [];
   private readonly neighborsById = new Map<string, Neighbor>();
   private readonly pool: Neighbor[][] = [];
   private readonly previous = new Map<string, { x: number; y: number; targetX: number; targetY: number; stalled: number;
@@ -35,7 +37,9 @@ export class EnemyLocomotion {
   };
 
   begin(neighbors: readonly Neighbor[], geometry: NavigationGeometry, deltaMs: number): void {
-    for (const bucket of this.buckets.values()) { bucket.length = 0; this.pool.push(bucket); }
+    for (const bucket of this.activeBuckets) { bucket.length = 0; this.pool.push(bucket); }
+    this.activeBuckets.length = 0;
+    for (const row of this.buckets.values()) { row.clear(); this.rowPool.push(row); }
     this.buckets.clear(); this.maxRadius = 0; this.maxNeighborSpeed = 0;
     this.geometry = geometry; this.deltaSeconds = Math.min(0.1, Math.max(0, deltaMs / 1000));
     this.elapsedMs += Math.max(0, deltaMs);
@@ -43,9 +47,13 @@ export class EnemyLocomotion {
     for (const neighbor of neighbors) {
       this.neighborsById.set(neighbor.id, neighbor); this.maxRadius = Math.max(this.maxRadius, neighbor.radius);
       this.maxNeighborSpeed = Math.max(this.maxNeighborSpeed, Math.hypot(neighbor.vx, neighbor.vy));
-      const key = `${Math.floor(neighbor.x / CELL)},${Math.floor(neighbor.y / CELL)}`;
-      let bucket = this.buckets.get(key);
-      if (!bucket) { bucket = this.pool.pop() ?? []; this.buckets.set(key, bucket); }
+      const col = Math.floor(neighbor.x / CELL), row = Math.floor(neighbor.y / CELL);
+      let columns = this.buckets.get(row);
+      if (!columns) { columns = this.rowPool.pop() ?? new Map(); this.buckets.set(row, columns); }
+      let bucket = columns.get(col);
+      if (!bucket) {
+        bucket = this.pool.pop() ?? []; columns.set(col, bucket); this.activeBuckets.push(bucket);
+      }
       bucket.push(neighbor);
     }
     for (const id of this.previous.keys()) if (!this.neighborsById.has(id)) this.previous.delete(id);
@@ -58,7 +66,8 @@ export class EnemyLocomotion {
     if (!geometry || request.priority === 'exclusive') return result(0, 0, 'exclusive');
     if (request.priority === 'attack') return result(0, 0, 'attack');
     if (!waypoint) return result(0, 0, 'route-pending');
-    const distance = Math.hypot(waypoint.x - x, waypoint.y - y);
+    const targetDx = waypoint.x - x, targetDy = waypoint.y - y;
+    const distance = Math.hypot(targetDx, targetDy);
     const prior = this.previous.get(request.id);
     const progress = prior ? Math.hypot(x - prior.x, y - prior.y) : 0;
     const sameTarget = prior && Math.hypot(waypoint.x - prior.targetX, waypoint.y - prior.targetY) < 16;
@@ -97,9 +106,13 @@ export class EnemyLocomotion {
     neighbors.length = 0;
     const range = radius + this.maxRadius + (speed + this.maxNeighborSpeed) * 0.16 + 8;
     const rangeSq = range * range;
-    for (let row = Math.floor((y - range) / CELL); row <= Math.floor((y + range) / CELL); row++) {
-      for (let col = Math.floor((x - range) / CELL); col <= Math.floor((x + range) / CELL); col++) {
-        const bucket = this.buckets.get(`${col},${row}`);
+    const minRow = Math.floor((y - range) / CELL), maxRow = Math.floor((y + range) / CELL);
+    const minCol = Math.floor((x - range) / CELL), maxCol = Math.floor((x + range) / CELL);
+    for (let row = minRow; row <= maxRow; row++) {
+      const columns = this.buckets.get(row);
+      if (!columns) continue;
+      for (let col = minCol; col <= maxCol; col++) {
+        const bucket = columns.get(col);
         if (!bucket) continue;
         for (const neighbor of bucket) {
           if (neighbor.id === request.id) continue;
@@ -126,6 +139,8 @@ export class EnemyLocomotion {
     }
     neighbors.length = visibleNeighbors;
     const conflicts = this.conflicts;
+    const radiusSq = radius ** 2;
+    let lastOverlap = -1;
     for (let index = 0; index < neighbors.length; index++) {
       const neighbor = neighbors[index];
       const dx = x - neighbor.x, dy = y - neighbor.y, separation = radius + neighbor.radius + 2;
@@ -135,32 +150,45 @@ export class EnemyLocomotion {
       conflict.dx = dx; conflict.dy = dy; conflict.vx = neighbor.vx; conflict.vy = neighbor.vy;
       conflict.separation = separation; conflict.separationSq = separation * separation;
       conflict.existingOverlap = Math.max(0, separation - Math.sqrt(dx * dx + dy * dy));
-      conflict.weight = neighbor.radius ** 2 / (radius ** 2 + neighbor.radius ** 2) * (precedes ? .06 : 1) / 5;
+      if (conflict.existingOverlap > 0) lastOverlap = index;
+      const neighborRadiusSq = neighbor.radius ** 2;
+      conflict.weight = neighborRadiusSq / (radiusSq + neighborRadiusSq) * (precedes ? .06 : 1) / 5;
     }
-    const heading = Math.atan2(waypoint.y - y, waypoint.x - x);
+    const heading = Math.atan2(targetDy, targetDx);
+    const maxVelocity = distance / dt, improvementScale = Math.max(1, speed * horizon);
     let bestScore = -0.05, bestVx = 0, bestVy = 0, safeCandidate = false;
     const angles = stalled > 0.8 ? RECOVERY_ANGLES : ANGLES;
-    for (const angle of angles) for (const scale of SPEED_SCALES) {
-      const velocity = Math.min(speed * scale, distance / dt);
-      const desiredX = Math.cos(heading + angle) * velocity, desiredY = Math.sin(heading + angle) * velocity;
-      // Smoothing is included in the safety check, rather than applied after collision avoidance.
-      const vx = request.previousVx + (desiredX - request.previousVx) * blend;
-      const vy = request.previousVy + (desiredY - request.previousVy) * blend;
-      if (!geometry.canMoveAgainst(x, y, x + vx * horizon, y + vy * horizon, radius, this.movementObstacles)) continue;
-      safeCandidate = true;
-      let penalty = 0;
-      for (let index = 0; index < neighbors.length; index++) {
-        const neighbor = conflicts[index];
-        const dx = neighbor.dx + (vx - neighbor.vx) * horizon, dy = neighbor.dy + (vy - neighbor.vy) * horizon;
-        const lengthSq = dx * dx + dy * dy;
-        const overlap = lengthSq < neighbor.separationSq ? neighbor.separation - Math.sqrt(lengthSq) : 0;
-        const difference = overlap - neighbor.existingOverlap;
-        penalty += difference * (difference > 0 ? 1 : .25) * neighbor.weight;
+    for (const angle of angles) {
+      const cos = Math.cos(heading + angle), sin = Math.sin(heading + angle);
+      const anglePenalty = Math.abs(angle) * 0.035;
+      candidate: for (const scale of SPEED_SCALES) {
+        const velocity = Math.min(speed * scale, maxVelocity);
+        const desiredX = cos * velocity, desiredY = sin * velocity;
+        // Smoothing is included in the safety check, rather than applied after collision avoidance.
+        const vx = request.previousVx + (desiredX - request.previousVx) * blend;
+        const vy = request.previousVy + (desiredY - request.previousVy) * blend;
+        if (!geometry.canMoveAgainst(x, y, x + vx * horizon, y + vy * horizon, radius, this.movementObstacles)) continue;
+        safeCandidate = true;
+        const straight = angle === 0 && scale === 1;
+        let improvement = straight ? 0 : (distance - Math.hypot(targetDx - vx * horizon, targetDy - vy * horizon)) / improvementScale;
+        let penalty = 0;
+        for (let index = 0; index < neighbors.length; index++) {
+          const neighbor = conflicts[index];
+          const dx = neighbor.dx + (vx - neighbor.vx) * horizon, dy = neighbor.dy + (vy - neighbor.vy) * horizon;
+          const lengthSq = dx * dx + dy * dy;
+          const overlap = lengthSq < neighbor.separationSq ? neighbor.separation - Math.sqrt(lengthSq) : 0;
+          const difference = overlap - neighbor.existingOverlap;
+          penalty += difference * (difference > 0 ? 1 : .25) * neighbor.weight;
+          // Once all initial overlaps have been scored, remaining contributions cannot be
+          // negative. The same subtraction order gives an upper bound on the final score.
+          // Keep the straight candidate's separate acceptance rule and all tie ordering.
+          if (!straight && index >= lastOverlap && improvement - penalty - anglePenalty <= bestScore) continue candidate;
+        }
+        if (straight && penalty <= .005) return result(vx, vy, 'none', progress, neighbors.length);
+        if (straight) improvement = (distance - Math.hypot(targetDx - vx * horizon, targetDy - vy * horizon)) / improvementScale;
+        const score = improvement - penalty - anglePenalty;
+        if (score > bestScore) { bestScore = score; bestVx = vx; bestVy = vy; }
       }
-      const improvement = (distance - Math.hypot(waypoint.x - x - vx * horizon, waypoint.y - y - vy * horizon)) / Math.max(1, speed * horizon);
-      const score = improvement - penalty - Math.abs(angle) * 0.035;
-      if (angle === 0 && scale === 1 && penalty <= .005) return result(vx, vy, 'none', progress, neighbors.length);
-      if (score > bestScore) { bestScore = score; bestVx = vx; bestVy = vy; }
     }
     if (!bestVx && !bestVy && safeCandidate) {
       history.retryAt = this.elapsedMs + 250;
@@ -192,6 +220,7 @@ export class EnemyLocomotion {
   getWorkCounters() { return { localNeighborsExamined: this.neighborsExamined, waitingNeighborsObserved: this.waitingNeighborsObserved }; }
   clear(): void {
     this.previous.clear(); this.buckets.clear(); this.neighborsById.clear(); this.pool.length = 0; this.geometry = null;
+    this.activeBuckets.length = 0; this.rowPool.length = 0;
     this.elapsedMs = 0; this.neighborsExamined = 0; this.waitingNeighborsObserved = 0;
     this.nearby.length = 0; this.conflicts.length = 0; this.movementObstacles.length = 0;
     this.neighborObstacles.length = 0;
