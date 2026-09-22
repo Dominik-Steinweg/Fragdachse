@@ -929,7 +929,7 @@
       "gameIds": [
         "alien-badger"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-am",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_alien_badger",
@@ -975,8 +975,8 @@
         }
       ],
       "hashes": {
-        "idle": "d74f6fc6d4d6a79ba001ca0be3e131448455f99bfa0fd1c4454af530ff71340e",
-        "sheet": "d21592f9fafb7b61fa77931b6e54a1e17581269f168a1418e945420ce859e6fa"
+        "idle": "713eb7f0e01adf2d6887b4e4f8783a76312291ebf61e996650648ed349941b44",
+        "sheet": "87d3abf9b8948a4fdc06a3782806758504730512ac6d1692433deea250824659"
       }
     },
     {
@@ -1097,7 +1097,7 @@
       "gameIds": [
         "pyro-badger"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-an",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_pyro_badger",
@@ -1143,8 +1143,8 @@
         }
       ],
       "hashes": {
-        "idle": "df92bb4bf924f8545b367d6050d14b8d64a5decd1d193b13a81c625332e6499f",
-        "sheet": "26f7f2e20d17fcd04607c951af2021138f1089f0687da16d1a07c9da68d37261"
+        "idle": "acac5426931221c1b0f7ce9f370692b62380bd8f662911496ac99787f46d593a",
+        "sheet": "a46570181ef38037d12e9101518cfdc309832e363c061f1e048a3d836b0e0322"
       }
     },
     {
@@ -2262,6 +2262,500 @@
       "hashes": {
         "idle": "7d9564c21559d5e4abddca92b583423973856958f5ca9ec89c40aa04947eb98d",
         "sheet": "bfe0852746ff36497714a42674c3b3f6be4eaa3bd9f87678662003148f0f92c3"
+      }
+    },
+    {
+      "id": "held-he-grenade",
+      "category": "utility",
+      "gameIds": [
+        "HE_GRENADE"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_HE_GRENADE",
+      "sheetTextureKey": "held_HE_GRENADE_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-he-grenade/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-he-grenade/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18
+        ],
+        "referenceGrip": [
+          3,
+          6
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "91d5225b4fbc76027eac324f7916c5252e168693599edcf37d4f424a84f48cdf",
+        "sheet": "ecc2d5f28d7f12c62169d33537228235e2fd7e6236c27975660e0c1976a571bb"
+      }
+    },
+    {
+      "id": "held-smoke-grenade",
+      "category": "utility",
+      "gameIds": [
+        "SMOKE_GRENADE"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_SMOKE_GRENADE",
+      "sheetTextureKey": "held_SMOKE_GRENADE_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-smoke-grenade/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-smoke-grenade/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          17.5
+        ],
+        "referenceGrip": [
+          3,
+          6.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "8ae39e7279a26f136f45ccfc5a52c883491dcfdcc7c529f6aa80f328338a75c5",
+        "sheet": "d8ce04b19c281513e8b5052a9dd80e13d63d6d0164c599934b48cc304e86626a"
+      }
+    },
+    {
+      "id": "held-molotov",
+      "category": "utility",
+      "gameIds": [
+        "MOLOTOV_GRENADE"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_MOLOTOV_GRENADE",
+      "sheetTextureKey": "held_MOLOTOV_GRENADE_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-molotov/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-molotov/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          15.1
+        ],
+        "referenceGrip": [
+          3,
+          7
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "17a91ddb0cd6d4aede048e4c6b0aa2b811768271c09b8086e36d61aad11b64eb",
+        "sheet": "f0638f569c4c0a2f97952724dd01272b63b486cba464f57ad0a0dec8c457dda2"
+      }
+    },
+    {
+      "id": "held-time-bubble",
+      "category": "utility",
+      "gameIds": [
+        "TIME_BUBBLE"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_TIME_BUBBLE",
+      "sheetTextureKey": "held_TIME_BUBBLE_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-time-bubble/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-time-bubble/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          19
+        ],
+        "referenceGrip": [
+          3,
+          6.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "3fbc7ff0ae540d8d5ce8417318751277321a88b84c8f689a12d946204c8db2ca",
+        "sheet": "e18a953dace0e6a9a4602e0db01e31dc3ff90a7660b9ecb8392a8ca5c6dcddb3"
+      }
+    },
+    {
+      "id": "held-stink-cloud",
+      "category": "utility",
+      "gameIds": [
+        "STINK_CLOUD"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_STINK_CLOUD",
+      "sheetTextureKey": "held_STINK_CLOUD_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-stink-cloud/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-stink-cloud/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18.6
+        ],
+        "referenceGrip": [
+          3.5,
+          6.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "7d6a0c7130ebbb7de9cac4adb4f90c381174f9d3a20bf922cbc0b568bd91549c",
+        "sheet": "7c4fe670a70c0506c2c165a25a3d2bf38db2986888ad71241d40c0f3bc7360c6"
+      }
+    },
+    {
+      "id": "held-translocator",
+      "category": "utility",
+      "gameIds": [
+        "TRANSLOCATOR"
+      ],
+      "revision": "v2-al",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_TRANSLOCATOR",
+      "sheetTextureKey": "held_TRANSLOCATOR_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-translocator/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-translocator/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          10.2
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "a8cee663f3caab5bd39951c7239ccab61b48772d1fddaf05feddb26f7d6107d4",
+        "sheet": "0f87fbec74cec31317ff669fc114cfe5b67625b07e93b05a8b575b740844386c"
+      }
+    },
+    {
+      "id": "held-rock-barrier",
+      "category": "utility",
+      "gameIds": [
+        "ROCK_BARRIER"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_ROCK_BARRIER",
+      "sheetTextureKey": "held_ROCK_BARRIER_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-rock-barrier/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-rock-barrier/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          19.2
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "de749f4818f9f0c7190df23b010db37303bd518746981261e847d8135e37aa47",
+        "sheet": "20df979ebf16a98ea67a7e67707508b64b585b72dd633ef7c2d71eaf3196f45e"
+      }
+    },
+    {
+      "id": "held-spore-turret",
+      "category": "utility",
+      "gameIds": [
+        "SPORE_TURRET"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_SPORE_TURRET",
+      "sheetTextureKey": "held_SPORE_TURRET_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-spore-turret/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-spore-turret/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18.4
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "56f07cb31f4605b4f885e9d063350035c955e402e7e4841a671bcee193129f3e",
+        "sheet": "ad9c29db047170d81f53f5ff7090d50c08672741e1e080c2235088494354617a"
+      }
+    },
+    {
+      "id": "held-zeus",
+      "category": "utility",
+      "gameIds": [
+        "ZEUS_TASER"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_ZEUS_TASER",
+      "sheetTextureKey": "held_ZEUS_TASER_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-zeus/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-zeus/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          15
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "ac4ca0ec7a83e0ac17bf71217bfa2970c4130f4b852bbbdc706941fa44cd7874",
+        "sheet": "329d98d18ae12ad1b55107de25dc3e826837728449f8355e9d0fe9d97a0f14b5"
+      }
+    },
+    {
+      "id": "held-decoy",
+      "category": "utility",
+      "gameIds": [
+        "DECOY"
+      ],
+      "revision": "v2-ak",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_DECOY",
+      "sheetTextureKey": "held_DECOY_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-decoy/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-decoy/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          17.6
+        ],
+        "referenceGrip": [
+          3,
+          8
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "7f67a643e7994d81780211c33c570f79217c034759441db025795f8f5883b8c3",
+        "sheet": "ea799bd8083e12af4e1ff611a03907ceba97e02bee67df6d6e74de65c83f1155"
       }
     }
   ]

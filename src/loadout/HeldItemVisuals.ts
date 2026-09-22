@@ -6,8 +6,8 @@
  * welches Bild dazu gehoert; die Zuordnung entscheidet diese Datei. Beides ist bewusst getrennt:
  * Die Action-/Slot-Identity ist Zustand, die Textur reine Darstellung.
  *
- * Waffen werden aus der ausgewählten Asset-Pipeline-Produktion zugeordnet. Utilities
- * und neutrale Gattungsbilder behalten ihre Pixelkarten in `generate-held-item-sprites.mjs`.
+ * Waffen und Utilities werden aus der ausgewählten Asset-Pipeline-Produktion zugeordnet.
+ * Neutrale Gattungsbilder behalten ihre Pixelkarten in `generate-held-item-sprites.mjs`.
  *
  * - Grip und Mündung liegen im **32-px-Referenzraster** (`HELD_ITEM_TEXTURE_SIZE`).
  *   `sourceScale` trennt die höhere Exportauflösung von dieser logischen Geometrie.
@@ -93,11 +93,11 @@ const GENERIC_GUN = sprite('generic_gun', 2.5, 8.5);
 const GENERIC_THROWABLE = sprite('generic_throwable', 2.5, 4.5);
 
 const PIPELINE_HELD_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Object.fromEntries(
-  PIPELINE_ASSETS.filter(asset => asset.category === 'weapon').flatMap(asset => {
+  PIPELINE_ASSETS.filter(asset => ['weapon', 'utility'].includes(asset.category)).flatMap(asset => {
     const held = ('heldItem' in asset ? asset.heldItem : null) as {
       referenceSize: number; grip: number[]; muzzle: number[];
     } | null;
-    if (!held || held.referenceSize !== HELD_ITEM_TEXTURE_SIZE) throw new Error(`Invalid held weapon export: ${asset.id}`);
+    if (!held || held.referenceSize !== HELD_ITEM_TEXTURE_SIZE) throw new Error(`Invalid held-item export: ${asset.id}`);
     const spec: HeldItemSpriteSpec = Object.freeze({ textureKey: asset.textureKey, assetPath: asset.idlePath,
       sourceScale: asset.sourceSize / held.referenceSize,
       gripX: held.grip[0], gripY: held.grip[1], muzzleX: held.muzzle[0], muzzleY: held.muzzle[1] });
@@ -108,12 +108,6 @@ const PIPELINE_HELD_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Obje
 /** Bilder mit eigener Gestaltung, geschluesselt auf die Loadout-Item-ID. */
 export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Object.freeze({
   ...PIPELINE_HELD_SPRITES,
-  HE_GRENADE: sprite('HE_GRENADE', 3, 6),
-  SMOKE_GRENADE: sprite('SMOKE_GRENADE', 3, 6.5),
-  MOLOTOV_GRENADE: sprite('MOLOTOV_GRENADE', 3, 7),
-  TIME_BUBBLE: sprite('TIME_BUBBLE', 3, 6.5),
-  STINK_CLOUD: sprite('STINKDRUESEN', 3.5, 6.5),
-  DECOY: sprite('DECOY', 3, 8),
 });
 
 const FALLBACK_SPRITES: readonly HeldItemSpriteSpec[] = [GENERIC_GUN, GENERIC_THROWABLE];
@@ -130,13 +124,9 @@ const SLOTLESS_WEAPON_FIRE_TYPES: ReadonlySet<string> = new Set([
   'healing_aura',
 ]);
 
-/** Utility-Arten, die nicht geworfen, sondern platziert oder sofort ausgeloest werden. */
+/** Konstruktion ohne eigenes Handmodell; explizite Katalogmodelle haben Vorrang. */
 const SLOTLESS_UTILITY_TYPES: ReadonlySet<string> = new Set([
-  'placeable_rock',
-  'placeable_turret',
   'placeable_pedestal',
-  'translocator',
-  'taser',
 ]);
 
 /**

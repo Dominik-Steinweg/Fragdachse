@@ -40,18 +40,18 @@ export function validateManifestV2(m) {
     if (m.mount && (!Number.isFinite(frame.baseDiameter) || frame.baseDiameter <= 0 || frame.baseDiameter > m.mount.maxBaseDiameter + 1e-5)) throw new Error(`Turret base footprint missing or exceeded in frame ${index}`);
   }
   if (m.mount && (m.category !== 'turret' || m.mount.rockSize !== 32 || !Number.isFinite(m.mount.maxBaseDiameter) || m.mount.maxBaseDiameter <= 0 || m.mount.maxBaseDiameter >= m.mount.rockSize)) throw new Error('Turret base must fit its 32-pixel rock');
-  if (!Array.isArray(m.clips) || (!m.clips.length && m.category !== 'weapon')) throw new Error('Animation clips missing');
+  if (!Array.isArray(m.clips) || (!m.clips.length && !['weapon', 'utility'].includes(m.category))) throw new Error('Animation clips missing');
   const names = new Set();
   for (const clip of m.clips) {
     if (!/^[a-z][a-z0-9-]*$/.test(clip.name) || names.has(clip.name) || typeof clip.motion !== 'string' || !clip.motion || !Number.isFinite(clip.frameRate) || clip.frameRate <= 0 || typeof clip.loop !== 'boolean' || !Array.isArray(clip.frames) || !clip.frames.length || clip.frames.some(n => !Number.isInteger(n) || n < 0 || n >= m.frames.length)) throw new Error('Invalid animation clip');
     names.add(clip.name);
   }
-  const required = m.category === 'weapon' ? null : m.category === 'turret' ? 'fire' : 'move';
+  const required = ['weapon', 'utility'].includes(m.category) ? null : m.category === 'turret' ? 'fire' : 'move';
   if (required && !names.has(required)) throw new Error(`Required ${required} clip missing`);
-  if (m.category === 'weapon') {
+  if (['weapon', 'utility'].includes(m.category)) {
     const h = m.heldItem;
     if (!h || h.referenceSize !== m.targetSize || !['grip', 'muzzle'].every(key => Array.isArray(h[key]) && h[key].length === 2
-      && h[key].every(n => Number.isFinite(n) && n >= 0 && n <= h.referenceSize))) throw new Error('Weapon grip/muzzle contract missing or invalid');
+      && h[key].every(n => Number.isFinite(n) && n >= 0 && n <= h.referenceSize))) throw new Error('Held-item grip/muzzle contract missing or invalid');
   }
   if (required === 'move' && !m.clips.find(c => c.name === 'move').loop) throw new Error('Movement clip must loop');
   validateDigests(m.sources, 'Source');

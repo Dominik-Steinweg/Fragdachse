@@ -59,11 +59,11 @@ async function fixture() {
 }
 
 describe('V2 animated asset export contracts', () => {
-  it('exports and selects a static weapon with one authored variant and retains its socket contract', async () => {
+  it.each(['weapon', 'utility'])('exports and selects a static %s and retains its socket contract', async (category) => {
     const f = await fixture();
     const folder = path.join(f.asset, 'standard');
     await rename(f.folder, folder);
-    const manifest = { ...f.manifest, variant: 'standard', category: 'weapon', clips: [], frames: f.manifest.frames.slice(0, 1),
+    const manifest = { ...f.manifest, variant: 'standard', category, clips: [], frames: f.manifest.frames.slice(0, 1),
       heldItem: { referenceSize: f.manifest.targetSize, grip: [8, 12], muzzle: [8, 2], referenceGrip: [2, 10] } };
     await save(path.join(folder, 'render.json'), manifest);
     await save(path.join(f.asset, 'build.json'), { status: 'complete', inputHash: hash('resolved fixture'), variants: { standard: { frames: manifest.frames } } });

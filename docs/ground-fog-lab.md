@@ -70,6 +70,13 @@ werden niemals in die Zukunft gerundet. Unveränderte Geometrie wird nicht erneu
 Die Maske moduliert ausschließlich vorhandene Dichte und entfällt bei niedriger Qualität.
 Das Lab zeigt gespeicherte und sichtbare Abschnitte, Zeichnungsaufrufe und verworfene Eingaben.
 
+Projektile, Hitscan und Nahkampf erhalten einen weich abfallenden Außenrand. Die Form wird
+erst nach der Stärkesättigung angewendet, damit auch kräftige Reaktionen weich bleiben.
+Linien laufen an ihren tatsächlichen Anfangs- und Endpunkten zusätzlich längs aus;
+verbundene Abschnitte und Abpraller erhalten an der Verbindung keine Ausblendung.
+Nahkampf blendet auch an den seitlichen Sektorrändern weich aus. Die gesamte Form bleibt
+im vorhandenen GPU-Pass; zusätzliche Blur-Pässe oder Texturen sind nicht erforderlich.
+
 Flamme und Laubbläser verwenden eine mit der Projektilgröße wachsende, weiche Spurbreite.
 Der Laubbläser teilt seine Größenfunktion mit dem Partikelrenderer.
 Projektile ohne replizierte Flugbahn (unter anderem Laubbläser und BFG) erhalten

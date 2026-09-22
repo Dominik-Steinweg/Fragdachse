@@ -6,7 +6,7 @@ Getragene Items sind Presentation einer replizierten Loadout- oder Slot-Entschei
 
 ## Authoring-Vertrag
 
-[src/loadout/HeldItemVisuals.ts](../../src/loadout/HeldItemVisuals.ts) ist die zentrale Zuordnung von Loadout-Item-ID zu HeldItemSpriteSpec. Waffen stammen aus dem [Asset-Katalog](../../scripts/asset-pipeline/catalog-v2.json) und den ausgewählten Exporten in [pipelineAssets.json](../../src/config/pipelineAssets.json). Der Import übernimmt Bild, Quellauflösung und `heldItem`-Metadaten zusammen. [scripts/generate-held-item-sprites.mjs](../../scripts/generate-held-item-sprites.mjs) hält weiterhin die Pixelkarten für Utilities und neutrale Gattungsbilder.
+[src/loadout/HeldItemVisuals.ts](../../src/loadout/HeldItemVisuals.ts) ist die zentrale Zuordnung von Loadout-Item-ID zu HeldItemSpriteSpec. Waffen und alle ausrüstbaren Utilities stammen aus den Kategorien `weapon` und `utility` des [Asset-Katalogs](../../scripts/asset-pipeline/catalog-v2.json) und den ausgewählten Exporten in [pipelineAssets.json](../../src/config/pipelineAssets.json). Der Import übernimmt Bild, Quellauflösung und `heldItem`-Metadaten zusammen. Beide Kategorien erlauben statische Modelle ohne Clips. Bau-Utilities besitzen eigene tragbare Modelle; die platzierten Weltobjekte behalten ihre separate Darstellung. [scripts/generate-held-item-sprites.mjs](../../scripts/generate-held-item-sprites.mjs) hält historische Pixelkarten und die weiterhin verwendeten neutralen Gattungsbilder.
 
 Für ein neues sichtbares Item gelten diese Invarianten:
 

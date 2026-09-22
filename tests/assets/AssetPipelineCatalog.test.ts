@@ -12,6 +12,21 @@ const assets = catalog.assets;
 const sorted = (values: string[]) => [...values].sort();
 
 describe('asset pipeline catalog contracts', () => {
+  it('covers every equipable utility with a portable model and authored held-item anchors', () => {
+    const required = LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility').map(entry => entry.id);
+    const utilities = assets.filter(asset => asset.category === 'utility');
+    expect(sorted(utilities.flatMap(asset => asset.gameIds))).toEqual(sorted(required));
+    for (const asset of utilities) {
+      expect(asset.forward).toBe('north');
+      expect(asset.clips).toEqual([]);
+      expect(asset.heldItem?.referenceSize).toBe(asset.targetSize);
+      expect(existsSync(path.join(root, asset.designReference!))).toBe(true);
+      for (const point of [asset.heldItem!.grip, asset.heldItem!.muzzle]) for (const coordinate of point) {
+        expect(coordinate).toBeGreaterThanOrEqual(0);
+        expect(coordinate).toBeLessThanOrEqual(asset.targetSize);
+      }
+    }
+  });
   it('covers every equipable held weapon with explicit grip and muzzle coordinates', () => {
     const slotless = new Set(['melee', 'energy_shield', 'tesla_dome', 'healing_aura']);
     const required = LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'weapon')
@@ -103,7 +118,7 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.orthoScale).toBeGreaterThan(0);
       expect(asset.textures).toBeDefined();
       // Original texture pixels and completed renders are local artifacts, not required in a clean checkout.
-      expect(Object.keys(asset.textures!)).toContain(asset.category === 'weapon' || asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
+      expect(Object.keys(asset.textures!)).toContain(['weapon', 'utility'].includes(asset.category) || asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
       expect(Object.keys(asset.materialVariants!)).toHaveLength(1);
       for (const variant of Object.values(asset.materialVariants!)) {
         expect(variant.textureStrength).toBeGreaterThanOrEqual(0);

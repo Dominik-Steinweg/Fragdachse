@@ -87,6 +87,21 @@ describe('Disposable V2 authoring previews', () => {
     expect(JSON.parse(await readFile(path.join(root, folder, 'preview.json'), 'utf8'))).toMatchObject({ comparison: { kind: 'missing' }, poses: [{ index: 0, clip: 'idle' }, { index: 2, clip: 'move', phase: .25 }] });
   });
 
+  it('reviews a new held utility from a loadout icon without assuming legacy grip coordinates', async () => {
+    const { root, image } = await fixture();
+    const folder = 'art/poc/pipeline-v2/previews/new-utility/zeus';
+    await save(path.join(root, folder, 'preview.json'), { status: 'authoring-preview', id: 'zeus', variant: 'standard', indices: [0],
+      spec: { id: 'zeus', label: 'Zeus', category: 'utility', targetSize: 32, clips: [], reference: 'zeus-icon.png',
+        heldItem: { referenceSize: 32, grip: [16, 24], muzzle: [16, 15] } } });
+    await image('zeus-icon.png');
+    await image(`${folder}/frame-0000.png`);
+    await image('public/assets/sprites/gras_bg_tile.png');
+    await image('public/assets/sprites/train/train_material_dark_top.png');
+    await preview(['--review', folder], root);
+    expect((await sharp(path.join(root, folder, 'comparison.png')).metadata()).width).toBeGreaterThan(0);
+    expect(JSON.parse(await readFile(path.join(root, folder, 'preview.json'), 'utf8')).comparison.kind).toBe('catalog');
+  });
+
   it('rejects traversal, production outputs and redirected preview directories', async () => {
     const { root } = await fixture();
     await expect(safePath(root, '../outside')).rejects.toThrow(/Unsafe/);

@@ -4,7 +4,7 @@ Codex steuert Blender über den vorhandenen MCP. Die Pipeline erzeugt orthografi
 
 ## V2-Katalog und Produktionsstand
 
-[catalog-v2.json](catalog-v2.json) ist der Bedarfskatalog: neun Turmgrafiken für elf Waffen-IDs, 14 Gegner, die Spielfigur und 18 gehaltene Waffen. Slotlose Nahkampf-/Schild-/Tesla-Fähigkeiten behalten ihre vorhandene Darstellung ohne getragenes Objekt. `gameIds`, `reference`, `targetSize` und optionale `referenceTransform` beziehen sich auf die bestehenden Spielverträge. Silhouette, Farbgruppen und Anatomie beziehungsweise Mechanik stehen in `description`; `requiredClips` nennt die Produktionsaufgabe. Assettests gleichen Abdeckung, gemeinsame Turmgrafiken, Anzeigegrößen und Referenzkorrekturen mit den aktuellen Spielregistries ab.
+[catalog-v2.json](catalog-v2.json) ist der Bedarfskatalog: neun Turmgrafiken für elf Waffen-IDs, 14 Gegner, die Spielfigur, 18 gehaltene Waffen und zehn Utilities einschließlich Zeus. Slotlose Nahkampf-/Schild-/Tesla-Fähigkeiten behalten ihre vorhandene Darstellung ohne getragenes Objekt. `gameIds`, `reference`, `targetSize` und optionale `referenceTransform` beziehen sich auf die bestehenden Spielverträge. Silhouette, Farbgruppen und Anatomie beziehungsweise Mechanik stehen in `description`; `requiredClips` nennt die Produktionsaufgabe. Assettests gleichen Abdeckung, gemeinsame Turmgrafiken, Anzeigegrößen und Referenzkorrekturen mit den aktuellen Spielregistries ab.
 
 - `production: "planned"` bedeutet ein vollständiges Briefing ohne ausführbare Rezeptur.
 - `production: "reference"` bedeutet eine unterstützte Referenzrezeptur. Erst ein vollständiger Build, Sichtprüfung, `selection.json` und Quellenarchiv belegen die tatsächlich produzierte Auswahl. Der Katalog allein behauptet keine Freigabe.
@@ -19,13 +19,19 @@ Codex steuert Blender über den vorhandenen MCP. Die Pipeline erzeugt orthografi
 | `badger` | 32 | 64/128 | `move`: schneller Lauf; `idle`: ruhige Atmung, beide mit stabilen Waffengriffen |
 | `held-*` | 32 Referenzraster | 128/256 | statisch, `clips: []`; Griff und Mündung in `heldItem` |
 
-Die Waffenrezeptur nutzt [weapon_surface_parts.py](weapon_surface_parts.py) für getrennte
+Waffen und Utilities nutzen [weapon_surface_parts.py](weapon_surface_parts.py) für getrennte
 Stahl-, Lack-, Holz-, Gummi-, Verbundstoff- und Keramikoberflächen. Gerichtete Maserung,
 unterbrochene Kratzer, Kantenabrieb und Kontaktfugen ergänzen die gepackte technische
 Textur. Breite Formwerte folgen den echten Normalen und dem gespeicherten `FD_FormMask`;
 die gemeinsame Kamera und Beleuchtung bleiben unverändert. `formShadowStrength` steuert
 diese Formschattierung unabhängig von `textureStrength`. Hitzeverfärbung ist ein eigenes
 Materialprofil für die Flammenwerferdüse.
+
+Die Kategorie `utility` nutzt dieselben statischen Export- und Griffverträge wie `weapon`.
+[held-utility.py](recipes_v2/held-utility.py) baut tragbare Modelle; Felsbau und Pilzturm
+besitzen kompakte Handformen unabhängig von ihren Weltobjekten. Ohne historisches
+Held-Bild dient das Freischaltbild als `reference` ohne `referenceGrip`; der Viewer
+zeigt dieses Vergleichsbild separat und setzt nur das neue Modell in die Spielerhand.
 
 Die Produktionsbibliothek erweitert diese ursprünglichen Referenzen auf sämtliche neun Turmgrafiken und 14 Gegner des Katalogs. Gemeinsame Anatomie- und Mechanikhelfer liefern Geometriewerkzeuge; Proportionen, Materialgruppen, Ausrüstung und Gangparameter bleiben in den einzelnen Rezepten gestaltet. Der Spieler verwendet einen schnellen Lauf mit Körper-, Kopf- und Schulterbewegung. Gewichtete Arme lassen die Schulterbewegung bis zu den festen Handgelenken auslaufen; Griffe und Daumen bleiben am Export-Root. Seine enger stehenden Füße greifen weiter vor als zurück. Die V2-F-Archive bewahren den früheren Lauf mit festem Oberkörper, V2-G den ausbalancierten Lauf mit bewegten Händen.
 

@@ -31,13 +31,6 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
 
   it('hat fuer jedes tragbare Katalog-Item ein eigenes Bild', () => {
     const slotlessWeaponTypes = new Set(['melee', 'energy_shield', 'tesla_dome', 'healing_aura']);
-    const slotlessUtilityTypes = new Set([
-      'placeable_rock',
-      'placeable_turret',
-      'placeable_pedestal',
-      'translocator',
-      'taser',
-    ]);
 
     for (const entry of LOADOUT_CATALOG_ENTRIES.filter((candidate) => candidate.kind !== 'ultimate')) {
       const weapon = findWeaponConfig(entry.id);
@@ -45,13 +38,23 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
       const shouldHaveSprite = weapon
         ? !slotlessWeaponTypes.has(weapon.fire.type)
         : utility
-          ? !slotlessUtilityTypes.has(utility.type)
+          ? true
           : false;
 
       if (shouldHaveSprite) {
         expect(HELD_ITEM_SPRITES[entry.id], entry.id).toBeDefined();
         expect(getHeldItemSpriteSpec(entry.id), entry.id).toBe(HELD_ITEM_SPRITES[entry.id]);
       }
+    }
+  });
+
+  it('nutzt für alle Utilities hochaufgelöste Modelle und vererbt sie an Modusvarianten', () => {
+    for (const { id } of LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility')) {
+      const spec = getHeldItemSpriteSpec(id)!;
+      expect(spec.assetPath).toContain('/pipeline-v2/');
+      expect(spec.sourceScale).toBeGreaterThan(1);
+      const variant = `${id}_COOP`;
+      if (findUtilityConfig(variant)) expect(getHeldItemSpriteSpec(variant)).toBe(spec);
     }
   });
 
@@ -85,9 +88,8 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
     }
   });
 
-  it('gibt Nahkampfwaffen und Konstrukten nichts in die Pfoten', () => {
+  it('gibt Nahkampfwaffen und unbekannten Items nichts in die Pfoten', () => {
     expect(getHeldItemSpriteSpec('BITE')).toBeNull();
-    expect(getHeldItemSpriteSpec('ROCK_BARRIER')).toBeNull();
     expect(getHeldItemSpriteSpec(null)).toBeNull();
     expect(getHeldItemSpriteSpec('KEIN_ITEM')).toBeNull();
   });

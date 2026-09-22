@@ -5,6 +5,7 @@ import { FOG, type FogFrame, type FogRect } from './FogConfig';
 export interface FogTrailProfile { radius: number; strength: number; lifeMs: number; decayMs: number; arcDegrees?: number }
 interface Trace {
   input: FogImpulse; at: number; endAt: number; startRadius: number; endRadius: number;
+  startCap: boolean; endCap: boolean;
   lifeMs: number; decayMs: number; source?: number | string; sourceStart?: number; sourceEnd?: number;
 }
 const pack = (data: Uint8Array, offset: number, n: number): void => {
@@ -24,7 +25,8 @@ export class FogTrailSegments {
   size = 0;
   constructor(private readonly frame: FogFrame) {}
   add(input: FogImpulse, now: number, profile: FogTrailProfile = { ...DEFAULT_PROFILE, radius: input.radius, strength: input.strength }): void {
-    this.insert({ input: { ...input }, at: now, endAt: now, startRadius: profile.radius, endRadius: profile.radius, lifeMs: profile.lifeMs, decayMs: profile.decayMs }, now);
+    this.insert({ input: { ...input }, at: now, endAt: now, startRadius: profile.radius, endRadius: profile.radius,
+      startCap: true, endCap: true, lifeMs: profile.lifeMs, decayMs: profile.decayMs }, now);
   }
   addPath(segment: ProjectileTrailSegment, source: number | string, now: number, profile: FogTrailProfile = DEFAULT_PROFILE): void {
     const { from, to } = segment;
@@ -32,12 +34,12 @@ export class FogTrailSegments {
     const dx = to.x - from.x, dy = to.y - from.y;
     if (!Number.isFinite(dx + dy + from.timeMs + to.timeMs + segment.ageMs + profile.radius) || Math.hypot(dx, dy) < .001) return;
     const index = this.tails.get(source), before = index === undefined ? undefined : this.slots[index];
-    const connected = before && !from.breakBefore && from.bounceSequence === undefined
+    const connected = before && !from.breakBefore
       && Math.abs(from.timeMs - before.sourceEnd!) < .01
       && Math.hypot(from.x - before.input.endX, from.y - before.input.endY) < .1
       && before.lifeMs === profile.lifeMs && before.decayMs === profile.decayMs;
     const startRadius = connected ? before.endRadius : profile.radius;
-    if (connected && to.timeMs - before.sourceStart! <= 1000) {
+    if (connected && from.bounceSequence === undefined && to.timeMs - before.sourceStart! <= 1000) {
       const ax = before.input.endX - before.input.x, ay = before.input.endY - before.input.y;
       const duration = to.timeMs - before.sourceStart!;
       const radiusAtJoin = before.startRadius + (profile.radius - before.startRadius) * (from.timeMs - before.sourceStart!) / Math.max(1, duration);
@@ -50,9 +52,12 @@ export class FogTrailSegments {
         this.encode(index!, before); return;
       }
     }
+    // End feathers belong to the continuous path, never to a batch boundary or bounce pivot.
+    if (connected && before.endCap) { before.endCap = false; this.version++; }
     const endAt = now - segment.ageMs, at = endAt - Math.max(0, to.timeMs - from.timeMs);
     this.insert({ input: { x: from.x, y: from.y, endX: to.x, endY: to.y, radius: profile.radius,
       strength: profile.strength, kind: profile.arcDegrees ? 'melee' : 'projectile', arcDegrees: profile.arcDegrees, priority: 10 }, at, endAt, startRadius, endRadius: profile.radius,
+      startCap: !connected, endCap: true,
       lifeMs: profile.lifeMs, decayMs: profile.decayMs, source, sourceStart: from.timeMs, sourceEnd: to.timeMs }, now);
   }
   private remove(index: number): void {
@@ -97,7 +102,7 @@ export class FogTrailSegments {
     let offset = 0;
     for (let index = 0; index < FOG.trailCapacity; index++) {
       const trace = this.slots[index]; if (!trace || (!includeProjectiles && trace.input.kind !== 'melee')) continue;
-      const p = trace.input, radius = Math.max(trace.startRadius, trace.endRadius) + 1;
+      const p = trace.input, radius = Math.max(trace.startRadius, trace.endRadius) * FOG.trailEdgeExtent + 1;
       if (Math.max(p.x, p.endX) + radius < view.x || Math.min(p.x, p.endX) - radius > view.x + view.width
         || Math.max(p.y, p.endY) + radius < view.y || Math.min(p.y, p.endY) - radius > view.y + view.height) continue;
       const length = Math.hypot(p.endX - p.x, p.endY - p.y);
@@ -106,7 +111,9 @@ export class FogTrailSegments {
         const end = corner >= 2, side = corner % 2 ? 1 : -1, along = end ? radius : -radius;
         data[offset++] = (end ? p.endX : p.x) + dx * along - dy * radius * side - this.frame.offsetX;
         data[offset++] = (end ? p.endY : p.y) + dy * along + dx * radius * side - this.frame.offsetY;
-        data[offset++] = index; data[offset++] = p.arcDegrees ?? 0;
+        data[offset++] = index;
+        // Arc occupies 0..360; the upper two bits mark the true path ends for the shader.
+        data[offset++] = (p.arcDegrees ?? 0) + (Number(trace.startCap) + Number(trace.endCap) * 2) * 512;
       }
     }
     return offset / 4;

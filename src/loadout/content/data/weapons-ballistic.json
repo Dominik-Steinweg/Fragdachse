@@ -2,6 +2,7 @@
   "weapons": {
     "GLOCK": {
       "id": "GLOCK",
+      "fogTrailDurationFactor": 0.6,
       "shotFeedbackProfile": "light",
       "cooldown": 250,
       "damage": 9,
@@ -119,6 +120,7 @@
     },
     "XBOW": {
       "id": "XBOW",
+      "fogTrailDurationFactor": 0.5,
       "shotFeedbackProfile": "medium",
       "cooldown": 700,
       "damage": 5,
@@ -181,6 +183,7 @@
     },
     "P90": {
       "id": "P90",
+      "fogTrailDurationFactor": 0.3,
       "shotFeedbackProfile": "rapid",
       "cooldown": 80,
       "damage": 8,
@@ -232,6 +235,7 @@
     },
     "AK47": {
       "id": "AK47",
+      "fogTrailDurationFactor": 0.4,
       "shotFeedbackProfile": "medium",
       "cooldown": 140,
       "damage": 10,
@@ -279,6 +283,7 @@
     },
     "SHOTGUN": {
       "id": "SHOTGUN",
+      "fogTrailDurationFactor": 0.4,
       "shotFeedbackProfile": "heavy",
       "cooldown": 700,
       "damage": 10,
@@ -324,6 +329,7 @@
     },
     "TURRET_MG": {
       "id": "TURRET_MG",
+      "fogTrailDurationFactor": 0.3,
       "cooldown": 260,
       "damage": 7,
       "range": 600,
@@ -417,6 +423,7 @@
     },
     "NEGEV": {
       "id": "NEGEV",
+      "fogTrailDurationFactor": 0.3,
       "shotFeedbackProfile": "rapid",
       "cooldown": 60,
       "damage": 5,

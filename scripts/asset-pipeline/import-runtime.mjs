@@ -44,16 +44,16 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
   }
   const textureKey = entry.category === 'turret'
     ? `turret_weapon_${entry.id.replaceAll('-', '_')}`
-    : entry.category === 'weapon' ? `held_${entry.gameIds[0]}`
+    : ['weapon', 'utility'].includes(entry.category) ? `held_${entry.gameIds[0]}`
     : entry.id === 'badger' ? 'badger' : enemies.find((enemy) => entry.gameIds.includes(enemy.id))?.imageKey;
   if (!textureKey) throw new Error(`Missing game mapping: ${entry.id}`);
   assets.push({
     id: entry.id, category: entry.category, gameIds: entry.gameIds, revision,
     variant: selected.variant, sourceSize: selected.size, textureKey,
-    sheetTextureKey: `${textureKey}_${entry.category === 'weapon' ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
+    sheetTextureKey: `${textureKey}_${['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
     idlePath: `./${folder}/idle.png`, sheetPath: `./${folder}/sheet.png`,
     forward: entry.forward, pivot: entry.pivot, layout: selected.layout,
-    ...(entry.category === 'weapon' ? { heldItem: rendered.heldItem } : {}),
+    ...(['weapon', 'utility'].includes(entry.category) ? { heldItem: rendered.heldItem } : {}),
     idleFrame: selected.idleFrame,
     clips: selected.clips.map(({ name, frames, frameRate, loop }) => ({ name, frames, frameRate, loop })),
     hashes,

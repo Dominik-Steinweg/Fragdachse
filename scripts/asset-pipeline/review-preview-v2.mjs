@@ -109,7 +109,7 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
   }
   if (source.path) {
     let previous = path.resolve(root, source.path);
-    if (source.kind === 'catalog' && m.spec.heldItem) {
+    if (source.kind === 'catalog' && m.spec.heldItem?.referenceGrip) {
       const h = m.spec.heldItem;
       previous = await sharp({ create: { width: h.referenceSize, height: h.referenceSize, channels: 4, background: '#00000000' } })
         .composite([{ input: await readFile(previous), left: Math.round(h.grip[0] - h.referenceGrip[0]), top: Math.round(h.grip[1] - h.referenceGrip[1]) }]).png().toBuffer();

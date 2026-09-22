@@ -69,10 +69,12 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     const obstacleFlow = checkObstacleFlow(scene);
     const traceLoad = checkTraceLoad(field, view, tuning, time);
     const weaponProfiles = checkWeaponProfiles(field, view, tuning, time);
+    const softTraces = checkSoftTraces(field, view, tuning, time);
     const checks = {
       ...obstacleFlow.checks,
       ...traceLoad.checks,
       ...weaponProfiles.checks,
+      ...softTraces.checks,
       cachedTerrainEditsPreserveOtherCells: cachedBefore.density === cachedAfter.density,
       cachedEditsAppliedBeforeResume: reopenedCached.density === 0 && !reopenedCached.reached && blockedCached.density === 0,
       thinTraceWithoutWideLane: fineTrail > 0 && outsideTrail === 0,
@@ -95,7 +97,7 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     };
     return { passed: Object.values(checks).every(Boolean), checks,
       readings: { initial, initialVelocity, wall, isolated, openingCenter, openingEdge, entered, reblocked, beforeRead, afterRead, neighbourhood,
-        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings, traceLoad: traceLoad.readings, weaponProfiles: weaponProfiles.readings } };
+        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings, traceLoad: traceLoad.readings, weaponProfiles: weaponProfiles.readings, softTraces: softTraces.readings } };
   } finally { field.destroy(); terrain.clear(); }
 }
 
@@ -160,7 +162,7 @@ function checkTraceLoad(field: FogGpuField, view: { x: number; y: number; width:
     streamWidthGrowsAlongPath: narrow === 0 && wide > .1,
     trainWakeOutlastsSmallTraces: train > .1 && bulletGone === 0,
     trainWakeExpires: trainGone === 0,
-    cappedClockKeepsTraceTip: cappedTip > .5,
+    cappedClockKeepsTraceTip: cappedTip > .1,
   }, readings: { single, duplicate, oldBefore, oldAfter, newest, traceCount, narrow, wide, train, bulletGone, trainGone, cappedTip } };
 }
 
@@ -176,7 +178,7 @@ function checkWeaponProfiles(field: FogGpuField, view: { x: number; y: number; w
   };
   add(60, 1, 1, 1); add(140, 2, 2, 1); add(220, 3, 1, 2); add(340, 4, 1, 2, 90);
   render(start);
-  const narrowOutside = field.readTrail(200, 75), wideInside = field.readTrail(200, 155);
+  const narrowOutside = field.readTrail(200, 80), wideInside = field.readTrail(200, 160);
   const front = field.readTrail(140, 340), behind = field.readTrail(60, 340), side = field.readTrail(100, 380);
   render(start, 'low');
   const lowMelee = field.readTrail(140, 340), lowProjectile = field.readTrail(200, 60);
@@ -190,4 +192,50 @@ function checkWeaponProfiles(field: FogGpuField, view: { x: number; y: number; w
     analyticalMeleeFacesForward: front > .1 && behind === 0 && side === 0,
     lowQualityKeepsMeleeButHidesProjectiles: lowMelee > .1 && lowProjectile === 0,
   }, readings: { narrowOutside, wideInside, front, behind, side, lowMelee, lowProjectile, normalExpired, extended, extendedMelee, allExpired } };
+}
+
+/** Shape contracts use relative gradients, not a fixed material opacity. */
+function checkSoftTraces(field: FogGpuField, view: { x: number; y: number; width: number; height: number }, tuning: ReturnType<typeof fogTuning>, start: number) {
+  const render = () => { field.step([], [.8, .8], tuning, start); field.render(view, 1024, 512, 'normal', 1); };
+  const profile = { radius: 12, strength: .8, lifeMs: FOG.trailMs, decayMs: FOG.trailDecayMs };
+  const point = (x: number, y: number, timeMs: number, flags = {}) => ({ x, y, timeMs, sequence: 1, vx: 100, vy: 0, ...flags });
+  const decreases = (values: number[]) => values.every((value, i) => i === 0 || value < values[i - 1]);
+  field.trails.clear();
+  field.trails.addPath({ from: point(100, 80, 0), to: point(400, 80, 0), ageMs: 0 }, 1, start, profile);
+  render();
+  const radial = [0, 6, 12, 18, 24].map(offset => field.readTrail(250, 80 + offset));
+  const head = [150, 125, 110, 100, 90, 76].map(x => field.readTrail(x, 80));
+  const tail = [350, 375, 390, 400, 410, 424].map(x => field.readTrail(x, 80));
+
+  // A continuous path split only by upload duration must match the unsplit GPU result.
+  field.trails.clear();
+  field.trails.addPath({ from: point(100, 80, 0), to: point(400, 80, 2000), ageMs: 0 }, 2, start, profile);
+  render(); const referenceJoin = field.readTrail(250, 80);
+  field.trails.clear();
+  const first = { from: point(100, 80, 0), to: point(250, 80, 1000), ageMs: 1000 };
+  field.trails.addPath(first, 3, start, profile);
+  field.trails.addPath({ from: point(250, 80, 1000), to: point(400, 80, 2000), ageMs: 0 }, 3, start, profile);
+  render(); const batchJoin = field.readTrail(250, 80), batchCount = field.trails.size;
+  field.trails.clear();
+  field.trails.addPath(first, 4, start, profile);
+  field.trails.addPath({ from: point(250, 80, 1000, { bounceSequence: 1 }), to: point(350, 180, 2000), ageMs: 0 }, 4, start, profile);
+  render(); const bounceJoin = field.readTrail(250, 80), bounceCount = field.trails.size;
+  field.trails.clear();
+  field.trails.addPath(first, 5, start, profile);
+  field.trails.addPath({ from: point(250, 80, 1000, { breakBefore: true }), to: point(400, 80, 2000), ageMs: 0 }, 5, start, profile);
+  render(); const interruptedJoin = field.readTrail(250, 80);
+
+  field.trails.clear();
+  field.trails.addPath({ from: point(100, 340, 0), to: point(132, 340, 0), ageMs: 0 }, 6, start, { ...profile, radius: 80, arcDegrees: 90 });
+  render();
+  const meleeAngles = [0, 25, 35, 44, 50].map(angle => field.readTrail(100 + Math.cos(angle * Math.PI / 180) * 50, 340 + Math.sin(angle * Math.PI / 180) * 50));
+  const meleeRadial = [20, 40, 60, 100, 150].map(radius => field.readTrail(100 + radius, 340));
+  return { checks: {
+    traceEdgesFadeContinuously: decreases(radial) && radial[3] > 0 && radial[4] === 0,
+    traceStartAndEndFadeContinuously: decreases(head) && decreases(tail) && head[4] > 0 && tail[4] > 0 && head[5] === 0 && tail[5] === 0,
+    batchBoundaryDoesNotFeather: batchCount === 2 && referenceJoin > .1 && Math.abs(batchJoin - referenceJoin) <= 1 / 255,
+    bouncePivotDoesNotFeather: bounceCount === 2 && Math.abs(bounceJoin - referenceJoin) <= 2 / 255,
+    pathInterruptionRestoresEndFeathers: interruptedJoin > 0 && interruptedJoin < batchJoin * .9,
+    meleeHasSoftAngularAndRadialEdges: decreases(meleeAngles) && decreases(meleeRadial) && meleeAngles[4] === 0 && meleeRadial[4] === 0,
+  }, readings: { radial, head, tail, referenceJoin, batchJoin, batchCount, bounceJoin, bounceCount, interruptedJoin, meleeAngles, meleeRadial } };
 }

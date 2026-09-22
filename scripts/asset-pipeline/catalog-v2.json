@@ -1111,10 +1111,10 @@
         0.5
       ],
       "description": {
-        "silhouette": "Jadegrüne spielerverwandte Zweibeiner-Anatomie mit zusammenhängenden Armen, mintfarbenem Gesicht und perlgrünen organischen Schulterplatten.",
-        "colors": "Tiefes Blauviolett, cyanblaue Gelenke, heller Nord-Kopfstreifen und dunkler zentraler Rückenkern.",
-        "anatomy": "Zweibeiner mit eigener fremdartiger Anatomie, wechselnden Beinen und unabhängig gelagerten Armen.",
-        "materials": "Jadegrüne spielerverwandte Zweibeiner-Anatomie mit zusammenhängenden Armen, mintfarbenem Gesicht und perlgrünen organischen Schulterplatten."
+        "silhouette": "Breiter glatter Alien-Schädel mit verjüngtem Kiefer, großen mandelförmigen Augen, angedeuteter Dachszeichnung und gehaltener Plasma-Waffe.",
+        "colors": "Blasses Graugrün am Kopf, kühles Indigo und Petrol an Körper und Panzerung, wenige mintfarbene Energieakzente.",
+        "anatomy": "Zweibeiner mit spielerverwandter Körperhaltung, eigenständigem Kopf, stabil gehaltenem Waffenmodell und separat ausschwingenden Beinen.",
+        "materials": "Runde ausgearbeitete Formen, ruhige matte Oberflächen, klare Formschatten, feine technische Gebrauchsspuren und kräftige Identitätsfarben."
       },
       "requiredClips": [
         "move"
@@ -1132,44 +1132,44 @@
         "cursorFace": true,
         "eyeSouthOffset": 0.025,
         "furBase": [
-          0.08,
-          0.27,
-          0.22
+          0.044,
+          0.1,
+          0.14
         ],
         "furTones": [
           [
-            12,
-            38,
-            38
+            10,
+            21,
+            28
           ],
           [
-            25,
-            83,
-            73
+            24,
+            43,
+            64
           ],
           [
-            54,
-            135,
-            112
+            46,
+            76,
+            106
           ],
           [
-            125,
-            191,
-            155
+            97,
+            136,
+            157
           ]
         ],
         "paintedFur": true,
         "contactAODistance": 0.65,
         "contactAOStrength": 0.9,
         "headColor": [
-          0.61,
-          0.85,
-          0.71
+          0.3,
+          0.53,
+          0.43
         ],
         "tailColor": [
-          0.25,
-          0.49,
-          0.35
+          0.12,
+          0.2,
+          0.2
         ],
         "footColor": [
           0.055,
@@ -1187,7 +1187,7 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
+          "label": "Eigenständiger Kopf und bewaffnete Haltung",
           "textureStrength": 0.62,
           "formShadowStrength": 1
         }
@@ -1374,10 +1374,10 @@
         0.5
       ],
       "description": {
-        "silhouette": "Warme orange Zweibeiner-Anatomie mit spielerverwandten Armen und Gesicht, goldener Schutzkleidung und kleinem Flammenwerfer.",
-        "colors": "Dunkles Violettbraun, kräftiger orangefarbener Kern und blasse Kopfzeichnung.",
-        "anatomy": "Zweibeiner mit stabiler bewaffneter Armhaltung und separat ausschwingenden Beinen.",
-        "materials": "Warme orange Zweibeiner-Anatomie mit spielerverwandten Armen und Gesicht, goldener Schutzkleidung und kleinem Flammenwerfer."
+        "silhouette": "Feuerroter Schutzhelm über einer schwarzen Atemmaske mit getrennten Sichtgläsern und seitlichen Filtern; Glock-artige Pistole in den Pfoten.",
+        "colors": "Feuerrote Schutzkleidung und Helm, dunkel verkohltes Fell, schwarze Atemmaske und sparsame bernsteinfarbene Gläser.",
+        "anatomy": "Zweibeiner mit spielerverwandter Körperhaltung, eigenständigem Kopf, stabil gehaltenem Waffenmodell und separat ausschwingenden Beinen.",
+        "materials": "Runde ausgearbeitete Formen, ruhige matte Oberflächen, klare Formschatten, feine technische Gebrauchsspuren und kräftige Identitätsfarben."
       },
       "requiredClips": [
         "move"
@@ -1395,44 +1395,44 @@
         "cursorFace": true,
         "eyeSouthOffset": 0.025,
         "furBase": [
-          0.32,
-          0.115,
-          0.032
+          0.19,
+          0.029,
+          0.017
         ],
         "furTones": [
           [
-            40,
             23,
-            12
+            12,
+            10
           ],
           [
-            95,
-            46,
-            18
+            64,
+            22,
+            16
           ],
           [
-            155,
-            85,
+            129,
+            42,
             26
           ],
           [
-            217,
-            153,
-            63
+            185,
+            81,
+            48
           ]
         ],
         "paintedFur": true,
         "contactAODistance": 0.65,
         "contactAOStrength": 0.9,
         "headColor": [
-          0.92,
-          0.76,
-          0.46
+          0.44,
+          0.021,
+          0.013
         ],
         "tailColor": [
-          0.51,
-          0.28,
-          0.09
+          0.14,
+          0.033,
+          0.023
         ],
         "footColor": [
           0.055,
@@ -1450,7 +1450,7 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
+          "label": "Eigenständiger Kopf und bewaffnete Haltung",
           "textureStrength": 0.62,
           "formShadowStrength": 1
         }
@@ -3354,6 +3354,840 @@
         "referenceGrip": [
           2.5,
           9.5
+        ]
+      }
+    },
+    {
+      "id": "held-he-grenade",
+      "label": "HE-Granate",
+      "category": "utility",
+      "gameIds": [
+        "HE_GRENADE"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/HE_GRENADE.png",
+      "designReference": "public/assets/sprites/Loadout/HE_GRENADE.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Eiartiger olivgrüner Gusskörper mit gebogenen Fragmentierungsfugen, Sicherungsbügel und Zugring.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "grenade",
+        "accent": [
+          0.42,
+          0.37,
+          0.09
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.105,
+            0.19,
+            0.027
+          ],
+          "trim": [
+            0.2,
+            0.29,
+            0.055
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18
+        ],
+        "referenceGrip": [
+          3,
+          6
+        ]
+      }
+    },
+    {
+      "id": "held-smoke-grenade",
+      "label": "Rauchgranate",
+      "category": "utility",
+      "gameIds": [
+        "SMOKE_GRENADE"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/SMOKE_GRENADE.png",
+      "designReference": "public/assets/sprites/Loadout/SMOKE_GRENADE.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Gerollte Stahlhülse mit olivgrünem Kennband, Entlüftungslöchern, Sicherungsbügel und Zugring.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "smoke",
+        "accent": [
+          0.22,
+          0.32,
+          0.055
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.115,
+            0.14,
+            0.155
+          ],
+          "trim": [
+            0.1,
+            0.16,
+            0.048
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          17.5
+        ],
+        "referenceGrip": [
+          3,
+          6.5
+        ]
+      }
+    },
+    {
+      "id": "held-molotov",
+      "label": "Molotow",
+      "category": "utility",
+      "gameIds": [
+        "MOLOTOV_GRENADE"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/MOLOTOV_GRENADE.png",
+      "designReference": "public/assets/sprites/Loadout/MOLOTOV_GRENADE.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Blaugrüne Glasflasche mit bernsteinfarbenem Inhalt, schmutzigem Papieretikett und gedrehtem Stoffdocht.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "molotov",
+        "accent": [
+          0.42,
+          0.24,
+          0.07
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.027,
+            0.08,
+            0.085
+          ],
+          "trim": [
+            0.4,
+            0.14,
+            0.025
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          15.1
+        ],
+        "referenceGrip": [
+          3,
+          7
+        ]
+      }
+    },
+    {
+      "id": "held-time-bubble",
+      "label": "Zeitblase",
+      "category": "utility",
+      "gameIds": [
+        "TIME_BUBBLE"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/TIME_BUBBLE.png",
+      "designReference": "public/assets/sprites/Loadout/TIME_BUBBLE.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Längliches blaues Chronometer mit gewölbtem Zeitkern, offenem Schutzkäfig und zwei gekapselten Reglern.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "time-bubble",
+        "accent": [
+          0.015,
+          0.33,
+          0.46
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.025,
+            0.055,
+            0.1
+          ],
+          "trim": [
+            0.115,
+            0.15,
+            0.24
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          19
+        ],
+        "referenceGrip": [
+          3,
+          6.5
+        ]
+      }
+    },
+    {
+      "id": "held-stink-cloud",
+      "label": "Stinkdrüsen",
+      "category": "utility",
+      "gameIds": [
+        "STINK_CLOUD"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/STINKDRUESEN.png",
+      "designReference": "public/assets/sprites/Loadout/STINKDRUESEN.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Violetter Atomisator zwischen zwei gelbgrünen Druckkartuschen mit Haltebändern und zentralem Auslass.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "stink",
+        "accent": [
+          0.29,
+          0.43,
+          0.025
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.067,
+            0.023,
+            0.1
+          ],
+          "trim": [
+            0.16,
+            0.07,
+            0.23
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18.6
+        ],
+        "referenceGrip": [
+          3.5,
+          6.5
+        ]
+      }
+    },
+    {
+      "id": "held-translocator",
+      "label": "Translocator",
+      "category": "utility",
+      "gameIds": [
+        "TRANSLOCATOR"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/Loadout/TRANSLOCATOR.png",
+      "designReference": "scripts/asset-pipeline/references/translocator-concept.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Längliches Puck-Abschussgerät mit erhöhtem Gehäuse, Griff, seitlichen Führungsgabeln und sichtbar darunter eingesetzter silberner Scheibe.",
+        "materials": "Dunkelroter abgenutzter Lack, graphitfarbene Mechanik, breite gebürstete Silberränder und sparsame bernsteinorange Induktionsanzeigen nach der beigefügten Konzeptzeichnung.",
+        "anatomy": "Echte orthografische Draufsicht; der breite Puck sitzt unter dem länglichen Gerät. Griff und Abschussrichtung liegen auf der Mittelachse. Die Handform bleibt zur Spielfigur maßhaltig."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "translocator",
+        "accent": [
+          0.7,
+          0.14,
+          0.015
+        ],
+        "palette": {
+          "steel": [
+            0.065,
+            0.07,
+            0.07
+          ],
+          "edge": [
+            0.34,
+            0.37,
+            0.365
+          ],
+          "body": [
+            0.105,
+            0.012,
+            0.018
+          ],
+          "trim": [
+            0.235,
+            0.026,
+            0.025
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          10.2
+        ]
+      }
+    },
+    {
+      "id": "held-rock-barrier",
+      "label": "Felsbau",
+      "category": "utility",
+      "gameIds": [
+        "ROCK_BARRIER"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/Loadout/FELSBAU.png",
+      "designReference": "public/assets/sprites/Loadout/FELSBAU.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Kompaktes Steinpaket mit abgerundeten Bruchkanten, messingfarbenen Spanngurten und Trageschlaufe.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "rock",
+        "accent": [
+          0.4,
+          0.28,
+          0.11
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.1,
+            0.115,
+            0.1
+          ],
+          "trim": [
+            0.32,
+            0.21,
+            0.065
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          19.2
+        ]
+      }
+    },
+    {
+      "id": "held-spore-turret",
+      "label": "Pilzturm",
+      "category": "utility",
+      "gameIds": [
+        "SPORE_TURRET"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/Loadout/FLIEGENPILZ.png",
+      "designReference": "public/assets/sprites/Loadout/FLIEGENPILZ.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Tragbarer junger Fliegenpilz mit rundem rostrotem Hut, elfenbeinfarbenen Schuppen und faserigem Stiel.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "spore",
+        "accent": [
+          0.44,
+          0.065,
+          0.025
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.085,
+            0.14,
+            0.035
+          ],
+          "trim": [
+            0.27,
+            0.22,
+            0.12
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18.4
+        ]
+      }
+    },
+    {
+      "id": "held-zeus",
+      "label": "Zeus",
+      "category": "utility",
+      "gameIds": [
+        "ZEUS_TASER"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/Loadout/ZEUS_TASER.png",
+      "designReference": "public/assets/sprites/Loadout/ZEUS_TASER.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Gelb-schwarzes isoliertes Zeus-Gehäuse mit zwei metallischen Kontakten, Gummigriff und eingelassener Serviceplatte.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "zeus",
+        "accent": [
+          0.65,
+          0.47,
+          0.035
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.065,
+            0.065,
+            0.038
+          ],
+          "trim": [
+            0.52,
+            0.34,
+            0.022
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          15
+        ]
+      }
+    },
+    {
+      "id": "held-decoy",
+      "label": "Köderprojektor",
+      "category": "utility",
+      "gameIds": [
+        "DECOY"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/DECOY.png",
+      "designReference": "public/assets/sprites/Loadout/DECOY.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Eckiger blauer Köderprojektor mit versenkter Linse, seitlichen Schutzbügeln, Tragebügel und Teleskopantenne.",
+        "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+        "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+      },
+      "requiredClips": [],
+      "recipe": "held-utility",
+      "model": {
+        "construction": "decoy",
+        "accent": [
+          0.015,
+          0.28,
+          0.45
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.072,
+            0.085
+          ],
+          "edge": [
+            0.21,
+            0.255,
+            0.275
+          ],
+          "body": [
+            0.021,
+            0.044,
+            0.072
+          ],
+          "trim": [
+            0.075,
+            0.16,
+            0.23
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          17.6
+        ],
+        "referenceGrip": [
+          3,
+          8
         ]
       }
     }

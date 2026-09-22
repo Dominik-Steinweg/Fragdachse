@@ -230,10 +230,10 @@ def verify(scene, manifest, report, source_folder):
     rigs = [ob for ob in scene.objects if ob.type == 'ARMATURE']
     owners = animation_owners(scene)
     if not manifest['clips']:
-        require(spec['category'] == 'weapon' and len(frames) == 1 and not owners,
-                'Only static weapons may omit Actions and clips')
+        require(spec['category'] in ('weapon', 'utility') and len(frames) == 1 and not owners,
+                'Only static held items may omit Actions and clips')
         require(spec['heldItem'] == manifest['heldItem'], 'Saved held-item anchors differ')
-        checks.append({'name': 'static_weapon_and_held_item_contract', 'passed': True})
+        checks.append({'name': 'static_held_item_contract', 'passed': True})
     else:
         require(any(ob.type in ('EMPTY', 'ARMATURE', 'MESH') and action_curves(ob) for ob in scene.objects),
                 'No real object or rig Action is attached')

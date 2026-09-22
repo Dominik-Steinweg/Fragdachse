@@ -6,6 +6,8 @@ export const FOG = {
   impulses: { high: 256, medium: 128, low: 32 },
   impulsesPerChunk: 16,
   trailCapacity: 8192, trailTextureWidth: 1024, trailMs: 3200, trailDecayMs: 1100, trailRadius: 5,
+  trailEdgeExtent: 1.8, trailEdgeFalloff: 1.65, trailEndFeather: 3, trailEndFeatherMin: 18,
+  trailSectorFeather: .45,
   trainTrailMs: 10000, trainTrailDecayMs: 4600,
   motionGain: 9, dashGain: 1.35,
   smallProjectileStrength: .48, largeProjectileStrength: .43,

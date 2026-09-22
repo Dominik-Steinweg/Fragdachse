@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { models, constructionsFor, resolveSource, sampleFrame } from '../../scripts/asset-pipeline/viewer/library.mjs';
+import { models, constructionsFor, resolveSource, sampleFrame, supportsHeldView } from '../../scripts/asset-pipeline/viewer/library.mjs';
 
 function asset(id: string, variants = ['standard'], frames = [1, 2, 3, 4]) {
   return { id, label: id, category: id === 'player' ? 'character' : 'enemy', targetSize: 32,
@@ -12,6 +12,16 @@ const library = { constructions: [
 ] };
 
 describe('model library review contracts', () => {
+  it('offers utility models with held composition but treats loadout-only references as standalone icons', () => {
+    const utility = { ...asset('zeus'), category: 'utility', heldItem: { referenceSize: 32, grip: [16, 24], muzzle: [16, 15] } };
+    const lib = { constructions: [{ key: '2/new', version: 2, assets: [utility] }] };
+    expect(models(lib, 'utility').map((a: { id: string }) => a.id)).toEqual(['zeus']);
+    expect(supportsHeldView(utility)).toBe(true);
+    expect(supportsHeldView(utility, true)).toBe(false);
+    expect(supportsHeldView({ heldItem: { ...utility.heldItem, referenceGrip: [3, 6] } }, true)).toBe(true);
+    expect(supportsHeldView(asset('player'))).toBe(false);
+    expect(sampleFrame(resolveSource(lib, { id: 'zeus' }), 'fire', 1, true)).toBe(0);
+  });
   it('keeps one model entry across constructions and searches within its category', () => {
     expect(models(library).map((a: { id: string }) => a.id)).toEqual(['enemy', 'player']);
     expect(models(library, 'enemy', 'ENe').map((a: { id: string }) => a.id)).toEqual(['enemy']);

@@ -46,6 +46,8 @@ describe('loadout content loader', () => {
   it('accepts optional fog factors for weapons and BFG and preserves inheritance', () => {
     const sources = clonedSources();
     const weapons = documentWith(sources, 'weapons', 'GLOCK').weapons!;
+    delete weapons.P90.fogTrailWidthFactor;
+    delete weapons.P90.fogTrailDurationFactor;
     Object.assign(weapons.GLOCK, { fogTrailWidthFactor: 2, fogTrailDurationFactor: .5 });
     weapons.FOG_VARIANT = { id: 'FOG_VARIANT', baseId: 'GLOCK', _notes: 'fog factors', fogTrailDurationFactor: 0 };
     Object.assign(documentWith(sources, 'utilities', 'BFG').utilities!.BFG, { fogTrailWidthFactor: 3, fogTrailDurationFactor: 2 });

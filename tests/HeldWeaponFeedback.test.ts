@@ -63,9 +63,9 @@ function visualFixture() {
     setDepth() { return this; },
     setOrigin(x: number, y: number) { this.originX = x; this.originY = y; return this; },
     setTexture(key: string) {
-      const weapon = ['GLOCK', 'AWP'].map(id => getHeldItemSpriteSpec(id)!).find(spec => spec.textureKey === key);
-      const size = 32 * (weapon?.sourceScale ?? 1);
-      this.frame = key === getHeldItemSpriteSpec('HE_GRENADE')!.textureKey
+      const item = ['GLOCK', 'AWP', 'HE_GRENADE'].map(id => getHeldItemSpriteSpec(id)!).find(spec => spec.textureKey === key);
+      const size = 32 * (item?.sourceScale ?? 1);
+      this.frame = key === getHeldItemSpriteSpec('HOLY_HAND_GRENADE')!.textureKey
         ? { cutWidth: 6, cutHeight: 7 } : { cutWidth: size, cutHeight: size };
       return this;
     },
@@ -85,7 +85,7 @@ function visualFixture() {
 }
 
 describe('animated held item geometry and lifetime', () => {
-  it('keeps a high-resolution weapon at logical size and restores legacy scale when switching to a utility', () => {
+  it('preserves logical size across high-resolution weapons/utilities and restores legacy fallback scale', () => {
     const { visual, image, imageCount } = visualFixture();
     visual.setItem('GLOCK');
     visual.sync(0, 0, 0, 32, true);
@@ -94,9 +94,14 @@ describe('animated held item geometry and lifetime', () => {
     expect(image.originX).toBe(getHeldItemSpriteSpec('GLOCK')!.gripX / 32);
     visual.setItem('HE_GRENADE');
     visual.sync(0, 0, 0, 64, true);
+    expect(image.displayWidth).toBe(64);
+    expect(image.displayHeight).toBe(64);
+    expect(image.originY).toBe(getHeldItemSpriteSpec('HE_GRENADE')!.gripY / 32);
+    visual.setItem('HOLY_HAND_GRENADE');
+    visual.sync(0, 0, 0, 64, true);
     expect(image.displayWidth).toBe(12);
     expect(image.displayHeight).toBe(14);
-    expect(image.originY).toBe(getHeldItemSpriteSpec('HE_GRENADE')!.gripY / 7);
+    expect(image.originY).toBe(getHeldItemSpriteSpec('HOLY_HAND_GRENADE')!.gripY / 7);
     expect(imageCount()).toBe(1);
   });
 

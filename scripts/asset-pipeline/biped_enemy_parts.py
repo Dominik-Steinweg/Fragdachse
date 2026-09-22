@@ -1,21 +1,30 @@
-"""Player-derived muscular badger anatomy with independently authored enemy equipment."""
+"""Shared biped stance with distinct enemy skulls, equipment and stable held weapons."""
+import bpy
 from recipes_v2 import badger
 from enemy_parts_b import scute, tube
 from enemy_surface_parts import finish_surfaces
 from rigs_v2 import attach
+from biped_enemy_heads import alien_head, pyro_head
+from biped_enemy_weapons import equip
 
 
 def build(c,spec,kind):
     asset=badger.build(c,spec)
+    # Replace only the freshly generated head group. The player's recipe and other scenes stay intact.
+    for ob in tuple(asset['parts']['head'].children):
+        bpy.data.objects.remove(ob,do_unlink=True)
     before={m for ob in c.scene.objects if ob.type=='MESH' for m in ob.data.materials}
     alien=kind=='alien'
-    shell=c.material('Jade alien carapace' if alien else 'Burnt orange fireproof shell',
-                     (.055,.38,.32) if alien else (.52,.16,.035),'technical')
-    rim=c.material('Pearl mint chitin' if alien else 'Warm ceramic armor edges',
-                   (.36,.66,.52) if alien else (.78,.42,.075),'technical')
+    head=alien_head(c) if alien else pyro_head(c)
+    attach(head,asset['parts']['head'])
+    for ob in head:ob['motionRole']='head'
+    shell=c.material('Indigo alien carapace' if alien else 'Fire red protective armor',
+                     (.074,.09,.23) if alien else (.44,.021,.013),'technical')
+    rim=c.material('Cold mint chitin inlays' if alien else 'Dark red ceramic armor edges',
+                   (.18,.41,.36) if alien else (.25,.021,.016),'technical')
     dark=c.material('Graphite equipment recess',(.018,.031,.038))
     energy=c.material('Contained turquoise organ' if alien else 'Amber furnace ceramic',
-                      (.06,.72,.69) if alien else (.95,.32,.028),emission=.15)
+                      (.045,.47,.38) if alien else (.70,.085,.012),emission=.15)
     body=[]
     for side in (-1,1):
         body.append(scute(c,'Rounded grown shoulder guard',(side*.57,-.27,1.68),.43,.44,shell,.18))
@@ -34,12 +43,11 @@ def build(c,spec,kind):
         body.append(c.ell('Oval recessed furnace carrier',(0,-.54,1.58),(.27,.17,.11),dark))
         body.append(c.ell('Warm oval furnace',(0,-.55,1.69),(.19,.115,.055),energy))
         for x in (-.10,0,.10): body.append(c.box('Curved furnace protective rib',(x,-.55,1.73),(.027,.20,.028),dark,.012))
-        for side in (-1,1): body.append(c.ell('Rounded fuel canister',(side*.45,-.48,1.42),(.11,.25,.10),rim))
-        pistol=[c.box('North-facing compact flame pistol',(.13,.83,1.62),(.145,.45,.12),dark,.035),
-                c.box('Warm pistol crown',(.13,.81,1.697),(.10,.27,.02),shell,.009),
-                c.ell('Recessed flame nozzle',(.13,1.035,1.64),(.045,.05,.035),rim)]
-        attach(pistol,asset['root'])
+        for side in (-1,1):
+            body.append(c.ell('Charcoal breathing air canister',(side*.45,-.48,1.42),(.11,.25,.10),dark))
+            for y in (-.63,-.40):body.append(scute(c,'Red canister securing band',(side*.45,y,1.51),.18,.055,shell,.035))
     attach(body,asset['parts']['body'])
     after={m for ob in c.scene.objects if ob.type=='MESH' for m in ob.data.materials}
-    finish_surfaces(c.scene,after-before)
+    finish_surfaces(c.scene,{m for m in after-before if not m.get('FD_SurfaceKind') and not m.get('FD_AlienEye')})
+    equip(c,asset,kind)
     return asset

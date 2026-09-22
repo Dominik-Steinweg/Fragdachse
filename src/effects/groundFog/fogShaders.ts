@@ -216,16 +216,16 @@ precision highp float;
 attribute vec2 inPosition,inTexCoord;
 uniform vec2 uViewOrigin,uViewSize;
 varying vec2 outWorld;
-varying float outIndex,outArc;
+varying float outIndex,outShape;
 void main() {
- outWorld=inPosition;outIndex=inTexCoord.x;outArc=inTexCoord.y;
+ outWorld=inPosition;outIndex=inTexCoord.x;outShape=inTexCoord.y;
  gl_Position=vec4((inPosition-uViewOrigin)/uViewSize*vec2(2.,-2.)+vec2(-1.,1.),0.,1.);
 }
 `;
 export const FOG_TRAIL_FRAGMENT = `
 precision highp float;
 varying vec2 outWorld;
-varying float outIndex,outArc;
+varying float outIndex,outShape;
 uniform sampler2D uCommands;
 uniform vec2 uWorldSize;
 uniform float uTrailTime,uReaction;
@@ -238,22 +238,34 @@ void main() {
  vec4 profile=texture2D(uCommands,uv+row*3.),radii=texture2D(uCommands,uv+row*4.);
  vec2 start=vec2(decode(a.rg),decode(a.ba))/65535.*uWorldSize,end=vec2(decode(b.rg),decode(b.ba))/65535.*uWorldSize;
  vec2 line=end-start;
- float t=clamp(dot(outWorld-start,line)/max(.001,dot(line,line)),0.,1.);
+ float lineLength=max(.001,length(line));
+ float along=dot(outWorld-start,line)/lineLength;
+ float t=clamp(along/lineLength,0.,1.);
  float radius=mix(decode(radii.rg),decode(radii.ba),t)/16.;
  float distance=length(outWorld-mix(start,end,t));
- float sector=1.;
- if(outArc>0.) {
+ float arc=mod(outShape,512.),caps=floor(outShape/512.);
+ float sector=1.,ends=1.;
+ if(arc>0.) {
    vec2 delta=outWorld-start;
    distance=length(delta);t=0.;
    float facing=dot(delta,line)/max(.001,distance*length(line));
-   float halfAngle=radians(outArc*.5);
-   sector=outArc>=359.9?1.:smoothstep(cos(halfAngle),cos(max(0.,halfAngle-.08)),facing);
+   float halfAngle=radians(arc*.5);
+   float feather=min(halfAngle*.65,${FOG.trailSectorFeather});
+   sector=arc>=359.9?1.:smoothstep(cos(halfAngle),cos(max(0.,halfAngle-feather)),facing);
+ } else {
+   float feather=min(lineLength*.45,max(${FOG.trailEndFeatherMin.toFixed(1)},radius*${FOG.trailEndFeather.toFixed(1)}));
+   float outside=max(.01,radius*${FOG.trailEdgeExtent});
+   if(mod(caps,2.)>.5) ends*=smoothstep(-outside,feather,along);
+   if(caps>1.5) ends*=smoothstep(-outside,feather,lineLength-along);
  }
  float duration=mod(decode(c.ba)-decode(c.rg)+60000.,60000.);
  float age=mod(uTrailTime-decode(c.rg)-t*duration+60000.,60000.);
  float life=decode(profile.gb),decay=max(1.,profile.a*life);
- float amount=sector*(1.-smoothstep(radius*.2,max(.01,radius),distance))*exp(-age/decay)
+ float amount=exp(-age/decay)
    *(1.-smoothstep(life*.7,life,age))*profile.r*4.5*uReaction;
- gl_FragColor=vec4(min(.90,1.-exp(-amount)),0,0,1);
+ // Shape after saturation: strong shots retain a soft edge instead of flattening the falloff.
+ float q=distance/max(.01,radius);
+ float edge=exp(-${FOG.trailEdgeFalloff}*q*q)*(1.-smoothstep(${FOG.trailEdgeExtent * .72},${FOG.trailEdgeExtent},q));
+ gl_FragColor=vec4(min(.90,1.-exp(-amount))*edge*sector*ends,0,0,1);
 }
 `;

@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { createWebGLStartupContext } from '../../../src/utils/webglContext';
 import { getHeldItemAnchor } from '../../../src/config';
 import runtime from '../../../src/config/pipelineAssets.json';
-import { categoryLabels, models, constructionsFor, resolveSource, sampleFrame } from './library.mjs';
+import { categoryLabels, models, constructionsFor, resolveSource, sampleFrame, supportsHeldView } from './library.mjs';
 
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -110,7 +110,7 @@ async function refresh() {
   document.querySelector('.review').classList.toggle('single', !$('compare').checked);
   $('label-original').hidden = !$('original').checked;
   const active = $('compare').checked ? [a, state.resolved.b] : [a];
-  $('held-control').hidden = !active.some(r => r.asset.category === 'weapon');
+  $('held-control').hidden = !active.some(r => Boolean(r.asset.heldItem));
   $('mount-control').hidden = !active.some(r => r.asset.category === 'turret');
   const reviewUrl = `/art/poc/pipeline-v${a.construction.version}/runs/${a.construction.run}/${a.asset.id}/review.png`;
   $('frame-overview').hidden = a.construction.version !== 2 || !a.variant.clips?.length;
@@ -140,7 +140,7 @@ async function refresh() {
 function layout() {
   if (!scene) return;
   const active = [$('compare').checked ? state.resolved.b : null, state.resolved.a].filter(Boolean);
-  const footprint = Math.max(...active.map(r => r.asset.category === 'weapon' && $('held').checked ? 76 : r.asset.targetSize));
+  const footprint = Math.max(...active.map(r => Boolean(r.asset.heldItem) && $('held').checked ? 76 : r.asset.targetSize));
   // Detail enlargement must also enlarge the review area: long held weapons and
   // boss sprites otherwise disappear behind its edge or the bottom labels.
   $('canvas').style.height = `${Math.max(245, footprint * Number($('factor').value) + 100)}px`;
@@ -196,10 +196,11 @@ class ReviewScene extends Phaser.Scene {
       const rotation=state.angle*Math.PI/180, size=a.targetSize*factor;
       p.rock.setVisible(a.category==='turret'&&$('mount').checked).setPosition(x,y).setDisplaySize(32*factor,32*factor);
       p.circle.setVisible(!!a.collisionDiameter&&$('collision').checked).setPosition(x,y).setRadius((a.collisionDiameter||0)*factor/2);
-      p.player.setVisible(a.category==='weapon'&&$('held').checked).setPosition(x,y).setDisplaySize(32*factor,32*factor).setRotation(rotation);
+      const heldView=supportsHeldView(a,which==='original');
+      p.player.setVisible(heldView&&$('held').checked).setPosition(x,y).setDisplaySize(32*factor,32*factor).setRotation(rotation);
       if (which!=='original'&&r.construction.version===2)p.sprite.setFrame(sampleFrame(r,state.clip,state.elapsed,state.idle,current));
       p.sprite.setOrigin(...a.pivot).setDisplaySize(size,size).setPosition(x,y).setRotation(rotation);
-      if(a.heldItem){
+      if(heldView){
         const original=which==='original',grip=original?a.heldItem.referenceGrip:a.heldItem.grip;
         const fw=original?p.sprite.frame.cutWidth:a.targetSize,fh=original?p.sprite.frame.cutHeight:a.targetSize;
         p.sprite.setDisplaySize(fw*factor,fh*factor);

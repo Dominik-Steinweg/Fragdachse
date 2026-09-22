@@ -13,7 +13,8 @@ import { BADGER_WALKING_FRAME_WIDTH } from '../../src/animations/BadgerAnimation
 import { getHeldItemSpriteSpec } from '../../src/loadout/HeldItemVisuals';
 import { resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
 import { getPipelineAssetForTexture } from '../../src/config/pipelineAssets';
-import { HELD_ITEM_TEXTURE_SIZE, PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../../src/config';
+import { LOADOUT_CATALOG_ENTRIES } from '../../src/loadout/LoadoutConfig';
+import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../../src/config';
 import { healthBarTestScene } from '../healthBarTestScene';
 
 // The installed Arcade Body works without a renderer. Its real source-pixel scaling is
@@ -48,8 +49,8 @@ function sceneWithArcadeBodies(sourceSize: number) {
   };
   scene.add.sprite = figure;
   scene.add.image = (x: number, y: number, key: string) => {
-    const held = getHeldItemSpriteSpec('GLOCK')!;
-    const size = key === held.textureKey ? HELD_ITEM_TEXTURE_SIZE * (held.sourceScale ?? 1) : sourceSize;
+    const asset = getPipelineAssetForTexture(key);
+    const size = asset && ['weapon', 'utility'].includes(asset.category) ? asset.sourceSize : sourceSize;
     const image = figure(x, y, key, 0, size);
     images.push(image);
     return image;
@@ -178,7 +179,8 @@ describe('figure source resolution and Arcade geometry', () => {
     expectPlayerBody(player.body, 100, 200);
   });
 
-  it('scales held weapons consistently in the arena, decoy and custom lobby preview', () => {
+  it.each(['GLOCK', ...LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility').map(entry => entry.id)])(
+    'scales %s consistently in the arena, decoy and custom lobby preview', (itemId) => {
     const { scene, images } = sceneWithArcadeBodies(BADGER_WALKING_FRAME_WIDTH);
     const player = new PlayerEntity(scene, { id: 'p', name: 'P', colorHex: 0xffffff },
       100, 200, false, null, { spawnEffect: false });
@@ -190,7 +192,7 @@ describe('figure source resolution and Arcade geometry', () => {
     expect(preview.sprite.frame.name).toBe(player.displayObject!.frame.name);
     for (const [entity, size] of [[player, PLAYER_SIZE], [decoy, PLAYER_SIZE],
       [preview, PLAYER_SIZE], [largePreview, 64]] as const) {
-      entity.setHeldItemId('GLOCK');
+      entity.setHeldItemId(itemId);
       const weapon = images.at(-1);
       const sprite = entity instanceof PlayerEntity ? entity.displayObject! : entity.sprite;
       expect(sprite.displayWidth).toBeCloseTo(size * PLAYER_VISUAL_SCALE);
@@ -198,7 +200,7 @@ describe('figure source resolution and Arcade geometry', () => {
       expect(decoy.sprite.body).toBeFalsy();
     }
     player.setDashScale(0.5);
-    const weapon = images.find(i => i.texture.key === getHeldItemSpriteSpec('GLOCK')!.textureKey);
+    const weapon = images.find(i => i.texture.key === getHeldItemSpriteSpec(itemId)!.textureKey);
     expect(weapon.displayWidth).toBeCloseTo(player.displayObject!.displayWidth);
 
     player.setDashScale(1);
