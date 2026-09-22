@@ -2,12 +2,12 @@
  * BadgerPreview — reusable badger sprite with colored glow aura.
  *
  * Used in the lobby panel (color indicator) and potentially elsewhere.
- * Shows the player's spritesheet idle frame with the same outer glow as the arena.
+ * Plays the player's authored idle animation with the same outer glow as the arena.
  * Optionally tracks the mouse pointer for rotation.
  */
 import * as Phaser from 'phaser';
 import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../config';
-import { BADGER_IDLE_FRAME, BADGER_WALKING_TEXTURE_KEY } from '../animations/BadgerAnimations';
+import { BADGER_IDLE_FRAME, BADGER_WALKING_TEXTURE_KEY, syncBadgerWalkingAnimation } from '../animations/BadgerAnimations';
 import { HeldItemVisual } from '../entities/HeldItemVisual';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
 import { addPlayerGlow } from '../effects/PlayerGlow';
@@ -36,6 +36,7 @@ export class BadgerPreview {
 
     this.sprite = scene.add.sprite(x, y, BADGER_WALKING_TEXTURE_KEY, BADGER_IDLE_FRAME);
     this.sprite.setDisplaySize(displaySize * PLAYER_VISUAL_SCALE, displaySize * PLAYER_VISUAL_SCALE);
+    syncBadgerWalkingAnimation(this.sprite, false);
 
     // Dieselbe Zuordnung wie in der Arena, nur mit der groesseren Vorschau-Kantenlaenge: die
     // Waffe skaliert damit automatisch mit, statt eine zweite Groessenpflege zu brauchen.
@@ -98,6 +99,7 @@ export class BadgerPreview {
    */
   setVisible(visible: boolean): void {
     this.sprite.setVisible(visible);
+    syncBadgerWalkingAnimation(this.sprite, false, visible);
     this.heldItemVisible = visible;
     this.syncHeldItem();
     if (visible) this.glowTween?.resume();

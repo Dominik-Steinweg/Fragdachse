@@ -1,3 +1,4 @@
+import { PROJECTILE_STYLES } from '../src/network/projectileSnapshotCodec';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({}));
@@ -32,6 +33,7 @@ function passiveRenderer(): Record<string, unknown> {
     updatePosition: vi.fn(),
     syncToBody: vi.fn(),
     playImpactSparks: vi.fn(),
+    playImpact: vi.fn(), sync: vi.fn(), retain: vi.fn(),
     destroyVisual: vi.fn(),
     destroyAll: vi.fn(),
     createTracer: vi.fn(),
@@ -41,15 +43,15 @@ function passiveRenderer(): Record<string, unknown> {
 }
 
 describe('ProjectilePresentationRuntime', () => {
-  it('samples host leaf-blower fog from displayed poses without requiring replicated flight history', () => {
+  it.each([...PROJECTILE_STYLES, undefined])('samples host %s fog without requiring replicated flight history', style => {
     const runtime = new ProjectilePresentationRuntime({} as never), sink = vi.fn();
     const release = runtime.bindGroundFogSegments(sink);
-    const shot = projectile({ style: 'leaf_blower', vx: 480 });
+    const shot = projectile({ style, vx: 480, weaponSourceId: 'BFG' });
     runtime.syncHostRenderers([shot], 1000);
     runtime.syncHostRenderers([{ ...shot, x: 108, size: 24 }], 1016);
     expect(sink).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       from: expect.objectContaining({ x: 100 }), to: expect.objectContaining({ x: 108 }), ageMs: 0,
-    }), 24, 'leaf_blower', shot.id);
+    }), 24, style ?? 'bullet', shot.id, 'BFG');
     runtime.syncHostRenderers([{ ...shot, x: 108 }], 1032);
     expect(sink).toHaveBeenCalledTimes(1);
     runtime.syncHostRenderers([{ ...shot, x: 2000 }], 1048);
@@ -65,18 +67,21 @@ describe('ProjectilePresentationRuntime', () => {
     expect(sink).toHaveBeenCalledTimes(2);
     runtime.releaseWorldPresentation();
   });
-  it('samples client leaf-blower fog at the same extrapolated pose and size as its renderer', () => {
-    const runtime = new ProjectilePresentationRuntime({} as never), replica = new ProjectileClientReplica(), sink = vi.fn();
+  it.each(PROJECTILE_STYLES)('samples client %s fog from displayed poses without flight history', style => {
+    const shape = { setDepth: vi.fn().mockReturnThis(), setPosition: vi.fn().mockReturnThis(), destroy: vi.fn() };
+    const runtime = new ProjectilePresentationRuntime({ add: { circle: () => shape } } as never), replica = new ProjectileClientReplica(), sink = vi.fn();
     const leaf = passiveRenderer();
-    runtime.bindRenderers({ leafBlower: leaf } as never, null);
+    runtime.bindRenderers(Object.fromEntries(['bullet', 'projectileBurn', 'flame', 'leafBlower', 'bfg',
+      'energyBall', 'hydra', 'gauss', 'holyGrenade', 'rocket', 'fireball', 'spore', 'grenade',
+      'translocatorPuck', 'teslaBolt', 'tracer'].map(key => [key, leaf])) as never, null);
     runtime.bindGroundFogSegments(sink);
-    const shot = projectile({ style: 'leaf_blower', vx: 480, velocityDecay: .5, suppressSpawnFx: true });
+    const shot = projectile({ style, vx: 480, velocityDecay: .5, suppressSpawnFx: true, weaponSourceId: 'BFG' });
     runtime.presentClientFrame(replica.sync([shot], 1000));
     runtime.extrapolateClient(replica, 1000); runtime.extrapolateClient(replica, 1016);
     expect(sink).toHaveBeenCalledOnce();
-    const pose = (leaf.updateVisual as ReturnType<typeof vi.fn>).mock.lastCall!;
-    expect(sink.mock.lastCall![0].to).toMatchObject({ x: pose[1], y: pose[2] });
-    expect(sink.mock.lastCall!.slice(1)).toEqual([pose[3], 'leaf_blower', shot.id]);
+    const pose = vi.fn(); replica.readExtrapolated(1016, pose);
+    expect(sink.mock.lastCall![0].to).toMatchObject({ x: pose.mock.lastCall![0].x, y: pose.mock.lastCall![0].y });
+    expect(sink.mock.lastCall!.slice(1)).toEqual([shot.size, style, shot.id, 'BFG']);
     runtime.presentClientFrame(replica.sync([{ ...shot, x: 112, size: 24 }], 1032));
     runtime.extrapolateClient(replica, 1040);
     expect(sink.mock.lastCall![1]).toBe(24);
@@ -88,7 +93,7 @@ describe('ProjectilePresentationRuntime', () => {
   it('shares confirmed bounce and terminal segments with fog once and releases the world sink', () => {
     const runtime = new ProjectilePresentationRuntime({} as never), sink = vi.fn();
     const release = runtime.bindGroundFogSegments(sink);
-    const shot = projectile({ flightPath: { timeMs: 30, ended: true, points: [
+    const shot = projectile({ style: 'bfg', weaponSourceId: 'BFG', flightPath: { timeMs: 30, ended: true, points: [
       { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0, breakBefore: true },
       { sequence: 2, timeMs: 10, x: 10, y: 0, vx: 0, vy: 1000, bounceSequence: 1 },
       { sequence: 3, timeMs: 20, x: 10, y: 10, vx: 0, vy: 1000 },
@@ -96,7 +101,7 @@ describe('ProjectilePresentationRuntime', () => {
       { sequence: 5, timeMs: 30, x: 90, y: 95, vx: 0, vy: 1000 },
     ] } });
     runtime.presentFinalPath(shot); const count = sink.mock.calls.length;
-    expect(sink.mock.calls.every(call => call[3] === shot.id)).toBe(true);
+    expect(sink.mock.calls.every(call => call[3] === shot.id && call[4] === 'BFG')).toBe(true);
     runtime.presentFinalPath(shot); expect(sink).toHaveBeenCalledTimes(count);
     const paths = sink.mock.calls.map(([s]) => [s.from.x, s.from.y, s.to.x, s.to.y]);
     expect(paths).toContainEqual([0, 0, 10, 0]); expect(paths).toContainEqual([10, 0, 10, 10]);

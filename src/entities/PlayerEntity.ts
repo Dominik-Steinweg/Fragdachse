@@ -310,7 +310,7 @@ export class PlayerEntity {
 
     }
     this.syncBar();
-
+    this.syncWalkingAnimation();
   }
 
   /**
@@ -1131,14 +1131,12 @@ export class PlayerEntity {
     // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
     if (!this.sprite) return;
     const hiddenByBurrow = this.burrowPhase === 'underground' || this.burrowPhase === 'trapped';
+    const active = this.baseVisible && this.sprite.visible && this.isAliveVisual
+      && this.burrowPhase !== 'windup' && !hiddenByBurrow;
     syncBadgerWalkingAnimation(
       this.sprite,
-      this.walkingRequested
-        && this.baseVisible
-        && this.sprite.visible
-        && this.isAliveVisual
-        && this.burrowPhase !== 'windup'
-        && !hiddenByBurrow,
+      this.walkingRequested,
+      active,
     );
   }
 

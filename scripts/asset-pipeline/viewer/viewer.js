@@ -1,309 +1,240 @@
 import * as Phaser from 'phaser';
 import { createWebGLStartupContext } from '../../../src/utils/webglContext';
+import { getHeldItemAnchor } from '../../../src/config';
+import runtime from '../../../src/config/pipelineAssets.json';
+import { categoryLabels, models, constructionsFor, resolveSource, sampleFrame } from './library.mjs';
 
 const $ = id => document.getElementById(id);
-const title = source => source.label || (source.variant === 'rich' ? 'Detailreich' : 'Ruhig');
-const parameters = new URLSearchParams(location.search);
-const version = Number(parameters.get('version') || 1);
-const run = parameters.get('run') || (version === 2 ? 'v2-a' : 'v1-f');
-const state = { asset: 0, angle: 0, elapsed: 0, columns: 3, sources: [], sprites: [], circles: [], backgrounds: [], rocks: [],
-  clip: 'idle', clipTime: 0, clipFrame: 0, playing: false, idle: true };
-let scene, game, catalog, startup;
-const backgrounds = {
-  grass: ['/assets/sprites/gras_bg_tile.png', 0x465a30],
-  earth: ['/assets/sprites/dirt47blob.png', 0x735845],
-  steel: ['/assets/sprites/train/train_material_dark_top.png', 0x253033],
-  light: [null, 0xb6bdb5],
-};
-
-function asset() { return catalog.assets[state.asset]; }
-function dimensions() {
-  const cssWidth = $('canvas').clientWidth, cssHeight = $('canvas').clientHeight;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  return { cssWidth, cssHeight, dpr };
-}
-function selected(which) { return state.sources[Number($(which).value)]; }
-function currentClip(source = selected('source-a')) { return source?.clips?.find(clip => clip.name === state.clip); }
-function displaySize() { return (Number($('profile').value) || asset().targetSize) * Number($('factor').value); }
-function sourceFrame(source) {
-  const clip = currentClip(source);
-  return state.idle || !clip ? (source.idleFrame ?? 0) : clip.frames[Math.min(state.clipFrame, clip.frames.length - 1)];
-}
-function updateAnimationControls() {
-  if (version !== 2) return;
-  const clip = currentClip();
-  const lastFrame = Math.max(0, (clip?.frames.length || 1) - 1);
-  $('frame').max = lastFrame;
-  $('frame').value = state.clipFrame;
-  $('frame').disabled = !clip;
-  $('frame-back').disabled = $('frame-next').disabled = !clip;
-  $('play').disabled = !clip;
-  $('play').textContent = state.playing ? 'Pause' : 'Abspielen';
-  $('play').setAttribute('aria-pressed', String(state.playing));
-  $('frame-value').textContent = `${sourceFrame(selected('source-a'))}${state.idle ? ' · Ruhe' : ` · ${state.clipFrame + 1}/${lastFrame + 1}`}`;
-  $('fire').hidden = $('sustain-control').hidden = state.clip !== 'fire';
-  $('animation-info').textContent = clip
-    ? `${clip.name === 'move' ? 'Bewegung' : 'Schießen'} · ${clip.frameRate} fps · ${clip.frames.length} Frames · A und B synchron. Verschieben und Drehen sind unabhängig.`
-    : 'Statische Ruhepose. Verschieben und Drehen ändern die Animation nicht.';
-}
-function applyAnimationFrame() {
-  if (version !== 2 || !state.sprites.length) return;
-  for (const [index, id] of ['source-a', 'source-b'].entries()) {
-    const source = selected(id);
-    // One shared review clock drives both sources. Phaser's independent sprite clocks would
-    // drift after source changes and would make frame stepping an unreliable A/B comparison.
-    if (state.sprites[index].texture.key === source.key) state.sprites[index].setFrame(sourceFrame(source));
+const params = new URLSearchParams(location.search);
+const state = { a: {}, b: {}, resolved: {}, clip: 'rest', elapsed: 0, playing: false, idle: true, angle: 0, travelTime: 0, ready: false };
+const backgrounds = { grass: ['/assets/sprites/gras_bg_tile.png', 0x465a30], earth: ['/assets/sprites/dirt47blob.png', 0x735845], steel: ['/assets/sprites/train/train_material_dark_top.png', 0x253033], light: [null, 0xb6bdb5] };
+let library, scene, game, startup, observer, generation = 0;
+const panels = [], pending = new Map(), loaded = new Set();
+const playerAsset = runtime.assets.find(a => a.id === 'badger');
+const label = r => `${r.asset.label} · ${r.construction.run}\n${r.variant.label || r.variant.variant} · ${r.source.size} px → ${r.asset.targetSize} Einheiten`;
+const clip = () => state.resolved.a?.variant.clips?.find(c => c.name === state.clip);
+const options = (id, entries, value) => { $(id).replaceChildren(...entries.map(([text, key]) => new Option(text, key))); $(id).value = String(value); };
+const visibleSlots = () => ['a', ...($('compare').checked ? ['b'] : []), ...($('original').checked ? ['original'] : [])];
+function showError(error) { $('error').hidden = false; $('error').textContent = error.message || String(error); }
+function configure(which) {
+  const r = resolveSource(library, state[which]);
+  if (!r) throw new Error('Für dieses Modell ist kein vollständiger Export verfügbar.');
+  state[which] = { id: r.asset.id, construction: r.construction.key, variant: r.variant.variant, size: r.source.size };
+  state.resolved[which] = r;
+  options(`run-${which}`, constructionsFor(library, r.asset.id).map(c => [`${c.run} · V${c.version}`, c.key]), r.construction.key);
+  options(`variant-${which}`, r.asset.variants.map(v => [v.label || v.variant, v.variant]), r.variant.variant);
+  options(`size-${which}`, [...r.variant.sources].sort((a, b) => a.size - b.size).map(s => [`${s.size} px${s.size === r.asset.targetSize ? ' · nativ' : ''}`, s.size]), r.source.size);
+  $(`selection-${which}`).textContent = r.asset.preferred ? `Produktionsauswahl: ${r.asset.preferred.variant} · ${r.asset.preferred.size} px. ${r.asset.preferred.reason || ''}` : 'Noch keine Produktionsauswahl für diese Konstruktion.';
+  const master = $(`master-${which}`), masterUrl = r.variant.master || r.source.idleUrl || r.source.url;
+  if (master.getAttribute('src') !== masterUrl) {
+    master.style.visibility = 'hidden';
+    master.onload = () => { master.style.visibility = ''; };
+    master.onerror = () => showError(new Error(`Detailbild konnte nicht geladen werden: ${masterUrl}`));
+    master.src = masterUrl;
   }
-  updateAnimationControls();
+  $(`master-caption-${which}`).textContent = label(r);
+  $(`label-${which}`).textContent = `${which.toUpperCase()} · ${label(r)}`;
 }
-function rest() {
-  state.playing = false; state.idle = true; state.clipFrame = 0; state.clipTime = 0;
-  $('sustain').checked = false;
-  applyAnimationFrame();
+function drawLibrary() {
+  const items = models(library, $('category').value, $('search').value);
+  $('model-count').textContent = `${items.length}`; $('empty').hidden = !!items.length;
+  $('model-list').replaceChildren(...items.map(asset => {
+    const r = resolveSource(library, { id: asset.id });
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'model-card';
+    button.setAttribute('aria-pressed', String(asset.id === state.a.id));
+    const img = document.createElement('img'); img.src = r.source.idleUrl || r.source.url; img.alt = ''; img.loading = 'lazy';
+    const title = document.createElement('span'); title.textContent = asset.label;
+    const count = constructionsFor(library, asset.id).length;
+    const subtitle = document.createElement('small'); subtitle.textContent = `${categoryLabels[asset.category] || asset.category} · ${count} ${count === 1 ? 'Konstruktion' : 'Konstruktionen'}`;
+    title.append(subtitle); button.append(img, title); button.addEventListener('click', () => chooseModel(asset.id));
+    return button;
+  }));
 }
-function startClip() {
-  if (!currentClip()) return;
-  state.playing = true; state.idle = false; state.clipFrame = 0; state.clipTime = 0;
-  applyAnimationFrame();
+function matchComparison() {
+  const current = state.resolved.a;
+  const otherVariant = current.asset.variants.find(v => v.variant !== current.variant.variant);
+  const older = constructionsFor(library, current.asset.id).find(c => c.key !== current.construction.key);
+  state.b = { id: current.asset.id, construction: otherVariant ? current.construction.key : older?.key || current.construction.key,
+    variant: otherVariant?.variant, size: current.source.size };
+  configure('b'); $('model-b').value = state.b.id;
 }
-function selectClip() {
-  state.clip = $('clip').value;
-  rest();
-  // Movement previews start immediately. A turret rests until the reviewer fires it.
-  if (state.clip === 'move') startClip();
+function chooseModel(id) {
+  const linked = !state.b.id || state.b.id === state.a.id;
+  state.a = { id }; configure('a');
+  if (linked) matchComparison();
+  drawLibrary(); configureClips(); void refresh();
 }
 function configureClips() {
-  if (version !== 2) return;
-  const clips = selected('source-a').clips || [];
-  $('clip').replaceChildren(new Option('Ruhepose', 'idle'), ...clips.map(clip =>
-    new Option(clip.name === 'move' ? 'Normales Bewegen' : clip.name === 'fire' ? 'Schießen' : clip.name, clip.name)));
-  $('clip').value = clips.some(clip => clip.name === state.clip) ? state.clip : clips[0]?.name || 'idle';
-  selectClip();
+  const clips = state.resolved.a.variant.clips || [];
+  options('clip', [['Ruhepose', 'rest'], ...clips.map(c => [c.name === 'move' ? 'Laufen' : c.name === 'idle' ? 'Atmen' : c.name === 'fire' ? 'Schießen' : c.name, c.name])], clips.some(c => c.name === state.clip) ? state.clip : clips[0]?.name || 'rest');
+  state.clip = $('clip').value; rest();
+  if (state.clip === 'move' || state.clip === 'idle') { state.idle = false; state.playing = true; }
+  updateControls();
 }
-function seekFrame(frame) {
-  const clip = currentClip();
-  if (!clip) return;
-  state.playing = false; state.idle = false;
-  state.clipFrame = Math.max(0, Math.min(clip.frames.length - 1, frame));
-  state.clipTime = state.clipFrame * 1000 / clip.frameRate;
-  applyAnimationFrame();
+function updateControls() {
+  const current = clip(), count = current?.frames.length || 1;
+  const frame = current ? Math.min(count - 1, Math.floor(state.elapsed * current.frameRate + 1e-7)) : 0;
+  $('frame').max = count - 1; $('frame').value = frame;
+  $('frame').disabled = $('play').disabled = $('frame-back').disabled = $('frame-next').disabled = !current;
+  $('play').textContent = state.playing ? 'Pause' : 'Abspielen'; $('play').setAttribute('aria-pressed', String(state.playing));
+  $('frame-value').textContent = state.idle ? 'Ruhe' : `${frame + 1} / ${count}`;
+  $('fire').hidden = $('sustain-control').hidden = state.clip !== 'fire';
+  const bClip = state.resolved.b?.variant.clips?.find(c => c.name === state.clip);
+  $('animation-info').textContent = current ? `${current.frameRate} fps · ${count} Frames. ${bClip ? 'A/B vergleichen dieselbe Bewegungsphase.' : 'B bleibt ohne passenden Clip in Ruhe.'}` : 'Statische Ruhepose. Rotation und Verschieben sind separat steuerbar.';
 }
-function advanceAnimation(delta) {
-  if (version !== 2 || !state.playing) return;
-  const clip = currentClip();
-  if (!clip) return;
-  state.clipTime += delta * Number($('time-scale').value);
-  const duration = clip.frames.length * 1000 / clip.frameRate;
-  const loop = state.clip === 'fire' ? $('sustain').checked : clip.loop;
-  if (state.clipTime >= duration) {
-    if (!loop) { rest(); return; }
-    state.clipTime %= duration;
-  }
-  const nextFrame = Math.floor(state.clipTime * clip.frameRate / 1000);
-  if (state.clipFrame !== nextFrame) { state.clipFrame = nextFrame; applyAnimationFrame(); }
-}
-const measure = m => m ? ` · ${m.width}×${m.height} px / ${m.area} Pixel ab 50% Alpha` : '';
-function labels() {
-  if (!scene || !state.sprites.length) return;
-  const current = asset();
-  const size = displaySize();
-  for (const [index, id] of ['source-a', 'source-b'].entries()) {
-    const source = selected(id);
-    state.sprites[index].setTexture(source.key, version === 2 ? sourceFrame(source) : undefined).setDisplaySize(size, size).setOrigin(...current.pivot);
-    $(`label-${index ? 'b' : 'a'}`).textContent = `${source.size} px Quelle → ${+size.toFixed(2)} Einheiten`;
-    $(`master-${index ? 'b' : 'a'}`).src = source.master || source.idleUrl || source.url;
-  }
-  const originalIndex = current.previousReference ? 3 : 2;
-  if (current.previousReference) {
-    state.sprites[2].setTexture(`${current.id}-previous`).setDisplaySize(size, size).setOrigin(...current.pivot);
-    $('label-previous').textContent = `${current.previousReference.sourceSize} px Quelle → ${+size.toFixed(2)} Einheiten`;
-  }
-  state.sprites[originalIndex].setTexture(`${current.id}-original`).setDisplaySize(size, size).setOrigin(...current.pivot);
-  state.sprites.forEach((s, i) => s.setVisible(i < state.columns));
-  const diameter = (current.collisionDiameter || 0) * Number($('factor').value);
-  state.circles.forEach((c, i) => {
-    c.setRadius(diameter / 2).setVisible(i < state.columns && !!diameter && $('collision').checked);
+function rest() { state.elapsed = 0; state.playing = false; state.idle = true; $('sustain').checked = false; updateControls(); }
+function start() { if (clip()) { state.elapsed = 0; state.playing = true; state.idle = false; updateControls(); } }
+function seek(value) { const current = clip(); if (!current) return; state.playing = false; state.idle = false; state.elapsed = Math.max(0, Math.min(current.frames.length - 1, value)) / current.frameRate; updateControls(); }
+function loadTexture(key, url, source, version) {
+  if (scene.textures.exists(key)) return Promise.resolve();
+  if (pending.has(key)) return pending.get(key);
+  const promise = new Promise((resolve, reject) => {
+    const cleanup = () => { scene.load.off('filecomplete', done); scene.load.off('loaderror', fail); pending.delete(key); };
+    const done = completed => { if (completed === key) { cleanup(); loaded.add(key); resolve(); } };
+    const fail = file => { if (file.key === key) { cleanup(); reject(new Error(`Datei konnte nicht geladen werden: ${url}`)); } };
+    scene.load.on('filecomplete', done); scene.load.on('loaderror', fail);
+    if (version === 2 && source) scene.load.spritesheet(key, url, { frameWidth: source.frameWidth, frameHeight: source.frameHeight,
+      margin: source.margin, spacing: source.spacing, endFrame: source.frameCount - 1 });
+    else scene.load.image(key, url);
   });
-  $('collision').disabled = !current.collisionDiameter;
-  $('collision-info').textContent = diameter ? `Ø ${+diameter.toFixed(2)} Einheiten · nur Vorschau` : 'Für dieses Asset kein Kollisionskreis hinterlegt';
-  const mounted = version === 2 && current.category === 'turret';
-  $('mount-control').hidden = !mounted;
-  state.rocks.forEach((rock, i) => rock.setDisplaySize(32 * Number($('factor').value), 32 * Number($('factor').value))
-    .setVisible(mounted && i < state.columns && $('mount').checked));
-  $('mount-info').textContent = mounted ? `Fels 32×32 · Unterbau ${current.mount ? `maximal Ø ${current.mount.maxBaseDiameter}` : 'ältere Referenz ohne Maßprüfung'} · Läufe dürfen überragen` : '';
-  const original = scene.textures.get(`${current.id}-original`).getSourceImage();
-  $('label-original').textContent = `${original.width} px Original → ${+size.toFixed(2)} Einheiten`;
-  const orientation = `${current.forward === 'north' ? 'Norden' : 'Osten'} bei 0° · Drehpunkt ${current.pivot.join(' / ')}.`;
-  $('metrics').textContent = current.referenceMetrics
-    ? `${orientation} Messung der nativen ${current.targetSize}-px-Datei:\nA${measure(selected('source-a').nativeMetrics)}\nB${measure(selected('source-b').nativeMetrics)}${current.previousReference ? '\n' + current.previousReference.label + measure(current.previousReference.nativeMetrics) : ''}\nOriginal${measure(current.referenceMetrics)}`
-    : `${orientation} Canvas bleibt vollständig erhalten. Für diesen älteren Run liegen keine nativen Flächenmessungen vor.`;
-  if (version === 2) {
-    $('metrics').textContent += `\nZellen ohne Rand: A ${selected('source-a').frameWidth}×${selected('source-a').frameHeight}, B ${selected('source-b').frameWidth}×${selected('source-b').frameHeight} px. Original bleibt statisch.`;
-    updateAnimationControls();
-  }
-  if (current.preferred?.reason) $('metrics').textContent += `\nAuswahl: ${current.preferred.reason}`;
+  pending.set(key, promise);
+  if (!scene.load.isLoading()) scene.load.start();
+  return promise;
 }
-function chooseAsset() {
-  state.asset = Number($('asset').value);
-  if (version === 2) {
-    const reviewUrl = `/art/poc/pipeline-v2/runs/${encodeURIComponent(run)}/${encodeURIComponent(asset().id)}/review.png`;
-    $('frame-overview-image').src = $('frame-overview-link').href = reviewUrl;
-    $('frame-overview-image').alt = `Sämtliche Animationsframes von ${asset().label} in beiden Materialvarianten`;
-    $('frame-overview-caption').textContent = `${asset().variants[0].frameCount} Frames pro Materialvariante, einschließlich Ruheframe 0. Beide Varianten stehen untereinander; die Frames folgen von links nach rechts, dann in der nächsten Zeile. Jede Figur bleibt in ihrer Nominalgröße von ${asset().targetSize} CSS-Pixeln. Auf schmalen Fenstern horizontal scrollen.`;
-  }
-  state.columns = asset().previousReference ? 4 : 3;
-  document.documentElement.style.setProperty('--columns', state.columns);
-  $('previous-heading').hidden = $('label-previous').hidden = !asset().previousReference;
-  $('previous-title').textContent = asset().previousReference?.label || '';
-  state.sources = asset().variants.flatMap(v => v.sources.map(s => ({ ...s, variant: v.variant, label: v.label, clips: v.clips,
-    idleFrame: v.idleFrame, frameCount: s.frameCount ?? v.frameCount, nativeMetrics: v.nativeMetrics, master: v.master, key: `${asset().id}-${v.variant}-${s.size}` })));
-  for (const id of ['source-a', 'source-b']) {
-    $(id).replaceChildren(...state.sources.map((s, i) => new Option(`${title(s)} · ${s.size} px${s.size === asset().targetSize ? ' (Prüfung)' : ''}`, i)));
-  }
-  const preferred = asset().preferred;
-  const variant = preferred?.variant || 'calm';
-  const size = preferred?.size || (asset().previousReference ? Math.max(...state.sources.map(s => s.size)) : state.sources.find(s => s.size > asset().targetSize)?.size || state.sources[0].size);
-  const firstIndex = state.sources.findIndex(s => s.variant === variant && s.size === size);
-  $('source-a').value = String(firstIndex < 0 ? 0 : firstIndex);
-  const secondIndex = state.sources.findIndex(s => s.variant !== selected('source-a').variant && s.size === selected('source-a').size);
-  $('source-b').value = String(secondIndex < 0 ? Math.min(Number($('source-a').value) + 1, state.sources.length - 1) : secondIndex);
-  state.clip = 'idle';
-  configureClips();
-  labels(); layout(); setBackground();
+async function refresh() {
+  if (!scene) return;
+  const token = ++generation; state.ready = false; $('error').hidden = true;
+  const a = state.resolved.a;
+  $('asset-title').textContent = a.asset.label; $('asset-category').textContent = categoryLabels[a.asset.category] || a.asset.category;
+  $('choice-b').hidden = $('master-b-figure').hidden = $('label-b').hidden = !$('compare').checked;
+  document.querySelector('.review').classList.toggle('single', !$('compare').checked);
+  $('label-original').hidden = !$('original').checked;
+  const active = $('compare').checked ? [a, state.resolved.b] : [a];
+  $('held-control').hidden = !active.some(r => r.asset.category === 'weapon');
+  $('mount-control').hidden = !active.some(r => r.asset.category === 'turret');
+  const reviewUrl = `/art/poc/pipeline-v${a.construction.version}/runs/${a.construction.run}/${a.asset.id}/review.png`;
+  $('frame-overview').hidden = a.construction.version !== 2 || !a.variant.clips?.length;
+  $('frame-overview-image').src = $('frame-overview-link').href = reviewUrl;
+  $('metrics').textContent = active.map((r,i) => `${i ? 'B' : 'A'}: ${r.asset.forward === 'north' ? 'Norden' : 'Osten'} · ${r.asset.targetSize} Einheiten · ${r.variant.variant}${r.variant.nativeMetrics ? ` · belegte Fläche ${r.variant.nativeMetrics.width}×${r.variant.nativeMetrics.height} Pixel` : ''}`).join('\n');
+  const keep = new Set(active.map(r => r.key));
+  const originalKey = `${a.construction.key}/${a.asset.id}/original`;
+  if ($('original').checked && a.asset.reference) keep.add(originalKey);
+  try {
+    await Promise.all([...active.map(r => loadTexture(r.key, r.source.url, { ...r.source, frameCount: r.source.frameCount ?? r.variant.frameCount }, r.construction.version)),
+      ...($('original').checked && a.asset.reference ? [loadTexture(originalKey, a.asset.reference)] : [])]);
+    if (token !== generation) return;
+    for (const [i,which] of ['a','b','original'].entries()) {
+      const r = which === 'original' ? a : state.resolved[which];
+      const key = which === 'original' ? originalKey : r.key;
+      panels[i].sprite.setTexture(scene.textures.exists(key) ? key : '__MISSING');
+    }
+    // Retain only the displayed source sheets, preventing unbounded GPU growth
+    // while browsing many historical constructions.
+    for (const key of loaded) if (!keep.has(key) && !pending.has(key)) { scene.textures.remove(key); loaded.delete(key); }
+    state.ready = true; layout(); updateControls();
+    const query = new URLSearchParams({ asset: state.a.id, version: String(a.construction.version), run: a.construction.run,
+      variant: state.a.variant, size: String(state.a.size), b: state.b.id, br: state.b.construction, bv: state.b.variant, bs: String(state.b.size), compare: String($('compare').checked) });
+    history.replaceState(null, '', `?${query}`);
+  } catch (error) { if (token === generation) showError(error); }
 }
 function layout() {
   if (!scene) return;
-  const { cssWidth: w, cssHeight: h, dpr } = dimensions();
-  game.scale.resize(Math.round(w * dpr), Math.round(h * dpr));
-  game.canvas.style.width = `${w}px`;
-  game.canvas.style.height = `${h}px`;
-  scene.cameras.main.setZoom(dpr).setScroll(0, 0).setOrigin(0, 0);
-  for (let i = 0; i < state.columns; i++) {
-    const [fill, tile] = state.backgrounds[i];
-    const x = w * (i + .5) / state.columns;
-    fill.setPosition(x, h / 2).setSize(w / state.columns, h);
-    tile.setPosition(x, h / 2).setSize(w / state.columns, h);
-  }
+  const active = [$('compare').checked ? state.resolved.b : null, state.resolved.a].filter(Boolean);
+  const footprint = Math.max(...active.map(r => r.asset.category === 'weapon' && $('held').checked ? 76 : r.asset.targetSize));
+  // Detail enlargement must also enlarge the review area: long held weapons and
+  // boss sprites otherwise disappear behind its edge or the bottom labels.
+  $('canvas').style.height = `${Math.max(245, footprint * Number($('factor').value) + 100)}px`;
+  const w = $('canvas').clientWidth, h = $('canvas').clientHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+  game.scale.resize(Math.round(w*dpr), Math.round(h*dpr)); game.canvas.style.width = `${w}px`; game.canvas.style.height = `${h}px`;
+  scene.cameras.main.setZoom(dpr).setScroll(0,0).setOrigin(0,0);
+  document.documentElement.style.setProperty('--columns', visibleSlots().length);
 }
-function setBackground() {
-  const key = $('background').value;
-  for (const [i, [fill, tile]] of state.backgrounds.entries()) {
-    fill.setFillStyle(backgrounds[key][1]).setVisible(i < state.columns);
-    tile.setVisible(i < state.columns && key !== 'light');
-    if (key !== 'light') tile.setTexture(`bg-${key}`, key === 'earth' ? 12 : '__BASE');
-  }
-}
-
 class ReviewScene extends Phaser.Scene {
   preload() {
-    if (version === 2) this.load.spritesheet('mount-rock', '/assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
-    for (const [key, [url]] of Object.entries(backgrounds)) {
-      if (key === 'earth') this.load.spritesheet('bg-earth', url, { frameWidth: 32, frameHeight: 32 });
-      else if (url) this.load.image(`bg-${key}`, url);
+    this.load.image('review-player', playerAsset.idlePath.replace(/^\./, ''));
+    this.load.spritesheet('mount-rock', '/assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
+    for (const [key,[url]] of Object.entries(backgrounds)) {
+      if (key === 'earth') this.load.spritesheet(`bg-${key}`,url,{frameWidth:32,frameHeight:32});
+      else if (url) this.load.image(`bg-${key}`,url);
     }
-    for (const a of catalog.assets) {
-      this.load.image(`${a.id}-original`, a.reference);
-      if (a.previousReference) this.load.image(`${a.id}-previous`, a.previousReference.url);
-      for (const v of a.variants) for (const s of v.sources) {
-        const key = `${a.id}-${v.variant}-${s.size}`;
-        if (version === 2) this.load.spritesheet(key, s.url, {
-          frameWidth: s.frameWidth, frameHeight: s.frameHeight, margin: s.margin, spacing: s.spacing,
-          endFrame: (s.frameCount ?? v.frameCount) - 1,
-        });
-        else this.load.image(key, s.url);
-      }
-    }
-    this.load.on('loaderror', file => showError(`Datei fehlt: ${file.src}. Export des Runs erneut prüfen.`));
+    this.load.on('loaderror', file => showError(new Error(`Datei fehlt: ${file.src}`)));
   }
   create() {
-    scene = this;
-    for (let i = 0; i < 4; i++) {
-      state.backgrounds.push([this.add.rectangle(0, 0, 1, 1, 0x465a30), this.add.tileSprite(0, 0, 1, 1, 'bg-grass')]);
-    }
-    if (version === 2) state.rocks = Array.from({ length: 4 }, () => this.add.image(0, 0, 'mount-rock', 36).setDisplaySize(32, 32));
-    state.circles = Array.from({ length: 4 }, () => this.add.circle(0, 0, 16).setStrokeStyle(1, 0xe7c887, .8));
-    state.sprites = Array.from({ length: 4 }, () => this.add.sprite(0, 0, `${catalog.assets[0].id}-original`));
-    chooseAsset(); layout(); setBackground();
-    $('renderer').textContent = `Phaser ${Phaser.VERSION} · ${startup.rendererType.toUpperCase()} · DPR ${dimensions().dpr}`;
-    // Read-only measurements for browser QA; never exposes game runtime or mutable objects.
-    window.assetReviewSnapshot = () => ({ version, run, asset: asset().id, renderer: startup.rendererType, angle: state.angle, moving: $('move').checked, rotating: $('rotate').checked,
-      background: $('background').value, dpr: dimensions().dpr, targetSize: asset().targetSize, displaySize: displaySize(),
-      animation: { clip: state.clip, frame: state.clipFrame, idle: state.idle, playing: state.playing,
-        frameRate: currentClip()?.frameRate ?? 0, frameCount: currentClip()?.frames.length ?? 1,
-        timeScale: Number($('time-scale').value), sustained: $('sustain').checked, authoredLoop: currentClip()?.loop ?? false },
-      sprites: state.sprites.filter(s => s.visible).map((s, i) => ({ source: s.texture.key, frame: s.frame.name,
-        width: s.displayWidth, height: s.displayHeight, frameWidth: s.frame.cutWidth, frameHeight: s.frame.cutHeight,
-        textureWidth: s.texture.getSourceImage().width, textureHeight: s.texture.getSourceImage().height,
-        x: s.x, y: s.y, rotation: s.angle, origin: [s.originX, s.originY],
-        ...(i < 2 && version === 2 ? { margin: selected(i ? 'source-b' : 'source-a').margin, spacing: selected(i ? 'source-b' : 'source-a').spacing,
-          columns: selected(i ? 'source-b' : 'source-a').columns, rows: selected(i ? 'source-b' : 'source-a').rows } : {}) })),
-      circles: state.circles.filter(c => c.visible).map(c => ({ diameter: c.radius * 2, x: c.x, y: c.y })) });
-    new ResizeObserver(layout).observe($('canvas'));
+    scene=this;
+    for (let i=0;i<3;i++) panels.push({fill:this.add.rectangle(0,0,1,1),tile:this.add.tileSprite(0,0,1,1,'bg-grass'),
+      rock:this.add.image(0,0,'mount-rock',36),player:this.add.image(0,0,'review-player'),
+      circle:this.add.circle(0,0,16).setStrokeStyle(1,0xe7c887,.7),sprite:this.add.sprite(0,0,'__MISSING')});
+    observer=new ResizeObserver(layout); observer.observe($('canvas'));
+    this.events.once('shutdown',()=>{observer.disconnect(); scene=null;});
+    $('renderer').textContent=`Phaser ${Phaser.VERSION} · ${startup.rendererType.toUpperCase()}`;
+    void refresh();
+    window.assetReviewSnapshot=()=>({asset:state.a.id,a:state.a,b:state.b,ready:state.ready,angle:state.angle,
+      animation:{clip:state.clip,elapsed:state.elapsed,playing:state.playing,idle:state.idle},
+      sprites:panels.filter(p=>p.sprite.visible).map(p=>({source:p.sprite.texture.key,frame:p.sprite.frame.name,width:p.sprite.displayWidth,height:p.sprite.displayHeight,origin:[p.sprite.originX,p.sprite.originY]}))});
   }
-  update(_time, delta) {
-    if (!scene) return;
-    const dt = Math.min(delta, 100) / 1000;
-    advanceAnimation(Math.min(delta, 100));
-    state.elapsed += dt;
-    if ($('rotate').checked) {
-      state.angle = (state.angle + 18 * dt) % 360;
-      $('angle').value = state.angle;
-      $('angle-value').textContent = `${Math.round(state.angle)}°`;
+  update(_time,delta) {
+    if (!state.ready) { panels.forEach(p=>[p.sprite,p.player,p.rock,p.circle].forEach(o=>o.setVisible(false))); return; }
+    const dt=Math.min(delta,100)/1000, current=clip(); state.travelTime+=dt;
+    if (state.playing && current) {
+      state.elapsed+=dt*Number($('time-scale').value);
+      const duration=current.frames.length/current.frameRate;
+      if (state.elapsed>=duration) {
+        if (state.clip==='fire' ? $('sustain').checked : current.loop) state.elapsed%=duration;
+        else rest();
+      }
+      updateControls();
     }
-    const { cssWidth: w, cssHeight: h } = dimensions();
-    const travel = Math.max(0, Math.min(65, w / (2 * state.columns) - state.sprites[0].displayWidth / 2 - 12));
-    const move = $('move').checked ? Math.sin(state.elapsed * .35) * travel : 0;
-    state.sprites.forEach((s, i) => {
-      const x = w * (i + .5) / state.columns + move, y = h * .46;
-      const referenceIndex = asset().previousReference ? 3 : 2;
-      const transform = i === referenceIndex ? asset().referenceTransform : undefined;
-      const rotation = state.angle + (transform?.rotationOffset || 0) * 180 / Math.PI;
-      const radians = rotation * Math.PI / 180;
-      const referenceScale = displaySize() / asset().targetSize;
-      const correctionX = (transform?.centerCorrectionX || 0) * referenceScale;
-      const correctionY = (transform?.centerCorrectionY || 0) * referenceScale;
-      s.setPosition(x + Math.cos(radians) * correctionX - Math.sin(radians) * correctionY,
-        y + Math.sin(radians) * correctionX + Math.cos(radians) * correctionY).setAngle(rotation);
-      state.circles[i].setPosition(x, y);
-      state.rocks[i]?.setPosition(x, y);
-    });
+    if ($('rotate').checked) {state.angle=(state.angle+18*dt)%360; $('angle').value=state.angle; $('angle-value').textContent=`${Math.round(state.angle)}°`;}
+    const visible=visibleSlots(),w=$('canvas').clientWidth,h=$('canvas').clientHeight,factor=Number($('factor').value),bg=$('background').value;
+    for (const [i,which] of ['a','b','original'].entries()) {
+      const p=panels[i],column=visible.indexOf(which),shown=column>=0;
+      [p.fill,p.tile,p.sprite,p.circle,p.rock,p.player].forEach(o=>o.setVisible(shown)); if(!shown)continue;
+      const r=which==='original'?state.resolved.a:state.resolved[which],a=r.asset;
+      const x=w*(column+.5)/visible.length+($('move').checked?Math.sin(state.travelTime*.7)*Math.min(45,w/visible.length*.15):0), y=(h-55)*.5;
+      p.fill.setFillStyle(backgrounds[bg][1]).setPosition(w*(column+.5)/visible.length,h/2).setSize(w/visible.length,h);
+      p.tile.setVisible(bg!=='light').setPosition(w*(column+.5)/visible.length,h/2).setSize(w/visible.length,h); if(bg!=='light')p.tile.setTexture(`bg-${bg}`,bg==='earth'?12:'__BASE');
+      const rotation=state.angle*Math.PI/180, size=a.targetSize*factor;
+      p.rock.setVisible(a.category==='turret'&&$('mount').checked).setPosition(x,y).setDisplaySize(32*factor,32*factor);
+      p.circle.setVisible(!!a.collisionDiameter&&$('collision').checked).setPosition(x,y).setRadius((a.collisionDiameter||0)*factor/2);
+      p.player.setVisible(a.category==='weapon'&&$('held').checked).setPosition(x,y).setDisplaySize(32*factor,32*factor).setRotation(rotation);
+      if (which!=='original'&&r.construction.version===2)p.sprite.setFrame(sampleFrame(r,state.clip,state.elapsed,state.idle,current));
+      p.sprite.setOrigin(...a.pivot).setDisplaySize(size,size).setPosition(x,y).setRotation(rotation);
+      if(a.heldItem){
+        const original=which==='original',grip=original?a.heldItem.referenceGrip:a.heldItem.grip;
+        const fw=original?p.sprite.frame.cutWidth:a.targetSize,fh=original?p.sprite.frame.cutHeight:a.targetSize;
+        p.sprite.setDisplaySize(fw*factor,fh*factor);
+        if($('held').checked){const anchor=getHeldItemAnchor(x,y,rotation,factor);p.sprite.setOrigin(grip[0]/fw,grip[1]/fh).setPosition(anchor.x,anchor.y);}
+        else if(original){const dx=(a.heldItem.grip[0]-grip[0]+fw/2-a.targetSize/2)*factor,dy=(a.heldItem.grip[1]-grip[1]+fh/2-a.targetSize/2)*factor;p.sprite.setPosition(x+Math.cos(rotation)*dx-Math.sin(rotation)*dy,y+Math.sin(rotation)*dx+Math.cos(rotation)*dy);}
+      }else if(which==='original'&&a.referenceTransform){const t=a.referenceTransform,angle=rotation+(t.rotationOffset||0),dx=(t.centerCorrectionX||0)*factor,dy=(t.centerCorrectionY||0)*factor;p.sprite.setPosition(x+Math.cos(angle)*dx-Math.sin(angle)*dy,y+Math.sin(angle)*dx+Math.cos(angle)*dy).setRotation(angle);}
+    }
   }
 }
-function showError(message) { $('error').hidden = false; $('error').textContent = message; }
 try {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(run)) throw new Error('Ungültige Run-ID.');
-  if (version !== 1 && version !== 2) throw new Error('Unbekannte Pipeline-Version. Unterstützt werden 1 und 2.');
-  const response = await fetch(`/art/poc/pipeline-v${version}/runs/${run}/catalog.json`);
-  if (!response.ok) throw new Error(`Run ${run} fehlt. Zuerst Blender-Render und Export ausführen.`);
-  catalog = await response.json();
-  if (catalog.version !== version || !catalog.assets?.length) throw new Error('Ungültiger oder leerer Asset-Katalog.');
-  $('pipeline-version').textContent = `FRAGDACHSE / ASSET PIPELINE V${version} · ${run}`;
-  $('animation-controls').hidden = version !== 2;
-  $('frame-overview').hidden = version !== 2;
-  $('asset').replaceChildren(...catalog.assets.map((a, i) => new Option(a.label, i)));
-  startup = createWebGLStartupContext();
-  if (!startup) throw new Error('WebGL konnte nicht gestartet werden.');
-  game = new Phaser.Game({ type: Phaser.WEBGL, parent: 'canvas', canvas: startup.canvas, context: startup.context,
-    width: 1000, height: 260, backgroundColor: '#28372e', scene: ReviewScene, banner: false,
-    render: { antialias: true, pixelArt: false, roundPixels: false, smoothPixelArt: startup.rendererType === 'webgl1' },
-    scale: { mode: Phaser.Scale.NONE }, audio: { noAudio: true } });
-  $('asset').addEventListener('change', chooseAsset);
-  $('mount').addEventListener('change', labels);
-  for (const id of ['source-a', 'source-b', 'profile', 'factor', 'collision']) $(id).addEventListener('change', labels);
-  $('clip').addEventListener('change', selectClip);
-  $('play').addEventListener('click', () => {
-    if (state.playing) { state.playing = false; updateAnimationControls(); }
-    else if (state.idle) startClip();
-    else { state.playing = true; updateAnimationControls(); }
-  });
-  $('idle').addEventListener('click', rest);
-  $('fire').addEventListener('click', startClip);
-  $('sustain').addEventListener('change', () => { if ($('sustain').checked) startClip(); else rest(); });
-  $('frame').addEventListener('input', event => seekFrame(Number(event.target.value)));
-  $('frame-back').addEventListener('click', () => seekFrame(state.clipFrame - 1));
-  $('frame-next').addEventListener('click', () => seekFrame(state.clipFrame + 1));
-  $('background').addEventListener('change', setBackground);
-  function angle(value) { state.angle = Number(value); $('angle').value = value; $('angle-value').textContent = `${value}°`; $('rotate').checked = false; }
-  $('angle').addEventListener('input', event => angle(event.target.value));
-  document.querySelectorAll('[data-angle]').forEach(button => button.addEventListener('click', () => angle(button.dataset.angle)));
-} catch (error) { showError(error.message); }
+  const response=await fetch('/art/poc/asset-library.json',{cache:'no-store'});
+  if(response.ok)library=await response.json();
+  else {const version=Number(params.get('version')||2),run=params.get('run')||'v2-g';if(!/^[a-z0-9][a-z0-9-]*$/.test(run)||![1,2].includes(version))throw new Error('Ungültige Konstruktion.');const res=await fetch(`/art/poc/pipeline-v${version}/runs/${run}/catalog.json`);if(!res.ok)throw new Error('Noch keine Modellbibliothek. Zuerst npm run assets:library ausführen.');const c=await res.json();library={constructions:[{key:`${version}/${run}`,version,run,assets:c.assets}]};}
+  const all=models(library);if(!all.length)throw new Error('Die Modellbibliothek enthält noch keine Exporte.');
+  state.a={id:params.get('asset')||all.find(a=>a.id==='badger')?.id||all[0].id,construction:params.has('run')?`${params.get('version')||2}/${params.get('run')}`:undefined,variant:params.get('variant'),size:Number(params.get('size'))};
+  if(!all.some(a=>a.id===state.a.id))state.a={id:all[0].id};configure('a');
+  options('model-b',all.map(a=>[`${a.label} · ${categoryLabels[a.category]||a.category}`,a.id]),state.a.id);
+  if(params.get('b')&&all.some(a=>a.id===params.get('b'))){state.b={id:params.get('b'),construction:params.get('br'),variant:params.get('bv'),size:Number(params.get('bs'))};configure('b');$('model-b').value=state.b.id;}else matchComparison();
+  $('compare').checked=params.get('compare')!=='false';drawLibrary();configureClips();
+  for(const which of ['a','b'])for(const [id,field]of[['run','construction'],['variant','variant'],['size','size']])$(`${id}-${which}`).addEventListener('change',event=>{state[which][field]=field==='size'?Number(event.target.value):event.target.value;if(field==='construction')delete state[which].variant;configure(which);if(which==='a')configureClips();void refresh();});
+  $('model-b').addEventListener('change',()=>{state.b={id:$('model-b').value};configure('b');void refresh();});
+  $('match').addEventListener('click',()=>{matchComparison();void refresh();});
+  for(const id of ['category','search'])$(id).addEventListener(id==='search'?'input':'change',drawLibrary);
+  for(const id of ['compare','original'])$(id).addEventListener('change',()=>void refresh());
+  $('factor').addEventListener('change',layout);
+  $('held').addEventListener('change',layout);
+  $('clip').addEventListener('change',()=>{state.clip=$('clip').value;rest();if(state.clip==='move'||state.clip==='idle')start();});
+  $('play').addEventListener('click',()=>{if(state.playing){state.playing=false;updateControls();}else if(state.idle)start();else{state.playing=true;updateControls();}});
+  $('idle').addEventListener('click',rest);$('fire').addEventListener('click',start);$('sustain').addEventListener('change',()=>{$('sustain').checked?start():rest();});
+  $('frame').addEventListener('input',e=>seek(Number(e.target.value)));$('frame-back').addEventListener('click',()=>seek(Number($('frame').value)-1));$('frame-next').addEventListener('click',()=>seek(Number($('frame').value)+1));
+  function angle(value){state.angle=Number(value);$('angle').value=value;$('angle-value').textContent=`${value}°`;$('rotate').checked=false;}
+  $('angle').addEventListener('input',e=>angle(e.target.value));document.querySelectorAll('[data-angle]').forEach(b=>b.addEventListener('click',()=>angle(b.dataset.angle)));
+  $('reset').addEventListener('click',()=>{angle(0);$('factor').value='1';$('background').value='grass';$('move').checked=$('collision').checked=$('original').checked=false;$('held').checked=$('mount').checked=true;state.travelTime=0;rest();void refresh();});
+  startup=createWebGLStartupContext();if(!startup)throw new Error('WebGL konnte nicht gestartet werden.');
+  game=new Phaser.Game({type:Phaser.WEBGL,parent:'canvas',canvas:startup.canvas,context:startup.context,width:1000,height:245,backgroundColor:'#243238',scene:ReviewScene,banner:false,
+    render:{antialias:true,pixelArt:false,roundPixels:false,smoothPixelArt:startup.rendererType==='webgl1'},scale:{mode:Phaser.Scale.NONE},audio:{noAudio:true}});
+  window.addEventListener('pagehide',()=>{observer?.disconnect();game.destroy(true);},{once:true});
+}catch(error){showError(error);}

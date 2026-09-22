@@ -107,7 +107,15 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
       await centered(layers, await sprite(file, display, angle), x + (transform?.centerCorrectionX ?? 0) * ratio, cy + (transform?.centerCorrectionY ?? 0) * ratio);
     }
   }
-  if (source.path) await add(path.resolve(root, source.path), 200, 204, source.transform);
+  if (source.path) {
+    let previous = path.resolve(root, source.path);
+    if (source.kind === 'catalog' && m.spec.heldItem) {
+      const h = m.spec.heldItem;
+      previous = await sharp({ create: { width: h.referenceSize, height: h.referenceSize, channels: 4, background: '#00000000' } })
+        .composite([{ input: await readFile(previous), left: Math.round(h.grip[0] - h.referenceGrip[0]), top: Math.round(h.grip[1] - h.referenceGrip[1]) }]).png().toBuffer();
+    }
+    await add(previous, 200, 204, source.transform);
+  }
   if (hasIdle) await add(idle, 600, 204);
   else svg += text(430, 204, 'Idle fehlt in dieser alten Vorschau.');
   for (let i = 0; i < motions.length; i++) {

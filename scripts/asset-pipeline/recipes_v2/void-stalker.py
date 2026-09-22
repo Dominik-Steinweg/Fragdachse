@@ -5,8 +5,8 @@ from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, ring, paw, 
 
 def build(c,spec):
     hide=c.material('Indigo living undersuit',(.032,.050,.105),'organic')
-    armor=c.material('Blue black chitin crowns',(.055,.105,.235),'technical')
-    edge=c.material('Dark blue armor bevels',(.023,.042,.081),'technical')
+    armor=c.material('Blue black chitin crowns',(.055,.19,.46),'technical')
+    edge=c.material('Dark blue armor bevels',(.025,.08,.18),'technical')
     violet=c.material('Dark violet dorsal well',(.064,.022,.14),'organic')
     dark=c.material('Near black articulated joints',(.008,.016,.035),'organic')
     pale=c.material('Cool pale badger stripe',(.47,.57,.64),'organic')

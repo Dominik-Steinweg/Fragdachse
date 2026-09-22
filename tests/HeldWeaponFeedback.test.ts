@@ -55,14 +55,27 @@ describe('held weapon feedback motion', () => {
 });
 
 function visualFixture() {
+  const sourceSize = 32 * (getHeldItemSpriteSpec('GLOCK')!.sourceScale ?? 1);
   const image = {
     active: true, visible: false, x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1,
-    frame: { cutWidth: 32, cutHeight: 32 },
-    setDepth() { return this; }, setOrigin() { return this; }, setTexture() { return this; },
+    displayWidth: 0, displayHeight: 0, originX: 0, originY: 0,
+    frame: { cutWidth: sourceSize, cutHeight: sourceSize },
+    setDepth() { return this; },
+    setOrigin(x: number, y: number) { this.originX = x; this.originY = y; return this; },
+    setTexture(key: string) {
+      const weapon = ['GLOCK', 'AWP'].map(id => getHeldItemSpriteSpec(id)!).find(spec => spec.textureKey === key);
+      const size = 32 * (weapon?.sourceScale ?? 1);
+      this.frame = key === getHeldItemSpriteSpec('HE_GRENADE')!.textureKey
+        ? { cutWidth: 6, cutHeight: 7 } : { cutWidth: size, cutHeight: size };
+      return this;
+    },
     setVisible(v: boolean) { this.visible = v; return this; },
     setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
     setRotation(r: number) { this.rotation = r; return this; },
-    setDisplaySize(w: number, h: number) { this.scaleX = w / 32; this.scaleY = h / 32; return this; },
+    setDisplaySize(w: number, h: number) {
+      this.displayWidth = w; this.displayHeight = h;
+      this.scaleX = w / this.frame.cutWidth; this.scaleY = h / this.frame.cutHeight; return this;
+    },
     setAlpha() { return this; }, destroy() { this.active = false; },
   };
   let images = 0;
@@ -72,6 +85,21 @@ function visualFixture() {
 }
 
 describe('animated held item geometry and lifetime', () => {
+  it('keeps a high-resolution weapon at logical size and restores legacy scale when switching to a utility', () => {
+    const { visual, image, imageCount } = visualFixture();
+    visual.setItem('GLOCK');
+    visual.sync(0, 0, 0, 32, true);
+    expect(image.displayWidth).toBe(32);
+    expect(image.displayHeight).toBe(32);
+    expect(image.originX).toBe(getHeldItemSpriteSpec('GLOCK')!.gripX / 32);
+    visual.setItem('HE_GRENADE');
+    visual.sync(0, 0, 0, 64, true);
+    expect(image.displayWidth).toBe(12);
+    expect(image.displayHeight).toBe(14);
+    expect(image.originY).toBe(getHeldItemSpriteSpec('HE_GRENADE')!.gripY / 7);
+    expect(imageCount()).toBe(1);
+  });
+
   it.each([0, Math.PI / 2, Math.PI, -Math.PI / 2])('keeps the muzzle on the rendered weapon at rotation %f', (rotation) => {
     const { visual, scene, image } = visualFixture();
     visual.setItem('GLOCK');

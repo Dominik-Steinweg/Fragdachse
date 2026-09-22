@@ -52,7 +52,7 @@ export async function preview(argv, root = repoRoot) {
   const { values: args, positionals } = parseArgs({ args: argv, allowPositionals: true, options: Object.fromEntries(
     ['blender', 'label', 'variant', 'indices', 'device', 'patch', 'compare', 'review'].map(k => [k, { type: 'string' }]).concat([['help', { type: 'boolean' }]])) });
   if (args.help) {
-    console.log('npm run assets:preview -- <id> [--variant calm|rich] [--indices 0,4,10|all] [--label name] [--device AUTO|OPTIX|CUDA|CPU] [--blender path] [--patch path] [--compare image]\nOhne Blender erneut auswerten: npm run assets:preview -- --review <Vorschauordner> [--compare image]');
+    console.log('npm run assets:preview -- <id> [--variant <Katalogvariante>] [--indices 0,4,10|all] [--label name] [--device AUTO|OPTIX|CUDA|CPU] [--blender path] [--patch path] [--compare image]\nOhne Blender erneut auswerten: npm run assets:preview -- --review <Vorschauordner> [--compare image]');
     return;
   }
   if (args.review) {
@@ -75,8 +75,9 @@ export async function preview(argv, root = repoRoot) {
     spec = { ...spec, ...update };
   }
   const indices = previewIndices(spec, args.indices);
-  const variant = args.variant ?? 'rich', device = args.device ?? 'AUTO';
-  if (!['calm', 'rich'].includes(variant) || !['AUTO', 'CPU', 'CUDA', 'OPTIX'].includes(device)) throw new Error('Ungültige Variante oder Gerät; siehe --help.');
+  const variant = args.variant ?? Object.keys(spec.materialVariants ?? {})[0], device = args.device ?? 'AUTO';
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(variant ?? '') || !Object.hasOwn(spec.materialVariants ?? {}, variant)
+    || !['AUTO', 'CPU', 'CUDA', 'OPTIX'].includes(device)) throw new Error('Ungültige Variante oder Gerät; siehe --help.');
   const label = identifier(args.label ?? `preview-${new Date().toISOString().replace(/[^0-9]/g, '')}-${randomUUID().slice(0, 8)}`);
   const previews = await safePath(root, 'art/poc/pipeline-v2/previews');
   const folder = await safePath(previews, `${label}/${id}`);

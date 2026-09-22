@@ -6,15 +6,14 @@
  * welches Bild dazu gehoert; die Zuordnung entscheidet diese Datei. Beides ist bewusst getrennt:
  * Die Action-/Slot-Identity ist Zustand, die Textur reine Darstellung.
  *
- * Vertrag fuer neue Waffen – eine Zeile in `HELD_ITEM_SPRITES` und eine Pixelkarte in
- * `scripts/generate-held-item-sprites.mjs`:
+ * Waffen werden aus der ausgewählten Asset-Pipeline-Produktion zugeordnet. Utilities
+ * und neutrale Gattungsbilder behalten ihre Pixelkarten in `generate-held-item-sprites.mjs`.
  *
- * - Die Textur liegt im **32-px-Referenzraster der getragenen Items** (`HELD_ITEM_TEXTURE_SIZE`), also 1 Texturpixel je
- *   Figurenpixel. Die Anzeigegroesse ergibt sich daraus von selbst; Waffen duerfen und sollen
- *   unterschiedlich gross sein, ohne dass hier eine Groesse gepflegt wird.
+ * - Grip und Mündung liegen im **32-px-Referenzraster** (`HELD_ITEM_TEXTURE_SIZE`).
+ *   `sourceScale` trennt die höhere Exportauflösung von dieser logischen Geometrie.
  * - Die Textur zeigt nach **Norden**, wie Spieler- und Gegnersprites. Den Rotationsoffset traegt
  *   allein die Figur.
- * - `gripX`/`gripY` ist der Punkt der Waffentextur in Texturpixeln, der auf dem Pfotenanker der
+ * - `gripX`/`gripY` ist der Punkt in logischen Referenzpixeln, der auf dem Pfotenanker der
  *   Figur (`HELD_ITEM_ANCHOR_X/Y`) sitzt.
  * - `muzzleX`/`muzzleY` ist der sichtbare Lauf- oder Rohrmund. Er wird zentral mit derselben
  *   Rotation und Skalierung in den World Space transformiert.
@@ -31,14 +30,17 @@ import {
   type MuzzleOrigin,
 } from '../config';
 import { findUtilityConfig, findWeaponConfig, getUtilityBaseId } from './LoadoutConfig';
+import { PIPELINE_ASSETS } from '../config/pipelineAssets';
 
 export interface HeldItemSpriteSpec {
   readonly textureKey: string;
   readonly assetPath: string;
-  /** Griffpunkt in Texturpixeln, Ursprung ist die linke obere Ecke der Waffentextur. */
+  /** Source texels per logical pixel in the 32-pixel held-item reference plane. */
+  readonly sourceScale?: number;
+  /** Griffpunkt in logischen Referenzpixeln, Ursprung ist die linke obere Ecke. */
   readonly gripX: number;
   readonly gripY: number;
-  /** Sichtbarer Mündungspunkt in Texturpixeln, Ursprung ist die linke obere Ecke. */
+  /** Sichtbarer Mündungspunkt in logischen Referenzpixeln. */
   readonly muzzleX: number;
   readonly muzzleY: number;
 }
@@ -90,26 +92,22 @@ const GENERIC_GUN = sprite('generic_gun', 2.5, 8.5);
 /** Neutrale Form fuer geworfene Utilities ohne eigenes Bild. */
 const GENERIC_THROWABLE = sprite('generic_throwable', 2.5, 4.5);
 
+const PIPELINE_HELD_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Object.fromEntries(
+  PIPELINE_ASSETS.filter(asset => asset.category === 'weapon').flatMap(asset => {
+    const held = ('heldItem' in asset ? asset.heldItem : null) as {
+      referenceSize: number; grip: number[]; muzzle: number[];
+    } | null;
+    if (!held || held.referenceSize !== HELD_ITEM_TEXTURE_SIZE) throw new Error(`Invalid held weapon export: ${asset.id}`);
+    const spec: HeldItemSpriteSpec = Object.freeze({ textureKey: asset.textureKey, assetPath: asset.idlePath,
+      sourceScale: asset.sourceSize / held.referenceSize,
+      gripX: held.grip[0], gripY: held.grip[1], muzzleX: held.muzzle[0], muzzleY: held.muzzle[1] });
+    return asset.gameIds.map(id => [id, spec]);
+  }),
+);
+
 /** Bilder mit eigener Gestaltung, geschluesselt auf die Loadout-Item-ID. */
 export const HELD_ITEM_SPRITES: Readonly<Record<string, HeldItemSpriteSpec>> = Object.freeze({
-  GLOCK: sprite('GLOCK', 4.5, 9.5, 3.5, 0),
-  ASMD_PRIM: sprite('ASMD_PRIM', 4.5, 14.5),
-  PLASMA: sprite('PLASMA', 3.5, 11.5),
-  HYDRA: sprite('HYDRA', 4.5, 13.5),
-  XBOW: sprite('XBOW', 4.5, 13.5),
-  LEAF_BLOWER: sprite('LAUBBLAESER', 5.5, 13.5),
-  PLASMA_BURNER: sprite('REPARATURSTRAHL', 4.5, 10.5, 3.5, 0),
-  OVERCHARGE_CORE: sprite('OVERCHARGE_CORE', 3.5, 9.5),
-  ENERGY_INJECTOR: sprite('ENERGIEINJEKTOR', 2.5, 9.5),
-  P90: sprite('P90', 4.5, 11.5, 4.5, 0),
-  AK47: sprite('AK47', 4.5, 20.5, 4.5, 0),
-  SHOTGUN: sprite('SHOTGUN', 5.5, 17.5, 4.5, 0),
-  ASMD_SEC: sprite('ASMD_SEC', 4.5, 14.5),
-  ROCKET_LAUNCHER: sprite('ROCKET_LAUNCHER', 6.5, 19.5, 5.5, 0),
-  MINI_ROCKET_LAUNCHER: sprite('MINI_ROCKET_LAUNCHER', 4.5, 12.5, 4.5, 0),
-  AWP: sprite('AWP', 4.5, 26.5, 4.5, 0),
-  FLAMETHROWER: sprite('FLAMETHROWER', 5.5, 15.5, 4.5, 0),
-  NEGEV: sprite('NEGEV', 6.5, 20.5, 5.5, 0),
+  ...PIPELINE_HELD_SPRITES,
   HE_GRENADE: sprite('HE_GRENADE', 3, 6),
   SMOKE_GRENADE: sprite('SMOKE_GRENADE', 3, 6.5),
   MOLOTOV_GRENADE: sprite('MOLOTOV_GRENADE', 3, 7),

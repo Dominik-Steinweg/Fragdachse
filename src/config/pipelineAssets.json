@@ -481,7 +481,8 @@
       "gameIds": [
         "zombie-badger"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_zombie_badger",
       "sheetTextureKey": "enemy_zombie_badger_walking",
@@ -526,8 +527,8 @@
         }
       ],
       "hashes": {
-        "idle": "166786eaf5a4451f5722714ad55c7cae289edd97c8d8eeac5074134f3c356ce4",
-        "sheet": "cd6d7ff5b61d4d5eb14c56e9957e5a27de72bc539b9cc50ff213dd2e16096ece"
+        "idle": "b43273264ccc5153a464a5b68903737019316f390f7e033783a4e890611afc86",
+        "sheet": "4597b2269dbe972c7d54089245531aa34c6dd1228c072d7697c39ce109fb819b"
       }
     },
     {
@@ -536,7 +537,8 @@
       "gameIds": [
         "demon-badger"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_demon_badger",
       "sheetTextureKey": "enemy_demon_badger_walking",
@@ -581,8 +583,8 @@
         }
       ],
       "hashes": {
-        "idle": "800740a52e2e5d4e667d17dbfcf94d77a146304ca154e5d97dc898768599f700",
-        "sheet": "9427ef42aa217e7bf2333294363298eca330b86da7027c1351119c345302970c"
+        "idle": "64123803f9d4a43c4baa10fb639ef46adf76e5de404189af5126e9de334d3893",
+        "sheet": "268950d3954e938dc1126ebf4dc66d7702db8e480cac4e844578a76789d3ae30"
       }
     },
     {
@@ -591,7 +593,8 @@
       "gameIds": [
         "rabid-badger"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_rabid_badger",
       "sheetTextureKey": "enemy_rabid_badger_walking",
@@ -636,8 +639,8 @@
         }
       ],
       "hashes": {
-        "idle": "a237aac16b6760ca885af870f807b38a48baa1eabe590804b6488c0c96fffb7d",
-        "sheet": "cc772e0fdf7a608083be67eac75dd26883d4d5459ef7a5ad7dc54216662e5816"
+        "idle": "28d3746860da38f54b5854dfb2f51c2720bb71cc09149ba2d4144cdd42bc16e5",
+        "sheet": "de7a4a398a92546f6d3ced81de56f77606bf4586e7997968cfc8f11345edc5ca"
       }
     },
     {
@@ -646,7 +649,8 @@
       "gameIds": [
         "grave-titan"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 256,
       "textureKey": "enemy_grave_titan",
       "sheetTextureKey": "enemy_grave_titan_walking",
@@ -691,8 +695,8 @@
         }
       ],
       "hashes": {
-        "idle": "80d0400c1dd795c1dcef774e85f5b99aadfa2fac751199f2830b3c06519e1632",
-        "sheet": "3c86bc60eddb18e5e19e79d65bc505176d7013de4193fe1677a0506ae8e5e511"
+        "idle": "924dbc04ecde1fa359028263a2f318c97a89ed2b058535b83bf824b894cd57f9",
+        "sheet": "d40df07601399c687636f82241c3e59707b895e2715ab7bb39508d042fae3788"
       }
     },
     {
@@ -701,7 +705,8 @@
       "gameIds": [
         "spore-warden"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_spore_warden",
       "sheetTextureKey": "enemy_spore_warden_walking",
@@ -746,8 +751,8 @@
         }
       ],
       "hashes": {
-        "idle": "bc846e91176373b412f5266e862367870a8e9a0876bcc74fce875fe32d433d51",
-        "sheet": "83bcf6e85070ac6809aabd44ebbc48abf158c7822a07180d7cbbfcd25e0c05ef"
+        "idle": "2db4b4785c8fcb069e5949efc94ddfe7258e1d255dd9e2953def5122f52ab690",
+        "sheet": "2eb0ad00c4118fc32d5cc225028efa4455544829ab8e8cb01df5b1df1b8caade"
       }
     },
     {
@@ -756,7 +761,8 @@
       "gameIds": [
         "plague-medic"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_plague_medic",
       "sheetTextureKey": "enemy_plague_medic_walking",
@@ -801,8 +807,8 @@
         }
       ],
       "hashes": {
-        "idle": "2402aea16cfc1bed4009691319c87794eeab1b35dda8d0a878d28dc170409be2",
-        "sheet": "2ee765721259deedf2d1286c280b6d6d889546f72eb9e12523da2dc2f2d42c47"
+        "idle": "aa6c6518614852b0c962c631acea9a80385c24e6eaa76ed8a966be02339ae950",
+        "sheet": "311b872d8ba9ccb314abf3fa9091937a66826f7d8d492ac28603934784bbe301"
       }
     },
     {
@@ -811,7 +817,8 @@
       "gameIds": [
         "void-stalker"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_void_stalker",
       "sheetTextureKey": "enemy_void_stalker_walking",
@@ -856,8 +863,8 @@
         }
       ],
       "hashes": {
-        "idle": "b2c4ee7b00683b46858a20c9cbc6efd20be0aa9bc6f42ea53667508e0801aaa0",
-        "sheet": "bf7df29c5ae23454690321d227cdf8f60ebb6ba882d47cb029832450439ed951"
+        "idle": "3d93ce35e234d9f925f5172dd672af63557aa56d5a39b17c0f912f800eb30449",
+        "sheet": "79fb92fc245c68b12e06c13e27ddd58d4ae04bc8a308e9f16176645fad5bfedc"
       }
     },
     {
@@ -866,7 +873,8 @@
       "gameIds": [
         "stink-broodmother"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_stink_broodmother",
       "sheetTextureKey": "enemy_stink_broodmother_walking",
@@ -911,8 +919,8 @@
         }
       ],
       "hashes": {
-        "idle": "05983dea20bf00629ed061d8bdabaf65a0c93d8f6f23b812b0de0af8c8a75017",
-        "sheet": "92a9fa153caa726202213bac3bad83509fb9472b04d6cc67e6855852131ade1e"
+        "idle": "79fb30bf7a129e100598ebeff97838403d643c21d24df8f1465f9a011e1a3ed4",
+        "sheet": "4a1c8d55aee56bd0e3706e1ed6e82ea42f0696ea0aadd0e2784a99e64a9db926"
       }
     },
     {
@@ -921,7 +929,8 @@
       "gameIds": [
         "alien-badger"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_alien_badger",
       "sheetTextureKey": "enemy_alien_badger_walking",
@@ -966,8 +975,8 @@
         }
       ],
       "hashes": {
-        "idle": "55065fc49f2a593a31b317033024f8f68001bf0de334a64bf96dcbb8f2e67554",
-        "sheet": "5e18381cd3023be29b58c9c974e6054780bf16adc9a22ac46f8081fc2650c091"
+        "idle": "d74f6fc6d4d6a79ba001ca0be3e131448455f99bfa0fd1c4454af530ff71340e",
+        "sheet": "d21592f9fafb7b61fa77931b6e54a1e17581269f168a1418e945420ce859e6fa"
       }
     },
     {
@@ -976,7 +985,8 @@
       "gameIds": [
         "thrower-badger"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_thrower_badger",
       "sheetTextureKey": "enemy_thrower_badger_walking",
@@ -1021,8 +1031,8 @@
         }
       ],
       "hashes": {
-        "idle": "2790dfd554da2699e7df4957b7d40056e26a968360cf7c9ab83fe350872564eb",
-        "sheet": "b5b260132c8068b9e11d570825fc15ec1742ecc1f07530af42459681057f5e32"
+        "idle": "98ab69549cb57c7635812f74f6352c7833dcbef271907e1d79fdec6e29066abd",
+        "sheet": "52ed7f71d83e48c2ab0089bf62d858394120cdce3c3627fb558d58a8d036fba6"
       }
     },
     {
@@ -1031,7 +1041,8 @@
       "gameIds": [
         "inferno-colossus"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 256,
       "textureKey": "enemy_inferno_colossus",
       "sheetTextureKey": "enemy_inferno_colossus_walking",
@@ -1076,8 +1087,8 @@
         }
       ],
       "hashes": {
-        "idle": "18fa1cf734b278ad35c62bb0de7301335f1a9796bce2a343a5fe65648d1b3fea",
-        "sheet": "2d321581a9f1ce317ac510208111105e1e18e8f976470d728fab656a6c3fa58c"
+        "idle": "af93adfb95f9487377f8b88e0f73623f7c17ce6f7b4d3df96c5cebb8e979e495",
+        "sheet": "bb3aee14c6a359dc6c05dcb75baceb58846c9261838d306e10d35fcff2319210"
       }
     },
     {
@@ -1086,7 +1097,8 @@
       "gameIds": [
         "pyro-badger"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_pyro_badger",
       "sheetTextureKey": "enemy_pyro_badger_walking",
@@ -1131,8 +1143,8 @@
         }
       ],
       "hashes": {
-        "idle": "c19784544852187f04d495f40661f3c361ab8feb20fcaf10edee55a80f7c114c",
-        "sheet": "454a1cd946e5eb40e68f8e4a3e3114fac1a2577e07283824a7367a90daf24f7b"
+        "idle": "df92bb4bf924f8545b367d6050d14b8d64a5decd1d193b13a81c625332e6499f",
+        "sheet": "26f7f2e20d17fcd04607c951af2021138f1089f0687da16d1a07c9da68d37261"
       }
     },
     {
@@ -1141,7 +1153,8 @@
       "gameIds": [
         "timebomb-badger"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_timebomb_badger",
       "sheetTextureKey": "enemy_timebomb_badger_walking",
@@ -1186,8 +1199,8 @@
         }
       ],
       "hashes": {
-        "idle": "1f86ed54c60e85cd525ef7aacabb04e156371f1512004d341fa6ccc6a3cd1b66",
-        "sheet": "c2524b0bd05ceeef45e61fcacd2b841021d4c771c000deff709fc0547248674b"
+        "idle": "5747ca58df2dc447819eacf3f3a162807ddde34dc5caf3298345b9da80b08d04",
+        "sheet": "61c64aecc2fae7bf554ec88bd438f8901ac3ea651f15d5b63555dd108ff69745"
       }
     },
     {
@@ -1196,7 +1209,8 @@
       "gameIds": [
         "void-hunter"
       ],
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 256,
       "textureKey": "enemy_void_hunter",
       "sheetTextureKey": "enemy_void_hunter_walking",
@@ -1241,8 +1255,8 @@
         }
       ],
       "hashes": {
-        "idle": "116305a7446d32ece6512ab4a0b085df2ea30a1a4651e9be965d59c92b23fab8",
-        "sheet": "22db73bc644aed516255f581db29f5750da5b0d5ef6daecf5c8b3653d1e158d0"
+        "idle": "9dc30d9fed7ae0329bcc70a0d1a9b2f6d115dd12fe8ed028d8979fa3d8f1bf0d",
+        "sheet": "a903649592965180975f82db6ca43ebce7e0a73b1b908fe9f7344ef79879740d"
       }
     },
     {
@@ -1251,8 +1265,8 @@
       "gameIds": [
         "player"
       ],
-      "revision": "v2-ae",
-      "variant": "rich",
+      "revision": "v2-ai",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "badger",
       "sheetTextureKey": "badger_walking",
@@ -1269,10 +1283,10 @@
         "margin": 2,
         "spacing": 4,
         "columns": 8,
-        "rows": 2,
-        "frameCount": 13,
+        "rows": 5,
+        "frameCount": 37,
         "width": 1056,
-        "height": 264
+        "height": 660
       },
       "idleFrame": 0,
       "clips": [
@@ -1294,11 +1308,960 @@
           ],
           "frameRate": 24,
           "loop": true
+        },
+        {
+          "name": "idle",
+          "frames": [
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36
+          ],
+          "frameRate": 8,
+          "loop": true
         }
       ],
       "hashes": {
-        "idle": "9027109af63aca865d58b897dbe3fae7d1bd03a024683e8e21f7167bff0af402",
-        "sheet": "519b0d9979ed1e27b77beab46c2f5916767a7d2f3c4f25650e6f997923af9859"
+        "idle": "ccb3a24fe3ba717fe801724a0cf81ecf37872ee1ca595461d8f35ce987bb6f63",
+        "sheet": "2f219d0b9b1e90d8ebb24a2a674c94880b3d779b57e53128a3d2fbbe23e08e63"
+      }
+    },
+    {
+      "id": "held-glock",
+      "category": "weapon",
+      "gameIds": [
+        "GLOCK"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_GLOCK",
+      "sheetTextureKey": "held_GLOCK_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-glock/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-glock/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          14.5
+        ],
+        "referenceGrip": [
+          4.5,
+          9.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "6bdb97c82af1d56b1e8acdff858740858b945edf670f73216e70ccb43230f0ab",
+        "sheet": "7c8836b8a282f3015bc269ed1611ba0c26817313c116a4ec925ddf29141e6e70"
+      }
+    },
+    {
+      "id": "held-p90",
+      "category": "weapon",
+      "gameIds": [
+        "P90"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_P90",
+      "sheetTextureKey": "held_P90_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-p90/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-p90/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          12.5
+        ],
+        "referenceGrip": [
+          4.5,
+          11.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "e76734b1ef9e7d1ce2ece9f1951ffa5d230435e3900ae73e6e55bbbb707b0653",
+        "sheet": "f3d788c043123505e732b4c23d11ea1c9876d495b242d30f40317daf503a0893"
+      }
+    },
+    {
+      "id": "held-ak47",
+      "category": "weapon",
+      "gameIds": [
+        "AK47"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_AK47",
+      "sheetTextureKey": "held_AK47_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-ak47/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-ak47/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          3.5
+        ],
+        "referenceGrip": [
+          4.5,
+          20.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "0bb15c27f361d12a6ff480aca2957c0be5cc4749204770b4521a0b54fabf1b46",
+        "sheet": "c92b665c5672a589b0b4b911c7aa7fe4a41f988b356beb8dcda72c79f6eb7f05"
+      }
+    },
+    {
+      "id": "held-shotgun",
+      "category": "weapon",
+      "gameIds": [
+        "SHOTGUN"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_SHOTGUN",
+      "sheetTextureKey": "held_SHOTGUN_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-shotgun/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-shotgun/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          6.5
+        ],
+        "referenceGrip": [
+          5.5,
+          17.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "4af21ddbd72e93d5fb1e7da31508821bee0ea0ab4ca846af1d71cdcceed9e106",
+        "sheet": "bd70a6eb4ae9cea705833c0035b1ca729a2b5fea542a944194cac6c146e407d9"
+      }
+    },
+    {
+      "id": "held-awp",
+      "category": "weapon",
+      "gameIds": [
+        "AWP"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_AWP",
+      "sheetTextureKey": "held_AWP_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-awp/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-awp/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          28
+        ],
+        "muzzle": [
+          16,
+          1.5
+        ],
+        "referenceGrip": [
+          4.5,
+          26.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "ea2d03a428ef6519b1e5274b908d97fd823514c0344d43286ddeea62105372fc",
+        "sheet": "163f86ca8901d7ff9bab3ebf3b4b02c50d412970a3ffc01bf7f7392a528bd2ab"
+      }
+    },
+    {
+      "id": "held-negev",
+      "category": "weapon",
+      "gameIds": [
+        "NEGEV"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_NEGEV",
+      "sheetTextureKey": "held_NEGEV_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-negev/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-negev/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          3.5
+        ],
+        "referenceGrip": [
+          6.5,
+          20.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "b12bcf389a8d7315a27d290d22232ac6e721deea99e2e2600b0a5ff01e7a378d",
+        "sheet": "d874c6e7a386560e4550ceb76c5b41025b13ebd9dc1a4032f80e612aa358e6f1"
+      }
+    },
+    {
+      "id": "held-xbow",
+      "category": "weapon",
+      "gameIds": [
+        "XBOW"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_XBOW",
+      "sheetTextureKey": "held_XBOW_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-xbow/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-xbow/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          10.5
+        ],
+        "referenceGrip": [
+          4.5,
+          13.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "d4f3e81f65712d644daae9f4fa410c71e99f33cc4efafbc12d3d0f0d0bd38fc4",
+        "sheet": "ab3dc80d7c79a0508385010ab5539dc9222b30e6f09a1536033ce60279555a0a"
+      }
+    },
+    {
+      "id": "held-asmd-prim",
+      "category": "weapon",
+      "gameIds": [
+        "ASMD_PRIM"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_ASMD_PRIM",
+      "sheetTextureKey": "held_ASMD_PRIM_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-asmd-prim/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-asmd-prim/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          9.5
+        ],
+        "referenceGrip": [
+          4.5,
+          14.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "ef6ee21df720ea35eb1d014e477e9db2e8d20a0b368397f80647145a1a6421d2",
+        "sheet": "8efc6c3b1d3d1d6f2d4c1bef6a814a4235e84fb41db8ffe0766f08855f094cca"
+      }
+    },
+    {
+      "id": "held-asmd-sec",
+      "category": "weapon",
+      "gameIds": [
+        "ASMD_SEC"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_ASMD_SEC",
+      "sheetTextureKey": "held_ASMD_SEC_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-asmd-sec/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-asmd-sec/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          9.5
+        ],
+        "referenceGrip": [
+          4.5,
+          14.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "c7808637a7785a943e2b260f781e748b84970b53da206eb52bbf2226491c7621",
+        "sheet": "42411433d1bcff9fd6aca6447d53c849de4e784c9f0c57c82b9bb4600e588125"
+      }
+    },
+    {
+      "id": "held-plasma",
+      "category": "weapon",
+      "gameIds": [
+        "PLASMA"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_PLASMA",
+      "sheetTextureKey": "held_PLASMA_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-plasma/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-plasma/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          12.5
+        ],
+        "referenceGrip": [
+          3.5,
+          11.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "b0609bab7bf805d5f40b78c96ca76c3c9e1d0541fc8a8fc7ccb39506a135867f",
+        "sheet": "832e1e5435496cee36f199159fdd065d7045501e31b5dcef0c80bd4b3df171f0"
+      }
+    },
+    {
+      "id": "held-hydra",
+      "category": "weapon",
+      "gameIds": [
+        "HYDRA"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_HYDRA",
+      "sheetTextureKey": "held_HYDRA_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-hydra/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-hydra/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          10.5
+        ],
+        "referenceGrip": [
+          4.5,
+          13.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "30d4bc0c2c667e36e85c0eeea4eea676c095e4fb5b5a4b19b8d58216dcb8d308",
+        "sheet": "ac43cecd7d2f9def7d629a1f47eaf47c123c9c4204fde3949059bec9d222c6aa"
+      }
+    },
+    {
+      "id": "held-rocket-launcher",
+      "category": "weapon",
+      "gameIds": [
+        "ROCKET_LAUNCHER"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_ROCKET_LAUNCHER",
+      "sheetTextureKey": "held_ROCKET_LAUNCHER_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-rocket-launcher/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-rocket-launcher/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          4.5
+        ],
+        "referenceGrip": [
+          6.5,
+          19.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "402562413c2ebc1ad4bc10d660acc0e39fc5054f4eae2c7318cc81dbe1ff3893",
+        "sheet": "cb44fa44f8a7406c94b88ab54bb0d2f0fddc009f479d112d6cb4ebc5144faa8e"
+      }
+    },
+    {
+      "id": "held-mini-rocket-launcher",
+      "category": "weapon",
+      "gameIds": [
+        "MINI_ROCKET_LAUNCHER"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_MINI_ROCKET_LAUNCHER",
+      "sheetTextureKey": "held_MINI_ROCKET_LAUNCHER_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-mini-rocket-launcher/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-mini-rocket-launcher/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          11.5
+        ],
+        "referenceGrip": [
+          4.5,
+          12.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "0b471215701e75e26037bb9648069714f241d422c4a61d489e5d9a2fd585edde",
+        "sheet": "9ca4f313b13f40d672f0b1772c286c61fa26cb691b5d6cc03504f3a4ce6abdf1"
+      }
+    },
+    {
+      "id": "held-flamethrower",
+      "category": "weapon",
+      "gameIds": [
+        "FLAMETHROWER"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_FLAMETHROWER",
+      "sheetTextureKey": "held_FLAMETHROWER_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-flamethrower/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-flamethrower/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          8.5
+        ],
+        "referenceGrip": [
+          5.5,
+          15.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "d0e7bd273b330eb547e5813a3e93a0f32d682df43653676005a09f4433402adf",
+        "sheet": "428885a2e0966d75e5759f24a4f852dbf4b4757833e54914dd2729197971a86f"
+      }
+    },
+    {
+      "id": "held-leaf-blower",
+      "category": "weapon",
+      "gameIds": [
+        "LEAF_BLOWER"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_LEAF_BLOWER",
+      "sheetTextureKey": "held_LEAF_BLOWER_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-leaf-blower/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-leaf-blower/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          10.5
+        ],
+        "referenceGrip": [
+          5.5,
+          13.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "e3e1dc96502503a6929f8781e3d8cfd77f0459cc2159736b87f7a8e95525d36f",
+        "sheet": "bb82cd3e73ccc71dd42c8ce1b51a0520caa875e896f3c1af761efcd8680a9ccf"
+      }
+    },
+    {
+      "id": "held-plasma-burner",
+      "category": "weapon",
+      "gameIds": [
+        "PLASMA_BURNER"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_PLASMA_BURNER",
+      "sheetTextureKey": "held_PLASMA_BURNER_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-plasma-burner/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-plasma-burner/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          13.5
+        ],
+        "referenceGrip": [
+          4.5,
+          10.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "8a3b7652c38363c42766fcbdda59514a6b467a7d9cda7dc63b57601bfc465eb7",
+        "sheet": "f2cc523b2f6f2613b311fd58ef16b5a57a52f4dfe4b54fb8580013f667cb5fe9"
+      }
+    },
+    {
+      "id": "held-overcharge-core",
+      "category": "weapon",
+      "gameIds": [
+        "OVERCHARGE_CORE"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_OVERCHARGE_CORE",
+      "sheetTextureKey": "held_OVERCHARGE_CORE_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-overcharge-core/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-overcharge-core/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          14.5
+        ],
+        "referenceGrip": [
+          3.5,
+          9.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "12c7fff4a90223341c1542128cb253efa0640c6900bb8e4b1c5a210c4510b4e0",
+        "sheet": "c6d1fbe7eededd0178f96ea25f1e8ce30392765c3645d4be5aae22eb855c31e4"
+      }
+    },
+    {
+      "id": "held-energy-injector",
+      "category": "weapon",
+      "gameIds": [
+        "ENERGY_INJECTOR"
+      ],
+      "revision": "v2-aj",
+      "variant": "standard",
+      "sourceSize": 256,
+      "textureKey": "held_ENERGY_INJECTOR",
+      "sheetTextureKey": "held_ENERGY_INJECTOR_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-energy-injector/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-energy-injector/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 260,
+        "height": 260
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          14.5
+        ],
+        "referenceGrip": [
+          2.5,
+          9.5
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "7d9564c21559d5e4abddca92b583423973856958f5ca9ec89c40aa04947eb98d",
+        "sheet": "bfe0852746ff36497714a42674c3b3f6be4eaa3bd9f87678662003148f0f92c3"
       }
     }
   ]

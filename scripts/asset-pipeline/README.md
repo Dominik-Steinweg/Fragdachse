@@ -1,10 +1,10 @@
 # FRAGDACHSE Asset-Pipeline V2
 
-Codex steuert Blender über den vorhandenen MCP. Die Pipeline erzeugt orthografische Turm-, Gegner- und Figurensprites einschließlich Blender-Actions, transparenten Animationsframes und vollständigen Quellenpaketen. Der separate Phaser-Viewer prüft sie bei Spielgröße. Runtime-Integration bleibt ein eigener Auftrag.
+Codex steuert Blender über den vorhandenen MCP. Die Pipeline erzeugt orthografische Turm-, Gegner-, Figuren- und gehaltene Waffensprites einschließlich Blender-Actions, transparenten Animationsframes und vollständigen Quellenpaketen. Der separate Phaser-Viewer prüft sie bei Spielgröße. Runtime-Integration bleibt ein eigener Auftrag.
 
 ## V2-Katalog und Produktionsstand
 
-[catalog-v2.json](catalog-v2.json) ist der Bedarfskatalog: neun Turmgrafiken für elf Waffen-IDs, 14 Gegner und die Spielfigur. `gameIds`, `reference`, `targetSize` und optionale `referenceTransform` beziehen sich auf die bestehenden Spielverträge. Silhouette, Farbgruppen und Anatomie beziehungsweise Mechanik stehen in `description`; `requiredClips` nennt die Produktionsaufgabe. Assettests gleichen Abdeckung, gemeinsame Turmgrafiken, Anzeigegrößen und Referenzkorrekturen mit den aktuellen Spielregistries ab.
+[catalog-v2.json](catalog-v2.json) ist der Bedarfskatalog: neun Turmgrafiken für elf Waffen-IDs, 14 Gegner, die Spielfigur und 18 gehaltene Waffen. Slotlose Nahkampf-/Schild-/Tesla-Fähigkeiten behalten ihre vorhandene Darstellung ohne getragenes Objekt. `gameIds`, `reference`, `targetSize` und optionale `referenceTransform` beziehen sich auf die bestehenden Spielverträge. Silhouette, Farbgruppen und Anatomie beziehungsweise Mechanik stehen in `description`; `requiredClips` nennt die Produktionsaufgabe. Assettests gleichen Abdeckung, gemeinsame Turmgrafiken, Anzeigegrößen und Referenzkorrekturen mit den aktuellen Spielregistries ab.
 
 - `production: "planned"` bedeutet ein vollständiges Briefing ohne ausführbare Rezeptur.
 - `production: "reference"` bedeutet eine unterstützte Referenzrezeptur. Erst ein vollständiger Build, Sichtprüfung, `selection.json` und Quellenarchiv belegen die tatsächlich produzierte Auswahl. Der Katalog allein behauptet keine Freigabe.
@@ -16,7 +16,16 @@ Codex steuert Blender über den vorhandenen MCP. Die Pipeline erzeugt orthografi
 | `spore` | 32 | 64/128 | `fire`: Zusammenziehen, Ausstoßbewegung, Entspannen |
 | `zombie-badger` | 28 | 64/128 | `move`: schwerfälliger Vierbeingang |
 | `alien-badger` | 30 | 64/128 | `move`: Zweibeingang mit eigener Anatomie |
-| `badger` | 32 | 64/128 | `move`: schneller Lauf mit stabilen Waffengriffen |
+| `badger` | 32 | 64/128 | `move`: schneller Lauf; `idle`: ruhige Atmung, beide mit stabilen Waffengriffen |
+| `held-*` | 32 Referenzraster | 128/256 | statisch, `clips: []`; Griff und Mündung in `heldItem` |
+
+Die Waffenrezeptur nutzt [weapon_surface_parts.py](weapon_surface_parts.py) für getrennte
+Stahl-, Lack-, Holz-, Gummi-, Verbundstoff- und Keramikoberflächen. Gerichtete Maserung,
+unterbrochene Kratzer, Kantenabrieb und Kontaktfugen ergänzen die gepackte technische
+Textur. Breite Formwerte folgen den echten Normalen und dem gespeicherten `FD_FormMask`;
+die gemeinsame Kamera und Beleuchtung bleiben unverändert. `formShadowStrength` steuert
+diese Formschattierung unabhängig von `textureStrength`. Hitzeverfärbung ist ein eigenes
+Materialprofil für die Flammenwerferdüse.
 
 Die Produktionsbibliothek erweitert diese ursprünglichen Referenzen auf sämtliche neun Turmgrafiken und 14 Gegner des Katalogs. Gemeinsame Anatomie- und Mechanikhelfer liefern Geometriewerkzeuge; Proportionen, Materialgruppen, Ausrüstung und Gangparameter bleiben in den einzelnen Rezepten gestaltet. Der Spieler verwendet einen schnellen Lauf mit Körper-, Kopf- und Schulterbewegung. Gewichtete Arme lassen die Schulterbewegung bis zu den festen Handgelenken auslaufen; Griffe und Daumen bleiben am Export-Root. Seine enger stehenden Füße greifen weiter vor als zurück. Die V2-F-Archive bewahren den früheren Lauf mit festem Oberkörper, V2-G den ausbalancierten Lauf mit bewegten Händen.
 
@@ -41,7 +50,7 @@ module_spec.loader.exec_module(pipeline)
 result = pipeline.build(repo, 'badger', 'v2-a')
 ```
 
-Der Build verwendet eine neue eigene Szene. Bestehende Szenen, V1-Ergebnisse und lokale Dachsänderungen bleiben erhalten. Der V2-Dachs übernimmt die aktuelle Schulter-/Armform der V1-Rezeptur und ergänzt getrennte bewegte Beine. Seine beiden Materialvarianten vergleichen zurückhaltende und kräftigere gemalte Fellgruppen bei identischer Formschattierung. `badger_material_parts.py` richtet die gepackte Felltextur über gespeicherte Ruhekoordinaten entlang der Arme aus; die Koordinaten folgen der Hautverformung. Der versionierte Texturprompt steht als `badgerQuietFurV2J` in `texture-prompts.json`. Die Fellmaterialien neutralisieren prozedurale Wolkenvariation; warme Oberseiten und kühle Seiten folgen den Oberflächennormalen. Weiche objektübergreifende Material-AO vertieft den Kontakt zwischen Kopf und Armen, ohne Geometrie, Alpha oder Beleuchtung zu ändern.
+Der Build verwendet eine neue eigene Szene. Bestehende Szenen, V1-Ergebnisse und lokale Dachsänderungen bleiben erhalten. Der V2-Dachs übernimmt die aktuelle Schulter-/Armform der V1-Rezeptur und ergänzt getrennte bewegte Beine. Historische Materialvarianten vergleichen zurückhaltende und kräftigere gemalte Fellgruppen bei identischer Formschattierung; neue Builds nutzen eine abgestimmte Variante. `badger_material_parts.py` richtet die gepackte Felltextur über gespeicherte Ruhekoordinaten entlang der Arme aus; die Koordinaten folgen der Hautverformung. Der versionierte Texturprompt steht als `badgerQuietFurV2J` in `texture-prompts.json`. Die Fellmaterialien neutralisieren prozedurale Wolkenvariation; warme Oberseiten und kühle Seiten folgen den Oberflächennormalen. Weiche objektübergreifende Material-AO vertieft den Kontakt zwischen Kopf und Armen, ohne Geometrie, Alpha oder Beleuchtung zu ändern.
 
 `build(..., device='CPU')` ist der portable Standard. `device='CUDA'` beziehungsweise `'OPTIX'` verwendet ein vorhandenes passendes Cycles-Gerät; fehlt es, schlägt der Auftrag ausdrücklich fehl. Die Gerätewahl gehört zum Input-Fingerprint und darf bei einer Wiederaufnahme nicht wechseln. Auf der Blender-Kommandozeile stehen `--device CPU|CUDA|OPTIX`, `--max-frames <Anzahl>` und `--asset references` für alle ausführbaren Referenzeinträge bereit; `references` ist eine CLI-Auswahl, keine Asset-ID für `build()`:
 
@@ -59,6 +68,16 @@ Der optionale Dachs-Face-Pass `model.combatFace` verwendet `badger_face_parts.py
 
 Die optionale Texturfamilie `bodyFur` ersetzt nur Körper-, Griff- und Pfotenfell; Kopf und Ohren behalten ihre ursprüngliche Textur. Gerichtete Fellgruppen modulieren die breiten Formwerte, ohne die Geometrie zu verändern. `model.clawedPaws` baut kompakte Pfoten und kurze matte Krallen über `badger_paw_parts.py`; sämtliche Teile gehören zur jeweiligen Beingeometrie und folgen den vorhandenen Beinsteuerungen. Der Standabstand und die Gelenkpunkte verwenden gemeinsam `model.footSpacing`.
 
+## Gehaltene Waffen und Materialvarianten
+
+Die Kategorie `weapon` verwendet [recipes_v2/held-weapon.py](recipes_v2/held-weapon.py). Jede Waffe besitzt eine eigene Bauweise; [weapon_parts_v2.py](weapon_parts_v2.py) liefert geformte Gehäuse, offene Rohre, Optiken, Armaturen und matte Oberflächen mit Kontaktschattierung. Konstruktionsfamilie und Akzentfarben stehen im Katalog; Geometrie und Materialien bleiben echte Blender-Modelle. `reference` zeigt das bisherige Held-Bild, `designReference` das Loadout-/Freischaltbild. Beide Originale werden beim Review archiviert.
+
+`model.palette` stimmt Stahl, Metallkanten, Gehäuse und Verkleidungen (`steel`, `edge`, `body`, `trim`) je Waffe auf diese Spielbilder ab; `wood`, `olive` und `brass` können die Werkstofffarben ergänzen. `accent` färbt Energieeinsätze und Kennzeichnungen. Beide ASMD-Modi verwenden die gemeinsame Konstruktion `asmd` mit identischer Geometrie und Grundpalette, aber unterschiedlichen Akzentfarben. Die zentral ausgerichteten Waffen führen Griff und Mündung auf derselben X-Achse im Referenzraster; zusätzliche seitliche Anbauteile bleiben davon unabhängig.
+
+`heldItem.referenceSize` beträgt 32. `grip` und `muzzle` sind Punkte in diesem logischen Raster; `referenceGrip` positioniert ausschließlich das alte Vergleichsbild. Der Render bleibt ein zentriertes quadratisches Canvas. Erst die Darstellung legt den Griff auf den Spieleranker. Ein Export mit 128 Pixeln wird somit mit `sourceScale=4` genutzt und verändert weder Waffenreichweite noch Mündungsposition. Statische Waffen brauchen keine künstliche Animation oder Armature. Ihre Blender-Geometrie kann später als Grundlage zusätzlicher Ansichten dienen.
+
+Neue Konstruktionen erzeugen genau eine passende Materialvariante (`standard`). Fell- und Formstärke werden in Vorschau-Iterationen abgestimmt; die historischen Varianten `calm`/`rich` bleiben lesbar. Zusätzliche Varianten werden nur bei ausdrücklichem Vergleichsauftrag authoriert.
+
 ## V2-Authoring-Vorschauen
 
 [preview-v2.mjs](preview-v2.mjs) verbindet Blender-Render und Bildvergleich in einem Aufruf:
@@ -67,7 +86,7 @@ Die optionale Texturfamilie `bodyFur` ersetzt nur Körper-, Griff- und Pfotenfel
 npm run assets:preview -- badger
 ```
 
-Standardmäßig entstehen drei tatsächliche 1024er-Render: idle sowie die verfügbaren Posen bei ungefähr 25 % und 75 % des ersten Clips, Variante `rich`. Vor dem Rendern prüft [preview-v2.py](preview-v2.py) weiterhin die Geometrie aller Posen mit den bestehenden Kamera- und Größenverträgen. Ein neuer unsichtbarer Blender-Hintergrundprozess erhält die interaktive Szene. Das eindeutige Label entsteht automatisch; die Ergebnisse liegen unter `art/poc/pipeline-v2/previews/<Label>/<id>`.
+Standardmäßig entstehen drei tatsächliche 1024er-Render: idle sowie die verfügbaren Posen bei ungefähr 25 % und 75 % des ersten Clips, mit der ersten authorierten Materialvariante (aktuell `standard`). Statische Waffen benötigen nur den Ruheframe. Vor dem Rendern prüft [preview-v2.py](preview-v2.py) weiterhin die Geometrie aller Posen mit den bestehenden Kamera- und Größenverträgen. Ein neuer unsichtbarer Blender-Hintergrundprozess erhält die interaktive Szene. Das eindeutige Label entsteht automatisch; die Ergebnisse liegen unter `art/poc/pipeline-v2/previews/<Label>/<id>`.
 
 Blender wird in dieser Reihenfolge gesucht: `--blender`, Umgebungsvariable `BLENDER_PATH`, `PATH`. Falls Blender nicht im Suchpfad liegt, genügt beispielsweise:
 
@@ -78,7 +97,7 @@ npm run assets:preview -- badger --blender "D:/Blender Foundation/Blender 5.2/bl
 | Option | Wirkung |
 | --- | --- |
 | `--label bewegung-a` | Eigenes neues Label; bestehende Labels werden abgelehnt. |
-| `--variant calm` | Eine Materialvariante rendern; Standard `rich`. |
+| `--variant standard` | Eine vorhandene Materialvariante rendern; Standard ist der erste Katalogeintrag. |
 | `--indices all` oder `--indices 0,3,6,9` | Alle bzw. bestimmte Posen; idle wird für den Vergleich immer ergänzt. |
 | `--device AUTO` | Standard: verfügbares OPTIX-, dann CUDA-Gerät, sonst CPU. Explizites `CPU`, `CUDA` oder `OPTIX` möglich; ein nicht verfügbares explizites GPU-Gerät führt zum Fehler. |
 | `--patch datei.json` | Bestehendes lokales Override-Format: Asset-ID auf flache Spec-Änderungen abbilden, optional unter `assets`; alternativ Asset-Liste. Der Katalog wird nicht geändert. |
@@ -95,7 +114,7 @@ Die normale Ausgabe enthält nur Ergebnis und Bildpfade. Vollständige Blender-A
 npm run assets:preview -- --review art/poc/pipeline-v2/previews/bewegung-a/badger
 ```
 
-[review-preview-v2.mjs](review-preview-v2.mjs) bleibt auch direkt mit einem Vorschauordner aufrufbar. Die neuen Übersichten ersetzen den bisherigen `review.png`-Aufbau. Nach tatsächlicher Bildprüfung die Rezeptur oder Bewegung korrigieren und eine neue Vorschau erzeugen. Statische Posen prüfen keine kontinuierliche Bewegung; dafür bleibt der vorhandene Viewer nach ausdrücklichem Browserauftrag zuständig. Erst danach den vollständigen Build mit beiden Varianten erzeugen. Produktionsrevisionen, Auswahl, Archive und Import bleiben von diesem Vorschauwerkzeug unberührt. Quellenpakete erfassen auch die gemeinsamen Python-Anatomie-/Mechanikhelfer; Änderungen in der Authoring-Bibliothek erfordern eine neue Revision.
+[review-preview-v2.mjs](review-preview-v2.mjs) bleibt auch direkt mit einem Vorschauordner aufrufbar. Die neuen Übersichten ersetzen den bisherigen `review.png`-Aufbau. Nach tatsächlicher Bildprüfung die Rezeptur oder Bewegung korrigieren und eine neue Vorschau erzeugen. Statische Posen prüfen keine kontinuierliche Bewegung; dafür bleibt der vorhandene Viewer nach ausdrücklichem Browserauftrag zuständig. Erst danach den vollständigen Build mit der abgestimmten Materialvariante erzeugen. Produktionsrevisionen, Auswahl, Archive und Import bleiben von diesem Vorschauwerkzeug unberührt. Quellenpakete erfassen auch die gemeinsamen Python-Anatomie-/Mechanikhelfer; Änderungen in der Authoring-Bibliothek erfordern eine neue Revision.
 
 ## V2 exportieren, prüfen und archivieren
 
@@ -106,13 +125,20 @@ npm run dev:browser
 
 Nach HTTP 200 auf Port 8090 den **sichtbaren** Viewer mit [V2-Beispieladresse](http://127.0.0.1:8090/scripts/asset-pipeline/viewer/?version=2&run=v2-a) öffnen. Browserprüfung bleibt opt-in; ein ausdrücklich beauftragter Browser-/Viewer-Review autorisiert sie. Ohne Browserauftrag oder bei verborgenem Pane die Sichtprüfung als nicht verifiziert melden.
 
-Der Viewer lädt echte Animationsframes und synchronisiert A/B über Materialvarianten und Quellgrößen. Clipauswahl, Abspielen/Pause, Einzelbildsteuerung und Tempo sind getrennt von räumlicher Bewegung und Rotation. Schüsse lassen sich sofort neu auslösen; Daueraktivität lässt sich ein- und ausschalten. Der Einzelbildregler und die offline erzeugte Frameübersicht helfen beim Prüfen des Loopübergangs. Auswahlgründe erscheinen nach erneutem Export auch im Viewer.
+`npm run assets:library` indexiert alle lokal exportierten V1-/V2-Konstruktionen in `art/poc/asset-library.json`; der V2-Export aktualisiert den Index ebenfalls. Die [Modellwerkstatt](http://127.0.0.1:8090/scripts/asset-pipeline/viewer/) startet ohne feste Run-ID. Links mit bisherigen Versions-/Run-Parametern funktionieren weiterhin.
+
+1. Kategorie oder Suche nutzen und das Modell links wählen.
+2. Für A Konstruktion, Variante und Quellauflösung wählen; die aktive Auswahl steht unter der Vorschau.
+3. Vergleich B einschalten und dort eine andere Konstruktion/Variante oder ein anderes Modell wählen. „B auf Modell A setzen“ kehrt zum Variantenvergleich zurück.
+4. Bei 1× auf verschiedenen Untergründen beurteilen; Waffen können direkt in der Spielerhand angezeigt werden. 4× und die Masteransicht dienen der Detailprüfung.
+
+Der Viewer lädt echte Animationsframes und synchronisiert A/B über die normalisierte Clipphase, auch bei unterschiedlicher Framezahl. Clipauswahl, Abspielen/Pause, Einzelbildsteuerung und Tempo sind getrennt von räumlicher Bewegung und Rotation. Schüsse lassen sich sofort neu auslösen; Daueraktivität lässt sich ein- und ausschalten. Der Einzelbildregler und die offline erzeugte Frameübersicht helfen beim Prüfen des Loopübergangs. Auswahlgründe erscheinen nach erneuter Indexierung und Neuladen auch im Viewer. Die Adresse erhält die A/B-Auswahl für reproduzierbare Vergleiche.
 
 Bei Faktor 1 jedes produzierte Asset mit beiden Quellgrößen auf hellen/dunklen sowie Gras-/Stahl-Untergründen prüfen: 0/45/90 Grad, laufende Rotation, normale Geschwindigkeit und Zeitlupe. Abnahme verlangt erkennbare Bewegung bei Nominalgröße, beim Spieler eine stabile Waffenhaltung mit abgestimmter Körper-, Kopf- und Schulterbewegung, geschlossene Loops, zuverlässige Rückkehr zur Ruhepose und keine flackernden oder abgeschnittenen Formen. Mechanik und lokales Eigenleuchten gehören zum Asset; Mündungsfeuer, Projektile, Blitze, ausgestoßene Partikel und Wirkungsbereiche bleiben separate Spieleffekte.
 
 ```powershell
 node scripts/asset-pipeline/prepare-review-v2.mjs art/poc/pipeline-v2/runs/v2-a/badger art/poc/pipeline-v2/reviews/v2-a-badger.json
-node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/v2-a/badger rich 128 "Der Pfotenwechsel ist bei 32 Einheiten klar; Rumpf, Kopf und Arme folgen dem Lauf natürlich."
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/v2-a/badger standard 128 "Der Pfotenwechsel ist bei 32 Einheiten klar; Rumpf, Kopf und Arme folgen dem Lauf natürlich."
 node scripts/asset-pipeline/export.mjs archive art/poc/pipeline-v2/runs/v2-a/badger
 node scripts/asset-pipeline/export.mjs export art/poc/pipeline-v2/runs/v2-a
 ```
@@ -124,7 +150,7 @@ Vor der Auswahl die tatsächlichen Prüfergebnisse als JSON-Objekt innerhalb des
 - Jeder transparente Masterframe hat 1024 × 1024 Pixel. Kamera, Licht, Canvas und Drehpunkt bleiben über alle Posen gleich. Ausgewertete Geometrie und Alpha-Bounds werden pro Frame auf Clipping geprüft; kein Autocrop oder automatisches Zentrieren.
 - Jede Framegröße wird direkt aus dem Master alpha-aware abgeleitet. Ein Spritesheet hat höchstens acht Spalten. Zwei transparente Pixel rund um jede Zelle ergeben `margin=2`, `spacing=4`; der Rand gehört nicht zur Frame- oder Anzeigegröße.
 - Pro Materialvariante entstehen `masters/frame-NNNN.png`, `asset.blend`, `render.json`, `export.json`, `sprite-<Größe>.png` als Ruhebild und `sheet-<Größe>.png`. Der Rendervertrag enthält Frames, Ruheframe, Clipzuordnung, Framerate, Loop, Ausrichtung, Drehpunkt, Anzeigegrößen und Quellenbelege; der Exportvertrag ergänzt Rasterbelegung, Pixelprüfungen und Hashes.
-- `review.png` zeigt sämtliche Frames beider Varianten; `catalog.json` auf Run-Ebene ist die abgeleitete Viewer-Liste. Unveränderte Master können identisch neu exportiert werden; beschädigte oder veränderte Quellen werden abgelehnt.
+- `review.png` zeigt sämtliche Frames der vorhandenen Varianten; `catalog.json` auf Run-Ebene ist die abgeleitete Viewer-Liste. Unveränderte Master können identisch neu exportiert werden; beschädigte oder veränderte Quellen werden abgelehnt.
 - `selection.json` bindet das vollständige ausgewählte Assetpaket mit Ruhebild, Sheet, Clip-/Rastermetadaten und SHA-256-Dateiliste. V2 kopiert kein einzelnes `preferred.png`; Material und Auflösung sind eine gemeinsame unveränderliche Auswahl.
 - `source-bundle.zip` enthält die gewählte Variante mit Blend-Datei/Actions, Masterframes, Exporten und Prüfdaten sowie `build.json`, `selection.json`, Originaltexturen und sämtliche verwendeten Quellen unter `archive-source/`. `archive-manifest.json` belegt alle gepackten Dateien per SHA-256. Alternativen bleiben im Run erhalten. Auswahl und fertiges ZIP werden nicht überschrieben.
 - Eine archivierte Blend-Datei exemplarisch unabhängig von der Arbeitsszene öffnen, den gespeicherten Asset-Scene wählen und einen Frame rendern; den Ausgabepfad auf einen separaten Prüfpfad setzen. Gepackte Texturen und Actions müssen ohne die ursprüngliche Arbeitsszene funktionieren. Pixelidentität über unterschiedliche Blender-/GPU-Versionen ist nicht zugesichert.
@@ -132,6 +158,14 @@ Vor der Auswahl die tatsächlichen Prüfergebnisse als JSON-Objekt innerhalb des
 `art/poc/pipeline-v2/` bleibt lokal und Git-ignoriert. Skripte, Rezepte, Katalog und Prompts werden versioniert. Für die Abnahme `npm run test:assets`, `node scripts/asset-pipeline/check-viewer.mjs`, `npm run check` und `git diff --check` ausführen. Bei Skilländerungen zusätzlich `npm run ai:sync`. Der Viewer-Build ersetzt keinen sichtbaren Browserreview.
 
 ## Gespeicherte V2-Animation in echtem Blender verifizieren
+
+`player_idle` authoriert Atmung über Brustskalierung und eine kleine Kopfreaktion. Die
+Beinsteuerungen bleiben in Ruhe; die gewichtet angebundenen Schultern bewegen sich bis zu den
+festen Waffenhänden. Der separate `idle`-Clip wird ohne doppelte Schlussphase exportiert und
+im Viewer als „Atmen“ neben der statischen „Ruhepose“ angeboten. Der Blender-Prüfer kontrolliert
+zusätzlich ruhende Füße und feste Griffe. Zweibeinige Gegner können über `biped_enemy_parts.py`
+die Spieler-Anatomie mit eigener Farbgebung und Ausrüstung verwenden; auch deren transitive
+V1-Rezeptquellen werden im Quellenarchiv erhalten.
 
 [verify_asset_pipeline_v2.py](../../tests/assets/verify_asset_pipeline_v2.py) prüft eine gespeicherte Blend-Datei unabhängig von der Arbeitsszene. Es gehört zur gezielten Assetprüfung, benötigt Blender und läuft nicht als Vitest-Abhängigkeit. Neben der Blend-Datei werden `render.json` und die zugehörigen `archive-source/`-Dateien benötigt; das Layout bleibt auch nach dem Entpacken eines Quellenarchivs erhalten.
 
@@ -159,7 +193,7 @@ Runtime und Build benötigen nur diese versionierten Dateien; Blender, Quellenar
 
 ## V1-Kompatibilität und vorhandene statische Referenzen
 
-Die folgenden V1-Befehle, Verzeichnisse und Materialhinweise bleiben gültig. Ohne Versionsparameter zeigt der Viewer weiterhin V1. Die gemeinsame Stil-/Materialbasis gilt auch für V2.
+Die folgenden V1-Befehle, Verzeichnisse und Materialhinweise bleiben gültig. Der Viewer listet V1 neben V2 in der gemeinsamen Bibliothek. Die gemeinsame Stil-/Materialbasis gilt auch für V2.
 
 
 Codex steuert Blender über den vorhandenen MCP. Bildgenerierung liefert Texturgrundlagen; diese Skripte vereinheitlichen Kamera, Material, Export und Prüfung. Keine Spielsimulation oder Runtime-Integration.

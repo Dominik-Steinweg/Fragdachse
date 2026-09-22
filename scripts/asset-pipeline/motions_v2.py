@@ -89,10 +89,21 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         if socket is not None:
             socket.default_value = p.get('idleEmission', .3) + p.get('activeEmission', 1.4) * wave
             socket.keyframe_insert(data_path='default_value', frame=frame)
+    elif motion == 'player_idle':
+        # Respiration belongs to the torso; feet and weapon grips stay planted.
+        breath = 0 if idle else .5-.5*math.cos(angle)
+        for name in parts['limbs']:
+            bone=asset['rig'].pose.bones[name]
+            key(bone,'location',(0,0,0),frame)
+            key(bone,'rotation_euler',(0,0,0),frame)
+        pose('body',scale=(1+p.get('chestWidth',.027)*breath,1+p.get('chestDepth',.018)*breath,1+p.get('chestLift',.022)*breath))
+        pose('head',location=(0,-p.get('headFollow',.008)*breath,0),scale=(1,1,1))
     elif motion in ('biped', 'quadruped', 'player_walk'):
         for i, name in enumerate(parts['limbs']):
             # Quadrupeds pair opposite front/back feet; bipeds alternate left/right.
             offset = (0 if i in (0, 3) else math.pi) if motion == 'quadruped' else i * math.pi
+            if motion == 'quadruped' and i >= 2:
+                offset += math.tau * p.get('rearPhase', 0)
             cycle = 0 if idle else math.sin(angle + offset)
             lift = 0 if idle else max(0, math.cos(angle + offset))
             bone = asset['rig'].pose.bones[name]

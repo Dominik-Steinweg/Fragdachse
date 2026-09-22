@@ -9,6 +9,7 @@
     "build:perf-lab": "tsc && vite build --mode performance-lab",
     "ai:sync": "node scripts/sync-ai-skills.mjs",
     "assets:preview": "node scripts/asset-pipeline/preview-v2.mjs",
+    "assets:library": "node scripts/asset-pipeline/index-library.mjs",
     "assets:lobby-forest": "node scripts/export-lobby-forest.mjs",
     "audio:convert": "node scripts/convert-audio.mjs",
     "icons:generate": "node scripts/generate-upgrade-icons.mjs",

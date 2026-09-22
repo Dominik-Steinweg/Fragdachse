@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -59,6 +59,24 @@ async function fixture() {
 }
 
 describe('V2 animated asset export contracts', () => {
+  it('exports and selects a static weapon with one authored variant and retains its socket contract', async () => {
+    const f = await fixture();
+    const folder = path.join(f.asset, 'standard');
+    await rename(f.folder, folder);
+    const manifest = { ...f.manifest, variant: 'standard', category: 'weapon', clips: [], frames: f.manifest.frames.slice(0, 1),
+      heldItem: { referenceSize: f.manifest.targetSize, grip: [8, 12], muzzle: [8, 2], referenceGrip: [2, 10] } };
+    await save(path.join(folder, 'render.json'), manifest);
+    await save(path.join(f.asset, 'build.json'), { status: 'complete', inputHash: hash('resolved fixture'), variants: { standard: { frames: manifest.frames } } });
+    expect(() => validateManifestV2({ ...manifest, heldItem: undefined })).toThrow(/grip/);
+    await exportRunV2(f.run, f.root);
+    const catalog = JSON.parse(await readFile(path.join(f.run, 'catalog.json'), 'utf8'));
+    expect(catalog.assets[0].variants.map((v: { variant: string }) => v.variant)).toEqual(['standard']);
+    expect(catalog.assets[0].heldItem).toEqual(manifest.heldItem);
+    await selectVariantV2(f.asset, 'standard', 32, 'The single idle frame preserves the authored grip.');
+    expect(await verifySelectionV2(f.asset)).toMatchObject({ variant: 'standard', clips: [], layout: { frameCount: 1 } });
+    const library = JSON.parse(await readFile(path.join(f.root, 'art/poc/asset-library.json'), 'utf8'));
+    expect(library.constructions[0].assets[0].id).toBe('fixture');
+  });
   it('requires evaluated support evidence for every frame of a mounted turret', async () => {
     const { manifest } = await fixture();
     const m = { ...manifest, category: 'turret', forward: 'east', mount: { rockSize: 32, maxBaseDiameter: 27 },

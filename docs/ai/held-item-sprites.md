@@ -6,13 +6,13 @@ Getragene Items sind Presentation einer replizierten Loadout- oder Slot-Entschei
 
 ## Authoring-Vertrag
 
-[src/loadout/HeldItemVisuals.ts](../../src/loadout/HeldItemVisuals.ts) ist die zentrale Zuordnung von Loadout-Item-ID zu HeldItemSpriteSpec. [scripts/generate-held-item-sprites.mjs](../../scripts/generate-held-item-sprites.mjs) erzeugt die Pixel-Assets und hält die Pixelkarten.
+[src/loadout/HeldItemVisuals.ts](../../src/loadout/HeldItemVisuals.ts) ist die zentrale Zuordnung von Loadout-Item-ID zu HeldItemSpriteSpec. Waffen stammen aus dem [Asset-Katalog](../../scripts/asset-pipeline/catalog-v2.json) und den ausgewählten Exporten in [pipelineAssets.json](../../src/config/pipelineAssets.json). Der Import übernimmt Bild, Quellauflösung und `heldItem`-Metadaten zusammen. [scripts/generate-held-item-sprites.mjs](../../scripts/generate-held-item-sprites.mjs) hält weiterhin die Pixelkarten für Utilities und neutrale Gattungsbilder.
 
 Für ein neues sichtbares Item gelten diese Invarianten:
 
 - Die Textur nutzt das 32-px-Referenzraster der getragenen Items; ihre Anzeigeskalierung wird aus der Figur abgeleitet.
 - Die Textur zeigt nach Norden. Die Figur liefert Rotation und Pose.
-- Grip- und Muzzle-Punkte liegen in Texturkoordinaten und werden mit derselben Transformation wie das Bild in den World Space übertragen.
+- Grip- und Muzzle-Punkte liegen in logischen Pixeln des 32-px-Referenzrasters. `HeldItemSpriteSpec.sourceScale` beschreibt Quellpixel je Referenzpixel (für ältere Pixelkarten implizit 1). Der Renderer wendet diesen Faktor auf Ursprung und Bildmaßstab gemeinsam an; visuelle Mündung und Gameplay-Geometrie bleiben dadurch unabhängig von der Exportauflösung.
 - Das Asset wird über die zentrale ID-Zuordnung geladen; keine zweite Renderer-eigene Item-Tabelle anlegen.
 - Slotlose Item-Arten liefern bewusst kein Bild. Unbekannte IDs liefern keinen erfundenen Fallback.
 
@@ -49,4 +49,4 @@ kurzzeitig überbrücken; explizite lokale Auswahl beendet diesen Darstellungs-O
 
 ## Änderungen prüfen
 
-Bei einer Änderung an Pixelkarte, Grip, Muzzle, Mapping oder Lazy-Lifetime den passenden Test [HeldItemVisuals.test.ts](../../tests/HeldItemVisuals.test.ts) und die vorhandenen Loadout-/Fire-Tests prüfen. Die Art-Direction-Regeln stehen in [visual-guidelines.md](visual-guidelines.md).
+Bei einer Änderung an Export, Pixelkarte, Grip, Muzzle, Mapping oder Lazy-Lifetime den passenden Test [HeldItemVisuals.test.ts](../../tests/HeldItemVisuals.test.ts) und die vorhandenen Loadout-/Fire-Tests prüfen. Die Art-Direction-Regeln stehen in [visual-guidelines.md](visual-guidelines.md).

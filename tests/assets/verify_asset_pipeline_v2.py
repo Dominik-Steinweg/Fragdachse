@@ -129,10 +129,13 @@ def fixed_presentation(scene, root):
     require(camera and camera.data.type == 'ORTHO', 'Camera must be orthographic')
     require(near(camera.rotation_euler, (0, 0, 0)), 'Camera must look exactly down -Z')
     require(near(camera.location, (0, 0, 8)), 'Camera must retain the locked location')
-    identity = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
-    require(near(matrix_values(root.evaluated_get(depsgraph).matrix_world), identity),
-            'Asset root moved, rotated or scaled away from the fixed export pivot')
-    return {'camera': matrix_values(camera.evaluated_get(depsgraph).matrix_world),
+    root_matrix = root.evaluated_get(depsgraph).matrix_world
+    scale = root_matrix[0][0]
+    centered_uniform = (scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, 1)
+    require(math.isfinite(scale) and scale > 0 and near(matrix_values(root_matrix), centered_uniform),
+            'Asset root must stay centered, north-facing and uniformly scaled')
+    return {'root': matrix_values(root_matrix),
+            'camera': matrix_values(camera.evaluated_get(depsgraph).matrix_world),
             'orthoScale': camera.data.ortho_scale,
             'lights': {ob.name: (matrix_values(ob.evaluated_get(depsgraph).matrix_world),
                                   tuple(ob.data.color), ob.data.energy, ob.data.size)
@@ -226,11 +229,17 @@ def verify(scene, manifest, report, source_folder):
     require(root.type == 'EMPTY', 'Expected explicit asset-root control')
     rigs = [ob for ob in scene.objects if ob.type == 'ARMATURE']
     owners = animation_owners(scene)
-    require(any(ob.type in ('EMPTY', 'ARMATURE', 'MESH') and action_curves(ob) for ob in scene.objects),
-            'No real object or rig Action is attached')
-    checks.append({'name': 'authored_actions_present', 'passed': True,
-                   'actions': [{'owner': owner.name, 'action': owner.animation_data.action.name,
-                                'curves': len(action_curves(owner))} for owner in owners]})
+    if not manifest['clips']:
+        require(spec['category'] == 'weapon' and len(frames) == 1 and not owners,
+                'Only static weapons may omit Actions and clips')
+        require(spec['heldItem'] == manifest['heldItem'], 'Saved held-item anchors differ')
+        checks.append({'name': 'static_weapon_and_held_item_contract', 'passed': True})
+    else:
+        require(any(ob.type in ('EMPTY', 'ARMATURE', 'MESH') and action_curves(ob) for ob in scene.objects),
+                'No real object or rig Action is attached')
+        checks.append({'name': 'authored_actions_present', 'passed': True,
+                       'actions': [{'owner': owner.name, 'action': owner.animation_data.action.name,
+                                    'curves': len(action_curves(owner))} for owner in owners]})
 
     set_frame(scene, 0)
     presentation = fixed_presentation(scene, root)
@@ -252,7 +261,7 @@ def verify(scene, manifest, report, source_folder):
     if 'mount' in spec:
         require(bases and 0 < spec['mount']['maxBaseDiameter'] < spec['mount']['rockSize'] == 32,
                 'Mounted turret needs an explicit support smaller than its 32-pixel rock')
-    if spec['category'] != 'turret':
+    if spec['category'] in ('character', 'enemy'):
         require(bool(rigs) and bool(rigged), 'Locomotion requires a saved rig and weighted limb geometry')
     if spec['category'] == 'character' and not balanced_player:
         require(bool(stable_upper), 'No fixed upper-body geometry available to verify')
@@ -270,6 +279,8 @@ def verify(scene, manifest, report, source_folder):
             last = state
             changed = different_meshes(idle, state)
             require(not changed.intersection(stable_upper), f'Player upper body moved: {sorted(changed.intersection(stable_upper))}')
+            if clip['motion'] == 'player_idle':
+                require(not changed.intersection(roles['left_leg'] | roles['right_leg']), 'Breathing moves planted feet')
             moved.update(changed)
             # The transformed, evaluated vertices must remain inside the same
             # two-percent safety border at every sampled pose, including rigging.
@@ -287,6 +298,9 @@ def verify(scene, manifest, report, source_folder):
                 require(diameter <= spec['mount']['maxBaseDiameter'] + EPSILON, 'Turret support exceeds its rotational mount footprint')
                 require(abs(diameter - frames[index]['baseDiameter']) < 1e-4, 'Recorded support footprint differs from evaluated source')
         require(bool(moved), f'Clip {clip["name"]} contains no visible geometric movement')
+        if clip['motion'] == 'player_idle':
+            require(bool(moved.intersection(roles['body'])) and bool(moved.intersection(roles['arms'])),
+                    'Breathing must visibly move chest and shoulders')
         if clip['loop']:
             closure = clip['timelineStart'] + len(clip['frames']) * 24 / clip['frameRate']
             require(all(abs(frames[index]['blenderFrame'] - closure) > EPSILON for index in clip['frames']),

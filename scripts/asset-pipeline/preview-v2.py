@@ -20,7 +20,7 @@ def main():
     parser.add_argument('--asset', required=True)
     parser.add_argument('--label', required=True)
     parser.add_argument('--indices', default='0,3,6,9')
-    parser.add_argument('--variant', choices=['calm', 'rich'], default='rich')
+    parser.add_argument('--variant')
     parser.add_argument('--patch')
     parser.add_argument('--device', choices=['AUTO', 'CPU', 'CUDA', 'OPTIX'], default='AUTO')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:])
@@ -62,7 +62,8 @@ def main():
         scene.cycles.device = 'GPU'
     else:
         scene.cycles.device = 'CPU'
-    settings = spec['materialVariants'][args.variant]
+    variant = args.variant or next(iter(spec['materialVariants']))
+    settings = spec['materialVariants'][variant]
     for socket in ctx.strengths: socket.default_value = settings['textureStrength']
     for socket in ctx.form_strengths: socket.default_value = settings['formShadowStrength']
     indices = list(range(len(session['samples']))) if args.indices == 'all' else [int(value) for value in args.indices.split(',')]
@@ -84,7 +85,7 @@ def main():
                 pose.update(clip=clip['name'], phase=position / divisor)
         poses.append(pose)
     pipeline.save_json(output / 'preview.json', dict(status='authoring-preview', id=asset_id, spec=spec,
-                       indices=indices, variant=args.variant, inputHash=fingerprint, bounds=session['bounds'],
+                       indices=indices, variant=variant, inputHash=fingerprint, bounds=session['bounds'],
                        baseDiameters=session['baseDiameters'], sources=sources, device=device,
                        poses=poses, clips=session['clips']))
     print(json.dumps({'preview': str(output), 'frames': indices}), flush=True)

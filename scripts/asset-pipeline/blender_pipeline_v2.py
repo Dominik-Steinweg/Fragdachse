@@ -70,8 +70,10 @@ def resolve_spec(root, asset_id):
             raise ValueError('Motion parameters must be finite numbers')
     if not set(spec['requiredClips']).issubset(names):
         raise ValueError('Required clip missing')
-    for variant in ('calm', 'rich'):
-        settings = spec['materialVariants'][variant]
+    if not spec.get('materialVariants'):
+        raise ValueError('At least one authored material variant is required')
+    for variant, settings in spec['materialVariants'].items():
+        identifier(variant)
         for name in ('textureStrength', 'formShadowStrength'):
             if not math.isfinite(settings[name]) or not 0 <= settings[name] <= 1:
                 raise ValueError(f'Invalid material {variant}.{name}')
@@ -81,12 +83,12 @@ def resolve_spec(root, asset_id):
 def inputs(root, spec, device='CPU'):
     names = ['blender_pipeline.py', 'blender_pipeline_v2.py', 'rigs_v2.py', 'motions_v2.py',
              f'recipes_v2/{spec["recipe"]}.py', 'catalog-v2.json',
-             'export.mjs', 'export-v2.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
+             'export.mjs', 'export-v2.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
     if spec['recipe'] in ('rocket', 'badger'):
         names.append(f'recipes/{spec["recipe"]}.py')
     # The production library includes shared anatomy/weapon helpers. Snapshot the
     # complete small Python authoring library so transitive imports stay portable.
-    names += [str(path.relative_to(BASE)).replace('\\', '/') for pattern in ('*.py', 'recipes_v2/*.py') for path in BASE.glob(pattern)]
+    names += [str(path.relative_to(BASE)).replace('\\', '/') for pattern in ('*.py', 'recipes/*.py', 'recipes_v2/*.py') for path in BASE.glob(pattern)]
     sources = {f'scripts/asset-pipeline/{name}': shared.digest(BASE / name) for name in names}
     for relative in ('package.json', 'package-lock.json'):
         sources[relative] = shared.digest(root / relative)
@@ -161,6 +163,7 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
     # MCP keeps Python alive. Hashing current files must never label cached old code.
     importlib.invalidate_caches()
     for name in ('blender_pipeline', 'rigs_v2', 'motions_v2',
+                 'recipes.badger', 'recipes_v2.badger',
                  *([f'recipes.{spec["recipe"]}'] if spec['recipe'] in ('badger', 'rocket') else [])):
         if name in sys.modules:
             importlib.reload(sys.modules[name])
@@ -185,7 +188,8 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
     if set(asset) != {'root', 'parts', 'rig', 'sockets'}:
         raise ValueError('Recipe must return root, parts, rig and sockets')
     samples, clips = motions_v2.author(asset, spec['clips'])
-    scene.frame_start, scene.frame_end = math.floor(clips[0]['timelineStart']), math.ceil(clips[-1]['timelineEnd'])
+    scene.frame_start = 0
+    scene.frame_end = math.ceil(clips[-1]['timelineEnd']) if clips else 0
     scene.render.fps = 24
     scene['pipelineVersion'], scene['forward'], scene['pivot'] = 2, spec['forward'], spec['pivot']
     scene['asset_manifest'] = json.dumps(spec)
@@ -278,7 +282,7 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU'):
             if out.exists():
                 raise ValueError('Unrecognized incomplete directory; choose a fresh revision')
             state = {'pipelineVersion': 2, 'id': asset_id, 'revision': revision, 'inputHash': fingerprint,
-                     'status': 'incomplete', 'variants': {name: {'frames': []} for name in ('calm', 'rich')}}
+                     'status': 'incomplete', 'variants': {name: {'frames': []} for name in spec['materialVariants']}}
             out.mkdir(parents=True)
             archive_inputs(root, out, sources, textures)
             save_json(out / 'build.json', state)
@@ -305,8 +309,6 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU'):
                 d.use = d.type == device
             scene.cycles.device = 'GPU'
         for variant, settings in spec['materialVariants'].items():
-            if variant not in ('calm', 'rich'):
-                continue
             for socket in ctx.strengths:
                 socket.default_value = settings['textureStrength']
             for socket in ctx.form_strengths:
@@ -321,7 +323,7 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU'):
                 if max_frames is not None and rendered >= max_frames:
                     return {'status': 'incomplete', 'id': asset_id, 'output': str(out),
                             'rendered': sum(len(v['frames']) for v in state['variants'].values()),
-                            'total': 2 * len(session['samples'])}
+                            'total': len(spec['materialVariants']) * len(session['samples'])}
                 set_frame(scene, sample['blenderFrame'])
                 name = f'masters/frame-{index:04d}.png'
                 scene.render.filepath = str(folder / name)
@@ -350,7 +352,7 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU'):
         _sessions.pop(key, None)
         scene.render.use_persistent_data = False
         return {'status': 'complete', 'id': asset_id, 'output': str(complete),
-                'framesPerVariant': len(session['samples']), 'variants': ['calm','rich']}
+                'framesPerVariant': len(session['samples']), 'variants': list(spec['materialVariants'])}
     finally:
         bpy.context.window.scene = previous_scene
         previous_scene.frame_set(previous_frame)

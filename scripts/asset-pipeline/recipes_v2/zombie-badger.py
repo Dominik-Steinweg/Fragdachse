@@ -4,7 +4,7 @@ from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, 
 
 def build(c, spec):
     coat=c.material('Sallow charcoal corpse fur',(.115,.133,.103),'organic')
-    shoulder=c.material('Raised coarse shoulder fur',(.21,.225,.165),'organic')
+    shoulder=c.material('Raised coarse shoulder fur',(.25,.275,.175),'organic')
     dark=c.material('Deep warm skin creases',(.018,.022,.017),'organic')
     ivory=c.material('Weathered warm ivory',(.58,.54,.38),'organic')
     skin=c.material('Muted old torn hide',(.24,.105,.067),'organic')
@@ -21,7 +21,7 @@ def build(c, spec):
         for j in range(3):
             body.append(plate(c,'Ragged flank fur',[(side*.47,-.14-j*.18),(side*.71,-.28-j*.18),
                        (side*.56,-.45-j*.18),(side*.41,-.37-j*.18)],.63-j*.045,.065,shoulder,dark))
-    body.append(ell(c,'Old exposed rib wound',(-.32,-.13,.853),(.22,.32,.025),wound,angle=.23))
+    body.append(ell(c,'Old exposed rib wound',(-.32,-.13,.853),(.26,.34,.025),wound,angle=.23))
     for j in range(int(spec.get('model',{}).get('exposedRibs',3))):
         body.append(horn(c,'Curved exposed ivory rib',[(-.47,-.30+j*.12,.84),(-.33,-.25+j*.12,.89),(-.21,-.31+j*.12,.872)], [.033,.041,.025],ivory))
     body.append(plate(c,'Raised healing hide flap',[(.14,-.42),(.26,-.37),(.39,-.27),(.46,-.31),

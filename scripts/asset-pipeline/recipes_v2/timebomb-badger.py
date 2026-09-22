@@ -1,14 +1,15 @@
 """Small fast quadruped whose attached bomb harness reads as one clear central hazard."""
-from enemy_parts_b import plate, scute, tube, head, paw, finish
+from organic_shell_parts import centered_shell as plate
+from enemy_parts_b import scute, tube, head, paw, finish
 
 
 def build(c, spec):
     fur=c.material('Timebomb cool grey brown fur',(.095,.105,.090),'organic')
     dark=c.material('Timebomb charcoal fur and webbing',(.014,.020,.022),'organic')
     pale=c.material('Timebomb pale badger crown',(.50,.52,.40),'organic')
-    armor=c.material('Timebomb dull dark steel casing',(.085,.11,.115),'technical')
-    edge=c.material('Timebomb restrained turquoise flank guards',(.08,.20,.19),'technical')
-    brass=c.material('Timebomb weathered brass clamps',(.38,.24,.065),'technical')
+    armor=c.material('Timebomb dull dark steel casing',(.54,.36,.032),'technical')
+    edge=c.material('Timebomb restrained turquoise flank guards',(.72,.49,.045),'technical')
+    brass=c.material('Timebomb weathered brass clamps',(.92,.69,.14),'technical')
     red=c.material('Timebomb tiny steady red timer',(.53,.026,.015),emission=.30)
     limbs={}
     for name,x,y in [('front_left',-.62,.38),('front_right',.62,.38),('rear_left',-.59,-.47),('rear_right',.59,-.47)]:
@@ -21,7 +22,7 @@ def build(c, spec):
         c.cylinder('Round armored charge casing',(0,-.18,.935),.32,.13,armor,12),
         c.cylinder('Recessed charge top',(0,-.18,1.015),.245,.045,dark,12)]
     for side in (-1,1):
-        harness.append(c.box('Brass charge retaining clamp',(side*.25,-.18,1.055),(.095,.45,.055),brass,.015))
+        harness.append(c.box('Brass charge retaining clamp',(side*.25,-.18,1.055),(.13,.49,.055),brass,.015))
         harness.append(c.ell('Recessed harness rivet',(side*.25,-.31,1.087),(.025,.025,.010),dark))
     harness.append(c.box('Single red timer window',(0,-.04,1.07),(.24,.13,.035),red,.012))
     for x in (-.065,.055):

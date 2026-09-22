@@ -21,14 +21,19 @@ durch den Map-Editor belegt; verwendet wurde `npm run dev:browser -- --port 8092
 - **Laufen / Dash:** Wiederholbarer Lauf mit schnellem Abschnitt und anschließendem Stillstand;
   daneben bewegt sich ein größerer Gegner. **Teleport** unterbricht die Quellrevision.
 - **Dauerfeuer / Einzelschuss:** P90, Glock, Schrot, große Geschosse, Abpraller oder 12-ms-Geschosse.
-  Alle Wegstücke laufen durch `ProjectilePathCursor`, einschließlich des Abschlusssegments.
+  Bestätigte Wegstücke laufen durch `ProjectilePathCursor`, einschließlich des Abschlusssegments.
+  Ohne Historie tastet `ProjectilePresentationRuntime` die dargestellten Positionen ab.
   Hitscan und Nahkampf sind zusätzlich auswählbar. Gerade, diagonale und schwenkende
   Fächerschüsse dienen der Spurprüfung; Lauf und Dash lassen sich einzeln wiederholen.
 - **Schützen / Projektile pro Schuss:** Bis zu vier gleichzeitige P90-Schützen mit je drei
   Projektilen. P90-Takt, Geschwindigkeit und Reichweite stammen aus dem Waffen-Authoring.
   Die Stresssuite ergänzt wiederholte Richtungswechsel zu den sichtbaren Fächern.
-- **Flammenwerfer / Laubbläser:** Wachsende Spurbreite mit den Produktions-VFX zum Vergleich.
-  **Zug / Nachlauf** spielt eine RB-54-Durchfahrt; Pause und Einzelschritt erlauben feste Ansichten.
+- **Flammenwerfer / Laubbläser / BFG:** Produktions-VFX zum Vergleich; die Strömungswaffen
+  verbreitern ihre Spur mit der Projektilgröße. BFG-Größe, Tempo und Reichweite kommen aus dem Authoring.
+- **Spurbreite × / Spurdauer ×:** Vorschau der beiden Waffenfaktoren (0–8, Standard 1),
+  einschließlich Hitscan und Nahkampf. Änderungen gelten für neue Abschnitte.
+  **Pfadquelle → Ohne Flugbahnhistorie** erzwingt den gemeinsamen Pose-Eingang für jedes Geschoss.
+- **Zug / Nachlauf:** Eine RB-54-Durchfahrt; Pause und Einzelschritt erlauben feste Ansichten.
 - **Kamerapfad:** Hin- und Rückweg durch die World; **Zoom** enthält auch einen extremen
   Sichtbereich zur Kapazitätsprüfung. **Kamerawackeln** nutzt den gemeinsamen Camera-Feedback-Owner.
 - **Pause / Einzelschritt / Langer Frame:** Fortschreibung, Impulsalter und Materialzeit prüfen.
@@ -47,7 +52,11 @@ Das entspricht ungefähr den vorherigen Reglern nahe ihrem Maximum. Die gemeinsa
 Deckkraftgrenze bleibt 0,30; Lichtmap und Tageskurve gelten weiterhin.
 Zentrale Werte stehen in `src/effects/groundFog/FogConfig.ts`.
 
-Kleine Geschosse verwenden die feine GPU-Maske: Das 8-Pixel-Feld erzeugte bei schmalen
+Die Lobby verwendet ebenfalls die normale Nebelstärke. Ihre Nebeldichte folgt der
+angezeigten, vom Host gewählten Lobby-Uhrzeit über denselben Zeitwert wie die Beleuchtung;
+das gilt auch beim Betreten des Testgeländes. Die lokale Grafikoption „Bodennebel“ bleibt wirksam.
+
+Waffenspuren verwenden die feine GPU-Maske: Das 8-Pixel-Feld erzeugte bei schmalen
 Spuren punktförmige Löcher. Bestätigte, gerade Flugsegmente derselben Projektilidentität
 werden deshalb unabhängig vom groben Impulsbudget zusammengefasst. Abpraller und
 Unterbrechungen bleiben getrennt. Höchstens 8.192 gespeicherte Abschnitte begrenzen die Last;
@@ -63,10 +72,11 @@ Das Lab zeigt gespeicherte und sichtbare Abschnitte, Zeichnungsaufrufe und verwo
 
 Flamme und Laubbläser verwenden eine mit der Projektilgröße wachsende, weiche Spurbreite.
 Der Laubbläser teilt seine Größenfunktion mit dem Partikelrenderer.
-Er hat im Spiel keine replizierte Flugbahn. `ProjectilePresentationRuntime`
-liefert dafür lokale Segmente aus der tatsächlich dargestellten Host-/Client-Pose.
-Das Lab verwendet denselben Weg. Stillstand, Positionssprünge, Entfernen und World-Wechsel
-erzeugen keine verbindenden Ersatzspuren; es werden keine zusätzlichen Netzwerkdaten erzeugt.
+Projektile ohne replizierte Flugbahn (unter anderem Laubbläser und BFG) erhalten
+lokale Segmente aus der tatsächlich dargestellten Host-/Client-Pose. Dieser Eingang in
+`ProjectilePresentationRuntime` gilt für jeden Projektiltyp. Das Lab verwendet denselben Weg.
+Stillstand, Positionssprünge, Entfernen und World-Wechsel erzeugen keine verbindenden Ersatzspuren.
+Bestätigte Historien bleiben vorrangig; beide Eingänge erzeugen keine doppelten Spuren.
 
 Die Zugspur ist ungefähr
 1,7 Zugbreiten breit und klingt über zehn Sekunden aus. Lokfront und Zugende liefern dafür
@@ -79,6 +89,30 @@ einen moderaten Zuschlag. Hitscan nutzt den gemeinsamen Tracer-Eingang nach dess
 Prediction-Deduplizierung; Nahkampf wirkt als gerichteter Sektor, auch bei Biss und Taser.
 GPU-Druckausgleich und Bewegungsaustausch über offene Zellflächen verbreitern den Stau
 vor Hindernissen und tragen die abgelenkte Strömung über die Ecken weiter.
+
+## Optionale Faktoren pro Waffe
+
+Im jeweiligen Eintrag unter `src/loadout/content/data/` können die Felder neben `id`,
+`damage` oder `cooldown` stehen, zum Beispiel in `weapons-ballistic.json` bei P90:
+
+```json
+"fogTrailWidthFactor": 1.5,
+"fogTrailDurationFactor": 2
+```
+
+Breite und komplette Ausblendkurve werden unabhängig multipliziert. Fehlend bedeutet 1,
+0 bei einem der Faktoren deaktiviert die Waffenspur. Zulässig sind endliche Werte von 0 bis 8.
+Der Validator und die vorhandene Variantenvererbung unterstützen beide Felder.
+Die BFG steht im Utility-Eintrag `BFG` in `utilities-tactical.json`.
+Hitscan und Nahkampf verwenden dieselben Faktoren; beim Nahkampf skaliert die Breite
+die Reichweite des Sektors. Der Öffnungswinkel bleibt gleich.
+
+Die Auflösung erfolgt über die konkrete Waffen-ID, nicht über den geteilten Grafikstil.
+Dafür tragen die vorhandenen Projektil-Statik- und Kampf-VFX-Daten optional
+`weaponSourceId` (Peer-Protokoll 20). Es gibt keine Nebel-Simulationsnachrichten.
+Auch große Geschosse und Nahkampf altern nun analytisch in der GPU-Spurmaske,
+damit ihre Dauer vollständig vom Faktor bestimmt wird. Niedrig zeigt weiterhin nur
+Nahkampf-, Figuren- und Zugreaktionen, keine Projektil- oder Hitscanspuren.
 
 ## Eigentümer und Datenfluss
 

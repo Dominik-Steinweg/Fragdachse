@@ -121,6 +121,13 @@ Arcade-Kreisradien werden in Quellpixeln gesetzt, damit die
 Sprite-Skalierung den konfigurierten Weltdurchmesser erhält; Spieler-Overlays übernehmen den
 aktuellen Texturframe und dessen Skalierung.
 
+[BadgerAnimations.ts](../../src/animations/BadgerAnimations.ts) registriert optionale `idle`-Clips
+aus derselben Assetauswahl wie den Lauf. Stehende aktive Figuren spielen diesen Clip ohne
+Neustart bei wiederholter Synchronisation; Figuren ohne Idle-Clip und inaktive Spieler halten
+den neutralen Ruheframe. Die Player-Presentation sperrt Atmung und Lauf bei Tod, Unsichtbarkeit
+und den blockierenden Eingrabphasen. Die Animation verändert weder Kollisionsgeometrie noch
+Gameplay-Zeit; [BadgerAnimations.test.ts](../../tests/BadgerAnimations.test.ts) prüft die Übergänge.
+
 Der [TurretAnimationController](../../src/effects/TurretAnimationController.ts) bindet Basis- und
 platzierbare Turmsprites an ihre bestehenden Turm-IDs. Bestätigte Projektilspawns treiben
 Schussanimationen; die erste Client-Übernahme bleibt stumm. Tesla folgt dem replizierten

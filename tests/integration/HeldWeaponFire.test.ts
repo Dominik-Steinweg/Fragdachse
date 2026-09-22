@@ -87,6 +87,7 @@ import type { SyncedHitscanTrace, LoadoutUseParams, LoadoutUseResult, WeaponSlot
 import { WeaponFireFeedbackController } from '../../src/effects/weapon/WeaponFireFeedbackController';
 import type { WeaponShotFeedbackEvent } from '../../src/loadout/WeaponShotFeedbackEvent';
 import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../../src/config';
+import { getPipelineAssetForTexture } from '../../src/config/pipelineAssets';
 import { createArenaCoopMissionPorts } from '../../src/scenes/arena/ArenaCoopMissionPorts';
 
 // Compose the real input, prediction, RPC, activation, cooldown, combat and trace-dedupe paths.
@@ -129,7 +130,8 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number, r
     const addImage = scene.add.image;
     scene.add.image = (...args: unknown[]) => {
       const image = addImage(...args);
-      Object.assign(image.frame, { cutWidth: 32, cutHeight: 32 });
+      const sourceSize = getPipelineAssetForTexture(String(args[2]))?.sourceSize ?? 32;
+      Object.assign(image.frame, { cutWidth: sourceSize, cutHeight: sourceSize });
       const setSize = image.setDisplaySize.bind(image);
       image.setDisplaySize = (w: number, h: number) => {
         image.scaleX = w / image.frame.cutWidth;

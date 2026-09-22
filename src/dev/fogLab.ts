@@ -1,3 +1,6 @@
+import { BfgRenderer } from '../effects/BfgRenderer';
+import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
+import type { ProjectileStyle } from '../types';
 import * as Phaser from 'phaser';
 import { runFogGpuContracts } from './fogGpuContracts';
 import { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
@@ -29,7 +32,7 @@ import { TRAIN } from '../train/TrainConfig';
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const value = (id: string): string => element<HTMLInputElement>(id).value;
 const number = (id: string): number => Number(value(id));
-const controlIds = ['scenario', 'seed', 'mode', 'quality', 'time', 'strength', 'debug', 'opacity', 'detail', 'windX', 'windY', 'reaction', 'weapon', 'motionPattern', 'shotPattern', 'shooters', 'pellets'];
+const controlIds = ['scenario', 'seed', 'mode', 'quality', 'time', 'strength', 'debug', 'opacity', 'detail', 'windX', 'windY', 'reaction', 'weapon', 'motionPattern', 'shotPattern', 'shooters', 'pellets', 'trailWidth', 'trailDuration', 'pathMode'];
 const query = new URLSearchParams(location.search);
 for (const id of controlIds) if (query.has(id)) element<HTMLInputElement>(id).value = query.get(id)!;
 const frame = { offsetX: 0, offsetY: 0, width: 8192, height: 3072 };
@@ -47,7 +50,8 @@ class FogLab extends Phaser.Scene {
   private cameraFeedback!: CameraFeedbackController;
   private flame: FlameRenderer | null = null;
   private leaf: LeafBlowerRenderer | null = null;
-  private leafPresentation: ProjectilePresentationRuntime | null = null;
+  private bfg: BfgRenderer | null = null;
+  private projectilePresentation: ProjectilePresentationRuntime | null = null;
   private gpuVfx: GpuVfxSystem | null = null;
   private train: TrainRenderer | null = null;
   private baseScroll = { x: 0, y: 0 };
@@ -102,6 +106,9 @@ class FogLab extends Phaser.Scene {
     this.tiles(cells(27, 9, 14, 24), 'fog-dirt', DEPTH.DIRT);
     this.fog = new GroundFogSystem(this, frame, number('seed'), water);
     this.fog.measureGpu = true;
+    this.projectilePresentation = new ProjectilePresentationRuntime(this);
+    this.projectilePresentation.bindGroundFogSegments((segment, size, style, id) => this.fog.addProjectile(segment, size, style, id, this.trailModifiers()));
+    if (value('weapon') === 'bfg') { this.bfg = new BfgRenderer(this); this.bfg.generateTextures(); }
     const scenario = value('scenario');
     if (scenario === 'train') this.train = new TrainRenderer(this);
     if (value('weapon') === 'flame' || value('weapon') === 'leaf_blower') {
@@ -110,8 +117,7 @@ class FogLab extends Phaser.Scene {
       this.leaf = new LeafBlowerRenderer(this); this.leaf.generateTextures(); this.leaf.registerGpuVfx(this.gpuVfx);
       this.leaf.setTerrainMaterialLayout({ dirt: cells(27, 9, 14, 24), tracks: [] });
       this.leaf.setTerrainColorSnapshot(new TerrainColorSnapshot(1, 1, 0, 0, new Uint8Array([95, 112, 66])));
-      this.leafPresentation = new ProjectilePresentationRuntime(this);
-      this.leafPresentation.bindGroundFogSegments((segment, size, style, id) => this.fog.addProjectile(segment, size, style, id));
+
     }
     this.addObstacle('wall', cells(47, 5, 2, 33).filter(c => scenario !== 'barrier' || c.gridY !== 20));
     if (scenario === 'nuke') this.addObstacle('target', cells(25, 11, 19, 19));
@@ -149,7 +155,7 @@ class FogLab extends Phaser.Scene {
     bind('longframe', () => { this.advance = 2000; });
     bind('reset', () => this.scene.restart()); bind('scenario', () => this.scene.restart(), 'change');
     bind('seed', () => this.scene.restart(), 'change');
-    bind('weapon', () => { if (this.gpuVfx || value('weapon') === 'flame' || value('weapon') === 'leaf_blower') this.scene.restart(); }, 'change');
+    bind('weapon', () => { if (this.gpuVfx || this.bfg || ['flame', 'leaf_blower', 'bfg'].includes(value('weapon'))) this.scene.restart(); }, 'change');
     bind('destroy', () => this.openTarget());
     bind('explode', () => { this.openTarget(); this.fog.addExplosion(1050, 650, scenario === 'nuke' ? 420 : 140); });
     bind('build', () => this.obstacles.has('construction') ? this.removeObstacle('construction') : this.addObstacle('construction', cells(23, 18, 5, 5)));
@@ -179,7 +185,8 @@ class FogLab extends Phaser.Scene {
       this.essence?.destroy(); this.essence = null;
       this.cameraFeedback.destroy();
       this.flame?.destroyAll(); this.flame = null; this.leaf?.destroyAll(); this.leaf = null;
-      this.leafPresentation?.releaseWorldPresentation(); this.leafPresentation = null;
+      this.bfg?.destroyAll(); this.bfg = null;
+      this.projectilePresentation?.releaseWorldPresentation(); this.projectilePresentation = null;
       this.gpuVfx?.destroy(); this.gpuVfx = null; this.train?.destroy(); this.train = null;
       this.fog.destroy(); this.water.destroy(); this.light.destroy(); this.quality.destroy();
     });
@@ -202,11 +209,14 @@ class FogLab extends Phaser.Scene {
     const images = this.obstacles.get('target') ?? []; this.obstacles.delete('target');
     for (const image of images) this.fadingBase.push({ image, removeAt: this.elapsed + 200 + Math.hypot(image.x - 1050, image.y - 650) * 12 });
   }
+  private trailModifiers() { return { fogTrailWidthFactor: number('trailWidth'), fogTrailDurationFactor: number('trailDuration') }; }
   private tickShots(dt: number): void {
+    const bfg = UTILITY_CONFIGS.BFG;
+    if (bfg.type !== 'bfg') throw new Error('BFG configuration missing');
     if (this.fireOnce || (this.firing && this.elapsed >= this.nextShot)) {
       this.fireOnce = false;
       const stream = value('weapon') === 'flame' ? streamContent.weapons.FLAMETHROWER : value('weapon') === 'leaf_blower' ? streamContent.weapons.LEAF_BLOWER : null;
-      this.nextShot = this.elapsed + (stream?.cooldown ?? (value('weapon') === 'p90' ? ballisticContent.weapons.P90.cooldown : value('weapon') === 'melee' ? 900 : 230));
+      this.nextShot = this.elapsed + (stream?.cooldown ?? (value('weapon') === 'p90' ? ballisticContent.weapons.P90.cooldown : value('weapon') === 'bfg' ? 1800 : value('weapon') === 'melee' ? 900 : 230));
       const pelletCount = value('weapon') === 'shotgun' ? 8 : number('pellets');
       const count = pelletCount * number('shooters');
       for (let i = 0; i < count; i++) {
@@ -215,8 +225,8 @@ class FogLab extends Phaser.Scene {
         const spread = (pellet - (pelletCount - 1) / 2) * .055;
         const angle = (pattern === 'fan' ? -.75 + Math.sin(this.elapsed / 1300 + shooter * .8) * .45 : pattern === 'diagonal' ? -.65 : 0) + spread;
         const y = (pattern === 'straight' ? 480 : 1000) + shooter * 26, style = value('weapon');
-        if (style === 'hitscan') { this.fog.addHitscan(250, y, 250 + Math.cos(angle) * 1150, y + Math.sin(angle) * 1150, 2); continue; }
-        if (style === 'melee') { this.fog.addMelee(this.actor.x, this.actor.y, -.35, 110, 135); continue; }
+        if (style === 'hitscan') { this.fog.addHitscan(250, y, 250 + Math.cos(angle) * 1150, y + Math.sin(angle) * 1150, 2, this.trailModifiers()); continue; }
+        if (style === 'melee') { this.fog.addMelee(this.actor.x, this.actor.y, -.35, 110, 135, this.trailModifiers()); continue; }
         this.shots.push({ id, angle, image: this.add.rectangle(250, y, style === 'p90' || style === 'glock' ? 8 : 16, 3, 0xffd695).setRotation(angle).setDepth(DEPTH.PROJECTILES),
           y, age: 0, born: this.elapsed, style, index: i, cursor: new ProjectilePathCursor(),
           points: [{ sequence: 1, timeMs: this.elapsed, x: 250, y, vx: Math.cos(angle) * 1200, vy: Math.sin(angle) * 1200, breakBefore: true }] });
@@ -225,26 +235,32 @@ class FogLab extends Phaser.Scene {
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const p = this.shots[i], old = p.age; p.age += dt;
       const stream = p.style === 'flame' ? streamContent.weapons.FLAMETHROWER : p.style === 'leaf_blower' ? streamContent.weapons.LEAF_BLOWER : null;
-      const speed = p.style === 'p90' ? ballisticContent.weapons.P90.fire.projectileSpeed / 1000 : p.style === 'rocket' ? .75 : 2.1;
+      const speed = p.style === 'p90' ? ballisticContent.weapons.P90.fire.projectileSpeed / 1000 : p.style === 'bfg' ? bfg.projectileSpeed / 1000 : p.style === 'rocket' ? .75 : 2.1;
       const travel = (age: number): number => stream
         ? stream.fire.projectileSpeed * (Math.pow(stream.fire.velocityDecay, age / 1000) - 1) / Math.log(stream.fire.velocityDecay)
         : speed * age;
       const point = (age: number): ProjectilePathPoint => ({ sequence: p.points.length + 1, timeMs: p.born + age,
         x: 250 + Math.cos(p.angle) * travel(age), y: p.y + Math.sin(p.angle) * travel(age) + (p.style === 'bounce' ? Math.max(0, age - 220) * .8 : 0), vx: Math.cos(p.angle) * speed * 1000, vy: Math.sin(p.angle) * speed * 1000 });
       const lifetime = stream ? Math.log(1 + stream.range * Math.log(stream.fire.velocityDecay) / stream.fire.projectileSpeed) / Math.log(stream.fire.velocityDecay) * 1000
-        : p.style === 'short' ? 12 : p.style === 'p90' ? ballisticContent.weapons.P90.range / speed : 560, end = Math.min(p.age, lifetime);
+        : p.style === 'bfg' ? bfg.range / speed : p.style === 'short' ? 12 : p.style === 'p90' ? ballisticContent.weapons.P90.range / speed : 560, end = Math.min(p.age, lifetime);
       const size = stream ? Math.min(stream.fire.hitboxEndSize, stream.fire.hitboxStartSize + stream.fire.hitboxGrowRate * end / 1000)
-        : ['p90', 'glock', 'shotgun', 'short', 'bounce'].includes(p.style) ? 3 : 12;
+        : p.style === 'bfg' ? bfg.projectileSize : ['p90', 'glock', 'shotgun', 'short', 'bounce'].includes(p.style) ? 3 : 12;
       if (p.style === 'bounce' && old < 220 && end > 220) p.points.push({ ...point(220), bounceSequence: 1 });
       p.points.push(point(end));
       const head = p.points[p.points.length - 1]; p.image.setPosition(head.x, head.y);
-      if (p.style === 'leaf_blower') {
-        // Match the game's history-free stream path instead of inventing replicated flight data.
-        const pose = { ...head, id: p.id, size, style: 'leaf_blower' as const, ownerId: 'lab', color: 0xb8caa3 };
-        this.leafPresentation!.syncHostRenderers([pose], this.elapsed);
-        if (p.age >= lifetime) this.leafPresentation!.destroyProjectileVisuals(pose);
+      if (value('pathMode') === 'pose' || ['leaf_blower', 'bfg'].includes(p.style)) {
+        // Exercise the production fallback without manufacturing a replicated flight path.
+        const style: ProjectileStyle = p.style === 'plasma' ? 'energy_ball'
+          : ['p90', 'glock', 'shotgun', 'short', 'bounce'].includes(p.style) ? 'bullet' : p.style as ProjectileStyle;
+        const pose = { ...head, id: p.id, size, style, ownerId: 'lab', color: 0xb8caa3 };
+        if (old === 0) this.projectilePresentation!.syncHostRenderers([{ ...pose, ...point(0) }], p.born);
+        this.projectilePresentation!.syncHostRenderers([pose], p.born + end);
+        if (p.age >= lifetime) this.projectilePresentation!.destroyProjectileVisuals(pose);
       } else p.cursor.consume({ timeMs: p.born + end, points: p.points, ended: p.age >= lifetime }, p.born + end,
-        segment => this.fog.addProjectile(segment, size, p.style, p.id));
+        segment => this.fog.addProjectile(segment, size, p.style, p.id, this.trailModifiers()));
+      if (p.style === 'bfg') {
+        p.image.setVisible(false); this.bfg!.createVisual(p.id, head.x, head.y, size); this.bfg!.updateVisual(p.id, head.x, head.y, size);
+      }
       if (stream) {
         p.image.setVisible(false);
         if (p.style === 'flame') {
@@ -254,7 +270,7 @@ class FogLab extends Phaser.Scene {
           this.leaf!.createVisual(p.id, head.x, head.y, size); this.leaf!.updateVisual(p.id, head.x, head.y, size, head.vx, head.vy);
         }
       }
-      if (p.age >= lifetime) { this.flame?.destroyVisual(p.id); this.leaf?.destroyVisual(p.id); p.image.destroy(); this.shots.splice(i, 1); }
+      if (p.age >= lifetime) { this.flame?.destroyVisual(p.id); this.leaf?.destroyVisual(p.id); this.bfg?.destroyVisual(p.id); p.image.destroy(); this.shots.splice(i, 1); }
     }
   }
   update(_time: number, rawDelta: number): void {
@@ -290,6 +306,7 @@ class FogLab extends Phaser.Scene {
       if (dt) this.fog.captureTrain(dt, state, state ? this.train.computeSegYs(state.y, state.dir) : []);
     }
     this.gpuVfx?.update(dt);
+    if (dt) this.bfg?.update();
     if (this.bench && this.elapsed >= this.nextExplosion) { this.nextExplosion += 4000; this.fog.addExplosion(1080, 800, 180); }
     for (const cell of this.fadingBase) if (cell.image.active && cell.removeAt <= this.elapsed) cell.image.destroy();
     this.fadingBase = this.fadingBase.filter(cell => cell.image.active);

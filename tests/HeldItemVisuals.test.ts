@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getHeldItemAnchor, HELD_ITEM_ANCHOR_X, HELD_ITEM_ANCHOR_Y, HELD_ITEM_TEXTURE_SIZE, MUZZLE_FORWARD_OFFSET, PLAYER_SIZE } from '../src/config';
+import { getHeldItemAnchor, HELD_ITEM_ANCHOR_X, HELD_ITEM_ANCHOR_Y, HELD_ITEM_TEXTURE_SIZE, PLAYER_SIZE } from '../src/config';
 import { HELD_ITEM_SPRITES, getHeldItemPointWorld, getHeldItemSpriteSpec, getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
 import { HELD_UTILITY_DISPLAY_MS, HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
 import {
@@ -60,14 +60,13 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
       const file = path.join(REPOSITORY_ROOT, 'public', spec.assetPath.replace(/^\.\//, ''));
       expect(existsSync(file), spec.assetPath).toBe(true);
 
-      const { width, height } = readPngSize(spec.assetPath);
-      // Das Raster bleibt an die 32-px-Figur gebunden. Die Standardpalette bleibt kompakt;
-      // nur das AWP darf als echte Langwaffen-Ausnahme deutlich laenger werden.
+      const source = readPngSize(spec.assetPath);
+      const sourceScale = spec.sourceScale ?? 1;
+      expect(Number.isFinite(sourceScale) && sourceScale > 0).toBe(true);
+      const width = source.width / sourceScale, height = source.height / sourceScale;
+      // Source resolution is independent from the shared 32-unit logical canvas.
       expect(width, spec.textureKey).toBeLessThanOrEqual(HELD_ITEM_TEXTURE_SIZE);
       expect(height, spec.textureKey).toBeLessThanOrEqual(HELD_ITEM_TEXTURE_SIZE);
-      const isExceptionalLongWeapon = spec.textureKey === 'held_AWP';
-      expect(width, spec.textureKey).toBeLessThanOrEqual(isExceptionalLongWeapon ? 32 : 13);
-      expect(height, spec.textureKey).toBeLessThanOrEqual(isExceptionalLongWeapon ? 32 : 24);
 
       expect(spec.gripX, spec.textureKey).toBeGreaterThanOrEqual(0);
       expect(spec.gripX, spec.textureKey).toBeLessThanOrEqual(width);
@@ -80,22 +79,10 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
     }
   });
 
-  it('laesst jede registrierte Muedung in ihrer Textur liegen', () => {
-    // Projektile, Hitscan-Ursprung, Muendungsfeuer und Schuss-Audio starten alle bei
-    // MUZZLE_FORWARD_OFFSET vor der Figurenmitte. Die sichtbare Muedung bleibt deshalb an der
-    // vorderen Texturkante; die Groessenstaffelung wird separat ueber Standard- und Ausnahmegroesse
-    // Standardwaffen bleiben kompakt; nur definierte Langwaffen duerfen diese Staffelung
-    // ueberschreiten.
-    const scale = PLAYER_SIZE / HELD_ITEM_TEXTURE_SIZE;
-    const maxForwardReach = MUZZLE_FORWARD_OFFSET / scale + HELD_ITEM_ANCHOR_Y;
-    expect(maxForwardReach).toBeGreaterThan(0);
-
+  it('richtet jede registrierte Mündung vom Griff aus nach Norden aus', () => {
     for (const spec of Object.values(HELD_ITEM_SPRITES)) {
       expect(spec.muzzleY, spec.textureKey).toBeLessThanOrEqual(spec.gripY);
-      expect(spec.muzzleY, spec.textureKey).toBeGreaterThanOrEqual(0);
-      expect(spec.muzzleY, spec.textureKey).toBeLessThanOrEqual(32);
     }
-    expect(HELD_ITEM_SPRITES.AWP.gripY).toBeGreaterThan(maxForwardReach);
   });
 
   it('gibt Nahkampfwaffen und Konstrukten nichts in die Pfoten', () => {

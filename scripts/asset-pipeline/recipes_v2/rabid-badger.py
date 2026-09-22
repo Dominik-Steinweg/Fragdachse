@@ -14,8 +14,8 @@ def build(c,spec):
     body=[loft(c,'Lean pinched pursuit torso',[(-.99,.05,.29,.05),(-.77,.33,.37,.20),(-.48,.39,.44,.24),
           (-.20,.27,.48,.24),(.10,.39,.54,.28),(.38,.46,.58,.27),(.58,.22,.58,.16),(.64,.06,.54,.05)],coat)]
     for side in (-1,1):
-        body.append(ell(c,'Long visible rear haunch',(side*.35,-.60,.50),(.24,.35,.22),muscle,angle=side*.33))
-        body.append(ell(c,'Forward narrow shoulder',(side*.35,.24,.67),(.19,.30,.22),muscle,taper=.22,angle=-side*.30))
+        body.append(ell(c,'Long visible rear haunch',(side*.35,-.60,.50),(.19,.39,.22),muscle,angle=side*.25))
+        body.append(ell(c,'Forward narrow shoulder',(side*.35,.24,.67),(.18,.35,.22),muscle,taper=.22,angle=-side*.22))
         for j in range(3):
             body.append(horn(c,'Swept coarse flank quill',[(side*.29,-.12-j*.20,.64-j*.06),
                         (side*.51,-.24-j*.20,.61-j*.06),(side*.56,-.36-j*.20,.54-j*.06)], [.092,.055,.008],muscle))

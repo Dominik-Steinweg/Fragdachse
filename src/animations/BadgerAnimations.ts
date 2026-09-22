@@ -5,7 +5,8 @@ import { PIPELINE_ASSETS, pipelineAnimationKey } from '../config/pipelineAssets'
  * Shared walking-animation contract for every badger-shaped figure.
  *
  * Walking sheets contain north-facing cells with explicit gutters and clip frame lists.
- * A separate idle frame is excluded from the move loop. `WALKING_SHEETS` below is the only place a
+ * A separate rest frame is excluded from the move loop; an authored idle clip is optional.
+ * `WALKING_SHEETS` below is the only place a
  * new animated figure is registered; preload, animation registration and the per-sprite sync
  * all derive from it.
  *
@@ -26,6 +27,11 @@ export interface WalkingSheet {
   readonly margin: number;
   readonly spacing: number;
   readonly frameRate: number;
+  readonly idle?: {
+    readonly animationKey: string;
+    readonly frames: readonly number[];
+    readonly frameRate: number;
+  };
   /**
    * Key of the static single-frame texture this sheet supersedes. Authored content that only
    * knows its image key – enemy configs – resolves its animated variant through this field.
@@ -33,13 +39,14 @@ export interface WalkingSheet {
   readonly staticTextureKey?: string;
 }
 
-/** Frame 0 ist die separate Idle-Pose; ein Stopp faellt nie mitten in den Schritt. */
+/** Frame 0 ist die neutrale Ruhepose für inaktive Figuren und Sheets ohne Idle-Clip. */
 export const WALKING_IDLE_FRAME = 0;
 
 const WALKING_SHEETS: readonly WalkingSheet[] = PIPELINE_ASSETS
-  .filter((asset) => asset.category !== 'turret')
+  .filter((asset) => asset.category === 'character' || asset.category === 'enemy')
   .map((asset) => {
     const clip = asset.clips.find((candidate) => candidate.name === 'move')!;
+    const idle = asset.clips.find((candidate) => candidate.name === 'idle');
     return {
       textureKey: asset.sheetTextureKey,
       animationKey: pipelineAnimationKey(asset, clip),
@@ -51,6 +58,7 @@ const WALKING_SHEETS: readonly WalkingSheet[] = PIPELINE_ASSETS
       frameCount: asset.layout.frameCount,
       frames: clip.frames,
       frameRate: clip.frameRate,
+      idle: idle ? { animationKey: pipelineAnimationKey(asset, idle), frames: idle.frames, frameRate: idle.frameRate } : undefined,
       staticTextureKey: asset.textureKey,
     };
   });
@@ -91,16 +99,15 @@ export function preloadBadgerAnimationAssets(loader: Phaser.Loader.LoaderPlugin)
 /** Register the global animations once; AnimationManager is shared by all Scenes. */
 export function registerBadgerAnimations(anims: Phaser.Animations.AnimationManager): void {
   for (const sheet of WALKING_SHEETS) {
-    if (anims.exists(sheet.animationKey)) continue;
-
-    anims.create({
-      key: sheet.animationKey,
-      frames: anims.generateFrameNumbers(sheet.textureKey, {
-        frames: [...sheet.frames],
-      }),
-      frameRate: sheet.frameRate,
-      repeat: -1,
-    });
+    for (const clip of sheet.idle ? [sheet, sheet.idle] : [sheet]) {
+      if (anims.exists(clip.animationKey)) continue;
+      anims.create({
+        key: clip.animationKey,
+        frames: anims.generateFrameNumbers(sheet.textureKey, { frames: [...clip.frames] }),
+        frameRate: clip.frameRate,
+        repeat: -1,
+      });
+    }
   }
 }
 
@@ -108,30 +115,32 @@ export function registerBadgerAnimations(anims: Phaser.Animations.AnimationManag
  * Apply the requested locomotion state to one figure sprite.
  *
  * The sheet is resolved from the sprite's own texture, so the helper covers players and
- * animated enemies alike and is a no-op for a figure without walking artwork. Idle
- * deliberately returns to frame 0, so stopping never leaves a half-step pose on screen. The
+ * animated enemies alike and is a no-op for a figure without walking artwork. Standing figures
+ * use their authored idle clip when present, otherwise frame 0. Inactive figures hold frame 0. The
  * helper is idempotent and therefore safe to call from host and client sync.
  */
 export function syncBadgerWalkingAnimation(
   sprite: Phaser.GameObjects.Sprite,
   walking: boolean,
+  active: boolean = true,
 ): void {
   const sheet = getWalkingSheetByTexture(sprite.texture.key);
   if (!sheet) return;
 
-  const isWalkingAnimation = sprite.anims.currentAnim?.key === sheet.animationKey;
+  const currentKey = sprite.anims.currentAnim?.key;
+  const desiredKey = active ? (walking ? sheet.animationKey : sheet.idle?.animationKey) : undefined;
 
-  if (walking) {
-    if (!isWalkingAnimation || !sprite.anims.isPlaying) {
-      sprite.play(sheet.animationKey);
+  if (desiredKey) {
+    if (currentKey !== desiredKey || !sprite.anims.isPlaying) {
+      sprite.play(desiredKey);
       // Ein Pulk gleichzeitig gestarteter Figuren liefe sonst im Gleichschritt. Die Phase ist
       // rein visuell und muss zwischen Host und Clients nicht uebereinstimmen.
-      sprite.anims.setProgress(Math.random());
+      if (walking) sprite.anims.setProgress(Math.random());
     }
     return;
   }
 
-  if (isWalkingAnimation && sprite.anims.isPlaying) {
+  if ((currentKey === sheet.animationKey || currentKey === sheet.idle?.animationKey) && sprite.anims.isPlaying) {
     sprite.anims.stop();
   }
   if (sprite.frame.name !== String(WALKING_IDLE_FRAME)) {

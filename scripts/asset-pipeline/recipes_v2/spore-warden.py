@@ -4,12 +4,12 @@ from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, 
 
 
 def build(c,spec):
-    hide=c.material('Warm olive guardian hide',(.17,.19,.075),'organic')
-    shell=c.material('Brown green grown armor',(.27,.26,.115),'organic')
-    rim=c.material('Ochre grown armor edges',(.40,.34,.12),'organic')
+    hide=c.material('Warm olive guardian hide',(.10,.20,.14),'organic')
+    shell=c.material('Brown green grown armor',(.24,.34,.16),'organic')
+    rim=c.material('Ochre grown armor edges',(.68,.32,.065),'organic')
     dark=c.material('Dark gills and paw clefts',(.035,.041,.017),'organic')
-    moss=c.material('Moss green fungal caps',(.245,.35,.085),'organic')
-    spot=c.material('Pale cap pore rims',(.59,.52,.24),'organic')
+    moss=c.material('Moss green fungal caps',(.82,.34,.07),'organic')
+    spot=c.material('Pale cap pore rims',(.94,.75,.37),'organic')
     ivory=c.material('Warm pale badger face',(.64,.58,.38),'organic')
     eyes=c.material('Yellow spore eyes',(.59,.60,.13),emission=.12)
     limbs={}
@@ -26,6 +26,11 @@ def build(c,spec):
         r=cap_radius*scale
         body.append(ell(c,'Rooted fungal shoulder chamber',(x,y,.84),(r*1.03,r*.98,.23),rim))
         body.append(ell(c,'Moss green mushroom crown',(x,y,.97),(r,r*.90,.16),moss))
+        for i in range(9):
+            a=math.tau*i/9
+            body.append(horn(c,'Soft radial fungal gill',[(x+math.cos(a)*r*.82,y+math.sin(a)*r*.75,1.025),
+                (x+math.cos(a)*r*.91,y+math.sin(a)*r*.82,.995),
+                (x+math.cos(a)*r*.98,y+math.sin(a)*r*.87,.95)],[.012,.017,.010],rim))
         for a,rad,spread in [(.25,.065,.58),(1.45,.050,.43),(2.8,.069,.55),(4.13,.045,.61),(5.24,.055,.31)]:
             a+=side*.17
             xx,yy=x+math.cos(a)*r*spread,y+math.sin(a)*r*spread

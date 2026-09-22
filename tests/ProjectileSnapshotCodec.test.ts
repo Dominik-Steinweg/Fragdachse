@@ -41,6 +41,7 @@ describe('Projektil-Statik-Codec', () => {
     const entry: SyncedProjectileStatic = {
       id: 4711,
       ownerId: 'peer-abc-123',
+      weaponSourceId: 'BFG',
       color: 0xffcc00,
       allowTeamDamage: true,
       ownerColor: 0xff0000,
@@ -232,6 +233,15 @@ describe('Projektil-Snapshot-Zusammenfuehrung', () => {
       bulletVisualPreset: 'ak47',
       shotAudioKey: 'ak47',
     });
+  });
+
+  it('preserves exact weapon identity through full joins, cached ticks and static replacements', () => {
+    const cache = new Map<number, SyncedProjectileStatic>();
+    const shared = { ...bulletStatic, weaponSourceId: 'P90' };
+    expect(applyProjectileSnapshot(cache, snapshot([shared], [bulletDynamic], true))[0].weaponSourceId).toBe('P90');
+    expect(applyProjectileSnapshot(cache, snapshot([], [bulletDynamic]))[0].weaponSourceId).toBe('P90');
+    expect(applyProjectileSnapshot(cache, snapshot([{ ...shared, weaponSourceId: 'P90_UPGRADE' }], [bulletDynamic]))[0].weaponSourceId).toBe('P90_UPGRADE');
+    expect(applyProjectileSnapshot(cache, snapshot([bulletStatic], [bulletDynamic], true))[0].weaponSourceId).toBeUndefined();
   });
 
   it('drops a dynamic entry whose static has not arrived yet', () => {

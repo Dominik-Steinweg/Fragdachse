@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
 import { DEFAULT_FOG_STRENGTH } from '../../config/groundFog';
-import { fogTrailFactor, type FogTrailModifiers } from '../../config/fogTrail';
+import type { FogTrailModifiers } from '../../config/fogTrail';
+import { createWeaponFogTrailProfile } from './WeaponFogTrail';
 import type { WaterCell, ExplosionVisualStyle, SyncedTrainState } from '../../types';
 import { TRAIN } from '../../train/TrainConfig';
 import { getStreamFogRadius } from '../ProjectileVisualSize';
@@ -76,9 +77,8 @@ export class GroundFogSystem {
     this.queueWeaponTrail(segment, sourceId, radius, strength, modifiers);
   }
   private queueWeaponTrail(segment: ProjectileTrailSegment, sourceId: number | string, radius: number, strength: number, modifiers: FogTrailModifiers, arcDegrees?: number): void {
-    const width = fogTrailFactor(modifiers.fogTrailWidthFactor), duration = fogTrailFactor(modifiers.fogTrailDurationFactor);
-    if (!width || !duration || segment.ageMs > FOG.trailMs * duration) return;
-    const profile: FogTrailProfile = { radius: radius * width, strength, lifeMs: FOG.trailMs * duration, decayMs: FOG.trailDecayMs * duration, arcDegrees };
+    const profile = createWeaponFogTrailProfile(radius, strength, modifiers, arcDegrees);
+    if (!profile || segment.ageMs > profile.lifeMs) return;
     if (this.fineInputs.length < FOG.trailCapacity) this.fineInputs.push({ segment, sourceId, profile });
     else this.fineDropped++;
   }
@@ -113,7 +113,7 @@ export class GroundFogSystem {
   addMelee(x: number, y: number, angle: number, arcDegrees: number, range: number, modifiers: FogTrailModifiers = {}): void {
     if (!this.active || !this.reactions || !Number.isFinite(angle + arcDegrees + range) || arcDegrees <= 0) return;
     const from = { x, y, timeMs: this.elapsed, sequence: 1, vx: 0, vy: 0 };
-    this.queueWeaponTrail({ from, to: { ...from, x: x + Math.cos(angle), y: y + Math.sin(angle), sequence: 2 }, ageMs: 0 },
+    this.queueWeaponTrail({ from, to: { ...from, x: x + Math.cos(angle) * 32, y: y + Math.sin(angle) * 32, sequence: 2 }, ageMs: 0 },
       this.nextHitscan--, range, .85, modifiers, Math.min(360, arcDegrees));
   }
   captureMotion(delta: number, players: readonly MovementVisualSource[], enemies: readonly MovementVisualSource[], view: FogRect): void {

@@ -1,14 +1,15 @@
 """Long predatory four-legged void hunter with tapered armor and twin body-mounted gauss rails."""
-from enemy_parts_b import plate, scute, tube, head, paw, finish
+from organic_shell_parts import centered_shell as plate
+from enemy_parts_b import scute, tube, head, paw, finish
 
 
 def build(c, spec):
-    hide=c.material('Hunter deep violet flexible hide',(.023,.017,.043),'organic')
-    armor=c.material('Hunter charcoal violet armor',(.045,.038,.065),'technical')
-    edge=c.material('Hunter muted mauve armor edge',(.17,.135,.205),'technical')
+    hide=c.material('Hunter deep violet flexible hide',(.035,.095,.13),'organic')
+    armor=c.material('Hunter charcoal violet armor',(.11,.27,.36),'technical')
+    edge=c.material('Hunter muted mauve armor edge',(.43,.66,.72),'technical')
     dark=c.material('Hunter black mechanical joints',(.008,.011,.017))
-    bone=c.material('Hunter smoky ivory face crest',(.37,.31,.43),'organic')
-    violet=c.material('Hunter narrow violet inlays',(.25,.025,.53),emission=.40)
+    bone=c.material('Hunter smoky ivory face crest',(.66,.78,.78),'organic')
+    violet=c.material('Hunter narrow violet inlays',(.63,.045,.36),emission=.40)
     claw=c.material('Hunter long cold talons',(.30,.29,.34),'technical')
     limbs={}
     for name,x,y in [('front_left',-.80,.52),('front_right',.80,.52),('rear_left',-.75,-.71),('rear_right',.75,-.71)]:

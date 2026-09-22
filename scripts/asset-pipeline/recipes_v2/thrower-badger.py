@@ -3,12 +3,12 @@ from enemy_parts_b import scute, tube, head, paw, finish
 
 
 def build(c, spec):
-    fur=c.material('Thrower cool brown coarse hide',(.12,.10,.065),'organic')
+    fur=c.material('Thrower cool brown coarse hide',(.25,.075,.037),'organic')
     dark=c.material('Thrower deep carrier folds',(.018,.023,.012),'organic')
-    tan=c.material('Thrower horn shoulder mantle',(.32,.27,.14),'organic')
+    tan=c.material('Thrower horn shoulder mantle',(.55,.22,.08),'organic')
     pale=c.material('Thrower broad bone face stripe',(.57,.51,.31),'organic')
-    olive=c.material('Thrower tough olive sling',(.21,.24,.045),'organic')
-    ochre=c.material('Thrower taut ochre launch tendon',(.39,.32,.065),'organic')
+    olive=c.material('Thrower tough olive sling',(.40,.22,.105),'organic')
+    ochre=c.material('Thrower taut ochre launch tendon',(.80,.51,.19),'organic')
     cargo=c.material('Thrower curled dark offspring',(.12,.12,.055),'organic')
     limbs={}
     for name,x,y in [('front_left',-.74,.48),('front_right',.74,.48),('rear_left',-.68,-.63),('rear_right',.68,-.63)]:
@@ -17,7 +17,7 @@ def build(c, spec):
           c.ell('Compact supporting ribcage',(0,-.27,.56),(.58,.67,.36),fur)]
     for y,w in [(.24,.70),(-.01,.68),(-.27,.57),(-.55,.42)]:
         body.append(scute(c,'Layered thrower vertebral shield',(0,y,1.01-abs(y)*.12),w,.35,tan,.12))
-    sling=[c.ell('Large right shoulder carrying pouch',(.60,-.21,.76),(.34,.47,.32),olive),
+    sling=[c.ell('Large right shoulder carrying pouch',(.60,-.21,.76),(.40,.50,.32),olive),
         c.ell('Recessed open launch cradle',(.59,-.14,1.015),(.255,.35,.07),dark),
         c.ell('Curled offspring back',(.59,-.12,1.04),(.20,.27,.14),cargo),
         c.ell('Offspring tucked pale head',(.56,.04,1.16),(.105,.13,.06),pale)]

@@ -43,6 +43,26 @@ function expectContentError(run: () => unknown, fragment: string): void {
 }
 
 describe('loadout content loader', () => {
+  it('accepts optional fog factors for weapons and BFG and preserves inheritance', () => {
+    const sources = clonedSources();
+    const weapons = documentWith(sources, 'weapons', 'GLOCK').weapons!;
+    Object.assign(weapons.GLOCK, { fogTrailWidthFactor: 2, fogTrailDurationFactor: .5 });
+    weapons.FOG_VARIANT = { id: 'FOG_VARIANT', baseId: 'GLOCK', _notes: 'fog factors', fogTrailDurationFactor: 0 };
+    Object.assign(documentWith(sources, 'utilities', 'BFG').utilities!.BFG, { fogTrailWidthFactor: 3, fogTrailDurationFactor: 2 });
+    const built = buildLoadoutRegistries(sources);
+    expect(built.weapons.GLOCK).toMatchObject({ fogTrailWidthFactor: 2, fogTrailDurationFactor: .5 });
+    expect(built.weapons.FOG_VARIANT).toMatchObject({ fogTrailWidthFactor: 2, fogTrailDurationFactor: 0 });
+    expect(built.utilities.BFG).toMatchObject({ fogTrailWidthFactor: 3, fogTrailDurationFactor: 2 });
+    expect(built.weapons.P90.fogTrailWidthFactor).toBeUndefined();
+    expect(built.weapons.P90.fogTrailDurationFactor).toBeUndefined();
+  });
+  it.each(['fogTrailWidthFactor', 'fogTrailDurationFactor'])('rejects invalid %s at the authored boundary', key => {
+    for (const value of [-1, 8.1, NaN, Infinity, '2']) {
+      const sources = clonedSources();
+      documentWith(sources, 'weapons', 'GLOCK').weapons!.GLOCK[key] = value;
+      expectContentError(() => buildLoadoutRegistries(sources), key);
+    }
+  });
   it('rejects unknown shot-feedback profiles at the authored-content boundary', () => {
     const sources = clonedSources();
     documentWith(sources, 'weapons', 'GLOCK').weapons!.GLOCK.shotFeedbackProfile = 'missing-profile';

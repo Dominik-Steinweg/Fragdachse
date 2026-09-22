@@ -85,6 +85,41 @@ schlugen vor der Korrektur fehl und bestehen danach. Insgesamt: 26 gezielte Test
 Der erneute Gesamtcheck meldet 4.043 bestandene Tests und dieselben drei bekannten
 Map-Testfehler. Die folgenden P90-Messwerte werden von dieser Korrektur nicht verändert.
 
+## Verallgemeinerung und Waffenfaktoren
+
+Der Ersatzpfad für Projektile ohne Historie gilt nun für alle 16 Projektiltypen,
+einschließlich BFG. Host und Client verwenden ihre dargestellten Positionen;
+bestätigte Historien bleiben vorrangig. Zwei optionale Authoring-Felder
+`fogTrailWidthFactor` und `fogTrailDurationFactor` skalieren die Waffenspur.
+Die exakte Waffen-ID erreicht Clients über die vorhandenen Statik-/VFX-Pakete
+(Peer-Protokoll 20); Faktoren und Nebelzustand werden nicht repliziert.
+
+Große Geschosse, Hitscan und Nahkampf nutzen ebenfalls analytisch alternde
+GPU-Spuren, damit der Dauerfaktor die ganze Reaktion bestimmt. Nahkampf bleibt
+ein gerichteter Sektor und funktioniert auch auf Niedrig. BFG, Faktoren und
+ein erzwingbarer Pose-Eingang sind im Lab verfügbar.
+
+Prüfung: 110 gezielte Tests, 31 GPU-Verträge, 54 Architekturtests, der
+P90-Nebel-Stressfall und die 51 Tests aus HeldWeaponFire/WorldPresentationFrameLifetime
+bestanden. Produktions-, Editor- und Lab-Build bestanden. Sichtprüfung im vorhandenen
+Browser-Pane: BFG mit Faktoren 1/1 und 2/2, vollständig ausgelaufene Spuren bei
+Dauerfaktor 0, der wachsende Laubbläser sowie vier P90-Schützen mit je drei
+Projektilen ohne Historie. Die P90-Ansicht blieb durchgehend, mit null verworfenen
+Eingaben und einem Spur-Draw-Call.
+
+`npm run check`: 4.079 Tests bestanden, dieselben drei Map-Fehler wie zuvor.
+Die zusätzlich gestartete vollständige Integrationssuite meldet 547 bestandene
+und zehn fehlgeschlagene Tests in ArenaExitLifecycle/LobbyWorldInteractive
+(unvollständige Runtime-Mocks beziehungsweise fehlende Netzwerkverbindung).
+Die vollständige Stresssuite meldet 80 bestandene, fünf übersprungene und einen
+fehlgeschlagenen NavigationSpawns-Test (Map 7: 15 statt 29 Gegner).
+Diese außerhalb der Nebelpfade liegenden Fehler bleiben offen. `git diff --check`
+ist für die geänderten Nebel-, Lab-, Test- und Dokumentationsdateien sauber.
+
+Die folgenden Zeitmessungen stammen vom früheren P90-Lastvergleich. Sie sind
+keine erneute Performance-Abnahme der verallgemeinerten Waffenfaktoren und des
+zusätzlichen analytischen Nahkampfzweigs.
+
 ## Messverfahren
 
 Gleicher sichtbarer Browser, 1.920 × 1.080, Seed 183, Hoch, 08:00 Uhr, Nebelstärke 1,

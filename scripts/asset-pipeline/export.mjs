@@ -10,7 +10,7 @@ const hash = data => createHash('sha256').update(data).digest('hex');
 const json = async file => JSON.parse(await readFile(file, 'utf8'));
 const exists = async file => access(file).then(() => true, () => false);
 const saveJson = (file, value) => writeFile(file, JSON.stringify(value, null, 2) + '\n');
-export const variantLabel = m => m.variantLabel || (m.variant === 'rich' ? 'Detailreich' : 'Ruhig / illustrativ');
+export const variantLabel = m => m.variantLabel || ({ rich: 'Detailreich', calm: 'Ruhig / illustrativ', standard: 'Standard' }[m.variant] ?? m.variant);
 
 export function inside(root, relative) {
   const target = path.resolve(root, relative);
@@ -21,8 +21,8 @@ export function inside(root, relative) {
 
 export function validateManifest(m) {
   if (m.pipelineVersion !== 1 || !/^[a-z0-9][a-z0-9-]*$/.test(m.id)) throw new Error('Invalid asset manifest');
-  if (!['calm', 'rich'].includes(m.variant) || !['north', 'east'].includes(m.forward)) throw new Error('Invalid variant/orientation');
-  if (!['character', 'enemy', 'turret'].includes(m.category)) throw new Error('Invalid category');
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(m.variant) || !['north', 'east'].includes(m.forward)) throw new Error('Invalid variant/orientation');
+  if (!['character', 'enemy', 'turret', 'weapon'].includes(m.category)) throw new Error('Invalid category');
   if (m.forward !== (m.category === 'turret' ? 'east' : 'north')) throw new Error('Orientation disagrees with asset category');
   if (!Number.isInteger(m.targetSize) || m.targetSize < 1 || m.targetSize > 1024) throw new Error('Invalid target size');
   if (!Array.isArray(m.sourceSizes) || !m.sourceSizes.length || m.sourceSizes.some(n => !Number.isInteger(n) || n < m.targetSize || n > 1024)) throw new Error('Invalid source sizes');
@@ -228,6 +228,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       if (variant && variant !== '--python') throw new Error('Archive accepts optional --python <executable>');
       if (variant === '--python' && !size) throw new Error('Supply Python executable');
       console.log(await archiveAssetV2(inside(v2Root, v2Relative), size));
-    } else throw new Error('Usage: node scripts/asset-pipeline/export.mjs export <run-folder> | select <asset-folder> <calm|rich> <size> <reason> | archive <v2-asset-folder> [--python <executable>]');
+    } else throw new Error('Usage: node scripts/asset-pipeline/export.mjs export <run-folder> | select <asset-folder> <variant> <size> <reason> | archive <v2-asset-folder> [--python <executable>]');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

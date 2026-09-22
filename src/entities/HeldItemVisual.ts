@@ -21,6 +21,7 @@ export class HeldItemVisual {
   private image: Phaser.GameObjects.Image | null = null;
   private itemId: string | null = null;
   private hasSprite = false;
+  private sourceScale = 1;
   private scrollFactor: number | null = null;
   private readonly feedback = new HeldWeaponFeedbackModel();
   private readonly feedbackPose = { recoilPx: 0, rotationRad: 0 };
@@ -82,7 +83,8 @@ export class HeldItemVisual {
     // Der Griffpunkt wird zum Ursprung des Bildes: danach ist Positionieren identisch mit
     // "Griff auf den Pfotenanker legen", unabhaengig von der Groesse der Waffentextur.
     const frame = this.image.frame;
-    this.image.setOrigin(spec.gripX / frame.cutWidth, spec.gripY / frame.cutHeight);
+    this.sourceScale = spec.sourceScale ?? 1;
+    this.image.setOrigin(spec.gripX * this.sourceScale / frame.cutWidth, spec.gripY * this.sourceScale / frame.cutHeight);
     this.hasSprite = true;
   }
 
@@ -116,7 +118,7 @@ export class HeldItemVisual {
       .setVisible(true)
       .setPosition(anchor.x - Math.sin(spriteRotation) * recoil, anchor.y + Math.cos(spriteRotation) * recoil)
       .setRotation(spriteRotation + this.feedbackPose.rotationRad)
-      .setDisplaySize(frame.cutWidth * textureScale, frame.cutHeight * textureScale)
+      .setDisplaySize(frame.cutWidth * textureScale / this.sourceScale, frame.cutHeight * textureScale / this.sourceScale)
       .setAlpha(alpha);
   }
 
@@ -147,8 +149,8 @@ export class HeldItemVisual {
     const image = this.image;
     const spec = getHeldItemSpriteSpec(this.itemId);
     if (!image?.active || !image.visible || !spec || !this.itemId) return false;
-    const x = (spec.muzzleX - spec.gripX) * image.scaleX;
-    const y = (spec.muzzleY - spec.gripY) * image.scaleY;
+    const x = (spec.muzzleX - spec.gripX) * this.sourceScale * image.scaleX;
+    const y = (spec.muzzleY - spec.gripY) * this.sourceScale * image.scaleY;
     const c = Math.cos(image.rotation), s = Math.sin(image.rotation);
     out.x = image.x + x * c - y * s;
     out.y = image.y + x * s + y * c;

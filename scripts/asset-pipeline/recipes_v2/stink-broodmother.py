@@ -3,12 +3,12 @@ from enemy_parts_b import scute, tube, head, paw, finish
 
 
 def build(c, spec):
-    hide=c.material('Broodmother warm umber hide',(.12,.082,.045),'organic')
+    hide=c.material('Broodmother warm umber hide',(.105,.16,.038),'organic')
     dark=c.material('Broodmother dark folds',(.018,.022,.012),'organic')
-    scab=c.material('Broodmother dry back plates',(.19,.17,.085),'organic')
+    scab=c.material('Broodmother dry back plates',(.25,.33,.058),'organic')
     pale=c.material('Broodmother aged ivory stripe',(.56,.48,.28),'organic')
-    olive=c.material('Broodmother muted olive chambers',(.22,.255,.045),'organic')
-    spot=c.material('Broodmother chamber nodules',(.46,.44,.10),'organic')
+    olive=c.material('Broodmother muted olive chambers',(.42,.61,.055),'organic')
+    spot=c.material('Broodmother chamber nodules',(.72,.78,.19),'organic')
     eye=c.material('Broodmother recessed yellow eyes',(.42,.39,.035),emission=.08)
     limbs={}
     for name,x,y in [('front_left',-.75,.42),('front_right',.75,.42),('rear_left',-.78,-.69),('rear_right',.78,-.69)]:
@@ -21,7 +21,7 @@ def build(c, spec):
         abdomen.append(tube(c,'Grouped curved spine crease',[(-width*.29,y+.025,z+.058),
             (0,y-.055,z+.060),(width*.29,y+.025,z+.058)],.016,dark))
     for side in (-1,1):
-        for i,(y,radius) in enumerate([(-.03,.27),(-.39,.32),(-.75,.21)]):
+        for i,(y,radius) in enumerate([(-.03,.27),(-.39,.38),(-.75,.27)]):
             x=side*(.64 if i<2 else .53)
             abdomen.append(c.ell('Bulging attached olive brood sac',(x,y,.55),(radius*.94,radius,.24),olive))
             for dx,dy,r in [(-.07,.06,.065),(.065,-.07,.045),(.05,.115,.04)]:

@@ -3,6 +3,8 @@ import math
 import bpy
 from mathutils import Vector
 from rigs_v2 import model, control, attach, limb_rig
+from enemy_surface_parts import finish_surfaces
+from organic_shell_parts import centered_shell
 
 
 def plate(c, name, center, outline, thickness, material, bevel=.025):
@@ -27,7 +29,7 @@ def plate(c, name, center, outline, thickness, material, bevel=.025):
 
 
 def scute(c, name, center, width, length, material, thickness=.09):
-    return plate(c, name, center, [(0, length*.54), (width*.43, length*.23),
+    return centered_shell(c, name, center, [(0, length*.54), (width*.43, length*.23),
         (width*.5, -length*.22), (width*.26, -length*.46), (0, -length*.57),
         (-width*.26, -length*.46), (-width*.5, -length*.22), (-width*.43, length*.23)],
         thickness, material, min(.035, thickness*.28))
@@ -57,22 +59,11 @@ def tube(c, name, points, radius, material, sides=8):
 
 
 def head(c, center, width, length, pale, dark, nose, eye=None, crest=None):
-    """A long north-pointing skull with paired badger masks, not a round human face."""
-    x,y,z=center; parts=[]
-    skull=c.ell('Tapered badger skull',center,(width,length,.19),pale)
-    for v in skull.data.vertices:
-        v.co.x *= 1-.38*max(0,v.co.y)
-    parts.append(skull)
-    for side in (-1,1):
-        mask=c.ell('Swept dark badger mask',(x+side*width*.54,y-.015,z+.15),
-                   (width*.20,length*.71,.035),dark)
-        mask.rotation_euler.z=-side*.17; parts.append(mask)
-        parts.append(c.ell('Folded badger ear',(x+side*width*.88,y-length*.60,z+.055),
-                           (width*.25,length*.23,.065),dark))
-        if eye:
-            parts.append(c.ell('Small recessed eye',(x+side*width*.42,y+length*.49,z+.163),
-                               (width*.060,length*.052,.012),eye))
-    parts.append(c.ell('North-pointing nose',(x,y+length*.90,z+.015),(width*.24,length*.16,.055),nose))
+    """Curved surface-projected facial bands, cheek volumes and recessed eyes."""
+    from recipes_v2.enemy_parts_a import head as sculpt_head
+    x,y,z=center
+    parts=sculpt_head(c,pale,dark,dark,eye or nose,y=y,z=z,width=width,length=length)
+    for ob in parts: ob.location.x+=x
     if crest:
         parts.append(scute(c,'Protective forehead crest',(x,y-length*.37,z+.185),width*.5,length*.50,crest,.065))
     return parts
@@ -86,12 +77,15 @@ def paw(c, name, hip, foot, width, fur, dark, claw, armor=None):
     if armor:
         objects.append(scute(c,name+' ankle plate',(x,y-.035,z+.115),width*1.70,.31,armor,.065))
     for dx in (-.52,0,.52):
+        objects.append(c.ell(name+' rounded toe knuckle',(x+dx*width,y+.13,z+.09),
+                             (width*.27,.085,.05),fur))
         objects.append(c.ell(name+' north claw',(x+dx*width,y+.205,z+.02),(.025,.08,.022),claw))
     return hip,objects
 
 
 def finish(c, limbs, body_parts, head_parts=None, head_pivot=(0,.35,.75), extras=None):
     """Explicit group references are retained for subsequent authored motion controls."""
+    finish_surfaces(c.scene)
     asset=model(c.scene)
     body=control(c.scene,'Body weight and balance',parent=asset['root'])
     attach(body_parts,body); asset['parts']['body']=body

@@ -1,5 +1,6 @@
 """Basalt siege beast: long segmented carapace, four enormous plated paws and inset furnace seams."""
 import math
+from organic_shell_parts import centered_shell
 from enemy_parts_b import plate, scute, tube, head, paw, finish
 
 
@@ -24,11 +25,11 @@ def fissures(c, name, paths, z, width, dark, hot):
 
 def build(c, spec):
     hide=c.material('Colossus dark umber joint hide',(.035,.021,.014),'organic')
-    basalt=c.material('Colossus matte basalt carapace',(.035,.030,.027),'technical')
-    plate_mat=c.material('Colossus dry copper brown plates',(.105,.057,.029),'technical')
-    edge=c.material('Colossus weathered horn edges',(.23,.145,.075),'organic')
+    basalt=c.material('Colossus matte basalt carapace',(.050,.059,.066),'technical')
+    plate_mat=c.material('Colossus dry copper brown plates',(.29,.105,.047),'technical')
+    edge=c.material('Colossus weathered horn edges',(.41,.23,.12),'organic')
     black=c.material('Colossus deep cooling recess',(.009,.012,.012))
-    molten=c.material('Colossus recessed amber heat',(.56,.105,.008),emission=.32)
+    molten=c.material('Colossus recessed amber heat',(.89,.17,.018),emission=.32)
     pale=c.material('Colossus scorched bone crest',(.48,.34,.20),'organic')
     limbs={}
     for index,(name,x,y) in enumerate([('front_left',-1.00,.65),('front_right',1.00,.65),('rear_left',-.94,-.83),('rear_right',.94,-.83)]):
@@ -58,7 +59,7 @@ def build(c, spec):
         body.append(scute(c,'Dark articulated segment backing',(0,y,z),w,.50,black,.09))
         body.append(scute(c,'Recessed furnace segment',(0,y,z+.045),w*.94,.45,molten,.035))
         for side in (-1,1):
-            panel=plate(c,'Heavy divided carapace tile',(side*w*.25,y,z+.105),
+            panel=centered_shell(c,'Heavy divided carapace tile',(side*w*.25,y,z+.105),
                 [(-w*.205,.19),(w*.205,.19),(w*.245,-.055),(w*.07,-.22),(-w*.19,-.15)],.15,
                 plate_mat if i%2==0 else basalt,.035)
             body.append(panel)
@@ -74,7 +75,7 @@ def build(c, spec):
             body.extend(fissures(c,'Natural divided armor fracture',paths,z+.181,.035 if i<3 else .029,black,molten))
         body.append(scute(c,'Raised central scorched vertebra',(0,y,z+.23),.135,.36,edge,.075))
     for side in (-1,1):
-        body.append(plate(c,'Jagged shoulder apron',(side*.75,.51,1.05),
+        body.append(centered_shell(c,'Rounded shoulder apron',(side*.75,.51,1.05),
             [(side*x,y) for x,y in [(-.25,.38),(.25,.38),(.39,.08),(.24,-.10),(.33,-.31),(0,-.43),(-.31,-.23)]],.21,basalt,.055))
         for j in range(3):
             body.append(scute(c,'Copper armor chevron',(side*.91,.67-j*.22,1.205),.37,.18,plate_mat,.05))

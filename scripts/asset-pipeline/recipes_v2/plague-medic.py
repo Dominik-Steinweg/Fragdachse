@@ -3,14 +3,14 @@ from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, 
 
 
 def build(c,spec):
-    hide=c.material('Muted brown medic fur',(.18,.15,.087),'organic')
-    leather=c.material('Worn ochre leather kit',(.27,.22,.105),'technical')
-    dark=c.material('Dark leather piping',(.040,.039,.021),'organic')
+    hide=c.material('Muted brown medic fur',(.14,.23,.19),'organic')
+    leather=c.material('Worn ochre leather kit',(.77,.78,.60),'technical')
+    dark=c.material('Dark leather piping',(.027,.072,.055),'organic')
     ivory=c.material('Pale clean face markings',(.64,.61,.44),'organic')
     metal=c.material('Matte dull brass fittings',(.32,.30,.18),'technical')
-    green=c.material('Sage green medical inset',(.18,.34,.12),'technical')
-    light=c.material('Pale green medical cross',(.60,.75,.39),emission=.08)
-    vial=c.material('Bounded medicinal green',(.18,.52,.12),emission=.12)
+    green=c.material('Sage green medical inset',(.025,.30,.12),'technical')
+    light=c.material('Pale green medical cross',(.72,.94,.68),emission=.08)
+    vial=c.material('Bounded medicinal green',(.07,.56,.24),emission=.12)
     eyes=c.material('Amber calm eyes',(.54,.48,.10),emission=.10)
     limbs={}
     for name,x,y in [('front_left',-.83,.37),('front_right',.83,.37),('rear_left',-.72,-.61),('rear_right',.72,-.61)]:
@@ -25,6 +25,11 @@ def build(c,spec):
     body.append(c.box('Sage medical symbol patch',(0,-.28,1.068),(.43,.43,.022),green,bevel=.04))
     body.append(c.box('Medical cross vertical',(0,-.28,1.083),(.105,.325,.025),light,bevel=.012))
     body.append(c.box('Medical cross horizontal',(0,-.28,1.084),(.325,.105,.025),light,bevel=.012))
+    for side in (-1,1):
+        for y in (-.51,-.41,-.31,-.21,-.11):
+            body.append(ell(c,'Neat satchel edge stitch',(side*(kit_width*.5-.08),y,1.067),(.011,.025,.004),metal))
+        body.append(c.box('Satchel rounded brass clasp',(side*.24,-.56,1.058),(.11,.11,.025),metal,.02))
+        body.append(c.box('Clasp inset',(side*.24,-.56,1.074),(.037,.06,.009),dark,.006))
     for side in (-1,1):
         body.append(ribbon(c,'Shoulder harness',[(side*.37,-.64,.91),(side*.38,-.19,1.072),
                   (side*.38,.19,.94),(side*.31,.43,.878)],[.09,.09,.085,.08],dark))

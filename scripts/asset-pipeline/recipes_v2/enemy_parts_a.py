@@ -4,6 +4,8 @@ import bpy
 import bmesh
 from mathutils import Vector
 from rigs_v2 import model, control, attach, limb_rig
+from enemy_surface_parts import finish_surfaces
+from organic_shell_parts import shell
 
 
 def outward_normals(mesh):
@@ -89,31 +91,7 @@ def loft(c, name, sections, material, sides=32):
 
 
 def plate(c, name, outline, z, rise, material, edge_material=None):
-    """A beveled, crowned irregular plate with authored broad facets."""
-    count = len(outline)
-    cx, cy = sum(p[0] for p in outline)/count, sum(p[1] for p in outline)/count
-    vertices = [(x, y, z) for x, y in outline]
-    vertices += [(cx+(x-cx)*.945, cy+(y-cy)*.945, z+rise*.50) for x, y in outline]
-    vertices += [(cx+(x-cx)*.46, cy+(y-cy)*.46, z+rise) for x, y in outline]
-    faces = [tuple(range(count-1, -1, -1))]
-    for ring in range(2):
-        for i in range(count):
-            faces.append((ring*count+i, ring*count+(i+1)%count, (ring+1)*count+(i+1)%count, (ring+1)*count+i))
-    faces.append(tuple(2*count+i for i in range(count)))
-    mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata(vertices, [], faces)
-    outward_normals(mesh)
-    mesh.materials.append(material)
-    if edge_material:
-        mesh.materials.append(edge_material)
-        for face in mesh.polygons[1:count+1]:
-            face.material_index = 1
-    ob = bpy.data.objects.new(name, mesh)
-    c.scene.collection.objects.link(ob)
-    bevel = ob.modifiers.new('Soft plate arris', 'BEVEL')
-    bevel.width, bevel.segments = .014, 2
-    ob.modifiers.new('Plate face normals', 'WEIGHTED_NORMAL')
-    return ob
+    return shell(c, name, outline, z, rise, material, edge_material)
 
 
 def ribbon(c, name, points, widths, material):
@@ -181,6 +159,8 @@ def paw(c, name, x, y, coat, dark, claw, width=.19, length=.27, toe_length=.12, 
     objects = [upper, foot]
     for j in range(toes):
         dx = (j-(toes-1)/2)*width*.57
+        objects.append(ell(c,name+' sculpted toe knuckle',(x+dx,y+length*.34,.23),
+                           (width*.28,length*.32,.065),coat,taper=.18))
         objects.append(horn(c, name+' ivory claw', [(x+dx,y+length*.44,.21),
                             (x+dx,y+length*.78,.17),(x+dx,y+length*.78+toe_length,.115)],
                             [width*.17,width*.12,.005],claw))
@@ -189,11 +169,12 @@ def paw(c, name, x, y, coat, dark, claw, width=.19, length=.27, toe_length=.12, 
 
 def head(c, pale, dark, coat, eye, y=.57, z=.87, width=.30, length=.43, ears=True):
     """Species identity: tapered skull, curved masks, recessed small eyes and muzzle."""
-    result = [ell(c,'Tapered badger skull',(0,y,z),(width,length,.235),pale,taper=.36)]
+    width *= 1.12
+    result = [ell(c,'Tapered badger skull',(0,y,z),(width,length,.205),pale,taper=.36)]
     def surface(x,dy):
         local_y=dy/length
         local_x=x/(width*(1-.36*max(0,local_y)))
-        return z+.235*math.sqrt(max(0,1-local_x*local_x-local_y*local_y))+.012
+        return z+.205*math.sqrt(max(0,1-local_x*local_x-local_y*local_y))+.012
     for side in (-1,1):
         result.append(ell(c,'Cheek fur',(side*width*.72,y-.13,z-.06),(width*.45,length*.63,.17),coat,taper=.35))
         marks=[(side*width*.66,-.25),(side*width*.62,-.06),(side*width*.44,.16),(side*width*.23,.34)]
@@ -213,6 +194,9 @@ def head(c, pale, dark, coat, eye, y=.57, z=.87, width=.30, length=.43, ears=Tru
         eye_x=side*width*.50; eye_z=surface(eye_x,.135)
         result.append(ell(c,'Inset eye surround',(eye_x,y+.135,eye_z),(.044,.036,.017),dark))
         result.append(ell(c,'Focused small eye',(eye_x,y+.146,eye_z+.014),(.025,.019,.011),eye))
+        result.append(ell(c,'Matte slit pupil',(eye_x,y+.149,eye_z+.025),(.007,.014,.004),dark))
+        result.append(horn(c,'Low sculpted eyebrow',[(eye_x-side*.04,y+.102,eye_z+.01),
+            (eye_x,y+.105,eye_z+.028),(eye_x+side*.043,y+.124,eye_z+.012)],[.017,.022,.008],coat))
         if ears:
             result.append(ell(c,'Backward swept ear',(side*width*.89,y-.29,z+.015),(.113,.145,.071),dark,taper=-.2,angle=side*.23))
             result.append(ell(c,'Quiet inner ear',(side*width*.9,y-.28,z+.067),(.055,.080,.018),coat,angle=side*.23))
@@ -222,9 +206,7 @@ def head(c, pale, dark, coat, eye, y=.57, z=.87, width=.30, length=.43, ears=Tru
 
 
 def finish(c, body_parts, head_parts, limbs, tail_parts=None):
-    materials={material for ob in c.scene.objects if ob.type=='MESH' for material in ob.data.materials}
-    for material in materials:
-        sculpt_shading(material)
+    finish_surfaces(c.scene)
     asset = model(c.scene)
     body = control(c.scene,'Body weight transfer',parent=asset['root'])
     attach(body_parts,body)

@@ -35,14 +35,9 @@
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -97,14 +92,9 @@
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -163,14 +153,9 @@
         "organic": "art/poc/pipeline-v1/textures/organic.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -225,14 +210,9 @@
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -290,14 +270,9 @@
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -352,14 +327,9 @@
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -417,14 +387,9 @@
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -482,14 +447,9 @@
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -547,14 +507,9 @@
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / illustrativ",
+        "standard": {
+          "label": "Ausgearbeitete Materialien",
           "textureStrength": 0.22,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Reich / detailliert",
-          "textureStrength": 0.68,
           "formShadowStrength": 0
         }
       },
@@ -596,7 +551,8 @@
       "description": {
         "silhouette": "Breiter gedrungener Dachskörper, spitze Nord-Schnauze und vier seitlich erkennbare Pfoten.",
         "colors": "Fahles graubraunes Fell, helle Rücken-/Kopfzeichnung und kleine schmutzige Ockerstellen.",
-        "anatomy": "Vierbeiner mit schwerem Rumpf und schleppendem versetztem Gang; Kopfzeichnung bleibt lesbar."
+        "anatomy": "Vierbeiner mit schwerem Rumpf und schleppendem versetztem Gang; Kopfzeichnung bleibt lesbar.",
+        "materials": "undefined Weich gerundete organische Oberflächen und ruhige präzise Details."
       },
       "requiredClips": [
         "move"
@@ -608,17 +564,12 @@
       },
       "orthoScale": 2.8,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png"
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhige Anatomie",
-          "textureStrength": 0.2,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Gealterte Materialflächen",
-          "textureStrength": 0.57,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -635,14 +586,16 @@
             "lift": 0.065,
             "footRoll": 0.1,
             "footYaw": 0.055,
-            "bodyYaw": 0.042,
+            "bodyYaw": 0.058,
             "bodyBob": 0.025,
             "bodyRoll": 0.035,
             "bodyPitch": 0.025,
             "bodyShift": 0.025,
             "headYaw": -0.022,
             "headBob": 0.012,
-            "tailYaw": 0.1
+            "tailYaw": 0.1,
+            "rearPhase": 0.18,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -668,7 +621,8 @@
       "description": {
         "silhouette": "Schmaler spitz zulaufender Rücken, kräftige Vorderpfoten und hornartige Kopfkontur.",
         "colors": "Schwarzbraun und kräftiges Dunkelrot mit wenigen orangefarbenen Rissen.",
-        "anatomy": "Vierbeiner mit klauenartigen Pfoten und aggressiv gebeugter Haltung; bewegte Gliedmaßen statt skalierter Zombieform."
+        "anatomy": "Vierbeiner mit klauenartigen Pfoten und aggressiv gebeugter Haltung; bewegte Gliedmaßen statt skalierter Zombieform.",
+        "materials": "undefined Weich gerundete organische Oberflächen und ruhige präzise Details."
       },
       "requiredClips": [
         "move"
@@ -680,17 +634,12 @@
       },
       "orthoScale": 2.98,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png"
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhige Anatomie",
-          "textureStrength": 0.2,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Gealterte Materialflächen",
-          "textureStrength": 0.57,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -714,7 +663,9 @@
             "bodyShift": 0.018,
             "headYaw": -0.022,
             "headBob": 0.017,
-            "tailYaw": 0.14
+            "tailYaw": 0.14,
+            "rearPhase": 0.08,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -740,7 +691,8 @@
       "description": {
         "silhouette": "Schlanker länglicher Rücken, seitlich vorgestreckte Krallen und kleine spitze Schnauze.",
         "colors": "Gesättigtes Violett, schwarze Flanken und durchgehende helle Rückenzeichnung.",
-        "anatomy": "Kleiner flinker Vierbeiner mit starkem diagonalen Pfotenwechsel und leichtem Rückenbogen."
+        "anatomy": "Kleiner flinker Vierbeiner mit starkem diagonalen Pfotenwechsel und leichtem Rückenbogen.",
+        "materials": "undefined Weich gerundete organische Oberflächen und ruhige präzise Details."
       },
       "requiredClips": [
         "move"
@@ -752,17 +704,12 @@
       },
       "orthoScale": 2.88,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png"
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhige Anatomie",
-          "textureStrength": 0.2,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Gealterte Materialflächen",
-          "textureStrength": 0.57,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -786,7 +733,9 @@
             "bodyShift": 0.028,
             "headYaw": -0.04,
             "headBob": 0.02,
-            "tailYaw": 0.24
+            "tailYaw": 0.24,
+            "rearPhase": 0.08,
+            "bodySurge": 0.035
           }
         }
       ]
@@ -812,7 +761,8 @@
       "description": {
         "silhouette": "Sehr breiter schwerer Rückenpanzer mit großen Steinplatten und massigen Pfoten.",
         "colors": "Dunkles Steingrau, gedecktes Moosgrün und helle Kopfzeichnung.",
-        "anatomy": "Vierbeiniger Boss mit langsamen Lastwechseln; große Rumpfmasse und Panzerplatten prägen den Gang."
+        "anatomy": "Vierbeiniger Boss mit langsamen Lastwechseln; große Rumpfmasse und Panzerplatten prägen den Gang.",
+        "materials": "Helle verwitterte Rundsteine, kühles Granitgrau und sattgrüne Moosnester; große ruhige Volumen."
       },
       "requiredClips": [
         "move"
@@ -824,18 +774,13 @@
       },
       "orthoScale": 3.38,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhige Anatomie",
-          "textureStrength": 0.2,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Gealterte Materialflächen",
-          "textureStrength": 0.57,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -859,7 +804,9 @@
             "bodyShift": 0.015,
             "headYaw": -0.01,
             "headBob": 0.008,
-            "tailYaw": 0.04
+            "tailYaw": 0.04,
+            "rearPhase": 0.18,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -885,7 +832,8 @@
       "description": {
         "silhouette": "Breiter ovaler Panzerkörper mit zwei auffälligen seitlichen Sporenkammern.",
         "colors": "Moosgrün, Ockerbraun, dunkle Plattenfugen und helle Schnauzenzeichnung.",
-        "anatomy": "Vierbeiner; organische Kammern folgen dem Körper leicht verzögert, die Pfoten bleiben separat lesbar."
+        "anatomy": "Vierbeiner; organische Kammern folgen dem Körper leicht verzögert, die Pfoten bleiben separat lesbar.",
+        "materials": "Goldorange Pilzkronen mit cremefarbenen Poren über moosgrünem Körper; organische gewölbte Schalen."
       },
       "requiredClips": [
         "move"
@@ -897,17 +845,12 @@
       },
       "orthoScale": 2.92,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png"
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhige Anatomie",
-          "textureStrength": 0.2,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Gealterte Materialflächen",
-          "textureStrength": 0.57,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -931,7 +874,9 @@
             "bodyShift": 0.027,
             "headYaw": -0.025,
             "headBob": 0.012,
-            "tailYaw": 0.12
+            "tailYaw": 0.12,
+            "rearPhase": 0.18,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -957,7 +902,8 @@
       "description": {
         "silhouette": "Runder geschichteter Körper mit deutlich abgesetzter Maske und hellem zentralem Rückensymbol.",
         "colors": "Dunkle Braun- und Olivtöne mit blassgrünem Kreuz-/Heilakzent.",
-        "anatomy": "Vierbeiner mit ruhigem tragendem Gang und fest angebrachtem medizinischem Rückengeschirr."
+        "anatomy": "Vierbeiner mit ruhigem tragendem Gang und fest angebrachtem medizinischem Rückengeschirr.",
+        "materials": "Helles cremefarbenes Sanitätsgepäck mit klarer grüner Kreuzmarkierung, salbeigrünes Fell und saubere Einfassungen."
       },
       "requiredClips": [
         "move"
@@ -969,18 +915,13 @@
       },
       "orthoScale": 2.84,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhige Anatomie",
-          "textureStrength": 0.2,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Gealterte Materialflächen",
-          "textureStrength": 0.57,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -1004,7 +945,9 @@
             "bodyShift": 0.015,
             "headYaw": -0.017,
             "headBob": 0.008,
-            "tailYaw": 0.09
+            "tailYaw": 0.09,
+            "rearPhase": 0.18,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -1030,7 +973,8 @@
       "description": {
         "silhouette": "Runder gepanzerter Rumpf mit ringförmigem Rückenmotiv und vier markierten Gliedmaßen.",
         "colors": "Tiefblau und Violett, cyanblaue Gelenke und helle Dachskopfzeichnung.",
-        "anatomy": "Vierbeiner mit niedriger schleichender Haltung; Gelenke und Rückenpanzer bleiben getrennte Formen."
+        "anatomy": "Vierbeiner mit niedriger schleichender Haltung; Gelenke und Rückenpanzer bleiben getrennte Formen.",
+        "materials": "Kobaltblaue gewölbte Chitinschalen, dunkler violetter Rückenbrunnen und getrennte cyanfarbene Nervenfelder."
       },
       "requiredClips": [
         "move"
@@ -1042,18 +986,13 @@
       },
       "orthoScale": 2.94,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhige Anatomie",
-          "textureStrength": 0.2,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Gealterte Materialflächen",
-          "textureStrength": 0.57,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -1077,7 +1016,9 @@
             "bodyShift": 0.023,
             "headYaw": -0.027,
             "headBob": 0.006,
-            "tailYaw": 0.08
+            "tailYaw": 0.08,
+            "rearPhase": 0.08,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -1103,7 +1044,8 @@
       "description": {
         "silhouette": "Breiter segmentierter Hinterkörper mit großen seitlichen gelbgrünen Brutsäcken.",
         "colors": "Braun, gedecktes Olivgelb, dunkle Segmentfugen und heller Kopfstreifen.",
-        "anatomy": "Vierbeiner mit wogendem Hinterleib und belasteten Pfoten; Säcke bewegen sich nur körpergebunden."
+        "anatomy": "Vierbeiner mit wogendem Hinterleib und belasteten Pfoten; Säcke bewegen sich nur körpergebunden.",
+        "materials": "Gelbgrüne große Brutkammern und olivfarbene Haut; runde schwere Birnenform und gegliederte Hautfalten."
       },
       "requiredClips": [
         "move"
@@ -1113,17 +1055,12 @@
       "model": {},
       "orthoScale": 2.76,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png"
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / matte Farbflächen",
-          "textureStrength": 0.18,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Texturiert / kontrollierte Details",
-          "textureStrength": 0.46,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -1148,7 +1085,9 @@
             "headYaw": 0.016,
             "headBob": 0.012,
             "tailYaw": 0.07,
-            "loadBob": 0.035
+            "loadBob": 0.035,
+            "rearPhase": 0.18,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -1172,31 +1111,85 @@
         0.5
       ],
       "description": {
-        "silhouette": "Fremdartiger gepanzerter Dachsrumpf mit breiten Schultern, separaten Armen und schmalerem Becken.",
+        "silhouette": "Jadegrüne spielerverwandte Zweibeiner-Anatomie mit zusammenhängenden Armen, mintfarbenem Gesicht und perlgrünen organischen Schulterplatten.",
         "colors": "Tiefes Blauviolett, cyanblaue Gelenke, heller Nord-Kopfstreifen und dunkler zentraler Rückenkern.",
-        "anatomy": "Zweibeiner mit eigener fremdartiger Anatomie, wechselnden Beinen und unabhängig gelagerten Armen."
+        "anatomy": "Zweibeiner mit eigener fremdartiger Anatomie, wechselnden Beinen und unabhängig gelagerten Armen.",
+        "materials": "Jadegrüne spielerverwandte Zweibeiner-Anatomie mit zusammenhängenden Armen, mintfarbenem Gesicht und perlgrünen organischen Schulterplatten."
       },
       "requiredClips": [
         "move"
       ],
       "production": "reference",
       "recipe": "alien-badger",
-      "model": {},
-      "orthoScale": 2.76,
+      "model": {
+        "footSouthOffset": 0.04,
+        "footSpacing": 1.24,
+        "clawedPaws": true,
+        "headSouthOffset": 0.04,
+        "earSouthOffset": 0.055,
+        "fierceEyes": true,
+        "combatFace": true,
+        "cursorFace": true,
+        "eyeSouthOffset": 0.025,
+        "furBase": [
+          0.08,
+          0.27,
+          0.22
+        ],
+        "furTones": [
+          [
+            12,
+            38,
+            38
+          ],
+          [
+            25,
+            83,
+            73
+          ],
+          [
+            54,
+            135,
+            112
+          ],
+          [
+            125,
+            191,
+            155
+          ]
+        ],
+        "paintedFur": true,
+        "contactAODistance": 0.65,
+        "contactAOStrength": 0.9,
+        "headColor": [
+          0.61,
+          0.85,
+          0.71
+        ],
+        "tailColor": [
+          0.25,
+          0.49,
+          0.35
+        ],
+        "footColor": [
+          0.055,
+          0.067,
+          0.075
+        ],
+        "upperBodyMotion": "stable-grip"
+      },
+      "orthoScale": 2.35,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
+        "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+        "headFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / matte Farbflächen",
-          "textureStrength": 0.18,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Texturiert / kontrollierte Details",
-          "textureStrength": 0.46,
-          "formShadowStrength": 0
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
+          "formShadowStrength": 1
         }
       },
       "clips": [
@@ -1207,21 +1200,19 @@
           "frameRate": 14,
           "loop": true,
           "parameters": {
-            "strideForward": 0.25,
-            "strideBack": 0.17,
-            "lift": 0.105,
-            "footRoll": 0.15,
-            "footYaw": 0.026,
-            "bodyYaw": 0.026,
-            "bodyBob": 0.032,
-            "bodyRoll": 0.018,
-            "bodyPitch": 0.012,
-            "bodyShift": 0.022,
-            "headYaw": 0.016,
-            "headBob": 0.011,
-            "tailYaw": 0.055,
-            "armSwing": 0.065,
-            "armBob": 0.018
+            "strideForward": 0.29,
+            "strideBack": 0.13,
+            "lift": 0.12,
+            "footRoll": 0.2,
+            "footYaw": 0.025,
+            "bodyYaw": 0.025,
+            "bodyRoll": 0.024,
+            "bodyPitch": 0.038,
+            "bodyBob": 0.075,
+            "bodySurge": -0.025,
+            "bodyShift": 0.018,
+            "headYaw": -0.022,
+            "headBob": -0.02
           }
         }
       ]
@@ -1247,7 +1238,8 @@
       "description": {
         "silhouette": "Segmentierter kräftiger Rücken und große seitliche organische Tragekammern.",
         "colors": "Gedämpftes Braun und Olivgelb mit hellem Kopfstreifen und dunklen Gelenkfugen.",
-        "anatomy": "Vierbeiner mit tragender Haltung; Kammern und Schulterapparat unterscheiden ihn anatomisch von einer bloßen Farbvariante."
+        "anatomy": "Vierbeiner mit tragender Haltung; Kammern und Schulterapparat unterscheiden ihn anatomisch von einer bloßen Farbvariante.",
+        "materials": "Rostbraune Trägermuskulatur, ockerfarbene Sehnen und lederbraune asymmetrische Wurftasche mit sichtbarer Brut."
       },
       "requiredClips": [
         "move"
@@ -1257,17 +1249,12 @@
       "model": {},
       "orthoScale": 2.72,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png"
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / matte Farbflächen",
-          "textureStrength": 0.18,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Texturiert / kontrollierte Details",
-          "textureStrength": 0.46,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -1292,7 +1279,9 @@
             "headYaw": 0.018,
             "headBob": 0.013,
             "tailYaw": 0.06,
-            "loadBob": 0.032
+            "loadBob": 0.032,
+            "rearPhase": 0.08,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -1318,7 +1307,8 @@
       "description": {
         "silhouette": "Langer breiter Rücken mit gezackten Panzersegmenten und vier massigen gepanzerten Pfoten.",
         "colors": "Schwarzes Basaltbraun, kupferorange Risse und kleine glühende Vertiefungen.",
-        "anatomy": "Vierbeiniger Boss mit schweren versetzten Schritten und gegliederter Rückenpanzerung; Weltfeuer separat."
+        "anatomy": "Vierbeiniger Boss mit schweren versetzten Schritten und gegliederter Rückenpanzerung; Weltfeuer separat.",
+        "materials": "Rundgeschliffene dunkle Basaltschalen, kupferrote Rückenpanzer und schmale orange Glutspalten."
       },
       "requiredClips": [
         "move"
@@ -1328,18 +1318,13 @@
       "model": {},
       "orthoScale": 3.78,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / matte Farbflächen",
-          "textureStrength": 0.18,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Texturiert / kontrollierte Details",
-          "textureStrength": 0.46,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -1363,7 +1348,9 @@
             "bodyShift": 0.023,
             "headYaw": 0.012,
             "headBob": 0.018,
-            "tailYaw": 0.035
+            "tailYaw": 0.035,
+            "rearPhase": 0.08,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -1387,31 +1374,85 @@
         0.5
       ],
       "description": {
-        "silhouette": "Breiter kantiger Schulterapparat über schmalerem Unterkörper mit zentralem Reaktorfeld.",
+        "silhouette": "Warme orange Zweibeiner-Anatomie mit spielerverwandten Armen und Gesicht, goldener Schutzkleidung und kleinem Flammenwerfer.",
         "colors": "Dunkles Violettbraun, kräftiger orangefarbener Kern und blasse Kopfzeichnung.",
-        "anatomy": "Zweibeiner mit stabiler bewaffneter Armhaltung und separat ausschwingenden Beinen."
+        "anatomy": "Zweibeiner mit stabiler bewaffneter Armhaltung und separat ausschwingenden Beinen.",
+        "materials": "Warme orange Zweibeiner-Anatomie mit spielerverwandten Armen und Gesicht, goldener Schutzkleidung und kleinem Flammenwerfer."
       },
       "requiredClips": [
         "move"
       ],
       "production": "reference",
       "recipe": "pyro-badger",
-      "model": {},
-      "orthoScale": 2.72,
+      "model": {
+        "footSouthOffset": 0.04,
+        "footSpacing": 1.24,
+        "clawedPaws": true,
+        "headSouthOffset": 0.04,
+        "earSouthOffset": 0.055,
+        "fierceEyes": true,
+        "combatFace": true,
+        "cursorFace": true,
+        "eyeSouthOffset": 0.025,
+        "furBase": [
+          0.32,
+          0.115,
+          0.032
+        ],
+        "furTones": [
+          [
+            40,
+            23,
+            12
+          ],
+          [
+            95,
+            46,
+            18
+          ],
+          [
+            155,
+            85,
+            26
+          ],
+          [
+            217,
+            153,
+            63
+          ]
+        ],
+        "paintedFur": true,
+        "contactAODistance": 0.65,
+        "contactAOStrength": 0.9,
+        "headColor": [
+          0.92,
+          0.76,
+          0.46
+        ],
+        "tailColor": [
+          0.51,
+          0.28,
+          0.09
+        ],
+        "footColor": [
+          0.055,
+          0.067,
+          0.075
+        ],
+        "upperBodyMotion": "stable-grip"
+      },
+      "orthoScale": 2.35,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
+        "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+        "headFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / matte Farbflächen",
-          "textureStrength": 0.18,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Texturiert / kontrollierte Details",
-          "textureStrength": 0.46,
-          "formShadowStrength": 0
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
+          "formShadowStrength": 1
         }
       },
       "clips": [
@@ -1422,20 +1463,19 @@
           "frameRate": 15,
           "loop": true,
           "parameters": {
-            "strideForward": 0.25,
-            "strideBack": 0.16,
-            "lift": 0.105,
-            "footRoll": 0.15,
-            "footYaw": 0.024,
-            "bodyYaw": 0.022,
-            "bodyBob": 0.028,
-            "bodyRoll": 0.015,
-            "bodyPitch": 0.01,
+            "strideForward": 0.29,
+            "strideBack": 0.13,
+            "lift": 0.12,
+            "footRoll": 0.2,
+            "footYaw": 0.025,
+            "bodyYaw": 0.025,
+            "bodyRoll": 0.024,
+            "bodyPitch": 0.038,
+            "bodyBob": 0.075,
+            "bodySurge": -0.025,
             "bodyShift": 0.018,
-            "headYaw": 0.012,
-            "headBob": 0.01,
-            "armSwing": 0.022,
-            "armBob": 0.01
+            "headYaw": -0.022,
+            "headBob": -0.02
           }
         }
       ]
@@ -1461,7 +1501,8 @@
       "description": {
         "silhouette": "Kompakter runder Körper mit vorderem hellem Kopfstreifen und gut erkennbarem Bombengeschirr.",
         "colors": "Dunkles Graubraun, schwach türkise Flanken und kleine rote Timeranzeige.",
-        "anatomy": "Vierbeiner mit schnellen kurzen Schritten; Geschirr bleibt befestigt, Zündung ist kein Teil des Laufclips."
+        "anatomy": "Vierbeiner mit schnellen kurzen Schritten; Geschirr bleibt befestigt, Zündung ist kein Teil des Laufclips.",
+        "materials": "Kleine graue Läufer-Anatomie mit klarer goldgelber Bombenkapsel und rotem Zeitfenster."
       },
       "requiredClips": [
         "move"
@@ -1471,18 +1512,13 @@
       "model": {},
       "orthoScale": 2.3,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / matte Farbflächen",
-          "textureStrength": 0.18,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Texturiert / kontrollierte Details",
-          "textureStrength": 0.46,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -1507,7 +1543,9 @@
             "headYaw": 0.023,
             "headBob": 0.016,
             "tailYaw": 0.09,
-            "loadBob": 0.009
+            "loadBob": 0.009,
+            "rearPhase": 0.08,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -1533,7 +1571,8 @@
       "description": {
         "silhouette": "Langer schmaler symmetrischer Jägerkörper mit spitzen Panzerenden und seitlichen Waffen-/Gliedmaßenformen.",
         "colors": "Anthrazit, dunkles Violett und schmale leuchtend purpurfarbene Panzerlinien.",
-        "anatomy": "Vierbeiniger Boss mit langen kontrollierten Schritten; längliche Silhouette erhalten, Referenz zeigt abweichend nach Süden."
+        "anatomy": "Vierbeiniger Boss mit langen kontrollierten Schritten; längliche Silhouette erhalten, Referenz zeigt abweichend nach Süden.",
+        "materials": "Lange eisblaue Jägerpanzerung mit dunkelblauen Gelenken und magentafarbenen eingelegten Energiebahnen."
       },
       "requiredClips": [
         "move"
@@ -1548,18 +1587,13 @@
       "model": {},
       "orthoScale": 3.55,
       "textures": {
-        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
       },
       "materialVariants": {
-        "calm": {
-          "label": "Ruhig / matte Farbflächen",
-          "textureStrength": 0.18,
-          "formShadowStrength": 0
-        },
-        "rich": {
-          "label": "Texturiert / kontrollierte Details",
-          "textureStrength": 0.46,
+        "standard": {
+          "label": "Organische Formen und klare Farben",
+          "textureStrength": 0.62,
           "formShadowStrength": 0
         }
       },
@@ -1571,8 +1605,8 @@
           "frameRate": 11,
           "loop": true,
           "parameters": {
-            "strideForward": 0.22,
-            "strideBack": 0.18,
+            "strideForward": 0.26,
+            "strideBack": 0.215,
             "lift": 0.065,
             "footRoll": 0.1,
             "footYaw": 0.018,
@@ -1583,7 +1617,9 @@
             "bodyShift": 0.012,
             "headYaw": 0.01,
             "headBob": 0.006,
-            "tailYaw": 0.033
+            "tailYaw": 0.033,
+            "rearPhase": 0.08,
+            "bodySurge": 0.012
           }
         }
       ]
@@ -1609,10 +1645,12 @@
       "description": {
         "silhouette": "Aufrechter breitschultriger Dachs mit seitlich versetzten waffenbereiten Händen, getrennten Beinen und hellem Süd-Schwanz.",
         "colors": "Gemalte schiefergraue Fellgruppen entlang der Arme, warme elfenbeinfarbene Kopfzeichnung und strukturierte anthrazitfarbene Gesichtsbänder; breite Werteflächen bleiben bei 32 Pixeln lesbar.",
-        "anatomy": "Cursor-inspirierter Dachskopf mit gerichteten gemalten Fellbüscheln, elfenbeinfarbener Gesichtsmitte und dunklen Wangenbändern. Breite nach hinten angelegte Ohren mit weichem hellem Fellsaum und auslaufendem Ansatz. Kompakte bernsteinfarbene Augen mit schmalen dunklen Pupillen und kleinem gemaltem Lichtakzent, ohne Emission. Gerichtetes dunkles Körperfell und enger geführte kompakte Pfoten mit kurzen Hornkrallen. Schneller Lauf mit kräftigem Wippen und stabilen Waffenhänden."
+        "anatomy": "Cursor-inspirierter Dachskopf mit gerichteten gemalten Fellbüscheln, elfenbeinfarbener Gesichtsmitte und dunklen Wangenbändern. Breite nach hinten angelegte Ohren mit weichem hellem Fellsaum und auslaufendem Ansatz. Kompakte bernsteinfarbene Augen mit schmalen dunklen Pupillen und kleinem gemaltem Lichtakzent, ohne Emission. Gerichtetes dunkles Körperfell und enger geführte kompakte Pfoten mit kurzen Hornkrallen. Schneller Lauf mit kräftigem Wippen und stabilen Waffenhänden.",
+        "animation": "Schneller Lauf mit stabilen Waffenhänden; dreisekündige ruhige Atmung mit Brust- und Schulterbewegung bei feststehenden Pfoten und Griffen."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "idle"
       ],
       "production": "reference",
       "recipe": "badger",
@@ -1626,27 +1664,59 @@
         "combatFace": true,
         "cursorFace": true,
         "eyeSouthOffset": 0.025,
-        "furBase": [0.035, 0.047, 0.057],
-        "furTones": [[7, 11, 17], [23, 29, 34], [47, 55, 59], [91, 90, 82]],
+        "furBase": [
+          0.035,
+          0.047,
+          0.057
+        ],
+        "furTones": [
+          [
+            7,
+            11,
+            17
+          ],
+          [
+            23,
+            29,
+            34
+          ],
+          [
+            47,
+            55,
+            59
+          ],
+          [
+            91,
+            90,
+            82
+          ]
+        ],
         "paintedFur": true,
         "contactAODistance": 0.65,
         "contactAOStrength": 0.9,
-        "headColor": [0.99, 0.97, 0.90],
-        "tailColor": [0.73, 0.71, 0.64],
-        "footColor": [0.055, 0.067, 0.075],
+        "headColor": [
+          0.99,
+          0.97,
+          0.9
+        ],
+        "tailColor": [
+          0.73,
+          0.71,
+          0.64
+        ],
+        "footColor": [
+          0.055,
+          0.067,
+          0.075
+        ],
         "upperBodyMotion": "stable-grip"
       },
       "orthoScale": 2.2,
       "collisionDiameter": 32,
       "materialVariants": {
-        "calm": {
-          "label": "Breite Fellzüge · ruhig",
-          "textureStrength": 0.45,
-          "formShadowStrength": 1
-        },
-        "rich": {
-          "label": "Breite Fellzüge · akzentuiert",
-          "textureStrength": 0.70,
+        "standard": {
+          "label": "Ausgearbeitetes Fell",
+          "textureStrength": 0.7,
           "formShadowStrength": 1
         }
       },
@@ -1670,7 +1740,7 @@
             "strideForward": 0.34,
             "strideBack": 0.12,
             "lift": 0.12,
-            "footRoll": 0.20,
+            "footRoll": 0.2,
             "footYaw": 0.025,
             "bodyYaw": 0.045,
             "bodyRoll": 0.024,
@@ -1681,8 +1751,1611 @@
             "headYaw": -0.022,
             "headBob": -0.035
           }
+        },
+        {
+          "name": "idle",
+          "motion": "player_idle",
+          "frameCount": 24,
+          "frameRate": 8,
+          "loop": true,
+          "parameters": {
+            "chestWidth": 0.027,
+            "chestDepth": 0.018,
+            "chestLift": 0.022,
+            "headFollow": 0.008
+          }
         }
       ]
+    },
+    {
+      "id": "held-glock",
+      "label": "GLOCK",
+      "category": "weapon",
+      "gameIds": [
+        "GLOCK"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/GLOCK.png",
+      "designReference": "public/assets/sprites/Loadout/GLOCK.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Schmaler facettierter Pistolenschlitten, Kammerfenster, geschütztes Visier und separater Polymergriff.",
+        "materials": "Eisblauer Stahlverschluss auf dunkelblauem Polymergriff. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "pistol",
+        "accent": [
+          0.13,
+          0.24,
+          0.32
+        ],
+        "palette": {
+          "steel": [
+            0.065,
+            0.105,
+            0.16
+          ],
+          "edge": [
+            0.24,
+            0.34,
+            0.43
+          ],
+          "body": [
+            0.018,
+            0.042,
+            0.085
+          ],
+          "trim": [
+            0.105,
+            0.19,
+            0.27
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          14.5
+        ],
+        "referenceGrip": [
+          4.5,
+          9.5
+        ]
+      }
+    },
+    {
+      "id": "held-p90",
+      "label": "P90",
+      "category": "weapon",
+      "gameIds": [
+        "P90"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/P90.png",
+      "designReference": "public/assets/sprites/Loadout/P90.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "P90-Bullpup mit rundem breitem Hinterschaft, eingezogener Taille, flachem Rauchglas-Magazin und längs integrierter vorderer Optik.",
+        "materials": "Blaugraues Polymer, rauchbraunes Magazin und dunkle integrierte Zieloptik. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "smg",
+        "accent": [
+          0.22,
+          0.31,
+          0.32
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.075,
+            0.08
+          ],
+          "edge": [
+            0.25,
+            0.32,
+            0.35
+          ],
+          "body": [
+            0.025,
+            0.055,
+            0.08
+          ],
+          "trim": [
+            0.06,
+            0.11,
+            0.145
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          12.5
+        ],
+        "referenceGrip": [
+          4.5,
+          11.5
+        ]
+      }
+    },
+    {
+      "id": "held-ak47",
+      "label": "AK47",
+      "category": "weapon",
+      "gameIds": [
+        "AK47"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/AK47.png",
+      "designReference": "public/assets/sprites/Loadout/AK47.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "AK-Stahlgehäuse mit Walnussschaft, gerundetem Staubdeckel, Gasrohr und abgesetztem Kornblock.",
+        "materials": "Rostorange Walnussflächen und dunkler blauer Stahl. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "rifle",
+        "accent": [
+          0.36,
+          0.14,
+          0.045
+        ],
+        "palette": {
+          "steel": [
+            0.03,
+            0.06,
+            0.095
+          ],
+          "edge": [
+            0.17,
+            0.24,
+            0.28
+          ],
+          "body": [
+            0.02,
+            0.04,
+            0.065
+          ],
+          "trim": [
+            0.055,
+            0.095,
+            0.125
+          ],
+          "wood": [
+            0.46,
+            0.115,
+            0.023
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          3.5
+        ],
+        "referenceGrip": [
+          4.5,
+          20.5
+        ]
+      }
+    },
+    {
+      "id": "held-shotgun",
+      "label": "SHOTGUN",
+      "category": "weapon",
+      "gameIds": [
+        "SHOTGUN"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/SHOTGUN.png",
+      "designReference": "public/assets/sprites/Loadout/SHOTGUN.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Pumpflinte mit geripptem Holzvorderschaft, Auswurffenster, Magazinrohr und schmaler Visierschiene.",
+        "materials": "Warmes braunes Walnussholz mit brüniertem braunem Stahl. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "shotgun",
+        "accent": [
+          0.38,
+          0.18,
+          0.065
+        ],
+        "palette": {
+          "steel": [
+            0.15,
+            0.12,
+            0.085
+          ],
+          "edge": [
+            0.37,
+            0.33,
+            0.25
+          ],
+          "body": [
+            0.14,
+            0.09,
+            0.055
+          ],
+          "trim": [
+            0.22,
+            0.13,
+            0.058
+          ],
+          "wood": [
+            0.28,
+            0.11,
+            0.047
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          6.5
+        ],
+        "referenceGrip": [
+          5.5,
+          17.5
+        ]
+      }
+    },
+    {
+      "id": "held-awp",
+      "label": "AWP",
+      "category": "weapon",
+      "gameIds": [
+        "AWP"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/AWP.png",
+      "designReference": "public/assets/sprites/Loadout/AWP.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Langes AWP-Matchgewehr mit grünem Chassis, abgestufter Zieloptik, Kammerstängel und angelegtem Zweibein.",
+        "materials": "Helles apfel-olivgrünes Chassis und dunkle Zieloptik. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "sniper",
+        "accent": [
+          0.25,
+          0.39,
+          0.065
+        ],
+        "palette": {
+          "steel": [
+            0.04,
+            0.055,
+            0.035
+          ],
+          "edge": [
+            0.22,
+            0.27,
+            0.15
+          ],
+          "body": [
+            0.12,
+            0.23,
+            0.035
+          ],
+          "trim": [
+            0.21,
+            0.35,
+            0.04
+          ],
+          "olive": [
+            0.25,
+            0.44,
+            0.038
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          28
+        ],
+        "muzzle": [
+          16,
+          1.5
+        ],
+        "referenceGrip": [
+          4.5,
+          26.5
+        ]
+      }
+    },
+    {
+      "id": "held-negev",
+      "label": "NEGEV",
+      "category": "weapon",
+      "gameIds": [
+        "NEGEV"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/NEGEV.png",
+      "designReference": "public/assets/sprites/Loadout/NEGEV.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Negev mit seitlichem Munitionskasten, sichtbarem Patronengurt, gelochtem Vorderschaft und Tragebügel.",
+        "materials": "Dunkles Militär-Oliv mit khakifarbenen Metallkanten und messingfarbenem Patronengurt. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "machine-gun",
+        "accent": [
+          0.23,
+          0.31,
+          0.065
+        ],
+        "palette": {
+          "steel": [
+            0.06,
+            0.085,
+            0.032
+          ],
+          "edge": [
+            0.28,
+            0.3,
+            0.18
+          ],
+          "body": [
+            0.075,
+            0.12,
+            0.045
+          ],
+          "trim": [
+            0.25,
+            0.28,
+            0.095
+          ],
+          "olive": [
+            0.095,
+            0.145,
+            0.032
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          3.5
+        ],
+        "referenceGrip": [
+          6.5,
+          20.5
+        ]
+      }
+    },
+    {
+      "id": "held-xbow",
+      "label": "XBOW",
+      "category": "weapon",
+      "gameIds": [
+        "XBOW"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/XBOW.png",
+      "designReference": "public/assets/sprites/Loadout/XBOW.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Compound-Armbrust mit geteilten Wurfarmen, Exzenterrollen, gespannten Sehnen und Bolzenschiene.",
+        "materials": "Blaue Verbundwerkstoffe und helle stahlblaue Wurfarme. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "crossbow",
+        "accent": [
+          0.045,
+          0.34,
+          0.48
+        ],
+        "palette": {
+          "steel": [
+            0.055,
+            0.105,
+            0.16
+          ],
+          "edge": [
+            0.34,
+            0.44,
+            0.56
+          ],
+          "body": [
+            0.028,
+            0.075,
+            0.14
+          ],
+          "trim": [
+            0.1,
+            0.22,
+            0.34
+          ],
+          "brass": [
+            0.38,
+            0.22,
+            0.12
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          10.5
+        ],
+        "referenceGrip": [
+          4.5,
+          13.5
+        ]
+      }
+    },
+    {
+      "id": "held-asmd-prim",
+      "label": "ASMD PRIM",
+      "category": "weapon",
+      "gameIds": [
+        "ASMD_PRIM"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/ASMD_PRIM.png",
+      "designReference": "public/assets/sprites/Loadout/ASMD_PRIM.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Gemeinsames ASMD-Modell mit Induktionslauf, symmetrischen Kondensatoren, gefasster Energiekammer und identischer Fokussierhülse.",
+        "materials": "Gemeinsames dunkles ASMD-Gehäuse mit silbernen Wangen und blauen Energieakzenten. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "asmd",
+        "accent": [
+          0.018,
+          0.38,
+          0.73
+        ],
+        "palette": {
+          "steel": [
+            0.06,
+            0.075,
+            0.11
+          ],
+          "edge": [
+            0.35,
+            0.38,
+            0.43
+          ],
+          "body": [
+            0.025,
+            0.032,
+            0.06
+          ],
+          "trim": [
+            0.2,
+            0.225,
+            0.27
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          9.5
+        ],
+        "referenceGrip": [
+          4.5,
+          14.5
+        ]
+      }
+    },
+    {
+      "id": "held-asmd-sec",
+      "label": "ASMD SEC",
+      "category": "weapon",
+      "gameIds": [
+        "ASMD_SEC"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/ASMD_SEC.png",
+      "designReference": "public/assets/sprites/Loadout/ASMD_SEC.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Gemeinsames ASMD-Modell mit Induktionslauf, symmetrischen Kondensatoren, gefasster Energiekammer und identischer Fokussierhülse.",
+        "materials": "Identisches ASMD-Gehäuse und identische Bauteile; violette statt blaue Energieakzente. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "asmd",
+        "accent": [
+          0.38,
+          0.035,
+          0.62
+        ],
+        "palette": {
+          "steel": [
+            0.06,
+            0.075,
+            0.11
+          ],
+          "edge": [
+            0.35,
+            0.38,
+            0.43
+          ],
+          "body": [
+            0.025,
+            0.032,
+            0.06
+          ],
+          "trim": [
+            0.2,
+            0.225,
+            0.27
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          9.5
+        ],
+        "referenceGrip": [
+          4.5,
+          14.5
+        ]
+      }
+    },
+    {
+      "id": "held-plasma",
+      "label": "PLASMA",
+      "category": "weapon",
+      "gameIds": [
+        "PLASMA"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/PLASMA.png",
+      "designReference": "public/assets/sprites/Loadout/PLASMA.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Gerundetes Energiegehäuse mit eingefasster Plasmakammer und zwei breiten gekühlten Entladegabeln.",
+        "materials": "Kobaltblaues Gehäuse mit cyanfarbener Kammer und blauen Entladegabeln. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "plasma",
+        "accent": [
+          0.02,
+          0.58,
+          0.79
+        ],
+        "palette": {
+          "steel": [
+            0.025,
+            0.09,
+            0.14
+          ],
+          "edge": [
+            0.18,
+            0.4,
+            0.55
+          ],
+          "body": [
+            0.018,
+            0.13,
+            0.32
+          ],
+          "trim": [
+            0.035,
+            0.3,
+            0.52
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          12.5
+        ],
+        "referenceGrip": [
+          3.5,
+          11.5
+        ]
+      }
+    },
+    {
+      "id": "held-hydra",
+      "label": "HYDRA",
+      "category": "weapon",
+      "gameIds": [
+        "HYDRA"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/HYDRA.png",
+      "designReference": "public/assets/sprites/Loadout/HYDRA.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Drei getrennte Kupferwicklungen und cyanfarbene Emitter auf einer mechanischen Verteilerbrücke.",
+        "materials": "Petrolfarbener Verteiler, kupferne Wicklungen und drei cyanfarbene Emitter. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "hydra",
+        "accent": [
+          0.015,
+          0.5,
+          0.6
+        ],
+        "palette": {
+          "steel": [
+            0.095,
+            0.18,
+            0.19
+          ],
+          "edge": [
+            0.23,
+            0.37,
+            0.37
+          ],
+          "body": [
+            0.016,
+            0.095,
+            0.105
+          ],
+          "trim": [
+            0.04,
+            0.23,
+            0.26
+          ],
+          "brass": [
+            0.44,
+            0.215,
+            0.07
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          10.5
+        ],
+        "referenceGrip": [
+          4.5,
+          13.5
+        ]
+      }
+    },
+    {
+      "id": "held-rocket-launcher",
+      "label": "ROCKET LAUNCHER",
+      "category": "weapon",
+      "gameIds": [
+        "ROCKET_LAUNCHER"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/ROCKET_LAUNCHER.png",
+      "designReference": "public/assets/sprites/Loadout/ROCKET_LAUNCHER.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Langes olivfarbenes Startrohr mit Spannbändern, Schulterpolster und seitlicher Zieloptik.",
+        "materials": "Moosgrünes Startrohr mit warmen bronzenen Spannringen. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "rocket",
+        "accent": [
+          0.43,
+          0.24,
+          0.065
+        ],
+        "palette": {
+          "steel": [
+            0.07,
+            0.1,
+            0.025
+          ],
+          "edge": [
+            0.35,
+            0.3,
+            0.12
+          ],
+          "body": [
+            0.11,
+            0.18,
+            0.03
+          ],
+          "trim": [
+            0.23,
+            0.3,
+            0.065
+          ],
+          "olive": [
+            0.2,
+            0.31,
+            0.038
+          ],
+          "brass": [
+            0.49,
+            0.28,
+            0.06
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          4.5
+        ],
+        "referenceGrip": [
+          6.5,
+          19.5
+        ]
+      }
+    },
+    {
+      "id": "held-mini-rocket-launcher",
+      "label": "MINI ROCKET LAUNCHER",
+      "category": "weapon",
+      "gameIds": [
+        "MINI_ROCKET_LAUNCHER"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/MINI_ROCKET_LAUNCHER.png",
+      "designReference": "public/assets/sprites/Loadout/MINI_ROCKET_LAUNCHER.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Kompakter gekapselter Sechsfach-Raketenpod mit versetzten Rohrreihen, Wartungsdeckeln und seitlichen Verschlüssen.",
+        "materials": "Schieferblauer Raketenpod mit orangefarbenen Rohrmarkierungen und Verschlüssen. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "mini-rockets",
+        "accent": [
+          0.65,
+          0.19,
+          0.035
+        ],
+        "palette": {
+          "steel": [
+            0.07,
+            0.11,
+            0.15
+          ],
+          "edge": [
+            0.29,
+            0.38,
+            0.44
+          ],
+          "body": [
+            0.07,
+            0.15,
+            0.27
+          ],
+          "trim": [
+            0.12,
+            0.245,
+            0.36
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          11.5
+        ],
+        "referenceGrip": [
+          4.5,
+          12.5
+        ]
+      }
+    },
+    {
+      "id": "held-flamethrower",
+      "label": "FLAMETHROWER",
+      "category": "weapon",
+      "gameIds": [
+        "FLAMETHROWER"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/FLAMETHROWER.png",
+      "designReference": "public/assets/sprites/Loadout/FLAMETHROWER.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Zwei Druckbehälter mit Armaturen und Schlauch; langer Brenner mit perforiertem Hitzeschild und Pilotleitung.",
+        "materials": "Kupferbrauner Regulator, orange Behälter und bronzener Hitzeschild. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "flame",
+        "accent": [
+          0.55,
+          0.16,
+          0.015
+        ],
+        "palette": {
+          "steel": [
+            0.045,
+            0.039,
+            0.032
+          ],
+          "edge": [
+            0.26,
+            0.2,
+            0.12
+          ],
+          "body": [
+            0.115,
+            0.055,
+            0.025
+          ],
+          "trim": [
+            0.21,
+            0.095,
+            0.036
+          ],
+          "brass": [
+            0.52,
+            0.23,
+            0.035
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          8.5
+        ],
+        "referenceGrip": [
+          5.5,
+          15.5
+        ]
+      }
+    },
+    {
+      "id": "held-leaf-blower",
+      "label": "LEAF BLOWER",
+      "category": "weapon",
+      "gameIds": [
+        "LEAF_BLOWER"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/LAUBBLAESER.png",
+      "designReference": "public/assets/sprites/Loadout/LAUBBLAESER.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Grünes rundes Lüftergehäuse mit Einlassgitter, seitlichem Tragegriff und verjüngtem Luftkanal.",
+        "materials": "Leuchtend grünes Lüftergehäuse mit blauem Luftkanal. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "blower",
+        "accent": [
+          0.19,
+          0.55,
+          0.028
+        ],
+        "palette": {
+          "steel": [
+            0.06,
+            0.17,
+            0.23
+          ],
+          "edge": [
+            0.18,
+            0.33,
+            0.41
+          ],
+          "body": [
+            0.08,
+            0.22,
+            0.025
+          ],
+          "trim": [
+            0.11,
+            0.28,
+            0.05
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          10.5
+        ],
+        "referenceGrip": [
+          5.5,
+          13.5
+        ]
+      }
+    },
+    {
+      "id": "held-plasma-burner",
+      "label": "PLASMA BURNER",
+      "category": "weapon",
+      "gameIds": [
+        "PLASMA_BURNER"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/REPARATURSTRAHL.png",
+      "designReference": "public/assets/sprites/Loadout/UPGRADE_UNLOCK_PLASMA_BURNER.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Kompaktes Schweißgerät mit Gaskartusche, Stromkabel, Kupferschaft und keramischem Brennerkopf.",
+        "materials": "Kobaltblaues Schweißgerät mit cyanfarbener Keramik und kupfernem Brennerschaft. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "repair",
+        "accent": [
+          0.025,
+          0.46,
+          0.7
+        ],
+        "palette": {
+          "steel": [
+            0.05,
+            0.12,
+            0.2
+          ],
+          "edge": [
+            0.23,
+            0.37,
+            0.44
+          ],
+          "body": [
+            0.025,
+            0.055,
+            0.16
+          ],
+          "trim": [
+            0.045,
+            0.16,
+            0.37
+          ],
+          "brass": [
+            0.3,
+            0.2,
+            0.09
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          13.5
+        ],
+        "referenceGrip": [
+          4.5,
+          10.5
+        ]
+      }
+    },
+    {
+      "id": "held-overcharge-core",
+      "label": "OVERCHARGE CORE",
+      "category": "weapon",
+      "gameIds": [
+        "OVERCHARGE_CORE"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/OVERCHARGE_CORE.png",
+      "designReference": "public/assets/sprites/Loadout/UPGRADE_UNLOCK_OVERCHARGE_CORE.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Zylindrische Energiekapsel mit umlaufenden Abschirmbändern, geschwungenem Schutzkäfig und Kupplung.",
+        "materials": "Gold-orange Energiekapsel und goldener Schutzkäfig vor dunkelblauem Gehäuse. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "core",
+        "accent": [
+          0.7,
+          0.28,
+          0.02
+        ],
+        "palette": {
+          "steel": [
+            0.04,
+            0.1,
+            0.17
+          ],
+          "edge": [
+            0.3,
+            0.4,
+            0.46
+          ],
+          "body": [
+            0.02,
+            0.075,
+            0.16
+          ],
+          "trim": [
+            0.055,
+            0.19,
+            0.31
+          ],
+          "brass": [
+            0.66,
+            0.36,
+            0.018
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          14.5
+        ],
+        "referenceGrip": [
+          3.5,
+          9.5
+        ]
+      }
+    },
+    {
+      "id": "held-energy-injector",
+      "label": "ENERGY INJECTOR",
+      "category": "weapon",
+      "gameIds": [
+        "ENERGY_INJECTOR"
+      ],
+      "production": "reference",
+      "reference": "public/assets/sprites/held/ENERGIEINJEKTOR.png",
+      "designReference": "public/assets/sprites/Loadout/UPGRADE_UNLOCK_ENERGY_INJECTOR.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Schmaler Injektor mit ablesbarer Dosierkartusche, Haltehülsen, Nadelfutter und Daumenhebel.",
+        "materials": "Helles silbrig-türkises Instrument mit cyanfarbener Dosierkartusche. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+        "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+      },
+      "requiredClips": [],
+      "recipe": "held-weapon",
+      "model": {
+        "construction": "injector",
+        "accent": [
+          0.035,
+          0.62,
+          0.78
+        ],
+        "palette": {
+          "steel": [
+            0.1,
+            0.23,
+            0.28
+          ],
+          "edge": [
+            0.53,
+            0.64,
+            0.6
+          ],
+          "body": [
+            0.38,
+            0.5,
+            0.52
+          ],
+          "trim": [
+            0.04,
+            0.32,
+            0.41
+          ],
+          "brass": [
+            0.55,
+            0.38,
+            0.08
+          ]
+        }
+      },
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Gebrauchte Materialien und kräftige Formschatten",
+          "textureStrength": 0.85,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          14.5
+        ],
+        "referenceGrip": [
+          2.5,
+          9.5
+        ]
+      }
     }
   ]
 }

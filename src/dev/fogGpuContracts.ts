@@ -2,6 +2,7 @@ import type * as Phaser from 'phaser';
 import { FogGpuField } from '../effects/groundFog/FogGpuField';
 import { FogTerrainModel } from '../effects/groundFog/FogTerrainModel';
 import { FOG, fogTuning } from '../effects/groundFog/FogConfig';
+import { createWeaponFogTrailProfile } from '../effects/groundFog/WeaponFogTrail';
 
 /** Deliberate synchronous readbacks in a disposable fixture, never in timed runs. */
 export function runFogGpuContracts(scene: Phaser.Scene): object {
@@ -67,9 +68,11 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     const reopenedCached = field.readDensity(292, 260), blockedCached = field.readDensity(140, 140);
     const obstacleFlow = checkObstacleFlow(scene);
     const traceLoad = checkTraceLoad(field, view, tuning, time);
+    const weaponProfiles = checkWeaponProfiles(field, view, tuning, time);
     const checks = {
       ...obstacleFlow.checks,
       ...traceLoad.checks,
+      ...weaponProfiles.checks,
       cachedTerrainEditsPreserveOtherCells: cachedBefore.density === cachedAfter.density,
       cachedEditsAppliedBeforeResume: reopenedCached.density === 0 && !reopenedCached.reached && blockedCached.density === 0,
       thinTraceWithoutWideLane: fineTrail > 0 && outsideTrail === 0,
@@ -92,7 +95,7 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     };
     return { passed: Object.values(checks).every(Boolean), checks,
       readings: { initial, initialVelocity, wall, isolated, openingCenter, openingEdge, entered, reblocked, beforeRead, afterRead, neighbourhood,
-        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings, traceLoad: traceLoad.readings } };
+        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings, traceLoad: traceLoad.readings, weaponProfiles: weaponProfiles.readings } };
   } finally { field.destroy(); terrain.clear(); }
 }
 
@@ -159,4 +162,32 @@ function checkTraceLoad(field: FogGpuField, view: { x: number; y: number; width:
     trainWakeExpires: trainGone === 0,
     cappedClockKeepsTraceTip: cappedTip > .5,
   }, readings: { single, duplicate, oldBefore, oldAfter, newest, traceCount, narrow, wide, train, bulletGone, trainGone, cappedTip } };
+}
+
+function checkWeaponProfiles(field: FogGpuField, view: { x: number; y: number; width: number; height: number }, tuning: ReturnType<typeof fogTuning>, start: number) {
+  field.trails.clear();
+  const point = (x: number, y: number) => ({ x, y, timeMs: 0, sequence: 1, vx: 0, vy: 0 });
+  const add = (y: number, id: number, width: number, duration: number, arc?: number) => {
+    const profile = createWeaponFogTrailProfile(arc ? 100 : 10, .8, { fogTrailWidthFactor: width, fogTrailDurationFactor: duration }, arc)!;
+    field.trails.addPath({ from: point(100, y), to: point(arc ? 132 : 450, y), ageMs: 0 }, id, start, profile);
+  };
+  const render = (now: number, quality: 'high' | 'low' = 'high') => {
+    field.step([], [.8, .8], tuning, now); field.render(view, 1024, 512, 'normal', 1, [], quality);
+  };
+  add(60, 1, 1, 1); add(140, 2, 2, 1); add(220, 3, 1, 2); add(340, 4, 1, 2, 90);
+  render(start);
+  const narrowOutside = field.readTrail(200, 75), wideInside = field.readTrail(200, 155);
+  const front = field.readTrail(140, 340), behind = field.readTrail(60, 340), side = field.readTrail(100, 380);
+  render(start, 'low');
+  const lowMelee = field.readTrail(140, 340), lowProjectile = field.readTrail(200, 60);
+  render(start + FOG.trailMs + 100);
+  const normalExpired = field.readTrail(200, 60), extended = field.readTrail(200, 220), extendedMelee = field.readTrail(140, 340);
+  render(start + FOG.trailMs * 2 + 100);
+  const allExpired = field.readTrail(200, 220) === 0 && field.readTrail(140, 340) === 0;
+  return { checks: {
+    weaponWidthFactorReachesGpu: narrowOutside === 0 && wideInside > .01,
+    weaponDurationFactorReachesGpu: normalExpired === 0 && extended > .01 && extendedMelee > .01 && allExpired,
+    analyticalMeleeFacesForward: front > .1 && behind === 0 && side === 0,
+    lowQualityKeepsMeleeButHidesProjectiles: lowMelee > .1 && lowProjectile === 0,
+  }, readings: { narrowOutside, wideInside, front, behind, side, lowMelee, lowProjectile, normalExpired, extended, extendedMelee, allExpired } };
 }

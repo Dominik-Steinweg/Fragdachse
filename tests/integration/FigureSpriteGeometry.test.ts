@@ -48,7 +48,8 @@ function sceneWithArcadeBodies(sourceSize: number) {
   };
   scene.add.sprite = figure;
   scene.add.image = (x: number, y: number, key: string) => {
-    const size = key === getHeldItemSpriteSpec('GLOCK')!.textureKey ? HELD_ITEM_TEXTURE_SIZE : sourceSize;
+    const held = getHeldItemSpriteSpec('GLOCK')!;
+    const size = key === held.textureKey ? HELD_ITEM_TEXTURE_SIZE * (held.sourceScale ?? 1) : sourceSize;
     const image = figure(x, y, key, 0, size);
     images.push(image);
     return image;
@@ -193,12 +194,12 @@ describe('figure source resolution and Arcade geometry', () => {
       const weapon = images.at(-1);
       const sprite = entity instanceof PlayerEntity ? entity.displayObject! : entity.sprite;
       expect(sprite.displayWidth).toBeCloseTo(size * PLAYER_VISUAL_SCALE);
-      expect(weapon.scaleX).toBeCloseTo(sprite.displayWidth / HELD_ITEM_TEXTURE_SIZE);
+      expect(weapon.displayWidth).toBeCloseTo(sprite.displayWidth);
       expect(decoy.sprite.body).toBeFalsy();
     }
     player.setDashScale(0.5);
     const weapon = images.find(i => i.texture.key === getHeldItemSpriteSpec('GLOCK')!.textureKey);
-    expect(weapon.scaleX).toBeCloseTo(player.displayObject!.displayWidth / HELD_ITEM_TEXTURE_SIZE);
+    expect(weapon.displayWidth).toBeCloseTo(player.displayObject!.displayWidth);
 
     player.setDashScale(1);
     player.setDecoyStealth(true);

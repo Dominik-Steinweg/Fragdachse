@@ -60,7 +60,9 @@ export async function prepareReviewV2(assetFolder, reviewJsonFile, workspace = r
   if (await exists(selectionFile)) throw new Error('Selection already exists; review inputs are immutable');
   const build = await json(await sourceFile(root, path.join(asset, 'build.json')));
   if (build.status !== 'complete' || !/^[a-f0-9]{64}$/.test(build.inputHash)) throw new Error('Completed V2 build required before review');
-  const manifests = await Promise.all(['calm', 'rich'].map(async variant => json(await sourceFile(root, path.join(asset, variant, 'render.json')))));
+  const variants = Object.keys(build.variants ?? {});
+  if (!variants.length) variants.push('calm', 'rich');
+  const manifests = await Promise.all(variants.map(async variant => json(await sourceFile(root, path.join(asset, referencePath(variant), 'render.json')))));
   for (const m of manifests) {
     if (m.pipelineVersion !== 2 || m.id !== parts[1] || m.revision !== parts[0]) throw new Error('Review manifest disagrees with asset folder');
   }
@@ -74,8 +76,8 @@ export async function prepareReviewV2(assetFolder, reviewJsonFile, workspace = r
   if (!review || typeof review !== 'object' || Array.isArray(review)) throw new Error('Review JSON must contain an object');
   const inputs = new Map([[reviewRelative, reviewBytes], [helperRelative, await readFile(helperFile)]]);
   const references = [];
-  for (const [role, relative] of [['reference', manifest.reference], ['previousReference', manifest.previousReference?.path]]) {
-    if (role === 'previousReference' && relative === undefined) continue;
+  for (const [role, relative] of [['reference', manifest.reference], ['previousReference', manifest.previousReference?.path], ['designReference', manifest.designReference]]) {
+    if (role !== 'reference' && relative === undefined) continue;
     referencePath(relative);
     const bytes = await readFile(await sourceFile(root, relative));
     if ((await sharp(bytes).metadata()).format !== 'png') throw new Error('Review references must be PNG images');

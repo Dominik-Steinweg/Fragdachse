@@ -5,12 +5,30 @@ import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
 import { PLAYER_SIZE } from '../../src/config';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { TURRET_VISUALS } from '../../src/config/turretVisuals';
+import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig } from '../../src/loadout/LoadoutConfig';
 
 const root = process.cwd();
 const assets = catalog.assets;
 const sorted = (values: string[]) => [...values].sort();
 
 describe('asset pipeline catalog contracts', () => {
+  it('covers every equipable held weapon with explicit grip and muzzle coordinates', () => {
+    const slotless = new Set(['melee', 'energy_shield', 'tesla_dome', 'healing_aura']);
+    const required = LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'weapon')
+      .filter(entry => { const weapon = findWeaponConfig(entry.id); return weapon && !slotless.has(weapon.fire.type); }).map(entry => entry.id);
+    const weapons = assets.filter(asset => asset.category === 'weapon');
+    expect(sorted(weapons.flatMap(asset => asset.gameIds))).toEqual(sorted(required));
+    for (const asset of weapons) {
+      expect(asset.forward).toBe('north');
+      expect(asset.requiredClips).toEqual([]);
+      expect(asset.heldItem?.referenceSize).toBe(asset.targetSize);
+      expect(existsSync(path.join(root, asset.designReference!))).toBe(true);
+      for (const point of [asset.heldItem!.grip, asset.heldItem!.muzzle]) for (const coordinate of point) {
+        expect(coordinate).toBeGreaterThanOrEqual(0);
+        expect(coordinate).toBeLessThanOrEqual(asset.targetSize);
+      }
+    }
+  });
   it('covers each current turret weapon once and preserves shared visual assignments', () => {
     const turrets = assets.filter((asset) => asset.category === 'turret');
     expect(sorted(turrets.flatMap((asset) => asset.gameIds))).toEqual(sorted(Object.keys(TURRET_VISUALS)));
@@ -48,7 +66,8 @@ describe('asset pipeline catalog contracts', () => {
     }
     const characters = assets.filter((asset) => asset.category === 'character');
     expect(characters).toHaveLength(1);
-    expect(characters[0]).toMatchObject({ gameIds: ['player'], targetSize: PLAYER_SIZE, forward: 'north', requiredClips: ['move'] });
+    expect(characters[0]).toMatchObject({ gameIds: ['player'], targetSize: PLAYER_SIZE, forward: 'north' });
+    expect(characters[0].requiredClips).toEqual(expect.arrayContaining(['move', 'idle']));
   });
 
   it('provides complete briefs and existing references without confusing source and display sizes', () => {
@@ -70,7 +89,7 @@ describe('asset pipeline catalog contracts', () => {
   });
 
   it('distinguishes executable reference recipes from planned briefs and defines complete motion contracts', () => {
-    const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk']);
+    const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle']);
     for (const asset of assets) {
       if (asset.production === 'planned') {
         expect(asset.recipe).toBeUndefined();
@@ -84,8 +103,8 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.orthoScale).toBeGreaterThan(0);
       expect(asset.textures).toBeDefined();
       // Original texture pixels and completed renders are local artifacts, not required in a clean checkout.
-      expect(Object.keys(asset.textures!)).toContain(asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
-      expect(Object.keys(asset.materialVariants!).sort()).toEqual(['calm', 'rich']);
+      expect(Object.keys(asset.textures!)).toContain(asset.category === 'weapon' || asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
+      expect(Object.keys(asset.materialVariants!)).toHaveLength(1);
       for (const variant of Object.values(asset.materialVariants!)) {
         expect(variant.textureStrength).toBeGreaterThanOrEqual(0);
         expect(variant.textureStrength).toBeLessThanOrEqual(1);

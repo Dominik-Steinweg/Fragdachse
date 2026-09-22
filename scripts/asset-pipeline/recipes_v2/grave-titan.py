@@ -1,14 +1,15 @@
-"""Massive terraced stone carapace carried by four broad, individually rigged paws."""
+"""Rounded weathered stone carapace, clustered lichen and broad articulated paws."""
+import math
 from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, finish
 
 
 def build(c,spec):
     hide=c.material('Ancient grey hide',(.105,.12,.085),'organic')
     dark=c.material('Deep stone joints',(.027,.034,.025),'organic')
-    stone=c.material('Weathered granite crowns',(.235,.255,.205),'technical')
-    edge=c.material('Dark granite broken sides',(.095,.115,.08),'technical')
-    lighter=c.material('Pale worn shoulder granite',(.34,.355,.275),'technical')
-    moss=c.material('Quiet moss in recesses',(.16,.225,.063),'organic')
+    stone=c.material('Weathered granite crowns',(.39,.44,.44),'technical')
+    edge=c.material('Dark granite broken sides',(.12,.17,.18),'technical')
+    lighter=c.material('Pale worn shoulder granite',(.61,.65,.59),'technical')
+    moss=c.material('Quiet moss in recesses',(.12,.29,.10),'organic')
     ivory=c.material('Ancient ivory face stripe',(.59,.55,.41),'organic')
     eyes=c.material('Faint green buried eyes',(.37,.47,.11),emission=.09)
     limbs={}
@@ -31,6 +32,10 @@ def build(c,spec):
     moss_amount=float(spec.get('model',{}).get('mossSpread',1))
     for x,y,z,s in [(-.75,.29,1.157,.09),(.65,.39,1.188,.075),(-.63,-.47,1.006,.09),(.52,-.58,.99,.08),(.05,-.65,1.117,.075)]:
         body.append(ell(c,'Recessed moss island',(x,y,z),(s*moss_amount,s*.63,.018),moss,angle=.5))
+        for i in range(5):
+            a=i*2.4
+            body.append(ell(c,'Small irregular lichen rosette',(x+math.cos(a)*s*.62,y+math.sin(a)*s*.40,z+.012),
+                (s*.36,s*.28,.012),moss,angle=a))
     body.append(ribbon(c,'Weathered broken central crack',[(-.11,.32,1.252),(.025,.14,1.257),(-.06,-.06,1.247)], [.024,.037,.014],edge))
     body.append(ribbon(c,'Forked grave slab fissure',[(.018,.14,1.258),(.16,.20,1.253),(.31,.19,1.215)], [.027,.018,.006],edge))
     body.append(ribbon(c,'Lower buried stone fracture',[(-.15,-.42,1.136),(-.035,-.50,1.138),(-.105,-.64,1.124)], [.020,.026,.009],edge))

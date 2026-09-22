@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
+import { indexLibrary } from './index-library.mjs';
 import { inside, inspectMaster, nativeMetrics, repoRoot, resizeMaster, validateManifest, variantLabel } from './export.mjs';
 
 const sha256 = data => createHash('sha256').update(data).digest('hex');
@@ -11,7 +12,7 @@ const readJson = async file => JSON.parse(await readFile(file, 'utf8'));
 const jsonBytes = value => Buffer.from(JSON.stringify(value, null, 2) + '\n');
 const exists = file => access(file).then(() => true, () => false);
 const digestPattern = /^[a-f0-9]{64}$/;
-const variants = ['calm', 'rich'];
+const validVariant = value => typeof value === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(value);
 const slash = value => value.split(path.sep).join('/');
 const execute = promisify(execFile);
 
@@ -39,14 +40,19 @@ export function validateManifestV2(m) {
     if (m.mount && (!Number.isFinite(frame.baseDiameter) || frame.baseDiameter <= 0 || frame.baseDiameter > m.mount.maxBaseDiameter + 1e-5)) throw new Error(`Turret base footprint missing or exceeded in frame ${index}`);
   }
   if (m.mount && (m.category !== 'turret' || m.mount.rockSize !== 32 || !Number.isFinite(m.mount.maxBaseDiameter) || m.mount.maxBaseDiameter <= 0 || m.mount.maxBaseDiameter >= m.mount.rockSize)) throw new Error('Turret base must fit its 32-pixel rock');
-  if (!Array.isArray(m.clips) || !m.clips.length) throw new Error('Animation clips missing');
+  if (!Array.isArray(m.clips) || (!m.clips.length && m.category !== 'weapon')) throw new Error('Animation clips missing');
   const names = new Set();
   for (const clip of m.clips) {
     if (!/^[a-z][a-z0-9-]*$/.test(clip.name) || names.has(clip.name) || typeof clip.motion !== 'string' || !clip.motion || !Number.isFinite(clip.frameRate) || clip.frameRate <= 0 || typeof clip.loop !== 'boolean' || !Array.isArray(clip.frames) || !clip.frames.length || clip.frames.some(n => !Number.isInteger(n) || n < 0 || n >= m.frames.length)) throw new Error('Invalid animation clip');
     names.add(clip.name);
   }
-  const required = m.category === 'turret' ? 'fire' : 'move';
-  if (!names.has(required)) throw new Error(`Required ${required} clip missing`);
+  const required = m.category === 'weapon' ? null : m.category === 'turret' ? 'fire' : 'move';
+  if (required && !names.has(required)) throw new Error(`Required ${required} clip missing`);
+  if (m.category === 'weapon') {
+    const h = m.heldItem;
+    if (!h || h.referenceSize !== m.targetSize || !['grip', 'muzzle'].every(key => Array.isArray(h[key]) && h[key].length === 2
+      && h[key].every(n => Number.isFinite(n) && n >= 0 && n <= h.referenceSize))) throw new Error('Weapon grip/muzzle contract missing or invalid');
+  }
   if (required === 'move' && !m.clips.find(c => c.name === 'move').loop) throw new Error('Movement clip must loop');
   validateDigests(m.sources, 'Source');
   for (const texture of Object.values(m.textures)) {
@@ -139,7 +145,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
 function presentationContract(m) {
   return JSON.stringify({ id: m.id, revision: m.revision, category: m.category, targetSize: m.targetSize, sourceSizes: m.sourceSizes, pivot: m.pivot, forward: m.forward,
     masterSize: m.masterSize, idleFrame: m.idleFrame, frames: m.frames.map(({ index, file, blenderFrame }) => ({ index, file, blenderFrame })), clips: m.clips,
-    camera: { ...m.camera, bounds: undefined }, textures: m.textures, sources: m.sources, reference: m.reference, referenceTransform: m.referenceTransform });
+    camera: { ...m.camera, bounds: undefined }, textures: m.textures, sources: m.sources, reference: m.reference, referenceTransform: m.referenceTransform, heldItem: m.heldItem });
 }
 
 async function listFiles(folder, prefix = '') {
@@ -173,7 +179,7 @@ async function bundleFiles(assetFolder, variant, size) {
 }
 
 export async function selectVariantV2(assetFolder, variant, size, reason) {
-  if (!variants.includes(variant) || typeof reason !== 'string' || !reason.trim()) throw new Error('Supply variant, size and review reason');
+  if (!validVariant(variant) || typeof reason !== 'string' || !reason.trim()) throw new Error('Supply variant, size and review reason');
   const selectionFile = path.join(assetFolder, 'selection.json');
   if (await exists(selectionFile)) throw new Error('Selection already exists; retain approved revision');
   const { files, manifest: m, exported } = await bundleFiles(assetFolder, variant, size);
@@ -186,7 +192,7 @@ export async function selectVariantV2(assetFolder, variant, size, reason) {
 
 export async function verifySelectionV2(assetFolder) {
   const selection = await readJson(path.join(assetFolder, 'selection.json'));
-  if (selection.version !== 2 || !variants.includes(selection.variant) || !selection.reason?.trim()) throw new Error('Invalid V2 selection');
+  if (selection.version !== 2 || !validVariant(selection.variant) || !selection.reason?.trim()) throw new Error('Invalid V2 selection');
   const { files, manifest: m, exported } = await bundleFiles(assetFolder, selection.variant, selection.size);
   if (JSON.stringify(selection.files) !== JSON.stringify(files) || selection.bundleSha256 !== sha256(jsonBytes(files)) || selection.inputHash !== exported.inputHash || selection.id !== m.id || selection.revision !== m.revision
     || selection.idle !== `${selection.variant}/sprite-${selection.size}.png` || selection.sheet !== `${selection.variant}/sheet-${selection.size}.png`
@@ -239,8 +245,13 @@ export async function exportRunV2(runFolder, workspace = repoRoot) {
   for (const dir of (await readdir(folder, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
     if (!dir.isDirectory() || dir.name.startsWith('.')) continue;
     const assetFolder = path.join(folder, dir.name), results = [];
+    const build = await completedBuild(assetFolder);
+    const variants = Object.keys(build.variants ?? {});
+    // Early V2 builds did not record their variant list; retain their two-folder format.
+    if (!variants.length) variants.push('calm', 'rich');
+    if (variants.some(variant => !validVariant(variant))) throw new Error('Invalid build variants');
     for (const variant of variants) results.push(await exportVariantV2(path.join(assetFolder, variant), workspace));
-    if (presentationContract(results[0].manifest) !== presentationContract(results[1].manifest)) throw new Error('Variants disagree on animation presentation contract');
+    if (results.some(result => presentationContract(result.manifest) !== presentationContract(results[0].manifest))) throw new Error('Variants disagree on animation presentation contract');
     const m = results[0].manifest;
     const url = file => '/' + slash(path.relative(workspace, file));
     const entries = results.map(result => {
@@ -258,7 +269,7 @@ export async function exportRunV2(runFolder, workspace = repoRoot) {
       previousReference = { label: m.previousReference.label, url: url(previous), sourceSize: meta.width, nativeMetrics: await nativeMetrics(previous, m.targetSize) };
     }
     assets.push({ id: m.id, label: m.label, category: m.category, targetSize: m.targetSize, forward: m.forward, pivot: m.pivot,
-      collisionDiameter: m.collisionDiameter, mount: m.mount, previousReference, reference: m.reference ? '/' + m.reference.replace(/^public\//, '') : undefined,
+      collisionDiameter: m.collisionDiameter, mount: m.mount, heldItem: m.heldItem, previousReference, reference: m.reference ? '/' + m.reference.replace(/^public\//, '') : undefined,
       referenceTransform: m.referenceTransform, referenceMetrics: m.reference ? await nativeMetrics(inside(workspace, m.reference), m.targetSize) : undefined,
       variants: entries, preferred: preferred ? { variant: preferred.variant, size: preferred.size, reason: preferred.reason } : undefined });
   }
@@ -266,5 +277,6 @@ export async function exportRunV2(runFolder, workspace = repoRoot) {
   const temporary = path.join(folder, '.catalog.json.tmp');
   await writeFile(temporary, jsonBytes({ version: 2, assets }));
   await rename(temporary, path.join(folder, 'catalog.json'));
+  await indexLibrary(workspace);
   return assets.map(a => a.id);
 }
