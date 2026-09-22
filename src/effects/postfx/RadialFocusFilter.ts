@@ -6,7 +6,7 @@ import {
 } from './radialFocusState';
 
 /** Texture used by Phaser's built-in Mask filter in the blurred ParallelFilters branch. */
-export const RADIAL_FOCUS_MASK_TEXTURE_KEY = '__radial_focus_blur_mask';
+const RADIAL_FOCUS_MASK_TEXTURE_KEY = '__radial_focus_blur_mask';
 
 const RADIAL_FOCUS_MASK_SCALE = 0.25;
 const RADIAL_FOCUS_MASK_WIDTH = Math.ceil(GAME_WIDTH * RADIAL_FOCUS_MASK_SCALE);
@@ -28,17 +28,15 @@ export { QualityControlledParallelFilters as RadialFocusParallelFilters } from '
  * created during a countdown, death close, or respawn reveal.
  */
 export class RadialFocusMaskTexture {
+  readonly textureKey = `${RADIAL_FOCUS_MASK_TEXTURE_KEY}_${Phaser.Utils.String.UUID()}`;
   readonly texture: Phaser.Textures.CanvasTexture;
   private lastFrameKey: string | null = null;
   private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene) {
-    if (scene.textures.exists(RADIAL_FOCUS_MASK_TEXTURE_KEY)) {
-      scene.textures.remove(RADIAL_FOCUS_MASK_TEXTURE_KEY);
-    }
-
+    // TextureManager is shared across scenes; each camera owns its mutable mask.
     this.texture = scene.textures.createCanvas(
-      RADIAL_FOCUS_MASK_TEXTURE_KEY,
+      this.textureKey,
       RADIAL_FOCUS_MASK_WIDTH,
       RADIAL_FOCUS_MASK_HEIGHT,
     ) as Phaser.Textures.CanvasTexture;
@@ -105,8 +103,8 @@ export class RadialFocusMaskTexture {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    if (this.scene.textures.exists(RADIAL_FOCUS_MASK_TEXTURE_KEY)) {
-      this.scene.textures.remove(RADIAL_FOCUS_MASK_TEXTURE_KEY);
+    if (this.scene.textures.exists(this.textureKey)) {
+      this.scene.textures.remove(this.textureKey);
     }
   }
 }

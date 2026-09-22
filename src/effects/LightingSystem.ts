@@ -247,7 +247,8 @@ export class LightingSystem {
   private quality: GraphicsQualityProfile;
   private unsubscribeQuality: (() => void) | null = null;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(private readonly scene: Phaser.Scene,
+    private readonly viewport: { readonly width: number; readonly height: number } = { width: GAME_WIDTH, height: GAME_HEIGHT }) {
     this.quality = getGraphicsQualityProfile(scene);
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       this.setGraphicsQuality(profile);
@@ -557,8 +558,8 @@ export class LightingSystem {
     const overlay = this.ensureLightMap();
     const scrollX = this.scene.cameras.main.scrollX;
     const scrollY = this.scene.cameras.main.scrollY;
-    const overscanX = this.getLightMapOverscanPx(GAME_WIDTH);
-    const overscanY = this.getLightMapOverscanPx(GAME_HEIGHT);
+    const overscanX = this.getLightMapOverscanPx(this.viewport.width);
+    const overscanY = this.getLightMapOverscanPx(this.viewport.height);
 
     const queueStartedAt = metricsEnabled ? performance.now() : 0;
     this.collectRenderQueue(now, scrollX, scrollY);
@@ -777,8 +778,8 @@ export class LightingSystem {
       dynamicOcclusionRefreshes: this.frameDynamicOcclusionRefreshes,
       maxOcclusionCacheAgeMs: this.frameMaxOcclusionCacheAgeMs,
       commandCount,
-      lightMapPixels: Math.ceil((GAME_WIDTH + overscanX * 2) * this.quality.lightMapScale)
-        * Math.ceil((GAME_HEIGHT + overscanY * 2) * this.quality.lightMapScale),
+      lightMapPixels: Math.ceil((this.viewport.width + overscanX * 2) * this.quality.lightMapScale)
+        * Math.ceil((this.viewport.height + overscanY * 2) * this.quality.lightMapScale),
       scratchPixels: occludingUsed * OCCLUDER_SCRATCH_SIZE * OCCLUDER_SCRATCH_SIZE,
       presetCounts: presetCounts!,
     };
@@ -889,8 +890,8 @@ export class LightingSystem {
   /** Wählt die sichtbaren Lichter aus, berechnet ihre Intensität und sortiert sie. */
   private collectRenderQueue(now: number, scrollX: number, scrollY: number): void {
     this.renderQueue.length = 0;
-    const overscanX = this.getLightMapOverscanPx(GAME_WIDTH);
-    const overscanY = this.getLightMapOverscanPx(GAME_HEIGHT);
+    const overscanX = this.getLightMapOverscanPx(this.viewport.width);
+    const overscanY = this.getLightMapOverscanPx(this.viewport.height);
 
     for (const light of this.lights) {
       let fade = 1;
@@ -912,8 +913,8 @@ export class LightingSystem {
       const screenX = light.x - scrollX;
       const screenY = light.y - scrollY;
       const reach = light.radiusPx;
-      if (screenX + reach < -overscanX || screenX - reach > GAME_WIDTH + overscanX) continue;
-      if (screenY + reach < -overscanY || screenY - reach > GAME_HEIGHT + overscanY) continue;
+      if (screenX + reach < -overscanX || screenX - reach > this.viewport.width + overscanX) continue;
+      if (screenY + reach < -overscanY || screenY - reach > this.viewport.height + overscanY) continue;
 
       this.renderQueue.push(light);
     }
@@ -1113,14 +1114,14 @@ export class LightingSystem {
       this.stampLight(
         this.lightMap!,
         light,
-        (light.x - scrollX + this.getLightMapOverscanPx(GAME_WIDTH)) * scale,
-        (light.y - scrollY + this.getLightMapOverscanPx(GAME_HEIGHT)) * scale,
+        (light.x - scrollX + this.getLightMapOverscanPx(this.viewport.width)) * scale,
+        (light.y - scrollY + this.getLightMapOverscanPx(this.viewport.height)) * scale,
       );
       return null;
     }
 
-    const overscanX = this.getLightMapOverscanPx(GAME_WIDTH);
-    const overscanY = this.getLightMapOverscanPx(GAME_HEIGHT);
+    const overscanX = this.getLightMapOverscanPx(this.viewport.width);
+    const overscanY = this.getLightMapOverscanPx(this.viewport.height);
     cache.image
       .setPosition(
         (light.x - scrollX + overscanX) * this.quality.lightMapScale,
@@ -1197,8 +1198,8 @@ export class LightingSystem {
     this.frameOcclusionRefreshes += 1;
 
     slot.image.setPosition(
-      (light.x - scrollX + this.getLightMapOverscanPx(GAME_WIDTH)) * this.quality.lightMapScale,
-      (light.y - scrollY + this.getLightMapOverscanPx(GAME_HEIGHT)) * this.quality.lightMapScale,
+      (light.x - scrollX + this.getLightMapOverscanPx(this.viewport.width)) * this.quality.lightMapScale,
+      (light.y - scrollY + this.getLightMapOverscanPx(this.viewport.height)) * this.quality.lightMapScale,
     );
     this.lightMap?.draw([slot.image]);
     if (!collectCounts) return null;
@@ -1454,10 +1455,10 @@ export class LightingSystem {
   private ensureLightMap(): Phaser.GameObjects.RenderTexture {
     if (this.lightMap) return this.lightMap;
 
-    const overscanX = this.getLightMapOverscanPx(GAME_WIDTH);
-    const overscanY = this.getLightMapOverscanPx(GAME_HEIGHT);
-    const displayWidth = GAME_WIDTH + overscanX * 2;
-    const displayHeight = GAME_HEIGHT + overscanY * 2;
+    const overscanX = this.getLightMapOverscanPx(this.viewport.width);
+    const overscanY = this.getLightMapOverscanPx(this.viewport.height);
+    const displayWidth = this.viewport.width + overscanX * 2;
+    const displayHeight = this.viewport.height + overscanY * 2;
     const width = Math.ceil(displayWidth * this.quality.lightMapScale);
     const height = Math.ceil(displayHeight * this.quality.lightMapScale);
 

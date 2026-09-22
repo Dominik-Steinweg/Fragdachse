@@ -270,6 +270,11 @@ export class CoopDefenseItemRewardOverlay {
     return this.visible;
   }
 
+  dismiss(): void {
+    if (!this.isVisible()) return;
+    this.hide(); this.onClosed();
+  }
+
   hide(): void {
     this.visible = false;
     this.presentation = null;

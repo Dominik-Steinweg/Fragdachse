@@ -1,6 +1,7 @@
 """Low pear-shaped mother with a plated spine, heavy olive brood sacs and four burdened paws."""
 from enemy_parts_b import scute, tube, head, paw, finish
 
+from enemy_craft_parts import head_b as head, finish_b as finish, refine
 
 def build(c, spec):
     hide=c.material('Broodmother warm umber hide',(.105,.16,.038),'organic')
@@ -31,4 +32,5 @@ def build(c, spec):
     skull=head(c,(0,.70,.98),.28,.36,pale,dark,dark,eye)
     body.append(scute(c,'Broad throat mantle',(0,.35,1.06),.79,.32,scab,.11))
     tail=[c.ell('Short blunt broodmother tail',(0,-1.055,.27),(.14,.20,.10),hide)]
+    refine(c,body,skull,limbs,(hide,),{olive:("sac",scab),scab:("chitin",dark),spot:("fungus",scab)},extra=(abdomen,tail))
     return finish(c,limbs,body,skull,(0,.37,.78),{'brood':((0,-.30,.45),abdomen),'tail':((0,-.94,.25),tail)})

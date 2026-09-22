@@ -1,3 +1,4 @@
+import type { TurretWeaponId } from '../types';
 import {
   isPersistentBaseRewardId,
   PERSISTENT_BASE_REWARD_IDS,
@@ -16,7 +17,7 @@ export interface PersistentBaseRewardDefinition {
    */
   readonly gameplaySource:
     | { readonly kind: 'power-up-definition'; readonly powerUpDefId: string }
-    | { readonly kind: 'construction-definition'; readonly constructionId: 'spore_turret' | 'rocket_turret' };
+    | { readonly kind: 'construction-definition'; readonly constructionId: 'spore_turret' | 'rocket_turret'; readonly weaponId?: TurretWeaponId };
   readonly initialState: {
     readonly respawnMs: number | null;
     readonly spawnOnArenaStart: boolean;
@@ -29,6 +30,22 @@ export interface PersistentBaseRewardDefinition {
 }
 
 export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDefinition[] = Object.freeze([
+  {
+    id: 'base_rage_pedestal',
+    category: 'basePedestal',
+    gameplaySource: { kind: 'power-up-definition', powerUpDefId: 'RAGE' },
+    initialState: { respawnMs: 120_000, spawnOnArenaStart: true },
+    placementRule: 'persistent-build-area',
+    presentation: { labelKey: 'powerup.RAGE.name', iconKey: 'powerup_rage' },
+  },
+  {
+    id: 'base_plasma_turret',
+    category: 'baseTurret',
+    gameplaySource: { kind: 'construction-definition', constructionId: 'spore_turret', weaponId: 'SPORE_TURRET_PLASMA' },
+    initialState: { respawnMs: null, spawnOnArenaStart: true },
+    placementRule: 'base-surface',
+    presentation: { labelKey: 'reward.plasma_turret.name', iconKey: 'UPGRADE_UNLOCK_SPORE_TURRET' },
+  },
   {
     id: 'base_adrenaline_pedestal',
     category: 'basePedestal',

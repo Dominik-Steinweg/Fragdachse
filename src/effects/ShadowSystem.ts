@@ -379,6 +379,7 @@ export class ShadowSystem {
   rebuildStaticLayoutShadows(
     layout: ArenaLayout | null,
     options: StaticShadowLayoutBuildOptions = {},
+    preserveVisible = false,
   ): void {
     if (!layout) {
       this.lastStaticLayout = null;
@@ -387,7 +388,7 @@ export class ShadowSystem {
       this.lastBakedProfile = null;
       return;
     }
-    this.rebuildStaticLayoutShadowsWithProfile(layout, options, this.profile);
+    this.rebuildStaticLayoutShadowsWithProfile(layout, options, this.profile, Number.NEGATIVE_INFINITY, preserveVisible);
   }
 
   /**

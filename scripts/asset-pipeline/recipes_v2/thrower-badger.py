@@ -1,6 +1,7 @@
 """Four-legged carrier with an asymmetric organic launch cradle and visible curled cargo."""
 from enemy_parts_b import scute, tube, head, paw, finish
 
+from enemy_craft_parts import head_b as head, finish_b as finish, refine
 
 def build(c, spec):
     fur=c.material('Thrower cool brown coarse hide',(.25,.075,.037),'organic')
@@ -34,4 +35,5 @@ def build(c, spec):
         sling.append(c.ell('Small counterweight chamber',(-.64,y,.83),(.18,.16,.14),ochre))
     skull=head(c,(0,.72,1.00),.27,.34,pale,dark,dark)
     tail=[scute(c,'Short carrying tail',(0,-.88,.37),.30,.32,fur,.14)]
+    refine(c,body,skull,limbs,(fur,cargo),{olive:("leather",ochre),ochre:("horn",dark),tan:("chitin",dark)},extra=(sling,tail))
     return finish(c,limbs,body,skull,(0,.39,.86),{'load':((0,-.23,.76),sling),'tail':((0,-.72,.39),tail)})

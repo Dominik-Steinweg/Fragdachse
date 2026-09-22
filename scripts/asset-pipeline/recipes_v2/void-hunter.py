@@ -2,15 +2,17 @@
 from organic_shell_parts import centered_shell as plate
 from enemy_parts_b import scute, tube, head, paw, finish
 
+from enemy_craft_parts import head_b as head, finish_b as finish, refine
+from enemy_craft_surfaces import technical
 
 def build(c, spec):
     hide=c.material('Hunter deep violet flexible hide',(.035,.095,.13),'organic')
-    armor=c.material('Hunter charcoal violet armor',(.11,.27,.36),'technical')
-    edge=c.material('Hunter muted mauve armor edge',(.43,.66,.72),'technical')
+    armor=technical(c,'Hunter charcoal violet armor',(.11,.27,.36),kind='ceramic')
+    edge=technical(c,'Hunter muted mauve armor edge',(.43,.66,.72),kind='edge')
     dark=c.material('Hunter black mechanical joints',(.008,.011,.017))
     bone=c.material('Hunter smoky ivory face crest',(.66,.78,.78),'organic')
     violet=c.material('Hunter narrow violet inlays',(.63,.045,.36),emission=.40)
-    claw=c.material('Hunter long cold talons',(.30,.29,.34),'technical')
+    claw=technical(c,'Hunter long cold talons',(.30,.29,.34),kind='steel')
     limbs={}
     for name,x,y in [('front_left',-.80,.52),('front_right',.80,.52),('rear_left',-.75,-.71),('rear_right',.75,-.71)]:
         limbs[name]=paw(c,name,(x*.62,y-.15,.39),(x,y,.16),.16,hide,dark,claw,armor)
@@ -34,10 +36,15 @@ def build(c, spec):
                 [(side*x,py) for x,py in [(-.07,.21),(width*.60,.24),(width,.065),
                  (width*.62,-.17),(.02,-.30),(-.10,-.14)]],.13,armor,.028))
         body.append(c.box('Body mounted gauss rail',(side*.61,.37,.77),(.14,.80,.17),dark,.025))
+        for j in range(5):
+            body.append(c.box('Gauss rail cooling collar',(side*.61,.10+j*.11,.86),(.17,.030,.022),edge,.006))
+        body.append(c.box('North gauss muzzle hood',(side*.61,.77,.82),(.18,.17,.14),armor,.020))
+        body.append(c.box('Recessed north muzzle channel',(side*.61,.814,.895),(.065,.070,.006),dark,.006))
         body.append(tube(c,'Narrow weapon charge strip',[(side*.66,.04,.895),(side*.66,.65,.895)],.018,violet))
         body.append(scute(c,'Rear pointed hunter fin',(side*.32,-.98,.62),.24,.74,edge,.08))
     skull=head(c,(0,1.01,1.08),.195,.39,bone,armor,dark,violet)
     skull.append(scute(c,'Elongated north forehead blade',(0,.76,1.265),.12,.49,edge,.07))
     tail=[scute(c,'Long tapering hunter tail',(0,-1.24,.41),.28,.70,armor,.11),
         tube(c,'Attached tail inlay',[(0,-1.06,.48),(0,-1.43,.49)],.018,violet)]
+    refine(c,body,skull,limbs,(hide,),{armor:("metal",dark),edge:("metal",dark),claw:("horn",dark)},extra=(tail,))
     return finish(c,limbs,body,skull,(0,.65,.93),{'tail':((0,-.96,.40),tail)})

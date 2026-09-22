@@ -2,6 +2,8 @@
 import math
 from organic_shell_parts import centered_shell
 from enemy_parts_b import plate, scute, tube, head, paw, finish
+from enemy_craft_parts import head_b as head, finish_b as finish, refine
+from enemy_craft_surfaces import technical
 
 
 def fissures(c, name, paths, z, width, dark, hot):
@@ -22,11 +24,10 @@ def fissures(c, name, paths, z, width, dark, hot):
             parts.append(plate(c,name+' '+layer,(0,0,height),left+list(reversed(right)),.001,material,0))
     return parts
 
-
 def build(c, spec):
     hide=c.material('Colossus dark umber joint hide',(.035,.021,.014),'organic')
     basalt=c.material('Colossus matte basalt carapace',(.050,.059,.066),'technical')
-    plate_mat=c.material('Colossus dry copper brown plates',(.29,.105,.047),'technical')
+    plate_mat=technical(c,'Colossus dry copper brown plates',(.29,.105,.047),kind='heat')
     edge=c.material('Colossus weathered horn edges',(.41,.23,.12),'organic')
     black=c.material('Colossus deep cooling recess',(.009,.012,.012))
     molten=c.material('Colossus recessed amber heat',(.89,.17,.018),emission=.32)
@@ -82,6 +83,10 @@ def build(c, spec):
         # Housed weapons and ammunition stay attached to the beast; no baked firing effects.
         body.append(c.box('North-facing siege weapon casing',(side*.70,.89,.79),(.30,.77,.25),black,.06))
         body.append(c.box('Scorched weapon mantle',(side*.70,.83,.955),(.35,.49,.14),plate_mat,.035))
+        for j in range(5):
+            body.append(c.box('Inset siege weapon cooling slot',(side*.70,.68+j*.066,1.030),(.20,.018,.008),black,.006))
+        for dx in (-.12,.12):
+            body.append(c.cylinder('Recessed mantle screw',(side*.70+dx,.65,1.031),.018,.012,edge,16))
         for dx in (-.07,.07):
             body.append(c.ell('Recessed siege muzzle',(side*.70+dx,1.245,.86),(.045,.07,.036),molten))
     skull=head(c,(0,1.055,1.16),.28,.40,pale,basalt,black,molten,edge)
@@ -89,4 +94,5 @@ def build(c, spec):
         skull.append(scute(c,'Heavy pointed cheek horn',(side*.35,.96,1.28),.19,.60,basalt,.12))
     tail=[scute(c,'Armored tail root',(0,-1.28,.50),.44,.49,basalt,.18),
         scute(c,'Copper tail wedge',(0,-1.52,.38),.25,.37,plate_mat,.12)]
+    refine(c,body,skull,limbs,(hide,),{basalt:("basalt",black),plate_mat:("metal",black),edge:("horn",black)},extra=(tail,))
     return finish(c,limbs,body,skull,(0,.72,1.02),{'tail':((0,-1.02,.47),tail)})

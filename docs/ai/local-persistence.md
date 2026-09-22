@@ -46,6 +46,22 @@ Import/Export, Einmaligkeit und Reset.
 
 ## Cache, Fehler und Lebensdauer
 
+Der Basis-Editor zeigt den persönlichen Entwurf in einer eigenen, lokalen World ohne Activity oder
+Spielfigur. Auch Gäste bearbeiten hier ihre eigenen Reward-Platzierungen; die gemeinsame World
+verwendet weiterhin die Reward-Platzierungen des Hosts. Änderungen persönlicher Konstruktionen
+benötigen dagegen auch im Menü eine Host-Bestätigung: Der Lobby-Layout-Vertrag prüft World- und
+Beitragsrevision und erlaubt nur Verschieben oder Entfernen vorhandener Identitäten. Er ist kein
+avatarfreier Baupfad. Der Entwurf selbst schreibt nichts in den Fortschritt; Schließen mit Abbruch
+verwirft ihn. Eingefrorene Area-/HP-Parameter einer vorhandenen World bleiben unverändert.
+[PersistentBaseEditor.test.ts](../../tests/PersistentBaseEditor.test.ts) und
+[PersistentBaseManagementAllClasses.test.ts](../../tests/integration/PersistentBaseManagementAllClasses.test.ts)
+prüfen diese Besitz- und Mutationsgrenzen.
+
+`completedMapIds` verzeichnet tatsächlich gutgeschriebene Siege. Die Liste verpasster Rewards wird
+aus diesen Abschlüssen, dem aktuellen Reward-Katalog der Maps und den persönlichen Freischaltungen
+abgeleitet. Freigeschaltete Folgemaps sind kein Beleg für einen Sieg; fehlende Abschlusslisten werden
+nicht daraus rekonstruiert. Import, Export und Charakter-Reset führen diese Liste mit.
+
 Die Speicherfunktionen dürfen einen Cache verwenden, müssen ihn bei Schreib- oder Reset-Operationen gezielt invalidieren und dürfen fehlgeschlagene Persistenz nicht in einen unbrauchbaren In-Memory-Zustand überführen. Cache- und Save-Lifetime ist von ArenaScene-, World- und Activity-Lifetime getrennt.
 
 Ein World- oder Scene-Teardown löscht keinen lokalen Progress automatisch und ist keine Persistenz- oder Besitzgrenze. Eine persistente World ohne aktive Mission bearbeitet `committed` direkt und stellt jede host-bestätigte Änderung sofort dem jeweiligen Besitzer zu. Eine neue Missions-Working-Copy startet von diesem zuletzt bestätigten Beitrag. `committed` bezeichnet den zuletzt akzeptierten Stand, `baseline` den Ausgangsstand der aktuellen Working Copy und `working` den aktuellen bearbeitbaren Zustand. Ein Activity-/Round-Ausgang kann die Working Copy committen oder verwerfen; dauerhaft gespeichert bleibt ausschließlich der persönliche Beitrag seines Besitzers.

@@ -5,9 +5,9 @@ import type { ConstructionOwnership, SyncedPlaceableRock } from '../types';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, TEAM_BLUE_COLOR } from '../config';
 import {
   getPersistentBaseBuildAreaExtentCells,
-  isCellInsidePersistentBaseBuildArea,
   resolvePersistentBaseCell,
 } from '../persistentBase/PersistentBaseCore';
+import { isPersistentBaseRewardCellAllowed } from '../persistentBase/PersistentBasePlacementRules';
 import type { PersistentBaseContributionStore } from '../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../persistentBase/PersistentBaseRewardStore';
 import {
@@ -458,13 +458,12 @@ export class PersistentBaseWorldMaterializer {
     site: WorldPersistentBaseSite,
     placement: PersistentBaseRewardPlacement,
   ): boolean {
-    const cell = this.resolveRewardCell(site, placement);
-    if (!cell) return false;
-    if (definition.placementRule === 'base-surface') return cell.domain === 'base-surface';
-    return isCellInsidePersistentBaseBuildArea(
+    return isPersistentBaseRewardCellAllowed(
+      definition.id,
       placement.relativeGridX,
       placement.relativeGridY,
       site.buildArea,
+      site.orientation,
     );
   }
 

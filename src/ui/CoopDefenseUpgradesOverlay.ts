@@ -1,5 +1,6 @@
 import { UPGRADE_HEADER, UPGRADE_CONTROLS } from './UpgradeForestAssets';
 import { MATCH_RESULTS_BACKGROUND } from './MatchResultsAssets';
+import { UPGRADE_MENU } from './UpgradeMenuLayout';
 import { ensureResultsTitle } from './matchResultsTextures';
 import { ensureUpgradeSurface, ensureUpgradeIcon, ensureUpgradeFrame, ensureUpgradeXpFrame, ensureUpgradeApply } from './upgradeForestTextures';
 import { BUTTON_CURSOR } from './gameCursor';
@@ -88,8 +89,8 @@ const NODE_TEX_RADIUS = 12;
 const XP_BAR_TEX_KEY = '_ccd_xpbar';
 const TREE_BACKGROUND_TEX_KEY = '_ccd_tree_background';
 
-const PANEL_W = GAME_WIDTH - 16;
-const PANEL_H = GAME_HEIGHT - 8;
+const PANEL_W = UPGRADE_MENU.width;
+const PANEL_H = UPGRADE_MENU.height;
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 const TITLE_Y = 76;
@@ -105,10 +106,10 @@ const POINTS_CHIP_H = 48;
 const RESPEC_W = 180;
 const RESPEC_H = 38;
 // Untere Button-Leiste (Abbruch / Uebernehmen) + Hinweiszeile darunter.
-const ACTION_BTN_W = 260;
-const ACTION_BTN_H = 50;
-const ACTION_BTN_GAP = 40;
-const ACTION_BTN_Y = CY + PANEL_H / 2 - 94;
+const ACTION_BTN_W = UPGRADE_MENU.buttonWidth;
+const ACTION_BTN_H = UPGRADE_MENU.buttonHeight;
+const ACTION_BTN_GAP = UPGRADE_MENU.buttonGap;
+const ACTION_BTN_Y = UPGRADE_MENU.buttonY;
 // Tooltips bleiben innerhalb des unteren Bildschirmrands.
 const TOOLTIP_BOTTOM = CY + PANEL_H / 2 - 74;
 
@@ -162,8 +163,8 @@ const BASE_UNLOCK_NODE_FILL = COLORS.GREY_5;
 const BASE_UNLOCK_NODE_STROKE = COLORS.GREY_2;
 const BASE_UNLOCK_NODE_ACTIVE = COLORS.GREY_1;
 
-const DIM_COLOR = COLORS.GREY_10;
-const DIM_ALPHA = 0.58;
+const DIM_COLOR = UPGRADE_MENU.dimColor;
+const DIM_ALPHA = UPGRADE_MENU.dimAlpha;
 const PANEL_BG = SURFACE.modal;
 const PANEL_ALPHA = 0.96;
 const PANEL_BORDER = BORDER.default;
@@ -358,6 +359,7 @@ export class CoopDefenseUpgradesOverlay {
     private readonly onSelectLoadoutItem: (slot: LoadoutSlot, itemId: string) => boolean,
     private readonly onCancel: () => void,
     private readonly onApply: () => void,
+    private readonly onClosed: () => void = () => {},
   ) {}
 
   build(): void {
@@ -396,16 +398,17 @@ export class CoopDefenseUpgradesOverlay {
       .setInteractive();
     objects.push(panel);
     const forest = this.scene.add.image(CX, CY, '__WHITE').setScrollFactor(0).setVisible(false);
-    const header = this.scene.add.image(CX, 82, '__WHITE').setScrollFactor(0).setVisible(false);
+    const header = this.scene.add.image(CX, UPGRADE_MENU.headerY, '__WHITE').setScrollFactor(0).setVisible(false);
     objects.push(forest, this.scene.add.image(CX, CY, ensureModalFrame(this.scene, PANEL_W, PANEL_H))
       .setDisplaySize(PANEL_W, PANEL_H).setScrollFactor(0), header);
     let refreshControls = () => {};
     const refreshArt = (key?: string) => {
       if (this.scene.textures.exists(MATCH_RESULTS_BACKGROUND.key)) {
-        forest.setTexture(MATCH_RESULTS_BACKGROUND.key).setTint(0x9ca98d).setDisplaySize(PANEL_W - 104, PANEL_H - 112).setVisible(true);
+        forest.setTexture(MATCH_RESULTS_BACKGROUND.key).setTint(UPGRADE_MENU.forestTint)
+          .setDisplaySize(PANEL_W - UPGRADE_MENU.forestInsetX, PANEL_H - UPGRADE_MENU.forestInsetY).setVisible(true);
       }
       if (this.scene.textures.exists(UPGRADE_HEADER.key)) {
-        header.setTexture(UPGRADE_HEADER.key).setDisplaySize(600, 150).setVisible(true);
+        header.setTexture(UPGRADE_HEADER.key).setDisplaySize(UPGRADE_MENU.headerWidth, UPGRADE_MENU.headerHeight).setVisible(true);
       }
       this.pointsChip?.setTexture(this.ensurePointsChipTexture(true)).setDisplaySize(POINTS_CHIP_W, POINTS_CHIP_H);
       if (UPGRADE_CONTROLS.some(asset => asset.key === key)) refreshControls();
@@ -650,21 +653,21 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   /** Verwirft alle Aenderungen seit dem Oeffnen und schliesst. */
-  private closeWithCancel(): void {
+  closeWithCancel(): void {
     if (!this.visible) return;
     this.onCancel();
     this.refresh();
-    this.hide();
+    this.hide(this.onClosed);
   }
 
   /** Uebernimmt die Aenderungen und schliesst. */
   private closeWithApply(): void {
     if (!this.visible) return;
     this.onApply();
-    this.hide();
+    this.hide(this.onClosed);
   }
 
-  hide(): void {
+  hide(afterHidden?: () => void): void {
     if (!this.visible || !this.container) return;
     this.visible = false;
     this.dismissDelay?.destroy();
@@ -684,12 +687,12 @@ export class CoopDefenseUpgradesOverlay {
       alpha: 0,
       duration: 100,
       ease: 'Sine.easeIn',
-      onComplete: () => this.container?.setVisible(false),
+      onComplete: () => { this.container?.setVisible(false); afterHidden?.(); },
     });
   }
 
   toggle(): void {
-    if (this.visible) this.hide();
+    if (this.visible) this.closeWithCancel();
     else this.show();
   }
 

@@ -14,7 +14,7 @@
         "weapon1"
       ],
       "adrenalinCost": 0,
-      "adrenalinGain": 100,
+      "adrenalinGain": 20,
       "hitHeal": 0,
       "hitAdrenaline": 0,
       "bloodEffectMultiplier": 1,
@@ -34,7 +34,7 @@
     "ZOMBIE_BADGER_BITE": {
       "id": "ZOMBIE_BADGER_BITE",
       "cooldown": 350,
-      "damage": 10,
+      "damage": 5,
       "range": 50,
       "fire": {
         "type": "melee",
@@ -60,15 +60,21 @@
     },
     "DEMON_BADGER_BITE": {
       "id": "DEMON_BADGER_BITE",
-      "damage": 15,
+      "damage": 7.5,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
     "RABID_BADGER_BITE": {
       "id": "RABID_BADGER_BITE",
-      "damage": 20,
+      "damage": 10,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
+    },
+    "TIMEBOMB_BADGER_BITE": {
+      "id": "TIMEBOMB_BADGER_BITE",
+      "damage": 10,
+      "baseId": "ZOMBIE_BADGER_BITE",
+      "_notes": "Felsenbiss des Zeitbomben-Dachses mit eigenem Schaden, unabhaengig vom Zombie-Dachs-Tuning."
     },
     "SPORE_WARDEN_BITE": {
       "id": "SPORE_WARDEN_BITE",

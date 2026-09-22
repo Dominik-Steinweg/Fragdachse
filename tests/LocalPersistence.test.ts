@@ -13,6 +13,7 @@ import {
   getStoredPersonalBaseContribution,
   setStoredPersonalBaseContribution,
   getStoredCoopDefenseProgress,
+  markStoredCoopDefenseMapCompleted,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
   getStoredMusicVolume,
@@ -63,6 +64,17 @@ class MemoryStorage implements Storage {
 
 describe('local progress generation', () => {
   let storage: MemoryStorage;
+
+  it('persists actual map wins through export/import and clears them on character reset', () => {
+    expect(getStoredCoopDefenseProgress().completedMapIds).toEqual([]);
+    expect(markStoredCoopDefenseMapCompleted('8')).toBe(true);
+    expect(markStoredCoopDefenseMapCompleted('8')).toBe(false);
+    const json = exportStoredGameProgressJson();
+    resetStoredCoopDefenseCharacter();
+    expect(getStoredCoopDefenseProgress().completedMapIds).toEqual([]);
+    importStoredGameProgressJson(json);
+    expect(getStoredCoopDefenseProgress().completedMapIds).toEqual(['8']);
+  });
 
   beforeEach(() => {
     storage = new MemoryStorage();

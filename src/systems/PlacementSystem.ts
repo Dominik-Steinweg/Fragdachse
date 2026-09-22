@@ -16,6 +16,7 @@ import {
 } from '../world/WorldMetrics';
 import type { ArenaLayout, ConstructionOwnership, LoadoutToolRef, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
+import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
 import {
   getCoopDefenseConstructionDefinition,
   getConstructionIdForUtility,
@@ -406,6 +407,36 @@ export class PlacementSystem {
     return { ...rock };
   }
 
+  /** Atomic editor move, including swaps; keeps every runtime ID and health value. */
+  relocateRocks(moves: readonly { id: number; gridX: number; gridY: number; angle: number;
+    footprint: readonly { dx: number; dy: number }[] }[]): SyncedPlaceableRock[] | null {
+    const ids = new Set(moves.map(move => move.id));
+    if (ids.size !== moves.length) return null;
+    const targets = new Set<string>();
+    for (const move of moves) {
+      if (!this.runtimeRocks.has(move.id) || !Number.isSafeInteger(move.gridX) || !Number.isSafeInteger(move.gridY)) return null;
+      for (const cell of move.footprint.length ? move.footprint : [{ dx: 0, dy: 0 }]) {
+        const x = move.gridX + cell.dx, y = move.gridY + cell.dy, key = this.key(x, y);
+        if (x < 0 || y < 0 || x >= this.metrics.gridCols || y >= this.metrics.gridRows
+          || this.buildReservation?.(x, y) || this.waterCells.has(key) || targets.has(key)) return null;
+        const occupied = this.rockGrid.getIndex(x, y);
+        if (occupied >= 0 && !ids.has(occupied)) return null;
+        targets.add(key);
+      }
+    }
+    for (const move of moves) {
+      const rock = this.runtimeRocks.get(move.id)!;
+      this.rockGrid.remove(rock.gridX, rock.gridY);
+    }
+    return moves.map(move => {
+      const rock = this.runtimeRocks.get(move.id)!;
+      rock.gridX = move.gridX; rock.gridY = move.gridY;
+      if (Number.isFinite(move.angle)) rock.angle = move.angle;
+      this.rockGrid.set(move.gridX, move.gridY, rock.id);
+      return { ...rock };
+    });
+  }
+
   tryPlaceConstruction(
     cfg: CoopDefenseConstructionDefinition,
     maxHp: number,
@@ -591,6 +622,7 @@ export class PlacementSystem {
       || cfg.footprint[0].dx !== 0 || cfg.footprint[0].dy !== 0
       || !this.canMaterializePersistentBaseRewardCell(gridX, gridY)) return null;
 
+    const source = getPersistentBaseRewardDefinition(persistentRewardId).gameplaySource;
     const maxHp = Math.max(1, cfg.maxHp);
     const rock: RuntimeRockRecord = {
       id: this.nextRockId++,
@@ -610,7 +642,7 @@ export class PlacementSystem {
       collisionMode: 'none',
       indestructible: true,
       targetRange: cfg.targetRange,
-      turretWeaponId: cfg.weaponId,
+      turretWeaponId: source.kind === 'construction-definition' ? source.weaponId ?? cfg.weaponId : cfg.weaponId,
       ...turretAimConfig(cfg),
       toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
       energyInjectorEffect: undefined,

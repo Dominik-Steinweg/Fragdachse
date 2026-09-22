@@ -2,6 +2,7 @@
 import math
 from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, finish
 
+from enemy_craft_parts import head_a as head, finish_a as finish, refine
 
 def build(c,spec):
     hide=c.material('Ancient grey hide',(.105,.12,.085),'organic')
@@ -43,4 +44,5 @@ def build(c,spec):
     for side in (-1,1):
         skull.append(plate(c,'Stone cheek guard',[(side*.25,.56),(side*.47,.50),(side*.56,.24),(side*.33,.23)],1.09,.13,stone,edge))
     tail=[ell(c,'Short heavy stone tail',(0,-1.10,.31),(.18,.20,.12),hide)]
+    refine(c,body,skull,limbs,(hide,),{stone:("stone",edge),lighter:("stone",edge),edge:("stone",dark),moss:("fungus",hide)},extra=(tail,))
     return finish(c,body,skull,limbs,tail)

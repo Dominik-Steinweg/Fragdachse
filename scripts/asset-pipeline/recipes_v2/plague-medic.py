@@ -1,14 +1,16 @@
 """Traveling plague support: fitted kit, restrained green vials and a readable back cross."""
 from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, finish
 
+from enemy_craft_parts import head_a as head, finish_a as finish, refine
+from enemy_craft_surfaces import technical
 
 def build(c,spec):
     hide=c.material('Muted brown medic fur',(.14,.23,.19),'organic')
     leather=c.material('Worn ochre leather kit',(.77,.78,.60),'technical')
     dark=c.material('Dark leather piping',(.027,.072,.055),'organic')
     ivory=c.material('Pale clean face markings',(.64,.61,.44),'organic')
-    metal=c.material('Matte dull brass fittings',(.32,.30,.18),'technical')
-    green=c.material('Sage green medical inset',(.025,.30,.12),'technical')
+    metal=technical(c,'Matte dull brass fittings',(.32,.30,.18),kind='brass')
+    green=technical(c,'Sage green medical inset',(.025,.30,.12),kind='coat')
     light=c.material('Pale green medical cross',(.72,.94,.68),emission=.08)
     vial=c.material('Bounded medicinal green',(.07,.56,.24),emission=.12)
     eyes=c.material('Amber calm eyes',(.54,.48,.10),emission=.10)
@@ -42,4 +44,5 @@ def build(c,spec):
     skull=head(c,ivory,dark,hide,eyes,y=.74,z=.95,width=.305,length=.41)
     skull.append(ribbon(c,'Small sage headband',[(-.22,.47,1.083),(0,.45,1.19),(.22,.47,1.083)],[.09,.09,.09],green))
     tail=[ell(c,'Short pale traveling tail',(0,-1.00,.30),(.115,.21,.09),ivory,angle=-.20)]
+    refine(c,body,skull,limbs,(hide,ivory),{leather:("cloth",dark),metal:("metal",dark),green:("metal",dark),dark:("leather",metal)},extra=(tail,))
     return finish(c,body,skull,limbs,tail)

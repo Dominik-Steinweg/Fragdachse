@@ -1,5 +1,6 @@
 {
   "mapId": "1",
+  "persistentBaseRewardsOnVictory": ["base_rage_pedestal"],
   "arenaWidthCells": 260,
   "arenaHeightCells": 33,
   "timeOfDay": "12:00",

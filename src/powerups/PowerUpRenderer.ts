@@ -279,6 +279,8 @@ export class PowerUpRenderer {
     }
   }
 
+  destroy(): void { this.clear(); this.pedestalGpu.destroy(); }
+
   /** Alle Container aufräumen (Arena-Teardown). */
   clear(): void {
     for (const [uid, visual] of this.sprites) {

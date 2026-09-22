@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { configureGpuLayerCameraTransform } from '../../graphics/GpuLayerCameraTransform';
 import { CELL_SIZE, DEPTH } from '../../config';
 import type { RockWorldFrame } from '../ArenaBuilder';
 import {
@@ -172,6 +173,7 @@ export class PersistentGpuWorldSystem {
           .setDepth(DEPTH.ROCKS)
           .setBlendMode(Phaser.BlendModes.NORMAL)
           .setVisible(false);
+        configureGpuLayerCameraTransform(layer);
         const slotOwners = new Int32Array(this.slotsPerPage).fill(-1);
         for (let localY = 0; localY < this.cellsPerPage; localY += 1) {
           for (let localX = 0; localX < this.cellsPerPage; localX += 1) {
@@ -205,6 +207,7 @@ export class PersistentGpuWorldSystem {
     const texture = this.scene.textures.get('walls');
     const layer = this.scene.add.spriteGPULayer(texture, this.slotsPerPage)
       .setDepth(DEPTH.ROCKS).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(this.visiblePageKeys.has(page.key));
+    configureGpuLayerCameraTransform(layer);
     for (let slot = 0; slot < this.slotsPerPage; slot++) layer.addMember(this.deadMember(0, 0, texture));
     page.wallLayer = layer;
     return layer;

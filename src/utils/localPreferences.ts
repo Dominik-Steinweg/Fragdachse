@@ -113,6 +113,7 @@ const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 export interface CoopDefenseProgressPreferences {
   totalXp: number;
   lastProcessedRoundEndedAt: number | null;
+  completedMapIds: string[];
   completedBossMapIds: string[];
   /** Hoechste freigeschaltete Map der linearen Kampagne; alles davor ist ebenfalls offen. */
   highestUnlockedMapId: string;
@@ -225,7 +226,8 @@ export interface LocalProgressDocument {
   coopDefense: {
     totalXp: number;
     lastProcessedRoundEndedAt: number | null;
-    completedBossMapIds: string[];
+    completedMapIds: string[];
+  completedBossMapIds: string[];
     highestUnlockedMapId: string;
     classesUnlocked: boolean;
     unlockedClassIds: CoopDefenseClassId[];
@@ -277,6 +279,7 @@ export type LocalProgressTransferMessageKey =
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
+  completedMapIds: [],
   completedBossMapIds: [],
   highestUnlockedMapId: INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
   classesUnlocked: false,
@@ -341,6 +344,7 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
   progression: {
     coopDefense: {
       ...DEFAULT_COOP_DEFENSE_PROGRESS,
+      completedMapIds: [],
       completedBossMapIds: [],
       defaultProfile: cloneCoopDefenseUpgradeProfile(
         DEFAULT_COOP_DEFENSE_PROGRESS.defaultProfile,
@@ -456,6 +460,7 @@ function buildDefaultPreferences(): LocalPreferences {
     progression: {
       coopDefense: {
         ...DEFAULT_COOP_DEFENSE_PROGRESS,
+        completedMapIds: [],
         completedBossMapIds: [],
         defaultProfile: cloneCoopDefenseUpgradeProfile(
           DEFAULT_COOP_DEFENSE_PROGRESS.defaultProfile,
@@ -797,6 +802,8 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.totalXp !== 'number' || !Number.isFinite(coop.totalXp)
     || (coop.lastProcessedRoundEndedAt !== null
       && (typeof coop.lastProcessedRoundEndedAt !== 'number' || !Number.isFinite(coop.lastProcessedRoundEndedAt)))
+    || (coop.completedMapIds !== undefined && (!Array.isArray(coop.completedMapIds)
+      || !coop.completedMapIds.every((id) => typeof id === 'string' && id.trim().length > 0)))
     || !Array.isArray(coop.completedBossMapIds)
     || !coop.completedBossMapIds.every((value) => typeof value === 'string' && value.trim().length > 0)
     || typeof coop.highestUnlockedMapId !== 'string'
@@ -910,6 +917,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
       coopDefense: {
         totalXp: sanitizeStoredXp(coop.totalXp),
         lastProcessedRoundEndedAt: sanitizeStoredRoundEndedAt(coop.lastProcessedRoundEndedAt),
+        completedMapIds: [...new Set((coop.completedMapIds ?? []) as string[])],
         completedBossMapIds,
         highestUnlockedMapId,
         classesUnlocked,
@@ -968,6 +976,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
     coopDefense: {
       totalXp: progress.totalXp,
       lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
+      completedMapIds: [...progress.completedMapIds],
       completedBossMapIds: [...progress.completedBossMapIds],
       highestUnlockedMapId: progress.highestUnlockedMapId,
       classesUnlocked: progress.classesUnlocked,
@@ -1400,6 +1409,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
   return {
     totalXp: progress.totalXp,
     lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
+    completedMapIds: [...progress.completedMapIds],
     completedBossMapIds: [...progress.completedBossMapIds],
     highestUnlockedMapId: progress.highestUnlockedMapId,
     classesUnlocked: progress.classesUnlocked,
@@ -1435,6 +1445,7 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
       ...current.progression,
       coopDefense: {
         ...progress,
+        completedMapIds: [...progress.completedMapIds],
         completedBossMapIds: [...progress.completedBossMapIds],
         defaultProfile: cloneCoopDefenseUpgradeProfile(
           progress.defaultProfile,
@@ -1612,6 +1623,7 @@ export function resetStoredCoopDefenseCharacter(): void {
       ...current.progression,
       coopDefense: {
         ...DEFAULT_COOP_DEFENSE_PROGRESS,
+        completedMapIds: [],
         completedBossMapIds: [],
         defaultProfile: cloneCoopDefenseUpgradeProfile(
           DEFAULT_COOP_DEFENSE_PROGRESS.defaultProfile,
@@ -2372,6 +2384,18 @@ export function setStoredCoopDefenseCheatProgress(
       },
     };
   });
+}
+
+/** Successful, eligible rounds are the sole source of the completion history. */
+export function markStoredCoopDefenseMapCompleted(mapId: string): boolean {
+  const id = mapId.trim();
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  if (!id || progress.completedMapIds.includes(id)) return false;
+  writePreferences({ ...current, progression: { ...current.progression,
+    coopDefense: { ...progress, completedMapIds: [...progress.completedMapIds, id] },
+  } });
+  return true;
 }
 
 /** Records a successful boss map once and returns whether a new boss point was earned. */

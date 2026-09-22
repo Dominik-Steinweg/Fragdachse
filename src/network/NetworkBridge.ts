@@ -1,3 +1,5 @@
+import { sanitizePersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../persistentBase/PersistentBaseLayoutEdit';
+import { isPersistentBaseAreaStage, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
 import { GameplayAudioCursor, isGameplayAudioEvent, type GameplayAudioCue, type GameplayAudioEvent } from '../audio/GameplayAudioFeedback';
 import { encodeMgAttrition, decodeMgAttrition } from './mgAttritionCodec';
@@ -790,6 +792,7 @@ export class NetworkBridge {
 
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private persistentBaseRewardPlacementHandler: PersistentBaseRewardPlacementHandler | null = null;
+  private persistentBaseLayoutEditHandler: ((playerId: string, edit: PersistentBaseLayoutEdit) => PersistentBaseLayoutEditResult) | null = null;
   private persistentBaseMoveHandler: PersistentBaseMoveHandler | null = null;
   private heldActionHandler: ((
     playerId: string,
@@ -2726,6 +2729,37 @@ export class NetworkBridge {
         : { ar: requestForCurrentActivity.activityRevision }),
     }, 1200);
     return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
+  }
+
+  offerPersonalBaseAreaStage(stage: PersistentBaseAreaStage): void {
+    if (myPlayer().getState('pbas') !== stage) myPlayer().setState('pbas', stage, true);
+  }
+
+  getPersonalBaseAreaStage(playerId: string): PersistentBaseAreaStage | null {
+    const value = this.playerStateMap.get(playerId)?.getState('pbas');
+    return isPersistentBaseAreaStage(value) ? value : null;
+  }
+
+  async sendPersistentBaseLayoutEdit(edit: PersistentBaseLayoutEdit): Promise<PersistentBaseLayoutEditResult> {
+    const request = sanitizePersistentBaseLayoutEdit(edit);
+    if (!request || this.getGamePhase() !== 'LOBBY') return { ok: false, reason: 'blocked' };
+    if (isHost()) return this.persistentBaseLayoutEditHandler?.(myPlayer().id, request) ?? { ok: false, reason: 'blocked' };
+    try {
+      const result = await this.callHostRpc('pble', request, 5000) as PersistentBaseLayoutEditResult | undefined;
+      if (!result?.ok) return { ok: false, reason: result?.reason ?? 'blocked' };
+      const contribution = sanitizePersistentPlayerBaseContribution(result.contribution);
+      return contribution ? { ok: true, contribution } : { ok: false, reason: 'invalid' };
+    } catch { return { ok: false, reason: 'blocked' }; }
+  }
+
+  registerPersistentBaseLayoutEditHandler(handler: (playerId: string, edit: PersistentBaseLayoutEdit) => PersistentBaseLayoutEditResult): void {
+    this.persistentBaseLayoutEditHandler = handler;
+    this.registerHostRpcHandler('pble', (data: unknown, caller: PlayerState): PersistentBaseLayoutEditResult => {
+      const edit = sanitizePersistentBaseLayoutEdit(data);
+      if (!isHost() || !edit || this.getGamePhase() !== 'LOBBY'
+        || this.getCurrentWorldRevision() !== edit.worldRevision) return { ok: false, reason: 'blocked' };
+      return handler(caller.id, edit);
+    });
   }
 
   registerPersistentBaseMoveHandler(handler: PersistentBaseMoveHandler): void {

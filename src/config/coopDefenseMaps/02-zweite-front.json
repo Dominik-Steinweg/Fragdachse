@@ -1,5 +1,6 @@
 {
   "mapId": "2",
+  "persistentBaseRewardsOnVictory": ["base_plasma_turret"],
   "arenaWidthCells": 70,
   "arenaHeightCells": 39,
   "timeOfDay": "05:00",

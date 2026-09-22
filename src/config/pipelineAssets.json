@@ -481,7 +481,7 @@
       "gameIds": [
         "zombie-badger"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ao",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_zombie_badger",
@@ -527,8 +527,8 @@
         }
       ],
       "hashes": {
-        "idle": "b43273264ccc5153a464a5b68903737019316f390f7e033783a4e890611afc86",
-        "sheet": "4597b2269dbe972c7d54089245531aa34c6dd1228c072d7697c39ce109fb819b"
+        "idle": "427a3fb78fe917b53f59e148106913b39c261d919487622a72f889c37d604f57",
+        "sheet": "9acac2f05dcee29469e3c9b8ef6810a3049cef5b7f6b42dd146f1557898c34bb"
       }
     },
     {
@@ -537,7 +537,7 @@
       "gameIds": [
         "demon-badger"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_demon_badger",
@@ -583,8 +583,8 @@
         }
       ],
       "hashes": {
-        "idle": "64123803f9d4a43c4baa10fb639ef46adf76e5de404189af5126e9de334d3893",
-        "sheet": "268950d3954e938dc1126ebf4dc66d7702db8e480cac4e844578a76789d3ae30"
+        "idle": "0754e9be725336cb24b91c39056eda61ac1c29674778c2b712e8e7b9d41b2cdb",
+        "sheet": "86dcaab109c597d3c34acee42c62c7c459910d12f0217564cf0710ec8c1d556f"
       }
     },
     {
@@ -593,7 +593,7 @@
       "gameIds": [
         "rabid-badger"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_rabid_badger",
@@ -639,8 +639,8 @@
         }
       ],
       "hashes": {
-        "idle": "28d3746860da38f54b5854dfb2f51c2720bb71cc09149ba2d4144cdd42bc16e5",
-        "sheet": "de7a4a398a92546f6d3ced81de56f77606bf4586e7997968cfc8f11345edc5ca"
+        "idle": "4e616b85a81f0addce5cddba37320373f861ce12aaccc5b92a2ae9968ed456b2",
+        "sheet": "523f69457a7bb12376f9a869ff755f37bea71b13c76258206399b87a37f66a7a"
       }
     },
     {
@@ -649,7 +649,7 @@
       "gameIds": [
         "grave-titan"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 256,
       "textureKey": "enemy_grave_titan",
@@ -695,8 +695,8 @@
         }
       ],
       "hashes": {
-        "idle": "924dbc04ecde1fa359028263a2f318c97a89ed2b058535b83bf824b894cd57f9",
-        "sheet": "d40df07601399c687636f82241c3e59707b895e2715ab7bb39508d042fae3788"
+        "idle": "78906ddb6919458209f777f206ca1e1ec0e474540083fee9f76c591b3f822e38",
+        "sheet": "c3d26715c03b724d90eb87e4714f6e3d964cff49b1c69920b9a0ba68aef1f53e"
       }
     },
     {
@@ -705,7 +705,7 @@
       "gameIds": [
         "spore-warden"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_spore_warden",
@@ -751,8 +751,8 @@
         }
       ],
       "hashes": {
-        "idle": "2db4b4785c8fcb069e5949efc94ddfe7258e1d255dd9e2953def5122f52ab690",
-        "sheet": "2eb0ad00c4118fc32d5cc225028efa4455544829ab8e8cb01df5b1df1b8caade"
+        "idle": "4c909c0bcf67d30c64ca325a6f4b9b6c1f4684e8aab3c9e8091a17d69092213c",
+        "sheet": "115af1ddba1a0bf8fc0e801a0f6320a598413db1c82f25b973808d2cdee5d23b"
       }
     },
     {
@@ -761,7 +761,7 @@
       "gameIds": [
         "plague-medic"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_plague_medic",
@@ -807,8 +807,8 @@
         }
       ],
       "hashes": {
-        "idle": "aa6c6518614852b0c962c631acea9a80385c24e6eaa76ed8a966be02339ae950",
-        "sheet": "311b872d8ba9ccb314abf3fa9091937a66826f7d8d492ac28603934784bbe301"
+        "idle": "5504b0b9e989411c812375e193afff093d430bee2fc250b13bbcf312a9cd25ea",
+        "sheet": "fd28e8ac5d3ed33049455be204a32809de020a9c135c315632ea4bcbe4f9d313"
       }
     },
     {
@@ -817,7 +817,7 @@
       "gameIds": [
         "void-stalker"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_void_stalker",
@@ -863,8 +863,8 @@
         }
       ],
       "hashes": {
-        "idle": "3d93ce35e234d9f925f5172dd672af63557aa56d5a39b17c0f912f800eb30449",
-        "sheet": "79fb92fc245c68b12e06c13e27ddd58d4ae04bc8a308e9f16176645fad5bfedc"
+        "idle": "3a78578a736d473af439a9fbdd56738a906e1b2be4fc9760d07369cd4ba09770",
+        "sheet": "39f24ef01a1b9ad321f82aa9aa7da0260281aff6da8d6757f35bedcd88be1dfa"
       }
     },
     {
@@ -873,7 +873,7 @@
       "gameIds": [
         "stink-broodmother"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_stink_broodmother",
@@ -919,8 +919,8 @@
         }
       ],
       "hashes": {
-        "idle": "79fb30bf7a129e100598ebeff97838403d643c21d24df8f1465f9a011e1a3ed4",
-        "sheet": "4a1c8d55aee56bd0e3706e1ed6e82ea42f0696ea0aadd0e2784a99e64a9db926"
+        "idle": "4dea591bd47efe80165085dfb746a424477f8f7ab4ff32d3cc8e36c1feec1d4b",
+        "sheet": "91abd8bf84a2d8085fe11eaa739d1e5ae80bedd1448751042999181baea26c55"
       }
     },
     {
@@ -985,7 +985,7 @@
       "gameIds": [
         "thrower-badger"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_thrower_badger",
@@ -1031,8 +1031,8 @@
         }
       ],
       "hashes": {
-        "idle": "98ab69549cb57c7635812f74f6352c7833dcbef271907e1d79fdec6e29066abd",
-        "sheet": "52ed7f71d83e48c2ab0089bf62d858394120cdce3c3627fb558d58a8d036fba6"
+        "idle": "585deb6e4f5fe389b34c15100d4c158c8be6e6d2f88e14e5db06a85b2e9cf831",
+        "sheet": "7a3c17f15b019feec626c74be1cad480aef1e66bf0600489a6b9865305157e92"
       }
     },
     {
@@ -1041,7 +1041,7 @@
       "gameIds": [
         "inferno-colossus"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 256,
       "textureKey": "enemy_inferno_colossus",
@@ -1087,8 +1087,8 @@
         }
       ],
       "hashes": {
-        "idle": "af93adfb95f9487377f8b88e0f73623f7c17ce6f7b4d3df96c5cebb8e979e495",
-        "sheet": "bb3aee14c6a359dc6c05dcb75baceb58846c9261838d306e10d35fcff2319210"
+        "idle": "7389c9edbc25daffce512a327b1f7084b62e0ca17efadd6f7f6b04e9341e460a",
+        "sheet": "6e7ac6786f547558c9dc3a21dea498a8d472c2f7580aeb804e5793bbf63e09c9"
       }
     },
     {
@@ -1153,7 +1153,7 @@
       "gameIds": [
         "timebomb-badger"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_timebomb_badger",
@@ -1199,8 +1199,8 @@
         }
       ],
       "hashes": {
-        "idle": "5747ca58df2dc447819eacf3f3a162807ddde34dc5caf3298345b9da80b08d04",
-        "sheet": "61c64aecc2fae7bf554ec88bd438f8901ac3ea651f15d5b63555dd108ff69745"
+        "idle": "ddcc2331d4324bbeb8fca0b4f5f7d4491fd0b1601f648d4a07148c509d4a43bc",
+        "sheet": "5bdb14f80f6f1d341a1e89ddb2e3e26bc95b11b288113d3408272f1c95130a90"
       }
     },
     {
@@ -1209,7 +1209,7 @@
       "gameIds": [
         "void-hunter"
       ],
-      "revision": "v2-ai",
+      "revision": "v2-ap",
       "variant": "standard",
       "sourceSize": 256,
       "textureKey": "enemy_void_hunter",
@@ -1255,8 +1255,8 @@
         }
       ],
       "hashes": {
-        "idle": "9dc30d9fed7ae0329bcc70a0d1a9b2f6d115dd12fe8ed028d8979fa3d8f1bf0d",
-        "sheet": "a903649592965180975f82db6ca43ebce7e0a73b1b908fe9f7344ef79879740d"
+        "idle": "f6b65477deffbd37e968a116bc7f67ba65b8d5795a0367dda1ae1282d789e8e1",
+        "sheet": "0655b3c1ac9eca4b7d89f10a43d806d101542d69a32ef9310f90fe5109eaf02b"
       }
     },
     {

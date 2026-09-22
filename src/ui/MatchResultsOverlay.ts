@@ -1292,7 +1292,8 @@ export class MatchResultsOverlay {
     this.completeSequence();
   }
 
-  private continueToLobby(): void {
+  continueToLobby(): void {
+    if (!this.isVisible()) return;
     const wasReplay = this.replayOnly;
     this.hide();
     if (!wasReplay) this.onContinue();

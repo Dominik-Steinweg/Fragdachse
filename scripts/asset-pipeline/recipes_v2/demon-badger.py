@@ -1,6 +1,7 @@
 """Horned muscular charger: swept red shoulders, narrow hot spine and hooked claws."""
 from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, finish
 
+from enemy_craft_parts import head_a as head, finish_a as finish, refine
 
 def build(c,spec):
     coat=c.material('Oxide red demonic hide',(.34,.035,.021),'organic')
@@ -31,6 +32,7 @@ def build(c,spec):
     skull=head(c,red,dark,coat,eyes,y=.64,z=.98,width=.27,length=.38,ears=False)
     for side in (-1,1):
         skull.append(horn(c,'Hooked cranial horn',[(side*.24,.46,1.11),(side*.40,.68,1.20),(side*.36,.95,1.13),(side*.22,1.13,1.04)], [.105,.080,.043,.006],dark))
-    skull.append(ribbon(c,'Ember forehead line',[(0,.45,1.215),(0,.65,1.226),(0,.90,1.11)],[.05,.062,.026],ember))
+    skull.append(ribbon(c,'Narrow irregular forehead fissure',[(0,.45,1.215),(-.016,.54,1.223),(.009,.65,1.226),(-.008,.76,1.195),(0,.90,1.11)],[.016,.025,.019,.022,.005],ember))
     tail=[horn(c,'Armored tapering tail',[(0,-.82,.39),(0,-1.07,.29),(0,-1.20,.20)],[.13,.083,.009],dark)]
+    refine(c,body,skull,limbs,(coat,),{red:("chitin",dark),dark:("horn",dark),pale:("horn",dark)},extra=(tail,))
     return finish(c,body,skull,limbs,tail)

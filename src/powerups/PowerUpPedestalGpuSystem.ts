@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { configureGpuLayerCameraTransform } from '../graphics/GpuLayerCameraTransform';
 import { DEPTH } from '../config';
 import type { SyncedPowerUpPedestal } from '../types';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS } from './PowerUpConfig';
@@ -99,6 +100,7 @@ export class PowerUpPedestalGpuSystem {
     this.ownerLayer = scene.add.spriteGPULayer(this.texture, MAX_PEDESTALS);
     this.ownerLayer.name = 'powerup-pedestal-owner';
     this.configureLayer(this.ownerLayer, DEPTH.PLAYERS - 1.999, Phaser.BlendModes.NORMAL);
+    for (const layer of [this.baseLayer, this.ownerLayer, this.additiveLayer]) configureGpuLayerCameraTransform(layer);
   }
 
   upsert(pedestal: SyncedPowerUpPedestal, mode: PowerUpPedestalGpuMode): boolean {
@@ -151,6 +153,10 @@ export class PowerUpPedestalGpuSystem {
 
   clear(): void {
     for (const id of [...this.handles.keys()]) this.remove(id);
+  }
+
+  destroy(): void {
+    this.clear(); this.baseLayer.destroy(); this.ownerLayer.destroy(); this.additiveLayer.destroy();
   }
 
   getActiveCount(): number {
@@ -312,6 +318,12 @@ function deadMember(): GpuMember {
 
 function baseFrameName(defId: string): string {
   return TIMED_POWERUP_PEDESTAL_CONFIGS[defId] ? `base:${defId}` : FRAME_FALLBACK_BASE;
+}
+
+/** Static menu previews sample the same pedestal artwork as the World GPU layer. */
+export function getPowerUpPedestalPreviewFrame(scene: Phaser.Scene, defId: string): { key: string; frame: string } {
+  ensurePedestalTexture(scene);
+  return { key: TEX_POWERUP_PEDESTAL_GPU, frame: baseFrameName(defId) };
 }
 
 function ensurePedestalTexture(scene: Phaser.Scene): void {

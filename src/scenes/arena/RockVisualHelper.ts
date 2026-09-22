@@ -1,3 +1,4 @@
+import { createWorldTurretVisual, syncWorldTurretVisualPose } from '../../entities/WorldTurretVisual';
 import type { TurretAnimationController } from '../../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../../effects/health/WorldHealthBarRenderer';
 import { TURRET_HEALTH_BAR_STYLE } from '../../effects/health/healthBarStyles';
@@ -384,26 +385,10 @@ export class RockVisualHelper {
     if (!this.arenaResult || this.arenaResult.rockVisualSystem === null) return;
     const world = this.gridToWorld(rock.gridX, rock.gridY);
     const weaponId = rock.turretWeaponId ?? 'SPORES';
-    const visualSpec = getTurretVisualSpec(weaponId);
     let visual = this.turretVisuals.get(rock.id);
     if (!visual) {
-      const aura = this.scene.add.image(world.x, world.y, TEX_TURRET_AURA)
-        .setDisplaySize(CELL_SIZE + 24, CELL_SIZE + 24)
-        .setTint(rock.ownerColor)
-        .setAlpha(0.2)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(DEPTH.ROCKS + 0.1);
-      const image = this.scene.add.sprite(world.x, world.y, visualSpec.textureKey)
-        .setDisplaySize(visualSpec.displaySize, visualSpec.displaySize)
-        .setDepth(DEPTH.ROCKS + 0.2);
-
-      visual = {
-        image,
-        aura,
-        healthBar: null,
-        constructionId: rock.constructionId,
-        turretWeaponId: rock.turretWeaponId,
-      };
+      visual = { ...createWorldTurretVisual(this.scene, weaponId, world.x, world.y, rock.ownerColor),
+        healthBar: null, constructionId: rock.constructionId, turretWeaponId: rock.turretWeaponId };
       this.turretVisuals.set(rock.id, visual);
     }
 
@@ -411,18 +396,9 @@ export class RockVisualHelper {
       ? getCoopDefenseConstructionDefinition(rock.constructionId)
       : undefined;
     const indestructible = definition?.indestructible === true;
-    const transform = getTurretVisualTransform(visualSpec, world.x, world.y, rock.angle);
-    this.turretAnimations?.bind(String(rock.id), visual.image, weaponId);
-    if (!this.turretAnimations) visual.image.setTexture(visualSpec.textureKey);
-    visual.image.setDisplaySize(visualSpec.displaySize, visualSpec.displaySize);
-    if (this.turretAnimations) {
-      this.turretAnimations.syncPose(String(rock.id), world.x, world.y, rock.angle,
-        !bridge.isHost() && rock.rotationSpeedDegPerSec !== undefined && weaponId !== 'TURRET_TESLA');
-    } else visual.image.setPosition(transform.x, transform.y).setRotation(transform.rotation);
-    visual.aura
-      .setPosition(world.x, world.y)
-      .setTint(rock.ownerColor)
-      .setVisible(visual.image.visible);
+    syncWorldTurretVisualPose(visual, String(rock.id), weaponId, world.x, world.y, rock.angle,
+      rock.ownerColor, this.turretAnimations,
+      !!this.turretAnimations && !bridge.isHost() && rock.rotationSpeedDegPerSec !== undefined && weaponId !== 'TURRET_TESLA');
     visual.constructionId = rock.constructionId;
     visual.turretWeaponId = rock.turretWeaponId;
 

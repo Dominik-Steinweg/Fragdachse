@@ -1,3 +1,4 @@
+import { AfterRoundFlow, type AfterRoundStep } from './AfterRoundFlow';
 import { PERSISTENT_BASE_HEALTH_REWARD_HP, resolvePersistentBaseMaxHp } from '../../persistentBase/PersistentBaseHealth';
 import { getLoadoutUtilityId, loadoutToolFromId } from '../../loadout/LoadoutTools';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
@@ -81,6 +82,7 @@ export interface ArenaMetaProgressStore {
   resetCharacter(): void;
   addCoopDefenseXp(amount: number): number;
   markCoopDefenseRoundProcessed(endedAt: number | null): void;
+  markCoopDefenseMapCompleted(mapId: string): boolean;
   markCoopDefenseBossMapCompleted(mapId: string): boolean;
   unlockCoopDefenseClassesAfterVictory(completedMapId: string): boolean;
   unlockCoopDefenseMapAfterVictory(completedMapId: string): boolean;
@@ -138,6 +140,7 @@ export interface ArenaMetaPresentationPort {
   scheduleUpgradeOverlayRefresh(): void;
   refreshColorIndicator(): void;
   hideDebugOverlay(): void;
+  showBaseOverlay(newRewardIds: readonly PersistentBaseRewardId[]): void;
   showUpgradeOverlay(): void;
   showItemsOverlay(): void;
   refreshItemsOverlay(): void;
@@ -214,6 +217,9 @@ export class ArenaMetaController {
   private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
   private lastMatchResultsPresentation: MatchResultsPresentation | null = null;
   private destroyed = false;
+  private readonly afterRound = new AfterRoundFlow();
+  private pendingAfterRoundStep: AfterRoundStep | null = null;
+  private afterRoundEndedAt: number | undefined;
   private lastSoundRoundEndedAt: number;
   private rewardBaselineRoundStartedAt: number | null = null;
   private baseRewardIdsBeforeRound: readonly PersistentBaseRewardId[] = [];
@@ -291,7 +297,10 @@ export class ArenaMetaController {
     this.input.presentation.setCoopDefenseProgress(
       showLobby && isCoopDefenseMode(this.input.session.getGameMode()) ? this.progress : null,
     );
-    if (showLobby) this.refreshItemsPresentation();
+    if (showLobby) {
+      this.refreshItemsPresentation();
+      if (this.pendingAfterRoundStep) this.presentAfterRoundStep(this.pendingAfterRoundStep);
+    }
   }
 
   handleImportedGameProgress(): boolean {
@@ -368,8 +377,12 @@ export class ArenaMetaController {
     if (!snapshot) return;
 
     this.setLocalReady(false);
-    this.input.progressStore.restoreProgress(snapshot);
-    this.refresh({ stored: snapshot });
+    const restored = { ...this.input.progressStore.getProgress(),
+      defaultProfile: snapshot.defaultProfile, profilesByClass: snapshot.profilesByClass,
+      selectedClassId: snapshot.selectedClassId,
+    };
+    this.input.progressStore.restoreProgress(restored);
+    this.refresh({ stored: restored });
   }
 
   applyUpgradeChanges(): void {
@@ -667,6 +680,7 @@ export class ArenaMetaController {
 
   beginMatchResults(): void {
     if (this.destroyed) return;
+    this.cancelAfterRoundFlow();
     // Eine neue Lobby-Rueckkehr darf niemals die alte Auswertung als frische Runde anzeigen.
     this.lastMatchResultsPresentation = null;
     this.coopDefenseMatchItemReward = null;
@@ -745,6 +759,17 @@ export class ArenaMetaController {
         : null,
     };
     this.lastMatchResultsPresentation = presentation;
+    if (freshProgress && progress) {
+      this.afterRoundEndedAt = firstResult.roundEndedAt;
+      const steps: AfterRoundStep[] = [];
+      if (presentation.itemReward) steps.push('items');
+      if (progress.after.level > progress.before.level || progress.newBossPoints > 0
+        || progress.classesUnlocked || progress.newlyUnlockedClassIds.length > 0) steps.push('upgrades');
+      if (progress.persistentBaseUnlocked || progress.persistentBaseAreaStageUnlocked
+        || progress.persistentBaseHealthReward || progress.newlyUnlockedBaseRewardIds.length) steps.push('base');
+      this.afterRound.prepare(firstResult.roundEndedAt, steps);
+      this.setLocalReady(false);
+    }
     this.input.presentation.setMatchResultsBalanceFeedbackVisible(balanceFeedbackAvailable);
     this.input.presentation.showMatchResults(presentation);
     this.input.presentation.setResultsReplayAvailable(true);
@@ -762,6 +787,49 @@ export class ArenaMetaController {
     }
   }
 
+  isAfterRoundFlowActive(): boolean { return this.afterRound.active; }
+
+  startAfterRoundFlow(): void {
+    if (this.destroyed) return;
+    // Reliable grants can be received while the results animation is playing.
+    const newIds = this.input.progressStore.getProgress().persistentBaseRewardUnlocks
+      .filter(id => !this.baseRewardIdsBeforeRound.includes(id));
+    if (newIds.length) this.afterRound.add('base');
+    this.presentAfterRoundStep(this.afterRound.start());
+  }
+
+  finishAfterRoundStep(step: AfterRoundStep): void {
+    if (this.destroyed) return;
+    const newIds = this.input.progressStore.getProgress().persistentBaseRewardUnlocks.filter(id => !this.baseRewardIdsBeforeRound.includes(id));
+    if (newIds.length) this.afterRound.add('base');
+    this.presentAfterRoundStep(this.afterRound.finish(step));
+  }
+
+  cancelAfterRoundFlow(): void { this.afterRound.cancel(); this.afterRoundEndedAt = undefined; this.pendingAfterRoundStep = null; }
+
+  private presentAfterRoundStep(step: AfterRoundStep | null): void {
+    if (!step) return;
+    if (this.input.session.getGamePhase() !== 'LOBBY') { this.cancelAfterRoundFlow(); return; }
+    this.setLocalReady(false);
+    if (this.input.session.isLocalReady() || this.input.session.isAuthoritativeLocalReady()) {
+      this.pendingAfterRoundStep = step; return;
+    }
+    this.pendingAfterRoundStep = null;
+    if (step === 'items') {
+      if (!this.getItemRewardPresentation(this.afterRoundEndedAt)) { this.finishAfterRoundStep(step); return; }
+      this.openItemRewardOverlay(this.afterRoundEndedAt, true);
+    } else if (step === 'upgrades') this.openUpgradeOverlay();
+    else this.openBaseOverlay(this.input.progressStore.getProgress().persistentBaseRewardUnlocks.filter(id => !this.baseRewardIdsBeforeRound.includes(id)));
+  }
+
+  openBaseOverlay(newRewardIds: readonly PersistentBaseRewardId[] = []): void {
+    if (this.destroyed || this.input.session.getGamePhase() !== 'LOBBY'
+      || !isCoopDefenseMode(this.input.session.getGameMode()) || this.input.session.isLocalReady()
+      || this.input.session.isAuthoritativeLocalReady() || !this.readFreshStoredProgress().persistentBaseUnlocked) return;
+    this.input.presentation.hideDebugOverlay();
+    this.input.presentation.showBaseOverlay(newRewardIds);
+  }
+
   replayMatchResults(balanceFeedbackAvailable = false): void {
     if (this.destroyed || !this.lastMatchResultsPresentation || this.matchResultsPending) return;
     if (this.input.presentation.isMatchResultsVisible()) return;
@@ -776,6 +844,7 @@ export class ArenaMetaController {
 
   abortMatchResults(message: string): void {
     if (this.destroyed) return;
+    this.cancelAfterRoundFlow();
     this.matchResultsPending = false;
     this.matchResultsProgressBefore = null;
     this.input.presentation.showMatchResultsTechnicalAbort(message);
@@ -873,7 +942,10 @@ export class ArenaMetaController {
 
     this.refresh();
     this.input.playSound?.('sfx_item_selected');
-    if (claim.salvagedXp > 0 && this.progress.level > beforeLevel) this.input.playSound?.('sfx_level_up');
+    if (claim.salvagedXp > 0 && this.progress.level > beforeLevel) {
+      this.input.playSound?.('sfx_level_up');
+      this.afterRound.add('upgrades');
+    }
     if (this.input.presentation.isItemsOverlayOpen()) {
       this.input.progressStore.markItemsSeen();
       this.refresh({ refreshOverlay: false });
@@ -965,6 +1037,7 @@ export class ArenaMetaController {
     let unlockedPersistentBaseAreaStage = false;
     let unlockedPersistentBaseHealth = false;
     if (roundState.status === 'victory' && completedMapId) {
+      this.input.progressStore.markCoopDefenseMapCompleted(completedMapId);
       const completedMapConfig = getCoopDefenseMapConfig(completedMapId);
       if (completedMapConfig.boss) {
         this.input.progressStore.markCoopDefenseBossMapCompleted(completedMapId);
@@ -1015,6 +1088,7 @@ export class ArenaMetaController {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.cancelAfterRoundFlow();
     this.upgradeProfileSnapshot = null;
   }
 

@@ -2,6 +2,7 @@
 import math
 from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, finish
 
+from enemy_craft_parts import head_a as head, finish_a as finish, refine
 
 def build(c,spec):
     hide=c.material('Warm olive guardian hide',(.10,.20,.14),'organic')
@@ -41,4 +42,5 @@ def build(c,spec):
             body.append(ell(c,'Small flank shelf fungus',(side*.61,y,z),(.20,.18,.075),rim,angle=side*.55))
     skull=head(c,ivory,dark,hide,eyes,y=.75,z=.97,width=.30,length=.39)
     tail=[horn(c,'Segmented living root tail',[(0,-.85,.36),(.015,-1.04,.27),(.095,-1.13,.19)], [.15,.10,.026],rim)]
+    refine(c,body,skull,limbs,(hide,),{shell:("chitin",dark),moss:("fungus",spot),rim:("horn",dark)},extra=(tail,))
     return finish(c,body,skull,limbs,tail)

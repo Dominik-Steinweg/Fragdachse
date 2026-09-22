@@ -68,6 +68,23 @@ function createPlacement(bases: readonly BaseSpec[] = []): PlacementSystem {
 }
 
 describe('turret aim configuration in placement snapshots', () => {
+  it('moves a layout batch atomically, including swaps, preserving runtime identity and damage', () => {
+    const placement = createPlacement();
+    const definition = COOP_DEFENSE_CONSTRUCTIONS.rock_barrier;
+    const a = placement.materializePersistentPlaceable(definition, 10, 10, .4, 'p1', 0xffffff)!;
+    const b = placement.materializePersistentPlaceable(definition, 11, 10, .8, 'p1', 0xffffff)!;
+    placement.applyDamage(a.id, 20);
+    const moves = [
+      { id: a.id, gridX: b.gridX, gridY: b.gridY, angle: a.angle, footprint: definition.footprint },
+      { id: b.id, gridX: a.gridX, gridY: a.gridY, angle: b.angle, footprint: definition.footprint },
+    ];
+    expect(placement.relocateRocks(moves)).not.toBeNull();
+    expect(placement.getRuntimeRock(a.id)).toMatchObject({ gridX: b.gridX, hp: a.maxHp - 20, angle: a.angle });
+    expect(placement.getRuntimeRock(b.id)).toMatchObject({ gridX: a.gridX, hp: b.maxHp, angle: b.angle });
+    const before = placement.getAllRuntimeRocks().map(rock => ({ ...rock }));
+    expect(placement.relocateRocks([{ ...moves[0], gridX: 12 }, { ...moves[1], gridX: -1 }])).toBeNull();
+    expect(placement.getAllRuntimeRocks()).toEqual(before);
+  });
   it('applies an owner-only snapshot update without merging equal construction types', () => {
     const host = createPlacement(); const definition = COOP_DEFENSE_CONSTRUCTIONS.rock_barrier;
     const first = host.materializePersistentPlaceable(definition, 10, 10, 0, 'p1', 0xffffff)!;
@@ -344,7 +361,7 @@ describe('PlacementSystem Coop-Defense base collision contract', () => {
     const first = surface[0]!;
     const runtime = placement.materializePersistentBaseReward(
       COOP_DEFENSE_CONSTRUCTIONS.spore_turret,
-      'base_spore_turret',
+      'base_plasma_turret',
       first.gridX,
       first.gridY,
       0,
@@ -353,12 +370,13 @@ describe('PlacementSystem Coop-Defense base collision contract', () => {
     );
     expect(runtime).toMatchObject({
       ownership: 'base-owned',
-      persistentRewardId: 'base_spore_turret',
+      persistentRewardId: 'base_plasma_turret',
       collisionMode: 'none',
       indestructible: true,
+      turretWeaponId: 'SPORE_TURRET_PLASMA',
     });
     expect(placement.getRuntimeRockAt(first.gridX, first.gridY)).toMatchObject({
-      persistentRewardId: 'base_spore_turret',
+      persistentRewardId: 'base_plasma_turret',
     });
   });
 });

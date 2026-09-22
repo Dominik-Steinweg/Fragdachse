@@ -549,10 +549,10 @@
         0.5
       ],
       "description": {
-        "silhouette": "Breiter gedrungener Dachskörper, spitze Nord-Schnauze und vier seitlich erkennbare Pfoten.",
-        "colors": "Fahles graubraunes Fell, helle Rücken-/Kopfzeichnung und kleine schmutzige Ockerstellen.",
-        "anatomy": "Vierbeiner mit schwerem Rumpf und schleppendem versetztem Gang; Kopfzeichnung bleibt lesbar.",
-        "materials": "undefined Weich gerundete organische Oberflächen und ruhige präzise Details."
+        "silhouette": "Breiter schwerer Vierbeiner mit organisch verfilztem Fell, langem keilförmigem Dachskopf und vier klar getrennten Krallenpfoten.",
+        "colors": "Fahles Salbei-/Graugrün, warme schmutzige Elfenbeinzeichnung, schwarze Gesichtsbänder, milchige Augen und sparsame dunkelrote Verletzungen.",
+        "anatomy": "Gedrungener Dachsrumpf mit lebendigem Schulter-/Kopfvolumen und schleppendem versetztem Vierbeinergang. Referenzdetails folgen der gekrümmten Anatomie.",
+        "materials": "Gerichtete geschichtete Fellbüschel, blinde milchige Augen in vertieften Lidern, freiliegende gealterte Rippen, verschmutzte Stoffwickel, genähte Narben und raues Reparaturleder."
       },
       "requiredClips": [
         "move"
@@ -568,8 +568,8 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
+          "label": "Verfilztes Salbeifell und verwitterte Details",
+          "textureStrength": 0.84,
           "formShadowStrength": 0
         }
       },
@@ -598,7 +598,8 @@
             "bodySurge": 0.012
           }
         }
-      ]
+      ],
+      "designReference": "scripts/asset-pipeline/references/zombie-badger-concept.png"
     },
     {
       "id": "demon-badger",
@@ -622,7 +623,7 @@
         "silhouette": "Schmaler spitz zulaufender Rücken, kräftige Vorderpfoten und hornartige Kopfkontur.",
         "colors": "Schwarzbraun und kräftiges Dunkelrot mit wenigen orangefarbenen Rissen.",
         "anatomy": "Vierbeiner mit klauenartigen Pfoten und aggressiv gebeugter Haltung; bewegte Gliedmaßen statt skalierter Zombieform.",
-        "materials": "undefined Weich gerundete organische Oberflächen und ruhige präzise Details."
+        "materials": "Kurzes gerichtetes rostrotes Fell, gewachsene Keratinkerben auf karminroten Hautplatten, geriefte schwarze Hörner und schmale Glutadern."
       },
       "requiredClips": [
         "move"
@@ -638,8 +639,8 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
           "formShadowStrength": 0
         }
       },
@@ -692,7 +693,7 @@
         "silhouette": "Schlanker länglicher Rücken, seitlich vorgestreckte Krallen und kleine spitze Schnauze.",
         "colors": "Gesättigtes Violett, schwarze Flanken und durchgehende helle Rückenzeichnung.",
         "anatomy": "Kleiner flinker Vierbeiner mit starkem diagonalen Pfotenwechsel und leichtem Rückenbogen.",
-        "materials": "undefined Weich gerundete organische Oberflächen und ruhige präzise Details."
+        "materials": "Dichtes violettes Fell auf schlanker Muskulatur, einzelne geschwungene Fellspitzen, verwitterte helle Rückendornen und gelbe Schlitzaugen."
       },
       "requiredClips": [
         "move"
@@ -708,8 +709,8 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
           "formShadowStrength": 0
         }
       },
@@ -762,7 +763,7 @@
         "silhouette": "Sehr breiter schwerer Rückenpanzer mit großen Steinplatten und massigen Pfoten.",
         "colors": "Dunkles Steingrau, gedecktes Moosgrün und helle Kopfzeichnung.",
         "anatomy": "Vierbeiniger Boss mit langsamen Lastwechseln; große Rumpfmasse und Panzerplatten prägen den Gang.",
-        "materials": "Helle verwitterte Rundsteine, kühles Granitgrau und sattgrüne Moosnester; große ruhige Volumen."
+        "materials": "Organisch verwitterter Granit mit mineralischer Körnung, verzweigten Brüchen, Erosionsporen und kleinen Flechten über dichtem olivgrauem Fell."
       },
       "requiredClips": [
         "move"
@@ -779,8 +780,8 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
           "formShadowStrength": 0
         }
       },
@@ -833,7 +834,7 @@
         "silhouette": "Breiter ovaler Panzerkörper mit zwei auffälligen seitlichen Sporenkammern.",
         "colors": "Moosgrün, Ockerbraun, dunkle Plattenfugen und helle Schnauzenzeichnung.",
         "anatomy": "Vierbeiner; organische Kammern folgen dem Körper leicht verzögert, die Pfoten bleiben separat lesbar.",
-        "materials": "Goldorange Pilzkronen mit cremefarbenen Poren über moosgrünem Körper; organische gewölbte Schalen."
+        "materials": "Warmorange Pilzkappen mit radialer Maserung, feinen gewachsenen Poren und Lamellen; grüne keratinartige Rückenplatten über weichem Fell."
       },
       "requiredClips": [
         "move"
@@ -849,8 +850,8 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
           "formShadowStrength": 0
         }
       },
@@ -903,7 +904,7 @@
         "silhouette": "Runder geschichteter Körper mit deutlich abgesetzter Maske und hellem zentralem Rückensymbol.",
         "colors": "Dunkle Braun- und Olivtöne mit blassgrünem Kreuz-/Heilakzent.",
         "anatomy": "Vierbeiner mit ruhigem tragendem Gang und fest angebrachtem medizinischem Rückengeschirr.",
-        "materials": "Helles cremefarbenes Sanitätsgepäck mit klarer grüner Kreuzmarkierung, salbeigrünes Fell und saubere Einfassungen."
+        "materials": "Fein gewebte und vernähte helle Sanitätstasche, abgenutzte Messingbeschläge, grüne Emblemfläche, Ledergurte und dichtes salbeigrünes Fell."
       },
       "requiredClips": [
         "move"
@@ -920,9 +921,9 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
-          "formShadowStrength": 0
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
+          "formShadowStrength": 0.82
         }
       },
       "clips": [
@@ -974,7 +975,7 @@
         "silhouette": "Runder gepanzerter Rumpf mit ringförmigem Rückenmotiv und vier markierten Gliedmaßen.",
         "colors": "Tiefblau und Violett, cyanblaue Gelenke und helle Dachskopfzeichnung.",
         "anatomy": "Vierbeiner mit niedriger schleichender Haltung; Gelenke und Rückenpanzer bleiben getrennte Formen.",
-        "materials": "Kobaltblaue gewölbte Chitinschalen, dunkler violetter Rückenbrunnen und getrennte cyanfarbene Nervenfelder."
+        "materials": "Verwitterte kobaltblaue Panzerung mit vertieften Nähten und Kontakten, gerippter violetter Energiekammer und dunklem Indigofell."
       },
       "requiredClips": [
         "move"
@@ -991,9 +992,9 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
-          "formShadowStrength": 0
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
+          "formShadowStrength": 0.82
         }
       },
       "clips": [
@@ -1045,7 +1046,7 @@
         "silhouette": "Breiter segmentierter Hinterkörper mit großen seitlichen gelbgrünen Brutsäcken.",
         "colors": "Braun, gedecktes Olivgelb, dunkle Segmentfugen und heller Kopfstreifen.",
         "anatomy": "Vierbeiner mit wogendem Hinterleib und belasteten Pfoten; Säcke bewegen sich nur körpergebunden.",
-        "materials": "Gelbgrüne große Brutkammern und olivfarbene Haut; runde schwere Birnenform und gegliederte Hautfalten."
+        "materials": "Olivgrünes geschichtetes Fell, fein geäderte lederartige Brutkammern, körnige Haut und trockene gewachsene Rückenplatten."
       },
       "requiredClips": [
         "move"
@@ -1059,8 +1060,8 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
           "formShadowStrength": 0
         }
       },
@@ -1239,7 +1240,7 @@
         "silhouette": "Segmentierter kräftiger Rücken und große seitliche organische Tragekammern.",
         "colors": "Gedämpftes Braun und Olivgelb mit hellem Kopfstreifen und dunklen Gelenkfugen.",
         "anatomy": "Vierbeiner mit tragender Haltung; Kammern und Schulterapparat unterscheiden ihn anatomisch von einer bloßen Farbvariante.",
-        "materials": "Rostbraune Trägermuskulatur, ockerfarbene Sehnen und lederbraune asymmetrische Wurftasche mit sichtbarer Brut."
+        "materials": "Rostbraunes gerichtetes Fell, genähte raue Trageschlinge, geriefte Sehnen, Hornschuppen und dichtes Fell des getragenen Nachwuchses."
       },
       "requiredClips": [
         "move"
@@ -1253,8 +1254,8 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
           "formShadowStrength": 0
         }
       },
@@ -1308,7 +1309,7 @@
         "silhouette": "Langer breiter Rücken mit gezackten Panzersegmenten und vier massigen gepanzerten Pfoten.",
         "colors": "Schwarzes Basaltbraun, kupferorange Risse und kleine glühende Vertiefungen.",
         "anatomy": "Vierbeiniger Boss mit schweren versetzten Schritten und gegliederter Rückenpanzerung; Weltfeuer separat.",
-        "materials": "Rundgeschliffene dunkle Basaltschalen, kupferrote Rückenpanzer und schmale orange Glutspalten."
+        "materials": "Poröser dunkler Basalt, hitzeverfärbte Kupferpanzerung, feine Abnutzung und Kontaktverschattung, Kühlschlitze und zurückhaltende Glutspalten."
       },
       "requiredClips": [
         "move"
@@ -1323,9 +1324,9 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
-          "formShadowStrength": 0
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
+          "formShadowStrength": 0.82
         }
       },
       "clips": [
@@ -1502,7 +1503,7 @@
         "silhouette": "Kompakter runder Körper mit vorderem hellem Kopfstreifen und gut erkennbarem Bombengeschirr.",
         "colors": "Dunkles Graubraun, schwach türkise Flanken und kleine rote Timeranzeige.",
         "anatomy": "Vierbeiner mit schnellen kurzen Schritten; Geschirr bleibt befestigt, Zündung ist kein Teil des Laufclips.",
-        "materials": "Kleine graue Läufer-Anatomie mit klarer goldgelber Bombenkapsel und rotem Zeitfenster."
+        "materials": "Dichtes graubraunes Fell, verwittertes ockerfarbenes rundes Sprenggehäuse, eingelassene Schrauben, Messinghalter und geschützte Zündsicherungen."
       },
       "requiredClips": [
         "move"
@@ -1517,9 +1518,9 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
-          "formShadowStrength": 0
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
+          "formShadowStrength": 0.82
         }
       },
       "clips": [
@@ -1572,7 +1573,7 @@
         "silhouette": "Langer schmaler symmetrischer Jägerkörper mit spitzen Panzerenden und seitlichen Waffen-/Gliedmaßenformen.",
         "colors": "Anthrazit, dunkles Violett und schmale leuchtend purpurfarbene Panzerlinien.",
         "anatomy": "Vierbeiniger Boss mit langen kontrollierten Schritten; längliche Silhouette erhalten, Referenz zeigt abweichend nach Süden.",
-        "materials": "Lange eisblaue Jägerpanzerung mit dunkelblauen Gelenken und magentafarbenen eingelegten Energiebahnen."
+        "materials": "Abgenutzte eisblaue Keramikpanzerung, fein bearbeitete Metallkanten und Gauss-Kühlrippen, dunkles Fell und schmale magentafarbene Einlagen."
       },
       "requiredClips": [
         "move"
@@ -1592,9 +1593,9 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Organische Formen und klare Farben",
-          "textureStrength": 0.62,
-          "formShadowStrength": 0
+          "label": "Ausgearbeitete Oberflächen und organisches Fell",
+          "textureStrength": 0.84,
+          "formShadowStrength": 0.82
         }
       },
       "clips": [

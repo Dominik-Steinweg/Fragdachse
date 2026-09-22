@@ -17,8 +17,10 @@ import {
 } from '../src/persistentBase/PersistentBaseRewardTypes';
 
 describe('Persistent Base Reward-Katalog', () => {
-  it('contains the five stable IDs and existing runtime references', () => {
+  it('contains the stable IDs and existing runtime references', () => {
     expect(PERSISTENT_BASE_REWARD_DEFINITIONS.map((definition) => definition.id)).toEqual([
+      'base_rage_pedestal',
+      'base_plasma_turret',
       'base_adrenaline_pedestal',
       'base_spore_turret',
       'base_health_pedestal',

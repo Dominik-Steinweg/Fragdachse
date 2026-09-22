@@ -78,6 +78,7 @@ export class RpcCoordinator {
     this.registerLoadoutUseHandler();
     this.registerPersistentBaseRewardPlacementHandler();
     this.registerPersistentBaseMoveHandler();
+    bridge.registerPersistentBaseLayoutEditHandler((playerId, edit) => this.persistentBase.editLayout(playerId, edit));
     this.registerCaptureTheBeerFxHandler();
     this.registerCoopDefenseCarryDeliveredFxHandler();
     this.registerExplosionEffectHandler();

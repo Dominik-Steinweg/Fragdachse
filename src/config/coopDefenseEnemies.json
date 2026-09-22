@@ -76,9 +76,9 @@
           "attackMovementSpeedFactor": 0.5,
           "minTargetDistancePx": 200,
           "salvo": {
-            "count": 12,
-            "intervalMs": 90,
-            "cooldownMs": 5000,
+            "count": 10,
+            "intervalMs": 80,
+            "cooldownMs": 10000,
             "targetDistribution": "round_robin"
           }
         },
@@ -406,7 +406,7 @@
       "knockbackFactor": 1.9,
       "movementTarget": "players-and-armed-constructs",
       "weapons": [
-        { "weaponId": "ZOMBIE_BADGER_BITE", "targetMode": "rocks" }
+        { "weaponId": "TIMEBOMB_BADGER_BITE", "targetMode": "rocks" }
       ],
       "attackScanIntervalMs": 120,
       "attackStopDurationMs": 100,

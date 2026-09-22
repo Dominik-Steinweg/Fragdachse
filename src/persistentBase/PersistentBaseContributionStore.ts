@@ -243,6 +243,13 @@ export class PersistentBaseContributionStore {
     return moved;
   }
 
+  /** Replace a validated lobby edit, retaining runtime-to-blueprint identity. */
+  replaceEditedContribution(contribution: PersistentPlayerBaseContribution): void {
+    if (this.working) throw new Error('Cannot edit a lobby blueprint during an activity');
+    this.committed.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
+    for (const entry of contribution.constructions) this.runtimeBindings.updateBlueprint(contribution.ownerId, entry);
+  }
+
   /** True, wenn dieser Blueprint bereits ein Runtime-Objekt in der Welt hat. */
   isMaterialized(ownerId: string, persistentId: string): boolean {
     return this.runtimeBindings.findRuntimeId(ownerId, persistentId) !== undefined;

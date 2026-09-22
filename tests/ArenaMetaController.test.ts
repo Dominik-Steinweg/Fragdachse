@@ -30,6 +30,7 @@ function makeInput(): {
     resetCharacter: vi.fn(),
     addCoopDefenseXp: vi.fn(),
     markCoopDefenseRoundProcessed: vi.fn(),
+    markCoopDefenseMapCompleted: vi.fn(),
     markCoopDefenseBossMapCompleted: vi.fn(),
     unlockCoopDefenseClassesAfterVictory: vi.fn(),
     unlockCoopDefenseMapAfterVictory: vi.fn(),
@@ -77,6 +78,7 @@ function makeInput(): {
     refreshColorIndicator: vi.fn(),
     hideDebugOverlay: vi.fn(),
     showUpgradeOverlay: vi.fn(),
+    showBaseOverlay: vi.fn(),
     setCoopDefenseItemsState: vi.fn(),
     showItemsOverlay: vi.fn(),
     refreshItemsOverlay: vi.fn(),
@@ -103,6 +105,52 @@ function makeInput(): {
 }
 
 describe('ArenaMetaController', () => {
+  it('offers level upgrades after closing results, then a newly earned base reward, exactly once', () => {
+    const { controller, store, resultRead, presentation, session } = makeInput();
+    const progress = getStoredCoopDefenseProgress();
+    progress.persistentBaseUnlocked = true;
+    vi.mocked(store.getProgress).mockImplementation(() => structuredClone(progress));
+    vi.mocked(store.addCoopDefenseXp).mockImplementation(xp => { progress.totalXp += xp; return progress.totalXp; });
+    vi.mocked(store.markCoopDefenseRoundProcessed).mockImplementation(endedAt => { progress.lastProcessedRoundEndedAt = endedAt; });
+    controller.refresh();
+    controller.captureRoundRewardBaseline(1);
+    controller.beginMatchResults();
+    progress.persistentBaseRewardUnlocks = ['base_spore_turret'];
+    vi.mocked(resultRead.getRoundResults).mockReturnValue([{
+      id: 'local', name: 'Local', colorHex: 0xffffff, frags: 0, teamId: null,
+      roundEndedAt: 42, gameMode: 'coop_defense', mapName: 'Map', sharedXp: getCoopDefenseXpThresholdForLevel(2),
+    }]);
+    vi.mocked(resultRead.getRoundState).mockReturnValue({ status: 'victory', roundStartTime: 1, endedAt: 42, coopDefenseMapId: '1' });
+    controller.tryFinalizeMatchResults();
+    expect(presentation.showUpgradeOverlay).not.toHaveBeenCalled();
+    vi.mocked(session.isAuthoritativeLocalReady).mockReturnValue(true);
+    controller.startAfterRoundFlow();
+    expect(presentation.showUpgradeOverlay).not.toHaveBeenCalled();
+    vi.mocked(session.isAuthoritativeLocalReady).mockReturnValue(false);
+    controller.refreshLobbyProjection();
+    expect(presentation.showUpgradeOverlay).toHaveBeenCalledTimes(1);
+    expect(presentation.showBaseOverlay).not.toHaveBeenCalled();
+    controller.finishAfterRoundStep('upgrades');
+    expect(presentation.showBaseOverlay).toHaveBeenCalledWith(['base_spore_turret']);
+    controller.finishAfterRoundStep('base');
+    controller.startAfterRoundFlow();
+    expect(controller.isAfterRoundFlowActive()).toBe(false);
+    expect(presentation.showBaseOverlay).toHaveBeenCalledTimes(1);
+    expect(store.markCoopDefenseMapCompleted).toHaveBeenCalledWith('1');
+  });
+
+  it('cancels upgrade spending without reverting a reward granted while the menu was open', () => {
+    const { controller, store } = makeInput();
+    let progress = getStoredCoopDefenseProgress();
+    vi.mocked(store.getProgress).mockImplementation(() => structuredClone(progress));
+    vi.mocked(store.restoreProgress).mockImplementation(value => { progress = structuredClone(value); });
+    controller.refresh(); controller.openUpgradeOverlay();
+    progress.persistentBaseRewardUnlocks.push('base_spore_turret');
+    progress.completedMapIds.push('6');
+    controller.cancelUpgradeChanges();
+    expect(progress.persistentBaseRewardUnlocks).toContain('base_spore_turret');
+    expect(progress.completedMapIds).toContain('6');
+  });
   it.each([true, false])('shows newly persisted round rewards for host=%s, including replay but excluding later rounds', (host) => {
     const { controller, store, session, resultRead, presentation } = makeInput();
     vi.mocked(session.isHost).mockReturnValue(host);

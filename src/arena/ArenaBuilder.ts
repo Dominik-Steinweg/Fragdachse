@@ -1,3 +1,4 @@
+import { createArenaBackground } from './ArenaBackgroundRenderer';
 import { WaterSurfaceRenderer } from './WaterSurfaceRenderer';
 import { AmbientWildlifeRenderer } from './AmbientWildlifeRenderer';
 import { WaterGeometry } from './WaterGeometry';
@@ -46,8 +47,6 @@ import { RockVisualStateStore, type RockVisualState } from './rocks/RockVisualSt
 import { RockVisualSystem } from './rocks/RockVisualSystem';
 import { getRockGpuPageSize, getRockRendererMode } from './rocks/RockRendererSettings';
 import {
-  ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
-  ARENA_BACKGROUND_TEXTURE_KEY,
   resolveArenaBackgroundSpec,
 } from './ArenaBackground';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
@@ -1002,28 +1001,10 @@ export class ArenaBuilder {
 
   private ensureArenaBackground(): void {
     if (this.arenaBackground) return;
-    this.arenaBackground = this.scene.add
-      .tileSprite(
-        ARENA_OFFSET_X + ARENA_WIDTH * 0.5,
-        ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5,
-        ARENA_WIDTH,
-        ARENA_HEIGHT,
-        ARENA_BACKGROUND_TEXTURE_KEY,
-      )
-      .setDepth(DEPTH.GRASS);
-
-    // Knapp über dem Gras und deutlich unter DEPTH.DIRT: die Multiply-Ebene darf ausschließlich
-    // das Gras einfärben, nicht den Dirt-Boden oder die Decals darüber.
-    this.arenaBackgroundDetail = this.scene.add
-      .tileSprite(
-        ARENA_OFFSET_X + ARENA_WIDTH * 0.5,
-        ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5,
-        ARENA_WIDTH,
-        ARENA_HEIGHT,
-        ARENA_BACKGROUND_DETAIL_TEXTURE_KEY,
-      )
-      .setDepth(DEPTH.GRASS + 0.01)
-      .setBlendMode(Phaser.BlendModes.MULTIPLY);
+    const background = createArenaBackground(this.scene,
+      ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5, ARENA_WIDTH, ARENA_HEIGHT);
+    this.arenaBackground = background.ground;
+    this.arenaBackgroundDetail = background.detail;
   }
 
   private ensureLobbyBackground(): void {

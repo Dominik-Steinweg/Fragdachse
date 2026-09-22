@@ -13,7 +13,6 @@ import {
 import { BARREL_MIN_PRIORITY, getPostFxPreset, type PostFxEvent } from './postFxPresets';
 import { buildTintMatrix, NEUTRAL_WORLD_GRADE, type WorldGrade } from './worldGrade';
 import {
-  RADIAL_FOCUS_MASK_TEXTURE_KEY,
   RadialFocusMaskTexture,
   RadialFocusParallelFilters,
   type RadialFocusFrame,
@@ -320,7 +319,7 @@ export class CameraPostFxController {
     radialFocusGrade.colorMatrix.brightness(1 - RADIAL_FOCUS_DARKEN, true);
     radialFocusGrade.colorMatrix.saturate(-highSampling.desaturate, true);
     this.lastRadialFocusDesaturate = highSampling.desaturate;
-    const radialFocusMask = radialFocusParallel.top.addMask(RADIAL_FOCUS_MASK_TEXTURE_KEY);
+    const radialFocusMask = radialFocusParallel.top.addMask(this.radialFocusMask.textureKey);
     radialFocusParallel.blend.blendMode = Phaser.BlendModes.NORMAL;
     radialFocusParallel.blend.amount = 1;
     radialFocusParallel.active = false;

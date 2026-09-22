@@ -2,11 +2,13 @@
 import math
 from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, ring, paw, head, finish
 
+from enemy_craft_parts import head_a as head, finish_a as finish, refine
+from enemy_craft_surfaces import technical
 
 def build(c,spec):
     hide=c.material('Indigo living undersuit',(.032,.050,.105),'organic')
-    armor=c.material('Blue black chitin crowns',(.055,.19,.46),'technical')
-    edge=c.material('Dark blue armor bevels',(.025,.08,.18),'technical')
+    armor=technical(c,'Blue black chitin crowns',(.055,.19,.46),kind='coat')
+    edge=technical(c,'Dark blue armor bevels',(.025,.08,.18),kind='edge')
     violet=c.material('Dark violet dorsal well',(.064,.022,.14),'organic')
     dark=c.material('Near black articulated joints',(.008,.016,.035),'organic')
     pale=c.material('Cool pale badger stripe',(.47,.57,.64),'organic')
@@ -37,9 +39,14 @@ def build(c,spec):
     body.append(ring(c,'Substantial violet armor well rim',(0,-.25,.986),radius+.045,.054,violet))
     body.append(c.cylinder('Deep central well disk',(0,-.25,.988),radius,.025,core,vertices=12))
     body.append(c.cylinder('Black empty well center',(0,-.25,1.009),radius*.58,.028,dark,vertices=12))
+    for i in range(12):
+        a=math.tau*i/12
+        points=[(math.cos(a)*r,-.25+math.sin(a)*r,z) for r,z in [(radius*.63,1.03),(radius*.80,1.043),(radius*.97,1.019)]]
+        body.append(horn(c,'Radial well cooling vane',points,[.007,.012,.008],edge))
     for i in range(4):
         a=math.tau*i/4+.36
         body.append(ell(c,'Cyan well contact',(math.cos(a)*(radius+.05),-.25+math.sin(a)*(radius+.05),1.027),(.044,.044,.018),cyan))
     skull=head(c,pale,dark,hide,eyes,y=.73,z=.99,width=.28,length=.40)
     tail=[plate(c,'Short armored tail',[(-.14,-.92),(0,-1.21),(.14,-.94),(0,-.83)],.30,.13,armor,edge)]
+    refine(c,body,skull,limbs,(hide,),{armor:("metal",edge),edge:("metal",dark),violet:("horn",dark)},extra=(tail,))
     return finish(c,body,skull,limbs,tail)

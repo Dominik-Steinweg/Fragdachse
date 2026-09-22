@@ -1,4 +1,5 @@
 import { UPGRADE_HEADER, UPGRADE_CONTROLS } from '../ui/UpgradeForestAssets';
+import { PERSISTENT_BASE_HEADER } from '../ui/PersistentBaseAssets';
 import type * as Phaser from 'phaser';
 import { LOADING_FOREST } from '../ui/LoadingScreenAssets';
 import { getMusicAssetPath } from '../audio/AudioCatalog';
@@ -15,6 +16,7 @@ export interface DeferredAsset {
 export const DEFERRED_ASSETS: readonly DeferredAsset[] = [
   ...UPGRADE_CONTROLS.map(asset => ({ ...asset, type: 'image' as const, optional: true })),
   { ...UPGRADE_HEADER, type: 'image', optional: true },
+  { ...PERSISTENT_BASE_HEADER, type: 'image', optional: true },
   { ...LOADING_FOREST, type: 'image', optional: true },
   { ...MATCH_RESULTS_TITLE, type: 'image', optional: true },
   { ...MATCH_RESULTS_BANNER, type: 'image', optional: true },

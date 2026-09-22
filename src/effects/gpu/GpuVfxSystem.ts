@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { configureGpuLayerCameraTransform } from '../../graphics/GpuLayerCameraTransform';
 import { GPU_VFX_ATLAS_KEY, GpuVfxFrameId, buildGpuVfxAtlas, getGpuVfxFrame } from './GpuVfxAtlas';
 import { GPU_VFX_EASE_NAMES } from './GpuVfxEase';
 import { GPU_VFX_EFFECTS, type GpuVfxEffectId, type GpuVfxImportance } from './GpuVfxEffects';
@@ -187,6 +188,7 @@ export class GpuVfxSystem {
 
     for (const spec of GPU_VFX_LANES) {
       const layer = scene.add.spriteGPULayer(GPU_VFX_ATLAS_KEY, spec.capacity);
+      configureGpuLayerCameraTransform(layer);
       // Alle Lanes teilen sich den Atlas; der Name ist danach das einzige Unterscheidungsmerkmal
       // in Debugger und Diagnose.
       layer.name = spec.label;
@@ -565,6 +567,9 @@ export class GpuVfxSystem {
     this.stopShaderWarmup();
     this.releaseAll();
     this.ribbonLayer?.destroy();
+    for (const lane of this.lanes) lane.layer.destroy();
+    this.lanes.length = 0;
+    this.ticks.length = 0;
     this.quality.destroy();
   }
 

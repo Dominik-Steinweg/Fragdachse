@@ -1,3 +1,4 @@
+import type { PersistentBaseLayoutEdit, PersistentBaseLayoutEditResult } from '../../persistentBase/PersistentBaseLayoutEdit';
 import type { PersistentBaseMoveRequest } from '../../persistentBase/PersistentBaseMove';
 import type { PersistentBaseRewardPlacementRequest } from '../../persistentBase/PersistentBaseRewardTypes';
 import type {
@@ -48,6 +49,7 @@ export interface ConstructionRpcPort {
 }
 
 export interface PersistentBaseRpcPort {
+  editLayout(playerId: string, edit: PersistentBaseLayoutEdit): PersistentBaseLayoutEditResult;
   placeReward(playerId: string, request: PersistentBaseRewardPlacementRequest): LoadoutUseResult;
   moveObject(playerId: string, request: PersistentBaseMoveRequest, hostNowMs: number): LoadoutUseResult;
 }

@@ -265,6 +265,7 @@ export function createArenaRuntimeRpcPorts(
       ),
     },
     persistentBase: {
+      editLayout: (playerId, edit) => persistentBase.editPersonalLayout(playerId, edit),
       placeReward: (playerId, request) => persistentBase.placePersistentBaseReward(playerId, request),
       moveObject: (playerId, request, hostNowMs) => persistentBase.movePersistentBaseObject(playerId, request, hostNowMs),
     },

@@ -1,6 +1,7 @@
 """Lean violet pursuit beast with pinched waist, thrown-out claws and serrated spine."""
 from recipes_v2.enemy_parts_a import ell, loft, plate, horn, ribbon, paw, head, finish
 
+from enemy_craft_parts import head_a as head, finish_a as finish, refine
 
 def build(c,spec):
     coat=c.material('Saturated violet hide',(.24,.030,.46),'organic')
@@ -26,4 +27,5 @@ def build(c,spec):
         body.append(horn(c,'Short serrated spine barb',[(0,y,.85-j*.045),(0,y-.11,.94-j*.045),(0,y-.21,.86-j*.045)], [.08,.045,.003],ivory))
     skull=head(c,ivory,dark,coat,eyes,y=.71,z=.86,width=.235,length=.37)
     tail=[horn(c,'Long whip tail',[(0,-.77,.38),(-.06,-1.02,.27),(.015,-1.18,.24),(.16,-1.25,.22)], [.085,.06,.037,.003],coat)]
+    refine(c,body,skull,limbs,(coat,muscle),{ivory:("horn",dark)},extra=(tail,))
     return finish(c,body,skull,limbs,tail)

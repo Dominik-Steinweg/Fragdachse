@@ -1,3 +1,7 @@
+import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
+import { PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
+import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
 import { getDeferredAssets } from '../assets/DeferredAssets';
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
@@ -287,6 +291,7 @@ export class ArenaScene extends Phaser.Scene {
   /** Scene-langlebiger Owner fuer persoenliche Progression, Upgrades und Loadout-Use-Cases. */
   private meta: ArenaMetaController | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
+  private baseEditor: PersistentBaseEditorScene | null = null;
   private matchResultsOverlay: MatchResultsOverlay | null = null;
   private roomStatisticsOverlay: RoomStatisticsOverlay | null = null;
   private arenaExitFadeOverlay: ArenaExitFadeOverlay | null = null;
@@ -483,6 +488,7 @@ export class ArenaScene extends Phaser.Scene {
       this.cancelArenaExitRenderWait();
       this.arenaExitFadeOverlay?.destroy();
       this.arenaExitFadeOverlay = null;
+      this.closeBaseEditor(false);
       this.matchResultsOverlay?.destroy();
       this.coopDefenseBalanceReportOverlay?.destroy();
       this.coopDefenseBalanceReportOverlay = null;
@@ -807,6 +813,7 @@ export class ArenaScene extends Phaser.Scene {
         scheduleUpgradeOverlayRefresh: () => this.coopDefenseUpgradesOverlay?.scheduleRefresh(),
         refreshColorIndicator: () => this.ctx.leftPanel.refreshColorIndicator(),
         hideDebugOverlay: () => this.coopDefenseDebugOverlay?.hide(),
+        showBaseOverlay: (ids) => this.openBaseEditor(ids),
         showUpgradeOverlay: () => this.coopDefenseUpgradesOverlay?.show(),
         showItemsOverlay: () => this.itemsOverlay?.show(),
         refreshItemsOverlay: () => this.itemsOverlay?.refresh(),
@@ -894,6 +901,7 @@ export class ArenaScene extends Phaser.Scene {
       (slot, itemId) => this.meta?.selectLoadoutItem(slot, itemId) ?? false,
       () => this.meta?.cancelUpgradeChanges(),
       () => this.meta?.applyUpgradeChanges(),
+      () => this.meta?.finishAfterRoundStep('upgrades'),
     );
     this.coopDefenseUpgradesOverlay.build();
     yield 'upgrade-overlay';
@@ -906,6 +914,7 @@ export class ArenaScene extends Phaser.Scene {
       () => {
         this.lobbyOverlay.setReadyButtonState(false);
         this.itemsOverlay?.refresh();
+        this.meta?.finishAfterRoundStep('items');
       },
     );
     this.itemRewardOverlay.build();
@@ -925,12 +934,7 @@ export class ArenaScene extends Phaser.Scene {
       // Die Netzwerkphase ist bereits LOBBY. Der lokale Layer gibt lediglich die darunter
       // Lobby frei, auch wenn ihr Aufbau noch laeuft; Ready bleibt weiterhin false.
       this.lobbyOverlay.setReadyButtonState(false);
-      // Nur der Reward dieser Runde folgt direkt auf die Auswertung. Altbestand bleibt bewusst
-      // im Item-Menue und wird nicht nach einem Match ohne neuen Drop aufgezwungen.
-      this.meta?.openItemRewardOverlay(
-        this.meta?.getLastMatchResultsPresentation()?.itemReward?.roundEndedAt,
-        true,
-      );
+      this.meta?.startAfterRoundFlow();
     }, () => this.openBalanceFeedback());
     this.matchResultsOverlay.build();
     yield "results-overlay";
@@ -1114,6 +1118,7 @@ export class ArenaScene extends Phaser.Scene {
         ? this.arenaRuntime.requestLocalWorldParticipation(true)
         : this.requestLocalLobbyWorldLeave(),
       leftPanel.getLobbyContentContainer(),
+      () => this.meta?.openBaseOverlay(),
     );
     this.lobbyOverlay.build();
     yield 'lobby-overlay';
@@ -1363,16 +1368,16 @@ export class ArenaScene extends Phaser.Scene {
         hideOptionsOverlay: () => this.ctx.leftPanel.hideOptionsOverlay(),
         toggleOptionsOverlay: () => this.ctx.leftPanel.toggleOptionsOverlay(),
         isCoopDefenseUpgradesOpen: () => this.coopDefenseUpgradesOverlay?.isOpen() ?? false,
-        hideCoopDefenseUpgrades: () => this.coopDefenseUpgradesOverlay?.hide(),
+        hideCoopDefenseUpgrades: () => this.coopDefenseUpgradesOverlay?.closeWithCancel(),
         isCoopDefenseDebugOpen: () => this.coopDefenseDebugOverlay?.isOpen() ?? false,
         hideCoopDefenseDebug: () => this.coopDefenseDebugOverlay?.hide(),
         toggleCoopDefenseDebug: () => this.coopDefenseDebugOverlay?.toggle(),
         isItemsOpen: () => this.itemsOverlay?.isOpen() ?? false,
         hideItems: () => this.itemsOverlay?.hide(),
         isItemRewardVisible: () => this.itemRewardOverlay?.isVisible() ?? false,
-        hideItemReward: () => this.itemRewardOverlay?.hide(),
+        hideItemReward: () => this.itemRewardOverlay?.dismiss(),
         isMatchResultsVisible: () => this.matchResultsOverlay?.isVisible() ?? false,
-        hideMatchResults: () => this.matchResultsOverlay?.hide(),
+        hideMatchResults: () => this.matchResultsOverlay?.continueToLobby(),
         isRoomStatisticsVisible: () => this.roomStatisticsOverlay?.isVisible() ?? false,
         hideRoomStatistics: () => this.roomStatisticsOverlay?.hide(),
         isWeaponBalanceLabOpen: () => this.weaponBalanceLabOverlay?.isOpen() ?? false,
@@ -1755,7 +1760,10 @@ export class ArenaScene extends Phaser.Scene {
     const weaponBalanceLabArena = inGame
       && configuredCoopDefenseMapId !== null
       && isWeaponBalanceLabMapId(configuredCoopDefenseMapId);
-    const optionsOpen = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
+    if (phase !== 'LOBBY' || terminated || !isCoopDefenseMode(configuredGameMode)) {
+      this.closeBaseEditor(false); this.meta?.cancelAfterRoundFlow();
+    }
+    const optionsOpen = !!this.baseEditor || (this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false);
 
     // Teilnahme haengt an der World, nicht an der Rundenphase - deshalb steht der Abgleich
     // ausdruecklich vor und unabhaengig von der Rundenrolle. Ohne Activity taktet niemand den
@@ -1881,6 +1889,9 @@ export class ArenaScene extends Phaser.Scene {
       this.lobbyOverlay.setTransportDiagnostics(bridge.getWorstTransportDiagnostics());
       this.lobbyOverlay.refreshPlayerList(players);
       this.meta?.refreshLobbyProjection();
+      const baseRewardState = getStoredPersistentBaseRewardState();
+      this.lobbyOverlay.setBaseState(getStoredPersistentBaseUnlocked(),
+        getStoredPersistentBaseRewardUnlocks().filter(id => !baseRewardState.placements.some(p => p.rewardId === id)).length);
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       const localId = bridge.getLocalPlayerId();
       const sidebarSignature = [
@@ -2113,7 +2124,56 @@ export class ArenaScene extends Phaser.Scene {
     if (previousMapId && bridge.isHost()) bridge.setCoopDefenseMapId(previousMapId);
   }
 
+  private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[]): void {
+    if (this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return;
+    const baseline = getStoredCoopDefenseProgress();
+    const model = new PersistentBaseEditorModel({ ...baseline, personalBaseContribution: getStoredPersonalBaseContribution() });
+    const revision = bridge.getCurrentWorldRevision();
+    if (revision === null) return;
+    bridge.setLocalReady(false); this.arenaRuntime.setIsLocalReady(false);
+    this.lobbyOverlay.setReadyButtonState(false);
+    const editor = new PersistentBaseEditorScene({ model, guest: !bridge.isHost(), newRewardIds, color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff,
+      close: () => this.closeBaseEditor(true),
+      save: async () => {
+        const canSave = () => this.baseEditor === editor && bridge.getGamePhase() === 'LOBBY'
+          && bridge.getCurrentWorldRevision() === revision && !bridge.getPlayerReady(bridge.getLocalPlayerId());
+        if (!canSave()) return false;
+        const current = getStoredCoopDefenseProgress();
+        if (current.persistentBaseRewardState.revision !== baseline.persistentBaseRewardState.revision) return false;
+        const changedConstructions = JSON.stringify(model.constructions) !== JSON.stringify(model.baseline.personalBaseContribution.constructions);
+        if (changedConstructions) {
+          bridge.offerPersonalBaseAreaStage(baseline.persistentBaseAreaStage);
+          const result = await bridge.sendPersistentBaseLayoutEdit({ worldRevision: revision,
+            expectedRevision: model.baseline.personalBaseContribution.revision, areaStage: baseline.persistentBaseAreaStage,
+            constructions: model.constructions });
+          if (!result.ok) return false;
+          setStoredPersonalBaseContribution(result.contribution);
+        }
+        if (!canSave()) return false;
+        if (JSON.stringify(model.rewards) !== JSON.stringify(baseline.persistentBaseRewardState.placements)
+          && !setStoredPersistentBaseRewardState({ ...baseline.persistentBaseRewardState, revision: baseline.persistentBaseRewardState.revision + 1, placements: model.rewards })) return false;
+        this.meta?.refresh();
+        return true;
+      },
+    });
+    this.baseEditor = editor;
+    this.input.enabled = false;
+    if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = false; }
+    this.scene.add(PersistentBaseEditorScene.KEY, editor, true);
+  }
+
+  private closeBaseEditor(advance: boolean): void {
+    if (!this.baseEditor) return;
+    this.baseEditor.dispose();
+    this.baseEditor = null;
+    this.scene.stop(PersistentBaseEditorScene.KEY); this.scene.remove(PersistentBaseEditorScene.KEY);
+    this.input.enabled = true;
+    if (this.input.keyboard) this.input.keyboard.enabled = true;
+    if (advance) this.meta?.finishAfterRoundStep('base');
+  }
+
   private onReadyToggled(): void {
+    if (this.baseEditor || this.meta?.isAfterRoundFlowActive()) return;
     const nowReady = !this.arenaRuntime.getIsLocalReady();
     if (nowReady) {
       // Frühwarnung gegen Lobby-Desync (Bug A/B): Nur bereit machen, wenn dieser Client mit dem

@@ -1,4 +1,5 @@
 export const deContent = {
+  "reward.plasma_turret.name": "Plasma-Turm",
   "loadout.GLOCK.name": "Glock",
   "loadout.ASMD_PRIM.name": "ASMD Primär",
   "loadout.BITE.name": "Dachsbiss",

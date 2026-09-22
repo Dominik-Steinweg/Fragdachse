@@ -1,4 +1,5 @@
 export const enContent = {
+  "reward.plasma_turret.name": "Plasma Turret",
   "loadout.GLOCK.name": "Glock",
   "loadout.ASMD_PRIM.name": "ASMD Primary",
   "loadout.BITE.name": "Badger Bite",

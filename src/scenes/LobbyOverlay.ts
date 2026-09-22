@@ -233,12 +233,14 @@ export class LobbyOverlay {
     private onOpenCoopDefenseItems: () => void,
     private onToggleWorldEntry: (enter: boolean) => void,
     private readonly playerCardParent?: Phaser.GameObjects.Container,
+    private readonly onOpenBase: () => void = () => {},
   ) {}
 
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void { this.progress?.setCoopDefenseProgress(progress); }
   setCoopDefenseItemsState(unlocked: boolean, pending: number, unseen: boolean): void {
     this.progress?.setCoopDefenseItemsState(unlocked, pending, unseen);
   }
+  setBaseState(unlocked: boolean, pending: number): void { this.progress?.setBaseState(unlocked, pending); }
   setResultsReplayHandler(handler: () => void): void { this.replayResultsHandler = handler; }
   setRoomStatisticsDetailHandler(handler: () => void): void { this.roomStatsDetailHandler = handler; }
   setResultsReplayAvailable(available: boolean): void {
@@ -453,7 +455,7 @@ export class LobbyOverlay {
     this.fullscreenUnsubscribe = onFullscreenChange(() => this.updateFullscreenIcon());
 
     this.progress = new LobbyPlayerProgress(this.scene,
-      this.onOpenCoopDefenseUpgrades, this.onOpenCoopDefenseItems);
+      this.onOpenCoopDefenseUpgrades, this.onOpenCoopDefenseItems, this.onOpenBase);
     const playerObjects: Phaser.GameObjects.GameObject[] = [];
     this.progress.build(playerObjects);
 

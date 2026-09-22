@@ -67,6 +67,14 @@ Die World-Kamera trägt World-FX und Camera-Feedback. Eine transparente Clarity-
 
 Camera-Feedback besitzt einen zentralen Owner: [CameraFeedbackController.ts](../../src/effects/camera/CameraFeedbackController.ts) und [CameraFeedbackModel.ts](../../src/effects/camera/CameraFeedbackModel.ts) sammeln, priorisieren, begrenzen und lösen Requests. Gameplay ruft keine direkten Kamera-Shakes auf; der Feedback-Offset verändert nicht die fachliche World- oder Pointer-Geometrie.
 
+GPU-Fels-/Mauerflächen, Power-Up-Podeste und GPU-VFX verwenden
+[GpuLayerCameraTransform.ts](../../src/graphics/GpuLayerCameraTransform.ts), damit ihre View-Matrix
+auch in versetzten, gefilterten Kameras mit normalen Sprites übereinstimmt. Phaser 4.2.1 setzt
+im GPU-Submitter sonst die externe Viewport-Verschiebung zusätzlich im Kamera-Framebuffer an.
+Die Korrektur bleibt im Renderpfad; gespeicherte Weltpositionen bleiben unverändert.
+[GpuLayerCameraTransform.test.ts](../../tests/GpuLayerCameraTransform.test.ts) prüft diese Parität
+gegen die installierten Phaser-Methoden mit und ohne Kamera-Framebuffer und bei mehreren Skalierungen.
+
 [CameraPostFxController.ts](../../src/effects/postfx/CameraPostFxController.ts) und [PostFxComposer.ts](../../src/effects/postfx/PostFxComposer.ts) halten Post-FX als visuelle, widerrufbare Komposition. Ein Effekt darf keine dauerhafte Spielregel oder kollisionsrelevante Farbe erzeugen.
 
 ## Runtime und Renderer

@@ -16,6 +16,7 @@ import { clearActiveSession, setActiveSession } from '../../src/network/peer/ses
 import {
   DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   resolvePersistentBaseCell,
+  resolvePersistentBaseCoreCellsRelative,
 } from '../../src/persistentBase/PersistentBaseCore';
 import {
   grantStoredPersistentBaseRewards,
@@ -478,6 +479,24 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     expect(rewardStore.getState().placements).toEqual([]);
   });
 
+  it('sperrt feste Basiszellen fuer Podeste beim Verschieben und Wiederherstellen', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, rewardStore, placementSystem, playerId } = harness;
+    const source = placeRewardPedestal(harness, 0, 0);
+    const surface = resolvePersistentBaseCoreCellsRelative().find(cell => cell.domain === 'base-surface')!;
+    const target = rewardCell(surface.relativeGridX, surface.relativeGridY);
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, target), 1_000).ok).toBe(false);
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({ gridX: source.gridX, gridY: source.gridY });
+
+    // A stored blueprint is untrusted too: reconciliation must not put a pedestal on a wall.
+    coordinator.persistentBaseWorldBinding.releaseRewardRuntime('base_health_pedestal');
+    rewardStore.moveReward({ rewardId: 'base_health_pedestal', relativeGridX: surface.relativeGridX,
+      relativeGridY: surface.relativeGridY, angle: 0 });
+    PersistentBaseWorldBinding.prototype.reconcile.call(coordinator.persistentBaseWorldBinding);
+    expect(placementSystem.getAllRuntimeRocks()).toHaveLength(0);
+    expect(coordinator.persistentBaseWorldBinding.rewardRuntimes.size).toBe(0);
+  });
+
   it('verschiebt ein Base-Reward-Podest atomar und erhaelt seinen Runtime- und Podestzustand', () => {
     const harness = createHarness('assault_dachs');
     const { coordinator, rewardStore, placementSystem, playerId } = harness;
@@ -752,6 +771,30 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
 });
 
 describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
+  it('accepts a lobby layout edit without an avatar, preserving owned runtime health and rejecting stale or non-lobby requests', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, placementSystem, contributionStore, persistentBaseSession, playerId } = harness;
+    const source = placeOwnConstruction(harness, playerId, 0, 0);
+    contributionStore.registerNew(playerId, source, { kind: 'construction', id: 'rock_barrier' },
+      getCoopDefenseConstructionDefinition('rock_barrier').footprint, harness.site.anchor, harness.site.buildArea);
+    persistentBaseSession.bindPlayerOwner(playerId, playerId);
+    const contribution = contributionStore.getCommittedContribution(playerId)!;
+    coordinator.ctx.playerManager.getPlayer = () => null;
+    coordinator.ingestOfferedPersistentBaseContributions = vi.fn();
+    coordinator.publishConfirmedPersistentBaseContributions = vi.fn();
+    vi.spyOn(bridge, 'getGamePhase').mockReturnValue('LOBBY');
+    vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue([playerId]);
+    placementSystem.applyDamage(source.id, 20);
+    const edit = { worldRevision: WORLD_REVISION, areaStage: 0 as const, expectedRevision: contribution.revision,
+      constructions: contribution.constructions.map(p => ({ ...p, relativeGridX: 1, relativeGridY: 1 })) };
+    const result = coordinator.editPersonalLayout(playerId, edit);
+    expect(result.ok).toBe(true);
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({ gridX: ANCHOR.gridX + 1, gridY: ANCHOR.gridY + 1, hp: source.maxHp - 20 });
+    expect(contributionStore.getCommittedContribution(playerId)?.constructions).toEqual(edit.constructions);
+    expect(coordinator.editPersonalLayout(playerId, { ...edit, constructions: [] })).toEqual({ ok: false, reason: 'stale' });
+    vi.mocked(bridge.getGamePhase).mockReturnValue('ARENA');
+    expect(coordinator.editPersonalLayout(playerId, edit)).toEqual({ ok: false, reason: 'blocked' });
+  });
   function placeOwnConstruction(
     harness: ReturnType<typeof createHarness>,
     ownerId: string,

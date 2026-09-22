@@ -1,3 +1,6 @@
+import { applyPersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../../persistentBase/PersistentBaseLayoutEdit';
+import { getPersistentConstructionFootprint, isPersistentBaseRewardCellAllowed } from '../../persistentBase/PersistentBasePlacementRules';
+import { getStoredPersistentBaseAreaStage } from '../../utils/localPreferences';
 import type Phaser from 'phaser';
 import { bridge } from '../../network/bridge';
 import { emitArenaMapGridChanged } from './ArenaEvents';
@@ -213,6 +216,7 @@ export class ArenaPersistentBaseSession {
   syncPersistentBaseContributions(): void {
     // Anbieten heisst nicht bauen: Der Host entscheidet, was davon in seiner Welt steht.
     bridge.offerPersistentBaseContribution(getStoredPersonalBaseContribution());
+    bridge.offerPersonalBaseAreaStage(getStoredPersistentBaseAreaStage());
 
     // Nur ein host-bestaetigter Stand darf lokal fortgeschrieben werden. Ohne diese Regel koennte
     // ein manipulierter Client seine eigene Revision erhoehen und ungeprueftes Bauwerk dauerhaft
@@ -230,6 +234,7 @@ export class ArenaPersistentBaseSession {
    * persist the reliable cumulative grant state; the host publishes the current-world projection.
    */
   syncPersistentBaseRewards(): void {
+    this.syncEditedRewardLayout();
     const confirmed = bridge.getConfirmedPersistentBaseRewardGrant();
     if (confirmed) grantStoredPersistentBaseRewards(confirmed.rewardIds);
 
@@ -240,6 +245,90 @@ export class ArenaPersistentBaseSession {
       return;
     }
     this.publishPersistentBaseRewardSessionState();
+  }
+
+  /** Lobby-only document edit: authority is the room owner, never an avatar or its class. */
+  editPersonalLayout(playerId: string, edit: PersistentBaseLayoutEdit): PersistentBaseLayoutEditResult {
+    if (!bridge.isHost() || bridge.getGamePhase() !== 'LOBBY' || bridge.getPlayerReady(playerId) || this.session.hasOpenTransaction
+      || bridge.getCurrentWorldRevision() !== edit.worldRevision
+      || !bridge.getConnectedPlayerIds().includes(playerId)) return { ok: false, reason: 'blocked' };
+    this.ingestOfferedPersistentBaseContributions();
+    const ownerId = this.session.getOwnerIdForPlayer(playerId);
+    const current = ownerId ? this.session.contributions.getCommittedContribution(ownerId) : null;
+    const stage = playerId === bridge.getLocalPlayerId() ? getStoredPersistentBaseAreaStage() : bridge.getPersonalBaseAreaStage(playerId);
+    if (!current || stage === null || stage !== edit.areaStage) return { ok: false, reason: 'stale' };
+    const result = applyPersistentBaseLayoutEdit(current, edit);
+    if (!result.ok) return result;
+    const bindings = this.session.contributions.getRuntimeBindings().filter(b => b.ownerId === ownerId);
+    const site = this.worldContext?.persistentBaseSite;
+    const placement = this.placementSystem;
+    const moves: Parameters<NonNullable<typeof placement>['relocateRocks']>[0][number][] = [];
+    const previous = new Map<number, SyncedPlaceableRock>();
+    for (const binding of bindings) {
+      const next = result.contribution.constructions.find(p => p.persistentId === binding.blueprint.persistentId);
+      if (!next) {
+        this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(binding.runtimeId);
+      } else if (site && placement && (next.relativeGridX !== binding.blueprint.relativeGridX || next.relativeGridY !== binding.blueprint.relativeGridY)) {
+        const runtime = placement.getRuntimeRock(binding.runtimeId);
+        if (!runtime) continue;
+        if (!(getPersistentConstructionFootprint(next) ?? []).every(cell => isCellInsidePersistentBaseBuildArea(
+          next.relativeGridX + cell.dx, next.relativeGridY + cell.dy, site.buildArea))) {
+          this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(runtime.id); continue;
+        }
+        previous.set(runtime.id, { ...runtime });
+        moves.push({ id: runtime.id, gridX: site.anchor.gridX + next.relativeGridX,
+          gridY: site.anchor.gridY + next.relativeGridY, angle: next.angle,
+          footprint: getPersistentConstructionFootprint(next) ?? [{ dx: 0, dy: 0 }] });
+      }
+    }
+    const relocated = placement?.relocateRocks(moves);
+    if (relocated) {
+      for (const runtime of relocated) this.relocatePlaceableRuntimePresentation(previous.get(runtime.id)!, runtime);
+    } else {
+      // A personal layout may conflict with this host's smaller site or another contribution.
+      // Preserve the blueprint; the regular composite decides whether it can materialize here.
+      for (const move of moves) this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(move.id);
+    }
+    this.session.contributions.replaceEditedContribution(result.contribution);
+    this.publishConfirmedPersistentBaseContributions([result.contribution]);
+    this.reconcilePersistentBaseWorld();
+    return result;
+  }
+
+  /** Adopts the local editor commit without replacing the host's room or frozen World parameters. */
+  private syncEditedRewardLayout(): void {
+    if (!bridge.isHost() || this.session.hasOpenTransaction) return;
+    const stored = getStoredPersistentBaseRewardState();
+    const current = this.session.rewards.getState();
+    if (stored.revision <= current.revision) return;
+    const site = this.worldContext?.persistentBaseSite;
+    const binding = this.world.getWorldBinding();
+    const placement = this.placementSystem;
+    const moves: Parameters<NonNullable<typeof placement>['relocateRocks']>[0][number][] = [];
+    const previous = new Map<number, SyncedPlaceableRock>();
+    for (const before of current.placements) {
+      const next = stored.placements.find(p => p.rewardId === before.rewardId);
+      const runtimeBinding = binding?.getRewardRuntime(before.rewardId);
+      if (!next) { binding?.releaseRewardRuntime(before.rewardId); continue; }
+      if (!site || !placement || !runtimeBinding || (next.relativeGridX === before.relativeGridX && next.relativeGridY === before.relativeGridY)) continue;
+      const runtime = placement.getRuntimeRock(runtimeBinding.runtimeId);
+      const cell = this.resolvePersistentBaseRewardCell(site, next);
+      if (!runtime || !cell || !isPersistentBaseRewardCellAllowed(next.rewardId, next.relativeGridX, next.relativeGridY, site.buildArea, site.orientation)) { binding?.releaseRewardRuntime(before.rewardId); continue; }
+      previous.set(runtime.id, { ...runtime });
+      moves.push({ id: runtime.id, gridX: cell.gridX, gridY: cell.gridY, angle: next.angle, footprint: [{ dx: 0, dy: 0 }] });
+    }
+    const moved = placement?.relocateRocks(moves);
+    if (moved) for (const runtime of moved) {
+      const id = runtime.persistentRewardId!;
+      binding?.relocateRewardRuntime(id, runtime);
+      this.relocatePlaceableRuntimePresentation(previous.get(runtime.id)!, runtime);
+    }
+    else for (const move of moves) {
+      const id = previous.get(move.id)?.persistentRewardId;
+      if (id) binding?.releaseRewardRuntime(id);
+    }
+    this.session.rewards.replaceCommittedState(stored);
+    this.reconcilePersistentBaseWorld();
   }
 
   /** Host entry point for the dedicated reward-placement RPC. */
@@ -1092,14 +1181,7 @@ export class ArenaPersistentBaseSession {
     site: WorldPersistentBaseSite,
     placement: PersistentBaseRewardPlacement,
   ): boolean {
-    const cell = this.resolvePersistentBaseRewardCell(site, placement);
-    if (!cell) return false;
-    if (definition.placementRule === 'base-surface') return cell.domain === 'base-surface';
-    return isCellInsidePersistentBaseBuildArea(
-      placement.relativeGridX,
-      placement.relativeGridY,
-      site.buildArea,
-    );
+    return isPersistentBaseRewardCellAllowed(definition.id, placement.relativeGridX, placement.relativeGridY, site.buildArea, site.orientation);
   }
 
   /** Stellt jedem Besitzer seinen host-bestaetigten Beitrag zu und speichert den eigenen lokal. */
