@@ -201,7 +201,7 @@
     {
       "id": "alien-badger",
       "pawCount": 2,
-      "maxHp": 220,
+      "maxHp": 180,
       "xp": 30,
       "size": 30,
       "moveSpeed": 150,
@@ -241,7 +241,7 @@
     {
       "id": "thrower-badger",
       "pawCount": 4,
-      "maxHp": 400,
+      "maxHp": 350,
       "xp": 40,
       "size": 30,
       "moveSpeed": 105,
@@ -294,7 +294,7 @@
           "targetMode": "players",
           "attackMovementSpeedFactor": 1,
           "minTargetDistancePx": 450,
-          "salvo": { "count": 10, "intervalMs": 90, "cooldownMs": 8000 }
+          "salvo": { "count": 10, "intervalMs": 90, "cooldownMs": 12000 }
         },
         { "weaponId": "INFERNO_COLOSSUS_BITE", "targetMode": "rocks" }
       ],
@@ -350,7 +350,7 @@
     {
       "id": "pyro-badger",
       "pawCount": 2,
-      "maxHp": 500,
+      "maxHp": 400,
       "xp": 50,
       "size": 30,
       "moveSpeed": 175,

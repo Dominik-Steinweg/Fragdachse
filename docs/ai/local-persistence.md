@@ -47,12 +47,14 @@ Import/Export, Einmaligkeit und Reset.
 ## Cache, Fehler und Lebensdauer
 
 Der Basis-Editor zeigt den persönlichen Entwurf in einer eigenen, lokalen World ohne Activity oder
-Spielfigur. Auch Gäste bearbeiten hier ihre eigenen Reward-Platzierungen; die gemeinsame World
-verwendet weiterhin die Reward-Platzierungen des Hosts. Änderungen persönlicher Konstruktionen
-benötigen dagegen auch im Menü eine Host-Bestätigung: Der Lobby-Layout-Vertrag prüft World- und
+Spielfigur. Nur der Host kann ihn öffnen; bei Clients bleibt der Lobby-Button gesperrt und der
+Belohnungsablauf überspringt diesen Bildschirm. Die gemeinsame World verwendet die
+Reward-Platzierungen des Hosts. Änderungen persönlicher Konstruktionen laufen auch im Menü
+über die Host-Bestätigung: Der Lobby-Layout-Vertrag prüft World- und
 Beitragsrevision und erlaubt nur Verschieben oder Entfernen vorhandener Identitäten. Er ist kein
 avatarfreier Baupfad. Der Entwurf selbst schreibt nichts in den Fortschritt; Schließen mit Abbruch
 verwirft ihn. Eingefrorene Area-/HP-Parameter einer vorhandenen World bleiben unverändert.
+[ArenaMetaController.test.ts](../../tests/ArenaMetaController.test.ts),
 [PersistentBaseEditor.test.ts](../../tests/PersistentBaseEditor.test.ts) und
 [PersistentBaseManagementAllClasses.test.ts](../../tests/integration/PersistentBaseManagementAllClasses.test.ts)
 prüfen diese Besitz- und Mutationsgrenzen.

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { CELL_SIZE, DEPTH, TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
+import { CELL_SIZE, DEPTH, TEAM_BLUE_COLOR, VOID_PALETTE } from '../config';
 import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
 import { mixColors } from '../effects/EffectUtils';
 import type { WorldMetrics } from '../world/WorldMetrics';
@@ -8,9 +8,9 @@ import type { WorldMetrics } from '../world/WorldMetrics';
 export const BASE_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.5);
 /** Hellerer, konzentrierter Lichtkern fuer freundliche Basistuerme. */
 export const BASE_TURRET_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.72);
-/** Gegnerbasen leuchten in derselben Helligkeit, aber in der Farbe des roten Teams. */
-export const HOSTILE_BASE_LIGHT_COLOR = mixColors(TEAM_RED_COLOR, 0xffffff, 0.5);
-export const HOSTILE_BASE_TURRET_LIGHT_COLOR = mixColors(TEAM_RED_COLOR, 0xffffff, 0.72);
+/** Gesättigtes Void-Licht erhält den dunklen Charakter der gegnerischen Panzerplatten. */
+export const HOSTILE_BASE_LIGHT_COLOR = VOID_PALETTE.primary;
+export const HOSTILE_BASE_TURRET_LIGHT_COLOR = VOID_PALETTE.bright;
 
 const BASE_LIGHT_SPACING = CELL_SIZE * 4.5;
 const BASE_LIGHT_OVERHANG = CELL_SIZE * 1.25;

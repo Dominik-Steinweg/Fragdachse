@@ -1,7 +1,7 @@
 export const enUi = {
   "ui.base.title": "Base",
   "ui.base.subtitle": "Drag objects into the base. Drag them back to the list to remove them.",
-  "ui.base.guest": "You are editing your own base. This room uses the host’s base; build together on the practice field.",
+  "ui.base.hostOnly": "Only the host can manage the base.",
   "ui.base.stats": "Stage {stage} · {hp} base HP",
   "ui.base.statsRadius": "Stage {stage} · Build radius {radius} cells · {hp} base HP",
   "ui.base.status": "STATUS",

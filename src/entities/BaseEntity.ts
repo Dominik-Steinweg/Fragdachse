@@ -12,7 +12,7 @@ import {
   COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL,
   DEPTH,
   TEAM_BLUE_COLOR,
-  TEAM_RED_COLOR,
+  VOID_PALETTE,
 } from '../config';
 import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
@@ -158,8 +158,7 @@ export class BaseEntity {
   private createPresentationRepresentation(): void {
     if (this.cellImages.length > 0) return;
     const hostile = this.spec.faction === 'hostile';
-    // Eigenes rotes Tileset statt Tint: das Basis-Tileset ist gesaettigt blau, ein Multiply-Tint
-    // mit Rot ergibt nahezu Schwarz.
+    // Eigenes Void-Tileset mit dunkler Panzerung und violetten Energiefugen.
     const cellTexture = hostile ? 'base_hostile' : 'base';
 
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
@@ -183,9 +182,9 @@ export class BaseEntity {
       const marker = this.scene.add.graphics()
         .setPosition(this.spec.spawnCenter.x, this.spec.spawnCenter.y)
         .setDepth(DEPTH.BASES + 2);
-      marker.lineStyle(2, hostile ? TEAM_RED_COLOR : TEAM_BLUE_COLOR, 0.78);
+      marker.lineStyle(2, hostile ? VOID_PALETTE.primary : TEAM_BLUE_COLOR, 0.78);
       marker.strokeCircle(0, 0, CELL_SIZE * 0.34);
-      marker.lineStyle(1, hostile ? 0xffaaa8 : 0xb7e9ff, 0.75);
+      marker.lineStyle(1, hostile ? VOID_PALETTE.bright : 0xb7e9ff, 0.75);
       marker.strokeCircle(0, 0, CELL_SIZE * 0.18);
       marker.lineBetween(-CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48, 0);
       marker.lineBetween(0, -CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48);

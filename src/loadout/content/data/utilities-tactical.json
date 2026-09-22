@@ -63,7 +63,7 @@
     "BFG": {
       "id": "BFG",
       "type": "bfg",
-      "allowTeamDamage": true,
+      "allowTeamDamage": false,
       "cooldown": 0,
       "activation": {
         "type": "charged_gate",

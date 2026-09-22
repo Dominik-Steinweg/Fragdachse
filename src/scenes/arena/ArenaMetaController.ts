@@ -765,8 +765,8 @@ export class ArenaMetaController {
       if (presentation.itemReward) steps.push('items');
       if (progress.after.level > progress.before.level || progress.newBossPoints > 0
         || progress.classesUnlocked || progress.newlyUnlockedClassIds.length > 0) steps.push('upgrades');
-      if (progress.persistentBaseUnlocked || progress.persistentBaseAreaStageUnlocked
-        || progress.persistentBaseHealthReward || progress.newlyUnlockedBaseRewardIds.length) steps.push('base');
+      if (this.input.session.isHost() && (progress.persistentBaseUnlocked || progress.persistentBaseAreaStageUnlocked
+        || progress.persistentBaseHealthReward || progress.newlyUnlockedBaseRewardIds.length)) steps.push('base');
       this.afterRound.prepare(firstResult.roundEndedAt, steps);
       this.setLocalReady(false);
     }
@@ -794,14 +794,14 @@ export class ArenaMetaController {
     // Reliable grants can be received while the results animation is playing.
     const newIds = this.input.progressStore.getProgress().persistentBaseRewardUnlocks
       .filter(id => !this.baseRewardIdsBeforeRound.includes(id));
-    if (newIds.length) this.afterRound.add('base');
+    if (this.input.session.isHost() && newIds.length) this.afterRound.add('base');
     this.presentAfterRoundStep(this.afterRound.start());
   }
 
   finishAfterRoundStep(step: AfterRoundStep): void {
     if (this.destroyed) return;
     const newIds = this.input.progressStore.getProgress().persistentBaseRewardUnlocks.filter(id => !this.baseRewardIdsBeforeRound.includes(id));
-    if (newIds.length) this.afterRound.add('base');
+    if (this.input.session.isHost() && newIds.length) this.afterRound.add('base');
     this.presentAfterRoundStep(this.afterRound.finish(step));
   }
 
@@ -810,6 +810,10 @@ export class ArenaMetaController {
   private presentAfterRoundStep(step: AfterRoundStep | null): void {
     if (!step) return;
     if (this.input.session.getGamePhase() !== 'LOBBY') { this.cancelAfterRoundFlow(); return; }
+    if (step === 'base' && !this.input.session.isHost()) {
+      this.pendingAfterRoundStep = null;
+      this.finishAfterRoundStep(step); return;
+    }
     this.setLocalReady(false);
     if (this.input.session.isLocalReady() || this.input.session.isAuthoritativeLocalReady()) {
       this.pendingAfterRoundStep = step; return;
@@ -823,7 +827,7 @@ export class ArenaMetaController {
   }
 
   openBaseOverlay(newRewardIds: readonly PersistentBaseRewardId[] = []): void {
-    if (this.destroyed || this.input.session.getGamePhase() !== 'LOBBY'
+    if (this.destroyed || !this.input.session.isHost() || this.input.session.getGamePhase() !== 'LOBBY'
       || !isCoopDefenseMode(this.input.session.getGameMode()) || this.input.session.isLocalReady()
       || this.input.session.isAuthoritativeLocalReady() || !this.readFreshStoredProgress().persistentBaseUnlocked) return;
     this.input.presentation.hideDebugOverlay();

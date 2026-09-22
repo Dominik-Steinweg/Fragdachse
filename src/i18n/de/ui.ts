@@ -1,7 +1,7 @@
 export const deUi = {
   "ui.base.title": "Basis",
   "ui.base.subtitle": "Objekte in die Basis ziehen. Zum Entfernen zurück in die Liste ziehen.",
-  "ui.base.guest": "Du bearbeitest deine eigene Basis. In diesem Raum gilt die Basis des Hosts; gemeinsam baut ihr auf dem Übungsplatz.",
+  "ui.base.hostOnly": "Nur der Host kann die Basis verwalten.",
   "ui.base.stats": "Stufe {stage} · {hp} Basis-HP",
   "ui.base.statsRadius": "Stufe {stage} · Bauradius {radius} Felder · {hp} Basis-HP",
   "ui.base.status": "STATUS",

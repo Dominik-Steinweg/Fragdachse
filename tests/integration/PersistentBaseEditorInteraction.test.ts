@@ -29,7 +29,7 @@ function harness(scale = 1) {
   }] };
   const model = new PersistentBaseEditorModel(progress);
   // Drive the pointer entry points without a DOM or a fake full GPU renderer.
-  const scene: any = new PersistentBaseEditorScene({ model, guest: false, color: 0xffffff,
+  const scene: any = new PersistentBaseEditorScene({ model, color: 0xffffff,
     newRewardIds: [], close() {}, save: async () => true });
   const world = { anchor: (scene.view.width / CELL_SIZE - 1) / 2, syncObjects: vi.fn() };
   Object.assign(scene, { world, scale: { width: GAME_WIDTH * scale }, preview: graphics(),

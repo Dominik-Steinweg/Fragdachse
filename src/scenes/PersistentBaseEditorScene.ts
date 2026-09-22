@@ -35,7 +35,6 @@ interface EditorRow { label: string; status: RowStatus; personal: boolean; icon?
 interface DragState { pointerId: number; x: number; y: number; offsetX: number; offsetY: number; started: boolean }
 export interface PersistentBaseEditorOptions {
   readonly model: PersistentBaseEditorModel;
-  readonly guest: boolean;
   readonly color: number;
   readonly newRewardIds: readonly PersistentBaseRewardId[];
   readonly save: () => Promise<boolean>;
@@ -110,7 +109,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     }
     this.label(chrome.centerX, chrome.headerY + 4, t('ui.base.title').toLocaleUpperCase(), 'display', .5)
       .setFontSize(44).setColor('#efe4bd').setStroke('#1e160f', 3);
-    this.label(chrome.centerX, 170, t(this.options.guest ? 'ui.base.guest' : 'ui.base.subtitle'), 'body', .5, 1700);
+    this.label(chrome.centerX, 170, t('ui.base.subtitle'), 'body', .5, 1700);
     const model = this.options.model;
     this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 216,
       t(model.area.kind === 'radius' ? 'ui.base.statsRadius' : 'ui.base.stats', {

@@ -42,11 +42,13 @@ export class LobbyPlayerProgress {
   private coopUpgradesBtn: UiButton | null = null;
   private coopBaseBtn: UiButton | null = null;
   private coopBaseUnlocked = false;
+  private coopBaseHost = false;
   private baseSignature = '';
   private coopItemsBtn: UiButton | null = null;
   private upgradeBtnEffect: LivingBarEffect | null = null;
   private itemsBtnEffect: LivingBarEffect | null = null;
   private itemsTooltip: UiTooltip | null = null;
+  private baseTooltip: UiTooltip | null = null;
   private coopItemsUnlocked = false;
   private coopItemsSignature: string | null = null;
   private coopProgressAvailable = false;
@@ -61,7 +63,7 @@ export class LobbyPlayerProgress {
     private readonly onOpenCoopDefenseItems: () => void,
     private readonly onOpenBase: () => void = () => {}) {}
   setVisible(visible: boolean): void { this.visible = visible; this.syncCoopEffectActivity(); }
-  hideTooltip(): void { this.itemsTooltip?.hide(); }
+  hideTooltip(): void { this.itemsTooltip?.hide(); this.baseTooltip?.hide(); }
   setReady(ready: boolean, ended = false): void {
     this.hideTooltip();
     this.isReady = ready; this.connectionEnded = ended; this.updateCoopDefenseMenuButtons();
@@ -70,6 +72,7 @@ export class LobbyPlayerProgress {
     this.upgradeBtnEffect?.destroy(); this.itemsBtnEffect?.destroy(); this.coopBarEffect?.destroy();
     this.itemsTooltip?.destroy(); this.coopUpgradesBtn?.destroy(); this.coopItemsBtn?.destroy();
     this.coopBaseBtn?.destroy();
+    this.baseTooltip?.destroy();
     this.coopBand?.destroy(true);
   }
   build(objects: Phaser.GameObjects.GameObject[]): void {
@@ -138,8 +141,10 @@ export class LobbyPlayerProgress {
     this.coopBaseBtn = new UiButton(this.scene, { skin: 'forest',
       x: PANEL_CX, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
       label: t('ui.base.title'), icon: 'lock', iconSize: 14, onClick: this.onOpenBase,
+      isEnabled: () => this.coopBaseHost,
     });
     this.coopBaseBtn.setEnabled(false);
+    this.attachBaseLockTooltip();
     this.coopBand = this.scene.add.container(0, 0, [
       bandBg,
       bandLabel,
@@ -199,6 +204,25 @@ export class LobbyPlayerProgress {
     this.itemsTooltip = new UiTooltip(this.scene, 360, undefined, undefined, 'forest');
     const tooltipRoot = this.itemsTooltip.build().setDepth(DEPTH.OVERLAY + 2).setScrollFactor(0);
     promoteToClarityCamera(this.scene, tooltipRoot);
+    this.baseTooltip = new UiTooltip(this.scene, 360, undefined, undefined, 'forest');
+    const baseTooltipRoot = this.baseTooltip.build().setDepth(DEPTH.OVERLAY + 2).setScrollFactor(0);
+    promoteToClarityCamera(this.scene, baseTooltipRoot);
+  }
+
+  private attachBaseLockTooltip(): void {
+    const bg = this.coopBaseBtn?.getBackground();
+    if (!bg) return;
+    // UiButton preserves hover events on disabled buttons for explanatory tooltips.
+    bg.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+      if (this.coopBaseHost) return;
+      this.itemsTooltip?.hide();
+      this.baseTooltip?.show(t('ui.base.title'), COLORS.GOLD_1,
+        [{ text: t('ui.base.hostOnly'), color: FOREST.text }], pointer);
+    });
+    bg.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!this.coopBaseHost) this.baseTooltip?.move(pointer);
+    });
+    bg.on('pointerout', () => this.baseTooltip?.hide());
   }
 
   private attachItemsLockTooltip(): void {
@@ -316,19 +340,21 @@ export class LobbyPlayerProgress {
     else this.itemsBtnEffect?.stop();
   }
 
-  setBaseState(unlocked: boolean, pending: number): void {
-    const signature = `${unlocked}:${pending}`;
+  setBaseState(unlocked: boolean, pending: number, isHost: boolean): void {
+    const signature = `${unlocked}:${pending}:${isHost}`;
     if (signature === this.baseSignature) return;
     this.baseSignature = signature;
     this.coopBaseUnlocked = unlocked;
-    this.coopBaseBtn?.setIcon(unlocked ? null : 'lock');
-    this.coopBaseBtn?.setBadge(unlocked && pending > 0 ? pending : null);
+    this.coopBaseHost = isHost;
+    this.baseTooltip?.hide();
+    this.coopBaseBtn?.setIcon(isHost && unlocked ? null : 'lock');
+    this.coopBaseBtn?.setBadge(isHost && unlocked && pending > 0 ? pending : null);
     this.updateCoopDefenseMenuButtons();
   }
 
   private updateCoopDefenseMenuButtons(): void {
     const enabled = !this.isReady && !this.connectionEnded;
-    this.coopBaseBtn?.setEnabled(enabled && this.coopBaseUnlocked);
+    this.coopBaseBtn?.setEnabled(enabled && this.coopBaseHost && this.coopBaseUnlocked);
     this.coopUpgradesBtn?.setEnabled(enabled);
     this.coopItemsBtn?.setEnabled(enabled && this.coopItemsUnlocked);
   }

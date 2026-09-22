@@ -196,7 +196,7 @@
     "HOLY_HAND_GRENADE": {
       "id": "HOLY_HAND_GRENADE",
       "type": "explosive",
-      "allowTeamDamage": true,
+      "allowTeamDamage": false,
       "cooldown": 0,
       "activation": {
         "type": "charged_throw",

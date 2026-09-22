@@ -356,7 +356,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.spritesheet('dirt_mottle', './assets/sprites/dirt47blob_mottle.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('kies', './assets/sprites/kies47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('base',  './assets/sprites/base47blob.png',  { frameWidth: 32, frameHeight: 32 });
-    // Rote Variante fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
+    // Authored Void-Panzerung fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
     // Frame-Indizes, daher unveraenderte Autotile-Logik.
     this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
     preloadArenaDecalAssets(this.load);
@@ -2125,17 +2125,17 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[]): void {
-    if (this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return;
+    if (this.baseEditor || !bridge.isHost() || bridge.getGamePhase() !== 'LOBBY') return;
     const baseline = getStoredCoopDefenseProgress();
     const model = new PersistentBaseEditorModel({ ...baseline, personalBaseContribution: getStoredPersonalBaseContribution() });
     const revision = bridge.getCurrentWorldRevision();
     if (revision === null) return;
     bridge.setLocalReady(false); this.arenaRuntime.setIsLocalReady(false);
     this.lobbyOverlay.setReadyButtonState(false);
-    const editor = new PersistentBaseEditorScene({ model, guest: !bridge.isHost(), newRewardIds, color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff,
+    const editor = new PersistentBaseEditorScene({ model, newRewardIds, color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff,
       close: () => this.closeBaseEditor(true),
       save: async () => {
-        const canSave = () => this.baseEditor === editor && bridge.getGamePhase() === 'LOBBY'
+        const canSave = () => this.baseEditor === editor && bridge.isHost() && bridge.getGamePhase() === 'LOBBY'
           && bridge.getCurrentWorldRevision() === revision && !bridge.getPlayerReady(bridge.getLocalPlayerId());
         if (!canSave()) return false;
         const current = getStoredCoopDefenseProgress();

@@ -137,6 +137,7 @@ import type {
 } from '../src/types';
 import type { ProjectileImpactSource } from '../src/projectile/ProjectileGameplayPort';
 import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
+import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { TargetDamageMutationRequest } from '../src/combat/CombatMutation';
 import type { CombatTargetRef } from '../src/combat/CombatScope';
 import type { HitscanShotRequest, MeleeSwingRequest } from '../src/loadout/WeaponFireExecutor';
@@ -286,14 +287,15 @@ function makeCombatHarness() {
 
 function makeSupportCombatHarness() {
   const players = [
-    fakeEntity({ id: 'shooter', color: 0xffffff, x: 0, y: 0, rotation: 0 }),
-    fakeEntity({ id: 'ally', color: 0x55cc88, x: 100, y: 0, rotation: 0 }),
-    fakeEntity({ id: 'victim', color: 0xcc5555, x: 100, y: 20, rotation: 0 }),
+    fakeEntity({ id: 'shooter', color: 0xffffff, x: 0, y: 0, rotation: 0, body: { enable: true } }),
+    fakeEntity({ id: 'ally', color: 0x55cc88, x: 100, y: 0, rotation: 0, body: { enable: true } }),
+    fakeEntity({ id: 'victim', color: 0xcc5555, x: 100, y: 20, rotation: 0, body: { enable: true } }),
   ];
   const bridge = {
     isHost: vi.fn(() => true),
     getPlayerProfile: vi.fn(() => undefined),
     areTeammates: vi.fn((first: string, second: string) => first === 'shooter' && second === 'ally'),
+    broadcastAudioFeedback: vi.fn(),
     broadcastEffect: vi.fn(),
     broadcastHitscanTracer: vi.fn(),
   } as unknown as NetworkBridge;
@@ -580,7 +582,36 @@ describe('CombatSystem base damage routing', () => {
   });
 });
 
-describe('Decoy regeneration and friendly explosion boundaries', () => {
+describe('Utility friendly damage boundaries and Decoy regeneration', () => {
+  it('keeps the Holy Hand Grenade owner and allies unharmed while damaging opponents', () => {
+    const { combat } = makeSupportCombatHarness();
+    const cfg = UTILITY_CONFIGS.HOLY_HAND_GRENADE;
+    combat.applyAoeDamage(0, 0, cfg.aoeRadius, cfg.aoeDamage, 'shooter', false, {
+      allowTeamDamage: cfg.allowTeamDamage,
+      damageFalloff: cfg.damageFalloff,
+      sourceSlot: 'utility',
+    });
+    expect(combat.getHP('shooter')).toBe(100);
+    expect(combat.getHP('ally')).toBe(100);
+    expect(combat.getHP('victim')).toBeLessThan(100);
+  });
+
+  it.each(['direct', 'pulse'] as const)('protects allies from BFG %s damage while allowing opponents', (kind) => {
+    const { combat } = makeSupportCombatHarness();
+    const cfg = UTILITY_CONFIGS.BFG;
+    const damage = kind === 'direct' ? cfg.directDamage : cfg.proximityPulse.damage;
+    expect(combat.canDamageTarget('shooter', 'ally', cfg.allowTeamDamage)).toBe(false);
+    expect(combat.canDamageTarget('shooter', 'victim', cfg.allowTeamDamage)).toBe(true);
+    for (const target of ['ally', 'victim']) {
+      combat.applyDamage(target, damage, false, 'shooter', cfg.id, undefined, {
+        allowTeamDamage: cfg.allowTeamDamage,
+        damageKind: 'direct',
+      });
+    }
+    expect(combat.getHP('ally')).toBe(100);
+    expect(combat.getHP('victim')).toBeLessThan(100);
+  });
+
   it('keeps allies and the owner unharmed, heals only while stealth is active and clamps HP', () => {
     const { combat, players } = makeSupportCombatHarness();
     players[2].x = 150; players[2].y = 0;

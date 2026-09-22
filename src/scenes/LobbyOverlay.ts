@@ -240,7 +240,7 @@ export class LobbyOverlay {
   setCoopDefenseItemsState(unlocked: boolean, pending: number, unseen: boolean): void {
     this.progress?.setCoopDefenseItemsState(unlocked, pending, unseen);
   }
-  setBaseState(unlocked: boolean, pending: number): void { this.progress?.setBaseState(unlocked, pending); }
+  setBaseState(unlocked: boolean, pending: number): void { this.progress?.setBaseState(unlocked, pending, this.bridge.isHost()); }
   setResultsReplayHandler(handler: () => void): void { this.replayResultsHandler = handler; }
   setRoomStatisticsDetailHandler(handler: () => void): void { this.roomStatsDetailHandler = handler; }
   setResultsReplayAvailable(available: boolean): void {
