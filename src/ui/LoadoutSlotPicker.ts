@@ -40,6 +40,8 @@ export interface LoadoutPickerSafeArea {
 export interface LoadoutPickerOptions {
   readonly anchorX: number;
   readonly anchorY: number;
+  /** Unterkante des Popups oberhalb des Ausloesers, falls darunter kein Platz ist. */
+  readonly aboveAnchorY?: number;
   readonly title: string;
   readonly groups: readonly LoadoutPickerGroup[];
   /** Ueberschreibt die gemeinsame Spaltenobergrenze fuer spezielle Einbettungen. */
@@ -165,7 +167,9 @@ export class LoadoutSlotPicker {
       Math.max(safeArea.left, safeArea.right - width),
     );
     const y = Phaser.Math.Clamp(
-      options.anchorY,
+      options.anchorY + height > safeArea.bottom && options.aboveAnchorY !== undefined
+        ? options.aboveAnchorY - height
+        : options.anchorY,
       safeArea.top,
       Math.max(safeArea.top, safeArea.bottom - height),
     );

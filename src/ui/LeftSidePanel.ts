@@ -138,6 +138,12 @@ const CAROUSEL_GROUP_DY = 44;
 const LOADOUT_CONTROL_W = LOBBY_CARD.contentWidth - 32;
 const LOADOUT_CONTROL_H = 48;
 const LOADOUT_POPUP_SAFE_AREA = LOBBY_POPUP_SAFE_AREA;
+const LOADOUT_POPUP_GAP = 6;
+// Gemeinsame Breite; der Anker folgt der angeklickten Slotflaeche.
+const LOADOUT_POPUP_LAYOUT = {
+  columns: 2,
+  safeArea: LOADOUT_POPUP_SAFE_AREA,
+} as const;
 
 const TEAM_OPTIONS: readonly TeamId[] = ['blue', 'red'];
 
@@ -865,18 +871,19 @@ export class LeftSidePanel {
 
     rowSlots.forEach((slot, visibleIndex) => {
       const rowIndex = toolLoadout && slot === 'ultimate' ? 3 : visibleIndex;
+      const rowY = CAROUSEL_START_Y + CAROUSEL_GROUP_DY + rowIndex * CAROUSEL_ROW_STEP;
       const items = this.getSlotItems(slot, storedProgress);
       const item = this.getSelectedSlotItem(slot, items, storedProgress);
       this.loadoutLayer!.add(createLoadoutSlotControl(this.scene, { skin: 'forest',
         x: CENTER_X,
-        y: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + rowIndex * CAROUSEL_ROW_STEP,
+        y: rowY,
         width: LOADOUT_CONTROL_W,
         height: LOADOUT_CONTROL_H,
         accentColor: item ? describeLoadoutItem(slot, item.id).accentColor : COLORS.GREY_5,
         presentation: item ? describeLoadoutItem(slot, item.id) : null,
         label: getSlotLabel(slot),
         enabled: this.loadoutEnabled && !this.lobbyFieldsLocked,
-        onClick: (anchorX) => this.openLoadoutSlotPicker(slot, anchorX),
+        onClick: (anchorX) => this.openLoadoutSlotPicker(slot, anchorX, rowY),
       }));
     });
 
@@ -885,7 +892,7 @@ export class LeftSidePanel {
     this.lastLoadoutControlEnabled = this.loadoutEnabled && !this.lobbyFieldsLocked;
   }
 
-  private openLoadoutSlotPicker(slot: LoadoutSlot, anchorX: number): void {
+  private openLoadoutSlotPicker(slot: LoadoutSlot, anchorX: number, rowY: number): void {
     if (!this.loadoutEnabled || this.lobbyFieldsLocked) return;
     const items = this.getSlotItems(slot);
     const selectedId = this.getSelectedSlotItem(slot, items)?.id ?? null;
@@ -909,12 +916,12 @@ export class LeftSidePanel {
       };
     });
     this.loadoutPicker?.open({
+      ...LOADOUT_POPUP_LAYOUT,
       anchorX,
-      anchorY: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + LOADOUT_CONTROL_H / 2 + 6,
+      anchorY: rowY + LOADOUT_CONTROL_H / 2 + LOADOUT_POPUP_GAP,
+      aboveAnchorY: rowY - LOADOUT_CONTROL_H / 2 - LOADOUT_POPUP_GAP,
       title: getSlotLabel(slot),
       groups: [{ label: null, entries }],
-      maxColumns: 2,
-      safeArea: LOADOUT_POPUP_SAFE_AREA,
     });
   }
 
@@ -962,11 +969,11 @@ export class LeftSidePanel {
         return tool ? describeLoadoutTool(tool) : null;
       }),
       enabled: this.loadoutEnabled && !this.lobbyFieldsLocked,
-      onSlotClick: (index, anchorX) => this.openToolPicker(index, anchorX),
+      onSlotClick: (index, anchorX) => this.openToolPicker(index, anchorX, rowY),
     }));
   }
 
-  private openToolPicker(slotIndex: number, anchorX: number): void {
+  private openToolPicker(slotIndex: number, anchorX: number, rowY: number): void {
     const progress = getStoredCoopDefenseProgress();
     const classId = progress.classesUnlocked ? progress.selectedClassId : 'dachs_nukem';
     const profile = progress.classesUnlocked ? progress.profilesByClass[classId] : progress.defaultProfile;
@@ -988,12 +995,12 @@ export class LeftSidePanel {
       };
     });
     this.loadoutPicker?.open({
+      ...LOADOUT_POPUP_LAYOUT,
       anchorX,
-      anchorY: CAROUSEL_START_Y + CAROUSEL_GROUP_DY + 2 * CAROUSEL_ROW_STEP + 24,
+      anchorY: rowY + LOADOUT_CONTROL_H / 2 + LOADOUT_POPUP_GAP,
+      aboveAnchorY: rowY - LOADOUT_CONTROL_H / 2 - LOADOUT_POPUP_GAP,
       title: t('ui.lobby.utilitySlot', { slot: slotIndex + 1 }),
       groups: [{ label: null, entries }],
-      maxColumns: 2,
-      safeArea: LOADOUT_POPUP_SAFE_AREA,
       clearLabel: current ? t('ui.lobby.clearSlot') : undefined,
       onClear: current
         ? () => this.persistToolSlot(profile, tools, slotIndex, null)

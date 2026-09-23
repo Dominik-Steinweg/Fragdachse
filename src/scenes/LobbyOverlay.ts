@@ -1054,7 +1054,9 @@ export class LobbyOverlay {
     const loadout = this.scene.add.container(CONTENT_L + LOADOUT_LEFT_OFFSET, LIST_Y)
       .setScrollFactor(0);
 
-    const handlePlayerPointerUp = (
+    // Auswahlmenues schliessen beim Druecken. Ihr anschliessendes Loslassen darf
+    // keine darunterliegende Spielerreihe aktivieren.
+    const handlePlayerPointerDown = (
       pointer: Phaser.Input.Pointer,
       _localX: number,
       _localY: number,
@@ -1066,10 +1068,10 @@ export class LobbyOverlay {
         this.openPlayerActionMenu(currentProfile, pointer.x, pointer.y);
       }
     };
-    bg.on('pointerup', handlePlayerPointerUp);
+    bg.on('pointerdown', handlePlayerPointerDown);
     // Der Name ist fuer den Coop-Level-Tooltip interaktiv und liegt damit bei `topOnly` ueber
     // dem Zeilenhintergrund. Der bestehende Kick-Pfad bleibt deshalb auch dort identisch.
-    name.on('pointerup', handlePlayerPointerUp);
+    name.on('pointerdown', handlePlayerPointerDown);
 
     const root = this.scene.add.container(0, 0, [bg, name, badge, mark, loadoutFrame, loadout, ping]).setScrollFactor(0);
     this.cardContent!.add(root);
