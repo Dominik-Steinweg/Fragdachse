@@ -176,6 +176,16 @@ describe('local WASD prediction', () => {
     f.prediction.destroy(); f.frame(10); expect(f.prediction.ownsPosition).toBe(false);
   });
 
+  it('glides across a host interruption but snaps a teleport', () => {
+    const f = fixture(); f.frame(50); f.frame(50);
+    const visual = f.rendered.x;
+    f.acknowledge(4, 0, { revision: 1, sequence: f.input.movementSequence, appliedMs: 40 }); f.frame();
+    expect(f.body.x).toBe(4); expect(f.rendered.x).toBeCloseTo(visual);
+    f.frame(20); expect(f.rendered.x).toBeLessThan(visual + 2); expect(f.rendered.x).toBeGreaterThan(6);
+    f.replaceSnapshot({ x: 40, positionRevision: 1 }); f.frame();
+    expect(f.rendered.x).toBe(40); expect(f.rendered.discontinuity).toBe(true);
+  });
+
   it('uses new host speed for future input and clamps a stalled render frame', () => {
     const f = fixture();
     f.acknowledge(0, 0, { speed: 50 }); f.frame(1000);

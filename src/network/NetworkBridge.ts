@@ -594,6 +594,7 @@ function defaultPlayerName(playerId: string): string {
 
 /** Spaetestens nach dieser Zeit wird die Eingabe auch unveraendert erneut gesendet. */
 const NET_INPUT_KEEPALIVE_MS = 100;
+const NET_INPUT_MOVEMENT_REDUNDANCY_MS = 60;
 const NET_PLACEMENT_PREVIEW_REFRESH_MS = 150;
 const NET_PLACEMENT_PREVIEW_TTL_MS = 600;
 
@@ -850,6 +851,7 @@ export class NetworkBridge {
   private lastSentInput: PlayerInput | null = null;
   private localMovementInput: PlayerInput | null = null;
   private localMovementSequence = 0;
+  private localMovementChangedAtMs = -Infinity;
   private lastInputSentAtMs = 0;
   private lastSentPlacementPreview: PlacementPreviewNetState | null = null;
   private lastPlacementPreviewSentAtMs = 0;
@@ -1574,11 +1576,15 @@ export class NetworkBridge {
     const previous = this.localMovementInput;
     if (!previous || previous.worldRevision !== worldRevision || previous.dx !== input.dx || previous.dy !== input.dy) {
       this.localMovementSequence++;
+      this.localMovementChangedAtMs = Date.now();
     }
     input.movementSequence = this.localMovementSequence;
     this.localMovementInput = input;
     const now = Date.now();
-    if (now - this.lastInputSentAtMs < NET_INPUT_KEEPALIVE_MS && isSamePlayerInput(input, this.lastSentInput)) {
+    // A lost direction change would otherwise keep the host on the old direction until the
+    // keepalive and surface as a visible prediction correction; repeat it for a few frames.
+    if (now - this.lastInputSentAtMs < NET_INPUT_KEEPALIVE_MS && isSamePlayerInput(input, this.lastSentInput)
+      && now - this.localMovementChangedAtMs >= NET_INPUT_MOVEMENT_REDUNDANCY_MS) {
       return;
     }
     this.lastInputSentAtMs = now;

@@ -56,7 +56,9 @@ export class PlayerMovementAcknowledgements {
   commit(id: string, pose: Pose): void {
     const entry = this.get(id, pose.positionRevision);
     if (!entry.consumed) return;
-    entry.committed = { pose: { ...pose }, state: { ...entry.consumed } };
+    // Explicit copy: the host passes PlayerEntity, whose pose fields are prototype getters.
+    entry.committed = { pose: { x: pose.x, y: pose.y, positionRevision: pose.positionRevision },
+      state: { ...entry.consumed } };
   }
 
   snapshot(id: string, pose: Pose): PlayerMovementPredictionState {

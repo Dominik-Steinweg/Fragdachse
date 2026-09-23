@@ -71,6 +71,7 @@ export class LocalPlayerPrediction {
     this.reset();
     this.body = body;
     this.lastVersion = -1;
+    this.positionRevision = -1;
   }
 
   /** Requires a new snapshot; cached pre-reconnect/round data may not restart prediction. */
@@ -82,7 +83,8 @@ export class LocalPlayerPrediction {
     this.active = false; this.holding = false; this.moving = false;
     this.history = [];
     this.offsetX = 0; this.offsetY = 0;
-    this.revision = -1; this.positionRevision = -1;
+    // positionRevision survives: it is the teleport baseline the entity currently shows.
+    this.revision = -1;
     this.sequence = -1; this.sequenceElapsedMs = 0;
   }
 
@@ -95,14 +97,16 @@ export class LocalPlayerPrediction {
       || !Number.isFinite(snapshot.x) || !Number.isFinite(snapshot.y)
       || !Number.isSafeInteger(snapshot.positionRevision) || snapshot.positionRevision! < 0) {
       this.reset();
+      // Without prediction the entity interpolates this snapshot and applies its teleports itself.
+      if (Number.isSafeInteger(snapshot?.positionRevision)) this.positionRevision = snapshot!.positionRevision!;
       return;
     }
 
     let discontinuity = false;
     if (fresh) {
       this.lastSnapshotAt = nowMs;
-      const restart = !this.active || state.revision !== this.revision
-        || snapshot.positionRevision !== this.positionRevision;
+      const teleported = snapshot.positionRevision !== this.positionRevision;
+      const restart = !this.active || state.revision !== this.revision || teleported;
       const visualX = this.body.x + this.offsetX, visualY = this.body.y + this.offsetY;
       this.body.control(true);
       this.body.reset(snapshot.x, snapshot.y);
@@ -127,7 +131,9 @@ export class LocalPlayerPrediction {
       this.positionRevision = snapshot.positionRevision!;
       this.active = true; this.holding = false;
       const correction = Math.hypot(visualX - this.body.x, visualY - this.body.y);
-      const snap = restart || correction > LOCAL_MOVEMENT_PREDICTION.snapDistance
+      // A restart only drops unconfirmed history. Unless the host teleported, the visual pose
+      // glides onto the new baseline instead of jumping back by the round-trip distance.
+      const snap = teleported || correction > LOCAL_MOVEMENT_PREDICTION.snapDistance
         || !this.body.canCorrectTo(visualX, visualY);
       this.offsetX = snap ? 0 : visualX - this.body.x;
       this.offsetY = snap ? 0 : visualY - this.body.y;

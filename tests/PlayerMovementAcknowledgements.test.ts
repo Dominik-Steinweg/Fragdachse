@@ -28,6 +28,21 @@ describe('host movement acknowledgement boundary', () => {
     expect(acks.snapshot('p', pose)).toMatchObject({ sequence: 2, appliedMs: 10 });
   });
 
+  it('commits entity poses whose fields are prototype getters', () => {
+    class EntityPose {
+      private px = 3;
+      get x(): number { return this.px; }
+      get y(): number { return 4; }
+      get positionRevision(): number { return 0; }
+      move(): void { this.px++; }
+    }
+    const acks = new PlayerMovementAcknowledgements(), pose = new EntityPose();
+    acks.select('p', 0, 1, 100, true); acks.consume('p', 0, 10); acks.commit('p', pose);
+    expect(acks.snapshot('p', pose)).toMatchObject({ sequence: 1, appliedMs: 10, canPredict: true });
+    pose.move();
+    expect(acks.snapshot('p', pose).canPredict).toBe(false);
+  });
+
   it('counts blocked and held input once per step, independently of packets and render frames', () => {
     const acks = new PlayerMovementAcknowledgements();
     const pose = { x: 10, y: 20, positionRevision: 0 };
