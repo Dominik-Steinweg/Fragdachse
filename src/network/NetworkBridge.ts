@@ -629,6 +629,7 @@ function isSamePlayerInput(input: PlayerInput, previous: PlayerInput | null): bo
   if (!previous) return false;
   return input.dx === previous.dx
     && input.dy === previous.dy
+    && input.movementSequence === previous.movementSequence
     && input.aim === previous.aim
     && input.dashHeld === previous.dashHeld
     && input.worldRevision === previous.worldRevision
@@ -847,6 +848,8 @@ export class NetworkBridge {
   private reconnectStatusCbs: Array<(status: PeerReconnectStatus) => void> = [];
   private kickedCbs: Array<() => void> = [];
   private lastSentInput: PlayerInput | null = null;
+  private localMovementInput: PlayerInput | null = null;
+  private localMovementSequence = 0;
   private lastInputSentAtMs = 0;
   private lastSentPlacementPreview: PlacementPreviewNetState | null = null;
   private lastPlacementPreviewSentAtMs = 0;
@@ -989,6 +992,7 @@ export class NetworkBridge {
         this.resetGameStateCache();
         this.lastObservedRttSampleCount = 0;
         this.lastSentInput = null;
+        this.localMovementInput = null;
         this.lastInputSentAtMs = 0;
         this.lastSentPlacementPreview = null;
         this.lastPlacementPreviewSentAtMs = 0;
@@ -1555,7 +1559,7 @@ export class NetworkBridge {
     const worldRevision = this.getWorldDescriptor()?.worldRevision;
     // Zwischen alter und neuer LobbyWorld gibt es bewusst kein World-Input-Fallback. Dadurch
     // kann ein bereits laufender Input-Loop die gerade beendete Instanz nicht wiederbeleben.
-    if (worldRevision === undefined) return;
+    if (worldRevision === undefined) { this.localMovementInput = null; return; }
     if (!maySendWorldInput(this.getLocalWorldParticipation())) {
       input = {
         dx: 0,
@@ -1565,6 +1569,14 @@ export class NetworkBridge {
         worldRevision,
       } satisfies PlayerInput;
     } else input = { ...input, worldRevision };
+    input.dx = Number.isFinite(input.dx) ? Math.max(-1, Math.min(1, input.dx)) : 0;
+    input.dy = Number.isFinite(input.dy) ? Math.max(-1, Math.min(1, input.dy)) : 0;
+    const previous = this.localMovementInput;
+    if (!previous || previous.worldRevision !== worldRevision || previous.dx !== input.dx || previous.dy !== input.dy) {
+      this.localMovementSequence++;
+    }
+    input.movementSequence = this.localMovementSequence;
+    this.localMovementInput = input;
     const now = Date.now();
     if (now - this.lastInputSentAtMs < NET_INPUT_KEEPALIVE_MS && isSamePlayerInput(input, this.lastSentInput)) {
       return;
@@ -1572,6 +1584,22 @@ export class NetworkBridge {
     this.lastInputSentAtMs = now;
     this.lastSentInput = input;
     myPlayer().setState(KEY_INPUT, input);
+  }
+
+  /** The exact policy-filtered sample used for sending, even when the keepalive is deduplicated. */
+  getLocalMovementInput(): PlayerInput | null {
+    return this.localMovementInput?.worldRevision === this.getCurrentWorldRevision() ? this.localMovementInput : null;
+  }
+
+  /** Begin fresh history after an authoritative interruption or a resumed session baseline. */
+  restartLocalMovementInput(confirmedSequence: number): void {
+    if (Number.isSafeInteger(confirmedSequence) && confirmedSequence >= 0) {
+      this.localMovementSequence = Math.max(this.localMovementSequence, confirmedSequence);
+    }
+    const input = this.getLocalMovementInput();
+    this.localMovementInput = null;
+    this.lastSentInput = null;
+    if (input) this.sendLocalInput(input);
   }
 
   /** Sendet den rein visuellen Placement-Presence-State über den ersetzbaren Kanal. */
@@ -1598,6 +1626,8 @@ export class NetworkBridge {
     if (!world) return undefined;
     return input?.worldRevision !== undefined
       && isCurrentWorldRevision(world.worldRevision, input.worldRevision)
+      && Number.isFinite(input.dx) && Math.abs(input.dx) <= 1
+      && Number.isFinite(input.dy) && Math.abs(input.dy) <= 1
       ? input
       : undefined;
   }

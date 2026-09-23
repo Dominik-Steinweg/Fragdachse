@@ -32,6 +32,13 @@ function makePlayerState(burnVisualStyle: PlayerNetState['burnVisualStyle']): Pl
 }
 
 describe('player burn visual style codec', () => {
+  it('round-trips a complete movement baseline without inventing prediction metadata', () => {
+    const movementPrediction = { sequence: 12, appliedMs: 125 / 3, revision: 4, canPredict: true, speed: 271.25 };
+    const source = { ...makePlayerState('normal'), x: 12.125, positionRevision: 3, movementPrediction };
+    const decoded = decodePlayerStates(encodePlayerStates({ p: source, baseline: makePlayerState('normal') }));
+    expect(decoded.p).toMatchObject({ x: source.x, positionRevision: 3, movementPrediction });
+    expect(decoded.baseline.movementPrediction).toBeUndefined();
+  });
   it('round-trips Firewalker independently of damaging burn and defaults old snapshots to inactive', () => {
     const active = { ...makePlayerState('void'), isMolotovFirewalkerActive: true };
     const result = decodePlayerStates(encodePlayerStates({ active, old: makePlayerState('normal') }));

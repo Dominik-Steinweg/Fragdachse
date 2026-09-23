@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const bridgeMock = vi.hoisted(() => ({
   isHost: vi.fn(() => true),
+  getLocalPlayerId: vi.fn(() => 'host'),
+  getCurrentWorldRevision: vi.fn(() => 1),
   isArenaCountdownActive: vi.fn(() => false),
   getGamePhase: vi.fn(() => 'ARENA'),
   getGameMode: vi.fn(() => 'coop_defense'),
@@ -31,7 +33,7 @@ import type {
 } from '../src/types';
 
 type LoadoutHandler = (
-  slot: 'utility',
+  slot: 'weapon1' | 'weapon2' | 'utility' | 'ultimate',
   angle: number,
   targetX: number,
   targetY: number,
@@ -251,6 +253,18 @@ beforeEach(() => {
 });
 
 describe('radial action RPC classification', () => {
+  it.each(['weapon1', 'weapon2', 'utility', 'ultimate'] as const)(
+    'never passes a forged client origin to the authoritative %s action', slot => {
+      const fixture = createFixture();
+      const handle = registerLoadoutHandler(fixture.coordinator);
+      const params = slot === 'utility' ? { temporaryUtilityInstanceId: 'temporary-utility-7' } : undefined;
+      expect(handle(slot, 0.5, 45, 67, 'p1', undefined, params, 999999, -999999).ok).toBe(true);
+      expect(fixture.usePlayerAction).toHaveBeenCalledOnce();
+      const request = fixture.usePlayerAction.mock.calls[0][0] as unknown as Record<string, unknown>;
+      expect(request).not.toHaveProperty('clientPosition');
+      expect(request).toMatchObject({ playerId: 'p1', targetX: 45, targetY: 67 });
+    });
+
   it('routes participation, persistent-base, pickup and train handlers through their domain ports', () => {
     const fixture = createFixture();
     const coordinator = fixture.coordinator as unknown as Record<string, () => void>;

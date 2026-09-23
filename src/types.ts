@@ -154,6 +154,8 @@ export interface CoopDefenseMissionProgressPresentationState {
 
 /** WASD-Input vom lokalen Spieler (jeden Frame an Host gesendet) */
 export interface PlayerInput {
+  /** Identifies a held movement state, not a packet or a client-authoritative timestep. */
+  movementSequence?: number;
   turretControl?: TurretControlInput;
   dx: number;  // -1 | 0 | 1
   dy: number;  // -1 | 0 | 1
@@ -234,8 +236,21 @@ export interface SyncedActiveHudBuff {
   intensity?: number;
 }
 
+/** Host confirmation paired with the player's completed physics pose. */
+export interface PlayerMovementPredictionState {
+  readonly sequence: number;
+  /** Actual host physics time spent using this sequence, including blocked movement. */
+  readonly appliedMs: number;
+  /** Invalidates history across interruptions, including ones between network ticks. */
+  readonly revision: number;
+  readonly canPredict: boolean;
+  /** Host-resolved ordinary walking speed, including all current modifiers. */
+  readonly speed: number;
+}
+
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
 export interface PlayerNetState {
+  movementPrediction?: PlayerMovementPredictionState;
   turretControl?: TurretControlState;
   rocketMagazine?: RocketMagazineState;
   pressureShieldUntil?: number;

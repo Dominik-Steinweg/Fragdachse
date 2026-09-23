@@ -18,6 +18,7 @@ import {
 import type { WorldCombatCore } from '../combat/WorldCombatCore';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
+import { collidePlayerWater, type PlayerMovementGeometry } from '../systems/PlayerMovement';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { ArenaLayout } from '../types';
 import type { WorldMaterialization } from './WorldMaterialization';
@@ -59,6 +60,7 @@ export interface WorldGeometryBindingInput {
  * Referenzen beim Runtime-Teardown symmetrisch wieder, bevor die Materialisierung faellt.
  */
 export class WorldGeometryBinding implements WorldScopedBinding {
+  readonly playerMovement: PlayerMovementGeometry;
   private readonly fireObstacles: FireObstacleIndex;
   private readonly obstacleIndex: ArenaObstacleIndex;
   private readonly geometryQueries: WorldGeometryQueries;
@@ -136,7 +138,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     hostPhysics.setBaseGroup(baseManager?.getBaseGroup() ?? null);
     hostPhysics.setWorldMetrics(world.metrics);
     hostPhysics.setWaterGeometry(water);
-    hostPhysics.setMovementBlockedCellResolver((gridX, gridY) => {
+    const movementBlocked = (gridX: number, gridY: number): boolean => {
       if (water.hasCell(gridX, gridY)) return true;
       const rockId = arena.rockGrid.getIndex(gridX, gridY);
       if (rockId >= 0 && arena.rockPhysicsProxies[rockId]?.active === true) return true;
@@ -149,7 +151,33 @@ export class WorldGeometryBinding implements WorldScopedBinding {
         return x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
       })) return true;
       return input.getBarrierCellBlocked(gridX, gridY);
-    });
+    };
+    hostPhysics.setMovementBlockedCellResolver(movementBlocked);
+    const waterSlide = { x: 0, y: 0, vx: 0, vy: 0 };
+    const movementGroups = () => [arena.rockGroup, arena.trunkGroup, baseManager?.getBaseGroup()];
+    this.playerMovement = {
+      metrics: world.metrics,
+      isBlockedCell: movementBlocked,
+      collide: (proxy) => {
+        if (this.destroyed) return;
+        for (const group of movementGroups()) if (group) scene.physics.world.collide(proxy, group);
+        collidePlayerWater(proxy.body as Phaser.Physics.Arcade.Body | null, water, waterSlide);
+      },
+      canOccupyCircle: (x, y, radius) => {
+        const m = world.metrics;
+        if (this.destroyed || ![x, y, radius].every(Number.isFinite) || radius < 0
+          || x - radius < m.offsetX || y - radius < m.offsetY
+          || x + radius > m.maxX || y + radius > m.maxY || water.isCircleBlocked(x, y, radius)) return false;
+        const groups = movementGroups();
+        for (const body of scene.physics.overlapRect(x - radius, y - radius, radius * 2, radius * 2, false, true)) {
+          if (!body.enable || !groups.some(group => group?.contains(body.gameObject))) continue;
+          const dx = x - Math.max(body.left, Math.min(x, body.right));
+          const dy = y - Math.max(body.top, Math.min(y, body.bottom));
+          if (dx * dx + dy * dy < radius * radius - 1e-6) return false;
+        }
+        return true;
+      },
+    };
 
     this.fireObstacles = new FireObstacleIndex({
       width: Math.ceil((world.metrics.offsetX + world.metrics.widthPx) / GROUND_FIRE_CELL_SIZE),

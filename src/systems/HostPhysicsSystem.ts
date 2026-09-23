@@ -1,6 +1,9 @@
 import type { ZeusMovement } from './ZeusRuntime';
 import * as Phaser from 'phaser';
 import { isMissionBarrierBody } from './CoopDefenseMissionBarrierManager';
+import { PlayerMovementAcknowledgements } from './PlayerMovementAcknowledgements';
+import { collidePlayerWater, resolveWalkingVelocity } from './PlayerMovement';
+import type { BurrowPhase, PlayerMovementPredictionState } from '../types';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { WaterGeometry } from '../arena/WaterGeometry';
 import type { EnemyEntity } from '../entities/EnemyEntity';
@@ -20,7 +23,6 @@ import { getDashBurstTiming, getPlayerDashBurstSpeedFactor } from '../utils/dash
 import { maySendWorldInput } from '../world/WorldParticipation';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import {
-  applyGridCornerAssist,
   type GridCornerAssistOutput,
   type MovementBlockedCell,
 } from './GridCornerAssist';
@@ -31,6 +33,7 @@ type BurrowSystemType   = {
   isStunned(id: string): boolean;
   isDashBlocked(id: string): boolean;
   getMovementSpeedFactor(id: string): number;
+  getPhase?(id: string): BurrowPhase;
 };
 type LoadoutManagerType = {
   getSpeedMultiplier(id: string, now: number): number;
@@ -93,6 +96,39 @@ interface ForcedMovement {
 }
 
 export class HostPhysicsSystem {
+  private readonly movementAcknowledgements = new PlayerMovementAcknowledgements();
+  private movementPhysicsWorld: Phaser.Physics.Arcade.World | null = null;
+  private readonly consumeMovementStep = (deltaSeconds: number): void => {
+    if (!this.bridge.isHost()) return;
+    for (const player of this.playerManager.getAllPlayers()) {
+      const body = player.physicsProxy.body as Phaser.Physics.Arcade.Body | null;
+      if (player.active && body?.enable) {
+        this.movementAcknowledgements.consume(player.id, player.positionRevision, deltaSeconds * 1000);
+      }
+    }
+  };
+  private readonly commitMovementStep = (): void => {
+    if (!this.bridge.isHost()) return;
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (player.active && player.physicsProxy.body) this.movementAcknowledgements.commit(player.id, player);
+    }
+  };
+
+  getMovementPredictionState(id: string, now = Date.now()): PlayerMovementPredictionState | undefined {
+    const player = this.playerManager.getPlayer(id);
+    if (!player) return undefined;
+    const state = this.movementAcknowledgements.snapshot(id, player);
+    // Combat and held actions can interrupt after the velocity selection in this frame.
+    if (state.canPredict && (!this.combatSystem?.isAlive(id) || this.stunChecker?.(id, now)
+      || this.burrowSystem?.isStunned(id) || this.burrowSystem?.isBurrowed(id)
+      || (this.burrowSystem?.getPhase?.(id) ?? 'idle') !== 'idle'
+      || this.dashStates.has(id) || this.mountedPlayers.has(id) || this.forcedMovement.has(id)
+      || this.pendingRecoils.has(id) || this.loadoutManager?.getHeldSelfPushVelocity(id, now))) {
+      this.movementAcknowledgements.interrupt(id);
+      return this.movementAcknowledgements.snapshot(id, player);
+    }
+    return state;
+  }
   private dashSequence = 0;
   private dashObserver: {
     start(id: string, now: number): void;
@@ -179,6 +215,7 @@ export class HostPhysicsSystem {
   setPlayerMounted(id: string, position: { x: number; y: number } | null): void {
     const player = this.playerManager.getPlayer(id);
     if (position) {
+      if (!this.mountedPlayers.has(id)) this.movementAcknowledgements.interrupt(id);
       this.mountedPlayers.set(id, { x: position.x, y: position.y });
       this.pendingRecoils.delete(id);
       this.recentImpulseSources.delete(id);
@@ -236,7 +273,19 @@ export class HostPhysicsSystem {
   setDashHoldEnabledResolver(resolver: ((playerId: string) => boolean) | null): void { this.dashHoldEnabledResolver = resolver; }
   setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
   setEnemyHitStaggerResolver(resolver: ((enemyId: string, now: number) => boolean) | null): void { this.enemyHitStaggerResolver = resolver; }
-  setWorldMetrics(metrics: WorldMetrics | null): void { this.worldMetrics = metrics; }
+  setWorldMetrics(metrics: WorldMetrics | null): void {
+    this.worldMetrics = metrics;
+    if (metrics && !this.movementPhysicsWorld) {
+      this.movementPhysicsWorld = this.scene.physics.world;
+      this.movementPhysicsWorld.on('worldstep', this.consumeMovementStep);
+      this.scene.events.on('postupdate', this.commitMovementStep);
+    } else if (!metrics) {
+      this.movementPhysicsWorld?.off('worldstep', this.consumeMovementStep);
+      this.scene.events.off('postupdate', this.commitMovementStep);
+      this.movementPhysicsWorld = null;
+      this.movementAcknowledgements.clear();
+    }
+  }
   private waterGeometry: WaterGeometry | null = null;
   private waterPhysicsWorld: Phaser.Physics.Arcade.World | null = null;
   private readonly waterSlide = { x: 0, y: 0, vx: 0, vy: 0 };
@@ -253,16 +302,7 @@ export class HostPhysicsSystem {
   private readonly collideWater = (): void => {
     if (!this.bridge.isHost() || !this.waterGeometry) return;
     const collide = (body: Phaser.Physics.Arcade.Body | null): void => {
-      if (!body?.enable) return;
-      const sx = body.prev.x + body.halfWidth;
-      const sy = body.prev.y + body.halfHeight;
-      const ex = body.center.x;
-      const ey = body.center.y;
-      if (!this.waterGeometry!.slideCircle(sx, sy, ex, ey, body.halfWidth,
-        body.velocity.x, body.velocity.y, this.waterSlide)) return;
-      body.position.set(this.waterSlide.x - body.halfWidth, this.waterSlide.y - body.halfHeight);
-      body.updateCenter();
-      body.setVelocity(this.waterSlide.vx, this.waterSlide.vy);
+      collidePlayerWater(body, this.waterGeometry, this.waterSlide);
     };
     for (const player of this.playerManager.getAllPlayers()) {
       if (player.active) collide(player.physicsProxy.body as Phaser.Physics.Arcade.Body | null);
@@ -328,6 +368,7 @@ export class HostPhysicsSystem {
     if (this.mountedPlayers.has(playerId)) return;
     const knockbackFactor = this.enemyManager?.getEnemy(playerId)?.getKnockbackFactor() ?? 1;
     if (knockbackFactor <= 0) return;
+    this.movementAcknowledgements.interrupt(playerId);
 
     const startMs = Date.now();
     const impulses = this.pendingRecoils.get(playerId) ?? [];
@@ -354,6 +395,7 @@ export class HostPhysicsSystem {
 
   setForcedMovement(playerId: string, vx: number, vy: number): void {
     if (this.mountedPlayers.has(playerId)) return;
+    if (!this.forcedMovement.has(playerId)) this.movementAcknowledgements.interrupt(playerId);
     this.forcedMovement.set(playerId, { vx, vy });
   }
 
@@ -503,6 +545,8 @@ export class HostPhysicsSystem {
     // Surface speed is the baseline for both variants; underground speed never stacks here.
     const vNorm = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * speedMult * dashRangeMultiplier;
 
+    this.movementAcknowledgements.interrupt(playerId);
+
     this.dashStates.set(playerId, {
       id: ++this.dashSequence,
       phase:   1,
@@ -558,6 +602,7 @@ export class HostPhysicsSystem {
    * Wird von BurrowSystem beim Betreten/Verlassen des Burrow-Zustands aufgerufen.
    */
   setPlayerBurrowed(id: string, burrowed: boolean): void {
+    if (burrowed !== this.burrowedPlayers.has(id)) this.movementAcknowledgements.interrupt(id);
     if (burrowed) {
       this.burrowedPlayers.add(id);
     } else {
@@ -633,6 +678,7 @@ export class HostPhysicsSystem {
    * Spieler-Collider zerstören wenn ein Spieler die Lobby verlässt.
    */
   removePlayer(id: string): void {
+    this.movementAcknowledgements.remove(id);
     this.mountedPlayers.delete(id);
     const colliders = this.playerColliders.get(id);
     if (colliders) {
@@ -685,172 +731,65 @@ export class HostPhysicsSystem {
       // obwohl Phaser den Koerper bereits entfernt hat.
       const playerBody = player.physicsProxy.body as Phaser.Physics.Arcade.Body | null;
       if (!player.active || !playerBody) continue;
-      const mounted = this.mountedPlayers.get(player.id);
-      if (mounted) { this.setPlayerMounted(player.id, mounted); continue; }
+      const movementInput = this.bridge.getPlayerInput(player.id);
+      let predictable = false;
+      let walkingSpeed = 0;
+      try {
+        const mounted = this.mountedPlayers.get(player.id);
+        if (mounted) { this.setPlayerMounted(player.id, mounted); continue; }
 
-      // Lazy: Collider mit Felsen anlegen
-      if (this.rockGroup && !this.rockCollidersSetup.has(player.id)) {
-        const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.physicsProxy, this.rockGroup, undefined,
-          (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
-        existing.push(c);
-        this.playerColliders.set(player.id, existing);
-        this.rockCollidersSetup.add(player.id);
-      }
-
-      // Lazy: Collider mit Baumstümpfen anlegen
-      if (this.trunkGroup && !this.trunkCollidersSetup.has(player.id)) {
-        const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.physicsProxy, this.trunkGroup, undefined,
-          (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
-        existing.push(c);
-        this.playerColliders.set(player.id, existing);
-        this.trunkCollidersSetup.add(player.id);
-      }
-
-      // Lazy: Collider mit Coop-Defense-Basen anlegen
-      if (this.baseGroup && !this.baseCollidersSetup.has(player.id)) {
-        const existing = this.playerColliders.get(player.id) ?? [];
-        const c = this.scene.physics.add.collider(player.physicsProxy, this.baseGroup, undefined,
-          (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
-        existing.push(c);
-        this.playerColliders.set(player.id, existing);
-        this.baseCollidersSetup.add(player.id);
-      }
-
-      // Tote Spieler überspringen (body.enable = false durch WorldCombatCore)
-      if (!this.combatSystem?.isAlive(player.id) || this.stunChecker?.(player.id, now)) {
-        this.dashObserver?.end(player.id); this.dashStates.delete(player.id); this.dashBurstPlayers.delete(player.id);
-        player.setDashScale(1); player.setCollisionRadius(PLAYER_SIZE / 2); playerBody.setVelocity(0, 0); continue;
-      }
-
-      const impulse = this.consumeImpulseVelocity(player.id, now);
-      const forcedMovement = this.forcedMovement.get(player.id);
-
-      if (!(this.canMoveResolver?.(player.id)
-        ?? maySendWorldInput(this.bridge.getWorldParticipation(player.id)))) {
-        playerBody.setVelocity(impulse.vx, impulse.vy);
-        continue;
-      }
-
-      if (movementLocked) {
-        const factor = this.getTimeBubbleFactor(player.id, player.x, player.y, now);
-        playerBody.setVelocity(impulse.vx * factor, impulse.vy * factor);
-        continue;
-      }
-
-      if (forcedMovement) {
-        const factor = this.getTimeBubbleFactor(
-          player.id,
-          player.x,
-          player.y,
-          now,
-        );
-        playerBody.setVelocity(
-          (forcedMovement.vx + impulse.vx) * factor,
-          (forcedMovement.vy + impulse.vy) * factor,
-        );
-        continue;
-      }
-
-      // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
-      if (this.burrowSystem?.isStunned(player.id)) {
-        const factor = this.getTimeBubbleFactor(player.id, player.x, player.y, now);
-        playerBody.setVelocity(impulse.vx * factor, impulse.vy * factor);
-        continue;
-      }
-
-      let baseVx = 0;
-      let baseVy = 0;
-
-      // ── 2. Dash: 2-Phasen Speed-Debt-Modell ─────────────────────────
-      const dash = this.dashStates.get(player.id);
-      if (dash) {
-        const elapsed = (now - dash.startMs) / 1000;
-
-        // Air Control: WASD wenn gedrückt, sonst gespeicherte Startrichtung
-        const input  = this.bridge.getPlayerInput(player.id);
-        const rawX   = input?.dx ?? 0;
-        const rawY   = input?.dy ?? 0;
-        const rawLen = Math.sqrt(rawX * rawX + rawY * rawY);
-        const dirX   = rawLen > 0 ? rawX / rawLen : dash.dirX;
-        const dirY   = rawLen > 0 ? rawY / rawLen : dash.dirY;
-
-        let speedFactor: number;
-        let done = false;
-
-        if (dash.phase === 1) {
-          const timing = getDashBurstTiming(
-            elapsed,
-            DASH_T1_S,
-            this.dashHoldEnabledResolver?.(player.id) ?? false,
-            input?.dashHeld === true,
-            DASH_HOLD_MAX_DURATION_FACTOR,
-          );
-          speedFactor = getPlayerDashBurstSpeedFactor(timing.progress, dash.impulseMultiplier);
-
-          // Hitbox sofort auf 50 % Radius (25 % Fläche). setCollisionRadius arbeitet in
-          // Display-Pixeln und kompensiert die Quelltextur-Skalierung des Spieler-Sprites.
-          player.setDashScale(0.5);
-          player.setCollisionRadius(PLAYER_SIZE * 0.25);
-          const groundFireDurationMs = this.dashGroundFireDurationResolver?.(player.id) ?? 0;
-          if (groundFireDurationMs > 0) {
-            this.dashGroundFireHandler?.(
-              player.id,
-              `dash:${player.id}:${dash.startMs}`,
-              dash.lastGroundX,
-              dash.lastGroundY,
-              player.x,
-              player.y,
-              groundFireDurationMs,
-              now,
-            );
-            dash.lastGroundX = player.x;
-            dash.lastGroundY = player.y;
-          }
-          this.publishDashMovement(player.id, now);
-          const impactDamage = this.dashImpactDamageResolver?.(player.id) ?? 0;
-          const impactKnockback = this.dashImpactKnockbackResolver?.(player.id) ?? 0;
-          if (impactDamage > 0) {
-            for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-              if (dash.hitIds.has(enemy.id) || !enemy.sprite.active) continue;
-              if (Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) > PLAYER_SIZE) continue;
-              if (this.dashObserver?.canApplyImpact?.(player.id, enemy.id) === false) continue;
-              dash.hitIds.add(enemy.id);
-              this.combatSystem?.applyDamage(enemy.id, impactDamage, false, player.id, 'Dash-Aufprall', { sourceX: player.x, sourceY: player.y });
-              this.addRecoil(enemy.id, dirX * impactKnockback, dirY * impactKnockback, 180, player.id);
-            }
-          }
-
-          if (timing.shouldEnd) {
-            // Phase 2 beginnt bei Loslassen bzw. am normalen/erweiterten Zeitlimit neu.
-            dash.phase   = 2;
-            dash.startMs = now;
-            this.dashBurstPlayers.delete(player.id);
-          }
-        } else {
-          const recoveryDuration = Math.max(0.01, this.dashRecoveryDurationResolver?.(player.id) ?? DASH_T2_S);
-          const t = Math.min(1, elapsed / recoveryDuration);
-          // Quad.easeIn: zähes Aufrappeln von f_min auf 1.0
-          const easeIn = t * t;
-          speedFactor = DASH_F_MIN + (1 - DASH_F_MIN) * easeIn;
-          const scale = 0.5 + 0.5 * easeIn;
-          player.setDashScale(scale);
-          player.setCollisionRadius(PLAYER_SIZE * scale / 2);
-          this.publishDashMovement(player.id, now);
-
-          if (elapsed >= recoveryDuration) {
-            done = true;
-            this.dashStates.delete(player.id);
-            this.dashObserver?.end(player.id);
-            player.setDashScale(1.0);
-            player.setCollisionRadius(PLAYER_SIZE / 2);
-          }
+        // Lazy: Collider mit Felsen anlegen
+        if (this.rockGroup && !this.rockCollidersSetup.has(player.id)) {
+          const existing = this.playerColliders.get(player.id) ?? [];
+          const c = this.scene.physics.add.collider(player.physicsProxy, this.rockGroup, undefined,
+            (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
+          existing.push(c);
+          this.playerColliders.set(player.id, existing);
+          this.rockCollidersSetup.add(player.id);
         }
 
-        if (!done) {
-          baseVx = dirX * dash.vNorm * speedFactor;
-          baseVy = dirY * dash.vNorm * speedFactor;
+        // Lazy: Collider mit Baumstümpfen anlegen
+        if (this.trunkGroup && !this.trunkCollidersSetup.has(player.id)) {
+          const existing = this.playerColliders.get(player.id) ?? [];
+          const c = this.scene.physics.add.collider(player.physicsProxy, this.trunkGroup, undefined,
+            (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
+          existing.push(c);
+          this.playerColliders.set(player.id, existing);
+          this.trunkCollidersSetup.add(player.id);
+        }
+
+        // Lazy: Collider mit Coop-Defense-Basen anlegen
+        if (this.baseGroup && !this.baseCollidersSetup.has(player.id)) {
+          const existing = this.playerColliders.get(player.id) ?? [];
+          const c = this.scene.physics.add.collider(player.physicsProxy, this.baseGroup, undefined,
+            (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
+          existing.push(c);
+          this.playerColliders.set(player.id, existing);
+          this.baseCollidersSetup.add(player.id);
+        }
+
+        // Tote Spieler überspringen (body.enable = false durch WorldCombatCore)
+        if (!this.combatSystem?.isAlive(player.id) || this.stunChecker?.(player.id, now)) {
+          this.dashObserver?.end(player.id); this.dashStates.delete(player.id); this.dashBurstPlayers.delete(player.id);
+          player.setDashScale(1); player.setCollisionRadius(PLAYER_SIZE / 2); playerBody.setVelocity(0, 0); continue;
+        }
+
+        const impulse = this.consumeImpulseVelocity(player.id, now);
+        const forcedMovement = this.forcedMovement.get(player.id);
+
+        if (!(this.canMoveResolver?.(player.id)
+          ?? maySendWorldInput(this.bridge.getWorldParticipation(player.id)))) {
+          playerBody.setVelocity(impulse.vx, impulse.vy);
+          continue;
+        }
+
+        if (movementLocked) {
+          const factor = this.getTimeBubbleFactor(player.id, player.x, player.y, now);
+          playerBody.setVelocity(impulse.vx * factor, impulse.vy * factor);
+          continue;
+        }
+
+        if (forcedMovement) {
           const factor = this.getTimeBubbleFactor(
             player.id,
             player.x,
@@ -858,65 +797,161 @@ export class HostPhysicsSystem {
             now,
           );
           playerBody.setVelocity(
-            (baseVx + impulse.vx) * factor,
-            (baseVy + impulse.vy) * factor,
+            (forcedMovement.vx + impulse.vx) * factor,
+            (forcedMovement.vy + impulse.vy) * factor,
           );
           continue;
         }
-        // done → fällt durch zur normalen Bewegung
-      }
 
-      // ── 3. Normaler Input mit optionalem Burrow-Speed-Faktor ─────────
-      const input = this.bridge.getPlayerInput(player.id);
-      let dx    = input?.dx ?? 0;
-      let dy    = input?.dy ?? 0;
-      if (
-        !this.burrowSystem?.isBurrowed(player.id)
-        && this.worldMetrics
-        && (this.movementBlockedCellResolver || this.waterGeometry)
-      ) {
-        applyGridCornerAssist(
+        // ── 1. Stun: Keine Bewegung ───────────────────────────────────────
+        if (this.burrowSystem?.isStunned(player.id)) {
+          const factor = this.getTimeBubbleFactor(player.id, player.x, player.y, now);
+          playerBody.setVelocity(impulse.vx * factor, impulse.vy * factor);
+          continue;
+        }
+
+        let baseVx = 0;
+        let baseVy = 0;
+
+        // ── 2. Dash: 2-Phasen Speed-Debt-Modell ─────────────────────────
+        const dash = this.dashStates.get(player.id);
+        if (dash) {
+          const elapsed = (now - dash.startMs) / 1000;
+
+          // Air Control: WASD wenn gedrückt, sonst gespeicherte Startrichtung
+          const input  = this.bridge.getPlayerInput(player.id);
+          const rawX   = input?.dx ?? 0;
+          const rawY   = input?.dy ?? 0;
+          const rawLen = Math.sqrt(rawX * rawX + rawY * rawY);
+          const dirX   = rawLen > 0 ? rawX / rawLen : dash.dirX;
+          const dirY   = rawLen > 0 ? rawY / rawLen : dash.dirY;
+
+          let speedFactor: number;
+          let done = false;
+
+          if (dash.phase === 1) {
+            const timing = getDashBurstTiming(
+              elapsed,
+              DASH_T1_S,
+              this.dashHoldEnabledResolver?.(player.id) ?? false,
+              input?.dashHeld === true,
+              DASH_HOLD_MAX_DURATION_FACTOR,
+            );
+            speedFactor = getPlayerDashBurstSpeedFactor(timing.progress, dash.impulseMultiplier);
+
+            // Hitbox sofort auf 50 % Radius (25 % Fläche). setCollisionRadius arbeitet in
+            // Display-Pixeln und kompensiert die Quelltextur-Skalierung des Spieler-Sprites.
+            player.setDashScale(0.5);
+            player.setCollisionRadius(PLAYER_SIZE * 0.25);
+            const groundFireDurationMs = this.dashGroundFireDurationResolver?.(player.id) ?? 0;
+            if (groundFireDurationMs > 0) {
+              this.dashGroundFireHandler?.(
+                player.id,
+                `dash:${player.id}:${dash.startMs}`,
+                dash.lastGroundX,
+                dash.lastGroundY,
+                player.x,
+                player.y,
+                groundFireDurationMs,
+                now,
+              );
+              dash.lastGroundX = player.x;
+              dash.lastGroundY = player.y;
+            }
+            this.publishDashMovement(player.id, now);
+            const impactDamage = this.dashImpactDamageResolver?.(player.id) ?? 0;
+            const impactKnockback = this.dashImpactKnockbackResolver?.(player.id) ?? 0;
+            if (impactDamage > 0) {
+              for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+                if (dash.hitIds.has(enemy.id) || !enemy.sprite.active) continue;
+                if (Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) > PLAYER_SIZE) continue;
+                if (this.dashObserver?.canApplyImpact?.(player.id, enemy.id) === false) continue;
+                dash.hitIds.add(enemy.id);
+                this.combatSystem?.applyDamage(enemy.id, impactDamage, false, player.id, 'Dash-Aufprall', { sourceX: player.x, sourceY: player.y });
+                this.addRecoil(enemy.id, dirX * impactKnockback, dirY * impactKnockback, 180, player.id);
+              }
+            }
+
+            if (timing.shouldEnd) {
+              // Phase 2 beginnt bei Loslassen bzw. am normalen/erweiterten Zeitlimit neu.
+              dash.phase   = 2;
+              dash.startMs = now;
+              this.dashBurstPlayers.delete(player.id);
+            }
+          } else {
+            const recoveryDuration = Math.max(0.01, this.dashRecoveryDurationResolver?.(player.id) ?? DASH_T2_S);
+            const t = Math.min(1, elapsed / recoveryDuration);
+            // Quad.easeIn: zähes Aufrappeln von f_min auf 1.0
+            const easeIn = t * t;
+            speedFactor = DASH_F_MIN + (1 - DASH_F_MIN) * easeIn;
+            const scale = 0.5 + 0.5 * easeIn;
+            player.setDashScale(scale);
+            player.setCollisionRadius(PLAYER_SIZE * scale / 2);
+            this.publishDashMovement(player.id, now);
+
+            if (elapsed >= recoveryDuration) {
+              done = true;
+              this.dashStates.delete(player.id);
+              this.dashObserver?.end(player.id);
+              player.setDashScale(1.0);
+              player.setCollisionRadius(PLAYER_SIZE / 2);
+            }
+          }
+
+          if (!done) {
+            baseVx = dirX * dash.vNorm * speedFactor;
+            baseVy = dirY * dash.vNorm * speedFactor;
+            const factor = this.getTimeBubbleFactor(
+              player.id,
+              player.x,
+              player.y,
+              now,
+            );
+            playerBody.setVelocity(
+              (baseVx + impulse.vx) * factor,
+              (baseVy + impulse.vy) * factor,
+            );
+            continue;
+          }
+          // done → fällt durch zur normalen Bewegung
+        }
+
+        // ── 3. Normaler Input mit optionalem Burrow-Speed-Faktor ─────────
+        const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;
+        const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id, now) ?? 1;
+        const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * ((this.walkingSpeedMultiplierResolver?.(player.id, now) ?? 1) * (1 + (this.zeusMoveBonus?.(player.id, now) ?? 0)));
+
+        resolveWalkingVelocity(player.x, player.y, movementInput?.dx ?? 0, movementInput?.dy ?? 0,
+          speed, this.worldMetrics,
+          !this.burrowSystem?.isBurrowed(player.id) && (this.movementBlockedCellResolver || this.waterGeometry)
+            ? this.assistedMovementBlocked : null, this.gridCornerAssistOutput);
+        baseVx = this.gridCornerAssistOutput.dx;
+        baseVy = this.gridCornerAssistOutput.dy;
+
+        const selfPush = this.loadoutManager?.getHeldSelfPushVelocity(player.id, now);
+        if (selfPush) {
+          baseVx += selfPush.vx;
+          baseVy += selfPush.vy;
+        }
+
+        const factor = this.getTimeBubbleFactor(
+          player.id,
           player.x,
           player.y,
-          dx,
-          dy,
-          this.worldMetrics,
-          this.assistedMovementBlocked,
-          this.gridCornerAssistOutput,
+          now,
         );
-        dx = this.gridCornerAssistOutput.dx;
-        dy = this.gridCornerAssistOutput.dy;
+        walkingSpeed = speed * factor;
+        predictable = !selfPush && !this.pendingRecoils.has(player.id)
+          && !this.burrowSystem?.isBurrowed(player.id)
+          && (this.burrowSystem?.getPhase?.(player.id) ?? 'idle') === 'idle';
+        playerBody.setVelocity(
+          (baseVx + impulse.vx) * factor,
+          (baseVy + impulse.vy) * factor,
+        );
+      } finally {
+        this.movementAcknowledgements.select(player.id, player.positionRevision,
+          movementInput?.movementSequence, walkingSpeed, predictable);
       }
-      const len   = Math.sqrt(dx * dx + dy * dy);
-
-      const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;
-      const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id, now) ?? 1;
-      const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * ((this.walkingSpeedMultiplierResolver?.(player.id, now) ?? 1) * (1 + (this.zeusMoveBonus?.(player.id, now) ?? 0)));
-
-      if (len > 0) {
-        baseVx = (dx / len) * speed;
-        baseVy = (dy / len) * speed;
-      } else {
-        baseVx = 0;
-        baseVy = 0;
-      }
-
-      const selfPush = this.loadoutManager?.getHeldSelfPushVelocity(player.id, now);
-      if (selfPush) {
-        baseVx += selfPush.vx;
-        baseVy += selfPush.vy;
-      }
-
-      const factor = this.getTimeBubbleFactor(
-        player.id,
-        player.x,
-        player.y,
-        now,
-      );
-      playerBody.setVelocity(
-        (baseVx + impulse.vx) * factor,
-        (baseVy + impulse.vy) * factor,
-      );
     }
 
     this.enemyManager?.forEachEnemy((enemy) => {

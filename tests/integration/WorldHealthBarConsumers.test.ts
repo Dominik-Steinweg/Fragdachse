@@ -61,7 +61,7 @@ import { WEAPON_CONFIGS, type WeaponConfig } from '../../src/loadout/LoadoutConf
 import type { WeaponFireOptions } from '../../src/loadout/WeaponFireExecutor';
 import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
 import { fakeEntity } from '../fakeEntity';
-import { createMovementVisualSample } from '../../src/effects/MovementStepSampler';
+import { createMovementVisualSample, MovementStepSampler } from '../../src/effects/MovementStepSampler';
 
 function harness() {
   const fake = healthBarTestScene();
@@ -99,6 +99,46 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it('applies local reconciliation to every player attachment without moving the body or producing steps', () => {
+    const h = harness();
+    const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,
+      100, 100, true, null, { spawnEffect: false });
+    player.setHealthBarRenderer(h.renderer);
+    player.setHeldItemId('GLOCK'); player.updateArmor(50); player.syncBar();
+    const position = vi.spyOn(h.renderer, 'position');
+    const muzzle = player.getHeldItemMuzzleOrigin()!;
+    expect(muzzle).not.toBeNull();
+    const attached = player as unknown as { nameLabel: { x: number; y: number };
+      heldItem: { image: { x: number; y: number } } };
+    const attachments = [player.displayObject!, attached.nameLabel, attached.heldItem.image];
+    const before = attachments.map(object => ({ x: object.x, y: object.y }));
+    const bars = h.rectangles.filter(object => object.visible);
+    const barBefore = bars.map(object => ({ x: object.x, y: object.y }));
+    const revision = player.positionRevision;
+    const sample = createMovementVisualSample(), sampler = new MovementStepSampler(), emit = vi.fn();
+    player.readMovementVisualSample(sample); sampler.advance(sample, 16, emit);
+    player.setMovementPresentationOffset(-7, 4, false);
+    expect([player.x, player.y, player.positionRevision]).toEqual([100, 100, revision]);
+    expect(player.displayObject).toMatchObject({ x: 93, y: 104 });
+    expect(player.getHeldItemMuzzleOrigin()).toEqual({ x: muzzle.x - 7, y: muzzle.y + 4 });
+    attachments.forEach((object, index) => {
+      expect(object.x).toBeCloseTo(before[index].x - 7);
+      expect(object.y).toBeCloseTo(before[index].y + 4);
+    });
+    expect(position).toHaveBeenLastCalledWith(expect.anything(), 93, expect.any(Number));
+    bars.forEach((bar, index) => {
+      expect(bar.x).toBeCloseTo(barBefore[index].x - 7);
+      expect(bar.y).toBeCloseTo(barBefore[index].y + 4);
+    });
+    for (let i = 0; i < 10; i++) {
+      player.setMovementPresentationOffset(-7 * (1 - i / 10), 4 * (1 - i / 10), false);
+      player.readMovementVisualSample(sample); sampler.advance(sample, 16, emit);
+      expect(sample.mode).toBe('idle');
+    }
+    expect(emit).not.toHaveBeenCalled();
+    player.destroy(); h.renderer.destroy();
+  });
+
   it('invalidates immutable enemy identities on replacement, removal and owner teardown', () => {
     const h = harness(), manager = enemies(h);
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100, entityGeneration: 4 });

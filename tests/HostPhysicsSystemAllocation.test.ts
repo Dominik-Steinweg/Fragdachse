@@ -168,6 +168,7 @@ function createHarness() {
 
   const colliderDestroySpies: Array<() => void> = [];
   const scene = {
+    events: { on: vi.fn(), off: vi.fn() },
     physics: {
       world: { on: vi.fn(), off: vi.fn() },
       add: {

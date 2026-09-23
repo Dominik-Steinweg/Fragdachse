@@ -160,7 +160,7 @@ describe('PlayerEntity – das Sprite ist keine Runtime-API mehr', () => {
     expect(body).toContain('this.syncVisualPosition();');
 
     const sync = source.slice(source.indexOf('  private syncVisualPosition(): void {'));
-    expect(sync).toContain('this.sprite.setPosition(this.runtime.x, this.runtime.y);');
+    expect(sync).toContain('this.sprite.setPosition(this.runtime.x + this.movementPresentationOffsetX, this.runtime.y + this.movementPresentationOffsetY);');
     expect(sync).toContain('this.sprite.rotation = this.runtime.rotation;');
   });
 

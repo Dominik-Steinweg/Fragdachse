@@ -28,6 +28,9 @@ import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgra
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { EnemyEntity } from '../../entities/EnemyEntity';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
+import { ClientPlayerMovementBody } from '../../entities/ClientPlayerMovementBody';
+import type { LocalPlayerPrediction } from '../../systems/LocalPlayerPrediction';
+import type { PlayerMovementGeometry } from '../../systems/PlayerMovement';
 import { ROCK_HP_MAX } from '../../config';
 import {
   getStoredCoopDefenseProgress,
@@ -126,6 +129,41 @@ export interface ClientActivityFramePort {
  * (weapon cooldown, hitscan tracer, pickup spam protection).
  */
 export class ClientUpdateCoordinator {
+  private movementBinding: {
+    prediction: LocalPlayerPrediction;
+    geometry: PlayerMovementGeometry;
+    player: PlayerEntity | null;
+  } | null = null;
+
+  bindMovementPrediction(prediction: LocalPlayerPrediction, geometry: PlayerMovementGeometry): { destroy(): void } {
+    this.movementBinding?.prediction.setBody(null);
+    const binding = { prediction, geometry, player: null as PlayerEntity | null };
+    this.movementBinding = binding;
+    return { destroy: () => {
+      prediction.setBody(null);
+      if (this.movementBinding === binding) this.movementBinding = null;
+    } };
+  }
+
+  resetMovementPrediction(): void { this.movementBinding?.prediction.reset(); }
+
+  private updateLocalMovement(state: GameState, version: number, delta: number, countdown: boolean): void {
+    const binding = this.movementBinding;
+    if (!binding) return;
+    const id = bridge.getLocalPlayerId();
+    const interactive = bridge.getLocalWorldParticipation() === 'interactive';
+    const player = interactive ? this.ctx.playerManager.getPlayer(id) ?? null : null;
+    if (binding.player !== player) {
+      binding.prediction.setBody(player ? new ClientPlayerMovementBody(player, binding.geometry) : null);
+      binding.player = player;
+    }
+    const snapshot = state.players[id];
+    binding.prediction.update(snapshot, version, delta, performance.now(), interactive && !countdown
+      && state.worldRevision === binding.prediction.worldRevision);
+    if (player && snapshot && !binding.prediction.ownsPosition) {
+      player.setTargetPosition(snapshot.x, snapshot.y, snapshot.positionRevision);
+    }
+  }
   private lastGameStateVersion = -1;
   private readonly ultimateReadyFeedback = new UltimateReadyFeedback();
   private readonly damagedStaticRockIds = new Set<number>();
@@ -282,6 +320,7 @@ export class ClientUpdateCoordinator {
   runClientUpdate(delta: number): void {
     const countdownActive = bridge.isArenaCountdownActive();
     if (!this.world) {
+      this.resetMovementPrediction();
       this.lastPerformance = {
         totalMs: 0,
         snapshotMs: 0,
@@ -311,6 +350,7 @@ export class ClientUpdateCoordinator {
       participation: bridge.getLocalWorldParticipation(),
       presentation,
     })) {
+      this.resetMovementPrediction();
       this.lastPerformance = {
         totalMs: 0,
         snapshotMs: 0,
@@ -329,6 +369,7 @@ export class ClientUpdateCoordinator {
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.baseManager?.syncDormantStates();
     if (!state) {
+      this.resetMovementPrediction();
       this.runActivityClientPresentationStep({
         stateAvailable: false,
         newSnapshot: false,
@@ -384,7 +425,7 @@ export class ClientUpdateCoordinator {
         }
         if (!countdownActive) this.prevAliveStates.set(id, ps.alive);
 
-        player.setTargetPosition(ps.x, ps.y, ps.positionRevision);
+        if (id !== localId || !this.movementBinding) player.setTargetPosition(ps.x, ps.y, ps.positionRevision);
         if (id !== localId) {
           player.setTargetRotation(dequantizeAngle(ps.rot));
         }
@@ -572,8 +613,12 @@ export class ClientUpdateCoordinator {
     }
 
     const interpolationStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
+    // Replay sees the current collision geometry, including this snapshot's World mutations.
+    this.updateLocalMovement(state, currentVersion, delta, countdownActive);
     for (const player of this.ctx.playerManager.getAllPlayers()) {
-      player.lerpStep(lerpFactor);
+      if (player !== this.movementBinding?.player || !this.movementBinding.prediction.ownsPosition) {
+        player.lerpStep(lerpFactor);
+      }
       const dashPhase = this.prevDashPhases.get(player.id) ?? 0;
       if (dashPhase !== 0) {
         this.applyDashVisual(player, player.id, dashPhase as 1 | 2);
@@ -616,7 +661,8 @@ export class ClientUpdateCoordinator {
       this.ctx.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed, localState.burrowPhase, localState.dashPhase);
 
       // Movement loop for local player
-      const isMovingLocal = localState.aim.isMoving;
+      const isMovingLocal = this.movementBinding?.prediction.ownsPosition
+        ? this.movementBinding.prediction.isMoving : localState.aim.isMoving;
       if (isMovingLocal && localState.alive && !localState.isBurrowed && !this.moveLoopHandle) {
         this.moveLoopHandle = this.ctx.gameAudioSystem.startLoop('sfx_player_move') ?? null;
       } else if ((!isMovingLocal || !localState.alive || localState.isBurrowed) && this.moveLoopHandle) {
@@ -875,6 +921,9 @@ export class ClientUpdateCoordinator {
     this.dashPhase2StartTimes.delete(playerId);
     this.dashTrailTimers.delete(playerId);
     if (playerId !== bridge.getLocalPlayerId()) return;
+
+    this.movementBinding?.prediction.setBody(null);
+    if (this.movementBinding) this.movementBinding.player = null;
 
     if (this.moveLoopHandle) this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle);
     this.moveLoopHandle = null;
@@ -1427,6 +1476,7 @@ export class ClientUpdateCoordinator {
   }
 
   resetPerRound(): void {
+    this.resetMovementPrediction();
     this.lastGameStateVersion = -1;
     this.ultimateReadyFeedback.reset();
     // Zwischen zwei Runden kann das Lobby-Menue den lokalen Spielstand geaendert haben.

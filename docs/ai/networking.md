@@ -82,6 +82,42 @@ Zeitlich begrenzte replizierte Zustände verwenden bevorzugt einen absoluten fac
 
 Wenn jede einzelne Auslösung eines wiederkehrenden Host-Ereignisses fachlich oder für die Presentation eindeutig erkannt werden muss, darf der Client sie nicht nur aus Dauer, Phase oder lokalem Timing rekonstruieren. In solchen Fällen ist eine monotone Sequence/Revision das bevorzugte Muster. Ein initialer Snapshot setzt typischerweise die aktuelle Baseline; vergangene Presentation-Ereignisse werden nicht automatisch nachgespielt. Das ist kein Zwang für rein kontinuierliche Zustände, bei denen nur der aktuelle Zustand zählt. Der Tesla-Dome nutzt dafür `pulseSequence`; sein Renderer löst Effekte nur bei fortschreitender Sequenz aus.
 
+## Lokale Spielerbewegung
+
+[`LocalPlayerPrediction`](../../src/systems/LocalPlayerPrediction.ts) ist eine abgeleitete,
+World-gebundene Projektion des eigenen interaktiven Client-Spielers, auch ohne Activity. Der
+Owner bekommt nur Eingabe- und Körperports; er verändert keine bestätigten Snapshots. Die
+Eingabe stammt aus demselben durch InputPolicy bereinigten Sample, das NetworkBridge sendet.
+Fremde Spieler und hostgesteuerte Sonderbewegungen behalten ihren Interpolationspfad.
+
+`PlayerInput.movementSequence` bezeichnet einen gehaltenen Bewegungszustand, keinen Transport-
+oder Physiktick. Richtungswechsel und Prediction-Neustarts beginnen eine neue Sequenz;
+Aim-Änderungen und Keepalives nicht. Der Host bestätigt in jedem Spieler-Snapshot zusätzlich
+die tatsächlich simulierte Dauer dieser Sequenz, eine Unterbrechungsrevision, die explizite
+Freigabe für normales Laufen und die hostseitig aufgelöste Geschwindigkeit. Clientzeit und
+Clientposition steuern die Hostbewegung nicht. Verlorene Zwischenzustände werden nicht
+nachträglich auf dem Host ausgeführt.
+
+[`PlayerMovementAcknowledgements`](../../src/systems/PlayerMovementAcknowledgements.ts)
+trennt die Auswahl einer Geschwindigkeit von ihrem Verbrauch im Arcade-`worldstep` und der
+Veröffentlichung nach `POST_UPDATE`. Position und ACK müssen denselben abgeschlossenen
+Körperstand beschreiben. Ein Empfangs-ACK oder eine Bestätigung beim Setzen der Velocity wäre
+zu früh. Unterbrechungen und Positionssprünge invalidieren ältere Historie auch dann, wenn sie
+zwischen zwei Netzwerkticks liegen.
+
+Prediction und Replay verwenden die gemeinsame Laufregel samt Eckhilfe und die aktuelle
+World-Kollisionsgeometrie. Nur der eigene Client-Körper wird aus dem automatischen Arcade-
+Schritt genommen und isoliert fortgeschaltet; Replay darf weder die globale Physik noch
+Gameplay-Kontakte ausführen. Geometrieänderungen eines Snapshots werden vor der Reconciliation
+angewendet. World-/Entity-Wechsel, Reconnect, Participation-Verlust und Sonderbewegungen
+verwerfen die Historie. Zeit und Umfang unbestätigter Bewegung sind begrenzt.
+
+Reconciliation korrigiert zuerst den abgeleiteten Körper. Kleine Fehler werden ausschließlich
+als gemeinsamer Darstellungsversatz aller Spieler-Anbauten geglättet; dieser Versatz darf keine
+Gameplay-Position oder Teleportrevision verändern. Der Host-RPC-Adapter verwirft übermittelte
+Client-Ursprünge für Waffen, Utilities und Ultimates. Deren Gameplay-Ursprung stammt aus der
+autoritativen Spielerposition; lokale Schusseffekte dürfen der vorhergesagten Darstellung folgen.
+
 ## Projectile-Flight-Replikation
 
 Der [`projectileSnapshotCodec`](../../src/network/projectileSnapshotCodec.ts) führt Flight-Profile

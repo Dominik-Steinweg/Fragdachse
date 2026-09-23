@@ -1278,6 +1278,7 @@ export class ArenaScene extends Phaser.Scene {
     bridge.onSpectatorEntered(id => this.arenaRuntime.handleSpectatorEntered(id));
     this.removeReconnectStatusListener = bridge.onReconnectStatus((status) => {
       if (status.state === 'reconnecting' || status.state === 'resumed') {
+        this.clientUpdate.resetMovementPrediction();
         this.coopMissionPresentation.resetMapEventsForHydration();
       }
       if (status.state === 'resumed') {

@@ -29,6 +29,8 @@ interface CompactPlayerState {
   ps?: number;
   rh?: number;
   pr?: number;
+  /** sequence, consumed milliseconds, interruption revision, eligible, resolved speed */
+  mp?: [number, number, number, boolean, number];
   x: number;
   y: number;
   r: number;   // rot (uint8)
@@ -69,6 +71,8 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
   const compact: CompactPlayerState = {
     tc: state.turretControl,
     pr: state.positionRevision,
+    mp: state.movementPrediction ? [state.movementPrediction.sequence, state.movementPrediction.appliedMs,
+      state.movementPrediction.revision, state.movementPrediction.canPredict, state.movementPrediction.speed] : undefined,
     x: state.x,
     y: state.y,
     r: state.rot,
@@ -117,6 +121,10 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
     ...(compact.ps ? { pressureShieldUntil: compact.ps } : {}),
     ...(compact.rh ? { rocketHealSequence: compact.rh } : {}),
     ...(compact.pr === undefined ? {} : { positionRevision: compact.pr }),
+    ...(compact.mp === undefined ? {} : { movementPrediction: {
+      sequence: compact.mp[0], appliedMs: compact.mp[1], revision: compact.mp[2],
+      canPredict: compact.mp[3], speed: compact.mp[4],
+    } }),
     y: compact.y,
     rot: compact.r,
     hp: compact.h,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TurretControlSystem } from '../src/systems/TurretControlSystem';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
@@ -54,6 +54,36 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
 }
 
 describe('World-Kanal – Replikation', () => {
+  it('sequences the policy-filtered movement state independently of aim and keepalive', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    let now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const host = bridgeFor(hostRoom); host.publishWorldAndActivity(world(), null);
+      const client = bridgeFor(clientRoom);
+      vi.spyOn(client, 'getLocalWorldParticipation').mockReturnValue('interactive');
+      client.sendLocalInput({ dx: 1, dy: 0, aim: 0 });
+      const sequence = client.getLocalMovementInput()!.movementSequence!;
+      client.sendLocalInput({ dx: 1, dy: 0, aim: 1 });
+      expect(client.getLocalMovementInput()).toMatchObject({ movementSequence: sequence, aim: 1 });
+      now += 101; client.sendLocalInput({ dx: 1, dy: 0, aim: 1 });
+      expect(client.getLocalMovementInput()!.movementSequence).toBe(sequence);
+      client.sendLocalInput({ dx: 0, dy: -1, aim: 1 });
+      expect(client.getLocalMovementInput()!.movementSequence).toBe(sequence + 1);
+      client.restartLocalMovementInput(1000);
+      expect(client.getLocalMovementInput()).toMatchObject({ movementSequence: 1001, dx: 0, dy: -1 });
+      vi.mocked(client.getLocalWorldParticipation).mockReturnValue('observer');
+      client.sendLocalInput({ dx: 1, dy: 1, aim: 2, dashHeld: true });
+      expect(client.getLocalMovementInput()).toMatchObject({ dx: 0, dy: 0, dashHeld: false, movementSequence: 1002 });
+      setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+      host.publishWorldAndActivity(world({ worldRevision: 13 }), null);
+      setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
+      expect(client.getLocalMovementInput()).toBeNull();
+      client.sendLocalInput({ dx: 0, dy: 0, aim: 2 });
+      expect(client.getLocalMovementInput()).toMatchObject({ movementSequence: 1003, worldRevision: 13 });
+    } finally { clock.mockRestore(); clearActiveSession(); }
+  });
+
   it('validates reliable turret requests and repeatedly snapshots typed occupancy for clients and late join', async () => {
     const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
     const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });

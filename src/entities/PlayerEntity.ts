@@ -149,6 +149,8 @@ export class PlayerEntity {
   private movementDashPhase: 0 | 1 | 2 = 0;
   private movementBurrowDash = false;
   private movementRevision = 0;
+  private movementPresentationOffsetX = 0;
+  private movementPresentationOffsetY = 0;
   /** Decaying teleport offset, separate from the normal interpolation lag while walking. */
   private movementCorrectionRemaining = 0;
 
@@ -475,6 +477,8 @@ export class PlayerEntity {
 
   /** Sprite + Physik-Body + HP-Balken positionieren (Host: Respawn). */
   setPosition(x: number, y: number): void {
+    this.movementPresentationOffsetX = 0;
+    this.movementPresentationOffsetY = 0;
     this.movementRevision++;
     this.movementCorrectionRemaining = 0;
     this.targetX = x;
@@ -489,8 +493,17 @@ export class PlayerEntity {
   private syncVisualPosition(): void {
     // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
     if (!this.sprite) return;
-    this.sprite.setPosition(this.runtime.x, this.runtime.y);
+    this.sprite.setPosition(this.runtime.x + this.movementPresentationOffsetX, this.runtime.y + this.movementPresentationOffsetY);
     this.sprite.rotation = this.runtime.rotation;
+  }
+
+  /** Cosmetic reconciliation only. Never changes the body, snapshot or teleport revision. */
+  setMovementPresentationOffset(x: number, y: number, discontinuity: boolean): void {
+    this.movementPresentationOffsetX = x;
+    this.movementPresentationOffsetY = y;
+    this.movementCorrectionRemaining = Math.hypot(x, y);
+    if (discontinuity) this.movementRevision++;
+    this.syncBar();
   }
 
   /**
@@ -570,14 +583,15 @@ export class PlayerEntity {
     // Die Physik bewegt die Runtime, nicht das Bild. Hier wird das Bild nachgezogen - dieselbe
     // Stelle, die schon immer der Frame-Hook fuer physikbewegte Figuren war.
     this.syncVisualPosition();
-    const x = this.runtime.x;
-    const hpY = this.runtime.y + HP_BAR_OFFSET_Y;
-    const armorY = this.runtime.y + ARMOR_BAR_OFFSET_Y;
+    const x = this.runtime.x + this.movementPresentationOffsetX;
+    const y = this.runtime.y + this.movementPresentationOffsetY;
+    const hpY = y + HP_BAR_OFFSET_Y;
+    const armorY = y + ARMOR_BAR_OFFSET_Y;
     this.bindHealthBar();
     this.healthBars?.position(this.healthBar, x, hpY);
     this.armorBarBg?.setPosition(x, armorY);
     this.armorBarFg?.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
-    this.nameLabel?.setPosition(x, this.runtime.y - PLAYER_VISUAL_SIZE * 0.72);
+    this.nameLabel?.setPosition(x, y - PLAYER_VISUAL_SIZE * 0.72);
     this.syncAttachedEffects();
     this.syncOverlays();
     this.syncWalkingAnimation();
@@ -595,7 +609,7 @@ export class PlayerEntity {
     if (!this.sprite?.active || this.presentation || !this.healthBars || this.healthBars.isValid(this.healthBar)) return;
     this.healthBar = this.healthBars.bind(
       playerHealthBarStyle(this.isEnemy), this.currentHp, this.maxHp,
-      this.runtime.x, this.runtime.y + HP_BAR_OFFSET_Y,
+      this.runtime.x + this.movementPresentationOffsetX, this.runtime.y + this.movementPresentationOffsetY + HP_BAR_OFFSET_Y,
       !this.baseVisible || !this.worldBarsVisible || this.isDecoyStealthed || this.turretMounted
         || this.burrowPhase === 'underground' || this.burrowPhase === 'trapped',
     );

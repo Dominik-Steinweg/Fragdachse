@@ -194,15 +194,15 @@ export class RpcCoordinator {
   }
 
   private registerLoadoutUseHandler(): void {
-    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, predictionId) => {
+    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, _clientX, _clientY, predictionId) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
       const capabilities = this.capabilities.get(senderId);
       if (!capabilities) return { ok: false, reason: 'blocked' };
       if (!isValidPlayerActionAttemptId(params?.attemptId)) return { ok: false, reason: 'invalid' };
       // Ein einziger hostseitiger Zeitpunkt für die gesamte Aktion: Held-Action-Consume,
       // Charge-Validierung, Construction-Use und der Gameplay-Commit teilen sich `hostNowMs`.
-      // `clientX`/`clientY` bleiben Positions-/Latenzkompensation und sind davon unberührt;
-      // eine Client-Uhr fließt bewusst nicht mehr in Cooldown-/Commit-Entscheidungen ein.
+      // Client-Urspruenge sind ebenso wenig Gameplay-Autoritaet wie eine Client-Uhr.
+      // Die Action-Owner lesen die verbindliche Position aus ihrer Host-Player-Runtime.
       const hostNowMs = this.resolveHostActionTime();
       if (params?.rocketMagazine && params.activityRevision !== bridge.getActivityDescriptor()?.activityRevision) {
         return { ok: false, reason: 'invalid' };
@@ -227,7 +227,6 @@ export class RpcCoordinator {
           hostNowMs,
           attemptId: params.attemptId,
           params,
-          clientPosition: { x: clientX, y: clientY },
         });
       }
       if (!capabilities.canInteract) return { ok: false, reason: 'blocked' };
@@ -347,7 +346,6 @@ export class RpcCoordinator {
           shotId,
           predictionId,
           params: authoritativeParams,
-          clientPosition: { x: clientX, y: clientY },
         })
         : slot === 'utility'
           ? this.playerLoadout.usePlayerAction({
@@ -359,7 +357,6 @@ export class RpcCoordinator {
             hostNowMs,
             attemptId: params?.attemptId,
             params: authoritativeParams,
-            clientPosition: { x: clientX, y: clientY },
           })
           : this.playerLoadout.usePlayerAction({
             category: 'ultimate',
@@ -370,7 +367,6 @@ export class RpcCoordinator {
             hostNowMs,
             attemptId: params?.attemptId,
             params: authoritativeParams,
-            clientPosition: { x: clientX, y: clientY },
           });
       if (result.ok && (slot === 'weapon1' || slot === 'weapon2')
         && senderId === bridge.getLocalPlayerId() && !params?.scopeHolding && !params?.rocketMagazine) {

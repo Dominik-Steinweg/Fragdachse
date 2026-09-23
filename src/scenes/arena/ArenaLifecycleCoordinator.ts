@@ -3,6 +3,7 @@ import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { collectDeathFragmentFrames } from '../../effects/gpu/DeathFragmentPreparation';
 import * as Phaser from 'phaser';
+import { LocalPlayerPrediction } from '../../systems/LocalPlayerPrediction';
 import { AdrenalineEssenceBinding } from '../../adrenalineEssence/AdrenalineEssenceBinding';
 import { ADRENALINE_ESSENCE_CONFIG } from '../../adrenalineEssence/AdrenalineEssenceConfig';
 import { AdrenalineEssenceGpuRenderer } from '../../adrenalineEssence/AdrenalineEssenceGpuRenderer';
@@ -2802,6 +2803,14 @@ export class ArenaLifecycleCoordinator {
       coopMissionRuntime,
       activityDescriptor,
     }, buildingGameplay);
+    if (!bridge.isHost() && this.worldGameplay.geometry) {
+      const prediction = new LocalPlayerPrediction(worldDescriptor.worldRevision, {
+        getInput: () => bridge.getLocalMovementInput(),
+        restartInput: sequence => bridge.restartLocalMovementInput(sequence),
+      });
+      const binding = this.clientUpdate.bindMovementPrediction(prediction, this.worldGameplay.geometry.playerMovement);
+      worldRuntime.bind({ destroy: () => { binding.destroy(); prediction.destroy(); } });
+    }
     this.attachLobbyAdrenalineEssence();
     this.adrenalineEssence?.prepare();
 

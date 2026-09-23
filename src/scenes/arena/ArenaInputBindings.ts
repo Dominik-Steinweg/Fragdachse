@@ -709,7 +709,6 @@ export class ArenaInputBindings {
       // Cancellation is cleanup, not combat input. It must cross the local capability gates so
       // stun, burrow and input teardown cannot strand an authoritative host charge.
       if (isGaussCancellation && params) {
-        const localPosition = actions.getLocalPlayerPosition();
         const cancellation = actions.sendLoadoutUse(
           slot,
           angle,
@@ -717,8 +716,8 @@ export class ArenaInputBindings {
           targetY,
           undefined,
           params,
-          localPosition?.x,
-          localPosition?.y,
+          undefined,
+          undefined,
           true,
         );
         void cancellation
@@ -793,7 +792,6 @@ export class ArenaInputBindings {
         actions.notifyUtilityFired();
       }
 
-      const localPosition = actions.getLocalPlayerPosition();
       if (slot === 'weapon2' && predictionId !== undefined && !actions.isHost()) {
         actions.beginPredictedWeapon2Use(
           predictionId,
@@ -803,8 +801,6 @@ export class ArenaInputBindings {
             targetY,
             shotId,
             params,
-            clientX: localPosition?.x,
-            clientY: localPosition?.y,
           },
           getLocalWeapon2AdrenalineCost(),
           (result) => handleLocalLoadoutFailure('weapon2', result, inputStarted, predictionId),
@@ -840,8 +836,8 @@ export class ArenaInputBindings {
         targetY,
         shotId,
         params,
-        localPosition?.x,
-        localPosition?.y,
+        undefined,
+        undefined,
         awaitResult || awaitFailureResult,
         predictionId,
       );
