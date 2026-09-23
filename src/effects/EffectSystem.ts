@@ -1,5 +1,6 @@
 import type { MgAttritionRenderer } from './MgAttritionRenderer';
 import { CoopXpTextRenderer } from './CoopXpTextRenderer';
+import type { PlasmaBurnerPulseEvent } from '../combat/plasmaBurner/PlasmaBurnerContracts';
 import * as Phaser from 'phaser';
 import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
@@ -392,6 +393,8 @@ export class EffectSystem implements EnemyVisualSink {
         }
       }
     });
+
+    this.bridge.registerPlasmaBurnerPulseHandler(event => this.playPlasmaBurnerPulse(event));
 
     this.bridge.registerHitscanTracerHandler((startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, visualStartX, visualStartY, weaponSourceId) => {
       this.playSyncedHitscanTracer({
@@ -1183,6 +1186,10 @@ export class EffectSystem implements EnemyVisualSink {
   playCoopDefenseXpText(x: number, y: number, xp: number): void {
     this.xpTextRenderer ??= new CoopXpTextRenderer(this.scene);
     this.xpTextRenderer.play(x, y, xp);
+  }
+
+  playPlasmaBurnerPulse(event: PlasmaBurnerPulseEvent, predicted = false): void {
+    this.plasmaBurnerRenderer?.playPulse(event, predicted);
   }
 
   playHitscanTracer(

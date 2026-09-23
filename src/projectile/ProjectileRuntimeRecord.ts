@@ -101,6 +101,7 @@ export interface ProjectileResolvedInteraction {
   readonly proximityPulse?: ProjectileProximityPulseConfig;
   readonly enemyHitExplosion?: ProjectileExplosionConfig;
   readonly impactCloud?: ImpactCloudConfig;
+  readonly plasmaBurnerCharge?: import('./ProjectileSpawnRequest').ProjectileSupportSpec['plasmaBurnerCharge'];
   readonly energyInjectorPayload?: ProjectileEnergyInjectorPayload;
   readonly grenadeEffect?: GrenadeEffectConfig;
   readonly detonable?: DetonableConfig;
@@ -207,7 +208,7 @@ export interface ProjectileMiniRocketState {
 }
 /** Distinct contact lifetimes stay distinct (penetration chain, flame, lifetime pierce). */
 export interface ProjectileContactMemory {
-  swarmOriginExited?: boolean;
+  originExited?: boolean;
   flamePierceHitIds?: Set<string>;
   hitObstacleIds?: Set<number>;
   bfgHitPlayers?: Set<string>;

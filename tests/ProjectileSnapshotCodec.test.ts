@@ -102,7 +102,7 @@ describe('Projektil-Statik-Codec', () => {
 
   it('round-trips every projectile style through its stable index', () => {
     // Der Schnappschuss der Laenge macht ein Umsortieren der Liste sichtbar - Indizes sind Wire-Werte.
-    expect(PROJECTILE_STYLES).toHaveLength(16);
+    expect(PROJECTILE_STYLES).toHaveLength(17);
     for (const style of PROJECTILE_STYLES) {
       expect(roundTripStatic({ id: 1, ownerId: 'p1', style }).style).toBe(style);
     }

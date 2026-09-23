@@ -1,3 +1,4 @@
+import type { PlasmaBurnerPulseEvent } from '../combat/plasmaBurner/PlasmaBurnerContracts';
 import * as Phaser from 'phaser';
 import {
   DEPTH_TRACE,
@@ -102,6 +103,7 @@ interface PlasmaBeamVisual {
  */
 export class PlasmaBurnerRenderer {
   private readonly beams = new Map<string, PlasmaBeamVisual>();
+  private readonly pulseSegments = new Map<string, { owner: string; index: number; locked: boolean; portal: boolean; lockEnd: boolean; healing: boolean; secondary: boolean }>();
   private readonly beamPool: PlasmaBeamVisual[] = [];
   private impactSparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private lighting: LightingSystem | null = null;
@@ -167,6 +169,25 @@ export class PlasmaBurnerRenderer {
     this.localAimAngleProvider = provider;
   }
 
+  playPulse(event: PlasmaBurnerPulseEvent, predicted = false): void {
+    const prefix = event.id + '#';
+    if (!predicted) for (const [key, visual] of this.beams) {
+      if (key.startsWith(prefix) && Number(key.slice(prefix.length)) >= event.s.length) this.recycleBeam(key, visual);
+    }
+    event.s.forEach(([sx, sy, ex, ey, fx], index) => {
+      if (predicted && index !== 0) return;
+      const key = prefix + index;
+      const previous = this.pulseSegments.get(key);
+      if (predicted && previous && (previous.locked || previous.portal)) return;
+      this.pulseSegments.set(key, { owner: event.id, index, locked: event.lk, portal: event.p > 1,
+        lockEnd: event.lk && index === event.p - 1, healing: fx === 2, secondary: index >= event.p });
+      const secondary = index >= event.p;
+      const color = fx === 2 ? 0x66ffc5 : fx === 1 ? 0x69ceff : 0x569bc4;
+      this.playTracer(sx, sy, ex, ey, mixColors(color, 0xffffff, Math.min(0.35, (event.m - 1) * 0.18)),
+        (secondary ? 2 : 3) * (1 + (event.m - 1) * 0.22), fx ? 'player' : 'none', key);
+    });
+  }
+
   playTracer(
     startX: number,
     startY: number,
@@ -219,10 +240,17 @@ export class PlasmaBurnerRenderer {
       const alpha = active
         ? 1
         : Phaser.Math.Clamp(1 - ((now - visual.activeUntil) / BEAM_FADE_MS), 0, 1);
-      visual.root.setAlpha(alpha);
+      visual.root.setAlpha(alpha * (this.pulseSegments.get(beamId)?.secondary ? 0.72 : 1));
 
       if (now >= visual.nextGeometryAt) {
         this.drawBeam(visual);
+        const segment = this.pulseSegments.get(beamId);
+        if (segment?.lockEnd) visual.endpoints.lineStyle(1, 0xb9f5ed, 0.65).strokeCircle(visual.endX, visual.endY, 8);
+        if (segment?.healing) {
+          visual.endpoints.lineStyle(1.5, 0xbcffe2, 0.9);
+          visual.endpoints.lineBetween(visual.endX - 3, visual.endY, visual.endX + 3, visual.endY);
+          visual.endpoints.lineBetween(visual.endX, visual.endY - 3, visual.endX, visual.endY + 3);
+        }
         visual.nextGeometryAt = now + Phaser.Math.Between(GEOMETRY_REFRESH_MIN_MS, GEOMETRY_REFRESH_MAX_MS);
         if (active) this.emitImpactSparks(visual, now);
       }
@@ -243,6 +271,7 @@ export class PlasmaBurnerRenderer {
       this.destroyBeamVisual(visual);
     }
     this.beams.clear();
+    this.pulseSegments.clear();
 
     for (const visual of this.beamPool) this.destroyBeamVisual(visual);
     this.beamPool.length = 0;
@@ -354,14 +383,16 @@ export class PlasmaBurnerRenderer {
   }
 
   private syncOwnerVisualState(beamId: string, visual: PlasmaBeamVisual, delta: number): void {
-    const owner = this.ownerVisualStateProvider?.(beamId) ?? null;
+    const segment = this.pulseSegments.get(beamId);
+    if (segment && segment.index !== 0) return;
+    const owner = this.ownerVisualStateProvider?.(segment?.owner ?? beamId) ?? null;
     if (!owner) {
       visual.motionTrailX = Phaser.Math.Linear(visual.motionTrailX, 0, 0.2);
       visual.motionTrailY = Phaser.Math.Linear(visual.motionTrailY, 0, 0.2);
       return;
     }
 
-    visual.color = owner.color;
+    if (!segment) visual.color = owner.color;
     const frameScale = 16.667 / Math.max(1, delta);
     const moveX = visual.lastOwnerX === null ? 0 : (owner.x - visual.lastOwnerX) * frameScale;
     const moveY = visual.lastOwnerY === null ? 0 : (owner.y - visual.lastOwnerY) * frameScale;
@@ -417,7 +448,9 @@ export class PlasmaBurnerRenderer {
   }
 
   private getLocalAimAngle(beamId: string): number | null {
-    const angle = this.localAimAngleProvider?.(beamId) ?? null;
+    const segment = this.pulseSegments.get(beamId);
+    if (segment && (segment.index !== 0 || segment.locked || segment.portal)) return null;
+    const angle = this.localAimAngleProvider?.(segment?.owner ?? beamId) ?? null;
     return angle !== null && Number.isFinite(angle) ? angle : null;
   }
 
@@ -434,6 +467,7 @@ export class PlasmaBurnerRenderer {
     visual.root.setVisible(false).setAlpha(0);
     visual.lightsReleased = true;
     this.beams.delete(beamId);
+    this.pulseSegments.delete(beamId);
     this.beamPool.push(visual);
   }
 

@@ -1,4 +1,5 @@
 import { BADGER_CURSOR } from './gameCursor';
+import { PlasmaBurnerOverloadIndicator } from './PlasmaBurnerOverloadIndicator';
 import * as Phaser from 'phaser';
 import { RocketMagazineIndicator } from './RocketMagazineIndicator';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
@@ -72,6 +73,9 @@ function usesGameplayMuzzle(config: WeaponConfig): boolean {
  */
 export class AimSystem {
   private rocketIndicator: RocketMagazineIndicator | null = null;
+  private plasmaIndicator: PlasmaBurnerOverloadIndicator | undefined;
+  private plasmaState: import('../combat/plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerOverloadNetState | undefined;
+  setPlasmaBurnerOverloadState(state: typeof this.plasmaState): void { this.plasmaState = state; }
   private rocketMagazineState: import('../types').RocketMagazineState | undefined;
   setRocketMagazineState(state: import('../types').RocketMagazineState | undefined): void { this.rocketMagazineState = state; }
   private readonly visuals: AimVisuals;
@@ -153,6 +157,7 @@ export class AimSystem {
     // stehen lassen kann – dieselbe Rolle, die frueher `gfx.clear()` hatte.
     this.visuals.beginFrame();
     this.rocketIndicator?.hide();
+    this.plasmaIndicator?.hide();
     if (!showAim) return;
 
     const sprite = this.getLocalSprite();
@@ -200,6 +205,10 @@ export class AimSystem {
     const pointerWorld = getUnshakenPointerWorldPoint(this.scene, pointer);
     const px = pointerWorld.x;
     const py = pointerWorld.y;
+    if (cfg.plasmaBurner?.overloadEnabled) {
+      this.plasmaIndicator ??= new PlasmaBurnerOverloadIndicator(this.scene);
+      this.plasmaIndicator.update(px, py, this.plasmaState ?? { q: 0, qMax: cfg.plasmaBurner.qMaxByLevel[cfg.plasmaBurner.capacitorLevel], building: false });
+    }
     if (this.rocketMagazineState) {
       this.rocketIndicator ??= new RocketMagazineIndicator(this.scene);
       this.rocketIndicator.update(px, py, this.rocketMagazineState, Date.now());
@@ -264,6 +273,7 @@ export class AimSystem {
 
   destroy(): void {
     this.rocketIndicator?.destroy();
+    this.plasmaIndicator?.destroy();
     this.scene.input.setDefaultCursor(BADGER_CURSOR);
     this.appliedCursor = BADGER_CURSOR;
     this.visuals.destroy();

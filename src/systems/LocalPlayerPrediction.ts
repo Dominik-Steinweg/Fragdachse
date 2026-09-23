@@ -13,6 +13,8 @@ export const LOCAL_MOVEMENT_PREDICTION = {
 export interface LocalPredictionBody {
   readonly x: number;
   readonly y: number;
+  /** The host's fixed Arcade step. Collision and corner assist depend on the step size. */
+  readonly stepMs: number;
   control(enabled: boolean): void;
   reset(x: number, y: number): void;
   step(dx: number, dy: number, speed: number, deltaMs: number): void;
@@ -25,10 +27,10 @@ export interface LocalPlayerPredictionPorts {
   restartInput(confirmedSequence: number): void;
 }
 
+/** Exactly one fixed physics step; `index` counts steps within its movement sequence. */
 interface MovementSample {
   sequence: number;
-  fromMs: number;
-  durationMs: number;
+  index: number;
   dx: number;
   dy: number;
   speed: number;
@@ -52,7 +54,9 @@ export class LocalPlayerPrediction {
   private revision = -1;
   private positionRevision = -1;
   private sequence = -1;
-  private sequenceElapsedMs = 0;
+  private sequenceSteps = 0;
+  /** Render time not yet covered by a whole fixed step; shown provisionally, never recorded. */
+  private stepRemainderMs = 0;
   private speed = 0;
   private offsetX = 0;
   private offsetY = 0;
@@ -60,11 +64,14 @@ export class LocalPlayerPrediction {
   private holding = false;
   private destroyed = false;
   private moving = false;
+  private lastCorrection = 0;
 
   constructor(readonly worldRevision: number, private readonly ports: LocalPlayerPredictionPorts) {}
 
   get ownsPosition(): boolean { return this.active || this.holding; }
   get isMoving(): boolean { return this.ownsPosition && this.moving; }
+  /** Distance between the predicted and the reconciled body at the latest continuing snapshot. */
+  get lastReconciliationError(): number { return this.lastCorrection; }
 
   setBody(body: LocalPredictionBody | null): void {
     if (this.body === body) return;
@@ -85,7 +92,7 @@ export class LocalPlayerPrediction {
     this.offsetX = 0; this.offsetY = 0;
     // positionRevision survives: it is the teleport baseline the entity currently shows.
     this.revision = -1;
-    this.sequence = -1; this.sequenceElapsedMs = 0;
+    this.sequence = -1; this.sequenceSteps = 0; this.stepRemainderMs = 0;
   }
 
   update(snapshot: Snapshot | undefined, version: number, deltaMs: number, nowMs: number, enabled: boolean): void {
@@ -107,30 +114,28 @@ export class LocalPlayerPrediction {
       this.lastSnapshotAt = nowMs;
       const teleported = snapshot.positionRevision !== this.positionRevision;
       const restart = !this.active || state.revision !== this.revision || teleported;
-      const visualX = this.body.x + this.offsetX, visualY = this.body.y + this.offsetY;
+      const predictedX = this.body.x, predictedY = this.body.y;
+      const visualX = predictedX + this.offsetX, visualY = predictedY + this.offsetY;
       this.body.control(true);
       this.body.reset(snapshot.x, snapshot.y);
       if (restart) {
         this.history = [];
-        this.sequence = -1; this.sequenceElapsedMs = 0;
+        this.sequence = -1; this.sequenceSteps = 0;
         this.ports.restartInput(state.sequence);
       } else {
-        this.history = this.history.flatMap(sample => {
-          if (sample.sequence < state.sequence) return [];
-          if (sample.sequence > state.sequence) return [sample];
-          const end = sample.fromMs + sample.durationMs;
-          if (end <= state.appliedMs) return [];
-          const fromMs = Math.max(sample.fromMs, state.appliedMs);
-          return [{ ...sample, fromMs, durationMs: end - fromMs }];
-        });
-        if (this.sequence === state.sequence) this.sequenceElapsedMs = Math.max(this.sequenceElapsedMs, state.appliedMs);
-        for (const sample of this.history) this.body.step(sample.dx, sample.dy, sample.speed, sample.durationMs);
+        // The host consumes whole fixed steps, so its ACK lands on this history's step grid.
+        const appliedSteps = Math.round(state.appliedMs / this.body.stepMs);
+        this.history = this.history.filter(sample => sample.sequence > state.sequence
+          || (sample.sequence === state.sequence && sample.index >= appliedSteps));
+        if (this.sequence === state.sequence) this.sequenceSteps = Math.max(this.sequenceSteps, appliedSteps);
+        for (const sample of this.history) this.body.step(sample.dx, sample.dy, sample.speed, this.body.stepMs);
       }
       this.speed = state.speed;
       this.revision = state.revision;
       this.positionRevision = snapshot.positionRevision!;
       this.active = true; this.holding = false;
       const correction = Math.hypot(visualX - this.body.x, visualY - this.body.y);
+      this.lastCorrection = restart ? 0 : Math.hypot(predictedX - this.body.x, predictedY - this.body.y);
       // A restart only drops unconfirmed history. Unless the host teleported, the visual pose
       // glides onto the new baseline instead of jumping back by the round-trip distance.
       const snap = teleported || correction > LOCAL_MOVEMENT_PREDICTION.snapDistance
@@ -145,32 +150,48 @@ export class LocalPlayerPrediction {
     if (!input || input.worldRevision !== this.worldRevision || !Number.isSafeInteger(input.movementSequence)
       || input.movementSequence! <= 0) { this.reset(); return; }
     const dt = Number.isFinite(deltaMs) ? Math.max(0, Math.min(deltaMs, LOCAL_MOVEMENT_PREDICTION.maxFrameMs)) : 0;
-    const historyMs = this.history.reduce((sum, sample) => sum + sample.durationMs, 0);
-    if (nowMs - this.lastSnapshotAt > LOCAL_MOVEMENT_PREDICTION.maxSnapshotAgeMs
-      || this.history.length >= LOCAL_MOVEMENT_PREDICTION.maxHistoryEntries
-      || historyMs + dt > LOCAL_MOVEMENT_PREDICTION.maxHistoryMs) {
-      this.active = false; this.holding = true;
-    }
+    const stepMs = this.body.stepMs;
+    if (nowMs - this.lastSnapshotAt > LOCAL_MOVEMENT_PREDICTION.maxSnapshotAgeMs) this.hold();
     this.moving = false;
-    if (this.active && dt > 0) {
+    let partialX = 0, partialY = 0;
+    if (this.active) {
+      const x = this.body.x, y = this.body.y;
       if (this.sequence !== input.movementSequence) {
         this.sequence = input.movementSequence!;
-        this.sequenceElapsedMs = 0;
+        this.sequenceSteps = 0;
       }
-      const sample: MovementSample = { sequence: this.sequence, fromMs: this.sequenceElapsedMs,
-        durationMs: dt, dx: input.dx, dy: input.dy, speed: this.speed };
-      const x = this.body.x, y = this.body.y;
-      this.body.step(sample.dx, sample.dy, sample.speed, dt);
-      this.moving = Math.hypot(this.body.x - x, this.body.y - y) > 0.001;
-      this.history.push(sample);
-      this.sequenceElapsedMs += dt;
+      // Same fixed grid as the host's Arcade world: sliding along rock seams and the corner
+      // assist then resolve identically in live prediction, host simulation and replay.
+      this.stepRemainderMs += dt;
+      while (this.active && this.stepRemainderMs >= stepMs - 1e-6) {
+        if (this.history.length >= LOCAL_MOVEMENT_PREDICTION.maxHistoryEntries
+          || (this.history.length + 1) * stepMs > LOCAL_MOVEMENT_PREDICTION.maxHistoryMs) { this.hold(); break; }
+        this.stepRemainderMs = Math.max(0, this.stepRemainderMs - stepMs);
+        const sample: MovementSample = { sequence: this.sequence, index: this.sequenceSteps++,
+          dx: input.dx, dy: input.dy, speed: this.speed };
+        this.body.step(sample.dx, sample.dy, sample.speed, stepMs);
+        this.history.push(sample);
+      }
+      if (this.active && this.stepRemainderMs > 1e-6 && (input.dx !== 0 || input.dy !== 0)) {
+        // Present the unfinished step without delaying input; the body returns to the grid.
+        const gridX = this.body.x, gridY = this.body.y;
+        this.body.step(input.dx, input.dy, this.speed, this.stepRemainderMs);
+        partialX = this.body.x - gridX; partialY = this.body.y - gridY;
+        this.body.reset(gridX, gridY);
+      }
+      this.moving = Math.hypot(this.body.x + partialX - x, this.body.y + partialY - y) > 0.001;
     }
     const decay = Math.exp(-dt / NET_SMOOTH_TIME_MS);
     this.offsetX *= decay; this.offsetY *= decay;
     if (!this.body.canCorrectTo(this.body.x + this.offsetX, this.body.y + this.offsetY)) {
       this.offsetX = 0; this.offsetY = 0; discontinuity = true;
     }
-    this.body.present(this.offsetX, this.offsetY, this.moving, discontinuity);
+    this.body.present(this.offsetX + partialX, this.offsetY + partialY, this.moving, discontinuity);
+  }
+
+  private hold(): void {
+    this.active = false; this.holding = true;
+    this.stepRemainderMs = 0;
   }
 
   destroy(): void { this.reset(); this.body = null; this.destroyed = true; }

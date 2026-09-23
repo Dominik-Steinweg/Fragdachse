@@ -1,3 +1,4 @@
+import { isPlasmaBurnerPulseEvent } from '../combat/plasmaBurner/PlasmaBurnerContracts';
 import { sanitizePersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../persistentBase/PersistentBaseLayoutEdit';
 import { isPersistentBaseAreaStage, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
@@ -430,16 +431,17 @@ function decodeSlimeTrailSnapshot(raw: unknown): SyncedSlimeTrailSnapshot {
 
 type EncodedTargetVulnerability = [string, string, number];
 
-function encodeSmokeTargets(entries: readonly import('../types').SyncedSmokeTargetStatus[]): [string, number, number][] {
-  return entries.map(entry => [entry.enemyId, entry.confusedUntil, entry.chargedUntil]);
+function encodeSmokeTargets(entries: readonly import('../types').SyncedSmokeTargetStatus[]): [string, number, number, number][] {
+  return entries.map(entry => [entry.enemyId, entry.confusedUntil, entry.chargedUntil, Math.round(entry.confusionIntensity * 100)]);
 }
 
 function decodeSmokeTargets(raw: unknown): import('../types').SyncedSmokeTargetStatus[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap(entry => {
-    if (!Array.isArray(entry) || entry.length !== 3 || typeof entry[0] !== 'string'
-      || !Number.isFinite(entry[1]) || !Number.isFinite(entry[2])) return [];
-    return [{ enemyId: entry[0], confusedUntil: entry[1], chargedUntil: entry[2] }];
+    if (!Array.isArray(entry) || entry.length !== 4 || typeof entry[0] !== 'string'
+      || !Number.isFinite(entry[1]) || !Number.isFinite(entry[2]) || !Number.isFinite(entry[3])) return [];
+    return [{ enemyId: entry[0], confusedUntil: entry[1], chargedUntil: entry[2],
+      confusionIntensity: Math.max(0, Math.min(1, entry[3] / 100)) }];
   });
 }
 
@@ -3840,6 +3842,17 @@ export class NetworkBridge {
   registerShotFxHandler(cb: (event: WeaponShotFeedbackEvent) => void): void {
     this.registerAllRpcHandler('sfx', async (data: unknown): Promise<unknown> => {
       if (this.acceptsWorldRpc(data) && isWeaponShotFeedbackEvent(data)) cb(data);
+      return undefined;
+    });
+  }
+
+  broadcastPlasmaBurnerPulse(event: import('../combat/plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerPulseEvent): void {
+    this.broadcastGameplayEvent('pbfx', { ...event, wr: this.getCurrentWorldRevision() });
+  }
+
+  registerPlasmaBurnerPulseHandler(handler: (event: import('../combat/plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerPulseEvent) => void): void {
+    this.registerAllRpcHandler('pbfx', async (data: unknown) => {
+      if (this.acceptsWorldRpc(data) && isPlasmaBurnerPulseEvent(data)) handler(data);
       return undefined;
     });
   }

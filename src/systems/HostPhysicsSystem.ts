@@ -3,7 +3,7 @@ import * as Phaser from 'phaser';
 import { isMissionBarrierBody } from './CoopDefenseMissionBarrierManager';
 import { PlayerMovementAcknowledgements } from './PlayerMovementAcknowledgements';
 import { collidePlayerWater, resolveWalkingVelocity } from './PlayerMovement';
-import type { BurrowPhase, PlayerMovementPredictionState } from '../types';
+import type { BurrowPhase, PlayerInput, PlayerMovementPredictionState } from '../types';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { WaterGeometry } from '../arena/WaterGeometry';
 import type { EnemyEntity } from '../entities/EnemyEntity';
@@ -90,6 +90,15 @@ interface RecentImpulseSource {
   expiresAt: number;
 }
 
+interface WalkingStep {
+  dx: number;
+  dy: number;
+  /** Host-resolved walking speed including the frame's time-bubble factor. */
+  speed: number;
+  assisted: boolean;
+  positionRevision: number;
+}
+
 interface ForcedMovement {
   vx: number;
   vy: number;
@@ -98,13 +107,22 @@ interface ForcedMovement {
 export class HostPhysicsSystem {
   private readonly movementAcknowledgements = new PlayerMovementAcknowledgements();
   private movementPhysicsWorld: Phaser.Physics.Arcade.World | null = null;
+  /** Ordinary walking of this frame, re-resolved before every fixed step (see consumeMovementStep). */
+  private readonly walkingSteps = new Map<string, WalkingStep>();
   private readonly consumeMovementStep = (deltaSeconds: number): void => {
     if (!this.bridge.isHost()) return;
     for (const player of this.playerManager.getAllPlayers()) {
       const body = player.physicsProxy.body as Phaser.Physics.Arcade.Body | null;
-      if (player.active && body?.enable) {
-        this.movementAcknowledgements.consume(player.id, player.positionRevision, deltaSeconds * 1000);
-      }
+      if (!player.active || !body?.enable) continue;
+      this.movementAcknowledgements.consume(player.id, player.positionRevision, deltaSeconds * 1000);
+      // Client prediction resolves the walking rule from the pose before each fixed step. The
+      // host must do the same instead of letting a render frame's later steps reuse a velocity
+      // chosen from an older pose and already clipped by Arcade's collision response.
+      const walking = this.walkingSteps.get(player.id);
+      if (!walking || walking.positionRevision !== player.positionRevision) continue;
+      resolveWalkingVelocity(body.center.x, body.center.y, walking.dx, walking.dy, walking.speed,
+        this.worldMetrics, walking.assisted ? this.assistedMovementBlocked : null, this.gridCornerAssistOutput);
+      body.setVelocity(this.gridCornerAssistOutput.dx, this.gridCornerAssistOutput.dy);
     }
   };
   private readonly commitMovementStep = (): void => {
@@ -113,6 +131,11 @@ export class HostPhysicsSystem {
       if (player.active && player.physicsProxy.body) this.movementAcknowledgements.commit(player.id, player);
     }
   };
+
+  private interruptMovement(id: string): void {
+    this.movementAcknowledgements.interrupt(id);
+    this.walkingSteps.delete(id);
+  }
 
   getMovementPredictionState(id: string, now = Date.now()): PlayerMovementPredictionState | undefined {
     const player = this.playerManager.getPlayer(id);
@@ -124,7 +147,7 @@ export class HostPhysicsSystem {
       || (this.burrowSystem?.getPhase?.(id) ?? 'idle') !== 'idle'
       || this.dashStates.has(id) || this.mountedPlayers.has(id) || this.forcedMovement.has(id)
       || this.pendingRecoils.has(id) || this.loadoutManager?.getHeldSelfPushVelocity(id, now))) {
-      this.movementAcknowledgements.interrupt(id);
+      this.interruptMovement(id);
       return this.movementAcknowledgements.snapshot(id, player);
     }
     return state;
@@ -215,7 +238,7 @@ export class HostPhysicsSystem {
   setPlayerMounted(id: string, position: { x: number; y: number } | null): void {
     const player = this.playerManager.getPlayer(id);
     if (position) {
-      if (!this.mountedPlayers.has(id)) this.movementAcknowledgements.interrupt(id);
+      if (!this.mountedPlayers.has(id)) this.interruptMovement(id);
       this.mountedPlayers.set(id, { x: position.x, y: position.y });
       this.pendingRecoils.delete(id);
       this.recentImpulseSources.delete(id);
@@ -284,6 +307,7 @@ export class HostPhysicsSystem {
       this.scene.events.off('postupdate', this.commitMovementStep);
       this.movementPhysicsWorld = null;
       this.movementAcknowledgements.clear();
+      this.walkingSteps.clear();
     }
   }
   private waterGeometry: WaterGeometry | null = null;
@@ -297,6 +321,11 @@ export class HostPhysicsSystem {
     this.waterGeometry = water?.water.length ? water : null;
     this.waterPhysicsWorld = this.waterGeometry ? this.scene.physics.world : null;
     this.waterPhysicsWorld?.on('worldstep', this.collideWater);
+    // Walking re-resolution reads the completed step pose, including the water pass.
+    if (this.movementPhysicsWorld && this.waterPhysicsWorld) {
+      this.movementPhysicsWorld.off('worldstep', this.consumeMovementStep);
+      this.movementPhysicsWorld.on('worldstep', this.consumeMovementStep);
+    }
   }
 
   private readonly collideWater = (): void => {
@@ -368,7 +397,7 @@ export class HostPhysicsSystem {
     if (this.mountedPlayers.has(playerId)) return;
     const knockbackFactor = this.enemyManager?.getEnemy(playerId)?.getKnockbackFactor() ?? 1;
     if (knockbackFactor <= 0) return;
-    this.movementAcknowledgements.interrupt(playerId);
+    this.interruptMovement(playerId);
 
     const startMs = Date.now();
     const impulses = this.pendingRecoils.get(playerId) ?? [];
@@ -395,7 +424,7 @@ export class HostPhysicsSystem {
 
   setForcedMovement(playerId: string, vx: number, vy: number): void {
     if (this.mountedPlayers.has(playerId)) return;
-    if (!this.forcedMovement.has(playerId)) this.movementAcknowledgements.interrupt(playerId);
+    if (!this.forcedMovement.has(playerId)) this.interruptMovement(playerId);
     this.forcedMovement.set(playerId, { vx, vy });
   }
 
@@ -545,7 +574,7 @@ export class HostPhysicsSystem {
     // Surface speed is the baseline for both variants; underground speed never stacks here.
     const vNorm = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * speedMult * dashRangeMultiplier;
 
-    this.movementAcknowledgements.interrupt(playerId);
+    this.interruptMovement(playerId);
 
     this.dashStates.set(playerId, {
       id: ++this.dashSequence,
@@ -602,7 +631,7 @@ export class HostPhysicsSystem {
    * Wird von BurrowSystem beim Betreten/Verlassen des Burrow-Zustands aufgerufen.
    */
   setPlayerBurrowed(id: string, burrowed: boolean): void {
-    if (burrowed !== this.burrowedPlayers.has(id)) this.movementAcknowledgements.interrupt(id);
+    if (burrowed !== this.burrowedPlayers.has(id)) this.interruptMovement(id);
     if (burrowed) {
       this.burrowedPlayers.add(id);
     } else {
@@ -679,6 +708,7 @@ export class HostPhysicsSystem {
    */
   removePlayer(id: string): void {
     this.movementAcknowledgements.remove(id);
+    this.walkingSteps.delete(id);
     this.mountedPlayers.delete(id);
     const colliders = this.playerColliders.get(id);
     if (colliders) {
@@ -712,6 +742,15 @@ export class HostPhysicsSystem {
     this.forcedMovement.delete(id);
   }
 
+  private recordWalkingStep(id: string, predictable: boolean, input: PlayerInput | undefined,
+    speed: number, assisted: boolean, positionRevision: number): void {
+    if (!predictable || !input) { this.walkingSteps.delete(id); return; }
+    let walking = this.walkingSteps.get(id);
+    if (!walking) this.walkingSteps.set(id, walking = { dx: 0, dy: 0, speed: 0, assisted: false, positionRevision: 0 });
+    walking.dx = input.dx; walking.dy = input.dy; walking.speed = speed;
+    walking.assisted = assisted; walking.positionRevision = positionRevision;
+  }
+
   // ── Frame-Update ─────────────────────────────────────────────────────────
 
   /**
@@ -734,6 +773,7 @@ export class HostPhysicsSystem {
       const movementInput = this.bridge.getPlayerInput(player.id);
       let predictable = false;
       let walkingSpeed = 0;
+      let walkingAssisted = false;
       try {
         const mounted = this.mountedPlayers.get(player.id);
         if (mounted) { this.setPlayerMounted(player.id, mounted); continue; }
@@ -921,10 +961,12 @@ export class HostPhysicsSystem {
         const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id, now) ?? 1;
         const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * ((this.walkingSpeedMultiplierResolver?.(player.id, now) ?? 1) * (1 + (this.zeusMoveBonus?.(player.id, now) ?? 0)));
 
-        resolveWalkingVelocity(player.x, player.y, movementInput?.dx ?? 0, movementInput?.dy ?? 0,
-          speed, this.worldMetrics,
-          !this.burrowSystem?.isBurrowed(player.id) && (this.movementBlockedCellResolver || this.waterGeometry)
-            ? this.assistedMovementBlocked : null, this.gridCornerAssistOutput);
+        walkingAssisted = !this.burrowSystem?.isBurrowed(player.id)
+          && !!(this.movementBlockedCellResolver || this.waterGeometry);
+        // The body already holds this frame's completed steps; the proxy only follows at POST_UPDATE.
+        resolveWalkingVelocity(playerBody.center.x, playerBody.center.y, movementInput?.dx ?? 0,
+          movementInput?.dy ?? 0, speed, this.worldMetrics,
+          walkingAssisted ? this.assistedMovementBlocked : null, this.gridCornerAssistOutput);
         baseVx = this.gridCornerAssistOutput.dx;
         baseVy = this.gridCornerAssistOutput.dy;
 
@@ -951,6 +993,7 @@ export class HostPhysicsSystem {
       } finally {
         this.movementAcknowledgements.select(player.id, player.positionRevision,
           movementInput?.movementSequence, walkingSpeed, predictable);
+        this.recordWalkingStep(player.id, predictable, movementInput, walkingSpeed, walkingAssisted, player.positionRevision);
       }
     }
 

@@ -195,18 +195,3 @@ export function resolvePlasmaSwarmRadialAngles(
 export function canTriggerPlasmaSwarm(source: PlasmaSwarmSourceFlags | undefined): boolean {
   return source?.plasmaSwarmEnabled === true && source.plasmaSwarmProjectile !== true;
 }
-
-/**
- * Prevents a swarm projectile from being consumed by the enemy it spawned inside.
- * The guard is cleared by the collision loop once the projectile has left that hitbox.
- */
-export function shouldIgnorePlasmaSwarmOriginHit(
-  source: PlasmaSwarmSourceFlags | undefined,
-  originEnemyId: string | undefined,
-  targetEnemyId: string,
-  hasExitedOrigin: boolean,
-): boolean {
-  return source?.plasmaSwarmProjectile === true
-    && originEnemyId === targetEnemyId
-    && !hasExitedOrigin;
-}

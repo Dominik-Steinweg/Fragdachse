@@ -546,7 +546,7 @@ export function getCoopDefenseResolvedEffectTotals(
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
 ): CoopDefenseResolvedEffectTotals {
   const safeProfile = getSanitizedProfile(profile, classId);
-  const additive: Record<string, number> = {};
+  const additive: Record<string, number> = { ...getCoopDefenseClassDefinition(classId).intrinsicStats };
   const percentage: Record<string, number> = {};
 
   for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {

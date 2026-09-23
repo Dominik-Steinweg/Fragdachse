@@ -1,3 +1,8 @@
+import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { resolvePlasmaBurnerStats } from '../src/loadout/PlasmaBurnerConfig';
+import { burnerRules, target } from './PlasmaBurnerTestFixture';
+import type { PlasmaBurnerPulseRequest } from '../src/combat/plasmaBurner/PlasmaBurnerContracts';
+import type { PlasmaBurnerTarget } from '../src/combat/plasmaBurner/PlasmaBurnerTargetPolicy';
 import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -264,6 +269,7 @@ function makeCombatHarness() {
   const bridge = {
     isHost: vi.fn(() => true),
     broadcastHitscanTracer: vi.fn(),
+    broadcastPlasmaBurnerPulse: vi.fn(),
     broadcastMeleeSwing: vi.fn(),
   } as unknown as NetworkBridge;
   const combat = new CombatSystem(
@@ -294,10 +300,12 @@ function makeSupportCombatHarness() {
   const bridge = {
     isHost: vi.fn(() => true),
     getPlayerProfile: vi.fn(() => undefined),
+    getLatestGameState: () => undefined,
     areTeammates: vi.fn((first: string, second: string) => first === 'shooter' && second === 'ally'),
     broadcastAudioFeedback: vi.fn(),
     broadcastEffect: vi.fn(),
     broadcastHitscanTracer: vi.fn(),
+    broadcastPlasmaBurnerPulse: vi.fn(),
   } as unknown as NetworkBridge;
   const playerManager = {
     getAllPlayers: () => players,
@@ -310,7 +318,7 @@ function makeSupportCombatHarness() {
     getWeaponDamageMultiplier: () => 1,
   });
   combat.setPowerUpSystem({ getDamageMultiplier: () => 1, removePlayer: () => {} });
-  return { combat, players };
+  return { combat, players, bridge };
 }
 
 describe('CombatSystem base damage routing', () => {
@@ -925,20 +933,18 @@ describe('Plasmabrenner hitscan support impact', () => {
     combat.setBaseObstacles([{ active: true, getData: () => 'hostile-base',
       getBounds: () => new Phaser.Geom.Rectangle(250, -10, 20, 20) }] as never);
     const callback = vi.fn(); // Full HP: support applies no repair, but still consumes the beam.
-    combat.setHitscanSupportImpactCallback(callback);
-    resolveHitscan(combat, 'player-1', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
-      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect);
+    bindBurner(combat, callback, callback);
+    pulse(combat, 'player-1');
     expect(callback).toHaveBeenCalledOnce();
-    expect(callback.mock.calls[0][0]).toMatchObject({ targetType: 'rock', targetId: '0', x: 120 });
+    expect(callback.mock.calls[0][0]).toMatchObject({ kind: 'construction', id: '0', x: 120 });
     expect(combat.traceHitscan({ shooterId: 'player-1', startX: 0, startY: 0, angle: 0, range: 420, traceThickness: 5 }))
       .toMatchObject({ hitObstacleKind: 'base', hitBaseId: 'hostile-base', endX: 250 });
     combat.setBaseObstacles([{ active: true, getData: () => 'hostile-base',
       getBounds: () => new Phaser.Geom.Rectangle(60, -10, 20, 20) }] as never);
     callback.mockClear();
-    resolveHitscan(combat, 'player-1', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
-      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect);
+    pulse(combat, 'player-1');
     expect(callback).toHaveBeenCalledOnce();
-    expect(callback.mock.calls[0][0]).toMatchObject({ targetType: 'base', targetId: 'hostile-base', x: 60 });
+    expect(callback.mock.calls[0][0]).toMatchObject({ kind: 'base', id: 'hostile-base' });
   });
 
   it('does not rewind the shooter into its own support trace while moving backwards', () => {
@@ -1019,6 +1025,7 @@ describe('Plasmabrenner hitscan support impact', () => {
 
   it('heals allies and damages enemies through the normal damage path', () => {
     const { combat } = makeSupportCombatHarness();
+    bindBurner(combat);
     combat.applyDamage('ally', 40, false, 'enemy', 'test');
     combat.applyDamage('victim', 40, false, 'shooter', 'test');
 
@@ -1032,10 +1039,7 @@ describe('Plasmabrenner hitscan support impact', () => {
       hitDecoyId: null,
       hitObstacle: false,
     }));
-    resolveHitscan(combat,
-      'shooter', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
-      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
-    );
+    pulse(combat);
     expect(combat.getHP('ally')).toBe(85);
 
     internals.traceHitscan.mockReturnValue({
@@ -1048,17 +1052,14 @@ describe('Plasmabrenner hitscan support impact', () => {
       hitObstacle: false,
     });
     combat.setTargetIncomingDamageMultiplierResolver((target) => target.targetType === 'player' ? 1.2 : 1);
-    resolveHitscan(combat,
-      'shooter', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
-      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
-    );
+    pulse(combat);
     expect(combat.getHP('victim')).toBe(30);
   });
 
   it('reports an actual base collision surface to the host support callback', () => {
     const { combat } = makeCombatHarness();
     const callback = vi.fn();
-    combat.setHitscanSupportImpactCallback(callback);
+    bindBurner(combat, callback, callback);
     const internals = combat as unknown as { traceHitscan: ReturnType<typeof vi.fn> };
     internals.traceHitscan = vi.fn(() => ({
       endX: 100,
@@ -1070,15 +1071,110 @@ describe('Plasmabrenner hitscan support impact', () => {
       hitObstacle: true,
       hitObstacleKind: 'base',
     }));
-    resolveHitscan(combat,
-      'player-1', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
-      'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
-    );
+    pulse(combat, 'player-1');
     expect(callback).toHaveBeenCalledWith(
-      { targetType: 'base', targetId: 'hostile-base', x: 100, y: 0 },
-      effect,
+      expect.objectContaining({ kind: 'base', id: 'hostile-base', x: 100, y: 0 }),
+      25,
       'player-1',
       'weapon2',
+      1,
     );
+  });
+});
+
+function bindBurner(combat: CombatSystem, repair = vi.fn(() => 0), damage = vi.fn(() => 0)) {
+  combat.setPlasmaBurnerTargetCatalog({
+    read: (key,owner,x,y) => {
+      const [kind,id] = key.split(':');
+      const isPlayer=kind==='player';
+      const supportable=isPlayer ? combat.canSupportPlasmaBurnerTarget(owner,id) : kind==='rock';
+      return {key:kind==='rock'?'construction:'+id:key,kind:kind==='rock'?'construction':kind,
+        id,category:isPlayer?'combatant':'structure',x:kind==='rock'?120:100,y:0,
+        alive:true,hp:isPlayer?combat.getHP(id):100,maxHp:100,self:id===owner,automatic:true,
+        supportable,damageable:!supportable} as PlasmaBurnerTarget;
+    },query:()=>[],
+  });
+  combat.setPlasmaBurnerStructurePort({repair,damage,damageBase:damage});
+}
+function pulse(combat: CombatSystem, playerId='shooter', patch: Partial<PlasmaBurnerPulseRequest> = {}) {
+  const config={...WEAPON_CONFIGS.PLASMA_BURNER,range:420,fire:{...WEAPON_CONFIGS.PLASMA_BURNER.fire,
+    type:'hitscan' as const, traceThickness:5,supportEffect:{type:'plasma_burner' as const,healPerHit:25,damagePerHit:25,beamColor:0x5cf58f}}};
+  return combat.resolvePlasmaBurnerPulse({playerId,config,nowMs:1000,x:0,y:0,angle:0,targetX:420,targetY:0,
+    stats:resolvePlasmaBurnerStats({...burnerRules,chainEnabled:0,targetLockLevel:0}),multiplier:1,chainMemberKeys:[],lock:null,sourceSlot:'weapon2',...patch});
+}
+
+describe('Plasmabrenner authoritative pulse contracts',()=>{
+  it('reports partial healing and rock damage using actual mutation amounts',()=>{
+    const {combat}=makeSupportCombatHarness();bindBurner(combat);
+    combat.applyDamage('ally',1,false,'victim','test');
+    const healed=pulse(combat);
+    expect(healed.contacts[0]).toMatchObject({effectiveAmount:1,fx:2});
+    expect(combat.getHP('ally')).toBe(100);
+    const damage=vi.fn(()=>4),repair=vi.fn();
+    combat.setPlasmaBurnerTargetCatalog({read:()=>null,query:()=>[]});
+    combat.setPlasmaBurnerStructurePort({damage,repair,damageBase:vi.fn()});
+    vi.spyOn(combat,'traceHitscan').mockReturnValue({endX:50,endY:0,distance:50,hitPlayerId:null,hitEnemyId:null,hitDecoyId:null,
+      hitObstacle:true,hitObstacleKind:'rock',hitObstacleIndex:7});
+    const config={...WEAPON_CONFIGS.PLASMA_BURNER,rockDamageMult:3};
+    const rock=pulse(combat,'shooter',{config,multiplier:2});
+    expect(damage).toHaveBeenCalledWith(expect.objectContaining({category:'environment',id:'7'}),30,'shooter','weapon2');
+    expect(repair).not.toHaveBeenCalled();expect(rock.contacts[0]).toMatchObject({effectiveAmount:4,fx:1});
+  });
+  it('chains from a healthy direct ally, applies 70% once per secondary and heals the inspector',()=>{
+    const {combat,players}=makeSupportCombatHarness();
+    combat.applyDamage('shooter',50,false,'victim','test');
+    const read=(key:string,owner:string)=>{
+      const id=key.slice(key.indexOf(':')+1),p=players.find(p=>p.id===id);if(!p)return null;
+      const friendly=id==='shooter'||id==='ally';
+      return {id,key,kind:'player' as const,category:'combatant' as const,x:p.x,y:p.y,hp:combat.getHP(id),maxHp:100,
+        alive:combat.isAlive(id),damageable:!friendly,supportable:friendly,self:id===owner,automatic:true};
+    };
+    combat.setPlasmaBurnerTargetCatalog({read,query:owner=>players.map(p=>read('player:'+p.id,owner)!)});
+    const result=pulse(combat,'shooter',{stats:resolvePlasmaBurnerStats({...burnerRules,cascadeLevel:1,couplingLevel:1})});
+    expect(result.contacts.map(c=>c.target.id)).toEqual(['ally','victim','shooter']);
+    expect(result.contacts.map(c=>c.effectiveAmount)).toEqual([0,17.5,17.5]);
+    expect(combat.getHP('shooter')).toBe(67.5);expect(combat.getHP('victim')).toBe(82.5);
+  });
+  it('preserves portal range, scales only damage and never locks through a portal route',()=>{
+    const {combat,players,bridge}=makeSupportCombatHarness();bindBurner(combat);
+    const pair={id:'portal',ownerId:'shooter',a:{x:50,y:0},b:{x:500,y:0},radius:10,reentryDistance:20,damageBonus:.5,createdAt:0,expiresAt:5000};
+    combat.setPortalQueryPort({getPortalPairs:()=>[pair],isPortalFriendly:()=>true});
+    Object.assign(players[1],{x:560,y:0});Object.assign(players[2],{x:1000,y:100});
+    combat.applyDamage('ally',50,false,'victim','test');
+    const healing=pulse(combat,'shooter',{stats:resolvePlasmaBurnerStats({...burnerRules,chainEnabled:0})});
+    expect(healing.contacts).toHaveLength(1);expect(healing.contacts[0].effectiveAmount).toBe(25);
+    expect(healing.lock).toBeNull();expect(vi.mocked(bridge.broadcastPlasmaBurnerPulse).mock.lastCall?.[0].p).toBe(2);
+    Object.assign(players[1],{x:1000,y:100});Object.assign(players[2],{x:560,y:0});
+    const damage=pulse(combat);expect(damage.contacts[0].effectiveAmount).toBe(37.5);
+    Object.assign(players[2],{x:1000,y:200});pulse(combat);
+    const event=vi.mocked(bridge.broadcastPlasmaBurnerPulse).mock.lastCall![0];
+    expect(event.p).toBe(2);expect(event.s.reduce((sum,[sx,sy,ex,ey])=>sum+Math.hypot(ex-sx,ey-sy),0)).toBeCloseTo(420);
+  });
+  it('reads a portal structure anchor from the final beam section', () => {
+    const { combat } = makeSupportCombatHarness();
+    const read = vi.fn(() => null);
+    combat.setPlasmaBurnerTargetCatalog({ read, query: () => [] });
+    const trace = { endX: 600, endY: 0, distance: 80, hitPlayerId: null, hitEnemyId: null,
+      hitDecoyId: null, hitObstacle: true, hitObstacleKind: 'rock' as const, hitObstacleIndex: 7 };
+    vi.spyOn(combat, 'traceHitscanPath').mockReturnValue([
+      { startX: 0, startY: 0, trace: { ...trace, endX: 50, hitObstacle: false } },
+      { startX: 520, startY: 0, trace },
+    ]);
+    pulse(combat);
+    expect(read).toHaveBeenCalledWith('rock:7', 'shooter', 520, 0);
+  });
+  it('a rock on the mouse ray does not displace a straight lock, while a healthy direct ally does',()=>{
+    const {combat}=makeSupportCombatHarness();bindBurner(combat);
+    combat.setPlasmaBurnerTargetCatalog({read:key=>key.startsWith('rock:')?null:target(key.slice(7),100,{hp:combat.getHP(key.slice(7)),damageable:key!=='player:ally',supportable:key==='player:ally'}),query:()=>[]});
+    const trace=vi.spyOn(combat,'traceHitscan');
+    const blank={endX:100,endY:0,distance:100,hitPlayerId:null,hitEnemyId:null,hitDecoyId:null,hitObstacle:false};
+    trace.mockImplementation(options=> options.angle===0 ? {...blank,hitPlayerId:'victim'}
+      : {...blank,endY:5,hitObstacle:true,hitObstacleKind:'rock',hitObstacleIndex:0});
+    const stats=resolvePlasmaBurnerStats({...burnerRules,chainEnabled:0});
+    const held=pulse(combat,'shooter',{angle:.05,lock:'player:victim',stats,targetY:20});
+    expect(held.contacts[0].target.id).toBe('victim');expect(held.lock).toBe('player:victim');
+    trace.mockReturnValue({...blank,hitPlayerId:'ally'});
+    const replaced=pulse(combat,'shooter',{lock:'player:victim',stats});
+    expect(replaced.contacts[0]).toMatchObject({target:{id:'ally'},effectiveAmount:0});expect(replaced.lock).toBeNull();
   });
 });

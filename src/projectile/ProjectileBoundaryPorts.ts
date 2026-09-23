@@ -42,6 +42,8 @@ export interface ProjectileTrainBindingPort {
 
 /** World-owned effects produced by a projectile contact. */
 export interface ProjectileWorldImpactBindingPort {
+  setPlasmaBurnerSupportPorts(catalog: import('../combat/plasmaBurner/PlasmaBurnerTargetPolicy').PlasmaBurnerTargetCatalogPort | null,
+    impact: import('./ProjectileSupportImpactPort').ProjectileSupportImpactPort | null): void;
   setLowSupportTargetChecker(checker: ((rockId: number, ownerId: string) => boolean) | null): void;
   setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void;
   setObstacleKindResolver(resolver: ((rockId: number) => import('../types').PlaceableKind | undefined) | null): void;

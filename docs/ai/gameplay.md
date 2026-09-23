@@ -133,6 +133,17 @@ bleiben getrennte Dimensionen. Combat-, World- und Explosion-Ports lassen fremde
 Domain-Ownern. Replication, Client-Replica und Presentation sind abgeleitete World-Ressourcen ohne
 Projectile-Gameplay-Authority.
 
+`lineage.originTarget` bezeichnet mit `{ kind, id }` ein temporär ausgenommenes Ursprungsziel,
+unabhängig von Waffe und Zielart. Nur dieses Ziel bleibt bis zum vollständigen Körperaustritt
+kontaktgesperrt; fremde Hindernisse behalten ihre Wirkung. `contacts.originExited` wird erst nach
+Figurenkontakten und World-Sweeps freigegeben, damit auch die Austrittsfläche im selben Schritt
+geschützt bleibt. Basisursprünge nutzen zusätzlich die bestehende `sourceCarrierBaseId`-Geometrie.
+Die Freigabe ist endgültig: Ein späterer Wiedereintritt darf treffen. Homing darf den Ursprung
+bis zum Austritt nicht erfassen und kann ihn danach als Rückfallziel behandeln; die Lineage
+erteilt selbst weder Zielberechtigung noch Schadens- oder Heilwirkung. Geprüft in
+[`WorldProjectileRuntime.test.ts`](../../tests/WorldProjectileRuntime.test.ts) und
+[`ProjectileCollisionSearch.test.ts`](../../tests/ProjectileCollisionSearch.test.ts).
+
 Nicht-penetrierende Geschosse mit aktivem Zell-Sweep erhalten weder Arcade-Rock- noch Arcade-Base-Collider.
 Auch die generische Combat-Zielaufloesung laesst diese Kontakte dem Runtime-Sweep.
 BaseEntity-Zellkoerper (einschliesslich persistenter Basiszellen) sind im Index OBSTACLE_BASE,

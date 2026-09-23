@@ -32,7 +32,6 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
 import { hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
-import type { HitscanSupportImpact } from '../../combat/WorldCombatCore';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
@@ -865,6 +864,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const playerFrame = this.playerGameplayRuntime?.getHostPlayerFrameReadModel(localId, now, isMovingLocal);
       const aimLocal      = playerFrame?.aim ?? this.getDefaultAimState(isMovingLocal);
       this.ctx.inputSystem.syncRocketMagazineState?.(playerFrame?.rocketMagazine);
+      this.ctx.aimSystem?.setPlasmaBurnerOverloadState(playerFrame?.plasmaBurnerOverload);
       this.ctx.aimSystem?.setAuthoritativeState(aimLocal);
       this.ctx.inputSystem.setLocalDecoyActive(this.ctx.decoySystem.hasActiveDecoy(localId));
       this.ctx.inputSystem.setLocalState(
@@ -1097,6 +1097,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         turretControl: playerFrame?.turretControl,
         ...this.ctx.getWorldCombatCore()!.getRocketSupportState(player.id, now),
         rocketMagazine: playerFrame?.rocketMagazine,
+        plasmaBurnerOverload: playerFrame?.plasmaBurnerOverload,
         positionRevision: player.positionRevision,
         movementPrediction: this.ctx.hostPhysics.getMovementPredictionState(player.id, now),
         x: player.x,
@@ -1936,95 +1937,6 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
 
   /** Host-authoritative Kontextwirkung eines Plasmabrenner-Hitscans. */
-  applyHitscanSupportImpact(
-    impact: HitscanSupportImpact,
-    effect: HitscanSupportEffect,
-    attackerId: string,
-    sourceSlot?: LoadoutSlot,
-  ): void {
-    if (impact.targetType === 'player') {
-      // WorldCombatCore hat die Heilung bereits angewendet; hier wird nur der replizierte
-      // Regenerationsimpuls erzeugt. Friendly Fire kann so auch bei fehlerhaften Clients
-      // nicht aus dem VFX-Pfad entstehen.
-      if (!bridge.isEnemyPair(attackerId, impact.targetId)) {
-        this.emitRegenerationEffect(impact.x, impact.y, effect.beamColor);
-      }
-      return;
-    }
-
-    this.applySupportStructureImpact(
-      attackerId,
-      impact.targetType,
-      impact.targetId,
-      impact.x,
-      impact.y,
-      effect,
-      sourceSlot,
-    );
-  }
-
-  private applySupportStructureImpact(
-    attackerId: string,
-    targetType: 'rock' | 'base',
-    targetId: string,
-    x: number,
-    y: number,
-    effect: HitscanSupportEffect,
-    sourceSlot?: LoadoutSlot,
-  ): void {
-    if (targetType === 'rock') {
-      const rockId = Number(targetId);
-      if (!Number.isInteger(rockId) || rockId < 0) return;
-      const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
-      if (!runtimeRock) {
-        const outcome = this.worldMutation?.applyRepair('rock', rockId, effect.healPerHit, attackerId, 'support.plasma_torch');
-        const healed = outcome?.kind === 'support-applied' ? outcome.actualAmount : 0;
-        if (healed > 0) this.emitRegenerationEffect(x, y, effect.beamColor);
-        return;
-      }
-
-      if (!bridge.isEnemyPair(attackerId, runtimeRock.ownerId)) {
-        const outcome = this.worldMutation?.applyRepair('rock', rockId, effect.healPerHit, attackerId, 'support.plasma_torch');
-        const healed = outcome?.kind === 'support-applied' ? outcome.actualAmount : 0;
-        if (healed > 0) this.emitRegenerationEffect(x, y, effect.beamColor);
-        return;
-      }
-
-      if (effect.damagePerHit <= 0) return;
-      const resolvedDamage = this.ctx.getWorldCombatCore()!.resolveExternalTargetDamage(
-        {
-          targetType: runtimeRock.constructionId ? 'construction' : 'rock',
-          targetId: String(runtimeRock.id),
-        },
-        effect.damagePerHit,
-        attackerId,
-        sourceSlot,
-      );
-      this.worldMutation?.applyResolvedDamage(
-        runtimeRock.constructionId ? 'construction' : 'rock', rockId, resolvedDamage,
-        attackerId, 'support.plasma_torch', 'direct', sourceSlot,
-      );
-      return;
-    }
-
-    const base = this.baseManager?.getBase(targetId) ?? this.findNearestBase(x, y);
-    if (!base || base.isInert?.() === true || base.getHp() <= 0) return;
-    if (base.faction === 'friendly') {
-      const healed = this.healBase(base.id, effect.healPerHit, attackerId);
-      if (healed > 0) this.emitRegenerationEffect(x, y, effect.beamColor);
-    } else if (effect.damagePerHit > 0) {
-      // Basisschaden geht ausschliesslich ueber den zentralen Basistrichter, damit
-      // Verwundbarkeit, Matrixschutz und ausgehende Modifikatoren gleich greifen.
-      this.ctx.getWorldCombatCore()!.applyBaseDamage(
-        base.id,
-        effect.damagePerHit,
-        attackerId,
-        sourceSlot,
-        effect.baseDamageMult ?? 1,
-      );
-    }
-  }
-
   /**
    * Hindernistreffer eines Energieinjektor-Projektils.
    * Wird vom world-scoped Projectile-Physics-Binding aus dem Fels- bzw. Basis-Collider gemeldet,

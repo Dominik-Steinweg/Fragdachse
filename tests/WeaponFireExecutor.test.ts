@@ -18,7 +18,7 @@ describe('WeaponFireExecutor hitscan gameplay muzzle', () => {
       resolveMelee: vi.fn(() => true),
     };
     const executor = new WeaponFireExecutor(sink);
-    const config = WEAPON_CONFIGS.PLASMA_BURNER;
+    const config = genericHitscan;
     const muzzle = getHeldWeaponGameplayMuzzleOrigin(config.id, 100, 200, 0, 32);
     if (!muzzle) throw new Error('Expected an explicit gameplay muzzle for the plasma burner');
 
@@ -54,7 +54,7 @@ describe('WeaponFireExecutor hitscan gameplay muzzle', () => {
       resolveHitscan,
       resolveMelee: vi.fn(() => true),
     });
-    const config = WEAPON_CONFIGS.PLASMA_BURNER;
+    const config = genericHitscan;
     const fallback = getTopDownMuzzleOrigin(100, 200, 0);
 
     executor.fire(config, {
@@ -75,3 +75,6 @@ describe('WeaponFireExecutor hitscan gameplay muzzle', () => {
     });
   });
 });
+
+const burner = WEAPON_CONFIGS.PLASMA_BURNER;
+const genericHitscan = { ...burner, fire: { ...burner.fire, supportEffect: undefined } };

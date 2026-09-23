@@ -106,8 +106,12 @@ zu früh. Unterbrechungen und Positionssprünge invalidieren ältere Historie au
 zwischen zwei Netzwerkticks liegen.
 
 Prediction und Replay verwenden die gemeinsame Laufregel samt Eckhilfe und die aktuelle
-World-Kollisionsgeometrie. Nur der eigene Client-Körper wird aus dem automatischen Arcade-
-Schritt genommen und isoliert fortgeschaltet; Replay darf weder die globale Physik noch
+World-Kollisionsgeometrie. Arcade-Kollision und Eckhilfe hängen von Schrittgröße und
+Ausgangspose ab: Host, Prediction und Replay lösen die Laufgeschwindigkeit deshalb vor jedem
+festen Arcade-Schritt aus der aktuellen Körperpose auf, und der Client zeichnet nur ganze
+Schritte dieses Rasters auf; Restzeit bis zum nächsten Schritt ist reine Darstellung. Nur der
+eigene Client-Körper wird aus dem automatischen Arcade-Schritt genommen und isoliert
+fortgeschaltet; Replay darf weder die globale Physik noch
 Gameplay-Kontakte ausführen. Geometrieänderungen eines Snapshots werden vor der Reconciliation
 angewendet. World-/Entity-Wechsel, Reconnect, Participation-Verlust und Sonderbewegungen
 verwerfen die Historie. Zeit und Umfang unbestätigter Bewegung sind begrenzt.

@@ -80,6 +80,7 @@ class MemoryRepository implements PersistentBaseRepositoryPort {
 }
 
 interface HeadlessBody {
+  center: { x: number; y: number };
   velocity: { x: number; y: number };
   setVelocity: ReturnType<typeof vi.fn>;
 }
@@ -96,13 +97,14 @@ interface HeadlessPlayer {
 
 function createHeadlessPlayer(id: string, x: number, y: number): HeadlessPlayer {
   const body: HeadlessBody = {
+    get center() { return { x: player.x, y: player.y }; },
     velocity: { x: 0, y: 0 },
     setVelocity: vi.fn((vx: number, vy: number) => {
       body.velocity.x = vx;
       body.velocity.y = vy;
     }),
   };
-  return {
+  const player: HeadlessPlayer = {
     id,
     active: true,
     x,
@@ -111,6 +113,7 @@ function createHeadlessPlayer(id: string, x: number, y: number): HeadlessPlayer 
     setDashScale: vi.fn(),
     setCollisionRadius: vi.fn(),
   };
+  return player;
 }
 
 function playerManager(players: Map<string, HeadlessPlayer>): PlayerManager {

@@ -168,3 +168,42 @@ describe('projectile homing against hostile bases', () => {
     expect(projectile.state.lockedTargetType).toBe('decoys');
   });
 });
+
+describe('plasma burner opt-in continuous homing',()=>{
+  const config={...BASE_HOMING,targetPolicy:'plasma_burner' as const,targetTypes:['players','constructions'] as const,
+    maxTurnDegreesPerSecond:90,retargetIntervalMs:200,acquireDelayMs:120,requireLineOfSight:true};
+  it('turns by simulated time after outbound delay, independently of frame size',()=>{
+    const run=(step:number)=>{
+      const c=new ProjectileHomingController(),p=makeProjectile({...config,targetTypes:[...config.targetTypes]});
+      const target={id:'a',type:'players' as const,x:0,y:200};
+      c.setTargetQueryPort({queryTargets:(_c,_o,_x,_y,_r,emit)=>emit(target.id,target.type,target.x,target.y),readTargetPosition:()=>target});
+      c.setLineOfFireReadPort({hasClearLineOfFire:()=>true});
+      for(let age=step;age<620;age+=step)c.update(p,age);c.update(p,620);
+      return Math.atan2(p.kinematics.velocityY,p.kinematics.velocityX);
+    };
+    expect(run(10)).toBeCloseTo(Math.PI/4);expect(run(157)).toBeCloseTo(run(10));
+  });
+  it('keeps valid targets, re-searches upon invalidation and throttles unsuccessful searches',()=>{
+    const c=new ProjectileHomingController(),p=makeProjectile({...config,targetTypes:['players']});
+    let alive=true,available=true;
+    const query=vi.fn((_c,_o,_x,_y,_r,emit)=>{if(available)emit(alive?'a':'b','players',20,20);});
+    c.setTargetQueryPort({queryTargets:query,readTargetPosition:(_c,_o,id)=>alive?{id,type:'players',x:20,y:20}:null});
+    c.setLineOfFireReadPort({hasClearLineOfFire:()=>true});
+    c.update(p,120);c.update(p,400);expect(query).toHaveBeenCalledTimes(1);
+    alive=false;c.update(p,410);expect(p.state.lockedTargetId).toBe('b');expect(query).toHaveBeenCalledTimes(2);
+    available=false;c.update(p,420);c.update(p,430);expect(query).toHaveBeenCalledTimes(3);
+    expect(p.state.lastSteeredAtSimulatedMs).toBe(430);
+  });
+  it('uses the origin only as a fallback after exit and preserves legacy step steering',()=>{
+    const c=new ProjectileHomingController(),p=makeProjectile({...config,targetTypes:['players']});
+    let exited=false,other=true;
+    const request={...p,isTargetAllowed:(id:string)=>id!=='origin'||exited,isTargetClaimed:(id:string)=>id==='origin'};
+    c.setTargetQueryPort({queryTargets:(_c,_o,_x,_y,_r,emit)=>{emit('origin','players',1,0);if(other)emit('other','players',30,0);},readTargetPosition:()=>null});
+    c.update(request,120);expect(p.state.lockedTargetId).toBe('other');
+    exited=true;c.update(request,121);expect(p.state.lockedTargetId).toBe('other');
+    other=false;c.update(request,122);expect(p.state.lockedTargetId).toBe('origin');
+    const legacy=makeProjectile({...BASE_HOMING,targetTypes:['players'],maxTurnDegreesPerStep:10,maxTurnDegreesPerSecond:1,requireLineOfSight:false});
+    c.setTargetQueryPort({queryTargets:(_c,_o,_x,_y,_r,emit)=>emit('up','players',0,200)});
+    c.update(legacy,1,true);expect(Math.atan2(legacy.kinematics.velocityY,legacy.kinematics.velocityX)).toBeCloseTo(Math.PI/18);
+  });
+});

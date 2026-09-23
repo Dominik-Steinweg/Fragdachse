@@ -45,7 +45,7 @@
       "shotFeedbackProfile": "stream",
       "cooldown": 100,
       "damage": 0,
-      "range": 600,
+      "range": 300,
       "fire": {
         "type": "hitscan",
         "traceThickness": 5,
@@ -74,6 +74,62 @@
       "spreadRecoverySpeed": 100,
       "shotAudio": {
         "failureKey": "shot_dry_trigger"
+      },
+      "plasmaBurner": {
+        "overloadEnabled": 0,
+        "chainEnabled": 0,
+        "capacitorLevel": 0,
+        "retentionLevel": 0,
+        "cascadeLevel": 0,
+        "couplingLevel": 0,
+        "chargesLevel": 0,
+        "targetLockLevel": 0,
+        "qMaxByLevel": [
+          100,
+          120,
+          140,
+          160
+        ],
+        "decayPerSecondByLevel": [
+          25,
+          20,
+          16,
+          12.5
+        ],
+        "jumpsByLevel": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "couplingRadiusByLevel": [
+          90,
+          110,
+          130,
+          150
+        ],
+        "intervalSecondsByLevel": [
+          1.2,
+          0.9,
+          0.6
+        ],
+        "toleranceDegreesByLevel": [
+          6,
+          10,
+          14
+        ],
+        "buildPerSecond": 33.3333,
+        "secondaryFactor": 0.7,
+        "secondaryOverloadWeight": 0.5,
+        "contactToleranceMs": 50,
+        "chargeDamage": 12,
+        "chargeHeal": 24,
+        "chargeSearchRadius": 240,
+        "chargeSpeed": 480,
+        "chargeTurnDegreesPerSecond": 720,
+        "chargeLifetimeMs": 1500,
+        "outboundMs": 120,
+        "size": 6
       }
     },
     "ENERGY_INJECTOR": {

@@ -1,3 +1,4 @@
+import type { PlasmaBurnerChargeRenderer } from '../effects/PlasmaBurnerChargeRenderer';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import { ProjectilePathCursor, type ProjectilePathPoint, type ProjectileTrailSegment } from './ProjectileFlightPath';
 import { tracerBounceDebug } from '../effects/TracerBounceDebugSettings';
@@ -91,6 +92,7 @@ export interface ProjectilePresentationRenderers {
   readonly spore: SporeRenderer;
   readonly grenade: GrenadeRenderer;
   readonly translocatorPuck: TranslocatorPuckRenderer;
+  readonly plasmaBurnerCharge?: PlasmaBurnerChargeRenderer;
   readonly teslaBolt: TeslaBoltRenderer;
   readonly tracer: TracerRenderer;
   readonly muzzleFlash: MuzzleFlashRenderer;
@@ -141,6 +143,7 @@ export class ProjectilePresentationRuntime {
   private sporeRenderer: SporeRenderer | null = null;
   private grenadeRenderer: GrenadeRenderer | null = null;
   private translocatorPuckRenderer: TranslocatorPuckRenderer | null = null;
+  private plasmaBurnerChargeRenderer: PlasmaBurnerChargeRenderer | null = null;
   private teslaBoltRenderer: TeslaBoltRenderer | null = null;
   private tracerRenderer: TracerRenderer | null = null;
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
@@ -173,6 +176,7 @@ export class ProjectilePresentationRuntime {
     this.grenadeRenderer = renderers.grenade;
     this.translocatorPuckRenderer = renderers.translocatorPuck;
     this.teslaBoltRenderer = renderers.teslaBolt;
+    this.plasmaBurnerChargeRenderer = renderers.plasmaBurnerCharge ?? null;
     this.tracerRenderer = renderers.tracer;
     this.muzzleFlashRenderer = renderers.muzzleFlash;
     this.turretAnimations = renderers.turretAnimations ?? null;
@@ -244,6 +248,9 @@ export class ProjectilePresentationRuntime {
     }
     if (style === 'tesla_bolt' && this.teslaBoltRenderer) {
       sprite.setVisible(false); sprite.setAlpha(0); this.teslaBoltRenderer.createVisual(id, x, y, cfg.size, cfg.color);
+    }
+    if (style === 'plasma_burner_charge' && this.plasmaBurnerChargeRenderer) {
+      sprite.setVisible(false); sprite.setAlpha(0); this.plasmaBurnerChargeRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
     if (style === 'flame' || style === 'leaf_blower' || style === 'bfg') {
       sprite.setVisible(false); sprite.setAlpha(0);
@@ -344,6 +351,7 @@ export class ProjectilePresentationRuntime {
     this.sporeRenderer?.destroyVisual(projectile.id);
     this.translocatorPuckRenderer?.destroyVisual(projectile.id);
     this.teslaBoltRenderer?.destroyVisual(projectile.id);
+    this.plasmaBurnerChargeRenderer?.destroyVisual(projectile.id);
   }
 
   /** Rebuild cached visuals when a stable ID receives new owner/source appearance metadata. */
@@ -372,6 +380,7 @@ export class ProjectilePresentationRuntime {
     this.grenadeRenderer?.destroyVisual(projectile.id);
     this.translocatorPuckRenderer?.destroyVisual(projectile.id);
     this.teslaBoltRenderer?.destroyVisual(projectile.id);
+    this.plasmaBurnerChargeRenderer?.destroyVisual(projectile.id);
     this.flameRenderer?.destroyVisual(projectile.id);
     this.tracerRenderer?.destroyTracer(projectile.id);
     const fallback = this.clientVisuals.get(projectile.id);
@@ -483,6 +492,12 @@ export class ProjectilePresentationRuntime {
           if (this.teslaBoltRenderer) {
             if (!this.teslaBoltRenderer.has(id)) this.teslaBoltRenderer.createVisual(id, x, y, size, projectile.color);
             this.teslaBoltRenderer.updateVisual(id, x, y, size, vx, vy, projectile.color);
+          }
+          break;
+        case 'plasma_burner_charge':
+          if (this.plasmaBurnerChargeRenderer) {
+            if (!this.plasmaBurnerChargeRenderer.has(id)) this.plasmaBurnerChargeRenderer.createVisual(id, x, y, size, projectile.color);
+            this.plasmaBurnerChargeRenderer.updateVisual(id, x, y, size, vx, vy, projectile.color);
           }
           break;
         default:
@@ -673,6 +688,9 @@ export class ProjectilePresentationRuntime {
       } else if (proj.style === 'tesla_bolt' && this.teslaBoltRenderer) {
         if (!this.teslaBoltRenderer.has(id)) this.teslaBoltRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color);
         this.teslaBoltRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
+      } else if (proj.style === 'plasma_burner_charge' && this.plasmaBurnerChargeRenderer) {
+        if (!this.plasmaBurnerChargeRenderer.has(id)) this.plasmaBurnerChargeRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color);
+        this.plasmaBurnerChargeRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
       } else if (proj.style === 'fireball' && this.fireballRenderer) {
         if (!this.fireballRenderer.has(id)) this.fireballRenderer.createVisual(id, proj.x, proj.y, proj.size);
         this.fireballRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
@@ -773,6 +791,7 @@ export class ProjectilePresentationRuntime {
       if (state?.style === 'tesla_bolt') this.teslaBoltRenderer.playImpact(state.serverX, state.serverY, state.size, state.color);
       this.teslaBoltRenderer.destroyVisual(id);
     }
+    if (this.plasmaBurnerChargeRenderer) for (const id of this.plasmaBurnerChargeRenderer.getActiveIds()) if (!activeIds.has(id)) this.plasmaBurnerChargeRenderer.destroyVisual(id);
     if (this.tracerRenderer) for (const id of this.tracerRenderer.getActiveIds()) if (!activeIds.has(id)) this.tracerRenderer.destroyTracer(id);
   }
 
@@ -789,6 +808,7 @@ export class ProjectilePresentationRuntime {
       else if (state.style === 'spore' && this.sporeRenderer?.has(id)) this.sporeRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY, state.color, state.sporeVisualVariant);
       else if (state.style === 'translocator_puck' && this.translocatorPuckRenderer?.has(id)) this.translocatorPuckRenderer.updateVisual(id, x, y, state.ownerColor ?? state.color);
       else if (state.style === 'tesla_bolt' && this.teslaBoltRenderer?.has(id)) this.teslaBoltRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY, state.color);
+      else if (state.style === 'plasma_burner_charge' && this.plasmaBurnerChargeRenderer?.has(id)) this.plasmaBurnerChargeRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY, state.color);
       else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) this.rocketRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY, state.miniRocketPhase, state.miniRocketCascadeStage);
       else if (state.style === 'fireball' && this.fireballRenderer?.has(id)) this.fireballRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY);
       else if (state.style === 'leaf_blower' && this.leafBlowerRenderer?.has(id)) this.leafBlowerRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY);
@@ -830,6 +850,7 @@ export class ProjectilePresentationRuntime {
     this.sporeRenderer?.destroyAll();
     this.translocatorPuckRenderer?.destroyAll();
     this.teslaBoltRenderer?.destroyAll();
+    this.plasmaBurnerChargeRenderer?.destroyAll();
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
   }

@@ -27,6 +27,9 @@ export interface SmokeCloud {
 interface Exposure {
   readonly cloud: SmokeCloud;
   readonly boss: boolean;
+  /** Buildup progress 0..1 at enteredAt; strength is its square, so the first moments stay mild. */
+  readonly startProgress: number;
+  readonly enteredAt: number;
   exitAt: number | null;
   expiresAt: number;
 }
@@ -94,8 +97,13 @@ export class SmokeRuntime implements SmokePerceptionPort {
       this.enemyKeys.set(String(target.ref.id), key);
       for (const cloud of this.clouds.values()) {
         if (!this.contains(cloud, target.x, target.y, now)) continue;
-        const duration = this.aftereffect(cloud.config.behavior, target.boss);
-        state.exposures.set(cloud.id, { cloud, boss: target.boss, exitAt: null, expiresAt: cloud.activeUntil + duration });
+        const expiresAt = cloud.activeUntil + this.aftereffect(cloud.config.behavior, target.boss);
+        const current = state.exposures.get(cloud.id);
+        if (current && current.exitAt === null) { current.expiresAt = expiresAt; continue; }
+        // Confusion belongs to the enemy: re-entering or crossing into another cloud continues
+        // from its current disorientation instead of restarting or instantly maxing it out.
+        const startProgress = Math.sqrt(this.confusionIntensity(state, now, true));
+        state.exposures.set(cloud.id, { cloud, boss: target.boss, startProgress, enteredAt: now, exitAt: null, expiresAt });
       }
       let vulnerableUntil = 0;
       for (const [id, exposure] of state.exposures) {
@@ -231,7 +239,8 @@ export class SmokeRuntime implements SmokePerceptionPort {
     for (const state of this.targets.values()) {
       const confusedUntil = Math.max(0, ...[...state.exposures.values()].map(e => e.expiresAt));
       const chargedUntil = state.charge?.expiresAt ?? 0;
-      if (confusedUntil > now || chargedUntil > now) result.push({ enemyId: String(state.target.ref.id), confusedUntil, chargedUntil });
+      const confusionIntensity = this.confusionIntensity(state, now, false);
+      if (confusedUntil > now || chargedUntil > now) result.push({ enemyId: String(state.target.ref.id), confusedUntil, confusionIntensity, chargedUntil });
     }
     return result;
   }
@@ -252,8 +261,24 @@ export class SmokeRuntime implements SmokePerceptionPort {
   private stateForId(id: string): TargetState | undefined { const key = this.enemyKeys.get(id); return key === undefined ? undefined : this.targets.get(key); }
   private exposureFraction(e: Exposure, now: number): number {
     const b = e.cloud.config.behavior;
-    const fade = e.exitAt === null ? 1 : clamp01((e.expiresAt - now) / Math.max(1, b.recoveryFadeMs));
-    return b.confusionFraction * (e.boss ? b.bossConfusionFactor : 1) * fade;
+    return b.confusionFraction * (e.boss ? b.bossConfusionFactor : 1) * this.exposureIntensity(e, now, true);
+  }
+  /**
+   * Confusion builds up quadratically while inside and freezes on exit, so enemies at the edge
+   * keep following their route into the cloud instead of being turned around on first contact.
+   */
+  private exposureIntensity(e: Exposure, now: number, withRecoveryFade: boolean): number {
+    if (now >= e.expiresAt) return 0;
+    const b = e.cloud.config.behavior;
+    const elapsed = Math.max(0, (e.exitAt ?? now) - e.enteredAt);
+    const progress = b.confusionBuildupMs > 0 ? clamp01(e.startProgress + elapsed / b.confusionBuildupMs) : 1;
+    const fade = !withRecoveryFade || e.exitAt === null ? 1 : clamp01((e.expiresAt - now) / Math.max(1, b.recoveryFadeMs));
+    return progress * progress * fade;
+  }
+  private confusionIntensity(state: TargetState, now: number, withRecoveryFade: boolean): number {
+    let intensity = 0;
+    for (const e of state.exposures.values()) intensity = Math.max(intensity, this.exposureIntensity(e, now, withRecoveryFade));
+    return intensity;
   }
   private dominantExposure(state: TargetState | undefined, now: number): Exposure | null {
     let best: Exposure | null = null;

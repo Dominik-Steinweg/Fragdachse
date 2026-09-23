@@ -25,7 +25,7 @@ export function resolvedSmoke(levels: Record<string, number> = fullSmokeLevels) 
 export function smokeEffect(behavior: Partial<SmokeBehaviorConfig> = {}, overrides: Partial<SmokeGrenadeEffect> = {}): SmokeGrenadeEffect {
   return { type: 'smoke', radius: 100, spreadDuration: 100, lingerDuration: 1000, dissipateDuration: 100,
     maxAlpha: 0.7, dotDamagePerTick: 3, dotTickIntervalMs: 50,
-    behavior: { ...structuredClone(authored.utilities.SMOKE_GRENADE.smokeBehavior), aftereffectMs: 200, recoveryFadeMs: 50,
+    behavior: { ...structuredClone(authored.utilities.SMOKE_GRENADE.smokeBehavior), confusionBuildupMs: 0, aftereffectMs: 200, recoveryFadeMs: 50,
       dischargeCount: 2, growthMaxProcs: 2, growthTransitionMs: 100, ...behavior }, ...overrides };
 }
 export function smokeTarget(id = 'enemy-1', x = 0, y = 0, boss = false, generation = 1): SmokeTarget {

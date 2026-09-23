@@ -14,6 +14,7 @@ export interface CoopDefenseClassDefinition {
   readonly hpRegenBonusPerSecond: number;
   readonly adrenalineRegenPerSecond?: number;
   readonly adrenalinePerEnemyDeath?: number;
+  readonly intrinsicStats?: Readonly<Record<string, number>>;
   readonly excludedGeneralUpgradeIds: readonly string[];
 }
 
@@ -67,7 +68,8 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
       // Adrenalingewinn ist bewusst identisch zu den anderen Klassen: passive Regeneration
       // plus Primaerwaffentreffer. Die Klassenstaerke haengt an der Baukapazitaet, nicht an
       // einer eigenen Ressourcenkurve.
-      excludedGeneralUpgradeIds: ['run_speed', 'burrow_speed'],
+      intrinsicStats: { 'player.turretControlEnabled': 1 },
+      excludedGeneralUpgradeIds: ['run_speed', 'burrow_speed', 'turret_control'],
     },
   });
 

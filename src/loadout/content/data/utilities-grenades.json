@@ -117,6 +117,7 @@
       },
       "smokeBehavior": {
         "confusionFraction": 0.5,
+        "confusionBuildupMs": 1200,
         "aftereffectMs": 1000,
         "directionMinMs": 800,
         "directionMaxMs": 1200,

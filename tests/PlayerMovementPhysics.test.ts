@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type * as Phaser from 'phaser';
 import { ClientPlayerMovementBody } from '../src/entities/ClientPlayerMovementBody';
+import { LocalPlayerPrediction } from '../src/systems/LocalPlayerPrediction';
 import { collidePlayerWater, resolveWalkingVelocity, type PlayerMovementGeometry } from '../src/systems/PlayerMovement';
 import { HostPhysicsSystem } from '../src/systems/HostPhysicsSystem';
 import { WaterGeometry } from '../src/arena/WaterGeometry';
@@ -21,7 +22,7 @@ const arcade = (name: string) => require(fileURLToPath(new URL(`../node_modules/
 const World = arcade('World'), Body = arcade('Body'), StaticBody = arcade('StaticBody');
 const metrics = resolveActiveArenaWorldMetrics();
 
-function fixture(mode: 'wall' | 'water' | 'bounds' = 'wall') {
+function fixture(mode: 'wall' | 'water' | 'bounds' | 'rocks' = 'wall') {
   const scene = { sys: { scale: { width: metrics.maxX, height: metrics.maxY } }, events: new EventEmitter(), physics: {} as any };
   const world = new World(scene, { fps: 120, gravity: { x: 0, y: 0 }, x: metrics.offsetX, y: metrics.offsetY,
     width: metrics.widthPx, height: metrics.heightPx });
@@ -39,16 +40,28 @@ function fixture(mode: 'wall' | 'water' | 'bounds' = 'wall') {
   wall.position.set(wallX, wallY); wall.center.set(wallX + CELL_SIZE / 2, wallY + CELL_SIZE * 3);
   world.add(wall);
   wall.enable = mode === 'wall';
+  // Rock walls consist of separate cell bodies whose seams a sliding circle crosses.
+  const cells = mode !== 'rocks' ? [] : Array.from({ length: 6 }, (_, i) => {
+    const cell = new StaticBody(world); cell.setSize(CELL_SIZE, CELL_SIZE);
+    cell.position.set(wallX, wallY + i * CELL_SIZE);
+    cell.center.set(wallX + CELL_SIZE / 2, wallY + (i + 0.5) * CELL_SIZE);
+    world.add(cell); return cell;
+  });
+  const obstacles = [wall, ...cells];
   const water = new WaterGeometry(mode === 'water'
     ? Array.from({ length: 6 }, (_, i) => ({ gridX: 5, gridY: 3 + i })) : [], metrics);
   const slide = { x: 0, y: 0, vx: 0, vy: 0 };
-  const blocked = (x: number, y: number) => (mode === 'wall' && wall.enable && x === 5 && y >= 3 && y < 9) || water.hasCell(x, y);
+  const blocked = (x: number, y: number) => ((mode === 'wall' && wall.enable) || mode === 'rocks')
+    && x === 5 && y >= 3 && y < 9 || water.hasCell(x, y);
   const geometry: PlayerMovementGeometry = { metrics, isBlockedCell: blocked,
-    collide: p => { if (wall.enable) world.collide(p, wall); collidePlayerWater(p.body as any, water, slide); },
+    collide: p => {
+      for (const obstacle of obstacles) if (obstacle.enable) world.collide(p, obstacle);
+      collidePlayerWater(p.body as any, water, slide);
+    },
     canOccupyCircle: (x, y, radius) => x - radius >= metrics.offsetX && y - radius >= metrics.offsetY
       && x + radius <= metrics.maxX && y + radius <= metrics.maxY && !water.isCircleBlocked(x, y, radius)
-      && (!wall.enable || Math.hypot(x - Math.max(wall.left, Math.min(x, wall.right)),
-        y - Math.max(wall.top, Math.min(y, wall.bottom))) >= radius - 1e-6),
+      && obstacles.every(o => !o.enable || Math.hypot(x - Math.max(o.left, Math.min(x, o.right)),
+        y - Math.max(o.top, Math.min(y, o.bottom))) >= radius - 1e-6),
   };
   const player = { id: 'p', get x() { return proxy.x; }, get y() { return proxy.y; },
     active: true, physicsProxy: proxy, body, positionRevision: 0,
@@ -62,7 +75,7 @@ function fixture(mode: 'wall' | 'water' | 'bounds' = 'wall') {
     combat as never);
   system.setRunSpeedResolver(() => 100);
   const manual = new ClientPlayerMovementBody(player, geometry);
-  return { scene, world, body, proxy, wall, water, slide, blocked, geometry, player, input, combat, system, manual };
+  return { scene, world, body, proxy, wall, cells, water, slide, blocked, geometry, player, input, combat, system, manual };
 }
 
 describe('isolated client Arcade movement', () => {
@@ -177,6 +190,53 @@ describe('isolated client Arcade movement', () => {
     expect(client.player.x).toBeCloseTo(host.player.x, 6);
     expect(client.player.y).toBeCloseTo(host.player.y, 6);
   });
+
+  it.each([[60, 0], [144, 0.2], [100, 0.3]])(
+    'predicts sliding along rock seams without corrections (client %s FPS, jitter %s)', (fps, jitter) => {
+      const host = fixture('rocks'), client = fixture('rocks');
+      for (const f of [host, client]) f.body.reset(f.wall.left - 40, f.wall.top + 5);
+      for (const cell of host.cells) host.world.addCollider(host.proxy, cell);
+      host.system.setWorldMetrics(metrics); host.system.setMovementBlockedCellResolver(host.blocked);
+      const clientInput = { ...client.input, dx: 1, dy: 1 };
+      const prediction = new LocalPlayerPrediction(1, {
+        getInput: () => clientInput,
+        restartInput: confirmed => { clientInput.movementSequence = Math.max(clientInput.movementSequence!, confirmed) + 1; },
+      });
+      prediction.setBody(client.manual);
+      const inFlight: { at: number; deliver(): void }[] = [];
+      const latencyMs = 45;
+      let snapshot: Parameters<LocalPlayerPrediction['update']>[0], version = 0, hostNow = 0, clientNow = 0;
+      let seed = 7; const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const errors: number[] = [];
+      for (let frame = 0; hostNow < 1400; frame++) {
+        // Host: UPDATE (fixed Arcade steps), scene update, POST_UPDATE at 60 Hz.
+        hostNow += 1000 / 60;
+        host.world.update(hostNow, 1000 / 60);
+        host.system.update(false, hostNow);
+        host.scene.events.emit('postupdate');
+        if (frame % 3 === 0) {
+          const state = { x: host.player.x, y: host.player.y, alive: true, positionRevision: 0,
+            movementPrediction: host.system.getMovementPredictionState('p', hostNow) };
+          inFlight.push({ at: hostNow + latencyMs, deliver: () => { snapshot = state; version++; } });
+        }
+        // Client renders at its own jittered rate and sends every input sample to the host.
+        while (clientNow < hostNow) {
+          const dt = 1000 / fps * (1 + (random() - 0.5) * jitter);
+          clientNow += dt;
+          while (inFlight[0] && inFlight[0].at <= clientNow) inFlight.shift()!.deliver();
+          const before = version;
+          prediction.update(snapshot, version, dt, clientNow, true);
+          if (before === version && errors.length < version) errors.push(prediction.lastReconciliationError);
+          const sent = { ...clientInput };
+          inFlight.push({ at: clientNow + latencyMs, deliver: () => Object.assign(host.input, sent) });
+          inFlight.sort((a, b) => a.at - b.at);
+        }
+      }
+      expect(host.player.x + PLAYER_SIZE / 2).toBeLessThanOrEqual(host.wall.left + 1e-6);
+      expect(host.player.y).toBeGreaterThan(host.wall.top + CELL_SIZE * 3); // Crossed several seams.
+      // The first confirmations after the start restart still carry the pre-restart path.
+      expect(Math.max(...errors.slice(6))).toBeLessThan(1e-6);
+    });
 
   it('keeps the actual Phaser UPDATE / scene update / POST_UPDATE pose and ACK coherent', () => {
     const f = fixture('bounds'); f.system.setWorldMetrics(metrics);

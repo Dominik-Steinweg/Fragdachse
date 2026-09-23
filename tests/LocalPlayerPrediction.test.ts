@@ -3,12 +3,12 @@ import { LocalPlayerPrediction, LOCAL_MOVEMENT_PREDICTION, type LocalPredictionB
 import type { PlayerInput, PlayerMovementPredictionState } from '../src/types';
 import { PlayerMovementAcknowledgements } from '../src/systems/PlayerMovementAcknowledgements';
 
-function fixture() {
+function fixture(stepMs = 1) {
   let input: PlayerInput = { dx: 1, dy: 0, aim: 0, movementSequence: 1, worldRevision: 5 };
   let x = 0, y = 0;
   const rendered = { x: 0, y: 0, walking: false, discontinuity: false };
   const body: LocalPredictionBody = {
-    get x() { return x; }, get y() { return y; }, control: vi.fn(),
+    get x() { return x; }, get y() { return y; }, stepMs, control: vi.fn(),
     reset: (px, py) => { x = px; y = py; },
     step: (dx, dy, speed, ms) => {
       const length = Math.hypot(dx, dy);
@@ -37,7 +37,7 @@ function fixture() {
 
 describe('local WASD prediction', () => {
   it.each([0, 30, 100, 160])('converges with %s ms one-way latency, jitter, loss and reordered states', latency => {
-    const f = fixture(), acks = new PlayerMovementAcknowledgements();
+    const f = fixture(1000 / 120), acks = new PlayerMovementAcknowledgements();
     const host = { x: 0, y: 0, positionRevision: 0 };
     let hostInput = { ...f.input, dx: 0, dy: 0 };
     let lastSentSequence = -1, inputVersion = 0, receivedInputVersion = -1, receivedSnapshotVersion = -1;
@@ -90,10 +90,11 @@ describe('local WASD prediction', () => {
   });
 
   it.each([30, 60, 120, 144])('normalizes diagonals at %s render FPS', fps => {
-    const f = fixture(); f.move(1, 1);
+    const f = fixture(1000 / 120); f.move(1, 1);
     for (let i = 0; i < Math.floor(fps / 5); i++) f.frame(1000 / fps);
-    expect(f.body.x).toBeCloseTo(f.body.y);
-    expect(Math.hypot(f.body.x, f.body.y)).toBeCloseTo(Math.floor(fps / 5) * 100 / fps);
+    // The body stays on the fixed step grid; the presented pose includes the unfinished step.
+    expect(f.rendered.x).toBeCloseTo(f.rendered.y);
+    expect(Math.hypot(f.rendered.x, f.rendered.y)).toBeCloseTo(Math.floor(fps / 5) * 100 / fps);
   });
 
   it('replays only the unconsumed part of a held sequence, without double-counting repeated ACKs', () => {

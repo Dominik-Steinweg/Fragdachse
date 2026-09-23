@@ -212,7 +212,7 @@ export interface ProjectileLineage {
   /** Schwarmkinder erzeugen selbst keine weiteren Schwärme. */
   readonly plasmaSwarmChild?: boolean;
   /** Ursprungsziel, das erst verlassen werden muss, bevor es erneut getroffen werden darf. */
-  readonly plasmaSwarmOriginEnemyId?: string;
+  readonly originTarget?: import('./ProjectileOrigin').ProjectileOriginTarget;
 }
 
 /** Verknüpfung mehrerer Projectiles desselben fachlichen Vorgangs. */
@@ -386,6 +386,7 @@ export interface ProjectileImpulseSpec {
 
 /** Unterstützende Wirkung ohne Schadensumweg. */
 export interface ProjectileSupportSpec {
+  readonly plasmaBurnerCharge?: { readonly damage: number; readonly heal: number; readonly sourceSlot: number };
   readonly energyInjector?: ProjectileEnergyInjectorPayload;
 }
 

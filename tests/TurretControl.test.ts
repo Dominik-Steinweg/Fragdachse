@@ -3,7 +3,7 @@ import { selectTurretCandidate, turretCandidateScore, TurretControlSystem, TURRE
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID } from '../src/config';
 import type { AutomatedTurret } from '../src/systems/TurretSystem';
 import type { TurretControlInput } from '../src/types';
-import { getCoopDefenseNumericStatTotals, getCoopDefenseUpgradeDefinition } from '../src/utils/coopDefenseUpgrades';
+import { getCoopDefenseNumericStatTotals, getCoopDefenseUpgradeDefinition, sanitizeCoopDefenseUpgradeProfile, getAvailableCoopDefenseUpgradePoints } from '../src/utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
 import { encodePlayerStates, decodePlayerStates } from '../src/network/playerStateCodec';
 import { WorldPlayerGameplayRuntime } from '../src/world/WorldPlayerGameplayRuntime';
@@ -160,6 +160,14 @@ describe('manual turret occupancy', () => {
       expect(decodePlayerStates(encodePlayerStates({ a: state } as never)).a.turretControl).toEqual(state.turretControl);
     }
     expect(decodePlayerStates(encodePlayerStates({ a: player } as never)).a.turretControl).toBeUndefined();
+  });
+
+  it('grants intrinsic Inspector control and silently refunds a saved purchase', () => {
+    const raw = { upgrades: { turret_control: { unlocked: true, level: 1 } } } as never;
+    const clean = sanitizeCoopDefenseUpgradeProfile(raw, 'inspector_gadachs');
+    expect(clean.upgrades.turret_control.level).toBe(0);
+    expect(getAvailableCoopDefenseUpgradePoints(2, clean, 'inspector_gadachs')).toBe(1);
+    expect(getCoopDefenseNumericStatTotals(clean, 'inspector_gadachs')['player.turretControlEnabled']).toBe(1);
   });
 
   it('resolves the authored feature for every Coop class', () => {

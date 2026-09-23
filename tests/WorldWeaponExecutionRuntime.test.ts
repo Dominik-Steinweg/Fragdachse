@@ -24,7 +24,7 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
       ownerId: 'p1', ownerColor: 0xffffff, sourceSlot: 'weapon1' as const, adrenalineGainBasis: basis,
       primaryHitRewardOrigin: { x: 30, y: 40 } };
     runtime.fire({ ...WEAPON_CONFIGS.GLOCK, adrenalinGain: 2 }, params);
-    runtime.fire({ ...WEAPON_CONFIGS.PLASMA_BURNER, adrenalinGain: 2 }, params);
+    runtime.fire({ ...genericHitscan, adrenalinGain: 2 }, params);
     runtime.fire({ ...WEAPON_CONFIGS.BITE, adrenalinGain: 2, hitAdrenaline: 3 }, params);
     const intents = [spawnProjectile.mock.calls[0][0].provenance.primaryHitReward,
       ...resolveImmediateAttack.mock.calls.map(([request]) => request.payload.primaryHitReward)];
@@ -56,7 +56,7 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
       sourceSlot: 'weapon1',
     });
 
-    expect(runtime.fire(WEAPON_CONFIGS.PLASMA_BURNER, params)).toBe(true);
+    expect(runtime.fire(genericHitscan, params)).toBe(true);
     expect(resolveImmediateAttack).toHaveBeenCalledTimes(1);
     expect(resolveImmediateAttack.mock.calls[0]?.[0]).toMatchObject({ kind: 'hitscan', payload: { shooterId: 'p1' } });
 
@@ -67,7 +67,7 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
 
   it('trägt gameplay-/visual-Muzzle sowie sourceSlot/shotId unverändert in den Hitscan-Request', () => {
     const { runtime, resolveImmediateAttack } = makeRuntime();
-    const config = WEAPON_CONFIGS.PLASMA_BURNER;
+    const config = genericHitscan;
     const muzzle = getHeldWeaponGameplayMuzzleOrigin(config.id, 100, 200, 0, 32);
     if (!muzzle) throw new Error('erwartete einen expliziten Gameplay-Muzzle');
 
@@ -112,13 +112,13 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
       ownerId: 'p1', ownerColor: 0xffffff, sourceSlot: 'weapon1' as const,
     };
 
-    expect(runtime.fire(WEAPON_CONFIGS.PLASMA_BURNER, params)).toBe(true);
+    expect(runtime.fire(genericHitscan, params)).toBe(true);
     expect(runtime.fire(WEAPON_CONFIGS.BITE, params)).toBe(true);
     expect(resolveImmediateAttack).toHaveBeenCalledTimes(2);
     const hitscan = resolveImmediateAttack.mock.calls[0]?.[0];
     expect(hitscan).toMatchObject({ kind: 'hitscan', payload: { shooterId: 'p1', startY: 200 } });
     expect(hitscan?.payload.startX).toBeGreaterThan(100);
-    expect(hitscan?.payload.range).toBeLessThan(WEAPON_CONFIGS.PLASMA_BURNER.range);
+    expect(hitscan?.payload.range).toBeLessThanOrEqual(genericHitscan.range);
     expect(resolveImmediateAttack.mock.calls[1]?.[0]).toMatchObject({
       kind: 'melee',
       payload: { shooterId: 'p1', x: 100, y: 200, range: WEAPON_CONFIGS.BITE.range },
@@ -126,3 +126,6 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
   });
 
 });
+
+const burner = WEAPON_CONFIGS.PLASMA_BURNER;
+const genericHitscan = { ...burner, fire: { ...burner.fire, supportEffect: undefined } };

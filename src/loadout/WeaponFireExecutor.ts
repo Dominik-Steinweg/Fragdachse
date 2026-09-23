@@ -459,6 +459,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
     fireConfig: HitscanWeaponFireConfig,
     params: WeaponFireParams,
   ): boolean {
+    if (fireConfig.supportEffect) throw new Error('Support hitscan requires PlasmaBurnerRuntime');
     const desiredGameplayMuzzle = params.gameplayMuzzleOrigin
       ?? getTopDownMuzzleOrigin(params.x, params.y, params.angle);
     const hasGameplayMuzzle = params.gameplayMuzzleOrigin !== undefined;

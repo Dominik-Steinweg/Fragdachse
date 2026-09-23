@@ -1,3 +1,4 @@
+import { shouldIgnoreOriginHit } from '../src/projectile/ProjectileOrigin';
 import { describe, expect, it } from 'vitest';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToWeaponConfig } from '../src/loadout/CoopDefenseLoadoutModifiers';
@@ -11,7 +12,6 @@ import {
   resolvePlasmaSwarmProjectileProfile,
   resolvePlasmaSwarmProjectileCount,
   resolvePlasmaSwarmRadialAngles,
-  shouldIgnorePlasmaSwarmOriginHit,
 } from '../src/systems/PlasmaCharge';
 import type { CoopDefenseUpgradeProfile } from '../src/types';
 import { getCoopDefenseResolvedEffectTotals, getCoopDefenseUpgradeDefinition } from '../src/utils/coopDefenseUpgrades';
@@ -107,22 +107,19 @@ describe('Plasma Gun Plasma-Aufladung', () => {
   });
 
   it('protects the spawn target only until the swarm projectile leaves its hitbox', () => {
-    expect(shouldIgnorePlasmaSwarmOriginHit(
-      { plasmaSwarmProjectile: true },
-      'enemy-1',
-      'enemy-1',
+    expect(shouldIgnoreOriginHit(
+      { kind: 'enemy', id: 'enemy-1' },
+      { kind: 'enemy', id: 'enemy-1' },
       false,
     )).toBe(true);
-    expect(shouldIgnorePlasmaSwarmOriginHit(
-      { plasmaSwarmProjectile: true },
-      'enemy-1',
-      'enemy-1',
+    expect(shouldIgnoreOriginHit(
+      { kind: 'enemy', id: 'enemy-1' },
+      { kind: 'enemy', id: 'enemy-1' },
       true,
     )).toBe(false);
-    expect(shouldIgnorePlasmaSwarmOriginHit(
-      { plasmaSwarmProjectile: true },
-      'enemy-1',
-      'enemy-2',
+    expect(shouldIgnoreOriginHit(
+      { kind: 'enemy', id: 'enemy-1' },
+      { kind: 'enemy', id: 'enemy-2' },
       false,
     )).toBe(false);
   });

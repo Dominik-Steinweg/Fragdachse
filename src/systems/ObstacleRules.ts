@@ -29,6 +29,8 @@ export interface ObstacleShotOptions {
   readonly purpose?: ObstacleQueryPurpose;
   readonly sourceCarrierBaseId?: string;
   readonly ignoreRocks?: boolean;
+  /** One temporary origin exemption; every other obstacle remains blocking. */
+  readonly skipRockIndex?: number;
   /** Support eligibility is independent of obstacle height. */
   readonly acceptsLowTarget?: (rockId: number) => boolean;
 }

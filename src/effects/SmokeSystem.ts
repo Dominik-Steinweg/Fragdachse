@@ -290,7 +290,7 @@ export class SmokeSystem {
         const r = Math.hypot(target.sprite.x - cloud.x, target.sprite.y - cloud.y) / Math.max(1, cloud.radius);
         smokeCover = Math.max(smokeCover, cloud.alpha * Math.max(0, Math.min(1, (1 - r) / .3)));
       }
-      effect.update(target, status.confusedUntil, status.chargedUntil, now, smokeCover);
+      effect.update(target, status.confusedUntil, status.confusionIntensity, status.chargedUntil, now, smokeCover);
     }
     for (const [id, started] of this.growthPulses) {
       const age = this.scene.time.now - started;

@@ -43,7 +43,7 @@ function sourceFactsKey(stackKey: string, source: CombatSource): string {
     source.authoredSourceId, source.sourceSlot, source.origin,
     source.lineage?.parentEffectId, source.lineage?.parentProjectileId,
     source.lineage?.reflected, source.lineage?.plasmaSwarmChild,
-    source.lineage?.plasmaSwarmOriginEnemyId,
+    source.lineage?.originTarget?.kind, source.lineage?.originTarget?.id,
     source.correlation?.executionId, source.correlation?.projectileId, source.correlation?.shotId,
   ]);
 }

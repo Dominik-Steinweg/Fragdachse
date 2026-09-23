@@ -252,6 +252,7 @@ export interface PlayerMovementPredictionState {
 export interface PlayerNetState {
   movementPrediction?: PlayerMovementPredictionState;
   turretControl?: TurretControlState;
+  plasmaBurnerOverload?: import('./combat/plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerOverloadNetState;
   rocketMagazine?: RocketMagazineState;
   pressureShieldUntil?: number;
   rocketHealSequence?: number;
@@ -376,7 +377,7 @@ export interface SyncedDecoy {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck' | 'tesla_bolt';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck' | 'tesla_bolt' | 'plasma_burner_charge';
 
 /** Semantic owner of a path effect; unlike ProjectileStyle this is gameplay capability data. */
 export type ProjectilePathEffectKind = 'awp' | 'fireball';
@@ -607,10 +608,11 @@ export interface DamageOverTimeAreaConfig {
   readonly baseDamageMult?: number;
 }
 
-export type HomingTargetType = 'players' | 'decoys' | 'enemies' | 'bases' | 'train' | 'projectiles' | 'turrets';
+export type HomingTargetType = 'players' | 'decoys' | 'enemies' | 'bases' | 'train' | 'projectiles' | 'turrets' | 'constructions';
 
 /** Sparse, host-authoritative state retained by the projectile homing capability. */
 export interface HomingRuntimeState {
+  lastSteeredAtSimulatedMs?: number;
   lockedTargetId?: string | null;
   lockedTargetType?: HomingTargetType;
   lastSearchAtSimulatedMs?: number;
@@ -642,6 +644,8 @@ export type SupportProjectileImpact =
 
 /** Data-driven Zielsuche/Lenkung für Projektilwaffen. */
 export interface ProjectileHomingConfig {
+  readonly targetPolicy?: 'plasma_burner';
+  readonly maxTurnDegreesPerSecond?: number;
   readonly acquireDelayMs: number;
   readonly searchRadius: number;
   readonly retargetIntervalMs: number;
@@ -1234,7 +1238,7 @@ export interface ProjectileSpawnConfig {
   /** Schwarmprojektile dürfen weder Aufladungen noch weitere Schwärme erzeugen. */
   plasmaSwarmProjectile?: boolean;
   /** Host-only: Ursprungziel, das beim Start verlassen werden muss, bevor es wieder getroffen wird. */
-  plasmaSwarmOriginEnemyId?: string;
+  readonly originTarget?: import('./projectile/ProjectileOrigin').ProjectileOriginTarget;
   plasmaSwarmProjectileCount?: number;
   plasmaSwarmExplosionRadius?: number;
   plasmaSwarmExplosionDamage?: number;
@@ -1248,6 +1252,7 @@ export interface ProjectileSpawnConfig {
   homingExcludedCircle?: ProjectileHomingExcludedCircle;
   /** Passes through logical combat targets once each, but not through world blockers. */
   piercesTargets?: boolean;
+  plasmaBurnerCharge?: import('./projectile/ProjectileSpawnRequest').ProjectileSupportSpec['plasmaBurnerCharge'];
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
   sourceTurretId?: string;
   flameStreamKey?: string;
@@ -1523,6 +1528,8 @@ export interface ChainLightningConfig {
 export interface SyncedSmokeTargetStatus {
   enemyId: string;
   confusedUntil: number;
+  /** Built-up confusion strength 0..1 before the aftereffect fade. */
+  confusionIntensity: number;
   chargedUntil: number;
 }
 

@@ -343,23 +343,23 @@ describe('spatial projectile candidates', () => {
   it('advances swarm-origin exit state even when its target lies outside the search region', () => {
     const run = execution({ readCollisionTargets: sink => sink('enemy', 'origin', 'enemy', 1000, 0, 8, 992, -8, 1008, 8) });
     const record = collisionRecord(1, 0, 0, 0, 0, 12, 'overlap');
-    record.provenance = { ...record.provenance, lineage: { plasmaSwarmOriginEnemyId: 'origin', plasmaSwarmChild: true } } as never;
+    record.provenance = { ...record.provenance, lineage: { originTarget: { kind: 'enemy', id: 'origin' }, plasmaSwarmChild: true } } as never;
     run.processor.run([record], 0, run.deps);
-    expect(record.contacts.swarmOriginExited).toBe(true);
+    expect(record.contacts.originExited).toBe(true);
   });
 
   it.each(['sweep', 'overlap'] as const)('keeps %s origin protection until both collision shapes are clear', mode => {
     const run = execution({ readCollisionTargets: sink => sink('enemy', 'origin', 'enemy', 0, 0, 30, -10, -10, 10, 10) });
     const record = collisionRecord(1, 0, 0, 25, 0, 12, mode);
-    record.provenance = { ...record.provenance, lineage: { plasmaSwarmOriginEnemyId: 'origin', plasmaSwarmChild: true } } as never;
+    record.provenance = { ...record.provenance, lineage: { originTarget: { kind: 'enemy', id: 'origin' }, plasmaSwarmChild: true } } as never;
     const hit = vi.fn(() => ({ accepted: true }));
     const deps = { ...run.deps, directImpact: { resolveDirectImpact: hit } as never };
     run.processor.run([record], 0, deps);
-    expect(record.contacts.swarmOriginExited).not.toBe(true); // bounds clear, circle still overlaps
+    expect(record.contacts.originExited).not.toBe(true); // bounds clear, circle still overlaps
     expect(hit).not.toHaveBeenCalled();
     record.lastX = 25; record.physics.body.reset(40, 0);
     run.processor.run([record], 1, deps);
-    expect(record.contacts.swarmOriginExited).toBe(true);
+    expect(record.contacts.originExited).toBe(true);
     expect(hit).not.toHaveBeenCalled(); // including the first exit face
     record.lastX = 40; record.physics.body.reset(0, 0);
     run.processor.run([record], 2, deps);

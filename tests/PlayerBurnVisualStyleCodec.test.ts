@@ -79,3 +79,11 @@ describe('Rocket player snapshot fields', () => {
     expect(clean.rocketHealSequence ?? 0).toBe(0);
   });
 });
+
+it('round-trips plasma overload and removes missing state in a full snapshot', () => {
+  const plasmaBurnerOverload={q:71.25,qMax:140,building:true};
+  const encoded=encodePlayerStates({p:{...makePlayerState('normal'),plasmaBurnerOverload}});
+  expect(encoded.p.po).toEqual(plasmaBurnerOverload);
+  expect(decodePlayerStates(encoded).p.plasmaBurnerOverload).toEqual(plasmaBurnerOverload);
+  expect(decodePlayerStates(encodePlayerStates({p:makePlayerState('normal')})).p.plasmaBurnerOverload).toBeUndefined();
+});

@@ -40,6 +40,7 @@ function makeRuntime() {
   const drainUnsub = vi.fn();
   const gainUnsub = vi.fn();
   const systems: Record<string, any> = {
+    plasmaBurner: plasmaStub(),
     resource: {
       initPlayer: tag('resource.initPlayer'),
       removePlayer: tag('resource.removePlayer'),
@@ -188,7 +189,7 @@ function makeConcreteRemoveRuntime() {
     removePlayer: vi.fn(),
   };
   const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
-  runtime.systems = {
+  runtime.systems = { plasmaBurner: plasmaStub(),
     resource,
     burrow,
     itemRuntime,
@@ -263,7 +264,7 @@ function makeDestroyRuntime() {
     setPositionResetCallback: vi.fn(),
     removePlayer: vi.fn(),
   };
-  const systems = {
+  const systems = { plasmaBurner: plasmaStub(),
     loadout,
     weaponActivation: { destroy: vi.fn() },
     ultimateBehavior: { destroy: vi.fn() },
@@ -358,9 +359,10 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
   });
 
   it('baut beim Loadout-Detach Loadout und Tunnel ab', () => {
-    const { runtime, order } = makeRuntime();
+    const { runtime, systems, order } = makeRuntime();
 
     runtime.detachPlayerLoadout('p1');
+    expect(systems.plasmaBurner.resetPlayer).toHaveBeenCalledWith('p1');
 
     expect(order).toEqual([
       'ultimateBehavior.removePlayer',
@@ -395,6 +397,7 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
       'resource.reconcilePlayerLimits',
     ]);
     expect(systems.loadout.syncSelectedLoadout).toHaveBeenCalledWith('p1', selection);
+    expect(systems.plasmaBurner.resetPlayer).toHaveBeenCalledWith('p1');
   });
 
   it('invalidiert Held Actions pro Spieler bzw. am Activity-Identity-Ende', () => {
@@ -405,6 +408,8 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
 
     expect(systems.heldAction.clearPlayer).toHaveBeenCalledWith('p1');
     expect(systems.heldAction.reset).toHaveBeenCalledTimes(1);
+    expect(systems.plasmaBurner.resetPlayer).toHaveBeenCalledWith('p1');
+    expect(systems.plasmaBurner.clearAll).toHaveBeenCalledOnce();
   });
 });
 
@@ -445,6 +450,7 @@ describe('WorldPlayerGameplayRuntime.reconcilePlayerBuildModifiers (2A)', () => 
     runtime.reconcilePlayerBuildModifiers(builds, 2_000);
 
     expect(systems.playerModifier.syncPlayers).toHaveBeenCalledWith(builds);
+    expect(systems.plasmaBurner.resetPlayer.mock.calls.flat()).toEqual(['withBuild', 'noBuild', 'absent']);
     expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('withBuild', 2_000);
     expect(systems.itemRuntime.initPlayer).not.toHaveBeenCalledWith('absent', 2_000);
     expect(systems.itemRuntime.removePlayer).toHaveBeenCalledWith('noBuild');
@@ -458,6 +464,7 @@ describe('WorldPlayerGameplayRuntime.reconcilePlayerBuildModifiers (2A)', () => 
 
     expect(systems.itemRuntime.initPlayer).not.toHaveBeenCalled();
     expect(systems.itemRuntime.removePlayer).not.toHaveBeenCalled();
+    expect(systems.plasmaBurner.resetPlayer).not.toHaveBeenCalled();
   });
 });
 
@@ -512,7 +519,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     const heldAction = new HostHeldActionSystem();
     const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
     runtime.turretControl = emptyTurretControl();
-    runtime.systems = { heldAction, translocator: { clear: vi.fn() } };
+    runtime.systems = { plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() } };
 
     expect(heldAction.start('p1', 'action-p1', 'charged_throw', 100, 0)).toBe(true);
     expect(heldAction.start('p2', 'action-p2', 'charged_throw', 100, 0)).toBe(true);
@@ -538,6 +545,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     runtime.destroy();
 
     expect(systems.ultimateBehavior.destroy).toHaveBeenCalledTimes(1);
+    expect(systems.plasmaBurner.destroy).toHaveBeenCalledOnce();
     expect(systems.weaponActivation.destroy).toHaveBeenCalledTimes(1);
     expect(systems.ak47Behavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.negevBehavior.destroy).toHaveBeenCalledTimes(1);
@@ -653,3 +661,5 @@ describe('World player actions release a Rocket magazine before changing player 
     expect(magazine.getState('p')).toBeUndefined();
   });
 });
+
+function plasmaStub() { return { resetPlayer: vi.fn(), clearAll: vi.fn(), destroy: vi.fn() }; }

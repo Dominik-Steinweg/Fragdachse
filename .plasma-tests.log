@@ -1,0 +1,75 @@
+
+> fragdachse@0.1.0 test
+> vitest run --pool=threads --exclude build/** --exclude art/** --exclude tools/audio-studio/** --exclude tests/architecture/** --exclude tests/integration/** --exclude tests/assets/** --exclude tests/stress/** --exclude tests/balance-lab/** tests/PlasmaBurnerOverload.test.ts tests/PlasmaBurnerChainResolver.test.ts tests/PlasmaBurnerTargetPolicy.test.ts tests/PlasmaBurnerTargetLock.test.ts tests/PlasmaBurnerChargeAccumulator.test.ts tests/CombatSystemBaseDamage.test.ts tests/InspectorSupportWeapons.test.ts tests/WeaponFireExecutor.test.ts tests/WorldWeaponExecutionRuntime.test.ts tests/PlasmaSwarm.test.ts
+
+
+ RUN  v3.2.7 C:/Fragdachse
+
+ ✓ tests/PlasmaBurnerChargeAccumulator.test.ts (2 tests) 4ms
+ ✓ tests/PlasmaBurnerOverload.test.ts (4 tests) 3ms
+ ✓ tests/PlasmaBurnerTargetLock.test.ts (2 tests) 3ms
+ ✓ tests/PlasmaBurnerTargetPolicy.test.ts (10 tests) 4ms
+ ✓ tests/PlasmaBurnerChainResolver.test.ts (3 tests) 18ms
+ ✓ tests/WorldWeaponExecutionRuntime.test.ts (6 tests) 9ms
+ ✓ tests/WeaponFireExecutor.test.ts (2 tests) 4ms
+ ✓ tests/InspectorSupportWeapons.test.ts (5 tests) 9ms
+ ❯ tests/CombatSystemBaseDamage.test.ts (31 tests | 1 failed) 52ms
+   ✓ CombatSystem base damage routing > does not amplify a resolved bubble discharge against hostile bases 5ms
+   ✓ CombatSystem base damage routing > applies explosion P once at the base boundary (frozen: false) 1ms
+   ✓ CombatSystem base damage routing > applies explosion P once at the base boundary (frozen: true) 0ms
+   ✓ CombatSystem base damage routing > applies general vulnerability in the central base path 1ms
+   ✓ CombatSystem base damage routing > applies general vulnerability to player damage as well 3ms
+   ✓ CombatSystem base damage routing > keeps projectile, melee, hitscan and explosion base paths on one callback 4ms
+   ✓ CombatSystem base damage routing > applies runtime multipliers once and enables critical hits against hostile bases 1ms
+   ✓ CombatSystem base damage routing > keeps a baseDamageMult isolated to base damage 1ms
+   ✓ CombatSystem base damage routing > keeps baseDamageMult out of ordinary enemy damage while preserving it for clusters 2ms
+   ✓ CombatSystem base damage routing > routes hostile and allied melee actors to bases by allegiance, not EnemyManager storage 2ms
+   ✓ Utility friendly damage boundaries and Decoy regeneration > keeps the Holy Hand Grenade owner and allies unharmed while damaging opponents 1ms
+   ✓ Utility friendly damage boundaries and Decoy regeneration > protects allies from BFG direct damage while allowing opponents 1ms
+   ✓ Utility friendly damage boundaries and Decoy regeneration > protects allies from BFG pulse damage while allowing opponents 1ms
+   ✓ Utility friendly damage boundaries and Decoy regeneration > keeps allies and the owner unharmed, heals only while stealth is active and clamps HP 1ms
+   ✓ CombatSystem death visual snapshots > keeps a complete visual snapshot for idle frame 0 1ms
+   ✓ CombatSystem death visual snapshots > keeps a complete visual snapshot for a running frame 0ms
+   ✓ CombatSystem actual damage callbacks > pins Host-frame time, samples fresh immediate time and supplies one RNG draw per target 1ms
+   ✓ CombatSystem actual damage callbacks > uses fresh Host time for immediate runtime factors and invalidates only its own World binding 1ms
+   ✓ CombatSystem actual damage callbacks > keeps protected contact separate from damage rewards and preserves stealth 0ms
+   ✓ CombatSystem actual damage callbacks > reports clamped hostile-enemy damage without overkill 1ms
+   ✓ CombatSystem actual damage callbacks > reports player damage after armor/HP clamping and only one death 1ms
+   ✓ CombatSystem actual damage callbacks > reports only effective healing and armor gains, including capped regen 1ms
+   ✓ CombatSystem melee query target set > keeps the pre-query second target excluded when the first mutation removes its blocker 2ms
+   ✓ Plasmabrenner hitscan support impact > preserves the explicit character team-damage rule when an explosion retains its source 1ms
+   ✓ Plasmabrenner hitscan support impact > ends each support beam at the first low target even when fully repaired, while offensive hitscan passes it 3ms
+   ✓ Plasmabrenner hitscan support impact > does not rewind the shooter into its own support trace while moving backwards 2ms
+   ✓ Plasmabrenner hitscan support impact > does not block an outgoing support beam when the shooter advances 0 pixels into its muzzle 1ms
+   ✓ Plasmabrenner hitscan support impact > does not block an outgoing support beam when the shooter advances 4 pixels into its muzzle 0ms
+   ✓ Plasmabrenner hitscan support impact > does not block an outgoing support beam when the shooter advances 8 pixels into its muzzle 0ms
+   ✓ Plasmabrenner hitscan support impact > heals allies and damages enemies through the normal damage path 1ms
+   × Plasmabrenner hitscan support impact > reports an actual base collision surface to the host support callback 11ms
+     → Support hitscan requires PlasmaBurnerCombatPort
+ ✓ tests/PlasmaSwarm.test.ts (12 tests) 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/CombatSystemBaseDamage.test.ts > Plasmabrenner hitscan support impact > reports an actual base collision surface to the host support callback
+Error: Support hitscan requires PlasmaBurnerCombatPort
+ ❯ CombatSystem.resolveHitscanShotAtHostTime src/combat/WorldCombatCore.ts:2663:30
+    2661|     sourceCarrierBaseId?: string,
+    2662|   ): boolean {
+    2663|     if (supportEffect) throw new Error('Support hitscan requires Plasm…
+       |                              ^
+    2664|     if (!this.bridge.isHost()) return false;
+    2665| 
+ ❯ src/combat/WorldCombatCore.ts:665:28
+ ❯ CombatSystem.runHostExecution src/combat/WorldCombatCore.ts:1152:18
+ ❯ CombatSystem.resolveImmediateAttack src/combat/WorldCombatCore.ts:657:17
+ ❯ resolveHitscan tests/CombatSystemBaseDamage.test.ts:183:17
+ ❯ tests/CombatSystemBaseDamage.test.ts:1073:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 9 passed (10)
+      Tests  1 failed | 76 passed (77)
+   Start at  00:14:18
+   Duration  1.16s (transform 1.62s, setup 0ms, collect 3.22s, tests 116ms, environment 3ms, prepare 1.44s)
+

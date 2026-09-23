@@ -1,3 +1,6 @@
+import { PlasmaBurnerTargetCatalog } from './PlasmaBurnerTargetCatalog';
+import { homingTargetKind } from '../projectile/ProjectileOrigin';
+import { plasmaBurnerTargetEffect } from '../combat/plasmaBurner/PlasmaBurnerTargetPolicy';
 import { OBSTACLE_ROCK } from '../systems/ArenaObstacleIndex';
 import { turretAimConfig } from '../config/turretAim';
 import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
@@ -36,7 +39,7 @@ import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
-import type { WorldCombatCore, HitscanSupportImpact } from '../combat/WorldCombatCore';
+import type { WorldCombatCore } from '../combat/WorldCombatCore';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { BurrowSystem } from '../systems/BurrowSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
@@ -57,7 +60,6 @@ import type {
   ExplosionVisualStyle,
   FireChunkTarget,
   GroundFireVisualStyle,
-  HitscanSupportEffect,
   LoadoutSlot,
   PlayerProfile,
   SlimeBloomTarget,
@@ -168,12 +170,6 @@ export interface WorldCombatImpactPort {
     x: number,
     y: number,
     projectile: ProjectileImpactSource | ProjectileEnergyInjectorImpact,
-  ) => void;
-  readonly applyHitscanSupportImpact: (
-    impact: HitscanSupportImpact,
-    effect: HitscanSupportEffect,
-    attackerId: string,
-    sourceSlot?: LoadoutSlot,
   ) => void;
   readonly applySupportProjectileImpact: (
     projectile: ProjectileImpactSource,
@@ -300,6 +296,7 @@ interface CachedProjectileBaseGeometry {
 export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly mgTurret: WorldMgTurretBinding | null;
   readonly systems: WorldCombatGameplaySystems | null;
+  private plasmaCatalog: PlasmaBurnerTargetCatalog | null = null;
   private destroyed = false;
   private activityGeneration = 0;
   private mgGroupSequence = 0;
@@ -450,7 +447,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setPlasmaSwarmMechanicPort(null);
     combatSystem.setEnergyInjectorTargetHitCallback(null);
     combatSystem.setPlasmaSwarmReactionHandler(null);
-    combatSystem.setHitscanSupportImpactCallback(null);
+    this.plasmaCatalog = null;
+    this.options.projectileWorldImpact.setPlasmaBurnerSupportPorts(null, null);
+    combatSystem.setPlasmaBurnerTargetCatalog(null);
+    combatSystem.setPlasmaBurnerStructurePort(null);
     combatSystem.setDirectPrimaryHitHandler(null);
     combatSystem.setPlayerDamageTakenHandler(null);
     combatSystem.setDamageDealtHandler(null);
@@ -637,7 +637,29 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (impact.targetType === 'player' && !o.network.authority.isEnemyPair(impact.ownerId, impact.targetId)) return;
       o.hostUpdate.applyEnergyInjectorTargetHit(impact.targetType, impact.targetId, impact.x, impact.y, impact);
     });
-    combat.setHitscanSupportImpactCallback((impact, effect, attackerId, sourceSlot) => o.hostUpdate.applyHitscanSupportImpact(impact, effect, attackerId, sourceSlot));
+    const plasmaCatalog = new PlasmaBurnerTargetCatalog({ players: o.playerManager, enemies: o.getEnemyManager,
+      bases: o.baseManager, placement: o.placementSystem, decoys: o.decoySystem, metrics: o.worldMetrics, combat });
+    this.plasmaCatalog = plasmaCatalog;
+    combat.setPlasmaBurnerTargetCatalog(plasmaCatalog);
+    o.projectileWorldImpact.setPlasmaBurnerSupportPorts(plasmaCatalog, {
+      resolvePlasmaBurnerCharge: req => combat.resolvePlasmaBurnerChargeImpact(req),
+    });
+    combat.setPlasmaBurnerStructurePort({
+      repair: (target, amount, owner) => {
+        const outcome = this.requireWorldMutation().applyRepair(target.kind === 'base' ? 'base' : 'rock', target.id, amount, owner, 'PLASMA_BURNER');
+        return outcome?.kind === 'support-applied' ? outcome.actualAmount : 0;
+      },
+      damage: (target, amount, owner, slot) => {
+        const resolved = target.category === 'environment' ? o.resolveObstacleDamage(Number(target.id), amount, owner)
+          : combat.resolveExternalTargetDamage({ targetType: 'construction', targetId: target.id }, amount, owner, slot);
+        const outcome = this.requireWorldMutation().applyResolvedDamage('rock', target.id, resolved, owner, 'PLASMA_BURNER', 'direct', slot);
+        return outcome?.kind === 'damage-applied' ? outcome.actualDamage : 0;
+      },
+      damageBase: (target, amount, owner, slot, mult) => {
+        const outcome = combat.applyBaseDamage(target.id, amount, owner, slot, mult);
+        return outcome?.kind === 'damage-applied' ? outcome.actualDamage : 0;
+      },
+    });
     const killReactions = new WorldCombatReactions(o);
     combat.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss, target) => {
       const generation = this.activityGeneration;
@@ -1054,8 +1076,21 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     };
     o.projectileTimeField.setProjectileTimeFieldPort(timeFieldPort);
     const targetQueryPort: ProjectileTargetQueryPort = {
+      readTargetPosition: (config, owner, id, type, x, y) => {
+        if (config.targetPolicy !== 'plasma_burner') return null;
+        const target = this.plasmaCatalog?.read(homingTargetKind(type) + ':' + id, owner, x, y);
+        return target && plasmaBurnerTargetEffect(target, 'automatic') ? { id, type, x: target.x, y: target.y } : null;
+      },
       queryTargets: (config, ownerId, originX, originY, searchRadius, emit) => {
         if (!o.network.authority.isHost()) return;
+        if (config.targetPolicy === 'plasma_burner') {
+          for (const target of this.plasmaCatalog?.query(ownerId, originX, originY, searchRadius) ?? []) {
+            const type: HomingTargetType = target.kind === 'player' ? 'players' : target.kind === 'enemy' ? 'enemies'
+              : target.kind === 'decoy' ? 'decoys' : target.kind === 'base' ? 'bases' : 'constructions';
+            emit(target.id, type, target.x, target.y);
+          }
+          return;
+        }
         const radiusSq = searchRadius * searchRadius;
         const inRange = (x: number, y: number): boolean => {
           const dx = x - originX;

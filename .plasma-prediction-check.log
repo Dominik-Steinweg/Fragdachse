@@ -1,0 +1,14 @@
+
+> fragdachse@0.1.0 test
+> vitest run --pool=threads --exclude build/** --exclude art/** --exclude tools/audio-studio/** --exclude tests/architecture/** --exclude tests/integration/** --exclude tests/assets/** --exclude tests/stress/** --exclude tests/balance-lab/** tests/LocalPlayerPrediction.test.ts
+
+
+ RUN  v3.2.7 C:/Fragdachse
+
+ ✓ tests/LocalPlayerPrediction.test.ts (18 tests) 33ms
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+   Start at  23:42:03
+   Duration  430ms (transform 53ms, setup 0ms, collect 65ms, tests 33ms, environment 0ms, prepare 99ms)
+

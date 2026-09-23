@@ -327,7 +327,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       this.obstacleIndex.querySegment(
         startX, startY, endX, endY,
         (kind, rockIndex, left, top, right, bottom, source) => {
-          if (kind === OBSTACLE_ROCK && !options.ignoreRocks
+          if (kind === OBSTACLE_ROCK && rockIndex !== options.skipRockIndex && !options.ignoreRocks
             && obstacleBlocks(this.obstacleIndex!.getRockClass(rockIndex), options.purpose ?? 'physical')
             && !(this.obstacleIndex!.getRockClass(rockIndex) === 'low' && options.purpose === 'support'
               && options.acceptsLowTarget && !options.acceptsLowTarget(rockIndex))) consider(rockIndex, left, top, right, bottom);
@@ -347,7 +347,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       for (let index = 0; index < (this.rockObjects?.length ?? 0); index += 1) {
         const rock = this.rockObjects![index];
         if (!rock?.active) continue;
-        if (options.ignoreRocks || !obstacleBlocks(rock.obstacleClass ?? 'veryHigh', options.purpose ?? 'physical')) continue;
+        if (index === options.skipRockIndex || options.ignoreRocks || !obstacleBlocks(rock.obstacleClass ?? 'veryHigh', options.purpose ?? 'physical')) continue;
         if (rock.obstacleClass === 'low' && options.purpose === 'support'
           && options.acceptsLowTarget && !options.acceptsLowTarget(index)) continue;
         const bounds = rock.getBounds();

@@ -137,6 +137,7 @@ describe('coop-defense classes', () => {
     const generalIds = categories.find(category => category.id === 'general')!.upgrades.map(upgrade => upgrade.id);
     const weapon2Ids = categories.find(category => category.id === 'weapon2')!.upgrades.map(upgrade => upgrade.id);
     const constructionIds = categories.find(category => category.id === 'construction')!.upgrades.map(upgrade => upgrade.id);
+    expect(generalIds).not.toContain('turret_control');
     expect(generalIds).not.toContain('run_speed');
     expect(generalIds).not.toContain('burrow_speed');
     expect(generalIds).not.toContain('burrow_cost');
@@ -144,6 +145,9 @@ describe('coop-defense classes', () => {
     // eigenen Kategorie.
     expect(weapon2Ids).toEqual([
       'unlock_plasma_burner',
+      'plasma_burner_range', 'plasma_burner_charges', 'plasma_burner_target_lock',
+      'plasma_burner_overload', 'plasma_burner_capacitor', 'plasma_burner_retention',
+      'plasma_burner_chain', 'plasma_burner_cascade', 'plasma_burner_coupling',
       'unlock_overcharge_core',
       'overcharge_radius',
       'overcharge_duration',

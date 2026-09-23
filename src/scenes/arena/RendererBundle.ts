@@ -1,3 +1,4 @@
+import { PlasmaBurnerChargeRenderer } from '../../effects/PlasmaBurnerChargeRenderer';
 import { onBootSceneTeardown } from '../../ui/BootPreparation';
 import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
 import { TurretAnimationController } from '../../effects/TurretAnimationController';
@@ -91,6 +92,7 @@ export interface RendererBundle {
   teslaDome:           TeslaDomeRenderer;
   teslaNova:           TeslaNovaRenderer;
   teslaBolt:           TeslaBoltRenderer;
+  plasmaBurnerCharge: PlasmaBurnerChargeRenderer;
   healingAura:         HealingAuraRenderer;
   guardianSpirit:      GuardianSpiritRenderer;
   repairDrone:         RepairDroneRenderer;
@@ -243,6 +245,8 @@ export function* createRendererBundleSteps(
   yield 'renderers/teslaNova';
   teslaDome.setNovaRenderer(teslaNova);
 
+  const plasmaBurnerCharge = new PlasmaBurnerChargeRenderer(scene);
+  cleanup.push(() => plasmaBurnerCharge.destroyAll());
   const teslaBolt = new TeslaBoltRenderer(scene);
   teslaBolt.generateTextures();
   yield 'renderers/teslaBolt';
@@ -395,7 +399,7 @@ export function* createRendererBundleSteps(
   cleanup.push(() => movement.destroy());
   return {
     interactions,
-    turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
+    turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
@@ -440,6 +444,7 @@ export function wireProjectileRenderers(
     grenade: bundle.grenade,
     translocatorPuck: bundle.translocatorPuck,
     teslaBolt: bundle.teslaBolt,
+    plasmaBurnerCharge: bundle.plasmaBurnerCharge,
     tracer: bundle.tracer,
     muzzleFlash: bundle.muzzleFlash,
     turretAnimations: bundle.turretAnimations,

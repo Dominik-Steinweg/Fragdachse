@@ -433,7 +433,10 @@ export class ClientUpdateCoordinator {
         player.updateArmor(ps.armor);
         player.updateBurnStacks(ps.burnStacks ?? 0, ps.burnVisualStyle ?? 'normal');
         player.updateRocketSupport?.(ps, bridge.getSynchronizedNow());
-        if (player.id === bridge.getLocalPlayerId()) this.ctx.inputSystem.syncRocketMagazineState?.(ps.alive ? ps.rocketMagazine : undefined);
+        if (player.id === bridge.getLocalPlayerId()) {
+          this.ctx.inputSystem.syncRocketMagazineState?.(ps.alive ? ps.rocketMagazine : undefined);
+          this.ctx.aimSystem?.setPlasmaBurnerOverloadState(ps.alive ? ps.plasmaBurnerOverload : undefined);
+        }
         player.updateMolotovFirewalker(ps.isMolotovFirewalkerActive === true && ps.alive);
         player.setVisible(ps.alive);
         player.setTurretMounted(!!ps.turretControl);
@@ -1631,6 +1634,7 @@ export class ClientUpdateCoordinator {
       localPlayer.y,
       desiredGameplayMuzzle.x,
       desiredGameplayMuzzle.y,
+      { purpose: config.fire.supportEffect ? 'support' : 'directFire' },
     );
     const visualMuzzleOrigin = getHeldWeaponMuzzleOrigin(
       config.id,
@@ -1639,7 +1643,7 @@ export class ClientUpdateCoordinator {
       localPlayer.rotation,
       localPlayer.displayObject?.displayWidth ?? PLAYER_VISUAL_SIZE,
     ) ?? desiredGameplayMuzzle;
-    const trace  = this.ctx.getWorldCombatCore()!.traceHitscan({
+    const traceOptions = {
       shooterId:  bridge.getLocalPlayerId(),
       startX:     resolvedStart.x,
       startY:     resolvedStart.y,
@@ -1654,9 +1658,20 @@ export class ClientUpdateCoordinator {
       ),
       traceThickness: config.fire.traceThickness,
       applyFavorTheShooter: bridge.isHost(),
-      includeShooter: Boolean(config.fire.supportEffect),
-    });
+      includeShooter: false,
+      purpose: config.fire.supportEffect ? 'support' as const : 'directFire' as const,
+    };
+    const trace = config.fire.supportEffect
+      ? this.ctx.getWorldCombatCore()!.traceHitscanPath(traceOptions)[0].trace
+      : this.ctx.getWorldCombatCore()!.traceHitscan(traceOptions);
 
+    if (config.fire.supportEffect?.type === 'plasma_burner') {
+      this.ctx.effectSystem.playPlasmaBurnerPulse({
+        id: localPlayer.id, sid: shotId, lk: false, m: 1, p: 1,
+        s: [[visualMuzzleOrigin.x, visualMuzzleOrigin.y, trace.endX, trace.endY, 0]],
+      }, true);
+      return shotId;
+    }
     this.ctx.effectSystem.playPredictedHitscanTracer(
       visualMuzzleOrigin.x,
       visualMuzzleOrigin.y,

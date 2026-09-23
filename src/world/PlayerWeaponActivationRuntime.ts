@@ -65,6 +65,7 @@ export interface PlayerWeaponActivationPhysicsPort {
 }
 
 export interface PlayerWeaponActivationRuntimeOptions {
+  readonly plasmaBurner?: Pick<import('./PlasmaBurnerRuntime').PlasmaBurnerRuntime, 'firePulse'>;
   readonly getRuntimeDamageMultiplier?: (playerId: string, slot: WeaponSlot, nowMs: number) => number;
   readonly playerManager: PlayerWeaponActivationPlayerPort;
   readonly loadout: PlayerWeaponActivationLoadoutPort;
@@ -228,6 +229,7 @@ export class PlayerWeaponActivationRuntime {
         primaryHitRewardScope,
         primaryHitRewardOrigin,
         flameRuntimeDamageMultiplier,
+        request.nowMs,
       );
       if (fired) didFire = true;
     }
@@ -271,6 +273,7 @@ export class PlayerWeaponActivationRuntime {
           primaryHitRewardScope,
           primaryHitRewardOrigin,
           flameRuntimeDamageMultiplier,
+        request.nowMs,
         );
         this.dispatchWeaponFire(
           sideCfg,
@@ -289,6 +292,7 @@ export class PlayerWeaponActivationRuntime {
           primaryHitRewardScope,
           primaryHitRewardOrigin,
           flameRuntimeDamageMultiplier,
+        request.nowMs,
         );
       }
     }
@@ -354,12 +358,16 @@ export class PlayerWeaponActivationRuntime {
     primaryHitRewardScope?: PrimaryHitRewardScope | null,
     primaryHitRewardOrigin?: { readonly x: number; readonly y: number },
     flameRuntimeDamageMultiplier?: number,
+    nowMs = 0,
   ): boolean {
     const visualMuzzleOrigin = this.getVisualMuzzleOrigin(playerId, config.id);
     switch (config.fire.type) {
       case 'projectile':
         return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin, gameplayMuzzleOrigin, adrenalineGainBasis, primaryHitRewardScope, primaryHitRewardOrigin);
       case 'hitscan':
+        if (config.fire.supportEffect?.type === 'plasma_burner') return this.options.plasmaBurner?.firePulse({
+          playerId, config, nowMs, x, y, angle, targetX, targetY, sourceSlot: sourceSlot as WeaponSlot, shotId, gameplayMuzzleOrigin,
+        }) ?? false;
         return this.fireHitscanWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId, visualMuzzleOrigin, gameplayMuzzleOrigin, adrenalineGainBasis, primaryHitRewardScope, primaryHitRewardOrigin);
       case 'melee':
         return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined, adrenalineGainBasis, primaryHitRewardScope, primaryHitRewardOrigin);

@@ -119,6 +119,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     leafBlowerMaxKnockback: interaction.impulse?.maxKnockback,
     leafBlowerSelfPush:     interaction.impulse?.selfPush,
     leafBlowerDeflectsProjectiles: interaction.impulse?.deflectsProjectiles,
+    plasmaBurnerCharge: interaction.support?.plasmaBurnerCharge,
     energyInjectorPayload: interaction.support?.energyInjector,
     detonable:      interaction.detonable,
     detonator:      interaction.detonator,

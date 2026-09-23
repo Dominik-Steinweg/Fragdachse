@@ -3,6 +3,8 @@ import type { ProjectileHomingConfig } from '../types';
 /** Authored smoke tuning, resolved once at throw time. */
 export interface SmokeBehaviorConfig {
   readonly confusionFraction: number;
+  /** Time inside smoke until confusion reaches full strength; zero confuses immediately. */
+  readonly confusionBuildupMs: number;
   readonly aftereffectMs: number;
   readonly directionMinMs: number;
   readonly directionMaxMs: number;

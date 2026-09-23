@@ -115,6 +115,7 @@ function createMockPlayer(id: string, x = 200, y = 200) {
     y,
     body: {
       velocity: { x: 0, y: 0 },
+      center: { get x() { return player.x; }, get y() { return player.y; } },
       setVelocity,
     },
     setDashScale: vi.fn(),

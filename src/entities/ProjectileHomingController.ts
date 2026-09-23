@@ -32,6 +32,7 @@ export type HomingTargetProvider = (
 ) => void;
 
 export interface ProjectileTargetQueryPort {
+  readTargetPosition?(config: ProjectileHomingConfig, ownerId: string, id: string, type: HomingTargetType, x: number, y: number): HomingTargetCandidate | null;
   readonly queryTargets: HomingTargetProvider;
 }
 
@@ -126,6 +127,8 @@ export class ProjectileHomingController {
   update(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch = false, hostNowMs = 0): boolean {
     const { homing, ownerId, kinematics, state } = request;
     if (!this.targetQueryPort) return false;
+    if (homing.targetPolicy === 'plasma_burner' && homing.maxTurnDegreesPerSecond !== undefined)
+      return this.updateContinuous(request, simulatedAgeMs, hostNowMs);
 
     if (
       state.lockedTargetId !== null
@@ -165,6 +168,37 @@ export class ProjectileHomingController {
     const nextAngle = currentAngle + clamp(angleDelta, -maxTurn, maxTurn);
 
     kinematics.setVelocity(Math.cos(nextAngle) * currentSpeed, Math.sin(nextAngle) * currentSpeed);
+    return true;
+  }
+
+
+  private updateContinuous(request: ProjectileHomingRequest, age: number, hostNow: number): boolean {
+    const { homing, state, kinematics, ownerId } = request;
+    const dt = Math.max(0, age - Math.max(state.lastSteeredAtSimulatedMs ?? 0, homing.acquireDelayMs)) / 1000;
+    state.lastSteeredAtSimulatedMs = age;
+    if (age < homing.acquireDelayMs) return false;
+    let target = state.lockedTargetId && state.lockedTargetType
+      ? this.targetQueryPort?.readTargetPosition?.(homing, ownerId, state.lockedTargetId, state.lockedTargetType, kinematics.x, kinematics.y) ?? null : null;
+    if (target && (request.isTargetAllowed?.(target.id, target.type) === false
+      || Math.hypot(target.x - kinematics.x, target.y - kinematics.y) > homing.searchRadius
+      || (homing.requireLineOfSight && this.lineOfFirePort
+        && !this.hasClearTargetLine(request, target)))) target = null;
+    if (!target) {
+      const lost = state.lockedTargetId != null;
+      state.lockedTargetId = null; state.lockedTargetType = undefined;
+      if (!lost && state.lastSearchAtSimulatedMs !== undefined && age - state.lastSearchAtSimulatedMs < homing.retargetIntervalMs) return false;
+      state.lastSearchAtSimulatedMs = age;
+      target = this.selectTarget(request, age, hostNow);
+      if (!target) return false;
+      state.lockedTargetId = target.id; state.lockedTargetType = target.type;
+    }
+    const speed = Math.hypot(kinematics.velocityX, kinematics.velocityY);
+    if (speed <= 0.001) return true;
+    const current = Math.atan2(kinematics.velocityY, kinematics.velocityX);
+    const desired = Math.atan2(target.y - kinematics.y, target.x - kinematics.x);
+    const maxTurn = homing.maxTurnDegreesPerSecond! * Math.PI / 180 * dt;
+    const angle = current + clamp(wrapAngle(desired - current), -maxTurn, maxTurn);
+    kinematics.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     return true;
   }
 
@@ -211,7 +245,7 @@ export class ProjectileHomingController {
         || (excludeOwner && candidate.id === ownerId)
         || dx * dx + dy * dy > searchRadiusSq
         || request.excludedTargetKeys?.has(`${candidate.type}:${candidate.id}`) === true
-        || !this.isTargetCurrentlyValid(candidate.id, candidate.type, ownerId);
+        || (homing.targetPolicy !== 'plasma_burner' && !this.isTargetCurrentlyValid(candidate.id, candidate.type, ownerId));
       this.rejected[i] = ineligible ? 1 : 0;
       if (!ineligible) eligible += 1;
     }
@@ -224,7 +258,7 @@ export class ProjectileHomingController {
         if (this.rejected[i]) continue;
         const candidate = this.candidatePool[i];
         if (candidate.id !== state.lockedTargetId || candidate.type !== state.lockedTargetType) continue;
-        if (!requireLineOfFire || this.lineOfFirePort!.hasClearLineOfFire(originX, originY, candidate.x, candidate.y, request.shotOptions)) {
+        if (!requireLineOfFire || this.hasClearTargetLine(request, candidate)) {
           if (!request.isTargetClaimed?.(candidate.id, candidate.type)) return candidate;
           sharedLockedTarget = candidate;
           break;
@@ -256,7 +290,8 @@ export class ProjectileHomingController {
 
         const score = distanceScore * distanceWeight + forwardScore * forwardWeight;
         const claimed = request.isTargetClaimed?.(candidate.id, candidate.type) ?? false;
-        if (bestIndex < 0 || (bestClaimed && !claimed) || (claimed === bestClaimed && score > bestScore)) {
+        if (bestIndex < 0 || (bestClaimed && !claimed) || (claimed === bestClaimed && (score > bestScore || (homing.targetPolicy === 'plasma_burner' && score === bestScore
+          && (candidate.type + ':' + candidate.id) < (this.candidatePool[bestIndex].type + ':' + this.candidatePool[bestIndex].id))))) {
           bestClaimed = claimed;
           bestScore = score;
           bestIndex = i;
@@ -266,12 +301,26 @@ export class ProjectileHomingController {
       if (bestIndex < 0) return null;
       if (bestClaimed && sharedLockedTarget) return sharedLockedTarget;
       const best = this.candidatePool[bestIndex];
-      if (!requireLineOfFire || this.lineOfFirePort!.hasClearLineOfFire(originX, originY, best.x, best.y, request.shotOptions)) return best;
+      if (!requireLineOfFire || this.hasClearTargetLine(request, best)) return best;
       this.rejected[bestIndex] = 1;
       eligible -= 1;
     }
 
     return null;
+  }
+
+  private hasClearTargetLine(request: ProjectileHomingRequest, target: HomingTargetCandidate): boolean {
+    const { kinematics: k, shotOptions: options } = request;
+    let x = target.x, y = target.y;
+    if (request.homing.targetPolicy === 'plasma_burner' && (target.type === 'bases' || target.type === 'constructions')) {
+      const dx = x - k.x, dy = y - k.y, distance = Math.hypot(dx, dy);
+      // Aim at the surface; test the center corridor only until the projectile's leading edge reaches it.
+      const padding = distance > 0 ? Math.abs(dx / distance) * (options?.halfWidth ?? 0)
+        + Math.abs(dy / distance) * (options?.halfHeight ?? 0) : 0;
+      const fraction = distance > 0 ? Math.max(0, distance - padding) / distance : 0;
+      x = k.x + dx * fraction; y = k.y + dy * fraction;
+    }
+    return this.lineOfFirePort?.hasClearLineOfFire(k.x, k.y, x, y, options) ?? true;
   }
 
   private isTargetCurrentlyValid(id: string, type: HomingTargetType, ownerId: string): boolean {

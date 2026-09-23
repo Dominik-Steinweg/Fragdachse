@@ -108,8 +108,8 @@ function fixture(training = false) {
       h.body.reset(x, y); physics.observe(id, x, y, h.body.velocity.x, h.body.velocity.y);
     }
     clock.now += 16;
-    projectiles.runHostProjectileStage(16, clock.now);
     projectiles.runHostInteractionStage(clock.now);
+    projectiles.runHostProjectileStage(16, clock.now);
   };
   return { scene, enemies, enemy, player, players, combat, receipts, range, plasma, projectiles, physics, spawnSwarm, move, network,
     destroy() { projectiles.destroy(); range?.destroy(); enemies.destroy(); } };

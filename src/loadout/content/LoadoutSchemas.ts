@@ -1,5 +1,6 @@
 import { MAX_FOG_TRAIL_FACTOR } from '../../config/fogTrail';
 import { validateRocketLauncherConfig } from '../RocketLauncherConfig';
+import { validatePlasmaBurnerConfig } from '../PlasmaBurnerConfig';
 import { validateStinkPlagueConfig } from '../StinkPlagueConfig';
 import { validateTurretAimConfig } from '../../config/turretAim';
 import { isWeaponFeedbackProfileId } from '../../config/weaponFeedback';
@@ -228,6 +229,7 @@ export function validateResolvedWeapon(value: unknown): string[] {
   if (!isRecord(value)) return ['$: WeaponConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
   if (value.rocketLauncher !== undefined) issues.push(...validateRocketLauncherConfig(value.rocketLauncher));
+  if (value.plasmaBurner !== undefined) issues.push(...validatePlasmaBurnerConfig(value.plasmaBurner));
   requireFields(value, [
     'cooldown', 'damage', 'range', 'fire', 'allowedSlots', 'adrenalinCost', 'adrenalinGain',
     'spreadStanding', 'spreadMoving', 'spreadPerShot', 'maxDynamicSpread',
@@ -375,7 +377,7 @@ export function validateResolvedUtility(value: unknown): string[] {
   }
   if (value.type === 'smoke') {
     const b = value.smokeBehavior;
-    const fields = ["confusionFraction","aftereffectMs","directionMinMs","directionMaxMs","recoveryFadeMs","retentionBias","retentionEdgeFraction","nearSightPx","bossNearSightPx","bossConfusionFactor","bossAftereffectFactor","vulnerabilityEnabled","chargeDurationMs","dischargeCount","dischargeCooldownMs","dischargeDamage","dischargeSpeed","dischargeRange","dischargeSize","growthMaxProcs","growthDurationMs","growthRadiusFraction","growthTransitionMs"];
+    const fields = ["confusionFraction","confusionBuildupMs","aftereffectMs","directionMinMs","directionMaxMs","recoveryFadeMs","retentionBias","retentionEdgeFraction","nearSightPx","bossNearSightPx","bossConfusionFactor","bossAftereffectFactor","vulnerabilityEnabled","chargeDurationMs","dischargeCount","dischargeCooldownMs","dischargeDamage","dischargeSpeed","dischargeRange","dischargeSize","growthMaxProcs","growthDurationMs","growthRadiusFraction","growthTransitionMs"];
     if (!isRecord(b) || fields.some(k => typeof b[k] !== 'number' || !Number.isFinite(b[k]) || (b[k] as number) < 0)
       || !isRecord(b.dischargeHoming)) issues.push('$.smokeBehavior: complete nonnegative finite tuning required');
     else {

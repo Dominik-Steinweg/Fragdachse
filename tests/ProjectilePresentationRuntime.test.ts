@@ -73,7 +73,7 @@ describe('ProjectilePresentationRuntime', () => {
     const leaf = passiveRenderer();
     runtime.bindRenderers(Object.fromEntries(['bullet', 'projectileBurn', 'flame', 'leafBlower', 'bfg',
       'energyBall', 'hydra', 'gauss', 'holyGrenade', 'rocket', 'fireball', 'spore', 'grenade',
-      'translocatorPuck', 'teslaBolt', 'tracer'].map(key => [key, leaf])) as never, null);
+      'translocatorPuck', 'teslaBolt', 'plasmaBurnerCharge', 'tracer'].map(key => [key, leaf])) as never, null);
     runtime.bindGroundFogSegments(sink);
     const shot = projectile({ style, vx: 480, velocityDecay: .5, suppressSpawnFx: true, weaponSourceId: 'BFG' });
     runtime.presentClientFrame(replica.sync([shot], 1000));
@@ -239,6 +239,7 @@ describe('ProjectilePresentationRuntime', () => {
       grenade: renderers,
       translocatorPuck: renderers,
       teslaBolt: renderers,
+      plasmaBurnerCharge: renderers,
       tracer: renderers,
       muzzleFlash,
     } as never, null);
@@ -291,6 +292,7 @@ describe('ProjectilePresentationRuntime', () => {
       grenade: renderers,
       translocatorPuck: renderers,
       teslaBolt: renderers,
+      plasmaBurnerCharge: renderers,
       tracer: renderers,
     } as never, null);
 
@@ -335,6 +337,7 @@ describe('ProjectilePresentationRuntime', () => {
       grenade: renderers,
       translocatorPuck: renderers,
       teslaBolt: renderers,
+      plasmaBurnerCharge: renderers,
       tracer: renderers,
     } as never, null);
 

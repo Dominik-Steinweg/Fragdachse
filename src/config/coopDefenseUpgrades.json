@@ -2071,6 +2071,222 @@
                                                                   }
                                             },
                                             {
+                                              "id": "plasma_burner_range",
+                                              "code": "C-I2-1",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "bossPointCostPerLevel": 0,
+                                              "refundable": true,
+                                              "sortOrder": 1,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "unlock_plasma_burner",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.range",
+                                                  "mode": "add_per_level",
+                                                  "value": 60
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "plasma_burner_charges",
+                                              "code": "C-I2-2",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "bossPointCostPerLevel": 0,
+                                              "refundable": true,
+                                              "sortOrder": 2,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "unlock_plasma_burner",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.plasmaBurner.chargesLevel",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "plasma_burner_target_lock",
+                                              "code": "C-I2-3",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "bossPointCostPerLevel": 0,
+                                              "refundable": true,
+                                              "sortOrder": 3,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "unlock_plasma_burner",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.plasmaBurner.targetLockLevel",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "plasma_burner_overload",
+                                              "code": "C-I2-C",
+                                              "kind": "upgrade",
+                                              "maxLevel": 1,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 0,
+                                              "bossPointCostPerLevel": 1,
+                                              "refundable": true,
+                                              "sortOrder": 4,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "unlock_plasma_burner",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.plasmaBurner.overloadEnabled",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "plasma_burner_capacitor",
+                                              "code": "C-I2-4",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "bossPointCostPerLevel": 0,
+                                              "refundable": true,
+                                              "sortOrder": 5,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "plasma_burner_overload",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.plasmaBurner.capacitorLevel",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "plasma_burner_retention",
+                                              "code": "C-I2-5",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "bossPointCostPerLevel": 0,
+                                              "refundable": true,
+                                              "sortOrder": 6,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "plasma_burner_overload",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.plasmaBurner.retentionLevel",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "plasma_burner_chain",
+                                              "code": "C-I2-D",
+                                              "kind": "upgrade",
+                                              "maxLevel": 1,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 0,
+                                              "bossPointCostPerLevel": 1,
+                                              "refundable": true,
+                                              "sortOrder": 7,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "plasma_burner_overload",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.plasmaBurner.chainEnabled",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "plasma_burner_cascade",
+                                              "code": "C-I2-6",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "bossPointCostPerLevel": 0,
+                                              "refundable": true,
+                                              "sortOrder": 8,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "plasma_burner_chain",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.plasmaBurner.cascadeLevel",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "plasma_burner_coupling",
+                                              "code": "C-I2-7",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "bossPointCostPerLevel": 0,
+                                              "refundable": true,
+                                              "sortOrder": 9,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "plasma_burner_chain",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "weapon.PLASMA_BURNER.plasmaBurner.couplingLevel",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
                                                 "id":  "unlock_overcharge_core",
                                                 "code":  "C-I1",
                                                 "kind":  "unlock",

@@ -30,6 +30,7 @@ function fixture() {
     { body: { enable: true, velocity: { x: 0, y: 0 }, setVelocity: vi.fn() }, getCollisionRadius: () => radius,
       setCollisionRadius: (value: number) => { radius = value; }, setDashScale: vi.fn(), positionRevision: 0 });
   Object.assign(player, { physicsProxy: player });
+  Object.defineProperty(player.body, 'center', { get: () => ({ x: player.x, y: player.y }) });
   const players = { getPlayer: (id: string) => id === 'p1' ? player : undefined, getAllPlayers: () => [player] };
   const network = { isHost: () => true, getPlayerProfile: players.getPlayer, areTeammates: () => false,
     broadcastAudioFeedback: vi.fn(),

@@ -63,7 +63,7 @@ export interface CombatSourceLineage {
   readonly parentProjectileId?: number;
   readonly reflected?: boolean;
   readonly plasmaSwarmChild?: boolean;
-  readonly plasmaSwarmOriginEnemyId?: string;
+  readonly originTarget?: import('../projectile/ProjectileOrigin').ProjectileOriginTarget;
 }
 
 export interface CombatSourceCorrelation {

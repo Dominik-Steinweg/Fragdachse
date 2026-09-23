@@ -22,6 +22,8 @@ type CombatStateReader = {
 
 type HostDecoy = Readonly<DecoyState>;
 export interface DecoyTargetSnapshot {
+  readonly hp: number;
+  readonly maxHp: number;
   readonly id: number;
   readonly ownerId: string;
   readonly x: number;
@@ -290,7 +292,7 @@ export class DecoySystem {
   }
 
   private targetSnapshot(decoy: HostDecoy): DecoyTargetSnapshot {
-    return { id: decoy.id, ownerId: decoy.ownerId, x: decoy.position.x, y: decoy.position.y,
+    return { id: decoy.id, ownerId: decoy.ownerId, hp: decoy.hp, maxHp: decoy.maxHp, x: decoy.position.x, y: decoy.position.y,
       radius: PLAYER_SIZE / 2, body: this.bodies.get(decoy.id)?.body ?? null };
   }
 

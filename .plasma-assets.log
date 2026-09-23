@@ -1,0 +1,58 @@
+
+> fragdachse@0.1.0 test:assets
+> vitest run --pool=threads --exclude build/** --exclude art/** tests/assets
+
+
+ RUN  v3.2.7 C:/Fragdachse
+
+ ✓ tests/assets/AssetPipelineViewer.test.ts (4 tests) 22ms
+ ✓ tests/assets/BaseGroundingAssets.test.ts (1 test) 178ms
+ ✓ tests/assets/AssetPipelineExport.test.ts (6 tests) 224ms
+ ✓ tests/assets/LobbyForestAssets.test.ts (13 tests) 253ms
+ ✓ tests/assets/ForestModalAssets.test.ts (1 test) 43ms
+ ✓ tests/assets/WaterMaskParity.test.ts (4 tests) 512ms
+ ✓ tests/assets/DeferredAssets.test.ts (2 tests) 161ms
+ ✓ tests/assets/TrackGravelAssets.test.ts (2 tests) 645ms
+   ✓ railway gravel production assets > loads distinct high-resolution RGBA material stamps with visible gravel and transparent gaps  640ms
+ ✓ tests/assets/UpgradeIconAudit.test.ts (1 test) 208ms
+ ✓ tests/assets/AssetPipelineCatalog.test.ts (6 tests) 83ms
+ ✓ tests/assets/PersistentBaseGravel.test.ts (8 tests) 90ms
+ ✓ tests/assets/GroundCoverField.test.ts (11 tests) 570ms
+stdout | tests/assets/AssetPipelineV2Preview.test.ts > Disposable V2 authoring previews > regenerates old preview manifests without Blender and preserves production files
+Vorschau OK: example / rich · 2 Posen · ? s · Gerät unbekannt
+Technik: Render vorhanden; Ästhetik und Bewegung separat prüfen.
+C:\Users\domin\AppData\Local\Temp\fd-preview-6M7rbl\art\poc\pipeline-v2\previews\test\example\comparison.png
+C:\Users\domin\AppData\Local\Temp\fd-preview-6M7rbl\art\poc\pipeline-v2\previews\test\example\scale.png
+
+ ✓ tests/assets/RockMossField.test.ts (11 tests) 658ms
+stdout | tests/assets/AssetPipelineV2Preview.test.ts > Disposable V2 authoring previews > regenerates old preview manifests without Blender and preserves production files
+Vorschau OK: example / rich · 2 Posen · ? s · Gerät unbekannt
+Technik: Render vorhanden; Ästhetik und Bewegung separat prüfen.
+C:\Users\domin\AppData\Local\Temp\fd-preview-6M7rbl\art\poc\pipeline-v2\previews\test\example\comparison.png
+C:\Users\domin\AppData\Local\Temp\fd-preview-6M7rbl\art\poc\pipeline-v2\previews\test\example\scale.png
+
+stdout | tests/assets/AssetPipelineV2Preview.test.ts > Disposable V2 authoring previews > reviews a new held utility from a loadout icon without assuming legacy grip coordinates
+Vorschau OK: zeus / standard · 1 Posen · ? s · Gerät unbekannt
+Technik: Render vorhanden; Ästhetik und Bewegung separat prüfen.
+C:\Users\domin\AppData\Local\Temp\fd-preview-IWZmvh\art\poc\pipeline-v2\previews\new-utility\zeus\comparison.png
+C:\Users\domin\AppData\Local\Temp\fd-preview-IWZmvh\art\poc\pipeline-v2\previews\new-utility\zeus\scale.png
+
+ ✓ tests/assets/PipelineRuntimeAssets.test.ts (5 tests) 1654ms
+   ✓ selected runtime asset package > keeps the wall material on the identical 32-pixel grid with byte-identical alpha  822ms
+   ✓ selected runtime asset package > ships unchanged selected PNGs, valid gutters, idle cells and explicit clip frames  801ms
+ ✓ tests/assets/AssetPipelineV2Preview.test.ts (8 tests) 2489ms
+   ✓ Disposable V2 authoring previews > regenerates old preview manifests without Blender and preserves production files  1851ms
+   ✓ Disposable V2 authoring previews > reviews a new held utility from a loadout icon without assuming legacy grip coordinates  419ms
+ ✓ tests/assets/RockVegetationField.test.ts (15 tests) 1592ms
+   ✓ Rock vegetation reach mask sheet > doubles the rock sheet frame for frame and grows outward from the silhouette  1044ms
+ ✓ tests/assets/AssetPipelineV2Export.test.ts (10 tests) 3325ms
+   ✓ V2 animated asset export contracts > exports and selects a static weapon and retains its socket contract  1214ms
+   ✓ V2 animated asset export contracts > publishes consistent sheet metadata and rejects divergent variant clips  557ms
+   ✓ V2 animated asset export contracts > binds every selected animation/source file immutably and verifies archive inventory  421ms
+   ✓ V2 animated asset export contracts > archives reference images, raw review JSON and its helper without changing render/export provenance  390ms
+
+ Test Files  17 passed (17)
+      Tests  108 passed (108)
+   Start at  00:36:28
+   Duration  4.61s (transform 4.16s, setup 0ms, collect 9.50s, tests 12.71s, environment 4ms, prepare 3.30s)
+

@@ -1,3 +1,5 @@
+import { PlasmaBurnerRuntime } from '../src/world/PlasmaBurnerRuntime';
+import { getHitscanRangeToCursor } from '../src/loadout/WeaponFireExecutor';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -29,97 +31,24 @@ function createManagerWithSpawnSpy() {
 }
 
 describe('inspector support weapons', () => {
-  it('fires the Plasmabrenner as a continuous, context-sensitive hitscan', () => {
-    const { adapter, spawnProjectile, resolveImmediateAttack } = createManagerWithSpawnSpy();
-    const productionConfig = WEAPON_CONFIGS.PLASMA_BURNER;
-
-    expect(getLoadoutItemName(productionConfig.id, 'de').trim().length).toBeGreaterThan(0);
-    expect(productionConfig.shotAudio).toMatchObject({ failureKey: 'shot_dry_trigger' });
-    expect(productionConfig.fire).toMatchObject({
-      type: 'hitscan',
-      visualPreset: 'plasma_burner',
-      supportEffect: {
-        type: 'plasma_burner',
-        beamColor: PLASMA_BURNER_COLOR,
-      },
-    });
-    if (productionConfig.fire.type !== 'hitscan') {
-      throw new Error('Der Plasmabrenner muss eine Hitscan-Waffe sein');
-    }
-
-    const supportEffect = {
-      type: 'plasma_burner' as const,
-      healPerHit: 3,
-      damagePerHit: 7,
-      beamColor: 0x123456,
-    };
-    const testConfig = {
-      ...productionConfig,
-      range: 123,
-      damage: 11,
-      adrenalinGain: 5,
-      fire: {
-        ...productionConfig.fire,
-        traceThickness: 9,
-        supportEffect,
-      },
-    };
-
-    expect(adapter.fire(
-      testConfig,
-      {
-        x: 100, y: 200, angle: 0, targetX: 500, targetY: 200,
-        ownerId: 'inspector', ownerColor: 0x22cc88,
-      },
-    )).toBe(true);
-
-    expect(spawnProjectile).not.toHaveBeenCalled();
-    const call = resolveImmediateAttack.mock.calls[0]?.[0];
-    expect(call?.kind).toBe('hitscan');
-    expect(call?.payload.range).toBe(testConfig.range);
-    expect(call?.payload.damage).toBe(testConfig.damage);
-    expect(call?.payload.traceThickness).toBe(testConfig.fire.traceThickness);
-    expect(call?.payload.adrenalinGain).toBe(testConfig.adrenalinGain);
-    expect(call?.payload.sourceId).toBe(testConfig.id);
-    expect(call?.payload.visualPreset).toBe(testConfig.fire.visualPreset);
-    expect(call?.payload.supportEffect).toEqual(supportEffect);
+  it('routes support pulses through the dedicated host owner and rejects generic hitscan execution', () => {
+    const config=WEAPON_CONFIGS.PLASMA_BURNER;
+    expect(config.range).toBe(300);
+    expect(getLoadoutItemName(config.id, 'de').trim().length).toBeGreaterThan(0);
+    expect(config.fire).toMatchObject({type:'hitscan',supportEffect:{type:'plasma_burner',beamColor:PLASMA_BURNER_COLOR}});
+    const {adapter,resolveImmediateAttack}=createManagerWithSpawnSpy();
+    expect(()=>adapter.fire(config,{x:0,y:0,angle:0,targetX:100,targetY:0,ownerId:'i',ownerColor:0xffffff})).toThrow('PlasmaBurnerRuntime');
+    expect(resolveImmediateAttack).not.toHaveBeenCalled();
+    const resolvePlasmaBurnerPulse=vi.fn(()=>({accepted:true,contacts:[],chainMemberKeys:[],lock:null}));
+    const runtime=new PlasmaBurnerRuntime({resolvePlasmaBurnerPulse},{spawnProjectile:vi.fn()});
+    expect(runtime.firePulse({playerId:'i',config,nowMs:0,x:0,y:0,angle:0,targetX:100,targetY:0})).toBe(true);
+    expect(resolvePlasmaBurnerPulse).toHaveBeenCalledOnce();
   });
 
-  it('limits the Plasmabrenner trace to the cursor while retaining its maximum range', () => {
-    const { adapter, resolveImmediateAttack } = createManagerWithSpawnSpy();
-    const config = WEAPON_CONFIGS.PLASMA_BURNER;
-    const startX = 100;
-    const startY = 200;
-    const angle = 0;
-    const muzzle = getTopDownMuzzleOrigin(startX, startY, angle);
-    const cursorX = muzzle.x + 80;
-
-    const secondAdapter = new AutomatedWeaponExecutionAdapter(
-      new WorldWeaponExecutionRuntime({
-        projectileSpawn: { spawnProjectile: vi.fn() },
-        combatSystem: {
-          resolveSafeHitscanStart: vi.fn((_shooterX, _shooterY, x, y) => ({ x, y })),
-          resolveImmediateAttack,
-        },
-      }),
-      { spawnProjectile: vi.fn() },
-    );
-
-    adapter.fire(config, {
-      x: startX, y: startY, angle, targetX: cursorX, targetY: startY,
-      ownerId: 'inspector', ownerColor: 0x22cc88,
-    });
-    expect(resolveImmediateAttack.mock.calls[0]?.[0].kind).toBe('hitscan');
-    expect(resolveImmediateAttack.mock.calls[0]?.[0].payload.range).toBeCloseTo(cursorX - muzzle.x, 10);
-
-    secondAdapter.fire(
-      config,
-      {
-        x: startX, y: startY, angle, targetX: muzzle.x + config.range + 200, targetY: startY,
-        ownerId: 'inspector', ownerColor: 0x22cc88,
-      },
-    );
-    expect(resolveImmediateAttack.mock.calls[1]?.[0].payload.range).toBe(config.range);
+  it('retains the cursor limit within its maximum range', () => {
+    const config=WEAPON_CONFIGS.PLASMA_BURNER;
+    expect(getHitscanRangeToCursor(config,20,0,0,100,0)).toBe(80);
+    expect(getHitscanRangeToCursor(config,20,0,0,1000,0)).toBe(300);
   });
 
   it('fires the energy injector as a precise non-homing projectile', () => {

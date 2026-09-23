@@ -226,6 +226,7 @@ export type WeaponFireConfig =
 export interface WeaponConfigShape extends FogTrailModifiers {
   /** Resolved normal flames captured before the fireball conversion. Runtime-only. */
   readonly fireballFlameConfig?: WeaponConfigShape;
+  readonly plasmaBurner?: import('./PlasmaBurnerConfig').PlasmaBurnerConfig;
   readonly rocketLauncher?: import('./RocketLauncherConfig').RocketLauncherConfig;
   readonly id: string;
   readonly cooldown: number;            // ms zwischen zwei Schüssen

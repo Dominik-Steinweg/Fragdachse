@@ -65,6 +65,23 @@ describe('smoke perception and lifetime', () => {
     runtime.updateExposure([smokeTarget()], 410);
     expect(runtime.getConfusion('enemy-1', 410)?.fraction).toBe(config.behavior.confusionFraction);
   });
+  it('builds confusion up gradually and resumes the current level on re-entry instead of resetting it', () => {
+    const { runtime } = smokeHarness();
+    const config = smokeEffect({ confusionBuildupMs: 1000, confusionFraction: 0.5 });
+    runtime.createCloud(0, 0, config, smokeSource(), 0);
+    runtime.updateExposure([smokeTarget()], 100);
+    expect(runtime.getConfusion('enemy-1', 100)?.fraction).toBe(0);
+    runtime.updateExposure([smokeTarget()], 600);
+    expect(runtime.getConfusion('enemy-1', 600)?.fraction).toBeCloseTo(0.125);
+    expect(runtime.getConfusion('enemy-1', 1100)?.fraction).toBeCloseTo(0.5);
+
+    runtime.updateExposure([smokeTarget('enemy-1', 200)], 600);
+    expect(runtime.getConfusion('enemy-1', 700)?.fraction).toBeCloseTo(0.125);
+    runtime.updateExposure([smokeTarget()], 700);
+    expect(runtime.getConfusion('enemy-1', 700)?.fraction).toBeCloseTo(0.125);
+    expect(runtime.getConfusion('enemy-1', 950)?.fraction).toBeCloseTo(0.5 * 0.75 ** 2);
+    expect(runtime.getTargetSnapshots(950)[0].confusionIntensity).toBeCloseTo(0.75 ** 2);
+  });
   it('blocks crossing rays, allows near sight and respects shielding obstacles', () => {
     let clear = true; const { runtime } = smokeHarness(() => clear);
     runtime.createCloud(0, 0, smokeEffect({ nearSightPx: 30 }), smokeSource(), 0);

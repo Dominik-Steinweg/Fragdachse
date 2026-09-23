@@ -112,7 +112,7 @@ describe('shared smoke presentation', () => {
     let litTime = 0;
     for (; litTime < 1000; litTime += 10) {
       scene.time.now = litTime;
-      effect.update(target, epoch + 5000, epoch + 5000, epoch + litTime, .96);
+      effect.update(target, epoch + 5000, 1, epoch + 5000, epoch + litTime, .96);
       if (statuses.some(o => o.depth > DEPTH.SMOKE && o.visible && o.alpha > 0)) break;
     }
     expect(litTime).toBeLessThan(1000);
@@ -120,10 +120,10 @@ describe('shared smoke presentation', () => {
     expect(above).toHaveLength(1);
     expect(statuses.filter(o => o.depth < DEPTH.SMOKE && o.visible && o.alpha > 0).length).toBeGreaterThan(1);
     const before = statuses.filter(o => o.depth < DEPTH.SMOKE).map(o => o.alpha);
-    effect.update(target, epoch + 5000, epoch + 5000, epoch + litTime, 0);
+    effect.update(target, epoch + 5000, 1, epoch + 5000, epoch + litTime, 0);
     expect(above[0].visible).toBe(false);
     expect(statuses.filter(o => o.depth < DEPTH.SMOKE).map(o => o.alpha)).toEqual(before);
-    effect.update(target, epoch + 5000, epoch + 5000, epoch + 4850, 0);
+    effect.update(target, epoch + 5000, 1, epoch + 5000, epoch + 4850, 0);
     const fading = statuses.filter(o => o.depth < DEPTH.SMOKE).map(o => o.alpha);
     expect(fading.every((alpha, i) => alpha <= before[i])).toBe(true);
     expect(fading.some((alpha, i) => alpha < before[i])).toBe(true);
@@ -138,7 +138,7 @@ describe('shared smoke presentation', () => {
     vulnerability.setActive(false); vulnerability.sync(target);
     expect(overlay.alpha).toBeLessThan(fullAlpha);
     scene.time.now += 300; vulnerability.sync(target); expect(overlay.active).toBe(false);
-    effect.update({ ...target, visible: false }, epoch + 5000, epoch + 5000, epoch + litTime, 1);
+    effect.update({ ...target, visible: false }, epoch + 5000, 1, epoch + 5000, epoch + litTime, 1);
     expect(statuses.every(o => !o.visible)).toBe(true);
     effect.destroy(); vulnerability.destroy(); expect(cosmetic.every(o => !o.active)).toBe(true);
   });
@@ -151,7 +151,7 @@ describe('shared smoke presentation', () => {
     const renderer = new SmokeSystem(scene);
     const epoch = Date.UTC(2026, 8, 8);
     let target: any = { sprite: new HealthTestObject(scene, 200, 200), bodySize: 40, visible: true };
-    renderer.syncTargetVisuals([{ enemyId: 'enemy', confusedUntil: epoch + 1000, chargedUntil: epoch + 1000 }], epoch, () => target);
+    renderer.syncTargetVisuals([{ enemyId: 'enemy', confusedUntil: epoch + 1000, confusionIntensity: 1, chargedUntil: epoch + 1000 }], epoch, () => target);
     frame(); const initial = [...cosmetic]; expect(initial.length).toBeGreaterThan(0);
     target = { ...target, sprite: new HealthTestObject(scene, 210, 220) }; frame();
     expect(initial.every(o => !o.active)).toBe(true);

@@ -1,3 +1,8 @@
+import { getHitscanRangeToCursor } from '../loadout/WeaponFireExecutor';
+import { plasmaBurnerTargetEffect, type PlasmaBurnerTarget, type PlasmaBurnerTargetCatalogPort } from './plasmaBurner/PlasmaBurnerTargetPolicy';
+import { resolvePlasmaBurnerChain } from './plasmaBurner/PlasmaBurnerChainResolver';
+import { canHoldPlasmaBurnerLock } from './plasmaBurner/PlasmaBurnerTargetLock';
+import type { PlasmaBurnerPulseRequest, PlasmaBurnerPulseOutcome, PlasmaBurnerContact, PlasmaBurnerChargeImpactRequest, PlasmaBurnerStructurePort } from './plasmaBurner/PlasmaBurnerContracts';
 import { PressureShieldSystem } from '../systems/PressureShieldSystem';
 import type { CombatStunStatusSystem } from '../systems/CombatStunStatusSystem';
 import type { MolotovWildfireDeath } from '../types';
@@ -81,7 +86,6 @@ import {
   PLASMA_SWARM_BASE_EXPLOSION_RADIUS,
   PLASMA_SWARM_BASE_PROJECTILE_COUNT,
   type PlasmaSwarmMechanicPort,
-  shouldIgnorePlasmaSwarmOriginHit,
 } from '../systems/PlasmaCharge';
 import type { TargetStatusTarget } from '../systems/TargetStatusSystem';
 import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
@@ -307,12 +311,6 @@ export interface LineOfFireOptions extends ObstacleShotOptions {
   readonly clearanceRadius?: number;
 }
 
-export interface HitscanSupportImpact {
-  readonly targetType: 'player' | 'rock' | 'base';
-  readonly targetId: string;
-  readonly x: number;
-  readonly y: number;
-}
 
 /**
  * Trefferziel eines Hitscans: kanonische Position und Trefferradius.
@@ -514,12 +512,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
     return this.currentHostExecution.sources.random;
   }
-  private onHitscanSupportImpact: ((
-    impact: HitscanSupportImpact,
-    effect: HitscanSupportEffect,
-    attackerId: string,
-    sourceSlot?: LoadoutSlot,
-  ) => void) | null = null;
+  private plasmaBurnerCatalog: PlasmaBurnerTargetCatalogPort | null = null;
+  private plasmaBurnerStructures: PlasmaBurnerStructurePort | null = null;
   /** Host-authoritative gate for actual post-death respawns. */
   private respawnAllowedResolver: ((playerId: string) => boolean) | null = null;
   /** Initialspawn has intentionally different semantics from a post-death respawn. */
@@ -927,14 +921,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   setPlasmaSwarmReactionHandler(handler: ((impact: ProjectilePlasmaSwarmImpact) => void) | null): void {
     this.onPlasmaSwarmReaction = handler;
   }
-  setHitscanSupportImpactCallback(handler: ((
-    impact: HitscanSupportImpact,
-    effect: HitscanSupportEffect,
-    attackerId: string,
-    sourceSlot?: LoadoutSlot,
-  ) => void) | null): void {
-    this.onHitscanSupportImpact = handler;
-  }
+
   private getTargetIncomingDamageMultiplierAtHostTime(target: TargetStatusTarget): number {
     return Math.max(0, this.targetIncomingDamageMultiplierResolver?.(target, this.hostFrameNowMs) ?? 1);
   }
@@ -2678,6 +2665,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     primaryHitReward?: PrimaryHitAdrenalineRewardIntent,
     sourceCarrierBaseId?: string,
   ): boolean {
+    if (supportEffect) throw new Error('Support hitscan requires PlasmaBurnerCombatPort');
     if (!this.bridge.isHost()) return false;
 
     const segments = this.traceHitscanPath({
@@ -2688,24 +2676,15 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       range,
       traceThickness,
       applyFavorTheShooter: true,
-      includeShooter: Boolean(supportEffect),
-      purpose: supportEffect ? 'support' : 'directFire',
+      includeShooter: false,
+      purpose: 'directFire',
       sourceCarrierBaseId,
     });
     for (const [index, segment] of segments.entries()) {
       const { trace, startX, startY } = segment;
       const multiplier = portalDamageMultiplier(segment.portalDamage);
     if (this.bubbleChargePort) {
-      let chargeDamage = (supportEffect?.damagePerHit ?? damage) * multiplier;
-      if (supportEffect) {
-        const healsPlayer = trace.hitPlayerId && this.relationshipForSource(
-          this.createLegacyMutationSource(shooterId, sourceId, 'support'), trace.hitPlayerId,
-        ).canSupport;
-        const baseId = trace.hitObstacleKind === 'base'
-          ? this.resolveHitscanBaseId(trace.endX, trace.endY, Math.cos(angle), Math.sin(angle)) : undefined;
-        if (healsPlayer || trace.hitObstacleKind === 'rock'
-          || (baseId && this.baseManager?.getBase(baseId)?.faction !== 'hostile')) chargeDamage = 0;
-      }
+      const chargeDamage = damage * multiplier;
       this.bubbleChargePort.observeHitscan(startX, startY, trace.endX, trace.endY, traceThickness, chargeDamage, this.hostFrameNowMs);
     }
 
@@ -2715,7 +2694,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       startY: Math.round(startY),
       endX: Math.round(trace.endX),
       endY: Math.round(trace.endY),
-      color: supportEffect?.beamColor ?? playerColor,
+      color: playerColor,
       thickness: traceThickness,
       impactKind: (trace.hitPlayerId || trace.hitEnemyId) ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       visualPreset,
@@ -2741,24 +2720,6 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const damageMultiplier = portalDamageMultiplier(final.portalDamage);
     damage *= damageMultiplier;
     burnOnHit = scalePortalDamagePayload(burnOnHit, damageMultiplier);
-    if (supportEffect) supportEffect = { ...supportEffect, damagePerHit: supportEffect.damagePerHit * damageMultiplier };
-
-    if (supportEffect) {
-      this.resolveHitscanSupportImpact(
-        trace,
-        supportEffect,
-        shooterId,
-        startX,
-        startY,
-        angle,
-        sourceId,
-        sourceSlot,
-        adrenalinGain,
-        primaryHitReward,
-      );
-      return true;
-    }
-
     if (trace.hitPlayerId) {
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
@@ -2853,117 +2814,142 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   /**
-   * Kontextabhaengiger Hitscan-Treffer des Plasmabrenners. Die Zielentscheidung bleibt im
-   * WorldCombatCore, waehrend Reparaturen an hostautoritaeren Strukturen beim Host-Update liegen.
-   * Feindlicher Schaden nutzt bewusst denselben Schadenstrichter wie jede andere Hitscan-Waffe.
+   * Dedicated support contact boundary. The catalog reads targets; mutation ports commit
+   * damage and repair and report their actual amounts for overload and charge generation.
    */
-  private resolveHitscanSupportImpact(
-    trace: HitscanTraceResult,
-    effect: HitscanSupportEffect,
-    shooterId: string,
-    startX: number,
-    startY: number,
-    angle: number,
-    sourceId: string,
-    sourceSlot?: WeaponSlot,
-    _adrenalinGain = 0,
-    primaryHitReward?: PrimaryHitAdrenalineRewardIntent,
-  ): void {
-    const dirX = Math.cos(angle);
-    const dirY = Math.sin(angle);
 
-    const damageTarget = (targetId: string): void => {
-      const loadoutMult = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
-      const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
-      const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
-      if (actualDamage <= 0) return;
-      if (this.shouldBlockWithShield(targetId, 'hitscan', actualDamage, startX, startY)) return;
-      const outcome = this.applyDamage(
-        targetId,
-        actualDamage,
-        false,
-        shooterId,
-        sourceId,
-        { sourceX: startX, sourceY: startY, dirX, dirY },
-        { sourceSlot, damageKind: 'direct' },
-      );
-      this.publishPrimaryHitReward(outcome, primaryHitReward, { x: trace.endX, y: trace.endY });
-    };
-
-    if (trace.hitPlayerId) {
-      const targetId = trace.hitPlayerId;
-      const friendly = this.relationshipForSource(
-        this.createLegacyMutationSource(shooterId, sourceId, 'support'), targetId,
-      ).canSupport;
-      if (friendly) {
-        const before = this.getHP(targetId);
-        const after = this.heal(targetId, effect.healPerHit);
-        if (after > before) {
-          this.onHitscanSupportImpact?.(
-            { targetType: 'player', targetId, x: trace.endX, y: trace.endY },
-            effect,
-            shooterId,
-            sourceSlot,
-          );
-        }
-      } else {
-        damageTarget(targetId);
-      }
-      return;
-    }
-
-    if (trace.hitEnemyId) {
-      damageTarget(trace.hitEnemyId);
-      return;
-    }
-
-    if (trace.hitDecoyId !== null) {
-      const loadoutMult = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
-      const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
-      const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
-      if (actualDamage <= 0) return;
-      const outcome = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, sourceId, {
-        sourceX: startX,
-        sourceY: startY,
-        dirX,
-        dirY,
-      }) ?? null;
-      this.publishPrimaryHitReward(outcome, primaryHitReward, { x: trace.endX, y: trace.endY });
-      return;
-    }
-
-    if (!trace.hitObstacle) return;
-    if (trace.hitObstacleKind === 'rock' && trace.hitObstacleIndex !== undefined) {
-      this.onHitscanSupportImpact?.(
-        {
-          targetType: 'rock',
-          targetId: String(trace.hitObstacleIndex),
-          x: trace.endX,
-          y: trace.endY,
-        },
-        effect,
-        shooterId,
-        sourceSlot,
-      );
-      return;
-    }
-
-    if (trace.hitObstacleKind === 'base') {
-      const targetId = trace.hitBaseId ?? this.resolveHitscanBaseId(trace.endX, trace.endY, dirX, dirY);
-      if (!targetId) return;
-      this.onHitscanSupportImpact?.(
-        { targetType: 'base', targetId, x: trace.endX, y: trace.endY },
-        effect,
-        shooterId,
-        sourceSlot,
-      );
-    }
+  setPlasmaBurnerTargetCatalog(catalog: PlasmaBurnerTargetCatalogPort | null): void { this.plasmaBurnerCatalog = catalog; }
+  setPlasmaBurnerStructurePort(port: PlasmaBurnerStructurePort | null): void { this.plasmaBurnerStructures = port; }
+  canSupportPlasmaBurnerTarget(ownerId: string, targetId: string): boolean {
+    return this.relationshipForSource(this.createLegacyMutationSource(ownerId, 'PLASMA_BURNER', 'support'), targetId).canSupport;
   }
 
+  resolvePlasmaBurnerPulse(req: PlasmaBurnerPulseRequest): PlasmaBurnerPulseOutcome {
+    return this.runHostExecution(() => {
+      const empty = { accepted: false, contacts: [], chainMemberKeys: [], lock: null };
+      if (!this.bridge.isHost() || !this.plasmaBurnerCatalog || req.config.fire.type !== 'hitscan'
+        || !req.config.fire.supportEffect) return empty;
+      const effect = req.config.fire.supportEffect;
+      const desired = req.gameplayMuzzleOrigin ?? { x: req.x, y: req.y };
+      const start = this.resolveSafeHitscanStart(req.x, req.y, desired.x, desired.y, { purpose: 'support' });
+      const options = { shooterId: req.playerId, startX: start.x, startY: start.y, angle: req.angle,
+        range: getHitscanRangeToCursor(req.config, start.x, start.y, req.angle, req.targetX, req.targetY),
+        traceThickness: req.config.fire.traceThickness, applyFavorTheShooter: true,
+        includeShooter: false, purpose: 'support' as const };
+      let path = this.traceHitscanPath(options);
+      const readTrace = (trace: HitscanTraceResult, fromX = start.x, fromY = start.y): PlasmaBurnerTarget | null => {
+        const key = trace.hitPlayerId ? 'player:' + trace.hitPlayerId : trace.hitEnemyId ? 'enemy:' + trace.hitEnemyId
+          : trace.hitDecoyId != null ? 'decoy:' + trace.hitDecoyId
+          : trace.hitBaseId ? 'base:' + trace.hitBaseId
+          : trace.hitObstacleKind === 'base' ? 'base:' + this.resolveHitscanBaseId(trace.endX, trace.endY, Math.cos(req.angle), Math.sin(req.angle))
+          : trace.hitObstacleKind === 'rock' ? 'rock:' + trace.hitObstacleIndex : null;
+        if (!key) return null;
+        const target = this.plasmaBurnerCatalog!.read(key, req.playerId, fromX, fromY);
+        if (target) return target;
+        if (trace.hitObstacleKind !== 'rock' || trace.hitObstacleIndex === undefined) return null;
+        return { key, kind: 'rock', id: String(trace.hitObstacleIndex), category: 'environment',
+          x: trace.endX, y: trace.endY, hp: 1, maxHp: 1, alive: true, damageable: true,
+          supportable: false, self: false, automatic: false };
+      };
+      const mouseEnd = path[path.length - 1];
+      let primary = readTrace(mouseEnd.trace, mouseEnd.startX, mouseEnd.startY);
+      const directlyTargeted = primary && primary.category !== 'environment' && plasmaBurnerTargetEffect(primary, 'direct') !== null;
+      let locked = false;
+      if (!directlyTargeted && req.lock) {
+        const target = this.plasmaBurnerCatalog.read(req.lock, req.playerId, start.x, start.y);
+        if (canHoldPlasmaBurnerLock(target, { ...start, angle: req.angle, range: req.config.range,
+          toleranceDegrees: req.stats.lockToleranceDegrees,
+          firstTargetAt: angle => readTrace(this.traceHitscan({ ...options, angle, range: req.config.range }))?.key ?? null })) {
+          const angle = Math.atan2(target.y - start.y, target.x - start.x);
+          path = [{ startX: start.x, startY: start.y, trace: this.traceHitscan({ ...options, angle, range: req.config.range }) }];
+          primary = target; locked = true;
+        }
+      }
+      const chain = primary && plasmaBurnerTargetEffect(primary, 'direct') ? resolvePlasmaBurnerChain({
+        primary, previous: req.chainMemberKeys, maxJumps: req.stats.maxJumps, radius: req.stats.couplingRadius,
+        read: (key, from) => this.plasmaBurnerCatalog!.read(key, req.playerId, from.x, from.y),
+        candidates: from => this.plasmaBurnerCatalog!.query(req.playerId, from.x, from.y, req.stats.couplingRadius),
+        visible: (from, to) => this.hasChainLineOfSight(from.x, from.y, to.x, to.y, { purpose: 'support' }),
+      }) : [];
+      const contacts: PlasmaBurnerContact[] = [];
+      const last = path[path.length - 1];
+      const segments: Array<[number, number, number, number, 0 | 1 | 2]> = path.map(p =>
+        [p.startX, p.startY, p.trace.endX, p.trace.endY, 0]);
+      if (primary) {
+        const contact = this.applyBurnerContact(primary, effect.damagePerHit * req.multiplier * portalDamageMultiplier(last.portalDamage),
+          effect.healPerHit * req.multiplier, req.playerId, req.sourceSlot, last.startX, last.startY,
+          req.config.rockDamageMult ?? 1, effect.baseDamageMult ?? req.config.baseDamageMult ?? 1, 'direct');
+        contacts.push({ ...contact, target: { ...primary, x: last.trace.endX, y: last.trace.endY }, portalDamage: last.portalDamage });
+        segments[segments.length - 1][4] = contact.fx;
+      }
+      let fromX = last.trace.endX, fromY = last.trace.endY;
+      for (const target of chain) {
+        const contact = this.applyBurnerContact(target, effect.damagePerHit * req.multiplier * req.stats.secondaryFactor * portalDamageMultiplier(last.portalDamage),
+          effect.healPerHit * req.multiplier * req.stats.secondaryFactor, req.playerId, req.sourceSlot, fromX, fromY,
+          req.config.rockDamageMult ?? 1, effect.baseDamageMult ?? req.config.baseDamageMult ?? 1, 'automatic');
+        contacts.push({ ...contact, portalDamage: last.portalDamage });
+        segments.push([fromX, fromY, target.x, target.y, contact.fx]);
+        fromX = target.x; fromY = target.y;
+      }
+      let lock: string | null = null;
+      if (primary && req.stats.lockToleranceDegrees > 0 && contacts[0]?.effectiveAmount > 0 && path.length === 1) {
+        const current = this.plasmaBurnerCatalog.read(primary.key, req.playerId, start.x, start.y);
+        if (canHoldPlasmaBurnerLock(current, { ...start, angle: req.angle, range: req.config.range,
+          toleranceDegrees: req.stats.lockToleranceDegrees,
+          firstTargetAt: angle => readTrace(this.traceHitscan({ ...options, angle, range: req.config.range }))?.key ?? null })) lock = primary.key;
+      }
+      for (const leg of path) {
+        this.bubbleChargePort?.observeHitscan(leg.startX, leg.startY, leg.trace.endX, leg.trace.endY, options.traceThickness,
+          primary && plasmaBurnerTargetEffect(primary, 'direct') === 'heal'
+            ? 0 : effect.damagePerHit * req.multiplier * portalDamageMultiplier(leg.portalDamage), req.nowMs);
+      }
+      this.bridge.broadcastPlasmaBurnerPulse({ id: req.playerId, sid: req.shotId, lk: locked || lock !== null,
+        m: req.multiplier, p: path.length, s: segments });
+      return { accepted: true, contacts, chainMemberKeys: chain.map(t => t.key), lock };
+    }, req.nowMs);
+  }
+
+  resolvePlasmaBurnerChargeImpact(req: PlasmaBurnerChargeImpactRequest): { accepted: boolean; effectiveAmount: number } {
+    return this.runHostExecution(() => {
+      if (!this.bridge.isHost()) return { accepted: false, effectiveAmount: 0 };
+      const owner = req.provenance.allegiance.ownerId;
+      const target = this.plasmaBurnerCatalog?.read(req.targetKey, owner, req.x, req.y);
+      if (!target || !plasmaBurnerTargetEffect(target, 'automatic')) return { accepted: false, effectiveAmount: 0 };
+      const contact = this.applyBurnerContact(target, req.damage, req.heal, owner, req.provenance.sourceSlot as WeaponSlot,
+        req.x, req.y, 1, 1, 'automatic', 'projectile');
+      return { accepted: true, effectiveAmount: contact.effectiveAmount };
+    }, req.nowMs);
+  }
+
+  private applyBurnerContact(target: PlasmaBurnerTarget, damage: number, heal: number, owner: string,
+    slot: WeaponSlot | undefined, x: number, y: number, rockMult: number, baseMult: number,
+    mode: 'direct' | 'automatic', attackCategory: 'hitscan' | 'projectile' = 'hitscan'): PlasmaBurnerContact {
+    const effect = plasmaBurnerTargetEffect(target, mode);
+    let amount = 0;
+    if (effect === 'heal') {
+      if (target.kind === 'player') {
+        const outcome = this.healWithOutcome(target.id, heal, this.createLegacyMutationSource(owner, 'PLASMA_BURNER', 'support'));
+        amount = outcome?.kind === 'support-applied' ? outcome.actualAmount : 0;
+      } else amount = this.plasmaBurnerStructures?.repair(target, heal, owner) ?? 0;
+    } else if (effect === 'damage') {
+      if (target.kind === 'base') amount = this.plasmaBurnerStructures?.damageBase(target, damage, owner, slot, baseMult) ?? 0;
+      else if (target.kind === 'rock' || target.kind === 'construction')
+        amount = this.plasmaBurnerStructures?.damage(target, damage * (target.category === 'environment' ? rockMult : 1), owner, slot) ?? 0;
+      else {
+        const loadout = slot ? this.loadoutManager?.getWeaponDamageMultiplier(owner, slot, this.hostFrameNowMs)
+          : this.loadoutManager?.getDamageMultiplier(owner, this.hostFrameNowMs);
+        const actual = damage * (loadout ?? 1) * (this.powerUpSystem?.getDamageMultiplier(owner) ?? 1);
+        if (!this.shouldBlockWithShield(target.id, attackCategory, actual, x, y)) {
+          const direction = Math.atan2(target.y - y, target.x - x);
+          const impact = { sourceX: x, sourceY: y, dirX: Math.cos(direction), dirY: Math.sin(direction) };
+          const outcome = target.kind === 'decoy' ? this.decoySystem?.applyDamage(Number(target.id), actual, owner, 'PLASMA_BURNER', impact)
+            : this.applyDamage(target.id, actual, false, owner, 'PLASMA_BURNER', impact, { sourceSlot: slot, damageKind: 'direct' });
+          amount = outcome?.kind === 'damage-applied' ? outcome.actualDamage : 0;
+        }
+      }
+    }
+    return { target, effectiveAmount: amount, fx: amount > 0 ? effect === 'heal' ? 2 : 1 : 0 };
+  }
   private resolveHitscanBaseId(endX: number, endY: number, dirX: number, dirY: number): string | undefined {
     const direct = this.baseManager?.getBaseIdAtWorldPoint(endX, endY);
     if (direct) return direct;
@@ -3119,11 +3105,16 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    * Sichtlinie für Kettenblitz-Sprünge: blockiert durch Felsen, Baumstämme,
    * Basen und den Zug – analog zur normalen Hitscan-/Projektil-Hindernislogik.
    */
-  private hasChainLineOfSight(x1: number, y1: number, x2: number, y2: number): boolean {
+  private hasChainLineOfSight(x1: number, y1: number, x2: number, y2: number, options: ObstacleShotOptions = {}): boolean {
+    const length = Math.hypot(x2 - x1, y2 - y1);
+    if (options.purpose === 'support' && length > 0.01) {
+      x1 += (x2 - x1) / length * 0.01;
+      y1 += (y2 - y1) / length * 0.01;
+    }
     this.chainScanLine.setTo(x1, y1, x2, y2);
     const dist = Phaser.Geom.Line.Length(this.chainScanLine);
     if (dist <= 0.0001) return true;
-    const blockerDistance = this.findNearestProjectilePathBlockerDistance(this.chainScanLine);
+    const blockerDistance = this.findNearestProjectilePathBlockerDistance(this.chainScanLine, false, options);
     return blockerDistance === null || blockerDistance >= dist - 1;
   }
 
@@ -4367,9 +4358,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   heal(playerId: string, amount: number, source?: CombatSource): number {
-    if (!this.isAlive(playerId) || amount <= 0) return this.getHP(playerId);
+    this.healWithOutcome(playerId, amount, source);
+    return this.getHP(playerId);
+  }
+
+  healWithOutcome(playerId: string, amount: number, source?: CombatSource): CombatSupportMutationOutcome | null {
+    if (!this.isAlive(playerId) || amount <= 0) return null;
     const target = this.playerVitals.getTargetRef(playerId);
-    if (!target) return this.getHP(playerId);
+    if (!target) return null;
     const outcome = this.applySupport({
       outcomeId: this.nextMutationOutcomeId('heal', playerId),
       target,
@@ -4378,9 +4374,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       amount,
     });
     if (outcome.kind === 'support-applied') this.onHealingReceived?.(playerId, outcome.actualAmount);
-    return outcome.kind === 'rejected'
-      ? this.getHP(playerId)
-      : outcome.resultingState.kind === 'combatant' ? outcome.resultingState.hp : this.getHP(playerId);
+    return outcome;
   }
 
 

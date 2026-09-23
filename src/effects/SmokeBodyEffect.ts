@@ -79,14 +79,16 @@ export class SmokeBodyEffect {
     }
   }
 
-  update(target: EntityStatusVisualTarget, confusedUntil: number, chargedUntil: number, now: number, smokeCover: number): void {
+  update(target: EntityStatusVisualTarget, confusedUntil: number, confusionIntensity: number, chargedUntil: number,
+    now: number, smokeCover: number): void {
     const { sprite, bodySize: size } = target;
     if (!target.visible || !sprite.active || !sprite.visible) {
       for (const object of [...this.wisps, this.arcs, this.scatter]) object.setVisible(false);
       return;
     }
     const t = (this.scene.time.now - this.startedAt) * .001;
-    const confusion = clamp((confusedUntil - now) / 350);
+    // Linear buildup progress reads earlier than the quadratic steering strength it drives.
+    const confusion = clamp((confusedUntil - now) / 350) * Math.sqrt(clamp(confusionIntensity));
     const charge = clamp((chargedUntil - now) / 300);
     const depth = Math.min(DEPTH.SMOKE - .1, sprite.depth + .27);
     this.wisps.forEach((wisp, i) => {

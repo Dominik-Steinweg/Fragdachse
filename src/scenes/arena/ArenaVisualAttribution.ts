@@ -72,7 +72,7 @@ export const GRAPHICS_FAMILIES = {
   teslaDomeEffects: ['TeslaDomeRenderer'],
   teslaNovaEffects: ['TeslaNovaRenderer'],
   miniTeslaDomeEffects: ['MiniTeslaDomeRenderer'],
-  plasmaBurnerEffects: ['PlasmaBurnerRenderer'],
+  plasmaBurnerEffects: ['PlasmaBurnerRenderer', 'PlasmaBurnerChargeRenderer'],
   energyShieldEffects: ['EnergyShieldRenderer'],
   weaponTelegraphs: ['Ak47StrategicTargetRenderer', 'WorldInteractionRenderer'],
   shootingRange: ['ShootingRangeRenderer'],

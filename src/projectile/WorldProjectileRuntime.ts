@@ -1,3 +1,6 @@
+import { homingTargetKind, shouldIgnoreOriginHit, originPhysicalKey } from './ProjectileOrigin';
+import { plasmaBurnerTargetEffect, type PlasmaBurnerTargetCatalogPort } from '../combat/plasmaBurner/PlasmaBurnerTargetPolicy';
+import type { ProjectileSupportImpactPort } from './ProjectileSupportImpactPort';
 import { scalePrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
 import { scalePortalDamagePayload } from '../combat/PortalDamagePayload';
 import { acquirePortalDamage, findPortalCrossing, gatePortalExit, portalCircleEntry, portalDamageMultiplier, releasePortalGates,
@@ -275,25 +278,54 @@ export class WorldProjectileRuntime implements
   private proximityPulseCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
   private rockHitCallback: ((rockId: number, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
   private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
+  private plasmaCatalog: PlasmaBurnerTargetCatalogPort | null = null;
+  private plasmaSupportImpact: ProjectileSupportImpactPort | null = null;
+  setPlasmaBurnerSupportPorts(catalog: PlasmaBurnerTargetCatalogPort | null, impact: ProjectileSupportImpactPort | null): void {
+    this.plasmaCatalog = catalog; this.plasmaSupportImpact = impact;
+  }
+  private plasmaTargetAllowed(record: ProjectileRuntimeRecord, target: ProjectileTargetRef): boolean {
+    if (shouldIgnoreOriginHit(record.provenance.lineage?.originTarget, target, record.contacts.originExited === true)) return false;
+    const candidate = this.plasmaCatalog?.read(target.kind + ':' + target.id, record.provenance.allegiance.ownerId,
+      record.physics.sprite.x, record.physics.sprite.y);
+    return !!candidate && plasmaBurnerTargetEffect(candidate, 'automatic') !== null;
+  }
+  private resolvePlasmaSupport(record: ProjectileRuntimeRecord, candidate: ProjectileImpactCandidate): boolean {
+    const payload = record.spec.interaction.plasmaBurnerCharge;
+    if (!payload || record.interaction.supportConsumed) return false;
+    // Reserve the effect before Combat callbacks can re-enter this runtime.
+    record.interaction.supportConsumed = true;
+    const result = this.plasmaSupportImpact?.resolvePlasmaBurnerCharge({
+      targetKey: candidate.target.kind + ':' + candidate.target.id, x: candidate.x, y: candidate.y,
+      damage: payload.damage, heal: payload.heal, provenance: record.provenance, nowMs: this.hostFrameNowMs,
+    });
+    if (!result?.accepted) record.interaction.supportConsumed = false;
+    return result?.accepted === true;
+  }
   private lowSupportTargetChecker: ((rockId: number, ownerId: string) => boolean) | null = null;
   setLowSupportTargetChecker(checker: typeof this.lowSupportTargetChecker): void { this.lowSupportTargetChecker = checker; }
 
   private shotOptions(record: ProjectileRuntimeRecord): import('../systems/ObstacleRules').ObstacleShotOptions {
     return { purpose: record.spec.flight.isGrenade || record.spec.flight.isTranslocatorPuck ? 'physical'
-      : record.spec.interaction.energyInjectorPayload ? 'support' : 'directFire',
+      : (record.spec.interaction.energyInjectorPayload || record.spec.interaction.plasmaBurnerCharge) ? 'support' : 'directFire',
       sourceCarrierBaseId: record.sourceCarrierBaseId,
+      skipRockIndex: !record.contacts.originExited && (record.provenance.lineage?.originTarget?.kind === 'construction' || record.provenance.lineage?.originTarget?.kind === 'rock')
+        ? Number(record.provenance.lineage.originTarget.id) : undefined,
       halfWidth: record.physics.body.width / 2, halfHeight: record.physics.body.height / 2,
-      acceptsLowTarget: id => this.lowSupportTargetChecker?.(id, record.provenance.allegiance.ownerId) ?? true };
+      acceptsLowTarget: id => record.spec.interaction.plasmaBurnerCharge ? this.plasmaTargetAllowed(record, { kind: 'rock', id })
+        : this.lowSupportTargetChecker?.(id, record.provenance.allegiance.ownerId) ?? true };
   }
 
   private allowsWorldContact(record: ProjectileRuntimeRecord, target: ProjectilePhysicsContactTarget | ProjectileTargetRef,
     ex = record.physics.sprite.x, ey = record.physics.sprite.y): boolean {
+    if (record.spec.interaction.plasmaBurnerCharge && 'id' in target && shouldIgnoreOriginHit(record.provenance.lineage?.originTarget, target,
+      record.contacts.originExited === true)) return false;
     if (target.kind !== 'rock' && target.kind !== 'base') return true;
     if (target.kind === 'rock') {
       const kind = this.obstacleKindResolver?.(target.id);
       const low = kind === 'rock' || kind === 'turret'
         || this.physicsBinding.getObstacleGeometry?.()?.getRockClass(target.id) === 'low';
       if (low) return record.spec.flight.isGrenade === true || record.spec.flight.isTranslocatorPuck === true
+        || (record.spec.interaction.plasmaBurnerCharge !== undefined && this.plasmaTargetAllowed(record, target))
         || (record.spec.interaction.energyInjectorPayload !== undefined
           && (this.lowSupportTargetChecker?.(target.id, record.provenance.allegiance.ownerId) ?? true));
     }
@@ -310,7 +342,10 @@ export class WorldProjectileRuntime implements
     const exit = this.physicsBinding.getObstacleGeometry?.()?.carrierExitFraction(
       record.lastX, record.lastY, record.physics.sprite.x, record.physics.sprite.y,
       record.sourceCarrierBaseId, record.physics.body.width / 2, record.physics.body.height / 2) ?? -1;
-    if (exit < 1) record.sourceCarrierBaseId = undefined;
+    if (exit < 1) {
+      if (record.provenance.lineage?.originTarget?.kind === 'base' && record.provenance.lineage.originTarget.id === record.sourceCarrierBaseId) record.contacts.originExited = true;
+      record.sourceCarrierBaseId = undefined;
+    }
   }
   private baseHitCallback: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
   private supportImpactCallback: ((projectile: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null = null;
@@ -343,6 +378,10 @@ export class WorldProjectileRuntime implements
     this.projectiles = new ProjectileStore(options.identityScope);
     const runtime = this;
     this.collisionDependencies = {
+      deferOriginExit: true,
+      allowsSupportTarget: (record, target) => target.kind === 'base' || target.kind === 'rock'
+        ? this.allowsWorldContact(record, target) : this.plasmaTargetAllowed(record, target),
+      resolveSupportImpact: (record, candidate) => this.resolvePlasmaSupport(record, candidate),
       shotOptions: record => this.shotOptions(record),
       allowsWorldContact: (record, target) => this.allowsWorldContact(record, target),
       worldTargetHit: (record, target, sx, sy, ex, ey) => {
@@ -534,7 +573,7 @@ export class WorldProjectileRuntime implements
           ...impact.provenance.lineage,
           parentProjectileId: impact.projectileId,
           plasmaSwarmChild: true,
-          plasmaSwarmOriginEnemyId: impact.enemyId,
+          originTarget: { kind: 'enemy', id: impact.enemyId },
         },
       });
     }
@@ -976,6 +1015,13 @@ export class WorldProjectileRuntime implements
     const previousResolution = this.resolvedWorldContacts.get(contactKey);
     if (previousResolution) return previousResolution;
 
+    if (projectile.spec.interaction.plasmaBurnerCharge) {
+      this.resolvePlasmaSupport(projectile, candidate);
+      this.queueProjectileDestroy(projectile.id);
+      const resolved: ResolvedWorldContact = { outcome: 'consumed', technicalContactConsumed: true };
+      this.resolvedWorldContacts.set(contactKey, resolved);
+      return resolved;
+    }
     this.resolveGrenadeContact(projectile, candidate);
 
     const impact = this.createImpactSource(projectile, candidate.x, candidate.y);
@@ -1841,6 +1887,7 @@ export class WorldProjectileRuntime implements
       if (step && !parent.pendingDestroy) step.toAge = parent.simulatedAgeMs ?? step.toAge;
     }
     const stage = this.lifecycleProcessor.run(this.projectiles.stepOrder, coreStage);
+    this.collisionProcessor.completeOriginExits();
     for (const id of this.flameSteps.keys()) {
       const parent = this.projectiles.getById(id);
       if (parent) this.finishFlameStep(parent, parent.pendingDestroy === true);
@@ -2504,13 +2551,11 @@ export class WorldProjectileRuntime implements
       get shotOptions() { return runtime.shotOptions(projectile); },
       get ownerId() { return projectile.provenance.allegiance.ownerId; },
       homing: projectile.spec.flight.homing!,
-      isTargetAllowed: (id, type) => !(type === 'enemies'
-        && projectile.provenance.lineage?.plasmaSwarmChild
-        && projectile.provenance.lineage.plasmaSwarmOriginEnemyId === id
-        && !projectile.contacts.swarmOriginExited),
+      isTargetAllowed: (id, type) => !shouldIgnoreOriginHit(projectile.provenance.lineage?.originTarget,
+        { kind: homingTargetKind(type), id }, projectile.contacts.originExited === true),
       isTargetClaimed: (id, type) => {
-        if (type === 'enemies' && projectile.provenance.lineage?.plasmaSwarmChild
-          && projectile.provenance.lineage.plasmaSwarmOriginEnemyId === id) return true;
+        const origin = projectile.provenance.lineage?.originTarget;
+        if (origin && originPhysicalKey(origin) === originPhysicalKey({ kind: homingTargetKind(type), id })) return true;
         const group = projectile.spec.flight.homingExcludedCircle?.bubbleId;
         if (group === undefined) return false;
         const claims = runtime.prismTargetClaims.get(group)?.get(`${type}:${id}`);
@@ -2811,6 +2856,7 @@ export class WorldProjectileRuntime implements
           enemyHitExplosion: cfg.enemyHitExplosion,
           impactCloud: cfg.impactCloud,
           energyInjectorPayload: cfg.energyInjectorPayload,
+          plasmaBurnerCharge: cfg.plasmaBurnerCharge,
           grenadeEffect: cfg.grenadeEffect,
           detonable: cfg.detonable,
           detonator: cfg.detonator,

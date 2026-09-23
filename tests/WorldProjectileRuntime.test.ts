@@ -925,7 +925,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
       expect(child.provenance.primaryHitReward).toBeUndefined();
       expect(child.provenance).toMatchObject({
         gameplaySourceId: 'source', attributionId: 'credit', allegiance: { ownerId: 'team' },
-        lineage: { parentProjectileId: 12, plasmaSwarmChild: true, plasmaSwarmOriginEnemyId: 'enemy-origin' },
+        lineage: { parentProjectileId: 12, plasmaSwarmChild: true, originTarget: { kind: 'enemy', id: 'enemy-origin' } },
         correlation: { ak47ShotId: 7 },
       });
     }
@@ -1443,4 +1443,91 @@ it('continues accelerated portal travel after Combat rejects an earlier target',
   expect(physics.handles.get(id)!.sprite.x).toBe(550);
   expect(physics.handles.get(id)!.body.velocity.x).toBeCloseTo(140);
   runtime.destroy();
+});
+
+describe('autonomous plasma support projectiles', () => {
+  function charge(kind: 'player'|'enemy'|'decoy'|'construction'|'base', id: string, collisionMode: 'sweep'|'overlap' = 'sweep'): ProjectileSpawnRequest {
+    const request=baseRequest({collisionMode, lifetime:1500, size:6, projectileStyle:'plasma_burner_charge'});
+    return {...request,provenance:{...request.provenance,lineage:{originTarget:{kind,id}}},
+      interaction:{support:{plasmaBurnerCharge:{damage:12,heal:24,sourceSlot:0}}}};
+  }
+  function catalog(hp=50) { return {read:(key:string,_owner:string,x:number,y:number)=>{
+    const [kind,id]=key.split(':');
+    return {key,kind:kind==='rock'?'construction':kind,id,category:'combatant',x,y,hp,maxHp:100,
+      alive:true,damageable:false,supportable:true,self:id==='owner',automatic:true};
+  },query:()=>[]}; }
+  it.each(['player','enemy','decoy','construction','base'] as const)('protects the full %s origin until exit and permits one returning effect', kind=>{
+    const {runtime,physics}=createRuntimeHarness();
+    const physical=kind==='construction'?'rock':kind,originId=kind==='decoy'||kind==='construction'?'1':'origin';
+    const impact=vi.fn(()=>({accepted:true,effectiveAmount:2})),direct=vi.fn();
+    const read=catalog().read;
+    runtime.setPlasmaBurnerSupportPorts({query:()=>[],read:(key,...args)=>({...read(key,...args),
+      damageable:kind==='enemy'||kind==='decoy',supportable:kind!=='enemy'&&kind!=='decoy'})} as never,{resolvePlasmaBurnerCharge:impact});
+    runtime.setProjectileCombatPort({resolveDirectImpact:direct,resolveExplosionCombat:vi.fn(()=>({damagedTargetKeys:[]}))});
+    runtime.setProjectileCollisionTargetQueryPort({readCollisionTargets:sink=>sink(physical as never,originId,'owner',0,0,8,-8,-8,8,8)});
+    const id=runtime.spawnProjectile(charge(kind,originId,'overlap'))!,h=physics.handles.get(id)!;
+    runtime.runHostInteractionStage(1000);runtime.runHostProjectileStage(0,1000);
+    expect(impact).not.toHaveBeenCalled();
+    h.sprite.x=10;runtime.runHostInteractionStage(1010);runtime.runHostProjectileStage(10,1010);
+    expect(impact).not.toHaveBeenCalled(); // center left the target, but the projectile body still overlaps
+    h.sprite.x=30;runtime.runHostInteractionStage(1020);runtime.runHostProjectileStage(10,1020);
+    expect(impact).not.toHaveBeenCalled();
+    h.sprite.x=0;runtime.runHostInteractionStage(1030);runtime.runHostProjectileStage(10,1030);
+    expect(impact).toHaveBeenCalledOnce();expect(direct).not.toHaveBeenCalled();
+    expect(physics.specs).toHaveLength(1);expect(runtime.activeCount).toBe(0);
+    runtime.runHostInteractionStage(1040);expect(impact).toHaveBeenCalledOnce();
+    runtime.destroy();
+  });
+  it('keeps construction-origin exemption through the exit sweep and still consumes foreign blocking geometry',()=>{
+    const {runtime,physics}=createRuntimeHarness();
+    const impact=vi.fn(()=>({accepted:false,effectiveAmount:0}));
+    runtime.setPlasmaBurnerSupportPorts(catalog() as never,{resolvePlasmaBurnerCharge:impact});
+    runtime.setProjectileCollisionTargetQueryPort({readCollisionTargets:sink=>sink('rock',1,'owner',0,0,8,-8,-8,8,8)});
+    const id=runtime.spawnProjectile(charge('construction','1'))!,h=physics.handles.get(id)!;
+    let foreign=false;
+    vi.mocked(physics.binding.findNearestRockSweep).mockImplementation((_sx,_sy,_ex,_ey,_skip,_w,_h,_id,_bases,options)=>{
+      expect(options?.skipRockIndex).toBe(1);
+      return foreign ? {rockIndex:2,x:12,y:0,normalX:-1,normalY:0} : null;
+    });
+    h.sprite.x=30;runtime.runHostInteractionStage(1010);runtime.runHostProjectileStage(10,1010);
+    expect(runtime.activeCount).toBe(1);
+    // The next frame must admit the original cell again.
+    vi.mocked(physics.binding.findNearestRockSweep).mockImplementation((_sx,_sy,_ex,_ey,_skip,_w,_h,_id,_bases,options)=>{
+      expect(options?.skipRockIndex).toBeUndefined();return {rockIndex:2,x:32,y:0,normalX:-1,normalY:0};
+    });
+    h.sprite.x=60;runtime.runHostInteractionStage(1020);runtime.runHostProjectileStage(10,1020);runtime.runHostProjectileStage(0,1020);
+    expect(impact).toHaveBeenCalledOnce();expect(runtime.activeCount).toBe(0);
+    runtime.destroy();
+  });
+  it('flies through healthy allies, heals the owner once and keeps the original lifetime',()=>{
+    const {runtime,physics}=createRuntimeHarness();
+    let hp=100;const impact=vi.fn(()=>({accepted:true,effectiveAmount:3}));
+    runtime.setPlasmaBurnerSupportPorts({query:()=>[],read:(...args)=>catalog(hp).read(...args)} as never,{resolvePlasmaBurnerCharge:impact});
+    runtime.setProjectileCollisionTargetQueryPort({readCollisionTargets:sink=>sink('player','owner','owner',0,0,8,-8,-8,8,8)});
+    const id=runtime.spawnProjectile(charge('player','other','overlap'))!;
+    runtime.runHostInteractionStage(1000);runtime.runHostProjectileStage(500,1500);
+    expect(runtime.activeCount).toBe(1);expect(impact).not.toHaveBeenCalled();
+    hp=90;runtime.runHostInteractionStage(1501);runtime.runHostProjectileStage(1,1501);
+    expect(impact).toHaveBeenCalledOnce();expect(physics.released).toEqual([id]);
+    const next=runtime.spawnProjectile(charge('player','other','overlap'))!;
+    hp=100;runtime.runHostProjectileStage(1400,2400);runtime.runHostInteractionStage(2400);runtime.runHostProjectileStage(101,2501);
+    expect(physics.released).toContain(next);expect(impact).toHaveBeenCalledOnce();
+    runtime.destroy();
+  });
+  it('reserves a support effect before a Combat callback re-enters the collision stage', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const impact = vi.fn(() => {
+      runtime.runHostInteractionStage(1000);
+      return { accepted: true, effectiveAmount: 3 };
+    });
+    runtime.setPlasmaBurnerSupportPorts(catalog() as never, { resolvePlasmaBurnerCharge: impact });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+      sink('player', 'owner', 'owner', 0, 0, 8, -8, -8, 8, 8) });
+    const id = runtime.spawnProjectile(charge('player', 'other', 'overlap'))!;
+    runtime.runHostInteractionStage(1000);
+    runtime.runHostProjectileStage(0, 1000);
+    expect(impact).toHaveBeenCalledOnce();
+    expect(physics.released).toEqual([id]);
+    runtime.destroy();
+  });
 });

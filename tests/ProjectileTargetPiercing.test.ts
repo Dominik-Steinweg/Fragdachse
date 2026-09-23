@@ -421,7 +421,7 @@ describe('generic projectile target piercing', () => {
           flight: { collisionMode: 'overlap', piercesTargets: true },
           provenance: {
             ...createSingleOwnerProvenance('player-1', { weaponSourceId: 'weapon.plasma.swarm' }),
-            lineage: { parentProjectileId: parent, plasmaSwarmChild: true, plasmaSwarmOriginEnemyId: 'enemy-a' },
+            lineage: { parentProjectileId: parent, plasmaSwarmChild: true, originTarget: { kind: 'enemy', id: 'enemy-a' } },
           },
         }));
       }

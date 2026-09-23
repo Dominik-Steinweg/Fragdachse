@@ -17,6 +17,7 @@ export class ClientPlayerMovementBody implements LocalPredictionBody {
 
   get x(): number { return this.player.x; }
   get y(): number { return this.player.y; }
+  get stepMs(): number { return 1000 / this.body.world.fps; }
 
   control(enabled: boolean): void {
     if (this.controlled === enabled) return;
@@ -40,8 +41,7 @@ export class ClientPlayerMovementBody implements LocalPredictionBody {
   }
 
   step(dx: number, dy: number, speed: number, deltaMs: number): void {
-    const world = this.body.world;
-    const maxStepMs = 1000 / world.fps;
+    const maxStepMs = this.stepMs;
     for (let remaining = deltaMs; remaining > 1e-7;) {
       const stepMs = Math.min(remaining, maxStepMs);
       resolveWalkingVelocity(this.x, this.y, dx, dy, speed,

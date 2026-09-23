@@ -58,6 +58,7 @@ describe('Resonance Flow through World composition and passive regeneration', ()
     }, { getAdrenalineRegenMultiplier: () => otherMultiplier });
     Object.assign(runtime.systems, {
       resource,
+      plasmaBurner: { update() {} },
       burrow: { isBurrowed: () => burrowed, isStunned: () => false, update() {} },
       heldAction: { clearExpired() {}, clearPlayer() {}, reset() {} },
       loadout: { getEquippedUtilityConfig: () => config, update() {} },

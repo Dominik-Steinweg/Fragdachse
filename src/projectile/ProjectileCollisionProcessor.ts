@@ -2,7 +2,7 @@ import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import { advanceProjectileDistance } from './ProjectileDistanceScaling';
 import { usesRockSweep } from './ProjectileRockSweep';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
-import { shouldIgnorePlasmaSwarmOriginHit } from '../systems/PlasmaCharge';
+import { originPhysicalKey, shouldIgnoreOriginHit } from './ProjectileOrigin';
 import type { ProjectileId } from './ProjectileSpawnPort';
 import type {
   ProjectileContactMode,
@@ -66,6 +66,9 @@ interface SweepCandidate {
 
 /** Was der Owner für die Kandidatenverarbeitung bereitstellt. */
 export interface ProjectileCollisionDependencies {
+  readonly deferOriginExit?: boolean;
+  allowsSupportTarget?(record: ProjectileRuntimeRecord, target: ProjectileTargetRef): boolean;
+  resolveSupportImpact?(record: ProjectileRuntimeRecord, candidate: ProjectileImpactCandidate): boolean;
   shotOptions?(record: ProjectileRuntimeRecord): import('../systems/ObstacleRules').ObstacleShotOptions;
   allowsWorldContact?(record: ProjectileRuntimeRecord, target: ProjectileTargetRef): boolean;
   worldTargetHit?(record: ProjectileRuntimeRecord, target: ProjectileTargetRef,
@@ -234,6 +237,7 @@ function grenadeRectangleContact(sx: number, sy: number, ex: number, ey: number,
  * bewusst noch in derselben Stage verarbeitet – die Aktivmenge wird absichtlich live iteriert.
  */
 export class ProjectileCollisionProcessor {
+  private readonly pendingOriginExits = new Map<ProjectileRuntimeRecord, { x: number; y: number }>();
   private readonly targetPool: CollisionTargetSlot[] = [];
   private readonly snapshotIndex = new SnapshotTargetIndex();
   private readonly searchCandidates: CollisionTargetSlot[] = [];
@@ -328,10 +332,21 @@ export class ProjectileCollisionProcessor {
       if (record.spec.flight.isGrenade) this.processGrenadeContacts(record, deps);
       else this.processRecord(record, nowMs, deps);
     }
+    if (!deps.deferOriginExit) this.completeOriginExits();
+  }
+
+  /** World sweeps must finish before the origin can become a future contact. */
+  completeOriginExits(): void {
+    for (const [record, position] of this.pendingOriginExits) {
+      if (!record.pendingDestroy && record.physics.sprite.x === position.x && record.physics.sprite.y === position.y)
+        record.contacts.originExited = true;
+    }
+    this.pendingOriginExits.clear();
   }
 
   /** Gibt die gepoolte Frame-Sicht frei. */
   reset(): void {
+    this.pendingOriginExits.clear();
     this.targetPool.length = 0;
     this.snapshotIndex.clear();
     this.searchCandidates.length = 0;
@@ -499,25 +514,25 @@ export class ProjectileCollisionProcessor {
         // Ein Sweep-Frame verarbeitet alle zulässigen Kandidaten entlang des Segments; ein
         // nicht-penetrativer Kontakt beendet ihn im Ergebnis, statt auf Overlap zurückzufallen.
         this.processSweep(record, nowMs, deps);
-        this.advanceSwarmOriginExit(record);
+        this.advanceOriginExit(record);
         return;
       }
     }
     this.processOverlap(record, nowMs, deps);
-    this.advanceSwarmOriginExit(record);
+    this.advanceOriginExit(record);
   }
 
   /** Release only after the whole contact segment, including its exit face, was processed. */
-  private advanceSwarmOriginExit(record: ProjectileRuntimeRecord): void {
+  private advanceOriginExit(record: ProjectileRuntimeRecord): void {
     const lineage = record.provenance.lineage;
-    if (!lineage?.plasmaSwarmChild || !lineage.plasmaSwarmOriginEnemyId || record.contacts.swarmOriginExited) return;
-    const origin = this.targetSlotsByPhysicalKey.get(`enemy:${lineage.plasmaSwarmOriginEnemyId}`);
+    if (!lineage?.originTarget || record.contacts.originExited || record.sourceCarrierBaseId) return;
+    const origin = this.targetSlotsByPhysicalKey.get(originPhysicalKey(lineage.originTarget));
     const sprite = record.physics.sprite;
     // Both collision paths must be clear: overlap uses bounds, sweep an expanded circle.
     const radius = (origin?.radius ?? 0) + Math.max(sprite.displayWidth, sprite.displayHeight) * 0.5;
     if (!origin || (!overlaps(sprite.getBounds(this.overlapBounds), origin)
       && Math.hypot(sprite.x - origin.x, sprite.y - origin.y) > radius)) {
-      record.contacts.swarmOriginExited = true;
+      this.pendingOriginExits.set(record, { x: sprite.x, y: sprite.y });
     }
   }
 
@@ -696,7 +711,9 @@ export class ProjectileCollisionProcessor {
     slot: CollisionTargetSlot,
     deps: ProjectileCollisionDependencies,
   ): boolean {
-    if (slot.kind !== 'base' && slot.kind !== 'rock' && record.provenance.allegiance.ownerId === slot.ownerId) return false;
+    const support = record.spec.interaction.plasmaBurnerCharge !== undefined;
+    if (!support && slot.kind !== 'base' && slot.kind !== 'rock' && record.provenance.allegiance.ownerId === slot.ownerId) return false;
+    if (support && deps.allowsSupportTarget?.(record, slot.ref) !== true) return false;
     if (deps.allowsWorldContact?.(record, slot.ref) === false) return false;
     const excluded = record.spec.flight.collisionFilter.excludedTarget;
     if (excluded && excluded.id === slot.id && excluded.kind === slot.kind
@@ -718,15 +735,10 @@ export class ProjectileCollisionProcessor {
     const exclusionKey = slot.exclusionKey;
     if (exclusionKey !== null && record.interaction.multiExplosionExcludedTargetKeys?.has(exclusionKey)) return false;
 
-    if (slot.kind === 'enemy' && shouldIgnorePlasmaSwarmOriginHit(
-        { plasmaSwarmProjectile: record.provenance.lineage?.plasmaSwarmChild },
-        record.provenance.lineage?.plasmaSwarmOriginEnemyId,
-        slot.id,
-        record.contacts.swarmOriginExited === true,
-      )) return false;
+    if (shouldIgnoreOriginHit(record.provenance.lineage?.originTarget, slot.ref, record.contacts.originExited === true)) return false;
 
     // Köder sind reine Ablenkziele und kennen keine Beziehungsprüfung.
-    if (isCombatTarget(slot.kind) && deps.targetability
+    if (!support && isCombatTarget(slot.kind) && deps.targetability
       && !deps.targetability.canDamage(record.provenance, slot.ref, record.provenance.allegiance.allowTeamDamage === true)) {
       return false;
     }
@@ -746,6 +758,11 @@ export class ProjectileCollisionProcessor {
       // World interaction is resolved by the WorldProjectileRuntime through the narrow callback.
       // The processor remains responsible only for candidate order and the terminal outcome.
       return deps.resolveWorldImpact?.(record, candidate) ?? 'consumed';
+    }
+    if (record.spec.interaction.plasmaBurnerCharge) {
+      if (!deps.resolveSupportImpact?.(record, candidate)) return 'ignored';
+      deps.destroyProjectile(record.id);
+      return 'consumed';
     }
     const impactPort = deps.directImpact;
     if (!impactPort) return 'ignored';

@@ -76,7 +76,7 @@ const MINI_ROCKET_CASCADE_NONE = -1;
  */
 export const PROJECTILE_STYLES = [
   'bullet', 'ball', 'energy_ball', 'hydra', 'spore', 'flame', 'fireball', 'leaf_blower',
-  'bfg', 'awp', 'gauss', 'rocket', 'grenade', 'holy_grenade', 'translocator_puck', 'tesla_bolt',
+  'bfg', 'awp', 'gauss', 'rocket', 'grenade', 'holy_grenade', 'translocator_puck', 'tesla_bolt', 'plasma_burner_charge',
 ] as const satisfies readonly ProjectileStyle[];
 
 export const PROJECTILE_BULLET_VISUAL_PRESETS = [

@@ -1,3 +1,4 @@
+import { PlasmaBurnerRuntime } from './PlasmaBurnerRuntime';
 import { MolotovUpgradeSystem } from '../systems/MolotovUpgradeSystem';
 import { TurretControlSystem, resolveTurretExit } from '../systems/TurretControlSystem';
 import { dequantizeAngle } from '../utils/angle';
@@ -161,6 +162,7 @@ export interface WorldPlayerGameplayNetworkPort {
 interface WorldPlayerGameplaySystems {
   readonly playerAction: PlayerActionRuntime;
   readonly weaponActivation: PlayerWeaponActivationRuntime;
+  readonly plasmaBurner: PlasmaBurnerRuntime;
   readonly rocketMagazine: RocketMagazineRuntime;
   readonly utilityAction: PlayerUtilityActionRuntime;
   readonly ultimateBehavior: PlayerUltimateBehaviorRuntime;
@@ -320,6 +322,7 @@ export type PlayerGameplayReadViews =
 
 export interface PlayerGameplayHostFrameReadModel {
   readonly turretControl?: import('../types').TurretControlState;
+  readonly plasmaBurnerOverload?: import('../combat/plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerOverloadNetState;
   readonly rocketMagazine?: import('../types').RocketMagazineState;
   readonly adrenaline: number;
   readonly adrenalineRevision: number;
@@ -406,7 +409,8 @@ export interface WorldPlayerGameplayRuntimeOptions {
     & CombatDamageEffectPort
     & CombatActivityPort
     & CombatImmediateAttackPort
-    & PrimaryHitRewardScopeReadPort;
+    & PrimaryHitRewardScopeReadPort
+    & import('../combat/CombatCapabilities').PlasmaBurnerCombatPort;
   readonly hostPhysics: HostPhysicsSystem;
   readonly fireSystem: FireSystem;
   readonly placementSystem: PlacementSystem;
@@ -471,6 +475,7 @@ export class WorldPlayerGameplayRuntime implements
       enter: (id, turret) => {
         this.clearHeldActionsForPlayer(id);
         this.systems.rocketMagazine?.cancel(id);
+        this.systems.plasmaBurner.endGesture(id, Date.now());
         this.systems.sustainedWeaponBehavior.resetPlayer(id);
         this.systems.ultimateBehavior.interruptCombat(id, Date.now());
         options.decoySystem.breakStealth(id, Date.now());
@@ -738,7 +743,9 @@ export class WorldPlayerGameplayRuntime implements
         }, `negev-killstreak:${event.ownerId}:${event.nowMs}`, event.nowMs);
       },
     });
+    const plasmaBurner = new PlasmaBurnerRuntime(options.combatSystem, options.projectileSpawn);
     const weaponActivation = new PlayerWeaponActivationRuntime({
+      plasmaBurner,
       getRuntimeDamageMultiplier: (id, slot, nowMs) => loadout.getWeaponDamageMultiplier(id, slot, nowMs)
         * (options.getPowerUpSystem()?.getDamageMultiplier(id) ?? 1),
       playerManager: {
@@ -809,6 +816,7 @@ export class WorldPlayerGameplayRuntime implements
     );
 
     this.systems = {
+      plasmaBurner,
       rocketMagazine,
       playerAction,
       weaponActivation,
@@ -929,6 +937,7 @@ export class WorldPlayerGameplayRuntime implements
         },
         removeEnemy: (enemyId) => systems.itemRuntime.removeEnemy(enemyId),
         handlePlayerDeath: (playerId, x, y) => {
+          systems.plasmaBurner.resetPlayer(playerId);
           systems.molotovUpgrade?.removePlayer(playerId);
           systems.flamethrowerUpgrade?.handlePlayerDeath(playerId, x, y);
         },
@@ -1021,6 +1030,7 @@ export class WorldPlayerGameplayRuntime implements
     this.turretControl.reconcile();
     this.interruptStunnedActions(nowMs);
     const { systems } = this;
+    systems.plasmaBurner.update(nowMs);
     systems.heldAction.clearExpired(nowMs);
     if (countdownActive) {
       systems.rocketMagazine?.cancelAll();
@@ -1161,6 +1171,7 @@ export class WorldPlayerGameplayRuntime implements
       adrenaline: systems.resource.getAdrenaline(playerId),
       turretControl: this.getTurretControlState(playerId),
       rocketMagazine: systems.rocketMagazine?.getState(playerId),
+      plasmaBurnerOverload: systems.plasmaBurner.getState(playerId),
       adrenalineRevision: systems.resource.getAdrenalineRevision(playerId),
       maxAdrenaline: systems.resource.getMaxAdrenaline(playerId),
       rage: systems.resource.getRage(playerId),
@@ -1277,6 +1288,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   detachPlayerBuild(playerId: string): void {
+    this.systems.plasmaBurner.resetPlayer(playerId);
     this.systems.rocketMagazine?.cancel(playerId);
     this.systems.itemRuntime.removePlayer(playerId);
   }
@@ -1297,6 +1309,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   detachPlayerLoadout(playerId: string): void {
+    this.systems.plasmaBurner.resetPlayer(playerId);
     this.turretControl.release(playerId);
     this.systems.ultimateBehavior.removePlayer(playerId);
     this.systems.ak47Behavior?.removePlayer(playerId);
@@ -1317,6 +1330,7 @@ export class WorldPlayerGameplayRuntime implements
   reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean {
     const changed = this.systems.loadout.syncSelectedLoadout(playerId, selection);
     if (changed) {
+      this.systems.plasmaBurner.resetPlayer(playerId);
       this.systems.rocketMagazine?.cancel(playerId);
       this.systems.ultimateBehavior.resetPlayer(playerId);
       this.systems.ak47Behavior?.resetPlayer(playerId);
@@ -1341,6 +1355,7 @@ export class WorldPlayerGameplayRuntime implements
   ): void {
     const changedPlayerIds = this.systems.playerModifier.syncPlayers(builds);
     for (const playerId of changedPlayerIds) {
+      this.systems.plasmaBurner.resetPlayer(playerId);
       this.systems.rocketMagazine?.cancel(playerId);
       const snapshot = builds.get(playerId) ?? null;
       const wantsItemRuntime = Boolean(snapshot?.coopDefenseProfile)
@@ -1355,6 +1370,7 @@ export class WorldPlayerGameplayRuntime implements
 
   /** Held Actions eines austretenden Spielers verwerfen (Player-in-World-Detach-Grenze). */
   invalidateHeldActionsForPlayer(playerId: string): void {
+    this.systems.plasmaBurner.resetPlayer(playerId);
     this.systems.rocketMagazine?.cancel(playerId);
     this.clearHeldActionsForPlayer(playerId);
   }
@@ -1364,6 +1380,7 @@ export class WorldPlayerGameplayRuntime implements
    * Runtime-Detach derselben Activity lässt sie bewusst bestehen.
    */
   invalidateHeldActionsOnActivityEnd(): void {
+    this.systems.plasmaBurner.clearAll();
     this.turretControl.clear();
     this.systems.rocketMagazine?.cancelAll();
     this.systems.heldAction.reset();
@@ -1624,6 +1641,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.loadout.setShieldBuffReadPort(null);
     systems.loadout.setSustainedWeaponBehavior(null);
     systems.loadout.setUltimateModifierReadPort(null);
+    systems.plasmaBurner.destroy();
     systems.rocketMagazine?.destroy();
     systems.weaponActivation.destroy();
     systems.ultimateBehavior.destroy();

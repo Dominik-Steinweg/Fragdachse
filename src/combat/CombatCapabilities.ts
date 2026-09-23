@@ -27,6 +27,10 @@ import type {
 } from '../types';
 
 // CF-READ
+export interface PlasmaBurnerCombatPort {
+  resolvePlasmaBurnerPulse(request: import('./plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerPulseRequest): import('./plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerPulseOutcome;
+}
+
 export interface CombatVitalsReadPort {
   readVitals(target: CombatTargetRef): CombatTargetStateSnapshot | null;
 }

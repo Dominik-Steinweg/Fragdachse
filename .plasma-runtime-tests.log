@@ -1,0 +1,53 @@
+
+> fragdachse@0.1.0 test
+> vitest run --pool=threads --exclude build/** --exclude art/** --exclude tools/audio-studio/** --exclude tests/architecture/** --exclude tests/integration/** --exclude tests/assets/** --exclude tests/stress/** --exclude tests/balance-lab/** tests/PlasmaBurnerPulsePresentation.test.ts tests/WorldProjectileRuntime.test.ts
+
+
+ RUN  v3.2.7 C:/Fragdachse
+
+ ❯ tests/PlasmaBurnerPulsePresentation.test.ts (3 tests | 2 failed) 8ms
+   × atomic plasma pulse presentation > replaces the authoritative segment set and never deduplicates by predicted shot id 6ms
+     → Math.Linear is not a function
+   × atomic plasma pulse presentation > prediction only changes segment zero and respects confirmed portals and locks 0ms
+     → Math.Linear is not a function
+   ✓ atomic plasma pulse presentation > rejects malformed wire segments and primary section counts 1ms
+ ✓ tests/WorldProjectileRuntime.test.ts (68 tests) 82ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/PlasmaBurnerPulsePresentation.test.ts > atomic plasma pulse presentation > replaces the authoritative segment set and never deduplicates by predicted shot id
+TypeError: Math.Linear is not a function
+ ❯ mixColors src/effects/EffectUtils.ts:275:37
+    273|   const bb = colorB & 0xff;
+    274| 
+    275|   const rr = Math.round(Phaser.Math.Linear(ar, br, t));
+       |                                     ^
+    276|   const rg = Math.round(Phaser.Math.Linear(ag, bg, t));
+    277|   const rb = Math.round(Phaser.Math.Linear(ab, bb, t));
+ ❯ src/effects/PlasmaBurnerRenderer.ts:186:39
+ ❯ PlasmaBurnerRenderer.playPulse src/effects/PlasmaBurnerRenderer.ts:177:13
+ ❯ tests/PlasmaBurnerPulsePresentation.test.ts:15:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/PlasmaBurnerPulsePresentation.test.ts > atomic plasma pulse presentation > prediction only changes segment zero and respects confirmed portals and locks
+TypeError: Math.Linear is not a function
+ ❯ mixColors src/effects/EffectUtils.ts:275:37
+    273|   const bb = colorB & 0xff;
+    274| 
+    275|   const rr = Math.round(Phaser.Math.Linear(ar, br, t));
+       |                                     ^
+    276|   const rg = Math.round(Phaser.Math.Linear(ag, bg, t));
+    277|   const rb = Math.round(Phaser.Math.Linear(ab, bb, t));
+ ❯ src/effects/PlasmaBurnerRenderer.ts:186:39
+ ❯ PlasmaBurnerRenderer.playPulse src/effects/PlasmaBurnerRenderer.ts:177:13
+ ❯ tests/PlasmaBurnerPulsePresentation.test.ts:21:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 69 passed (71)
+   Start at  00:28:26
+   Duration  874ms (transform 479ms, setup 0ms, collect 703ms, tests 90ms, environment 0ms, prepare 170ms)
+
