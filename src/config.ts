@@ -273,7 +273,7 @@ export const PLAYER_SIZE  = 32;
 /** Reiner Darstellungsfaktor; Kollisions- und Gameplay-Geometrie bleiben bei PLAYER_SIZE. */
 export const PLAYER_VISUAL_SCALE = 1.2;
 export const PLAYER_VISUAL_SIZE = PLAYER_SIZE * PLAYER_VISUAL_SCALE;
-export const PLAYER_SPEED = 240;
+export const PLAYER_SPEED = 280;
 export const MUZZLE_FORWARD_OFFSET = PLAYER_SIZE * 0.7;
 export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
 

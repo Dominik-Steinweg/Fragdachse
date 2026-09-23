@@ -3,7 +3,7 @@
   "persistentBaseRewardsOnVictory": ["base_rage_pedestal"],
   "arenaWidthCells": 260,
   "arenaHeightCells": 33,
-  "timeOfDay": "12:00",
+  "timeOfDay": "08:00",
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "tutorialAnchor": {
