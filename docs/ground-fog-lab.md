@@ -49,11 +49,16 @@ Geschwindigkeit und Impulsbelegung lassen sich getrennt anzeigen.
 Deckkraft **0,50**, zentraler Dichtefaktor **1,85**, Map-Stärke weiterhin **1**; Lichtmap und
 Tageskurve gelten unverändert. Zentrale Werte stehen in `src/effects/groundFog/FogConfig.ts`.
 
-**Nebelbänke:** Die Zieldichte bildet keinen flächigen Schleier, sondern getrennte, weich
-auslaufende Bänder entlang einer verzerrten, langsam veränderlichen Isolinie, die zusätzlich
-in unterschiedlich starke Abschnitte zerfallen. Dazwischen bleibt nur ein dünner Restdunst
-(Land 7 %, offenes Wasser 32 % der Tagesdichte). Er hält den randseitigen Zufluss in
-geöffnete Bereiche aufrecht; über Wasser bleibt der Nebel dadurch zusammenhängender.
+**Nebelbänke:** Die Zieldichte bildet keinen flächigen Schleier, sondern getrennte, gestreckte
+Flächen aus zwei leicht verzerrten Rauschoktaven mit breiter, weicher Schwelle. Bänder entlang
+einer Rausch-Isolinie wurden verworfen: Sie werden bei steilem Rauschgradienten schmal und
+hart und wirken wie Flussläufe. Die Verzerrung bleibt unter der Faltungsgrenze, damit keine
+Knicke mit abrupten Rändern entstehen. Dazwischen bleibt ein dünner Restdunst (Land 7 %,
+Wasser 12 % der Tagesdichte), der den randseitigen Zufluss in geöffnete Bereiche aufrecht hält.
+
+**Wasser:** Die Wassergewichtung verläuft als eine glatte Rampe über den vorzeichenbehafteten
+Uferabstand, 160 px über Land bis 64 px ins Wasser. Wasser erhöht die Tagesdichte und
+begünstigt Nebelbänke leicht, erzeugt aber keine eigene, uferförmige Nebelfläche.
 
 **Bewegung:** Ein schwacher, seedabhängiger Grundwind (3,5 px/s) wird von einem begrenzten,
 regional phasenverschobenen Mäandern überlagert. Benachbarte Bänke ziehen dadurch in
@@ -65,7 +70,7 @@ laufen mit 0, damit Kodierung und Hindernisströmung unabhängig davon geprüft 
 
 **Material:** Eine zeitlich veränderliche Domain-Warp-Struktur aus Wölbungen, feinen Strähnen
 und (nur auf Hoch) Feindetail skaliert die optische Dicke. Ein kleiner Kantenabzug löst dünnen
-Nebel in Schwaden auf und lässt die Zwischenräume klar; eine weiche Sättigung (höchstens 0,52)
+Nebel in Schwaden auf und lässt die Zwischenräume klar; eine weiche Sättigung (höchstens 0,58)
 ersetzt die frühere harte Deckkraftgrenze von 0,30, sodass dichte Kerne präsent bleiben,
 ohne flach abgeschnitten zu wirken.
 

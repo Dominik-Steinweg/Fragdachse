@@ -13,12 +13,14 @@ export const FOG = {
   smallProjectileStrength: .48, largeProjectileStrength: .43,
   pressureGain: 38, momentumMix: .10, windRelaxation: .035,
   densityScale: 1.85,
-  // Separate banks: soft ribbon threshold of the warped target field, thin haze in the gaps.
-  bankLow: .62, bankHigh: .84, clearHaze: .07, waterHaze: .32,
+  // Separate banks: soft threshold of elongated patches (world px), thin haze in the gaps.
+  bankLength: 580, bankWidth: 330, bankLow: .50, bankHigh: .78, clearHaze: .07, waterHaze: .12, waterBankBias: .06,
+  // World px over which the water weight ramps on both sides of the shoreline.
+  waterRamp: 160,
   // Bounded sway in world px and its quasi-periodic cycles in seconds.
   meanderAmplitude: 56, meanderPeriods: [83, 127, 61, 50.4],
   // Soft optical saturation instead of a hard opacity clip.
-  materialMaxAlpha: .52, materialGain: 3, materialEdge: .035,
+  materialMaxAlpha: .58, materialGain: 2.4, materialEdge: .03,
   materialMargin: 64,
 } as const;
 export type FogQuality = 'high' | 'medium' | 'low';

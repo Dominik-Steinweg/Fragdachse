@@ -146,11 +146,21 @@ describe('ground fog bounded world state', () => {
     terrain.setObstacle('a', [cell], true); terrain.setObstacle('b', [cell], true); terrain.acknowledge();
     terrain.removeObstacle('a'); expect(terrain.changed.size).toBe(0);
     terrain.removeObstacle('b'); expect(terrain.changed.size).toBe(1); expect(terrain.dirtyChunks.size).toBe(1);
-    expect(terrain.sample(48, 48)).toEqual([255, 0, 255, 255]);
-    terrain.acknowledge(); expect(terrain.sample(48, 48)).toEqual([255, 0, 255, 0]);
+    const flags = (x: number, y: number) => { const [open, , opened, changed] = terrain.sample(x, y); return [open, opened, changed]; };
+    expect(flags(48, 48)).toEqual([255, 255, 255]);
+    terrain.acknowledge(); expect(flags(48, 48)).toEqual([255, 255, 0]);
     terrain.setObstacle('a', [cell]); expect(terrain.sample(48, 48)[0]).toBe(0);
     terrain.removeObstacle('a'); expect(terrain.sample(48, 48)[2]).toBe(255);
     expect(terrain.sample(80, 112)[0]).toBe(255);
+  });
+  it('ramps the water weight smoothly across the shoreline instead of stepping at the bank', () => {
+    const terrain = new FogTerrainModel(frame, Array.from({ length: 16 }, (_, i) => ({ gridX: 4 + i % 4, gridY: 4 + Math.floor(i / 4) })));
+    const weights = Array.from({ length: 40 }, (_, i) => terrain.sample(192 - i * 8, 192)[1]);
+    expect(weights[0]).toBe(255); expect(weights[weights.length - 1]).toBe(0);
+    for (let i = 1; i < weights.length; i++) {
+      expect(weights[i]).toBeLessThanOrEqual(weights[i - 1]);
+      expect(weights[i - 1] - weights[i]).toBeLessThan(40);
+    }
   });
   it('retains overlapping slots, caps cache and evicts on world time only', () => {
     const residency = new FogResidency(frame);

@@ -46,17 +46,21 @@ vec2 ambientWind(vec2 world) {
 }
 // Target and material share this transport, so texture stays attached to its bank.
 vec2 fogSpace(vec2 world,float t) { return world-uWind*t-meanderOffset(world,t); }
-// Separate banks with clear gaps: soft ribbons along a slowly morphing, warped isoline,
-// broken into segments of varying strength.
+// Separate banks with clear gaps: elongated, gently warped two-octave patches above a wide,
+// soft threshold. Isoline ribbons were avoided on purpose: value-noise isolines narrow into
+// hard, river-like strands wherever the noise gradient is steep.
 float targetDensity(float slot,vec2 p,float water) {
   vec2 q=fogSpace(origin(slot)+(p+.5)*8.0,uTime);
   vec2 drift=uTime*vec2(.0023,-.0017);
-  vec2 warp=vec2(noise(q/520.0+vec2(9.2,3.7)+drift),noise(q/520.0+vec2(1.7,13.4)-drift))-.5;
-  float line=noise(q/430.0+warp*1.8)*.82+noise(q/150.0+vec2(21.0,7.0)+warp*2.6)*.18;
-  float ribbon=1.0-abs(line*2.0-1.0);
-  float segment=smoothstep(.34,.62,noise(q/380.0+vec2(31.0,17.0)-warp));
-  float cover=smoothstep(${f(FOG.bankLow)},${f(FOG.bankHigh)},ribbon)*segment;
-  // Thin residual haze keeps edge inflow alive; open water stays more continuous.
+  vec2 warp=vec2(noise(q/560.0+vec2(9.2,3.7)+drift),noise(q/560.0+vec2(1.7,13.4)-drift))-.5;
+  // Warp gradients stay well below one so the field never folds into creases with abrupt rims.
+  float angle=uSeed*.0063;
+  vec2 s=mat2(cos(angle),sin(angle),-sin(angle),cos(angle))*q/vec2(${f(FOG.bankLength)},${f(FOG.bankWidth)});
+  float field=noise(s+warp*.45)*.68+noise(s*2.3+vec2(21.0,7.0)+warp*.8)*.32
+    // Water favours banks a little instead of adding a hard, shore-shaped sheet.
+    +water*${f(FOG.waterBankBias)};
+  float cover=smoothstep(${f(FOG.bankLow)},${f(FOG.bankHigh)},field);
+  // Thin residual haze keeps edge inflow alive; open water keeps slightly more of it.
   float haze=mix(${f(FOG.clearHaze)},${f(FOG.waterHaze)},water);
   return clamp(mix(uDensity.x,uDensity.y,water)*(haze+(1.0-haze)*cover),0.0,.95);
 }
