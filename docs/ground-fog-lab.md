@@ -46,11 +46,28 @@ Geschwindigkeit und Impulsbelegung lassen sich getrennt anzeigen.
 
 ## Akzeptierte Grundabstimmung
 
-Nach Nutzerrückmeldung wurde der Standard dichter und sichtbarer eingestellt:
-Deckkraft **0,50**, zentraler Dichtefaktor **1,85**, Map-Stärke weiterhin **1**.
-Das entspricht ungefähr den vorherigen Reglern nahe ihrem Maximum. Die gemeinsame
-Deckkraftgrenze bleibt 0,30; Lichtmap und Tageskurve gelten weiterhin.
-Zentrale Werte stehen in `src/effects/groundFog/FogConfig.ts`.
+Deckkraft **0,50**, zentraler Dichtefaktor **1,85**, Map-Stärke weiterhin **1**; Lichtmap und
+Tageskurve gelten unverändert. Zentrale Werte stehen in `src/effects/groundFog/FogConfig.ts`.
+
+**Nebelbänke:** Die Zieldichte bildet keinen flächigen Schleier, sondern getrennte, weich
+auslaufende Bänder entlang einer verzerrten, langsam veränderlichen Isolinie, die zusätzlich
+in unterschiedlich starke Abschnitte zerfallen. Dazwischen bleibt nur ein dünner Restdunst
+(Land 7 %, offenes Wasser 32 % der Tagesdichte). Er hält den randseitigen Zufluss in
+geöffnete Bereiche aufrecht; über Wasser bleibt der Nebel dadurch zusammenhängender.
+
+**Bewegung:** Ein schwacher, seedabhängiger Grundwind (3,5 px/s) wird von einem begrenzten,
+regional phasenverschobenen Mäandern überlagert. Benachbarte Bänke ziehen dadurch in
+unterschiedliche Richtungen und wenden über Minuten; die Verschiebung akkumuliert nicht.
+Dieselbe Transportfunktion bewegt Zieldichte und Materialstruktur, ihre Zeitableitung ist
+die Umgebungsströmung der Simulation. Textur, Dichte und Advektion bleiben so deckungsgleich.
+Der Lab-Regler **Mäandern** (0–2, Standard 1) skaliert nur diesen Anteil; die GPU-Verträge
+laufen mit 0, damit Kodierung und Hindernisströmung unabhängig davon geprüft werden.
+
+**Material:** Eine zeitlich veränderliche Domain-Warp-Struktur aus Wölbungen, feinen Strähnen
+und (nur auf Hoch) Feindetail skaliert die optische Dicke. Ein kleiner Kantenabzug löst dünnen
+Nebel in Schwaden auf und lässt die Zwischenräume klar; eine weiche Sättigung (höchstens 0,52)
+ersetzt die frühere harte Deckkraftgrenze von 0,30, sodass dichte Kerne präsent bleiben,
+ohne flach abgeschnitten zu wirken.
 
 Die Lobby verwendet ebenfalls die normale Nebelstärke. Ihre Nebeldichte folgt der
 angezeigten, vom Host gewählten Lobby-Uhrzeit über denselben Zeitwert wie die Beleuchtung;

@@ -13,7 +13,7 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
   terrain.setObstacle('wall', rect(15, 0, 1, 16), true);
   terrain.markOpened(rect(16, 0, 16, 16));
   terrain.setObstacle('rock', rect(6, 5, 6, 6), true);
-  const tuning = { ...fogTuning(183), windX: 24, windY: 0 };
+  const tuning = { ...fogTuning(183), windX: 24, windY: 0, meander: 0 };
   const field = new FogGpuField(scene, terrain, 183, tuning, 0);
   let time = 0;
   const steps = (n: number): void => {
@@ -105,7 +105,7 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
 function checkObstacleFlow(scene: Phaser.Scene) {
   const frame = { offsetX: 0, offsetY: 0, width: 512, height: 512 };
   const view = { x: 0, y: 0, width: 512, height: 512 };
-  const tuning = { ...fogTuning(183), windX: 24, windY: 0 };
+  const tuning = { ...fogTuning(183), windX: 24, windY: 0, meander: 0 };
   const baseline = new FogTerrainModel(frame, []), blocked = new FogTerrainModel(frame, []);
   blocked.setObstacle('rock', Array.from({ length: 12 }, (_, i) => ({ gridX: 10 + i % 2, gridY: 5 + Math.floor(i / 2) })), true);
   const control = new FogGpuField(scene, baseline, 183, tuning, 0);

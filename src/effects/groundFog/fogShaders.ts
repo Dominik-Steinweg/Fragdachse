@@ -1,12 +1,16 @@
 import { FOG } from './FogConfig';
 const cells = FOG.chunkSize / FOG.cellSize;
+const f = (value: number): string => value.toFixed(6);
+const cycle = (seconds: number): string => f(Math.PI * 2 / seconds);
+const [W1, W2, W3, W4] = FOG.meanderPeriods.map(cycle);
+const AMPLITUDE = f(FOG.meanderAmplitude);
 export const FOG_GLSL = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
 varying vec2 outTexCoord;
 uniform sampler2D uState, uVelocity, uTerrain, uMeta, uCommands, uBins, uImpulse;
 uniform vec2 uWorldSize, uWind, uDensity;
-uniform float uTime, uSeed, uReaction, uInitialize;
+uniform float uTime, uSeed, uReaction, uInitialize, uMeander;
 const vec2 atlasSize = vec2(${FOG.atlasCols * cells}.0, ${FOG.atlasRows * cells}.0);
 const float SIDE = ${cells}.0;
 const float SLOTS = ${FOG.atlasCols * FOG.atlasRows}.0;
@@ -23,11 +27,38 @@ float noise(vec2 p) {
   vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
   return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
 }
+// Bounded, regionally phased sway: neighbouring banks drift in different directions and
+// turn over minutes. The displacement never accumulates, so no shear builds up over time.
+// The analytic phase field only times the motion and is never visible as a pattern.
+vec4 meanderPhase(vec2 world,float t) {
+  vec2 ph=vec2(sin(world.x/610.0+1.3*sin(world.y/830.0+uSeed))*2.4+world.y/1300.0,
+    sin(world.y/570.0+1.1*sin(world.x/760.0-uSeed))*2.4-world.x/1500.0);
+  return vec4(${W1}*t+ph.x,${W3}*t+ph.y*1.3,${W2}*t+ph.y,${W4}*t+ph.x*1.7);
+}
+vec2 meanderOffset(vec2 world,float t) {
+  vec4 a=meanderPhase(world,t);
+  return vec2(sin(a.x)+.5*sin(a.y),sin(a.z)+.5*sin(a.w))*${AMPLITUDE}*uMeander;
+}
+// Time derivative of fogSpace(): ambient flow carries density where the banks travel.
+vec2 ambientWind(vec2 world) {
+  vec4 a=meanderPhase(world,uTime);
+  return uWind+vec2(${W1}*cos(a.x)+${W3}*.5*cos(a.y),${W2}*cos(a.z)+${W4}*.5*cos(a.w))*${AMPLITUDE}*uMeander;
+}
+// Target and material share this transport, so texture stays attached to its bank.
+vec2 fogSpace(vec2 world,float t) { return world-uWind*t-meanderOffset(world,t); }
+// Separate banks with clear gaps: soft ribbons along a slowly morphing, warped isoline,
+// broken into segments of varying strength.
 float targetDensity(float slot,vec2 p,float water) {
-  vec2 world=origin(slot)+(p+.5)*8.0;
-  float broad=noise(world/270.0);
-  float wisps=noise(world/113.0+vec2(21.0,7.0));
-  return clamp(mix(uDensity.x,uDensity.y,water)*(.10+.90*smoothstep(.28,.78,broad*.72+wisps*.28)),0.0,.95);
+  vec2 q=fogSpace(origin(slot)+(p+.5)*8.0,uTime);
+  vec2 drift=uTime*vec2(.0023,-.0017);
+  vec2 warp=vec2(noise(q/520.0+vec2(9.2,3.7)+drift),noise(q/520.0+vec2(1.7,13.4)-drift))-.5;
+  float line=noise(q/430.0+warp*1.8)*.82+noise(q/150.0+vec2(21.0,7.0)+warp*2.6)*.18;
+  float ribbon=1.0-abs(line*2.0-1.0);
+  float segment=smoothstep(.34,.62,noise(q/380.0+vec2(31.0,17.0)-warp));
+  float cover=smoothstep(${f(FOG.bankLow)},${f(FOG.bankHigh)},ribbon)*segment;
+  // Thin residual haze keeps edge inflow alive; open water stays more continuous.
+  float haze=mix(${f(FOG.clearHaze)},${f(FOG.waterHaze)},water);
+  return clamp(mix(uDensity.x,uDensity.y,water)*(haze+(1.0-haze)*cover),0.0,.95);
 }
 vec4 state(float slot,vec2 p) {
   if(slot<0.0) return vec4(0);
@@ -42,7 +73,7 @@ vec4 state(float slot,vec2 p) {
 }
 vec2 velocity(float slot,vec2 p) {
   if(slot<0.0 || terrain(slot,p).r<.5 || terrain(slot,p).a>.5) return vec2(0);
-  if(meta(slot,2.0).g>.5) return uWind;
+  if(meta(slot,2.0).g>.5) return ambientWind(origin(slot)+(p+.5)*8.0);
   vec4 v=texture2D(uVelocity,flip(cellUV(slot,p)));
   return (vec2(unpack16(v.rg),unpack16(v.ba))*2.0-1.0)*SPEED;
 }
@@ -120,7 +151,7 @@ void main() {
  vec2 old=velocity(slot,p),push=vec2(0),mixing=vec2(0);float compressed=pressure(slot,p);
  flowFace(slot,p,vec2(-1,0),compressed,old,push,mixing);flowFace(slot,p,vec2(1,0),compressed,old,push,mixing);
  flowFace(slot,p,vec2(0,-1),compressed,old,push,mixing);flowFace(slot,p,vec2(0,1),compressed,old,push,mixing);
- vec2 v=mix(old,uWind,${FOG.windRelaxation})+mixing*${FOG.momentumMix}*.25+push*${FOG.pressureGain}.0
+ vec2 v=mix(old,ambientWind(origin(slot)+(p+.5)*8.0),${FOG.windRelaxation})+mixing*${FOG.momentumMix}*.25+push*${FOG.pressureGain}.0
    +(impulse.rg*255.0-128.0)/127.0*SPEED;
  // L1 CFL <= .6: even an extreme explosion never skips a cell.
  v*=min(1.0,144.0/max(144.0,abs(v.x)+abs(v.y)));
@@ -200,14 +231,21 @@ void main() {
    }
    gl_FragColor=vec4(color, .92);return;
  }
- vec2 drift=world-uWind*uTime;
- float broad=noise(drift/160.0),fold=noise(drift/55.0+vec2(broad*2.0,uTime*.013));
- float fine=uQuality>1.5?noise(drift/23.0+fold):.5;
- float veil=mix(.55,1.0,smoothstep(.2,.8,broad*.4+fold*.6));
- veil*=mix(1.0,.7+fine*.6,uDetail);
+ // Displayed density lies between the previous and current step; texture time follows it.
+ float t=uTime-(1.0-uInterpolation)*${f(FOG.stepMs / 1000)};
+ vec2 q=fogSpace(world,t);
+ // A time-evolving domain warp lets billows churn in place instead of sliding as one sheet.
+ vec2 warp=vec2(noise(q/170.0+vec2(t*.019,5.1)),noise(q/170.0+vec2(-3.7,t*.015)))-.5;
+ float body=noise(q/74.0+warp*2.2)*.62+noise(q/33.0+warp*3.0+vec2(t*.011,0.0))*.38;
+ float strand=1.0-abs(noise(q/47.0+warp*3.4-vec2(0.0,t*.009))*2.0-1.0);
+ float fine=uQuality>1.5?noise(q/17.0+warp*4.0+vec2(0.0,t*.02)):.5;
+ float structure=smoothstep(.22,.82,body*.76+strand*strand*.12+fine*.12);
+ // Structure scales optical thickness; a small edge offset erodes thin fog into wisps and
+ // leaves the gaps clear, while saturation keeps dense cores soft instead of clipped flat.
+ float thickness=max(0.0,d*mix(1.0,.12+1.8*structure,uDetail)-${f(FOG.materialEdge)});
  float trace=uHasTrails>.5?texture2D(uImpulse,outTexCoord).r:0.0;
- float alpha=min(.30,d*veil*uOpacity)*(1.0-trace);
- gl_FragColor=vec4(vec3(.79,.85,.84)*alpha,alpha);
+ float alpha=${f(FOG.materialMaxAlpha)}*(1.0-exp(-${f(FOG.materialGain)}*uOpacity*thickness))*(1.0-trace);
+ gl_FragColor=vec4(mix(vec3(.72,.79,.81),vec3(.84,.88,.88),structure)*alpha,alpha);
 }
 `;
 

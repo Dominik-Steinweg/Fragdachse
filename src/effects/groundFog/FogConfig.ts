@@ -13,15 +13,21 @@ export const FOG = {
   smallProjectileStrength: .48, largeProjectileStrength: .43,
   pressureGain: 38, momentumMix: .10, windRelaxation: .035,
   densityScale: 1.85,
+  // Separate banks: soft ribbon threshold of the warped target field, thin haze in the gaps.
+  bankLow: .62, bankHigh: .84, clearHaze: .07, waterHaze: .32,
+  // Bounded sway in world px and its quasi-periodic cycles in seconds.
+  meanderAmplitude: 56, meanderPeriods: [83, 127, 61, 50.4],
+  // Soft optical saturation instead of a hard opacity clip.
+  materialMaxAlpha: .52, materialGain: 3, materialEdge: .035,
   materialMargin: 64,
 } as const;
 export type FogQuality = 'high' | 'medium' | 'low';
 export type FogDebug = 'normal' | 'barriers' | 'water' | 'density' | 'unreached' | 'velocity' | 'impulses' | 'surface';
 export const FOG_DEBUG: readonly FogDebug[] = ['normal', 'barriers', 'water', 'density', 'unreached', 'velocity', 'impulses', 'surface'];
-export interface FogTuning { opacity: number; detail: number; windX: number; windY: number; reaction: number }
+export interface FogTuning { opacity: number; detail: number; windX: number; windY: number; reaction: number; meander: number }
 export function fogTuning(seed: number): FogTuning {
   const angle = ((seed >>> 0) % 997) / 997 * Math.PI * 2;
-  return { opacity: .50, detail: .65, windX: Math.cos(angle) * 12, windY: Math.sin(angle) * 12, reaction: 1 };
+  return { opacity: .50, detail: .65, windX: Math.cos(angle) * 3.5, windY: Math.sin(angle) * 3.5, reaction: 1, meander: 1 };
 }
 /** Periodic smooth curve, independent of lighting brightness. [land, water]. */
 export function fogDensityAt(minutes: number): readonly [number, number] {

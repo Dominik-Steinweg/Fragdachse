@@ -124,6 +124,7 @@ export class FogGpuField {
         set('uWorldSize', [this.terrain.frame.width, this.terrain.frame.height]);
         set('uWind', [this.tuning.windX, this.tuning.windY]); set('uTime', this.elapsed / 1000);
         set('uSeed', (this.seed >>> 0) % 997); set('uDensity', this.density); set('uReaction', this.tuning.reaction);
+        set('uMeander', this.tuning.meander);
         set('uInitialize', this.initializeOnly ? 1 : 0);
         set('uLookupSize', [this.lookup.width, this.lookup.height]);
         set('uViewOrigin', [this.view.x - this.terrain.frame.offsetX, this.view.y - this.terrain.frame.offsetY]);

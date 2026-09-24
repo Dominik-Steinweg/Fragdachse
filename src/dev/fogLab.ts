@@ -32,7 +32,7 @@ import { TRAIN } from '../train/TrainConfig';
 const element = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const value = (id: string): string => element<HTMLInputElement>(id).value;
 const number = (id: string): number => Number(value(id));
-const controlIds = ['scenario', 'seed', 'mode', 'quality', 'time', 'strength', 'debug', 'opacity', 'detail', 'windX', 'windY', 'reaction', 'weapon', 'motionPattern', 'shotPattern', 'shooters', 'pellets', 'trailWidth', 'trailDuration', 'pathMode'];
+const controlIds = ['scenario', 'seed', 'mode', 'quality', 'time', 'strength', 'debug', 'opacity', 'detail', 'windX', 'windY', 'meander', 'reaction', 'weapon', 'motionPattern', 'shotPattern', 'shooters', 'pellets', 'trailWidth', 'trailDuration', 'pathMode'];
 const query = new URLSearchParams(location.search);
 for (const id of controlIds) if (query.has(id)) element<HTMLInputElement>(id).value = query.get(id)!;
 const frame = { offsetX: 0, offsetY: 0, width: 8192, height: 3072 };
@@ -295,7 +295,7 @@ class FogLab extends Phaser.Scene {
       y: camera.scrollY + camera.height * (1 - 1 / camera.zoom) / 2, width: camera.width / camera.zoom, height: camera.height / camera.zoom };
     this.fog.enabled = value('mode') !== 'off'; this.fog.reactions = value('mode') === 'full';
     this.fog.strength = number('strength'); this.fog.quality = value('quality') as FogQuality; this.fog.debug = value('debug') as FogDebug;
-    Object.assign(this.fog.tuning, { opacity: number('opacity'), detail: number('detail'), windX: number('windX'), windY: number('windY'), reaction: number('reaction') });
+    Object.assign(this.fog.tuning, { opacity: number('opacity'), detail: number('detail'), windX: number('windX'), windY: number('windY'), meander: number('meander'), reaction: number('reaction') });
     this.quality.setLevel(this.fog.quality);
     this.water.prepareMasks(); this.water.updateResidency(view);
     if (dt) { this.fog.captureMotion(dt, [this.playerSource], [this.enemySource], view); this.tickShots(Math.min(dt, 67)); }
