@@ -1,272 +1,157 @@
 import sharp from 'sharp';
-import * as path from 'path';
+import { mkdir, readFile } from 'node:fs/promises';
 
-/**
- * Erzeugt die beiden Boden-Kacheln der Arena:
- *
- * - `gras_bg_tile.png`     – die nahtlose Basiskachel (Farbe, Wolken, Halmkorn).
- * - `gras_detail_tile.png` – eine nahezu weisse Multiply-Kachel mit Buescheln und Korn.
- *
- * Warum zwei Kacheln statt einer: Die Basiskachel ist 1254 px breit, die Arena je nach Modus
- * 1440 bis 4320 px. Die Wolkenstruktur wiederholt sich damit bis zu 3,4-mal sichtbar. Die
- * Detailkachel hat mit 512 px eine dazu weitgehend teilerfremde Periode (kgV 321 024 px), sodass
- * die Kombination praktisch nie identisch wiederkehrt.
- *
- * Warum ueberhaupt neu erzeugt: Die alte Kachel war eine einzelne weichgezeichnete Rauschoktave.
- * Ihre gesamte Energie sass bei 65-129 px (RMS 1,31), waehrend das 1-3-px-Band bei 0,22 lag – der
- * Dirt-Boden erreicht dort 3,82. Gras las sich dadurch als unscharfer Hintergrund unter einer
- * scharfen Dirt-Ebene. Beide Kacheln hier sind deshalb bewusst multi-oktavig aufgebaut, mit
- * absichtlich *fallender* Amplitude zu grossen Skalen hin.
- *
- * Aufruf: node scripts/generate-grass-tiles.mjs
- */
+const source = 'tools/source-art/ground-materials', output = 'public/assets/sprites';
+/** Selected sources, their physical size and a mild authored grade: materials.json. */
+const recipe = JSON.parse(await readFile(source + '/materials.json', 'utf8'));
+const size = recipe.tileSize, patch = 128, overlap = 32, step = patch - overlap;
+await mkdir(output, { recursive: true });
 
-const OUT_DIR = path.join('public', 'assets', 'sprites');
-const BASE_TARGET = path.join(OUT_DIR, 'gras_bg_tile.png');
-const DETAIL_TARGET = path.join(OUT_DIR, 'gras_detail_tile.png');
-
-/**
- * 627 = 3·11·19, also ungerade und damit exakt teilerfremd zur Detailkachel. Die alte Kachel war
- * doppelt so gross; das Viertel an Pixeln haelt die Dateigroesse trotz des neuen Feinkorns etwa
- * auf dem alten Stand. Grossflaechige Struktur geht dabei nicht verloren, weil die groesste
- * verbliebene Wellenlaenge ohnehin die schwaechste Bande ist.
- */
-const BASE_SIZE = 627;
-/** Zweierpotenz; gegen 627 teilerfremd, gemeinsame Periode also 321 024 px. */
-const DETAIL_SIZE = 512;
-
-/**
- * Farbachsen des Grases. Die alte Kachel variierte nur in R und G (sd(B) = 0,3) und wirkte
- * dadurch wie ein Gruen-Helligkeitsverlauf statt wie Material. Diese beiden Endpunkte spannen
- * eine echte Farbtonachse auf: feucht/beschattet gegen trocken/besonnt.
- *
- * Beide Endpunkte haben bewusst **dieselbe Rec.709-Luma (67,2)**. Sonst schleppt die Farbachse
- * verdeckt Helligkeit mit, und weil der Farbton absichtlich traeger wandert als der Wert, landet
- * diese Helligkeit vollstaendig in den grossen Skalen – das Bandprofil laesst sich dann ueber die
- * Wert-Oktaven nicht mehr steuern. Beim Aendern der Farben die Luma nachrechnen:
- * 0,2126·R + 0,7152·G + 0,0722·B.
- */
-const COLOR_COOL = [35, 78, 60];
-const COLOR_WARM = [54, 75, 36];
-
-/**
- * Multiplikative Helligkeitsamplitude der Basiskachel. Zusammen mit der Detailkachel liegt die
- * Kontrastdichte pro 32-px-Zelle danach etwa bei der Haelfte des Dirt-Bodens – Gras bleibt das
- * ruhigere Material, liest sich aber in derselben Bildebene.
- */
-const BASE_VALUE_AMOUNT = 0.056;
-/** Ausschlag entlang der Farbtonachse; 1 = voll trocken, -1 = voll feucht. */
-const BASE_HUE_AMOUNT = 0.16;
-/**
- * Vorabhebung, die den mittleren Multiply-Verlust der Detailkachel ausgleicht. Ohne sie saenke
- * der Gras-Mittelton unter den alten Wert, statt ihn wie beabsichtigt leicht anzuheben.
- */
-const DETAIL_MEAN_COMPENSATION = 1 / 0.955;
-
-/**
- * Oktavleiter der Basiskachel. `n` ist die Gitteraufloesung; die Wellenlaenge ist 627/n px.
- * Nur Teiler von 627 sind zulaessig (1, 3, 11, 19, 33, 57, 209, 627), sonst waere die Kachel
- * nicht mehr nahtlos. Die Amplituden fallen bewusst zu grossen Skalen hin – genau umgekehrt zur
- * alten Kachel, deren gesamte Energie bei 65-129 px sass.
- *
- * Die 1-px-Oktave (n = 627) fehlt bewusst: Sie waere der mit Abstand teuerste PNG-Inhalt, und
- * die Detailkachel deckt dieselbe Wellenlaenge mit ihrer 256er-Oktave ab.
- */
-const BASE_VALUE_OCTAVES = [
-  { nx: 3, ny: 3, amp: 0.14 },     // 209 px – die verbliebene grossflaechige Wolke
-  { nx: 11, ny: 11, amp: 0.30 },   // 57 px
-  { nx: 19, ny: 19, amp: 0.46 },   // 33 px – gedaempft, sonst wirkt die Flaeche fleckig
-  { nx: 33, ny: 33, amp: 1.00 },   // 19 px – Mittelband, traegt das Maximum
-  { nx: 57, ny: 57, amp: 1.15 },   // 11 px – Mittelband, traegt das Maximum
-  { nx: 209, ny: 209, amp: 0.62 }, // 3 px – Korn, bewusst gedaempft (siehe BLADE_MIX)
-];
-
-/** Der Farbton wandert traeger als die Helligkeit, sonst zerfaellt die Flaeche in Farbrauschen. */
-const BASE_HUE_OCTAVES = [
-  { nx: 3, ny: 3, amp: 1.0 },
-  { nx: 11, ny: 11, amp: 0.6 },
-  { nx: 19, ny: 19, amp: 0.3 },
-  { nx: 57, ny: 57, amp: 0.12 },
-];
-
-/**
- * Halmkorn: zwei stark anisotrope Felder, quer und laengs. Beide bleiben exakt kachelbar, weil
- * nur die Gitteraufloesungen pro Achse unterschiedlich sind, nicht die Abtastgeometrie. Eine
- * niederfrequente Maske blendet zwischen ihnen und erzeugt so wechselnde Halmrichtungen.
- */
-const BLADE_FIELD_A = [
-  { nx: 33, ny: 57, amp: 1.0 },  // 19 px lang, 11 px breit
-  { nx: 19, ny: 33, amp: 0.6 },  // 33 px lang, 19 px breit
-];
-const BLADE_FIELD_B = [
-  { nx: 57, ny: 33, amp: 1.0 },
-  { nx: 33, ny: 19, amp: 0.6 },
-];
-const BLADE_MASK_OCTAVE = { nx: 11, ny: 11, amp: 1.0 };
-/**
- * Anteil des Halmkorns am Helligkeitsfeld der Basiskachel. Bewusst niedrig: Ein hoher Anteil in
- * Verbindung mit stark gestreckten Feldern loest die Flaeche in einzeln erkennbare Striche auf.
- * Die Streckung bleibt deshalb bei etwa 1,7:1 und dient nur noch als Richtungsandeutung.
- */
-const BLADE_MIX = 0.16;
-
-/** Oktavleiter der Detailkachel; Teiler von 512, Wellenlaenge 512/n px. */
-const DETAIL_OCTAVES = [
-  { nx: 8, ny: 8, amp: 0.32 },     // 64 px – Buescheln/Flecken
-  { nx: 16, ny: 16, amp: 0.48 },   // 32 px – Buescheln, gedaempft gegen Fleckigkeit
-  { nx: 32, ny: 32, amp: 0.90 },   // 16 px – Mittelband
-  { nx: 64, ny: 64, amp: 0.85 },   // 8 px
-  { nx: 128, ny: 128, amp: 0.52 }, // 4 px
-  { nx: 256, ny: 256, amp: 0.22 }, // 2 px – Korn, nur noch als Andeutung
-];
-/** Wie stark die Detailkachel maximal abdunkelt (0,075 = bis 92,5 % Helligkeit). */
-const DETAIL_DEPTH = 0.075;
-/** Leichte Farbtonverschiebung der Detailkachel, damit sie nicht nur Helligkeit moduliert. */
-const DETAIL_TINT_DEPTH = 0.012;
-
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+/** Offline quilting preserves authored blade/grain scale. Overlapping patches
+ * are joined along minimum-error paths, without a new noise or detail layer. */
+function quilt(input, nativeSize, seed) {
+  const data = Buffer.alloc(size * size * 3);
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  const sourcePixel = (p, x, y, c) => {
+    let u = p.flip ? patch - 1 - x : x, v = y;
+    for (let r = 0; r < p.rotation; r++) [u, v] = [patch - 1 - v, u];
+    return input[((p.y + v) * nativeSize + p.x + u) * 3 + c];
   };
+  for (let oy = 0; oy < size; oy += step) for (let ox = 0; ox < size; ox += step) {
+    const w = Math.min(patch, size - ox), h = Math.min(patch, size - oy);
+    let best, score = Infinity;
+    const error = (p, x, y) => {
+      let sum = 0;
+      for (let c = 0; c < 3; c++) sum += (data[((oy + y) * size + ox + x) * 3 + c] - sourcePixel(p, x, y, c)) ** 2;
+      return sum;
+    };
+    for (let candidate = 0; candidate < 24; candidate++) {
+      const p = { x: Math.floor(random() * (nativeSize - patch + 1)), y: Math.floor(random() * (nativeSize - patch + 1)),
+        flip: random() < .5, rotation: Math.floor(random() * 4) };
+      let total = 0;
+      for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
+        if ((ox && x < overlap) || (oy && y < overlap)) total += error(p, x, y);
+      }
+      if (total < score) { best = p; score = total; }
+    }
+    const cut = (length, across, horizontal) => {
+      const cost = new Float64Array(length * across), parent = new Int16Array(cost.length);
+      for (let i = 0; i < length; i++) for (let j = 0; j < across; j++) {
+        let prev = j;
+        if (i) for (let k = Math.max(0, j - 1); k <= Math.min(across - 1, j + 1); k++) {
+          if (cost[(i - 1) * across + k] < cost[(i - 1) * across + prev]) prev = k;
+        }
+        cost[i * across + j] = error(best, horizontal ? i : j, horizontal ? j : i)
+          + (i ? cost[(i - 1) * across + prev] : 0);
+        parent[i * across + j] = prev;
+      }
+      let j = 0;
+      for (let k = 1; k < across; k++) if (cost[(length - 1) * across + k] < cost[(length - 1) * across + j]) j = k;
+      const path = new Int16Array(length);
+      for (let i = length - 1; i >= 0; i--) { path[i] = j; j = parent[i * across + j]; }
+      return path;
+    };
+    const left = ox ? cut(h, Math.min(overlap, w), false) : null;
+    const top = oy ? cut(w, Math.min(overlap, h), true) : null;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if ((left && x < left[y]) || (top && y < top[x])) continue;
+      for (let c = 0; c < 3; c++) data[((oy + y) * size + ox + x) * 3 + c] = sourcePixel(best, x, y, c);
+    }
+  }
+  return data;
 }
 
-function smoothstep(t) {
-  return t * t * (3 - 2 * t);
+function reconcileTileEdges(data, band = 8) {
+  for (let axis = 0; axis < 2; axis++) for (let line = 0; line < size; line++) {
+    for (let offset = 0; offset < band; offset++) {
+      const t = 1 - offset / band, weight = t * t * (3 - 2 * t) * .5;
+      const a = (axis === 0 ? line * size + offset : offset * size + line) * 3;
+      const b = (axis === 0 ? line * size + size - 1 - offset : (size - 1 - offset) * size + line) * 3;
+      for (let c = 0; c < 3; c++) {
+        const first = data[a + c], last = data[b + c];
+        data[a + c] = Math.round(first + (last - first) * weight);
+        data[b + c] = Math.round(last + (first - last) * weight);
+      }
+    }
+  }
+}
+/** Grade in linear-ish display space: per-channel gain, saturation about luma, gamma. */
+function grade(data, { gain = [1, 1, 1], saturation = 1, gamma = 1 } = {}) {
+  for (let i = 0; i < data.length; i += 3) {
+    let r = data[i] * gain[0] / 255, g = data[i + 1] * gain[1] / 255, b = data[i + 2] * gain[2] / 255;
+    const luma = r * .3 + g * .59 + b * .11;
+    r = luma + (r - luma) * saturation; g = luma + (g - luma) * saturation; b = luma + (b - luma) * saturation;
+    data[i] = Math.round(255 * Math.max(0, Math.min(1, r)) ** gamma);
+    data[i + 1] = Math.round(255 * Math.max(0, Math.min(1, g)) ** gamma);
+    data[i + 2] = Math.round(255 * Math.max(0, Math.min(1, b)) ** gamma);
+  }
 }
 
-/**
- * Periodisches Value-Noise. Die Gitterindizes werden modulo `nx`/`ny` genommen; solange `nx` die
- * Kachelbreite und `ny` die Kachelhoehe teilt, ist das Ergebnis in beiden Achsen nahtlos.
- */
-function valueNoiseField(size, nx, ny, rng) {
-  const lattice = new Float64Array(nx * ny);
-  for (let i = 0; i < lattice.length; i += 1) lattice[i] = rng();
-
-  const out = new Float64Array(size * size);
-  for (let y = 0; y < size; y += 1) {
-    const v = (y / size) * ny;
-    const y0 = Math.floor(v);
-    const fy = smoothstep(v - y0);
-    const ya = (y0 % ny) * nx;
-    const yb = ((y0 + 1) % ny) * nx;
-    for (let x = 0; x < size; x += 1) {
-      const u = (x / size) * nx;
-      const x0 = Math.floor(u);
-      const fx = smoothstep(u - x0);
-      const xa = x0 % nx;
-      const xb = (x0 + 1) % nx;
-      const top = lattice[ya + xa] + (lattice[ya + xb] - lattice[ya + xa]) * fx;
-      const bottom = lattice[yb + xa] + (lattice[yb + xb] - lattice[yb + xa]) * fx;
-      out[y * size + x] = (top + (bottom - top) * fy) * 2 - 1;
+/** Seamless value-noise fBm over the whole tile; `cells` lattice cells per octave. */
+function periodicNoise(octaves, seed) {
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  const fade = v => v * v * (3 - 2 * v);
+  const out = new Float32Array(size * size);
+  for (const cells of octaves) {
+    const lattice = Float32Array.from({ length: cells * cells }, random);
+    const at = (i, j) => lattice[(j % cells) * cells + (i % cells)];
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const u = x / size * cells, v = y / size * cells, i = Math.floor(u), j = Math.floor(v);
+      const tx = fade(u - i), ty = fade(v - j);
+      out[y * size + x] += ((at(i, j) * (1 - tx) + at(i + 1, j) * tx) * (1 - ty)
+        + (at(i, j + 1) * (1 - tx) + at(i + 1, j + 1) * tx) * ty) / octaves.length;
     }
   }
   return out;
 }
 
-function sumOctaves(size, octaves, rng) {
-  const out = new Float64Array(size * size);
-  for (const octave of octaves) {
-    const field = valueNoiseField(size, octave.nx, octave.ny, rng);
-    for (let i = 0; i < out.length; i += 1) out[i] += field[i] * octave.amp;
-  }
-  return out;
-}
-
-/** Auf Mittelwert 0 und Standardabweichung 1 bringen, damit die Amplituden oben absolut wirken. */
-function normalize(field) {
-  let mean = 0;
-  for (let i = 0; i < field.length; i += 1) mean += field[i];
-  mean /= field.length;
+/** Blade height of the base layer: luminance above its wrapped local mean, about 0..1. */
+function bladeHeight(data, radius = 6) {
+  const light = new Float32Array(size * size), height = new Float32Array(size * size);
+  for (let i = 0; i < light.length; i++) light[i] = data[i * 3] * .3 + data[i * 3 + 1] * .59 + data[i * 3 + 2] * .11;
+  const wrap = v => (v + size) % size;
   let variance = 0;
-  for (let i = 0; i < field.length; i += 1) variance += (field[i] - mean) ** 2;
-  const sd = Math.sqrt(variance / field.length) || 1;
-  for (let i = 0; i < field.length; i += 1) field[i] = (field[i] - mean) / sd;
-  return field;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let sum = 0;
+    for (let k = -radius; k <= radius; k++) sum += light[y * size + wrap(x + k)] + light[wrap(y + k) * size + x];
+    height[y * size + x] = light[y * size + x] - sum / (4 * radius + 2);
+    variance += height[y * size + x] ** 2;
+  }
+  const deviation = Math.sqrt(variance / height.length) || 1;
+  return height.map(v => .5 + .2 * v / deviation);
 }
 
-function clamp255(v) {
-  return v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+async function nativeQuilt(layer) {
+  const nativeSize = Math.round(layer.sourceMetres * recipe.pixelsPerMetre);
+  const native = await sharp(source + '/' + layer.source).resize(nativeSize, nativeSize, { kernel: 'lanczos3' })
+    .removeAlpha().raw().toBuffer();
+  return quilt(native, nativeSize, layer.seed);
 }
 
 /**
- * Feines Korn ist der teuerste PNG-Inhalt: unquantisiert wiegt die Basiskachel ein Vielfaches.
- * Eine 256-Farben-Palette drueckt sie auf rund ein Viertel bei einem Quantisierungsfehler weit
- * unterhalb der Kanalstreuung. Der Browser dekodiert Paletten-PNGs ohnehin nach RGBA, an der
- * GPU-Textur aendert sich nichts.
- *
- * `dither: 0` ist Absicht: Fehlerdiffusion streut ein Pixelraster ueber die Flaeche, und genau
- * dieses Raster ist auf einer ruhigen Grasflaeche als Grieß sichtbar. Der Farbumfang ist mit
- * einem schmalen Gruenband klein genug, dass 256 Farben auch ohne Dithering nicht bandeln.
+ * Material variation inside the tile: each blend layer covers roughly `coverage` of the
+ * area in patches of the given lattice scales. The mask is height-biased, so tall blades of
+ * the base survive at patch borders instead of a soft cross-fade.
  */
-async function writePng(target, size, rgb) {
-  await sharp(Buffer.from(rgb), { raw: { width: size, height: size, channels: 3 } })
-    .png({ palette: true, colours: 256, dither: 0, compressionLevel: 9 })
-    .toFile(target);
-  console.log(`geschrieben: ${target} (${size}x${size})`);
+function blendLayer(data, height, layerData, layer) {
+  const noise = periodicNoise(layer.cells, layer.seed ^ 0x9e3779b9);
+  const threshold = Float32Array.from(noise).sort()[Math.floor(noise.length * (1 - layer.coverage))];
+  for (let i = 0; i < noise.length; i++) {
+    const t = Math.max(0, Math.min(1, (noise[i] - threshold - (height[i] - .5) * layer.heightBias) / layer.softness + .5));
+    const mask = t * t * (3 - 2 * t);
+    for (let c = 0; c < 3; c++) data[i * 3 + c] = Math.round(data[i * 3 + c] + (layerData[i * 3 + c] - data[i * 3 + c]) * mask);
+  }
 }
 
-async function generateBaseTile() {
-  const size = BASE_SIZE;
-  const rng = mulberry32(0x6a5c11);
-
-  const value = normalize(sumOctaves(size, BASE_VALUE_OCTAVES, rng));
-  const bladeA = normalize(sumOctaves(size, BLADE_FIELD_A, rng));
-  const bladeB = normalize(sumOctaves(size, BLADE_FIELD_B, rng));
-  const bladeMask = valueNoiseField(size, BLADE_MASK_OCTAVE.nx, BLADE_MASK_OCTAVE.ny, rng);
-  const hue = normalize(sumOctaves(size, BASE_HUE_OCTAVES, rng));
-
-  const blades = new Float64Array(size * size);
-  for (let i = 0; i < blades.length; i += 1) {
-    const mix = bladeMask[i] * 0.5 + 0.5;
-    blades[i] = bladeA[i] * (1 - mix) + bladeB[i] * mix;
-  }
-  normalize(blades);
-
-  const combined = new Float64Array(size * size);
-  for (let i = 0; i < combined.length; i += 1) {
-    combined[i] = value[i] * (1 - BLADE_MIX) + blades[i] * BLADE_MIX;
-  }
-  normalize(combined);
-
-  const rgb = Buffer.alloc(size * size * 3);
-  for (let i = 0; i < combined.length; i += 1) {
-    const warmth = Math.max(-1, Math.min(1, hue[i] * BASE_HUE_AMOUNT)) * 0.5 + 0.5;
-    const level = (1 + combined[i] * BASE_VALUE_AMOUNT) * DETAIL_MEAN_COMPENSATION;
-    for (let channel = 0; channel < 3; channel += 1) {
-      const base = COLOR_COOL[channel] + (COLOR_WARM[channel] - COLOR_COOL[channel]) * warmth;
-      rgb[i * 3 + channel] = clamp255(base * level);
-    }
-  }
-
-  await writePng(BASE_TARGET, size, rgb);
+for (const [target, material] of Object.entries(recipe.materials)) {
+  const data = await nativeQuilt(material);
+  const height = bladeHeight(data);
+  for (const layer of material.blend ?? []) blendLayer(data, height, await nativeQuilt(layer), layer);
+  reconcileTileEdges(data);
+  grade(data, material.grade);
+  await sharp(data, { raw: { width: size, height: size, channels: 3 } }).png().toFile(output + '/' + target + '.png');
+  console.log(target + ': ' + size + ' x ' + size + ' from ' + material.source + ', ' + recipe.pixelsPerMetre + ' pixels/metre');
 }
-
-async function generateDetailTile() {
-  const size = DETAIL_SIZE;
-  const rng = mulberry32(0x1d3f97);
-
-  const detail = normalize(sumOctaves(size, DETAIL_OCTAVES, rng));
-  const tint = normalize(sumOctaves(size, [{ nx: 8, ny: 8, amp: 1 }, { nx: 32, ny: 32, amp: 0.4 }], rng));
-
-  const rgb = Buffer.alloc(size * size * 3);
-  for (let i = 0; i < detail.length; i += 1) {
-    // Auf [-1, 1] begrenzen: einzelne Ausreisser duerfen die Kachel nicht ueber Weiss hinaus
-    // oder in harte schwarze Punkte treiben.
-    const d = Math.max(-1, Math.min(1, detail[i]));
-    const t = Math.max(-1, Math.min(1, tint[i]));
-    const level = 1 - DETAIL_DEPTH * (d * 0.5 + 0.5);
-    rgb[i * 3 + 0] = clamp255(255 * level * (1 + t * DETAIL_TINT_DEPTH));
-    rgb[i * 3 + 1] = clamp255(255 * level);
-    rgb[i * 3 + 2] = clamp255(255 * level * (1 - t * DETAIL_TINT_DEPTH));
-  }
-
-  await writePng(DETAIL_TARGET, size, rgb);
-}
-
-await generateBaseTile();
-await generateDetailTile();
+// Neutral compatibility tile for the independent, intentionally untouched fog lab.
+await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ffffff' } })
+  .png().toFile(output + '/gras_detail_tile.png');

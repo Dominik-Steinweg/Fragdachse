@@ -7,7 +7,7 @@ import { categoryLabels, models, constructionsFor, resolveSource, sampleFrame, s
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const state = { a: {}, b: {}, resolved: {}, clip: 'rest', elapsed: 0, playing: false, idle: true, angle: 0, travelTime: 0, ready: false };
-const backgrounds = { grass: ['/assets/sprites/gras_bg_tile.png', 0x465a30], earth: ['/assets/sprites/dirt47blob.png', 0x735845], steel: ['/assets/sprites/train/train_material_dark_top.png', 0x253033], light: [null, 0xb6bdb5] };
+const backgrounds = { grass: ['/assets/sprites/gras_bg_tile.png', 0x465a30], earth: ['/assets/sprites/dirt_material.png', 0x735845], steel: ['/assets/sprites/train/train_material_dark_top.png', 0x253033], light: [null, 0xb6bdb5] };
 let library, scene, game, startup, observer, generation = 0;
 const panels = [], pending = new Map(), loaded = new Set();
 const playerAsset = runtime.assets.find(a => a.id === 'badger');
@@ -154,8 +154,7 @@ class ReviewScene extends Phaser.Scene {
     this.load.image('review-player', playerAsset.idlePath.replace(/^\./, ''));
     this.load.spritesheet('mount-rock', '/assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     for (const [key,[url]] of Object.entries(backgrounds)) {
-      if (key === 'earth') this.load.spritesheet(`bg-${key}`,url,{frameWidth:32,frameHeight:32});
-      else if (url) this.load.image(`bg-${key}`,url);
+      if (url) this.load.image(`bg-${key}`,url);
     }
     this.load.on('loaderror', file => showError(new Error(`Datei fehlt: ${file.src}`)));
   }
@@ -192,7 +191,7 @@ class ReviewScene extends Phaser.Scene {
       const r=which==='original'?state.resolved.a:state.resolved[which],a=r.asset;
       const x=w*(column+.5)/visible.length+($('move').checked?Math.sin(state.travelTime*.7)*Math.min(45,w/visible.length*.15):0), y=(h-55)*.5;
       p.fill.setFillStyle(backgrounds[bg][1]).setPosition(w*(column+.5)/visible.length,h/2).setSize(w/visible.length,h);
-      p.tile.setVisible(bg!=='light').setPosition(w*(column+.5)/visible.length,h/2).setSize(w/visible.length,h); if(bg!=='light')p.tile.setTexture(`bg-${bg}`,bg==='earth'?12:'__BASE');
+      p.tile.setVisible(bg!=='light').setPosition(w*(column+.5)/visible.length,h/2).setSize(w/visible.length,h); if(bg!=='light')p.tile.setTexture(`bg-${bg}`,'__BASE');
       const rotation=state.angle*Math.PI/180, size=a.targetSize*factor;
       p.rock.setVisible(a.category==='turret'&&$('mount').checked).setPosition(x,y).setDisplaySize(32*factor,32*factor);
       p.circle.setVisible(!!a.collisionDiameter&&$('collision').checked).setPosition(x,y).setRadius((a.collisionDiameter||0)*factor/2);

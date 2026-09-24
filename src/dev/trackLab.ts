@@ -1,3 +1,5 @@
+import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
+import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../config';
 import type { ArenaLayout } from '../types';
@@ -18,11 +20,8 @@ class TrackLab extends Phaser.Scene {
   private lastStatus = '';
 
   preload(): void {
-    this.load.image('gras_bg_tile', '/assets/sprites/gras_bg_tile.png');
-    this.load.image('gras_detail_tile', '/assets/sprites/gras_detail_tile.png');
+    preloadGroundMaterials(this.load);
     this.load.image('bg_tracks', '/assets/sprites/BahnstreckeSchienen.png');
-    this.load.spritesheet('dirt', '/assets/sprites/dirt47blob.png', { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('dirt_mottle', '/assets/sprites/dirt47blob_mottle.png', { frameWidth: 32, frameHeight: 32 });
     preloadTrackGravelAssets(this.load);
   }
 
@@ -42,9 +41,7 @@ class TrackLab extends Phaser.Scene {
     const layout: ArenaLayout = { seed: this.seed, rocks: [], trees: [], tracks, powerUpPedestals: [],
       dirt: createOrganicDirtMargin(soilSources, { maxCols: frame.width / CELL_SIZE,
         maxRows: frame.height / CELL_SIZE, rng: () => 0.5 }) };
-    this.add.tileSprite(frame.offsetX, frame.offsetY, frame.width, frame.height, 'gras_bg_tile').setOrigin(0).setDepth(DEPTH.GRASS);
-    this.add.tileSprite(frame.offsetX, frame.offsetY, frame.width, frame.height, 'gras_detail_tile').setOrigin(0)
-      .setDepth(DEPTH.GRASS + 0.1).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    createArenaBackground(this, frame.offsetX + frame.width / 2, frame.offsetY + frame.height / 2, frame.width, frame.height);
     this.ground = new GroundSurfaceStreamer({ scene: this, frame, layout, groundCoverPlacements: [] });
     const rails = ArenaVisualFactory.createTracks(this, tracks, frame);
     const camera = this.cameras.main;

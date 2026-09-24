@@ -11,6 +11,7 @@ import {
 import type { ArenaLayout, GameMode } from '../types';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { resolveArenaBackgroundSpec } from './ArenaBackground';
+import { GROUND_MACRO_KEY, GROUND_MACRO_TILE_SCALE } from './GroundMaterialConfig';
 import type { ArenaBuilderResult, RockWorldFrame } from './ArenaBuilder';
 import type { GroundSurfaceStreamer, GroundSnapshotRegion } from './chunks/GroundSurfaceStreamer';
 import { TerrainColorSnapshot } from './TerrainColorSnapshot';
@@ -210,11 +211,8 @@ export class TerrainColorSnapshotBuilder {
     const renderScale = TERRAIN_SNAPSHOT_RENDER_SCALE;
     const background = resolveArenaBackgroundSpec(mode, this.frame.width);
     const baseFrame = scene.textures.getFrame(background.textureKey);
-    const detailFrame = scene.textures.getFrame(background.detailTextureKey);
     const baseTileWidth = Math.max(1, baseFrame.width);
     const baseTileHeight = Math.max(1, baseFrame.height);
-    const detailTileWidth = Math.max(1, detailFrame.width);
-    const detailTileHeight = Math.max(1, detailFrame.height);
 
     this.scratch.clear();
     // draw()/repeat() respektieren die interne Kamera; stamp() in den bestehenden Helfern nicht.
@@ -233,25 +231,12 @@ export class TerrainColorSnapshotBuilder {
         tilePositionY: getTerrainTexturePhase(region.worldY, this.frame.offsetY, baseTileHeight),
       } as SnapshotRepeatConfig,
     );
-    this.scratch.repeat(
-      background.detailTextureKey,
-      undefined,
-      region.worldX,
-      region.worldY,
-      region.width,
-      region.height,
-      {
-        alpha: background.detailAlpha,
-        blendMode: Phaser.BlendModes.MULTIPLY,
-        tilePositionX: getTerrainTexturePhase(region.worldX, this.frame.offsetX, detailTileWidth),
-        tilePositionY: getTerrainTexturePhase(region.worldY, this.frame.offsetY, detailTileHeight),
-      } as SnapshotRepeatConfig,
-    );
 
     const groundSurface = arenaResult.groundSurface;
     groundSurface?.renderSnapshotDirt(this.scratch, region, renderScale);
     groundSurface?.renderSnapshotPersistentBaseGravel(this.scratch, region, renderScale);
     groundSurface?.renderSnapshotGroundCover(this.scratch, region, renderScale);
+    this.renderGroundMacro(region);
     groundSurface?.renderSnapshotPersistentBaseGravelDecoration(this.scratch, region, renderScale);
     groundSurface?.renderSnapshotTrackGravel(this.scratch, region, renderScale);
     this.renderTracks(layout, region);
@@ -259,6 +244,19 @@ export class TerrainColorSnapshotBuilder {
     groundSurface?.renderSnapshotDecals(this.scratch, region, renderScale);
 
     this.scratch.render();
+  }
+
+  /** Same Multiply map and phase as the World's macro TileSprite (tile position in texels). */
+  private renderGroundMacro(region: TerrainSnapshotRegion): void {
+    const frame = this.options.scene.textures.getFrame(GROUND_MACRO_KEY);
+    const scale = GROUND_MACRO_TILE_SCALE;
+    this.scratch.repeat(GROUND_MACRO_KEY, undefined, region.worldX, region.worldY, region.width, region.height, {
+      blendMode: Phaser.BlendModes.MULTIPLY,
+      tileScaleX: scale,
+      tileScaleY: scale,
+      tilePositionX: getTerrainTexturePhase(region.worldX, this.frame.offsetX, frame.width * scale) / scale,
+      tilePositionY: getTerrainTexturePhase(region.worldY, this.frame.offsetY, frame.height * scale) / scale,
+    } as SnapshotRepeatConfig);
   }
 
   private renderTracks(layout: ArenaLayout, region: TerrainSnapshotRegion): void {

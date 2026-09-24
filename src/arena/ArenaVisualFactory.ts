@@ -10,15 +10,15 @@ import {
   GRID_ROWS,
   TRUNK_RADIUS,
 } from '../config';
-import type { DecalCell, DirtCell, TrackCell, TreeCell } from '../types';
+import type { DecalCell, TrackCell, TreeCell } from '../types';
 import { CANOPY_TEXTURE_KEYS } from './CanopyConfig';
 import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
-import { AutoTiler, DIRT_AUTOTILE, GRAVEL_AUTOTILE } from './AutoTiler';
+import { AutoTiler, GRAVEL_AUTOTILE } from './AutoTiler';
 import { hashCell01 } from './CellHash';
 import { RockGridIndex } from './RockGridIndex';
 import { ROCK_MOSS_MASK_TEXTURE_KEY } from './RockMossConfig';
 import { ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_TEXTURE_KEY } from './RockVegetationConfig';
-import { DIRT_BLOB_SURFACE_PROFILE, GRAVEL_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
+import { GRAVEL_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
 import { registerGraphicsObject } from '../effects/EffectUtils';
@@ -31,13 +31,6 @@ const ROCK_DECAL_ROTATION_SALT = 0x2c91;
  */
 const GROUND_DECAL_ROTATION_SALT = 0x51a7;
 
-/**
- * Groesste Vergroesserung der Dirt-Randfahne. Sie ist der Ueberhang, um den eine Dirt-Zelle ueber
- * ihre eigene Zelle hinaus zeichnet – und damit der Rand, mit dem ein Render-Chunk seine
- * Nachbarzellen einsammeln muss, damit an der Chunkgrenze kein Saum fehlt.
- */
-export const DIRT_FRINGE_MAX_SCALE = 1.18;
-export const DIRT_FRINGE_OVERHANG_PX = (CELL_SIZE * DIRT_FRINGE_MAX_SCALE - CELL_SIZE) * 0.5;
 
 export interface ArenaTreeVisual {
   trunk: Phaser.GameObjects.Arc;
@@ -183,109 +176,6 @@ export class ArenaVisualFactory {
       result.push({ trunk, canopy, worldX, worldY });
     }
     return result;
-  }
-
-  /**
-   * Weiche Auslaufkante des Dirt-Bodens: vergroesserte, zunehmend transparentere Kopien
-   * derselben Autotile-Kachel.
-   *
-   * Warum gestapelte Kopien und kein Weichzeichner: Die Kante entsteht aus der 47-Blob-Alpha
-   * des Sheets, es gibt also keine separate Randgeometrie, die sich weichzeichnen liesse. Drei
-   * abgestufte Kopien ergeben bei 32 px Zellgroesse einen rund 3 px breiten Verlauf – genug,
-   * damit Dirt in das Gras einlaeuft, statt als ausgeschnittener Aufkleber darauf zu liegen.
-   *
-   * Die Werte sind bewusst klein: Ein breiterer Saum wandert sichtbar in die Nachbarzelle und
-   * verschiebt damit die wahrgenommene Begehbarkeitsgrenze.
-   */
-  private static readonly DIRT_FRINGE_STEPS: readonly { scale: number; alpha: number }[] = [
-    { scale: 1.05, alpha: 0.34 },
-    { scale: 1.11, alpha: 0.19 },
-    { scale: DIRT_FRINGE_MAX_SCALE, alpha: 0.10 },
-  ];
-
-  static createDirt(scene: Phaser.Scene, dirtCells: DirtCell[], metrics?: ArenaVisualGridMetrics): Phaser.GameObjects.Image[] {
-    return this.createDirtImages(scene, dirtCells, metrics).surface;
-  }
-
-  /**
-   * Erzeugt Randfahne und scharfe Flaeche in einem Durchgang, weil beide dieselbe Belegung,
-   * dieselbe Autotile-Maske und dieselben Ecktints brauchen.
-   *
-   * `fringe` gehoert beim Backen *unter* `surface`; die Reihenfolge der Rueckgabe entspricht
-   * bereits der Zeichenreihenfolge.
-   */
-  static createDirtImages(
-    scene: Phaser.Scene,
-    dirtCells: DirtCell[],
-    metrics?: ArenaVisualGridMetrics,
-  ): { fringe: Phaser.GameObjects.Image[]; surface: Phaser.GameObjects.Image[] } {
-    if (dirtCells.length === 0) return { fringe: [], surface: [] };
-
-    const gridMetrics = getMetrics(metrics);
-    const dirtGrid = new RockGridIndex(dirtCells, {
-      cols: gridMetrics.gridCols ?? GRID_COLS,
-      rows: gridMetrics.gridRows ?? GRID_ROWS,
-    });
-    return this.createDirtImagesFromGrid(
-      scene,
-      dirtCells,
-      (gx, gy) => dirtGrid.isOccupiedWithBorder(gx, gy),
-      metrics,
-    );
-  }
-
-  /**
-   * Wie {@link createDirtImages}, aber mit von aussen gegebener Belegung.
-   *
-   * Das ist der Unterschied, den das Chunk-Streaming braucht: Ein Render-Chunk erzeugt Bilder nur
-   * fuer die Zellen seiner Region, die Autotile-Maske und die Ecktints muessen dabei aber weiter
-   * den **gesamten** Dirt-Bestand sehen. Baute jeder Chunk seinen Index nur aus den eigenen
-   * Zellen, saehe jede Chunkgrenze wie eine Aussenkante des Bodens aus.
-   */
-  static createDirtImagesFromGrid(
-    scene: Phaser.Scene,
-    dirtCells: readonly DirtCell[],
-    isOccupied: (gx: number, gy: number) => boolean,
-    metrics?: ArenaVisualGridMetrics,
-  ): { fringe: Phaser.GameObjects.Image[]; surface: Phaser.GameObjects.Image[] } {
-    if (dirtCells.length === 0) return { fringe: [], surface: [] };
-
-    const gridMetrics = getMetrics(metrics);
-    const fringe: Phaser.GameObjects.Image[] = [];
-    const surface: Phaser.GameObjects.Image[] = [];
-
-    for (const { gridX, gridY } of dirtCells) {
-      const worldX = gridMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
-      const mask = AutoTiler.computeMask(gridX, gridY, isOccupied);
-      const frame = AutoTiler.getFrame(mask, DIRT_AUTOTILE);
-      const tints = resolveBlobSurfaceCornerTints(DIRT_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied);
-
-      // Nur Zellen mit freiliegender Kardinalkante tragen zur Silhouette bei. Bei einer Zelle
-      // im Inneren faende die Vergroesserung ohnehin nur weiteren Dirt vor.
-      const exposed = !isOccupied(gridX - 1, gridY)
-        || !isOccupied(gridX + 1, gridY)
-        || !isOccupied(gridX, gridY - 1)
-        || !isOccupied(gridX, gridY + 1);
-      if (exposed) {
-        for (const step of this.DIRT_FRINGE_STEPS) {
-          const halo = new Phaser.GameObjects.Image(scene, worldX, worldY, 'dirt', frame);
-          halo.setDisplaySize(CELL_SIZE * step.scale, CELL_SIZE * step.scale);
-          halo.setDepth(DEPTH.DIRT);
-          halo.setAlpha(step.alpha);
-          halo.setTint(...tints);
-          fringe.push(halo);
-        }
-      }
-
-      const img = new Phaser.GameObjects.Image(scene, worldX, worldY, 'dirt', frame);
-      img.setDisplaySize(CELL_SIZE, CELL_SIZE);
-      img.setDepth(DEPTH.DIRT);
-      img.setTint(...tints);
-      surface.push(img);
-    }
-
-    return { fringe, surface };
   }
 
   /**

@@ -186,67 +186,22 @@ export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   }],
 };
 
-/**
- * The base sheet supplies the clean Blob silhouette; its alternate supplies an independent,
- * colour-compatible material signal for the non-periodic Mottle pass.
- */
+/** Flat soil colour policy. DirtSurfaceField owns coverage; the authored material owns detail. */
 export const DIRT_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   id: 'dirt',
-  textureKey: 'dirt',
-  // The regular sheet's soft waves are the visible repeating motif. Its authored alternate
-  // is color-compatible but structurally distinct, so random mottle stamps can decorrelate it.
-  materialTextureKey: 'dirt_mottle',
-  materialFrame: 12,
+  textureKey: 'dirt_material',
+  materialFrame: 0,
   seedSalt: 0x51d7,
   shading: {
-    // Dirt lag mit einer mittleren Helligkeit von 93 deutlich über dem Gras (58) und las sich
-    // dadurch als beleuchtete Ebene über einem dunklen Grund. Zusammen mit dem angehobenen
-    // Gras-Mittelton halbiert diese Absenkung den Abstand, ohne dass Dirt seine Wärme verliert.
-    baseLevel: 0.92,
-    washValueAmount: 0.024,
+    baseLevel: 1,
+    washValueAmount: 0,
     washValuePeriods: [13, 5.5],
-    washHueAmount: 0.055,
+    washHueAmount: 0,
     washHuePeriod: 18,
-    washHues: [0xb58263, 0xa87d62, 0xc29c76],
+    washHues: [0xffffff],
   },
-  mottle: {
-    textureSize: CELL_SIZE,
-    // Weak phase break: preserve most of the authored base material.
-    blend: 'normal',
-    // `dirt47blob_alt.png`, frame 12, has compatible earth colours but not the soft repeating
-    // wave of the base sheet, so it breaks phase without any brightness remapping.
-    materialMode: 'native',
-    passes: [
-      { perCell: 1.25, minScale: 0.72, maxScale: 1.85, alpha: 0.35 },
-      { perCell: 0.12, minScale: 2.6, maxScale: 4.8, alpha: 0.44 },
-    ],
-    falloff: [
-      [0, 'rgba(0,0,0,0)'],
-      [0.58, 'rgba(0,0,0,0.03)'],
-      [0.84, 'rgba(0,0,0,0.35)'],
-      [1, 'rgba(0,0,0,1)'],
-    ],
-  },
-  // Strong material-depth pass above the weak replacement pass. It uses the same generic
-  // clipped Mottle path, but Multiply restores texture without erasing the phase break.
-  additionalMottleLayers: [{
-    textureSize: CELL_SIZE,
-    blend: 'multiply',
-    materialMode: 'normalized',
-    materialGain: 3,
-    materialPeak: 92,
-    materialEqualizeTint: 0x80caff,
-    passes: [
-      { perCell: 1.8, minScale: 0.62, maxScale: 2.05, alpha: 0.58 },
-      { perCell: 0.28, minScale: 2.4, maxScale: 4.8, alpha: 0.94 },
-    ],
-    falloff: [
-      [0, 'rgba(0,0,0,0)'],
-      [0.58, 'rgba(0,0,0,0.03)'],
-      [0.84, 'rgba(0,0,0,0.35)'],
-      [1, 'rgba(0,0,0,1)'],
-    ],
-  }],
+  // Soil is a continuous authored material. It needs no per-cell material replacement.
+  mottle: { textureSize: CELL_SIZE, blend: 'normal', materialMode: 'native', passes: [], falloff: [] },
 };
 
 /**

@@ -1,3 +1,5 @@
+import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
+import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
 import * as Phaser from 'phaser';
 import map00 from '../config/coopDefenseMaps/00-test.json';
 import { WaterSurfaceRenderer } from '../arena/WaterSurfaceRenderer';
@@ -63,8 +65,7 @@ class WaterLab extends Phaser.Scene {
   private wetX = 700;
 
   preload(): void {
-    this.load.image('lab-grass', '/assets/sprites/gras_bg_tile.png');
-    this.load.image('lab-detail', '/assets/sprites/gras_detail_tile.png');
+    preloadGroundMaterials(this.load);
     this.load.image('lab-badger', '/assets/sprites/pipeline-v2/badger/idle.png');
   }
   create(): void {
@@ -90,8 +91,7 @@ class WaterLab extends Phaser.Scene {
     document.getElementById('fixture')!.textContent = `Ansicht: ${fixture.name}`;
     const focusButton = document.getElementById('focus') as HTMLButtonElement;
     focusButton.disabled = !tip;
-    this.add.tileSprite(0, 0, width, height, 'lab-grass').setOrigin(0).setDepth(1);
-    this.add.tileSprite(0, 0, width, height, 'lab-detail').setOrigin(0).setDepth(2).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    createArenaBackground(this, width / 2, height / 2, width, height);
     this.surface = new WaterSurfaceRenderer(this, { offsetX: 0, offsetY: 0, width, height }, water, fixture.seed);
     this.proxy = this.add.zone(this.startX, this.startY, PLAYER_SIZE, PLAYER_SIZE);
     this.physics.add.existing(this.proxy);

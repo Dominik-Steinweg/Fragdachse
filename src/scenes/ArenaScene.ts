@@ -1,3 +1,4 @@
+import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
@@ -340,10 +341,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadAllAudio(this.load);
     preloadForestAssets(this.load);
     preloadForestModalAssets(this.load);
-    // Beide Boden-Kacheln stammen aus scripts/generate-grass-tiles.mjs; die Detailkachel liegt
-    // als Multiply-Ebene darueber und bricht die Periode der Basiskachel (siehe ArenaBackground).
-    this.load.image('gras_bg_tile', './assets/sprites/gras_bg_tile.png');
-    this.load.image('gras_detail_tile', './assets/sprites/gras_detail_tile.png');
+    preloadGroundMaterials(this.load);
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
     this.load.image('bg_tracks', './assets/sprites/BahnstreckeSchienen.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
@@ -353,8 +351,6 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.load.spritesheet('mission_barrier', './assets/sprites/missionbarrier47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('rock_mottle', './assets/sprites/rocks47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('dirt',  './assets/sprites/dirt47blob.png',  { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('dirt_mottle', './assets/sprites/dirt47blob_mottle.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('kies', './assets/sprites/kies47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('base',  './assets/sprites/base47blob.png',  { frameWidth: 32, frameHeight: 32 });
     // Authored Void-Panzerung fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche

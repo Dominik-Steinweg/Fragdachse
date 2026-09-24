@@ -1,0 +1,71 @@
+# Waldboden-Lab
+
+Start: `npm run dev:browser`, dann [Boden-Lab](http://127.0.0.1:8090/ground-lab.html).
+`npm run build:ground-lab` prueft und buendelt den separaten Lab-Einstieg. Das Lab wird
+nicht mit dem normalen Spiel-Bundle geladen.
+
+## Bedienung und Sichtpruefung
+
+- **Material- und Grenzproben:** Flaechen, Loch, diagonale Treppe, schmaler Streifen,
+  Einzelzelle und Insel. Die bewusst einfachen Formen zeigen Material- und Kantenfehler.
+- **Waldprobe:** unveraenderte Dirt-/Fels-/Baumpositionen aus dem Lobby-Layout, bestehende
+  Fels- und Baumassets und eine Figur als Groessenreferenz. Kein eigener Nebel oder Post-FX.
+- Seed, Zoom 75/100/150/200 %, Bodenbedeckung an/aus und Ziehen zum Kameraverschieben.
+  Der weltfeste 1-Meter-Massstab entspricht 32 Weltpixeln.
+- Chunkgrenzen, Weltversatz 37/19, Neuaufbau und Kamera weg/zurueck pruefen Wiederaufbau
+  und Naehte. Die Materialprobe ist gross genug fuer echte Chunk-Eviction.
+- Status: residente Chunks, ausstehende Bakes, Chunktexturspeicher und Bake-Zeit.
+
+Abnahme bei Normalzoom und 75 %, zuerst ohne, dann mit Bodenbedeckung. Die Erde laeuft ueber
+eine unregelmaessig breite Zone ins Gras aus: Halme und Bueschelgruppen ragen in die Erde,
+Erde erscheint zuerst in den Luecken zwischen den Halmen. Keine erhoehte Erdplatte, kein
+gleichmaessiger Saum, keine Kachelwiederholung. Auch im normalen Spiel mit Licht und Nebel
+pruefen; das Lab ersetzt diesen Schritt nicht.
+
+## Aufbau
+
+| Ebene | Tiefe | Quelle |
+|---|---|---|
+| Gras | `DEPTH.GRASS` | `gras_bg_tile`, TileSprite, 1 Texel = 1 Weltpixel |
+| Erde samt Uebergang | `DEPTH.DIRT` | `DirtSurfaceLayer`, gestreamte Chunk-Bakes |
+| Bodenbedeckung | `DEPTH.GROUND_COVER` | Moosflecken, Blatthorste, Halmbueschel |
+| Grossflaechige Variation | `DEPTH.GROUND_MACRO` | `ground_macro`, Multiply-TileSprite, 5,5-fach gestreckt |
+
+`DirtSurfaceField` berechnet nur Darstellung aus Seed, Dirt-Belegung und World-Rahmen und
+schreibt fertiges RGBA: Eine gefilterte, weltfest verformte Belegungsdichte bestimmt die
+Kontur. Im Uebergang entscheidet ein Height-Blend je Pixel zwischen Gras und Erde; die Hoehe
+stammt aus der Graskachel selbst (`deriveGrassHeight`) plus Klumpenrauschen, die Breite der
+Zone variiert entlang der Kante. Davor liegt ein schwacher Erdton im Gras, direkt an der Kante
+ein leichter Kontaktschatten. Chunk-Bakes und Terrain-Farbsnapshot rufen denselben Bake auf,
+das Ergebnis haengt nicht von Bake-Reihenfolge oder Regionsaufteilung ab. Netz- und
+Layoutdaten bleiben unveraendert.
+
+Die Bodenbedeckung hat drei Stufen (`GROUND_COVER_TIERS`), jeweils mit Schwerpunkt am
+Uebergang: grosse, weich auslaufende Moos-/Grasflecken, breitblaettrige Horste mit
+eingebackenem Kontaktschatten und kleine Halmbueschel.
+
+## Quellen und reproduzierbarer Export
+
+`npm run sprites:ground` erzeugt alle Bodenassets in dieser Reihenfolge:
+
+1. `scripts/generate-grass-tiles.mjs` liest
+   [`materials.json`](../tools/source-art/ground-materials/materials.json): Quelle,
+   physische Groesse (32 Pixel/Meter), Farbabstimmung und fuer das Gras zusaetzliche
+   Mischschichten (schuetteres Gras, kleine Erdflecken). Deterministisches Image-Quilting setzt
+   daraus nahtlose 1024-Pixel-Kacheln zusammen, ohne Schaerfen oder kuenstliches Rauschen.
+2. `scripts/generate-ground-macro.mjs` erzeugt die nahtlose, niederfrequente Multiply-Karte.
+3. `scripts/generate-ground-cover-textures.mjs` erzeugt Moosflecken aus
+   `tools/source-art/groundcover` (gemeinsame organische Pipeline, an die neue Graskachel
+   angeglichen), Blatthorste aus `tools/source-art/rockvegetation` und Halmbueschel aus
+   `tools/source-art/ground-materials`.
+
+Die Material- und Bueschelquellen wurden mit dem eingebauten Imagegen-Werkzeug erzeugt;
+Prompts stehen in [`prompts.json`](../tools/source-art/ground-materials/prompts.json) und
+[`candidates-set-02/prompts.json`](../tools/source-art/ground-materials/candidates-set-02/prompts.json).
+Die neutralweisse alte Detailtextur bleibt fuer das unabhaengige Nebel-Lab erhalten.
+
+## Automatische Pruefung
+
+`npm run check`, `npm run test:assets`, `npm run test:integration` und `npm run build:ground-lab`.
+Die Bodenpruefungen schuetzen Determinismus, Kachelkanten, Chunk-/Snapshot-Paritaet und Teardown;
+sie ersetzen keine Sichtpruefung und schreiben keine aesthetischen Parameter fest.

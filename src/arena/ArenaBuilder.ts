@@ -167,8 +167,7 @@ export class ArenaBuilder {
   private leftSidebar: Phaser.GameObjects.Rectangle | null = null;
   private rightSidebar: Phaser.GameObjects.Rectangle | null = null;
   private arenaBackground: Phaser.GameObjects.TileSprite | null = null;
-  /** Multiply-Feinschicht über dem Gras; bricht dessen Kachelperiode (siehe ArenaBackground). */
-  private arenaBackgroundDetail: Phaser.GameObjects.TileSprite | null = null;
+  private arenaBackgroundMacro: Phaser.GameObjects.TileSprite | null = null;
   private lobbyBackground: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene) {
@@ -217,13 +216,10 @@ export class ArenaBuilder {
         .setSize(ARENA_WIDTH, ARENA_HEIGHT)
         .setTilePosition(0, 0)
         .setVisible(inArena);
-
-      this.arenaBackgroundDetail
-        ?.setTexture(background.detailTextureKey)
-        .setPosition(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5)
+      this.arenaBackgroundMacro
+        ?.setPosition(ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5)
         .setSize(ARENA_WIDTH, ARENA_HEIGHT)
         .setTilePosition(0, 0)
-        .setAlpha(background.detailAlpha)
         .setVisible(inArena);
     }
 
@@ -1004,7 +1000,7 @@ export class ArenaBuilder {
     const background = createArenaBackground(this.scene,
       ARENA_OFFSET_X + ARENA_WIDTH * 0.5, ARENA_OFFSET_Y + ARENA_HEIGHT * 0.5, ARENA_WIDTH, ARENA_HEIGHT);
     this.arenaBackground = background.ground;
-    this.arenaBackgroundDetail = background.detail;
+    this.arenaBackgroundMacro = background.macro;
   }
 
   private ensureLobbyBackground(): void {

@@ -1,9 +1,8 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
 import type { ArenaLayout, DecalCell, DirtCell } from '../../types';
-import { ArenaVisualFactory, DIRT_FRINGE_OVERHANG_PX } from '../ArenaVisualFactory';
+import { ArenaVisualFactory } from '../ArenaVisualFactory';
 import {
-  DIRT_BLOB_SURFACE_PROFILE,
   getBlobSurfaceMottleReachPx,
   GRAVEL_BLOB_SURFACE_PROFILE,
 } from '../BlobSurfaceProfile';
@@ -24,7 +23,6 @@ import type {
 } from '../PersistentBaseGravelField';
 import type { PersistentBaseAnchor } from '../../persistentBase/PersistentBaseTypes';
 import type { PersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
-import { RockGridIndex } from '../RockGridIndex';
 import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
 import { ArenaPointBucketIndex } from './ArenaPointBucketIndex';
 import { ChunkScratchPool, ChunkedRenderSurface, eraseChunkScratch } from './ChunkedRenderSurface';
@@ -38,9 +36,12 @@ import type {
 import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
 import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
 import { TrackGravelLayer } from '../TrackGravelLayer';
+import { DirtSurfaceLayer } from '../DirtSurfaceLayer';
+import { DIRT_SURFACE_REACH_PX } from '../DirtSurfaceField';
+import { readGroundMaterialSamples, type GroundMaterialSamples } from '../GroundMaterialSamples';
 
 /**
- * Gestreamte statische Bodenbaender: Dirt samt eingebackener Materialstoerung, optionaler
+ * Gestreamte statische Bodenbaender: durchgehendes Dirt-Material mit organischer Maske, optionaler
  * Persistent-Base-Kies, Ground Cover, Bahnschotter und die statischen Decals.
  *
  * Diese Schichten aendern sich zur Laufzeit nicht. Frueher war das der Grund, sie genau einmal je World
@@ -48,8 +49,8 @@ import { TrackGravelLayer } from '../TrackGravelLayer';
  * je Band. Jetzt gilt dieselbe Ueberlegung je Render-Chunk: Ein Chunk wird beim Sichtbarwerden
  * einmal gebacken und danach nur noch gezeichnet.
  *
- * Der Bake ist deterministisch, weil jede Quelle es ist: Dirt-Autotiling und Ecktints haengen an
- * der Zellbelegung, die Materialstoerung an Zellkoordinate und Seed, Ground-Cover-Platzierungen
+ * Der Bake ist deterministisch, weil jede Quelle es ist: Dirt-Maske und Materialphase haengen an
+ * Zellbelegung, Weltkoordinate und Seed, Ground-Cover-Platzierungen
  * werden einmal je World erzeugt und danach nur gefiltert, und Decals tragen ihre Drehung im
  * Layout beziehungsweise leiten sie aus ihrer Zelle ab. Ein wieder betretener Chunk sieht deshalb
  * aus wie zuvor.
@@ -78,6 +79,8 @@ export interface GroundSurfaceStreamerOptions {
   /** Optionaler Initialzustand, damit der erste Chunk bereits mit Kies gebacken wird. */
   readonly persistentBaseGravel?: GroundSurfacePersistentBaseGravelZone;
   readonly chunkSize?: number;
+  /** CPU material samples for the soil bake; read from the loaded textures when omitted. */
+  readonly groundMaterials?: GroundMaterialSamples;
 }
 
 export interface GroundSnapshotRegion {
@@ -95,14 +98,10 @@ export class GroundSurfaceStreamer {
   private readonly gridRows: number;
   private readonly groundCoverPlacements: readonly GroundCoverPlacement[];
   private readonly groundDecals: readonly DecalCell[];
-  private readonly dirtGrid: RockGridIndex;
   private readonly dirtIndex: ArenaCellBucketIndex;
   private readonly groundCoverIndex: ArenaPointBucketIndex<GroundCoverPlacement>;
   private readonly groundDecalIndex: ArenaPointBucketIndex<DecalCell>;
-  private readonly dirtIsOccupied: (gx: number, gy: number) => boolean;
   private readonly dirtCandidateIds: number[] = [];
-  private readonly dirtVisibleCells: DirtCell[] = [];
-  private readonly dirtMottleSourceCells: DirtCell[] = [];
   private readonly groundCoverCandidateIds: number[] = [];
   private readonly groundCoverCandidates: GroundCoverPlacement[] = [];
   private readonly groundDecalCandidateIds: number[] = [];
@@ -123,10 +122,7 @@ export class GroundSurfaceStreamer {
   private readonly persistentBaseGravelMottleSourceCells: PersistentBaseGravelCell[] = [];
   private readonly persistentBaseGravelDecorationCandidateIds: number[] = [];
   private readonly persistentBaseGravelDecorationCandidates: PersistentBaseGravelDecoration[] = [];
-  private readonly mottleConfigs = [
-    DIRT_BLOB_SURFACE_PROFILE.mottle,
-    ...(DIRT_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
-  ];
+  private readonly dirtLayer: DirtSurfaceLayer | null;
   private readonly persistentBaseGravelMottleConfigs = [
     GRAVEL_BLOB_SURFACE_PROFILE.mottle,
     ...(GRAVEL_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
@@ -148,9 +144,6 @@ export class GroundSurfaceStreamer {
     }
     this.groundDecals = groundDecals;
     this.scratch = new ChunkScratchPool(options.scene);
-    // Der Index sieht den gesamten Dirt-Bestand. Ein chunklokaler Index liesse jede Chunkgrenze
-    // wie eine Aussenkante des Bodens aussehen.
-    this.dirtGrid = new RockGridIndex(this.dirtCells, { cols: this.gridCols, rows: this.gridRows });
     this.dirtIndex = new ArenaCellBucketIndex(options.frame.width);
     this.dirtIndex.sync(this.dirtCells);
     this.groundCoverIndex = new ArenaPointBucketIndex(
@@ -173,7 +166,6 @@ export class GroundSurfaceStreamer {
       }),
     );
     this.groundDecalIndex.sync(this.groundDecals);
-    this.dirtIsOccupied = (gx, gy) => this.dirtGrid.isOccupiedWithBorder(gx, gy);
 
     const trackColumns = ArenaVisualFactory.getTrackColumnSpecs(options.layout.tracks ?? [], options.frame);
     const layers: ChunkedSurfaceLayerSpec[] = [
@@ -208,10 +200,10 @@ export class GroundSurfaceStreamer {
       : null;
     if (this.trackGravelLayer) this.scratch.preallocate('trackGravel', scratchSize);
     this.scratch.preallocate('dirt', scratchSize);
-    this.scratch.preallocate('dirtCutout', scratchSize, 'redraw');
-    for (let index = 0; index < this.mottleConfigs.length; index += 1) {
-      this.scratch.preallocate(`dirtMottle${index}`, scratchSize);
-    }
+    this.dirtLayer = this.dirtCells.length > 0
+      ? new DirtSurfaceLayer(options.scene, options.layout.seed, this.dirtCells, this.frame, scratchSize,
+        options.groundMaterials ?? readGroundMaterialSamples(options.scene))
+      : null;
     this.scratch.preallocate('groundCover', scratchSize);
     this.scratch.preallocate('groundDecal', scratchSize);
     if (this.persistentBaseGravelEnabled) {
@@ -543,6 +535,7 @@ export class GroundSurfaceStreamer {
     this.surface.destroy();
     this.scratch.destroy();
     this.trackGravelLayer?.destroy();
+    this.dirtLayer?.destroy();
     this.dirtIndex.clear();
     this.groundCoverIndex.clear();
     this.groundDecalIndex.clear();
@@ -627,131 +620,13 @@ export class GroundSurfaceStreamer {
     sink.blit(GROUND_TRACK_GRAVEL_LAYER_ID, target);
   }
 
-  /**
-   * Dirt einer Region: Randfahne, scharfe Flaeche und die darauf eingebackene Materialstoerung.
-   *
-   * Die Materialstoerung bleibt wie bisher in derselben Textur wie der Boden statt in einer
-   * eigenen Ebene: Sie aendert sich nie und spart so eine komplette Renderziel-Ebene je Chunk.
-   */
+  /** Native continuous soil, clipped by the same World field used for snapshots. */
   private bakeDirtRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
-    const dirtCells = this.dirtCells;
-    const { size } = region;
-    const target = this.scratch.get('dirt', size);
-    target.clear();
-
-    if (dirtCells.length === 0) {
-      target.render();
-      sink.blit(GROUND_DIRT_LAYER_ID, target);
-      return;
-    }
-
-    const maxX = region.localX + size;
-    const maxY = region.localY + size;
-    const mottleReach = getBlobSurfaceMottleReachPx(DIRT_BLOB_SURFACE_PROFILE);
-
-    // Zwei verschieden weite Auswahlen: Die sichtbaren Kacheln reichen um die Randfahne ueber
-    // ihre Zelle hinaus, die Materialstempel um ein Vielfaches davon.
-    this.dirtVisibleCells.length = 0;
-    this.dirtMottleSourceCells.length = 0;
-    const visibleCandidateIds = this.dirtIndex.collect(
-      region.localX,
-      region.localY,
-      size,
-      DIRT_FRINGE_OVERHANG_PX,
-      this.dirtCandidateIds,
-    );
-    visibleCandidateIds.sort(compareNumbers);
-    for (const id of visibleCandidateIds) {
-      const cell = dirtCells[id];
-      if (!cell) continue;
-      const cellMinX = cell.gridX * CELL_SIZE;
-      const cellMinY = cell.gridY * CELL_SIZE;
-      const cellMaxX = cellMinX + CELL_SIZE;
-      const cellMaxY = cellMinY + CELL_SIZE;
-      if (cellMaxX + DIRT_FRINGE_OVERHANG_PX > region.localX && cellMinX - DIRT_FRINGE_OVERHANG_PX < maxX
-        && cellMaxY + DIRT_FRINGE_OVERHANG_PX > region.localY && cellMinY - DIRT_FRINGE_OVERHANG_PX < maxY) {
-        this.dirtVisibleCells.push(cell);
-      }
-    }
-    const mottleCandidateIds = this.dirtIndex.collect(
-      region.localX,
-      region.localY,
-      size,
-      mottleReach,
-      this.dirtCandidateIds,
-    );
-    mottleCandidateIds.sort(compareNumbers);
-    for (const id of mottleCandidateIds) {
-      const cell = dirtCells[id];
-      if (!cell) continue;
-      const cellMinX = cell.gridX * CELL_SIZE;
-      const cellMinY = cell.gridY * CELL_SIZE;
-      const cellMaxX = cellMinX + CELL_SIZE;
-      const cellMaxY = cellMinY + CELL_SIZE;
-      if (cellMaxX + mottleReach > region.localX && cellMinX - mottleReach < maxX
-        && cellMaxY + mottleReach > region.localY && cellMinY - mottleReach < maxY) {
-        this.dirtMottleSourceCells.push(cell);
-      }
-    }
-
-    if (this.dirtVisibleCells.length === 0 && this.dirtMottleSourceCells.length === 0) {
-      target.render();
-      sink.blit(GROUND_DIRT_LAYER_ID, target);
-      return;
-    }
-
-    const { fringe, surface: tiles } = ArenaVisualFactory.createDirtImagesFromGrid(
-      this.scene,
-      this.dirtVisibleCells,
-      this.dirtIsOccupied,
-      {
-        offsetX: -region.localX,
-        offsetY: -region.localY,
-        gridCols: this.gridCols,
-        gridRows: this.gridRows,
-      },
-    );
-    if (fringe.length > 0) target.draw(fringe);
-    if (tiles.length > 0) target.draw(tiles);
-    target.render();
-
-    if (tiles.length > 0 && this.dirtMottleSourceCells.length > 0) {
-      // Die Stanzform traegt nur die Silhouette *dieser* Region. Eine Dirt-Kachel deckt exakt
-      // ihre eigene Zelle, der Satz ist damit vollstaendig.
-      const cutout = this.scratch.get('dirtCutout', size, 'redraw');
-      cutout.clear();
-      cutout.fill(0x000000, 1);
-      cutout.erase(tiles);
-      cutout.render();
-
-      for (let index = 0; index < this.mottleConfigs.length; index += 1) {
-        const mottle = this.mottleConfigs[index];
-        const layer = this.scratch.get(`dirtMottle${index}`, size);
-        layer.setBlendMode(mottle.blend === 'multiply' ? Phaser.BlendModes.MULTIPLY : Phaser.BlendModes.NORMAL);
-        layer.clear();
-        stampBlobSurfaceMottle(
-          this.scene,
-          layer,
-          DIRT_BLOB_SURFACE_PROFILE,
-          mottle,
-          this.dirtMottleSourceCells,
-          index,
-          -region.localX,
-          -region.localY,
-        );
-        layer.render();
-        eraseChunkScratch(layer, cutout, size);
-        layer.render();
-        // `draw()` rendert das Objekt mit seinem eigenen Blendmode – so bleibt die geordnete
-        // Normal-/Multiply-Kombination beim Verflachen erhalten.
-        target.draw(layer);
-        target.render();
-      }
-    }
-
-    for (const image of fringe) image.destroy();
-    for (const image of tiles) image.destroy();
-
+    const target = this.scratch.get('dirt', region.size);
+    const candidates = this.dirtIndex.collect(region.localX, region.localY, region.size,
+      DIRT_SURFACE_REACH_PX, this.dirtCandidateIds);
+    if (this.dirtLayer && candidates.length > 0) this.dirtLayer.bake(target, region);
+    else { target.clear(); target.render(); }
     sink.blit(GROUND_DIRT_LAYER_ID, target);
   }
 

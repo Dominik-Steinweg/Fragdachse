@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
   const buildTimestamp = new Date().toISOString();
   const navigationBuild = mode === 'navigation-lab';
   const fogBuild = mode === 'fog-lab';
+  const groundBuild = mode === 'ground-lab';
   const performanceBuild = mode === 'performance-lab';
   const sourceHash = createHash('sha256');
   if (navigationBuild) {
@@ -98,6 +99,7 @@ export default defineConfig(({ mode }) => {
     ...(performanceBuild ? { outDir: process.env.FD_PERFORMANCE_BUILD_DIR || 'build/performance-lab', copyPublicDir: false } : {}),
     ...(navigationBuild ? { outDir: `build/${mode}`, copyPublicDir: false } : {}),
     ...(fogBuild ? { outDir: 'build/fog-lab', copyPublicDir: false } : {}),
+    ...(groundBuild ? { outDir: 'build/ground-lab', copyPublicDir: false } : {}),
     target: 'es2020',
     chunkSizeWarningLimit: 5000,
     // Ohne Source-Maps lösen Chrome-Profile und die Long-Animation-Frame-Attribution des
@@ -108,6 +110,7 @@ export default defineConfig(({ mode }) => {
     rollupOptions: {
       ...(navigationBuild ? { input: 'navigation-lab.html' } : {}),
       ...(fogBuild ? { input: 'fog-lab.html' } : {}),
+      ...(groundBuild ? { input: 'ground-lab.html' } : {}),
       output: {
         manualChunks: {
           // Packt Phaser und PeerJS in eine eigene Datei namens "vendor"

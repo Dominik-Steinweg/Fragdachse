@@ -265,7 +265,7 @@ Jede PNG-Größe entsteht direkt aus dem Master ohne Autocrop, wiederholtes Verk
 
 Der Viewer nutzt die installierte Phaser-Version und `createWebGLStartupContext` des Spiels: WebGL2 bevorzugt, WebGL1 als Fallback; `smoothPixelArt` nur bei WebGL1 wie in `src/main.ts`, sonst geglättete Skalierung. Quell- und Anzeigeauflösung bleiben getrennt. 1 Einheit entspricht bei Faktor 1 einem CSS-Pixel, Display-DPR bis 2 wird berücksichtigt. Browser-Zoom 100% verwenden. Keine Spielkamera-Skalierung, Welt-FX oder Spielsimulation. Die GPU-Generation wird eingeblendet; WebGL2-Prüfung ist kein Nachweis für WebGL1.
 
-Gras und Stahl verwenden vorhandene Repositorybilder; Erde zeigt den vollflächigen Frame 12 des vorhandenen `dirt47blob.png` (32er Frames). Dieses Referenzbild wird nur angezeigt; keine neuen 47-Blob-Flächen entstehen. Hell neutral zeigt dunkle Farbsäume. Master und Offline-Review ersetzen keine Rotation-/Bewegungskontrolle.
+Gras, Erde und Stahl verwenden die Repository-Materialien; Erde zeigt die durchgehende `dirt_material.png`. Die Vorschau erzeugt keine neuen Terrainflächen. Hell neutral zeigt dunkle Farbsäume. Master und Offline-Review ersetzen keine Rotation-/Bewegungskontrolle.
 
 ## Prüfung und Aufbewahrung
 

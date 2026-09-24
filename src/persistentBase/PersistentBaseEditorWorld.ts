@@ -196,6 +196,6 @@ export class PersistentBaseEditorWorld {
     for (const visual of this.turrets.values()) { visual.image.destroy(); visual.aura.destroy(); }
     this.bases.destroy(); this.shadows.destroy(); this.lighting.destroy();
     ArenaBuilder.destroyDynamic(this.arena);
-    this.background.ground.destroy(); this.background.detail.destroy();
+    this.background.ground.destroy(); this.background.macro.destroy();
   }
 }

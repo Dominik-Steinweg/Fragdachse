@@ -534,6 +534,25 @@ export function createFakeArenaScene() {
       exists: () => true,
       getFrame: () => ({ width: 32, height: 32 }),
       addDynamicTexture: () => null,
+      // One stable 32 px source per key, so CPU material samples can be read and cached.
+      get: (() => {
+        const sources = new Map<string, { width: number; height: number }>();
+        return (key: string) => {
+          if (!sources.has(key)) sources.set(key, { width: 32, height: 32 });
+          const source = sources.get(key)!;
+          return { getSourceImage: () => source };
+        };
+      })(),
+      createCanvas: (key: string, width: number, height: number) => ({
+        key, context: {
+          createImageData: () => ({ width, height, data: new Uint8ClampedArray(width * height * 4) }),
+          putImageData() {},
+        },
+        draw() { return this; },
+        getData: (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+        refresh() {},
+      }),
+      remove() {},
     },
     layers,
   };

@@ -3,7 +3,7 @@ import type { DirtCell } from '../types';
 import type { ArenaVisualGridMetrics } from './ArenaVisualFactory';
 import { hashSeededCell01 } from './CellHash';
 import {
-  GROUND_COVER_CONFIG,
+  GROUND_COVER_TIERS,
   getGroundCoverPlacementBudget,
   getGroundCoverTextureKey,
   getGroundCoverVariantsForAnchor,
@@ -15,7 +15,7 @@ import type { GroundCoverAnchor, GroundCoverLayerConfig } from './GroundCoverCon
  * Phaser-Abhaengigkeit und damit direkt testbar.
  *
  * Die Schicht ist bewusst kein Teil von `ArenaLayout.decals`. Decals sind zellgebundene 16-px-
- * Marken mit eigenem Netzwerk- und Rehydrierungsvertrag; diese Flecken sind mehrere Zellen gross,
+ * Marken mit eigenem Netzwerk- und Rehydrierungsvertrag; diese Bueschel variieren in ihrer Groesse,
  * liegen absichtlich neben ihrer Ankerzelle und werden auf jedem Peer beim Backen neu abgeleitet.
  * `layout.seed` und `layout.dirt` stehen dafuer ueberall zur Verfuegung, am Wire-Format aendert
  * sich nichts.
@@ -56,8 +56,13 @@ function lerp(from: number, to: number, t: number): number {
   return from + (to - from) * t;
 }
 
+/** Without an explicit config: every tier of GROUND_COVER_TIERS, in draw order. */
 export function generateGroundCoverPlacements(options: GroundCoverFieldOptions): GroundCoverPlacement[] {
-  const config = options.config ?? GROUND_COVER_CONFIG;
+  if (!options.config) return GROUND_COVER_TIERS.flatMap(config => generateTier(options, config));
+  return generateTier(options, options.config);
+}
+
+function generateTier(options: GroundCoverFieldOptions, config: GroundCoverLayerConfig): GroundCoverPlacement[] {
   const metrics = options.metrics;
   const offsetX = metrics?.offsetX ?? ARENA_OFFSET_X;
   const offsetY = metrics?.offsetY ?? ARENA_OFFSET_Y;
@@ -120,7 +125,7 @@ export function generateGroundCoverPlacements(options: GroundCoverFieldOptions):
         // nur als defensive Konsistenzgrenze wirken und nie einen spaeteren Kartenabschnitt
         // abschneiden.
         if (placements.length >= placementBudget) return placements;
-        const salt = slot * 997;
+        const salt = config.seedSalt + slot * 997;
         const jitterX = (hashSeededCell01(options.seed, blockX, blockY, salt + 1) - 0.5) * 2 * config.jitterCells;
         const jitterY = (hashSeededCell01(options.seed, blockX, blockY, salt + 2) - 0.5) * 2 * config.jitterCells;
         // Bewusst ungeklemmt: Ein Anker darf knapp neben dem Gitter liegen, sein Fleck laeuft dann

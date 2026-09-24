@@ -38,7 +38,9 @@
     "deploy": "gh-pages -d dist",
     "deploy:current": "npm run build && gh-pages -d dist -e current --add",
     "map:editor": "vite --config tools/map-editor/vite.config.ts --open",
-    "build:map-editor": "tsc -p tools/map-editor/tsconfig.json && vite build --config tools/map-editor/vite.config.ts"
+    "build:map-editor": "tsc -p tools/map-editor/tsconfig.json && vite build --config tools/map-editor/vite.config.ts",
+    "build:ground-lab": "tsc && vite build --mode ground-lab",
+    "sprites:ground": "node scripts/generate-grass-tiles.mjs && node scripts/generate-ground-macro.mjs && node scripts/generate-ground-cover-textures.mjs"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

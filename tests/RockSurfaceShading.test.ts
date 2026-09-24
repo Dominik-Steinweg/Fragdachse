@@ -99,11 +99,8 @@ describe('47-Blob surface shading', () => {
   });
 
   it('uses independent alternate material sources for weak normal replacement passes', () => {
-    expect(DIRT_BLOB_SURFACE_PROFILE.materialTextureKey).toBe('dirt_mottle');
-    expect(DIRT_BLOB_SURFACE_PROFILE.materialTextureKey).not.toBe(DIRT_BLOB_SURFACE_PROFILE.textureKey);
     expect(ROCK_BLOB_SURFACE_PROFILE.materialTextureKey).toBe('rock_mottle');
     expect(ROCK_BLOB_SURFACE_PROFILE.materialTextureKey).not.toBe(ROCK_BLOB_SURFACE_PROFILE.textureKey);
-    expect(DIRT_BLOB_SURFACE_PROFILE.mottle).toMatchObject({ blend: 'normal', materialMode: 'native' });
     expect(ROCK_BLOB_SURFACE_PROFILE.mottle).toMatchObject({ blend: 'normal', materialMode: 'native' });
     expect(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers).toHaveLength(1);
     expect(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers?.[0]).toMatchObject({ blend: 'multiply', materialMode: 'normalized' });

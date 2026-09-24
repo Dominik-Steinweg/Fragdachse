@@ -6,9 +6,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { generateGroundCoverPlacements } from '../../src/arena/GroundCoverField';
 import {
   getGroundCoverPlacementBudget,
-  GROUND_COVER_CONFIG,
+  GROUND_COVER_TIERS,
   getGroundCoverTextureKey,
 } from '../../src/arena/GroundCoverConfig';
+import type { GroundCoverLayerConfig } from '../../src/arena/GroundCoverConfig';
 import type { GroundCoverPlacement } from '../../src/arena/GroundCoverField';
 import {
   ARENA_OFFSET_X,
@@ -40,12 +41,13 @@ describe('Ground cover field', () => {
     applyArenaMetricsForMode('deathmatch', 'ARENA');
   });
 
-  it('sums the variant weights to a hundred and names every file by convention', () => {
-    const total = GROUND_COVER_CONFIG.variants.reduce((sum, variant) => sum + variant.frequencyPercent, 0);
-    expect(total).toBe(100);
-    expect(GROUND_COVER_CONFIG.variants).toHaveLength(16);
-    for (const variant of GROUND_COVER_CONFIG.variants) {
-      expect(variant.fileName).toMatch(/^ground_cover_\d\d\.png$/);
+  it('sums the variant weights to a hundred per tier and names every file by convention', () => {
+    expect(new Set(GROUND_COVER_TIERS.map((tier) => tier.seedSalt)).size).toBe(GROUND_COVER_TIERS.length);
+    for (const tier of GROUND_COVER_TIERS) {
+      const total = tier.variants.reduce((sum, variant) => sum + variant.frequencyPercent, 0);
+      expect(total).toBeCloseTo(100, 6);
+      expect(tier.variants.length).toBeGreaterThan(1);
+      for (const variant of tier.variants) expect(variant.fileName).toMatch(/^ground_(cover|clump|patch)_\d\d\.png$/);
     }
   });
 
@@ -55,10 +57,9 @@ describe('Ground cover field', () => {
     // Platzhalter ersetzt.
     const assetDir = path.join(__dirname, '..', '..', 'public', 'assets', 'sprites', 'groundcover');
     const shipped = new Set(fs.readdirSync(assetDir).filter((name) => name.endsWith('.png')));
-    for (const variant of GROUND_COVER_CONFIG.variants) {
-      expect(shipped.has(variant.fileName)).toBe(true);
-    }
-    expect(shipped.size).toBe(GROUND_COVER_CONFIG.variants.length);
+    const listed = GROUND_COVER_TIERS.flatMap((tier) => tier.variants.map((variant) => variant.fileName));
+    for (const fileName of listed) expect(shipped.has(fileName)).toBe(true);
+    expect(shipped.size).toBe(new Set(listed).size);
   });
 
   it('is deterministic for a seed and varies between seeds', () => {
@@ -123,14 +124,18 @@ describe('Ground cover field', () => {
   });
 
   it('keeps size, alpha and texture inside the configured bounds', () => {
-    const known = new Set(GROUND_COVER_CONFIG.variants.map((variant) => getGroundCoverTextureKey(variant.fileName)));
+    const tierByTexture = new Map<string, GroundCoverLayerConfig>();
+    for (const tier of GROUND_COVER_TIERS) {
+      for (const variant of tier.variants) tierByTexture.set(getGroundCoverTextureKey(variant.fileName), tier);
+    }
     const layout = generateArenaWithActiveMetrics(54_000);
     const placements = placementsFor(layout.seed, layout.dirt);
     expect(placements.length).toBeGreaterThan(0);
 
     for (const placement of placements) {
-      const anchorConfig = GROUND_COVER_CONFIG[placement.anchor];
-      expect(known.has(placement.textureKey)).toBe(true);
+      const tier = tierByTexture.get(placement.textureKey);
+      expect(tier).toBeDefined();
+      const anchorConfig = tier![placement.anchor];
       expect(placement.sizePx).toBeGreaterThanOrEqual(anchorConfig.minSizeCells * CELL_SIZE);
       expect(placement.sizePx).toBeLessThanOrEqual(anchorConfig.maxSizeCells * CELL_SIZE);
       expect(placement.alpha).toBeGreaterThanOrEqual(anchorConfig.minAlpha);
@@ -141,12 +146,14 @@ describe('Ground cover field', () => {
   });
 
   it('stays inside the placement budget', () => {
-    const blocks = Math.ceil(GRID_COLS / GROUND_COVER_CONFIG.blockCells) * Math.ceil(GRID_ROWS / GROUND_COVER_CONFIG.blockCells);
     for (let index = 0; index < 10; index += 1) {
       const layout = generateArenaWithActiveMetrics(55_000 + index);
-      const placements = placementsFor(layout.seed, layout.dirt);
-      expect(placements.length).toBeLessThanOrEqual(getGroundCoverPlacementBudget(GRID_COLS, GRID_ROWS));
-      expect(placements.length).toBeLessThanOrEqual(blocks * GROUND_COVER_CONFIG.maxPerBlock);
+      for (const tier of GROUND_COVER_TIERS) {
+        const placements = generateGroundCoverPlacements({ seed: layout.seed, dirt: layout.dirt, config: tier });
+        const blocks = Math.ceil(GRID_COLS / tier.blockCells) * Math.ceil(GRID_ROWS / tier.blockCells);
+        expect(placements.length).toBeLessThanOrEqual(getGroundCoverPlacementBudget(GRID_COLS, GRID_ROWS, tier));
+        expect(placements.length).toBeLessThanOrEqual(blocks * tier.maxPerBlock);
+      }
     }
   });
 
@@ -163,7 +170,8 @@ describe('Ground cover field', () => {
     // 400 x 80 has 1 280 Ground-Cover-Bloecke. Der alte globale Deckel von 512 liess den
     // zeilenweise spaeter verarbeiteten unteren Kartenbereich leer.
     expect(placements.length).toBeGreaterThan(512);
-    expect(placements.length).toBeLessThanOrEqual(getGroundCoverPlacementBudget(400, 80));
+    expect(placements.length).toBeLessThanOrEqual(
+      GROUND_COVER_TIERS.reduce((sum, tier) => sum + getGroundCoverPlacementBudget(400, 80, tier), 0));
     expect(lowerHalf).toBeGreaterThan(upperHalf * 0.5);
   });
 

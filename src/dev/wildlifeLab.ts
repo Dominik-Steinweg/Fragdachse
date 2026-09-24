@@ -1,3 +1,5 @@
+import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
+import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
 import * as Phaser from 'phaser';
 import { CANOPY_RADIUS, CELL_SIZE, DEPTH, TRUNK_RADIUS } from '../config';
 import { buildLobbyWorldLayout, LOBBY_WORLD_HEIGHT_CELLS, LOBBY_WORLD_WIDTH_CELLS } from '../arena/LobbyWorldLayout';
@@ -24,8 +26,7 @@ class WildlifeLab extends Phaser.Scene {
   private disposers: (() => void)[] = [];
 
   preload(): void {
-    this.load.image('wildlife-grass', '/assets/sprites/gras_bg_tile.png');
-    this.load.image('wildlife-detail', '/assets/sprites/gras_detail_tile.png');
+    preloadGroundMaterials(this.load);
     this.load.image('wildlife-canopy', '/assets/sprites/canopies/canopy01.png');
     this.load.image('wildlife-badger', '/assets/sprites/pipeline-v2/badger/idle.png');
   }
@@ -38,9 +39,7 @@ class WildlifeLab extends Phaser.Scene {
     const width = this.fixture === 0 ? LOBBY_WORLD_WIDTH_CELLS * CELL_SIZE : 4096;
     const height = this.fixture === 0 ? LOBBY_WORLD_HEIGHT_CELLS * CELL_SIZE : 2048;
     const frame = { offsetX: 0, offsetY: 0, width, height };
-    this.add.tileSprite(0, 0, width, height, 'wildlife-grass').setOrigin(0).setDepth(DEPTH.GRASS);
-    this.add.tileSprite(0, 0, width, height, 'wildlife-detail').setOrigin(0).setDepth(DEPTH.GRASS + .1)
-      .setBlendMode(Phaser.BlendModes.MULTIPLY);
+    createArenaBackground(this, width / 2, height / 2, width, height);
     const canopies: Phaser.GameObjects.Image[] = [];
     for (const tree of layout.trees) {
       const x = (tree.gridX + .5) * CELL_SIZE, y = (tree.gridY + .5) * CELL_SIZE;

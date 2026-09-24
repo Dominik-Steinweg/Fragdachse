@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fragdachse · Waldboden</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#121913;color:#e4e6d8;font:14px system-ui}header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid #364332}h1{margin:0;font-size:21px;font-weight:600}p{margin:5px 0 0;color:#aab6a2}a{color:#c5d6ab}nav{display:flex;flex-wrap:wrap;gap:8px;padding:12px 24px;align-items:center}button,select,input{font:inherit;background:#263326;color:#e4e6d8;border:1px solid #55634b;padding:7px 11px;border-radius:5px}button{cursor:pointer}button:hover{background:#3c4e35}input{width:95px}label{display:flex;gap:8px;align-items:center}#stage{height:calc(100vh - 185px);min-height:320px;width:100%}output{display:block;padding:12px 24px;color:#bdc9ad;font:12px ui-monospace,monospace}.hint{font-size:12px}
+</style></head><body>
+<header><div><h1>Waldboden</h1><p>Gras, Erde und ihre Übergänge · Produktionsmaterialien und Chunk-Streaming</p></div><a href="/">Zum Spiel ↗</a></header>
+<nav aria-label="Bodenprobe">
+<select id="fixture" aria-label="Ansicht"><option value="materials">Material- und Grenzproben</option><option value="forest">Waldprobe · Lobby-Layout</option></select>
+<label>Seed <input id="seed" type="number" value="17" step="1"></label>
+<button id="zoom">Zoom 100 %</button><button id="cover" aria-pressed="true">Büschel an</button>
+<button id="grid" aria-pressed="false">Chunkgrenzen</button><button id="pan">Kamera weg</button>
+<button id="offset">Weltversatz 0, 0</button><button id="rebuild">Neu aufbauen</button>
+<span class="hint">Ziehen zum Verschieben</span></nav>
+<output id="status" aria-live="polite">Materialien werden geladen …</output><div id="stage"></div>
+<script type="module" src="/src/dev/groundLab.ts"></script></body></html>

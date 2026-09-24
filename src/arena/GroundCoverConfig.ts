@@ -1,14 +1,8 @@
 import type * as Phaser from 'phaser';
 
-/**
- * Authored-Daten der Ground-Cover-Schicht: grosse Moosflaechen, die die Dirt/Gras-Grenze und das
- * 32-px-Raster aufbrechen. Aufbau bewusst wie {@link ./DecalConfig}: Pfadkonstante, Variantentabelle
- * mit Haeufigkeitsgewichten, Preload-Helfer.
- *
- * Die Texturen entstehen offline in `scripts/generate-ground-cover-textures.mjs`. Ihre Alpha ist
- * dort bereits auf volle Bandbreite gebaut; jede Abschwaechung passiert zur Laufzeit ueber die
- * Alpha-Bereiche hier, damit ein Balancing-Schritt keine acht PNGs neu erzeugen muss.
- */
+/** Three tiers supplement the authored materials, concentrated at the grass/soil seam: large
+ * feathered moss/grass patches, leafy clumps and compact blade tufts, in that draw order. Sources and reproducible export:
+ * scripts/generate-ground-cover-textures.mjs. */
 
 const GROUND_COVER_ASSET_PATH = './assets/sprites/groundcover';
 
@@ -41,6 +35,8 @@ export interface GroundCoverAnchorConfig {
 }
 
 export interface GroundCoverLayerConfig {
+  /** Hash salt of this tier, so tiers never share placement rolls. */
+  seedSalt: number;
   /** Kantenlaenge eines Ankerblocks in Zellen. */
   blockCells: number;
   /** Maximale Zahl lokaler Anker-Slots je Block; der Gesamtumfang folgt aus dem Map-Raster. */
@@ -53,53 +49,50 @@ export interface GroundCoverLayerConfig {
   variants: readonly GroundCoverVariantConfig[];
 }
 
-/**
- * Warum ein Blockraster statt einer Wahrscheinlichkeit je Zelle wie bei Decals oder
- * {@link ./BlobSurfaceMottle}: Ein Mottle-Stempel ist rund eine Zelle breit, dort *ist* die
- * Zellwahrscheinlichkeit die Deckung. Ein Moosfleck ueberdeckt dagegen 5-11 Zellen je Achse; schon
- * wenige Prozent je Zelle ergaeben ueber einem Saum von einigen hundert Zellen einen geschlossenen
- * gruenen Teppich. Der Block ist mit 5 Zellen kleiner als der kleinste Fleck, benachbarte Bloecke
- * ueberlappen also weiterhin – die geforderte Ueberlagerung entsteht, die Dichte bleibt begrenzt.
- */
+/** Compact blade tufts. Bounded placement density, independent of chunk residency and camera. */
 export const GROUND_COVER_CONFIG: GroundCoverLayerConfig = {
-  blockCells: 5,
-  maxPerBlock: 2,
-  /** Volle Blockbreite: der Anker landet an jeder Stelle, nie auf einem Zellmittelpunkt. */
-  jitterCells: 2.5,
-
-  seam: { perBlock: 0.95, minSizeCells: 5, maxSizeCells: 11, sizeBias: 1.6, minAlpha: 0.70, maxAlpha: 0.90 },
-  dirt: { perBlock: 0.80, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1.8, minAlpha: 0.62, maxAlpha: 0.86 },
-  grass: { perBlock: 0.74, minSizeCells: 3, maxSizeCells: 7, sizeBias: 2.0, minAlpha: 0.44, maxAlpha: 0.86 },
-
-  /**
-   * Die Gewichte sind bewusst flach: Bei 16 Vorlagen faellt eine Wiederholung nur dann auf, wenn
-   * eine einzelne Form haeufig genug ist, um als Muster gelesen zu werden. Ausnahmen sind unten
-   * einzeln begruendet. Die Summe ist 100; innerhalb einer Ankerklasse normiert der Generator die
-   * dort zugelassenen Gewichte selbst nach.
-   */
-  variants: [
-    { fileName: 'ground_cover_01.png', frequencyPercent: 8 },
-    { fileName: 'ground_cover_02.png', frequencyPercent: 8 },
-    { fileName: 'ground_cover_03.png', frequencyPercent: 7 },
-    { fileName: 'ground_cover_04.png', frequencyPercent: 7 },
-    // Groesster geschlossener Klumpen – bewusst selten, sonst dominiert eine einzelne Form.
-    { fileName: 'ground_cover_05.png', frequencyPercent: 5 },
-    { fileName: 'ground_cover_06.png', frequencyPercent: 6 },
-    // Die beiden braunsten Vorlagen (gemessen 31 % bzw. 50 % Pixel mit R >= G, gegen 6-22 % bei
-    // allen anderen). Auf Gras laegen sie als Fremdkoerper; am Saum und auf Dirt sind sie genau
-    // das Bindeglied zwischen den Materialien.
-    { fileName: 'ground_cover_07.png', frequencyPercent: 4, anchors: ['seam', 'dirt'] },
-    { fileName: 'ground_cover_08.png', frequencyPercent: 4, anchors: ['seam', 'dirt'] },
-    { fileName: 'ground_cover_09.png', frequencyPercent: 7 },
-    { fileName: 'ground_cover_10.png', frequencyPercent: 6 },
-    { fileName: 'ground_cover_11.png', frequencyPercent: 7 },
-    { fileName: 'ground_cover_12.png', frequencyPercent: 6 },
-    { fileName: 'ground_cover_13.png', frequencyPercent: 7 },
-    { fileName: 'ground_cover_14.png', frequencyPercent: 6 },
-    { fileName: 'ground_cover_15.png', frequencyPercent: 6 },
-    { fileName: 'ground_cover_16.png', frequencyPercent: 6 },
-  ],
+  seedSalt: 0,
+  blockCells: 2,
+  maxPerBlock: 1,
+  jitterCells: 1,
+  seam: { perBlock: .7, minSizeCells: .5, maxSizeCells: 1.35, sizeBias: 1.5, minAlpha: .8, maxAlpha: 1 },
+  dirt: { perBlock: .07, minSizeCells: .4, maxSizeCells: .9, sizeBias: 1.8, minAlpha: .7, maxAlpha: .95 },
+  grass: { perBlock: .16, minSizeCells: .45, maxSizeCells: 1.1, sizeBias: 1.6, minAlpha: .75, maxAlpha: 1 },
+  variants: Array.from({ length: 8 }, (_, index) => ({
+    fileName: `ground_cover_${String(index + 1).padStart(2, '0')}.png`, frequencyPercent: 12.5,
+  })),
 };
+
+/** Large grass patches: thicker growth that breaks up grass areas and softens soil borders. */
+export const GROUND_PATCH_CONFIG: GroundCoverLayerConfig = {
+  seedSalt: 0x6a1d,
+  blockCells: 4,
+  maxPerBlock: 1,
+  jitterCells: 2,
+  seam: { perBlock: .6, minSizeCells: 2, maxSizeCells: 4, sizeBias: 1.4, minAlpha: .6, maxAlpha: .85 },
+  dirt: { perBlock: .08, minSizeCells: 1.5, maxSizeCells: 2.6, sizeBias: 1.6, minAlpha: .5, maxAlpha: .75 },
+  grass: { perBlock: .3, minSizeCells: 2, maxSizeCells: 4.5, sizeBias: 1.3, minAlpha: .55, maxAlpha: .85 },
+  variants: Array.from({ length: 16 }, (_, index) => ({
+    fileName: `ground_patch_${String(index + 1).padStart(2, '0')}.png`, frequencyPercent: 6.25,
+  })),
+};
+
+/** Low broad-leaved clumps with a baked contact shadow; readable at stamp size. */
+export const GROUND_CLUMP_CONFIG: GroundCoverLayerConfig = {
+  seedSalt: 0x3c55,
+  blockCells: 3,
+  maxPerBlock: 1,
+  jitterCells: 1.5,
+  seam: { perBlock: .42, minSizeCells: 1.4, maxSizeCells: 2.6, sizeBias: 1.4, minAlpha: .9, maxAlpha: 1 },
+  dirt: { perBlock: .05, minSizeCells: 1, maxSizeCells: 1.8, sizeBias: 1.6, minAlpha: .85, maxAlpha: 1 },
+  grass: { perBlock: .2, minSizeCells: 1.4, maxSizeCells: 3, sizeBias: 1.4, minAlpha: .85, maxAlpha: 1 },
+  variants: Array.from({ length: 16 }, (_, index) => ({
+    fileName: `ground_clump_${String(index + 1).padStart(2, '0')}.png`, frequencyPercent: 6.25,
+  })),
+};
+
+/** Draw order: patches, clumps, tufts on top. */
+export const GROUND_COVER_TIERS: readonly GroundCoverLayerConfig[] = [GROUND_PATCH_CONFIG, GROUND_CLUMP_CONFIG, GROUND_COVER_CONFIG];
 
 /**
  * Obergrenze des Blockrasters fuer eine konkrete Map. Sie skaliert mit der Mapflaeche und ist
@@ -136,7 +129,7 @@ export function getGroundCoverAnchorConfig(
 }
 
 export function preloadGroundCoverAssets(loader: Phaser.Loader.LoaderPlugin): void {
-  for (const variant of GROUND_COVER_CONFIG.variants) {
+  for (const tier of GROUND_COVER_TIERS) for (const variant of tier.variants) {
     loader.image(getGroundCoverTextureKey(variant.fileName), `${GROUND_COVER_ASSET_PATH}/${variant.fileName}`);
   }
 }

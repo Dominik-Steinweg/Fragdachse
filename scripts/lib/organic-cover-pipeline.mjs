@@ -351,7 +351,9 @@ async function processSource(profile, fileName, outputIndex, gradeTarget) {
     const mg = g + (gradeTarget[1] - g) * profile.gradeStrength;
     const mb = b + (gradeTarget[2] - b) * profile.gradeStrength;
     const after = luma(mr, mg, mb) || 1;
-    const gain = before / after;
+    // Optionaler globaler Helligkeitsfaktor (Standard 1): senkt eine Vorlagenmenge als Ganzes ab,
+    // ohne ihren inneren Kontrast zu stauchen.
+    const gain = before / after * (profile.lumaScale ?? 1);
     cropped[i * 4] = clamp255(mr * gain);
     cropped[i * 4 + 1] = clamp255(mg * gain);
     cropped[i * 4 + 2] = clamp255(mb * gain);
