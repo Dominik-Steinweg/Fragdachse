@@ -237,6 +237,32 @@ describe('world contact dedupe ordering', () => {
 });
 
 describe('generic projectile target piercing', () => {
+  it('air fire ignores ground and friendlies, retains fractional penetration damage, and stops at a hostile base', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const hits: Array<{ id: string; damage: number }> = [];
+    const bases: string[] = [];
+    runtime.setProjectileTargetabilityPort({ canDamage: () => true, canDamageOwner: () => true, isTargetCurrentlyValid: () => true });
+    runtime.setProjectileCombatPort({ resolveDirectImpact: ({ target, directHit }) => {
+      hits.push({ id: target.id, damage: directHit.damage }); return { accepted: true };
+    }, resolveExplosionCombat: () => ({ damagedTargetKeys: [] }) });
+    runtime.setBaseHitCallback(id => bases.push(id));
+    const id = spawn(runtime, request({ flight: { collisionMode: 'sweep', size: 6,
+      collisionFilter: { airborne: true }, penetration: { count: 3, damageRetention: 1 } },
+      interaction: { directHit: { damage: 1.4 } } }));
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      sink('rock', 9, 'world', 5, 0, 3, 2, -3, 8, 3, 'rock');
+      sink('player', 'friend', 'friend', 10, 0, 3, 7, -3, 13, 3);
+      sink('enemy', 'a', 'hostile', 20, 0, 3, 17, -3, 23, 3);
+      sink('enemy', 'b', 'hostile', 40, 0, 3, 37, -3, 43, 3);
+      sink('base', 'base', 'hostile', 60, 0, 3, 57, -3, 63, 3);
+      sink('enemy', 'behind-base', 'hostile', 80, 0, 3, 77, -3, 83, 3);
+    } });
+    runtime.runHostInteractionStage(0);
+    physics.handles.get(id)!.sprite.x = 100;
+    runtime.runHostInteractionStage(100);
+    expect(hits).toEqual([{ id: 'a', damage: 1.4 }, { id: 'b', damage: 1.4 }]);
+    expect(bases).toEqual(['base']); expect(runtime.activeCount).toBe(0);
+  });
   it('resolves one world candidate and deduplicates a later technical contact', () => {
     const { runtime, physics } = createProjectileRuntimeTestWorld();
     const hits: number[] = [];

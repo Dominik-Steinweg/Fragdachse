@@ -70,6 +70,19 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
     return { cs, damageCalls, now: () => now, setNow: (value: number) => { now = value; } };
   }
 
+  it('retains captured drone attribution through ground contact and every later burn tick', () => {
+    const {cs}=createTestSetup();
+    const source=cs.captureWorldDamageSource('p1','ground_fire.attack_drone','ground',{
+      gameplaySourceId:'drone-1',gameplaySourceKind:'turret',attributionId:'p1',attributionKind:'player',
+      allegiance:{ownerId:'p1',kind:'player'},sourceSlot:'utility',sourceTurretId:'station-1',correlation:{executionId:'bomb-1'},
+    });
+    const applied=vi.spyOn(cs,'applyDamage');
+    cs.applyBurnHit('p_target','p1',1000,1.4,'bomb-1:chunk','ground_fire.attack_drone','ground_fire','normal',source);
+    cs.updateBurnEffects(1250);cs.updateBurnEffects(1500);
+    expect(applied).toHaveBeenCalledTimes(2);
+    for(const call of applied.mock.calls)expect(call[6]).toMatchObject({source,basis:{kind:'source-resolved',amount:1.4}});
+  });
+
   it('reveals on periodic HP or armor loss, but not merely receiving a burn stack', () => {
     const f = createTestSetup(), reveal = vi.fn();
     f.cs.setDecoySystem({ breakStealth: reveal } as never);

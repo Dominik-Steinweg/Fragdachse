@@ -104,7 +104,7 @@ describe('asset pipeline catalog contracts', () => {
   });
 
   it('distinguishes executable reference recipes from planned briefs and defines complete motion contracts', () => {
-    const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle']);
+    const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors']);
     for (const asset of assets) {
       if (asset.production === 'planned') {
         expect(asset.recipe).toBeUndefined();
@@ -118,7 +118,7 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.orthoScale).toBeGreaterThan(0);
       expect(asset.textures).toBeDefined();
       // Original texture pixels and completed renders are local artifacts, not required in a clean checkout.
-      expect(Object.keys(asset.textures!)).toContain(['weapon', 'utility'].includes(asset.category) || asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
+      expect(Object.keys(asset.textures!)).toContain(['weapon', 'utility', 'construction', 'companion'].includes(asset.category) || asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
       expect(Object.keys(asset.materialVariants!)).toHaveLength(1);
       for (const variant of Object.values(asset.materialVariants!)) {
         expect(variant.textureStrength).toBeGreaterThanOrEqual(0);

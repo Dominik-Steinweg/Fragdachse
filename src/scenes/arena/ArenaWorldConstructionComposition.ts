@@ -1,3 +1,4 @@
+import { isOffensiveConstruction } from '../../systems/offensiveConstruction';
 import { bridge } from '../../network/bridge';
 import { PICKUP_AUDIO } from '../../audio/GameplayAudioFeedback';
 import { PLAYER_COLORS } from '../../config';
@@ -171,7 +172,7 @@ export function composeWorldConstruction(
       if (runtime.kind === 'rock' && (cause === 'damage' || cause === 'decay')) {
         emitArenaRockDestroyed(scene.game.events, { rockId: runtime.id, source: 'placeable_rock', reason: cause });
       }
-      if ((cause === 'damage' || cause === 'decay') && runtime.kind === 'turret') {
+      if ((cause === 'damage' || cause === 'decay') && isOffensiveConstruction(runtime)) {
         try { rockVisualHelper.spawnTurretDeathCloud(runtime); }
         catch (error) { console.error('[ConstructionWorldRuntime] Death presentation failed', error); }
       }

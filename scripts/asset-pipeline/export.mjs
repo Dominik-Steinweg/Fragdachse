@@ -22,7 +22,7 @@ export function inside(root, relative) {
 export function validateManifest(m) {
   if (m.pipelineVersion !== 1 || !/^[a-z0-9][a-z0-9-]*$/.test(m.id)) throw new Error('Invalid asset manifest');
   if (!/^[a-z0-9][a-z0-9-]*$/.test(m.variant) || !['north', 'east'].includes(m.forward)) throw new Error('Invalid variant/orientation');
-  if (!['character', 'enemy', 'turret', 'weapon', 'utility'].includes(m.category)) throw new Error('Invalid category');
+  if (!['character', 'enemy', 'turret', 'weapon', 'utility', 'construction', 'companion'].includes(m.category)) throw new Error('Invalid category');
   if (m.forward !== (m.category === 'turret' ? 'east' : 'north')) throw new Error('Orientation disagrees with asset category');
   if (!Number.isInteger(m.targetSize) || m.targetSize < 1 || m.targetSize > 1024) throw new Error('Invalid target size');
   if (!Array.isArray(m.sourceSizes) || !m.sourceSizes.length || m.sourceSizes.some(n => !Number.isInteger(n) || n < m.targetSize || n > 1024)) throw new Error('Invalid source sizes');

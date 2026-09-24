@@ -62,7 +62,10 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         key(ob, 'rotation_euler', tuple(a + b for a, b in zip(base[1], rotation)), frame)
         key(ob, 'scale', tuple(a * b for a, b in zip(base[2], scale)), frame)
     angle = math.tau * phase
-    if motion in ('mechanical_fire', 'energy_fire'):
+    if motion == 'quad_rotors':
+        for i in range(4):
+            pose(f'rotor{i}', rotation=(0, 0, (0 if idle else angle) * (1 if i in (0, 3) else -1)))
+    elif motion in ('mechanical_fire', 'energy_fire'):
         # Immediate response, then smooth recovery; no baked salvo timing.
         kick = 0 if idle or phase == 1 else (1 - phase) ** 2
         for name in ('left_pod', 'right_pod'):

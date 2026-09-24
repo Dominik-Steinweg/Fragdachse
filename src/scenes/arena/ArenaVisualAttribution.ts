@@ -86,6 +86,7 @@ export const GRAPHICS_FAMILIES = {
     'CoopDefenseMissionProgressRenderer',
     'CoopDefenseObjectiveRepairDroneRenderer',
     'RepairDroneRenderer',
+    'AttackDroneRenderer',
   ],
   encounterTelegraphs: ['CoopDefenseEncounterTelegraphRenderer'],
   powerUpEffects: ['PowerUpRenderer'],

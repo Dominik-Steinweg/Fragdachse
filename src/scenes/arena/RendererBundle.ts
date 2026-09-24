@@ -25,6 +25,7 @@ import { TeslaBoltRenderer }   from '../../effects/TeslaBoltRenderer';
 import { HealingAuraRenderer } from '../../effects/HealingAuraRenderer';
 import { GuardianSpiritRenderer } from '../../effects/GuardianSpiritRenderer';
 import { RepairDroneRenderer } from '../../effects/RepairDroneRenderer';
+import { AttackDroneRenderer } from '../../effects/AttackDroneRenderer';
 import { SlimeTrailRenderer } from '../../effects/SlimeTrailRenderer';
 import { CorpseMarkerRenderer } from '../../effects/CorpseMarkerRenderer';
 import { FlamethrowerUpgradeRenderer } from '../../effects/FlamethrowerUpgradeRenderer';
@@ -96,6 +97,7 @@ export interface RendererBundle {
   healingAura:         HealingAuraRenderer;
   guardianSpirit:      GuardianSpiritRenderer;
   repairDrone:         RepairDroneRenderer;
+  attackDrone:         AttackDroneRenderer;
   slimeTrail:          SlimeTrailRenderer;
   corpseMarker:        CorpseMarkerRenderer;
   flamethrowerUpgrades: FlamethrowerUpgradeRenderer;
@@ -261,6 +263,9 @@ export function* createRendererBundleSteps(
   const repairDrone = new RepairDroneRenderer(scene);
   repairDrone.generateTextures();
   yield 'renderers/repairDrone';
+  const attackDrone = new AttackDroneRenderer(scene);
+  cleanup.push(() => attackDrone.destroyAll());
+  yield 'renderers/attackDrone';
 
   const slimeTrail = new SlimeTrailRenderer(scene);
   const corpseMarker = new CorpseMarkerRenderer(scene);
@@ -399,7 +404,7 @@ export function* createRendererBundleSteps(
   cleanup.push(() => movement.destroy());
   return {
     interactions,
-    turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
+    turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,

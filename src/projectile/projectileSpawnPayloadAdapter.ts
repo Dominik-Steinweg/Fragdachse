@@ -34,6 +34,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     visualMuzzleOrigin:   presentation.visualMuzzleOrigin,
 
     sourceCarrierBaseId: flight.collisionFilter?.sourceCarrierBaseId,
+    airborne: flight.collisionFilter?.airborne,
     ignoreRockIndex:      flight.collisionFilter?.ignoreRockIndex,
     excludedTarget: flight.collisionFilter?.excludedTarget,
     initialTargetProtection: flight.collisionFilter?.initialTargetProtection,

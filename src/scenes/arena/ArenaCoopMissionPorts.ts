@@ -1,3 +1,4 @@
+import { isOffensiveConstruction } from '../../systems/offensiveConstruction';
 import { bridge } from '../../network/bridge';
 import { PLAYER_SIZE } from '../../config';
 import type {
@@ -110,7 +111,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
       getArmedConstructions: () => {
         const constructions: CoopMissionArmedConstructionView[] = [];
         for (const construction of getWorldRuntime()?.materialization?.placement?.getAllRuntimeRocks() ?? []) {
-          if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+          if (construction.hp <= 0 || !isOffensiveConstruction(construction)) continue;
           if (getWorldRuntime()?.materialization?.placement?.getCarrierBaseId(construction.id)) continue;
           constructions.push({
             representedPlayerIds: representedPlayers(id => id === construction.id),

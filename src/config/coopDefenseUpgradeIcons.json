@@ -1,5 +1,13 @@
 {
   "withIcon": [
+    "unlock_attack_drone_station",
+    "attack_drone_self_loader",
+    "attack_drone_service",
+    "attack_drone_flight",
+    "attack_drone_penetration",
+    "attack_drone_bomb_bay",
+    "attack_drone_bomb_count",
+    "attack_drone_fire_chunks",
     "adrenaline_cost",
     "adrenaline_gain",
     "adrenaline_regeneration",

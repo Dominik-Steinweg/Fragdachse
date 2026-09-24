@@ -166,6 +166,7 @@ function makeCombatController() {
     energyShield: { update: vi.fn() },
     guardianSpirit: { update: vi.fn() },
     repairDrone: { update: vi.fn() },
+    attackDrone: { update: vi.fn() },
     slimeTrail: { update: vi.fn() },
     flamethrowerUpgrades: { update: vi.fn() },
     ak47StrategicTargets: { sync: vi.fn() },

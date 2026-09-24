@@ -30,6 +30,7 @@ export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): 
   bundle.energyShield.destroyAll();
   bundle.guardianSpirit.destroyAll();
   bundle.repairDrone.destroyAll();
+  bundle.attackDrone.destroyAll();
   bundle.objectiveRepairDrones.destroyAll();
   bundle.slimeTrail.clear();
   bundle.corpseMarker.clearAll();

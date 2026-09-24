@@ -545,7 +545,7 @@ export class ProjectileCollisionProcessor {
     const startY = record.lastY;
     const endX = record.physics.sprite.x;
     const endY = record.physics.sprite.y;
-    const blockerDistance = deps.worldBlocker?.getNearestBlockerDistance(
+    const blockerDistance = record.spec.flight.collisionFilter.airborne ? null : deps.worldBlocker?.getNearestBlockerDistance(
       startX,
       startY,
       endX,
@@ -711,6 +711,8 @@ export class ProjectileCollisionProcessor {
     slot: CollisionTargetSlot,
     deps: ProjectileCollisionDependencies,
   ): boolean {
+    if (record.spec.flight.collisionFilter.airborne
+      && slot.kind !== 'enemy' && slot.kind !== 'base') return false;
     const support = record.spec.interaction.plasmaBurnerCharge !== undefined;
     if (!support && slot.kind !== 'base' && slot.kind !== 'rock' && record.provenance.allegiance.ownerId === slot.ownerId) return false;
     if (support && deps.allowsSupportTarget?.(record, slot.ref) !== true) return false;

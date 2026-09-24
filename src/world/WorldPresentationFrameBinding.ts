@@ -39,6 +39,8 @@ import type {
   SyncedPowerUp,
   SyncedPowerUpPedestal,
   SyncedRepairDrone,
+  SyncedAttackDrone,
+  SyncedAttackDroneBomb,
   SyncedSlimeTrailSnapshot,
   SyncedTeslaDome,
   SyncedTimeBubble,
@@ -89,6 +91,8 @@ export interface WorldClientPresentationState {
   readonly energyShields: SyncedEnergyShield[];
   readonly guardianSpirits: SyncedGuardianSpirit[];
   readonly repairDrones: SyncedRepairDrone[];
+  readonly attackDrones?: SyncedAttackDrone[];
+  readonly attackDroneBombs?: SyncedAttackDroneBomb[];
   readonly slimeTrail: SyncedSlimeTrailSnapshot;
   readonly burningGround: SyncedBurningGroundSnapshot;
   readonly train: SyncedTrainState | null;
@@ -109,6 +113,9 @@ export interface WorldClientPresentationRenderers {
     syncVisuals(snapshots: readonly SyncedRepairDrone[], constructions: readonly SyncedPlaceableRock[]): void;
   };
   readonly slimeTrail: { syncVisuals(snapshot: SyncedSlimeTrailSnapshot): void };
+  readonly attackDrone?: {
+    syncVisuals(drones: readonly SyncedAttackDrone[], bombs: readonly SyncedAttackDroneBomb[], constructions: readonly SyncedPlaceableRock[], now: number): void;
+  };
   readonly flamethrowerUpgrades: {
     syncGround(snapshot: SyncedBurningGroundSnapshot, now: number): void;
     syncRings(players: Readonly<Record<string, PlayerNetState>>): void;
@@ -468,6 +475,7 @@ export class WorldPresentationFrameBinding {
       renderers.energyShield.syncVisuals(state.energyShields);
       renderers.guardianSpirit.syncVisuals(state.guardianSpirits);
       renderers.repairDrone.syncVisuals(state.repairDrones, state.placeableRocks);
+      renderers.attackDrone?.syncVisuals(state.attackDrones ?? [], state.attackDroneBombs ?? [], state.placeableRocks, now);
       renderers.slimeTrail.syncVisuals(state.slimeTrail);
       renderers.flamethrowerUpgrades.syncGround(
         countdownActive && state.burningGround.cells.length === 0

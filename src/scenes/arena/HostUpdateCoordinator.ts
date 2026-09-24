@@ -400,6 +400,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // Missionsschritt, der sie als Ziele liest.
     if (!countdownActive) this.plagueBinding?.advance(now);
     if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceMgTurrets(now);
+    if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceAttackDrones(now, delta);
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
     if (!countdownActive) this.smokeBinding?.refresh(now);
     // Activity: Missionsfortschritt, Navigation und Gegner. Die Reihenfolge darin gehoert der
@@ -464,6 +465,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.placementSystem?.getAllRuntimeRocks() ?? [],
     );
     this.visuals?.slimeTrail.syncVisuals(slimeTrail);
+    this.visuals?.attackDrone.syncVisuals(
+      this.combatFramePort?.getCombatGameplayBinding()?.attackDrone?.system.getSnapshot() ?? [],
+      this.combatFramePort?.getCombatGameplayBinding()?.attackDrone?.getBombSnapshot() ?? [],
+      this.placementSystem?.getAllRuntimeRocks() ?? [], now,
+    );
     if (metrics) metrics.combatProjectilesMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
@@ -582,6 +588,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
               contact.sourceId,
               'ground_fire',
               contact.visualStyle,
+              contact.combatSource,
             );
           }
         }
@@ -617,6 +624,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
               contact.sourceId,
               'ground_fire',
               contact.visualStyle,
+              contact.combatSource,
             );
           }
         }
@@ -1147,7 +1155,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       ?? { ak47StrategicTargets: [], tunnels: [] };
     const remoteControlTurrets = this.playerGameplayRuntime?.getRemoteControlSnapshot(
       this.ctx.playerManager.getAllPlayers().map((player) => player.id),
-      this.combatSystems?.turret?.getTurrets() ?? [],
+      this.combatFramePort?.getCombatGameplayBinding()?.getOffensiveConstructionSources() ?? [],
     ) ?? [];
 
     bridge.publishGameState({
@@ -1181,6 +1189,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       energyShields,
       guardianSpirits,
       repairDrones,
+      attackDrones: this.combatFramePort?.getCombatGameplayBinding()?.attackDrone?.system.getSnapshot() ?? [],
+      attackDroneBombs: this.combatFramePort?.getCombatGameplayBinding()?.attackDrone?.getBombSnapshot() ?? [],
       slimeTrail,
       burningGround,
       targetVulnerabilities: this.targetingSystems?.targetStatus?.getSnapshot(now) ?? [],

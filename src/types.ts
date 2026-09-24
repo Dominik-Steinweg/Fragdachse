@@ -175,7 +175,7 @@ export type TurretControlRequest =
   | { readonly action: 'enter'; readonly turretId: number | string }
   | ({ readonly action: 'exit' } & TurretControlState);
 
-export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel';
+export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel' | 'drone_station';
 
 /** Candidate-generation mode owned by projectile gameplay, independent of presentation. */
 export type ProjectileCollisionMode = 'sweep' | 'overlap' | 'physics' | 'none';
@@ -457,6 +457,8 @@ export interface GroundFireCellEffect {
 }
 
 export interface FireChunkBurstConfig extends GroundFireCellEffect {
+  /** Optional deterministic host seed; omitted callers keep the existing random selection. */
+  readonly randomSeed?: number;
   readonly requireLineOfSight?: boolean;
   readonly targetSurvivors?: boolean;
   /** Optional extra landings per survivor, using landingExplosion.radius as their reach. */
@@ -487,7 +489,8 @@ export interface RocketMagazineState {
 /** A landing cannot recursively create another burst. */
 export type FireChunkLandingExplosion = Pick<ProjectileExplosionConfig,
   'radius' | 'maxDamage' | 'minDamage' | 'knockback' | 'selfDamageMult' | 'excludeFriendlyPlayers' |
-  'rocketSupport' | 'visualStyle' | 'appliedSourceDamageFactors'>;
+  'rocketSupport' | 'visualStyle' | 'appliedSourceDamageFactors' | 'audioSourceId' | 'damageTarget' |
+  'baseDamageMult' | 'rockDamageMult' | 'trainDamageMult' | 'useTargetSurfaceDistance'>;
 
 export interface RocketExplosionSupport {
   /** Source-only outgoing bonus captured at the main impact, before recipient defenses. */
@@ -537,6 +540,8 @@ export type OverchargeFieldEffect = ReinforcementMatrixEffect;
 
 /** Data-driven Explosion für Projektilwaffen (Rakete, spätere explosive Shots, ...). */
 export interface ProjectileExplosionConfig {
+  /** Area attacks whose planning uses the receiver footprint use its nearest surface at impact. */
+  readonly useTargetSurfaceDistance?: boolean;
   /** Presentation source when combat attribution groups several weapons together. */
   readonly audioSourceId?: string;
   readonly rocketSupport?: RocketExplosionSupport;
@@ -1018,6 +1023,7 @@ export type CoopDefenseItemRewardAction = 'take' | 'equip';
 
 /** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
 export type ConstructionId =
+  | 'attack_drone_station'
   | 'rock_barrier'
   | 'spore_turret'
   | 'rocket_turret'
@@ -1202,6 +1208,7 @@ export interface ProjectileDamageSourceFactor {
 
 /** Konfiguration für ein gespawntes Projektil (wird von der World-Runtime aufgelöst) */
 export interface ProjectileSpawnConfig {
+  airborne?: boolean;
   speedVariation?: 'charged_bolt';
   distanceScaling?: import('./projectile/ProjectileDistanceScaling').ProjectileDistanceScaling;
   proximityPulse?: ProjectileProximityPulseConfig;
@@ -1888,6 +1895,34 @@ export interface SyncedRemoteControlTurret {
 /** Ortsbezogene Schadensverstaerkung eines Konstrukts aus dem Energieinjektor. */
 export interface TurretDamageBuff {
   readonly damageMultiplier: number;
+}
+
+export type AttackDronePhase = 'catchup' | 'patrol' | 'gun' | 'bomb_approach' | 'bomb_run' | 'returning' | 'servicing' | 'docked';
+
+/** Presentation projection only; all flight and attack decisions belong to the host. */
+export interface SyncedAttackDrone {
+  readonly id: string;
+  readonly stationId: number;
+  readonly ownerId: string;
+  readonly ownerColor: number;
+  readonly x: number;
+  readonly y: number;
+  readonly flightAngle: number;
+  readonly gunAngle: number;
+  readonly phase: AttackDronePhase;
+  readonly phaseStartedAt: number;
+  readonly lastShotAt: number;
+  readonly shotSequence: number;
+}
+
+export interface SyncedAttackDroneBomb {
+  readonly id: string;
+  readonly stationId: number;
+  readonly ownerId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly droppedAt: number;
+  readonly landsAt: number;
 }
 
 export type RepairDronePhase = 'orbiting' | 'travelling' | 'repairing' | 'returning';

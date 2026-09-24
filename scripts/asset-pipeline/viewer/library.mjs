@@ -1,5 +1,5 @@
 /** Pure selection and playback rules, shared by the viewer and asset tests. */
-export const categoryLabels = { character: 'Spielfiguren', enemy: 'Gegner', turret: 'Türme', weapon: 'Waffen', utility: 'Utilities' };
+export const categoryLabels = { character: 'Spielfiguren', enemy: 'Gegner', turret: 'Türme', weapon: 'Waffen', utility: 'Utilities', construction: 'Konstrukte', companion: 'Begleiter' };
 /** A loadout icon without a reference grip cannot be composed into the player's hands. */
 export function supportsHeldView(asset, original = false) {
   return Boolean(asset.heldItem && (!original || asset.heldItem.referenceGrip));

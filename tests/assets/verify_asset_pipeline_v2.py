@@ -112,7 +112,14 @@ def assert_same_pose(a, b, label):
     require(a['bones'].keys() == b['bones'].keys(), f'{label}: rig membership differs')
     require(all(near(a['bones'][name], b['bones'][name]) for name in a['bones']), f'{label}: rig pose differs')
     require(a['properties'].keys() == b['properties'].keys(), f'{label}: animated property membership differs')
-    require(all(abs(value - b['properties'][name]) <= EPSILON for name, value in a['properties'].items()),
+    # A continuous mechanical rotor closes at 2*pi. Its Euler value differs by one
+    # turn while its evaluated geometry and matrix above must still match exactly.
+    def property_matches(name, value):
+        difference = value - b['properties'][name]
+        if name[1].endswith('rotation_euler'):
+            difference = math.atan2(math.sin(difference), math.cos(difference))
+        return abs(difference) <= EPSILON
+    require(all(property_matches(name, value) for name, value in a['properties'].items()),
             f'{label}: animated property differs (including material emission)')
 
 
@@ -230,10 +237,11 @@ def verify(scene, manifest, report, source_folder):
     rigs = [ob for ob in scene.objects if ob.type == 'ARMATURE']
     owners = animation_owners(scene)
     if not manifest['clips']:
-        require(spec['category'] in ('weapon', 'utility') and len(frames) == 1 and not owners,
-                'Only static held items may omit Actions and clips')
-        require(spec['heldItem'] == manifest['heldItem'], 'Saved held-item anchors differ')
-        checks.append({'name': 'static_held_item_contract', 'passed': True})
+        require(spec['category'] in ('weapon', 'utility', 'construction', 'companion') and len(frames) == 1 and not owners,
+                'Only explicitly static assets may omit Actions and clips')
+        if spec['category'] in ('weapon', 'utility'):
+            require(spec['heldItem'] == manifest['heldItem'], 'Saved held-item anchors differ')
+        checks.append({'name': 'static_asset_contract', 'passed': True})
     else:
         require(any(ob.type in ('EMPTY', 'ARMATURE', 'MESH') and action_curves(ob) for ob in scene.objects),
                 'No real object or rig Action is attached')

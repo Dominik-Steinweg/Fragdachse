@@ -14,9 +14,9 @@ describe('selected figure animations', () => {
       create: (config: { key: string }) => { keys.add(config.key); create(config); } };
     registerBadgerAnimations(anims as unknown as Phaser.Animations.AnimationManager);
     registerBadgerAnimations(anims as unknown as Phaser.Animations.AnimationManager);
-    const figures = PIPELINE_ASSETS.filter(a => a.clips.some(clip => clip.name === 'move'));
+    const figures = PIPELINE_ASSETS.filter(a => ['character', 'enemy'].includes(a.category) && a.clips.some(clip => clip.name === 'move'));
     expect(create).toHaveBeenCalledTimes(figures.reduce((n,a) => n + a.clips.filter(c => c.name === 'move' || c.name === 'idle').length, 0));
-    for (const asset of PIPELINE_ASSETS.filter(a => !a.clips.some(clip => clip.name === 'move'))) {
+    for (const asset of PIPELINE_ASSETS.filter(a => !figures.includes(a))) {
       expect(getWalkingSheetForStaticTexture(asset.textureKey)).toBeNull();
     }
     for (const asset of figures) {

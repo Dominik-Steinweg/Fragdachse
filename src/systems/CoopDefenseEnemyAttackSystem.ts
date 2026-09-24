@@ -1,3 +1,4 @@
+import { isOffensiveConstruction } from './offensiveConstruction';
 import * as Phaser from 'phaser';
 import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
 import type { BaseManager } from '../entities/BaseManager';
@@ -717,7 +718,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       : knownConstruction ? [knownConstruction] : [];
     for (const construction of constructions) {
       if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(construction.id), 'all')) continue;
-      if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+      if (construction.hp <= 0 || !isOffensiveConstruction(construction)) continue;
       const obstacle = rockObjects[construction.id];
       if (!obstacle?.active) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);

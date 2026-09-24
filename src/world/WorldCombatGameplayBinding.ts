@@ -1,3 +1,4 @@
+import { isOffensiveConstruction } from '../systems/offensiveConstruction';
 import { PlasmaBurnerTargetCatalog } from './PlasmaBurnerTargetCatalog';
 import { homingTargetKind } from '../projectile/ProjectileOrigin';
 import { plasmaBurnerTargetEffect } from '../combat/plasmaBurner/PlasmaBurnerTargetPolicy';
@@ -11,6 +12,8 @@ import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { WorldMgTurretBinding } from './WorldMgTurretBinding';
 import { resolveMgTurretStats } from '../config/mgTurret';
+import { WorldAttackDroneBinding } from './WorldAttackDroneBinding';
+import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
 import type { MgOwner } from '../systems/MgAttritionRuntime';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import type {
@@ -294,6 +297,7 @@ interface CachedProjectileBaseGeometry {
 
 /** Owns the World binding graph for combat, physics, projectile, turret and decoy systems. */
 export class WorldCombatGameplayBinding implements WorldScopedBinding {
+  readonly attackDrone: WorldAttackDroneBinding | null;
   readonly mgTurret: WorldMgTurretBinding | null;
   readonly systems: WorldCombatGameplaySystems | null;
   private plasmaCatalog: PlasmaBurnerTargetCatalog | null = null;
@@ -312,6 +316,15 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
     const playerCombat = options.getPlayerCombatIntegration();
+    this.attackDrone = playerCombat && options.network.authority.isHost() ? new WorldAttackDroneBinding({
+      combat: options.combatSystem, players: options.playerManager, placement: options.placementSystem,
+      bases: options.baseManager, metrics: options.worldMetrics, projectiles: options.projectileSpawn,
+      playerCombat, enemies: options.getEnemyManager, mutation: options.getWorldMutation,
+      available: id => options.getWorldParticipation(id) === 'interactive' && options.getPlayerCapabilities(id).canUseCombat,
+      enabled: () => options.isCoopDefense?.() ?? options.isCoopMission(),
+      injector: options.getEnergyInjectorSystem, remoteSources: () => this.getOffensiveConstructionSources(),
+      explosionFx: (x, y, radius, sourceId) => options.network.effects.broadcastExplosionEffect(x, y, radius, 0xffae57, 'rocket', undefined, sourceId),
+    }) : null;
     this.mgTurret = playerCombat && options.network.authority.isHost() ? new WorldMgTurretBinding({
       combat: options.combatSystem, getEnemies: options.getEnemyManager, bases: options.baseManager,
       getMutation: options.getWorldMutation,
@@ -383,6 +396,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.getEnemyMovementStatusSystem?.()?.clear();
     this.systems?.plasmaSwarmReaction.clear();
     this.mgTurret?.clear();
+    this.attackDrone?.clearActivity();
     this.mgOwnerGroups.clear();
   }
 
@@ -396,6 +410,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.clearActivityBindings();
     this.destroyed = true;
     this.mgTurret?.destroy();
+    this.attackDrone?.destroy();
     this.projectileBaseGeometry.length = 0;
     this.projectileBaseGeometryGeneration = -1;
     this.options.bindPlayerShieldBuffPort?.(null);
@@ -866,13 +881,13 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const damageMultiplier = o.getEnergyInjectorSystem()?.getTurretDamageMultiplierAt(x, y) ?? 1;
       return damageMultiplier > 1 ? { damageMultiplier } : null;
     });
-    turret.setTurretDamageMultiplierProvider((turretData, turrets) => playerCombat.item.getRemoteControlDamageMultiplier(turretData.ownerId, turretData, turrets));
+    turret.setTurretDamageMultiplierProvider(turretData => playerCombat.item.getRemoteControlDamageMultiplier(turretData.ownerId, turretData, this.getOffensiveConstructionSources()));
     teslaDome.setRockCallbacks(
       () => o.getRockTargets().flatMap(rock => rock.active ? [{ index: rock.index, x: rock.x, y: rock.y }] : []),
       (index, damage, ownerId) => o.hostUpdate.applyTeslaRockDamage(index, damage, ownerId),
     );
     teslaDome.setTurretCallbacks(
-      () => o.placementSystem.getAllRuntimeRocks().filter(rock => rock.kind === 'turret').map(rock => ({ id: rock.id, x: o.worldMetrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2, y: o.worldMetrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2, ownerId: rock.ownerId })),
+      () => o.placementSystem.getAllRuntimeRocks().filter(isOffensiveConstruction).map(rock => ({ id: rock.id, x: o.worldMetrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2, y: o.worldMetrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2, ownerId: rock.ownerId })),
       (id, damage, ownerId) => o.hostUpdate.applyTeslaTurretDamage(id, damage, ownerId),
     );
     teslaDome.setEnemyTargetProvider(() => (o.getEnemyManager()?.getAllEnemies() ?? []).filter(enemy => enemy.sprite.active).map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })));
@@ -1418,6 +1433,12 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     return !!rock && rock.kind === 'turret' && rock.constructionId === 'machine_gun_turret' && rock.ownership !== 'base-owned';
   }
 
+  getOffensiveConstructionSources(): readonly RemoteControlSource[] {
+    return [...(this.systems?.turret.getTurrets() ?? []), ...(this.attackDrone?.getStationSources() ?? [])];
+  }
+
+  advanceAttackDrones(now: number, deltaMs: number): void { this.attackDrone?.advance(now, deltaMs); }
+
   advanceMgTurrets(now: number): void {
     if (this.destroyed) return;
     this.mgTurret?.advance(now);
@@ -1529,7 +1550,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         const { x, y, ownerId } = turret;
         const injectorMultiplier = o.getEnergyInjectorSystem()?.getTurretDamageMultiplierAt(x, y) ?? 1;
         const baseOwned = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID || ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID;
-        const remote = !baseOwned && playerCombat ? playerCombat.item.getRemoteControlDamageMultiplier(ownerId, turret, turrets) : 1;
+        const remote = !baseOwned && playerCombat ? playerCombat.item.getRemoteControlDamageMultiplier(ownerId, turret, this.getOffensiveConstructionSources()) : 1;
         return [{
           id: turret.id,
           ownerId,

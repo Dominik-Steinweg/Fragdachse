@@ -186,6 +186,7 @@ export interface CombatDamageEffectPort {
     sourceId: string,
     origin?: BurnOrigin,
     visualStyle?: GroundFireVisualStyle,
+    source?: CombatSource,
   ): void;
 }
 

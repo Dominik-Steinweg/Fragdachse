@@ -37,6 +37,7 @@ export function resolveProjectileBodyProfile(
   const isBfg = cfg.isBfg === true;
   const isOverlapPiercing = cfg.collisionMode === 'overlap' && cfg.piercesTargets === true;
   const isAntiTunnelingBody = !isFlame
+    && !cfg.airborne
     && !isLeafBlower
     && !isBfg
     && !isOverlapPiercing
@@ -117,7 +118,7 @@ export function resolveSafeMuzzleSpawn(
       && cfg.leafBlowerDeflectsProjectiles !== true);
   // Diese Projektiltypen passieren Welt-Hindernisse im normalen Flug per Overlap. Für sie
   // werden deshalb nur die normalen World-Bounds berücksichtigt.
-  const resolvesWorldObstacleBlockers = !isBfgOrGauss;
+  const resolvesWorldObstacleBlockers = !isBfgOrGauss && !cfg.airborne;
 
   if (resolvesWorldObstacleBlockers && context.geometry) {
     const obstacleHit = context.geometry.nearestObstacleHit(line, {

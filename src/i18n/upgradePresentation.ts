@@ -1,5 +1,6 @@
 import { resolveTimeBubblePrismEmitter } from '../loadout/TimeBubbleConfig';
 import { MG_TURRET_RULES } from '../config/mgTurretRules';
+import { ATTACK_DRONE_RULES as DRONE } from '../config/attackDrone';
 import { getDomainCatalog, getDomainKeys, translate, translateSegments, type TranslationSegment } from './catalog';
 import { formatNumber, formatUpgradeEffectValue } from './format';
 import type { Locale } from './types';
@@ -23,6 +24,12 @@ function getUpgradeParams(
   locale: Locale,
 ): Record<string, string | number> {
   const params: Record<string, string | number> = {
+    droneMagazine: DRONE.magazine,
+    droneRegen: DRONE.regenerationPerLevel * 100,
+    droneSpeed: DRONE.speedPerLevel * 100,
+    droneServiceTimes: [1, 2, 3].map(level => formatNumber(DRONE.serviceMs * (1 - DRONE.serviceReductionPerLevel * level) / 1000, locale)).join(' / '),
+    droneBombs: DRONE.bombCount, droneBombCooldown: DRONE.bombCooldownMs / 1000,
+    droneExtraBombs: DRONE.bombsPerLevel, droneFireSeconds: DRONE.groundDurationMs / 1000,
     mgDuration: MG_TURRET_RULES.durationMs / 1000,
     mgPercentBasis: 100,
     mgRadius: MG_TURRET_RULES.transferRadius,

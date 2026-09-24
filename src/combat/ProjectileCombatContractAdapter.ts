@@ -49,6 +49,7 @@ export function adaptProjectileCombatSource(
     origin: 'direct',
     lineage: provenance.lineage ? { ...provenance.lineage } : undefined,
     correlation: {
+      executionId: provenance.correlation?.executionId,
       projectileId,
       shotId: provenance.correlation?.ak47ShotId,
     },

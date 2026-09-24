@@ -1,3 +1,4 @@
+import { isOffensiveConstruction } from './offensiveConstruction';
 import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
 import {
   getCoopDefenseEnemyConfig,
@@ -458,7 +459,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
 
   private damageConstructions(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {
     for (const construction of this.placementSystem.getAllRuntimeRocks()) {
-      if (construction.hp <= 0 || construction.kind !== 'turret') continue;
+      if (construction.hp <= 0 || !isOffensiveConstruction(construction)) continue;
       const world = this.placementSystem.getWorldPointForCell(construction.gridX, construction.gridY);
       const distance = Math.hypot(world.x - x, world.y - y);
       if (distance > radius) continue;

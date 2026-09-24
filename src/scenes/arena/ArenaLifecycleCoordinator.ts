@@ -432,6 +432,7 @@ export class ArenaLifecycleCoordinator {
           energyShield: this.renderers.energyShield,
           guardianSpirit: this.renderers.guardianSpirit,
           repairDrone: this.renderers.repairDrone,
+          attackDrone: this.renderers.attackDrone,
           slimeTrail: this.renderers.slimeTrail,
           flamethrowerUpgrades: this.renderers.flamethrowerUpgrades,
           getTrain: () => this.renderers.train,

@@ -1407,6 +1407,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceId: string,
     origin: BurnOrigin = 'generic',
     visualStyle: GroundFireVisualStyle = 'normal',
+    source?: CombatSource,
   ): void {
     this.runHostExecution(() => this.applyBurnHitAtHostTime(
       targetId,
@@ -1417,6 +1418,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       sourceId,
       origin,
       visualStyle,
+      source,
     ));
   }
 
@@ -1713,7 +1715,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (enemy.isBurrowed() || (source
         ? !this.relationshipForSource({ ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } }, enemy.id).canDamage
         : !this.canDamageTarget(ownerId, enemy.id, effect.allowTeamDamage))) continue;
-      const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
+      const centerDistance = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
+      const dist = effect.useTargetSurfaceDistance ? Math.max(0, centerDistance - enemy.getCollisionRadius()) : centerDistance;
       if (dist > effect.radius) continue;
 
       const basis = this.resolveExplosionDamageBasis(dist, effect, ownerId, sourceSlot);
@@ -1744,7 +1747,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (source ? source.allegiance.kind === 'enemy' : this.enemyManager?.hasEnemy(ownerId)) continue;
       const damage = Math.round(computeProjectileExplosionDamage(surface.distance, effect));
       if (damage <= 0) continue;
-      const outcome = this.applyBaseDamage(base.id, damage, ownerId, sourceSlot, effect.baseDamageMult, effect.appliedSourceDamageFactors);
+      const outcome = this.applyBaseDamage(base.id, damage, ownerId, sourceSlot, effect.baseDamageMult, effect.appliedSourceDamageFactors, source);
       if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
         damagedTargetKeys.push(`bases:${base.id}`);
       }

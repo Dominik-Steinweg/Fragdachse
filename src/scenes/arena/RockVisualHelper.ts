@@ -200,7 +200,7 @@ export class RockVisualHelper {
 
     let refreshStaticShadows = false;
 
-    if (!this.arenaResult.rockPhysicsProxies[rock.id]?.active && rock.kind === 'rock') {
+    if (!this.arenaResult.rockPhysicsProxies[rock.id]?.active && (rock.kind === 'rock' || rock.kind === 'drone_station')) {
       ArenaBuilder.spawnRockAndRetile(
         this.scene,
         this.arenaResult,

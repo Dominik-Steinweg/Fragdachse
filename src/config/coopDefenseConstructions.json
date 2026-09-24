@@ -1,4 +1,5 @@
 {
+  "attack_drone_station": { "buildCooldownMs": 100 },
   "rock_barrier": { "buildCooldownMs": 100 },
   "spore_turret": { "buildCooldownMs": 100 },
   "rocket_turret": { "buildCooldownMs": 100 },

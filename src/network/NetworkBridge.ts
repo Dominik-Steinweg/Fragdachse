@@ -1,3 +1,5 @@
+import { encodeAttackDrones, decodeAttackDrones, encodeAttackDroneBombs, decodeAttackDroneBombs } from './attackDroneSnapshotCodec';
+import type { SyncedAttackDrone, SyncedAttackDroneBomb } from '../types';
 import { isPlasmaBurnerPulseEvent } from '../combat/plasmaBurner/PlasmaBurnerContracts';
 import { sanitizePersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../persistentBase/PersistentBaseLayoutEdit';
 import { isPersistentBaseAreaStage, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
@@ -357,6 +359,8 @@ export interface GameState {
   energyShields: SyncedEnergyShield[];
   guardianSpirits: SyncedGuardianSpirit[];
   repairDrones: SyncedRepairDrone[];
+  attackDrones?: SyncedAttackDrone[];
+  attackDroneBombs?: SyncedAttackDroneBomb[];
   slimeTrail: SyncedSlimeTrailSnapshot;
   targetVulnerabilities: SyncedTargetVulnerability[];
   ak47StrategicTargets: SyncedAk47StrategicTarget[];
@@ -402,6 +406,8 @@ interface OutboundGameState {
   energyShields: SyncedEnergyShield[];
   guardianSpirits: SyncedGuardianSpirit[];
   repairDrones: SyncedRepairDrone[];
+  attackDrones?: SyncedAttackDrone[];
+  attackDroneBombs?: SyncedAttackDroneBomb[];
   slimeTrail: SyncedSlimeTrailSnapshot;
   targetVulnerabilities: SyncedTargetVulnerability[];
   ak47StrategicTargets: SyncedAk47StrategicTarget[];
@@ -2928,6 +2934,8 @@ export class NetworkBridge {
     if (state.energyShields.length > 0) payload.es = state.energyShields;
     if (state.guardianSpirits.length > 0) payload.g = state.guardianSpirits;
     if (state.repairDrones.length > 0) payload.rd = state.repairDrones;
+    if (state.attackDrones?.length) payload.ad = encodeAttackDrones(state.attackDrones);
+    if (state.attackDroneBombs?.length) payload.adb = encodeAttackDroneBombs(state.attackDroneBombs);
     if (state.slimeTrail.cells.length > 0 || state.slimeTrail.affectedEnemies.length > 0) {
       payload.sl = encodeSlimeTrailSnapshot(state.slimeTrail);
     }
@@ -3035,6 +3043,8 @@ export class NetworkBridge {
       es: state.energyShields,
       g: state.guardianSpirits,
       rd: state.repairDrones,
+      ad: encodeAttackDrones(state.attackDrones ?? []),
+      adb: encodeAttackDroneBombs(state.attackDroneBombs ?? []),
       sl: encodeSlimeTrailSnapshot(state.slimeTrail),
       vu: encodeTargetVulnerabilities(state.targetVulnerabilities),
       st: state.ak47StrategicTargets,
@@ -3155,6 +3165,8 @@ export class NetworkBridge {
       energyShields: (raw.es as SyncedEnergyShield[] | undefined) ?? [],
       guardianSpirits: (raw.g as SyncedGuardianSpirit[] | undefined) ?? [],
       repairDrones: (raw.rd as SyncedRepairDrone[] | undefined) ?? [],
+      attackDrones: decodeAttackDrones(raw.ad),
+      attackDroneBombs: decodeAttackDroneBombs(raw.adb),
       slimeTrail: decodeSlimeTrailSnapshot(raw.sl),
       targetVulnerabilities: decodeTargetVulnerabilities(raw.vu),
       ak47StrategicTargets: (raw.st as SyncedAk47StrategicTarget[] | undefined) ?? [],

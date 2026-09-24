@@ -28,6 +28,7 @@ type CombatRenderers = Pick<RendererBundle,
   | 'energyShield'
   | 'guardianSpirit'
   | 'repairDrone'
+  | 'attackDrone'
   | 'slimeTrail'
   | 'flamethrowerUpgrades'
   | 'ak47StrategicTargets'
@@ -94,6 +95,7 @@ export class ArenaCombatPresentationController {
     this.renderers.energyShield.update(frame.delta);
     this.renderers.guardianSpirit.update(frame.delta);
     this.renderers.repairDrone.update(frame.delta);
+    this.renderers.attackDrone.update(frame.delta, now);
     this.renderers.slimeTrail.update(frame.delta);
     this.renderers.flamethrowerUpgrades.update(now);
     diagnosticsFrame?.mark('visualEffectsEnd');

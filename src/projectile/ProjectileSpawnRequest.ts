@@ -112,6 +112,8 @@ export interface ProjectilePenetrationSpec {
 
 /** Quellbezogene Kollisionsausnahmen einer montierten Feuerquelle. */
 export interface ProjectileCollisionFilterSpec {
+  /** Elevated fire ignores ground geometry; hostile base surfaces remain terminal targets. */
+  readonly airborne?: boolean;
   readonly excludedTarget?: import('../combat/CombatScope').CombatTargetRef;
   readonly initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
   readonly sourceCarrierBaseId?: string;
@@ -217,6 +219,7 @@ export interface ProjectileLineage {
 
 /** Verknüpfung mehrerer Projectiles desselben fachlichen Vorgangs. */
 export interface ProjectileCorrelation {
+  readonly executionId?: string;
   /** Schuss-Id, über die zusammengehörende AK47-Projektile erkannt werden. */
   readonly ak47ShotId?: number;
 }

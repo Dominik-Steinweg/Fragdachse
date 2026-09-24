@@ -697,9 +697,12 @@ export class WorldPlayerGameplayRuntime implements
             : options.combatSystem.canDamageTarget(ownerId, enemyId);
         },
         explode: landing => {
+          const sourceId = landing.effect.audioSourceId ?? 'ROCKET_LAUNCHER.aftershock';
+          const slot = landing.source?.sourceSlot ?? 'weapon2';
+          const source = landing.source ? { ...landing.source, authoredSourceId: sourceId, origin: 'explosion' as const } : undefined;
           options.combatSystem.applyExplosionDamage(landing.x, landing.y, landing.effect, landing.ownerId,
-            'weapon2', 'ROCKET_LAUNCHER.aftershock', landing.source);
-          options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket', undefined, 'ROCKET_LAUNCHER.aftershock');
+            slot, sourceId, source);
+          options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket', undefined, sourceId);
         },
       },
     );

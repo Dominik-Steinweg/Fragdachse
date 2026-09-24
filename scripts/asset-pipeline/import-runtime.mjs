@@ -42,7 +42,9 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
     copies.push({ file, destination: `public/${folder}/${name}` });
     hashes[field] = hash;
   }
-  const textureKey = entry.category === 'turret'
+  const textureKey = entry.category === 'construction' ? `construction_${entry.gameIds[0]}`
+    : entry.category === 'companion' ? entry.id.replaceAll('-', '_')
+    : entry.category === 'turret'
     ? `turret_weapon_${entry.id.replaceAll('-', '_')}`
     : ['weapon', 'utility'].includes(entry.category) ? `held_${entry.gameIds[0]}`
     : entry.id === 'badger' ? 'badger' : enemies.find((enemy) => entry.gameIds.includes(enemy.id))?.imageKey;

@@ -377,7 +377,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     const cellKey = (t: FireChunkTarget) => Math.floor(t.x / 16) + ':' + Math.floor(t.y / 16);
     const occupied = new Set(targets.map(cellKey));
     const candidates = targets.length < count
-      ? this.selectRandomFireCells(x, y, burst.searchRadius, Infinity).filter(t => !occupied.has(cellKey(t)))
+      ? this.selectRandomFireCells(x, y, burst.searchRadius, Infinity, burst.randomSeed).filter(t => !occupied.has(cellKey(t)))
       : [];
     // Only near candidates and actual random fallback attempts need a flight-line query.
     const validity = new Map<FireChunkTarget, boolean>();
@@ -514,7 +514,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     }, now);
   }
 
-  private selectRandomFireCells(x: number, y: number, radius: number, count: number): FireChunkTarget[] {
+  private selectRandomFireCells(x: number, y: number, radius: number, count: number, seed?: number): FireChunkTarget[] {
     const candidates: FireChunkTarget[] = [];
     const minGridX = Math.floor((x - radius) / 16);
     const maxGridX = Math.floor((x + radius) / 16);
@@ -533,7 +533,15 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
         candidates.push(target);
       }
     }
-    Phaser.Utils.Array.Shuffle(candidates);
+    if (seed === undefined) Phaser.Utils.Array.Shuffle(candidates);
+    else {
+      let state = seed >>> 0;
+      for (let i = candidates.length - 1; i > 0; i--) {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        const j = Math.floor(state / 4294967296 * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+      }
+    }
     return candidates.slice(0, Math.max(0, Math.floor(count)));
   }
 

@@ -1,5 +1,6 @@
 import { validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import rawCoopDefenseConstructionCooldowns from './coopDefenseConstructions.json';
+import { ATTACK_DRONE_RULES } from './attackDrone';
 import type { ConstructionId, ConstructionOwnership, CoopDefenseClassId, EnergyInjectorConstructionEffect, GameMode, PlaceableKind, TurretWeaponId } from '../types';
 
 interface RawCoopDefenseConstructionCooldownDefinition {
@@ -47,11 +48,13 @@ export interface CoopDefensePowerUpPedestalDefinition extends CoopDefenseConstru
 }
 
 export type CoopDefenseConstructionDefinition =
+  | (CoopDefenseConstructionBaseDefinition & { readonly kind: 'drone_station'; readonly indestructible?: false })
   | CoopDefenseBarrierConstructionDefinition
   | CoopDefenseWeaponConstructionDefinition
   | CoopDefensePowerUpPedestalDefinition;
 
 export const COOP_DEFENSE_CONSTRUCTION_IDS: readonly ConstructionId[] = [
+  'attack_drone_station',
   'rock_barrier',
   'spore_turret',
   'rocket_turret',
@@ -184,6 +187,14 @@ function loadConstructionBuildCooldowns(): Readonly<Record<ConstructionId, numbe
 
 export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDefenseConstructionDefinition>> =
   Object.freeze({
+    attack_drone_station: {
+      kind: 'drone_station', id: 'attack_drone_station',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.attack_drone_station,
+      iconKey: null, unlockUpgradeId: 'unlock_attack_drone_station', allowedModes: ['coop_defense'],
+      maxHp: ATTACK_DRONE_RULES.stationHp, placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
+      capacityCost: ATTACK_DRONE_RULES.capacityCost, color: 0xf4a64b, footprint: SINGLE_CELL_FOOTPRINT,
+      energyInjectorEffect: { type: 'damage_turret', damageMultiplier: 1.25 },
+    },
     rock_barrier: {
       kind: 'rock',
       id: 'rock_barrier',

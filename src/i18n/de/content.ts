@@ -1,4 +1,6 @@
 export const deContent = {
+  "construction.attack_drone_station.name": "Angriffsdrohnenstation",
+  "construction.attack_drone_station.description": "Eine verwundbare Station versorgt eine unverwundbare autonome Kampfdrohne.",
   "reward.plasma_turret.name": "Plasma-Turm",
   "loadout.GLOCK.name": "Glock",
   "loadout.ASMD_PRIM.name": "ASMD Primär",

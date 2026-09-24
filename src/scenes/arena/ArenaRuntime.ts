@@ -719,7 +719,7 @@ export class ArenaRuntime {
   getHostRemoteControlTargets(playerIds: readonly string[]): readonly SyncedRemoteControlTurret[] {
     return this.flow.getWorldPlayerGameplayRuntime()?.getRemoteControlSnapshot(
       [...playerIds],
-      this.flow.getWorldCombatGameplayBinding()?.systems?.turret?.getTurrets() ?? [],
+      this.flow.getWorldCombatGameplayBinding()?.getOffensiveConstructionSources() ?? [],
     ) ?? [];
   }
 

@@ -2757,6 +2757,134 @@
         "idle": "7f67a643e7994d81780211c33c570f79217c034759441db025795f8f5883b8c3",
         "sheet": "ea799bd8083e12af4e1ff611a03907ceba97e02bee67df6d6e74de65c83f1155"
       }
+    },
+    {
+      "id": "attack-drone-station",
+      "category": "construction",
+      "gameIds": [
+        "attack_drone_station"
+      ],
+      "revision": "v2-attack-drone-a",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "construction_attack_drone_station",
+      "sheetTextureKey": "construction_attack_drone_station_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/attack-drone-station/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/attack-drone-station/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "284bff7f99b47211bf246c2f532aaef6ea378efa14813d69f21f45c0297ae096",
+        "sheet": "a1a891833c62c8b63f95babba73e5625bc1e6e840a6eeea7cbfa97a9a020e122"
+      }
+    },
+    {
+      "id": "attack-drone-body",
+      "category": "companion",
+      "gameIds": [
+        "attack_drone"
+      ],
+      "revision": "v2-attack-drone-a",
+      "variant": "standard",
+      "sourceSize": 160,
+      "textureKey": "attack_drone_body",
+      "sheetTextureKey": "attack_drone_body_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/attack-drone-body/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/attack-drone-body/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1312,
+        "height": 328
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 24,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "c6af99d80e3bb8fe7af90bfd2a33c338a7b12990cfde067d4b3e426a2d1102be",
+        "sheet": "310623563612c3003f6564cd6d7312372af30e03eef67cf9cb99d87286e7174c"
+      }
+    },
+    {
+      "id": "attack-drone-gun",
+      "category": "companion",
+      "gameIds": [
+        "attack_drone_gun"
+      ],
+      "revision": "v2-attack-drone-a",
+      "variant": "standard",
+      "sourceSize": 160,
+      "textureKey": "attack_drone_gun",
+      "sheetTextureKey": "attack_drone_gun_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/attack-drone-gun/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/attack-drone-gun/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 164,
+        "height": 164
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "hashes": {
+        "idle": "9fac27d98e7df4eadb5cd573af6d525197869a4240b91bc86216f672768f5d76",
+        "sheet": "5b45c6896d5f8c296072d02da9689ff907fce7703eec870ce5734bef6c1dca2d"
+      }
     }
   ]
 }

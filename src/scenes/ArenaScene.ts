@@ -5,6 +5,7 @@ import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStore
 import { getDeferredAssets } from '../assets/DeferredAssets';
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
+import { preloadAttackDroneAssets } from '../effects/AttackDroneRenderer';
 import * as Phaser from 'phaser';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
@@ -388,6 +389,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
     preloadBadgerAnimationAssets(this.load);
     preloadHeldItemAssets(this.load);
+    preloadAttackDroneAssets(this.load);
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
     // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.
     const enemyImageKeys = new Set(
@@ -976,6 +978,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── Renderers ─────────────────────────────────────────────────────────
     yield 'context';
     this.renderers = yield* createRendererBundleSteps(this, playerManager);
+    this.renderers.attackDrone.setAudio(gameAudioSystem);
     this.captureTheBeerPresentation = new CaptureTheBeerPresentationBinding(this.renderers.beer);
     // Der Profiler entsteht vor dem Renderer-Bundle; die GPU-VFX-Statistik wird deshalb hier
     // nachgereicht. Ohne sie fehlen Lanes und Effekte im Performance-Export vollstaendig.

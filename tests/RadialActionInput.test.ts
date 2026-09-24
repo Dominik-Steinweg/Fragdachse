@@ -155,6 +155,30 @@ describe('shared Shift interaction', () => {
 });
 
 describe('Radial Menu V2 input', () => {
+  it('retains short E taps for construction preview and confirmation, without replay after an input lock', () => {
+    const f = createSystem(), keyboard = new Map<string, TestKey & EventEmitter>();
+    Object.assign(f.scene.input, { keyboard: { addKey: (code: string) => {
+      const button = Object.assign(new EventEmitter(), key(), { consumeEdge: true });
+      keyboard.set(code, button); return button;
+    } } });
+    const events = new EventEmitter();
+    Object.assign(f.scene, { events, game: { events: new EventEmitter() } });
+    f.system.setup();
+    f.system.setupRadialActionProviders({ getTools: () => [{ kind: 'construction', id: 'attack_drone_station' }],
+      getCooldownUntil: () => 0, getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }) });
+    f.system.setupConstructionPlacementPreviewProvider(() => ({ angle: 0, targetX: 100, targetY: 0, isValid: true } as never));
+    const uses = vi.fn(); f.system.setupLoadoutListener(uses);
+    const e = keyboard.get('E')!;
+    const tap = () => { e.isDown = true; e.justDown = true; e.emit('down'); e.isDown = false; e.justDown = false; };
+    tap(); f.system.update(); f.system.update();
+    expect(uses).not.toHaveBeenCalled();
+    expect(f.bridge.sendLocalPlacementPreview).toHaveBeenLastCalledWith(expect.objectContaining({ active: true }));
+    tap(); f.system.update(); f.system.update();
+    expect(uses).toHaveBeenCalledExactlyOnceWith('utility', 0, 100, 0, expect.objectContaining({ constructionId: 'attack_drone_station' }));
+    f.system.setInputEnabled(false); tap(); f.system.setInputEnabled(true); f.system.update();
+    expect(f.system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
+    events.emit('shutdown'); expect(e.listenerCount('down')).toBe(0);
+  });
   it('exposes global dismantle from the first E-down frame, never selection alone, and clears on release or input lock', () => {
     const { system, keys } = createSystem();
     system.setupRadialActionProviders({ getTools: () => [], getCooldownUntil: () => 0,

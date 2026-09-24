@@ -6533,6 +6533,170 @@
                            "id":  "construction",
                            "sortOrder":  45,
                            "upgrades":  [
+{
+  "id": "unlock_attack_drone_station",
+  "availableClasses": [
+    "inspector_gadachs"
+  ],
+  "code": "E-K11",
+  "kind": "unlock",
+  "maxLevel": 1,
+  "costPerLevel": 1,
+  "sortOrder": 110
+},
+{
+  "id": "attack_drone_self_loader",
+  "code": "E-K11-L1",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "costPerLevel": 1,
+  "sortOrder": 111,
+  "requires": [
+    {
+      "upgradeId": "unlock_attack_drone_station",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "construction.attack_drone_station.selfLoader",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "attack_drone_service",
+  "code": "E-K11-L2",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "costPerLevel": 1,
+  "sortOrder": 112,
+  "requires": [
+    {
+      "upgradeId": "attack_drone_self_loader",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "construction.attack_drone_station.service",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "attack_drone_flight",
+  "code": "E-K11-R1",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "costPerLevel": 1,
+  "sortOrder": 113,
+  "requires": [
+    {
+      "upgradeId": "unlock_attack_drone_station",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "construction.attack_drone_station.flight",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "attack_drone_penetration",
+  "code": "E-K11-R2",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "costPerLevel": 1,
+  "sortOrder": 114,
+  "requires": [
+    {
+      "upgradeId": "attack_drone_flight",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "construction.attack_drone_station.penetration",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "attack_drone_bomb_bay",
+  "code": "E-K11-B",
+  "kind": "upgrade",
+  "maxLevel": 1,
+  "costPerLevel": 0,
+  "bossPointCostPerLevel": 1,
+  "sortOrder": 115,
+  "requires": [
+    {
+      "upgradeId": "attack_drone_service",
+      "minLevel": 1
+    },
+    {
+      "upgradeId": "attack_drone_penetration",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "construction.attack_drone_station.bombBay",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "attack_drone_bomb_count",
+  "code": "E-K11-BL1",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "costPerLevel": 1,
+  "sortOrder": 116,
+  "requires": [
+    {
+      "upgradeId": "attack_drone_bomb_bay",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "construction.attack_drone_station.bombCount",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "attack_drone_fire_chunks",
+  "code": "E-K11-BR1",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "costPerLevel": 1,
+  "sortOrder": 117,
+  "requires": [
+    {
+      "upgradeId": "attack_drone_bomb_bay",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "construction.attack_drone_station.fireChunks",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+
                                             {
                                                 "id":  "unlock_rocket_turret",
                                                 "availableClasses": ["inspector_gadachs"],

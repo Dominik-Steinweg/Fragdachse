@@ -1198,6 +1198,11 @@ export class WorldProjectileRuntime implements
     y: number,
     impact: ProjectileImpactSource,
   ): boolean {
+    if (projectile.spec.flight.collisionFilter.airborne) {
+      this.applyBaseContact(projectile, baseId, impact);
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
     if (projectile.spec.interaction.energyInjectorPayload) {
       if (projectile.interaction.supportConsumed) return true;
       projectile.interaction.supportConsumed = true;
@@ -2813,6 +2818,7 @@ export class WorldProjectileRuntime implements
           isFlame: cfg.isFlame,
           isBfg: cfg.isBfg,
           collisionFilter: {
+            airborne: cfg.airborne,
             sourceCarrierBaseId: cfg.sourceCarrierBaseId,
             ignoreRockIndex: cfg.ignoreRockIndex,
             excludedTarget: cfg.excludedTarget,
@@ -3022,6 +3028,12 @@ function resolveProjectileCollisionMode(cfg: ProjectileSpawnConfig): import('../
 }
 
 function resolvePhysicsMechanics(cfg: ProjectileSpawnConfig): ProjectilePhysicsMechanics {
+  if (cfg.airborne) return {
+    bodyResponse: 'none', rockContactMode: 'overlap', trunkContactMode: 'overlap',
+    baseContactMode: 'overlap', trainContactMode: 'overlap', worldBounds: true,
+    stopOnRockContact: false, stopOnTrunkContact: false, stopOnBaseContact: false, stopOnTrainContact: false,
+    stopOnWorldBoundary: false, rock: false, trunk: false, base: false, train: false,
+  };
   const bfg = cfg.isBfg === true;
   const gauss = hasGaussDischarge(cfg)
     || (cfg.collisionMode === 'overlap' && cfg.piercesTargets === true && !bfg

@@ -220,6 +220,7 @@ export class InputSystem {
   private keySpace!: Phaser.Input.Keyboard.Key;
   private keyShift!: Phaser.Input.Keyboard.Key;
   private shiftPressPending = false;
+  private utilityPressPending = false;
   private keyE!:     Phaser.Input.Keyboard.Key;
   private keyQ!:     Phaser.Input.Keyboard.Key;
   private keyR!:     Phaser.Input.Keyboard.Key;
@@ -382,6 +383,8 @@ export class InputSystem {
     };
     this.keyShift.on('down', latchShiftPress);
     this.keyE     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E, false);
+    const latchUtilityPress = () => { if (this.inputEnabled) this.utilityPressPending = true; };
+    this.keyE.on('down', latchUtilityPress);
     this.keyQ     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
     this.keyR     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.R, false);
     this.keyB     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B, false);
@@ -394,6 +397,8 @@ export class InputSystem {
     this.scene.game.events.on('hidden', cancelOnInputLoss);
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.keyShift.off('down', latchShiftPress);
+      this.keyE.off('down', latchUtilityPress);
+      this.utilityPressPending = false;
       this.shiftPressPending = false;
       cancelOnInputLoss();
       this.scene.game.events.off('blur', cancelOnInputLoss);
@@ -1263,6 +1268,9 @@ export class InputSystem {
     const shiftDown = Phaser.Input.Keyboard.JustDown(this.keyShift);
     const shiftPressed = this.shiftPressPending || shiftDown;
     this.shiftPressPending = false;
+    const utilityDown = Phaser.Input.Keyboard.JustDown(this.keyE);
+    const utilityPressed = this.utilityPressPending || utilityDown;
+    this.utilityPressPending = false;
     // Die Scene schaltet den lokalen Input zusaetzlich ab; dieser Rollencheck verhindert, dass
     // bereits gedrueckte Tasten oder Debug-/Placement-Hotkeys beim Spectator noch Aktionen
     // erzeugen, bevor der naechste Snapshot die Entity entfernt.
@@ -1442,7 +1450,7 @@ export class InputSystem {
         this.endRepositionInteraction();
         return;
       }
-      if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (leftInputStarted || utilityPressed) {
         if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
         if (!preview.isValid) return;
         if (this.repositionSourceRuntimeId === null) {
@@ -1468,7 +1476,7 @@ export class InputSystem {
         this.cancelRadialPlacement();
         return;
       }
-      if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (leftInputStarted || utilityPressed) {
         if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
         if (preview.isValid) {
           this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY, {
@@ -1491,7 +1499,7 @@ export class InputSystem {
         this.cancelRadialPlacement();
         return;
       }
-      if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (leftInputStarted || utilityPressed) {
         if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
         const rewardId = this.getSelectedPersistentRewardId();
         if (rewardId && preview.isValid && this.placePersistentRewardProvider) {
@@ -1516,7 +1524,7 @@ export class InputSystem {
         this.cancelRadialPlacement();
         return;
       }
-      if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      if (leftInputStarted || utilityPressed) {
         if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
         if (preview.isValid) {
           const tool = this.getSelectedConstructionToolRef();
@@ -1542,7 +1550,7 @@ export class InputSystem {
         const target = clampedTarget;
         const targetAngle = angle;
 
-        if (rightPointerDown || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+        if (rightPointerDown || utilityPressed) {
           this.cancelUtilityTargeting();
           return;
         }
@@ -1605,7 +1613,7 @@ export class InputSystem {
         return;
       }
 
-      if (Phaser.Input.Keyboard.JustDown(this.keyE) || leftInputStarted) {
+      if (utilityPressed || leftInputStarted) {
         if (leftInputStarted) {
           this.consumeLeftClickForModeConfirmation();
         }
@@ -1633,7 +1641,7 @@ export class InputSystem {
         return;
       }
 
-      if (Phaser.Input.Keyboard.JustDown(this.keyE) || leftInputStarted) {
+      if (utilityPressed || leftInputStarted) {
         if (leftInputStarted) {
           this.consumeLeftClickForModeConfirmation();
         }
@@ -1755,7 +1763,7 @@ export class InputSystem {
       return;
     }
 
-    if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
+    if (!utilityBlocked && utilityPressed) {
       const selectedAction = this.getSelectedRadialActionState(this.getCooldownNow());
       if (!selectedAction) return;
       if (selectedAction && !selectedAction.available) {
@@ -2206,6 +2214,7 @@ export class InputSystem {
   }
 
   private cancelUtilityInteraction(): void {
+    this.utilityPressPending = false;
     this.cancelRocketMagazine();
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
