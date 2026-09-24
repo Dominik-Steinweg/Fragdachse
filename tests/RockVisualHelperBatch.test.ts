@@ -21,6 +21,7 @@ import { RockVisualHelper } from '../src/scenes/arena/RockVisualHelper';
 import type { ArenaBuilderResult } from '../src/arena/ArenaBuilder';
 import { RockVisualStateStore } from '../src/arena/rocks/RockVisualState';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { FakeImage } from './fakeArenaRenderScene';
 
 const OWNER_ID = 'client-owner';
 const OWNER_COLOR = 0x52d273;
@@ -81,7 +82,19 @@ function createFixture(order: readonly number[], materialize = true) {
       return events;
     }),
   };
+  const turretObjects: FakeImage[] = [];
+  const visual = (x: number, y: number, texture: string) => {
+    const image = Object.assign(new FakeImage(texture, x, y), {
+      visible: true,
+      setBlendMode() { return this; },
+      setTexture(key: string) { this.key = key; return this; },
+      setVisible(visible: boolean) { this.visible = visible; return this; },
+    });
+    turretObjects.push(image);
+    return image;
+  };
   const scene = {
+    add: { image: visual, sprite: visual },
     events,
     textures: { exists: () => true },
     game: { events: { emit: vi.fn() } },
@@ -154,6 +167,7 @@ function createFixture(order: readonly number[], materialize = true) {
     rockOverlaySurface,
     shadowSystem,
     ctx,
+    turretObjects,
     flushPostUpdate: () => postUpdate?.(),
   };
 }
@@ -180,6 +194,41 @@ function expectedState(
 }
 
 describe('RockVisualHelper client snapshot materialization', () => {
+  it('keeps drone station placement and integrity updates free of turret sprites', () => {
+    const f = createFixture([0], false);
+    const station = f.changes.added[0];
+    Object.assign(station, { kind: 'drone_station', constructionId: 'attack_drone_station',
+      toolRef: { kind: 'construction', id: 'attack_drone_station' } });
+
+    f.helper.materializePlaceableRock(station, false);
+    f.helper.updateRockVisualById(station.id, station.maxHp / 2);
+    f.helper.materializePlaceableRock(station, false);
+    f.helper.updateRockVisualById(station.id, station.maxHp);
+    f.helper.createOrUpdateTurretVisual(station);
+    expect(f.result.rockPhysicsProxies[station.id]?.active).toBe(true);
+    expect(f.result.rockVisualStates.get(station.id)?.active).toBe(true);
+    expect(f.turretObjects).toHaveLength(0);
+
+    f.helper.removePlaceableRockVisual(station, false);
+    expect(f.result.rockPhysicsProxies[station.id]?.active).not.toBe(true);
+    expect(f.result.rockVisualStates.get(station.id)?.active).not.toBe(true);
+    expect(f.turretObjects).toHaveLength(0);
+  });
+
+  it('renders actual turrets and releases their artifacts by runtime ID even after a kind change', () => {
+    const f = createFixture([0], false);
+    const turret = f.changes.added[0];
+    Object.assign(turret, { kind: 'turret', constructionId: 'spore_turret', turretWeaponId: 'TURRET_SPORES' });
+    f.helper.materializePlaceableRock(turret, false);
+    expect(f.turretObjects.some(image => image.active && image.key === 'turret_weapon_spore')).toBe(true);
+
+    // Reproduce an obsolete turret projection attached to a station's runtime ID.
+    const station: SyncedPlaceableRock = { ...turret, kind: 'drone_station',
+      constructionId: 'attack_drone_station', turretWeaponId: undefined };
+    f.helper.removePlaceableRockVisual(station, false);
+    expect(f.turretObjects.every(image => !image.active)).toBe(true);
+  });
+
   it('sounds only confirmed new placements, never initial snapshots, restoration or repeated materialization', () => {
     const f = createFixture([0, 1, 2], false);
     // GPU dust allocation is unrelated to admission of the placement audio.

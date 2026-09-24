@@ -5,6 +5,7 @@ import { ATTACK_DRONE_RULES as R } from '../config/attackDrone';
 import type { SyncedAttackDrone, SyncedAttackDroneBomb, SyncedPlaceableRock } from '../types';
 import { ensureCanvasTexture, registerGraphicsObject } from './EffectUtils';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 
 const ASSETS = ['attack-drone-station', 'attack-drone-body', 'attack-drone-gun'] as const;
 const SHADOW = '__attack_drone_shadow', FLASH = '__attack_drone_flash', BOMB = '__attack_drone_bomb';
@@ -83,13 +84,14 @@ export class AttackDroneRenderer {
     }
   }
   update(delta: number, now: number): void {
-    const lerp = 1 - Math.exp(-Math.max(0, delta) / 48), view = this.scene.cameras.main.worldView;
+    const lerp = 1 - Math.exp(-Math.max(0, delta) / 48), view = getVisibleWorldView(this.scene.cameras.main);
     const bodyAsset = getPipelineAsset('attack-drone-body'), clip = bodyAsset.clips[0];
     for (const v of this.drones.values()) {
       const s = v.state;
       v.x += (s.x - v.x) * lerp; v.y += (s.y - v.y) * lerp;
       v.flightAngle = this.angle(v.flightAngle, s.flightAngle, lerp); v.gunAngle = this.angle(v.gunAngle, s.gunAngle, lerp);
-      const visible = v.x >= view.left - 64 && v.x <= view.right + 64 && v.y >= view.top - 64 && v.y <= view.bottom + 64;
+      const visible = v.x >= view.x - 64 && v.x <= view.x + view.width + 64
+        && v.y >= view.y - 64 && v.y <= view.y + view.height + 64;
       const docked = s.phase === 'servicing' || s.phase === 'docked';
       for (const object of [v.body, v.gun, v.shadow, v.marker]) object.setVisible(visible);
       v.flash.setVisible(visible && now < v.flashUntil);

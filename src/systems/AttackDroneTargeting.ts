@@ -74,6 +74,18 @@ export class AttackDroneTargetIndex {
   clear(): void { this.cells.clear(); this.byKey.clear(); }
 }
 
+/** The same reachable fan is used for target selection and preparation of the next burst. */
+export function droneGunGroup(position: DronePoint, focus: AttackDroneTarget, targets: readonly AttackDroneTarget[]): AttackDroneTarget[] {
+  const point = nearestDroneTargetPoint(focus, position), angle = Math.atan2(point.y - position.y, point.x - position.x);
+  return targets.filter(t => {
+    if (!droneExplosionTouches(t, position, R.range + R.muzzleOffset)) return false;
+    const p = nearestDroneTargetPoint(t, position), distance = droneDistance(p, position);
+    const direction = Math.atan2(p.y - position.y, p.x - position.x) - angle;
+    return Math.abs(Math.atan2(Math.sin(direction), Math.cos(direction)))
+      <= R.groupSweepDegrees * Math.PI / 360 + Math.atan2(t.radius, Math.max(1, distance));
+  });
+}
+
 export function selectDroneGunTarget(position: DronePoint, targets: readonly AttackDroneTarget[]): DroneGunTarget | null {
   const reachable = targets.filter(t => droneExplosionTouches(t, position, R.range + R.muzzleOffset));
   const candidates = [...reachable].sort((a, b) => droneDistance(nearestDroneTargetPoint(a, position), position)
@@ -81,17 +93,62 @@ export function selectDroneGunTarget(position: DronePoint, targets: readonly Att
   let best: DroneGunTarget | null = null, bestScore = -Infinity;
   for (const target of candidates) {
     const point = nearestDroneTargetPoint(target, position);
-    const angle = Math.atan2(point.y - position.y, point.x - position.x);
-    const group = reachable.filter(t => {
-      const p = nearestDroneTargetPoint(t, position), distance = droneDistance(p, position);
-      const diff = Math.atan2(Math.sin(Math.atan2(p.y - position.y, p.x - position.x) - angle),
-        Math.cos(Math.atan2(p.y - position.y, p.x - position.x) - angle));
-      return Math.abs(diff) <= R.groupSweepDegrees * Math.PI / 360 + Math.atan2(t.radius, Math.max(1, distance));
-    });
+    const group = droneGunGroup(position, target, reachable);
     const score = group.length * 1000 + group.reduce((n, t) => n + t.weight, 0) - droneDistance(point, position) / R.range;
     if (score > bestScore) { bestScore = score; best = { point, targetKeys: [target.key, ...group.filter(t => t.key !== target.key).map(t => t.key)] }; }
   }
   return best;
+}
+
+/** Bounded angle search at decision cadence, with travel and target clearance during the pause. */
+export function selectDroneFiringPosition(position: DronePoint, owner: DronePoint, focus: AttackDroneTarget,
+  targets: readonly AttackDroneTarget[], bounds: DroneRect, travelBudget: number, occupied: readonly DronePoint[] = []): DronePoint {
+  const point = nearestDroneTargetPoint(focus, position), standoff = R.range / 2;
+  const radialAngle = Math.atan2(position.y - point.y, position.x - point.x);
+  const angles = [radialAngle, ...Array.from({ length: 16 }, (_, i) => i * Math.PI / 8)];
+  let best = position, bestScore = -Infinity;
+  for (const angle of [null, ...angles]) {
+    let candidate = angle === null ? position : { x: point.x + Math.cos(angle) * standoff, y: point.y + Math.sin(angle) * standoff };
+    const distance = droneDistance(candidate, owner), scale = Math.min(1, R.ownerRadius / Math.max(1, distance));
+    candidate = { x: Math.max(bounds.left, Math.min(bounds.right, owner.x + (candidate.x - owner.x) * scale)),
+      y: Math.max(bounds.top, Math.min(bounds.bottom, owner.y + (candidate.y - owner.y) * scale)) };
+    const travel = droneDistance(position, candidate);
+    if (travel > travelBudget || !droneExplosionTouches(focus, candidate, R.range + R.muzzleOffset)) continue;
+    // Do not cut through the enemy to reach a firing position on its opposite side.
+    const dx = candidate.x - position.x, dy = candidate.y - position.y;
+    const along = Math.max(0, Math.min(1, ((point.x - position.x) * dx + (point.y - position.y) * dy) / Math.max(1, travel * travel)));
+    if (droneDistance({ x: position.x + dx * along, y: position.y + dy * along }, point)
+      < Math.min(standoff / 2, droneDistance(position, point))) continue;
+    const group = droneGunGroup(candidate, focus, targets);
+    const crowding = occupied.reduce((sum, other) => sum + Math.max(0, 1 - droneDistance(candidate, other) / R.separationRadius), 0);
+    const score = group.length * 1000 + group.reduce((sum, t) => sum + t.weight, 0)
+      - Math.abs(droneDistance(candidate, point) - standoff) / R.range - travel / (R.range * 4) - crowding * R.separationRadius;
+    if (score > bestScore) { best = candidate; bestScore = score; }
+  }
+  return best;
+}
+
+/** Acquisition is wider than weapon range, especially around the defended owner. */
+export function selectDroneApproachPoint(position: DronePoint, owner: DronePoint, targets: readonly AttackDroneTarget[],
+  bounds: DroneRect): DronePoint | null {
+  const candidates = targets.filter(t => droneExplosionTouches(t, owner, R.ownerThreatRadius)
+    || droneExplosionTouches(t, position, R.targetSearchRadius));
+  candidates.sort((a, b) => Number(droneExplosionTouches(b, owner, R.ownerThreatRadius))
+    - Number(droneExplosionTouches(a, owner, R.ownerThreatRadius))
+    || droneDistance(nearestDroneTargetPoint(a, owner), owner) - droneDistance(nearestDroneTargetPoint(b, owner), owner)
+    || a.key.localeCompare(b.key));
+  for (const target of candidates) {
+    const point = nearestDroneTargetPoint(target, owner), distance = droneDistance(point, owner);
+    // Stay inside the patrol leash so pursuit cannot alternate with catch-up at its edge.
+    const travel = Math.max(0, Math.min(R.ownerRadius, distance - R.range / 2));
+    const scale = travel / Math.max(1, distance);
+    const destination = {
+      x: Math.max(bounds.left, Math.min(bounds.right, owner.x + (point.x - owner.x) * scale)),
+      y: Math.max(bounds.top, Math.min(bounds.bottom, owner.y + (point.y - owner.y) * scale)),
+    };
+    if (droneExplosionTouches(target, destination, R.range + R.muzzleOffset)) return destination;
+  }
+  return null;
 }
 
 /** Candidate work is bounded; the actual blast circles, including base cells, decide coverage. */

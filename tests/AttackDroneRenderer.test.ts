@@ -17,13 +17,31 @@ function fixture(){
     item.setTexture=(texture:string)=>{item.texture=texture;return item;};
     item.destroy=()=>{item.destroyed=true;};objects.push(item);return item;
   };
-  const scene={textures:{},add:{image:object,circle:object},cameras:{main:{worldView:{left:0,top:0,right:500,bottom:500}}}};
+  const camera={width:500,height:500,originX:0,originY:0,zoom:1,scrollX:0,scrollY:0,
+    worldView:{left:0,top:0,right:500,bottom:500}};
+  const scene={textures:{},add:{image:object,circle:object},cameras:{main:camera}};
   const renderer=new AttackDroneRenderer(scene as never), audio={playSound:vi.fn()};renderer.setAudio(audio);
   const state:SyncedAttackDrone={id:'one',stationId:1,ownerId:'p',ownerColor:1,x:100,y:100,flightAngle:0,gunAngle:1,
     phase:'gun',phaseStartedAt:0,lastShotAt:100,shotSequence:4};
-  return{renderer,audio,state,objects};
+  return{renderer,audio,state,objects,camera};
 }
 describe('attack drone snapshot presentation',()=>{
+  it.each([0.5,1,2])('keeps both screen edges visible at render scale %s and restores culled drones after scrolling',zoom=>{
+    const f=fixture(), width=1920,height=1080;
+    Object.assign(f.camera,{width:width*zoom,height:height*zoom,zoom});
+    // Phaser worldView assumes a centered origin, unlike the actual Arena camera.
+    const left=(f.camera.width-width)/2,top=(f.camera.height-height)/2;
+    f.camera.worldView={left,top,right:left+width,bottom:top+height};
+    const states=[{...f.state,x:20,y:20},{...f.state,id:'right',x:width-20,y:height-20}];
+    f.renderer.syncVisuals(states,[],[],100);f.renderer.update(16,100);
+    const parts=f.objects.filter(o=>o.texture!=='__attack_drone_flash');
+    expect(parts.every(o=>o.visible)).toBe(true);
+    f.camera.scrollX=width*2;f.renderer.update(16,116);
+    expect(parts.every(o=>!o.visible)).toBe(true);
+    f.camera.scrollX=0;f.renderer.update(16,132);
+    expect(parts.every(o=>o.visible)).toBe(true);
+    f.renderer.destroyAll();
+  });
   it('keeps owner colors separate and only pulses during service, not dormant docking',()=>{
     const f=fixture();
     const service={...f.state,ownerColor:0x55aa44,phase:'servicing' as const,phaseStartedAt:100};

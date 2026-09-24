@@ -4199,7 +4199,7 @@
       "gameIds": [
         "attack_drone_station"
       ],
-      "reference": "public/assets/sprites/turrets/rocket.png",
+      "reference": "scripts/asset-pipeline/references/attack-drone-station-v2-a.png",
       "targetSize": 32,
       "sourceSizes": [
         64,
@@ -4212,8 +4212,8 @@
       ],
       "description": {
         "silhouette": "Square chamfered service pad with inset docking bed and two contact rails",
-        "colors": "Matte teal armor, graphite, soft steel, warm copper identification",
-        "anatomy": "Strict orthographic top-down. Mechanically separated parts, clear broad values at game size."
+        "colors": "Weathered warm titanium and cool phosphate panels, graphite mechanics, small amber lamps and faded ochre markings",
+        "anatomy": "Strict orthographic top-down. Real faceted alloy shells, machined joints, tactile grain, recessed vents and restrained wear. Broad values remain readable at nominal game size."
       },
       "requiredClips": [],
       "production": "reference",
@@ -4227,9 +4227,9 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Matte teal and warm copper",
-          "textureStrength": 0.22,
-          "formShadowStrength": 0.2
+          "label": "Weathered titanium, graphite and amber",
+          "textureStrength": 0.16,
+          "formShadowStrength": 0.64
         }
       },
       "clips": []
@@ -4241,7 +4241,7 @@
       "gameIds": [
         "attack_drone"
       ],
-      "reference": "public/assets/sprites/turrets/rocket.png",
+      "reference": "scripts/asset-pipeline/references/attack-drone-body-v2-a.png",
       "targetSize": 40,
       "sourceSizes": [
         80,
@@ -4253,9 +4253,9 @@
         0.5
       ],
       "description": {
-        "silhouette": "Armored central fuselage, four open rotor guards and broad crossed blades",
-        "colors": "Matte teal armor, graphite, soft steel, warm copper identification",
-        "anatomy": "Strict orthographic top-down. Mechanically separated parts, clear broad values at game size."
+        "silhouette": "Tapered armored fuselage and four segmented fan ducts with five swept impeller blades each",
+        "colors": "Weathered warm titanium and cool phosphate panels, graphite mechanics, small amber lamps and faded ochre markings",
+        "anatomy": "Strict orthographic top-down. Real faceted alloy shells, machined joints, tactile grain, recessed vents and restrained wear. Broad values remain readable at nominal game size."
       },
       "requiredClips": [
         "move"
@@ -4271,21 +4271,22 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Matte teal and warm copper",
-          "textureStrength": 0.22,
-          "formShadowStrength": 0.2
+          "label": "Weathered titanium, graphite and amber",
+          "textureStrength": 0.16,
+          "formShadowStrength": 0.64
         }
       },
       "clips": [
         {
           "name": "move",
           "motion": "quad_rotors",
-          "frameCount": 12,
-          "frameRate": 24,
+          "frameCount": 16,
+          "frameRate": 48,
           "loop": true,
           "parameters": {}
         }
-      ]
+      ],
+      "designReference": "art/poc/pipeline-v2/references/attack-drone-b/design-reference.png"
     },
     {
       "id": "attack-drone-gun",
@@ -4294,7 +4295,7 @@
       "gameIds": [
         "attack_drone_gun"
       ],
-      "reference": "public/assets/sprites/turrets/rocket.png",
+      "reference": "scripts/asset-pipeline/references/attack-drone-gun-v2-a.png",
       "targetSize": 40,
       "sourceSizes": [
         80,
@@ -4307,8 +4308,8 @@
       ],
       "description": {
         "silhouette": "Compact central gimbal and long narrow cannon",
-        "colors": "Matte teal armor, graphite, soft steel, warm copper identification",
-        "anatomy": "Strict orthographic top-down. Mechanically separated parts, clear broad values at game size."
+        "colors": "Weathered warm titanium and cool phosphate panels, graphite mechanics, small amber lamps and faded ochre markings",
+        "anatomy": "Strict orthographic top-down. Real faceted alloy shells, machined joints, tactile grain, recessed vents and restrained wear. Broad values remain readable at nominal game size."
       },
       "requiredClips": [],
       "production": "reference",
@@ -4322,12 +4323,13 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Matte teal and warm copper",
-          "textureStrength": 0.22,
-          "formShadowStrength": 0.2
+          "label": "Weathered titanium, graphite and amber",
+          "textureStrength": 0.16,
+          "formShadowStrength": 0.64
         }
       },
-      "clips": []
+      "clips": [],
+      "designReference": "art/poc/pipeline-v2/references/attack-drone-b/design-reference.png"
     }
   ]
 }

@@ -2,6 +2,7 @@
 
 Stand: 24.09.2026. Bezug: [GDD V2](../GDDs/Fragdachse_GDD_Angriffsdrohnenstation_v2.md).
 Die GDD-Balancewerte wurden unverändert in `src/config/attackDrone.json` übernommen.
+Die folgenden Messungen dokumentieren die Erstabnahme; die anschließende KI-Anpassung und ihre Nachprüfung stehen am Ende dieses Berichts.
 
 ## Umsetzung
 
@@ -117,3 +118,71 @@ Die temporäre Drohneninvestition wurde über die reguläre Kategorie-Rückersta
 Zusätzlich wurden zwei reale Browserclients über den regulären Einladungslink verbunden. Auf dem gemeinsamen Übungsplatz platzierten beide Besitzer eigene Stationen; ein Besitzer ergänzte eine zweite Station. Alle drei Drohnen erschienen in beiden Ansichten. Besitzerfarbe, getrennte Flugbewegung sowie Rückkehr und Andocken beim Wechsel eines Besitzers in die Lobby wurden geprüft, während die Drohne des verbleibenden Besitzers weiterflog. Der zweite Client meldete keine Warnungen oder Laufzeitfehler. Das Versorgungspulsieren ist auf die Ladephase begrenzt; dauerhaft wartende Drohnen pulsieren nicht weiter. Farben und diese Phasengrenze sind zusätzlich durch einen Renderertest abgesichert.
 
 Grenzen der Sichtabnahme: Die vollständige 12-Spieler-Last wurde simuliert, nicht mit zwölf sichtbaren Browsern geprüft. Die Kampfprüfung und der isolierte Andockvergleich ergänzen die automatisierte Versorgungskontrolle; eine manuelle Stoppuhrmessung der 1,0–2,5 Sekunden erfolgte nicht.
+
+## Nachprüfung: Zielsuche, Bombenkoordination und linker Bildrand
+
+24.09.2026, Anpassung auf Spielerfeedback:
+
+- Die Zielerfassung umfasst 800 px um die Drohne sowie Bedrohungen innerhalb von 600 px um die letzte lebende Besitzerposition. Ohne direkt erreichbares Geschützziel fliegt die Drohne ein erreichbares Ziel gezielt an; Besitzerbedrohungen haben dabei Vorrang. Waffenreichweite, Schussregeln und Fluggrenzen bleiben erhalten. Die gemeinsame räumliche Zielsicht wird weiterhin höchstens alle 250 ms aktualisiert.
+- Pro Besitzer ist ein Bombeneinsatz einschließlich Anflug, Teppich und Einschlagsauswertung aktiv. Nach dem letzten Einschlag folgen 500 ms zur Neubewertung (mindestens bis zur Brandbrockenlandung). Weitere Drohnen verwenden währenddessen ihr Geschütz. Erst im folgenden World-Update wird die Reservierung freigegeben, damit auch nach großen Zeitschritten die Treffer bereits verarbeitet sind. Abgeworfene Bomben halten die Reservierung nach Stationsentfernung; ein abgebrochener Anflug ohne Abwurf gibt sie frei. Andere Besitzer sind unabhängig.
+- Die Drohnendarstellung verwendet `getVisibleWorldView()` statt Phasers um eine zentrierte Kamera berechnetem `worldView`. Das verhindert falsches Ausblenden am linken/oberen Bildrand bei veränderter Renderauflösung.
+
+Prüfung: `npm run check` mit 4.312 Core-Tests, 54 Architekturtests und beiden Builds bestanden. Die gezielten Drohnen-, Renderer- und World-Binding-Tests bestehen (37 Tests). Zusätzlich bestehen die Drohnen-Netzwerk-, Stress- und Balance-Lab-Suites (6 Tests, 37 Messszenarien); der Lasttest umfasst 3/36/48 voll ausgebaute Stationen und weiterhin 241 gemeinsame Zielsicht-Aktualisierungen in 60 s. Neue Regressionstests schützen Anflug von hinter dem Spieler, unveränderte Waffenreichweite, überlebende/entfallene Bombenziele, mehrere Besitzer, Stationsentfernung, Activity-Teardown, große World-Zeitschritte sowie Sichtbarkeit und Wiedereinblenden bei Renderfaktoren 0,5/1/2.
+
+Im unveränderten 60-s-Messaufbau steigt der Rohschaden einer Grunddrohne bei 400/800 px Stationsdistanz von 12,79/11,81 auf 13,51/12,23 DPS durch die bessere Zielaufnahme. Die voll ausgebauten Acht-Ziel-Szenarien `dense` und `spread` bleiben bei 56,27 bzw. 39,09 DPS. Diese Einzelstationsmessung quantifiziert keine Überkill-Ersparnis; diese wird durch die Mehrstations-Verhaltenstests mit beim Einschlag entfallenden Zielen geprüft.
+
+Browsernachprüfung auf Port 8090: Zwei Stationen im Übungsplatz platziert; beide Drohnen bei 3840×2160 sichtbar, ausdrücklich auch links der früheren falschen Ausblendgrenze. Die tatsächliche Canvas-Auflösung wurde über das DOM geprüft; keine Browser-Laufzeitfehler. Die automatisierten Kamera-Grenztests ergänzen diese Sichtprüfung. Temporäre Testfreischaltung und Werkzeugauswahl wurden über die vorhandene UI zurückgesetzt; Browsergröße zurückgesetzt und Testtab geschlossen.
+
+## Nachprüfung: Kampfbewegung während und zwischen Salven
+
+24.09.2026, weitere Anpassung auf Spielerfeedback:
+
+- Während der Feuerpause hält die Drohne ein erreichbares Ziel im Blick. Eine begrenzte Winkelbewertung im vorhandenen 250-ms-Takt bevorzugt Positionen, von denen mehr Gegner in den Geschützfächer passen. Flugstrecke, verbleibende Pausenzeit, Abstand zum Ziel und Besitzer-/Weltgrenzen fließen ein. Ohne erreichbare Feuerposition bleibt der gezielte Anflug aktiv. Zufällige Patrouillenpunkte werden bei bestehendem Kampfziel nicht verwendet.
+- Während einer Salve korrigiert die Drohne ihren Abstand zum aktuellen Ziel und kann seitlich weiterfliegen. Die Grundrate ist über `combatStrafeDegreesPerSecond` konfigurierbar; Flug-Upgrades wirken innerhalb des Geschütz-Drehbudgets. Bei nachlaufendem Geschütz oder Verlust einer bereits erfassten Gruppe aus dem Fächer wird die seitliche Bewegung reduziert bzw. ausgesetzt. Der Mündungspunkt wird aus der bewegten Flugposition und der unabhängig nachgeführten Geschützausrichtung berechnet. Die Zielgruppe bleibt während der Salve gebunden.
+- Geschützflug bleibt innerhalb des Besitzerbereichs, damit am Ende der Salve kein unnötiger Anschlussflug entsteht. Bombenanflüge und Versorgungsentscheidungen behalten ihren Vorrang. Schussanzahl, Salvendauer, Feuerpause, Schaden, Regeneration und Bombenregeln bleiben unverändert. Die vorhandenen Positions-/Winkelsnapshots übertragen auch diese Flugbewegung; zusätzliche Netzwerkzustände sind nicht erforderlich.
+
+Automatisierte Prüfung: 44 gezielte Drohnen-/Renderer-/World-Binding-Tests bestanden. Neue Regressionen schützen späte Bewegung innerhalb der Salve, tatsächliche Mündungspositionen und Trefferwinkel bei Grund-/Ausbaugeschwindigkeit, gezielten Anflug in der Feuerpause, bessere Gruppenwinkel, Pausenfrist, Besitzerabstand und Weltgrenzen. Netzwerk-, Stress- und Balance-Lab-Suites bestehen mit 6 Tests und 37 Messszenarien. Der Lasttest mit 3/36/48 Stationen bleibt bei 241 gemeinsamen Zielsicht-Aktualisierungen in 60 s. `npm run check` besteht mit 4.321 Core-Tests, 54 Architekturtests sowie Spiel- und Map-Editor-Build.
+
+Roh-DPS im selben 60-s-Messaufbau, unmittelbar vor und nach dieser Bewegungsänderung:
+
+| Szenario | Vorher | Nachher |
+|---|---:|---:|
+| Grunddrohne, Station 400 px entfernt | 13,51 | 13,67 |
+| Grunddrohne, Station 800 px entfernt | 12,23 | 12,79 |
+| Bewegliches Einzelziel, Radius 12 px, Distanz 200 px | 9,64 | 10,87 |
+| Bewegliches Einzelziel, Radius 12 px, Distanz 400 px | 8,26 | 10,62 |
+| Vollausbau, acht dichte Ziele | 56,27 | 53,87 |
+| Vollausbau, acht verteilte Ziele | 39,09 | 48,16 |
+| Vollausbau, acht Ziele in einer Linie | 43,78 | 38,21 |
+
+Die neue Positionierung verbessert insbesondere bewegliche Einzelziele und verteilte Gruppen. Bei kollinearen Zielen verliert die dynamische Flugbahn einen Teil der früheren idealen Durchschusslinie. Falls die Sicht-/Spielprüfung hier eine Korrektur nahelegt, wäre eine stärkere Gewichtung überlappender Trefferflächen bei der Winkelwahl gezielter als eine pauschale Schadensanhebung. Es erfolgte kein Schadens-Retuning. Vollständige Mess- und Prüfprotokolle liegen lokal unter `build/attack-drone-verification/combat-flight-special.log` und `combat-flight-check.log`.
+
+Auf ausdrücklichen Wunsch wurde für diese Bewegungsänderung **keine Browserprüfung** durchgeführt. Die Sichtabnahme übernimmt der Benutzer; frühere Browsernachweise weiter oben gelten nicht als Abnahme dieser Flugbewegungen.
+
+## Nachprüfung: Abstandshaltung, Beschleunigung und ruhiger Rumpf
+
+24.09.2026, weitere Anpassung auf Spielerfeedback:
+
+- Eine gemeinsame räumliche Nachbarsicht erfasst fliegende Drohnen aller Besitzer pro Simulationsschritt. Bei der Positionswahl werden bereits belegte und von Nachbarn geplante Feuerpositionen weniger attraktiv. Zusätzlich wirkt innerhalb des konfigurierten Abstands eine begrenzte Ausweichgeschwindigkeit. Auch exakt übereinander gestartete Drohnen erhalten reproduzierbare, unterschiedliche Ausweichrichtungen. Es gibt keine Kollisionskörper, Positionskorrekturen zwischen Drohnen oder garantierte Mindestdistanz; kurzzeitige Überlagerungen bleiben möglich.
+- Jede Drohne besitzt eine Laufzeitgeschwindigkeit. Beschleunigung, Bremsung und weiches Ankommen ersetzen sofortige Geschwindigkeitswechsel. Eine Richtungsumkehr baut vorhandenen Schwung zunächst ab. Andocken und Activity-Teardown löschen die Geschwindigkeit. Weltgrenzen werden weiterhin eingehalten; die vorhandenen Netzwerksnapshots übertragen Position und Winkel ohne neue Protokollfelder.
+- Der Rumpf folgt der tatsächlich zurückgelegten Bewegung mit begrenzter Drehrate. Sehr langsame Korrekturen, numerisches Zittern, blockierte Bewegung an der Weltgrenze und Updates ohne Zeitfortschritt ändern die Rumpfausrichtung nicht. Das Geschütz bleibt unabhängig davon nachgeführt.
+- Nahe dem Andockpunkt und dem Beginn eines Bombenkorridors wird das Ausweichen ausgeblendet. Begonnene Bombenläufe behalten ihre feste Linie. Abwurfzeitpunkte werden aus dem tatsächlichen Streckenfortschritt des Simulationsschritts interpoliert, damit Beschleunigung und Bremsung die Bombenanzahl und Teppichgeometrie nicht verändern.
+
+Neue Startwerte stehen in `src/config/attackDrone.json`: Beschleunigung 1.400 px/s², Bremsung 2.200 px/s², Anflugreaktion 180 ms, Rumpfdrehung höchstens 180°/s, Halten der Ausrichtung unter 12 px/s, weicher Abstand 64 px und maximaler Ausweichbeitrag 120 px/s. Waffen-, Salven- und Schadenswerte wurden nicht geändert.
+
+Prüfung: 54 gezielte Flug-, Drohnen-, World-Binding- und Renderer-Tests bestanden. Neue Regressionen schützen Beschleunigung/Bremsung, Richtungsumkehr, ruhige Ausrichtung, räumliche Nachbarsicht, exakt überlagerte Starts, verschiedene Besitzer, belegte Feuerpositionen, Andocken trotz Überlagerung und korrekte Bombenzeitpunkte. Netzwerk-, Stress- und Balance-Lab-Suites bestehen mit 6 Tests und 37 Messszenarien. Der Lasttest umfasst weiterhin 3/36/48 Stationen und 241 gemeinsame Zielsicht-Aktualisierungen in 60 s. `npm run check` besteht mit 4.331 Core-Tests, 54 Architekturtests sowie Spiel- und Map-Editor-Build. `git diff --check` ist sauber.
+
+Das Anfahren und Abbremsen verlängert Flugmanöver und verändert damit die Einsatzzeiten. Im bisherigen Einzelstations-Benchmark ergibt sich folgende Roh-DPS-Änderung gegenüber der unmittelbar vorherigen Kampfbewegung:
+
+| Szenario | Vorher | Nachher |
+|---|---:|---:|
+| Grunddrohne, Station 400 px entfernt | 13,67 | 12,83 |
+| Grunddrohne, Station 800 px entfernt | 12,79 | 12,25 |
+| Bewegliches Einzelziel, Radius 12 px, Distanz 200 px | 10,87 | 10,08 |
+| Vollausbau, acht dichte Ziele | 53,87 | 48,16 |
+| Vollausbau, acht verteilte Ziele | 48,16 | 36,59 |
+| Vollausbau, acht Ziele in einer Linie | 38,21 | 39,94 |
+
+Die Abstandshaltung selbst wird durch Mehrdrohnen-Verhaltenstests geprüft; die DPS-Tabelle bildet weiterhin eine einzelne Station ab. Falls die längeren Manöver im Spiel zu träge wirken, sollten zuerst Anflugreaktion und Beschleunigungs-/Bremswerte beurteilt werden. Eine pauschale Schadensanhebung wurde nicht vorgenommen. Lokale Protokolle: `build/attack-drone-verification/flight-spacing-special.log` und `flight-spacing-check.log`.
+
+Weiterhin **keine Browserprüfung**; die manuelle Sichtabnahme übernimmt der Benutzer.

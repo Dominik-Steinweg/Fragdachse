@@ -273,13 +273,14 @@ export class RockVisualHelper {
 
   removePlaceableRockVisual(rock: SyncedPlaceableRock, playDust: boolean): void {
     if (!this.arenaResult || !this.currentLayout) return;
+    // Release by runtime ID even if an earlier projection assigned the wrong kind.
+    this.destroyTurretVisual(rock.id);
     const currentProxy = this.arenaResult.rockPhysicsProxies[rock.id];
     if (rock.collisionMode === 'none') {
       if (playDust) {
         const world = this.gridToWorld(rock.gridX, rock.gridY);
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
       }
-      this.destroyTurretVisual(rock.id);
       this.destroyRockProxyIfPresent(rock.id);
       return;
     }
@@ -287,7 +288,6 @@ export class RockVisualHelper {
       if (currentProxy) {
         ArenaBuilder.destroyRock(this.arenaResult, rock.id);
       }
-      this.destroyTurretVisual(rock.id);
       this.markObstaclesDirty(rock.id, false);
       return;
     }
@@ -301,16 +301,6 @@ export class RockVisualHelper {
       } else {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
       }
-    }
-    if (rock.kind === 'turret') {
-      ArenaBuilder.destroyRockAndRetile(
-        this.arenaResult,
-        this.currentLayout.rocks,
-        rock.id,
-      );
-      this.destroyTurretVisual(rock.id);
-      this.markObstaclesDirty(rock.id, false);
-      return;
     }
     ArenaBuilder.destroyRockAndRetile(
       this.arenaResult,
@@ -328,7 +318,7 @@ export class RockVisualHelper {
       if (runtimeRock.kind === 'turret') this.createOrUpdateTurretVisual({ ...runtimeRock, hp });
       return;
     }
-    if (runtimeRock && runtimeRock.kind !== 'rock') {
+    if (runtimeRock?.kind === 'turret') {
       ArenaBuilder.updateRockVisual(
         this.arenaResult,
         this.currentLayout.rocks,
@@ -382,7 +372,7 @@ export class RockVisualHelper {
   }
 
   createOrUpdateTurretVisual(rock: SyncedPlaceableRock): void {
-    if (!this.arenaResult || this.arenaResult.rockVisualSystem === null) return;
+    if (rock.kind !== 'turret' || !this.arenaResult || this.arenaResult.rockVisualSystem === null) return;
     const world = this.gridToWorld(rock.gridX, rock.gridY);
     const weaponId = rock.turretWeaponId ?? 'SPORES';
     let visual = this.turretVisuals.get(rock.id);
