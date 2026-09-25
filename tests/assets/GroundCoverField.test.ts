@@ -49,7 +49,7 @@ describe('Ground cover field', () => {
       expect(total).toBeCloseTo(100, 6);
       expect(tier.variants.length).toBeGreaterThan(1);
       for (const variant of tier.variants) {
-        expect(variant.fileName).toMatch(/^(ground_(cover|patch)_\d\d|forest_[a-z]+-\d\d-[a-z-]+)\.png$/);
+        expect(variant.fileName).toMatch(/^(ground_(cover|patch)_\d\d|(forest|ground_area)_[a-z]+-\d\d-[a-z-]+)\.png$/);
       }
     }
   });

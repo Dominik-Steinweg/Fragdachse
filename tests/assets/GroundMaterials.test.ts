@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
 import { GROUND_COVER_TIERS } from '../../src/arena/GroundCoverConfig';
+import { CELL_SIZE } from '../../src/config';
 
 describe('native forest floor assets', () => {
   for (const name of ['gras_bg_tile', 'dirt_material']) it(`${name} wraps without a colour seam`, async () => {
@@ -29,8 +30,12 @@ describe('native forest floor assets', () => {
       let empty = 0, opaque = 0;
       for (let i = 3; i < data.length; i += 4) { if (data[i] === 0) empty++; if (data[i] > 64) opaque++; }
       expect(empty).toBeGreaterThan(0); expect(opaque).toBeGreaterThan(0);
-      // No mipmaps: stamps stay close to their largest display size.
-      expect(Math.max(info.width, info.height)).toBeLessThanOrEqual(256);
+      // No mipmaps: stamps stay close to their largest display size (margins and oversampling
+      // included), whatever that size is.
+      const anchorMax = Math.max(...[tier.seam, tier.dirt, tier.grass, tier.rockFoot, tier.bank]
+        .filter((anchor) => anchor !== undefined).map((anchor) => anchor!.maxSizeCells));
+      const maxDisplayPx = (variant.sizeCells?.[1] ?? anchorMax) * CELL_SIZE;
+      expect(Math.max(info.width, info.height)).toBeLessThanOrEqual(Math.ceil(maxDisplayPx * 1.6));
     }
   });
 });

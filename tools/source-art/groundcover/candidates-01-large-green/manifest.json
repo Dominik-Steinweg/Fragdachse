@@ -1,0 +1,408 @@
+{
+  "tool": "built-in image_gen",
+  "promptSet": "prompts.json",
+  "worldPixelsPerMetre": 32,
+  "sizeConvention": "Nominal radius; longest visible diameter = radiusMetres * 2 * 32 world pixels. Ignore transparent source margins when sizing.",
+  "variants": [
+    {
+      "id": "moss-01-soft-colony",
+      "title": "Weiche Mooskolonie",
+      "category": "Moos",
+      "radiusMetres": 2.5,
+      "diameterMetres": 5,
+      "intendedWorldPixels": 160,
+      "file": "moss-01-soft-colony.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-78fa3869-3351-4679-821f-2b7e115b7375.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 795091,
+        "fullyOpaquePixels": 96,
+        "partiallyTransparentPixels": 777329,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 57,
+          "y": 73,
+          "width": 1152,
+          "height": 1129
+        }
+      }
+    },
+    {
+      "id": "moss-02-broken-islands",
+      "title": "Aufgebrochene Moosinseln",
+      "category": "Moos",
+      "radiusMetres": 4,
+      "diameterMetres": 8,
+      "intendedWorldPixels": 256,
+      "file": "moss-02-broken-islands.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-a7880049-6f51-4902-b597-5b4d878924df.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 789827,
+        "fullyOpaquePixels": 250,
+        "partiallyTransparentPixels": 782439,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 113,
+          "y": 92,
+          "width": 1073,
+          "height": 1098
+        }
+      }
+    },
+    {
+      "id": "moss-03-creeping-band",
+      "title": "Kriechendes Moosband",
+      "category": "Moos",
+      "radiusMetres": 5.5,
+      "diameterMetres": 11,
+      "intendedWorldPixels": 352,
+      "file": "moss-03-creeping-band.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-e821931e-0665-4cef-956a-cfa1affeb4fd.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 1049743,
+        "fullyOpaquePixels": 219,
+        "partiallyTransparentPixels": 522554,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 38,
+          "y": 46,
+          "width": 1190,
+          "height": 1175
+        }
+      }
+    },
+    {
+      "id": "moss-04-wide-carpet",
+      "title": "Großer Moosteppich",
+      "category": "Moos",
+      "radiusMetres": 7,
+      "diameterMetres": 14,
+      "intendedWorldPixels": 448,
+      "file": "moss-04-wide-carpet.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-37ed64c3-34eb-4fcf-a571-5f724ee4cbb1.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 732976,
+        "fullyOpaquePixels": 325,
+        "partiallyTransparentPixels": 839215,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 24,
+          "y": 27,
+          "width": 1205,
+          "height": 1201
+        }
+      }
+    },
+    {
+      "id": "clover-01-open-colony",
+      "title": "Lockere Kleefläche",
+      "category": "Klee",
+      "radiusMetres": 2,
+      "diameterMetres": 4,
+      "intendedWorldPixels": 128,
+      "file": "clover-01-open-colony.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-40cbeb35-fdc8-44ad-9a80-32d0ca424fb7.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 895966,
+        "fullyOpaquePixels": 29,
+        "partiallyTransparentPixels": 676521,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 79,
+          "y": 81,
+          "width": 1106,
+          "height": 1109
+        }
+      }
+    },
+    {
+      "id": "clover-02-dense-pockets",
+      "title": "Klee mit dichten Inseln",
+      "category": "Klee",
+      "radiusMetres": 3.5,
+      "diameterMetres": 7,
+      "intendedWorldPixels": 224,
+      "file": "clover-02-dense-pockets.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-96cbd014-e469-41aa-928d-18fb067bfaf5.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 675042,
+        "fullyOpaquePixels": 169,
+        "partiallyTransparentPixels": 897305,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 69,
+          "y": 54,
+          "width": 1134,
+          "height": 1152
+        }
+      }
+    },
+    {
+      "id": "clover-03-creeping-crescent",
+      "title": "Kriechender Kleebogen",
+      "category": "Klee",
+      "radiusMetres": 5,
+      "diameterMetres": 10,
+      "intendedWorldPixels": 320,
+      "file": "clover-03-creeping-crescent.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-63b7af26-62d3-44e9-97e0-ecfa6315f2a7.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 965280,
+        "fullyOpaquePixels": 4,
+        "partiallyTransparentPixels": 607232,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 43,
+          "y": 43,
+          "width": 1154,
+          "height": 1165
+        }
+      }
+    },
+    {
+      "id": "clover-04-broad-mosaic",
+      "title": "Großes Kleemosaik",
+      "category": "Klee",
+      "radiusMetres": 6.5,
+      "diameterMetres": 13,
+      "intendedWorldPixels": 416,
+      "file": "clover-04-broad-mosaic.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-d37e7ef2-ed68-4158-a8b9-e92b4a3990ae.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 685388,
+        "fullyOpaquePixels": 130,
+        "partiallyTransparentPixels": 886998,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 49,
+          "y": 46,
+          "width": 1168,
+          "height": 1164
+        }
+      }
+    },
+    {
+      "id": "cover-01-round-leaf-runners",
+      "title": "Rundblättrige Ausläufer",
+      "category": "Bodendecker",
+      "radiusMetres": 2.5,
+      "diameterMetres": 5,
+      "intendedWorldPixels": 160,
+      "file": "cover-01-round-leaf-runners.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-1ed152be-be24-4a96-9472-984499408650.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 777373,
+        "fullyOpaquePixels": 276,
+        "partiallyTransparentPixels": 794867,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 58,
+          "y": 79,
+          "width": 1140,
+          "height": 1108
+        }
+      }
+    },
+    {
+      "id": "cover-02-small-lobed-leaves",
+      "title": "Kleine gelappte Blätter",
+      "category": "Bodendecker",
+      "radiusMetres": 4,
+      "diameterMetres": 8,
+      "intendedWorldPixels": 256,
+      "file": "cover-02-small-lobed-leaves.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-d655decf-596a-49f6-8903-2292d93f01b2.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 877161,
+        "fullyOpaquePixels": 99,
+        "partiallyTransparentPixels": 695256,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 65,
+          "y": 67,
+          "width": 1145,
+          "height": 1137
+        }
+      }
+    },
+    {
+      "id": "cover-03-moss-and-sorrel",
+      "title": "Moos und Waldsauerklee",
+      "category": "Bodendecker",
+      "radiusMetres": 5.5,
+      "diameterMetres": 11,
+      "intendedWorldPixels": 352,
+      "file": "cover-03-moss-and-sorrel.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-c41b5fb2-c371-4577-8023-9b90ce9fde39.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 586700,
+        "fullyOpaquePixels": 148,
+        "partiallyTransparentPixels": 985668,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 46,
+          "y": 65,
+          "width": 1175,
+          "height": 1147
+        }
+      }
+    },
+    {
+      "id": "cover-04-broad-creeping-mat",
+      "title": "Weitläufiger Kriechteppich",
+      "category": "Bodendecker",
+      "radiusMetres": 7,
+      "diameterMetres": 14,
+      "intendedWorldPixels": 448,
+      "file": "cover-04-broad-creeping-mat.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-d4133fc7-7810-4de3-bbbf-a953ba82f113.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 637939,
+        "fullyOpaquePixels": 2,
+        "partiallyTransparentPixels": 934575,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 65,
+          "y": 70,
+          "width": 1151,
+          "height": 1126
+        }
+      }
+    },
+    {
+      "id": "soil-01-worn-earth",
+      "title": "Leicht freigelegte Erde",
+      "category": "Erde & Streu",
+      "radiusMetres": 2,
+      "diameterMetres": 4,
+      "intendedWorldPixels": 128,
+      "file": "soil-01-worn-earth.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-bd08f39f-2875-4303-a6af-d77d114ae3a2.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 949471,
+        "fullyOpaquePixels": 100,
+        "partiallyTransparentPixels": 622945,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 90,
+          "y": 124,
+          "width": 1098,
+          "height": 1030
+        }
+      }
+    },
+    {
+      "id": "soil-02-humus-moss",
+      "title": "Humus mit Moosresten",
+      "category": "Erde & Streu",
+      "radiusMetres": 3.5,
+      "diameterMetres": 7,
+      "intendedWorldPixels": 224,
+      "file": "soil-02-humus-moss.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-c2c3116b-79af-4038-ae15-30814d95c9ea.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 824587,
+        "fullyOpaquePixels": 264,
+        "partiallyTransparentPixels": 747665,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 60,
+          "y": 60,
+          "width": 1161,
+          "height": 1142
+        }
+      }
+    },
+    {
+      "id": "soil-03-fine-leaf-litter",
+      "title": "Feine Laubstreu",
+      "category": "Erde & Streu",
+      "radiusMetres": 5,
+      "diameterMetres": 10,
+      "intendedWorldPixels": 320,
+      "file": "soil-03-fine-leaf-litter.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-4ad494cd-079c-4f97-a115-5d403cb31263.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 711628,
+        "fullyOpaquePixels": 28,
+        "partiallyTransparentPixels": 860860,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 64,
+          "y": 75,
+          "width": 1142,
+          "height": 1116
+        }
+      }
+    },
+    {
+      "id": "soil-04-dry-soil-islands",
+      "title": "Trockene Erdinseln",
+      "category": "Erde & Streu",
+      "radiusMetres": 6.5,
+      "diameterMetres": 13,
+      "intendedWorldPixels": 416,
+      "file": "soil-04-dry-soil-islands.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-17a33108-0a7a-41b9-9685-1ce430bf18ea.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "fullyTransparentPixels": 750893,
+        "fullyOpaquePixels": 183,
+        "partiallyTransparentPixels": 821440,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 67,
+          "y": 57,
+          "width": 1135,
+          "height": 1146
+        }
+      }
+    }
+  ]
+}

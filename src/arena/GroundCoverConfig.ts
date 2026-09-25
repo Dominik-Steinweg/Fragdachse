@@ -58,6 +58,8 @@ export interface GroundCoverClusterConfig {
   radiusCells: number;
   /** Wahrscheinlichkeit, dass ein Stempel die Art des Clusters wiederholt. */
   coherence: number;
+  /** Folgt den Freiflaechen statt den Inseln (z. B. offene Erde zwischen dem Bewuchs). */
+  invert?: boolean;
 }
 
 export interface GroundCoverAnchorConfig {
@@ -113,7 +115,10 @@ export const GROUND_COVER_CONFIG: GroundCoverLayerConfig = {
   })),
 };
 
-/** Large grass patches: thicker growth that breaks up grass areas and softens soil borders. */
+/**
+ * Medium moss patches: thicker growth around the undergrowth that softens soil borders. They
+ * follow the growth islands instead of dotting the lawn.
+ */
 export const GROUND_PATCH_CONFIG: GroundCoverLayerConfig = {
   seedSalt: 0x6a1d,
   blockCells: 4,
@@ -121,7 +126,11 @@ export const GROUND_PATCH_CONFIG: GroundCoverLayerConfig = {
   jitterCells: 2,
   seam: { perBlock: .6, minSizeCells: 2, maxSizeCells: 4, sizeBias: 1.4, minAlpha: .6, maxAlpha: .85 },
   dirt: { perBlock: .08, minSizeCells: 1.5, maxSizeCells: 2.6, sizeBias: 1.6, minAlpha: .5, maxAlpha: .75 },
-  grass: { perBlock: .3, minSizeCells: 2, maxSizeCells: 4.5, sizeBias: 1.3, minAlpha: .55, maxAlpha: .85 },
+  grass: { perBlock: .5, minSizeCells: 2, maxSizeCells: 4.5, sizeBias: 1.3, minAlpha: .55, maxAlpha: .85 },
+  cluster: {
+    fieldSalt: GROWTH_FIELD_SALT, fieldCells: 9, threshold: .44, softness: .12, edgeFloor: .6, sparse: .1,
+    members: [1, 1], radiusCells: 0, coherence: 1,
+  },
   variants: Array.from({ length: 16 }, (_, index) => ({
     fileName: `ground_patch_${String(index + 1).padStart(2, '0')}.png`, frequencyPercent: 6.25,
   })),
@@ -280,9 +289,77 @@ export const GRASS_DECAL_OPEN_GROUND_KEEP = .12;
 /** Growth level from which grass decals count as part of an island (about 40 % of the area). */
 export const GRASS_DECAL_GROWTH_THRESHOLD = .5;
 
-/** Draw order: moss patches, litter, blade tufts, vegetation on top. */
+/** A flat large ground surface from tools/source-art/groundcover, exported as `ground_area_<source>.png`. */
+function areaVariant(source: string, diameterMetres: number, frequencyPercent: number): GroundCoverVariantConfig {
+  return {
+    fileName: `ground_area_${source}.png`, frequencyPercent, sizeCells: [diameterMetres * .85, diameterMetres * 1.1],
+    sourceSet: 'candidates-01-large-green',
+  };
+}
+
+/**
+ * Large green surfaces (moss, clover, creeping ground cover, 2-7 m radius) below the undergrowth.
+ * They follow the growth field with a lower threshold than the plants, so the vegetation islands
+ * stand on a carpet that reaches a little beyond them. Few, large stamps keep the lawn calm.
+ */
+export const GROUND_AREA_GREEN_CONFIG: GroundCoverLayerConfig = {
+  seedSalt: 0x2a61,
+  blockCells: 8,
+  maxPerBlock: 1,
+  jitterCells: 3,
+  seam: { perBlock: .7, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1, minAlpha: .7, maxAlpha: .9 },
+  dirt: { perBlock: .1, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1, minAlpha: .6, maxAlpha: .8 },
+  grass: { perBlock: .95, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1, minAlpha: .75, maxAlpha: .95 },
+  rockFoot: { perBlock: .7, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1, minAlpha: .75, maxAlpha: .95 },
+  bank: { perBlock: .6, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1, minAlpha: .75, maxAlpha: .95 },
+  cluster: {
+    fieldSalt: GROWTH_FIELD_SALT, fieldCells: 9, threshold: .42, softness: .12, edgeFloor: .6, sparse: .06,
+    members: [1, 1], radiusCells: 0, coherence: 1,
+  },
+  variants: [
+    areaVariant('moss-01-soft-colony', 5, 9),
+    areaVariant('moss-02-broken-islands', 8, 9),
+    areaVariant('moss-03-creeping-band', 11, 8),
+    areaVariant('moss-04-wide-carpet', 14, 7),
+    areaVariant('clover-01-open-colony', 4, 9),
+    areaVariant('clover-02-dense-pockets', 7, 8),
+    areaVariant('clover-03-creeping-crescent', 10, 7),
+    areaVariant('clover-04-broad-mosaic', 13, 6),
+    areaVariant('cover-01-round-leaf-runners', 5, 9),
+    areaVariant('cover-02-small-lobed-leaves', 8, 8),
+    areaVariant('cover-03-moss-and-sorrel', 11, 10),
+    areaVariant('cover-04-broad-creeping-mat', 14, 10),
+  ],
+};
+
+/**
+ * Large soil and litter surfaces on the open ground between the growth islands and along soil
+ * seams. Translucent, so they only break up wide calm lawn without adding detail noise.
+ */
+export const GROUND_AREA_SOIL_CONFIG: GroundCoverLayerConfig = {
+  seedSalt: 0x2a67,
+  blockCells: 9,
+  maxPerBlock: 1,
+  jitterCells: 3.5,
+  seam: { perBlock: .6, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1, minAlpha: .55, maxAlpha: .8 },
+  dirt: { perBlock: .45, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1, minAlpha: .5, maxAlpha: .75 },
+  grass: { perBlock: .55, minSizeCells: 4, maxSizeCells: 8, sizeBias: 1, minAlpha: .45, maxAlpha: .7 },
+  cluster: {
+    fieldSalt: GROWTH_FIELD_SALT, fieldCells: 9, threshold: .5, softness: .1, edgeFloor: 0, sparse: 0,
+    members: [1, 1], radiusCells: 0, coherence: 1, invert: true,
+  },
+  variants: [
+    areaVariant('soil-01-worn-earth', 4, 25),
+    areaVariant('soil-02-humus-moss', 7, 28),
+    areaVariant('soil-03-fine-leaf-litter', 10, 27),
+    areaVariant('soil-04-dry-soil-islands', 13, 20),
+  ],
+};
+
+/** Draw order: large soil and green surfaces, moss patches, litter, blade tufts, vegetation on top. */
 export const GROUND_COVER_TIERS: readonly GroundCoverLayerConfig[] = [
-  GROUND_PATCH_CONFIG, FOREST_LITTER_CONFIG, GROUND_COVER_CONFIG, FOREST_VEGETATION_CONFIG,
+  GROUND_AREA_SOIL_CONFIG, GROUND_AREA_GREEN_CONFIG, GROUND_PATCH_CONFIG, FOREST_LITTER_CONFIG,
+  GROUND_COVER_CONFIG, FOREST_VEGETATION_CONFIG,
 ];
 
 /**

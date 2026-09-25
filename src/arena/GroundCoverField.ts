@@ -199,7 +199,8 @@ function generateTier(options: GroundCoverFieldOptions, config: GroundCoverLayer
         // Growth decides between a cluster on an island or band and calm open ground.
         let growth = 1;
         if (cluster) {
-          const level = groundGrowthLevel(options.seed, anchorX, anchorY, cluster);
+          const grown = groundGrowthLevel(options.seed, anchorX, anchorY, cluster);
+          const level = cluster.invert ? 1 - grown : grown;
           const floor = anchor === 'rockFoot' || anchor === 'bank' ? cluster.edgeFloor : 0;
           growth = smoothstep(cluster.threshold - cluster.softness, cluster.threshold + cluster.softness,
             Math.max(level, floor));

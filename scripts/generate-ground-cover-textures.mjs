@@ -2,7 +2,9 @@ import * as path from 'path';
 import sharp from 'sharp';
 import { mkdir } from 'node:fs/promises';
 import { runOrganicCoverPipeline } from './lib/organic-cover-pipeline.mjs';
-import { FOREST_LITTER_CONFIG, FOREST_VEGETATION_CONFIG } from '../src/arena/GroundCoverConfig.ts';
+import {
+  FOREST_LITTER_CONFIG, FOREST_VEGETATION_CONFIG, GROUND_AREA_GREEN_CONFIG, GROUND_AREA_SOIL_CONFIG,
+} from '../src/arena/GroundCoverConfig.ts';
 
 /**
  * Textures of GROUND_COVER_TIERS (src/arena/GroundCoverConfig.ts):
@@ -129,6 +131,26 @@ for (const tier of [FOREST_LITTER_CONFIG, FOREST_VEGETATION_CONFIG]) {
       .resize(body, body, { fit: 'inside', kernel: 'lanczos3' }).png().toBuffer();
     await sharp(await withContactShadow(sprite, { blur, offset: 0, opacity: family.shadow }))
       .png().toFile(path.join(output, variant.fileName));
+    console.log(`${variant.fileName}: ${longSide} px from ${source}`);
+  }
+}
+
+/**
+ * Large flat ground surfaces (moss, clover, creeping cover, soil and litter; 2-7 m radius) from
+ * tools/source-art/groundcover. Trimmed to the visible surface and exported at their largest
+ * world size: flat colour layers without a contact shadow, below the upright vegetation.
+ */
+const AREA_SOURCE = path.join('tools', 'source-art', 'groundcover');
+for (const tier of [GROUND_AREA_GREEN_CONFIG, GROUND_AREA_SOIL_CONFIG]) {
+  for (const variant of tier.variants) {
+    const source = variant.fileName.replace(/^ground_area_/, '').replace(/\.png$/, '');
+    const input = path.join(AREA_SOURCE, variant.sourceSet, `${source}.png`);
+    const metadata = await sharp(input).metadata();
+    if (!metadata.hasAlpha) throw new Error(`Expected transparent source: ${input}`);
+    const longSide = Math.ceil(variant.sizeCells[1] * 32);
+    await sharp(await sharp(input).trim({ threshold: 5 }).png().toBuffer())
+      .resize(longSide, longSide, { fit: 'inside', kernel: 'lanczos3' })
+      .png({ compressionLevel: 9 }).toFile(path.join(output, variant.fileName));
     console.log(`${variant.fileName}: ${longSide} px from ${source}`);
   }
 }

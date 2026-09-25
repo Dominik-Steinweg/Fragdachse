@@ -278,8 +278,9 @@ export class ArenaBuilder {
       water: layout.water ?? [],
       metrics: worldMetrics,
     }).filter(p => !waterGeometry.isCircleBlocked(p.worldX, p.worldY,
-      // Bank growth may lean over the waterline; the water surface above covers its tips.
-      p.sizePx * (p.anchor === 'bank' ? .3 : Math.SQRT2 / 2)));
+      // Bank growth may lean over the waterline and large flat surfaces may reach under it; the
+      // water surface above covers them.
+      p.sizePx * (p.anchor === 'bank' ? .3 : p.sizePx > 3 * CELL_SIZE ? .1 : Math.SQRT2 / 2)));
 
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
