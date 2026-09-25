@@ -7,8 +7,8 @@
  * kommen host-autoritativ über den Basis-Snapshot. Zeitachse und Drohnenzahl teilt der Renderer mit
  * `CoopDefenseObjectiveRepairSystem`, damit Strahl und HP-Balken zusammenfallen.
  *
- * Optik und Strahlrezept stammen aus dem spielergebundenen Drohnensystem (`repairDroneVisuals`);
- * unterschieden sind sie über den fehlenden Besitzerring und den Formationsflug statt eines Orbits
+ * Artwork und Arbeitseffekt werden mit dem spielergebundenen Drohnensystem geteilt;
+ * unterschieden sind sie über die fehlende Besitzermarkierung und den Formationsflug statt eines Orbits
  * um einen Spieler.
  */
 import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
@@ -19,17 +19,15 @@ import {
 } from '../config/coopDefenseObjectiveRepair';
 import { getBaseWorldBounds } from '../arena/BaseRegistry';
 import type { BaseManager } from '../entities/BaseManager';
-import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { getSecondaryObjectiveTargets } from '../ui/coopDefenseSecondaryObjectiveModel';
 import {
-  REPAIR_DRONE_DEPTH,
   createRepairDroneBody,
-  drawRepairBeam,
   updateRepairDroneRotors,
 } from './repairDroneVisuals';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
-import { registerGraphicsObject } from './EffectUtils';
+import { getRepairDroneWorkProbe, RepairDroneEffects } from './RepairDroneEffects';
+import type { LightingSystem } from './LightingSystem';
 
 /** Höchstens zwei gleichzeitig wiederhergestellte Ziele; die Objekte werden vorab angelegt. */
 const MAX_JOBS = 2;
@@ -42,12 +40,11 @@ const ENTRY_SPREAD_RAD = 0.34;
 
 interface DroneVisual {
   readonly body: Phaser.GameObjects.Image;
-  readonly glow: Phaser.GameObjects.Arc;
-  readonly beam: Phaser.GameObjects.Graphics;
-  readonly spark: Phaser.GameObjects.Arc;
+  readonly effects: RepairDroneEffects;
 }
 
 interface RepairJob {
+  readonly targetId: string;
   readonly centerX: number;
   readonly centerY: number;
   /** Richtung, aus der die Drohnen kommen und in die sie wieder abfliegen. */
@@ -61,8 +58,14 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
   private readonly drones: DroneVisual[] = [];
   private built = false;
   private visible = false;
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+    for (const drone of this.drones) drone.effects.setLightingSystem(lighting);
+  }
 
   build(): void {
     if (this.built) return;
@@ -70,21 +73,9 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
 
     for (let index = 0; index < MAX_DRONES; index += 1) {
       const body = createRepairDroneBody(this.scene, 0, 0).setVisible(false);
-      const glow = this.scene.add.circle(0, 0, 13, 0x63ffc0, 0.12)
-        .setStrokeStyle(1, 0xbfffe3, 0.45)
-        .setDepth(REPAIR_DRONE_DEPTH - 0.02)
-        .setVisible(false);
-      registerGraphicsObject(this.scene, 'objectiveMarkers', glow);
-      const beam = this.scene.add.graphics()
-        .setDepth(REPAIR_DRONE_DEPTH - 0.01)
-        .setVisible(false);
-      const spark = this.scene.add.circle(0, 0, 7, 0xc8ffe4, 0.35)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(REPAIR_DRONE_DEPTH - 0.015)
-        .setVisible(false);
-      registerGraphicsObject(this.scene, 'objectiveMarkers', beam);
-      registerGraphicsObject(this.scene, 'objectiveMarkers', spark);
-      this.drones.push({ body, glow, beam, spark });
+      const effects = new RepairDroneEffects(this.scene, `repair-drone:mission:${index}`);
+      effects.setLightingSystem(this.lighting);
+      this.drones.push({ body, effects });
     }
   }
 
@@ -106,7 +97,6 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
     }
 
     this.visible = true;
-    const decorative = getGraphicsQualityProfile(this.scene).level !== 'low';
     const now = this.scene.time.now;
     const { droneCount } = COOP_DEFENSE_OBJECTIVE_REPAIR_CONFIG;
 
@@ -117,7 +107,7 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
         hideDrone(drone);
         continue;
       }
-      this.applyDrone(drone, job, index % droneCount, droneCount, now, decorative);
+      this.applyDrone(drone, job, index % droneCount, droneCount, now);
     }
   }
 
@@ -134,9 +124,7 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
   destroy(): void {
     for (const drone of this.drones) {
       drone.body.destroy();
-      drone.glow.destroy();
-      drone.beam.destroy();
-      drone.spark.destroy();
+      drone.effects.destroy();
     }
     this.drones.length = 0;
     this.built = false;
@@ -170,6 +158,7 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
         const centerX = bounds.x + bounds.width * 0.5;
         const centerY = bounds.y + bounds.height * 0.5;
         jobs.push({
+          targetId,
           centerX,
           centerY,
           entryAngle: this.getEntryAngle(baseManager, centerX, centerY),
@@ -207,7 +196,6 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
     slot: number,
     droneCount: number,
     now: number,
-    decorative: boolean,
   ): void {
     const { approachMs, repairMs, approachDistancePx } = COOP_DEFENSE_OBJECTIVE_REPAIR_CONFIG;
     const formationAngle = job.entryAngle
@@ -255,42 +243,13 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
       .setPosition(x, y + bob)
       .setRotation(Math.atan2(facingY - y, facingX - x) + Math.PI / 2);
     updateRepairDroneRotors(drone.body, now, slot * 37);
-    drone.glow
-      .setVisible(decorative)
-      .setAlpha(alpha)
-      .setPosition(x, y + bob)
-      .setScale(0.9 + Math.sin(now * 0.01 + slot) * 0.08);
-
-    drone.beam.clear();
-    if (!repairing) {
-      drone.beam.setVisible(false);
-      drone.spark.setVisible(false);
-      return;
-    }
-
-    const surface = job.surfacePointOf(x, y + bob);
-    if (!surface) {
-      drone.beam.setVisible(false);
-      drone.spark.setVisible(false);
-      return;
-    }
-    // Leichtes Flackern statt eines konstanten Strichs: Der Strahl liest sich als Arbeit, nicht als
-    // statische Verbindung.
-    const flicker = 0.78 + Math.sin(now * 0.021 + slot * 2.1) * 0.22;
-    drone.beam.setVisible(true);
-    drawRepairBeam(drone.beam, x, y + bob, surface.x, surface.y, alpha * flicker);
-    drone.spark
-      .setVisible(decorative)
-      .setPosition(surface.x, surface.y)
-      .setAlpha(alpha * 0.45 * flicker)
-      .setScale(0.8 + flicker * 0.5);
+    const probe = getRepairDroneWorkProbe(drone.body);
+    const surface = repairing ? job.surfacePointOf(probe.x, probe.y) : null;
+    drone.effects.update(drone.body, surface ? { id: job.targetId, ...surface } : null, now, alpha);
   }
 }
 
 function hideDrone(drone: DroneVisual): void {
   drone.body.setVisible(false);
-  drone.glow.setVisible(false);
-  drone.spark.setVisible(false);
-  drone.beam.clear();
-  drone.beam.setVisible(false);
+  drone.effects.hide();
 }

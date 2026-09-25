@@ -1,0 +1,982 @@
+{
+  "title": "Farbige Bodendetails – Serie 03",
+  "generator": "Built-in Imagegen",
+  "promptSet": "prompts.json",
+  "worldPixelsPerMetre": 32,
+  "sizeConvention": "User-confirmed radius; longest visible diameter = radiusMetres * 64 world pixels. Transparent padding excluded.",
+  "runtimeIntegrated": false,
+  "variants": [
+    {
+      "id": "small-01-ivory-stars",
+      "title": "Elfenbeinsterne",
+      "sizeClass": "Klein",
+      "type": "Blüten",
+      "radiusMetres": 0.3,
+      "diameterMetres": 0.6,
+      "intendedWorldPixels": 19,
+      "file": "small-01-ivory-stars.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-41cbba0d-2ae3-4117-906a-2a818d156b92.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1245607,
+        "fullyOpaquePixels": 625,
+        "partiallyTransparentPixels": 326284,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 220,
+          "y": 263,
+          "width": 816,
+          "height": 708
+        }
+      }
+    },
+    {
+      "id": "small-02-golden-cups",
+      "title": "Goldgelbe Blüten",
+      "sizeClass": "Klein",
+      "type": "Blüten",
+      "radiusMetres": 0.4,
+      "diameterMetres": 0.8,
+      "intendedWorldPixels": 26,
+      "file": "small-02-golden-cups.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-bf2f0a92-2878-4e31-aa00-655fd3398122.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1267390,
+        "fullyOpaquePixels": 371,
+        "partiallyTransparentPixels": 304755,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 220,
+          "y": 289,
+          "width": 819,
+          "height": 661
+        }
+      }
+    },
+    {
+      "id": "small-03-rose-pink",
+      "title": "Rosafarbene Waldblüten",
+      "sizeClass": "Klein",
+      "type": "Blüten",
+      "radiusMetres": 0.45,
+      "diameterMetres": 0.9,
+      "intendedWorldPixels": 29,
+      "file": "small-03-rose-pink.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-1ebad138-12ab-42e8-9e73-ce1d8547933b.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1249276,
+        "fullyOpaquePixels": 886,
+        "partiallyTransparentPixels": 322354,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 120,
+          "y": 249,
+          "width": 1028,
+          "height": 808
+        }
+      }
+    },
+    {
+      "id": "small-04-blue-violets",
+      "title": "Blaue Waldveilchen",
+      "sizeClass": "Klein",
+      "type": "Blüten",
+      "radiusMetres": 0.5,
+      "diameterMetres": 1,
+      "intendedWorldPixels": 32,
+      "file": "small-04-blue-violets.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-8e91f935-41c8-4ec8-8c6c-387ce50309b7.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1072541,
+        "fullyOpaquePixels": 124,
+        "partiallyTransparentPixels": 499851,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 121,
+          "y": 167,
+          "width": 1001,
+          "height": 933
+        }
+      }
+    },
+    {
+      "id": "small-05-mauve-bells",
+      "title": "Malvenfarbene Blüten",
+      "sizeClass": "Klein",
+      "type": "Blüten",
+      "radiusMetres": 0.55,
+      "diameterMetres": 1.1,
+      "intendedWorldPixels": 35,
+      "file": "small-05-mauve-bells.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-1c6c7057-720e-4ae3-9b62-c29fbbe30f3c.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1319725,
+        "fullyOpaquePixels": 325,
+        "partiallyTransparentPixels": 252466,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 300,
+          "y": 288,
+          "width": 710,
+          "height": 658
+        }
+      }
+    },
+    {
+      "id": "small-06-mixed-meadow",
+      "title": "Bunte Waldlichtung",
+      "sizeClass": "Klein",
+      "type": "Blüten",
+      "radiusMetres": 0.7,
+      "diameterMetres": 1.4,
+      "intendedWorldPixels": 45,
+      "file": "small-06-mixed-meadow.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-8584ef41-7cf0-4c53-94cc-075f78a06bce.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1112344,
+        "fullyOpaquePixels": 399,
+        "partiallyTransparentPixels": 459773,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 131,
+          "y": 142,
+          "width": 999,
+          "height": 997
+        }
+      }
+    },
+    {
+      "id": "small-07-burgundy-sorrel",
+      "title": "Bordeauxroter Sauerklee",
+      "sizeClass": "Klein",
+      "type": "Blattmuster",
+      "radiusMetres": 0.65,
+      "diameterMetres": 1.3,
+      "intendedWorldPixels": 42,
+      "file": "small-07-burgundy-sorrel.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-492a89ab-1248-4ce0-8bfe-9b7694723a3f.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1126599,
+        "fullyOpaquePixels": 1337,
+        "partiallyTransparentPixels": 444580,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 117,
+          "y": 169,
+          "width": 1040,
+          "height": 904
+        }
+      }
+    },
+    {
+      "id": "small-08-silver-leaf",
+      "title": "Silbergrüne Blattzeichnung",
+      "sizeClass": "Klein",
+      "type": "Blattmuster",
+      "radiusMetres": 0.8,
+      "diameterMetres": 1.6,
+      "intendedWorldPixels": 51,
+      "file": "small-08-silver-leaf.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-949fccd1-9ce9-48a2-bfd5-d02eff65020f.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1171978,
+        "fullyOpaquePixels": 780,
+        "partiallyTransparentPixels": 399758,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 75,
+          "y": 163,
+          "width": 1127,
+          "height": 935
+        }
+      }
+    },
+    {
+      "id": "small-09-amber-lichen",
+      "title": "Bernsteinfarbene Flechten",
+      "sizeClass": "Klein",
+      "type": "Moos & Flechten",
+      "radiusMetres": 0.6,
+      "diameterMetres": 1.2,
+      "intendedWorldPixels": 38,
+      "file": "small-09-amber-lichen.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-0b04c637-af90-4141-9cc4-61679688363e.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1015408,
+        "fullyOpaquePixels": 4,
+        "partiallyTransparentPixels": 557104,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 129,
+          "y": 162,
+          "width": 1064,
+          "height": 963
+        }
+      }
+    },
+    {
+      "id": "small-10-copper-litter",
+      "title": "Kupferrote Laubstreu",
+      "sizeClass": "Klein",
+      "type": "Laub & Pilze",
+      "radiusMetres": 0.85,
+      "diameterMetres": 1.7,
+      "intendedWorldPixels": 54,
+      "file": "small-10-copper-litter.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-a2fc85ea-7bad-40de-809a-aeb98eeff8a1.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1351410,
+        "fullyOpaquePixels": 99,
+        "partiallyTransparentPixels": 221007,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 182,
+          "y": 212,
+          "width": 891,
+          "height": 804
+        }
+      }
+    },
+    {
+      "id": "small-11-orange-fungi",
+      "title": "Orangebraune Pilzgruppen",
+      "sizeClass": "Klein",
+      "type": "Laub & Pilze",
+      "radiusMetres": 0.4,
+      "diameterMetres": 0.8,
+      "intendedWorldPixels": 26,
+      "file": "small-11-orange-fungi.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-a2b64f6d-7722-49a3-90da-503462dc8e7a.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1412190,
+        "fullyOpaquePixels": 28,
+        "partiallyTransparentPixels": 160298,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 341,
+          "y": 341,
+          "width": 570,
+          "height": 556
+        }
+      }
+    },
+    {
+      "id": "small-12-bronze-green",
+      "title": "Bronzegrüne Blattinseln",
+      "sizeClass": "Klein",
+      "type": "Blattmuster",
+      "radiusMetres": 0.9,
+      "diameterMetres": 1.8,
+      "intendedWorldPixels": 58,
+      "file": "small-12-bronze-green.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-14c59b2e-98ca-4ad8-bf50-199cbeee01d7.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1234366,
+        "fullyOpaquePixels": 1096,
+        "partiallyTransparentPixels": 337054,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 110,
+          "y": 228,
+          "width": 1039,
+          "height": 786
+        }
+      }
+    },
+    {
+      "id": "medium-01-ivory-stars",
+      "title": "Elfenbeinsterne",
+      "sizeClass": "Mittel",
+      "type": "Blüten",
+      "radiusMetres": 1,
+      "diameterMetres": 2,
+      "intendedWorldPixels": 64,
+      "file": "medium-01-ivory-stars.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-2fb36c33-1128-44c5-b333-379fa695de7a.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1097702,
+        "fullyOpaquePixels": 283,
+        "partiallyTransparentPixels": 474531,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 95,
+          "y": 164,
+          "width": 1060,
+          "height": 952
+        }
+      }
+    },
+    {
+      "id": "medium-02-golden-cups",
+      "title": "Goldgelbe Blüten",
+      "sizeClass": "Mittel",
+      "type": "Blüten",
+      "radiusMetres": 1.1,
+      "diameterMetres": 2.2,
+      "intendedWorldPixels": 70,
+      "file": "medium-02-golden-cups.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-7a648db7-eca3-4bbd-9ff3-8c9fc8976f64.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 960625,
+        "fullyOpaquePixels": 5,
+        "partiallyTransparentPixels": 611886,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 100,
+          "y": 108,
+          "width": 1056,
+          "height": 1054
+        }
+      }
+    },
+    {
+      "id": "medium-03-rose-pink",
+      "title": "Rosafarbene Waldblüten",
+      "sizeClass": "Mittel",
+      "type": "Blüten",
+      "radiusMetres": 1.2,
+      "diameterMetres": 2.4,
+      "intendedWorldPixels": 77,
+      "file": "medium-03-rose-pink.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-aa85a06f-c762-40b0-9fe6-a0d6fd6359dc.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1108854,
+        "fullyOpaquePixels": 405,
+        "partiallyTransparentPixels": 463257,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 80,
+          "y": 88,
+          "width": 1105,
+          "height": 1078
+        }
+      }
+    },
+    {
+      "id": "medium-04-blue-violets",
+      "title": "Blaue Waldveilchen",
+      "sizeClass": "Mittel",
+      "type": "Blüten",
+      "radiusMetres": 1.3,
+      "diameterMetres": 2.6,
+      "intendedWorldPixels": 83,
+      "file": "medium-04-blue-violets.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-1e68427d-dfa7-4188-8422-a71158f3a47a.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1037815,
+        "fullyOpaquePixels": 374,
+        "partiallyTransparentPixels": 534327,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 69,
+          "y": 135,
+          "width": 1133,
+          "height": 994
+        }
+      }
+    },
+    {
+      "id": "medium-05-mauve-bells",
+      "title": "Malvenfarbene Blüten",
+      "sizeClass": "Mittel",
+      "type": "Blüten",
+      "radiusMetres": 1.5,
+      "diameterMetres": 3,
+      "intendedWorldPixels": 96,
+      "file": "medium-05-mauve-bells.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-a185230e-9dd7-4f47-9c3e-6e65ffb32607.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 837714,
+        "fullyOpaquePixels": 18,
+        "partiallyTransparentPixels": 734784,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 119,
+          "y": 75,
+          "width": 1087,
+          "height": 1111
+        }
+      }
+    },
+    {
+      "id": "medium-06-mixed-meadow",
+      "title": "Bunte Waldlichtung",
+      "sizeClass": "Mittel",
+      "type": "Blüten",
+      "radiusMetres": 1.6,
+      "diameterMetres": 3.2,
+      "intendedWorldPixels": 102,
+      "file": "medium-06-mixed-meadow.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-e019a850-aa11-4bbf-a216-32dd2dd6f104.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 869872,
+        "fullyOpaquePixels": 138,
+        "partiallyTransparentPixels": 702506,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 92,
+          "y": 67,
+          "width": 1083,
+          "height": 1114
+        }
+      }
+    },
+    {
+      "id": "medium-07-burgundy-sorrel",
+      "title": "Bordeauxroter Sauerklee",
+      "sizeClass": "Mittel",
+      "type": "Blattmuster",
+      "radiusMetres": 1.2,
+      "diameterMetres": 2.4,
+      "intendedWorldPixels": 77,
+      "file": "medium-07-burgundy-sorrel.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-89662931-5fc6-42c4-bd09-ab48cf352603.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 874464,
+        "fullyOpaquePixels": 330,
+        "partiallyTransparentPixels": 697722,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 92,
+          "y": 106,
+          "width": 1080,
+          "height": 1052
+        }
+      }
+    },
+    {
+      "id": "medium-08-silver-leaf",
+      "title": "Silbergrüne Blattzeichnung",
+      "sizeClass": "Mittel",
+      "type": "Blattmuster",
+      "radiusMetres": 1.8,
+      "diameterMetres": 3.6,
+      "intendedWorldPixels": 115,
+      "file": "medium-08-silver-leaf.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-f4c6e001-0938-484c-af6c-bcbee6a421f0.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1031257,
+        "fullyOpaquePixels": 549,
+        "partiallyTransparentPixels": 540710,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 96,
+          "y": 108,
+          "width": 1104,
+          "height": 1064
+        }
+      }
+    },
+    {
+      "id": "medium-09-amber-lichen",
+      "title": "Bernsteinfarbene Flechten",
+      "sizeClass": "Mittel",
+      "type": "Moos & Flechten",
+      "radiusMetres": 1.4,
+      "diameterMetres": 2.8,
+      "intendedWorldPixels": 90,
+      "file": "medium-09-amber-lichen.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-ec817130-064b-4896-81fb-bb50a6f5690e.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 717430,
+        "fullyOpaquePixels": 55,
+        "partiallyTransparentPixels": 855031,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 57,
+          "y": 70,
+          "width": 1142,
+          "height": 1123
+        }
+      }
+    },
+    {
+      "id": "medium-10-copper-litter",
+      "title": "Kupferrote Laubstreu",
+      "sizeClass": "Mittel",
+      "type": "Laub & Pilze",
+      "radiusMetres": 1.7,
+      "diameterMetres": 3.4,
+      "intendedWorldPixels": 109,
+      "file": "medium-10-copper-litter.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-46458900-9427-4356-898f-aad99bf1c0bb.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 968240,
+        "fullyOpaquePixels": 74,
+        "partiallyTransparentPixels": 604202,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 87,
+          "y": 98,
+          "width": 1080,
+          "height": 1064
+        }
+      }
+    },
+    {
+      "id": "medium-11-orange-fungi",
+      "title": "Orangebraune Pilzgruppen",
+      "sizeClass": "Mittel",
+      "type": "Laub & Pilze",
+      "radiusMetres": 1.1,
+      "diameterMetres": 2.2,
+      "intendedWorldPixels": 70,
+      "file": "medium-11-orange-fungi.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-e8787e2c-4431-4002-9bbc-009b017dcf72.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 1050119,
+        "fullyOpaquePixels": 187,
+        "partiallyTransparentPixels": 522210,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 121,
+          "y": 113,
+          "width": 1013,
+          "height": 1022
+        }
+      }
+    },
+    {
+      "id": "medium-12-bronze-green",
+      "title": "Bronzegrüne Blattinseln",
+      "sizeClass": "Mittel",
+      "type": "Blattmuster",
+      "radiusMetres": 2,
+      "diameterMetres": 4,
+      "intendedWorldPixels": 128,
+      "file": "medium-12-bronze-green.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-c127c6b8-a805-40db-8e98-d0f39155d24c.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 887320,
+        "fullyOpaquePixels": 495,
+        "partiallyTransparentPixels": 684701,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 79,
+          "y": 99,
+          "width": 1115,
+          "height": 1055
+        }
+      }
+    },
+    {
+      "id": "large-01-ivory-stars",
+      "title": "Elfenbeinsterne",
+      "sizeClass": "Groß",
+      "type": "Blüten",
+      "radiusMetres": 2.25,
+      "diameterMetres": 4.5,
+      "intendedWorldPixels": 144,
+      "file": "large-01-ivory-stars.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-49e1a95a-8f08-422c-8e09-33b6506b8b95.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 779950,
+        "fullyOpaquePixels": 40,
+        "partiallyTransparentPixels": 792526,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 58,
+          "y": 57,
+          "width": 1130,
+          "height": 1149
+        }
+      }
+    },
+    {
+      "id": "large-02-golden-cups",
+      "title": "Goldgelbe Blüten",
+      "sizeClass": "Groß",
+      "type": "Blüten",
+      "radiusMetres": 2.75,
+      "diameterMetres": 5.5,
+      "intendedWorldPixels": 176,
+      "file": "large-02-golden-cups.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-a1840c3f-42ff-459f-854d-0d11ddd4895f.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 899997,
+        "fullyOpaquePixels": 5,
+        "partiallyTransparentPixels": 672514,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 60,
+          "y": 49,
+          "width": 1154,
+          "height": 1142
+        }
+      }
+    },
+    {
+      "id": "large-03-rose-pink",
+      "title": "Rosafarbene Waldblüten",
+      "sizeClass": "Groß",
+      "type": "Blüten",
+      "radiusMetres": 3.25,
+      "diameterMetres": 6.5,
+      "intendedWorldPixels": 208,
+      "file": "large-03-rose-pink.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-7f348165-70ee-4c18-bf3a-db914a36bf76.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 735335,
+        "fullyOpaquePixels": 34,
+        "partiallyTransparentPixels": 837147,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 48,
+          "y": 73,
+          "width": 1161,
+          "height": 1129
+        }
+      }
+    },
+    {
+      "id": "large-04-blue-violets",
+      "title": "Blaue Waldveilchen",
+      "sizeClass": "Groß",
+      "type": "Blüten",
+      "radiusMetres": 3.75,
+      "diameterMetres": 7.5,
+      "intendedWorldPixels": 240,
+      "file": "large-04-blue-violets.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-2c823402-84a9-4689-9ad4-394b5500b3ad.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 786960,
+        "fullyOpaquePixels": 20,
+        "partiallyTransparentPixels": 785536,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 45,
+          "y": 85,
+          "width": 1172,
+          "height": 1099
+        }
+      }
+    },
+    {
+      "id": "large-05-mauve-bells",
+      "title": "Malvenfarbene Blüten",
+      "sizeClass": "Groß",
+      "type": "Blüten",
+      "radiusMetres": 4.5,
+      "diameterMetres": 9,
+      "intendedWorldPixels": 288,
+      "file": "large-05-mauve-bells.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-d0e9aab2-482e-43a0-a431-6c5bd6534774.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 577937,
+        "fullyOpaquePixels": 1,
+        "partiallyTransparentPixels": 994578,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 33,
+          "y": 52,
+          "width": 1190,
+          "height": 1152
+        }
+      }
+    },
+    {
+      "id": "large-06-mixed-meadow",
+      "title": "Bunte Waldlichtung",
+      "sizeClass": "Groß",
+      "type": "Blüten",
+      "radiusMetres": 5,
+      "diameterMetres": 10,
+      "intendedWorldPixels": 320,
+      "file": "large-06-mixed-meadow.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-d501cbe9-6f6c-43e2-aa60-82937d515357.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 577253,
+        "fullyOpaquePixels": 5,
+        "partiallyTransparentPixels": 995258,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 30,
+          "y": 39,
+          "width": 1189,
+          "height": 1176
+        }
+      }
+    },
+    {
+      "id": "large-07-burgundy-sorrel",
+      "title": "Bordeauxroter Sauerklee",
+      "sizeClass": "Groß",
+      "type": "Blattmuster",
+      "radiusMetres": 3,
+      "diameterMetres": 6,
+      "intendedWorldPixels": 192,
+      "file": "large-07-burgundy-sorrel.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-bc27efb8-9520-4725-b2ac-7c5400ee99a0.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 678960,
+        "fullyOpaquePixels": 173,
+        "partiallyTransparentPixels": 893383,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 36,
+          "y": 44,
+          "width": 1182,
+          "height": 1168
+        }
+      }
+    },
+    {
+      "id": "large-08-silver-leaf",
+      "title": "Silbergrüne Blattzeichnung",
+      "sizeClass": "Groß",
+      "type": "Blattmuster",
+      "radiusMetres": 5.5,
+      "diameterMetres": 11,
+      "intendedWorldPixels": 352,
+      "file": "large-08-silver-leaf.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-da86e8c4-ca17-463c-9ec1-0f72ea5e7409.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 721792,
+        "fullyOpaquePixels": 14,
+        "partiallyTransparentPixels": 850710,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 73,
+          "y": 65,
+          "width": 1119,
+          "height": 1134
+        }
+      }
+    },
+    {
+      "id": "large-09-amber-lichen",
+      "title": "Bernsteinfarbene Flechten",
+      "sizeClass": "Groß",
+      "type": "Moos & Flechten",
+      "radiusMetres": 4,
+      "diameterMetres": 8,
+      "intendedWorldPixels": 256,
+      "file": "large-09-amber-lichen.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-a369062a-ef24-49e5-b3e1-8a253925da06.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 254,
+        "fullyTransparentPixels": 763645,
+        "fullyOpaquePixels": 0,
+        "partiallyTransparentPixels": 808871,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 94,
+          "y": 95,
+          "width": 1076,
+          "height": 1078
+        }
+      }
+    },
+    {
+      "id": "large-10-copper-litter",
+      "title": "Kupferrote Laubstreu",
+      "sizeClass": "Groß",
+      "type": "Laub & Pilze",
+      "radiusMetres": 6,
+      "diameterMetres": 12,
+      "intendedWorldPixels": 384,
+      "file": "large-10-copper-litter.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-3b359792-62f5-447c-8acc-c1fee8da261e.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 723064,
+        "fullyOpaquePixels": 68,
+        "partiallyTransparentPixels": 849384,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 60,
+          "y": 42,
+          "width": 1145,
+          "height": 1178
+        }
+      }
+    },
+    {
+      "id": "large-11-orange-fungi",
+      "title": "Orangebraune Pilzgruppen",
+      "sizeClass": "Groß",
+      "type": "Laub & Pilze",
+      "radiusMetres": 2.5,
+      "diameterMetres": 5,
+      "intendedWorldPixels": 160,
+      "file": "large-11-orange-fungi.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-949884ae-085f-4b63-ace6-9048b4821846.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 875230,
+        "fullyOpaquePixels": 28,
+        "partiallyTransparentPixels": 697258,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 46,
+          "y": 68,
+          "width": 1150,
+          "height": 1114
+        }
+      }
+    },
+    {
+      "id": "large-12-bronze-green",
+      "title": "Bronzegrüne Blattinseln",
+      "sizeClass": "Groß",
+      "type": "Blattmuster",
+      "radiusMetres": 7,
+      "diameterMetres": 14,
+      "intendedWorldPixels": 448,
+      "file": "large-12-bronze-green.png",
+      "generatedOriginal": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-dde11f48-6c30-4c76-8434-d37619a4373c.png",
+      "png": {
+        "width": 1254,
+        "height": 1254,
+        "hasAlpha": true,
+        "maxAlpha": 255,
+        "fullyTransparentPixels": 633766,
+        "fullyOpaquePixels": 99,
+        "partiallyTransparentPixels": 938651,
+        "alphaBoundsThreshold": 16,
+        "alphaBounds": {
+          "x": 39,
+          "y": 19,
+          "width": 1187,
+          "height": 1215
+        }
+      }
+    }
+  ]
+}

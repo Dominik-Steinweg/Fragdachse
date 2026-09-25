@@ -1,63 +1,47 @@
 import { describe, expect, it, vi } from 'vitest';
 import type * as Phaser from 'phaser';
-import type { PlayerManager } from '../src/entities/PlayerManager';
+import type { PlayerNetState } from '../src/types';
 
-interface TestParticle {
-  x: number;
-  y: number;
-}
-
-class TestEmitter {
-  private readonly alive: TestParticle[] = [];
-  private readonly dead: TestParticle[] = [];
-
-  emitParticleAt(x: number, y: number): TestParticle {
-    const particle = this.dead.pop() ?? { x: 0, y: 0 };
-    particle.x += x;
-    particle.y += y;
-    this.alive.push(particle);
-    return particle;
+const { createdQuads, TestShaderQuad } = vi.hoisted(() => {
+  const createdQuads: { x: number; y: number; visible: boolean; destroyed: boolean }[] = [];
+  class TestShaderQuad {
+    x = 0;
+    y = 0;
+    visible = true;
+    destroyed = false;
+    constructor(_scene: unknown, readonly config: { setupUniforms: (set: (name: string, value: unknown) => void) => void }) {
+      createdQuads.push(this);
+    }
+    setOrigin(): this { return this; }
+    setDepth(): this { return this; }
+    setBlendMode(): this { return this; }
+    setSize(): this { return this; }
+    setVisible(visible: boolean): this { this.visible = visible; return this; }
+    setPosition(x: number, y: number): this { this.x = x; this.y = y; return this; }
+    destroy(): void { this.destroyed = true; }
   }
-
-  killAll(): void {
-    while (this.alive.length > 0) this.dead.push(this.alive.pop()!);
-  }
-
-  forEachDead(callback: (particle: TestParticle, emitter: TestEmitter) => void): void {
-    for (const particle of this.dead) callback(particle, this);
-  }
-
-  addParticleProcessor(): void {}
-}
-
-const createdEmitters: TestEmitter[] = [];
+  return { createdQuads, TestShaderQuad };
+});
 
 vi.mock('phaser', () => ({
-  BlendModes: { ADD: 1 },
-  Math: { Between: () => 30, Linear: (a: number, b: number, t: number) => a + (b-a)*t },
-  Utils: { Array: { GetRandom: (a: unknown[]) => a[0] } },
-  GameObjects: {
-    Particles: {
-      ParticleProcessor: class {},
-    },
+  BlendModes: { ADD: 1, NORMAL: 0 },
+  Math: {
+    Between: () => 30,
+    Linear: (a: number, b: number, t: number) => a + (b-a)*t,
+    Clamp: (v: number, min: number, max: number) => Math.min(max, Math.max(min, v)),
+    Easing: { Quadratic: { Out: (t: number) => t * (2 - t) } },
   },
+  Utils: { Array: { GetRandom: (a: unknown[]) => a[0] } },
+  GameObjects: { Shader: TestShaderQuad },
 }));
 
 vi.mock('../src/effects/EffectUtils', () => ({
-  createEmitter: () => {
-    const emitter = new TestEmitter();
-    createdEmitters.push(emitter);
-    return emitter;
-  },
-  killAllAndResetParticlePositions: (emitter: TestEmitter) => {
-    emitter.killAll();
-    emitter.forEachDead((particle) => {
-      particle.x = 0;
-      particle.y = 0;
-    });
-  },
-  destroyEmitter: () => {},
+  registerGraphicsObject: (_scene: unknown, _family: string, object: unknown) => object,
   ensureCanvasTexture: () => {},
+}));
+
+vi.mock('../src/graphics/GraphicsQuality', () => ({
+  getGraphicsQualityProfile: () => ({ level: 'high' }),
 }));
 
 vi.mock('../src/utils/phaserFx', () => ({
@@ -100,24 +84,58 @@ vi.mock('../src/effects/LightingConfig', () => ({
 
 import { FlamethrowerUpgradeRenderer } from '../src/effects/FlamethrowerUpgradeRenderer';
 
-describe('FlamethrowerUpgradeRenderer particle pools', () => {
-  it('keeps only the ring emitters classic and reuses their particles after clear()', () => {
-    const renderer = new FlamethrowerUpgradeRenderer(
-      {} as Phaser.Scene,
-      {} as PlayerManager,
-    );
-    // Das Bodenfeuer laeuft ueber GPUFX; klassisch bleiben allein Ringflammen und Ringfunken,
-    // die an eigener Ringgeometrie und am RingTurbulenceProcessor haengen.
-    expect(createdEmitters).toHaveLength(2);
-    for (const emitter of createdEmitters) emitter.emitParticleAt(512, 640);
+function ringState(radius: number): PlayerNetState {
+  return { flameRingRadius: radius, alive: true, isBurrowed: false } as PlayerNetState;
+}
 
+describe('FlamethrowerUpgradeRenderer flame ring', () => {
+  it('draws one GPU quad per ring, lets it burn out after replication ends and releases its lights at once', () => {
+    createdQuads.length = 0;
+    const scene = {
+      sys: { renderer: { gl: {} } },
+      time: { now: 1_000 },
+      cameras: { main: { zoomX: 1, zoomY: 1 } },
+      add: { existing: vi.fn() },
+      tweens: { killTweensOf: vi.fn() },
+    };
+    const owners = { getOwnerVisualState: () => ({ x: 120, y: 80, visible: true }) };
+    const lighting = { setLight: vi.fn(), releaseLight: vi.fn() };
+    const renderer = new FlamethrowerUpgradeRenderer(scene as unknown as Phaser.Scene, owners as never);
+    renderer.setLightingSystem(lighting as never);
+
+    renderer.syncRings({ p1: ringState(64) });
+    renderer.update(0);
+    renderer.update(16);
+    expect(createdQuads).toHaveLength(1);
+    expect(createdQuads[0]).toMatchObject({ x: 120, y: 80, visible: true, destroyed: false });
+    expect(lighting.setLight).toHaveBeenCalled();
+
+    renderer.syncRings({});
+    const releasedKeys = lighting.releaseLight.mock.calls.map(([key]) => key as string);
+    expect(releasedKeys.filter(key => key.startsWith('flamering:p1:'))).toHaveLength(12);
+    lighting.setLight.mockClear();
+    scene.time.now += 100;
+    renderer.update(116);
+    expect(createdQuads[0].destroyed).toBe(false);
+    expect(lighting.setLight).not.toHaveBeenCalled();
+
+    scene.time.now += 1_000;
+    renderer.update(1_116);
+    expect(createdQuads[0].destroyed).toBe(true);
+    expect(createdQuads).toHaveLength(1);
+  });
+
+  it('allocates no GPU objects for headless presentation', () => {
+    createdQuads.length = 0;
+    const renderer = new FlamethrowerUpgradeRenderer(
+      { time: { now: 0 } } as unknown as Phaser.Scene,
+      { getOwnerVisualState: () => ({ x: 0, y: 0, visible: true }) } as never,
+    );
+    renderer.syncRings({ p1: ringState(64) });
+    renderer.update(0);
+    expect(createdQuads).toHaveLength(0);
     // Ohne `registerGpuVfx()` darf der Bodenpfad nur nichts tun, nicht werfen.
     renderer.clear();
-
-    for (const emitter of createdEmitters) {
-      const reused = emitter.emitParticleAt(96, 128);
-      expect(reused).toMatchObject({ x: 96, y: 128 });
-    }
   });
 });
 

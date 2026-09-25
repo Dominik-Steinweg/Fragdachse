@@ -2,30 +2,35 @@ import * as Phaser from 'phaser';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../config';
 import type { SyncedPlaceableRock, SyncedRepairDrone } from '../types';
 import {
-  REPAIR_DRONE_DEPTH as DRONE_DEPTH,
   REPAIR_DRONE_SMOOTH_TIME_MS as SMOOTH_TIME_MS,
   createRepairDroneBody,
-  drawRepairBeam,
   updateRepairDroneRotors,
 } from './repairDroneVisuals';
-import { registerGraphicsObject } from './EffectUtils';
+import { getRepairDroneWorkProbe, RepairDroneEffects } from './RepairDroneEffects';
+import type { LightingSystem } from './LightingSystem';
 
 interface RepairDroneVisual {
   body: Phaser.GameObjects.Image;
-  glow: Phaser.GameObjects.Arc;
-  beam: Phaser.GameObjects.Graphics;
+  effects: RepairDroneEffects;
+  ownerColor: number;
   currentX: number;
   currentY: number;
   targetX: number;
   targetY: number;
-  repairTarget?: { x: number; y: number };
+  repairTarget?: { id: string; x: number; y: number };
 }
 
 /** Top-down repair drone with a host-synchronized repair beam. */
 export class RepairDroneRenderer {
   private readonly visuals = new Map<string, RepairDroneVisual>();
+  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+    for (const visual of this.visuals.values()) visual.effects.setLightingSystem(lighting);
+  }
 
   syncVisuals(
     snapshots: readonly SyncedRepairDrone[],
@@ -44,6 +49,7 @@ export class RepairDroneRenderer {
         .map(construction => [
           construction.id,
           {
+            id: String(construction.id),
             x: ARENA_OFFSET_X + construction.gridX * CELL_SIZE + CELL_SIZE * 0.5,
             y: ARENA_OFFSET_Y + construction.gridY * CELL_SIZE + CELL_SIZE * 0.5,
           },
@@ -57,7 +63,7 @@ export class RepairDroneRenderer {
       }
       visual.targetX = snapshot.x;
       visual.targetY = snapshot.y;
-      visual.glow.setStrokeStyle(1, snapshot.ownerColor, 0.65);
+      visual.ownerColor = snapshot.ownerColor;
       visual.repairTarget = snapshot.phase === 'repairing' && snapshot.targetConstructionId !== undefined
         ? constructionPositions.get(snapshot.targetConstructionId)
         : undefined;
@@ -76,18 +82,17 @@ export class RepairDroneRenderer {
       const dx = aim.x - visual.currentX, dy = aim.y - visual.currentY;
       if (Math.hypot(dx, dy) > 0.5) visual.body.setRotation(Math.atan2(dy, dx) + Math.PI / 2);
       updateRepairDroneRotors(visual.body, now);
-      visual.glow
-        .setPosition(visual.currentX, visual.currentY + bob)
-        .setScale(0.9 + Math.sin(now * 0.01) * 0.08);
-      visual.beam.clear();
-      if (!visual.repairTarget) continue;
-      drawRepairBeam(
-        visual.beam,
-        visual.currentX,
-        visual.currentY + bob,
-        visual.repairTarget.x,
-        visual.repairTarget.y,
-      );
+      const target = visual.repairTarget;
+      // Constructions occupy one grid cell. Land the work at its facing edge,
+      // rather than drawing through the turret into the center of its tile.
+      const halfCell = CELL_SIZE * 0.5;
+      const probe = getRepairDroneWorkProbe(visual.body);
+      const contact = target ? {
+        id: target.id,
+        x: Math.max(target.x - halfCell, Math.min(target.x + halfCell, probe.x)),
+        y: Math.max(target.y - halfCell, Math.min(target.y + halfCell, probe.y)),
+      } : null;
+      visual.effects.update(visual.body, contact, now, 1, visual.ownerColor);
     }
   }
 
@@ -97,17 +102,13 @@ export class RepairDroneRenderer {
   }
 
   private createVisual(snapshot: SyncedRepairDrone): RepairDroneVisual {
-    const glow = this.scene.add.circle(snapshot.x, snapshot.y, 13, 0x63ffc0, 0.12)
-      .setStrokeStyle(1, snapshot.ownerColor, 0.65)
-      .setDepth(DRONE_DEPTH - 0.02);
-    const beam = this.scene.add.graphics().setDepth(DRONE_DEPTH - 0.01);
-    registerGraphicsObject(this.scene, 'objectiveMarkers', glow);
-    registerGraphicsObject(this.scene, 'objectiveMarkers', beam);
+    const effects = new RepairDroneEffects(this.scene, `repair-drone:player:${snapshot.ownerId}`);
+    effects.setLightingSystem(this.lighting);
 
     return {
       body: createRepairDroneBody(this.scene, snapshot.x, snapshot.y),
-      glow,
-      beam,
+      effects,
+      ownerColor: snapshot.ownerColor,
       currentX: snapshot.x,
       currentY: snapshot.y,
       targetX: snapshot.x,
@@ -117,7 +118,6 @@ export class RepairDroneRenderer {
 
   private destroyVisual(visual: RepairDroneVisual): void {
     visual.body.destroy();
-    visual.glow.destroy();
-    visual.beam.destroy();
+    visual.effects.destroy();
   }
 }
