@@ -71,6 +71,11 @@ mit sandigem Kies `gravel_material_alt` gemischt, Quellen
 Gras. Die dezenten Kiesstempel (`PERSISTENT_BASE_GRAVEL_DECORATION_CONFIG`) bleiben im Inneren
 der Zone.
 
+Das Gleisbett (`TrackGravelField`) entsteht pixelgenau aus demselben Kiesmaterial, grau gestimmt:
+dichter Schotter unter den Schwellen, eine entlang des Gleises unregelmaessig breite Schulter, in
+der die Steine gruppenweise in ein dunkles, verdichtetes Erdbett auslaufen. Den organischen Erdrand
+um die Gleise liefert weiterhin die Karte. Sichtpruefung im Gleis-Lab (`track-lab.html`).
+
 ## Quellen und reproduzierbarer Export
 
 `npm run sprites:ground` erzeugt alle Bodenassets in dieser Reihenfolge:

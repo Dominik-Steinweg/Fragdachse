@@ -95,15 +95,16 @@ export const SHADOW_CASTERS = {
   rock: {
     enabled: true,
     layerDepth: DEPTH.ROCKS - 0.35,
-    castHeightPx: 8,
-    opacity: 0.72,
-    softnessPx: 4,
+    // Short, close contact: the broad stone facets carry height, the footprint roots it in soil.
+    castHeightPx: 6,
+    opacity: 0.52,
+    softnessPx: 2.5,
     blurLayers: 8,
     stretch: 0.8,
-    inflatePx: 1,
+    inflatePx: 2,
     shape: 'cell',
-    footprintWidthPx: CELL_SIZE * 0.85,
-    footprintHeightPx: CELL_SIZE * 0.85,
+    footprintWidthPx: CELL_SIZE * 0.9,
+    footprintHeightPx: CELL_SIZE * 0.9,
   },
   trunk: {
     enabled: true,

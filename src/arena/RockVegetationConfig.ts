@@ -112,8 +112,7 @@ export const ROCK_VEGETATION_CONFIG: RockVegetationLayerConfig = {
   // Narrower than one cell: rock letters and walls are often only one or two cells thick, and a
   // full cell of leaf mat on an edge turns them into hedges instead of stone.
   minBandPx: 20,
-  maxBandPx: 34,
-  /** 9 bis 13 px nach aussen – klar sichtbar und innerhalb der Maskenreichweite von 15 px. */
+  maxBandPx: 28,
   // A short overhang keeps the rock silhouette (and its dark contour) readable.
   overhangPx: 7,
   overhangJitterPx: 2,
@@ -142,17 +141,14 @@ export const ROCK_VEGETATION_CONFIG: RockVegetationLayerConfig = {
    * haeufigste Fall (rund 60 % aller Kantenlaeufe). Waechst dort regelmaessig etwas, entsteht ueber
    * die Karte ein Tupfenmuster, und die grossen Matten auf den langen Kanten gehen darin unter.
    */
-  minCoverage: 0.16,
-  /**
-   * Steiler als die Untergrenze vermuten laesst: Ab drei Zellen soll eine Kante zuverlaessig
-   * bewachsen sein, damit die Schicht trotz der seltenen Einzelzellen kraeftig deckt.
-   */
-  coverageSlopePerCell: 0.16,
-  maxCoverage: 0.9,
+  minCoverage: 0.13,
+  // Long edges retain bare fracture faces between irregular patches of vegetation.
+  coverageSlopePerCell: 0.07,
+  maxCoverage: 0.56,
   maxGapCells: 2,
   maxEdgesPerCell: 2,
-  minAlpha: 0.82,
-  maxAlpha: 1,
+  minAlpha: 0.7,
+  maxAlpha: 0.94,
 
   /** Flache Gewichte: Bei acht Vorlagen faellt jede Haeufung als Muster auf. */
   variants: [

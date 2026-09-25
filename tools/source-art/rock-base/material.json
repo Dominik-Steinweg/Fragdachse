@@ -1,22 +1,25 @@
 {
-  "source": "candidates-01/rock-base-08-dark-cool-slate.png",
-  "sourceMetres": 4,
+  "source": "rock-strata.png",
+  "sourceMetres": 8,
   "pixelsPerMetre": 32,
   "seed": 4099,
   "grade": {
-    "gain": [0.92, 0.98, 1.06],
-    "saturation": 0.7,
-    "gamma": 1.02
+    "gain": [0.94, 0.98, 1.04],
+    "saturation": 0.55,
+    "gamma": 0.94
   },
   "edge": {
-    "cornerRadius": 6,
-    "insetMean": 1.1,
-    "insetVariation": 1.7,
-    "lightLift": 0.5,
-    "shadeDrop": 0.45,
-    "rimWidth": 5,
-    "rimDarken": 0.28,
-    "outline": 0.42,
-    "outlineWidth": 3
+    "cornerRadius": 7,
+    "insetMean": 1.2,
+    "insetVariation": 2.8,
+    "lightLift": 0.42,
+    "shadeDrop": 0.3,
+    "rimWidth": 8,
+    "rimDarken": 0.12,
+    "outline": 0.25,
+    "outlineWidth": 1.1,
+    "shelfWidth": 5.5,
+    "shelfVariation": 2.5,
+    "shelfLift": 0.18
   }
 }

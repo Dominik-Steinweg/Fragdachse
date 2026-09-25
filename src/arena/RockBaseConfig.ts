@@ -32,7 +32,7 @@ export function getRockBaseFrame(autotileFrame: number, gridX: number, gridY: nu
 
 export function preloadRockBase(load: Phaser.Loader.LoaderPlugin): void {
   // New material atlas revision: bypass partial downloads cached under the old URL.
-  load.spritesheet(ROCK_BASE_TEXTURE_KEY, './assets/sprites/rock_base.png?v=material-phases-1', {
+  load.spritesheet(ROCK_BASE_TEXTURE_KEY, './assets/sprites/rock_base.png?v=rock-strata-2', {
     frameWidth: ROCK_BASE_FRAME_SIZE,
     frameHeight: ROCK_BASE_FRAME_SIZE,
     margin: ROCK_BASE_FRAME_MARGIN,

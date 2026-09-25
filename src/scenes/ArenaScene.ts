@@ -28,7 +28,6 @@ import { preloadArenaDecalAssets } from '../arena/DecalConfig';
 import { preloadBaseGroundingAssets } from '../arena/BaseGroundingConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravelConfig';
-import { preloadTrackGravelAssets } from '../arena/TrackGravelConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationAssets } from '../arena/RockVegetationConfig';
 import { preloadTurretVisualAssets, registerTurretAnimations } from '../config/turretVisuals';
@@ -361,7 +360,6 @@ export class ArenaScene extends Phaser.Scene {
     preloadBaseGroundingAssets(this.load);
     preloadGroundCoverAssets(this.load);
     preloadPersistentBaseGravelAssets(this.load);
-    preloadTrackGravelAssets(this.load);
     preloadRockMossAssets(this.load);
     preloadRockVegetationAssets(this.load);
     preloadTurretVisualAssets(this.load);

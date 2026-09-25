@@ -26,7 +26,10 @@ const PITCH = CELL + ROCK_BASE_FRAME_MARGIN * 2;
 const nativeSize = Math.round(recipe.sourceMetres * recipe.pixelsPerMetre);
 const native = await sharp(sourceDir + '/' + recipe.source).resize(nativeSize, nativeSize, { kernel: 'lanczos3' })
   .removeAlpha().raw().toBuffer();
-const material = quilt(native, nativeSize, recipe.seed, { size: TILE, patch: 64, overlap: 16 });
+// A full-period source already contains the broad shelves and their lighting. Preserve their
+// orientation; rotated quilting patches would turn the directional facets against each other.
+const material = nativeSize === TILE ? Buffer.from(native)
+  : quilt(native, nativeSize, recipe.seed, { size: TILE, patch: 64, overlap: 16 });
 reconcileTileEdges(material, TILE, 6);
 grade(material, recipe.grade);
 
@@ -35,10 +38,10 @@ let seed = recipe.seed ^ 0x5bd1e995;
 const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
 function periodicNoise(cells) {
   const lattice = Float32Array.from({ length: cells * cells }, random);
-  const fade = v => v * v * (3 - 2 * v);
   return (x, y) => {
     const u = x / TILE * cells, v = y / TILE * cells, i = Math.floor(u), j = Math.floor(v);
-    const tx = fade(u - i), ty = fade(v - j);
+    // Linear segments chip the contour instead of making a smoothly rippled border.
+    const tx = u - i, ty = v - j;
     const at = (a, b) => lattice[(((b % cells) + cells) % cells) * cells + (((a % cells) + cells) % cells)];
     return (at(i, j) * (1 - tx) + at(i + 1, j) * tx) * (1 - ty) + (at(i, j + 1) * (1 - tx) + at(i + 1, j + 1) * tx) * ty;
   };
@@ -114,9 +117,14 @@ for (let slot = 0; slot < ROCK_BASE_AUTOTILE_SLOTS; slot++) {
       const length = Math.hypot(gx, gy) || 1;
       // Outward normal is the negative distance gradient.
       const facing = (-gx / length) * LIGHT[0] + (-gy / length) * LIGHT[1];
-      const rim = 1 - smooth(distance / edge.rimWidth);
+      const shelfWidth = edge.shelfWidth + (coarse(u, v) - .5) * edge.shelfVariation;
+      const rim = 1 - smooth(distance / (edge.rimWidth + (coarse(u, v) - .5) * 3));
+      // A broad inclined face meets the top at a broken lip. Its width varies in world space,
+      // so it crosses tile boundaries without repeating a bevel around every cell.
+      const lip = Math.max(0, 1 - Math.abs(distance - shelfWidth) / 1.2);
       const shade = 1 + rim * (edge.lightLift * Math.max(0, facing) - edge.shadeDrop * Math.max(0, -facing))
         - edge.rimDarken * rim * rim
+        + lip * edge.shelfLift * (.25 + .75 * Math.max(0, facing))
         // Narrow dark contour right at exposed edges: separates the rock from any ground value.
         - (edge.outline ?? 0) * (1 - smooth(distance / (edge.outlineWidth ?? 1)));
       const source = (((v % TILE) * TILE) + (u % TILE)) * 3;

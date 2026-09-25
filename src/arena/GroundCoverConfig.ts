@@ -168,7 +168,7 @@ export const FOREST_LITTER_CONFIG: GroundCoverLayerConfig = {
   seam: { perBlock: .32, minSizeCells: .3, maxSizeCells: .6, sizeBias: 1, minAlpha: .95, maxAlpha: 1 },
   dirt: { perBlock: .45, minSizeCells: .3, maxSizeCells: .6, sizeBias: 1, minAlpha: .95, maxAlpha: 1 },
   grass: { perBlock: .05, minSizeCells: .3, maxSizeCells: .6, sizeBias: 1, minAlpha: .9, maxAlpha: 1 },
-  rockFoot: { perBlock: .75, minSizeCells: .3, maxSizeCells: .6, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
+  rockFoot: { perBlock: .95, minSizeCells: .3, maxSizeCells: .6, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   // Washed-up pebbles and drift twigs along the waterline.
   bank: { perBlock: .6, minSizeCells: .3, maxSizeCells: .6, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   // Litter gathers under and around the undergrowth, a little wider than the plants themselves.
@@ -212,7 +212,7 @@ export const FOREST_VEGETATION_CONFIG: GroundCoverLayerConfig = {
   seam: { perBlock: 1, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   dirt: { perBlock: .12, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   grass: { perBlock: 1, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
-  rockFoot: { perBlock: .8, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
+  rockFoot: { perBlock: .5, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   // Grass clumps and sedges fringe the water; ferns and flowers stay on firmer ground.
   bank: { perBlock: 1, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   cluster: {

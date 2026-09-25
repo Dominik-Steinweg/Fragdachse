@@ -145,7 +145,7 @@ export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
     directional: {
       lightDirection: [Math.SQRT1_2, Math.SQRT1_2],
       edgeLift: 0.03,
-      edgeShade: 0.2,
+      edgeShade: 0.12,
     },
   },
   mottle: {
@@ -172,7 +172,7 @@ export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
     materialPeak: 199,
     materialEqualizeTint: 0xfff1df,
     passes: [
-      { perCell: 0.58, minScale: 2.4, maxScale: 4.6, alpha: 0.4 },
+      { perCell: 0.58, minScale: 2.4, maxScale: 4.6, alpha: 0.2 },
     ],
     falloff: [
       [0, 'rgba(0,0,0,0)'],
@@ -200,4 +200,3 @@ export const DIRT_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   // Soil is a continuous authored material. It needs no per-cell material replacement.
   mottle: { textureSize: CELL_SIZE, blend: 'normal', materialMode: 'native', passes: [], falloff: [] },
 };
-

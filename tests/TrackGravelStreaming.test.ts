@@ -7,6 +7,7 @@ import type { ArenaLayout } from '../src/types';
 import { GroundSurfaceStreamer, GROUND_TRACK_GRAVEL_LAYER_ID } from '../src/arena/chunks/GroundSurfaceStreamer';
 import { ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
 import { createFakeArenaScene } from './fakeArenaRenderScene';
+import type { GroundMaterialSamples } from '../src/arena/GroundMaterialSamples';
 
 const FRAME = { offsetX: 37, offsetY: 19, width: 4096, height: 256 };
 const VIEW = { x: FRAME.offsetX, y: FRAME.offsetY, width: 128, height: 128 };
@@ -15,7 +16,12 @@ const layout: ArenaLayout = {
   tracks: Array.from({ length: FRAME.height / CELL_SIZE }, (_, gridY) => ({ gridX: 2, gridY })),
 };
 
-/** Canvas upload port only; mask pixels are tested directly, without pretending to emulate WebGL. */
+const material = { width: 8, height: 8, rgba: new Uint8ClampedArray(8 * 8 * 4).fill(128) };
+const groundMaterials: GroundMaterialSamples = {
+  dirt: material, gravel: material, grassHeight: { width: 8, height: 8, data: new Uint8Array(64) },
+};
+
+/** Canvas upload port only; ballast pixels are tested directly, without pretending to emulate WebGL. */
 function harness(tracks = layout.tracks) {
   const scene = createFakeArenaScene();
   const uploads: Array<{ width: number; data: Uint8ClampedArray }> = [];
@@ -43,6 +49,7 @@ function harness(tracks = layout.tracks) {
   Object.assign(scene.textures, { createCanvas, remove: (key: string) => liveMasks.delete(key) });
   const streamer = new GroundSurfaceStreamer({
     scene: scene as never, frame: FRAME, layout: { ...layout, tracks }, groundCoverPlacements: [], chunkSize: 128,
+    groundMaterials,
   });
   return { scene, streamer, uploads, liveMasks, renderTargets, createCanvas, sceneImages };
 }
@@ -65,11 +72,11 @@ describe('railway gravel streaming', () => {
     expect(rail.renderTargets.every(texture => !texture.active)).toBe(true);
   });
 
-  it('reuses one mask and reproduces gravel after releasing and revisiting chunks', () => {
+  it('reuses one canvas and reproduces the ballast after releasing and revisiting chunks', () => {
     const h = harness();
     const read = () => {
       const texture = h.streamer.getChunkTexture(GROUND_TRACK_GRAVEL_LAYER_ID, 0, 0) as unknown as { content: string[] };
-      return texture.content.filter(entry => entry.includes('track_gravel_')).slice();
+      return texture.content.filter(entry => entry.includes('__track_ballast_')).slice();
     };
     h.streamer.updateResidency(VIEW);
     ChunkedRenderSurface.drainBakeQueue(h.scene as never);
@@ -85,7 +92,7 @@ describe('railway gravel streaming', () => {
     h.streamer.destroy();
   });
 
-  it('uses the same world mask for normal chunks and scaled terrain snapshots', () => {
+  it('uses the same world ballast for normal chunks and scaled terrain snapshots', () => {
     const h = harness();
     h.streamer.updateResidency(VIEW);
     ChunkedRenderSurface.drainBakeQueue(h.scene as never);
@@ -102,7 +109,7 @@ describe('railway gravel streaming', () => {
       expect(snapshot.data.slice(y * snapshot.width * 4, (y * snapshot.width + 128) * 4))
         .toEqual(normal.data.slice(normalStart, normalStart + 128 * 4));
     }
-    expect(target.content.some(entry => entry.includes('track_gravel_'))).toBe(true);
+    expect(target.content.some(entry => entry.includes('__track_ballast_'))).toBe(true);
     h.streamer.destroy();
     target.destroy();
   });

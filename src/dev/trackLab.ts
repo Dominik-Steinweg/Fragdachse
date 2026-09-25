@@ -8,7 +8,6 @@ import { createOrganicDirtMargin } from '../arena/OrganicDirtMargin';
 import { GroundSurfaceStreamer } from '../arena/chunks/GroundSurfaceStreamer';
 import { ARENA_RENDER_CHUNK_SIZE } from '../arena/chunks/ArenaChunkGrid';
 import { ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
-import { preloadTrackGravelAssets } from '../arena/TrackGravelConfig';
 import { hashSeededCell01 } from '../arena/CellHash';
 
 /** Operable visual fixture using production terrain, material and streaming paths. */
@@ -22,7 +21,6 @@ class TrackLab extends Phaser.Scene {
   preload(): void {
     preloadGroundMaterials(this.load);
     this.load.image('bg_tracks', '/assets/sprites/BahnstreckeSchienen.png');
-    preloadTrackGravelAssets(this.load);
   }
 
   create(): void {

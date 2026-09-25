@@ -201,7 +201,8 @@ export class GroundSurfaceStreamer {
     this.scratchSize = scratchSize;
     this.groundMaterials = options.groundMaterials ?? null;
     this.trackGravelLayer = trackColumns.length > 0
-      ? new TrackGravelLayer(options.scene, options.layout.seed, trackColumns, options.frame, scratchSize)
+      ? new TrackGravelLayer(options.scene, options.layout.seed, trackColumns, options.frame, scratchSize,
+        this.getGroundMaterials())
       : null;
     if (this.trackGravelLayer) this.scratch.preallocate('trackGravel', scratchSize);
     this.scratch.preallocate('dirt', scratchSize);
