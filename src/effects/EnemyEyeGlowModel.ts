@@ -23,8 +23,10 @@ export interface EnemyEyeLight {
 }
 export interface EnemyEyePose {
   x: number; y: number; width: number; height: number; rotation: number; alpha: number; color: number;
-  /** Bloom diameter around the eye; follows the enemy's size, not the tiny eye ellipse. */
+  /** Diameter of the shared aura around both eyes; follows the enemy's size. */
   glowPx: number;
+  /** Centre distance to the other eye. Eye-local glow stays below it so two eyes remain two. */
+  spacing: number;
   /** Stable per-enemy phase so neighbouring enemies never pulse in lockstep. */
   phase: number;
 }
@@ -37,7 +39,7 @@ const LIGHT_RADIUS_PER_SIZE = 1.45, LIGHT_RADIUS_MIN = 52, LIGHT_RADIUS_MAX = 17
 const LIGHT_INTENSITY = .5, INNER_RADIUS_RATIO = .42, INNER_INTENSITY = .55;
 /** Pulls the light from the eyes towards the body pivot so the whole silhouette is lit. */
 const LIGHT_BODY_PULL = .35;
-const GLOW_PER_SIZE = .5, GLOW_MIN = 14, GLOW_MAX = 46;
+const GLOW_PER_SIZE = .45, GLOW_MIN = 12, GLOW_MAX = 40;
 const GOLDEN_ANGLE = 2.399963;
 
 const anchorsByTexture = new Map<string, { frames: readonly EyeAnchorFrame[]; static: boolean }>();
@@ -80,6 +82,7 @@ export class EnemyEyeGlowModel implements EnemyEyeLightFrame {
       writeEyePose(left, frame.left, sprite, style.color);
       writeEyePose(right, frame.right, sprite, style.color);
       left.glowPx = right.glowPx = glow; left.phase = right.phase = phase;
+      left.spacing = right.spacing = Math.hypot(left.x - right.x, left.y - right.y);
       const light = this.lights[this.lightCount] ?? (this.lights[this.lightCount] = { x: 0, y: 0, color: 0, radiusPx: 0, intensity: 0 });
       this.lightCount++;
       const eyeX = (left.x + right.x) * .5, eyeY = (left.y + right.y) * .5;
@@ -90,7 +93,7 @@ export class EnemyEyeGlowModel implements EnemyEyeLightFrame {
   }
 
   private eye(index: number): EnemyEyePose {
-    return this.eyes[index] ?? (this.eyes[index] = { x: 0, y: 0, width: 0, height: 0, rotation: 0, alpha: 0, color: 0, glowPx: 0, phase: 0 });
+    return this.eyes[index] ?? (this.eyes[index] = { x: 0, y: 0, width: 0, height: 0, rotation: 0, alpha: 0, color: 0, glowPx: 0, spacing: 0, phase: 0 });
   }
 
   /** Keyed by the displayed sprite, which lives exactly as long as the enemy's visual. */
@@ -122,8 +125,8 @@ export function writeEyePose(out: EnemyEyePose, eye: EyeAnchor, sprite: EyeSprit
   const xx = ax * ax + bx * bx, yy = ay * ay + by * by, xy = ax * ay + bx * by;
   const d = Math.hypot(xx - yy, 2 * xy);
   // Preserve a narrow, readable core at native game size, including subpixel positions.
-  out.width = Math.max(2, Math.sqrt(Math.max(0, (xx + yy + d) * .5)));
-  out.height = Math.max(1.3, Math.sqrt(Math.max(0, (xx + yy - d) * .5)));
+  out.width = Math.max(1.6, Math.sqrt(Math.max(0, (xx + yy + d) * .5)));
+  out.height = Math.max(1, Math.sqrt(Math.max(0, (xx + yy - d) * .5)));
   out.rotation = sprite.rotation + .5 * Math.atan2(2 * xy, xx - yy);
   out.alpha = sprite.alpha; out.color = color;
 }

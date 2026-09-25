@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ BlendModes: { ADD: 1 } }));
 vi.mock('../src/effects/EffectUtils', () => ({ fillRadialGradientTexture() {}, registerGraphicsObject() {}, mixColors: (color: number) => color }));
-vi.mock('../src/effects/EmissiveScale', () => ({ emissiveAlpha: (alpha: number) => alpha }));
+vi.mock('../src/effects/EmissiveScale', () => ({ emissiveAlpha: (alpha: number) => alpha, getEmissiveScale: () => 1 }));
 vi.mock('../src/effects/EnemyEyeBatch', () => ({ EnemyEyeBatch: class {
   layer = { setBlendMode() {}, setName() {} }; begin = vi.fn(); write = vi.fn(); destroy = vi.fn();
 } }));
