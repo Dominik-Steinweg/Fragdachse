@@ -276,6 +276,17 @@ describe('gpu vfx system: lanes', () => {
 });
 
 describe('gpu vfx system: frame order', () => {
+  it('unregisters a world-owned emitter without stopping other effects', () => {
+    const { system } = setup();
+    let first = 0, second = 0;
+    const stop = system.registerEmission(() => { first++; });
+    system.registerEmission(() => { second++; });
+    system.update(16);
+    stop(); stop();
+    system.update(16);
+    expect(first).toBe(1);
+    expect(second).toBe(2);
+  });
   it('retires expired members before running the emission ticks', () => {
     // Reihenfolge ist Teil des Vertrags: `acquire()` vergibt nur freie Slots, ein Spawn vor dem
     // Sweep wuerde als Kapazitaets-Verwurf abgewiesen.

@@ -83,6 +83,8 @@ export interface ProjectilePhysicsBindingPort {
   findNearestPortalWorldSweep?(startX: number, startY: number, endX: number, endY: number,
     halfWidth: number, halfHeight: number, ignoreTrunks: boolean): ProjectileRockSweepHit | null;
   setMovementObserver?(observer: ProjectileMovementObserver | null): void;
+  /** Wall-clock ms the fixed-step simulation trails the host clock, including steps still pending this frame. */
+  getStepLagMs?(): number;
   setRockGroup(
     group: Phaser.Physics.Arcade.StaticGroup | null,
     objects: (RockPhysicsProxy | null)[] | null,
@@ -174,6 +176,13 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
         sprite.y + body.y - body.prevFrame.y, body.velocity.x, body.velocity.y);
     }
   };
+
+  getStepLagMs(): number {
+    // Arcade decrements its accumulator before each step and its WORLD_STEP event, so the
+    // remainder is exactly how far the current body state lags the frame. Phaser is pinned to 4.2.1.
+    const elapsed = (this.scene.physics?.world as unknown as { _elapsed?: number } | undefined)?._elapsed;
+    return typeof elapsed === 'number' && Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+  }
 
   setMovementObserver(observer: ProjectileMovementObserver | null): void {
     this.scene.physics.world.off('worldstep', this.observeStep);

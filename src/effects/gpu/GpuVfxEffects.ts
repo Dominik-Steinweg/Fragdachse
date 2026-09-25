@@ -86,6 +86,7 @@ export const GpuVfxEffectId = {
   MgBleed: 72,
   MgTransfer: 73,
   ConstructionOwnershipMote: 74,
+  TranslocatorPortal: 75,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -606,4 +607,6 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.FlightCoreStrip, importance: 'standard', release: 'kill-with-source' },
   { id: GpuVfxEffectId.ConstructionOwnershipMote, label: 'construction.ownership-mote', lane: GpuVfxLaneId.ExplosionAccent,
     frame: GpuVfxFrameId.DeathFragment, importance: 'decorative', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.TranslocatorPortal, label: 'translocator.portal', lane: GpuVfxLaneId.ExplosionAccent,
+    frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
 ];

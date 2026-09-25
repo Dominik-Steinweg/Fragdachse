@@ -471,8 +471,12 @@ export class GpuVfxSystem {
   // ── Frame-Lifecycle ────────────────────────────────────────────────────────
 
   /** Meldet den Emissions-Tick eines Effekts an. Reihenfolge der Anmeldung = Reihenfolge im Frame. */
-  registerEmission(tick: GpuVfxEmissionTick): void {
+  registerEmission(tick: GpuVfxEmissionTick): () => void {
     this.ticks.push(tick);
+    return () => {
+      const index = this.ticks.indexOf(tick);
+      if (index >= 0) this.ticks.splice(index, 1);
+    };
   }
 
   setDiagnosticEventSink(sink: GpuVfxDiagnosticEventSink | null): void {

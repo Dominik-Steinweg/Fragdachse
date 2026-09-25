@@ -33,8 +33,13 @@ export interface TranslocatorWorldPort {
   readonly collapseEnemy: (actor: TranslocatorActor, center: PortalPoint, config: TranslocatorUtilityConfig, ownerId: string, now: number) => void;
 }
 export type TranslocatorUseOutcome = 'thrown' | 'teleported' | 'opened' | 'closed' | 'blocked';
-interface ActiveUse { state: TranslocatorUseState; readonly config: TranslocatorUtilityConfig }
+interface ActiveUse {
+  state: TranslocatorUseState;
+  readonly config: TranslocatorUtilityConfig;
+  invalidRest?: { x: number; y: number; since: number };
+}
 interface PhaseBuff { readonly value: number; readonly expiresAt: number }
+const INVALID_PUCK_RESET_MS = 1000;
 
 /** Sole writer of a player's complete translocator lifetime and acquired phase buffs. */
 export class TranslocatorSystem implements PortalQueryPort {
@@ -97,9 +102,10 @@ export class TranslocatorSystem implements PortalQueryPort {
 
   /** Follow-up identity survives depleted temporary stock and utility selection changes. */
   followup(id: string, useId: string, now: number): TranslocatorUseOutcome {
-    const use = this.uses.get(id);
-    if (!use || use.state.useId !== useId || !this.combatSystem.isAlive(id)) return 'blocked';
+    if (this.uses.get(id)?.state.useId !== useId || !this.combatSystem.isAlive(id)) return 'blocked';
     this.updateUse(id, now);
+    const use = this.uses.get(id);
+    if (!use || use.state.useId !== useId) return 'blocked';
     if (use.state.phase === 'portals') { this.finish(id, use, now, true); return 'closed'; }
     return use.state.phase === 'puck' ? this.teleport(id, use, now) : 'blocked';
   }
@@ -109,8 +115,7 @@ export class TranslocatorSystem implements PortalQueryPort {
     const destination = this.projectilePort.getPuckPosition(use.state.projectileId);
     const actor = this.world.getActors().find(a => a.id === id);
     const cfg = use.config;
-    if (!destination || !actor || !this.world.canOccupy(actor, destination.x, destination.y)
-      || (cfg.portalEnabled > 0 && Math.hypot(destination.x - actor.x, destination.y - actor.y) < cfg.portalMinSeparation)) return 'blocked';
+    if (!destination || !actor || !this.canTeleportTo(actor, destination, cfg)) return 'blocked';
     if (!this.projectilePort.consumePuck(use.state.projectileId)) return 'blocked';
     const pair: PortalPair | null = cfg.portalEnabled > 0 ? { id: use.state.useId, ownerId: id,
       a: { ...destination }, b: { x: actor.x, y: actor.y }, radius: cfg.portalRadius,
@@ -154,7 +159,25 @@ export class TranslocatorSystem implements PortalQueryPort {
     } else if (!this.combatSystem.isAlive(id) || (state.phase === 'portals' && state.pair.expiresAt <= now)
       || (state.phase === 'puck' && !this.projectilePort.getPuckPosition(state.projectileId))) {
       this.finish(id, use, now, state.phase === 'portals');
+    } else if (state.phase === 'puck' && this.world) {
+      const point = this.projectilePort.getPuckPosition(state.projectileId)!;
+      const actor = this.world.getActors().find(a => a.id === id);
+      if (!actor || this.canTeleportTo(actor, point, use.config)) {
+        use.invalidRest = undefined;
+      } else if (!use.invalidRest || Math.hypot(point.x - use.invalidRest.x, point.y - use.invalidRest.y) > 0.5) {
+        // Measure against the rest anchor, so even slow cumulative drift restarts the grace period.
+        use.invalidRest = { ...point, since: now };
+      } else if (now - use.invalidRest.since >= INVALID_PUCK_RESET_MS) {
+        this.projectilePort.consumePuck(state.projectileId);
+        this.uses.delete(id);
+        this.publish(id); // Failed deployment is ready again, without a teleport cooldown.
+      }
     }
+  }
+
+  private canTeleportTo(actor: TranslocatorActor, point: PortalPoint, config: TranslocatorUtilityConfig): boolean {
+    return !!this.world?.canOccupy(actor, point.x, point.y)
+      && (config.portalEnabled <= 0 || Math.hypot(point.x - actor.x, point.y - actor.y) >= config.portalMinSeparation);
   }
 
   /** After physics, before any owner consumes traveled actor segments. */

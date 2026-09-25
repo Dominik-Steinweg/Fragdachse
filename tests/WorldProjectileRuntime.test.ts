@@ -776,6 +776,30 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     runtime.destroy();
   });
 
+  it('stamps fixed physics steps with simulation time instead of the shared frame clock', () => {
+    let now = 1000;
+    const physics = createTechnicalPhysicsBinding();
+    const runtime = new WorldProjectileRuntime({ physicsBinding: physics.binding,
+      presentation: createPresentation(), identityScope: new ProjectileIdentityScope(1), hostNowMs: () => now });
+    const id = runtime.spawnProjectile(baseRequest({ tracerConfig: { profile: 'light' } }))!;
+    const handle = physics.handles.get(id)!;
+    const step = (x: number, lagMs: number) => {
+      physics.setStepLag(lagMs); handle.sprite.x = x;
+      physics.observe(id, x, 0, handle.body.velocity.x, handle.body.velocity.y);
+    };
+    // Frame 1 runs two 120 Hz steps at one host instant; the accumulator still holds the second.
+    now = 1016; step(8, 12); step(16, 4);
+    runtime.runHostProjectileStage(16, now);
+    // Frame 2 runs no physics step: the sprite rests on the confirmed tip.
+    now = 1020; physics.setStepLag(8);
+    runtime.runHostProjectileStage(4, now);
+    let path: import('../src/projectile/ProjectileFlightPath').ProjectileFlightPath | undefined;
+    runtime.readProjectileReplication(record => { path = record.dynamic.flightPath; });
+    const points = path!.points.slice(1);
+    expect(points.map(p => [p.x, p.timeMs])).toEqual([[8, 1004], [16, 1012]]);
+    runtime.destroy();
+  });
+
   it.each(['sweep', 'physics', 'world-boundary'] as const)('publishes one flight pivot for a %s bounce', (mode) => {
     let now = 0;
     const physics = createTechnicalPhysicsBinding();

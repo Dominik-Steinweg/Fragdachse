@@ -2822,7 +2822,7 @@ export class ArenaLifecycleCoordinator {
     }
 
     // World-/Activity-renderers are owned by WorldTrainRuntime.
-    this.renderers.translocatorTeleport = presentation ? new TranslocatorTeleportRenderer(this.scene) : null;
+    this.renderers.translocatorTeleport = presentation ? new TranslocatorTeleportRenderer(this.scene, this.renderers.gpuVfx) : null;
     this.renderers.translocatorTeleport?.setLightingSystem(this.renderers.lighting);
     // Uhrzeit vor dem Schattenaufbau setzen: zur Nacht hin werden die statischen
     // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwächt.

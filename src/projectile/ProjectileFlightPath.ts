@@ -90,6 +90,15 @@ export class ProjectilePathRecorder {
     this.append(id, x, y, vx, vy, timeMs, breakBefore);
   }
 
+  /** A display head resting on the confirmed tip adds no travel. Restamping that tip with a later
+   * clock would invent a stop, followed by a zero-duration jump at the next physics sample. */
+  appendHead(id: number, x: number, y: number, vx: number, vy: number, timeMs: number): void {
+    const points = this.paths.get(id)?.points;
+    const last = points?.[points.length - 1];
+    if (last && Math.abs(last.x - x) < 1e-6 && Math.abs(last.y - y) < 1e-6) return;
+    this.append(id, x, y, vx, vy, timeMs);
+  }
+
   begin(id: number, x: number, y: number, vx: number, vy: number, timeMs: number): void {
     this.pending.delete(id);
     this.bounceOrigins.delete(id);

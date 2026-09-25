@@ -20,12 +20,15 @@ export interface TechnicalPhysicsBindingFixture {
   readonly releaseWorldState: ReturnType<typeof vi.fn>;
   emit(contact: ProjectilePhysicsContact): boolean | undefined;
   observe(id: number, x: number, y: number, vx: number, vy: number): void;
+  /** Fixed-step lag reported to the runtime, as Arcade's accumulator remainder. */
+  setStepLag(ms: number): void;
 }
 
 /** Headless technical Physics boundary; gameplay ownership remains in WorldProjectileRuntime. */
 export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture {
   let contactHandler: ((contact: ProjectilePhysicsContact) => boolean) | null = null;
   let movementObserver: ProjectileMovementObserver | null = null;
+  let stepLagMs = 0;
   const handles = new Map<number, ProjectilePhysicsHandle>();
   const specs: ProjectilePhysicsSpawnSpec[] = [];
   const released: number[] = [];
@@ -33,6 +36,7 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
 
   const binding = {
     setMovementObserver: (observer: ProjectileMovementObserver | null) => { movementObserver = observer; },
+    getStepLagMs: () => stepLagMs,
     setRockGroup: vi.fn(),
     setBaseGroup: vi.fn(),
     setTrainGroup: vi.fn(),
@@ -121,6 +125,7 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
     releaseWorldState,
     emit: (contact) => contactHandler?.(contact),
     observe: (id, x, y, vx, vy) => movementObserver?.(id, x, y, vx, vy),
+    setStepLag: (ms) => { stepLagMs = ms; },
   };
 }
 

@@ -56,6 +56,60 @@ describe('Translocator use lifetime', () => {
     expect(w.system.getUseState('p')?.useId).toBe(use);
     expect(w.projectile.consumePuck).not.toHaveBeenCalled();
   });
+  it('resets an invalid resting puck, replicates readiness and permits a fresh throw', () => {
+    const w = world(); const use = w.throwPuck();
+    vi.mocked(w.port.canOccupy).mockReturnValue(false);
+    w.system.update(1100);
+    w.system.update(1700);
+    expect(w.system.getUseState('p')?.useId).toBe(use);
+    // A follow-up arriving at expiry must not use the removed deployment.
+    expect(w.system.followup('p', use, 2200)).toBe('blocked');
+    expect(w.system.getUseState('p')).toBeNull();
+    expect(w.published.get('p')).toBeNull();
+    expect(w.pucks.size).toBe(0);
+    expect(w.projectile.consumePuck).toHaveBeenCalledTimes(1);
+    expect(w.port.transferActor).not.toHaveBeenCalled();
+    expect(w.system.handleUse('p', 0, 0, 0, 2201, undefined, w.config)).toBe('thrown');
+    expect(w.system.followup('p', use, 2202)).toBe('blocked');
+  });
+  it('waits for continuous rest and retains a puck that reaches valid ground', () => {
+    const w = world(); const use = w.throwPuck();
+    const puckId = w.system.getActivePuckId('p')!;
+    vi.mocked(w.port.canOccupy).mockReturnValue(false);
+    for (let now = 1100; now <= 3100; now += 500) {
+      w.pucks.set(puckId, { x: now / 10, y: 50 });
+      w.system.update(now);
+    }
+    expect(w.system.getUseState('p')?.useId).toBe(use);
+    w.system.update(3600);
+    expect(w.system.getUseState('p')?.useId).toBe(use);
+    vi.mocked(w.port.canOccupy).mockReturnValue(true);
+    w.system.update(4000);
+    w.system.update(10000);
+    expect(w.system.getUseState('p')?.useId).toBe(use);
+    expect(w.system.followup('p', use, 10001)).toBe('teleported');
+  });
+  it('starts a new grace period when a resting destination becomes invalid again', () => {
+    const w = world(); const use = w.throwPuck();
+    vi.mocked(w.port.canOccupy).mockReturnValue(false);
+    w.system.update(1100);
+    vi.mocked(w.port.canOccupy).mockReturnValue(true);
+    w.system.update(1800);
+    vi.mocked(w.port.canOccupy).mockReturnValue(false);
+    w.system.update(2000);
+    w.system.update(2500);
+    expect(w.system.getUseState('p')?.useId).toBe(use);
+    w.system.update(3100);
+    expect(w.system.getUseState('p')).toBeNull();
+  });
+  it('also resets a resting puck whose portal endpoints would overlap', () => {
+    const w = world({ portalEnabled: 1 }); w.throwPuck();
+    w.pucks.set(w.system.getActivePuckId('p')!, { x: 50, y: 50 });
+    w.system.update(1100);
+    w.system.update(2200);
+    expect(w.system.getUseState('p')).toBeNull();
+    expect(w.system.getPortalPairs()).toHaveLength(0);
+  });
   it('damages only intersecting hostile bodies through the normal authored damage boundary', () => {
     const w = world(); const use = w.throwPuck();
     w.add('enemy-touch', 250 + w.config.telefragRadius + 12, 50);

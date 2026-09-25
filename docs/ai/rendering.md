@@ -172,6 +172,11 @@ frische Physics-Beobachtung mit dem synchronisierten Sprite uebereinstimmen, bev
 wieder als Bewegung aufgezeichnet wird.
 Bounce-Punkte bleiben Ecken, räumliche Unterbrechungen werden nicht verbunden. Die Historie ist nach
 Alter und Punktzahl begrenzt; nur unveränderte geradlinige Bewegung darf zusammengefasst werden.
+Pfadzeiten sind die Host-Zeit des Physikzustands: Host-Uhr minus Fixed-Step-Rückstand der Physik
+(`getStepLagMs`), nicht die gemeinsame Frame-Uhr. Mehrere Schritte eines Frames erhalten so getrennte
+Zeiten. Ein Darstellungskopf, der auf der bestätigten Spitze ruht, wird nicht neu gestempelt; sonst
+entstünde eine Zeittreppe aus erfundenem Stillstand und Sprüngen ohne Dauer. Segment-Konsumenten
+müssen dennoch einzelne Null-Längen- oder Null-Dauer-Segmente (Kontakte, Bounces) ohne Bruch tragen.
 
 Ein zeitlich fortschreitender Cursor konsumiert bestätigte Segmente einmalig. Flight Signature,
 Rocket-Smoke und Projectile-Burn teilen den neutralen Distanz-Sampler, besitzen aber eigene Dichten,

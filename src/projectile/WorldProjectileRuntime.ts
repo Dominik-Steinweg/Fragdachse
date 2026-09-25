@@ -430,7 +430,13 @@ export class WorldProjectileRuntime implements
       return !target || !record || this.allowsWorldContact(record, target, x, y);
     });
     this.physicsBinding.setMovementObserver?.((id, x, y, vx, vy) =>
-      this.flightPaths.observe(id, x, y, vx, vy, this.hostNowMs()));
+      this.flightPaths.observe(id, x, y, vx, vy, this.flightNowMs()));
+  }
+
+  /** Host time of the current physics state. Fixed steps trail the frame clock; stamping them with
+   * wall time would put several steps on one instant and turn straight flight into a staircase. */
+  private flightNowMs(): number {
+    return this.hostNowMs() - (this.physicsBinding.getStepLagMs?.() ?? 0);
   }
 
   /** Anzahl der aktuell wirksamen Projectiles dieser World. */
@@ -835,11 +841,11 @@ export class WorldProjectileRuntime implements
     };
     if (tracerBounce) {
       this.flightPaths.bounce(projectile.id, flightPosition?.x ?? x, flightPosition?.y ?? y,
-        vx, vy, this.hostNowMs(), presentation.sequence);
+        vx, vy, this.flightNowMs(), presentation.sequence);
       captureBounceContact(projectile.id, presentation.sequence, x, y);
     } else {
       this.flightPaths.discardPending(projectile.id);
-      this.flightPaths.append(projectile.id, x, y, vx, vy, this.hostNowMs(), false, presentation.sequence);
+      this.flightPaths.append(projectile.id, x, y, vx, vy, this.flightNowMs(), false, presentation.sequence);
     }
     projectile.lastBouncePresentation = presentation;
     this.presentation.playBounceImpact(
@@ -1000,7 +1006,7 @@ export class WorldProjectileRuntime implements
       if (result.outcome === 'consumed' && (!awaitingFlightBounce || result.technicalContactConsumed)) {
         this.flightPaths.discardPending(projectile.id);
         this.flightPaths.append(projectile.id, candidate.x, candidate.y,
-          projectile.physics.body.velocity.x, projectile.physics.body.velocity.y, this.hostNowMs());
+          projectile.physics.body.velocity.x, projectile.physics.body.velocity.y, this.flightNowMs());
       }
       return result;
     }
@@ -1635,8 +1641,8 @@ export class WorldProjectileRuntime implements
       if (finalContact) {
         this.flightPaths.discardPending(record.id);
         this.flightPaths.append(record.id, finalContact.x, finalContact.y,
-          record.physics.body.velocity.x, record.physics.body.velocity.y, this.hostNowMs());
-      } else this.recordFlightPosition(record, this.hostNowMs());
+          record.physics.body.velocity.x, record.physics.body.velocity.y, this.flightNowMs());
+      } else this.recordFlightPosition(record);
       const finalRecord = this.createProjectileReplicationRecord(record);
       const flightPath = this.flightPaths.read(record.id, this.hostNowMs(), true);
       if (flightPath) {
@@ -1902,7 +1908,7 @@ export class WorldProjectileRuntime implements
     if (this.destroyed) return emptyHostStageResult();
     this.runMiniRocketStateStage();
     for (const record of this.projectiles.activeRecords) {
-      this.recordFlightPosition(record, nowMs);
+      this.recordFlightPosition(record);
       record.portalTravel = undefined;
     }
     this.presentation.syncHostRenderers(this.presentationProjectiles);
@@ -2984,7 +2990,8 @@ export class WorldProjectileRuntime implements
     return record;
   }
 
-  private recordFlightPosition(record: ProjectileRuntimeRecord, nowMs: number): void {
+  private recordFlightPosition(record: ProjectileRuntimeRecord): void {
+    const nowMs = this.flightNowMs();
     const contact = this.flightContactPoints.get(record.id);
     if (contact && (record.pendingDestroy || !this.projectiles.activeRecords.has(record))) {
       this.flightPaths.discardPending(record.id);
@@ -2993,7 +3000,7 @@ export class WorldProjectileRuntime implements
       this.flightContactPoints.delete(record.id);
       if (!record.portalFlightPending && !this.flightPaths.commitThrough(record.id, record.physics.sprite.x, record.physics.sprite.y)) return;
       record.portalFlightPending = false;
-      this.flightPaths.append(record.id, record.physics.sprite.x, record.physics.sprite.y,
+      this.flightPaths.appendHead(record.id, record.physics.sprite.x, record.physics.sprite.y,
         record.physics.body.velocity.x, record.physics.body.velocity.y, nowMs);
     }
   }
