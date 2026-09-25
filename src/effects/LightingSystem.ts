@@ -490,14 +490,20 @@ export class LightingSystem {
       this.enemyEyeBatch = new EnemyEyeBatch(this.scene, TEX_LIGHT_RADIAL, 256);
       this.enemyEyeBatch.layer.setBlendMode(Phaser.BlendModes.ADD).setName('enemy-eye-ground-lights');
     }
-    this.enemyEyeBatch.begin(frame.lightCount);
+    // Up to two quads per light: the wide spill and an optional denser inner pool.
+    this.enemyEyeBatch.begin(frame.lightCount * 2);
     const scale = this.quality.lightMapScale;
     for (let i = 0; i < frame.lightCount; i++) {
       const light = frame.lights[i], x = light.x - scrollX, y = light.y - scrollY, r = light.radiusPx;
       if (x + r < -overscanX || y + r < -overscanY
           || x - r > this.viewport.width + overscanX || y - r > this.viewport.height + overscanY) continue;
-      this.enemyEyeBatch.write((x + overscanX) * scale, (y + overscanY) * scale,
-        r * 2 * scale, r * 2 * scale, 0, light.color, Math.min(1, light.intensity * factor));
+      const lx = (x + overscanX) * scale, ly = (y + overscanY) * scale;
+      this.enemyEyeBatch.write(lx, ly, r * 2 * scale, r * 2 * scale, 0, light.color, Math.min(1, light.intensity * factor));
+      const inner = light.innerRadiusPx ?? 0;
+      if (inner > 0 && light.innerIntensity) {
+        this.enemyEyeBatch.write(lx, ly, inner * 2 * scale, inner * 2 * scale, 0, light.color,
+          Math.min(1, light.innerIntensity * factor));
+      }
       this.renderedEyeLights++;
     }
     this.enemyEyeBatch.layer.setVisible(this.renderedEyeLights > 0);

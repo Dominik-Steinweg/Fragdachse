@@ -11,7 +11,8 @@ import { PIPELINE_ASSETS } from '../src/config/pipelineAssets';
 describe('enemy eye world lifetime', () => {
   it('clears on presentation loss, suppression and world replacement, ignores stale closes and cannot revive after destroy', () => {
     const lighting = { setEnemyEyeLights: vi.fn() };
-    const scene = { textures: {}, cameras: { main: { worldView: { x: 0, y: 0, width: 500, height: 500 } } } };
+    const scene = { textures: {}, time: { now: 0 },
+      cameras: { main: { width: 500, height: 500, originX: 0, originY: 0, zoom: 1, scrollX: 0, scrollY: 0 } } };
     const renderer = new EnemyEyeGlowRenderer(scene as never, lighting as never);
     const asset = PIPELINE_ASSETS.find(a => a.id === 'zombie-badger')!;
     const enemy = { kind: asset.id, faction: 'hostile', getHp: () => 10,
@@ -33,5 +34,20 @@ describe('enemy eye world lifetime', () => {
     renderer.closeWorld(replacement); expect(renderer.model.eyeCount).toBe(0);
     renderer.destroy(); renderer.destroy(); renderer.openWorld(scope, () => true); sync();
     expect(renderer.model.lightCount).toBe(0); expect(lighting.setEnemyEyeLights).toHaveBeenLastCalledWith(null);
+  });
+
+  it('keeps eyes at the left edge of an origin-(0, 0) camera at high render resolution', () => {
+    const lighting = { setEnemyEyeLights: vi.fn() };
+    // Phaser's own worldView would start at x = 125 here (it assumes origin 0.5).
+    const scene = { textures: {}, time: { now: 0 }, cameras: { main: { width: 500, height: 500,
+      originX: 0, originY: 0, zoom: 2, scrollX: 0, scrollY: 0, worldView: { x: 125, y: 125, width: 250, height: 250 } } } };
+    const renderer = new EnemyEyeGlowRenderer(scene as never, lighting as never);
+    const asset = PIPELINE_ASSETS.find(a => a.id === 'zombie-badger')!;
+    renderer.openWorld({}, () => true);
+    renderer.sync([{ kind: asset.id, faction: 'hostile', getHp: () => 10,
+      sprite: { x: 4, y: 4, rotation: 0, scaleX: .25, scaleY: .25, displayOriginX: 64, displayOriginY: 64,
+        flipX: false, flipY: false, active: true, visible: true, alpha: 1,
+        texture: { key: asset.textureKey }, frame: { name: '__BASE', realWidth: 128, realHeight: 128 } } }] as never);
+    expect(renderer.model.eyeCount).toBe(2);
   });
 });

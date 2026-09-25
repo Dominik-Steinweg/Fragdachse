@@ -2,7 +2,7 @@
   "enemies": [
     {
       "id": "zombie-badger",
-      "eyeGlow": { "color": 16053215 },
+      "eyeGlow": { "color": 15138800 },
       "pawCount": 4,
       "maxHp": 15,
       "xp": 1,
@@ -23,7 +23,7 @@
     },
     {
       "id": "demon-badger",
-      "eyeGlow": { "color": 16748869 },
+      "eyeGlow": { "color": 16734746 },
       "pawCount": 4,
       "maxHp": 20,
       "xp": 2,
@@ -44,7 +44,7 @@
     },
     {
       "id": "rabid-badger",
-      "eyeGlow": { "color": 12284671 },
+      "eyeGlow": { "color": 11550975 },
       "pawCount": 4,
       "maxHp": 20,
       "xp": 3,
@@ -65,7 +65,7 @@
     },
     {
       "id": "grave-titan",
-      "eyeGlow": { "color": 11788163 },
+      "eyeGlow": { "color": 9240378 },
       "pawCount": 4,
       "maxHp": 1800,
       "xp": 300,
@@ -108,7 +108,7 @@
     },
     {
       "id": "spore-warden",
-      "eyeGlow": { "color": 14018411 },
+      "eyeGlow": { "color": 14745386 },
       "pawCount": 4,
       "maxHp": 140,
       "xp": 6,
@@ -130,7 +130,7 @@
     },
     {
       "id": "plague-medic",
-      "eyeGlow": { "color": 16765304 },
+      "eyeGlow": { "color": 16758815 },
       "pawCount": 4,
       "maxHp": 180,
       "xp": 10,
@@ -152,7 +152,7 @@
     },
     {
       "id": "void-stalker",
-      "eyeGlow": { "color": 6613503 },
+      "eyeGlow": { "color": 3073791 },
       "pawCount": 4,
       "maxHp": 190,
       "xp": 15,
@@ -181,7 +181,7 @@
     },
     {
       "id": "stink-broodmother",
-      "eyeGlow": { "color": 12312663 },
+      "eyeGlow": { "color": 11857950 },
       "pawCount": 4,
       "maxHp": 250,
       "xp": 20,
@@ -208,7 +208,7 @@
     },
     {
       "id": "alien-badger",
-      "eyeGlow": { "color": 8385743 },
+      "eyeGlow": { "color": 2883520 },
       "pawCount": 2,
       "maxHp": 180,
       "xp": 30,
@@ -249,7 +249,7 @@
     },
     {
       "id": "thrower-badger",
-      "eyeGlow": { "color": 16761963 },
+      "eyeGlow": { "color": 16754730 },
       "pawCount": 4,
       "maxHp": 350,
       "xp": 40,
@@ -285,7 +285,7 @@
     },
     {
       "id": "inferno-colossus",
-      "eyeGlow": { "color": 13933567 },
+      "eyeGlow": { "color": 12078591 },
       "pawCount": 4,
       "maxHp": 3200,
       "xp": 500,
@@ -360,7 +360,7 @@
     },
     {
       "id": "pyro-badger",
-      "eyeGlow": { "color": 13933567 },
+      "eyeGlow": { "color": 12078591 },
       "pawCount": 2,
       "maxHp": 400,
       "xp": 50,
@@ -410,7 +410,7 @@
     },
     {
       "id": "timebomb-badger",
-      "eyeGlow": { "color": 14273791 },
+      "eyeGlow": { "color": 9395199 },
       "pawCount": 4,
       "maxHp": 60,
       "xp": 10,
@@ -461,7 +461,7 @@
     },
     {
       "id": "void-hunter",
-      "eyeGlow": { "color": 11766015 },
+      "eyeGlow": { "color": 9059839 },
       "pawCount": 4,
       "maxHp": 4000,
       "xp": 750,

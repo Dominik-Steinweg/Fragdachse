@@ -23,7 +23,9 @@ describe('frame-bound enemy eyes', () => {
     model.update([source], view);
     expect(model.eyes[0]).toEqual(start);
     model.update([{ ...source, sprite: { ...source.sprite, texture: { key: asset.textureKey }, frame: { ...source.sprite.frame, name: '__BASE' } } }], view);
-    expect(model.eyes[0]).toEqual(start);
+    // A different sprite object is a different enemy visual and gets its own pulse phase.
+    expect(model.eyes[0].phase).not.toBe(start.phase);
+    expect({ ...model.eyes[0], phase: start.phase }).toEqual(start);
   });
 
   it('transforms origin, rotation, signed/nonuniform scale and both flips', () => {
@@ -62,7 +64,11 @@ describe('frame-bound enemy eyes', () => {
     const model = new EnemyEyeGlowModel(), source = enemy();
     model.update([{ ...source, sprite: { ...source.sprite, x: -5, alpha: .5 } }], view);
     expect(model.eyeCount).toBe(2); expect(model.lightCount).toBe(1);
-    expect(model.lights[0].x).toBeCloseTo((model.eyes[0].x + model.eyes[1].x) / 2);
+    // The light sits between the eyes and the body pivot so it lights the whole silhouette.
+    const eyeX = (model.eyes[0].x + model.eyes[1].x) / 2;
+    expect(model.lights[0].x).toBeGreaterThanOrEqual(Math.min(eyeX, -5) - 1e-9);
+    expect(model.lights[0].x).toBeLessThanOrEqual(Math.max(eyeX, -5) + 1e-9);
+    expect(model.lights[0].innerRadiusPx).toBeLessThan(model.lights[0].radiusPx);
     expect(model.eyes[0].alpha).toBe(.5);
     const intensity = model.lights[0].intensity;
     model.update([source], view);
