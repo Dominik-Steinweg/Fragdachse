@@ -4,9 +4,9 @@ import type { SyncedPlaceableRock, SyncedRepairDrone } from '../types';
 import {
   REPAIR_DRONE_DEPTH as DRONE_DEPTH,
   REPAIR_DRONE_SMOOTH_TIME_MS as SMOOTH_TIME_MS,
-  REPAIR_DRONE_TEXTURE_KEY as TEX_REPAIR_DRONE,
+  createRepairDroneBody,
   drawRepairBeam,
-  ensureRepairDroneTexture,
+  updateRepairDroneRotors,
 } from './repairDroneVisuals';
 import { registerGraphicsObject } from './EffectUtils';
 
@@ -26,10 +26,6 @@ export class RepairDroneRenderer {
   private readonly visuals = new Map<string, RepairDroneVisual>();
 
   constructor(private readonly scene: Phaser.Scene) {}
-
-  generateTextures(): void {
-    ensureRepairDroneTexture(this.scene.textures);
-  }
 
   syncVisuals(
     snapshots: readonly SyncedRepairDrone[],
@@ -61,7 +57,7 @@ export class RepairDroneRenderer {
       }
       visual.targetX = snapshot.x;
       visual.targetY = snapshot.y;
-      visual.body.setTint(snapshot.ownerColor);
+      visual.glow.setStrokeStyle(1, snapshot.ownerColor, 0.65);
       visual.repairTarget = snapshot.phase === 'repairing' && snapshot.targetConstructionId !== undefined
         ? constructionPositions.get(snapshot.targetConstructionId)
         : undefined;
@@ -75,7 +71,11 @@ export class RepairDroneRenderer {
       visual.currentX = Phaser.Math.Linear(visual.currentX, visual.targetX, lerp);
       visual.currentY = Phaser.Math.Linear(visual.currentY, visual.targetY, lerp);
       const bob = Math.sin(now * 0.008 + ownerId.length) * 2;
-      visual.body.setPosition(visual.currentX, visual.currentY + bob).setRotation(now * 0.0012);
+      visual.body.setPosition(visual.currentX, visual.currentY + bob);
+      const aim = visual.repairTarget ?? { x: visual.targetX, y: visual.targetY };
+      const dx = aim.x - visual.currentX, dy = aim.y - visual.currentY;
+      if (Math.hypot(dx, dy) > 0.5) visual.body.setRotation(Math.atan2(dy, dx) + Math.PI / 2);
+      updateRepairDroneRotors(visual.body, now);
       visual.glow
         .setPosition(visual.currentX, visual.currentY + bob)
         .setScale(0.9 + Math.sin(now * 0.01) * 0.08);
@@ -98,16 +98,14 @@ export class RepairDroneRenderer {
 
   private createVisual(snapshot: SyncedRepairDrone): RepairDroneVisual {
     const glow = this.scene.add.circle(snapshot.x, snapshot.y, 13, 0x63ffc0, 0.12)
-      .setStrokeStyle(1, 0xbfffe3, 0.45)
+      .setStrokeStyle(1, snapshot.ownerColor, 0.65)
       .setDepth(DRONE_DEPTH - 0.02);
     const beam = this.scene.add.graphics().setDepth(DRONE_DEPTH - 0.01);
     registerGraphicsObject(this.scene, 'objectiveMarkers', glow);
     registerGraphicsObject(this.scene, 'objectiveMarkers', beam);
 
     return {
-      body: this.scene.add.image(snapshot.x, snapshot.y, TEX_REPAIR_DRONE)
-        .setDepth(DRONE_DEPTH)
-        .setTint(snapshot.ownerColor),
+      body: createRepairDroneBody(this.scene, snapshot.x, snapshot.y),
       glow,
       beam,
       currentX: snapshot.x,

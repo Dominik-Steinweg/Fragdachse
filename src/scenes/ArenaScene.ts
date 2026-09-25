@@ -8,6 +8,7 @@ import { getDeferredAssets } from '../assets/DeferredAssets';
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import { preloadAttackDroneAssets } from '../effects/AttackDroneRenderer';
+import { preloadRepairDroneAssets } from '../effects/repairDroneVisuals';
 import * as Phaser from 'phaser';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
@@ -385,6 +386,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadBadgerAnimationAssets(this.load);
     preloadHeldItemAssets(this.load);
     preloadAttackDroneAssets(this.load);
+    preloadRepairDroneAssets(this.load);
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
     // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.
     const enemyImageKeys = new Set(

@@ -2889,6 +2889,66 @@
         "idle": "d493244a70b577d221a0ea9e0528a8dec1a087eb0b15dbbd9abd11cb3f154a3c",
         "sheet": "7bb1e918416aaa2e3130c427faf9d6ebd9fc1c4b1cf8d36eb0f8b1d2173f1df8"
       }
+    },
+    {
+      "id": "repair-drone",
+      "category": "companion",
+      "gameIds": [
+        "repair_drone"
+      ],
+      "revision": "v2-repair-drone-b",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "repair_drone",
+      "sheetTextureKey": "repair_drone_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/repair-drone/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/repair-drone/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 3,
+        "frameCount": 17,
+        "width": 1056,
+        "height": 396
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16
+          ],
+          "frameRate": 48,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "8dc3e898e9e6e59a8e2f1562399588afedc70883de63ae7305fa5e5cc1503ba8",
+        "sheet": "4e22147576cb9f10e363600037b491b1c4128040b6a0896869f1bae1c9ff237b"
+      }
     }
   ]
 }

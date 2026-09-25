@@ -8,7 +8,7 @@
  * `CoopDefenseObjectiveRepairSystem`, damit Strahl und HP-Balken zusammenfallen.
  *
  * Optik und Strahlrezept stammen aus dem spielergebundenen Drohnensystem (`repairDroneVisuals`);
- * unterschieden sind sie über den fehlenden Besitzer-Tint und den Formationsflug statt eines Orbits
+ * unterschieden sind sie über den fehlenden Besitzerring und den Formationsflug statt eines Orbits
  * um einen Spieler.
  */
 import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
@@ -23,9 +23,9 @@ import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { getSecondaryObjectiveTargets } from '../ui/coopDefenseSecondaryObjectiveModel';
 import {
   REPAIR_DRONE_DEPTH,
-  REPAIR_DRONE_TEXTURE_KEY,
+  createRepairDroneBody,
   drawRepairBeam,
-  ensureRepairDroneTexture,
+  updateRepairDroneRotors,
 } from './repairDroneVisuals';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
@@ -64,19 +64,12 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
 
   constructor(private readonly scene: Phaser.Scene) {}
 
-  generateTextures(): void {
-    ensureRepairDroneTexture(this.scene.textures);
-  }
-
   build(): void {
     if (this.built) return;
     this.built = true;
-    this.generateTextures();
 
     for (let index = 0; index < MAX_DRONES; index += 1) {
-      const body = this.scene.add.image(0, 0, REPAIR_DRONE_TEXTURE_KEY)
-        .setDepth(REPAIR_DRONE_DEPTH)
-        .setVisible(false);
+      const body = createRepairDroneBody(this.scene, 0, 0).setVisible(false);
       const glow = this.scene.add.circle(0, 0, 13, 0x63ffc0, 0.12)
         .setStrokeStyle(1, 0xbfffe3, 0.45)
         .setDepth(REPAIR_DRONE_DEPTH - 0.02)
@@ -231,6 +224,8 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
     let y = stationY;
     let alpha = 1;
     let repairing = false;
+    let facingX = job.centerX;
+    let facingY = job.centerY;
 
     if (job.elapsedMs < approachMs) {
       // Anflug: schnelles Heranführen, weiches Einschwenken in die Formation.
@@ -238,6 +233,8 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
       x = Phaser.Math.Linear(entryX, stationX, progress);
       y = Phaser.Math.Linear(entryY, stationY, progress);
       alpha = Math.min(1, job.elapsedMs / (approachMs * 0.35));
+      facingX = stationX;
+      facingY = stationY;
     } else if (job.elapsedMs < approachMs + repairMs) {
       repairing = true;
     } else {
@@ -247,6 +244,8 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
       x = Phaser.Math.Linear(stationX, entryX, progress);
       y = Phaser.Math.Linear(stationY, entryY, progress);
       alpha = 1 - progress;
+      facingX = entryX;
+      facingY = entryY;
     }
 
     const bob = Math.sin(now * 0.008 + slot * 1.7) * 2;
@@ -254,7 +253,8 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
       .setVisible(true)
       .setAlpha(alpha)
       .setPosition(x, y + bob)
-      .setRotation(now * 0.0012);
+      .setRotation(Math.atan2(facingY - y, facingX - x) + Math.PI / 2);
+    updateRepairDroneRotors(drone.body, now, slot * 37);
     drone.glow
       .setVisible(decorative)
       .setAlpha(alpha)

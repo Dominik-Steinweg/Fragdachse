@@ -261,7 +261,6 @@ export function* createRendererBundleSteps(
   guardianSpirit.generateTextures();
   yield 'renderers/guardianSpirit';
   const repairDrone = new RepairDroneRenderer(scene);
-  repairDrone.generateTextures();
   yield 'renderers/repairDrone';
   const attackDrone = new AttackDroneRenderer(scene);
   cleanup.push(() => attackDrone.destroyAll());

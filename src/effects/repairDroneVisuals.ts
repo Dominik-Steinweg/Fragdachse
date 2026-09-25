@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { ensureCanvasTexture } from './EffectUtils';
+import { getPipelineAsset } from '../config/pipelineAssets';
 
 /**
  * Geteilte Optik der Reparaturdrohnen.
@@ -8,48 +8,29 @@ import { ensureCanvasTexture } from './EffectUtils';
  * Der spielergebundene {@link RepairDroneRenderer} und die missionsgebundenen Drohnen der
  * Nebenmissionen sollen als dieselbe Technik erkennbar sein, ohne ihre Fachlogik zu teilen: Der eine
  * folgt einem Spieler samt Upgrade und repliziert seine Position, der andere ist eine rein lokale
- * Präsentation aus dem Objective-Zustand. Gemeinsam sind nur Textur, Tiefe und Strahlrezept.
+ * Präsentation aus dem Objective-Zustand. Gemeinsam sind Artwork, Rotorclip, Tiefe und Strahlrezept.
  */
-export const REPAIR_DRONE_TEXTURE_KEY = '__repair_drone';
+const ASSET = getPipelineAsset('repair-drone');
+const FLIGHT_CLIP = ASSET.clips.find(clip => clip.name === 'move')!;
 export const REPAIR_DRONE_DEPTH = DEPTH.PROJECTILES + 0.4;
 /** Zeitkonstante der Positionsglättung in Millisekunden. */
 export const REPAIR_DRONE_SMOOTH_TIME_MS = 48;
 
-/** Idempotent: Beide Renderer dürfen die Textur anfordern. */
-export function ensureRepairDroneTexture(textures: Phaser.Textures.TextureManager): void {
-  ensureCanvasTexture(textures, REPAIR_DRONE_TEXTURE_KEY, 32, 32, (ctx) => {
-    ctx.translate(16, 16);
-    ctx.fillStyle = '#26343c';
-    ctx.strokeStyle = '#bcebd4';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#7fffc1';
-    ctx.beginPath();
-    ctx.arc(0, 0, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#8297a1';
-    ctx.lineWidth = 3;
-    for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(angle) * 6, Math.sin(angle) * 6);
-      ctx.lineTo(Math.cos(angle) * 12, Math.sin(angle) * 12);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = '#d5f5e6';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(-12, 0, 3, 0, Math.PI * 2);
-    ctx.moveTo(15, 0);
-    ctx.arc(12, 0, 3, 0, Math.PI * 2);
-    ctx.moveTo(3, -12);
-    ctx.arc(0, -12, 3, 0, Math.PI * 2);
-    ctx.moveTo(3, 12);
-    ctx.arc(0, 12, 3, 0, Math.PI * 2);
-    ctx.stroke();
-  });
+export function preloadRepairDroneAssets(loader: Phaser.Loader.LoaderPlugin): void {
+  loader.spritesheet(ASSET.sheetTextureKey, ASSET.sheetPath, ASSET.layout);
+}
+
+export function createRepairDroneBody(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Image {
+  return scene.add.image(x, y, ASSET.sheetTextureKey, ASSET.idleFrame)
+    .setOrigin(ASSET.pivot[0], ASSET.pivot[1])
+    .setDisplaySize(32, 32)
+    .setDepth(REPAIR_DRONE_DEPTH);
+}
+
+/** Sample the Blender impellers without rotating the hull or creating pooled animation timers. */
+export function updateRepairDroneRotors(body: Phaser.GameObjects.Image, now: number, phaseOffsetMs = 0): void {
+  const index = Math.floor(Math.max(0, now + phaseOffsetMs) * FLIGHT_CLIP.frameRate / 1000) % FLIGHT_CLIP.frames.length;
+  body.setFrame(FLIGHT_CLIP.frames[index]);
 }
 
 /**

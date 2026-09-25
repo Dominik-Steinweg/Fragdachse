@@ -4330,6 +4330,57 @@
       },
       "clips": [],
       "designReference": "art/poc/pipeline-v2/references/attack-drone-b/design-reference.png"
+    },
+    {
+      "id": "repair-drone",
+      "label": "Service-Drohne S-02",
+      "category": "companion",
+      "gameIds": [
+        "repair_drone"
+      ],
+      "reference": "scripts/asset-pipeline/references/repair-drone-legacy.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Compact twin-duct service chassis with two broad side impellers, open front gripping jaws and a rear battery cassette",
+        "colors": "Worn warm ivory enamel over petrol green paint, graphite mechanics, satin alloy, copper hydraulic lines and small mint worklights",
+        "anatomy": "Strict orthographic top-down, weaponless and stationless. Separate beveled service panels, an inlaid wrench marking, recessed fasteners and sparse edge wear. Only the two counter-rotating impellers move."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "repair-drone",
+      "model": {},
+      "orthoScale": 3.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Aged ivory enamel, petrol green and satin alloy",
+          "textureStrength": 0.15,
+          "formShadowStrength": 0.64
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "twin_rotors",
+          "frameCount": 16,
+          "frameRate": 48,
+          "loop": true,
+          "parameters": {}
+        }
+      ]
     }
   ]
 }
