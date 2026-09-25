@@ -19,6 +19,9 @@ export class PerformanceLabController {
     private readonly windows: PerformanceWindow[], private readonly markers: { name: string; atMs: number }[],
     private readonly mark: (name: string) => number, private readonly complete: (result: PerformanceLabResult) => void) {
     this.cases = resolvePerformanceCases(request.caseId);
+    if (request.timeOfDayMinutes !== undefined) {
+      this.cases = this.cases.map(test => ({ ...test, timeOfDay: request.timeOfDayMinutes }));
+    }
     this.unregister = registerReferenceMap();
     this.startedAt = this.mark('arena-requested');
     try { this.port.start(this.cases[0].mapId ?? PERFORMANCE_MAP_ID, REFERENCE_SEED, this.cases[0].commit); }

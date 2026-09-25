@@ -11,6 +11,20 @@ Relevanzprüfung als Kalibrierungskandidat gekennzeichnet.
 
 ## Bedienung
 
+`--enemy-eyes on|off` schaltet ausschließlich Augen und deren Bodenlichter für einen
+A/B-Vergleich; `--time-of-day HH:MM` fixiert die Tageszeit des Falls. Beide Werte stehen
+im Run-Manifest und in der Umgebung. Für Vergleiche identische Uhrzeit, Fall, Build,
+Aufnahmedauer und Capture-Profil verwenden. Beispiel:
+`npm run perf:chrome -- --case enemies.medium --enemy-eyes on --time-of-day 00:00`.
+Ohne Schalter gilt das normale Verhalten.
+
+Die optische Einzelprüfung ist im vorhandenen Navigation-Lab möglich:
+`/navigation-lab.html?kinds=all&count=14&autorun=1` oder eine kommaseparierte
+Gegnerauswahl, etwa `kinds=zombie-badger,rabid-badger`. Diese Auswahl benutzt die normale
+Spielkamera und einen engeren Spawn-Bereich; die Referenzszenarien bleiben unverändert.
+`M` öffnet den lokalen Tageszeitregler. Pausieren und Einzelschritte helfen bei der
+Positionsprüfung; solche Sichtprüfungen sind keine Performance-Aufnahmen.
+
 Voraussetzungen: Projektabhängigkeiten installiert, lokal installiertes Google Chrome und
 Netzwerkzugriff auf den normalen Signalisierungsserver des Spiels.
 

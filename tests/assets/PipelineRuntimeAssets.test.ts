@@ -4,11 +4,28 @@ import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 import manifest from '../../src/config/pipelineAssets.json';
 import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
+import { validateEyeAnchors } from '../../scripts/asset-pipeline/eye-anchors.mjs';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
 import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
 
 describe('selected runtime asset package', () => {
+  it('binds complete eye poses to every enemy image revision', () => {
+    for (const asset of manifest.assets.filter(a => a.category === 'enemy')) {
+      expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset)).not.toThrow();
+      expect(COOP_DEFENSE_ENEMY_CONFIGS[asset.id].eyeGlow).toBeDefined();
+      expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount + 1, asset)).toThrow();
+      expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, { ...asset, revision: 'foreign' })).toThrow();
+      expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount,
+        { ...asset, hashes: { ...asset.hashes, sheet: 'foreign' } })).toThrow();
+      const invalid = structuredClone(asset.eyeAnchors!);
+      invalid.frames[0].left.x = Number.NaN;
+      expect(() => validateEyeAnchors(invalid, asset.layout.frameCount, asset)).toThrow();
+      expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset,
+        asset.eyeAnchors!.source.blendSha256)).not.toThrow();
+      expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset, '0'.repeat(64))).toThrow();
+    }
+  });
   it('ships the mission barrier blob frames with transparent spare slots and seamless straight runs', async () => {
     const { data, info } = await sharp('public/assets/sprites/missionbarrier47blob.png')
       .ensureAlpha().raw().toBuffer({ resolveWithObject: true });

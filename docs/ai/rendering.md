@@ -79,6 +79,22 @@ gegen die installierten Phaser-Methoden mit und ohne Kamera-Framebuffer und bei 
 
 ## Runtime und Renderer
 
+Gegneraugen verwenden die `eyeAnchors` des importierten `PipelineAsset`: normalisierte
+Ellipsen je Sprite-Frame, aus ausgewerteter Blender-Geometrie mit der Exportkamera und
+denselben Animationssamples. Der Import bindet sie an Revision, Variante, Blend- und
+PNG-Hashes; fehlende oder fremde Anker sind Assetfehler. Neue Rezepte liefern direkte
+`eyeLeft`-/`eyeRight`-Mesh-Sockets. Historische Migrationen lesen ausschließlich die
+ausgewählte archivierte Quelle und verändern weder Sprites noch Archive.
+
+[EnemyEyeGlowRenderer.ts](../../src/effects/EnemyEyeGlowRenderer.ts) liest nach der
+Gegner-Visual-Synchronisierung den tatsächlich angezeigten Frame und Sprite-Transform.
+Gemeinsame GPU-Layer zeichnen die Augen über der Nachtabdunklung und unter Baumkronen.
+Nur lebende, sichtbare feindliche Gegner liefern Augen und Licht. Ein geborgter,
+wiederverwendeter Frame-Puffer geht vor dem Licht-Update an `LightingSystem`;
+dessen separater GPU-Batch zeichnet schattenlose Bodenlichter ohne das normale
+Lichtbudget zu belegen, auch bei niedriger Qualität. Die World-Frame-Bindung besitzt
+die Freigabe; Presentation-Verlust, World-Wechsel und Teardown leeren die Daten.
+
 Wasser besitzt getrennte World-Geometrie: [WaterGeometry.ts](../../src/arena/WaterGeometry.ts) sperrt Bodenabfragen, Platzierung und gesweepte Koerperbewegung auch bei deaktivierten Buddel-Collidern. Es hat keine HP und nimmt nicht an Schuss-, Sicht- oder Projektil-Hindernisabfragen teil; die Navigation fuehrt Wasser als ausdruecklich unpassierbar. [WaterSurfaceRenderer.ts](../../src/arena/WaterSurfaceRenderer.ts) gehoert ausschliesslich zur World-Praesentation: Maskentextur und Shader entstehen pro residentem Chunk, Uferdaten bleiben statisch, Animation verwendet gemeinsame Weltkoordinaten und lokale Zeit. Renderer-Teardown veraendert keine Wasser-Spielregel.
 
 Wasser-CPU-Masken werden fuer die gesamte dargestellte World einschliesslich Ufer-Rand-Chunks

@@ -415,6 +415,7 @@ export class ArenaLifecycleCoordinator {
         burrowEffects: this.renderers.burrowGpu,
         healthBars: this.renderers.healthBars,
         healthBarScope: this.worldRuntime,
+        enemyEyes: this.renderers.enemyEyes,
         scene: this.scene,
         getLocalWorldPresentation: () => this.getLocalWorldPresentation(),
         getSpectatorCameraInput: this.getSpectatorCameraInput,

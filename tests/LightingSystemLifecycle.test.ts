@@ -4,7 +4,15 @@ vi.mock('phaser', () => ({
   BlendModes: { MULTIPLY: 2, ADD: 1 },
   Textures: { FilterMode: { LINEAR: 1 } },
   Math: { Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)) },
-  GameObjects: { Image: class {
+  GameObjects: { SpriteGPULayer: class {
+    memberCount = 0;
+    frame = { realWidth: 256, realHeight: 256 };
+    members: object[] = [];
+    constructor(_scene: unknown, _texture: unknown, public size: number) {}
+    setVisible() { return this; } setBlendMode() { return this; } setName() { return this; }
+    addMember(member: object) { this.members[this.memberCount++] = { ...member }; }
+    resize(size: number) { this.size = size; } destroy() {}
+  }, Image: class {
     setOrigin() { return this; }
     setBlendMode() { return this; }
     destroy() {}
@@ -13,29 +21,55 @@ vi.mock('phaser', () => ({
 
 import { AdrenalineEssenceLighting } from '../src/adrenalineEssence/AdrenalineEssenceLighting';
 import { LightingSystem } from '../src/effects/LightingSystem';
+import { GraphicsQualityController, type GraphicsQuality } from '../src/graphics/GraphicsQuality';
 
-function fixture() {
+function fixture(quality: GraphicsQuality = 'high') {
   const stamps = vi.fn();
+  const draws = vi.fn();
+  const fills = vi.fn();
   const scene = {
     time: { now: 100 },
-    textures: { exists: () => true },
+    textures: { exists: () => true, get: () => ({}) },
     cameras: { main: { scrollX: 0, scrollY: 0 } },
     make: { graphics: () => ({ destroy() {} }) },
-    add: { renderTexture: () => ({
+    add: { particles: vi.fn(), renderTexture: () => ({
       texture: { key: 'fake-lightmap', setFilter() {} },
       setOrigin() { return this; }, setDisplaySize() { return this; },
       setScrollFactor() { return this; }, setDepth() { return this; },
       setBlendMode() { return this; }, setRenderMode() { return this; },
-      setVisible() { return this; }, fill() {}, stamp: stamps, destroy() {},
+      setVisible() { return this; }, fill: fills, draw: draws, stamp: stamps, destroy() {},
     }) },
   };
+  new GraphicsQualityController(quality).attach(scene as never);
   const lighting = new LightingSystem(scene as never);
   lighting.setTimeOfDay(0);
   lighting.setActive(true);
-  return { scene, lighting, stamps };
+  return { scene, lighting, stamps, draws, fills };
 }
 
 describe('keyed light lifecycle', () => {
+  it.each(['high', 'medium', 'low'] as const)('batches every eye light outside the %s budget and clears the previously lit map', (quality) => {
+    const { lighting, draws, fills } = fixture(quality);
+    lighting.setPerformanceMetricsEnabled(true);
+    // Exceed even the high-quality budget with normal lights.
+    for (let i = 0; i < 250; i++) lighting.setLight(`flash:${i}`, 'muzzleFlash', 100, 100);
+    const lights = Array.from({ length: 120 }, (_, i) => ({ x: 100 + i, y: 100, radiusPx: 30, intensity: .18, color: 0xbb72ff }));
+    lighting.setEnemyEyeLights({ lights, lightCount: lights.length });
+    lighting.update();
+    expect(draws).toHaveBeenCalledTimes(1);
+    expect(draws.mock.lastCall?.[0].memberCount).toBe(lights.length);
+    expect(lighting.getDebugStats().enemyEyeLights).toBe(lights.length);
+    expect(lighting.getPerformanceMetrics().presetCounts.enemyEyes).toBe(lights.length);
+    const alpha = draws.mock.lastCall?.[0].members[0].alpha;
+    lighting.setTimeOfDay(12 * 60); lighting.update();
+    expect(lighting.getDebugStats().enemyEyeLights).toBe(0);
+    lighting.setTimeOfDay(0); lighting.update();
+    expect(draws.mock.lastCall?.[0].members[0].alpha).toBe(alpha);
+    lighting.clear(); fills.mockClear(); lighting.update();
+    expect(lighting.getDebugStats().enemyEyeLights).toBe(0);
+    expect(fills).toHaveBeenCalledOnce();
+    lighting.destroy();
+  });
   it('keeps canopy falloff circular, including square bounds and distant light sources', () => {
     const { lighting } = fixture();
     const ambient = lighting.resolveCanopyTint(100, 100);

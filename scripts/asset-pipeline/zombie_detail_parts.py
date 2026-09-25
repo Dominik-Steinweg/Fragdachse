@@ -1,5 +1,6 @@
 """Authored damaged hide, old cloth wraps and the zombie's cloudy-eyed badger face."""
 import math
+from eye_anchors import register_eye
 from recipes_v2.enemy_parts_a import horn, ell
 from zombie_surface_parts import Surface, patch, oval, locks, torn_rim
 
@@ -63,7 +64,7 @@ def head(c,p):
         patch(c,'Ragged inflamed eye socket',surface,oval(x,y,.077,.112,side*-.13,.09,3 if side<0 else 7),p['skin'],.024)
         patch(c,'Deep eye socket recess',surface,oval(x,y,.059,.091,side*-.13),p['wound'],.031)
         z=surface.height(x,y)
-        ell(c,'Milky blind zombie eye',(x,y,z+.052),(.045,.071,.029),p['eye'],angle=side*-.13)
+        register_eye(c,side,ell(c,'Milky blind zombie eye',(x,y,z+.052),(.045,.071,.029),p['eye'],angle=side*-.13))
         ell(c,'Tiny quiet wet-eye highlight',(x-.012,y+.031,z+.09),(.010,.015,.003),p['glint'])
         for edge in (-1,1):
             points=[]

@@ -460,6 +460,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     stopRecording: () => diagnostics.stopScenarioRecording(),
     environment: () => ({ canvasWidth: scene.game.canvas.width, canvasHeight: scene.game.canvas.height,
       viewportWidth: innerWidth, viewportHeight: innerHeight, dpr: devicePixelRatio,
-      quality: 'high', targetFps: 120, physicsFps: 120, coldBrowser: true, audio: 'running' }),
+      quality: 'high', targetFps: 120, physicsFps: 120, coldBrowser: true, audio: 'running',
+      enemyEyes: window.__FD_PERF_REQUEST__?.enemyEyes ?? 'on',
+      timeOfDayMinutes: window.__FD_PERF_REQUEST__?.timeOfDayMinutes ?? null }),
   };
 }

@@ -3,6 +3,7 @@ import { onBootSceneTeardown } from '../../ui/BootPreparation';
 import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
 import { TurretAnimationController } from '../../effects/TurretAnimationController';
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
+import { EnemyEyeGlowRenderer } from '../../effects/EnemyEyeGlowRenderer';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import * as Phaser from 'phaser';
@@ -76,6 +77,7 @@ import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 export interface RendererBundle {
   interactions: WorldInteractionRenderer;
   healthBars: WorldHealthBarRenderer;
+  enemyEyes: EnemyEyeGlowRenderer;
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
   plasmaBurner:        PlasmaBurnerRenderer;
@@ -397,6 +399,8 @@ export function* createRendererBundleSteps(
   // `WorldProjectileRuntime.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   const healthBars = new WorldHealthBarRenderer(scene);
+  const enemyEyes = new EnemyEyeGlowRenderer(scene, lighting);
+  cleanup.push(() => enemyEyes.destroy());
   const interactions = new WorldInteractionRenderer(scene);
   cleanup.push(() => interactions.clear());
   const constructionOwnershipMotes = new ConstructionOwnershipMoteRenderer(gpuVfx);
@@ -410,6 +414,7 @@ export function* createRendererBundleSteps(
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
     healthBars,
+    enemyEyes,
     gpuVfx,
     constructionOwnershipMotes,
     movement,

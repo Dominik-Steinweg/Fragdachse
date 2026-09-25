@@ -71,6 +71,7 @@ class Authoring:
         self.scene, self.images = scene, images
         self.strengths = []
         self.form_strengths = []
+        self.eye_sockets = {}
 
     def material(self, name, color, family=None, emission=0, form_shading=False):
         m = bpy.data.materials.new(name)

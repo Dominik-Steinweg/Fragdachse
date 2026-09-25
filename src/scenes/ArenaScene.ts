@@ -213,7 +213,8 @@ import { startPerformanceCapture, attachPerformanceLab, performanceLobbyRevealed
 
 export class ArenaScene extends Phaser.Scene {
   /** Explicit control surface for a separately booted, local-only analysis arena. */
-  createNavigationLabPort(): import('../debug/navigationLab/NavigationLabPort').NavigationLabPort {
+  createNavigationLabPort(): import('../debug/navigationLab/NavigationLabPort').NavigationLabPort | null {
+    if (!this.initializationReady) return null;
     return {
       ...this.arenaRuntime.navigationLabPort,
       start: (mapId, seed, loadout) => {
@@ -242,6 +243,8 @@ export class ArenaScene extends Phaser.Scene {
       },
       getPerformance: () => ({ ...this.hostUpdate.getPerformanceMetrics() }),
       getRenderCpuMs: () => this.diagnostics?.getRenderCpuMs() ?? 0,
+      getEyeGlowCounts: () => ({ eyes: this.renderers.enemyEyes.model.eyeCount,
+        lights: this.renderers.lighting.getDebugStats().enemyEyeLights }),
     };
   }
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
@@ -1193,6 +1196,7 @@ export class ArenaScene extends Phaser.Scene {
         if (window.__FD_PERF__ && !['failed', 'complete'].includes(window.__FD_PERF__.state)) failPerformanceLab('Scene shutdown during capture');
       });
       attachPerformanceLab(async () => {
+        this.renderers.enemyEyes.setSuppressed(window.__FD_PERF_REQUEST__?.enemyEyes === 'off');
         const { createPerformanceLabGamePort } = await import('../debug/performanceLab/gamePort');
         return createPerformanceLabGamePort(this, this.arenaRuntime, playerManager, this.diagnostics!,
           (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger), () => this.lobbyOverlay.isRevealComplete());

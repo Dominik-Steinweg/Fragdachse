@@ -2,6 +2,7 @@
   "enemies": [
     {
       "id": "zombie-badger",
+      "eyeGlow": { "color": 16053215 },
       "pawCount": 4,
       "maxHp": 15,
       "xp": 1,
@@ -22,6 +23,7 @@
     },
     {
       "id": "demon-badger",
+      "eyeGlow": { "color": 16748869 },
       "pawCount": 4,
       "maxHp": 20,
       "xp": 2,
@@ -42,6 +44,7 @@
     },
     {
       "id": "rabid-badger",
+      "eyeGlow": { "color": 12284671 },
       "pawCount": 4,
       "maxHp": 20,
       "xp": 3,
@@ -62,6 +65,7 @@
     },
     {
       "id": "grave-titan",
+      "eyeGlow": { "color": 11788163 },
       "pawCount": 4,
       "maxHp": 1800,
       "xp": 300,
@@ -104,6 +108,7 @@
     },
     {
       "id": "spore-warden",
+      "eyeGlow": { "color": 14018411 },
       "pawCount": 4,
       "maxHp": 140,
       "xp": 6,
@@ -125,6 +130,7 @@
     },
     {
       "id": "plague-medic",
+      "eyeGlow": { "color": 16765304 },
       "pawCount": 4,
       "maxHp": 180,
       "xp": 10,
@@ -146,6 +152,7 @@
     },
     {
       "id": "void-stalker",
+      "eyeGlow": { "color": 6613503 },
       "pawCount": 4,
       "maxHp": 190,
       "xp": 15,
@@ -174,6 +181,7 @@
     },
     {
       "id": "stink-broodmother",
+      "eyeGlow": { "color": 12312663 },
       "pawCount": 4,
       "maxHp": 250,
       "xp": 20,
@@ -200,6 +208,7 @@
     },
     {
       "id": "alien-badger",
+      "eyeGlow": { "color": 8385743 },
       "pawCount": 2,
       "maxHp": 180,
       "xp": 30,
@@ -240,6 +249,7 @@
     },
     {
       "id": "thrower-badger",
+      "eyeGlow": { "color": 16761963 },
       "pawCount": 4,
       "maxHp": 350,
       "xp": 40,
@@ -275,6 +285,7 @@
     },
     {
       "id": "inferno-colossus",
+      "eyeGlow": { "color": 13933567 },
       "pawCount": 4,
       "maxHp": 3200,
       "xp": 500,
@@ -349,6 +360,7 @@
     },
     {
       "id": "pyro-badger",
+      "eyeGlow": { "color": 13933567 },
       "pawCount": 2,
       "maxHp": 400,
       "xp": 50,
@@ -398,6 +410,7 @@
     },
     {
       "id": "timebomb-badger",
+      "eyeGlow": { "color": 14273791 },
       "pawCount": 4,
       "maxHp": 60,
       "xp": 10,
@@ -448,6 +461,7 @@
     },
     {
       "id": "void-hunter",
+      "eyeGlow": { "color": 11766015 },
       "pawCount": 4,
       "maxHp": 4000,
       "xp": 750,

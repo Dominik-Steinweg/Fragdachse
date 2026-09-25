@@ -291,6 +291,7 @@ export interface CoopDefenseEnemyConfig {
   readonly isBoss?: boolean;
   readonly color?: number;
   readonly glow?: CoopDefenseEnemyGlowConfig;
+  readonly eyeGlow?: { readonly color: number };
   readonly phaseTwoGlow?: CoopDefenseEnemyGlowConfig;
   readonly translocator?: CoopDefenseEnemyTranslocatorConfig;
   readonly burrow?: CoopDefenseEnemyBurrowConfig;
@@ -388,6 +389,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         isBoss: config.isBoss,
         color: config.color,
         glow: config.glow,
+        eyeGlow: config.eyeGlow,
         phaseTwoGlow: config.phaseTwoGlow,
         translocator: config.translocator,
         burrow: config.burrow,
@@ -489,6 +491,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,
     glow: normalizeGlowConfig(enemy.glow),
+    eyeGlow: normalizeEyeGlowConfig(enemy.eyeGlow),
     phaseTwoGlow: normalizeGlowConfig(enemy.phaseTwoGlow),
     translocator: normalizeTranslocatorConfig(enemy.translocator, enemy.id),
     burrow: normalizeBurrowConfig(enemy.burrow),
@@ -527,6 +530,14 @@ function normalizeTrainCollision(
     damageToEnemy: Math.max(0, config.damageToEnemy),
     destroysTrain: config.destroysTrain === true,
   };
+}
+
+function normalizeEyeGlowConfig(value: { readonly color: number } | undefined): { readonly color: number } | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value.color) || value.color < 0 || value.color > 0xffffff) {
+    throw new Error('[coopDefenseEnemies] Invalid eye glow color');
+  }
+  return { color: value.color };
 }
 
 function normalizeGlowConfig(

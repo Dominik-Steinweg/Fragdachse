@@ -17,9 +17,13 @@ function options(args) {
   const value = { caseId: 'standard', timeoutMs: 25 * 60_000, captureProfile: 'standard' };
   for (let i = 0; i < args.length; i += 2) {
     const flag = args[i], arg = args[i + 1];
-    if (flag === '--help') { console.log('perf:chrome [--case CASE-ID] [--duration-seconds N] [--timeout-seconds N] [--capture-profile standard|reduced]\nCases: environment.route, destruction.single/nuke/bfg, enemies.low/medium/high, hazards.void-fire, weapon.glock/p90/plasma/mini-rockets/shotgun/asmd/bite/rocket/tesla/flame, utility.he/molotov/smoke, construction.defense, ultimate.armageddon, combat.day/night/day-night, recovery.idle'); process.exit(0); }
+    if (flag === '--help') { console.log('perf:chrome [--case CASE-ID] [--duration-seconds N] [--timeout-seconds N] [--capture-profile standard|reduced] [--enemy-eyes on|off] [--time-of-day HH:MM]\nCases: environment.route, destruction.single/nuke/bfg, enemies.low/medium/high, hazards.void-fire, weapon.glock/p90/plasma/mini-rockets/shotgun/asmd/bite/rocket/tesla/flame, utility.he/molotov/smoke, construction.defense, ultimate.armageddon, combat.day/night/day-night, recovery.idle'); process.exit(0); }
     if (!arg) throw new Error(`Missing argument for ${flag}`);
     if (flag === '--case') value.caseId = arg;
+    else if (flag === '--enemy-eyes' && ['on', 'off'].includes(arg)) value.enemyEyes = arg;
+    else if (flag === '--time-of-day' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(arg)) {
+      const [h, m] = arg.split(':').map(Number); value.timeOfDayMinutes = h * 60 + m;
+    }
     else if (flag === '--duration-seconds' || flag === '--timeout-seconds') {
       const ms = Number(arg) * 1000;
       if (!Number.isFinite(ms) || ms <= 0 || ms > 24 * 3600_000) throw new Error(`Invalid duration: ${arg}`);

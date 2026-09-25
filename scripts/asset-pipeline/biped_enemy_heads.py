@@ -3,6 +3,7 @@ import math
 from mathutils import Vector
 from enemy_parts_b import tube, plate
 from weapon_surface_parts import material, paint_depth
+from eye_anchors import register_eye
 
 
 def pyro_head(c):
@@ -30,6 +31,7 @@ def pyro_head(c):
         rim.rotation_euler.z=side*.27
         lens=c.ell('Separate smoked respirator eyepiece',(side*.13,.29,2.109),(.089,.088,.021),glass)
         lens.rotation_euler.z=side*.27
+        register_eye(c,side,lens)
         c.ell('Round breathing filter housing',(side*.265,.39,1.977),(.109,.139,.09),dark)
         c.ell('Metal filter grille',(side*.27,.405,2.053),(.082,.103,.021),metal)
         for dx in (-.040,0,.040):
@@ -116,6 +118,7 @@ def alien_head(c):
         import bpy
         mesh=bpy.data.meshes.new('Conforming almond eye');mesh.from_pydata(vertices,[],faces);mesh.update()
         ob=bpy.data.objects.new('Large swept black alien eye',mesh);c.scene.collection.objects.link(ob);mesh.materials.append(dark)
+        register_eye(c,side,ob)
         for p in mesh.polygons:p.use_smooth=True
         tube(c,'Soft alien orbital fold',outline+[outline[0]],.010,crease,10)
         c.ell('Restrained alien eye glint',(side*.18-.021,.205,surface(side*.18-.021,.205)+.026),(.014,.029,.007),pale)

@@ -276,13 +276,16 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
   it('owns movement and Burrow presentation without activity and closes both once before handoff', () => {
     const movementEffects = { openWorld: vi.fn(), closeWorld: vi.fn() };
     const burrowEffects = { openWorld: vi.fn(), closeWorld: vi.fn() };
+    const enemyEyes = { openWorld: vi.fn(), closeWorld: vi.fn() };
     let presentation: WorldPresentationRequirement = { required: false, mode: 'none', surfaces: [] };
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), {
       movementEffects: movementEffects as never, burrowEffects: burrowEffects as never,
+      enemyEyes: enemyEyes as never,
       getLocalWorldPresentation: () => presentation,
     }));
     expect(movementEffects.openWorld).toHaveBeenCalledWith(binding);
     expect(burrowEffects.openWorld).toHaveBeenCalledWith(binding, expect.any(Function));
+    expect(enemyEyes.openWorld).toHaveBeenCalledWith(binding, expect.any(Function));
     const isVisible = burrowEffects.openWorld.mock.calls[0][1] as () => boolean;
     expect(isVisible()).toBe(false);
     presentation = INTERACTIVE_PRESENTATION;
@@ -291,6 +294,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     expect(isVisible()).toBe(false);
     expect(movementEffects.closeWorld).toHaveBeenCalledExactlyOnceWith(binding);
     expect(burrowEffects.closeWorld).toHaveBeenCalledExactlyOnceWith(binding);
+    expect(enemyEyes.closeWorld).toHaveBeenCalledExactlyOnceWith(binding);
   });
   it('startet unzerstoert und wird durch destroy() idempotent inert', () => {
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene()));

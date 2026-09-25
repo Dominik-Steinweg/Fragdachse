@@ -3,6 +3,7 @@ import math
 from recipes_v2.enemy_parts_a import ell, horn
 from enemy_parts_b import scute
 from zombie_surface_parts import Surface, locks, patch, oval
+from eye_anchors import register_eye
 
 
 def head_a(c,pale,dark,coat,eye,y=.57,z=.87,width=.30,length=.43,ears=True,nose=None):
@@ -29,7 +30,7 @@ def head_a(c,pale,dark,coat,eye,y=.57,z=.87,width=.30,length=.43,ears=True,nose=
         x=side*ex;scale=width/.34
         patch(c,'Soft inset eye socket',surface,oval(x,ey,.061*scale,.044*scale,side*-.24),dark,.012)
         height=surface.height(x,ey)
-        ell(c,'Living narrow enemy eye',(x,ey+.002,height+.029),(.036*scale,.023*scale,.013),eye,angle=side*-.24)
+        register_eye(c,side,ell(c,'Living narrow enemy eye',(x,ey+.002,height+.029),(.036*scale,.023*scale,.013),eye,angle=side*-.24))
         pupil=c.material('Dark vertical enemy pupil',(.004,.006,.005))
         ell(c,'Focused pupil',(x,ey+.004,height+.041),(.008*scale,.020*scale,.003),pupil)
         glint=c.material('Restrained ivory eye reflection',(.74,.76,.64))

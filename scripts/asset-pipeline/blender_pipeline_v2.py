@@ -23,6 +23,7 @@ if str(BASE) not in sys.path:
     sys.path.insert(0, str(BASE))
 import blender_pipeline as shared
 import motions_v2
+import eye_anchors
 
 _sessions = {}
 
@@ -83,7 +84,7 @@ def resolve_spec(root, asset_id):
 def inputs(root, spec, device='CPU'):
     names = ['blender_pipeline.py', 'blender_pipeline_v2.py', 'rigs_v2.py', 'motions_v2.py',
              f'recipes_v2/{spec["recipe"]}.py', 'catalog-v2.json',
-             'export.mjs', 'export-v2.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
+             'export.mjs', 'export-v2.mjs', 'eye-anchors.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
     if spec['recipe'] in ('rocket', 'badger'):
         names.append(f'recipes/{spec["recipe"]}.py')
     # The production library includes shared anatomy/weapon helpers. Snapshot the
@@ -162,7 +163,7 @@ def validate_base(scene, asset, spec):
 def prepare(root, spec, revision, fingerprint, sources, textures):
     # MCP keeps Python alive. Hashing current files must never label cached old code.
     importlib.invalidate_caches()
-    for name in ('blender_pipeline', 'rigs_v2', 'motions_v2',
+    for name in ('blender_pipeline', 'rigs_v2', 'motions_v2', 'eye_anchors',
                  'recipes.badger', 'recipes_v2.badger',
                  *([f'recipes.{spec["recipe"]}'] if spec['recipe'] in ('badger', 'rocket') else [])):
         if name in sys.modules:
@@ -187,6 +188,9 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
     asset = recipe.build(ctx, spec)
     if set(asset) != {'root', 'parts', 'rig', 'sockets'}:
         raise ValueError('Recipe must return root, parts, rig and sockets')
+    asset['sockets'].update(ctx.eye_sockets)
+    if spec['category'] == 'enemy' and set(ctx.eye_sockets) != {'eyeLeft', 'eyeRight'}:
+        raise ValueError('Enemy recipes must supply both direct eye mesh sockets')
     samples, clips = motions_v2.author(asset, spec['clips'])
     scene.frame_start = 0
     scene.frame_end = math.ceil(clips[-1]['timelineEnd']) if clips else 0
@@ -201,7 +205,7 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
         text = bpy.data.texts.new(relative)
         text.write(path.read_text(encoding='utf-8'))
         texts.add(text)
-    bounds, bases = {}, {}
+    bounds, bases, eyes = {}, {}, []
     # Validate every evaluated pose before spending time rendering any frame.
     for sample in samples:
         set_frame(scene, sample['blenderFrame'])
@@ -210,8 +214,10 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
         bounds[sample['index']] = validate_pose(scene)
         base = validate_base(scene, asset, spec)
         if base is not None: bases[sample['index']] = base
+        if ctx.eye_sockets:
+            eyes.append(eye_anchors.sample_eyes(scene, asset['sockets']))
     scene.frame_set(0)
-    return {'scene': scene, 'ctx': ctx, 'asset': asset, 'samples': samples, 'clips': clips, 'bounds': bounds, 'baseDiameters': bases, 'texts': texts}
+    return {'scene': scene, 'ctx': ctx, 'asset': asset, 'samples': samples, 'clips': clips, 'bounds': bounds, 'baseDiameters': bases, 'texts': texts, 'eyeFrames': eyes}
 
 
 def archive_inputs(root, out, sources, textures):
@@ -345,6 +351,8 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU'):
                             camera={'type':'ORTHO','rotation':list(scene.camera.rotation_euler),
                                     'location':list(scene.camera.location),'orthoScale':scene.camera.data.ortho_scale,
                                     'transparent':True,'bounds':session['bounds'][0]})
+            if session['eyeFrames']:
+                manifest['eyeAnchors'] = {'version': 1, 'frames': session['eyeFrames']}
             save_json(folder / 'render.json', manifest)
         state['status'] = 'complete'
         save_json(out / 'build.json', state)

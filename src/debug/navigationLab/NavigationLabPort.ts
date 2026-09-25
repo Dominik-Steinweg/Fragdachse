@@ -60,4 +60,5 @@ export interface NavigationLabPort extends NavigationLabWorldPort {
   stopRecording(): ArenaPerformanceReport | null;
   getPerformance(): HostUpdatePerformanceMetrics;
   getRenderCpuMs(): number;
+  getEyeGlowCounts?(): { eyes: number; lights: number };
 }

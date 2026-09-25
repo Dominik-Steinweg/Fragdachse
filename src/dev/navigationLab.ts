@@ -20,6 +20,11 @@ declare const __NAVIGATION_BUILD_ID__: string;
 const params = new URLSearchParams(location.search);
 if (!params.has('session')) params.set('session', String(Date.now()));
 const scenario = navigationScenario(params.get('scenario') ?? 'rock-field');
+// Optional visual review uses the same production entities without changing reference suites.
+const reviewAllKinds = params.has('kinds');
+const kinds = params.get('kinds') === 'all' ? enemyConfig.enemies.map(enemy => enemy.id)
+  : params.get('kinds')?.split(',') ?? scenario.kinds;
+if (kinds.some(kind => !enemyConfig.enemies.some(enemy => enemy.id === kind))) throw new Error('Unknown enemy review palette');
 const spawnAudit = params.get('spawnAudit') === '1';
 const pursuit = params.get('pursuit') === '1';
 if (params.has('suite') && params.get('suite') !== 'reference') throw new Error('Unknown navigation suite');
@@ -37,13 +42,13 @@ const status = document.querySelector<HTMLOutputElement>('#status')!;
 const results = document.querySelector<HTMLPreElement>('#results')!;
 const environment = { build: __NAVIGATION_BUILD_ID__, scenarioVersion: NAVIGATION_SCENARIO_VERSION,
   cpuMeasurement: 'phaser-game-step-v1', combatObservation: 'combatant-committed-damage-v1',
-  cameraFixture: '1856px-spawn-band-overview',
+  cameraFixture: reviewAllKinds ? 'normal-game-camera' : '1856px-spawn-band-overview',
   targetFixture: { pinned: !pursuit, maxHp: 1_000_000, healEveryFrame: true },
   pursuit,
   density: params.get('density') === '1',
   spawnAudit, mapId,
   mutations: params.get('mutations') === '1',
-  scenario: scenario.id, seed, count, warmupMs, durationMs, userAgent: navigator.userAgent,
+  scenario: scenario.id, kinds, seed, count, warmupMs, durationMs, userAgent: navigator.userAgent,
   devicePixelRatio, hardwareConcurrency: navigator.hardwareConcurrency, enemyConfig, weaponConfig: WEAPON_CONFIGS,
   hardware: null as unknown, gpu: null as unknown, session: params.get('session'), suite: params.get('suite'),
   graphicsQuality: getStoredGraphicsQuality(), repeat: Number(params.get('repeat') ?? 0),
@@ -90,7 +95,7 @@ function spawn(): void {
   if (!port || spawnPoints.length === 0) return;
   const i = spawnSequence++;
   const point = spawnPoints[Math.floor(random() * spawnPoints.length)];
-  port.spawnEnemy(point.x, point.y, pursuit ? 'void-stalker' : scenario.kinds[i % scenario.kinds.length],
+  port.spawnEnemy(point.x, point.y, pursuit ? 'void-stalker' : kinds[i % kinds.length],
     scenario.allyFraction > 0 && i % Math.round(1 / scenario.allyFraction) === 0);
 }
 
@@ -123,7 +128,7 @@ function prepare(): void {
   }
   spawnPoints = free.filter(p => {
     const distance = Math.hypot(p.x - playerPoint!.x, p.y - playerPoint!.y);
-    return distance >= 256 && distance <= 800;
+    return distance >= 256 && distance <= (reviewAllKinds ? 450 : 800);
   });
   if (!spawnPoints.length) throw new Error('No spawn positions in the scenario band');
   if (spawnAudit) {
@@ -271,12 +276,15 @@ class NavigationArena extends ArenaScene {
   create(): void {
     super.create();
     labScene = this;
-    port = this.createNavigationLabPort();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { removeDamageObserver?.(); removeDamageObserver = null; });
-    status.value = `${scenario.description} · ${count} Einheiten · Seed ${seed}`;
-    if (params.get('autorun') === '1') begin();
   }
   update(time: number, delta: number): void {
+    if (!port) {
+      port = this.createNavigationLabPort();
+      if (!port) { super.update(time, delta); return; }
+      status.value = `${scenario.description} · ${count} Einheiten · Seed ${seed}`;
+      if (params.get('autorun') === '1') begin();
+    }
     if (state === 'complete' || state === 'failed' || (paused && !singleStep)) return;
     singleStep = false;
     try {
@@ -385,7 +393,7 @@ class NavigationArena extends ArenaScene {
       const sceneStarted = performance.now();
       super.update(time, delta);
       const sceneCpuMs = performance.now() - sceneStarted;
-      if (playerPoint) this.cameras.main.stopFollow()
+      if (playerPoint && !reviewAllKinds) this.cameras.main.stopFollow()
         .setZoom(Math.min(this.scale.width, this.scale.height) / 1856).centerOn(playerPoint.x, playerPoint.y);
       if (state === 'measuring') {
         observeGeometryChange();
@@ -396,6 +404,10 @@ class NavigationArena extends ArenaScene {
         const wallAt = performance.now(); sample('frameMs', wallAt - lastWallAt); lastWallAt = wallAt;
         for (const [key, value] of Object.entries(port!.getPerformance())) if (typeof value === 'number') sample(key, value);
         status.value = `Messung ${Math.min(durationMs, elapsed).toFixed(0)} / ${durationMs} ms · ${scenario.id}`;
+        if (reviewAllKinds) {
+          const glow = port!.getEyeGlowCounts?.();
+          status.value += ` · Augen ${glow?.eyes ?? 0} · Bodenlichter ${glow?.lights ?? 0}`;
+        }
         if (elapsed >= durationMs) finish();
       }
     } catch (error) {

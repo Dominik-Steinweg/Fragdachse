@@ -3,6 +3,7 @@ import { readFile, mkdir, copyFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { verifySelectionV2 } from './export-v2.mjs';
+import { validateEyeAnchors } from './eye-anchors.mjs';
 
 const revision = process.argv[2] ?? 'v2-g';
 if (!/^v2-[a-z0-9-]+$/.test(revision)) throw new Error('Invalid revision');
@@ -14,7 +15,8 @@ if (new Set(requestedIds).size !== requestedIds.length
     || requestedIds.some(id => !catalog.assets.some(entry => entry.id === id))) {
   throw new Error('Specify distinct catalog asset IDs for a partial import');
 }
-const previous = requestedIds.length ? await readJson('src/config/pipelineAssets.json') : null;
+const existingRuntime = await readJson('src/config/pipelineAssets.json');
+const previous = requestedIds.length ? existingRuntime : null;
 if (previous && previous.version !== 2) {
   throw new Error('Partial import requires an existing V2 runtime package');
 }
@@ -49,7 +51,7 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
     : ['weapon', 'utility'].includes(entry.category) ? `held_${entry.gameIds[0]}`
     : entry.id === 'badger' ? 'badger' : enemies.find((enemy) => entry.gameIds.includes(enemy.id))?.imageKey;
   if (!textureKey) throw new Error(`Missing game mapping: ${entry.id}`);
-  assets.push({
+  const asset = {
     id: entry.id, category: entry.category, gameIds: entry.gameIds, revision,
     variant: selected.variant, sourceSize: selected.size, textureKey,
     sheetTextureKey: `${textureKey}_${['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
@@ -59,7 +61,18 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
     idleFrame: selected.idleFrame,
     clips: selected.clips.map(({ name, frames, frameRate, loop }) => ({ name, frames, frameRate, loop })),
     hashes,
-  });
+  };
+  if (entry.category === 'enemy') {
+    // A reimport may retain a reviewed migration only for byte-identical selected images.
+    const previousAsset = existingRuntime.assets.find(asset => asset.id === entry.id);
+    asset.eyeAnchors = rendered.eyeAnchors ? {
+      ...rendered.eyeAnchors,
+      source: { revision, variant: selected.variant, blendSha256: selected.files[`${selected.variant}/asset.blend`],
+        sheetSha256: hashes.sheet, idleSha256: hashes.idle },
+    } : previousAsset?.eyeAnchors;
+    validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset, selected.files[`${selected.variant}/asset.blend`]);
+  }
+  assets.push(asset);
 }
 // Resolve and hash every selected input before modifying the runtime package.
 for (const { file, destination } of copies) {

@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { indexLibrary } from './index-library.mjs';
+import { validateEyeAnchors } from './eye-anchors.mjs';
 import { inside, inspectMaster, nativeMetrics, repoRoot, resizeMaster, validateManifest, variantLabel } from './export.mjs';
 
 const sha256 = data => createHash('sha256').update(data).digest('hex');
@@ -34,6 +35,8 @@ export function validateManifestV2(m) {
   validateManifest({ ...m, pipelineVersion: 1 });
   if (!/^[a-z0-9][a-z0-9-]*$/.test(m.revision)) throw new Error('Invalid revision');
   if (!Array.isArray(m.frames) || !m.frames.length || m.idleFrame !== 0) throw new Error('V2 requires frames and idleFrame 0');
+  // Historical immutable V2 bundles remain readable; new enemy builds require sockets.
+  if (m.eyeAnchors !== undefined) validateEyeAnchors(m.eyeAnchors, m.frames.length);
   for (const [index, frame] of m.frames.entries()) {
     if (frame.index !== index || frame.file !== `masters/frame-${String(index).padStart(4, '0')}.png` || !Number.isFinite(frame.blenderFrame) || !digestPattern.test(frame.sha256)) throw new Error(`Invalid frame ${index}`);
     if (!Array.isArray(frame.bounds) || frame.bounds.length !== 4 || frame.bounds.some(n => !Number.isFinite(n)) || frame.bounds[0] > frame.bounds[2] || frame.bounds[1] > frame.bounds[3]) throw new Error(`Invalid frame bounds ${index}`);

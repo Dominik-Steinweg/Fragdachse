@@ -1,5 +1,15 @@
 import manifest from './pipelineAssets.json';
 
+/** Normalized full-frame coordinates; rotation follows the image's clockwise Y-down plane. */
+export interface EyeAnchor {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly rotation: number;
+}
+export interface EyeAnchorFrame { readonly left: EyeAnchor; readonly right: EyeAnchor }
+
 /** Runtime-only projection of the selected Blender exports, committed with their PNGs. */
 export const PIPELINE_ASSETS = manifest.assets;
 export type PipelineAsset = (typeof PIPELINE_ASSETS)[number];

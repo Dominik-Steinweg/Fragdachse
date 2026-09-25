@@ -185,6 +185,22 @@ Für einen exemplarischen unabhängigen Render `--render-frame 1 --render-output
 
 ## Ausgewählte Assets ins Spiel übernehmen
 
+Gegner benötigen `eyeAnchors` Version 1 mit einer normalisierten Ellipse
+(`x`, `y`, `width`, `height`, `rotation` in Radiant; Y nach unten) je Auge und
+exportiertem Frame. Rezepte registrieren direkte Mesh-Referenzen als `eyeLeft` und
+`eyeRight` im Socket-Vertrag. Die Pipeline projiziert die ausgewertete Geometrie mit
+derselben Kamera und denselben Samples wie das Spritesheet. Der Runtime-Import ergänzt
+Revision, Variante sowie SHA-256 von Blend, Idle und Sheet und lehnt fehlende,
+unvollständige oder fremde Anker ab.
+
+Für die bereits importierten historischen Revisionen liest `export-eye-anchors.py`
+die explizit geprüften Augenflächen aus den ausgewählten Blend-Dateien. Aufruf im
+separaten Prozess: `blender --background --python-exit-code 1 --python
+scripts/asset-pipeline/export-eye-anchors.py -- --repo .`. Das Werkzeug überprüft
+Selection-, Render-Metadaten- und Bildbindung, schreibt nur den Runtime-Manifest und
+lässt PNGs und abgeschlossene Archive unverändert. Beim erneuten Import bleiben solche
+migrierten Anker nur für dieselbe Revision, Variante und identische Quellen erhalten.
+
 `node scripts/asset-pipeline/import-runtime.mjs v2-g` übernimmt die ausgewählten Ruhebilder und
 Sheets unverändert nach `public/assets/sprites/pipeline-v2/` und erzeugt die versionierte
 `src/config/pipelineAssets.json`. Der Import prüft die Dateien gegen die SHA-256-Werte der

@@ -154,6 +154,7 @@ export interface WorldClientPresentationRenderers {
  * schmalen, benannten Ports dieses Inputs. Activity-Presentation bleibt ausserhalb dieses Owners.
  */
 export interface WorldPresentationFrameBindingInput {
+  readonly enemyEyes?: import('../effects/EnemyEyeGlowRenderer').EnemyEyeGlowRenderer;
   readonly groundFog?: {
     readonly getSystem: () => GroundFogSystem | null;
     readonly getBases: () => BaseManager | null;
@@ -244,6 +245,7 @@ export class WorldPresentationFrameBinding {
   private spectatorCameraScrollY = 0;
 
   constructor(private readonly input: WorldPresentationFrameBindingInput) {
+    this.input.enemyEyes?.openWorld(this, () => !this.destroyed && this.input.getLocalWorldPresentation().required);
     this.input.movementEffects?.openWorld(this);
     this.input.burrowEffects?.openWorld(this, () => !this.destroyed && this.input.getLocalWorldPresentation().required);
     this.input.lighting.setDynamicOccluderSource(this.trainLightOccluders);
@@ -680,6 +682,7 @@ export class WorldPresentationFrameBinding {
     if (this.input.healthBarScope) this.input.healthBars?.closeWorld(this.input.healthBarScope);
     this.input.movementEffects?.closeWorld(this);
     this.input.burrowEffects?.closeWorld(this);
+    this.input.enemyEyes?.closeWorld(this);
     this.trainLightOccluders.clear();
     this.input.lighting.clearDynamicOccluderSource(this.trainLightOccluders);
   }

@@ -8,6 +8,9 @@ export interface PerformanceRunRequest {
   durationMs?: number;
   timeoutMs: number;
   captureProfile: 'standard' | 'reduced';
+  /** Controlled visual ablation, with identical enemy simulation and assets. */
+  enemyEyes?: 'on' | 'off';
+  timeOfDayMinutes?: number;
 }
 export interface PerformanceWindow {
   id: string;

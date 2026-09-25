@@ -5,6 +5,8 @@ import {
   GAME_WIDTH,
 } from '../config';
 import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
+import { EnemyEyeBatch } from './EnemyEyeBatch';
+import type { EnemyEyeLightFrame } from './EnemyEyeGlowModel';
 import type { DynamicLightOccluderSource } from './DynamicLightOccluders';
 import type { LightOccluderIndex } from './LightOccluderIndex';
 import {
@@ -208,6 +210,9 @@ export class LightingSystem {
   private readonly pool: ActiveLight[] = [];
   private readonly keyed = new Map<string, ActiveLight>();
   private readonly renderQueue: ActiveLight[] = [];
+  private enemyEyeFrame: EnemyEyeLightFrame | null = null;
+  private enemyEyeBatch: EnemyEyeBatch | null = null;
+  private renderedEyeLights = 0;
 
   private occluders: LightOccluderIndex | null = null;
   private dynamicOccluders: DynamicLightOccluderSource | null = null;
@@ -350,11 +355,12 @@ export class LightingSystem {
     return this.lastPerformance;
   }
 
-  getDebugStats(): { activeLights: number; renderedLights: number; occlusionSlots: number } {
+  getDebugStats(): { activeLights: number; renderedLights: number; occlusionSlots: number; enemyEyeLights: number } {
     return {
       activeLights: this.lights.length,
       renderedLights: this.renderQueue.length,
       occlusionSlots: this.slots.length,
+      enemyEyeLights: this.renderedEyeLights,
     };
   }
 
@@ -418,6 +424,7 @@ export class LightingSystem {
 
   /** Gibt alle Lichter frei, ohne die Texturen zu zerstören. */
   clear(): void {
+    this.setEnemyEyeLights(null);
     for (const light of this.lights) {
       this.releaseExplosionCache(light);
       this.pool.push(light);
@@ -429,6 +436,8 @@ export class LightingSystem {
 
   destroy(): void {
     this.clear();
+    this.enemyEyeBatch?.destroy();
+    this.enemyEyeBatch = null;
     this.vectorSuppressed = false;
     this.destroyRenderTargets();
     this.unsubscribeQuality?.();
@@ -459,6 +468,41 @@ export class LightingSystem {
   }
 
   // ── Lichtquellen ───────────────────────────────────────────────────────────
+
+  /** Borrowed until the next visual frame; separate from ranked, potentially shadowed lights. */
+  setEnemyEyeLights(frame: EnemyEyeLightFrame | null): void {
+    this.enemyEyeFrame = frame;
+    if (!frame || frame.lightCount === 0) {
+      this.enemyEyeBatch?.begin(0);
+      this.renderedEyeLights = 0;
+    }
+  }
+
+  private collectEnemyEyeLights(scrollX: number, scrollY: number, overscanX: number, overscanY: number): number {
+    this.renderedEyeLights = 0;
+    const frame = this.enemyEyeFrame;
+    const factor = this.sky.lightFactor * GLOBAL_LIGHT_INTENSITY_MULT;
+    if (!frame || !frame.lightCount || factor <= 0 || this.compositeSuppressed) {
+      this.enemyEyeBatch?.begin(0);
+      return 0;
+    }
+    if (!this.enemyEyeBatch) {
+      this.enemyEyeBatch = new EnemyEyeBatch(this.scene, TEX_LIGHT_RADIAL, 256);
+      this.enemyEyeBatch.layer.setBlendMode(Phaser.BlendModes.ADD).setName('enemy-eye-ground-lights');
+    }
+    this.enemyEyeBatch.begin(frame.lightCount);
+    const scale = this.quality.lightMapScale;
+    for (let i = 0; i < frame.lightCount; i++) {
+      const light = frame.lights[i], x = light.x - scrollX, y = light.y - scrollY, r = light.radiusPx;
+      if (x + r < -overscanX || y + r < -overscanY
+          || x - r > this.viewport.width + overscanX || y - r > this.viewport.height + overscanY) continue;
+      this.enemyEyeBatch.write((x + overscanX) * scale, (y + overscanY) * scale,
+        r * 2 * scale, r * 2 * scale, 0, light.color, Math.min(1, light.intensity * factor));
+      this.renderedEyeLights++;
+    }
+    this.enemyEyeBatch.layer.setVisible(this.renderedEyeLights > 0);
+    return this.renderedEyeLights;
+  }
 
   /** Einmalimpuls mit eigener Abklingdauer (Mündungsfeuer, Explosion, Aufschlag). */
   pulse(presetKey: LightPresetKey, x: number, y: number, overrides?: LightOverrides): void {
@@ -563,6 +607,7 @@ export class LightingSystem {
 
     const queueStartedAt = metricsEnabled ? performance.now() : 0;
     this.collectRenderQueue(now, scrollX, scrollY);
+    const eyeLights = this.collectEnemyEyeLights(scrollX, scrollY, overscanX, overscanY);
     const queueMs = metricsEnabled ? performance.now() - queueStartedAt : 0;
 
     this.frameOcclusionRefreshes = 0;
@@ -581,7 +626,7 @@ export class LightingSystem {
 
     const ambientColor = this.sky.ambientColor;
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
-    const queueEmpty = this.renderQueue.length === 0;
+    const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0;
 
     // Reihenfolge ist tragend: erst Sichtbarkeit entscheiden, dann erst Befehle erzeugen.
     // `setRenderMode('all')` leert den Command-Buffer am Platz des Objekts in der
@@ -640,6 +685,8 @@ export class LightingSystem {
     // Nebenbei: `lightMap.setAlpha(k)` wäre ein exakter Lerp des gesamten Composites
     // Richtung No-Op – der kostenlose Weg zu einer globalen Lichtstärke.
     overlay.fill(ambientColor, 1);
+    // One instanced draw for every visible eye light, independent of the ranked light budget.
+    if (eyeLights > 0) overlay.draw(this.enemyEyeBatch!.layer);
 
     const staticOccluderRevision = this.vectorSuppressed
       ? 0
@@ -652,7 +699,7 @@ export class LightingSystem {
     );
 
     let occludingUsed = 0;
-    let directLights = 0;
+    let directLights = eyeLights;
     let fallbackOccludingLights = 0;
     let directMs = 0;
     let occlusionMs = 0;
@@ -661,10 +708,11 @@ export class LightingSystem {
     let falloffQuads = 0;
     let dynamicOccluderTests = 0;
     let dynamicOccluderHits = 0;
-    let commandCount = 1;
-    let radialLights = 0;
+    let commandCount = 1 + (eyeLights > 0 ? 1 : 0);
+    let radialLights = eyeLights;
     let coneLights = 0;
     const presetCounts = countMetrics ? {} as Record<string, number> : null;
+    if (presetCounts && eyeLights > 0) presetCounts.enemyEyes = eyeLights;
     for (const light of this.renderQueue) {
       if (countMetrics) {
         presetCounts![light.presetKey] = (presetCounts![light.presetKey] ?? 0) + 1;
@@ -736,8 +784,8 @@ export class LightingSystem {
 
     if (semanticMetricsEnabled) {
       this.recordAttributionMetrics(
-        this.lights.length,
-        this.renderQueue.length,
+        this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0),
+        this.renderQueue.length + eyeLights,
         occludingUsed,
         commandCount,
         shadowQuads,
@@ -759,8 +807,8 @@ export class LightingSystem {
       directMs,
       occlusionMs,
       shadowGeometryMs,
-      activeLights: this.lights.length,
-      renderedLights: this.renderQueue.length,
+      activeLights: this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0),
+      renderedLights: this.renderQueue.length + eyeLights,
       directLights,
       occludingLights: occludingUsed,
       fallbackOccludingLights,

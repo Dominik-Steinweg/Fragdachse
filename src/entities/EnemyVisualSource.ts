@@ -6,6 +6,7 @@ import type { SyncedEnemyState } from '../types';
 export interface EnemyVisualSource {
   readonly id: string;
   readonly kind: CoopDefenseEnemyKind;
+  readonly faction: 'hostile' | 'allied';
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly getHp: () => number;
   readonly getNetSnapshot: () => SyncedEnemyState;
