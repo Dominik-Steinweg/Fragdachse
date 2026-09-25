@@ -155,7 +155,8 @@ function buildBlob47Table(spritesheetOrder: readonly number[]): number[] {
 // │ Browsertitel angezeigt bei Hover (in ArenaBuilder implementierbar).    │
 // └─────────────────────────────────────────────────────────────────────────┘
 
-const ROCK_47_SPRITESHEET_ORDER: readonly number[] = [
+/** Frame-Index im 47-Blob-Sheet → corner-suppressed Maske; -1 = leerer Slot. */
+export const ROCK_47_SPRITESHEET_ORDER: readonly number[] = [
   // ── Zeile 0 (Frames 0–10) ────────────────────────────────────────────────
   28,   //  0: E, SE, S
   124,  //  1: E, SE, S, SW, W
@@ -231,11 +232,6 @@ export const ROCK_AUTOTILE: AutoTileConfig = {
 
 /** AutoTile-Konfiguration für das Dirt-47-Blob-Tileset (gleiche Tile-Anordnung wie Rocks). */
 export const DIRT_AUTOTILE: AutoTileConfig = {
-  bitmaskToFrame: BLOB47_TABLE,
-};
-
-/** AutoTile-Konfiguration fuer den Persistent-Base-Kies (gleiches 47-Blob-Raster). */
-export const GRAVEL_AUTOTILE: AutoTileConfig = {
   bitmaskToFrame: BLOB47_TABLE,
 };
 

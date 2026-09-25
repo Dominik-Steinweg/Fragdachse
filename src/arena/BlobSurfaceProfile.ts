@@ -123,12 +123,14 @@ export function getBlobSurfaceMottleReachPx(profile: BlobSurfaceProfile): number
   return maxScale * CELL_SIZE * 0.5;
 }
 
-/** Raised rock surface: a light authored replacement pass plus strong proportional material depth. */
+/**
+ * Raised rock surface. The continuous authored material, silhouette and edge light live in the
+ * rock base atlas (RockBaseConfig); this profile only adds corner tints and a broad, weak
+ * value variation on top, so the stone structure stays readable.
+ */
 export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   id: 'rock',
   textureKey: 'rocks',
-  // The authored alternate is substantially lighter and spatially independent from the base
-  // rock sheet, allowing a weak NORMAL pass to break phase and lift the overall stone value.
   materialTextureKey: 'rock_mottle',
   materialFrame: 12,
   // Zero deliberately preserves the pre-profile hash inputs exactly.
@@ -149,13 +151,9 @@ export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   mottle: {
     textureSize: CELL_SIZE,
     blend: 'normal',
-    // `rocks47blob_alt.png`, frame 12, is a light blue-grey authored stone texture that is
-    // already value-compatible with the base sheet, so it is stamped exactly as authored.
+    // The base atlas no longer repeats per cell, so no replacement pass is needed.
     materialMode: 'native',
-    passes: [
-      { perCell: 1.15, minScale: 0.6, maxScale: 1.85, alpha: 0.13 },
-      { perCell: 0.18, minScale: 2.4, maxScale: 4.6, alpha: 0.15 },
-    ],
+    passes: [],
     falloff: [
       [0, 'rgba(0,0,0,0)'],
       [0.62, 'rgba(0,0,0,0.04)'],
@@ -163,8 +161,8 @@ export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
       [1, 'rgba(0,0,0,1)'],
     ],
   },
-  // Keep the existing strong multiply character, but normalize the light authored material
-  // first. The warm equalization stops the blue-grey source from cooling the rock mass.
+  // Broad, weak value variation only: small stamps would lay the old sheet's grain over the
+  // new stone. Normalized with a warm equalization so the blue-grey source adds no cast.
   additionalMottleLayers: [{
     textureSize: CELL_SIZE,
     blend: 'multiply',
@@ -174,8 +172,7 @@ export const ROCK_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
     materialPeak: 199,
     materialEqualizeTint: 0xfff1df,
     passes: [
-      { perCell: 1.15, minScale: 0.6, maxScale: 1.85, alpha: 0.96 },
-      { perCell: 0.58, minScale: 2.4, maxScale: 4.6, alpha: 0.92 },
+      { perCell: 0.58, minScale: 2.4, maxScale: 4.6, alpha: 0.4 },
     ],
     falloff: [
       [0, 'rgba(0,0,0,0)'],
@@ -204,52 +201,3 @@ export const DIRT_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
   mottle: { textureSize: CELL_SIZE, blend: 'normal', materialMode: 'native', passes: [], falloff: [] },
 };
 
-/**
- * Subtiles Profil fuer den Kies-Blob. Das authored `kies`-Sheet traegt bereits sein eigenes
- * Mikrodetail; die zusaetzlichen, weich gekappten Mottle-Passes brechen die sichtbare
- * Rasterphase auf und bleiben farblich beim Kiesmaterial.
- */
-export const GRAVEL_BLOB_SURFACE_PROFILE: BlobSurfaceProfile = {
-  id: 'persistentGravel',
-  textureKey: 'kies',
-  materialFrame: 12,
-  seedSalt: 0x2e71,
-  shading: {
-    baseLevel: 0.98,
-    washValueAmount: 0.035,
-    washValuePeriods: [11, 4.75],
-    washHueAmount: 0.04,
-    washHuePeriod: 17,
-    washHues: [0xc2a17e, 0xa88e74, 0xd0b997],
-  },
-  mottle: {
-    textureSize: CELL_SIZE,
-    blend: 'normal',
-    materialMode: 'native',
-    passes: [
-      // Viele kleine, nicht zellzentrierte Stamps brechen die wiederkehrende Blob-Textur.
-      { perCell: 1.5, minScale: 0.58, maxScale: 1.7, alpha: 0.48 },
-      // Wenige groessere Formen verbinden benachbarte Zellen, ohne den Zonenrand zu verwischen.
-      { perCell: 0.28, minScale: 2.2, maxScale: 4.0, alpha: 0.5 },
-    ],
-    falloff: [
-      [0, 'rgba(0,0,0,0)'],
-      [1, 'rgba(0,0,0,1)'],
-    ],
-  },
-  additionalMottleLayers: [{
-    // A darker native pass restores material depth after the normal replacement pass and makes
-    // the phase break readable against the otherwise cool, low-contrast gravel sheet.
-    textureSize: CELL_SIZE,
-    blend: 'multiply',
-    materialMode: 'native',
-    passes: [
-      { perCell: 1.35, minScale: 0.66, maxScale: 1.8, alpha: 0.42 },
-      { perCell: 0.24, minScale: 2.3, maxScale: 4.2, alpha: 0.48 },
-    ],
-    falloff: [
-      [0, 'rgba(0,0,0,0)'],
-      [1, 'rgba(0,0,0,1)'],
-    ],
-  }],
-};

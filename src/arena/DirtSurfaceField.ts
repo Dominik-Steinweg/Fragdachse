@@ -1,5 +1,5 @@
 import { CELL_SIZE } from '../config';
-import type { DirtCell } from '../types';
+import type { DirtCell, WaterCell } from '../types';
 import { hashSeededCell01 } from './CellHash';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
 import { groundMaterialPhase } from './GroundMaterialConfig';
@@ -28,6 +28,39 @@ const WASH = .2;
 const SHADE = .16;
 /** Density lattice spacing in world pixels. */
 const DENSITY_STEP = 2;
+/** Spacing of the coarse lattice for the dry/moist soil mask, in world pixels. */
+const DRY_STEP = 8;
+/** Share of soil drawn with the drier second material, and the raggedness of its border. */
+const DRY_THRESHOLD = .55;
+const DRY_SOFT = .07;
+/** Riverbank around water: visible width beyond the water cells, ragged per position (px). */
+const BANK_MIN = 10;
+const BANK_MAX = 42;
+/** Warp of the distance query: breaks the cell stairs without exposing grass under the water rim. */
+const BANK_WARP_PX = 8;
+/** Distance over which grass blades give way to the bank at its outer edge. */
+const BANK_EDGE_SOFT = 14;
+/** Faint damp wash on the grass just beyond the bank. */
+const BANK_WASH = .22;
+const BANK_WASH_PX = 12;
+/**
+ * Wet silt reaches this far from the water cells (min + noise range). Wetness darkens only
+ * gently and over a long run: the bank is a shallow, gradual shore. When a wave recedes it
+ * must reveal damp silt, not a dark drop-off.
+ */
+const BANK_WET_MIN = 14;
+const BANK_WET_RANGE = 18;
+const BANK_WET_DARKEN = .1;
+/** Slight further darkening of the bed below water, spread over BANK_SUBMERGED_PX. */
+const BANK_SUBMERGED_DARKEN = .1;
+const BANK_SUBMERGED_PX = 40;
+const BANK_EDGE_SHADE = .12;
+/** Signed-distance lattice spacing and cap; the ring covers the widest bank plus its wash. */
+const BANK_STEP = 4;
+const BANK_FIELD_CAP = 72;
+const BANK_RING = Math.ceil((BANK_MAX + 4 + BANK_WASH_PX + BANK_WARP_PX + BANK_STEP) / CELL_SIZE);
+/** Maximum visual reach of the riverbank beyond a water cell. No gameplay geometry changes. */
+export const WATER_BANK_REACH_PX = BANK_RING * CELL_SIZE;
 /** Seeded value-noise lattice; wraps after LATTICE periods, i.e. far beyond the visible scale. */
 const LATTICE = 256;
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
@@ -47,8 +80,14 @@ export class DirtSurfaceField {
   private readonly lattice: Float32Array;
   private readonly weightX = new Float64Array(3);
   private densityGrid = new Float32Array(0);
+  private dryGrid = new Float32Array(0);
+  /** Water occupancy and "bank within reach" per cell; null without water. */
+  private readonly water: Uint8Array | null;
+  private readonly bankZone: Uint8Array | null;
+  private bankGrid = new Float32Array(0);
 
-  constructor(seed: number, dirt: readonly DirtCell[], readonly frame: ChunkWorldFrame) {
+  constructor(seed: number, dirt: readonly DirtCell[], readonly frame: ChunkWorldFrame,
+    water: readonly WaterCell[] = []) {
     this.cols = Math.max(1, Math.ceil(frame.width / CELL_SIZE));
     this.rows = Math.max(1, Math.ceil(frame.height / CELL_SIZE));
     this.occupied = new Uint8Array(this.cols * this.rows);
@@ -68,6 +107,21 @@ export class DirtSurfaceField {
         if (this.occupied[this.index(x + dx, y + dy)]) any = true; else all = false;
       }
       this.zone[y * this.cols + x] = all ? 2 : any ? 1 : 0;
+    }
+    const wet = new Uint8Array(this.occupied.length);
+    let anyWater = false;
+    for (const cell of water) {
+      if (cell.gridX >= 0 && cell.gridY >= 0 && cell.gridX < this.cols && cell.gridY < this.rows) {
+        wet[cell.gridY * this.cols + cell.gridX] = 1;
+        anyWater = true;
+      }
+    }
+    this.water = anyWater ? wet : null;
+    this.bankZone = anyWater ? new Uint8Array(this.occupied.length) : null;
+    if (this.bankZone) for (let y = 0; y < this.rows; y++) for (let x = 0; x < this.cols; x++) {
+      search: for (let dy = -BANK_RING; dy <= BANK_RING; dy++) for (let dx = -BANK_RING; dx <= BANK_RING; dx++) {
+        if (wet[this.index(x + dx, y + dy)]) { this.bankZone[y * this.cols + x] = 1; break search; }
+      }
     }
   }
 
@@ -131,6 +185,11 @@ export class DirtSurfaceField {
     return smooth(clamp01((level - height) / SOFT + .5));
   }
 
+  /** Broad dry/moist field of the soil; frame-anchored like every other input. */
+  private dryness(x: number, y: number): number {
+    return this.noise(x, y, 190, 21) * .6 + this.noise(x, y, 67, 22) * .4;
+  }
+
   /** Density on the frame-anchored lattice; exact outside the seam zone. */
   private latticeDensity(i: number, j: number): number {
     const x = i * DENSITY_STEP, y = j * DENSITY_STEP;
@@ -158,9 +217,29 @@ export class DirtSurfaceField {
   }
 
   /**
+   * Signed distance to the union of water cells: negative inside water, positive on land,
+   * capped at BANK_FIELD_CAP. Exact for cell squares; the World boundary repeats its edge cells.
+   */
+  private waterDistance(x: number, y: number): number {
+    const water = this.water!;
+    const gx = Math.floor(x / CELL_SIZE), gy = Math.floor(y / CELL_SIZE);
+    const inside = water[this.index(gx, gy)];
+    let best = BANK_FIELD_CAP;
+    for (let dy = -BANK_RING; dy <= BANK_RING; dy++) for (let dx = -BANK_RING; dx <= BANK_RING; dx++) {
+      if (water[this.index(gx + dx, gy + dy)] === inside) continue;
+      const left = (gx + dx) * CELL_SIZE, top = (gy + dy) * CELL_SIZE;
+      const ox = Math.max(left - x, 0, x - left - CELL_SIZE), oy = Math.max(top - y, 0, y - top - CELL_SIZE);
+      const distance = Math.sqrt(ox * ox + oy * oy);
+      if (distance < best) best = distance;
+    }
+    return inside ? -best : best;
+  }
+
+  /**
    * Writes straight (non-premultiplied) RGBA soil for one square region at native resolution.
    * The grass below stays a separate GPU tile; this layer carries soil, the blended seam, the
-   * soil wash ahead of it and the contact shade. Chunk bakes and snapshots share it.
+   * soil wash ahead of it, the contact shade and the riverbank around water. Chunk bakes and
+   * snapshots share it.
    */
   writeSurface(data: Uint8ClampedArray, stride: number, worldX: number, worldY: number, size: number,
     materials: GroundMaterialSamples): void {
@@ -174,37 +253,140 @@ export class DirtSurfaceField {
     for (let j = 0; j < rows; j++) for (let i = 0; i < span; i++) grid[j * span + i] = this.latticeDensity(i0 + i, j0 + j);
     const dirtColumn = groundMaterialPhase(localX, dirt.width);
     const heightColumn = groundMaterialPhase(localX, grassHeight.width);
+    // Optional drier second soil, mixed by a broad world-fixed field with a ragged border.
+    const alt = materials.dirtAlt;
+    const d0 = Math.floor((localX + .5) / DRY_STEP), e0 = Math.floor((localY + .5) / DRY_STEP);
+    const drySpan = Math.floor((localX + size - .5) / DRY_STEP) - d0 + 2;
+    const dryRows = Math.floor((localY + size - .5) / DRY_STEP) - e0 + 2;
+    if (alt) {
+      if (this.dryGrid.length < drySpan * dryRows) this.dryGrid = new Float32Array(drySpan * dryRows);
+      for (let j = 0; j < dryRows; j++) for (let i = 0; i < drySpan; i++) {
+        this.dryGrid[j * drySpan + i] = this.dryness((d0 + i) * DRY_STEP, (e0 + j) * DRY_STEP);
+      }
+    }
+    const altColumn = alt ? groundMaterialPhase(localX, alt.width) : 0;
+    // Riverbank: signed water distance on its own frame-anchored lattice.
+    const bank = this.bankZone && materials.bank && materials.bankWet
+      ? { dry: materials.bank, wet: materials.bankWet } : null;
+    const b0 = Math.floor((localX + .5) / BANK_STEP), c0 = Math.floor((localY + .5) / BANK_STEP);
+    const bankSpan = Math.floor((localX + size - .5) / BANK_STEP) - b0 + 2;
+    const bankRows = Math.floor((localY + size - .5) / BANK_STEP) - c0 + 2;
+    if (bank) {
+      if (this.bankGrid.length < bankSpan * bankRows) this.bankGrid = new Float32Array(bankSpan * bankRows);
+      for (let j = 0; j < bankRows; j++) for (let i = 0; i < bankSpan; i++) {
+        const bx = (b0 + i) * BANK_STEP, by = (c0 + j) * BANK_STEP;
+        this.bankGrid[j * bankSpan + i] = this.waterDistance(
+          bx + (this.noise(bx, by, 47, 35) - .5) * BANK_WARP_PX * 1.4 + (this.noise(bx, by, 15, 36) - .5) * BANK_WARP_PX * .6,
+          by + (this.noise(bx, by, 53, 37) - .5) * BANK_WARP_PX * 1.4 + (this.noise(bx, by, 17, 38) - .5) * BANK_WARP_PX * .6);
+      }
+    }
+    const bankColumn = bank ? groundMaterialPhase(localX, bank.dry.width) : 0;
+    const wetColumn = bank ? groundMaterialPhase(localX, bank.wet.width) : 0;
     for (let py = 0; py < size; py++) {
       const y = localY + py + .5, row = Math.floor(y / CELL_SIZE);
       const v = y / DENSITY_STEP - j0, gj = Math.floor(v), ty = v - gj;
       const dirtRow = groundMaterialPhase(localY + py, dirt.height) * dirt.width;
       const heightRow = groundMaterialPhase(localY + py, grassHeight.height) * grassHeight.width;
-      let dirtX = dirtColumn - 1, heightX = heightColumn - 1;
+      const altRow = alt ? groundMaterialPhase(localY + py, alt.height) * alt.width : 0;
+      const dv = y / DRY_STEP - e0, dj = Math.floor(dv), dty = dv - dj;
+      const bankRow = bank ? groundMaterialPhase(localY + py, bank.dry.height) * bank.dry.width : 0;
+      const wetRow = bank ? groundMaterialPhase(localY + py, bank.wet.height) * bank.wet.width : 0;
+      const bv = y / BANK_STEP - c0, bj = Math.floor(bv), bty = bv - bj;
+      let dirtX = dirtColumn - 1, heightX = heightColumn - 1, altX = altColumn - 1;
+      let bankX = bankColumn - 1, wetX = wetColumn - 1;
       for (let px = 0; px < size; px++) {
         if (++dirtX === dirt.width) dirtX = 0;
         if (++heightX === grassHeight.width) heightX = 0;
+        if (alt && ++altX === alt.width) altX = 0;
+        if (bank) {
+          if (++bankX === bank.dry.width) bankX = 0;
+          if (++wetX === bank.wet.width) wetX = 0;
+        }
         const out = (py * stride + px) * 4;
         const x = localX + px + .5;
-        const zone = this.zone[this.index(Math.floor(x / CELL_SIZE), row)];
+        const cell = this.index(Math.floor(x / CELL_SIZE), row);
+        const zone = this.zone[cell];
+        const bankCell = bank ? this.bankZone![cell] : 0;
         // Clear all channels: a reused canvas must not keep colour from an earlier region.
-        if (!zone) { data.fill(0, out, out + 4); continue; }
-        let alpha = 1, shade = 1;
-        if (zone === 1) {
-          const u = x / DENSITY_STEP - i0, gi = Math.floor(u), tx = u - gi, g = gj * span + gi;
-          const top = grid[g] + (grid[g + 1] - grid[g]) * tx;
-          const bottom = grid[g + span] + (grid[g + span + 1] - grid[g + span]) * tx;
-          const density = top + (bottom - top) * ty;
-          if (density <= 0) { data.fill(0, out, out + 4); continue; }
-          const height = grassHeight.data[heightRow + heightX] / 255;
-          const soil = this.soil(x, y, density, height);
-          const wash = WASH * smooth(clamp01(density * 2));
-          alpha = Math.max(soil, wash);
-          shade = 1 - SHADE * (1 - smooth(clamp01((density - .5) * 3)));
+        if (!zone && !bankCell) { data.fill(0, out, out + 4); continue; }
+        let alpha = 0, r = 0, gr = 0, b = 0;
+        if (zone) {
+          alpha = 1;
+          let shade = 1;
+          if (zone === 1) {
+            const u = x / DENSITY_STEP - i0, gi = Math.floor(u), tx = u - gi, g = gj * span + gi;
+            const top = grid[g] + (grid[g + 1] - grid[g]) * tx;
+            const bottom = grid[g + span] + (grid[g + span + 1] - grid[g + span]) * tx;
+            const density = top + (bottom - top) * ty;
+            if (density <= 0) alpha = 0;
+            else {
+              const height = grassHeight.data[heightRow + heightX] / 255;
+              const soil = this.soil(x, y, density, height);
+              const wash = WASH * smooth(clamp01(density * 2));
+              alpha = Math.max(soil, wash);
+              shade = 1 - SHADE * (1 - smooth(clamp01((density - .5) * 3)));
+            }
+          }
+          if (alpha > 0) {
+            const source = (dirtRow + dirtX) * 4;
+            r = dirt.rgba[source]; gr = dirt.rgba[source + 1]; b = dirt.rgba[source + 2];
+            if (alt) {
+              const du = x / DRY_STEP - d0, di = Math.floor(du), dtx = du - di, k = dj * drySpan + di, dg = this.dryGrid;
+              const dTop = dg[k] + (dg[k + 1] - dg[k]) * dtx;
+              const dBottom = dg[k + drySpan] + (dg[k + drySpan + 1] - dg[k + drySpan]) * dtx;
+              const dry = dTop + (dBottom - dTop) * dty + (this.noise(x, y, 6, 23) - .5) * .09;
+              const mix = smooth(clamp01((dry - DRY_THRESHOLD) / DRY_SOFT + .5));
+              if (mix > 0) {
+                const second = (altRow + altX) * 4;
+                r += (alt.rgba[second] - r) * mix;
+                gr += (alt.rgba[second + 1] - gr) * mix;
+                b += (alt.rgba[second + 2] - b) * mix;
+              }
+            }
+            r *= shade; gr *= shade; b *= shade;
+          }
         }
-        const source = (dirtRow + dirtX) * 4;
-        data[out] = dirt.rgba[source] * shade;
-        data[out + 1] = dirt.rgba[source + 1] * shade;
-        data[out + 2] = dirt.rgba[source + 2] * shade;
+        if (bank && bankCell) {
+          const bu = x / BANK_STEP - b0, bi = Math.floor(bu), btx = bu - bi, k = bj * bankSpan + bi, bg = this.bankGrid;
+          const bTop = bg[k] + (bg[k + 1] - bg[k]) * btx;
+          const bBottom = bg[k + bankSpan] + (bg[k + bankSpan + 1] - bg[k + bankSpan]) * btx;
+          const distance = bTop + (bBottom - bTop) * bty;
+          if (distance < BANK_MAX + 4 + BANK_WASH_PX) {
+            // Ragged outer bank edge; grass keeps its tall blades and clumps into the bank.
+            const width = BANK_MIN + smooth(this.noise(x, y, 83, 31)) * (BANK_MAX - BANK_MIN) + (this.noise(x, y, 23, 32) - .5) * 8;
+            const level = .5 + (width - distance) / BANK_EDGE_SOFT * .5;
+            const clump = this.noise(x, y, 6, 12) * .45 + this.noise(x, y, 17, 13) * .55;
+            const height = (grassHeight.data[heightRow + heightX] / 255) * (1 - CLUMP) + clump * CLUMP;
+            const cover = smooth(clamp01((level - height) / SOFT + .5));
+            // A faint damp wash darkens the grass just ahead of the bank.
+            const wash = BANK_WASH * smooth(clamp01((width + BANK_WASH_PX - distance) / BANK_WASH_PX));
+            const bankAlpha = Math.max(cover, wash);
+            if (bankAlpha > 0) {
+              // Wet silt at the waterline, rooted humus behind it; both darken as they get wetter.
+              const reach = BANK_WET_MIN + this.noise(x, y, 41, 33) * BANK_WET_RANGE;
+              const wet = 1 - smooth(clamp01((distance + 6) / reach));
+              const silt = smooth(clamp01(wet * 1.3 + (this.noise(x, y, 13, 34) - .5) * .5));
+              const dryAt = (bankRow + bankX) * 4, wetAt = (wetRow + wetX) * 4;
+              const submerged = smooth(clamp01(-distance / BANK_SUBMERGED_PX));
+              const edgeShade = 1 - BANK_EDGE_SHADE * (1 - smooth(clamp01((width - distance) / 8)));
+              const shade = (1 - BANK_WET_DARKEN * wet) * (1 - BANK_SUBMERGED_DARKEN * submerged) * edgeShade;
+              const dry = bank.dry.rgba, damp = bank.wet.rgba;
+              const br = (dry[dryAt] + (damp[wetAt] - dry[dryAt]) * silt) * shade;
+              const bgr = (dry[dryAt + 1] + (damp[wetAt + 1] - dry[dryAt + 1]) * silt) * shade;
+              const bb = (dry[dryAt + 2] + (damp[wetAt + 2] - dry[dryAt + 2]) * silt) * shade;
+              // Bank over soil (straight-alpha "over").
+              const below = alpha * (1 - bankAlpha), outAlpha = bankAlpha + below;
+              r = (br * bankAlpha + r * below) / outAlpha;
+              gr = (bgr * bankAlpha + gr * below) / outAlpha;
+              b = (bb * bankAlpha + b * below) / outAlpha;
+              alpha = outAlpha;
+            }
+          }
+        }
+        if (alpha <= 0) { data.fill(0, out, out + 4); continue; }
+        data[out] = r;
+        data[out + 1] = gr;
+        data[out + 2] = b;
         data[out + 3] = Math.round(alpha * 255);
       }
     }

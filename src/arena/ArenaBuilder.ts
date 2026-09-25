@@ -274,8 +274,12 @@ export class ArenaBuilder {
     const groundCoverPlacements = generateGroundCoverPlacements({
       seed: layout.seed,
       dirt: layout.dirt ?? [],
+      rocks: layout.rocks,
+      water: layout.water ?? [],
       metrics: worldMetrics,
-    }).filter(p => !waterGeometry.isCircleBlocked(p.worldX, p.worldY, p.sizePx * Math.SQRT2 / 2));
+    }).filter(p => !waterGeometry.isCircleBlocked(p.worldX, p.worldY,
+      // Bank growth may lean over the waterline; the water surface above covers its tips.
+      p.sizePx * (p.anchor === 'bank' ? .3 : Math.SQRT2 / 2)));
 
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {

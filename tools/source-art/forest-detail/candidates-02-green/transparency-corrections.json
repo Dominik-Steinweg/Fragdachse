@@ -1,0 +1,12 @@
+[
+  {
+    "id": "grass-04-split-crown",
+    "path": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-c2ad9fc0-4312-4dc6-a57f-48bd6854f42d.png",
+    "prompt": "Use case: background-extraction. Edit the attached game grass sprite. Preserve the exact overhead leaf shapes, relative positions, physical scale and painted style. Remove the ENTIRE background: the black rectangle AND the fuzzy diffuse green halo/cloud around and between the leaves. Output ONLY the sharply defined grass blades themselves on a REAL TRANSPARENT PNG ALPHA CHANNEL, including all internal gaps. This is NOT a black background, and NOT a checkerboard image. No shadow, no glow, no backdrop, no soft green disk. Leaf interiors fully opaque; only natural edge antialiasing. Restore any faint blades to opaque green without inventing new leaves. Rich dark natural forest green blade faces with restrained slightly lighter green centres; no pale yellow or grey wash. Keep exact top-down orthographic view. One standalone usable cutout. Do not show it over a ground texture."
+  },
+  {
+    "id": "grass-13-edge-tuft",
+    "path": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-bf787311-6327-4625-9b62-c8733bd75802.png",
+    "prompt": "Use case: background-extraction. Edit the attached game grass sprite. Preserve the exact overhead leaf shapes, relative positions, physical scale and painted style. Remove the ENTIRE background: the black rectangle AND the fuzzy diffuse green halo/cloud around and between the leaves. Output ONLY the sharply defined grass blades themselves on a REAL TRANSPARENT PNG ALPHA CHANNEL, including all internal gaps. This is NOT a black background, and NOT a checkerboard image. No shadow, no glow, no backdrop, no soft green disk. Leaf interiors fully opaque; only natural edge antialiasing. Restore any faint blades to opaque green without inventing new leaves. Rich dark natural forest green blade faces with restrained slightly lighter green centres; no pale yellow or grey wash. Keep exact top-down orthographic view. One standalone usable cutout. Do not show it over a ground texture."
+  }
+]

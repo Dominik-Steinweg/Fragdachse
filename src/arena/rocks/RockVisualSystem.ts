@@ -6,7 +6,7 @@ import { ClassicRockRenderer } from './ClassicRockRenderer';
 import { PersistentGpuWorldSystem } from './PersistentGpuWorldSystem';
 import type { PersistentGpuWorldDiagnostics } from './PersistentGpuWorldSystem';
 import type { RockGpuPageSize, RockRendererMode } from './RockRendererSettings';
-import { RockVisualStateStore, resolveRockCornerTints } from './RockVisualState';
+import { RockVisualStateStore, resolveRockCornerTints, resolveRockTexture } from './RockVisualState';
 
 export interface RockDestructionVisualSnapshot {
   readonly material?: 'rocks' | 'walls';
@@ -83,10 +83,11 @@ export class RockVisualSystem {
     const state = this.store.get(id);
     if (!state?.active) return null;
     return {
-      material: state.material,
+      // Landschaftsfels nutzt die Standardtextur des Trümmer-Renderers, die Felsbasis.
+      material: state.material === 'walls' ? 'walls' : undefined,
       x: state.x,
       y: state.y,
-      frame: state.frame,
+      frame: resolveRockTexture(state).frame,
       size: CELL_SIZE,
       tint: resolveRockCornerTints(state)[0],
       angle: 0,

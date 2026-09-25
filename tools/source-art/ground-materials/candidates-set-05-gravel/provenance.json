@@ -1,0 +1,62 @@
+{
+  "tool": "built-in image_gen",
+  "postprocessing": "None; original files copied byte-for-byte.",
+  "images": [
+    {
+      "id": "gravel-01-river",
+      "file": "gravel-01-river.png",
+      "source": "C:\\Users\\domin\\.codex\\generated_images\\01a0d7df-3691-7bc2-abc7-3cd40c7c6857\\exec-6955b84e-f212-430f-bcca-e8cb315977e1.png",
+      "width": 1254,
+      "height": 1254,
+      "channels": 3,
+      "hasAlpha": false,
+      "meanRgb": [
+        141.07,
+        123.44,
+        104
+      ]
+    },
+    {
+      "id": "gravel-02-grey-crushed",
+      "file": "gravel-02-grey-crushed.png",
+      "source": "C:\\Users\\domin\\.codex\\generated_images\\01a0d7df-3691-7bc2-abc7-3cd40c7c6857\\exec-89f0cb38-6fb0-42c6-a2a2-a7a4afc02564.png",
+      "width": 1254,
+      "height": 1254,
+      "channels": 3,
+      "hasAlpha": false,
+      "meanRgb": [
+        132.12,
+        117.74,
+        102.22
+      ]
+    },
+    {
+      "id": "gravel-03-sandy",
+      "file": "gravel-03-sandy.png",
+      "source": "C:\\Users\\domin\\.codex\\generated_images\\01a0d7df-3691-7bc2-abc7-3cd40c7c6857\\exec-350a3909-999d-400b-ad9a-c5de001b8900.png",
+      "width": 1254,
+      "height": 1254,
+      "channels": 3,
+      "hasAlpha": false,
+      "meanRgb": [
+        143.16,
+        123.2,
+        102.15
+      ]
+    },
+    {
+      "id": "gravel-04-damp",
+      "file": "gravel-04-damp.png",
+      "source": "C:\\Users\\domin\\.codex\\generated_images\\01a0d7df-3691-7bc2-abc7-3cd40c7c6857\\exec-02831f31-aa1a-4e12-b791-b59d1d3960f7.png",
+      "width": 1254,
+      "height": 1254,
+      "channels": 3,
+      "hasAlpha": false,
+      "meanRgb": [
+        102.23,
+        89.39,
+        75.22
+      ]
+    }
+  ]
+}

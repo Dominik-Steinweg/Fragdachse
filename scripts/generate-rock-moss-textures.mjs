@@ -89,6 +89,11 @@ const PROFILE = {
    * Graugruen zu kippen.
    */
   gradeStrength: 0.2,
+  /**
+   * Dunkel und gedeckt: Moos verschoent den Fels subtil und bleibt ihm untergeordnet. Leicht
+   * entsaettigt, damit es auch in groesserer Menge nicht gegen das kraeftige Gras konkurriert.
+   */
+  finalModulate: { brightness: 0.92, saturation: 0.85 },
   seed: 20260815,
 };
 

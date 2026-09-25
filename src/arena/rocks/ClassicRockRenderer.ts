@@ -6,7 +6,7 @@ import { RockLayerGrid } from '../chunks/RockLayerGrid';
 import { RockViewportCuller } from '../chunks/RockViewportCuller';
 import type { ChunkWorldRect } from '../chunks/ArenaChunkGrid';
 import type { RockVisualState } from './RockVisualState';
-import { resolveRockCornerTints } from './RockVisualState';
+import { resolveRockCornerTints, resolveRockTexture } from './RockVisualState';
 
 /** Der bestehende Image-Pfad, jetzt als reiner Consumer von `RockVisualState`. */
 export class ClassicRockRenderer {
@@ -47,19 +47,20 @@ export class ClassicRockRenderer {
       return;
     }
 
+    const { key, frame } = resolveRockTexture(state);
     const image = current ?? ArenaVisualFactory.createRock(
       this.scene,
       state.x,
       state.y,
-      state.frame,
+      frame,
       undefined,
       this.layers.layerFor(state.gridX, state.gridY),
     );
     this.images[id] = image;
-    if (state.material === 'walls' || image.texture?.key === 'walls') image.setTexture(state.material ?? 'rocks', state.frame);
+    if (image.texture?.key !== key) image.setTexture(key, frame);
     image
       .setPosition(state.x, state.y)
-      .setFrame(state.frame)
+      .setFrame(frame)
       .setDisplaySize(CELL_SIZE, CELL_SIZE)
       .setScale(state.scaleX, state.scaleY)
       .setAlpha(state.alpha)

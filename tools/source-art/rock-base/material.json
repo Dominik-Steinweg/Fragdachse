@@ -1,0 +1,22 @@
+{
+  "source": "candidates-01/rock-base-08-dark-cool-slate.png",
+  "sourceMetres": 4,
+  "pixelsPerMetre": 32,
+  "seed": 4099,
+  "grade": {
+    "gain": [0.92, 0.98, 1.06],
+    "saturation": 0.7,
+    "gamma": 1.02
+  },
+  "edge": {
+    "cornerRadius": 6,
+    "insetMean": 1.1,
+    "insetVariation": 1.7,
+    "lightLift": 0.5,
+    "shadeDrop": 0.45,
+    "rimWidth": 5,
+    "rimDarken": 0.28,
+    "outline": 0.42,
+    "outlineWidth": 3
+  }
+}

@@ -13,13 +13,11 @@ import {
 import type { DecalCell, TrackCell, TreeCell } from '../types';
 import { CANOPY_TEXTURE_KEYS } from './CanopyConfig';
 import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
-import { AutoTiler, GRAVEL_AUTOTILE } from './AutoTiler';
 import { hashCell01 } from './CellHash';
 import { RockGridIndex } from './RockGridIndex';
 import { ROCK_MOSS_MASK_TEXTURE_KEY } from './RockMossConfig';
+import { ROCK_BASE_TEXTURE_KEY } from './RockBaseConfig';
 import { ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_TEXTURE_KEY } from './RockVegetationConfig';
-import { GRAVEL_BLOB_SURFACE_PROFILE } from './BlobSurfaceProfile';
-import { resolveBlobSurfaceCornerTints } from './BlobSurfaceShading';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 
@@ -31,6 +29,13 @@ const ROCK_DECAL_ROTATION_SALT = 0x2c91;
  */
 const GROUND_DECAL_ROTATION_SALT = 0x51a7;
 
+
+/** A live rock as the mask sheets read it: centre and 47-Blob frame (not the base atlas frame). */
+export interface RockMaskSource {
+  readonly x: number;
+  readonly y: number;
+  readonly autotileFrame: number;
+}
 
 export interface ArenaTreeVisual {
   trunk: Phaser.GameObjects.Arc;
@@ -81,6 +86,7 @@ export class ArenaVisualFactory {
    * `cornerTints` traegt Flaechenwash und Kantenlicht. Der Tint
    * folgt der Kachel-Alpha exakt, die 47-Blob-Silhouette bleibt also unangetastet.
    */
+  /** `frame` is a rock base atlas frame, see getRockBaseFrame(). */
   static createRock(
     scene: Phaser.Scene,
     worldX: number,
@@ -96,7 +102,7 @@ export class ArenaVisualFactory {
      */
     layer?: Phaser.GameObjects.Layer,
   ): Phaser.GameObjects.Image {
-    const img = new Phaser.GameObjects.Image(scene, worldX, worldY, 'rocks', frame);
+    const img = new Phaser.GameObjects.Image(scene, worldX, worldY, ROCK_BASE_TEXTURE_KEY, frame);
     if (layer) layer.add(img);
     else scene.add.existing(img);
     img.setDisplaySize(CELL_SIZE, CELL_SIZE);
@@ -118,12 +124,11 @@ export class ArenaVisualFactory {
    */
   static createRockMossMasks(
     scene: Phaser.Scene,
-    rocks: readonly Phaser.GameObjects.Image[],
+    rocks: readonly RockMaskSource[],
   ): Phaser.GameObjects.Image[] {
     const masks: Phaser.GameObjects.Image[] = [];
     for (const rock of rocks) {
-      if (!rock.active) continue;
-      const mask = new Phaser.GameObjects.Image(scene, rock.x, rock.y, ROCK_MOSS_MASK_TEXTURE_KEY, rock.frame.name);
+      const mask = new Phaser.GameObjects.Image(scene, rock.x, rock.y, ROCK_MOSS_MASK_TEXTURE_KEY, rock.autotileFrame);
       mask.setDisplaySize(CELL_SIZE, CELL_SIZE);
       masks.push(mask);
     }
@@ -138,12 +143,11 @@ export class ArenaVisualFactory {
    */
   static createRockVegetationMasks(
     scene: Phaser.Scene,
-    rocks: readonly Phaser.GameObjects.Image[],
+    rocks: readonly RockMaskSource[],
   ): Phaser.GameObjects.Image[] {
     const masks: Phaser.GameObjects.Image[] = [];
     for (const rock of rocks) {
-      if (!rock.active) continue;
-      const mask = new Phaser.GameObjects.Image(scene, rock.x, rock.y, ROCK_VEGETATION_MASK_TEXTURE_KEY, rock.frame.name);
+      const mask = new Phaser.GameObjects.Image(scene, rock.x, rock.y, ROCK_VEGETATION_MASK_TEXTURE_KEY, rock.autotileFrame);
       mask.setDisplaySize(ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_FRAME_SIZE);
       masks.push(mask);
     }
@@ -174,40 +178,6 @@ export class ArenaVisualFactory {
       const trunk = this.createTrunk(scene, worldX, worldY);
       const canopy = this.createCanopy(scene, worldX, worldY);
       result.push({ trunk, canopy, worldX, worldY });
-    }
-    return result;
-  }
-
-  /**
-   * Erzeugt die aktuellen Persistent-Base-Kieszellen aus demselben 47-Blob-/Corner-Tint-Pfad wie
-   * Dirt. Der vollstaendige Nachbar-Lookup wird vom Aufrufer geliefert, damit Chunkgrenzen nicht
-   * als kuenstliche Aussengrenze erscheinen.
-   */
-  static createGravelImagesFromGrid(
-    scene: Phaser.Scene,
-    gravelCells: readonly { gridX: number; gridY: number }[],
-    isOccupied: (gx: number, gy: number) => boolean,
-    metrics?: ArenaVisualGridMetrics,
-  ): Phaser.GameObjects.Image[] {
-    if (gravelCells.length === 0) return [];
-
-    const gridMetrics = getMetrics(metrics);
-    const result: Phaser.GameObjects.Image[] = [];
-    for (const { gridX, gridY } of gravelCells) {
-      const worldX = gridMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
-      const mask = AutoTiler.computeMask(gridX, gridY, isOccupied);
-      const frame = AutoTiler.getFrame(mask, GRAVEL_AUTOTILE);
-      const image = new Phaser.GameObjects.Image(scene, worldX, worldY, 'kies', frame);
-      image.setDisplaySize(CELL_SIZE, CELL_SIZE);
-      image.setDepth(DEPTH.PERSISTENT_BASE_GRAVEL);
-      image.setTint(...resolveBlobSurfaceCornerTints(
-        GRAVEL_BLOB_SURFACE_PROFILE,
-        gridX,
-        gridY,
-        isOccupied,
-      ));
-      result.push(image);
     }
     return result;
   }

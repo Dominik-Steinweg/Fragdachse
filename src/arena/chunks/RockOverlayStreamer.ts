@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
 import type { ArenaLayout, DecalCell, RockCell } from '../../types';
 import { ArenaVisualFactory } from '../ArenaVisualFactory';
+import type { RockMaskSource } from '../ArenaVisualFactory';
 import { ROCK_BLOB_SURFACE_PROFILE, getBlobSurfaceMottleReachPx } from '../BlobSurfaceProfile';
 import { stampBlobSurfaceMottle } from '../BlobSurfaceMottle';
 import { ROCK_DECAL_LARGE_SIZE, ROCK_DECAL_SIZE, isEnclosedRockDecal } from '../DecalConfig';
@@ -15,6 +16,7 @@ import { fillRockVegetationCutout, stampRockVegetation } from '../RockVegetation
 import { getRockVegetationPlacementRadiusPx } from '../RockVegetationField';
 import type { RockVegetationPlacement } from '../RockVegetationField';
 import type { RockVisualState } from '../rocks/RockVisualState';
+import { resolveRockTexture } from '../rocks/RockVisualState';
 import { ROCK_VEGETATION_MASK_MARGIN_PX } from '../RockVegetationConfig';
 import {
   ROCK_OVERLAY_CHUNK_SIZE,
@@ -128,7 +130,8 @@ export class RockOverlayStreamer {
   private readonly decalCutoutCells: RockCell[] = [];
   private readonly activeCellKeys = new Set<number>();
   private readonly silhouetteImages: Phaser.GameObjects.Image[] = [];
-  private readonly vegetationMaskImages: Phaser.GameObjects.Image[] = [];
+  private readonly silhouetteSources: RockMaskSource[] = [];
+  private readonly vegetationSources: RockMaskSource[] = [];
   private readonly temporaryImages: Phaser.GameObjects.Image[] = [];
 
   constructor(options: RockOverlayStreamerOptions) {
@@ -324,11 +327,13 @@ export class RockOverlayStreamer {
     // ausschliesslich chunklokal gezeichnet. Weltpositionierte Live-Felsen ueber eine
     // Scratch-Kamera einzulesen hat den Arena-Offset gegenueber dem Bake verschoben.
     const silhouetteImages = this.silhouetteImages;
-    const vegetationMaskImages = this.vegetationMaskImages;
+    const silhouetteSources = this.silhouetteSources;
+    const vegetationSources = this.vegetationSources;
     const temporaryImages = this.temporaryImages;
     const activeCellKeys = this.activeCellKeys;
     silhouetteImages.length = 0;
-    vegetationMaskImages.length = 0;
+    silhouetteSources.length = 0;
+    vegetationSources.length = 0;
     temporaryImages.length = 0;
     activeCellKeys.clear();
 
@@ -365,19 +370,26 @@ export class RockOverlayStreamer {
         && cellMinY - ROCK_VEGETATION_MASK_MARGIN_PX < maxY;
       if (!intersectsSilhouette && !intersectsVegetation) continue;
 
+      const source: RockMaskSource = {
+        x: cellMinX + CELL_SIZE * 0.5 - region.localX,
+        y: cellMinY + CELL_SIZE * 0.5 - region.localY,
+        autotileFrame: visualState.frame,
+      };
+      if (intersectsVegetation) vegetationSources.push(source);
+      if (!intersectsSilhouette) continue;
+      silhouetteSources.push(source);
+      // Die Stanzform folgt der gezeichneten Silhouette: Landschaftsfels nutzt die Felsbasis mit
+      // abgerundeten Ecken, gebaute Waende weiterhin das 47-Blob-Sheet.
       // Losgeloest statt ueber `scene.add`: Die Kopie wird nur gezeichnet und sofort wieder
       // zerstoert; die Anzeigeliste wuerde jede davon linear durchsuchen (siehe
       // {@link ../ArenaVisualFactory}).
-      const copy = new Phaser.GameObjects.Image(
-        this.scene,
-        cellMinX + CELL_SIZE * 0.5 - region.localX,
-        cellMinY + CELL_SIZE * 0.5 - region.localY,
-        ROCK_BLOB_SURFACE_PROFILE.textureKey,
-        visualState.frame,
-      ).setDisplaySize(CELL_SIZE, CELL_SIZE);
+      const silhouette = visualState.material === 'walls'
+        ? { key: ROCK_BLOB_SURFACE_PROFILE.textureKey, frame: visualState.frame }
+        : resolveRockTexture(visualState);
+      const copy = new Phaser.GameObjects.Image(this.scene, source.x, source.y, silhouette.key, silhouette.frame)
+        .setDisplaySize(CELL_SIZE, CELL_SIZE);
       temporaryImages.push(copy);
-      if (intersectsSilhouette) silhouetteImages.push(copy);
-      if (intersectsVegetation) vegetationMaskImages.push(copy);
+      silhouetteImages.push(copy);
     }
 
     // Die Materialquelle kommt aus dem vollstaendigen Bestand, nicht aus den lebenden Felsen:
@@ -438,9 +450,9 @@ export class RockOverlayStreamer {
       sink.blit(rockOverlayMottleLayerId(index), target);
     }
 
-    this.bakeMossRegion(region, sink, silhouetteImages);
+    this.bakeMossRegion(region, sink, silhouetteSources);
     this.bakeDecalRegion(region, sink, decalCutoutCells, activeCellKeys);
-    this.bakeVegetationRegion(region, sink, vegetationMaskImages);
+    this.bakeVegetationRegion(region, sink, vegetationSources);
 
     for (const image of temporaryImages) image.destroy();
     temporaryImages.length = 0;
@@ -449,7 +461,7 @@ export class RockOverlayStreamer {
   private bakeMossRegion(
     region: ChunkBakeRegion,
     sink: ChunkBakeSink,
-    silhouetteImages: readonly Phaser.GameObjects.Image[],
+    silhouetteSources: readonly RockMaskSource[],
   ): void {
     const { size } = region;
     const maxX = region.localX + size;
@@ -475,7 +487,7 @@ export class RockOverlayStreamer {
       }
     }
 
-    const masks = ArenaVisualFactory.createRockMossMasks(this.scene, silhouetteImages);
+    const masks = ArenaVisualFactory.createRockMossMasks(this.scene, silhouetteSources);
     const cutout = this.scratch.get('mossCutout', size, 'redraw');
     fillRockMossCutout(cutout, masks);
 
@@ -497,7 +509,7 @@ export class RockOverlayStreamer {
   private bakeVegetationRegion(
     region: ChunkBakeRegion,
     sink: ChunkBakeSink,
-    maskSourceImages: readonly Phaser.GameObjects.Image[],
+    maskSources: readonly RockMaskSource[],
   ): void {
     const { size } = region;
     const maxX = region.localX + size;
@@ -523,7 +535,7 @@ export class RockOverlayStreamer {
       }
     }
 
-    const masks = ArenaVisualFactory.createRockVegetationMasks(this.scene, maskSourceImages);
+    const masks = ArenaVisualFactory.createRockVegetationMasks(this.scene, maskSources);
     const cutout = this.scratch.get('vegetationCutout', size, 'redraw');
     fillRockVegetationCutout(cutout, masks);
 

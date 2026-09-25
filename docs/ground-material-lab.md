@@ -40,9 +40,35 @@ ein leichter Kontaktschatten. Chunk-Bakes und Terrain-Farbsnapshot rufen denselb
 das Ergebnis haengt nicht von Bake-Reihenfolge oder Regionsaufteilung ab. Netz- und
 Layoutdaten bleiben unveraendert.
 
-Die Bodenbedeckung hat drei Stufen (`GROUND_COVER_TIERS`), jeweils mit Schwerpunkt am
-Uebergang: grosse, weich auslaufende Moos-/Grasflecken, breitblaettrige Horste mit
-eingebackenem Kontaktschatten und kleine Halmbueschel.
+Die Bodenbedeckung hat vier Stufen (`GROUND_COVER_TIERS`), in Zeichenreihenfolge: grosse, weich
+auslaufende Moos-/Grasflecken, flache Waldstreu (Kiesel, Zweige, Laub), kleine Halmbueschel und
+aufrechte Waldvegetation (Grashorste, Farne und Stauden, Bluetengruppen). Streu und Vegetation
+behalten ihre physische Groesse. Streu, Halmbueschel und Vegetation wachsen gruppiert: Ein gemeinsames,
+weltfestes Wachstumsfeld (`groundGrowthLevel`) bildet unregelmaessige Inseln und Baender, dort
+entstehen Cluster meist derselben Art, dazwischen bleiben ruhige Freiflaechen. Die 16-px-Gras-Decals
+des Layouts folgen beim Backen demselben Feld (`isGroundDecalInGrowth`); Layout und Wire-Format
+bleiben unveraendert. Felszellen tragen keine Anker; freie Zellen direkt neben einem
+Felsen bilden den Anker `rockFoot` mit Kieseln und Pflanzen am Felsfuss. Erdflaechen mischen
+ueber ein grossflaechiges, weltfestes Feld feuchten Humus (`dirt_material`) mit trockenerem,
+hellerem Lehm (`dirt_material_alt`).
+
+Um Wasser legt dieselbe Erdschicht eine Uferboeschung: Eine vorzeichenbehaftete, weltfeste Distanz
+zu den Wasserzellen bestimmt Deckung, Naesse und Material. Unter dem durchscheinenden Wasserrand
+liegt deckender, nur leicht abgedunkelter Grund, und das Wasser bleibt ueber eine flache Uferzone
+durchscheinend und wird erst allmaehlich tief; eine zurueckweichende Welle legt so feuchten
+Schlamm statt einer dunklen Abbruchkante frei; an der Wasserlinie feiner nasser Schlamm
+(`bank_material_wet`), dahinter durchwurzelter Humus (`bank_material`), dessen Aussenkante
+unregelmaessig breit ist und wie die Erdnaht ueber die Grashoehe ins Gras auslaeuft. Die
+Kollision bleibt die Wasserzelle. Die Bodenbedeckung kennt dazu den Anker `bank` (Kiesel,
+Zweige, Grashorste und Seggen, die ueber die Wasserlinie ragen duerfen). Quellen:
+[`shoreline/candidates-01`](../tools/source-art/shoreline/candidates-01/README.md).
+
+Der Kieshof der persistenten Basis nutzt dasselbe Feld: `DirtSurfaceField` mit den Zellen der
+aktuellen Bauflaeche und dem Kiesmaterial (grauer Schotter `gravel_material`, grossflaechig
+mit sandigem Kies `gravel_material_alt` gemischt, Quellen
+`ground-materials/candidates-set-05-gravel`). Er bekommt damit dieselbe organische Naht zum
+Gras. Die dezenten Kiesstempel (`PERSISTENT_BASE_GRAVEL_DECORATION_CONFIG`) bleiben im Inneren
+der Zone.
 
 ## Quellen und reproduzierbarer Export
 
@@ -50,14 +76,18 @@ eingebackenem Kontaktschatten und kleine Halmbueschel.
 
 1. `scripts/generate-grass-tiles.mjs` liest
    [`materials.json`](../tools/source-art/ground-materials/materials.json): Quelle,
-   physische Groesse (32 Pixel/Meter), Farbabstimmung und fuer das Gras zusaetzliche
-   Mischschichten (schuetteres Gras, kleine Erdflecken). Deterministisches Image-Quilting setzt
+   physische Groesse (32 Pixel/Meter), Farbabstimmung und optionale Mischschichten
+   (`blend`). Das Gras (dunkles Farngruen aus `candidates-set-04-rich-grass`) nutzt bewusst
+   keine Mischschicht, damit die Flaeche ruhig bleibt; Variation kommt aus Makrokarte und
+   Bodenbedeckung. Deterministisches Image-Quilting setzt
    daraus nahtlose 1024-Pixel-Kacheln zusammen, ohne Schaerfen oder kuenstliches Rauschen.
 2. `scripts/generate-ground-macro.mjs` erzeugt die nahtlose, niederfrequente Multiply-Karte.
 3. `scripts/generate-ground-cover-textures.mjs` erzeugt Moosflecken aus
    `tools/source-art/groundcover` (gemeinsame organische Pipeline, an die neue Graskachel
-   angeglichen), Blatthorste aus `tools/source-art/rockvegetation` und Halmbueschel aus
-   `tools/source-art/ground-materials`.
+   angeglichen), Halmbueschel aus `tools/source-art/ground-materials` sowie Streu und
+   Vegetation (`forest_*`) aus [`forest-detail/candidates-01`](../tools/source-art/forest-detail/candidates-01/README.md).
+   Namen und physische Groessen stehen nur in der Variantentabelle von
+   `src/arena/GroundCoverConfig.ts`; der Export liest sie direkt.
 
 Die Material- und Bueschelquellen wurden mit dem eingebauten Imagegen-Werkzeug erzeugt;
 Prompts stehen in [`prompts.json`](../tools/source-art/ground-materials/prompts.json) und

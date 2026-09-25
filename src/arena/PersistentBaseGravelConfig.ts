@@ -14,7 +14,10 @@ export interface PersistentBaseGravelDecorationConfig {
   readonly coveragePercent: number;
   /** Maximale zufaellige Verschiebung des Ankers, in Zellen. */
   readonly maxOffsetCells: number;
-  /** Zulaessiger Ueberstand des gedrehten Stamps ueber den aktiven Zonenrand, in Zellen. */
+  /**
+   * Zulaessiger Ueberstand des gedrehten Stamps ueber den aktiven Zonenrand, in Zellen. Negativ
+   * haelt ihn so weit im Inneren; den Rand zum Gras formt allein das Kiesfeld.
+   */
   readonly maxOverhangCells: number;
   readonly minSizeCells: number;
   readonly maxSizeCells: number;
@@ -26,21 +29,22 @@ export interface PersistentBaseGravelDecorationConfig {
 }
 
 /**
- * Dezente, grosse Kies-/Bodenformen ueber dem Blob-Untergrund.
+ * Dezente, grosse Kies-/Bodenformen ueber dem durchgehenden Kiesmaterial.
  *
  * Die vier Formen sind keine eigene Terrain-Technik: Sie werden wie Ground Cover als
- * deterministische Texture-Stamps in dieselbe Chunk-Surface gebacken. Die randgebundene
- * Platzierung laesst den 47-Blob trotz der dichten Materialdeckung als Zonenform lesbar.
+ * deterministische Texture-Stamps in dieselbe Chunk-Surface gebacken. Sie bleiben im Inneren der
+ * Zone und brechen dort nur die Materialflaeche auf; ueber den Zonenrand ragende Stamps legten
+ * sonst einen hellen, gezackten Saum auf das Gras.
  */
 export const PERSISTENT_BASE_GRAVEL_DECORATION_CONFIG: PersistentBaseGravelDecorationConfig = {
   coveragePercent: 100,
   maxOffsetCells: 0.26,
-  maxOverhangCells: 2.75,
+  maxOverhangCells: -0.75,
   minSizeCells: 1.10,
-  maxSizeCells: 3.9,
+  maxSizeCells: 3.2,
   sizeBias: 1.2,
-  minAlpha: 0.3,
-  maxAlpha: 0.7,
+  minAlpha: 0.15,
+  maxAlpha: 0.4,
   variants: [
     { fileName: 'gravel_patch_01.png', frequencyPercent: 25 },
     { fileName: 'gravel_patch_02.png', frequencyPercent: 25 },

@@ -221,7 +221,7 @@ function matchesCategory(object: Phaser.GameObjects.GameObject, category: Ablati
     case 'blood':
       return key.startsWith(BLOOD_TEXTURE_PREFIX);
     case 'rocks':
-      return key === 'rocks';
+      return key === 'rocks' || key === 'rock_base';
     case 'groundFire':
       return GROUND_FIRE_TEXTURE_HINTS.some((hint) => key.includes(hint));
     case 'projectiles':

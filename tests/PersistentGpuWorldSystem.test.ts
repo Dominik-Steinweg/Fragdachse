@@ -80,13 +80,13 @@ describe('PersistentGpuWorldSystem', () => {
     const { system, layers } = fixture([wall, nature]);
     const wallSlot = 5 * 16 + 3, rockSlot = wallSlot + 1;
     expect(layers[0].members[wallSlot]).toMatchObject({ alpha: 0 });
-    expect(layers[0].members[rockSlot]).toMatchObject({ frame: { textureKey: 'rocks' } });
+    expect(layers[0].members[rockSlot]).toMatchObject({ frame: { textureKey: 'rock_base' } });
     expect(layers[2].members[wallSlot]).toMatchObject({ frame: { textureKey: 'walls' }, alpha: 1 });
     expect(system.getDiagnostics().capacity).toBe(3 * 256);
     wall.active = false; system.applyDirty([0]);
     expect(layers[2].members[wallSlot]).toMatchObject({ alpha: 0 });
     Object.assign(wall, { active: true, material: 'rocks' }); system.applyDirty([0]);
-    expect(layers[0].members[wallSlot]).toMatchObject({ frame: { textureKey: 'rocks' }, alpha: 1 });
+    expect(layers[0].members[wallSlot]).toMatchObject({ frame: { textureKey: 'rock_base' }, alpha: 1 });
     expect(layers[2].members[wallSlot]).toMatchObject({ alpha: 0 });
     system.destroy();
   });

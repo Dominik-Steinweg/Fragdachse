@@ -1,5 +1,8 @@
 import type * as Phaser from 'phaser';
-import { DIRT_MATERIAL_KEY, GRASS_MATERIAL_KEY } from './GroundMaterialConfig';
+import {
+  BANK_MATERIAL_KEY, BANK_MATERIAL_WET_KEY, DIRT_MATERIAL_ALT_KEY, DIRT_MATERIAL_KEY, GRASS_MATERIAL_KEY,
+  GRAVEL_MATERIAL_ALT_KEY, GRAVEL_MATERIAL_KEY,
+} from './GroundMaterialConfig';
 
 /** CPU copy of a seamless material at native world scale (straight RGBA). */
 export interface GroundMaterialPixels {
@@ -17,6 +20,14 @@ export interface GrassHeightMap {
 
 export interface GroundMaterialSamples {
   readonly dirt: GroundMaterialPixels;
+  /** Optional drier second soil, mixed in by the soil field's broad dry/moist mask. */
+  readonly dirtAlt?: GroundMaterialPixels;
+  /** Optional riverbank soil and wet waterline silt; without them water keeps no bank. */
+  readonly bank?: GroundMaterialPixels;
+  readonly bankWet?: GroundMaterialPixels;
+  /** Optional Persistent-Base gravel and its sandier admixture. */
+  readonly gravel?: GroundMaterialPixels;
+  readonly gravelAlt?: GroundMaterialPixels;
   readonly grassHeight: GrassHeightMap;
 }
 
@@ -94,7 +105,7 @@ function readPixels(scene: Phaser.Scene, key: string): { source: object; pixels:
   }
 }
 
-/** Read once per loaded material pair and shared by every World, bake and snapshot. */
+/** Read once per loaded material set and shared by every World, bake and snapshot. */
 export function readGroundMaterialSamples(scene: Phaser.Scene): GroundMaterialSamples {
   const grassSource = scene.textures.get(GRASS_MATERIAL_KEY).getSourceImage() as object;
   const cached = cache.get(grassSource);
@@ -102,6 +113,11 @@ export function readGroundMaterialSamples(scene: Phaser.Scene): GroundMaterialSa
   if (cached && cache.get(dirtSource) === cached) return cached;
   const samples: GroundMaterialSamples = {
     dirt: readPixels(scene, DIRT_MATERIAL_KEY).pixels,
+    dirtAlt: readPixels(scene, DIRT_MATERIAL_ALT_KEY).pixels,
+    bank: readPixels(scene, BANK_MATERIAL_KEY).pixels,
+    bankWet: readPixels(scene, BANK_MATERIAL_WET_KEY).pixels,
+    gravel: readPixels(scene, GRAVEL_MATERIAL_KEY).pixels,
+    gravelAlt: readPixels(scene, GRAVEL_MATERIAL_ALT_KEY).pixels,
     grassHeight: deriveGrassHeight(readPixels(scene, GRASS_MATERIAL_KEY).pixels),
   };
   cache.set(grassSource, samples);

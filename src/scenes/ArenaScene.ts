@@ -1,4 +1,5 @@
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
+import { preloadRockBase } from '../arena/RockBaseConfig';
 import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
@@ -345,13 +346,13 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
     this.load.image('bg_tracks', './assets/sprites/BahnstreckeSchienen.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
+    preloadRockBase(this.load);
     this.load.spritesheet('walls', './assets/sprites/walls47blob.png', { frameWidth: 32, frameHeight: 32 });
     for (const control of SHOOTING_RANGE_CONTROLS) {
       this.load.image(`shooting-range-${control}`, `./assets/shooting-range/${control}.png`);
     }
     this.load.spritesheet('mission_barrier', './assets/sprites/missionbarrier47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('rock_mottle', './assets/sprites/rocks47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('kies', './assets/sprites/kies47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('base',  './assets/sprites/base47blob.png',  { frameWidth: 32, frameHeight: 32 });
     // Authored Void-Panzerung fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
     // Frame-Indizes, daher unveraenderte Autotile-Logik.

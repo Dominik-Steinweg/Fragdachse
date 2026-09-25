@@ -218,6 +218,8 @@ async function writeMats() {
       const outHeight = Math.round(BAND_PX * AUTHOR_SCALE);
       const scaled = await sharp(oriented, { raw: { width: crop.width, height: crop.height, channels: 4 } })
         .resize(outWidth, outHeight, { fit: 'fill', kernel: 'lanczos3' })
+        // Dark, muted mats: a subtle accent at the rock edge, matching the rock moss.
+        .modulate({ brightness: 0.95, saturation: 0.85 })
         .raw()
         .toBuffer();
       dissolveInnerSide(scaled, outWidth, outHeight, rng);

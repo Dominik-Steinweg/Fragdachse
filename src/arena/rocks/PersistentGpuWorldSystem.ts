@@ -10,7 +10,8 @@ import {
 import type { ChunkWorldRect } from '../chunks/ArenaChunkGrid';
 import type { RockGpuPageSize } from './RockRendererSettings';
 import type { RockVisualState } from './RockVisualState';
-import { resolveRockCornerTints } from './RockVisualState';
+import { resolveRockCornerTints, resolveRockTexture } from './RockVisualState';
+import { ROCK_BASE_TEXTURE_KEY } from '../RockBaseConfig';
 
 const BUFFER_SEGMENTS = 24;
 const FULL_UPLOAD_SEGMENT_THRESHOLD = 12;
@@ -68,7 +69,7 @@ export class PersistentGpuWorldSystem {
     this.cellsPerPage = this.pagePixels / CELL_SIZE;
     this.slotsPerPage = this.cellsPerPage * this.cellsPerPage;
     this.grid = new ArenaChunkGrid(frame.width, frame.height, this.pagePixels);
-    this.texture = this.scene.textures.get('rocks');
+    this.texture = this.scene.textures.get(ROCK_BASE_TEXTURE_KEY);
     this.buildPages();
     this.diagnostics = this.emptyDiagnostics();
     this.applyDirty(states.filter(state => state?.material === 'walls').map(state => state!.id));
@@ -220,7 +221,7 @@ export class PersistentGpuWorldSystem {
     return {
       x: state.x,
       y: state.y,
-      frame: texture.get(state.frame),
+      frame: texture.get(resolveRockTexture(state).frame),
       scaleX: state.scaleX,
       scaleY: state.scaleY,
       alpha: state.alpha,

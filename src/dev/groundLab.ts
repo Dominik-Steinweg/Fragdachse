@@ -11,6 +11,7 @@ import { ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
 import { ARENA_RENDER_CHUNK_SIZE } from '../arena/chunks/ArenaChunkGrid';
 import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
 import { ArenaVisualFactory } from '../arena/ArenaVisualFactory';
+import { getRockBaseFrame, preloadRockBase } from '../arena/RockBaseConfig';
 import { ROCK_BLOB_SURFACE_PROFILE } from '../arena/BlobSurfaceProfile';
 import { resolveBlobSurfaceCornerTints } from '../arena/BlobSurfaceShading';
 import { RenderResolutionController, getRenderScale } from '../graphics/RenderResolution';
@@ -45,7 +46,7 @@ class GroundLab extends Phaser.Scene {
   preload(): void {
     preloadGroundMaterials(this.load);
     preloadGroundCoverAssets(this.load);
-    this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
+    preloadRockBase(this.load);
     this.load.image('ground-lab-canopy', './assets/sprites/canopies/canopy01.png');
     this.load.image('ground-lab-player', './assets/sprites/pipeline-v2/badger/idle.png');
   }
@@ -70,14 +71,14 @@ class GroundLab extends Phaser.Scene {
     this.add.text(rulerX, rulerY + 8, '1 m', { fontSize: '13px', color: '#eee3c7' }).setDepth(1000);
     this.ground = new GroundSurfaceStreamer({ scene: this, frame,
       layout: { ...layout, tracks: [], decals: [] },
-      groundCoverPlacements: state.cover ? generateGroundCoverPlacements({ seed, dirt: layout.dirt, metrics }) : [],
+      groundCoverPlacements: state.cover ? generateGroundCoverPlacements({ seed, dirt: layout.dirt, rocks: layout.rocks, metrics }) : [],
     });
     if (forest) {
       const cells = new Set(layout.rocks.map(c => `${c.gridX}:${c.gridY}`));
       const occupied = (x: number, y: number) => cells.has(`${x}:${y}`);
       for (const cell of layout.rocks) ArenaVisualFactory.createRock(this,
         frame.offsetX + (cell.gridX + .5) * CELL_SIZE, frame.offsetY + (cell.gridY + .5) * CELL_SIZE,
-        AutoTiler.getFrame(AutoTiler.computeMask(cell.gridX, cell.gridY, occupied), ROCK_AUTOTILE),
+        getRockBaseFrame(AutoTiler.getFrame(AutoTiler.computeMask(cell.gridX, cell.gridY, occupied), ROCK_AUTOTILE), cell.gridX, cell.gridY),
         resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, cell.gridX, cell.gridY, occupied));
       for (const tree of layout.trees) this.add.image(frame.offsetX + (tree.gridX + .5) * CELL_SIZE,
         frame.offsetY + (tree.gridY + .5) * CELL_SIZE, 'ground-lab-canopy')

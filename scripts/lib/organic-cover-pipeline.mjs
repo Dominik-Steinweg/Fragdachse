@@ -371,6 +371,8 @@ async function processSource(profile, fileName, outputIndex, gradeTarget) {
       fit: 'inside',
       kernel: 'lanczos3',
     })
+    // Optional final colour pass (e.g. fresher moss); profiles without it are unchanged.
+    .modulate(profile.finalModulate ?? {})
     .png({ compressionLevel: 9 })
     .toFile(target);
 

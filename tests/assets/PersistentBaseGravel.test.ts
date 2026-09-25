@@ -7,7 +7,7 @@ vi.mock('phaser', async () => (await import('../fakeArenaRenderScene')).createFa
 
 import { CELL_SIZE, DEPTH } from '../../src/config';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS } from '../../src/config/persistentBase';
-import { AutoTiler, GRAVEL_AUTOTILE } from '../../src/arena/AutoTiler';
+import { DirtSurfaceField, DIRT_SURFACE_REACH_PX } from '../../src/arena/DirtSurfaceField';
 import { ChunkedRenderSurface } from '../../src/arena/chunks/ChunkedRenderSurface';
 import {
   GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID,
@@ -22,7 +22,6 @@ import {
   DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   resolvePersistentBaseBuildAreaForStage,
 } from '../../src/persistentBase/PersistentBaseCore';
-import { GRAVEL_BLOB_SURFACE_PROFILE } from '../../src/arena/BlobSurfaceProfile';
 import { isCellInsidePersistentBaseZone } from '../../src/persistentBase/PersistentBaseZone';
 import {
   PERSISTENT_BASE_GRAVEL_ASSET_PATH,
@@ -119,40 +118,19 @@ describe('persistent-base gravel field', () => {
     }
   });
 
-  it('keeps complete 47-blob neighbour context across a 128-px chunk boundary', () => {
+  it('gives the zone the soil seam: solid inside, fading into the grass within its reach', () => {
+    // The gravel is drawn by the soil field with the zone's cells, so it shares the organic,
+    // blade-interleaved border into the grass and is independent of chunk partitioning.
     const state = createPersistentBaseGravelState({
       seed: 23,
-      anchor: { gridX: 4, gridY: 1 },
-      buildArea: { kind: 'radius', radiusCells: 2 },
-      frame: { offsetX: 0, offsetY: 0, width: 512, height: 128 },
+      anchor: { gridX: 6, gridY: 4 },
+      buildArea: { kind: 'radius', radiusCells: 3 },
+      frame: { offsetX: 0, offsetY: 0, width: 512, height: 320 },
     });
-    const fullSet = state.cellKeys;
-    expect(fullSet.has(persistentBaseGravelCellKey(3, 1))).toBe(true);
-    expect(fullSet.has(persistentBaseGravelCellKey(4, 1))).toBe(true);
-    expect(Math.floor((3 * CELL_SIZE) / 128)).toBe(0);
-    expect(Math.floor((4 * CELL_SIZE) / 128)).toBe(1);
-
-    const fullMask = AutoTiler.computeMask(
-      3,
-      1,
-      (gridX, gridY) => fullSet.has(persistentBaseGravelCellKey(gridX, gridY)),
-    );
-    const chunkLocalSet = new Set(
-      state.cells
-        .filter((cell) => Math.floor((cell.gridX * CELL_SIZE) / 128) === 0)
-        .map((cell) => persistentBaseGravelCellKey(cell.gridX, cell.gridY)),
-    );
-    const chunkLocalMask = AutoTiler.computeMask(
-      3,
-      1,
-      (gridX, gridY) => chunkLocalSet.has(persistentBaseGravelCellKey(gridX, gridY)),
-    );
-
-    expect(fullMask & 4).toBe(4);
-    expect(chunkLocalMask & 4).toBe(0);
-    expect(AutoTiler.getFrame(fullMask, GRAVEL_AUTOTILE)).not.toBe(
-      AutoTiler.getFrame(chunkLocalMask, GRAVEL_AUTOTILE),
-    );
+    const field = new DirtSurfaceField(23, state.cells, { offsetX: 0, offsetY: 0, width: 512, height: 320 });
+    expect(field.coverageAt(6.5 * CELL_SIZE, 4.5 * CELL_SIZE)).toBe(1);
+    const outside = (3 + 1) * CELL_SIZE + DIRT_SURFACE_REACH_PX + 1;
+    expect(field.coverageAt(6.5 * CELL_SIZE + outside, 4.5 * CELL_SIZE)).toBe(0);
   });
 
   it('is pixel-stable for the same seed and preserves inner placements when the radius grows', () => {
@@ -179,7 +157,6 @@ describe('persistent-base gravel field', () => {
 
     expect(first.decorations).not.toHaveLength(0);
     expect(first.decorations).toEqual(reload.decorations);
-    expect(GRAVEL_BLOB_SURFACE_PROFILE.mottle.passes.length).toBeGreaterThan(0);
     for (const decoration of first.decorations) {
       expect(decoration.sizePx / CELL_SIZE).toBeGreaterThanOrEqual(config.minSizeCells);
       expect(decoration.sizePx / CELL_SIZE).toBeLessThanOrEqual(config.maxSizeCells);

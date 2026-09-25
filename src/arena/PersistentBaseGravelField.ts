@@ -174,14 +174,13 @@ function createPersistentBaseGravelDecorations(
         cell.gridY + offsetY - anchor.gridY,
       );
       if (centerDistance + rotatedStampRadius > buildArea.radiusCells + config.maxOverhangCells) continue;
-    } else if (!isCellInsidePersistentBaseZone(
-      cell.gridX + offsetX - anchor.gridX,
-      cell.gridY + offsetY - anchor.gridY,
-      buildArea,
-    )) {
-      // Square areas keep their exact cell set; only the authored stamp itself may overhang
-      // that edge slightly. No circular fallback is allowed for the square courtyard.
-      continue;
+    } else {
+      // Square areas keep their exact cell set. The rotated stamp's extent, widened or narrowed
+      // by the configured overhang, must stay inside it on all four sides.
+      const reach = rotatedStampRadius + config.maxOverhangCells;
+      const centerX = cell.gridX + offsetX - anchor.gridX, centerY = cell.gridY + offsetY - anchor.gridY;
+      if (![[0, 0], [reach, 0], [-reach, 0], [0, reach], [0, -reach]].every(([dx, dy]) =>
+        isCellInsidePersistentBaseZone(centerX + dx, centerY + dy, buildArea))) continue;
     }
     const alphaRoll = hashSeededCell01(seed, cell.gridX, cell.gridY, DECORATION_SALTS.alpha);
     decorations.push({

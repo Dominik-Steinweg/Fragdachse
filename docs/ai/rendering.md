@@ -199,6 +199,8 @@ Statische World-Flächen werden über Chunking und Streaming resident gehalten. 
 
 Der Renderer darf daher nicht voraussetzen, dass die gesamte World als eine ständig neu gezeichnete Fläche vorliegt. Cleanup und Pool-Recycling gehören zur Renderer-Lifetime.
 
+Felsen: `RockVisualState.frame` ist immer der 47-Blob-Frame (Retiling, Moos- und Vegetationsmasken). Textur und Frame der gezeichneten Felsbasis leiten GPU- und Classic-Renderer, Overlay-Silhouette und Trümmer ausschließlich über `resolveRockTexture` aus Frame und Rasterposition ab ([RockBaseConfig.ts](../../src/arena/RockBaseConfig.ts)); die Kollision bleibt die volle Rasterzelle.
+
 Persistente GPU-/World-Flächen gehören zur World- und Chunk-Lifetime; transiente VFX gehören zur Effects-Lifetime. Beide Ressourcenklassen werden getrennt erzeugt, aktualisiert und beim jeweiligen Owner-Teardown freigegeben.
 
 ## DOM und Vollbild

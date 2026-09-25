@@ -1,0 +1,389 @@
+[
+  {
+    "id": "earth-01-dry-loam",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": false,
+    "alphaMin": 255,
+    "alphaMax": 255,
+    "bytes": 3304282
+  },
+  {
+    "id": "earth-02-sandy-loam",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": false,
+    "alphaMin": 255,
+    "alphaMax": 255,
+    "bytes": 3377074
+  },
+  {
+    "id": "earth-03-dry-humus",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": false,
+    "alphaMin": 255,
+    "alphaMax": 255,
+    "bytes": 3224046
+  },
+  {
+    "id": "earth-04-mineral-earth",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": false,
+    "alphaMin": 255,
+    "alphaMax": 255,
+    "bytes": 3290436
+  },
+  {
+    "id": "flowers-01-white-three",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 773126
+  },
+  {
+    "id": "flowers-02-white-five",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 977923
+  },
+  {
+    "id": "flowers-03-yellow-three",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 828933
+  },
+  {
+    "id": "flowers-04-yellow-five",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 929264
+  },
+  {
+    "id": "flowers-05-pink-three",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 819335
+  },
+  {
+    "id": "flowers-06-pink-five",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1402947
+  },
+  {
+    "id": "grass-01-compact",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 829706
+  },
+  {
+    "id": "grass-02-wide-fan",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1005751
+  },
+  {
+    "id": "grass-03-star",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 974133
+  },
+  {
+    "id": "grass-04-leaning",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1065277
+  },
+  {
+    "id": "grass-05-sedge",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1068345
+  },
+  {
+    "id": "grass-06-small-open",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 953697
+  },
+  {
+    "id": "grass-07-dry-tips",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1153199
+  },
+  {
+    "id": "grass-08-two-crowns",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1173805
+  },
+  {
+    "id": "grass-09-curled",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1110145
+  },
+  {
+    "id": "grass-10-forest-green",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 958178
+  },
+  {
+    "id": "leaf-01-oak",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 931728
+  },
+  {
+    "id": "leaf-02-pair",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1052229
+  },
+  {
+    "id": "leaf-03-fragments",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 407437
+  },
+  {
+    "id": "leaf-04-folded",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 822544
+  },
+  {
+    "id": "leaf-05-mixed",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1014597
+  },
+  {
+    "id": "plant-01-fern-star",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1373690
+  },
+  {
+    "id": "plant-02-fern-asymmetric",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1301825
+  },
+  {
+    "id": "plant-03-fern-young",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1227610
+  },
+  {
+    "id": "plant-04-fern-spreading",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1450313
+  },
+  {
+    "id": "plant-05-lance-rosette",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1234856
+  },
+  {
+    "id": "plant-06-broad-rosette",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1164140
+  },
+  {
+    "id": "plant-07-split-leaves",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1538005
+  },
+  {
+    "id": "plant-08-narrow-star",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 1151487
+  },
+  {
+    "id": "stone-01-round",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 253915
+  },
+  {
+    "id": "stone-02-angular",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 581615
+  },
+  {
+    "id": "stone-03-pair",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 249142
+  },
+  {
+    "id": "stone-04-flat",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 997482
+  },
+  {
+    "id": "stone-05-small-group",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 434172
+  },
+  {
+    "id": "twig-01-fork",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 327574
+  },
+  {
+    "id": "twig-02-bent",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 294696
+  },
+  {
+    "id": "twig-03-crossing",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 522675
+  },
+  {
+    "id": "twig-04-small-branch",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 396184
+  },
+  {
+    "id": "twig-05-splinter",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "bytes": 338279
+  }
+]

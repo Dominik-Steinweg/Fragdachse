@@ -17,6 +17,7 @@
     "icons:audit": "node scripts/audit-upgrade-icons.mjs",
     "sprites:held": "node scripts/generate-held-item-sprites.mjs",
     "sprites:groundcover": "node scripts/generate-ground-cover-textures.mjs",
+    "sprites:rockbase": "node scripts/generate-rock-base.mjs",
     "sprites:rockmoss": "node scripts/generate-rock-moss-textures.mjs",
     "sprites:rockvegetation": "node scripts/generate-rock-vegetation-textures.mjs",
     "dev": "vite",

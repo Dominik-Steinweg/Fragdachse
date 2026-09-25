@@ -1,4 +1,5 @@
 import { multiplyTint } from '../BlobSurfaceShading';
+import { ROCK_BASE_TEXTURE_KEY, getRockBaseFrame } from '../RockBaseConfig';
 import type { BlobSurfaceCornerTints } from '../BlobSurfaceShading';
 
 /** Rendererunabhaengige Darstellungswahrheit eines einzelnen Felsens. */
@@ -75,6 +76,16 @@ export class RockVisualStateStore {
     this.states.length = 0;
     this.dirtyIds.clear();
   }
+}
+
+/**
+ * Textur und Frame eines Felsquads. `state.frame` bleibt der 47-Blob-Frame (Masken, Retiling);
+ * Landschaftsfels zeichnet daraus die positionsabhaengige Materialphase der Felsbasis.
+ */
+export function resolveRockTexture(state: RockVisualState): { key: string; frame: number } {
+  return state.material === 'walls'
+    ? { key: 'walls', frame: state.frame }
+    : { key: ROCK_BASE_TEXTURE_KEY, frame: getRockBaseFrame(state.frame, state.gridX, state.gridY) };
 }
 
 /** Bestehende Damage-/Owner-Mischung, getrennt von den vier Surface-Ecktints. */

@@ -109,10 +109,13 @@ export const ROCK_VEGETATION_CONFIG: RockVegetationLayerConfig = {
    * aufgeloest, der Bewuchs endet also irgendwo im inneren Drittel des Bandes statt an seiner
    * Kante.
    */
-  minBandPx: 32,
-  maxBandPx: 50,
+  // Narrower than one cell: rock letters and walls are often only one or two cells thick, and a
+  // full cell of leaf mat on an edge turns them into hedges instead of stone.
+  minBandPx: 20,
+  maxBandPx: 34,
   /** 9 bis 13 px nach aussen – klar sichtbar und innerhalb der Maskenreichweite von 15 px. */
-  overhangPx: 11,
+  // A short overhang keeps the rock silhouette (and its dark contour) readable.
+  overhangPx: 7,
   overhangJitterPx: 2,
   /**
    * Versatz entlang der Kante. Ohne ihn beginnt und endet jede Matte auf einer Zellgrenze, und die
@@ -139,13 +142,13 @@ export const ROCK_VEGETATION_CONFIG: RockVegetationLayerConfig = {
    * haeufigste Fall (rund 60 % aller Kantenlaeufe). Waechst dort regelmaessig etwas, entsteht ueber
    * die Karte ein Tupfenmuster, und die grossen Matten auf den langen Kanten gehen darin unter.
    */
-  minCoverage: 0.14,
+  minCoverage: 0.16,
   /**
    * Steiler als die Untergrenze vermuten laesst: Ab drei Zellen soll eine Kante zuverlaessig
    * bewachsen sein, damit die Schicht trotz der seltenen Einzelzellen kraeftig deckt.
    */
-  coverageSlopePerCell: 0.18,
-  maxCoverage: 0.95,
+  coverageSlopePerCell: 0.16,
+  maxCoverage: 0.9,
   maxGapCells: 2,
   maxEdgesPerCell: 2,
   minAlpha: 0.82,

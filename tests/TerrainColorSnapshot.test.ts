@@ -13,7 +13,7 @@ import {
 import { TerrainColorSnapshot } from '../src/arena/TerrainColorSnapshot';
 import { WATER_COLOR, WaterSurfaceModel } from '../src/arena/WaterSurfaceModel';
 import { WaterSurfaceRenderer } from '../src/arena/WaterSurfaceRenderer';
-import { GRAVEL_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
+import { ROCK_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { stampBlobSurfaceMottle } from '../src/arena/BlobSurfaceMottle';
 import { stampGroundCover } from '../src/arena/GroundCoverLayer';
 
@@ -216,8 +216,8 @@ describe('TerrainColorSnapshot', () => {
       stampBlobSurfaceMottle(
         { textures: { exists: () => true } } as never,
         layer as never,
-        GRAVEL_BLOB_SURFACE_PROFILE,
-        GRAVEL_BLOB_SURFACE_PROFILE.mottle,
+        ROCK_BLOB_SURFACE_PROFILE,
+        ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers![0],
         [{ gridX: 3, gridY: 2 }],
         0,
         0,

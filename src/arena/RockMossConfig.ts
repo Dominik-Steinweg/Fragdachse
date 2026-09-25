@@ -52,16 +52,18 @@ export const ROCK_MOSS_CONFIG: RockMossLayerConfig = {
   maxPerBlock: 2,
   jitterCells: 1.5,
 
-  perBlock: 0.75,
+  // Rich moss cover on the rock tops. The rock contour and the cool grey between the patches
+  // keep the stone readable against soil and grass.
+  perBlock: 1.0,
   /**
    * Deutlich kleiner als am Boden (3-11 Zellen). Ein Moosfleck soll ueber mehrere Felskacheln
    * laufen und den Verbund zusammenbinden, aber nicht eine ganze Formation unter sich begraben.
    */
   minSizeCells: 2,
-  maxSizeCells: 8,
+  maxSizeCells: 7,
   sizeBias: 1.5,
-  minAlpha: 0.45,
-  maxAlpha: 0.95,
+  minAlpha: 0.5,
+  maxAlpha: 0.9,
 
   /** Flache Gewichte: Bei acht Vorlagen faellt jede Haeufung als Muster auf. */
   variants: [

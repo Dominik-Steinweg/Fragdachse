@@ -13,9 +13,10 @@ import {
   ensureExplosionChunkTexture, ensureExplosionSmokeTexture,
   TEX_EXPLOSION_CHUNK, TEX_EXPLOSION_SMOKE,
 } from './gpu/GpuVfxSourceTextures';
+import { ROCK_BASE_TEXTURE_KEY } from '../arena/RockBaseConfig';
 
 const TEX_ROCK_DUST = TEX_EXPLOSION_SMOKE;
-const ROCK_TEXTURE_KEY = 'rocks';
+const ROCK_TEXTURE_KEY = ROCK_BASE_TEXTURE_KEY;
 
 /**
  * Wie weit ein Truemmerstueck oder eine Staubwolke ueber den Fels hinausreicht.

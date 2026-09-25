@@ -283,7 +283,8 @@ describe('rock overlay streamer', () => {
   it('rebuilds a revisited chunk identically', () => {
     const { scene, streamer } = buildFixture();
     const layerIds = [
-      rockOverlayMottleLayerId(0),
+      // The last mottle layer carries the stamps; the first one is currently empty by design.
+      rockOverlayMottleLayerId(1),
       ROCK_OVERLAY_MOSS_LAYER_ID,
       ROCK_OVERLAY_VEGETATION_LAYER_ID,
     ];

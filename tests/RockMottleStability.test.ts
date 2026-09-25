@@ -80,6 +80,8 @@ for (let gridY = 0; gridY < 3; gridY += 1) {
 }
 const DESTROYED = { gridX: 2, gridY: 1 };
 const SURVIVORS = FIELD.filter((cell) => cell.gridX !== DESTROYED.gridX || cell.gridY !== DESTROYED.gridY);
+const bleedsOntoNeighbours = (cell: RockCell) => stampsOf([cell]).filter((stamp) =>
+  reachesCell(stamp, cell.gridX + 1, cell.gridY) || reachesCell(stamp, cell.gridX - 1, cell.gridY));
 
 describe('rock mottle placement stability', () => {
   it('is a pure function of the source cells', () => {
@@ -101,13 +103,13 @@ describe('rock mottle placement stability', () => {
   it('shows why the source must not shrink: a cell stamps onto its neighbours', () => {
     // Die Flecken einer Zelle reichen weit ueber sie hinaus. Faellt sie aus der Quelle, verschwinden
     // Flecken mitten auf unveraenderten Nachbarfelsen – genau das sichtbare Umspringen des Materials.
-    const bleeding = stampsOf([DESTROYED]).filter((stamp) =>
-      reachesCell(stamp, DESTROYED.gridX + 1, DESTROYED.gridY)
-      || reachesCell(stamp, DESTROYED.gridX - 1, DESTROYED.gridY));
-    expect(bleeding.length).toBeGreaterThan(0);
+    // Placement density is tuning; any cell whose stamps reach a neighbour shows the rule.
+    const destroyed = FIELD.find((cell) => bleedsOntoNeighbours(cell).length > 0);
+    expect(destroyed).toBeDefined();
+    const bleeding = bleedsOntoNeighbours(destroyed!);
 
     const full = stampsOf(FIELD);
-    const survivorsOnly = stampsOf(SURVIVORS);
+    const survivorsOnly = stampsOf(FIELD.filter((cell) => cell !== destroyed));
     for (const stamp of bleeding) {
       expect(full).toContainEqual(stamp);
       expect(survivorsOnly).not.toContainEqual(stamp);

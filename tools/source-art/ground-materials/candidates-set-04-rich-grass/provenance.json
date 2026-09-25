@@ -1,0 +1,18 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "reference.png",
+  "sources": {
+    "grass-01-rich-forest": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-a71cb76e-09e4-4126-b1dc-15f376e21d32.png",
+    "grass-02-rich-moss": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-f85be7f7-81ba-492b-94eb-42dcc7f42f3b.png",
+    "grass-03-rich-fern": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-d92c1830-b915-461c-873d-e9f71e924a5a.png",
+    "grass-04-rich-olive": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-5522c190-e55a-42ef-aba0-497cf23bc8ae.png",
+    "grass-05-dark-forest": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-a325d707-47f6-4710-bbe0-788bc907cd1e.png",
+    "grass-06-dark-pine": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-15fb397f-b952-4946-bf3d-a3c52a089820.png",
+    "grass-07-dark-olive": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-8b020987-3501-4b91-823a-d86cdc7219ff.png",
+    "grass-08-dark-fern": "C:/Users/domin/.codex/generated_images/01a0d503-9598-7143-9513-dbfbfbb2977e/exec-29ce23b1-1071-4887-9806-4d51e977caac.png",
+    "grass-09-deep-forest": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-86ad8c1c-15b0-4d9e-bcb0-3e9a4b883193.png",
+    "grass-10-deep-spruce": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-704462f1-b388-4d57-88fa-362be71cff50.png",
+    "grass-11-deep-moss": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-befdc643-a6aa-4fc7-b98d-2c7e33eb9e43.png",
+    "grass-12-deep-jade": "C:\\Users\\domin\\.codex\\generated_images\\01a0d503-9598-7143-9513-dbfbfbb2977e\\exec-0aeea54d-3f54-43c0-93c7-5ef413384eb8.png"
+  }
+}

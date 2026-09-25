@@ -1,15 +1,11 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
-import type { ArenaLayout, DecalCell, DirtCell } from '../../types';
+import type { ArenaLayout, DecalCell, DirtCell, WaterCell } from '../../types';
 import { ArenaVisualFactory } from '../ArenaVisualFactory';
-import {
-  getBlobSurfaceMottleReachPx,
-  GRAVEL_BLOB_SURFACE_PROFILE,
-} from '../BlobSurfaceProfile';
-import { stampBlobSurfaceMottle } from '../BlobSurfaceMottle';
 import { DECAL_SIZE } from '../DecalConfig';
 import { getGroundCoverPlacementRadiusPx, stampGroundCover } from '../GroundCoverLayer';
 import type { GroundCoverPlacement } from '../GroundCoverField';
+import { isGroundDecalInGrowth } from '../GroundCoverField';
 import {
   createPersistentBaseGravelState,
   getPersistentBaseGravelDecorationReachPx,
@@ -25,7 +21,7 @@ import type { PersistentBaseAnchor } from '../../persistentBase/PersistentBaseTy
 import type { PersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
 import { ArenaCellBucketIndex } from './ArenaCellBucketIndex';
 import { ArenaPointBucketIndex } from './ArenaPointBucketIndex';
-import { ChunkScratchPool, ChunkedRenderSurface, eraseChunkScratch } from './ChunkedRenderSurface';
+import { ChunkScratchPool, ChunkedRenderSurface } from './ChunkedRenderSurface';
 import type { ChunkSamplingMode } from './ChunkedRenderSurface';
 import type {
   ChunkBakeRegion,
@@ -37,7 +33,7 @@ import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
 import { ROCK_OVERLAY_CHUNK_SIZE } from '../RockOverlayRegions';
 import { TrackGravelLayer } from '../TrackGravelLayer';
 import { DirtSurfaceLayer } from '../DirtSurfaceLayer';
-import { DIRT_SURFACE_REACH_PX } from '../DirtSurfaceField';
+import { DIRT_SURFACE_REACH_PX, WATER_BANK_REACH_PX } from '../DirtSurfaceField';
 import { readGroundMaterialSamples, type GroundMaterialSamples } from '../GroundMaterialSamples';
 
 /**
@@ -62,6 +58,8 @@ export const GROUND_PERSISTENT_BASE_GRAVEL_DECORATION_LAYER_ID = 'persistentBase
 export const GROUND_COVER_LAYER_ID = 'groundCover';
 export const GROUND_TRACK_GRAVEL_LAYER_ID = 'trackGravel';
 export const GROUND_DECAL_LAYER_ID = 'groundDecals';
+/** Separates the gravel seam's noise from the soil seam of the same World seed. */
+const PERSISTENT_BASE_GRAVEL_SEED_SALT = 0x6a7e1;
 
 export interface GroundSurfacePersistentBaseGravelZone {
   readonly seed: number;
@@ -94,11 +92,14 @@ export class GroundSurfaceStreamer {
   private readonly scene: Phaser.Scene;
   private readonly frame: ChunkWorldFrame;
   private readonly dirtCells: readonly DirtCell[];
+  /** Water cells only feed the riverbank of the soil layer; the water itself renders elsewhere. */
+  private readonly waterCells: readonly WaterCell[];
   private readonly gridCols: number;
   private readonly gridRows: number;
   private readonly groundCoverPlacements: readonly GroundCoverPlacement[];
   private readonly groundDecals: readonly DecalCell[];
   private readonly dirtIndex: ArenaCellBucketIndex;
+  private readonly waterIndex: ArenaCellBucketIndex;
   private readonly groundCoverIndex: ArenaPointBucketIndex<GroundCoverPlacement>;
   private readonly groundDecalIndex: ArenaPointBucketIndex<DecalCell>;
   private readonly dirtCandidateIds: number[] = [];
@@ -117,16 +118,13 @@ export class GroundSurfaceStreamer {
   private readonly persistentBaseGravelDecorationIndex: ArenaPointBucketIndex<PersistentBaseGravelDecoration>;
   private persistentBaseGravelDecorationQueryRadius = 0;
   private readonly persistentBaseGravelCandidateIds: number[] = [];
-  private readonly persistentBaseGravelVisibleCells: PersistentBaseGravelCell[] = [];
-  private readonly persistentBaseGravelMottleCandidateIds: number[] = [];
-  private readonly persistentBaseGravelMottleSourceCells: PersistentBaseGravelCell[] = [];
+  /** Gravel with the same organic grass seam as soil; rebuilt when the zone changes. */
+  private persistentBaseGravelLayer: DirtSurfaceLayer | null = null;
   private readonly persistentBaseGravelDecorationCandidateIds: number[] = [];
   private readonly persistentBaseGravelDecorationCandidates: PersistentBaseGravelDecoration[] = [];
   private readonly dirtLayer: DirtSurfaceLayer | null;
-  private readonly persistentBaseGravelMottleConfigs = [
-    GRAVEL_BLOB_SURFACE_PROFILE.mottle,
-    ...(GRAVEL_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? []),
-  ];
+  private readonly scratchSize: number;
+  private groundMaterials: GroundMaterialSamples | null;
   private readonly scratch: ChunkScratchPool;
   private readonly surface: ChunkedRenderSurface;
   private readonly trackGravelLayer: TrackGravelLayer | null;
@@ -140,12 +138,17 @@ export class GroundSurfaceStreamer {
     this.groundCoverPlacements = options.groundCoverPlacements;
     const groundDecals: DecalCell[] = [];
     for (const decal of options.layout.decals ?? []) {
-      if ((decal.surface ?? 'ground') !== 'rock') groundDecals.push(decal);
+      if ((decal.surface ?? 'ground') === 'rock') continue;
+      // Grass specks gather with the undergrowth instead of dotting every open patch.
+      if (isGroundDecalInGrowth(options.layout.seed, decal)) groundDecals.push(decal);
     }
     this.groundDecals = groundDecals;
     this.scratch = new ChunkScratchPool(options.scene);
     this.dirtIndex = new ArenaCellBucketIndex(options.frame.width);
     this.dirtIndex.sync(this.dirtCells);
+    this.waterCells = options.layout.water ?? [];
+    this.waterIndex = new ArenaCellBucketIndex(options.frame.width);
+    this.waterIndex.sync(this.waterCells);
     this.groundCoverIndex = new ArenaPointBucketIndex(
       options.frame,
       (placement) => ({ x: placement.worldX, y: placement.worldY }),
@@ -195,23 +198,21 @@ export class GroundSurfaceStreamer {
     // im verdeckten Startup angelegt, damit auch eine spaet erstmals befuellte Mottle-/Decal-
     // Variante keinen neuen Framebuffer mitten im Match anfordern muss.
     const scratchSize = ROCK_OVERLAY_CHUNK_SIZE + this.surface.gutterPx * 2;
+    this.scratchSize = scratchSize;
+    this.groundMaterials = options.groundMaterials ?? null;
     this.trackGravelLayer = trackColumns.length > 0
       ? new TrackGravelLayer(options.scene, options.layout.seed, trackColumns, options.frame, scratchSize)
       : null;
     if (this.trackGravelLayer) this.scratch.preallocate('trackGravel', scratchSize);
     this.scratch.preallocate('dirt', scratchSize);
-    this.dirtLayer = this.dirtCells.length > 0
+    this.dirtLayer = this.dirtCells.length > 0 || this.waterCells.length > 0
       ? new DirtSurfaceLayer(options.scene, options.layout.seed, this.dirtCells, this.frame, scratchSize,
-        options.groundMaterials ?? readGroundMaterialSamples(options.scene))
+        this.getGroundMaterials(), this.waterCells)
       : null;
     this.scratch.preallocate('groundCover', scratchSize);
     this.scratch.preallocate('groundDecal', scratchSize);
     if (this.persistentBaseGravelEnabled) {
       this.scratch.preallocate('persistentBaseGravel', scratchSize);
-      this.scratch.preallocate('persistentBaseGravelCutout', scratchSize, 'redraw');
-      for (let index = 0; index < this.persistentBaseGravelMottleConfigs.length; index += 1) {
-        this.scratch.preallocate(`persistentBaseGravelMottle${index}`, scratchSize);
-      }
       this.scratch.preallocate('persistentBaseGravelDecoration', scratchSize);
       if (options.persistentBaseGravel) this.setPersistentBaseGravel(options.persistentBaseGravel);
     }
@@ -292,6 +293,8 @@ export class GroundSurfaceStreamer {
 
     this.persistentBaseGravelIndex.clear();
     this.persistentBaseGravelIndex.sync(this.persistentBaseGravelCells);
+    this.persistentBaseGravelLayer?.destroy();
+    this.persistentBaseGravelLayer = this.createPersistentBaseGravelLayer(nextState);
     this.persistentBaseGravelDecorationIndex.clear();
     this.persistentBaseGravelDecorationIndex.sync(this.persistentBaseGravelDecorations);
     this.invalidatePersistentBaseGravelDelta(previousState, nextState);
@@ -536,6 +539,8 @@ export class GroundSurfaceStreamer {
     this.scratch.destroy();
     this.trackGravelLayer?.destroy();
     this.dirtLayer?.destroy();
+    this.persistentBaseGravelLayer?.destroy();
+    this.persistentBaseGravelLayer = null;
     this.dirtIndex.clear();
     this.groundCoverIndex.clear();
     this.groundDecalIndex.clear();
@@ -577,14 +582,12 @@ export class GroundSurfaceStreamer {
     }
     if (changedCells.size === 0) return;
 
-    // Retiling needs one cell of complete 8-neighbour context. Decorations and the material
-    // mottle reach several cells, so invalidate the larger surrounding region as well; the
-    // surface itself deduplicates the resulting 128-px dirty work units.
+    // The organic seam and the decorations reach beyond their cells, so invalidate the larger
+    // surrounding region as well; the surface deduplicates the resulting 128-px work units.
     const decorationReachPx = getPersistentBaseGravelDecorationReachPx();
-    const mottleReachPx = getBlobSurfaceMottleReachPx(GRAVEL_BLOB_SURFACE_PROFILE);
     const reachCells = Math.max(
       1,
-      Math.ceil(Math.max(decorationReachPx, mottleReachPx) / CELL_SIZE) + 1,
+      Math.ceil(Math.max(decorationReachPx, DIRT_SURFACE_REACH_PX) / CELL_SIZE) + 1,
     );
     const cols = Math.ceil(this.frame.width / CELL_SIZE);
     const rows = Math.ceil(this.frame.height / CELL_SIZE);
@@ -623,112 +626,44 @@ export class GroundSurfaceStreamer {
   /** Native continuous soil, clipped by the same World field used for snapshots. */
   private bakeDirtRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
     const target = this.scratch.get('dirt', region.size);
-    const candidates = this.dirtIndex.collect(region.localX, region.localY, region.size,
-      DIRT_SURFACE_REACH_PX, this.dirtCandidateIds);
-    if (this.dirtLayer && candidates.length > 0) this.dirtLayer.bake(target, region);
+    const soil = this.dirtIndex.collect(region.localX, region.localY, region.size,
+      DIRT_SURFACE_REACH_PX, this.dirtCandidateIds).length > 0;
+    const bank = !soil && this.waterIndex.collect(region.localX, region.localY, region.size,
+      WATER_BANK_REACH_PX, this.dirtCandidateIds).length > 0;
+    if (this.dirtLayer && (soil || bank)) this.dirtLayer.bake(target, region);
     else { target.clear(); target.render(); }
     sink.blit(GROUND_DIRT_LAYER_ID, target);
   }
 
   private bakePersistentBaseGravelRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {
     if (!this.persistentBaseGravelEnabled) return;
-
-    const { size } = region;
-    const maxX = region.localX + size;
-    const maxY = region.localY + size;
-    const mottleReach = getBlobSurfaceMottleReachPx(GRAVEL_BLOB_SURFACE_PROFILE);
-    this.persistentBaseGravelVisibleCells.length = 0;
-    this.persistentBaseGravelMottleSourceCells.length = 0;
-    const candidateIds = this.persistentBaseGravelIndex.collect(
-      region.localX,
-      region.localY,
-      size,
-      0,
-      this.persistentBaseGravelCandidateIds,
-    );
-    candidateIds.sort(compareNumbers);
-    for (const id of candidateIds) {
-      const cell = this.persistentBaseGravelCells[id];
-      if (!cell) continue;
-      const cellMinX = cell.gridX * CELL_SIZE;
-      const cellMinY = cell.gridY * CELL_SIZE;
-      if (cellMinX + CELL_SIZE > region.localX && cellMinX < maxX
-        && cellMinY + CELL_SIZE > region.localY && cellMinY < maxY) {
-        this.persistentBaseGravelVisibleCells.push(cell);
-      }
-    }
-    const mottleCandidateIds = this.persistentBaseGravelIndex.collect(
-      region.localX,
-      region.localY,
-      size,
-      mottleReach,
-      this.persistentBaseGravelMottleCandidateIds,
-    );
-    mottleCandidateIds.sort(compareNumbers);
-    for (const id of mottleCandidateIds) {
-      const cell = this.persistentBaseGravelCells[id];
-      if (!cell) continue;
-      const cellMinX = cell.gridX * CELL_SIZE;
-      const cellMinY = cell.gridY * CELL_SIZE;
-      const cellMaxX = cellMinX + CELL_SIZE;
-      const cellMaxY = cellMinY + CELL_SIZE;
-      if (cellMaxX + mottleReach > region.localX && cellMinX - mottleReach < maxX
-        && cellMaxY + mottleReach > region.localY && cellMinY - mottleReach < maxY) {
-        this.persistentBaseGravelMottleSourceCells.push(cell);
-      }
-    }
-
-    const target = this.scratch.get('persistentBaseGravel', size);
-    target.clear();
-    let images: Phaser.GameObjects.Image[] = [];
-    if (this.persistentBaseGravelVisibleCells.length > 0) {
-      images = ArenaVisualFactory.createGravelImagesFromGrid(
-        this.scene,
-        this.persistentBaseGravelVisibleCells,
-        (gridX, gridY) => this.persistentBaseGravelCellKeys.has(persistentBaseGravelCellKey(gridX, gridY)),
-        {
-          offsetX: -region.localX,
-          offsetY: -region.localY,
-          gridCols: Math.ceil(this.frame.width / CELL_SIZE),
-          gridRows: Math.ceil(this.frame.height / CELL_SIZE),
-        },
-      );
-      if (images.length > 0) target.draw(images);
-    }
-    target.render();
-
-    if (images.length > 0 && this.persistentBaseGravelMottleSourceCells.length > 0) {
-      const cutout = this.scratch.get('persistentBaseGravelCutout', size, 'redraw');
-      cutout.clear();
-      cutout.fill(0x000000, 1);
-      cutout.erase(images);
-      cutout.render();
-
-      for (let index = 0; index < this.persistentBaseGravelMottleConfigs.length; index += 1) {
-        const mottle = this.persistentBaseGravelMottleConfigs[index];
-        const layer = this.scratch.get(`persistentBaseGravelMottle${index}`, size);
-        layer.setBlendMode(mottle.blend === 'multiply' ? Phaser.BlendModes.MULTIPLY : Phaser.BlendModes.NORMAL);
-        layer.clear();
-        stampBlobSurfaceMottle(
-          this.scene,
-          layer,
-          GRAVEL_BLOB_SURFACE_PROFILE,
-          mottle,
-          this.persistentBaseGravelMottleSourceCells,
-          index,
-          -region.localX,
-          -region.localY,
-        );
-        layer.render();
-        eraseChunkScratch(layer, cutout, size);
-        layer.render();
-        target.draw(layer);
-        target.render();
-      }
-    }
-
-    for (const image of images) image.destroy();
+    const target = this.scratch.get('persistentBaseGravel', region.size);
+    const near = this.persistentBaseGravelIndex.collect(region.localX, region.localY, region.size,
+      DIRT_SURFACE_REACH_PX, this.persistentBaseGravelCandidateIds).length > 0;
+    if (this.persistentBaseGravelLayer && near) this.persistentBaseGravelLayer.bake(target, region);
+    else { target.clear(); target.render(); }
     sink.blit(GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID, target);
+  }
+
+  /**
+   * The gravel zone uses the soil field with gravel cells and gravel material, so its border
+   * gets the same organic, blade-interleaved seam into the grass as soil. Its own seed salt keeps
+   * the seam shape independent of nearby soil.
+   */
+  private createPersistentBaseGravelLayer(state: PersistentBaseGravelState | null): DirtSurfaceLayer | null {
+    if (!state || state.cells.length === 0) return null;
+    const materials = this.getGroundMaterials();
+    if (!materials.gravel) return null;
+    return new DirtSurfaceLayer(this.scene, (state.seed ^ PERSISTENT_BASE_GRAVEL_SEED_SALT) >>> 0, state.cells,
+      this.frame, this.scratchSize, {
+        dirt: materials.gravel,
+        dirtAlt: materials.gravelAlt,
+        grassHeight: materials.grassHeight,
+      });
+  }
+
+  private getGroundMaterials(): GroundMaterialSamples {
+    return this.groundMaterials ??= readGroundMaterialSamples(this.scene);
   }
 
   private bakePersistentBaseGravelDecorationRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {

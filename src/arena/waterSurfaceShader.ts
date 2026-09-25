@@ -56,12 +56,17 @@ void main() {
   float bank=field(p*.038+vec2(uSeed,31.7));
   float grain=noise(p*.16+9.2);
   float shore=mask.r*${WATER_SHORE_DISTANCE.toFixed(1)};
-  float alpha=smoothstep(.32+bank*.10,.99,mask.b);
+  // The baked riverbank below carries the soft land transition (wet silt, darkening towards
+  // the water), so the waterline itself stays fairly crisp instead of a blurred blob edge.
+  float alpha=smoothstep(.40+bank*.08,.78,mask.b);
   // A short soft contact margin reveals water close to the collision edge.
   // Its opacity is independent of the much broader, calm shallow-water zone.
-  alpha*=smoothstep(0.0,16.0,shore);
-  // Freshly wetted ground retains a thin translucent film, strongest at the outer rim.
-  alpha*=mix(.68,1.0,smoothstep(0.0,24.0,shore));
+  alpha*=smoothstep(0.0,9.0,shore);
+  // A shallow shelf: the baked bank stays visible through the water for a few decimetres and
+  // only gradually disappears, so the shore reads as gently sloping rather than a drop-off.
+  alpha*=mix(.42,1.0,smoothstep(2.0,44.0,shore));
+  // Thin meniscus where the surface meets the bank and catches a little light.
+  float meniscus=smoothstep(.40,.50,mask.b)*(1.0-smoothstep(.54,.70,mask.b));
   // The same phase drives the incoming crest and its wetting/recession cycle.
   // Age zero is a crest at the bank. Water then recedes outside-in and returns
   // smoothly with the next crest, without moving the authored collision boundary.
@@ -106,9 +111,10 @@ void main() {
   // One continuous water material: the shallow region shares the slow surface field,
   // with much lower contrast. Ripples and their reflected light build up with depth.
   // A single monotonic distance ramp replaces the nearly uniform shallow shelf.
-  // Every color channel darkens continuously; only the slope eases into deep water.
+  // Every color channel darkens continuously. The ramp starts flat at the bank and eases into
+  // deep water, so the shallows stay light instead of dropping off right at the shore.
   float shoreFraction=clamp(depthDistance/${WATER_SHORE_DISTANCE.toFixed(1)},0.0,1.0);
-  float colorDepth=1.0-pow(1.0-shoreFraction,1.5);
+  float colorDepth=shoreFraction*shoreFraction*(3.0-2.0*shoreFraction);
   vec3 shallow=vec3(.095,.325,.32);
   vec3 deep=vec3(.022,.17,.195);
   vec3 color=mix(shallow,deep,colorDepth)*(.90+broad*.18);
@@ -134,6 +140,7 @@ void main() {
   float fringe=smoothstep(0.0,4.0,shore)*(1.0-smoothstep(24.0,42.0,shore));
   float broken=smoothstep(.28,.70,bank+.10*sin(shoreTime*.14+p.x*.022-p.y*.014));
   color+=vec3(.12,.26,.27)*wave*fringe*broken*.12;
+  color+=vec3(.030,.060,.060)*meniscus*(.6+.4*bank);
   gl_FragColor=vec4(color*alpha,alpha);
 }
 `;

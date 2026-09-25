@@ -1,0 +1,514 @@
+[
+  {
+    "id": "grass-01-compact-fans",
+    "file": "grass-01-compact-fans.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1176997,
+    "fullyOpaquePixels": 1208,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 147,
+      "y": 112,
+      "width": 984,
+      "height": 1019
+    }
+  },
+  {
+    "id": "grass-02-open-clump",
+    "file": "grass-02-open-clump.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1302067,
+    "fullyOpaquePixels": 847,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 96,
+      "y": 94,
+      "width": 1094,
+      "height": 1085
+    }
+  },
+  {
+    "id": "grass-03-wide-fan",
+    "file": "grass-03-wide-fan.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1130682,
+    "fullyOpaquePixels": 1541,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 41,
+      "y": 59,
+      "width": 1155,
+      "height": 1135
+    }
+  },
+  {
+    "id": "grass-04-split-crown",
+    "file": "grass-04-split-crown.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1237800,
+    "fullyOpaquePixels": 763,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 199,
+      "y": 141,
+      "width": 908,
+      "height": 932
+    }
+  },
+  {
+    "id": "grass-05-swept-blades",
+    "file": "grass-05-swept-blades.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1181272,
+    "fullyOpaquePixels": 882,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 111,
+      "y": 128,
+      "width": 1088,
+      "height": 985
+    }
+  },
+  {
+    "id": "grass-06-small-crescent",
+    "file": "grass-06-small-crescent.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1273014,
+    "fullyOpaquePixels": 630,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 71,
+      "y": 204,
+      "width": 1119,
+      "height": 897
+    }
+  },
+  {
+    "id": "grass-07-soft-sedge",
+    "file": "grass-07-soft-sedge.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1076170,
+    "fullyOpaquePixels": 867,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 61,
+      "y": 69,
+      "width": 1139,
+      "height": 1111
+    }
+  },
+  {
+    "id": "grass-08-low-mat",
+    "file": "grass-08-low-mat.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1181957,
+    "fullyOpaquePixels": 907,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 120,
+      "y": 77,
+      "width": 997,
+      "height": 1064
+    }
+  },
+  {
+    "id": "grass-09-young-tuft",
+    "file": "grass-09-young-tuft.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1291039,
+    "fullyOpaquePixels": 634,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 111,
+      "y": 90,
+      "width": 1085,
+      "height": 1086
+    }
+  },
+  {
+    "id": "grass-10-three-fans",
+    "file": "grass-10-three-fans.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1146857,
+    "fullyOpaquePixels": 2886,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 67,
+      "y": 47,
+      "width": 1115,
+      "height": 1167
+    }
+  },
+  {
+    "id": "grass-11-curling-blades",
+    "file": "grass-11-curling-blades.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1191594,
+    "fullyOpaquePixels": 1142,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 55,
+      "y": 76,
+      "width": 1132,
+      "height": 1106
+    }
+  },
+  {
+    "id": "grass-12-short-rosette",
+    "file": "grass-12-short-rosette.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1287270,
+    "fullyOpaquePixels": 752,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 226,
+      "y": 145,
+      "width": 850,
+      "height": 930
+    }
+  },
+  {
+    "id": "grass-13-edge-tuft",
+    "file": "grass-13-edge-tuft.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1376349,
+    "fullyOpaquePixels": 767,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 156,
+      "y": 331,
+      "width": 959,
+      "height": 628
+    }
+  },
+  {
+    "id": "grass-14-cross-growth",
+    "file": "grass-14-cross-growth.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1107548,
+    "fullyOpaquePixels": 1332,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 52,
+      "y": 62,
+      "width": 1147,
+      "height": 1145
+    }
+  },
+  {
+    "id": "grass-15-lush-compact",
+    "file": "grass-15-lush-compact.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1056133,
+    "fullyOpaquePixels": 1799,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 89,
+      "y": 56,
+      "width": 1094,
+      "height": 1154
+    }
+  },
+  {
+    "id": "grass-16-long-open",
+    "file": "grass-16-long-open.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1182452,
+    "fullyOpaquePixels": 2237,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 109,
+      "y": 55,
+      "width": 1108,
+      "height": 1147
+    }
+  },
+  {
+    "id": "fern-01-uneven-star",
+    "file": "fern-01-uneven-star.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1070829,
+    "fullyOpaquePixels": 1345,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 74,
+      "y": 90,
+      "width": 1136,
+      "height": 1095
+    }
+  },
+  {
+    "id": "fern-02-side-spread",
+    "file": "fern-02-side-spread.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1051349,
+    "fullyOpaquePixels": 1908,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 171,
+      "y": 58,
+      "width": 1004,
+      "height": 1146
+    }
+  },
+  {
+    "id": "fern-03-young-four",
+    "file": "fern-03-young-four.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1159429,
+    "fullyOpaquePixels": 1309,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 211,
+      "y": 194,
+      "width": 886,
+      "height": 882
+    }
+  },
+  {
+    "id": "fern-04-twin-growth",
+    "file": "fern-04-twin-growth.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1013223,
+    "fullyOpaquePixels": 938,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 38,
+      "y": 115,
+      "width": 1186,
+      "height": 1056
+    }
+  },
+  {
+    "id": "fern-05-curving",
+    "file": "fern-05-curving.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1129062,
+    "fullyOpaquePixels": 1364,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 84,
+      "y": 76,
+      "width": 1062,
+      "height": 1111
+    }
+  },
+  {
+    "id": "fern-06-broad-fronds",
+    "file": "fern-06-broad-fronds.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1021979,
+    "fullyOpaquePixels": 612,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 76,
+      "y": 101,
+      "width": 1112,
+      "height": 1073
+    }
+  },
+  {
+    "id": "fern-07-low-fan",
+    "file": "fern-07-low-fan.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1063879,
+    "fullyOpaquePixels": 1095,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 78,
+      "y": 172,
+      "width": 1076,
+      "height": 904
+    }
+  },
+  {
+    "id": "fern-08-narrow-fronds",
+    "file": "fern-08-narrow-fronds.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 958685,
+    "fullyOpaquePixels": 936,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 48,
+      "y": 32,
+      "width": 1149,
+      "height": 1178
+    }
+  },
+  {
+    "id": "plant-01-lance-leaves",
+    "file": "plant-01-lance-leaves.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1182063,
+    "fullyOpaquePixels": 744,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 69,
+      "y": 96,
+      "width": 1108,
+      "height": 1050
+    }
+  },
+  {
+    "id": "plant-02-round-leaves",
+    "file": "plant-02-round-leaves.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1102848,
+    "fullyOpaquePixels": 769,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 226,
+      "y": 197,
+      "width": 859,
+      "height": 821
+    }
+  },
+  {
+    "id": "plant-03-lobed-leaves",
+    "file": "plant-03-lobed-leaves.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1153400,
+    "fullyOpaquePixels": 462,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 222,
+      "y": 205,
+      "width": 870,
+      "height": 820
+    }
+  },
+  {
+    "id": "plant-04-long-rosette",
+    "file": "plant-04-long-rosette.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1315147,
+    "fullyOpaquePixels": 620,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 176,
+      "y": 137,
+      "width": 890,
+      "height": 904
+    }
+  },
+  {
+    "id": "plant-05-creeping",
+    "file": "plant-05-creeping.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1188699,
+    "fullyOpaquePixels": 685,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 77,
+      "y": 158,
+      "width": 1102,
+      "height": 873
+    }
+  },
+  {
+    "id": "plant-06-three-leaf",
+    "file": "plant-06-three-leaf.png",
+    "width": 1254,
+    "height": 1254,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1099937,
+    "fullyOpaquePixels": 785,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 140,
+      "y": 150,
+      "width": 1005,
+      "height": 961
+    }
+  },
+  {
+    "id": "plant-07-broad-asymmetric",
+    "file": "plant-07-broad-asymmetric.png",
+    "width": 1262,
+    "height": 1246,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 987975,
+    "fullyOpaquePixels": 627,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 128,
+      "y": 101,
+      "width": 1045,
+      "height": 1034
+    }
+  },
+  {
+    "id": "plant-08-small-paired",
+    "file": "plant-08-small-paired.png",
+    "width": 1261,
+    "height": 1247,
+    "hasAlpha": true,
+    "fullyTransparentPixels": 1244526,
+    "fullyOpaquePixels": 684,
+    "alphaBoundsThreshold": 16,
+    "alphaBounds": {
+      "x": 255,
+      "y": 152,
+      "width": 835,
+      "height": 909
+    }
+  }
+]

@@ -2,14 +2,15 @@ import * as path from 'path';
 import sharp from 'sharp';
 import { mkdir } from 'node:fs/promises';
 import { runOrganicCoverPipeline } from './lib/organic-cover-pipeline.mjs';
+import { FOREST_LITTER_CONFIG, FOREST_VEGETATION_CONFIG } from '../src/arena/GroundCoverConfig.ts';
 
 /**
- * Two ground-cover tiers, see GROUND_COVER_TIERS in src/arena/GroundCoverConfig.ts:
+ * Textures of GROUND_COVER_TIERS (src/arena/GroundCoverConfig.ts):
  *
- * - ground_patch_XX: large grass/moss patches from tools/source-art/groundcover, feathered and
+ * - ground_patch_XX: large moss/grass patches from tools/source-art/groundcover, feathered and
  *   perforated by the shared organic pipeline, then pulled to the hue and value of the grass tile.
- * - ground_cover_XX: small flat blade tufts from tools/source-art/ground-materials, only trimmed
- *   and downsampled once for native-scale stamps.
+ * - ground_cover_XX: small flat blade tufts from tools/source-art/ground-materials.
+ * - forest_*: litter and vegetation from tools/source-art/forest-detail, see below.
  *
  * Run after scripts/generate-grass-tiles.mjs; the patches are graded against its grass tile.
  */
@@ -55,8 +56,8 @@ const TUFT_GRADE = { brightness: 1.35, saturation: 1.05 };
 const trimmedTufts = [];
 
 /**
- * Soft contact shadow below flat vegetation: the blades stand a few centimetres above the
- * ground. Offset toward the scene's usual down-right shading, then the sprite on top.
+ * Soft contact shadow below flat vegetation and litter. Centred by default: stamps rotate
+ * freely, so an offset shadow would point in random directions.
  */
 async function withContactShadow(input, { blur, offset, opacity }) {
   const meta = await sharp(input).metadata();
@@ -81,51 +82,53 @@ for (let index = 1; index <= 8; index++) {
   trimmedTufts.push(trimmed);
   // Stamped at up to about 45 px; 64 px keeps blades crisp without heavy minification.
   const stamp = await withContactShadow(await sharp(trimmed).resize(60, 60, { fit: 'inside' }).png().toBuffer(),
-    { blur: 1.6, offset: 1, opacity: .55 });
+    { blur: 1.6, offset: 0, opacity: .55 });
   await sharp(stamp).png().toFile(path.join(output, `ground_cover_${id}.png`));
   console.log(`ground_cover_${id}: transparent native-scale tuft`);
 }
 
 /**
- * Leafy clumps: organic cut-outs of the low broad-leaved plants in tools/source-art/rockvegetation.
- * Broad leaves stay readable at stamp size, where thin blades would blur into mush. Each source
- * yields two clumps; a noisy radial falloff gives them an irregular, feathered outline.
+ * Forest detail from tools/source-art/forest-detail: litter and vegetation tiers of
+ * GROUND_COVER_TIERS. The runtime variant table is the single source of names and physical
+ * sizes; each stamp is exported just above its largest display size (no mipmaps at runtime)
+ * with a soft, centred contact shadow that stays correct under random stamp rotation.
  */
-const CLUMP_SIZE = 128;
-let clumpSeed = 0x2f6a91;
-const random = () => { clumpSeed = (Math.imul(clumpSeed, 1664525) + 1013904223) >>> 0; return clumpSeed / 4294967296; };
-const vegetation = path.join('tools', 'source-art', 'rockvegetation');
-let clumpIndex = 0;
-for (let sourceIndex = 1; sourceIndex <= 8; sourceIndex++) {
-  const input = path.join(vegetation, `${String(sourceIndex).padStart(2, '0')}.png`);
-  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  for (let cut = 0; cut < 2; cut++) {
-    // Opaque centre: retry until the sample point lies inside dense foliage.
-    let cx = 0, cy = 0;
-    for (let attempt = 0; attempt < 200; attempt++) {
-      cx = Math.floor(info.width * (.2 + random() * .6));
-      cy = Math.floor(info.height * (.3 + random() * .4));
-      if (data[(cy * info.width + cx) * 4 + 3] > 200) break;
-    }
-    const radius = Math.floor(Math.min(info.height * .32, 170 + random() * 130));
-    const size = radius * 2, left = Math.max(0, Math.min(info.width - size, cx - radius));
-    const top = Math.max(0, Math.min(info.height - size, cy - radius));
-    const lobes = Array.from({ length: 5 }, () => ({ phase: random() * Math.PI * 2, amp: .06 + random() * .1 }));
-    const crop = Buffer.alloc(size * size * 4);
-    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-      const source = ((top + y) * info.width + left + x) * 4, target = (y * size + x) * 4;
-      const dx = x - radius + .5, dy = y - radius + .5, angle = Math.atan2(dy, dx);
-      let edge = .78;
-      lobes.forEach((lobe, k) => { edge += lobe.amp * Math.sin(angle * (k + 2) + lobe.phase); });
-      const t = Math.max(0, Math.min(1, (edge - Math.hypot(dx, dy) / radius) / .28));
-      for (let c = 0; c < 3; c++) crop[target + c] = data[source + c];
-      crop[target + 3] = Math.round(data[source + 3] * t * t * (3 - 2 * t));
-    }
-    const clump = await sharp(crop, { raw: { width: size, height: size, channels: 4 } })
-      .resize(CLUMP_SIZE, CLUMP_SIZE, { kernel: 'lanczos3' }).modulate({ brightness: 1.35, saturation: 1.05 }).png().toBuffer();
-    const id = String(++clumpIndex).padStart(2, '0');
-    await sharp(await withContactShadow(clump, { blur: 3, offset: 2, opacity: .65 }))
-      .png().toFile(path.join(output, `ground_clump_${id}.png`));
-    console.log(`ground_clump_${id}: leafy clump from ${input}`);
+const FOREST_SOURCE = path.join('tools', 'source-art', 'forest-detail');
+/** Per motif family: grade towards the dark forest floor and contact-shadow strength. */
+const FOREST_FAMILIES = {
+  grass: { modulate: { brightness: .95, saturation: 1.25 }, shadow: .5 },
+  plant: { modulate: { brightness: 1.05, saturation: 1.15 }, shadow: .55 },
+  flowers: { modulate: { brightness: 1, saturation: .95 }, shadow: .35 },
+  stone: { modulate: { brightness: 1.05, saturation: .8 }, shadow: .65 },
+  twig: { modulate: { brightness: 1, saturation: .85 }, shadow: .5 },
+  leaf: { modulate: { brightness: .95, saturation: .85 }, shadow: .3 },
+};
+/** The green set was painted for the current grass: exported as authored, only the shadow differs. */
+const FOREST_SET_FAMILIES = {
+  'candidates-02-green': {
+    grass: { modulate: { brightness: 1, saturation: 1 }, shadow: .5 },
+    fern: { modulate: { brightness: 1, saturation: 1 }, shadow: .55 },
+    plant: { modulate: { brightness: 1, saturation: 1 }, shadow: .55 },
+  },
+};
+const EXPORT_OVERSAMPLE = 1.3;
+for (const tier of [FOREST_LITTER_CONFIG, FOREST_VEGETATION_CONFIG]) {
+  for (const variant of tier.variants) {
+    const source = variant.fileName.replace(/^forest_/, '').replace(/\.png$/, '');
+    const set = variant.sourceSet ?? 'candidates-01';
+    const family = (FOREST_SET_FAMILIES[set] ?? FOREST_FAMILIES)[source.split('-')[0]];
+    if (!family) throw new Error(`No export family for ${source}`);
+    const input = path.join(FOREST_SOURCE, set, `${source}.png`);
+    const metadata = await sharp(input).metadata();
+    if (!metadata.hasAlpha) throw new Error(`Expected transparent source: ${input}`);
+    const longSide = Math.max(12, Math.ceil(variant.sizeCells[1] * 32 * EXPORT_OVERSAMPLE));
+    const blur = Math.max(.8, longSide * .035);
+    // Sprite plus shadow margin together fill the long side.
+    const body = Math.max(8, longSide - Math.ceil(blur * 2) * 2);
+    const sprite = await sharp(input).trim({ threshold: 5 }).modulate(family.modulate)
+      .resize(body, body, { fit: 'inside', kernel: 'lanczos3' }).png().toBuffer();
+    await sharp(await withContactShadow(sprite, { blur, offset: 0, opacity: family.shadow }))
+      .png().toFile(path.join(output, variant.fileName));
+    console.log(`${variant.fileName}: ${longSide} px from ${source}`);
   }
 }

@@ -6,10 +6,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { generateGroundCoverPlacements } from '../../src/arena/GroundCoverField';
 import {
   getGroundCoverPlacementBudget,
+  FOREST_VEGETATION_CONFIG,
   GROUND_COVER_TIERS,
   getGroundCoverTextureKey,
 } from '../../src/arena/GroundCoverConfig';
-import type { GroundCoverLayerConfig } from '../../src/arena/GroundCoverConfig';
+import type { GroundCoverLayerConfig, GroundCoverVariantConfig } from '../../src/arena/GroundCoverConfig';
 import type { GroundCoverPlacement } from '../../src/arena/GroundCoverField';
 import {
   ARENA_OFFSET_X,
@@ -47,7 +48,9 @@ describe('Ground cover field', () => {
       const total = tier.variants.reduce((sum, variant) => sum + variant.frequencyPercent, 0);
       expect(total).toBeCloseTo(100, 6);
       expect(tier.variants.length).toBeGreaterThan(1);
-      for (const variant of tier.variants) expect(variant.fileName).toMatch(/^ground_(cover|clump|patch)_\d\d\.png$/);
+      for (const variant of tier.variants) {
+        expect(variant.fileName).toMatch(/^(ground_(cover|patch)_\d\d|forest_[a-z]+-\d\d-[a-z-]+)\.png$/);
+      }
     }
   });
 
@@ -117,27 +120,30 @@ describe('Ground cover field', () => {
         expect(localY % CELL_SIZE).not.toBe(0);
         // Auch die Zellmitte waere eine Rasterbindung.
         expect(localX % CELL_SIZE).not.toBe(CELL_SIZE / 2);
-        octiles.add(Math.floor(((localX % CELL_SIZE) / CELL_SIZE) * 8));
+        // Positive remainder: cluster members may sit just outside the frame.
+        octiles.add(Math.floor((((localX % CELL_SIZE) + CELL_SIZE) % CELL_SIZE / CELL_SIZE) * 8));
       }
     }
     expect(octiles.size).toBe(8);
   });
 
   it('keeps size, alpha and texture inside the configured bounds', () => {
-    const tierByTexture = new Map<string, GroundCoverLayerConfig>();
+    const byTexture = new Map<string, { tier: GroundCoverLayerConfig; variant: GroundCoverVariantConfig }>();
     for (const tier of GROUND_COVER_TIERS) {
-      for (const variant of tier.variants) tierByTexture.set(getGroundCoverTextureKey(variant.fileName), tier);
+      for (const variant of tier.variants) byTexture.set(getGroundCoverTextureKey(variant.fileName), { tier, variant });
     }
     const layout = generateArenaWithActiveMetrics(54_000);
-    const placements = placementsFor(layout.seed, layout.dirt);
+    const placements = generateGroundCoverPlacements({ seed: layout.seed, dirt: layout.dirt, rocks: layout.rocks });
     expect(placements.length).toBeGreaterThan(0);
 
     for (const placement of placements) {
-      const tier = tierByTexture.get(placement.textureKey);
-      expect(tier).toBeDefined();
-      const anchorConfig = tier![placement.anchor];
-      expect(placement.sizePx).toBeGreaterThanOrEqual(anchorConfig.minSizeCells * CELL_SIZE);
-      expect(placement.sizePx).toBeLessThanOrEqual(anchorConfig.maxSizeCells * CELL_SIZE);
+      const entry = byTexture.get(placement.textureKey);
+      expect(entry).toBeDefined();
+      const anchorConfig = entry!.tier[placement.anchor]!;
+      expect(anchorConfig).toBeDefined();
+      const [minCells, maxCells] = entry!.variant.sizeCells ?? [anchorConfig.minSizeCells, anchorConfig.maxSizeCells];
+      expect(placement.sizePx).toBeGreaterThanOrEqual(minCells * CELL_SIZE - 1e-9);
+      expect(placement.sizePx).toBeLessThanOrEqual(maxCells * CELL_SIZE + 1e-9);
       expect(placement.alpha).toBeGreaterThanOrEqual(anchorConfig.minAlpha);
       expect(placement.alpha).toBeLessThanOrEqual(anchorConfig.maxAlpha);
       expect(placement.rotation).toBeGreaterThanOrEqual(0);
@@ -152,7 +158,7 @@ describe('Ground cover field', () => {
         const placements = generateGroundCoverPlacements({ seed: layout.seed, dirt: layout.dirt, config: tier });
         const blocks = Math.ceil(GRID_COLS / tier.blockCells) * Math.ceil(GRID_ROWS / tier.blockCells);
         expect(placements.length).toBeLessThanOrEqual(getGroundCoverPlacementBudget(GRID_COLS, GRID_ROWS, tier));
-        expect(placements.length).toBeLessThanOrEqual(blocks * tier.maxPerBlock);
+        expect(placements.length).toBeLessThanOrEqual(blocks * tier.maxPerBlock * (tier.cluster?.members[1] ?? 1));
       }
     }
   });
@@ -183,6 +189,64 @@ describe('Ground cover field', () => {
       excludeCell: () => true,
     });
     expect(placements).toHaveLength(0);
+  });
+
+  it('keeps rock cells free and anchors rock-foot detail right beside rocks', () => {
+    const layout = generateArenaWithActiveMetrics(58_000);
+    const rocks = new Set(layout.rocks.map((cell) => `${cell.gridX}:${cell.gridY}`));
+    const placements = generateGroundCoverPlacements({ seed: layout.seed, dirt: layout.dirt, rocks: layout.rocks });
+    const cellOf = (placement: GroundCoverPlacement) => [
+      Math.min(GRID_COLS - 1, Math.max(0, Math.floor((placement.worldX - ARENA_OFFSET_X) / CELL_SIZE))),
+      Math.min(GRID_ROWS - 1, Math.max(0, Math.floor((placement.worldY - ARENA_OFFSET_Y) / CELL_SIZE))),
+    ];
+    expect(placements.some((placement) => placement.anchor === 'rockFoot')).toBe(true);
+    for (const placement of placements) {
+      const [x, y] = cellOf(placement);
+      expect(rocks.has(`${x}:${y}`)).toBe(false);
+      if (placement.anchor !== 'rockFoot') continue;
+      let beside = false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) beside ||= rocks.has(`${x + dx}:${y + dy}`);
+      expect(beside).toBe(true);
+    }
+  });
+
+  it('keeps water cells free and anchors bank growth on the dry cells beside water', () => {
+    const water: { gridX: number; gridY: number }[] = [];
+    for (let gridY = 8; gridY < 14; gridY += 1) for (let gridX = 10; gridX < 22; gridX += 1) water.push({ gridX, gridY });
+    const wet = new Set(water.map((cell) => `${cell.gridX}:${cell.gridY}`));
+    const placements = generateGroundCoverPlacements({ seed: 58_100, dirt: [], water });
+    expect(placements.some((placement) => placement.anchor === 'bank')).toBe(true);
+    for (const placement of placements) {
+      const x = Math.floor((placement.worldX - ARENA_OFFSET_X) / CELL_SIZE);
+      const y = Math.floor((placement.worldY - ARENA_OFFSET_Y) / CELL_SIZE);
+      expect(wet.has(`${x}:${y}`)).toBe(false);
+      if (placement.anchor !== 'bank') continue;
+      let beside = false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) beside ||= wet.has(`${x + dx}:${y + dy}`);
+      expect(beside).toBe(true);
+    }
+  });
+
+  it('groups vegetation into clusters with calm open ground in between', () => {
+    const metrics = { offsetX: 0, offsetY: 0, gridCols: 120, gridRows: 80 };
+    const placements = generateGroundCoverPlacements({ seed: 58_200, dirt: [], metrics, config: FOREST_VEGETATION_CONFIG });
+    const nearest = placements.map((a, i) => {
+      let best = Infinity;
+      for (let j = 0; j < placements.length; j++) {
+        if (j !== i) best = Math.min(best, Math.hypot(a.worldX - placements[j].worldX, a.worldY - placements[j].worldY));
+      }
+      return best / CELL_SIZE;
+    }).sort((a, b) => a - b);
+    // A uniform scatter of the same count would space plants about this far apart.
+    const uniformSpacing = 0.5 * Math.sqrt(metrics.gridCols * metrics.gridRows / placements.length);
+    expect(nearest[nearest.length >> 1]).toBeLessThan(uniformSpacing * 0.7);
+    let open = 0, windows = 0;
+    for (let y = 0; y < metrics.gridRows; y += 4) for (let x = 0; x < metrics.gridCols; x += 4) {
+      windows += 1;
+      if (!placements.some((p) => p.worldX >= x * CELL_SIZE && p.worldX < (x + 4) * CELL_SIZE
+        && p.worldY >= y * CELL_SIZE && p.worldY < (y + 4) * CELL_SIZE)) open += 1;
+    }
+    expect(open / windows).toBeGreaterThan(0.25);
   });
 
   it('produces only grass anchors without any dirt', () => {
