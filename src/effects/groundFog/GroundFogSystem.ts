@@ -174,8 +174,11 @@ export class GroundFogSystem {
       const camera = this.scene.cameras.main, scale = this.quality === 'low' ? .25 : .5;
       const margin = FOG.materialMargin / camera.zoom;
       const output = { x: view.x - margin, y: view.y - margin, width: view.width + margin * 2, height: view.height + margin * 2 };
-      this.gpu.render(output, (camera.width + FOG.materialMargin * 2) * scale,
-        (camera.height + FOG.materialMargin * 2) * scale, this.debug, this.accumulator / FOG.stepMs, this.surfaces, this.quality);
+      const pixels = { width: camera.width + FOG.materialMargin * 2, height: camera.height + FOG.materialMargin * 2 };
+      // Wakes are cut at up to screen resolution; the soft material stays at reduced resolution.
+      const trailScale = Math.min(1, FOG.trailMaskMaxWidth / pixels.width);
+      this.gpu.render(output, pixels.width * scale, pixels.height * scale, this.debug, this.accumulator / FOG.stepMs,
+        this.surfaces, this.quality, pixels.width * trailScale, pixels.height * trailScale);
       this.timer?.end(); this.stats.gpuMs = this.timer?.ms ?? null; this.stats.gpuSample = this.timer?.sample ?? 0;
       const active = [...this.gpu.residency.chunks.values()].filter(c => c.active).length;
       Object.assign(this.stats, { status: this.gpu.residency.overflow ? 'view capacity exceeded' : 'ready',

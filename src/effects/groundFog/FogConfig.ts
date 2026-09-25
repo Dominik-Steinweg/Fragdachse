@@ -8,6 +8,11 @@ export const FOG = {
   trailCapacity: 8192, trailTextureWidth: 1024, trailMs: 3200, trailDecayMs: 1100, trailRadius: 5,
   trailEdgeExtent: 1.8, trailEdgeFalloff: 1.65, trailEndFeather: 3, trailEndFeatherMin: 18,
   trailSectorFeather: .45,
+  // Gaussian reconstruction footprint in trail-mask texels: a wake never gets thinner than the
+  // mask can represent, otherwise its core would bead with the pixel phase along diagonals.
+  trailPixelFootprint: 1.1,
+  // The wake mask follows screen resolution up to this width; the material stays reduced.
+  trailMaskMaxWidth: 2560,
   trainTrailMs: 10000, trainTrailDecayMs: 4600,
   motionGain: 9, dashGain: 1.35,
   smallProjectileStrength: .48, largeProjectileStrength: .43,

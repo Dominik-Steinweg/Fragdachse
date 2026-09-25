@@ -198,7 +198,7 @@ void main() {
 export const FOG_MATERIAL_FRAGMENT = FOG_GLSL + `
 uniform sampler2D uLookup;
 uniform vec2 uLookupSize,uViewOrigin,uViewSize;
-uniform float uOpacity,uDetail,uDebug,uInterpolation,uHasSurface,uQuality,uHasTrails;
+uniform float uOpacity,uDetail,uDebug,uInterpolation,uHasSurface,uQuality;
 // uVelocity is the previous DENSITY buffer in this presentation pass.
 vec4 worldSample(vec2 world) {
  if(any(lessThan(world,vec2(0))) || any(greaterThanEqual(world,uWorldSize))) return vec4(0);
@@ -247,9 +247,23 @@ void main() {
  // Structure scales optical thickness; a small edge offset erodes thin fog into wisps and
  // leaves the gaps clear, while saturation keeps dense cores soft instead of clipped flat.
  float thickness=max(0.0,d*mix(1.0,.12+1.8*structure,uDetail)-${f(FOG.materialEdge)});
- float trace=uHasTrails>.5?texture2D(uImpulse,outTexCoord).r:0.0;
- float alpha=${f(FOG.materialMaxAlpha)}*(1.0-exp(-${f(FOG.materialGain)}*uOpacity*thickness))*(1.0-trace);
+ // Weapon wakes are cut in FOG_DISPLAY_FRAGMENT at mask resolution, never at material texels.
+ float alpha=${f(FOG.materialMaxAlpha)}*(1.0-exp(-${f(FOG.materialGain)}*uOpacity*thickness));
  gl_FragColor=vec4(mix(vec3(.72,.79,.81),vec3(.84,.88,.88),structure)*alpha,alpha);
+}
+`;
+
+/** Screen composite: soft half-resolution material, wake cut at the finer trail-mask resolution.
+ * Cutting inside the material would sample thin wakes per material texel and bead diagonals. */
+export const FOG_DISPLAY_FRAGMENT = `
+#pragma phaserTemplate(shaderName)
+precision mediump float;
+varying vec2 outTexCoord;
+uniform sampler2D uMaterial,uTrails;
+uniform float uHasTrails;
+void main() {
+ float trace=uHasTrails>.5?texture2D(uTrails,outTexCoord).r:0.0;
+ gl_FragColor=texture2D(uMaterial,outTexCoord)*(1.0-trace);
 }
 `;
 
@@ -270,7 +284,7 @@ varying vec2 outWorld;
 varying float outIndex,outShape;
 uniform sampler2D uCommands;
 uniform vec2 uWorldSize;
-uniform float uTrailTime,uReaction;
+uniform float uTrailTime,uReaction,uTrailBlur;
 float decode(vec2 v) {return dot(v,vec2(65280.,255.));}
 void main() {
  float index=floor(outIndex+.5);
@@ -283,7 +297,11 @@ void main() {
  float lineLength=max(.001,length(line));
  float along=dot(outWorld-start,line)/lineLength;
  float t=clamp(along/lineLength,0.,1.);
- float radius=mix(decode(radii.rg),decode(radii.ba),t)/16.;
+ float authored=mix(decode(radii.rg),decode(radii.ba),t)/16.;
+ // Prefilter by the mask's texel footprint (variances add), so a sub-texel wake
+ // reads as a continuous lane instead of beads. Only half of the widening is paid in peak
+ // strength: thin wakes stay clearly cut without their cross-section swelling unbounded.
+ float radius=sqrt(authored*authored+uTrailBlur*uTrailBlur),coverage=sqrt(authored/max(.01,radius));
  float distance=length(outWorld-mix(start,end,t));
  float arc=mod(outShape,512.),caps=floor(outShape/512.);
  float sector=1.,ends=1.;
@@ -308,6 +326,6 @@ void main() {
  // Shape after saturation: strong shots retain a soft edge instead of flattening the falloff.
  float q=distance/max(.01,radius);
  float edge=exp(-${FOG.trailEdgeFalloff}*q*q)*(1.-smoothstep(${FOG.trailEdgeExtent * .72},${FOG.trailEdgeExtent},q));
- gl_FragColor=vec4(min(.90,1.-exp(-amount))*edge*sector*ends,0,0,1);
+ gl_FragColor=vec4(min(.90,1.-exp(-amount))*edge*coverage*sector*ends,0,0,1);
 }
 `;

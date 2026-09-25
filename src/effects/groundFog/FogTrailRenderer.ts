@@ -18,9 +18,11 @@ export class FogTrailRenderer {
     const shader = this.shader, node = shader.renderNode, renderer = node.renderer, gl = renderer.gl;
     const context = shader.drawingContext!, buffer = node.vertexBufferLayout.buffer;
     node.manager.startStandAloneRender();
+    // Mask texel footprint in world px (shader Gaussian units): sub-texel wakes widen instead of beading.
+    const blur = FOG.trailPixelFootprint * view.width / shader.width * Math.sqrt(2 * FOG.trailEdgeFalloff);
     const key = `${view.x},${view.y},${view.width},${view.height},${includeProjectiles}`;
     if (this.version !== trails.version || this.viewKey !== key) {
-      this.vertices = trails.writeVertices(buffer.viewF32!, view, includeProjectiles);
+      this.vertices = trails.writeVertices(buffer.viewF32!, view, includeProjectiles, blur);
       if (this.vertices) buffer.update(this.vertices * 16);
       this.version = trails.version; this.viewKey = key;
     }
@@ -32,6 +34,7 @@ export class FogTrailRenderer {
       manager.setUniform('uViewSize', [view.width, view.height]);
       manager.setUniform('uWorldSize', [this.frame.width, this.frame.height]);
       manager.setUniform('uCommands', 0); manager.setUniform('uTrailTime', elapsed % 60000); manager.setUniform('uReaction', reaction);
+      manager.setUniform('uTrailBlur', blur);
       manager.applyUniforms(suite.program);
       context.beginDraw(); suite.program.bind(); suite.vao.bind();
       renderer.glTextureUnits.bindUnits([commands.get().source.glTexture]);

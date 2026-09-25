@@ -32,12 +32,18 @@ export class FogTrailSegments {
     const { from, to } = segment;
     if (to.breakBefore || from === to) { this.tails.delete(source); return; }
     const dx = to.x - from.x, dy = to.y - from.y;
-    if (!Number.isFinite(dx + dy + from.timeMs + to.timeMs + segment.ageMs + profile.radius) || Math.hypot(dx, dy) < .001) return;
+    if (!Number.isFinite(dx + dy + from.timeMs + to.timeMs + segment.ageMs + profile.radius)) return;
     const index = this.tails.get(source), before = index === undefined ? undefined : this.slots[index];
     const connected = before && !from.breakBefore
       && Math.abs(from.timeMs - before.sourceEnd!) < .01
       && Math.hypot(from.x - before.input.endX, from.y - before.input.endY) < .1
       && before.lifeMs === profile.lifeMs && before.decayMs === profile.decayMs;
+    if (Math.hypot(dx, dy) < .001) {
+      // Time without travel still continues the path. Host paths can alternate time-only and
+      // zero-duration samples; dropping the former would split every step into feathered beads.
+      if (connected) before.sourceEnd = Math.max(before.sourceEnd!, to.timeMs);
+      return;
+    }
     const startRadius = connected ? before.endRadius : profile.radius;
     if (connected && from.bounceSequence === undefined && to.timeMs - before.sourceStart! <= 1000) {
       const ax = before.input.endX - before.input.x, ay = before.input.endY - before.input.y;
@@ -97,12 +103,13 @@ export class FogTrailSegments {
       const trace = this.slots[i]; if (trace && now - trace.endAt >= trace.lifeMs) this.remove(i);
     }
   }
-  /** Six vertices per visible capsule, world anchored and tightly aligned to its direction. */
-  writeVertices(data: Float32Array, view: FogRect, includeProjectiles = true): number {
+  /** Six vertices per visible capsule, world anchored and tightly aligned to its direction.
+   * `blur` is the shader's resolution footprint in world px, which widens every capsule. */
+  writeVertices(data: Float32Array, view: FogRect, includeProjectiles = true, blur = 0): number {
     let offset = 0;
     for (let index = 0; index < FOG.trailCapacity; index++) {
       const trace = this.slots[index]; if (!trace || (!includeProjectiles && trace.input.kind !== 'melee')) continue;
-      const p = trace.input, radius = Math.max(trace.startRadius, trace.endRadius) * FOG.trailEdgeExtent + 1;
+      const p = trace.input, radius = Math.hypot(Math.max(trace.startRadius, trace.endRadius), blur) * FOG.trailEdgeExtent + 1;
       if (Math.max(p.x, p.endX) + radius < view.x || Math.min(p.x, p.endX) - radius > view.x + view.width
         || Math.max(p.y, p.endY) + radius < view.y || Math.min(p.y, p.endY) - radius > view.y + view.height) continue;
       const length = Math.hypot(p.endX - p.x, p.endY - p.y);

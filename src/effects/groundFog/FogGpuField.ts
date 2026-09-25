@@ -3,7 +3,7 @@ import { FOG, FOG_DEBUG, type FogDebug, type FogRect, type FogTuning, type FogQu
 import { FogTerrainModel } from './FogTerrainModel';
 import { FogResidency } from './FogResidency';
 import type { FogImpulse } from './FogImpulses';
-import { FOG_DENSITY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_MATERIAL_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
+import { FOG_DENSITY_FRAGMENT, FOG_DISPLAY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_MATERIAL_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
 import { FogTrailSegments } from './FogTrailSegments';
 import { FogTrailRenderer } from './FogTrailRenderer';
 
@@ -61,7 +61,7 @@ export class FogGpuField {
   private readonly velocities: Phaser.GameObjects.Shader[] = [];
   private readonly impulse: Phaser.GameObjects.Shader;
   private material: Phaser.GameObjects.Shader | null = null;
-  private display: Phaser.GameObjects.Image | null = null;
+  private display: Phaser.GameObjects.Shader | null = null;
   private surfaceMask: Phaser.GameObjects.RenderTexture | null = null;
   private trailMask: Phaser.GameObjects.Shader | null = null;
   private trailCommands: FogDataTexture | null = null;
@@ -132,7 +132,6 @@ export class FogGpuField {
         set('uOpacity', this.tuning.opacity); set('uDetail', this.tuning.detail);
         set('uDebug', FOG_DEBUG.indexOf(this.debug)); set('uInterpolation', this.interpolation);
         set('uHasSurface', this.hasSurfaces ? 1 : 0); set('uQuality', this.quality === 'high' ? 2 : this.quality === 'medium' ? 1 : 0);
-        set('uHasTrails', this.trailMask ? 1 : 0);
       },
     }, 0, 0, width, height, Array(8).fill('__DEFAULT'));
     try {
@@ -155,7 +154,6 @@ export class FogGpuField {
     if (shader === this.material) {
       shader.textures[4] = this.velocities[this.current].texture!;
       shader.textures[5] = this.surfaceMask?.texture ?? this.scene.textures.get('__DEFAULT');
-      if (this.debug === 'normal' && this.trailMask) shader.textures[6] = this.trailMask.texture!;
     }
     // Never bind the output as an input, even when that sampler was optimized out.
     for (let i = 0; i < shader.textures.length; i++) if (shader.textures[i] === shader.texture)
@@ -257,16 +255,29 @@ export class FogGpuField {
     }
     if (cleared) this.terrainTexture.upload();
   }
+  /** Screen-space composite of the soft material and the finer wake mask. */
+  private makeDisplay(width: number, height: number): Phaser.GameObjects.Shader {
+    const display = new Phaser.GameObjects.Shader(this.scene, {
+      name: 'GroundFog_display', shaderName: 'GroundFog_display', fragmentSource: FOG_DISPLAY_FRAGMENT,
+      setupUniforms: (set: (name: string, value: unknown) => void) => {
+        set('uMaterial', 0); set('uTrails', 1); set('uHasTrails', this.trailMask && this.debug === 'normal' ? 1 : 0);
+      },
+    }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT']);
+    return this.scene.add.existing(display).setOrigin(0).setDepth(this.depth);
+  }
+  /** `trailWidth`/`trailHeight` size the wake mask independently of the soft material. */
   render(view: FogRect, pixelWidth: number, pixelHeight: number, debug: FogDebug, interpolation: number,
-    surfaces: readonly Phaser.GameObjects.Image[] = [], quality: FogQuality = 'high'): void {
+    surfaces: readonly Phaser.GameObjects.Image[] = [], quality: FogQuality = 'high',
+    trailWidth = pixelWidth, trailHeight = pixelHeight): void {
     if (!this.initialized || this.residency.overflow || this.destroyed) { this.display?.setVisible(false); return; }
     this.view = view; this.debug = debug; this.interpolation = interpolation; this.quality = quality;
     const w = Math.max(2, Math.ceil(pixelWidth / 2) * 2), h = Math.max(2, Math.ceil(pixelHeight / 2) * 2);
     if (!this.material || this.material.width !== w || this.material.height !== h) {
-      this.display?.destroy(); if (this.material) destroyFogShader(this.material);
+      if (this.display) destroyFogShader(this.display);
+      if (this.material) destroyFogShader(this.material);
       this.material = this.makePass('material', FOG_MATERIAL_FRAGMENT, w, h);
       this.material.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
-      this.display = this.scene.add.image(view.x, view.y, this.material.texture!).setOrigin(0).setDepth(this.depth);
+      this.display = this.makeDisplay(w, h);
       this.surfaceMask?.destroy(); this.surfaceMask = null;
     }
     if (quality !== 'low' || this.trails.size > 0 || this.trailMask) {
@@ -274,9 +285,10 @@ export class FogGpuField {
       if (this.trailVersion !== this.trails.version) {
         this.trailCommands.data.set(this.trails.commands); this.trailCommands.upload(); this.trailVersion = this.trails.version;
       }
-      if (!this.trailMask || this.trailMask.width !== w || this.trailMask.height !== h) {
+      const tw = Math.max(2, Math.ceil(trailWidth / 2) * 2), th = Math.max(2, Math.ceil(trailHeight / 2) * 2);
+      if (!this.trailMask || this.trailMask.width !== tw || this.trailMask.height !== th) {
         if (this.trailMask) destroyFogShader(this.trailMask);
-        this.trailMask = this.makePass('trails', FOG_TRAIL_FRAGMENT, w, h, FOG_TRAIL_VERTEX);
+        this.trailMask = this.makePass('trails', FOG_TRAIL_FRAGMENT, tw, th, FOG_TRAIL_VERTEX);
         this.trailMask.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
         this.trailRenderer = new FogTrailRenderer(this.trailMask, this.terrain.frame);
       }
@@ -298,6 +310,7 @@ export class FogGpuField {
       mask.render();
     }
     this.draw(this.material, this.states[this.current], this.states[1 - this.current]);
+    this.display!.setTextures([this.material.texture!, this.trailMask?.texture ?? this.scene.textures.get('__DEFAULT')]);
     this.display!.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setVisible(true);
   }
   hide(): void { this.display?.setVisible(false); }
@@ -344,7 +357,7 @@ export class FogGpuField {
   }
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;
-    this.display?.destroy(); this.display = null;
+    if (this.display) destroyFogShader(this.display); this.display = null;
     this.surfaceMask?.destroy(); this.surfaceMask = null;
     if (this.material) destroyFogShader(this.material);
     if (this.trailMask) destroyFogShader(this.trailMask);

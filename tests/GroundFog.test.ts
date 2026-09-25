@@ -58,6 +58,25 @@ describe('ground fog bounded world state', () => {
     expect(trails.writeVertices(vertices, { x: 0, y: 0, width: 2048, height: 2048 })).toBe(trails.size * 6);
     trails.prepare(2040 + FOG.trailMs); expect(trails.size).toBe(0);
   });
+  it('keeps one trace when a path alternates time-only and zero-duration samples', () => {
+    // Host physics can stamp several steps with one frame time: travel and time advance separately.
+    const trails = new FogTrailSegments({ offsetX: 0, offsetY: 0, width: 2048, height: 2048 });
+    const point = (step: number, tick: number) => ({ x: 100 + step * 8.33, y: 100 + step * 4, timeMs: 1000 + tick * 9, sequence: step + tick + 1, vx: 1000, vy: 480 });
+    for (let i = 0; i < 30; i++) {
+      trails.addPath({ from: point(i, i), to: point(i, i + 1), ageMs: 0 }, 7, 2000 + i * 9);
+      trails.addPath({ from: point(i, i + 1), to: point(i + 1, i + 1), ageMs: 0 }, 7, 2000 + i * 9);
+    }
+    expect(trails.size).toBe(1);
+  });
+  it('widens capsule bounds by the mask resolution footprint so thin wakes are not clipped', () => {
+    const trails = new FogTrailSegments({ offsetX: 0, offsetY: 0, width: 2048, height: 2048 });
+    const point = (n: number) => ({ x: 100 + n * 100, y: 100, timeMs: n * 100, sequence: n + 1, vx: 1000, vy: 0 });
+    trails.addPath({ from: point(0), to: point(1), ageMs: 0 }, 1, 100);
+    const vertices = new Float32Array(FOG.trailCapacity * 24);
+    const beside = { x: 100, y: 100 + FOG.trailRadius * FOG.trailEdgeExtent + 2, width: 100, height: 50 };
+    expect(trails.writeVertices(vertices, beside)).toBe(0);
+    expect(trails.writeVertices(vertices, beside, true, 10)).toBe(6);
+  });
   it('keeps coalesced tips visible when source time outruns the capped fog clock', () => {
     const trails = new FogTrailSegments(frame);
     const p = (x: number, timeMs: number) => ({ x, y: 100, timeMs, sequence: timeMs, vx: 1000, vy: 0 });
