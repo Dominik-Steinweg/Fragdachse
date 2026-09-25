@@ -222,62 +222,75 @@ export const FOREST_VEGETATION_CONFIG: GroundCoverLayerConfig = {
   variants: [
     // Green set: the main undergrowth. Grass clumps carry the clusters, herbs and ferns vary them.
     greenVariant('grass-01-compact-fans', 1, 2.7),
-    greenVariant('grass-02-open-clump', .85, 3.3),
-    greenVariant('grass-03-wide-fan', 1.45, 2.75),
-    greenVariant('grass-04-split-crown', 1.5, 2.75),
-    greenVariant('grass-05-swept-blades', 1.25, 2.75),
-    greenVariant('grass-06-small-crescent', .9, 3.3),
-    greenVariant('grass-07-soft-sedge', 1.6, 2.75),
-    greenVariant('grass-08-low-mat', 1.35, 2.75),
-    greenVariant('grass-09-young-tuft', .65, 3.3),
-    greenVariant('grass-10-three-fans', 1.75, 2.2),
-    greenVariant('grass-11-curling-blades', 1.2, 2.75),
-    greenVariant('grass-12-short-rosette', 1, 3.3),
-    greenVariant('grass-13-edge-tuft', 1.55, 2.75),
-    greenVariant('grass-14-cross-growth', 1.3, 2.75),
-    greenVariant('grass-15-lush-compact', 1.4, 3.3),
-    greenVariant('grass-16-long-open', 1.9, 2.2),
-    greenVariant('fern-01-uneven-star', 1.6, 1.3, PLANT_GROUND),
-    greenVariant('fern-02-side-spread', 1.9, 0.9, PLANT_GROUND),
-    greenVariant('fern-03-young-four', .85, 1.65, PLANT_GROUND),
-    greenVariant('fern-04-twin-growth', 1.75, 0.9, PLANT_GROUND),
-    greenVariant('fern-05-curving', 1.5, 1.3, PLANT_GROUND),
-    greenVariant('fern-06-broad-fronds', 2.1, 0.55, PLANT_GROUND),
-    greenVariant('fern-07-low-fan', 1.25, 1.3, PLANT_GROUND),
-    greenVariant('fern-08-narrow-fronds', 1.55, 1.1, PLANT_GROUND),
-    greenVariant('plant-01-lance-leaves', 1.1, 2.2, PLANT_GROUND),
-    greenVariant('plant-02-round-leaves', .85, 2.75, PLANT_GROUND),
-    greenVariant('plant-03-lobed-leaves', 1.3, 2.2, PLANT_GROUND),
-    greenVariant('plant-04-long-rosette', 1.2, 2.2, PLANT_GROUND),
-    greenVariant('plant-05-creeping', 1.4, 2.2, PLANT_GROUND),
-    greenVariant('plant-06-three-leaf', .75, 2.75, PLANT_GROUND),
-    greenVariant('plant-07-broad-asymmetric', 1.5, 1.65, PLANT_GROUND),
-    greenVariant('plant-08-small-paired', .7, 2.75, PLANT_GROUND),
+    greenVariant('grass-02-open-clump', .85, 3.05),
+    greenVariant('grass-03-wide-fan', 1.45, 2.55),
+    greenVariant('grass-04-split-crown', 1.5, 2.55),
+    greenVariant('grass-05-swept-blades', 1.25, 2.55),
+    greenVariant('grass-06-small-crescent', .9, 3.05),
+    greenVariant('grass-07-soft-sedge', 1.6, 2.55),
+    greenVariant('grass-08-low-mat', 1.35, 2.55),
+    greenVariant('grass-09-young-tuft', .65, 3.05),
+    greenVariant('grass-10-three-fans', 1.75, 2.05),
+    greenVariant('grass-11-curling-blades', 1.2, 2.55),
+    greenVariant('grass-12-short-rosette', 1, 3.05),
+    greenVariant('grass-13-edge-tuft', 1.55, 2.55),
+    greenVariant('grass-14-cross-growth', 1.3, 2.55),
+    greenVariant('grass-15-lush-compact', 1.4, 3.05),
+    greenVariant('grass-16-long-open', 1.9, 2.05),
+    greenVariant('fern-01-uneven-star', 1.6, 1.2, PLANT_GROUND),
+    greenVariant('fern-02-side-spread', 1.9, 0.85, PLANT_GROUND),
+    greenVariant('fern-03-young-four', .85, 1.5, PLANT_GROUND),
+    greenVariant('fern-04-twin-growth', 1.75, 0.85, PLANT_GROUND),
+    greenVariant('fern-05-curving', 1.5, 1.2, PLANT_GROUND),
+    greenVariant('fern-06-broad-fronds', 2.1, 0.5, PLANT_GROUND),
+    greenVariant('fern-07-low-fan', 1.25, 1.2, PLANT_GROUND),
+    greenVariant('fern-08-narrow-fronds', 1.55, 1, PLANT_GROUND),
+    greenVariant('plant-01-lance-leaves', 1.1, 2.05, PLANT_GROUND),
+    greenVariant('plant-02-round-leaves', .85, 2.55, PLANT_GROUND),
+    greenVariant('plant-03-lobed-leaves', 1.3, 2.05, PLANT_GROUND),
+    greenVariant('plant-04-long-rosette', 1.2, 2.05, PLANT_GROUND),
+    greenVariant('plant-05-creeping', 1.4, 2.05, PLANT_GROUND),
+    greenVariant('plant-06-three-leaf', .75, 2.55, PLANT_GROUND),
+    greenVariant('plant-07-broad-asymmetric', 1.5, 1.5, PLANT_GROUND),
+    greenVariant('plant-08-small-paired', .7, 2.55, PLANT_GROUND),
     // First set: kept for variety, now secondary.
-    forestVariant('grass-01-compact', 1.1, 1.65),
-    forestVariant('grass-02-wide-fan', 1.8, 1.1),
-    forestVariant('grass-03-star', 1.6, 1.1),
-    forestVariant('grass-04-leaning', 1.5, 1.1),
-    forestVariant('grass-05-sedge', 2, 1.1),
-    forestVariant('grass-06-small-open', 1, 1.65),
-    forestVariant('grass-07-dry-tips', 1.7, 1.1),
-    forestVariant('grass-08-two-crowns', 1.9, 1.1),
-    forestVariant('grass-09-curled', 1.4, 1.1),
-    forestVariant('grass-10-forest-green', 1.8, 1.65),
-    forestVariant('plant-01-fern-star', 1.8, 0.55, PLANT_GROUND),
-    forestVariant('plant-02-fern-asymmetric', 2.3, 0.35, PLANT_GROUND),
-    forestVariant('plant-03-fern-young', 1.1, 0.9, PLANT_GROUND),
-    forestVariant('plant-04-fern-spreading', 2.5, 0.35, PLANT_GROUND),
-    forestVariant('plant-05-lance-rosette', 1.4, 1.1, PLANT_GROUND),
-    forestVariant('plant-06-broad-rosette', 1.7, 1.1, PLANT_GROUND),
-    forestVariant('plant-07-split-leaves', 2, 0.9, PLANT_GROUND),
-    forestVariant('plant-08-narrow-star', 1.3, 1.1, PLANT_GROUND),
-    forestVariant('flowers-01-white-three', .45, 1.65, FLOWER_GROUND),
-    forestVariant('flowers-02-white-five', .75, 1.1, FLOWER_GROUND),
-    forestVariant('flowers-03-yellow-three', .35, 1.65, FLOWER_GROUND),
-    forestVariant('flowers-04-yellow-five', .65, 1.1, FLOWER_GROUND),
-    forestVariant('flowers-05-pink-three', .4, 1.1, FLOWER_GROUND),
-    forestVariant('flowers-06-pink-five', .8, 1.1, FLOWER_GROUND),
+    forestVariant('grass-01-compact', 1.1, 1.5),
+    forestVariant('grass-02-wide-fan', 1.8, 1),
+    forestVariant('grass-03-star', 1.6, 1),
+    forestVariant('grass-04-leaning', 1.5, 1),
+    forestVariant('grass-05-sedge', 2, 1),
+    forestVariant('grass-06-small-open', 1, 1.5),
+    forestVariant('grass-07-dry-tips', 1.7, 1),
+    forestVariant('grass-08-two-crowns', 1.9, 1),
+    forestVariant('grass-09-curled', 1.4, 1),
+    forestVariant('grass-10-forest-green', 1.8, 1.5),
+    forestVariant('plant-01-fern-star', 1.8, 0.5, PLANT_GROUND),
+    forestVariant('plant-02-fern-asymmetric', 2.3, 0.3, PLANT_GROUND),
+    forestVariant('plant-03-fern-young', 1.1, 0.85, PLANT_GROUND),
+    forestVariant('plant-04-fern-spreading', 2.5, 0.3, PLANT_GROUND),
+    forestVariant('plant-05-lance-rosette', 1.4, 1, PLANT_GROUND),
+    forestVariant('plant-06-broad-rosette', 1.7, 1, PLANT_GROUND),
+    forestVariant('plant-07-split-leaves', 2, 0.85, PLANT_GROUND),
+    forestVariant('plant-08-narrow-star', 1.3, 1, PLANT_GROUND),
+    forestVariant('flowers-01-white-three', .45, 0.75, FLOWER_GROUND),
+    forestVariant('flowers-02-white-five', .75, 0.55, FLOWER_GROUND),
+    forestVariant('flowers-03-yellow-three', .35, 0.75, FLOWER_GROUND),
+    forestVariant('flowers-04-yellow-five', .65, 0.55, FLOWER_GROUND),
+    forestVariant('flowers-05-pink-three', .4, 0.55, FLOWER_GROUND),
+    forestVariant('flowers-06-pink-five', .8, 0.55, FLOWER_GROUND),
+    // Colour set: small flower clumps and coloured leaves; clusters turn them into small drifts.
+    forestVariant('small-01-ivory-stars', .6, 0.9, FLOWER_GROUND, 'candidates-03-color'),
+    forestVariant('small-02-golden-cups', .8, 0.9, FLOWER_GROUND, 'candidates-03-color'),
+    forestVariant('small-03-rose-pink', .9, 0.9, FLOWER_GROUND, 'candidates-03-color'),
+    forestVariant('small-04-blue-violets', 1, 0.9, FLOWER_GROUND, 'candidates-03-color'),
+    forestVariant('small-05-mauve-bells', 1.1, 0.9, FLOWER_GROUND, 'candidates-03-color'),
+    forestVariant('small-06-mixed-meadow', 1.4, 0.75, FLOWER_GROUND, 'candidates-03-color'),
+    forestVariant('small-07-burgundy-sorrel', 1.3, 1.1, PLANT_GROUND, 'candidates-03-color'),
+    forestVariant('small-08-silver-leaf', 1.6, 1.1, PLANT_GROUND, 'candidates-03-color'),
+    forestVariant('small-09-amber-lichen', 1.2, 0.9, PLANT_GROUND, 'candidates-03-color'),
+    forestVariant('small-10-copper-litter', 1.7, 0.9, PLANT_GROUND, 'candidates-03-color'),
+    forestVariant('small-11-orange-fungi', .8, 0.75, PLANT_GROUND, 'candidates-03-color'),
+    forestVariant('small-12-bronze-green', 1.8, 0.9, PLANT_GROUND, 'candidates-03-color'),
   ],
 };
 
@@ -289,13 +302,20 @@ export const GRASS_DECAL_OPEN_GROUND_KEEP = .12;
 /** Growth level from which grass decals count as part of an island (about 40 % of the area). */
 export const GRASS_DECAL_GROWTH_THRESHOLD = .5;
 
-/** A flat large ground surface from tools/source-art/groundcover, exported as `ground_area_<source>.png`. */
-function areaVariant(source: string, diameterMetres: number, frequencyPercent: number): GroundCoverVariantConfig {
+/**
+ * A flat large ground surface, exported as `ground_area_<source>.png`. `sourceSet` is relative to
+ * tools/source-art.
+ */
+function areaVariant(source: string, diameterMetres: number, frequencyPercent: number,
+  sourceSet = 'groundcover/candidates-01-large-green'): GroundCoverVariantConfig {
   return {
     fileName: `ground_area_${source}.png`, frequencyPercent, sizeCells: [diameterMetres * .85, diameterMetres * 1.1],
-    sourceSet: 'candidates-01-large-green',
+    sourceSet,
   };
 }
+
+/** Colour accents from forest-detail/candidates-03-color (flowers, sorrel, lichen, fungi, litter). */
+const COLOR_SET = 'forest-detail/candidates-03-color';
 
 /**
  * Large green surfaces (moss, clover, creeping ground cover, 2-7 m radius) below the undergrowth.
@@ -356,10 +376,59 @@ export const GROUND_AREA_SOIL_CONFIG: GroundCoverLayerConfig = {
   ],
 };
 
-/** Draw order: large soil and green surfaces, moss patches, litter, blade tufts, vegetation on top. */
+/**
+ * Sparse colour colonies (flowers, burgundy sorrel, silver leaves, amber lichen, copper litter,
+ * fungi; 2-14 m across). Flat, calm surfaces at the rim of the growth islands: colour appears where
+ * the ground is already alive, and rarely on the open lawn. Medium colonies outnumber large ones.
+ */
+export const GROUND_AREA_COLOR_CONFIG: GroundCoverLayerConfig = {
+  seedSalt: 0x2a6d,
+  blockCells: 6,
+  maxPerBlock: 1,
+  jitterCells: 2.5,
+  seam: { perBlock: .6, minSizeCells: 2, maxSizeCells: 6, sizeBias: 1, minAlpha: .9, maxAlpha: 1 },
+  dirt: { perBlock: .05, minSizeCells: 2, maxSizeCells: 6, sizeBias: 1, minAlpha: .75, maxAlpha: .9 },
+  grass: { perBlock: .7, minSizeCells: 2, maxSizeCells: 6, sizeBias: 1, minAlpha: .9, maxAlpha: 1 },
+  rockFoot: { perBlock: .4, minSizeCells: 2, maxSizeCells: 6, sizeBias: 1, minAlpha: .9, maxAlpha: 1 },
+  cluster: {
+    fieldSalt: GROWTH_FIELD_SALT, fieldCells: 9, threshold: .42, softness: .1, edgeFloor: .5, sparse: .1,
+    members: [1, 1], radiusCells: 0, coherence: 1,
+  },
+  variants: [
+    areaVariant('medium-01-ivory-stars', 2, 6.15, COLOR_SET),
+    areaVariant('medium-02-golden-cups', 2.2, 6.3, COLOR_SET),
+    areaVariant('medium-03-rose-pink', 2.4, 5.25, COLOR_SET),
+    areaVariant('medium-04-blue-violets', 2.6, 6.3, COLOR_SET),
+    areaVariant('medium-05-mauve-bells', 3, 5.25, COLOR_SET),
+    areaVariant('medium-06-mixed-meadow', 3.2, 5.25, COLOR_SET),
+    areaVariant('medium-07-burgundy-sorrel', 2.4, 6.3, COLOR_SET),
+    areaVariant('medium-08-silver-leaf', 3.6, 6.3, COLOR_SET),
+    areaVariant('medium-09-amber-lichen', 2.8, 5.25, COLOR_SET),
+    areaVariant('medium-10-copper-litter', 3.4, 5.25, COLOR_SET),
+    areaVariant('medium-11-orange-fungi', 2.2, 4.2, COLOR_SET),
+    areaVariant('medium-12-bronze-green', 4, 5.25, COLOR_SET),
+    areaVariant('large-01-ivory-stars', 4.5, 3.15, COLOR_SET),
+    areaVariant('large-02-golden-cups', 5.5, 3.15, COLOR_SET),
+    areaVariant('large-03-rose-pink', 6.5, 2.6, COLOR_SET),
+    areaVariant('large-04-blue-violets', 7.5, 3.15, COLOR_SET),
+    areaVariant('large-05-mauve-bells', 9, 2.6, COLOR_SET),
+    areaVariant('large-06-mixed-meadow', 10, 2.1, COLOR_SET),
+    areaVariant('large-07-burgundy-sorrel', 6, 3.15, COLOR_SET),
+    areaVariant('large-08-silver-leaf', 11, 3.15, COLOR_SET),
+    areaVariant('large-09-amber-lichen', 8, 2.6, COLOR_SET),
+    areaVariant('large-10-copper-litter', 12, 2.6, COLOR_SET),
+    areaVariant('large-11-orange-fungi', 5, 1.55, COLOR_SET),
+    areaVariant('large-12-bronze-green', 14, 3.15, COLOR_SET),
+  ],
+};
+
+/**
+ * Draw order: large soil, green and colour surfaces, moss patches, litter, blade tufts, vegetation
+ * on top.
+ */
 export const GROUND_COVER_TIERS: readonly GroundCoverLayerConfig[] = [
-  GROUND_AREA_SOIL_CONFIG, GROUND_AREA_GREEN_CONFIG, GROUND_PATCH_CONFIG, FOREST_LITTER_CONFIG,
-  GROUND_COVER_CONFIG, FOREST_VEGETATION_CONFIG,
+  GROUND_AREA_SOIL_CONFIG, GROUND_AREA_GREEN_CONFIG, GROUND_AREA_COLOR_CONFIG, GROUND_PATCH_CONFIG,
+  FOREST_LITTER_CONFIG, GROUND_COVER_CONFIG, FOREST_VEGETATION_CONFIG,
 ];
 
 /**

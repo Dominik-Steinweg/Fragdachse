@@ -3,7 +3,8 @@ import sharp from 'sharp';
 import { mkdir } from 'node:fs/promises';
 import { runOrganicCoverPipeline } from './lib/organic-cover-pipeline.mjs';
 import {
-  FOREST_LITTER_CONFIG, FOREST_VEGETATION_CONFIG, GROUND_AREA_GREEN_CONFIG, GROUND_AREA_SOIL_CONFIG,
+  FOREST_LITTER_CONFIG, FOREST_VEGETATION_CONFIG, GROUND_AREA_COLOR_CONFIG, GROUND_AREA_GREEN_CONFIG,
+  GROUND_AREA_SOIL_CONFIG,
 } from '../src/arena/GroundCoverConfig.ts';
 
 /**
@@ -107,6 +108,9 @@ const FOREST_FAMILIES = {
 };
 /** The green set was painted for the current grass: exported as authored, only the shadow differs. */
 const FOREST_SET_FAMILIES = {
+  'candidates-03-color': {
+    small: { modulate: { brightness: 1, saturation: 1 }, shadow: .35 },
+  },
   'candidates-02-green': {
     grass: { modulate: { brightness: 1, saturation: 1 }, shadow: .5 },
     fern: { modulate: { brightness: 1, saturation: 1 }, shadow: .55 },
@@ -137,11 +141,11 @@ for (const tier of [FOREST_LITTER_CONFIG, FOREST_VEGETATION_CONFIG]) {
 
 /**
  * Large flat ground surfaces (moss, clover, creeping cover, soil and litter; 2-7 m radius) from
- * tools/source-art/groundcover. Trimmed to the visible surface and exported at their largest
+ * tools/source-art (groundcover, forest-detail colour set). Trimmed to the visible surface and exported at their largest
  * world size: flat colour layers without a contact shadow, below the upright vegetation.
  */
-const AREA_SOURCE = path.join('tools', 'source-art', 'groundcover');
-for (const tier of [GROUND_AREA_GREEN_CONFIG, GROUND_AREA_SOIL_CONFIG]) {
+const AREA_SOURCE = path.join('tools', 'source-art');
+for (const tier of [GROUND_AREA_GREEN_CONFIG, GROUND_AREA_SOIL_CONFIG, GROUND_AREA_COLOR_CONFIG]) {
   for (const variant of tier.variants) {
     const source = variant.fileName.replace(/^ground_area_/, '').replace(/\.png$/, '');
     const input = path.join(AREA_SOURCE, variant.sourceSet, `${source}.png`);

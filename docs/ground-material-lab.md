@@ -40,9 +40,10 @@ ein leichter Kontaktschatten. Chunk-Bakes und Terrain-Farbsnapshot rufen denselb
 das Ergebnis haengt nicht von Bake-Reihenfolge oder Regionsaufteilung ab. Netz- und
 Layoutdaten bleiben unveraendert.
 
-Die Bodenbedeckung hat sechs Stufen (`GROUND_COVER_TIERS`), in Zeichenreihenfolge: grosse flache
+Die Bodenbedeckung hat sieben Stufen (`GROUND_COVER_TIERS`), in Zeichenreihenfolge: grosse flache
 Erd- und Laubflaechen auf den Freiflaechen, grosse gruene Flaechen (Moos, Klee, Bodendecker; 2-7 m
-Radius) unter den Wuchsinseln, mittlere, weich auslaufende Moosflecken, flache Waldstreu (Kiesel, Zweige, Laub), kleine Halmbueschel und
+Radius) unter den Wuchsinseln, sparsame Farbkolonien (Blueten, Sauerklee, Flechten, Pilze, Kupferlaub;
+`forest-detail/candidates-03-color`) am Rand der Wuchsinseln, mittlere, weich auslaufende Moosflecken, flache Waldstreu (Kiesel, Zweige, Laub), kleine Halmbueschel und
 aufrechte Waldvegetation (Grashorste, Farne und Stauden, Bluetengruppen). Streu und Vegetation
 behalten ihre physische Groesse. Streu, Halmbueschel und Vegetation wachsen gruppiert: Ein gemeinsames,
 weltfestes Wachstumsfeld (`groundGrowthLevel`) bildet unregelmaessige Inseln und Baender, dort
