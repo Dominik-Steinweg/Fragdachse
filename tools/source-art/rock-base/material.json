@@ -4,15 +4,15 @@
   "pixelsPerMetre": 32,
   "seed": 4099,
   "grade": {
-    "gain": [0.94, 0.98, 1.04],
-    "saturation": 0.55,
-    "gamma": 0.94
+    "gain": [0.64, 0.71, 0.8],
+    "saturation": 0.5,
+    "gamma": 1
   },
   "edge": {
     "cornerRadius": 7,
     "insetMean": 1.2,
     "insetVariation": 2.8,
-    "lightLift": 0.42,
+    "lightLift": 0.32,
     "shadeDrop": 0.3,
     "rimWidth": 8,
     "rimDarken": 0.12,
@@ -20,6 +20,6 @@
     "outlineWidth": 1.1,
     "shelfWidth": 5.5,
     "shelfVariation": 2.5,
-    "shelfLift": 0.18
+    "shelfLift": 0.13
   }
 }

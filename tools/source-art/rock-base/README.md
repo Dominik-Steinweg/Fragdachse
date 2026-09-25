@@ -6,7 +6,8 @@ Produktionsquelle der Felsbasis (`public/assets/sprites/rock_base.png`, Laufzeit
 - [`material.json`](material.json) verwendet [`rock-strata.png`](rock-strata.png): breite, gestufte
   Bruchflächen in orthografischer Draufsicht. Quelle mit dem eingebauten Imagegen erzeugt;
   vollständiger Prompt: [`rock-strata.prompt.txt`](rock-strata.prompt.txt). Maßstab: 8 × 8 m,
-  entsprechend 256 Weltpixeln. Farbabstimmung und Kantenparameter liegen in derselben Rezeptdatei.
+  entsprechend 256 Weltpixeln. Farbabstimmung und Kantenparameter liegen in derselben Rezeptdatei:
+  dunkles, kühles Schiefergrau mit zurückgenommenen Glanzkanten hält die Felsflächen im Hintergrund.
 - Die Quelle belegt die volle Materialperiode; nur die Übergänge an den Wiederholungskanten
   werden angeglichen. Keine Rotation einzelner Patches, damit das Facettenlicht konsistent bleibt.
   Kleinere Quellen können weiterhin gequiltet werden. Jeder 47-Blob-Frame existiert in 64

@@ -212,7 +212,7 @@ export const FOREST_VEGETATION_CONFIG: GroundCoverLayerConfig = {
   seam: { perBlock: 1, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   dirt: { perBlock: .12, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   grass: { perBlock: 1, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
-  rockFoot: { perBlock: .5, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
+  rockFoot: { perBlock: .7, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   // Grass clumps and sedges fringe the water; ferns and flowers stay on firmer ground.
   bank: { perBlock: 1, minSizeCells: 1, maxSizeCells: 2, sizeBias: 1, minAlpha: 1, maxAlpha: 1 },
   cluster: {

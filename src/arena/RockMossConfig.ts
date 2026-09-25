@@ -52,17 +52,17 @@ export const ROCK_MOSS_CONFIG: RockMossLayerConfig = {
   maxPerBlock: 2,
   jitterCells: 1.5,
 
-  // Leave broad mineral shelves exposed; moss connects selected recesses across cells.
-  perBlock: 0.65,
+  // Broad moss islands tie the dark slate into the forest while leaving its facets readable.
+  perBlock: 1.05,
   /**
    * Deutlich kleiner als am Boden (3-11 Zellen). Ein Moosfleck soll ueber mehrere Felskacheln
    * laufen und den Verbund zusammenbinden, aber nicht eine ganze Formation unter sich begraben.
    */
   minSizeCells: 2,
-  maxSizeCells: 5,
+  maxSizeCells: 7,
   sizeBias: 1.5,
-  minAlpha: 0.38,
-  maxAlpha: 0.72,
+  minAlpha: 0.5,
+  maxAlpha: 0.86,
 
   /** Flache Gewichte: Bei acht Vorlagen faellt jede Haeufung als Muster auf. */
   variants: [
