@@ -22,10 +22,15 @@ export function preloadForestModalAssets(loader: Phaser.Loader.LoaderPlugin): vo
   loader.image(MODAL_FRAME_ASSET.key, MODAL_FRAME_ASSET.file);
 }
 
-/** Uniform source-to-display scale for every corner and every cropped rail repeat. */
-export function drawModalFrame(ctx: CanvasRenderingContext2D, image: HTMLImageElement, w: number, h: number): void {
+/**
+ * Uniform source-to-display scale for every corner and every cropped rail repeat.
+ * `maxCap` bounds the displayed corner size; a fixed value keeps the wood equally thick
+ * across differently sized windows of one family.
+ */
+export function drawModalFrame(ctx: CanvasRenderingContext2D, image: HTMLImageElement, w: number, h: number,
+  maxCap = 120): void {
   const corner = image.width / 5;
-  const cap = Math.min(120, w / 3, h / 3), scale = cap / corner;
+  const cap = Math.min(maxCap, w / 3, h / 3), scale = cap / corner;
   const sx = [0, corner, image.width - corner], sy = [0, corner, image.height - corner];
   const sw = [corner, image.width - corner * 2, corner], sh = [corner, image.height - corner * 2, corner];
   const dx = [0, cap, w - cap], dy = [0, cap, h - cap];

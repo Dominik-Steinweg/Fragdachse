@@ -36,11 +36,11 @@ export const COOP_DEFENSE_TUTORIAL_PANEL_WIDTH = 840;
 export const COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT = 168;
 export const COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS = 2;
 
-// ── Innenraster des Tutorial-Fensters ────────────────────────────────────────
+// ── Höhenraster des Tutorial-Fensters ────────────────────────────────────────
 // Die Maße sind fest verdrahtet statt aus gemessenem Text abgeleitet, weil die
 // Arena-Generierung (Felsformation unter dem Fenster) dieselbe Höhe ohne Phaser
-// und ohne Textmetrik kennen muss.
-export const COOP_DEFENSE_TUTORIAL_PAD_X = 28;
+// und ohne Textmetrik kennen muss. Die Anordnung innerhalb dieser Höhe (Rahmen,
+// Titelschild, Tabellenspalten) gehört der Darstellung in `ui/CenterHUD`.
 export const COOP_DEFENSE_TUTORIAL_PAD_TOP = 18;
 export const COOP_DEFENSE_TUTORIAL_TITLE_H = 22;
 /** Reservierte Höhe des Fließtexts in der Steuerungs-Variante (bis zu 4 umgebrochene Zeilen). */
@@ -49,9 +49,6 @@ export const COOP_DEFENSE_TUTORIAL_CONTROLS_BODY_H = 124;
 export const COOP_DEFENSE_TUTORIAL_CONTROLS_HEADING_H = 40;
 export const COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H = 30;
 export const COOP_DEFENSE_TUTORIAL_CONTROLS_PAD_BOTTOM = 20;
-/** Spaltenversatz der Tastenliste, gemessen vom linken Panelrand. */
-export const COOP_DEFENSE_TUTORIAL_CONTROLS_KEY_X = 180;
-export const COOP_DEFENSE_TUTORIAL_CONTROLS_DESC_X = 400;
 
 /** Weltmitte der aktuell aktiven Arena; folgt den pro Map angewendeten Arena-Metriken. */
 export function getCoopDefenseTutorialPanelCenterX(anchor?: CoopDefenseTutorialAnchor, metrics?: Pick<WorldMetrics, 'offsetX' | 'widthPx'>): number {
