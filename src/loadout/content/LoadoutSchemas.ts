@@ -228,6 +228,10 @@ export function validateResolvedWeapon(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: WeaponConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.miniRocketEssenceCapacity !== undefined && (typeof value.miniRocketEssenceCapacity !== 'number'
+    || !Number.isFinite(value.miniRocketEssenceCapacity) || value.miniRocketEssenceCapacity < 0)) {
+    issues.push('$.miniRocketEssenceCapacity: endliche nichtnegative Kapazität erforderlich');
+  }
   if (value.rocketLauncher !== undefined) issues.push(...validateRocketLauncherConfig(value.rocketLauncher));
   if (value.plasmaBurner !== undefined) issues.push(...validatePlasmaBurnerConfig(value.plasmaBurner));
   requireFields(value, [

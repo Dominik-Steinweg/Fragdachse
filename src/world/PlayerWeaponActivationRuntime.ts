@@ -473,10 +473,6 @@ export class PlayerWeaponActivationRuntime {
       options,
       gameplayMuzzleOrigin,
       visualMuzzleOrigin,
-      resolvePaidAdrenalineCost: () => Math.min(
-        this.options.resourceSystem.getAdrenaline(playerId),
-        this.options.resourceSystem.resolveAdrenalineCost(playerId, config.adrenalinCost),
-      ),
     });
   }
 

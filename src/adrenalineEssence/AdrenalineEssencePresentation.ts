@@ -174,7 +174,7 @@ export class AdrenalineEssencePresentation {
   update(now: number): void {
     let incoming = 0;
     for (const transfer of this.state?.transfers ?? []) {
-      if (transfer.playerId === this.localPlayerId
+      if (!transfer.target && transfer.playerId === this.localPlayerId
         && !this.received.has(transfer.id)
         && now < transfer.arrivalAt + ESSENCE_VISUAL.incomingGraceMs) {
         incoming += transfer.value;
@@ -226,9 +226,10 @@ export class EssenceVisualSlots {
 }
 
 /** Value affects density and a bounded size class, never a fixed points-per-droplet rule. */
-export function essenceDropletCount(value: number, quality: GraphicsQuality, visibleGroups: number): number {
+export function essenceDropletCount(value: number, quality: GraphicsQuality, visibleGroups: number, carried = false): number {
   // A normal split hit reads as a single fluid pearl. Satellites decorate larger pools only.
-  const authored = Math.min(ESSENCE_VISUAL.maxDroplets, 1 + Math.floor(Math.log2(1 + Math.max(0, value) / 6)));
+  const authored = Math.min(ESSENCE_VISUAL.maxDroplets, carried ? Math.ceil(Math.max(0, value))
+    : 1 + Math.floor(Math.log2(1 + Math.max(0, value) / 6)));
   const qualityLimit = quality === 'low' ? ESSENCE_VISUAL.lowQualityDroplets
     : quality === 'medium' ? ESSENCE_VISUAL.mediumQualityDroplets : ESSENCE_VISUAL.maxDroplets;
   const densityLimit = visibleGroups > ESSENCE_VISUAL.minimumDensityAfter ? 1

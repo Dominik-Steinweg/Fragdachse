@@ -23,7 +23,7 @@ import {
 } from '../config/coopDefenseEnemies';
 import type { GroundFireVisualStyle, SyncedEnemyState } from '../types';
 import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
-import { VulnerableBodyEffect, type EntityStatusVisualTarget } from '../effects/SmokeBodyEffect';
+import type { EntityStatusVisualTarget } from '../effects/SmokeBodyEffect';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { PlasmaChargeRenderer, MAX_PLASMA_CHARGE_STACKS } from '../effects/PlasmaChargeRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
@@ -102,7 +102,7 @@ export class EnemyEntity {
   private burnRenderer: EntityBurnRenderer | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
   private plasmaChargeRenderer: PlasmaChargeRenderer | null = null;
-  private vulnerableEffect: VulnerableBodyEffect | null = null;
+  private vulnerable = false;
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
   private burnStacks = 0;
   private plasmaChargeStacks = 0;
@@ -426,20 +426,21 @@ export class EnemyEntity {
     return `entityburn:enemy:${this.id}`;
   }
 
-  /** Unified body presentation for vulnerability from every gameplay source. */
+  /**
+   * Presented vulnerability from every gameplay source. The scene-owned, GPU-batched
+   * `EnemyVulnerabilityRenderer` draws it for all enemies at once.
+   */
   setVulnerable(active: boolean): void {
-    if (active && !this.vulnerableEffect) this.vulnerableEffect = new VulnerableBodyEffect(this.sprite.scene);
-    this.vulnerableEffect?.setActive(active);
-    this.syncVulnerableEffect();
+    this.vulnerable = active;
+  }
+
+  isVulnerable(): boolean {
+    return this.vulnerable;
   }
 
   getStatusVisualTarget(): EntityStatusVisualTarget {
     return { sprite: this.sprite, bodySize: this.config.size,
       visible: !this.burrowed && this.currentHp > 0 && this.sprite.visible };
-  }
-
-  private syncVulnerableEffect(): void {
-    this.vulnerableEffect?.sync(this.getStatusVisualTarget());
   }
 
   getMoveSpeed(): number {
@@ -666,7 +667,6 @@ export class EnemyEntity {
     this.syncVoidMolotovWindupVisuals();
     this.syncBurnEffect();
     this.syncPlasmaChargeEffect();
-    this.syncVulnerableEffect();
     this.bindHealthBar();
     this.healthBars?.suppress(this.healthBar, this.burrowed || !this.sprite.visible);
     this.healthBars?.position(this.healthBar, this.sprite.x, this.sprite.y + this.getHpBarOffsetY());
@@ -704,8 +704,6 @@ export class EnemyEntity {
     this.burnRenderer = null;
     this.plasmaChargeRenderer?.destroy();
     this.plasmaChargeRenderer = null;
-    this.vulnerableEffect?.destroy();
-    this.vulnerableEffect = null;
     this.ownerRing?.destroy();
     this.ownerRing = null;
     if (this.glowHalo) {

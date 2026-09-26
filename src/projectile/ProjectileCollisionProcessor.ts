@@ -321,7 +321,7 @@ export class ProjectileCollisionProcessor {
         if (effect?.type !== 'damage' || effect.role === 'cluster' || effect.role === 'demolition'
           || !effect.impactFuse) continue;
       } else {
-        if (record.miniRocket.deferredExplosion || record.miniRocket.spent) continue;
+        if (record.miniRocket.deferredExplosion || record.miniRocket.spent || record.miniRocket.phase === 'return') continue;
         const mode = record.spec.flight.collisionMode ?? 'overlap';
         if (mode === 'none' || mode === 'physics') continue;
       }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AdrenalineEssenceBinding, type EssenceBindingPorts } from '../../src/adrenalineEssence/AdrenalineEssenceBinding';
-import type { EssencePlayerSnapshot } from '../../src/adrenalineEssence/AdrenalineEssenceTypes';
+import type { EssencePlayerSnapshot, EssenceRocketSnapshot, EssenceRocketTerminal } from '../../src/adrenalineEssence/AdrenalineEssenceTypes';
 import type { PrimaryHitAdrenalineRewardFact } from '../../src/combat/PrimaryHitReward';
 import { ResourceSystem } from '../../src/systems/ResourceSystem';
 import type { ActivityDescriptor } from '../../src/world/ActivityDescriptor';
@@ -42,10 +42,14 @@ function fixture(isHost = true, spread = false) {
   }]]);
   const rewardSinks = new Set<(reward: PrimaryHitAdrenalineRewardFact) => void>();
   const burrowObservers = new Set<(id: string) => void>();
+  const rockets: EssenceRocketSnapshot[] = [];
+  const rocketObservers = new Set<(event: EssenceRocketTerminal) => void>();
   const presentation = { sync: vi.fn(), clear: vi.fn(), destroy: vi.fn() };
   const time = { now: 0, ready: true };
   const ports: EssenceBindingPorts = {
     isHost, now: () => time.now, servicesReady: () => time.ready,
+    getRockets: () => rockets,
+    observeRocketTerminal: observer => { rocketObservers.add(observer); return () => { rocketObservers.delete(observer); }; },
     getPlayers: () => [...players.values()].map(player => ({
       ...player, adrenaline: resources.getAdrenaline(player.playerId), maxAdrenaline: resources.getMaxAdrenaline(player.playerId),
     })),
@@ -59,10 +63,55 @@ function fixture(isHost = true, spread = false) {
     accessGroupFor: () => ({ kind: 'coop' }), localPlayerId: () => 'a', isLocallyVisible: () => true,
     resourceRevisionFor: id => resources.getAdrenalineRevision(id), createPresentation: () => presentation,
   };
-  return { resources, gains, players, rewardSinks, burrowObservers, ports, presentation, time };
+  return { resources, gains, players, rewardSinks, burrowObservers, ports, presentation, time, rockets, rocketObservers };
 }
 
 describe('scoped essence composition', () => {
+  it('attaches a late projectile owner without duplicating reward or terminal subscriptions', () => {
+    const f = fixture();
+    let ready = false;
+    const observeRocketTerminal = vi.fn((observer: (event: EssenceRocketTerminal) => void) => {
+      if (!ready) return null;
+      f.rocketObservers.add(observer);
+      return () => { f.rocketObservers.delete(observer); };
+    });
+    const binding = new AdrenalineEssenceBinding(descriptor(), { ...f.ports, observeRocketTerminal });
+    binding.prepare();
+    expect(f.rewardSinks.size).toBe(1);
+    expect(f.rocketObservers.size).toBe(0);
+    ready = true;
+    binding.prepare(); binding.prepare();
+    expect(f.rewardSinks.size).toBe(1);
+    expect(f.rocketObservers.size).toBe(1);
+    expect(observeRocketTerminal).toHaveBeenCalledTimes(2);
+    binding.destroy();
+    expect(f.rocketObservers.size).toBe(0);
+  });
+  it('routes rocket delivery through the resolved resource commit and detaches terminal hooks with its scope', () => {
+    const f = fixture();
+    f.resources.refundAdrenaline('a', f.resources.getMaxAdrenaline('a'));
+    f.rockets.push({ projectileId: 7, ownerId: 'a', x: 0, y: 0, capacity: 4, returning: true });
+    const binding = new AdrenalineEssenceBinding(descriptor(), f.ports);
+    binding.prepare();
+    for (const sink of f.rewardSinks) sink(fact());
+    binding.updateHost(300); binding.updateHost(600);
+    expect(binding.runtime!.getState().cargo?.[0].value).toBe(3.5);
+    expect(f.gains).not.toHaveBeenCalled();
+    f.resources.drainAdrenaline('a', 2, 600);
+    f.time.now = 700;
+    const listener = [...f.rocketObservers][0];
+    listener({ projectileId: 7, ownerId: 'a', x: 25, y: 50, collected: true });
+    expect(f.resources.getAdrenaline('a')).toBe(f.resources.getMaxAdrenaline('a'));
+    expect(f.gains).toHaveBeenCalledOnce();
+    expect(binding.runtime!.getDiagnostics()).toMatchObject({ committedValue: 2, activeValue: 1.5 });
+    binding.render(700);
+    expect(f.presentation.sync.mock.calls.at(-1)![0].clusters[0]).toMatchObject({ originX: 25, originY: 50 });
+    binding.destroy();
+    expect(f.rocketObservers.size).toBe(0);
+    listener({ projectileId: 7, ownerId: 'a', x: 99, y: 99, collected: true });
+    expect(f.gains).toHaveBeenCalledOnce();
+    expect(binding.runtime!.getDiagnostics().activeValue).toBe(0);
+  });
   it('replaces an Activity within the same World, detaches hooks and discards old value without affecting the new Activity', () => {
     const f = fixture();
     const host = new ActivityRuntimeHost(21);

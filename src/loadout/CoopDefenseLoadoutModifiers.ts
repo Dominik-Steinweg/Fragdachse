@@ -390,10 +390,10 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'MINI_ROCKET_LAUNCHER',
     targets: [{ path: ['miniRocketReturnEnabled'], formula: 'add' }],
   },
-  'weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupAdrenalineRefundFraction': {
+  'weapon.MINI_ROCKET_LAUNCHER.miniRocketEssenceCapacity': {
     kind: 'weapon',
     itemId: 'MINI_ROCKET_LAUNCHER',
-    targets: [{ path: ['miniRocketPickupAdrenalineRefundFraction'], formula: 'add' }],
+    targets: [{ path: ['miniRocketEssenceCapacity'], formula: 'add' }],
   },
   'weapon.MINI_ROCKET_LAUNCHER.miniRocketPickupArmor': {
     kind: 'weapon',

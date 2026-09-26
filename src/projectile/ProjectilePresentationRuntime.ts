@@ -139,6 +139,10 @@ export class ProjectilePresentationRuntime {
   private gaussRenderer: GaussRenderer | null = null;
   private holyGrenadeRenderer: HolyGrenadeRenderer | null = null;
   private rocketRenderer: RocketRenderer | null = null;
+
+  getRocketPosition(projectileId: number): { readonly x: number; readonly y: number } | null {
+    return this.rocketRenderer?.getPosition(projectileId) ?? null;
+  }
   private fireballRenderer: FireballRenderer | null = null;
   private sporeRenderer: SporeRenderer | null = null;
   private grenadeRenderer: GrenadeRenderer | null = null;

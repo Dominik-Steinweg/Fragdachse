@@ -89,6 +89,8 @@ import {
 import {
   ProjectileMiniRocketProcessor,
   type ProjectileMiniRocketStatePort,
+  type MiniRocketEssenceCandidate,
+  type MiniRocketTerminal,
 } from './ProjectileMiniRocketProcessor';
 import type {
   ProjectileBarrierPort,
@@ -244,6 +246,7 @@ export class WorldProjectileRuntime implements
     ),
     resetHoming: (projectile) => this.resetHomingState(projectile),
     onCollected: (projectile, x, y) => {
+      projectile.miniRocket.collectedAt = { x, y };
       this.miniRocketStatePort?.onOutcome({
         kind: 'mini-rocket-collected',
         projectileId: projectile.id,
@@ -253,14 +256,30 @@ export class WorldProjectileRuntime implements
           y,
           color: projectile.presentation.color,
           ownerColor: projectile.presentation.ownerColor,
-          adrenalineRefund: Math.max(0, projectile.spec.flight.miniRocket.adrenalineCostPaid ?? 0)
-            * Math.max(0, projectile.spec.flight.miniRocket.pickupAdrenalineRefundFraction ?? 0),
           armorRefund: Math.max(0, projectile.spec.flight.miniRocket.pickupArmor ?? 0),
         },
       });
     },
   });
   private miniRocketStatePort: ProjectileMiniRocketStatePort | null = null;
+  private readonly miniRocketTerminalObservers = new Set<(event: MiniRocketTerminal) => void>();
+
+  observeMiniRocketTerminal(observer: (event: MiniRocketTerminal) => void): () => void {
+    this.miniRocketTerminalObservers.add(observer);
+    return () => { this.miniRocketTerminalObservers.delete(observer); };
+  }
+
+  getMiniRocketEssenceCandidates(): readonly MiniRocketEssenceCandidate[] {
+    const candidates: MiniRocketEssenceCandidate[] = [];
+    for (const record of this.projectiles.activeRecords) {
+      const capacity = record.spec.flight.miniRocket.essenceCapacity ?? 0;
+      if (record.pendingDestroy || capacity <= 0) continue;
+      candidates.push({ projectileId: record.id, ownerId: record.provenance.allegiance.ownerId,
+        x: record.physics.sprite.x, y: record.physics.sprite.y, capacity,
+        returning: record.miniRocket.phase === 'return' && !record.pendingExplosion });
+    }
+    return candidates;
+  }
   /** Capability-Index der aktiven Luftstöße, die gegnerische Projectiles umlenken. */
   private readonly deflectorIds = new Set<ProjectileId>();
   private readonly collisionDependencies: ProjectileCollisionDependencies;
@@ -700,6 +719,11 @@ export class WorldProjectileRuntime implements
     if (!projectile || projectile.pendingDestroy || !this.projectiles.activeRecords.has(projectile)) return true;
     if (!this.allowsWorldContact(projectile, contact.target, contact.flightPosition?.x ?? contact.x,
       contact.flightPosition?.y ?? contact.y)) return true;
+    if (projectile.miniRocket.phase === 'return') {
+      this.flightContactPoints.set(projectile.id, { x: contact.x, y: contact.y });
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
 
     const bounceEligible = this.shouldBounceAfterContact(projectile, contact.target);
     if (bounceEligible && contact.target.kind !== 'world-boundary'
@@ -1020,6 +1044,13 @@ export class WorldProjectileRuntime implements
     const contactKey = `${candidate.projectileId}:${projectileTargetPhysicalKey(candidate.target)}`;
     const previousResolution = this.resolvedWorldContacts.get(contactKey);
     if (previousResolution) return previousResolution;
+
+    if (projectile.miniRocket.phase === 'return') {
+      this.queueProjectileDestroy(projectile.id);
+      const resolved: ResolvedWorldContact = { outcome: 'consumed', technicalContactConsumed: true };
+      this.resolvedWorldContacts.set(contactKey, resolved);
+      return resolved;
+    }
 
     if (projectile.spec.interaction.plasmaBurnerCharge) {
       this.resolvePlasmaSupport(projectile, candidate);
@@ -1632,9 +1663,16 @@ export class WorldProjectileRuntime implements
   }
 
   private releaseProjectile(record: ProjectileRuntimeRecord): void {
+    const terminalPosition = record.miniRocket.collectedAt ?? this.flightContactPoints.get(record.id)
+      ?? { x: record.physics.sprite.x, y: record.physics.sprite.y };
     this.finishFlameStep(record, true);
     this.removePrismTargetClaim(record.id);
     if (this.projectiles.getById(record.id) !== record) return;
+    // Return endings are harmless, but still get one replicated cosmetic release.
+    const returnDestruction = !this.destroyed && record.miniRocket.phase === 'return'
+      && !record.miniRocket.collectedAt && !record.miniRocket.destructionFxEmitted
+      ? this.createImpactSource(record, terminalPosition.x, terminalPosition.y) : null;
+    if (returnDestruction) record.miniRocket.destructionFxEmitted = true;
     const handle = record.physics;
     if (!this.destroyed) {
       const finalContact = this.flightContactPoints.get(record.id);
@@ -1685,7 +1723,13 @@ export class WorldProjectileRuntime implements
       destroyScale: record.physics.sprite.displayWidth / 16,
     });
     this.physicsBinding.releaseProjectileResources(handle);
+    if (!this.destroyed && (record.spec.flight.miniRocket.essenceCapacity ?? 0) > 0) {
+      const event: MiniRocketTerminal = { projectileId: record.id, ownerId: record.provenance.allegiance.ownerId,
+        ...terminalPosition, collected: record.miniRocket.collectedAt !== undefined };
+      for (const observer of this.miniRocketTerminalObservers) observer(event);
+    }
     // Finish all owned teardown before a reaction can remove siblings, spawn or destroy the World.
+    if (returnDestruction) this.miniRocketDestroyedCallback?.(returnDestruction);
     this.projectileResolvedCallback?.(lifecycle);
   }
 
@@ -2330,7 +2374,7 @@ export class WorldProjectileRuntime implements
       // Geworfene Utilities passieren; nur übernehmbare Wurfgeschosse hält die Barriere auf.
       const capturable = record.spec.interaction.grenadeEffect?.type === 'spawn_enemy';
       if (record.spec.flight.isGrenade && !capturable) continue;
-      if (record.miniRocket.deferredExplosion || record.miniRocket.spent) continue;
+      if (record.miniRocket.deferredExplosion || record.miniRocket.spent || record.miniRocket.phase === 'return') continue;
 
       const request = {
         projectileId: record.id,
@@ -2407,7 +2451,7 @@ export class WorldProjectileRuntime implements
       if (target.spec.interaction.impulse.leafBlowerDeflectsProjectiles === true) continue;
       // Geworfene Utilities fliegen weiter; nur echte Geschosse werden umgelenkt.
       if (target.spec.flight.isGrenade) continue;
-      if (target.miniRocket.deferredExplosion || target.miniRocket.spent) continue;
+      if (target.miniRocket.deferredExplosion || target.miniRocket.spent || target.miniRocket.phase === 'return') continue;
 
       for (const deflectorId of this.deflectorIds) {
         if (this.deflectProjectile(target.id, deflectorId, nowMs)) break;
@@ -2422,7 +2466,7 @@ export class WorldProjectileRuntime implements
     if (target.pendingDestroy || blower.pendingDestroy) return false;
     if (!this.projectiles.activeRecords.has(target) || !this.projectiles.activeRecords.has(blower)) return false;
     if (target.spec.interaction.impulse.leafBlowerDeflectsProjectiles === true || target.spec.flight.isGrenade) return false;
-    if (target.miniRocket.deferredExplosion || target.miniRocket.spent) return false;
+    if (target.miniRocket.deferredExplosion || target.miniRocket.spent || target.miniRocket.phase === 'return') return false;
     const blowerOwnerId = blower.provenance.allegiance.ownerId;
     if (blowerOwnerId === target.provenance.allegiance.ownerId) return false;
     if (this.targetabilityPort && !this.targetabilityPort.canDamageOwner(
@@ -2703,6 +2747,7 @@ export class WorldProjectileRuntime implements
     this.directImpactPort = null;
     this.trainImpactPort = null;
     this.miniRocketStatePort = null;
+    this.miniRocketTerminalObservers.clear();
     this.projectileImpactEventCallback = null;
     this.naturalFlameExpiryCallback = null;
     this.portalDetonations.length = 0;
@@ -2856,9 +2901,8 @@ export class WorldProjectileRuntime implements
             returnEnabled: cfg.miniRocketReturnEnabled,
             returnRangeBuffer: cfg.miniRocketReturnRangeBuffer,
             pickupRadius: cfg.miniRocketPickupRadius,
-            pickupAdrenalineRefundFraction: cfg.miniRocketPickupAdrenalineRefundFraction,
+            essenceCapacity: cfg.miniRocketEssenceCapacity,
             pickupArmor: cfg.miniRocketPickupArmor,
-            adrenalineCostPaid: cfg.miniRocketAdrenalineCostPaid,
             safetyLifetimeMs: cfg.miniRocketSafetyLifetimeMs,
             cascadeDamageBonusPerExplosion: cfg.miniRocketCascadeDamageBonusPerExplosion
           }

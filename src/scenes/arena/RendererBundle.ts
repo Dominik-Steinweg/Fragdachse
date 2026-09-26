@@ -4,6 +4,7 @@ import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
 import { TurretAnimationController } from '../../effects/TurretAnimationController';
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
 import { EnemyEyeGlowRenderer } from '../../effects/EnemyEyeGlowRenderer';
+import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import * as Phaser from 'phaser';
@@ -78,6 +79,7 @@ export interface RendererBundle {
   interactions: WorldInteractionRenderer;
   healthBars: WorldHealthBarRenderer;
   enemyEyes: EnemyEyeGlowRenderer;
+  enemyVulnerability: EnemyVulnerabilityRenderer;
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
   plasmaBurner:        PlasmaBurnerRenderer;
@@ -401,6 +403,8 @@ export function* createRendererBundleSteps(
   const healthBars = new WorldHealthBarRenderer(scene);
   const enemyEyes = new EnemyEyeGlowRenderer(scene, lighting);
   cleanup.push(() => enemyEyes.destroy());
+  const enemyVulnerability = new EnemyVulnerabilityRenderer(scene);
+  cleanup.push(() => enemyVulnerability.destroy());
   const interactions = new WorldInteractionRenderer(scene);
   cleanup.push(() => interactions.clear());
   const constructionOwnershipMotes = new ConstructionOwnershipMoteRenderer(gpuVfx);
@@ -415,6 +419,7 @@ export function* createRendererBundleSteps(
     remoteControl,
     healthBars,
     enemyEyes,
+    enemyVulnerability,
     gpuVfx,
     constructionOwnershipMotes,
     movement,

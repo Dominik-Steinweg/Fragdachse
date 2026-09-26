@@ -13,7 +13,7 @@ import { healthBarTestScene, HealthTestObject } from './healthBarTestScene';
 import type { SyncedSmokeCloud } from '../src/types';
 import { GraphicsQualityController } from '../src/graphics/GraphicsQuality';
 import { sampleSmokeWeather } from '../src/effects/smokeCloudShader';
-import { SmokeBodyEffect, VulnerableBodyEffect } from '../src/effects/SmokeBodyEffect';
+import { SmokeBodyEffect } from '../src/effects/SmokeBodyEffect';
 import { DEPTH } from '../src/config';
 
 describe('shared smoke presentation', () => {
@@ -103,11 +103,8 @@ describe('shared smoke presentation', () => {
     const { scene, cosmetic } = healthBarTestScene();
     const sprite = new HealthTestObject(scene, 150, 190).setDepth(DEPTH.PLAYERS).setTexture('enemy', 'walk-2');
     const target = { sprite: sprite as any, bodySize: 40, visible: true };
-    const vulnerability = new VulnerableBodyEffect(scene);
-    vulnerability.setActive(true); vulnerability.sync(target);
-    const overlay = cosmetic[0];
     const effect = new SmokeBodyEffect(scene, target, 'wisp', 3);
-    const statuses = cosmetic.slice(1);
+    const statuses = [...cosmetic];
     const epoch = Date.UTC(2026, 8, 8);
     let litTime = 0;
     for (; litTime < 1000; litTime += 10) {
@@ -127,20 +124,10 @@ describe('shared smoke presentation', () => {
     const fading = statuses.filter(o => o.depth < DEPTH.SMOKE).map(o => o.alpha);
     expect(fading.every((alpha, i) => alpha <= before[i])).toBe(true);
     expect(fading.some((alpha, i) => alpha < before[i])).toBe(true);
-    sprite.setPosition(240, 270).setTexture('enemy', 'walk-3').setFlip(true, false).setRotation(.7).setDisplaySize(80, 55);
-    vulnerability.sync(target);
-    expect(overlay.texture.key).toBe('enemy'); expect(overlay.frame.name).toBe('walk-3');
-    expect([overlay.x, overlay.y, overlay.rotation, overlay.flipX, overlay.displayWidth]).toEqual([240, 270, .7, true, 80]);
-    expect(overlay.depth).toBeLessThan(DEPTH.SMOKE);
     expect(sprite.alpha).toBe(1);
-    const fullAlpha = overlay.alpha;
-    vulnerability.setActive(false); scene.time.now += 110;
-    vulnerability.setActive(false); vulnerability.sync(target);
-    expect(overlay.alpha).toBeLessThan(fullAlpha);
-    scene.time.now += 300; vulnerability.sync(target); expect(overlay.active).toBe(false);
     effect.update({ ...target, visible: false }, epoch + 5000, 1, epoch + 5000, epoch + litTime, 1);
     expect(statuses.every(o => !o.visible)).toBe(true);
-    effect.destroy(); vulnerability.destroy(); expect(cosmetic.every(o => !o.active)).toBe(true);
+    effect.destroy(); expect(cosmetic.every(o => !o.active)).toBe(true);
   });
 
   it('invalidates body effects on hidden or missing targets, reused sprite IDs, expiry and teardown', () => {

@@ -10,4 +10,6 @@ export interface EnemyVisualSource {
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly getHp: () => number;
   readonly getNetSnapshot: () => SyncedEnemyState;
+  /** Presented general vulnerability (host status or replicated snapshot), never a rule input. */
+  readonly isVulnerable: () => boolean;
 }

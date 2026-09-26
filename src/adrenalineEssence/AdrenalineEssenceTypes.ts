@@ -8,6 +8,30 @@ export interface EssenceScope {
 
 export interface EssencePoint { readonly x: number; readonly y: number }
 
+/** Projectile-owned flight projection; essence values remain owned by the essence runtime. */
+export interface EssenceRocketSnapshot extends EssencePoint {
+  readonly projectileId: number;
+  readonly ownerId: string;
+  readonly capacity: number;
+  readonly returning: boolean;
+}
+
+export interface EssenceRocketTerminal extends EssencePoint {
+  readonly projectileId: number;
+  readonly ownerId: string;
+  readonly collected: boolean;
+}
+
+export interface EssenceCargoSnapshot extends EssencePoint {
+  readonly projectileId: number;
+  readonly ownerId: string;
+  readonly accessGroup: EssenceAccessGroup;
+  readonly value: number;
+  readonly seed: number;
+}
+
+export type EssenceTransferTarget = { readonly kind: 'rocket'; readonly projectileId: number };
+
 export type EssenceAccessGroup =
   | { readonly kind: 'coop' }
   | { readonly kind: 'team'; readonly teamId: string }
@@ -79,6 +103,8 @@ export interface EssenceClusterSnapshot {
 }
 
 export interface EssenceTransferSnapshot {
+  /** Absent for the existing player destination; rocket destinations are explicit. */
+  readonly target?: EssenceTransferTarget;
   readonly id: string;
   readonly clusterId: string;
   readonly accessGroup: EssenceAccessGroup;
@@ -96,6 +122,7 @@ export interface EssenceTransferSnapshot {
 }
 
 export interface EssenceTransferReceipt extends EssenceScope {
+  readonly target?: EssenceTransferTarget;
   /** Transfer identity also deduplicates the terminal presentation signal. */
   readonly id: string;
   readonly status: 'committed' | 'returned' | 'expired' | 'cancelled';
@@ -116,6 +143,7 @@ export interface EssenceTransferReceipt extends EssenceScope {
 }
 
 export interface EssenceState extends EssenceScope {
+  readonly cargo?: readonly EssenceCargoSnapshot[];
   readonly revision: number;
   readonly clusters: readonly EssenceClusterSnapshot[];
   /** Only active transfers, never historical arrival events, belong in full/JIP state. */
@@ -137,6 +165,7 @@ export interface EssenceAttributionDiagnostics {
 }
 
 export interface EssenceDiagnostics {
+  readonly carriedValue: number;
   readonly materializedValue: number;
   readonly authoredValue: number;
   readonly committedValue: number;
@@ -174,6 +203,7 @@ export interface EssenceDiagnostics {
 }
 
 export interface AdrenalineEssencePorts {
+  readonly getRockets?: () => readonly EssenceRocketSnapshot[];
   readonly getPlayers: () => readonly EssencePlayerSnapshot[];
   /** Validates an already scattered candidate, using bounded nearby fallback if needed. */
   readonly resolveGroundPoint: (candidate: EssencePoint, seed: number) => EssencePoint | null;

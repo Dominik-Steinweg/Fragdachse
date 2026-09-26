@@ -14,41 +14,6 @@ const GLOW = '__smoke_status_scatter';
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const random = (n: number) => { const v = Math.sin(n * 127.1 + 91.7) * 43758.5453; return v - Math.floor(v); };
 
-/** A colour overlay follows the real animated body without changing its own tint. */
-export class VulnerableBodyEffect {
-  private image: Phaser.GameObjects.Image | null = null;
-  private active = false;
-  private endedAt = 0;
-
-  constructor(private readonly scene: Phaser.Scene) {}
-
-  setActive(active: boolean): void {
-    if (this.active && !active) this.endedAt = this.scene.time.now;
-    this.active = active;
-  }
-
-  sync(target: EntityStatusVisualTarget): void {
-    const { sprite } = target;
-    const fade = this.active ? 1 : clamp(1 - (this.scene.time.now - this.endedAt) / 220);
-    if (!target.visible || !sprite.active || !sprite.visible || (!this.active && !this.image) || fade <= 0) {
-      this.image?.destroy(); this.image = null; return;
-    }
-    if (!this.image) {
-      this.image = makeAdditive(this.scene.add.image(sprite.x, sprite.y, sprite.texture.key, sprite.frame.name)).setTint(0xd24b42);
-      registerGraphicsObject(this.scene, 'enemyStatus', this.image);
-    }
-    const pulse = .16 + .10 * (.5 + .5 * Math.sin(this.scene.time.now * .006 + sprite.x * .013));
-    this.image.setTexture(sprite.texture.key, sprite.frame.name)
-      .setOrigin(sprite.originX, sprite.originY).setFlip(sprite.flipX, sprite.flipY)
-      .setPosition(sprite.x, sprite.y).setRotation(sprite.rotation)
-      .setDisplaySize(sprite.displayWidth, sprite.displayHeight)
-      .setDepth(Math.min(DEPTH.SMOKE - .1, sprite.depth + .19))
-      .setAlpha(emissiveAlpha(pulse * fade * sprite.alpha));
-  }
-
-  destroy(): void { this.image?.destroy(); this.image = null; this.active = false; }
-}
-
 /** Bounded body effects, owned by the smoke renderer for one target sprite instance. */
 export class SmokeBodyEffect {
   readonly sprite: EntityStatusVisualTarget['sprite'];

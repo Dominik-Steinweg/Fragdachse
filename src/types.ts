@@ -1335,9 +1335,8 @@ export interface ProjectileSpawnConfig {
   miniRocketReturnEnabled?: boolean;
   miniRocketReturnRangeBuffer?: number;
   miniRocketPickupRadius?: number;
-  miniRocketPickupAdrenalineRefundFraction?: number;
+  miniRocketEssenceCapacity?: number;
   miniRocketPickupArmor?: number;
-  miniRocketAdrenalineCostPaid?: number;
   miniRocketSafetyLifetimeMs?: number;
   miniRocketCascadeDamageBonusPerExplosion?: number;
   ak47ShotId?: number;

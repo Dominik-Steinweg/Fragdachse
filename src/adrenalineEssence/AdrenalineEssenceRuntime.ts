@@ -13,6 +13,9 @@ import {
   type EssenceState,
   type EssenceTransferReceipt,
   type EssenceTransferSnapshot,
+  type EssenceRocketSnapshot,
+  type EssenceRocketTerminal,
+  type EssenceCargoSnapshot,
 } from './AdrenalineEssenceTypes';
 
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
@@ -38,6 +41,22 @@ interface Transfer {
   readonly source: Cluster['anchor'];
   readonly contributions: Contribution[];
 }
+
+interface Cargo {
+  snapshot: EssenceCargoSnapshot;
+  readonly lifeRevision: number;
+  readonly participationRevision: number;
+  readonly contributions: Contribution[];
+}
+
+interface Collector extends EssencePlayerSnapshot {
+  readonly key: string;
+  readonly rocket?: EssenceRocketSnapshot;
+}
+
+const collectorKey = (playerId: string, rocketId?: number): string => JSON.stringify(
+  rocketId === undefined ? ['player', playerId] : ['rocket', rocketId],
+);
 
 /** A compact spatial index for fixed anchors and the small per-tick player projection. */
 class PointGrid<T extends EssencePoint> {
@@ -84,6 +103,8 @@ export class AdrenalineEssenceRuntime {
   private readonly config: AdrenalineEssenceConfig;
   private readonly clusters = new Map<string, Cluster>();
   private readonly transfers = new Map<string, Transfer>();
+  private readonly cargo = new Map<number, Cargo>();
+  private rockets = new Map<number, EssenceRocketSnapshot>();
   private readonly mergeGrid: PointGrid<Cluster['anchor']>;
   private readonly seenRewards = new Set<string>();
   private readonly rewardRetention: { readonly id: string; readonly acceptedAt: number }[] = [];
@@ -245,6 +266,14 @@ export class AdrenalineEssenceRuntime {
     this.now = now;
     this.pruneRetention();
     const transferCpuStarted = performance.now();
+    const rockets = this.rockets = new Map((this.ports.getRockets?.() ?? []).map(rocket => [rocket.projectileId, rocket]));
+    for (const [id, cargo] of this.cargo) {
+      const rocket = rockets.get(id);
+      if (rocket && (rocket.x !== cargo.snapshot.x || rocket.y !== cargo.snapshot.y)) {
+        cargo.snapshot = { ...cargo.snapshot, x: rocket.x, y: rocket.y };
+        this.revision++;
+      }
+    }
     const players = new Map(this.ports.getPlayers().map(player => [player.playerId, player]));
     const transfers = [...this.transfers.values()].sort((left, right) => (
       left.snapshot.arrivalAt - right.snapshot.arrivalAt || left.snapshot.id.localeCompare(right.snapshot.id)
@@ -261,6 +290,26 @@ export class AdrenalineEssenceRuntime {
       const reason = this.invalidCollectorReason(transfer, currentPlayer);
       if (reason) {
         this.finishTransfer(transfer, 0, 0, reason);
+        continue;
+      }
+      if (transfer.snapshot.target?.kind === 'rocket') {
+        const rocket = rockets.get(transfer.snapshot.target.projectileId)!;
+        let cargo = this.cargo.get(rocket.projectileId);
+        if (!cargo) {
+          cargo = {
+            snapshot: { projectileId: rocket.projectileId, ownerId: rocket.ownerId,
+              accessGroup: transfer.snapshot.accessGroup, x: rocket.x, y: rocket.y, value: 0, seed: transfer.snapshot.seed },
+            lifeRevision: transfer.snapshot.lifeRevision, participationRevision: transfer.snapshot.participationRevision,
+            contributions: [],
+          };
+          this.cargo.set(rocket.projectileId, cargo);
+        }
+        cargo.contributions.push(...transfer.contributions);
+        cargo.snapshot = { ...cargo.snapshot, value: sumValue(cargo.contributions) };
+        this.transfers.delete(transfer.snapshot.id);
+        this.completedTransferCount++;
+        this.transferDurationTotal += now - transfer.snapshot.startedAt;
+        this.revision++;
         continue;
       }
       this.committing = transfer;
@@ -325,6 +374,7 @@ export class AdrenalineEssenceRuntime {
         ...(cluster.lastMergeAt !== undefined ? { lastMergeAt: cluster.lastMergeAt } : {}),
       })),
       transfers: [...this.transfers.values()].map(transfer => ({ ...transfer.snapshot })),
+      ...(this.cargo.size ? { cargo: [...this.cargo.values()].map(cargo => cargo.snapshot) } : {}),
     };
     return this.snapshotCache;
   }
@@ -336,6 +386,7 @@ export class AdrenalineEssenceRuntime {
     let ejectingValue = 0;
     let groundedValue = 0;
     let reservedValue = 0;
+    let carriedValue = 0;
     let contributionCount = 0;
     for (const cluster of this.clusters.values()) {
       const value = sumValue(cluster.contributions);
@@ -347,12 +398,16 @@ export class AdrenalineEssenceRuntime {
       reservedValue += transfer.snapshot.value;
       contributionCount += transfer.contributions.length;
     }
-    const activeValue = ejectingValue + groundedValue + reservedValue;
+    for (const cargo of this.cargo.values()) {
+      carriedValue += cargo.snapshot.value;
+      contributionCount += cargo.contributions.length;
+    }
+    const activeValue = ejectingValue + groundedValue + reservedValue + carriedValue;
     return {
       materializedValue: this.materializedValue, authoredValue: this.authoredValue, committedValue: this.committedValue,
       expiredValue: this.expiredValue, placementFailedValue: this.placementFailedValue,
       lifecycleDiscardedValue: this.lifecycleDiscardedValue, returnedValue: this.returnedValue,
-      expiredReturnValue: this.expiredReturnValue, ejectingValue, groundedValue, reservedValue, activeValue,
+      expiredReturnValue: this.expiredReturnValue, ejectingValue, groundedValue, reservedValue, carriedValue, activeValue,
       conservationError: this.materializedValue - this.committedValue - this.expiredValue
         - this.placementFailedValue - this.lifecycleDiscardedValue - activeValue,
       rewardCount: this.rewardCount, duplicateRewardCount: this.duplicateRewardCount,
@@ -375,6 +430,9 @@ export class AdrenalineEssenceRuntime {
     this.cancellations.teardown += this.transfers.size;
     this.clusters.clear();
     this.transfers.clear();
+    this.cargo.clear();
+    this.rockets.clear();
+    this.rockets.clear();
     this.mergeGrid.clear();
     this.seenRewards.clear();
     this.rewardRetention.length = 0;
@@ -432,14 +490,31 @@ export class AdrenalineEssenceRuntime {
 
   private reserveNearby(): void {
     // Read again after arrival commits; projected resource snapshots must not overbook new flights.
-    const playerGrid = new PointGrid<EssencePlayerSnapshot>(this.config.magnetRadius);
-    for (const player of this.ports.getPlayers()) {
-      if (player.interactive && player.alive && player.collectible && player.accessGroup && finitePoint(player)) playerGrid.add(player);
+    const playerGrid = new PointGrid<Collector>(this.config.magnetRadius);
+    const players = this.ports.getPlayers();
+    for (const player of players) {
+      if (player.interactive && player.alive && player.collectible && player.accessGroup && finitePoint(player)) {
+        playerGrid.add({ ...player, key: collectorKey(player.playerId) });
+      }
+    }
+    const owners = new Map(players.map(player => [player.playerId, player]));
+    for (const rocket of this.ports.getRockets?.() ?? []) {
+      const owner = owners.get(rocket.ownerId);
+      const cargo = this.cargo.get(rocket.projectileId);
+      if (!rocket.returning || !finitePoint(rocket) || !Number.isFinite(rocket.capacity) || rocket.capacity <= 0
+        || !owner?.interactive || !owner.alive || !owner.collectible || !owner.accessGroup
+        || (cargo && (cargo.snapshot.ownerId !== owner.playerId || cargo.lifeRevision !== owner.lifeRevision
+          || cargo.participationRevision !== owner.participationRevision
+          || !hasEssenceAccess(cargo.snapshot.accessGroup, owner.accessGroup)))) continue;
+      playerGrid.add({ ...owner, x: rocket.x, y: rocket.y, rocket,
+        key: collectorKey(owner.playerId, rocket.projectileId),
+        adrenaline: cargo?.snapshot.value ?? 0, maxAdrenaline: rocket.capacity });
     }
     const incoming = new Map<string, number>();
     for (const transfer of this.transfers.values()) {
-      const { playerId, value } = transfer.snapshot;
-      incoming.set(playerId, (incoming.get(playerId) ?? 0) + value);
+      const { playerId, value, target } = transfer.snapshot;
+      const key = collectorKey(playerId, target?.projectileId);
+      incoming.set(key, (incoming.get(key) ?? 0) + value);
     }
     const clusters = [...this.clusters.values()].filter(cluster => cluster.state === 'grounded')
       .sort((left, right) => left.anchor.landAt - right.anchor.landAt || left.anchor.id.localeCompare(right.anchor.id));
@@ -451,10 +526,10 @@ export class AdrenalineEssenceRuntime {
           return hasEssenceAccess(anchor.accessGroup, player.accessGroup)
             && distanceSquared(anchor, player) <= this.config.magnetRadius ** 2;
         })
-        .sort((left, right) => distanceSquared(anchor, left) - distanceSquared(anchor, right) || left.playerId.localeCompare(right.playerId));
+        .sort((left, right) => distanceSquared(anchor, left) - distanceSquared(anchor, right) || left.key.localeCompare(right.key));
       for (const player of candidates) {
         if (!cluster.contributions.length) break;
-        const capacity = player.maxAdrenaline - player.adrenaline - (incoming.get(player.playerId) ?? 0);
+        const capacity = player.maxAdrenaline - player.adrenaline - (incoming.get(player.key) ?? 0);
         if (!Number.isFinite(capacity) || capacity <= 0) continue;
         this.lineOfSightChecks++;
         if (!this.ports.hasLineOfSight(anchor, player)) continue;
@@ -469,12 +544,13 @@ export class AdrenalineEssenceRuntime {
           snapshot: {
             id: this.nextId('transfer'), clusterId: anchor.id, accessGroup: anchor.accessGroup,
             playerId: player.playerId, lifeRevision: player.lifeRevision, participationRevision: player.participationRevision,
+            ...(player.rocket ? { target: { kind: 'rocket' as const, projectileId: player.rocket.projectileId } } : {}),
             sourceX: anchor.x, sourceY: anchor.y, targetX: player.x, targetY: player.y,
             value, startedAt: this.now, arrivalAt: this.now + flightMs, seed: anchor.seed,
           },
         };
         this.transfers.set(transfer.snapshot.id, transfer);
-        incoming.set(player.playerId, (incoming.get(player.playerId) ?? 0) + value);
+        incoming.set(player.key, (incoming.get(player.key) ?? 0) + value);
         this.startedTransferCount++;
         this.transferStartDelayTotal += this.now - anchor.landAt;
         this.peakTransferCount = Math.max(this.peakTransferCount, this.transfers.size);
@@ -484,7 +560,7 @@ export class AdrenalineEssenceRuntime {
     }
   }
 
-  private takeContributions(cluster: Cluster, amount: number): Contribution[] {
+  private takeContributions(cluster: { contributions: Contribution[] }, amount: number): Contribution[] {
     // Full acceptance moves the original fractions intact. Repeated subtraction from
     // their rounded aggregate would otherwise manufacture a residual on the last part.
     if (amount >= sumValue(cluster.contributions)) {
@@ -505,6 +581,11 @@ export class AdrenalineEssenceRuntime {
   }
 
   private invalidCollectorReason(transfer: Transfer, player: EssencePlayerSnapshot | undefined): EssenceCancelReason | undefined {
+    if (transfer.snapshot.target?.kind === 'rocket') {
+      const id = transfer.snapshot.target.projectileId;
+      const rocket = this.rockets.get(id);
+      if (!rocket || !rocket.returning || rocket.ownerId !== transfer.snapshot.playerId) return 'disconnect';
+    }
     if (!player) return 'disconnect';
     if (!player.interactive || player.participationRevision !== transfer.snapshot.participationRevision) return 'participation';
     if (!player.alive) return 'death';
@@ -559,6 +640,7 @@ export class AdrenalineEssenceRuntime {
     this.receipts.push({
       ...this.scope, id: snapshot.id, status: credited > 0 ? 'committed' : returned > 0 ? 'returned' : reason ? 'cancelled' : 'expired',
       ...(reason ? { reason } : {}), accessGroup: snapshot.accessGroup,
+      ...(snapshot.target ? { target: snapshot.target } : {}),
       playerId: snapshot.playerId, lifeRevision: snapshot.lifeRevision, participationRevision: snapshot.participationRevision,
       creditedValue: credited, returnedValue: returned, expiredValue: expired,
       resourceRevision, completedAt: this.now, sourceX: snapshot.sourceX, sourceY: snapshot.sourceY,
@@ -570,6 +652,84 @@ export class AdrenalineEssenceRuntime {
   private removeCluster(cluster: Cluster): void {
     this.clusters.delete(cluster.anchor.id);
     if (cluster.state === 'grounded') this.mergeGrid.delete(cluster.anchor);
+    this.revision++;
+  }
+
+  /** Exactly-once terminal settlement. This is a transfer of existing value, never a reward. */
+  finishRocket(event: EssenceRocketTerminal, now: number): void {
+    if (this.destroyed || !Number.isFinite(now) || !finitePoint(event)) return;
+    this.now = Math.max(this.now, now);
+    this.rockets.delete(event.projectileId);
+    for (const transfer of [...this.transfers.values()]) {
+      if (transfer.snapshot.target?.projectileId === event.projectileId) this.finishTransfer(transfer, 0, 0, 'disconnect');
+    }
+    const cargo = this.cargo.get(event.projectileId);
+    if (!cargo) return;
+    this.cargo.delete(event.projectileId);
+    this.revision++;
+    const player = this.ports.getPlayers().find(candidate => candidate.playerId === event.ownerId);
+    const valid = event.collected && player?.interactive && player.alive && player.collectible
+      && player.playerId === cargo.snapshot.ownerId && player.lifeRevision === cargo.lifeRevision
+      && player.participationRevision === cargo.participationRevision
+      && hasEssenceAccess(cargo.snapshot.accessGroup, player.accessGroup);
+    const result = valid ? this.ports.commitResolvedGain(event.ownerId, cargo.snapshot.value)
+      : { creditedValue: 0, resourceRevision: 0 };
+    const credited = Number.isFinite(result.creditedValue)
+      ? Math.max(0, Math.min(cargo.snapshot.value, result.creditedValue)) : 0;
+    this.committedValue += credited;
+    let remainingCredit = credited;
+    const rest: Contribution[] = [];
+    for (const part of cargo.contributions) {
+      const accepted = credited === cargo.snapshot.value ? part.value : Math.min(part.value, remainingCredit);
+      remainingCredit -= accepted;
+      this.recordCollectedValue(part, event.ownerId, accepted);
+      if (accepted < part.value) rest.push({ ...part, value: part.value - accepted });
+    }
+    // Resource observers may synchronously end the scope. Never spawn into its successor.
+    if (this.destroyed) {
+      this.lifecycleDiscardedValue += sumValue(rest);
+      return;
+    }
+    if (rest.length) this.dropCargo(cargo.snapshot, rest, event);
+    if (credited > 0) this.receipts.push({
+      ...this.scope, id: this.nextId('transfer'), status: 'committed', accessGroup: cargo.snapshot.accessGroup,
+      playerId: event.ownerId, lifeRevision: cargo.lifeRevision, participationRevision: cargo.participationRevision,
+      creditedValue: credited, returnedValue: sumValue(rest), expiredValue: 0,
+      resourceRevision: result.resourceRevision, completedAt: this.now,
+      sourceX: event.x, sourceY: event.y, targetX: event.x, targetY: event.y,
+    });
+  }
+
+  private dropCargo(snapshot: EssenceCargoSnapshot, contributions: Contribution[], origin: EssencePoint): void {
+    const points: EssencePoint[] = [];
+    const rotation = (snapshot.seed >>> 0) / 0x1_0000_0000 * Math.PI * 2;
+    for (let i = 0; i < this.config.fragmentsPerReward; i++) {
+      const angle = rotation + i * Math.PI * 2 / this.config.fragmentsPerReward;
+      const radius = (this.config.scatterMinRadius + this.config.scatterMaxRadius) / 2;
+      const point = this.ports.resolveGroundPoint({ x: origin.x + Math.cos(angle) * radius,
+        y: origin.y + Math.sin(angle) * radius }, snapshot.seed + i);
+      if (point && finitePoint(point)) points.push(point);
+    }
+    if (!points.length) {
+      this.placementFailedValue += sumValue(contributions);
+      this.placementFailureCount++;
+      return;
+    }
+    const total = sumValue(contributions);
+    const source = { contributions };
+    const landAt = this.now + this.config.landingMaxMs;
+    for (let i = 0; i < points.length && source.contributions.length; i++) {
+      const selected = this.takeContributions(source, i === points.length - 1 ? Infinity : total / points.length);
+      if (!selected.length) continue;
+      const id = this.nextId('cluster');
+      this.clusters.set(id, {
+        anchor: { id, accessGroup: snapshot.accessGroup, ...points[i], originX: origin.x, originY: origin.y,
+          seed: snapshot.seed + i, createdAt: this.now, landAt },
+        state: 'ejecting', contributions: selected.map(part => ({ ...part, expiresAt: landAt + this.config.groundLifetimeMs })),
+      });
+    }
+    this.returnedValue += total;
+    this.peakClusterCount = Math.max(this.peakClusterCount, this.clusters.size);
     this.revision++;
   }
 

@@ -193,6 +193,7 @@ export interface ProjectileInteractionState {
 }
 /** Continuation state; Mini Rocket adds its attack/coast/return phases. */
 export interface ProjectileMiniRocketState {
+  collectedAt?: { readonly x: number; readonly y: number };
   phase?: MiniRocketFlightPhase;
   coastUntilAgeMs?: number;
   nextExplosionAtAgeMs?: number;

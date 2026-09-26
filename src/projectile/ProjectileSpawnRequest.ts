@@ -149,9 +149,8 @@ export interface ProjectileMiniRocketFlightSpec {
   readonly returnEnabled?: boolean;
   readonly returnRangeBuffer?: number;
   readonly pickupRadius?: number;
-  readonly pickupAdrenalineRefundFraction?: number;
+  readonly essenceCapacity?: number;
   readonly pickupArmor?: number;
-  readonly adrenalineCostPaid?: number;
   readonly safetyLifetimeMs?: number;
   readonly cascadeDamageBonusPerExplosion?: number;
 }

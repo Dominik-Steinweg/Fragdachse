@@ -3,8 +3,37 @@ import { AdrenalineEssenceRuntime } from '../../src/adrenalineEssence/Adrenaline
 import { ADRENALINE_ESSENCE_CONFIG } from '../../src/adrenalineEssence/AdrenalineEssenceConfig';
 import { AdrenalineEssenceClientReplica, AdrenalineEssenceReplication } from '../../src/adrenalineEssence/AdrenalineEssenceReplication';
 import { decodeEssenceSnapshot, encodeEssenceSnapshot } from '../../src/adrenalineEssence/AdrenalineEssenceWireCodec';
-import { ESSENCE_VALUE_TOLERANCE, type EssencePlayerSnapshot } from '../../src/adrenalineEssence/AdrenalineEssenceTypes';
+import { ESSENCE_VALUE_TOLERANCE, type EssencePlayerSnapshot, type EssenceRocketSnapshot } from '../../src/adrenalineEssence/AdrenalineEssenceTypes';
 import { NET_TICK_INTERVAL_MS } from '../../src/config';
+
+it('conserves simultaneous rocket reservations, cargo and terminal drops under load', () => {
+  const rockets: EssenceRocketSnapshot[] = Array.from({ length: 256 }, (_, projectileId) => ({
+    projectileId, ownerId: 'owner', x: projectileId * 320, y: 0, capacity: 6, returning: true,
+  }));
+  const scope = { worldRevision: 1, activityRevision: 1 };
+  const runtime = new AdrenalineEssenceRuntime(scope, {
+    getRockets: () => rockets,
+    getPlayers: () => [{ playerId: 'owner', x: 0, y: 0, lifeRevision: 1, participationRevision: 1,
+      interactive: true, alive: true, collectible: true, accessGroup: { kind: 'coop' }, adrenaline: 100, maxAdrenaline: 100 }],
+    resolveGroundPoint: point => point, hasLineOfSight: () => true,
+    commitResolvedGain: () => { throw new Error('Uncollected cargo cannot commit'); },
+  }, { fragmentsPerReward: 1, scatterMinRadius: 0, scatterMaxRadius: 0 });
+  for (const rocket of rockets) runtime.materialize({ ...scope, id: `reward:${rocket.projectileId}`,
+    creatorId: 'owner', authoredValue: 7.125, resolvedValue: 7.125, origin: rocket,
+    createdAt: 0, seed: rocket.projectileId, accessGroup: { kind: 'coop' } });
+  runtime.update(300); runtime.update(600);
+  expect(runtime.getState().cargo).toHaveLength(rockets.length);
+  expect(runtime.getState().cargo!.every(c => c.value <= 6)).toBe(true);
+  const publisher = new AdrenalineEssenceReplication();
+  const replica = new AdrenalineEssenceClientReplica(scope);
+  replica.apply(decodeEssenceSnapshot(JSON.parse(JSON.stringify(encodeEssenceSnapshot(publisher.build(runtime.getState(), 600, true)!)))));
+  expect(replica.getState()).toEqual(runtime.getState());
+  for (const rocket of rockets.splice(0)) runtime.finishRocket({ ...rocket, collected: false }, 1000);
+  expect(runtime.getDiagnostics().carriedValue).toBe(0);
+  expect(Math.abs(runtime.getDiagnostics().conservationError)).toBeLessThan(ESSENCE_VALUE_TOLERANCE);
+  runtime.destroy();
+  expect(Math.abs(runtime.getDiagnostics().conservationError)).toBeLessThan(ESSENCE_VALUE_TOLERANCE);
+});
 
 function runCombatStress(seed: number, fragmentsPerReward: number) {
   let randomState = seed;

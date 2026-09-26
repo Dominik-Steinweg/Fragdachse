@@ -3,6 +3,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { MiniRocketFlightPhase } from '../types';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
+import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
 import { pickGpuVfxTint } from './gpu/GpuVfxMember';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
@@ -93,12 +94,17 @@ export class RocketRenderer {
   private readonly trailSamplers = new Map<number, ProjectileTrailSampler>();
   private readonly pendingSmoke: Array<{ x: number; y: number; size: number; color: number; age: number; queued: number; generation: number }> = [];
   private smokeSource = GPU_VFX_NO_SOURCE_HANDLE;
+  private returnBurstSource = GPU_VFX_NO_SOURCE_HANDLE;
+  private returnGlowSpec: GpuVfxSpawnSpec | null = null;
+  private returnRingSpec: GpuVfxSpawnSpec | null = null;
+  private returnSparkSpec: GpuVfxSpawnSpec | null = null;
+  private returnSmokeSpec: GpuVfxSpawnSpec | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   /**
    * Meldet Exhaust und Rauch beim gemeinsamen GPU-VFX-Backend an. Die Layer gehoeren dem
-   * Backend; hier entstehen nur die beiden Spawn-Specs und die geteilte Rauchquelle.
+   * Backend; hier entstehen nur Spawn-Specs und geteilte Quellen fuer Rauch und Rueckflugende.
    */
   registerGpuVfx(system: GpuVfxSystem): void {
     if (this.gpuVfx) return;
@@ -119,6 +125,24 @@ export class RocketRenderer {
     this.smokeSpec.alphaEase = GpuVfxEase.QuadOut;
 
     this.smokeSource = system.createSource(GpuVfxEffectId.RocketSmoke);
+    this.returnBurstSource = system.createSource(GpuVfxEffectId.RocketReturnBurst);
+    this.returnGlowSpec = system.createSpec(GpuVfxEffectId.RocketReturnBurst);
+    Object.assign(this.returnGlowSpec, { lifeMs: 180, scaleStart: 0.5, scaleEnd: 1.1,
+      scaleEase: GpuVfxEase.QuadOut, alphaStart: 0.48, alphaEase: GpuVfxEase.QuadOut,
+      tintBlendStart: 0.3 });
+    this.returnRingSpec = system.createSpec(GpuVfxEffectId.RocketReturnBurst);
+    Object.assign(this.returnRingSpec, { frame: GpuVfxFrameId.ExplosionRing, lifeMs: 240,
+      scaleStart: 0.07, scaleEnd: 0.4, scaleEase: GpuVfxEase.QuadOut,
+      alphaStart: 0.25, alphaEase: GpuVfxEase.QuadOut });
+    this.returnSparkSpec = system.createSpec(GpuVfxEffectId.RocketReturnBurst);
+    Object.assign(this.returnSparkSpec, { frame: GpuVfxFrameId.ExplosionSpark,
+      positionEase: GpuVfxEase.QuadOut, scaleStart: 0.34, scaleEnd: 0.06,
+      stretchStart: 1.6, alphaStart: 0.65, alphaEase: GpuVfxEase.QuadOut,
+      tintBlendStart: 0.2 });
+    this.returnSmokeSpec = system.createSpec(GpuVfxEffectId.RocketSmoke);
+    Object.assign(this.returnSmokeSpec, { lifeMs: 420, scaleStart: 0.28, scaleEnd: 0.8,
+      scaleEase: GpuVfxEase.QuadOut, alphaStart: 0.2, alphaEase: GpuVfxEase.QuadOut,
+      tint: 0x9cb0b8 });
     system.registerEmission((_delta, now) => {
       for (const p of this.pendingSmoke) if (p.generation === system.emissionGeneration) this.spawnSmokePuff(p.x, p.y, p.size, p.color, p.age + now - p.queued);
       this.pendingSmoke.length = 0;
@@ -343,6 +367,10 @@ export class RocketRenderer {
     }
   }
 
+  getPosition(id: number): { readonly x: number; readonly y: number } | null {
+    return this.rockets.get(id)?.body ?? null;
+  }
+
   updateVisual(
     id: number,
     x: number,
@@ -455,35 +483,33 @@ export class RocketRenderer {
   }
 
   playSpentDestruction(x: number, y: number, color: number): void {
-    const flash = this.scene.add.circle(x, y, 3, color, 0.7)
-      .setDepth(DEPTH.PROJECTILES + 1)
-      .setStrokeStyle(1.5, 0xffffff, 0.85)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    registerGraphicsObject(this.scene, 'rocketLifecycleGraphics', flash);
-    this.scene.tweens.add({
-      targets: flash,
-      radius: 14,
-      alpha: 0,
-      duration: 180,
-      ease: 'Quad.easeOut',
-      onComplete: () => flash.destroy(),
-    });
-
-    const sparks = this.scene.add.particles(x, y, TEX_ROCKET_EXHAUST, {
-      lifespan: { min: 140, max: 280 },
-      speed: { min: 18, max: 60 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.22, end: 0.02 },
-      alpha: { start: 0.8, end: 0 },
-      tint: [0xffffff, color, 0x8b949b],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-    }).setDepth(DEPTH.PROJECTILES + 1);
-    registerParticleEmitter(this.scene, 'rocketLifecycleBurst', sparks);
-    sparks.explode(8);
-    recordParticleSpawn(this.scene, 'rocketLifecycleBurst', 8);
-    this.spawnSmokePuff(x, y, 6, color);
-    this.scene.time.delayedCall(320, () => sparks.destroy());
+    const system = this.gpuVfx;
+    const glow = this.returnGlowSpec, ring = this.returnRingSpec;
+    const spark = this.returnSparkSpec, smoke = this.returnSmokeSpec;
+    if (!system || system.isSuppressed() || !glow || !ring || !spark || !smoke
+      || this.returnBurstSource === GPU_VFX_NO_SOURCE_HANDLE) return;
+    const count = system.quality.scaleDiscreteBurst(GpuVfxEffectId.RocketReturnBurst, 5);
+    if (count === 0) return;
+    const now = system.now();
+    glow.x = ring.x = spark.x = smoke.x = x;
+    glow.y = ring.y = spark.y = smoke.y = y;
+    glow.tint = ring.tint = spark.tint = color;
+    system.spawn(glow, this.returnBurstSource, now);
+    system.spawn(ring, this.returnBurstSource, now);
+    const offset = Math.random() * Math.PI * 2;
+    for (let i = 0; i < count; i += 1) {
+      const angle = offset + (i + Math.random() * 0.35) * Math.PI * 2 / count;
+      const speed = 18 + Math.random() * 30;
+      spark.vx = Math.cos(angle) * speed;
+      spark.vy = Math.sin(angle) * speed;
+      spark.rotation = angle;
+      spark.lifeMs = 200 + Math.random() * 140;
+      system.spawn(spark, this.returnBurstSource, now);
+    }
+    smoke.rotation = offset;
+    smoke.vx = Math.cos(offset) * 5;
+    smoke.vy = Math.sin(offset) * 5;
+    system.spawn(smoke, this.returnBurstSource, now);
   }
 
   destroyVisual(id: number): void {
@@ -517,6 +543,7 @@ export class RocketRenderer {
     // Einzelne Raketen lassen ihre Schwaden auslaufen; erst der Teardown raeumt sie ab. Die
     // Quelle selbst bleibt bestehen, sie ist szenenlebenslang.
     this.gpuVfx?.clearSource(this.smokeSource);
+    this.gpuVfx?.clearSource(this.returnBurstSource);
     this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.RocketSmoke);
   }
 }

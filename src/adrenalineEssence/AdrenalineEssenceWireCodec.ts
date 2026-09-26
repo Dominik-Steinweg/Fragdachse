@@ -4,6 +4,7 @@ import {
   type EssenceAccessGroup,
   type EssenceCancelReason,
   type EssenceClusterSnapshot,
+  type EssenceCargoSnapshot,
   type EssenceScope,
   type EssenceTransferReceipt,
   type EssenceTransferSnapshot,
@@ -20,20 +21,21 @@ type WireCluster = [
 type WireTransfer = [
   id: WireId, clusterId: WireId, group: number, player: number,
   life: number, participation: number, sourceX: number, sourceY: number,
-  targetX: number, targetY: number, value: number, startedAt: number, arrivalAt: number, seed: number,
+  targetX: number, targetY: number, value: number, startedAt: number, arrivalAt: number, seed: number, rocketId?: number,
 ];
 type WireReceipt = [
   id: WireId, group: number, player: number, life: number, participation: number,
   status: number, reason: number, credited: number, returned: number, expired: number,
-  resourceRevision: number, completedAt: number, sourceX: number, sourceY: number, targetX: number, targetY: number,
+  resourceRevision: number, completedAt: number, sourceX: number, sourceY: number, targetX: number, targetY: number, rocketId?: number,
 ];
 
 export type EssenceWireSnapshot = readonly [
-  version: 2, worldRevision: number, activityRevision: number | null, full: 0 | 1,
+  version: 3, worldRevision: number, activityRevision: number | null, full: 0 | 1,
   revision: number, baseRevision: number, stateRevision: number, sentAt: number,
   groups: readonly WireGroup[], players: readonly string[], clusters: readonly WireCluster[],
   clusterRemovals: readonly WireId[], transfers: readonly WireTransfer[],
   transferRemovals: readonly WireId[], receipts: readonly WireReceipt[],
+  cargo: readonly (readonly number[])[], cargoRemovals: readonly number[],
 ];
 
 const statuses = ['committed', 'returned', 'expired', 'cancelled'] as const;
@@ -98,6 +100,7 @@ export function encodeEssenceSnapshot(snapshot: EssenceSnapshot): EssenceWireSna
     groupIndex(transfer.accessGroup), playerIndex(transfer.playerId), transfer.lifeRevision, transfer.participationRevision,
     transfer.sourceX, transfer.sourceY, transfer.targetX, transfer.targetY, transfer.value,
     transfer.startedAt, transfer.arrivalAt, transfer.seed,
+    ...(transfer.target ? [transfer.target.projectileId] as [number] : [] as []),
   ]);
   const receipts: WireReceipt[] = snapshot.receipts.map(receipt => {
     if (receipt.worldRevision !== snapshot.worldRevision || receipt.activityRevision !== snapshot.activityRevision) {
@@ -108,13 +111,15 @@ export function encodeEssenceSnapshot(snapshot: EssenceSnapshot): EssenceWireSna
       receipt.lifeRevision, receipt.participationRevision, statuses.indexOf(receipt.status), reasons.indexOf(receipt.reason),
       receipt.creditedValue, receipt.returnedValue, receipt.expiredValue, receipt.resourceRevision,
       receipt.completedAt, receipt.sourceX, receipt.sourceY, receipt.targetX, receipt.targetY,
+      ...(receipt.target ? [receipt.target.projectileId] as [number] : [] as []),
     ];
   });
+  const cargo = (snapshot.cargo ?? []).map(c => [c.projectileId, playerIndex(c.ownerId), groupIndex(c.accessGroup), c.x, c.y, c.value, c.seed]);
   const wire: EssenceWireSnapshot = [
-    2, snapshot.worldRevision, snapshot.activityRevision, snapshot.full ? 1 : 0,
+    3, snapshot.worldRevision, snapshot.activityRevision, snapshot.full ? 1 : 0,
     snapshot.revision, snapshot.baseRevision, snapshot.stateRevision, snapshot.sentAt,
     groups, players, clusters, snapshot.clusterRemovals.map(id => encodeId(id, snapshot, 'cluster')),
-    transfers, snapshot.transferRemovals.map(id => encodeId(id, snapshot, 'transfer')), receipts,
+    transfers, snapshot.transferRemovals.map(id => encodeId(id, snapshot, 'transfer')), receipts, cargo, snapshot.cargoRemovals ?? [],
   ];
   encoded.set(snapshot, { wire });
   return wire;
@@ -161,7 +166,8 @@ function decodeCluster(raw: unknown, groups: readonly EssenceAccessGroup[], scop
 }
 
 function decodeTransfer(raw: unknown, groups: readonly EssenceAccessGroup[], players: readonly string[], scope: EssenceScope): EssenceTransferSnapshot | null {
-  if (!Array.isArray(raw) || raw.length !== 14 || !numericSpan(raw, 2)
+  if (!Array.isArray(raw) || (raw.length !== 14 && raw.length !== 15) || !numericSpan(raw, 2)
+    || (raw.length === 15 && !nonNegativeInteger(raw[14]))
     || !dictionaryIndex(raw[2], groups.length) || !dictionaryIndex(raw[3], players.length) || raw[10] < 0) return null;
   const id = decodeId(raw[0], scope, 'transfer');
   const clusterId = decodeId(raw[1], scope, 'cluster');
@@ -171,11 +177,13 @@ function decodeTransfer(raw: unknown, groups: readonly EssenceAccessGroup[], pla
     id, clusterId, accessGroup: groups[row[2]], playerId: players[row[3]], lifeRevision: row[4], participationRevision: row[5],
     sourceX: row[6], sourceY: row[7], targetX: row[8], targetY: row[9], value: row[10],
     startedAt: row[11], arrivalAt: row[12], seed: row[13],
+    ...(row[14] !== undefined ? { target: { kind: 'rocket' as const, projectileId: row[14] } } : {}),
   };
 }
 
 function decodeReceipt(raw: unknown, groups: readonly EssenceAccessGroup[], players: readonly string[], scope: EssenceScope): EssenceTransferReceipt | null {
-  if (!Array.isArray(raw) || raw.length !== 16 || !numericSpan(raw, 1)
+  if (!Array.isArray(raw) || (raw.length !== 16 && raw.length !== 17) || !numericSpan(raw, 1)
+    || (raw.length === 17 && !nonNegativeInteger(raw[16]))
     || !dictionaryIndex(raw[1], groups.length) || !dictionaryIndex(raw[2], players.length)
     || !dictionaryIndex(raw[5], statuses.length) || !dictionaryIndex(raw[6], reasons.length)
     || raw[7] < 0 || raw[8] < 0 || raw[9] < 0) return null;
@@ -188,12 +196,13 @@ function decodeReceipt(raw: unknown, groups: readonly EssenceAccessGroup[], play
     status: statuses[row[5]], ...(reason !== undefined ? { reason } : {}),
     creditedValue: row[7], returnedValue: row[8], expiredValue: row[9], resourceRevision: row[10], completedAt: row[11],
     sourceX: row[12], sourceY: row[13], targetX: row[14], targetY: row[15],
+    ...(row[16] !== undefined ? { target: { kind: 'rocket' as const, projectileId: row[16] } } : {}),
   };
 }
 
 /** Invalid packets remain inert; a later valid full snapshot repairs transport loss. */
 export function decodeEssenceSnapshot(raw: unknown): EssenceSnapshot | null {
-  if (!Array.isArray(raw) || raw.length !== 15 || raw[0] !== 2
+  if (!Array.isArray(raw) || raw.length !== 17 || raw[0] !== 3
     || !nonNegativeInteger(raw[1]) || raw[1] <= 0
     || (raw[2] !== null && (!nonNegativeInteger(raw[2]) || raw[2] <= 0)) || (raw[3] !== 0 && raw[3] !== 1)
     || !nonNegativeInteger(raw[4]) || !nonNegativeInteger(raw[5]) || !nonNegativeInteger(raw[6]) || !finite(raw[7])
@@ -205,6 +214,13 @@ export function decodeEssenceSnapshot(raw: unknown): EssenceSnapshot | null {
   const clusters: EssenceClusterSnapshot[] = [];
   const transfers: EssenceTransferSnapshot[] = [];
   const receipts: EssenceTransferReceipt[] = [];
+  const cargo: EssenceCargoSnapshot[] = [];
+  for (const row of raw[15]) {
+    if (!Array.isArray(row) || row.length !== 7 || !row.every(finite) || !nonNegativeInteger(row[0])
+      || !dictionaryIndex(row[1], players.length) || !dictionaryIndex(row[2], groups.length) || row[5] <= 0) return null;
+    cargo.push({ projectileId: row[0], ownerId: players[row[1]], accessGroup: groups[row[2]], x: row[3], y: row[4], value: row[5], seed: row[6] });
+  }
+  if (!raw[16].every(nonNegativeInteger)) return null;
   const clusterRemovals: string[] = [];
   const transferRemovals: string[] = [];
   for (const row of raw[10]) {
@@ -235,5 +251,6 @@ export function decodeEssenceSnapshot(raw: unknown): EssenceSnapshot | null {
   return {
     ...scope, full: raw[3] === 1, revision: raw[4], baseRevision: raw[5], stateRevision: raw[6], sentAt: raw[7],
     clusters, clusterRemovals, transfers, transferRemovals, receipts,
+    ...(cargo.length || raw[16].length ? { cargo, cargoRemovals: raw[16] as number[] } : {}),
   };
 }

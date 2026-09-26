@@ -319,7 +319,7 @@ describe('ArenaVisualAttributionCollector', () => {
       ['ArenaVisualFactory', 'treeTrunks', ['trunk']],
       ['ProjectilePresentationRuntime', 'projectileShapes', ['sprite']],
       ['EnemyEntity', 'enemyStatus', ['this.voidMolotovWindupRing']],
-      ['VulnerableBodyEffect', 'enemyStatus', ['this.image']],
+      ['EnemyVulnerabilityRenderer', 'enemyStatus', ['layer']],
       ['SmokeBodyEffect', 'enemyStatus', ['object']],
     ] as const;
     for (const [sourceName, family, objects] of expected) {

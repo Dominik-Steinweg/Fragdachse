@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFakePhaserModule());
 import { StinkPlagueRenderer } from '../src/effects/StinkPlagueRenderer';
-import { VulnerableBodyEffect } from '../src/effects/SmokeBodyEffect';
 import { healthBarTestScene, HealthTestObject } from './healthBarTestScene';
 import { GraphicsQualityController } from '../src/graphics/GraphicsQuality';
 
 describe('plague snapshot presentation',()=>{
-  it('tracks the animated body, coexists with vulnerability, pools expired marks and rejects reused ids',()=>{
+  it('tracks the animated body, pools expired marks and rejects reused ids',()=>{
     const {scene,cosmetic}=healthBarTestScene();
     scene.cameras.main={width:800,height:600,zoom:1,originX:0,originY:0,scrollX:0,scrollY:0};
     const sprite=new HealthTestObject(scene,200,200).setTexture('enemy','walk-1');
@@ -23,10 +22,8 @@ describe('plague snapshot presentation',()=>{
     renderer.sync(snapshot,1200,()=>({...target,entityGeneration:6}));expect(cosmetic.every(o=>!o.visible)).toBe(true);
     renderer.sync(snapshot,1200,()=>target);renderer.update(3000);expect(cosmetic.every(o=>!o.visible)).toBe(true);
     renderer.sync(snapshot,1200,()=>target);
-    const vulnerable=new VulnerableBodyEffect(scene);vulnerable.setActive(true);vulnerable.sync(target);
     expect(mark.visible && mark.alpha>0).toBe(true);
-    expect(cosmetic.at(-1)!.visible && cosmetic.at(-1)!.alpha>0).toBe(true);
-    vulnerable.destroy();renderer.clear();expect(cosmetic.every(o=>!o.active)).toBe(true);
+    renderer.clear();expect(cosmetic.every(o=>!o.active)).toBe(true);
   });
   it('does not replay bootstrap impulses, deduplicates recovery snapshots and bounds cosmetic allocation',()=>{
     const {scene,cosmetic}=healthBarTestScene();

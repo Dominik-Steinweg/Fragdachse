@@ -1276,6 +1276,8 @@ export class ArenaLifecycleCoordinator {
       servicesReady: () => Boolean(this.getWorldCombatCore() && this.worldPlayerGameplayRuntime && this.worldGeometryBinding),
       bindRewardSink: sink => this.combatSystem.bindPrimaryHitRewardSink(scope.activityRevision, sink),
       observeBurrow: observer => this.worldPlayerGameplayRuntime!.addBurrowStartObserver(observer),
+      getRockets: () => this.getWorldProjectileRuntime()?.getMiniRocketEssenceCandidates() ?? [],
+      observeRocketTerminal: observer => this.getWorldProjectileRuntime()?.observeMiniRocketTerminal(observer) ?? null,
       getPlayers: () => {
         const core = this.getWorldCombatCore();
         const gameplay = this.worldPlayerGameplayRuntime;
@@ -1322,7 +1324,8 @@ export class ArenaLifecycleCoordinator {
           const player = this.ctx.playerManager.getPlayer(playerId);
           return player ?? null;
         }, new AdrenalineEssenceLighting(this.renderers.lighting), playerId =>
-          playerId === bridge.getLocalPlayerId() ? this.ctx.playerStatusRing?.getEssenceArrivalPoint?.() : null);
+          playerId === bridge.getLocalPlayerId() ? this.ctx.playerStatusRing?.getEssenceArrivalPoint?.() : null,
+          projectileId => this.getWorldProjectileRuntime()?.getPresentationRuntime().getRocketPosition(projectileId));
         const hud = new AdrenalineEssencePresentation({
           setEssenceIncoming: value => this.ctx.playerStatusRing?.setEssenceIncoming?.(value),
           notifyEssenceArrival: (value, completionAgeMs) => {

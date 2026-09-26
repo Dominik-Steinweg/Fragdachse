@@ -442,7 +442,7 @@ export const enUpgrades = {
   "upgrade.mini_rocket_homecoming_protocol.name": "Mini Rocket Homecoming Protocol",
   "upgrade.mini_rocket_homecoming_protocol.description": "If a rocket loses all targets, it can return to you while searching for enemies. After its final explosion it returns spent and can only be collected.",
   "upgrade.mini_rocket_adrenaline_recovery.name": "Mini Rocket Adrenaline Recovery",
-  "upgrade.mini_rocket_adrenaline_recovery.description": "Refunds {value0Absolute} of the adrenaline actually paid when collected, up to {maxValue0} over all levels.",
+  "upgrade.mini_rocket_adrenaline_recovery.description": "Collects up to {value0Unsigned} adrenaline per level from ground essence while returning and delivers it to you. Excess or undelivered cargo drops back onto the ground.",
   "upgrade.mini_rocket_armor_recovery.name": "Mini Rocket Armor Recovery",
   "upgrade.mini_rocket_armor_recovery.description": "Grants {value0} armor per level when collected. No internal cooldown.",
   "upgrade.awp_charge_damage.name": "AWP Charge Damage",

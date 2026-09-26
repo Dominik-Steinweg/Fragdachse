@@ -38,6 +38,10 @@ export class ProjectileLifecycleProcessor {
   }
 
   triggerExplosion(projectile: ProjectileRuntimeRecord, impactTargetKey?: string): boolean {
+    if (projectile.miniRocket.phase === 'return') {
+      this.deps.queueDestroy(projectile);
+      return true;
+    }
     if (!projectile.interaction.explosion) return false;
     // Only the direct trigger target is excluded during coast, not every AoE recipient.
     projectile.interaction.multiExplosionExcludedTargetKeys?.clear();
@@ -97,6 +101,10 @@ export class ProjectileLifecycleProcessor {
     allowMultiContinue = false,
     stopMultiContinuationAtObstacle = false,
   ): void {
+    if (proj.miniRocket.phase === 'return') {
+      this.deps.queueDestroy(proj);
+      return;
+    }
     if (proj.pendingExplosion) return;
     if (!proj.interaction.explosion) {
       if (proj.miniRocket.spent) this.queueSpentMiniRocketDestruction(proj);
@@ -205,6 +213,16 @@ export class ProjectileLifecycleProcessor {
     if (proj.pendingDestroy) {
       this.deps.release(proj);
       return false;
+    }
+
+    if (proj.miniRocket.phase === 'return') {
+      proj.miniRocket.deferredExplosion = false;
+      proj.miniRocket.deferredExplosionStopsAtObstacle = false;
+      if (coreStage.miniRocketSafetyExpiredIds.has(proj.id) || coreStage.lifetimeExpiredIds.has(proj.id)
+        || coreStage.rangeDepletedIds.has(proj.id) || coreStage.bounceLimitReachedIds.has(proj.id)) {
+        this.deps.release(proj);
+        return false;
+      }
     }
 
     if (proj.spec.flight.isGrenade) {

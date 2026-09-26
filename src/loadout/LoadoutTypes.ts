@@ -317,7 +317,7 @@ export interface WeaponConfigShape extends FogTrailModifiers {
   readonly miniRocketReturnEnabled?: number;
   readonly miniRocketReturnRangeBuffer?: number;
   readonly miniRocketPickupRadius?: number;
-  readonly miniRocketPickupAdrenalineRefundFraction?: number;
+  readonly miniRocketEssenceCapacity?: number;
   readonly miniRocketPickupArmor?: number;
   readonly miniRocketSafetyLifetimeMs?: number;
   readonly miniRocketCascadeDamageBonusPerExplosion?: number;

@@ -29,6 +29,74 @@ function fixture() {
 }
 
 describe('world-owned projectile lifecycle authority', () => {
+  it.each(['contact', 'lifetime', 'range', 'safety'] as const)('ends a returning armed rocket without explosion on %s', cause => {
+    const { runtime, physics, wall } = fixture();
+    runtime.setProjectileMiniRocketStatePort({ getOwnerPosition: () => ({ x: 1000, y: 0 }), onOutcome: () => {} });
+    const terminal = vi.fn();
+    const cosmetic = vi.fn();
+    runtime.setMiniRocketDestroyedCallback(cosmetic);
+    runtime.observeMiniRocketTerminal(terminal);
+    const spawn = request();
+    const id = runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight,
+      remainingRangePx: 100,
+      homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90 },
+      miniRocket: { stageRangePx: 100, returnEnabled: true, essenceCapacity: 2,
+        ...(cause === 'safety' ? { safetyLifetimeMs: 10 } : {}) },
+    } })!;
+    runtime.runHostProjectileStage(0, 0);
+    expect(runtime.getMiniRocketEssenceCandidates()[0].returning).toBe(true);
+    if (cause === 'contact') wall(id);
+    if (cause === 'range') { physics.handles.get(id)!.sprite.x = 5000; }
+    const result = runtime.runHostProjectileStage(cause === 'lifetime' ? 1100 : cause === 'safety' ? 11 : 0, 1100);
+    expect(result.projectileExplosions).toEqual([]);
+    expect(runtime.runHostProjectileStage(0, 1100).projectileExplosions).toEqual([]);
+    expect(runtime.activeCount).toBe(0);
+    expect(terminal).toHaveBeenCalledOnce();
+    expect(terminal.mock.calls[0][0]).toMatchObject({ projectileId: id, ownerId: 'owner', collected: false });
+    runtime.destroyProjectile(id);
+    expect(cosmetic).toHaveBeenCalledOnce();
+    expect(cosmetic.mock.calls[0][0]).toMatchObject({
+      x: terminal.mock.calls[0][0].x, y: terminal.mock.calls[0][0].y,
+    });
+  });
+
+  it('reports successful collection once and preserves the independent armor pickup', () => {
+    const { runtime } = fixture();
+    const onOutcome = vi.fn();
+    const cosmetic = vi.fn();
+    runtime.setMiniRocketDestroyedCallback(cosmetic);
+    runtime.setProjectileMiniRocketStatePort({ getOwnerPosition: () => ({ x: 0, y: 0 }), onOutcome });
+    const terminal = vi.fn();
+    runtime.observeMiniRocketTerminal(terminal);
+    const spawn = request();
+    const id = runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight, remainingRangePx: 100,
+      homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90 },
+      miniRocket: { stageRangePx: 100, returnEnabled: true, essenceCapacity: 2, pickupArmor: 3 },
+    } })!;
+    runtime.runHostProjectileStage(0, 0);
+    runtime.runHostProjectileStage(0, 1);
+    runtime.destroyProjectile(id);
+    expect(terminal).toHaveBeenCalledExactlyOnceWith({ projectileId: id, ownerId: 'owner', collected: true, x: 0, y: 0 });
+    expect(onOutcome.mock.calls[0][0].pickup).toMatchObject({ armorRefund: 3 });
+    expect(onOutcome.mock.calls[0][0].pickup).not.toHaveProperty('adrenalineRefund');
+    expect(cosmetic).not.toHaveBeenCalled();
+  });
+
+  it('does not emit a return burst when the World is torn down', () => {
+    const { runtime } = fixture();
+    runtime.setProjectileMiniRocketStatePort({ getOwnerPosition: () => ({ x: 1000, y: 0 }), onOutcome: () => {} });
+    const cosmetic = vi.fn();
+    runtime.setMiniRocketDestroyedCallback(cosmetic);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight, remainingRangePx: 100,
+      homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90 },
+      miniRocket: { stageRangePx: 100, returnEnabled: true, essenceCapacity: 2 },
+    } });
+    runtime.runHostProjectileStage(0, 0);
+    expect(runtime.getMiniRocketEssenceCandidates()[0].returning).toBe(true);
+    runtime.destroy();
+    expect(cosmetic).not.toHaveBeenCalled();
+  });
   it('queues a terminal impact once and releases resources after producing the deferred request', () => {
     const { runtime, physics, wall } = fixture();
     const resolved = vi.fn();

@@ -22,7 +22,8 @@ function latestMember(layer: FakeGpuLayer, slot: number) {
   return layer.members[layer.edited.lastIndexOf(slot)];
 }
 function setup(lighting?: ConstructorParameters<typeof AdrenalineEssenceGpuRenderer>[2],
-  arrivalTarget?: ConstructorParameters<typeof AdrenalineEssenceGpuRenderer>[3]) {
+  arrivalTarget?: ConstructorParameters<typeof AdrenalineEssenceGpuRenderer>[3],
+  rocketTarget?: ConstructorParameters<typeof AdrenalineEssenceGpuRenderer>[4]) {
   const scene = makeFakeGpuVfxScene();
   const factory = scene.add.spriteGPULayer;
   scene.add.spriteGPULayer = (key, size) => {
@@ -33,11 +34,35 @@ function setup(lighting?: ConstructorParameters<typeof AdrenalineEssenceGpuRende
     });
   };
   const target = { x: 180, y: 100 };
-  const renderer = new AdrenalineEssenceGpuRenderer(scene as never, () => target, lighting, arrivalTarget);
+  const renderer = new AdrenalineEssenceGpuRenderer(scene as never, () => target, lighting, arrivalTarget, rocketTarget);
   return { scene, renderer, target, body: findFakeLane(scene, 'adrenaline-essence-body'), glow: findFakeLane(scene, 'adrenaline-essence-glow') };
 }
 
 describe('AdrenalineEssenceGpuRenderer ownership and visual semantics', () => {
+  it('follows the displayed rocket with orbiting cargo and releases it immediately on removal or access loss', () => {
+    const position = { x: 300, y: 400 };
+    const lighting = { update: vi.fn(), clear: vi.fn(), destroy: vi.fn() };
+    const { renderer, body } = setup(lighting, undefined, () => position);
+    const loaded = { ...state([]), cargo: [{ projectileId: 7, ownerId: 'p', accessGroup: { kind: 'coop' as const },
+      x: 100, y: 100, value: 2, seed: 10 }] };
+    renderer.update(loaded, 100);
+    expect(renderer.getStats().activeGroups).toBe(1);
+    const first = { ...latestMember(body, 0) };
+    renderer.update(loaded, 200);
+    expect(latestMember(body, 0)).not.toEqual(first);
+    position.x = 600;
+    renderer.update(loaded, 300);
+    expect(lighting.update.mock.calls.at(-1)![0][0]).toMatchObject({ x: 600, y: 400, value: 2 });
+    renderer.update(state([], [], 2), 310);
+    expect(renderer.getStats().activeGroups).toBe(0);
+    renderer.update({ ...loaded, revision: 3 }, 400);
+    expect(renderer.getStats().activeGroups).toBe(1);
+    renderer.clear();
+    expect(renderer.getStats().activeGroups).toBe(0);
+    expect(body.visible).toBe(false);
+    renderer.destroy();
+    expect(body.destroy).toHaveBeenCalledOnce();
+  });
   it('follows the live ring fill target and uses it for confirmed arrival', () => {
     const destination = { x: 210, y: 130 };
     const lighting = { update: vi.fn(), clear: vi.fn(), destroy: vi.fn() };

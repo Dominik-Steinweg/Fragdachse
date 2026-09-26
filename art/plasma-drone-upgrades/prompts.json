@@ -1,0 +1,128 @@
+{
+  "generator": "Built-in image_gen",
+  "useCase": "stylized-concept",
+  "transparentBackground": true,
+  "basePrompt": "Use case: stylized-concept. Create ONE finished square upgrade icon for Fragdachse. Transparent background. Match the supplied P90 and machine gun turret upgrade artwork: compact richly shaded painterly game equipment illustration, dark steel with crisp cool edge highlights and saturated readable effect accents, slightly stylized proportions. Three-quarter perspective with visible sides, never orthographic top-down. One bold centered composition occupying 82% of canvas, comfortably padded, readable at 64px. No text, letters, numbers, UI frame, background scene, watermark, flat vector pictogram or pixelation. References show style and the actual weapon/drone shape; do NOT copy a reference layout. ",
+  "styleReferences": [
+    "public/assets/sprites/Loadout/P90.png",
+    "public/assets/sprites/Loadout/UPGRADE_P90_DAMAGE.png",
+    "public/assets/sprites/Loadout/UPGRADE_UNLOCK_MACHINE_GUN_TURRET.png"
+  ],
+  "shapeReferences": {
+    "plasma": "public/assets/sprites/pipeline-v2/held-plasma-burner/idle.png",
+    "drone": [
+      "public/assets/sprites/pipeline-v2/attack-drone-body/idle.png",
+      "public/assets/sprites/pipeline-v2/attack-drone-gun/idle.png"
+    ]
+  },
+  "assets": [
+    {
+      "id": "unlock_plasma_burner",
+      "prompt": "A compact elongated handheld plasma burner matching the reference weapon: dark navy armored oblong body, side vents, short thin forward barrel, small cyan emitter, now emitting subtle green plasma. Show the whole weapon diagonally in three-quarter side perspective, recognizable body and barrel; no hands.",
+      "source": "source/unlock_plasma_burner.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_UNLOCK_PLASMA_BURNER.png"
+    },
+    {
+      "id": "plasma_burner_range",
+      "prompt": "The same navy plasma burner emitter firing one long thin vivid green plasma lance diagonally across the icon. Length and precise focused reach are the main idea.",
+      "source": "source/plasma_burner_range.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_RANGE.png"
+    },
+    {
+      "id": "plasma_burner_charges",
+      "prompt": "The same navy plasma burner muzzle with three distinct bright green autonomous plasma spheres curving away from it, short curved trails, spheres large and readable.",
+      "source": "source/plasma_burner_charges.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_CHARGES.png"
+    },
+    {
+      "id": "plasma_burner_target_lock",
+      "prompt": "The same navy plasma burner muzzle sending a curved green beam into a single bright target enclosed by four simple green targeting brackets. Clear target acquisition.",
+      "source": "source/plasma_burner_target_lock.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_TARGET_LOCK.png"
+    },
+    {
+      "id": "plasma_burner_overload",
+      "prompt": "A dark navy industrial plasma energy coil, three sturdy stacked metal rings around a brilliant green central core with short forceful green electric arcs. Stored power rising.",
+      "source": "source/plasma_burner_overload.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_OVERLOAD.png"
+    },
+    {
+      "id": "plasma_burner_capacitor",
+      "prompt": "A chunky dark navy high-capacity capacitor with two substantial cylindrical green energy cells, reinforced steel end caps and shared metal connector. Clear large storage device in perspective.",
+      "source": "source/plasma_burner_capacitor.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_CAPACITOR.png"
+    },
+    {
+      "id": "plasma_burner_retention",
+      "prompt": "A dark navy green energy cell enclosed by two thick protective metallic crescent clamps forming an almost closed ring, bright green charge safely held inside. Readable energy preservation motif.",
+      "source": "source/plasma_burner_retention.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_RETENTION.png"
+    },
+    {
+      "id": "plasma_burner_chain",
+      "prompt": "Two dark metallic enemy target nodes in perspective linked sequentially by one vivid green zigzag plasma arc entering from lower left. Two large nodes, a single clear chain.",
+      "source": "source/plasma_burner_chain.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_CHAIN.png"
+    },
+    {
+      "id": "plasma_burner_cascade",
+      "prompt": "Four dark metallic target nodes arranged in a rising zigzag in perspective linked sequentially by vivid green plasma lightning. A clear expanded four-target chain, distinct separated nodes.",
+      "source": "source/plasma_burner_cascade.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_CASCADE.png"
+    },
+    {
+      "id": "plasma_burner_coupling",
+      "prompt": "Two dark metallic target nodes far apart, connected by a long stretched vivid green plasma arc, two restrained curved green range marks around the source. Expanded connection radius.",
+      "source": "source/plasma_burner_coupling.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_PLASMA_BURNER_COUPLING.png"
+    },
+    {
+      "id": "unlock_attack_drone_station",
+      "prompt": "The attack drone in the reference: elongated angular dark gunmetal fuselage, exactly four large circular ducted propellers on X arms, small amber markings, front chin-mounted slender gun. Hovering over a small low-profile square service pad. Show drone dominant in dynamic three-quarter perspective with sides visible, no top-down view.",
+      "source": "source/unlock_attack_drone_station.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_UNLOCK_ATTACK_DRONE_STATION.png"
+    },
+    {
+      "id": "attack_drone_self_loader",
+      "prompt": "A compact dark gunmetal drone ammunition feeder with curved belt of large brass cartridges cycling into an armored box, a restrained amber curved arrow reinforces automatic replenishment. Industrial drone component in three-quarter perspective.",
+      "source": "source/attack_drone_self_loader.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_ATTACK_DRONE_SELF_LOADER.png"
+    },
+    {
+      "id": "attack_drone_service",
+      "prompt": "A dark gunmetal drone docking service connector and compact ammunition cassette, warm amber energy bridge between two chunky metallic contacts, a small partial ducted drone rotor behind. Fast resupply in three-quarter perspective.",
+      "source": "source/attack_drone_service.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_ATTACK_DRONE_SERVICE.png"
+    },
+    {
+      "id": "attack_drone_flight",
+      "prompt": "The same four ducted rotor attack drone from the reference, elongated dark armored fuselage and forward gun, banked in three-quarter perspective with three short amber speed trails behind. Exactly four enclosed rotors, speed and forward motion.",
+      "source": "source/attack_drone_flight.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_ATTACK_DRONE_FLIGHT.png"
+    },
+    {
+      "id": "attack_drone_penetration",
+      "prompt": "One large pointed brass armor-piercing cartridge passing diagonally through two separated thick dark steel plates, clean bright amber trajectory and small sparks at pierced holes. Three-quarter perspective, bold silhouette.",
+      "source": "source/attack_drone_penetration.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_ATTACK_DRONE_PENETRATION.png"
+    },
+    {
+      "id": "attack_drone_bomb_bay",
+      "prompt": "The underside bomb bay of a dark gunmetal attack drone fuselage, two open armored doors and one large olive gunmetal bomb with amber stripe falling out. Close three-quarter underside perspective, clear bomb release.",
+      "source": "source/attack_drone_bomb_bay.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_ATTACK_DRONE_BOMB_BAY.png"
+    },
+    {
+      "id": "attack_drone_bomb_count",
+      "prompt": "A compact rack holding three large gunmetal olive bombs with warm amber stripes, staggered in three-quarter perspective. Clearly three complete bombs, quantity upgrade in the same drone equipment family.",
+      "source": "source/attack_drone_bomb_count.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_ATTACK_DRONE_BOMB_COUNT.png"
+    },
+    {
+      "id": "attack_drone_fire_chunks",
+      "prompt": "One gunmetal olive bomb with amber stripe splitting at its nose into three distinct glowing orange incendiary chunks and small stylized flames below. Strong orange fire silhouette, matching drone ordnance, three-quarter perspective.",
+      "source": "source/attack_drone_fire_chunks.png",
+      "runtime": "../../public/assets/sprites/Loadout/UPGRADE_ATTACK_DRONE_FIRE_CHUNKS.png"
+    }
+  ]
+}

@@ -158,12 +158,6 @@ export interface WeaponFireParams {
   sourceSlot?: LoadoutSlot;
   shotId?:     number;
   options?:    WeaponFireOptions;
-  /**
-   * Bereits gezahlte Adrenalinkosten der Mini-Rakete. Wird nur für diese eine Waffe abgefragt,
-   * damit der Executor selbst keine Ressourcenverwaltung braucht. Ein Aufruf ohne
-   * Ressourcen-Runtime liefert nichts.
-   */
-  resolvePaidAdrenalineCost?: () => number;
 }
 
 /**
@@ -342,9 +336,8 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
           returnEnabled: (config.miniRocketReturnEnabled ?? 0) > 0,
           returnRangeBuffer: config.miniRocketReturnRangeBuffer,
           pickupRadius:  config.miniRocketPickupRadius,
-          pickupAdrenalineRefundFraction: config.miniRocketPickupAdrenalineRefundFraction,
+          essenceCapacity: config.miniRocketEssenceCapacity,
           pickupArmor:   config.miniRocketPickupArmor,
-          adrenalineCostPaid: params.resolvePaidAdrenalineCost?.() ?? 0,
           safetyLifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : undefined,
           cascadeDamageBonusPerExplosion: config.miniRocketCascadeDamageBonusPerExplosion,
         } : undefined,

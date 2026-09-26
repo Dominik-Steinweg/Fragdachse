@@ -87,6 +87,7 @@ export const GpuVfxEffectId = {
   MgTransfer: 73,
   ConstructionOwnershipMote: 74,
   TranslocatorPortal: 75,
+  RocketReturnBurst: 76,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -609,4 +610,6 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.DeathFragment, importance: 'decorative', release: 'kill-with-source' },
   { id: GpuVfxEffectId.TranslocatorPortal, label: 'translocator.portal', lane: GpuVfxLaneId.ExplosionAccent,
     frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.RocketReturnBurst, label: 'rocket.return-burst', lane: GpuVfxLaneId.ExplosionAccent,
+    frame: GpuVfxFrameId.DeathGlow, importance: 'standard', release: 'linger' },
 ];

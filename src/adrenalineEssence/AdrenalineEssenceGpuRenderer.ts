@@ -20,6 +20,7 @@ import {
 import {
   essenceAccessGroupKey,
   type EssenceClusterSnapshot,
+  type EssenceCargoSnapshot,
   type EssencePoint,
   type EssenceState,
   type EssenceTransferReceipt,
@@ -49,6 +50,7 @@ interface LiquidPose {
 }
 
 interface VisualEntry {
+  cargo?: EssenceCargoSnapshot;
   readonly key: string;
   readonly slot: number;
   cluster: EssenceClusterSnapshot | null;
@@ -123,6 +125,7 @@ export class AdrenalineEssenceGpuRenderer {
     private readonly getPlayerPosition: (playerId: string) => EssencePoint | null | undefined,
     private readonly lighting?: EssenceLightingPresentation,
     private readonly getArrivalTarget?: (playerId: string) => EssencePoint | null | undefined,
+    private readonly getRocketPosition?: (projectileId: number) => EssencePoint | null | undefined,
   ) {
     buildGpuVfxAtlas(scene);
     this.glow = scene.add.spriteGPULayer(GPU_VFX_ATLAS_KEY, this.capacity * GLOW_STRIDE);
@@ -161,9 +164,9 @@ export class AdrenalineEssenceGpuRenderer {
         this.remove(entry);
         continue;
       }
-      const count = essenceDropletCount(entry.value, quality, this.entries.size);
+      const count = essenceDropletCount(entry.value, quality, this.entries.size, !!entry.cargo);
       this.visibleDroplets += count;
-      this.detailDrops += essenceDropletCount(entry.value, 'high', 0) - count;
+      this.detailDrops += essenceDropletCount(entry.value, 'high', 0, !!entry.cargo) - count;
       this.samplePose(entry, now);
       if (entry.pose.flight && quality !== 'low') this.visibleTails += count;
       entry.light.x = entry.x;
@@ -260,8 +263,17 @@ export class AdrenalineEssenceGpuRenderer {
       entry.seen = this.syncRevision;
       entry.nextUpdateAt = 0;
     }
+    for (const cargo of state.cargo ?? []) {
+      const entry = this.obtain(`r:${cargo.projectileId}`, cargo.value, cargo.seed, cargo.x, cargo.y);
+      entry.cargo = cargo;
+      entry.mode = 'live';
+      entry.value = cargo.value;
+      entry.seen = this.syncRevision;
+      entry.nextUpdateAt = 0;
+    }
     for (const entry of this.entries.values()) {
       if (entry.mode !== 'live' || entry.seen === this.syncRevision) continue;
+      if (entry.cargo) { this.remove(entry); continue; }
       const cluster = entry.cluster;
       if (cluster && now < cluster.expiresAt
         && !state.transfers.some((transfer) => transfer.clusterId === cluster.id)) {
@@ -406,8 +418,16 @@ export class AdrenalineEssenceGpuRenderer {
       sizeFactor = entry.mode === 'arrival' ? 0.8 + t * 0.4 : Math.max(0.15, 1 - t * 0.72);
       landingPulse = entry.mode === 'arrival' ? Math.sin(t * Math.PI) * 0.8 : 0;
       moving = true;
+    } else if (entry.cargo) {
+      const target = this.getRocketPosition?.(entry.cargo.projectileId) ?? entry.cargo;
+      entry.x = target.x;
+      entry.y = target.y;
+      moving = true;
+      sizeFactor = 0.8 + Math.min(0.35, entry.value * 0.05);
     } else if (transfer) {
-      const target = this.playerTarget(transfer.playerId, transfer.targetX, transfer.targetY);
+      const target = transfer.target?.kind === 'rocket'
+        ? this.getRocketPosition?.(transfer.target.projectileId) ?? { x: transfer.targetX, y: transfer.targetY }
+        : this.playerTarget(transfer.playerId, transfer.targetX, transfer.targetY);
       const pose = sampleEssenceFlight(transfer, now, target, this.pose);
       entry.x = pose.x;
       entry.y = pose.y;
@@ -482,8 +502,10 @@ export class AdrenalineEssenceGpuRenderer {
       alpha * (quality === 'low' ? ESSENCE_VISUAL.lowQualityHaloAlpha : ESSENCE_VISUAL.haloAlpha)
         * (entry.mode === 'return' ? 0.55 : 1));
     for (let i = 0; i < count; i++) {
-      const phase = essenceSeedUnit(entry.seed, i * 4 + 10) * TWO_PI;
-      const radius = i === 0 ? 0 : (2.8 + essenceSeedUnit(entry.seed, i * 4 + 11) * 2.8) * spread;
+      const phase = entry.cargo ? groupPhase + now * 0.004 + i * TWO_PI / count
+        : essenceSeedUnit(entry.seed, i * 4 + 10) * TWO_PI;
+      const radius = entry.cargo ? 11 + Math.min(5, entry.visualValue) + Math.sin(now * 0.003 + i) * 1.5
+        : i === 0 ? 0 : (2.8 + essenceSeedUnit(entry.seed, i * 4 + 11) * 2.8) * spread;
       const x = entry.x + Math.cos(phase) * radius;
       const y = entry.y + Math.sin(phase) * radius * 0.84;
       const scaleClass = i === 0 ? 1 : essenceSeedUnit(entry.seed, i * 4 + 12) < 0.55

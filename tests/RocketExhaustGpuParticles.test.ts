@@ -69,7 +69,7 @@ describe('rocket exhaust gpu particles', () => {
 
   it('creates no ParticleEmitter for the flight visuals any more', () => {
     // Weder pro Rakete noch geteilt: Exhaust und Smoke laufen beide ueber GPU-Layer. Klassische
-    // Emitter entstehen nur noch in den Einmal-Bursts von playCollection/playSpentDestruction.
+    // Emitter entstehen nur noch im Einmal-Burst von playCollection.
     const { renderer, scene } = setup();
     expect(scene.emitters.length).toBe(0);
     for (let id = 1; id <= 5; id += 1) spawnRocket(renderer, id);
@@ -181,5 +181,49 @@ describe('rocket exhaust gpu particles', () => {
     renderer.destroyAll();
     expect(exhaust.patched.length).toBe(spawned);
     expect(registry.getStats()?.['rocket-exhaust'].liveCount).toBe(0);
+  });
+
+  it('renders the harmless return burst entirely on shared GPU lanes and lets it expire', () => {
+    const { registry, renderer, scene, smoke } = setup();
+    const accent = findFakeLane(scene, 'explosion-accent');
+    const objects = scene.objects.length;
+    const tween = vi.spyOn(scene.tweens, 'add');
+    const timer = vi.spyOn(scene.time, 'delayedCall');
+    renderer.playSpentDestruction(120, 240, 0x68dfff);
+    expect(scene.objects).toHaveLength(objects);
+    expect(scene.emitters).toHaveLength(0);
+    expect(tween).not.toHaveBeenCalled();
+    expect(timer).not.toHaveBeenCalled();
+    expect(accent.edited.length).toBeGreaterThan(0);
+    expect(smoke.edited.length).toBeGreaterThan(0);
+    registry.update(1000);
+    expect(registry.getStats()?.['explosion-accent'].liveCount).toBe(0);
+    expect(registry.getStats()?.['rocket-smoke'].liveCount).toBe(0);
+  });
+
+  it('keeps a return burst after its rocket is removed but clears it at world teardown', () => {
+    const { registry, renderer } = setup();
+    spawnRocket(renderer, 1);
+    renderer.playSpentDestruction(100, 100, 0x68dfff);
+    renderer.destroyVisual(1);
+    expect(registry.getStats()?.['explosion-accent'].liveCount).toBeGreaterThan(0);
+    renderer.destroyAll();
+    expect(registry.getStats()?.['explosion-accent'].liveCount).toBe(0);
+    expect(registry.getStats()?.['rocket-smoke'].liveCount).toBe(0);
+    // The scene-lived source must also work in the next World.
+    renderer.playSpentDestruction(100, 100, 0x68dfff);
+    expect(registry.getStats()?.['explosion-accent'].liveCount).toBeGreaterThan(0);
+  });
+
+  it('respects GPU suppression and disabled particle quality for return bursts', () => {
+    const { registry, renderer, scene, smoke } = setup();
+    const accent = findFakeLane(scene, 'explosion-accent');
+    registry.setSuppressed(true);
+    renderer.playSpentDestruction(0, 0, 0xffffff);
+    registry.setSuppressed(false);
+    qualityFactors.standard = 0;
+    renderer.playSpentDestruction(0, 0, 0xffffff);
+    expect(accent.edited).toHaveLength(0);
+    expect(smoke.edited).toHaveLength(0);
   });
 });

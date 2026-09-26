@@ -442,7 +442,7 @@ export const deUpgrades = {
   "upgrade.mini_rocket_homecoming_protocol.name": "Heimkehrprotokoll",
   "upgrade.mini_rocket_homecoming_protocol.description": "Findet eine Rakete kein Ziel mehr, kann sie zum Spieler zurückkehren und unterwegs weiter nach Gegnern suchen. Nach ihrer letzten Explosion kehrt sie verbraucht zurück und kann nur noch eingesammelt werden.",
   "upgrade.mini_rocket_adrenaline_recovery.name": "Upgrade Mini-Raketen: Adrenalinrückgewinnung",
-  "upgrade.mini_rocket_adrenaline_recovery.description": "Erstattet beim Einsammeln je Stufe {value0Absolute} der tatsächlich bezahlten Adrenalinkosten zurück, bis zu {maxValue0}.",
+  "upgrade.mini_rocket_adrenaline_recovery.description": "Sammelt auf dem Rückflug bis zu {value0Unsigned} Adrenalin je Stufe aus Bodenessenz und liefert es bei dir ab. Überschuss oder verlorene Ladung fällt wieder zu Boden.",
   "upgrade.mini_rocket_armor_recovery.name": "Upgrade Mini-Raketen: Panzerungsbergung",
   "upgrade.mini_rocket_armor_recovery.description": "Gewährt beim Einsammeln {value0} Rüstung je Stufe. Kein interner Cooldown.",
   "upgrade.awp_charge_damage.name": "Geduldiger Tod",

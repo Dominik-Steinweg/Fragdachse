@@ -1063,9 +1063,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         return owner ? { x: owner.x, y: owner.y } : null;
       },
       onOutcome: (outcome) => {
-        if (outcome.pickup.adrenalineRefund > 0) {
-          o.getPlayerCombatIntegration()?.resource.refundAdrenaline(outcome.collectorId, outcome.pickup.adrenalineRefund);
-        }
         if (outcome.pickup.armorRefund > 0) o.combatSystem.addArmor(outcome.collectorId, outcome.pickup.armorRefund);
         o.network.effects.broadcastMiniRocketCollectionEffect(
           outcome.pickup.x,

@@ -1,6 +1,23 @@
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import type { ProjectileMiniRocketCollectedOutcome } from './ProjectileGameplayPort';
 
+export interface MiniRocketEssenceCandidate {
+  readonly projectileId: number;
+  readonly ownerId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly capacity: number;
+  readonly returning: boolean;
+}
+
+export interface MiniRocketTerminal {
+  readonly projectileId: number;
+  readonly ownerId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly collected: boolean;
+}
+
 /** Domain-facing hooks for the local Mini-Rocket state machine. */
 export interface ProjectileMiniRocketStatePort {
   getOwnerPosition(ownerId: string): { x: number; y: number } | null;

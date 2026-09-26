@@ -86,7 +86,7 @@ describe('versioned compact essence wire tuples', () => {
       receipts: [{ ...receipt('committed'), activityRevision: null, id: '21:null:transfer:4' }],
     });
     const wire = encodeEssenceSnapshot(state);
-    expect(wire[0]).toBe(2);
+    expect(wire[0]).toBe(3);
     expect(wire[2]).toBeNull();
     expect(wire[10][0][0]).toBe(1);
     expect(roundtrip(state)).toEqual(state);

@@ -1,8 +1,10 @@
-import type { EssenceClusterSnapshot, EssenceScope, EssenceState, EssenceTransferReceipt, EssenceTransferSnapshot } from './AdrenalineEssenceTypes';
+import type { EssenceCargoSnapshot, EssenceClusterSnapshot, EssenceScope, EssenceState, EssenceTransferReceipt, EssenceTransferSnapshot } from './AdrenalineEssenceTypes';
 import { getEssenceWireByteLength } from './AdrenalineEssenceWireCodec';
 
 /** Independent delta stream inside the existing World snapshot channel. */
 export interface EssenceSnapshot extends EssenceScope {
+  readonly cargo?: readonly EssenceCargoSnapshot[];
+  readonly cargoRemovals?: readonly number[];
   readonly full: boolean;
   readonly revision: number;
   readonly baseRevision: number;
@@ -24,6 +26,7 @@ export class AdrenalineEssenceReplication {
   private lastFullAt = Number.NEGATIVE_INFINITY;
   private clusters = new Map<string, string>();
   private transfers = new Map<string, string>();
+  private cargo = new Map<number, string>();
   private readonly receipts = new Map<string, { readonly receipt: EssenceTransferReceipt; lastSentAt: number | null }>();
   private bytes = 0;
   private snapshots = 0;
@@ -42,6 +45,13 @@ export class AdrenalineEssenceReplication {
       .map(entry => entry.receipt);
     const nextClusters = new Map<string, string>();
     const nextTransfers = new Map<string, string>();
+    const nextCargo = new Map<number, string>();
+    const cargo = (state.cargo ?? []).filter(entry => {
+      const signature = JSON.stringify(entry);
+      nextCargo.set(entry.projectileId, signature);
+      return full || this.cargo.get(entry.projectileId) !== signature;
+    });
+    const cargoRemovals = full ? [] : [...this.cargo.keys()].filter(id => !nextCargo.has(id));
     const clusters = state.clusters.filter(cluster => {
       const signature = JSON.stringify(cluster);
       nextClusters.set(cluster.id, signature);
@@ -54,17 +64,19 @@ export class AdrenalineEssenceReplication {
     });
     const clusterRemovals = full ? [] : [...this.clusters.keys()].filter(id => !nextClusters.has(id));
     const transferRemovals = full ? [] : [...this.transfers.keys()].filter(id => !nextTransfers.has(id));
-    if (!full && !clusters.length && !transfers.length && !clusterRemovals.length && !transferRemovals.length && !readyReceipts.length) return null;
+    if (!full && !clusters.length && !transfers.length && !clusterRemovals.length && !transferRemovals.length && !readyReceipts.length && !cargo.length && !cargoRemovals.length) return null;
     const baseRevision = this.revision;
     const snapshot: EssenceSnapshot = {
       worldRevision: state.worldRevision, activityRevision: state.activityRevision,
       full, revision: ++this.revision, baseRevision, stateRevision: state.revision, sentAt: now,
       clusters, clusterRemovals, transfers, transferRemovals,
+      ...(cargo.length || cargoRemovals.length ? { cargo, cargoRemovals } : {}),
       // Bootstrap is current state, never a replay of historical arrival effects.
       receipts: readyReceipts,
     };
     this.clusters = nextClusters;
     this.transfers = nextTransfers;
+    this.cargo = nextCargo;
     if (full) this.lastFullAt = now;
     // Full snapshots intentionally contain no terminal history and never consume a first send.
     for (const receipt of readyReceipts) this.receipts.get(receipt.id)!.lastSentAt = now;
@@ -87,6 +99,7 @@ export class AdrenalineEssenceClientReplica {
   private terminalBaseline = Number.NEGATIVE_INFINITY;
   private clusters = new Map<string, EssenceClusterSnapshot>();
   private transfers = new Map<string, EssenceTransferSnapshot>();
+  private cargo = new Map<number, EssenceCargoSnapshot>();
   private seenReceipts = new Map<string, number>();
   private receipts: EssenceTransferReceipt[] = [];
   private snapshot: EssenceState;
@@ -100,13 +113,15 @@ export class AdrenalineEssenceClientReplica {
     if (!Number.isSafeInteger(snapshot.revision) || snapshot.revision <= this.revision) return false;
     if (!snapshot.full && (this.gap || this.revision < 0 || snapshot.baseRevision !== this.revision)) { this.gap = true; return false; }
     if (snapshot.full) {
-      this.clusters.clear(); this.transfers.clear(); this.gap = false;
+      this.clusters.clear(); this.transfers.clear(); this.cargo.clear(); this.gap = false;
       if (this.revision < 0) this.terminalBaseline = snapshot.sentAt;
     }
     for (const id of snapshot.clusterRemovals) this.clusters.delete(id);
     for (const id of snapshot.transferRemovals) this.transfers.delete(id);
     for (const cluster of snapshot.clusters) this.clusters.set(cluster.id, cluster);
     for (const transfer of snapshot.transfers) this.transfers.set(transfer.id, transfer);
+    for (const id of snapshot.cargoRemovals ?? []) this.cargo.delete(id);
+    for (const cargo of snapshot.cargo ?? []) this.cargo.set(cargo.projectileId, cargo);
     this.revision = snapshot.revision;
     this.stateRevision = snapshot.stateRevision;
     for (const [id, until] of this.seenReceipts) if (until <= snapshot.sentAt) this.seenReceipts.delete(id);
@@ -117,7 +132,7 @@ export class AdrenalineEssenceClientReplica {
       this.seenReceipts.set(receipt.id, snapshot.sentAt + RECEIPT_RETENTION_MS * 2);
       this.receipts.push(receipt);
     }
-    this.snapshot = { ...this.scope, revision: this.stateRevision, clusters: [...this.clusters.values()], transfers: [...this.transfers.values()] };
+    this.snapshot = { ...this.scope, revision: this.stateRevision, clusters: [...this.clusters.values()], transfers: [...this.transfers.values()], ...(this.cargo.size ? { cargo: [...this.cargo.values()] } : {}) };
     return true;
   }
 
@@ -126,6 +141,7 @@ export class AdrenalineEssenceClientReplica {
   isAwaitingFull(): boolean { return this.gap || this.revision < 0; }
   clear(): void {
     this.clusters.clear(); this.transfers.clear(); this.seenReceipts.clear(); this.receipts = [];
+    this.cargo.clear();
     this.revision = -1; this.gap = false;
     this.terminalBaseline = Number.NEGATIVE_INFINITY;
     this.snapshot = { ...this.scope, revision: 0, clusters: [], transfers: [] };

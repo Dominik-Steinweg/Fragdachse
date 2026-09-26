@@ -93,7 +93,6 @@ export interface MiniRocketPickupSpec {
   readonly y: number;
   readonly color: number;
   readonly ownerColor?: number;
-  readonly adrenalineRefund: number;
   readonly armorRefund: number;
 }
 

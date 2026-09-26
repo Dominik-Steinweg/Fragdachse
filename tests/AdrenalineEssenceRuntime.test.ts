@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AdrenalineEssenceRuntime } from '../src/adrenalineEssence/AdrenalineEssenceRuntime';
 import { ADRENALINE_ESSENCE_CONFIG } from '../src/adrenalineEssence/AdrenalineEssenceConfig';
-import { canSeeEssence, ESSENCE_VALUE_TOLERANCE, type EssencePlayerSnapshot, type EssenceReward } from '../src/adrenalineEssence/AdrenalineEssenceTypes';
+import { canSeeEssence, ESSENCE_VALUE_TOLERANCE, type EssenceRocketSnapshot, type EssencePlayerSnapshot, type EssenceReward } from '../src/adrenalineEssence/AdrenalineEssenceTypes';
 
 const scope = { worldRevision: 2, activityRevision: 3 };
 const coop = { kind: 'coop' } as const;
@@ -17,7 +17,9 @@ const reward = (id: string, value = 10, x = 0, createdAt = 0, overrides: Partial
 
 function fixture(players: Player[] = [], config = {}) {
   let revision = 0;
+  const rockets: EssenceRocketSnapshot[] = [];
   const ports = {
+    getRockets: () => rockets,
     getPlayers: () => players.map(entry => ({ ...entry })),
     resolveGroundPoint: vi.fn((origin: { x: number; y: number }) => origin as { x: number; y: number } | null),
     hasLineOfSight: vi.fn(() => true),
@@ -36,7 +38,7 @@ function fixture(players: Player[] = [], config = {}) {
     landingMinMs: 100, landingMaxMs: 100, groundLifetimeMs: 1000,
     transferMinMs: 100, transferMaxMs: 100, mergeRadius: 30, mergeWindowMs: 150, ...config,
   });
-  return { runtime, ports, players };
+  return { runtime, ports, players, rockets };
 }
 
 function conserved(runtime: AdrenalineEssenceRuntime): void {
@@ -45,6 +47,92 @@ function conserved(runtime: AdrenalineEssenceRuntime): void {
 }
 
 describe('AdrenalineEssenceRuntime', () => {
+  it('shares magnetism with rockets, reserves capacity once and delivers only at the owner', () => {
+    const owner = player('a', 200, 0);
+    const { runtime, ports, rockets } = fixture([owner]);
+    rockets.push({ projectileId: 7, ownerId: 'a', x: 0, y: 0, capacity: 4, returning: true });
+    runtime.materialize(reward('first', 3));
+    runtime.materialize(reward('second', 3, 35));
+    runtime.update(100);
+    expect(runtime.getState().transfers.reduce((sum, t) => sum + t.value, 0)).toBe(4);
+    expect(runtime.getState().transfers.every(t => t.target?.projectileId === 7)).toBe(true);
+    runtime.update(200);
+    expect(runtime.getState().cargo?.[0].value).toBe(4);
+    expect(ports.commitResolvedGain).not.toHaveBeenCalled();
+    rockets[0] = { ...rockets[0], returning: false };
+    runtime.update(2000);
+    expect(runtime.getState().cargo?.[0].value).toBe(4);
+    owner.adrenaline = 98.5;
+    const terminal = { projectileId: 7, ownerId: 'a', x: 200, y: 0, collected: true };
+    runtime.finishRocket(terminal, 2000);
+    runtime.finishRocket(terminal, 2000);
+    expect(owner.adrenaline).toBe(100);
+    expect(ports.commitResolvedGain).toHaveBeenCalledOnce();
+    expect(runtime.getState().cargo).toBeUndefined();
+    expect(runtime.getState().clusters.reduce((sum, c) => sum + c.value, 0)).toBe(2.5);
+    expect(runtime.getState().clusters[0]).toMatchObject({ originX: 200, expiresAt: 3100 });
+    conserved(runtime);
+  });
+
+  it('chooses the nearest eligible collector and keeps pending rocket transfers out of attack', () => {
+    const owner = player('a', 200, 100);
+    const nearerPlayer = player('b', 1, 1);
+    const { runtime, rockets } = fixture([owner, nearerPlayer]);
+    rockets.push({ projectileId: 7, ownerId: 'a', x: 2, y: 0, capacity: 4, returning: true });
+    runtime.materialize(reward('hit', 3));
+    runtime.update(100);
+    expect(runtime.getState().transfers).toMatchObject([{ playerId: 'b', value: 1 }, { target: { kind: 'rocket', projectileId: 7 }, value: 2 }]);
+    rockets[0] = { ...rockets[0], returning: false };
+    owner.adrenaline = 100;
+    runtime.update(150);
+    expect(runtime.getState().transfers.every(t => !t.target)).toBe(true);
+    runtime.update(200);
+    expect(runtime.getState().cargo).toBeUndefined();
+    expect(nearerPlayer.adrenaline).toBe(100);
+    rockets[0] = { ...rockets[0], returning: true };
+    runtime.update(250);
+    runtime.update(350);
+    expect(runtime.getState().cargo?.[0].value).toBe(2);
+    conserved(runtime);
+  });
+
+  it.each(['full', 'dead', 'new-life', 'disconnected', 'ended'] as const)('drops cargo without credit for %s at the terminal point', mode => {
+    const owner = player('a', 0, 0);
+    const { runtime, ports, rockets, players } = fixture([owner]);
+    rockets.push({ projectileId: 3, ownerId: 'a', x: 0, y: 0, capacity: 2, returning: true });
+    runtime.materialize(reward('hit', 1.125));
+    runtime.update(100); runtime.update(200);
+    if (mode === 'dead') owner.alive = false;
+    if (mode === 'new-life') { owner.lifeRevision++; owner.adrenaline = 0; }
+    if (mode === 'disconnected') players.length = 0;
+    runtime.finishRocket({ projectileId: 3, ownerId: 'a', x: 400, y: 30, collected: mode !== 'ended' }, 3000);
+    expect(runtime.getDiagnostics().committedValue).toBe(0);
+    expect(runtime.getState().clusters).toMatchObject([{ originX: 400, originY: 30, value: 1.125, expiresAt: 4100 }]);
+    if (mode !== 'full') expect(ports.commitResolvedGain).not.toHaveBeenCalled();
+    conserved(runtime);
+  });
+
+  it('enforces rocket access and line of sight, and discards cargo on scope teardown', () => {
+    const owner = player('a', 0, 0);
+    const { runtime, ports, rockets } = fixture([owner]);
+    rockets.push({ projectileId: 1, ownerId: 'a', x: 0, y: 0, capacity: 2, returning: true });
+    runtime.materialize(reward('hit', 1));
+    owner.accessGroup = { kind: 'personal', playerId: 'a' };
+    runtime.update(100);
+    expect(runtime.getState().transfers).toEqual([]);
+    owner.accessGroup = coop;
+    ports.hasLineOfSight.mockReturnValue(false);
+    runtime.update(150);
+    expect(runtime.getState().transfers).toEqual([]);
+    ports.hasLineOfSight.mockReturnValue(true);
+    runtime.update(200); runtime.update(300);
+    expect(runtime.getDiagnostics().carriedValue).toBe(1);
+    runtime.destroy();
+    runtime.finishRocket({ projectileId: 1, ownerId: 'a', x: 100, y: 0, collected: true }, 400);
+    expect(runtime.getDiagnostics().lifecycleDiscardedValue).toBe(1);
+    expect(runtime.getState().clusters).toEqual([]);
+    conserved(runtime);
+  });
   it('materializes full resolved fractions for a full creator, waits for landing, and commits only at arrival', () => {
     const creator = player('a', 0, 0);
     const teammate = player('b', 10, 100);

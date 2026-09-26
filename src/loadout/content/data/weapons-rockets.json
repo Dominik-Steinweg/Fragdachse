@@ -129,7 +129,7 @@
       "miniRocketReturnEnabled": 0,
       "miniRocketReturnRangeBuffer": 0.5,
       "miniRocketPickupRadius": 32,
-      "miniRocketPickupAdrenalineRefundFraction": 0,
+      "miniRocketEssenceCapacity": 0,
       "miniRocketPickupArmor": 0,
       "miniRocketSafetyLifetimeMs": 12000,
       "miniRocketCascadeDamageBonusPerExplosion": 0,

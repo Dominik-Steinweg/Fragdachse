@@ -22,6 +22,7 @@ export interface EssenceBindingPresentation {
 }
 
 export interface EssenceBindingPorts extends AdrenalineEssencePorts {
+  readonly observeRocketTerminal?: (observer: (event: import('./AdrenalineEssenceTypes').EssenceRocketTerminal) => void) => (() => void) | null;
   readonly isHost: boolean;
   readonly now: () => number;
   readonly servicesReady: () => boolean;
@@ -47,6 +48,7 @@ export class AdrenalineEssenceBinding {
   private destroyed = false;
   private detachReward: (() => void) | null = null;
   private detachBurrow: (() => void) | null = null;
+  private detachRockets: (() => void) | null = null;
   private pendingPresentation: EssenceTransferReceipt[] = [];
   private filteredSource: EssenceState | null = null;
   private filteredGroup: string | null = null;
@@ -62,7 +64,9 @@ export class AdrenalineEssenceBinding {
 
   /** Activity startup may precede World services; connect as soon as composition is ready. */
   prepare(): void {
-    if (this.destroyed || this.connected || !this.runtime || !this.ports.servicesReady()) return;
+    if (this.destroyed || !this.runtime || !this.ports.servicesReady()) return;
+    this.detachRockets ??= this.ports.observeRocketTerminal?.(event => this.runtime?.finishRocket(event, this.ports.now())) ?? null;
+    if (this.connected) return;
     this.detachReward = this.ports.bindRewardSink(fact => {
       if (this.destroyed || fact.worldRevision !== this.scope.worldRevision || fact.activityRevision !== this.scope.activityRevision) return;
       const accessGroup = this.ports.accessGroupFor(fact.creatorId) ?? this.creatorGroups.get(fact.creatorId);
@@ -129,7 +133,7 @@ export class AdrenalineEssenceBinding {
     if (this.filteredGroup !== null && groupKey !== this.filteredGroup) this.presentation?.clear();
     if (state !== this.filteredSource || groupKey !== this.filteredGroup) {
       this.filteredSource = state; this.filteredGroup = groupKey;
-      this.filtered = { ...state, clusters: state.clusters.filter(c => hasEssenceAccess(c.accessGroup, group)), transfers: state.transfers.filter(t => hasEssenceAccess(t.accessGroup, group)) };
+      this.filtered = { ...state, clusters: state.clusters.filter(c => hasEssenceAccess(c.accessGroup, group)), transfers: state.transfers.filter(t => hasEssenceAccess(t.accessGroup, group)), cargo: state.cargo?.filter(c => hasEssenceAccess(c.accessGroup, group)) };
     }
     const ready: EssenceTransferReceipt[] = [];
     this.pendingPresentation = this.pendingPresentation.filter(receipt => {
@@ -138,7 +142,7 @@ export class AdrenalineEssenceBinding {
       if (receipt.creditedValue > 0 && this.ports.resourceRevisionFor(receipt.playerId) < receipt.resourceRevision) return true;
       ready.push(receipt); return false;
     });
-    if (!this.presentation && !this.filtered!.clusters.length && !this.filtered!.transfers.length && !ready.length) return;
+    if (!this.presentation && !this.filtered!.clusters.length && !this.filtered!.transfers.length && !this.filtered!.cargo?.length && !ready.length) return;
     this.presentation ??= this.ports.createPresentation();
     this.presentation.sync(this.filtered!, ready, now, localId);
   }
@@ -149,6 +153,7 @@ export class AdrenalineEssenceBinding {
     if (this.destroyed) return;
     this.destroyed = true;
     this.detachReward?.(); this.detachBurrow?.();
+    this.detachRockets?.(); this.detachRockets = null;
     this.detachReward = null; this.detachBurrow = null;
     this.runtime?.destroy(); this.replica.clear();
     this.presentation?.destroy(); this.presentation = null;

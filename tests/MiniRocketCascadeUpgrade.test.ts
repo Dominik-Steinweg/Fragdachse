@@ -19,6 +19,21 @@ function maxProfile(upgradeIds: readonly string[]): CoopDefenseUpgradeProfile {
 }
 
 describe('mini-rocket cascade charge', () => {
+  it('resolves each recovery level to authored cargo capacity without changing shot costs', () => {
+    const definition = getCoopDefenseUpgradeDefinition('mini_rocket_adrenaline_recovery')!;
+    const base = WEAPON_CONFIGS.MINI_ROCKET_LAUNCHER;
+    for (let level = 0; level <= definition.maxLevel; level++) {
+      const profile = maxProfile(['unlock_mini_rocket_launcher', 'mini_rocket_long_range_drive',
+        'mini_rocket_triple_detonation', 'mini_rocket_cascade_charge', 'mini_rocket_thermobaric_charge',
+        'mini_rocket_launcher_homing_turn', 'mini_rocket_launcher_explosion_damage',
+        'mini_rocket_homecoming_protocol', 'mini_rocket_adrenaline_recovery']);
+      profile.upgrades.mini_rocket_adrenaline_recovery.level = level;
+      const resolved = applyCoopDefenseModifiersToWeaponConfig(base, 'weapon2', getCoopDefenseResolvedEffectTotals(profile));
+      expect(resolved.miniRocketEssenceCapacity).toBe((base.miniRocketEssenceCapacity ?? 0) + definition.effects[0].value * level);
+      expect(resolved.adrenalinCost).toBe(base.adrenalinCost);
+    }
+    expect(getUpgradeDescription(definition.id, 'de')).not.toMatch(/\{[^}]+\}/);
+  });
   it('applies the bonus only after the first explosion and stacks per explosion', () => {
     expect(getMiniRocketCascadeMultiplier(0, 0.1)).toBe(1);
     expect(getMiniRocketCascadeMultiplier(1, 0.1)).toBeCloseTo(1.1);

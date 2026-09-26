@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AdrenalineEssenceClientReplica, AdrenalineEssenceReplication, ESSENCE_RECEIPT_REPEAT_MS } from '../src/adrenalineEssence/AdrenalineEssenceReplication';
 import type { EssenceClusterSnapshot, EssenceState, EssenceTransferReceipt } from '../src/adrenalineEssence/AdrenalineEssenceTypes';
+import { encodeEssenceSnapshot, decodeEssenceSnapshot } from '../src/adrenalineEssence/AdrenalineEssenceWireCodec';
 
 const scope = { worldRevision: 1, activityRevision: 2 };
 const cluster: EssenceClusterSnapshot = { id: 'c', accessGroup: { kind: 'coop' }, x: 10, y: 20, originX: 10, originY: 20, seed: 4, value: 0.15, createdAt: 0, landAt: 200, expiresAt: 8200, state: 'grounded' };
@@ -8,6 +9,37 @@ const state = (revision: number, clusters: readonly EssenceClusterSnapshot[]): E
 const receipt: EssenceTransferReceipt = { ...scope, id: 't', status: 'committed', accessGroup: { kind: 'coop' }, playerId: 'p', lifeRevision: 1, participationRevision: 1, creditedValue: 0.15, returnedValue: 0, expiredValue: 0, resourceRevision: 3, completedAt: 50, sourceX: 10, sourceY: 20, targetX: 40, targetY: 30 };
 
 describe('Essence delta/full stream', () => {
+  it('replicates cargo and rocket destinations through the wire, heals loss and removes stale cargo', () => {
+    const host = new AdrenalineEssenceReplication();
+    const client = new AdrenalineEssenceClientReplica(scope);
+    const cargo = { projectileId: 7, ownerId: 'p', accessGroup: { kind: 'coop' as const }, x: 20, y: 30, value: 1.125, seed: 2 };
+    const loaded: EssenceState = { ...state(1, []), cargo: [cargo], transfers: [{
+      id: 't', clusterId: 'c', accessGroup: cargo.accessGroup, playerId: 'p', lifeRevision: 1, participationRevision: 1,
+      sourceX: 10, sourceY: 10, targetX: 20, targetY: 30, value: 0.125, startedAt: 0, arrivalAt: 100, seed: 2,
+      target: { kind: 'rocket', projectileId: 7 },
+    }] };
+    const send = (value: EssenceState, now: number, full = false) => {
+      const snapshot = host.build(value, now, full)!;
+      const decoded = decodeEssenceSnapshot(JSON.parse(JSON.stringify(encodeEssenceSnapshot(snapshot))));
+      expect(decoded).toEqual(snapshot);
+      return decoded;
+    };
+    expect(client.apply(send(loaded, 0))).toBe(true);
+    expect(client.getState()).toEqual(loaded);
+    send(state(2, []), 10); // Lost removal.
+    const replaced = { ...state(3, []), cargo: [{ ...cargo, value: 2.25 }] };
+    expect(client.apply(send(replaced, 20))).toBe(false);
+    expect(client.apply(send(replaced, 1000, true))).toBe(true);
+    expect(client.getState()).toEqual(replaced);
+    const joining = new AdrenalineEssenceClientReplica(scope);
+    joining.apply(send(replaced, 1100, true));
+    expect(joining.getState()).toEqual(replaced);
+    expect(joining.drainReceipts()).toEqual([]);
+    client.apply(send(state(4, []), 2000, true));
+    expect(client.getState().cargo).toBeUndefined();
+    client.clear();
+    expect(client.getState().cargo).toBeUndefined();
+  });
   it('heals a dropped delta only from a newer full, preserving fractions and rejecting stale tombstones', () => {
     const host = new AdrenalineEssenceReplication();
     const client = new AdrenalineEssenceClientReplica(scope);

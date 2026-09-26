@@ -151,6 +151,7 @@ function makeCombatController() {
   const renderers = {
     healthBars: { update: vi.fn() },
     enemyEyes: { sync: vi.fn() },
+    enemyVulnerability: { sync: vi.fn() },
     beer: { update: vi.fn() },
     timeBubble: { update: vi.fn() },
     blackHole: { update: vi.fn() },

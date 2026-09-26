@@ -1,5 +1,14 @@
 {
   "withIcon": [
+    "plasma_burner_range",
+    "plasma_burner_charges",
+    "plasma_burner_target_lock",
+    "plasma_burner_overload",
+    "plasma_burner_capacitor",
+    "plasma_burner_retention",
+    "plasma_burner_chain",
+    "plasma_burner_cascade",
+    "plasma_burner_coupling",
     "unlock_attack_drone_station",
     "attack_drone_self_loader",
     "attack_drone_service",
@@ -299,15 +308,6 @@
     "zeus_thunderfront"
   ],
   "withoutIcon": [
-    "plasma_burner_range",
-    "plasma_burner_charges",
-    "plasma_burner_target_lock",
-    "plasma_burner_overload",
-    "plasma_burner_capacitor",
-    "plasma_burner_retention",
-    "plasma_burner_chain",
-    "plasma_burner_cascade",
-    "plasma_burner_coupling",
     "turret_control",
     "unlock_ak47",
     "unlock_asmd_primary",

@@ -65,9 +65,8 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     miniRocketReturnEnabled:  miniRocket?.returnEnabled,
     miniRocketReturnRangeBuffer: miniRocket?.returnRangeBuffer,
     miniRocketPickupRadius:   miniRocket?.pickupRadius,
-    miniRocketPickupAdrenalineRefundFraction: miniRocket?.pickupAdrenalineRefundFraction,
+    miniRocketEssenceCapacity: miniRocket?.essenceCapacity,
     miniRocketPickupArmor:    miniRocket?.pickupArmor,
-    miniRocketAdrenalineCostPaid: miniRocket?.adrenalineCostPaid,
     miniRocketSafetyLifetimeMs:   miniRocket?.safetyLifetimeMs,
     miniRocketCascadeDamageBonusPerExplosion: miniRocket?.cascadeDamageBonusPerExplosion,
 
