@@ -122,8 +122,12 @@ await writeFile(new URL('src/ui/hudFrameExports.json', root), JSON.stringify({
   width: atlasW,
   height: atlasH,
   // Geometrie in Quellpixeln relativ zum jeweiligen Frame.
-  card: { width: cardW, height: FRAME_H, cap: CAP, interiorTop: 29, interiorBottom: 69,
-    railCenter: 23, trackTop: 72, trackBottom: 78, trackInset: 52 },
+  // Gemessen an der Alphahülle (Alpha > 40) über die ganze Schienenmitte aller Farbvarianten:
+  // gemeinsame Innenöffnung y 29–74, x 31 bis Breite−35 (Wurzelornament rechts ist breiter). Das Füllband liegt knapp über dem farbigen Innensaum; `textCenter`
+  // ist die Mitte zwischen Kicker-Schild und Füllband. Text, Füllband und Schilder teilen eine
+  // gemeinsame Innenkante (`contentInset`), die links hinter dem Efeu beginnt.
+  card: { width: cardW, height: FRAME_H, cap: CAP, interiorTop: 29, interiorBottom: 74,
+    railCenter: 23, textCenter: 53, trackTop: 70, trackBottom: 74, trackInset: 62, contentInset: 62 },
   strip: { width: strip.width, height: FRAME_H, cap: CAP, interiorTop: 29, interiorBottom: 76, railCenter: 23 },
   divider: { width: DIVIDER_W },
   atlas: { frames, meta: { image: 'hud-frames.webp', size: { w: atlasW, h: atlasH }, scale: '1' } },

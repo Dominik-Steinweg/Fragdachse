@@ -148,8 +148,7 @@ export class HudCard {
   private kickerText = '';
   private glyph = false;
   private pips: { count: number; filled: number; current: number } | null = null;
-  private railNote = '';
-  private readonly railNoteText: Phaser.GameObjects.Text;
+  private readonly kickerSize: number;
 
   constructor(private readonly scene: Phaser.Scene, config: HudCardConfig) {
     ensureBackingTexture(scene);
@@ -159,6 +158,7 @@ export class HudCard {
     this.widthValue = config.width;
     this.toneId = config.tone;
     this.centered = config.centered ?? false;
+    this.kickerSize = config.kickerSize ?? 9;
     const style = HUD_TONES[config.tone];
 
     this.backing = scene.add.nineslice(0, 0, BACKING_TEX, undefined, 48, 48, 12, 12, 12, 12)
@@ -173,15 +173,13 @@ export class HudCard {
       .setTint(style.accent);
     this.decor = scene.add.graphics();
     registerGraphicsObject(scene, 'gameplayHud', this.decor);
-    this.kicker = scene.add.text(0, 0, '', hudTextStyle(config.kickerSize ?? 10, style.accent, false, 1.4))
-      .setOrigin(0, 0.5);
-    this.railNoteText = scene.add.text(0, 0, '', hudTextStyle(config.kickerSize ?? 10, HUD_TEXT_MUTED, false, 0.8))
-      .setOrigin(1, 0.5).setVisible(false);
-    this.title = scene.add.text(0, 0, '', hudTextStyle(config.titleSize ?? 16, HUD_TEXT_PRIMARY, false, 0.6))
+    this.kicker = scene.add.text(0, 0, '', hudTextStyle(this.kickerSize, style.accent, false, 1.4))
+      .setOrigin(0.5, 0.5);
+    this.title = scene.add.text(0, 0, '', hudTextStyle(config.titleSize ?? 15, HUD_TEXT_PRIMARY, false, 0.6))
       .setOrigin(this.centered ? 0.5 : 0, 0.5);
-    this.value = scene.add.text(0, 0, '', hudTextStyle(config.valueSize ?? 15, HUD_TEXT_PRIMARY, true))
+    this.value = scene.add.text(0, 0, '', hudTextStyle(config.valueSize ?? 14, HUD_TEXT_PRIMARY, true))
       .setOrigin(1, 0.5);
-    this.root.add([this.head, this.decor, this.kicker, this.railNoteText, this.title, this.value]);
+    this.root.add([this.head, this.decor, this.kicker, this.title, this.value]);
     this.layout();
   }
 
@@ -191,22 +189,26 @@ export class HudCard {
   /** Kartenoberkante relativ zur Mitte. */
   get top(): number { return -this.height / 2; }
 
-  /** Rechteck der Füllung in lokalen Koordinaten. */
+  /** Füllband unter der Textzeile, mit gleichem Abstand zu beiden Ecken. */
   get fillRect(): HudFillRect {
     const s = this.scale;
-    const left = -this.widthValue / 2 + SRC.trackInset * s;
-    const height = Math.max(2, (SRC.trackBottom - SRC.trackTop) * s - 1);
+    const height = Math.max(2, Math.round((SRC.trackBottom - SRC.trackTop) * s));
     return {
-      x: left,
+      x: -this.widthValue / 2 + SRC.trackInset * s,
       y: this.top + ((SRC.trackTop + SRC.trackBottom) / 2) * s - height / 2,
       width: Math.max(1, this.widthValue - SRC.trackInset * s * 2),
       height,
     };
   }
 
-  get contentLeft(): number { return -this.widthValue / 2 + 66 * this.scale + (this.glyph ? 18 * this.scale * 2 : 0); }
-  get contentRight(): number { return this.widthValue / 2 - 66 * this.scale; }
-  get interiorCenterY(): number { return this.top + ((SRC.interiorTop + SRC.interiorBottom) / 2) * this.scale; }
+  /** Radius der Nebenziel-Raute; die Textzeile rückt um ihre Breite ein. */
+  private get glyphRadius(): number { return Math.max(3, 8 * this.scale); }
+  get contentLeft(): number {
+    return -this.widthValue / 2 + SRC.contentInset * this.scale + (this.glyph ? this.glyphRadius * 2 + 7 : 0);
+  }
+  get contentRight(): number { return this.widthValue / 2 - SRC.contentInset * this.scale; }
+  /** Mitte der Textzeile: optisch mittig zwischen oberer Schiene und Füllband. */
+  get interiorCenterY(): number { return this.top + SRC.textCenter * this.scale; }
   get railY(): number { return this.top + SRC.railCenter * this.scale; }
 
   setTone(tone: HudTone): this {
@@ -234,15 +236,6 @@ export class HudCard {
     if (text === this.kickerText) return this;
     this.kickerText = text;
     this.kicker.setText(text);
-    this.drawDecor();
-    return this;
-  }
-
-  /** Kurzer Zusatz rechts auf der oberen Schiene (z. B. Belohnung). */
-  setRailNote(text: string): this {
-    if (text === this.railNote) return this;
-    this.railNote = text;
-    this.railNoteText.setText(text).setVisible(text.length > 0);
     this.drawDecor();
     return this;
   }
@@ -306,7 +299,7 @@ export class HudCard {
 
   /** Deckkraft aller Inhalte ohne Glas und Rahmen – für die Übergabe aus einer Ankündigung. */
   setContentAlpha(alpha: number): this {
-    for (const object of [this.fill, this.head, this.decor, this.kicker, this.railNoteText, this.title, this.value]) {
+    for (const object of [this.fill, this.head, this.decor, this.kicker, this.title, this.value]) {
       object.setAlpha(alpha);
     }
     return this;
@@ -330,11 +323,13 @@ export class HudCard {
   private syncFill(): void {
     const rect = this.fillRect;
     const width = rect.width * this.fillFrac;
+    // Mittig gesetzte Karten (Ankündigungen) füllen symmetrisch von der Mitte aus.
+    const cropX = this.centered ? FILL_TEX_W * (1 - this.fillFrac) / 2 : 0;
     this.fill
       .setVisible(this.fillVisible && width > 0.5)
       .setPosition(rect.x, rect.y + rect.height / 2)
       .setDisplaySize(Math.max(1, rect.width), rect.height)
-      .setCrop(0, 0, FILL_TEX_W * this.fillFrac, FILL_TEX_H);
+      .setCrop(cropX, 0, FILL_TEX_W * this.fillFrac, FILL_TEX_H);
     this.head.setVisible(this.headVisible);
     if (this.headVisible) {
       this.head.setPosition(rect.x + width, rect.y + rect.height / 2).setScale(Math.max(0.6, rect.height / 5));
@@ -346,9 +341,10 @@ export class HudCard {
     const w = this.widthValue;
     this.frame.width = w / s;
     // NineSlice rechnet seine Vertices in den width/height-Settern neu.
-    this.backing.width = Math.max(24, w - 44 * s);
-    this.backing.height = Math.max(24, (SRC.trackBottom - SRC.interiorTop + 12) * s);
-    this.backing.setPosition(0, this.top + (SRC.interiorTop + SRC.trackBottom) / 2 * s);
+    // Das Glas füllt die Innenöffnung und reicht knapp unter die Schienen, damit keine Fuge bleibt.
+    this.backing.width = Math.max(24, w - 52 * s);
+    this.backing.height = Math.max(24, (SRC.interiorBottom - SRC.interiorTop + 8) * s);
+    this.backing.setPosition(0, this.top + ((SRC.interiorTop + SRC.interiorBottom) / 2) * s);
     const y = this.interiorCenterY;
     this.title.setPosition(this.centered ? 0 : this.contentLeft, y);
     this.value.setPosition(this.contentRight, y);
@@ -362,62 +358,48 @@ export class HudCard {
     const s = this.scale;
     g.clear();
     const railY = this.railY;
-    const plateH = Math.round(this.kicker.height * 0.86) + 2;
+    // Schilder sind nur wenig höher als die Schiene: sie liegen auf ihr, statt sie zu verdecken.
+    const plateH = this.kickerSize + 5;
+    const plate = (x: number, w: number): void => {
+      g.fillStyle(0x0a0e0d, 0.92);
+      g.fillRoundedRect(x, railY - plateH / 2, w, plateH, plateH / 2);
+      g.lineStyle(1, style.muted, 0.8);
+      g.strokeRoundedRect(x, railY - plateH / 2, w, plateH, plateH / 2);
+    };
 
-    let railLeft = -this.widthValue / 2 + 78 * s;
     if (this.kickerText) {
-      const plateW = this.kicker.width + 14;
-      const plateX = this.centered ? -plateW / 2 : -this.widthValue / 2 + 78 * s;
-      railLeft = plateX + plateW + 8;
-      g.fillStyle(0x0a0e0d, 0.94);
-      g.fillRoundedRect(plateX, railY - plateH / 2, plateW, plateH, plateH / 2);
-      g.lineStyle(1, style.muted, 0.95);
-      g.strokeRoundedRect(plateX, railY - plateH / 2, plateW, plateH, plateH / 2);
-      this.kicker.setVisible(true).setPosition(plateX + 7, railY);
+      const plateW = Math.round(this.kicker.width) + 12;
+      // Die Schriftkante des Schilds fluchtet mit Titel und Füllband.
+      const plateX = this.centered ? -plateW / 2 : -this.widthValue / 2 + SRC.contentInset * s - 6;
+      plate(plateX, plateW);
+      this.kicker.setVisible(true).setPosition(plateX + plateW / 2, railY);
     } else {
       this.kicker.setVisible(false);
     }
 
-    let railRight = this.widthValue / 2 - 78 * s;
     if (this.pips) {
-      const pipW = Math.max(6, 22 * s);
-      const pipH = Math.max(3, 7 * s);
-      const gap = Math.max(3, 6 * s);
+      const pipW = Math.max(5, 18 * s);
+      const pipH = Math.max(2.5, 5 * s);
+      const gap = Math.max(3, 5 * s);
       const total = this.pips.count * pipW + (this.pips.count - 1) * gap;
-      const plateW = total + 12;
-      g.fillStyle(0x0a0e0d, 0.94);
-      g.fillRoundedRect(railRight - plateW, railY - plateH / 2, plateW, plateH, plateH / 2);
-      g.lineStyle(1, style.muted, 0.95);
-      g.strokeRoundedRect(railRight - plateW, railY - plateH / 2, plateW, plateH, plateH / 2);
-      const startX = railRight - plateW + 6;
+      const plateW = total + 10;
+      // Rechts fluchtet das Schild mit der Wertspalte.
+      const plateX = this.widthValue / 2 - SRC.contentInset * s + 5 - plateW;
+      plate(plateX, plateW);
       for (let index = 0; index < this.pips.count; index += 1) {
-        const x = startX + index * (pipW + gap);
+        const x = plateX + 5 + index * (pipW + gap);
         if (index === this.pips.current) g.fillStyle(style.accent, 1);
         else if (index < this.pips.filled) g.fillStyle(style.muted, 0.95);
         else g.fillStyle(COLORS.GREY_6, 0.85);
         g.fillRoundedRect(x, railY - pipH / 2, pipW, pipH, pipH / 2);
       }
-      railRight -= plateW + 6;
-    }
-    // Die Notiz bekommt nur den Platz zwischen Kicker und Marken; reicht er nicht, entfällt sie.
-    const noteSpace = railRight - railLeft - 14;
-    const showNote = this.railNote.length > 0 && noteSpace >= 48;
-    this.railNoteText.setVisible(showNote);
-    if (showNote) {
-      fitHudText(this.railNoteText, this.railNote, noteSpace);
-      const plateW = this.railNoteText.width + 14;
-      g.fillStyle(0x0a0e0d, 0.9);
-      g.fillRoundedRect(railRight - plateW, railY - plateH / 2, plateW, plateH, plateH / 2);
-      g.lineStyle(1, COLORS.GREY_6, 0.9);
-      g.strokeRoundedRect(railRight - plateW, railY - plateH / 2, plateW, plateH, plateH / 2);
-      this.railNoteText.setPosition(railRight - 7, railY);
     }
 
     if (this.glyph) {
       // Raute: eindeutiges Zeichen des freiwilligen Nebenziels (Pflichtziel ohne Glyphe).
-      const gx = -this.widthValue / 2 + 66 * s + 8 * s * 2 - 4;
+      const r = this.glyphRadius;
+      const gx = -this.widthValue / 2 + SRC.contentInset * s + r;
       const gy = this.interiorCenterY;
-      const r = Math.max(3.5, 9 * s);
       g.fillStyle(style.accent, 0.95);
       g.fillPoints([
         new Phaser.Math.Vector2(gx, gy - r), new Phaser.Math.Vector2(gx + r, gy),

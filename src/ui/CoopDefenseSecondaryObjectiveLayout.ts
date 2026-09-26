@@ -6,14 +6,18 @@ import { SECONDARY_OBJECTIVE_MAX_CHIPS } from './coopDefenseSecondaryObjectiveMo
  * Seitenspalte. Die Datei besitzt bewusst keine HUD-Imports: CenterHUD und Nebenziel-HUD
  * beziehen ihre Positionen beide von hier, ohne einen zyklischen Modulpfad aufzubauen.
  *
- * Die Karten sind Waldrelief-Rahmen (`HudCard`) mit fester Quellhöhe von 98 px; `scale` legt
+ * Die Karten sind Waldboden-Rahmen (`HudCard`) mit fester Quellhöhe von 98 px; `scale` legt
  * damit Höhe und Rahmenstärke fest. Alle Karten der Spalte teilen Breite und rechte Kante.
  */
 const PANEL_WIDTH = 340;
 const RIGHT_MARGIN = 14;
 const PANEL_CENTER_X = GAME_WIDTH - PANEL_WIDTH / 2 - RIGHT_MARGIN;
 const STACK_TOP_Y = 10;
-const STACK_GAP = 6;
+/**
+ * Die Rahmen tragen oben und unten transparente Polster (Efeu, Schatten); die sichtbaren
+ * Abstände entstehen daraus. Ein zusätzlicher Spalt ließe die Spalte zerfallen.
+ */
+const STACK_GAP = 2;
 const CARD_SOURCE_HEIGHT = 98;
 const CARD_SCALE = 0.5;
 const CHIP_SCALE = 0.36;
@@ -54,7 +58,7 @@ export const COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT = {
   panelScale: CARD_SCALE,
   chipHeight: CHIP_HEIGHT,
   chipScale: CHIP_SCALE,
-  rowGap: STACK_GAP - 2,
+  rowGap: 0,
   columnTopY: COOP_DEFENSE_ENCOUNTER_LAYOUT.topY
     + COOP_DEFENSE_ENCOUNTER_LAYOUT.height
     + STACK_GAP,

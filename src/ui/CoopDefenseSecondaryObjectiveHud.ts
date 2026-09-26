@@ -109,8 +109,8 @@ export class CoopDefenseSecondaryObjectiveHud {
       scale: LAYOUT.panelScale,
       width: PANEL_W,
       tone: 'blue',
-      titleSize: 16,
-      valueSize: 15,
+      titleSize: 15,
+      valueSize: 14,
     });
     this.panel.setGlyph(true).setKicker(t('ui.objective.secondary'));
     this.panel.root.setPosition(COLUMN_X, COLUMN_TOP_Y + PANEL_H / 2).setVisible(false);
@@ -235,7 +235,6 @@ export class CoopDefenseSecondaryObjectiveHud {
       .setKicker(entry.terminal
         ? t('ui.objective.secondaryStatus', { status: entry.statusLine ?? '' })
         : t('ui.objective.secondary'))
-      .setRailNote(entry.terminal ? '' : entry.rewardHint)
       .setValue(progressText(entry), entry.terminal ? style.accent : HUD_TEXT_PRIMARY)
       .setTitle(entry.title, style.accent)
       .setProgress(progressFraction(entry), !entry.terminal);

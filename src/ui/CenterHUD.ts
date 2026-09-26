@@ -2,7 +2,7 @@
  * CenterHUD – bildschirmfeste Arena-Infoflächen.
  *
  * Es gibt keine festen GUI-Bereiche: Jede Fläche liegt über der Spielwelt. Daher gilt
- * „so wenig wie möglich, so viel wie nötig" – schmale Waldrelief-Rahmen mit halbtransparentem
+ * „so wenig wie möglich, so viel wie nötig" – schmale Waldboden-Rahmen mit halbtransparentem
  * Glas, die nur erscheinen, solange sie etwas zu sagen haben:
  *   - oben mittig die Statusleiste (Lebensstatus, Rundentimer, Zug)
  *   - oben rechts Hauptziel und Angriffsserie (darunter das Nebenziel-HUD)
@@ -222,12 +222,12 @@ export class CenterHUD {
 
   private buildMissionCards(): void {
     this.mainCard = new HudCard(this.scene, {
-      scale: MAIN.scale, width: MAIN.width, tone: 'gold', titleSize: 16, valueSize: 15,
+      scale: MAIN.scale, width: MAIN.width, tone: 'gold', titleSize: 15, valueSize: 14,
     });
     this.mainCard.setKicker(t('ui.objective.main'));
     this.mainCard.root.setPosition(MAIN_X, MAIN_Y).setVisible(false);
     this.encounterCard = new HudCard(this.scene, {
-      scale: ENCOUNTER.scale, width: ENCOUNTER.width, tone: 'purple', titleSize: 16, valueSize: 15,
+      scale: ENCOUNTER.scale, width: ENCOUNTER.width, tone: 'purple', titleSize: 15, valueSize: 14,
     });
     this.encounterCard.root.setPosition(ENCOUNTER_X, ENCOUNTER_Y).setVisible(false);
     this.missionStack.add([this.mainCard.root, this.encounterCard.root]);

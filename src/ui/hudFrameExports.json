@@ -8,11 +8,13 @@
     "height": 98,
     "cap": 64,
     "interiorTop": 29,
-    "interiorBottom": 69,
+    "interiorBottom": 74,
     "railCenter": 23,
-    "trackTop": 72,
-    "trackBottom": 78,
-    "trackInset": 52
+    "textCenter": 53,
+    "trackTop": 70,
+    "trackBottom": 74,
+    "trackInset": 62,
+    "contentInset": 62
   },
   "strip": {
     "width": 216,

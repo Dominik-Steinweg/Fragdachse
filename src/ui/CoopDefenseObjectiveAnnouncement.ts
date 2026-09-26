@@ -120,7 +120,7 @@ export class CoopDefenseObjectiveAnnouncement {
       width: ANNOUNCE_W,
       tone: 'gold',
       titleSize: 25,
-      kickerSize: 12,
+      kickerSize: 11,
       centered: true,
       backingAlpha: BACKING_ALPHA,
     });
