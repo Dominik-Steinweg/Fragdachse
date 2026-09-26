@@ -3152,6 +3152,19 @@ function createDetonationTarget(projectile: ProjectileRuntimeRecord): Projectile
     effect: projectile.spec.interaction.detonable!,
     sourceId: projectile.provenance.weaponSourceId ?? 'weapon.unknown',
     sourceSlot: projectile.provenance.sourceSlot,
+    pulseSource: projectile.spec.interaction.proximityPulse ? {
+      projectileId: projectile.id,
+      ownerId: projectile.provenance.allegiance.ownerId,
+      provenance: projectile.provenance,
+      x: projectile.physics.sprite.x,
+      y: projectile.physics.sprite.y,
+      color: projectile.presentation.color,
+      sourceId: projectile.provenance.weaponSourceId ?? 'weapon.unknown',
+      sourceSlot: projectile.provenance.sourceSlot,
+      proximityPulse: { ...projectile.spec.interaction.proximityPulse },
+      rockDamageMult: projectile.spec.interaction.directHit.rockDamageMult,
+      trainDamageMult: projectile.spec.interaction.directHit.trainDamageMult,
+    } : undefined,
   };
 }
 

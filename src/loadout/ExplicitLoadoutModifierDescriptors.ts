@@ -264,6 +264,11 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "ASMD_SEC",
     targets: [{ path: ["detonable","comboAdrenalineGain"], formula: "add" }],
   },
+  "weapon.ASMD_SEC.detonable.comboLightningLevel": {
+    kind: "weapon",
+    itemId: "ASMD_SEC",
+    targets: [{ path: ["detonable","comboLightningLevel"], formula: "add" }],
+  },
   "weapon.ASMD_SEC.matchPrimaryRange": {
     kind: "weapon",
     itemId: "ASMD_SEC",

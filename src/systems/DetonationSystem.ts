@@ -3,12 +3,15 @@ import type {
   ProjectileExternalInteractionPort,
 } from '../projectile/ProjectileExternalInteractionPort';
 import type { DetonableConfig, DetonatorConfig, LoadoutSlot } from '../types';
+import type { ProjectileProximityPulseSource } from '../projectile/ProjectileGameplayPort';
 
 /**
  * Detonations-Ereignis: entsteht wenn ein Projektion mit DetonableConfig
  * durch einen passenden Detonator ausgelöst wird.
  */
 export interface DetonationEvent {
+  projectileId:       number;
+  pulseSource?:       ProjectileProximityPulseSource;
   x:                  number;
   y:                  number;
   /** Owner des gezündeten Projektils (für Kill-Attribution) */
@@ -123,6 +126,8 @@ function toDetonationEvent(
   sourceSlot?: LoadoutSlot,
 ): DetonationEvent {
   return {
+    projectileId: outcome.id,
+    pulseSource: outcome.pulseSource,
     x: outcome.x,
     y: outcome.y,
     projectileOwnerId: outcome.projectileOwnerId,

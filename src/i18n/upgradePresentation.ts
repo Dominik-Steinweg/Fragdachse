@@ -1,3 +1,4 @@
+import { COMBO_LIGHTNING_RANGE_MULTIPLIER, getComboLightningDamageMultiplier } from '../systems/DetonationResolver';
 import { resolveTimeBubblePrismEmitter } from '../loadout/TimeBubbleConfig';
 import { MG_TURRET_RULES } from '../config/mgTurretRules';
 import { ATTACK_DRONE_RULES as DRONE } from '../config/attackDrone';
@@ -50,6 +51,13 @@ function getUpgradeParams(
       'unsigned',
     );
   });
+
+  if (definition.id === 'asmd_secondary_arc_damage') {
+    params.comboRangeMultiplier = formatNumber(COMBO_LIGHTNING_RANGE_MULTIPLIER, locale);
+    params.comboMultipliers = Array.from({ length: definition.maxLevel }, (_, index) =>
+      formatNumber(getComboLightningDamageMultiplier((WEAPON_CONFIGS.ASMD_SEC.detonable?.comboLightningLevel ?? 0)
+        + definition.effects[0].value * (index + 1)), locale)).join(' / ');
+  }
 
   const rocket = WEAPON_CONFIGS.ROCKET_LAUNCHER.rocketLauncher!;
   if (definition.id.startsWith('rocket_launcher_')) {

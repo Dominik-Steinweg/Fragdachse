@@ -6,18 +6,25 @@ vi.mock('../../src/network/bridge', () => ({ bridge: {
   getActivityDescriptor: () => null, getActiveGameMode: () => 'coop_defense',
   getConnectedPlayers: () => [], getLocalPlayerId: () => 'headless',
   getPlayerHeldItemId: () => null, getPlayerInput: () => null, flushEffects() {},
-  getPlayerColor: () => 0xffffff, broadcastExplosionEffect() {},
+  getPlayerColor: () => 0xffffff, broadcastExplosionEffect() {}, broadcastBfgLaserBatch: vi.fn(),
 } }));
 vi.mock('phaser', async () => {
   const phaser = (await import('../fakeArenaRenderScene')).createFakePhaserModule();
   const { createRequire } = await import('node:module');
   const require = createRequire(import.meta.url), root = require.resolve('phaser/package.json').replace(/package\.json$/, '');
   const Line = require(root + 'src/geom/line/Line.js');
-  return { ...phaser, Geom: { ...phaser.Geom,
+  return { ...phaser, Math: { ...phaser.Math, Distance: { ...phaser.Math.Distance,
+    Squared: (x1: number, y1: number, x2: number, y2: number) => (x2 - x1) ** 2 + (y2 - y1) ** 2,
+  } }, Geom: { ...phaser.Geom,
     Rectangle: require(root + 'src/geom/rectangle/Rectangle.js'),
     Line: Object.assign(Line, { Length: (l: any) => Math.hypot(l.x2 - l.x1, l.y2 - l.y1) }) } };
 });
 
+import { DetonationSystem } from '../../src/systems/DetonationSystem';
+import { resolveDetonations, type DetonationEffectSink } from '../../src/systems/DetonationResolver';
+import { ResourceSystem } from '../../src/systems/ResourceSystem';
+import { AdrenalineEssenceBinding } from '../../src/adrenalineEssence/AdrenalineEssenceBinding';
+import { bridge } from '../../src/network/bridge';
 import { WorldCombatCore } from '../../src/combat/WorldCombatCore';
 import { EnemyManager } from '../../src/entities/EnemyManager';
 import { StinkCloudSystem } from '../../src/effects/StinkCloudSystem';
@@ -411,5 +418,96 @@ describe('normal and stationary enemy combat parity', () => {
       expect(f.receipts.filter(r => r.target.id === next.id)).toEqual([]);
       f.range!.finishHostStep(clock.now); expect(f.range!.snapshot().dps).toBe(0);
     } finally { s.destroy(); f.destroy(); }
+  });
+});
+
+
+describe('ASMD detonation through shared world effects', () => {
+  it.each([1, 2, 3])('retains the ball stats after removal and applies one attributed final pulse at level %i', level => {
+    const f = fixture();
+    const { host, cloud } = cloudHost(f);
+    try {
+      const pulse = { radius: 110, damage: 7, scanIntervalMs: 400 };
+      const ball = f.projectiles.spawnProjectile({
+        origin: { x: 100, y: 100, angle: 0 },
+        provenance: createSingleOwnerProvenance('ball-owner', { weaponSourceId: 'ASMD_SEC', sourceSlot: 'weapon2' }),
+        flight: { speed: 50, size: 16, lifetimeMs: 5000, maxBounces: 0, isGrenade: false },
+        interaction: { directHit: { damage: 1, rockDamageMult: 1.5, trainDamageMult: 0.5 }, proximityPulse: pulse,
+          detonable: { tag: 'asmd_ball', aoeDamage: 1, aoeRadius: 20, allowCrossTeam: true, comboLightningLevel: level } },
+        presentation: { style: 'energy_ball', color: 0x123456 },
+      });
+      const detonations = new DetonationSystem(f.projectiles);
+      expect(detonations.detonateProjectile(ball, 'p1')).toBe(true);
+      expect(detonations.detonateProjectile(ball, 'p1')).toBe(false);
+      expect(f.physics.released).toContain(ball);
+      const events = detonations.flushDetonations();
+      expect(events).toHaveLength(1);
+      expect(events[0].pulseSource).toMatchObject({ proximityPulse: pulse, rockDamageMult: 1.5, trainDamageMult: 0.5 });
+      const hp = f.enemy.getHp();
+      const sink = (host as unknown as { detonationEffectSink: DetonationEffectSink }).detonationEffectSink;
+      vi.mocked(bridge.broadcastBfgLaserBatch).mockClear();
+      resolveDetonations(sink, events);
+      expect(f.enemy.getHp()).toBeCloseTo(hp - pulse.damage * (level + 1));
+      expect(f.receipts.at(-1)?.source.attribution.id).toBe('p1');
+      expect(bridge.broadcastBfgLaserBatch).toHaveBeenCalledExactlyOnceWith(
+        [{ sx: 100, sy: 100, ex: 300, ey: 100 }], 0x123456, 'asmd_primary');
+      expect(detonations.flushDetonations()).toEqual([]);
+    } finally { cloud.destroyAll(); f.destroy(); }
+  });
+
+  it('keeps standard pulse range, visibility and alliance rules for the shared resolver', () => {
+    const f = fixture();
+    const { host, cloud } = cloudHost(f);
+    try {
+      const source = { projectileId: 42, ownerId: 'p1', provenance: createSingleOwnerProvenance('p1'),
+        sourceId: 'ASMD_SEC', x: 100, y: 100, color: 0xffffff,
+        proximityPulse: { radius: 100, damage: 7, scanIntervalMs: 400 } };
+      const hp = f.enemy.getHp();
+      expect(host.resolveProjectileProximityPulse(source).lines).toEqual([]);
+      const extended = { ...source, proximityPulse: { ...source.proximityPulse, radius: 250 } };
+      const sight = vi.spyOn(f.combat, 'hasLineOfSight').mockReturnValue(false);
+      expect(host.resolveProjectileProximityPulse(extended).lines).toEqual([]);
+      sight.mockRestore();
+      const relation = vi.spyOn(f.combat, 'canDamageTarget').mockReturnValue(false);
+      expect(host.resolveProjectileProximityPulse(extended).lines).toEqual([]);
+      relation.mockRestore();
+      expect(f.enemy.getHp()).toBe(hp);
+      expect(host.resolveProjectileProximityPulse(extended).lines).toHaveLength(1);
+      expect(f.enemy.getHp()).toBeCloseTo(hp - source.proximityPulse.damage);
+    } finally { cloud.destroyAll(); f.destroy(); }
+  });
+
+  it('materializes combo essence without a target or immediate credit through the host binding', () => {
+    const f = fixture();
+    const { host, cloud } = cloudHost(f);
+    const resource = new ResourceSystem();
+    resource.initPlayer('p1'); resource.setAdrenaline('p1', 0);
+    resource.setAdrenalineGainMultiplierResolver(() => 2);
+    const essence = new AdrenalineEssenceBinding({ worldRevision: 71, activityRevision: 1 }, {
+      isHost: true, now: () => clock.now, servicesReady: () => true,
+      getPlayers: () => [{ playerId: 'p1', lifeRevision: 1, participationRevision: 1, interactive: true,
+        alive: true, collectible: true, accessGroup: { kind: 'coop' }, x: 80, y: 90,
+        adrenaline: resource.getAdrenaline('p1'), maxAdrenaline: resource.getMaxAdrenaline('p1') }],
+      resolveGroundPoint: () => ({ x: 80, y: 90 }), hasLineOfSight: () => true,
+      commitResolvedGain: (id, value) => ({ creditedValue: resource.commitResolvedAdrenalineGain(id, value),
+        resourceRevision: resource.getAdrenalineRevision(id) }),
+      bindRewardSink: () => () => {}, observeBurrow: () => () => {},
+      accessGroupFor: () => ({ kind: 'coop' }), localPlayerId: () => 'p1', isLocallyVisible: () => false,
+      resourceRevisionFor: id => resource.getAdrenalineRevision(id),
+      createPresentation: () => ({ sync() {}, clear() {}, destroy() {} }),
+    });
+    try {
+      host.setActivityFramePort({ getAdrenalineEssence: () => essence } as never);
+      host.setPlayerFramePort({ getPlayerGameplayRuntime: () => ({ getPlayerCombatIntegrationPort: () => ({ resource }) }) } as never);
+      const sink = (host as unknown as { detonationEffectSink: DetonationEffectSink }).detonationEffectSink;
+      resolveDetonations(sink, [{ projectileId: 17, x: 80, y: 90, projectileOwnerId: 'p1', detonatorOwnerId: 'p1',
+        sourceId: 'ASMD_SEC', effect: { tag: 'asmd_ball', aoeRadius: 1, aoeDamage: 1,
+          allowCrossTeam: true, comboAdrenalineGain: 15 } }]);
+      expect(resource.getAdrenaline('p1')).toBe(0);
+      expect(essence.runtime!.getState().clusters[0]).toMatchObject({ originX: 80, originY: 90, value: 30 });
+      essence.updateHost(clock.now + 300);
+      essence.updateHost(clock.now + 600);
+      expect(resource.getAdrenaline('p1')).toBe(30);
+    } finally { essence.destroy(); cloud.destroyAll(); f.destroy(); }
   });
 });

@@ -34,7 +34,7 @@ export const LOADOUT_ALLOWED_KEYS_BY_PATH: Readonly<Record<string, ReadonlySet<s
   "weapon.awpCharge": new Set(["corridorDamage","corridorDotDurationMs","corridorDotTickIntervalMs","corridorEnabled","corridorHalfWidth","corridorKnockback","corridorKnockbackDurationMs","durationMs","fireTrailBurnDamagePerTick","fireTrailBurnDurationMs","fireTrailDurationMs","fireTrailHalfWidthCells","fullChargeDamageBonus","maxDamageBonus"]),
   "weapon.burnOnHit": new Set(["damagePerTick","durationMs"]),
   "weapon.chainLightning": new Set(["damageFalloffPerJump","detonableTags","maxJumps","searchRadius","targetEnemies","thicknessFalloffPerJump"]),
-  "weapon.detonable": new Set(["allowCrossTeam","aoeDamage","aoeRadius","comboAdrenalineGain","damageFalloff","dotArea","explosionVisualStyle","knockback","selfKnockbackMult","tag"]),
+  "weapon.detonable": new Set(["allowCrossTeam","aoeDamage","aoeRadius","comboAdrenalineGain","comboLightningLevel","damageFalloff","dotArea","explosionVisualStyle","knockback","selfKnockbackMult","tag"]),
   "weapon.detonable.damageFalloff": new Set(["minDamage"]),
   "weapon.detonable.dotArea": new Set(["damagePerTick","durationMs","radiusScale","style","tickIntervalMs"]),
   "weapon.detonator": new Set(["triggerTags"]),

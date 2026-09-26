@@ -1484,6 +1484,8 @@ export type GrenadeEffectConfig =
  */
 export interface DetonableConfig {
   readonly comboAdrenalineGain?: number;
+  /** Zero disables the combo pulse; positive levels multiply resolved damage by level + 1. */
+  readonly comboLightningLevel?: number;
   readonly tag: string;              // Bezeichner, z.B. 'asmd_ball'
   readonly aoeDamage: number;        // Explosionsschaden bei Detonation
   readonly aoeRadius: number;        // Explosionsradius in px

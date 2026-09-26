@@ -318,3 +318,59 @@ describe('scoped essence composition', () => {
     binding.destroy();
   });
 });
+
+
+describe('confirmed combo essence', () => {
+  it('scatters the resolved reward from the center once and lets an ally collect without multiplying again', () => {
+    const f = fixture(true, true);
+    f.resources.setAdrenalineGainMultiplierResolver(id => id === 'a' ? 2 : 9);
+    f.resources.initPlayer('b');
+    f.resources.drainAdrenaline('b', f.resources.getMaxAdrenaline('b'), 0);
+    f.players.set('a', { ...f.players.get('a')!, x: 2000, y: 2000 });
+    f.players.set('b', { ...f.players.get('a')!, playerId: 'b', x: 80, y: 90 });
+    const binding = new AdrenalineEssenceBinding(descriptor(), f.ports);
+    const reward = { ...binding.scope, projectileId: 17, creatorId: 'a', authoredValue: 15,
+      resolvedValue: f.resources.resolveAdrenalineGain(f.resources.captureAdrenalineGainBasis('a')!, 15),
+      origin: { x: 80, y: 90 }, weaponId: 'ASMD_SEC' };
+    expect(binding.materializeCombo(reward)).toBe(true);
+    expect(binding.materializeCombo(reward)).toBe(false);
+    expect(f.gains).not.toHaveBeenCalled();
+    const clusters = binding.runtime!.getState().clusters;
+    expect(clusters.length).toBeGreaterThan(1);
+    expect(clusters.reduce((sum, c) => sum + c.value, 0)).toBeCloseTo(reward.resolvedValue);
+    for (const cluster of clusters) {
+      expect(cluster).toMatchObject({ originX: 80, originY: 90, accessGroup: { kind: 'coop' } });
+      expect(Math.hypot(cluster.x - 80, cluster.y - 90)).toBeGreaterThan(0);
+    }
+    // Bring the ally to each fragment, using the normal landing/reservation/arrival loop.
+    let now = 1000;
+    for (const cluster of clusters) {
+      f.players.set('b', { ...f.players.get('b')!, x: cluster.x, y: cluster.y });
+      binding.updateHost(now);
+      binding.updateHost(now + 500);
+      now += 600;
+    }
+    expect(f.resources.getAdrenaline('a')).toBe(0);
+    expect(f.resources.getAdrenaline('b')).toBeCloseTo(reward.resolvedValue);
+    expect(binding.getDiagnostics().gameplay).toMatchObject({ rewardCount: 1, activeValue: 0 });
+    binding.destroy();
+  });
+
+  it('rejects stale scopes and clients and discards pending combo value on teardown', () => {
+    const f = fixture();
+    const binding = new AdrenalineEssenceBinding(descriptor(), f.ports);
+    const reward = { ...binding.scope, projectileId: 9, creatorId: 'a', authoredValue: 10,
+      resolvedValue: 10, origin: { x: 0, y: 0 }, weaponId: 'ASMD_SEC' };
+    expect(binding.materializeCombo({ ...reward, worldRevision: 20 })).toBe(false);
+    expect(binding.materializeCombo({ ...reward, activityRevision: 2 })).toBe(false);
+    const client = new AdrenalineEssenceBinding(descriptor(), fixture(false).ports);
+    expect(client.materializeCombo(reward)).toBe(false);
+    expect(binding.materializeCombo(reward)).toBe(true);
+    binding.destroy();
+    expect(binding.materializeCombo(reward)).toBe(false);
+    binding.updateHost(1000);
+    expect(f.gains).not.toHaveBeenCalled();
+    expect(binding.getDiagnostics().gameplay).toMatchObject({ activeValue: 0, lifecycleDiscardedValue: 10 });
+    client.destroy();
+  });
+});

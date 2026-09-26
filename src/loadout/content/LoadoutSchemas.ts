@@ -248,6 +248,12 @@ export function validateResolvedWeapon(value: unknown): string[] {
   } else {
     requireFields(value.fire, FIRE_REQUIRED[value.fire.type], issues, '$.fire');
   }
+  if (isRecord(value.detonable) && value.detonable.comboLightningLevel !== undefined) {
+    const level = value.detonable.comboLightningLevel;
+    if (typeof level !== 'number' || !Number.isInteger(level) || level < 0 || level > 3) {
+      issues.push('$.detonable.comboLightningLevel: ganze Zahl zwischen 0 und 3 erforderlich');
+    }
+  }
   if (value.shotFeedbackProfile !== undefined && !isWeaponFeedbackProfileId(value.shotFeedbackProfile)) {
     issues.push('$.shotFeedbackProfile: unbekanntes Schuss-Feedback-Profil');
   }

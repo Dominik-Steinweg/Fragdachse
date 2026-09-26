@@ -13,6 +13,9 @@ vi.mock('phaser', () => ({
   },
 }));
 
+const fogBridge = vi.hoisted(() => ({ registerBfgLaserBatchHandler: vi.fn() }));
+vi.mock('../src/network/bridge', () => ({ bridge: fogBridge }));
+import { RpcCoordinator } from '../src/scenes/arena/RpcCoordinator';
 import { EffectSystem } from '../src/effects/EffectSystem';
 import type { SyncedDeathEffect } from '../src/types';
 
@@ -98,6 +101,35 @@ describe('EffectSystem player death animation', () => {
     releaseReplacement(); system.playHitscanTracer(300, 300, 600, 300, 0xffffff, 2, 'none', 'asmd_primary');
     expect(replacement.hitscan).toHaveBeenCalledOnce();
   });
+  it('routes storm laser batches through the primary hitscan fog path and respects fog detach', () => {
+    const tracer = vi.fn(), bfg = { playLaserBatch: vi.fn() };
+    const system = Object.create(EffectSystem.prototype) as EffectSystem;
+    Object.assign(system, { ensureTextures: vi.fn(), emitHitscanBeamLight: vi.fn(),
+      asmdPrimaryRenderer: { playTracer: tracer } });
+    const fog = { hitscan: vi.fn(), melee: vi.fn() };
+    const release = system.bindGroundFogCombat(fog);
+    const rpc = Object.assign(Object.create(RpcCoordinator.prototype), {
+      effectSystem: system, renderers: { asmdPrimary: { playTracer: tracer }, bfg },
+    });
+    rpc.registerBfgLaserBatchHandler();
+    const receive = fogBridge.registerBfgLaserBatchHandler.mock.calls.at(-1)![0];
+    const lines = [{ sx: 300, sy: 300, ex: 600, ey: 300 }, { sx: 300, sy: 300, ex: 300, ey: 600 }];
+    // Both travelling Kugelgewitter and the final combo volley use this replicated preset.
+    receive(lines, 0x123456, 'asmd_primary');
+    expect(tracer).toHaveBeenCalledTimes(lines.length);
+    expect(fog.hitscan).toHaveBeenCalledTimes(lines.length);
+    for (const line of lines) {
+      expect(fog.hitscan).toHaveBeenCalledWith(line.sx, line.sy, line.ex, line.ey, 1.35, 'ASMD_SEC');
+    }
+    expect(bfg.playLaserBatch).not.toHaveBeenCalled();
+    release();
+    receive(lines, 0x123456, 'asmd_primary');
+    expect(tracer).toHaveBeenCalledTimes(lines.length * 2);
+    expect(fog.hitscan).toHaveBeenCalledTimes(lines.length);
+    receive(lines, 0x123456, undefined, 42);
+    expect(bfg.playLaserBatch).toHaveBeenCalledExactlyOnceWith(lines, 42);
+  });
+
   it('observes bite and taser after swing deduplication, including their specialized VFX paths', () => {
     const system = Object.create(EffectSystem.prototype) as EffectSystem;
     Object.assign(system, { scene: { time: { now: 10 } }, processedMeleeSwingKeys: new Map(),

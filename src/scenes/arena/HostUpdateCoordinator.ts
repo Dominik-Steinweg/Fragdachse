@@ -50,7 +50,8 @@ import type { WorldSupportGameplayRuntime } from '../../world/WorldSupportGamepl
 import type { WorldObjectMutationRuntime } from '../../world/WorldObjectMutationRuntime';
 import type { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
 import type { ProjectileEnergyInjectorImpact } from '../../projectile/ProjectileCombatPort';
-import type { ProjectileImpactSource } from '../../projectile/ProjectileGameplayPort';
+import type { ProjectileImpactSource, ProjectileProximityPulseSource } from '../../projectile/ProjectileGameplayPort';
+import { createSingleOwnerProvenance } from '../../projectile/ProjectileSpawnRequest';
 import type {
   ProjectileExplosionRequest,
   ProjectileExplosionOutcome,
@@ -1749,7 +1750,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    * Gemeinsamer Gameplay-Resolver für alle radialen Projektil-Pulse.
    * BFG-Spielerziele bleiben bewusst außerhalb dieses Coop-Pfades.
    */
-  resolveProjectileProximityPulse(proj: ProjectileImpactSource): { lines: { sx: number; sy: number; ex: number; ey: number }[] } {
+  resolveProjectileProximityPulse(proj: ProjectileProximityPulseSource): { lines: { sx: number; sy: number; ex: number; ey: number }[] } {
     const config = proj.proximityPulse;
     const lines: { sx: number; sy: number; ex: number; ey: number }[] = [];
     if (!config || config.radius <= 0 || config.damage <= 0) return { lines };
@@ -1867,8 +1868,26 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    * Umgebungsschaden und der replizierte Explosionskanal.
    */
   private readonly detonationEffectSink: DetonationEffectSink = {
-    addComboAdrenaline: (ownerId, amount) => {
-      this.playerGameplayRuntime?.getPlayerCombatIntegrationPort()?.resource.addAdrenaline(ownerId, amount);
+    spawnComboEssence: (event, amount) => {
+      const essence = this.activityFramePort?.getAdrenalineEssence?.();
+      const resource = this.playerGameplayRuntime?.getPlayerCombatIntegrationPort()?.resource;
+      const basis = resource?.captureAdrenalineGainBasis(event.projectileOwnerId);
+      if (!essence || !resource || !basis) return;
+      essence.materializeCombo({
+        ...essence.scope, projectileId: event.projectileId, creatorId: event.projectileOwnerId,
+        authoredValue: amount, resolvedValue: resource.resolveAdrenalineGain(basis, amount),
+        origin: { x: event.x, y: event.y }, weaponId: event.sourceId,
+      });
+    },
+    applyComboLightning: (source, detonatorOwnerId) => {
+      // A different player's primary may detonate the ball. Capture that player's allegiance,
+      // rather than retaining the ball owner's building-damage permission.
+      const provenance = source.ownerId === detonatorOwnerId ? source.provenance
+        : this.ctx.getWorldCombatCore()!.captureProjectileProvenance(createSingleOwnerProvenance(detonatorOwnerId, {
+          weaponSourceId: source.sourceId, sourceSlot: source.sourceSlot,
+        }));
+      const pulse = this.resolveProjectileProximityPulse({ ...source, ownerId: detonatorOwnerId, provenance });
+      bridge.broadcastBfgLaserBatch(pulse.lines, source.color, 'asmd_primary');
     },
     applyAoeDamage: (x, y, radius, damage, attackerId, falloff, baseDamageMult, sourceSlot) => {
       this.ctx.getWorldCombatCore()!.applyAoeDamage(x, y, radius, damage, attackerId, false, {

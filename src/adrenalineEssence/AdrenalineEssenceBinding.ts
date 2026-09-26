@@ -4,6 +4,16 @@ import { ESSENCE_VISUAL } from './AdrenalineEssencePresentation';
 import { AdrenalineEssenceClientReplica, AdrenalineEssenceReplication, type EssenceSnapshot } from './AdrenalineEssenceReplication';
 import { hasEssenceAccess, type AdrenalineEssencePorts, type EssenceAccessGroup, type EssenceScope, type EssenceState, type EssenceTransferReceipt } from './AdrenalineEssenceTypes';
 
+/** A confirmed detonation reward, already resolved against its creator's gain basis. */
+export interface ComboEssenceReward extends EssenceScope {
+  readonly projectileId: number;
+  readonly creatorId: string;
+  readonly authoredValue: number;
+  readonly resolvedValue: number;
+  readonly origin: { readonly x: number; readonly y: number };
+  readonly weaponId: string;
+}
+
 export interface EssenceBindingPresentation {
   getStats?(): object;
   sync(state: EssenceState, receipts: readonly EssenceTransferReceipt[], now: number, localPlayerId: string): void;
@@ -66,6 +76,19 @@ export class AdrenalineEssenceBinding {
     });
     this.detachBurrow = this.ports.observeBurrow(id => this.runtime?.cancelPlayer(id, 'burrow', this.ports.now()));
     this.connected = true;
+  }
+
+  /** Combo success is sufficient; this is independent of primary-hit reward facts. */
+  materializeCombo(reward: ComboEssenceReward): boolean {
+    if (this.destroyed || !this.runtime || !this.ports.servicesReady()
+      || reward.worldRevision !== this.scope.worldRevision || reward.activityRevision !== this.scope.activityRevision) return false;
+    const accessGroup = this.ports.accessGroupFor(reward.creatorId) ?? this.creatorGroups.get(reward.creatorId);
+    if (!accessGroup) return false;
+    return this.runtime.materialize({
+      ...reward,
+      id: ['combo', reward.worldRevision, reward.activityRevision, reward.projectileId].join(':'),
+      createdAt: this.ports.now(), seed: reward.projectileId, accessGroup, branchId: 'combo',
+    });
   }
 
   updateHost(now: number): void {

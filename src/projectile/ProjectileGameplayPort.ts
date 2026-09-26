@@ -68,6 +68,11 @@ export interface ProjectileFlameExpiryEvent extends ProjectileImpactSource {
   readonly y: number;
 }
 
+/** Frozen inputs shared by travelling pulses and a detonated ball's final pulse. */
+export type ProjectileProximityPulseSource = Pick<ProjectileImpactSource,
+  'projectileId' | 'ownerId' | 'provenance' | 'x' | 'y' | 'color' | 'sourceId' | 'sourceSlot'
+  | 'rockDamageMult' | 'trainDamageMult' | 'proximityPulse' | 'isBfg'>;
+
 export interface ProjectileResolvedOutcome {
   readonly kind: 'resolved';
   readonly projectileId: number;

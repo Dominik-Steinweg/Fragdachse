@@ -1,5 +1,6 @@
 import type { DamageOverTimeAreaConfig, ExplosionVisualStyle, LoadoutSlot, RadialDamageFalloffConfig } from '../types';
 import type { DetonationEvent } from './DetonationSystem';
+import type { ProjectileProximityPulseSource } from '../projectile/ProjectileGameplayPort';
 
 /**
  * Wirkungen, die eine ausgelöste Detonation nach sich zieht.
@@ -10,8 +11,10 @@ import type { DetonationEvent } from './DetonationSystem';
  * Detonationspfad mit abweichender Reihenfolge gibt.
  */
 export interface DetonationEffectSink {
-  /** Adrenalin für den Besitzer des gezündeten Projektils. Ohne Ressourcensystem ein No-op. */
-  addComboAdrenaline(ownerId: string, amount: number): void;
+  /** Confirmed combo reward; resources are only credited when its essence arrives. */
+  spawnComboEssence(event: DetonationEvent, amount: number): void;
+  /** One final pulse, using the ball's resolved stats and the detonator's attribution. */
+  applyComboLightning(source: ProjectileProximityPulseSource, detonatorOwnerId: string): void;
   /** Flächenschaden an Figuren und Gegnern. */
   applyAoeDamage(
     x: number, y: number, radius: number, damage: number,
@@ -65,7 +68,7 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
 
   const comboAdrenalineGain = Math.max(0, effect.comboAdrenalineGain ?? 0);
   if (comboAdrenalineGain > 0) {
-    sink.addComboAdrenaline(event.projectileOwnerId, comboAdrenalineGain);
+    sink.spawnComboEssence(event, comboAdrenalineGain);
   }
 
   sink.applyAoeDamage(
@@ -91,6 +94,9 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
     effect.damageFalloff,
   );
 
+  const pulse = resolveComboLightning(event);
+  if (pulse) sink.applyComboLightning(pulse, event.detonatorOwnerId);
+
   const detonatorColor = sink.resolveOwnerColor(event.detonatorOwnerId);
   sink.playExplosion(
     event.x, event.y, effect.aoeRadius,
@@ -104,6 +110,25 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
     event.detonatorOwnerId, detonatorColor ?? 0xffffff,
     event.sourceId, event.sourceSlot,
   );
+}
+
+export const COMBO_LIGHTNING_RANGE_MULTIPLIER = 2;
+
+export function getComboLightningDamageMultiplier(level: number): number {
+  return level > 0 ? level + 1 : 0;
+}
+
+/** Upgrade multipliers apply after all modifiers already captured by the ball. */
+export function resolveComboLightning(event: DetonationEvent): ProjectileProximityPulseSource | null {
+  const level = event.effect.comboLightningLevel ?? 0;
+  const source = event.pulseSource;
+  const pulse = source?.proximityPulse;
+  if (level <= 0 || !source || !pulse || pulse.radius <= 0 || pulse.damage <= 0) return null;
+  const multiplier = getComboLightningDamageMultiplier(level);
+  return {
+    ...source, x: event.x, y: event.y,
+    proximityPulse: { ...pulse, radius: pulse.radius * COMBO_LIGHTNING_RANGE_MULTIPLIER, damage: pulse.damage * multiplier },
+  };
 }
 
 /** Verarbeitet einen ganzen Frame-Schwung in Reihenfolge. */

@@ -34,6 +34,8 @@ describe('projectile detonation characterization', () => {
     expect(system.detonateProjectile(7, 'detonator')).toBe(true);
     expect(detonateProjectile).toHaveBeenCalledWith(7, 'detonator');
     expect(system.flushDetonations()).toEqual([{
+      projectileId: 7,
+      pulseSource: undefined,
       x: 12,
       y: 34,
       projectileOwnerId: 'ball-owner',

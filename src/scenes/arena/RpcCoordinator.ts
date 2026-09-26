@@ -476,7 +476,9 @@ export class RpcCoordinator {
     bridge.registerBfgLaserBatchHandler((lines, color, visualPreset, projectileId) => {
       for (const line of lines) {
         if (visualPreset === 'asmd_primary') {
-          this.renderers.asmdPrimary.playTracer(line.sx, line.sy, line.ex, line.ey, color, 1.35, 'player');
+          this.effectSystem.playHitscanTracer(
+            line.sx, line.sy, line.ex, line.ey, color, 1.35, 'player', 'asmd_primary', undefined, 'ASMD_SEC',
+          );
         }
       }
       if (visualPreset !== 'asmd_primary' && projectileId !== undefined) {

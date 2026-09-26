@@ -4,6 +4,7 @@ import type {
   LoadoutSlot,
 } from '../types';
 import type { ProjectileId } from './ProjectileSpawnPort';
+import type { ProjectileProximityPulseSource } from './ProjectileGameplayPort';
 
 /** Geometrische Suchanfrage der ASMD-/Detonator-Mechanik. */
 export interface ProjectileDetonationSearchRequest {
@@ -24,6 +25,7 @@ export interface ProjectileDetonationTarget {
   readonly effect: DetonableConfig;
   readonly sourceId: string;
   readonly sourceSlot?: LoadoutSlot;
+  readonly pulseSource?: ProjectileProximityPulseSource;
 }
 
 /** Bestätigtes Ergebnis einer autoritativen externen Detonation. */

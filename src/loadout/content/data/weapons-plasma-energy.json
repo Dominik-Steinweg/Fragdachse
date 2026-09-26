@@ -312,7 +312,8 @@
           "radiusScale": 1,
           "style": "electric"
         },
-        "comboAdrenalineGain": 0
+        "comboAdrenalineGain": 0,
+        "comboLightningLevel": 0
       },
       "proximityPulse": {
         "radius": 0,
