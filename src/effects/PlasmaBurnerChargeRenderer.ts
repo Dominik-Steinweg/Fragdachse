@@ -29,13 +29,13 @@ export class PlasmaBurnerChargeRenderer {
     const visual = this.visuals.get(id);
     if (!visual) return;
     const angle = Math.atan2(vy, vx);
-    const tint = mixColors(color, 0x55ffdb, 0.65);
+    const tint = mixColors(color, 0x4dff3a, 0.72);
     const pulse = 1 + Math.sin(this.scene.time.now * 0.018 + id * 2.4) * 0.08;
     visual.halo.setPosition(x, y).setDisplaySize(size * 4, size * 4).setTint(tint).setAlpha(emissiveAlpha(0.22));
     visual.tail.setPosition(x - Math.cos(angle) * size, y - Math.sin(angle) * size)
       .setRotation(angle).setDisplaySize(size * 3.5, size * 0.8).setTint(tint).setAlpha(emissiveAlpha(0.7));
     visual.core.setPosition(x, y).setDisplaySize(size * 1.15 * pulse, size * 1.15 * pulse)
-      .setTint(0xe9fff7).setAlpha(emissiveAlpha(0.95));
+      .setTint(0xf4ffd9).setAlpha(emissiveAlpha(0.95));
     visual.ribbons.forEach((ribbon, index) => {
       const phase = this.scene.time.now * 0.011 + id + index * Math.PI;
       ribbon.setPosition(x + Math.cos(phase) * size * 0.6, y + Math.sin(phase) * size * 0.6)

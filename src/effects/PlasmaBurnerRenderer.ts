@@ -3,37 +3,41 @@ import * as Phaser from 'phaser';
 import {
   DEPTH_TRACE,
   clipPointToArenaRay,
-  getBeamPaletteForPlayerColor,
   getTopDownMuzzleOriginFromVector,
   isPointInsideArena,
 } from '../config';
+import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import type { HitscanImpactKind } from '../types';
 import {
-  createEmitter,
-  destroyEmitter,
   ensureCanvasTexture,
   fillRadialGradientTexture,
-  killAllAndResetParticlePositions,
-  makeAdditive,
   mixColors,
   registerGraphicsObject,
-  setEmitterTintArray,
 } from './EffectUtils';
-import { emissiveAlpha } from './EmissiveScale';
-import {
-  blendBeamPaths,
-  createJitteredBeamPath,
-  reanchorBeamPathEnd,
-  reanchorBeamPathStart,
-  resampleBeamSpline,
-  sampleBeamPath,
-  sampleBeamTangent,
-  strokeBeamPolyline,
-  type BeamPoint,
-} from './BeamPathShared';
+import { getEmissiveScale } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
+import {
+  PLASMA_BURNER_BEAM_BACK_PAD,
+  PLASMA_BURNER_BEAM_FRAGMENT_SOURCE,
+  PLASMA_BURNER_BEAM_FRONT_PAD,
+  PLASMA_BURNER_BEAM_HEIGHT,
+  PLASMA_BURNER_BEAM_SHADER_NAME,
+} from './plasmaBurnerBeamShader';
 
 type BeamOwnerVisualState = { x: number; y: number; color: number };
+
+/** Farbrampe des Strahls: Tiefgrün, Plasmagrün, Limettenglut, fast weißer Kern. */
+interface PlasmaPalette {
+  readonly deep: number;
+  readonly body: number;
+  readonly hot: number;
+  readonly core: number;
+}
+
+// Grüne Plasmaenergie ist die Identität der Waffe und bleibt unabhängig von der Spielerfarbe.
+const PLASMA_PALETTE: PlasmaPalette = { deep: 0x0b7a1c, body: 0x2fe03c, hot: 0x9dff4a, core: 0xf4ffd9 };
+// Heilende Kettensegmente kippen ins Minzgrün und bleiben so vom Schadensstrahl unterscheidbar.
+const HEALING_PALETTE: PlasmaPalette = { deep: 0x0a7a5e, body: 0x2fe0aa, hot: 0x9dffd8, core: 0xf0fff8 };
 
 const TEX_PLASMA_HAZE = '__plasma_burner_haze';
 const TEX_PLASMA_STREAK = '__plasma_burner_streak';
@@ -41,37 +45,35 @@ const TEX_PLASMA_SPARK = '__plasma_burner_spark';
 
 const BEAM_HOLD_MS = 190;
 const BEAM_FADE_MS = 140;
-const GEOMETRY_REFRESH_MIN_MS = 25;
-const GEOMETRY_REFRESH_MAX_MS = 40;
-const IMPACT_SPARK_INTERVAL_MS = 62;
-const CONTROL_POINT_SPACING_PX = 62;
-const RESAMPLE_SPACING_PX = 6;
-const MIN_CONTROL_POINTS = 6;
-const MAX_CONTROL_POINTS = 11;
-const MIN_RESAMPLED_POINTS = 24;
-const MAX_RESAMPLED_POINTS = 92;
-const MAX_HAZE_SAMPLES = 7;
-const MAX_STREAK_SAMPLES = 6;
-const MAX_SPARK_SAMPLES = 5;
 const BEAM_LIGHT_SPACING_PX = 220;
 const BEAM_MAX_PATH_LIGHTS = 2;
+// Periodisch begrenzt: die Advektion wächst mit der Zeit und verliert sonst Präzision.
+const BEAM_TIME_WRAP_S = 240;
+const BEAM_DETAIL = { high: 2, medium: 1, low: 0 } as const;
+const MAX_MOTION_BEND_PX = 9;
+
+interface BeamUniforms {
+  width: number;
+  length: number;
+  time: number;
+  thickness: number;
+  boost: number;
+  alpha: number;
+  bend: number;
+  impact: number;
+  lock: number;
+  heal: number;
+  pixelSize: number;
+  detail: number;
+  emission: number;
+  palette: PlasmaPalette;
+}
 
 interface PlasmaBeamVisual {
-  readonly root: Phaser.GameObjects.Container;
-  readonly glow: Phaser.GameObjects.Graphics;
-  readonly discharge: Phaser.GameObjects.Graphics;
-  readonly filaments: Phaser.GameObjects.Graphics;
-  readonly endpoints: Phaser.GameObjects.Graphics;
-  readonly hazeSamples: Phaser.GameObjects.Image[];
-  readonly streakSamples: Phaser.GameObjects.Image[];
-  readonly sparkSamples: Phaser.GameObjects.Image[];
-  readonly muzzleHalo: Phaser.GameObjects.Image;
-  readonly muzzleStreak: Phaser.GameObjects.Image;
-  readonly impactHalo: Phaser.GameObjects.Image;
-  readonly impactFlare: Phaser.GameObjects.Image;
-  mainPath: BeamPoint[];
-  outerPath: BeamPoint[];
-  corePath: BeamPoint[];
+  /** `null` ohne WebGL-Renderer; Endpunkt- und Lichtlogik laufen trotzdem weiter. */
+  readonly quad: Phaser.GameObjects.Shader | null;
+  readonly uniforms: BeamUniforms;
+  readonly seed: number;
   startX: number;
   startY: number;
   endX: number;
@@ -79,13 +81,10 @@ interface PlasmaBeamVisual {
   authoritativeEndX: number;
   authoritativeEndY: number;
   authoritativeLength: number;
-  color: number;
   thickness: number;
   impactKind: HitscanImpactKind;
   activeUntil: number;
   fadeEndsAt: number;
-  nextGeometryAt: number;
-  lastImpactSparkAt: number;
   lightsReleased: boolean;
   lastOwnerX: number | null;
   lastOwnerY: number | null;
@@ -93,27 +92,39 @@ interface PlasmaBeamVisual {
   motionTrailY: number;
 }
 
+interface PulseSegmentState {
+  owner: string;
+  index: number;
+  locked: boolean;
+  portal: boolean;
+  lockEnd: boolean;
+  healing: boolean;
+  secondary: boolean;
+  boost: number;
+}
+
 /**
- * Kontinuierlicher Lightning-Gun-Renderer fuer den Plasmabrenner.
+ * GPU-Renderer des kontinuierlichen Plasmabrenner-Strahls.
  *
- * Hitscan-Impulse aktualisieren ausschliesslich Endpunkte und Lebensdauer des Visuals.
- * `update()` erzeugt lokal unruhige Kontrollpunkte, glaettet sie als Catmull-Rom-Spline
- * und mischt sie zeitlich mit dem vorherigen Pfad. Vier Graphics, gebuendelte Images und
- * ein geteilter Partikelemitter werden pro Schuetze beziehungsweise Renderer gepoolt.
+ * Hitscan-Impulse aktualisieren ausschließlich Endpunkte und Lebensdauer des Visuals. Jedes
+ * Strahlsegment ist ein gepooltes, entlang Start→Ende gedrehtes Shader-Quad; Kern, Plasma-
+ * stränge, Turbulenz, Funken sowie Mündungs- und Einschlagblüte berechnet der Fragment-Shader
+ * (`plasmaBurnerBeamShader.ts`). Pro Frame setzt die CPU nur Transform und Uniforms.
  */
 export class PlasmaBurnerRenderer {
   private readonly beams = new Map<string, PlasmaBeamVisual>();
-  private readonly pulseSegments = new Map<string, { owner: string; index: number; locked: boolean; portal: boolean; lockEnd: boolean; healing: boolean; secondary: boolean }>();
+  private readonly pulseSegments = new Map<string, PulseSegmentState>();
   private readonly beamPool: PlasmaBeamVisual[] = [];
-  private impactSparkEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private lighting: LightingSystem | null = null;
   private ownerVisualStateProvider: ((ownerId: string) => BeamOwnerVisualState | null) | null = null;
   private localAimAngleProvider: ((ownerId: string) => number | null) | null = null;
+  private nextSeed = 0;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
 
+  /** Die Texturen teilt sich der `PlasmaBurnerChargeRenderer` für seine Plasmatropfen. */
   generateTextures(): void {
     fillRadialGradientTexture(this.scene.textures, TEX_PLASMA_HAZE, 96, [
       [0, 'rgba(255,255,255,0.9)'],
@@ -179,21 +190,26 @@ export class PlasmaBurnerRenderer {
       const key = prefix + index;
       const previous = this.pulseSegments.get(key);
       if (predicted && previous && (previous.locked || previous.portal)) return;
-      this.pulseSegments.set(key, { owner: event.id, index, locked: event.lk, portal: event.p > 1,
-        lockEnd: event.lk && index === event.p - 1, healing: fx === 2, secondary: index >= event.p });
       const secondary = index >= event.p;
-      const color = fx === 2 ? 0x66ffc5 : fx === 1 ? 0x69ceff : 0x569bc4;
-      this.playTracer(sx, sy, ex, ey, mixColors(color, 0xffffff, Math.min(0.35, (event.m - 1) * 0.18)),
+      const healing = fx === 2;
+      this.pulseSegments.set(key, { owner: event.id, index, locked: event.lk, portal: event.p > 1,
+        lockEnd: event.lk && index === event.p - 1, healing, secondary,
+        boost: 1 + Math.min(0.45, Math.max(0, event.m - 1) * 0.22) });
+      this.playTracer(sx, sy, ex, ey, healing ? HEALING_PALETTE.body : PLASMA_PALETTE.body,
         (secondary ? 2 : 3) * (1 + (event.m - 1) * 0.22), fx ? 'player' : 'none', key);
     });
   }
 
+  /**
+   * `color` gehört zum gemeinsamen Hitscan-Tracer-Vertrag; der Plasmastrahl nutzt bewusst
+   * seine eigene grüne Palette statt der Spielerfarbe.
+   */
   playTracer(
     startX: number,
     startY: number,
     endX: number,
     endY: number,
-    color: number,
+    _color: number,
     thickness: number,
     impactKind: HitscanImpactKind = 'environment',
     beamId = 'anonymous',
@@ -211,22 +227,24 @@ export class PlasmaBurnerRenderer {
     visual.authoritativeEndX = clippedEnd.x;
     visual.authoritativeEndY = clippedEnd.y;
     visual.authoritativeLength = Math.hypot(clippedEnd.x - startX, clippedEnd.y - startY);
-    if (!existing || visual.mainPath.length === 0) {
+    if (!existing) {
       visual.endX = clippedEnd.x;
       visual.endY = clippedEnd.y;
     }
-    visual.color = color;
     visual.thickness = Math.max(1, thickness);
     visual.impactKind = impactKind === 'none' && clippedByArena ? 'environment' : impactKind;
     visual.activeUntil = now + BEAM_HOLD_MS;
     visual.fadeEndsAt = visual.activeUntil + BEAM_FADE_MS;
-    visual.nextGeometryAt = Math.min(visual.nextGeometryAt, now);
     visual.lightsReleased = false;
-    visual.root.setVisible(true).setAlpha(1);
   }
 
   update(delta = 16.667): void {
+    if (this.beams.size === 0) return;
     const now = this.scene.time.now;
+    const qualityLevel = getGraphicsQualityProfile(this.scene).level;
+    const camera = this.scene.cameras?.main;
+    const pixelSize = camera ? 1 / Math.max(0.001, Math.min(camera.zoomX, camera.zoomY)) : 1;
+    const emission = getEmissiveScale();
 
     for (const [beamId, visual] of this.beams) {
       if (now >= visual.fadeEndsAt) {
@@ -237,24 +255,24 @@ export class PlasmaBurnerRenderer {
       const active = now <= visual.activeUntil;
       this.syncOwnerVisualState(beamId, visual, delta);
       this.syncVisualEndpoint(beamId, visual, delta, active);
-      const alpha = active
+      const fade = active
         ? 1
         : Phaser.Math.Clamp(1 - ((now - visual.activeUntil) / BEAM_FADE_MS), 0, 1);
-      visual.root.setAlpha(alpha * (this.pulseSegments.get(beamId)?.secondary ? 0.72 : 1));
+      const segment = this.pulseSegments.get(beamId);
 
-      if (now >= visual.nextGeometryAt) {
-        this.drawBeam(visual);
-        const segment = this.pulseSegments.get(beamId);
-        if (segment?.lockEnd) visual.endpoints.lineStyle(1, 0xb9f5ed, 0.65).strokeCircle(visual.endX, visual.endY, 8);
-        if (segment?.healing) {
-          visual.endpoints.lineStyle(1.5, 0xbcffe2, 0.9);
-          visual.endpoints.lineBetween(visual.endX - 3, visual.endY, visual.endX + 3, visual.endY);
-          visual.endpoints.lineBetween(visual.endX, visual.endY - 3, visual.endX, visual.endY + 3);
-        }
-        visual.nextGeometryAt = now + Phaser.Math.Between(GEOMETRY_REFRESH_MIN_MS, GEOMETRY_REFRESH_MAX_MS);
-        if (active) this.emitImpactSparks(visual, now);
-      }
-      this.updateTextureLayers(visual, now);
+      const uniforms = visual.uniforms;
+      uniforms.time = (now / 1000) % BEAM_TIME_WRAP_S;
+      uniforms.thickness = visual.thickness;
+      uniforms.boost = segment?.boost ?? 1;
+      uniforms.alpha = fade * (segment?.secondary ? 0.72 : 1);
+      uniforms.impact = this.hasImpact(visual) ? (visual.impactKind === 'player' ? 2 : 1) : 0;
+      uniforms.lock = segment?.lockEnd ? 1 : 0;
+      uniforms.heal = segment?.healing ? 1 : 0;
+      uniforms.palette = segment?.healing ? HEALING_PALETTE : PLASMA_PALETTE;
+      uniforms.pixelSize = pixelSize;
+      uniforms.detail = BEAM_DETAIL[qualityLevel];
+      uniforms.emission = emission;
+      this.layoutQuad(visual);
 
       if (active) {
         this.syncBeamLights(beamId, visual);
@@ -268,92 +286,58 @@ export class PlasmaBurnerRenderer {
   clear(): void {
     for (const [beamId, visual] of this.beams) {
       this.releaseBeamLights(beamId);
-      this.destroyBeamVisual(visual);
+      visual.quad?.destroy();
     }
     this.beams.clear();
     this.pulseSegments.clear();
 
-    for (const visual of this.beamPool) this.destroyBeamVisual(visual);
+    for (const visual of this.beamPool) visual.quad?.destroy();
     this.beamPool.length = 0;
-
-    if (this.impactSparkEmitter) killAllAndResetParticlePositions(this.impactSparkEmitter);
   }
 
   shutdown(): void {
     this.clear();
-    if (this.impactSparkEmitter) {
-      destroyEmitter(this.impactSparkEmitter);
-      this.impactSparkEmitter = null;
-    }
   }
 
   private acquireBeam(beamId: string): PlasmaBeamVisual {
     const visual = this.beamPool.pop() ?? this.createBeamVisual();
     const now = this.scene.time.now;
-    visual.mainPath = [];
-    visual.outerPath = [];
-    visual.corePath = [];
     visual.activeUntil = now;
     visual.fadeEndsAt = now + BEAM_FADE_MS;
-    visual.nextGeometryAt = now;
-    visual.lastImpactSparkAt = 0;
     visual.lightsReleased = false;
     visual.lastOwnerX = null;
     visual.lastOwnerY = null;
     visual.motionTrailX = 0;
     visual.motionTrailY = 0;
-    visual.root.setVisible(true).setAlpha(1);
+    // Sichtbar erst nach dem ersten Layout, sonst blitzt das Quad mit alter Geometrie auf.
+    visual.quad?.setVisible(false);
     this.beams.set(beamId, visual);
     return visual;
   }
 
   private createBeamVisual(): PlasmaBeamVisual {
-    const root = this.scene.add.container(0, 0).setDepth(DEPTH_TRACE + 0.16);
-    const glow = makeAdditive(this.scene.add.graphics());
-    const discharge = makeAdditive(this.scene.add.graphics());
-    const filaments = makeAdditive(this.scene.add.graphics());
-    const endpoints = makeAdditive(this.scene.add.graphics());
-    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', glow);
-    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', discharge);
-    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', filaments);
-    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', endpoints);
-    const hazeSamples = Array.from({ length: MAX_HAZE_SAMPLES }, () => this.createAdditiveImage(TEX_PLASMA_HAZE));
-    const streakSamples = Array.from({ length: MAX_STREAK_SAMPLES }, () => this.createAdditiveImage(TEX_PLASMA_STREAK));
-    const sparkSamples = Array.from({ length: MAX_SPARK_SAMPLES }, () => this.createAdditiveImage(TEX_PLASMA_SPARK));
-    const muzzleHalo = this.createAdditiveImage(TEX_PLASMA_HAZE);
-    const muzzleStreak = this.createAdditiveImage(TEX_PLASMA_STREAK);
-    const impactHalo = this.createAdditiveImage(TEX_PLASMA_HAZE);
-    const impactFlare = this.createAdditiveImage(TEX_PLASMA_HAZE);
-    root.add([
-      glow,
-      ...hazeSamples,
-      discharge,
-      filaments,
-      ...streakSamples,
-      ...sparkSamples,
-      endpoints,
-      muzzleHalo,
-      muzzleStreak,
-      impactHalo,
-      impactFlare,
-    ]);
-
+    const uniforms: BeamUniforms = {
+      width: PLASMA_BURNER_BEAM_BACK_PAD + PLASMA_BURNER_BEAM_FRONT_PAD + 1,
+      length: 1,
+      time: 0,
+      thickness: 3,
+      boost: 1,
+      alpha: 0,
+      bend: 0,
+      impact: 0,
+      lock: 0,
+      heal: 0,
+      pixelSize: 1,
+      detail: 2,
+      emission: 1,
+      palette: PLASMA_PALETTE,
+    };
+    // Goldener-Schnitt-Folge: benachbarte Segmente erhalten sichtbar verschiedene Muster.
+    const seed = ((this.nextSeed++ * 0.61803398875) % 1) * 997;
     return {
-      root,
-      glow,
-      discharge,
-      filaments,
-      endpoints,
-      hazeSamples,
-      streakSamples,
-      sparkSamples,
-      muzzleHalo,
-      muzzleStreak,
-      impactHalo,
-      impactFlare,
-      mainPath: [],
-      outerPath: [],
-      corePath: [],
+      quad: this.createBeamQuad(uniforms, seed),
+      uniforms,
+      seed,
       startX: 0,
       startY: 0,
       endX: 0,
@@ -361,13 +345,10 @@ export class PlasmaBurnerRenderer {
       authoritativeEndX: 0,
       authoritativeEndY: 0,
       authoritativeLength: 0,
-      color: 0x62ffd2,
-      thickness: 5,
+      thickness: 3,
       impactKind: 'none',
       activeUntil: 0,
       fadeEndsAt: 0,
-      nextGeometryAt: 0,
-      lastImpactSparkAt: 0,
       lightsReleased: true,
       lastOwnerX: null,
       lastOwnerY: null,
@@ -376,10 +357,71 @@ export class PlasmaBurnerRenderer {
     };
   }
 
-  private createAdditiveImage(texture: string): Phaser.GameObjects.Image {
-    const image = this.scene.add.image(0, 0, texture).setVisible(false).setAlpha(0);
-    makeAdditive(image);
-    return image;
+  private createBeamQuad(uniforms: BeamUniforms, seed: number): Phaser.GameObjects.Shader | null {
+    // Headless-Präsentation darf keine GPU-Ressourcen anlegen.
+    if (!(this.scene.sys?.renderer as { gl?: unknown } | undefined)?.gl) return null;
+    const deep = this.colorToVec3(PLASMA_PALETTE.deep);
+    const body = this.colorToVec3(PLASMA_PALETTE.body);
+    const hot = this.colorToVec3(PLASMA_PALETTE.hot);
+    const core = this.colorToVec3(PLASMA_PALETTE.core);
+    const quad = new Phaser.GameObjects.Shader(this.scene, {
+      name: PLASMA_BURNER_BEAM_SHADER_NAME,
+      shaderName: PLASMA_BURNER_BEAM_SHADER_NAME,
+      fragmentSource: PLASMA_BURNER_BEAM_FRAGMENT_SOURCE,
+      setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
+        const palette = uniforms.palette;
+        setUniform('uSize', [uniforms.width, PLASMA_BURNER_BEAM_HEIGHT]);
+        setUniform('uBack', PLASMA_BURNER_BEAM_BACK_PAD);
+        setUniform('uLength', uniforms.length);
+        setUniform('uTime', uniforms.time);
+        setUniform('uSeed', seed);
+        setUniform('uThickness', uniforms.thickness);
+        setUniform('uBoost', uniforms.boost);
+        setUniform('uAlpha', uniforms.alpha);
+        setUniform('uBend', uniforms.bend);
+        setUniform('uImpact', uniforms.impact);
+        setUniform('uLock', uniforms.lock);
+        setUniform('uHeal', uniforms.heal);
+        setUniform('uPixelSize', uniforms.pixelSize);
+        setUniform('uDetail', uniforms.detail);
+        setUniform('uEmission', uniforms.emission);
+        setUniform('uDeep', this.writeColor(deep, palette.deep));
+        setUniform('uBody', this.writeColor(body, palette.body));
+        setUniform('uHot', this.writeColor(hot, palette.hot));
+        setUniform('uCore', this.writeColor(core, palette.core));
+      },
+    }, 0, 0, uniforms.width, PLASMA_BURNER_BEAM_HEIGHT);
+    quad.setOrigin(0.5).setDepth(DEPTH_TRACE + 0.16).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(false);
+    // Direktes Display-List-Kind: normales Kamera-Culling und World-Kamera-Zuordnung.
+    this.scene.add.existing(quad);
+    registerGraphicsObject(this.scene, 'plasmaBurnerEffects', quad);
+    return quad;
+  }
+
+  /** Richtet das Quad entlang Start→Ende aus; Reserve hinter Mündung und Endpunkt für die Blüten. */
+  private layoutQuad(visual: PlasmaBeamVisual): void {
+    const dx = visual.endX - visual.startX;
+    const dy = visual.endY - visual.startY;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const angle = Math.atan2(dy, dx);
+    const uniforms = visual.uniforms;
+    uniforms.length = length;
+    // Trägheitsbiegung quer zum Strahl, projiziert auf dessen Normale.
+    uniforms.bend = (visual.motionTrailY * Math.cos(angle)) - (visual.motionTrailX * Math.sin(angle));
+
+    const quad = visual.quad;
+    if (!quad) return;
+    const width = Math.ceil(length + PLASMA_BURNER_BEAM_BACK_PAD + PLASMA_BURNER_BEAM_FRONT_PAD);
+    if (width !== uniforms.width) {
+      uniforms.width = width;
+      // Shader-Size aktualisiert displayOrigin nicht selbst.
+      quad.setSize(width, PLASMA_BURNER_BEAM_HEIGHT).setOrigin(0.5);
+    }
+    const centerOffset = (width / 2) - PLASMA_BURNER_BEAM_BACK_PAD;
+    quad
+      .setPosition(visual.startX + Math.cos(angle) * centerOffset, visual.startY + Math.sin(angle) * centerOffset)
+      .setRotation(angle)
+      .setVisible(uniforms.alpha > 0.001);
   }
 
   private syncOwnerVisualState(beamId: string, visual: PlasmaBeamVisual, delta: number): void {
@@ -392,16 +434,14 @@ export class PlasmaBurnerRenderer {
       return;
     }
 
-    if (!segment) visual.color = owner.color;
     const frameScale = 16.667 / Math.max(1, delta);
     const moveX = visual.lastOwnerX === null ? 0 : (owner.x - visual.lastOwnerX) * frameScale;
     const moveY = visual.lastOwnerY === null ? 0 : (owner.y - visual.lastOwnerY) * frameScale;
     visual.lastOwnerX = owner.x;
     visual.lastOwnerY = owner.y;
 
-    const maxTrail = 9;
-    const desiredTrailX = Phaser.Math.Clamp(-moveX * 0.72, -maxTrail, maxTrail);
-    const desiredTrailY = Phaser.Math.Clamp(-moveY * 0.72, -maxTrail, maxTrail);
+    const desiredTrailX = Phaser.Math.Clamp(-moveX * 0.72, -MAX_MOTION_BEND_PX, MAX_MOTION_BEND_PX);
+    const desiredTrailY = Phaser.Math.Clamp(-moveY * 0.72, -MAX_MOTION_BEND_PX, MAX_MOTION_BEND_PX);
     const follow = 1 - Math.exp(-Math.max(1, delta) / 48);
     visual.motionTrailX = Phaser.Math.Linear(visual.motionTrailX, desiredTrailX, follow);
     visual.motionTrailY = Phaser.Math.Linear(visual.motionTrailY, desiredTrailY, follow);
@@ -410,13 +450,6 @@ export class PlasmaBurnerRenderer {
     const directionX = localAimAngle === null ? visual.endX - owner.x : Math.cos(localAimAngle);
     const directionY = localAimAngle === null ? visual.endY - owner.y : Math.sin(localAimAngle);
     const muzzle = getTopDownMuzzleOriginFromVector(owner.x, owner.y, directionX, directionY);
-    const shiftX = muzzle.x - visual.startX;
-    const shiftY = muzzle.y - visual.startY;
-    if ((shiftX * shiftX) + (shiftY * shiftY) <= 0.0001) return;
-
-    reanchorBeamPathStart(visual.mainPath, shiftX, shiftY);
-    reanchorBeamPathStart(visual.outerPath, shiftX, shiftY);
-    reanchorBeamPathStart(visual.corePath, shiftX, shiftY);
     visual.startX = muzzle.x;
     visual.startY = muzzle.y;
   }
@@ -436,15 +469,8 @@ export class PlasmaBurnerRenderer {
 
     const responseMs = localAimAngle === null ? 48 : 26;
     const follow = 1 - Math.exp(-Math.max(1, delta) / responseMs);
-    const shiftX = (targetX - visual.endX) * follow;
-    const shiftY = (targetY - visual.endY) * follow;
-    if ((shiftX * shiftX) + (shiftY * shiftY) <= 0.0001) return;
-
-    reanchorBeamPathEnd(visual.mainPath, shiftX, shiftY);
-    reanchorBeamPathEnd(visual.outerPath, shiftX, shiftY);
-    reanchorBeamPathEnd(visual.corePath, shiftX, shiftY);
-    visual.endX += shiftX;
-    visual.endY += shiftY;
+    visual.endX += (targetX - visual.endX) * follow;
+    visual.endY += (targetY - visual.endY) * follow;
   }
 
   private getLocalAimAngle(beamId: string): number | null {
@@ -454,506 +480,30 @@ export class PlasmaBurnerRenderer {
     return angle !== null && Number.isFinite(angle) ? angle : null;
   }
 
+  private hasImpact(visual: PlasmaBeamVisual): boolean {
+    return visual.impactKind !== 'none' && isPointInsideArena(visual.endX, visual.endY);
+  }
+
   private recycleBeam(beamId: string, visual: PlasmaBeamVisual): void {
     this.releaseBeamLights(beamId);
-    visual.glow.clear();
-    visual.discharge.clear();
-    visual.filaments.clear();
-    visual.endpoints.clear();
-    visual.mainPath = [];
-    visual.outerPath = [];
-    visual.corePath = [];
-    this.hideTextureLayers(visual);
-    visual.root.setVisible(false).setAlpha(0);
+    visual.quad?.setVisible(false);
+    visual.uniforms.alpha = 0;
     visual.lightsReleased = true;
     this.beams.delete(beamId);
     this.pulseSegments.delete(beamId);
     this.beamPool.push(visual);
   }
 
-  private destroyBeamVisual(visual: PlasmaBeamVisual): void {
-    visual.root.removeAll(true);
-    visual.root.destroy();
+  private colorToVec3(color: number): number[] {
+    return this.writeColor([0, 0, 0], color);
   }
 
-  private drawBeam(visual: PlasmaBeamVisual): void {
-    const dx = visual.endX - visual.startX;
-    const dy = visual.endY - visual.startY;
-    const length = Math.hypot(dx, dy);
-    const controlCount = Phaser.Math.Clamp(
-      Math.ceil(length / CONTROL_POINT_SPACING_PX) + 1,
-      MIN_CONTROL_POINTS,
-      MAX_CONTROL_POINTS,
-    );
-    const divisions = Phaser.Math.Clamp(
-      Math.ceil(length / RESAMPLE_SPACING_PX),
-      MIN_RESAMPLED_POINTS,
-      MAX_RESAMPLED_POINTS,
-    );
-    const jitter = Phaser.Math.Clamp(length * 0.014 + visual.thickness * 0.34, 4.2, 10);
-    const phase = this.scene.time.now * 0.015;
-
-    const start = { x: visual.startX, y: visual.startY };
-    const end = { x: visual.endX, y: visual.endY };
-    const nextMain = createJitteredBeamPath(
-      start,
-      end,
-      controlCount,
-      divisions,
-      jitter,
-      phase,
-      visual.motionTrailX,
-      visual.motionTrailY,
-    );
-    const nextOuter = createJitteredBeamPath(start, end, controlCount, divisions, jitter * 0.62, phase + 2.7);
-    const nextCore = createJitteredBeamPath(start, end, controlCount, divisions, jitter * 0.38, phase + 5.3);
-    visual.mainPath = blendBeamPaths(visual.mainPath, nextMain, 0.62, start, end);
-    visual.outerPath = blendBeamPaths(visual.outerPath, nextOuter, 0.5, start, end);
-    visual.corePath = blendBeamPaths(visual.corePath, nextCore, 0.72, start, end);
-
-    const palette = getBeamPaletteForPlayerColor(visual.color);
-    const mainColor = visual.color;
-    const glowColor = mixColors(visual.color, palette.glow, 0.28);
-    const coreColor = mixColors(visual.color, 0xffffff, 0.84);
-
-    visual.glow.clear();
-    strokeBeamPolyline(visual.glow, visual.outerPath, Math.max(visual.thickness * 5.2, 24), glowColor, 0.055);
-    strokeBeamPolyline(visual.glow, visual.outerPath, Math.max(visual.thickness * 3.1, 15), mainColor, 0.14);
-
-    visual.discharge.clear();
-    strokeBeamPolyline(visual.discharge, visual.mainPath, Math.max(visual.thickness * 1.08, 4.8), mainColor, 0.86);
-    strokeBeamPolyline(visual.discharge, visual.corePath, Math.max(visual.thickness * 0.28, 1.35), coreColor, 0.98);
-
-    visual.filaments.clear();
-    this.drawFilaments(visual.filaments, visual.mainPath, jitter, mainColor, glowColor, coreColor);
-    this.drawSideBranches(visual.filaments, visual.mainPath, length, jitter, mainColor, glowColor, coreColor);
-    this.drawEndpointDischarges(visual, dx, dy, length, mainColor, glowColor, coreColor);
-  }
-
-  private drawFilaments(
-    graphics: Phaser.GameObjects.Graphics,
-    mainPath: readonly BeamPoint[],
-    jitter: number,
-    mainColor: number,
-    glowColor: number,
-    coreColor: number,
-  ): void {
-    if (mainPath.length < 4) return;
-    const filamentCount = Phaser.Math.Between(3, 5);
-
-    for (let filament = 0; filament < filamentCount; filament += 1) {
-      const startT = Phaser.Math.FloatBetween(0.04, 0.66);
-      const endT = Math.min(0.96, startT + Phaser.Math.FloatBetween(0.18, 0.46));
-      const controlCount = Phaser.Math.Between(4, 6);
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const controls: BeamPoint[] = [];
-
-      for (let index = 0; index < controlCount; index += 1) {
-        const localT = index / (controlCount - 1);
-        const pathT = Phaser.Math.Linear(startT, endT, localT);
-        const base = sampleBeamPath(mainPath, pathT);
-        const tangent = sampleBeamTangent(mainPath, pathT);
-        const envelope = Math.sin(Math.PI * localT);
-        const separation = side * jitter * Phaser.Math.FloatBetween(0.18, 0.5) * (0.3 + envelope * 0.7);
-        const noise = Phaser.Math.FloatBetween(-jitter * 0.12, jitter * 0.12);
-        controls.push({
-          x: base.x - tangent.y * (separation + noise),
-          y: base.y + tangent.x * (separation + noise),
-        });
-      }
-
-      const filamentPath = resampleBeamSpline(controls, Phaser.Math.Between(12, 24));
-      strokeBeamPolyline(graphics, filamentPath, Phaser.Math.FloatBetween(2.1, 3.2), glowColor, 0.07);
-      strokeBeamPolyline(
-        graphics,
-        filamentPath,
-        Phaser.Math.FloatBetween(0.62, 1.08),
-        filament % 3 === 0 ? coreColor : filament % 2 === 0 ? glowColor : mainColor,
-        Phaser.Math.FloatBetween(0.34, 0.62),
-      );
-    }
-  }
-
-  private drawSideBranches(
-    graphics: Phaser.GameObjects.Graphics,
-    mainPath: readonly BeamPoint[],
-    length: number,
-    jitter: number,
-    mainColor: number,
-    glowColor: number,
-    coreColor: number,
-  ): void {
-    if (mainPath.length < 4) return;
-    const roll = Math.random();
-    const branchCount = roll < 0.12 ? 2 : roll < 0.48 ? 1 : 0;
-
-    for (let branch = 0; branch < branchCount; branch += 1) {
-      const pivotT = Phaser.Math.FloatBetween(0.22, 0.84);
-      const pivot = sampleBeamPath(mainPath, pivotT);
-      const tangent = sampleBeamTangent(mainPath, pivotT);
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const baseAngle = Math.atan2(tangent.y, tangent.x);
-      const branchAngle = baseAngle + side * Phaser.Math.FloatBetween(0.62, 1.05);
-      const branchLength = Phaser.Math.Clamp(length * Phaser.Math.FloatBetween(0.045, 0.085), 10, 29);
-      const endX = pivot.x + Math.cos(branchAngle) * branchLength;
-      const endY = pivot.y + Math.sin(branchAngle) * branchLength;
-      const branchPath = this.createSmoothBranch(pivot.x, pivot.y, endX, endY, jitter * 0.28);
-
-      strokeBeamPolyline(graphics, branchPath, 2.8, glowColor, 0.08);
-      strokeBeamPolyline(graphics, branchPath, 0.78, branch === 0 ? coreColor : mainColor, 0.62);
-    }
-  }
-
-  private createSmoothBranch(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number,
-    jitter: number,
-  ): BeamPoint[] {
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const length = Math.hypot(dx, dy) || 1;
-    const normalX = -dy / length;
-    const normalY = dx / length;
-    const controls: BeamPoint[] = [{ x: startX, y: startY }];
-    for (let index = 1; index < 4; index += 1) {
-      const t = index / 4;
-      const offset = Phaser.Math.FloatBetween(-jitter, jitter) * Math.sin(Math.PI * t);
-      controls.push({
-        x: Phaser.Math.Linear(startX, endX, t) + normalX * offset,
-        y: Phaser.Math.Linear(startY, endY, t) + normalY * offset,
-      });
-    }
-    controls.push({ x: endX, y: endY });
-    return resampleBeamSpline(controls, 10);
-  }
-
-  private drawEndpointDischarges(
-    visual: PlasmaBeamVisual,
-    dx: number,
-    dy: number,
-    length: number,
-    mainColor: number,
-    glowColor: number,
-    coreColor: number,
-  ): void {
-    const graphics = visual.endpoints;
-    const incomingAngle = length > 0.001 ? Math.atan2(dy, dx) : 0;
-    graphics.clear();
-
-    // A free-running beam must not end as a flat line cap. The tapered plasma tip
-    // keeps the cursor endpoint readable even when there is no collision impact.
-    const tangentX = length > 0.001 ? dx / length : 1;
-    const tangentY = length > 0.001 ? dy / length : 0;
-    const normalX = -tangentY;
-    const normalY = tangentX;
-    const tipDepth = Math.min(length * 0.42, Phaser.Math.Clamp(length * 0.08, 8, 18));
-    const tipBaseX = visual.endX - tangentX * tipDepth;
-    const tipBaseY = visual.endY - tangentY * tipDepth;
-    const tipHalfWidth = Math.max(visual.thickness * 1.25, 4.5);
-
-    graphics.fillStyle(glowColor, 0.12);
-    graphics.fillTriangle(
-      tipBaseX + normalX * tipHalfWidth,
-      tipBaseY + normalY * tipHalfWidth,
-      tipBaseX - normalX * tipHalfWidth,
-      tipBaseY - normalY * tipHalfWidth,
-      visual.endX,
-      visual.endY,
-    );
-    graphics.fillStyle(coreColor, 0.62);
-    graphics.fillTriangle(
-      tipBaseX + normalX * (tipHalfWidth * 0.42),
-      tipBaseY + normalY * (tipHalfWidth * 0.42),
-      tipBaseX - normalX * (tipHalfWidth * 0.42),
-      tipBaseY - normalY * (tipHalfWidth * 0.42),
-      visual.endX,
-      visual.endY,
-    );
-    graphics.fillStyle(coreColor, 0.92);
-    graphics.fillCircle(visual.endX, visual.endY, Math.max(visual.thickness * 0.72, 2.4));
-
-    for (let filament = 0; filament < 2; filament += 1) {
-      const side = filament === 0 ? -1 : 1;
-      const branchStartX = tipBaseX + normalX * side * tipHalfWidth * 0.58;
-      const branchStartY = tipBaseY + normalY * side * tipHalfWidth * 0.58;
-      const branchPath = this.createSmoothBranch(
-        branchStartX,
-        branchStartY,
-        branchStartX - tangentX * Phaser.Math.FloatBetween(1, 5) + normalX * side * Phaser.Math.FloatBetween(2, 6),
-        branchStartY - tangentY * Phaser.Math.FloatBetween(1, 5) + normalY * side * Phaser.Math.FloatBetween(2, 6),
-        1.2,
-      );
-      strokeBeamPolyline(graphics, branchPath, 1.8, glowColor, 0.12);
-      strokeBeamPolyline(graphics, branchPath, 0.62, coreColor, 0.5);
-    }
-
-    for (let ray = 0; ray < 3; ray += 1) {
-      const angle = incomingAngle + Phaser.Math.FloatBetween(-0.55, 0.55);
-      const inner = Phaser.Math.FloatBetween(2, 5);
-      const outer = Phaser.Math.FloatBetween(9, 18);
-      graphics.lineStyle(Phaser.Math.FloatBetween(0.65, 1.15), ray === 0 ? coreColor : mainColor, Phaser.Math.FloatBetween(0.34, 0.7));
-      graphics.lineBetween(
-        visual.startX + Math.cos(angle) * inner,
-        visual.startY + Math.sin(angle) * inner,
-        visual.startX + Math.cos(angle) * outer,
-        visual.startY + Math.sin(angle) * outer,
-      );
-    }
-
-    if (visual.impactKind === 'none' || !isPointInsideArena(visual.endX, visual.endY)) return;
-    const sparkCount = Phaser.Math.Between(4, 7);
-    for (let spark = 0; spark < sparkCount; spark += 1) {
-      const angle = incomingAngle + Math.PI + Phaser.Math.FloatBetween(-1.4, 1.4);
-      const inner = Phaser.Math.FloatBetween(3, 7);
-      const outer = Phaser.Math.FloatBetween(12, 28);
-      graphics.lineStyle(Phaser.Math.FloatBetween(0.65, 1.2), spark % 3 === 0 ? coreColor : mainColor, Phaser.Math.FloatBetween(0.36, 0.76));
-      graphics.lineBetween(
-        visual.endX + Math.cos(angle) * inner,
-        visual.endY + Math.sin(angle) * inner,
-        visual.endX + Math.cos(angle) * outer,
-        visual.endY + Math.sin(angle) * outer,
-      );
-    }
-
-    const dischargeCount = Math.random() < 0.58 ? Phaser.Math.Between(1, 2) : 0;
-    for (let discharge = 0; discharge < dischargeCount; discharge += 1) {
-      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const dischargeLength = Phaser.Math.FloatBetween(10, 24);
-      const branchPath = this.createSmoothBranch(
-        visual.endX,
-        visual.endY,
-        visual.endX + Math.cos(angle) * dischargeLength,
-        visual.endY + Math.sin(angle) * dischargeLength,
-        2.8,
-      );
-      strokeBeamPolyline(graphics, branchPath, 2.5, glowColor, 0.08);
-      strokeBeamPolyline(graphics, branchPath, 0.72, coreColor, 0.72);
-    }
-  }
-
-  private updateTextureLayers(visual: PlasmaBeamVisual, now: number): void {
-    const dx = visual.endX - visual.startX;
-    const dy = visual.endY - visual.startY;
-    const length = Math.hypot(dx, dy);
-    const palette = getBeamPaletteForPlayerColor(visual.color);
-    const mainColor = visual.color;
-    const glowColor = mixColors(visual.color, palette.glow, 0.28);
-    const coreColor = mixColors(visual.color, 0xffffff, 0.84);
-    this.updateHazeSamples(visual, now, length, mainColor, glowColor);
-    this.updateStreakSamples(visual, now, length, mainColor, coreColor);
-    this.updateSparkSamples(visual, now, length, mainColor, coreColor);
-    this.updateEndpointImages(visual, now, length, mainColor, glowColor, coreColor);
-  }
-
-  private updateHazeSamples(
-    visual: PlasmaBeamVisual,
-    now: number,
-    length: number,
-    mainColor: number,
-    glowColor: number,
-  ): void {
-    if (visual.outerPath.length < 2 || length < 1) {
-      for (const image of visual.hazeSamples) image.setVisible(false);
-      return;
-    }
-    const count = Phaser.Math.Clamp(Math.round(length / 68), 3, MAX_HAZE_SAMPLES);
-    const sampleWidth = Phaser.Math.Clamp((length / count) * 1.55, 56, 108);
-
-    for (let index = 0; index < visual.hazeSamples.length; index += 1) {
-      const image = visual.hazeSamples[index];
-      if (index >= count) {
-        image.setVisible(false);
-        continue;
-      }
-      const baseT = (index + 0.5) / count;
-      const t = Phaser.Math.Clamp(baseT + Math.sin(now * 0.0024 + index * 1.9) * 0.012, 0.02, 0.98);
-      const point = sampleBeamPath(visual.outerPath, t);
-      const tangent = sampleBeamTangent(visual.outerPath, t);
-      const drift = Math.sin(now * 0.0053 + index * 2.2) * 2.2;
-      const pulse = 0.5 + Math.sin(now * 0.009 + index * 1.43) * 0.5;
-      image
-        .setVisible(true)
-        .setPosition(point.x - tangent.y * drift, point.y + tangent.x * drift)
-        .setRotation(Math.atan2(tangent.y, tangent.x))
-        .setTint(index % 2 === 0 ? glowColor : mainColor)
-        .setDisplaySize(sampleWidth, Phaser.Math.Linear(27, 38, pulse))
-        .setAlpha(emissiveAlpha(Phaser.Math.Linear(0.085, 0.15, pulse)));
-    }
-  }
-
-  private updateStreakSamples(
-    visual: PlasmaBeamVisual,
-    now: number,
-    length: number,
-    mainColor: number,
-    coreColor: number,
-  ): void {
-    if (visual.mainPath.length < 2 || length < 1) {
-      for (const image of visual.streakSamples) image.setVisible(false);
-      return;
-    }
-    const count = Phaser.Math.Clamp(Math.round(length / 82), 3, MAX_STREAK_SAMPLES);
-
-    for (let index = 0; index < visual.streakSamples.length; index += 1) {
-      const image = visual.streakSamples[index];
-      if (index >= count) {
-        image.setVisible(false);
-        continue;
-      }
-      const movingT = this.wrap01(now * (0.00048 + index * 0.000025) + index / count);
-      const t = 0.045 + movingT * 0.91;
-      const point = sampleBeamPath(visual.mainPath, t);
-      const tangent = sampleBeamTangent(visual.mainPath, t);
-      const pulse = 0.5 + Math.sin(now * 0.017 + index * 2.71) * 0.5;
-      const lateral = Math.sin(now * 0.011 + index * 1.77) * 1.5;
-      image
-        .setVisible(true)
-        .setPosition(point.x - tangent.y * lateral, point.y + tangent.x * lateral)
-        .setRotation(Math.atan2(tangent.y, tangent.x))
-        .setTint(index % 3 === 0 ? coreColor : mainColor)
-        .setDisplaySize(Phaser.Math.Linear(34, 62, pulse), Phaser.Math.Linear(4.2, 7.2, pulse))
-        .setAlpha(emissiveAlpha(Phaser.Math.Linear(0.1, 0.27, pulse)));
-    }
-  }
-
-  private updateSparkSamples(
-    visual: PlasmaBeamVisual,
-    now: number,
-    length: number,
-    mainColor: number,
-    coreColor: number,
-  ): void {
-    if (visual.corePath.length < 2 || length < 1) {
-      for (const image of visual.sparkSamples) image.setVisible(false);
-      return;
-    }
-    const count = Phaser.Math.Clamp(Math.round(length / 96), 2, MAX_SPARK_SAMPLES);
-
-    for (let index = 0; index < visual.sparkSamples.length; index += 1) {
-      const image = visual.sparkSamples[index];
-      if (index >= count) {
-        image.setVisible(false);
-        continue;
-      }
-      const movingT = this.wrap01(1 - now * (0.00062 + index * 0.00004) + index / count);
-      const t = 0.035 + movingT * 0.93;
-      const point = sampleBeamPath(visual.corePath, t);
-      const pulse = 0.5 + Math.sin(now * 0.026 + index * 3.17) * 0.5;
-      const size = Phaser.Math.Linear(4.5, 9.5, pulse);
-      image
-        .setVisible(true)
-        .setPosition(point.x, point.y)
-        .setTint(index % 2 === 0 ? coreColor : mainColor)
-        .setDisplaySize(size, size)
-        .setAlpha(emissiveAlpha(Phaser.Math.Linear(0.2, 0.7, pulse)));
-    }
-  }
-
-  private updateEndpointImages(
-    visual: PlasmaBeamVisual,
-    now: number,
-    length: number,
-    mainColor: number,
-    glowColor: number,
-    coreColor: number,
-  ): void {
-    const tangent = visual.mainPath.length >= 2
-      ? sampleBeamTangent(visual.mainPath, 0.02)
-      : { x: length > 0.001 ? (visual.endX - visual.startX) / length : 1, y: length > 0.001 ? (visual.endY - visual.startY) / length : 0 };
-    const angle = Math.atan2(tangent.y, tangent.x);
-    const muzzlePulse = 0.5 + Math.sin(now * 0.024) * 0.5;
-    const muzzleSize = Phaser.Math.Linear(30, 43, muzzlePulse);
-    visual.muzzleHalo
-      .setVisible(true)
-      .setPosition(visual.startX, visual.startY)
-      .setTint(glowColor)
-      .setDisplaySize(muzzleSize, muzzleSize)
-      .setAlpha(emissiveAlpha(Phaser.Math.Linear(0.28, 0.46, muzzlePulse)));
-    visual.muzzleStreak
-      .setVisible(true)
-      .setPosition(visual.startX + tangent.x * 7, visual.startY + tangent.y * 7)
-      .setRotation(angle)
-      .setTint(coreColor)
-      .setDisplaySize(Phaser.Math.Linear(28, 42, muzzlePulse), Phaser.Math.Linear(7, 11, muzzlePulse))
-      .setAlpha(emissiveAlpha(Phaser.Math.Linear(0.46, 0.76, muzzlePulse)));
-
-    const hasImpact = visual.impactKind !== 'none' && isPointInsideArena(visual.endX, visual.endY);
-    if (!hasImpact) {
-      visual.impactHalo.setVisible(false);
-      visual.impactFlare.setVisible(false);
-      return;
-    }
-    const impactPulse = 0.5 + Math.sin(now * 0.031 + 1.7) * 0.5;
-    const impactScale = visual.impactKind === 'player' ? 0.9 : 1.08;
-    visual.impactHalo
-      .setVisible(true)
-      .setPosition(visual.endX, visual.endY)
-      .setTint(glowColor)
-      .setDisplaySize(
-        Phaser.Math.Linear(43, 62, impactPulse) * impactScale,
-        Phaser.Math.Linear(43, 62, impactPulse) * impactScale,
-      )
-      .setAlpha(emissiveAlpha(Phaser.Math.Linear(0.28, 0.5, impactPulse)));
-    visual.impactFlare
-      .setVisible(true)
-      .setPosition(visual.endX, visual.endY)
-      .setTint(coreColor)
-      .setDisplaySize(
-        Phaser.Math.Linear(15, 24, impactPulse) * impactScale,
-        Phaser.Math.Linear(15, 24, impactPulse) * impactScale,
-      )
-      .setAlpha(emissiveAlpha(Phaser.Math.Linear(0.62, 0.92, impactPulse)));
-  }
-
-  private hideTextureLayers(visual: PlasmaBeamVisual): void {
-    for (const image of visual.hazeSamples) image.setVisible(false);
-    for (const image of visual.streakSamples) image.setVisible(false);
-    for (const image of visual.sparkSamples) image.setVisible(false);
-    visual.muzzleHalo.setVisible(false);
-    visual.muzzleStreak.setVisible(false);
-    visual.impactHalo.setVisible(false);
-    visual.impactFlare.setVisible(false);
-  }
-
-  private wrap01(value: number): number {
-    return value - Math.floor(value);
-  }
-
-  private emitImpactSparks(visual: PlasmaBeamVisual, now: number): void {
-    if (visual.impactKind === 'none' || !isPointInsideArena(visual.endX, visual.endY)) return;
-    if (now - visual.lastImpactSparkAt < IMPACT_SPARK_INTERVAL_MS) return;
-
-    const emitter = this.ensureImpactSparkEmitter();
-    setEmitterTintArray(emitter, [
-      0xffffff,
-      mixColors(visual.color, 0xffffff, 0.78),
-      visual.color,
-      mixColors(visual.color, 0xffffff, 0.34),
-    ]);
-    emitter.emitParticleAt(visual.endX, visual.endY, Phaser.Math.Between(2, 4));
-    visual.lastImpactSparkAt = now;
-  }
-
-  private ensureImpactSparkEmitter(): Phaser.GameObjects.Particles.ParticleEmitter {
-    if (this.impactSparkEmitter) return this.impactSparkEmitter;
-    this.generateTextures();
-    this.impactSparkEmitter = createEmitter(this.scene, 0, 0, TEX_PLASMA_SPARK, {
-      lifespan: { min: 90, max: 190 },
-      frequency: -1,
-      angle: { min: 0, max: 360 },
-      speed: { min: 55, max: 185 },
-      scale: { start: 0.9, end: 0 },
-      alpha: { start: 0.94, end: 0 },
-      tint: [0xffffff],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting: false,
-      reserve: 64,
-      maxParticles: 64,
-      maxAliveParticles: 36,
-    }, DEPTH_TRACE + 0.2, undefined, 'plasmaBurner');
-    return this.impactSparkEmitter;
+  /** Schreibt in ein wiederverwendetes Array, damit das Uniform-Setup pro Frame nichts allokiert. */
+  private writeColor(target: number[], color: number): number[] {
+    target[0] = ((color >> 16) & 0xff) / 255;
+    target[1] = ((color >> 8) & 0xff) / 255;
+    target[2] = (color & 0xff) / 255;
+    return target;
   }
 
   private syncBeamLights(beamId: string, visual: PlasmaBeamVisual): void {
@@ -967,8 +517,9 @@ export class PlasmaBurnerRenderer {
       return;
     }
 
+    const palette = visual.uniforms.palette;
     const count = Phaser.Math.Clamp(Math.ceil(length / BEAM_LIGHT_SPACING_PX), 1, BEAM_MAX_PATH_LIGHTS);
-    const lightColor = mixColors(visual.color, 0xffffff, 0.62);
+    const lightColor = mixColors(palette.hot, 0xffffff, 0.25);
     const radiusPx = Phaser.Math.Clamp((length / count) * 0.9, 145, 205);
     for (let slot = 0; slot < count; slot += 1) {
       const t = (slot + 0.5) / count;
@@ -988,7 +539,7 @@ export class PlasmaBurnerRenderer {
       this.lighting.releaseLight(this.pathLightKey(beamId, slot));
     }
 
-    if (visual.impactKind !== 'none' && isPointInsideArena(visual.endX, visual.endY)) {
+    if (this.hasImpact(visual)) {
       const pulse = 0.94 + Math.sin(this.scene.time.now * 0.035 + visual.endX * 0.012 + visual.endY * 0.009) * 0.06;
       this.lighting.setLight(
         this.impactLightKey(beamId),
@@ -996,7 +547,7 @@ export class PlasmaBurnerRenderer {
         visual.endX,
         visual.endY,
         {
-          color: mixColors(visual.color, 0xffffff, 0.74),
+          color: mixColors(palette.hot, 0xffffff, 0.45),
           radiusPx: visual.impactKind === 'player' ? 185 : 215,
           intensity: pulse,
         },

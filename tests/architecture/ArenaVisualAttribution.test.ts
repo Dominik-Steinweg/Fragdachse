@@ -477,7 +477,6 @@ const GRAPHICS_ARC_LEGACY_SOURCES: Readonly<Record<string, string>> = {
   'src/effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts': 'Markerringe, noch nicht auf gebackene Ringe umgestellt.',
   'src/effects/EffectSystem.ts': 'Explosions- und Kegelgeometrie, noch nicht umgestellt.',
   'src/effects/EnergyShieldRenderer.ts': 'Schildkuppel mit dynamischen Teilbogen, noch nicht umgestellt.',
-  'src/effects/PlasmaBurnerRenderer.ts': 'Strahlendpunkt, noch nicht auf ein gebackenes Glowquad umgestellt.',
   'src/effects/ShadowSystem.ts': 'Einmaliger Bake in eine RenderTexture, kein Pro-Frame-Pfad.',
   'src/effects/TeslaDomeRenderer.ts': 'Feldfilamente mit dynamischen Teilbogen, noch nicht umgestellt.',
   'src/effects/ZeusTaserRenderer.ts': 'Kegeltelegraph, noch nicht umgestellt.',
