@@ -1,5 +1,5 @@
 /**
- * Waldrelief-Rahmen des Arena-HUDs.
+ * Waldboden-Rahmen mit farbigem Innenrand des Arena-HUDs.
  *
  * Ein kleiner Atlas (`scripts/export-hud-frames.mjs`) liefert eine Kartenform in acht
  * Farbfamilien, eine neutrale Statusleiste und deren Trenner. Die Farbfamilie trägt die

@@ -3,8 +3,8 @@
  *
  * Aufbau (lokale Koordinaten, Ursprung in der Kartenmitte, Einheiten = Bildschirmpixel):
  *   - halbtransparente Glasfläche hinter der Rahmenöffnung – die Welt bleibt sichtbar
- *   - Waldrelief-Rahmen (3-Slice, nur horizontal gestreckt) in der Farbfamilie der Aussage
- *   - Fortschrittsfüllung in der gemalten Rinne am unteren Rahmenrand
+ *   - Waldboden-Rahmen (3-Slice, nur horizontal gestreckt) in der Farbfamilie der Aussage
+ *   - schmale Fortschrittsfüllung oberhalb der unteren Holzschiene
  *   - Kicker als kleines Schild auf der oberen Schiene, optional Marken rechts auf der Schiene
  *   - eine Inhaltszeile: Titel links, Wert rechts
  *
@@ -347,8 +347,8 @@ export class HudCard {
     this.frame.width = w / s;
     // NineSlice rechnet seine Vertices in den width/height-Settern neu.
     this.backing.width = Math.max(24, w - 44 * s);
-    this.backing.height = Math.max(24, 72 * s);
-    this.backing.setPosition(0, this.top + 50 * s);
+    this.backing.height = Math.max(24, (SRC.trackBottom - SRC.interiorTop + 12) * s);
+    this.backing.setPosition(0, this.top + (SRC.interiorTop + SRC.trackBottom) / 2 * s);
     const y = this.interiorCenterY;
     this.title.setPosition(this.centered ? 0 : this.contentLeft, y);
     this.value.setPosition(this.contentRight, y);

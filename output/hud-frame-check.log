@@ -1,0 +1,612 @@
+
+> fragdachse@0.1.0 check
+> npm test && npm run test:architecture && npm run build && npm run build:map-editor
+
+
+> fragdachse@0.1.0 test
+> vitest run --pool=threads --exclude build/** --exclude art/** --exclude tools/audio-studio/** --exclude tests/architecture/** --exclude tests/integration/** --exclude tests/assets/** --exclude tests/stress/** --exclude tests/balance-lab/**
+
+
+ RUN  v3.2.7 C:/Fragdachse
+
+stderr | tests/GpuVfxSystem.test.ts > gpu vfx system: lanes > shares flight admission, critical reserve, profiling and source cleanup across both primitives
+[GpuVfxPool:flight-signature] Kapazitaet 16384 erschoepft - Spawn verworfen, statt aktives Material zu ueberschreiben. Kapazitaet pruefen.
+
+ ✓ tests/MuzzleFlashRendererGpuParticles.test.ts (20 tests) 1298ms
+ ✓ tests/StinkCloudGpuParticles.test.ts (18 tests) 1606ms
+ ✓ tests/BurrowGpuRenderer.test.ts (20 tests) 1652ms
+ ✓ tests/TrackGravelField.test.ts (5 tests) 3786ms
+   ✓ railway ballast bed > is stable across input order and rebuilds, but varies by world seed  1399ms
+   ✓ railway ballast bed > moves with the world frame without rerolling the material  661ms
+   ✓ railway ballast bed > keeps independent continuous edges within the configured core and shoulder reach  1020ms
+   ✓ railway ballast bed > gives overlapping chunk gutters the exact same pixels as a larger bake  630ms
+ ✓ tests/RocketSmokeGpuParticles.test.ts (15 tests) 1407ms
+   ✓ gpu vfx eased base > tunes wake opacity independently from the core and honors long core lengths within the shared lifetime  327ms
+ ✓ tests/GroundFireGpuParticles.test.ts (12 tests) 2043ms
+   ✓ GroundFire GPU particles > keeps large surfaces inside the existing shared lane budget  418ms
+ ✓ tests/TerrainColorSnapshot.test.ts (12 tests) 2742ms
+   ✓ TerrainColorSnapshot > stamps expanded water across chunk boundaries while retaining dry ground  2724ms
+ ✓ tests/GpuVfxSystem.test.ts (34 tests) 3027ms
+   ✓ gpu vfx system: lanes > shares flight admission, critical reserve, profiling and source cleanup across both primitives  355ms
+ ✓ tests/CombatGoreGpuRenderer.test.ts (25 tests) 3084ms
+ ✓ tests/RocketExhaustGpuParticles.test.ts (13 tests) 993ms
+ ✓ tests/AirstrikeGpuParticles.test.ts (11 tests) 716ms
+ ✓ tests/DirtSurfaceField.test.ts (4 tests) 5631ms
+   ✓ World soil surface > is independent of cell order, rebuilding, and sampling partition  1245ms
+   ✓ World soil surface > moves with the World frame and varies at edges between seeds  699ms
+   ✓ World soil surface > lays a riverbank under and around water, independent of order and partition  3669ms
+ ✓ tests/ArenaMetaController.test.ts (23 tests) 2224ms
+ ✓ tests/ActivityRebindingContracts.test.ts (8 tests) 5677ms
+ ✓ tests/CoopDefenseTutorialAdvanceMap.test.ts (29 tests) 2981ms
+   ✓ Map 1 as the guided advance tutorial > keeps tutorial rock banks intact through the nearby map edge (seed 1)  333ms
+   ✓ Map 1 as the guided advance tutorial > keeps every authored checkpoint core free of rocks, trees and water  421ms
+   ✓ Map 1 as the guided advance tutorial > stamps the complete tutorial bridge blockades without cutting them open again  336ms
+   ✓ Map 1 as the guided advance tutorial > leaves a mostly open start around the intact control tutorial and open terrain across the map  334ms
+   ✓ Map 1 as the guided advance tutorial > respects the authored tree budget and keeps crowns off water, rock and crossings  344ms
+   ✓ Map 1 as the guided advance tutorial > keeps bridge approaches clear and unlocks the route in order across generated layouts  399ms
+   ✓ Map 1 as the guided advance tutorial > keeps every route stage and authored spawn area walkable  360ms
+stderr | tests/PeerLink.test.ts > PeerLink native connection state > tolerates a short disconnected blip and closes if it persists
+[PeerLink] Verbindung geschlossen (peer=remote-peer). kein Grund vom Transport
+
+stderr | tests/PeerLink.test.ts > PeerLink native connection state > treats native failed as an immediate link abort
+[PeerLink] Verbindung geschlossen (peer=remote-peer). kein Grund vom Transport
+
+stderr | tests/PeerLink.test.ts > PeerLink native connection state > treats native closed as an immediate link abort
+[PeerLink] Verbindung geschlossen (peer=remote-peer). kein Grund vom Transport
+
+ ✓ tests/PeerLink.test.ts (10 tests) 1123ms
+   ✓ PeerLink bounded message transport > joins and resumes a real room with a fragmented full baseline on small SCTP channels  822ms
+ ✓ tests/DirtSurfaceStreaming.test.ts (2 tests) 916ms
+   ✓ soil streaming and snapshot parity > reuses one surface canvas, restores evicted soil identically and releases resources  551ms
+   ✓ soil streaming and snapshot parity > uses identical native soil pixels for display and reduced terrain snapshots  363ms
+ ✓ tests/PerformanceLabScenarios.test.ts (3 tests) 1282ms
+   ✓ Performance reference fixtures > resolves every frozen build through legal ready contracts and supports independent cases  1218ms
+ ✓ tests/AdrenalineEssenceLiquidFrames.test.ts (3 tests) 674ms
+   ✓ procedural essence liquid material > keeps every frame a connected, softly edged cyan bead on a transparent background  657ms
+ ✓ tests/MapEditorFileStore.test.ts (11 tests) 1447ms
+   ✓ Map editor local file replacement > uses the same water clearance for saving and previews (persistent: false)  319ms
+ ✓ tests/ExplosionGpuRenderer.modern.test.ts (9 tests) 974ms
+ ✓ tests/ArenaCellBucketIndex.test.ts (19 tests) 775ms
+   ✓ arena cell bucket index > returns a superset of the full scan for every region and reach  370ms
+ ✓ tests/ArenaGeneratorWorldMetrics.test.ts (1 test) 1024ms
+   ✓ ArenaGenerator world-scoped metrics > generates the same layout independently of mutable active arena state  1023ms
+ ✓ tests/GpuVfxAtlas.test.ts (13 tests) 1309ms
+   ✓ gpu vfx atlas > keeps every frame padded against its neighbours and the border  532ms
+ ✓ tests/MovementEffectsRenderer.test.ts (9 tests) 697ms
+ ✓ tests/ArenaRockDecals.test.ts (3 tests) 740ms
+   ✓ Arena rock decals > can bind a decal conservatively to multiple touching rocks  358ms
+ ✓ tests/WaterSurfaceRenderer.test.ts (5 tests) 969ms
+   ✓ Water presentation residency > continues the baked boundary using local map dimensions in an offset world  323ms
+   ✓ Water presentation residency > only allocates nearby occupied chunks, reuses masks, and releases all resources on teardown  528ms
+ ✓ tests/LoadoutContentLoader.test.ts (15 tests) 542ms
+ ✓ tests/WaterTerrain.test.ts (46 tests) 4681ms
+   ✓ Water terrain contracts > generates reproducible water and reserves it from scenery and pickups on Map 0  2856ms
+   ✓ Water terrain contracts > generates reproducible water and reserves it from scenery and pickups on Map 1  670ms
+ ✓ tests/ProjectileFlightProcessor.test.ts (7 tests) 2346ms
+   ✓ charged bolt random tempo > stays bounded, fluctuates both ways and retains mean speed across short-lived projectiles  2259ms
+ ✓ tests/ArenaDirtDecals.test.ts (2 tests) 556ms
+   ✓ Arena dirt decals > places rock-underlay decals on dirt cells beneath rocks  552ms
+ ✓ tests/TurretVisualCatalog.test.ts (4 tests) 594ms
+   ✓ turret visual catalog > provides transparent selected PNGs and separates normal from void flame  587ms
+ ✓ tests/CoopDefenseRockFieldMap.test.ts (5 tests) 456ms
+   ✓ Map 14 rock field > generates both rock and walkable ground on every seed  312ms
+ ✓ tests/LivingClipGeometry.test.ts (7 tests) 546ms
+ ✓ tests/CoopDefenseLoadoutModifierReachability.test.ts (6 tests) 865ms
+   ✓ coop-defense loadout modifier reachability > keeps every discrete shipped upgrade level combination schema-valid  575ms
+ ✓ tests/TimeOfDay.test.ts (11 tests) 421ms
+   ✓ sky state > keeps every derived factor inside its valid range  314ms
+ ✓ tests/LeafBlowerGpuParticles.test.ts (7 tests) 663ms
+ ✓ tests/FlameRendererGpuParticles.test.ts (10 tests) 906ms
+ ✓ tests/TrackGravelStreaming.test.ts (3 tests) 495ms
+   ✓ railway gravel streaming > uses the same world ballast for normal chunks and scaled terrain snapshots  319ms
+ ✓ tests/GpuFlightRibbon.test.ts (21 tests) 641ms
+   ✓ GPU flight ribbon geometry and lifetime > does not rewrite data during stillness or aging and never allocates for zero motion  479ms
+ ✓ tests/EntityBurnGpuController.test.ts (8 tests) 636ms
+ ✓ tests/ChunkedRenderSurface.test.ts (25 tests) 412ms
+ ✓ tests/ConstructionOwnershipMoteRenderer.test.ts (4 tests) 267ms
+ ✓ tests/MapEditorPreview.test.ts (18 tests) 429ms
+ ✓ tests/LocalPersistence.test.ts (32 tests) 436ms
+ ✓ tests/CoopDefenseC3.test.ts (15 tests) 394ms
+ ✓ tests/MatchResultsModel.test.ts (13 tests) 254ms
+ ✓ tests/MapEditorDocument.test.ts (15 tests) 325ms
+ ✓ tests/EnemyIntentAndBreach.test.ts (44 tests) 281ms
+ ✓ tests/ExplosionGpuRenderer.test.ts (2 tests) 174ms
+ ✓ tests/PlayerMovementPhysics.test.ts (19 tests) 444ms
+ ✓ tests/CoopDefenseClassUnlocks.test.ts (7 tests) 233ms
+ ✓ tests/CoopDefenseC4.test.ts (8 tests) 319ms
+   ✓ Coop Defense C4 campaign validation > prebuilds every shipped ground-hazard event for a real arena seed  300ms
+ ✓ tests/I18n.test.ts (5 tests) 193ms
+ ✓ tests/ProjectileCollisionSearch.test.ts (19 tests) 137ms
+ ✓ tests/AmbientWildlife.test.ts (24 tests) 10163ms
+   ✓ cosmetic wildlife > retracts the tongue completely between individually varied, recurring flicks  516ms
+   ✓ cosmetic wildlife > turns continuously and stays in its habitat under pressure at minute 0, with world offsets  3763ms
+   ✓ cosmetic wildlife > turns continuously and stays in its habitat under pressure at minute 720, with world offsets  4621ms
+ ✓ tests/AttackDroneSystem.test.ts (40 tests) 252ms
+ ✓ tests/MgAttritionRenderer.test.ts (3 tests) 219ms
+ ✓ tests/FlowFieldKernelEquivalence.test.ts (11 tests) 170ms
+ ✓ tests/AmbientWildlifeRendering.test.ts (9 tests) 210ms
+ ✓ tests/ZeusGpuRenderer.test.ts (5 tests) 262ms
+ ✓ tests/ProjectilePhysicsBoundary.test.ts (55 tests) 205ms
+ ✓ tests/CoopDefenseItemPersistence.test.ts (25 tests) 187ms
+ ✓ tests/CoopDefenseZeitzunderMap.test.ts (3 tests) 178ms
+ ✓ tests/ShadowStaticBake.test.ts (12 tests) 131ms
+ ✓ tests/CoopDefenseTutorialArena.test.ts (6 tests) 301ms
+ ✓ tests/WorldProjectileRuntime.test.ts (70 tests) 228ms
+ ✓ tests/RockVegetationTeardown.test.ts (4 tests) 161ms
+ ✓ tests/RockOverlayStreamer.test.ts (12 tests) 162ms
+ ✓ tests/CoopDefenseDormantBases.test.ts (22 tests) 211ms
+ ✓ tests/WorldCombatGameplayBinding.test.ts (25 tests) 295ms
+ ✓ tests/GroundHazardSpread.test.ts (3 tests) 150ms
+ ✓ tests/DachsOfSteelRockArmorDrop.test.ts (7 tests) 408ms
+   ✓ Dachs of Steel & Tutorial-Felsen Armor Drops > generates tutorial rocks and normal rocks without armorDropMult on Map 1 and Map 11  399ms
+ ✓ tests/CoopDefenseVoidHunterMap.test.ts (3 tests) 104ms
+ ✓ tests/GroundFireTextures.test.ts (3 tests) 124ms
+ ✓ tests/GroundFog.test.ts (17 tests) 160ms
+ ✓ tests/CoopDefenseRespec.test.ts (4 tests) 101ms
+ ✓ tests/DeathFragmentPreparation.test.ts (2 tests) 95ms
+ ✓ tests/LocalPlayerPrediction.test.ts (18 tests) 61ms
+ ✓ tests/GameContentValidation.test.ts (7 tests) 121ms
+stderr | tests/CoopDefenseSpawnExecutor.test.ts > Spawn coordinates across World and navigation grids > rejects a free center when the actual boss body overlaps neighboring rock
+[CoopDefenseSpawnExecutor] Keine freien Spawn-Zellen an der authored Arena-Front mehr.
+
+stderr | tests/CoopDefenseSpawnExecutor.test.ts > Spawn coordinates across World and navigation grids > uses live physical geometry while a replacement navigation field is still pending
+[CoopDefenseSpawnExecutor] Keine freien Spawn-Zellen an der authored Arena-Front mehr.
+
+stderr | tests/CoopDefenseSpawnExecutor.test.ts > Spawn coordinates across World and navigation grids > spawns while moving goals await a new field, using current connected regions
+[CoopDefenseSpawnExecutor] Keine freien Spawn-Zellen an der authored Arena-Front mehr.
+
+stderr | tests/CoopDefenseSpawnExecutor.test.ts > CoopDefenseSpawnExecutor fronts > uses live grid dimensions and does not silently replace an exhausted front
+[CoopDefenseSpawnExecutor] Keine freien Spawn-Zellen an der authored Arena-Front mehr.
+
+ ✓ tests/CoopDefenseSpawnExecutor.test.ts (11 tests) 56ms
+ ✓ tests/WorldMetricsScopeContracts.test.ts (30 tests) 107ms
+ ✓ tests/PowerUpRendererGpuPedestals.test.ts (1 test) 122ms
+ ✓ tests/MapEditorPersistentSpawns.test.ts (3 tests) 100ms
+ ✓ tests/EnemySeparationGrid.test.ts (14 tests) 60ms
+ ✓ tests/LoadoutToolSlots.test.ts (6 tests) 83ms
+ ✓ tests/LoadoutCatalog.test.ts (13 tests) 78ms
+ ✓ tests/CoopDefenseClassLoadoutPersistence.test.ts (4 tests) 65ms
+ ✓ tests/ProjectileTargetPiercing.test.ts (26 tests) 92ms
+ ✓ tests/HitFeedbackRenderer.test.ts (10 tests) 71ms
+ ✓ tests/PerformanceLabReports.test.ts (15 tests) 68ms
+ ✓ tests/SmokeRenderer.test.ts (9 tests) 98ms
+ ✓ tests/CombatSystemBaseDamage.test.ts (36 tests) 71ms
+ ✓ tests/WorldRuntimeContextContracts.test.ts (21 tests) 42ms
+ ✓ tests/CoopDefenseItemStats.test.ts (14 tests) 51ms
+ ✓ tests/UpgradeMenuLayout.test.ts (3 tests) 100ms
+ ✓ tests/CombatSystemRespawn.test.ts (34 tests) 85ms
+ ✓ tests/NavigationBodyGraph.test.ts (8 tests) 71ms
+ ✓ tests/PersistentBaseUnlock.test.ts (8 tests) 65ms
+ ✓ tests/ArenaObstacleIndex.test.ts (15 tests) 79ms
+ ✓ tests/ProjectilePresentationRuntime.test.ts (46 tests) 93ms
+ ✓ tests/AdrenalineEssenceRuntime.test.ts (47 tests) 60ms
+ ✓ tests/WorldPlayerGameplayLifecycle.test.ts (21 tests) 58ms
+ ✓ tests/CoopDefenseClasses.test.ts (10 tests) 50ms
+ ✓ tests/HostPhysicsSystemAllocation.test.ts (29 tests) 60ms
+ ✓ tests/FlowFieldCoordinator.test.ts (16 tests) 59ms
+ ✓ tests/RadialActionInput.test.ts (38 tests) 67ms
+ ✓ tests/GameAudioSystem.test.ts (7 tests) 37ms
+ ✓ tests/CoopDefenseMaps.test.ts (25 tests) 86ms
+ ✓ tests/WorldActivityAuthoring.test.ts (18 tests) 47ms
+stderr | tests/PeerRoom.test.ts > PeerRoom handshake and roster > rejects a full room without disturbing existing players
+[PeerRoom] Raum ist voll, Verbindung wird abgewiesen.
+
+stderr | tests/PeerRoom.test.ts > PeerRoom handshake and roster > isolates a protocol-mismatched incoming join to that link
+[PeerRoom] Protokollversion passt nicht (Gegenseite 21, hier 22).
+
+ ✓ tests/PeerRoom.test.ts (37 tests) 72ms
+ ✓ tests/CoopDefenseDecoyTargetSystem.test.ts (7 tests) 82ms
+ ✓ tests/NavigationCostsAndPositions.test.ts (3 tests) 30ms
+ ✓ tests/AdrenalineEssenceLighting.test.ts (9 tests) 47ms
+ ✓ tests/EnemyFlowFieldBaseAvoidance.test.ts (13 tests) 43ms
+ ✓ tests/RockPhysicsChurn.test.ts (3 tests) 34ms
+ ✓ tests/CoopDefenseInfernoColossusCombat.test.ts (26 tests) 50ms
+ ✓ tests/TimeBubbleSystem.test.ts (18 tests) 42ms
+ ✓ tests/HeGrenadeRuntime.test.ts (5 tests) 53ms
+ ✓ tests/CoopDefenseStatParity.test.ts (8 tests) 35ms
+ ✓ tests/CoopDefenseItems.test.ts (35 tests) 43ms
+ ✓ tests/RockDestructionRenderer.test.ts (3 tests) 54ms
+ ✓ tests/VoidHunterSprite.test.ts (1 test) 64ms
+ ✓ tests/BurrowSystem.test.ts (21 tests) 34ms
+ ✓ tests/ProjectileFlightPath.test.ts (16 tests) 59ms
+ ✓ tests/WorldChannelContracts.test.ts (12 tests) 42ms
+ ✓ tests/PlayerUltimateBehaviorRuntime.test.ts (13 tests) 18ms
+ ✓ tests/BaseGrounding.test.ts (9 tests) 34ms
+ ✓ tests/ForestTextures.test.ts (7 tests) 40ms
+ ✓ tests/EnemySmokeConfusion.test.ts (4 tests) 27ms
+ ✓ tests/GraphicsQualityAndPerformance.test.ts (24 tests) 72ms
+ ✓ tests/TeslaDomeSystem.test.ts (26 tests) 42ms
+ ✓ tests/Ak47CoopDefenseUpgrades.test.ts (11 tests) 55ms
+ ✓ tests/CombatSystemBurnParity.test.ts (10 tests) 56ms
+ ✓ tests/DistortionProfileBake.test.ts (19 tests) 34ms
+ ✓ tests/TimeBubbleResonance.test.ts (11 tests) 47ms
+ ✓ tests/PersistentBaseRewardNetwork.test.ts (7 tests) 37ms
+ ✓ tests/StinkPlagueUpgradeTree.test.ts (5 tests) 35ms
+ ✓ tests/TranslocatorSystem.test.ts (16 tests) 23ms
+ ✓ tests/BiteRendererPooling.test.ts (2 tests) 42ms
+ ✓ tests/ProjectileLifecycleAuthority.test.ts (10 tests) 54ms
+ ✓ tests/PersistentBaseRewardPedestalMove.test.ts (6 tests) 19ms
+ ✓ tests/UpgradePresentation.test.ts (6 tests) 47ms
+ ✓ tests/PersistentBaseRewardPersistence.test.ts (4 tests) 40ms
+ ✓ tests/RocketLauncherUpgrades.test.ts (9 tests) 36ms
+ ✓ tests/ArenaTransitionReadiness.test.ts (28 tests) 23ms
+ ✓ tests/SharedGlowSystem.test.ts (29 tests) 22ms
+ ✓ tests/WorldHealthBarRenderer.test.ts (10 tests) 31ms
+ ✓ tests/GeneralCriticalUpgrades.test.ts (3 tests) 18ms
+ ✓ tests/InspectorSupportConstructions.test.ts (18 tests) 28ms
+ ✓ tests/WorldPresentationContracts.test.ts (9 tests) 26ms
+ ✓ tests/RocketFireChunks.test.ts (15 tests) 42ms
+ ✓ tests/MolotovUpgradeSystem.test.ts (12 tests) 33ms
+ ✓ tests/HeldItemVisuals.test.ts (18 tests) 39ms
+ ✓ tests/LobbySelectionMenus.test.ts (10 tests) 31ms
+ ✓ tests/CoopDefenseEnemyScaling.test.ts (14 tests) 27ms
+ ✓ tests/RocketMagazineRuntime.test.ts (19 tests) 20ms
+ ✓ tests/AsmdSecondaryUpgrades.test.ts (8 tests) 35ms
+ ✓ tests/GridCornerAssist.test.ts (10 tests) 23ms
+ ✓ tests/EnemyNavigationGeometry.test.ts (9 tests) 43ms
+ ✓ tests/CoopDefenseEncounters.test.ts (7 tests) 17ms
+ ✓ tests/Format.test.ts (15 tests) 39ms
+ ✓ tests/TurretControl.test.ts (10 tests) 35ms
+ ✓ tests/BadgerAnimations.test.ts (3 tests) 20ms
+ ✓ tests/CoopDefenseC2.test.ts (12 tests) 24ms
+ ✓ tests/RockGridIndexLarge.test.ts (5 tests) 22ms
+ ✓ tests/GpuVfxRenderLanes.test.ts (17 tests) 50ms
+ ✓ tests/HeadlessEventTiming.test.ts (9 tests) 79ms
+ ✓ tests/PersistentBaseEditor.test.ts (6 tests) 29ms
+ ✓ tests/HeGrenadeCharges.test.ts (6 tests) 37ms
+ ✓ tests/AttackDroneFlight.test.ts (5 tests) 24ms
+ ✓ tests/CoopDefenseSecondaryObjectiveEdgeMarkers.test.ts (7 tests) 20ms
+ ✓ tests/ForestModal.test.ts (4 tests) 33ms
+ ✓ tests/PersistentBaseRepositioning.test.ts (12 tests) 24ms
+ ✓ tests/LobbyRosterLayout.test.ts (22 tests) 38ms
+ ✓ tests/CoopDefenseSecondaryObjectives.test.ts (30 tests) 32ms
+ ✓ tests/SmokeRuntime.test.ts (13 tests) 30ms
+ ✓ tests/WorldAttackDroneBinding.test.ts (3 tests) 22ms
+stderr | tests/GpuVfxPool.test.ts > gpu vfx pool > hands out both free slots of a fragmented pool [live, free, free, live]
+[GpuVfxPool:test] Kapazitaet 4 erschoepft - Spawn verworfen, statt aktives Material zu ueberschreiben. Kapazitaet pruefen.
+
+ ✓ tests/GpuVfxPool.test.ts (16 tests) 27ms
+ ✓ tests/DecoyUpgradeTree.test.ts (4 tests) 22ms
+ ✓ tests/CoopDefenseProfileMemo.test.ts (4 tests) 23ms
+ ✓ tests/TeslaDomeCoopDefenseUpgrades.test.ts (7 tests) 26ms
+ ✓ tests/ArenaPresentationOwnership.test.ts (7 tests) 21ms
+ ✓ tests/ConstructionOwnershipGpuSystem.test.ts (5 tests) 12ms
+ ✓ tests/CoopDefenseRuntimeAffixWiring.test.ts (20 tests) 35ms
+ ✓ tests/MolotovUpgrades.test.ts (3 tests) 29ms
+ ✓ tests/LightingSystemLifecycle.test.ts (6 tests) 25ms
+ ✓ tests/EnemyVulnerabilityRenderer.test.ts (1 test) 10ms
+ ✓ tests/UiTheme.test.ts (26 tests) 18ms
+ ✓ tests/RockVisualHelperBatch.test.ts (9 tests) 29ms
+ ✓ tests/DecoyRuntime.test.ts (3 tests) 24ms
+ ✓ tests/GrenadeFragmentRules.test.ts (5 tests) 17ms
+ ✓ tests/PersistentBaseRoundOutcome.test.ts (11 tests) 21ms
+ ✓ tests/HeGrenadeUpgradeTree.test.ts (5 tests) 22ms
+ ✓ tests/RadialActionRpc.test.ts (16 tests) 46ms
+ ✓ tests/PlacementBaseCollision.test.ts (12 tests) 25ms
+ ✓ tests/LobbyMusicLazyLoading.test.ts (14 tests) 26ms
+ ✓ tests/CoopDefenseObjectivePlacementReward.test.ts (13 tests) 26ms
+ ✓ tests/FlamethrowerUpgrades.test.ts (6 tests) 25ms
+ ✓ tests/PersistentBaseRewardDomain.test.ts (10 tests) 22ms
+ ✓ tests/LivingBarEffectQuality.test.ts (14 tests) 27ms
+ ✓ tests/MissionLifecycleContracts.test.ts (7 tests) 28ms
+ ✓ tests/InputWeaponExclusivity.test.ts (12 tests) 41ms
+ ✓ tests/ProjectileSnapshotCodec.test.ts (30 tests) 27ms
+ ✓ tests/WorldCombatReactions.test.ts (4 tests) 11ms
+ ✓ tests/StinkPlagueRuntime.test.ts (9 tests) 19ms
+ ✓ tests/RoomStatisticsGameplayHooks.test.ts (8 tests) 22ms
+ ✓ tests/SmokeUpgradeTree.test.ts (4 tests) 23ms
+ ✓ tests/CoopDefenseMapDirector.test.ts (22 tests) 30ms
+ ✓ tests/PersistentBaseZone.test.ts (5 tests) 18ms
+ ✓ tests/AdrenalineEssenceGpuRenderer.test.ts (11 tests) 39ms
+ ✓ tests/CoopDefenseItemsModel.test.ts (17 tests) 22ms
+ ✓ tests/PeerPacketCodec.test.ts (4 tests) 66ms
+ ✓ tests/StinkCloudRenderer.test.ts (7 tests) 19ms
+ ✓ tests/CombatSystemLineOfFire.test.ts (16 tests) 36ms
+ ✓ tests/HeldWeaponFeedback.test.ts (9 tests) 18ms
+ ✓ tests/CoopDefenseAdvanceMission.test.ts (33 tests) 23ms
+ ✓ tests/ArenaDiagnosticsController.test.ts (7 tests) 26ms
+ ✓ tests/WorldDescriptorContracts.test.ts (15 tests) 15ms
+ ✓ tests/ConstructionPhase2.test.ts (4 tests) 33ms
+ ✓ tests/ZeusUpgradeTree.test.ts (3 tests) 27ms
+ ✓ tests/RepairDroneRenderer.test.ts (7 tests) 22ms
+ ✓ tests/AdrenalineEssenceReplication.test.ts (6 tests) 11ms
+ ✓ tests/PresentationInputPolicyContracts.test.ts (11 tests) 8ms
+ ✓ tests/Weapon2PredictionDedupe.test.ts (4 tests) 47ms
+ ✓ tests/CoopDefenseTimebomb.test.ts (6 tests) 22ms
+ ✓ tests/AllyFlowFieldLifetime.test.ts (7 tests) 18ms
+ ✓ tests/PersistentBaseCore.test.ts (13 tests) 22ms
+ ✓ tests/WorldGeometryBindingLifecycle.test.ts (9 tests) 28ms
+ ✓ tests/TransitionRaceCases.test.ts (10 tests) 21ms
+ ✓ tests/CoopDefenseVoidHunterSystem.test.ts (9 tests) 22ms
+ ✓ tests/AttackDroneSnapshotCodec.test.ts (3 tests) 16ms
+ ✓ tests/AttackDroneUpgrades.test.ts (5 tests) 24ms
+ ✓ tests/CombatResolution.test.ts (9 tests) 18ms
+ ✓ tests/PowerUpPedestalGpuSystem.test.ts (2 tests) 13ms
+ ✓ tests/PersistentBaseContributionStore.test.ts (18 tests) 28ms
+ ✓ tests/DecoyDeathSnapshot.test.ts (2 tests) 18ms
+ ✓ tests/CoopDefenseEnemyTranslocator.test.ts (7 tests) 16ms
+ ✓ tests/ReinforcementMatrixSystem.test.ts (4 tests) 7ms
+ ✓ tests/BootPreparation.test.ts (8 tests) 20ms
+ ✓ tests/CoopDefenseMissionProgressRenderer.test.ts (13 tests) 17ms
+ ✓ tests/PersistentBasePreview.test.ts (5 tests) 31ms
+ ✓ tests/PlayerTreeRuntimeContracts.test.ts (13 tests) 48ms
+ ✓ tests/DecoyGroundFire.test.ts (1 test) 19ms
+ ✓ tests/SpecializedWeaponExecutionAdapter.test.ts (3 tests) 13ms
+ ✓ tests/ZeusRuntime.test.ts (13 tests) 21ms
+ ✓ tests/ShootingRangeRuntime.test.ts (5 tests) 27ms
+ ✓ tests/TurretAim.test.ts (19 tests) 25ms
+ ✓ tests/ProjectileReplicationAdapter.test.ts (7 tests) 12ms
+ ✓ tests/GrenadeShardRenderer.test.ts (4 tests) 15ms
+ ✓ tests/PeerProtocol.test.ts (6 tests) 8ms
+ ✓ tests/ArenaRuntimeOwnership.test.ts (6 tests) 24ms
+ ✓ tests/PersistentBaseRewardAuthoring.test.ts (4 tests) 16ms
+ ✓ tests/MgTurretUpgrades.test.ts (4 tests) 34ms
+ ✓ tests/WorldGradeResolver.test.ts (18 tests) 21ms
+ ✓ tests/CoopXpTextRenderer.test.ts (3 tests) 22ms
+ ✓ tests/GeneralDashUpgrades.test.ts (5 tests) 13ms
+ ✓ tests/ArenaInputBindings.test.ts (4 tests) 25ms
+ ✓ tests/TransportDiagnostics.test.ts (17 tests) 12ms
+ ✓ tests/PersistentBaseContributionSync.test.ts (6 tests) 17ms
+ ✓ tests/EffectSystemDeathAnimation.test.ts (8 tests) 18ms
+ ✓ tests/AdrenalineEssencePhaserGpuContract.test.ts (1 test) 21ms
+ ✓ tests/GameplayRuntimeCharacterization.test.ts (10 tests) 18ms
+ ✓ tests/MiniRocketCascadeUpgrade.test.ts (3 tests) 16ms
+ ✓ tests/PerformanceLabController.test.ts (7 tests) 13ms
+ ✓ tests/HealthBarFeedbackModel.test.ts (14 tests) 19ms
+ ✓ tests/PlayerLifetimeSeparation.test.ts (5 tests) 9ms
+ ✓ tests/HostHeldActionSystem.test.ts (15 tests) 8ms
+ ✓ tests/AttackDroneRenderer.test.ts (6 tests) 15ms
+ ✓ tests/PlasmaBurnerRuntime.test.ts (5 tests) 15ms
+ ✓ tests/CoopDefenseC4Integration.test.ts (3 tests) 23ms
+ ✓ tests/ResourceSystemObservers.test.ts (8 tests) 19ms
+ ✓ tests/PlayerGroundHazardSpawn.test.ts (4 tests) 20ms
+ ✓ tests/WebGLContext.test.ts (7 tests) 16ms
+ ✓ tests/PlayerCapabilityContracts.test.ts (7 tests) 12ms
+ ✓ tests/PlasmaSwarm.test.ts (12 tests) 18ms
+ ✓ tests/MovementStepSampler.test.ts (10 tests) 32ms
+ ✓ tests/PerformanceLabBoot.test.ts (1 test) 29ms
+ ✓ tests/FlamethrowerUpgradeRenderer.test.ts (3 tests) 15ms
+ ✓ tests/GraveTitanVoidPlasma.test.ts (3 tests) 18ms
+ ✓ tests/CoopDefenseB9TeamBuff.test.ts (6 tests) 12ms
+ ✓ tests/ArenaChunkGrid.test.ts (9 tests) 12ms
+ ✓ tests/CoopDefenseUtilityCooldownAffix.test.ts (5 tests) 23ms
+ ✓ tests/WorldLifecycleContracts.test.ts (7 tests) 9ms
+ ✓ tests/RadialActionHud.test.ts (2 tests) 10ms
+ ✓ tests/FireSystemVisualStyles.test.ts (9 tests) 20ms
+ ✓ tests/NegevBehaviorRuntime.test.ts (5 tests) 14ms
+ ✓ tests/InspectorSupportWeapons.test.ts (5 tests) 12ms
+ ✓ tests/ArenaPointBucketIndex.test.ts (3 tests) 22ms
+ ✓ tests/CombatRuntimeContracts.test.ts (15 tests) 18ms
+ ✓ tests/SustainedWeaponBehaviorRuntime.test.ts (3 tests) 9ms
+ ✓ tests/ArmageddonSystem.test.ts (3 tests) 13ms
+ ✓ tests/AdrenalineEssenceWireCodec.test.ts (6 tests) 20ms
+ ✓ tests/TrainMapEvent.test.ts (12 tests) 20ms
+ ✓ tests/CoopDefenseSecondaryObjectiveHud.test.ts (17 tests) 14ms
+ ✓ tests/RadialActionModel.test.ts (5 tests) 12ms
+ ✓ tests/AwpNegevAdrenalineUpgrades.test.ts (6 tests) 14ms
+ ✓ tests/CoopDefenseMandatoryDefensePriority.test.ts (7 tests) 10ms
+ ✓ tests/PersistentGpuWorldSystem.test.ts (5 tests) 12ms
+ ✓ tests/EntityJoltModel.test.ts (19 tests) 46ms
+ ✓ tests/CoopDefenseBurrowingEnemies.test.ts (20 tests) 17ms
+ ✓ tests/CoopDefenseB10Multiplayer.test.ts (10 tests) 16ms
+ ✓ tests/CoopDefenseItemRuntimeSystem.test.ts (39 tests) 19ms
+ ✓ tests/TurretAnimationController.test.ts (8 tests) 17ms
+ ✓ tests/HitFeedbackModel.test.ts (9 tests) 17ms
+ ✓ tests/CombatStatusOwners.test.ts (12 tests) 17ms
+ ✓ tests/GpuFlightRibbonLayer.test.ts (3 tests) 10ms
+ ✓ tests/WeaponFireFeedbackController.test.ts (6 tests) 18ms
+ ✓ tests/PersistentBaseVisuals.test.ts (4 tests) 15ms
+ ✓ tests/CoopDefenseCarry.test.ts (6 tests) 19ms
+ ✓ tests/CoopDefenseConstructionCapacity.test.ts (13 tests) 9ms
+ ✓ tests/RockSurfaceShading.test.ts (10 tests) 17ms
+ ✓ tests/CoopDefenseB8Rewards.test.ts (13 tests) 20ms
+ ✓ tests/LowHealthBloodModel.test.ts (12 tests) 14ms
+ ✓ tests/LoadoutIconLayout.test.ts (9 tests) 9ms
+ ✓ tests/RadialFocusMaskTexture.test.ts (2 tests) 8ms
+ ✓ tests/ClientWeaponAdrenalinePrediction.test.ts (7 tests) 20ms
+ ✓ tests/PlayerWorldRuntimeContracts.test.ts (9 tests) 12ms
+ ✓ tests/CoopDefenseRoundStateSystem.test.ts (16 tests) 7ms
+ ✓ tests/CoopDefenseBaseDamageContract.test.ts (2 tests) 9ms
+ ✓ tests/CoopDefenseHostileBaseTurrets.test.ts (5 tests) 10ms
+ ✓ tests/CoopDefenseEnemyLifecycle.test.ts (2 tests) 6ms
+ ✓ tests/PlasmaBurnerPulsePresentation.test.ts (3 tests) 7ms
+ ✓ tests/StinkPlagueRenderer.test.ts (2 tests) 14ms
+ ✓ tests/PostFxComposer.test.ts (25 tests) 30ms
+ ✓ tests/SmokeGeometry.test.ts (3 tests) 11ms
+ ✓ tests/TimeBubbleRenderer.test.ts (2 tests) 20ms
+ ✓ tests/AutomatedPelletWeapon.test.ts (5 tests) 23ms
+ ✓ tests/CoopDefenseBossSystem.test.ts (1 test) 5ms
+ ✓ tests/WorldParticipationContracts.test.ts (9 tests) 10ms
+ ✓ tests/ProjectileHomingBaseTarget.test.ts (11 tests) 16ms
+ ✓ tests/LightOccluderIndex.test.ts (12 tests) 9ms
+ ✓ tests/WorldWeaponExecutionRuntime.test.ts (6 tests) 13ms
+ ✓ tests/CoopDefenseStuckEnemyBite.test.ts (7 tests) 14ms
+ ✓ tests/NukeChoreography.test.ts (15 tests) 11ms
+ ✓ tests/ClientObjectiveRewardReconciliation.test.ts (11 tests) 19ms
+ ✓ tests/ActivityResultApplication.test.ts (7 tests) 8ms
+ ✓ tests/LocalDistortionComposer.test.ts (2 tests) 8ms
+ ✓ tests/GroundFireClusters.test.ts (5 tests) 8ms
+ ✓ tests/SmokeSystem.test.ts (1 test) 7ms
+ ✓ tests/TemporaryUtilityLifecycle.test.ts (6 tests) 12ms
+ ✓ tests/WeaponFireExecutor.test.ts (2 tests) 26ms
+ ✓ tests/GpuLayerCameraTransform.test.ts (3 tests) 11ms
+ ✓ tests/CoopDefenseEnemyVoidFireChunks.test.ts (3 tests) 15ms
+ ✓ tests/WeaponReactionRuntime.test.ts (5 tests) 12ms
+ ✓ tests/LightShadowGeometry.test.ts (14 tests) 10ms
+ ✓ tests/ArenaMetrics.test.ts (9 tests) 9ms
+ ✓ tests/TranslocatorTeleportRenderer.test.ts (2 tests) 13ms
+ ✓ tests/ActivityLifecycleContracts.test.ts (14 tests) 15ms
+ ✓ tests/BaseVoidFireSystem.test.ts (6 tests) 11ms
+ ✓ tests/MgAttritionRuntime.test.ts (7 tests) 12ms
+ ✓ tests/PersistentBaseLocalPersistence.test.ts (1 test) 19ms
+ ✓ tests/WeaponSlotExclusivity.test.ts (3 tests) 12ms
+ ✓ tests/AdrenalineEssencePresentation.test.ts (11 tests) 11ms
+ ✓ tests/CameraFeedbackModel.test.ts (19 tests) 30ms
+ ✓ tests/RechargeableCharges.test.ts (9 tests) 10ms
+ ✓ tests/PortalTraversal.test.ts (5 tests) 7ms
+ ✓ tests/ShotPlanResolverRuntimeRegression.test.ts (6 tests) 7ms
+ ✓ tests/CoopDefenseMapUnlocks.test.ts (6 tests) 7ms
+ ✓ tests/GpuVfxMember.test.ts (13 tests) 10ms
+ ✓ tests/TextResolution.test.ts (1 test) 23ms
+ ✓ tests/HostileBaseIndicator.test.ts (7 tests) 6ms
+ ✓ tests/RocketSupportPresentation.test.ts (1 test) 9ms
+ ✓ tests/RockOverlayRegions.test.ts (11 tests) 16ms
+ ✓ tests/RockRebindPresentation.test.ts (5 tests) 40ms
+ ✓ tests/AfterRoundFlow.test.ts (10 tests) 7ms
+ ✓ tests/PersistentBaseComposite.test.ts (15 tests) 11ms
+ ✓ tests/BurrowExitPositionResolver.test.ts (11 tests) 11ms
+ ✓ tests/AwpDestructionCorridor.test.ts (4 tests) 12ms
+ ✓ tests/GeneralRageUpgrades.test.ts (2 tests) 34ms
+ ✓ tests/ArmageddonUpgrades.test.ts (2 tests) 11ms
+ ✓ tests/LobbyPlayerProgress.test.ts (2 tests) 12ms
+ ✓ tests/TrainLightOccluderSource.test.ts (4 tests) 6ms
+ ✓ tests/CombatSystemChainLightningParity.test.ts (1 test) 9ms
+ ✓ tests/PlasmaBurnerOverload.test.ts (4 tests) 5ms
+ ✓ tests/ArenaBackground.test.ts (3 tests) 5ms
+ ✓ tests/BootLoaderProgress.test.ts (3 tests) 9ms
+ ✓ tests/StaticPolygonGraphics.test.ts (4 tests) 10ms
+ ✓ tests/PlasmaBurnerChargeAccumulator.test.ts (2 tests) 7ms
+ ✓ tests/RoundParticipationPolicy.test.ts (4 tests) 7ms
+ ✓ tests/HydraUpgrades.test.ts (2 tests) 15ms
+ ✓ tests/BackdropBlur.test.ts (1 test) 10ms
+ ✓ tests/ProjectileClientReplica.test.ts (4 tests) 9ms
+ ✓ tests/PointerInputHandoff.test.ts (3 tests) 11ms
+ ✓ tests/BloomSampling.test.ts (4 tests) 6ms
+ ✓ tests/CoopDefenseCombatPositioning.test.ts (5 tests) 7ms
+ ✓ tests/ParticleFlowScheduler.test.ts (6 tests) 6ms
+ ✓ tests/EnvironmentDamageResolver.test.ts (5 tests) 7ms
+ ✓ tests/EnemyAiTargetCatalog.test.ts (4 tests) 6ms
+ ✓ tests/ExplosionAudio.test.ts (5 tests) 10ms
+ ✓ tests/PlasmaBurnerConfig.test.ts (3 tests) 8ms
+ ✓ tests/EnemyEyeGlowRenderer.test.ts (2 tests) 9ms
+ ✓ tests/ProjectileSpawnResolver.test.ts (6 tests) 22ms
+ ✓ tests/CoopDefenseMissionProgressSystem.test.ts (4 tests) 8ms
+ ✓ tests/RockMottleStability.test.ts (4 tests) 6ms
+ ✓ tests/ZeusRenderer.test.ts (2 tests) 7ms
+ ✓ tests/CoopDefenseRespawnBudgetSystem.test.ts (7 tests) 8ms
+ ✓ tests/BurnStateMachine.test.ts (9 tests) 7ms
+ ✓ tests/LivingFieldTexture.test.ts (8 tests) 10ms
+ ✓ tests/CoopDefenseTrainAwarenessSideways.test.ts (4 tests) 5ms
+ ✓ tests/DistortionFramePlanner.test.ts (12 tests) 11ms
+ ✓ tests/RoomStatisticsViewport.test.ts (2 tests) 11ms
+ ✓ tests/PlasmaBurnerTargetCatalog.test.ts (1 test) 41ms
+ ✓ tests/RoomQualityMonitor.test.ts (7 tests) 7ms
+ ✓ tests/ClarityCameraAssignment.test.ts (8 tests) 7ms
+ ✓ tests/EnemyEyeGlowModel.test.ts (4 tests) 8ms
+ ✓ tests/CoopDefenseEnemyBurrowSystem.test.ts (11 tests) 42ms
+ ✓ tests/CameraBaseScroll.test.ts (4 tests) 5ms
+ ✓ tests/RoomStatistics.test.ts (4 tests) 10ms
+ ✓ tests/LightingConfig.test.ts (4 tests) 11ms
+ ✓ tests/PlayerMovementAcknowledgements.test.ts (4 tests) 7ms
+ ✓ tests/CoopDefenseMainObjectiveModel.test.ts (5 tests) 6ms
+ ✓ tests/ArenaClipMask.test.ts (3 tests) 6ms
+ ✓ tests/ReinforcementMatrixProjectile.test.ts (2 tests) 8ms
+ ✓ tests/CoopDefenseAiTargetBoundaries.test.ts (2 tests) 9ms
+ ✓ tests/WorldRoundLoadingContracts.test.ts (3 tests) 9ms
+ ✓ tests/PlayerBurnVisualStyleCodec.test.ts (7 tests) 12ms
+ ✓ tests/ConfiguredNukeVariant.test.ts (1 test) 7ms
+ ✓ tests/ShieldBuffLoadoutBoundary.test.ts (1 test) 5ms
+ ✓ tests/CoopDefenseObjectiveRepair.test.ts (5 tests) 4ms
+ ✓ tests/GroundFireMotionField.test.ts (5 tests) 7ms
+ ✓ tests/GpuVfxQuality.test.ts (8 tests) 8ms
+ ✓ tests/TeslaDomeAudio.test.ts (1 test) 7ms
+ ✓ tests/HudOcclusionFade.test.ts (7 tests) 10ms
+ ✓ tests/CoopDefenseStructureScaling.test.ts (5 tests) 7ms
+ ✓ tests/BootScreen.test.ts (8 tests) 7ms
+ ✓ tests/ExplosionVisualProfiles.test.ts (3 tests) 5ms
+ ✓ tests/TargetStatusSystem.test.ts (4 tests) 12ms
+ ✓ tests/ResourceSystemExplicitTime.test.ts (10 tests) 7ms
+ ✓ tests/ArenaTimeOfDayController.test.ts (7 tests) 5ms
+ ✓ tests/BaseDestructionRenderer.test.ts (2 tests) 7ms
+ ✓ tests/DetonationSystem.test.ts (1 test) 7ms
+ ✓ tests/UtilityChargePrediction.test.ts (4 tests) 6ms
+ ✓ tests/CoopMissionActivityConfig.test.ts (2 tests) 6ms
+ ✓ tests/ExplosionShockwaveSequence.test.ts (3 tests) 6ms
+ ✓ tests/FullGameStateBootstrap.test.ts (2 tests) 5ms
+ ✓ tests/ChainLightningResolverCharacterization.test.ts (2 tests) 11ms
+ ✓ tests/RockRegistry.test.ts (2 tests) 6ms
+ ✓ tests/WorldSafeGroundPoint.test.ts (2 tests) 6ms
+ ✓ tests/EnemySlowMerge.test.ts (6 tests) 7ms
+ ✓ tests/PersistentBaseWorldMaterializer.test.ts (2 tests) 6ms
+ ✓ tests/fakeGpuVfxScene.test.ts (5 tests) 18ms
+ ✓ tests/CountdownGroundFirePreview.test.ts (2 tests) 7ms
+ ✓ tests/CoopDefensePersistentPressure.test.ts (2 tests) 6ms
+ ✓ tests/CoopDefenseEnemyDodgeSystem.test.ts (2 tests) 6ms
+ ✓ tests/WorldRenderWork.test.ts (3 tests) 26ms
+ ✓ tests/RadialMenuGeometry.test.ts (3 tests) 5ms
+ ✓ tests/CoopDefenseCarryPresentation.test.ts (2 tests) 5ms
+ ✓ tests/PlasmaBurnerChainResolver.test.ts (3 tests) 5ms
+ ✓ tests/FireObstacleIndex.test.ts (4 tests) 5ms
+ ✓ tests/RadialFocusState.test.ts (3 tests) 5ms
+ ✓ tests/PlasmaBurnerTargetPolicy.test.ts (10 tests) 14ms
+ ✓ tests/MolotovFirewalkerRenderer.test.ts (1 test) 5ms
+ ✓ tests/ParticleEmitterPoolReset.test.ts (1 test) 5ms
+ ✓ tests/HitFeedbackAudio.test.ts (2 tests) 4ms
+ ✓ tests/GameplayAudioFeedback.test.ts (3 tests) 6ms
+ ✓ tests/RockRendererSettings.test.ts (1 test) 4ms
+ ✓ tests/PlayerName.test.ts (1 test) 3ms
+ ✓ tests/PlasmaBurnerTargetLock.test.ts (2 tests) 5ms
+ ✓ tests/SpectatorCameraModel.test.ts (3 tests) 4ms
+ ✓ tests/AimSpreadModelActiveSlot.test.ts (2 tests) 4ms
+ ✓ tests/BroodBombHatchAudio.test.ts (2 tests) 5ms
+ ✓ tests/CoopDefenseLoadoutSelection.test.ts (2 tests) 3ms
+ ✓ tests/TutorialHudOcclusion.test.ts (5 tests) 3ms
+ ✓ tests/LoadoutRulesSemanticEquality.test.ts (3 tests) 3ms
+
+ Test Files  465 passed (465)
+      Tests  4393 passed (4393)
+   Start at  18:05:22
+   Duration  32.22s (transform 60.86s, setup 0ms, collect 193.49s, tests 93.18s, environment 150ms, prepare 79.26s)
+
+
+> fragdachse@0.1.0 test:architecture
+> vitest run --pool=threads --exclude build/** --exclude art/** tests/architecture
+
+
+ RUN  v3.2.7 C:/Fragdachse
+
+ ✓ tests/architecture/FlowFieldWorkerImportHygiene.test.ts (6 tests) 6ms
+ ✓ tests/architecture/PlayerGameplayReadViewBoundary.test.ts (1 test) 145ms
+ ✓ tests/architecture/WorldGameplayCompositionContracts.test.ts (7 tests) 221ms
+ ✓ tests/architecture/CameraShakeOwnership.test.ts (3 tests) 533ms
+ ✓ tests/architecture/ArenaVisualAttribution.test.ts (11 tests) 1498ms
+   ✓ ArenaVisualAttributionCollector > requires every catalog family to have a concrete runtime attribution hook  373ms
+   ✓ Graphics arc guardrail > keeps new sources free of per-frame Graphics arcs  468ms
+   ✓ Graphics arc guardrail > keeps the legacy list a ratchet without stale entries  430ms
+ ✓ tests/architecture/ProjectileRuntimeContracts.test.ts (26 tests) 2295ms
+   ✓ Projectile Runtime – ownership and dependency ratchets > restricts mutable state and registry access to the authoritative owners  1467ms
+   ✓ Projectile Runtime – ownership and dependency ratchets > keeps style dispatch out of collision, flight, combat and guidance  433ms
+
+ Test Files  6 passed (6)
+      Tests  54 passed (54)
+   Start at  18:05:56
+   Duration  4.88s (transform 395ms, setup 0ms, collect 2.67s, tests 4.70s, environment 1ms, prepare 751ms)
+
+
+> fragdachse@0.1.0 build
+> tsc && vite build
+
+vite v6.4.1 building for production...
+transforming...
+✓ 955 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                              6.38 kB │ gzip:     2.39 kB
+dist/assets/FlowFieldWorker-DhWfiuwK.js     18.20 kB
+dist/assets/vendor-CcPL2-_s.js           1,774.37 kB │ gzip:   405.63 kB │ map: 11,651.24 kB
+dist/assets/index-CQtpNZkd.js            4,777.55 kB │ gzip: 1,261.25 kB │ map: 16,183.55 kB
+✓ built in 11.88s
+
+> fragdachse@0.1.0 build:map-editor
+> tsc -p tools/map-editor/tsconfig.json && vite build --config tools/map-editor/vite.config.ts
+
+vite v6.4.1 building for production...
+transforming...
+✓ 55 modules transformed.
+rendering chunks...
+computing gzip size...
+../../build/map-editor/index.html                   0.37 kB │ gzip:   0.27 kB
+../../build/map-editor/assets/worker-CKFY1ELp.js  384.64 kB
+../../build/map-editor/assets/index-CDWkw9sT.css    7.97 kB │ gzip:   2.43 kB
+../../build/map-editor/assets/index-BaB-ebL-.js   396.82 kB │ gzip: 109.39 kB
+✓ built in 724ms

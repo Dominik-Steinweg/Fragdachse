@@ -19,12 +19,12 @@ describe('HUD frame artwork', () => {
     const metadata = await sharp(runtime).metadata();
     expect(metadata.format).toBe('webp');
     expect([metadata.width, metadata.height]).toEqual([exportsJson.width, exportsJson.height]);
-    const original = resolve(root, 'waldrelief-sheet.png');
+    const original = resolve(root, exportsJson.source);
     expect((await sharp(original).metadata()).format).toBe('png');
     expect(readFileSync(runtime).length).toBeLessThan(readFileSync(original).length);
     const prompts = JSON.parse(readFileSync(resolve(root, 'prompts.json'), 'utf8'));
     expect(prompts.assets.some((entry: { file: string; prompt: string }) =>
-      entry.file === 'waldrelief-sheet.png' && entry.prompt.length > 0)).toBe(true);
+      entry.file === exportsJson.source && entry.prompt.length > 0)).toBe(true);
   });
 
   it('offers one card frame per tone family, plus strip and divider, inside the atlas', () => {

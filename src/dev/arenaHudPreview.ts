@@ -129,7 +129,8 @@ export function openArenaHudPreview(scene: Phaser.Scene, status: (message: strin
     }
     centerHUD.updateEncounterPresentation(encounterState(t), t);
     secondary.sync(secondaryState(t), [], t, true);
-    centerHUD.updateBottomStatus(hudData(t), false);
+    // Zuerst genau eine Karte: die Zentrierung ist so vor dem Aufbau der vollen Zeile prüfbar.
+    centerHUD.updateBottomStatus(hudData(t), t < 8_000);
     if (!toastShown && t > 14_000) {
       toastShown = true;
       centerHUD.showYouFragged('Walddachs 3', 0xffffff);

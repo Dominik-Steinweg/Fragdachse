@@ -30,7 +30,7 @@ Camera-Feedback unterstützt Treffergewicht und Gefahr, darf aber Pointer-, Koll
 
 Die Arena hat keine festen GUI-Bereiche; jede Screen-Space-Fläche liegt über der Spielwelt. Infoflächen erscheinen deshalb nur, solange sie etwas aussagen, und bleiben schmal und halbtransparent.
 
-- Karten, Statusleiste und Ressourcenzeile verwenden die Waldrelief-Rahmen aus [HudFrameAssets.ts](../../src/ui/HudFrameAssets.ts) über [HudCard.ts](../../src/ui/HudCard.ts), [HudStatusStrip.ts](../../src/ui/HudStatusStrip.ts) und [HudResourceRow.ts](../../src/ui/HudResourceRow.ts) statt eigener Graphics-Panels.
+- Karten, Statusleiste und Ressourcenzeile verwenden die Waldboden-Rahmen mit farbigem Innenrand aus [HudFrameAssets.ts](../../src/ui/HudFrameAssets.ts) über [HudCard.ts](../../src/ui/HudCard.ts), [HudStatusStrip.ts](../../src/ui/HudStatusStrip.ts) und [HudResourceRow.ts](../../src/ui/HudResourceRow.ts) statt eigener Graphics-Panels.
 - Die Farbfamilie trägt die Bedeutung (`HUD_TONES`): Gold Hauptziel/Rüstung, Violett Angriffswellen, Blau Nebenziele, Grün Erfolg, Rot Ultimate/Fehlschlag, Orange Utility, Bronze Baukapazität, Neutral Status. Freie Inhaltsfarben werden über `hudToneForColor` einer Familie zugeordnet.
 - Der serialisierte Ankündigungskanal ([CoopDefenseObjectiveAnnouncement.ts](../../src/ui/CoopDefenseObjectiveAnnouncement.ts)) verwandelt eine Meldung mit `target` (Mitte, Breite, Rahmenmaßstab der Zielkarte) in genau diese Karte; das Zielpanel blendet bei `onArrive` nur seinen Inhalt auf. Ton der Meldung und Farbfamilie der Zielkarte müssen übereinstimmen.
 

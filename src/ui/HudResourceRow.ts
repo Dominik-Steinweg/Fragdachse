@@ -2,24 +2,22 @@
  * HudResourceRow – Ressourcen- und Zustandskarten am unteren Bildrand.
  *
  * Statt eines Turms, der aus der Bildmitte Richtung Spielfigur wächst, liegen die Karten in
- * einer flachen Zeile direkt über der Unterkante. Zwei Gruppen wachsen von der Mitte nach
- * außen: links die eigene Ausrüstung (Utility, Rüstung), rechts Ultimate, Baukapazität und
- * zeitlich begrenzte Power-Ups. Ein Eintrag verschiebt dadurch nur Karten seiner eigenen Seite;
- * Utility und Ultimate bleiben an der Mitte verankert, wo das Auge sie erwartet.
+ * einer flachen Zeile direkt über der Unterkante. Ausrüstung steht links von Ultimate,
+ * Baukapazität und Power-Ups. Jede belegte Zeile wird als Ganzes zentriert, auch bei einem
+ * einzelnen Eintrag oder ungleich großen Gruppen.
  */
 import * as Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { LivingBarEffect } from './LivingBarEffect';
 import { HudCard, HUD_TEXT_PRIMARY } from './HudCard';
-import { HUD_TONES, type HudTone } from './HudFrameAssets';
+import { HUD_CARD_SOURCE, HUD_TONES, type HudTone } from './HudFrameAssets';
 
 const SCALE = 0.5;
 const ENTRY_W = 236;
 const GAP_X = 8;
 const GAP_Y = 4;
-const CENTER_GAP = 10;
 const BOTTOM_MARGIN = 8;
-const PER_ROW = 3;
+const PER_ROW = 6;
 const MOVE_MS = 240;
 const ENTER_MS = 220;
 const EXIT_MS = 150;
@@ -114,7 +112,7 @@ export class HudResourceRow {
   private orderSignature = '';
 
   private cardHeight(): number {
-    return 98 * SCALE;
+    return HUD_CARD_SOURCE.height * SCALE;
   }
 
   private create(entry: HudResourceEntry): EntryVisual {
@@ -201,17 +199,21 @@ export class HudResourceRow {
     const h = this.cardHeight();
     const baseY = GAME_HEIGHT - BOTTOM_MARGIN - h / 2;
     const centerX = GAME_WIDTH / 2;
-    const counters = { left: 0, right: 0 };
-    for (const id of order) {
-      const visual = this.entries.get(id);
-      if (!visual || visual.removing) continue;
-      const index = counters[visual.side]++;
-      const column = index % PER_ROW;
-      const row = Math.floor(index / PER_ROW);
-      const offset = CENTER_GAP / 2 + ENTRY_W / 2 + column * (ENTRY_W + GAP_X);
-      const x = visual.side === 'left' ? centerX - offset : centerX + offset;
-      const y = baseY - row * (h + GAP_Y);
-      this.moveTo(visual, x, y);
+    const visible = order.map((id) => this.entries.get(id))
+      .filter((visual): visual is EntryVisual => !!visual && !visual.removing);
+    // Linke Gruppe wie bisher von außen zur Mitte, rechte von der Mitte nach außen.
+    const ordered = [
+      ...visible.filter((visual) => visual.side === 'left').reverse(),
+      ...visible.filter((visual) => visual.side === 'right'),
+    ];
+    for (let start = 0; start < ordered.length; start += PER_ROW) {
+      const row = ordered.slice(start, start + PER_ROW);
+      const width = row.length * ENTRY_W + (row.length - 1) * GAP_X;
+      const y = baseY - (start / PER_ROW) * (h + GAP_Y);
+      row.forEach((visual, column) => {
+        const x = centerX - width / 2 + ENTRY_W / 2 + column * (ENTRY_W + GAP_X);
+        this.moveTo(visual, x, y);
+      });
     }
   }
 
