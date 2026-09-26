@@ -5,6 +5,7 @@ import { MUZZLE_MAX_LIFETIME } from '../muzzleFlashModel';
 import { MOVEMENT_FX } from '../../config/movementEffects';
 import { BURROW_FX } from '../../config/burrowEffects';
 import { ZEUS_FX } from '../../config/zeusEffects';
+import { LEAF_BLOWER_FX } from '../../config/leafBlowerEffects';
 import {
   GpuVfxFrameAnimationId,
   type GpuVfxFrameAnimationId as GpuVfxFrameAnimationIdType,
@@ -92,6 +93,7 @@ export const GpuVfxLaneId = {
   MovementGround:        32,
   ElectricGround:        33,
   ElectricBody:          34,
+  WaterSurface:          35,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -429,9 +431,9 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     label: 'world-debris',
     depth: DEPTH.FIRE + 0.075,
     blendMode: Phaser.BlendModes.NORMAL,
-    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
-    capacity: 2048 + BURROW_FX.flightCapacity,
-    maxLifetimeMs: 860,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    capacity: LEAF_BLOWER_FX.leafCapacity + BURROW_FX.flightCapacity,
+    maxLifetimeMs: LEAF_BLOWER_FX.leaf.lifeMaxMs,
     order: 'ordered',
     reserveCritical: 0,
     rationale:
@@ -439,11 +441,11 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + '(FIRE + 0.05) und FlameSpark (FIRE + 0.1), damit die Reihenfolge nicht von der '
       + 'Erzeugungsreihenfolge der GPU-Quellen abhaengt.',
     capacityRationale:
-      'Ein LeafBlower erzeugt 5 Blaetter je 40 ms, also 125/s; bei maximal 860 ms leben rund '
-      + '108 Member je Quelle. Der zusaetzliche Staub liegt bei 1 je 40 ms und maximal 650 ms, '
-      + 'also rund 17 weitere Member je Quelle. 16 gleichzeitig sichtbare LeafBlower benoetigen '
-      + 'damit rund 2000 Slots; 2048 ist die naechste begruendete Reserve. Dazu kommen maximal '
-      + '1024 kurzlebige Burrow-Klumpen und Erdkrumen aus einem separat begrenzten Budget.',
+      'Der LeafBlower verteilt Laub, Halme, Erdkrumen, Gischt und Staub nach Flugstrecke: rund '
+      + '140 Member je 350 px Projektilweg bei hoechstens 1050 ms Lebensdauer. Ein dauerfeuernder '
+      + 'Blaeser haelt damit etwa 900 Member; 4096 Slots tragen vier gleichzeitige Blaeser, der '
+      + 'Qualitaetsfaktor duennt darunter aus. Dazu kommen maximal 1024 kurzlebige Burrow-Klumpen '
+      + 'und Erdkrumen aus einem separat begrenzten Budget.',
   },
   {
     id: GpuVfxLaneId.ExplosionSpark,
@@ -717,10 +719,11 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     id: GpuVfxLaneId.MovementGround, label: 'movement-ground',
     depth: DEPTH.DECALS + 0.1, blendMode: Phaser.BlendModes.NORMAL,
     eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
-    capacity: MOVEMENT_FX.footprintCapacity + MOVEMENT_FX.dustCapacity + BURROW_FX.groundCapacity,
+    capacity: MOVEMENT_FX.footprintCapacity + MOVEMENT_FX.dustCapacity + BURROW_FX.groundCapacity
+      + LEAF_BLOWER_FX.groundCapacity,
     maxLifetimeMs: MOVEMENT_FX.footprintLifeMaxMs, order: 'ordered', reserveCritical: 0,
     rationale: 'Ground contacts must cover terrain decals but remain below rocks, actors and combat signals. Existing NORMAL lanes are all above these obstacles.',
-    capacityRationale: 'The movement renderer admits at most 3072 four-second prints (768/s sustained) and 1024 short dust particles, with player reserves inside both budgets. Burrow separately admits at most 2048 short-lived ground clods and dust members.',
+    capacityRationale: 'The movement renderer admits at most 3072 four-second prints (768/s sustained) and 1024 short dust particles, with player reserves inside both budgets. Burrow separately admits at most 2048 short-lived ground clods and dust members; LeafBlower ground streaks (about 120 per continuously firing blower) get their own 1536-slot share.',
   },
   {
     id: GpuVfxLaneId.ElectricGround, label: 'electric-ground',
@@ -737,5 +740,13 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     order: 'add-over-opaque', reserveCritical: 1024,
     rationale: 'Electrical shells follow player bodies above their silhouettes; the floor remains a separate depth band.',
     capacityRationale: 'Twelve owners with overlapping shell/branch generations; body cores retain reserved capacity under decorative load.',
+  },
+  {
+    id: GpuVfxLaneId.WaterSurface, label: 'water-surface',
+    depth: DEPTH.WATER + 0.05, blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut], capacity: LEAF_BLOWER_FX.waterCapacity,
+    maxLifetimeMs: LEAF_BLOWER_FX.ripple.lifeMaxMs, order: 'add-over-opaque', reserveCritical: 0,
+    rationale: 'Wind ripples and rings lie on the water surface: above the water quads, below ground fog, rocks and actors. No existing lane sits in that band.',
+    capacityRationale: 'A blower over water leaves about 45 ripple members per 350 px of flight at under 820 ms; 1536 slots carry several blowers over water at once.',
   },
 ];

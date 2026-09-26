@@ -42,7 +42,7 @@ import { LobbyPlayerProgress } from '../../src/ui/LobbyPlayerProgress';
 import { DEPTH } from '../../src/config';
 import { OptionsOverlay } from '../../src/ui/OptionsOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
-import { CenterHUD } from '../../src/ui/CenterHUD';
+import { HudResourceRow } from '../../src/ui/HudResourceRow';
 import { CoopDefenseUpgradesOverlay } from '../../src/ui/CoopDefenseUpgradesOverlay';
 
 class UiObject extends EventEmitter {
@@ -87,6 +87,16 @@ class UiObject extends EventEmitter {
   setFillStyle() { return this; }
   setTint() { return this; }
   setBlendMode() { return this; }
+  setScale() { return this; }
+  setFrame() { return this; }
+  setSlices() { return this; }
+  setLetterSpacing() { return this; }
+  clear() { return this; }
+  fillStyle() { return this; }
+  lineStyle() { return this; }
+  fillRoundedRect() { return this; }
+  strokeRoundedRect() { return this; }
+  fillPoints() { return this; }
   destroy() { if (!this.active) return; this.active = false; this.emit('destroy'); this.removeAll(true); }
 }
 
@@ -94,7 +104,7 @@ function sceneStub() {
   const tweens: any[] = [];
   const scene: any = {
     input: new EventEmitter(), events: new EventEmitter(),
-    tweens: { add: (config: any) => {
+    tweens: { killTweensOf() {}, add: (config: any) => {
       const tween = { ...config, removed: false, remove() { this.removed = true; }, destroy() { this.removed = true; } };
       tweens.push(tween);
       return tween;
@@ -112,6 +122,8 @@ function sceneStub() {
       text: (x = 0, y = 0) => new UiObject('text', x, y),
       rectangle: (x = 0, y = 0) => new UiObject('rectangle', x, y),
       circle: (x = 0, y = 0) => new UiObject('circle', x, y),
+      nineslice: (x = 0, y = 0) => new UiObject('nineslice', x, y),
+      graphics: () => new UiObject('graphics'),
     },
   };
   return { scene, tweens };
@@ -243,28 +255,24 @@ describe('living UI consumer ownership', () => {
     expect(effects.every(effect => effect.destroyed)).toBe(true);
   });
 
-  it('keeps lower HUD bars inactive on build and immediately stops them when the root hides', () => {
+  it('creates lower HUD bars inactive, runs them only while filled and releases them on clear', () => {
     const { scene } = sceneStub();
-    const hud: any = new CenterHUD(scene);
-    hud.container = new UiObject('container').setVisible(false);
-    hud.buildTimer();
-    hud.buildBottomStack();
-    expect(effects).toHaveLength(3);
-    expect(effects.every(effect => !effect.active)).toBe(true);
-    hud.transitionToGame();
-    hud.showLowerSection(hud.armorSection, 'Armor', 0.5, 0, 0);
+    const row = new HudResourceRow(scene, new UiObject('container') as never);
+    expect(effects).toHaveLength(0);
+    const ultimate = { id: 'ultimate', side: 'right', tone: 'red', title: 'Ultimate', frac: 0.7, energy: 1 } as const;
+    row.sync([ultimate]);
+    expect(effects).toHaveLength(1);
+    expect(effects[0].opts.startActive).toBe(false);
     expect(effects[0].active).toBe(true);
-    hud.hideLowerSection(hud.armorSection); // Begin the normal visible fade.
-    hud.resetCoopMissionPresentation = () => {};
-    hud.hideTrainWidget = () => {};
-    hud.transitionToLobby();
-    expect(effects.every(effect => !effect.active)).toBe(true);
-    hud.showLowerSection(hud.armorSection, 'Armor', 0.7, 0, 0);
-    hud.setSectionEnergized(hud.armorSection, true);
+    row.sync([{ ...ultimate, frac: 0 }]);
     expect(effects[0].active).toBe(false);
-    hud.transitionToGame();
-    hud.showLowerSection(hud.armorSection, 'Armor', 0.7, 0, 0);
+    row.sync([ultimate]);
+    row.setPresentationActive(false);
+    expect(effects[0].active).toBe(false);
+    row.setPresentationActive(true);
     expect(effects[0].active).toBe(true);
+    row.clear();
+    expect(effects[0].destroyed).toBe(true);
   });
 
   it('uses the full node contour and stable identity even for hidden partial fills', () => {

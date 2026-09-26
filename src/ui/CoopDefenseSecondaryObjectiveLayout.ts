@@ -5,16 +5,28 @@ import { SECONDARY_OBJECTIVE_MAX_CHIPS } from './coopDefenseSecondaryObjectiveMo
  * Gemeinsamer Bildschirm-Layoutvertrag für Hauptziel, Wellen, Nebenmissionen und rechte
  * Seitenspalte. Die Datei besitzt bewusst keine HUD-Imports: CenterHUD und Nebenziel-HUD
  * beziehen ihre Positionen beide von hier, ohne einen zyklischen Modulpfad aufzubauen.
+ *
+ * Die Karten sind Waldrelief-Rahmen (`HudCard`) mit fester Quellhöhe von 98 px; `scale` legt
+ * damit Höhe und Rahmenstärke fest. Alle Karten der Spalte teilen Breite und rechte Kante.
  */
-const PANEL_WIDTH = 400;
-const PANEL_CENTER_X = GAME_WIDTH - PANEL_WIDTH / 2 - 24;
-const STACK_TOP_Y = 22;
-const STACK_GAP = 8;
+const PANEL_WIDTH = 340;
+const RIGHT_MARGIN = 14;
+const PANEL_CENTER_X = GAME_WIDTH - PANEL_WIDTH / 2 - RIGHT_MARGIN;
+const STACK_TOP_Y = 10;
+const STACK_GAP = 6;
+const CARD_SOURCE_HEIGHT = 98;
+const CARD_SCALE = 0.5;
+const CHIP_SCALE = 0.36;
+const CARD_HEIGHT = CARD_SOURCE_HEIGHT * CARD_SCALE;
+const CHIP_HEIGHT = CARD_SOURCE_HEIGHT * CHIP_SCALE;
 
 /** Screen-Space-Layout des serialisierten Coop-Objective-Ankündigungskanals. */
 export const COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT = {
-  centerY: 166,
-  height: 96,
+  centerY: 196,
+  /** Karte plus Detailzeile darunter. */
+  height: 112,
+  width: 560,
+  cardScale: 0.8,
   entryOffsetY: 12,
 } as const;
 
@@ -22,7 +34,8 @@ export const COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT = {
   centerX: PANEL_CENTER_X,
   topY: STACK_TOP_Y,
   width: PANEL_WIDTH,
-  height: 64,
+  height: CARD_HEIGHT,
+  scale: CARD_SCALE,
 } as const;
 
 export const COOP_DEFENSE_ENCOUNTER_LAYOUT = {
@@ -31,14 +44,17 @@ export const COOP_DEFENSE_ENCOUNTER_LAYOUT = {
     + COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.height
     + STACK_GAP,
   width: PANEL_WIDTH,
-  height: 84,
+  height: CARD_HEIGHT,
+  scale: CARD_SCALE,
 } as const;
 
 export const COOP_DEFENSE_SECONDARY_OBJECTIVE_LAYOUT = {
   panelWidth: PANEL_WIDTH,
-  panelHeight: 64,
-  chipHeight: 34,
-  rowGap: 6,
+  panelHeight: CARD_HEIGHT,
+  panelScale: CARD_SCALE,
+  chipHeight: CHIP_HEIGHT,
+  chipScale: CHIP_SCALE,
+  rowGap: STACK_GAP - 2,
   columnTopY: COOP_DEFENSE_ENCOUNTER_LAYOUT.topY
     + COOP_DEFENSE_ENCOUNTER_LAYOUT.height
     + STACK_GAP,

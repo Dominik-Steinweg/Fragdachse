@@ -11,6 +11,9 @@ export interface CoopDefenseLifeStatusInput {
 export interface CoopDefenseLifeStatusViewModel {
   readonly text: string;
   readonly color: string;
+  /** Getrennte Beschriftung und Zahl, sofern der Status ein Zähler ist (Statusleiste). */
+  readonly label?: string;
+  readonly value?: string;
 }
 
 /**
@@ -32,10 +35,11 @@ export function buildCoopDefenseLifeStatusViewModel(
   if (budget.alive && budget.remainingRespawns === 0) {
     return { text: t('ui.lifeStatus.lastLife'), color: '#ffb347' };
   }
+  const count = formatNumber(budget.remainingRespawns, getLocale(), { useGrouping: false });
   return {
-    text: t('ui.lifeStatus.respawns', {
-      count: formatNumber(budget.remainingRespawns, getLocale(), { useGrouping: false }),
-    }),
+    text: t('ui.lifeStatus.respawns', { count }),
     color: '#ffd166',
+    label: t('ui.lifeStatus.respawnsLabel'),
+    value: count,
   };
 }

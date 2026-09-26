@@ -1,0 +1,239 @@
+{
+  "file": "runtime/hud-frames.webp",
+  "width": 530,
+  "height": 498,
+  "card": {
+    "width": 264,
+    "height": 98,
+    "cap": 84,
+    "interiorTop": 19,
+    "interiorBottom": 66,
+    "railCenter": 10,
+    "trackTop": 75,
+    "trackBottom": 87,
+    "trackInset": 52
+  },
+  "strip": {
+    "width": 256,
+    "height": 98,
+    "cap": 84,
+    "interiorTop": 19,
+    "interiorBottom": 76,
+    "railCenter": 10
+  },
+  "divider": {
+    "width": 22
+  },
+  "atlas": {
+    "frames": {
+      "card-neutral": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 264,
+          "h": 98
+        }
+      },
+      "card-gold": {
+        "frame": {
+          "x": 266,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 264,
+          "h": 98
+        }
+      },
+      "card-bronze": {
+        "frame": {
+          "x": 0,
+          "y": 100,
+          "w": 264,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 264,
+          "h": 98
+        }
+      },
+      "card-blue": {
+        "frame": {
+          "x": 266,
+          "y": 100,
+          "w": 264,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 264,
+          "h": 98
+        }
+      },
+      "card-purple": {
+        "frame": {
+          "x": 0,
+          "y": 200,
+          "w": 264,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 264,
+          "h": 98
+        }
+      },
+      "card-green": {
+        "frame": {
+          "x": 266,
+          "y": 200,
+          "w": 264,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 264,
+          "h": 98
+        }
+      },
+      "card-orange": {
+        "frame": {
+          "x": 0,
+          "y": 300,
+          "w": 264,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 264,
+          "h": 98
+        }
+      },
+      "card-red": {
+        "frame": {
+          "x": 266,
+          "y": 300,
+          "w": 264,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 264,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 264,
+          "h": 98
+        }
+      },
+      "strip": {
+        "frame": {
+          "x": 0,
+          "y": 400,
+          "w": 256,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 98
+        }
+      },
+      "divider": {
+        "frame": {
+          "x": 258,
+          "y": 400,
+          "w": 22,
+          "h": 98
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 22,
+          "h": 98
+        },
+        "sourceSize": {
+          "w": 22,
+          "h": 98
+        }
+      }
+    },
+    "meta": {
+      "image": "hud-frames.webp",
+      "size": {
+        "w": 530,
+        "h": 498
+      },
+      "scale": "1"
+    }
+  }
+}

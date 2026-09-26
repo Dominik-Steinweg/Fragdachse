@@ -1,43 +1,24 @@
 /**
- * CenterHUD – feste UI-Elemente in der Bildschirmmitte.
+ * CenterHUD – bildschirmfeste Arena-Infoflächen.
  *
- * Enthält Timer (oben mittig), RB54-Widget (direkt darunter) und
- * den unteren Stack für Power-Ups, Utility und Ultimate.
+ * Es gibt keine festen GUI-Bereiche: Jede Fläche liegt über der Spielwelt. Daher gilt
+ * „so wenig wie möglich, so viel wie nötig" – schmale Waldrelief-Rahmen mit halbtransparentem
+ * Glas, die nur erscheinen, solange sie etwas zu sagen haben:
+ *   - oben mittig die Statusleiste (Lebensstatus, Rundentimer, Zug)
+ *   - oben rechts Hauptziel und Angriffsserie (darunter das Nebenziel-HUD)
+ *   - unten eine flache Zeile für Utility, Rüstung, Ultimate, Baukapazität und Power-Ups
+ *   - kurze Meldungen oberhalb der Spielfigur
+ * Das Tutorial-Fenster ist ein Weltobjekt und lebt in {@link CoopDefenseTutorialPanel}.
  */
 import * as Phaser from 'phaser';
-import { ARMOR_COLOR, GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
+import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
 import { getUtilityHudDisplayName, type ArenaHUDData } from './ArenaHUD';
 import type { CoopDefenseEncounterPresentationState } from '../types';
 import type { CoopDefenseLifeStatusViewModel } from './coopDefenseLifeStatusModel';
-import {
-  rgbStr,
-  type LivingBarPalette,
-  ensureLivingBarTextures, createGradientTexture, LivingBarEffect,
-} from './LivingBarEffect';
-import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
-import { registerGraphicsObject } from '../effects/EffectUtils';
-import { formatTrainArrivalLabel } from '../train/TrainEvent';
 import { formatNumber, getLocale, t } from '../i18n';
 import { getContentDisplayName, getSourceName } from '../i18n/contentPresentation';
-import {
-  COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H,
-  COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
-  getCoopDefenseTutorialPanelCenterX,
-  getCoopDefenseTutorialPanelHeight,
-  getCoopDefenseTutorialPanelTopY,
-  type CoopDefenseTutorialAnchor,
-} from '../config/coopDefenseTutorial';
-import { HELP_CONTROLS } from '../config/helpControls';
-import { ensureFlatPanelTexture, ensureIconTexture, roundRectPath } from './uiTextures';
-import { BORDER as FOREST_BORDER, SURFACE as FOREST_SURFACE, TEXT as FOREST_TEXT, textStyle as forestTextStyle } from './ForestModal';
-import { ensureForestButton } from './forestTextures';
-import { MOTION } from './uiTheme';
-import {
-  TUTORIAL_FRAME_INNER,
-  TUTORIAL_TOP_RAIL_Y,
-  ensureTutorialKeycapTexture,
-  ensureTutorialPanelTexture,
-} from './coopDefenseTutorialPanelTextures';
+import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
+import type { CoopDefenseTutorialAnchor } from '../config/coopDefenseTutorial';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import type { MainObjectiveViewModel } from './coopDefenseMainObjectiveModel';
 import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnnouncement';
@@ -46,226 +27,66 @@ import {
   COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT,
 } from './CoopDefenseSecondaryObjectiveLayout';
 import {
-  BOTTOM_STACK_BAR_H,
-  BOTTOM_STACK_BAR_LEFT,
-  BOTTOM_STACK_BAR_W,
-  BOTTOM_STACK_GAP,
-  BOTTOM_STACK_LABEL_FONT,
-  BOTTOM_STACK_LABEL_H,
-  BOTTOM_STACK_PANEL_H,
-  BOTTOM_STACK_PANEL_W,
-  BOTTOM_STACK_TOTAL_H,
-} from './BottomStackLayout';
-import {
   advanceHudOcclusionFade,
   createHudOcclusionFadeState,
   type HudOcclusionRect,
   resetHudOcclusionFade,
 } from './hudOcclusionFade';
-import { doHudRectsOverlap, getWorldRectOnScreen, isHudRectOccluded } from './hudOcclusionProbe';
+import { isHudRectOccluded } from './hudOcclusionProbe';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
+import { HudCard, hudTextStyle } from './HudCard';
+import { HUD_TONES, hudToneForColor, type HudTone } from './HudFrameAssets';
+import { HudStatusStrip, type HudStatusField } from './HudStatusStrip';
+import { HudResourceRow, type HudResourceEntry } from './HudResourceRow';
+import { CoopDefenseTutorialPanel } from './CoopDefenseTutorialPanel';
 
-const CENTER_X       = GAME_WIDTH / 2;
-const PANEL_WIDTH    = 200;
-const PANEL_BG_COL   = 0x000000;
-const PANEL_BG_ALPHA = 0.25;
+const CENTER_X = GAME_WIDTH / 2;
+const STATUS_STRIP_TOP = 8;
+const TIMER_WARNING_SECS = 10;
 
-const TIMER_Y             = 28;
-const TIMER_BG_H          = 44;
-const TIMER_COLOR_NORMAL  = '#e0e0e0';
-const TIMER_COLOR_WARNING = '#ff4444';
+// ── Kurzmeldungen (Frags, Bier) ─────────────────────────────────────────────
+// Oberhalb der Spielfigur statt auf ihr: Die Bildmitte gehört dem Kampf.
+const TOAST_Y = GAME_HEIGHT / 2 - 190;
+const TOAST_MAX_TEXT_W = 620;
+const TOAST_IN_MS = 200;
+const TOAST_HOLD_MS = 950;
+const TOAST_OUT_MS = 280;
+const TOAST_BAND_TEX = '_center_toast_band';
+const TOAST_TEXT_COLOR = 0xe6dcc4;
 
-const TUTORIAL_FADE_MS    = MOTION.slow;
-/** Kurzer Absenk-Auftritt: die Tafel „legt sich" auf ihren Platz statt nur einzublenden. */
-const TUTORIAL_ENTRY_RISE = 6;
-const TUTORIAL_OCCLUSION_MARGIN_PX = 6;
-const TUTORIAL_OCCLUSION_FADE = {
-  minAlpha: 0.02,
-  fadeOutMs: 90,
-  fadeInMs: 520,
-  holdMs: 260,
-} as const;
-// Innenlayout im Rahmen. Außenmaße bleiben der Vertrag aus `coopDefenseTutorial`, weil die
-// Arena-Generierung die Felsformation unter dem Fenster daraus ableitet.
-const TUTORIAL_PLAQUE_H     = 28;
-const TUTORIAL_PLAQUE_PAD_X = 22;
-const TUTORIAL_PLAQUE_ICON  = 14;
-const TUTORIAL_PLAQUE_GAP   = 8;
-const TUTORIAL_BODY_TOP     = TUTORIAL_TOP_RAIL_Y + TUTORIAL_PLAQUE_H / 2 + 6;
-const TUTORIAL_BODY_PAD_X   = 64;
-const TUTORIAL_TABLE_W      = 600;
-const TUTORIAL_TABLE_PAD_BOTTOM = 14;
-const TUTORIAL_KEYCAP_W     = 170;
-const TUTORIAL_KEYCAP_H     = 24;
-const TUTORIAL_KEY_CX       = -TUTORIAL_TABLE_W / 2 + 12 + TUTORIAL_KEYCAP_W / 2;
-const TUTORIAL_DESC_X       = -TUTORIAL_TABLE_W / 2 + 12 + TUTORIAL_KEYCAP_W + 24;
-/** Abstand der Steuerungsüberschrift über der ersten Tabellenzeile. */
-const TUTORIAL_HEADING_GAP  = 18;
-const TUTORIAL_HEADING_RULE = 150;
-
-/**
- * Tabellenoberkante der Steuerungs-Variante: vom unteren Rahmen aus verankert, damit die Zeilen
- * unabhängig von der reservierten Fließtexthöhe nie in die Holzleiste laufen.
- */
-function getTutorialControlsRowsTop(panelHeight: number): number {
-  return panelHeight - TUTORIAL_FRAME_INNER - TUTORIAL_TABLE_PAD_BOTTOM
-    - HELP_CONTROLS.length * COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H;
-}
-
-/** Vertikale Mitte des Fließtexts: zentriert zwischen Titelschild und Tabelle bzw. unterem Rahmen. */
-function getTutorialBodyCenterY(panelHeight: number, showControls: boolean): number {
-  const bottom = showControls
-    ? getTutorialControlsRowsTop(panelHeight) - TUTORIAL_HEADING_GAP - 22
-    : panelHeight - TUTORIAL_FRAME_INNER;
-  return (TUTORIAL_BODY_TOP + bottom) / 2;
-}
-
-const ANNOUNCEMENT_Y          = GAME_HEIGHT / 2;
-const ANNOUNCEMENT_MAX_TEXT_W = 560;
-const ANNOUNCEMENT_MIN_W      = 240;
-const ANNOUNCEMENT_MIN_H      = 48;
-const ANNOUNCEMENT_PAD_X      = 20;
-const ANNOUNCEMENT_PAD_Y      = 14;
-const ANNOUNCEMENT_HOLD_MS    = 800;
-const ANNOUNCEMENT_FADE_MS    = 200;
-const ANNOUNCEMENT_TEXT_COLOR = '#e0e0e0';
-
-const TRAIN_SEP_Y      = 56;
-const TRAIN_TEXT_Y     = 72;
-const TRAIN_BAR_Y      = 90;
-const TRAIN_BAR_H      = 12;
-const TRAIN_BAR_W      = PANEL_WIDTH - 16;
-const TRAIN_BAR_LEFT   = CENTER_X - TRAIN_BAR_W / 2;
-const TRAIN_BAR_TOP    = TRAIN_BAR_Y - TRAIN_BAR_H / 2;
-const TRAIN_BAR_ALPHA  = 1;
-const TRAIN_BAR_TEX    = '_center_train_fg';
-const TRAIN_BAR_BG_TEX = '_center_train_bg';
-const TRAIN_PAL: LivingBarPalette = { dark: 0x3d1812, mid: 0xcf573c, light: 0xff8060 };
-const TRAIN_PANEL_Y    = 78;
-const TRAIN_PANEL_H    = 54;
-const TOP_PANEL_FADE_TEX = '_center_top_panel_fade';
-const TIMER_PANEL_FADE_TEX = '_center_timer_panel_fade';
-const TOP_PANEL_W       = PANEL_WIDTH + 28;
-const TOP_PANEL_TOP     = TIMER_Y - TIMER_BG_H / 2;
-const TOP_PANEL_BOTTOM  = TRAIN_PANEL_Y + TRAIN_PANEL_H / 2;
-const TOP_PANEL_H       = TOP_PANEL_BOTTOM - TOP_PANEL_TOP;
-const TOP_PANEL_Y       = (TOP_PANEL_TOP + TOP_PANEL_BOTTOM) / 2;
-
-// ── Encounter-Panel ──────────────────────────────────────────────────────────
-// Anzeige der Coop-Defense-Angriffsserie. Die Wellenposition trägt die Pip-Leiste,
-// die Phase die Statuszeile, die Restzeit der eigene Countdown – jede Information
-// steht damit genau einmal im Panel.
-const ENCOUNTER_PANEL_W = COOP_DEFENSE_ENCOUNTER_LAYOUT.width;
-const ENCOUNTER_PANEL_H = COOP_DEFENSE_ENCOUNTER_LAYOUT.height;
-const ENCOUNTER_PANEL_X = COOP_DEFENSE_ENCOUNTER_LAYOUT.centerX;
-const ENCOUNTER_PANEL_TOP_Y = COOP_DEFENSE_ENCOUNTER_LAYOUT.topY;
-const ENCOUNTER_PANEL_Y = ENCOUNTER_PANEL_TOP_Y + ENCOUNTER_PANEL_H / 2;
-
-/**
- * Lage des Pflichtziel-Panels. Exportiert, damit sich das Nebenziel-Panel daran ausrichten
- * kann, statt dieselben Zahlen ein zweites Mal zu führen – die beiden bilden bewusst eine
- * gemeinsame Zeile am oberen Rand.
- */
-export const ENCOUNTER_PANEL_LAYOUT = {
-  ...COOP_DEFENSE_ENCOUNTER_LAYOUT,
-} as const;
-const ENCOUNTER_PANEL_LEFT = -ENCOUNTER_PANEL_W / 2;
-const ENCOUNTER_PANEL_TOP = -ENCOUNTER_PANEL_H / 2;
-const ENCOUNTER_PANEL_RADIUS = 10;
-const ENCOUNTER_CONTENT_LEFT = ENCOUNTER_PANEL_LEFT + 24;
-const ENCOUNTER_CONTENT_RIGHT = -ENCOUNTER_PANEL_LEFT - 20;
-const ENCOUNTER_RAIL_X = ENCOUNTER_PANEL_LEFT + 9;
-const ENCOUNTER_RAIL_H = ENCOUNTER_PANEL_H - 24;
-const ENCOUNTER_KICKER_Y = ENCOUNTER_PANEL_TOP + 19;
-const ENCOUNTER_STATUS_Y = ENCOUNTER_PANEL_TOP + 46;
-const ENCOUNTER_PROGRESS_Y = ENCOUNTER_PANEL_TOP + 69;
-const ENCOUNTER_PROGRESS_H = 6;
-const ENCOUNTER_PROGRESS_W = ENCOUNTER_CONTENT_RIGHT - ENCOUNTER_CONTENT_LEFT;
-const ENCOUNTER_FILL_H = ENCOUNTER_PROGRESS_H - 2;
-const ENCOUNTER_FILL_W = ENCOUNTER_PROGRESS_W - 2;
-const ENCOUNTER_PIP_W = 17;
-const ENCOUNTER_PIP_H = 5;
-const ENCOUNTER_PIP_GAP = 5;
-/** Über dieser Wellenzahl bleibt die Pip-Leiste ungezeichnet; die Pips wären nicht mehr zählbar. */
+// ── Missionskarten ──────────────────────────────────────────────────────────
+const MAIN = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT;
+const MAIN_X = MAIN.centerX;
+const MAIN_Y = MAIN.topY + MAIN.height / 2;
+const ENCOUNTER = COOP_DEFENSE_ENCOUNTER_LAYOUT;
+const ENCOUNTER_X = ENCOUNTER.centerX;
+const ENCOUNTER_Y = ENCOUNTER.topY + ENCOUNTER.height / 2;
+const CARD_ENTRY_MS = 220;
+const CARD_HANDOFF_MS = 180;
+/** Über dieser Wellenzahl bleibt die Markenleiste leer; die Marken wären nicht mehr zählbar. */
 const ENCOUNTER_PIP_MAX = 9;
-const ENCOUNTER_FADE_MS = 180;
-const ENCOUNTER_BG_TEX = '_center_encounter_bg';
-const ENCOUNTER_RAIL_TEX = '_center_encounter_rail';
-const ENCOUNTER_RAIL_GLOW_TEX = '_center_encounter_rail_glow';
-const ENCOUNTER_RAIL_W = 6;
-const ENCOUNTER_RAIL_GLOW_W = 34;
-const ENCOUNTER_RAIL_GLOW_ALPHA = 0.5;
 const ENCOUNTER_SCAN_PERIOD_MS = 1_800;
-const ENCOUNTER_SCAN_INSET_PX = 9;
 const ENCOUNTER_ANNOUNCEMENT_PRIORITY = 100;
 const ENCOUNTER_START_ANNOUNCEMENT_HOLD_MS = 900;
 const ENCOUNTER_RESULT_ANNOUNCEMENT_HOLD_MS = 1_200;
 
-// ── Hauptziel-Panel ─────────────────────────────────────────────────────────
-const MAIN_PANEL_W = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.width;
-const MAIN_PANEL_H = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.height;
-const MAIN_PANEL_X = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.centerX;
-const MAIN_PANEL_Y = COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.topY + MAIN_PANEL_H / 2;
-const MAIN_PANEL_LEFT = -MAIN_PANEL_W / 2;
-const MAIN_PANEL_TOP = -MAIN_PANEL_H / 2;
-const MAIN_PANEL_RADIUS = 9;
-const MAIN_CONTENT_LEFT = MAIN_PANEL_LEFT + 20;
-const MAIN_CONTENT_RIGHT = -MAIN_PANEL_LEFT - 18;
-const MAIN_KICKER_Y = MAIN_PANEL_TOP + 15;
-const MAIN_TITLE_Y = MAIN_PANEL_TOP + 35;
-const MAIN_PROGRESS_Y = MAIN_PANEL_TOP + 53;
-const MAIN_PROGRESS_H = 6;
-const MAIN_PROGRESS_W = MAIN_CONTENT_RIGHT - MAIN_CONTENT_LEFT;
-const MAIN_FILL_H = MAIN_PROGRESS_H - 2;
-const MAIN_FILL_W = MAIN_PROGRESS_W - 2;
-const MAIN_BG_TEX = '_center_main_objective_bg';
-const MAIN_BAR_TEX = '_center_main_objective_bar';
-const MAIN_ENTRY_SCALE = 0.42;
+// ── Untere Zeile ────────────────────────────────────────────────────────────
+const STACK_REVEAL_MS = 500;
+const ULTIMATE_REVEAL_MS = 850;
+const CONSTRUCTION_CAPACITY_ID = 'construction';
+/** Laufende Power-Ups ohne eigene Restzeit zeigen ihren Zähler statt einer Rinne. */
+const POWER_UPS_WITHOUT_TRACK = new Set(['NEGEV_KILLSTREAK']);
 
-type EncounterStyleId = 'incoming' | 'active' | 'done' | 'rest';
+type EncounterPhase = CoopDefenseEncounterPresentationState['phase'];
+type TrainState =
+  | { readonly mode: 'hidden' }
+  | { readonly mode: 'arrival'; readonly secs: number }
+  | { readonly mode: 'hp'; readonly ratio: number }
+  | { readonly mode: 'destroyed' };
 
-interface EncounterStyle {
-  /** Leitfarbe für Rahmen, Schiene, Pips, Balken und Statuszeile. */
-  readonly accent: number;
-  /** Gedämpfte Zweitfarbe für Kicker und ruhende Pips. */
-  readonly muted: number;
-  readonly palette: LivingBarPalette;
-  readonly barTex: string;
-}
-
-const ENCOUNTER_STYLES: Record<EncounterStyleId, EncounterStyle> = {
-  incoming: {
-    accent: COLORS.PURPLE_2,
-    muted: COLORS.PURPLE_4,
-    palette: { dark: COLORS.PURPLE_6, mid: COLORS.PURPLE_3, light: COLORS.PURPLE_1 },
-    barTex: '_center_encounter_bar_incoming',
-  },
-  active: {
-    accent: COLORS.PURPLE_2,
-    muted: COLORS.PURPLE_4,
-    palette: { dark: COLORS.PURPLE_6, mid: COLORS.PURPLE_3, light: COLORS.PURPLE_1 },
-    barTex: '_center_encounter_bar_active',
-  },
-  done: {
-    accent: COLORS.GREEN_2,
-    muted: COLORS.GREEN_4,
-    palette: { dark: 0x1d3a1a, mid: COLORS.GREEN_3, light: COLORS.GREEN_1 },
-    barTex: '_center_encounter_bar_done',
-  },
-  rest: {
-    accent: COLORS.PURPLE_3,
-    muted: COLORS.PURPLE_4,
-    palette: { dark: COLORS.PURPLE_6, mid: COLORS.PURPLE_4, light: COLORS.PURPLE_2 },
-    barTex: '_center_encounter_bar_rest',
-  },
-};
-
-function resolveEncounterStyleId(phase: CoopDefenseEncounterPresentationState['phase']): EncounterStyleId {
-  if (phase === 'active') return 'active';
-  if (phase === 'cleared' || phase === 'complete') return 'done';
-  if (phase === 'rest') return 'rest';
-  return 'incoming';
+function encounterTone(phase: EncounterPhase): HudTone {
+  return phase === 'cleared' || phase === 'complete' ? 'green' : 'purple';
 }
 
 function formatEncounterFronts(fronts: readonly string[] | undefined): string {
@@ -288,330 +109,91 @@ function formatEncounterLabel(
   return t('ui.encounter.waveLabel', { index, count, fronts: formatEncounterFronts(fronts) });
 }
 
-const STACK_MARGIN     = 20;
-const STACK_REVEAL_MS  = 500;
-const ULTIMATE_REVEAL_MS = 850;
-const STACK_FADE_MS    = 100;
-const STACK_CORE_TEX   = '_center_core';
-
-const ARM_BAR_TEX      = '_center_arm_fg';
-const UTIL_BAR_TEX     = '_center_util_fg';
-const ULT_BAR_TEX      = '_center_ult_fg';
-const STACK_BAR_BG_TEX = '_center_stack_bg';
-const ARM_PAL: LivingBarPalette = { dark: COLORS.GOLD_3, mid: ARMOR_COLOR, light: COLORS.GOLD_1 };
-const UTIL_PAL: LivingBarPalette = { dark: 0x8a4018, mid: 0xd97030, light: 0xf0a048 };
-const ULT_PAL: LivingBarPalette = { dark: COLORS.RED_3, mid: COLORS.RED_2, light: COLORS.RED_1 };
-
-const COLOR_SEPARATOR = 0x334455;
-const COL_BAR_BG      = COLORS.GREY_9;
-const COL_BAR_BG2     = COLORS.GREY_8;
-const COL_BORDER      = COLORS.GREY_6;
-
-const ANNOUNCEMENT_FONT = {
-  fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: ANNOUNCEMENT_TEXT_COLOR,
-  align: 'center' as const,
-  wordWrap: { width: ANNOUNCEMENT_MAX_TEXT_W },
-};
-// Tutorial-Typografie folgt den Forest-Menüs (Chakra Petch, warmes Pergament-Weiß, Gold nur
-// für Titel und Tasten), damit Hilfe-Fenster und Tutorial als eine Familie lesen.
-const TUTORIAL_TITLE_FONT = forestTextStyle('labelSm', { color: COLORS.GOLD_1 });
-const TUTORIAL_HEADING_FONT = forestTextStyle('section', { color: COLORS.GOLD_2 });
-const TUTORIAL_BODY_FONT = {
-  ...forestTextStyle('body', {
-    color: FOREST_TEXT.primary,
-    align: 'center',
-    wordWrapWidth: COOP_DEFENSE_TUTORIAL_PANEL_WIDTH - TUTORIAL_BODY_PAD_X * 2,
-  }),
-  fontSize: '19px',
-  lineSpacing: 6,
-};
-const TUTORIAL_CONTROLS_KEY_FONT = forestTextStyle('labelSm', { color: COLORS.GOLD_1 });
-const TUTORIAL_CONTROLS_DESC_FONT = {
-  ...forestTextStyle('body', { color: FOREST_TEXT.primary }),
-  fontSize: '16px',
-};
-const ENCOUNTER_KICKER_FONT = {
-  fontSize: '13px', fontFamily: 'monospace', fontStyle: 'bold',
-  color: toCssColor(COLORS.GREY_4), letterSpacing: 2,
-};
-const ENCOUNTER_STATUS_FONT = {
-  fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-};
-const ENCOUNTER_COUNTDOWN_FONT = {
-  fontSize: '22px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
-};
-const MAIN_KICKER_FONT = {
-  fontSize: '11px', fontFamily: 'monospace', fontStyle: 'bold',
-  color: toCssColor(COLORS.GOLD_3), letterSpacing: 2,
-};
-const MAIN_TITLE_FONT = {
-  fontSize: '18px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
-};
-const MAIN_PROGRESS_FONT = {
-  fontSize: '14px', fontFamily: 'monospace', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_2),
-};
-
-function ensureBarBgTexture(scene: Phaser.Scene, key: string, width: number, height: number): void {
-  if (scene.textures.exists(key)) return;
-  const ct = scene.textures.createCanvas(key, width, height)!;
-  const ctx = ct.context;
-  const grad = ctx.createLinearGradient(0, 0, 0, height);
-  grad.addColorStop(0, rgbStr(COL_BAR_BG2));
-  grad.addColorStop(1, rgbStr(COL_BAR_BG));
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.fillRect(0, 0, width, 1);
-  ct.refresh();
+function formatClock(secs: number): string {
+  const safe = Math.max(0, Math.ceil(secs));
+  return safe < 60 ? `${safe}s` : `${Math.floor(safe / 60)}:${(safe % 60).toString().padStart(2, '0')}`;
 }
 
-/** Bildschirmfeste HUD-Fläche mit weichem Alpha-Auslauf an allen Außenkanten. */
-function ensureFadedPanelTexture(
-  scene: Phaser.Scene,
-  key: string,
-  width: number,
-  height: number,
-  fillAlpha: number,
-): void {
-  if (scene.textures.exists(key)) return;
-  const ct = scene.textures.createCanvas(key, width, height);
-  if (!ct) return;
-
-  const ctx = ct.context;
-  const edgeX = Math.min(14, width * 0.12);
-  const edgeY = Math.min(5, height * 0.16);
-  ctx.clearRect(0, 0, width, height);
-
-  const body = ctx.createLinearGradient(0, 0, 0, height);
-  body.addColorStop(0, `rgba(0,0,0,${fillAlpha * 0.88})`);
-  body.addColorStop(0.5, `rgba(0,0,0,${fillAlpha})`);
-  body.addColorStop(1, `rgba(0,0,0,${fillAlpha * 0.92})`);
-  ctx.fillStyle = body;
-  ctx.fillRect(0, 0, width, height);
-
-  // Maske zuerst horizontal, dann vertikal anwenden: dadurch entstehen keine harten
-  // Rechteckkanten und die gemeinsame Fläche bleibt zwischen Timer und Zug durchgehend.
-  ctx.globalCompositeOperation = 'destination-in';
-  const horizontal = ctx.createLinearGradient(0, 0, width, 0);
-  horizontal.addColorStop(0, 'rgba(0,0,0,0)');
-  horizontal.addColorStop(edgeX / width, 'rgba(0,0,0,0.78)');
-  horizontal.addColorStop(Math.min(0.2, (edgeX * 2) / width), 'rgba(0,0,0,1)');
-  horizontal.addColorStop(Math.max(0.8, 1 - (edgeX * 2) / width), 'rgba(0,0,0,1)');
-  horizontal.addColorStop(1 - edgeX / width, 'rgba(0,0,0,0.78)');
-  horizontal.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = horizontal;
-  ctx.fillRect(0, 0, width, height);
-
-  const vertical = ctx.createLinearGradient(0, 0, 0, height);
-  vertical.addColorStop(0, 'rgba(0,0,0,0)');
-  vertical.addColorStop(edgeY / height, 'rgba(0,0,0,0.82)');
-  vertical.addColorStop(Math.min(0.2, (edgeY * 2) / height), 'rgba(0,0,0,1)');
-  vertical.addColorStop(Math.max(0.8, 1 - (edgeY * 2) / height), 'rgba(0,0,0,1)');
-  vertical.addColorStop(1 - edgeY / height, 'rgba(0,0,0,0.82)');
-  vertical.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = vertical;
-  ctx.fillRect(0, 0, width, height);
-  ctx.globalCompositeOperation = 'source-over';
-  ct.refresh();
+function cssToColor(css: string): number {
+  const parsed = Number.parseInt(css.replace('#', ''), 16);
+  return Number.isFinite(parsed) ? parsed : COLORS.GOLD_1;
 }
 
-interface LowerBarSection {
-  container: Phaser.GameObjects.Container;
-  panelBg: Phaser.GameObjects.Rectangle;
-  label: Phaser.GameObjects.Text;
-  bg: Phaser.GameObjects.Image;
-  fg: Phaser.GameObjects.Image;
-  border: Phaser.GameObjects.Rectangle;
-  effect: LivingBarEffect;
-  energized: boolean;
-  glow: GlowHandle | null;
-  glowTween: Phaser.Tweens.Tween | null;
-  labelTween: Phaser.Tweens.Tween | null;
-  hideTween: Phaser.Tweens.Tween | null;
-  lastWidth: number;
-  lastLabel: string | null;
-}
-
-/**
- * Leitschiene des Encounter-Panels. Beide Texturen sind reines Weiß mit Alphaverlauf und
- * werden zur Laufzeit auf die Phasenfarbe getintet.
- *
- * Der Körper liegt bewusst unter voller Deckkraft, der schmale Kern darüber auf 1: nach dem
- * Tint entsteht daraus ein heller Kern in einem dunkleren Mantel. Ein einfarbiges Rechteck
- * bliebe flach, und seine harten Kanten verrieten den additiven Schein als Rechteck.
- */
-function ensureEncounterRailTextures(scene: Phaser.Scene): void {
-  if (!scene.textures.exists(ENCOUNTER_RAIL_TEX)) {
-    const ct = scene.textures.createCanvas(ENCOUNTER_RAIL_TEX, ENCOUNTER_RAIL_W, ENCOUNTER_RAIL_H);
-    if (ct) {
-      const ctx = ct.context;
-      const radius = (ENCOUNTER_RAIL_W - 1) / 2;
-      ctx.clearRect(0, 0, ENCOUNTER_RAIL_W, ENCOUNTER_RAIL_H);
-      const body = ctx.createLinearGradient(0, 0, 0, ENCOUNTER_RAIL_H);
-      body.addColorStop(0, 'rgba(255,255,255,0.16)');
-      body.addColorStop(0.16, 'rgba(255,255,255,0.5)');
-      body.addColorStop(0.5, 'rgba(255,255,255,0.68)');
-      body.addColorStop(0.84, 'rgba(255,255,255,0.5)');
-      body.addColorStop(1, 'rgba(255,255,255,0.16)');
-      roundRectPath(ctx, 0.5, 0.5, ENCOUNTER_RAIL_W - 1, ENCOUNTER_RAIL_H - 1, radius);
-      ctx.fillStyle = body;
-      ctx.fill();
-
-      ctx.save();
-      roundRectPath(ctx, 0.5, 0.5, ENCOUNTER_RAIL_W - 1, ENCOUNTER_RAIL_H - 1, radius);
-      ctx.clip();
-      const core = ctx.createLinearGradient(0, 0, 0, ENCOUNTER_RAIL_H);
-      core.addColorStop(0, 'rgba(255,255,255,0)');
-      core.addColorStop(0.22, 'rgba(255,255,255,1)');
-      core.addColorStop(0.78, 'rgba(255,255,255,1)');
-      core.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = core;
-      ctx.fillRect(ENCOUNTER_RAIL_W / 2 - 1, 0, 2, ENCOUNTER_RAIL_H);
-      ctx.restore();
-      ct.refresh();
-    }
-  }
-
-  if (scene.textures.exists(ENCOUNTER_RAIL_GLOW_TEX)) return;
-  const ct = scene.textures.createCanvas(ENCOUNTER_RAIL_GLOW_TEX, ENCOUNTER_RAIL_GLOW_W, ENCOUNTER_RAIL_H);
+/** Weiches, zu den Rändern auslaufendes Band hinter Kurzmeldungen – kein Kasten über der Welt. */
+function ensureToastBandTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(TOAST_BAND_TEX)) return;
+  const w = 512;
+  const h = 64;
+  const ct = scene.textures.createCanvas(TOAST_BAND_TEX, w, h);
   if (!ct) return;
   const ctx = ct.context;
-  ctx.clearRect(0, 0, ENCOUNTER_RAIL_GLOW_W, ENCOUNTER_RAIL_H);
-  const horizontal = ctx.createLinearGradient(0, 0, ENCOUNTER_RAIL_GLOW_W, 0);
-  horizontal.addColorStop(0, 'rgba(255,255,255,0)');
-  horizontal.addColorStop(0.34, 'rgba(255,255,255,0.26)');
-  horizontal.addColorStop(0.5, 'rgba(255,255,255,0.85)');
-  horizontal.addColorStop(0.66, 'rgba(255,255,255,0.26)');
-  horizontal.addColorStop(1, 'rgba(255,255,255,0)');
+  const horizontal = ctx.createLinearGradient(0, 0, w, 0);
+  horizontal.addColorStop(0, 'rgba(7,10,12,0)');
+  horizontal.addColorStop(0.22, 'rgba(7,10,12,0.62)');
+  horizontal.addColorStop(0.78, 'rgba(7,10,12,0.62)');
+  horizontal.addColorStop(1, 'rgba(7,10,12,0)');
   ctx.fillStyle = horizontal;
-  ctx.fillRect(0, 0, ENCOUNTER_RAIL_GLOW_W, ENCOUNTER_RAIL_H);
-  // Vertikaler Auslauf über destination-in: Der Schein endet weich statt an einer Kante.
+  ctx.fillRect(0, 0, w, h);
   ctx.globalCompositeOperation = 'destination-in';
-  const vertical = ctx.createLinearGradient(0, 0, 0, ENCOUNTER_RAIL_H);
+  const vertical = ctx.createLinearGradient(0, 0, 0, h);
   vertical.addColorStop(0, 'rgba(0,0,0,0)');
-  vertical.addColorStop(0.2, 'rgba(0,0,0,1)');
-  vertical.addColorStop(0.8, 'rgba(0,0,0,1)');
+  vertical.addColorStop(0.3, 'rgba(0,0,0,1)');
+  vertical.addColorStop(0.7, 'rgba(0,0,0,1)');
   vertical.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = vertical;
-  ctx.fillRect(0, 0, ENCOUNTER_RAIL_GLOW_W, ENCOUNTER_RAIL_H);
+  ctx.fillRect(0, 0, w, h);
   ctx.globalCompositeOperation = 'source-over';
-  ct.refresh();
-}
-
-function ensureRadialTexture(
-  scene: Phaser.Scene,
-  key: string,
-  size: number,
-  colorStops: [number, string][],
-): void {
-  if (scene.textures.exists(key)) return;
-  const ct = scene.textures.createCanvas(key, size, size)!;
-  const ctx = ct.context;
-  const half = size / 2;
-  const grad = ctx.createRadialGradient(half, half, 0, half, half, half);
-  for (const [stop, color] of colorStops) grad.addColorStop(stop, color);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
   ct.refresh();
 }
 
 export class CenterHUD {
   private container!: Phaser.GameObjects.Container;
+  private statusStrip!: HudStatusStrip;
+  private resourceRow!: HudResourceRow;
+  private readonly tutorial: CoopDefenseTutorialPanel;
 
-  private timerPanelBg!: Phaser.GameObjects.Image;
-  private topPanelBg!: Phaser.GameObjects.Image;
-  private timerText!: Phaser.GameObjects.Text;
-  private lifeStatusText!: Phaser.GameObjects.Text;
-  private tutorialContainer!: Phaser.GameObjects.Container;
-  private tutorialLifecycleContainer!: Phaser.GameObjects.Container;
-  private tutorialPanelBg!: Phaser.GameObjects.Image;
-  private tutorialControlsDecor!: Phaser.GameObjects.Graphics;
-  private tutorialBody!: Phaser.GameObjects.Text;
-  /** Überschrift, Tastenkappen und Beschriftungen der Steuerungstafel. */
-  private tutorialControlsObjects: (Phaser.GameObjects.Text | Phaser.GameObjects.Image)[] = [];
-  private tutorialTween: Phaser.Tweens.Tween | null = null;
-  private readonly tutorialOcclusionFade = createHudOcclusionFadeState();
-  private tutorialValue: string | null = null;
-  private tutorialControlsValue = false;
-  private tutorialStepContainer!: Phaser.GameObjects.Container;
-  private tutorialStepLifecycleContainer!: Phaser.GameObjects.Container;
-  private tutorialStepPanelBg!: Phaser.GameObjects.Image;
-  private tutorialStepBody!: Phaser.GameObjects.Text;
-  private tutorialStepTween: Phaser.Tweens.Tween | null = null;
-  private tutorialStepValue: string | null = null;
-  private announcementContainer!: Phaser.GameObjects.Container;
-  private announcementBg!: Phaser.GameObjects.Rectangle;
-  private announcementText!: Phaser.GameObjects.Text;
-  private announcementTween: Phaser.Tweens.Tween | null = null;
-  /** Trägt Hauptziel- und Angriffsserien-Panel; weicht als Ganzes vor dem Spielfeld zurück. */
+  private toast!: Phaser.GameObjects.Container;
+  private toastBand!: Phaser.GameObjects.Image;
+  private toastText!: Phaser.GameObjects.Text;
+  private toastTween: Phaser.Tweens.TweenChain | null = null;
+
+  /** Trägt Hauptziel- und Angriffsserien-Karte; weicht als Ganzes vor dem Spielfeld zurück. */
   private missionStack!: Phaser.GameObjects.Container;
   private readonly missionStackFade = createHudOcclusionFadeState();
-  private mainObjectivePanel!: Phaser.GameObjects.Container;
-  private mainObjectiveBg!: Phaser.GameObjects.Image;
-  private mainObjectiveFrame!: Phaser.GameObjects.Graphics;
-  private mainObjectiveFill!: Phaser.GameObjects.Image;
-  private mainObjectiveHead!: Phaser.GameObjects.Image;
-  private mainObjectiveKicker!: Phaser.GameObjects.Text;
-  private mainObjectiveTitle!: Phaser.GameObjects.Text;
-  private mainObjectiveProgress!: Phaser.GameObjects.Text;
-  private mainObjectiveTween: Phaser.Tweens.Tween | null = null;
-  private encounterPanel!: Phaser.GameObjects.Container;
-  private encounterBg!: Phaser.GameObjects.Image;
-  private encounterFrame!: Phaser.GameObjects.Graphics;
-  private encounterPips!: Phaser.GameObjects.Graphics;
-  private encounterRailGlow!: Phaser.GameObjects.Image;
-  private encounterRail!: Phaser.GameObjects.Image;
-  private encounterProgressFill!: Phaser.GameObjects.Image;
-  private encounterProgressHead!: Phaser.GameObjects.Image;
-  private encounterKicker!: Phaser.GameObjects.Text;
-  private encounterStatus!: Phaser.GameObjects.Text;
-  private encounterCountdown!: Phaser.GameObjects.Text;
+  private mainCard!: HudCard;
+  private mainTween: Phaser.Tweens.Tween | null = null;
+  private encounterCard!: HudCard;
   private encounterTween: Phaser.Tweens.Tween | null = null;
   private encounterPulseTween: Phaser.Tweens.Tween | null = null;
 
-  private trainText!: Phaser.GameObjects.Text;
-  private trainBarBg!: Phaser.GameObjects.Image;
-  private trainBarFgImg!: Phaser.GameObjects.Image;
-  private trainBarEffect!: LivingBarEffect;
-  private trainBarBorder!: Phaser.GameObjects.Rectangle;
+  // Statusleiste
+  private timerSecs: number | null = null;
+  private lifeStatus: CoopDefenseLifeStatusViewModel | null = null;
+  private train: TrainState = { mode: 'hidden' };
+  private statusSignature = '';
 
-  private utilitySection!: LowerBarSection;
-  private armorSection!: LowerBarSection;
-  private ultimateSection!: LowerBarSection;
-  private puContainerRef: Phaser.GameObjects.Container | null = null;
-
-  private lastTimerText: string | null = null;
-  private lastTimerColor: string | null = null;
-  private lastLifeStatusText: string | null = null;
   private lastMainObjectiveId: string | null = null;
   private lastMainObjectiveSignature: string | null = null;
-  private lastMainObjectiveProgressWidth = -1;
   private mainObjectiveAnnouncementPending = false;
   private lastEncounterPresentationId: string | null = null;
   private lastEncounterPresentationSignature: string | null = null;
-  private lastEncounterPresentationPhase: CoopDefenseEncounterPresentationState['phase'] | null = null;
-  private lastEncounterStyleId: EncounterStyleId | null = null;
-  private lastEncounterPipSignature: string | null = null;
-  private lastEncounterProgressWidth = -1;
+  private lastEncounterPresentationPhase: EncounterPhase | null = null;
   private lastEncounterCountdownText: string | null = null;
-  private lastEncounterDeterminate: boolean | null = null;
   private encounterAnnouncementHandsOver = false;
   private currentEncounterAnnouncementId: string | null = null;
-  private currentEncounterAnnouncementPhase: CoopDefenseEncounterPresentationState['phase'] | null = null;
+  private currentEncounterAnnouncementPhase: EncounterPhase | null = null;
   private readonly announcedEncounterStarts = new Set<string>();
   private readonly announcedEncounterResults = new Set<string>();
-  private lastTrainText: string | null = null;
-  private lastTrainBarWidth = -1;
-  private lastTrainMode: 'hidden' | 'arrival' | 'hp' | 'destroyed' = 'hidden';
+
   private utilityRevealUntil = 0;
   private ultimateRevealUntil = 0;
   private utilityHeldLastFrame = false;
-  private utilityAttentionActive = false;
-  private ultimateReadyActive = false;
 
   private objectiveAnnouncements: CoopDefenseObjectiveAnnouncement | null = null;
 
-  constructor(private scene: Phaser.Scene) {}
+  constructor(private scene: Phaser.Scene) {
+    this.tutorial = new CoopDefenseTutorialPanel(scene);
+  }
 
   setObjectiveAnnouncements(announcements: CoopDefenseObjectiveAnnouncement | null): void {
     this.objectiveAnnouncements = announcements;
@@ -623,499 +205,66 @@ export class CenterHUD {
     this.container.setVisible(false);
     promoteToClarityCamera(this.scene, this.container);
 
-    ensureLivingBarTextures(this.scene);
-    ensureFadedPanelTexture(this.scene, TIMER_PANEL_FADE_TEX, TOP_PANEL_W, TIMER_BG_H, 0.35);
-    ensureFadedPanelTexture(this.scene, TOP_PANEL_FADE_TEX, TOP_PANEL_W, TOP_PANEL_H, 0.3);
-    ensureBarBgTexture(this.scene, TRAIN_BAR_BG_TEX, TRAIN_BAR_W, TRAIN_BAR_H);
-    ensureBarBgTexture(this.scene, STACK_BAR_BG_TEX, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
-    ensureRadialTexture(this.scene, STACK_CORE_TEX, 14, [
-      [0, 'rgba(255,255,255,1.0)'],
-      [0.3, 'rgba(255,255,255,0.7)'],
-      [0.6, 'rgba(255,255,255,0.2)'],
-      [1, 'rgba(255,255,255,0)'],
-    ]);
-    if (!this.scene.textures.exists(TRAIN_BAR_TEX)) {
-      createGradientTexture(this.scene, TRAIN_BAR_TEX, TRAIN_PAL, TRAIN_BAR_W, TRAIN_BAR_H);
-    }
-    if (!this.scene.textures.exists(UTIL_BAR_TEX)) {
-      createGradientTexture(this.scene, UTIL_BAR_TEX, UTIL_PAL, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
-    }
-    if (!this.scene.textures.exists(ARM_BAR_TEX)) {
-      createGradientTexture(this.scene, ARM_BAR_TEX, ARM_PAL, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
-    }
-    if (!this.scene.textures.exists(ULT_BAR_TEX)) {
-      createGradientTexture(this.scene, ULT_BAR_TEX, ULT_PAL, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
-    }
+    this.statusStrip = new HudStatusStrip(this.scene, CENTER_X, STATUS_STRIP_TOP);
+    this.container.add(this.statusStrip.root);
 
-    this.buildTimer();
-    // Eigene Zwischenebene für die beiden Missionspanels: Ihre Auftritts-Tweens schreiben ihr
+    // Eigene Zwischenebene für die beiden Missionskarten: Ihre Auftritts-Tweens schreiben ihr
     // eigenes Alpha, das Ausweichen vor dem Spielfeld liegt deshalb eine Ebene darüber und
     // multipliziert sich damit, statt es abzubrechen.
     this.missionStack = this.scene.add.container(0, 0);
     this.container.add(this.missionStack);
-    this.buildMainObjectivePanel();
-    this.buildEncounterPanel();
-    this.buildTutorialPanel();
-    this.buildTutorialStepPanel();
-    this.buildAnnouncementOverlay();
-    this.buildTrainWidget();
-    this.buildBottomStack();
+    this.buildMissionCards();
+
+    this.resourceRow = new HudResourceRow(this.scene, this.container);
+    this.buildToast();
+    this.tutorial.build();
   }
 
-  private buildTimer(): void {
-    this.timerPanelBg = this.scene.add.image(CENTER_X, TIMER_Y, TIMER_PANEL_FADE_TEX)
-      .setScrollFactor(0);
-    this.topPanelBg = this.scene.add.image(CENTER_X, TOP_PANEL_Y, TOP_PANEL_FADE_TEX)
-      .setScrollFactor(0)
-      .setVisible(false);
-    this.timerText = this.scene.add.text(CENTER_X, TIMER_Y, '2:00', {
-      fontSize: '32px', fontFamily: 'monospace', color: TIMER_COLOR_NORMAL, fontStyle: 'bold',
-    }).setOrigin(0.5).setScrollFactor(0);
-    this.lifeStatusText = this.scene.add.text(CENTER_X + PANEL_WIDTH / 2 + 18, TIMER_Y, '', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#ffd166', fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
-    this.container.add([this.timerPanelBg, this.topPanelBg, this.timerText, this.lifeStatusText]);
-  }
-
-  private buildMainObjectivePanel(): void {
-    ensureFlatPanelTexture(
-      this.scene,
-      MAIN_BG_TEX,
-      MAIN_PANEL_W,
-      MAIN_PANEL_H,
-      COLORS.GREY_8,
-      COLORS.GREY_6,
-      { radius: MAIN_PANEL_RADIUS, fillAlpha: 0.88, strokeAlpha: 0.42 },
-    );
-    if (!this.scene.textures.exists(MAIN_BAR_TEX)) {
-      createGradientTexture(
-        this.scene,
-        MAIN_BAR_TEX,
-        { dark: 0x4d3210, mid: COLORS.GOLD_2, light: COLORS.GOLD_1 },
-        MAIN_FILL_W,
-        MAIN_FILL_H,
-      );
-    }
-
-    this.mainObjectiveBg = this.scene.add.image(0, 0, MAIN_BG_TEX).setOrigin(0.5);
-    this.mainObjectiveFrame = this.scene.add.graphics();
-    registerGraphicsObject(this.scene, 'gameplayHud', this.mainObjectiveFrame);
-    this.mainObjectiveFill = this.scene.add.image(
-      MAIN_CONTENT_LEFT + 1,
-      MAIN_PROGRESS_Y - MAIN_FILL_H / 2,
-      MAIN_BAR_TEX,
-    ).setOrigin(0, 0);
-    this.mainObjectiveFill.setCrop(0, 0, 0, MAIN_FILL_H);
-    this.mainObjectiveHead = this.scene.add.image(MAIN_CONTENT_LEFT, MAIN_PROGRESS_Y, STACK_CORE_TEX)
-      .setOrigin(0.5)
-      .setScale(1.45)
-      .setTint(COLORS.GOLD_1)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setVisible(false);
-    this.mainObjectiveKicker = this.scene.add.text(
-      MAIN_CONTENT_LEFT,
-      MAIN_KICKER_Y,
-      'HAUPTZIEL',
-      MAIN_KICKER_FONT,
-    ).setOrigin(0, 0.5);
-    this.mainObjectiveTitle = this.scene.add.text(
-      MAIN_CONTENT_LEFT,
-      MAIN_TITLE_Y,
-      '',
-      MAIN_TITLE_FONT,
-    ).setOrigin(0, 0.5);
-    this.mainObjectiveProgress = this.scene.add.text(
-      MAIN_CONTENT_RIGHT,
-      MAIN_TITLE_Y,
-      '',
-      MAIN_PROGRESS_FONT,
-    ).setOrigin(1, 0.5);
-
-    this.mainObjectiveFrame.lineStyle(1.5, COLORS.GOLD_2, 0.54);
-    this.mainObjectiveFrame.strokeRoundedRect(
-      MAIN_PANEL_LEFT + 1,
-      MAIN_PANEL_TOP + 1,
-      MAIN_PANEL_W - 2,
-      MAIN_PANEL_H - 2,
-      MAIN_PANEL_RADIUS,
-    );
-    this.mainObjectiveFrame.fillStyle(COLORS.GREY_9, 0.9);
-    this.mainObjectiveFrame.fillRoundedRect(
-      MAIN_CONTENT_LEFT,
-      MAIN_PROGRESS_Y - MAIN_PROGRESS_H / 2,
-      MAIN_PROGRESS_W,
-      MAIN_PROGRESS_H,
-      MAIN_PROGRESS_H / 2,
-    );
-    this.mainObjectiveFrame.lineStyle(1, COLORS.GOLD_2, 0.3);
-    this.mainObjectiveFrame.strokeRoundedRect(
-      MAIN_CONTENT_LEFT,
-      MAIN_PROGRESS_Y - MAIN_PROGRESS_H / 2,
-      MAIN_PROGRESS_W,
-      MAIN_PROGRESS_H,
-      MAIN_PROGRESS_H / 2,
-    );
-
-    this.mainObjectivePanel = this.scene.add.container(MAIN_PANEL_X, MAIN_PANEL_Y, [
-      this.mainObjectiveBg,
-      this.mainObjectiveFrame,
-      this.mainObjectiveFill,
-      this.mainObjectiveHead,
-      this.mainObjectiveKicker,
-      this.mainObjectiveTitle,
-      this.mainObjectiveProgress,
-    ]).setScrollFactor(0).setVisible(false);
-    this.missionStack.add(this.mainObjectivePanel);
-  }
-
-  private buildEncounterPanel(): void {
-    // Grundfläche als geteilte Panel-Textur: gleicher Verlauf, Radius und Randton wie die
-    // übrigen Menü- und Overlay-Flächen. Nur die farbführenden Teile liegen als eigene
-    // Objekte darüber und werden bei einem Phasenwechsel neu gezeichnet, nicht pro Frame.
-    ensureFlatPanelTexture(
-      this.scene,
-      ENCOUNTER_BG_TEX,
-      ENCOUNTER_PANEL_W,
-      ENCOUNTER_PANEL_H,
-      COLORS.GREY_8,
-      COLORS.GREY_6,
-      { radius: ENCOUNTER_PANEL_RADIUS, fillAlpha: 0.88, strokeAlpha: 0.45 },
-    );
-    for (const style of Object.values(ENCOUNTER_STYLES)) {
-      if (this.scene.textures.exists(style.barTex)) continue;
-      createGradientTexture(this.scene, style.barTex, style.palette, ENCOUNTER_FILL_W, ENCOUNTER_FILL_H);
-    }
-    ensureEncounterRailTextures(this.scene);
-
-    this.encounterBg = this.scene.add.image(0, 0, ENCOUNTER_BG_TEX).setOrigin(0.5);
-    this.encounterFrame = this.scene.add.graphics();
-    registerGraphicsObject(this.scene, 'gameplayHud', this.encounterFrame);
-    this.encounterRailGlow = this.scene.add
-      .image(ENCOUNTER_RAIL_X, 0, ENCOUNTER_RAIL_GLOW_TEX)
-      .setOrigin(0.5)
-      .setAlpha(ENCOUNTER_RAIL_GLOW_ALPHA)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    this.encounterRail = this.scene.add
-      .image(ENCOUNTER_RAIL_X, 0, ENCOUNTER_RAIL_TEX)
-      .setOrigin(0.5);
-    this.encounterPips = this.scene.add.graphics();
-    registerGraphicsObject(this.scene, 'gameplayHud', this.encounterPips);
-
-    this.encounterKicker = this.scene.add
-      .text(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_KICKER_Y, t('ui.encounter.series'), ENCOUNTER_KICKER_FONT)
-      .setOrigin(0, 0.5);
-    this.encounterStatus = this.scene.add
-      .text(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_STATUS_Y, '', ENCOUNTER_STATUS_FONT)
-      .setOrigin(0, 0.5);
-    this.encounterCountdown = this.scene.add
-      .text(ENCOUNTER_CONTENT_RIGHT, ENCOUNTER_STATUS_Y, '', ENCOUNTER_COUNTDOWN_FONT)
-      .setOrigin(1, 0.5);
-
-    this.encounterProgressFill = this.scene.add
-      .image(ENCOUNTER_CONTENT_LEFT + 1, ENCOUNTER_PROGRESS_Y - ENCOUNTER_FILL_H / 2, ENCOUNTER_STYLES.incoming.barTex)
-      .setOrigin(0, 0);
-    this.encounterProgressFill.setCrop(0, 0, 0, ENCOUNTER_FILL_H);
-    // Laufende Spitze des Balkens: dieselbe Radialtextur wie die Kernpartikel des unteren
-    // Stacks, additiv und eingefärbt – sie macht den Fortschritt auch bei 6 px Höhe ablesbar.
-    this.encounterProgressHead = this.scene.add
-      .image(ENCOUNTER_CONTENT_LEFT, ENCOUNTER_PROGRESS_Y, STACK_CORE_TEX)
-      .setOrigin(0.5)
-      .setScale(1.6)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setVisible(false);
-
-    this.encounterPanel = this.scene.add.container(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y, [
-      this.encounterBg,
-      this.encounterFrame,
-      this.encounterRailGlow,
-      this.encounterRail,
-      this.encounterProgressFill,
-      this.encounterProgressHead,
-      this.encounterPips,
-      this.encounterKicker,
-      this.encounterStatus,
-      this.encounterCountdown,
-    ]).setScrollFactor(0).setVisible(false).setAlpha(1);
-    this.missionStack.add(this.encounterPanel);
-  }
-
-  private buildTutorialPanel(): void {
-    this.tutorialPanelBg = this.createTutorialPanelBg();
-    this.tutorialBody = this.scene.add.text(0, 0, '', TUTORIAL_BODY_FONT)
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(1);
-
-    // Steuerungstabelle: einmal aufgebaut, nur in der Steuerungs-Variante sichtbar. Die Zeilen
-    // sind vom unteren Rahmen aus verankert; Überschrift und Zeilenflächen liegen in einer
-    // gemeinsamen Graphics-Ebene, Tastenkappen als geteilte Textur wie im Hilfe-Fenster.
-    const controlsHeight = getCoopDefenseTutorialPanelHeight(true);
-    const rowsTop = getTutorialControlsRowsTop(controlsHeight);
-    const rowH = COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H;
-    const headingY = rowsTop - TUTORIAL_HEADING_GAP;
-    const heading = this.scene.add.text(0, headingY, t('ui.help.heading'), TUTORIAL_HEADING_FONT)
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(1);
-    const keycapKey = ensureTutorialKeycapTexture(this.scene, TUTORIAL_KEYCAP_W, TUTORIAL_KEYCAP_H);
-    const rows = HELP_CONTROLS.flatMap((entry, i) => {
-      const y = rowsTop + i * rowH + rowH / 2;
-      return [
-        this.scene.add.image(TUTORIAL_KEY_CX, y, keycapKey).setScrollFactor(1),
-        this.scene.add.text(TUTORIAL_KEY_CX, y, t(entry.keyId), TUTORIAL_CONTROLS_KEY_FONT)
-          .setOrigin(0.5, 0.5).setScrollFactor(1),
-        this.scene.add.text(TUTORIAL_DESC_X, y, t(entry.descriptionKey), TUTORIAL_CONTROLS_DESC_FONT)
-          .setOrigin(0, 0.5).setScrollFactor(1),
-      ];
+  private buildMissionCards(): void {
+    this.mainCard = new HudCard(this.scene, {
+      scale: MAIN.scale, width: MAIN.width, tone: 'gold', titleSize: 16, valueSize: 15,
     });
-    this.tutorialControlsObjects = [heading, ...rows];
-
-    this.tutorialControlsDecor = this.scene.add.graphics().setScrollFactor(1);
-    registerGraphicsObject(this.scene, 'gameplayHud', this.tutorialControlsDecor);
-    const decor = this.tutorialControlsDecor;
-    // Zierlinien links und rechts der Überschrift mit kleiner Raute als Abschluss.
-    const ruleInner = heading.width / 2 + 14;
-    decor.fillStyle(FOREST_BORDER.default, 0.55);
-    for (const dir of [-1, 1]) {
-      const inner = dir * ruleInner;
-      const outer = dir * (ruleInner + TUTORIAL_HEADING_RULE);
-      decor.fillRect(Math.min(inner, outer), headingY - 0.5, TUTORIAL_HEADING_RULE, 1);
-    }
-    decor.fillStyle(COLORS.GOLD_3, 0.85);
-    for (const dir of [-1, 1]) {
-      const x = dir * ruleInner;
-      decor.fillTriangle(x - 3.5, headingY, x, headingY - 3.5, x + 3.5, headingY);
-      decor.fillTriangle(x - 3.5, headingY, x, headingY + 3.5, x + 3.5, headingY);
-    }
-    // Ruhige Zeilenflächen statt eines harten Zebra-Musters.
-    HELP_CONTROLS.forEach((_entry, i) => {
-      decor.fillStyle(FOREST_SURFACE.raised, i % 2 === 0 ? 0.32 : 0.14);
-      decor.fillRoundedRect(-TUTORIAL_TABLE_W / 2, rowsTop + i * rowH + 2, TUTORIAL_TABLE_W, rowH - 4, 6);
+    this.mainCard.setKicker(t('ui.objective.main'));
+    this.mainCard.root.setPosition(MAIN_X, MAIN_Y).setVisible(false);
+    this.encounterCard = new HudCard(this.scene, {
+      scale: ENCOUNTER.scale, width: ENCOUNTER.width, tone: 'purple', titleSize: 16, valueSize: 15,
     });
-
-    this.tutorialLifecycleContainer = this.scene.add.container(0, 0, [
-      this.tutorialPanelBg,
-      this.tutorialControlsDecor,
-      ...this.createTutorialPlaque(),
-      this.tutorialBody,
-      ...this.tutorialControlsObjects,
-    ]).setScrollFactor(1).setAlpha(0);
-    this.tutorialContainer = this.scene.add.container(
-      getCoopDefenseTutorialPanelCenterX(),
-      getCoopDefenseTutorialPanelTopY(),
-      [this.tutorialLifecycleContainer],
-    );
-    // Der übrige CenterHUD liegt auf der scrollfreien Klarheitskamera. Das Tutorial muss
-    // dagegen ein Weltobjekt bleiben, damit es beim horizontalen Kamera-Scroll über seiner
-    // Felsformation bleibt. Als eigener Root-Container erbt es nicht die Kamera-Maske des HUDs.
-    this.tutorialContainer
-      .setDepth(DEPTH.OVERLAY - 1)
-      .setScrollFactor(1)
-      .setVisible(false)
-      .setAlpha(1);
+    this.encounterCard.root.setPosition(ENCOUNTER_X, ENCOUNTER_Y).setVisible(false);
+    this.missionStack.add([this.mainCard.root, this.encounterCard.root]);
   }
 
-  private buildTutorialStepPanel(): void {
-    this.tutorialStepPanelBg = this.createTutorialPanelBg();
-    this.tutorialStepBody = this.scene.add.text(0, 0, '', TUTORIAL_BODY_FONT)
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(1);
-    this.tutorialStepLifecycleContainer = this.scene.add.container(0, 0, [
-      this.tutorialStepPanelBg,
-      ...this.createTutorialPlaque(),
-      this.tutorialStepBody,
-    ]).setScrollFactor(1).setAlpha(0);
-    this.tutorialStepContainer = this.scene.add.container(
-      getCoopDefenseTutorialPanelCenterX(),
-      getCoopDefenseTutorialPanelTopY(),
-      [this.tutorialStepLifecycleContainer],
-    );
-    this.tutorialStepContainer
-      .setDepth(DEPTH.OVERLAY - 1)
-      .setScrollFactor(1)
-      .setVisible(false)
-      .setAlpha(1);
-  }
-
-  /** Glas und Holzrahmen; die Textur wird pro angezeigter Fensterhöhe gewählt. */
-  private createTutorialPanelBg(): Phaser.GameObjects.Image {
-    const width = COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
-    const height = getCoopDefenseTutorialPanelHeight(false);
-    return this.scene.add.image(0, 0, ensureTutorialPanelTexture(this.scene, width, height))
-      .setOrigin(0.5, 0)
-      .setDisplaySize(width, height)
-      .setScrollFactor(1);
-  }
-
-  private setTutorialPanelHeight(image: Phaser.GameObjects.Image, height: number): void {
-    const width = COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
-    image.setTexture(ensureTutorialPanelTexture(this.scene, width, height)).setDisplaySize(width, height);
-  }
-
-  /** Walnuss-Schild mit Hinweis-Symbol und Titel, mittig auf der oberen Rahmenleiste. */
-  private createTutorialPlaque(): Phaser.GameObjects.GameObject[] {
-    const title = this.scene.add.text(0, TUTORIAL_TOP_RAIL_Y, t('ui.help.title'), TUTORIAL_TITLE_FONT)
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(1);
-    const contentW = TUTORIAL_PLAQUE_ICON + TUTORIAL_PLAQUE_GAP + Math.ceil(title.width);
-    const plaqueW = Math.max(120, contentW + TUTORIAL_PLAQUE_PAD_X * 2);
-    const contentLeft = -contentW / 2;
-    title.setX(contentLeft + TUTORIAL_PLAQUE_ICON + TUTORIAL_PLAQUE_GAP + title.width / 2);
-    const plaque = this.scene.add.image(
-      0,
-      TUTORIAL_TOP_RAIL_Y,
-      ensureForestButton(this.scene, plaqueW, TUTORIAL_PLAQUE_H, 'neutral', 'rest'),
-    ).setScrollFactor(1);
-    // Symbol in doppelter Größe rastern und herunterskalieren, sonst franst die Kontur aus.
-    const icon = this.scene.add.image(
-      contentLeft + TUTORIAL_PLAQUE_ICON / 2,
-      TUTORIAL_TOP_RAIL_Y,
-      ensureIconTexture(this.scene, 'info', TUTORIAL_PLAQUE_ICON * 2, COLORS.GOLD_1),
-    ).setDisplaySize(TUTORIAL_PLAQUE_ICON, TUTORIAL_PLAQUE_ICON).setScrollFactor(1);
-    return [plaque, icon, title];
-  }
-
-  private buildAnnouncementOverlay(): void {
-    this.announcementBg = this.scene.add.rectangle(CENTER_X, ANNOUNCEMENT_Y, ANNOUNCEMENT_MIN_W, ANNOUNCEMENT_MIN_H, PANEL_BG_COL, PANEL_BG_ALPHA)
-      .setScrollFactor(0)
+  private buildToast(): void {
+    ensureToastBandTexture(this.scene);
+    this.toastBand = this.scene.add.image(0, 0, TOAST_BAND_TEX);
+    this.toastText = this.scene.add.text(0, 0, '', {
+      ...hudTextStyle(22, TOAST_TEXT_COLOR, false, 1),
+      align: 'center',
+      wordWrap: { width: TOAST_MAX_TEXT_W, useAdvancedWrap: true },
+    }).setOrigin(0.5);
+    this.toast = this.scene.add.container(CENTER_X, TOAST_Y, [this.toastBand, this.toastText])
       .setVisible(false);
-    registerGraphicsObject(this.scene, 'gameplayHud', this.announcementBg);
-    this.announcementText = this.scene.add.text(CENTER_X, ANNOUNCEMENT_Y, '', ANNOUNCEMENT_FONT)
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setVisible(false);
-    this.announcementContainer = this.scene.add.container(0, 0, [this.announcementBg, this.announcementText]);
-    this.announcementContainer.setScrollFactor(0).setVisible(false).setAlpha(1);
-    this.container.add(this.announcementContainer);
-  }
-
-  private buildTrainWidget(): void {
-    this.trainText = this.scene.add.text(CENTER_X, TRAIN_TEXT_Y, '', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#c0a060', align: 'center',
-      wordWrap: { width: PANEL_WIDTH - 8 },
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setVisible(false);
-    this.container.add(this.trainText);
-
-    this.trainBarBg = this.scene.add.image(TRAIN_BAR_LEFT, TRAIN_BAR_TOP, TRAIN_BAR_BG_TEX)
-      .setOrigin(0, 0).setScrollFactor(0).setAlpha(TRAIN_BAR_ALPHA).setVisible(false);
-    this.container.add(this.trainBarBg);
-
-    this.trainBarFgImg = this.scene.add.image(TRAIN_BAR_LEFT, TRAIN_BAR_TOP, TRAIN_BAR_TEX)
-      .setOrigin(0, 0).setScrollFactor(0).setAlpha(TRAIN_BAR_ALPHA).setVisible(false);
-    this.trainBarFgImg.setCrop(0, 0, 0, TRAIN_BAR_H);
-    this.container.add(this.trainBarFgImg);
-
-    this.trainBarEffect = new LivingBarEffect(
-      this.scene,
-      this.container,
-      TRAIN_BAR_LEFT,
-      TRAIN_BAR_TOP,
-      TRAIN_BAR_W,
-      TRAIN_BAR_H,
-      TRAIN_PAL,
-      { glowTarget: this.trainBarFgImg, scrollFactor: 0, intensity: TRAIN_BAR_ALPHA },
-    );
-    // The effect starts with a full field window by default, while the train widget
-    // itself is hidden until a round actually provides a train.
-    this.trainBarEffect.setFilledWidth(0);
-    this.trainBarEffect.stop();
-
-    this.trainBarBorder = this.scene.add.rectangle(TRAIN_BAR_LEFT, TRAIN_BAR_TOP, TRAIN_BAR_W, TRAIN_BAR_H)
-      .setOrigin(0, 0).setScrollFactor(0)
-      .setStrokeStyle(1, 0x5a2010, 0.6)
-      .setFillStyle(0, 0)
-      .setAlpha(TRAIN_BAR_ALPHA)
-      .setVisible(false);
-    registerGraphicsObject(this.scene, 'gameplayHud', this.trainBarBorder);
-    this.container.add(this.trainBarBorder);
-  }
-
-  private buildBottomStack(): void {
-    this.armorSection = this.createLowerSection(ARM_BAR_TEX, ARM_PAL);
-    this.utilitySection = this.createLowerSection(UTIL_BAR_TEX, UTIL_PAL);
-    this.ultimateSection = this.createLowerSection(ULT_BAR_TEX, ULT_PAL);
-  }
-
-  private createLowerSection(textureKey: string, palette: LivingBarPalette): LowerBarSection {
-    const section = this.scene.add.container(CENTER_X, 0);
-    section.setVisible(false).setAlpha(1);
-
-    const panelBg = this.scene.add.rectangle(0, BOTTOM_STACK_TOTAL_H / 2, BOTTOM_STACK_PANEL_W, BOTTOM_STACK_PANEL_H, PANEL_BG_COL, PANEL_BG_ALPHA)
-      .setScrollFactor(0);
-    registerGraphicsObject(this.scene, 'gameplayHud', panelBg);
-    const label = this.scene.add.text(0, 0, '', BOTTOM_STACK_LABEL_FONT)
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0);
-    const bg = this.scene.add.image(BOTTOM_STACK_BAR_LEFT, BOTTOM_STACK_LABEL_H, STACK_BAR_BG_TEX)
-      .setOrigin(0, 0)
-      .setScrollFactor(0);
-    const fg = this.scene.add.image(BOTTOM_STACK_BAR_LEFT, BOTTOM_STACK_LABEL_H, textureKey)
-      .setOrigin(0, 0)
-      .setScrollFactor(0);
-    fg.setCrop(0, 0, 0, BOTTOM_STACK_BAR_H);
-    const border = this.scene.add.rectangle(BOTTOM_STACK_BAR_LEFT, BOTTOM_STACK_LABEL_H, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setStrokeStyle(1, COL_BORDER, 1)
-      .setFillStyle(0, 0);
-    registerGraphicsObject(this.scene, 'gameplayHud', border);
-
-    section.add([panelBg, label, bg, fg]);
-    const effect = new LivingBarEffect(
-      this.scene,
-      section,
-      BOTTOM_STACK_BAR_LEFT,
-      BOTTOM_STACK_LABEL_H,
-      BOTTOM_STACK_BAR_W,
-      BOTTOM_STACK_BAR_H,
-      palette,
-      { glowTarget: fg, scrollFactor: 0, startActive: false },
-    );
-    section.add(border);
-    this.container.add(section);
-
-    return {
-      container: section,
-      panelBg,
-      label,
-      bg,
-      fg,
-      border,
-      effect,
-      energized: false,
-      glow: null,
-      glowTween: null,
-      labelTween: null,
-      hideTween: null,
-      lastWidth: -1,
-      lastLabel: null,
-    };
+    this.container.add(this.toast);
   }
 
   transitionToGame(): void {
     this.container.setVisible(true);
     // Der eigentliche Rundentimer wird erst ab `isArenaStarted()` synchronisiert. Bis dahin
-    // darf der Build-Default (2:00) nicht als bereits laufender Spieltimer erscheinen.
-    this.timerPanelBg.setVisible(false);
-    this.timerText.setVisible(false);
-    this.topPanelBg.setVisible(false);
+    // darf kein Build-Default als bereits laufender Spieltimer erscheinen.
+    this.timerSecs = null;
+    this.syncStatusStrip();
   }
 
   transitionToLobby(): void {
     this.container.setVisible(false);
     this.resetCoopMissionPresentation();
     this.hideTrainWidget();
-    this.hideLowerSection(this.armorSection);
-    this.hideLowerSection(this.utilitySection);
-    this.hideLowerSection(this.ultimateSection);
-    this.stopSectionAttention(this.armorSection);
-    this.stopSectionAttention(this.utilitySection);
-    this.stopSectionAttention(this.ultimateSection);
+    this.timerSecs = null;
+    this.statusSignature = '';
+    this.statusStrip.hide();
+    this.resourceRow.clear();
     this.utilityRevealUntil = 0;
     this.ultimateRevealUntil = 0;
     this.utilityHeldLastFrame = false;
-    this.utilityAttentionActive = false;
-    this.ultimateReadyActive = false;
-    this.lastTimerText = null;
-    this.lastTimerColor = null;
   }
 
   /**
@@ -1127,59 +276,97 @@ export class CenterHUD {
     this.announcedEncounterStarts.clear();
     this.announcedEncounterResults.clear();
     this.encounterAnnouncementHandsOver = false;
-    this.hideAnnouncement();
+    this.hideToast();
     this.hideMainObjectivePresentation(true);
     this.hideEncounterPresentation();
-    this.hideTutorial(true);
-    this.hideTutorialStep(true);
+    this.tutorial.reset();
     if (this.missionStack) {
       resetHudOcclusionFade(this.missionStackFade);
       this.missionStack.setAlpha(1);
     }
-    this.lastLifeStatusText = null;
-    this.lifeStatusText.setVisible(false);
+    this.lifeStatus = null;
+    this.syncStatusStrip();
   }
 
-  setPuContainer(c: Phaser.GameObjects.Container): void {
-    this.puContainerRef = c;
-  }
+  // ── Statusleiste ──────────────────────────────────────────────────────────
 
   updateTimer(secs: number, visible = true): void {
-    this.timerText.setVisible(visible);
-    this.timerPanelBg.setVisible(visible);
-    if (!visible) return;
-    const mm = Math.floor(secs / 60);
-    const ss = secs % 60;
-    const nextText = `${mm}:${ss.toString().padStart(2, '0')}`;
-    const nextColor = secs <= 10 ? TIMER_COLOR_WARNING : TIMER_COLOR_NORMAL;
-    this.timerText.setFontSize(32);
-    if (nextText !== this.lastTimerText) {
-      this.timerText.setText(nextText);
-      this.lastTimerText = nextText;
-    }
-    if (nextColor !== this.lastTimerColor) {
-      this.timerText.setColor(nextColor);
-      this.lastTimerColor = nextColor;
-    }
+    const next = visible ? Math.max(0, Math.floor(secs)) : null;
+    if (next === this.timerSecs) return;
+    this.timerSecs = next;
+    this.syncStatusStrip();
   }
 
   /**
-   * Kompakte Lebens-/Rueckkehrzeile neben dem Timer. Jede Map mit authored Respawn-Budget
-   * fuellt sie; welcher Text erscheint, entscheidet allein das Anzeigemodell.
+   * Lebens-/Rückkehrstatus. Jede Map mit authored Respawn-Budget füllt ihn; welcher Text
+   * erscheint, entscheidet allein das Anzeigemodell.
    */
   updateLifeStatus(model: CoopDefenseLifeStatusViewModel | null): void {
-    if (!model) {
-      if (this.lifeStatusText.visible) this.lifeStatusText.setVisible(false);
-      this.lastLifeStatusText = null;
-      return;
-    }
-
-    if (model.text !== this.lastLifeStatusText) {
-      this.lifeStatusText.setText(model.text);
-      this.lastLifeStatusText = model.text;
-    }
-    this.lifeStatusText.setColor(model.color).setVisible(true);
+    const same = model?.text === this.lifeStatus?.text && model?.color === this.lifeStatus?.color;
+    this.lifeStatus = model;
+    if (!same) this.syncStatusStrip();
   }
+
+  /** @param arrivalTimerSecs Verbleibende Sekunden bis zur nächsten Einfahrt. */
+  setTrainArrival(arrivalTimerSecs: number): void {
+    this.setTrain({ mode: 'arrival', secs: Math.max(0, Math.ceil(arrivalTimerSecs)) });
+  }
+
+  updateTrainHP(hp: number, maxHp: number): void {
+    const ratio = maxHp > 0 ? Phaser.Math.Clamp(hp / maxHp, 0, 1) : 0;
+    // Auf Leistenpixel quantisiert: Die Leiste baut nur bei sichtbarer Änderung neu.
+    this.setTrain({ mode: 'hp', ratio: Math.round(ratio * 92) / 92 });
+  }
+
+  showTrainDestroyed(): void {
+    this.setTrain({ mode: 'destroyed' });
+  }
+
+  hideTrainWidget(): void {
+    this.setTrain({ mode: 'hidden' });
+  }
+
+  private setTrain(next: TrainState): void {
+    const current = this.train;
+    if (current.mode === next.mode
+      && (current.mode !== 'arrival' || current.secs === (next as typeof current).secs)
+      && (current.mode !== 'hp' || current.ratio === (next as typeof current).ratio)) return;
+    this.train = next;
+    this.syncStatusStrip();
+  }
+
+  private syncStatusStrip(): void {
+    if (!this.statusStrip) return;
+    const fields: HudStatusField[] = [];
+    if (this.lifeStatus) {
+      const color = cssToColor(this.lifeStatus.color);
+      fields.push(this.lifeStatus.value !== undefined
+        ? { id: 'life', label: this.lifeStatus.label ?? '', value: this.lifeStatus.value, valueColor: color }
+        : { id: 'life', label: '', value: this.lifeStatus.text, valueColor: color });
+    }
+    if (this.timerSecs !== null) {
+      fields.push({
+        id: 'timer',
+        label: '',
+        value: `${Math.floor(this.timerSecs / 60)}:${(this.timerSecs % 60).toString().padStart(2, '0')}`,
+        valueColor: this.timerSecs <= TIMER_WARNING_SECS ? COLORS.RED_2 : undefined,
+      });
+    }
+    const train = this.train;
+    if (train.mode === 'arrival') {
+      fields.push({ id: 'train', label: t('ui.train.name'), value: t('ui.train.arrivalShort', { time: formatClock(train.secs) }) });
+    } else if (train.mode === 'hp') {
+      fields.push({ id: 'train', label: t('ui.train.name'), value: '', bar: train.ratio });
+    } else if (train.mode === 'destroyed') {
+      fields.push({ id: 'train', label: t('ui.train.name'), value: t('ui.train.cancelled'), valueColor: COLORS.RED_2 });
+    }
+    const signature = fields.map((field) => `${field.id}|${field.label}|${field.value}|${field.valueColor ?? ''}|${field.bar ?? ''}`).join('#');
+    if (signature === this.statusSignature) return;
+    this.statusSignature = signature;
+    this.statusStrip.setFields(fields);
+  }
+
+  // ── Hauptziel ─────────────────────────────────────────────────────────────
 
   updateMainObjectivePresentation(model: MainObjectiveViewModel | null): void {
     if (!model) {
@@ -1190,93 +377,97 @@ export class CenterHUD {
     const objectiveChanged = model.id !== this.lastMainObjectiveId;
     const signature = `${model.id}|${model.title}|${model.progressLabel}|${model.progress.toFixed(4)}`;
     if (signature !== this.lastMainObjectiveSignature) {
-      this.mainObjectiveProgress.setText(model.progressLabel);
-      const availableTitleWidth = Math.max(
-        80,
-        MAIN_CONTENT_RIGHT - MAIN_CONTENT_LEFT - this.mainObjectiveProgress.width - 14,
-      );
-      this.mainObjectiveTitle.setFontSize(18).setText(model.title);
-      if (this.mainObjectiveTitle.width > availableTitleWidth) this.mainObjectiveTitle.setFontSize(15);
-
-      const fillW = Math.round(MAIN_FILL_W * Phaser.Math.Clamp(model.progress, 0, 1));
-      if (fillW !== this.lastMainObjectiveProgressWidth) {
-        this.mainObjectiveFill.setCrop(0, 0, fillW, MAIN_FILL_H);
-        this.mainObjectiveHead
-          .setX(MAIN_CONTENT_LEFT + 1 + fillW)
-          .setVisible(fillW > 4 && fillW < MAIN_FILL_W);
-        this.lastMainObjectiveProgressWidth = fillW;
-      }
+      this.mainCard
+        .setValue(model.progressLabel, HUD_TONES.gold.accent)
+        .setTitle(model.title, COLORS.GOLD_1)
+        .setProgress(model.progress);
       this.lastMainObjectiveSignature = signature;
     }
 
     if (objectiveChanged) {
       this.lastMainObjectiveId = model.id;
       this.mainObjectiveAnnouncementPending = this.objectiveAnnouncements !== null;
-      this.mainObjectivePanel.setVisible(false);
+      this.mainCard.root.setVisible(false);
       if (this.objectiveAnnouncements) {
         this.objectiveAnnouncements.enqueue({
           id: `main:${model.id}`,
-          kicker: 'HAUPTZIEL',
+          kicker: t('ui.objective.main'),
           title: model.title,
           detail: model.progressLabel,
           tone: 'main',
-          target: { x: MAIN_PANEL_X, y: MAIN_PANEL_Y, scale: MAIN_ENTRY_SCALE },
+          target: { x: MAIN_X, y: MAIN_Y, width: MAIN.width, scale: MAIN.scale },
           onStart: () => {
             this.mainObjectiveAnnouncementPending = true;
-            if (this.mainObjectivePanel?.active) this.mainObjectivePanel.setVisible(false);
+            this.mainCard?.root.setVisible(false);
           },
           onArrive: () => {
             this.mainObjectiveAnnouncementPending = false;
-            if (this.mainObjectivePanel?.active && this.lastMainObjectiveId === model.id) {
-              this.playMainObjectiveEntry(MAIN_ENTRY_SCALE);
-            }
+            if (this.lastMainObjectiveId === model.id) this.playCardEntry(this.mainCard, MAIN_Y, true, 'main');
+          },
+          onCancel: () => {
+            this.mainObjectiveAnnouncementPending = false;
           },
         });
       } else {
         this.mainObjectiveAnnouncementPending = false;
-        this.playMainObjectiveEntry(1);
+        this.playCardEntry(this.mainCard, MAIN_Y, false, 'main');
       }
       return;
     }
 
-    if (!this.mainObjectiveAnnouncementPending && !this.mainObjectivePanel.visible) {
-      this.playMainObjectiveEntry(1);
+    if (!this.mainObjectiveAnnouncementPending && !this.mainCard.root.visible) {
+      this.playCardEntry(this.mainCard, MAIN_Y, false, 'main');
     }
   }
 
-  private playMainObjectiveEntry(fromScale: number): void {
-    this.mainObjectiveTween?.destroy();
-    this.mainObjectivePanel
-      .setPosition(MAIN_PANEL_X, MAIN_PANEL_Y + (fromScale < 1 ? 0 : 7))
-      .setScale(fromScale < 1 ? fromScale : 0.97)
-      .setVisible(true)
-      .setAlpha(0);
-    this.mainObjectiveTween = this.scene.tweens.add({
-      targets: this.mainObjectivePanel,
-      alpha: 1,
-      y: MAIN_PANEL_Y,
-      scaleX: 1,
-      scaleY: 1,
-      duration: fromScale < 1 ? 260 : 180,
-      ease: 'Back.easeOut',
-      onComplete: () => { this.mainObjectiveTween = null; },
-    });
+  /**
+   * `handoff`: Eine Ankündigung hat ihren Rahmen bereits exakt auf diesem Platz abgelegt – nur
+   * der Inhalt blendet auf. Sonst gleitet die Karte kurz von unten an ihren Platz.
+   */
+  private playCardEntry(card: HudCard, y: number, handoff: boolean, slot: 'main' | 'encounter'): void {
+    const previous = slot === 'main' ? this.mainTween : this.encounterTween;
+    previous?.destroy();
+    let tween: Phaser.Tweens.Tween;
+    if (handoff) {
+      card.root.setY(y).setScale(1).setVisible(true).setAlpha(1);
+      card.setContentAlpha(0);
+      const proxy = { alpha: 0 };
+      tween = this.scene.tweens.add({
+        targets: proxy,
+        alpha: 1,
+        duration: CARD_HANDOFF_MS,
+        ease: 'Quad.easeOut',
+        onUpdate: () => { card.setContentAlpha(proxy.alpha); },
+      });
+    } else {
+      card.setContentAlpha(1);
+      card.root.setY(y + 8).setScale(1).setVisible(true).setAlpha(0);
+      tween = this.scene.tweens.add({
+        targets: card.root,
+        alpha: 1,
+        y,
+        duration: CARD_ENTRY_MS,
+        ease: 'Cubic.easeOut',
+      });
+    }
+    if (slot === 'main') this.mainTween = tween;
+    else this.encounterTween = tween;
   }
 
   private hideMainObjectivePresentation(resetRound: boolean): void {
-    if (!resetRound && !this.lastMainObjectiveId && !this.mainObjectivePanel?.visible) return;
-    this.mainObjectiveTween?.destroy();
-    this.mainObjectiveTween = null;
-    this.mainObjectivePanel?.setVisible(false).setAlpha(1).setScale(1).setPosition(MAIN_PANEL_X, MAIN_PANEL_Y);
+    if (!resetRound && !this.lastMainObjectiveId && !this.mainCard?.root.visible) return;
+    this.mainTween?.destroy();
+    this.mainTween = null;
+    this.mainCard?.setContentAlpha(1);
+    this.mainCard?.root.setVisible(false).setAlpha(1).setScale(1).setPosition(MAIN_X, MAIN_Y);
     this.lastMainObjectiveId = null;
     this.lastMainObjectiveSignature = null;
-    this.lastMainObjectiveProgressWidth = -1;
     this.mainObjectiveAnnouncementPending = false;
   }
 
   /**
-   * Pro Frame: Hauptziel- und Angriffsserien-Panel weichen gemeinsam zurück, sobald unter der
-   * rechten Spalte gekämpft oder gezielt wird. Gemeinsam, weil eine halb durchsichtige Spalte
+   * Pro Frame: Hauptziel- und Angriffsserien-Karte weichen gemeinsam zurück, sobald unter der
+   * rechten Spalte gekämpft oder gezielt wird. Gemeinsam, weil eine halb durchsichtige Karte
    * über einer deckenden aussähe wie ein Darstellungsfehler.
    */
   updateMissionStackOcclusion(
@@ -1285,8 +476,8 @@ export class CenterHUD {
     enemyManager: EnemyManager | null,
   ): void {
     if (!this.missionStack) return;
-    const mainVisible = this.mainObjectivePanel?.visible === true;
-    const encounterVisible = this.encounterPanel?.visible === true;
+    const mainVisible = this.mainCard?.root.visible === true;
+    const encounterVisible = this.encounterCard?.root.visible === true;
     if (!mainVisible && !encounterVisible) {
       resetHudOcclusionFade(this.missionStackFade);
       this.missionStack.setAlpha(1);
@@ -1294,12 +485,10 @@ export class CenterHUD {
     }
 
     const occluded = isHudRectOccluded(this.scene, {
-      left: MAIN_PANEL_X - MAIN_PANEL_W / 2,
-      right: MAIN_PANEL_X + MAIN_PANEL_W / 2,
-      top: mainVisible ? COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.topY : ENCOUNTER_PANEL_TOP_Y,
-      bottom: encounterVisible
-        ? ENCOUNTER_PANEL_TOP_Y + ENCOUNTER_PANEL_H
-        : COOP_DEFENSE_MAIN_OBJECTIVE_LAYOUT.topY + MAIN_PANEL_H,
+      left: MAIN_X - MAIN.width / 2,
+      right: MAIN_X + MAIN.width / 2,
+      top: mainVisible ? MAIN.topY : ENCOUNTER.topY,
+      bottom: encounterVisible ? ENCOUNTER.topY + ENCOUNTER.height : MAIN.topY + MAIN.height,
     }, playerManager, enemyManager);
     this.missionStack.setAlpha(advanceHudOcclusionFade(this.missionStackFade, occluded, deltaMs));
   }
@@ -1310,82 +499,41 @@ export class CenterHUD {
     const announcementRect = this.objectiveAnnouncements?.getReservedHudRect();
     if (announcementRect) rects.push(announcementRect);
 
-    const addPanelRect = (
-      panel: Phaser.GameObjects.Container | undefined,
-      width: number,
-      height: number,
-    ): void => {
-      if (!panel?.visible) return;
+    const addCardRect = (card: HudCard | undefined): void => {
+      if (!card?.root.visible) return;
       rects.push({
-        left: panel.x - width * panel.scaleX / 2,
-        right: panel.x + width * panel.scaleX / 2,
-        top: panel.y - height * panel.scaleY / 2,
-        bottom: panel.y + height * panel.scaleY / 2,
+        left: card.root.x - card.width * card.root.scaleX / 2,
+        right: card.root.x + card.width * card.root.scaleX / 2,
+        top: card.root.y - card.height * card.root.scaleY / 2,
+        bottom: card.root.y + card.height * card.root.scaleY / 2,
       });
     };
-
-    addPanelRect(this.mainObjectivePanel, MAIN_PANEL_W, MAIN_PANEL_H);
-    addPanelRect(this.encounterPanel, ENCOUNTER_PANEL_W, ENCOUNTER_PANEL_H);
+    // Statusleiste und untere Zeile bleiben bewusst frei: Sie sind flach und dauerhaft sichtbar;
+    // eine Reservierung würde die Tafel schon bei einer Randberührung verschwinden lassen.
+    addCardRect(this.mainCard);
+    addCardRect(this.encounterCard);
     return rects;
   }
 
+  // ── Tutorial (Weltobjekt, eigene Klasse) ───────────────────────────────────
+
+  updateTutorialOcclusion(deltaMs: number, reservedHudRects: readonly HudOcclusionRect[]): void {
+    this.tutorial.updateTutorialOcclusion(deltaMs, reservedHudRects);
+  }
+
   /**
-   * Aktualisiert die temporäre Verdeckung in einer eigenen Alpha-Ebene. Der Welt-Root bleibt
-   * an seiner Position; nur seine Sichtbarkeit wird gegen die aktuellen Screen-Flächen geprüft.
+   * @param showControls True: Unter dem Fließtext erscheint die Steuerungstabelle des
+   *   Hilfe-Fensters; das Fenster wächst entsprechend (Einstiegs-Map).
    */
-  updateTutorialOcclusion(
-    deltaMs: number,
-    reservedHudRects: readonly HudOcclusionRect[],
-  ): void {
-    const tutorialRects = this.getTutorialScreenRects();
-    if (tutorialRects.length === 0) {
-      resetHudOcclusionFade(this.tutorialOcclusionFade);
-      if (this.tutorialContainer?.active) this.tutorialContainer.setAlpha(1);
-      if (this.tutorialStepContainer?.active) this.tutorialStepContainer.setAlpha(1);
-      return;
-    }
-
-    const occluded = tutorialRects.some((tutorialRect) => reservedHudRects.some((reservedRect) => (
-      doHudRectsOverlap(tutorialRect, reservedRect, TUTORIAL_OCCLUSION_MARGIN_PX)
-    )));
-    const alpha = advanceHudOcclusionFade(
-      this.tutorialOcclusionFade,
-      occluded,
-      deltaMs,
-      TUTORIAL_OCCLUSION_FADE,
-    );
-    this.tutorialContainer.setAlpha(alpha);
-    this.tutorialStepContainer.setAlpha(alpha);
+  updateTutorial(text: string | null, showControls = false, anchor?: CoopDefenseTutorialAnchor): void {
+    this.tutorial.updateTutorial(text, showControls, anchor);
   }
 
-  /** Aktuelle sichtbare Panel-Fläche des Tutorials in Design-Screen-Koordinaten. */
-  getTutorialScreenRect(): HudOcclusionRect | null {
-    return this.getTutorialScreenRectForContainer(this.tutorialContainer, this.tutorialControlsValue);
+  updateTutorialStep(text: string | null, anchor?: CoopDefenseTutorialAnchor): void {
+    this.tutorial.updateTutorialStep(text, anchor);
   }
 
-  private getTutorialScreenRects(): HudOcclusionRect[] {
-    return [
-      this.getTutorialScreenRectForContainer(this.tutorialContainer, this.tutorialControlsValue),
-      this.getTutorialScreenRectForContainer(this.tutorialStepContainer, false),
-    ].filter((rect): rect is HudOcclusionRect => rect !== null);
-  }
-
-  private getTutorialScreenRectForContainer(
-    container: Phaser.GameObjects.Container | undefined,
-    showControls: boolean,
-  ): HudOcclusionRect | null {
-    if (!container?.visible) return null;
-    const camera = this.scene.cameras?.main;
-    if (!camera) return null;
-    const width = COOP_DEFENSE_TUTORIAL_PANEL_WIDTH;
-    const height = getCoopDefenseTutorialPanelHeight(showControls);
-    return getWorldRectOnScreen({
-      left: container.x - width / 2,
-      right: container.x + width / 2,
-      top: container.y,
-      bottom: container.y + height,
-    }, camera);
-  }
+  // ── Angriffsserie ─────────────────────────────────────────────────────────
 
   updateEncounterPresentation(
     state: CoopDefenseEncounterPresentationState | null,
@@ -1434,29 +582,27 @@ export class CenterHUD {
               ? 'ui.encounter.status.rest'
               : 'ui.encounter.status.complete',
     );
-    const styleId = resolveEncounterStyleId(state.phase);
-    const style = ENCOUNTER_STYLES[styleId];
-    const textSignature = [state.encounterId, state.phase, statusText].join('|');
+    const tone = encounterTone(state.phase);
+    const accent = HUD_TONES[tone].accent;
     const phaseChanged = state.phase !== this.lastEncounterPresentationPhase;
+    const card = this.encounterCard;
+    card.setTone(tone);
 
+    if (countdownText !== this.lastEncounterCountdownText) {
+      card.setValue(countdownText, accent);
+      this.lastEncounterCountdownText = countdownText;
+      this.lastEncounterPresentationSignature = null;
+    }
+    const textSignature = [state.encounterId, state.phase, statusText, tone].join('|');
     if (textSignature !== this.lastEncounterPresentationSignature) {
-      this.encounterStatus.setText(statusText);
+      card.setTitle(statusText, accent);
       this.lastEncounterPresentationSignature = textSignature;
     }
-    if (countdownText !== this.lastEncounterCountdownText) {
-      this.encounterCountdown.setText(countdownText).setVisible(countdownText.length > 0);
-      this.lastEncounterCountdownText = countdownText;
-    }
-
-    if (styleId !== this.lastEncounterStyleId) {
-      this.applyEncounterStyle(style);
-      this.lastEncounterStyleId = styleId;
-    }
-    this.drawEncounterPips(state, style);
+    this.syncEncounterPips(state);
 
     // Nur die Gegnerbilanz oder eine wirklich zeitlich endende Phase darf einen Abschluss
     // behaupten. Für einen offenen active-State ohne belastbare Gegnerzuordnung bleibt die
-    // Leiste voll gedimmt und bekommt stattdessen einen wandernden Lichtimpuls.
+    // Rinne gedimmt gefüllt und bekommt stattdessen einen wandernden Lichtimpuls.
     const indeterminate = state.phase === 'active' && kills === null;
     const progress = indeterminate
       ? 1
@@ -1471,33 +617,36 @@ export class CenterHUD {
           );
     const determinate = !indeterminate
       && (kills !== null || (state.phaseEndsAtMs !== null && state.phase !== 'active'));
-    const fillW = Math.round(ENCOUNTER_FILL_W * progress);
-    if (fillW !== this.lastEncounterProgressWidth) {
-      this.encounterProgressFill.setCrop(0, 0, fillW, ENCOUNTER_FILL_H);
-      this.lastEncounterProgressWidth = fillW;
-    }
-    if (determinate !== this.lastEncounterDeterminate) {
-      this.encounterProgressFill.setAlpha(determinate ? 1 : 0.32);
-      this.lastEncounterDeterminate = determinate;
-    }
+    card.setProgress(progress, determinate, determinate ? 1 : 0.32);
     if (indeterminate) {
-      const scanRange = Math.max(1, ENCOUNTER_FILL_W - ENCOUNTER_SCAN_INSET_PX * 2);
-      const scanPhase = 0.5 + 0.5 * Math.sin((elapsed / ENCOUNTER_SCAN_PERIOD_MS) * Math.PI * 2);
-      this.encounterProgressHead.setX(
-        ENCOUNTER_CONTENT_LEFT + 1 + ENCOUNTER_SCAN_INSET_PX + scanPhase * scanRange,
-      );
-    } else {
-      this.encounterProgressHead.setX(ENCOUNTER_CONTENT_LEFT + 1 + fillW);
+      const scan = 0.5 + 0.5 * Math.sin((elapsed / ENCOUNTER_SCAN_PERIOD_MS) * Math.PI * 2);
+      card.setHeadAt(0.04 + scan * 0.92);
     }
-    this.encounterProgressHead.setVisible(
-      indeterminate || (determinate && fillW > 4 && fillW < ENCOUNTER_FILL_W),
-    );
 
-    if (!this.encounterAnnouncementHandsOver && (phaseChanged || !this.encounterPanel.visible)) {
-      this.playEncounterPhaseEntry(state.phase);
+    if (!this.encounterAnnouncementHandsOver && (phaseChanged || !card.root.visible)) {
+      this.playEncounterPhaseEntry(state.phase, false);
     }
     this.lastEncounterPresentationId = state.encounterId;
     this.lastEncounterPresentationPhase = state.phase;
+  }
+
+  /**
+   * Wellenposition als Marken auf der Rahmenschiene: abgewehrt, laufend und ausstehend sind an
+   * Farbe unterscheidbar. Der Kicker nennt Welle und Front; bei sehr vielen Wellen bleibt er
+   * allein, weil einzelne Marken dann nicht mehr zählbar wären.
+   */
+  private syncEncounterPips(state: CoopDefenseEncounterPresentationState): void {
+    const count = Math.max(1, Math.floor(state.sequenceCount));
+    const isDone = state.phase === 'cleared' || state.phase === 'complete';
+    const clearedCount = state.phase === 'complete'
+      ? count
+      : isDone
+        ? state.sequenceIndex
+        : state.sequenceIndex - 1;
+    const currentIndex = isDone ? -1 : state.sequenceIndex - 1;
+    this.encounterCard.setKicker(formatEncounterLabel(state.sequenceIndex, count, state.encounterFronts));
+    if (count > ENCOUNTER_PIP_MAX || count < 2) this.encounterCard.setPips(0, 0, -1);
+    else this.encounterCard.setPips(count, clearedCount, currentIndex);
   }
 
   private queueEncounterAnnouncements(state: CoopDefenseEncounterPresentationState): void {
@@ -1518,15 +667,15 @@ export class CenterHUD {
         isRelevant: () => this.currentEncounterAnnouncementId === targetId
           && (this.currentEncounterAnnouncementPhase === 'incoming'
             || this.currentEncounterAnnouncementPhase === 'active'),
-        target: { x: ENCOUNTER_PANEL_X, y: ENCOUNTER_PANEL_Y, scale: 0.42 },
+        target: { x: ENCOUNTER_X, y: ENCOUNTER_Y, width: ENCOUNTER.width, scale: ENCOUNTER.scale },
         onStart: () => {
           this.encounterAnnouncementHandsOver = true;
-          if (this.encounterPanel?.active) this.encounterPanel.setVisible(false);
+          this.encounterCard?.root.setVisible(false);
         },
         onArrive: () => {
           this.encounterAnnouncementHandsOver = false;
-          if (this.encounterPanel?.active && this.lastEncounterPresentationId === targetId) {
-            this.playEncounterPhaseEntry(this.lastEncounterPresentationPhase ?? state.phase);
+          if (this.lastEncounterPresentationId === targetId) {
+            this.playEncounterPhaseEntry(this.lastEncounterPresentationPhase ?? state.phase, true);
           }
         },
         onCancel: () => {
@@ -1556,124 +705,25 @@ export class CenterHUD {
     }
   }
 
-  /** Farbführende Teile des Panels. Läuft nur beim Wechsel der Phasenfarbe. */
-  private applyEncounterStyle(style: EncounterStyle): void {
-    this.encounterRail.setTint(style.accent);
-    this.encounterRailGlow.setTint(style.accent);
-    this.encounterStatus.setColor(toCssColor(style.accent));
-    this.encounterCountdown.setColor(toCssColor(style.accent));
-    this.encounterKicker.setColor(toCssColor(style.muted));
-    this.encounterProgressFill.setTexture(style.barTex);
-    this.encounterProgressFill.setCrop(0, 0, Math.max(0, this.lastEncounterProgressWidth), ENCOUNTER_FILL_H);
-    this.encounterProgressHead.setTint(style.accent);
-
-    const frame = this.encounterFrame;
-    frame.clear();
-    frame.lineStyle(1.5, style.accent, 0.5);
-    frame.strokeRoundedRect(
-      ENCOUNTER_PANEL_LEFT + 1,
-      ENCOUNTER_PANEL_TOP + 1,
-      ENCOUNTER_PANEL_W - 2,
-      ENCOUNTER_PANEL_H - 2,
-      ENCOUNTER_PANEL_RADIUS,
-    );
-    frame.fillStyle(COLORS.GREY_9, 0.9);
-    frame.fillRoundedRect(
-      ENCOUNTER_CONTENT_LEFT,
-      ENCOUNTER_PROGRESS_Y - ENCOUNTER_PROGRESS_H / 2,
-      ENCOUNTER_PROGRESS_W,
-      ENCOUNTER_PROGRESS_H,
-      ENCOUNTER_PROGRESS_H / 2,
-    );
-    frame.lineStyle(1, style.accent, 0.28);
-    frame.strokeRoundedRect(
-      ENCOUNTER_CONTENT_LEFT,
-      ENCOUNTER_PROGRESS_Y - ENCOUNTER_PROGRESS_H / 2,
-      ENCOUNTER_PROGRESS_W,
-      ENCOUNTER_PROGRESS_H,
-      ENCOUNTER_PROGRESS_H / 2,
-    );
-  }
-
   /**
-   * Wellenposition als Segmentleiste. Sie ersetzt die frühere doppelte Zahlenangabe:
-   * abgewehrt, laufend und ausstehend sind an Farbe und Deckkraft unterscheidbar.
+   * Auftritt bei Phasenwechsel. Nur die beiden kurzen Signalphasen atmen; ein Dauerpuls während
+   * des Angriffs würde neben den Kampfeffekten nur flimmern.
    */
-  private drawEncounterPips(state: CoopDefenseEncounterPresentationState, style: EncounterStyle): void {
-    const count = Math.max(1, Math.floor(state.sequenceCount));
-    const isDone = state.phase === 'cleared' || state.phase === 'complete';
-    const clearedCount = state.phase === 'complete'
-      ? count
-      : isDone
-        ? state.sequenceIndex
-        : state.sequenceIndex - 1;
-    const currentIndex = isDone ? -1 : state.sequenceIndex - 1;
-    const signature = `${count}|${clearedCount}|${currentIndex}|${style.accent}|${state.encounterFronts.join(',')}`;
-    if (signature === this.lastEncounterPipSignature) return;
-    this.lastEncounterPipSignature = signature;
-
-    this.encounterPips.clear();
-    if (count > ENCOUNTER_PIP_MAX) {
-      // Zu viele Wellen für eine zählbare Leiste – die Position wandert dann in den Kicker.
-      this.encounterKicker.setText(formatEncounterLabel(state.sequenceIndex, count, state.encounterFronts));
-      return;
-    }
-    this.encounterKicker.setText(formatEncounterLabel(state.sequenceIndex, count, state.encounterFronts));
-
-    const totalW = count * ENCOUNTER_PIP_W + (count - 1) * ENCOUNTER_PIP_GAP;
-    const startX = ENCOUNTER_CONTENT_RIGHT - totalW;
-    const top = ENCOUNTER_KICKER_Y - ENCOUNTER_PIP_H / 2;
-    for (let index = 0; index < count; index += 1) {
-      const x = startX + index * (ENCOUNTER_PIP_W + ENCOUNTER_PIP_GAP);
-      if (index === currentIndex) {
-        this.encounterPips.fillStyle(style.accent, 0.22);
-        this.encounterPips.fillRoundedRect(x - 2, top - 2, ENCOUNTER_PIP_W + 4, ENCOUNTER_PIP_H + 4, 4);
-        this.encounterPips.fillStyle(style.accent, 1);
-      } else if (index < clearedCount) {
-        this.encounterPips.fillStyle(style.accent, 0.75);
-      } else {
-        this.encounterPips.fillStyle(COLORS.GREY_6, 0.7);
-      }
-      this.encounterPips.fillRoundedRect(x, top, ENCOUNTER_PIP_W, ENCOUNTER_PIP_H, 2);
-    }
-  }
-
-  /**
-   * Auftritt bei Phasenwechsel. Der Container sitzt auf der Panelmitte und trägt lokal
-   * platzierte Kinder – ein Skalierungs-Tween wächst hier deshalb um die eigene Mitte.
-   */
-  private playEncounterPhaseEntry(phase: CoopDefenseEncounterPresentationState['phase']): void {
-    this.encounterTween?.destroy();
-    this.encounterPanel
-      .setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y + 8)
-      .setScale(0.97)
-      .setVisible(true)
-      .setAlpha(0);
-    this.encounterTween = this.scene.tweens.add({
-      targets: this.encounterPanel,
-      alpha: 1,
-      y: ENCOUNTER_PANEL_Y,
-      scaleX: 1,
-      scaleY: 1,
-      duration: ENCOUNTER_FADE_MS,
-      ease: 'Back.easeOut',
-      onComplete: () => { this.encounterTween = null; },
-    });
-
+  private playEncounterPhaseEntry(phase: EncounterPhase, handoff: boolean): void {
+    this.playCardEntry(this.encounterCard, ENCOUNTER_Y, handoff, 'encounter');
     this.encounterPulseTween?.destroy();
     this.encounterPulseTween = null;
-    this.encounterRailGlow.setScale(1, 1).setAlpha(ENCOUNTER_RAIL_GLOW_ALPHA);
+    this.encounterCard.setHeadPulse(1);
     if (phase !== 'incoming' && phase !== 'cleared') return;
-    // Nur die beiden kurzen Signalphasen atmen. Ein Dauerpuls während des Angriffs
-    // würde neben den Kampfeffekten nur flimmern.
+    const proxy = { value: 1 };
     this.encounterPulseTween = this.scene.tweens.add({
-      targets: this.encounterRailGlow,
-      scaleX: 1.7,
-      alpha: ENCOUNTER_RAIL_GLOW_ALPHA * 0.42,
+      targets: proxy,
+      value: 0.3,
       duration: phase === 'incoming' ? 340 : 480,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
+      onUpdate: () => { this.encounterCard.setHeadPulse(proxy.value); },
     });
   }
 
@@ -1682,170 +732,22 @@ export class CenterHUD {
     this.encounterTween = null;
     this.encounterPulseTween?.destroy();
     this.encounterPulseTween = null;
-    this.encounterPanel
-      ?.setVisible(false)
+    this.encounterCard?.setContentAlpha(1);
+    this.encounterCard?.root
+      .setVisible(false)
       .setAlpha(1)
       .setScale(1)
-      .setPosition(ENCOUNTER_PANEL_X, ENCOUNTER_PANEL_Y);
-    this.encounterRailGlow?.setScale(1, 1).setAlpha(ENCOUNTER_RAIL_GLOW_ALPHA);
+      .setPosition(ENCOUNTER_X, ENCOUNTER_Y);
     this.encounterAnnouncementHandsOver = false;
     this.currentEncounterAnnouncementId = null;
     this.currentEncounterAnnouncementPhase = null;
     this.lastEncounterPresentationSignature = null;
     this.lastEncounterPresentationId = null;
     this.lastEncounterPresentationPhase = null;
-    this.lastEncounterStyleId = null;
-    this.lastEncounterPipSignature = null;
-    this.lastEncounterProgressWidth = -1;
     this.lastEncounterCountdownText = null;
-    this.lastEncounterDeterminate = null;
   }
 
-  /**
-   * @param showControls True: Unter dem Fließtext erscheint die Steuerungstabelle des
-   *   Hilfe-Fensters; das Fenster wächst entsprechend (Einstiegs-Map).
-   */
-  updateTutorial(
-    text: string | null,
-    showControls = false,
-    anchor?: CoopDefenseTutorialAnchor,
-  ): void {
-    this.tutorialContainer.setPosition(
-      getCoopDefenseTutorialPanelCenterX(anchor),
-      getCoopDefenseTutorialPanelTopY(anchor),
-    );
-    const nextText = text?.trim() || null;
-    if (nextText === this.tutorialValue && showControls === this.tutorialControlsValue) return;
-    this.tutorialValue = nextText;
-    this.tutorialControlsValue = showControls;
-    this.tutorialTween?.destroy();
-    this.tutorialTween = null;
-
-    if (!nextText) {
-      this.hideTutorial(false);
-      return;
-    }
-
-    const height = getCoopDefenseTutorialPanelHeight(showControls);
-    this.setTutorialPanelHeight(this.tutorialPanelBg, height);
-    this.tutorialBody.setText(nextText).setY(getTutorialBodyCenterY(height, showControls));
-    this.tutorialControlsDecor.setVisible(showControls);
-    for (const entry of this.tutorialControlsObjects) entry.setVisible(showControls);
-
-    this.tutorialContainer.setVisible(true).setAlpha(this.tutorialOcclusionFade.alpha);
-    this.tutorialLifecycleContainer.setAlpha(0).setY(-TUTORIAL_ENTRY_RISE);
-    this.tutorialTween = this.scene.tweens.add({
-      targets: this.tutorialLifecycleContainer,
-      alpha: 1,
-      y: 0,
-      duration: TUTORIAL_FADE_MS,
-      ease: MOTION.ease.out,
-      onComplete: () => { this.tutorialTween = null; },
-    });
-  }
-
-  /**
-   * Lokaler Tutorial-Step im selben World-Space-Panel wie das Starttutorial. Der Checkpoint
-   * wird außerhalb der HUD-Darstellung ausgewertet; `anchor` bestimmt ausschließlich die
-   * authored Weltposition des Fensters.
-   */
-  updateTutorialStep(
-    text: string | null,
-    anchor?: CoopDefenseTutorialAnchor,
-  ): void {
-    this.tutorialStepContainer.setPosition(
-      getCoopDefenseTutorialPanelCenterX(anchor),
-      getCoopDefenseTutorialPanelTopY(anchor),
-    );
-    const nextText = text?.trim() || null;
-    if (nextText === this.tutorialStepValue) return;
-    this.tutorialStepValue = nextText;
-    this.tutorialStepTween?.destroy();
-    this.tutorialStepTween = null;
-
-    if (!nextText) {
-      this.hideTutorialStep(false);
-      return;
-    }
-
-    const height = getCoopDefenseTutorialPanelHeight(false);
-    this.tutorialStepBody.setText(nextText).setY(getTutorialBodyCenterY(height, false));
-    this.tutorialStepContainer.setVisible(true).setAlpha(1);
-    this.tutorialStepLifecycleContainer.setAlpha(0).setY(-TUTORIAL_ENTRY_RISE);
-    this.tutorialStepTween = this.scene.tweens.add({
-      targets: this.tutorialStepLifecycleContainer,
-      alpha: 1,
-      y: 0,
-      duration: TUTORIAL_FADE_MS,
-      ease: MOTION.ease.out,
-      onComplete: () => { this.tutorialStepTween = null; },
-    });
-  }
-
-  /** @param arrivalTimerSecs Verbleibende Sekunden bis zur nächsten Einfahrt. */
-  setTrainArrival(arrivalTimerSecs: number): void {
-    const nextText = formatTrainArrivalLabel(arrivalTimerSecs, getLocale());
-    if (this.lastTrainText !== nextText) {
-      this.trainText.setText(nextText);
-      this.lastTrainText = nextText;
-    }
-    if (this.lastTrainMode !== 'arrival') {
-      this.showTrainPanelBackground();
-      this.trainText.setVisible(true);
-      this.hideTrainBar();
-      this.lastTrainMode = 'arrival';
-      this.lastTrainBarWidth = -1;
-    }
-  }
-
-  updateTrainHP(hp: number, maxHp: number): void {
-    const ratio = maxHp > 0 ? Math.max(0, hp / maxHp) : 0;
-    const nextText = 'RB 54';
-    if (this.lastTrainText !== nextText) {
-      this.trainText.setText(nextText);
-      this.lastTrainText = nextText;
-    }
-    if (this.lastTrainMode !== 'hp') {
-      this.showTrainPanelBackground();
-      this.trainText.setVisible(true);
-      this.trainBarBg.setVisible(true);
-      this.trainBarFgImg.setVisible(true);
-      this.trainBarBorder.setVisible(true);
-      this.trainBarEffect.start();
-      this.lastTrainMode = 'hp';
-    }
-    const fillW = Math.max(0, Math.round(TRAIN_BAR_W * ratio));
-    if (this.lastTrainBarWidth !== fillW) {
-      this.trainBarFgImg.setCrop(0, 0, fillW, TRAIN_BAR_H);
-      this.trainBarEffect.setFilledWidth(fillW);
-      this.lastTrainBarWidth = fillW;
-    }
-  }
-
-  showTrainDestroyed(): void {
-    const nextText = 'RB 54 fällt\nheute leider aus';
-    if (this.lastTrainText !== nextText) {
-      this.trainText.setText(nextText);
-      this.lastTrainText = nextText;
-    }
-    if (this.lastTrainMode !== 'destroyed') {
-      this.showTrainPanelBackground();
-      this.trainText.setVisible(true);
-      this.hideTrainBar();
-      this.lastTrainMode = 'destroyed';
-      this.lastTrainBarWidth = -1;
-    }
-  }
-
-  hideTrainWidget(): void {
-    this.topPanelBg.setVisible(false);
-    this.timerPanelBg.setVisible(true);
-    this.trainText.setVisible(false);
-    this.hideTrainBar();
-    this.lastTrainMode = 'hidden';
-    this.lastTrainBarWidth = -1;
-    this.lastTrainText = null;
-  }
+  // ── Untere Zeile ──────────────────────────────────────────────────────────
 
   updateBottomStatus(data: ArenaHUDData, utilityHeld: boolean): void {
     const now = this.scene.time.now;
@@ -1866,58 +768,82 @@ export class CenterHUD {
       || (data.isTemporaryUtilitySelected ?? false);
     const isUltimateReady = data.isUltimateActive || data.rage >= data.ultimateRequiredRage;
     const showUltimate = isUltimateReady || now < this.ultimateRevealUntil;
-    const showArmor = data.armor > 0;
 
-    let nextBottom = GAME_HEIGHT - STACK_MARGIN;
-
-    if (showUltimate) {
-      this.showLowerSection(
-        this.ultimateSection,
-        t('ui.hud.ultimate', { name: data.ultimateId ? getContentDisplayName(data.ultimateId, getLocale()) : t('ui.common.unknown') }),
-        Phaser.Math.Clamp(data.rage / Math.max(1, data.maxRage), 0, 1),
-        CENTER_X,
-        nextBottom - BOTTOM_STACK_TOTAL_H,
-      );
-      this.setUltimateReadyVisual(isUltimateReady);
-      nextBottom = this.ultimateSection.container.y - BOTTOM_STACK_GAP;
-    } else {
-      this.setUltimateReadyVisual(false);
-      this.hideLowerSection(this.ultimateSection);
-    }
-
+    const entries: HudResourceEntry[] = [];
     if (showUtility) {
-      this.showLowerSection(
-        this.utilitySection,
-        t('ui.hud.utility', {
-          name: getUtilityHudDisplayName(data.utilityId, data.utilityAction, data.persistentBaseRewardId)
-            + (data.utilityStatusLabel ? ` · ${data.utilityStatusLabel}` : ''),
-        }),
-        Phaser.Math.Clamp(1 - data.utilityCooldownFrac, 0, 1),
-        CENTER_X,
-        nextBottom - BOTTOM_STACK_TOTAL_H,
-      );
-      this.utilitySection.container.setAlpha(data.utilityBlocked ? 0.45 : 1);
-      this.setUtilityAttention(data.isTemporaryUtilitySelected ?? false);
-      nextBottom = this.utilitySection.container.y - BOTTOM_STACK_GAP;
-    } else {
-      this.setUtilityAttention(false);
-      this.hideLowerSection(this.utilitySection);
+      const charges = data.utilityChargeState
+        ? `${data.utilityChargeState.availableCharges}/${data.utilityChargeState.maxCharges}`
+        : '';
+      entries.push({
+        id: 'utility',
+        side: 'left',
+        tone: 'orange',
+        title: getUtilityHudDisplayName(data.utilityId, data.utilityAction, data.persistentBaseRewardId),
+        value: data.utilityStatusLabel ?? charges,
+        frac: Phaser.Math.Clamp(1 - data.utilityCooldownFrac, 0, 1),
+        energy: data.isTemporaryUtilitySelected ? 1 : 0,
+        dim: data.utilityBlocked === true,
+        attention: data.isTemporaryUtilitySelected ?? false,
+      });
     }
-
-    if (showArmor) {
-      this.showLowerSection(
-        this.armorSection,
-        `Armor: ${Math.round(data.armor)}/${Math.round(data.maxArmor)}`,
-        Phaser.Math.Clamp(data.armor / Math.max(1, data.maxArmor), 0, 1),
-        CENTER_X,
-        nextBottom - BOTTOM_STACK_TOTAL_H,
-      );
-      nextBottom = this.armorSection.container.y - BOTTOM_STACK_GAP;
-    } else {
-      this.hideLowerSection(this.armorSection);
+    if (data.armor > 0) {
+      entries.push({
+        id: 'armor',
+        side: 'left',
+        tone: 'gold',
+        title: t('ui.hud.armor'),
+        value: `${Math.round(data.armor)}/${Math.round(data.maxArmor)}`,
+        frac: Phaser.Math.Clamp(data.armor / Math.max(1, data.maxArmor), 0, 1),
+      });
     }
+    if (showUltimate) {
+      entries.push({
+        id: 'ultimate',
+        side: 'right',
+        tone: 'red',
+        title: data.ultimateId ? getContentDisplayName(data.ultimateId, getLocale()) : t('ui.hud.ultimateShort'),
+        value: isUltimateReady ? t('ui.hud.ready') : '',
+        valueColor: isUltimateReady ? HUD_TONES.red.accent : undefined,
+        frac: Phaser.Math.Clamp(data.rage / Math.max(1, data.maxRage), 0, 1),
+        energy: isUltimateReady ? 1 : 0,
+        attention: isUltimateReady,
+      });
+    }
+    const capacityMax = data.constructionCapacityMax ?? 0;
+    if (capacityMax > 0) {
+      const used = Phaser.Math.Clamp(data.constructionCapacityUsed ?? 0, 0, capacityMax);
+      entries.push({
+        id: CONSTRUCTION_CAPACITY_ID,
+        side: 'right',
+        tone: 'bronze',
+        title: t('ui.hud.constructionCapacity'),
+        value: `${Math.round(used)} / ${Math.round(capacityMax)}`,
+        frac: used / capacityMax,
+      });
+    }
+    if (data.shieldBuff?.visible) {
+      const shield = data.shieldBuff;
+      entries.push(this.powerUpEntry(shield.defId,
+        shield.maxValue > 0 ? shield.value / shield.maxValue : 0, `+${shield.damageBonusPct}%`));
+    }
+    for (const powerUp of data.activePowerUps ?? []) {
+      if (!POWERUP_DEFS[powerUp.defId] || powerUp.remainingFrac <= 0.001) continue;
+      entries.push(this.powerUpEntry(powerUp.defId, powerUp.remainingFrac, powerUp.valueText, powerUp.intensity));
+    }
+    this.resourceRow.sync(entries);
+  }
 
-    this.layoutPowerUps(nextBottom);
+  private powerUpEntry(defId: string, remainingFrac: number, valueText?: string, intensity?: number): HudResourceEntry {
+    const def = POWERUP_DEFS[defId];
+    return {
+      id: `powerup:${defId}`,
+      side: 'right',
+      tone: def ? hudToneForColor(def.color) : 'neutral',
+      title: getContentDisplayName(defId, getLocale()),
+      value: valueText ?? '',
+      frac: POWER_UPS_WITHOUT_TRACK.has(defId) ? null : Phaser.Math.Clamp(remainingFrac, 0, 1),
+      energy: intensity ?? 0,
+    };
   }
 
   flashUtilityCooldown(_frac: number, _displayName: string): void {
@@ -1928,30 +854,21 @@ export class CenterHUD {
     this.ultimateRevealUntil = Math.max(this.ultimateRevealUntil, this.scene.time.now + ULTIMATE_REVEAL_MS);
   }
 
-  showAnnouncement(text: string, color: string | number = ANNOUNCEMENT_TEXT_COLOR): void {
-    this.announcementTween?.destroy();
-    this.announcementTween = null;
-    this.announcementText.setText(text);
-    this.announcementText.setColor(typeof color === 'number' ? toCssColor(color) : color);
+  // ── Kurzmeldungen ─────────────────────────────────────────────────────────
 
-    const width = Math.max(
-      ANNOUNCEMENT_MIN_W,
-      Math.min(ANNOUNCEMENT_MAX_TEXT_W + ANNOUNCEMENT_PAD_X * 2, this.announcementText.width + ANNOUNCEMENT_PAD_X * 2),
-    );
-    const height = Math.max(ANNOUNCEMENT_MIN_H, this.announcementText.height + ANNOUNCEMENT_PAD_Y * 2);
-    this.announcementBg.setSize(width, height);
-
-    this.announcementContainer.setAlpha(1).setVisible(true);
-    this.announcementBg.setVisible(true);
-    this.announcementText.setVisible(true);
-
-    this.announcementTween = this.scene.tweens.add({
-      targets: this.announcementContainer,
-      alpha: 0,
-      delay: ANNOUNCEMENT_HOLD_MS,
-      duration: ANNOUNCEMENT_FADE_MS,
-      ease: 'Quad.easeOut',
-      onComplete: () => this.hideAnnouncement(),
+  showAnnouncement(text: string, color: string | number = TOAST_TEXT_COLOR): void {
+    this.toastTween?.destroy();
+    this.toastTween = null;
+    this.toastText.setText(text).setColor(typeof color === 'number' ? toCssColor(color) : color);
+    this.toastBand.setDisplaySize(this.toastText.width + 220, Math.max(56, this.toastText.height + 26));
+    this.toast.setVisible(true).setAlpha(0).setScale(0.92).setY(TOAST_Y + 8);
+    this.toastTween = this.scene.tweens.chain({
+      targets: this.toast,
+      tweens: [
+        { alpha: 1, scaleX: 1, scaleY: 1, y: TOAST_Y, duration: TOAST_IN_MS, ease: 'Back.easeOut' },
+        { alpha: 0, y: TOAST_Y - 12, delay: TOAST_HOLD_MS, duration: TOAST_OUT_MS, ease: 'Quad.easeIn' },
+      ],
+      onComplete: () => this.hideToast(),
     });
   }
 
@@ -1970,220 +887,19 @@ export class CenterHUD {
     this.showAnnouncement(t('ui.announcement.beerCaptured', { player: playerName }), COLORS.GREEN_2);
   }
 
+  private hideToast(): void {
+    this.toastTween?.destroy();
+    this.toastTween = null;
+    this.toast?.setVisible(false).setAlpha(1).setScale(1).setY(TOAST_Y);
+  }
+
   destroy(): void {
-    this.hideAnnouncement();
+    this.hideToast();
     this.hideMainObjectivePresentation(true);
     this.hideEncounterPresentation();
-    this.hideTutorial(true);
-    this.hideTutorialStep(true);
-    this.tutorialContainer.destroy(true);
-    this.tutorialStepContainer.destroy(true);
-    this.trainBarEffect.destroy();
-    this.stopSectionAttention(this.armorSection);
-    this.stopSectionAttention(this.utilitySection);
-    this.stopSectionAttention(this.ultimateSection);
-    this.armorSection.effect.destroy();
-    this.utilitySection.effect.destroy();
-    this.ultimateSection.effect.destroy();
-    this.mainObjectiveTween?.destroy();
+    this.tutorial.destroy();
+    this.statusStrip.destroy();
+    this.resourceRow.destroy();
     this.container.destroy(true);
-  }
-
-  private showLowerSection(section: LowerBarSection, label: string, frac: number, x: number, y: number): void {
-    const fillW = Math.max(0, Math.round(BOTTOM_STACK_BAR_W * Phaser.Math.Clamp(frac, 0, 1)));
-    if (section.hideTween) {
-      section.hideTween.destroy();
-      section.hideTween = null;
-    }
-    section.container.setPosition(x, y).setVisible(true).setAlpha(1);
-    section.panelBg.setVisible(true);
-    section.bg.setVisible(true);
-    section.fg.setVisible(true);
-    section.border.setVisible(true);
-    if (section.lastLabel !== label) {
-      section.label.setText(label);
-      section.lastLabel = label;
-    }
-    section.label.setVisible(true);
-    if (section.lastWidth !== fillW) {
-      section.fg.setCrop(0, 0, fillW, BOTTOM_STACK_BAR_H);
-      section.effect.setFilledWidth(fillW);
-      section.lastWidth = fillW;
-    }
-    if (!this.container.visible || fillW <= 6) {
-      section.effect.stop();
-    } else {
-      section.effect.start();
-    }
-  }
-
-  private hideLowerSection(section: LowerBarSection): void {
-    if (!this.container.visible || !section.container.visible) {
-      section.hideTween?.destroy();
-      section.hideTween = null;
-      section.container.setVisible(false).setAlpha(1);
-      section.effect.stop();
-      section.lastWidth = -1;
-      return;
-    }
-    if (section.hideTween) return;
-    section.hideTween = this.scene.tweens.add({
-      targets: section.container,
-      alpha: 0,
-      duration: STACK_FADE_MS,
-      ease: 'Linear',
-      onComplete: () => {
-        section.hideTween = null;
-        section.container.setVisible(false).setAlpha(1);
-        section.effect.stop();
-        section.lastWidth = -1;
-      },
-    });
-  }
-
-  private layoutPowerUps(nextBottom: number): void {
-    if (!this.puContainerRef?.visible) return;
-    const stackHeight = Number(this.puContainerRef.getData('stackHeight') ?? 0);
-    this.puContainerRef.setY(nextBottom - stackHeight);
-  }
-
-  private setUtilityAttention(enabled: boolean): void {
-    if (enabled === this.utilityAttentionActive) return;
-    this.utilityAttentionActive = enabled;
-    this.setSectionEnergized(this.utilitySection, enabled);
-    if (enabled) {
-      this.utilitySection.glow = addExternalGlow(this.utilitySection.fg, UTIL_PAL.light, 3, 0, false, 0.4, 8);
-      if (this.utilitySection.glow) {
-        this.utilitySection.glowTween = this.scene.tweens.add({
-          targets: this.utilitySection.glow,
-          outerStrength: 8,
-          duration: 400,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      }
-      this.utilitySection.labelTween = this.scene.tweens.add({
-        targets: this.utilitySection.label,
-        scaleX: 1.06,
-        scaleY: 1.06,
-        duration: 600,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-      return;
-    }
-    this.stopSectionAttention(this.utilitySection);
-  }
-
-  private setUltimateReadyVisual(enabled: boolean): void {
-    if (enabled === this.ultimateReadyActive) return;
-    this.ultimateReadyActive = enabled;
-    this.setSectionEnergized(this.ultimateSection, enabled);
-    if (enabled) {
-      this.ultimateSection.glow = addExternalGlow(this.ultimateSection.fg, 0xff3300, 4, 0, false, 0.3, 10);
-      if (this.ultimateSection.glow) {
-        this.ultimateSection.glowTween = this.scene.tweens.add({
-          targets: this.ultimateSection.glow,
-          outerStrength: 8,
-          duration: 800,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      }
-      return;
-    }
-    this.stopSectionAttention(this.ultimateSection);
-  }
-
-  private stopSectionAttention(section: LowerBarSection): void {
-    if (section.labelTween) {
-      section.labelTween.destroy();
-      section.labelTween = null;
-      section.label.setScale(1);
-    }
-    if (section.glowTween) {
-      section.glowTween.destroy();
-      section.glowTween = null;
-    }
-    if (section.glow) {
-      removeExternalFx(section.fg, section.glow);
-      section.glow = null;
-    }
-  }
-
-  private setSectionEnergized(section: LowerBarSection, energized: boolean): void {
-    if (section.energized === energized) return;
-    section.energized = energized;
-    const hasFill = section.lastWidth > 6;
-    section.effect.setEnergyIntensity(energized ? 1 : 0);
-    if (this.container.visible && section.container.visible && hasFill) section.effect.start();
-    else section.effect.stop();
-  }
-
-  private hideTrainBar(): void {
-    this.trainBarBg.setVisible(false);
-    this.trainBarFgImg.setVisible(false);
-    this.trainBarBorder.setVisible(false);
-    this.trainBarEffect.stop();
-  }
-
-  private showTrainPanelBackground(): void {
-    this.timerPanelBg.setVisible(false);
-    this.topPanelBg.setVisible(true);
-  }
-
-  private hideAnnouncement(): void {
-    this.announcementTween?.destroy();
-    this.announcementTween = null;
-    this.announcementContainer.setVisible(false).setAlpha(1);
-    this.announcementBg.setVisible(false);
-    this.announcementText.setVisible(false);
-  }
-
-  private hideTutorial(immediate: boolean): void {
-    this.tutorialTween?.destroy();
-    this.tutorialTween = null;
-    this.tutorialValue = null;
-    if (immediate || !this.tutorialContainer.visible) {
-      this.tutorialContainer.setVisible(false).setAlpha(1);
-      this.tutorialLifecycleContainer.setAlpha(0);
-      resetHudOcclusionFade(this.tutorialOcclusionFade);
-      return;
-    }
-    this.tutorialTween = this.scene.tweens.add({
-      targets: this.tutorialLifecycleContainer,
-      alpha: 0,
-      duration: TUTORIAL_FADE_MS,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        this.tutorialTween = null;
-        this.tutorialContainer.setVisible(false).setAlpha(1);
-        resetHudOcclusionFade(this.tutorialOcclusionFade);
-      },
-    });
-  }
-
-  private hideTutorialStep(immediate: boolean): void {
-    this.tutorialStepTween?.destroy();
-    this.tutorialStepTween = null;
-    this.tutorialStepValue = null;
-    if (immediate || !this.tutorialStepContainer?.visible) {
-      this.tutorialStepContainer?.setVisible(false).setAlpha(1);
-      this.tutorialStepLifecycleContainer?.setAlpha(0);
-      return;
-    }
-    this.tutorialStepTween = this.scene.tweens.add({
-      targets: this.tutorialStepLifecycleContainer,
-      alpha: 0,
-      duration: TUTORIAL_FADE_MS,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        this.tutorialStepTween = null;
-        this.tutorialStepContainer.setVisible(false).setAlpha(1);
-      },
-    });
   }
 }

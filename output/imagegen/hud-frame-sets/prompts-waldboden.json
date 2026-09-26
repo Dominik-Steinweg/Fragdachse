@@ -1,0 +1,21 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "User gameplay screenshot codex-clipboard-7a1a34b7-c3a2-4422-a2a5-1becc8d36095.png",
+  "prompt": "Use case: stylized-concept. Create a NEW HUD frame asset sheet designed specifically to blend with the attached woodland game screenshot. INPUT IMAGE IS A STYLE REFERENCE ONLY, not a screenshot to reproduce. Study the thin rough wooden border of the LARGE HELP WINDOW at the left and the matte subdued natural textures in the forest. The small bright metallic leaf frames at the very top of the screenshot are the OLD UNSUCCESSFUL design: do NOT copy those.\nDeliver just an isolated transparent RGBA sprite sheet, no gameplay background, no text, no labels, no icons. Exactly 24 hollow rectangular frames, 8 rows and 3 columns, evenly spaced with generous gutters. Landscape high resolution.\nNEW ART DIRECTION: very slender weathered twig-and-dark-oak rails, muted umber and grey-brown bark, a little moss caught in joins, a tiny asymmetrical ivy sprig at one corner and a tiny root knot at the opposite corner. Natural irregularity but straight usable inner edges. Matte painterly textures like the screenshot environment. The frames must feel made from the same earthy forest material as the large help panel. No polished wood, NO shiny metallic trim, NO gold plated leaves, NO large symmetrical corner ornaments, NO gems, NO thick bevels, NO chrome, NO luminous outlines, NO neon, NO bright saturated colored rails, NO crisp plastic cartoon look. Low contrast natural wood, readable silhouette but visually subordinate to game content. Frame rails about 1/35 of panel height at source; corners at most twice rail thickness. Sparse tiny olive ivy leaves, not laurel wreaths. Diffuse flat lighting, no white highlights.\n3 columns: left a broad shallow status frame, about 7:1 with completely OPEN UNDIVIDED interior (text layout will be dynamic); middle a resource frame about 5:1, completely empty interior; right an objective frame about 4:1, completely empty interior. NO embedded progress bars, NO dividers, NO title tabs: reusable quiet frames only. All three shapes share identical thin natural wood construction.\n8 color variants in ROWS top to bottom. More than 95% of the visible frame remains IDENTICAL NATURAL BROWN WOOD and OLIVE IVY in every row. Color is conveyed ONLY by a short faded pigment notch on the bottom edge and a tiny muted thread binding near one corner. Never color the whole border or leaves. Colors small but distinguishable:\n1 weathered grey #819796\n2 faded ochre gold #de9e41\n3 earthy bronze #be772b\n4 slate blue #4f8fba\n5 dusky plum #a23e8c\n6 moss green #75a743\n7 clay orange #d97030\n8 dried brick red #a53030.\nUse these as pigment hue references but muted by natural wood shading. No colorful aura. Natural thin wood is dominant.\nTransparent alpha outside all frames and throughout every frame center. No filled panels, no colored backplates, no gradient backdrop, no baked checkerboard. Uniform grid, all 24 complete assets visible, no clipping. The result should look restrained and grounded in THIS screenshot's dark natural forest, not like generic fantasy inventory UI.",
+  "colorsTopToBottom": [
+    "grey",
+    "gold",
+    "bronze",
+    "blue",
+    "purple",
+    "green",
+    "orange",
+    "red"
+  ],
+  "columnsLeftToRight": [
+    "status",
+    "resource",
+    "objective"
+  ],
+  "integration": "Not integrated; visual review of generated sheet only."
+}

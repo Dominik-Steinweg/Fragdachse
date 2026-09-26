@@ -20,9 +20,8 @@ import { getContentDisplayName } from '../i18n/contentPresentation';
 import { getLocale, t } from '../i18n';
 import {
   ARMOR_COLOR, ARMOR_MAX,
-  COLORS, toCssColor, GAME_HEIGHT,
+  COLORS, toCssColor,
 } from '../config';
-import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import type { ShieldBuffHudState } from '../types';
 import type { RadialManagementAction } from '../systems/RadialActionModel';
 import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
@@ -35,19 +34,6 @@ import {
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import { registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import { FONT_MONO } from './uiTheme';
-import {
-  BOTTOM_STACK_BAR_H,
-  BOTTOM_STACK_BAR_LEFT,
-  BOTTOM_STACK_BAR_W,
-  BOTTOM_STACK_GAP,
-  BOTTOM_STACK_LABEL_FONT,
-  BOTTOM_STACK_LABEL_H,
-  BOTTOM_STACK_PANEL_H,
-  BOTTOM_STACK_PANEL_W,
-  BOTTOM_STACK_TOTAL_H,
-  getBottomStackHeight,
-} from './BottomStackLayout';
-
 // ── Layout ──────────────────────────────────────────────────────────────────
 const DEFAULT_PANEL_W = 240;
 let panelWidth = DEFAULT_PANEL_W;
@@ -81,11 +67,6 @@ const W2_BAR_Y  = 328;
 const UT_LBL_Y  = 354;
 const UT_BAR_Y  = 374;
 
-// Power-Up section (below utility bar)
-const DIV3_Y        = 400;
-const PU_SECTION_Y  = 410; // Y start for the power-up section
-const CONSTRUCTION_CAPACITY_HUD_ID = '__construction_capacity';
-
 // Fonts
 const LABEL_FONT  = { fontSize: '18px', fontFamily: FONT_MONO, color: toCssColor(COLORS.GREY_3) };
 const NAME_FONT   = { fontSize: '32px', fontFamily: FONT_MONO, fontStyle: 'bold' as const, color: '#ffffff' };
@@ -104,7 +85,6 @@ const PAL_ADR:  BarPalette = { dark: COLORS.BLUE_4,  mid: COLORS.BLUE_3,  light:
 const PAL_ULT:  BarPalette = { dark: COLORS.RED_3,   mid: COLORS.RED_2,   light: COLORS.RED_1 };
 const PAL_WPN:  BarPalette = { dark: COLORS.GREY_5,  mid: COLORS.GREY_4,  light: COLORS.GREY_2 };
 const PAL_UTIL: BarPalette = { dark: 0x8a4018,  mid: 0xd97030,  light: 0xf0a048 };
-const PAL_CAP:  BarPalette = { dark: COLORS.BROWN_5, mid: COLORS.GOLD_3, light: COLORS.GOLD_1 };
 
 const COL_HP_TRAIL = COLORS.RED_1;
 const COL_BAR_BG   = COLORS.GREY_9;
@@ -199,8 +179,6 @@ interface BarLayout {
   readonly totalHeight: number;
   readonly gap: number;
   readonly backgroundTextureKey: string;
-  readonly centeredLabel: boolean;
-  readonly fitLabel: boolean;
 }
 
 function getMainBarLayout(): BarLayout {
@@ -215,25 +193,8 @@ function getMainBarLayout(): BarLayout {
     totalHeight: 34,
     gap: 12,
     backgroundTextureKey: '_hud_bar_bg',
-    centeredLabel: false,
-    fitLabel: false,
   };
 }
-
-const POWER_UP_BAR_LAYOUT: BarLayout = {
-  x: BOTTOM_STACK_BAR_LEFT,
-  width: BOTTOM_STACK_BAR_W,
-  height: BOTTOM_STACK_BAR_H,
-  labelX: 0,
-  labelOriginX: 0.5,
-  panelWidth: BOTTOM_STACK_PANEL_W,
-  panelHeight: BOTTOM_STACK_PANEL_H,
-  totalHeight: BOTTOM_STACK_TOTAL_H,
-  gap: BOTTOM_STACK_GAP,
-  backgroundTextureKey: '_hud_stack_bg',
-  centeredLabel: true,
-  fitLabel: true,
-};
 
 /** Info about a single active power-up buff for HUD display. */
 export interface ActivePowerUpInfo {
@@ -345,18 +306,9 @@ export class ArenaHUD {
   private w2Insufficient = false;
   private w2RedOverlay!: Phaser.GameObjects.Rectangle;
 
-  // Power-Up section
-  /** Currently visible power-up bar entries (keyed by defId), using full BarBundle. */
-  private puEntries = new Map<string, BarBundle>();
-  /** Ordered list of currently shown defIds (for layout). */
-  private puOrder: string[] = [];
-  private puFadeTween: Phaser.Tweens.Tween | null = null;
-  private pendingPuEntries: ActivePowerUpInfo[] | null = null;
-
   constructor(
     private scene: Phaser.Scene,
     private container: Phaser.GameObjects.Container,
-    private puContainer: Phaser.GameObjects.Container,
   ) {
     this.ensureTextures();
     this.build();
@@ -367,7 +319,6 @@ export class ArenaHUD {
   private ensureTextures(): void {
     const s = this.scene;
     makeBgTexture(s, '_hud_bar_bg', barWidth, BAR_H);
-    makeBgTexture(s, '_hud_stack_bg', BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
     ensureLivingBarTextures(s);
 
     // Bar gradient textures
@@ -435,7 +386,6 @@ export class ArenaHUD {
     registerParticleEmitter(this.scene, 'arenaHud', this.adrBurstEmitter);
     c.add(this.adrBurstEmitter);
 
-    // Power-Up section: dynamisch befüllt via updatePowerUpSection(), startet leer
   }
 
   // ── Bar factory ───────────────────────────────────────────────────────────
@@ -478,7 +428,7 @@ export class ArenaHUD {
       layout.labelX,
       labelY,
       labelText,
-      layout.centeredLabel ? BOTTOM_STACK_LABEL_FONT : LABEL_FONT,
+      LABEL_FONT,
     )
       .setOrigin(layout.labelOriginX, 0)
       .setScrollFactor(0);
@@ -601,10 +551,8 @@ export class ArenaHUD {
   }
 
   update(data: ArenaHUDData): void {
-    if (!this.presentationActive) {
-      this.updatePersistentPowerUps(data);
-      return;
-    }
+    // Power-Ups und Baukapazität zeigt die untere HUD-Zeile (`CenterHUD`) unabhängig vom TAB-HUD.
+    if (!this.presentationActive) return;
 
     this.currentMaxArmor = Math.max(1, data.maxArmor);
     this.currentMaxAdrenaline = Math.max(1, data.maxAdrenaline);
@@ -637,35 +585,6 @@ export class ArenaHUD {
       this.util.label.setText(`${t('ui.loadout.utility')}: ${displayName}${chargeSuffix}${data.utilityStatusLabel ? ` · ${data.utilityStatusLabel}` : ''}`);
     }
     this.updateTemporaryUtilityVisual(data.isTemporaryUtilitySelected ?? false);
-    this.updatePersistentPowerUps(data);
-  }
-
-  /** Power-ups remain visible outside the TAB panel and therefore keep receiving state updates. */
-  private updatePersistentPowerUps(data: ArenaHUDData): void {
-    const shieldPowerUps = data.shieldBuff?.visible
-      ? [{
-          defId: data.shieldBuff.defId,
-          remainingFrac: data.shieldBuff.maxValue > 0 ? data.shieldBuff.value / data.shieldBuff.maxValue : 0,
-          valueText: `+${data.shieldBuff.damageBonusPct}%`,
-        }]
-      : [];
-    const capacityMax = data.constructionCapacityMax ?? 0;
-    const capacityUsed = Phaser.Math.Clamp(data.constructionCapacityUsed ?? 0, 0, capacityMax);
-    const constructionCapacity = capacityMax > 0
-      ? [{
-          defId: CONSTRUCTION_CAPACITY_HUD_ID,
-          remainingFrac: capacityUsed / capacityMax,
-          valueText: `${Math.round(capacityUsed)} / ${Math.round(capacityMax)}`,
-        }]
-      : [];
-    // Die Baukapazitaet steht absichtlich zuletzt: Der Power-Up-Container wird an
-    // seiner Unterkante verankert, daher bleibt diese permanente Zeile an derselben
-    // Stelle und zeitlich begrenzte Power-Ups wachsen nach oben.
-    this.updatePowerUpSection([
-      ...shieldPowerUps,
-      ...(data.activePowerUps ?? []),
-      ...constructionCapacity,
-    ]);
   }
 
   /** Fully suspends the expensive, normally hidden TAB-HUD presentation. */
@@ -769,17 +688,11 @@ export class ArenaHUD {
       b.energized = true; // force re-apply
       this.setBarEnergized(b, false);
     }
-    this.puFadeTween?.destroy();
-    this.puFadeTween = null;
-    this.puContainer.setVisible(false);
-    this.puContainer.setAlpha(1);
     if (this.nameScrollTween) {
       this.nameScrollTween.destroy();
       this.nameScrollTween = null;
     }
     this.nameText.x = BAR_X;
-    // Clear power-up entries
-    this.clearPowerUpEntries();
   }
 
   destroy(): void {
@@ -793,8 +706,6 @@ export class ArenaHUD {
     }
     if (this.nameScrollTween) this.nameScrollTween.destroy();
     this.adrBurstEmitter?.destroy();
-    this.puFadeTween?.destroy();
-    this.clearPowerUpEntries();
   }
 
   // ── Name marquee ──────────────────────────────────────────────────────────
@@ -1102,166 +1013,6 @@ export class ArenaHUD {
     if (this.utilWobbleGlow) { removeExternalFx(this.util.fgImg, this.utilWobbleGlow); this.utilWobbleGlow = null; }
     if (this.utilLabelPulseTween) { this.utilLabelPulseTween.destroy(); this.utilLabelPulseTween = null; }
     this.util.label.setScale(1);
-  }
-
-  // ── Power-Up section ───────────────────────────────────────────────────
-
-  /** Properly destroy all game objects inside a BarBundle. */
-  private destroyBarBundle(b: BarBundle): void {
-    b.idleEffect.destroy();
-    b.panelBg?.destroy();
-    b.label.destroy();
-    b.bgImg.destroy();
-    b.fgImg.destroy();
-    b.border.destroy();
-    b.trail?.destroy();
-    b.valueText?.destroy();
-    b.highlight?.destroy();
-  }
-
-  private clearPowerUpEntries(): void {
-    for (const bundle of this.puEntries.values()) this.destroyBarBundle(bundle);
-    this.puEntries.clear();
-    this.puOrder = [];
-  }
-
-  private rebuildPowerUpEntries(activePowerUps: ActivePowerUpInfo[]): void {
-    this.clearPowerUpEntries();
-
-    let yOff = 0;
-    for (const pu of activePowerUps) {
-      const def = POWERUP_DEFS[pu.defId];
-      const isConstructionCapacity = pu.defId === CONSTRUCTION_CAPACITY_HUD_ID;
-      if (!def && !isConstructionCapacity) continue;
-
-      const palette = isConstructionCapacity ? PAL_CAP : paletteFromColor(def.color);
-      const texKey  = this.ensurePuTexture(pu.defId, palette);
-      const labelY  = yOff;
-      const barY    = yOff + BOTTOM_STACK_LABEL_H;
-
-      const bundle = this.createBar(
-        labelY,
-        barY,
-        isConstructionCapacity
-          ? t('ui.hud.constructionCapacity')
-          : t('ui.hud.powerUp', { name: getContentDisplayName(pu.defId, getLocale()) }),
-        palette,
-        texKey,
-        isConstructionCapacity || pu.defId === 'SHIELD_OVERCHARGE' || pu.defId === 'NEGEV_KILLSTREAK'
-          ? { value: true, panel: true, keepAliveWhenPresentationInactive: true }
-          : { panel: true, keepAliveWhenPresentationInactive: true },
-        this.puContainer,
-        POWER_UP_BAR_LAYOUT,
-      );
-      this.fitPowerUpLabel(bundle);
-      if (pu.defId === 'NEGEV_KILLSTREAK') {
-        bundle.bgImg.setVisible(false);
-        bundle.fgImg.setVisible(false);
-        bundle.border.setVisible(false);
-        bundle.trail?.setVisible(false);
-        bundle.highlight?.setVisible(false);
-        // Ohne Balken ist die Wertzeile frei: eine Zeile tiefer, damit sie nicht
-        // mehr mit dem langen Power-Up-Namen kollidiert.
-        bundle.valueText?.setPosition(
-          POWER_UP_BAR_LAYOUT.x + POWER_UP_BAR_LAYOUT.width,
-          barY,
-        );
-      }
-      this.setBarEnergized(bundle, true);
-      this.setBarEnergyIntensity(bundle, pu.intensity ?? 0);
-
-      this.puEntries.set(pu.defId, bundle);
-      this.puOrder.push(pu.defId);
-      yOff += POWER_UP_BAR_LAYOUT.totalHeight + POWER_UP_BAR_LAYOUT.gap;
-    }
-
-    const n = this.puOrder.length;
-    if (n > 0) {
-      const totalH = getBottomStackHeight(n);
-      this.puContainer.setData('stackHeight', totalH);
-      this.puContainer.setY(GAME_HEIGHT - 20 - totalH);
-      this.puContainer.setAlpha(1);
-      this.puContainer.setVisible(true);
-      return;
-    }
-
-    this.puContainer.setData('stackHeight', 0);
-    this.puContainer.setVisible(false);
-    this.puContainer.setAlpha(1);
-  }
-
-  /** Ensure the gradient texture for a power-up palette exists, create lazily. */
-  private ensurePuTexture(defId: string, palette: BarPalette): string {
-    const key = `_hud_pu_${defId}`;
-    if (!this.scene.textures.exists(key)) {
-      createGradientTexture(this.scene, key, palette, BOTTOM_STACK_BAR_W, BOTTOM_STACK_BAR_H);
-    }
-    return key;
-  }
-
-  /** Keep long localized labels inside the shared lower-stack panel. */
-  private fitPowerUpLabel(bundle: BarBundle): void {
-    if (!bundle.layout.fitLabel) return;
-
-    bundle.label.setScale(1);
-    const valueReserve = bundle.valueText && bundle.valueText.text.length > 0
-      ? bundle.valueText.width + 8
-      : 0;
-    const availableWidth = Math.max(1, bundle.layout.panelWidth - 8 - valueReserve);
-    const measuredWidth = Math.max(1, bundle.label.width);
-    if (measuredWidth > availableWidth) {
-      bundle.label.setScale(availableWidth / measuredWidth);
-    }
-  }
-
-  private updatePowerUpSection(activePowerUps: ActivePowerUpInfo[]): void {
-    const visiblePowerUps = activePowerUps.filter((powerUp) =>
-      powerUp.defId === CONSTRUCTION_CAPACITY_HUD_ID || powerUp.remainingFrac > 0.001
-    );
-    const activeIds = new Set(visiblePowerUps.map(p => p.defId));
-
-    // Check if the set of active IDs changed
-    let setChanged = activeIds.size !== this.puOrder.length;
-    if (!setChanged) {
-      for (const id of this.puOrder) {
-        if (!activeIds.has(id)) { setChanged = true; break; }
-      }
-    }
-
-    if (setChanged) {
-      this.pendingPuEntries = visiblePowerUps;
-      if (!this.puFadeTween && this.puOrder.length > 0 && this.puContainer.visible) {
-        this.puFadeTween = this.scene.tweens.add({
-          targets: this.puContainer,
-          alpha: 0,
-          duration: 100,
-          ease: 'Linear',
-          onComplete: () => {
-            this.puFadeTween = null;
-            const nextEntries = this.pendingPuEntries ?? [];
-            this.pendingPuEntries = null;
-            this.rebuildPowerUpEntries(nextEntries);
-          },
-        });
-        return;
-      }
-
-      this.pendingPuEntries = null;
-      this.puFadeTween?.destroy();
-      this.puFadeTween = null;
-      this.rebuildPowerUpEntries(visiblePowerUps);
-    }
-
-    // Update fractions
-    for (const pu of visiblePowerUps) {
-      const bundle = this.puEntries.get(pu.defId);
-      if (!bundle) continue;
-      const frac = Math.max(0, Math.min(1, pu.remainingFrac));
-      if (pu.defId !== 'NEGEV_KILLSTREAK') this.setBarFrac(bundle, frac);
-      bundle.valueText?.setText(pu.valueText ?? '');
-      this.fitPowerUpLabel(bundle);
-      this.setBarEnergyIntensity(bundle, pu.intensity ?? 0);
-    }
   }
 
   // ── Bar intensity mode ──────────────────────────────────────────────────

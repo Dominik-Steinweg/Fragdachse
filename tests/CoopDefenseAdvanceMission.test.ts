@@ -524,7 +524,7 @@ describe('advance presentation', () => {
 
   it('shows the same respawn budget line on every map that authors one', () => {
     expect(buildCoopDefenseLifeStatusViewModel({ budget: living, missionRespawnActive: false }))
-      .toEqual({ text: 'RESPAWNS: 2', color: '#ffd166' });
+      .toEqual({ text: 'RESPAWNS: 2', color: '#ffd166', label: 'RESPAWNS', value: '2' });
     expect(buildCoopDefenseLifeStatusViewModel({
       budget: { remainingRespawns: 0, alive: true, eliminated: false },
       missionRespawnActive: true,
@@ -542,7 +542,7 @@ describe('advance presentation', () => {
     expect(buildCoopDefenseLifeStatusViewModel({
       budget: { remainingRespawns: 1, alive: false, eliminated: false },
       missionRespawnActive: false,
-    })).toEqual({ text: 'RESPAWNS: 1', color: '#ffd166' });
+    })).toEqual({ text: 'RESPAWNS: 1', color: '#ffd166', label: 'RESPAWNS', value: '1' });
     // Erst das aufgebrauchte Budget fuehrt in den endgueltigen Zustand.
     expect(buildCoopDefenseLifeStatusViewModel({
       budget: { remainingRespawns: 0, alive: false, eliminated: true },

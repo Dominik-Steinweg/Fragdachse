@@ -99,7 +99,7 @@ export const GRAPHICS_FAMILIES = {
   baseMarkers: ['BaseEntity', 'ArenaBuilder', 'HostileBaseIndicator', 'WorldHealthBarRenderer'],
   placementPreview: ['PlacementPreviewRenderer', 'PersistentBaseVisuals'],
   rockTools: ['WorldHealthBarRenderer'],
-  gameplayHud: ['ArenaHUD', 'CenterHUD', 'CoopDefenseSecondaryObjectiveHud'],
+  gameplayHud: ['ArenaHUD', 'HudCard', 'HudStatusStrip', 'CoopDefenseTutorialPanel', 'CoopDefenseObjectiveAnnouncement'],
 } as const;
 
 export type ClassicParticleFamily = keyof typeof CLASSIC_PARTICLE_FAMILIES;

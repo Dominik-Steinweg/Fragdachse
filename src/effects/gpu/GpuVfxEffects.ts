@@ -88,6 +88,10 @@ export const GpuVfxEffectId = {
   ConstructionOwnershipMote: 74,
   TranslocatorPortal: 75,
   RocketReturnBurst: 76,
+  LeafBlowerGrit: 77,
+  LeafBlowerStreak: 78,
+  LeafBlowerSpray: 79,
+  LeafBlowerRipple: 80,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -612,4 +616,12 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
   { id: GpuVfxEffectId.RocketReturnBurst, label: 'rocket.return-burst', lane: GpuVfxLaneId.ExplosionAccent,
     frame: GpuVfxFrameId.DeathGlow, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.LeafBlowerGrit, label: 'leafblower.grit', lane: GpuVfxLaneId.WorldDebris,
+    frame: GpuVfxFrameId.LeafBlowerGrain, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.LeafBlowerStreak, label: 'leafblower.ground-streak', lane: GpuVfxLaneId.MovementGround,
+    frame: GpuVfxFrameId.LeafBlowerWindStreak, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.LeafBlowerSpray, label: 'leafblower.spray', lane: GpuVfxLaneId.WorldDebris,
+    frame: GpuVfxFrameId.LeafBlowerDroplet, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.LeafBlowerRipple, label: 'leafblower.water-ripple', lane: GpuVfxLaneId.WaterSurface,
+    frame: GpuVfxFrameId.LeafBlowerWindStreak, importance: 'decorative', release: 'linger' },
 ];

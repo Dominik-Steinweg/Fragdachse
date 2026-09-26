@@ -1,48 +1,59 @@
 import * as Phaser from 'phaser';
-import { getLeafBlowerVisualSize } from './ProjectileVisualSize';
-import { CELL_SIZE } from '../config';
+import { LEAF_BLOWER_FX } from '../config/leafBlowerEffects';
 import type { ArenaLayout } from '../types';
+import { mixColors } from './EffectUtils';
 import { createLeafBlowerMaterialSampler, type LeafBlowerMaterial, type LeafBlowerMaterialSampler } from './LeafBlowerMaterial';
-import { ensureLeafBlowerDustTexture, ensureLeafDebrisTexture } from './gpu/GpuVfxSourceTextures';
+import { ensureLeafBlowerDustTexture, ensureLeafBlowerSheetTexture } from './gpu/GpuVfxSourceTextures';
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
 import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
-import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
 import { pickGpuVfxTint } from './gpu/GpuVfxMember';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import type { TerrainColorSnapshot } from '../arena/TerrainColorSnapshot';
 
-const LEAF_PARTICLE_FREQUENCY_MS = 40;
-const LEAF_PARTICLE_QUANTITY = 5;
-const LEAF_PARTICLE_LIFESPAN_MIN_MS = 360;
-const LEAF_PARTICLE_LIFESPAN_MAX_MS = 860;
-const DUST_PARTICLE_FREQUENCY_MS = 40;
-const DUST_PARTICLE_LIFESPAN_MIN_MS = 350;
-const DUST_PARTICLE_LIFESPAN_MAX_MS = 650;
-const DUST_PARTICLE_ALPHA = 0.62;
-const GRASS_BROWN_CHANCE = 0.05;
-const DIRT_BROWN_CHANCE = 0.90;
-
-const SPAWN_CIRCLE = new Phaser.Geom.Circle();
-const SPAWN_POINT = new Phaser.Math.Vector2();
-
-/** Sichtbare Zielfarben; die GPU-Tints darunter kompensieren die gefaerbte Legacy-Quelltextur. */
+/** Sichtbare Blattfarben; die Motive sind hellgrau, der Tint ist direkt die Zielfarbe. */
 export const LEAF_GREEN_COLORS: readonly number[] = [
-  0x6f8f4d,
-  0x809b55,
-  0x6a8447,
-  0x879858,
+  0x62803d,
+  0x708c45,
+  0x587338,
+  0x7d9249,
+  0x69843f,
 ];
 export const LEAF_BROWN_COLORS: readonly number[] = [
-  0x88683e,
-  0x7b5f38,
-  0x836a43,
-  0x755936,
+  0x8f6a3a,
+  0x7a5831,
+  0xa27f46,
+  0x6c4c2b,
+  0xab8e50,
 ];
-
-const LEAF_GREEN_TINTS = LEAF_GREEN_COLORS.map(compensateLeafTint);
-const LEAF_BROWN_TINTS = LEAF_BROWN_COLORS.map(compensateLeafTint);
+const GRASS_CLIPPING_COLORS: readonly number[] = [0x86a352, 0x7a974a, 0x93ab5c];
+const STRAW_COLORS: readonly number[] = [0xc2ac72, 0xb09a62, 0xa88f5c];
+const TWIG_COLORS: readonly number[] = [0x735a3c, 0x654e34];
+const SOIL_TINT = 0x3b2b1c;
+const DUST_TINT = 0xe8dcc0;
+const TERRAIN_FALLBACK: Readonly<Record<Exclude<LeafBlowerMaterial, 'water'>, number>> = {
+  grass: 0x5f7040,
+  dirt: 0x7a6446,
+  neutral: 0x77736a,
+};
+/** Anteil brauner Blätter je Untergrund; auf Erde liegt vor allem trockenes Herbstlaub. */
+const BROWN_LEAF_CHANCE: Readonly<Record<Exclude<LeafBlowerMaterial, 'water'>, number>> = {
+  grass: 0.26,
+  dirt: 0.86,
+  neutral: 0.5,
+};
+/** Befestigte Flächen tragen weniger loses Laub als Rasen oder Erde. */
+const NEUTRAL_LEAF_KEEP = 0.35;
+const LEAF_FRAMES: readonly GpuVfxFrameId[] = [
+  GpuVfxFrameId.LeafBlowerLeafOval,
+  GpuVfxFrameId.LeafBlowerLeafOval,
+  GpuVfxFrameId.LeafBlowerLeafNarrow,
+  GpuVfxFrameId.LeafBlowerLeafRound,
+  GpuVfxFrameId.LeafBlowerLeafCurl,
+];
+/** Ein Positionssprung darüber ist ein Snapshot- oder Replikatsprung, keine Flugstrecke. */
+const MAX_SEGMENT_PX = 160;
 
 interface LeafBlowerVisual {
   x: number;
@@ -50,27 +61,65 @@ interface LeafBlowerVisual {
   size: number;
   vx: number;
   vy: number;
-  leafFlow: ParticleFlowScheduler;
-  dustFlow: ParticleFlowScheduler;
-  leafSource: number;
-  dustSource: number;
-  material: LeafBlowerMaterial;
-  brownChance: number;
-  lastMaterialSampleX: number;
-  lastMaterialSampleY: number;
+  /** Position des letzten Emissionsticks; der Weg dazwischen wird gleichmäßig belegt. */
+  lastX: number;
+  lastY: number;
+  source: number;
+  readonly carry: Float32Array;
 }
 
+/** Indizes in `LeafBlowerVisual.carry`: Bruchteil noch nicht emittierter Partikel je Schicht. */
+const Layer = {
+  Leaf: 0, Clipping: 1, Grit: 2, Dust: 3, Streak: 4, Spray: 5, Mist: 6, Ripple: 7, Ring: 8,
+} as const;
+const LAYER_COUNT = 9;
+
+interface SegmentFrame {
+  fromX: number;
+  fromY: number;
+  dx: number;
+  dy: number;
+  dirX: number;
+  dirY: number;
+  heading: number;
+  speed: number;
+  spread: number;
+  size: number;
+}
+
+const SEGMENT: SegmentFrame = {
+  fromX: 0, fromY: 0, dx: 0, dy: 0, dirX: 1, dirY: 0, heading: 0, speed: 0, spread: 0, size: 0,
+};
+const SPAWN = { x: 0, y: 0, side: 0, offset: 0 };
+
 function ensureLeafBlowerTextures(scene: Phaser.Scene): void {
-  ensureLeafDebrisTexture(scene);
+  ensureLeafBlowerSheetTexture(scene);
   ensureLeafBlowerDustTexture(scene);
 }
 
+/**
+ * Laubbläser als zusammenhängender Strom aus aufgewirbeltem Laub und Dreck.
+ *
+ * Jedes Projektil belegt die seit dem letzten Tick geflogene Strecke gleichmäßig mit Partikeln,
+ * die vom Boden aufgenommen und mit einem Teil der Strömungsgeschwindigkeit mitgerissen werden.
+ * Die Spuren aufeinanderfolgender Projektile überlappen deshalb zu einem Strom, in dem kein
+ * einzelnes Projektil als Büschel erkennbar ist. Bewegung, Drehung, Flattern und Ausblenden
+ * rechnet die GPU; die CPU schreibt nur Spawns.
+ *
+ * Der Untergrund wird pro Spawnpunkt abgetastet: Rasen liefert grünes Laub und Halme, Erde
+ * braunes Laub und viele Krümel, Wege mehr Staub. Wasser erzeugt kein neues Laub, sondern
+ * Gischt und Kräuselung; bereits aufgewirbeltes Laub darf über das Wasser weiterfliegen.
+ */
 export class LeafBlowerRenderer {
   private readonly scene: Phaser.Scene;
   private readonly visuals = new Map<number, LeafBlowerVisual>();
   private gpuVfx: GpuVfxSystem | null = null;
   private leafSpec: GpuVfxSpawnSpec | null = null;
+  private gritSpec: GpuVfxSpawnSpec | null = null;
   private dustSpec: GpuVfxSpawnSpec | null = null;
+  private streakSpec: GpuVfxSpawnSpec | null = null;
+  private spraySpec: GpuVfxSpawnSpec | null = null;
+  private rippleSpec: GpuVfxSpawnSpec | null = null;
   private terrainSnapshot: TerrainColorSnapshot | null = null;
   private materialSampler: LeafBlowerMaterialSampler | null = null;
 
@@ -86,11 +135,12 @@ export class LeafBlowerRenderer {
     if (this.gpuVfx) return;
     this.gpuVfx = system;
     this.leafSpec = system.createSpec(GpuVfxEffectId.LeafDebris);
-    this.leafSpec.scaleEnd = 0.04;
-    this.leafSpec.alphaStart = 0.96;
-    this.leafSpec.alphaEnd = 0;
+    this.gritSpec = system.createSpec(GpuVfxEffectId.LeafBlowerGrit);
     this.dustSpec = system.createSpec(GpuVfxEffectId.LeafBlowerDust);
-    system.registerEmission((deltaMs, nowMs) => this.emitParticles(deltaMs, nowMs));
+    this.streakSpec = system.createSpec(GpuVfxEffectId.LeafBlowerStreak);
+    this.spraySpec = system.createSpec(GpuVfxEffectId.LeafBlowerSpray);
+    this.rippleSpec = system.createSpec(GpuVfxEffectId.LeafBlowerRipple);
+    system.registerEmission((_deltaMs, nowMs) => this.emitParticles(nowMs));
   }
 
   setTerrainColorSnapshot(snapshot: TerrainColorSnapshot | null): void {
@@ -98,45 +148,33 @@ export class LeafBlowerRenderer {
   }
 
   setTerrainMaterialLayout(
-    layout: Pick<ArenaLayout, 'dirt' | 'tracks'> | null,
+    layout: Pick<ArenaLayout, 'dirt' | 'tracks' | 'water'> | null,
     baseCells: readonly { gridX: number; gridY: number }[] = [],
   ): void {
     this.materialSampler = layout
       ? createLeafBlowerMaterialSampler(layout, baseCells)
       : null;
-    for (const visual of this.visuals.values()) {
-      visual.lastMaterialSampleX = visual.x;
-      visual.lastMaterialSampleY = visual.y;
-      this.applyMaterialAt(visual, visual.x, visual.y);
-    }
   }
 
   createVisual(id: number, x: number, y: number, size: number): void {
     if (this.visuals.has(id)) return;
-
-    const visual: LeafBlowerVisual = {
+    this.visuals.set(id, {
       x,
       y,
       size,
       vx: 0,
       vy: 0,
-      leafFlow: new ParticleFlowScheduler(LEAF_PARTICLE_FREQUENCY_MS),
-      dustFlow: new ParticleFlowScheduler(DUST_PARTICLE_FREQUENCY_MS),
-      leafSource: this.gpuVfx?.createSource(GpuVfxEffectId.LeafDebris) ?? GPU_VFX_NO_SOURCE_HANDLE,
-      dustSource: this.gpuVfx?.createSource(GpuVfxEffectId.LeafBlowerDust) ?? GPU_VFX_NO_SOURCE_HANDLE,
-      material: 'grass',
-      brownChance: GRASS_BROWN_CHANCE,
-      lastMaterialSampleX: x,
-      lastMaterialSampleY: y,
-    };
-    this.applyMaterialAt(visual, x, y);
-    this.visuals.set(id, visual);
+      lastX: x,
+      lastY: y,
+      // Eine Quelle je Projektil; der Linger-Modus lässt alle Schichten normal ausleben.
+      source: this.gpuVfx?.createSource(GpuVfxEffectId.LeafDebris) ?? GPU_VFX_NO_SOURCE_HANDLE,
+      carry: new Float32Array(LAYER_COUNT),
+    });
   }
 
   updateVisual(id: number, x: number, y: number, size: number, vx: number, vy: number): void {
     const visual = this.visuals.get(id);
     if (!visual) return;
-    this.advanceMaterialSampling(visual, x, y);
     visual.x = x;
     visual.y = y;
     visual.size = size;
@@ -148,14 +186,12 @@ export class LeafBlowerRenderer {
     const visual = this.visuals.get(id);
     if (!visual) return;
     this.visuals.delete(id);
+    // Der Reststrom bis zur letzten bekannten Position gehört noch zum Strahl.
+    if (!immediate) this.emitVisual(visual, this.scene.time?.now ?? 0);
 
-    if (this.gpuVfx) {
-      if (immediate) {
-        if (visual.leafSource !== GPU_VFX_NO_SOURCE_HANDLE) this.gpuVfx.clearSource(visual.leafSource);
-        if (visual.dustSource !== GPU_VFX_NO_SOURCE_HANDLE) this.gpuVfx.clearSource(visual.dustSource);
-      }
-      if (visual.leafSource !== GPU_VFX_NO_SOURCE_HANDLE) this.gpuVfx.releaseSource(visual.leafSource);
-      if (visual.dustSource !== GPU_VFX_NO_SOURCE_HANDLE) this.gpuVfx.releaseSource(visual.dustSource);
+    if (this.gpuVfx && visual.source !== GPU_VFX_NO_SOURCE_HANDLE) {
+      if (immediate) this.gpuVfx.clearSource(visual.source);
+      this.gpuVfx.releaseSource(visual.source);
     }
   }
 
@@ -171,162 +207,344 @@ export class LeafBlowerRenderer {
     for (const [id] of this.visuals) this.destroyVisual(id, true);
   }
 
-  private emitParticles(deltaMs: number, nowMs: number): void {
-    const system = this.gpuVfx;
-    const leafSpec = this.leafSpec;
-    const dustSpec = this.dustSpec;
-    if (!system || !leafSpec || !dustSpec || !this.terrainSnapshot) return;
-
-    const leafFrequency = system.quality.scaleFrequency(
-      LEAF_PARTICLE_FREQUENCY_MS,
-      GpuVfxEffectId.LeafDebris,
-    );
-    const dustFrequency = system.quality.scaleFrequency(
-      DUST_PARTICLE_FREQUENCY_MS,
-      GpuVfxEffectId.LeafBlowerDust,
-    );
-    if (leafFrequency <= 0) system.recordQualityDrop(GpuVfxEffectId.LeafDebris);
-    if (dustFrequency <= 0) system.recordQualityDrop(GpuVfxEffectId.LeafBlowerDust);
-
-    for (const visual of this.visuals.values()) {
-      if (leafFrequency > 0) {
-        visual.leafFlow.setFrequency(leafFrequency);
-        const dueLeaves = visual.leafFlow.tick(deltaMs);
-        for (let cycle = 0; cycle < dueLeaves; cycle += 1) {
-          for (let count = 0; count < LEAF_PARTICLE_QUANTITY; count += 1) {
-            this.spawnLeaf(visual, leafSpec, nowMs);
-          }
-        }
-      }
-
-      if (dustFrequency > 0) {
-        visual.dustFlow.setFrequency(dustFrequency);
-        const dueDust = visual.dustFlow.tick(deltaMs);
-        for (let count = 0; count < dueDust; count += 1) {
-          this.spawnDust(visual, dustSpec, nowMs);
-        }
-      }
-    }
+  private emitParticles(nowMs: number): void {
+    for (const visual of this.visuals.values()) this.emitVisual(visual, nowMs);
   }
 
-  private spawnLeaf(visual: LeafBlowerVisual, spec: GpuVfxSpawnSpec, nowMs: number): void {
+  private emitVisual(visual: LeafBlowerVisual, nowMs: number): void {
     const system = this.gpuVfx;
     if (!system) return;
-
-    const visualSize = getLeafBlowerVisualSize(visual.size);
-    const speed = Math.max(1, Math.hypot(visual.vx, visual.vy));
-    const dirX = visual.vx / speed;
-    const dirY = visual.vy / speed;
-    const heading = Math.atan2(visual.vy, visual.vx);
-    const sourceRadius = Math.max(visualSize * 0.06, 1.25);
-    const debrisRadius = Math.max(visualSize * 0.12, 2.4);
-    const radius = Math.max(debrisRadius * 1.45, 4.4);
-    const sourceX = visual.x - dirX * sourceRadius * 1.15;
-    const sourceY = visual.y - dirY * sourceRadius * 1.15;
-
-    SPAWN_CIRCLE.setTo(sourceX, sourceY, radius);
-    Phaser.Geom.Circle.Random(SPAWN_CIRCLE, SPAWN_POINT);
-
-    const emissionAngle = heading + Math.PI;
-    const emissionSpeed = Phaser.Math.FloatBetween(
-      Math.max(speed * 0.08, 18),
-      Math.max(speed * 0.28, 48),
-    );
-
-    spec.frame = GpuVfxFrameId.LeafDebris;
-    spec.lifeMs = Phaser.Math.FloatBetween(LEAF_PARTICLE_LIFESPAN_MIN_MS, LEAF_PARTICLE_LIFESPAN_MAX_MS);
-    spec.x = SPAWN_POINT.x;
-    spec.y = SPAWN_POINT.y;
-    spec.vx = Math.cos(emissionAngle) * emissionSpeed;
-    spec.vy = Math.sin(emissionAngle) * emissionSpeed;
-    spec.yMode = GpuVfxEase.Linear;
-    spec.rotation = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    spec.angularVelocity = 0;
-    spec.scaleStart = Math.max(visualSize / 102, 0.11);
-    spec.scaleEnd = 0.04;
-    spec.alphaStart = 0.96;
-    spec.alphaEnd = 0;
-    spec.tint = pickLeafTint(visual.brownChance);
-    system.spawn(spec, visual.leafSource, nowMs);
-  }
-
-  private spawnDust(visual: LeafBlowerVisual, spec: GpuVfxSpawnSpec, nowMs: number): void {
-    const system = this.gpuVfx;
-    const snapshot = this.terrainSnapshot;
-    if (!system || !snapshot) return;
-
-    const visualSize = getLeafBlowerVisualSize(visual.size);
-    const speed = Math.max(1, Math.hypot(visual.vx, visual.vy));
-    const dirX = visual.vx / speed;
-    const dirY = visual.vy / speed;
-    const heading = Math.atan2(visual.vy, visual.vx);
-    const sourceRadius = Math.max(visualSize * 0.06, 1.25);
-    const sourceX = visual.x - dirX * sourceRadius * 1.15;
-    const sourceY = visual.y - dirY * sourceRadius * 1.15;
-    const radius = Math.max(visualSize * 0.18, 5.5);
-
-    SPAWN_CIRCLE.setTo(sourceX, sourceY, radius);
-    Phaser.Geom.Circle.Random(SPAWN_CIRCLE, SPAWN_POINT);
-
-    const emissionAngle = heading + Math.PI + Phaser.Math.FloatBetween(-0.32, 0.32);
-    const emissionSpeed = Phaser.Math.FloatBetween(
-      Math.max(speed * 0.04, 10),
-      Math.max(speed * 0.16, 24),
-    );
-
-    spec.frame = GpuVfxFrameId.LeafBlowerDust;
-    spec.lifeMs = Phaser.Math.FloatBetween(DUST_PARTICLE_LIFESPAN_MIN_MS, DUST_PARTICLE_LIFESPAN_MAX_MS);
-    spec.x = SPAWN_POINT.x;
-    spec.y = SPAWN_POINT.y;
-    spec.vx = Math.cos(emissionAngle) * emissionSpeed;
-    spec.vy = Math.sin(emissionAngle) * emissionSpeed;
-    spec.yMode = GpuVfxEase.Linear;
-    spec.rotation = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    spec.angularVelocity = 0;
-    spec.scaleStart = Math.max(visualSize / 135, 0.10);
-    spec.scaleEnd = Math.max(visualSize / 90, 0.18);
-    spec.alphaStart = DUST_PARTICLE_ALPHA;
-    spec.alphaEnd = 0;
-    spec.tint = snapshot.sample(SPAWN_POINT.x, SPAWN_POINT.y);
-    system.spawn(spec, visual.dustSource, nowMs);
-  }
-
-  private advanceMaterialSampling(visual: LeafBlowerVisual, x: number, y: number): void {
-    const dx = x - visual.lastMaterialSampleX;
-    const dy = y - visual.lastMaterialSampleY;
+    const dx = visual.x - visual.lastX;
+    const dy = visual.y - visual.lastY;
     const distance = Math.hypot(dx, dy);
-    if (distance < CELL_SIZE) return;
+    if (distance < 0.01) return;
+    visual.lastX = visual.x;
+    visual.lastY = visual.y;
+    if (distance > MAX_SEGMENT_PX) return;
 
-    const sampleCount = Math.floor(distance / CELL_SIZE);
-    for (let index = 1; index <= sampleCount; index += 1) {
-      const ratio = (index * CELL_SIZE) / distance;
-      this.applyMaterialAt(visual, visual.lastMaterialSampleX + dx * ratio, visual.lastMaterialSampleY + dy * ratio);
+    const speed = Math.hypot(visual.vx, visual.vy);
+    const frame = SEGMENT;
+    frame.fromX = visual.x - dx;
+    frame.fromY = visual.y - dy;
+    frame.dx = dx;
+    frame.dy = dy;
+    frame.dirX = speed > 1 ? visual.vx / speed : dx / distance;
+    frame.dirY = speed > 1 ? visual.vy / speed : dy / distance;
+    frame.heading = Math.atan2(frame.dirY, frame.dirX);
+    frame.speed = Math.max(speed, distance * 30);
+    frame.size = visual.size;
+    frame.spread = Math.max(LEAF_BLOWER_FX.spreadMin, visual.size * LEAF_BLOWER_FX.spreadFactor);
+
+    const fx = LEAF_BLOWER_FX;
+    const leaves = this.dueCount(visual, Layer.Leaf, distance, fx.leaf.spacingPx, GpuVfxEffectId.LeafDebris);
+    for (let n = 0; n < leaves; n += 1) this.spawnLeaf(visual, nowMs);
+    const clippings = this.dueCount(visual, Layer.Clipping, distance, fx.clipping.spacingPx, GpuVfxEffectId.LeafDebris);
+    for (let n = 0; n < clippings; n += 1) this.spawnClipping(visual, nowMs);
+    // Die dichteste Krümelrate; auf Rasen wird ein Teil der Spawns am Material verworfen.
+    const grit = this.dueCount(visual, Layer.Grit, distance, fx.grit.dirtSpacingPx, GpuVfxEffectId.LeafBlowerGrit);
+    for (let n = 0; n < grit; n += 1) this.spawnGrit(visual, nowMs);
+    const dust = this.dueCount(visual, Layer.Dust, distance, fx.dust.spacingPx, GpuVfxEffectId.LeafBlowerDust);
+    for (let n = 0; n < dust; n += 1) this.spawnDust(visual, nowMs);
+    const streaks = this.dueCount(visual, Layer.Streak, distance, fx.streak.spacingPx, GpuVfxEffectId.LeafBlowerStreak);
+    for (let n = 0; n < streaks; n += 1) this.spawnStreak(visual, nowMs);
+    const spray = this.dueCount(visual, Layer.Spray, distance, fx.spray.spacingPx, GpuVfxEffectId.LeafBlowerSpray);
+    for (let n = 0; n < spray; n += 1) this.spawnSpray(visual, nowMs);
+    const mist = this.dueCount(visual, Layer.Mist, distance, fx.mist.spacingPx, GpuVfxEffectId.LeafBlowerSpray);
+    for (let n = 0; n < mist; n += 1) this.spawnMist(visual, nowMs);
+    const ripples = this.dueCount(visual, Layer.Ripple, distance, fx.ripple.streakSpacingPx, GpuVfxEffectId.LeafBlowerRipple);
+    for (let n = 0; n < ripples; n += 1) this.spawnRipple(visual, nowMs, false);
+    const rings = this.dueCount(visual, Layer.Ring, distance, fx.ripple.ringSpacingPx, GpuVfxEffectId.LeafBlowerRipple);
+    for (let n = 0; n < rings; n += 1) this.spawnRipple(visual, nowMs, true);
+  }
+
+  /** Streckenbasierte Emission mit Qualitätsfaktor; der Bruchteil wandert in den nächsten Tick. */
+  private dueCount(visual: LeafBlowerVisual, layer: number, distance: number, spacingPx: number, effect: GpuVfxEffectId): number {
+    const system = this.gpuVfx!;
+    const factor = system.quality.getEmissionFactor(effect);
+    if (factor <= 0) {
+      system.recordQualityDrop(effect);
+      return 0;
     }
-    const consumed = sampleCount * CELL_SIZE / distance;
-    visual.lastMaterialSampleX += dx * consumed;
-    visual.lastMaterialSampleY += dy * consumed;
+    const total = visual.carry[layer] + (distance / spacingPx) * factor;
+    const count = Math.floor(total);
+    visual.carry[layer] = total - count;
+    return count;
   }
 
-  private applyMaterialAt(visual: LeafBlowerVisual, x: number, y: number): void {
-    const material = this.materialSampler?.sample(x, y) ?? 'grass';
-    visual.material = material;
-    if (material === 'dirt') visual.brownChance = DIRT_BROWN_CHANCE;
-    else if (material === 'grass') visual.brownChance = GRASS_BROWN_CHANCE;
+  /**
+   * Zufälliger Punkt auf dem geflogenen Wegstück, quer dazu dreieckverteilt über die aktuelle
+   * Stromhalbbreite: dicht in der Mitte, ausgefranst am Rand.
+   */
+  private pickSpawnPoint(widthScale = 1): typeof SPAWN {
+    const frame = SEGMENT;
+    const t = Math.random();
+    const offset = (Math.random() + Math.random() - 1) * frame.spread * widthScale;
+    SPAWN.offset = offset;
+    SPAWN.side = offset < 0 ? -1 : 1;
+    SPAWN.x = frame.fromX + frame.dx * t - frame.dirY * offset;
+    SPAWN.y = frame.fromY + frame.dy * t + frame.dirX * offset;
+    return SPAWN;
   }
-}
 
-/** Kompensiert den Multiply-Tint fuer die gefaerbte Legacy-Leaf-Quelltextur. */
-export function compensateLeafTint(visibleColor: number): number {
-  const red = compensateChannel((visibleColor >> 16) & 0xff, 0x8a);
-  const green = compensateChannel((visibleColor >> 8) & 0xff, 0xa3);
-  const blue = compensateChannel(visibleColor & 0xff, 0x57);
-  return (red << 16) | (green << 8) | blue;
-}
+  private materialAt(x: number, y: number): LeafBlowerMaterial {
+    return this.materialSampler?.sample(x, y) ?? 'grass';
+  }
 
-function compensateChannel(visible: number, source: number): number {
-  return Math.min(0xff, Math.round((visible * 0xff) / source));
-}
+  private terrainAt(x: number, y: number, material: Exclude<LeafBlowerMaterial, 'water'>): number {
+    return this.terrainSnapshot?.sample(x, y) ?? TERRAIN_FALLBACK[material];
+  }
 
-function pickLeafTint(brownChance: number): number {
-  return pickGpuVfxTint(Math.random() < brownChance ? LEAF_BROWN_TINTS : LEAF_GREEN_TINTS);
+  /**
+   * Mitgerissene Bewegung: Vorwärtsanteil der Strömung plus seitliches Ausweichen nach außen,
+   * damit der Strom wie ein Fächer aufgeht. `QuadOut` bremst das Partikel bis zum Liegenbleiben;
+   * seine Anfangsgeschwindigkeit ist das Doppelte der übergebenen mittleren Geschwindigkeit.
+   */
+  private applyCarry(spec: GpuVfxSpawnSpec, carryMin: number, carryMax: number, lateral: number): void {
+    const frame = SEGMENT;
+    const forward = frame.speed * Phaser.Math.FloatBetween(carryMin, carryMax) * 0.5;
+    const outward = frame.speed * lateral * 0.5
+      * (Math.abs(SPAWN.offset) / frame.spread + 0.15) * Math.random() * SPAWN.side;
+    const swirl = frame.speed * 0.06 * (Math.random() * 2 - 1);
+    spec.vx = frame.dirX * forward - frame.dirY * (outward + swirl);
+    spec.vy = frame.dirY * forward + frame.dirX * (outward + swirl);
+    spec.positionEase = GpuVfxEase.QuadOut;
+    spec.yMode = GpuVfxEase.Linear;
+  }
+
+  private spawnLeaf(visual: LeafBlowerVisual, nowMs: number): void {
+    const spec = this.leafSpec!;
+    const point = this.pickSpawnPoint();
+    const material = this.materialAt(point.x, point.y);
+    if (material === 'water') return;
+    if (material === 'neutral' && Math.random() > NEUTRAL_LEAF_KEEP) return;
+    const fx = LEAF_BLOWER_FX.leaf;
+    spec.frame = LEAF_FRAMES[Math.floor(Math.random() * LEAF_FRAMES.length)];
+    spec.lifeMs = Phaser.Math.FloatBetween(fx.lifeMinMs, fx.lifeMaxMs);
+    spec.x = point.x;
+    spec.y = point.y;
+    this.applyCarry(spec, fx.carryMin, fx.carryMax, fx.lateral);
+    spec.rotation = Math.random() * Math.PI * 2;
+    spec.angularVelocity = (Math.random() < 0.5 ? -1 : 1) * Phaser.Math.FloatBetween(2.5, fx.spinMax);
+    spec.rotationEase = GpuVfxEase.Linear;
+    // Laub bleibt klein, egal wie weit der Luftstrom schon aufgefächert ist.
+    const scale = Phaser.Math.FloatBetween(fx.scaleMin, fx.scaleMax);
+    spec.scaleStart = scale;
+    spec.scaleEnd = scale * 0.9;
+    spec.scaleEase = GpuVfxEase.Linear;
+    // Flattern: das Blatt kippt beim Taumeln auf die Kante.
+    spec.stretchStart = 1;
+    spec.stretchEnd = Phaser.Math.FloatBetween(0.45, 1);
+    spec.alphaStart = fx.alpha;
+    spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.CubicIn;
+    spec.tint = pickGpuVfxTint(Math.random() < BROWN_LEAF_CHANCE[material] ? LEAF_BROWN_COLORS : LEAF_GREEN_COLORS);
+    this.gpuVfx!.spawn(spec, visual.source, nowMs);
+  }
+
+  private spawnClipping(visual: LeafBlowerVisual, nowMs: number): void {
+    const spec = this.leafSpec!;
+    const point = this.pickSpawnPoint();
+    const material = this.materialAt(point.x, point.y);
+    if (material === 'water' || material === 'neutral') return;
+    const fx = LEAF_BLOWER_FX.clipping;
+    const twig = material === 'dirt' && Math.random() < 0.35;
+    spec.frame = twig ? GpuVfxFrameId.LeafBlowerTwig : GpuVfxFrameId.LeafBlowerGrassBlade;
+    spec.lifeMs = Phaser.Math.FloatBetween(fx.lifeMinMs, fx.lifeMaxMs);
+    spec.x = point.x;
+    spec.y = point.y;
+    this.applyCarry(spec, twig ? 0.15 : 0.3, twig ? 0.5 : 0.9, 0.3);
+    spec.rotation = SEGMENT.heading + Phaser.Math.FloatBetween(-0.9, 0.9);
+    spec.angularVelocity = (Math.random() < 0.5 ? -1 : 1) * Phaser.Math.FloatBetween(4, 16);
+    spec.rotationEase = GpuVfxEase.Linear;
+    const scale = Phaser.Math.FloatBetween(fx.scaleMin, fx.scaleMax);
+    spec.scaleStart = scale;
+    spec.scaleEnd = scale;
+    spec.scaleEase = GpuVfxEase.Linear;
+    spec.stretchStart = 1;
+    spec.stretchEnd = Phaser.Math.FloatBetween(0.6, 1);
+    spec.alphaStart = 0.95;
+    spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.CubicIn;
+    spec.tint = pickGpuVfxTint(twig ? TWIG_COLORS : material === 'dirt' ? STRAW_COLORS : GRASS_CLIPPING_COLORS);
+    this.gpuVfx!.spawn(spec, visual.source, nowMs);
+  }
+
+  private spawnGrit(visual: LeafBlowerVisual, nowMs: number): void {
+    const spec = this.gritSpec!;
+    const point = this.pickSpawnPoint(0.85);
+    const material = this.materialAt(point.x, point.y);
+    if (material === 'water') return;
+    const fx = LEAF_BLOWER_FX.grit;
+    const spacing = material === 'dirt' ? fx.dirtSpacingPx : material === 'grass' ? fx.grassSpacingPx : fx.neutralSpacingPx;
+    if (Math.random() > fx.dirtSpacingPx / spacing) return;
+    const clod = Math.random() < 0.3;
+    spec.frame = clod ? GpuVfxFrameId.LeafBlowerClod : GpuVfxFrameId.LeafBlowerGrain;
+    spec.lifeMs = Phaser.Math.FloatBetween(fx.lifeMinMs, fx.lifeMaxMs);
+    spec.x = point.x;
+    spec.y = point.y;
+    this.applyCarry(spec, fx.carryMin, fx.carryMax, 0.22);
+    spec.rotation = Math.random() * Math.PI * 2;
+    spec.angularVelocity = 0;
+    const scale = Phaser.Math.FloatBetween(fx.scaleMin, fx.scaleMax) * (clod ? 0.75 : 1);
+    spec.scaleStart = scale;
+    spec.scaleEnd = scale;
+    spec.scaleEase = GpuVfxEase.Linear;
+    spec.stretchStart = 1;
+    spec.stretchEnd = 1;
+    spec.alphaStart = fx.alpha;
+    spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.CubicIn;
+    spec.tint = mixColors(this.terrainAt(point.x, point.y, material), SOIL_TINT, fx.darken);
+    this.gpuVfx!.spawn(spec, visual.source, nowMs);
+  }
+
+  private spawnDust(visual: LeafBlowerVisual, nowMs: number): void {
+    const spec = this.dustSpec!;
+    const point = this.pickSpawnPoint(0.7);
+    const material = this.materialAt(point.x, point.y);
+    if (material === 'water') return;
+    const fx = LEAF_BLOWER_FX.dust;
+    spec.frame = GpuVfxFrameId.LeafBlowerDust;
+    spec.lifeMs = Phaser.Math.FloatBetween(fx.lifeMinMs, fx.lifeMaxMs);
+    spec.x = point.x;
+    spec.y = point.y;
+    this.applyCarry(spec, fx.carryMin, fx.carryMax, 0.35);
+    spec.rotation = SEGMENT.heading + Phaser.Math.FloatBetween(-0.2, 0.2);
+    spec.angularVelocity = 0;
+    // Der Schleier zeigt den wachsenden Wirkungsbereich; nur er skaliert mit der Trefferfläche.
+    const diameter = Math.max(14, SEGMENT.spread * 2);
+    spec.scaleStart = (diameter * fx.sizeStart) / 18;
+    spec.scaleEnd = (diameter * fx.sizeEnd) / 18;
+    spec.scaleEase = GpuVfxEase.QuadOut;
+    spec.stretchStart = fx.stretchStart;
+    spec.stretchEnd = fx.stretchEnd;
+    spec.alphaStart = Phaser.Math.FloatBetween(fx.alphaMin, fx.alphaMax) * (material === 'neutral' ? fx.neutralAlphaBoost : 1);
+    spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.Linear;
+    spec.tint = mixColors(this.terrainAt(point.x, point.y, material), DUST_TINT, fx.lighten);
+    this.gpuVfx!.spawn(spec, visual.source, nowMs);
+  }
+
+  private spawnStreak(visual: LeafBlowerVisual, nowMs: number): void {
+    const spec = this.streakSpec!;
+    const point = this.pickSpawnPoint(0.9);
+    const material = this.materialAt(point.x, point.y);
+    if (material === 'water') return;
+    const fx = LEAF_BLOWER_FX.streak;
+    spec.frame = GpuVfxFrameId.LeafBlowerWindStreak;
+    spec.lifeMs = Phaser.Math.FloatBetween(fx.lifeMinMs, fx.lifeMaxMs);
+    spec.x = point.x;
+    spec.y = point.y;
+    const drift = SEGMENT.speed * fx.carry * 0.5;
+    spec.vx = SEGMENT.dirX * drift;
+    spec.vy = SEGMENT.dirY * drift;
+    spec.positionEase = GpuVfxEase.QuadOut;
+    spec.yMode = GpuVfxEase.Linear;
+    // Der Bewuchs legt sich radial vom Strommittelpunkt weg.
+    spec.rotation = SEGMENT.heading + (SPAWN.offset / SEGMENT.spread) * 0.35 + Phaser.Math.FloatBetween(-0.12, 0.12);
+    spec.angularVelocity = 0;
+    const scale = fx.width * Phaser.Math.FloatBetween(0.7, 1.1);
+    spec.scaleStart = scale;
+    spec.scaleEnd = scale;
+    spec.scaleEase = GpuVfxEase.Linear;
+    spec.stretchStart = fx.lengthScale * Phaser.Math.FloatBetween(0.7, 1.2);
+    spec.stretchEnd = spec.stretchStart * 1.3;
+    spec.alphaStart = Phaser.Math.FloatBetween(fx.alphaMin, fx.alphaMax);
+    spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.Linear;
+    spec.tint = mixColors(this.terrainAt(point.x, point.y, material), 0xffffff, fx.lighten);
+    this.gpuVfx!.spawn(spec, visual.source, nowMs);
+  }
+
+  private spawnSpray(visual: LeafBlowerVisual, nowMs: number): void {
+    const spec = this.spraySpec!;
+    const point = this.pickSpawnPoint();
+    if (this.materialAt(point.x, point.y) !== 'water') return;
+    const fx = LEAF_BLOWER_FX.spray;
+    spec.frame = GpuVfxFrameId.LeafBlowerDroplet;
+    spec.lifeMs = Phaser.Math.FloatBetween(fx.lifeMinMs, fx.lifeMaxMs);
+    spec.x = point.x;
+    spec.y = point.y;
+    this.applyCarry(spec, fx.carryMin, fx.carryMax, 0.4);
+    spec.rotation = SEGMENT.heading;
+    spec.angularVelocity = 0;
+    const scale = Phaser.Math.FloatBetween(fx.scaleMin, fx.scaleMax);
+    spec.scaleStart = scale;
+    spec.scaleEnd = scale * 0.6;
+    spec.scaleEase = GpuVfxEase.Linear;
+    // Bewegungsunschärfe: frische Tropfen sind in Flugrichtung gezogen.
+    spec.stretchStart = 1.8;
+    spec.stretchEnd = 1;
+    spec.alphaStart = Phaser.Math.FloatBetween(fx.alphaMin, fx.alphaMax);
+    spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.Linear;
+    spec.tint = fx.tint;
+    this.gpuVfx!.spawn(spec, visual.source, nowMs);
+  }
+
+  private spawnMist(visual: LeafBlowerVisual, nowMs: number): void {
+    const spec = this.spraySpec!;
+    const point = this.pickSpawnPoint(0.7);
+    if (this.materialAt(point.x, point.y) !== 'water') return;
+    const fx = LEAF_BLOWER_FX.mist;
+    spec.frame = GpuVfxFrameId.LeafBlowerDust;
+    spec.lifeMs = Phaser.Math.FloatBetween(fx.lifeMinMs, fx.lifeMaxMs);
+    spec.x = point.x;
+    spec.y = point.y;
+    this.applyCarry(spec, fx.carryMin, fx.carryMax, 0.3);
+    spec.rotation = SEGMENT.heading;
+    spec.angularVelocity = 0;
+    const diameter = Math.max(14, SEGMENT.spread * 2);
+    spec.scaleStart = (diameter * 0.3) / 18;
+    spec.scaleEnd = (diameter * 0.62) / 18;
+    spec.scaleEase = GpuVfxEase.QuadOut;
+    spec.stretchStart = 1.7;
+    spec.stretchEnd = 1.2;
+    spec.alphaStart = Phaser.Math.FloatBetween(fx.alphaMin, fx.alphaMax);
+    spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.Linear;
+    spec.tint = fx.tint;
+    this.gpuVfx!.spawn(spec, visual.source, nowMs);
+  }
+
+  private spawnRipple(visual: LeafBlowerVisual, nowMs: number, ring: boolean): void {
+    const spec = this.rippleSpec!;
+    const point = this.pickSpawnPoint(ring ? 0.8 : 1);
+    if (this.materialAt(point.x, point.y) !== 'water') return;
+    const fx = LEAF_BLOWER_FX.ripple;
+    spec.lifeMs = Phaser.Math.FloatBetween(fx.lifeMinMs, fx.lifeMaxMs);
+    spec.x = point.x;
+    spec.y = point.y;
+    const drift = SEGMENT.speed * (ring ? 0.04 : 0.1) * 0.5;
+    spec.vx = SEGMENT.dirX * drift;
+    spec.vy = SEGMENT.dirY * drift;
+    spec.positionEase = GpuVfxEase.QuadOut;
+    spec.yMode = GpuVfxEase.Linear;
+    spec.angularVelocity = 0;
+    spec.tint = fx.tint;
+    spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.Linear;
+    if (ring) {
+      spec.frame = GpuVfxFrameId.ExplosionRing;
+      spec.scaleStart = fx.ringScaleStart;
+      spec.scaleEnd = fx.ringScaleEnd;
+      spec.scaleEase = GpuVfxEase.QuadOut;
+      // Vom Wind in Strömungsrichtung gedehnte Ringe.
+      spec.stretchStart = 1.15;
+      spec.stretchEnd = 1.35;
+      spec.rotation = SEGMENT.heading;
+      spec.alphaStart = fx.ringAlpha;
+    } else {
+      spec.frame = GpuVfxFrameId.LeafBlowerWindStreak;
+      spec.rotation = SEGMENT.heading + Phaser.Math.FloatBetween(-0.22, 0.22);
+      const scale = Phaser.Math.FloatBetween(0.6, 1);
+      spec.scaleStart = scale;
+      spec.scaleEnd = scale * 0.8;
+      spec.scaleEase = GpuVfxEase.Linear;
+      spec.stretchStart = Phaser.Math.FloatBetween(0.6, 1.1);
+      spec.stretchEnd = spec.stretchStart * 1.6;
+      spec.alphaStart = Phaser.Math.FloatBetween(fx.streakAlphaMin, fx.streakAlphaMax);
+    }
+    this.gpuVfx!.spawn(spec, visual.source, nowMs);
+  }
 }

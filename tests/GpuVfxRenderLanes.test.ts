@@ -8,6 +8,7 @@ import { GpuVfxEase } from '../src/effects/gpu/GpuVfxEase';
 import { GPU_VFX_DEPTH_EPSILON, GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { DEPTH } from '../src/config';
 import { BURROW_FX } from '../src/config/burrowEffects';
+import { LEAF_BLOWER_FX } from '../src/config/leafBlowerEffects';
 
 /** Die layerglobalen Eigenschaften – nur sie duerfen eine eigene Lane rechtfertigen. */
 function laneKey(lane: (typeof GPU_VFX_LANES)[number]): string {
@@ -111,7 +112,7 @@ describe('gpu vfx render lanes', () => {
     expect(lane.blendMode).toBe(0);
     expect(lane.order).toBe('ordered');
     expect(lane.capacity).toBeGreaterThan(BURROW_FX.flightCapacity);
-    expect(lane.maxLifetimeMs).toBe(860);
+    expect(lane.maxLifetimeMs).toBeGreaterThanOrEqual(LEAF_BLOWER_FX.leaf.lifeMaxMs);
     expect(effect.lane).toBe(GpuVfxLaneId.WorldDebris);
     expect(effect.frame).toBe(GpuVfxFrameId.LeafDebris);
     expect(effect.release).toBe('linger');
@@ -121,6 +122,15 @@ describe('gpu vfx render lanes', () => {
     expect(lane.capacityRationale).toContain('Staub');
     expect(lane.eases).toContain(GpuVfxEase.QuadOut);
     expect(GPU_VFX_EFFECTS.find(candidate => candidate.label === 'burrow.clod')?.lane).toBe(lane.id);
+  });
+
+  it('draws leaf blower water ripples on the water surface, below fog and actors', () => {
+    const lane = GPU_VFX_LANES[GpuVfxLaneId.WaterSurface];
+    const ripple = GPU_VFX_EFFECTS.find((candidate) => candidate.label === 'leafblower.water-ripple')!;
+    expect(ripple.lane).toBe(GpuVfxLaneId.WaterSurface);
+    expect(lane.depth).toBeGreaterThan(DEPTH.WATER);
+    expect(lane.depth).toBeLessThan(DEPTH.GROUND_FOG);
+    expect(lane.depth).toBeLessThan(DEPTH.PLAYERS);
   });
 
   it('keeps all transient pedestal effects on one dedicated compact lane', () => {

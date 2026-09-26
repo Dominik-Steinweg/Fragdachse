@@ -20,6 +20,8 @@ import {
   TEX_GROUND_FIRE_SMOKE,
   TEX_LEAF_DEBRIS,
   TEX_LEAF_BLOWER_DUST,
+  TEX_LEAF_BLOWER_SHEET,
+  LEAF_BLOWER_SHEET_CELLS,
   TEX_EXPLOSION_SPARK,
   TEX_EXPLOSION_EMBER,
   TEX_EXPLOSION_FIREBALL_A,
@@ -55,6 +57,7 @@ import {
   ensureGroundFireSmokeTexture,
   ensureLeafDebrisTexture,
   ensureLeafBlowerDustTexture,
+  ensureLeafBlowerSheetTexture,
   ensureExplosionSparkTexture,
   ensureExplosionEmberTexture,
   ensureExplosionFireballTextures,
@@ -198,6 +201,17 @@ export const GpuVfxFrameId = {
   MovementPawBroad:      184,
   // 185..208 belong to the three eight-phase liquid materials.
   EssenceLiquidTail:     209,
+  /** Laubbläser-Motivstreifen; hellgrau, die Farbe kommt aus dem Member-Tint. */
+  LeafBlowerLeafOval:    210,
+  LeafBlowerLeafNarrow:  211,
+  LeafBlowerLeafRound:   212,
+  LeafBlowerLeafCurl:    213,
+  LeafBlowerGrassBlade:  214,
+  LeafBlowerTwig:        215,
+  LeafBlowerGrain:       216,
+  LeafBlowerClod:        217,
+  LeafBlowerDroplet:     218,
+  LeafBlowerWindStreak:  219,
 } as const;
 
 /** Nur die unten erzeugte, zusammenhaengende Morph-Folge darf diesen ID-Bereich belegen. */
@@ -221,6 +235,13 @@ interface GpuVfxAtlasEntry {
   readonly essenceTail?: boolean;
   /** Erzeugt die Quelltextur, falls der zustaendige Renderer noch nicht gelaufen ist. */
   readonly ensure: ((scene: Phaser.Scene) => void) | null;
+}
+
+function leafBlowerSheetEntry(
+  id: GpuVfxFrameId, frame: string, cell: { readonly x: number; readonly width: number; readonly height: number },
+): GpuVfxAtlasEntry {
+  return { id, frame, sourceTextureKey: TEX_LEAF_BLOWER_SHEET, sourceX: cell.x, width: cell.width, height: cell.height,
+    ensure: ensureLeafBlowerSheetTexture };
 }
 
 const DEATH_MORPH_ATLAS_ENTRIES: readonly GpuVfxAtlasEntry[] = Array.from(
@@ -475,6 +496,16 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   { id: GpuVfxFrameId.EssenceLiquidTail, frame: ESSENCE_LIQUID_TAIL_FRAME,
     sourceTextureKey: null, width: ESSENCE_LIQUID_FRAME_SIZE, height: ESSENCE_LIQUID_FRAME_SIZE,
     essenceTail: true, ensure: null },
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerLeafOval, 'leaf-blower-leaf-oval', LEAF_BLOWER_SHEET_CELLS.leafOval),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerLeafNarrow, 'leaf-blower-leaf-narrow', LEAF_BLOWER_SHEET_CELLS.leafNarrow),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerLeafRound, 'leaf-blower-leaf-round', LEAF_BLOWER_SHEET_CELLS.leafRound),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerLeafCurl, 'leaf-blower-leaf-curl', LEAF_BLOWER_SHEET_CELLS.leafCurl),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerGrassBlade, 'leaf-blower-grass-blade', LEAF_BLOWER_SHEET_CELLS.grassBlade),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerTwig, 'leaf-blower-twig', LEAF_BLOWER_SHEET_CELLS.twig),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerGrain, 'leaf-blower-grain', LEAF_BLOWER_SHEET_CELLS.grain),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerClod, 'leaf-blower-clod', LEAF_BLOWER_SHEET_CELLS.clod),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerDroplet, 'leaf-blower-droplet', LEAF_BLOWER_SHEET_CELLS.droplet),
+  leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerWindStreak, 'leaf-blower-wind-streak', LEAF_BLOWER_SHEET_CELLS.windStreak),
 ];
 
 /** Transparenter Rand um jeden Frame, in Pixeln. */

@@ -175,17 +175,10 @@ interface SwatchEntry {
   color:  number;
 }
 
-// ── Power-Up-Container (center-bottom, nicht animiert) ─────────────────────
-// Die Kinder verwenden negative lokale X-Koordinaten und liegen dadurch exakt
-// auf derselben Mittelachse wie der Armor-/Utility-/Ultimate-Stack.
-// y wird dynamisch von ArenaHUD/CenterHUD gesetzt (abhängig von den Zeilen).
-const PU_CONTAINER_X = GAME_WIDTH / 2;
-
 export class LeftSidePanel {
   private lobbyContainer!: Phaser.GameObjects.Container;
   private lobbyContent!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;
-  private puContainer!:    Phaser.GameObjects.Container;
   private arenaHUD!:       ArenaHUD;
   private adrenalineCostProvider: (() => number) | null = null;
   private arenaOverlayVisible = false;
@@ -257,13 +250,8 @@ export class LeftSidePanel {
         .setScrollFactor(0),
     );
 
-    // Power-Up-Container: feste Position mittig unten, unabhängig vom Tween
-    this.puContainer = this.scene.add.container(PU_CONTAINER_X, 0);
-    this.puContainer.setDepth(DEPTH.OVERLAY - 1);
-    this.puContainer.setVisible(false);
-
     configureArenaHudLayout(ARENA_PANEL_W);
-    this.arenaHUD = new ArenaHUD(this.scene, this.gameContainer, this.puContainer);
+    this.arenaHUD = new ArenaHUD(this.scene, this.gameContainer);
     this.arenaHUD.setPresentationActive(false);
 
     // ── lobbyContainer (Namens- und Farbsektion, initial on-screen) ───────────
@@ -383,10 +371,9 @@ export class LeftSidePanel {
     this.pickerContainer.setVisible(false);
 
     // Klarheitskamera: dieses Panel ist HUD und darf von der Bildkomposition der Welt nicht
-    // erfasst werden. `puContainer` und `pickerContainer` sind eigene Wurzeln, kein Kind von
-    // `gameContainer` – sie brauchen deshalb je einen eigenen Aufruf.
+    // erfasst werden. `pickerContainer` ist eine eigene Wurzel, kein Kind von
+    // `gameContainer` – sie braucht deshalb einen eigenen Aufruf.
     promoteToClarityCamera(this.scene, this.gameContainer);
-    promoteToClarityCamera(this.scene, this.puContainer);
     promoteToClarityCamera(this.scene, this.lobbyContainer);
     promoteToClarityCamera(this.scene, this.pickerContainer);
     promoteToClarityCamera(this.scene, this.badgerPreview.sprite);
@@ -404,7 +391,6 @@ export class LeftSidePanel {
     this.refreshColorIndicator();
   }
 
-  getPuContainer(): Phaser.GameObjects.Container { return this.puContainer; }
 
   /** Reicht den Host-Abbruch der laufenden Partie an das Optionsmenue durch. */
   setAbortMatchBinding(binding: AbortMatchBinding | null): void {
@@ -524,7 +510,6 @@ export class LeftSidePanel {
     this.arenaOverlayVisible = false;
     this.badgerPreview?.setVisible(true);
     this.lobbyContainer.setVisible(true);
-    this.puContainer.setVisible(false);
 
     this.scene.tweens.add({
       targets:  this.gameContainer,

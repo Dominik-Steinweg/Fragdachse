@@ -701,3 +701,195 @@ export function ensureStinkPuffTexture(scene: Phaser.Scene): void {
     }
   });
 }
+
+export const TEX_LEAF_BLOWER_SHEET = '__leaf_blower_sheet';
+
+/**
+ * Zellen des Laubbläser-Motivstreifens. Alle Motive sind helles Grau: die Farbe kommt allein
+ * aus dem Member-Tint, damit Gras, Erde und Herbstlaub aus denselben Formen entstehen. Die
+ * Blätter sind doppelt aufgelöst und werden verkleinert gezeichnet, damit Adern und Ränder
+ * auch bei kleiner Anzeige fein bleiben.
+ */
+export const LEAF_BLOWER_SHEET_CELLS = {
+  leafOval:   { x: 0,   width: 18, height: 12 },
+  leafNarrow: { x: 20,  width: 18, height: 9 },
+  leafRound:  { x: 40,  width: 15, height: 14 },
+  leafCurl:   { x: 57,  width: 14, height: 10 },
+  grassBlade: { x: 73,  width: 18, height: 4 },
+  twig:       { x: 93,  width: 16, height: 5 },
+  grain:      { x: 111, width: 4,  height: 4 },
+  clod:       { x: 117, width: 7,  height: 6 },
+  droplet:    { x: 126, width: 5,  height: 5 },
+  windStreak: { x: 133, width: 36, height: 6 },
+} as const;
+const LEAF_BLOWER_SHEET_WIDTH = 170;
+const LEAF_BLOWER_SHEET_HEIGHT = 14;
+
+export function ensureLeafBlowerSheetTexture(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, TEX_LEAF_BLOWER_SHEET, LEAF_BLOWER_SHEET_WIDTH, LEAF_BLOWER_SHEET_HEIGHT, (ctx) => {
+    ctx.clearRect(0, 0, LEAF_BLOWER_SHEET_WIDTH, LEAF_BLOWER_SHEET_HEIGHT);
+    const cells = LEAF_BLOWER_SHEET_CELLS;
+
+    // Blattkörper mit Querwölbung, Mittelrippe, Seitenadern und dunklerem Rand.
+    const leaf = (
+      cell: { x: number; width: number; height: number },
+      halfLength: number,
+      halfWidth: number,
+      veins: number,
+      outline: (ctx: CanvasRenderingContext2D) => void,
+    ): void => {
+      ctx.save();
+      ctx.translate(cell.x + cell.width / 2, cell.height / 2);
+      const body = ctx.createLinearGradient(0, -halfWidth, 0, halfWidth);
+      body.addColorStop(0, '#fbfbfb');
+      body.addColorStop(0.45, '#e6e6e6');
+      body.addColorStop(1, '#bcbcbc');
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      outline(ctx);
+      ctx.fill();
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = 'rgba(120,120,120,0.75)';
+      ctx.stroke();
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(-halfLength - 1, 0);
+      ctx.lineTo(halfLength, 0);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = 0.55;
+      for (let vein = 1; vein <= veins; vein += 1) {
+        const x = -halfLength + (vein / (veins + 1)) * halfLength * 1.8;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + halfLength * 0.32, -halfWidth);
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + halfLength * 0.32, halfWidth);
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+
+    leaf(cells.leafOval, 8, 5, 3, (c) => {
+      c.moveTo(-8, 0);
+      c.bezierCurveTo(-5, -5.6, 4, -5.4, 8.4, 0);
+      c.bezierCurveTo(4, 5.4, -5, 5.6, -8, 0);
+      c.closePath();
+    });
+    leaf(cells.leafNarrow, 8, 3.6, 3, (c) => {
+      c.moveTo(-8.4, 0.4);
+      c.quadraticCurveTo(-1, -4.2, 8.6, -0.4);
+      c.quadraticCurveTo(0, 3.8, -8.4, 0.4);
+      c.closePath();
+    });
+    leaf(cells.leafRound, 6.5, 6.2, 2, (c) => {
+      // Gesägter Rand: kleine Zacken entlang eines fast runden Blatts.
+      const teeth = 14;
+      for (let index = 0; index <= teeth; index += 1) {
+        const angle = (index / teeth) * Math.PI * 2;
+        const radius = index % 2 === 0 ? 6.3 : 5.6;
+        const x = Math.cos(angle) * radius * 1.04 + (Math.cos(angle) > 0 ? 0.6 : 0);
+        const y = Math.sin(angle) * radius;
+        if (index === 0) c.moveTo(x, y);
+        else c.lineTo(x, y);
+      }
+      c.closePath();
+    });
+    // Eingerolltes Blatt: sichtbare, dunklere Unterseite als schmaler Saum.
+    leaf(cells.leafCurl, 6.5, 4.2, 2, (c) => {
+      c.moveTo(-6.5, 1.5);
+      c.bezierCurveTo(-4, -4.6, 4, -4.4, 6.6, -0.6);
+      c.bezierCurveTo(3, 1.6, -2, 3.6, -6.5, 1.5);
+      c.closePath();
+    });
+    ctx.fillStyle = 'rgba(150,150,150,0.8)';
+    ctx.beginPath();
+    ctx.ellipse(cells.leafCurl.x + 7, 7.2, 5.2, 1.3, -0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Stiele an Oval und Schmalblatt.
+    ctx.strokeStyle = 'rgba(170,170,170,0.95)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(cells.leafOval.x + 1, 6);
+    ctx.lineTo(cells.leafOval.x - 0.2, 6.4);
+    ctx.moveTo(cells.leafNarrow.x + 0.8, 4.9);
+    ctx.lineTo(cells.leafNarrow.x - 0.2, 5.2);
+    ctx.stroke();
+
+    // Grashalm: spitz zulaufend, Mittellinie heller.
+    const blade = cells.grassBlade;
+    const bladeFill = ctx.createLinearGradient(0, 0, 0, blade.height);
+    bladeFill.addColorStop(0, '#f4f4f4');
+    bladeFill.addColorStop(1, '#bdbdbd');
+    ctx.fillStyle = bladeFill;
+    ctx.beginPath();
+    ctx.moveTo(blade.x + 0.5, 1.2);
+    ctx.quadraticCurveTo(blade.x + 9, 0.2, blade.x + blade.width - 0.5, 2);
+    ctx.quadraticCurveTo(blade.x + 9, 3.6, blade.x + 0.5, 2.9);
+    ctx.closePath();
+    ctx.fill();
+
+    // Zweigstück mit Knoten.
+    const twig = cells.twig;
+    ctx.strokeStyle = '#d2d2d2';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(twig.x + 1, 3.2);
+    ctx.lineTo(twig.x + 9, 2.4);
+    ctx.lineTo(twig.x + twig.width - 1, 2.9);
+    ctx.moveTo(twig.x + 9, 2.4);
+    ctx.lineTo(twig.x + 12, 0.9);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+
+    // Erdkorn und Krümel mit Licht von oben links.
+    const grainX = cells.grain.x + 2;
+    const grain = ctx.createRadialGradient(grainX - 0.5, 1.5, 0.2, grainX, 2, 2);
+    grain.addColorStop(0, '#f2f2f2');
+    grain.addColorStop(0.7, '#c4c4c4');
+    grain.addColorStop(1, 'rgba(180,180,180,0)');
+    ctx.fillStyle = grain;
+    ctx.fillRect(cells.grain.x, 0, cells.grain.width, cells.grain.height);
+    const clod = cells.clod;
+    const clodFill = ctx.createLinearGradient(clod.x, 0, clod.x + clod.width, clod.height);
+    clodFill.addColorStop(0, '#f0f0f0');
+    clodFill.addColorStop(1, '#a8a8a8');
+    ctx.fillStyle = clodFill;
+    ctx.beginPath();
+    ctx.moveTo(clod.x + 1, 2);
+    ctx.lineTo(clod.x + 3.5, 0.5);
+    ctx.lineTo(clod.x + 6.4, 1.8);
+    ctx.lineTo(clod.x + 5.8, 5);
+    ctx.lineTo(clod.x + 2.2, 5.5);
+    ctx.lineTo(clod.x + 0.6, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Wassertropfen: heller Kern, weicher Rand.
+    const drop = cells.droplet;
+    const dropFill = ctx.createRadialGradient(drop.x + 2.5, 2.5, 0, drop.x + 2.5, 2.5, 2.5);
+    dropFill.addColorStop(0, 'rgba(255,255,255,1)');
+    dropFill.addColorStop(0.55, 'rgba(255,255,255,0.75)');
+    dropFill.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = dropFill;
+    ctx.fillRect(drop.x, 0, drop.width, drop.height);
+
+    // Windstrich: weich auslaufende Linie für niedergedrückten Bewuchs und Wasserkräuselung.
+    const streak = cells.windStreak;
+    const along = ctx.createLinearGradient(streak.x, 0, streak.x + streak.width, 0);
+    along.addColorStop(0, 'rgba(255,255,255,0)');
+    along.addColorStop(0.3, 'rgba(255,255,255,0.85)');
+    along.addColorStop(0.62, 'rgba(255,255,255,1)');
+    along.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = along;
+    ctx.fillRect(streak.x, 2, streak.width, 2);
+    ctx.globalAlpha = 0.4;
+    ctx.fillRect(streak.x, 1, streak.width, 1);
+    ctx.fillRect(streak.x, 4, streak.width, 1);
+    ctx.globalAlpha = 1;
+  });
+}

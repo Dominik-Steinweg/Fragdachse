@@ -19,7 +19,7 @@ import { PowerUpRenderer } from '../powerups/PowerUpRenderer';
 import { AdrenalineEssenceGpuRenderer } from '../adrenalineEssence/AdrenalineEssenceGpuRenderer';
 import { CameraFeedbackController } from '../effects/camera/CameraFeedbackController';
 import { impactHeavy } from '../effects/camera/cameraFeedbackPresets';
-import { DEPTH } from '../config';
+import { DEPTH, applyArenaWorldMetrics } from '../config';
 import ballisticContent from '../loadout/content/data/weapons-ballistic.json';
 import streamContent from '../loadout/content/data/weapons-flame-air.json';
 import { FlameRenderer } from '../effects/FlameRenderer';
@@ -91,6 +91,9 @@ class FogLab extends Phaser.Scene {
   create(): void {
     frame.width = value('scenario') === 'camera' ? 12288 : 8192;
     frame.height = value('scenario') === 'camera' ? 4096 : 3072;
+    // Die Lab-Welt beginnt bei 0/0; Zell-Sampler (z. B. Laubbläser-Material) rechnen im Arenaraum.
+    applyArenaWorldMetrics({ arenaWidth: frame.width, arenaHeight: frame.height, arenaOffsetX: 0, arenaOffsetY: 0,
+      arenaViewportWidth: 1920, arenaViewportHeight: 1080, usesDynamicCamera: true, showStaticArenaFrames: false });
     this.elapsed = 0; this.shots = []; this.nextShot = 0; this.nextExplosion = 4000; this.obstacles.clear(); this.fadingBase = []; this.advance = 0;
     this.fireOnce = false; this.nextProjectileId = 1;
     if (!this.bench) { this.motion = this.firing = this.pan = this.paused = false; }
@@ -115,7 +118,7 @@ class FogLab extends Phaser.Scene {
       this.gpuVfx = new GpuVfxSystem(this);
       this.flame = new FlameRenderer(this); this.flame.generateTextures(); this.flame.registerGpuVfx(this.gpuVfx);
       this.leaf = new LeafBlowerRenderer(this); this.leaf.generateTextures(); this.leaf.registerGpuVfx(this.gpuVfx);
-      this.leaf.setTerrainMaterialLayout({ dirt: cells(27, 9, 14, 24), tracks: [] });
+      this.leaf.setTerrainMaterialLayout({ dirt: cells(27, 9, 14, 24), tracks: [], water });
       this.leaf.setTerrainColorSnapshot(new TerrainColorSnapshot(1, 1, 0, 0, new Uint8Array([95, 112, 66])));
 
     }

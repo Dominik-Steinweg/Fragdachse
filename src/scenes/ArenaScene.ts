@@ -13,6 +13,7 @@ import * as Phaser from 'phaser';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
 import { getForestModalSurfaces, preloadForestModalAssets } from '../ui/ForestModal';
+import { preloadHudFrameAssets } from '../ui/HudFrameAssets';
 import { preloadForestAssets } from '../ui/LobbyForestAssets';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
@@ -345,6 +346,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadAllAudio(this.load);
     preloadForestAssets(this.load);
     preloadForestModalAssets(this.load);
+    preloadHudFrameAssets(this.load);
     preloadGroundMaterials(this.load);
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
     this.load.image('bg_tracks', './assets/sprites/BahnstreckeSchienen.png');
@@ -742,7 +744,6 @@ export class ArenaScene extends Phaser.Scene {
     this.coopMissionPresentation = new CoopMissionPresentationInfrastructure(this);
     const centerHUD  = new CenterHUD(this);
     centerHUD.build();
-    centerHUD.setPuContainer(leftPanel.getPuContainer());
     this.coopMissionPresentation.bindCenterHud(centerHUD);
 
     const aimSystem = new AimSystem(

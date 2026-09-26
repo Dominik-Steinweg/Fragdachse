@@ -12,6 +12,8 @@ import { RoomStatisticsOverlay } from '../ui/RoomStatisticsOverlay';
 import { preloadForestAssets } from '../ui/LobbyForestAssets';
 import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from '../ui/MatchResultsAssets';
 import { getForestModalSurfaces, preloadForestModalAssets } from '../ui/ForestModal';
+import { preloadHudFrameAssets } from '../ui/HudFrameAssets';
+import { openArenaHudPreview } from './arenaHudPreview';
 import { ClarityCameraRegistry } from '../scenes/arena/ClarityCameraRegistry';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
@@ -41,6 +43,7 @@ class ForestUiPreview extends Phaser.Scene {
     this.load.image(LOADING_FOREST.key, LOADING_FOREST.url);
     preloadForestAssets(this.load);
     preloadForestModalAssets(this.load);
+    preloadHudFrameAssets(this.load);
     for (const asset of UPGRADE_CONTROLS) this.load.image(asset.key, asset.url);
     this.load.image(UPGRADE_HEADER.key, UPGRADE_HEADER.url);
     this.load.image(MATCH_RESULTS_TITLE.key, MATCH_RESULTS_TITLE.url);
@@ -108,6 +111,8 @@ class ForestUiPreview extends Phaser.Scene {
         step = (step + 1) % 121;
       };
       update(); timer = this.time.addEvent({ delay: 100, loop: true, callback: update });
+    } else if (menu === 'hud') {
+      this.overlay = openArenaHudPreview(this, status);
     } else if (menu === 'help') {
       const overlay = new HelpOverlay(this); this.overlay = overlay; overlay.build(); overlay.show();
     } else if (menu === 'options') {

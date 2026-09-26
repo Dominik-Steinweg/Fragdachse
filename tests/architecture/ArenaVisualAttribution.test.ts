@@ -51,7 +51,12 @@ const ARENA_RUNTIME_SOURCE_PREFIXES = [
 const ARENA_RUNTIME_SOURCE_NAMES = new Set([
   'src/ui/ArenaHUD.ts',
   'src/ui/CenterHUD.ts',
+  'src/ui/CoopDefenseObjectiveAnnouncement.ts',
   'src/ui/CoopDefenseSecondaryObjectiveHud.ts',
+  'src/ui/CoopDefenseTutorialPanel.ts',
+  'src/ui/HudCard.ts',
+  'src/ui/HudResourceRow.ts',
+  'src/ui/HudStatusStrip.ts',
   'src/ui/HostileBaseIndicator.ts',
   'src/ui/PlayerStatusRing.ts',
 ]);
@@ -483,7 +488,6 @@ const GRAPHICS_ARC_LEGACY_SOURCES: Readonly<Record<string, string>> = {
   'src/entities/BaseEntity.ts': 'Einmalig gezeichnete Basismarkierung, kein Pro-Frame-Pfad.',
   'src/scenes/arena/GaussWarningRenderer.ts': 'Emitterglow der Fremdspieler, noch nicht umgestellt.',
   'src/scenes/arena/PlacementPreviewRenderer.ts': 'Platzierungsvorschau, noch nicht umgestellt.',
-  'src/ui/CoopDefenseObjectiveAnnouncement.ts': 'Einmalig gezeichneter Rahmenschmuck, kein Pro-Frame-Pfad.',
   'src/ui/HostileBaseIndicator.ts': 'Pfeilspitze, noch nicht umgestellt.',
   'src/ui/RadialActionMenu.ts': 'Radialmenue, zeichnet nur bei geoeffnetem Menue.',
 };
