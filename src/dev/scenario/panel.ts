@@ -16,6 +16,8 @@ export function createScenarioPanel(controller: DevScenarioController) {
   root.innerHTML = `<style>
   #dev-scenario-panel { position:fixed; z-index:10000; right:10px; top:10px; width:350px; max-height:calc(100vh - 20px); overflow:auto; padding:14px; box-sizing:border-box; background:#14202aee; border:1px solid #657583; border-radius:8px; color:#eef3f6; font:13px system-ui,sans-serif }
   #dev-scenario-panel summary { cursor:pointer; font-weight:650; padding:6px 0 }
+  #dev-scenario-panel[data-collapsed=true] { width:auto; padding:4px }
+  #dev-scenario-panel[data-collapsed=true] #dev-shell { display:none }
   #dev-scenario-panel label { display:block; margin:7px 0 }
   #dev-scenario-panel select,#dev-scenario-panel input,#dev-scenario-panel textarea { display:block; width:100%; box-sizing:border-box; background:#0c151e; color:#fff; border:1px solid #697985; padding:5px; border-radius:3px }
   #dev-scenario-panel input[type=checkbox] { display:inline; width:auto; margin-right:8px }
@@ -24,8 +26,16 @@ export function createScenarioPanel(controller: DevScenarioController) {
   #dev-scenario-panel textarea { height:190px; font:11px ui-monospace,monospace }
   #dev-scenario-panel hr { border:0; border-top:1px solid #41515d } #dev-scenario-panel .hint { color:#bccbd5; font-size:12px }
   #dev-scenario-panel img { max-width:none } #dev-scenario-panel .capture { max-height:70vh; overflow:auto }
-  </style><details open id="dev-shell"><summary>Dev-Szenario · isolierter Spielstand</summary><p class="hint">Offline-Host · Änderungen betreffen nur diesen Tab. Steuerung über Grid-Koordinaten (32 px/Zelle).</p><output role="status" id="dev-status"></output><div id="dev-content"></div></details>`;
+  </style><button type="button" id="dev-collapse" aria-controls="dev-shell" aria-expanded="true">Panel einklappen</button><details open id="dev-shell"><summary>Dev-Szenario · isolierter Spielstand</summary><p class="hint">Offline-Host · Änderungen betreffen nur diesen Tab. Steuerung über Grid-Koordinaten (32 px/Zelle).</p><output role="status" id="dev-status"></output><div id="dev-content"></div></details>`;
   document.body.append(root);
+  const collapse = root.querySelector<HTMLButtonElement>('#dev-collapse')!;
+  function setCollapsed(collapsed: boolean): void {
+    root.dataset.collapsed = String(collapsed);
+    collapse.textContent = collapsed ? 'Dev-Szenario öffnen' : 'Panel einklappen';
+    collapse.setAttribute('aria-expanded', String(!collapsed));
+    if (!collapsed) root.querySelector<HTMLDetailsElement>('#dev-shell')!.open = true;
+  }
+  collapse.onclick = () => setCollapsed(root.dataset.collapsed !== 'true');
   for (const name of ['keydown', 'keyup', 'pointerdown', 'pointerup', 'wheel']) root.addEventListener(name, event => event.stopPropagation());
   const content = root.querySelector<HTMLDivElement>('#dev-content')!;
   const controls: Record<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> = {};
@@ -126,7 +136,7 @@ export function createScenarioPanel(controller: DevScenarioController) {
   hint(objects, 'Gegner behalten KI und Angriffe; „Position festhalten“ deaktiviert diese nicht. Bauwerke verwenden echte Platzierungs-, Cooldown- und Kapazitätsregeln.');
 
   const simulation = section('5 · Zeit, Ressourcen und Kamera');
-  for (const [key, title] of [['suppressWaves', 'Authored Encounter unterdrücken'], ['refillAdrenaline', 'Adrenalin pro Frame auffüllen'], ['refillHp', 'HP pro Frame auffüllen']] as const) {
+  for (const [key, title] of [['suppressWaves', 'Authored Encounter unterdrücken'], ['freezeMission', 'Mission und Respawn-Verbrauch einfrieren'], ['hideTutorial', 'Tutorial und Steuerungshilfe ausblenden'], ['refillAdrenaline', 'Adrenalin pro Frame auffüllen'], ['refillHp', 'HP pro Frame auffüllen']] as const) {
     const check = field(simulation, title, key, 'checkbox');
     check.onchange = () => { controller.config[key] = check.checked; syncJson(); controller.saveLink(); };
   }
@@ -159,24 +169,26 @@ export function createScenarioPanel(controller: DevScenarioController) {
   button(exchange, 'Katalog herunterladen', () => download('dev-scenario-catalog.json', { upgrades: COOP_DEFENSE_UPGRADE_DEFINITIONS, affixes: COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS, enemies: COOP_DEFENSE_ENEMY_KINDS, constructions: COOP_DEFENSE_CONSTRUCTION_IDS }));
   const report = document.createElement('pre'); report.id = 'dev-report'; report.setAttribute('aria-label', 'Szenario-Zustand'); exchange.append(report);
   button(exchange, 'Bericht anzeigen', () => { report.textContent = JSON.stringify(controller.snapshot(), null, 2); });
+  const command = document.createElement('textarea'); command.id = 'dev-command'; command.setAttribute('aria-label', 'API-Befehl JSON');
+  command.value = '{"action":"status"}'; exchange.append(command);
+  button(exchange, 'API-Befehl ausführen', () => {
+    report.textContent = JSON.stringify(window.devScenario!.run(JSON.parse(command.value)), null, 2);
+  });
+  hint(exchange, 'Dieselben Befehle sind direkt über window.devScenario.run(...) erreichbar. status(), whenReady() und capture() funktionieren unabhängig vom Panel. Siehe docs/dev-scenarios.md.');
 
   const captures = section('7 · Screenshot in Originalauflösung');
   const capture = document.createElement('div'); capture.className = 'capture';
   const savedCapture = document.createElement('output'); savedCapture.id = 'dev-capture-path';
-  button(captures, 'PNG im Workspace speichern', () => controller.capture(url => {
-    void (async () => {
-      const png = await (await fetch(url)).blob();
-      const response = await fetch('/__dev-scenario-capture', { method: 'POST', headers: { 'content-type': 'image/png' }, body: png });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? 'PNG konnte nicht gespeichert werden.');
-      savedCapture.textContent = result.path;
-    })().catch(error => { controller.fail(error); refresh(); });
-  }));
+  button(captures, 'PNG im Workspace speichern', () => {
+    void window.devScenario!.capture().then(result => {
+      savedCapture.textContent = result.ok ? result.path! : result.error; refresh();
+    });
+  });
   captures.append(savedCapture);
-  button(captures, 'PNG aufnehmen', () => controller.capture(url => {
+  button(captures, 'PNG aufnehmen', () => { void controller.capture().then(url => {
     capture.replaceChildren(); const a = document.createElement('a'); a.href = url; a.download = 'dev-scenario.png'; a.textContent = 'PNG herunterladen';
     const image = document.createElement('img'); image.src = url; image.alt = 'Szenario-Aufnahme in Originalauflösung'; capture.append(a, image);
-  }));
+  }).catch(error => { controller.fail(error); refresh(); }); });
   hint(captures, 'Die Vorschau ist scrollbar und zeigt jeden Bildpixel. Bei Pause rendert die Aufnahme genau einen zusätzlichen Simulationsframe.'); captures.append(capture);
 
   function syncTarget(): void { gx.value = String(controller.aim.gridX); gy.value = String(controller.aim.gridY); }
@@ -188,7 +200,7 @@ export function createScenarioPanel(controller: DevScenarioController) {
     }
     fill(upgrade, Object.keys(COOP_DEFENSE_UPGRADE_DEFINITIONS).filter(id => isCoopDefenseUpgradeAvailableForClass(id, config.classId)));
     equipped.textContent = config.tools.map(tool => describeLoadoutTool(tool).displayName).join(', ') || 'Keine Werkzeuge';
-    for (const key of ['suppressWaves', 'refillAdrenaline', 'refillHp'] as const) (controls[key] as HTMLInputElement).checked = config[key];
+    for (const key of ['suppressWaves', 'freezeMission', 'hideTutorial', 'refillAdrenaline', 'refillHp'] as const) (controls[key] as HTMLInputElement).checked = config[key];
     time.value = String(config.timeOfDay); syncJson(); syncTarget(); link.value = location.href;
   }
   function refresh(): void {
@@ -196,5 +208,5 @@ export function createScenarioPanel(controller: DevScenarioController) {
     link.value = location.href;
   }
   sync(); refresh();
-  return { sync, syncTarget, refresh, destroy: () => root.remove() };
+  return { sync, syncTarget, refresh, setCollapsed, destroy: () => root.remove() };
 }

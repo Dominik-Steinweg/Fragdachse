@@ -820,7 +820,7 @@ export class ArenaLifecycleCoordinator {
       getParticipantIds: () => bridge.getRoundParticipation()?.participantIds ?? bridge.getConnectedPlayerIds(),
       nextGenerationId: () => this.nextFlowFieldGenerationId(),
       getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId),
-      getSecondsLeft: () => bridge.computeSecondsLeft(),
+      getSecondsLeft: () => bridge.computeSecondsLeft(this.getCoopMissionRuntime()?.getMissionNow(bridge.getSynchronizedNow())),
       getConnectedPlayerIds: () => bridge.getConnectedPlayerIds(),
       getSpectatorIds: () => bridge.getRoundParticipation()?.spectatorIds ?? [],
       isPlayerBurrowed: (playerId) => this.worldPlayerGameplayRuntime?.isBurrowed(playerId) ?? false,

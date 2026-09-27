@@ -39,6 +39,18 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator) {
     if (!isDevScenarioMode() || !bridge.isHost() || bridge.getConnectedPlayers().length !== 1) throw new Error('Isolated dev host required.');
   };
   return {
+    setOptions(freezeMission: boolean, hideTutorial: boolean): void {
+      requireLocal();
+      const now = Math.max(bridge.getSynchronizedNow(), bridge.getArenaStartTime());
+      flow.getCoopMissionRuntime()?.setScenarioOptions(freezeMission && bridge.isArenaStarted(), hideTutorial, now);
+    },
+    readMission() {
+      const runtime = flow.getCoopMissionRuntime();
+      return { frozen: runtime?.scenarioMissionFrozen ?? false,
+        elapsedMs: Math.max(0, (runtime?.getMissionNow(bridge.getSynchronizedNow()) ?? bridge.getSynchronizedNow()) - bridge.getArenaStartTime()),
+        respawnBudget: bridge.getLocalCoopDefenseRespawnBudgetState(),
+        progress: bridge.getCoopDefenseMissionProgressPresentationState() };
+    },
     suppressEncounters(value: boolean): void {
       requireLocal();
       const runtime = flow.getCoopMissionRuntime();

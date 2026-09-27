@@ -9,6 +9,20 @@ function createSystem(respawnsPerPlayer = 2): CoopDefenseRespawnBudgetSystem {
 }
 
 describe('CoopDefenseRespawnBudgetSystem', () => {
+  it('freezes only consumption while preserving the death/respawn lifecycle and resumes without catch-up', () => {
+    const system = createSystem();
+    system.setConsumptionPaused(true);
+    for (let i = 0; i < 4; i++) {
+      expect(system.handlePlayerDeath('p1')).toBe(true);
+      expect(system.isPlayerAlive('p1')).toBe(false);
+      expect(system.consumeRespawn('p1')).toBe(true);
+      expect(system.consumeRespawn('p1')).toBe(false);
+    }
+    expect(system.getPlayerState('p1')).toEqual({ alive: true, eliminated: false, remainingRespawns: 2 });
+    system.setConsumptionPaused(false);
+    system.handlePlayerDeath('p1'); system.consumeRespawn('p1');
+    expect(system.getPlayerState('p1')?.remainingRespawns).toBe(1);
+  });
   it('does not consume a respawn on the initial spawn', () => {
     const system = createSystem();
 

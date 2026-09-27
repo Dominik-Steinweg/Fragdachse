@@ -2396,8 +2396,7 @@ export class NetworkBridge {
    * Berechnet die verbleibenden Sekunden LOKAL.
    * Wird niemals über das Netzwerk gesendet.
    */
-  computeSecondsLeft(): number {
-    const now = this.getSynchronizedNow();
+  computeSecondsLeft(now = this.getSynchronizedNow()): number {
     const effectiveNow = Math.max(now, this.getArenaStartTime());
     return Math.max(0, Math.ceil((this.getRoundEndTime() - effectiveNow) / 1000));
   }

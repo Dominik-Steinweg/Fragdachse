@@ -6,6 +6,12 @@ import { createMemoryStorage } from '../src/dev/scenario/memoryStorage';
 import { ScenarioClock } from '../src/dev/scenario/clock';
 
 describe('Dev scenario contract', () => {
+  it('loads old recipes with visual-review defaults and validates explicit overrides', () => {
+    const old = { version: 1, classId: 'dachs_nukem', mapId: '1' };
+    expect(parseScenario(old)).toMatchObject({ freezeMission: true, hideTutorial: true });
+    expect(parseScenario({ ...old, freezeMission: false, hideTutorial: false })).toMatchObject({ freezeMission: false, hideTutorial: false });
+    expect(() => parseScenario({ ...old, freezeMission: 'yes' })).toThrow();
+  });
   it.each(COOP_DEFENSE_CLASS_IDS)('round-trips a complete %s loadout without real progression', classId => {
     const config = defaultScenario(classId);
     expect(decodeScenario(encodeScenario(config))).toEqual(config);

@@ -32,6 +32,8 @@ Adrenalin und HP können pro Simulationsframe aufgefüllt werden. HP-Auffüllen 
 
 Der URL-Hash enthält ein versioniertes JSON-Rezept. Start, Teleport, Gegner- und Bauaktionen sowie laufende
 Ressourcen-/Tageszeitänderungen aktualisieren den Link. Nach Reload wird das Rezept automatisch gestartet.
+Auch ein Wechsel **nur des URL-Hashes** baut das neue Rezept automatisch auf. Ungültige Rezepte zeigen
+einen Fehler und ersetzen den laufenden Aufbau nicht. Ein Neustart gibt laufende Eingaben frei.
 Gespeicherte Bauwerke entstehen vor den konfigurierten Gegnern; für den Bau wird kurz eine gültige Position
 in Reichweite verwendet und danach die Beobachterposition wiederhergestellt.
 
@@ -45,9 +47,65 @@ JSON lässt sich im Panel bearbeiten, validieren und exportieren. Items enthalte
 Itemdaten einschließlich Affix-IDs und Werten; der Katalog-Export liefert die aktuellen Definitionen.
 Der Bericht enthält angeforderte Konfiguration, tatsächlich übernommenes Loadout, World-Seed/Fingerprint,
 Ladezustand, Spieler-/Gegnerpositionen, Effekt- und Konstruktionszustand sowie die letzte Aktionsantwort.
-`pendingSetupConstructions` muss für einen vollständig aufgebauten Testfall `0` sein.
+`ready: true` bestätigt den abgeschlossenen Aufbau einschließlich geprüfter Startposition nach dem Host-Frame.
+`initialPosition` enthält angeforderte und tatsächlich angewendete Koordinaten. Ein späterer Tod verwendet
+weiterhin den normalen Respawn der Map; der Bericht zeigt die jeweils aktuelle Spielerposition separat.
+Teleportieren beendet eine laufende Bewegung, erhält aber gehaltene Waffen, Utility-Aufladungen und Ultimate.
+
+`freezeMission: true` (Standard) hält Missionsfortschritt, Ziele, Missionsuhr, Missionsabschluss und den
+Verbrauch vorhandener Respawns an. Kampf, Gegnerfähigkeiten, Effekte und echte Tod-/Respawn-Abläufe laufen weiter.
+Beim Fortsetzen wird die pausierte Zeit nicht nachgeholt; ein bereits aufgebrauchtes Budget wird nicht erneuert.
+`suppressWaves` bleibt die getrennte Analysis-Policy für authored Encounter. Für normale Missionsabläufe
+**beide** Schalter ausschalten. `hideTutorial: true` (Standard) blendet Tutorialtext und Steuerungshilfe
+auch in PNGs aus; mit `false` sind sie wieder sichtbar. Alte Rezepte erhalten diese neuen Standardwerte.
+Bei globaler Pause werden Live-Optionen mit dem nächsten Schritt oder der nächsten Aufnahme angewendet.
+
+Fixierte Gegner melden `pinned: true`, `pinnedPosition`, `moving: false` und Geschwindigkeit null.
+Ihre KI-Absicht bleibt unter `desiredMovement` erhalten. Bei freien Gegnern sind `moving`/`vx`/`vy`
+weiterhin gewünschte Bewegung, keine gemessene Verschiebung.
 
 ## Browser-Agenten
+
+Im isolierten Dev-Einstieg steht nach dem Scene-Start `window.devScenario` zur Verfügung. Die API
+funktioniert auch bei eingeklapptem Panel. Der Knopf **Panel einklappen** verkleinert die gesamte Fläche.
+
+```js
+const dev = window.devScenario;
+await dev.whenReady(); // { ok, status }; maximal 180 s, mit optionalem timeoutMs
+dev.run({ action: 'target', gridX: 18, gridY: 23 });
+dev.run({ action: 'holdWeapon', slot: 'weapon2' });
+dev.run({ action: 'teleport', gridX: 14, gridY: 23 }); // Waffe bleibt gehalten
+dev.run({ action: 'options', values: { freezeMission: true, hideTutorial: true } });
+dev.run({ action: 'camera', zoom: 2, focusTarget: false });
+dev.run({ action: 'panel', collapsed: true });
+const shot = await dev.capture(); // { ok: true, path: 'C:\\…\\build\\dev-scenarios\\….png', url, status }
+const report = dev.status(); // eigenständiger Snapshot, kein veränderlicher Runtime-Verweis
+dev.run({ action: 'stop' });
+```
+
+`run` liefert synchron `{ok, status}` oder `{ok:false, error, status}`. `capture` liefert dasselbe
+asynchron, bei Erfolg zusätzlich den absoluten PNG-Pfad und die URL. Eine zweite gleichzeitige Aufnahme
+wird abgelehnt. `whenReady()` wartet auf den aktuellen Aufbau; ein Szenario-Wechsel bricht eine laufende
+Aufnahme ab. Nach Scene-Teardown wird die globale API entfernt und wartende Aufrufe werden beendet.
+
+| Aktion | Zusätzliche Felder |
+|---|---|
+| `start` | `scenario`: vollständiges oder um Standardwerte ergänzbares Rezept |
+| `status`, `findFree`, `stop`, `utility`, `clearEnemies`, `pause`, `resume` | keine |
+| `target`, `teleport` | `gridX`, `gridY`; Teleport ohne Koordinaten verwendet das Ziel |
+| `move` | `dx`, `dy` (−1…1), `durationMs` (0…10000) |
+| `holdWeapon`, `fire` | `slot`: `weapon1` oder `weapon2` |
+| `ultimate` | `phase`: `press` (Standard) oder `release` |
+| `spawn` | `kind`, optional `pinned`, `hp`, `gridX`, `gridY`; ohne Position am Ziel |
+| `build` | `id`, optional `gridX`, `gridY`; ohne Position am Ziel |
+| `step` | optional `frames` (1…600, ganzzahlig) |
+| `speed` | `value` (0.1…2) |
+| `camera` | optional `zoom` (0.25…8), `focusTarget` |
+| `panel` | `collapsed`: Boolean |
+| `options` | `values`: `timeOfDay`, `freezeMission`, `hideTutorial`, `suppressWaves`, `refillHp`, `refillAdrenaline` |
+
+Browser-Werkzeuge, die keine schreibenden JavaScript-Aufrufe erlauben, können denselben JSON-Befehl
+im Feld **API-Befehl JSON** ausführen. Das Ergebnis erscheint direkt im Bericht; es wird kein JavaScript evaluiert.
 
 Alle Steuerelemente sind HTML mit Labels und stabilen `dev-*`-IDs. Ein Canvas-Klick, Cheat-Menü oder Zugriff
 auf private Scene-Felder ist für den Aufbau nicht nötig. Bei fehlerhafter Klickskalierung des Browser-Panes

@@ -92,6 +92,19 @@ function createHarness(): {
 }
 
 describe('CoopMissionPresentationBinding', () => {
+  it('freezes displayed mission time and resumes without counting paused combat time', () => {
+    const { binding, runtime, clock, progressTimes } = createHarness();
+    runtime.bind(binding);
+    runtime.setScenarioOptions(true, true, clock.now);
+    binding.sync(16, true);
+    clock.now += 4000;
+    binding.sync(16, true);
+    runtime.setScenarioOptions(false, false, clock.now);
+    clock.now += 100;
+    binding.sync(16, true);
+    expect(progressTimes).toEqual([1000, 1000, 1100]);
+    runtime.destroy();
+  });
   it('passes synchronized round time to checkpoint animation every active frame', () => {
     const { binding, runtime, clock, progressTimes } = createHarness();
     runtime.bind(binding);

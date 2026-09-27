@@ -18,6 +18,9 @@ export interface CoopDefenseRespawnBudgetSystemOptions {
 export class CoopDefenseRespawnBudgetSystem {
   private readonly respawnsPerPlayer: number;
   private readonly players = new Map<string, CoopDefenseRespawnBudgetPlayerState>();
+  private consumptionPaused = false;
+
+  setConsumptionPaused(paused: boolean): void { this.consumptionPaused = paused; }
 
   constructor(options: CoopDefenseRespawnBudgetSystemOptions) {
     this.respawnsPerPlayer = normalizeRespawnCount(options.respawnsPerPlayer);
@@ -88,7 +91,7 @@ export class CoopDefenseRespawnBudgetSystem {
   consumeRespawn(playerId: string): boolean {
     if (!this.canPlayerRespawn(playerId)) return false;
     const state = this.players.get(playerId)!;
-    state.remainingRespawns -= 1;
+    if (!this.consumptionPaused) state.remainingRespawns -= 1;
     state.alive = true;
     return true;
   }

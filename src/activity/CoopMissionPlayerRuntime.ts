@@ -97,6 +97,11 @@ export class CoopMissionPlayerRuntime {
     this.options.publishRespawnBudget(budget.getSnapshot());
   }
 
+  /** Suspend consumption without bypassing death/respawn state transitions. */
+  setRespawnConsumptionPaused(paused: boolean): void {
+    this.options.respawnBudget?.setConsumptionPaused(paused);
+  }
+
   /** Der tatsaechlich ausgefuehrte Respawn; ohne Budget ist er immer erlaubt. */
   consumeRespawn(playerId: string, publish = true): boolean {
     if (this.destroyed || !this.attachedPlayers.has(playerId)) return false;

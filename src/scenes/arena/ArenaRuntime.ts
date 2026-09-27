@@ -688,6 +688,10 @@ export class ArenaRuntime {
     return { wildlife, fog: world?.presentation?.groundFog?.getDiagnostics() ?? null };
   }
 
+  getMissionNow(now = this.getSynchronizedNow()): number {
+    return this.flow.getCoopMissionRuntime()?.getMissionNow(now) ?? now;
+  }
+
   getScenarioLoadingState() {
     const arena = this.flow.getWorldRuntime()?.materialization?.arena;
     const view = getVisibleWorldView(this.scene.cameras.main);

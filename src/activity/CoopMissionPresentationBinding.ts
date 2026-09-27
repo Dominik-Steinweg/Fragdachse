@@ -163,7 +163,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     }
     this.presentationActive = true;
 
-    const elapsedMs = this.reads.getSynchronizedNow() - this.reads.getArenaStartTime();
+    const elapsedMs = this.runtime.getMissionNow(this.reads.getSynchronizedNow()) - this.reads.getArenaStartTime();
     const missionProgress = this.reads.getMissionProgressPresentationState();
     const encounter = this.reads.getEncounterPresentationState();
 
@@ -266,6 +266,11 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     elapsedMs: number,
     missionProgress: CoopDefenseMissionProgressPresentationState | null,
   ): void {
+    if (this.runtime?.scenarioHideTutorial) {
+      this.ui.centerHud.updateTutorial(null, false);
+      this.ui.centerHud.updateTutorialStep(null);
+      return;
+    }
     const roundElapsedMs = Math.max(0, elapsedMs);
     const tutorialDurationMs = this.mapConfig.tutorialDurationMs ?? COOP_DEFENSE_TUTORIAL_DURATION_MS;
     const tutorialText = getMapTutorial(this.mapConfig.mapId, getLocale());

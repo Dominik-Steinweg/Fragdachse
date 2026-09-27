@@ -12,6 +12,7 @@ import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
 import { ScenarioClock } from './clock';
 import { decodeScenario, defaultScenario, encodeScenario, parseScenario, scenarioLoadout, type DevScenario, type GridPoint } from './config';
 import { createScenarioPanel } from './panel';
+import { installScenarioApi } from './api';
 
 export class DevScenarioController {
   readonly clock: ScenarioClock;
@@ -33,6 +34,18 @@ export class DevScenarioController {
   private startedAt = performance.now();
   private lobbyFrames = 0;
   private readyAt: number | null = null;
+  private setupPending = false;
+  private initialPosition: { requested: GridPoint | null; applied: { x: number; y: number } | null; verified: boolean } = { requested: null, applied: null, verified: false };
+  private readonly api: ReturnType<typeof installScenarioApi>;
+  private captureCancel: (() => void) | null = null;
+  private captureRevision = 0;
+  private readonly onHashChange = () => {
+    try {
+      const config = decodeScenario(location.hash);
+      if (!config) throw new Error('URL enthält kein Szenario-Rezept.');
+      this.start(config); this.panel.sync();
+    } catch (error) { this.fail(error); }
+  };
   private readonly panel: ReturnType<typeof createScenarioPanel>;
   private readonly refreshTimer: ReturnType<typeof setInterval>;
   private disposed = false;
@@ -45,6 +58,8 @@ export class DevScenarioController {
     let imported: DevScenario | null = null;
     try { imported = decodeScenario(location.hash); } catch (error) { this.fail(error); }
     this.panel = createScenarioPanel(this);
+    this.api = installScenarioApi(this);
+    window.addEventListener('hashchange', this.onHashChange);
     this.refreshTimer = setInterval(() => this.panel.refresh(), 300);
     if (imported) { this.config = imported; this.panel.sync(); this.start(imported); }
   }
@@ -58,6 +73,8 @@ export class DevScenarioController {
   start(value: unknown): void {
     const config = parseScenario(value);
     this.stop();
+    this.captureCancel?.();
+    this.captureRevision++;
     this.clock.paused = false; this.clock.speed = 1;
     this.config = config;
     this.saveLink();
@@ -66,6 +83,8 @@ export class DevScenarioController {
     bridge.setLocalReady(false); this.runtime.setIsLocalReady(false);
     this.state = 'waiting-lobby'; this.lobbyFrames = 0;
     this.startedAt = performance.now(); this.readyAt = null;
+    this.setupPending = false;
+    this.initialPosition = { requested: config.player, applied: null, verified: false };
     this.message = 'Warte auf Lobby und normalen Rundenstart …';
   }
   saveLink(): void { history.replaceState(null, '', encodeScenario(this.config)); }
@@ -99,7 +118,10 @@ export class DevScenarioController {
   }
   teleport(point = this.aim, remember = true): void {
     this.requireReady(); const position = this.free(point, 16);
-    this.stop(); this.runtime.navigationLabPort.placePlayer(position.x, position.y);
+    // A position change cancels walking, but must not release a held weapon/utility/ultimate.
+    this.movement = { dx: 0, dy: 0, until: 0 };
+    bridge.sendLocalInput({ dx: 0, dy: 0, aim: 0, dashHeld: false });
+    this.runtime.navigationLabPort.placePlayer(position.x, position.y);
     if (remember) { this.config.player = { ...point }; this.saveLink(); }
     this.message = 'Spieler versetzt.';
   }
@@ -193,14 +215,17 @@ export class DevScenarioController {
       }
       if (this.state === 'loading') {
         this.runtime.devScenarioPort.suppressEncounters(true);
-        if (!this.runtime.navigationLabPort.isReady() || !bridge.isArenaStarted()) return;
-        this.state = 'ready'; this.readyAt = performance.now();
+        this.runtime.devScenarioPort.setOptions(this.config.freezeMission, this.config.hideTutorial);
+        if (!this.runtime.navigationLabPort.isReady() || !bridge.isArenaStarted()
+          || !this.runtime.getScenarioLoadingState().roundStartPrepared
+          || !this.runtime.navigationLabPort.getPlayerPosition()?.alive) return;
+        this.state = 'ready'; this.setupPending = true;
         if (this.config.player) this.teleport(this.config.player, false);
         const player = this.runtime.navigationLabPort.getPlayerPosition();
         if (player) this.aim = this.grid({ x: player.x + 128, y: player.y });
         this.pendingConstructions = [...this.config.constructions]; this.nextBuildAt = 0;
         if (!this.pendingConstructions.length) this.spawnConfiguredEnemies();
-        this.message = 'Szenario bereit. Alle Eingaben verwenden normale Gameplay-Aktionen.';
+        this.message = 'Szenario-Aufbau wird im Host-Frame geprüft …';
         this.panel.syncTarget();
       }
       if (this.state !== 'ready') return;
@@ -209,6 +234,7 @@ export class DevScenarioController {
       }
       const now = this.clock.now, id = bridge.getLocalPlayerId();
       this.runtime.devScenarioPort.suppressEncounters(this.config.suppressWaves || this.pendingConstructions.length > 0);
+      this.runtime.devScenarioPort.setOptions(this.config.freezeMission, this.config.hideTutorial);
       this.runtime.setTimeOfDayDebugOverride(this.config.timeOfDay);
       if (this.config.refillAdrenaline) this.runtime.weaponBalanceLabPort.setAdrenaline(id, this.runtime.weaponBalanceLabPort.getMaxAdrenaline(id));
       if (this.config.refillHp) { const combat = this.runtime.getWorldCombatCore(); combat?.heal(id, combat.getMaxHp(id)); }
@@ -245,6 +271,26 @@ export class DevScenarioController {
   private spawnConfiguredEnemies(): void {
     for (const enemy of this.config.enemies) this.spawn(enemy.kind, enemy.pinned, enemy.hp, enemy, false);
   }
+  /** Final placement belongs after normal spawn/physics reconciliation, before camera/render. */
+  afterHostFrame(): void {
+    if (this.state !== 'ready') return;
+    try {
+      for (const [id, point] of this.pinned) this.runtime.weaponBalanceLabPort.pinTarget(id, point.x, point.y);
+      if (this.setupPending && this.pendingConstructions.length === 0) {
+        const requested = this.initialPosition.requested;
+        if (requested) this.teleport(requested, false);
+        const player = this.runtime.navigationLabPort.getPlayerPosition();
+        if (!player?.alive) return;
+        this.initialPosition.applied = { x: player.x, y: player.y };
+        const expected = requested ? this.world(requested) : player;
+        if (Math.hypot(player.x - expected.x, player.y - expected.y) > 0.01) throw new Error('Startposition konnte nicht übernommen werden.');
+        this.initialPosition.verified = true; this.setupPending = false; this.readyAt = performance.now();
+        this.message = 'Szenario bereit. Startposition und Aufbau geprüft.';
+      }
+    } catch (error) { this.fail(error); this.stop(); this.state = 'error'; }
+  }
+  setPanelCollapsed(collapsed: boolean): void { this.panel.setCollapsed(collapsed); }
+  syncPanel(): void { this.panel.sync(); }
   syncCamera(): void {
     if (this.state !== 'ready') return;
     let point: { x: number; y: number } | null;
@@ -258,7 +304,8 @@ export class DevScenarioController {
     setCameraBaseScroll(this.scene, camera.scrollX, camera.scrollY);
   }
   snapshot(): Record<string, unknown> {
-    return { state: this.state, message: this.message, isolated: true, network: 'local-only',
+    return { state: this.state, ready: this.state === 'ready' && !this.setupPending, message: this.message, isolated: true, network: 'local-only',
+      initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),
       elapsedWallMs: Math.round(performance.now() - this.startedAt), simulationMs: this.clock.now,
       paused: this.clock.paused, speed: this.clock.speed, trigger: this.trigger, moving: this.movement,
@@ -269,19 +316,49 @@ export class DevScenarioController {
       config: this.config, committedLoadout: bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId()),
       phase: bridge.getGamePhase(), world: this.runtime.getWorldDescriptor(), metrics: this.runtime.getWorldMetrics(),
       loading: this.runtime.getScenarioLoadingState(), player: this.runtime.navigationLabPort.getPlayerPosition(),
-      aim: this.aim, enemies: this.runtime.navigationLabPort.readEnemies(), effects: this.runtime.getScenarioObservation(), lastAction: this.lastAction };
+      aim: this.aim, enemies: this.runtime.navigationLabPort.readEnemies().map(enemy => ({ ...enemy,
+        pinned: this.pinned.has(enemy.id), pinnedPosition: this.pinned.get(enemy.id) ?? null,
+        desiredMovement: { moving: enemy.moving, vx: enemy.vx, vy: enemy.vy },
+        moving: this.pinned.has(enemy.id) ? false : enemy.moving,
+        vx: this.pinned.has(enemy.id) ? 0 : enemy.vx, vy: this.pinned.has(enemy.id) ? 0 : enemy.vy })),
+      effects: this.runtime.getScenarioObservation(), lastAction: this.lastAction };
   }
-  capture(callback: (url: string) => void): void {
+  capture(): Promise<string> {
     this.requireReady();
-    this.scene.game.renderer.snapshot(image => {
-      if (image instanceof HTMLImageElement) callback(image.src);
-      else this.fail(new Error('Renderer lieferte kein PNG.'));
-    }, 'image/png');
-    if (this.clock.paused) this.clock.step();
+    if (this.captureCancel) return Promise.reject(new Error('Eine Aufnahme läuft bereits.'));
+    return new Promise((resolve, reject) => {
+      const finish = (error: Error | null, url = '') => {
+        if (this.captureCancel !== cancel) return;
+        this.captureCancel = null; clearTimeout(timeout);
+        if (error) reject(error); else resolve(url);
+      };
+      const cancel = () => finish(new Error('Aufnahme durch Szenario-Wechsel beendet.'));
+      const timeout = setTimeout(() => finish(new Error('Keine Aufnahme nach 10 s; Browser-Pane sichtbar halten.')), 10000);
+      this.captureCancel = cancel;
+      try {
+        this.scene.game.renderer.snapshot(image => {
+          if (image instanceof HTMLImageElement) finish(null, image.src);
+          else finish(new Error('Renderer lieferte kein PNG.'));
+        }, 'image/png');
+        if (this.clock.paused) this.clock.step();
+      } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
+    });
+  }
+  async captureToWorkspace(): Promise<{ path: string; url: string; status: Record<string, unknown> }> {
+    const revision = this.captureRevision;
+    const url = await this.capture();
+    const status = structuredClone(this.snapshot());
+    const png = await (await fetch(url)).blob();
+    const response = await fetch('/__dev-scenario-capture', { method: 'POST', headers: { 'content-type': 'image/png' }, body: png, signal: AbortSignal.timeout(15000) });
+    const result = await response.json();
+    if (revision !== this.captureRevision || this.disposed) throw new Error('Aufnahme gehört zu einem inzwischen beendeten Szenario.');
+    if (!response.ok) throw new Error(result.error ?? 'PNG konnte nicht gespeichert werden.');
+    return { path: result.path, url: result.url, status };
   }
   destroy(): void {
     if (this.disposed) return;
     this.disposed = true; this.stop(); clearInterval(this.refreshTimer);
+    window.removeEventListener('hashchange', this.onHashChange); this.api.destroy(); this.captureCancel?.();
     this.panel.destroy(); this.clock.destroy();
   }
 }

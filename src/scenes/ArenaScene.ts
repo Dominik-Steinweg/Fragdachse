@@ -1587,6 +1587,8 @@ export class ArenaScene extends Phaser.Scene {
       diagnosticsFrame,
     );
 
+    this.devScenario?.afterHostFrame();
+
     // Baumkronen haengen an der Darstellung, nicht an der Runde: der Abgleich ist rein lokal und
     // kennt weder Activity noch Rundenphase. Deshalb blenden sie ueber der eigenen Figur auch in
     // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
@@ -1967,7 +1969,7 @@ export class ArenaScene extends Phaser.Scene {
   ): void {
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');
-      const secs = bridge.computeSecondsLeft();
+      const secs = bridge.computeSecondsLeft(this.arenaRuntime.getMissionNow());
       const activeMapConfig = configuredCoopDefenseMapId !== null
         ? getCoopDefenseMapConfig(configuredCoopDefenseMapId)
         : null;

@@ -196,6 +196,15 @@ describe('CoopMissionRuntime – Missionsschritte des Frames', () => {
     runtime.hostSimulationStep(16, 1000, false, false);
 
     expect(order).toEqual(['progress', 'objectives', 'world:dormant-bases', 'repair']);
+    order.length = 0;
+    runtime.setScenarioOptions(true, true, 1000);
+    runtime.hostSimulationStep(16, 5000, false, false);
+    expect(order).toEqual([]);
+    expect(runtime.getMissionNow(5000)).toBe(1000);
+    runtime.setScenarioOptions(false, false, 5000);
+    runtime.hostSimulationStep(16, 5016, false, false);
+    expect(order).toEqual(['progress', 'objectives', 'world:dormant-bases', 'repair']);
+    expect(runtime.getMissionNow(5016)).toBe(1016);
   });
 
   it('meldet den Missionsabschluss, ohne ihn anzuwenden', () => {

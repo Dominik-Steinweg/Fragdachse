@@ -126,7 +126,7 @@ export class CoopMissionHostUpdate {
     weaponBalanceLabActive: boolean,
     metrics: CoopMissionNavigationMetrics | null = null,
   ): void {
-    if (!this.runtime.analysisScenarioActive) {
+    if (!this.runtime.analysisScenarioActive && !this.runtime.scenarioMissionFrozen) {
       this.runProgressPhase(deltaMs, nowMs, countdownActive, weaponBalanceLabActive);
     }
     const navStartedAt = metrics ? performance.now() : 0;

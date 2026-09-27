@@ -26,6 +26,8 @@ export interface DevScenario {
   constructions: (GridPoint & { id: ConstructionId })[];
   timeOfDay: number;
   suppressWaves: boolean;
+  freezeMission: boolean;
+  hideTutorial: boolean;
   refillAdrenaline: boolean;
   refillHp: boolean;
 }
@@ -92,7 +94,7 @@ export function defaultScenario(classId: CoopDefenseClassId = 'dachs_nukem'): De
     weapon2: getSelectableLoadoutItems('weapon2', 'coop_defense', profile, classId)[0].id,
     ultimate: getSelectableLoadoutItems('ultimate', 'coop_defense', profile, classId)[0].id,
     tools, upgrades: {}, items: [], player: null, enemies: [], constructions: [], timeOfDay: 720,
-    suppressWaves: true, refillAdrenaline: true, refillHp: true };
+    suppressWaves: true, freezeMission: true, hideTutorial: true, refillAdrenaline: true, refillHp: true };
 }
 
 function object(value: unknown, name: string): Record<string, unknown> {
@@ -117,7 +119,7 @@ export function parseScenario(value: unknown): DevScenario {
   number(config.seed, 'seed', 0, 0xffffffff);
   if (!Number.isInteger(config.seed)) throw new Error('seed muss ganzzahlig sein.');
   number(config.timeOfDay, 'timeOfDay', 0, 1439);
-  for (const key of ['suppressWaves', 'refillAdrenaline', 'refillHp'] as const) if (typeof config[key] !== 'boolean') throw new Error(`${key}: Boolean erwartet.`);
+  for (const key of ['suppressWaves', 'freezeMission', 'hideTutorial', 'refillAdrenaline', 'refillHp'] as const) if (typeof config[key] !== 'boolean') throw new Error(`${key}: Boolean erwartet.`);
   for (const key of ['items', 'tools', 'enemies', 'constructions'] as const) if (!Array.isArray(config[key])) throw new Error(`${key}: Array erwartet.`);
   if (config.enemies.length > 200 || config.constructions.length > 100 || config.items.length > 20 || config.tools.length > 6) throw new Error('Szenario überschreitet die Objektgrenze.');
   object(config.upgrades, 'upgrades');

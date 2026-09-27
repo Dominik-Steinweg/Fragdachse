@@ -24,3 +24,24 @@ Arena-Exit-Lifecycle-Tests. Der normale Produktionsoutput enthält weder Dev-Sze
 
 Nicht als verifiziert behauptet: jede einzelne Waffe/Utility/Spezialaktion, Multiplayer-Parität,
 vollständig deterministische Simulation, kalte Startzeit oder Shader-Änderungen ohne Reload.
+
+## Nachprüfung des Bedienungsfeedbacks
+
+- Balance-Map: Rezeptposition `(14,23)` ergab `(464,764)`; der ursprüngliche Positionsfehler trat
+  in diesem Durchlauf nicht auf. Die neue Prüfung bestätigt die Position nach dem Host-Frame.
+  Ein Regressionstest simuliert ein überschreibendes Spawn-Reconcile in diesem Frame.
+- Gehaltene Tesla-Kuppel blieb beim Teleport nach `(15,23)` aktiv; im Bericht weiterhin `trigger: weapon2`.
+- Hash-only-Wechsel zur Map 7 ohne Reload rekonstruierte Spieler `(98,26)`, einen Flammenturm und einen Gegner.
+  Bericht: `ready: true`, keine ausstehenden Bauwerke und verifizierte Startposition.
+- Der fixierte Gegner meldete `moving: false`, während `desiredMovement.moving: true` die KI-Absicht zeigte.
+- Panel eingeklappt: nur der kleine Öffnen-Knopf blieb sichtbar. PNG-Workspace-Export funktionierte über die API.
+- Map 0: Missionszeit blieb bei 1 ms, Respawn-Budget bei 99, Steuerungshilfe ausgeblendet.
+  Wiederholte echte Tod-/Respawn-Budgetübergänge mit pausiertem Verbrauch und anschließendes Fortsetzen
+  wurden zusätzlich headless geprüft; im Browser wurde dafür kein Tod erzwungen.
+- Befehle wurden über das JSON-Feld ausgeführt, das dieselbe API wie `window.devScenario.run` verwendet.
+  `whenReady`, ungültige Kommandos, isolierte Snapshots, Hashwechsel und Capture-Abbruch beim Teardown
+  sind durch Regressionstests abgedeckt.
+
+Erfolgreich: `npm run check` (4420 Core- und 54 Architekturtests, Spiel- und Map-Editor-Build),
+`npm run test:integration` (614 Tests). Nach der abschließenden Capture-Zuordnungskorrektur nochmals
+19 gezielte Tests und Produktionsbuild. Dev-Panel/API-Texte fehlen im Produktionsbundle.

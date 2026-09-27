@@ -175,6 +175,24 @@ export interface CoopMissionScopedBinding {
 export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityStep {
   /** Explicit lab-owned population; gameplay still uses the ordinary host simulation. */
   analysisScenarioActive = false;
+  scenarioHideTutorial = false;
+  private missionFrozenAt: number | null = null;
+  private missionPausedMs = 0;
+
+  get scenarioMissionFrozen(): boolean { return this.missionFrozenAt !== null; }
+  getMissionNow(nowMs: number): number {
+    return (this.missionFrozenAt ?? nowMs) - this.missionPausedMs;
+  }
+  /** The isolated dev adapter owns this override; a new Activity starts with its normal clock. */
+  setScenarioOptions(freezeMission: boolean, hideTutorial: boolean, nowMs: number): void {
+    this.scenarioHideTutorial = hideTutorial;
+    if (freezeMission && this.missionFrozenAt === null) this.missionFrozenAt = nowMs;
+    if (!freezeMission && this.missionFrozenAt !== null) {
+      this.missionPausedMs += Math.max(0, nowMs - this.missionFrozenAt);
+      this.missionFrozenAt = null;
+    }
+    this.playerActivityOwner?.setRespawnConsumptionPaused(freezeMission);
+  }
   private baseVoidFireOwner: import('../systems/BaseVoidFireSystem').BaseVoidFireSystem | null = null;
 
   setBaseVoidFire(system: import('../systems/BaseVoidFireSystem').BaseVoidFireSystem): void {
@@ -423,7 +441,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   /** Getragene Missionsziele fuer den Snapshot dieses Frames. */
   hostCarrySnapshot(interactionsEnabled: boolean): SyncedCoopDefenseCarryState {
     if (this.destroyed) return [];
-    return this.objectiveOwner?.carry?.hostUpdate(interactionsEnabled) ?? [];
+    return this.objectiveOwner?.carry?.hostUpdate(interactionsEnabled && !this.scenarioMissionFrozen) ?? [];
   }
 
   /**
@@ -433,7 +451,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
    * Uebergaenge.
    */
   hostResolveCompletion(): CoopMissionOutcome | null {
-    if (this.destroyed || this.analysisScenarioActive) return null;
+    if (this.destroyed || this.analysisScenarioActive || this.scenarioMissionFrozen) return null;
     return this.objectiveOwner?.roundState?.update() ?? null;
   }
 
