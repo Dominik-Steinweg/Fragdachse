@@ -1,9 +1,9 @@
 import type { WeaponSlot } from '../../types';
 import type { PerformanceCase } from './contracts';
 import { buildPerformanceLoadout as build, presets, type PresetItem } from './loadouts';
-import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID } from './referenceMap';
+import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID, DAWN_MAP_ID } from './referenceMap';
 export { PERFORMANCE_MAP_ID, REFERENCE_SEED, registerReferenceMap } from './referenceMap';
-export const SCENARIO_VERSION = 'reference-1-candidate.5';
+export const SCENARIO_VERSION = 'reference-1-candidate.6';
 
 export function allPerformanceCases(): PerformanceCase[] {
   const glock = build('GLOCK');
@@ -15,10 +15,12 @@ export function allPerformanceCases(): PerformanceCase[] {
     ['glock', 'GLOCK', 7000], ['p90', 'P90', 7000], ['plasma', 'PLASMA', 7000],
     ['mini-rockets', 'MINI_ROCKET_LAUNCHER', 7000], ['shotgun', 'SHOTGUN', 7000], ['asmd', 'ASMD_PRIM', 7000],
     ['bite', 'BITE', 7000], ['rocket', 'ROCKET_LAUNCHER', 7000], ['tesla', 'TESLA_DOME', 7000], ['flame', 'FLAMETHROWER', 7000],
+    ['hydra', 'HYDRA', 7000],
   ];
   const combat = build('GLOCK', true);
   return [
     base('environment.route', 55_000, 'environment', { mapId: `${PERFORMANCE_MAP_ID}-train` }),
+    base('environment.dawn', 15_000, 'environment', { mapId: DAWN_MAP_ID }),
     base('destruction.single', 8000, 'weapon', { itemId: 'GLOCK', maximumActions: undefined, minimumActions: 1, targetDistance: 80, requireHits: false }),
     base('destruction.nuke', 16_000, 'pickup', { itemId: 'NUKE', maximumActions: 1, minimumActions: 1, tailMs: 5000 }),
     base('destruction.bfg', 18_000, 'pickup', { itemId: 'BFG', maximumActions: 1, minimumActions: 1, tailMs: 5000 }),
@@ -37,11 +39,13 @@ export function allPerformanceCases(): PerformanceCase[] {
         actionIntervalMs: continuous ? 0 : Math.max(1, cfg.cooldown), minimumActions: 1, maximumActions: undefined,
         requireHits: true, requiredDamageKinds, continuous, tailMs: 1000, targetDistance: item === 'BITE' ? 38 : item === 'FLAMETHROWER' ? 140 : 220 });
     }),
-    ...(['HE_GRENADE', 'MOLOTOV_GRENADE', 'SMOKE_GRENADE'] as const).map((item, i) => {
+    ...(['HE_GRENADE', 'MOLOTOV_GRENADE', 'SMOKE_GRENADE', 'TIME_BUBBLE'] as const).map((item, i) => {
       const loadout = build(item), cfg = loadout.effective.utility;
-      return base(`utility.${['he', 'molotov', 'smoke'][i]}`, 6000, 'utility', { commit: loadout.commit, buildSignature: loadout.buildSignature, itemId: item,
+      return base(`utility.${['he', 'molotov', 'smoke', 'time-bubble'][i]}`, item === 'TIME_BUBBLE' ? 10_000 : 6000, 'utility', { commit: loadout.commit, buildSignature: loadout.buildSignature, itemId: item,
         actionIntervalMs: cfg.cooldown + ('fullChargeDuration' in cfg.activation ? cfg.activation.fullChargeDuration : 0),
-        minimumActions: 1, maximumActions: undefined, requireHits: item !== 'SMOKE_GRENADE', tailMs: 6000 });
+        // A time field owns its cooldown until it expires. One sustained cast is representative.
+        minimumActions: 1, maximumActions: item === 'TIME_BUBBLE' ? 1 : undefined,
+        requireHits: item !== 'SMOKE_GRENADE', tailMs: item === 'TIME_BUBBLE' ? 4000 : 6000 });
     }),
     base('construction.defense', 12_000, 'construction', { commit: combat.commit, buildSignature: combat.buildSignature, enemyCount: 24, minimumActions: 4, maximumActions: 4, actionIntervalMs: 2000 }),
     base('ultimate.armageddon', 10_000, 'utility', { ...build('ARMAGEDDON'), itemId: 'ARMAGEDDON', minimumActions: 1, maximumActions: 1, requireHits: true, tailMs: 5000 }),

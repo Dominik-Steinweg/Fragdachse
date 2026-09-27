@@ -524,6 +524,16 @@ export class WorldProjectileRuntime implements
     return Math.max(this.projectiles.activeCount, this.clientReplica.size, this.presentation.clientVisualCount);
   }
 
+  /** Read-only lab coverage, sampled outside the per-projectile simulation loop. */
+  getDebugSpecialProjectileCounts(): { hydraChildren: number; prismShots: number } {
+    let hydraChildren = 0, prismShots = 0;
+    for (const projectile of this.projectiles.activeRecords) {
+      if (projectile.presentation.projectileStyle === 'hydra' && projectile.presentation.suppressSpawnFx) hydraChildren++;
+      if (projectile.presentation.bulletVisualPreset === 'time_prism') prismShots++;
+    }
+    return { hydraChildren, prismShots };
+  }
+
   getShadowSamples(): readonly ShadowProjectileSample[] {
     return this.presentation.getShadowSamples(
       this.projectiles.activeCount > 0 ? this.presentationProjectiles : [],

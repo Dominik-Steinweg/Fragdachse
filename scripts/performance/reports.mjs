@@ -23,7 +23,11 @@ function stackDescription(stack, renderSource) {
     ? `; weitere Projekt-Aufrufer derselben Kette (Zwischenaufrufe ausgelassen): ${project.map(renderSource).join(' ← ')}` : '');
 }
 
-export async function writeReports(directory, manifest, summary, trace, buildDirectory) {
+export async function writeReports(directory, manifest, summary, trace, buildDirectory, checkSpace = async () => {}) {
+  const writeReport = async (path, text) => {
+    await checkSpace(Buffer.byteLength(text));
+    await writeFile(path, text);
+  };
   await mkdir(join(directory, 'cases'), { recursive: true });
   const observations = findings(summary.windows);
   const header = `# Performance-Lab ${manifest.runId}\n\nSzenario: ${manifest.scenarioVersion}. Aufnahme: ${manifest.captureProfile}.\n\n`;
@@ -107,17 +111,17 @@ export async function writeReports(directory, manifest, summary, trace, buildDir
       && (w.id === candidate.id || w.id.startsWith(`${candidate.id}.`)))?.id ?? manifest.caseId;
     caseLines.push('\n## Wiederholung\n', '```text', `npm run perf:chrome -- --case ${repeatCase}${manifest.durationMs ? ` --duration-seconds ${manifest.durationMs / 1000}` : ''} --timeout-seconds ${manifest.timeoutMs / 1000}${manifest.captureProfile === 'reduced' ? ' --capture-profile reduced' : ''}`, '```');
     caseLines.push('', ...[...references].map(([url, id]) => `[${id}]: ${url}`));
-    await writeFile(join(caseDir, `${w.id}.md`), caseLines.join('\n'));
+    await writeReport(join(caseDir, `${w.id}.md`), caseLines.join('\n'));
   }
   lines.push('\nKeine automatische Ursachenbestimmung. Bildschirmtakt/VSync, Erstverwendung, tatsächliche Last und Messstreuung berücksichtigen.');
-  await writeFile(join(directory, 'summary.md'), lines.join('\n'));
-  await writeFile(join(directory, 'analysis.md'), [header, 'Lies zuerst [summary.md](summary.md), danach die verlinkten Fallberichte. Alle Auswertungen wurden bereits durch den Runner ausgeführt; die KI braucht keine Skriptausführung.\n',
+  await writeReport(join(directory, 'summary.md'), lines.join('\n'));
+  await writeReport(join(directory, 'analysis.md'), [header, 'Lies zuerst [summary.md](summary.md), danach die verlinkten Fallberichte. Alle Auswertungen wurden bereits durch den Runner ausgeführt; die KI braucht keine Skriptausführung.\n',
     `Quellstand: ${manifest.sourceHash}; Commit: ${manifest.commit}. Der unveränderliche [Quellstand](${link(directory, join(buildDirectory, 'source'))}) gehört exakt zur Aufnahme.\n`,
     `Messbedingungen: Chrome ${manifest.browserVersion}; Aufnahmeprofil ${manifest.captureProfile} v${manifest.captureProfileVersion}. Hardware, Renderauflösung, Szenariodaten-Hash und Startparameter stehen im [Manifest](manifest.json). Für Vorher/Nachher müssen Fallversion und Bedingungen passen; verschiedene Quellstände sind erlaubt.\n`,
     '## Priorisierte Beobachtungen\n', ...observations.slice(0, 8).map(f => `- **${f.type}:** [${f.caseId}](cases/${f.caseId}.md) – ${f.text}`),
     '\nDie Kategorien werden abwechselnd priorisiert. Vollständige Phase-Intervalle und Grenzintervalle sind getrennt; Hänger bleiben ungekürzt. Hauptthread-Bereiche sind verschachtelt, Worker parallel und GPU asynchron. Idle, GC-Überlappung oder Worker-Aktivität begründen allein keine Ursachenhypothese.\n',
     'Untersuchungsauftrag: Beobachtung und Ursache trennen; auffällige Aufrufketten im passenden Quellstand prüfen; eine begründete Änderung und den kleinsten aussagekräftigen Wiederholungstest vorschlagen. Nach der Änderung führt der Mensch den Test und perf:compare aus.\n',
     ...trace.notes.map(n => `- ${n}`), '\nOriginaldaten: [Spieltrace](fragdachse-trace.json), [Chrome-Trace](chrome-trace.json.gz), [aufbereitete Belege](evidence.json).'].join('\n'));
-  await writeFile(join(directory, 'summary.json'), JSON.stringify({ ...summary, findings: observations }, null, 2));
-  await writeFile(join(directory, 'evidence.json'), JSON.stringify(trace));
+  await writeReport(join(directory, 'summary.json'), JSON.stringify({ ...summary, findings: observations }, null, 2));
+  await writeReport(join(directory, 'evidence.json'), JSON.stringify(trace));
 }

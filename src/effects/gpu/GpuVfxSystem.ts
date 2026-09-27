@@ -15,7 +15,7 @@ import { GpuVfxQuality } from './GpuVfxQuality';
 import { GPU_VFX_LANES, GpuVfxLaneId, type GpuVfxLaneSpec } from './GpuVfxRenderLanes';
 import type { GpuVfxSpawnSpec } from './GpuVfxSpawnSpec';
 import { GpuFlightRibbonStore, type FlightRibbonHandle, type FlightRibbonStyle } from './GpuFlightRibbon';
-import { createFlightRibbonLayer } from './GpuFlightRibbonLayer';
+import { createFlightRibbonLayer, type FlightRibbonLayer } from './GpuFlightRibbonLayer';
 import type { ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
 
 /**
@@ -102,7 +102,7 @@ interface GpuVfxLane {
 export class GpuVfxSystem {
   private readonly scene: Phaser.Scene;
   readonly flightRibbons: GpuFlightRibbonStore;
-  private readonly ribbonLayer: Phaser.GameObjects.Image | null;
+  private readonly ribbonLayer: FlightRibbonLayer | null;
   private flightPeak = 0;
   private readonly lanes: GpuVfxLane[] = [];
   private readonly ticks: GpuVfxEmissionTick[] = [];
@@ -137,7 +137,7 @@ export class GpuVfxSystem {
   private shaderWarmupShutdownRegistered = false;
   private readonly stopShaderWarmupOnShutdown = (): void => { this.stopShaderWarmup(); };
   private readonly runShaderWarmup = (): void => {
-    if (!this.shaderWarmupActive || this.shaderWarmupLane >= this.lanes.length) return;
+    if (!this.shaderWarmupActive) return;
 
     const renderer = this.scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     if (!renderer.baseDrawingContext || !this.scene.cameras.main) {
@@ -158,12 +158,15 @@ export class GpuVfxSystem {
     context.setScissorBox(0, 0, 1, 1);
 
     try {
-      lane.layer.submitterNode.run(context);
+      if (lane) lane.layer.submitterNode.run(context);
       // With KHR_parallel_shader_compile Phaser returns null while the link is pending. Keep
       // this lane selected until its actual program suite is resident in the ProgramManager.
-      if (lane.layer.submitterNode.programManager.getCurrentProgramSuite()) {
+      const ready = lane ? lane.layer.submitterNode.programManager.getCurrentProgramSuite()
+        : this.ribbonLayer?.prepare(context) ?? true;
+      if (ready) {
         this.shaderWarmupLane += 1;
-        if (this.shaderWarmupLane >= this.lanes.length) {
+        if (this.shaderWarmupLane > this.lanes.length
+          || this.shaderWarmupLane === this.lanes.length && !this.ribbonLayer) {
           this.shaderWarmupState = 'complete';
           this.stopShaderWarmup();
         }
@@ -570,7 +573,7 @@ export class GpuVfxSystem {
   destroy(): void {
     this.stopShaderWarmup();
     this.releaseAll();
-    this.ribbonLayer?.destroy();
+    this.ribbonLayer?.image.destroy();
     for (const lane of this.lanes) lane.layer.destroy();
     this.lanes.length = 0;
     this.ticks.length = 0;
@@ -618,7 +621,7 @@ export class GpuVfxSystem {
       capacityDrops: stats.capacityDrops + ribbon.capacityDrops, segmentsTouched: stats.segmentsTouched + ribbon.segmentsTouched };
   }
 
-  private applyRibbonVisibility(): void { this.ribbonLayer?.setVisible(!this.suppressed && this.flightRibbons.liveCount > 0); }
+  private applyRibbonVisibility(): void { this.ribbonLayer?.image.setVisible(!this.suppressed && this.flightRibbons.liveCount > 0); }
 
   // ── Interna ────────────────────────────────────────────────────────────────
 

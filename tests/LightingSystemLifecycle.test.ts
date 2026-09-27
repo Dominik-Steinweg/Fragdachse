@@ -3,14 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({
   BlendModes: { MULTIPLY: 2, ADD: 1 },
   Textures: { FilterMode: { LINEAR: 1 } },
+  Renderer: { WebGL: { Utils: { getTintAppendFloatAlpha: (color: number) => color } } },
   Math: { Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)) },
   GameObjects: { SpriteGPULayer: class {
     memberCount = 0;
+    timeElapsed = 0;
+    nextMemberF32 = new Float32Array(42);
     frame = { realWidth: 256, realHeight: 256 };
     members: object[] = [];
     constructor(_scene: unknown, _texture: unknown, public size: number) {}
     setVisible() { return this; } setBlendMode() { return this; } setName() { return this; }
     addMember(member: object) { this.members[this.memberCount++] = { ...member }; }
+    addData(data: Float32Array) { this.members[this.memberCount++] = { alpha: data[20] }; }
     resize(size: number) { this.size = size; } destroy() {}
   }, Image: class {
     setOrigin() { return this; }

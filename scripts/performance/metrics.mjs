@@ -1,5 +1,6 @@
 import { overlaps, contained, overlapMs, prepareIntervals, costOverview, spikeWork } from './intervals.mjs';
-export { COST_SCOPES } from './intervals.mjs';
+import { COST_SCOPES } from './intervals.mjs';
+export { COST_SCOPES };
 export const MEASUREMENT_VERSION = 2;
 
 export function metric(values) {
@@ -21,16 +22,23 @@ export function summarizeWindows(result) {
     const inside = overlapping.filter(f => contained(f, window));
     const boundaryIntervals = overlapping.filter(f => !contained(f, window)).map(f => ({ ...f,
       overlapMs: overlapMs(f, window), phaseIds: result.windows.filter(w => overlaps(f, w)).map(w => w.id) }));
+    // Include whole boundary frames: their preceding work can lie outside this
+    // phase. Scan the full recording once, not again for each of its ten spikes.
+    const inspectionRange = overlapping.reduce((range, f) => ({
+      fromMs: Math.min(range.fromMs, f.fromMs), toMs: Math.max(range.toMs, f.toMs),
+    }), { fromMs: window.fromMs, toMs: window.toMs });
+    const phaseData = { ...data, cpu: data.cpu.filter(s => overlaps(s, inspectionRange)),
+      work: data.work.filter(w => overlaps(w, inspectionRange)) };
     const frame = metric(inside.map(f => f.durationMs));
     const overBudget = Object.fromEntries([1000 / 120, 1000 / 60, 1000 / 30, 50].map(threshold => {
       const count = inside.filter(f => f.durationMs > threshold).length;
       return [threshold, { count, percent: inside.length ? count / inside.length * 100 : null,
         boundaryCount: boundaryIntervals.filter(f => f.durationMs > threshold).length }];
     }));
-    const costs = costOverview(data, window, metric);
+    const costs = costOverview(phaseData, window, metric);
     const spikes = [...overlapping].sort((a, b) => b.durationMs - a.durationMs).slice(0, 10).map(f => ({ ...f,
       crossesPhase: !contained(f, window), overlapMs: overlapMs(f, window),
-      phaseIds: result.windows.filter(w => overlaps(f, w)).map(w => w.id), work: spikeWork(data, f) }));
+      phaseIds: result.windows.filter(w => overlaps(f, w)).map(w => w.id), work: spikeWork(phaseData, f) }));
     const sections = [];
     for (let fromMs = window.fromMs; fromMs < window.toMs; fromMs += 2000) {
       const range = { fromMs, toMs: window.toMs - (fromMs + 2000) < 1000 ? window.toMs : fromMs + 2000 };
@@ -51,7 +59,7 @@ export function summarizeWindows(result) {
       .filter(s => s.count >= 2).sort((a, b) => b.count - a.count).slice(0, 3);
     const gpuInside = data.gpu.filter(g => contained(g, window));
     const gpuBoundary = data.gpu.filter(g => overlaps(g, window) && !contained(g, window));
-    const workInside = data.work.filter(w => w.complete && contained(w, window));
+    const workInside = phaseData.work.filter(w => w.complete && contained(w, window));
     const drawCalls = metric(workInside.map(w => w.drawCalls));
     const issues = [];
     if (!frame) issues.push('Keine vollständig enthaltenen Frame-Intervalle; Grenzintervalle separat lesen.');
@@ -105,6 +113,11 @@ export function compareResults(a, b) {
     if (JSON.stringify(a.manifest[key]) !== JSON.stringify(b.manifest[key])) warnings.push(`Abweichung: ${key}`);
   }
   if (a.summary.schemaVersion !== b.summary.schemaVersion) warnings.push('Inkompatible Messsemantik / Summary-Version');
+  const lobbyA = a.summary.windows.find(w => w.id === 'lobby')?.frame?.median;
+  const lobbyB = b.summary.windows.find(w => w.id === 'lobby')?.frame?.median;
+  if (lobbyA > 0 && lobbyB > 0 && Math.max(lobbyA, lobbyB) / Math.min(lobbyA, lobbyB) > 1.1) {
+    warnings.push(`Abweichender Lobby-Frame-Takt: ${lobbyA.toFixed(2)} → ${lobbyB.toFixed(2)} ms. Bildschirmtakt oder Grundlast können FPS/GPU-Zeiten beeinflussen; CPU-Bereiche und Wiederholungen prüfen.`);
+  }
   const cases = a.summary.windows.filter(w => w.kind === 'measurement').map(left => {
     const right = b.summary.windows.find(w => w.id === left.id && w.kind === left.kind);
     if (!right) return { id: left.id, status: 'missing' };
@@ -114,6 +127,14 @@ export function compareResults(a, b) {
     for (const group of ['frame', 'hostStep', 'renderSubmit', 'gpu', 'drawCalls', 'offscreenDrawCalls']) {
       differences[group] = Object.fromEntries(['median', 'p95', 'p99', 'maximum'].map(key => {
         const before = left[group]?.[key], after = right[group]?.[key];
+        return [key, Number.isFinite(before) && Number.isFinite(after) ? { before, after, absolute: after - before, percent: before ? (after - before) / before * 100 : null } : null];
+      }));
+    }
+    // Keep the nested scopes separate, just as in the per-case report. Comparing
+    // only host/render totals otherwise hides regressions in POST_UPDATE or UI.
+    for (const scope of Object.keys(COST_SCOPES)) {
+      differences[`scope.${scope}`] = Object.fromEntries(['median', 'p95', 'p99', 'maximum'].map(key => {
+        const before = left.costs?.scopes?.[scope]?.[key], after = right.costs?.scopes?.[scope]?.[key];
         return [key, Number.isFinite(before) && Number.isFinite(after) ? { before, after, absolute: after - before, percent: before ? (after - before) / before * 100 : null } : null];
       }));
     }

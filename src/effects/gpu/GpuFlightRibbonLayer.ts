@@ -50,9 +50,15 @@ void main() {
   gl_FragColor = vec4(texel.rgb * color * colorData.a * fade * uAlpha, alpha);
 }`;
 
+export interface FlightRibbonLayer {
+  readonly image: Phaser.GameObjects.Image;
+  /** Prime one bounded pool page per loading frame, without creating live effects. */
+  prepare(context: Phaser.Renderer.WebGL.DrawingContext): boolean;
+}
+
 /** One display-list entry, fixed-size persistent pages, GPU animation between data changes. */
 export function createFlightRibbonLayer(scene: Phaser.Scene, store: GpuFlightRibbonStore, depth: number,
-  now: () => number): Phaser.GameObjects.Image | null {
+  now: () => number): FlightRibbonLayer | null {
   const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
   // Like SpriteGPULayer, this primitive is WebGL-only. Pure stores remain usable headlessly.
   if (!renderer?.gl) return null;
@@ -83,8 +89,8 @@ export function createFlightRibbonLayer(scene: Phaser.Scene, store: GpuFlightRib
       for (let i = 0; i < indices.length; i++) indices[i] = i;
       return indices.buffer;
     }
-    run(context: Phaser.Renderer.WebGL.DrawingContext): void {
-      if (!store.pageLive[this.page]) return;
+    run(context: Phaser.Renderer.WebGL.DrawingContext, preparing = false): boolean {
+      if (!preparing && !store.pageLive[this.page]) return false;
       this.onRunBegin(context);
       const program = this.programManager;
       // Phaser 4.2.1 documents the suite but types its return as plain Object.
@@ -94,10 +100,15 @@ export function createFlightRibbonLayer(scene: Phaser.Scene, store: GpuFlightRib
       } | null;
       if (suite) {
         if (this.uploadedVersion !== store.pageVersion[this.page]) {
+          // First render or a skipped version (e.g. an invisible page) needs all persistent data.
+          const incremental = this.uploadedVersion >= 0 && this.uploadedVersion + 1 === store.pageVersion[this.page];
+          const first = incremental ? store.pageDirtyStart[this.page] : 0;
+          const end = incremental ? store.pageDirtyEnd[this.page] : FLIGHT_RIBBON_PAGE_SIZE;
+          const offset = first * FLIGHT_RIBBON_SLOT_WORDS;
           const start = this.page * FLIGHT_RIBBON_PAGE_SIZE * FLIGHT_RIBBON_SLOT_WORDS;
-          const data = store.data.subarray(start, start + FLIGHT_RIBBON_PAGE_SIZE * FLIGHT_RIBBON_SLOT_WORDS);
-          this.vertexBufferLayout.buffer.viewF32!.set(data);
-          this.vertexBufferLayout.buffer.update(data.byteLength);
+          const data = store.data.subarray(start + offset, start + end * FLIGHT_RIBBON_SLOT_WORDS);
+          this.vertexBufferLayout.buffer.viewF32!.set(data, offset);
+          this.vertexBufferLayout.buffer.update(data.byteLength, offset * Float32Array.BYTES_PER_ELEMENT);
           this.uploadedVersion = store.pageVersion[this.page];
         }
         // The view matrix already includes scroll and selects the PostFX framebuffer space.
@@ -110,9 +121,10 @@ export function createFlightRibbonLayer(scene: Phaser.Scene, store: GpuFlightRib
         program.setUniform('uMainSampler', 0);
         program.applyUniforms(suite.program);
         renderer!.drawElements(context, [layer.frame.source.glTexture!], suite.program, suite.vao,
-          FLIGHT_RIBBON_PAGE_SIZE * FLIGHT_RIBBON_VERTICES, 0, this.topology);
+          Math.max(preparing ? 1 : 0, store.pageDrawCount[this.page]) * FLIGHT_RIBBON_VERTICES, 0, this.topology);
       }
       this.onRunEnd(context);
+      return suite !== null;
     }
     dispose(): void {
       // RenderNodeManager mixes in EventEmitter; its d.ts omits that inheritance.
@@ -129,16 +141,20 @@ export function createFlightRibbonLayer(scene: Phaser.Scene, store: GpuFlightRib
       renderer!.deleteBuffer(this.vertexBufferLayout.buffer);
     }
   }
-  // Lazy pages avoid reserving all GPU buffers for scenes with little projectile activity.
+  // Pool capacity is fixed. Allocate it over loading frames so bursts do not create GPU buffers.
   const pages = new Map<number, RibbonPage>();
+  let preparationPage = 0;
+  const getPage = (index: number): RibbonPage => {
+    let page = pages.get(index);
+    if (!page) { page = new RibbonPage(index); pages.set(index, page); }
+    return page;
+  };
   class RibbonSubmitter extends Phaser.Renderer.WebGL.RenderNodes.RenderNode {
     constructor() { super('SubmitterFlightRibbon', manager); }
     run(context: Phaser.Renderer.WebGL.DrawingContext): void {
       manager.startStandAloneRender(); this.onRunBegin(context);
       for (let i = 0; i < store.pageLive.length; i++) if (store.pageLive[i]) {
-        let page = pages.get(i);
-        if (!page) { page = new RibbonPage(i); pages.set(i, page); }
-        page.run(context);
+        getPage(i).run(context);
       }
       this.onRunEnd(context);
     }
@@ -148,5 +164,10 @@ export function createFlightRibbonLayer(scene: Phaser.Scene, store: GpuFlightRib
     for (const page of pages.values()) page.dispose();
     pages.clear();
   });
-  return layer;
+  return { image: layer, prepare(context) {
+    if (preparationPage >= store.pageLive.length) return true;
+    manager.startStandAloneRender();
+    if (getPage(preparationPage).run(context, true)) preparationPage++;
+    return preparationPage >= store.pageLive.length;
+  } };
 }

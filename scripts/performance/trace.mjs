@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs';
-import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile, rename, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { compose } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 import { resolve, basename, dirname, sep } from 'node:path';
@@ -23,7 +24,11 @@ export async function archiveDependencySources(buildDirectory) {
       if (!dependency || typeof content !== 'string' || written.has(dependency)) continue;
       const target = resolve(root, dependency);
       if (!target.startsWith(root + sep)) throw new Error('Dependency source path escapes archive');
-      await mkdir(dirname(target), { recursive: true }); await writeFile(target, content);
+      await mkdir(dirname(target), { recursive: true });
+      // A retried build may already share this path with the immutable object cache.
+      const temporary = `${target}.${randomUUID()}.tmp`;
+      try { await writeFile(temporary, content, { flag: 'wx' }); await rename(temporary, target); }
+      finally { await rm(temporary, { force: true }); }
       written.add(dependency);
     }
   }
@@ -129,6 +134,24 @@ export async function analyzeTrace(events, result, windows, resolveSource = asyn
       ...(w.recurringSpikes ?? []).map((s, recurringIndex) => ({ ...s, index, recurringIndex })),
     ]);
     const aggregates = aggregateWindows.map(() => ({ self: new Map(), inclusive: new Map(), stacks: new Map(), total: 0, unknown: 0, unresolved: 0, states: {} }));
+    const orderedWindows = aggregateWindows.map((window, index) => ({ ...window, index }))
+      .sort((a, b) => a.fromMs - b.fromMs);
+    const activeWindows = new Set(), stacksByLeaf = new Map();
+    let nextWindow = 0;
+    const stackFor = leaf => {
+      if (stacksByLeaf.has(leaf)) return stacksByLeaf.get(leaf);
+      const chain = [], seen = new Set();
+      for (let id = leaf; id !== undefined && !seen.has(id); id = parents.get(id)) {
+        seen.add(id); if (mapped.has(id)) chain.push(id);
+      }
+      const frame = mapped.get(leaf), name = frame?.name ?? frame?.functionName ?? '';
+      const functionChain = chain.filter(id => !isMetaFrame(mapped.get(id)?.name ?? mapped.get(id)?.functionName))
+        .map(id => functionIds.get(`node:${id}`));
+      const stack = { unknown: !chain.length || !frame, name, meta: isMetaFrame(name), unresolved: !frame?.mapped,
+        selfId: functionIds.get(`node:${leaf}`), inclusiveIds: [...new Set(functionChain)], key: functionChain.join('/') };
+      stacksByLeaf.set(leaf, stack);
+      return stack;
+    };
     let at = p.start / 1000 - offset;
     const timeline = [];
     for (const chunk of p.chunks.sort((a, b) => a.ts - b.ts)) {
@@ -147,24 +170,25 @@ export async function analyzeTrace(events, result, windows, resolveSource = asyn
     for (let i = 0; i + 1 < timeline.length; i++) {
         if (i % 10_000 === 0) { await yieldEventLoop(); signal?.throwIfAborted(); }
         const from = timeline[i].at, at = timeline[i + 1].at, leaf = timeline[i].id;
-        const chain = [], seen = new Set();
-        for (let id = leaf; id !== undefined && !seen.has(id); id = parents.get(id)) {
-          seen.add(id); if (mapped.has(id)) chain.push(id);
+        if (at <= from) continue;
+        // Ordered sample intervals need only the windows currently intersecting them.
+        // Profile node parents are immutable after parsing, so reuse their packed stack.
+        while (nextWindow < orderedWindows.length && orderedWindows[nextWindow].fromMs < at) {
+          activeWindows.add(orderedWindows[nextWindow++].index);
         }
-        for (let j = 0; j < aggregateWindows.length; j++) {
-          const w = aggregateWindows[j], weight = Math.max(0, Math.min(at, w.toMs) - Math.max(from, w.fromMs));
+        const stack = stackFor(leaf);
+        for (const j of activeWindows) {
+          const w = aggregateWindows[j];
+          if (w.toMs <= from) { activeWindows.delete(j); continue; }
+          const weight = Math.max(0, Math.min(at, w.toMs) - Math.max(from, w.fromMs));
           if (!weight) continue;
           const a = aggregates[j]; a.total += weight;
-          if (!chain.length || !mapped.has(leaf)) { a.unknown += weight; continue; }
-          const name = mapped.get(leaf)?.name ?? mapped.get(leaf)?.functionName ?? '';
-          if (isMetaFrame(name)) { a.states[name] = (a.states[name] ?? 0) + weight; continue; }
-          if (!mapped.get(leaf)?.mapped) a.unresolved += weight;
-          const functionChain = chain.filter(id => !isMetaFrame(mapped.get(id)?.name ?? mapped.get(id)?.functionName)).map(id => functionIds.get(`node:${id}`));
-          const selfId = functionIds.get(`node:${leaf}`);
-          a.self.set(selfId, (a.self.get(selfId) ?? 0) + weight);
-          for (const id of new Set(functionChain)) a.inclusive.set(id, (a.inclusive.get(id) ?? 0) + weight);
-          const key = functionChain.join('/');
-          a.stacks.set(key, (a.stacks.get(key) ?? 0) + weight);
+          if (stack.unknown) { a.unknown += weight; continue; }
+          if (stack.meta) { a.states[stack.name] = (a.states[stack.name] ?? 0) + weight; continue; }
+          if (stack.unresolved) a.unresolved += weight;
+          a.self.set(stack.selfId, (a.self.get(stack.selfId) ?? 0) + weight);
+          for (const id of stack.inclusiveIds) a.inclusive.set(id, (a.inclusive.get(id) ?? 0) + weight);
+          a.stacks.set(stack.key, (a.stacks.get(stack.key) ?? 0) + weight);
         }
     }
     for (let j = 0; j < aggregateWindows.length; j++) {

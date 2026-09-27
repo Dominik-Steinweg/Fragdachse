@@ -314,6 +314,7 @@ describe('GPU flight ribbon geometry and lifetime', () => {
     append(point(20, 0, 20), point(40, 0, 40), 40, false, handle);
     expect(store.liveCount).toBe(0); expect(store.handleCount).toBe(0);
     expect([...store.pageLive].every(n => n === 0)).toBe(true);
+    expect([...store.pageDrawCount].every(n => n === 0)).toBe(true);
     expect(store.data.every(n => n === 0)).toBe(true);
   });
 
@@ -326,5 +327,35 @@ describe('GPU flight ribbon geometry and lifetime', () => {
     const data = store.data.slice(), versions = [...store.pageVersion];
     store.retire(100); store.flush();
     expect(store.data).toEqual(data); expect([...store.pageVersion]).toEqual(versions);
+  });
+
+  it('retains the latest changed range across idle flushes and includes retired slots', () => {
+    const { store, handle, append } = setup();
+    append(point(0, 0, 0), point(40, 0, 40));
+    append(point(40, 0, 40), point(80, 10, 80));
+    const lastSlot = Math.max(...store.spans(handle).map(span => span.slot));
+    expect(store.pageDrawCount[0]).toBe(lastSlot + 1);
+    store.clear(); store.flush();
+    expect(store.pageDirtyStart[0]).toBe(0);
+    expect(store.pageDirtyEnd[0]).toBe(lastSlot + 1);
+    expect(store.data.every(n => n === 0)).toBe(true);
+    const ranges = [[...store.pageDirtyStart], [...store.pageDirtyEnd], [...store.pageVersion]];
+    store.flush();
+    expect([[...store.pageDirtyStart], [...store.pageDirtyEnd], [...store.pageVersion]]).toEqual(ranges);
+  });
+
+  it('shrinks the submitted page tail after retirement and expands it when slots are reused', () => {
+    const { store, handle, append } = setup();
+    append(point(0, 0, 0), point(40, 0, 40));
+    const firstEnd = Math.max(...store.spans(handle).map(span => span.slot)) + 1;
+    const second = store.create(4, { tuning: FLIGHT_SIGNATURE_PROFILES.heavy, color: 0xffffff, emissive: 1 })!;
+    append(point(0, 10, 0), point(80, 10, 80), 80, false, second);
+    expect(store.pageDrawCount[0]).toBeGreaterThan(firstEnd);
+    store.clearSource(4); store.flush();
+    expect(store.pageDrawCount[0]).toBe(firstEnd);
+    const replacement = store.create(4, { tuning: FLIGHT_SIGNATURE_PROFILES.heavy, color: 0xffffff, emissive: 1 })!;
+    append(point(0, 10, 0), point(80, 10, 80), 80, false, replacement);
+    const end = Math.max(...[...store.spans(handle), ...store.spans(replacement)].map(span => span.slot)) + 1;
+    expect(store.pageDrawCount[0]).toBe(end);
   });
 });

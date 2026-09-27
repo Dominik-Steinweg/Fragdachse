@@ -1,42 +1,20 @@
 import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { cp, mkdir, readFile, readdir, writeFile, stat, statfs, open, unlink } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { mkdir, readFile, readdir, writeFile, stat } from 'node:fs/promises';
 import { resolve, join, relative, extname, sep } from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { cpus, platform, release, totalmem, freemem } from 'node:os';
-import { pipeline } from 'node:stream/promises';
-import { createGzip } from 'node:zlib';
 import { summarizeWindows } from './metrics.mjs';
 import { analyzeTrace, traceEvents, createSourceResolver, archiveDependencySources } from './trace.mjs';
 import { writeReports } from './reports.mjs';
-import { acquireOwned, preserveFailedChromeTrace } from './lifecycle.mjs';
+import { acquireOwned, preserveFailedChromeTrace, transferChromeTrace, readBrowserJson } from './lifecycle.mjs';
+import { createBuildStorage, checkDiskSpace, MINIMUM_FREE_BYTES, DISK_HEADROOM_BYTES } from './storage.mjs';
 
-function options(args) {
-  const value = { caseId: 'standard', timeoutMs: 25 * 60_000, captureProfile: 'standard' };
-  for (let i = 0; i < args.length; i += 2) {
-    const flag = args[i], arg = args[i + 1];
-    if (flag === '--help') { console.log('perf:chrome [--case CASE-ID] [--duration-seconds N] [--timeout-seconds N] [--capture-profile standard|reduced] [--enemy-eyes on|off] [--time-of-day HH:MM]\nCases: environment.route, destruction.single/nuke/bfg, enemies.low/medium/high, hazards.void-fire, weapon.glock/p90/plasma/mini-rockets/shotgun/asmd/bite/rocket/tesla/flame, utility.he/molotov/smoke, construction.defense, ultimate.armageddon, combat.day/night/day-night, recovery.idle'); process.exit(0); }
-    if (!arg) throw new Error(`Missing argument for ${flag}`);
-    if (flag === '--case') value.caseId = arg;
-    else if (flag === '--enemy-eyes' && ['on', 'off'].includes(arg)) value.enemyEyes = arg;
-    else if (flag === '--time-of-day' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(arg)) {
-      const [h, m] = arg.split(':').map(Number); value.timeOfDayMinutes = h * 60 + m;
-    }
-    else if (flag === '--duration-seconds' || flag === '--timeout-seconds') {
-      const ms = Number(arg) * 1000;
-      if (!Number.isFinite(ms) || ms <= 0 || ms > 24 * 3600_000) throw new Error(`Invalid duration: ${arg}`);
-      value[flag === '--duration-seconds' ? 'durationMs' : 'timeoutMs'] = ms;
-    } else if (flag === '--capture-profile' && ['standard', 'reduced'].includes(arg)) value.captureProfile = arg;
-    else throw new Error(`Unknown option: ${flag}`);
-  }
-  if (!/^(standard|environment\.route|destruction\.(single|nuke|bfg)|enemies\.(low|medium|high)|hazards\.void-fire|weapon\.(glock|p90|plasma|mini-rockets|shotgun|asmd|bite|rocket|tesla|flame)|utility\.(he|molotov|smoke)|construction\.defense|ultimate\.armageddon|combat\.(day|night|day-night)|recovery\.idle)$/.test(value.caseId)) throw new Error(`Unknown case: ${value.caseId}`);
-  if (value.durationMs && (['standard', 'combat.day-night'].includes(value.caseId) || value.durationMs + 60_000 > value.timeoutMs)) throw new Error('Duration requires an individual case and at least 60 seconds of timeout headroom');
-  return value;
-}
+import { parsePerformanceOptions } from './options.mjs';
 
-const request = { schemaVersion: 1, runId: `${new Date().toISOString().replaceAll(':', '-')}-${randomUUID().slice(0, 8)}`, ...options(process.argv.slice(2)) };
+const request = { schemaVersion: 1, runId: `${new Date().toISOString().replaceAll(':', '-')}-${randomUUID().slice(0, 8)}`, ...parsePerformanceOptions(process.argv.slice(2)) };
 const root = resolve('.');
 const directory = resolve('build/performance-results', request.runId);
 await mkdir(directory, { recursive: true });
@@ -49,11 +27,21 @@ const saveManifest = () => {
   return manifestWrite;
 };
 await saveManifest();
-let browser, server, context, traceSession, tracing = false, timeout, statusTimer, buildProcess;
+let browser, server, context, traceSession, tracing = false, timeout, statusTimer, diskTimer, buildProcess;
+let diskSpaceFailed = false;
+const checkSpace = async (additionalBytes = 0) => {
+  try {
+    const freeBytes = await checkDiskSpace(root, additionalBytes);
+    manifest.diskObservation = { minimumFreeBytes: Math.min(manifest.diskObservation?.minimumFreeBytes ?? freeBytes, freeBytes),
+      lastFreeBytes: freeBytes, reserveBytes: MINIMUM_FREE_BYTES, headroomBytes: DISK_HEADROOM_BYTES };
+    return freeBytes;
+  } catch (error) { if (error.code === 'PERF_DISK_SPACE') diskSpaceFailed = true; throw error; }
+};
 let aborted = false;
 const abortController = new AbortController();
 let abortRun;
 const interruption = new Promise((_, reject) => { abortRun = reason => {
+  if (aborted) return;
   aborted = true; abortController.abort(new Error(reason)); reject(new Error(reason));
 }; });
 const onInterrupt = () => abortRun('Vom Anwender abgebrochen');
@@ -92,28 +80,38 @@ async function hashSources() {
 }
 
 async function run() {
-  const disk = await statfs(root);
-  if (disk.bavail * disk.bsize < 1024 ** 3) throw new Error('Weniger als 1 GiB frei: Platz für Build, unkomprimierten Trace und Komprimierung schaffen.');
-  manifest.sourceHash = await hashSources();
+  await checkSpace();
+  diskTimer = setInterval(() => { void checkSpace(64 * 1024 ** 2).catch(error => abortRun(error.message)); }, 2000);
+  manifest.sourceHash = request.buildHash ?? await hashSources();
   manifest.commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   manifest.dirty = !!execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
   const buildDirectory = resolve('build/performance-builds', manifest.sourceHash);
   const site = join(buildDirectory, 'site');
   let built = false;
   try { built = JSON.parse(await readFile(join(buildDirectory, 'build.json'), 'utf8')).sourceHash === manifest.sourceHash; } catch {}
+  if (request.buildHash && !built) throw new Error(`Archived build is missing or incomplete: ${request.buildHash}`);
   if (!built) {
+    await checkSpace(512 * 1024 ** 2);
     console.log('Building immutable performance artifact…');
     await command(process.execPath, ['node_modules/typescript/bin/tsc']);
     await command(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--mode', 'performance-lab'], { FD_PERFORMANCE_BUILD_DIR: site });
-    await cp(resolve('public'), site, { recursive: true });
+    const storage = createBuildStorage(resolve('build/performance-objects'), buildDirectory, checkSpace, abortController.signal);
+    await storage.deduplicateTree(site);
+    await storage.archiveTree(resolve('public'), site);
     for (const path of ['src', 'scripts/performance', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) {
       abortController.signal.throwIfAborted();
-      await cp(resolve(path), join(buildDirectory, 'source', path), { recursive: true });
+      await storage.archiveTree(resolve(path), join(buildDirectory, 'source', path));
     }
     await archiveDependencySources(buildDirectory);
+    await storage.deduplicateTree(join(buildDirectory, 'source/dependencies'));
     if (await hashSources() !== manifest.sourceHash) throw new Error('Source files changed during build');
-    await writeFile(join(buildDirectory, 'build.json'), JSON.stringify({ sourceHash: manifest.sourceHash, commit: manifest.commit, createdAt: new Date().toISOString() }));
+    await writeFile(join(buildDirectory, 'build.json'), JSON.stringify({ sourceHash: manifest.sourceHash, commit: manifest.commit, dirty: manifest.dirty, createdAt: new Date().toISOString(), storage: storage.statistics }));
   }
+  const buildInfo = JSON.parse(await readFile(join(buildDirectory, 'build.json'), 'utf8'));
+  manifest.buildStorage = buildInfo.storage ?? null;
+  manifest.buildReused = built;
+  manifest.commit = buildInfo.commit;
+  manifest.dirty = buildInfo.dirty ?? null;
   manifest.buildDirectory = relative(directory, buildDirectory).replaceAll('\\', '/');
   const scenarioHash = createHash('sha256');
   for (const file of ['scenarios.ts', 'referenceMap.ts', 'fixtures.ts', 'build-presets.json', 'loadouts.ts', 'gamePort.ts', 'PerformanceLabController.ts']) {
@@ -231,30 +229,28 @@ async function run() {
   console.log('Chrome-Trace: warte auf Stream…');
   const completed = await bounded(finished, 120_000, 'Chrome liefert keinen Trace-Stream');
   if (completed.dataLossOccurred || !completed.stream) throw new Error('Chrome trace lost data or returned no stream');
-  const rawTrace = join(directory, 'chrome-trace.json');
+  const rawTrace = join(directory, 'chrome-trace.json.gz');
   console.log('Chrome-Trace übertragen…');
-  const handle = await open(rawTrace, 'wx');
-  try {
-    for (;;) {
-      const chunk = await traceSession.send('IO.read', { handle: completed.stream, size: 1024 * 1024 });
-      await handle.writeFile(chunk.base64Encoded ? Buffer.from(chunk.data, 'base64') : chunk.data);
-      if (chunk.eof) break;
-    }
-  } finally { await handle.close(); await traceSession.send('IO.close', { handle: completed.stream }); }
-  const result = await page.evaluate(() => window.__FD_PERF__.result);
+  await transferChromeTrace(traceSession, completed.stream, rawTrace, { signal: abortController.signal, checkSpace });
+  const gameTrace = await readBrowserJson(page, () => ({ json: JSON.stringify(window.__FD_PERF__.result) }), { signal: abortController.signal });
+  const result = JSON.parse(gameTrace);
   await context.close(); context = null;
   await browser.close(); browser = null;
   abortController.signal.throwIfAborted();
   if (consoleMessages.some(m => m.type === 'pageerror' || m.type === 'error')) throw new Error('Browserfehler während des Laufs; siehe console.json');
   manifest.status = 'analyzing'; manifest.scenarioVersion = result.scenarioVersion; manifest.environment = result.environment;
   await saveManifest();
-  await writeFile(join(directory, 'fragdachse-trace.json'), JSON.stringify(result));
+  await checkSpace(Buffer.byteLength(gameTrace) + 32 * 1024 ** 2);
+  await writeFile(join(directory, 'fragdachse-trace.json'), gameTrace);
   const summary = { schemaVersion: 2, windows: summarizeWindows(result) };
+  // Preserve the inexpensive frame evidence before the larger Chrome analysis.
+  // A timeout still leaves a failed manifest, never a successful comparison run.
+  const summaryText = JSON.stringify(summary);
+  await checkSpace(Buffer.byteLength(summaryText));
+  await writeFile(join(directory, 'summary.json'), summaryText);
   console.log('Aufzeichnung beendet; Berichte und Source-Maps werden ausgewertet…');
   const trace = await analyzeTrace(traceEvents(rawTrace, abortController.signal), result, summary.windows, await createSourceResolver(buildDirectory), abortController.signal);
-  await writeReports(directory, manifest, summary, trace, buildDirectory);
-  await pipeline(createReadStream(rawTrace), createGzip(), createWriteStream(join(directory, 'chrome-trace.json.gz')), { signal: abortController.signal });
-  await unlink(rawTrace);
+  await writeReports(directory, manifest, summary, trace, buildDirectory, checkSpace);
   await writeFile(join(directory, 'console.json'), JSON.stringify(consoleMessages, null, 2));
   if (aborted) throw new Error('Lauf wurde abgebrochen');
   manifest.status = 'complete'; manifest.completedAt = new Date().toISOString();
@@ -270,18 +266,16 @@ try {
 } finally {
   clearTimeout(timeout);
   clearInterval(statusTimer);
+  clearInterval(diskTimer);
   if (buildProcess && buildProcess.exitCode === null) buildProcess.kill();
-  if (manifest.status === 'failed' && tracing && traceSession) {
+  if (manifest.status === 'failed' && tracing && traceSession && !diskSpaceFailed) {
     tracing = false;
     console.log('Abgebrochenen Chrome-Trace zur Fehlerdiagnose sichern…');
-    const partialTrace = join(directory, 'chrome-trace.partial.json');
+    const partialTrace = join(directory, 'chrome-trace.partial.json.gz');
     try {
-      const details = await preserveFailedChromeTrace(traceSession, partialTrace);
-      manifest.partialChromeTrace = { file: 'chrome-trace.partial.json', ...details,
+      const details = await preserveFailedChromeTrace(traceSession, partialTrace, 30_000, { checkSpace });
+      manifest.partialChromeTrace = { file: 'chrome-trace.partial.json.gz', ...details,
         note: 'Unvollständiger fehlgeschlagener Lauf; kein Eingang für perf:compare.' };
-      await pipeline(createReadStream(partialTrace), createGzip(), createWriteStream(`${partialTrace}.gz`));
-      manifest.partialChromeTrace.file += '.gz';
-      await unlink(partialTrace);
     } catch (error) { manifest.partialChromeTraceError = String(error); }
     await saveManifest();
   }

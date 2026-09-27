@@ -660,6 +660,7 @@ export class ArenaRuntime {
       powerUps: this.flow.getWorldPowerUpRuntime()?.system?.getWorldItemSnapshot() ?? [],
       nukes: this.flow.getWorldPowerUpRuntime()?.system?.getNukeSnapshot().length ?? 0,
       smoke: this.flow.getWorldSupportGameplayRuntime()?.smoke.runtime.getSnapshots(now).length ?? 0,
+      timeBubbles: this.renderers.timeBubble.getDebugVisualCount(),
       meteors: this.flow.getWorldSupportGameplayRuntime()?.systems.armageddon.getSnapshot().length ?? 0,
       burningCells: burningGround.cells.length,
       burningGround,
@@ -671,6 +672,18 @@ export class ArenaRuntime {
   getScenarioEnvironmentCounts() {
     const arena = this.flow.getWorldRuntime()?.materialization?.arena;
     return { trees: arena?.trunkBodies.length ?? 0, wildlife: arena?.wildlife?.model.animals.length ?? 0 };
+  }
+
+  getScenarioVisibleEnvironment() {
+    const world = this.flow.getWorldRuntime();
+    const view = getVisibleWorldView(this.scene.cameras.main);
+    const wildlife: Record<string, number> = {};
+    for (const animal of world?.materialization?.arena?.wildlife?.model.animals ?? []) {
+      if (animal.opacity <= 0.01 || animal.x < view.x || animal.x > view.x + view.width
+        || animal.y < view.y || animal.y > view.y + view.height) continue;
+      wildlife[animal.kind] = (wildlife[animal.kind] ?? 0) + 1;
+    }
+    return { wildlife, fog: world?.presentation?.groundFog?.getDiagnostics() ?? null };
   }
 
   getScenarioLoadingState() {

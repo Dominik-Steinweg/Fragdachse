@@ -4,8 +4,9 @@
 
 Das Lab führt den normalen Solo-Host-Start, den Lobby-Reveal, die Audiofreigabe und drei
 Sekunden Lobby aus. Erst danach lädt es seine Fallsteuerung. `standard` durchläuft den
-Referenzparcours mit allen 18 Gegenständen des
-[V1-Konzepts](GDDs/Fragdachse_Performance_Lab_Konzept_V1_Revision_3.md), anschließend erfolgt
+Referenzparcours mit den Gegenständen des
+[V1-Konzepts](GDDs/Fragdachse_Performance_Lab_Konzept_V1_Revision_3.md) und einem kleinen
+Querschnitt ergänzender Mechaniken, anschließend erfolgt
 die belohnungsfreie Rückkehr. Die Szenarioversion bleibt bis zur menschlichen
 Relevanzprüfung als Kalibrierungskandidat gekennzeichnet.
 
@@ -38,6 +39,18 @@ npm run perf:chrome -- --case weapon.glock --capture-profile reduced
 npm run perf:compare -- <Ergebnisordner-A> <Ergebnisordner-B>
 ```
 
+Mit `--build <sourceHash aus manifest.json>` lässt sich ein vollständiger archivierter Build
+erneut messen, ohne Checkout-Wechsel oder Neubau. Ein fehlendes/unvollständiges Archiv ist
+ein Fehler; der Runner ersetzt es nicht durch den aktuellen Quellstand. So sind abwechselnde
+Vorher/Nachher-Wiederholungen unter ähnlichen Bedingungen möglich. `buildReused` zeigt im
+Manifest die Wiederverwendung; `buildStorage` beschreibt die ursprüngliche Archivierung.
+`perf:compare` stellt auch die einzelnen CPU-Bereiche gegenüber und warnt bei deutlich
+abweichendem Lobby-Frame-Takt. Dieser Takt ist eine Beobachtung, keine Messung der Monitorfrequenz.
+Die Frame-Zusammenfassung wird bereits vor der Chrome-Auswertung gesichert. Ein späterer
+Fehler lässt den Lauf dennoch auf `failed`; er wird dadurch nicht vergleichbar. Die Offline-
+Auswertung begrenzt Bereichssuchen auf überlappende Phasen und verwendet Profil-Aufrufketten
+wieder, ohne Stichproben auszulassen oder Phasengrenzen zu kürzen.
+
 Der Runner öffnet sichtbares Chrome mit einem frischen, isolierten Browserprofil. Das Fenster
 muss während der Messung sichtbar und fokussiert bleiben. Die Spielauflösung beträgt
 1920 × 1080 CSS-Pixel bei DPR 1 und hoher Grafikqualität. 120 FPS sind ein Bewertungsziel;
@@ -49,16 +62,33 @@ produktive Cooldowns, vollständige geplante Aktionszahl und Nachlauf kommen hin
 Ausbleibende Aktionen werden auf späteren echten Frames ausgeführt; es gibt keine Nachholsalven.
 `--timeout-seconds` setzt das technische Gesamtlimit einschließlich Build und Auswertung;
 Standard sind 1500 Sekunden. Ein Fehler führt zu einem erfolglosen Lauf, nicht zu geringerer Last.
-Vor dem Start muss mindestens 1 GiB frei sein; längere Aufnahmen benötigen zusätzlichen Platz
-für den zunächst unkomprimierten Trace. Nach erfolgreicher Komprimierung bleibt nur die
-vollständige `.gz`-Aufnahme erhalten. Fehlgeschlagene Ergebnisordner tragen ihren Fehler im Manifest.
+Der Runner reserviert mindestens 1 GiB freien Plattenplatz plus 128 MiB Sicherheitspuffer.
+Er prüft vor Builds und größeren Schreibvorgängen sowie alle zwei Sekunden während des Laufs.
+Chrome-Traces werden mit begrenztem Stream-Puffer direkt nach `.json.gz` geschrieben;
+eine unkomprimierte Zwischenkopie entfällt. Bei Platzmangel wird abgebrochen und auf eine
+zusätzliche Trace-Bergung verzichtet. Fehlgeschlagene Ergebnisordner tragen ihren Fehler im Manifest.
 Bei einem Abbruch versucht der Runner, den noch verfügbaren Chrome-Puffer als
 `chrome-trace.partial.json.gz` zu sichern. Dieser Diagnosebeleg bleibt ausdrücklich unvollständig;
 das Manifest bleibt `failed`, und `perf:compare` akzeptiert ihn nicht als Vergleichslauf.
 
-`reduced` schaltet ausschließlich Chromes JS-Sampling ab. Der Spielprofiler bleibt gleich.
-Dieses Profil dient einer groben Gegenmessung und liefert keine gesampelten Aufrufstapel.
-Es ist im Vergleich ausdrücklich eine andere Messbedingung.
+Nach Aufnahmeende wird der Spielbericht im Browser einmal als JSON serialisiert und in
+begrenzten Textstücken übertragen. So muss Playwright nicht Millionen einzelner Messwerte
+in einer einzigen Protokollantwort rekursiv verpacken. Die eigentliche Messung bleibt davon
+unberührt; diese Arbeit erfolgt erst nach dem Stoppen des Chrome-Traces.
+
+Ohne explizites `--capture-profile` verwendet der vollständige Parcours (`standard` als
+Fallauswahl, auch ohne `--case`) das Profil `reduced`. Einzeltests und die kürzere Gruppe
+`combat.day-night` verwenden weiterhin `standard` mit JS-Sampling. Ein explizites Profil
+hat Vorrang; für Vorher/Nachher-Vergleiche muss es auf beiden Seiten gleich sein.
+
+`reduced` schaltet ausschließlich Chromes JS-Sampling ab. Der Spielprofiler bleibt gleich;
+die vollständigen Frame-, CPU-Abschnitts- und GPU-Messungen bleiben erhalten, gesampelte
+JavaScript-Aufrufstapel fehlen. Es ist im Vergleich ausdrücklich eine andere Messbedingung.
+Der lange Parcours mit JS-Sampling stürzte bei der Prüfung vom 26.09.2026 in Chrome 153
+sowohl mit ursprünglichen als auch optimierten Renderern beim abschließenden Lobby-Rückweg
+ab. Die Läufe ohne JS-Sampling waren vollständig. Die Absturzursache ist ungeklärt; der
+Default begrenzt das beobachtete Problem, repariert aber keinen Chrome-Fehler. Für eine
+vertiefte CPU-Analyse einzelne auffällige Fälle mit dem Standardprofil aufnehmen.
 
 Aufnahmeprofil v6 verwendet einen begrenzten Chrome-Trace-Puffer von 1.200.000 KiB und aktiviert
 JS-Sampling über die entsprechende Trace-Kategorie. Der Pufferfüllstand wird überwacht;
@@ -71,13 +101,16 @@ Sichtbare Gameplay-Last und Spieltakte ändern sich durch die Profilauswahl nich
 | Fall-ID | Inhalt |
 |---|---|
 | `environment.route` | Elf Wegpunkte, drei Seen, sichtbarer fahrender Zug und globale Felsreserve |
+| `environment.dawn` | Kurze Uferroute um 06:00 Uhr: Wasser, sichtbare Fische/Wildlife und reagierender Bodennebel |
 | `destruction.single` | Einzelzerstörung mit Glock |
 | `destruction.nuke`, `destruction.bfg` | Reguläres Pickup, Aktivierung/Aufladen, eigenes dichtes Felsfeld und freigeräumte Route |
 | `enemies.low`, `enemies.medium`, `enemies.high` | Drei feste Gegnerbestände mit gleicher Artenmischung und Spielerbewegung |
 | `hazards.void-fire` | Dauerhafte VoidFire-Front in der Größe des Endzustands von Map 14, danach 30 Sekunden volle Feuerlast |
 | `weapon.glock`, `weapon.p90`, `weapon.plasma`, `weapon.mini-rockets`, `weapon.shotgun` | Baseline beziehungsweise explizit voll ausgebaute Waffen |
 | `weapon.asmd`, `weapon.bite`, `weapon.rocket`, `weapon.tesla`, `weapon.flame` | Basis-Builds einschließlich gehaltener Waffen |
+| `weapon.hydra` | Aufgerüstete Hydra gegen eine Felswand: tatsächliche Teilung und nachführende Split-Projektile mit Treffern |
 | `utility.he`, `utility.molotov`, `utility.smoke` | HE-Basis sowie volle Molotov-/Smoke-Builds mit regulärem Werfen |
+| `utility.time-bubble` | Ein regulär geworfenes Zeitfeld mit Fokus, Resonanz und Prismenspirale; sichtbare Blase, Prismengeschosse und Treffer erforderlich |
 | `construction.defense` | Zwei Raketen-Türme und zwei Mauern über Bauaktionen, danach Angriff auf Konstruktionen |
 | `ultimate.armageddon` | Basis-Ultimate mit echten Meteoren und Treffern |
 | `combat.day`, `combat.night`, `combat.day-night` | Frische identische Welt, separat gemessener Tageszeitwechsel und Bauvorbereitung, vier feste Gegnerwellen |
@@ -89,6 +122,21 @@ Aktions-Lifecycle. Beide Zerstörungstests erhalten unabhängig voneinander ein 
 Die Gruppe `combat.day-night` enthält zusätzlich die anschließende Erholung derselben Nacht-Welt.
 Jeder erfolgreiche Lauf prüft die tatsächlich ausgeführte Mechanik; fehlende Treffer,
 Pickups, Effekte, Bauaktionen oder Umgebungsmerkmale lassen den Lauf scheitern.
+
+Ab `reference-1-candidate.6` ist Bodennebel im Lab wie in der normalen hohen Grafikqualität
+aktiviert. Ältere Lab-Builds hatten ihn grundsätzlich abgeschaltet und sind deshalb keine
+direkte Gesamt-Baseline. Manifest/Umgebung nennen `groundFog: true`. Umgebung und Tag-/Nachtkampf
+erfassen sichtbare Tierarten sowie Nebelaktivität im tatsächlichen Kameraausschnitt. Die
+Morgenkarte lädt bereits mit ihrer authored Tageszeit; sie versteckt die Initialisierung
+nicht in einem nachträglichen Zeitsprung. Hydra und Zeitblase ergänzen eigenständige Mechaniken
+(Teilung/Homing und Zeitfeld/Prismenspirale), keine vollständige Waffen- oder Upgrade-Matrix.
+Die drei zusätzlichen Fälle haben zusammen 38 Sekunden feste Mess-/Nachlaufzeit; normale
+Lade- und Rückkehrphasen kommen hinzu.
+
+Vorbereitung und erstes Gameplay bleiben getrennt messbar. Asset-Laden, Shader-Kompilierung,
+GPU-Puffer und vorbereitbare Text-/Effektressourcen gehören in die normale Ladebarriere.
+Die Projektilspuren bereiten ihren begrenzten Pufferpool über mehrere Ladeframes vor.
+Das Lab verwirft keine ersten Gameplay-Frames als pauschales Warmup.
 
 Die Referenzwelt hat 160 × 96 Zellen, drei Seen, feste Felsfelder, Vegetation und einen
 unbewaffneten feindlichen Außenposten außerhalb der Messbereiche. Dieser aktiviert die normale
@@ -135,6 +183,15 @@ Builds liegen unveränderlich unter `build/performance-builds/<Quellhash>/`. Ein
 verweist relativ auf seinen Build, lesbaren Projektquellstand, Source-Maps und darin enthaltene
 Abhängigkeitsquellen. Beim Weitergeben beide Verzeichnisse mit ihrer relativen Struktur erhalten.
 Ein neuer Build überschreibt keine frühere erfolgreiche Aufnahme.
+
+Unveränderte Build-, Asset- und Quelldateien teilen ihre Daten über Hardlinks auf private,
+inhaltlich adressierte Kopien in `build/performance-objects/`. Arbeitsdateien werden niemals
+direkt verlinkt: spätere Änderungen unter `src/` oder `public/` verändern kein Archiv.
+Wo Hardlinks nicht verfügbar sind, wird die Datei kopiert. `build.json` und das Run-Manifest
+nennen logische, neu gespeicherte und wiederverwendete Bytes; der Explorer kann bei Hardlinks
+eine höhere logische Größe als die tatsächlich belegte Plattenkapazität anzeigen.
+Build-Verzeichnisse bleiben eigenständig nutzbar und lassen sich normal weiterkopieren.
+Frühere Aufnahmen und Builds werden nicht automatisch gelöscht.
 
 Ab Profil v6 verwenden Spielreport-Schema 9, `frameCapture.version: 2`, Summary-/Vergleichsformat 2
 und Sampling-Belegformat 3 eine ausdrücklich getrennte Messsemantik. Alte Aufnahmen bleiben

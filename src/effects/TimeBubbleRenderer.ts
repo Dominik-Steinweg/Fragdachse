@@ -139,6 +139,8 @@ export class TimeBubbleRenderer {
 
   constructor(private readonly scene: Phaser.Scene) {}
 
+  getDebugVisualCount(): number { return this.visuals.size; }
+
   setDistortionComposer(composer: LocalDistortionComposer | null): void {
     this.distortion = composer;
   }

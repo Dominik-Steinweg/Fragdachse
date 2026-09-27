@@ -89,7 +89,11 @@ function join(knot: FlightRibbonKnot, previous: FlightRibbonKnot | null, next: F
 export class GpuFlightRibbonStore {
   readonly data: Float32Array;
   readonly pageLive: Uint16Array;
+  readonly pageDrawCount: Uint16Array;
   readonly pageVersion: Uint32Array;
+  /** Changed slot interval in each page's latest version; older consumers must upload the full page. */
+  readonly pageDirtyStart: Uint16Array;
+  readonly pageDirtyEnd: Uint16Array;
   private readonly flights = new Map<number, Flight>();
   private readonly slots: (FlightRibbonSpan | null)[];
   private readonly free: number[] = [];
@@ -113,7 +117,10 @@ export class GpuFlightRibbonStore {
     this.coreWork = this.wakeWork = capacity;
     this.slots = new Array(capacity).fill(null);
     this.pageLive = new Uint16Array(Math.ceil(capacity / FLIGHT_RIBBON_PAGE_SIZE));
+    this.pageDrawCount = new Uint16Array(this.pageLive.length);
     this.pageVersion = new Uint32Array(this.pageLive.length);
+    this.pageDirtyStart = new Uint16Array(this.pageLive.length);
+    this.pageDirtyEnd = new Uint16Array(this.pageLive.length);
     for (let i = capacity - 1; i >= 0; i--) this.free.push(i);
   }
   create(source: number, style: FlightRibbonStyle): FlightRibbonHandle | null {
@@ -237,7 +244,9 @@ export class GpuFlightRibbonStore {
       chain.knots += span.previous ? 1 : 2;
       chain.spans.push(span); chain.last = to; this.slots[slot] = span;
       this.active++; this.rearms++; this.peak = Math.max(this.peak, this.active);
-      this.pageLive[Math.floor(slot / FLIGHT_RIBBON_PAGE_SIZE)]++;
+      const page = Math.floor(slot / FLIGHT_RIBBON_PAGE_SIZE);
+      this.pageLive[page]++;
+      this.pageDrawCount[page] = Math.max(this.pageDrawCount[page], slot % FLIGHT_RIBBON_PAGE_SIZE + 1);
       this.dirty.add(slot); this.admission.spawn(effect);
     }
   }
@@ -247,7 +256,16 @@ export class GpuFlightRibbonStore {
     chain.knots -= span.next ? 1 : 2;
     if (span.next) { span.next.previous = null; this.dirty.add(span.next.slot); }
     this.slots[span.slot] = null; this.free.push(span.slot); this.dirty.add(span.slot);
-    this.active--; this.retirements++; this.pageLive[Math.floor(span.slot / FLIGHT_RIBBON_PAGE_SIZE)]--;
+    const page = Math.floor(span.slot / FLIGHT_RIBBON_PAGE_SIZE);
+    this.active--; this.retirements++; this.pageLive[page]--;
+    // Never submit the unused tail of a persistent page. Holes before the last live
+    // slot retain their zero geometry, so slot identity and draw order stay intact.
+    let end = this.pageDrawCount[page];
+    if (span.slot % FLIGHT_RIBBON_PAGE_SIZE + 1 === end) {
+      const start = page * FLIGHT_RIBBON_PAGE_SIZE;
+      while (end > 0 && !this.slots[start + end - 1]) end--;
+      this.pageDrawCount[page] = end;
+    }
   }
   private evictOldPrefix(wake: boolean): boolean {
     // Wake cannot evict critical material. Core first reclaims optional material.
@@ -302,7 +320,16 @@ export class GpuFlightRibbonStore {
       const span = this.slots[slot], offset = slot * FLIGHT_RIBBON_SLOT_WORDS;
       this.data.fill(0, offset, offset + FLIGHT_RIBBON_SLOT_WORDS);
       if (span) this.writeSpan(span);
-      pages.add(Math.floor(slot / FLIGHT_RIBBON_PAGE_SIZE));
+      const page = Math.floor(slot / FLIGHT_RIBBON_PAGE_SIZE);
+      const localSlot = slot % FLIGHT_RIBBON_PAGE_SIZE;
+      if (!pages.has(page)) {
+        this.pageDirtyStart[page] = localSlot;
+        this.pageDirtyEnd[page] = localSlot + 1;
+        pages.add(page);
+      } else {
+        this.pageDirtyStart[page] = Math.min(this.pageDirtyStart[page], localSlot);
+        this.pageDirtyEnd[page] = Math.max(this.pageDirtyEnd[page], localSlot + 1);
+      }
     }
     this.writes += pages.size;
     for (const page of pages) this.pageVersion[page]++;

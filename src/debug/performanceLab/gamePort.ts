@@ -79,6 +79,20 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     const state = flow.getScenarioObservation();
     if (window.__FD_PERF__) window.__FD_PERF__.detail = { ...counters, mapEvents: state.mapEvents };
     peak('smokePeak', state.smoke); peak('meteorPeak', state.meteors); peak('nukePeak', state.nukes);
+    if (preparedId === 'utility.time-bubble' || preparedId === 'weapon.hydra') {
+      const projectiles = flow.getWorldProjectileRuntime()?.getDebugSpecialProjectileCounts();
+      peak('timeBubblePeak', state.timeBubbles);
+      peak('hydraChildrenPeak', projectiles?.hydraChildren ?? 0);
+      peak('prismShotsPeak', projectiles?.prismShots ?? 0);
+    }
+    if (preparedId.startsWith('environment.') || preparedId.startsWith('combat.')) {
+      const environment = flow.getScenarioVisibleEnvironment();
+      for (const [kind, count] of Object.entries(environment.wildlife)) peak(`visibleWildlife.${kind}`, count);
+      if (environment.fog?.status === 'ready') add('fogReadySamples');
+      peak('fogChunksPeak', environment.fog?.activeChunks ?? 0);
+      peak('fogImpulsesPeak', environment.fog?.submittedImpulses ?? 0);
+      peak('fogTracesPeak', environment.fog?.visibleTraces ?? 0);
+    }
     peak('burningCellsPeak', state.burningCells);
     if (preparedId === 'hazards.void-fire') {
       const view = getVisibleWorldView(scene.cameras.main);
@@ -98,7 +112,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       }
     }
     peak('activeLightsPeak', state.lights.activeLights); peak('renderedLightsPeak', state.lights.renderedLights);
-    if (preparedId.startsWith('combat.')) {
+    if (preparedId.startsWith('combat.') || preparedId === 'environment.dawn') {
       const waterProbe = point(86, 72);
       if (isWorldPointInsideView(waterProbe.x, waterProbe.y, getVisibleWorldView(scene.cameras.main))) add('waterVisibleSamples');
     }
@@ -175,16 +189,18 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       input();
       return;
     }
-    playerPosition = test.kind === 'environment' ? point(33, 48)
+    playerPosition = test.id === 'environment.dawn' ? point(80, 64) : test.kind === 'environment' ? point(33, 48)
       : test.itemId === 'NUKE' || test.id === 'destruction.single' ? point(40, 51)
-      : test.itemId === 'BFG' ? point(76, 51) : point(67, 72);
+      : test.itemId === 'BFG' || test.itemId === 'HYDRA' ? point(76, 51) : point(67, 72);
     if (!geometry.isFree(playerPosition.x, playerPosition.y, 18)) throw new Error(`${test.id}: blocked player fixture`);
     flow.navigationLabPort.placePlayer(playerPosition.x, playerPosition.y);
     aimPosition = { x: playerPosition.x + (test.targetDistance ?? 220), y: playerPosition.y };
     if (test.id === 'destruction.single') aimPosition = point(44, 50);
     if (test.itemId === 'NUKE') aimPosition = point(54, 50);
     if (test.itemId === 'BFG') aimPosition = point(95, 50);
-    route = test.kind === 'environment'
+    // Hydra splits on world contact. Shoot the wall, with durable targets behind the player.
+    if (test.itemId === 'HYDRA') aimPosition = point(82, 51);
+    route = test.id === 'environment.dawn' ? [[80,64],[80,85],[105,85]].map(([x,y]) => point(x,y)) : test.kind === 'environment'
       ? [[33,48],[33,32],[45,32],[75,32],[87,37],[126,37],[126,65],[122,85],[78,85],[73,72],[67,72]].map(([x,y]) => point(x,y))
       : [];
     routeIndex = 0;
@@ -194,7 +210,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     }
     if (test.kind === 'weapon' && !test.id.startsWith('destruction') || test.kind === 'utility') {
       for (const offset of test.itemId === 'BITE' ? [0] : [-65, 0, 65]) {
-        const position = { x: aimPosition.x, y: aimPosition.y + offset };
+        const position = { x: test.itemId === 'HYDRA' ? playerPosition.x - 80 : aimPosition.x, y: aimPosition.y + offset };
         if (!geometry.isFree(position.x, position.y, 16)) throw new Error(`${test.id}: blocked target fixture`);
         const target = flow.weaponBalanceLabPort.spawnTarget(position.x, position.y, fixture.targetHp);
         if (!target) throw new Error('Failed to spawn performance target');
@@ -330,7 +346,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       const world = flow.getWorldDescriptor();
       if (world?.definitionId.endsWith(`:${requestedMap}`) && focusedWorld !== world.worldRevision
         && flow.getWorldMetrics()?.gridCols === 160 && players.getPlayer(localId())) {
-        const initial = requestedMap.endsWith('-train') ? point(33, 48) : point(67, 72);
+        const initial = requestedMap.endsWith('-dawn') ? point(80, 64) : requestedMap.endsWith('-train') ? point(33, 48) : point(67, 72);
         flow.navigationLabPort.placePlayer(initial.x, initial.y);
         focusedWorld = world.worldRevision;
       }
@@ -369,7 +385,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         const dx = goal.x - player.x, dy = goal.y - player.y, distance = Math.hypot(dx, dy);
         if (distance < 28) { counters.clearedRouteReached = 1; input(); }
         else input(dx / distance, dy / distance);
-      } else if (test.kind === 'environment' && elapsed > 15_000 && routeIndex < route.length) {
+      } else if (test.kind === 'environment' && elapsed > (test.id === 'environment.dawn' ? 0 : 15_000) && routeIndex < route.length) {
         const player = players.getPlayer(localId())!, goal = route[routeIndex];
         const dx = goal.x - player.x, dy = goal.y - player.y, distance = Math.hypot(dx, dy);
         if (distance < 28) { routeIndex++; counters.routeWaypoints = routeIndex; input(); }
@@ -419,7 +435,13 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       }
       if (test.id.startsWith('destruction') && !(counters.destroyedRocks > 0)) throw new Error(`${test.id}: no rock destruction observed`);
       if (test.id.startsWith('destruction') && rocks() < fixture.remainingGlobalRocks) throw new Error(`${test.id}: global rock reserve exhausted`);
-      if (test.kind === 'environment' && (!(counters.trainMovingSamples > 0) || counters.routeWaypoints !== route.length || counters.lakesObserved !== 3)) throw new Error(`Environment route, lakes or visible moving train missing: ${JSON.stringify(counters)}`);
+      if (test.id === 'environment.route' && (!(counters.trainMovingSamples > 0) || counters.routeWaypoints !== route.length || counters.lakesObserved !== 3)) throw new Error(`Environment route, lakes or visible moving train missing: ${JSON.stringify(counters)}`);
+      if (test.id === 'environment.dawn' && (counters.routeWaypoints !== route.length || !counters.waterVisibleSamples
+        || !counters['visibleWildlife.fish'] || !counters.fogReadySamples || !counters.fogChunksPeak || !counters.fogImpulsesPeak)) {
+        throw new Error(`Dawn route, visible fish, water or reactive fog missing: ${JSON.stringify(counters)}`);
+      }
+      if (test.itemId === 'HYDRA' && !counters.hydraChildrenPeak) throw new Error('No Hydra split children observed');
+      if (test.itemId === 'TIME_BUBBLE' && (!counters.timeBubblePeak || !counters.prismShotsPeak)) throw new Error('No time bubble with prism shots observed');
       if (test.id.startsWith('destruction')) counters.fieldRocksRemaining = fieldRocks(test.itemId);
       if (test.kind === 'pickup' && !counters.clearedRouteReached) throw new Error(`${test.id}: cleared route could not be traversed`);
       if (test.itemId === 'SMOKE_GRENADE' && !(counters.smokePeak > 0)) throw new Error('No smoke cloud observed');
@@ -460,7 +482,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     stopRecording: () => diagnostics.stopScenarioRecording(),
     environment: () => ({ canvasWidth: scene.game.canvas.width, canvasHeight: scene.game.canvas.height,
       viewportWidth: innerWidth, viewportHeight: innerHeight, dpr: devicePixelRatio,
-      quality: 'high', targetFps: 120, physicsFps: 120, coldBrowser: true, audio: 'running',
+      quality: 'high', groundFog: true, targetFps: 120, physicsFps: 120, coldBrowser: true, audio: 'running',
       enemyEyes: window.__FD_PERF_REQUEST__?.enemyEyes ?? 'on',
       timeOfDayMinutes: window.__FD_PERF_REQUEST__?.timeOfDayMinutes ?? null }),
   };

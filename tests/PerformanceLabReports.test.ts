@@ -1,14 +1,118 @@
 import { describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, writeFile, unlink, rmdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, unlink, rmdir, rm, stat } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { gzipSync } from 'node:zlib';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { metric, summarizeWindows, compareResults, findings } from '../scripts/performance/metrics.mjs';
-import { analyzeTrace, createSourceResolver, traceEvents } from '../scripts/performance/trace.mjs';
-import { acquireOwned, preserveFailedChromeTrace } from '../scripts/performance/lifecycle.mjs';
+import { analyzeTrace, createSourceResolver, traceEvents, archiveDependencySources } from '../scripts/performance/trace.mjs';
+import { acquireOwned, preserveFailedChromeTrace, transferChromeTrace, readBrowserJson } from '../scripts/performance/lifecycle.mjs';
+import { createBuildStorage, checkDiskSpace, MINIMUM_FREE_BYTES, DISK_HEADROOM_BYTES } from '../scripts/performance/storage.mjs';
+import { parsePerformanceOptions } from '../scripts/performance/options.mjs';
 
 describe('Performance lab offline evidence', () => {
+  it('defaults full runs to reduced tracing and focused runs to JS sampling, preserving explicit overrides', () => {
+    expect(parsePerformanceOptions([]).captureProfile).toBe('reduced');
+    expect(parsePerformanceOptions(['--case', 'standard']).captureProfile).toBe('reduced');
+    expect(parsePerformanceOptions(['--case', 'enemies.high']).captureProfile).toBe('standard');
+    expect(parsePerformanceOptions(['--capture-profile', 'standard']).captureProfile).toBe('standard');
+    expect(parsePerformanceOptions(['--case', 'enemies.high', '--capture-profile', 'reduced']).captureProfile).toBe('reduced');
+  });
+
+  it('transfers large result JSON in bounded text chunks and releases the browser handle on cancellation', async () => {
+    const encoded = JSON.stringify({ name: 'ä😀some more text', values: [1, null, 3] });
+    let disposed = 0;
+    let cancelDuringRead = false;
+    const cancelled = new AbortController();
+    const sizes: number[] = [];
+    const page = { evaluateHandle: async (producer: Function) => {
+      const remote = producer();
+      // Primitive handles cross CDP by value, defeating bounded transfers.
+      expect(remote).toEqual({ json: encoded });
+      return {
+        evaluate: async (fn: Function, args: unknown) => {
+          const value = fn(remote, args);
+          if (typeof value === 'string') sizes.push(value.length);
+          if (cancelDuringRead && typeof value === 'string') cancelled.abort(new Error('cancelled'));
+          return value;
+        },
+        dispose: async () => { disposed++; },
+      };
+    } };
+    expect(await readBrowserJson(page, () => ({ json: encoded }), { chunkChars: 4 })).toBe(encoded);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(5);
+    cancelDuringRead = true;
+    await expect(readBrowserJson(page, () => ({ json: encoded }), { signal: cancelled.signal, chunkChars: 4 })).rejects.toThrow('cancelled');
+    expect(disposed).toBe(2);
+  });
+
+  it('shares immutable build copies while edits to working files leave older captures intact', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'fd-build-storage-'));
+    try {
+      const source = join(folder, 'live');
+      await mkdir(source);
+      await writeFile(join(source, 'asset.txt'), 'original');
+      const objects = join(folder, 'objects'), first = join(folder, 'first'), second = join(folder, 'second');
+      const a = createBuildStorage(objects, first), b = createBuildStorage(objects, second);
+      await a.archiveTree(source, join(first, 'site'));
+      await b.archiveTree(source, join(second, 'site'));
+      expect(b.statistics).toMatchObject({ storedBytes: 0, reusedBytes: 8, linkedFiles: 1 });
+      expect((await stat(join(first, 'site/asset.txt'))).ino).toBe((await stat(join(second, 'site/asset.txt'))).ino);
+      await writeFile(join(source, 'asset.txt'), 'changed');
+      await b.archiveTree(source, join(second, 'site'));
+      expect(await readFile(join(second, 'site/asset.txt'), 'utf8')).toBe('changed');
+      expect(await readFile(join(first, 'site/asset.txt'), 'utf8')).toBe('original');
+      const third = join(folder, 'third');
+      await createBuildStorage(objects, third).archiveTree(source, join(third, 'site'));
+      expect(await readFile(join(third, 'site/asset.txt'), 'utf8')).toBe('changed');
+      await expect(a.archiveTree(source, join(folder, 'outside'))).rejects.toThrow('escapes');
+    } finally { await rm(folder, { recursive: true, force: true }); }
+  });
+
+  it('reserves disk headroom before a write, including its projected size', async () => {
+    const free = MINIMUM_FREE_BYTES + DISK_HEADROOM_BYTES + 100;
+    const stats = async () => ({ bavail: free, bsize: 1 });
+    expect(await checkDiskSpace('.', 100, stats)).toBe(free);
+    await expect(checkDiskSpace('.', 101, stats)).rejects.toMatchObject({ code: 'PERF_DISK_SPACE' });
+  });
+
+  it('does not overwrite shared dependency sources when retrying an archive', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'fd-dependency-storage-'));
+    try {
+      const first = join(folder, 'first'), second = join(folder, 'second'), objects = join(folder, 'objects');
+      const map = (content: string) => JSON.stringify({ sources: ['../node_modules/example/index.js'], sourcesContent: [content] });
+      await mkdir(join(first, 'site/assets'), { recursive: true });
+      await writeFile(join(first, 'site/assets/index.js.map'), map('original'));
+      await archiveDependencySources(first);
+      await createBuildStorage(objects, first).deduplicateTree(join(first, 'source'));
+      await createBuildStorage(objects, second).archiveTree(join(first, 'source'), join(second, 'source'));
+      await mkdir(join(second, 'site/assets'), { recursive: true });
+      await writeFile(join(second, 'site/assets/index.js.map'), map('changed'));
+      await archiveDependencySources(second);
+      const dependency = 'source/dependencies/node_modules/example/index.js';
+      expect(await readFile(join(first, dependency), 'utf8')).toBe('original');
+      expect(await readFile(join(second, dependency), 'utf8')).toBe('changed');
+    } finally { await rm(folder, { recursive: true, force: true }); }
+  });
+
+  it('streams a complete compressed Chrome trace and closes its handle when disk checks fail', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'fd-compressed-trace-'));
+    const closed: string[] = [];
+    const send = async (method: string, args: { handle: string }) => {
+      if (method === 'IO.close') closed.push(args.handle);
+      return { data: '{"traceEvents":[{"name":"ä"}]}', eof: true };
+    };
+    try {
+      const path = join(folder, 'trace.json.gz');
+      await transferChromeTrace({ send }, 'complete', path);
+      expect(JSON.parse(gunzipSync(await readFile(path)).toString())).toEqual({ traceEvents: [{ name: 'ä' }] });
+      await expect(transferChromeTrace({ send }, 'failed', join(folder, 'failed.gz'), {
+        checkSpace: async () => { throw new Error('disk full'); },
+      })).rejects.toThrow('disk full');
+      expect(closed).toEqual(['complete', 'failed']);
+    } finally { await rm(folder, { recursive: true, force: true }); }
+  });
+
   it('salvages a failed trace independently of the lost page and retains its data-loss flag', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'fd-partial-trace-')), path = join(directory, 'partial.json');
     const session = Object.assign(new EventEmitter(), { send: async (method: string) => {
@@ -158,9 +262,17 @@ describe('Performance lab offline evidence', () => {
     expect(comparison.warnings).toContain('Abweichung: browserVersion');
     expect(comparison.cases[0]).toMatchObject({ loadChanged: true, status: 'conditions-differ' });
     const a = run('1', 20), b = run('1', 20);
+    Object.assign(a.summary.windows[0], { costs: { scopes: { scenePostUpdate: { median: 8 } } } });
+    Object.assign(b.summary.windows[0], { costs: { scopes: { scenePostUpdate: { median: 2 } } } });
+    expect(compareResults(a, b).cases[0].differences['scope.scenePostUpdate'].median)
+      .toEqual({ before: 8, after: 2, absolute: -6, percent: -75 });
+    expect(compareResults(a, b).cases[0].differences['scope.scenePostUpdate'].p95).toBeNull();
     Object.assign(a.manifest, { caseId: 'standard' });
     Object.assign(b.manifest, { caseId: 'weapon.glock', durationMs: 60_000 });
     expect(compareResults(a, b).warnings).toEqual(['Abweichung: caseId', 'Abweichung: durationMs']);
+    a.summary.windows[0].id = b.summary.windows[0].id = 'lobby';
+    b.summary.windows[0].frame.median = 20;
+    expect(compareResults(a, b).warnings.some(w => w.includes('Lobby-Frame-Takt'))).toBe(true);
   });
 
   it('aligns sample clocks, keeps workers separate and reports GC overlap without summing nested samples', async () => {
@@ -177,13 +289,21 @@ describe('Performance lab offline evidence', () => {
       { name: 'MajorGC', ph: 'X', pid: 2, tid: 99, ts: 1_010_000, dur: 3000 },
     ];
     const result = { request: { runId: 'r', captureProfile: 'standard' }, markers: [{ name: 'boot-start', atMs: 0 }, { name: 'run-end', atMs: 100 }] };
-    const report = await analyzeTrace(events, result, [{ id: 'a', fromMs: 5, toMs: 15, spikes: [{ atMs: 15, durationMs: 10 }] }]);
+    const report = await analyzeTrace(events, result, [
+      { id: 'a', fromMs: 5, toMs: 15, spikes: [{ atMs: 15, durationMs: 10 }] },
+      { id: 'later', fromMs: 15, toMs: 20, spikes: [] },
+      { id: 'earlier', fromMs: 0, toMs: 5, spikes: [] },
+      { id: 'after-last-sample', fromMs: 20, toMs: 30, spikes: [] },
+    ]);
     expect(report.windows[0].threads).toHaveLength(2);
     expect(report.windows[0].threads.map(t => t.role)).toEqual(['main', 'worker']);
     expect(report.windows[0].threads[0].sampledMs).toBe(10);
     expect(report.windows[0].threads[0].self[0].ms).toBe(10);
     expect(report.windows[0].threads[0].inclusive).toHaveLength(2);
     expect(report.windows[0].spikes[0].gc).toHaveLength(1);
+    expect(report.windows[1].threads[0].self[0].ms).toBe(5);
+    expect(report.windows[2].threads[0].self[0].ms).toBe(5);
+    expect(report.windows[3].threads).toEqual([]);
     expect(report.cpuSamples).toBe(6);
     expect(report.reorderedDeltas).toBe(2);
   });

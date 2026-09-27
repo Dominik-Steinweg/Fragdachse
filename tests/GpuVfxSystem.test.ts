@@ -20,6 +20,7 @@ import { getGpuVfxFrameAnimation, GpuVfxFrameAnimationId } from '../src/effects/
 import { GPU_VFX_EFFECTS, GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { GpuVfxSystem, admitGpuVfxSpawn } from '../src/effects/gpu/GpuVfxSystem';
+import * as flightRibbonLayer from '../src/effects/gpu/GpuFlightRibbonLayer';
 import { FLIGHT_SIGNATURE_PROFILES } from '../src/projectile/FlightSignature';
 import { createGpuVfxMemberHandle } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
@@ -240,6 +241,29 @@ describe('gpu vfx system: lanes', () => {
     expect(context.setColorWritemask).toHaveBeenCalledWith(false, false, false, false);
     expect(events.count('prerender')).toBe(0);
     expect(events.count('shutdown')).toBe(0);
+    system.destroy();
+  });
+
+  it('keeps loading pending until the flight ribbon buffers and shader are prepared', () => {
+    const scene = makeFakeGpuVfxScene();
+    const events = makeWarmupEvents(), context = makeWarmupContext();
+    Object.assign(scene, { events, cameras: { main: {} }, renderer: { baseDrawingContext: { getClone: () => context } } });
+    const addLayer = scene.add.spriteGPULayer;
+    scene.add.spriteGPULayer = ((key: string, size: number) => Object.assign(addLayer(key, size), {
+      submitterNode: { run() {}, programManager: { getCurrentProgramSuite: () => ({}) } },
+    })) as typeof scene.add.spriteGPULayer;
+    let ready = false;
+    const prepare = vi.fn(() => ready);
+    vi.spyOn(flightRibbonLayer, 'createFlightRibbonLayer').mockReturnValueOnce({
+      image: { destroy: vi.fn(), setVisible: vi.fn() } as never, prepare,
+    });
+    const system = new GpuVfxSystem(scene as never);
+    for (let index = 0; index <= GPU_VFX_LANES.length; index++) events.emit('prerender');
+    expect(prepare).toHaveBeenCalledWith(context);
+    expect(system.isShaderWarmupComplete()).toBe(false);
+    ready = true; events.emit('prerender');
+    expect(system.getShaderWarmupState()).toBe('complete');
+    expect(events.count('prerender')).toBe(0);
     system.destroy();
   });
 

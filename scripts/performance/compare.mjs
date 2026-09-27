@@ -15,6 +15,7 @@ const directory = resolve('build/performance-results', `comparison-${Date.now()}
 await mkdir(directory, { recursive: true });
 await writeFile(join(directory, 'comparison.json'), JSON.stringify(result, null, 2));
 const lines = ['# Performance-Vergleich\n', `${a.manifest.runId} → ${b.manifest.runId}\n`, result.interpretation,
+  '\nCPU-Bereiche (scope.*) sind verschachtelt und nicht addierbar; jeder Bereich verwendet seine eigenen enthaltenen Stichproben.\n',
   '\n## Bedingungen\n', ...result.warnings.map(w => `- ${w}`), '\n## Fälle\n'];
 for (const c of result.cases) {
   lines.push(`### ${c.id}\n`, `Status: ${c.status}. Last verändert: ${c.loadChanged ?? 'nicht vergleichbar'}.\n`);

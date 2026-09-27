@@ -561,7 +561,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.graphicsQuality = new GraphicsQualityController(
       __PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__ ? 'high' : getStoredGraphicsQuality());
-    this.graphicsQuality.setGroundFogEnabled(!__PERFORMANCE_LAB__ && getStoredGroundFogEnabled());
+    this.graphicsQuality.setGroundFogEnabled(__PERFORMANCE_LAB__ || getStoredGroundFogEnabled());
     this.graphicsQuality.attach(this);
     onBootSceneTeardown(this.events, () => this.graphicsQuality.destroy());
     this.graphicsQuality.subscribe((profile) => {

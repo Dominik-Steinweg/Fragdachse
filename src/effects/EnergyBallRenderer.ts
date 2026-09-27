@@ -24,6 +24,9 @@ interface EnergyBallVisual {
   shellEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   glowImage: Phaser.GameObjects.Image;
   shellImage: Phaser.GameObjects.Image;
+  size: number;
+  color: number;
+  variant: EnergyBallVariant;
 }
 
 interface EnergyBallVisualPreset {
@@ -256,7 +259,7 @@ export class EnergyBallRenderer {
       this.getShellTint(color, variant, preset),
     );
 
-    this.visuals.set(id, { coreEmitter, shellEmitter, glowImage, shellImage });
+    this.visuals.set(id, { coreEmitter, shellEmitter, glowImage, shellImage, size: NaN, color, variant });
     this.updateVisual(id, x, y, size, 0, 0, color, variant);
   }
 
@@ -269,30 +272,34 @@ export class EnergyBallRenderer {
     void vx;
     void vy;
 
-    const spread = Math.max(size * preset.spreadFactor, preset.minSpread);
     const pulse = Math.sin(this.scene.time.now * 0.02 + id * 0.7);
     const glowPulse = Math.max(0.3, 1 + pulse * preset.glowPulseAmplitude);
     const shellPulse = Math.max(0.4, 1 + Math.cos(this.scene.time.now * 0.016 + id * 0.4) * preset.shellPulseAmplitude);
     const glowScale = Math.max(size * preset.glowScaleFactor, preset.minGlowScale) * glowPulse;
 
     visual.coreEmitter.setPosition(x, y);
-    setCircleEmitZone(visual.coreEmitter, spread * preset.coreZoneFactor, 2, true);
-    visual.coreEmitter.setParticleScale(preset.coreParticleScaleBase + size * preset.coreParticleScaleFactor, 0.08);
-
     visual.shellEmitter.setPosition(x, y);
-    setCircleEmitZone(visual.shellEmitter, spread * preset.shellZoneFactor, 1, true);
-    visual.shellEmitter.setParticleScale(preset.shellParticleScaleBase + size * preset.shellParticleScaleFactor, 0.1);
+    if (visual.size !== size || visual.variant !== variant) {
+      const spread = Math.max(size * preset.spreadFactor, preset.minSpread);
+      setCircleEmitZone(visual.coreEmitter, spread * preset.coreZoneFactor, 2, true);
+      visual.coreEmitter.setParticleScale(preset.coreParticleScaleBase + size * preset.coreParticleScaleFactor, 0.08);
+      setCircleEmitZone(visual.shellEmitter, spread * preset.shellZoneFactor, 1, true);
+      visual.shellEmitter.setParticleScale(preset.shellParticleScaleBase + size * preset.shellParticleScaleFactor, 0.1);
+    }
+    if (visual.color !== color || visual.variant !== variant) {
+      visual.glowImage.setTint(this.getGlowTint(color, variant, preset));
+      visual.shellImage.setTint(this.getShellTint(color, variant, preset));
+    }
+    visual.size = size; visual.color = color; visual.variant = variant;
 
     visual.glowImage.setPosition(x, y);
     visual.glowImage.setScale(glowScale);
     visual.glowImage.setAlpha(preset.glowAlpha * (0.92 + pulse * 0.05));
-    visual.glowImage.setTint(this.getGlowTint(color, variant, preset));
 
     visual.shellImage.setPosition(x, y);
     visual.shellImage.setScale(Math.max(size * preset.shellScaleFactor, preset.minShellScale) * shellPulse);
     visual.shellImage.setRotation(this.scene.time.now * 0.006 + id * 0.15);
     visual.shellImage.setAlpha(preset.shellAlpha * (0.95 + pulse * 0.04));
-    visual.shellImage.setTint(this.getShellTint(color, variant, preset));
   }
 
   destroyVisual(id: number): void {

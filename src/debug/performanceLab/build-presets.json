@@ -66,6 +66,27 @@
       "unlock_asmd_primary": 1
     }
   },
+  "HYDRA": {
+    "slot": "weapon1",
+    "upgrades": {
+      "unlock_hydra": 1,
+      "hydra_split_count": 1,
+      "hydra_range": 3,
+      "hydra_damage_split": 3,
+      "hydra_hunting_instinct": 1
+    }
+  },
+  "TIME_BUBBLE": {
+    "slot": "utility",
+    "upgrades": {
+      "unlock_time_bubble": 1,
+      "time_bubble_cooldown": 3,
+      "time_bubble_focus": 1,
+      "time_bubble_radius": 3,
+      "time_bubble_prism_spiral": 3,
+      "time_bubble_resonance": 1
+    }
+  },
   "BITE": {
     "slot": "weapon1",
     "upgrades": {

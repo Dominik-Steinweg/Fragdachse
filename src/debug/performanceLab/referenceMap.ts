@@ -3,6 +3,7 @@ import { PERFORMANCE_FIXTURE as fixture } from './fixtures';
 
 export const PERFORMANCE_MAP_ID = 'performance-reference';
 export const VOID_FIRE_MAP_ID = `${PERFORMANCE_MAP_ID}-void-fire`;
+export const DAWN_MAP_ID = `${PERFORMANCE_MAP_ID}-dawn`;
 export const REFERENCE_SEED = 16092026;
 
 /** Fixed authored fixture; its load is never scaled to the measuring device. */
@@ -14,7 +15,7 @@ export function referenceMap(mapId = PERFORMANCE_MAP_ID): CoopDefenseMapConfig {
       if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) water.push({ gridX: x, gridY: y });
     }
   }
-  return { mapId, arenaWidthCells: 160, arenaHeightCells: 96, timeOfDay: voidFire ? '20:30' : '12:00',
+  return { mapId, arenaWidthCells: 160, arenaHeightCells: 96, timeOfDay: voidFire ? '20:30' : mapId === DAWN_MAP_ID ? '06:00' : '12:00',
     rockFillRatio: 0, treeCount: voidFire ? 0 : 72, trackMode: 'rails', trackPosition: { kind: 'grid', gridX: 30 },
     // Keep the fire rectangle unobstructed so every run reaches the same full load.
     water: voidFire ? water.filter(cell => cell.gridY < fixture.voidFire.area.gridY) : water, rockWalls: [
@@ -41,7 +42,7 @@ export function referenceMap(mapId = PERFORMANCE_MAP_ID): CoopDefenseMapConfig {
 
 export function registerReferenceMap(): () => void {
   const removers: (() => void)[] = [];
-  try { for (const id of [PERFORMANCE_MAP_ID, `${PERFORMANCE_MAP_ID}-train`, VOID_FIRE_MAP_ID]) removers.push(registerDiagnosticMap(referenceMap(id))); }
+  try { for (const id of [PERFORMANCE_MAP_ID, `${PERFORMANCE_MAP_ID}-train`, VOID_FIRE_MAP_ID, DAWN_MAP_ID]) removers.push(registerDiagnosticMap(referenceMap(id))); }
   catch (error) { removers.reverse().forEach(remove => remove()); throw error; }
   return () => removers.reverse().forEach(remove => remove());
 }
