@@ -55,6 +55,7 @@ export class FakeImage {
   active = true;
   visible = true;
   depth = 0;
+  tint = 0xffffff;
   scaleX = 1;
   scaleY = 1;
   rotation = 0;
@@ -78,7 +79,7 @@ export class FakeImage {
   setDepth(depth: number): this { this.depth = depth; return this; }
   setBlendMode(): this { return this; }
   /** Vier Ecktints wie beim echten Image; fuer die Paritaetsvergleiche irrelevant. */
-  setTint(): this { return this; }
+  setTint(tint: number): this { this.tint = tint; return this; }
   setPosition(x: number, y: number): this {
     this.x = x;
     this.y = y;

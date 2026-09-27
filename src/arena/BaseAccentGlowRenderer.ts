@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
+import { VOID_PALETTE } from '../config';
 import { emissiveAlpha } from '../effects/EmissiveScale';
 import { BASE_ACCENT_PADDING } from './BaseAccentMask';
-import { acquireBaseAccentGlowTexture } from './BaseAccentGlowTexture';
+import { acquireBaseAccentGlowTexture, type BaseAccentTextureKey } from './BaseAccentGlowTexture';
 
 const PERIOD_MS = 3000;
 
@@ -16,9 +17,10 @@ export class BaseAccentGlowRenderer {
   private readonly cells = new Map<number, AccentCell>();
   private texture: ReturnType<typeof acquireBaseAccentGlowTexture> | null = null;
 
-  constructor(private readonly scene: Phaser.Scene, images: readonly Phaser.GameObjects.Image[]) {
+  constructor(private readonly scene: Phaser.Scene, images: readonly Phaser.GameObjects.Image[], sourceKey: BaseAccentTextureKey = 'base') {
     if (images.length === 0) return;
-    this.texture = acquireBaseAccentGlowTexture(scene.textures);
+    this.texture = acquireBaseAccentGlowTexture(scene.textures, sourceKey);
+    const hostile = sourceKey === 'base_hostile';
     images.forEach((source, index) => {
       const name = String(source.frame.name);
       if (!this.texture!.frames.has(name)) return;
@@ -36,8 +38,8 @@ export class BaseAccentGlowRenderer {
         .setBlendMode(Phaser.BlendModes.ADD);
       this.cells.set(index, {
         source,
-        halo: overlay('halo', 0x278fff, 0.04),
-        core: overlay('core', 0x72caff, 0.05),
+        halo: overlay('halo', hostile ? VOID_PALETTE.primary : 0x278fff, 0.04),
+        core: overlay('core', hostile ? VOID_PALETTE.bright : 0x72caff, 0.05),
       });
     });
     if (this.cells.size === 0) {
@@ -52,8 +54,8 @@ export class BaseAccentGlowRenderer {
 
   private update(): void {
     const pulse = 0.5 - 0.5 * Math.cos(this.scene.time.now / PERIOD_MS * Math.PI * 2);
-    const coreAlpha = emissiveAlpha(0.2 + pulse * 0.28);
-    const haloAlpha = emissiveAlpha(0.3 + pulse * 0.25);
+    const coreAlpha = emissiveAlpha(0.28 + pulse * 0.36);
+    const haloAlpha = emissiveAlpha(0.42 + pulse * 0.33);
     for (const cell of this.cells.values()) {
       const alpha = cell.source.active && cell.source.visible ? cell.source.alpha : 0;
       cell.core.setAlpha(coreAlpha * alpha);

@@ -8,11 +8,12 @@ export interface BaseAccentFrameRect {
   readonly height: number;
 }
 
-/** Extracts only the authored blue/cyan paint; gray metal and transparent pixels stay dark. */
+/** Extracts the selected accent hue; neutral metal and transparent pixels stay dark. */
 export function buildBaseAccentMask(
   rgba: ArrayLike<number>,
   sourceWidth: number,
   frame: BaseAccentFrameRect,
+  hue: 'blue' | 'violet' = 'blue',
 ) {
   const padding = BASE_ACCENT_PADDING;
   const width = frame.width + padding * 2, height = frame.height + padding * 2;
@@ -22,7 +23,9 @@ export function buildBaseAccentMask(
     for (let x = 0; x < frame.width; x++) {
       const i = ((frame.y + y) * sourceWidth + frame.x + x) * 4;
       const r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
-      const coverage = b >= g * 0.9 ? Math.min(1, Math.max(0, (Math.min(g, b) - r - 16) / 42)) : 0;
+      const accent = hue === 'violet' ? r : g;
+      const neutral = hue === 'violet' ? g : r;
+      const coverage = b >= accent * 0.9 ? Math.min(1, Math.max(0, (Math.min(accent, b) - neutral - 16) / 42)) : 0;
       const value = coverage * rgba[i + 3];
       alpha[(y + padding) * width + x + padding] = value;
       if (value >= 0.5) hasAccent = true;

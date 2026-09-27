@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+// Decorative accents are exercised with both factions in BaseGrounding.test.ts.
+vi.mock('../src/arena/BaseAccentGlowRenderer', () => ({
+  BaseAccentGlowRenderer: class { destroyCell() {} destroy() {} },
+}));
+
 vi.mock('phaser', () => ({
   Math: {
     Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),

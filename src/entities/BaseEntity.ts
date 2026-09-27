@@ -166,7 +166,7 @@ export class BaseEntity {
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
     this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
     this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics);
-    if (!hostile) this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages);
+    this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages, cellTexture);
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
     for (const turret of this.spec.turrets) {

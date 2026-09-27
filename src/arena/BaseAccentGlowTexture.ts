@@ -1,7 +1,7 @@
 import type * as Phaser from 'phaser';
 import { buildBaseAccentMask, BASE_ACCENT_PADDING } from './BaseAccentMask';
 
-const TEXTURE_KEY = '__base_accent_glow';
+export type BaseAccentTextureKey = 'base' | 'base_hostile';
 
 interface SharedAccentTexture {
   readonly key: string;
@@ -9,13 +9,15 @@ interface SharedAccentTexture {
   users: number;
 }
 
-const sharedTextures = new WeakMap<Phaser.Textures.TextureManager, SharedAccentTexture>();
+const sharedTextures = new WeakMap<Phaser.Textures.TextureManager, Map<BaseAccentTextureKey, SharedAccentTexture>>();
 
 /** The atlas belongs to its live base/preview users, never to a gameplay or round state. */
-export function acquireBaseAccentGlowTexture(textures: Phaser.Textures.TextureManager) {
-  let shared = sharedTextures.get(textures);
+export function acquireBaseAccentGlowTexture(textures: Phaser.Textures.TextureManager, sourceKey: BaseAccentTextureKey = 'base') {
+  let cache = sharedTextures.get(textures);
+  let shared = cache?.get(sourceKey);
   if (!shared) {
-    const source = textures.get('base');
+    const key = `__base_accent_glow_${sourceKey}`;
+    const source = textures.get(sourceKey);
     const frameNames = source.getFrameNames();
     const sourceImage = source.getSourceImage() as HTMLImageElement;
     const scratch = document.createElement('canvas');
@@ -27,14 +29,14 @@ export function acquireBaseAccentGlowTexture(textures: Phaser.Textures.TextureMa
     const pitchX = Math.max(...frameNames.map(name => source.get(name).cutWidth)) + BASE_ACCENT_PADDING * 2;
     const pitchY = Math.max(...frameNames.map(name => source.get(name).cutHeight)) + BASE_ACCENT_PADDING * 2;
     const cols = Math.ceil(Math.sqrt(frameNames.length * 2));
-    const atlas = textures.createCanvas(TEXTURE_KEY, cols * pitchX, Math.ceil(frameNames.length * 2 / cols) * pitchY)!;
+    const atlas = textures.createCanvas(key, cols * pitchX, Math.ceil(frameNames.length * 2 / cols) * pitchY)!;
     const frames = new Set<string>();
     try {
       for (let index = 0; index < frameNames.length; index++) {
         const name = frameNames[index], frame = source.get(name);
         const mask = buildBaseAccentMask(pixels, scratch.width, {
           x: frame.cutX, y: frame.cutY, width: frame.cutWidth, height: frame.cutHeight,
-        });
+        }, sourceKey === 'base_hostile' ? 'violet' : 'blue');
         if (!mask.hasAccent) continue;
         frames.add(name);
         for (const [layer, data] of [mask.core, mask.halo].entries()) {
@@ -47,11 +49,12 @@ export function acquireBaseAccentGlowTexture(textures: Phaser.Textures.TextureMa
       }
       atlas.refresh();
     } catch (error) {
-      textures.remove(TEXTURE_KEY);
+      textures.remove(key);
       throw error;
     }
-    shared = { key: TEXTURE_KEY, frames, users: 0 };
-    sharedTextures.set(textures, shared);
+    shared = { key, frames, users: 0 };
+    if (!cache) sharedTextures.set(textures, cache = new Map());
+    cache.set(sourceKey, shared);
   }
   shared.users++;
   const acquired = shared;
@@ -64,7 +67,8 @@ export function acquireBaseAccentGlowTexture(textures: Phaser.Textures.TextureMa
       released = true;
       if (--acquired.users === 0) {
         textures.remove(acquired.key);
-        sharedTextures.delete(textures);
+        cache!.delete(sourceKey);
+        if (cache!.size === 0) sharedTextures.delete(textures);
       }
     },
   };

@@ -7,7 +7,7 @@ vi.mock('../src/arena/BaseAccentGlowTexture', () => ({
   })),
 }));
 
-import { CELL_SIZE } from '../src/config';
+import { CELL_SIZE, VOID_PALETTE } from '../src/config';
 import { buildBaseGroundingLayout } from '../src/arena/BaseGroundingLayout';
 import { BASE_GROUNDING_ASSETS } from '../src/arena/BaseGroundingConfig';
 import { BaseEntity } from '../src/entities/BaseEntity';
@@ -127,7 +127,12 @@ describe('Base foundation ownership', () => {
     const { base, grounding, accents, scene } = setup(faction, role);
     const original = grounding();
     const initialAccents = accents();
-    expect(initialAccents.length > 0).toBe(faction === 'friendly');
+    expect(initialAccents.length).toBeGreaterThan(0);
+    expect(acquireBaseAccentGlowTexture).toHaveBeenLastCalledWith(scene.textures, faction === 'hostile' ? 'base_hostile' : 'base');
+    if (faction === 'hostile') {
+      expect(initialAccents[0].tint).toBe(VOID_PALETTE.primary);
+      expect(initialAccents[1].tint).toBe(VOID_PALETTE.bright);
+    }
     expect(original.length).toBeGreaterThan(0);
     expect(base.getSurfaceImages()).toHaveLength(cells.length);
     expect(base.getSurfaceImages().some((image) => original.includes(image as unknown as FakeImage))).toBe(false);
@@ -150,8 +155,8 @@ describe('Base foundation ownership', () => {
     expect(scene.events.eventNames()).toEqual([]);
   });
 
-  it('creates decoration once on activation, and none without presentation', () => {
-    const dormant = setup('friendly', 'outpost', true, true);
+  it.each(['friendly', 'hostile'] as const)('creates %s decoration once on activation, and none without presentation', faction => {
+    const dormant = setup(faction, 'outpost', true, true);
     expect(dormant.grounding()).toHaveLength(0);
     expect(dormant.accents()).toHaveLength(0);
     expect(dormant.scene.events.eventNames()).toEqual([]);
@@ -166,7 +171,7 @@ describe('Base foundation ownership', () => {
     dormant.base.setHp(0);
     expect(dormant.grounding().every((image) => !image.active)).toBe(true);
     dormant.base.destroy();
-    const headless = setup('friendly', 'main', false);
+    const headless = setup(faction, 'main', false);
     expect(headless.images).toHaveLength(0);
     headless.base.destroy();
   });
