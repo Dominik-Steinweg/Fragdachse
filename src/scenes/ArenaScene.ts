@@ -1097,7 +1097,7 @@ export class ArenaScene extends Phaser.Scene {
           ? (this.arenaRuntime?.getHostRemoteControlTargets(playerManager.getAllPlayers().map((player) => player.id)) ?? [])
           : (bridge.getLatestGameState()?.remoteControlTurrets ?? []),
         getEnemyVisuals: () => this.arenaRuntime?.getCombatEnemyVisuals() ?? [],
-        syncEnemyHostVisuals: () => this.arenaRuntime?.syncEnemyHostVisuals(),
+        syncEnemyHostVisuals: deltaMs => this.arenaRuntime?.syncEnemyHostVisuals(deltaMs),
         getEnemyCount: () => this.arenaRuntime?.getEnemyCount() ?? 0,
       },
     );
@@ -1609,6 +1609,7 @@ export class ArenaScene extends Phaser.Scene {
     // Der GPU-Partikel-Tick haengt bewusst nicht am Zustands-Sync: auf Clients laufen die
     // Renderer-Syncs nur mit frischem Netzzustand, die bisherigen Emitter liefen dagegen
     // autonom weiter. Erst stilllegen, dann emittieren – die Registry garantiert die Reihenfolge.
+    this.combatPresentation?.prepareEnemyVisuals(delta, diagnosticsFrame);
     this.renderers.movement.captureFrame(
       delta, presentationPolicy.showWorld,
       presentationPolicy.showWorld ? this.ctx.playerManager.getAllPlayers() : [],

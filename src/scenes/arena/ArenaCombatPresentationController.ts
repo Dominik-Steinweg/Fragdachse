@@ -44,7 +44,7 @@ export interface ArenaCombatPresentationSourcePort {
   readonly getEnergyInjectorEffects: () => readonly SyncedEnergyInjectorEffect[];
   readonly getRemoteControlTargets: () => readonly SyncedRemoteControlTurret[];
   readonly getEnemyVisuals: () => readonly EnemyVisualSource[];
-  readonly syncEnemyHostVisuals: () => void;
+  readonly syncEnemyHostVisuals: (deltaMs: number) => void;
   readonly getEnemyCount: () => number;
   readonly getStrategicTargets: (now: number) => readonly SyncedAk47StrategicTarget[];
   readonly getStrategicTargetEnemy: (enemyId: string) => EnemyVisualSource | null;
@@ -69,6 +69,14 @@ export class ArenaCombatPresentationController {
     private readonly sources: ArenaCombatPresentationSourcePort,
   ) {}
 
+  /** Advance the displayed pose once, before movement effects and all other pose consumers. */
+  prepareEnemyVisuals(deltaMs: number, diagnosticsFrame: ArenaDiagnosticsFrame | null): void {
+    if (this.destroyed) return;
+    diagnosticsFrame?.begin('visualEnemy');
+    this.sources.syncEnemyHostVisuals(deltaMs);
+    diagnosticsFrame?.end('visualEnemy');
+  }
+
   sync(frame: ArenaCombatPresentationFrame, diagnosticsFrame: ArenaDiagnosticsFrame | null): void {
     if (this.destroyed) return;
     const now = this.sources.getSynchronizedNow();
@@ -87,7 +95,6 @@ export class ArenaCombatPresentationController {
     this.renderers.teslaNova.update();
     diagnosticsFrame?.begin('visualEnemy');
     const auraEnemies = frame.inArena ? this.sources.getEnemyVisuals() : [];
-    this.sources.syncEnemyHostVisuals();
     this.renderers.enemyEyes.sync(auraEnemies);
     this.renderers.enemyVulnerability.sync(auraEnemies);
     this.renderers.healthBars.update(frame.inArena);

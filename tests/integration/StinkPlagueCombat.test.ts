@@ -67,7 +67,9 @@ describe('plague confirmed combat and slime integration',()=> {
       const flow=emptyFlow();
       const move=(locked=false,special:any=null,smoke:any=null,decoy:any=null)=>f.enemies.hostUpdateMovement(flow as never,null,null,null,
         locked,100,1000,null,null,null,null,null,special,smoke,decoy);
-      carrier.pauseAttackMovement(0,.5,500);move();
+      carrier.pauseAttackMovement(0,.5,500);
+      // Let ordinary acceleration settle before checking the authored speed modifier.
+      for (let step=0;step<6;step++) move();
       expect(carrier.getDesiredVelocity().vx).toBeGreaterThan(0);
       expect(carrier.getDesiredVelocity().vx/carrier.getMoveSpeed()).toBeCloseTo(.5*(1+source.config.pursuitMoveSpeedBonus),2);
       expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(true);
@@ -90,7 +92,7 @@ describe('plague confirmed combat and slime integration',()=> {
     const f=fixture(true);try {
       const carrier=f.spawn(300,300);f.spawn(450,300);f.infect(carrier,plagueSource('p1',{pandemicEnabled:1}));f.binding.spread(0);
       const positioning={getMovementOverride:()=>({vx:0,vy:11})};
-      f.enemies.hostUpdateMovement(emptyFlow() as never,null,null,null,false,100,1000,null,null,null,null,positioning);
+      for (let step=0;step<6;step++) f.enemies.hostUpdateMovement(emptyFlow() as never,null,null,null,false,100,1000,null,null,null,null,positioning);
       expect(carrier.getDesiredVelocity().vx).toBeCloseTo(0);
       expect(carrier.getDesiredVelocity().vy).toBeCloseTo(11);
       expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
@@ -108,7 +110,7 @@ describe('plague confirmed combat and slime integration',()=> {
       f.slime.hostUpdate(0);
       expect(f.slime.getEnemyMovementFactor(carrier.id,0)).toBeCloseTo(1-f.baseline.slowFraction);
       const flow=emptyFlow();
-      f.enemies.hostUpdateMovement(flow as never,null,null,null,false,100,1000);
+      for (let step=0;step<6;step++) f.enemies.hostUpdateMovement(flow as never,null,null,null,false,100,1000);
       expect(carrier.getDesiredVelocity().vx/carrier.getMoveSpeed()).toBeCloseTo(1+source.config.pursuitMoveSpeedBonus,2);
       expect(f.slime.getEnemyMovementFactor(carrier.id,100)).toBe(1);
       const hp=carrier.getHp(), tick=f.baseline.tickIntervalMs;

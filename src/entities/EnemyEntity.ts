@@ -99,6 +99,9 @@ export class EnemyEntity {
   private nextAttackScanAt = 0;
   private currentAimAngle = 0;
   private targetAimAngle = 0;
+  /** Presentation only: ordinary host locomotion may turn more calmly than its gameplay aim. */
+  private visualAimAngle = 0;
+  private smoothMovementFacing = false;
   private burnRenderer: EntityBurnRenderer | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
   private plasmaChargeRenderer: PlasmaChargeRenderer | null = null;
@@ -201,6 +204,9 @@ export class EnemyEntity {
     if (this.authoritative) {
       this.body.reset(x, y);
     }
+    this.visualAimAngle = this.currentAimAngle;
+    this.smoothMovementFacing = false;
+    this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset());
     this.syncBar();
   }
 
@@ -235,16 +241,39 @@ export class EnemyEntity {
     this.targetY = y;
   }
 
-  setDesiredVelocity(vx: number, vy: number, now?: number, aimAngle?: number): void {
+  setDesiredVelocity(vx: number, vy: number, now?: number, aimAngle?: number,
+    facing: 'immediate' | 'locomotion' = 'immediate'): void {
     if (!this.authoritative) return;
     if (this.stationary) { vx = 0; vy = 0; }
     this.desiredVelocityX = vx;
     this.desiredVelocityY = vy;
+    this.smoothMovementFacing = false;
     if (aimAngle !== undefined) {
       this.faceAngle(aimAngle);
     } else if ((vx !== 0 || vy !== 0) && (now === undefined || !this.isAttackMovementPaused(now))) {
-      this.faceAngle(Math.atan2(vy, vx));
+      const ordinary = facing === 'locomotion' && this.dashPhase === 0 && this.specialAction === 'none' && !this.burrowed;
+      if (ordinary) {
+        // Near standstill a tiny avoidance velocity has no meaningful facing.
+        if (this.wantsToMove()) {
+          this.currentAimAngle = this.targetAimAngle = Math.atan2(vy, vx);
+          this.smoothMovementFacing = true;
+        }
+      } else this.faceAngle(Math.atan2(vy, vx));
     }
+  }
+
+  /** Once per host presentation frame. Clients already have one network-angle filter. */
+  syncMovementFacing(deltaMs: number): void {
+    if (!this.authoritative) return;
+    if (this.dashPhase !== 0 || this.specialAction !== 'none' || this.burrowed) {
+      this.faceAngle(this.currentAimAngle);
+      return;
+    }
+    if (!this.smoothMovementFacing) return;
+    const diff = Phaser.Math.Angle.Wrap(this.currentAimAngle - this.visualAimAngle);
+    const timeConstant = Math.abs(diff) <= Math.PI / 6 ? 120 : 45;
+    this.visualAimAngle += diff * (1 - Math.exp(-Math.max(0, deltaMs) / timeConstant));
+    this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset());
   }
 
   getDesiredVelocity(): { vx: number; vy: number } {
@@ -296,7 +325,7 @@ export class EnemyEntity {
   readMovementVisualSample(out: MovementVisualSample): void {
     out.id = this.id;
     out.x = this.sprite.x; out.y = this.sprite.y;
-    out.facing = this.getAimAngle();
+    out.facing = this.sprite.rotation - this.getSpriteRotationOffset();
     out.size = this.config.size; out.pawCount = this.config.pawCount;
     out.footprint = getEnemyFootprintVariant(this.kind);
     out.player = false;
@@ -333,7 +362,8 @@ export class EnemyEntity {
     this.sprite.y = Phaser.Math.Linear(this.sprite.y, this.targetY, factor);
     const diff = Phaser.Math.Angle.Wrap(this.targetAimAngle - this.currentAimAngle);
     this.currentAimAngle = this.currentAimAngle + diff * factor;
-    this.sprite.setRotation(this.currentAimAngle + this.getSpriteRotationOffset());
+    this.visualAimAngle = this.currentAimAngle;
+    this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset());
     this.syncBar();
   }
 
@@ -632,6 +662,8 @@ export class EnemyEntity {
   faceAngle(angle: number): void {
     this.currentAimAngle = angle;
     this.targetAimAngle = angle;
+    this.visualAimAngle = angle;
+    this.smoothMovementFacing = false;
     this.sprite.setRotation(angle + this.getSpriteRotationOffset());
   }
 
@@ -847,7 +879,7 @@ export class EnemyEntity {
       && this.sprite.visible;
     if (!active) {
       this.destroyTimebombFuseVisuals();
-      this.sprite.setRotation(this.currentAimAngle + this.getSpriteRotationOffset());
+      this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset());
       return;
     }
 
@@ -865,7 +897,7 @@ export class EnemyEntity {
     const frequency = 0.01 + progress * 0.035;
     const amplitude = 0.12 + progress * 0.42;
     const wobble = Math.sin(this.sprite.scene.time.now * frequency) * amplitude;
-    this.sprite.setRotation(this.currentAimAngle + this.getSpriteRotationOffset() + wobble);
+    this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset() + wobble);
   }
 
   private destroyTimebombFuseVisuals(): void {

@@ -193,6 +193,7 @@ function makeCombatController() {
 describe('ArenaCombatPresentationController', () => {
   it('sequenziert allgemeine Kampf-/FX-Darstellung über Source-Ports', () => {
     const harness = makeCombatController();
+    harness.controller.prepareEnemyVisuals(16, null);
     harness.controller.sync({ inArena: true, delta: 16 }, null);
 
     expect(harness.renderers.beer.update).toHaveBeenCalledWith(1000, 16);
@@ -200,7 +201,7 @@ describe('ArenaCombatPresentationController', () => {
     expect(harness.renderers.remoteControl.syncVisuals).toHaveBeenCalledWith([], 1000);
     expect(harness.renderers.healingAura.syncEnemies).toHaveBeenCalledWith([]);
     expect(harness.renderers.energyShield.update).toHaveBeenCalledWith(16);
-    expect(harness.sources.syncEnemyHostVisuals).toHaveBeenCalledTimes(1);
+    expect(harness.sources.syncEnemyHostVisuals).toHaveBeenCalledExactlyOnceWith(16);
     expect(harness.renderers.enemyEyes.sync).toHaveBeenCalledWith([]);
     expect(vi.mocked(harness.sources.syncEnemyHostVisuals).mock.invocationCallOrder[0])
       .toBeLessThan(harness.renderers.enemyEyes.sync.mock.invocationCallOrder[0]);
@@ -213,9 +214,11 @@ describe('ArenaCombatPresentationController', () => {
   it('führt nach Destroy keinen weiteren Präsentationsschritt aus', () => {
     const harness = makeCombatController();
     harness.controller.destroy();
+    harness.controller.prepareEnemyVisuals(16, null);
     harness.controller.sync({ inArena: true, delta: 16 }, null);
     expect(harness.renderers.beer.update).not.toHaveBeenCalled();
     expect(harness.sources.updateVisualFeedback).not.toHaveBeenCalled();
+    expect(harness.sources.syncEnemyHostVisuals).not.toHaveBeenCalled();
   });
 
   it.each(['interactive', 'preview', 'none'] as const)('zeigt Strategic Targets nur in der interaktiven World (%s)', worldMode => {

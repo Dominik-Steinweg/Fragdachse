@@ -5,9 +5,13 @@ interface Neighbor { readonly id: string; readonly x: number; readonly y: number
 const ANGLES = [0, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2];
 const RECOVERY_ANGLES = [...ANGLES, Math.PI * 0.75, -Math.PI * 0.75, Math.PI];
 const SPEED_SCALES = [1, 0.45];
+const STEERING_SWITCH_MARGIN = 0.04;
 const CELL = 96;
 interface Conflict { dx: number; dy: number; vx: number; vy: number; separation: number;
   separationSq: number; existingOverlap: number; weight: number }
+interface SteeringChoice { angle: number; scale: number; heading: number; vx: number; vy: number; frame: number }
+interface MovementHistory { x: number; y: number; targetX: number; targetY: number; stalled: number;
+  retryAt: number; geometry: NavigationGeometry; crowdNeighbors?: readonly Neighbor[]; steering?: SteeringChoice }
 
 /** One consistent position/velocity snapshot for both hostile and allied ordinary movement. */
 export class EnemyLocomotion {
@@ -16,8 +20,8 @@ export class EnemyLocomotion {
   private readonly activeBuckets: Neighbor[][] = [];
   private readonly neighborsById = new Map<string, Neighbor>();
   private readonly pool: Neighbor[][] = [];
-  private readonly previous = new Map<string, { x: number; y: number; targetX: number; targetY: number; stalled: number;
-    retryAt: number; geometry: NavigationGeometry; crowdNeighbors?: readonly Neighbor[] }>();
+  private readonly previous = new Map<string, MovementHistory>();
+  private frame = 0;
   private elapsedMs = 0;
   private neighborsExamined = 0;
   private waitingNeighborsObserved = 0;
@@ -37,6 +41,7 @@ export class EnemyLocomotion {
   };
 
   begin(neighbors: readonly Neighbor[], geometry: NavigationGeometry, deltaMs: number): void {
+    this.frame++;
     for (const bucket of this.activeBuckets) { bucket.length = 0; this.pool.push(bucket); }
     this.activeBuckets.length = 0;
     for (const row of this.buckets.values()) { row.clear(); this.rowPool.push(row); }
@@ -63,6 +68,7 @@ export class EnemyLocomotion {
     const { x, y, radius, speed, waypoint } = request, geometry = this.geometry;
     const result = (vx: number, vy: number, waitReason: MovementFeedback['waitReason'], progress = 0, neighborsVisited = 0): MovementFeedback =>
       ({ vx, vy, waitReason, progress, neighborsVisited });
+    if (!geometry || request.priority !== 'ordinary' || !waypoint) this.previous.delete(request.id);
     if (!geometry || request.priority === 'exclusive') return result(0, 0, 'exclusive');
     if (request.priority === 'attack') return result(0, 0, 'attack');
     if (!waypoint) return result(0, 0, 'route-pending');
@@ -72,7 +78,7 @@ export class EnemyLocomotion {
     const progress = prior ? Math.hypot(x - prior.x, y - prior.y) : 0;
     const sameTarget = prior && Math.hypot(waypoint.x - prior.targetX, waypoint.y - prior.targetY) < 16;
     const stalled = sameTarget && progress < Math.max(0.1, speed * this.deltaSeconds * 0.08) ? prior.stalled + this.deltaSeconds : 0;
-    const history = { x, y, targetX: waypoint.x, targetY: waypoint.y, stalled,
+    const history: MovementHistory = { x, y, targetX: waypoint.x, targetY: waypoint.y, stalled,
       retryAt: prior?.retryAt ?? 0, geometry, crowdNeighbors: prior?.crowdNeighbors };
     this.previous.set(request.id, history);
     // A waypoint may be the precise attachment needed to turn around a rock corner.
@@ -81,7 +87,7 @@ export class EnemyLocomotion {
     const dt = this.deltaSeconds;
     if (dt <= 0 || speed <= 0) return result(0, 0, 'arrival', progress);
     const horizon = Math.max(dt, 0.12);
-    const blend = Math.min(1, dt * 14);
+    const blend = 1 - Math.exp(-dt * 14);
     // Every smoothed candidate lies inside this envelope, including previous dash/impulse
     // velocities. Query buckets once, then retain the exact capsule test for each heading.
     const reach = (Math.hypot(request.previousVx, request.previousVy) * (1 - blend) + speed * blend) * horizon;
@@ -155,13 +161,22 @@ export class EnemyLocomotion {
       conflict.weight = neighborRadiusSq / (radiusSq + neighborRadiusSq) * (precedes ? .06 : 1) / 5;
     }
     const heading = Math.atan2(targetDy, targetDx);
+    // Retain a decision only across uninterrupted ordinary movement. Re-score it against
+    // today's geometry and crowd; momentum from an override is not a steering commitment.
+    const priorChoice = prior?.steering;
+    const choice = priorChoice && prior?.geometry === geometry && priorChoice.frame === this.frame - 1
+      && stalled <= 0.8 && Math.cos(heading - priorChoice.heading) >= 0.5
+      && Math.abs(request.previousVx - priorChoice.vx) < 1e-3
+      && Math.abs(request.previousVy - priorChoice.vy) < 1e-3 ? priorChoice : undefined;
     const maxVelocity = distance / dt, improvementScale = Math.max(1, speed * horizon);
     let bestScore = -0.05, bestVx = 0, bestVy = 0, safeCandidate = false;
+    let bestAngle = 0, bestScale = 1, freeStraightVx = 0, freeStraightVy = 0;
     const angles = stalled > 0.8 ? RECOVERY_ANGLES : ANGLES;
     for (const angle of angles) {
       const cos = Math.cos(heading + angle), sin = Math.sin(heading + angle);
       const anglePenalty = Math.abs(angle) * 0.035;
       candidate: for (const scale of SPEED_SCALES) {
+        const continuityBonus = choice?.angle === angle && choice.scale === scale ? STEERING_SWITCH_MARGIN : 0;
         const velocity = Math.min(speed * scale, maxVelocity);
         const desiredX = cos * velocity, desiredY = sin * velocity;
         // Smoothing is included in the safety check, rather than applied after collision avoidance.
@@ -181,15 +196,32 @@ export class EnemyLocomotion {
           penalty += difference * (difference > 0 ? 1 : .25) * neighbor.weight;
           // Once all initial overlaps have been scored, remaining contributions cannot be
           // negative. The same subtraction order gives an upper bound on the final score.
-          // Keep the straight candidate's separate acceptance rule and all tie ordering.
-          if (!straight && index >= lastOverlap && improvement - penalty - anglePenalty <= bestScore) continue candidate;
+          // Include the possible continuity bonus in the bound so a retained choice is
+          // never pruned before its full overlap relief has been evaluated.
+          if (!straight && index >= lastOverlap && improvement - penalty - anglePenalty + continuityBonus <= bestScore) continue candidate;
         }
-        if (straight && penalty <= .005) return result(vx, vy, 'none', progress, neighbors.length);
+        if (straight && penalty <= .005) {
+          if (!choice || continuityBonus) {
+            history.steering = { angle, scale, heading, vx, vy, frame: this.frame };
+            return result(vx, vy, 'none', progress, neighbors.length);
+          }
+          // A clear straight path still accepts reversing momentum if no useful detour
+          // remains. It must first compete with the current avoidance choice, though.
+          freeStraightVx = vx; freeStraightVy = vy;
+        }
         if (straight) improvement = (distance - Math.hypot(targetDx - vx * horizon, targetDy - vy * horizon)) / improvementScale;
         const score = improvement - penalty - anglePenalty;
-        if (score > bestScore) { bestScore = score; bestVx = vx; bestVy = vy; }
+        // Hysteresis never makes a rejected movement preferable to waiting.
+        if (score > -0.05 && score + continuityBonus > bestScore) {
+          bestScore = score + continuityBonus; bestVx = vx; bestVy = vy; bestAngle = angle; bestScale = scale;
+        }
       }
     }
+    if (!bestVx && !bestVy && (freeStraightVx || freeStraightVy)) {
+      bestVx = freeStraightVx; bestVy = freeStraightVy;
+    }
+    if (bestVx || bestVy) history.steering = { angle: bestAngle, scale: bestScale, heading,
+      vx: bestVx, vy: bestVy, frame: this.frame };
     if (!bestVx && !bestVy && safeCandidate) {
       history.retryAt = this.elapsedMs + 250;
       history.crowdNeighbors = neighbors.slice();
@@ -221,7 +253,7 @@ export class EnemyLocomotion {
   clear(): void {
     this.previous.clear(); this.buckets.clear(); this.neighborsById.clear(); this.pool.length = 0; this.geometry = null;
     this.activeBuckets.length = 0; this.rowPool.length = 0;
-    this.elapsedMs = 0; this.neighborsExamined = 0; this.waitingNeighborsObserved = 0;
+    this.frame = 0; this.elapsedMs = 0; this.neighborsExamined = 0; this.waitingNeighborsObserved = 0;
     this.nearby.length = 0; this.conflicts.length = 0; this.movementObstacles.length = 0;
     this.neighborObstacles.length = 0;
   }

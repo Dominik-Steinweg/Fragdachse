@@ -196,7 +196,8 @@ export class EnemyManager {
       radius: enemy.getSize() / 2, speed, waypoint, priority, previousVx: previous.vx, previousVy: previous.vy,
       routeCost: navigation?.status === 'ready' ? navigation.cost : undefined });
     this.movementFeedback.set(enemy.id, result);
-    enemy.setDesiredVelocity(result.vx, result.vy, this.movementNow, aimAngle);
+    enemy.setDesiredVelocity(result.vx, result.vy, this.movementNow, aimAngle,
+      result.waitReason === 'none' ? 'locomotion' : 'immediate');
     return result;
   }
   private readonly committedDeathWork = new WeakMap<CombatDamageMutationOutcome, (isCurrent: () => boolean) => void>();
@@ -1166,8 +1167,9 @@ export class EnemyManager {
     this.enemyTargets.delete(id);
   }
 
-  syncHostVisuals(): void {
+  syncHostVisuals(deltaMs: number): void {
     for (const enemy of this.enemies.values()) {
+      enemy.syncMovementFacing(deltaMs);
       enemy.syncBar();
     }
   }

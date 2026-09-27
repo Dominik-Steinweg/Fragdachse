@@ -187,4 +187,99 @@ describe('Shared enemy and ally locomotion', () => {
     expect(movement.solve({ ...body, priority: 'attack' })).toMatchObject({ vx: 0, vy: 0, waitReason: 'attack' });
     expect(movement.solve({ ...body, priority: 'exclusive' })).toMatchObject({ vx: 0, vy: 0, waitReason: 'exclusive' });
   });
+
+  function movingGap() {
+    const movement = new EnemyLocomotion(), world = geometry();
+    let request: LocomotionRequest = { ...body, radius: 10, waypoint: { x: 1000, y: 64 } };
+    const snapshot = (offset: number) => [
+      { ...neighbor('a', 64, 64, 10), vx: request.previousVx, vy: request.previousVy },
+      { ...neighbor('front', 76, 64 + offset, 10), vx: 20 },
+      { ...neighbor('rear', 54, 64, 10), vx: 20 },
+    ];
+    const step = (offset: number) => {
+      movement.begin(snapshot(offset), world, 16);
+      const feedback = movement.solve(request);
+      request = { ...request, previousVx: feedback.vx, previousVy: feedback.vy };
+      return feedback;
+    };
+    // Establish forward movement while both nearby bodies contribute overlap relief.
+    for (let frame = 0; frame < 8; frame++) step(frame % 2 ? .1 : -.1);
+    return { movement, world, snapshot, step, request: () => request };
+  }
+
+  it('keeps a viable course through small alternating changes in neighbor predictions', () => {
+    const gap = movingGap();
+    for (let frame = 0; frame < 12; frame++) {
+      const feedback = gap.step(frame % 2 ? .1 : -.1);
+      expect(feedback.waitReason).toBe('none');
+      expect(feedback.vx).toBeGreaterThan(0);
+      expect(feedback.vy).toBeCloseTo(0);
+    }
+    gap.movement.begin([neighbor('a', 64, 64, 10)], gap.world, 16);
+    const free = gap.movement.solve(gap.request());
+    expect(free.vx).toBeGreaterThanOrEqual(gap.request().previousVx);
+    expect(free.vy).toBeCloseTo(0);
+  });
+
+  it.each(['attack', 'exclusive', 'route-pending', 'stopped', 'skipped', 'removed', 'geometry', 'override', 'clear'] as const)(
+    'discards the previous choice after %s', reset => {
+      const gap = movingGap();
+      let world = gap.world, request = gap.request();
+      const reference = new EnemyLocomotion();
+      reference.begin(gap.snapshot(-.1), world, 16);
+      const fresh = reference.solve(request);
+      // Without a previous choice, this encounter would make a marginal lateral correction.
+      expect(Math.abs(fresh.vy)).toBeGreaterThan(0);
+      if (reset === 'attack' || reset === 'exclusive') gap.movement.solve({ ...request, priority: reset });
+      if (reset === 'route-pending') gap.movement.solve({ ...request, waypoint: null });
+      if (reset === 'stopped') gap.movement.solve({ ...request, speed: 0 });
+      if (reset === 'skipped') gap.movement.begin(gap.snapshot(-.1), world, 16);
+      if (reset === 'removed') gap.movement.begin([], world, 16);
+      if (reset === 'geometry') world = geometry();
+      if (reset === 'override') request = { ...request, previousVy: 5 };
+      if (reset === 'clear') gap.movement.clear();
+      gap.movement.begin(gap.snapshot(-.1), world, 16);
+      reference.clear(); reference.begin(gap.snapshot(-.1), world, 16);
+      const expected = reference.solve(request);
+      expect(gap.movement.solve(request)).toMatchObject({
+        vx: expected.vx, vy: expected.vy, waitReason: expected.waitReason,
+      });
+    },
+  );
+
+  it('rechecks a retained course against new pressure, walls and a changed goal', () => {
+    const gap = movingGap(), request = gap.request(), reference = new EnemyLocomotion();
+    const front = { ...neighbor('front', 85, 64, 10), vx: -100 };
+    gap.movement.begin([neighbor('a', 64, 64, 10), front], gap.world, 16);
+    const blocked = gap.movement.solve(request);
+    expect(blocked.vx).toBeLessThan(request.previousVx);
+
+    const wall = geometry([{ id: 'new-wall', kind: 'barrier', shape: 'rect', left: 76, right: 90, top: 0, bottom: 256 }]);
+    gap.movement.begin([neighbor('a', 64, 64, 10)], wall, 16);
+    const safe = gap.movement.solve(request);
+    expect(wall.canMove(64, 64, 64 + safe.vx * .016, 64 + safe.vy * .016, 10)).toBe(true);
+
+    const turningGap = movingGap();
+    const turned = { ...turningGap.request(), waypoint: { x: 64, y: 200 } };
+    turningGap.movement.begin(turningGap.snapshot(0), turningGap.world, 16);
+    reference.begin(turningGap.snapshot(0), turningGap.world, 16);
+    const expected = reference.solve(turned);
+    expect(turningGap.movement.solve(turned)).toMatchObject({ vx: expected.vx, vy: expected.vy });
+  });
+
+  it('settles free acceleration equally over the same time at different frame rates', () => {
+    const velocities = [30, 60, 120].map(fps => {
+      const world = geometry(), movement = new EnemyLocomotion();
+      let request = { ...body };
+      for (let frame = 0; frame < fps / 2; frame++) {
+        movement.begin([neighbor('a', request.x, request.y)], world, 1000 / fps);
+        const feedback = movement.solve(request);
+        request = { ...request, x: request.x + feedback.vx / fps, y: request.y + feedback.vy / fps,
+          previousVx: feedback.vx, previousVy: feedback.vy };
+      }
+      return request.previousVx;
+    });
+    expect(velocities[0]).toBeGreaterThan(0);
+    for (const velocity of velocities) expect(velocity).toBeCloseTo(velocities[0], 8);
+  });
 });

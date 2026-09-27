@@ -16,7 +16,7 @@ function sourceIdentity(root) {
 }
 const sourceHash = sourceIdentity('.');
 const result = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', '--pool=threads',
-  '--exclude', 'build/**', 'tests/stress/NavigationMovementStress.test.ts'], { stdio: 'inherit',
+  '--exclude', 'build/**', '--exclude', 'art/**', 'tests/stress/NavigationMovementStress.test.ts'], { stdio: 'inherit',
   env: { ...process.env, NAVIGATION_SOURCE_IDENTITY: sourceHash, NAVIGATION_STRESS: '1',
     NAVIGATION_SMOKE: process.argv.includes('--smoke') ? '1' : '0' } });
 process.exitCode = result.status ?? 1;

@@ -52,7 +52,7 @@ describe('World HP pooled load, actual Host and Client state paths', () => {
         host.applyDamage(enemy.id, 0.2);
         host.applyDamage(enemy.id, 1);
       }
-      host.syncHostVisuals();
+      host.syncHostVisuals(16);
       client.applySnapshot(host.getNetSnapshot());
       client.updateClientInterpolation(1);
       hostRenderer.update(true); clientRenderer.update(true);

@@ -750,8 +750,8 @@ export class ArenaRuntime {
     return this.flow.getWorldEnemyManager()?.getAllEnemies() ?? [];
   }
 
-  syncEnemyHostVisuals(): void {
-    this.flow.getWorldEnemyManager()?.syncHostVisuals();
+  syncEnemyHostVisuals(deltaMs: number): void {
+    this.flow.getWorldEnemyManager()?.syncHostVisuals(deltaMs);
   }
 
   getEnemyCount(): number {

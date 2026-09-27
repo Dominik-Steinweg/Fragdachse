@@ -20,6 +20,7 @@ import { CoopDefenseEnemyAttackSystem } from '../../src/systems/CoopDefenseEnemy
 import { CoopDefenseEnemyAbilitySystem } from '../../src/systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefenseEnemyCombatPositioningSystem } from '../../src/systems/CoopDefenseEnemyCombatPositioningSystem';
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyKind } from '../../src/config/coopDefenseEnemies';
+import { createMovementVisualSample } from '../../src/effects/MovementStepSampler';
 
 describe('Combat movement and hidden-player pursuit', () => {
   function combatWorld(kind: CoopDefenseEnemyKind = 'rabid-badger',
@@ -81,6 +82,23 @@ describe('Combat movement and hidden-player pursuit', () => {
     w.observe(200); w.move(200);
     expect(Math.hypot(...Object.values(w.unit.getDesiredVelocity()))).toBeGreaterThan(0);
     w.destroy();
+  });
+
+  it('marks ordinary navigation for visual turning without delaying its authoritative direction', () => {
+    const w = combatWorld();
+    try {
+      w.player.x = 224; w.player.y = 192; w.blockSight(); w.observe(200);
+      w.unit.faceAngle(-Math.PI / 2);
+      const before = w.unit.sprite.rotation;
+      w.move(200);
+      const { vx, vy } = w.unit.getDesiredVelocity();
+      expect(Math.hypot(vx, vy)).toBeGreaterThan(0);
+      expect(w.unit.getAimAngle()).toBeCloseTo(Math.atan2(vy, vx));
+      expect(w.unit.sprite.rotation).toBe(before);
+      w.manager.syncHostVisuals(16);
+      expect(w.unit.sprite.rotation).not.toBe(before);
+      expect(w.unit.getNetSnapshot().rot).toBeCloseTo(Math.atan2(vy, vx));
+    } finally { w.destroy(); }
   });
 
   it('lets configured retreat and exclusive movement override holding while retreat still faces the target', () => {
@@ -153,7 +171,7 @@ describe('Combat movement and hidden-player pursuit', () => {
     const tick = (now: number) => {
       w.observe(now); w.move(now, undefined, true);
       ability.hostUpdate(now); w.attacks.hostUpdate(16, now);
-      w.manager.syncHostVisuals();
+      w.manager.syncHostVisuals(16);
       client.applySnapshot(w.manager.getNetSnapshot()); client.updateClientInterpolation(1);
     };
     try {
@@ -268,6 +286,99 @@ describe('Combat movement and hidden-player pursuit', () => {
       for (let step = 0; step < 15; step++) tick();
       expect(w.unit.sprite.x).toBeGreaterThan(closerHeldX);
     } finally { w.destroy(); }
+  });
+});
+
+describe('Enemy locomotion facing presentation', () => {
+  const wrap = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
+  function fixture(kind: CoopDefenseEnemyKind = 'rabid-badger') {
+    const manager = new EnemyManager(healthBarTestScene().scene, resolveCoopDefenseEnemyConfigs(1));
+    const unit = manager.hostSpawnAtWorld(64, 128, kind);
+    const offset = unit.sprite.rotation;
+    return { manager, unit, facing: () => unit.sprite.rotation - offset,
+      walk: (angle: number) => unit.setDesiredVelocity(Math.cos(angle) * 100, Math.sin(angle) * 100, 0, undefined, 'locomotion') };
+  }
+
+  it.each(['rabid-badger', 'timebomb-badger'] as const)('smooths only the displayed angle and shares that pose with movement effects (%s)', kind => {
+    const f = fixture(kind);
+    try {
+      f.walk(.4);
+      const snapshot = f.unit.getNetSnapshot();
+      f.manager.syncHostVisuals(50);
+      expect(f.facing()).toBeGreaterThan(0);
+      expect(f.facing()).toBeLessThan(.4);
+      expect(f.unit.getAimAngle()).toBeCloseTo(.4);
+      expect(f.unit.getNetSnapshot()).toEqual(snapshot);
+      const sample = createMovementVisualSample();
+      f.unit.readMovementVisualSample(sample);
+      expect(sample.facing).toBeCloseTo(f.facing());
+    } finally { f.manager.destroy(); }
+  });
+
+  it('turns across the angle seam and settles equally at different frame rates', () => {
+    const angles = [30, 60, 120].map(fps => {
+      const f = fixture();
+      try {
+        f.unit.faceAngle(Math.PI - .1); f.walk(-Math.PI + .1);
+        for (let frame = 0; frame < fps / 5; frame++) f.manager.syncHostVisuals(1000 / fps);
+        const turn = wrap(f.facing() - (Math.PI - .1));
+        expect(turn).toBeGreaterThan(0);
+        expect(turn).toBeLessThan(.2);
+        return turn;
+      } finally { f.manager.destroy(); }
+    });
+    for (const angle of angles) expect(angle).toBeCloseTo(angles[0], 8);
+  });
+
+  it('lets explicit aim, attack pauses and exclusive movement take priority immediately', () => {
+    const f = fixture();
+    try {
+      f.walk(.4); f.manager.syncHostVisuals(16);
+      f.unit.faceAngle(Math.PI / 2); f.manager.syncHostVisuals(16);
+      expect(f.facing()).toBeCloseTo(Math.PI / 2);
+      f.unit.pauseAttackMovement(0, .5, 100);
+      f.walk(0); f.manager.syncHostVisuals(16);
+      expect(f.facing()).toBeCloseTo(Math.PI / 2);
+      f.unit.setDesiredVelocity(100, 0, 101, -Math.PI / 2, 'locomotion');
+      expect(f.facing()).toBeCloseTo(-Math.PI / 2);
+      f.unit.setDesiredVelocity(-100, 0, 101);
+      expect(Math.abs(f.facing())).toBeCloseTo(Math.PI);
+    } finally { f.manager.destroy(); }
+  });
+
+  it('holds its displayed direction at rest and resets lag on teleport or special action', () => {
+    const f = fixture();
+    try {
+      f.walk(.4); f.manager.syncHostVisuals(16);
+      const beforeStop = f.facing();
+      f.unit.stopMovement(); f.manager.syncHostVisuals(100);
+      expect(f.facing()).toBe(beforeStop);
+      f.unit.setDesiredVelocity(-.01, .01, 0, undefined, 'locomotion'); f.manager.syncHostVisuals(16);
+      expect(f.facing()).toBe(beforeStop);
+      expect(f.unit.getAimAngle()).toBeCloseTo(.4);
+      f.unit.setPosition(180, 180); f.manager.syncHostVisuals(16);
+      expect(f.facing()).toBeCloseTo(.4);
+      f.walk(.8); f.unit.setSpecialAction('void-molotov-windup'); f.manager.syncHostVisuals(16);
+      expect(f.facing()).toBeCloseTo(.8);
+      f.unit.setSpecialAction('none'); f.walk(1.2); f.unit.setDashPhase(1); f.manager.syncHostVisuals(16);
+      expect(f.facing()).toBeCloseTo(1.2);
+    } finally { f.manager.destroy(); }
+  });
+
+  it('keeps one existing interpolation on clients and initializes new entities at their replicated angle', () => {
+    const f = fixture();
+    const client = new EnemyManager(healthBarTestScene().scene, resolveCoopDefenseEnemyConfigs(1));
+    try {
+      f.unit.faceAngle(.2); client.applySnapshot(f.manager.getNetSnapshot());
+      const remote = client.getEnemy(f.unit.id)!;
+      const offset = remote.sprite.rotation - .2;
+      expect(remote.getAimAngle()).toBeCloseTo(.2);
+      f.walk(.4); f.manager.syncHostVisuals(16);
+      client.applySnapshot(f.manager.getNetSnapshot()); client.updateClientInterpolation(.25);
+      expect(remote.sprite.rotation - offset).toBeCloseTo(.25);
+      client.syncHostVisuals(100);
+      expect(remote.sprite.rotation - offset).toBeCloseTo(.25);
+    } finally { client.destroy(); f.manager.destroy(); }
   });
 });
 

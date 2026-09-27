@@ -83,7 +83,6 @@ export class ShootingRangeWorldBinding {
     if (this.destroyed || !this.authoritative) return;
     this.runtime.finishHostStep(now);
     this.pinTargets();
-    this.enemies.syncHostVisuals();
   }
   private pinTargets(): void {
     this.runtime.snapshot().targets.forEach((target, slot) => {
