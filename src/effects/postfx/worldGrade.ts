@@ -47,7 +47,7 @@ export const BOSS_VISUAL_BLEND_DURATION_MS = 1800;
  * keine spätere Abstimmung Telegraphen, Spielerfarben oder Gefahrenhinweise unleserlich macht.
  */
 export const WORLD_GRADE_CLAMPS = {
-  saturation: [0.80, 1.12],
+  saturation: [0.80, 1.24],
   contrast: [0.92, 1.30],
   brightness: [0.86, 1.08],
   temperature: [-1, 1],
@@ -171,32 +171,49 @@ export function resolveDarkness(sky: SkyState): number {
  * überall und nachts nirgends. Sie folgt darum der Helligkeit des Bildes.
  */
 function resolveBloomThreshold(darkness: number): number {
-  return clamp(0.68 - darkness * 0.18, WORLD_GRADE_CLAMPS.bloomThreshold);
+  // Nachts nur moderat absenken: ausgeleuchteter Kies und Nebel im Lichtkegel liegen sonst
+  // über der Schwelle und überstrahlen den Kegel milchig-weiß statt nur die Lichtkerne.
+  return clamp(0.68 - darkness * 0.1, WORLD_GRADE_CLAMPS.bloomThreshold);
 }
 
-export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
-  // In der Lobby wird nicht komponiert: dort gibt es keine Spielwelt zu führen, und ein
-  // Grading würde nur die Menüdarstellung verfälschen.
-  if (inputs.gamePhase === 'LOBBY') return NEUTRAL_WORLD_GRADE;
+/**
+ * Grundlook der Welt bei Tag. Die Bodenmaterialien sind bewusst gedämpft authored, damit
+ * Figuren, Telegraphen und Effekte sich abheben; Nebel und Morgenlicht nehmen zusätzlich
+ * Sättigung weg. Ohne diesen Trimm wirkt das Gesamtbild grau statt lebendig.
+ */
+const DAY_LOOK = {
+  saturation: 1.18,
+  contrast: 1.07,
+  brightness: 1.05,
+} as const;
 
+export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
+  // Die Lobby-Welt bekommt denselben Tageszeit-Look wie die Arena – sie ist das erste Bild,
+  // das Spieler sehen. Menüs liegen auf der Klarheitskamera und bleiben ungefiltert.
+  // Verletzung und Bossphasen gehören dagegen ausschließlich zur laufenden Arena.
+  const inLobby = inputs.gamePhase === 'LOBBY';
   const darkness = resolveDarkness(inputs.skyState);
-  const hurt = 1 - Math.min(1, Math.max(0, inputs.localHpFraction));
-  const bossActive = inputs.bossPhase > 0;
+  const hurt = inLobby ? 0 : 1 - Math.min(1, Math.max(0, inputs.localHpFraction));
+  const bossActive = !inLobby && inputs.bossPhase > 0;
   const bossVisualIntensity = bossActive
     ? clamp(inputs.bossVisualIntensity ?? 1, [0, 1])
     : 0;
 
-  // Nachts entsättigen und die Kontraste anziehen – das ist der Effekt, den das Auge bei
-  // wenig Licht ohnehin erwartet, und er trennt Silhouetten besser vom Boden.
-  let saturation = 1 - darkness * 0.18;
-  let contrast = 1 + darkness * 0.12;
-  let brightness = 1 - darkness * 0.04;
+  // Nachts leicht entsättigen, Kontraste anziehen und abdunkeln: die Nacht soll sehr dunkel
+  // sein, Lichtquellen tragen die Lesbarkeit. Eine starke Entsättigung darüber machte die
+  // Nacht grauschwarz; die Farbstimmung trägt das blaue Ambient.
+  let saturation = DAY_LOOK.saturation - darkness * 0.12;
+  let contrast = DAY_LOOK.contrast + darkness * 0.07;
+  let brightness = DAY_LOOK.brightness - darkness * 0.1;
 
-  let tint = darkness > 0.05 ? NIGHT_TINT : 0xffffff;
-  let tintStrength = darkness * 0.28;
-  let temperature = -darkness * 0.6;
-  let bloomAmount = 0.14 + darkness * 0.08;
-  let vignetteStrength = 0.18 + darkness * 0.05;
+  // Der kühle Nachtstich setzt erst in echter Dämmerung ein; goldenes Morgen- und
+  // Abendlicht soll nicht bläulich gegengefärbt werden.
+  const night = smoothstep01((darkness - 0.3) / 0.55);
+  let tint = night > 0 ? NIGHT_TINT : 0xffffff;
+  let tintStrength = night * 0.16;
+  let temperature = -night * 0.5;
+  let bloomAmount = 0.14 + darkness * 0.04;
+  let vignetteStrength = 0.16 + darkness * 0.05;
 
   if (inputs.isVoidMap) {
     tint = VOID_TINT;

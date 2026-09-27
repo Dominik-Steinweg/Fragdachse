@@ -68,10 +68,10 @@ describe('sky state', () => {
     expect(shadowTuple(DEFAULT_TIME_OF_DAY_MINUTES)).toEqual(SHADOW_PROFILES.day);
   });
 
-  it('pins midnight to the former night profile', () => {
+  it('pins midnight to the deep night profile', () => {
     const sky = resolveSkyState(0);
 
-    expect(sky.ambientColor).toBe(0x161a24);
+    expect(sky.ambientColor).toBe(0x11172a);
     expect(sky.lightFactor).toBe(1);
     expect(sky.canopyLightFactor).toBe(0.45);
     expect(sky.artificialLightFactor).toBe(1);
@@ -82,7 +82,7 @@ describe('sky state', () => {
   it('interpolates across the midnight wrap without a jump', () => {
     // 23:30 und 00:00 tragen dieselben Werte; alles dazwischen muss darauf liegen.
     for (const minute of [23 * 60 + 40, 23 * 60 + 50, MINUTES_PER_DAY - 1]) {
-      expect(resolveSkyState(minute).ambientColor).toBe(0x161a24);
+      expect(resolveSkyState(minute).ambientColor).toBe(0x11172a);
       expect(resolveSkyState(minute).lightFactor).toBe(1);
     }
   });

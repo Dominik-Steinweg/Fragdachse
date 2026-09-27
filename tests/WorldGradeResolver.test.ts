@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { resolveSkyState } from '../src/effects/TimeOfDay';
 import {
   isNeutralGrade,
-  NEUTRAL_WORLD_GRADE,
   resolveBaseGrade,
   resolveDarkness,
   buildTintMatrix,
@@ -70,10 +69,12 @@ describe('resolveBaseGrade', () => {
     for (const input of cases) expectWithinClamps(resolveBaseGrade(input));
   });
 
-  it('komponiert in der Lobby gar nicht', () => {
-    const grade = resolveBaseGrade(inputs({ gamePhase: 'LOBBY', skyState: MIDNIGHT, localHpFraction: 0 }));
-    expect(grade).toEqual(NEUTRAL_WORLD_GRADE);
-    expect(isNeutralGrade(grade)).toBe(true);
+  it('zeigt in der Lobby den Tageszeit-Look ohne Verletzungs- und Bossanteile', () => {
+    const lobby = resolveBaseGrade(inputs({
+      gamePhase: 'LOBBY', skyState: MIDNIGHT, localHpFraction: 0, bossPhase: 2,
+    }));
+    expect(lobby).toEqual(resolveBaseGrade(inputs({ skyState: MIDNIGHT })));
+    expect(isNeutralGrade(lobby)).toBe(false);
   });
 
   it('entsaettigt und kuehlt zur Nacht hin', () => {
