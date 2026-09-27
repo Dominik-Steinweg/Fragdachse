@@ -17,7 +17,7 @@ import type {
 } from './ArenaInputBindings';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { NavigationLabWorldPort } from '../../debug/navigationLab/NavigationLabPort';
-import { createNavigationLabWorldPort } from './ArenaRuntimeAdapters';
+import { createNavigationLabWorldPort, createDevScenarioWorldPort } from './ArenaRuntimeAdapters';
 import type { WorldPresentationRequirement } from '../../world/WorldPresentation';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldMetrics } from '../../world/WorldMetrics';
@@ -124,6 +124,7 @@ export interface ArenaRuntimeInput {
 
 export class ArenaRuntime {
   readonly navigationLabPort: NavigationLabWorldPort;
+  readonly devScenarioPort: ReturnType<typeof createDevScenarioWorldPort>;
   /** Raumlanglebiger Persistent-Base-Owner; er ueberlebt jede World und jede Runde. */
   readonly persistentBase: ArenaRuntimePersistentBasePort;
   /** Gebuendelte RPC-Ports fuer den RpcCoordinator; entkoppelt von konkreten Runtime-Interna. */
@@ -217,6 +218,7 @@ export class ArenaRuntime {
     this.persistentBase = createArenaPersistentBasePort(this.persistentBaseOwner);
     this.weaponBalanceLabPort = createWeaponBalanceLabWorldPort(this.flow, this.ctx.playerManager);
     this.navigationLabPort = createNavigationLabWorldPort(this.flow, this.ctx.playerManager);
+    this.devScenarioPort = createDevScenarioWorldPort(this.flow);
     this.strategicTargetsPort = createArenaStrategicTargetsPort(this.flow);
     this.presentation = createArenaRuntimePresentationPort(
       this.syncWorldCamera.bind(this),

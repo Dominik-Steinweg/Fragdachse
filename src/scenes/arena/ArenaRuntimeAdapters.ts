@@ -3,6 +3,7 @@ import { getCoopDefenseMapConfig, resolveCoopDefenseMapEncounterConfigs } from '
 import type { NavigationLabWorldPort } from '../../debug/navigationLab/NavigationLabPort';
 import type { EnemyIntent, MovementFeedback } from '../../systems/navigation/NavigationContracts';
 import { bridge } from '../../network/bridge';
+import { isDevScenarioMode } from '../../utils/devScenarioMode';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { ArenaInputPersistentBasePorts, ArenaInputPlacementPorts } from './ArenaInputBindings';
@@ -29,6 +30,24 @@ export function createArenaFlowFieldDebugPort(service: EnemyFlowFieldService): E
     setRefreshListener: (listener) => service.registerDebugOverlayCallback(
       listener ? () => listener() : null,
     ),
+  };
+}
+
+/** Dev-only mutations resolve activity-owned managers afresh on every command. */
+export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator) {
+  const requireLocal = () => {
+    if (!isDevScenarioMode() || !bridge.isHost() || bridge.getConnectedPlayers().length !== 1) throw new Error('Isolated dev host required.');
+  };
+  return {
+    suppressEncounters(value: boolean): void {
+      requireLocal();
+      const runtime = flow.getCoopMissionRuntime();
+      if (runtime) runtime.analysisScenarioActive = value;
+    },
+    setEnemyHp(id: string, hp: number): void {
+      requireLocal();
+      flow.getCoopMissionRuntime()?.enemyManager?.hostSetVitalsBaseline(id, hp, hp);
+    },
   };
 }
 

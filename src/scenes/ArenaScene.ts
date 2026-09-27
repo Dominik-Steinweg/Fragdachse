@@ -92,6 +92,8 @@ import { CenterHUD }             from '../ui/CenterHUD';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { BootScreen, BOOT_ERROR_EVENT } from '../ui/BootScreen';
 import { BootPreparation, onBootSceneTeardown } from '../ui/BootPreparation';
+import { isDevScenarioMode } from '../utils/devScenarioMode';
+import type { DevScenarioController } from '../dev/scenario/controller';
 import { observeBootLoader } from '../ui/BootLoaderProgress';
 import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
 import {
@@ -279,6 +281,7 @@ export class ArenaScene extends Phaser.Scene {
   private clientUpdate!: ClientUpdateCoordinator;
   private rpcCoordinator!: RpcCoordinator;
   private arenaRuntime!: ArenaRuntime;
+  private devScenario: DevScenarioController | null = null;
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
@@ -1194,6 +1197,16 @@ export class ArenaScene extends Phaser.Scene {
       getSpectatorCameraInput: () => this.inputBindings?.getSpectatorCameraInput(),
     });
     this.arenaRuntime.setRuntimeDiagnosticEventSink(this.diagnostics?.getSemanticEventSink() ?? null);
+    if (import.meta.env.DEV && isDevScenarioMode()) {
+      let disposed = false;
+      onBootSceneTeardown(this.events, () => {
+        disposed = true; this.devScenario?.destroy(); this.devScenario = null;
+      });
+      void import('../dev/scenario/controller').then(({ DevScenarioController }) => {
+        if (!disposed) this.devScenario = new DevScenarioController(this, this.arenaRuntime,
+          (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger), () => this.lobbyOverlay.isRevealComplete());
+      }).catch(error => { console.error('[Dev scenario]', error); });
+    }
     if (__PERFORMANCE_LAB__) {
       onBootSceneTeardown(this.events, () => {
         if (window.__FD_PERF__ && !['failed', 'complete'].includes(window.__FD_PERF__.state)) failPerformanceLab('Scene shutdown during capture');
@@ -1507,6 +1520,7 @@ export class ArenaScene extends Phaser.Scene {
     const prepareWorldSurfaces = presentationPolicy.showWorld
       || (arenaLoading && worldActive && localWorldPresentation.required && !terminated);
     this.arenaRuntime.presentation.syncWorldCamera(delta, prepareWorldSurfaces);
+    this.devScenario?.syncCamera();
     // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
     // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
@@ -1521,13 +1535,14 @@ export class ArenaScene extends Phaser.Scene {
       gameplayActive: worldActive && (!activityActive || gameplayActive),
       countdownActive,
       uiBlocking: optionsOpen,
-      diagnosticsArena: weaponBalanceLabArena || (__PERFORMANCE_LAB__ && !!window.__FD_PERF_REQUEST__),
+      diagnosticsArena: weaponBalanceLabArena || isDevScenarioMode() || (__PERFORMANCE_LAB__ && !!window.__FD_PERF_REQUEST__),
     });
     if (worldActive && localWorldPresentation.required && countdownActive) {
       this.syncCountdownPlayerPresentation();
     }
     diagnosticsFrame?.mark('inputEnd');
     if (__PERFORMANCE_LAB__) updatePerformanceLab();
+    this.devScenario?.update();
 
     this.syncArenaLobbyFrame(
       phase,
@@ -1618,6 +1633,7 @@ export class ArenaScene extends Phaser.Scene {
     // part of the local startup working set and must not be reset to the lobby origin before the
     // readiness check at the end of the frame.
     this.arenaRuntime.presentation.syncWorldCamera(spectator ? 0 : delta, prepareWorldSurfaces);
+    this.devScenario?.syncCamera();
     const coopDefensePresentationActive = inRoundWorld && isCoopDefenseMode(configuredGameMode);
     this.arenaRuntime.presentation.syncCoopMissionPresentation(delta, coopDefensePresentationActive);
     this.syncSpectatorPlayerNames(inArena);
@@ -2650,6 +2666,9 @@ export class ArenaScene extends Phaser.Scene {
   private syncMainCameraBounds(): void {
     const camera = this.cameras.main;
     if (!camera) return;
+    // The isolated scenario controller supplies its own zoom and world focus. Design-space
+    // bounds would clamp that view again later in the same frame.
+    if (isDevScenarioMode()) { camera.removeBounds(); return; }
     // Um das Feedback-Budget erweitert: Phaser klemmt `scrollX/scrollY` in `preRender` gegen die
     // Grenzen. Bei fixer Kamera fallen Sichtfeld und Grenzen exakt zusammen, der zulässige
     // Bereich kollabiert dann auf einen einzigen Wert – der Kamera-Versatz würde stillschweigend

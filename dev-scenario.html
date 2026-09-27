@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fragdachse · Dev-Szenario</title>
+<style>
+html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111820; color:#e8e2d4; font:14px system-ui,sans-serif }
+#game-container { position:absolute; inset:0; overflow:hidden }
+canvas { display:block }
+#boot-screen { position:absolute; inset:0; display:grid; place-content:center; text-align:center; gap:12px; background:#111820; z-index:100 }
+#boot-status { font-size:18px } #boot-detail { color:#9daab6 }
+#boot-bar-fill { height:3px; background:#e3b566; transform-origin:left }
+</style></head><body>
+<div id="game-container"><div id="boot-screen"><h1>Dev-Szenario</h1><div id="boot-status">Spiel wird geladen …</div><div id="boot-bar-fill"></div><div id="boot-detail"></div></div></div>
+<script type="module" src="/src/dev/devScenario.ts"></script>
+</body></html>

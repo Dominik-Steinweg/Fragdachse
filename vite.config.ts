@@ -1,4 +1,5 @@
 import gameVersion from './game-version.json';
+import { devScenarioArtifacts } from './scripts/dev-scenario-artifacts';
 import { defineConfig, normalizePath } from 'vite';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -29,7 +30,7 @@ export default defineConfig(({ mode }) => {
 
   return {
   base: navigationBuild ? `/build/${mode}/` : './',
-  plugins: [{
+  plugins: [devScenarioArtifacts(), {
     name: 'local-navigation-report',
     configureServer(server) {
       server.middlewares.use('/__navigation-environment', (_request, response) => {

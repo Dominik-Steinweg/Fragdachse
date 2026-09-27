@@ -1,5 +1,6 @@
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
+import { isDevScenarioMode } from '../../utils/devScenarioMode';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { collectDeathFragmentFrames } from '../../effects/gpu/DeathFragmentPreparation';
 import * as Phaser from 'phaser';
@@ -2110,7 +2111,7 @@ export class ArenaLifecycleCoordinator {
   hostDiscardRound(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const mapId = this.resolveConfiguredCoopDefenseMapId();
-    if (!isDiagnosticMapId(mapId)) return;
+    if (!isDiagnosticMapId(mapId) && !isDevScenarioMode()) return;
     this.persistentBase.rollbackPersistentBaseMissionIfActive();
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);

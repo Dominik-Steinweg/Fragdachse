@@ -29,6 +29,10 @@ Ohne ausdrückliche Aufforderung keinen Dev-Server, Browser oder Screenshot star
 
 ## Dokumentationsänderungen
 
+Für ausdrücklich beauftragte Gameplay-Sichtprüfungen bietet der bestehende Dev-Server den
+[Dev-Szenario-Modus](../dev-scenarios.md): isolierter Spielstand, direkter Map-/Loadout-Aufbau,
+HTML-Eingaben, Zeitsteuerung und PNG-Ausgabe. Die Opt-in-Regel gilt unverändert.
+
 Nach Markdown- oder Skill-Änderungen:
 
 1. relative Links, Pfade und Symbolnamen mit rg beziehungsweise Test-Path prüfen;

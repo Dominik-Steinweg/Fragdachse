@@ -6,6 +6,12 @@ Lokale Speicherung ist eine validierte Domänengrenze für Geräteeinstellungen,
 
 ## Getrennte Dokumente
 
+Der separate [Dev-Szenario-Einstieg](../dev-scenarios.md) ersetzt LocalStorage und SessionStorage
+vor dem dynamischen Import des Spiels durch tablokalen Speicher. Sein URL-Rezept durchläuft die
+normalen Loadout- und Lifecycle-Verträge; es importiert keine World-Runtime aus einem Spielstand.
+Die Diagnose-Uhr und der lokale transportlose Host dürfen nur in diesem isolierten Dev-Einstieg
+aktiviert werden, nicht in einer normalen oder gemeinsam genutzten Spielsession.
+
 [src/utils/localPreferences.ts](../../src/utils/localPreferences.ts) trennt mindestens:
 
 - Geräteeinstellungen wie Audio, Grafik und Locale;

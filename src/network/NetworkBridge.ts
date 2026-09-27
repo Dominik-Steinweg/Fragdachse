@@ -921,6 +921,16 @@ export class NetworkBridge {
    * Meldung – es gibt bewusst keinen stillen Fallback auf einen anderen Transportweg.
    */
   static async connect(): Promise<void> {
+    if (import.meta.env.DEV && (await import('../utils/devScenarioMode')).isDevScenarioMode()) {
+      const { createLocalScenarioSession } = await import('./peer/LocalScenarioSession');
+      await createLocalScenarioSession({
+        hostOnlyPlayerKeys: HOST_ONLY_PLAYER_KEYS,
+        welcomeExcludedPlayerKeys: WELCOME_EXCLUDED_PLAYER_KEYS,
+        clientOwnedPlayerKeys: CLIENT_OWNED_PLAYER_KEYS,
+        onPayloadDiagnostics: null,
+      });
+      return;
+    }
     const roomCode = readRoomCodeFromUrl();
     const session = roomCode === null
       ? await createHostSession({

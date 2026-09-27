@@ -1,4 +1,5 @@
 import { UtilityChargePrediction } from '../loadout/UtilityChargePrediction';
+import { isDevScenarioMode } from '../utils/devScenarioMode';
 import { isFriendlyTurret, TURRET_CONTROL_RULES } from './TurretControlSystem';
 import { selectInteractionCandidate, interactionCandidateScore, WORLD_INTERACTION_RULES } from './WorldInteractionSelection';
 import type { WorldInteractionCandidate } from './WorldInteractionCandidate';
@@ -1257,7 +1258,7 @@ export class InputSystem {
 
   /** Jeden Frame: WASD + Dash + Burrow + Loadout lesen, RPCs senden. */
   isWeaponTriggerHeld(slot: 'weapon1' | 'weapon2'): boolean {
-    return (typeof __PERFORMANCE_LAB__ !== 'undefined' && __PERFORMANCE_LAB__ && this.diagnosticTrigger === slot)
+    return (((typeof __PERFORMANCE_LAB__ !== 'undefined' && __PERFORMANCE_LAB__) || isDevScenarioMode()) && this.diagnosticTrigger === slot)
       || (this.inputEnabled && this.firingWeaponSlot === slot);
   }
 

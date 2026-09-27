@@ -45,6 +45,8 @@ import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
 import { ResultApplication } from '../../src/activity/ResultApplication';
 import { bridge } from '../../src/network/bridge';
+import * as devScenarioMode from '../../src/utils/devScenarioMode';
+import { DEFAULT_COOP_DEFENSE_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { registerDiagnosticMap, getCoopDefenseMapConfig, WEAPON_BALANCE_LAB_MAP_ID } from '../../src/config/coopDefenseMaps';
 
 function fixture(host: boolean, outcome = 'victory') {
@@ -85,6 +87,20 @@ function fixture(host: boolean, outcome = 'victory') {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
+  it.each([[false, true, false], [true, false, false], [true, true, true]])(
+    'only an isolated dev host may discard campaign rounds (dev=%s host=%s)', (dev, host, allowed) => {
+      vi.spyOn(devScenarioMode, 'isDevScenarioMode').mockReturnValue(dev);
+      const { flow, setPhase } = fixture(host);
+      setPhase('ARENA'); flow.resolveConfiguredCoopDefenseMapId = () => DEFAULT_COOP_DEFENSE_MAP_ID;
+      for (const key of ['publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
+        'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+        'publishRoundState', 'publishRoundResults'] as const) vi.spyOn(bridge, key).mockImplementation(() => {});
+      flow.hostDiscardRound();
+      expect(bridge.getGamePhase()).toBe(allowed ? 'LOBBY' : 'ARENA');
+      expect(flow.worldLifecycle.endInstance).toHaveBeenCalledTimes(allowed ? 1 : 0);
+      expect(flow.persistentBase.rollbackPersistentBaseMissionIfActive).toHaveBeenCalledTimes(allowed ? 1 : 0);
+      expect(flow.persistentBase.applyRoundConclusion).not.toHaveBeenCalled();
+    });
   it('discards a dynamically registered diagnostic round without results, rewards or persistence commits', () => {
     const unregister = registerDiagnosticMap({ ...getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID), mapId: 'performance-exit-test' });
     try {
