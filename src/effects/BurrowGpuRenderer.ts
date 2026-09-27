@@ -1,6 +1,7 @@
 import type { TerrainColorSnapshot } from '../arena/TerrainColorSnapshot';
 import { BURROW_FX } from '../config/burrowEffects';
 import { BurrowEarthbreakPresentation } from './BurrowEarthbreakPresentation';
+import type { EarthbreakFissureStore } from './earthbreak/EarthbreakFissureStore';
 import type { SyncedBurrowEarthbreak } from '../systems/BurrowEarthbreakRuntime';
 import { mixColors } from './EffectUtils';
 import { MovementParticleBudget } from './MovementParticleBudget';
@@ -102,8 +103,13 @@ export class BurrowGpuRenderer {
   constructor(private readonly gpu: GpuVfxSystem) {
     this.earthbreak = new BurrowEarthbreakPresentation(gpu, (x, y, emergence, age) => {
       const kind = emergence ? 'earthbreakExit' : 'earthbreak';
-      this.spawnEarth(x, y, 0, emergence ? 1.1 : 0.7, age, kind);
+      this.spawnEarth(x, y, 0, emergence ? 1.1 : 0.8, age, kind);
       this.spawnDust(x, y, 0, kind, age);
+    }, (x, y) => mixColors(this.terrain?.sample(x, y) ?? BURROW_FX.terrainFallback,
+      BURROW_FX.earthTint, BURROW_FX.earthbreak.soilMix), (ownerId) => {
+      // The same displayed underground position that drives the digging churn.
+      const target = this.underground.get(ownerId)?.target;
+      return target && validUndergroundTarget(target) ? target : null;
     });
     this.clod = gpu.createSpec(GpuVfxEffectId.BurrowClod);
     this.grain = gpu.createSpec(GpuVfxEffectId.BurrowGrain);
@@ -140,6 +146,9 @@ export class BurrowGpuRenderer {
   }
 
   setTerrainColorSnapshot(snapshot: TerrainColorSnapshot | null): void { this.terrain = snapshot; }
+
+  /** Instance data of the Earthbreak fissure shader layers; the renderer bundle binds the GL passes. */
+  get earthbreakFissures(): EarthbreakFissureStore { return this.earthbreak.fissures; }
 
   syncEarthbreak(snapshots: readonly SyncedBurrowEarthbreak[], hostNow: number, host = false): void {
     if (this.destroyed || !this.world) return;

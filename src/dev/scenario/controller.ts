@@ -186,6 +186,12 @@ export class DevScenarioController {
       hostNowMs: bridge.getSynchronizedNow(), source: { kind: 'equipped' }, params: { heldActionId: this.heldUtility?.id } });
     this.heldUtility = null;
   }
+  /** Same host request as the burrow key; adrenaline, cooldown and exit rules stay authoritative. */
+  burrow(enter: boolean): void {
+    this.requireReady();
+    this.runtime.rpcPorts.playerLoadout.handleBurrowRequest(bridge.getLocalPlayerId(), enter);
+    this.lastAction = { ok: true, burrow: enter ? 'enter' : 'exit' };
+  }
   ultimate(action: 'press' | 'release' = 'press'): void {
     this.requireReady(); const target = this.world(this.aim), player = this.runtime.navigationLabPort.getPlayerPosition()!;
     if (action === 'press') this.runtime.prepareScenarioRage();

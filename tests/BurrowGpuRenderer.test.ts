@@ -15,6 +15,7 @@ import { BurrowEarthbreakPresentation } from '../src/effects/BurrowEarthbreakPre
 import { BURROW_EARTHBREAK as earthbreakRules } from '../src/config/burrowEarthbreak';
 import type { SyncedBurrowEarthbreak } from '../src/systems/BurrowEarthbreakRuntime';
 import { BURROW_FX } from '../src/config/burrowEffects';
+import { FISSURE_CAPACITY, FISSURE_TIMING } from '../src/effects/earthbreak/EarthbreakFissureStore';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
@@ -45,23 +46,68 @@ function earthbreakTrace(): SyncedBurrowEarthbreak {
 }
 
 describe('Earthbreak GPU presentation', () => {
-  it('shows bounded persistent cracks with existing atlas geometry and releases them on empty state and teardown', () => {
+  it('keeps a bounded persistent fissure outside the particle lanes and releases it on cancel and teardown', () => {
     const h = setup();
     const trace = earthbreakTrace();
-    const points = Array.from({ length: BURROW_FX.earthbreak.maxVisibleCracks * 2 }, (_, i) => ({ x: i * 24, y: 0 }));
+    const points = Array.from({ length: FISSURE_CAPACITY * 2 }, (_, i) => ({ x: i * 24, y: 0 }));
     h.renderer.syncEarthbreak([{ ...trace, points }], 1000);
     h.gpu.update(0);
-    expect(h.ground.members.some(m => m.frame === 'flight-core-strip')).toBe(true);
-    expect(h.gpu.getStats()!['movement-ground'].liveCount).toBeLessThanOrEqual(
-      BURROW_FX.earthbreak.maxVisibleCracks * BURROW_FX.earthbreak.membersPerCrack);
-    h.gpu.update(BURROW_FX.earthbreak.crackLifeMs + 1);
-    expect(h.gpu.getStats()!['movement-ground'].liveCount).toBeGreaterThan(0);
-    h.renderer.syncEarthbreak([], 4000); h.gpu.update(0);
+    const fissures = h.renderer.earthbreakFissures;
+    expect(fissures.size).toBe(FISSURE_CAPACITY);
     expect(h.gpu.getStats()!['movement-ground'].liveCount).toBe(0);
-    h.renderer.syncEarthbreak([trace], 4000); h.gpu.update(0);
+    // A dig does not expire while it lasts.
+    h.gpu.update(10_000);
+    expect(fissures.size).toBe(FISSURE_CAPACITY);
+    // A trace that vanishes without emergence closes instead of detonating.
+    h.renderer.syncEarthbreak([], 12_000); h.gpu.update(0);
+    expect(fissures.size).toBe(FISSURE_CAPACITY);
+    h.gpu.update(FISSURE_TIMING.cancelMs + 1);
+    expect(fissures.size).toBe(0);
+    h.renderer.syncEarthbreak([trace], 13_000); h.gpu.update(0);
+    expect(fissures.size).toBe(1);
     h.renderer.closeWorld(h.world);
-    expect(h.gpu.getStats()!['movement-ground'].liveCount).toBe(0);
+    expect(fissures.size).toBe(0);
     expect(h.scene.emitters).toHaveLength(0);
+  });
+
+  it('reaches from the dig origin to the displayed underground position and hands the tip to the exit', () => {
+    const h = setup();
+    let owner = { x: 0, y: 0 };
+    const presentation = new BurrowEarthbreakPresentation(h.gpu, vi.fn(), undefined, () => owner);
+    const digging = (points: { x: number; y: number }[]): SyncedBurrowEarthbreak => ({ ...earthbreakTrace(), points });
+    presentation.sync([digging([])], 1000, true);
+    presentation.update(h.gpu.now(), () => true);
+    expect(presentation.fissures.size).toBe(0);
+    // Before the first replicated point the live tip already opens the ground behind the badger.
+    owner = { x: 18, y: 0 };
+    presentation.update(h.gpu.now(), () => true);
+    expect(presentation.fissures.size).toBe(1);
+    // Lead-in from the origin, one point-to-point segment and the tip ahead of the newest point.
+    owner = { x: 60, y: 0 };
+    presentation.sync([digging([{ x: 24, y: 0 }, { x: 48, y: 0 }])], 1000, true);
+    presentation.update(h.gpu.now(), () => true);
+    expect(presentation.fissures.size).toBe(3);
+    presentation.sync([{ ...digging([{ x: 24, y: 0 }, { x: 48, y: 0 }]), phase: 'detonating',
+      exit: { x: 60, y: 0 }, detonatedAt: 1000 }], 1000, true);
+    presentation.update(h.gpu.now(), () => true);
+    expect(presentation.fissures.has('1:tip')).toBe(false);
+    expect(presentation.fissures.has('1:exit')).toBe(true);
+    expect(presentation.fissures.has('1:crater')).toBe(true);
+    expect(presentation.fissures.size).toBe(4);
+    presentation.destroy();
+  });
+
+  it('adds the emergence connector and crater once, then retires the collapsed ground', () => {
+    const h = setup();
+    h.renderer.syncEarthbreak([earthbreakTrace()], 1000); h.gpu.update(0);
+    const fissures = h.renderer.earthbreakFissures;
+    expect(fissures.size).toBe(1);
+    const detonated = { ...earthbreakTrace(), phase: 'detonating' as const, exit: { x: 60, y: 0 }, detonatedAt: 1000 };
+    h.renderer.syncEarthbreak([detonated], 1000); h.gpu.update(0);
+    h.renderer.syncEarthbreak([detonated], 1000); h.gpu.update(0);
+    expect(fissures.size).toBe(3);
+    h.gpu.update(3 * earthbreakRules.intervalMs + FISSURE_TIMING.holdMs + FISSURE_TIMING.fadeMs + 1);
+    expect(fissures.size).toBe(0);
   });
 
   it('reconstructs the continuing chain after a late join without replaying past explosions', () => {
@@ -111,7 +157,7 @@ describe('Earthbreak GPU presentation', () => {
     presentation.destroy(); h.renderer.destroy();
   });
 
-  it('renders additional earth bursts on the shared GPU lanes and culls distant cracks', () => {
+  it('renders additional earth bursts on the shared GPU lanes and skips distant ones', () => {
     const h = setup();
     h.renderer.openWorld(h.world, () => true, x => x < 100);
     h.renderer.syncEarthbreak([{ ...earthbreakTrace(), points: [{ x: 200, y: 0 }] }], 1000);

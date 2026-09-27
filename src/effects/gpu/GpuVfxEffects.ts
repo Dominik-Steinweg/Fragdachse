@@ -92,7 +92,6 @@ export const GpuVfxEffectId = {
   LeafBlowerStreak: 78,
   LeafBlowerSpray: 79,
   LeafBlowerRipple: 80,
-  BurrowCrack: 81,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -625,6 +624,4 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.LeafBlowerDroplet, importance: 'standard', release: 'linger' },
   { id: GpuVfxEffectId.LeafBlowerRipple, label: 'leafblower.water-ripple', lane: GpuVfxLaneId.WaterSurface,
     frame: GpuVfxFrameId.LeafBlowerWindStreak, importance: 'decorative', release: 'linger' },
-  { id: GpuVfxEffectId.BurrowCrack, label: 'burrow.crack', lane: GpuVfxLaneId.MovementGround,
-    frame: GpuVfxFrameId.FlightCoreStrip, importance: 'critical', release: 'kill-with-source' },
 ];

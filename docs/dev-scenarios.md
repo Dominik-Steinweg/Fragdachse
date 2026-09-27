@@ -25,7 +25,8 @@ Der Einstieg und die Bedienoberfläche werden vom normalen Produktionsbuild nich
 
 Das Utility-Kommando verwendet das **erste Utility im Werkzeug-Loadout** und lädt aufladbare Utilities voll auf.
 Für ein anderes Utility die Werkzeugreihenfolge im JSON ändern und neu starten. Ultimate hat getrennte
-Drücken-/Loslassen-Kommandos; beim Drücken wird Rage aufgefüllt.
+Drücken-/Loslassen-Kommandos; beim Drücken wird Rage aufgefüllt. **Eingraben**/**Auftauchen** senden dieselbe
+Host-Anfrage wie die Grabtaste; Adrenalin- und Austrittsregeln gelten unverändert.
 Adrenalin und HP können pro Simulationsframe aufgefüllt werden. HP-Auffüllen verhindert keinen tödlichen Einzeltreffer.
 
 ## Wiederholbare Aufbauten
@@ -96,6 +97,7 @@ Aufnahme ab. Nach Scene-Teardown wird die globale API entfernt und wartende Aufr
 | `move` | `dx`, `dy` (−1…1), `durationMs` (0…10000) |
 | `holdWeapon`, `fire` | `slot`: `weapon1` oder `weapon2` |
 | `ultimate` | `phase`: `press` (Standard) oder `release` |
+| `burrow` | `phase`: `enter` (Eingraben) oder `exit` (Auftauchen); gleiche Host-Anfrage wie die Grabtaste |
 | `spawn` | `kind`, optional `pinned`, `hp`, `gridX`, `gridY`; ohne Position am Ziel |
 | `build` | `id`, optional `gridX`, `gridY`; ohne Position am Ziel |
 | `step` | optional `frames` (1…600, ganzzahlig) |

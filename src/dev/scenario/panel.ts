@@ -121,6 +121,8 @@ export function createScenarioPanel(controller: DevScenarioController) {
     button(actions, `${slot} halten`, () => { target(); controller.fire(slot, true); });
   }
   button(actions, 'Utility auslösen', () => { target(); controller.utility(); });
+  button(actions, 'Eingraben', () => controller.burrow(true));
+  button(actions, 'Auftauchen', () => controller.burrow(false));
   button(actions, 'Ultimate drücken', () => { target(); controller.ultimate('press'); });
   button(actions, 'Ultimate loslassen', () => { target(); controller.ultimate('release'); });
   button(actions, 'Alle Aktionen stoppen', () => controller.stop());

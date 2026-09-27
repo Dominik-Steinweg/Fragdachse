@@ -49,6 +49,10 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     case 'holdWeapon': controller.fire(slot(c.slot), true); break;
     case 'fire': controller.fire(slot(c.slot), false); break;
     case 'utility': controller.utility(); break;
+    case 'burrow': {
+      if (c.phase !== 'enter' && c.phase !== 'exit') throw new Error('phase: enter oder exit erwartet.');
+      controller.burrow(c.phase === 'enter'); break;
+    }
     case 'ultimate': {
       if (c.phase !== undefined && c.phase !== 'press' && c.phase !== 'release') throw new Error('phase: press oder release erwartet.');
       controller.ultimate(c.phase as 'press' | 'release' | undefined); break;
