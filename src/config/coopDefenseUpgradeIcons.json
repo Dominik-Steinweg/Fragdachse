@@ -308,6 +308,7 @@
     "zeus_thunderfront"
   ],
   "withoutIcon": [
+    "burrow_earthbreak",
     "turret_control",
     "unlock_ak47",
     "unlock_asmd_primary",

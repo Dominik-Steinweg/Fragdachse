@@ -165,6 +165,8 @@ export function composeWorldTrain(
     },
     getEnemyManager: () => (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager) ?? null,
     isPlayerBurrowed: (playerId) => gameplay.player?.isBurrowed(playerId) ?? false,
+    resolveBurrowDamage: (playerId, baseDamage) => gameplay.player?.getPlayerModifierReadPort()
+      .getResolvedStat(playerId, 'player.burrowTrainDamage', baseDamage) ?? baseDamage,
     getTimeBubbleSystem: () => gameplay.combat?.systems?.timeBubble ?? null,
     setTranslocatorTrainManager: (train) => gameplay.player?.setTranslocatorTrainManager(train),
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,

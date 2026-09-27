@@ -190,6 +190,7 @@ export const deContent = {
   "source.environment.train.name": "Zug RB 54",
   "source.environment.train_push.name": "In den Zug geschubst",
   "source.environment.explosion.name": "Explosion",
+  "source.upgrade.burrow_earthbreak.name": "Erdbruch",
   "source.environment.telefrag.name": "Telefrag",
   "source.environment.dash.name": "Dash-Aufprall",
   "source.environment.slime_trail.name": "Schleimspur",

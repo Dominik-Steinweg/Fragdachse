@@ -1,6 +1,7 @@
 import { COMBO_LIGHTNING_RANGE_MULTIPLIER, getComboLightningDamageMultiplier } from '../systems/DetonationResolver';
 import { resolveTimeBubblePrismEmitter } from '../loadout/TimeBubbleConfig';
 import { MG_TURRET_RULES } from '../config/mgTurretRules';
+import { BURROW_EARTHBREAK } from '../config/burrowEarthbreak';
 import { ATTACK_DRONE_RULES as DRONE } from '../config/attackDrone';
 import { getDomainCatalog, getDomainKeys, translate, translateSegments, type TranslationSegment } from './catalog';
 import { formatNumber, formatUpgradeEffectValue } from './format';
@@ -25,6 +26,10 @@ function getUpgradeParams(
   locale: Locale,
 ): Record<string, string | number> {
   const params: Record<string, string | number> = {
+    earthbreakDamage: formatNumber(BURROW_EARTHBREAK.damage, locale),
+    earthbreakExitDamage: formatNumber(BURROW_EARTHBREAK.exitDamage, locale),
+    earthbreakSeconds: formatNumber(BURROW_EARTHBREAK.vulnerabilityDurationMs / 1000, locale),
+    earthbreakVulnerability: formatNumber(VULNERABILITY_INCOMING_DAMAGE_BONUS, locale, { style: 'percent' }),
     droneMagazine: DRONE.magazine,
     droneRegen: DRONE.regenerationPerLevel * 100,
     droneSpeed: DRONE.speedPerLevel * 100,

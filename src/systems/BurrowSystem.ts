@@ -30,7 +30,18 @@ interface BurrowStateData {
 
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string, now?: number): void };
 
+export interface BurrowLifecycleObserver {
+  entered(playerId: string): void;
+  sample(playerId: string): void;
+  exited(playerId: string, now: number): void;
+  cancelDig(playerId: string): void;
+  reset(playerId: string): void;
+}
+
 export class BurrowSystem {
+  private lifecycleObserver: BurrowLifecycleObserver | null = null;
+
+  setLifecycleObserver(observer: BurrowLifecycleObserver | null): void { this.lifecycleObserver = observer; }
   private states = new Map<string, BurrowStateData>();
   private undergroundSpeedResolver: ((playerId: string) => number) | null = null;
   private drainMultiplierResolver: ((playerId: string) => number) | null = null;
@@ -191,10 +202,12 @@ export class BurrowSystem {
           }
           break;
         case 'underground':
+          if (!state.isTunnelTransit) this.lifecycleObserver?.sample(id);
           this.updateUndergroundState(id, state, delta, now);
           break;
         case 'trapped':
-          this.updateTrappedState(id, state, delta);
+          this.lifecycleObserver?.sample(id);
+          this.updateTrappedState(id, state, delta, now);
           break;
         case 'recovery':
           if (now >= state.phaseEndsAt) {
@@ -218,13 +231,13 @@ export class BurrowSystem {
         now,
       );
       if (this.resources.getAdrenaline(id) <= 0) {
-        this.requestExit(id, 'depleted');
+        this.requestExit(id, 'depleted', now);
         return;
       }
     }
   }
 
-  private updateTrappedState(id: string, state: BurrowStateData, delta: number): void {
+  private updateTrappedState(id: string, state: BurrowStateData, delta: number, now: number): void {
     state.stuckDamageAccum += BURROW_STUCK_DAMAGE_PER_SEC * delta / 1000;
 
     if (state.stuckDamageAccum >= 1) {
@@ -236,7 +249,7 @@ export class BurrowSystem {
       state.stuckDamageAccum -= damage;
     }
 
-    this.tryFinalizeExit(id);
+    if (this.combat.isAlive(id)) this.tryFinalizeExit(id, undefined, now);
   }
 
   // ── Privat ─────────────────────────────────────────────────────────────────
@@ -267,19 +280,20 @@ export class BurrowSystem {
     this.hostPhysics.setPlayerBurrowed(id, true);
     this.stinkCloudSystem?.hostDeactivateForPlayer(id, now);
     this.bridge.broadcastBurrowVisual(id, 'underground');
+    this.lifecycleObserver?.entered(id);
   }
 
-  private requestExit(id: string, reason: 'manual' | 'depleted'): void {
+  private requestExit(id: string, reason: 'manual' | 'depleted', now = Date.now()): void {
     const state = this.states.get(id);
     if (!state || state.phase !== 'underground') return;
 
     if (state.isTunnelTransit) {
       if (this.isCurrentPositionBlocked(id)) return;
-      this.finalizeTunnelTransit(id);
+      this.finalizeTunnelTransit(id, now);
       return;
     }
 
-    if (!this.tryFinalizeExit(id)) {
+    if (!this.tryFinalizeExit(id, undefined, now)) {
       if (reason === 'depleted') {
         this.states.set(id, {
           phase: 'trapped',
@@ -292,12 +306,13 @@ export class BurrowSystem {
     }
   }
 
-  private tryFinalizeExit(id: string, collisionRadius?: number): boolean {
+  private tryFinalizeExit(id: string, collisionRadius?: number, now = Date.now()): boolean {
+    this.lifecycleObserver?.sample(id);
     const player = this.playerMgr.getPlayer(id);
     if (!player) {
       // Preserve teardown-safe behavior: a missing player runtime was previously treated as
       // non-blocking by the static check.
-      this.finalizeExit(id);
+      this.finalizeExit(id, now);
       return true;
     }
 
@@ -323,25 +338,27 @@ export class BurrowSystem {
       player.setPosition(resolved.x, resolved.y);
       this.onPositionResetCb?.(id, resolved.x, resolved.y);
     }
-    this.finalizeExit(id);
+    this.finalizeExit(id, now);
     return true;
   }
 
-  private finalizeExit(id: string): void {
+  private finalizeExit(id: string, now: number): void {
     this.hostPhysics.setPlayerBurrowed(id, false);
     this.states.set(id, {
       phase: 'recovery',
-      phaseEndsAt: Date.now() + BURROW_POPOUT_WEAPON_LOCK_MS,
+      phaseEndsAt: now + BURROW_POPOUT_WEAPON_LOCK_MS,
       drainElapsedMs: 0,
       stuckDamageAccum: 0,
     });
     const player = this.playerMgr.getPlayer(id);
     this.bridge.broadcastBurrowVisual(id, 'recovery', player?.x, player?.y);
     this.applyShockwave(id);
+    this.lifecycleObserver?.exited(id, now);
   }
 
   startTunnelTransit(id: string): void {
     if (!this.combat.isAlive(id)) return;
+    this.lifecycleObserver?.cancelDig(id);
     this.states.set(id, {
       phase: 'underground',
       phaseEndsAt: 0,
@@ -374,6 +391,7 @@ export class BurrowSystem {
   }
 
   private resetState(id: string, broadcastIdle: boolean): void {
+    this.lifecycleObserver?.reset(id);
     const phase = this.getPhase(id);
     if (phase === 'idle') return;
 
@@ -401,7 +419,7 @@ export class BurrowSystem {
   }
 
   /**
-   * AoE-Knockback + Schaden für Spieler im SHOCKWAVE_RADIUS um den Auftauchenden.
+   * Radial impulse and centrally filtered damage to hostile combatants.
    */
   private applyShockwave(id: string): void {
     const origin = this.playerMgr.getPlayer(id);
@@ -421,21 +439,9 @@ export class BurrowSystem {
       0,
     );
 
-    for (const other of this.playerMgr.getAllPlayers()) {
-      if (other.id === id) continue;
-      if (!this.combat.isAlive(other.id)) continue;
-
-      const dx   = other.x - ox;
-      const dy   = other.y - oy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < shockwaveRadius && dist > 0) {
-        this.combat.applyDamage(other.id, shockwaveDamage, false, id, 'Auftauchschockwelle', {
-          sourceX: ox,
-          sourceY: oy,
-        });
-      }
-    }
+    this.combat.applyAoeDamage(ox, oy, shockwaveRadius, shockwaveDamage, id, false, {
+      sourceId: 'Auftauchschockwelle', baseDamageMult: 0,
+    });
 
     // Visueller Effekt für alle Clients (inkl. Host)
     this.bridge.broadcastShockwaveEffect(ox, oy, shockwaveRadius);

@@ -73,6 +73,7 @@ export interface WorldTrainRuntimeOptions {
   readonly network: WorldTrainNetworkPort;
   readonly getEnemyManager: () => EnemyManager | null;
   readonly isPlayerBurrowed: (playerId: string) => boolean;
+  readonly resolveBurrowDamage?: (playerId: string, baseDamage: number) => number;
   readonly getTimeBubbleSystem: () => TimeBubbleSystem | null;
   readonly setTranslocatorTrainManager: (train: TrainManager | null) => void;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
@@ -257,6 +258,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
       return collision ? { destroysTrain: !isRevivedAlly && collision.destroysTrain } : undefined;
     });
     train.setIsPlayerBurrowedCallback((playerId) => this.options.isPlayerBurrowed(playerId));
+    train.setBurrowDamageResolver(this.options.resolveBurrowDamage ?? null);
     train.setOnBurrowDamageDealtCallback((_playerId, x, y) => {
       this.options.network.effects.broadcastTrainBurrowSparks(x, y);
     });

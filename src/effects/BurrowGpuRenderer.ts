@@ -1,5 +1,7 @@
 import type { TerrainColorSnapshot } from '../arena/TerrainColorSnapshot';
 import { BURROW_FX } from '../config/burrowEffects';
+import { BurrowEarthbreakPresentation } from './BurrowEarthbreakPresentation';
+import type { SyncedBurrowEarthbreak } from '../systems/BurrowEarthbreakRuntime';
 import { mixColors } from './EffectUtils';
 import { MovementParticleBudget } from './MovementParticleBudget';
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
@@ -13,7 +15,7 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const GRAINS = [GpuVfxFrameId.DeathDustMoteB, GpuVfxFrameId.DeathDustMoteC, GpuVfxFrameId.DeathDustMoteE];
 const ALWAYS_VISIBLE = (): boolean => true;
 
-type EarthBurstKind = 'enter' | 'exit' | 'dash' | 'undergroundIdle' | 'undergroundMove';
+type EarthBurstKind = 'enter' | 'exit' | 'dash' | 'undergroundIdle' | 'undergroundMove' | 'earthbreak' | 'earthbreakExit';
 interface BurrowEvent { kind: 'enter' | 'exit' | 'shockwave'; x: number; y: number; radius: number; heading: number; }
 
 export interface BurrowUndergroundTarget {
@@ -68,6 +70,8 @@ function enterDirection(heading: number, index: number): number {
 
 /** Scene-owned GPU presentation. World ownership also covers the bounded flight-to-ground handoff. */
 export class BurrowGpuRenderer {
+  private readonly earthbreak: BurrowEarthbreakPresentation;
+  private isPointVisible: (x: number, y: number) => boolean = ALWAYS_VISIBLE;
   private readonly flight = new MovementParticleBudget(BURROW_FX.flightCapacity, BURROW_FX.clodReserve);
   private readonly ground = new MovementParticleBudget(BURROW_FX.groundCapacity, BURROW_FX.clodReserve);
   private readonly landings = Array.from({ length: BURROW_FX.flightCapacity }, createLanding);
@@ -96,6 +100,11 @@ export class BurrowGpuRenderer {
   private destroyed = false;
 
   constructor(private readonly gpu: GpuVfxSystem) {
+    this.earthbreak = new BurrowEarthbreakPresentation(gpu, (x, y, emergence, age) => {
+      const kind = emergence ? 'earthbreakExit' : 'earthbreak';
+      this.spawnEarth(x, y, 0, emergence ? 1.1 : 0.7, age, kind);
+      this.spawnDust(x, y, 0, kind, age);
+    });
     this.clod = gpu.createSpec(GpuVfxEffectId.BurrowClod);
     this.grain = gpu.createSpec(GpuVfxEffectId.BurrowGrain);
     this.residue = gpu.createSpec(GpuVfxEffectId.BurrowResidue);
@@ -110,11 +119,13 @@ export class BurrowGpuRenderer {
     gpu.registerEmission((deltaMs, now) => this.emitFrame(now, deltaMs));
   }
 
-  openWorld(scope: object, isVisible: () => boolean = ALWAYS_VISIBLE): void {
+  openWorld(scope: object, isVisible: () => boolean = ALWAYS_VISIBLE,
+    isPointVisible: (x: number, y: number) => boolean = ALWAYS_VISIBLE): void {
     if (this.destroyed) return;
     this.clearAllUnderground();
     this.clear();
     this.world = scope;
+    this.isPointVisible = isPointVisible;
     this.isVisible = isVisible;
     this.wasVisible = false;
   }
@@ -129,6 +140,11 @@ export class BurrowGpuRenderer {
   }
 
   setTerrainColorSnapshot(snapshot: TerrainColorSnapshot | null): void { this.terrain = snapshot; }
+
+  syncEarthbreak(snapshots: readonly SyncedBurrowEarthbreak[], hostNow: number, host = false): void {
+    if (this.destroyed || !this.world) return;
+    this.earthbreak.sync(snapshots, hostNow, host);
+  }
 
   /** Phase synchronization binds the hidden player sprite; its visible flag is intentionally irrelevant. */
   syncUnderground(id: string, target: BurrowUndergroundTarget): void {
@@ -194,7 +210,7 @@ export class BurrowGpuRenderer {
 
   private prepare(x: number, y: number): boolean {
     if (this.destroyed || !this.world || !Number.isFinite(x + y)) return false;
-    if (this.generation !== this.gpu.emissionGeneration) this.clear();
+    if (this.generation !== this.gpu.emissionGeneration) this.clear(true);
     if (!this.hasVisiblePresentation()) return false;
     if (this.gpu.isSuppressed()) return false;
     this.flight.retire(this.gpu.now()); this.ground.retire(this.gpu.now());
@@ -203,7 +219,8 @@ export class BurrowGpuRenderer {
 
   private hasVisiblePresentation(): boolean {
     const visible = this.isVisible?.() ?? false;
-    if (this.wasVisible && !visible) this.clear();
+    if (this.wasVisible && !visible) this.clear(true);
+    if (!visible) this.earthbreak.hide(this.gpu.now());
     if (!this.wasVisible && visible) this.rebaseUnderground(this.gpu.now());
     this.wasVisible = visible;
     return visible;
@@ -218,7 +235,8 @@ export class BurrowGpuRenderer {
 
   private spawnEarth(x: number, y: number, heading: number, size: number, age: number, kind: EarthBurstKind): void {
     const profile = undergroundProfile(kind);
-    const tuning = profile ?? (kind === 'enter' ? BURROW_FX.enter : kind === 'dash' ? BURROW_FX.dash : BURROW_FX.exit);
+    const tuning = profile ?? (kind === 'enter' ? BURROW_FX.enter : kind === 'dash' ? BURROW_FX.dash
+      : kind === 'earthbreak' ? BURROW_FX.earthbreak.burst : kind === 'earthbreakExit' ? BURROW_FX.earthbreak.exit : BURROW_FX.exit);
     const entering = kind === 'enter';
     const directed = kind === 'dash' || kind === 'undergroundMove';
     const particleScale = size * (profile?.scale ?? (entering ? BURROW_FX.enter.scale : 1));
@@ -303,11 +321,13 @@ export class BurrowGpuRenderer {
     spec.y = y + ny * forward + nx * side + between(-scatter, scatter);
   }
 
-  private spawnDust(x: number, y: number, heading: number, kind: Exclude<EarthBurstKind, 'dash'>): void {
+  private spawnDust(x: number, y: number, heading: number, kind: Exclude<EarthBurstKind, 'dash'>, age = 0): void {
     const profile = undergroundProfile(kind);
     const entering = kind === 'enter';
-    const count = this.scaledCount(GpuVfxEffectId.BurrowDust, (profile ?? (entering ? BURROW_FX.enter : BURROW_FX.exit)).dust);
-    const size = profile?.dustScale ?? (entering ? BURROW_FX.enter.dustScale : 1);
+    const tuning = profile ?? (entering ? BURROW_FX.enter : kind === 'earthbreak' ? BURROW_FX.earthbreak.burst
+      : kind === 'earthbreakExit' ? BURROW_FX.earthbreak.exit : BURROW_FX.exit);
+    const count = this.scaledCount(GpuVfxEffectId.BurrowDust, tuning.dust);
+    const size = profile?.dustScale ?? (entering ? BURROW_FX.enter.dustScale : kind === 'earthbreak' ? 0.65 : 1);
     const earth = this.terrain?.sample(x, y) ?? BURROW_FX.terrainFallback;
     const phase = between(0, TAU);
     const spec = this.dust;
@@ -332,13 +352,13 @@ export class BurrowGpuRenderer {
       spec.stretchStart = 1.2; spec.stretchEnd = body ? 1.1 : 0.85;
       spec.alphaStart = BURROW_FX.dust.alpha * (body ? 1 : 0.8); spec.alphaEnd = 0;
       spec.tint = mixColors(earth, BURROW_FX.dustTint, BURROW_FX.dustTintMix + between(-0.1, 0.1));
-      if (this.gpu.spawn(spec, this.dustSource, this.gpu.now())) this.ground.record(this.gpu.now() + spec.lifeMs);
+      if (this.gpu.spawn(spec, this.dustSource, this.gpu.now(), age)) this.ground.record(this.gpu.now() + spec.lifeMs - age);
     }
   }
 
   private emitFrame(now: number, deltaMs: number): void {
     if (this.destroyed || !this.world) return;
-    if (this.generation !== this.gpu.emissionGeneration) { this.clear(); return; }
+    if (this.generation !== this.gpu.emissionGeneration) { this.clear(true); return; }
     if (!this.hasVisiblePresentation()) return;
     this.flight.retire(now); this.ground.retire(now);
     for (let i = this.pendingCount - 1; i >= 0; i--) {
@@ -362,6 +382,8 @@ export class BurrowGpuRenderer {
       }
     }
     this.advanceUnderground(now, deltaMs);
+    if (!this.gpu.isSuppressed()) this.earthbreak.update(now, this.isPointVisible);
+    else this.earthbreak.hide(now);
   }
 
   private rebaseUndergroundTrack(track: UndergroundTrack, now: number): void {
@@ -428,7 +450,9 @@ export class BurrowGpuRenderer {
     if (this.gpu.spawn(spec, this.residueSource, now, age)) this.ground.record(landing.dueMs + landing.lifeMs);
   }
 
-  clear(): void {
+  clear(preserveTimeline = false): void {
+    if (preserveTimeline) this.earthbreak.hide(this.gpu.now());
+    else this.earthbreak.clear();
     this.eventCount = this.pendingCount = 0; this.flight.clear(); this.ground.clear();
     this.rebaseUnderground(this.gpu.now());
     this.gpu.clearSource(this.clodSource); this.gpu.clearSource(this.grainSource);
@@ -442,5 +466,6 @@ export class BurrowGpuRenderer {
     this.clear(); this.destroyed = true; this.world = null; this.isVisible = null; this.wasVisible = false; this.terrain = null;
     this.gpu.releaseSource(this.clodSource); this.gpu.releaseSource(this.grainSource);
     this.gpu.releaseSource(this.residueSource); this.gpu.releaseSource(this.dustSource); this.gpu.releaseSource(this.ringSource);
+    this.earthbreak.destroy();
   }
 }

@@ -711,7 +711,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       gpuVfx: { isShaderWarmupComplete: () => true },
       combatGoreGpu: { fragmentTemplateCache: { stepPreparation: vi.fn(() => ++fragmentTicks >= 2) } },
     };
-    coordinator.ctx = { effectSystem: { prepareXpText: vi.fn(() => ++xpTicks >= 3) },
+    coordinator.ctx = { effectSystem: { prepareXpText: vi.fn(() => ++xpTicks >= 3), prepareEnemyClawEffects: vi.fn(() => true) },
       smokeSystem: { prepare: () => true } };
     coordinator.getLocalWorldPresentation = () => ({ required: true });
     const syncArena = vi.spyOn(coordinator, 'syncArenaLoadReady');
@@ -881,7 +881,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => warmupComplete },
       combatGoreGpu: { fragmentTemplateCache: { stepPreparation: prepareFragments } } };
     const prepareSmoke = vi.fn(() => smokeReady);
-    coordinator.ctx = { effectSystem: { prepareXpText: prepareXp }, smokeSystem: { prepare: prepareSmoke } };
+    coordinator.ctx = { effectSystem: { prepareXpText: prepareXp, prepareEnemyClawEffects: vi.fn(() => true) }, smokeSystem: { prepare: prepareSmoke } };
     coordinator.getLocalWorldPresentation = () => ({ required: presentationRequired });
     coordinator.syncAuthoritativeRoundStartAnchors = vi.fn();
     coordinator.tryScheduleArenaStart = vi.fn();

@@ -153,6 +153,7 @@ function createHarness() {
   const combatSystem = {
     isAlive: () => true,
     applyDamage: vi.fn(),
+    applyAoeDamage: vi.fn(),
   } as unknown as CombatSystem;
 
   const playerManager = {

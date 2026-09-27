@@ -363,10 +363,6 @@ export class ArenaCountdownOverlay {
    * the same coordinate space as the rendered world.
    */
   syncAfterCameraFeedback(): void {
-    if (this.countdownView.isVisible()) {
-      const camera = this.scene.cameras.main;
-      this.countdownView.setAnchor(this.lastFocusWorldX - camera.scrollX, this.lastFocusWorldY - camera.scrollY);
-    }
     if (this.mode === 'loading') {
       this.postFx?.setRadialFocus(null);
       this.focusFallback.setVisible(false);

@@ -190,6 +190,7 @@ export const enContent = {
   "source.environment.train.name": "RB 54 Train",
   "source.environment.train_push.name": "Pushed into the train",
   "source.environment.explosion.name": "Explosion",
+  "source.upgrade.burrow_earthbreak.name": "Earthbreak",
   "source.environment.telefrag.name": "Telefrag",
   "source.environment.dash.name": "Dash Impact",
   "source.environment.slime_trail.name": "Slime Trail",

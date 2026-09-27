@@ -140,7 +140,9 @@ describe('coop-defense classes', () => {
     expect(generalIds).not.toContain('turret_control');
     expect(generalIds).not.toContain('run_speed');
     expect(generalIds).not.toContain('burrow_speed');
-    expect(generalIds).not.toContain('burrow_cost');
+    expect(generalIds).toContain('burrow_cost');
+    expect(generalIds).toContain('unburrow_shockwave');
+    expect(generalIds).not.toContain('burrow_earthbreak');
     // Waffe 2 traegt nur noch die Adrenalinfaehigkeiten, die Konstrukte stehen in ihrer
     // eigenen Kategorie.
     expect(weapon2Ids).toEqual([

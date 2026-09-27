@@ -21,6 +21,7 @@ import { ResourceSystem } from '../src/systems/ResourceSystem';
 import { POWERUP_DEFS } from '../src/powerups/PowerUpConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import { BurrowSystem } from '../src/systems/BurrowSystem';
+import { BurrowEarthbreakRuntime } from '../src/systems/BurrowEarthbreakRuntime';
 import { TunnelSystem } from '../src/systems/TunnelSystem';
 import { TurretControlSystem } from '../src/systems/TurretControlSystem';
 
@@ -31,6 +32,13 @@ function emptyTurretControl() {
 }
 
 type AnyRuntime = WorldPlayerGameplayRuntime & Record<string, any>;
+
+function createRuntimeShell(): AnyRuntime {
+  const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+  runtime.earthbreak = new BurrowEarthbreakRuntime(vi.fn());
+  runtime.detachEarthbreakMovement = vi.fn();
+  return runtime;
+}
 
 function makeRuntime() {
   const order: string[] = [];
@@ -126,7 +134,7 @@ function makeRuntime() {
     },
   };
 
-  const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+  const runtime = createRuntimeShell();
   runtime.systems = systems;
   runtime.turretControl = emptyTurretControl();
   runtime.options = {
@@ -188,7 +196,7 @@ function makeConcreteRemoveRuntime() {
   const translocator = {
     removePlayer: vi.fn(),
   };
-  const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+  const runtime = createRuntimeShell();
   runtime.systems = { plasmaBurner: plasmaStub(),
     resource,
     burrow,
@@ -245,6 +253,7 @@ function makeDestroyRuntime() {
     'setDrainMultiplierResolver',
     'setShockwaveDamageResolver',
     'setShockwaveRadiusResolver',
+    'setLifecycleObserver',
   ];
   const loadout = Object.fromEntries([
     ...setterNames,
@@ -287,7 +296,7 @@ function makeDestroyRuntime() {
     playerModifier: { clear: vi.fn() },
     itemRuntime: { clear: vi.fn() },
   };
-  const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+  const runtime = createRuntimeShell();
   runtime.systems = systems;
   runtime.options = {
     playerManager: {
@@ -517,7 +526,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
 
   it('macht spielerbezogenes Held-Action-Remove und Activity-Reset wiederholbar', () => {
     const heldAction = new HostHeldActionSystem();
-    const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+    const runtime = createRuntimeShell();
     runtime.turretControl = emptyTurretControl();
     runtime.systems = { plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() } };
 
@@ -531,9 +540,13 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
 
     expect(heldAction.start('p1', 'action-p1b', 'charged_throw', 100, 0)).toBe(true);
     expect(heldAction.start('p2', 'action-p2b', 'charged_throw', 100, 0)).toBe(true);
+    runtime.earthbreak.start('p1', { x: 0, y: 0, positionRevision: 0 });
+    runtime.earthbreak.exit('p1', { x: 0, y: 0 }, 1000);
+    runtime.earthbreak.start('p2', { x: 20, y: 0, positionRevision: 0 });
     runtime.invalidateHeldActionsOnActivityEnd();
     runtime.invalidateHeldActionsOnActivityEnd();
 
+    expect(runtime.earthbreak.snapshot()).toEqual([]);
     expect(heldAction.consume('p1', 'action-p1b', 'charged_throw', 100, 50)).toBeNull();
     expect(heldAction.consume('p2', 'action-p2b', 'charged_throw', 100, 50)).toBeNull();
   });
@@ -541,8 +554,16 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
   it('führt den World-destroy-Teardown bei wiederholtem Aufruf nur einmal aus', () => {
     const { runtime, systems } = makeDestroyRuntime();
 
+    runtime.earthbreak.start('p1', { x: 0, y: 0, positionRevision: 0 });
+    runtime.earthbreak.move('p1', { x: 100, y: 0, positionRevision: 0 });
+    runtime.earthbreak.exit('p1', { x: 100, y: 0 }, 1000);
+    expect(runtime.earthbreak.snapshot()).toHaveLength(1);
+
     runtime.destroy();
     runtime.destroy();
+
+    expect(runtime.earthbreak.snapshot()).toEqual([]);
+    expect(runtime.detachEarthbreakMovement).toHaveBeenCalledOnce();
 
     expect(systems.ultimateBehavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.plasmaBurner.destroy).toHaveBeenCalledOnce();

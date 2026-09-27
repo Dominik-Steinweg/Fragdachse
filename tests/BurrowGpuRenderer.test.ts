@@ -11,6 +11,9 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({ getGraphicsQualityController
 }) }));
 
 import { BurrowGpuRenderer } from '../src/effects/BurrowGpuRenderer';
+import { BurrowEarthbreakPresentation } from '../src/effects/BurrowEarthbreakPresentation';
+import { BURROW_EARTHBREAK as earthbreakRules } from '../src/config/burrowEarthbreak';
+import type { SyncedBurrowEarthbreak } from '../src/systems/BurrowEarthbreakRuntime';
 import { BURROW_FX } from '../src/config/burrowEffects';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
@@ -35,6 +38,92 @@ function setup(open = true) {
 }
 
 function undergroundTarget(x = 0) { return { x, y: 0, rotation: Math.PI / 2, active: true, visible: false }; }
+
+function earthbreakTrace(): SyncedBurrowEarthbreak {
+  return { id: 1, ownerId: 'p', points: [{ x: 24, y: 0 }, { x: 48, y: 0 }],
+    phase: 'digging', exit: null, detonatedAt: null };
+}
+
+describe('Earthbreak GPU presentation', () => {
+  it('shows bounded persistent cracks with existing atlas geometry and releases them on empty state and teardown', () => {
+    const h = setup();
+    const trace = earthbreakTrace();
+    const points = Array.from({ length: BURROW_FX.earthbreak.maxVisibleCracks * 2 }, (_, i) => ({ x: i * 24, y: 0 }));
+    h.renderer.syncEarthbreak([{ ...trace, points }], 1000);
+    h.gpu.update(0);
+    expect(h.ground.members.some(m => m.frame === 'flight-core-strip')).toBe(true);
+    expect(h.gpu.getStats()!['movement-ground'].liveCount).toBeLessThanOrEqual(
+      BURROW_FX.earthbreak.maxVisibleCracks * BURROW_FX.earthbreak.membersPerCrack);
+    h.gpu.update(BURROW_FX.earthbreak.crackLifeMs + 1);
+    expect(h.gpu.getStats()!['movement-ground'].liveCount).toBeGreaterThan(0);
+    h.renderer.syncEarthbreak([], 4000); h.gpu.update(0);
+    expect(h.gpu.getStats()!['movement-ground'].liveCount).toBe(0);
+    h.renderer.syncEarthbreak([trace], 4000); h.gpu.update(0);
+    h.renderer.closeWorld(h.world);
+    expect(h.gpu.getStats()!['movement-ground'].liveCount).toBe(0);
+    expect(h.scene.emitters).toHaveLength(0);
+  });
+
+  it('reconstructs the continuing chain after a late join without replaying past explosions', () => {
+    const h = setup(), burst = vi.fn();
+    const presentation = new BurrowEarthbreakPresentation(h.gpu, burst);
+    const trace = { ...earthbreakTrace(), phase: 'detonating' as const, exit: { x: 50, y: 0 }, detonatedAt: 1000 };
+    presentation.sync([trace], 1000 + earthbreakRules.intervalMs);
+    presentation.update(h.gpu.now(), () => true);
+    expect(burst).not.toHaveBeenCalled();
+    h.gpu.update(earthbreakRules.intervalMs);
+    presentation.update(h.gpu.now(), () => true);
+    expect(burst).toHaveBeenCalledExactlyOnceWith(24, 0, false, 0);
+    presentation.sync([trace], 1000 + 2 * earthbreakRules.intervalMs);
+    presentation.update(h.gpu.now(), () => true);
+    expect(burst).toHaveBeenCalledTimes(1);
+    presentation.destroy();
+  });
+
+  it('plays emergence and every subsequent pulse once from an observed trace without another snapshot', () => {
+    const h = setup(), burst = vi.fn();
+    const presentation = new BurrowEarthbreakPresentation(h.gpu, burst);
+    presentation.sync([earthbreakTrace()], 1000);
+    presentation.sync([{ ...earthbreakTrace(), phase: 'detonating', exit: { x: 52, y: 1 }, detonatedAt: 1000 }], 1000);
+    presentation.update(h.gpu.now(), () => true);
+    expect(burst).toHaveBeenCalledExactlyOnceWith(52, 1, true, 0);
+    h.gpu.update(earthbreakRules.intervalMs * 2);
+    presentation.update(h.gpu.now(), () => true);
+    expect(burst.mock.calls.map(([x]) => x)).toEqual([52, 48, 24]);
+    presentation.update(h.gpu.now(), () => true);
+    expect(burst).toHaveBeenCalledTimes(3);
+    presentation.destroy();
+  });
+
+  it('consumes hidden detonations without replay and resumes future pulses', () => {
+    const h = setup(), burst = vi.fn();
+    const presentation = new BurrowEarthbreakPresentation(h.gpu, burst);
+    presentation.sync([earthbreakTrace()], 1000, true);
+    const trace = { ...earthbreakTrace(), phase: 'detonating' as const, exit: { x: 50, y: 0 }, detonatedAt: 1000 };
+    presentation.sync([trace], 1000, true);
+    presentation.hide(h.gpu.now());
+    presentation.sync([trace], 1000, true);
+    presentation.update(h.gpu.now(), () => true);
+    expect(burst).not.toHaveBeenCalled();
+    h.gpu.update(earthbreakRules.intervalMs);
+    presentation.update(h.gpu.now(), () => true);
+    expect(burst).toHaveBeenCalledExactlyOnceWith(48, 0, false, 0);
+    presentation.destroy(); h.renderer.destroy();
+  });
+
+  it('renders additional earth bursts on the shared GPU lanes and culls distant cracks', () => {
+    const h = setup();
+    h.renderer.openWorld(h.world, () => true, x => x < 100);
+    h.renderer.syncEarthbreak([{ ...earthbreakTrace(), points: [{ x: 200, y: 0 }] }], 1000);
+    h.gpu.update(0); expect(h.ground.members).toHaveLength(0);
+    h.renderer.syncEarthbreak([{ ...earthbreakTrace(), phase: 'detonating', exit: { x: 50, y: 0 }, detonatedAt: 1000 }], 1000);
+    h.gpu.update(0);
+    expect(h.flight.members.some(m => m.frame === 'explosion-chunk')).toBe(true);
+    expect(h.ground.members.some(m => m.frame === 'explosion-smoke')).toBe(true);
+    h.renderer.closeWorld(h.world);
+    expect(h.gpu.getStats()!['world-debris'].liveCount).toBe(0);
+  });
+});
 
 function advanceFrames(gpu: GpuVfxSystem, durationMs: number, beforeFrame?: (index: number) => void, deltaMs = 16) {
   for (let i = 0; i < Math.ceil(durationMs / deltaMs); i++) { beforeFrame?.(i); gpu.update(deltaMs); }

@@ -1153,7 +1153,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       ? EMPTY_FULL_PROJECTILE_SNAPSHOT
       : this.worldFramePort?.getProjectileRuntime?.()?.getNetSnapshot() ?? null;
     const playerSnapshot = this.playerGameplayRuntime?.prepareHostSnapshot(now)
-      ?? { ak47StrategicTargets: [], tunnels: [] };
+      ?? { ak47StrategicTargets: [], tunnels: [], earthbreak: [] };
+      this.visuals?.burrowGpu.syncEarthbreak(playerSnapshot.earthbreak, now, true);
     const remoteControlTurrets = this.playerGameplayRuntime?.getRemoteControlSnapshot(
       this.ctx.playerManager.getAllPlayers().map((player) => player.id),
       this.combatFramePort?.getCombatGameplayBinding()?.getOffensiveConstructionSources() ?? [],
@@ -1204,6 +1205,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       airstrikes,
       meteors,
       tunnels: [...playerSnapshot.tunnels],
+      earthbreak: playerSnapshot.earthbreak,
       train,
       bases: this.baseManager?.getNetSnapshot() ?? [],
       captureTheBeer,

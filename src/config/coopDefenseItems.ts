@@ -485,7 +485,7 @@ Object.freeze([
     displayAsPercent: true,
   },
   {
-    // Derselbe Bucket wie das Upgrade "Einbuddeltempo": beide skalieren den Tempofaktor unter
+    // Derselbe Bucket wie das Upgrade "Buddel-Tempo": beide skalieren den Tempofaktor unter
     // der Erde, nicht die Laufgeschwindigkeit an der Oberflaeche.
     id: 'burrow_speed',
     stat: 'player.burrowSpeed',

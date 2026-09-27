@@ -1,19 +1,14 @@
 import * as Phaser from 'phaser';
 import {
-  ARENA_HEIGHT,
-  ARENA_OFFSET_X,
-  ARENA_OFFSET_Y,
-  ARENA_VIEWPORT_WIDTH,
   COLORS,
   DEPTH,
+  GAME_HEIGHT,
   GAME_WIDTH,
   toCssColor,
 } from '../config';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { t } from '../i18n';
-import { getCoopDefenseObjectiveAnnouncementHudRect } from './CoopDefenseObjectiveAnnouncement';
-import { COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT } from './CoopDefenseSecondaryObjectiveLayout';
 import { RADIAL_HUB_FRAME, RADIAL_HUB_GEOMETRY, RADIAL_WHEEL_TEXTURE } from './RadialWheelAssets';
 import { FONT_DISPLAY, FONT_WEIGHT } from './uiTheme';
 
@@ -26,11 +21,19 @@ const OUTER_RADIUS = RADIAL_HUB_GEOMETRY.outerRadius * FRAME_SCALE;
 const SEAM_RADIUS = INNER_RADIUS + 2.6;
 const FALLBACK_RING_WIDTH = OUTER_RADIUS - INNER_RADIUS;
 
-/** Abstand Medaillonmitte ↔ Dachs; hält Lebens-/Statusring der Figur frei. */
-const ANCHOR_OFFSET_Y = 118;
-const EDGE_MARGIN = 12;
-/** Oberhalb dieser Linie liegen Statusleiste und Ankündigungen. */
-const TOP_HUD_CLEARANCE = 64;
+// 48 Segmente halten den Kreisfehler bei dieser Anzeigegröße unter 0,15 Pixeln.
+// Stabile Punkte werden einmal vorbereitet; nur der Bogenkopf bewegt sich pro Frame.
+const RING_SEGMENTS = 48;
+const RING_STEP = Math.PI * 2 / RING_SEGMENTS;
+const circlePoints = (radius: number, segments = RING_SEGMENTS): Phaser.Math.Vector2[] =>
+  Array.from({ length: segments }, (_, index) => {
+    const angle = -Math.PI / 2 + index * Math.PI * 2 / segments;
+    return new Phaser.Math.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius);
+  });
+const DISC_POINTS = circlePoints(INNER_RADIUS + 1);
+const FALLBACK_RING_POINTS = circlePoints(INNER_RADIUS + FALLBACK_RING_WIDTH / 2);
+const SEAM_POINTS = circlePoints(SEAM_RADIUS);
+const TIP_OFFSETS = circlePoints(2.6, 12);
 
 const NUMERAL_SIZE_PX = 56;
 const GO_SIZE_PX = 30;
@@ -38,7 +41,6 @@ const INK = '#070a0c';
 const PARCHMENT = '#ded5ad';
 const SEAM_LIGHT = 0xdfe9b0;
 const DISC_FILL = 0x0b110d;
-const FOLLOW_SHARPNESS = 14;
 
 const ENTER_MS = 360;
 const NUMERAL_IN_MS = 240;
@@ -67,20 +69,17 @@ const LEAF_POINTS = LEAF_SHAPE.map(() => new Phaser.Math.Vector2());
 const LEAF_LENGTH = 8;
 
 type Phase = 'hidden' | 'count' | 'go';
-type Side = 'above' | 'below';
 
 const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
 const clamp01 = (value: number): number => Phaser.Math.Clamp(value, 0, 1);
 
 /**
- * Rundenstart-Countdown (3 · 2 · 1 · LOS!) als kleines Waldboden-Medaillon am eigenen Dachs.
+ * Rundenstart-Countdown (3 · 2 · 1 · LOS!) als Waldboden-Medaillon in der Bildschirmmitte.
  *
  * Der Nabenring des Utility-Rads trägt die Ziffer; auf seinem grünen Innensaum läuft pro
- * Sekunde ein heller Lichtbogen ab. Das Medaillon folgt der Figur im Fokus des Schleiers und
- * weicht nach unten aus, wenn oben HUD oder Zielankündigung liegen. Bei „LOS!“ lösen sich ein
- * paar Blätter vom Ring, danach blendet es sich aus.
+ * Sekunde ein heller Lichtbogen ab. Bei „LOS!“ lösen sich ein paar Blätter vom Ring, danach blendet es sich aus.
  *
- * Die Ansicht ist rein visuell: Zeitbasis, Audio, Schleier und Anker liefert der Aufrufer.
+ * Die Ansicht ist rein visuell: Zeitbasis, Audio und Schleier liefert der Aufrufer.
  */
 export class RoundStartCountdownView {
   private readonly root: Phaser.GameObjects.Container;
@@ -90,21 +89,18 @@ export class RoundStartCountdownView {
   private readonly numeral: Phaser.GameObjects.Text;
   private readonly outgoing: Phaser.GameObjects.Text;
   private readonly goText: Phaser.GameObjects.Text;
+  private readonly tipPoints = TIP_OFFSETS.map(() => new Phaser.Math.Vector2());
   private phase: Phase = 'hidden';
-  private side: Side | null = null;
   private shownValue = 0;
   private secondFraction = 1;
-  private anchorX = GAME_WIDTH / 2;
-  private anchorY = ARENA_OFFSET_Y + ARENA_HEIGHT / 2;
-  private hasAnchor = false;
-  private lastFollowMs = 0;
   private readonly goState = { leaves: 1, seam: 1 };
   private goTimer: Phaser.Tweens.Tween | null = null;
   private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene) {
     const disc = scene.add.graphics();
-    disc.fillStyle(DISC_FILL, 0.74).fillCircle(0, 0, INNER_RADIUS + 1);
+    disc.fillStyle(DISC_FILL, 0.74).fillPoints(DISC_POINTS, true);
+    registerGraphicsObject(scene, 'gameplayHud', disc);
     const parts: Phaser.GameObjects.GameObject[] = [disc];
     if (scene.textures.exists(RADIAL_WHEEL_TEXTURE)) {
       parts.push(scene.add.image(0, 0, RADIAL_WHEEL_TEXTURE, RADIAL_HUB_FRAME)
@@ -113,7 +109,7 @@ export class RoundStartCountdownView {
     } else {
       // Ohne Atlas bleibt eine ruhige Holzring-Andeutung statt eines leeren Rands.
       disc.lineStyle(FALLBACK_RING_WIDTH, COLORS.BROWN_6, 0.9)
-        .strokeCircle(0, 0, INNER_RADIUS + FALLBACK_RING_WIDTH / 2);
+        .strokePoints(FALLBACK_RING_POINTS, true);
     }
     this.seam = scene.add.graphics();
     this.leaves = scene.add.graphics();
@@ -126,7 +122,7 @@ export class RoundStartCountdownView {
     parts.push(this.seam, this.outgoing, this.numeral, this.goText);
 
     this.medallion = scene.add.container(0, 0, parts);
-    this.root = scene.add.container(0, 0, [this.medallion, this.leaves])
+    this.root = scene.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [this.medallion, this.leaves])
       .setDepth(DEPTH.OVERLAY)
       .setScrollFactor(0)
       .setVisible(false);
@@ -135,17 +131,6 @@ export class RoundStartCountdownView {
 
   isVisible(): boolean {
     return this.phase !== 'hidden';
-  }
-
-  /** Bildschirmposition des eigenen Dachses nach Kamera-Feedback (Designraum 1920×1080). */
-  setAnchor(screenX: number, screenY: number): void {
-    const first = !this.hasAnchor;
-    this.anchorX = screenX;
-    this.anchorY = screenY;
-    this.hasAnchor = true;
-    if (this.phase === 'hidden') return;
-    if (this.side === null) this.side = this.resolveSide();
-    this.follow(first);
   }
 
   /** Zeigt den laufenden Countdown; `msLeft` ist die Restzeit bis zur Freigabe (> 0). */
@@ -211,7 +196,6 @@ export class RoundStartCountdownView {
     if (this.destroyed) return;
     this.stopTweens();
     this.phase = 'hidden';
-    this.side = null;
     this.shownValue = 0;
     this.secondFraction = 1;
     this.goState.leaves = 1;
@@ -249,7 +233,6 @@ export class RoundStartCountdownView {
   private enter(): void {
     this.stopTweens();
     this.phase = 'count';
-    this.side = this.hasAnchor ? this.resolveSide() : null;
     this.shownValue = 0;
     this.secondFraction = 1;
     this.goState.leaves = 1;
@@ -258,7 +241,6 @@ export class RoundStartCountdownView {
     this.goText.setVisible(false);
     this.outgoing.setVisible(false);
     this.root.setVisible(true);
-    this.follow(true);
     this.medallion.setAlpha(0).setScale(0.86);
     this.scene.tweens.add({ targets: this.medallion, alpha: 1, scale: 1, duration: ENTER_MS, ease: 'Back.easeOut' });
   }
@@ -294,78 +276,47 @@ export class RoundStartCountdownView {
     });
   }
 
-  /** Oben, solange Arena-Oberkante und Zielankündigung frei bleiben; sonst unterhalb der Figur. */
-  private resolveSide(): Side {
-    const top = this.anchorY - ANCHOR_OFFSET_Y - OUTER_RADIUS;
-    if (top < ARENA_OFFSET_Y + TOP_HUD_CLEARANCE) return 'below';
-    const announce = getCoopDefenseObjectiveAnnouncementHudRect(
-      GAME_WIDTH / 2,
-      COOP_DEFENSE_OBJECTIVE_ANNOUNCEMENT_LAYOUT.centerY,
-    );
-    const x = this.clampX(this.anchorX);
-    const overlapsAnnouncement = x + OUTER_RADIUS > announce.left - EDGE_MARGIN
-      && x - OUTER_RADIUS < announce.right + EDGE_MARGIN
-      && top < announce.bottom + EDGE_MARGIN;
-    return overlapsAnnouncement ? 'below' : 'above';
-  }
-
-  private clampX(x: number): number {
-    return Phaser.Math.Clamp(
-      x,
-      ARENA_OFFSET_X + OUTER_RADIUS + EDGE_MARGIN,
-      ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH - OUTER_RADIUS - EDGE_MARGIN,
-    );
-  }
-
-  private follow(snap: boolean): void {
-    const offset = this.side === 'below' ? ANCHOR_OFFSET_Y : -ANCHOR_OFFSET_Y;
-    const targetX = this.clampX(this.anchorX);
-    const targetY = Phaser.Math.Clamp(
-      this.anchorY + offset,
-      ARENA_OFFSET_Y + OUTER_RADIUS + EDGE_MARGIN,
-      ARENA_OFFSET_Y + ARENA_HEIGHT - OUTER_RADIUS - EDGE_MARGIN,
-    );
-    const now = this.scene.time.now;
-    const dt = Math.min(100, Math.max(0, now - this.lastFollowMs));
-    this.lastFollowMs = now;
-    if (snap || dt === 0) {
-      this.root.setPosition(targetX, targetY);
-      return;
-    }
-    // Weiches Nachführen: Screenshake und Kamerazittern reißen das Medaillon nicht mit.
-    const k = 1 - Math.exp(-FOLLOW_SHARPNESS * dt / 1000);
-    this.root.setPosition(this.root.x + (targetX - this.root.x) * k, this.root.y + (targetY - this.root.y) * k);
-  }
-
   private redrawSeam(): void {
     const g = this.seam;
     g.clear();
     if (this.phase === 'hidden') return;
-    const top = -Math.PI / 2;
-    const end = top + Math.PI * 2;
-
     if (this.phase === 'go') {
       // Der Saum leuchtet einmal vollständig auf und verglimmt.
       const fade = 1 - clamp01(this.goState.seam);
-      g.lineStyle(7, SEAM_LIGHT, 0.28 * fade).strokeCircle(0, 0, SEAM_RADIUS);
-      g.lineStyle(3, SEAM_LIGHT, 0.95 * fade).strokeCircle(0, 0, SEAM_RADIUS);
+      g.lineStyle(7, SEAM_LIGHT, 0.28 * fade).strokePoints(SEAM_POINTS, true);
+      g.lineStyle(3, SEAM_LIGHT, 0.95 * fade).strokePoints(SEAM_POINTS, true);
       return;
     }
 
     const fraction = this.secondFraction;
     if (fraction <= 0.002) return;
     // Der Kopf wandert im Uhrzeigersinn; übrig bleibt der Bogen zurück zur 12-Uhr-Position.
-    const head = top + Math.PI * 2 * (1 - fraction);
+    const headSegment = RING_SEGMENTS * (1 - fraction);
+    const head = -Math.PI / 2 + RING_STEP * headSegment;
+    const headX = Math.cos(head) * SEAM_RADIUS;
+    const headY = Math.sin(head) * SEAM_RADIUS;
     g.lineStyle(7, SEAM_LIGHT, 0.22);
-    g.beginPath();
-    g.arc(0, 0, SEAM_RADIUS, head, end, false);
-    g.strokePath();
+    this.strokeSeam(headSegment, headX, headY);
     g.lineStyle(3, SEAM_LIGHT, 0.95);
-    g.beginPath();
-    g.arc(0, 0, SEAM_RADIUS, head, end, false);
-    g.strokePath();
+    this.strokeSeam(headSegment, headX, headY);
+    for (let index = 0; index < TIP_OFFSETS.length; index += 1) {
+      const offset = TIP_OFFSETS[index];
+      this.tipPoints[index].set(headX + offset.x, headY + offset.y);
+    }
     g.fillStyle(SEAM_LIGHT, 1);
-    g.fillCircle(Math.cos(head) * SEAM_RADIUS, Math.sin(head) * SEAM_RADIUS, 2.6);
+    g.fillPoints(this.tipPoints, true);
+  }
+
+  private strokeSeam(headSegment: number, headX: number, headY: number): void {
+    const g = this.seam;
+    g.beginPath();
+    g.moveTo(headX, headY);
+    for (let index = Math.floor(headSegment) + 1; index < RING_SEGMENTS; index += 1) {
+      const point = SEAM_POINTS[index];
+      g.lineTo(point.x, point.y);
+    }
+    g.lineTo(SEAM_POINTS[0].x, SEAM_POINTS[0].y);
+    g.strokePath();
   }
 
   private redrawLeaves(): void {

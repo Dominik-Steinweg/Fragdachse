@@ -123,6 +123,7 @@ export interface CombatDamageApplicationOptions {
 
 /** Explicit radial-effect modifiers used by migrated world/activity consumers. */
 export interface CombatAoeDamageOptions {
+  readonly vulnerabilityDurationMs?: number;
   readonly damageKind?: Extract<CombatDamageKind, 'explosion' | 'ground'>;
   readonly source?: CombatSource;
   readonly category?: ShieldBlockCategory;

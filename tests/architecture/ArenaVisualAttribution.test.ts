@@ -70,7 +70,7 @@ const DIRECT_VECTOR_FACTORY_EXCEPTIONS: Readonly<Record<string, Readonly<Record<
   'src/entities/BaseEntity.ts:149': { rectangle: 'Invisible Arcade physics hitbox; it never renders.' },
   'src/effects/ShadowSystem.ts:1093': { graphics: 'Invisible RenderTexture bake helper; only the baked texture is rendered.' },
   'src/scenes/arena/EnemyFlowFieldDebugOverlay.ts': { graphics: 'Optional Shift+D+B developer overlay, outside normal arena runtime attribution.' },
-  'src/train/TrainManager.ts:346': { rectangle: 'Invisible Arcade physics hitbox kept in the static collision group.' },
+  'src/train/TrainManager.ts:351': { rectangle: 'Invisible Arcade physics hitbox kept in the static collision group.' },
 };
 
 function readTypeScriptSources(directory: string): TypeScriptSource[] {

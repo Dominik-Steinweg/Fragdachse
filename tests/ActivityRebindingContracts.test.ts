@@ -362,7 +362,7 @@ describe('Activity rebinding', () => {
       projectileTravelReadPort: service(),
       projectileEnvironmentInteractionPort: service(),
       combatSystem: service(),
-      hostPhysics: service(),
+      hostPhysics: service({ observeMovementSteps: () => vi.fn() }),
       fireSystem: service(),
       placementSystem: service(),
       gameAudioSystem: service(),

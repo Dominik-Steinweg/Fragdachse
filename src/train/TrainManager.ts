@@ -81,6 +81,11 @@ export class TrainManager {
 
   /** Akkumulierter Delta-ms pro Spieler für den Buddel-Schaden-Tick */
   private burrowDamageTimers = new Map<string, number>();
+  private burrowDamageResolver: ((playerId: string, baseDamage: number) => number) | null = null;
+
+  setBurrowDamageResolver(resolver: ((playerId: string, baseDamage: number) => number) | null): void {
+    this.burrowDamageResolver = resolver;
+  }
   private readonly hitEnemyIds = new Set<string>();
 
   constructor(
@@ -506,7 +511,8 @@ export class TrainManager {
       let elapsed = (this.burrowDamageTimers.get(player.id) ?? 0) + delta;
       while (elapsed >= TRAIN.BURROW_DAMAGE_TICK_INTERVAL_MS) {
         elapsed -= TRAIN.BURROW_DAMAGE_TICK_INTERVAL_MS;
-        this.applyDamage(TRAIN.BURROW_DAMAGE_PER_TICK, player.id);
+        this.applyDamage(this.burrowDamageResolver?.(player.id, TRAIN.BURROW_DAMAGE_PER_TICK)
+          ?? TRAIN.BURROW_DAMAGE_PER_TICK, player.id);
         this.onBurrowDamageDealt?.(player.id, px, py);
       }
       this.burrowDamageTimers.set(player.id, elapsed);

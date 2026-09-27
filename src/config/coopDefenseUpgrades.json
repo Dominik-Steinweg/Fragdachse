@@ -375,6 +375,7 @@
                                                 "maxLevel":  3,
                                                 "costPerLevel":  1,
                                                 "sortOrder":  120,
+                                                "requires": [{ "upgradeId": "burrow_cost", "minLevel": 1 }],
                                                 "effects":  [
                                                                 {
                                                                     "stat":  "player.burrowSpeed",
@@ -389,18 +390,17 @@
                                                 "kind":  "upgrade",
                                                 "maxLevel":  3,
                                                 "costPerLevel":  1,
-                                                "sortOrder":  130,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "burrow_speed",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
+                                                "sortOrder":  119,
                                                 "effects":  [
                                                                 {
                                                                     "stat":  "player.burrowCost",
                                                                     "mode":  "add_percent_per_level",
-                                                                    "value":  -0.1
+                                                                    "value":  -0.25
+                                                                },
+                                                                {
+                                                                    "stat": "player.burrowTrainDamage",
+                                                                    "mode": "add_percent_per_level",
+                                                                    "value": 0.2
                                                                 }
                                                             ]
                                             },
@@ -429,6 +429,22 @@
                                                                     "value":  0.15
                                                                 }
                                                             ]
+                                            },
+                                            {
+                                                "id": "burrow_earthbreak",
+                                                "code": "A14-C",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "costPerLevel": 0,
+                                                "bossPointCostPerLevel": 1,
+                                                "sortOrder": 141,
+                                                "requires": [
+                                                    { "upgradeId": "burrow_speed", "minLevel": 1 },
+                                                    { "upgradeId": "unburrow_shockwave", "minLevel": 1 }
+                                                ],
+                                                "effects": [
+                                                    { "stat": "player.burrowEarthbreakEnabled", "mode": "add_per_level", "value": 1 }
+                                                ]
                                             },
                                             {
                                                 "id":  "dash_range",

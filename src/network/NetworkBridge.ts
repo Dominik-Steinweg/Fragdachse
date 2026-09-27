@@ -1,4 +1,5 @@
 import { isEnemyClawEvent } from '../systems/EnemyClawAttack';
+import { encodeBurrowEarthbreak, decodeBurrowEarthbreak } from './burrowEarthbreakCodec';
 import { encodeAttackDrones, decodeAttackDrones, encodeAttackDroneBombs, decodeAttackDroneBombs } from './attackDroneSnapshotCodec';
 import type { SyncedAttackDrone, SyncedAttackDroneBomb } from '../types';
 import { isPlasmaBurnerPulseEvent } from '../combat/plasmaBurner/PlasmaBurnerContracts';
@@ -321,6 +322,7 @@ export interface RoundState {
 }
 
 export interface GameState {
+  earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   /** Activity-scoped independent delta stream; consumed only by the passive essence replica. */
   adrenalineEssence?: EssenceSnapshot | null;
@@ -370,6 +372,7 @@ export interface GameState {
 }
 
 interface OutboundGameState {
+  earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   mgAttrition?: MgAttritionSnapshot;
   adrenalineEssence?: EssenceSnapshot | null;
@@ -2934,6 +2937,7 @@ export class NetworkBridge {
     if (state.decoys.length > 0)       payload.dc = state.decoys;
     if (state.smokes.length > 0)       payload.s = state.smokes;
     payload.zs = state.zeus ?? EMPTY_ZEUS_SNAPSHOT;
+    payload.eb = encodeBurrowEarthbreak(state.earthbreak ?? []);
     payload.sx = encodeSmokeTargets(state.smokeTargets ?? []);
     payload.pl = encodeStinkPlague(state.stinkPlague ?? emptyStinkPlagueSnapshot());
     payload.mga = encodeMgAttrition(state.mgAttrition ?? emptyMgAttritionSnapshot());
@@ -3042,6 +3046,7 @@ export class NetworkBridge {
       rc: state.remoteControlTurrets,
       dc: state.decoys,
       s: state.smokes,
+      eb: encodeBurrowEarthbreak(state.earthbreak ?? []),
       zs: state.zeus ?? EMPTY_ZEUS_SNAPSHOT,
       sx: encodeSmokeTargets(state.smokeTargets ?? []),
       pl: encodeStinkPlague(state.stinkPlague ?? emptyStinkPlagueSnapshot()),
@@ -3166,6 +3171,7 @@ export class NetworkBridge {
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
       zeus: (raw.zs as ZeusSnapshot | undefined) ?? this.cachedGameState?.zeus ?? EMPTY_ZEUS_SNAPSHOT,
       smokeTargets: decodeSmokeTargets(raw.sx),
+      earthbreak: decodeBurrowEarthbreak(raw.eb),
       stinkPlague: decodeStinkPlague(raw.pl),
       mgAttrition: decodeMgAttrition(raw.mga),
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],

@@ -720,10 +720,10 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     depth: DEPTH.DECALS + 0.1, blendMode: Phaser.BlendModes.NORMAL,
     eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
     capacity: MOVEMENT_FX.footprintCapacity + MOVEMENT_FX.dustCapacity + BURROW_FX.groundCapacity
-      + LEAF_BLOWER_FX.groundCapacity,
+      + LEAF_BLOWER_FX.groundCapacity + BURROW_FX.earthbreak.maxVisibleCracks * BURROW_FX.earthbreak.membersPerCrack,
     maxLifetimeMs: MOVEMENT_FX.footprintLifeMaxMs, order: 'ordered', reserveCritical: 0,
     rationale: 'Ground contacts must cover terrain decals but remain below rocks, actors and combat signals. Existing NORMAL lanes are all above these obstacles.',
-    capacityRationale: 'The movement renderer admits at most 3072 four-second prints (768/s sustained) and 1024 short dust particles, with player reserves inside both budgets. Burrow separately admits at most 2048 short-lived ground clods and dust members; LeafBlower ground streaks (about 120 per continuously firing blower) get their own 1536-slot share.',
+    capacityRationale: 'The movement renderer admits at most 3072 four-second prints (768/s sustained) and 1024 short dust particles, with player reserves inside both budgets. Burrow separately admits at most 2048 short-lived ground clods and dust members plus 256 visible cracks of 12 members each; LeafBlower ground streaks (about 120 per continuously firing blower) get their own 1536-slot share.',
   },
   {
     id: GpuVfxLaneId.ElectricGround, label: 'electric-ground',

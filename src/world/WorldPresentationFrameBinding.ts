@@ -84,6 +84,7 @@ export interface WorldPresentationRenderWork {
 
 /** Der generische, replizierte World-Anteil des Client-Snapshots. */
 export interface WorldClientPresentationState {
+  readonly earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   readonly players: Record<string, PlayerNetState>;
   readonly placeableRocks: SyncedPlaceableRock[];
   readonly timeBubbles: SyncedTimeBubble[];
@@ -247,7 +248,11 @@ export class WorldPresentationFrameBinding {
   constructor(private readonly input: WorldPresentationFrameBindingInput) {
     this.input.enemyEyes?.openWorld(this, () => !this.destroyed && this.input.getLocalWorldPresentation().required);
     this.input.movementEffects?.openWorld(this);
-    this.input.burrowEffects?.openWorld(this, () => !this.destroyed && this.input.getLocalWorldPresentation().required);
+    this.input.burrowEffects?.openWorld(this, () => !this.destroyed && this.input.getLocalWorldPresentation().required,
+      (x, y) => {
+        const view = getVisibleWorldView(this.input.scene.cameras.main);
+        return x >= view.x - 100 && y >= view.y - 100 && x <= view.x + view.width + 100 && y <= view.y + view.height + 100;
+      });
     this.input.lighting.setDynamicOccluderSource(this.trainLightOccluders);
   }
 
@@ -472,6 +477,7 @@ export class WorldPresentationFrameBinding {
     const now = this.input.getSynchronizedNow();
 
     if (state) {
+      this.input.burrowEffects?.syncEarthbreak(state.earthbreak ?? [], now);
       renderers.timeBubble.syncVisuals(state.timeBubbles);
       renderers.teslaDome.syncVisuals(state.teslaDomes, this);
       renderers.energyShield.syncVisuals(state.energyShields);

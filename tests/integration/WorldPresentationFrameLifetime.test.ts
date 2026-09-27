@@ -284,7 +284,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       getLocalWorldPresentation: () => presentation,
     }));
     expect(movementEffects.openWorld).toHaveBeenCalledWith(binding);
-    expect(burrowEffects.openWorld).toHaveBeenCalledWith(binding, expect.any(Function));
+    expect(burrowEffects.openWorld).toHaveBeenCalledWith(binding, expect.any(Function), expect.any(Function));
     expect(enemyEyes.openWorld).toHaveBeenCalledWith(binding, expect.any(Function));
     const isVisible = burrowEffects.openWorld.mock.calls[0][1] as () => boolean;
     expect(isVisible()).toBe(false);

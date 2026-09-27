@@ -126,12 +126,9 @@ class ForestUiPreview extends Phaser.Scene {
         else if (!went) { went = true; view.playGo(); }
         else if (msLeft < -2200) { went = false; unlockAt = this.time.now + 3000; }
       };
-      // Der Mauszeiger steht für den eigenen Dachs, damit Ausweichen und Nachführen prüfbar sind.
-      const anchor = (): void => { const p = this.input.activePointer; view.setAnchor(p.x || 960, p.y || 640); };
       this.events.on('update', tick);
-      this.events.on('postupdate', anchor);
       this.overlay = { build: () => undefined, hide: () => view.hide(),
-        destroy: () => { this.events.off('update', tick); this.events.off('postupdate', anchor); view.destroy(); } };
+        destroy: () => { this.events.off('update', tick); view.destroy(); } };
       status('Countdown läuft in Schleife');
     } else if (menu === 'hud') {
       this.overlay = openArenaHudPreview(this, status);

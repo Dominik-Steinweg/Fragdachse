@@ -105,6 +105,12 @@ interface ForcedMovement {
 }
 
 export class HostPhysicsSystem {
+  private readonly movementStepObservers = new Set<(id: string, x: number, y: number, revision: number) => void>();
+
+  observeMovementSteps(observer: (id: string, x: number, y: number, revision: number) => void): () => void {
+    this.movementStepObservers.add(observer);
+    return () => { this.movementStepObservers.delete(observer); };
+  }
   private readonly movementAcknowledgements = new PlayerMovementAcknowledgements();
   private movementPhysicsWorld: Phaser.Physics.Arcade.World | null = null;
   /** Ordinary walking of this frame, re-resolved before every fixed step (see consumeMovementStep). */
@@ -114,6 +120,7 @@ export class HostPhysicsSystem {
     for (const player of this.playerManager.getAllPlayers()) {
       const body = player.physicsProxy.body as Phaser.Physics.Arcade.Body | null;
       if (!player.active || !body?.enable) continue;
+      for (const observer of this.movementStepObservers) observer(player.id, body.center.x, body.center.y, player.positionRevision);
       this.movementAcknowledgements.consume(player.id, player.positionRevision, deltaSeconds * 1000);
       // Client prediction resolves the walking rule from the pose before each fixed step. The
       // host must do the same instead of letting a render frame's later steps reuse a velocity

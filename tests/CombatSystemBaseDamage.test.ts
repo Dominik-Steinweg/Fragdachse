@@ -5,6 +5,7 @@ import type { PlasmaBurnerPulseRequest } from '../src/combat/plasmaBurner/Plasma
 import type { PlasmaBurnerTarget } from '../src/combat/plasmaBurner/PlasmaBurnerTargetPolicy';
 import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
+import { TargetStatusSystem, VULNERABILITY_INCOMING_DAMAGE_BONUS } from '../src/systems/TargetStatusSystem';
 
 vi.mock('phaser', () => {
   class TestLine {
@@ -322,6 +323,42 @@ function makeSupportCombatHarness() {
 }
 
 describe('CombatSystem base damage routing', () => {
+  it('damages only hostile combatants at an earth explosion centre and applies vulnerability after the hit', () => {
+    const { combat, players } = makeSupportCombatHarness();
+    let now = 1000, hp = 1000;
+    combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.5 });
+    const enemy = fakeEntity({ id: 'hostile', faction: 'hostile', x: 0, y: 0,
+      getHp: () => hp, getMaxHp: () => 1000, isBurrowed: () => false });
+    const ally = fakeEntity({ id: 'summon', faction: 'allied', ownerId: 'shooter', x: 0, y: 0,
+      getHp: () => 100, getMaxHp: () => 100, isBurrowed: () => false });
+    const damage = vi.fn((_id: string, amount: number) => { hp -= amount; return { died: false, remainingHp: hp }; });
+    combat.setEnemyManager({ getAllEnemies: () => [enemy, ally],
+      getEnemy: (id: string) => [enemy, ally].find(e => e.id === id),
+      hasEnemy: (id: string) => [enemy, ally].some(e => e.id === id),
+      ...enemyMutationPort(enemy, damage),
+    } as never);
+    for (const p of players) { p.x = 0; p.y = 0; }
+    const status = new TargetStatusSystem();
+    combat.setApplyVulnerabilityHandler((target, duration, time) => { status.applyVulnerability(target, duration, time); });
+    combat.setTargetIncomingDamageMultiplierResolver((target, time) => status.getIncomingDamageMultiplier(target, time));
+    const bases = vi.fn(() => []);
+    combat.setBaseManager({ getBasesByFaction: bases } as never);
+    const hit = (duration = 3000) => combat.applyAoeDamage(0, 0, 40, 10, 'shooter', false,
+      { sourceId: 'upgrade.burrow_earthbreak', baseDamageMult: 0, vulnerabilityDurationMs: duration });
+    hit();
+    expect(damage).toHaveBeenLastCalledWith('hostile', 10);
+    expect(combat.getHP('shooter')).toBe(100); expect(combat.getHP('ally')).toBe(100);
+    expect(combat.getHP('victim')).toBe(90);
+    expect(bases).not.toHaveBeenCalled();
+    now += 60; hit();
+    expect(damage).toHaveBeenLastCalledWith('hostile', 10 * (1 + VULNERABILITY_INCOMING_DAMAGE_BONUS));
+    expect(status.getSnapshot(now).find(t => t.targetId === 'hostile')?.expiresAt).toBe(now + 3000);
+    now += 60; hit(1);
+    expect(damage).toHaveBeenLastCalledWith('hostile', 10 * (1 + VULNERABILITY_INCOMING_DAMAGE_BONUS));
+    expect(status.getSnapshot(now).find(t => t.targetId === 'hostile')?.expiresAt).toBe(4060);
+    expect(damage.mock.calls.every(([id]) => id === 'hostile')).toBe(true);
+  });
+
   it('does not amplify a resolved bubble discharge against hostile bases', () => {
     const { combat, baseDamage } = makeCombatHarness();
     const outgoing = vi.fn(() => ({ amount: 999, isCritical: true }));

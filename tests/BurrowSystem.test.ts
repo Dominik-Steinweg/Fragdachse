@@ -2,6 +2,8 @@ import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { BURROW_DRAIN_INTERVAL_MS, BURROW_WINDUP_DURATION_MS, PLAYER_SIZE } from '../src/config';
 import type { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
 import { BurrowSystem } from '../src/systems/BurrowSystem';
+import { BurrowEarthbreakRuntime } from '../src/systems/BurrowEarthbreakRuntime';
+import { BURROW_EARTHBREAK } from '../src/config/burrowEarthbreak';
 import type { WorldMetrics } from '../src/world/WorldMetrics';
 import { WaterGeometry } from '../src/arena/WaterGeometry';
 
@@ -39,8 +41,10 @@ function createHarness(options: HarnessOptions = {}) {
     id: PLAYER_ID,
     x: 20,
     y: 48,
+    positionRevision: 0,
     getCollisionRadius: () => 16,
     setPosition(x: number, y: number): void {
+      this.positionRevision++;
       this.x = x;
       this.y = y;
     },
@@ -65,6 +69,7 @@ function createHarness(options: HarnessOptions = {}) {
   const combat = {
     isAlive: vi.fn(() => true),
     applyDamage: vi.fn(),
+    applyAoeDamage: vi.fn(),
   };
   const hostPhysics = {
     setPlayerBurrowed: vi.fn(),
@@ -110,6 +115,19 @@ function enterUnderground(system: BurrowSystem): void {
   expect(system.getPhase(PLAYER_ID)).toBe('underground');
 }
 
+function bindEarthbreak(h: ReturnType<typeof createHarness>) {
+  const explode = vi.fn();
+  const runtime = new BurrowEarthbreakRuntime(explode);
+  h.system.setLifecycleObserver({
+    entered: id => runtime.start(id, h.player),
+    sample: id => runtime.move(id, h.player),
+    exited: (id, now) => runtime.exit(id, h.player, now),
+    reset: id => runtime.removePlayer(id),
+    cancelDig: id => runtime.cancelDig(id),
+  });
+  return { runtime, explode };
+}
+
 describe('BurrowSystem Exit Assist', () => {
   it('resolves a burrow exit beside water onto ground with full surface clearance', () => {
     const water = new WaterGeometry([{ gridX: 1, gridY: 1 }], worldMetrics());
@@ -141,6 +159,65 @@ describe('BurrowSystem Exit Assist', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it.each(['manual', 'depleted', 'dash'] as const)('ignites Earthbreak once on a successful %s exit, after position assistance', reason => {
+    const h = createHarness({ blocked: x => x === 20, drainToZero: true });
+    const { runtime, explode } = bindEarthbreak(h);
+    enterUnderground(h.system);
+    h.player.y += BURROW_EARTHBREAK.spacingPx;
+    if (reason === 'manual') h.system.handleBurrowRequest(PLAYER_ID, false);
+    else if (reason === 'dash') expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(true);
+    else h.system.update(BURROW_DRAIN_INTERVAL_MS, 5000);
+    const trace = runtime.snapshot()[0];
+    expect(trace.points).toEqual([{ x: 20, y: 48 + BURROW_EARTHBREAK.spacingPx }]);
+    expect(trace.exit).toEqual({ x: h.player.x, y: h.player.y });
+    expect(h.player.positionRevision).toBe(1);
+    expect(explode).toHaveBeenCalledExactlyOnceWith(expect.objectContaining(trace.exit!));
+    expect(trace.detonatedAt).toBe(reason === 'depleted' ? 5000 : Date.now());
+    expect(h.combat.applyAoeDamage).toHaveBeenCalledExactlyOnceWith(
+      h.player.x, h.player.y, expect.any(Number), expect.any(Number), PLAYER_ID, false,
+      { sourceId: 'Auftauchschockwelle', baseDamageMult: 0 },
+    );
+    h.system.handleBurrowRequest(PLAYER_ID, false);
+    expect(explode).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the trace through blocked manual, dash and trapped exits until ground becomes free', () => {
+    let blocked = true;
+    const h = createHarness({ blocked: () => blocked, drainToZero: true });
+    const { runtime, explode } = bindEarthbreak(h);
+    enterUnderground(h.system);
+    h.player.x += BURROW_EARTHBREAK.spacingPx;
+    h.system.handleBurrowRequest(PLAYER_ID, false);
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
+    h.system.update(BURROW_DRAIN_INTERVAL_MS);
+    expect(h.system.getPhase(PLAYER_ID)).toBe('trapped');
+    expect(runtime.snapshot()[0].phase).toBe('digging');
+    expect(explode).not.toHaveBeenCalled();
+    blocked = false;
+    h.system.update(0, 7000);
+    expect(explode).toHaveBeenCalledTimes(1);
+    expect(runtime.snapshot()[0]).toMatchObject({ phase: 'detonating', detonatedAt: 7000 });
+  });
+
+  it('never excavates in a tunnel, preserves already ignited chains and clears everything on removal', () => {
+    const h = createHarness();
+    const { runtime, explode } = bindEarthbreak(h);
+    enterUnderground(h.system);
+    h.player.x += BURROW_EARTHBREAK.spacingPx;
+    h.system.handleBurrowRequest(PLAYER_ID, false);
+    h.system.startTunnelTransit(PLAYER_ID);
+    h.player.x += BURROW_EARTHBREAK.spacingPx * 5;
+    h.system.update(100);
+    h.system.completeTunnelTransit(PLAYER_ID);
+    expect(runtime.snapshot()).toHaveLength(1);
+    expect(runtime.snapshot()[0].points).toHaveLength(1);
+    expect(explode).toHaveBeenCalledTimes(1);
+    h.system.removePlayer(PLAYER_ID);
+    runtime.advance(Date.now() + 10000, () => true);
+    expect(runtime.snapshot()).toEqual([]);
+    expect(explode).toHaveBeenCalledTimes(1);
   });
 
   it('commits a safe dash exit with collision restoration and exactly one popout', () => {

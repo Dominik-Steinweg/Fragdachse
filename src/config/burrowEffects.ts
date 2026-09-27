@@ -51,4 +51,10 @@ export const BURROW_FX = {
     travelMin: 12, travelMax: 28, alpha: 0.36, spin: 0.85,
   },
   shockwave: { lifeMs: 360, alpha: 0.62, tint: 0xd7bd85, startRadiusFactor: 0.15 },
+  earthbreak: {
+    maxVisibleCracks: 256, membersPerCrack: 12, crackLifeMs: 2000, maxReplayAgeMs: 250,
+    rimTint: 0x9d7950, coreTint: 0x2c2015,
+    burst: { clods: 18, grains: 12, dust: 4, spreadMin: 14, spreadMax: 35, originRadius: 7 },
+    exit: { clods: 90, grains: 45, dust: 16, spreadMin: 32, spreadMax: 82, originRadius: 14 },
+  },
 } as const;

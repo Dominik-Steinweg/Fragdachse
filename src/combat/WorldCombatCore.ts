@@ -148,6 +148,7 @@ type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlay
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string, now?: number): void };
 
 interface AoeDamageOptions {
+  vulnerabilityDurationMs?: number;
   damageKind?: Extract<CombatDamageKind, 'explosion' | 'ground'>;
   source?: CombatSource;
   /** Explicit source resolution, e.g. a reservoir whose accumulated damage must not be amplified again. */
@@ -1558,7 +1559,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const category = options?.category ?? (damageKind === 'ground' ? 'damage_over_time' : 'explosion');
       if (this.shouldBlockWithShield(player.id, category, roundedDamage, x, y)) continue;
-      this.applyDamage(player.id, roundedDamage, false, ownerId, options?.sourceId ?? 'weapon.grenade', {
+      const outcome = this.applyDamage(player.id, roundedDamage, false, ownerId, options?.sourceId ?? 'weapon.grenade', {
         sourceX: x,
         sourceY: y,
         ...options?.killSource,
@@ -1570,9 +1571,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
           source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: damageKind },
         } : {}),
       });
+      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0 && this.isAlive(player.id)) {
+        this.applyProjectileVulnerability({ targetType: 'player', targetId: player.id }, options?.vulnerabilityDurationMs ?? 0);
+      }
     }
 
-    this.applyRadialHostileBaseDamage(
+    if (options?.baseDamageMult !== 0) this.applyRadialHostileBaseDamage(
       x, y, radius, damage, ownerId, options?.damageFalloff, sourceSlot,
       options?.baseDamageMult, options?.damageBasis?.sourceFactors ?? derivedFrom?.damage.sourceFactors,
       options?.source,
@@ -1595,7 +1599,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if ((options?.enemySlowFraction ?? 0) > 0 && (options?.enemySlowDurationMs ?? 0) > 0) {
         this.applyEnemySlow(enemy.id, options?.enemySlowFraction ?? 0, options?.enemySlowDurationMs ?? 0);
       }
-      this.applyDamage(enemy.id, roundedDamage, false, ownerId, options?.sourceId ?? 'weapon.grenade', {
+      const outcome = this.applyDamage(enemy.id, roundedDamage, false, ownerId, options?.sourceId ?? 'weapon.grenade', {
         sourceX: x,
         sourceY: y,
         ...options?.killSource,
@@ -1607,6 +1611,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
           source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: damageKind },
         } : {}),
       });
+      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0 && this.isAlive(enemy.id)) {
+        this.applyProjectileVulnerability({ targetType: 'enemy', targetId: enemy.id }, options?.vulnerabilityDurationMs ?? 0);
+      }
     }
   }
 

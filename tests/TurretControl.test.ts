@@ -36,7 +36,7 @@ describe('manual turret occupancy', () => {
     const player = { id: 'pilot', x: 0, y: 0, rotation: 0, hp: 71, armor: 23,
       setPosition(x: number, y: number) { this.x = x; this.y = y; } };
     let sources = [turret(1)], permitted = true, stunned = false, dash = 0, forced = false, phase = 'idle';
-    const physics = service({ getDashPhase: () => dash, hasForcedMovement: () => forced });
+    const physics = service({ getDashPhase: () => dash, hasForcedMovement: () => forced, observeMovementSteps: () => vi.fn() });
     const runtime = new WorldPlayerGameplayRuntime({
       playerManager: service({ getAllPlayers: () => [player], getPlayer: () => player, getWorldSpawnPoint: () => ({ x: -50, y: 0 }) }),
       getTurrets: () => sources, isFriendlyTurret: () => true,

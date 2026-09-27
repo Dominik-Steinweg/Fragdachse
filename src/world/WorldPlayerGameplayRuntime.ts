@@ -36,6 +36,7 @@ import type { PlayerCapabilities } from './PlayerCapabilities';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { BurrowSystem } from '../systems/BurrowSystem';
+import { BurrowEarthbreakRuntime, type EarthbreakPose, type SyncedBurrowEarthbreak } from '../systems/BurrowEarthbreakRuntime';
 import { TranslocatorSystem, type TranslocatorActor } from '../systems/TranslocatorSystem';
 import type { PortalQueryPort, PortalPair } from '../systems/PortalTraversal';
 import type { CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
@@ -361,6 +362,7 @@ export interface PlayerGameplayPostProjectileStageResult {
 }
 
 export interface PlayerGameplayHostSnapshot {
+  readonly earthbreak: readonly SyncedBurrowEarthbreak[];
   readonly ak47StrategicTargets: readonly SyncedAk47StrategicTarget[];
   readonly tunnels: readonly SyncedTunnel[];
 }
@@ -449,6 +451,8 @@ export class WorldPlayerGameplayRuntime implements
   PlayerGameplayResourceCommandPort,
   PlayerGameplayFrameStages {
   private readonly systems: WorldPlayerGameplaySystems;
+  private readonly earthbreak: BurrowEarthbreakRuntime;
+  private readonly detachEarthbreakMovement: () => void;
   private readonly turretControl: TurretControlSystem;
   private geometryQueries: WorldGeometryQueries | null = null;
   private destroyed = false;
@@ -456,6 +460,13 @@ export class WorldPlayerGameplayRuntime implements
   private readonly heldActionUtilityIds = new Map<string, string | null>();
 
   constructor(private readonly options: WorldPlayerGameplayRuntimeOptions) {
+    this.earthbreak = new BurrowEarthbreakRuntime(event => options.combatSystem.applyAoeDamage(
+      event.x, event.y, event.radius, event.damage, event.ownerId, false,
+      { sourceId: 'upgrade.burrow_earthbreak', baseDamageMult: 0, vulnerabilityDurationMs: event.vulnerabilityDurationMs },
+    ));
+    this.detachEarthbreakMovement = options.hostPhysics.observeMovementSteps((id, x, y, positionRevision) => {
+      this.earthbreak.move(id, { x, y, positionRevision });
+    });
     this.turretControl = new TurretControlSystem({
       getTurrets: () => options.getTurrets?.() ?? [],
       getActor: id => {
@@ -940,6 +951,7 @@ export class WorldPlayerGameplayRuntime implements
         },
         removeEnemy: (enemyId) => systems.itemRuntime.removeEnemy(enemyId),
         handlePlayerDeath: (playerId, x, y) => {
+          this.earthbreak.removePlayer(playerId);
           systems.plasmaBurner.resetPlayer(playerId);
           systems.molotovUpgrade?.removePlayer(playerId);
           systems.flamethrowerUpgrade?.handlePlayerDeath(playerId, x, y);
@@ -1036,6 +1048,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.plasmaBurner.update(nowMs);
     systems.heldAction.clearExpired(nowMs);
     if (countdownActive) {
+      this.earthbreak.clear();
       systems.rocketMagazine?.cancelAll();
       systems.heldAction.reset();
     this.heldActionUtilityIds?.clear();
@@ -1107,6 +1120,12 @@ export class WorldPlayerGameplayRuntime implements
 
   runHostPreCombatStage(nowMs: number, countdownActive: boolean): void {
     if (this.destroyed || countdownActive) return;
+    for (const player of this.options.playerManager.getAllPlayers()) {
+      const pose = this.readEarthbreakPose(player.id);
+      if (pose) this.earthbreak.move(player.id, pose);
+    }
+    this.earthbreak.advance(nowMs, id => !!this.options.playerManager.getPlayer(id)?.active
+      && this.options.combatSystem.isAlive(id));
     this.interruptStunnedActions(nowMs);
     this.systems.flamethrowerUpgrade?.prepareProjectileBurns(nowMs);
     this.systems.weaponUpgrade?.hostUpdate(nowMs);
@@ -1151,8 +1170,9 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   prepareHostSnapshot(nowMs: number): PlayerGameplayHostSnapshot {
-    if (this.destroyed) return { ak47StrategicTargets: [], tunnels: [] };
+    if (this.destroyed) return { ak47StrategicTargets: [], tunnels: [], earthbreak: [] };
     return {
+      earthbreak: this.earthbreak.snapshot(),
       ak47StrategicTargets: this.getAk47StrategicTargetNetSnapshot(nowMs),
       tunnels: this.getTunnelNetSnapshot(),
     };
@@ -1279,10 +1299,12 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   attachPlayerBurrow(playerId: string): void {
+    this.earthbreak.removePlayer(playerId);
     this.systems.burrow.initPlayer(playerId);
   }
 
   detachPlayerBurrow(playerId: string): void {
+    this.earthbreak.removePlayer(playerId);
     this.systems.burrow.removePlayer(playerId);
   }
 
@@ -1383,6 +1405,7 @@ export class WorldPlayerGameplayRuntime implements
    * Runtime-Detach derselben Activity lässt sie bewusst bestehen.
    */
   invalidateHeldActionsOnActivityEnd(): void {
+    this.earthbreak.clear();
     this.systems.plasmaBurner.clearAll();
     this.turretControl.clear();
     this.systems.rocketMagazine?.cancelAll();
@@ -1635,8 +1658,10 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   destroy(): void {
-    this.turretControl.clear();
     if (this.destroyed) return;
+    this.earthbreak.clear();
+    this.detachEarthbreakMovement();
+    this.turretControl.clear();
     this.destroyed = true;
     const { systems } = this;
     this.heldActionUtilityIds?.clear();
@@ -1692,6 +1717,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.burrow.setDrainMultiplierResolver(null);
     systems.burrow.setShockwaveDamageResolver(null);
     systems.burrow.setShockwaveRadiusResolver(null);
+    systems.burrow.setLifecycleObserver(null);
     systems.playerModifier.clear();
     systems.itemRuntime.clear();
   }
@@ -1718,12 +1744,37 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   private configureBurrow(burrow: BurrowSystem, playerModifier: CoopDefensePlayerModifierSystem): void {
+    burrow.setLifecycleObserver({
+      entered: id => {
+        const pose = this.readEarthbreakPose(id);
+        if (pose && playerModifier.getNumericStat(id, 'player.burrowEarthbreakEnabled') > 0) this.earthbreak.start(id, pose);
+      },
+      sample: id => {
+        const pose = this.readEarthbreakPose(id);
+        if (pose) this.earthbreak.move(id, pose);
+      },
+      exited: (id, now) => {
+        const player = this.options.playerManager.getPlayer(id);
+        if (player && this.options.combatSystem.isAlive(id)) this.earthbreak.exit(id, player, now);
+      },
+      reset: id => this.earthbreak.removePlayer(id),
+      cancelDig: id => this.earthbreak.cancelDig(id),
+    });
     burrow.setUndergroundSpeedResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.burrowSpeed', BURROW_UNDERGROUND_SPEED_FACTOR));
     burrow.setDrainMultiplierResolver((playerId) => 1 + playerModifier.getPercentageStat(playerId, 'player.burrowCost'));
     burrow.setShockwaveDamageResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.unburrowShockwaveDamage', SHOCKWAVE_DAMAGE));
     burrow.setShockwaveRadiusResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.unburrowShockwaveRadius', SHOCKWAVE_RADIUS));
     burrow.setPositionResetCallback((playerId, x, y) => this.options.resetPlayerPosition(playerId, x, y));
     burrow.setBurrowStartCallback((playerId) => this.options.dropBeer(playerId));
+  }
+
+  /** Arcade commits proxy positions after the simulation steps; never retrace that older pose. */
+  private readEarthbreakPose(id: string): EarthbreakPose | null {
+    const player = this.options.playerManager.getPlayer(id);
+    if (!player) return null;
+    const body = player.physicsProxy.body;
+    const center = body && 'center' in body ? body.center : null;
+    return { x: center?.x ?? player.x, y: center?.y ?? player.y, positionRevision: player.positionRevision };
   }
 
   private bindLoadout(
