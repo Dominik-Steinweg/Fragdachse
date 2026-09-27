@@ -57,13 +57,14 @@ interface ExplosionSequenceHost {
   hasActiveNukeSequence(): boolean;
 }
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
-import { impactExceptional, impactHeavy, impactLight } from './camera/cameraFeedbackPresets';
+import { impactExceptional, impactLight } from './camera/cameraFeedbackPresets';
 import {
   EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
   EXPLOSION_LIGHT_RADIUS_FACTOR,
   getExplosionLightDurationMs,
 } from './LightingConfig';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
+import { HolyExplosionRenderer } from './HolyExplosionRenderer';
 import type { BloodStainSink, CombatGoreGpuRenderer } from './CombatGoreGpuRenderer';
 import {
   TEX_EXPLOSION_SPARK,
@@ -115,6 +116,7 @@ export class EffectSystem implements EnemyVisualSink {
     return () => { if (this.groundFogExplosion === sink) this.groundFogExplosion = null; };
   }
   private xpTextRenderer: CoopXpTextRenderer | null = null;
+  private holyExplosionRenderer: HolyExplosionRenderer | null = null;
 
   prepareXpText(): boolean {
     this.xpTextRenderer ??= new CoopXpTextRenderer(this.scene);
@@ -122,6 +124,9 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   clearXpTexts(): void { this.xpTextRenderer?.clear(); }
+
+  /** Laufende Signatur-Explosionen der Heiligen Handgranate gehören zur endenden World. */
+  clearHolyExplosions(): void { this.holyExplosionRenderer?.clear(); }
   private pendingPredictedTracerIds = new Map<number, number>();
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
@@ -258,6 +263,8 @@ export class EffectSystem implements EnemyVisualSink {
   destroy(): void {
     this.xpTextRenderer?.destroy();
     this.xpTextRenderer = null;
+    this.clearHolyExplosions();
+    this.holyExplosionRenderer = null;
     this.clearZeusUpgrades();
     this.burrowGpuRenderer?.clearAllUnderground();
     this.damageVignetteTop?.destroy();
@@ -888,7 +895,7 @@ export class EffectSystem implements EnemyVisualSink {
     });
 
     if (isHoly) {
-      const skyFlash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xffefc4, 0.18);
+      const skyFlash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xfff1cc, 0.3);
       registerGraphicsObject(this.scene, 'effectSystemGraphics', skyFlash);
       skyFlash.setScrollFactor(0);
       skyFlash.setDepth(DEPTH.OVERLAY - 2);
@@ -896,36 +903,35 @@ export class EffectSystem implements EnemyVisualSink {
       this.scene.tweens.add({
         targets:    skyFlash,
         alpha:      0,
-        duration:   260,
-        ease:       'Quad.easeOut',
+        duration:   520,
+        ease:       'Cubic.easeOut',
         onComplete: () => skyFlash.destroy(),
       });
 
-    }
-
-    if (isHoly) {
-      const verticalBeam = this.scene.add.rectangle(x, y, Math.max(radius * 0.16, 20), radius * 0.95, 0xfff4d0, 0.24);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', verticalBeam);
-      verticalBeam.setDepth(DEPTH_FX + 0.3);
-      makeAdditive(verticalBeam);
-      const horizontalBeam = this.scene.add.rectangle(x, y, radius * 0.95, Math.max(radius * 0.16, 20), 0xffe0a4, 0.2);
-      registerGraphicsObject(this.scene, 'effectSystemGraphics', horizontalBeam);
-      horizontalBeam.setDepth(DEPTH_FX + 0.31);
-      makeAdditive(horizontalBeam);
-      this.scene.tweens.add({
-        targets:    [verticalBeam, horizontalBeam],
-        scaleX:     1.25,
-        scaleY:     1.25,
-        alpha:      0,
-        duration:   420,
-        ease:       'Quad.easeOut',
-        onComplete: () => {
-          verticalBeam.destroy();
-          horizontalBeam.destroy();
-        },
+      // Die Signatur: das Siegel der Heiligen Handgranate aus Licht, Strahlen, Nimbus und Federn.
+      this.holyExplosionRenderer ??= new HolyExplosionRenderer(this.scene);
+      this.holyExplosionRenderer.play(x, y, radius);
+      // Nachglühen, solange das Siegel steht; der erste Lichtstoß kommt aus emitExplosionLight.
+      // Die Intensität über 1 wird nach dem Abklingfaktor auf 1 begrenzt: der Bereich bleibt
+      // dadurch zunächst voll erhellt und klingt erst gegen Ende ab. Lichter fallen quadratisch
+      // ab; erst ein deutlich weiterer Radius hält den ganzen Wirkungsbereich hell. Das zweite,
+      // engere Licht addiert sich im Kern, sodass der Bereich nachts fast taghell wird.
+      this.lighting?.pulse('explosion', x, y, {
+        radiusPx: radius * 2.2,
+        color: 0xfff0c8,
+        intensity: 2.8,
+        durationMs: 1600,
+        occludes: false,
       });
-
-      this.cameraFeedback?.request(impactHeavy({ sourceX: x, sourceY: y }));
+      this.lighting?.pulse('explosion', x, y, {
+        radiusPx: radius * 1.3,
+        color: 0xfffaea,
+        intensity: 2.4,
+        durationMs: 1300,
+        occludes: false,
+      });
+      this.postFx?.pulseEvent('holyDetonation');
+      this.cameraFeedback?.request(impactExceptional({ sourceX: x, sourceY: y }));
     } else if (isEnergy) {
       this.cameraFeedback?.request(impactLight({ sourceX: x, sourceY: y }));
     } else if (isNuke && !this.visualFeedback?.hasActiveNukeSequence()) {

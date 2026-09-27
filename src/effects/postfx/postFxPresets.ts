@@ -17,6 +17,7 @@ export const POST_FX_EVENTS = [
   'bossPhaseChange',
   'nukeDetonation',
   'voidNukeDetonation',
+  'holyDetonation',
   'teleport',
   'localDeath',
 ] as const;
@@ -27,6 +28,7 @@ export const POST_FX_PRIORITY = {
   hit: 30,
   teleport: 45,
   bossPhase: 60,
+  holy: 80,
   death: 85,
   nuke: 100,
 } as const;
@@ -87,6 +89,24 @@ const PRESETS: Readonly<Record<PostFxEvent, PostFxPulse>> = {
       tintStrength: 0.5,
       bloomAmount: 0.75,
       vignetteStrength: 0.26,
+    },
+  },
+
+  /**
+   * Heilige Handgranate: goldene Überbelichtung mit Bloom statt Entsättigung. Seltenes
+   * Einzelereignis und deshalb global; der eigene Tod bleibt darüber priorisiert.
+   */
+  holyDetonation: {
+    priority: POST_FX_PRIORITY.holy,
+    durationMs: 1000,
+    ease: 'impulse',
+    grade: {
+      brightness: 0.18,
+      contrast: 0.06,
+      saturation: 0.08,
+      tint: 0xffe2a0,
+      tintStrength: 0.32,
+      bloomAmount: 0.85,
     },
   },
 

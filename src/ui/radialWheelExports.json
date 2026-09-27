@@ -1,0 +1,137 @@
+{
+  "file": "radial-wheel.webp",
+  "sources": {
+    "ring": "radial-ring-sheet.png",
+    "icons": "radial-icons-sheet-v5.png",
+    "iconRow": 1
+  },
+  "width": 596,
+  "height": 466,
+  "ring": {
+    "size": 466,
+    "centerX": 233.2,
+    "centerY": 232.9,
+    "innerRadius": 188.5,
+    "outerRadius": 224
+  },
+  "hub": {
+    "size": 128,
+    "centerX": 63.6,
+    "centerY": 64.1,
+    "innerRadius": 40.4,
+    "outerRadius": 58.5
+  },
+  "iconSize": 64,
+  "atlas": {
+    "frames": {
+      "ring": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 466,
+          "h": 466
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 466,
+          "h": 466
+        },
+        "sourceSize": {
+          "w": 466,
+          "h": 466
+        }
+      },
+      "hub": {
+        "frame": {
+          "x": 468,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 128
+        }
+      },
+      "icon-reposition": {
+        "frame": {
+          "x": 468,
+          "y": 130,
+          "w": 64,
+          "h": 64
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 64,
+          "h": 64
+        },
+        "sourceSize": {
+          "w": 64,
+          "h": 64
+        }
+      },
+      "icon-dismantle": {
+        "frame": {
+          "x": 468,
+          "y": 196,
+          "w": 64,
+          "h": 64
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 64,
+          "h": 64
+        },
+        "sourceSize": {
+          "w": 64,
+          "h": 64
+        }
+      },
+      "icon-dismantle-own-all": {
+        "frame": {
+          "x": 468,
+          "y": 262,
+          "w": 64,
+          "h": 64
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 64,
+          "h": 64
+        },
+        "sourceSize": {
+          "w": 64,
+          "h": 64
+        }
+      }
+    },
+    "meta": {
+      "image": "radial-wheel.webp",
+      "size": {
+        "w": 596,
+        "h": 466
+      },
+      "scale": "1"
+    }
+  }
+}

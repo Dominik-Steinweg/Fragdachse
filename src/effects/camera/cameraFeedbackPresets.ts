@@ -55,12 +55,12 @@ function impact(
   };
 }
 
-/** Nuke-Detonation und vergleichbare Einzelereignisse. */
+/** Nuke-Detonation, Heilige Handgranate und vergleichbare Einzelereignisse. */
 export function impactExceptional(options?: ImpactOptions): CameraFeedbackRequest {
   return impact(38, 550, CAMERA_FEEDBACK_PRIORITY.exceptional, options);
 }
 
-/** Große Explosionen, Holy Explosion, Meteoreinschlag. */
+/** Große Explosionen, Meteoreinschlag. */
 export function impactHeavy(options?: ImpactOptions): CameraFeedbackRequest {
   return impact(32, 520, CAMERA_FEEDBACK_PRIORITY.heavyImpact, options);
 }

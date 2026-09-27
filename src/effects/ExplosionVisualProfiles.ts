@@ -60,8 +60,9 @@ export const EXPLOSION_VISUAL_PROFILES = {
     family: 'energy', countScale: 1, lifeScale: 1, bodyScale: 0,
     smokeScale: 0, chunkScale: 0, upwardEmbers: false,
   },
+  // Kleinerer Feuerball-Körper: die Form trägt das Lichtsiegel des HolyExplosionRenderer.
   holy: {
-    family: 'holy', countScale: 1.15, lifeScale: 1.25, bodyScale: 1.15,
+    family: 'holy', countScale: 1.15, lifeScale: 1.25, bodyScale: 0.65,
     smokeScale: 0, chunkScale: 0.65, upwardEmbers: true,
   },
   lightning: {

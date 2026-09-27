@@ -488,7 +488,6 @@ const GRAPHICS_ARC_LEGACY_SOURCES: Readonly<Record<string, string>> = {
   'src/scenes/arena/GaussWarningRenderer.ts': 'Emitterglow der Fremdspieler, noch nicht umgestellt.',
   'src/scenes/arena/PlacementPreviewRenderer.ts': 'Platzierungsvorschau, noch nicht umgestellt.',
   'src/ui/HostileBaseIndicator.ts': 'Pfeilspitze, noch nicht umgestellt.',
-  'src/ui/RadialActionMenu.ts': 'Radialmenue, zeichnet nur bei geoeffnetem Menue.',
 };
 
 /** `ctx`/`context` sind der Canvas-2D-Kontext beim Backen und damit ausdruecklich erlaubt. */

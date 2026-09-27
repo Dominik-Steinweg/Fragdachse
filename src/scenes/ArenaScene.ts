@@ -14,6 +14,7 @@ import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
 import { getForestModalSurfaces, preloadForestModalAssets } from '../ui/ForestModal';
 import { preloadHudFrameAssets } from '../ui/HudFrameAssets';
+import { preloadRadialWheelAssets } from '../ui/RadialWheelAssets';
 import { preloadForestAssets } from '../ui/LobbyForestAssets';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
@@ -347,6 +348,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadForestAssets(this.load);
     preloadForestModalAssets(this.load);
     preloadHudFrameAssets(this.load);
+    preloadRadialWheelAssets(this.load);
     preloadGroundMaterials(this.load);
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
     this.load.image('bg_tracks', './assets/sprites/BahnstreckeSchienen.png');
@@ -373,7 +375,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadTrainMaterialAssets(this.load);
     this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');
     this.load.image('powerup_arm', './assets/sprites/16x16Armor.png');
-    this.load.image('powerup_rage', './assets/sprites/16x16Rage.svg');
+    this.load.image('powerup_rage', './assets/sprites/16x16Rage.png');
     this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
     this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
     this.load.image('powerup_hhg', './assets/sprites/16x16holy_grenade.png');

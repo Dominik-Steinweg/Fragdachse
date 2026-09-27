@@ -39,6 +39,12 @@ export interface HudCardConfig {
   readonly scale: number;
   readonly width: number;
   readonly tone: HudTone;
+  /**
+   * Feste Rahmenfamilie unabhängig von `tone`. Für Karten, die ihren Inhalt häufig umfärben
+   * (z. B. das Utility-Rad): Die Rahmen der Farbfamilien sind einzeln gemalt und weichen in
+   * Ornamenten minimal voneinander ab; ein fester Rahmen verhindert dabei sichtbares Springen.
+   */
+  readonly frameTone?: HudTone;
   readonly titleSize?: number;
   readonly valueSize?: number;
   readonly kickerSize?: number;
@@ -141,6 +147,7 @@ export class HudCard {
   private readonly decor: Phaser.GameObjects.Graphics;
   private readonly centered: boolean;
   private toneId: HudTone;
+  private readonly fixedFrameTone: HudTone | null;
   private widthValue: number;
   private fillFrac = 0;
   private fillVisible = true;
@@ -157,6 +164,7 @@ export class HudCard {
     this.height = SRC.height * config.scale;
     this.widthValue = config.width;
     this.toneId = config.tone;
+    this.fixedFrameTone = config.frameTone ?? null;
     this.centered = config.centered ?? false;
     this.kickerSize = config.kickerSize ?? 9;
     const style = HUD_TONES[config.tone];
@@ -164,7 +172,7 @@ export class HudCard {
     this.backing = scene.add.nineslice(0, 0, BACKING_TEX, undefined, 48, 48, 12, 12, 12, 12)
       .setAlpha(config.backingAlpha ?? 0.62);
     this.frame = scene.add.nineslice(
-      0, 0, HUD_FRAME_TEXTURE, hudCardFrame(config.tone), SRC.width, SRC.height, SRC.cap, SRC.cap,
+      0, 0, HUD_FRAME_TEXTURE, hudCardFrame(config.frameTone ?? config.tone), SRC.width, SRC.height, SRC.cap, SRC.cap,
     ).setScale(config.scale);
     this.fill = scene.add.image(0, 0, ensureHudFillTexture(scene, config.tone)).setOrigin(0, 0.5);
     this.root = scene.add.container(0, 0, [this.backing, this.frame, this.fill]);
@@ -215,9 +223,11 @@ export class HudCard {
     if (tone === this.toneId) return this;
     this.toneId = tone;
     const style = HUD_TONES[tone];
-    this.frame.setFrame(hudCardFrame(tone));
-    // `setFrame` setzt die Slices nicht zurück; Breite und Kappen bleiben erhalten.
-    this.frame.setSlices(this.frame.width, SRC.height, SRC.cap, SRC.cap, 0, 0);
+    if (!this.fixedFrameTone) {
+      this.frame.setFrame(hudCardFrame(tone));
+      // `setFrame` setzt die Slices nicht zurück; Breite und Kappen bleiben erhalten.
+      this.frame.setSlices(this.frame.width, SRC.height, SRC.cap, SRC.cap, 0, 0);
+    }
     this.fill.setTexture(ensureHudFillTexture(this.scene, tone));
     this.head.setTint(style.accent);
     this.kicker.setColor(toCssColor(style.accent));
