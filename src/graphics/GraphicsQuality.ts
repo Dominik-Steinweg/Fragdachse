@@ -24,6 +24,8 @@ export interface GraphicsQualityProfile {
   readonly level: GraphicsQuality;
   readonly particleFactors: Readonly<Record<VisualImportance, number>>;
   readonly lightMapScale: number;
+  /** Ambient-subtracted lightmap composite; no additional light rendering. */
+  readonly lightBleed: boolean;
   readonly maxLightsPerFrame: number;
   readonly maxOccludingLightsPerFrame: number;
   readonly shadowLayerFactor: number;
@@ -108,6 +110,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     level: 'high',
     particleFactors: { critical: 1, standard: 1, decorative: 1 },
     lightMapScale: 0.5,
+    lightBleed: true,
     // Deutlich über der Zahl gleichzeitig sichtbarer Lichtquellen: sonst schneidet der
     // Sortier-/Truncate-Schritt jeden Frame andere Lichter weg, und mit dem Flackern der
     // Intensitäten springt der Grenzfall sichtbar an und aus. Ein reines Stamp-Licht ohne
@@ -144,6 +147,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     level: 'medium',
     particleFactors: { critical: 0.8, standard: 0.65, decorative: 0.45 },
     lightMapScale: 0.375,
+    lightBleed: true,
     maxLightsPerFrame: 120,
     maxOccludingLightsPerFrame: 2,
     shadowLayerFactor: 0.5,
@@ -176,6 +180,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
     level: 'low',
     particleFactors: { critical: 0.6, standard: 0.35, decorative: 0 },
     lightMapScale: 0.25,
+    lightBleed: false,
     maxLightsPerFrame: 64,
     maxOccludingLightsPerFrame: 0,
     shadowLayerFactor: 0.25,

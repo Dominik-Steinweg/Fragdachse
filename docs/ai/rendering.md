@@ -79,6 +79,13 @@ gegen die installierten Phaser-Methoden mit und ohne Kamera-Framebuffer und bei 
 
 ## Runtime und Renderer
 
+[LightingSystem.ts](../../src/effects/LightingSystem.ts) besitzt beide Licht-Composites:
+MULTIPLY und den optionalen, weich gesättigten Bleed-Beitrag aus derselben Lightmap nach
+Ambient-Abzug. Lichtquellen nutzen weiterhin ausschließlich die vorhandene Lightmap samt
+Budget und Verdeckung. Beide Beiträge liegen vor den World-Kamerafiltern und unter den
+Baumkronen; Clarity-Inhalte bleiben ungefiltert. `GraphicsQuality` kann Bleed unabhängig
+abschalten, ohne Lichtquellen oder deren Simulation zu verändern.
+
 Gegneraugen verwenden die `eyeAnchors` des importierten `PipelineAsset`: normalisierte
 Ellipsen je Sprite-Frame, aus ausgewerteter Blender-Geometrie mit der Exportkamera und
 denselben Animationssamples. Der Import bindet sie an Revision, Variante, Blend- und

@@ -166,8 +166,8 @@ export function resolveDarkness(sky: SkyState): number {
 }
 
 /**
- * Der Bloom sieht die **beleuchtete** Welt: die Lichtkarte wird per MULTIPLY in denselben
- * Puffer komponiert, bevor die Kamerafilter laufen. Eine feste Schwelle blühte deshalb tagsüber
+ * Der Bloom sieht die **beleuchtete** Welt: MULTIPLY und der ambientbereinigte Bleed-Beitrag
+ * der Lichtkarte landen vor den Kamerafiltern im selben Puffer. Eine feste Schwelle blühte deshalb tagsüber
  * überall und nachts nirgends. Sie folgt darum der Helligkeit des Bildes.
  */
 function resolveBloomThreshold(darkness: number): number {

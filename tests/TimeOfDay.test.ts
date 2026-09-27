@@ -54,8 +54,8 @@ describe('time of day parsing', () => {
 });
 
 describe('sky state', () => {
-  // Diese beiden Tests halten die Zusage fest, dass die Umstellung auf eine
-  // kontinuierliche Uhrzeit Mittag und Mitternacht optisch nicht verändert.
+  // Mittag bleibt neutral; die Ambient- und Schattenverträge der tiefen Nacht bleiben
+  // unabhängig vom zusätzlichen Bleed-Beitrag bestehen.
   it('pins noon to the former day profile', () => {
     const sky = resolveSkyState(DEFAULT_TIME_OF_DAY_MINUTES);
 
@@ -63,6 +63,7 @@ describe('sky state', () => {
     // Renderpass darf entfallen.
     expect(sky.ambientColor).toBe(NEUTRAL_AMBIENT_COLOR);
     expect(sky.lightFactor).toBe(0);
+    expect(sky.bleedFactor).toBe(0);
     expect(sky.canopyLightFactor).toBe(0);
     expect(sky.artificialLightFactor).toBe(0);
     expect(shadowTuple(DEFAULT_TIME_OF_DAY_MINUTES)).toEqual(SHADOW_PROFILES.day);
@@ -99,6 +100,7 @@ describe('sky state', () => {
       );
       expect(channelStep).toBeLessThanOrEqual(3);
       expect(Math.abs(current.lightFactor - previous.lightFactor)).toBeLessThan(0.02);
+      expect(Math.abs(current.bleedFactor - previous.bleedFactor)).toBeLessThan(0.02);
       previous = current;
     }
   });
@@ -112,13 +114,24 @@ describe('sky state', () => {
         sky.artificialLightFactor,
         sky.shadowOpacityMult,
         sky.emissiveScale,
+        sky.bleedFactor,
       ]) {
         expect(value).toBeGreaterThanOrEqual(0);
         expect(value).toBeLessThanOrEqual(1);
       }
-      expect(sky.bleedFactor).toBe(0);
       expect(sky.shadowLengthMult).toBeGreaterThan(0);
       expect(sky.shadowSoftnessMult).toBeGreaterThan(0);
+    }
+  });
+
+  it('adds bleed at night and dusk, with a continuous midnight wrap', () => {
+    for (const minute of [0, 5 * 60, 18 * 60 + 45, 22 * 60 + 30]) {
+      expect(resolveSkyState(minute).bleedFactor).toBeGreaterThan(0);
+    }
+    const epsilon = 0.00001;
+    for (let minute = 0; minute < MINUTES_PER_DAY; minute++) {
+      expect(Math.abs(resolveSkyState(minute - epsilon).bleedFactor
+        - resolveSkyState(minute + epsilon).bleedFactor)).toBeLessThan(epsilon);
     }
   });
 

@@ -47,6 +47,22 @@ const RADIAL_TEX_SIZE = 256;
 const CONE_TEX_WIDTH = 256;
 const CONE_TEX_HEIGHT = 512;
 
+const LIGHT_BLEED_FRAGMENT = `
+precision highp float;
+uniform sampler2D uLightMap;
+uniform vec3 uAmbient;
+uniform float uBleedFactor;
+varying vec2 outTexCoord;
+void main() {
+  // The shared map already includes light color, falloff, budgets and occlusion.
+  vec3 excess = max(texture2D(uLightMap, outTexCoord).rgb - uAmbient, vec3(0.0));
+  float peak = max(excess.r, max(excess.g, excess.b));
+  // A shared shoulder preserves the residual hue instead of whitening each channel.
+  float shoulder = (1.0 - exp(-2.0 * peak)) / max(peak, 0.00001);
+  gl_FragColor = vec4(excess * shoulder * uBleedFactor, 1.0);
+}
+`;
+
 /**
  * Die Lichtkarte ist bildschirmfest, ihre Lichter werden aber bei `x - camera.scrollX`
  * gestempelt. Seit alle Kamerabewegung über `CameraFeedbackController` als **Scroll-Versatz**
@@ -179,7 +195,8 @@ function emptyPerformanceMetrics(): LightingPerformanceMetrics {
  * Dynamische Beleuchtung und Lichtverdeckung über eine Lightmap.
  *
  * Alle Lichter werden in eine halbauflösende Bildschirm-Lightmap komponiert, die als
- * ein einziges Overlay über die Welt gelegt wird. Dadurch werden Spieler, Gegner und
+ * MULTIPLY-Overlay über die Welt gelegt wird. Ein optionaler Bleed-Quad liest dieselbe
+ * Textur und addiert nur Licht oberhalb des Ambients. Dadurch werden Spieler, Gegner und
  * Effekte ohne Per-Objekt-Kosten beleuchtet – anders als bei Phasers eingebautem
  * Lighting, das `setLighting(true)` pro Objekt braucht, Render-Batches bricht und
  * keinerlei geometrische Verdeckung kennt.
@@ -202,6 +219,8 @@ export class LightingSystem {
   private sky: SkyState = resolveSkyState(DEFAULT_TIME_OF_DAY_MINUTES);
 
   private lightMap: Phaser.GameObjects.RenderTexture | null = null;
+  private lightBleed: Phaser.GameObjects.Shader | null = null;
+  private readonly bleedAmbient = new Float32Array(3);
   private readonly slots: OccluderSlot[] = [];
   private readonly occlusionCachePool: OcclusionCache[] = [];
   private activeExplosionCacheCount = 0;
@@ -455,6 +474,18 @@ export class LightingSystem {
     for (const cache of this.occlusionCachePool) this.destroyOcclusionCache(cache);
     this.occlusionCachePool.length = 0;
     this.activeExplosionCacheCount = 0;
+    if (this.lightBleed) {
+      // Shader.preDestroy in Phaser 4.2.1 leaves its private VAOs/buffer alive.
+      const node = this.lightBleed.renderNode;
+      for (const suite of Object.values(node.programManager.programs)) {
+        Phaser.Utils.Array.Remove(node.renderer.glVAOWrappers, suite.vao);
+        suite.vao.destroy();
+      }
+      node.programManager.programs = {};
+      node.renderer.deleteBuffer(node.vertexBufferLayout.buffer);
+      this.lightBleed.destroy();
+      this.lightBleed = null;
+    }
     this.lightMap?.destroy();
     this.lightMap = null;
     // Die neue Textur startet leer, das gemerkte Ambient gilt nicht mehr.
@@ -633,12 +664,13 @@ export class LightingSystem {
     const ambientColor = this.sky.ambientColor;
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
     const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0;
+    this.syncLightBleed(overlay, !queueEmpty);
 
     // Reihenfolge ist tragend: erst Sichtbarkeit entscheiden, dann erst Befehle erzeugen.
     // `setRenderMode('all')` leert den Command-Buffer am Platz des Objekts in der
     // Display-List – ein unsichtbares Objekt mit gefülltem Buffer ließe ihn auflaufen.
-    if ((ambientIsNeutral && queueEmpty) || this.compositeSuppressed) {
-      // Weißes Ambient ohne Licht multipliziert die Szene mit 1: kein Renderpass, kein
+    if (ambientIsNeutral || this.compositeSuppressed) {
+      // Weißes Ambient bleibt auch mit additiven Lichtern weiß: kein Renderpass, kein
       // Overlay. Der Vergleich ist bewusst exakt – eine Toleranz wie „fast weiß" wäre
       // optisch unsichtbar, würde die Kostenschwelle aber unvorhersehbar verschieben.
       overlay.setVisible(false);
@@ -1500,10 +1532,43 @@ export class LightingSystem {
   // ── Intern: Ressourcen ─────────────────────────────────────────────────────
 
   private syncOverlayVisibility(): void {
+    // Never display a stale light field between a state change and the next update.
+    this.lightBleed?.setVisible(false);
     if (!this.lightMap) return;
-    // Der Fall „weißes Ambient ohne Licht" wird bewusst nur in `update()` entschieden,
+    // Der Fall „weißes Ambient" wird bewusst nur in `update()` entschieden,
     // damit beide Stellen nicht auseinanderlaufen können.
     this.lightMap.setVisible(this.enabled && !this.compositeSuppressed);
+  }
+
+  private syncLightBleed(lightMap: Phaser.GameObjects.RenderTexture, hasLights: boolean): void {
+    if (!hasLights || this.compositeSuppressed || !this.quality.lightBleed
+      || this.sky.bleedFactor <= 0 || this.sky.ambientColor === NEUTRAL_AMBIENT_COLOR) {
+      this.lightBleed?.setVisible(false);
+      return;
+    }
+
+    const ambient = this.sky.ambientColor;
+    this.bleedAmbient[0] = ((ambient >> 16) & 0xff) / 255;
+    this.bleedAmbient[1] = ((ambient >> 8) & 0xff) / 255;
+    this.bleedAmbient[2] = (ambient & 0xff) / 255;
+    if (!this.lightBleed) {
+      const quad = new Phaser.GameObjects.Shader(this.scene, {
+        name: 'LightBleed', shaderName: 'LightBleed', fragmentSource: LIGHT_BLEED_FRAGMENT,
+        setupUniforms: (set: (name: string, value: unknown) => void) => {
+          set('uLightMap', 0);
+          set('uAmbient', this.bleedAmbient);
+          set('uBleedFactor', this.sky.bleedFactor);
+        },
+      }, lightMap.x, lightMap.y, lightMap.displayWidth, lightMap.displayHeight, [lightMap.texture]);
+      quad.setTextureCoordinatesFromFrame(lightMap.frame);
+      // SCREEN = dst + bleed * (1 - dst): an additive contribution with remaining
+      // headroom, so even overlapping lights cannot hard-clip the world to white.
+      // No extra lightmap/filter framebuffer; the map's 'all' draw runs first.
+      quad.setOrigin(0).setScrollFactor(0).setDepth(DEPTH_LIGHTING + 0.001)
+        .setBlendMode(Phaser.BlendModes.SCREEN);
+      this.lightBleed = this.scene.add.existing(quad);
+    }
+    this.lightBleed.setVisible(true);
   }
 
   private ensureLightMap(): Phaser.GameObjects.RenderTexture {

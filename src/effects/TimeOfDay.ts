@@ -3,7 +3,8 @@
  *
  * Es gibt genau **eine** Rechenvorschrift für Licht, unabhängig von der Uhrzeit: die
  * Lightmap wird mit `ambientColor` gefüllt, Lichter werden additiv hineingestempelt, und
- * das Ergebnis multipliziert die Szene. Die Uhrzeit ändert ausschließlich Werte, nie den
+ * das Ergebnis multipliziert die Szene. Der Bleed-Beitrag hellt nur den Lichtanteil über
+ * dem Ambient weich auf. Die Uhrzeit ändert ausschließlich Werte, nie den
  * Pfad. Zwei Punkte der Kurve sind dabei besonders:
  *
  * - **12:00** liefert `0xffffff`. Phasers MULTIPLY ist `blendFunc(DST_COLOR,
@@ -51,10 +52,8 @@ export interface SkyState {
    */
   readonly emissiveScale: number;
   /**
-   * Platzhalter für einen späteren additiven Zweitpass ("Licht, das über die Szene
-   * hinausleuchtet"). MULTIPLY allein kann nur abdunkeln, ein warmes Licht auf warmem
-   * Abendambient liest sich deshalb entsättigend statt wärmend. Der Ausbau wäre eine
-   * komplette zusätzliche Fullscreen-Stufe; bis dahin bleibt der Wert überall 0.
+   * Stärke des weich gesättigten, aufhellenden Lichtanteils oberhalb des Ambients.
+   * Liest dieselbe Lightmap nach dem MULTIPLY-Composite; 0 überspringt den Zweitpass.
    */
   readonly bleedFactor: number;
 }
@@ -78,31 +77,31 @@ interface SkyKeyframe extends SkyState {
  */
 const SKY_KEYFRAMES: readonly SkyKeyframe[] = [
   // Tiefe Nacht: sehr dunkel; der Blauanteil färbt das Restlicht kühl statt grauschwarz.
-  { atMinute: 0 * 60, ambientColor: 0x11172a, lightFactor: 1, canopyLightFactor: 0.45, artificialLightFactor: 1, shadowOpacityMult: 0.15, shadowLengthMult: 1.9, shadowSoftnessMult: 1.8, emissiveScale: 1, bleedFactor: 0 },
-  { atMinute: 3 * 60, ambientColor: 0x11172a, lightFactor: 1, canopyLightFactor: 0.45, artificialLightFactor: 1, shadowOpacityMult: 0.15, shadowLengthMult: 1.9, shadowSoftnessMult: 1.8, emissiveScale: 1, bleedFactor: 0 },
+  { atMinute: 0 * 60, ambientColor: 0x11172a, lightFactor: 1, canopyLightFactor: 0.45, artificialLightFactor: 1, shadowOpacityMult: 0.15, shadowLengthMult: 1.9, shadowSoftnessMult: 1.8, emissiveScale: 1, bleedFactor: 0.24 },
+  { atMinute: 3 * 60, ambientColor: 0x11172a, lightFactor: 1, canopyLightFactor: 0.45, artificialLightFactor: 1, shadowOpacityMult: 0.15, shadowLengthMult: 1.9, shadowSoftnessMult: 1.8, emissiveScale: 1, bleedFactor: 0.24 },
   // Mondnacht: heller Boden, Silhouetten ohne Licht erkennbar.
-  { atMinute: 4 * 60, ambientColor: 0x1e263e, lightFactor: 0.92, canopyLightFactor: 0.42, artificialLightFactor: 1, shadowOpacityMult: 0.22, shadowLengthMult: 1.9, shadowSoftnessMult: 1.72, emissiveScale: 0.98, bleedFactor: 0 },
-  { atMinute: 5 * 60, ambientColor: 0x1e263e, lightFactor: 0.92, canopyLightFactor: 0.42, artificialLightFactor: 1, shadowOpacityMult: 0.22, shadowLengthMult: 1.9, shadowSoftnessMult: 1.72, emissiveScale: 0.98, bleedFactor: 0 },
+  { atMinute: 4 * 60, ambientColor: 0x1e263e, lightFactor: 0.92, canopyLightFactor: 0.42, artificialLightFactor: 1, shadowOpacityMult: 0.22, shadowLengthMult: 1.9, shadowSoftnessMult: 1.72, emissiveScale: 0.98, bleedFactor: 0.28 },
+  { atMinute: 5 * 60, ambientColor: 0x1e263e, lightFactor: 0.92, canopyLightFactor: 0.42, artificialLightFactor: 1, shadowOpacityMult: 0.22, shadowLengthMult: 1.9, shadowSoftnessMult: 1.72, emissiveScale: 0.98, bleedFactor: 0.28 },
   // Früher Morgen: leicht cyanfarben, bevor das direkte Sonnenlicht einsetzt.
-  { atMinute: 5 * 60 + 45, ambientColor: 0x4f6f78, lightFactor: 0.78, canopyLightFactor: 0.36, artificialLightFactor: 0.85, shadowOpacityMult: 0.32, shadowLengthMult: 1.88, shadowSoftnessMult: 1.52, emissiveScale: 0.94, bleedFactor: 0 },
+  { atMinute: 5 * 60 + 45, ambientColor: 0x4f6f78, lightFactor: 0.78, canopyLightFactor: 0.36, artificialLightFactor: 0.85, shadowOpacityMult: 0.32, shadowLengthMult: 1.88, shadowSoftnessMult: 1.52, emissiveScale: 0.94, bleedFactor: 0.26 },
   // Morgengrauen: rosig-pfirsichfarben. Ein Ambient mit G < B würde Grün zu Grau ziehen.
-  { atMinute: 6 * 60 + 45, ambientColor: 0xa8867c, lightFactor: 0.48, canopyLightFactor: 0.22, artificialLightFactor: 0.4, shadowOpacityMult: 0.42, shadowLengthMult: 1.8, shadowSoftnessMult: 1.25, emissiveScale: 0.82, bleedFactor: 0 },
+  { atMinute: 6 * 60 + 45, ambientColor: 0xa8867c, lightFactor: 0.48, canopyLightFactor: 0.22, artificialLightFactor: 0.4, shadowOpacityMult: 0.42, shadowLengthMult: 1.8, shadowSoftnessMult: 1.25, emissiveScale: 0.82, bleedFactor: 0.24 },
   // Goldener Morgen: Blau stärker gedämpft als Grün hält Laub und Gras gesättigt.
-  { atMinute: 7 * 60 + 45, ambientColor: 0xe0c095, lightFactor: 0.26, canopyLightFactor: 0.12, artificialLightFactor: 0.1, shadowOpacityMult: 0.58, shadowLengthMult: 1.75, shadowSoftnessMult: 1.1, emissiveScale: 0.7, bleedFactor: 0 },
-  { atMinute: 9 * 60, ambientColor: 0xf6ecd8, lightFactor: 0.08, canopyLightFactor: 0.04, artificialLightFactor: 0, shadowOpacityMult: 0.67, shadowLengthMult: 1.12, shadowSoftnessMult: 1.02, emissiveScale: 0.6, bleedFactor: 0 },
+  { atMinute: 7 * 60 + 45, ambientColor: 0xe0c095, lightFactor: 0.26, canopyLightFactor: 0.12, artificialLightFactor: 0.1, shadowOpacityMult: 0.58, shadowLengthMult: 1.75, shadowSoftnessMult: 1.1, emissiveScale: 0.7, bleedFactor: 0.12 },
+  { atMinute: 9 * 60, ambientColor: 0xf6ecd8, lightFactor: 0.08, canopyLightFactor: 0.04, artificialLightFactor: 0, shadowOpacityMult: 0.67, shadowLengthMult: 1.12, shadowSoftnessMult: 1.02, emissiveScale: 0.6, bleedFactor: 0.015 },
   // Mittag: weiß, damit das Composite exakt zum No-Op wird.
   { atMinute: 12 * 60, ambientColor: 0xffffff, lightFactor: 0, canopyLightFactor: 0, artificialLightFactor: 0, shadowOpacityMult: 1, shadowLengthMult: 1, shadowSoftnessMult: 1, emissiveScale: 0.55, bleedFactor: 0 },
-  { atMinute: 15 * 60, ambientColor: 0xfdf4e8, lightFactor: 0.03, canopyLightFactor: 0.01, artificialLightFactor: 0, shadowOpacityMult: 0.79, shadowLengthMult: 1.06, shadowSoftnessMult: 1.01, emissiveScale: 0.57, bleedFactor: 0 },
+  { atMinute: 15 * 60, ambientColor: 0xfdf4e8, lightFactor: 0.03, canopyLightFactor: 0.01, artificialLightFactor: 0, shadowOpacityMult: 0.79, shadowLengthMult: 1.06, shadowSoftnessMult: 1.01, emissiveScale: 0.57, bleedFactor: 0.01 },
   // Nachmittag: kräftiges Goldgelb als Gegenstück zum klaren Morgenlicht.
-  { atMinute: 17 * 60, ambientColor: 0xf3ddc0, lightFactor: 0.1, canopyLightFactor: 0.05, artificialLightFactor: 0, shadowOpacityMult: 0.65, shadowLengthMult: 1.2, shadowSoftnessMult: 1.05, emissiveScale: 0.62, bleedFactor: 0 },
+  { atMinute: 17 * 60, ambientColor: 0xf3ddc0, lightFactor: 0.1, canopyLightFactor: 0.05, artificialLightFactor: 0, shadowOpacityMult: 0.65, shadowLengthMult: 1.2, shadowSoftnessMult: 1.05, emissiveScale: 0.62, bleedFactor: 0.04 },
   // Sonnenuntergang: sattes Orange, anschließend tiefes Rot.
-  { atMinute: 18 * 60 + 45, ambientColor: 0xf47722, lightFactor: 0.24, canopyLightFactor: 0.11, artificialLightFactor: 0.08, shadowOpacityMult: 0.56, shadowLengthMult: 1.58, shadowSoftnessMult: 1.32, emissiveScale: 0.71, bleedFactor: 0 },
-  { atMinute: 19 * 60 + 45, ambientColor: 0xc93624, lightFactor: 0.44, canopyLightFactor: 0.2, artificialLightFactor: 0.35, shadowOpacityMult: 0.44, shadowLengthMult: 1.68, shadowSoftnessMult: 1.48, emissiveScale: 0.8, bleedFactor: 0 },
+  { atMinute: 18 * 60 + 45, ambientColor: 0xf47722, lightFactor: 0.24, canopyLightFactor: 0.11, artificialLightFactor: 0.08, shadowOpacityMult: 0.56, shadowLengthMult: 1.58, shadowSoftnessMult: 1.32, emissiveScale: 0.71, bleedFactor: 0.24 },
+  { atMinute: 19 * 60 + 45, ambientColor: 0xc93624, lightFactor: 0.44, canopyLightFactor: 0.2, artificialLightFactor: 0.35, shadowOpacityMult: 0.44, shadowLengthMult: 1.68, shadowSoftnessMult: 1.48, emissiveScale: 0.8, bleedFactor: 0.28 },
   // Dämmerung nach Sonnenuntergang: deutlich gesättigteres Violett/Dunkelblau.
-  { atMinute: 20 * 60 + 45, ambientColor: 0x4a2c70, lightFactor: 0.72, canopyLightFactor: 0.33, artificialLightFactor: 0.8, shadowOpacityMult: 0.24, shadowLengthMult: 1.7, shadowSoftnessMult: 1.7, emissiveScale: 0.92, bleedFactor: 0 },
-  { atMinute: 21 * 60 + 30, ambientColor: 0x382952, lightFactor: 0.92, canopyLightFactor: 0.42, artificialLightFactor: 1, shadowOpacityMult: 0.22, shadowLengthMult: 1.9, shadowSoftnessMult: 1.72, emissiveScale: 0.98, bleedFactor: 0 },
-  { atMinute: 22 * 60 + 30, ambientColor: 0x1e263e, lightFactor: 0.92, canopyLightFactor: 0.42, artificialLightFactor: 1, shadowOpacityMult: 0.22, shadowLengthMult: 1.9, shadowSoftnessMult: 1.72, emissiveScale: 0.98, bleedFactor: 0 },
-  { atMinute: 23 * 60 + 30, ambientColor: 0x11172a, lightFactor: 1, canopyLightFactor: 0.45, artificialLightFactor: 1, shadowOpacityMult: 0.15, shadowLengthMult: 1.9, shadowSoftnessMult: 1.8, emissiveScale: 1, bleedFactor: 0 },
+  { atMinute: 20 * 60 + 45, ambientColor: 0x4a2c70, lightFactor: 0.72, canopyLightFactor: 0.33, artificialLightFactor: 0.8, shadowOpacityMult: 0.24, shadowLengthMult: 1.7, shadowSoftnessMult: 1.7, emissiveScale: 0.92, bleedFactor: 0.3 },
+  { atMinute: 21 * 60 + 30, ambientColor: 0x382952, lightFactor: 0.92, canopyLightFactor: 0.42, artificialLightFactor: 1, shadowOpacityMult: 0.22, shadowLengthMult: 1.9, shadowSoftnessMult: 1.72, emissiveScale: 0.98, bleedFactor: 0.28 },
+  { atMinute: 22 * 60 + 30, ambientColor: 0x1e263e, lightFactor: 0.92, canopyLightFactor: 0.42, artificialLightFactor: 1, shadowOpacityMult: 0.22, shadowLengthMult: 1.9, shadowSoftnessMult: 1.72, emissiveScale: 0.98, bleedFactor: 0.28 },
+  { atMinute: 23 * 60 + 30, ambientColor: 0x11172a, lightFactor: 1, canopyLightFactor: 0.45, artificialLightFactor: 1, shadowOpacityMult: 0.15, shadowLengthMult: 1.9, shadowSoftnessMult: 1.8, emissiveScale: 1, bleedFactor: 0.24 },
 ];
 
 /** Ambient, bei dem das MULTIPLY-Composite nachweislich nichts tut. */
