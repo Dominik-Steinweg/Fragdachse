@@ -6,6 +6,7 @@ import type { WorldMetrics } from '../../world/WorldMetrics';
 import type { LightingSystem } from '../../effects/LightingSystem';
 import { BASE_LIGHT_COLOR, getBaseLightSpots, createBaseSurfaceImages } from '../../entities/BaseVisuals';
 import { BaseGroundingRenderer } from '../../arena/BaseGroundingRenderer';
+import { BaseAccentGlowRenderer } from '../../arena/BaseAccentGlowRenderer';
 
 const PREVIEW_LIGHT_PREFIX = 'persistent-base-preview';
 
@@ -13,6 +14,7 @@ const PREVIEW_LIGHT_PREFIX = 'persistent-base-preview';
 export class PersistentBasePreviewRenderer {
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private grounding: BaseGroundingRenderer | null = null;
+  private accentGlow: BaseAccentGlowRenderer | null = null;
   private readonly lightKeys = new Set<string>();
   private lightSpots: readonly { readonly x: number; readonly y: number; readonly radius: number }[] = [];
   private currentKey = '';
@@ -48,6 +50,7 @@ export class PersistentBasePreviewRenderer {
     const surfaceCells = coreCells.filter((cell) => cell.domain === 'base-surface');
     this.cellImages.push(...createBaseSurfaceImages(this.scene, surfaceCells, metrics, 'base'));
     this.grounding = new BaseGroundingRenderer(this.scene, surfaceCells, metrics);
+    this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages);
     const originX = metrics.offsetX + (preview.anchor.gridX - 2) * CELL_SIZE;
     const originY = metrics.offsetY + (preview.anchor.gridY - 2) * CELL_SIZE;
     this.lightSpots = getBaseLightSpots({
@@ -87,6 +90,8 @@ export class PersistentBasePreviewRenderer {
   }
 
   clear(): void {
+    this.accentGlow?.destroy();
+    this.accentGlow = null;
     this.grounding?.destroy();
     this.grounding = null;
     for (const image of this.cellImages) image.destroy();

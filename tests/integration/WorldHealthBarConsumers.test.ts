@@ -22,6 +22,10 @@ vi.mock('phaser', async () => {
 vi.mock('../../src/effects/SpawnEffectRenderer', () => ({
   SpawnEffectRenderer: class { setLightingSystem() {} play() {} },
 }));
+// Decorative base pixels have their own mask and presentation-lifetime tests.
+vi.mock('../../src/arena/BaseAccentGlowRenderer', () => ({
+  BaseAccentGlowRenderer: class { destroyCell() {} destroy() {} },
+}));
 import { EnemyManager } from '../../src/entities/EnemyManager';
 import { WorldCombatCore as CombatSystem } from '../../src/combat/WorldCombatCore';
 import { WorldCombatReactions } from '../../src/world/WorldCombatReactions';

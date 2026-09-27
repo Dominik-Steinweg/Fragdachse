@@ -12,6 +12,8 @@
  * Kein Phaser-Import: Die Datei laeuft in Testdateien, die `phaser` per `vi.mock` ersetzen.
  */
 
+import EventEmitter from 'eventemitter3';
+
 export interface FakeFill {
   x: number;
   y: number;
@@ -51,6 +53,10 @@ function translateContent(content: readonly string[], offsetX: number, offsetY: 
 
 export class FakeImage {
   active = true;
+  visible = true;
+  depth = 0;
+  scaleX = 1;
+  scaleY = 1;
   rotation = 0;
   alpha = 1;
   displaySize = 0;
@@ -58,16 +64,19 @@ export class FakeImage {
   displayHeight = 0;
   originX = 0.5;
   originY = 0.5;
-  frame = { name: 0 };
+  frame = { name: 0 as string | number, width: 32, height: 32 };
 
-  constructor(public key: string, public x: number, public y: number) {}
+  constructor(public key: string, public x: number, public y: number, frame: string | number = 0) {
+    this.frame.name = frame;
+  }
 
   setOrigin(x = 0.5, y = x): this {
     this.originX = x;
     this.originY = y;
     return this;
   }
-  setDepth(): this { return this; }
+  setDepth(depth: number): this { this.depth = depth; return this; }
+  setBlendMode(): this { return this; }
   /** Vier Ecktints wie beim echten Image; fuer die Paritaetsvergleiche irrelevant. */
   setTint(): this { return this; }
   setPosition(x: number, y: number): this {
@@ -87,6 +96,8 @@ export class FakeImage {
     this.displaySize = width;
     this.displayWidth = width;
     this.displayHeight = height;
+    this.scaleX = width / this.frame.width;
+    this.scaleY = height / this.frame.height;
     return this;
   }
   destroy(): void {
@@ -444,7 +455,7 @@ export class FakeRenderTexture {
 export class FakeDetachedImage extends FakeImage {
   constructor(_scene: unknown, x: number, y: number, key: string, frame?: string | number) {
     super(key, x, y);
-    if (frame !== undefined) this.frame = { name: frame as number };
+    if (frame !== undefined) this.frame.name = frame;
   }
 }
 
@@ -486,6 +497,7 @@ export class FakeZone {
  */
 export function createFakePhaserModule(): Record<string, unknown> {
   return {
+    Scenes: { Events: { POST_UPDATE: 'postupdate', SHUTDOWN: 'shutdown' } },
     BlendModes: { NORMAL: 0, MULTIPLY: 1, ADD: 2, ERASE: 17, SKIP_CHECK: -1 },
     Math: {
       Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
@@ -510,10 +522,12 @@ export function createFakeArenaScene() {
   let created = 0;
   const layers: Array<{ list: unknown[]; visible: boolean; active: boolean }> = [];
   return {
+    events: new EventEmitter(),
+    time: { now: 0 },
     add: {
       renderTexture: (_x = 0, _y = 0, width = 32, height = 32) =>
         new FakeRenderTexture(`fake_rt_${created++}`, width, height),
-      image: (x: number, y: number, key: string) => new FakeImage(key, x, y),
+      image: (x: number, y: number, key: string, frame?: string | number) => new FakeImage(key, x, y, frame),
       existing: <T>(gameObject: T): T => gameObject,
       layer: () => {
         const layer = {

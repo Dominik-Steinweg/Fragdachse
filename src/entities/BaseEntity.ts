@@ -25,6 +25,7 @@ import { makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
 import { createBaseSurfaceImages, getBaseLightSpots } from './BaseVisuals';
 import { BaseGroundingRenderer } from '../arena/BaseGroundingRenderer';
+import { BaseAccentGlowRenderer } from '../arena/BaseAccentGlowRenderer';
 import {
   integrityState,
   type WorldIntegrityMutationResult,
@@ -79,6 +80,7 @@ export class BaseEntity {
   private voidBurning = false;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private grounding: BaseGroundingRenderer | null = null;
+  private accentGlow: BaseAccentGlowRenderer | null = null;
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Sprite>();
   private readonly turretAngles = new Map<string, number>();
@@ -164,6 +166,7 @@ export class BaseEntity {
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
     this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
     this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics);
+    if (!hostile) this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages);
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
     for (const turret of this.spec.turrets) {
@@ -252,6 +255,7 @@ export class BaseEntity {
 
   /** Entfernt genau das Zellbild, dessen Explosion gerade abgespielt wird. */
   destroyCellVisual(cellIndex: number): void {
+    this.accentGlow?.destroyCell(cellIndex);
     this.grounding?.destroyCell(cellIndex);
     const image = this.cellImages[cellIndex];
     if (image?.active) image.destroy();
@@ -500,6 +504,8 @@ export class BaseEntity {
     this.cellBodies.length = 0;
 
     try {
+      this.accentGlow?.destroy();
+      this.accentGlow = null;
       this.vulnerableMarker?.destroy();
       this.vulnerableMarker = null;
       for (const image of this.turretImages.values()) {
@@ -524,6 +530,8 @@ export class BaseEntity {
   }
 
   destroy(): void {
+    this.accentGlow?.destroy();
+    this.accentGlow = null;
     this.grounding?.destroy();
     this.grounding = null;
     for (const image of this.cellImages) {
@@ -546,6 +554,8 @@ export class BaseEntity {
   }
 
   private resetRepresentation(): void {
+    this.accentGlow?.destroy();
+    this.accentGlow = null;
     this.grounding?.destroy();
     this.grounding = null;
     for (const image of this.cellImages) {

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFakePhaserModule());
+vi.mock('../src/arena/BaseAccentGlowTexture', () => ({
+  acquireBaseAccentGlowTexture: () => ({
+    key: 'test-base-accent', frames: new Set(Array.from({ length: 55 }, (_, i) => String(i))), release: vi.fn(),
+  }),
+}));
 
 import {
   getCoopDefenseMapConfig,
@@ -69,8 +74,8 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     const scene = createFakeArenaScene();
     const images: Array<{ key: string; active: boolean }> = [];
     const originalImage = scene.add.image;
-    scene.add.image = ((x: number, y: number, key: string) => {
-      const image = originalImage(x, y, key);
+    scene.add.image = ((x: number, y: number, key: string, frame?: string | number) => {
+      const image = originalImage(x, y, key, frame);
       images.push(image);
       return image;
     }) as typeof originalImage;
@@ -88,6 +93,8 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     renderer.sync(preview, metrics);
     expect(images.filter((image) => image.key === 'base')).toHaveLength(20);
     expect(renderer.getSurfaceImages()).toHaveLength(20);
+    expect(images.some(image => image.key === 'test-base-accent')).toBe(true);
+    expect(scene.events.listenerCount('postupdate')).toBe(1);
     const surfaceCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation)
       .filter((cell) => cell.domain === 'base-surface');
     const grounding = images.filter((image) => image.key.startsWith('base-grounding-'));
@@ -98,15 +105,18 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     const imageCount = images.length;
     renderer.sync(preview, metrics);
     expect(images).toHaveLength(imageCount);
+    expect(scene.events.listenerCount('postupdate')).toBe(1);
 
     renderer.syncLights(true);
     expect(lighting.setLight).toHaveBeenCalled();
     renderer.clear();
     expect(images.every((image) => image.active === false)).toBe(true);
+    expect(scene.events.eventNames()).toEqual([]);
     expect(lighting.releaseLight).toHaveBeenCalled();
     renderer.sync(preview, metrics);
     expect(images.slice(imageCount).every((image) => image.active)).toBe(true);
     renderer.sync(null, null);
     expect(images.every((image) => !image.active)).toBe(true);
+    expect(scene.events.eventNames()).toEqual([]);
   });
 });
