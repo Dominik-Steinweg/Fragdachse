@@ -138,9 +138,14 @@ export class EffectSystem implements EnemyVisualSink {
   private biteRenderer: BiteRenderer | null = null;
   private enemyClawRenderer: EnemyClawRenderer | null = null;
 
-  syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean): void {
+  syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number): void {
     if (state.attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
-    this.enemyClawRenderer?.sync(id, state, x, y, now, visible);
+    this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor);
+  }
+  /** Links the claw shader passes during world preparation instead of on the first strike. */
+  prepareEnemyClawEffects(): boolean {
+    this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
+    return this.enemyClawRenderer.prepare();
   }
   clearEnemyClaw(id: string): void { this.enemyClawRenderer?.release(id); }
   clearEnemyClawEffects(): void { this.enemyClawRenderer?.clear(); }

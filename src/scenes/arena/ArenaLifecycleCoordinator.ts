@@ -1109,7 +1109,8 @@ export class ArenaLifecycleCoordinator {
       const fragmentsReady = this.renderers.combatGoreGpu.fragmentTemplateCache.stepPreparation();
       const xpReady = this.ctx.effectSystem.prepareXpText();
       const smokeReady = this.ctx.smokeSystem.prepare();
-      this.combatPresentationPrepared = fragmentsReady && xpReady && smokeReady;
+      const clawReady = this.ctx.effectSystem.prepareEnemyClawEffects();
+      this.combatPresentationPrepared = fragmentsReady && xpReady && smokeReady && clawReady;
     }
   }
 

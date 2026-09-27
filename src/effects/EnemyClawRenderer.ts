@@ -1,156 +1,143 @@
-import * as Phaser from 'phaser';
-import { DEPTH, DEPTH_TRACE } from '../config';
+import type * as Phaser from 'phaser';
+import { DEPTH, DEPTH_LIGHTING, DEPTH_TRACE } from '../config';
+import { emissiveAlpha } from './EmissiveScale';
 import type { SyncedMeleeSwing } from '../types';
-import type { EnemyClawAttack, EnemyClawState } from '../systems/EnemyClawAttack';
-import { createEmitter, ensureCanvasTexture, killAllAndResetParticlePositions, registerGraphicsObject } from './EffectUtils';
+import type { EnemyClawState } from '../systems/EnemyClawAttack';
+import { EnemyClawVfxStore } from './enemyClaw/EnemyClawVfxStore';
+import { ClawVfxPass, createEnemyClawGpuLayer, type EnemyClawGpuLayer } from './enemyClaw/EnemyClawGpuLayer';
 
-interface Telegraph {
-  readonly attack: EnemyClawAttack;
-  readonly graphics: Phaser.GameObjects.Graphics;
-  crossedImpact: boolean;
+/** One danger family for every hostile claw: the sector must read as "leave" regardless of species. */
+export const ENEMY_CLAW_HOSTILE_COLOR = 0xff4a36;
+
+/** Bounded warmup: a pass that never renders must not hold the world-load barrier. */
+const MAX_PREPARE_CALLS = 30;
+const IDENTITY_TTL_MS = 4000;
+const MAX_IDENTITIES = 4096;
+
+interface ActiveClaw {
+  readonly attackId: string;
+  /** Hit time on the local presentation clock. */
+  readonly hitClock: number;
 }
 
-/** Scene-owned visual pools. Only the host's melee result emits contact/blood particles. */
+/**
+ * Presentation of announced enemy claw attacks, entirely GPU-animated.
+ *
+ * `sync` mirrors the replicated windup: the ground telegraph charges toward the hit time and
+ * the rake plays from the same timeline. `confirm` is the host's melee result; it adds the
+ * contact mark and covers strikes whose windup this client never saw. Blood stays with the
+ * combat hit effects of the damage pipeline.
+ */
 export class EnemyClawRenderer {
-  private readonly telegraphs = new Map<string, Telegraph>();
-  private readonly freeTelegraphs: Phaser.GameObjects.Graphics[] = [];
-  private readonly slashes = new Set<Phaser.GameObjects.Graphics>();
-  private readonly freeSlashes: Phaser.GameObjects.Graphics[] = [];
+  private readonly store = new EnemyClawVfxStore();
+  private readonly layers: EnemyClawGpuLayer[] = [];
+  private readonly active = new Map<string, ActiveClaw>();
+  /** Strike identities whose rake already played or was deliberately skipped. */
   private readonly struck = new Map<string, number>();
   private readonly confirmed = new Map<string, number>();
-  private flecks: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
-  private blood: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private lastRetire = Number.NaN;
+  private prepareCalls = 0;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(private readonly scene: Phaser.Scene) {
+    const time = (): number => this.store.time(this.clock());
+    const ground = createEnemyClawGpuLayer(scene, this.store, ClawVfxPass.Ground, DEPTH.PLAYERS - 0.1, time);
+    const top = createEnemyClawGpuLayer(scene, this.store, ClawVfxPass.Top, DEPTH_TRACE, time);
+    // Emissive trace above the night lightmap, below the enemy eye auras.
+    const night = createEnemyClawGpuLayer(scene, this.store, ClawVfxPass.Night, DEPTH_LIGHTING + 0.08, time,
+      () => emissiveAlpha(0.85));
+    for (const layer of [ground, top, night]) if (layer) this.layers.push(layer);
+  }
 
-  sync(id: string, state: EnemyClawState, x: number, y: number, now: number, visible: boolean): void {
+  /** Links all shader passes before combat; polled by the world's presentation preparation. */
+  prepare(): boolean {
+    this.prepareCalls++;
+    return this.prepareCalls >= MAX_PREPARE_CALLS || this.layers.every(layer => layer.isReady());
+  }
+
+  /**
+   * `now` is the synchronized clock of the attack timeline. It is converted once per spawn to
+   * the local presentation clock, so a late or missing sync never freezes a running rake.
+   */
+  sync(id: string, state: EnemyClawState, x: number, y: number, now: number, visible: boolean,
+    color = ENEMY_CLAW_HOSTILE_COLOR): void {
+    const clock = this.clock();
+    this.retire(clock);
     const attack = state.attack;
     if (!attack || now >= attack.endsAt || !visible) { this.release(id); return; }
-    let current = this.telegraphs.get(id);
-    if (current?.attack.attackId !== attack.attackId) {
-      this.release(id);
-      const graphics = this.freeTelegraphs.pop() ?? this.graphics('enemyStatus');
-      graphics.clear().setDepth(DEPTH.PLAYERS - .1).setVisible(true);
-      const half = attack.arcDegrees * Math.PI / 360;
-      const points = [new Phaser.Math.Vector2(0, 0)];
-      for (let i = 0; i <= 24; i++) {
-        const angle = -half + 2 * half * i / 24;
-        points.push(new Phaser.Math.Vector2(Math.cos(angle) * attack.range, Math.sin(angle) * attack.range));
-      }
-      graphics.fillStyle(0xd55340, .085).fillPoints(points, true);
-      graphics.lineStyle(1.5, 0xf18b6d, .9).strokePoints(points.slice(1), false);
-      graphics.lineStyle(1, 0xa84437, .55);
-      graphics.lineBetween(0, 0, points[1].x, points[1].y);
-      graphics.lineBetween(0, 0, points[points.length - 1].x, points[points.length - 1].y);
-      // An initial late snapshot establishes a baseline, never replays past strikes.
-      current = { attack, graphics, crossedImpact: now >= attack.hitAt };
-      if (current.crossedImpact) { this.prune(); this.struck.set(attack.attackId, now); }
-      this.telegraphs.set(id, current);
+    const current = this.active.get(id);
+    if (current?.attackId === attack.attackId) {
+      if (now < attack.hitAt) this.store.move(attack.attackId, x, y);
+      return;
     }
-    const progress = Math.max(0, Math.min(1, (now - attack.startedAt) / (attack.hitAt - attack.startedAt)));
-    current.graphics.setPosition(x, y).setRotation(attack.angle).setAlpha(.45 + .5 * progress).setVisible(now < attack.hitAt);
-    if (!current.crossedImpact && now >= attack.hitAt) {
-      current.crossedImpact = true;
-      this.strike(attack.attackId, x, y, attack.angle, attack.range, attack.arcDegrees);
-    }
+    this.release(id);
+    // A windup first seen after its hit establishes a baseline; past strikes never replay.
+    if (now >= attack.hitAt) { this.remember(this.struck, attack.attackId, clock); return; }
+    const offset = clock - now;
+    const added = this.store.addAttack(attack.attackId, {
+      x, y, angle: attack.angle, range: attack.range, halfArc: attack.arcDegrees * Math.PI / 360,
+      startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset, hitAt: attack.hitAt + offset, color,
+    }, clock);
+    if (added) this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset });
   }
 
   confirm(swing: SyncedMeleeSwing): void {
     const id = swing.clawAttackId ?? `${swing.shooterId}:${swing.swingId}`;
-    this.prune();
+    const clock = this.clock();
+    this.retire(clock);
     if (this.confirmed.has(id)) return;
-    this.confirmed.set(id, this.scene.time.now + 4000);
-    this.strike(id, swing.x, swing.y, swing.angle, swing.range, swing.arcDegrees);
+    this.remember(this.confirmed, id, clock);
+    if (!this.store.has(id) && !this.struck.has(id)) {
+      // The windup never reached this client: play the rake from the authoritative result.
+      this.remember(this.struck, id, clock);
+      this.store.addAttack(id, {
+        x: swing.x, y: swing.y, angle: swing.angle, range: swing.range, halfArc: swing.arcDegrees * Math.PI / 360,
+        startedAt: clock - 2, strikeAt: clock - 1, hitAt: clock, color: ENEMY_CLAW_HOSTILE_COLOR,
+      }, clock);
+    }
     if (!swing.hitPlayer || swing.impactX === undefined || swing.impactY === undefined) return;
-    this.ensureParticles();
-    this.blood!.setEmitterAngle({ min: Phaser.Math.RadToDeg(swing.angle) - 24, max: Phaser.Math.RadToDeg(swing.angle) + 24 });
-    this.blood!.explode(Math.min(8, Math.max(0, Math.round(5 * (swing.bloodEffectMultiplier ?? 1)))), swing.impactX, swing.impactY);
+    const size = Math.max(15, Math.min(34, swing.range * 0.36));
+    this.store.addContact(`${id}:contact`, swing.impactX, swing.impactY, swing.angle, size,
+      this.store.colorOf(id) ?? ENEMY_CLAW_HOSTILE_COLOR, clock);
   }
 
-  private strike(id: string, x: number, y: number, angle: number, range: number, arc: number): void {
-    this.prune();
-    if (this.struck.has(id)) return;
-    this.struck.set(id, this.scene.time.now + 4000);
-    if (this.slashes.size >= 96) return;
-    const graphics = this.freeSlashes.pop() ?? this.graphics('biteEffects');
-    graphics.clear().setPosition(x, y).setRotation(angle).setDepth(DEPTH_TRACE).setAlpha(1).setVisible(true);
-    this.slashes.add(graphics);
-    // Mirrored tapered claw wakes, contained inside the announced sector.
-    const spread = Math.sin(arc * Math.PI / 360) * .66;
-    for (const side of [-1, 1]) {
-      const edge: Phaser.Math.Vector2[] = [], inner: Phaser.Math.Vector2[] = [];
-      for (let i = 0; i <= 14; i++) {
-        const t = i / 14, px = range * (.20 + .72 * t);
-        const py = side * range * spread * (.18 + .63 * t + .25 * Math.sin(t * Math.PI));
-        const width = range * .055 * Math.sin(Math.PI * t);
-        edge.push(new Phaser.Math.Vector2(px, py + width)); inner.unshift(new Phaser.Math.Vector2(px, py - width));
-      }
-      graphics.fillStyle(0x472720, .72).fillPoints([...edge, ...inner], true);
-      graphics.lineStyle(Math.max(.8, range * .013), 0xf4d8b7, .93).strokePoints(edge, false);
-    }
-    this.scene.tweens.add({ targets: graphics, alpha: 0, duration: 155, ease: 'Cubic.easeOut', onComplete: () => {
-      this.slashes.delete(graphics); graphics.clear().setVisible(false); this.freeSlashes.push(graphics);
-    } });
-    this.ensureParticles();
-    this.flecks!.setEmitterAngle({ min: Phaser.Math.RadToDeg(angle) - 15, max: Phaser.Math.RadToDeg(angle) + 15 });
-    for (const side of [-1, 1]) {
-      const dx = range * .72, dy = side * range * spread * .64;
-      this.flecks!.explode(2, x + Math.cos(angle) * dx - Math.sin(angle) * dy, y + Math.sin(angle) * dx + Math.cos(angle) * dy);
-    }
-  }
-
-  private graphics(family: 'enemyStatus' | 'biteEffects'): Phaser.GameObjects.Graphics {
-    const graphics = this.scene.add.graphics();
-    if (family === 'enemyStatus') registerGraphicsObject(this.scene, 'enemyStatus', graphics);
-    else registerGraphicsObject(this.scene, 'biteEffects', graphics);
-    return graphics;
-  }
-
-  private ensureParticles(): void {
-    if (this.flecks) return;
-    ensureCanvasTexture(this.scene.textures, '__enemy_claw_fleck', 12, 6, ctx => {
-      const gradient = ctx.createLinearGradient(0, 0, 12, 0);
-      gradient.addColorStop(0, 'rgba(255,255,255,0)'); gradient.addColorStop(.65, 'rgba(255,255,255,.95)'); gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gradient; ctx.beginPath(); ctx.moveTo(0, 3); ctx.lineTo(9, 1); ctx.lineTo(12, 3); ctx.lineTo(9, 5); ctx.closePath(); ctx.fill();
-    });
-    this.flecks = createEmitter(this.scene, 0, 0, '__enemy_claw_fleck', {
-      emitting: false, lifespan: { min: 90, max: 160 }, speed: { min: 35, max: 95 },
-      scale: { start: .42, end: .05 }, alpha: { start: .75, end: 0 }, tint: 0xebc5a1,
-      maxParticles: 384, maxAliveParticles: 192,
-    }, DEPTH_TRACE, 'standard', 'bite');
-    this.blood = createEmitter(this.scene, 0, 0, '__enemy_claw_fleck', {
-      emitting: false, lifespan: { min: 120, max: 220 }, speed: { min: 35, max: 100 },
-      scale: { start: .55, end: .1 }, alpha: { start: .85, end: 0 }, tint: 0x9e302a,
-      maxParticles: 256, maxAliveParticles: 128,
-    }, DEPTH_TRACE, 'standard', 'bite');
-  }
-
-  private prune(): void {
-    // Keep recent identities across long packet delays, with a fixed memory bound.
-    for (const entries of [this.struck, this.confirmed]) while (entries.size >= 4096) entries.delete(entries.keys().next().value!);
-  }
-
+  /** Before the hit a cancelled windup vanishes; after it the running rake finishes on its own. */
   release(id: string): void {
-    const entry = this.telegraphs.get(id);
+    const entry = this.active.get(id);
     if (!entry) return;
-    entry.graphics.clear().setVisible(false);
-    if (this.freeTelegraphs.length < 128) this.freeTelegraphs.push(entry.graphics); else entry.graphics.destroy();
-    this.telegraphs.delete(id);
+    this.active.delete(id);
+    const clock = this.clock();
+    if (clock >= entry.hitClock) this.remember(this.struck, entry.attackId, clock);
+    else this.store.remove(entry.attackId);
   }
 
   clear(): void {
-    for (const id of this.telegraphs.keys()) this.release(id);
-    for (const graphics of this.slashes) {
-      this.scene.tweens.killTweensOf(graphics); graphics.clear().setVisible(false); this.freeSlashes.push(graphics);
-    }
-    this.slashes.clear(); this.struck.clear(); this.confirmed.clear();
-    for (const emitter of [this.flecks, this.blood]) if (emitter) killAllAndResetParticlePositions(emitter);
+    this.active.clear();
+    this.struck.clear();
+    this.confirmed.clear();
+    this.store.clear();
   }
 
   destroy(): void {
     this.clear();
-    for (const graphics of [...this.freeTelegraphs, ...this.freeSlashes]) graphics.destroy();
-    this.freeTelegraphs.length = this.freeSlashes.length = 0;
-    this.flecks?.destroy(); this.blood?.destroy(); this.flecks = this.blood = null;
+    for (const layer of this.layers) layer.image.destroy();
+    this.layers.length = 0;
+  }
+
+  private clock(): number { return this.scene.time.now; }
+
+  private retire(clock: number): void {
+    if (clock === this.lastRetire) return;
+    this.lastRetire = clock;
+    this.store.retire(clock);
+  }
+
+  /** Keeps recent identities across long packet delays, with a fixed memory bound. */
+  private remember(entries: Map<string, number>, id: string, clock: number): void {
+    // Insertion order equals expiry order, so the sweep stops at the first live identity.
+    for (const [key, expiresAt] of entries) {
+      if (expiresAt > clock && entries.size < MAX_IDENTITIES) break;
+      entries.delete(key);
+    }
+    entries.set(id, clock + IDENTITY_TTL_MS);
   }
 }
