@@ -563,7 +563,7 @@
       "model": {
         "exposedRibs": 3
       },
-      "orthoScale": 2.8,
+      "orthoScale": 6.72,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
@@ -610,11 +610,13 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.12
           }
         }
       ],
-      "designReference": "scripts/asset-pipeline/references/zombie-badger-concept.png"
+      "designReference": "scripts/asset-pipeline/references/zombie-badger-concept.png",
+      "displayScale": 2.4
     },
     {
       "id": "demon-badger",
@@ -649,7 +651,7 @@
       "model": {
         "hornSweep": 1
       },
-      "orthoScale": 2.98,
+      "orthoScale": 7.152,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
@@ -696,10 +698,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.192
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "rabid-badger",
@@ -734,7 +738,7 @@
       "model": {
         "spineLength": 0.84
       },
-      "orthoScale": 3.04,
+      "orthoScale": 7.296,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
@@ -781,10 +785,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.216
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "grave-titan",
@@ -819,7 +825,7 @@
       "model": {
         "mossSpread": 1
       },
-      "orthoScale": 3.38,
+      "orthoScale": 8.112,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -867,10 +873,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.352
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "spore-warden",
@@ -905,7 +913,7 @@
       "model": {
         "capRadius": 0.31
       },
-      "orthoScale": 2.92,
+      "orthoScale": 7.008,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
@@ -952,10 +960,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.168
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "plague-medic",
@@ -990,7 +1000,7 @@
       "model": {
         "kitWidth": 0.83
       },
-      "orthoScale": 3,
+      "orthoScale": 7.2,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -1038,10 +1048,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.2
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "void-stalker",
@@ -1076,7 +1088,7 @@
       "model": {
         "coreRadius": 0.24
       },
-      "orthoScale": 2.94,
+      "orthoScale": 7.056,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -1124,10 +1136,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.176
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "stink-broodmother",
@@ -1160,7 +1174,7 @@
       "production": "reference",
       "recipe": "stink-broodmother",
       "model": {},
-      "orthoScale": 3.18,
+      "orthoScale": 7.632,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
@@ -1208,10 +1222,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.272
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "alien-badger",
@@ -1300,7 +1316,7 @@
         ],
         "upperBodyMotion": "stable-grip"
       },
-      "orthoScale": 2.62,
+      "orthoScale": 6.288,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
         "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
@@ -1348,10 +1364,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.048
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "thrower-badger",
@@ -1384,7 +1402,7 @@
       "production": "reference",
       "recipe": "thrower-badger",
       "model": {},
-      "orthoScale": 2.72,
+      "orthoScale": 6.528,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
@@ -1432,10 +1450,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.088
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "inferno-colossus",
@@ -1468,7 +1488,7 @@
       "production": "reference",
       "recipe": "inferno-colossus",
       "model": {},
-      "orthoScale": 3.94,
+      "orthoScale": 9.456,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -1516,10 +1536,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.576
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "pyro-badger",
@@ -1608,7 +1630,7 @@
         ],
         "upperBodyMotion": "stable-grip"
       },
-      "orthoScale": 2.62,
+      "orthoScale": 6.288,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
         "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
@@ -1656,10 +1678,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.048
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "timebomb-badger",
@@ -1692,7 +1716,7 @@
       "production": "reference",
       "recipe": "timebomb-badger",
       "model": {},
-      "orthoScale": 2.46,
+      "orthoScale": 5.904,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -1741,10 +1765,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 0.984
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "void-hunter",
@@ -1782,7 +1808,7 @@
       },
       "recipe": "void-hunter",
       "model": {},
-      "orthoScale": 3.71,
+      "orthoScale": 8.904,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -1830,10 +1856,12 @@
             "impact": 11
           },
           "parameters": {
-            "strength": 1
+            "strength": 1,
+            "leapDistance": 1.484
           }
         }
-      ]
+      ],
+      "displayScale": 2.4
     },
     {
       "id": "badger",

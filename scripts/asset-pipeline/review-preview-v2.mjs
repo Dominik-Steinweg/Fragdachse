@@ -43,11 +43,11 @@ export async function comparisonSource(root, spec, override) {
       const idle = m.frames.find(f => f.index === m.idleFrame);
       if (idle) {
         const master = await safePath(base, idle.file);
-        if (await exists(master)) return describe(master, 'imported-master', `${revision} / ${variant} · Master`);
+        if (await exists(master)) return { ...await describe(master, 'imported-master', `${revision} / ${variant} · Master`), displayScale: imported.displayScale ?? 1 };
       }
     }
     const file = await safePath(path.join(root, 'public'), imported.idlePath);
-    if (await exists(file)) return describe(file, 'imported-runtime', `${revision} / ${variant} · Runtime, geringere Quellauflösung`);
+    if (await exists(file)) return { ...await describe(file, 'imported-runtime', `${revision} / ${variant} · Runtime, geringere Quellauflösung`), displayScale: imported.displayScale ?? 1 };
     return { kind: 'missing', label: 'Importierter Vergleich fehlt lokal' };
   }
   if (spec.reference) {
@@ -73,8 +73,10 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
   const manifestFile = await safePath(folder, 'preview.json');
   const m = await json(manifestFile);
   if (m.status !== 'authoring-preview' || !m.indices?.length || m.indices.some(i => !Number.isInteger(i) || i < 0)) throw new Error('Ungültiges Vorschau-Manifest.');
-  const size = m.spec.targetSize;
-  if (!Number.isInteger(size) || size < 1 || size > 128) throw new Error('Ungültige Nominalgröße.');
+  const displayScale = m.spec.displayScale ?? 1;
+  if (!Number.isInteger(m.spec.targetSize) || m.spec.targetSize < 1 || m.spec.targetSize > 128
+      || !Number.isFinite(displayScale) || displayScale < 1 || displayScale > 3) throw new Error('Ungültige Nominalgröße.');
+  const size = Math.round(m.spec.targetSize * displayScale);
   const source = await comparisonSource(root, m.spec, compare);
   const frame = async index => safePath(folder, `frame-${String(index).padStart(4, '0')}.png`);
   const idle = await frame(0);
@@ -96,11 +98,11 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
   const motions = m.indices.filter(i => i !== 0), columns = 4, width = 800;
   const height = 382 + Math.ceil(motions.length / columns) * 225;
   let svg = text(20, 28, `${m.spec.label} · ${m.variant} · Authoring-Vorschau`, 19)
-    + text(20, 51, `Vergrößert und ${size} px Spielgröße · statische Posen, keine Bewegungsabnahme`)
+    + text(20, 51, `Vergrößert und ${m.spec.targetSize} px Körpergröße · statische Posen, keine Bewegungsabnahme`)
     + text(30, 80, 'Bisher: ' + source.label, 12) + text(430, 80, 'Neu: idle', 12);
   const layers = [];
-  async function add(file, x, y, transform) {
-    for (const [display, cy] of [[220, y], [size, y + 146]]) {
+  async function add(file, x, y, transform, scale = m.spec.displayScale ?? 1) {
+    for (const [display, cy] of [[Math.round(220 * scale / (m.spec.displayScale ?? 1)), y], [Math.round(m.spec.targetSize * scale), y + 146]]) {
       const angle = (transform?.rotationOffset ?? 0) * 180 / Math.PI;
       const ratio = display / size;
       if (rock) await centered(layers, display === size ? rock : await sharp(rock).resize(Math.round(32 * ratio)).png().toBuffer(), x, cy);
@@ -114,7 +116,7 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
       previous = await sharp({ create: { width: h.referenceSize, height: h.referenceSize, channels: 4, background: '#00000000' } })
         .composite([{ input: await readFile(previous), left: Math.round(h.grip[0] - h.referenceGrip[0]), top: Math.round(h.grip[1] - h.referenceGrip[1]) }]).png().toBuffer();
     }
-    await add(previous, 200, 204, source.transform);
+    await add(previous, 200, 204, source.transform, source.displayScale ?? 1);
   }
   if (hasIdle) await add(idle, 600, 204);
   else svg += text(430, 204, 'Idle fehlt in dieser alten Vorschau.');
@@ -130,7 +132,7 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
 
   // Real viewer textures at their native tiling scale; stationary rock under rotated turrets.
   const backgrounds = [['Hell', '#d5d9d5'], ['Dunkel', '#131a21'], ['Gras', 'public/assets/sprites/gras_bg_tile.png'], ['Stahl', 'public/assets/sprites/train/train_material_dark_top.png']];
-  let scaleSvg = text(20, 28, `${m.spec.label} · ${size} px · ${m.variant}`, 19)
+  let scaleSvg = text(20, 28, `${m.spec.label} · ${m.spec.targetSize} px Körpergröße · ${m.variant}`, 19)
     + text(20, 51, `0° / 45° / 90° · Originalpixel ohne Hochskalierung${rock ? ' · Fels 32 px' : ''}`);
   const scaleLayers = [];
   const rowHeight = Math.max(100, Math.ceil(size * Math.SQRT2) + 20);

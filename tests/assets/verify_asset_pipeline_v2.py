@@ -172,6 +172,7 @@ def verify(scene, manifest, report, source_folder):
     spec = json.loads(scene['asset_manifest'])
     for key in ('id', 'category', 'recipe', 'targetSize', 'sourceSizes', 'forward', 'pivot', 'orthoScale', 'requiredClips'):
         require(spec[key] == manifest[key], f'Embedded asset description differs: {key}')
+    require(spec.get('displayScale', 1) == manifest.get('displayScale', 1), 'Padded canvas scale differs')
     require(json.loads(scene['asset_clips']) == manifest['clips'], 'Embedded clips differ from export manifest')
     require(scene['inputHash'] == manifest['inputHash'], 'Embedded input fingerprint differs')
     require(scene['pipelineVersion'] == manifest['pipelineVersion'] == 2, 'Expected V2 scene and manifest')
@@ -326,6 +327,19 @@ def verify(scene, manifest, report, source_folder):
             require(bool(different_meshes(first, last)), 'Last loop sample duplicates its first pose')
         else:
             assert_same_pose(idle, last, f'{clip["name"]} return to idle')
+        if clip['name'] == 'claw' and 'leapDistance' in clip.get('parameters', {}):
+            controls = [ob for ob in owners if ob.get('attackMotion')]
+            require(len(controls) == 1, 'Pounce requires one authored visual motion control')
+            control = controls[0]
+            markers = clip['markers']
+            positions = []
+            for pose_index in (markers['strike'], markers['impact'], markers['impact'] + 1, len(clip['frames']) - 1):
+                set_frame(scene, frames[clip['frames'][pose_index]]['blenderFrame'])
+                positions.append(control.location.y)
+            require(positions[0] < 0 < positions[1] < positions[2], 'Pounce must coil, launch and follow through beyond contact')
+            require(abs(positions[-1]) < EPSILON, 'Pounce must return to its fixed pivot')
+            checks.append({'name': 'claw_pounce_anticipation_contact_followthrough', 'passed': True,
+                           'forwardPositions': positions})
         moved_all.update(moved)
         per_clip.append({'name': clip['name'], 'loop': clip['loop'], 'movingMeshes': len(moved),
                          'samples': len(clip['frames'])})

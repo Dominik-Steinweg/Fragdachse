@@ -329,16 +329,16 @@ interface HitscanTarget {
 /**
  * Trefferziel eines noch sprite-gefuehrten Gegners.
  *
- * Bewusst genau eine Stelle: solange Gegner ihren Radius aus dem Anzeigemass ableiten, steht
- * diese Ableitung hier und nicht verstreut an jedem Aufruf.
+ * Der Trefferkreis bleibt unabhängig vom transparenten Bewegungsraum des Sprites.
  */
 function toSpriteHitscanTarget(
   sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Arc,
+  hitRadius: number,
 ): HitscanTarget {
   return {
     x: sprite.x,
     y: sprite.y,
-    hitRadius: Math.max(sprite.displayWidth, sprite.displayHeight) * 0.5,
+    hitRadius,
     body: sprite.body as { velocity: { x: number; y: number } } | null,
   };
 }
@@ -1819,12 +1819,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!enemy.sprite.active || !this.isAlive(enemy.id)) continue;
-      const bounds = enemy.sprite.getBounds(this.projectileTargetBounds);
+      const radius = enemy.getCollisionRadius();
       sink(
         'enemy', enemy.id, enemy.id,
         enemy.sprite.x, enemy.sprite.y,
-        Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5,
-        bounds.left, bounds.top, bounds.right, bounds.bottom,
+        radius,
+        enemy.sprite.x - radius, enemy.sprite.y - radius, enemy.sprite.x + radius, enemy.sprite.y + radius,
       );
     }
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
@@ -3263,7 +3263,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         selectSwingTarget({
           kind: 'enemy', id: enemy.id, key: `enemy:${enemy.id}`,
           x: enemy.sprite.x, y: enemy.sprite.y,
-          radius: Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5,
+          radius: enemy.getCollisionRadius(),
         });
       }
     }
@@ -3681,7 +3681,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
-        toSpriteHitscanTarget(enemy.sprite),
+        toSpriteHitscanTarget(enemy.sprite, enemy.getCollisionRadius()),
         traceThickness,
         applyFavorTheShooter,
       );

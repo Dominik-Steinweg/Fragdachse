@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { PIPELINE_ASSETS, pipelineAnimationKey } from '../config/pipelineAssets';
+import { PIPELINE_ASSETS, pipelineAnimationKey, getPipelineSpriteScale } from '../config/pipelineAssets';
 
 /**
  * Shared walking-animation contract for every badger-shaped figure.
@@ -11,7 +11,8 @@ import { PIPELINE_ASSETS, pipelineAnimationKey } from '../config/pipelineAssets'
  * all derive from it.
  *
  * The sheet resolution never decides how big a figure is drawn. Display size stays the
- * entity's decision (`PLAYER_SIZE`, `ResolvedCoopDefenseEnemyConfig.size`), see
+ * entity's decision (`PLAYER_SIZE`, `ResolvedCoopDefenseEnemyConfig.size`); an authored
+ * displayScale adds transparent motion room without changing that body's size. See
  * docs/ai/rendering.md.
  */
 export interface WalkingSheet {
@@ -27,6 +28,8 @@ export interface WalkingSheet {
   readonly margin: number;
   readonly spacing: number;
   readonly frameRate: number;
+  /** Transparent room for authored motion, independent of the figure's collision diameter. */
+  readonly displayScale: number;
   readonly idle?: {
     readonly animationKey: string;
     readonly frames: readonly number[];
@@ -58,6 +61,7 @@ const WALKING_SHEETS: readonly WalkingSheet[] = PIPELINE_ASSETS
       frameCount: asset.layout.frameCount,
       frames: clip.frames,
       frameRate: clip.frameRate,
+      displayScale: getPipelineSpriteScale(asset.textureKey),
       idle: idle ? { animationKey: pipelineAnimationKey(asset, idle), frames: idle.frames, frameRate: idle.frameRate } : undefined,
       staticTextureKey: asset.textureKey,
     };

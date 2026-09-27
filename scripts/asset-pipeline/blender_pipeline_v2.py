@@ -57,6 +57,8 @@ def resolve_spec(root, asset_id):
         raise ValueError('V2 assets require centered pivot and category-facing convention')
     if not math.isfinite(spec['orthoScale']) or spec['orthoScale'] <= 0:
         raise ValueError('Invalid authored ortho scale')
+    if not 1 <= spec.get('displayScale', 1) <= 3:
+        raise ValueError('Display scale must preserve a finite padded canvas between 1 and 3')
     names = set()
     for clip in spec['clips']:
         if clip['name'] in names or not isinstance(clip['loop'], bool):
@@ -197,6 +199,13 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
     asset['sockets'].update(ctx.eye_sockets)
     if spec['category'] == 'enemy' and set(ctx.eye_sockets) != {'eyeLeft', 'eyeRight'}:
         raise ValueError('Enemy recipes must supply both direct eye mesh sockets')
+    if spec['category'] == 'enemy':
+        from rigs_v2 import control, attach
+        children = list(asset['root'].children)
+        motion = control(scene, 'Attack motion — visual pounce', parent=asset['root'])
+        motion['attackMotion'] = True
+        attach(children, motion)
+        asset['parts']['attack_motion'] = motion
     samples, clips = motions_v2.author(asset, spec['clips'])
     scene.frame_start = 0
     scene.frame_end = math.ceil(clips[-1]['timelineEnd']) if clips else 0

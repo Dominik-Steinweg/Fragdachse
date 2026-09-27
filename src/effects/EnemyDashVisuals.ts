@@ -59,7 +59,7 @@ export class EnemyDashVisualTracker {
           0.5,
           enemy.sprite.rotation,
           enemy.getImageKey(),
-          enemy.getSize(),
+          enemy.getVisualSize(),
         );
         this.trailTimers.set(enemy.id, now + TRAIL_INTERVAL_MS);
       }

@@ -23,7 +23,7 @@ function configure(which) {
   state.resolved[which] = r;
   options(`run-${which}`, constructionsFor(library, r.asset.id).map(c => [`${c.run} · V${c.version}`, c.key]), r.construction.key);
   options(`variant-${which}`, r.asset.variants.map(v => [v.label || v.variant, v.variant]), r.variant.variant);
-  options(`size-${which}`, [...r.variant.sources].sort((a, b) => a.size - b.size).map(s => [`${s.size} px${s.size === r.asset.targetSize ? ' · nativ' : ''}`, s.size]), r.source.size);
+  options(`size-${which}`, [...r.variant.sources].sort((a, b) => a.size - b.size).map(s => [`${s.size} px${s.size === Math.round(r.asset.targetSize * (r.asset.displayScale ?? 1)) ? ' · nativ' : ''}`, s.size]), r.source.size);
   $(`selection-${which}`).textContent = r.asset.preferred ? `Produktionsauswahl: ${r.asset.preferred.variant} · ${r.asset.preferred.size} px. ${r.asset.preferred.reason || ''}` : 'Noch keine Produktionsauswahl für diese Konstruktion.';
   const master = $(`master-${which}`), masterUrl = r.variant.master || r.source.idleUrl || r.source.url;
   if (master.getAttribute('src') !== masterUrl) {
@@ -140,7 +140,7 @@ async function refresh() {
 function layout() {
   if (!scene) return;
   const active = [$('compare').checked ? state.resolved.b : null, state.resolved.a].filter(Boolean);
-  const footprint = Math.max(...active.map(r => Boolean(r.asset.heldItem) && $('held').checked ? 76 : r.asset.targetSize));
+  const footprint = Math.max(...active.map(r => Boolean(r.asset.heldItem) && $('held').checked ? 76 : r.asset.targetSize*(r.asset.displayScale??1)));
   // Detail enlargement must also enlarge the review area: long held weapons and
   // boss sprites otherwise disappear behind its edge or the bottom labels.
   $('canvas').style.height = `${Math.max(245, footprint * Number($('factor').value) + 100)}px`;
@@ -192,7 +192,7 @@ class ReviewScene extends Phaser.Scene {
       const x=w*(column+.5)/visible.length+($('move').checked?Math.sin(state.travelTime*.7)*Math.min(45,w/visible.length*.15):0), y=(h-55)*.5;
       p.fill.setFillStyle(backgrounds[bg][1]).setPosition(w*(column+.5)/visible.length,h/2).setSize(w/visible.length,h);
       p.tile.setVisible(bg!=='light').setPosition(w*(column+.5)/visible.length,h/2).setSize(w/visible.length,h); if(bg!=='light')p.tile.setTexture(`bg-${bg}`,'__BASE');
-      const rotation=state.angle*Math.PI/180, size=a.targetSize*factor;
+      const rotation=state.angle*Math.PI/180, size=a.targetSize*(which==='original'?1:(a.displayScale??1))*factor;
       p.rock.setVisible(a.category==='turret'&&$('mount').checked).setPosition(x,y).setDisplaySize(32*factor,32*factor);
       p.circle.setVisible(!!a.collisionDiameter&&$('collision').checked).setPosition(x,y).setRadius((a.collisionDiameter||0)*factor/2);
       const heldView=supportsHeldView(a,which==='original');

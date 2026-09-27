@@ -21,7 +21,7 @@ export class HealthTestObject {
   displayHeight = 32;
   writes = 0;
   texture = { key: 'test', source: [{ width: 32, height: 32 }] };
-  frame = { name: '__BASE', width: 32, height: 32 };
+  frame = { name: '__BASE', width: 32, height: 32, realWidth: 32, realHeight: 32 };
   anims = { isPlaying: false, currentAnim: null, stop() {} };
   body: any = null;
   private destroyListeners: (() => void)[] = [];
@@ -89,7 +89,11 @@ export function healthBarTestScene() {
   }
   scene.physics = { add: {
     existing(object: HealthTestObject) {
-      const body: any = { velocity: { x: 0, y: 0 }, setCircle() {}, setCollideWorldBounds() {},
+      let sourceRadius = object.frame.realWidth * 0.5;
+      const body: any = { velocity: { x: 0, y: 0 },
+        get halfWidth() { return sourceRadius * object.displayWidth / object.frame.realWidth; },
+        set halfWidth(radius: number) { sourceRadius = radius * object.frame.realWidth / object.displayWidth; },
+        setCircle(radius: number) { sourceRadius = radius; }, setCollideWorldBounds() {},
         setBounce() {}, setSize() {}, updateFromGameObject() {},
         reset(x: number, y: number) { object.setPosition(x, y); },
         setVelocity(x: number, y: number) { body.velocity.x = x; body.velocity.y = y; },

@@ -33,6 +33,7 @@ function validateDigests(values, label) {
 export function validateManifestV2(m) {
   if (m.pipelineVersion !== 2) throw new Error('Expected V2 asset manifest');
   validateManifest({ ...m, pipelineVersion: 1 });
+  if (m.displayScale !== undefined && (!Number.isFinite(m.displayScale) || m.displayScale < 1 || m.displayScale > 3)) throw new Error('Invalid display scale');
   if (!/^[a-z0-9][a-z0-9-]*$/.test(m.revision)) throw new Error('Invalid revision');
   if (!Array.isArray(m.frames) || !m.frames.length || m.idleFrame !== 0) throw new Error('V2 requires frames and idleFrame 0');
   // Historical immutable V2 bundles remain readable; new enemy builds require sockets.
@@ -124,7 +125,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     const input = await readFile(inside(folder, frame.file));
     if (sha256(input) !== frame.sha256) throw new Error(`Master frame changed: ${frame.file}`);
     const report = await inspectMaster(input, m.masterSize);
-    report.native = await nativeMetrics(input, m.targetSize);
+    report.native = await nativeMetrics(input, Math.round(m.targetSize * (m.displayScale ?? 1)));
     masters.push(input); reports.push(report);
   }
   const blendHash = sha256(await readFile(path.join(folder, 'asset.blend')));
@@ -151,7 +152,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
 }
 
 function presentationContract(m) {
-  return JSON.stringify({ id: m.id, revision: m.revision, category: m.category, targetSize: m.targetSize, sourceSizes: m.sourceSizes, pivot: m.pivot, forward: m.forward,
+  return JSON.stringify({ id: m.id, revision: m.revision, category: m.category, targetSize: m.targetSize, displayScale: m.displayScale, sourceSizes: m.sourceSizes, pivot: m.pivot, forward: m.forward,
     masterSize: m.masterSize, idleFrame: m.idleFrame, frames: m.frames.map(({ index, file, blenderFrame }) => ({ index, file, blenderFrame })), clips: m.clips,
     camera: { ...m.camera, bounds: undefined }, textures: m.textures, sources: m.sources, reference: m.reference, referenceTransform: m.referenceTransform, heldItem: m.heldItem });
 }
@@ -192,6 +193,7 @@ export async function selectVariantV2(assetFolder, variant, size, reason) {
   if (await exists(selectionFile)) throw new Error('Selection already exists; retain approved revision');
   const { files, manifest: m, exported } = await bundleFiles(assetFolder, variant, size);
   const selection = { version: 2, id: m.id, revision: m.revision, inputHash: exported.inputHash, variant, size, reason: reason.trim(),
+    ...(m.displayScale !== undefined ? { displayScale: m.displayScale } : {}),
     idle: `${variant}/sprite-${size}.png`, sheet: `${variant}/sheet-${size}.png`, layout: exported.sheets[size], idleFrame: m.idleFrame, clips: m.clips,
     files, bundleSha256: sha256(jsonBytes(files)) };
   await writeFile(selectionFile, jsonBytes(selection), { flag: 'wx' });
@@ -203,6 +205,7 @@ export async function verifySelectionV2(assetFolder) {
   if (selection.version !== 2 || !validVariant(selection.variant) || !selection.reason?.trim()) throw new Error('Invalid V2 selection');
   const { files, manifest: m, exported } = await bundleFiles(assetFolder, selection.variant, selection.size);
   if (JSON.stringify(selection.files) !== JSON.stringify(files) || selection.bundleSha256 !== sha256(jsonBytes(files)) || selection.inputHash !== exported.inputHash || selection.id !== m.id || selection.revision !== m.revision
+    || selection.displayScale !== m.displayScale
     || selection.idle !== `${selection.variant}/sprite-${selection.size}.png` || selection.sheet !== `${selection.variant}/sheet-${selection.size}.png`
     || JSON.stringify(selection.layout) !== JSON.stringify(exported.sheets[selection.size]) || selection.idleFrame !== m.idleFrame || JSON.stringify(selection.clips) !== JSON.stringify(m.clips)) throw new Error('Selected bundle changed; retain approved revision');
   return selection;
@@ -226,15 +229,16 @@ export async function archiveAssetV2(assetFolder, python = process.env.FD_ASSET_
 
 export async function reviewAssetV2(assetFolder, exports) {
   const layers = [], labels = [];
-  const cell = Math.max(108, ...exports.map(e => e.manifest.targetSize + 40)), labelHeight = 28, columns = 8;
+  const cell = Math.max(108, ...exports.map(e => Math.round(e.manifest.targetSize * (e.manifest.displayScale ?? 1)) + 40)), labelHeight = 28, columns = 8;
   let row = 0;
   for (const result of exports) {
     const m = result.manifest;
     labels.push({ text: `${variantLabel(m)} · ${m.targetSize} px nominal`, x: 10, y: row * cell + 20 });
     row++;
+    const canvasSize = Math.round(m.targetSize * (m.displayScale ?? 1));
     for (let index = 0; index < m.frames.length; index++) {
-      const png = await resizeMaster(inside(path.join(assetFolder, m.variant), m.frames[index].file), m.targetSize);
-      layers.push({ input: png, left: (index % columns) * cell + Math.floor((cell - m.targetSize) / 2), top: row * cell + Math.floor((cell - m.targetSize) / 2) });
+      const png = await resizeMaster(inside(path.join(assetFolder, m.variant), m.frames[index].file), canvasSize);
+      layers.push({ input: png, left: (index % columns) * cell + Math.floor((cell - canvasSize) / 2), top: row * cell + Math.floor((cell - canvasSize) / 2) });
       labels.push({ text: String(index), x: (index % columns) * cell + 8, y: row * cell + labelHeight });
       if (index % columns === columns - 1 || index === m.frames.length - 1) row++;
     }
@@ -276,7 +280,7 @@ export async function exportRunV2(runFolder, workspace = repoRoot) {
       const meta = await sharp(previous).metadata();
       previousReference = { label: m.previousReference.label, url: url(previous), sourceSize: meta.width, nativeMetrics: await nativeMetrics(previous, m.targetSize) };
     }
-    assets.push({ id: m.id, label: m.label, category: m.category, targetSize: m.targetSize, forward: m.forward, pivot: m.pivot,
+    assets.push({ id: m.id, label: m.label, category: m.category, targetSize: m.targetSize, displayScale: m.displayScale, forward: m.forward, pivot: m.pivot,
       collisionDiameter: m.collisionDiameter, mount: m.mount, heldItem: m.heldItem, previousReference, reference: m.reference ? '/' + m.reference.replace(/^public\//, '') : undefined,
       referenceTransform: m.referenceTransform, referenceMetrics: m.reference ? await nativeMetrics(inside(workspace, m.reference), m.targetSize) : undefined,
       variants: entries, preferred: preferred ? { variant: preferred.variant, size: preferred.size, reason: preferred.reason } : undefined });

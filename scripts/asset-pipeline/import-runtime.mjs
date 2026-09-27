@@ -33,6 +33,7 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
       || JSON.stringify(entry.pivot) !== JSON.stringify(rendered.pivot)) {
     throw new Error(`Selected model no longer matches the runtime catalog: ${entry.id}`);
   }
+  if ((entry.displayScale ?? 1) !== (rendered.displayScale ?? 1)) throw new Error(`Selected canvas scale differs from catalog: ${entry.id}`);
   const folder = `assets/sprites/pipeline-v2/${entry.id}`;
   const hashes = {};
   for (const [field, name] of [['idle', 'idle.png'], ['sheet', 'sheet.png']]) {
@@ -57,6 +58,7 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
     sheetTextureKey: `${textureKey}_${['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
     idlePath: `./${folder}/idle.png`, sheetPath: `./${folder}/sheet.png`,
     forward: entry.forward, pivot: entry.pivot, layout: selected.layout,
+    ...(rendered.displayScale !== undefined ? { displayScale: rendered.displayScale } : {}),
     ...(['weapon', 'utility'].includes(entry.category) ? { heldItem: rendered.heldItem } : {}),
     idleFrame: selected.idleFrame,
     clips: selected.clips.map(({ name, frames, frameRate, loop, markers }) => ({ name, frames, frameRate, loop, ...(markers ? { markers } : {}) })),

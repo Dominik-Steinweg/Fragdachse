@@ -63,7 +63,10 @@ describe('V2 animated asset export contracts', () => {
     const f = await fixture();
     const claw = { name: 'claw', motion: 'claw_quadruped', frameRate: 24, loop: false,
       frames: [0, 1, 2, 3], markers: { strike: 1, impact: 2 } };
-    const m = { ...f.manifest, clips: [...f.manifest.clips, claw] };
+    const m = { ...f.manifest, displayScale: 2, clips: [...f.manifest.clips, claw] };
+    for (const displayScale of [0, -1, Number.NaN, Infinity, 4]) {
+      expect(() => validateManifestV2({ ...m, displayScale })).toThrow(/display scale/);
+    }
     for (const bad of [{ ...claw, loop: true }, { ...claw, markers: undefined },
       { ...claw, markers: { strike: 2, impact: 1 } }, { ...claw, markers: { strike: 1, impact: 3 } }]) {
       expect(() => validateManifestV2({ ...m, clips: [m.clips[0], bad] })).toThrow(/Claw/);
@@ -72,6 +75,10 @@ describe('V2 animated asset export contracts', () => {
     await exportVariantV2(f.folder, f.root);
     await selectVariantV2(f.asset, 'calm', 32, 'Contract fixture with explicit attack phase markers.');
     expect((await verifySelectionV2(f.asset)).clips.find(c => c.name === 'claw')).toEqual(claw);
+    expect((await verifySelectionV2(f.asset)).displayScale).toBe(m.displayScale);
+    const selected = JSON.parse(await readFile(path.join(f.asset, 'selection.json'), 'utf8'));
+    await save(path.join(f.asset, 'selection.json'), { ...selected, displayScale: 1 });
+    await expect(verifySelectionV2(f.asset)).rejects.toThrow(/bundle changed/);
   });
   it.each(['weapon', 'utility'])('exports and selects a static %s and retains its socket contract', async (category) => {
     const f = await fixture();

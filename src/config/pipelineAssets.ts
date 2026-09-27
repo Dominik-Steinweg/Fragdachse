@@ -25,6 +25,14 @@ export function getPipelineAssetForTexture(textureKey: string): PipelineAsset | 
   return PIPELINE_ASSETS.find((asset) => asset.textureKey === textureKey);
 }
 
+const spriteScales = new Map(PIPELINE_ASSETS.flatMap(asset => {
+  const scale = 'displayScale' in asset && typeof asset.displayScale === 'number' ? asset.displayScale : 1;
+  return [[asset.textureKey, scale], [asset.sheetTextureKey, scale]] as const;
+}));
+
+/** Authored transparent movement margin; multiply the canvas, never the collision size. */
+export function getPipelineSpriteScale(textureKey: string): number { return spriteScales.get(textureKey) ?? 1; }
+
 export function pipelineAnimationKey(asset: PipelineAsset, clip: PipelineClip): string {
   if (clip.name === 'move') return `${asset.textureKey}_walk`;
   return `${asset.sheetTextureKey}_${clip.name}`;

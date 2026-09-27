@@ -183,7 +183,7 @@ export class EnemyEntity {
     this.sprite = this.walkingSheet
       ? scene.add.sprite(x, y, this.walkingSheet.textureKey, WALKING_IDLE_FRAME)
       : scene.add.sprite(x, y, this.config.imageKey);
-    this.sprite.setDisplaySize(this.config.size, this.config.size);
+    this.sprite.setDisplaySize(this.getVisualSize(), this.getVisualSize());
     this.sprite.setDepth(DEPTH.PLAYERS - 0.05);
     if (faction === 'allied') {
       this.sprite.setTint(0x89d66d);
@@ -202,8 +202,7 @@ export class EnemyEntity {
     if (authoritative) {
       scene.physics.add.existing(this.sprite);
       const body = this.body;
-      // Arcade takes source pixels; display scaling supplies the authored world diameter.
-      body.setCircle(this.sprite.frame.realWidth * 0.5, 0, 0);
+      this.syncCollisionCircle();
       body.setCollideWorldBounds(true);
       body.setBounce(0, 0);
       body.allowGravity = false;
@@ -513,16 +512,27 @@ export class EnemyEntity {
   getCollisionRadius(): number {
     // Der Arcade-Body ist waehrend eines Dashes temporaer kleiner. Sonderbewegungen muessen
     // deshalb den tatsaechlichen Radius verwenden; auf Clients ohne autoritativen Body gilt die
-    // registrierte Groesse als identische visuelle und physische Abmessung.
+    // registrierte Koerpergroesse ohne den transparenten Bewegungsrand.
     if (this.authoritative && this.sprite.body) {
       return this.body.halfWidth;
     }
     return this.config.size * 0.5;
   }
 
-  /** Volle Kantenlänge des Gegners – Basis für Ausweich-Skalierung und Trail-Geister. */
+  /** Physischer Grunddurchmesser des Gegners vor der Ausweich-Skalierung. */
   getSize(): number {
     return this.config.size;
+  }
+
+  /** Canvas includes the pounce's transparent margin; the physical size stays authored. */
+  getVisualSize(): number {
+    return this.config.size * (this.walkingSheet?.displayScale ?? 1);
+  }
+
+  private syncCollisionCircle(): void {
+    const diameter = this.sprite.frame.realWidth / (this.walkingSheet?.displayScale ?? 1);
+    const offset = (this.sprite.frame.realWidth - diameter) * 0.5;
+    this.body.setCircle(diameter * 0.5, offset, offset);
   }
 
   getImageKey(): string {
@@ -558,9 +568,9 @@ export class EnemyEntity {
    */
   setDashScale(scale: number): void {
     const clamped = Phaser.Math.Clamp(scale, 0.1, 1);
-    this.sprite.setDisplaySize(this.config.size * clamped, this.config.size * clamped);
+    this.sprite.setDisplaySize(this.getVisualSize() * clamped, this.getVisualSize() * clamped);
     if (this.authoritative && this.sprite.body) {
-      this.body.setCircle(this.sprite.frame.realWidth * 0.5, 0, 0);
+      this.syncCollisionCircle();
     }
   }
 

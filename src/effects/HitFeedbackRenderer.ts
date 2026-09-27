@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { HIT_FEEDBACK_VFX } from '../config';
+import { getPipelineSpriteScale } from '../config/pipelineAssets';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import type { SyncedHitEffect } from '../types';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
@@ -233,7 +234,7 @@ export class HitFeedbackRenderer {
     if (!getGraphicsQualityProfile(this.scene).entityJolt) return;
     const scale = target.isLocalPlayer ? HIT_FEEDBACK_VFX.localPlayerJoltFactor : 1;
     const px = resolveJoltPx(profile.joltPx, target.knockbackFactor, scale,
-      Math.min(target.sprite.displayWidth, target.sprite.displayHeight));
+      Math.min(target.sprite.displayWidth, target.sprite.displayHeight) / getPipelineSpriteScale(target.sprite.texture.key));
     if (px <= 0) return;
     this.jolt.jolt(
       target.sprite as unknown as JoltTarget,

@@ -1,5 +1,6 @@
 import type * as Phaser from 'phaser';
 import { BLOOD_HIT_VFX, COLORS, DEATH_DISINTEGRATION_VFX } from '../config';
+import { getPipelineSpriteScale } from '../config/pipelineAssets';
 import type { SyncedDeathEffect, SyncedHitEffect } from '../types';
 import { createSeededRandom, mixColors } from './EffectUtils';
 import {
@@ -115,7 +116,7 @@ export class CombatGoreGpuRenderer {
     const template = this.fragmentTemplateCache.get(effect.textureKey, effect.frame);
     if (template.chunks.length === 0) return;
 
-    const maxDimension = Math.max(displayWidth, displayHeight);
+    const maxDimension = Math.max(displayWidth, displayHeight) / getPipelineSpriteScale(effect.textureKey);
     const profile = resolveDeathProfile(maxDimension, template.chunks.length);
     const rng = createSeededRandom(effect.seed);
     const entityTint = effect.tint ?? 0xffffff;

@@ -160,6 +160,13 @@ Arcade-Kreisradien werden in Quellpixeln gesetzt, damit die
 Sprite-Skalierung den konfigurierten Weltdurchmesser erhält; Spieler-Overlays übernehmen den
 aktuellen Texturframe und dessen Skalierung.
 
+Bei Gegnern erweitert das importierte `PipelineAsset.displayScale` ausschließlich den
+transparenten Bewegungsraum des Sprites. [EnemyEntity](../../src/entities/EnemyEntity.ts)
+rechnet diesen Faktor aus dem zentrierten Arcade-Kreis heraus; Trefferabfragen verwenden
+`getCollisionRadius()`. Augenanker und Silhouettenkopien folgen dem gesamten Canvas,
+während körperbezogene Licht-, Markierungs- und Effektgrößen den Faktor herausrechnen.
+Die im Blender-Clip vorgezogene Figur verschiebt weder Entity-Position noch Trefferkugel.
+
 [BadgerAnimations.ts](../../src/animations/BadgerAnimations.ts) registriert optionale `idle`-Clips
 aus derselben Assetauswahl wie den Lauf. Stehende aktive Figuren spielen diesen Clip ohne
 Neustart bei wiederholter Synchronisation; Figuren ohne Idle-Clip und inaktive Spieler halten

@@ -39,6 +39,13 @@ Türme erhalten `mount: {rockSize: 32, maxBaseDiameter: 27}` und liefern alle ta
 
 Quellauflösung und Anzeigegröße sind unabhängig. Neue Figuren schauen nach Norden (+Y), Türme nach Osten (+X); Weltursprung und Bildmitte bleiben der gemeinsame Drehpunkt. Die Original-Spore erhält im Vergleich ihre bestehende +7/-7-Pixel-Korrektur, der Original-Leerenjäger seine Drehung um π. Diese `referenceTransform` betrifft ausschließlich das alte Vergleichsbild; `rotationOffset` ist im Bogenmaß.
 
+Gegner können mit `displayScale` einen größeren transparenten Bewegungsraum erhalten. `orthoScale`
+und die dargestellte Canvas-Kantenlänge werden mit demselben Faktor erweitert; `targetSize`
+bleibt der bisherige Körperdurchmesser. Export, Auswahl, Import und Viewer führen diesen Faktor
+mit. Der Klauenclip bewegt einen eigenen untergeordneten Körper-Control nach vorne; Export-Root,
+Kamera und Pivot bleiben fest. `leapDistance` beschreibt den Vorstoß in Blender-Einheiten,
+`strike` und `impact` markieren die zeitliche Zuordnung durch die Runtime.
+
 ## V2 bauen und erweitern
 
 1. Originalbild und aktuelle Spielkonfiguration prüfen. Für Serienassets den vorhandenen Katalogeintrag ausarbeiten; keine abweichenden Kopien von Spiel-IDs oder Anzeigegrößen anlegen.

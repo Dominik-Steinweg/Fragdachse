@@ -8,18 +8,41 @@ import { validateEyeAnchors } from '../../scripts/asset-pipeline/eye-anchors.mjs
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
 import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
+import { getPipelineSpriteScale } from '../../src/config/pipelineAssets';
 
 describe('selected runtime asset package', () => {
-  it('ships a marked one-shot claw clip for every enemy with anchors for all poses', () => {
+  it('ships a marked one-shot pounce beyond the body circle, with anchors for all poses', async () => {
     for (const asset of manifest.assets.filter(a => a.category === 'enemy')) {
       const clip = asset.clips.find(c => c.name === 'claw')!;
       expect(clip, asset.id).toBeDefined();
       expect(clip.loop).toBe(false);
+      const authored = catalog.assets.find(a => a.id === asset.id)!;
+      expect(getPipelineSpriteScale(asset.textureKey)).toBe(authored.displayScale ?? 1);
+      expect(getPipelineSpriteScale(asset.sheetTextureKey)).toBe(getPipelineSpriteScale(asset.textureKey));
       const markers = (clip as typeof clip & { markers: { strike: number; impact: number } }).markers;
       expect(markers.strike).toBeGreaterThan(0);
       expect(markers.impact).toBeGreaterThan(markers.strike);
       expect(markers.impact).toBeLessThan(clip.frames.length - 1);
       for (const frame of clip.frames) expect(asset.eyeAnchors!.frames[frame]).toBeDefined();
+      const { data, info } = await sharp(`public/${asset.sheetPath.replace(/^\.\//, '')}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const pose = (frame: number) => {
+        const size = asset.sourceSize, layout = asset.layout;
+        const x = layout.margin + frame % layout.columns * (size + layout.spacing);
+        const y = layout.margin + Math.floor(frame / layout.columns) * (size + layout.spacing);
+        let sum = 0, count = 0, top = size;
+        for (let py = 0; py < size; py++) for (let px = 0; px < size; px++) {
+          if (data[((y + py) * info.width + x + px) * 4 + 3] < 128) continue;
+          sum += py; count++; top = Math.min(top, py);
+        }
+        expect(count).toBeGreaterThan(0);
+        return { center: sum / count, top };
+      };
+      const idle = pose(asset.idleFrame), impact = pose(clip.frames[markers.impact]);
+      expect(pose(clip.frames[markers.strike]).center, asset.id).toBeGreaterThan(idle.center);
+      expect(impact.center, asset.id).toBeLessThan(idle.center);
+      expect(pose(clip.frames[markers.impact + 1]).center, asset.id).toBeLessThan(impact.center);
+      expect(impact.top, asset.id).toBeLessThan(asset.sourceSize * (0.5 - 0.5 / getPipelineSpriteScale(asset.textureKey)));
+      expect(pose(clip.frames.at(-1)!).center, asset.id).toBeCloseTo(idle.center, 1);
     }
   });
   it('binds complete eye poses to every enemy image revision', () => {

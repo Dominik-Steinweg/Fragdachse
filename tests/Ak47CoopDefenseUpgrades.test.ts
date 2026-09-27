@@ -442,7 +442,7 @@ describe('AK-47 Strategische Ziele', () => {
 
   it('only renders the local player strategic target and filters out foreign targets', () => {
     const { renderer, containers } = makeRendererFixture();
-    const enemy = fakeEntity({ id: 'e1', x: 350, y: 420, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32, getHp: () => 100 });
+    const enemy = fakeEntity({ id: 'e1', x: 350, y: 420, active: true, texture: { key: 'enemy-test' }, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32, getHp: () => 100 });
 
     // Snapshot contains only target for foreign player 'p2'
     renderer.sync(
@@ -483,7 +483,7 @@ describe('AK-47 Strategische Ziele', () => {
 
   it('shows hit confirmation graphics when confirmationUntil is active', () => {
     const { renderer, graphicsObjects } = makeRendererFixture();
-    const enemy = fakeEntity({ id: 'e1', x: 100, y: 100, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32, getHp: () => 100 });
+    const enemy = fakeEntity({ id: 'e1', x: 100, y: 100, active: true, texture: { key: 'enemy-test' }, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32, getHp: () => 100 });
     const confirmationGraphics = graphicsObjects[1]; // second graphics object is confirmation
 
     // With confirmationUntil in future (hit confirmation active)

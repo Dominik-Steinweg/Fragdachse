@@ -63,7 +63,7 @@ function fixture(training = false) {
   };
   const configs = resolveCoopDefenseEnemyConfigs(1);
   const kind = SHOOTING_RANGE.enemyKind as keyof typeof configs;
-  configs[kind] = { ...configs[kind], glow: undefined, deathSpawns: [], imageKey: 'test-enemy' };
+  configs[kind] = { ...configs[kind], glow: undefined, deathSpawns: [] };
   const enemies = new EnemyManager(scene, configs);
   const player = fakeEntity({ id: 'p1', x: 300, y: 100, active: true, color: 0xffffff,
     body: { velocity: { x: 0, y: 0 } } });
@@ -143,6 +143,23 @@ function cloudHost(f: ReturnType<typeof fixture>) {
 }
 
 describe('shared swarm collision and homing', () => {
+  it('keeps the expanded pounce canvas out of projectile target geometry, including during a dash', () => {
+    const f = fixture();
+    try {
+      expect(f.enemy.sprite.displayWidth).toBeGreaterThan(f.enemy.getSize());
+      for (const scale of [1, .5, 1]) {
+        f.enemy.setDashScale(scale);
+        let inspected = false;
+        f.combat.readCollisionTargets((kind, id, _owner, x, y, radius, left, top, right, bottom) => {
+          if (kind !== 'enemy' || id !== f.enemy.id) return;
+          inspected = true;
+          expect(radius).toBeCloseTo(f.enemy.getSize() * scale / 2);
+          expect([left, top, right, bottom]).toEqual([x - radius, y - radius, x + radius, y + radius]);
+        });
+        expect(inspected).toBe(true);
+      }
+    } finally { f.destroy(); }
+  });
   it('preserves opaque presentation through collision, combat and swarm spawn; only the capability enables gameplay', () => {
     const run = (style: ProjectileStyle, enabled: boolean) => {
       const f = fixture();

@@ -1,5 +1,5 @@
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { PIPELINE_ASSETS, type EyeAnchor, type EyeAnchorFrame } from '../config/pipelineAssets';
+import { PIPELINE_ASSETS, getPipelineSpriteScale, type EyeAnchor, type EyeAnchorFrame } from '../config/pipelineAssets';
 
 export interface EyeSpritePose {
   readonly x: number; readonly y: number; readonly rotation: number;
@@ -69,10 +69,11 @@ export class EnemyEyeGlowModel implements EnemyEyeLightFrame {
       const asset = anchorsByTexture.get(sprite.texture.key);
       const frame = asset?.frames[asset.static ? 0 : Number(sprite.frame.name)];
       if (!style || !frame) continue;
-      const size = Math.max(Math.abs(sprite.frame.realWidth * sprite.scaleX), Math.abs(sprite.frame.realHeight * sprite.scaleY));
+      const canvasSize = Math.max(Math.abs(sprite.frame.realWidth * sprite.scaleX), Math.abs(sprite.frame.realHeight * sprite.scaleY));
+      const size = canvasSize / getPipelineSpriteScale(sprite.texture.key);
       const radius = Math.max(LIGHT_RADIUS_MIN, Math.min(LIGHT_RADIUS_MAX, size * LIGHT_RADIUS_PER_SIZE));
       // Include the head's offset from the pivot and the full light footprint.
-      const margin = radius + size;
+      const margin = radius + canvasSize;
       if (sprite.x + margin < view.x || sprite.y + margin < view.y
           || sprite.x - margin > view.x + view.width || sprite.y - margin > view.y + view.height) continue;
       const glow = Math.max(GLOW_MIN, Math.min(GLOW_MAX, size * GLOW_PER_SIZE));

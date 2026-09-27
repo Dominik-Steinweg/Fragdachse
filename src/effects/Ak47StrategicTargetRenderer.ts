@@ -3,6 +3,7 @@ import { COLORS, DEPTH } from '../config';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import type { SyncedAk47StrategicTarget } from '../types';
 import { registerGraphicsObject } from './EffectUtils';
+import { getPipelineSpriteScale } from '../config/pipelineAssets';
 
 const MARKER_COLOR = COLORS.GOLD_1;
 const MARKER_RING_COLOR = COLORS.GOLD_2;
@@ -167,7 +168,7 @@ export class Ak47StrategicTargetRenderer {
     const sprite = enemy.sprite;
     const width = sprite.displayWidth || (sprite.width * Math.abs(sprite.scaleX)) || 32;
     const height = sprite.displayHeight || (sprite.height * Math.abs(sprite.scaleY)) || 32;
-    const enemyRadius = Math.max(width, height) * 0.5;
+    const enemyRadius = Math.max(width, height) * 0.5 / getPipelineSpriteScale(sprite.texture.key);
     return Math.round(Phaser.Math.Clamp(enemyRadius + 8, MIN_MARKER_RADIUS, MAX_MARKER_RADIUS));
   }
 

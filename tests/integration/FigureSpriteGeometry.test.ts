@@ -12,7 +12,7 @@ import { SpawnEffectRenderer } from '../../src/effects/SpawnEffectRenderer';
 import { BADGER_WALKING_FRAME_WIDTH } from '../../src/animations/BadgerAnimations';
 import { getHeldItemSpriteSpec } from '../../src/loadout/HeldItemVisuals';
 import { resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
-import { getPipelineAssetForTexture } from '../../src/config/pipelineAssets';
+import { getPipelineAssetForTexture, getPipelineSpriteScale } from '../../src/config/pipelineAssets';
 import { LOADOUT_CATALOG_ENTRIES } from '../../src/loadout/LoadoutConfig';
 import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../../src/config';
 import { healthBarTestScene } from '../healthBarTestScene';
@@ -109,6 +109,7 @@ describe('figure source resolution and Arcade geometry', () => {
         { ...config, weapons: [], glow: undefined, isBoss: false });
       for (const factor of [1, 0.5, 1]) {
         enemy.setDashScale(factor);
+        expect(enemy.sprite.displayWidth).toBeCloseTo(config.size * factor * getPipelineSpriteScale(asset.textureKey));
         const body = enemy.body;
         body.updateFromGameObject();
         expect(body.width).toBeCloseTo(config.size * factor);
@@ -116,6 +117,12 @@ describe('figure source resolution and Arcade geometry', () => {
         expect(Math.abs(body.center.x - 100)).toBeLessThanOrEqual(0.5);
         expect(Math.abs(body.center.y - 200)).toBeLessThanOrEqual(0.5);
         expect(enemy.getCollisionRadius()).toBe(Math.floor(config.size * factor / 2));
+      }
+      enemy.applyClawAttackState({ revision: 1, attack: { attackId: 'pounce', weaponId: 'claws',
+        angle: 1.2, range: 40, arcDegrees: 100, startedAt: 0, strikeAt: 270, hitAt: 350, endsAt: 570 } });
+      for (const now of [0, 270, 350, 390, 569]) {
+        enemy.syncClawAnimation(now);
+        expectPlayerBody(enemy.body, 100, 200, config.size);
       }
     }
   });

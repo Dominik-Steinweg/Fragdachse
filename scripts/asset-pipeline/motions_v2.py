@@ -74,6 +74,7 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         key(bone, 'location', (0, 0, 0), frame)
         key(bone, 'rotation_euler', (0, 0, 0), frame)
     pose('claw_weapon')
+    pose('attack_motion')
     if motion in ('claw_quadruped', 'claw_biped'):
         apply_claw(asset, phase, frame, idle, p, pose, key)
     elif motion in ('quad_rotors', 'twin_rotors'):
