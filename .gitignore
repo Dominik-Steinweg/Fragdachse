@@ -76,3 +76,6 @@ scripts/generate-fallback.mjs
 
 # Local visual asset proofs of concept
 /art/poc/
+
+# Trailer-Renderings (groß, jederzeit reproduzierbar über output/trailer/pipeline)
+output/trailer/*.mp4
