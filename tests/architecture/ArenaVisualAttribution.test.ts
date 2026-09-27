@@ -483,7 +483,6 @@ const GRAPHICS_ARC_LEGACY_SOURCES: Readonly<Record<string, string>> = {
   'src/effects/EffectSystem.ts': 'Explosions- und Kegelgeometrie, noch nicht umgestellt.',
   'src/effects/EnergyShieldRenderer.ts': 'Schildkuppel mit dynamischen Teilbogen, noch nicht umgestellt.',
   'src/effects/ShadowSystem.ts': 'Einmaliger Bake in eine RenderTexture, kein Pro-Frame-Pfad.',
-  'src/effects/TeslaDomeRenderer.ts': 'Feldfilamente mit dynamischen Teilbogen, noch nicht umgestellt.',
   'src/effects/ZeusTaserRenderer.ts': 'Kegeltelegraph, noch nicht umgestellt.',
   'src/entities/BaseEntity.ts': 'Einmalig gezeichnete Basismarkierung, kein Pro-Frame-Pfad.',
   'src/scenes/arena/GaussWarningRenderer.ts': 'Emitterglow der Fremdspieler, noch nicht umgestellt.',

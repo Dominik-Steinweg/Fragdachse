@@ -242,12 +242,10 @@ export function* createRendererBundleSteps(
 
   const turretAnimations = new TurretAnimationController();
   const teslaDome = new TeslaDomeRenderer(scene, turretAnimations);
-  teslaDome.generateTextures();
   yield 'renderers/teslaDome';
 
   // Blitznova und Gewitterprojektile sind eigene Effektfamilien, haengen aber am selben Feldpuls.
   const teslaNova = new TeslaNovaRenderer(scene);
-  teslaNova.generateTextures();
   yield 'renderers/teslaNova';
   teslaDome.setNovaRenderer(teslaNova);
 
@@ -279,7 +277,6 @@ export function* createRendererBundleSteps(
   projectileBurn.registerGpuVfx(gpuVfx);
 
   const miniTeslaDome = new MiniTeslaDomeRenderer(scene);
-  miniTeslaDome.generateTextures();
   yield 'renderers/miniTeslaDome';
 
   const timeBubble = new TimeBubbleRenderer(scene);

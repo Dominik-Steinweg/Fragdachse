@@ -78,10 +78,8 @@ const FIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   tesla_dome: [
     'radius', 'damagePerTick', 'tickInterval', 'adrenalineDrainPerSecond', 'movementSlowFactor',
     'requireLineOfSight', 'targetTypes', 'visualIndicatorAlpha', 'visualFieldAlpha',
-    'visualIdleArcCount', 'visualIdleArcLength', 'visualBoltThicknessMin',
-    'visualBoltThicknessMax', 'visualJitter', 'visualBranchChance',
-    'visualCoreParticleFrequency', 'visualFieldParticleFrequency', 'visualRimParticleFrequency',
-    'visualImpactBurstScale', 'visualWhiteness', 'visualPulseSpeed',
+    'visualIdleArcCount', 'visualBoltThicknessMin', 'visualBoltThicknessMax', 'visualJitter',
+    'visualBranchChance', 'visualImpactBurstScale', 'visualWhiteness', 'visualPulseSpeed',
   ],
   healing_aura: ['radius', 'healPerTick', 'tickInterval'],
   energy_shield: [

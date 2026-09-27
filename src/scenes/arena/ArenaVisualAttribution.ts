@@ -43,8 +43,6 @@ export const CLASSIC_PARTICLE_FAMILIES = {
   spawnEffect: ['SpawnEffectRenderer'],
   spore: ['SporeRenderer'],
   teslaBolt: ['TeslaBoltRenderer'],
-  teslaDome: ['TeslaDomeRenderer'],
-  teslaNova: ['TeslaNovaRenderer'],
   timebombFuse: ['TimebombFuseRenderer'],
   timeBubble: ['TimeBubbleRenderer'],
   tunnelEndpoint: ['TunnelEndpointVisual'],

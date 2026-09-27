@@ -109,14 +109,10 @@ export interface TeslaDomeWeaponFireConfig {
   readonly visualIndicatorAlpha: number;
   readonly visualFieldAlpha: number;
   readonly visualIdleArcCount: number;
-  readonly visualIdleArcLength: number;
   readonly visualBoltThicknessMin: number;
   readonly visualBoltThicknessMax: number;
   readonly visualJitter: number;
   readonly visualBranchChance: number;
-  readonly visualCoreParticleFrequency: number;
-  readonly visualFieldParticleFrequency: number;
-  readonly visualRimParticleFrequency: number;
   readonly visualImpactBurstScale: number;
   readonly visualWhiteness: number;
   readonly visualPulseSpeed: number;
