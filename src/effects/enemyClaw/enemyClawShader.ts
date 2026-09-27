@@ -61,40 +61,33 @@ float line(float d, float halfWidth) {
   return 1.0 - smoothstep(halfWidth - uPixel, halfWidth + uPixel, abs(d));
 }
 
-// Output is premultiplied; alpha below the color weight reads as a soft additive glow.
-vec4 telegraph(float wash) {
+// A soft, edgeless tint: the zone only needs to read roughly, so both flanks and the far
+// end dissolve into transparency. A diffuse charge swell carries the timing instead of lines.
+// Output is premultiplied.
+vec4 telegraph(float gain) {
   float range = vShape.x;
   float halfArc = vShape.y;
   float r = length(vLocal);
-  float ang = abs(atan(vLocal.y, vLocal.x));
-  float dRad = r - range;
-  float dAng = (ang - halfArc) * r;
-  float inside = 1.0 - smoothstep(-uPixel, uPixel, max(dRad, dAng));
-  if (inside <= 0.0) return vec4(0.0);
+  float rn = r / range;
+  if (rn >= 1.0) return vec4(0.0);
+  float an = abs(atan(vLocal.y, vLocal.x)) / max(halfArc, 0.001);
+  if (an >= 1.0) return vec4(0.0);
 
   float charge = clamp((uTime - vTiming.x) / max(1.0, vTiming.z - vTiming.x), 0.0, 1.0);
   float strike = smoothstep(vTiming.y, vTiming.z, uTime);
-  float vis = smoothstep(vTiming.x, vTiming.x + 70.0, uTime)
+  float vis = smoothstep(vTiming.x, vTiming.x + 90.0, uTime)
     * (1.0 - smoothstep(vTiming.z, vTiming.z + FADE_MS, uTime));
-  float rn = r / range;
-  // The attacker's body covers the hub; fading it keeps the sector from reading as a disc.
-  float hub = smoothstep(0.14, 0.46, rn);
 
-  float front = charge * range;
-  float behind = front - r;
-  float filled = smoothstep(-uPixel, uPixel, behind);
-  // Kept thin so dozens of overlapping sectors stay separable by their rims.
-  float base = (0.03 + 0.06 * rn) * hub;
-  float fill = filled * (0.05 + 0.16 * exp(-max(behind, 0.0) / (0.2 * range))) * hub;
-  float wave = line(behind, 0.7) * smoothstep(0.05, 0.2, charge) * hub;
-  float rim = line(dRad + 1.1, 0.8);
-  float side = line(dAng + 0.7, 0.5) * smoothstep(0.3, 0.95, rn);
-  float edge = max(rim * (0.4 + 0.45 * charge + 0.15 * strike), side * 0.32);
+  // The attacker's body covers the hub; flanks and far end fall off over a wide band.
+  float hub = smoothstep(0.08, 0.4, rn);
+  float flank = 1.0 - smoothstep(0.4, 1.0, an);
+  float reach = 1.0 - smoothstep(0.55, 1.0, rn);
+  float mask = hub * flank * reach;
 
-  float a = ((base + fill + 0.14 * strike * hub) * wash + 0.5 * wave + edge) * inside * vis;
-  float heat = clamp(wave * 0.8 + rim * (0.25 + 0.75 * strike), 0.0, 1.0);
-  vec3 color = mix(vColor.rgb, HOT, heat * 0.7);
-  a = min(a, 0.9);
+  // The swell grows outward with the windup and has no visible front edge.
+  float swell = 1.0 - smoothstep(charge - 0.35, charge + 0.1, rn);
+  float a = mask * (0.1 + 0.2 * swell * charge + 0.1 * strike) * gain * vis;
+  vec3 color = mix(vColor.rgb, HOT, 0.35 * strike);
   return vec4(color * a, a);
 }
 
@@ -188,8 +181,8 @@ void main() {
   vec4 color;
   if (uPass < 0.5) color = telegraph(1.0);
   else if (uPass < 1.5) color = vShape.z < 0.5 ? rake() : contact();
-  // Emissive trace: outlines and strokes carry the warning, the area wash stays faint.
-  else color = vShape.z < 0.5 ? telegraph(0.3) + rake() : contact();
+  // Emissive trace: a fainter copy of the tint keeps the zone readable under the night lightmap.
+  else color = vShape.z < 0.5 ? telegraph(0.55) + rake() : contact();
   if (color.a <= 0.003 && max(color.r, max(color.g, color.b)) <= 0.003) discard;
   gl_FragColor = color * uAlpha;
 }`;
