@@ -218,6 +218,11 @@ def verify(scene, manifest, report, source_folder):
         require(all(authored[key] == clip[key] for key in ('name', 'motion', 'frameRate', 'loop')),
                 f'Authored timing or motion differs for {clip["name"]}')
         require(authored['frameCount'] == len(clip['frames']), f'Wrong sampled count for {clip["name"]}')
+        if clip['name'] == 'claw':
+            markers = clip.get('markers', {})
+            require(markers == authored.get('markers') and not clip['loop']
+                    and 0 < markers.get('strike', -1) < markers.get('impact', -1) < len(clip['frames']) - 1,
+                    'Claw contact markers must survive export in order')
         step = 24 / clip['frameRate']
         expected = [clip['timelineStart'] + i * step for i in range(len(clip['frames']))]
         require(near([frames[index]['blenderFrame'] for index in clip['frames']], expected),

@@ -107,6 +107,7 @@ export interface CoopMissionCompositionOptions {
   readonly releaseMissionObjectives: (runtime: CoopMissionRuntime, playerId: string) => void;
   readonly publishMissionProgress: (state: CoopDefenseMissionProgressPresentationState | null) => void;
   readonly broadcastCarryDeliveredFx: (x: number, y: number) => void;
+  readonly enemyClawNetwork: import('../systems/EnemyClawAttack').EnemyClawNetworkPort;
   readonly enemyAbilityNetwork: CoopDefenseEnemyAbilityNetworkPort;
   readonly publishRespawnBudget: (state: import('../types').CoopDefenseRespawnBudgetState | null) => void;
   readonly patchBarrierCells: (changes: readonly { gridX: number; gridY: number; occupied: boolean }[]) => void;
@@ -279,6 +280,7 @@ export class CoopMissionComposition {
       fireSystem: this.options.getFireSystem(),
       decoySystem: this.options.getDecoySystem(),
       enemyAbilityNetwork: this.options.enemyAbilityNetwork,
+      enemyClawNetwork: this.options.enemyClawNetwork,
       getTrainManager: this.options.train.getCurrentTrain,
       getTrainEvent: this.options.train.getCurrentTrainEvent,
       isSafeEnemyGroundAt: this.options.isSafeEnemyGroundAt,

@@ -1,5 +1,6 @@
 """Authored Actions sampled at fixed phases. Motion never translates the asset root."""
 import math
+from claw_motion_v2 import apply_claw
 
 
 def key(ob, path, value, frame):
@@ -18,17 +19,22 @@ def author(asset, clips):
         count, name, motion = clip['frameCount'], clip['name'], clip['motion']
         step = 24 / clip['frameRate']
         frames = []
+        parameters = dict(clip.get('parameters', {}))
+        if clip.get('markers'):
+            parameters.update(strikePhase=clip['markers']['strike'] / (count - 1),
+                              impactPhase=clip['markers']['impact'] / (count - 1))
         # Evaluate the closure pose at N for loops, but export only [0, N).
         for i in range(count + (1 if clip['loop'] else 0)):
             phase = i / (count if clip['loop'] else count - 1)
-            apply(asset, motion, phase, frame + i * step, parameters=clip.get('parameters', {}), rests=rests)
+            apply(asset, motion, phase, frame + i * step, parameters=parameters, rests=rests)
             if i < count:
                 index = len(samples)
                 frames.append(index)
                 samples.append({'index': index, 'blenderFrame': frame + i * step})
         exported.append({k: clip[k] for k in ('name', 'motion', 'frameRate', 'loop')} | {'frames': frames,
                          'timelineStart': frame, 'timelineEnd': max(frame + count * step - 1, samples[-1]['blenderFrame']),
-                         **({'parameters': clip['parameters']} if 'parameters' in clip else {})})
+                         **({'parameters': clip['parameters']} if 'parameters' in clip else {}),
+                         **({'markers': clip['markers']} if 'markers' in clip else {})})
         frame += count * step + 2
     # Idle keys are independent of the first phase in an active loop.
     for clip in clips:
@@ -62,7 +68,15 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         key(ob, 'rotation_euler', tuple(a + b for a, b in zip(base[1], rotation)), frame)
         key(ob, 'scale', tuple(a * b for a, b in zip(base[2], scale)), frame)
     angle = math.tau * phase
-    if motion in ('quad_rotors', 'twin_rotors'):
+    # Attack-only controls must also be keyed at rest throughout locomotion.
+    for name in parts.get('claw_bones', []):
+        bone = asset['rig'].pose.bones[name]
+        key(bone, 'location', (0, 0, 0), frame)
+        key(bone, 'rotation_euler', (0, 0, 0), frame)
+    pose('claw_weapon')
+    if motion in ('claw_quadruped', 'claw_biped'):
+        apply_claw(asset, phase, frame, idle, p, pose, key)
+    elif motion in ('quad_rotors', 'twin_rotors'):
         for i in range(2 if motion == 'twin_rotors' else 4):
             pose(f'rotor{i}', rotation=(0, 0, (0 if idle else angle) * (1 if i in (0, 3) else -1)))
     elif motion in ('mechanical_fire', 'energy_fire'):

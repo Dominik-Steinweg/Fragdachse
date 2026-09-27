@@ -10,6 +10,18 @@ import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgr
 import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
 
 describe('selected runtime asset package', () => {
+  it('ships a marked one-shot claw clip for every enemy with anchors for all poses', () => {
+    for (const asset of manifest.assets.filter(a => a.category === 'enemy')) {
+      const clip = asset.clips.find(c => c.name === 'claw')!;
+      expect(clip, asset.id).toBeDefined();
+      expect(clip.loop).toBe(false);
+      const markers = (clip as typeof clip & { markers: { strike: number; impact: number } }).markers;
+      expect(markers.strike).toBeGreaterThan(0);
+      expect(markers.impact).toBeGreaterThan(markers.strike);
+      expect(markers.impact).toBeLessThan(clip.frames.length - 1);
+      for (const frame of clip.frames) expect(asset.eyeAnchors!.frames[frame]).toBeDefined();
+    }
+  });
   it('binds complete eye poses to every enemy image revision', () => {
     for (const asset of manifest.assets.filter(a => a.category === 'enemy')) {
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset)).not.toThrow();

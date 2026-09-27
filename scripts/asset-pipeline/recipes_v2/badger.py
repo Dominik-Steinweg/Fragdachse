@@ -50,6 +50,27 @@ def build(ctx, spec):
         modifier.object = rig
         ob['motionRole'] = 'arms'
     asset['parts'].update(body=body, head=head)
+    # Enemy-only distal controls leave the player's stable-grip contract intact.
+    if spec['category'] == 'enemy':
+        bpy.context.view_layer.objects.active = rig
+        bpy.ops.object.mode_set(mode='EDIT')
+        for side, x in [('left', -.55), ('right', .55)]:
+            bone = rig.data.edit_bones.new('claw_' + side)
+            bone.head, bone.tail = (x, -.15, 1.45), (x, .10, 1.45)
+            bone.parent = rig.data.edit_bones['root']
+        bpy.ops.object.mode_set(mode='OBJECT')
+        asset['parts']['claw_bones'] = ['claw_left', 'claw_right']
+        for name in asset['parts']['claw_bones']:
+            rig.pose.bones[name].rotation_mode = 'XYZ'
+        for ob in groups['arms']:
+            name = 'claw_left' if ob.location.x < 0 else 'claw_right'
+            if ob in groups['hands']:
+                weights = ob.vertex_groups.new(name=name)
+                weights.add(list(range(len(ob.data.vertices))), 1, 'REPLACE')
+                modifier = ob.modifiers.new('Enemy claw hand', 'ARMATURE')
+                modifier.object = rig
+            else:
+                ob.vertex_groups['root'].name = name
     for ob in groups['head']: ob['motionRole'] = 'head'
     for ob in groups['upper']:
         if 'motionRole' not in ob: ob['motionRole'] = 'body'

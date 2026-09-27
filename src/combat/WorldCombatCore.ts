@@ -723,6 +723,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
             payload.damageTargets,
             payload.baseDamageMult,
             this.capturePrimaryHitRewardScope(payload.primaryHitReward),
+            payload.clawAttackId,
           ),
           interactions: Object.freeze([...interactions]),
         };
@@ -3215,6 +3216,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     damageTargets?: readonly MeleeDamageTarget[],
     baseDamageMult = 1,
     primaryHitReward?: PrimaryHitAdrenalineRewardIntent,
+    clawAttackId?: string,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -3285,6 +3287,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     // Resolution + mutation phase: each selected physical entity is processed at most once.
     for (const target of swingTargets) {
       const dist = target.distance;
+      let bloodContact = false;
 
       // Keep source-side factors at the immediate impact, matching the prior per-target
       // resolution point and avoiding a hidden second scaling stage in the mutation writer.
@@ -3308,12 +3311,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         if (canDealDamage) this.applyBurnOnHit(target.id, shooterId, burnOnHit, sourceId);
         this.publishPrimaryHitReward(outcome, primaryHitReward, { x: target.x, y: target.y });
         if (canDealDamage) this.applyMeleeHitRewards(shooterId, hitHeal);
+        bloodContact = canDealDamage && outcome?.kind === 'damage-applied' && outcome.actualDamage > 0;
         // A geometrically accepted friendly contact still contributes to the swing projection;
         // only damage/reaction eligibility is gated by the relationship result.
         void outcome;
       }
 
       meleeHitIds.add(target.key);
+      if (clawAttackId && !bloodContact) continue;
       hitPlayer = true;
       if (dist < nearestHitDistance) {
         nearestHitDistance = dist;
@@ -3373,7 +3378,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         sourceSlot,
         baseDamageMult,
       );
-      if (baseHit.hit && baseHit.distance < nearestHitDistance) {
+      if (baseHit.hit && !clawAttackId && baseHit.distance < nearestHitDistance) {
         nearestHitDistance = baseHit.distance;
         impactX = baseHit.impactX;
         impactY = baseHit.impactY;
@@ -3394,7 +3399,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     );
 
     // Swing-VFX für alle Clients in die Replikations-Queue einreihen
-    this.queueMeleeSwing({ weaponSourceId: sourceId, x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY, bloodEffectMultiplier, shotAudioKey });
+    this.queueMeleeSwing({ clawAttackId, weaponSourceId: sourceId, x, y, angle, arcDegrees, range, color: playerColor, shooterId, visualPreset, hitPlayer, impactX, impactY, bloodEffectMultiplier, shotAudioKey });
     return true;
   }
 

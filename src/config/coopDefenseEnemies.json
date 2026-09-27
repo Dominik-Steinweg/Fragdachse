@@ -2,7 +2,9 @@
   "enemies": [
     {
       "id": "zombie-badger",
-      "eyeGlow": { "color": 15138800 },
+      "eyeGlow": {
+        "color": 15138800
+      },
       "pawCount": 4,
       "maxHp": 15,
       "xp": 1,
@@ -11,7 +13,15 @@
       "knockbackFactor": 1.2,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "ZOMBIE_BADGER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
+        {
+          "weaponId": "ZOMBIE_BADGER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
@@ -23,7 +33,9 @@
     },
     {
       "id": "demon-badger",
-      "eyeGlow": { "color": 16734746 },
+      "eyeGlow": {
+        "color": 16734746
+      },
       "pawCount": 4,
       "maxHp": 20,
       "xp": 2,
@@ -32,7 +44,15 @@
       "knockbackFactor": 1.4,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "DEMON_BADGER_BITE", "targetMode": "all", "playerMeleeWindupMs": 150 }
+        {
+          "weaponId": "DEMON_BADGER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 250,
+            "strikeMs": 80,
+            "recoveryMs": 160
+          }
+        }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 200,
@@ -44,7 +64,9 @@
     },
     {
       "id": "rabid-badger",
-      "eyeGlow": { "color": 11550975 },
+      "eyeGlow": {
+        "color": 11550975
+      },
       "pawCount": 4,
       "maxHp": 20,
       "xp": 3,
@@ -53,7 +75,15 @@
       "knockbackFactor": 1.5,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "RABID_BADGER_BITE", "targetMode": "all", "playerMeleeWindupMs": 150 }
+        {
+          "weaponId": "RABID_BADGER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 250,
+            "strikeMs": 80,
+            "recoveryMs": 160
+          }
+        }
       ],
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 100,
@@ -65,7 +95,9 @@
     },
     {
       "id": "grave-titan",
-      "eyeGlow": { "color": 9240378 },
+      "eyeGlow": {
+        "color": 9240378
+      },
       "pawCount": 4,
       "maxHp": 1800,
       "xp": 300,
@@ -86,14 +118,28 @@
             "targetDistribution": "round_robin"
           }
         },
-        { "weaponId": "GRAVE_TITAN_BITE", "targetMode": "all", "playerMeleeWindupMs": 450 }
+        {
+          "weaponId": "GRAVE_TITAN_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 550,
+            "strikeMs": 80,
+            "recoveryMs": 320
+          }
+        }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 260,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_grave_titan",
       "isBoss": true,
-      "glow": { "color": 8191882, "sizeFactor": 1.55, "alpha": 0.9, "lightRadiusPx": 240, "lightIntensity": 0.95 },
+      "glow": {
+        "color": 8191882,
+        "sizeFactor": 1.55,
+        "alpha": 0.9,
+        "lightRadiusPx": 240,
+        "lightIntensity": 0.95
+      },
       "trainAwareness": {
         "safetyDistancePx": 48,
         "timeSafetyMarginMs": 750
@@ -108,7 +154,9 @@
     },
     {
       "id": "spore-warden",
-      "eyeGlow": { "color": 14745386 },
+      "eyeGlow": {
+        "color": 14745386
+      },
       "pawCount": 4,
       "maxHp": 140,
       "xp": 6,
@@ -117,8 +165,19 @@
       "knockbackFactor": 1,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "SPORE_WARDEN_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
-        { "weaponId": "WARDEN_SPORES", "targetMode": "players" }
+        {
+          "weaponId": "SPORE_WARDEN_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        },
+        {
+          "weaponId": "WARDEN_SPORES",
+          "targetMode": "players"
+        }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 260,
@@ -130,7 +189,9 @@
     },
     {
       "id": "plague-medic",
-      "eyeGlow": { "color": 16758815 },
+      "eyeGlow": {
+        "color": 16758815
+      },
       "pawCount": 4,
       "maxHp": 180,
       "xp": 10,
@@ -139,8 +200,19 @@
       "knockbackFactor": 1,
       "movementTarget": "bases",
       "weapons": [
-        { "weaponId": "PLAGUE_MEDIC_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
-        { "weaponId": "HEALING_AURA", "targetMode": "all" }
+        {
+          "weaponId": "PLAGUE_MEDIC_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        },
+        {
+          "weaponId": "HEALING_AURA",
+          "targetMode": "all"
+        }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 220,
@@ -152,7 +224,9 @@
     },
     {
       "id": "void-stalker",
-      "eyeGlow": { "color": 3073791 },
+      "eyeGlow": {
+        "color": 3073791
+      },
       "pawCount": 4,
       "maxHp": 190,
       "xp": 15,
@@ -161,8 +235,19 @@
       "knockbackFactor": 1,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "VOID_STALKER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 },
-        { "weaponId": "MINI_TESLA_DOME", "targetMode": "players" }
+        {
+          "weaponId": "VOID_STALKER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        },
+        {
+          "weaponId": "MINI_TESLA_DOME",
+          "targetMode": "players"
+        }
       ],
       "attackScanIntervalMs": 160,
       "attackStopDurationMs": 200,
@@ -181,7 +266,9 @@
     },
     {
       "id": "stink-broodmother",
-      "eyeGlow": { "color": 11857950 },
+      "eyeGlow": {
+        "color": 11857950
+      },
       "pawCount": 4,
       "maxHp": 250,
       "xp": 20,
@@ -190,7 +277,15 @@
       "knockbackFactor": 0.7,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "STINK_BROODMOTHER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
+        {
+          "weaponId": "STINK_BROODMOTHER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 240,
@@ -200,7 +295,11 @@
         "utilityId": "ENEMY_STINK_CLOUD"
       },
       "deathSpawns": [
-        { "enemyKind": "rabid-badger", "count": 4, "offsetPx": 9 }
+        {
+          "enemyKind": "rabid-badger",
+          "count": 4,
+          "offsetPx": 9
+        }
       ],
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
@@ -208,7 +307,9 @@
     },
     {
       "id": "alien-badger",
-      "eyeGlow": { "color": 2883520 },
+      "eyeGlow": {
+        "color": 2883520
+      },
       "pawCount": 2,
       "maxHp": 180,
       "xp": 30,
@@ -217,8 +318,19 @@
       "knockbackFactor": 1,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "ALIEN_BADGER_BITE", "targetMode": "structures" },
-        { "weaponId": "ALIEN_BADGER_PLASMA", "targetMode": "players" }
+        {
+          "weaponId": "ALIEN_BADGER_BITE",
+          "targetMode": "structures",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        },
+        {
+          "weaponId": "ALIEN_BADGER_PLASMA",
+          "targetMode": "players"
+        }
       ],
       "attackScanIntervalMs": 160,
       "attackStopDurationMs": 180,
@@ -249,7 +361,9 @@
     },
     {
       "id": "thrower-badger",
-      "eyeGlow": { "color": 16754730 },
+      "eyeGlow": {
+        "color": 16754730
+      },
       "pawCount": 4,
       "maxHp": 350,
       "xp": 40,
@@ -258,7 +372,15 @@
       "knockbackFactor": 0.5,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "THROWER_BADGER_BITE", "targetMode": "all", "playerMeleeWindupMs": 250 }
+        {
+          "weaponId": "THROWER_BADGER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        }
       ],
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 220,
@@ -285,7 +407,9 @@
     },
     {
       "id": "inferno-colossus",
-      "eyeGlow": { "color": 12078591 },
+      "eyeGlow": {
+        "color": 12078591
+      },
       "pawCount": 4,
       "maxHp": 3200,
       "xp": 500,
@@ -305,9 +429,21 @@
           "targetMode": "players",
           "attackMovementSpeedFactor": 1,
           "minTargetDistancePx": 450,
-          "salvo": { "count": 10, "intervalMs": 90, "cooldownMs": 12000 }
+          "salvo": {
+            "count": 10,
+            "intervalMs": 90,
+            "cooldownMs": 12000
+          }
         },
-        { "weaponId": "INFERNO_COLOSSUS_BITE", "targetMode": "rocks" }
+        {
+          "weaponId": "INFERNO_COLOSSUS_BITE",
+          "targetMode": "rocks",
+          "meleeTiming": {
+            "hitDelayMs": 550,
+            "strikeMs": 80,
+            "recoveryMs": 320
+          }
+        }
       ],
       "attackScanIntervalMs": 70,
       "attackStopDurationMs": 110,
@@ -320,7 +456,13 @@
         "retreatSpeedFactor": 0,
         "requireLineOfSight": true
       },
-      "glow": { "color": 12799231, "sizeFactor": 1.65, "alpha": 1, "lightRadiusPx": 265, "lightIntensity": 1 },
+      "glow": {
+        "color": 12799231,
+        "sizeFactor": 1.65,
+        "alpha": 1,
+        "lightRadiusPx": 265,
+        "lightIntensity": 1
+      },
       "voidFireChunks": {
         "count": 20,
         "searchRadius": 160,
@@ -360,7 +502,9 @@
     },
     {
       "id": "pyro-badger",
-      "eyeGlow": { "color": 12078591 },
+      "eyeGlow": {
+        "color": 12078591
+      },
       "pawCount": 2,
       "maxHp": 400,
       "xp": 50,
@@ -369,15 +513,32 @@
       "knockbackFactor": 0.6,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "PYRO_BADGER_BITE", "targetMode": "structures" },
-        { "weaponId": "PYRO_BADGER_GLOCK", "targetMode": "players" }
+        {
+          "weaponId": "PYRO_BADGER_BITE",
+          "targetMode": "structures",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        },
+        {
+          "weaponId": "PYRO_BADGER_GLOCK",
+          "targetMode": "players"
+        }
       ],
       "attackScanIntervalMs": 140,
       "attackStopDurationMs": 120,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_pyro_badger",
       "color": 11749375,
-      "glow": { "color": 12799231, "sizeFactor": 1.7, "alpha": 0.85, "lightRadiusPx": 85, "lightIntensity": 1 },
+      "glow": {
+        "color": 12799231,
+        "sizeFactor": 1.7,
+        "alpha": 0.85,
+        "lightRadiusPx": 85,
+        "lightIntensity": 1
+      },
       "burrow": {
         "maxDurationMs": 2000,
         "speedFactor": 1.6,
@@ -410,7 +571,9 @@
     },
     {
       "id": "timebomb-badger",
-      "eyeGlow": { "color": 9395199 },
+      "eyeGlow": {
+        "color": 9395199
+      },
       "pawCount": 4,
       "maxHp": 60,
       "xp": 10,
@@ -419,7 +582,15 @@
       "knockbackFactor": 1.9,
       "movementTarget": "players-and-armed-constructs",
       "weapons": [
-        { "weaponId": "TIMEBOMB_BADGER_BITE", "targetMode": "rocks" }
+        {
+          "weaponId": "TIMEBOMB_BADGER_BITE",
+          "targetMode": "rocks",
+          "meleeTiming": {
+            "hitDelayMs": 250,
+            "strikeMs": 80,
+            "recoveryMs": 160
+          }
+        }
       ],
       "attackScanIntervalMs": 120,
       "attackStopDurationMs": 100,
@@ -461,7 +632,9 @@
     },
     {
       "id": "void-hunter",
-      "eyeGlow": { "color": 9059839 },
+      "eyeGlow": {
+        "color": 9059839
+      },
       "pawCount": 4,
       "maxHp": 4000,
       "xp": 750,
@@ -470,8 +643,19 @@
       "knockbackFactor": 0.25,
       "movementTarget": "players",
       "weapons": [
-        { "weaponId": "VOID_HUNTER_BITE", "targetMode": "structures" },
-        { "weaponId": "VOID_HUNTER_SHOTGUN", "targetMode": "players" }
+        {
+          "weaponId": "VOID_HUNTER_BITE",
+          "targetMode": "structures",
+          "meleeTiming": {
+            "hitDelayMs": 550,
+            "strikeMs": 80,
+            "recoveryMs": 320
+          }
+        },
+        {
+          "weaponId": "VOID_HUNTER_SHOTGUN",
+          "targetMode": "players"
+        }
       ],
       "attackScanIntervalMs": 100,
       "attackStopDurationMs": 120,
@@ -550,7 +734,9 @@
           "meteorSpawnRadius": 350,
           "meteorDamageRadius": 96,
           "meteorDamage": 10,
-          "meteorDamageFalloff": { "minDamage": 10 },
+          "meteorDamageFalloff": {
+            "minDamage": 10
+          },
           "meteorFallDuration": 2000,
           "meteorsPerSecond": 3,
           "meteorRadiusJitter": 0.1,

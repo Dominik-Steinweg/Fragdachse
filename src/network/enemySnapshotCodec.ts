@@ -1,3 +1,4 @@
+import { isEnemyClawState } from '../systems/EnemyClawAttack';
 /**
  * Kompakte (De-)Serialisierung des Gegner-Upsert-Stroms für {@link SyncedEnemySnapshot}.
  *
@@ -18,6 +19,7 @@ import {
 import type { SyncedEnemyDeltaState } from '../types';
 
 const FIELD_GENERATION = 1024;
+const FIELD_CLAW = 2048;
 const FIELD_POS = 1;   // x + y
 const FIELD_ROT = 2;   // rot (quantisiert × ROT_QUANT)
 const FIELD_HP = 4;    // hp + maxHp
@@ -46,6 +48,7 @@ export function enemyNumToId(num: number): string {
 /** Hängt einen (vollständigen oder Delta-)Upsert an den flachen Zahlenstrom an. */
 export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnemyDeltaState): void {
   let mask = 0;
+  if (entry.claw !== undefined) mask |= FIELD_CLAW;
   if (entry.entityGeneration !== undefined) mask |= FIELD_GENERATION;
   if (entry.x !== undefined && entry.y !== undefined) mask |= FIELD_POS;
   if (entry.rot !== undefined) mask |= FIELD_ROT;
@@ -94,6 +97,12 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   }
   if (mask & FIELD_PLASMA_CHARGE) out.push(entry.plasmaChargeStacks as number);
   if (mask & FIELD_GENERATION) out.push(entry.entityGeneration as number);
+  if (mask & FIELD_CLAW) {
+    const state = entry.claw!, attack = state.attack;
+    out.push(state.revision, attack ? 1 : 0);
+    if (attack) out.push(attack.attackId, attack.weaponId, attack.startedAt, attack.strikeAt,
+      attack.hitAt, attack.endsAt, attack.angle, attack.range, attack.arcDegrees);
+  }
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -144,6 +153,16 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
     if (mask & FIELD_GENERATION) {
       const generation = stream[i++] as number;
       if (Number.isSafeInteger(generation) && generation >= 0) entry.entityGeneration = generation;
+    }
+    if (mask & FIELD_CLAW) {
+      const revision = stream[i++] as number, active = stream[i++] as number;
+      const claw = { revision, attack: active ? {
+        attackId: stream[i++] as string, weaponId: stream[i++] as string,
+        startedAt: stream[i++] as number, strikeAt: stream[i++] as number,
+        hitAt: stream[i++] as number, endsAt: stream[i++] as number,
+        angle: stream[i++] as number, range: stream[i++] as number, arcDegrees: stream[i++] as number,
+      } : null };
+      if (isEnemyClawState(claw)) entry.claw = claw;
     }
     result.push(entry);
   }

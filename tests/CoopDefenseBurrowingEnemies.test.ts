@@ -8,6 +8,48 @@ import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { VOID_FIRE_COLOR } from '../src/config';
 import { decodeEnemyUpserts, encodeEnemyUpsert } from '../src/network/enemySnapshotCodec';
 import type { SyncedEnemyDeltaState } from '../src/types';
+import { clawFrameIndex, isEnemyClawState, type EnemyClawAttack } from '../src/systems/EnemyClawAttack';
+
+describe('enemy claw contracts', () => {
+  const attack: EnemyClawAttack = { attackId: 'e:1', weaponId: 'ZOMBIE_BADGER_BITE', angle: 1.2,
+    startedAt: 1000, strikeAt: 1270, hitAt: 1350, endsAt: 1570, range: 40, arcDegrees: 110 };
+
+  it('gives every authored enemy melee weapon a target-independent anticipation and recovery', () => {
+    for (const config of Object.values(COOP_DEFENSE_ENEMY_CONFIGS)) {
+      const melee = config.weapons.filter(w => WEAPON_CONFIGS[w.weaponId].fire.type === 'melee');
+      expect(melee.length).toBeGreaterThan(0);
+      for (const weapon of melee) {
+        expect(weapon.meleeTiming!.hitDelayMs).toBeGreaterThan(weapon.meleeTiming!.strikeMs);
+        expect(weapon.meleeTiming!.strikeMs).toBeGreaterThan(0);
+        expect(weapon.meleeTiming!.recoveryMs).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('round trips start and explicit clearing alongside generations and unrelated deltas', () => {
+    const entries: SyncedEnemyDeltaState[] = [
+      { id: 'e1', entityGeneration: 7, claw: { revision: 3, attack } },
+      { id: 'e1', entityGeneration: 7, claw: { revision: 4, attack: null } },
+      { id: 'e2', hp: 17, maxHp: 30, burrowed: true },
+    ];
+    const wire: (string | number)[] = [];
+    entries.forEach(entry => encodeEnemyUpsert(wire, entry));
+    const decoded = decodeEnemyUpserts(wire);
+    expect(decoded).toEqual(entries);
+    for (const invalid of [{ ...attack, hitAt: attack.strikeAt }, { ...attack, endsAt: NaN }, { ...attack, arcDegrees: 361 }]) {
+      expect(isEnemyClawState({ revision: 1, attack: invalid })).toBe(false);
+    }
+  });
+
+  it('samples the authored markers at host times, clamps boundaries and catches up directly', () => {
+    const markers = { strike: 8, impact: 11 };
+    expect(clawFrameIndex(attack, 900, 18, markers)).toBe(0);
+    expect(clawFrameIndex(attack, attack.strikeAt, 18, markers)).toBe(markers.strike);
+    expect(clawFrameIndex(attack, attack.hitAt, 18, markers)).toBe(markers.impact);
+    expect(clawFrameIndex(attack, attack.endsAt + 100, 18, markers)).toBe(17);
+    expect(clawFrameIndex(attack, attack.hitAt + 100, 18, markers)).toBeGreaterThan(markers.impact);
+  });
+});
 
 describe('Alien-Dachs', () => {
   const alien = getCoopDefenseEnemyConfig('alien-badger');
@@ -90,7 +132,7 @@ describe('Wurf-Dachs', () => {
     const bite = thrower.weapons.find((weapon) => weapon.weaponId === 'THROWER_BADGER_BITE');
     expect(bite?.targetMode).toBe('all');
     // Ein Spielerbiss ohne Vorwarnzeit waere nicht ausweichbar.
-    expect(bite!.playerMeleeWindupMs!).toBeGreaterThan(0);
+    expect(bite!.meleeTiming!.hitDelayMs).toBeGreaterThan(bite!.meleeTiming!.strikeMs);
 
     const biteConfig = WEAPON_CONFIGS.THROWER_BADGER_BITE;
     if (biteConfig.fire.type !== 'melee') throw new Error('Biss muss eine Nahkampfwaffe sein');

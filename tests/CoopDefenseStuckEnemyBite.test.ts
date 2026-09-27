@@ -64,7 +64,7 @@ function createStuckEnemy(
         weapon: bite,
         targetMode: 'structures',
         minimumFireDurationMs: 0,
-        playerMeleeWindupMs: 0,
+        meleeTiming: getCoopDefenseEnemyConfig('pyro-badger').weapons.find(weapon => weapon.weaponId === 'PYRO_BADGER_BITE')!.meleeTiming,
         attackMovementSpeedFactor: 0,
         minTargetDistancePx: 0,
       },
@@ -72,7 +72,6 @@ function createStuckEnemy(
         weapon: glock,
         targetMode: playerWeaponTargetMode,
         minimumFireDurationMs: 0,
-        playerMeleeWindupMs: 0,
         attackMovementSpeedFactor: 0,
         minTargetDistancePx: 0,
       },
@@ -173,6 +172,8 @@ describe('Enemy stuck in a rock', () => {
       allowsAttack: (_enemy: string, kind: string, id: string) => permitted && kind === 'obstacle' && id === '800',
     } as unknown as EnemyIntentSystem);
     system.hostUpdate(16, 1000);
+    expect(firedWeaponIds).toEqual([]);
+    system.hostUpdate(16, 1000 + enemy.getAttackWeapons()[0].meleeTiming!.hitDelayMs);
     expect(firedWeaponIds).toEqual(['PYRO_BADGER_BITE']);
     expect(unrelatedReads).toBe(0);
     permitted = false;

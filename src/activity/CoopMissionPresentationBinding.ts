@@ -253,7 +253,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     // intentionally refreshed on every available state, just like the former Scene adapter,
     // while EnemyManager reconciliation remains gated by the network-version flag above.
     this.clientCarryPresentationItems = frame.carryItems;
-    runtime.enemyManager?.updateClientInterpolation(frame.interpolationFactor);
+    runtime.enemyManager?.updateClientInterpolation(frame.interpolationFactor, this.reads.getSynchronizedNow());
 
     const vulnerabilityNow = this.reads.getSynchronizedNow();
     for (const enemy of runtime.enemyManager?.getAllEnemies() ?? []) {

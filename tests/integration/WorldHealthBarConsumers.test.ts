@@ -103,6 +103,37 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it('reconciles claw events with baseline/delta revisions and enemy generations', () => {
+    const h = harness(), manager = enemies(h);
+    const clearEnemyClawEffects = vi.fn();
+    manager.setVisualSink({ clearEnemyClawEffects, clearBurrowState: vi.fn(), syncBurrowState: vi.fn(),
+      playBurrowPhaseEffect: vi.fn(), playEnemySpawnEffect: vi.fn() });
+    const attack = { attackId: 'e1:1', weaponId: 'ZOMBIE_BADGER_BITE', startedAt: 1000,
+      strikeAt: 1270, hitAt: 1350, endsAt: 1570, angle: 1, range: 40, arcDegrees: 100 };
+    const start = { enemyId: 'e1', entityGeneration: 4, state: { revision: 10, attack } };
+    manager.applyClawEvent(start); // reliable start may beat the spawn snapshot
+    upsert(manager, { id: 'e1', entityGeneration: 4, kind, x: 100, y: 100, hp: 100, maxHp: 100 });
+    const enemy = manager.getEnemy('e1')!;
+    expect(enemy.getClawAttackState()).toEqual(start.state);
+    manager.applyClawEvent({ ...start, state: { revision: 11, attack: null } });
+    manager.applyClawEvent(start);
+    upsert(manager, { id: 'e1', entityGeneration: 4, claw: start.state });
+    expect(enemy.getClawAttackState()).toEqual({ revision: 11, attack: null });
+    upsert(manager, { id: 'e1', entityGeneration: 4, claw: { revision: 12, attack } });
+    expect(enemy.getClawAttackState().attack).toEqual(attack);
+    upsert(manager, { id: 'e1', entityGeneration: 4, claw: { revision: 13, attack: null } });
+    expect(enemy.getClawAttackState().attack).toBeNull();
+    manager.applyClawEvent({ ...start, entityGeneration: 5, state: { revision: 1, attack: { ...attack, attackId: 'new' } } });
+    upsert(manager, { id: 'e1', entityGeneration: 5, kind, x: 100, y: 100, hp: 100, maxHp: 100 });
+    const replacement = manager.getEnemy('e1')!;
+    expect(replacement).not.toBe(enemy);
+    manager.applyClawEvent({ ...start, state: { revision: 999, attack } });
+    upsert(manager, { id: 'e1', entityGeneration: 4, kind, x: 100, y: 100, claw: { revision: 999, attack } });
+    expect(manager.getEnemy('e1')).toBe(replacement);
+    expect(replacement.getClawAttackState().attack?.attackId).toBe('new');
+    manager.destroy(); h.renderer.destroy();
+    expect(clearEnemyClawEffects).toHaveBeenCalledTimes(1);
+  });
   it('applies local reconciliation to every player attachment without moving the body or producing steps', () => {
     const h = harness();
     const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,

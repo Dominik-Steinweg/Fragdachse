@@ -1,3 +1,4 @@
+import type { EnemyClawAttack, EnemyClawState } from './EnemyClawAttack';
 import { isOffensiveConstruction } from './offensiveConstruction';
 import * as Phaser from 'phaser';
 import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
@@ -45,11 +46,10 @@ interface PlayerTargetLockState {
 }
 
 interface MeleeWindupState {
-  readonly weaponId: string;
-  readonly targetRef: EnemyAiTargetRef;
-  target: EnemyAttackCandidate;
-  readonly aimAngle: number;
-  readonly executeAt: number;
+  readonly attackWeapon: EnemyAttackWeapon;
+  readonly target: EnemyAttackCandidate;
+  readonly presentation: EnemyClawAttack;
+  executed: boolean;
 }
 
 /** Laufende Salve eines Gegners; pro Gegner kann nur eine Waffe gleichzeitig salvieren. */
@@ -87,6 +87,27 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   private readonly salvoStates = new Map<string, EnemySalvoState>();
   private readonly playerTargetLocks = new Map<string, PlayerTargetLockState>();
   private readonly meleeWindups = new Map<string, MeleeWindupState>();
+  private clawRevision = 0;
+  private clawStateSink: ((enemy: EnemyEntity, state: EnemyClawState) => void) | null = null;
+  setClawStateSink(sink: ((enemy: EnemyEntity, state: EnemyClawState) => void) | null): void { this.clawStateSink = sink; }
+
+  private clearClawAttack(enemy: EnemyEntity): void {
+    if (!this.meleeWindups.delete(enemy.id)) return;
+    this.clawStateSink?.(enemy, { revision: ++this.clawRevision, attack: null });
+  }
+
+  destroy(): void {
+    for (const enemy of this.enemyManager.getAllEnemies()) this.clearClawAttack(enemy);
+    this.meleeWindups.clear();
+    this.salvoStates.clear(); this.sustainedAttacks.clear(); this.playerTargetLocks.clear(); this.lastAttackTargets.clear();
+    this.clawStateSink = null;
+  }
+
+  removeEnemy(enemy: EnemyEntity): void {
+    this.clearClawAttack(enemy);
+    this.salvoStates.delete(enemy.id); this.sustainedAttacks.delete(enemy.id);
+    this.playerTargetLocks.delete(enemy.id); this.lastAttackTargets.delete(enemy.id);
+  }
   private readonly lastAttackTargets = new Map<string, EnemyAttackCandidate>();
   private actionBlockedChecker: ((enemyId: string) => boolean) | null = null;
 
@@ -103,7 +124,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   ) {}
 
   getCurrentTarget(enemyId: string, now = Date.now()): EnemyAiTargetRef | null {
-    return this.meleeWindups.get(enemyId)?.targetRef
+    return this.meleeWindups.get(enemyId)?.target.targetRef
       ?? this.salvoStates.get(enemyId)?.target.targetRef
       ?? this.sustainedAttacks.get(enemyId)?.targetRef
       ?? ((this.playerTargetLocks.get(enemyId)?.lockedUntil ?? 0) >= now
@@ -115,13 +136,13 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   }
 
   /** No scan, cooldown, lock or salvo mutation: locomotion reads this before moving the enemy. */
-  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean } | null {
+  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean; committed?: boolean } | null {
     if (!enemy.sprite.active || enemy.faction !== 'hostile' || enemy.isBurrowed()
       || this.combatSystem.isStunned?.(enemy.id, now) || this.actionBlockedChecker?.(enemy.id)
       || this.enemyManager.isEnemyPanicking(enemy.id) || this.trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) return null;
 
     const windup = this.meleeWindups.get(enemy.id);
-    if (windup) return { aimAngle: windup.aimAngle, holdPosition: true };
+    if (windup) return { aimAngle: windup.presentation.angle, holdPosition: true, committed: true };
     const salvo = this.salvoStates.get(enemy.id);
     const sustained = this.sustainedAttacks.get(enemy.id);
     const committedWeaponId = salvo && now < salvo.expiresAt ? salvo.weaponId
@@ -151,7 +172,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   hostUpdate(delta: number, now: number): void {
     const activeEnemyIds = new Set<string>();
     for (const enemy of this.enemyManager.getAllEnemies()) {
-      if (!enemy.sprite.active) continue;
+      if (!enemy.sprite.active || enemy.getHp?.() <= 0) { this.clearClawAttack(enemy); continue; }
       if (enemy.faction !== 'hostile') continue;
       activeEnemyIds.add(enemy.id);
       enemy.decayWeaponSpread(delta, now);
@@ -159,10 +180,10 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       // Mounted players leave the player target space. Do not keep their last position as a
       // smoke-obscured lock; the next scan must select the real construct/carrier reference.
       const currentTarget = this.getCurrentTarget(enemy.id, now);
-      if (currentTarget?.kind === 'player' && (this.combatSystem.isPlayerTargetable?.(currentTarget.id) === false
+      if (!this.meleeWindups.has(enemy.id) && currentTarget?.kind === 'player' && (this.combatSystem.isPlayerTargetable?.(currentTarget.id) === false
         || this.targetCatalog?.getPlayerReplacement(currentTarget.id))) this.abortCombat(enemy, now);
 
-      if (this.combatSystem.isStunned?.(enemy.id, now) || this.actionBlockedChecker?.(enemy.id)) {
+      if (this.combatSystem.isStunned?.(enemy.id, now) || this.actionBlockedChecker?.(enemy.id) || (enemy.getDashPhase?.() ?? 0) !== 0) {
         this.abortCombat(enemy, now);
         // Die Sperre gehoert ausschliesslich dem Angriffssystem. Exklusive Spezialbewegungen
         // (etwa die Jagd des Zeitbombendachses) wurden bereits vom EnemyManager gesetzt und
@@ -224,7 +245,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     this.sustainedAttacks.delete(enemy.id);
     this.playerTargetLocks.delete(enemy.id);
     this.lastAttackTargets.delete(enemy.id);
-    this.meleeWindups.delete(enemy.id);
+    this.clearClawAttack(enemy);
   }
 
   /** Beendet eine laufende Salve und sperrt ihre Waffe fuer die konfigurierte Pause. */
@@ -276,78 +297,39 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   }
 
   private shouldStartMeleeWindup(attack: SelectedEnemyAttack): boolean {
-    return attack.attackWeapon.weapon.config.fire.type === 'melee'
-      && attack.attackWeapon.playerMeleeWindupMs > 0
-      && attack.target.targetRef !== undefined;
+    return attack.attackWeapon.weapon.config.fire.type === 'melee' && !!attack.attackWeapon.meleeTiming;
   }
 
   private startMeleeWindup(enemy: EnemyEntity, attack: SelectedEnemyAttack, now: number): void {
-    const targetRef = attack.target.targetRef;
-    if (!targetRef) return;
-
-    const aimAngle = Phaser.Math.Angle.Between(
-      enemy.sprite.x,
-      enemy.sprite.y,
-      attack.target.targetX,
-      attack.target.targetY,
-    );
-    this.meleeWindups.set(enemy.id, {
-      weaponId: attack.attackWeapon.weapon.config.id,
-      targetRef,
-      target: attack.target,
-      aimAngle,
-      executeAt: now + attack.attackWeapon.playerMeleeWindupMs,
-    });
-    if (targetRef) this.decoyTargets?.usedTarget(enemy.id, targetRef);
+    const timing = attack.attackWeapon.meleeTiming!;
+    const config = attack.attackWeapon.weapon.config;
+    if (config.fire.type !== 'melee') return;
+    const angle = Math.atan2(attack.target.targetY - enemy.sprite.y, attack.target.targetX - enemy.sprite.x);
+    const revision = ++this.clawRevision;
+    const presentation: EnemyClawAttack = {
+      attackId: enemy.id + ':' + now + ':' + revision, weaponId: config.id, angle,
+      startedAt: now, strikeAt: now + timing.hitDelayMs - timing.strikeMs,
+      hitAt: now + timing.hitDelayMs, endsAt: now + timing.hitDelayMs + timing.recoveryMs,
+      range: config.range, arcDegrees: config.fire.hitArcDegrees,
+    };
+    this.meleeWindups.set(enemy.id, { attackWeapon: attack.attackWeapon, target: { ...attack.target }, presentation, executed: false });
+    this.clawStateSink?.(enemy, { revision, attack: presentation });
+    if (attack.target.targetRef) this.decoyTargets?.usedTarget(enemy.id, attack.target.targetRef);
     enemy.stopMovement();
-    enemy.faceAngle(aimAngle);
+    enemy.faceAngle(angle);
   }
 
   private updateMeleeWindup(enemy: EnemyEntity, now: number): void {
     const state = this.meleeWindups.get(enemy.id);
     if (!state) return;
-
-    const attackWeapon = enemy.getAttackWeapons().find(candidate => candidate.weapon.config.id === state.weaponId);
-    const range = attackWeapon?.weapon.config.range ?? 0;
-    const target = this.isAttackTargetObscured(enemy, state.target, range)
-      ? state.target : this.buildPlayerLikeTargetCandidate(enemy, state.targetRef, range);
-    if (
-      !attackWeapon
-      || attackWeapon.weapon.config.fire.type !== 'melee'
-      || !target
-    ) {
-      this.meleeWindups.delete(enemy.id);
-      return;
-    }
-
     enemy.stopMovement();
-    state.target = target;
-    enemy.faceAngle(state.aimAngle);
-    if (now < state.executeAt) return;
-
-    this.meleeWindups.delete(enemy.id);
-    if (!enemy.isWeaponReady(attackWeapon.weapon, now)) return;
-
-    this.fireAttack(
-      enemy,
-      {
-        attackWeapon,
-        target: {
-          kind: target.kind,
-          priority: 2,
-          distance: target.distance,
-          targetX: target.targetX,
-          targetY: target.targetY,
-          targetId: target.targetId,
-          targetRef: target.targetRef,
-          obstacle: target.obstacle,
-          obstacleIndex: target.obstacleIndex,
-        },
-      },
-      now,
-      state.aimAngle,
-      true,
-    );
+    enemy.faceAngle(state.presentation.angle);
+    if (!state.executed && now >= state.presentation.hitAt) {
+      // Set before dispatch: damage callbacks may remove the attacker or end the Activity.
+      state.executed = true;
+      this.fireAttack(enemy, state, now, state.presentation.angle, true, state.presentation.attackId);
+    }
+    if (now >= state.presentation.endsAt) this.clearClawAttack(enemy);
   }
 
   private fireAttack(
@@ -356,10 +338,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     now: number,
     forcedAngle?: number,
     committed = false,
+    clawAttackId?: string,
   ): void {
     const { attackWeapon, target } = attack;
     const committedLivingAttack = committed && (target.targetRef?.kind === 'player' || target.targetRef?.kind === 'decoy' || target.kind === 'ally');
-    if (this.intents && target.kind !== 'train' && !committedLivingAttack) {
+    if (this.intents && target.kind !== 'train' && !committedLivingAttack && !clawAttackId) {
       if (target.kind === 'obstacle' && (target.obstacleIndex === undefined
         || this.getRockObjects()?.[target.obstacleIndex] !== target.obstacle || !target.obstacle?.active)) {
         this.abortCombat(enemy, now); return;
@@ -383,16 +366,17 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const didFire = this.weaponExecution.fire(weapon.config, {
       x: enemy.sprite.x,
       y: enemy.sprite.y,
-      angle: angle + enemy.rollWeaponSpreadOffset(weapon),
+      angle: clawAttackId ? angle : angle + enemy.rollWeaponSpreadOffset(weapon),
       targetX: target.targetX,
       targetY: target.targetY,
       ownerId: enemy.id,
       ownerColor: COLORS.RED_2,
+      options: clawAttackId ? { clawAttackId } : undefined,
     });
     if (!didFire) return;
     if (target.targetRef) this.decoyTargets?.usedTarget(enemy.id, target.targetRef);
 
-    enemy.pauseAttackMovement(now, attackWeapon.attackMovementSpeedFactor);
+    if (!clawAttackId) enemy.pauseAttackMovement(now, attackWeapon.attackMovementSpeedFactor);
     enemy.recordWeaponUse(weapon, now);
     this.lastAttackTargets.set(enemy.id, { ...attack.target });
     this.advanceSalvo(enemy, attackWeapon, now);

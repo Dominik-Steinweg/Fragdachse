@@ -75,7 +75,7 @@ describe('asset pipeline catalog contracts', () => {
       const asset = enemies.find((entry) => entry.gameIds.includes(enemyId))!;
       expect(asset.targetSize).toBe(config.size);
       expect(asset.forward).toBe('north');
-      expect(asset.requiredClips).toEqual(['move']);
+      expect(asset.requiredClips).toEqual(expect.arrayContaining(['move', 'claw']));
       expect(asset.reference).toBe(`public/assets/sprites/enemies/${config.imageKey}.png`);
       expect(config.spriteRotationOffsetDegrees ?? 0).toBe(0);
     }
@@ -104,7 +104,7 @@ describe('asset pipeline catalog contracts', () => {
   });
 
   it('distinguishes executable reference recipes from planned briefs and defines complete motion contracts', () => {
-    const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors']);
+    const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors', 'claw_quadruped', 'claw_biped']);
     for (const asset of assets) {
       if (asset.production === 'planned') {
         expect(asset.recipe).toBeUndefined();

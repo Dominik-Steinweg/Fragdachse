@@ -34,7 +34,8 @@ import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';
 import { EnemyAiTargetCatalog } from '../src/systems/EnemyAiTargetCatalog';
 import type { EnemyIntentSystem } from '../src/systems/navigation/EnemyIntentSystem';
-import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecutionAdapter';
+import type { AutomatedWeaponExecution, AutomatedWeaponFireParams } from '../src/world/AutomatedWeaponExecutionAdapter';
+import type { EnemyClawState } from '../src/systems/EnemyClawAttack';
 
 const COLOSSUS = getCoopDefenseEnemyConfig('inferno-colossus');
 const SCAN_INTERVAL_MS = COLOSSUS.attackScanIntervalMs;
@@ -81,7 +82,7 @@ function createColossus(x = 100, y = 100, targetModeOverride?: 'all' | 'players'
     weapon: new GenericWeapon(WEAPON_CONFIGS[configured.weaponId as keyof typeof WEAPON_CONFIGS]),
     targetMode: targetModeOverride ?? configured.targetMode,
     minimumFireDurationMs: configured.minimumFireDurationMs ?? 0,
-    playerMeleeWindupMs: configured.playerMeleeWindupMs ?? 0,
+    meleeTiming: configured.meleeTiming,
     attackMovementSpeedFactor: configured.attackMovementSpeedFactor ?? 0,
     minTargetDistancePx: configured.minTargetDistancePx ?? 0,
     salvo: configured.salvo,
@@ -146,6 +147,8 @@ function createAttackSystem(
   lineOfFire = () => true,
 ) {
   const shots: FiredShot[] = [];
+  const fireParams: AutomatedWeaponFireParams[] = [];
+  const isStunned = vi.fn(() => false);
   const enemyManager = {
     canSeeThroughSmoke: vi.fn(() => true),
     getAllEnemies: () => [enemy],
@@ -168,9 +171,11 @@ function createAttackSystem(
       canDamageTarget: () => true,
       hasLineOfSight: () => true,
       hasClearLineOfFire: lineOfFire,
+      isStunned,
     } as unknown as CombatSystem,
     {
-      fire: (config: { id: string }, params: { targetX: number; targetY: number }) => {
+      fire: (config: { id: string }, params: AutomatedWeaponFireParams) => {
+        fireParams.push(params);
         shots.push({ weaponId: config.id, targetX: params.targetX, targetY: params.targetY });
         return true;
       },
@@ -181,8 +186,88 @@ function createAttackSystem(
     targetCatalog,
   );
 
-  return { system, shots, enemyManager };
+  return { system, shots, enemyManager, fireParams, isStunned };
 }
+
+describe('committed enemy claw timeline', () => {
+  function fixture() {
+    const enemy = createColossus();
+    const bite = enemy.getAttackWeapons().find(w => w.weapon.config.fire.type === 'melee')!;
+    enemy.getAttackWeapons = () => [{ ...bite, targetMode: 'players' }];
+    const player = fakeEntity({ id: 'p1', x: 110, y: 100, active: true });
+    const f = createAttackSystem(enemy, [player]);
+    const states: EnemyClawState[] = [];
+    f.system.setClawStateSink((_enemy, state) => states.push(state));
+    f.system.hostUpdate(16, 1000);
+    return { ...f, enemy, player, bite, states, attack: states[0].attack! };
+  }
+
+  it('waits for contact, executes once across skipped ticks, and keeps recovery exclusive', () => {
+    const f = fixture(), { attack } = f;
+    expect(f.shots).toEqual([]);
+    expect(f.enemy.isWeaponReady(f.bite.weapon, attack.hitAt - 1)).toBe(true);
+    f.system.hostUpdate(16, attack.hitAt - 1);
+    expect(f.shots).toEqual([]);
+    f.system.hostUpdate(16, attack.hitAt + 17);
+    f.system.hostUpdate(16, attack.hitAt + 18);
+    expect(f.shots).toHaveLength(1);
+    expect(f.enemy.isWeaponReady(f.bite.weapon, attack.hitAt + 18)).toBe(false);
+    // Even an independently ready weapon may not start during recovery.
+    const ready = new GenericWeapon(WEAPON_CONFIGS.GLOCK);
+    f.enemy.getAttackWeapons = () => [{ ...f.bite, weapon: ready, targetMode: 'players' }];
+    f.system.hostUpdate(16, attack.endsAt - 1);
+    expect(f.shots).toHaveLength(1);
+    expect(f.system.getCombatMovement(f.enemy, attack.endsAt - 1)).toMatchObject({ holdPosition: true, committed: true });
+    f.system.hostUpdate(16, attack.endsAt);
+    expect(f.states.at(-1)).toEqual({ revision: f.states[0].revision + 1, attack: null });
+    f.system.hostUpdate(16, attack.endsAt + SCAN_INTERVAL_MS);
+    expect(f.shots).toHaveLength(2);
+  });
+
+  it('finishes a whiff in the frozen direction after the original target leaves or disappears', () => {
+    const f = fixture();
+    f.player.sprite.x = -500; f.player.sprite.y = 900; f.player.sprite.active = false;
+    f.enemy.rollWeaponSpreadOffset = () => 1;
+    f.system.hostUpdate(16, f.attack.hitAt);
+    expect(f.fireParams).toHaveLength(1);
+    expect(f.fireParams[0]).toMatchObject({ angle: 0, targetX: 110, targetY: 100,
+      options: { clawAttackId: f.attack.attackId } });
+    expect(f.enemy.aimAngle).toBe(0);
+    expect(f.system.getCombatMovement(f.enemy, f.attack.hitAt)).toMatchObject({ aimAngle: 0, committed: true });
+    f.system.hostUpdate(16, f.attack.endsAt);
+    expect(f.states.at(-1)?.attack).toBeNull();
+  });
+
+  it('does not lose or repeat the impact when a frame skips the entire strike and recovery', () => {
+    const f = fixture();
+    f.system.hostUpdate(1000, f.attack.endsAt + 10);
+    expect(f.shots).toHaveLength(1);
+    expect(f.states.at(-1)?.attack).toBeNull();
+    f.system.hostUpdate(1, f.attack.endsAt + 11);
+    expect(f.shots).toHaveLength(1);
+  });
+
+  it.each(['death', 'stun', 'burrow', 'panic', 'exclusive', 'dash', 'detach', 'remove'] as const)('cancels before contact on %s', reason => {
+    const f = fixture();
+    if (reason === 'death') f.enemy.getHp = () => 0;
+    if (reason === 'stun') f.isStunned.mockReturnValue(true);
+    if (reason === 'burrow') f.enemy.isBurrowed = () => true;
+    if (reason === 'panic') f.enemyManager.isEnemyPanicking = () => true;
+    if (reason === 'exclusive') f.system.setActionBlockedChecker(() => true);
+    if (reason === 'dash') f.enemy.getDashPhase = () => 1;
+    if (reason === 'detach') f.system.destroy();
+    else if (reason === 'remove') f.system.removeEnemy(f.enemy);
+    else f.system.hostUpdate(16, f.attack.hitAt);
+    expect(f.shots).toEqual([]);
+    expect(f.states.at(-1)?.attack).toBeNull();
+  });
+
+  it('ordinary damage does not interrupt a committed swing', () => {
+    const f = fixture(); f.enemy.getHp = () => 1;
+    f.system.hostUpdate(16, f.attack.hitAt);
+    expect(f.shots).toHaveLength(1);
+  });
+});
 
 /** Laesst den Host-Takt so lange laufen, bis `untilMs` erreicht ist. */
 function runAttackFrames(
@@ -269,7 +354,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     const enemy = createColossus();
     const bite = enemy.getAttackWeapons().find(w => w.weapon.config.fire.type === 'melee')!;
     const windupMs = 200;
-    enemy.getAttackWeapons = () => [{ ...bite, targetMode: 'players', playerMeleeWindupMs: windupMs }];
+    enemy.getAttackWeapons = () => [{ ...bite, targetMode: 'players', meleeTiming: { hitDelayMs: windupMs, strikeMs: 80, recoveryMs: 220 } }];
     const player = fakeEntity({ id: 'p1', x: 110, y: 100, active: true });
     const { system, shots, enemyManager } = createAttackSystem(enemy, [player]);
     system.hostUpdate(16, 1000);

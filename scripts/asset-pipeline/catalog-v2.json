@@ -555,7 +555,8 @@
         "materials": "Gerichtete geschichtete Fellbüschel, blinde milchige Augen in vertieften Lidern, freiliegende gealterte Rippen, verschmutzte Stoffwickel, genähte Narben und raues Reparaturleder."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "zombie-badger",
@@ -597,6 +598,20 @@
             "rearPhase": 0.18,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ],
       "designReference": "scripts/asset-pipeline/references/zombie-badger-concept.png"
@@ -626,7 +641,8 @@
         "materials": "Kurzes gerichtetes rostrotes Fell, gewachsene Keratinkerben auf karminroten Hautplatten, geriefte schwarze Hörner und schmale Glutadern."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "demon-badger",
@@ -668,6 +684,20 @@
             "rearPhase": 0.08,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -696,14 +726,15 @@
         "materials": "Dichtes violettes Fell auf schlanker Muskulatur, einzelne geschwungene Fellspitzen, verwitterte helle Rückendornen und gelbe Schlitzaugen."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "rabid-badger",
       "model": {
         "spineLength": 0.84
       },
-      "orthoScale": 2.88,
+      "orthoScale": 3.04,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
@@ -738,6 +769,20 @@
             "rearPhase": 0.08,
             "bodySurge": 0.035
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -766,7 +811,8 @@
         "materials": "Organisch verwitterter Granit mit mineralischer Körnung, verzweigten Brüchen, Erosionsporen und kleinen Flechten über dichtem olivgrauem Fell."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "grave-titan",
@@ -809,6 +855,20 @@
             "rearPhase": 0.18,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -837,7 +897,8 @@
         "materials": "Warmorange Pilzkappen mit radialer Maserung, feinen gewachsenen Poren und Lamellen; grüne keratinartige Rückenplatten über weichem Fell."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "spore-warden",
@@ -879,6 +940,20 @@
             "rearPhase": 0.18,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -907,14 +982,15 @@
         "materials": "Fein gewebte und vernähte helle Sanitätstasche, abgenutzte Messingbeschläge, grüne Emblemfläche, Ledergurte und dichtes salbeigrünes Fell."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "plague-medic",
       "model": {
         "kitWidth": 0.83
       },
-      "orthoScale": 2.84,
+      "orthoScale": 3,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -950,6 +1026,20 @@
             "rearPhase": 0.18,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -978,7 +1068,8 @@
         "materials": "Verwitterte kobaltblaue Panzerung mit vertieften Nähten und Kontakten, gerippter violetter Energiekammer und dunklem Indigofell."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "void-stalker",
@@ -1021,6 +1112,20 @@
             "rearPhase": 0.08,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -1049,12 +1154,13 @@
         "materials": "Olivgrünes geschichtetes Fell, fein geäderte lederartige Brutkammern, körnige Haut und trockene gewachsene Rückenplatten."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "stink-broodmother",
       "model": {},
-      "orthoScale": 2.76,
+      "orthoScale": 3.18,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
       },
@@ -1090,6 +1196,20 @@
             "rearPhase": 0.18,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -1118,7 +1238,8 @@
         "materials": "Runde ausgearbeitete Formen, ruhige matte Oberflächen, klare Formschatten, feine technische Gebrauchsspuren und kräftige Identitätsfarben."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "alien-badger",
@@ -1179,7 +1300,7 @@
         ],
         "upperBodyMotion": "stable-grip"
       },
-      "orthoScale": 2.35,
+      "orthoScale": 2.62,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
         "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
@@ -1215,6 +1336,20 @@
             "headYaw": -0.022,
             "headBob": -0.02
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_biped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -1243,7 +1378,8 @@
         "materials": "Rostbraunes gerichtetes Fell, genähte raue Trageschlinge, geriefte Sehnen, Hornschuppen und dichtes Fell des getragenen Nachwuchses."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "thrower-badger",
@@ -1284,6 +1420,20 @@
             "rearPhase": 0.08,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -1312,12 +1462,13 @@
         "materials": "Poröser dunkler Basalt, hitzeverfärbte Kupferpanzerung, feine Abnutzung und Kontaktverschattung, Kühlschlitze und zurückhaltende Glutspalten."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "inferno-colossus",
       "model": {},
-      "orthoScale": 3.78,
+      "orthoScale": 3.94,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -1353,6 +1504,20 @@
             "rearPhase": 0.08,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -1381,7 +1546,8 @@
         "materials": "Runde ausgearbeitete Formen, ruhige matte Oberflächen, klare Formschatten, feine technische Gebrauchsspuren und kräftige Identitätsfarben."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "pyro-badger",
@@ -1442,7 +1608,7 @@
         ],
         "upperBodyMotion": "stable-grip"
       },
-      "orthoScale": 2.35,
+      "orthoScale": 2.62,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
         "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
@@ -1478,6 +1644,20 @@
             "headYaw": -0.022,
             "headBob": -0.02
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_biped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -1506,12 +1686,13 @@
         "materials": "Dichtes graubraunes Fell, verwittertes ockerfarbenes rundes Sprenggehäuse, eingelassene Schrauben, Messinghalter und geschützte Zündsicherungen."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "recipe": "timebomb-badger",
       "model": {},
-      "orthoScale": 2.3,
+      "orthoScale": 2.46,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -1548,6 +1729,20 @@
             "rearPhase": 0.08,
             "bodySurge": 0.012
           }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
+          }
         }
       ]
     },
@@ -1576,7 +1771,8 @@
         "materials": "Abgenutzte eisblaue Keramikpanzerung, fein bearbeitete Metallkanten und Gauss-Kühlrippen, dunkles Fell und schmale magentafarbene Einlagen."
       },
       "requiredClips": [
-        "move"
+        "move",
+        "claw"
       ],
       "production": "reference",
       "referenceTransform": {
@@ -1586,7 +1782,7 @@
       },
       "recipe": "void-hunter",
       "model": {},
-      "orthoScale": 3.55,
+      "orthoScale": 3.71,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
         "technical": "art/poc/pipeline-v1/textures/technical.png"
@@ -1621,6 +1817,20 @@
             "tailYaw": 0.033,
             "rearPhase": 0.08,
             "bodySurge": 0.012
+          }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_quadruped",
+          "frameCount": 18,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 8,
+            "impact": 11
+          },
+          "parameters": {
+            "strength": 1
           }
         }
       ]

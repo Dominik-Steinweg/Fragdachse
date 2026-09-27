@@ -59,6 +59,20 @@ async function fixture() {
 }
 
 describe('V2 animated asset export contracts', () => {
+  it('preserves claw markers through export and selection and rejects ambiguous timing', async () => {
+    const f = await fixture();
+    const claw = { name: 'claw', motion: 'claw_quadruped', frameRate: 24, loop: false,
+      frames: [0, 1, 2, 3], markers: { strike: 1, impact: 2 } };
+    const m = { ...f.manifest, clips: [...f.manifest.clips, claw] };
+    for (const bad of [{ ...claw, loop: true }, { ...claw, markers: undefined },
+      { ...claw, markers: { strike: 2, impact: 1 } }, { ...claw, markers: { strike: 1, impact: 3 } }]) {
+      expect(() => validateManifestV2({ ...m, clips: [m.clips[0], bad] })).toThrow(/Claw/);
+    }
+    await save(path.join(f.folder, 'render.json'), m);
+    await exportVariantV2(f.folder, f.root);
+    await selectVariantV2(f.asset, 'calm', 32, 'Contract fixture with explicit attack phase markers.');
+    expect((await verifySelectionV2(f.asset)).clips.find(c => c.name === 'claw')).toEqual(claw);
+  });
   it.each(['weapon', 'utility'])('exports and selects a static %s and retains its socket contract', async (category) => {
     const f = await fixture();
     const folder = path.join(f.asset, 'standard');

@@ -66,6 +66,12 @@ def resolve_spec(root, asset_id):
             raise ValueError('Clip needs 2–120 sampled frames')
         if not math.isfinite(clip['frameRate']) or clip['frameRate'] <= 0:
             raise ValueError('Clip frameRate must be positive')
+        if clip['name'] == 'claw':
+            markers = clip.get('markers', {})
+            if (clip['loop'] or set(markers) != {'strike', 'impact'}
+                    or any(type(v) is not int for v in markers.values())
+                    or not 0 < markers['strike'] < markers['impact'] < clip['frameCount'] - 1):
+                raise ValueError('Claw requires ordered strike/contact markers')
         if any(not isinstance(value, (int, float)) or not math.isfinite(value)
                for value in clip.get('parameters', {}).values()):
             raise ValueError('Motion parameters must be finite numbers')
@@ -163,7 +169,7 @@ def validate_base(scene, asset, spec):
 def prepare(root, spec, revision, fingerprint, sources, textures):
     # MCP keeps Python alive. Hashing current files must never label cached old code.
     importlib.invalidate_caches()
-    for name in ('blender_pipeline', 'rigs_v2', 'motions_v2', 'eye_anchors',
+    for name in ('blender_pipeline', 'rigs_v2', 'claw_motion_v2', 'motions_v2', 'eye_anchors',
                  'recipes.badger', 'recipes_v2.badger',
                  *([f'recipes.{spec["recipe"]}'] if spec['recipe'] in ('badger', 'rocket') else [])):
         if name in sys.modules:

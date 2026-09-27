@@ -1,4 +1,6 @@
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
+import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '../systems/EnemyClawAttack';
+import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
 import { enemyHealthBarStyle } from '../effects/health/healthBarStyles';
@@ -54,7 +56,7 @@ export interface EnemyAttackWeapon {
   readonly weapon: BaseWeapon;
   readonly targetMode: CoopDefenseEnemyWeaponTargetMode;
   readonly minimumFireDurationMs: number;
-  readonly playerMeleeWindupMs: number;
+  readonly meleeTiming?: import('../systems/EnemyClawAttack').EnemyMeleeTiming;
   /** 0 = Gegner bleibt waehrend der Angriffspause stehen, 1 = er laeuft ungebremst weiter. */
   readonly attackMovementSpeedFactor: number;
   readonly minTargetDistancePx: number;
@@ -123,6 +125,27 @@ export class EnemyEntity {
   /** Walking-Sheet dieser Gegnerart, oder `null` fuer eine statische Darstellung. */
   private readonly walkingSheet: WalkingSheet | null;
   private walkingRequested = false;
+  private clawState: EnemyClawState = EMPTY_ENEMY_CLAW_STATE;
+  private clawAnimating = false;
+
+  getClawAttackState(): EnemyClawState { return this.clawState; }
+
+  applyClawAttackState(state: EnemyClawState): void {
+    if (!isEnemyClawState(state) || state.revision <= this.clawState.revision) return;
+    this.clawState = state;
+    this.clawAnimating = state.attack !== null;
+    if (!this.clawAnimating) this.syncWalkingAnimation();
+  }
+
+  syncClawAnimation(now: number): void {
+    const attack = this.clawState.attack;
+    const wasAnimating = this.clawAnimating;
+    this.clawAnimating = !!attack && now < attack.endsAt && this.sprite.visible && !this.burrowed && this.currentHp > 0;
+    if (this.clawAnimating && attack) {
+      this.faceAngle(attack.angle);
+      syncEnemyClawAnimation(this.sprite, this.config.imageKey, attack, now);
+    } else if (wasAnimating) this.syncWalkingAnimation();
+  }
   private movementRevision = 0;
   /** Decaying teleport offset, separate from the normal interpolation lag while walking. */
   private movementCorrectionRemaining = 0;
@@ -348,6 +371,7 @@ export class EnemyEntity {
   }
 
   private syncWalkingAnimation(): void {
+    if (this.clawAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,
@@ -706,6 +730,7 @@ export class EnemyEntity {
 
   getNetSnapshot(): SyncedEnemyState {
     return {
+      claw: this.clawState,
       positionRevision: this.movementRevision,
       id: this.id,
       kind: this.kind,
@@ -1010,7 +1035,7 @@ export class EnemyEntity {
         weapon: new GenericWeapon(this.resolveEnemyWeaponConfig(baseConfig, configuredWeapon.targetMode)),
         targetMode: configuredWeapon.targetMode,
         minimumFireDurationMs: configuredWeapon.minimumFireDurationMs ?? 0,
-        playerMeleeWindupMs: configuredWeapon.playerMeleeWindupMs ?? 0,
+        meleeTiming: configuredWeapon.meleeTiming,
         attackMovementSpeedFactor: configuredWeapon.attackMovementSpeedFactor ?? 0,
         minTargetDistancePx: configuredWeapon.minTargetDistancePx ?? 0,
         salvo: configuredWeapon.salvo,

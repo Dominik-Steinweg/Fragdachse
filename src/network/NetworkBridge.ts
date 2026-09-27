@@ -1,3 +1,4 @@
+import { isEnemyClawEvent } from '../systems/EnemyClawAttack';
 import { encodeAttackDrones, decodeAttackDrones, encodeAttackDroneBombs, decodeAttackDroneBombs } from './attackDroneSnapshotCodec';
 import type { SyncedAttackDrone, SyncedAttackDroneBomb } from '../types';
 import { isPlasmaBurnerPulseEvent } from '../combat/plasmaBurner/PlasmaBurnerContracts';
@@ -4051,6 +4052,22 @@ export class NetworkBridge {
 
   // ── Melee-Swing-RPC: Host → Alle ──────────────────────────────────────────
 
+  broadcastEnemyClawAttack(event: import('../systems/EnemyClawAttack').EnemyClawEvent): void {
+    this.broadcastGameplayEvent('eclaw', { ...event, wr: this.getCurrentWorldRevision(),
+      ar: this.getActivityDescriptor()?.activityRevision ?? null });
+  }
+
+  subscribeEnemyClawAttack(handler: (event: import('../systems/EnemyClawAttack').EnemyClawEvent) => void): () => void {
+    const listener = (raw: unknown) => {
+      if (this.acceptsWorldRpc(raw) && isEnemyClawEvent(raw)
+        && (raw as { ar?: number | null }).ar === (this.getActivityDescriptor()?.activityRevision ?? null)) handler(raw);
+    };
+    this.registerAllRpcHandler('eclaw', listener);
+    return () => {
+      if (this.allRpcHandlers.get('eclaw') === listener) this.allRpcHandlers.delete('eclaw');
+    };
+  }
+
   broadcastMeleeSwing(swing: SyncedMeleeSwing): void {
     this.broadcastGameplayEvent('msfx', {
       sid: swing.swingId, x: swing.x, y: swing.y,
@@ -4061,6 +4078,8 @@ export class NetworkBridge {
       hx: swing.impactX,
       hy: swing.impactY,
       sa: swing.shotAudioKey,
+      ca: swing.clawAttackId,
+      wr: this.getCurrentWorldRevision(), ar: this.getActivityDescriptor()?.activityRevision ?? null,
     });
   }
 
@@ -4069,7 +4088,10 @@ export class NetworkBridge {
     this.registerAllRpcHandler('msfx', async (data: unknown): Promise<unknown> => {
       const meleeSwingHandler = this.meleeSwingHandler;
       if (!meleeSwingHandler) return undefined;
-      const { sid, x, y, a, ad, r, c, id, vp, hp, hx, hy, sa } = data as {
+      if ((data as { ca?: string })?.ca && (!this.acceptsWorldRpc(data)
+        || (data as { ar?: number | null }).ar !== (this.getActivityDescriptor()?.activityRevision ?? null))) return undefined;
+      const { sid, x, y, a, ad, r, c, id, vp, hp, hx, hy, sa, ca } = data as {
+        ca?: string;
         sid: number; x: number; y: number;
         a: number; ad: number; r: number;
         c: number; id: string;
@@ -4079,7 +4101,7 @@ export class NetworkBridge {
         hy?: number;
         sa?: string;
       };
-      meleeSwingHandler({ swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id, visualPreset: vp, hitPlayer: hp, impactX: hx, impactY: hy, shotAudioKey: sa });
+      meleeSwingHandler({ clawAttackId: ca, swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id, visualPreset: vp, hitPlayer: hp, impactX: hx, impactY: hy, shotAudioKey: sa });
       return undefined;
     });
   }

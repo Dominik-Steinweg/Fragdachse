@@ -403,7 +403,7 @@ export class ClientUpdateCoordinator {
       shootingRange.acceptSnapshot(state.shootingRange);
       shootingRange.enemies.applySnapshot(state.enemies);
     }
-    shootingRange?.enemies.updateClientInterpolation(lerpFactor);
+    shootingRange?.enemies.updateClientInterpolation(lerpFactor, bridge.getSynchronizedNow());
     const snapshotMs = this.performanceMetricsEnabled ? performance.now() - startedAt : 0;
     let playersMs = 0;
     let projectilesEffectsMs = 0;

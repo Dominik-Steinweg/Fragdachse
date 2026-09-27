@@ -25,6 +25,7 @@ import {
 import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { PlasmaBurnerRenderer } from './PlasmaBurnerRenderer';
 import { BiteRenderer } from './BiteRenderer';
+import { EnemyClawRenderer } from './EnemyClawRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { EnemyVisualSink } from '../entities/EnemyManager';
 import { SpawnEffectRenderer } from './SpawnEffectRenderer';
@@ -135,6 +136,14 @@ export class EffectSystem implements EnemyVisualSink {
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private plasmaBurnerRenderer: PlasmaBurnerRenderer | null = null;
   private biteRenderer: BiteRenderer | null = null;
+  private enemyClawRenderer: EnemyClawRenderer | null = null;
+
+  syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean): void {
+    if (state.attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
+    this.enemyClawRenderer?.sync(id, state, x, y, now, visible);
+  }
+  clearEnemyClaw(id: string): void { this.enemyClawRenderer?.release(id); }
+  clearEnemyClawEffects(): void { this.enemyClawRenderer?.clear(); }
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
   private lighting: LightingSystem | null = null;
   private hitFeedbackRenderer: HitFeedbackRenderer | null = null;
@@ -261,6 +270,7 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   destroy(): void {
+    this.enemyClawRenderer?.destroy(); this.enemyClawRenderer = null;
     this.xpTextRenderer?.destroy();
     this.xpTextRenderer = null;
     this.clearHolyExplosions();
@@ -1495,6 +1505,13 @@ export class EffectSystem implements EnemyVisualSink {
     this.processedMeleeSwingKeys.set(key, now + 500);
 
     this.audioSystem?.playSound(swing.shotAudioKey, swing.x, swing.y, swing.shooterId);
+
+    if (swing.visualPreset === 'enemy_claw') {
+      this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
+      this.enemyClawRenderer.confirm(swing);
+      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
+      return;
+    }
 
     if (swing.visualPreset === 'bite' && this.biteRenderer) {
       this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);

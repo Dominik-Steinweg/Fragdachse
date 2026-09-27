@@ -404,7 +404,7 @@ export interface HitscanSupportEffect {
 }
 
 /** Visuelles Preset fuer Melee-Swings. */
-export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite';
+export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite' | 'enemy_claw';
 export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'rocks' | 'train';
 
 /** Variant-Preset fuer Energy-Ball-Projektile. */
@@ -861,8 +861,10 @@ export interface SyncedDeathEffect {
 
 export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect;
 
-/** Kurzlebiger Melee-Swing für VFX-Replikation (Host → Clients, unreliable). */
+/** Kurzlebiger Melee-Swing für VFX-Replikation über den zuverlässigen Gameplay-Kanal. */
 export interface SyncedMeleeSwing {
+  /** Correlates an announced enemy strike with its authoritative contact effects. */
+  clawAttackId?: string;
   /** Exact authored source for local presentation settings. */
   weaponSourceId?: string;
   swingId:    number;   // pro Session eindeutig, für Client-Deduplizierung
@@ -1983,6 +1985,7 @@ export interface SyncedBaseTurretState {
 
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
 export interface SyncedEnemyState {
+  claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2013,6 +2016,7 @@ export interface SyncedEnemyState {
 
 /** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
 export interface SyncedEnemyDeltaState {
+  claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;

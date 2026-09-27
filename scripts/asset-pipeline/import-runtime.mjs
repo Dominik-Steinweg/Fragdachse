@@ -59,7 +59,7 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
     forward: entry.forward, pivot: entry.pivot, layout: selected.layout,
     ...(['weapon', 'utility'].includes(entry.category) ? { heldItem: rendered.heldItem } : {}),
     idleFrame: selected.idleFrame,
-    clips: selected.clips.map(({ name, frames, frameRate, loop }) => ({ name, frames, frameRate, loop })),
+    clips: selected.clips.map(({ name, frames, frameRate, loop, markers }) => ({ name, frames, frameRate, loop, ...(markers ? { markers } : {}) })),
     hashes,
   };
   if (entry.category === 'enemy') {

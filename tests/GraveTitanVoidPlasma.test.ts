@@ -58,7 +58,7 @@ function createTitan(): TestTitan {
     weapon: new GenericWeapon(WEAPON_CONFIGS[configured.weaponId as keyof typeof WEAPON_CONFIGS]),
     targetMode: configured.targetMode,
     minimumFireDurationMs: configured.minimumFireDurationMs ?? 0,
-    playerMeleeWindupMs: configured.playerMeleeWindupMs ?? 0,
+    meleeTiming: configured.meleeTiming,
     attackMovementSpeedFactor: configured.attackMovementSpeedFactor ?? 0,
     minTargetDistancePx: configured.minTargetDistancePx ?? 0,
     salvo: configured.salvo,
@@ -80,6 +80,7 @@ function createTitan(): TestTitan {
     decayWeaponSpread: () => {},
     rollWeaponSpreadOffset: () => 0,
     faceAngle: () => {},
+    stopMovement: () => {},
     canScanForAttack(now: number) { return now >= this.nextScanAt; },
     scheduleNextAttackScan(now: number) { this.nextScanAt = now + TITAN.attackScanIntervalMs; },
     isWeaponReady(weapon: GenericWeapon, now: number) {
@@ -205,7 +206,9 @@ describe('Grufttitan Void-Plasma', () => {
     const { system, shots } = createAttackSystem(enemy, players, bases);
 
     const salvo = VOID_PLASMA_ATTACK.salvo!;
-    runAttackFrames(system, 1_000, 1_000 + salvo.cooldownMs + salvo.intervalMs * salvo.count + TITAN.attackScanIntervalMs * 2);
+    const melee = TITAN.weapons.find(weapon => weapon.meleeTiming)!.meleeTiming!;
+    runAttackFrames(system, 1_000, 1_000 + salvo.cooldownMs + salvo.intervalMs * salvo.count
+      + melee.hitDelayMs + melee.recoveryMs + TITAN.attackScanIntervalMs * 2);
 
     const weaponIds = shots.map((shot) => shot.weaponId);
     const firstBiteIndex = weaponIds.indexOf('GRAVE_TITAN_BITE');

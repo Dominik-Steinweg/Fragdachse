@@ -47,7 +47,7 @@ export interface CoopDefenseEnemyWeaponConfig {
   readonly weaponId: WeaponConfig['id'];
   readonly targetMode: CoopDefenseEnemyWeaponTargetMode;
   readonly minimumFireDurationMs?: number;
-  readonly playerMeleeWindupMs?: number;
+  readonly meleeTiming?: import('../systems/EnemyClawAttack').EnemyMeleeTiming;
   /**
    * Anteil der Laufgeschwindigkeit waehrend der Angriffspause dieser Waffe. Fehlt der Wert,
    * bleibt der Gegner wie bisher stehen (0). 1 bedeutet ungebremstes Weiterlaufen.
@@ -796,9 +796,7 @@ function normalizeWeapons(
       minimumFireDurationMs: weapon.minimumFireDurationMs === undefined
         ? undefined
         : Math.max(0, Math.floor(weapon.minimumFireDurationMs)),
-      playerMeleeWindupMs: weapon.playerMeleeWindupMs === undefined
-        ? undefined
-        : Math.max(0, Math.floor(weapon.playerMeleeWindupMs)),
+      meleeTiming: normalizeMeleeTiming(weapon.meleeTiming),
       attackMovementSpeedFactor: weapon.attackMovementSpeedFactor === undefined
         ? undefined
         : Math.max(0, Math.min(1, weapon.attackMovementSpeedFactor)),
@@ -808,6 +806,13 @@ function normalizeWeapons(
       salvo: normalizeWeaponSalvoConfig(weapon.salvo),
     };
   });
+}
+
+function normalizeMeleeTiming(timing: CoopDefenseEnemyWeaponConfig['meleeTiming']): CoopDefenseEnemyWeaponConfig['meleeTiming'] {
+  if (!timing) return undefined;
+  if (![timing.hitDelayMs, timing.strikeMs, timing.recoveryMs].every(value => Number.isFinite(value) && value > 0)
+    || timing.strikeMs >= timing.hitDelayMs) throw new Error('[coopDefenseEnemies] Invalid melee timing');
+  return { ...timing };
 }
 
 function normalizeWeaponSalvoConfig(

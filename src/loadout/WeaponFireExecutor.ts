@@ -80,6 +80,7 @@ export interface HitscanShotRequest {
 
 /** Normalisierter Nahkampfschlag. */
 export interface MeleeSwingRequest {
+  readonly clawAttackId?: string;
   readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
   shooterId:             string;
   x:                     number;
@@ -121,6 +122,7 @@ export interface WeaponFireSink extends ProjectileSpawnPort {
 
 /** Zusatzangaben automatischer Feuerquellen (Türme, Konstrukte). */
 export interface WeaponFireOptions {
+  readonly clawAttackId?: string;
   sourceCarrierBaseId?: string;
   ignoreRockIndex?: number;
   sourceSlot?: LoadoutSlot;
@@ -495,6 +497,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
     params: WeaponFireParams,
   ): boolean {
     return this.sink.resolveMelee({
+      clawAttackId: params.options?.clawAttackId,
       primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:melee`, params.adrenalineGainBasis, config.adrenalinGain, config.hitAdrenaline ?? 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, params.sourceSlot),
       shooterId:             params.ownerId,
       x:                     params.x,

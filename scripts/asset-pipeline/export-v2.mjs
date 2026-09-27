@@ -48,6 +48,11 @@ export function validateManifestV2(m) {
   for (const clip of m.clips) {
     if (!/^[a-z][a-z0-9-]*$/.test(clip.name) || names.has(clip.name) || typeof clip.motion !== 'string' || !clip.motion || !Number.isFinite(clip.frameRate) || clip.frameRate <= 0 || typeof clip.loop !== 'boolean' || !Array.isArray(clip.frames) || !clip.frames.length || clip.frames.some(n => !Number.isInteger(n) || n < 0 || n >= m.frames.length)) throw new Error('Invalid animation clip');
     names.add(clip.name);
+    if (clip.name === 'claw' && (clip.loop || !clip.markers
+      || !Number.isInteger(clip.markers.strike) || !Number.isInteger(clip.markers.impact)
+      || !(0 < clip.markers.strike && clip.markers.strike < clip.markers.impact && clip.markers.impact < clip.frames.length - 1))) {
+      throw new Error('Claw requires ordered strike and impact markers within a one-shot clip');
+    }
   }
   const required = ['weapon', 'utility', 'construction', 'companion'].includes(m.category) ? null : m.category === 'turret' ? 'fire' : 'move';
   if (required && !names.has(required)) throw new Error(`Required ${required} clip missing`);

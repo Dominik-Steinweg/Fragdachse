@@ -23,4 +23,5 @@ def equip(c,asset,kind):
     mount.location=(-(gx-16)*scale,.68-(16-gy)*scale,1.48)
     for ob in parts.objects:ob['motionRole']='held-weapon';ob['heldWeaponAsset']=entry
     asset['sockets']['held-weapon']=mount
+    asset['parts']['claw_weapon']=mount
     return parts.objects

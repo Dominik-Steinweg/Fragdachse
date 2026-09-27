@@ -867,6 +867,31 @@ describe('CombatSystem actual damage callbacks', () => {
 });
 
 describe('CombatSystem melee query target set', () => {
+  it('checks current positions at claw impact and publishes blood only for actual living hits', () => {
+    const shooter = fakeEntity({ id: 'shooter', x: 0, y: 0 });
+    const target = fakeEntity({ id: 'target', x: 40, y: 0 });
+    const broadcastMeleeSwing = vi.fn();
+    const combat = new CombatSystem({ getAllPlayers: () => [shooter, target],
+      getPlayer: (id: string) => id === 'shooter' ? shooter : target } as unknown as PlayerManager,
+      { isHost: () => true, areTeammates: () => false, getPlayerProfile: () => undefined,
+        broadcastEffect: vi.fn(), broadcastMeleeSwing } as unknown as NetworkBridge);
+    combat.initPlayer('shooter'); combat.initPlayer('target');
+    const swing = (id: string) => combat.resolveImmediateAttack({ kind: 'melee',
+      origin: { x: 0, y: 0 }, aim: { x: 1, y: 0 }, range: 70, payload: {
+        shooterId: 'shooter', x: 0, y: 0, angle: 0, range: 70, arcDegrees: 80,
+        damage: 10, adrenalinGain: 0, sourceId: 'claw', color: 0, visualPreset: 'enemy_claw',
+        clawAttackId: id, damageTargets: ['players'],
+      } });
+    target.x = 200;
+    expect(swing('dodge').accepted).toBe(true);
+    expect(combat.getHP('target')).toBe(100);
+    expect(broadcastMeleeSwing).toHaveBeenLastCalledWith(expect.objectContaining({ clawAttackId: 'dodge', hitPlayer: false }));
+    target.x = -40; swing('behind');
+    expect(combat.getHP('target')).toBe(100);
+    target.x = 40; swing('hit');
+    expect(combat.getHP('target')).toBe(90);
+    expect(broadcastMeleeSwing).toHaveBeenLastCalledWith(expect.objectContaining({ clawAttackId: 'hit', hitPlayer: true, impactX: 40 }));
+  });
   it('keeps the pre-query second target excluded when the first mutation removes its blocker', () => {
     const shooter = fakeEntity({ id: 'shooter', x: 0, y: 0 });
     const first = fakeEntity({ id: 'first', x: 40, y: 0 });

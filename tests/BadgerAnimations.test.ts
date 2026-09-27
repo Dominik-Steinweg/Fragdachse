@@ -1,10 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 import type * as Phaser from 'phaser';
 import { PIPELINE_ASSETS } from '../src/config/pipelineAssets';
+import { syncEnemyClawAnimation } from '../src/animations/EnemyClawAnimation';
 import { getWalkingSheetForStaticTexture, preloadBadgerAnimationAssets, registerBadgerAnimations,
   syncBadgerWalkingAnimation } from '../src/animations/BadgerAnimations';
 
 describe('selected figure animations', () => {
+  it('samples every enemy claw at its host markers and releases the walk animation', () => {
+    for (const asset of PIPELINE_ASSETS.filter(a => a.category === 'enemy')) {
+      const clip = asset.clips.find(c => c.name === 'claw')!;
+      const attack = { attackId: 'test', weaponId: 'bite', angle: 0, range: 40, arcDegrees: 100,
+        startedAt: 1000, strikeAt: 1270, hitAt: 1350, endsAt: 1570 };
+      const view: any = { texture: { key: asset.sheetTextureKey }, frame: { name: 3 },
+        anims: { isPlaying: true, currentAnim: { key: 'walk' }, stop: vi.fn(() => { view.anims.isPlaying = false; }) },
+        setFrame: vi.fn((frame: number) => { view.frame.name = frame; }) };
+      const markers = ('markers' in clip ? clip.markers : undefined)!;
+      expect(syncEnemyClawAnimation(view, asset.textureKey, attack, attack.strikeAt)).toBe(true);
+      expect(view.frame.name).toBe(clip.frames[markers.strike]);
+      syncEnemyClawAnimation(view, asset.textureKey, attack, attack.hitAt);
+      expect(view.frame.name).toBe(clip.frames[markers.impact]);
+      expect(view.anims.stop).toHaveBeenCalledTimes(1);
+      syncBadgerWalkingAnimation(view, false);
+      expect(view.frame.name).toBe(asset.idleFrame);
+    }
+  });
   it('loads every figure with gutters and registers authored move and idle frames once', () => {
     const spritesheet = vi.fn();
     preloadBadgerAnimationAssets({ spritesheet } as unknown as Phaser.Loader.LoaderPlugin);

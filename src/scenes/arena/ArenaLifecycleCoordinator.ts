@@ -851,6 +851,10 @@ export class ArenaLifecycleCoordinator {
       },
       publishMissionProgress: (state) => bridge.publishCoopDefenseMissionProgressPresentationState(state),
       broadcastCarryDeliveredFx: (x, y) => bridge.broadcastCoopDefenseCarryDeliveredFx(x, y),
+      enemyClawNetwork: {
+        broadcast: event => bridge.broadcastEnemyClawAttack(event),
+        subscribe: handler => bridge.subscribeEnemyClawAttack(handler),
+      },
       enemyAbilityNetwork: {
         broadcastTranslocatorFlash: (x, y, color, phase, ownerId) => bridge.broadcastTranslocatorFlash(x, y, color, phase, ownerId),
       },
@@ -2906,6 +2910,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.fireSystem.destroyAll();
     this.ctx.stinkCloudSystem.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
+    this.ctx.effectSystem.clearEnemyClawEffects();
     this.ctx.effectSystem.clearXpTexts();
     this.renderers.combatGoreGpu.fragmentTemplateCache.clear();
     this.combatPresentationPrepared = false;

@@ -128,6 +128,7 @@ describe('Coop mission without bases', () => {
     const runtime = new CoopMissionRuntime(activity);
     const enemyManager = {
       setEnemySpawnedCallback: vi.fn(), setNavigationIntents: vi.fn(),
+      setEnemyRemovingCallback: vi.fn(),
       setLethalDamageGuard: vi.fn(), setVisualSink: vi.fn(), destroy: vi.fn(),
       getAllEnemies: () => [],
     };
@@ -135,6 +136,7 @@ describe('Coop mission without bases', () => {
     const releaseTrain = vi.fn();
     const setResolvedCallback = vi.fn();
     const composition = new CoopMissionComposition({
+      enemyClawNetwork: { broadcast: vi.fn(), subscribe: () => vi.fn() },
       getWorld: () => ({
         descriptor: { worldRevision: 1 }, bases: [],
         metrics: resolveCoopDefenseWorldMetrics(survivalMap.arenaWidthCells, survivalMap.arenaHeightCells),

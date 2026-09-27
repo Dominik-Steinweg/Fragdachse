@@ -751,7 +751,7 @@ export class ArenaRuntime {
   }
 
   syncEnemyHostVisuals(deltaMs: number): void {
-    this.flow.getWorldEnemyManager()?.syncHostVisuals(deltaMs);
+    this.flow.getWorldEnemyManager()?.syncHostVisuals(deltaMs, this.getSynchronizedNow());
   }
 
   getEnemyCount(): number {

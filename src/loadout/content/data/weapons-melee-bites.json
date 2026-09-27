@@ -39,7 +39,7 @@
       "fire": {
         "type": "melee",
         "hitArcDegrees": 80,
-        "visualPreset": "bite"
+        "visualPreset": "enemy_claw"
       },
       "allowedSlots": [],
       "adrenalinCost": 0,
@@ -144,7 +144,7 @@
       "fire": {
         "type": "melee",
         "hitArcDegrees": 90,
-        "visualPreset": "bite"
+        "visualPreset": "enemy_claw"
       },
       "allowedSlots": [],
       "adrenalinCost": 0,
@@ -171,7 +171,7 @@
       "fire": {
         "type": "melee",
         "hitArcDegrees": 90,
-        "visualPreset": "bite",
+        "visualPreset": "enemy_claw",
         "damageTargets": [
           "rocks"
         ]

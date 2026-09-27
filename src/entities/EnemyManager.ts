@@ -130,7 +130,7 @@ export interface EnemyCombatPositioningSource {
 
 /** Read-only combat decision, evaluated before ordinary movement without advancing weapons. */
 export interface EnemyCombatMovementSource {
-  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean } | null;
+  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean; committed?: boolean } | null;
 }
 
 /** Exklusive Spezialbewegung, die normale KI-Zweige fuer diesen Frame ersetzt. */
@@ -144,6 +144,9 @@ export interface EnemySpecialMovementSource {
  * Typ gehalten, damit der EnemyManager nicht auf die Effekt-Schicht importieren muss.
  */
 export interface EnemyVisualSink {
+  syncEnemyClaw?(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean): void;
+  clearEnemyClaw?(id: string): void;
+  clearEnemyClawEffects?(): void;
   syncBurrowState(id: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void;
   clearBurrowState(id: string): void;
   playBurrowPhaseEffect(x: number, y: number, phase: BurrowPhase): void;
@@ -208,6 +211,27 @@ export class EnemyManager {
     runtimeGeneration: nextEnemyCombatOwnerGeneration++,
   });
   private readonly enemyTargets = new Map<string, CombatTargetRef>();
+  private readonly pendingClawEvents = new Map<string, import('../systems/EnemyClawAttack').EnemyClawEvent>();
+
+  publishClawState(enemy: EnemyEntity, state: import('../systems/EnemyClawAttack').EnemyClawState): import('../systems/EnemyClawAttack').EnemyClawEvent | null {
+    const generation = this.enemyTargets.get(enemy.id)?.instance.entityGeneration;
+    if (generation === undefined || this.enemies.get(enemy.id) !== enemy) return null;
+    enemy.applyClawAttackState(state);
+    return { enemyId: enemy.id, entityGeneration: generation, state };
+  }
+
+  applyClawEvent(event: import('../systems/EnemyClawAttack').EnemyClawEvent): void {
+    const generation = this.enemyTargets.get(event.enemyId)?.instance.entityGeneration;
+    if (generation === event.entityGeneration) {
+      this.enemies.get(event.enemyId)?.applyClawAttackState(event.state);
+    } else if (generation === undefined || event.entityGeneration > generation) {
+      const previous = this.pendingClawEvents.get(event.enemyId);
+      if (previous && (previous.entityGeneration > event.entityGeneration
+        || (previous.entityGeneration === event.entityGeneration && previous.state.revision >= event.state.revision))) return;
+      if (this.pendingClawEvents.size >= 1024) this.pendingClawEvents.delete(this.pendingClawEvents.keys().next().value!);
+      this.pendingClawEvents.set(event.enemyId, event);
+    }
+  }
   private nextEnemyGeneration = 1;
   private mutationOutcomeSequence = 0;
   private readonly scene: Phaser.Scene;
@@ -243,6 +267,8 @@ export class EnemyManager {
   }
   private readonly smokeConfusionStates = new Map<string, EnemySmokeConfusionState>();
   private onEnemySpawned: ((enemy: EnemyEntity, options?: EnemySpawnOptions) => void) | null = null;
+  private onEnemyRemoving: ((enemy: EnemyEntity) => void) | null = null;
+  setEnemyRemovingCallback(callback: ((enemy: EnemyEntity) => void) | null): void { this.onEnemyRemoving = callback; }
   private lethalDamageGuard: EnemyLethalDamageGuard | null = null;
   private visualSink: EnemyVisualSink | null = null;
   private lighting: LightingSystem | null = null;
@@ -516,6 +542,11 @@ export class EnemyManager {
       // bleibt dabei am Ziel, weil die Pause weiterhin aktiv ist.
       const specialAction = enemy.getSpecialAction() !== 'none';
       const combatMovement = specialAction ? null : combatMovementSource?.getCombatMovement(enemy, now) ?? null;
+      if (combatMovement?.committed) {
+        enemy.stopMovement();
+        enemy.faceAngle(combatMovement.aimAngle);
+        continue;
+      }
       const attackMovementFactor = !combatMovementSource || combatMovement || specialAction
         ? enemy.getAttackMovementSpeedFactor(now) : 1;
       if (attackMovementFactor <= 0 && enemy.isAttackMovementPaused(now)) {
@@ -1160,6 +1191,8 @@ export class EnemyManager {
    * müssen sie vor dessen Zerstörung abgeräumt werden.
    */
   private destroyEnemyEntity(id: string, enemy: EnemyEntity): void {
+    this.onEnemyRemoving?.(enemy);
+    this.visualSink?.clearEnemyClaw?.(id);
     this.plaguePursuers.delete(id);
     this.visualSink?.clearBurrowState(id);
     enemy.destroy();
@@ -1167,11 +1200,18 @@ export class EnemyManager {
     this.enemyTargets.delete(id);
   }
 
-  syncHostVisuals(deltaMs: number): void {
+  syncHostVisuals(deltaMs: number, now: number): void {
     for (const enemy of this.enemies.values()) {
       enemy.syncMovementFacing(deltaMs);
+      this.syncClawVisuals(enemy, now);
       enemy.syncBar();
     }
+  }
+
+  private syncClawVisuals(enemy: EnemyEntity, now: number): void {
+    enemy.syncClawAnimation(now);
+    this.visualSink?.syncEnemyClaw?.(enemy.id, enemy.getClawAttackState(), enemy.sprite.x, enemy.sprite.y, now,
+      enemy.sprite.visible && !enemy.isBurrowed() && enemy.getHp() > 0);
   }
 
   applySnapshot(snapshot: SyncedEnemySnapshot | null): void {
@@ -1202,26 +1242,32 @@ export class EnemyManager {
     this.remoteSnapshotSeen = true;
   }
 
-  updateClientInterpolation(factor: number): void {
+  updateClientInterpolation(factor: number, now: number): void {
     for (const enemy of this.enemies.values()) {
       // Vor dem Interpolationsschritt: der noch offene Weg zur Zielposition ist auf dem Client
       // das Bewegungssignal fuer die Laufanimation.
       enemy.syncWalkingFromInterpolation();
       enemy.lerpStep(factor);
+      this.syncClawVisuals(enemy, now);
     }
   }
 
   destroy(): void {
+    this.pendingClawEvents.clear();
     this.locomotion.clear(); this.movementFeedback.clear(); this.intents = null;
     this.waterGeometry = null;
     this.combatActive = false;
     this.plagueMovement = null;
     this.plaguePursuers.clear();
     for (const [id, enemy] of this.enemies) {
+      this.onEnemyRemoving?.(enemy);
+      this.visualSink?.clearEnemyClaw?.(id);
       this.visualSink?.clearBurrowState(id);
       enemy.destroy();
     }
     this.enemies.clear();
+    this.onEnemyRemoving = null;
+    this.visualSink?.clearEnemyClawEffects?.();
     this.enemyTargets.clear();
     this.wildfirePanicStates.clear();
     this.smokeConfusionStates.clear();
@@ -1274,6 +1320,10 @@ export class EnemyManager {
 
   private buildDeltaState(previous: SyncedEnemyState, current: SyncedEnemyState): SyncedEnemyDeltaState | null {
     const delta: SyncedEnemyDeltaState = { id: current.id };
+    if (current.claw?.revision !== previous.claw?.revision) {
+      delta.claw = current.claw;
+      delta.entityGeneration = current.entityGeneration;
+    }
     if (current.entityGeneration !== previous.entityGeneration) delta.entityGeneration = current.entityGeneration;
     if (current.positionRevision !== previous.positionRevision) {
       delta.positionRevision = current.positionRevision;
@@ -1342,6 +1392,8 @@ export class EnemyManager {
 
   private applyRemoteSnapshot(remote: SyncedEnemyDeltaState): void {
     let enemy = this.enemies.get(remote.id);
+    const currentGeneration = this.enemyTargets.get(remote.id)?.instance.entityGeneration;
+    if (currentGeneration !== undefined && remote.entityGeneration !== undefined && remote.entityGeneration < currentGeneration) return;
     if (enemy && remote.entityGeneration !== undefined && remote.entityGeneration !== this.enemyTargets.get(remote.id)?.instance.entityGeneration) {
       this.destroyEnemyEntity(remote.id, enemy); enemy = undefined;
     }
@@ -1377,6 +1429,9 @@ export class EnemyManager {
       );
       this.enemies.set(remote.id, enemy);
       this.registerCombatTarget(remote.id, remote.entityGeneration ?? this.nextEnemyGeneration++);
+      if (remote.claw) enemy.applyClawAttackState(remote.claw);
+      const pendingClaw = this.pendingClawEvents.get(remote.id);
+      if (pendingClaw) { this.pendingClawEvents.delete(remote.id); this.applyClawEvent(pendingClaw); }
       if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy, {});
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
       if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);
@@ -1384,6 +1439,7 @@ export class EnemyManager {
     }
 
     const wasBurrowed = enemy.isBurrowed();
+    if (remote.claw) enemy.applyClawAttackState(remote.claw);
     if (remote.burrowed !== undefined) this.setEnemyBurrowed(remote.id, remote.burrowed);
 
     if (remote.hp !== undefined || remote.maxHp !== undefined) {

@@ -41,6 +41,7 @@ export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly playerFireChunkPort: FireChunkBurstPort | null;
   readonly fireSystem: FireSystem;
   readonly decoySystem: DecoySystem | null;
+  readonly enemyClawNetwork: import('../systems/EnemyClawAttack').EnemyClawNetworkPort;
   readonly enemyAbilityNetwork: CoopDefenseEnemyAbilityNetworkPort;
   readonly getTrainManager: () => TrainAwarenessSource | null;
   readonly getTrainEvent: () => TrainEventConfig | undefined;
@@ -168,8 +169,15 @@ export class CoopMissionEnemyBehaviourComposition {
       attack,
       decoyTargets,
     });
+    let unsubscribeClaw: (() => void) | null = null;
     runtime.bind({
       attach: () => {
+        unsubscribeClaw = this.options.enemyClawNetwork.subscribe(event => enemyManager.applyClawEvent(event));
+        enemyManager.setEnemyRemovingCallback(enemy => attack.removeEnemy(enemy));
+        attack.setClawStateSink((enemy, state) => {
+          const event = enemyManager.publishClawState(enemy, state);
+          if (event) this.options.enemyClawNetwork.broadcast(event);
+        });
         this.options.decoySystem?.setLifecyclePort(decoyTargets);
         if (decoyTargets) for (const decoy of this.options.decoySystem?.runtime.values() ?? []) decoyTargets.activated(decoy);
         enemyManager.setEnemySpawnedCallback((enemy: EnemyEntity, options) => {
@@ -177,6 +185,9 @@ export class CoopMissionEnemyBehaviourComposition {
         });
       },
       detach: () => {
+        attack.destroy();
+        enemyManager.setEnemyRemovingCallback(null);
+        unsubscribeClaw?.(); unsubscribeClaw = null;
         this.options.decoySystem?.setLifecyclePort(null);
         enemyManager.setEnemySpawnedCallback(null);
         this.options.hostPhysics.setEnemyRockContactCallback(null);
