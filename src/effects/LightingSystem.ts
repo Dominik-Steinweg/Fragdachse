@@ -7,6 +7,7 @@ import {
 import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
 import { EnemyEyeBatch } from './EnemyEyeBatch';
 import type { EnemyEyeLightFrame } from './EnemyEyeGlowModel';
+import type { EssenceLightFrame } from '../adrenalineEssence/AdrenalineEssenceLighting';
 import type { DynamicLightOccluderSource } from './DynamicLightOccluders';
 import type { LightOccluderIndex } from './LightOccluderIndex';
 import {
@@ -232,6 +233,9 @@ export class LightingSystem {
   private enemyEyeFrame: EnemyEyeLightFrame | null = null;
   private enemyEyeBatch: EnemyEyeBatch | null = null;
   private renderedEyeLights = 0;
+  private readonly essenceFrames = new Map<object, EssenceLightFrame>();
+  private essenceBatch: EnemyEyeBatch | null = null;
+  private renderedEssenceLights = 0;
 
   private occluders: LightOccluderIndex | null = null;
   private dynamicOccluders: DynamicLightOccluderSource | null = null;
@@ -374,12 +378,13 @@ export class LightingSystem {
     return this.lastPerformance;
   }
 
-  getDebugStats(): { activeLights: number; renderedLights: number; occlusionSlots: number; enemyEyeLights: number } {
+  getDebugStats(): { activeLights: number; renderedLights: number; occlusionSlots: number; enemyEyeLights: number; essenceLights: number } {
     return {
       activeLights: this.lights.length,
       renderedLights: this.renderQueue.length,
       occlusionSlots: this.slots.length,
       enemyEyeLights: this.renderedEyeLights,
+      essenceLights: this.renderedEssenceLights,
     };
   }
 
@@ -402,7 +407,7 @@ export class LightingSystem {
     // Der Kurzschluss bei leerer Lichtliste spart zugleich `sampleLightAmount()`, das
     // pro Krone über alle aktiven Lichter läuft.
     const factor = this.sky.canopyLightFactor;
-    if (factor <= 0 || this.lights.length === 0) return this.sky.ambientColor;
+    if (factor <= 0 || (this.lights.length === 0 && this.essenceFrames.size === 0)) return this.sky.ambientColor;
 
     const lit = Phaser.Math.Clamp(this.sampleLightAmount(x, y) * factor, 0, 1);
     return mixChannels(this.sky.ambientColor, 0xffffff, lit);
@@ -438,12 +443,21 @@ export class LightingSystem {
       total += contribution;
       if (total >= 1) return 1;
     }
-    return total;
+    if (LIGHT_PRESETS.adrenalineEssence.enabled) {
+      const factor = this.sky.lightFactor * GLOBAL_LIGHT_INTENSITY_MULT;
+      if (factor > 0) {
+        for (const frame of this.essenceFrames.values()) total += frame.sampleLightAmount(x, y) * factor;
+      }
+    }
+    return Math.min(1, total);
   }
 
   /** Gibt alle Lichter frei, ohne die Texturen zu zerstören. */
   clear(): void {
     this.setEnemyEyeLights(null);
+    this.essenceFrames.clear();
+    this.essenceBatch?.begin(0);
+    this.renderedEssenceLights = 0;
     for (const light of this.lights) {
       this.releaseExplosionCache(light);
       this.pool.push(light);
@@ -457,6 +471,8 @@ export class LightingSystem {
     this.clear();
     this.enemyEyeBatch?.destroy();
     this.enemyEyeBatch = null;
+    this.essenceBatch?.destroy();
+    this.essenceBatch = null;
     this.vectorSuppressed = false;
     this.destroyRenderTargets();
     this.unsubscribeQuality?.();
@@ -499,6 +515,52 @@ export class LightingSystem {
   }
 
   // ── Lichtquellen ───────────────────────────────────────────────────────────
+
+  /** Borrowed presentation frames; owner identity prevents one scope's teardown clearing another. */
+  setEssenceLights(owner: object, frame: EssenceLightFrame | null): void {
+    if (frame && frame.lightCount > 0) this.essenceFrames.set(owner, frame);
+    else this.essenceFrames.delete(owner);
+    if (this.essenceFrames.size === 0) {
+      this.essenceBatch?.begin(0);
+      this.renderedEssenceLights = 0;
+    }
+  }
+
+  private countEssenceLights(): number {
+    let count = 0;
+    for (const frame of this.essenceFrames.values()) count += frame.lightCount;
+    return count;
+  }
+
+  private collectEssenceLights(scrollX: number, scrollY: number, overscanX: number, overscanY: number): number {
+    this.renderedEssenceLights = 0;
+    const count = this.countEssenceLights();
+    const preset = LIGHT_PRESETS.adrenalineEssence;
+    const factor = this.sky.lightFactor * GLOBAL_LIGHT_INTENSITY_MULT;
+    if (count === 0 || !preset.enabled || factor <= 0 || this.compositeSuppressed) {
+      this.essenceBatch?.begin(0);
+      return 0;
+    }
+    if (!this.essenceBatch) {
+      // Reuse the proven instanced quad packer, with a separate layer and lifetime from enemy eyes.
+      this.essenceBatch = new EnemyEyeBatch(this.scene, TEX_LIGHT_RADIAL, 256);
+      this.essenceBatch.layer.setBlendMode(Phaser.BlendModes.ADD).setName('adrenaline-essence-lights');
+    }
+    this.essenceBatch.begin(count);
+    const scale = this.quality.lightMapScale;
+    for (const frame of this.essenceFrames.values()) {
+      for (let index = 0; index < frame.lightCount; index++) {
+        const light = frame.lights[index], x = light.x - scrollX, y = light.y - scrollY, r = light.radiusPx;
+        if (x + r < -overscanX || y + r < -overscanY
+          || x - r > this.viewport.width + overscanX || y - r > this.viewport.height + overscanY) continue;
+        this.essenceBatch.write((x + overscanX) * scale, (y + overscanY) * scale,
+          r * 2 * scale, r * 2 * scale, 0, preset.color, Math.min(1, light.intensity * factor));
+        this.renderedEssenceLights++;
+      }
+    }
+    this.essenceBatch.layer.setVisible(this.renderedEssenceLights > 0);
+    return this.renderedEssenceLights;
+  }
 
   /** Borrowed until the next visual frame; separate from ranked, potentially shadowed lights. */
   setEnemyEyeLights(frame: EnemyEyeLightFrame | null): void {
@@ -645,6 +707,7 @@ export class LightingSystem {
     const queueStartedAt = metricsEnabled ? performance.now() : 0;
     this.collectRenderQueue(now, scrollX, scrollY);
     const eyeLights = this.collectEnemyEyeLights(scrollX, scrollY, overscanX, overscanY);
+    const essenceLights = this.collectEssenceLights(scrollX, scrollY, overscanX, overscanY);
     const queueMs = metricsEnabled ? performance.now() - queueStartedAt : 0;
 
     this.frameOcclusionRefreshes = 0;
@@ -663,7 +726,7 @@ export class LightingSystem {
 
     const ambientColor = this.sky.ambientColor;
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
-    const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0;
+    const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0;
     this.syncLightBleed(overlay, !queueEmpty);
 
     // Reihenfolge ist tragend: erst Sichtbarkeit entscheiden, dann erst Befehle erzeugen.
@@ -725,6 +788,7 @@ export class LightingSystem {
     overlay.fill(ambientColor, 1);
     // One instanced draw for every visible eye light, independent of the ranked light budget.
     if (eyeLights > 0) overlay.draw(this.enemyEyeBatch!.layer);
+    if (essenceLights > 0) overlay.draw(this.essenceBatch!.layer);
 
     const staticOccluderRevision = this.vectorSuppressed
       ? 0
@@ -737,7 +801,7 @@ export class LightingSystem {
     );
 
     let occludingUsed = 0;
-    let directLights = eyeLights;
+    let directLights = eyeLights + essenceLights;
     let fallbackOccludingLights = 0;
     let directMs = 0;
     let occlusionMs = 0;
@@ -746,11 +810,12 @@ export class LightingSystem {
     let falloffQuads = 0;
     let dynamicOccluderTests = 0;
     let dynamicOccluderHits = 0;
-    let commandCount = 1 + (eyeLights > 0 ? 1 : 0);
-    let radialLights = eyeLights;
+    let commandCount = 1 + (eyeLights > 0 ? 1 : 0) + (essenceLights > 0 ? 1 : 0);
+    let radialLights = eyeLights + essenceLights;
     let coneLights = 0;
     const presetCounts = countMetrics ? {} as Record<string, number> : null;
     if (presetCounts && eyeLights > 0) presetCounts.enemyEyes = eyeLights;
+    if (presetCounts && essenceLights > 0) presetCounts.adrenalineEssence = essenceLights;
     for (const light of this.renderQueue) {
       if (countMetrics) {
         presetCounts![light.presetKey] = (presetCounts![light.presetKey] ?? 0) + 1;
@@ -822,8 +887,8 @@ export class LightingSystem {
 
     if (semanticMetricsEnabled) {
       this.recordAttributionMetrics(
-        this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0),
-        this.renderQueue.length + eyeLights,
+        this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0) + this.countEssenceLights(),
+        this.renderQueue.length + eyeLights + essenceLights,
         occludingUsed,
         commandCount,
         shadowQuads,
@@ -845,8 +910,8 @@ export class LightingSystem {
       directMs,
       occlusionMs,
       shadowGeometryMs,
-      activeLights: this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0),
-      renderedLights: this.renderQueue.length + eyeLights,
+      activeLights: this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0) + this.countEssenceLights(),
+      renderedLights: this.renderQueue.length + eyeLights + essenceLights,
       directLights,
       occludingLights: occludingUsed,
       fallbackOccludingLights,

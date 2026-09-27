@@ -35,7 +35,7 @@ vi.mock('phaser', () => ({
     setVisible() { return this; } setBlendMode() { return this; } setName() { return this; }
     addMember(member: object) { this.members[this.memberCount++] = { ...member }; }
     addData(data: Float32Array) { this.members[this.memberCount++] = { alpha: data[20] }; }
-    resize(size: number) { this.size = size; } destroy() {}
+    resize(size: number) { this.size = size; } destroy = vi.fn();
   }, Image: class {
     setOrigin() { return this; }
     setBlendMode() { return this; }
@@ -49,6 +49,7 @@ import * as Phaser from 'phaser';
 import { resolveSkyState } from '../src/effects/TimeOfDay';
 import * as TimeOfDay from '../src/effects/TimeOfDay';
 import { GraphicsQualityController, type GraphicsQuality } from '../src/graphics/GraphicsQuality';
+import { ADRENALINE_ESSENCE_LIGHTING as ESSENCE_CONFIG } from '../src/effects/LightingConfig';
 
 function fixture(quality: GraphicsQuality = 'high') {
   const stamps = vi.fn();
@@ -223,28 +224,77 @@ describe('keyed light lifecycle', () => {
   });
 
   it('uses the same sky attenuation and direct lightmap path for stationary essence across the day', () => {
-    const { scene, lighting, stamps } = fixture();
+    const { scene, lighting, stamps, draws, fills, shaders } = fixture();
     const helper = new AdrenalineEssenceLighting(lighting);
     const sources = [{ id: 'ground', x: 100, y: 100, value: 2, alpha: 1 }];
+    const ambient = lighting.resolveCanopyTint(100, 100);
     helper.update(sources, 'high', null);
     lighting.update();
-    expect(stamps).toHaveBeenCalledTimes(1);
-    expect(stamps.mock.lastCall?.[4].alpha).toBeGreaterThan(0);
+    expect(stamps).not.toHaveBeenCalled();
+    expect(draws).toHaveBeenCalledOnce();
+    const batch = draws.mock.lastCall?.[0];
+    const initialAlpha = batch.members[0].alpha;
+    expect(initialAlpha).toBeGreaterThan(0);
+    expect(shaders[0].visible).toBe(true);
+    expect(lighting.resolveCanopyTint(100, 100)).not.toBe(ambient);
+    expect(lighting.resolveCanopyTint(1000, 1000)).toBe(ambient);
     lighting.setTimeOfDay(12 * 60);
     scene.time.now += 1000;
     helper.update(sources, 'high', null);
     lighting.update();
-    expect(stamps).toHaveBeenCalledTimes(1);
+    expect(draws).toHaveBeenCalledOnce();
+    expect(shaders[0].visible).toBe(false);
     lighting.setTimeOfDay(0);
     scene.time.now += 1000;
     helper.update(sources, 'high', null);
     lighting.update();
-    expect(stamps).toHaveBeenCalledTimes(2);
-    expect(lighting.getDebugStats().activeLights).toBe(1);
+    expect(draws).toHaveBeenCalledTimes(2);
+    expect(batch.members[0].alpha).toBe(initialAlpha);
+    expect(lighting.getDebugStats()).toMatchObject({ activeLights: 0, essenceLights: 1 });
+    // No keyed-light timeout can drop quiet ground pearls between renderer updates.
+    scene.time.now += 10000;
+    lighting.update();
+    expect(batch.members[0].alpha).toBe(initialAlpha);
+    expect(lighting.getDebugStats().essenceLights).toBe(1);
     helper.update([], 'high', null);
     helper.clear();
-    expect(lighting.getDebugStats().activeLights).toBe(0);
+    draws.mockClear(); fills.mockClear(); lighting.update();
+    expect(lighting.getDebugStats().essenceLights).toBe(0);
+    expect(draws).not.toHaveBeenCalled();
+    expect(fills).toHaveBeenCalledOnce();
+    expect(shaders[0].visible).toBe(false);
+    expect(lighting.resolveCanopyTint(100, 100)).toBe(ambient);
     helper.destroy();
+    lighting.destroy();
+    expect(batch.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('keeps all essence cells in one draw despite saturated light budgets and quality changes', () => {
+    const { lighting, draws, qualityController } = fixture();
+    const helper = new AdrenalineEssenceLighting(lighting);
+    const nextOwner = new AdrenalineEssenceLighting(lighting);
+    const sources = Array.from({ length: 400 }, (_, i) => ({
+      id: String(i), x: (i % 25) * ESSENCE_CONFIG.bucketSizePx,
+      y: Math.floor(i / 25) * ESSENCE_CONFIG.bucketSizePx, value: 1, alpha: 1,
+    }));
+    lighting.setPerformanceMetricsEnabled(true);
+    for (let i = 0; i < 250; i++) lighting.setLight(`flash:${i}`, 'muzzleFlash', 100, 100);
+    for (const quality of ['high', 'medium', 'low'] as const) {
+      qualityController.setLevel(quality);
+      helper.update(sources, quality, null);
+      nextOwner.update([sources[0]], quality, null);
+      draws.mockClear(); lighting.update();
+      expect(draws).toHaveBeenCalledOnce();
+      expect(draws.mock.lastCall?.[0].memberCount).toBe(sources.length + 1);
+      expect(lighting.getDebugStats().essenceLights).toBe(sources.length + 1);
+      const metrics = lighting.getPerformanceMetrics();
+      expect(metrics.presetCounts.adrenalineEssence).toBe(sources.length + 1);
+      expect(metrics.commandCount).toBe(2 + metrics.presetCounts.muzzleFlash);
+    }
+    helper.destroy(); draws.mockClear(); lighting.update();
+    expect(draws.mock.lastCall?.[0].memberCount).toBe(1);
+    nextOwner.destroy(); draws.mockClear(); lighting.update();
+    expect(draws).not.toHaveBeenCalled();
     lighting.destroy();
   });
 });

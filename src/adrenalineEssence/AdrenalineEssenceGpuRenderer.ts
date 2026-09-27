@@ -495,12 +495,16 @@ export class AdrenalineEssenceGpuRenderer {
     const groupPhase = essenceSeedUnit(entry.seed, 5) * TWO_PI;
     const wobble = quality === 'low' || this.entries.size > ESSENCE_VISUAL.reducedDensityAfter ? 0
       : Math.sin(now * ESSENCE_VISUAL.wobbleRate + groupPhase) * ESSENCE_VISUAL.wobbleAmplitude;
-    const haloScale = baseDiameter * (ESSENCE_VISUAL.haloScale + count * ESSENCE_VISUAL.haloPerDropletScale
+    const grounded = entry.cluster !== null && !flight;
+    const haloSize = grounded ? ESSENCE_VISUAL.groundHaloScale : ESSENCE_VISUAL.haloScale;
+    const haloAlpha = grounded
+      ? quality === 'low' ? ESSENCE_VISUAL.lowQualityGroundHaloAlpha : ESSENCE_VISUAL.groundHaloAlpha
+      : quality === 'low' ? ESSENCE_VISUAL.lowQualityHaloAlpha : ESSENCE_VISUAL.haloAlpha;
+    const haloScale = baseDiameter * (haloSize + count * ESSENCE_VISUAL.haloPerDropletScale
       + landingPulse * ESSENCE_VISUAL.haloLandingScale) / 24;
     this.write(this.glow, entry.slot * GLOW_STRIDE, 'death-glow', entry.x, entry.y,
-      haloScale, haloScale * 0.78, 0, ESSENCE_PALETTE.halo,
-      alpha * (quality === 'low' ? ESSENCE_VISUAL.lowQualityHaloAlpha : ESSENCE_VISUAL.haloAlpha)
-        * (entry.mode === 'return' ? 0.55 : 1));
+      haloScale, haloScale * 0.78, 0, grounded ? ESSENCE_PALETTE.groundHalo : ESSENCE_PALETTE.halo,
+      alpha * haloAlpha * (entry.mode === 'return' ? 0.55 : 1));
     for (let i = 0; i < count; i++) {
       const phase = entry.cargo ? groupPhase + now * 0.004 + i * TWO_PI / count
         : essenceSeedUnit(entry.seed, i * 4 + 10) * TWO_PI;

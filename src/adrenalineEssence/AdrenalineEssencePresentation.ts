@@ -38,6 +38,9 @@ export const ESSENCE_VISUAL = {
   haloLandingScale: 0.6,
   haloAlpha: 0.25,
   lowQualityHaloAlpha: 0.17,
+  groundHaloScale: 2,
+  groundHaloAlpha: 0.48,
+  lowQualityGroundHaloAlpha: 0.32,
   flightInitialSpeedFraction: 0.12,
   flightMaximumBendPx: 17,
   flightBendDistanceFraction: 0.12,
@@ -49,6 +52,7 @@ export const ESSENCE_PALETTE = {
   body: 0x35bfd3,
   light: 0x9dece8,
   halo: 0x319ed1,
+  groundHalo: 0x28b8ff,
 } as const;
 
 export interface EssenceHudPort {

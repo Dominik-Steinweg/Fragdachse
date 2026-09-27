@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AdrenalineEssenceLighting, type EssenceLightSource } from '../src/adrenalineEssence/AdrenalineEssenceLighting';
+import { AdrenalineEssenceLighting, type EssenceLightFrame, type EssenceLightSource } from '../src/adrenalineEssence/AdrenalineEssenceLighting';
 import { ADRENALINE_ESSENCE_LIGHTING as CONFIG } from '../src/effects/LightingConfig';
 import type { GraphicsQuality } from '../src/graphics/GraphicsQuality';
 
@@ -7,107 +7,113 @@ const view = { x: 0, y: 0, width: 1024, height: 768 };
 const source = (id: string, x: number, y: number, value = 1, alpha = 1): EssenceLightSource => ({ id, x, y, value, alpha });
 
 function fixture() {
-  // Keep fading keys alive, so budget assertions also detect trails left by moving sources.
-  const owned = new Map<string, { x: number; y: number; fading: boolean }>();
+  const owned = new Map<object, EssenceLightFrame>();
   const lighting = {
-    setLight: vi.fn((key: string, _preset: string, x: number, y: number, _overrides?: unknown) => {
-      owned.set(key, { x, y, fading: false });
-    }),
-    releaseLight: vi.fn((key: string, options?: { immediate?: boolean }) => {
-      if (options?.immediate) owned.delete(key);
-      else if (owned.has(key)) owned.get(key)!.fading = true;
+    setEssenceLights: vi.fn((owner: object, frame: EssenceLightFrame | null) => {
+      if (frame) owned.set(owner, frame);
+      else owned.delete(owner);
     }),
   };
-  return { helper: new AdrenalineEssenceLighting(lighting), lighting, owned };
+  const helper = new AdrenalineEssenceLighting(lighting);
+  return { helper, lighting, owned, frame: () => owned.get(helper)! };
 }
 
 describe('essence arena light aggregation', () => {
-  it('weights actual ground/flight poses in a shared bucket and refreshes stationary sources every frame', () => {
-    const { helper, lighting } = fixture();
-    const sources = [source('ground', 10, 20), source('flight', 30, 40, 3)];
+  it('weights actual ground/flight poses and reuses the frame and light storage for stationary sources', () => {
+    const { helper, lighting, frame } = fixture();
+    const unit = CONFIG.bucketSizePx / 8;
+    const sources = [source('ground', unit, unit * 2), source('flight', unit * 3, unit * 4, 3)];
     helper.update(sources, 'high', view);
-    expect(lighting.setLight).toHaveBeenCalledTimes(1);
-    expect(lighting.setLight.mock.calls[0]).toEqual([
-      expect.any(String), 'adrenalineEssence', 25, 35,
-      expect.objectContaining({ occludes: false, radiusPx: expect.any(Number), intensity: expect.any(Number) }),
-    ]);
+    expect(frame().lightCount).toBe(1);
+    const firstFrame = frame(), firstLight = frame().lights[0];
+    expect(firstLight).toMatchObject({ x: unit * 2.5, y: unit * 3.5 });
     helper.update(sources, 'high', view);
-    expect(lighting.setLight).toHaveBeenCalledTimes(2);
-    expect(lighting.setLight.mock.calls[1][0]).toBe(lighting.setLight.mock.calls[0][0]);
-    helper.update([sources[0], source('flight', 50, 40, 3)], 'high', view);
-    expect(lighting.setLight.mock.lastCall?.[2]).toBe(40);
+    expect(lighting.setEssenceLights).toHaveBeenCalledTimes(2);
+    expect(frame()).toBe(firstFrame);
+    expect(frame().lights[0]).toBe(firstLight);
+    helper.update([sources[0], source('flight', unit * 5, unit * 4, 3)], 'high', view);
+    expect(frame().lights[0].x).toBe(unit * 4);
   });
 
-  it.each<GraphicsQuality>(['high', 'medium', 'low'])('bounds active and fading lights on %s while sources cross buckets', quality => {
-    const { helper, owned } = fixture();
-    for (let frame = 0; frame < 60; frame += 1) {
-      const sources = Array.from({ length: 80 }, (_, index) => source(String(index), index * 75 + frame * 70, frame * 70));
-      helper.update(sources, quality, null);
-      expect(owned.size).toBeLessThanOrEqual(CONFIG.maxLights[quality]);
+  it.each<GraphicsQuality>(['high', 'medium', 'low'])('keeps every visible occupied cell lit on %s, including while sources move', quality => {
+    const { helper, frame, owned } = fixture();
+    const sources = Array.from({ length: 200 }, (_, index) =>
+      source(String(index), (index % 20) * CONFIG.bucketSizePx, Math.floor(index / 20) * CONFIG.bucketSizePx));
+    for (let tick = 0; tick < 20; tick++) {
+      const moving = sources.map(pose => ({ ...pose, x: pose.x + tick, y: pose.y + tick }));
+      helper.update(moving, quality, view);
+      expect(frame().lightCount).toBe(sources.length);
+      for (const pose of moving) expect(frame().sampleLightAmount(pose.x, pose.y)).toBeGreaterThan(0);
     }
-    helper.update([], quality, null);
-    expect([...owned.values()].every(light => light.fading)).toBe(true);
-    helper.clear();
+    helper.update([], quality, view);
     expect(owned.size).toBe(0);
   });
 
-  it('prefers on-screen then nearby sources, with stable tie-breaking independent of input order', () => {
-    const { helper, owned } = fixture();
-    const sources = Array.from({ length: 20 }, (_, index) => source(String(index), index * 68 + 4, 350));
-    helper.update(sources, 'low', view);
-    const first = [...owned.entries()].filter(([, light]) => !light.fading);
-    expect(first).toHaveLength(CONFIG.maxLights.low);
-    for (const [, light] of first) expect(Math.abs(light.x - view.width / 2)).toBeLessThan(160);
-    helper.update([...sources].reverse(), 'low', view);
-    expect([...owned.entries()].filter(([, light]) => !light.fading)).toEqual(first);
+  it('bounds dense piles by occupied cells and lights even low-value pearls away from the weighted centre', () => {
+    const { helper, frame } = fixture();
+    const edge = CONFIG.bucketSizePx - 1;
+    const pile = Array.from({ length: 1000 }, (_, i) => source(String(i), 0, 0, 100));
+    const corner = source('corner', edge, edge, 0.01);
+    helper.update([...pile, corner], 'high', view);
+    expect(frame().lightCount).toBe(1);
+    const light = frame().lights[0];
+    expect(light.intensity).toBeLessThanOrEqual(CONFIG.maxIntensity);
+    expect(Math.hypot(corner.x - light.x, corner.y - light.y)).toBeLessThan(light.radiusPx);
+    expect(light.radiusPx).toBeLessThanOrEqual(Math.SQRT2 * CONFIG.bucketSizePx + CONFIG.maxRadiusPx);
+    const expected = (1 - Math.hypot(corner.x - light.x, corner.y - light.y) / light.radiusPx) ** 2 * light.intensity;
+    expect(frame().sampleLightAmount(corner.x, corner.y)).toBeCloseTo(expected);
+    expect(expected).toBeGreaterThan(0);
+    expect(frame().sampleLightAmount(10000, 10000)).toBe(0);
   });
 
-  it('reduces the budget immediately, and clears lights already fading before a visibility change', () => {
-    const { helper, owned, lighting } = fixture();
-    const sources = Array.from({ length: 20 }, (_, index) => source(String(index), index * 80, 50));
-    helper.update(sources, 'high', null);
-    expect(owned.size).toBe(CONFIG.maxLights.high);
-    helper.update(sources, 'low', null);
-    expect(owned.size).toBe(CONFIG.maxLights.low);
-    helper.update([], 'low', null);
-    expect(lighting.releaseLight.mock.calls.some(call => call[1] === undefined)).toBe(true);
-    helper.clear();
-    expect(owned.size).toBe(0);
-    helper.update(sources, 'low', null);
-    helper.destroy();
-    helper.update(sources, 'low', null);
-    expect(owned.size).toBe(0);
-  });
-
-  it('does not turn invisible/invalid or distant poses into lights and bounds aggregated strength', () => {
-    const { helper, lighting } = fixture();
+  it('culls invisible/invalid and distant poses while keeping lights overlapping the viewport edge', () => {
+    const { helper, frame, owned } = fixture();
     helper.update([
       source('hidden', 50, 50, 1, 0), source('invalid', NaN, 50),
       source('distant', 10000, 10000), source('empty', 50, 50, 0),
     ], 'high', view);
-    expect(lighting.setLight).not.toHaveBeenCalled();
-    helper.update([source('bright', 50, 50, 1_000_000)], 'high', view);
-    const overrides = lighting.setLight.mock.lastCall?.[4] as { radiusPx: number; intensity: number };
-    expect(overrides.radiusPx).toBeLessThanOrEqual(CONFIG.maxRadiusPx);
-    expect(overrides.intensity).toBeLessThanOrEqual(CONFIG.maxIntensity);
+    expect(owned.size).toBe(0);
+    helper.update([source('edge', -CONFIG.minRadiusPx / 2, 0), source('bright', 50, 50, 1_000_000)], 'high', view);
+    expect(frame().lightCount).toBe(2);
+    for (let i = 0; i < frame().lightCount; i++) {
+      expect(frame().lights[i].radiusPx).toBeLessThanOrEqual(CONFIG.maxRadiusPx);
+      expect(frame().lights[i].intensity).toBeLessThanOrEqual(CONFIG.maxIntensity);
+    }
+    expect(frame().sampleLightAmount(0, 0)).toBeGreaterThan(0);
   });
 
   it('keeps fading subnormal rewards and huge finite sources at finite light positions', () => {
-    const { helper, lighting } = fixture();
+    const { helper, frame } = fixture();
     helper.update([source('tiny', 25, 35, Number.MIN_VALUE, 0.5)], 'high', null);
-    expect(lighting.setLight.mock.lastCall?.slice(2, 4)).toEqual([25, 35]);
+    expect(frame().lights[0]).toMatchObject({ x: 25, y: 35 });
     helper.update([
       source('large-a', 100, 110, Number.MAX_VALUE),
       source('large-b', 120, 120, Number.MAX_VALUE),
       source('distant-finite', Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE),
     ], 'high', null);
-    for (const call of lighting.setLight.mock.calls) {
-      const overrides = call[4] as { radiusPx: number; intensity: number };
-      for (const value of [call[2], call[3], overrides.radiusPx, overrides.intensity]) {
-        expect(Number.isFinite(value)).toBe(true);
-      }
+    for (let i = 0; i < frame().lightCount; i++) {
+      const light = frame().lights[i];
+      for (const value of [light.x, light.y, light.radiusPx, light.intensity]) expect(Number.isFinite(value)).toBe(true);
+      expect(Number.isFinite(frame().sampleLightAmount(light.x, light.y))).toBe(true);
     }
-    expect(lighting.setLight.mock.calls.some(call => call[2] === 110 && call[3] === 115)).toBe(true);
+    expect(frame().lights[0]).toMatchObject({ x: 110, y: 115 });
+  });
+
+  it('uses source fading directly and clears borrowed data on visibility loss, without resurrecting destroyed owners', () => {
+    const { helper, frame, owned } = fixture();
+    helper.update([source('ground', 40, 40)], 'high', view);
+    const full = frame().lights[0].intensity;
+    helper.update([source('ground', 40, 40, 1, 0.25)], 'low', view);
+    expect(frame().lights[0].intensity).toBeLessThan(full * 0.5);
+    const borrowed = frame();
+    helper.clear();
+    expect(owned.size).toBe(0);
+    expect(borrowed.lightCount).toBe(0);
+    expect(borrowed.sampleLightAmount(40, 40)).toBe(0);
+    helper.update([source('ground', 40, 40)], 'low', view);
+    helper.destroy();
+    helper.update([source('ground', 40, 40)], 'high', view);
+    expect(owned.size).toBe(0);
   });
 
   it('keeps overlapping presentation owners independent during teardown', () => {

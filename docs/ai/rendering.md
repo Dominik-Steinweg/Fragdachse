@@ -86,6 +86,14 @@ Budget und Verdeckung. Beide Beiträge liegen vor den World-Kamerafiltern und un
 Baumkronen; Clarity-Inhalte bleiben ungefiltert. `GraphicsQuality` kann Bleed unabhängig
 abschalten, ohne Lichtquellen oder deren Simulation zu verändern.
 
+Essenzlicht konsumiert ausschließlich zugriffsgefilterte Darstellungspositionen aus
+[AdrenalineEssenceLighting.ts](../../src/adrenalineEssence/AdrenalineEssenceLighting.ts).
+Alle sichtbaren, belegten Raumzellen gehen als geborgter Frame an `LightingSystem`,
+das sie gemeinsam in dieselbe Lightmap zeichnet, ohne einzelne Essenzen nach dem
+normalen Lichtbudget auszusortieren. Dichte Ansammlungen teilen Lichtflächen;
+Qualitätsstufen verändern deren Renderauflösung statt ihrer Abdeckung. Der
+Presentation-Owner entfernt seinen Frame bei Sichtbarkeitsverlust und Teardown.
+
 Gegneraugen verwenden die `eyeAnchors` des importierten `PipelineAsset`: normalisierte
 Ellipsen je Sprite-Frame, aus ausgewerteter Blender-Geometrie mit der Exportkamera und
 denselben Animationssamples. Der Import bindet sie an Revision, Variante, Blend- und

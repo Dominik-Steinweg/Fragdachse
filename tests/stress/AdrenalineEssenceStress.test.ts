@@ -5,6 +5,43 @@ import { AdrenalineEssenceClientReplica, AdrenalineEssenceReplication } from '..
 import { decodeEssenceSnapshot, encodeEssenceSnapshot } from '../../src/adrenalineEssence/AdrenalineEssenceWireCodec';
 import { ESSENCE_VALUE_TOLERANCE, type EssencePlayerSnapshot, type EssenceRocketSnapshot } from '../../src/adrenalineEssence/AdrenalineEssenceTypes';
 import { NET_TICK_INTERVAL_MS } from '../../src/config';
+import { AdrenalineEssenceLighting, type EssenceLightFrame } from '../../src/adrenalineEssence/AdrenalineEssenceLighting';
+import { ADRENALINE_ESSENCE_LIGHTING as LIGHT_CONFIG } from '../../src/effects/LightingConfig';
+
+describe('essence light coverage under load', () => {
+  it.each(['high', 'medium', 'low'] as const)('bounds light geometry by visible area without losing dense or distant cells on %s', quality => {
+    const view = { x: 0, y: 0, width: 1920, height: 1080 };
+    const cols = Math.floor(view.width / LIGHT_CONFIG.bucketSizePx);
+    const rows = Math.floor(view.height / LIGHT_CONFIG.bucketSizePx);
+    const cells = cols * rows;
+    let borrowed: EssenceLightFrame | null = null;
+    const helper = new AdrenalineEssenceLighting({ setEssenceLights: (_owner, next) => { borrowed = next; } });
+    const frame = () => borrowed!;
+    for (const count of [cells, 50_000]) {
+      const sources = Array.from({ length: count }, (_, i) => ({
+        id: String(i), value: 1 + i % 8, alpha: 1,
+        x: (i % cols) * LIGHT_CONFIG.bucketSizePx + 1 + (i % 7) / 7 * (LIGHT_CONFIG.bucketSizePx - 2),
+        y: (Math.floor(i / cols) % rows) * LIGHT_CONFIG.bucketSizePx + 1 + (i % 11) / 11 * (LIGHT_CONFIG.bucketSizePx - 2),
+      }));
+      for (let warmup = 0; warmup < 20; warmup++) helper.update(sources, quality, view);
+      const storage = frame().lights;
+      const samples: number[] = [];
+      for (let tick = 0; tick < 100; tick++) {
+        const start = performance.now();
+        helper.update(sources, quality, view);
+        samples.push(performance.now() - start);
+        expect(frame().lightCount).toBe(cells);
+        expect(frame().lights).toBe(storage);
+      }
+      for (const source of sources) expect(frame().sampleLightAmount(source.x, source.y)).toBeGreaterThan(0);
+      samples.sort((a, b) => a - b);
+      console.info('Essence light aggregation CPU', JSON.stringify({ quality, sources: count, lightQuads: frame().lightCount,
+        updateP50Ms: Number(samples[49].toFixed(3)), updateP95Ms: Number(samples[94].toFixed(3)) }));
+    }
+    helper.destroy();
+    expect(borrowed).toBeNull();
+  });
+});
 
 it('conserves simultaneous rocket reservations, cargo and terminal drops under load', () => {
   const rockets: EssenceRocketSnapshot[] = Array.from({ length: 256 }, (_, projectileId) => ({

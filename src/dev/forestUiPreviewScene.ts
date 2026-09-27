@@ -1,5 +1,6 @@
 import { UPGRADE_HEADER, UPGRADE_CONTROLS } from '../ui/UpgradeForestAssets';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
+import { RoundStartCountdownView } from '../ui/RoundStartCountdownView';
 import { LOADING_FOREST } from '../ui/LoadingScreenAssets';
 import * as Phaser from 'phaser';
 import { HelpOverlay } from '../ui/HelpOverlay';
@@ -114,6 +115,24 @@ class ForestUiPreview extends Phaser.Scene {
         step = (step + 1) % 121;
       };
       update(); timer = this.time.addEvent({ delay: 100, loop: true, callback: update });
+    } else if (menu === 'countdown') {
+      // Endlosschleife 3 · 2 · 1 · LOS! mit kurzer Pause, damit Ein- und Ausstieg beobachtbar bleiben.
+      const view = new RoundStartCountdownView(this);
+      let unlockAt = this.time.now + 3000;
+      let went = false;
+      const tick = (): void => {
+        const msLeft = unlockAt - this.time.now;
+        if (msLeft > 0) view.showCount(msLeft);
+        else if (!went) { went = true; view.playGo(); }
+        else if (msLeft < -2200) { went = false; unlockAt = this.time.now + 3000; }
+      };
+      // Der Mauszeiger steht für den eigenen Dachs, damit Ausweichen und Nachführen prüfbar sind.
+      const anchor = (): void => { const p = this.input.activePointer; view.setAnchor(p.x || 960, p.y || 640); };
+      this.events.on('update', tick);
+      this.events.on('postupdate', anchor);
+      this.overlay = { build: () => undefined, hide: () => view.hide(),
+        destroy: () => { this.events.off('update', tick); this.events.off('postupdate', anchor); view.destroy(); } };
+      status('Countdown läuft in Schleife');
     } else if (menu === 'hud') {
       this.overlay = openArenaHudPreview(this, status);
     } else if (menu === 'radial') {

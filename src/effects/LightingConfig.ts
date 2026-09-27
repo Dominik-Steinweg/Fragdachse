@@ -25,14 +25,14 @@ export const MAX_OCCLUDING_LIGHT_RADIUS = (OCCLUDER_SCRATCH_SIZE / LIGHTMAP_SCAL
 export const EXPLOSION_OCCLUSION_REFRESH_MS = 100;
 
 export const MAX_LIGHTS_PER_FRAME = 48;
-/** Per-presentation budget includes active and fading essence light slots. */
+/** Spatial aggregation bounds essence fill cost; all occupied visible cells are rendered in one batch. */
 export const ADRENALINE_ESSENCE_LIGHTING = {
-  bucketSizePx: 64,
-  maxLights: { high: 12, medium: 8, low: 4 },
-  minRadiusPx: 64,
-  maxRadiusPx: 80,
-  minIntensity: 0.2,
-  maxIntensity: 0.4,
+  // Keep the shared light close to the pearls now that its footprint is compact.
+  bucketSizePx: 32,
+  minRadiusPx: 28,
+  maxRadiusPx: 40,
+  minIntensity: 0.55,
+  maxIntensity: 0.75,
   valueHalfSaturation: 4,
 } as const;
 /**
@@ -132,9 +132,9 @@ export const LIGHT_PRESETS = {
   adrenalineEssence: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 64,
-    color: 0xa5f4ff,
-    intensity: 0.2,
+    radiusPx: ADRENALINE_ESSENCE_LIGHTING.minRadiusPx,
+    color: 0x28b8ff,
+    intensity: ADRENALINE_ESSENCE_LIGHTING.minIntensity,
     durationMs: 0,
     decayExponent: 1,
     occludes: false,

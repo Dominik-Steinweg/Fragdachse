@@ -236,7 +236,7 @@ describe('loading backdrop transition', () => {
   function overlay() {
     const value = Object.create(ArenaCountdownOverlay.prototype) as any;
     Object.assign(value, { mode: 'hidden', loadingCoveredCallbacks: [],
-      loadingBackdrop: new Surface(), loadingRoot: new Surface(), text: new Surface(), focusFallback: new Surface(),
+      loadingBackdrop: new Surface(), loadingRoot: new Surface(), countdownView: { hide: vi.fn() }, focusFallback: new Surface(),
       scene: { tweens: { add: vi.fn(), killTweensOf: vi.fn() } } });
     return value;
   }
