@@ -393,7 +393,7 @@ export class ArenaScene extends Phaser.Scene {
     // Die waffenlose Fassung der Figur. Die getragene Waffe ist seit `HeldItemVisual` ein eigenes
     // Bild; `32x32dachsweapon01.png` mit den braunen Platzhalterpixeln wird nicht mehr geladen.
     this.load.image('badger',      getPipelineAssetForTexture('badger')!.idlePath);
-    this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
+    this.load.atlas('dachs_death', './assets/player/death-a01-r03/death-sheet.png', './assets/player/death-a01-r03/death-atlas.json');
     preloadBadgerAnimationAssets(this.load);
     preloadHeldItemAssets(this.load);
     preloadAttackDroneAssets(this.load);
@@ -642,10 +642,10 @@ export class ArenaScene extends Phaser.Scene {
       this.anims.create({
         key:       'player_death',
         frames:    this.anims.generateFrameNames('dachs_death', {
-          prefix:  'Animation test (Dachs tot) (geist dunkler fade)-NEU ',
-          suffix:  '.aseprite',
+          prefix:  'badger-death-',
+          zeroPad: 3,
           start:   0,
-          end:     37,
+          end:     71,
         }),
         frameRate: 60,
         repeat:    0,

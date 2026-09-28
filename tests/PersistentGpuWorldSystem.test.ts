@@ -74,6 +74,40 @@ function fixture(states: RockVisualState[], width = 1024, height = 512) {
 }
 
 describe('PersistentGpuWorldSystem', () => {
+  it('releases rock and wall GPU resources across repeated world lifetimes without deleting shared programs', () => {
+    const sharedProgram = { destroy: vi.fn() };
+    const unrelatedVao = { destroy: vi.fn() };
+    const renderer = { glVAOWrappers: [unrelatedVao], deleteBuffer: vi.fn() };
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const { system, layers } = fixture([state(0, 3, 5), { ...state(1, 4, 5), material: 'walls' }]);
+      const owned = layers.map(layer => {
+        const vao = { destroy: vi.fn() };
+        const instance = {}, vertex = {};
+        const destroy = vi.spyOn(layer, 'destroy');
+        renderer.glVAOWrappers.push(vao);
+        Object.assign(layer, { submitterNode: {
+          manager: { renderer },
+          programManager: { programs: { main: { vao, program: sharedProgram } } },
+          instanceBufferLayout: { buffer: instance }, vertexBufferLayout: { buffer: vertex },
+        } });
+        return { vao, instance, vertex, destroy };
+      });
+      renderer.deleteBuffer.mockClear();
+      system.destroy();
+      system.destroy();
+      expect(renderer.deleteBuffer).toHaveBeenCalledTimes(layers.length * 2);
+      for (const resource of owned) {
+        expect(renderer.deleteBuffer).toHaveBeenCalledWith(resource.instance);
+        expect(renderer.deleteBuffer).toHaveBeenCalledWith(resource.vertex);
+        expect(resource.vao.destroy).toHaveBeenCalledOnce();
+        expect(resource.destroy).toHaveBeenCalledOnce();
+      }
+      expect(renderer.glVAOWrappers).toEqual([unrelatedVao]);
+    }
+    expect(sharedProgram.destroy).not.toHaveBeenCalled();
+    expect(unrelatedVao.destroy).not.toHaveBeenCalled();
+  });
+
   it('keeps wall and nature material separate through patch, removal and cell reuse', () => {
     const wall = { ...state(0, 3, 5), material: 'walls' as const };
     const nature = state(1, 4, 5);

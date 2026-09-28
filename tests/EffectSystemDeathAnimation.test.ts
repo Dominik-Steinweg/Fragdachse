@@ -22,7 +22,7 @@ import type { SyncedDeathEffect } from '../src/types';
 interface FakeDeathSprite {
   setOrigin: ReturnType<typeof vi.fn>;
   setDepth: ReturnType<typeof vi.fn>;
-  setPosition: ReturnType<typeof vi.fn>;
+  setDisplaySize: ReturnType<typeof vi.fn>;
   once: ReturnType<typeof vi.fn>;
   play: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
@@ -33,7 +33,7 @@ function makeDeathSprite(): FakeDeathSprite {
   const sprite = {
     setOrigin: vi.fn(function(this: FakeDeathSprite) { return this; }),
     setDepth: vi.fn(function(this: FakeDeathSprite) { return this; }),
-    setPosition: vi.fn(function(this: FakeDeathSprite) { return this; }),
+    setDisplaySize: vi.fn(function(this: FakeDeathSprite) { return this; }),
     once: vi.fn(function(this: FakeDeathSprite, _event: string, callback: () => void) {
       this.complete = callback;
       return this;
@@ -170,9 +170,10 @@ describe('EffectSystem player death animation', () => {
     internals.playDeathEffect(effect);
 
     expect(gpu.playDeath).toHaveBeenCalledWith(effect, true);
-    expect(scene.add.sprite).toHaveBeenCalledWith(320, 240, 'dachs_death');
-    expect(sprites[0]!.setOrigin).toHaveBeenCalledWith(0.5, 1);
-    expect(sprites[0]!.setPosition).toHaveBeenCalledWith(320, 256);
+    expect(scene.add.sprite).toHaveBeenCalledWith(320, 240, 'dachs_death', 'badger-death-000');
+    expect(sprites[0]!.setOrigin).toHaveBeenCalledWith(0.5, 0.75);
+    // Source resolution must not enlarge the effect or shift the death position.
+    expect(sprites[0]!.setDisplaySize).toHaveBeenCalledWith(48, 96);
     expect(sprites[0]!.play).toHaveBeenCalledWith('player_death');
 
     sprites[0]!.complete?.();

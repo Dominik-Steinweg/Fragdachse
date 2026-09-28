@@ -1,0 +1,976 @@
+{
+  "status": "approval-preview-not-imported",
+  "revision": "r03",
+  "frameCount": 72,
+  "frameRate": 60,
+  "duration": 1.2,
+  "sourceSize": [
+    256,
+    512
+  ],
+  "masterSize": [
+    1024,
+    2048
+  ],
+  "logicalSize": [
+    48,
+    96
+  ],
+  "anchor": [
+    0.5,
+    0.75
+  ],
+  "sourceBlend": "art\\poc\\pipeline-v2\\runs\\v2-ai\\badger\\standard\\asset.blend",
+  "sourceSHA256": "7bb22c9a13389ddf1381b145d82d73ed88e37ee5a913aad2834e7853641e1be1",
+  "device": "OPTIX",
+  "rendered": [
+    0,
+    16,
+    24,
+    34,
+    58,
+    71,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70
+  ],
+  "oldDuration": 0.6333333333333333,
+  "sourceBodyDisplaySize": 38.4,
+  "verification": {
+    "fixedCanvas": true,
+    "safetyBorder": "2% at alpha > 2",
+    "lastFrameTransparent": true,
+    "frames": [
+      {
+        "frame": 0,
+        "occupied": 17839,
+        "maxAlpha": 255,
+        "bounds": [
+          39,
+          299,
+          216,
+          464
+        ],
+        "sha256": "01e5e905883feee17b223932d8abb47380c7c9dae95231f04b2742fa0bfb874d"
+      },
+      {
+        "frame": 1,
+        "occupied": 17839,
+        "maxAlpha": 255,
+        "bounds": [
+          39,
+          299,
+          216,
+          464
+        ],
+        "sha256": "01e5e905883feee17b223932d8abb47380c7c9dae95231f04b2742fa0bfb874d"
+      },
+      {
+        "frame": 2,
+        "occupied": 17822,
+        "maxAlpha": 255,
+        "bounds": [
+          39,
+          299,
+          216,
+          464
+        ],
+        "sha256": "98402242c079cc9a6c049d9fcd1cc7004e0551e49973eea03a0138f6b83a6160"
+      },
+      {
+        "frame": 3,
+        "occupied": 17617,
+        "maxAlpha": 255,
+        "bounds": [
+          39,
+          300,
+          216,
+          464
+        ],
+        "sha256": "158604eaaf304c1e1f55bc0a0df0b0dc9b521bb9c85356a46566d33f8f24e195"
+      },
+      {
+        "frame": 4,
+        "occupied": 17230,
+        "maxAlpha": 255,
+        "bounds": [
+          40,
+          300,
+          215,
+          463
+        ],
+        "sha256": "067789901232a6d4e239f2f92006299fbd9c95e8a5a7f71c206e3a89042a98cc"
+      },
+      {
+        "frame": 5,
+        "occupied": 16626,
+        "maxAlpha": 255,
+        "bounds": [
+          42,
+          302,
+          213,
+          461
+        ],
+        "sha256": "a47aceea292312c61367ec059865bd68352bfdce43370011f5b73498412eeccb"
+      },
+      {
+        "frame": 6,
+        "occupied": 15872,
+        "maxAlpha": 255,
+        "bounds": [
+          44,
+          303,
+          211,
+          459
+        ],
+        "sha256": "39d58e703648c5d2806c53430398a8a624cee8a96c586f962c3964f4b429e33c"
+      },
+      {
+        "frame": 7,
+        "occupied": 15017,
+        "maxAlpha": 255,
+        "bounds": [
+          46,
+          305,
+          209,
+          457
+        ],
+        "sha256": "a79ce7eb016f0ab248a764dde638e97c1add18036e93577ff800240fa41fbaf4"
+      },
+      {
+        "frame": 8,
+        "occupied": 14058,
+        "maxAlpha": 255,
+        "bounds": [
+          49,
+          307,
+          206,
+          454
+        ],
+        "sha256": "f107574b88d43f425b615aab965ccc7bc85c60f5254eaf40178007f000233f57"
+      },
+      {
+        "frame": 9,
+        "occupied": 13086,
+        "maxAlpha": 255,
+        "bounds": [
+          52,
+          310,
+          203,
+          451
+        ],
+        "sha256": "feaf9edfde9eee6a6394636e1aa8ba5994e194ac3fcda0a32a7c4cef3297018b"
+      },
+      {
+        "frame": 10,
+        "occupied": 12085,
+        "maxAlpha": 255,
+        "bounds": [
+          55,
+          312,
+          201,
+          448
+        ],
+        "sha256": "39625b7aab6dfee34b9a2b14b9e2639158aec973d6ac735bbd6166502e462fb9"
+      },
+      {
+        "frame": 11,
+        "occupied": 11106,
+        "maxAlpha": 255,
+        "bounds": [
+          57,
+          314,
+          198,
+          444
+        ],
+        "sha256": "df21502443cf8ce94a1c21c78a8ff63bfe4336a269badced919bcbd95fb3b9ca"
+      },
+      {
+        "frame": 12,
+        "occupied": 10145,
+        "maxAlpha": 255,
+        "bounds": [
+          60,
+          317,
+          195,
+          441
+        ],
+        "sha256": "dc2cf141eb7309acaa32cd1118e7c2b82f87f129b1ea9fb62b7e61ca9de1f1c0"
+      },
+      {
+        "frame": 13,
+        "occupied": 9313,
+        "maxAlpha": 255,
+        "bounds": [
+          63,
+          319,
+          192,
+          438
+        ],
+        "sha256": "e413cfbae4cf1b675e1a6cb2f0644cd6afa9de3fbaca92ce7f8dd38a396872ce"
+      },
+      {
+        "frame": 14,
+        "occupied": 8510,
+        "maxAlpha": 255,
+        "bounds": [
+          66,
+          322,
+          189,
+          435
+        ],
+        "sha256": "5df4b9e3bcce85f9c6fb5970876efae038e7ab707f8b5d24809fed1ed91cd6e9"
+      },
+      {
+        "frame": 15,
+        "occupied": 7775,
+        "maxAlpha": 255,
+        "bounds": [
+          69,
+          324,
+          186,
+          432
+        ],
+        "sha256": "d1df4e1f233702a864111dfef7d165134caf0ec73e0a00595755a5406d5c0933"
+      },
+      {
+        "frame": 16,
+        "occupied": 7127,
+        "maxAlpha": 255,
+        "bounds": [
+          71,
+          326,
+          184,
+          429
+        ],
+        "sha256": "d98b6731aff2c86c90a0cfeae4073f51cfe3fdc4038419948bdd919afa6fe621"
+      },
+      {
+        "frame": 17,
+        "occupied": 6646,
+        "maxAlpha": 255,
+        "bounds": [
+          73,
+          328,
+          182,
+          427
+        ],
+        "sha256": "85e047c73256315070fab6cb5131c3ebc2ccf6074ddfa6c96cf427f04d1f3d45"
+      },
+      {
+        "frame": 18,
+        "occupied": 7140,
+        "maxAlpha": 255,
+        "bounds": [
+          75,
+          329,
+          180,
+          440
+        ],
+        "sha256": "5d0d59b460a3684160c22993b82f15a0cb41b361e50cadf65e5a5605de3f4539"
+      },
+      {
+        "frame": 19,
+        "occupied": 6944,
+        "maxAlpha": 255,
+        "bounds": [
+          77,
+          330,
+          178,
+          441
+        ],
+        "sha256": "da54eae3c62bba55e631f6cc41a063d91a4c87dba87de4779baf96392718a74e"
+      },
+      {
+        "frame": 20,
+        "occupied": 6923,
+        "maxAlpha": 255,
+        "bounds": [
+          78,
+          331,
+          177,
+          443
+        ],
+        "sha256": "d6ec64a3dc34b8226978c5c3a0d64fee9aacc080811534c5f2eb18de36fc1dac"
+      },
+      {
+        "frame": 21,
+        "occupied": 7083,
+        "maxAlpha": 255,
+        "bounds": [
+          79,
+          331,
+          177,
+          445
+        ],
+        "sha256": "60d5a149bd86fef6f6b534a11a23e1faa02a5a011c9518e475f7f5a6c7e1f4c7"
+      },
+      {
+        "frame": 22,
+        "occupied": 7467,
+        "maxAlpha": 255,
+        "bounds": [
+          79,
+          328,
+          176,
+          449
+        ],
+        "sha256": "7e0713be12c30028762fb8c49561f099b271f9e6a35315753119291573822f53"
+      },
+      {
+        "frame": 23,
+        "occupied": 8040,
+        "maxAlpha": 255,
+        "bounds": [
+          79,
+          326,
+          176,
+          452
+        ],
+        "sha256": "9c83126212284eb02dd1a050355d27d25ac07c8c2459aa0389ea87b458af2eba"
+      },
+      {
+        "frame": 24,
+        "occupied": 8729,
+        "maxAlpha": 255,
+        "bounds": [
+          77,
+          324,
+          178,
+          454
+        ],
+        "sha256": "110f9a81c09c7991c31342e64f6946dfaac1630910069317d28d2bacd774380b"
+      },
+      {
+        "frame": 25,
+        "occupied": 9484,
+        "maxAlpha": 255,
+        "bounds": [
+          74,
+          322,
+          181,
+          458
+        ],
+        "sha256": "694bdf531239f22130ec8a229cf21f37f9fefcedff73f9710a88872103bfd5a3"
+      },
+      {
+        "frame": 26,
+        "occupied": 10295,
+        "maxAlpha": 255,
+        "bounds": [
+          72,
+          319,
+          183,
+          463
+        ],
+        "sha256": "a348473b8b63bf5c1df8c246b5a24faebda2b6f5c8d64ed17f5e5a8ee8a6c150"
+      },
+      {
+        "frame": 27,
+        "occupied": 11072,
+        "maxAlpha": 255,
+        "bounds": [
+          70,
+          317,
+          185,
+          466
+        ],
+        "sha256": "e36605d4789024e463996a58fb54203495a28d9d92154e41bb34592e85a8afd0"
+      },
+      {
+        "frame": 28,
+        "occupied": 11815,
+        "maxAlpha": 255,
+        "bounds": [
+          69,
+          314,
+          186,
+          467
+        ],
+        "sha256": "a609646967d22c39b429b82a509f8ca8d4d5c4e72127794bf19860290c448426"
+      },
+      {
+        "frame": 29,
+        "occupied": 12477,
+        "maxAlpha": 255,
+        "bounds": [
+          67,
+          311,
+          188,
+          467
+        ],
+        "sha256": "80909e4e590ca2d48f8ceff19e262c9965ede29d29c7a4cbb79794cf0d1c0e85"
+      },
+      {
+        "frame": 30,
+        "occupied": 12992,
+        "maxAlpha": 255,
+        "bounds": [
+          66,
+          307,
+          189,
+          467
+        ],
+        "sha256": "b78d00de32b61d8b5aeccbddf981898840160f406bb9364301ffb692ff789f31"
+      },
+      {
+        "frame": 31,
+        "occupied": 13280,
+        "maxAlpha": 255,
+        "bounds": [
+          65,
+          304,
+          189,
+          463
+        ],
+        "sha256": "e68d8c879e7faf87b927e703e43be5a143977bdc6ed64ab8e42a5b893e7ba78e"
+      },
+      {
+        "frame": 32,
+        "occupied": 13354,
+        "maxAlpha": 255,
+        "bounds": [
+          64,
+          300,
+          189,
+          458
+        ],
+        "sha256": "3922883aa0ef7c867274c764ba741a7d8ee91fd5f7030496cd1780a89c357571"
+      },
+      {
+        "frame": 33,
+        "occupied": 13277,
+        "maxAlpha": 255,
+        "bounds": [
+          64,
+          297,
+          189,
+          452
+        ],
+        "sha256": "5c706174f4777b3142509c55b5ce7bc1b2864b6a8f441799d6cd84a218837a10"
+      },
+      {
+        "frame": 34,
+        "occupied": 13218,
+        "maxAlpha": 255,
+        "bounds": [
+          64,
+          292,
+          189,
+          445
+        ],
+        "sha256": "aaa23c02edb817c4717426f01309b1be87d20a728b0fbd6d724c242eb3601642"
+      },
+      {
+        "frame": 35,
+        "occupied": 13149,
+        "maxAlpha": 255,
+        "bounds": [
+          64,
+          288,
+          189,
+          439
+        ],
+        "sha256": "dd7b2d744b74af9a2e667b725b0c6e367f22dda7ea1ba0a092c9cbe922abcb05"
+      },
+      {
+        "frame": 36,
+        "occupied": 13092,
+        "maxAlpha": 255,
+        "bounds": [
+          64,
+          283,
+          189,
+          434
+        ],
+        "sha256": "97b9cf70a93a5954e3a18cbe68a896a1f58a5faf7b146b0e2a97b36010f92cf2"
+      },
+      {
+        "frame": 37,
+        "occupied": 13068,
+        "maxAlpha": 255,
+        "bounds": [
+          65,
+          278,
+          190,
+          429
+        ],
+        "sha256": "a98bf84b826cdc58b762d9356b0c407e77decb8f6f2a47c94cc9f80e22ffca37"
+      },
+      {
+        "frame": 38,
+        "occupied": 13081,
+        "maxAlpha": 255,
+        "bounds": [
+          66,
+          272,
+          191,
+          426
+        ],
+        "sha256": "561adb2576a71c4bd7078b647a86be8bfed8070a285ef5cd76dae645a8143d04"
+      },
+      {
+        "frame": 39,
+        "occupied": 13152,
+        "maxAlpha": 255,
+        "bounds": [
+          66,
+          266,
+          192,
+          422
+        ],
+        "sha256": "344eed611acbfbadfca150d00329950e8b300684d2e2761a00f8cd616be55619"
+      },
+      {
+        "frame": 40,
+        "occupied": 13222,
+        "maxAlpha": 255,
+        "bounds": [
+          68,
+          260,
+          193,
+          421
+        ],
+        "sha256": "23b915646a309f9dd3e77d4aa41f17b29cae0bddba9e749202d95b853b6a11cd"
+      },
+      {
+        "frame": 41,
+        "occupied": 13248,
+        "maxAlpha": 255,
+        "bounds": [
+          69,
+          253,
+          193,
+          418
+        ],
+        "sha256": "256c573a6a53179a95640e7b683eef42865ddca3e9886d22a285352c2c82441d"
+      },
+      {
+        "frame": 42,
+        "occupied": 13210,
+        "maxAlpha": 255,
+        "bounds": [
+          71,
+          247,
+          194,
+          415
+        ],
+        "sha256": "2b0c7e08accdf1f592e311fca79a2ea48edb422868cc7b60f62c9b0696a312dc"
+      },
+      {
+        "frame": 43,
+        "occupied": 13155,
+        "maxAlpha": 255,
+        "bounds": [
+          73,
+          241,
+          195,
+          412
+        ],
+        "sha256": "514df28329ad881e21e0dfe7ac61d5269dbc8b30014cd730a9f9bdaa667f7472"
+      },
+      {
+        "frame": 44,
+        "occupied": 13029,
+        "maxAlpha": 255,
+        "bounds": [
+          74,
+          234,
+          195,
+          407
+        ],
+        "sha256": "a9233940b295682da85a35a61d9282a5d7a17b99304ec9ce4d6b3f19ce388ada"
+      },
+      {
+        "frame": 45,
+        "occupied": 12835,
+        "maxAlpha": 255,
+        "bounds": [
+          76,
+          228,
+          195,
+          401
+        ],
+        "sha256": "53df25f8efa98cdba8d883ede089325107089f4d7024e3b0fabbc89eb4d17023"
+      },
+      {
+        "frame": 46,
+        "occupied": 12536,
+        "maxAlpha": 255,
+        "bounds": [
+          78,
+          222,
+          194,
+          393
+        ],
+        "sha256": "935e166b3ff6227e12a9bc646f1d04bd0cb95919da729bf16f18828e1ff8b278"
+      },
+      {
+        "frame": 47,
+        "occupied": 12170,
+        "maxAlpha": 255,
+        "bounds": [
+          79,
+          216,
+          194,
+          384
+        ],
+        "sha256": "9d5d31d691c86cff5a08f1d4a9bdb064848409f9b7aedea4565622c6c5c00579"
+      },
+      {
+        "frame": 48,
+        "occupied": 11742,
+        "maxAlpha": 255,
+        "bounds": [
+          80,
+          210,
+          192,
+          374
+        ],
+        "sha256": "7c5f722d4925fa0a763bc57eaabd5cc035047b1187b135a675ec38f6211e2fd7"
+      },
+      {
+        "frame": 49,
+        "occupied": 11246,
+        "maxAlpha": 255,
+        "bounds": [
+          81,
+          204,
+          191,
+          363
+        ],
+        "sha256": "c5821ca0840c37a311fb65f35863592fcc79ab5893aeab00290c7c4947fd1942"
+      },
+      {
+        "frame": 50,
+        "occupied": 10677,
+        "maxAlpha": 255,
+        "bounds": [
+          82,
+          198,
+          188,
+          351
+        ],
+        "sha256": "26e61c67d30ca85136f557e0fe4ad19c0467839b444f8804fd13a75eea944ed5"
+      },
+      {
+        "frame": 51,
+        "occupied": 10116,
+        "maxAlpha": 255,
+        "bounds": [
+          83,
+          193,
+          186,
+          339
+        ],
+        "sha256": "33977b2f5f346a301e6e29faaec1be79ad2963979028648e3cdc6942bfb64b20"
+      },
+      {
+        "frame": 52,
+        "occupied": 9488,
+        "maxAlpha": 255,
+        "bounds": [
+          83,
+          187,
+          183,
+          327
+        ],
+        "sha256": "c820a0df3ed5a343e6edfbdd1fb23a331f5264a0b80d0b4689b49414ee54ca2d"
+      },
+      {
+        "frame": 53,
+        "occupied": 8870,
+        "maxAlpha": 255,
+        "bounds": [
+          83,
+          182,
+          180,
+          315
+        ],
+        "sha256": "e88cbb0b27028251e2f3af1ffe6c0302bda813c97417e1e63bc3ce9106b532dc"
+      },
+      {
+        "frame": 54,
+        "occupied": 8261,
+        "maxAlpha": 255,
+        "bounds": [
+          83,
+          177,
+          177,
+          304
+        ],
+        "sha256": "d65818c47a22824d65836805f9ae1c12a691552b34594ae0b08e3df30e77f7ec"
+      },
+      {
+        "frame": 55,
+        "occupied": 7703,
+        "maxAlpha": 255,
+        "bounds": [
+          83,
+          172,
+          174,
+          294
+        ],
+        "sha256": "000aa4a341c600944e7240c7547c1d5a9965cfcd5f4819a4436e6a76f7e63a01"
+      },
+      {
+        "frame": 56,
+        "occupied": 7133,
+        "maxAlpha": 255,
+        "bounds": [
+          83,
+          167,
+          171,
+          285
+        ],
+        "sha256": "3dcb8cc18e68feaaab5500e9e205131c3694cb0d39e15dd745885974cb4887ad"
+      },
+      {
+        "frame": 57,
+        "occupied": 6593,
+        "maxAlpha": 255,
+        "bounds": [
+          84,
+          163,
+          168,
+          277
+        ],
+        "sha256": "ce09fd828ec3323c30b03dcaac7e3f613e2f16fd6b888ae98b708a4257199edb"
+      },
+      {
+        "frame": 58,
+        "occupied": 6097,
+        "maxAlpha": 255,
+        "bounds": [
+          84,
+          159,
+          165,
+          270
+        ],
+        "sha256": "5bc2cb6e4c3dcb4d3d1e036ff4e2ba5ecf9590ef856a74627f617efcde682c2f"
+      },
+      {
+        "frame": 59,
+        "occupied": 5624,
+        "maxAlpha": 255,
+        "bounds": [
+          84,
+          155,
+          162,
+          262
+        ],
+        "sha256": "ffabd64a6a482dc534688488bac350fede69b5338637ddf9353835f4deb08bb4"
+      },
+      {
+        "frame": 60,
+        "occupied": 5226,
+        "maxAlpha": 255,
+        "bounds": [
+          84,
+          151,
+          159,
+          259
+        ],
+        "sha256": "fde03a52ff8c5b4a2c9958e6c61e7152d25656d56140d0a646e0d74829efad9f"
+      },
+      {
+        "frame": 61,
+        "occupied": 4824,
+        "maxAlpha": 255,
+        "bounds": [
+          84,
+          148,
+          156,
+          252
+        ],
+        "sha256": "d5beb3e357c9094506b2d3f57fc6cf586db71a516dca1cbd1f3b75b0d69ef131"
+      },
+      {
+        "frame": 62,
+        "occupied": 4475,
+        "maxAlpha": 255,
+        "bounds": [
+          85,
+          145,
+          154,
+          247
+        ],
+        "sha256": "929337c39df6daee6b9bce14023e31e9d9854a20c30d05994a4468d2bd91c62e"
+      },
+      {
+        "frame": 63,
+        "occupied": 4142,
+        "maxAlpha": 254,
+        "bounds": [
+          87,
+          142,
+          151,
+          242
+        ],
+        "sha256": "234acc3d097b3e01c3234a0281b8f3073a9df0b1da9eb81b6a84ada4bbdd5af0"
+      },
+      {
+        "frame": 64,
+        "occupied": 3879,
+        "maxAlpha": 245,
+        "bounds": [
+          87,
+          141,
+          149,
+          238
+        ],
+        "sha256": "f5ade5503cfc0e36024e81ca50a7d20a648125b72b4e8572f554bb3890093335"
+      },
+      {
+        "frame": 65,
+        "occupied": 3637,
+        "maxAlpha": 220,
+        "bounds": [
+          89,
+          139,
+          148,
+          233
+        ],
+        "sha256": "7fd7df2e75d994fa509f89a09fb5775318c1b6221aa9c54b006182d22e0129f0"
+      },
+      {
+        "frame": 66,
+        "occupied": 3444,
+        "maxAlpha": 181,
+        "bounds": [
+          90,
+          137,
+          147,
+          229
+        ],
+        "sha256": "c7e961f990cda2843407baef54bcf095a35d0491211b60e0cfa3a537b20ca377"
+      },
+      {
+        "frame": 67,
+        "occupied": 3269,
+        "maxAlpha": 126,
+        "bounds": [
+          91,
+          136,
+          146,
+          225
+        ],
+        "sha256": "0415661a8caa5c577d6a2bb9782b785fd2c9ba6f8a315f1ee9c02edb4cbba97c"
+      },
+      {
+        "frame": 68,
+        "occupied": 3108,
+        "maxAlpha": 67,
+        "bounds": [
+          92,
+          135,
+          146,
+          221
+        ],
+        "sha256": "902fa9bd36a864d47471ff3feff7a4fc6fcc8efa87729099148ca30c17402821"
+      },
+      {
+        "frame": 69,
+        "occupied": 2970,
+        "maxAlpha": 20,
+        "bounds": [
+          94,
+          134,
+          147,
+          217
+        ],
+        "sha256": "824cd2cb61fae73baa574f8e6dd51145101c05563a4b48fea032b05a2448eca7"
+      },
+      {
+        "frame": 70,
+        "occupied": 2798,
+        "maxAlpha": 4,
+        "bounds": [
+          96,
+          134,
+          147,
+          214
+        ],
+        "sha256": "4c5491cf53cf582bf563a4a920a2c6fe36f12487464c80e1d06306903d60e90b"
+      },
+      {
+        "frame": 71,
+        "occupied": 0,
+        "maxAlpha": 0,
+        "bounds": null,
+        "sha256": "280a471a8c0701cc621ee91bb2a1f3bd74ec2cf750516fcd114c427288c9a1ae"
+      }
+    ]
+  },
+  "files": {
+    "death-sheet.png": "2d823b4f832a1380049264eb4b4196c67237bbdcaa0e13a1e2f1aaf82d1fb680",
+    "death-atlas.json": "a4f8c9de87f072e22149302f92f4e3b2a44f94850867ec2081922db188e2930e",
+    "vergleich.html": "21439265d1896f6612830492e01bfeb4df11bc6c7f5b80bdfeb78fb15a7aafaf",
+    "vorher-nachher.gif": "c2430a6aa76b696830213ce4306207a7d253fc906eb04e16eeaa7a63654c9a8b",
+    "r02-r03.gif": "49bfd1d66e98de041b8489441a47bb87ed92941114e4ade6de71e7a139fdecd7",
+    "phasen.png": "989752bc12b6e09fd8da10fdae4965397f6ed96eef41071fca2b7188a9c4d3c4"
+  }
+}

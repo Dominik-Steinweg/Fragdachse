@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A01 · Dachs → Geist · Animationsvergleich</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#111a18;color:#e7eee9;font:15px/1.5 system-ui,sans-serif}main{max-width:1120px;margin:36px auto;padding:0 24px}.eyebrow{color:#8ec7b3;text-transform:uppercase;letter-spacing:.16em;font-size:12px}h1{font-weight:550;font-size:32px;margin:8px 0 10px}p{color:#aebeb7;margin:8px 0 20px}.tag{font-size:12px;padding:5px 10px;border:1px solid #486257;border-radius:16px;margin-left:12px;vertical-align:middle}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{background:#1a2722;border:1px solid #33483e;border-radius:16px;overflow:hidden}.head{padding:16px 20px;border-bottom:1px solid #33483e;display:flex;justify-content:space-between;align-items:center}.head strong{font-size:19px}.head span{color:#9eafa7;font-size:13px}canvas{width:100%;display:block;aspect-ratio:500/440}.controls{background:#1a2722;border:1px solid #33483e;border-radius:14px;padding:18px;margin-top:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}button,select{font:inherit;color:#e7eee9;background:#2a4035;border:1px solid #4a6658;border-radius:8px;padding:8px 12px;cursor:pointer}button:hover{background:#3a5748}label{display:flex;align-items:center;gap:8px;color:#b6c8be}input[type=range]{flex:1;min-width:160px;accent-color:#97d0b5}.timeline{width:100%;display:flex;align-items:center;gap:16px;font-variant-numeric:tabular-nums}.status{font-size:13px;color:#a6c7b6;min-width:90px}.notes{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}.notes p{font-size:14px}.small{font-size:12px;color:#8ea399}.error{color:#ffb3a8}@media(max-width:680px){.grid,.notes{grid-template-columns:1fr}main{padding:0 14px;margin-top:20px}.head{padding:12px}h1{font-size:25px}.tag{display:inline-block;margin:8px 0}.controls{gap:10px}}
+</style>
+<main>
+<div class="eyebrow">Fragdachse · Asset A01 · Entwurf __REVISION__</div>
+<h1>Vom Dachs zum Geist <span class="tag">Vorschau · noch nicht im Spiel</span></h1>
+<p>Gemeinsamer Startpunkt, unveränderte Spielgröße. Oben vierfach vergrößert, darunter die jeweilige Original-Anzeigegröße bei Kamera-Zoom 1.</p>
+<div class="grid">
+  <section class="card"><div class="head"><strong id="reference-title">Bisheriger Entwurf r02</strong><span id="reference-size">256 × 512 px / Frame · 1,20 s</span></div><canvas id="old" width="1000" height="880" aria-label="Bisherige Todesanimation"></canvas></section>
+  <section class="card"><div class="head"><strong>Überarbeitet __REVISION__</strong><span>256 × 512 px / Frame · 1,20 s</span></div><canvas id="new" width="1000" height="880" aria-label="Neue Todesanimation"></canvas></section>
+</div>
+<div class="controls">
+  <button id="play">Pause</button><button id="restart">Neu starten</button>
+  <label>Vorher <select id="reference"><option value="previous">Entwurf r02</option><option value="original">Aktuelle Spielversion</option></select></label>
+  <label>Tempo <select id="speed"><option value="1">1×</option><option value="0.5">½×</option><option value="0.25">¼×</option></select></label>
+  <label>Vergleich <select id="sync"><option value="real">Echte Dauer</option><option value="phase">Gleiche Phase</option></select></label>
+  <label>Hintergrund <select id="background"><option value="dark">Dunkel</option><option value="grass">Spielrasen</option><option value="light">Hell</option><option value="checker">Transparenzraster</option></select></label>
+  <div class="timeline"><input id="scrub" type="range" min="0" max="1200" value="0" step="1" aria-label="Zeitpunkt"><output class="status" id="time">0,00 s</output><button id="prev" aria-label="Ein Bild zurück">− Frame</button><button id="next" aria-label="Ein Bild weiter">+ Frame</button></div>
+</div>
+<div class="notes">
+  <div><strong>Deutlicheres Gesicht, lebendiger Schweif</strong><p>Größere dunkle Kreuzaugen, ein gefüllter Mund und runde Ohren machen den Geist besser lesbar. Eine laufende Welle bewegt den unteren Schweif. Die Arme ziehen sich vor der Verwandlung nach innen; das Geistgesicht erscheint erst nach der Körperauflösung.</p></div>
+  <div><strong>Bewusst etwas mehr Zeit</strong><p>Die alte Animation läuft im Spiel mit 38 Frames bei 60 fps. Der Entwurf hat 72 Frames bei 60 fps. „Gleiche Phase“ streckt nur die Wiedergabe des Originals zum Formvergleich; „Echte Dauer“ zeigt beide vorgesehenen Geschwindigkeiten.</p></div>
+</div>
+<p class="small">Der Vergleich zeigt exportierte RGBA-Frames ohne zusätzliche Partikel oder Bloom. Spielbeleuchtung, Gore und andere gleichzeitige Effekte sind hier nicht enthalten. Für eine Übernahme sind neuer Atlas, Anzeigegröße und Animationstiming gemeinsam zu integrieren.</p>
+<p id="load-status" class="small">Bilder werden geladen …</p>
+</main>
+<script>
+const oldImage=new Image(),previousImage=new Image(),newImage=new Image(),grass=new Image();
+oldImage.src='__OLD_IMAGE__';previousImage.src='__PREVIOUS_IMAGE__';newImage.src='__NEW_IMAGE__';grass.src='__GRASS_IMAGE__';
+const $=id=>document.getElementById(id),oldCanvas=$('old'),newCanvas=$('new');
+let running=true,elapsed=0,last=0,ready=false;
+function draw(canvas,image,kind){
+ const w=canvas.clientWidth,h=440,dpr=window.devicePixelRatio||1;
+ if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);canvas.style.height=h+'px'}
+ const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);const bg=$('background').value;
+ ctx.fillStyle=bg==='light'?'#cdd8cf':'#1c2c25';ctx.fillRect(0,0,w,h);
+ if(bg==='checker'){for(let y=0;y<h;y+=16)for(let x=0;x<w;x+=16){ctx.fillStyle=(x/16+y/16)%2?'#405047':'#293a31';ctx.fillRect(x,y,16,16)}}
+ if(bg==='grass'){ctx.save();ctx.globalAlpha=.9;ctx.drawImage(grass,0,0,w,h);ctx.restore()}
+ let t=Math.min(elapsed,1.2),phase=$('sync').value==='phase';
+ let frame=kind==='old'?Math.floor((phase?t/1.2*(38/60):t)*60):Math.floor(t*60);
+ const done=kind==='old'?frame>=38:frame>=72;
+ ctx.textAlign='center';ctx.fillStyle=bg==='light'?'#415b4d':'#9db5a7';ctx.font='12px system-ui';ctx.fillText('4× vergrößert',w/2,24);
+ ctx.fillText('Anzeigegröße im Spiel · Zoom 1',w/2,322);
+ if(!done){
+   const fw=kind==='old'?32:256,fh=kind==='old'?64:512;
+   const sx=kind==='old'?frame*32:2+frame%8*260,sy=kind==='old'?0:2+Math.floor(frame/8)*516;
+   const dw=kind==='old'?32:48,dh=kind==='old'?64:96,anchor=kind==='old'?48:72;
+   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+   ctx.drawImage(image,sx,sy,fw,fh,w/2-dw*2,252-anchor*4,dw*4,dh*4);
+   ctx.imageSmoothingEnabled=true;
+   ctx.drawImage(image,sx,sy,fw,fh,w/2-dw/2,394-anchor,dw,dh);
+ }
+ ctx.strokeStyle=bg==='light'?'#819789':'#436452';ctx.lineWidth=1;
+ for(const y of [252,394]){ctx.beginPath();ctx.moveTo(w/2-5,y);ctx.lineTo(w/2+5,y);ctx.moveTo(w/2,y-5);ctx.lineTo(w/2,y+5);ctx.stroke()}
+ ctx.textAlign='left';ctx.fillStyle=bg==='light'?'#415b4d':'#9db5a7';ctx.font='11px system-ui';ctx.fillText(done?'Ende':`Frame ${frame+1} / ${kind==='old'?38:72}`,14,h-14);
+}
+function redraw(){if(!ready)return;const previous=$('reference').value==='previous';$('reference-title').textContent=previous?'Bisheriger Entwurf r02':'Aktuelle Spielversion';$('reference-size').textContent=previous?'256 × 512 px / Frame · 1,20 s':'32 × 64 px / Frame · 0,63 s';draw(oldCanvas,previous?previousImage:oldImage,previous?'new':'old');draw(newCanvas,newImage,'new');$('scrub').value=Math.min(elapsed,1.2)*1000;$('time').textContent=Math.min(elapsed,1.2).toFixed(2).replace('.',',')+' s'}
+function tick(now){if(last&&running)elapsed+=(now-last)/1000*Number($('speed').value);last=now;if(elapsed>1.8)elapsed=0;redraw();requestAnimationFrame(tick)}
+function pause(){running=false;$('play').textContent='Abspielen'}
+$('play').onclick=()=>{running=!running;$('play').textContent=running?'Pause':'Abspielen'};
+$('restart').onclick=()=>{elapsed=0;running=true;$('play').textContent='Pause';redraw()};
+$('scrub').oninput=()=>{pause();elapsed=Number($('scrub').value)/1000;redraw()};
+$('prev').onclick=()=>{pause();elapsed=Math.max(0,Math.min(elapsed,1.2)-1/60);redraw()};
+$('next').onclick=()=>{pause();elapsed=Math.min(1.2,elapsed+1/60);redraw()};
+for(const id of ['reference','speed','sync','background'])$(id).onchange=redraw;
+Promise.all([oldImage.decode(),previousImage.decode(),newImage.decode(),grass.decode()]).then(()=>{ready=true;$('load-status').textContent='Alle Frames geladen · transparente Exporte · Entwurf __REVISION__';requestAnimationFrame(tick)}).catch(e=>{$('load-status').textContent='Ladefehler: '+e;$('load-status').className='error'});
+</script>
+</html>

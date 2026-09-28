@@ -155,7 +155,10 @@ export class PersistentGpuWorldSystem {
   }
 
   destroy(): void {
-    for (const page of this.pages.values()) { page.layer.destroy(); page.wallLayer?.destroy(); }
+    for (const page of this.pages.values()) {
+      destroyGpuLayer(page.layer);
+      if (page.wallLayer) destroyGpuLayer(page.wallLayer);
+    }
     this.pages.clear();
     this.handles.length = 0;
     this.visiblePageKeys.clear();
@@ -262,4 +265,22 @@ export class PersistentGpuWorldSystem {
       estimatedUploadBytes: 0,
     };
   }
+}
+
+/** Phaser 4.2.1 destroys the frame texture, but leaves submitter disposal as a TODO.
+ * The buffers and VAOs belong to this layer; shader programs belong to Phaser's cache. */
+function destroyGpuLayer(layer: Phaser.GameObjects.SpriteGPULayer): void {
+  const node = layer.submitterNode;
+  if (node?.programManager) {
+    const renderer = node.manager.renderer;
+    for (const suite of Object.values(node.programManager.programs)) {
+      const index = renderer.glVAOWrappers.indexOf(suite.vao);
+      if (index !== -1) renderer.glVAOWrappers.splice(index, 1);
+      suite.vao.destroy();
+    }
+    node.programManager.programs = {};
+    renderer.deleteBuffer(node.instanceBufferLayout.buffer);
+    renderer.deleteBuffer(node.vertexBufferLayout.buffer);
+  }
+  layer.destroy();
 }

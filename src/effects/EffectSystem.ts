@@ -1709,10 +1709,11 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   private playPlayerDeathAnimation(x: number, y: number): void {
-    const sprite = this.scene.add.sprite(x, y, 'dachs_death');
-    sprite.setOrigin(0.5, 1);
+    const sprite = this.scene.add.sprite(x, y, 'dachs_death', 'badger-death-000');
+    // The 256x512 export has a fixed body pivot 75% down its flight canvas.
+    sprite.setOrigin(0.5, 0.75);
+    sprite.setDisplaySize(48, 96);
     sprite.setDepth(DEPTH_FX + 0.1);
-    sprite.setPosition(x, y + PLAYER_SIZE / 2);
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy());
     sprite.play('player_death');
   }
