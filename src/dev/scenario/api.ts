@@ -49,6 +49,32 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     case 'holdWeapon': controller.fire(slot(c.slot), true); break;
     case 'fire': controller.fire(slot(c.slot), false); break;
     case 'utility': controller.utility(); break;
+    case 'train': controller.startTrain(c.invulnerable === undefined ? false : boolean(c.invulnerable)); break;
+    case 'temporaryUtility': {
+      if (typeof c.utility !== 'string') throw new Error('utility: Utility-ID erwartet.');
+      controller.temporaryUtility(c.utility, c.chargeMs === undefined ? undefined : number(c.chargeMs, 0, 10000)); break;
+    }
+    case 'bot': {
+      controller.requireReadyForBots();
+      const index = number(c.index, 0, 10);
+      if (!Number.isInteger(index)) throw new Error('index muss ganzzahlig sein.');
+      if (c.place === true) controller.placeBot(index, point(c));
+      if (c.move !== undefined) {
+        const move = object(c.move);
+        controller.bots.move(index, number(move.dx, -1, 1), number(move.dy, -1, 1), number(move.durationMs, 0, 10000));
+      }
+      if (c.aim !== undefined) controller.aimBot(index, c.aim === null ? null : point(c.aim));
+      if (c.fire !== undefined) controller.bots.hold(index, c.fire === null ? null : slot(c.fire));
+      if (c.burrow !== undefined) {
+        if (c.burrow !== 'enter' && c.burrow !== 'exit') throw new Error('burrow: enter oder exit erwartet.');
+        controller.bots.burrow(index, c.burrow === 'enter');
+      }
+      if (c.temporaryUtility !== undefined) {
+        if (typeof c.temporaryUtility !== 'string') throw new Error('temporaryUtility: Utility-ID erwartet.');
+        controller.bots.temporaryUtility(index, c.temporaryUtility, c.chargeMs === undefined ? undefined : number(c.chargeMs, 0, 10000));
+      }
+      break;
+    }
     case 'burrow': {
       if (c.phase !== 'enter' && c.phase !== 'exit') throw new Error('phase: enter oder exit erwartet.');
       controller.burrow(c.phase === 'enter'); break;
@@ -77,7 +103,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     }
     case 'options': {
       const options = object(c.values);
-      for (const key of Object.keys(options)) if (!['timeOfDay', 'freezeMission', 'hideTutorial', 'suppressWaves', 'refillHp', 'refillAdrenaline'].includes(key)) throw new Error(`Keine Live-Option: ${key}`);
+      for (const key of Object.keys(options)) if (!['timeOfDay', 'freezeMission', 'hideTutorial', 'suppressWaves', 'refillHp', 'refillAdrenaline', 'playerFreeForAll', 'hideAim'].includes(key)) throw new Error(`Keine Live-Option: ${key}`);
       controller.config = parseScenario({ ...controller.config, ...options }); controller.saveLink(); break;
     }
     case 'camera': {

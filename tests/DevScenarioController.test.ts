@@ -12,6 +12,7 @@ vi.mock('../src/network/bridge', () => ({ bridge: {
   getGamePhase: () => host.phase, isArenaStarted: () => host.started, getLocalPlayerId: () => 'p1',
   sendLocalInput() {}, setLocalReady() {}, setGameMode() {}, setCoopDefenseMapId() {},
   setLocalReadyWithCommittedLoadout() {}, getSynchronizedNow: () => Date.now(), getPlayerCommittedLoadout: () => null,
+  setDevScenarioPlayerFreeForAll() {}, setDevScenarioBotState() {},
 } }));
 
 let controller: DevScenarioController;
@@ -30,7 +31,7 @@ beforeEach(() => {
       getPlayerPosition: () => ({ ...player }), getGeometry: () => ({}),
       placePlayer: (x: number, y: number) => { player.x = x; player.y = y; }, readEnemies: () => [],
     },
-    devScenarioPort: { suppressEncounters() {}, setOptions() {}, readMission: () => ({}) },
+    devScenarioPort: { suppressEncounters() {}, setOptions() {}, readMission: () => ({}), updateTrain() {} },
     weaponBalanceLabPort: { setAdrenaline() {}, getMaxAdrenaline: () => 100,
       useWeaponAction: (slot: string) => { attacks.push(slot); return { ok: true }; } },
     rpcPorts: { heldAction: { clearPlayer() {} } },

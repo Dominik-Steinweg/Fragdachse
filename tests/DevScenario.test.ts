@@ -11,6 +11,16 @@ describe('Dev scenario contract', () => {
     expect(parseScenario(old)).toMatchObject({ freezeMission: true, hideTutorial: true });
     expect(parseScenario({ ...old, freezeMission: false, hideTutorial: false })).toMatchObject({ freezeMission: false, hideTutorial: false });
     expect(() => parseScenario({ ...old, freezeMission: 'yes' })).toThrow();
+    expect(parseScenario(old)).toMatchObject({ bots: [], playerFreeForAll: false });
+  });
+  it('validates scripted bots against the scenario class', () => {
+    const config = defaultScenario('dachs_nukem');
+    const parsed = parseScenario({ ...config, bots: [{ name: 'Kalle', weapon1: 'PLASMA' }], playerFreeForAll: true });
+    expect(parsed.bots).toEqual([{ name: 'Kalle', weapon1: 'PLASMA', weapon2: config.weapon2, player: null }]);
+    expect(parsed.playerFreeForAll).toBe(true);
+    expect(() => parseScenario({ ...config, bots: [{ weapon2: 'missing' }] })).toThrow();
+    expect(() => parseScenario({ ...config, bots: [{ typo: true }] })).toThrow();
+    expect(() => parseScenario({ ...config, bots: Array.from({ length: 12 }, () => ({})) })).toThrow();
   });
   it.each(COOP_DEFENSE_CLASS_IDS)('round-trips a complete %s loadout without real progression', classId => {
     const config = defaultScenario(classId);

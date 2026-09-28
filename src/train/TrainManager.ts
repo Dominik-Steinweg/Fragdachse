@@ -585,4 +585,9 @@ export class TrainManager {
       segmentPositions: ys.map(y => ({ x: this.trackX, y })),
     });
   }
+
+  /** Dev scenario fixtures only: restores the full integrity of a living train. */
+  restoreIntegrity(): void {
+    if (this.alive && !this.destroyed) this.hp = TRAIN.HP_MAX;
+  }
 }

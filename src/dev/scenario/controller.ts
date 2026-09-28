@@ -13,9 +13,11 @@ import { ScenarioClock } from './clock';
 import { decodeScenario, defaultScenario, encodeScenario, parseScenario, scenarioLoadout, type DevScenario, type GridPoint } from './config';
 import { createScenarioPanel } from './panel';
 import { installScenarioApi } from './api';
+import { ScenarioBots } from './bots';
 
 export class DevScenarioController {
   readonly clock: ScenarioClock;
+  readonly bots: ScenarioBots;
   config = defaultScenario();
   state: 'idle' | 'waiting-lobby' | 'loading' | 'ready' | 'error' = 'idle';
   message = 'Szenario konfigurieren und starten.';
@@ -55,6 +57,7 @@ export class DevScenarioController {
     private lobbyReady: () => boolean) {
     if (!isDevScenarioMode()) throw new Error('Dev entry required.');
     this.clock = new ScenarioClock(scene.game.loop);
+    this.bots = new ScenarioBots(runtime, () => this.clock.now);
     let imported: DevScenario | null = null;
     try { imported = decodeScenario(location.hash); } catch (error) { this.fail(error); }
     this.panel = createScenarioPanel(this);
@@ -63,6 +66,8 @@ export class DevScenarioController {
     this.refreshTimer = setInterval(() => this.panel.refresh(), 300);
     if (imported) { this.config = imported; this.panel.sync(); this.start(imported); }
   }
+  requireReadyForBots(): void { this.requireReady(); }
+  hidesAim(): boolean { return this.state === 'ready' && this.config.hideAim; }
   private requireReady(): void {
     if (this.state !== 'ready' || !bridge.isArenaStarted() || this.runtime.isMatchTerminated()) throw new Error('Szenario ist noch nicht bereit oder die Runde ist beendet.');
   }
@@ -205,7 +210,31 @@ export class DevScenarioController {
     bridge.sendLocalInput({ dx: 0, dy: 0, aim: 0, dashHeld: false });
     this.runtime.rpcPorts.heldAction.clearPlayer(bridge.getLocalPlayerId());
     this.runtime.stopScenarioUltimate();
+    this.bots.stop();
+    this.localTemporary.held = null;
   }
+  private readonly localTemporary: { id: string; held: { instanceId: string; heldId?: string; releaseAt: number } | null } = { id: '', held: null };
+  /** Pickup-only utilities (NUKE, BFG, HOLY_HAND_GRENADE …) for the scenario player, aimed at the target. */
+  temporaryUtility(utilityId: string, chargeMs?: number): void {
+    this.requireReady();
+    this.localTemporary.id = bridge.getLocalPlayerId();
+    this.bots.useTemporaryUtility(this.localTemporary, utilityId, chargeMs);
+  }
+  /** Places a bot on a free grid cell. */
+  placeBot(index: number, point: GridPoint): void {
+    this.requireReady();
+    const position = this.free(point, 16);
+    this.bots.place(index, position.x, position.y);
+  }
+  private lastTrainUpdate = 0;
+  private trainInvulnerable = false;
+  startTrain(invulnerable = false): void {
+    this.requireReady();
+    this.trainInvulnerable = invulnerable;
+    this.lastTrainUpdate = this.clock.now;
+    if (!this.runtime.devScenarioPort.startTrain()) throw new Error('Diese Map hat keine Zugstrecke.');
+  }
+  aimBot(index: number, point: GridPoint | null): void { this.bots.aim(index, point ? this.world(point) : null); }
   pause(): void { this.requireReady(); this.clock.paused = true; }
   resume(): void { this.clock.paused = false; }
   step(frames = 1): void { this.requireReady(); this.clock.step(frames); }
@@ -216,9 +245,11 @@ export class DevScenarioController {
       if (this.state === 'waiting-lobby' && bridge.getGamePhase() === 'LOBBY' && this.lobbyReady() && ++this.lobbyFrames >= 2) {
         bridge.setGameMode('coop_defense'); bridge.setCoopDefenseMapId(this.config.mapId);
         this.runtime.navigationLabPort.setNextRoundSeed(this.config.seed);
+        this.bots.prepare(this.config);
         bridge.setLocalReadyWithCommittedLoadout(scenarioLoadout(this.config)); this.runtime.setIsLocalReady(true);
         this.state = 'loading'; this.message = 'Map lädt, Szenario wartet auf die Ready-Barriere …';
       }
+      if (this.state === 'waiting-lobby' || this.state === 'loading') this.bots.acknowledgeWorld();
       if (this.state === 'loading') {
         this.runtime.devScenarioPort.suppressEncounters(true);
         this.runtime.devScenarioPort.setOptions(this.config.freezeMission, this.config.hideTutorial);
@@ -227,6 +258,7 @@ export class DevScenarioController {
           || !this.runtime.navigationLabPort.getPlayerPosition()?.alive) return;
         this.state = 'ready'; this.setupPending = true;
         if (this.config.player) this.teleport(this.config.player, false);
+        this.config.bots.forEach((bot, index) => { if (bot.player) this.placeBot(index, bot.player); });
         const player = this.runtime.navigationLabPort.getPlayerPosition();
         if (player) this.aim = this.grid({ x: player.x + 128, y: player.y });
         this.pendingConstructions = [...this.config.constructions]; this.nextBuildAt = 0;
@@ -242,8 +274,17 @@ export class DevScenarioController {
       this.runtime.devScenarioPort.suppressEncounters(this.config.suppressWaves || this.pendingConstructions.length > 0);
       this.runtime.devScenarioPort.setOptions(this.config.freezeMission, this.config.hideTutorial);
       this.runtime.setTimeOfDayDebugOverride(this.config.timeOfDay);
-      if (this.config.refillAdrenaline) this.runtime.weaponBalanceLabPort.setAdrenaline(id, this.runtime.weaponBalanceLabPort.getMaxAdrenaline(id));
-      if (this.config.refillHp) { const combat = this.runtime.getWorldCombatCore(); combat?.heal(id, combat.getMaxHp(id)); }
+      bridge.setDevScenarioPlayerFreeForAll(this.config.playerFreeForAll);
+      this.runtime.devScenarioPort.updateTrain(Math.max(0, now - this.lastTrainUpdate), this.trainInvulnerable); this.lastTrainUpdate = now;
+      this.bots.update();
+      this.bots.releaseDue(this.localTemporary, this.world(this.aim));
+      if (this.config.refillAdrenaline) {
+        for (const playerId of [id, ...this.bots.ids()]) this.runtime.weaponBalanceLabPort.setAdrenaline(playerId, this.runtime.weaponBalanceLabPort.getMaxAdrenaline(playerId));
+      }
+      if (this.config.refillHp) {
+        const combat = this.runtime.getWorldCombatCore(); combat?.heal(id, combat.getMaxHp(id));
+        for (const botId of this.bots.ids()) this.runtime.devScenarioPort.healPlayer(botId);
+      }
       for (const [enemyId, position] of this.pinned) this.runtime.weaponBalanceLabPort.pinTarget(enemyId, position.x, position.y);
       if (this.pendingConstructions.length && now >= this.nextBuildAt) {
         const construction = this.pendingConstructions[0];
@@ -312,6 +353,7 @@ export class DevScenarioController {
   snapshot(): Record<string, unknown> {
     return { state: this.state, ready: this.state === 'ready' && !this.setupPending, message: this.message, isolated: true, network: 'local-only',
       initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
+      bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),
       elapsedWallMs: Math.round(performance.now() - this.startedAt), simulationMs: this.clock.now,
       paused: this.clock.paused, speed: this.clock.speed, trigger: this.trigger, moving: this.movement,
@@ -363,7 +405,7 @@ export class DevScenarioController {
   }
   destroy(): void {
     if (this.disposed) return;
-    this.disposed = true; this.stop(); clearInterval(this.refreshTimer);
+    this.disposed = true; this.stop(); bridge.setDevScenarioPlayerFreeForAll(false); clearInterval(this.refreshTimer);
     window.removeEventListener('hashchange', this.onHashChange); this.api.destroy(); this.captureCancel?.();
     this.panel.destroy(); this.clock.destroy();
   }

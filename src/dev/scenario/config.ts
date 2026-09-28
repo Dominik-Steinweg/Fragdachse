@@ -10,6 +10,8 @@ import { sanitizeCoopDefenseEquippedItems } from '../../utils/coopDefenseItems';
 import type { CoopDefenseClassId, ConstructionId, CoopDefenseItem, LoadoutToolRef } from '../../types';
 
 export interface GridPoint { gridX: number; gridY: number }
+/** Scripted bot badger; shares class, upgrades and items with the scenario player. */
+export interface DevScenarioBot { name: string; weapon1: string; weapon2: string; player: GridPoint | null }
 export interface DevScenario {
   version: 1;
   mapId: string;
@@ -30,6 +32,11 @@ export interface DevScenario {
   hideTutorial: boolean;
   refillAdrenaline: boolean;
   refillHp: boolean;
+  bots: DevScenarioBot[];
+  /** Players (incl. bots) may damage each other, like in the free-for-all lobby. */
+  playerFreeForAll: boolean;
+  /** Hides aim beam and crosshair of the scenario player (clean captures). */
+  hideAim: boolean;
 }
 
 export const scenarioMaps = () => [...COOP_DEFENSE_MAP_CONFIGS, ...getDiagnosticMapConfigs()];
@@ -94,7 +101,7 @@ export function defaultScenario(classId: CoopDefenseClassId = 'dachs_nukem'): De
     weapon2: getSelectableLoadoutItems('weapon2', 'coop_defense', profile, classId)[0].id,
     ultimate: getSelectableLoadoutItems('ultimate', 'coop_defense', profile, classId)[0].id,
     tools, upgrades: {}, items: [], player: null, enemies: [], constructions: [], timeOfDay: 720,
-    suppressWaves: true, freezeMission: true, hideTutorial: true, refillAdrenaline: true, refillHp: true };
+    suppressWaves: true, freezeMission: true, hideTutorial: true, refillAdrenaline: true, refillHp: true, bots: [], playerFreeForAll: false, hideAim: false };
 }
 
 function object(value: unknown, name: string): Record<string, unknown> {
@@ -119,8 +126,8 @@ export function parseScenario(value: unknown): DevScenario {
   number(config.seed, 'seed', 0, 0xffffffff);
   if (!Number.isInteger(config.seed)) throw new Error('seed muss ganzzahlig sein.');
   number(config.timeOfDay, 'timeOfDay', 0, 1439);
-  for (const key of ['suppressWaves', 'freezeMission', 'hideTutorial', 'refillAdrenaline', 'refillHp'] as const) if (typeof config[key] !== 'boolean') throw new Error(`${key}: Boolean erwartet.`);
-  for (const key of ['items', 'tools', 'enemies', 'constructions'] as const) if (!Array.isArray(config[key])) throw new Error(`${key}: Array erwartet.`);
+  for (const key of ['suppressWaves', 'freezeMission', 'hideTutorial', 'refillAdrenaline', 'refillHp', 'playerFreeForAll', 'hideAim'] as const) if (typeof config[key] !== 'boolean') throw new Error(`${key}: Boolean erwartet.`);
+  for (const key of ['items', 'tools', 'enemies', 'constructions', 'bots'] as const) if (!Array.isArray(config[key])) throw new Error(`${key}: Array erwartet.`);
   if (config.enemies.length > 200 || config.constructions.length > 100 || config.items.length > 20 || config.tools.length > 6) throw new Error('Szenario überschreitet die Objektgrenze.');
   object(config.upgrades, 'upgrades');
   config.tools = config.tools.map(value => {
@@ -130,6 +137,16 @@ export function parseScenario(value: unknown): DevScenario {
     throw new Error('Unbekanntes Werkzeug.');
   });
   config.player = config.player === null ? null : point(config.player);
+  if (config.bots.length > 11) throw new Error('Maximal 11 Bots.');
+  config.bots = config.bots.map((value, index) => {
+    const bot = object(value, 'Bot');
+    for (const key of Object.keys(bot)) if (!['name', 'weapon1', 'weapon2', 'player'].includes(key)) throw new Error(`Bot: unbekanntes Feld ${key}`);
+    const result: DevScenarioBot = { name: typeof bot.name === 'string' ? bot.name.slice(0, 20) : `Bot ${index + 1}`,
+      weapon1: typeof bot.weapon1 === 'string' ? bot.weapon1 : config.weapon1, weapon2: typeof bot.weapon2 === 'string' ? bot.weapon2 : config.weapon2,
+      player: bot.player == null ? null : point(bot.player) };
+    scenarioLoadout({ ...config, weapon1: result.weapon1, weapon2: result.weapon2 });
+    return result;
+  });
   config.enemies = config.enemies.map(value => {
     const enemy = object(value, 'Gegner');
     if (!COOP_DEFENSE_ENEMY_KINDS.includes(enemy.kind as CoopDefenseEnemyKind) || typeof enemy.pinned !== 'boolean') throw new Error('Gegnerart oder pinned ungültig.');

@@ -796,6 +796,8 @@ export class NetworkBridge {
   private spectatorEnteredCbs: Array<(id: string) => void> = [];
 
   private activated = false;
+  /** Dev scenario only (see setDevScenarioPlayerFreeForAll). */
+  private devScenarioPlayerFreeForAll = false;
   private rpcDispatchersActive = false;
   private readonly registeredRpcTypes = new Map<string, 'host' | 'all'>();
   private knownPlayerColors: readonly number[] = [];
@@ -1455,6 +1457,7 @@ export class NetworkBridge {
 
   /** Explizite World-Sonderregel; die LobbyWorld verwendet bewusst `game-mode`. */
   private usesFreeForAllWorldRelationships(): boolean {
+    if (import.meta.env.DEV && this.devScenarioPlayerFreeForAll) return true;
     if (this.getActivityDescriptor() !== null) return false;
     const definitionId = this.getWorldDescriptor()?.definitionId;
     if (!definitionId) return false;
@@ -1738,6 +1741,31 @@ export class NetworkBridge {
   setLocalReadyWithCommittedLoadout(snapshot: LoadoutCommitSnapshot): void {
     myPlayer().setState(KEY_LOADOUT_COMMITTED, snapshot, true);
     myPlayer().setState(KEY_READY, true);
+  }
+
+  /** Dev scenario only: writes the client-owned state of a scripted bot peer on the offline host. */
+  setDevScenarioBotState(playerId: string, state: { name?: string; commit?: LoadoutCommitSnapshot; input?: PlayerInput; worldLoaded?: boolean }): void {
+    if (!import.meta.env.DEV || playerId === this.getLocalPlayerId()) return;
+    const room = requireRoom();
+    const world = this.getWorldDescriptor();
+    if (state.worldLoaded) {
+      // A bot has no renderer: it acknowledges assets and the current world like an instantly loaded client.
+      if (room.getPlayerState(playerId, KEY_DEFERRED_ASSETS_READY) !== true) room.setPlayerState(playerId, KEY_DEFERRED_ASSETS_READY, true, true);
+      if (world && !this.getPlayerWorldLoadReady(playerId, world.worldRevision)) {
+        room.setPlayerState(playerId, KEY_WORLD_LOAD_READY, { worldRevision: world.worldRevision, progress: 100, stage: 'ready', ready: true } satisfies WorldLoadReadyState, true);
+      }
+    }
+    if (state.name !== undefined) room.setPlayerState(playerId, KEY_NAME, sanitizePlayerName(state.name) || 'Dachs', true);
+    if (state.commit) {
+      room.setPlayerState(playerId, KEY_LOADOUT_COMMITTED, state.commit, true);
+      room.setPlayerState(playerId, KEY_READY, true, true);
+    }
+    if (state.input) room.setPlayerState(playerId, KEY_INPUT, { ...state.input, worldRevision: this.getWorldDescriptor()?.worldRevision });
+  }
+
+  /** Dev scenario only: lets players of a coop round damage each other like in the free-for-all lobby. */
+  setDevScenarioPlayerFreeForAll(enabled: boolean): void {
+    if (import.meta.env.DEV) this.devScenarioPlayerFreeForAll = enabled;
   }
 
   getPlayerReady(playerId: string): boolean {

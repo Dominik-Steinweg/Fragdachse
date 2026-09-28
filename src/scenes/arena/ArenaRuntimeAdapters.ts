@@ -4,6 +4,9 @@ import type { NavigationLabWorldPort } from '../../debug/navigationLab/Navigatio
 import type { EnemyIntent, MovementFeedback } from '../../systems/navigation/NavigationContracts';
 import { bridge } from '../../network/bridge';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
+import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
+import type { UtilityConfig } from '../../loadout/LoadoutConfig';
+import type { ResolvedCoopDefenseMapEventConfig } from '../../config/coopDefenseMapAuthoring';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { ArenaInputPersistentBasePorts, ArenaInputPlacementPorts } from './ArenaInputBindings';
@@ -34,11 +37,45 @@ export function createArenaFlowFieldDebugPort(service: EnemyFlowFieldService): E
 }
 
 /** Dev-only mutations resolve activity-owned managers afresh on every command. */
-export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator) {
+export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, players: PlayerManager) {
+  // Scripted bot peers are the only allowed additional participants of the isolated host.
   const requireLocal = () => {
-    if (!isDevScenarioMode() || !bridge.isHost() || bridge.getConnectedPlayers().length !== 1) throw new Error('Isolated dev host required.');
+    if (!isDevScenarioMode() || !bridge.isHost() || bridge.getConnectedPlayers()
+      .some(player => player.id !== bridge.getLocalPlayerId() && !isLocalScenarioBotPeer(player.id))) throw new Error('Isolated dev host required.');
   };
   return {
+    getPlayer(id: string): { x: number; y: number; alive: boolean; burrowed: boolean } | null {
+      const player = players.getPlayer(id), combat = flow.getWorldCombatCore();
+      return player ? { x: player.x, y: player.y, alive: combat?.isAlive(id) ?? false, burrowed: combat?.isBurrowed(id) ?? false } : null;
+    },
+    placePlayer(id: string, x: number, y: number): void {
+      requireLocal();
+      players.getPlayer(id)?.setPosition(x, y);
+    },
+    healPlayer(id: string): void {
+      const combat = flow.getWorldCombatCore();
+      if (combat?.isAlive(id)) combat.heal(id, combat.getMaxHp(id));
+    },
+    /** Grants a pickup-only utility (e.g. NUKE, BFG) through the normal temporary-utility owner. */
+    addTemporaryUtility(id: string, config: UtilityConfig): string | null {
+      requireLocal();
+      return flow.getWorldPlayerGameplayRuntime()?.addTemporaryUtility(id, config, 1) ?? null;
+    },
+    /** Runs one train pass now, independent of authored map events and suppressed encounters. */
+    startTrain(): boolean {
+      requireLocal();
+      const handler = flow.getWorldTrainRuntime()?.getActivityTrainHandler();
+      if (!handler) return false;
+      handler.reset();
+      return handler.schedule({ id: 'dev-scenario-train', type: 'train', start: { type: 'time', atMs: 0 } } as ResolvedCoopDefenseMapEventConfig, 1, 0, 0);
+    },
+    /** Map events normally drive the train; they are paused while encounters are suppressed or the mission is frozen. */
+    updateTrain(deltaMs: number, invulnerable = false): void {
+      if (invulnerable) flow.getWorldTrainRuntime()?.getCurrentTrain()?.restoreIntegrity();
+      const runtime = flow.getCoopMissionRuntime();
+      if (!runtime || !(runtime.analysisScenarioActive || runtime.scenarioMissionFrozen)) return;
+      flow.getWorldTrainRuntime()?.getActivityTrainHandler()?.hostUpdate(deltaMs, false, 0);
+    },
     setOptions(freezeMission: boolean, hideTutorial: boolean): void {
       requireLocal();
       const now = Math.max(bridge.getSynchronizedNow(), bridge.getArenaStartTime());

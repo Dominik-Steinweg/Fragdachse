@@ -104,7 +104,10 @@ Aufnahme ab. Nach Scene-Teardown wird die globale API entfernt und wartende Aufr
 | `speed` | `value` (0.1…2) |
 | `camera` | optional `zoom` (0.25…8), `focusTarget` |
 | `panel` | `collapsed`: Boolean |
-| `options` | `values`: `timeOfDay`, `freezeMission`, `hideTutorial`, `suppressWaves`, `refillHp`, `refillAdrenaline` |
+| `options` | `values`: `timeOfDay`, `freezeMission`, `hideTutorial`, `suppressWaves`, `refillHp`, `refillAdrenaline`, `playerFreeForAll`, `hideAim` |
+| `temporaryUtility` | `utility` (z. B. `NUKE`, `BFG`, `HOLY_HAND_GRENADE`), optional `chargeMs`; nutzt ein Pickup-Utility auf das Ziel |
+| `train` | optional `invulnerable`; lässt auf Maps mit Zugstrecke sofort einen Zug einfahren |
+| `bot` | `index`, optional `place` + `gridX`/`gridY`, `move` {`dx`, `dy`, `durationMs`}, `aim` {`gridX`, `gridY`} oder `null`, `fire` (`weapon1`/`weapon2`/`null`), `burrow` (`enter`/`exit`), `temporaryUtility` + `chargeMs` |
 
 Browser-Werkzeuge, die keine schreibenden JavaScript-Aufrufe erlauben, können denselben JSON-Befehl
 im Feld **API-Befehl JSON** ausführen. Das Ergebnis erscheint direkt im Bericht; es wird kein JavaScript evaluiert.
@@ -112,6 +115,17 @@ im Feld **API-Befehl JSON** ausführen. Das Ergebnis erscheint direkt im Bericht
 Alle Steuerelemente sind HTML mit Labels und stabilen `dev-*`-IDs. Ein Canvas-Klick, Cheat-Menü oder Zugriff
 auf private Scene-Felder ist für den Aufbau nicht nötig. Bei fehlerhafter Klickskalierung des Browser-Panes
 funktionieren fokussierte Buttons mit Enter und Checkboxen mit Leertaste. Selects unterstützen normale Auswahlaktionen.
+
+### Bots, Freund-Feuer und Züge
+
+Das Rezeptfeld `bots` (höchstens 11 Einträge `{ name, weapon1, weapon2, player }`) lässt vor dem Start skriptgesteuerte
+Dachse über den normalen Raum-Handshake beitreten. Sie teilen Klasse, Upgrades und Items des Szenario-Spielers, bestätigen
+Assets und World sofort und handeln ausschließlich über dieselben Host-Ports (Eingaben, Waffenaktionen, Graben, Utilities).
+Bots bleiben für die Lebensdauer des Tabs im Raum; für eine andere Bot-Anzahl den Tab neu laden.
+`refillHp` und `refillAdrenaline` gelten auch für Bots. `playerFreeForAll` lässt Spieler und Bots einander wie in der
+freien Lobby-World treffen. Unterdrückte Encounter pausieren auch Map-Events; `train` fährt den authored Zug dann direkt.
+Pickup-Utilities wie Atombombe, BFG oder Heilige Handgranate sind keine Werkzeuge; `temporaryUtility` vergibt sie über den
+normalen temporären Utility-Besitzer. Aufladbare Utilities werden nach voller Ladung (oder `chargeMs`) ausgelöst.
 
 Beispiel für einen vollständig über die Oberfläche geprüften Aufbau: Map `7`, Klasse `inspector_gadachs`,
 Werkzeug `construction:flame_turret`, Spieler bei Grid `(98,26)`, Flammenturm bei `(102,25)`, fixierter

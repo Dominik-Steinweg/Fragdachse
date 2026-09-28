@@ -132,6 +132,11 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     return this.activityHandler;
   }
 
+  /** Dev scenario only: drives the authored train pass directly while map events are suppressed. */
+  getActivityTrainHandler(): CoopDefenseTrainEventHandler | null {
+    return this.activityHandler;
+  }
+
   getCurrentTrain(): TrainManager | null {
     return this.activityTrain ?? this.classicTrain;
   }

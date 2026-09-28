@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: 'Chakra'; src: url('file:///C:/Fragdachse/public/assets/fonts/chakra-petch-700.woff2') format('woff2'); font-weight: 700; }
+@font-face { font-family: 'Chakra'; src: url('file:///C:/Fragdachse/public/assets/fonts/chakra-petch-500.woff2') format('woff2'); font-weight: 500; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+.layer { position: absolute; inset: 0; }
+.bar { position: absolute; left: 0; right: 0; height: 132px; background: #000; }
+#barTop { top: 0; } #barBot { bottom: 0; }
+/* Nature-documentary lower third */
+#lt { position: absolute; left: 150px; bottom: 175px; font-family: 'Chakra'; color: #f3efe6; text-shadow: 0 2px 10px rgba(0,0,0,.9); }
+#lt .rule { width: 0; height: 2px; background: #e8c170; margin-bottom: 12px; }
+#lt .a { font-weight: 700; font-size: 40px; letter-spacing: 0.14em; }
+#lt .b { font-weight: 500; font-size: 26px; letter-spacing: 0.08em; color: #d8cfbd; margin-top: 4px; font-style: italic; }
+/* End card */
+#endBg { background: radial-gradient(ellipse 75% 70% at 50% 50%, #1a1712 0%, #0b0a08 70%, #050504 100%); }
+#title { position: absolute; left: 0; right: 0; top: 330px; text-align: center; font-family: 'Chakra'; font-weight: 700; font-size: 188px; letter-spacing: 0.14em; padding-left: 0.14em; line-height: 1;
+  background: linear-gradient(180deg, #fffaf0 0%, #fbe7bd 38%, #e8c170 66%, #be772b 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 8px 22px rgba(0,0,0,.9)) drop-shadow(0 0 46px rgba(232,193,112,.32)); }
+#rule2 { position: absolute; top: 560px; left: 50%; height: 4px; transform: translateX(-50%); background: linear-gradient(90deg, rgba(232,193,112,0), #e8c170 20%, #fff1cf 50%, #e8c170 80%, rgba(232,193,112,0)); box-shadow: 0 0 14px rgba(232,193,112,.6); }
+#event { position: absolute; left: 0; right: 0; top: 612px; text-align: center; font-family: 'Chakra'; font-weight: 700; font-size: 76px; letter-spacing: 0.12em; color: #fff3d6; text-shadow: 0 0 26px rgba(232,193,112,.35), 0 4px 16px rgba(0,0,0,.9); white-space: nowrap; }
+#flash { background: #fff; }
+#black { background: #000; }
+</style></head>
+<body>
+  <div class="bar" id="barTop"></div><div class="bar" id="barBot"></div>
+  <div id="lt"><div class="rule" id="ltRule"></div><div class="a">DER FRAGDACHS</div><div class="b">Meles meles mercenarius · Söldner im Vorruhestand</div></div>
+  <div class="layer" id="endBg"></div>
+  <div id="title">FRAGDACHSE</div>
+  <div id="rule2"></div>
+  <div id="event">DACHS-LAN · 9.–11. OKTOBER 2026</div>
+  <div class="layer" id="flash"></div>
+  <div class="layer" id="black"></div>
+<script>
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const eo = t => 1 - Math.pow(1 - clamp(t), 3);
+const ss = t => { t = clamp(t); return t * t * (3 - 2 * t); };
+const ramp = (t, a, b) => clamp((t - a) / (b - a));
+const $ = id => document.getElementById(id);
+const P = window.PLAN = { drop: 38.0, lt: [3.0, 6.2], end: 60.0, total: 68.0, flashes: [[29.62, 0.7, 0.35], [38.0, 0.85, 0.22], [46.0, 0.5, 0.18], [53.47, 0.45, 0.25], [56.0, 0.9, 0.35]] };
+window.renderAt = (t) => {
+  const bar = t < P.drop ? 132 : 132 * (1 - eo((t - P.drop) / 0.2));
+  $('barTop').style.height = bar + 'px'; $('barBot').style.height = bar + 'px';
+  const [la, lb] = P.lt;
+  const lo = Math.min(ss(ramp(t, la, la + 0.5)), 1 - ss(ramp(t, lb - 0.5, lb)));
+  $('lt').style.opacity = lo; $('lt').style.transform = `translateX(${(1 - ss(ramp(t, la, la + 0.6))) * -30}px)`;
+  $('ltRule').style.width = (eo(ramp(t, la, la + 0.8)) * 520) + 'px';
+  // End card: fades in out of the white flash of the last impact.
+  const e = ss(ramp(t, P.end, P.end + 0.25));
+  $('endBg').style.opacity = e;
+  const tk = eo(ramp(t, P.end + 0.15, P.end + 0.6));
+  $('title').style.opacity = tk; $('title').style.transform = `scale(${1.12 - 0.12 * tk + 0.015 * ramp(t, P.end + 0.6, P.total)})`;
+  $('title').style.filter = `blur(${(1 - tk) * 10}px) drop-shadow(0 8px 22px rgba(0,0,0,.9)) drop-shadow(0 0 ${46 + 50 * (1 - ramp(t, P.end + 0.3, P.end + 1.3))}px rgba(232,193,112,.32))`;
+  $('rule2').style.width = (eo(ramp(t, P.end + 0.4, P.end + 1.1)) * 1150) + 'px'; $('rule2').style.opacity = tk;
+  const ek = eo(ramp(t, P.end + 0.9, P.end + 1.5));
+  $('event').style.opacity = ek; $('event').style.transform = `translateY(${(1 - ek) * 22}px)`;
+  let f = 0;
+  for (const [ft, peak, dec] of P.flashes) if (t >= ft && t < ft + dec) f = Math.max(f, peak * (1 - eo((t - ft) / dec)));
+  if (t >= P.end - 0.35 && t < P.end) f = Math.max(f, Math.pow(ramp(t, P.end - 0.35, P.end), 2));
+  if (t >= P.end) f = Math.max(f, 1 - eo(ramp(t, P.end, P.end + 0.7)));
+  $('flash').style.opacity = f;
+  $('black').style.opacity = Math.max(1 - eo(ramp(t, 0, 1.2)), ss(ramp(t, P.total - 1.0, P.total - 0.1)));
+};
+window.renderAt(0);
+</script></body></html>
