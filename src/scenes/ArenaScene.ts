@@ -290,6 +290,7 @@ export class ArenaScene extends Phaser.Scene {
   private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
   /** Scene-langlebiger Owner der Diagnose (Profiler, Ablation, Net-/Performance-Overlay). */
   private diagnostics: ArenaDiagnosticsController | null = null;
+  private networkProbe = false;
   /** Scene-langlebiger Owner fuer Keyboard-Setup, Hotkeys und deren Teardown. */
   private inputBindings: ArenaInputBindings | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
@@ -1208,6 +1209,17 @@ export class ArenaScene extends Phaser.Scene {
       }).catch(error => { console.error('[Dev scenario]', error); });
     }
     if (__PERFORMANCE_LAB__) {
+      if (new URLSearchParams(location.search).has('network-probe')) {
+        this.networkProbe = true;
+        let disposed = false;
+        let cleanup: (() => void) | undefined;
+        onBootSceneTeardown(this.events, () => { disposed = true; cleanup?.(); });
+        void import('../debug/performanceLab/networkProbe').then(({ attachNetworkProbe }) => {
+          if (!disposed) cleanup = attachNetworkProbe(this, this.arenaRuntime, playerManager, this.diagnostics!,
+            (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger),
+            () => this.lobbyOverlay.isRevealComplete(), level => this.graphicsQuality.setLevel(level));
+        }).catch(error => { console.error('[Network probe]', error); });
+      }
       onBootSceneTeardown(this.events, () => {
         if (window.__FD_PERF__ && !['failed', 'complete'].includes(window.__FD_PERF__.state)) failPerformanceLab('Scene shutdown during capture');
       });
@@ -1535,7 +1547,8 @@ export class ArenaScene extends Phaser.Scene {
       gameplayActive: worldActive && (!activityActive || gameplayActive),
       countdownActive,
       uiBlocking: optionsOpen,
-      diagnosticsArena: weaponBalanceLabArena || isDevScenarioMode() || (__PERFORMANCE_LAB__ && !!window.__FD_PERF_REQUEST__),
+      diagnosticsArena: weaponBalanceLabArena || isDevScenarioMode() || (__PERFORMANCE_LAB__
+        && (!!window.__FD_PERF_REQUEST__ || this.networkProbe)),
     });
     if (worldActive && localWorldPresentation.required && countdownActive) {
       this.syncCountdownPlayerPresentation();

@@ -103,6 +103,9 @@ function installPageLeave(): void {
 
 async function boot(): Promise<void> {
   if (__PERFORMANCE_LAB__) beginPerformanceBoot();
+  if (__PERFORMANCE_LAB__ && new URLSearchParams(location.search).has('network-probe')) {
+    (await import('./debug/performanceLab/networkProbe')).prepareNetworkProbe();
+  }
   const startupContext = createWebGLStartupContext();
   if (!startupContext) {
     if (__PERFORMANCE_LAB__) failPerformanceLab('WebGL startup context unavailable');

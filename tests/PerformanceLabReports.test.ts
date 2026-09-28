@@ -9,8 +9,42 @@ import { analyzeTrace, createSourceResolver, traceEvents, archiveDependencySourc
 import { acquireOwned, preserveFailedChromeTrace, transferChromeTrace, readBrowserJson } from '../scripts/performance/lifecycle.mjs';
 import { createBuildStorage, checkDiskSpace, MINIMUM_FREE_BYTES, DISK_HEADROOM_BYTES } from '../scripts/performance/storage.mjs';
 import { parsePerformanceOptions } from '../scripts/performance/options.mjs';
+import { checkProbePair, summarizeProbe } from '../scripts/performance/network-report.mjs';
 
 describe('Performance lab offline evidence', () => {
+  it('rejects unrelated network captures even if their settings match', () => {
+    const host = { schemaVersion: 1, experiment: 'p90-bubble-1', role: 'host', room: 'room', roundStart: 100,
+      quality: 'high', buildSignature: 'build', cooldownMs: 200 };
+    const client = { ...host, role: 'client' };
+    expect(() => checkProbePair(host, client)).not.toThrow();
+    expect(() => checkProbePair(host, { ...client, roundStart: 101 })).toThrow('roundStart');
+    expect(() => checkProbePair(host, { ...client, error: 'disconnected' })).toThrow('Abgebrochener');
+  });
+
+  it('marks absent client updates as missing evidence, preserving the whole observation gap', () => {
+    const result = { role: 'client', updates: [], samples: [],
+      windows: [{ id: 'idle', kind: 'measurement', fromMs: 100, toMs: 2100 }], game: {
+        frameCapture: { version: 2, startedAtPerformanceMs: 0, frames: [[1, 200, 16, 1, 1, 0, 0]] },
+        series: { gpuSamples: [], samples: [], sampleIntervalMs: 1000 }, session: {}, summaries: { gpu: { status: 'unsupported' } },
+      } };
+    const phase = summarizeProbe(result)[0];
+    expect(phase.errors).toContain('Keine laufenden Zustandsupdates');
+    expect(phase.updateGapMaxMs).toBe(2000);
+    expect(phase.sentKiBs).toBeNull();
+  });
+
+  it('uses exact phase action counts and rejects underload despite large cumulative counters', () => {
+    const link = { bytesSent: 1000, reliableBufferedBytes: 0, fastBufferedBytes: 0 };
+    const result = { role: 'host', cooldownMs: 100, updates: [],
+      windows: [{ id: 'p90', kind: 'measurement', fromMs: 0, toMs: 6000, load: { shots: 1, hits: 2 } }],
+      samples: [100, 5900].map((atMs, i) => ({ atMs, shots: 100 + 80 * i, projectiles: 5, links: [link] })), game: {
+        frameCapture: { version: 2, startedAtPerformanceMs: 0, frames: [[1, 200, 16, 1, 1, 0, 5]] },
+        series: { gpuSamples: [], samples: [], sampleIntervalMs: 1000 }, session: {}, summaries: { gpu: { status: 'unsupported' } },
+      } };
+    const phase = summarizeProbe(result)[0];
+    expect(phase.shots).toBe(1);
+    expect(phase.errors).toContain('Schusslast unterschritten');
+  });
   it('defaults full runs to reduced tracing and focused runs to JS sampling, preserving explicit overrides', () => {
     expect(parsePerformanceOptions([]).captureProfile).toBe('reduced');
     expect(parsePerformanceOptions(['--case', 'standard']).captureProfile).toBe('reduced');

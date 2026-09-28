@@ -1,8 +1,94 @@
 # Performance-Lab
 
+## Kleiner Netzwerk-Test: P90 und TimeBubble
+
+`npm run perf:network` öffnet den Host im Performance-Lab-Modus. Im kleinen Testpanel
+„Client in zweitem Fenster öffnen“ wählen, dort „Client bereit“ anklicken und danach
+beim Host „Messung starten“. Beide Fenster sichtbar halten, vor dem Start auf dieselbe
+Auflösung bringen und während der Messung nicht bedienen. Chrome und ein erreichbarer
+PeerJS-Signalisierungsserver werden benötigt. Der normale Produktionsbuild hat diesen
+Testmodus nicht.
+
+Genau ein Host und ein echter WebRTC-Client nehmen teil. Nur der Host
+erzeugt die Last; die Anzahl der Schützen ändert sich zwischen Vergleichsläufen nicht.
+Die vorhandene Referenzkarte, legalen P90-/TimeBubble-Upgrades, Zielsteuerung und der
+Frame-Profiler werden mitgenutzt. Es gibt keine zusätzliche Gegnerwelle.
+
+| Phase | Dauer | Last |
+|---|---:|---|
+| Warmup | 5 s | Welt und Darstellung einlaufen lassen |
+| idle | 10 s | Verbindung und reguläre Zustandsübertragung |
+| p90 | 20 s | P90 mit ihrem produktiven Cooldown |
+| p90-bubble | 30 s | Dieselbe P90 plus TimeBubbles, sobald diese wieder verfügbar sind |
+| recovery | 10 s | Keine neuen Schüsse oder Utility-Aktionen |
+
+Der bestehende autoritative Arenastart und die synchronisierte Spieluhr bestimmen die
+Phasen auf beiden Rechnern. Zu spät geladene Teilnehmer, versteckte/veränderte Fenster
+und Verbindungswechsel brechen den Lauf ab. Nach 75 Sekunden auf **beiden** Seiten die
+Ergebnisdatei herunterladen und zusammen auswerten:
+
+```sh
+npm run perf:network:report -- <host.json> <client.json>
+```
+
+Der Bericht zeigt Frame-, Spielschritt- und Renderzeiten, den Aufwand des Host-Publikationspfads,
+Versandrate, native Sendepuffer, RTC-/Anwendungs-Ping, Client-Update-Lücken und tatsächlich
+erreichte Last. Fehlende Daten, Treffer, TimeBubbles/Prismengeschosse oder zu wenige Schüsse
+machen die Belastungsmessung ungültig. Ein erfolgreicher Lauf bedeutet nur vollständige
+Messdaten; es gibt kein pauschales „lagfrei“-Urteil.
+
+Für den ersten gezielten Vergleich beide Fenster schließen und den Host mit
+`http://127.0.0.1:8090/?network-probe=low` neu öffnen. Der Client-Link übernimmt `low`.
+Auflösung und Hardware gleich halten, jeden Grafikstand dreimal prüfen und Schusszahl sowie
+Projektillast vergleichen. Sinkende Verzögerungen bei gleicher Last sprechen für einen Anteil
+der lokalen Darstellung/Verarbeitung. Ändert sich die Last, ist das kein sauberer Grafikvergleich.
+Weitere Werkzeuge oder Transportänderungen erst hinzufügen, wenn diese Messung einen konkreten
+Verdacht liefert.
+
+RTC/App im Bericht sind die bestehenden gleitenden Mediane am Phasenende. Sie sind keine
+phasengenauen Perzentile oder exakte Eingabebestätigungszeiten. Transportwerte und
+Projektillast werden einmal pro Sekunde abgetastet; kurze Pufferspitzen können fehlen.
+Update-Lücken zeigen neu beobachtete Zustände und sind keine Einweg-Latenz. Für weitere
+CPU-/GPU-Analyse enthält jede Datei den vorhandenen vollständigen Frame-Profiler-Export.
+Das Skript archiviert keine Builds und erstellt keine neue Ergebnishistorie; den zugehörigen
+Code-Stand bei Vergleichen selbst festhalten.
+
+Zwei Instanzen auf einem Rechner teilen weiterhin CPU und GPU. Für einen zweiten Rechner
+den Dev-Server bei Bedarf mit `npm run dev:browser -- --mode performance-lab --host 0.0.0.0`
+im LAN starten und die Host-Adresse im Client-Link verwenden. Auf beiden Geräten denselben
+Server und Testmodus verwenden. Reale Internet-/WLAN-Bedingungen sind damit noch nicht abgedeckt.
+
+### Erste Messung des kleinen Tests (28.09.2026)
+
+Je drei vollständige High-/Low-Läufe mit zwei Chrome-Instanzen ohne sichtbare Fenster auf
+demselben Rechner, 1280 × 720 bei DPR 1, im Dev-Build. Alle sechs Messpaare erfüllen die
+Last- und Vollständigkeitsprüfung. JSON-Exporte und Berichte liegen lokal unter
+[`build/network-probe-validation/`](../build/network-probe-validation/); dieser Ordner wird
+nicht versioniert. Es handelt sich um neue Messungen des kleinen Tests.
+
+| Beobachtung über sechs Läufe | P90 | P90 + TimeBubble |
+|---|---:|---:|
+| Host-Versand | 63–68 KiB/s | 284–316 KiB/s |
+| Host-Publikationspfad pro Snapshot, Mittelwert | 0,45–0,54 ms | 2,20–2,39 ms |
+
+Mit TimeBubble steigt der Versand wiederholt auf etwa das Vier- bis Fünffache. Niedrige
+Grafik verbessert häufig die Framezeiten, aber die Bereiche überlappen: Host-Frame-p95
+High 18,3–24,3 ms, Low 18,2–24,2 ms; Client High 12,2–18,4 ms, Low 12,2–18,1 ms.
+Die Bubble-Phase erreicht 126–130 Schüsse bei High und 130–131 bei Low sowie Spitzen
+von 70–72 Projektilen. Damit ist die Last ähnlich, aber nicht exakt gleich.
+Ein High-Lauf enthält außerdem eine lokale Client-Pause von rund 1,4 Sekunden am Übergang
+zur Erholung; dieser Ausreißer bleibt in den Daten. Die übrigen Bubble-Phasen zeigen
+maximale Client-Update-Lücken von rund 98–122 ms.
+
+Der nächste gezielte Schritt ist derselbe Test auf zwei Rechnern, anschließend bei
+reproduzierbarem Befund die Prüfung des bestehenden Projektil-Publikationspfads.
+Der Anstieg belegt zusätzlichen Aufwand, aber weder dessen alleinige Verantwortung für
+Lags noch eine behobene Verbindungsstörung. Die gemeinsame Hardware und der Dev-Build
+begrenzen die Übertragbarkeit dieser ersten Messung.
+
 ## Aktueller Umfang
 
-Das Lab führt den normalen Solo-Host-Start, den Lobby-Reveal, die Audiofreigabe und drei
+Der Solo-Parcours führt den normalen Host-Start, den Lobby-Reveal, die Audiofreigabe und drei
 Sekunden Lobby aus. Erst danach lädt es seine Fallsteuerung. `standard` durchläuft den
 Referenzparcours mit den Gegenständen des
 [V1-Konzepts](GDDs/Fragdachse_Performance_Lab_Konzept_V1_Revision_3.md) und einem kleinen

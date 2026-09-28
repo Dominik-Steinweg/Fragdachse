@@ -5,8 +5,19 @@ import { getCoopDefenseMapConfig, isDiagnosticMapId } from '../src/config/coopDe
 import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID } from '../src/debug/performanceLab/referenceMap';
 import { PERFORMANCE_FIXTURE } from '../src/debug/performanceLab/fixtures';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
+import { buildPerformanceLoadout, presets } from '../src/debug/performanceLab/loadouts';
 
 describe('Performance reference fixtures', () => {
+  it('combines weapon and utility upgrades without replacing either ready selection', () => {
+    const base = buildPerformanceLoadout('P90');
+    const combined = buildPerformanceLoadout('P90', false, 'TIME_BUBBLE');
+    expect(isCoopDefenseReadyLoadoutComplete(combined.commit)).toBe(true);
+    expect(combined.commit[presets.P90.slot as 'weapon1' | 'weapon2']).toBe('P90');
+    expect(combined.commit.utility).toBe('TIME_BUBBLE');
+    for (const id of Object.keys(presets.P90.upgrades))
+      expect(combined.commit.coopDefenseProfile?.upgrades[id]).toEqual(base.commit.coopDefenseProfile?.upgrades[id]);
+    expect(() => buildPerformanceLoadout('P90', false, 'GLOCK')).toThrow('utility');
+  });
   it('keeps fixed enemy loads free of population-growing abilities', () => {
     for (const kind of PERFORMANCE_FIXTURE.enemyKinds) {
       const config = getCoopDefenseEnemyConfig(kind);

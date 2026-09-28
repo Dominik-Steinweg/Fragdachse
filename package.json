@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "perf:network": "npm run dev:browser -- --mode performance-lab --open /?network-probe=high",
+    "perf:network:report": "node scripts/performance/network-report.mjs",
     "perf:chrome": "node scripts/performance/run.mjs",
     "perf:compare": "node scripts/performance/compare.mjs",
     "build:perf-lab": "tsc && vite build --mode performance-lab",
