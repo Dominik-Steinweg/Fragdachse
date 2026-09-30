@@ -1,0 +1,42 @@
+{
+  "tool": "built-in image_gen",
+  "revision": "r01",
+  "jobs": [
+    {
+      "id": "A03",
+      "prompt": "Create one polished high-resolution weapon inventory/loadout icon for Fragdachse, a stylized arena shooter. Input 1 is a newly rendered oblique view of the actual in-game Blender model: use it as the authoritative geometry, proportions, colors, components and camera reference. Input 2 shows the existing weapon/upgrade icon art direction only. Transform the model render into clear mildly hand-painted 3D game icon art: broad matte shading, restrained material texture, crisp soft-antialiased contour, stronger midtones and controlled pale edge highlights for legibility at 22–32px. Preserve the real model silhouette and its visible parts. Do not invent a different weapon. One isolated weapon, diagonally butt at bottom-left, barrel at top-right, useful three-quarter view rather than straight top-down. Generous use of square canvas, about 8% clear margin. Transparent background. NO tile, frame, badge, text, character, floor, cast shadow, sparks or scene. No heavy black cartoon outline, photorealism or glossy toy treatment. 1024x1024. NEGEV light machine gun: retain olive-green boxy receiver, chunky side ammunition box and visible short brass belt, dark metal long barrel, top rail and carry handle, folded support legs, sturdy rear stock. Increase broad value separation so the receiver and ammunition box are clearly readable.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A03-blender.png",
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/style-contact.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A04",
+      "prompt": "Create one polished high-resolution weapon inventory/loadout icon for Fragdachse, a stylized arena shooter. Input 1 is a newly rendered oblique view of the actual in-game Blender model: use it as the authoritative geometry, proportions, colors, components and camera reference. Input 2 shows the existing weapon/upgrade icon art direction only. Transform the model render into clear mildly hand-painted 3D game icon art: broad matte shading, restrained material texture, crisp soft-antialiased contour, stronger midtones and controlled pale edge highlights for legibility at 22–32px. Preserve the real model silhouette and its visible parts. Do not invent a different weapon. One isolated weapon, diagonally butt at bottom-left, barrel at top-right, useful three-quarter view rather than straight top-down. Generous use of square canvas, about 8% clear margin. Transparent background. NO tile, frame, badge, text, character, floor, cast shadow, sparks or scene. No heavy black cartoon outline, photorealism or glossy toy treatment. 1024x1024. ASMD PRIMARY blue energy rifle: retain this exact compact dark graphite housing, broad blue upper energy panel, side rails, four bronze-and-blue coils and cylindrical barrel. Make the blue energy accents luminous but tightly contained, the bronze coils distinct. Do not add real-world rifle stocks or magazines.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A04-blender.png",
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/style-contact.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A05",
+      "prompt": "Precise color-variant edit for ASMD secondary weapon icon A05. Input 1 is the final ASMD primary icon to edit. Input 2 is the actual secondary-mode Blender model render, which establishes the purple mode color. Preserve input 1 geometry, silhouette, canvas placement, orientation, scale, bronze coils, grey metal body, every component and material texture. Change ONLY cyan/blue energy panels, rings, accents and their tightly contained edge light to luminous saturated violet-purple, matching input 2 color identity. Do not redesign or add components. The two icons must read as the same weapon with different mode colors. Transparent background, same square canvas and padding as input 1. No text, border, badge, floor, extra glow cloud.",
+      "referenced_image_paths": [
+        "C:\\Users\\domin\\.codex\\generated_images\\01a0e944-ddf4-7ff3-a4c5-e7ac923817ad\\exec-b5c49a19-dd5b-408b-b40f-accfef55ea76.png",
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A05-blender.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A06",
+      "prompt": "Create one polished high-resolution weapon inventory/loadout icon for Fragdachse, a stylized arena shooter. Input 1 is a newly rendered oblique view of the actual in-game Blender model: use it as the authoritative geometry, proportions, colors, components and camera reference. Input 2 shows the existing weapon/upgrade icon art direction only. Transform the model render into clear mildly hand-painted 3D game icon art: broad matte shading, restrained material texture, crisp soft-antialiased contour, stronger midtones and controlled pale edge highlights for legibility at 22–32px. Preserve the real model silhouette and its visible parts. Do not invent a different weapon. One isolated weapon, diagonally butt at bottom-left, barrel at top-right, useful three-quarter view rather than straight top-down. Generous use of square canvas, about 8% clear margin. Transparent background. NO tile, frame, badge, text, character, floor, cast shadow, sparks or scene. No heavy black cartoon outline, photorealism or glossy toy treatment. 1024x1024. AWP sniper rifle: retain the olive-green long stock/body, long slim dark metal barrel, large mounted scope with adjustment knobs, top rail and folded bipod. Improve the scope and stock silhouette legibility with broad sage-green and blue-grey highlights while preserving the model.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A06-blender.png",
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/style-contact.png"
+      ],
+      "transparent_background": true
+    }
+  ]
+}

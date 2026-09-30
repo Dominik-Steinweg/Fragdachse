@@ -12,12 +12,12 @@ function isAsmdLoadoutIcon(textureKey: string): boolean {
 }
 
 /**
- * Returns the authored UI texture key and uses nearest-neighbor sampling for
- * the ASMD icons so weak outer pixels remain visible at small display sizes.
+ * Returns the authored UI texture key and smoothly downsamples the high-resolution
+ * ASMD icons into their small UI display boxes.
  */
 export function getLoadoutIconTextureKey(scene: Phaser.Scene, textureKey: string): string {
   if (isAsmdLoadoutIcon(textureKey) && scene.textures.exists(textureKey)) {
-    scene.textures.get(textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    scene.textures.get(textureKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
   }
   return textureKey;
 }

@@ -167,5 +167,5 @@ export const TRAIN_DROP_COUNT = 1;
 /** Maximaler Abstand Spieler–PowerUp-Mittelpunkt, um einzusammeln */
 export const PICKUP_RADIUS = 16;
 
-/** Darstellungsgröße der PowerUp-Rectangles (px) */
-export const POWERUP_RENDER_SIZE = 16;
+/** Kantenlänge der Power-Up-Symbole in Spieleinheiten, unabhängig von der Texturauflösung. */
+export const POWERUP_RENDER_SIZE = 22;

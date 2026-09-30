@@ -1,0 +1,86 @@
+{
+  "tool": "built-in image_gen",
+  "revision": "r03",
+  "jobs": [
+    {
+      "id": "A07",
+      "variant": "b",
+      "name": "Heilung",
+      "prompt": "Generate a SINGLE isolated small game pickup SYMBOL on fully transparent background. This is a separate foreground layer that will be composited onto a shared grey tile later. DO NOT draw a tile, plate, grey patch, background, border frame or ground shadow. Main reference input is an old game icon; extract ONLY its colored symbol identity, ignore its square grey tile and old pixel staircase. Create crisp SMOOTH vector-like contours, professional clean miniature game icon, no artificial pixelation. Must survive reduction to 12x12 visible pixels in a 16x16 total icon. Use 3-4 large solid opaque color areas, strong silhouette, clean thin dark colored outline, bright saturated face. No texture, noise, dirty spots, airbrushed shadows, vague gradients, lighting bloom, reflections, realistic metal, blur, black cloud or ornamental detail. Keep all colored parts fully opaque; only empty space is transparent. Center one symbol with 12 percent transparent margin on every side. Square 1024x1024 canvas. No text, no sheet, no multiple icons. Subject: A symmetric upright red medical plus sign, equal thick arms. Deep burgundy outer contour, saturated crimson main face, a single brighter coral-red upper-left bevel strip. No gap or internal hole. Variant B: maximum small-size legibility, bold compact silhouette, slightly broader symbol strokes and extremely restrained crisp bevel; the colored main face must remain large and uniform.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A07-original.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A08",
+      "variant": "b",
+      "name": "Rüstung",
+      "prompt": "Generate a SINGLE isolated small game pickup SYMBOL on fully transparent background. This is a separate foreground layer that will be composited onto a shared grey tile later. DO NOT draw a tile, plate, grey patch, background, border frame or ground shadow. Main reference input is an old game icon; extract ONLY its colored symbol identity, ignore its square grey tile and old pixel staircase. Create crisp SMOOTH vector-like contours, professional clean miniature game icon, no artificial pixelation. Must survive reduction to 12x12 visible pixels in a 16x16 total icon. Use 3-4 large solid opaque color areas, strong silhouette, clean thin dark colored outline, bright saturated face. No texture, noise, dirty spots, airbrushed shadows, vague gradients, lighting bloom, reflections, realistic metal, blur, black cloud or ornamental detail. Keep all colored parts fully opaque; only empty space is transparent. Center one symbol with 12 percent transparent margin on every side. Square 1024x1024 canvas. No text, no sheet, no multiple icons. Subject: A broad gold shield, horizontal flat top, gently tapering sides and a single centered bottom point. Dark ochre contour, warm gold main face, pale gold upper-left bevel strip. No emblem, no cross, no interior markings. Variant B: maximum small-size legibility, bold compact silhouette, slightly broader symbol strokes and extremely restrained crisp bevel; the colored main face must remain large and uniform.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A08-original.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A09",
+      "variant": "b",
+      "name": "Wut",
+      "prompt": "Generate a SINGLE isolated small game pickup SYMBOL on fully transparent background. This is a separate foreground layer that will be composited onto a shared grey tile later. DO NOT draw a tile, plate, grey patch, background, border frame or ground shadow. Main reference input is an old game icon; extract ONLY its colored symbol identity, ignore its square grey tile and old pixel staircase. Create crisp SMOOTH vector-like contours, professional clean miniature game icon, no artificial pixelation. Must survive reduction to 12x12 visible pixels in a 16x16 total icon. Use 3-4 large solid opaque color areas, strong silhouette, clean thin dark colored outline, bright saturated face. No texture, noise, dirty spots, airbrushed shadows, vague gradients, lighting bloom, reflections, realistic metal, blur, black cloud or ornamental detail. Keep all colored parts fully opaque; only empty space is transparent. Center one symbol with 12 percent transparent margin on every side. Square 1024x1024 canvas. No text, no sheet, no multiple icons. Subject: One red flame with three broad pointed tips, large central tip and lower side tips, deep burgundy outline, scarlet-red body and one large bright coral inner flame. Simple unmistakable silhouette. Variant B: maximum small-size legibility, bold compact silhouette, slightly broader symbol strokes and extremely restrained crisp bevel; the colored main face must remain large and uniform.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A09-original.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A10",
+      "variant": "b",
+      "name": "Adrenalin",
+      "prompt": "Generate a SINGLE isolated small game pickup SYMBOL on fully transparent background. This is a separate foreground layer that will be composited onto a shared grey tile later. DO NOT draw a tile, plate, grey patch, background, border frame or ground shadow. Main reference input is an old game icon; extract ONLY its colored symbol identity, ignore its square grey tile and old pixel staircase. Create crisp SMOOTH vector-like contours, professional clean miniature game icon, no artificial pixelation. Must survive reduction to 12x12 visible pixels in a 16x16 total icon. Use 3-4 large solid opaque color areas, strong silhouette, clean thin dark colored outline, bright saturated face. No texture, noise, dirty spots, airbrushed shadows, vague gradients, lighting bloom, reflections, realistic metal, blur, black cloud or ornamental detail. Keep all colored parts fully opaque; only empty space is transparent. Center one symbol with 12 percent transparent margin on every side. Square 1024x1024 canvas. No text, no sheet, no multiple icons. Subject: One compact BLUE SYRINGE along a diagonal bottom-left to top-right: short broad dark navy plunger at lower left, wide straight cyan-blue barrel in middle, short dark navy needle at upper right. Dark navy continuous outer contour and one pale blue band on barrel. It must read as syringe, not key or sword. No ticks, no drop shadow. Variant B: maximum small-size legibility, bold compact silhouette, slightly broader symbol strokes and extremely restrained crisp bevel; the colored main face must remain large and uniform.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A10-original.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A11",
+      "variant": "b",
+      "name": "Schadensverstärker",
+      "prompt": "Generate a SINGLE isolated small game pickup SYMBOL on fully transparent background. This is a separate foreground layer that will be composited onto a shared grey tile later. DO NOT draw a tile, plate, grey patch, background, border frame or ground shadow. Main reference input is an old game icon; extract ONLY its colored symbol identity, ignore its square grey tile and old pixel staircase. Create crisp SMOOTH vector-like contours, professional clean miniature game icon, no artificial pixelation. Must survive reduction to 12x12 visible pixels in a 16x16 total icon. Use 3-4 large solid opaque color areas, strong silhouette, clean thin dark colored outline, bright saturated face. No texture, noise, dirty spots, airbrushed shadows, vague gradients, lighting bloom, reflections, realistic metal, blur, black cloud or ornamental detail. Keep all colored parts fully opaque; only empty space is transparent. Center one symbol with 12 percent transparent margin on every side. Square 1024x1024 canvas. No text, no sheet, no multiple icons. Subject: One thick MAGENTA pointed oval ring, upright, tapered pointed top and bottom, open transparent oval center. Dark plum outside contour and saturated purple-magenta broad inner band with a thin brighter magenta left edge. No gem, no flame, no disc. Variant B: maximum small-size legibility, bold compact silhouette, slightly broader symbol strokes and extremely restrained crisp bevel; the colored main face must remain large and uniform.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A11-original.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A12",
+      "variant": "a",
+      "name": "Heilige Granate",
+      "prompt": "Generate a SINGLE isolated small game pickup SYMBOL on fully transparent background. This is a separate foreground layer that will be composited onto a shared grey tile later. DO NOT draw a tile, plate, grey patch, background, border frame or ground shadow. Main reference input is an old game icon; extract ONLY its colored symbol identity, ignore its square grey tile and old pixel staircase. Create crisp SMOOTH vector-like contours, professional clean miniature game icon, no artificial pixelation. Must survive reduction to 12x12 visible pixels in a 16x16 total icon. Use 3-4 large solid opaque color areas, strong silhouette, clean thin dark colored outline, bright saturated face. No texture, noise, dirty spots, airbrushed shadows, vague gradients, lighting bloom, reflections, realistic metal, blur, black cloud or ornamental detail. Keep all colored parts fully opaque; only empty space is transparent. Center one symbol with 12 percent transparent margin on every side. Square 1024x1024 canvas. No text, no sheet, no multiple icons. Subject: One golden holy hand grenade: squat round bomb body with a clearly visible thick short gold cross centered on top, dark ochre contour, warm amber-gold body, one simple pale-gold upper-left bevel area and ONE small red square in the center. No white spots around red square, no mottling, no jewels, no screws. Variant A: restrained 2-tone cel shading, flat main face, just one small hard-edged lighter inset on upper-left; no gradient.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A12-original.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A13",
+      "variant": "b",
+      "name": "Nuke",
+      "prompt": "Generate a SINGLE isolated small game pickup SYMBOL on fully transparent background. This is a separate foreground layer that will be composited onto a shared grey tile later. DO NOT draw a tile, plate, grey patch, background, border frame or ground shadow. Main reference input is an old game icon; extract ONLY its colored symbol identity, ignore its square grey tile and old pixel staircase. Create crisp SMOOTH vector-like contours, professional clean miniature game icon, no artificial pixelation. Must survive reduction to 12x12 visible pixels in a 16x16 total icon. Use 3-4 large solid opaque color areas, strong silhouette, clean thin dark colored outline, bright saturated face. No texture, noise, dirty spots, airbrushed shadows, vague gradients, lighting bloom, reflections, realistic metal, blur, black cloud or ornamental detail. Keep all colored parts fully opaque; only empty space is transparent. Center one symbol with 12 percent transparent margin on every side. Square 1024x1024 canvas. No text, no sheet, no multiple icons. Subject: One standard black radiation trefoil printed on a solid amber-yellow circle, exactly THREE broad black sector lobes separated by wide yellow gaps and a central black round dot. Flat high contrast, no gloss, no extra rings or halo. Variant B: maximum small-size legibility, bold compact silhouette, slightly broader symbol strokes and extremely restrained crisp bevel; the colored main face must remain large and uniform.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A13-original.png"
+      ],
+      "transparent_background": true
+    },
+    {
+      "id": "A14",
+      "variant": "b",
+      "name": "BFG",
+      "prompt": "Generate a SINGLE isolated small game pickup SYMBOL on fully transparent background. This is a separate foreground layer that will be composited onto a shared grey tile later. DO NOT draw a tile, plate, grey patch, background, border frame or ground shadow. Main reference input is an old game icon; extract ONLY its colored symbol identity, ignore its square grey tile and old pixel staircase. Create crisp SMOOTH vector-like contours, professional clean miniature game icon, no artificial pixelation. Must survive reduction to 12x12 visible pixels in a 16x16 total icon. Use 3-4 large solid opaque color areas, strong silhouette, clean thin dark colored outline, bright saturated face. No texture, noise, dirty spots, airbrushed shadows, vague gradients, lighting bloom, reflections, realistic metal, blur, black cloud or ornamental detail. Keep all colored parts fully opaque; only empty space is transparent. Center one symbol with 12 percent transparent margin on every side. Square 1024x1024 canvas. No text, no sheet, no multiple icons. Subject: One green energy sphere rendered as exactly four crisp nested broad color zones: deep forest green outer circle, saturated leaf green, lime green inner circle, and small pale yellow-green center. Hard clean contour, no fuzzy glow, no spikes or smoke. Variant B: maximum small-size legibility, bold compact silhouette, slightly broader symbol strokes and extremely restrained crisp bevel; the colored main face must remain large and uniform.",
+      "referenced_image_paths": [
+        "C:/Fragdachse/art/icon-refresh-a03-a14/r01/references/A14-original.png"
+      ],
+      "transparent_background": true
+    }
+  ]
+}

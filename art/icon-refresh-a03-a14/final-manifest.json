@@ -1,0 +1,214 @@
+{
+  "status": "approved-and-integrated",
+  "weaponsRevision": "r01",
+  "powerUpsRevision": "r05",
+  "selectedFrame": "c",
+  "assets": [
+    {
+      "id": "A03",
+      "source": "art/icon-refresh-a03-a14/r01/icons/A03.png",
+      "destination": "public/assets/sprites/Loadout/NEGEV.png",
+      "sha256": "5006219e6c5547bf15eca3bd3b667c468e9ad54e5b41091a8c8b97fdf2e7344c",
+      "previousSHA256": "fbb2e8b161ecefcfcc1d95fc256e90df814a9bce633cc5a6d08ef4140c0cde15",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A04",
+      "source": "art/icon-refresh-a03-a14/r01/icons/A04.png",
+      "destination": "public/assets/sprites/Loadout/ASMD_PRIM.png",
+      "sha256": "e8629575e6214866d35445ec7bb37e880c43c2d26f02404342b487a6aa3edf5a",
+      "previousSHA256": "29aa91b7e640e154573f97b5fd762936c91697e7b838017d9a796c95846acba7",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A05",
+      "source": "art/icon-refresh-a03-a14/r01/icons/A05.png",
+      "destination": "public/assets/sprites/Loadout/ASMD_SEC.png",
+      "sha256": "0570380f8d5e5265845e64e009b1bd1647ae3c0109a6a69e9dda465d4b29c09f",
+      "previousSHA256": "27af52eacefe439494b685e5ae3a21396a4e8add01d2a080c778575e971aac14",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A06",
+      "source": "art/icon-refresh-a03-a14/r01/icons/A06.png",
+      "destination": "public/assets/sprites/Loadout/AWP.png",
+      "sha256": "43c1402ba69503a1d92afd9e8d06c9e5b6679d64705a7ba8380b2d2f6da0a069",
+      "previousSHA256": "976deb7207bc0b33a68ea10ecb26db9c4a6789f0a0845a5841c8a7f66ef88528",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A07",
+      "source": "art/icon-refresh-a03-a14/r05/icons/A07.png",
+      "destination": "public/assets/sprites/16x16HP.png",
+      "sha256": "b281ab9c7ebaca98fb1ff61d069956fd338ddf761542cc8de656c3d5fa831ebe",
+      "previousSHA256": "62db3902323bccb05f9a8770b17729389dd62c044aa65cab6b821c018eb854a7",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A08",
+      "source": "art/icon-refresh-a03-a14/r05/icons/A08.png",
+      "destination": "public/assets/sprites/16x16Armor.png",
+      "sha256": "d2c6da91581cdbba284a729868011de262ea0ba9fde87104156a249ad587ad4c",
+      "previousSHA256": "e43b8c4b89184a8e0a06aca7e5b9e0081b089bc9ca055583b4763e9ccb6d7ec5",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A09",
+      "source": "art/icon-refresh-a03-a14/r05/icons/A09.png",
+      "destination": "public/assets/sprites/16x16Rage.png",
+      "sha256": "060f7c092ebc29ab1f2869841c93c7872a25387df719ff9d0a5264ef4ac8f323",
+      "previousSHA256": "22a0aa3036653912527e20d97a478c024144ad9596e565d6e102e04a1cdb4ecd",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A10",
+      "source": "art/icon-refresh-a03-a14/r05/icons/A10.png",
+      "destination": "public/assets/sprites/16x16adrenalin.png",
+      "sha256": "c0f267f9503ae3376713907b566071ccd636a9c14b0d2a5bf44a83fc4506a6f9",
+      "previousSHA256": "810c45134aa53855ed9eca750a65ebbf060c2d7a35f7af177ad7a921e835307d",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A11",
+      "source": "art/icon-refresh-a03-a14/r05/icons/A11.png",
+      "destination": "public/assets/sprites/16x16damageamp.png",
+      "sha256": "050ee75208f354bbea7d746c374065678f99cab1cc5bf36c2ee6e3db1bb263c0",
+      "previousSHA256": "f352cba2fadfb78563d90a4c079e9ee6f989aea108dd47fa8fc84b23864f8210",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A12",
+      "source": "art/icon-refresh-a03-a14/r05/icons/A12.png",
+      "destination": "public/assets/sprites/16x16holy_grenade.png",
+      "sha256": "d0aabc02bedae323f7682b5efb8540e34544231c8387f2d1e59669e8c13b5cf3",
+      "previousSHA256": "ea122a86c1fd1b9f71af57d25c9132e1084a1066d1247f5b7435e154b7286865",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A13",
+      "source": "art/icon-refresh-a03-a14/r05/icons/A13.png",
+      "destination": "public/assets/sprites/16x16nuke.png",
+      "sha256": "a88d713af903324d164df426a6c408adf28cc7ee980259f9ed162ac463a5cfab",
+      "previousSHA256": "002f664a602d478fcf0882ada80dcbc390ea7a1ac9753788eeba626c42ec6270",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "id": "A14",
+      "source": "art/icon-refresh-a03-a14/r05/icons/A14.png",
+      "destination": "public/assets/sprites/16x16bfg.png",
+      "sha256": "3883061cfdd71aa7a2202b0bcecce8e3278c59315af3754e39812d92b55de269",
+      "previousSHA256": "d2339946a47da77bbe1051f0f30da39ec66421b6d79a67071735aa999554db18",
+      "width": 256,
+      "height": 256
+    }
+  ],
+  "symbolLayers": [
+    {
+      "id": "A07",
+      "symbolSource": "art/icon-refresh-a03-a14/r03/layers/A07-b.png",
+      "sourceSymbolSHA256": "737ae9a0098e5ceace8c514c80e8256e3d261d557359cd56ad5293f8b8801fc4",
+      "symbolSHA256": "2078a2805d3d2d97878b50ba6122c5639f0e7b3990c01998947b0f98bb63a7ee",
+      "symbolBox": 180,
+      "symbolOffset": 38,
+      "backgroundSHA256": "ca6ecf391eaa50dd2e9f4bee3b9c1ea8bf7ebbe5382021bd0ee0379ee8777b8c",
+      "iconSHA256": "b281ab9c7ebaca98fb1ff61d069956fd338ddf761542cc8de656c3d5fa831ebe",
+      "centerAlphaMin": 255
+    },
+    {
+      "id": "A08",
+      "symbolSource": "art/icon-refresh-a03-a14/r03/layers/A08-b.png",
+      "sourceSymbolSHA256": "1cc8ddb26d5928d656f0133f7fe70a344225b6ab5f7feaa2ebac50170279a594",
+      "symbolSHA256": "64e8b91f23a8a3c15fd392227a8a28578d67c3477bc3472dd7fbb4758d2622fa",
+      "symbolBox": 180,
+      "symbolOffset": 38,
+      "backgroundSHA256": "ca6ecf391eaa50dd2e9f4bee3b9c1ea8bf7ebbe5382021bd0ee0379ee8777b8c",
+      "iconSHA256": "d2c6da91581cdbba284a729868011de262ea0ba9fde87104156a249ad587ad4c",
+      "centerAlphaMin": 255
+    },
+    {
+      "id": "A09",
+      "symbolSource": "art/icon-refresh-a03-a14/r03/layers/A09-b.png",
+      "sourceSymbolSHA256": "12eb9238f3c4b9beae8dcf85579c16814ae5157478eeaa5f9ebf7d8233f20c2c",
+      "symbolSHA256": "d08f79665b69f676cdd827ca827ca040195b7fa83cda87bf55a8fe6e4a8325a3",
+      "symbolBox": 180,
+      "symbolOffset": 38,
+      "backgroundSHA256": "ca6ecf391eaa50dd2e9f4bee3b9c1ea8bf7ebbe5382021bd0ee0379ee8777b8c",
+      "iconSHA256": "060f7c092ebc29ab1f2869841c93c7872a25387df719ff9d0a5264ef4ac8f323",
+      "centerAlphaMin": 255
+    },
+    {
+      "id": "A10",
+      "symbolSource": "art/icon-refresh-a03-a14/r03/layers/A10-b.png",
+      "sourceSymbolSHA256": "bbf12422bce31096d6d2662bbe8e69f61d6d455058c35668c7d47adfdd8ab5bc",
+      "symbolSHA256": "fe44a6325c682670be98d6a2481966994020d9852ad666e22ae28a6d23b3b497",
+      "symbolBox": 180,
+      "symbolOffset": 38,
+      "backgroundSHA256": "ca6ecf391eaa50dd2e9f4bee3b9c1ea8bf7ebbe5382021bd0ee0379ee8777b8c",
+      "iconSHA256": "c0f267f9503ae3376713907b566071ccd636a9c14b0d2a5bf44a83fc4506a6f9",
+      "centerAlphaMin": 255
+    },
+    {
+      "id": "A11",
+      "symbolSource": "art/icon-refresh-a03-a14/r03/layers/A11-b.png",
+      "sourceSymbolSHA256": "d0189138734ac57aaeb365e690dac6ef3dd3b9c036feacc5e0c816e5a5b36b67",
+      "symbolSHA256": "def5ab303990067afa1ea980b4993f0b34b0eeeb36bf3f5f76ad28bb41f734f0",
+      "symbolBox": 180,
+      "symbolOffset": 38,
+      "backgroundSHA256": "ca6ecf391eaa50dd2e9f4bee3b9c1ea8bf7ebbe5382021bd0ee0379ee8777b8c",
+      "iconSHA256": "050ee75208f354bbea7d746c374065678f99cab1cc5bf36c2ee6e3db1bb263c0",
+      "centerAlphaMin": 255
+    },
+    {
+      "id": "A12",
+      "symbolSource": "art/icon-refresh-a03-a14/r03/layers/A12-a.png",
+      "sourceSymbolSHA256": "c9bac88d54224910e9db5fe747c9d775a86b6411040ffbf76758fd865fe8a42f",
+      "symbolSHA256": "c3dd991e3cc14a3e62d18e3e51b7a2d55befb0edd07bfa10df93a4171c525aa8",
+      "symbolBox": 180,
+      "symbolOffset": 38,
+      "backgroundSHA256": "ca6ecf391eaa50dd2e9f4bee3b9c1ea8bf7ebbe5382021bd0ee0379ee8777b8c",
+      "iconSHA256": "d0aabc02bedae323f7682b5efb8540e34544231c8387f2d1e59669e8c13b5cf3",
+      "centerAlphaMin": 255
+    },
+    {
+      "id": "A13",
+      "symbolSource": "art/icon-refresh-a03-a14/r03/layers/A13-b.png",
+      "sourceSymbolSHA256": "d4d8824049fb652bb5408413cd9e79d77362938890b1fb0d66dc045a95016343",
+      "symbolSHA256": "ba13275238f77188c1b10f6e76be1d9961466e44fd62536d31894ddd46083354",
+      "symbolBox": 180,
+      "symbolOffset": 38,
+      "backgroundSHA256": "ca6ecf391eaa50dd2e9f4bee3b9c1ea8bf7ebbe5382021bd0ee0379ee8777b8c",
+      "iconSHA256": "a88d713af903324d164df426a6c408adf28cc7ee980259f9ed162ac463a5cfab",
+      "centerAlphaMin": 255
+    },
+    {
+      "id": "A14",
+      "symbolSource": "art/icon-refresh-a03-a14/r03/layers/A14-b.png",
+      "sourceSymbolSHA256": "d1925875606b0296df62242301245a7af80f2295333e90f521a735fd7c6610ec",
+      "symbolSHA256": "a82ba7d9bc95989a0aaf603416dad31948681a9fd5653f11424fd511b43b5d54",
+      "symbolBox": 180,
+      "symbolOffset": 38,
+      "backgroundSHA256": "ca6ecf391eaa50dd2e9f4bee3b9c1ea8bf7ebbe5382021bd0ee0379ee8777b8c",
+      "iconSHA256": "3883061cfdd71aa7a2202b0bcecce8e3278c59315af3754e39812d92b55de269",
+      "centerAlphaMin": 255
+    }
+  ],
+  "validation": {
+    "runtimeHashes": "12/12 match approved exports",
+    "reproduction": "8/8 power-up exports byte-identical",
+    "assetTests": "138 passed (22 files) on main",
+    "focusedTests": "13 passed (3 files) on main",
+    "build": "Blocked by pre-existing unchanged imports in src/arena/rocks/RockSurfaceRendering.ts:2-4",
+    "postIntegrationMatchVisualCheck": false
+  }
+}

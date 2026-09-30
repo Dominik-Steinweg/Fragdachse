@@ -1,0 +1,9 @@
+{
+  "tool": "built-in image_gen",
+  "variant": "c",
+  "prompt": "Make the SAME empty rounded-square tile MUCH MORE DEEPLY BEVELED AND DRAMATICALLY SHADED than this reference. User twice says the shading is still too weak. This must be an immediately obvious large change at only 16px. Preserve the overall rounded-square silhouette, outer dark border, filled opaque grey center, overall footprint and pure magenta technical background. Increase bevel band thickness to approximately 14 percent of the tile width on each side, with a bold broad bright SILVER-WHITE upper-left plane (#F3F7F5), medium grey top-right corner facets, and a very dark BLUE-CHARCOAL lower-right plane (#293D48). Strong directional light from upper left. Bottom and right rim should be visibly several value steps DARKER than the center; top and left should be much LIGHTER. Smoothly rounded outer corners with broad readable corner facets. Quiet SOLID medium-light grey center #A4B2AE, fully OPAQUE with no stains or texture. This is a chunky deeply embossed stone-metal game button, use clean broad planes rather than photorealism. NOT a thin flat outline; the RIM ITSELF must have a big light/dark division. No cloudy gradient across center, no holes, no transparency, no symbol, no decorative nested border, no text. OPAQUE RGB output on perfectly uniform pure MAGENTA #FF00FF outside tile; no cast shadow on magenta. Keep original tile positioning and padding.",
+  "referenced_image_paths": [
+    "C:/Fragdachse/art/icon-refresh-a03-a14/r05/raw/opaque-a.png"
+  ],
+  "transparent_background": false
+}

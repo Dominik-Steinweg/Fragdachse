@@ -10,6 +10,8 @@ import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } fro
 
 const TEX_NUKE_ICON = 'powerup_nuk';
 const TEX_NUKE_WARN = '__nuke_warning_particle';
+// Preserve the original countdown size independently of the icon's source resolution.
+const NUKE_ICON_DISPLAY_SIZE = 16;
 
 interface NukeVisual {
   radius:        Phaser.GameObjects.Arc;
@@ -142,7 +144,7 @@ export class NukeRenderer {
       const countdownMs = Math.max(1, nuke.explodeAt - nuke.armedAt);
       const progress = Phaser.Math.Clamp(1 - ((nuke.explodeAt - now) / countdownMs), 0, 1);
       const pulse = 1 + 0.09 * Math.sin(now / 95 + nuke.id) + progress * 0.12;
-      visual.icon.setScale(pulse);
+      visual.icon.setDisplaySize(NUKE_ICON_DISPLAY_SIZE * pulse, NUKE_ICON_DISPLAY_SIZE * pulse);
       visual.ring.setAlpha(NUKE_CONFIG.circleStrokeAlpha + 0.16 * Math.sin(now / 135));
       visual.outerRing.setAlpha(0.22 + progress * 0.35);
       visual.coreGlow.setAlpha(0.16 + progress * 0.34);
@@ -227,7 +229,7 @@ export class NukeRenderer {
     shadow.setDepth(DEPTH.PLAYERS - 2);
 
     const icon = this.scene.add.image(nuke.x, nuke.y, TEX_NUKE_ICON);
-    icon.setDisplaySize(36, 36);
+    icon.setDisplaySize(NUKE_ICON_DISPLAY_SIZE, NUKE_ICON_DISPLAY_SIZE);
     icon.setDepth(DEPTH.PLAYERS - 1);
     if (isVoid) icon.setTint(VOID_PALETTE.primary);
 

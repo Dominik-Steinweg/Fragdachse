@@ -126,7 +126,7 @@ export class PowerUpRenderer {
       const container = this.scene.add.container(pu.x, pu.y);
       container.setDepth(DEPTH.PLAYERS - 1);
 
-      // ── Grafik: feste Größe, kein Scale-Tween ─────────────────────────────
+      // Feste Zielgröße; die Einblendanimation skaliert relativ zu diesem Fit.
       const graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle | null =
         isMissionMarker
           ? null
@@ -432,8 +432,10 @@ export class PowerUpRenderer {
     ).setScale(0.28);
 
     const reveal = { value: 0 };
+    const baseScaleX = graphic.scaleX;
+    const baseScaleY = graphic.scaleY;
     graphic.setAlpha(0);
-    graphic.setScale(0.35);
+    graphic.setScale(baseScaleX * 0.35, baseScaleY * 0.35);
     container.setScale(0.88);
 
     this.scene.tweens.add({
@@ -444,10 +446,15 @@ export class PowerUpRenderer {
       onUpdate: () => {
         const stepped = Math.round(reveal.value * 7) / 7;
         graphic.setAlpha(stepped);
-        graphic.setScale(0.35 + stepped * 0.65);
+        const revealScale = 0.35 + stepped * 0.65;
+        graphic.setScale(baseScaleX * revealScale, baseScaleY * revealScale);
         container.setScale(0.88 + stepped * 0.12);
       },
-      onComplete: () => container.setScale(1),
+      onComplete: () => {
+        graphic.setAlpha(1);
+        graphic.setScale(baseScaleX, baseScaleY);
+        container.setScale(1);
+      },
     });
 
     this.scene.tweens.add({
