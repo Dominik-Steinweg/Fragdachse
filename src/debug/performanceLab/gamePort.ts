@@ -17,8 +17,10 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
   players: PlayerManager, diagnostics: ArenaDiagnosticsController,
   setInput: (angle: number, trigger: WeaponSlot | null) => void,
   isLobbyRevealed: () => boolean, participants = 1): PerformanceLabGamePort {
-  diagnostics.addFrameScope(flow, 'runHostFrame', 'gameplay');
-  diagnostics.addFrameScope(flow, 'runClientFrame', 'gameplay');
+  if (!window.__FD_PERF_REQUEST__?.load) {
+    diagnostics.addFrameScope(flow, 'runHostFrame', 'gameplay');
+    diagnostics.addFrameScope(flow, 'runClientFrame', 'gameplay');
+  }
   const targets = new Map<string, { x: number; y: number }>();
   let previousMap = bridge.getCoopDefenseMapId(), previousMode = bridge.getGameMode();
   let playerPosition = { x: 1000, y: 540 }, aimPosition = { x: 1220, y: 540 };
@@ -341,10 +343,12 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       flow.navigationLabPort.setNextRoundSeed(seed);
       bridge.setLocalReadyWithCommittedLoadout(commit); flow.setIsLocalReady(true);
     },
+    readLoadingState: () => ({ worldId: flow.getWorldDescriptor()?.definitionId ?? null,
+      revealReady: flow.getWorldRevealState(getVisibleWorldView(scene.cameras.main)).ready }),
     isReady: () => {
       if (flow.isMatchTerminated()) throw new Error('Arena preparation failed; see console.json');
       const world = flow.getWorldDescriptor();
-      if (world?.definitionId.endsWith(`:${requestedMap}`) && focusedWorld !== world.worldRevision
+      if (!window.__FD_PERF_REQUEST__?.load && world?.definitionId.endsWith(`:${requestedMap}`) && focusedWorld !== world.worldRevision
         && flow.getWorldMetrics()?.gridCols === 160 && players.getPlayer(localId())) {
         const initial = requestedMap.endsWith('-dawn') ? point(80, 64) : requestedMap.endsWith('-train') ? point(33, 48) : point(67, 72);
         flow.navigationLabPort.placePlayer(initial.x, initial.y);

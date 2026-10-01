@@ -386,3 +386,78 @@ sind anhand ihrer konkreten Lastdaten zu beurteilen.
 
 Technische Referenzen: [CDP Tracing](https://chromedevtools.github.io/devtools-protocol/1-3/Tracing/)
 und [Chromes CPUProfileDataModel](https://chromium.googlesource.com/devtools/devtools-frontend/+/9a696c4e723caa3c7e1f78886da353f1f06a79b0/front_end/core/sdk/CPUProfileDataModel.ts).
+
+
+## Ladezeitmessung ohne Browser-Pane-Drosselung
+
+Der bestehende Runner bietet einen separaten Lade-Modus. Er baut bzw. verwendet sein
+archiviertes **performance-lab-Produktionsbundle**, keinen Vite-Dev-Server. Der normale
+Host-Verbindungs-, Ready-/Start- und Discard-Pfad l?dt die echten Maps; Kampffixtures und
+vollst?ndige Frame-/Chrome-Traces bleiben aus. Signalisierungszugriff und lokales Chrome
+sind weiterhin Voraussetzungen. Keine parallel laufenden Builds/Lasttests.
+
+```text
+npm run perf:chrome -- --load --runs 5
+npm run perf:chrome -- --load --runs 5 --network 50mbps
+npm run perf:chrome -- --load --runs 5 --headless on
+```
+
+Ein Aufruf misst pro Wiederholung HTTP-kalten Boot bis Lobby-Reveal, danach einen warmen
+Reload im selben Browserkontext und anschlie?end Lobby ? Map 1 ? Lobby ? Map 7 ? Lobby
+? Map 15 ? Lobby. Die Maps nutzen Seed 12345 und ihren normalen Spawn, ohne Teleport oder
+Layout-/Tageszeit-Override. Grafikqualit?t high, 1664?936 CSS-Pixel, DPR 1. Chrome erh?lt
+`--disable-background-timer-throttling`, `--disable-renderer-backgrounding` und
+`--disable-backgrounding-occluded-windows`. Der normale Trace-Modus bleibt unver?ndert.
+`--runs` akzeptiert 1?100 (Standard 5), `--network` ist `local` oder `50mbps`
+(50 Mbit/s je Richtung, CDP-Latenz 20 ms). `--timeout-seconds` begrenzt wie bisher den
+Gesamtlauf inklusive Build (Standard 1500 s), jede Ladephase zus?tzlich auf maximal 300 s.
+`--build <sourceHash>` verwendet einen archivierten Build mit Lade-API; ?ltere Archive ohne
+`prepareLoad` werden abgelehnt. Trace-F?lle und visuelle Ablationen sind nicht kombinierbar.
+
+Kalt bedeutet geleerten Chrome-HTTP-/Origin-Cache, **nicht** kalten Betriebssystem-,
+Shader- oder GPU-Cache. Warm beh?lt Browserkontext und Cache und l?dt die Seite neu;
+der Raum-Hash wird vorher entfernt, damit erneut ein Host startet. Der isolierte Server
+liefert unver?nderliche Build-Dateien mit Cache-Control und ETag. Dies misst kontrollierte
+Cachebedingungen, nicht die Header eines beliebigen Deployments. Headless ist eine eigene
+Messbedingung und sollte nicht mit sichtbaren Chrome-L?ufen vermischt werden.
+
+Ausgabe: `build/performance-results/<runId>/load-summary.json` und `load-summary.md`,
+plus `load-<NN>-cold-lobby.json`, `warm-lobby` und `map-1/7/15` mit der vollst?ndigen
+`__FD_BOOT__.timeline()`, Navigation-/Resource-Timings und rAF-Stichproben. Manifest und
+Browserprotokoll bleiben beim vorhandenen Runner. Fehler sichern nach M?glichkeit
+`load-failed-timeline.json`; schon geschriebene Stichproben bleiben erhalten.
+
+Der Bericht trennt Navigationsbeginn ? Boot-Reveal (einschlie?lich initialer Module,
+Verbindung und Fade), World-Aufbau ? lokale Ready-Barriere, World-Aufbau ? erste beobachtete
+Reveal-Freigabe und Auftrag ? spielbar (einschlie?lich regul?rem Countdown). Reveal-Freigabe
+wird bei Maps im 100-ms-Takt beobachtet; sie ist kein Screenshot und misst nicht das Ende
+eines UI-Fades. Der rAF-Check endet nach Aufbau/Ready/Reveal-Freigabe, nicht erst nach dem
+Countdown. Median-fps unter 20, verdeckte Dokumente, falsche Aufl?sung oder unvollst?ndige
+Stichproben machen den Lauf ung?ltig: Rohdaten bleiben, alle Median/p95-Aggregate schlie?en
+ihn aus, der Runner endet mit Fehlerstatus. Effektive FPS, Anfangs-/Endl?cken und Intervall-p95
+helfen, l?ngere Einzelpausen zu erkennen, die der Median allein nicht zeigt.
+
+Downloadgruppen enthalten Transfer-/HTTP-Bodybytes und Zeitspannen; warme Cachetreffer
+k?nnen Transferbytes 0 melden. Map-Gruppen verwenden das A1-World-Aufbaufenster, Bootgruppen
+die Navigation. Zus?tzlich liegen rohe Resource-Timings ab Ladeauftrag vor. Worker-interne
+Imports bleiben au?erhalb der Hauptseiten-Resource-Timeline. CPU-, Worker- und verstrichene
+Abschnitte k?nnen ?berlappen und d?rfen nicht zur Gesamtdauer addiert werden. Jede Phase
+nennt ihre zuletzt erf?llten Barrieren. Ladeberichte werden ?ber ihre JSON-Phasen verglichen;
+`perf:compare` bleibt f?r die bisherigen Trace-Berichte zust?ndig.
+
+### Einordnung der Loader-Attribution
+
+`loader-process/json/other` kann die beiden bereits als Objekt ?bergebenen Atlas-JSONs aus
+`preloadHudFrameAssets` und `preloadRadialWheelAssets` betreffen. Phasers `JSONFile`
+?berspringt daf?r JSON.parse; `MultiFile.pendingDestroy` meldet filecomplete erst nach dem
+vollst?ndigen Atlas einschlie?lich PNG. A1 misst load ? filecomplete: somit Wartezeit auf
+Partnerbild/Decode/Cache, keine isolierte JSON-Parsezeit. Der dritte Atlas `dachs_death`
+l?dt dagegen externes JSON unter `assets/player`.
+
+Die Desktop-Vorgabe von Phaser ist `loaderMaxParallelDownloads = 32`; das Spiel ?berschreibt
+sie nicht. `LoaderPlugin.update` f?llt die Warteschlange im Scene-Update nach,
+`nextFile` st??t die n?chste Downloadwelle nicht selbst an. 748 Spritebilder brauchen
+somit rechnerisch mindestens 24 volle Wellen allein f?r diese Gruppe; andere Dateien teilen
+die Queue. Ein gedrosselter Sekundentakt kann die beobachtete Streckung ?ber etwa 21 Sekunden
+erkl?ren, beweist aber keinen entsprechenden Netzwerk- oder Decode-Aufwand im ungedrosselten
+Spiel. Loader-Parallelit?t und Assets bleiben f?r diese Messrunde unver?ndert.

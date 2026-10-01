@@ -13,6 +13,7 @@ import { acquireOwned, preserveFailedChromeTrace, transferChromeTrace, readBrows
 import { createBuildStorage, checkDiskSpace, MINIMUM_FREE_BYTES, DISK_HEADROOM_BYTES } from './storage.mjs';
 
 import { parsePerformanceOptions } from './options.mjs';
+import { LOAD_VIEWPORT, runLoadMeasurements } from './load.mjs';
 
 const request = { schemaVersion: 1, runId: `${new Date().toISOString().replaceAll(':', '-')}-${randomUUID().slice(0, 8)}`, ...parsePerformanceOptions(process.argv.slice(2)) };
 const root = resolve('.');
@@ -129,7 +130,10 @@ async function run() {
       if (!file.startsWith(site + sep)) { res.writeHead(403).end(); return; }
       try {
         const size = (await stat(file)).size;
-        res.writeHead(200, { 'content-type': mime[extname(file)] ?? 'application/octet-stream', 'content-length': size });
+        // Immutable build URL; explicit HTTP cache semantics make warm reloads reproducible.
+        const cache = request.load ? { 'cache-control': 'public, max-age=31536000, immutable', etag: `"${manifest.sourceHash}-${size}"` } : {};
+        if (request.load && req.headers['if-none-match'] === cache.etag) { res.writeHead(304, cache).end(); return; }
+        res.writeHead(200, { 'content-type': mime[extname(file)] ?? 'application/octet-stream', 'content-length': size, ...cache });
         createReadStream(file).on('error', () => res.destroy()).pipe(res);
       } catch { res.writeHead(404).end(); }
     })().catch(() => res.writeHead(500).end());
@@ -138,11 +142,17 @@ async function run() {
   const url = `http://127.0.0.1:${server.address().port}/`;
   const launchOptions = { channel: 'chrome', headless: false, args: ['--window-size=1940,1160', '--enable-automation'],
     ignoreDefaultArgs: ['--mute-audio', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] };
+  if (request.load) {
+    launchOptions.headless = request.headless;
+    launchOptions.args = ['--window-size=1684,1016', '--enable-automation', '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'];
+    launchOptions.ignoreDefaultArgs = ['--mute-audio', '--autoplay-policy=no-user-gesture-required'];
+  }
   manifest.launchOptions = launchOptions;
   browser = await acquireOwned(() => chromium.launch(launchOptions),
     resource => bounded(resource.close(), 10_000, 'Late browser close timeout'), abortController.signal);
   manifest.browserVersion = browser.version();
-  context = await acquireOwned(() => browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 }),
+  context = await acquireOwned(() => browser.newContext({ viewport: request.load ? LOAD_VIEWPORT : { width: 1920, height: 1080 }, deviceScaleFactor: 1 }),
     resource => bounded(resource.close(), 5000, 'Late context close timeout'), abortController.signal);
   await context.addInitScript(req => { window.__FD_PERF_REQUEST__ = req; }, request);
   const page = await context.newPage();
@@ -187,6 +197,25 @@ async function run() {
     devices: manifest.gpu.devices, renderer: manifest.gpu.auxAttributes?.glRenderer,
     vendor: manifest.gpu.auxAttributes?.glVendor,
   } : 'unavailable';
+  if (request.load) {
+    manifest.status = 'measuring-load';
+    manifest.environment = { build: 'performance-lab', quality: 'high', viewport: LOAD_VIEWPORT, network: request.network };
+    await saveManifest();
+    const result = await runLoadMeasurements({ page, context, url, directory, request, signal: abortController.signal });
+    clearInterval(statusTimer);
+    await context.close(); context = null;
+    await browser.close(); browser = null;
+    manifest.validSamples = result.samples.filter(s => s.valid).length;
+    manifest.invalidSamples = result.samples.length - manifest.validSamples;
+    await writeFile(join(directory, 'console.json'), JSON.stringify(consoleMessages, null, 2));
+    if (consoleMessages.some(m => m.type === 'pageerror' || m.type === 'error')) throw new Error('Browser errors; see console.json');
+    if (manifest.invalidSamples) throw new Error(`${manifest.invalidSamples} invalid loading samples; see load-summary.md`);
+    abortController.signal.throwIfAborted();
+    manifest.status = 'complete'; manifest.completedAt = new Date().toISOString();
+    await saveManifest();
+    console.log(`Fertig: ${join(directory, 'load-summary.md')}`);
+    return;
+  }
   manifest.captureProfileVersion = 6;
   const categories = ['devtools.timeline', 'blink.user_timing', 'v8'];
   if (request.captureProfile === 'standard') categories.push('disabled-by-default-v8.cpu_profiler');

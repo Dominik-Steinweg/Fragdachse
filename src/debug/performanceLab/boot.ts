@@ -10,6 +10,7 @@ let controller: { update(now: number): void; cancel(reason: string): void } | nu
 let createPort: (() => Promise<PerformanceLabGamePort>) | null = null;
 let disposers: (() => void)[] = [];
 let stopCapture: (() => void) | null = null;
+let loadPort: PerformanceLabGamePort | null = null;
 
 export function labMarker(name: string): number {
   const atMs = performance.now();
@@ -24,7 +25,7 @@ export function failPerformanceLab(error: unknown): void {
     window.__FD_PERF__.state = 'failed';
     window.__FD_PERF__.error = message;
   }
-  try { controller?.cancel(message); }
+  try { controller?.cancel(message); const port = loadPort; loadPort = null; port?.discard(); }
   catch (cleanupError) { if (window.__FD_PERF__) window.__FD_PERF__.error += `; Cleanup: ${String(cleanupError)}`; }
   finally {
     try { stopCapture?.(); } finally {
@@ -45,7 +46,7 @@ export function beginPerformanceBoot(): void {
 
 export function startPerformanceCapture(diagnostics: ArenaDiagnosticsController): void {
   const request = window.__FD_PERF_REQUEST__;
-  if (!request) return;
+  if (!request || request.load) return;
   diagnostics.startScenarioRecording({ runId: request.runId, participantId: 'local-host', role: 'host',
     captureProfile: request.captureProfile }, { maxFrames: 2_000_000, maxDurationMs: request.timeoutMs });
   stopCapture = () => { diagnostics.stopScenarioRecording(); };
@@ -55,6 +56,29 @@ export function startPerformanceCapture(diagnostics: ArenaDiagnosticsController)
 export function attachPerformanceLab(factory: () => Promise<PerformanceLabGamePort>, audioState: () => string): void {
   createPort = factory;
   if (window.__FD_PERF__) window.__FD_PERF__.audioState = audioState;
+  if (window.__FD_PERF_REQUEST__?.load && window.__FD_PERF__) {
+    window.__FD_PERF__.prepareLoad = async () => {
+      const state = window.__FD_PERF__!;
+      if (loadPort) return;
+      if (state.state !== 'awaiting-audio' || audioState() !== 'running') throw new Error('Load probe needs revealed lobby and unlocked audio');
+      state.state = 'loading-probe';
+      const [{ buildPerformanceLoadout }, port] = await Promise.all([import('./loadouts'), factory()]);
+      if (window.__FD_PERF__?.state === 'failed') { port.discard(); return; }
+      if (!port.readLoadingState) { port.discard(); throw new Error('Build has no loading-state port'); }
+      loadPort = port;
+      const commit = buildPerformanceLoadout('GLOCK').commit;
+      state.load = {
+        start: mapId => {
+          if (!['1', '7', '15'].includes(mapId)) throw new Error('Unsupported loading map');
+          if (!port.isLobbyReady()) throw new Error('Load probe requires a ready lobby');
+          port.start(mapId, 12345, commit);
+        },
+        lobby: () => port.discard(),
+        status: () => ({ ready: port.isReady(), lobbyReady: port.isLobbyReady(), ...port.readLoadingState!() }),
+      };
+      state.state = 'load-ready';
+    };
+  }
 }
 
 export function performanceLobbyRevealed(): void {
@@ -70,6 +94,7 @@ export function updatePerformanceLab(): void {
   if (!state || !request || state.state === 'failed' || state.state === 'complete') return;
   try {
     if (performance.now() > request.timeoutMs) throw new Error('Performance-Lab: Gesamt-Timeout');
+    if (request.load) return;
     if (controller) { controller.update(performance.now()); return; }
     if (lobbyRevealedAt === null || !createPort || !startRequested || state.audioState?.() !== 'running') return;
     if (lobbyStartedAt === null) {

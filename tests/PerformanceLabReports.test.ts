@@ -373,3 +373,23 @@ describe('Performance lab offline evidence', () => {
     await expect(analyzeTrace([{ name: 'anything' }], {}, [], undefined, controller.signal)).rejects.toThrow('Technical timeout');
   });
 });
+
+
+it('validates load mode and excludes throttled evidence from all aggregates', async () => {
+  const { rafEvidence, summarizeLoadSamples, LOAD_VIEWPORT } = await import('../scripts/performance/load.mjs');
+  expect(parsePerformanceOptions(['--load'])).toMatchObject({ load: true, runs: 5, network: 'local', headless: false });
+  expect(parsePerformanceOptions(['--runs', '2', '--load', '--network', '50mbps', '--headless', 'on'])).toMatchObject({ runs: 2, network: '50mbps', headless: true });
+  for (const args of [['--runs','5'],['--load','--runs','0'],['--load','--case','weapon.glock'],['--load','--network','bad']]) expect(() => parsePerformanceOptions(args)).toThrow();
+  const probe = { viewport: { ...LOAD_VIEWPORT, dpr: 1 }, hidden: [], truncated: false, times: [0,16,32,48,64] };
+  expect(rafEvidence(probe,0,64).errors).toEqual([]);
+  expect(rafEvidence({ ...probe, times: [0,1000,2000,3000,4000] },0,4000).errors).toContain('Median rAF below 20 fps: throttled or overloaded');
+  expect(rafEvidence({ ...probe, hidden: [{ hidden: true }], truncated: true },0,64).errors).toHaveLength(2);
+  const good = { iteration: 1, phase: 'cold-lobby', valid: true, bootRevealMs: 100, worldReadyMs: 40,
+    resources: { groups: [{ group: 'sprites', transferBytes: 42, encodedBytes: 40, requests: 1, wallSpanMs: 5 }] },
+    raf: { medianFps: 60 }, lastFulfilled: ['world:render'], sections: [{ scope: 'world', name: 'bake', kind: 'cpu-submit', totalMs: 3 }] };
+  const results = summarizeLoadSamples([good, { ...good, iteration: 2, bootRevealMs: 200 }, { ...good, valid: false, bootRevealMs: 50_000 }]);
+  expect(results[0]).toMatchObject({ valid: 2, invalid: 1, bootRevealMs: { median: 100, p95: 200 } });
+  expect(results[0].downloads[0].transferBytes.count).toBe(2);
+  expect(results[0].topSections[0].durationMs.count).toBe(2);
+  expect(summarizeLoadSamples([{ ...good, valid: false }])[0].bootRevealMs).toBeNull();
+});

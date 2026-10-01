@@ -11,6 +11,8 @@ export interface PerformanceRunRequest {
   /** Controlled visual ablation, with identical enemy simulation and assets. */
   enemyEyes?: 'on' | 'off';
   timeOfDayMinutes?: number;
+  /** Loading attribution without combat fixtures or frame recording. */
+  load?: boolean;
 }
 export interface PerformanceWindow {
   id: string;
@@ -33,6 +35,7 @@ export interface PerformanceLabGamePort {
   start(mapId: string, seed: number, commit: LoadoutCommitSnapshot): void;
   isReady(): boolean;
   isLobbyReady(): boolean;
+  readLoadingState?(): { worldId: string | null; revealReady: boolean };
   prepareTargets(): void;
   prepareCase?(test: PerformanceCase, markPreparation?: (name: string) => void): boolean | void;
   updateCase?(test: PerformanceCase, elapsedMs: number, stage?: 'measure' | 'tail', durationMs?: number): void;
@@ -82,6 +85,12 @@ declare global {
       audioState?: () => string;
       start: () => void;
       cancel: (reason: string) => void;
+      prepareLoad?: () => Promise<void>;
+      load?: {
+        start: (mapId: string) => void;
+        lobby: () => void;
+        status: () => { ready: boolean; lobbyReady: boolean; worldId: string | null; revealReady: boolean };
+      };
     };
   }
 }
