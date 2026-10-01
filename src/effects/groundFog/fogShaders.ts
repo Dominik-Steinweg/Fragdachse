@@ -215,7 +215,7 @@ ${SUN_COMPOSITE_FACTOR_GLSL}
 vec4 lightFog(vec4 fog,vec2 world) {
  if(fog.a<=0.0)return fog;
  // Material optics only: preserve premultiplied colour and alpha, wakes and density.
- float v=0.0;
+ float v=0.0;vec2 cloudLight=vec2(0.0);
  float day=uSunComposite*smoothstep(0.0,.15,uSceneSun);
  float waterWeight=0.0;
  vec3 fogComposite=vec3(1.0);
@@ -225,7 +225,7 @@ vec4 lightFog(vec4 fog,vec2 world) {
    fog.b=mix(.81,.88,structure)*fog.a;
  }
  if(day>0.0) {
-   v=sunVolumeVisibility(world);
+   cloudLight=sunLightSample(world);v=cloudLight.r;
    // Solar visibility changes radiance below, never optical coverage.
    if(uFogBankMetadata<.5)fog*=mix(1.0,uSunFogOpacity,day);
  }
@@ -252,8 +252,11 @@ vec4 lightFog(vec4 fog,vec2 world) {
      }
      // Cancel the exact shared ground factor. Fog scatters the same smooth
      // opening once; no leaf texture or separate volumetric pass contributes.
-     float ground=sunVisibility(world);
-     vec3 factor=sunCompositeFactor(uCompositeShade,uCompositeDaylight,uCompositeSun,ground,amount,atmosphereDither(world));
+     float ground=cloudLight.r;
+     float spot=cloudLight.g;
+     float spotWarmth=clamp((uCompositeSun.r-uCompositeSun.b)*2.0,0.0,1.0);
+     scattering*=vec3(1.0)+vec3(.25+.15*spotWarmth,.25,.25-.15*spotWarmth)*(spot*uCloudSpotAmount*amount);
+     vec3 factor=sunCompositeFactor(uCompositeShade,uCompositeDaylight,uCompositeSun,ground,amount,atmosphereDither(world),spot,uCloudSpotAmount*uCloudCached);
      fogComposite=max(vec3(.05),factor);
      fog.rgb=mix(fog.rgb,scattering*fog.a,amount)/max(vec3(.05),factor);
    }

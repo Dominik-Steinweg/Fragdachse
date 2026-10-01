@@ -16,8 +16,11 @@ describe('isolated scenario rock damage port',()=>{
     expect(port.destroyRock(6)).toBe(true);
     expect(damage).toHaveBeenCalledWith('rock',6,75,'local','dev-scenario.single-rock');
     expect(port.destroyRock(5)).toBe(false);expect(damage).toHaveBeenCalledOnce();
-    authority.host=false;
+    expect(port.destroyRocksNear(5,4,2)).toEqual([6]);
+    expect(damage).toHaveBeenLastCalledWith('rock',6,75,'local','dev-scenario.rock-explosion');
+    damage.mockClear();authority.host=false;
+    expect(()=>port.destroyRocksNear(5,4,2)).toThrow('Isolated dev host required');
     expect(()=>port.destroyRock(6)).toThrow('Isolated dev host required');
-    expect(damage).toHaveBeenCalledOnce();authority.host=true;
+    expect(damage).not.toHaveBeenCalled();authority.host=true;
   });
 });

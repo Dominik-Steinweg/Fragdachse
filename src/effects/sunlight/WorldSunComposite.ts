@@ -1,5 +1,6 @@
 import {getVisibleWorldView,createVisibleWorldView} from '../../graphics/CameraWorldView';
 import { SunRenderTarget, ownSunShader, sunShaderName } from './SunRenderTarget';
+import type { SunCanopy } from './SunCanopyMask';
 import { CloudFieldTexture } from './CloudFieldTexture';
 import { sunRenderWorld, sunRenderSize } from './SunRenderQuality';
 import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
@@ -29,7 +30,8 @@ uniform vec3 uSunShade,uSunDaylight,uSunLit;
 void main() {
   // The half-scale source needs one LSB of noise to decorrelate successive MULTIPLY stages.
   // Exactly neutral at strength zero; stable world pixels, no temporal sparkle.
-  vec3 factor=sunCompositeFactor(uSunShade,uSunDaylight,uSunLit,sunVisibility(worldPosition()),uSunStrength,atmosphereDither(worldPosition()));
+  vec2 light=sunLightSample(worldPosition());
+  vec3 factor=sunCompositeFactor(uSunShade,uSunDaylight,uSunLit,light.r,uSunStrength,atmosphereDither(worldPosition()),light.g,uCloudSpotAmount*uCloudCached);
   gl_FragColor=vec4(clamp(factor*0.5+vec3(.5/255.0),0.0,1.0),0.5);
 }`;
 const modulateModes = new WeakMap<Phaser.Renderer.WebGL.WebGLRenderer, number>();
@@ -55,8 +57,8 @@ export class WorldSunComposite {
   private readonly cloudField: CloudFieldTexture | null;
   private readonly sizes = { composite: [0,0] };
   constructor(private readonly scene: Phaser.Scene, private readonly tuning: SunTuning,
-    private readonly sun: RockLightingState, private readonly clouds?: SunCloudState) {
-    this.cloudField=clouds?new CloudFieldTexture(scene,clouds):null;
+    private readonly sun: RockLightingState, private readonly clouds?: SunCloudState,canopies:readonly SunCanopy[]=[]) {
+    this.cloudField=clouds?new CloudFieldTexture(scene,clouds,canopies):null;
   }
   prepareClouds(x:number,y:number,width:number,height:number):void { this.cloudField?.update(x,y,width,height); }
   get diagnostics() { return { quality:getGraphicsQualityProfile(this.scene).level,

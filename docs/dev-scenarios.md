@@ -189,6 +189,10 @@ dev.run({ action: 'options', values: { timeOfDay: 720 } });
 dev.run({ action: 'sunTuning', values: { cloudWarp: .65, cloudSoftness: .25 } });
 dev.run({ action: 'sunTuning', reset: true });
 dev.run({ action: 'measureWorldLighting', mode: 'stationary' });
+// Several rocks through the same authoritative damage path (isolated dev host).
+// Set the target inside a formation; grid multiples of 16 exercise chunk borders.
+dev.run({ action: 'target', gridX: 16, gridY: 16 });
+dev.run({ action: 'measureWorldLighting', mode: 'explosion', radius: 2.5 });
 // Nach Abschluss: Messung mit Qualitätsstufe und tatsächlichen Rendergrößen.
 const measurement = dev.status().worldLightingMeasurement;
 ```
@@ -203,7 +207,7 @@ Das Wolkenfeld bleibt in Weltkoordinaten verankert. `cloudCover` und `cloudDensi
 Bedeckung und Kontrast, `cloudScale` die Größe, `cloudWarp` die Form und `cloudSoftness` die weichen Ränder.
 `shade`, `daylight` und `sun` steuern getrennt k�hlen Wolkenschatten, neutrales Tageslicht und warme Licht�ffnungen.
 `fogShade` und `fogSun` f�rben nur die Nebelradiance; Dichte und Fl�chenbudget �ndern sich dadurch nicht.
-`cloudSpotAmount` (Standard `.22`, aus: `0`) und `cloudSpotScale` (Standard `180` Weltpx, Bereich `80�300`) steuern die kleineren Licht�ffnungen.
+`cloudSpotAmount` (Standard `.28`, aus: `0`) und `cloudSpotScale` (Standard `130` Weltpx, Bereich `80�300`) steuern die kleineren Licht�ffnungen.
 `cloudSpeed`, `cloudEvolution` und `cloudGust` steuern Drift und Formwandel über die pausierbare Präsentationszeit.
 Die Felddiagnose meldet Breite, Höhe, RGBA-Bytes und Weltpixel je Texel; die Auflösung folgt der Grafikqualität.
 Rezepte mit entfernten Lichtvergleichsfeldern oder Strahlen-/Bandparametern werden mit Hinweis abgelehnt.

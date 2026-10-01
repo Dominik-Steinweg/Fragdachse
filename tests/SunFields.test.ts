@@ -116,3 +116,27 @@ it('adds bounded smaller openings with negligible mean exposure shift and stable
   expect(Math.abs(delta/n)).toBeLessThan(.02);if(t.cloudCover>0)expect(changes/n).toBeGreaterThan(.005);else expect(changes).toBe(0);
  }
 });
+
+it('gives small openings visible local contrast while bounding average exposure and preserving night',async()=>{
+ const {cloudSmallOpeningAt}=await import('../src/effects/sunlight/SunFieldModel');
+ const {sunCompositeFactor}=await import('../src/effects/sunlight/sunVisibility');
+ const {resolveSunAtmosphere}=await import('../src/effects/sunlight/SunAtmosphere');
+ const t=createSunTuning(),state={tuning:t,timeSec:30,strength:1,sunPath:createSunPath()},out=[0,0,0];
+ const luma=()=>out[0]*.2126+out[1]*.7152+out[2]*.0722;
+ for(const minute of [0,480,600,720,1020,1155]){
+  resolveSunAtmosphere(minute,t);state.strength=resolveSunPath(minute,null,state.sunPath).strength;
+  let before=0,after=0,peak=1;
+  for(let y=-2000;y<2000;y+=39)for(let x=-2000;x<2000;x+=37){
+   const spot=cloudSmallOpeningAt(x,y,state),visibility=sunlightAt(x,y,state);
+   expect(cloudSmallOpeningAt(x,y,state,0)).toBe(0);
+   expect(cloudSmallOpeningAt(x,y,state)).toBe(spot);
+   state.sunPath.azimuth+=37;expect(cloudSmallOpeningAt(x,y,state)).toBe(spot);
+   sunCompositeFactor(out,t.shade,t.daylight,t.sun,visibility,state.strength);const base=luma();before+=base;
+   sunCompositeFactor(out,t.shade,t.daylight,t.sun,visibility,state.strength,0,spot,t.cloudCover>0?t.cloudSpotAmount:0);
+   after+=luma();peak=Math.max(peak,luma()/base);
+   if(!state.strength)expect(out).toEqual([1,1,1]);
+  }
+  if(state.strength>.99){expect(peak).toBeGreaterThan(1.15);expect(peak).toBeLessThan(1.35);}
+  expect(Math.abs(after/before-1)).toBeLessThan(.04);
+ }
+});

@@ -109,7 +109,7 @@ export class DevScenarioController {
     this.worldLighting.tuneSun(patch,reset);
     if (this.clock.paused) this.step();
   }
-  measureWorldLighting(mode: 'stationary' | 'destruction' | 'traverse' | 'walk' = 'stationary'): void {
+  measureWorldLighting(mode: 'stationary' | 'destruction' | 'explosion' | 'traverse' | 'walk' = 'stationary',radius=2.5): void {
     this.requireReady(); if (this.clock.paused) this.resume();
     this.stop();
     this.worldLighting ??= new WorldLightingMeasurement(this.scene, () => this.runtime.getScenarioLightingTargets());
@@ -118,11 +118,12 @@ export class DevScenarioController {
     const savedAim={...this.aim},savedFocus=this.cameraAtTarget;
     const restore=()=>{this.aim=savedAim;this.cameraAtTarget=savedFocus;this.syncCamera();};
     const pending=()=>{const loading=this.runtime.getScenarioLoadingState();return (loading.ground?.pendingWork??0)>0||(loading.overlay?.pendingWork??0)>0;};
-    if(mode==='destruction') {
+    if(mode==='destruction'||mode==='explosion') {
       const rock=this.runtime.devScenarioPort.findDestructibleRock(this.aim.gridX,this.aim.gridY);
       if(!rock)throw new Error('Kein zerstörbarer Fels innerhalb von 8 Zellen um das Ziel.');
       this.aim={gridX:rock.gridX,gridY:rock.gridY};this.cameraAtTarget=true;this.syncCamera();
       this.worldLighting.measure({mode,durationMs:5000,restore,pending,advance:()=>{},start:()=>{
+        if(mode==='explosion'){const ids=this.runtime.devScenarioPort.destroyRocksNear(rock.gridX,rock.gridY,radius);return {rockIds:ids,gridX:rock.gridX,gridY:rock.gridY,radius,authoritative:true};}
         if(!this.runtime.devScenarioPort.destroyRock(rock.id))throw new Error('Der ausgewählte Fels wurde nicht autoritativ zerstört.');
         return {rockId:rock.id,gridX:rock.gridX,gridY:rock.gridY,authoritative:true};
       }});

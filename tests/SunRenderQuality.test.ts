@@ -15,6 +15,7 @@ vi.mock('phaser',()=>({BlendModes:{SCREEN:3},Textures:{FilterMode:{LINEAR:0}},Ut
     once(_e:string,f:()=>void){this.callbacks.push(f);return this;}
     setRenderToTexture(){this.renderToTexture=true;this.glTexture={};this.texture={get:()=>({source:{glTexture:this.glTexture}}),setFilter:vi.fn(),destroy:vi.fn()};this.drawingContext={state:{blend:{}},camera:{destroy:vi.fn()},destroy:vi.fn()};return this;}
     renderWebGLStep(){this.renderNode.run();}
+    setTextures(textures:any[]){this.textures=textures;return this;}
     setOrigin(){return this;}setScrollFactor(){return this;}setDepth(){return this;}setBlendMode(){return this;}
     setPosition(){return this;}setSize(w:number,h:number){this.width=w;this.height=h;return this;}
     destroy(){if(this.destroyed)return;this.destroyed=true;for(const f of this.callbacks)f();this.texture?.destroy();this.drawingContext?.destroy();}
@@ -30,16 +31,16 @@ import { VEGETATION_LIGHT_HEADER, VEGETATION_LIGHT_PROCESS } from '../src/effect
 import { CLOUD_FIELD_FRAGMENT } from '../src/effects/sunlight/CloudFieldTexture';
 import type { SunCloudState } from '../src/effects/sunlight/cloudShadow';
 
-function fixture(){
+function fixture(canopies:any[]=[]){
   fake.shaders.length=0;
   const renderer={gl:{DST_COLOR:1,SRC_COLOR:2,FUNC_ADD:3,MAX_TEXTURE_IMAGE_UNITS:4,CLAMP_TO_EDGE:33071,LINEAR:9729,TEXTURE_2D:3553,TEXTURE_WRAP_S:10242,TEXTURE_WRAP_T:10243,TEXTURE_MIN_FILTER:10241,TEXTURE_MAG_FILTER:10240,texParameteri:vi.fn(),getParameter:()=>16},
-    blendModes:[],addBlendMode:vi.fn(),glVAOWrappers:[],deleteBuffer:vi.fn(),deleteProgram:vi.fn(),shaderProgramFactory:{programs:{}},
+    createTexture2D:vi.fn(()=>({})),blendModes:[],addBlendMode:vi.fn(),glVAOWrappers:[],deleteBuffer:vi.fn(),deleteProgram:vi.fn(),shaderProgramFactory:{programs:{}},
     glTextureUnits:{bind:vi.fn()},glWrapper:{update:vi.fn()},renderNodes:{finishBatch:vi.fn()}};
   const source={glTexture:{}},texture={source:[source],get:()=>({source})};
-  const scene={sys:{renderer},textures:{get:()=>texture},add:{particles:vi.fn(),existing:(x:any)=>x}};
+  const scene={sys:{renderer},textures:{get:()=>texture,addGLTexture:vi.fn((key:string)=>({...texture,key})),remove:vi.fn()},add:{particles:vi.fn(),existing:(x:any)=>x}};
   const quality=new GraphicsQualityController();quality.attach(scene as never);
   const tuning=createSunTuning(),clouds:SunCloudState={tuning,timeSec:0,strength:1,sunPath:createSunPath()};
-  const owner=new WorldSunComposite(scene as never,tuning,{enabled:true,normals:false,strength:1,sun:[0,0,1]},clouds);
+  const owner=new WorldSunComposite(scene as never,tuning,{enabled:true,normals:false,strength:1,sun:[0,0,1]},clouds,canopies);
   return {renderer,scene,quality,owner,clouds};
 }
 describe('reduced sunlight resources',()=>{
@@ -178,4 +179,13 @@ it('enforces sampling after renderWebGLStep performs its deferred resize',async(
  expect(shader.glTexture.wrapT).toBe(f.renderer.gl.CLAMP_TO_EDGE);
  expect(shader.glTexture.minFilter).toBe(f.renderer.gl.LINEAR);
  target.destroy();f.owner.destroy();f.quality.destroy();
+});
+
+it('owns one static canopy exclusion, keeps it across quality changes and releases it on teardown',()=>{
+ const f=fixture([{worldX:150,worldY:150,gfx:{displayWidth:200,displayHeight:200}}]);
+ f.owner.prepareClouds(0,0,1000,1000);expect(f.renderer.createTexture2D).toHaveBeenCalledOnce();
+ expect(f.owner.diagnostics.clouds!.canopyBytes).toBeGreaterThan(0);
+ for(const q of ['low','high'] as const){f.quality.setLevel(q);f.clouds.timeSec+=1;f.owner.prepareClouds(0,0,1000,1000);}
+ expect(f.renderer.createTexture2D).toHaveBeenCalledOnce();
+ f.owner.destroy();f.owner.destroy();expect(f.scene.textures.remove).toHaveBeenCalledOnce();f.quality.destroy();
 });

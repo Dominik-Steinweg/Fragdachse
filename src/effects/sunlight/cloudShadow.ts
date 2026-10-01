@@ -27,9 +27,9 @@ float cloudTravel(float timeSec,float speed) {
 uniform sampler2D uCloudField;
 uniform vec4 uCloudWorld;
 uniform float uCloudCached;
-float cloudShadowAnalytic(vec2 world,float timeSec) {
-  if(uCloudCover<=0.0||uCloudStrength<=0.0)return 1.0;
-  if(uCloudCover>=1.0)return 0.0;
+vec2 cloudLightAnalytic(vec2 world,float timeSec) {
+  if(uCloudCover<=0.0||uCloudStrength<=0.0)return vec2(1.0,0.0);
+  if(uCloudCover>=1.0)return vec2(0.0);
   vec2 drift=vec2(1.0,.23)*cloudTravel(timeSec,uCloudSpeed);
   vec2 p=(world-drift)/max(500.0,uCloudScale);
   vec2 shear=timeSec*vec2(.009,-.006)*uCloudEvolution;
@@ -41,10 +41,13 @@ float cloudShadowAnalytic(vec2 world,float timeSec) {
   float opening=smoothstep(threshold-uCloudSoftness,threshold+uCloudSoftness,field);
   // Small irregular openings follow the same wind/warp, never the sun azimuth.
   // Zero at fully shaded/clear endpoints; both lifts and dips retain mean exposure.
-  float spot=smoothstep(.40,.78,cloudNoise(p*(max(500.0,uCloudScale)/max(80.0,uCloudSpotScale))+warp*.8+vec2(53.2,17.8)));
+  float detail=cloudNoise(p*(max(500.0,uCloudScale)/max(80.0,uCloudSpotScale))+warp*.8+vec2(53.2,17.8));
+  float spot=smoothstep(.40,.78,detail);
+  float smallOpening=smoothstep(.54,.78,detail)*(.65+.35*smoothstep(.10,.60,opening));
   opening=clamp(opening+uCloudSpotAmount*(spot-.40)*4.0*opening*(1.0-opening),0.0,1.0);
-  return mix(1.0,opening,smoothstep(0.0,.12,uCloudCover))*(1.0-smoothstep(.88,1.0,uCloudCover));
+  return vec2(mix(1.0,opening,smoothstep(0.0,.12,uCloudCover))*(1.0-smoothstep(.88,1.0,uCloudCover)),smallOpening);
 }
+float cloudShadowAnalytic(vec2 world,float timeSec) {return cloudLightAnalytic(world,timeSec).r;}
 float cloudShadow(vec2 world,float timeSec) {
   if(uCloudCover<=0.0||uCloudStrength<=0.0)return 1.0;
   if(uCloudCover>=1.0)return 0.0;

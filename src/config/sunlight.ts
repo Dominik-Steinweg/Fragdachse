@@ -26,7 +26,7 @@ export const SUN_TUNING_DEFAULTS = {
   fogMaxCover: .33, fogWaterMaxCover: .16, fogScatterBudget: .025,
   fogPileSoftness: 22, fogScatter: .22, fogDensity: .55,
   cloudCover: 0.35, cloudDensity: 0.5, cloudSpeed: 18, cloudScale: 900,
-  cloudSpotAmount: .22, cloudSpotScale: 180,
+  cloudSpotAmount: .28, cloudSpotScale: 130,
   cloudEvolution: .32, cloudGust: .18, cloudWarp: .65, cloudSoftness: .25,
   cloudCanopyShade: [0.72, 0.76, 0.82] as readonly number[],
   rockEdgeFlora: 1, rockCreviceFlora: 1, rockFootFlora: 1,

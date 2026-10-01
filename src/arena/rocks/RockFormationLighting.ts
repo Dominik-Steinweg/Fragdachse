@@ -1,3 +1,4 @@
+import { RockGroundEstimate } from './RockGroundEstimate';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { WOODLAND_ROCK_COLOUR_KEY, WOODLAND_TRANSMISSION_KEY } from '../../assets/WoodlandAssetManifest';
 import { WOODLAND_ROCK_COVERAGE_KEY, WOODLAND_ROCK_HEIGHT_KEY } from '../../assets/WoodlandAssetManifest';
@@ -43,6 +44,8 @@ const snapshot=(s: RockVisualState): FormationRock => ({id:s.id,gridX:s.gridX,gr
  * vegetation and its ground shadow. Workers build static data; each frame draws
  * only two quads and updates uniforms. The existing lightmap still colours once. */
 export class RockFormationLighting {
+  private readonly groundEstimate:RockGroundEstimate;
+  private readonly estimatedGround=new Float64Array(5);
   private readonly field: FormationDataTexture;
   private readonly occlusion: FormationDataTexture;
   private readonly lookup: FormationDataTexture;
@@ -90,6 +93,7 @@ export class RockFormationLighting {
   constructor(private readonly scene: Phaser.Scene, private readonly frame: RockWorldFrame,
     private readonly states: readonly (RockVisualState | undefined)[], private readonly state: RockLightingState,
     private readonly heightTextureKey = WOODLAND_ROCK_HEIGHT_KEY) {
+    this.groundEstimate=new RockGroundEstimate(frame.width,frame.height,states);
     this.frameUniform=new Float32Array([frame.offsetX,frame.offsetY,frame.width,frame.height]);
     const prefix=`__rock_formation_${nextId++}_`;
     // Every mineral atlas preserves this original coverage, including 2x colour.
@@ -200,7 +204,16 @@ export class RockFormationLighting {
         eraseX0=Math.min(eraseX0,x0);eraseY0=Math.min(eraseY0,y0);
         eraseX1=Math.max(eraseX1,x1);eraseY1=Math.max(eraseY1,y1);
         for(let py=y0;py<y1;py++)for(let px=x0;px<x1;px++) {
-          const p=(py*FORMATION_SIDE+px)*4;r.data[p+3]=0;
+          const p=(py*FORMATION_SIDE+px)*4;r.data[p]=128;r.data[p+1]=128;r.data[p+3]=0;
+          const e=this.estimatedGround;
+          this.groundEstimate.sample(e,r.cx*FORMATION.chunk+(px-FORMATION.gutter+.5)*FORMATION.step,
+            r.cy*FORMATION.chunk+(py-FORMATION.gutter+.5)*FORMATION.step,this.azimuth,36+(this.rim?.rockRimHeight??0));
+          r.data[p+2]=Math.round(e[0]*255/(Math.PI/2));
+          if(r.occlusion){r.occlusion[p]=Math.round(e[3]*255);r.occlusion[p+1]=Math.round(e[1]*255/(Math.PI/2));
+            r.occlusion[p+2]=Math.round(e[2]*255/(Math.PI/2));r.occlusion[p+3]=Math.round(e[4]*255);}
+          // An interrupted sun transition must not blend the old bright rock top back in.
+          if(r.previous&&r.occlusion){r.previous[p]=r.data[p+2];r.previous[p+1]=r.occlusion[p+1];
+            r.previous[p+2]=r.occlusion[p+2];r.previous[p+3]=r.occlusion[p+3];}
           erased=true;
         }
       }
@@ -217,7 +230,8 @@ export class RockFormationLighting {
           this.uploadBytes+=patch.byteLength;this.eraseUploadBytes+=patch.byteLength;
         };
         uploadRect(this.field,r.data);
-        // Keep AO/horizons until the revision-matched result; clearing them makes bright floor squares.
+        if(r.occlusion)uploadRect(this.occlusion,r.occlusion);
+        if(r.previous&&this.previous)uploadRect(this.previous,r.previous);
 
       }
     }

@@ -48,8 +48,9 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       controller.setSunTuning(c.values,c.reset === true); break;
     case 'measureWorldLighting': {
       const mode=c.mode??'stationary';
-      if(mode!=='stationary'&&mode!=='destruction'&&mode!=='traverse'&&mode!=='walk')throw new Error('mode: stationary, destruction, traverse oder walk erwartet.');
-      controller.measureWorldLighting(mode);break;
+      if(mode!=='stationary'&&mode!=='destruction'&&mode!=='explosion'&&mode!=='traverse'&&mode!=='walk')throw new Error('mode: stationary, destruction, explosion, traverse oder walk erwartet.');
+      if(mode==='explosion')controller.measureWorldLighting(mode,c.radius===undefined?2.5:number(c.radius,1,6));
+      else controller.measureWorldLighting(mode);break;
     }
     case 'start': controller.start(c.scenario); break;
     case 'target': controller.aim = point(c); break;

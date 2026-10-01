@@ -408,8 +408,9 @@ it('removes an anchored colony across chunks exactly as a full rebake, without r
   const rocks=Array.from({length:64},(_,i)=>({gridX:i%8,gridY:Math.floor(i/8)}));
   const {scene,streamer,rockVisualStates}=buildFixture({rocks,decals:rocks.map(r=>decal(LARGE_CORE_DECAL,r.gridX,r.gridY,ROCK_DECAL_LARGE_SIZE))});
   ChunkedRenderSurface.drainBakeQueue(scene as never);
-  for(const id of [0,7,27,31,56,63]){
-    deactivateRock(rockVisualStates,id);streamer.refreshRegions(new Set([id]));
+  for(const wave of [[0],[7],[27,28,35,36],[31],[56,63]]){
+    for(const id of wave)deactivateRock(rockVisualStates,id);
+    streamer.refreshRegions(new Set(wave));
     ChunkedRenderSurface.drainBakeQueue(scene as never);
     const regions=[ROCK_OVERLAY_VEGETATION_LAYER_ID,ROCK_OVERLAY_DECAL_LAYER_ID].flatMap(layer=>
       [0,1].flatMap(cx=>[0,1].map(cy=>chunkTexture(streamer,layer,cx,cy))));

@@ -10,7 +10,7 @@ import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
 
 type Targets = ReturnType<ArenaRuntime['getScenarioLightingTargets']>;
 export interface WorldLightingWorkload {
-  mode: 'destruction' | 'traverse' | 'walk';
+  mode: 'destruction' | 'explosion' | 'traverse' | 'walk';
   durationMs: number;
   start(): unknown;
   advance(elapsedMs: number): void;
@@ -90,7 +90,7 @@ export class WorldLightingMeasurement {
       const elapsed=now-recordingAt;
       if(workload) {
         try {workload.advance(Math.min(elapsed,workload.durationMs));} catch(error) {this.measurement={status:'failed',reason:String(error)};stop();return;}
-        if(pending||(workload.mode!=='destruction'&&elapsed<workload.durationMs)) {quietSince=null;settleAt=null;}
+        if(pending||(workload.mode!=='destruction'&&workload.mode!=='explosion'&&elapsed<workload.durationMs)) {quietSince=null;settleAt=null;}
         else {
           quietSince??=now;
           if(now-quietSince>=200)settleAt??=quietSince-recordingAt;
@@ -110,7 +110,7 @@ export class WorldLightingMeasurement {
           workload&&frames.length<180?'Fewer than 180 rendered frames were observed before the recording deadline.':null,
         view: JSON.parse(initial), warmupMs: 2000, samples: frames.length, recordedMs:elapsed,
         workload:workloadResult, workloadDurationMs:workload?.durationMs??null, settleTimeMs:workload?settleAt:null,
-        postWorkSettleMs:workload&&settleAt!==null?Math.max(0,settleAt-(workload.mode!=='destruction'?workload.durationMs:0)):null,
+        postWorkSettleMs:workload&&settleAt!==null?Math.max(0,settleAt-(workload.mode!=='destruction'&&workload.mode!=='explosion'?workload.durationMs:0)):null,
         framesOver16_7Ms:frames.filter(ms=>ms>16.7).length,framesOver33_3Ms:frames.filter(ms=>ms>33.3).length,
         formationBuilds:(formation?.builds??0)-initialBuilds, workerBuildMs:(formation?.workerBuildMs??0)-initialWorkerMs,
         eraseUploadBytes:(formation?.eraseUploadBytes??0)-initialErase,residentEvictions:(formation?.residentEvictions??0)-initialEvictions,

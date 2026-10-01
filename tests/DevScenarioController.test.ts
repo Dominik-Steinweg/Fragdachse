@@ -79,7 +79,10 @@ describe('Dev scenario automation lifecycle', () => {
     expect(window.devScenario!.run({action:'measureWorldLighting',mode:'walk'}).ok).toBe(true);
     expect(measure).toHaveBeenLastCalledWith('walk');
     expect(window.devScenario!.run({action:'measureWorldLighting',mode:'typo'}).ok).toBe(false);
-    expect(measure).toHaveBeenCalledTimes(3);
+    expect(window.devScenario!.run({action:'measureWorldLighting',mode:'explosion',radius:2.5}).ok).toBe(true);
+      expect(measure).toHaveBeenLastCalledWith('explosion',2.5);
+      expect(window.devScenario!.run({action:'measureWorldLighting',mode:'explosion',radius:99}).ok).toBe(false);
+      expect(measure).toHaveBeenCalledTimes(4);
   });
   it('bounds the walking camera route to the map and reports its actual speed without moving the player',()=>{
     enter();controller.afterHostFrame();

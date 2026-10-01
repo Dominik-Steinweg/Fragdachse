@@ -66,7 +66,7 @@ export class WorldSunlightPresentation {
   this.fogBase=targets.fog?{opacity:targets.fog.tuning.opacity,detail:targets.fog.tuning.detail}:null;
   try {
   this.canopyLighting=new CanopyLighting(scene,targets.canopies);
-  this.sunComposite=new WorldSunComposite(scene,this.sunTuning,this.sunState,this.clouds);
+  this.sunComposite=new WorldSunComposite(scene,this.sunTuning,this.sunState,this.clouds,targets.canopies);
   targets.rocks?.setFormationOptions(true,true,this.clouds);
   targets.rockOverlays?.setFormationReceiver(targets.rocks?.getFormationReceiver??null);
   targets.shadow.setFormationShadows(this.landscape);

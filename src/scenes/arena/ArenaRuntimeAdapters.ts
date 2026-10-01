@@ -64,6 +64,20 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       const outcome=flow.getWorldObjectMutationRuntime()?.applyResolvedDamage('rock',id,hp,bridge.getLocalPlayerId(),'dev-scenario.single-rock');
       return outcome?.kind==='damage-applied'&&outcome.transition.kind==='destroyed';
     },
+    destroyRocksNear(gridX:number,gridY:number,radius:number):number[] {
+      requireLocal();
+      const world=flow.getWorldRuntime()?.materialization,arena=world?.arena,registry=world?.rocks;
+      const mutation=flow.getWorldObjectMutationRuntime(),ids:number[]=[];
+      if(!arena||!registry||!mutation)return ids;
+      for(let y=Math.floor(gridY-radius);y<=Math.ceil(gridY+radius);y++)for(let x=Math.floor(gridX-radius);x<=Math.ceil(gridX+radius);x++){
+        if((x-gridX)**2+(y-gridY)**2>radius*radius)continue;
+        const id=arena.rockGrid.getIndex(x,y);if(id<0||registry.isIndestructible(id))continue;
+        const hp=registry.readIntegrity(id)?.integrity;if(!hp)continue;
+        const result=mutation.applyResolvedDamage('rock',id,hp,bridge.getLocalPlayerId(),'dev-scenario.rock-explosion');
+        if(result?.kind==='damage-applied'&&result.transition.kind==='destroyed')ids.push(id);
+      }
+      return ids;
+    },
     getPlayer(id: string): { x: number; y: number; alive: boolean; burrowed: boolean } | null {
       const player = players.getPlayer(id), combat = flow.getWorldCombatCore();
       return player ? { x: player.x, y: player.y, alive: combat?.isAlive(id) ?? false, burrowed: combat?.isBurrowed(id) ?? false } : null;

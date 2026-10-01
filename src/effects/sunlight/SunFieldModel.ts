@@ -37,6 +37,22 @@ export function cloudShadowAt(x:number,y:number,state:SunCloudState,time=state.t
   const result=mix(1,opening,smooth(0,.12,t.cloudCover))*(1-smooth(.88,1,t.cloudCover));
   return Number.isFinite(result)?result:1;
 }
+export function cloudSmallOpeningAt(x:number,y:number,state:SunCloudState,canopy=1):number {
+  const t=state.tuning;
+  if(!Number.isFinite(x+y)||!Number.isFinite(state.strength)||state.strength<=0||t.cloudCover<=0)return 0;
+  if(t.cloudCover>=1)return 0;
+  const seconds=cloudTimeSeconds(state.timeSec),travel=cloudTravel(seconds,t.cloudSpeed,t.cloudGust),scale=Math.max(500,t.cloudScale);
+  let px=(x-travel)/scale,py=(y-travel*.23)/scale;
+  const sx=seconds*.009*t.cloudEvolution,sy=-seconds*.006*t.cloudEvolution;
+  const wx=noise(px*.67+sx+3.1,py*.67+sy+3.1,cloudHash)-.5;
+  const wy=noise(px*.67-sx*.71+19.7,py*.67-sy*.71+19.7,cloudHash)-.5;
+  px+=wx*t.cloudWarp;py+=wy*t.cloudWarp;
+  const field=.62*noise(px,py,cloudHash)+.27*noise(px*2.03+17.3+sx*1.7,py*2.03+39.1+sy*1.7,cloudHash)
+    +.11*noise(px*4.11+7.7-sx*2.3,py*4.11+7.7-sy*2.3,cloudHash);
+  const threshold=mix(.32,.68,t.cloudCover);let opening=smooth(threshold-t.cloudSoftness,threshold+t.cloudSoftness,field);
+  const spot=smooth(.54,.78,noise(px*(scale/Math.max(80,t.cloudSpotScale))+wx*.8+53.2,py*(scale/Math.max(80,t.cloudSpotScale))+wy*.8+17.8,cloudHash));
+  return spot*(.65+.35*smooth(.10,.60,opening))*Math.max(0,Math.min(1,canopy));
+}
 /** Same opening-to-light transfer as CLOUD_SHADOW_GLSL. */
 export function sunlightAt(x:number,y:number,state:SunCloudState):number {
   return mix(.5,cloudShadowAt(x,y,state),Math.max(0,Math.min(1,state.tuning.cloudDensity*2)));

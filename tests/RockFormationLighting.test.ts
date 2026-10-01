@@ -80,7 +80,7 @@ describe('formation lighting ownership and incremental updates',()=>{
     const f=fixture();settle(f);f.upload.mockClear();
     const before=f.lighting.getDiagnostics().uploadBytes;
     f.states[0].active=false;f.lighting.invalidate([0]);
-    expect(f.upload).toHaveBeenCalledTimes(1);
+    expect(f.upload).toHaveBeenCalledTimes(2);
     for(const call of f.upload.mock.calls) {
       expect(call.slice(2,6)).toEqual([65,65,16,16]);
       const data=call[8] as Uint8Array;
@@ -88,8 +88,8 @@ describe('formation lighting ownership and incremental updates',()=>{
     }
     const field=f.upload.mock.calls[0][8] as Uint8Array;
     expect(field.filter((_,i)=>i%4===3).every(v=>v===0)).toBe(true);
-    expect(field.filter((_,i)=>i%4===2).every(v=>v===255)).toBe(true); // Preserve previous shadow until worker completion.
-    expect(f.lighting.getDiagnostics().uploadBytes-before).toBe(16*16*4);
+    expect(field.filter((_,i)=>i%4===2).every(v=>v===0)).toBe(true); // An isolated removed rock has no neighbours to cast ground shadows.
+    expect(f.lighting.getDiagnostics().uploadBytes-before).toBe(16*16*4*2);
     expect(f.lighting.getDiagnostics().pendingChunks).toBe(1);
     f.lighting.destroy();
   });
@@ -97,7 +97,7 @@ describe('formation lighting ownership and incremental updates',()=>{
     const f=fixture(1024,512,16,4);settle(f);f.upload.mockClear();
     f.states[0].active=false;f.lighting.invalidate([0]);
     const widths=f.upload.mock.calls.map(call=>call[4]);
-    expect(widths.sort((a,b)=>a-b)).toEqual([1,16]);
+    expect(widths.sort((a,b)=>a-b)).toEqual([1,1,16,16]);
     f.lighting.destroy();
   });
   it('retains completed resident chunks across camera traversal without rebuilding or uploading on return',()=>{
