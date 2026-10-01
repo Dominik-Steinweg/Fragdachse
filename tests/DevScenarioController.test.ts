@@ -140,3 +140,25 @@ describe('Dev scenario automation lifecycle', () => {
     expect(api.run({ action: 'resume' })).toMatchObject({ ok: false });
   });
 });
+
+it('restores world output diagnostics and rejects unknown passes before mutating the world',()=>{
+ enter();controller.afterHostFrame();
+ const sunlight={setDebugCompositeSuppressed:vi.fn(),setDebugCompositeView:vi.fn(),inspectDebugCompositeMaterial:vi.fn(()=>({zeroRGB:0}))};
+ const fog={setDebugDisplaySuppressed:vi.fn()},lighting={setCompositeSuppressed:vi.fn()};
+ const postFx={setDebugDisabled:vi.fn((names:string[])=>{if(names.includes('typo'))throw Error('unknown');}),getDebugPasses:()=>[]};
+ (controller as any).runtime.getScenarioLightingTargets=()=>({sunlight,fog,lighting,postFx});
+ controller.setRenderDebug(['sunComposite','fogDisplay','lightmap','grade'],'neutral',true);
+ expect(controller.lastAction).toMatchObject({material:{zeroRGB:0}});
+ expect(postFx.setDebugDisabled).toHaveBeenLastCalledWith(['grade']);
+ expect(sunlight.setDebugCompositeSuppressed).toHaveBeenLastCalledWith(true);
+ expect(fog.setDebugDisplaySuppressed).toHaveBeenLastCalledWith(true);
+ expect(lighting.setCompositeSuppressed).toHaveBeenLastCalledWith(true);
+ expect(()=>controller.setRenderDebug(['typo'])).toThrow();
+ expect(sunlight.setDebugCompositeSuppressed).toHaveBeenCalledTimes(1);
+ controller.start(defaultScenario());
+ expect(postFx.setDebugDisabled).toHaveBeenLastCalledWith([]);
+ expect(sunlight.setDebugCompositeSuppressed).toHaveBeenLastCalledWith(false);
+ expect(sunlight.setDebugCompositeView).toHaveBeenLastCalledWith('normal');
+ expect(fog.setDebugDisplaySuppressed).toHaveBeenLastCalledWith(false);
+ expect(lighting.setCompositeSuppressed).toHaveBeenLastCalledWith(false);
+});

@@ -44,7 +44,12 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     case 'status': return;
     case 'renderDebug':
       if (!Array.isArray(c.disable) || c.disable.some(name => typeof name !== 'string')) throw new Error('renderDebug.disable: Liste von Passnamen erwartet.');
-      controller.setRenderDebug(c.disable as string[]); break;
+      if(c.composite!==undefined&&!['normal','material','neutral','neutralInline'].includes(c.composite as string)) throw new Error('renderDebug.composite: normal, material, neutral oder neutralInline erwartet.');
+      if(c.probe!==undefined)boolean(c.probe);
+      if(c.probe===true)controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,true);
+      else if(c.composite===undefined)controller.setRenderDebug(c.disable as string[]);
+      else controller.setRenderDebug(c.disable as string[],c.composite as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView);
+      break;
     case 'sunTuning':
       if(c.reset !== undefined && c.reset !== true) throw new Error('sunTuning.reset: true erwartet.');
       if(c.reset === true && c.values !== undefined) throw new Error('sunTuning: reset oder values angeben.');
@@ -99,7 +104,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     }
     case 'stop': controller.stop(); break;
     case 'spawn': {
-      if (!COOP_DEFENSE_ENEMY_KINDS.includes(c.kind as CoopDefenseEnemyKind)) throw new Error('Unbekannte Gegnerart.');
+      if (!COOP_DEFENSE_ENEMY_KINDS.includes(c.kind as CoopDefenseEnemyKind)) throw new Error(`Unbekannte spawn.kind: ${String(c.kind)}. Registry-Keys: ${COOP_DEFENSE_ENEMY_KINDS.join(', ')}`);
       controller.spawn(c.kind as CoopDefenseEnemyKind, c.pinned === undefined ? false : boolean(c.pinned),
         c.hp == null ? null : number(c.hp, 1, 10000000), c.gridX === undefined && c.gridY === undefined ? undefined : point(c)); break;
     }

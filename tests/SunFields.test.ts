@@ -140,3 +140,25 @@ it('gives small openings visible local contrast while bounding average exposure 
   expect(Math.abs(after/before-1)).toBeLessThan(.04);
  }
 });
+
+it('keeps the material factor finite and positive for all atmosphere anchors and RGBA8 field extremes',async()=>{
+ const {sunCompositeFactor}=await import('../src/effects/sunlight/sunVisibility');
+ const {SUN_ATMOSPHERE_KEYFRAMES}=await import('../src/effects/sunlight/SunAtmosphere');
+ const result=[0,0,0];
+ for(const {values:t} of SUN_ATMOSPHERE_KEYFRAMES)for(const strength of [0,.5,1]){
+  for(const visibility of [0,1/255,.5,1])for(const spot of [0,1])for(const grain of [-.5,.5]){
+   sunCompositeFactor(result,t.shade,t.daylight,t.sun,visibility,strength,grain,spot,t.cloudSpotAmount);
+   for(const factor of result){
+    expect(Number.isFinite(factor)).toBe(true);expect(factor).toBeGreaterThan(0);expect(factor).toBeLessThanOrEqual(2);
+    if(strength===0)expect(factor).toBe(1);
+    // Effect colour is the destination of modulate-2x, never a material input.
+    // RGBA8 clamps out-of-range colour on its preceding write, before blending.
+    for(const effect of [-1,0,1/255,1,4]){
+     const destination=Math.max(0,Math.min(1,effect));
+     const output=2*(factor*.5)*destination;
+     expect(Number.isFinite(output)).toBe(true);expect(output).toBeGreaterThanOrEqual(0);
+    }
+   }
+  }
+ }
+});

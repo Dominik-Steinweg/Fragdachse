@@ -133,6 +133,24 @@ Werkzeug `construction:flame_turret`, Spieler bei Grid `(98,26)`, Flammenturm be
 
 ## Produktionsdarstellung diagnostizieren
 
+Lokale Render-Ausgaben isolieren: `dev.run({action:'renderDebug',disable:['sunComposite','fogDisplay','lightmap']})`.
+Die Liste ersetzt die bisherige Auswahl; zusätzlich sind `distortion`, `bloom`, `grade`, `vignette`, `focus`, `barrel` erlaubt.
+`disable:[]` stellt alle Ausgaben wieder her; beim Szenariostart und Teardown wird ebenfalls zurückgesetzt.
+Simulation, Nebeldichte, Wolkenfeld und Lichtquellen laufen bei ausgeblendeter Ausgabe unverändert weiter.
+Optionales `composite`: `material` zeigt die RGB8-Faktortextur vor dem Modulate-Blend (neutral ≈ grau),
+`neutral` zeichnet Faktor 1 mit weiterhin laufendem Material-Pass, `neutralInline` zeichnet Faktor 1 ohne diesen Pass.
+`normal` ist der Standard. Diese drei Diagnoseansichten ändern absichtlich die Ausgabe, nicht das Tuning.
+`dev.run({action:'renderDebug',disable:[],probe:true}).status.lastAction.material` liest einmalig das zuletzt gerenderte
+Material-Target aus: `minRGB`/`maxRGB`, `zeroRGB`, `minAlpha`/`maxAlpha` (Bytes). VFX über dem Display-Quad
+sind darin nicht enthalten. Der synchrone Readback ist nur für Diagnose, nicht für Performance-Messungen bestimmt.
+
+Sporenturm-Repro über die normale Bau-/Zielvalidierung (danach `await dev.whenReady()`, `camera` mit Zoom 1.4):
+`dev.run({action:'start',scenario:{version:1,classId:'inspector_gadachs',mapId:'7',seed:12345,timeOfDay:720,tools:[{kind:'construction',id:'spore_turret'}],player:{gridX:98,gridY:26},constructions:[{id:'spore_turret',gridX:102,gridY:25}],enemies:[{kind:'zombie-badger',gridX:106,gridY:25,pinned:true,hp:10000000}]}})`.
+Der Turm steht vier Zellen vom bewegungsfixierten Ziel entfernt; der Nahkämpfer erreicht ihn dort nicht.
+`SPORE_TURRET` ist die interne Utility-ID; das Szenario-Werkzeug verwendet die kanonische Construction-ID.
+Einzelspawn: `dev.run({action:'spawn',kind:'zombie-badger',gridX:106,gridY:25,pinned:true,hp:10000000})`.
+
+
 ### Ladezeit statt Framezeit messen
 
 In Dev und im Produktionsbuild ist `window.__FD_BOOT__.timeline()` auch w?hrend des Ladens abrufbar.

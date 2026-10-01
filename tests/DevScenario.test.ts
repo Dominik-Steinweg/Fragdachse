@@ -145,3 +145,22 @@ describe('camera pass diagnostics', () => {
     expect(setRenderDebug).toHaveBeenCalledExactlyOnceWith(['grade']);
   });
 });
+
+it('accepts the registry spore repro loadout and exact enemy key through the public API',()=>{
+ const config=parseScenario({version:1,classId:'inspector_gadachs',mapId:'7',seed:12345,
+   tools:[{kind:'construction',id:'spore_turret'}],player:{gridX:98,gridY:26},
+   constructions:[{id:'spore_turret',gridX:102,gridY:25}],
+   enemies:[{kind:'zombie-badger',pinned:true,hp:10000000,gridX:106,gridY:25}]});
+ expect(scenarioLoadout(config).tools).toEqual(config.tools);
+ const spawn=vi.fn(),setRenderDebug=vi.fn(),controller={spawn,setRenderDebug,syncPanel(){}} as never;
+ runScenarioCommand(controller,{action:'spawn',...config.enemies[0]});
+ expect(spawn).toHaveBeenCalledWith('zombie-badger',true,10000000,{gridX:106,gridY:25});
+ for(const composite of ['normal','material','neutral','neutralInline']){
+  runScenarioCommand(controller,{action:'renderDebug',disable:['sunComposite','fogDisplay','lightmap'],composite});
+  expect(setRenderDebug).toHaveBeenLastCalledWith(['sunComposite','fogDisplay','lightmap'],composite);
+ }
+ runScenarioCommand(controller,{action:'renderDebug',disable:[],probe:true});
+ expect(setRenderDebug).toHaveBeenLastCalledWith([],'normal',true);
+ expect(()=>runScenarioCommand(controller,{action:'renderDebug',disable:[],probe:'yes'})).toThrow();
+ expect(()=>runScenarioCommand(controller,{action:'renderDebug',disable:[],composite:'typo'})).toThrow();
+});

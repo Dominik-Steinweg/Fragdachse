@@ -36,6 +36,11 @@ export class GroundFogSystem {
   quality: FogQuality = 'high';
   strength: number;
   enabled = true;
+  private debugDisplaySuppressed = false;
+  setDebugDisplaySuppressed(value: boolean): void {
+    this.debugDisplaySuppressed = value;
+    if (value) this.gpu?.hide();
+  }
   measureGpu = false;
   private timer: FogGpuTimer | null = null;
   private surfaces: readonly Phaser.GameObjects.Image[] = [];
@@ -191,6 +196,7 @@ export class GroundFogSystem {
       const trailScale = Math.min(1, FOG.trailMaskMaxWidth / pixels.width);
       this.gpu.render(output, pixels.width * scale, pixels.height * scale, this.debug, this.accumulator / FOG.stepMs,
         this.surfaces, this.quality, pixels.width * trailScale, pixels.height * trailScale);
+      if (this.debugDisplaySuppressed) this.gpu.hide();
         this.timer?.end(); this.stats.gpuMs = this.timer?.ms ?? null; this.stats.gpuSample = this.timer?.sample ?? 0;
         this.stats.materialWidth=this.gpu.materialWidth;this.stats.materialHeight=this.gpu.materialHeight;
         this.stats.lightingAtMaterialResolution=this.gpu.lightingAtMaterialResolution;

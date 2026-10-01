@@ -60,6 +60,9 @@ export class WorldSunlightPresentation {
  get presentationMinute():number{return this.lastMinute;}
  get sunStatus(){return {azimuth:this.sunPath.azimuth,elevation:this.sunPath.elevation*180/Math.PI,strength:this.sunPath.strength,horizonAzimuth:this.sunPath.horizonAzimuth};}
  get diagnostics(){return this.sunComposite?.diagnostics??null;}
+ setDebugCompositeSuppressed(value:boolean):void {this.sunComposite?.setDebugSuppressed(value);}
+ setDebugCompositeView(value:import('./WorldSunComposite').SunCompositeDebugView):void {this.sunComposite?.setDebugView(value);}
+ inspectDebugCompositeMaterial(){return this.sunComposite?.inspectMaterial()??null;}
  get woodlandCount():number{return this.woodland?.count??0;}
  constructor(private readonly scene:Phaser.Scene,private readonly targets:Targets) {
   const measuredAt=loadingTimeline.start();

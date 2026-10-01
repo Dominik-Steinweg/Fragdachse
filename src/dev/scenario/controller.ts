@@ -29,7 +29,7 @@ export class DevScenarioController {
   zoom = 1;
   cameraAtTarget = false;
   private worldLighting: WorldLightingMeasurement | null = null;
-  private debugPostFx: ReturnType<ArenaRuntime['getScenarioLightingTargets']>['postFx'] | null = null;
+  private debugTargets: ReturnType<ArenaRuntime['getScenarioLightingTargets']> | null = null;
   private trigger: WeaponSlot | null = null;
   private inputStarted = false;
   private sequence = 0;
@@ -103,16 +103,28 @@ export class DevScenarioController {
     this.message = 'Warte auf Lobby und normalen Rundenstart …';
   }
   saveLink(): void { history.replaceState(null, '', encodeScenario(this.config)); }
-  setRenderDebug(disable: readonly string[]): void {
+  setRenderDebug(disable: readonly string[], composite: import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView = 'normal', probe = false): void {
     this.requireReady();
-    const postFx = this.runtime.getScenarioLightingTargets().postFx;
-    postFx.setDebugDisabled(disable);
-    this.debugPostFx = disable.length ? postFx : null;
-    this.lastAction = { renderDebug: postFx.getDebugPasses() };
+    const targets = this.runtime.getScenarioLightingTargets();
+    const worldPasses = ['sunComposite', 'fogDisplay', 'lightmap'];
+    // Validate the entire request before changing any world output.
+    targets.postFx.setDebugDisabled(disable.filter(name => !worldPasses.includes(name)));
+    targets.sunlight?.setDebugCompositeSuppressed(disable.includes('sunComposite'));
+    targets.sunlight?.setDebugCompositeView(composite);
+    targets.fog?.setDebugDisplaySuppressed(disable.includes('fogDisplay'));
+    targets.lighting.setCompositeSuppressed(disable.includes('lightmap'));
+    this.debugTargets = disable.length || composite !== 'normal' ? targets : null;
+    this.lastAction = { renderDebug: targets.postFx.getDebugPasses(),
+      worldOutputs: worldPasses.map(name => ({ name, disabled: disable.includes(name) })), composite, material: probe ? targets.sunlight?.inspectDebugCompositeMaterial() ?? null : undefined };
   }
   private clearRenderDebug(): void {
-    this.debugPostFx?.setDebugDisabled([]);
-    this.debugPostFx = null;
+    const targets = this.debugTargets;
+    targets?.postFx.setDebugDisabled([]);
+    targets?.sunlight?.setDebugCompositeSuppressed(false);
+    targets?.sunlight?.setDebugCompositeView('normal');
+    targets?.fog?.setDebugDisplaySuppressed(false);
+    targets?.lighting.setCompositeSuppressed(false);
+    this.debugTargets = null;
   }
   setSunTuning(values: unknown, reset = false): void {
     this.requireReady();

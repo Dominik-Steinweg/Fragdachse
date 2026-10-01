@@ -16,7 +16,9 @@ vi.mock('phaser',()=>({BlendModes:{SCREEN:3},Textures:{FilterMode:{LINEAR:0}},Ut
     setRenderToTexture(){this.renderToTexture=true;this.glTexture={};this.texture={get:()=>({source:{glTexture:this.glTexture}}),setFilter:vi.fn(),destroy:vi.fn()};this.drawingContext={state:{blend:{}},camera:{destroy:vi.fn()},destroy:vi.fn()};return this;}
     renderWebGLStep(){this.renderNode.run();}
     setTextures(textures:any[]){this.textures=textures;return this;}
-    setOrigin(){return this;}setScrollFactor(){return this;}setDepth(){return this;}setBlendMode(){return this;}
+    visible=true;blendMode=0;
+    setVisible(value:boolean){this.visible=value;return this;}
+    setOrigin(){return this;}setScrollFactor(){return this;}setDepth(){return this;}setBlendMode(value:number){this.blendMode=value;return this;}
     setPosition(){return this;}setSize(w:number,h:number){this.width=w;this.height=h;return this;}
     destroy(){if(this.destroyed)return;this.destroyed=true;for(const f of this.callbacks)f();this.texture?.destroy();this.drawingContext?.destroy();}
   }}
@@ -188,4 +190,40 @@ it('owns one static canopy exclusion, keeps it across quality changes and releas
  for(const q of ['low','high'] as const){f.quality.setLevel(q);f.clouds.timeSec+=1;f.owner.prepareClouds(0,0,1000,1000);}
  expect(f.renderer.createTexture2D).toHaveBeenCalledOnce();
  f.owner.destroy();f.owner.destroy();expect(f.scene.textures.remove).toHaveBeenCalledOnce();f.quality.destroy();
+});
+
+it('isolates composite output, material sampling and offscreen drawing independently',()=>{
+ const f=fixture();f.owner.setEnabled(true);
+ const quad=fake.shaders.find(s=>s.config.name.includes('CompositeDisplay'));
+ const material=fake.shaders.find(s=>s.config.name.includes('CompositeMaterial'));
+ const draw=vi.spyOn(material,'renderWebGLStep');
+ const camera={x:0,y:0,width:1664,height:936,originX:0,originY:0,scrollX:0,scrollY:0,zoom:1,zoomX:1,zoomY:1};
+ f.owner.setDebugSuppressed(true);expect(quad.visible).toBe(false);
+ f.owner.setEnabled(true);expect(quad.visible).toBe(false);
+ f.owner.setDebugSuppressed(false);expect(quad.visible).toBe(true);
+ for(const view of ['normal','material','neutral','neutralInline'] as const){
+   draw.mockClear();f.owner.setDebugView(view);quad.renderNode.run({camera},quad);
+   expect(draw).toHaveBeenCalledTimes(view==='neutralInline'?0:1);
+   expect(quad.uniforms.uDebugView).toBe(view==='normal'?0:view==='material'?1:2);
+ }
+ f.owner.setDebugView('normal');quad.renderNode.run({camera},quad);expect(quad.uniforms.uDebugView).toBe(0);
+ f.owner.destroy();f.quality.destroy();
+});
+
+it('reads only the factor target on request and restores the framebuffer even on failure',()=>{
+ const f=fixture();f.owner.setEnabled(true);
+ const material=fake.shaders.find(s=>s.config.name.includes('CompositeMaterial'));
+ material.setSize(2,1);material.drawingContext.framebuffer={name:'factor'};
+ const sceneBuffer={name:'scene'};let bound:any=sceneBuffer;
+ const wrapper=f.renderer.glWrapper as any;wrapper.state={bindings:{framebuffer:sceneBuffer}};
+ wrapper.update.mockImplementation((state:any)=>{if(state.bindings)bound=state.bindings.framebuffer;});
+ const read=vi.fn((_x:number,_y:number,_w:number,_h:number,_format:number,_type:number,out:Uint8Array)=>{
+   expect(bound).toBe(material.drawingContext.framebuffer);out.set([128,128,128,128,100,120,140,128]);
+ });
+ (f.renderer.gl as any).readPixels=read;
+ expect(f.owner.inspectMaterial()).toEqual({width:2,height:1,minRGB:[100,120,128],maxRGB:[128,128,140],zeroRGB:0,minAlpha:128,maxAlpha:128});
+ expect(bound).toBe(sceneBuffer);expect(read).toHaveBeenCalledOnce();
+ read.mockImplementationOnce(()=>{throw Error('read failure');});expect(()=>f.owner.inspectMaterial()).toThrow('read failure');
+ expect(bound).toBe(sceneBuffer);
+ f.owner.destroy();expect(f.owner.inspectMaterial()).toBeNull();f.quality.destroy();
 });
