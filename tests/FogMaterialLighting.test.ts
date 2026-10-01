@@ -15,3 +15,10 @@ it('keeps the ordinary material sampler contract and applies lighting before the
  // No extra offscreen pass or change to the final alpha/patch field is needed.
  expect(FOG_K_MATERIAL_FRAGMENT).toContain('fogPatchEdgeAlpha(alpha,patchDistance,patchActivity)');
 });
+it('declares every sampler that a fog fragment reads',()=>{
+ for(const source of [FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT]){
+  const declared=new Set([...source.matchAll(/uniform\s+sampler2D\s+([^;]+);/g)].flatMap(m=>m[1].split(',').map(s=>s.trim())));
+  const read=new Set([...source.matchAll(/texture2D\(\s*(\w+)/g)].map(m=>m[1]));
+  for(const sampler of read)expect(declared,`missing sampler ${sampler}`).toContain(sampler);
+ }
+});

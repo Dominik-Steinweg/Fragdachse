@@ -209,6 +209,7 @@ uniform float uSunFogOpacity,uSunFogShadeOpacity;
 uniform float uFogBankMetadata;
 ${FOG_VISIBILITY_BUDGET_GLSL}
 uniform float uSceneSun;
+uniform sampler2D uSunTransmission;
 ${SUN_VISIBILITY_GLSL}
 
 vec4 lightFog(vec4 fog,vec2 world) {
