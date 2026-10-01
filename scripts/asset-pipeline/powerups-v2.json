@@ -1,0 +1,411 @@
+{
+  "version": 2,
+  "schema": "fd-layered-powerups-spec",
+  "masterSize": 1024,
+  "exportSize": 256,
+  "displaySize": 22,
+  "reviewZoom": 1.4,
+  "countdownDisplaySize": 16,
+  "pulseScales": [
+    0.92,
+    1,
+    1.08
+  ],
+  "assets": [
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-base",
+      "label": "Gemeinsame graue Basis",
+      "recipe": "powerup-base",
+      "model": {},
+      "gameIds": [],
+      "reference": "art/icon-refresh-a03-a14/r05/layers/background.png",
+      "role": "base"
+    },
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.075,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-hp",
+      "label": "Heilung",
+      "recipe": "powerup-symbol",
+      "model": {
+        "symbol": "hp"
+      },
+      "gameIds": [
+        "HEALTH_PACK"
+      ],
+      "spriteKey": "powerup_hp",
+      "reference": "public/assets/sprites/16x16HP.png",
+      "referenceSha256": "b281ab9c7ebaca98fb1ff61d069956fd338ddf761542cc8de656c3d5fa831ebe",
+      "symbolReference": "art/icon-refresh-a03-a14/r03/layers/A07-b.png",
+      "symbolReferenceSha256": "737ae9a0098e5ceace8c514c80e8256e3d261d557359cd56ad5293f8b8801fc4",
+      "role": "symbol"
+    },
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.075,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-armor",
+      "label": "Ruestung",
+      "recipe": "powerup-symbol",
+      "model": {
+        "symbol": "armor"
+      },
+      "gameIds": [
+        "ARMOR"
+      ],
+      "spriteKey": "powerup_arm",
+      "reference": "public/assets/sprites/16x16Armor.png",
+      "referenceSha256": "d2c6da91581cdbba284a729868011de262ea0ba9fde87104156a249ad587ad4c",
+      "symbolReference": "art/icon-refresh-a03-a14/r03/layers/A08-b.png",
+      "symbolReferenceSha256": "1cc8ddb26d5928d656f0133f7fe70a344225b6ab5f7feaa2ebac50170279a594",
+      "role": "symbol"
+    },
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.075,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-rage",
+      "label": "Rage",
+      "recipe": "powerup-symbol",
+      "model": {
+        "symbol": "rage"
+      },
+      "gameIds": [
+        "RAGE"
+      ],
+      "spriteKey": "powerup_rage",
+      "reference": "public/assets/sprites/16x16Rage.png",
+      "referenceSha256": "060f7c092ebc29ab1f2869841c93c7872a25387df719ff9d0a5264ef4ac8f323",
+      "symbolReference": "art/icon-refresh-a03-a14/r03/layers/A09-b.png",
+      "symbolReferenceSha256": "12eb9238f3c4b9beae8dcf85579c16814ae5157478eeaa5f9ebf7d8233f20c2c",
+      "role": "symbol"
+    },
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.075,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-adrenaline",
+      "label": "Adrenalin",
+      "recipe": "powerup-symbol",
+      "model": {
+        "symbol": "adrenaline"
+      },
+      "gameIds": [
+        "ADRENALINE"
+      ],
+      "spriteKey": "powerup_adr",
+      "reference": "public/assets/sprites/16x16adrenalin.png",
+      "referenceSha256": "c0f267f9503ae3376713907b566071ccd636a9c14b0d2a5bf44a83fc4506a6f9",
+      "symbolReference": "art/icon-refresh-a03-a14/r03/layers/A10-b.png",
+      "symbolReferenceSha256": "bbf12422bce31096d6d2662bbe8e69f61d6d455058c35668c7d47adfdd8ab5bc",
+      "role": "symbol"
+    },
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.075,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-bfg",
+      "label": "BFG",
+      "recipe": "powerup-symbol",
+      "model": {
+        "symbol": "bfg"
+      },
+      "gameIds": [
+        "BFG"
+      ],
+      "spriteKey": "powerup_bfg",
+      "reference": "public/assets/sprites/16x16bfg.png",
+      "referenceSha256": "3883061cfdd71aa7a2202b0bcecce8e3278c59315af3754e39812d92b55de269",
+      "symbolReference": "art/icon-refresh-a03-a14/r03/layers/A14-b.png",
+      "symbolReferenceSha256": "d1925875606b0296df62242301245a7af80f2295333e90f521a735fd7c6610ec",
+      "role": "symbol"
+    },
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.075,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-damage-amp",
+      "label": "Damage Amp",
+      "recipe": "powerup-symbol",
+      "model": {
+        "symbol": "damage-amp"
+      },
+      "gameIds": [
+        "DOUBLE_DAMAGE"
+      ],
+      "spriteKey": "powerup_dam",
+      "reference": "public/assets/sprites/16x16damageamp.png",
+      "referenceSha256": "050ee75208f354bbea7d746c374065678f99cab1cc5bf36c2ee6e3db1bb263c0",
+      "symbolReference": "art/icon-refresh-a03-a14/r03/layers/A11-b.png",
+      "symbolReferenceSha256": "d0189138734ac57aaeb365e690dac6ef3dd3b9c036feacc5e0c816e5a5b36b67",
+      "role": "symbol"
+    },
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.075,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-holy-grenade",
+      "label": "Heilige Handgranate",
+      "recipe": "powerup-symbol",
+      "model": {
+        "symbol": "holy-grenade"
+      },
+      "gameIds": [
+        "HOLY_HAND_GRENADE"
+      ],
+      "spriteKey": "powerup_hhg",
+      "reference": "public/assets/sprites/16x16holy_grenade.png",
+      "referenceSha256": "d0aabc02bedae323f7682b5efb8540e34544231c8387f2d1e59669e8c13b5cf3",
+      "symbolReference": "art/icon-refresh-a03-a14/r03/layers/A12-a.png",
+      "symbolReferenceSha256": "c9bac88d54224910e9db5fe747c9d775a86b6411040ffbf76758fd865fe8a42f",
+      "role": "symbol"
+    },
+    {
+      "category": "powerup",
+      "targetSize": 22,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "requiredClips": [],
+      "production": "reference",
+      "orthoScale": 2.2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte worn relief",
+          "textureStrength": 0.075,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [],
+      "id": "powerup-nuke",
+      "label": "Nuke",
+      "recipe": "powerup-symbol",
+      "model": {
+        "symbol": "nuke"
+      },
+      "gameIds": [
+        "NUKE"
+      ],
+      "spriteKey": "powerup_nuk",
+      "reference": "public/assets/sprites/16x16nuke.png",
+      "referenceSha256": "a88d713af903324d164df426a6c408adf28cc7ee980259f9ed162ac463a5cfab",
+      "symbolReference": "art/icon-refresh-a03-a14/r03/layers/A13-b.png",
+      "symbolReferenceSha256": "d4d8824049fb652bb5408413cd9e79d77362938890b1fb0d66dc045a95016343",
+      "role": "symbol"
+    }
+  ],
+  "presentation": {
+    "revision": "r02",
+    "symbolFinish": "tinted-edge-contact-v1",
+    "lighting": {
+      "ambient": 0.16,
+      "key": {
+        "position": [
+          -3,
+          4,
+          5
+        ],
+        "energy": 650,
+        "size": 3.2
+      },
+      "fill": {
+        "position": [
+          4,
+          -2,
+          6
+        ],
+        "energy": 75,
+        "size": 5
+      }
+    }
+  }
+}

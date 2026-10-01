@@ -230,6 +230,15 @@ und erzeugt eigene Passauswahl, Review-Bögen und ein geprüftes Quellenarchiv u
 21c ist von Claude freigegeben; der separate Runtime-Import ist für 21d vorbereitet und
 schreibt ausschließlich mit explizitem `--apply`.
 
+## Power-up-Basis und getrennte Symbole
+
+[POWERUPS.md](POWERUPS.md) beschreibt neun statische V2-Modelle: eine gemeinsame graue
+Basis und acht matte Reliefsymbole mit gemeinsamem Pivot/Canvas. Der separate Katalog
+`powerups-v2.json` bindet die bisherigen Icons und ausgewählten Symbol-Layer als Referenz.
+`node scripts/asset-pipeline/powerups-run.mjs --revision powerups-r01` erzeugt die neue
+Revision auf D:, 128/256er Exporte, acht UI-Komposite, Spielgrößen-/Puls-Review und ein
+geprüftes Quellenarchiv. Runtime-Veröffentlichung bleibt ein separater expliziter Import.
+
 ## V1-Kompatibilität und vorhandene statische Referenzen
 
 Die folgenden V1-Befehle, Verzeichnisse und Materialhinweise bleiben gültig. Der Viewer listet V1 neben V2 in der gemeinsamen Bibliothek. Die gemeinsame Stil-/Materialbasis gilt auch für V2.
