@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "status": "pilot-only",
+  "assetId": "badger",
+  "source": "art/poc/pipeline-v2/runs/v2-ai/badger/standard",
+  "poseIndices": [0, 1, 4, 7, 25],
+  "coordinates": {
+    "axes": ["right", "south", "up"],
+    "blenderToAsset": [1, -1, 1],
+    "pivotBlender": [0, 0, 0],
+    "groundZBlender": 0,
+    "bodyPivotUV": [0.5, 0.5],
+    "bodyCanvasWorldPx": 38.4,
+    "bodyOrthoScaleBlender": 2.2,
+    "azimuth": "degrees clockwise from asset +X (right), toward light; north=270",
+    "normal": "asset-space XYZ encoded as 0.5*n+0.5; renormalize after sampling"
+  },
+  "grid": {
+    "azimuthDegrees": [0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5],
+    "elevationDegrees": [28, 35, 45],
+    "interpolation": "cyclic azimuth; linear cot(elevation); displayed pose only"
+  },
+  "shadow": {
+    "texelsPerWorldPx": 2,
+    "supersample": 4,
+    "sunAngularDiameterDegrees": 2,
+    "samples": 64,
+    "seed": 37,
+    "paddingWorldPx": 2,
+    "coverage": "1 - shaded linear receiver / unoccluded linear receiver",
+    "encoding": "unorm8-linear",
+    "premultiplied": false,
+    "packing": "four independent pose masks in RGBA, identical light and canvas",
+    "gutterTexels": 2,
+    "maximumPageSize": 2048
+  },
+  "material": {
+    "masterSize": 1024,
+    "sourceSizes": [64, 128],
+    "albedo": { "encoding": "srgb8-straight-rgba", "premultiplied": false },
+    "normal": { "encoding": "unorm8-linear-rgb-normal-a-ao", "premultiplied": false },
+    "aoDistanceBlender": 0.65,
+    "aoSamples": 32,
+    "samples": 64,
+    "seed": 37
+  },
+  "decisions": {
+    "night": "contact + normal response; point-light cast shadows deferred",
+    "highTarget": "GTX 1060 / RX 580",
+    "weapons": "separate silhouette B",
+    "productionGate": "21b pilot approved by Claude; 21c prepared for Claude execution; runtime activation belongs to 21d"
+  }
+}

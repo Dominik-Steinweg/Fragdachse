@@ -220,6 +220,16 @@ Runtime und Build benötigen nur diese versionierten Dateien; Blender, Quellenar
 `art/poc/` bleiben lokale Authoring-Werkzeuge. Die Runtime-Bindung beschreibt
 [rendering.md](../../docs/ai/rendering.md#figuren--und-turmassets).
 
+## Separate Figurenpässe (21a–21c)
+
+[CHARACTER-PASSES.md](CHARACTER-PASSES.md) beschreibt die additive Schatten-/Albedo-/Normal-Pipeline.
+Er arbeitet auf einer Kopie der ausgewählten Blend-Datei, mit eigenen Passverträgen und Prüfern.
+Die bisherigen Beauty-Verträge bleiben unverändert. `--production` rendert alle 37 Posen
+und erzeugt eigene Passauswahl, Review-Bögen und ein geprüftes Quellenarchiv unter
+`D:/Fragdachse-render`. Historische Pilotbilder liegen unter `build/player-shadow/pilot`.
+21c ist von Claude freigegeben; der separate Runtime-Import ist für 21d vorbereitet und
+schreibt ausschließlich mit explizitem `--apply`.
+
 ## V1-Kompatibilität und vorhandene statische Referenzen
 
 Die folgenden V1-Befehle, Verzeichnisse und Materialhinweise bleiben gültig. Der Viewer listet V1 neben V2 in der gemeinsamen Bibliothek. Die gemeinsame Stil-/Materialbasis gilt auch für V2.
