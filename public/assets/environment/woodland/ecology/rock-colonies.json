@@ -476,8 +476,8 @@
     "width": 512,
     "height": 1024,
     "rgbaBytes": 2097152,
-    "downloadBytes": 108078,
-    "sha256": "ad33e0618dd4b3591b4caa02864765ed9cf72ee1bd878545cd99b52ce2bed5b2",
+    "downloadBytes": 65333,
+    "sha256": "09993ee8ff5a1abe0e14a37e2344e59eea5b7d948b394aaf3a17d3cd51599a10",
     "frames": {
       "moss-strip-01": {
         "frame": {

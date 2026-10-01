@@ -1,3 +1,4 @@
+import { prepareRuntimeAssets } from './prepare-runtime-assets.mjs';
 import sharp from 'sharp';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -58,7 +59,7 @@ const files=[
 ];
 const assets=[];
 for(const entry of files){
-  const png=await sharp(entry.data,{raw:{width:entry.width,height:entry.height,channels:4}}).png().toBuffer();
+  const png=await sharp(entry.data,{raw:{width:entry.width,height:entry.height,channels:4}}).png(entry.file === 'mineral-height.png' ? {compressionLevel:9,adaptiveFiltering:true,palette:false} : {}).toBuffer();
   await writeFile(`${directory}/${entry.file}`,png);
   assets.push({file:entry.file,width:entry.width,height:entry.height,rgbaBytes:entry.data.length,downloadBytes:png.length,sha256:hash(png)});
 }
@@ -67,3 +68,6 @@ await writeFile(`${directory}/mineral.json`,JSON.stringify({version:7,period,hei
   geometrySource:'scripts/lib/slate-v7-geometry.mjs',geometrySha256:hash((await readFile('scripts/lib/slate-v7-geometry.mjs','utf8')).replace(/\r\n/g,'\n')),
   heightEncoding:'RG uint16: -32 + n/65535 * 64 world pixels',heightFromAlbedo:false,assets},null,2)+'\n');
 console.log(JSON.stringify({source,period,assets}));
+
+// Refresh lossless runtime files and content versions after the authored export.
+await prepareRuntimeAssets();

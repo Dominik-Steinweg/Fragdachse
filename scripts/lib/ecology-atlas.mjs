@@ -15,7 +15,7 @@ export async function packEcologyAtlas(output, name, assets, cell = 256, readAss
     // Copy straight RGBA exactly: alpha compositing would round dark leaf fringes twice.
     for(let row=0;row<a.height;row++)tile.copy(pixels,((y+row)*width+x)*4,row*a.width*4,(row+1)*a.width*4);
   }
-  const bytes=await sharp(pixels,{raw:{width,height,channels:4}}).png().toBuffer();
+  const bytes=await sharp(pixels,{raw:{width,height,channels:4}}).png(name === 'rock-contact' ? {compressionLevel:9,adaptiveFiltering:true,palette:false} : {}).toBuffer();
   const file=`${name}-atlas.png`; await writeFile(`${output}/${file}`,bytes);
   return {file,width,height,rgbaBytes:width*height*4,downloadBytes:bytes.length,sha256:hash(bytes),frames};
 }

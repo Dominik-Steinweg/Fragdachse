@@ -1,3 +1,4 @@
+import { prepareRuntimeAssets } from './prepare-runtime-assets.mjs';
 import * as path from 'path';
 import sharp from 'sharp';
 import { mkdir } from 'node:fs/promises';
@@ -158,3 +159,6 @@ for (const tier of [GROUND_AREA_GREEN_CONFIG, GROUND_AREA_SOIL_CONFIG, GROUND_AR
     console.log(`${variant.fileName}: ${longSide} px from ${source}`);
   }
 }
+
+// Refresh lossless runtime files and content versions after the authored export.
+await prepareRuntimeAssets();

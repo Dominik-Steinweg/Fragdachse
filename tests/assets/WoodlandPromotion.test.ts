@@ -14,7 +14,7 @@ it('binds all delivered bytes to manifest hashes and reports actual boot/RGBA to
     for(const a of assets){const bytes=await readFile(root+'/'+folder+'/'+a.file);expect(hash(bytes)).toBe(a.sha256);expect(bytes.length).toBe(a.downloadBytes);}
   }
   for(const limit of [4096,8192]){
-    let download=0,rgba=0;for(const a of woodlandAssetFiles(limit)){const p='public/'+a.url.slice(2);download+=(await readFile(p)).length;if(a.kind!=='coverage'){const m=await sharp(p).metadata();rgba+=m.width!*m.height!*4;}}
+    let download=0,rgba=0;for(const a of woodlandAssetFiles(limit)){const p='public/'+a.url.slice(2).split('?')[0];download+=(await readFile(p)).length;if(a.kind!=='coverage'){const m=await sharp(p).metadata();rgba+=m.width!*m.height!*4;}}
     expect(woodlandAssetBytes(limit)).toMatchObject({download,residentRGBA:rgba});
   }
 },30000);
@@ -22,7 +22,11 @@ it('binds all delivered bytes to manifest hashes and reports actual boot/RGBA to
 it('delivers exactly the manifest-bound production files',async()=>{
  const manifests=['rock/mineral','canopy/canopy','ecology/rock-colonies','ecology/ground-litter','ecology/lilies','sun/transmission'];
  const expected=new Set(manifests.map(p=>p+'.json'));
- for(const limit of [4096,8192])for(const a of woodlandAssetFiles(limit))expected.add(a.url.split('/woodland/')[1]);
+ for(const limit of [4096,8192])for(const a of woodlandAssetFiles(limit))expected.add(a.url.split('/woodland/')[1].split('?')[0]);
+ const publication=await json('public/assets/runtime-colours.json');
+ for(const asset of Object.values(publication.assets) as {source:string;file:string}[]) {
+   if(asset.source.includes('/woodland/'))expected.add(asset.source.split('/woodland/')[1]);
+ }
  const actual:string[]=[];for(const folder of ['rock','canopy','ecology','sun'])for(const name of await readdir(root+'/'+folder))actual.push(folder+'/'+name);
  expect(actual.sort()).toEqual([...expected].sort());
 });

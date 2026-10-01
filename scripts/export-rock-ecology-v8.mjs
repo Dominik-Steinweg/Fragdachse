@@ -1,3 +1,4 @@
+import { prepareRuntimeAssets } from './prepare-runtime-assets.mjs';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
@@ -29,3 +30,6 @@ await writeFile(`${output}/rock-colonies.json`, JSON.stringify({ version: 8, sou
   recipe: 'scripts/export-rock-ecology-v8.mjs', alphaCleanup: 'legacy moss/creeper: smoothstep(64,208,alpha); preserveAlpha variants: authored alpha; all: transparent 4px margin',
   orientation: 'orthographic overhead; diffuse albedo; runtime formation lighting', assets }, null, 2)+'\n');
 console.log(`Exported ${assets.length} ecology assets, ${assets.reduce((n,a)=>n+a.rgbaBytes,0)} RGBA bytes.`);
+
+// Refresh lossless runtime files and content versions after the authored export.
+await prepareRuntimeAssets();

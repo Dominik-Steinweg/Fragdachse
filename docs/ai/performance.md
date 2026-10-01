@@ -94,3 +94,15 @@ Flächenbudget; Streuung und Composite-Kompensation müssen gemeinsam mit dem fi
 werden. Die CPU-Gegenstücke und Tests in [FogPatchField](../../src/effects/sunlight/FogPatchField.ts)
 und [FogPatches.test.ts](../../tests/FogPatches.test.ts) sichern diese Grenze.
 Das Flächenbudget ist kein harter Grenzwert für jeden einzelnen Kameraausschnitt.
+
+## HTTP-Cache bei Ladezeitmessungen
+
+Der Lade-Modus des bestehenden Perf-Runners verwendet ein eigenes persistentes Chrome-Profil
+pro Messlauf mit einem expliziten Disk-Cache-Budget. Jede kalte Iteration leert HTTP- und
+Origin-Cache; der warme Reload
+benutzt denselben Kontext ohne Loeschung. Dies leert keinen OS-, Shader- oder Treibercache.
+Resource-Timing-Transferbytes und CDP-Cache-/Header-Belege im Laufbericht bestimmen, ob
+der erwartete Cache wirklich greift; die Laufdauer allein belegt das nicht.
+Inhaltsversionierte Asset-URLs erhalten lokal bei Vite/Preview immutable-Header. Das
+`gh-pages`-Deployment besitzt keine Repository-Konfiguration fuer eigene HTTP-Header;
+langlebige Cache-Control-Header muessen bei einem dafuer geeigneten Host/CDN gesetzt werden.

@@ -21,7 +21,7 @@ it.each([4096,4351,4352,8192])('downloads one selected V7 atlas and scales every
   const f=fixture(limit);preloadWoodlandAssets(f.scene);const files=woodlandAssetFiles(limit);
   expect(f.files.map(x=>x.url)).toEqual(files.map(x=>x.url));
   const colour=f.files.filter(x=>x.key===WOODLAND_ROCK_COLOUR_KEY);expect(colour).toHaveLength(1);
-  const scale=limit>=4352?2:1;expect(colour[0].url.endsWith(scale===2?'mineral-colour-2x.png':'mineral-colour.png')).toBe(true);
+  const scale=limit>=4352?2:1;expect(new URL(colour[0].url,'https://assets.invalid/').pathname.endsWith(scale===2?'mineral-colour-2x.webp':'mineral-colour.webp')).toBe(true);
   colour[0].data={width:2176*scale,height:1870*scale};colour[0].onProcessComplete();
   expect(f.textures.addSpriteSheet.mock.lastCall[2]).toEqual({frameWidth:32*scale,frameHeight:32*scale,margin:scale,spacing:2*scale});
   expect(colour[0].complete).toBe(true);

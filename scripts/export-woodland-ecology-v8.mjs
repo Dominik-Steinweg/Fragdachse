@@ -1,3 +1,4 @@
+import { prepareRuntimeAssets } from './prepare-runtime-assets.mjs';
 import sharp from 'sharp';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { packEcologyAtlas, hash } from './lib/ecology-atlas.mjs';
@@ -28,3 +29,6 @@ for(const [name,names] of Object.entries(selections)) {
     alpha:'authored alpha; unchanged colours; transparent 4px padding',atlas,assets},null,2)+'\n');
   console.log(`${name}: ${assets.length} frames, ${atlas.rgbaBytes} RGBA bytes`);
 }
+
+// Refresh lossless runtime files and content versions after the authored export.
+await prepareRuntimeAssets();

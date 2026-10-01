@@ -317,3 +317,15 @@ Fels-Horizonte unterscheiden Geometrie-Revision und Sonnenrichtung. Ein Richtung
 keinen geometrisch gültigen laufenden Bake: Sein Ergebnis darf als Zwischenstand erscheinen und
 wird anschließend auf die neueste Richtung nachgeführt. Geometrieänderungen, insbesondere
 Zerstörung, verwerfen veraltete Ergebnisse. Horizont-Blends verwenden die pausierbare Präsentationsuhr.
+
+## Runtime-Asset-Vertrag
+
+Farbtexturen werden durch `scripts/prepare-runtime-assets.mjs` verlustfrei veroeffentlicht.
+`src/assets/RuntimeAssetUrls.ts` bindet logische Loader-Pfade an den Inhalts-Hash der tatsaechlich
+geladenen Datei, auch fuer Deferred-Assets und Retry. Textur-Keys und Frames bleiben stabil.
+Die PNG-Exportzwischenprodukte bleiben fuer Offline-Paritaetspruefungen vorhanden.
+Bei premultipliziert hochgeladenen Farbtexturen sind Alpha und RGB bei Alpha > 0 exakt;
+unsichtbares RGB darf nur dort entfallen. Datenatlanten behalten alle Kanaele, auch RGB
+unter Alpha 0, und ihren bisherigen non-PMA-Upload. Farbkompression darf nicht auf Daten
+uebertragen werden. Nach einem Export aktualisiert `npm run assets:runtime` die Runtime-Dateien
+und URL-Versionen; die Build-Scripts fuehren diesen Schritt automatisch aus.

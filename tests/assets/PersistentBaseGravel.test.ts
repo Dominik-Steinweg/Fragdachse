@@ -263,7 +263,10 @@ describe('persistent-base gravel assets and overlay ownership', () => {
       'gravel_patch_04.png',
     ];
 
-    expect(readdirSync(assetDir).sort()).toEqual(expectedFiles);
+    const publication=JSON.parse(readFileSync('public/assets/runtime-colours.json','utf8'));
+    const runtimeFiles=(Object.values(publication.assets) as {file:string}[])
+      .filter(a=>a.file.startsWith('assets/sprites/persistent-base/')).map(a=>a.file.split('/').pop()!);
+    expect(readdirSync(assetDir).sort()).toEqual([...expectedFiles,...runtimeFiles].sort());
     const queued: Array<{ key: string; path: string }> = [];
     preloadPersistentBaseGravelAssets({
       image: (key: string, path: string) => queued.push({ key, path }),

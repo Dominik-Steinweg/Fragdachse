@@ -1,3 +1,4 @@
+import { prepareRuntimeAssets } from './prepare-runtime-assets.mjs';
 import sharp from 'sharp';
 import { mkdir, readFile, rename, rm } from 'node:fs/promises';
 import { grade, quilt, reconcileTileEdges } from './lib/material-tile.mjs';
@@ -162,3 +163,6 @@ try {
   await rm(temporaryPath, { force: true });
 }
 console.log(`rock_base: ${width} x ${height}, ${ROCK_BASE_PHASES} phases per frame from ${recipe.source}`);
+
+// Refresh lossless runtime files and content versions after the authored export.
+await prepareRuntimeAssets();

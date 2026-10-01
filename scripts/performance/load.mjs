@@ -104,6 +104,18 @@ export async function runLoadMeasurements({ page, context, url, directory, reque
   signal.throwIfAborted();
   const cdp = await context.newCDPSession(page);
   const samples = [];
+  let http = { responses: 0, diskCache: 0, serviceWorker: 0, examples: [] };
+  const responseReceived = ({ response }) => {
+    http.responses++;
+    if (response.fromDiskCache) http.diskCache++;
+    if (response.fromServiceWorker) http.serviceWorker++;
+    if (http.examples.length < 12 && /woodland|rock_base|gravel_material/.test(response.url)) {
+      const headers = Object.fromEntries(Object.entries(response.headers).map(([k, v]) => [k.toLowerCase(), v]));
+      http.examples.push({ url: response.url, status: response.status, diskCache: !!response.fromDiskCache,
+        cacheControl: headers['cache-control'], etag: headers.etag });
+    }
+  };
+  cdp.on?.('Network.responseReceived', responseReceived);
   const poll = async predicate => {
     const deadline = Date.now() + Math.min(request.timeoutMs, 300_000);
     for (;;) {
@@ -139,7 +151,8 @@ export async function runLoadMeasurements({ page, context, url, directory, reque
       // Boot includes imports before BootScreen.begin; switches exclude earlier cached boot transfers.
       resources: boot ? raw.timeline.resources : world?.resources ?? { groups: [] } };
     // Raw timeline + phase-local raw resources preserve evidence for other attribution/grouping.
-    await writeFile(join(directory, `load-${String(iteration).padStart(2, '0')}-${phase}.json`), JSON.stringify({ sample, ...raw }, null, 2));
+    await writeFile(join(directory, `load-${String(iteration).padStart(2, '0')}-${phase}.json`), JSON.stringify({ sample, ...raw, http }, null, 2));
+    http = { responses: 0, diskCache: 0, serviceWorker: 0, examples: [] };
     samples.push(sample);
     await writeLoadReports(directory, request, samples);
     console.log(`Load ${iteration}/${request.runs} ${phase}: ${(sample.commandToRevealMs / 1000).toFixed(2)} s, rAF ${raf.medianFps?.toFixed(1) ?? '?'} fps${sample.valid ? '' : ' INVALID'}`);
@@ -201,5 +214,5 @@ export async function runLoadMeasurements({ page, context, url, directory, reque
       await writeFile(join(directory, 'load-failed-timeline.json'), JSON.stringify(partial, null, 2));
     } catch { /* The renderer can already be gone; previous samples remain on disk. */ }
     throw error;
-  } finally { await cdp.detach().catch(() => {}); }
+  } finally { cdp.off?.('Network.responseReceived', responseReceived); await cdp.detach().catch(() => {}); }
 }

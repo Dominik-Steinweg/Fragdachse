@@ -76,13 +76,14 @@ async function hashSources() {
     if (info.isDirectory()) for (const entry of (await readdir(path)).sort()) await visit(join(path, entry));
     else { hash.update(relative(root, path).replaceAll('\\', '/')); hash.update(await readFile(path)); }
   }
-  for (const path of ['src', 'scripts/performance', 'public', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) await visit(resolve(path));
+  for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'public', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) await visit(resolve(path));
   return hash.digest('hex');
 }
 
 async function run() {
   await checkSpace();
   diskTimer = setInterval(() => { void checkSpace(64 * 1024 ** 2).catch(error => abortRun(error.message)); }, 2000);
+  if (!request.buildHash) await command(process.execPath, ['scripts/prepare-runtime-assets.mjs']);
   manifest.sourceHash = request.buildHash ?? await hashSources();
   manifest.commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   manifest.dirty = !!execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
@@ -99,7 +100,7 @@ async function run() {
     const storage = createBuildStorage(resolve('build/performance-objects'), buildDirectory, checkSpace, abortController.signal);
     await storage.deduplicateTree(site);
     await storage.archiveTree(resolve('public'), site);
-    for (const path of ['src', 'scripts/performance', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) {
+    for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) {
       abortController.signal.throwIfAborted();
       await storage.archiveTree(resolve(path), join(buildDirectory, 'source', path));
     }
@@ -149,11 +150,22 @@ async function run() {
     launchOptions.ignoreDefaultArgs = ['--mute-audio', '--autoplay-policy=no-user-gesture-required'];
   }
   manifest.launchOptions = launchOptions;
-  browser = await acquireOwned(() => chromium.launch(launchOptions),
-    resource => bounded(resource.close(), 10_000, 'Late browser close timeout'), abortController.signal);
+  if (request.load) {
+    // A regular on-disk HTTP cache, scoped to this run; never use a personal Chrome profile.
+    // Incognito contexts have a small memory-only cache, unsuitable for a >100 MB boot.
+    launchOptions.args.push('--disk-cache-size=536870912');
+    manifest.cacheProfile = 'chrome-profile';
+    context = await acquireOwned(() => chromium.launchPersistentContext(join(directory, 'chrome-profile'), {
+      ...launchOptions, viewport: LOAD_VIEWPORT, deviceScaleFactor: 1,
+    }), resource => bounded(resource.close(), 10_000, 'Late profile close timeout'), abortController.signal);
+    browser = context.browser();
+  } else {
+    browser = await acquireOwned(() => chromium.launch(launchOptions),
+      resource => bounded(resource.close(), 10_000, 'Late browser close timeout'), abortController.signal);
+    context = await acquireOwned(() => browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 }),
+      resource => bounded(resource.close(), 5000, 'Late context close timeout'), abortController.signal);
+  }
   manifest.browserVersion = browser.version();
-  context = await acquireOwned(() => browser.newContext({ viewport: request.load ? LOAD_VIEWPORT : { width: 1920, height: 1080 }, deviceScaleFactor: 1 }),
-    resource => bounded(resource.close(), 5000, 'Late context close timeout'), abortController.signal);
   await context.addInitScript(req => { window.__FD_PERF_REQUEST__ = req; }, request);
   const page = await context.newPage();
   abortController.signal.throwIfAborted();

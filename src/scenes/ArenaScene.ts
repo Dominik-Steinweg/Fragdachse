@@ -1,3 +1,4 @@
+import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { preloadRockBase } from '../arena/RockBaseConfig';
@@ -329,6 +330,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   preload(): void {
+    installRuntimeAssetUrls(this.load);
     BootScreen.begin();
     BootScreen.setStatus(t('ui.boot.loadingData'));
     BootScreen.setProgress(0);

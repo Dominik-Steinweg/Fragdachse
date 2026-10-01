@@ -1,3 +1,4 @@
+import { prepareRuntimeAssets } from './prepare-runtime-assets.mjs';
 import sharp from 'sharp';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -37,10 +38,13 @@ for(const a of assets)if(a.conifer)a.weight=broad*.25/conifers;
 await mkdir(output,{recursive:true});
 const atlases=[];
 for(let i=0;i<kinds.length;i++) {
-  const file=`${kinds[i]==='data'?'normal-ao-thickness':kinds[i]}.png`,bytes=await sharp(buffers[i],{raw:{width:side,height:side,channels:4}}).png().toBuffer();
+  const file=`${kinds[i]==='data'?'normal-ao-thickness':kinds[i]}.png`,bytes=await sharp(buffers[i],{raw:{width:side,height:side,channels:4}}).png(i === 0 ? {} : {compressionLevel:9,adaptiveFiltering:true,palette:false}).toBuffer();
   await writeFile(`${output}/${file}`,bytes);
   atlases.push({kind:kinds[i],file,width:side,height:side,rgbaBytes:buffers[i].length,downloadBytes:bytes.length,sha256:sha256(bytes),premultiplied:i===0});
 }
 await writeFile(`${output}/canopy.json`,JSON.stringify({version:9,source,recipe:'scripts/export-forest-v9.mjs',
   orientation:'top-down neutral; no rotation or mirroring',coverageConfig,coverageVersion,coverageSha256:sha256(coverageText),coverageContract,materialConfig,materialVersion,materialSha256:sha256(materialText),atlases,assets},null,2)+'\n');
 console.log(`V9: ${assets.length} crowns, ${atlases.length} atlases, ${buffers.reduce((n,b)=>n+b.length,0)/1048576} MiB RGBA.`);
+
+// Refresh lossless runtime files and content versions after the authored export.
+await prepareRuntimeAssets();

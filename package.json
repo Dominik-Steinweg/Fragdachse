@@ -44,7 +44,13 @@
     "map:editor": "vite --config tools/map-editor/vite.config.ts --open",
     "build:map-editor": "tsc -p tools/map-editor/tsconfig.json && vite build --config tools/map-editor/vite.config.ts",
     "build:ground-lab": "tsc && vite build --mode ground-lab",
-    "sprites:ground": "node scripts/generate-grass-tiles.mjs && node scripts/generate-ground-macro.mjs && node scripts/generate-ground-cover-textures.mjs"
+    "sprites:ground": "node scripts/generate-grass-tiles.mjs && node scripts/generate-ground-macro.mjs && node scripts/generate-ground-cover-textures.mjs",
+    "assets:runtime": "node scripts/prepare-runtime-assets.mjs",
+    "prebuild": "npm run assets:runtime",
+    "prebuild:perf-lab": "npm run assets:runtime",
+    "prebuild:map-editor": "npm run assets:runtime",
+    "assets:verify-runtime": "node scripts/verify-runtime-assets.mjs",
+    "pretest:assets": "npm run assets:runtime"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

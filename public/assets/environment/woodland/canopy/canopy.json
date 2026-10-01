@@ -71,8 +71,8 @@
       "width": 2048,
       "height": 2048,
       "rgbaBytes": 16777216,
-      "downloadBytes": 8143566,
-      "sha256": "6d44dd8ada6378667187be00e24e3d80706b143c914c4a639f272d0f66c90b57",
+      "downloadBytes": 2701749,
+      "sha256": "83b3eff93b031b057869fee0d51abb0d74910cd10de3272be64cc8bfa8eac716",
       "premultiplied": false
     },
     {
@@ -81,8 +81,8 @@
       "width": 2048,
       "height": 2048,
       "rgbaBytes": 16777216,
-      "downloadBytes": 7254146,
-      "sha256": "a2a0f99a80b96e3ca0b1aefdf330dc0d54573ed33418f20afbc0dd8c2fa94b86",
+      "downloadBytes": 2759290,
+      "sha256": "f114dacc306494947cf5ae54136bb608e339752268fc11d25eb414e6b3e36073",
       "premultiplied": false
     },
     {
@@ -91,8 +91,8 @@
       "width": 2048,
       "height": 2048,
       "rgbaBytes": 16777216,
-      "downloadBytes": 7340266,
-      "sha256": "701334921dc3d49112a393db0fc45fcffa63460afe9f25e624ca06a1596d7382",
+      "downloadBytes": 2776310,
+      "sha256": "486ceb2411fb8101f44079cfd173c671a6f7b32b4d17b23241d9b1aff11f1c05",
       "premultiplied": false
     }
   ],
