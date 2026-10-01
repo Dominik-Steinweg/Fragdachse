@@ -35,7 +35,7 @@ export interface ChunkBakeJob {
   readonly completionKey?: object;
   /** Raises the frame budget only while visible/inherently urgent work is pending. */
   readonly urgent?: () => boolean;
-  readonly run: () => void;
+  readonly run: () => void | boolean;
 }
 
 function now(): number {
@@ -49,6 +49,7 @@ function now(): number {
  */
 export class ChunkBakeScheduler {
   private readonly jobs = new Map<string, ChunkBakeJob>();
+  private readonly deferredOwners=new Set<object>();
   private lastOwner: object | null = null;
   private consecutiveOwnerOperations = 0;
   private activeCompletionKey: object | null = null;
@@ -90,6 +91,7 @@ export class ChunkBakeScheduler {
     );
     if (effectiveBudget <= 0) return 0;
 
+    this.deferredOwners.clear();
     const startedAt = now();
     const deadline = startedAt + effectiveBudget;
     let operations = 0;
@@ -98,7 +100,7 @@ export class ChunkBakeScheduler {
       if (!job) break;
       this.jobs.delete(job.key);
       const measuredAt = loadingTimeline.start();
-      job.run();
+      if(job.run()===false){this.jobs.set(job.key,job);this.deferredOwners.add(job.owner);continue;}
       if (measuredAt >= 0) loadingTimeline.end(job.diagnosticName ?? 'chunks/bake', measuredAt);
       operations += 1;
       this.recordOperation(job);
@@ -112,12 +114,13 @@ export class ChunkBakeScheduler {
 
   /** Nur fuer kontrollierte Tests/Teardown-Checks; der normale Frame-Pfad nutzt runFrame(). */
   drain(maxOperations = Number.POSITIVE_INFINITY): number {
+    this.deferredOwners.clear();
     let operations = 0;
     while (this.jobs.size > 0 && operations < maxOperations) {
       const job = this.pickNextJob();
       if (!job) break;
       this.jobs.delete(job.key);
-      job.run();
+      if(job.run()===false){this.jobs.set(job.key,job);break;}
       operations += 1;
       this.recordOperation(job);
     }
@@ -135,6 +138,7 @@ export class ChunkBakeScheduler {
     let best: ChunkBakeJob | null = null;
     let bestPriority = Number.POSITIVE_INFINITY;
     for (const job of this.jobs.values()) {
+      if(this.deferredOwners.has(job.owner))continue;
       const priority = job.priority();
       if (priority < bestPriority) {
         best = job;
@@ -149,6 +153,7 @@ export class ChunkBakeScheduler {
       let completionBest: ChunkBakeJob | null = null;
       let completionPriority = Number.POSITIVE_INFINITY;
       for (const job of this.jobs.values()) {
+        if(this.deferredOwners.has(job.owner))continue;
         if (job.completionKey !== this.activeCompletionKey) continue;
         const priority = job.priority();
         if (priority < completionPriority) {
@@ -168,6 +173,7 @@ export class ChunkBakeScheduler {
       let alternative: ChunkBakeJob | null = null;
       let alternativePriority = Number.POSITIVE_INFINITY;
       for (const job of this.jobs.values()) {
+        if(this.deferredOwners.has(job.owner))continue;
         if (job.owner === this.lastOwner) continue;
         const priority = job.priority();
         if (priority < alternativePriority) {

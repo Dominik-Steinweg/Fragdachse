@@ -1,6 +1,6 @@
 # ground-litter: active authored sources
 
-Built-in ImageGen, September 2026. Only the selected sources below are runtime inputs. Authored alpha and orthographic overhead appearance are retained. Recipes, sizes and source hashes are recorded in `public/assets/environment/woodland/ecology/ground-litter.json`.
+Built-in ImageGen, September 2026. Only the selected sources below are runtime inputs. Authored alpha and orthographic overhead appearance are retained. Recipes, sizes and source hashes are recorded in `src/assets/manifests/ground-litter.json`.
 
 - [leaf-litter-01.png](leaf-litter-01.png)
 - [leaf-litter-03.png](leaf-litter-03.png)

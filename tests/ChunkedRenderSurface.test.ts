@@ -731,3 +731,15 @@ describe('chunked render surface', () => {
     expect(reacquired.texture.source[0].scaleMode).toBe(0);
   });
 });
+
+it('does not reveal or complete an async material region before its pixels exist',async()=>{
+ const {getChunkBakeScheduler}=await import('../src/arena/chunks/ChunkBakeScheduler');
+ const scene=createScene(),bake=vi.fn();let ready=false;
+ const surface=new ChunkedRenderSurface(scene,{frame:{offsetX:12,offsetY:20,width:512,height:512},layers:LAYERS,
+  prepare:()=>ready,bake});const view={x:12,y:20,width:512,height:512};surface.updateResidency(view);
+ drain(scene);expect(bake).not.toHaveBeenCalled();expect(surface.getWorkingSet(view).ready).toBe(false);
+ const scheduler=getChunkBakeScheduler(scene),other=vi.fn();scheduler.enqueue({key:'independent',owner:{},priority:()=>10000,run:other});
+ scheduler.runFrame(100);expect(other).toHaveBeenCalledOnce();expect(scheduler.pendingJobs).toBeGreaterThan(0);
+ ready=true;drain(scene);expect(bake).toHaveBeenCalled();expect(surface.getWorkingSet(view).ready).toBe(true);
+ surface.destroy();expect(scheduler.pendingJobs).toBe(0);
+});

@@ -1,6 +1,6 @@
 # rock-colonies: active authored sources
 
-Built-in ImageGen, September 2026. Only the selected sources below are runtime inputs. Authored alpha and orthographic overhead appearance are retained. Recipes, sizes and source hashes are recorded in `public/assets/environment/woodland/ecology/rock-colonies.json`.
+Built-in ImageGen, September 2026. Only the selected sources below are runtime inputs. Authored alpha and orthographic overhead appearance are retained. Recipes, sizes and source hashes are recorded in `src/assets/manifests/rock-colonies.json`.
 
 - [moss-strip-01.png](moss-strip-01.png)
 - [moss-strip-02.png](moss-strip-02.png)

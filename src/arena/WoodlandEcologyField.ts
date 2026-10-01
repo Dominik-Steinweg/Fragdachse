@@ -6,8 +6,8 @@ import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
 import { ARENA_RENDER_CHUNK_SIZE } from './chunks/ArenaChunkGrid';
 import { WATER_MASK_HALO, WATER_MASK_STEP, WATER_SHORE_DISTANCE, type WaterMaskView } from './WaterSurfaceModel';
-import litter from '../../public/assets/environment/woodland/ecology/ground-litter.json';
-import pond from '../../public/assets/environment/woodland/ecology/lilies.json';
+import litter from '../assets/manifests/ground-litter.json';
+import pond from '../assets/manifests/lilies.json';
 import { CANOPY_ASSETS, canopyVariant } from './trees/CanopyAssets';
 
 export const WOODLAND_ATLASES = [

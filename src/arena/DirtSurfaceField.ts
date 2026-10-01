@@ -208,6 +208,14 @@ export class DirtSurfaceField {
     return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
   }
 
+  private hasBank(x:number,y:number,size:number):boolean {
+    if(!this.bankZone)return false;
+    for(let gy=Math.floor(y/CELL_SIZE);gy<=Math.floor((y+size-1)/CELL_SIZE);gy++)
+      for(let gx=Math.floor(x/CELL_SIZE);gx<=Math.floor((x+size-1)/CELL_SIZE);gx++)
+        if(this.bankZone[this.index(gx,gy)])return true;
+    return false;
+  }
+
   /** Soil opacity for a neutral grass height; used by tests and coarse consumers. */
   coverageAt(worldX: number, worldY: number): number {
     const x = worldX - this.frame.offsetX, y = worldY - this.frame.offsetY;
@@ -268,7 +276,7 @@ export class DirtSurfaceField {
     }
     const altColumn = alt ? groundMaterialPhase(localX, alt.width) : 0;
     // Riverbank: signed water distance on its own frame-anchored lattice.
-    const bank = this.bankZone && materials.bank && materials.bankWet
+    const bank = this.hasBank(localX,localY,size) && materials.bank && materials.bankWet
       ? { dry: materials.bank, wet: materials.bankWet } : null;
     const b0 = Math.floor((localX + .5) / BANK_STEP), c0 = Math.floor((localY + .5) / BANK_STEP);
     const bankSpan = Math.floor((localX + size - .5) / BANK_STEP) - b0 + 2;

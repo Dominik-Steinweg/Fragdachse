@@ -686,9 +686,9 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       expect(scene.game.events.off).not.toHaveBeenCalled();
       expect(progress).not.toHaveBeenCalled(); // Unmeasured work does not invent a percentage.
     }
-    expect(scene.arenaRuntime.getWorldRevealState).toHaveBeenCalledWith({
+    expect(scene.arenaRuntime.getWorldRevealState).toHaveBeenCalledWith(expect.objectContaining({
       x: 90, y: 120, width: 640, height: 360, centerX: 410, centerY: 300,
-    });
+    }));
     reveal.ready = true;
     scene.syncBootReveal();
     expect(scene.bootRevealPending).toBe(false);

@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { sha256, visiblePixels } from './lib/runtime-colours.mjs';
 
-const manifest = JSON.parse(await readFile('public/assets/runtime-colours.json', 'utf8'));
+const manifest = JSON.parse(await readFile('src/assets/manifests/runtime-colours.json', 'utf8'));
 const proof = 'build/a2-proof';
 await mkdir(proof, { recursive: true });
 const pairs = [], candidates = [];

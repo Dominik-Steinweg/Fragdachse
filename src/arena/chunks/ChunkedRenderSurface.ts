@@ -98,6 +98,8 @@ export interface ChunkedRenderSurfaceOptions {
   readonly frame: ChunkWorldFrame;
   readonly layers: readonly ChunkedSurfaceLayerSpec[];
   readonly bake: ChunkBakeFn;
+  /** Async material preparation; false retains the job and all readiness barriers. */
+  readonly prepare?: (worldX:number,worldY:number,size:number)=>boolean;
   readonly chunkSize?: number;
   /** Ueberschreibt {@link CHUNK_SAMPLING_GUTTER_PX}; `0` schaltet den Gutter ab. */
   readonly gutterPx?: number;
@@ -193,6 +195,7 @@ export class ChunkedRenderSurface {
   readonly chunkTextureSize: number;
   private readonly frame: ChunkWorldFrame;
   private readonly layers: readonly ChunkedSurfaceLayerSpec[];
+  private readonly prepare?:ChunkedRenderSurfaceOptions['prepare'];
   private readonly bakeFn: ChunkBakeFn;
   private readonly onChunkTextureCreated?: (texture: Phaser.GameObjects.RenderTexture, layerId: string) => void;
   private readonly onChunkBaked?: ChunkedRenderSurfaceOptions['onChunkBaked'];
@@ -221,7 +224,7 @@ export class ChunkedRenderSurface {
     this.frame = options.frame;
     this.layers = options.layers;
     this.diagnosticName = 'chunks/bake/' + options.layers.map(layer => layer.id).join('+');
-    this.bakeFn = options.bake;
+    this.bakeFn = options.bake;this.prepare=options.prepare;
     this.onChunkBaked = options.onChunkBaked;
     this.onChunkTextureCreated = options.onChunkTextureCreated;
     this.scheduler = getChunkBakeScheduler(scene);
@@ -909,8 +912,10 @@ export class ChunkedRenderSurface {
     chunk: ResidentChunk,
     regionKey: string,
     region: { localX: number; localY: number; width: number; height: number },
-  ): void {
+  ): void | boolean {
     if (this.destroyed || this.resident.get(this.grid.key(chunk.coord.cx, chunk.coord.cy)) !== chunk) return;
+    if(this.prepare&&!this.prepare(this.frame.offsetX+region.localX-this.gutterPx,
+      this.frame.offsetY+region.localY-this.gutterPx,region.width+2*this.gutterPx))return false;
     this.runBake(chunk, region.localX, region.localY, region.width);
     if (chunk.gutterSyncRegions.delete(regionKey)) {
       const neighbours = this.collectNeighbourGutterTargets(

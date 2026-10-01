@@ -31,7 +31,9 @@ export function cloudShadowAt(x:number,y:number,state:SunCloudState,time=state.t
   px+=wx*t.cloudWarp;py+=wy*t.cloudWarp;
   const field=.62*noise(px,py,cloudHash)+.27*noise(px*2.03+17.3+sx*1.7,py*2.03+39.1+sy*1.7,cloudHash)
     +.11*noise(px*4.11+7.7-sx*2.3,py*4.11+7.7-sy*2.3,cloudHash);
-  const threshold=mix(.32,.68,t.cloudCover),opening=smooth(threshold-t.cloudSoftness,threshold+t.cloudSoftness,field);
+  const threshold=mix(.32,.68,t.cloudCover);let opening=smooth(threshold-t.cloudSoftness,threshold+t.cloudSoftness,field);
+  const spot=smooth(.40,.78,noise(px*(scale/Math.max(80,t.cloudSpotScale))+wx*.8+53.2,py*(scale/Math.max(80,t.cloudSpotScale))+wy*.8+17.8,cloudHash));
+  opening=Math.max(0,Math.min(1,opening+t.cloudSpotAmount*(spot-.40)*4*opening*(1-opening)));
   const result=mix(1,opening,smooth(0,.12,t.cloudCover))*(1-smooth(.88,1,t.cloudCover));
   return Number.isFinite(result)?result:1;
 }

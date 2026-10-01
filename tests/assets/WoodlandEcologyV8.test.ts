@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
 it.each(['rock-colonies','ground-litter','lilies'])('verifies %s atlas frames, source hashes and exclusions',async name=>{
   const root='public/assets/environment/woodland/ecology/';
-  const m=JSON.parse(await readFile(root+name+'.json','utf8'));
+  const m=JSON.parse(await readFile('src/assets/manifests/'+name+'.json','utf8'));
   const png=await readFile(root+m.atlas.file);expect(hash(png)).toBe(m.atlas.sha256);
   const {data,info}=await sharp(png).raw().toBuffer({resolveWithObject:true});
   expect(info).toMatchObject({width:m.atlas.width,height:m.atlas.height,channels:4});expect(data.length).toBe(m.atlas.rgbaBytes);

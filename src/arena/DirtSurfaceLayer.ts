@@ -1,3 +1,4 @@
+import {TerrainSnapshotWorkerClient} from './TerrainSnapshotWorkerClient';
 import * as Phaser from 'phaser';
 import type { DirtCell, WaterCell } from '../types';
 import { DirtSurfaceField } from './DirtSurfaceField';
@@ -15,6 +16,9 @@ export class DirtSurfaceLayer {
   private readonly surface: Phaser.Textures.CanvasTexture;
   private readonly image: Phaser.GameObjects.Image;
   private readonly pixels: ImageData;
+  private worker:TerrainSnapshotWorkerClient|null=null;
+  private requested:string|null=null;
+  private readonly prepared=new Map<string,Uint8ClampedArray>();
 
   constructor(private readonly scene: Phaser.Scene, seed: number, dirt: readonly DirtCell[],
     frame: ChunkWorldFrame, size: number, private readonly materials: GroundMaterialSamples,
@@ -32,6 +36,23 @@ export class DirtSurfaceLayer {
     this.image = new Phaser.GameObjects.Image(scene, 0, 0, key).setOrigin(0);
   }
 
+  /** One transferred tile in flight, bounded native cache, no readback. */
+  prepare(worldX:number,worldY:number,size:number):boolean {
+    if(typeof Worker==='undefined')return true;
+    this.worker??=new TerrainSnapshotWorkerClient();
+    const result=this.worker.take();
+    if(result&&this.requested!==null){
+      if(this.prepared.size>=64)this.prepared.delete(this.prepared.keys().next().value!);
+      this.prepared.set(this.requested,new Uint8ClampedArray(result));this.requested=null;
+    }
+    const key=worldX+':'+worldY+':'+size;
+    if(this.prepared.has(key))return true;
+    if(this.requested===null){this.requested=key;
+      this.worker.request(this.snapshotSource,size,worldX,worldY,size,size,new ArrayBuffer(size*size*4),true);
+    }
+    return false;
+  }
+
   bake(target: Phaser.GameObjects.RenderTexture, region: ChunkBakeRegion): void {
     this.writeRegion(region);
     this.surface.context.putImageData(this.pixels, 0, 0);
@@ -45,11 +66,14 @@ export class DirtSurfaceLayer {
   /** Borrowed native pixels, consumed before the next bake. Snapshot staging uses
    * the identical field without uploading/drawing one GPU scratch per small tile. */
   writeRegion(region: ChunkBakeRegion): ImageData {
+    const cached=this.prepared.get(region.worldX+':'+region.worldY+':'+region.size);
+    if(cached){this.pixels.data.set(cached);return this.pixels;}
     this.field.writeSurface(this.pixels.data, this.pixels.width, region.worldX, region.worldY, region.size, this.materials);
     return this.pixels;
   }
 
   destroy(): void {
+    this.worker?.destroy();this.worker=null;this.prepared.clear();this.requested=null;
     this.image.destroy();
     this.scene.textures.remove(this.surface.key);
   }

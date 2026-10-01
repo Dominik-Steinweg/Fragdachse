@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {ROCK_ECOLOGY_RECIPE,exportRockEcology} from '../../scripts/lib/rock-ecology-v8-export.mjs';
 import {ROCK_ECOLOGY_ASSETS} from '../../src/arena/rocks/RockEcologyAssets';
 it('reproduces source-traced RGBA ecology assets with clear borders and real leaf coverage',async()=>{
-  const manifest=JSON.parse(await readFile('public/assets/environment/woodland/ecology/rock-colonies.json','utf8'));
+  const manifest=JSON.parse(await readFile('src/assets/manifests/rock-colonies.json','utf8'));
   expect(manifest.assets.length).toBe(23);expect(manifest.assets.length).toBe(ROCK_ECOLOGY_ASSETS.length);
   const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
   for(const asset of manifest.assets){
@@ -25,7 +25,7 @@ it('reproduces source-traced RGBA ecology assets with clear borders and real lea
   }
 });
 it('packs exact frame pixels and hashes in one atlas, preserving approved padded source proportions',async()=>{
-  const m=JSON.parse(await readFile('public/assets/environment/woodland/ecology/rock-colonies.json','utf8'));
+  const m=JSON.parse(await readFile('src/assets/manifests/rock-colonies.json','utf8'));
   const bytes=await readFile('public/assets/environment/woodland/ecology/'+m.atlas.file);
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(m.atlas.sha256);
   expect(m.atlas.rgbaBytes).toBe(m.atlas.width*m.atlas.height*4);

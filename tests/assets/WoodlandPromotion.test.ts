@@ -7,7 +7,7 @@ const root='public/assets/environment/woodland';
 const json=async(p:string)=>JSON.parse(await readFile(p,'utf8'));
 const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
 it('binds all delivered bytes to manifest hashes and reports actual boot/RGBA totals',async()=>{
-  const manifests=await Promise.all(['rock/mineral','canopy/canopy','ecology/rock-colonies','ecology/ground-litter','ecology/lilies','sun/transmission'].map(p=>json(root+'/'+p+'.json')));
+  const manifests=await Promise.all(['rock/mineral','canopy/canopy','ecology/rock-colonies','ecology/ground-litter','ecology/lilies','sun/transmission'].map(p=>json('src/assets/manifests/'+p.split('/').at(-1)+'.json')));
   for(const [i,m] of manifests.entries()){
     const folder=i===0?'rock':i===1?'canopy':i===5?'sun':'ecology';
     const assets=i===0?[...m.assets,m.coverage]:i===1?m.atlases:i===5?[{...m,file:'transmission.png'}]:[m.atlas,...(m.contactAtlas?[m.contactAtlas]:[])];
@@ -21,9 +21,9 @@ it('binds all delivered bytes to manifest hashes and reports actual boot/RGBA to
 
 it('delivers exactly the manifest-bound production files',async()=>{
  const manifests=['rock/mineral','canopy/canopy','ecology/rock-colonies','ecology/ground-litter','ecology/lilies','sun/transmission'];
- const expected=new Set(manifests.map(p=>p+'.json'));
+ const expected=new Set<string>();
  for(const limit of [4096,8192])for(const a of woodlandAssetFiles(limit))expected.add(a.url.split('/woodland/')[1].split('?')[0]);
- const publication=await json('public/assets/runtime-colours.json');
+ const publication=await json('src/assets/manifests/runtime-colours.json');
  for(const asset of Object.values(publication.assets) as {source:string;file:string}[]) {
    if(asset.source.includes('/woodland/'))expected.add(asset.source.split('/woodland/')[1]);
  }

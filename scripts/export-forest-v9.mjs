@@ -42,7 +42,7 @@ for(let i=0;i<kinds.length;i++) {
   await writeFile(`${output}/${file}`,bytes);
   atlases.push({kind:kinds[i],file,width:side,height:side,rgbaBytes:buffers[i].length,downloadBytes:bytes.length,sha256:sha256(bytes),premultiplied:i===0});
 }
-await writeFile(`${output}/canopy.json`,JSON.stringify({version:9,source,recipe:'scripts/export-forest-v9.mjs',
+await writeFile('src/assets/manifests/canopy.json',JSON.stringify({version:9,source,recipe:'scripts/export-forest-v9.mjs',
   orientation:'top-down neutral; no rotation or mirroring',coverageConfig,coverageVersion,coverageSha256:sha256(coverageText),coverageContract,materialConfig,materialVersion,materialSha256:sha256(materialText),atlases,assets},null,2)+'\n');
 console.log(`V9: ${assets.length} crowns, ${atlases.length} atlases, ${buffers.reduce((n,b)=>n+b.length,0)/1048576} MiB RGBA.`);
 

@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {runtimeAssetUrl} from '../../src/assets/RuntimeAssetUrls';
 import urls from '../../src/assets/runtimeAssetUrls.json';
-import publication from '../../public/assets/runtime-colours.json';
+import publication from '../../src/assets/manifests/runtime-colours.json';
 const hash=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const visible=(pixels:Buffer)=>{for(let i=0;i<pixels.length;i+=4)if(pixels[i+3]===0)pixels.fill(0,i,i+3);return pixels;};
 it('publishes exact alpha and visible RGB, unchanged dimensions, valid content hashes and smaller downloads',async()=>{

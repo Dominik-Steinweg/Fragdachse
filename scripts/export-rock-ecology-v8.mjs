@@ -25,7 +25,7 @@ for (const recipe of ROCK_ECOLOGY_RECIPE.filter(r => r.surfaceFinish)) {
 const atlas = await packEcologyAtlas(output, 'rock-colonies', assets, 256, a => images.get(a.file));
 const contactAtlas=await packEcologyAtlas(output,'rock-contact',contacts,128,a => images.get(a.file));
 for(const a of [...assets,...contacts]) { a.pixelSha256=hash(await sharp(images.get(a.file)).ensureAlpha().raw().toBuffer()); delete a.file; delete a.sha256; }
-await writeFile(`${output}/rock-colonies.json`, JSON.stringify({ version: 8, source, atlas,
+await writeFile('src/assets/manifests/rock-colonies.json', JSON.stringify({ version: 8, source, atlas,
   contactAtlas, contacts, contactRecipe:'96px colour alpha + 16px guard, dilate 3px, blur sigma 3px; dark neutral green; runtime opacity',
   recipe: 'scripts/export-rock-ecology-v8.mjs', alphaCleanup: 'legacy moss/creeper: smoothstep(64,208,alpha); preserveAlpha variants: authored alpha; all: transparent 4px margin',
   orientation: 'orthographic overhead; diffuse albedo; runtime formation lighting', assets }, null, 2)+'\n');

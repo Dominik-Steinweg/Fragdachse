@@ -1,3 +1,4 @@
+import {createVisibleWorldView} from '../../graphics/CameraWorldView';
 import type * as Phaser from 'phaser';
 import { bridge } from '../../network/bridge';
 import { isDiagnosticMapId } from '../../config/coopDefenseMaps';
@@ -22,6 +23,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     diagnostics.addFrameScope(flow, 'runHostFrame', 'gameplay');
     diagnostics.addFrameScope(flow, 'runClientFrame', 'gameplay');
   }
+  const cameraView=createVisibleWorldView();
   const targets = new Map<string, { x: number; y: number }>();
   let previousMap = bridge.getCoopDefenseMapId(), previousMode = bridge.getGameMode();
   let playerPosition = { x: 1000, y: 540 }, aimPosition = { x: 1220, y: 540 };
@@ -132,7 +134,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     }
     const train = state.train;
     if (train?.alive) { add('trainActiveSamples'); counters.trainX = train.x; counters.trainY = train.y;
-      counters.cameraX = scene.cameras.main.worldView.x; counters.cameraY = scene.cameras.main.worldView.y; }
+      getVisibleWorldView(scene.cameras.main,cameraView); counters.cameraX=cameraView.x; counters.cameraY=cameraView.y; }
     if (train?.alive && isWorldPointInsideView(train.x, train.y, getVisibleWorldView(scene.cameras.main))) {
       add('trainVisibleSamples');
       if (lastTrainY !== null && Math.abs(lastTrainY - train.y) > 1) add('trainMovingSamples');

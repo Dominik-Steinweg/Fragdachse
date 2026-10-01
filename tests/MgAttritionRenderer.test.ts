@@ -12,7 +12,7 @@ import { emptyMgAttritionSnapshot } from '../src/systems/MgAttritionRuntime';
 
 beforeEach(()=>resetGpuVfxAtlasForTests());
 function setup(){
-  const scene=Object.assign(makeFakeGpuVfxScene(),{cameras:{main:{worldView:{x:-100,y:-100,right:1000,bottom:1000}}}});
+  const scene=Object.assign(makeFakeGpuVfxScene(),{cameras:{main:{width:1100,height:1100,originX:0,originY:0,zoom:1,scrollX:-100,scrollY:-100,worldView:{x:-100,y:-100,right:1000,bottom:1000}}}});
   const gpu=new GpuVfxSystem(scene as never), registrations=vi.spyOn(gpu,'registerEmission'), create=vi.spyOn(gpu,'createSource'),release=vi.spyOn(gpu,'releaseSource');
   const renderer=new MgAttritionRenderer(scene as never,gpu);
   const target=mgTarget().ref,snapshot={targets:[{target,expiresAt:4000,bleedUntil:4000}],transfers:[],transferSequence:0};

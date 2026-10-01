@@ -25,7 +25,7 @@ for(const [name,names] of Object.entries(selections)) {
   }
   const atlas=await packEcologyAtlas(output,target,assets,256,a=>images.get(a.file));
   for(const a of assets) { a.pixelSha256=hash(await sharp(images.get(a.file)).ensureAlpha().raw().toBuffer()); delete a.file; delete a.sha256; }
-  await writeFile(`${output}/${target}.json`,JSON.stringify({version:8,source,recipe:'scripts/export-woodland-ecology-v8.mjs',
+  await writeFile(`src/assets/manifests/${target}.json`,JSON.stringify({version:8,source,recipe:'scripts/export-woodland-ecology-v8.mjs',
     alpha:'authored alpha; unchanged colours; transparent 4px padding',atlas,assets},null,2)+'\n');
   console.log(`${name}: ${assets.length} frames, ${atlas.rgbaBytes} RGBA bytes`);
 }

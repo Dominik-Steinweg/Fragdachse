@@ -1,11 +1,11 @@
-import mineral from '../../public/assets/environment/woodland/rock/mineral.json';
-import colonies from '../../public/assets/environment/woodland/ecology/rock-colonies.json';
-import litter from '../../public/assets/environment/woodland/ecology/ground-litter.json';
-import lilies from '../../public/assets/environment/woodland/ecology/lilies.json';
-import transmission from '../../public/assets/environment/woodland/sun/transmission.json';
+import mineral from './manifests/mineral.json';
+import colonies from './manifests/rock-colonies.json';
+import litter from './manifests/ground-litter.json';
+import lilies from './manifests/lilies.json';
+import transmission from './manifests/transmission.json';
 import { CANOPY_ATLASES, CANOPY_FRAMES } from '../arena/trees/CanopyAssets';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
-import runtimeColours from '../../public/assets/runtime-colours.json';
+import runtimeColours from './manifests/runtime-colours.json';
 
 export const WOODLAND_ROCK_COLOUR_KEY = 'woodland-rock-colour';
 export const WOODLAND_ROCK_HEIGHT_KEY = 'woodland-rock-height';

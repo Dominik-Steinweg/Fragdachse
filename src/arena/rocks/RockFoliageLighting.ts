@@ -39,8 +39,8 @@ vec3 foliageSample(vec2 world) {
     + mod(local,${FORMATION.chunk}.0)/${FORMATION.step}.0+${FORMATION.gutter}.0)/(atlas*${FORMATION_SIDE}.0);
   vec4 field = texture2D(uFoliageField,uv);
   vec4 shelter = texture2D(uFoliageOcclusion,uv);
-  vec3 horizons=blendHorizons(vec3(field.b,shelter.gb),uv,slot);
-  field.b=horizons.r;shelter.gb=horizons.gb;
+  vec4 horizons=blendHorizons(vec4(field.b,shelter.gba),uv,slot);
+  field.b=horizons.r;shelter.gb=horizons.gb;shelter.a=horizons.a;
   vec2 xy = field.rg*2.0-1.0;
   vec3 mineralNormal = normalize(vec3(xy,sqrt(max(.001,1.0-dot(xy,xy)))));
   // Leaves present many orientations. Broad wrapped response avoids printing

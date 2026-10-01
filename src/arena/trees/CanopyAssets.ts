@@ -1,4 +1,4 @@
-import manifest from '../../../public/assets/environment/woodland/canopy/canopy.json';
+import manifest from '../../assets/manifests/canopy.json';
 export const CANOPY_ATLASES=manifest.atlases.map(a=>({...a,key:`woodland-canopy-${a.kind}`}));
 export const CANOPY_ASSETS=manifest.assets;
 export const CANOPY_FRAMES=Object.fromEntries(CANOPY_ASSETS.map(a=>[String(a.index),{frame:a.frame}]));

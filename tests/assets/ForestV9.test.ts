@@ -6,7 +6,7 @@ import { CANOPY_ATLASES, CANOPY_ASSETS, canopyVariant } from '../../src/arena/tr
 const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
 it('packs the source channels unchanged, including non-opacity data alpha, with matching hashes',async()=>{
   const root='public/assets/environment/woodland/canopy';
-  const manifest=JSON.parse(await readFile(root+'/canopy.json','utf8'));
+  const manifest=JSON.parse(await readFile('src/assets/manifests/canopy.json','utf8'));
   for(const atlas of CANOPY_ATLASES){
     const bytes=await readFile(root+'/'+atlas.file);expect(hash(bytes)).toBe(atlas.sha256);
     const meta=await sharp(bytes).metadata();expect(meta).toMatchObject({width:atlas.width,height:atlas.height,channels:4});
@@ -21,7 +21,7 @@ it('packs the source channels unchanged, including non-opacity data alpha, with 
 },30000);
 it('retains the original hiding coverage contract and deterministic weighted species',async()=>{
   const {canopyCoverage}=await import('../../scripts/lib/canopy-coverage.mjs');
-  const manifest=JSON.parse(await readFile('public/assets/environment/woodland/canopy/canopy.json','utf8'));
+  const manifest=JSON.parse(await readFile('src/assets/manifests/canopy.json','utf8'));
   for(const a of CANOPY_ASSETS){
     const pixels=await sharp(manifest.source+'/'+a.sources[0].file).raw().toBuffer();
     const coverage=canopyCoverage(pixels,a.displayScale);

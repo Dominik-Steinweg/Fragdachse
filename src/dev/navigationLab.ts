@@ -1,3 +1,5 @@
+import {createVisibleWorldView,getVisibleWorldView} from '../graphics/CameraWorldView';
+const cameraView=createVisibleWorldView();
 import * as Phaser from 'phaser';
 import { ArenaScene } from '../scenes/ArenaScene';
 import { bridge } from '../network/bridge';
@@ -318,9 +320,9 @@ class NavigationArena extends ArenaScene {
           if (state === 'measuring') {
             observations++;
             sample('population', enemies.length);
-            const view = this.cameras.main.worldView;
-            sample('visiblePopulation', enemies.filter(enemy => enemy.x >= view.left && enemy.x <= view.right
-              && enemy.y >= view.top && enemy.y <= view.bottom).length);
+            const view = getVisibleWorldView(this.cameras.main,cameraView);
+            sample('visiblePopulation', enemies.filter(enemy => enemy.x >= view.x && enemy.x <= view.right
+              && enemy.y >= view.y && enemy.y <= view.bottom).length);
             const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
             if (memory) sample('heapBytes', memory.usedJSHeapSize);
             for (const enemy of enemies) {

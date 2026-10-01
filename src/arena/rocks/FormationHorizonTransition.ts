@@ -1,4 +1,4 @@
-/** Three old solar horizons packed separately from normals, coverage and ambient
+/** Solar horizons and contact AO packed separately from normals, coverage and ambient
  * cavity. Interrupted transitions start at the currently visible horizon. */
 export function packPreviousHorizons(data: Uint8Array, occlusion: Uint8Array,
   previous: Uint8Array, mix: number): void {
@@ -6,7 +6,7 @@ export function packPreviousHorizons(data: Uint8Array, occlusion: Uint8Array,
     previous[i]=Math.round(previous[i]+(data[i+2]-previous[i])*mix);
     previous[i+1]=Math.round(previous[i+1]+(occlusion[i+1]-previous[i+1])*mix);
     previous[i+2]=Math.round(previous[i+2]+(occlusion[i+2]-previous[i+2])*mix);
-    previous[i+3]=255;
+    previous[i+3]=Math.round(previous[i+3]+(occlusion[i+3]-previous[i+3])*mix);
   }
 }
 export const HORIZON_BLEND_GLSL = `
@@ -20,9 +20,9 @@ float horizonMix(float slot) {
   float component=mod(slot,4.0);
   return component<.5?group.x:component<1.5?group.y:component<2.5?group.z:group.w;
 }
-vec3 blendHorizons(vec3 next,vec2 uv,float slot) {
+vec4 blendHorizons(vec4 next,vec2 uv,float slot) {
   float weight=horizonMix(slot);
   if(weight>=1.0)return next;
-  return mix(texture2D(uHorizonPrevious,uv).rgb,next,weight);
+  return mix(texture2D(uHorizonPrevious,uv),next,weight);
 }
 `;

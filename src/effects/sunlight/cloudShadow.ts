@@ -11,6 +11,7 @@ export function cloudDirectFactor(open: number, density: number, strength: numbe
 }
 export const CLOUD_SHADOW_GLSL = `
 uniform float uCloudTime,uCloudCover,uCloudDensity,uCloudSpeed,uCloudScale,uCloudStrength;
+uniform float uCloudSpotAmount,uCloudSpotScale;
 uniform float uCloudEvolution,uCloudGust,uCloudWarp,uCloudSoftness;
 float cloudHash(vec2 p) { p=fract(p*vec2(.1031,.11369)); p+=dot(p,p.yx+19.19); return fract((p.x+p.y)*p.x); }
 float cloudNoise(vec2 p) {
@@ -38,6 +39,10 @@ float cloudShadowAnalytic(vec2 world,float timeSec) {
     +.11*cloudNoise(p*4.11+7.7-shear*2.3);
   float threshold=mix(.32,.68,uCloudCover);
   float opening=smoothstep(threshold-uCloudSoftness,threshold+uCloudSoftness,field);
+  // Small irregular openings follow the same wind/warp, never the sun azimuth.
+  // Zero at fully shaded/clear endpoints; both lifts and dips retain mean exposure.
+  float spot=smoothstep(.40,.78,cloudNoise(p*(max(500.0,uCloudScale)/max(80.0,uCloudSpotScale))+warp*.8+vec2(53.2,17.8)));
+  opening=clamp(opening+uCloudSpotAmount*(spot-.40)*4.0*opening*(1.0-opening),0.0,1.0);
   return mix(1.0,opening,smoothstep(0.0,.12,uCloudCover))*(1.0-smoothstep(.88,1.0,uCloudCover));
 }
 float cloudShadow(vec2 world,float timeSec) {
@@ -67,6 +72,7 @@ export function setCloudUniforms(set: (name: string, value: unknown) => void, st
   set('uCloudWorld',cache?.world??EMPTY_CLOUD_WORLD);
   const time=cloudTimeSeconds(state?.timeSec??0);
   set('uCloudTime',time);set('uCloudStrength',state?.strength??0);
+  set('uCloudSpotAmount',state?.tuning.cloudSpotAmount??0);set('uCloudSpotScale',state?.tuning.cloudSpotScale??180);
   set('uCloudWarp',state?.tuning.cloudWarp??0);set('uCloudSoftness',state?.tuning.cloudSoftness??.22);
   set('uCloudEvolution',state?.tuning.cloudEvolution??0);set('uCloudGust',state?.tuning.cloudGust??0);
   set('uCloudCover',state?.tuning.cloudCover??0);set('uCloudDensity',state?.tuning.cloudDensity??0);

@@ -1,3 +1,5 @@
+import { getVisibleWorldView } from '../graphics/CameraWorldView';
+export { getVisibleWorldView, type CameraWorldViewSource } from '../graphics/CameraWorldView';
 import { resolveActiveArenaWorldMetrics } from '../world/WorldMetrics';
 import { COLORS, DEPTH } from '../config';
 import { getBaseWorldBounds } from '../arena/BaseRegistry';
@@ -25,37 +27,6 @@ export interface CameraViewportTransform {
   readonly x: number;
   readonly y: number;
   readonly zoom: number;
-}
-
-/** Camera fields the visible-world-rect derivation needs. */
-export interface CameraWorldViewSource {
-  readonly width: number;
-  readonly height: number;
-  readonly originX: number;
-  readonly originY: number;
-  readonly zoom: number;
-  readonly scrollX: number;
-  readonly scrollY: number;
-}
-
-/**
- * Tatsächlich sichtbarer Weltausschnitt der Kamera.
- *
- * Phasers `camera.worldView` zentriert das Sichtfeld um `scroll + camera.width / 2` und
- * unterstellt damit `origin = 0.5`. Die Arena-Kamera arbeitet mit `origin = (0, 0)`, dort gilt
- * `Screen = zoom * (Welt - scroll)` (siehe `graphics/RenderResolution`). `worldView` liegt
- * deshalb um `(camera.width - camera.width / zoom) / 2` Weltpixel daneben – bei Renderauflösung
- * 1 exakt null, bei höheren Auflösungen mehrere hundert Pixel.
- */
-export function getVisibleWorldView(camera: CameraWorldViewSource): WorldViewRect {
-  const zoom = Math.max(0.001, camera.zoom);
-  const width = camera.width / zoom;
-  const height = camera.height / zoom;
-  const originPxX = camera.width * camera.originX;
-  const originPxY = camera.height * camera.originY;
-  const x = camera.scrollX + originPxX - originPxX / zoom;
-  const y = camera.scrollY + originPxY - originPxY / zoom;
-  return { x, y, width, height, centerX: x + width * 0.5, centerY: y + height * 0.5 };
 }
 
 /** True as soon as a world point enters the camera view. */

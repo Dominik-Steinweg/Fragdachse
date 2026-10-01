@@ -108,3 +108,5 @@ der erwartete Cache wirklich greift; die Laufdauer allein belegt das nicht.
 Inhaltsversionierte Asset-URLs erhalten lokal bei Vite/Preview immutable-Header. Das
 `gh-pages`-Deployment besitzt keine Repository-Konfiguration fuer eigene HTTP-Header;
 langlebige Cache-Control-Header muessen bei einem dafuer geeigneten Host/CDN gesetzt werden.
+
+Native Bodenmaterial-Kacheln und Terrain-Snapshot verwenden denselben Material-Worker-Vertrag. Ein Chunk-Bake bleibt bis zu seinen vollst�ndigen Materialdaten pending; wartende Jobs blockieren keine anderen Surface-Owner. Der World-Owner beendet Worker und verwirft �bertragene Kacheln beim Teardown.

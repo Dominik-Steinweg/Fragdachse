@@ -1,3 +1,4 @@
+import {getVisibleWorldView} from '../../graphics/CameraWorldView';
 import * as Phaser from 'phaser';
 import { bridge } from '../../network/bridge';
 import { ArenaRuntimeProfiler } from './ArenaRuntimeProfiler';
@@ -1124,6 +1125,7 @@ export class ArenaDiagnosticsController {
     let filteredObjectCount = 0;
     const filterTypes = new Map<string, number>();
     const camera = this.input.scene.cameras.main;
+    const cameraView=getVisibleWorldView(camera);
     forEachSceneDisplayObject(this.input.scene, (child) => {
       const gameObject = child as Phaser.GameObjects.GameObject & {
         visible?: boolean;
@@ -1141,7 +1143,7 @@ export class ArenaDiagnosticsController {
       if (gameObject.willRender?.(camera) ?? gameObject.visible !== false) willRenderObjectCount += 1;
       if (gameObject.getBounds) {
         try {
-          if (Phaser.Geom.Intersects.RectangleToRectangle(gameObject.getBounds(), camera.worldView)) {
+          if ((() => {const b=gameObject.getBounds!();return b.right>=cameraView.x&&b.left<=cameraView.right&&b.bottom>=cameraView.y&&b.top<=cameraView.bottom;})()) {
             inCameraBoundsObjectCount += 1;
           }
         } catch {

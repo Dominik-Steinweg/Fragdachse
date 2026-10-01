@@ -12,6 +12,7 @@ export class TerrainSnapshotWorkerClient {
   private busy = false;
   private disposed = false;
   private materialKind = '';
+  private native=false;
   constructor(create = () => new Worker(new URL('./TerrainSnapshotWorker.ts', import.meta.url), { type: 'module' })) {
     const measurement = loadingTimeline.capture();
     this.worker = create();
@@ -19,14 +20,14 @@ export class TerrainSnapshotWorkerClient {
       if (this.disposed) return;
       this.busy = false;
       this.result = event.data.buffer;
-      measurement?.add('terrain-snapshot/material-worker', event.data.cpuMs, 'worker');
-      measurement?.add(`terrain-snapshot/material-worker/${this.materialKind}`, event.data.cpuMs, 'worker');
+      measurement?.add(this.native?'chunks/material-worker':'terrain-snapshot/material-worker', event.data.cpuMs, 'worker');
+      measurement?.add(`${this.native?'chunks':'terrain-snapshot'}/material-worker/${this.materialKind}`, event.data.cpuMs, 'worker');
     };
     this.worker.onerror = event => { if (!this.disposed) this.error = new Error(event.message); };
     this.worker.onmessageerror = () => { if (!this.disposed) this.error = new Error('[TerrainColorSnapshot] Worker decode failed.'); };
   }
   request(source: TerrainSnapshotMaterialSource, side: number, x: number, y: number,
-    width: number, height: number, buffer: ArrayBuffer): void {
+    width: number, height: number, buffer: ArrayBuffer, native=false): void {
     if (this.disposed || this.busy || this.result) throw new Error('[TerrainColorSnapshot] Invalid worker request lifetime.');
     let id = this.sources.get(source);
     if (id === undefined) {
@@ -36,8 +37,8 @@ export class TerrainSnapshotWorkerClient {
       this.worker.postMessage({ kind: 'init', id, source } satisfies TerrainSnapshotRequest);
     }
     this.busy = true;
-    this.materialKind = source.kind;
-    this.worker.postMessage({ kind: 'bake', id, side, x, y, width, height, buffer } satisfies TerrainSnapshotRequest, [buffer]);
+    this.materialKind = source.kind;this.native=native;
+    this.worker.postMessage({ kind: 'bake', id, side, x, y, width, height, buffer, native } satisfies TerrainSnapshotRequest, [buffer]);
   }
   take(): ArrayBuffer | null {
     if (this.error) throw this.error;

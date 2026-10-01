@@ -19,6 +19,11 @@ export class TerrainSnapshotMaterial {
   constructor(private readonly source: TerrainSnapshotMaterialSource) {
     this.soil = source.kind === 'soil' ? new DirtSurfaceField(source.seed, source.dirt, source.frame, source.water) : null;
   }
+  /** Full-resolution visible chunk: same field, no sparse snapshot sampling. */
+  writeNative(data:Uint8ClampedArray,side:number,x:number,y:number):void {
+    if(!this.soil)throw new Error('Native material requires soil');
+    this.soil.writeSurface(data,side,x,y,side,this.source.materials);
+  }
   write(data: Uint8ClampedArray, side: number, worldX: number, worldY: number, width: number, height: number): void {
     data.fill(0);
     const source = this.source, tile = this.tile, size = ROCK_OVERLAY_CHUNK_SIZE;

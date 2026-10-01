@@ -1,4 +1,4 @@
-import manifest from '../../../public/assets/environment/woodland/ecology/rock-colonies.json';
+import manifest from '../../assets/manifests/rock-colonies.json';
 import type { RockVegetationPlacement } from '../RockVegetationField';
 
 export const ROCK_ECOLOGY_ATLAS = { ...manifest.atlas, key: 'woodland-rock-colonies' };

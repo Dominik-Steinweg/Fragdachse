@@ -205,6 +205,7 @@ export class GroundSurfaceStreamer {
       layers,
       chunkSize: options.chunkSize,
       bake: (region, sink) => this.bakeRegion(region, sink),
+      prepare:(x,y,size)=>this.prepareMaterials(x,y,size),
       onChunkBaked: this.queueVegetation,
     });
 
@@ -609,6 +610,15 @@ export class GroundSurfaceStreamer {
         }
       }
     }
+  }
+
+  private prepareMaterials(x:number,y:number,size:number):boolean {
+    const lx=x-this.frame.offsetX,ly=y-this.frame.offsetY;
+    const soil=this.dirtIndex.collect(lx,ly,size,DIRT_SURFACE_REACH_PX,this.dirtCandidateIds).length>0;
+    const bank=!soil&&this.waterIndex.collect(lx,ly,size,WATER_BANK_REACH_PX,this.dirtCandidateIds).length>0;
+    if(this.dirtLayer&&(soil||bank)&&!this.dirtLayer.prepare(x,y,size))return false;
+    const gravel=this.persistentBaseGravelIndex.collect(lx,ly,size,DIRT_SURFACE_REACH_PX,this.persistentBaseGravelCandidateIds).length>0;
+    return !this.persistentBaseGravelLayer||!gravel||this.persistentBaseGravelLayer.prepare(x,y,size);
   }
 
   private bakeRegion(region: ChunkBakeRegion, sink: ChunkBakeSink): void {

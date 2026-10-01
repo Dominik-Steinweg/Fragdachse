@@ -5,6 +5,7 @@ vi.mock('phaser', () => ({ Textures: { FilterMode: { LINEAR: 0 } }, GameObjects:
 import { TerrainSnapshotMaterial, type TerrainSnapshotMaterialSource } from '../src/arena/TerrainSnapshotMaterial';
 import { TerrainSnapshotWorkerClient } from '../src/arena/TerrainSnapshotWorkerClient';
 import { TerrainSnapshotStaging } from '../src/arena/TerrainSnapshotStaging';
+import { DirtSurfaceLayer } from '../src/arena/DirtSurfaceLayer';
 import { DirtSurfaceField } from '../src/arena/DirtSurfaceField';
 import { writeTrackBallast } from '../src/arena/TrackGravelField';
 import { TERRAIN_SNAPSHOT_SCALE } from '../src/arena/TerrainColorSnapshotBuilder';
@@ -33,7 +34,8 @@ class Port {
     while (this.jobs.length) {
       const job = this.jobs.shift()!;
       if (job.kind === 'init') { this.fields.set(job.id, new TerrainSnapshotMaterial(job.source)); continue; }
-      this.fields.get(job.id)!.write(new Uint8ClampedArray(job.buffer), job.side, job.x, job.y, job.width, job.height);
+      if(job.native)this.fields.get(job.id)!.writeNative(new Uint8ClampedArray(job.buffer),job.side,job.x,job.y);
+      else this.fields.get(job.id)!.write(new Uint8ClampedArray(job.buffer), job.side, job.x, job.y, job.width, job.height);
       this.onmessage?.({ data: structuredClone({ buffer: job.buffer, cpuMs: 1 }, { transfer: [job.buffer] }) });
       return;
     }
@@ -111,4 +113,30 @@ describe('terrain snapshot sampling and worker lifetime', () => {
     expect(native).not.toHaveBeenCalled(); expect(work.next().done).toBe(true);
     staging.destroy(); staging.destroy(); expect(port.terminate).toHaveBeenCalledOnce(); expect(remove).toHaveBeenCalledOnce();
   });
+});
+
+it('transfers pixel-identical native soil tiles including gutters and releases native jobs on teardown',()=>{
+ const port=new Port(),worker=new TerrainSnapshotWorkerClient(()=>port as never);
+ const field=new DirtSurfaceField(source.seed,source.kind==='soil'?source.dirt:[],source.frame,source.kind==='soil'?source.water:[]);
+ const side=132,reference=new Uint8ClampedArray(side*side*4);
+ for(const [x,y] of [[35,17],[167,17],[299,149]]){
+  field.writeSurface(reference,side,x,y,side,source.materials);
+  worker.request(source,side,x,y,side,side,new ArrayBuffer(reference.length),true);
+  expect(worker.take()).toBeNull();port.reply();expect(new Uint8ClampedArray(worker.take()!)).toEqual(reference);
+ }
+ worker.request(source,side,0,0,side,side,new ArrayBuffer(reference.length),true);worker.destroy();port.reply();
+ expect(worker.take()).toBeNull();expect(port.terminate).toHaveBeenCalledOnce();
+});
+
+it('keeps a native chunk pending until its transferred material exists, then uploads without main-thread recalculation',()=>{
+ const port=new Port();vi.stubGlobal('Worker',class {constructor(){return port;}});
+ const put=vi.fn(),refresh=vi.fn(),remove=vi.fn();const side=132;
+ const scene={textures:{createCanvas:()=>({key:'soil',context:{createImageData:()=>({width:side,height:side,data:new Uint8ClampedArray(side*side*4)}),putImageData:put},refresh}),remove}};
+ const layer=new DirtSurfaceLayer(scene as never,source.seed,source.kind==='soil'?source.dirt:[],frame,side,materials,source.kind==='soil'?source.water:[]);
+ expect(layer.prepare(35,17,side)).toBe(false);expect(layer.prepare(35,17,side)).toBe(false);expect(put).not.toHaveBeenCalled();
+ port.reply();expect(layer.prepare(35,17,side)).toBe(true);
+ const native=vi.spyOn(DirtSurfaceField.prototype,'writeSurface');
+ const target={clear:vi.fn(),draw:vi.fn(),render:vi.fn()};layer.bake(target as never,{worldX:35,worldY:17,size:side} as never);
+ expect(native).not.toHaveBeenCalled();expect(put).toHaveBeenCalledOnce();expect(refresh).toHaveBeenCalledOnce();expect(target.render).toHaveBeenCalledOnce();
+ expect(layer.prepare(35,17,side)).toBe(true);layer.prepare(167,17,side);layer.destroy();port.reply();expect(port.terminate).toHaveBeenCalledOnce();expect(remove).toHaveBeenCalledWith('soil');
 });

@@ -21,7 +21,7 @@ function fixture(){
   createTexture2D:vi.fn((...args:any[])=>({pixels:args[6]})),glTextureUnits:{bind:vi.fn()},glWrapper:{updateTexturing:vi.fn()},
   glVAOWrappers:[],deleteBuffer:vi.fn(),off:vi.fn()};
  renderer.renderNodes={renderer,finishBatch:vi.fn(),off:vi.fn()};
- const scene:any={sys:{renderer},cameras:{main:{worldView:{centerX:0,centerY:0}}},
+ const scene:any={sys:{renderer},cameras:{main:{width:800,height:600,originX:0,originY:0,zoom:1,scrollX:-400,scrollY:-300,worldView:{centerX:0,centerY:0}}},
   textures:{addGLTexture:vi.fn((key:string)=>({key})),remove:vi.fn()}};
  const fallback={name:'original',run:vi.fn((_context:any,image:any)=>image.customRenderNodes.BatchHandler?.setupUniforms({}))};
  const image:any={scene,visible:true,x:31,y:-17,width:512,height:512,frame:{u0:2/516,v0:2/516,u1:514/516,v1:514/516},

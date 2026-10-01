@@ -3,7 +3,7 @@ import type { ArenaLayout, WaterCell } from '../types';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
 import type { EcologyPlacement, EcologyWaterField } from './WoodlandEcologyField';
 import { ecologyHash } from './ecologyHash';
-import pond from '../../public/assets/environment/woodland/ecology/lilies.json';
+import pond from '../assets/manifests/lilies.json';
 
 type LilyAnchor={x:number;y:number;roll:number};
 /** Only floating lily pads/groups are placed. */

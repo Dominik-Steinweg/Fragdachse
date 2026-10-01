@@ -1,3 +1,4 @@
+import {getVisibleWorldView,createVisibleWorldView} from '../graphics/CameraWorldView';
 import type * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { registerGraphicsObject } from '../effects/EffectUtils';
@@ -8,6 +9,7 @@ import { WOODLAND_ATLASES, type EcologyPlacement } from './WoodlandEcologyField'
 /** World-owned atlas sprites. Same texture/depth per family lets Phaser batch them;
  * automatic scene registration restricts them to the World camera. */
 export class WoodlandEcologyRenderer {
+  private readonly cameraView=createVisibleWorldView();
   private readonly entries:{p:EcologyPlacement;image:Phaser.GameObjects.Image}[];
   constructor(private readonly scene:Phaser.Scene, placements:readonly EcologyPlacement[]) {
     this.entries=placements.map(p=>{
@@ -19,7 +21,7 @@ export class WoodlandEcologyRenderer {
     });
   }
   update(tuning:SunTuning, water:WaterSurfaceRenderer|null, litter:boolean, pond:boolean,density=1):void {
-    const view=this.scene.cameras.main.worldView,time=water?.getPresentationTime()??0;
+    const view=getVisibleWorldView(this.scene.cameras.main,this.cameraView),time=water?.getPresentationTime()??0;
     for(const entry of this.entries) {
       const p=entry.p, image=entry.image,isLitter=p.kind==='litter';
       const visible=(isLitter?litter:pond)&&p.rank<(isLitter?tuning.litterDensity:tuning.pondFloraDensity)*density

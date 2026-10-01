@@ -134,8 +134,8 @@ void main() {
   vec2 uv = (vec2(mod(slot,ATLAS.x),floor(slot/ATLAS.x))*SIDE
     + mod(local,CHUNK)/${FORMATION.step}.0 + ${FORMATION.gutter}.0) / (ATLAS*SIDE);
   vec4 data = texture2D(uField,uv), shelter = texture2D(uOcclusion,uv);
-  vec3 horizons=blendHorizons(vec3(data.b,shelter.gb),uv,slot);
-  data.b=horizons.r;shelter.gb=horizons.gb;
+  vec4 horizons=blendHorizons(vec4(data.b,shelter.gba),uv,slot);
+  data.b=horizons.r;shelter.gb=horizons.gb;shelter.a=horizons.a;
   vec2 xy = data.rg*2.0-1.0;
   vec3 normal = normalize(vec3(xy,sqrt(max(.001,1.0-dot(xy,xy)))));
   vec4 formOptions=uOptions;formOptions.x*=cloudFormStrength(world);

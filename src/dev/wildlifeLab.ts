@@ -1,3 +1,5 @@
+import {createVisibleWorldView,getVisibleWorldView} from '../graphics/CameraWorldView';
+const cameraView=createVisibleWorldView();
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
 import * as Phaser from 'phaser';
@@ -120,7 +122,7 @@ class WildlifeLab extends Phaser.Scene {
       this.actor.setPosition(this.approachX + Math.min(this.approachTime, 1.2) * 45, this.approachY);
     }
     const players = this.actor.visible ? [{ id: 'probe', x: this.actor.x, y: this.actor.y }] : [];
-    const view = this.cameras.main.worldView;
+    const view = getVisibleWorldView(this.cameras.main,cameraView);
     this.water.prepareMasks();
     this.water.updateResidency(view);
     this.wildlife.update(delta, players, view);

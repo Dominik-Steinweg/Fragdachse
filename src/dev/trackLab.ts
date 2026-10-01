@@ -1,3 +1,5 @@
+import {createVisibleWorldView,getVisibleWorldView} from '../graphics/CameraWorldView';
+const cameraView=createVisibleWorldView();
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
 import * as Phaser from 'phaser';
@@ -83,7 +85,7 @@ class TrackLab extends Phaser.Scene {
   }
 
   update(): void {
-    this.ground.updateResidency(this.cameras.main.worldView);
+    this.ground.updateResidency(getVisibleWorldView(this.cameras.main,cameraView));
     ChunkedRenderSurface.drainBakeQueue(this);
     const stats = this.ground.getStats();
     const status = `Seed ${this.seed} · Zoom ${Math.round(this.cameras.main.zoom * 100)} % · ${stats.residentChunks} residente Chunks · ${stats.pendingRegions} ausstehende Bereiche`;

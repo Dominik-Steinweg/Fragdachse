@@ -55,7 +55,7 @@ describe('HostileBaseIndicator geometry', () => {
 
   it('derives the visible world rect from an origin-(0, 0) camera instead of trusting worldView', () => {
     const camera = { width: 3_840, height: 2_160, originX: 0, originY: 0, zoom: 2, scrollX: 700, scrollY: 0 };
-    expect(getVisibleWorldView(camera)).toEqual({
+    expect(getVisibleWorldView(camera)).toMatchObject({
       x: 700,
       y: 0,
       width: 1_920,
@@ -75,7 +75,7 @@ describe('HostileBaseIndicator geometry', () => {
 
   it('is a no-op at render scale 1', () => {
     const camera = { width: 1_920, height: 1_080, originX: 0, originY: 0, zoom: 1, scrollX: 320, scrollY: 0 };
-    expect(getVisibleWorldView(camera)).toEqual({
+    expect(getVisibleWorldView(camera)).toMatchObject({
       x: 320,
       y: 0,
       width: 1_920,

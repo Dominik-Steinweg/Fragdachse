@@ -63,7 +63,7 @@ for(const entry of files){
   await writeFile(`${directory}/${entry.file}`,png);
   assets.push({file:entry.file,width:entry.width,height:entry.height,rgbaBytes:entry.data.length,downloadBytes:png.length,sha256:hash(png)});
 }
-await writeFile(`${directory}/mineral.json`,JSON.stringify({version:7,period,heightPeriod,seed,variant,geometryScale,geometryChips,
+await writeFile('src/assets/manifests/mineral.json',JSON.stringify({version:7,period,heightPeriod,seed,variant,geometryScale,geometryChips,
   source,sourceSha256:hash(sourceBytes),coverage:{file:'coverage.png',width,height,downloadBytes:baselineBytes.length,sha256:hash(baselineBytes),cpuOnly:true},coverageSource:'tools/source-art/rock-mineral/coverage.png',coverageSha256:hash(baselineBytes),
   geometrySource:'scripts/lib/slate-v7-geometry.mjs',geometrySha256:hash((await readFile('scripts/lib/slate-v7-geometry.mjs','utf8')).replace(/\r\n/g,'\n')),
   heightEncoding:'RG uint16: -32 + n/65535 * 64 world pixels',heightFromAlbedo:false,assets},null,2)+'\n');

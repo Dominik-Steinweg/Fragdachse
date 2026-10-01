@@ -16,7 +16,7 @@ it('softens alpha edges without introducing a light colour rim',async()=>{
  expect(fringe).toBeGreaterThan(0);
 });
 it('reproduces deterministic alpha contact masks and their exact atlas frames',async()=>{
- const root='public/assets/environment/woodland/ecology/',m=JSON.parse(await readFile(root+'rock-colonies.json','utf8'));
+ const root='public/assets/environment/woodland/ecology/',m=JSON.parse(await readFile('src/assets/manifests/rock-colonies.json','utf8'));
  const hash=(v:Buffer)=>createHash('sha256').update(v).digest('hex');
  const atlas=await readFile(root+m.contactAtlas.file);expect(hash(atlas)).toBe(m.contactAtlas.sha256);
  expect(m.contacts.map((a:any)=>a.name).sort()).toEqual(m.assets.filter((a:any)=>a.surfaceFinish).map((a:any)=>a.name).sort());

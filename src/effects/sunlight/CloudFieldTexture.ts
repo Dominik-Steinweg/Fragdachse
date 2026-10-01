@@ -23,7 +23,7 @@ export class CloudFieldTexture implements CloudFieldBinding {
   readonly world=[0,0,1,1];
   private readonly renderer: Phaser.Renderer.WebGL.WebGLRenderer;
   private readonly target: SunRenderTarget | null;
-  private readonly previous=new Float64Array(12).fill(NaN);
+  private readonly previous=new Float64Array(14).fill(NaN);
   private readonly size=[0,0];
   private builds=0;
   private dirty=false;
@@ -47,7 +47,7 @@ export class CloudFieldTexture implements CloudFieldBinding {
     this.check(1,this.state.strength>0?1:0);this.check(2,t.cloudCover);this.check(3,t.cloudSpeed);
     this.check(4,t.cloudScale);this.check(5,t.cloudEvolution);this.check(6,t.cloudGust);
     this.check(7,t.cloudWarp);this.check(8,t.cloudSoftness);this.check(9,t.cloudDensity);
-    this.check(10,this.size[0]);this.check(11,this.size[1]);
+    this.check(10,this.size[0]);this.check(11,this.size[1]);this.check(12,t.cloudSpotAmount);this.check(13,t.cloudSpotScale);
     if(this.world[0]!==x||this.world[1]!==y||this.world[2]!==width||this.world[3]!==height)this.dirty=true;
     if(!this.dirty)return;
     this.world[0]=x;this.world[1]=y;this.world[2]=Math.max(1,width);this.world[3]=Math.max(1,height);

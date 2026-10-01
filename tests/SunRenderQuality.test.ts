@@ -56,7 +56,7 @@ describe('reduced sunlight resources',()=>{
     const f=fixture();f.owner.setEnabled(true);
     const quad=fake.shaders.find(s=>!s.renderToTexture&&s.config.name.includes('CompositeDisplay'));
     for(const zoom of [.5,1,1.25,2,4]){
-      const camera={x:137,y:81,zoomX:zoom,zoomY:zoom,worldView:{x:-123.5,y:377.25,width:1664/zoom,height:936/zoom}};
+      const camera={x:137,y:81,width:1664,height:936,originX:0,originY:0,scrollX:-123.5,scrollY:377.25,zoom,zoomX:zoom,zoomY:zoom,worldView:{x:-123.5,y:377.25,width:1664/zoom,height:936/zoom}};
       quad.renderNode.run({camera},quad);
       const material=fake.shaders.find(s=>s.config.name.includes('CompositeMaterial')),w=material.uniforms.uSunWorld;
       expect(w[0]+64/(1664+128)*w[2]).toBeCloseTo(camera.worldView.x,8);

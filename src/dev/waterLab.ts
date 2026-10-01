@@ -1,3 +1,5 @@
+import {createVisibleWorldView,getVisibleWorldView} from '../graphics/CameraWorldView';
+const cameraView=createVisibleWorldView();
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
 import * as Phaser from 'phaser';
@@ -199,7 +201,7 @@ class WaterLab extends Phaser.Scene {
     }
     this.actor.setPosition(this.proxy.x, this.proxy.y);
     this.surface.prepareMasks();
-    this.surface.updateResidency(this.cameras.main.worldView);
+    this.surface.updateResidency(getVisibleWorldView(this.cameras.main,cameraView));
   }
 }
 

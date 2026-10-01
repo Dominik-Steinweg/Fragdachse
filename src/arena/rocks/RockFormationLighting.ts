@@ -35,7 +35,7 @@ class FormationDataTexture {
   }
   destroy(): void { this.scene.textures.remove(this.key); }
 }
-interface Resident { cx: number; cy: number; slot: number; ready: boolean; dirty: boolean; lastUse: number; revision: number; data?: Uint8Array; occlusion?: Uint8Array; previous?: Uint8Array; azimuth?: number }
+interface Resident { cx: number; cy: number; slot: number; ready: boolean; dirty: boolean; lastUse: number; revision: number; data?: Uint8Array; occlusion?: Uint8Array; previous?: Uint8Array; azimuth?: number; repair?: boolean }
 const signature=(s: FormationRock): string => `${s.gridX},${s.gridY},${s.active},${s.material},${s.frame}`;
 const snapshot=(s: RockVisualState): FormationRock => ({id:s.id,gridX:s.gridX,gridY:s.gridY,active:s.active,material:s.material,frame:s.frame});
 
@@ -81,6 +81,7 @@ export class RockFormationLighting {
   private qualityHorizons=true;
   private azimuth = 135;
   private readonly horizonBlend = new Float32Array(64).fill(1);
+  private readonly horizonDuration = new Float64Array(64).fill(.6);
   private readonly horizonSince = new Float64Array(64);
   private directionChanges = 0;
   private directionBuildMs = 0;
@@ -189,7 +190,7 @@ export class RockFormationLighting {
       for(const s of changes) {
         const x=s.gridX*CELL_SIZE,y=s.gridY*CELL_SIZE;
         if(x>=r.cx*FORMATION.chunk-reach-CELL_SIZE && x<= (r.cx+1)*FORMATION.chunk+reach
-          && y>=r.cy*FORMATION.chunk-reach-CELL_SIZE && y<= (r.cy+1)*FORMATION.chunk+reach) {r.dirty=true;r.revision=this.revision;}
+          && y>=r.cy*FORMATION.chunk-reach-CELL_SIZE && y<= (r.cy+1)*FORMATION.chunk+reach) {r.dirty=true;r.repair=true;r.revision=this.revision;}
         if(!r.data || (s.active && s.material!=='walls')) continue;
         const x0=Math.max(0,Math.floor((x-r.cx*FORMATION.chunk)/FORMATION.step)+FORMATION.gutter);
         const x1=Math.min(FORMATION_SIDE,Math.ceil((x+CELL_SIZE-r.cx*FORMATION.chunk)/FORMATION.step)+FORMATION.gutter);
@@ -199,9 +200,7 @@ export class RockFormationLighting {
         eraseX0=Math.min(eraseX0,x0);eraseY0=Math.min(eraseY0,y0);
         eraseX1=Math.max(eraseX1,x1);eraseY1=Math.max(eraseY1,y1);
         for(let py=y0;py<y1;py++)for(let px=x0;px<x1;px++) {
-          const p=(py*FORMATION_SIDE+px)*4;r.data[p+2]=0;r.data[p+3]=0;
-          if(r.occlusion){r.occlusion[p]=255;r.occlusion[p+1]=0;r.occlusion[p+2]=0;r.occlusion[p+3]=255;}
-          if(r.previous){r.previous[p]=0;r.previous[p+1]=0;r.previous[p+2]=0;}
+          const p=(py*FORMATION_SIDE+px)*4;r.data[p+3]=0;
           erased=true;
         }
       }
@@ -218,8 +217,8 @@ export class RockFormationLighting {
           this.uploadBytes+=patch.byteLength;this.eraseUploadBytes+=patch.byteLength;
         };
         uploadRect(this.field,r.data);
-        if(r.occlusion)uploadRect(this.occlusion,r.occlusion);
-        if(r.previous&&this.previous)uploadRect(this.previous,r.previous);
+        // Keep AO/horizons until the revision-matched result; clearing them makes bright floor squares.
+
       }
     }
   }
@@ -283,7 +282,7 @@ export class RockFormationLighting {
     this.syncRimGeometry();
     const now=this.state.clouds?.timeSec??0;
     for(let slot=0;slot<64;slot++)if(this.horizonBlend[slot]<1) {
-      const t=Math.max(0,Math.min(1,(now-this.horizonSince[slot])/.6));
+      const t=Math.max(0,Math.min(1,(now-this.horizonSince[slot])/this.horizonDuration[slot]));
       this.horizonBlend[slot]=t*t*(3-2*t);
     }
     const active=this.state.material==='mineral'&&!this.error&&!this.overflow;
@@ -295,15 +294,15 @@ export class RockFormationLighting {
       this.maxWorkerBuildMs=Math.max(this.maxWorkerBuildMs,result.buildMs);
       const r=this.resident.get(`${result.cx},${result.cy}`);
       if(r&&result.revision===r.revision) {
-        if(this.previous&&r.ready&&r.data&&r.occlusion&&r.azimuth!==result.azimuth) {
+        if(this.previous&&r.ready&&r.data&&r.occlusion&&(r.repair||r.azimuth!==result.azimuth)) {
           r.previous??=new Uint8Array(result.data.length);
           packPreviousHorizons(r.data,r.occlusion,r.previous,this.horizonBlend[r.slot]);
           this.previous.upload(r.slot%FORMATION.atlasColumns*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
             FORMATION_SIDE,FORMATION_SIDE,r.previous);
-          this.uploadBytes+=r.previous.byteLength;this.horizonBlend[r.slot]=0;this.horizonSince[r.slot]=now;
+          this.uploadBytes+=r.previous.byteLength;this.horizonBlend[r.slot]=0;this.horizonSince[r.slot]=now;this.horizonDuration[r.slot]=r.repair?.18:.6;
         } else this.horizonBlend[r.slot]=1;
         if(r.azimuth!==undefined&&r.azimuth!==result.azimuth){this.directionBuildMs+=result.buildMs;this.directionBuilds++;}
-        r.azimuth=result.azimuth;
+        r.azimuth=result.azimuth;r.repair=false;
         this.field.upload((r.slot%FORMATION.atlasColumns)*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
           FORMATION_SIDE,FORMATION_SIDE,result.data);
         this.occlusion.upload((r.slot%FORMATION.atlasColumns)*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
@@ -313,6 +312,10 @@ export class RockFormationLighting {
       } else this.discardedBuilds++;
     }
     if(!active||this.busy)return;
+    // Geometry repairs precede speculative residency/direction work.
+    for(const key of this.wanted){const r=this.resident.get(key);if(r?.repair&&r.dirty){
+      this.busy=true;this.post({kind:'build',cx:r.cx,cy:r.cy,revision:r.revision,azimuth:this.azimuth,horizons:this.qualityHorizons});return;
+    }}
     // Round-robin prevents a moving sun from starving later resident chunks.
     for(let i=0;i<this.wanted.length;i++) {
       const index=(this.buildCursor+i)%this.wanted.length;

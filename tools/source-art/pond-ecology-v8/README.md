@@ -1,6 +1,6 @@
 # lilies: active authored sources
 
-Built-in ImageGen, September 2026. Only the selected sources below are runtime inputs. Authored alpha and orthographic overhead appearance are retained. Recipes, sizes and source hashes are recorded in `public/assets/environment/woodland/ecology/lilies.json`.
+Built-in ImageGen, September 2026. Only the selected sources below are runtime inputs. Authored alpha and orthographic overhead appearance are retained. Recipes, sizes and source hashes are recorded in `src/assets/manifests/lilies.json`.
 
 - [lily-group-01.png](lily-group-01.png)
 - [lily-group-02.png](lily-group-02.png)

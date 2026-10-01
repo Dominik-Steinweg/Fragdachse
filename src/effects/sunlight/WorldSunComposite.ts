@@ -1,3 +1,4 @@
+import {getVisibleWorldView,createVisibleWorldView} from '../../graphics/CameraWorldView';
 import { SunRenderTarget, ownSunShader, sunShaderName } from './SunRenderTarget';
 import { CloudFieldTexture } from './CloudFieldTexture';
 import { sunRenderWorld, sunRenderSize } from './SunRenderQuality';
@@ -65,7 +66,7 @@ export class WorldSunComposite {
     if (!composite && this.composite) { this.composite.destroy(); this.composite = null;this.sizes.composite.fill(0); }
   }
   private create(): Phaser.GameObjects.Shader {
-    const world = [0,0,1,1];
+    const world = [0,0,1,1],visibleWorld=createVisibleWorldView();
     const target = new SunRenderTarget(this.scene,'CompositeMaterial',SUN_COMPOSITE_FRAGMENT,set=>{
       set('uSunWorld',world);setCloudUniforms(set,this.clouds);
       set('uSunStrength',this.sun.strength);set('uSunShade',this.tuning.shade);set('uSunLit',this.tuning.sun);set('uSunDaylight',this.tuning.daylight);
@@ -84,7 +85,7 @@ export class WorldSunComposite {
       .setBlendMode(modulateMode(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer));
     const node=quad.renderNode,run=node.run,owner=this;
     node.run=function(context,object,parent):void {
-      const camera=context.camera!,view=camera.worldView,quality=getGraphicsQualityProfile(owner.scene).sunlight;
+      const camera=context.camera!,view=getVisibleWorldView(camera,visibleWorld),quality=getGraphicsQualityProfile(owner.scene).sunlight;
       const pad=sunRenderWorld(world,view.x,view.y,view.width,view.height,camera.zoomX,camera.zoomY);
       const scale=quality.compositeScale;
       const w=sunRenderSize(world[2],camera.zoomX,scale),h=sunRenderSize(world[3],camera.zoomY,scale);

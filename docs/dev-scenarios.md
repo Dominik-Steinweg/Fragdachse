@@ -203,6 +203,7 @@ Das Wolkenfeld bleibt in Weltkoordinaten verankert. `cloudCover` und `cloudDensi
 Bedeckung und Kontrast, `cloudScale` die Größe, `cloudWarp` die Form und `cloudSoftness` die weichen Ränder.
 `shade`, `daylight` und `sun` steuern getrennt k�hlen Wolkenschatten, neutrales Tageslicht und warme Licht�ffnungen.
 `fogShade` und `fogSun` f�rben nur die Nebelradiance; Dichte und Fl�chenbudget �ndern sich dadurch nicht.
+`cloudSpotAmount` (Standard `.22`, aus: `0`) und `cloudSpotScale` (Standard `180` Weltpx, Bereich `80�300`) steuern die kleineren Licht�ffnungen.
 `cloudSpeed`, `cloudEvolution` und `cloudGust` steuern Drift und Formwandel über die pausierbare Präsentationszeit.
 Die Felddiagnose meldet Breite, Höhe, RGBA-Bytes und Weltpixel je Texel; die Auflösung folgt der Grafikqualität.
 Rezepte mit entfernten Lichtvergleichsfeldern oder Strahlen-/Bandparametern werden mit Hinweis abgelehnt.

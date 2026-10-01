@@ -102,3 +102,17 @@ it('retains broad shadows and minority highlights throughout active atmosphere a
   expect(gradient).toBeLessThan(.025);
  }
 });
+
+it('adds bounded smaller openings with negligible mean exposure shift and stable paused coordinates',async()=>{
+ const {SUN_ATMOSPHERE_KEYFRAMES,resolveSunAtmosphere}=await import('../src/effects/sunlight/SunAtmosphere');
+ const {sunCompositeFactor}=await import('../src/effects/sunlight/sunVisibility');const t=createSunTuning(),out=[0,0,0];
+ const state={tuning:t,timeSec:30,strength:1};
+ for(const {minute} of SUN_ATMOSPHERE_KEYFRAMES){resolveSunAtmosphere(minute,t);let delta=0,changes=0,n=0;
+  for(let y=-4096;y<4096;y+=137)for(let x=-4096;x<4096;x+=131){
+   const amount=t.cloudSpotAmount,withSpot=sunlightAt(x,y,state);t.cloudSpotAmount=0;const without=sunlightAt(x,y,state);t.cloudSpotAmount=amount;
+   expect(sunlightAt(x,y,state)).toBe(withSpot);sunCompositeFactor(out,t.shade,t.daylight,t.sun,withSpot,1);const a=out[0]*.2126+out[1]*.7152+out[2]*.0722;
+   sunCompositeFactor(out,t.shade,t.daylight,t.sun,without,1);delta+=a-(out[0]*.2126+out[1]*.7152+out[2]*.0722);changes+=Math.abs(withSpot-without);n++;
+  }
+  expect(Math.abs(delta/n)).toBeLessThan(.02);if(t.cloudCover>0)expect(changes/n).toBeGreaterThan(.005);else expect(changes).toBe(0);
+ }
+});

@@ -1,3 +1,4 @@
+import {getVisibleWorldView,createVisibleWorldView} from '../graphics/CameraWorldView';
 import * as Phaser from 'phaser';
 import { DEPTH_FX } from '../config';
 import { makeAdditive, mixColors, registerGraphicsObject } from './EffectUtils';
@@ -22,6 +23,7 @@ interface PortalBurst { x: number; y: number; color: number; radius: number; inw
 
 /** World-scoped orthographic apertures and their short-lived transfer feedback. */
 export class TranslocatorTeleportRenderer {
+  private readonly cameraView=createVisibleWorldView();
   private lighting: LightingSystem | null = null;
   private readonly portals = new Map<string, PortalVisual>();
   private readonly transient = new Set<Phaser.GameObjects.Graphics>();
@@ -161,7 +163,7 @@ export class TranslocatorTeleportRenderer {
       this.captured = false;
       return;
     }
-    const view = this.scene.cameras.main.worldView;
+    const view = getVisibleWorldView(this.scene.cameras.main,this.cameraView);
     const visible = (x: number, y: number, r: number) => x + r >= view.x && y + r >= view.y
       && x - r <= view.right && y - r <= view.bottom;
     for (const burst of this.bursts) {

@@ -1,3 +1,4 @@
+import {getVisibleWorldView,createVisibleWorldView} from '../../graphics/CameraWorldView';
 import * as Phaser from 'phaser';
 import { getChunkBakeScheduler } from '../../arena/chunks/ChunkBakeScheduler';
 import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState } from './cloudShadow';
@@ -69,6 +70,7 @@ export class VegetationLighting {
  private submitter:Node|null=null;
  private current:Binding|null=null;
  private disposed=false;
+ private readonly cameraView=createVisibleWorldView();
  private readonly uv=[0,0,1,1];private readonly world=[0,0,1,1];private readonly offset=[0,0];
  private readonly empty={};private readonly sunFallback=[0,0,1];
  private sourceCanvas:HTMLCanvasElement|null=null;
@@ -139,7 +141,7 @@ export class VegetationLighting {
   r.covered=false;
   for(let ty=0;ty<this.tiles;ty++)for(let tx=0;tx<this.tiles;tx++)
   this.scheduler.enqueue({key:this.prefix+':'+r.id+':'+tx+':'+ty,owner:this,completionKey:r,urgent:()=>image.visible,
-   priority:()=>{const c=this.scene.cameras.main;return Math.hypot(x-c.worldView.centerX,y-c.worldView.centerY);},
+   priority:()=>{const v=getVisibleWorldView(this.scene.cameras.main,this.cameraView);return Math.hypot(x-v.centerX,y-v.centerY);},
    run:()=>{
     if(this.disposed||!image.scene||image.x!==x||image.y!==y||Math.ceil(this.clouds.tuning.vegDomeBlur/2)!==blur){this.cancelPending(record);return;}
     this.bakeTile(record,x,y,blur,tx,ty);

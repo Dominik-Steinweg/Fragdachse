@@ -29,7 +29,7 @@ function setup() {
     quality: { scaleFrequency: (n: number) => n, scaleDiscreteBurst: (_effect: number, n: number) => n },
     registerEmission: (tick: GpuVfxEmissionTick) => { ticks.add(tick); return () => { ticks.delete(tick); }; },
   };
-  const scene = { add: { graphics }, cameras: { main: { worldView: { x: 0, y: 0, right: 800, bottom: 600 } } },
+  const scene = { add: { graphics }, cameras: { main: { width:800,height:600,originX:0,originY:0,zoom:1,scrollX:0,scrollY:0,worldView: { x: 0, y: 0, right: 800, bottom: 600 } } },
     tweens: { addCounter: () => ({ remove: vi.fn() }) } };
   const renderer = new TranslocatorTeleportRenderer(scene as never, gpu as never);
   const pair: PortalPair = { id: 'pair', ownerId: 'owner', a: { x: 100, y: 100 }, b: { x: 400, y: 100 },

@@ -26,7 +26,7 @@ export async function colourSources() {
   return files.sort();
 }
 export async function prepareRuntimeAssets() {
-  const previous = JSON.parse(await readFile('public/assets/runtime-colours.json', 'utf8').catch(() => '{"assets":{}}')).assets;
+  const previous = JSON.parse(await readFile('src/assets/manifests/runtime-colours.json', 'utf8').catch(() => '{"assets":{}}')).assets;
   const manifest = {};
   let before = 0, after = 0;
   for (const file of await colourSources()) {
@@ -38,7 +38,7 @@ export async function prepareRuntimeAssets() {
     manifest[published.source] = published;
     before += published.sourceBytes; after += published.downloadBytes;
   }
-  const output = 'public/assets/runtime-colours.json';
+  const output = 'src/assets/manifests/runtime-colours.json';
   const text = JSON.stringify({ version: 1, assets: manifest }, null, 2) + '\n';
   if (await readFile(output, 'utf8').catch(() => '') !== text) await writeFile(output, text);
   const urls = {};

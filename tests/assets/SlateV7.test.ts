@@ -8,7 +8,7 @@ import {ROCK_BASE_FRAME_SIZE as CELL,ROCK_BASE_PHASE_CELLS as N,ROCK_BASE_PHASES
 
 it('keeps V7 material coverage, phase coordinates and extruded frame borders compatible with the shared renderer',async()=>{
   const directory='public/assets/environment/woodland/rock';
-  const meta=JSON.parse(await readFile(`${directory}/mineral.json`,'utf8'));
+  const meta=JSON.parse(await readFile('src/assets/manifests/mineral.json','utf8'));
   const hash=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
   expect(hash(await readFile(meta.source))).toBe(meta.sourceSha256);
   expect(hash(await readFile(meta.coverageSource))).toBe(meta.coverageSha256);
@@ -61,7 +61,7 @@ it('adds high-density mineral grain without changing normalized frames or any co
 
 it('reproduces the encoded V7 height independently of pigment with deterministic wrapping',async()=>{
   const directory='public/assets/environment/woodland/rock';
-  const meta=JSON.parse(await readFile(`${directory}/mineral.json`,'utf8'));
+  const meta=JSON.parse(await readFile('src/assets/manifests/mineral.json','utf8'));
   expect(meta.heightFromAlbedo).toBe(false);
   expect(createHash('sha256').update((await readFile(meta.geometrySource,'utf8')).replace(/\r\n/g,'\n')).digest('hex')).toBe(meta.geometrySha256);
   const geometry=meta.variant==='weathered'?slateV7WeatheredGeometry(meta.heightPeriod,meta.seed,meta.geometryScale,meta.geometryChips):slateV7Geometry(meta.heightPeriod,meta.seed,meta.variant);

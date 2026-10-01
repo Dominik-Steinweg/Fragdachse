@@ -1,3 +1,5 @@
+import {createVisibleWorldView,getVisibleWorldView} from '../graphics/CameraWorldView';
+const cameraView=createVisibleWorldView();
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH, GAME_WIDTH, GAME_HEIGHT, CANOPY_RADIUS } from '../config';
 import type { ArenaLayout, DirtCell } from '../types';
@@ -138,7 +140,7 @@ class GroundLab extends Phaser.Scene {
   }
 
   update(): void {
-    this.ground.updateResidency(this.cameras.main.worldView);
+    this.ground.updateResidency(getVisibleWorldView(this.cameras.main,cameraView));
     const start = performance.now();
     ChunkedRenderSurface.flushBakeBudget(this);
     this.bakeMs = Math.max(this.bakeMs * .98, performance.now() - start);

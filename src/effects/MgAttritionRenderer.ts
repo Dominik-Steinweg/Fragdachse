@@ -1,3 +1,4 @@
+import {getVisibleWorldView,createVisibleWorldView} from '../graphics/CameraWorldView';
 import type * as Phaser from 'phaser';
 import { combatTargetInstanceKey, type CombatTargetRef } from '../combat/CombatScope';
 import type { MgAttritionSnapshot, MgTransfer } from '../systems/MgAttritionRuntime';
@@ -11,6 +12,7 @@ interface Entry { source: number; flow: ParticleFlowScheduler; blood: ParticleFl
 
 /** One scene-long GPU emission callback; World state and GPU sources are explicitly cleared. */
 export class MgAttritionRenderer {
+  private readonly cameraView=createVisibleWorldView();
   private readonly entries = new Map<string, Entry>();
   private targets: MgAttritionSnapshot['targets'] = [];
   private lookup: (ref: CombatTargetRef) => MgTargetVisual | null = () => null;
@@ -51,7 +53,7 @@ export class MgAttritionRenderer {
 
   private emit(delta: number, gpuNow: number): void {
     this.now += Math.max(0, delta);
-    const view = this.scene.cameras.main.worldView;
+    const view = getVisibleWorldView(this.scene.cameras.main,this.cameraView);
     const inView = (x: number, y: number, radius = 0) => x + radius >= view.x && x - radius <= view.right && y + radius >= view.y && y - radius <= view.bottom;
     const visible = new Set<string>();
     if (!this.gpu.isSuppressed()) for (const state of this.targets) {
