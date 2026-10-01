@@ -85,6 +85,7 @@ describe('base editor World terrain', () => {
     const world = Object.assign(Object.create(PersistentBaseEditorWorld.prototype), {
       scene, arena: { groundSurface: ground }, shadows: { updateStaticResidency() {} },
       bases: { syncLights() {} }, animations: { update() {} }, powerUps: { updatePedestals() {} },
+      presentationTimeMs:0,sunlight:{update:vi.fn()},
       gpu: { update() {} }, fog: { update() {} }, lighting: { update() {} }, fx: { update() {} },
     }) as PersistentBaseEditorWorld;
     ground.updateResidency(view);

@@ -216,6 +216,7 @@ function emptyPerformanceMetrics(): LightingPerformanceMetrics {
  * sind, bevor die Lightmap ihre eigenen Zeichenbefehle ausführt.
  */
 export class LightingSystem {
+  private sunAmbient: number | null = null;
   private timeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
   private sky: SkyState = resolveSkyState(DEFAULT_TIME_OF_DAY_MINUTES);
 
@@ -327,6 +328,14 @@ export class LightingSystem {
     this.syncOverlayVisibility();
   }
 
+  /** Reversible dev presentation override; lamps retain their production sky factors. */
+  setSunAmbient(color: number | null): void {
+    if(color!==null&&(!Number.isInteger(color)||color<0||color>0xffffff))throw new Error('Invalid sunlight ambient');
+    if(this.sunAmbient===color)return;
+    this.sunAmbient=color;this.lightMapHoldsAmbientOnly=false;
+  }
+  getAmbientColor(): number { return this.sunAmbient ?? this.sky.ambientColor; }
+
   getTimeOfDayMinutes(): number {
     return this.timeOfDayMinutes;
   }
@@ -407,10 +416,10 @@ export class LightingSystem {
     // Der Kurzschluss bei leerer Lichtliste spart zugleich `sampleLightAmount()`, das
     // pro Krone über alle aktiven Lichter läuft.
     const factor = this.sky.canopyLightFactor;
-    if (factor <= 0 || (this.lights.length === 0 && this.essenceFrames.size === 0)) return this.sky.ambientColor;
+    if (factor <= 0 || (this.lights.length === 0 && this.essenceFrames.size === 0)) return this.getAmbientColor();
 
     const lit = Phaser.Math.Clamp(this.sampleLightAmount(x, y) * factor, 0, 1);
-    return mixChannels(this.sky.ambientColor, 0xffffff, lit);
+    return mixChannels(this.getAmbientColor(), 0xffffff, lit);
   }
 
   /**
@@ -724,7 +733,7 @@ export class LightingSystem {
     this.frameRefreshDynamicTests = 0;
     this.frameRefreshDynamicHits = 0;
 
-    const ambientColor = this.sky.ambientColor;
+    const ambientColor = this.getAmbientColor();
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
     const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0;
     this.syncLightBleed(overlay, !queueEmpty);
@@ -1607,12 +1616,12 @@ export class LightingSystem {
 
   private syncLightBleed(lightMap: Phaser.GameObjects.RenderTexture, hasLights: boolean): void {
     if (!hasLights || this.compositeSuppressed || !this.quality.lightBleed
-      || this.sky.bleedFactor <= 0 || this.sky.ambientColor === NEUTRAL_AMBIENT_COLOR) {
+      || this.sky.bleedFactor <= 0 || this.getAmbientColor() === NEUTRAL_AMBIENT_COLOR) {
       this.lightBleed?.setVisible(false);
       return;
     }
 
-    const ambient = this.sky.ambientColor;
+    const ambient = this.getAmbientColor();
     this.bleedAmbient[0] = ((ambient >> 16) & 0xff) / 255;
     this.bleedAmbient[1] = ((ambient >> 8) & 0xff) / 255;
     this.bleedAmbient[2] = (ambient & 0xff) / 255;

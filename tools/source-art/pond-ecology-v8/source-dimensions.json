@@ -1,0 +1,82 @@
+[
+  {
+    "id": "lily-group-01",
+    "original": [
+      1254,
+      1254
+    ],
+    "delivered": [
+      1506,
+      1506
+    ],
+    "padding": [
+      126,
+      126
+    ],
+    "minimumTransparentMarginPercent": 8.366533864541832
+  },
+  {
+    "id": "lily-group-02",
+    "original": [
+      1536,
+      1024
+    ],
+    "delivered": [
+      1844,
+      1230
+    ],
+    "padding": [
+      154,
+      103
+    ],
+    "minimumTransparentMarginPercent": 8.351409978308027
+  },
+  {
+    "id": "lily-pad-01",
+    "original": [
+      1292,
+      1218
+    ],
+    "delivered": [
+      1552,
+      1462
+    ],
+    "padding": [
+      130,
+      122
+    ],
+    "minimumTransparentMarginPercent": 8.344733242134064
+  },
+  {
+    "id": "lily-pad-02",
+    "original": [
+      1254,
+      1254
+    ],
+    "delivered": [
+      1506,
+      1506
+    ],
+    "padding": [
+      126,
+      126
+    ],
+    "minimumTransparentMarginPercent": 8.366533864541832
+  },
+  {
+    "id": "lily-pad-03",
+    "original": [
+      1536,
+      1024
+    ],
+    "delivered": [
+      1844,
+      1230
+    ],
+    "padding": [
+      154,
+      103
+    ],
+    "minimumTransparentMarginPercent": 8.351409978308027
+  }
+]

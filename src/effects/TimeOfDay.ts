@@ -182,6 +182,19 @@ function stripKeyframe(frame: SkyKeyframe): SkyState {
   return state;
 }
 
+/** Allocation-free scalar view of the same authored curve for sun geometry. */
+export function resolveSkyShadowLength(minutes: number): number {
+  const time=normalizeTimeOfDay(minutes);
+  let previous=SKY_KEYFRAMES[SKY_KEYFRAMES.length-1],next=SKY_KEYFRAMES[0];
+  for(let i=0;i<SKY_KEYFRAMES.length;i++) {
+    const frame=SKY_KEYFRAMES[i];
+    if(frame.atMinute===time)return frame.shadowLengthMult;
+    if(frame.atMinute>time){next=frame;previous=SKY_KEYFRAMES[(i+SKY_KEYFRAMES.length-1)%SKY_KEYFRAMES.length];break;}
+  }
+  const span=wrapForward(next.atMinute-previous.atMinute);
+  return lerp(previous.shadowLengthMult,next.shadowLengthMult,span===0?0:wrapForward(time-previous.atMinute)/span);
+}
+
 function wrapForward(delta: number): number {
   const wrapped = delta % MINUTES_PER_DAY;
   return wrapped < 0 ? wrapped + MINUTES_PER_DAY : wrapped;

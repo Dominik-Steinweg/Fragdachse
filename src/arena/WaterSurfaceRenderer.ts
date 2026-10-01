@@ -1,3 +1,4 @@
+import { WOODLAND_TRANSMISSION_KEY } from '../assets/WoodlandAssetManifest';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { WaterCell } from '../types';
@@ -5,6 +6,9 @@ import { ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, ARENA_RE
   type ChunkWorldFrame, type ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { WaterSurfaceModel, WATER_MASK_HALO, type WaterMask, type WaterMaskView } from './WaterSurfaceModel';
 import { WATER_FRAGMENT, WATER_SHADER_NAME } from './waterSurfaceShader';
+import { WATER_SUN_FRAGMENT, setWaterSunUniforms } from './WaterSunlight';
+import type { SunCloudState } from '../effects/sunlight/cloudShadow';
+
 
 let nextWaterSurfaceId = 0;
 interface WaterChunk { x: number; y: number; quad: Phaser.GameObjects.Shader; key: string }
@@ -17,8 +21,11 @@ export class WaterSurfaceRenderer {
   private readonly totalMasks: number;
   private destroyed = false;
   private readonly chunks = new Map<string, WaterChunk>();
+  private sunlight: SunCloudState | undefined;
+  private readonly worldOffset: Float32Array;
   constructor(private readonly scene: Phaser.Scene, private readonly frame: ChunkWorldFrame,
     water: readonly WaterCell[], private readonly seed: number) {
+    this.worldOffset = new Float32Array([frame.offsetX, frame.offsetY]);
     const model = new WaterSurfaceModel(water, frame);
     const origins = model.getChunkOrigins(ARENA_RENDER_CHUNK_SIZE, frame.width, frame.height);
     this.totalMasks = origins.length;
@@ -49,6 +56,19 @@ export class WaterSurfaceRenderer {
   }
 
   isPrepared(): boolean { return !this.destroyed && this.preparation === null; }
+
+  getPresentationTime(): number { return this.sunlight?.timeSec ?? this.scene.time.now/1000; }
+
+  /** Only program/borrowed sampler changes; resident CPU/GPU masks are retained. */
+  setSunlight(state?: SunCloudState): void {
+    const variantChanged=!!state!==!!this.sunlight;
+    this.sunlight=state;
+    if(this.destroyed||!variantChanged)return;
+    for(const chunk of this.chunks.values()) {
+      chunk.quad.destroy();
+      chunk.quad=this.createQuad(chunk.x,chunk.y,chunk.key);
+    }
+  }
 
   /** Borrow the immutable CPU masks. The presentation owner retains their lifetime. */
   *getPreparedMasks(): Generator<{ readonly x: number; readonly y: number; readonly mask: WaterMaskView }> {
@@ -90,18 +110,26 @@ export class WaterSurfaceRenderer {
       pixels.data.set(mask.data); texture.context.putImageData(pixels, 0, 0); texture.refresh();
       texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
       const x = this.frame.offsetX + cx * size, y = this.frame.offsetY + cy * size;
-      const origin = new Float32Array([cx * size, cy * size]);
-      const quad = new Phaser.GameObjects.Shader(this.scene, {
-        name: WATER_SHADER_NAME, shaderName: WATER_SHADER_NAME, fragmentSource: WATER_FRAGMENT,
-        setupUniforms: (set: (name: string, value: unknown) => void) => {
-          set('uMask', 0); set('uOrigin', origin); set('uSize', size); set('uHalo', WATER_MASK_HALO);
-          set('uTime', this.scene.time.now / 1000); set('uSeed', (this.seed >>> 0) % 997);
-        },
-      }, x + size / 2, y + size / 2, size, size, [key]);
-      quad.setDepth(DEPTH.WATER).setBlendMode(Phaser.BlendModes.NORMAL);
-      this.scene.add.existing(quad);
+      const quad = this.createQuad(x,y,key);
       this.chunks.set(id, { x, y, quad, key });
     }
+  }
+
+  private createQuad(x:number,y:number,key:string): Phaser.GameObjects.Shader {
+      const size=ARENA_RENDER_CHUNK_SIZE;
+      const origin = new Float32Array([x-this.frame.offsetX, y-this.frame.offsetY]);
+      const sun=!!this.sunlight, name=WATER_SHADER_NAME+(sun?'Sunlight':'');
+      const quad = new Phaser.GameObjects.Shader(this.scene, {
+        name, shaderName: name, fragmentSource: sun?WATER_SUN_FRAGMENT:WATER_FRAGMENT,
+        setupUniforms: (set: (name: string, value: unknown) => void) => {
+          set('uMask', 0); set('uOrigin', origin); set('uSize', size); set('uHalo', WATER_MASK_HALO);
+          set('uTime', this.getPresentationTime()); set('uSeed', (this.seed >>> 0) % 997);
+          if(sun) { set('uSunTransmission',1);set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight); }
+        },
+      }, x + size / 2, y + size / 2, size, size, sun?[key,WOODLAND_TRANSMISSION_KEY]:[key]);
+      quad.setDepth(DEPTH.WATER).setBlendMode(Phaser.BlendModes.NORMAL);
+      this.scene.add.existing(quad);
+      return quad;
   }
 
   destroy(): void {

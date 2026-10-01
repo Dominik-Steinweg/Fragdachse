@@ -65,13 +65,15 @@ export function stampRockVegetation(
   drawOffsetX: number,
   drawOffsetY: number,
   layerAlpha = 1,
+  tint = 0xffffff,
 ): void {
   for (const placement of placements) {
-    const frame = scene.textures.getFrame(placement.textureKey);
+    const frame = scene.textures.getFrame(placement.textureKey, placement.frame);
     if (!frame) continue;
     const scaleX = placement.lengthPx / frame.width;
-    layer.stamp(placement.textureKey, undefined, placement.worldX + drawOffsetX, placement.worldY + drawOffsetY, {
+    layer.stamp(placement.textureKey, placement.frame, placement.worldX + drawOffsetX, placement.worldY + drawOffsetY, {
       alpha: placement.alpha * layerAlpha,
+      tint,
       rotation: placement.rotation,
       scaleX: placement.mirrorX ? -scaleX : scaleX,
       scaleY: placement.bandPx / frame.height,

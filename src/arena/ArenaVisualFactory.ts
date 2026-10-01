@@ -1,3 +1,4 @@
+import { CANOPY_ATLASES, CANOPY_ASSETS, canopyVariant } from './trees/CanopyAssets';
 import * as Phaser from 'phaser';
 import {
   ARENA_OFFSET_X,
@@ -28,6 +29,11 @@ const ROCK_DECAL_ROTATION_SALT = 0x2c91;
  * Fels-Decal auf derselben Zelle nicht dieselbe Drehung erben.
  */
 const GROUND_DECAL_ROTATION_SALT = 0x51a7;
+
+/** Shared colour/data transform, including deterministic legacy-layout fallback. */
+export function groundDecalRotation(decal: DecalCell): number {
+  return decal.rotation ?? hashCell01(decal.gridX, decal.gridY, GROUND_DECAL_ROTATION_SALT) * Math.PI * 2;
+}
 
 
 /** A live rock as the mask sheets read it: centre and 47-Blob frame (not the base atlas frame). */
@@ -101,8 +107,9 @@ export class ArenaVisualFactory {
     * Pfad fuer kleine, vollstaendig sichtbare Bestaende.
      */
     layer?: Phaser.GameObjects.Layer,
+    textureKey = ROCK_BASE_TEXTURE_KEY,
   ): Phaser.GameObjects.Image {
-    const img = new Phaser.GameObjects.Image(scene, worldX, worldY, ROCK_BASE_TEXTURE_KEY, frame);
+    const img = new Phaser.GameObjects.Image(scene, worldX, worldY, textureKey, frame);
     if (layer) layer.add(img);
     else scene.add.existing(img);
     img.setDisplaySize(CELL_SIZE, CELL_SIZE);
@@ -162,9 +169,11 @@ export class ArenaVisualFactory {
   }
 
   static createCanopy(scene: Phaser.Scene, worldX: number, worldY: number): Phaser.GameObjects.Image {
-    const canopy = scene.add.image(worldX, worldY, Phaser.Math.RND.pick(CANOPY_TEXTURE_KEYS));
-    canopy.setDisplaySize(CANOPY_RADIUS * 2, CANOPY_RADIUS * 2);
-    canopy.setAngle(Phaser.Math.Between(0, 359));
+    // Keep RNG consumption stable for the rest of authored world decoration.
+    Phaser.Math.RND.pick(CANOPY_TEXTURE_KEYS);Phaser.Math.Between(0,359);
+    const asset=CANOPY_ASSETS[canopyVariant(worldX,worldY)];
+    const canopy=scene.add.image(worldX,worldY,CANOPY_ATLASES[0].key,String(asset.index));
+    canopy.setDisplaySize(CANOPY_RADIUS*2*asset.displayScale,CANOPY_RADIUS*2*asset.displayScale);
     canopy.setDepth(DEPTH.CANOPY);
     return canopy;
   }
@@ -213,7 +222,7 @@ export class ArenaVisualFactory {
       // genau einmal je World gebacken, sondern bei jedem Sichtbarwerden seines Chunks neu –
       // eine ausgewuerfelte Drehung liesse das Decal beim Wiederbetreten springen. Erzeugte
       // Layouts fuehren `rotation` ohnehin mit; das hier greift nur fuer Altbestand.
-      img.setRotation(decal.rotation
+      img.setRotation(surface === 'ground' ? groundDecalRotation(decal) : decal.rotation
         ?? hashCell01(gridX, gridY, surface === 'rock' ? ROCK_DECAL_ROTATION_SALT : GROUND_DECAL_ROTATION_SALT)
           * Math.PI * 2);
       img.setDepth(surface === 'rock' ? DEPTH.ROCK_DECALS : DEPTH.DECALS);

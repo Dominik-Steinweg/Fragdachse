@@ -79,3 +79,7 @@ scripts/generate-fallback.mjs
 
 # Trailer-Renderings (groß, jederzeit reproduzierbar über output/trailer/pipeline)
 output/trailer/*.mp4
+
+# ImageGen candidate/rejected variants: kept locally, not versioned
+tools/source-art/*/candidates/
+tools/source-art/*/candidates-*/

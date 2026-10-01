@@ -30,11 +30,12 @@ class Image {
   originX = 0.5; originY = 0.5; alpha = 1; angle = 0; active = false;
   crop = { x: 0, y: 0, width: 32, height: 32 };
   destroy = vi.fn();
+  tint = 0xffffff;
   setActive(v: boolean) { this.active = v; return this; }
   setVisible(_v: boolean) { return this; }
   setTexture(_key: string, _frame: unknown) { return this; }
   setDepth(_v: number) { return this; }
-  setTint(_v: number) { return this; }
+  setTint(value: number) { this.tint = value; return this; }
   setAlpha(v: number) { this.alpha = v; return this; }
   setAngle(v: number) { this.angle = v; return this; }
   setPosition(x: number, y: number) { this.x = x; this.y = y; return this; }
@@ -65,6 +66,13 @@ function setup() {
 }
 
 describe('RockDestructionRenderer', () => {
+  it('keeps the supplied surface brightness on flying fragments', () => {
+    const h = setup();
+    h.renderer.playDestruction(snapshot); h.tick();
+    expect(h.active().length).toBeGreaterThan(0);
+    expect(h.active().every(image => image.tint === snapshot.tint)).toBe(true);
+    h.renderer.destroy();
+  });
   it('spawns centered material fragments inside the rock and retains relative scale during flight', () => {
     const h = setup();
     h.renderer.playDestruction(snapshot); h.tick();

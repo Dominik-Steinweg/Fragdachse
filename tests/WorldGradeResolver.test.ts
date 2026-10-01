@@ -285,3 +285,35 @@ describe('buildTintMatrix', () => {
     expect(warm[12]).toBeLessThan(cold[12]);
   });
 });
+
+
+it('composes atmosphere before semantic channels and returns exactly the atmosphere baseline when they are absent',async()=>{
+ const {createSunTuning,resolveSunAtmosphere}=await import('../src/effects/sunlight/SunAtmosphere');
+ const {sunAtmosphereGrade}=await import('../src/effects/sunlight/SunTuning');
+ const {overrideWorldGrade,VOID_HUNTER_BOSS_VISUAL_PROFILE}=await import('../src/effects/postfx/worldGrade');
+ const tuning=createSunTuning();
+ for(let minute=0;minute<1440;minute+=5){
+  resolveSunAtmosphere(minute,tuning);const atmosphere=sunAtmosphereGrade(tuning),normal=inputs({skyState:resolveSkyState(minute)});
+  const base=resolveBaseGrade(normal,atmosphere);
+  expect(base).toEqual(overrideWorldGrade(resolveBaseGrade(normal),atmosphere));
+  for(const phase of [0,1,2])for(const hp of [1,.1]){
+   const grade=resolveBaseGrade({...normal,isVoidMap:true,bossPhase:phase,bossVisualProfile:'void-hunter',localHpFraction:hp},atmosphere);
+   expectWithinClamps(grade);expect(grade.brightness).toBeLessThanOrEqual(base.brightness);
+   if(phase){const p=phase===1?VOID_HUNTER_BOSS_VISUAL_PROFILE.phaseOne:VOID_HUNTER_BOSS_VISUAL_PROFILE.phaseTwo;
+    expect(grade.temperature).toBeCloseTo(p.temperature);expect(grade.tint).toBe(p.tint);expect(grade.tintStrength).toBe(p.tintStrength);
+    expect(grade.bloomAmount).toBeCloseTo(Math.min(WORLD_GRADE_CLAMPS.bloomAmount[1],base.bloomAmount+p.bloomBoost));}
+   const healthy=resolveBaseGrade({...normal,isVoidMap:true,bossPhase:phase,bossVisualProfile:'void-hunter'},atmosphere);
+   expect(grade.saturation).toBeLessThanOrEqual(healthy.saturation);
+  }
+ }
+});
+
+it('preserves boss and hurt semantics when the solar writer updates and pulses expire',async()=>{
+ const {composePostFx,PostFxPulseSet}=await import('../src/effects/postfx/PostFxComposer');
+ const basis={saturation:1.1,contrast:1.08,brightness:.94,temperature:.1,bloomAmount:.1};
+ const frame=inputs({isVoidMap:true,bossVisualProfile:'void-hunter',bossPhase:2,localHpFraction:.2});
+ const grade=resolveBaseGrade(frame,basis),pulses=new PostFxPulseSet();
+ pulses.request({id:'hit',priority:5,durationMs:100,grade:{brightness:1,saturation:-1}},0);
+ const active=composePostFx(grade,pulses.prune(20),20);expect(active.brightness).toBeLessThanOrEqual(1.3);expect(active.saturation).toBeGreaterThanOrEqual(.45);
+ const settled=composePostFx(grade,pulses.prune(101),101);for(const key of Object.keys(grade) as (keyof WorldGrade)[])expect(settled[key]).toBe(grade[key]);
+});

@@ -162,7 +162,7 @@ export const ROCK_DECAL_CONFIG: RockDecalLayerConfig = {
     { fileName: 'rock_mineral_streak.png', frequencyPercent: 5, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
     { fileName: 'rock_crack_split.png', frequencyPercent: 6, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
     { fileName: 'rock_crack_branchlet.png', frequencyPercent: 10, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
-    { fileName: 'rock_chip_angular.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'interior' },
+    // rock_chip_angular.png removed 2026-09-30 (user): old mauve-grey chip reads as a smear over rock vegetation.
     { fileName: 'rock_lichen_specks.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_moss_tuft.png', frequencyPercent: 9, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },
     { fileName: 'rock_root_threads.png', frequencyPercent: 8, displaySize: ROCK_DECAL_SIZE, placement: 'edge' },

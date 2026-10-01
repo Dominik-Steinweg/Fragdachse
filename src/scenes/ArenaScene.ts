@@ -1,3 +1,4 @@
+import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { preloadRockBase } from '../arena/RockBaseConfig';
 import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
@@ -32,7 +33,7 @@ import { preloadBaseGroundingAssets } from '../arena/BaseGroundingConfig';
 import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravelConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
-import { preloadRockVegetationAssets } from '../arena/RockVegetationConfig';
+import { preloadRockVegetationMask } from '../arena/RockVegetationConfig';
 import { preloadTurretVisualAssets, registerTurretAnimations } from '../config/turretVisuals';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { InputSystem }           from '../systems/InputSystem';
@@ -358,6 +359,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('bg_tracks', './assets/sprites/BahnstreckeSchienen.png');
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     preloadRockBase(this.load);
+    preloadWoodlandAssets(this);
     this.load.spritesheet('walls', './assets/sprites/walls47blob.png', { frameWidth: 32, frameHeight: 32 });
     for (const control of SHOOTING_RANGE_CONTROLS) {
       this.load.image(`shooting-range-${control}`, `./assets/shooting-range/${control}.png`);
@@ -373,7 +375,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadGroundCoverAssets(this.load);
     preloadPersistentBaseGravelAssets(this.load);
     preloadRockMossAssets(this.load);
-    preloadRockVegetationAssets(this.load);
+    preloadRockVegetationMask(this.load);
     preloadTurretVisualAssets(this.load);
     preloadCanopyAssets(this.load);
     preloadTrainMaterialAssets(this.load);
@@ -495,6 +497,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private *prepareLobby(): Generator<string, void> {
+    assertWoodlandAssetsReady(this);
     onBootSceneTeardown(this.events, () => {
       this.cancelArenaExitRenderWait();
       this.arenaExitFadeOverlay?.destroy();

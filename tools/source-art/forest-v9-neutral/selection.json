@@ -1,0 +1,82 @@
+[
+  {
+    "id": "stieleiche-gelappt-1",
+    "index": 0,
+    "reason": "Dichte breite Eichenmassen, ruhige kompakte Kontur."
+  },
+  {
+    "id": "stieleiche-gelappt-3",
+    "index": 1,
+    "reason": "Unregelmaessige Eichenkontur mit flacher Randkerbe und geschlossenem Kern."
+  },
+  {
+    "id": "traubeneiche-1",
+    "index": 2,
+    "reason": "Runde kompakte Eiche mit gut getrennten mittleren Bueschelgruppen."
+  },
+  {
+    "id": "traubeneiche-2",
+    "index": 3,
+    "reason": "Breitovale Eiche, klar abweichende Silhouette."
+  },
+  {
+    "id": "alte-eiche-1",
+    "index": 4,
+    "reason": "Geschlossene breite Alterskrone mit grossen Astmassen."
+  },
+  {
+    "id": "spitzahorn-1",
+    "index": 5,
+    "reason": "Frische satte Palette, deutliche kantige Blattgruppen."
+  },
+  {
+    "id": "spitzahorn-2",
+    "index": 6,
+    "reason": "Ovale Ahornkrone mit feineren Blattfaechern."
+  },
+  {
+    "id": "esskastanie-3",
+    "index": 7,
+    "reason": "Asymmetrische geschlossene Krone, breite Blattfaecher."
+  },
+  {
+    "id": "ulme-2",
+    "index": 8,
+    "reason": "Breitoval und gedeckt, ruhiger Kontrast zu den Eichen."
+  },
+  {
+    "id": "walnuss-3",
+    "index": 9,
+    "reason": "Unregelmaessige volle Krone mit groesseren Blattgruppen."
+  },
+  {
+    "id": "hainbuche-3",
+    "index": 10,
+    "reason": "Dichte Krone mit schraeg versetzter Schulter und kleinen Blaettern."
+  },
+  {
+    "id": "tanne-2",
+    "index": 11,
+    "reason": "Kompakte ovale Nadelkrone mit dichtem Kern."
+  },
+  {
+    "id": "tanne-3",
+    "index": 12,
+    "reason": "Unregelmaessigere Tanne mit klaren radialen Nadelfaechern."
+  },
+  {
+    "id": "schirmkiefer-3",
+    "index": 13,
+    "reason": "Dichter asymmetrischer Schirm mit grossen Nadelpolstern."
+  },
+  {
+    "id": "eibe-1",
+    "index": 14,
+    "reason": "Feine dunkle Nadelstruktur, kompakte leicht unregelmaessige Kontur."
+  },
+  {
+    "id": "eibe-2",
+    "index": 15,
+    "reason": "Breitovale dunkle Eibe als deutliche Formalternative."
+  }
+]

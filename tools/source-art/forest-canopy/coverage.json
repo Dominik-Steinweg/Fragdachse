@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "alpha": 192,
+  "size": 512,
+  "coreRadius": 192,
+  "coreMinimum": 0.98,
+  "maxScale": 1.7,
+  "minimumArea": 0.7518043518066406,
+  "references": [
+    {
+      "file": "canopy01.png",
+      "sha256": "ce7157f44f536b35959a4d1e2739ffa83f979562a9792e910ce094677d5a2c7c",
+      "opaqueFraction": 0.7122154235839844,
+      "displayedOpaqueFraction": 0.7122154235839844,
+      "coreCoverage": 1
+    },
+    {
+      "file": "canopy02.png",
+      "sha256": "439fc4c85d2c5f2a62bc78d9b138aa5526790f7e4f7416d6cabe9d549aef9703",
+      "opaqueFraction": 0.7518043518066406,
+      "displayedOpaqueFraction": 0.7518043518066406,
+      "coreCoverage": 1
+    },
+    {
+      "file": "canopy03.png",
+      "sha256": "39c7891bef120552c91ca6afb915af323e7cd9bc7cfcbed51e3f351a25dcf183",
+      "opaqueFraction": 0.7429122924804688,
+      "displayedOpaqueFraction": 0.7429122924804688,
+      "coreCoverage": 1
+    },
+    {
+      "file": "canopy04.png",
+      "sha256": "2fe3f4c701840d87a8165d4de62d952ec590e83c48cbef793ab17305e50feb6e",
+      "opaqueFraction": 0.7056617736816406,
+      "displayedOpaqueFraction": 0.7056617736816406,
+      "coreCoverage": 1
+    },
+    {
+      "file": "canopy05.png",
+      "sha256": "527cfdcb329d0a54a7b655d4ea99b8afe31bda9b2830481c75aff6a9b9c1a4a0",
+      "opaqueFraction": 0.7471771240234375,
+      "displayedOpaqueFraction": 0.7471771240234375,
+      "coreCoverage": 0.9999308269636495
+    }
+  ]
+}

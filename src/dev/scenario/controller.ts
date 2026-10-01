@@ -1,3 +1,4 @@
+import { WorldLightingMeasurement } from './WorldLightingMeasurement';
 import type * as Phaser from 'phaser';
 import type { ArenaRuntime } from '../../scenes/arena/ArenaRuntime';
 import type { WeaponSlot, ConstructionId, LoadoutUseResult } from '../../types';
@@ -14,6 +15,7 @@ import { decodeScenario, defaultScenario, encodeScenario, parseScenario, scenari
 import { createScenarioPanel } from './panel';
 import { installScenarioApi } from './api';
 import { ScenarioBots } from './bots';
+import { SUN_TUNING_DEFAULTS, validateSunTuning } from '../../effects/sunlight/SunTuning';
 
 export class DevScenarioController {
   readonly clock: ScenarioClock;
@@ -25,6 +27,7 @@ export class DevScenarioController {
   aim: GridPoint = { gridX: 10, gridY: 10 };
   zoom = 1;
   cameraAtTarget = false;
+  private worldLighting: WorldLightingMeasurement | null = null;
   private trigger: WeaponSlot | null = null;
   private inputStarted = false;
   private sequence = 0;
@@ -77,6 +80,7 @@ export class DevScenarioController {
   }
   start(value: unknown): void {
     const config = parseScenario(value);
+    this.worldLighting?.reset();
     this.stop();
     this.captureCancel?.();
     this.captureRevision++;
@@ -93,6 +97,61 @@ export class DevScenarioController {
     this.message = 'Warte auf Lobby und normalen Rundenstart …';
   }
   saveLink(): void { history.replaceState(null, '', encodeScenario(this.config)); }
+  setSunTuning(values: unknown, reset = false): void {
+    this.requireReady();
+    const patch = reset ? undefined : validateSunTuning(values);
+    this.worldLighting ??= new WorldLightingMeasurement(this.scene, () => this.runtime.getScenarioLightingTargets());
+    this.worldLighting.update(this.config.timeOfDay,this.clock.now);
+    this.worldLighting.tuneSun(patch,reset);
+    if (this.clock.paused) this.step();
+  }
+  measureWorldLighting(mode: 'stationary' | 'destruction' | 'traverse' | 'walk' = 'stationary'): void {
+    this.requireReady(); if (this.clock.paused) this.resume();
+    this.stop();
+    this.worldLighting ??= new WorldLightingMeasurement(this.scene, () => this.runtime.getScenarioLightingTargets());
+    this.worldLighting.update(this.config.timeOfDay,this.clock.now);
+    if(mode==='stationary'){this.worldLighting.measure();return;}
+    const savedAim={...this.aim},savedFocus=this.cameraAtTarget;
+    const restore=()=>{this.aim=savedAim;this.cameraAtTarget=savedFocus;this.syncCamera();};
+    const pending=()=>{const loading=this.runtime.getScenarioLoadingState();return (loading.ground?.pendingWork??0)>0||(loading.overlay?.pendingWork??0)>0;};
+    if(mode==='destruction') {
+      const rock=this.runtime.devScenarioPort.findDestructibleRock(this.aim.gridX,this.aim.gridY);
+      if(!rock)throw new Error('Kein zerstörbarer Fels innerhalb von 8 Zellen um das Ziel.');
+      this.aim={gridX:rock.gridX,gridY:rock.gridY};this.cameraAtTarget=true;this.syncCamera();
+      this.worldLighting.measure({mode,durationMs:5000,restore,pending,advance:()=>{},start:()=>{
+        if(!this.runtime.devScenarioPort.destroyRock(rock.id))throw new Error('Der ausgewählte Fels wurde nicht autoritativ zerstört.');
+        return {rockId:rock.id,gridX:rock.gridX,gridY:rock.gridY,authoritative:true};
+      }});
+    } else {
+      const metrics=this.runtime.getWorldMetrics();if(!metrics)throw new Error('Keine aktive World.');
+      const from={gridX:4,gridY:Math.max(4,Math.floor(metrics.gridRows*.3))};
+      const to=mode==='walk'?{gridX:Math.min(metrics.gridCols-5,from.gridX+72),gridY:from.gridY}
+        :{gridX:metrics.gridCols-5,gridY:Math.min(metrics.gridRows-5,Math.floor(metrics.gridRows*.7))};
+      const durationMs=mode==='walk'?30000:12000,half=durationMs/2;
+      const speedWorldPxPerSecond=Math.hypot(to.gridX-from.gridX,to.gridY-from.gridY)*32/(half/1000);
+      if(to.gridX-from.gridX<32)throw new Error('Die Kameraroute benötigt mindestens drei Fels-Chunks in der Breite.');
+      this.aim=from;this.cameraAtTarget=true;this.syncCamera();
+      this.worldLighting.measure({mode,durationMs,restore,pending,start:()=>({route:[from,to,from],durationMs,speedWorldPxPerSecond,
+        cameraOnly:true,coordinateSpace:'grid'}),
+        advance:elapsed=>{
+          const t=elapsed<=half?elapsed/half:(durationMs-elapsed)/half;
+          this.aim={gridX:from.gridX+(to.gridX-from.gridX)*t,gridY:from.gridY+(to.gridY-from.gridY)*t};this.syncCamera();
+        }});
+    }
+  }
+  worldLightingMeasurement() { return this.worldLighting?.measurement ?? null; }
+  worldLightingStatus() { return this.runtime.getScenarioLightingTargets().rocks?.getFormationDiagnostics() ?? null; }
+  focusLightingTree(): void {
+    this.requireReady();
+    const player = this.runtime.navigationLabPort.getPlayerPosition();
+    if (!player) return;
+    const trees = this.runtime.getScenarioLightingTargets().canopies;
+    const nearest = trees.reduce<typeof trees[number] | null>((best, tree) => !best
+      || Math.hypot(tree.worldX - player.x, tree.worldY - player.y) < Math.hypot(best.worldX - player.x, best.worldY - player.y) ? tree : best, null);
+    if (!nearest) throw new Error('Diese Map hat keine Baumkrone.');
+    this.aim = this.grid({ x: nearest.worldX, y: nearest.worldY }); this.cameraAtTarget = true;
+    if (this.clock.paused) this.step();
+  }
   private world(point: GridPoint): { x: number; y: number } {
     const metrics = this.runtime.getWorldMetrics();
     if (!metrics || !Number.isFinite(point.gridX + point.gridY) || point.gridX < 0 || point.gridY < 0
@@ -205,6 +264,7 @@ export class DevScenarioController {
       hostNowMs: bridge.getSynchronizedNow(), params: { ultimateAction: action } });
   }
   stop(): void {
+    this.worldLighting?.stopMeasurement();
     this.trigger = null; this.heldUtility = null; this.movement = { dx: 0, dy: 0, until: 0 };
     this.setInput(0, null);
     bridge.sendLocalInput({ dx: 0, dy: 0, aim: 0, dashHeld: false });
@@ -235,7 +295,7 @@ export class DevScenarioController {
     if (!this.runtime.devScenarioPort.startTrain()) throw new Error('Diese Map hat keine Zugstrecke.');
   }
   aimBot(index: number, point: GridPoint | null): void { this.bots.aim(index, point ? this.world(point) : null); }
-  pause(): void { this.requireReady(); this.clock.paused = true; }
+  pause(): void { this.requireReady(); this.worldLighting?.stopMeasurement(); this.clock.paused = true; }
   resume(): void { this.clock.paused = false; }
   step(frames = 1): void { this.requireReady(); this.clock.step(frames); }
   update(): void {
@@ -273,6 +333,7 @@ export class DevScenarioController {
       const now = this.clock.now, id = bridge.getLocalPlayerId();
       this.runtime.devScenarioPort.suppressEncounters(this.config.suppressWaves || this.pendingConstructions.length > 0);
       this.runtime.devScenarioPort.setOptions(this.config.freezeMission, this.config.hideTutorial);
+      this.worldLighting?.update(this.config.timeOfDay,this.clock.now);
       this.runtime.setTimeOfDayDebugOverride(this.config.timeOfDay);
       bridge.setDevScenarioPlayerFreeForAll(this.config.playerFreeForAll);
       this.runtime.devScenarioPort.updateTrain(Math.max(0, now - this.lastTrainUpdate), this.trainInvulnerable); this.lastTrainUpdate = now;
@@ -359,6 +420,9 @@ export class DevScenarioController {
       paused: this.clock.paused, speed: this.clock.speed, trigger: this.trigger, moving: this.movement,
       pendingSetupConstructions: this.pendingConstructions.length,
       rendererSize: { width: this.scene.game.canvas.width, height: this.scene.game.canvas.height },
+      sunTuning: { ...(this.worldLighting?.sunTuning ?? SUN_TUNING_DEFAULTS) },
+      sun: this.worldLighting?.sunStatus ?? null,
+      worldLightingMeasurement:this.worldLightingMeasurement(),
       camera: { zoom: this.zoom, focusTarget: this.cameraAtTarget, scrollX: this.scene.cameras.main.scrollX,
         scrollY: this.scene.cameras.main.scrollY, zoomX: this.scene.cameras.main.zoomX, zoomY: this.scene.cameras.main.zoomY },
       config: this.config, committedLoadout: bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId()),
@@ -392,6 +456,15 @@ export class DevScenarioController {
       } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
     });
   }
+  async saveReportToWorkspace(): Promise<{ path: string; url: string; status: Record<string, unknown> }> {
+    if(this.disposed||!isDevScenarioMode())throw new Error('Aktives Dev-Szenario erforderlich.');
+    const status=structuredClone(this.snapshot()),body=new Blob([JSON.stringify(status,null,2)],{type:'application/json'});
+    if(body.size>4*1024*1024)throw new Error('Bericht überschreitet 4 MiB.');
+    const response=await fetch('/__dev-scenario-report',{method:'POST',headers:{'content-type':'application/json'},body,signal:AbortSignal.timeout(15000)});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error??'Bericht konnte nicht gespeichert werden.');
+    return {path:result.path,url:result.url,status};
+  }
   async captureToWorkspace(): Promise<{ path: string; url: string; status: Record<string, unknown> }> {
     const revision = this.captureRevision;
     const url = await this.capture();
@@ -406,6 +479,7 @@ export class DevScenarioController {
   destroy(): void {
     if (this.disposed) return;
     this.disposed = true; this.stop(); bridge.setDevScenarioPlayerFreeForAll(false); clearInterval(this.refreshTimer);
+    this.worldLighting?.destroy(); this.worldLighting = null;
     window.removeEventListener('hashchange', this.onHashChange); this.api.destroy(); this.captureCancel?.();
     this.panel.destroy(); this.clock.destroy();
   }

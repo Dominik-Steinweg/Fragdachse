@@ -1,4 +1,9 @@
+import { CLOUD_SHADOW_GLSL } from '../sunlight/cloudShadow';
+import { ATMOSPHERE_DITHER_GLSL, FOG_BANK_GLSL } from '../sunlight/atmosphereNoise';
 import { FOG } from './FogConfig';
+import { SUN_VISIBILITY_GLSL } from '../sunlight/sunVisibility';
+import { FOG_VISIBILITY_BUDGET_GLSL } from '../sunlight/FogVisibilityBudget';
+import { FOG_PATCH_GLSL } from '../sunlight/FogPatchField';
 const cells = FOG.chunkSize / FOG.cellSize;
 const f = (value: number): string => value.toFixed(6);
 const cycle = (seconds: number): string => f(Math.PI * 2 / seconds);
@@ -195,10 +200,95 @@ void main() {
 }
 `;
 
-export const FOG_MATERIAL_FRAGMENT = FOG_GLSL + `
+const FOG_LIGHT_GLSL = `
+uniform vec3 uFogSun;
+uniform float uSunComposite;
+uniform vec3 uCompositeShade,uCompositeSun;
+uniform vec3 uSunFogShade,uSunFogLit;
+uniform float uSunFogOpacity,uSunFogShadeOpacity;
+uniform float uFogBankMetadata;
+${FOG_VISIBILITY_BUDGET_GLSL}
+uniform float uSceneSun;
+${SUN_VISIBILITY_GLSL}
+
+vec4 lightFog(vec4 fog,vec2 world) {
+ if(fog.a<=0.0)return fog;
+ // Material optics only: preserve premultiplied colour and alpha, wakes and density.
+ float v=0.0;
+ float day=uSunComposite*smoothstep(0.0,.15,uSceneSun);
+ float waterWeight=0.0;
+ vec3 fogComposite=vec3(1.0);
+ if(day>0.0 && uFogBankMetadata>.5) {
+   waterWeight=clamp(fog.b/max(.0001,fog.a),0.0,1.0);
+   float structure=clamp((fog.g/max(.0001,fog.a)-.79)/.09,0.0,1.0);
+   fog.b=mix(.81,.88,structure)*fog.a;
+ }
+ if(day>0.0) {
+   v=sunVolumeVisibility(world)*cloudTransmission(world);
+   // Solar visibility changes radiance below, never optical coverage.
+   if(uFogBankMetadata<.5)fog*=mix(1.0,uSunFogOpacity,day);
+ }
+ // Scattering colour shares the ground/foliage transmission and moving offset.
+ // Premultiplied alpha and the independent high-resolution wake remain intact.
+ if(uSceneSun>0.0 && uFogSun.z>0.0) {
+   if(uSunComposite>.5) {
+     // Ground fog precedes the composite. Compensate its factor so scattering
+     // remains readable instead of receiving two layers of canopy darkness.
+     float amount=clamp(uSceneSun,0.0,1.0);
+     vec3 scattering=mix(uSunFogShade,uSunFogLit,v);
+     // Neutral sky fill keeps rosy dusk mist from boosting flower/decal chroma.
+     float luma=dot(scattering,vec3(.2126,.7152,.0722));
+     scattering=mix(vec3(luma),scattering,.50);
+     // Retain the material's dimmer underside instead of painting every bank flat.
+     float underside=clamp(dot(fog.rgb,vec3(.2126,.7152,.0722))/max(.0001,fog.a),.65,.9)/.9;
+     float forward=uFogScatter*pow(1.0-clamp(uFogSun.z,0.0,1.0),1.5)*v;
+     scattering*=underside*(1.0+forward)*mix(1.0,mix(uSunFogShadeOpacity,1.0,v),amount);
+     if(uFogBankMetadata>.5) {
+       // Keep silver crests and darker valleys; sunlight only gently tints them.
+       vec3 material=fog.rgb/max(.0001,fog.a);
+       scattering=material*mix(vec3(1.0),mix(uSunFogShade,uSunFogLit,v),.22)
+         *(1.0+forward*.15);
+     }
+     // Cancel the actual ground composite, including its leaf mask. Cancelling
+     // with the low-pass visibility would print the sharp dapple onto fog again.
+     float ground=sunVisibility(world)*cloudTransmission(world);
+     vec3 factor=mix(vec3(1.0),clamp(mix(uCompositeShade,uCompositeSun,ground),0.0,2.0),amount);
+     factor=clamp(factor+atmosphereDither(world)*(2.0/255.0)*min(1.0,amount*8.0),0.0,2.0);
+     fogComposite=max(vec3(.05),factor);
+     fog.rgb=mix(fog.rgb,scattering*fog.a,amount)/max(vec3(.05),factor);
+   }
+ }
+ // Preserve premultiplied colour while bounding the denser woodland mist. The
+ // ordinary wake still clears around actors; never turn banks into opaque walls.
+ if(day>0.0) {
+   if(uFogBankMetadata<.5)fog*=fogBudgetAlpha(fog.a,waterWeight,uSceneSun)/max(.0001,fog.a);
+   float grain=atmosphereDither(world)/255.0*day*min(1.0,fog.a*32.0);
+   // Limit radiance AFTER the following composite, not the compensated source.
+   // Scattering changes hue within the fog budget, never its coverage. Reserve
+   // headroom for the unchanged grade; peak-normalize to retain the warm hue.
+   vec3 radiance=fog.rgb*fogComposite;
+   float peak=max(radiance.r,max(radiance.g,radiance.b));
+   // Patch mode budgets occupied area. A uniform grade compensation preserves
+   // internal contrast; the old per-pixel knee would flatten these dense cores.
+   if(uFogBankMetadata>.5)radiance*=mix(1.0,uFogRadianceLimit/.80,day);
+   float ceiling=fog.a*mix(1.0,uFogBankMetadata>.5?1.0:uFogRadianceLimit,day);
+   radiance*=min(1.0,ceiling/max(.0001,peak));
+   fog.rgb=clamp(radiance+grain,vec3(0),vec3(ceiling))/fogComposite;
+ }
+ return fog;
+}
+`;
+
+export const FOG_K_MATERIAL_FRAGMENT = FOG_GLSL + `
 uniform sampler2D uLookup;
+uniform float uFogBanksK,uFogDay,uBoundaryBlend,uWorldOffsetX,uWorldOffsetY,uFogPrelit;
+${CLOUD_SHADOW_GLSL}
+${FOG_BANK_GLSL}
+${FOG_PATCH_GLSL}
+${ATMOSPHERE_DITHER_GLSL}
+${FOG_LIGHT_GLSL}
 uniform vec2 uLookupSize,uViewOrigin,uViewSize;
-uniform float uOpacity,uDetail,uDebug,uInterpolation,uHasSurface,uQuality;
+uniform float uOpacity,uDetail,uDebug,uInterpolation,uHasSurface,uQuality,uWoodlandBanks;
 // uVelocity is the previous DENSITY buffer in this presentation pass.
 vec4 worldSample(vec2 world) {
  if(any(lessThan(world,vec2(0))) || any(greaterThanEqual(world,uWorldSize))) return vec4(0);
@@ -213,12 +303,86 @@ vec4 worldSample(vec2 world) {
  if(mask.r<.5 || (mask.b>.5 && s.b<.5)) d=0.0;
  return vec4(d,mask.r,mask.g,s.b);
 }
+vec4 smoothWorld(vec2 world) {
+ vec2 grid=world/8.0-.5,base=(floor(grid)+.5)*8.0,w=fract(grid);
+ return mix(mix(worldSample(base),worldSample(base+vec2(8,0)),w.x),
+   mix(worldSample(base+vec2(0,8)),worldSample(base+vec2(8,8)),w.x),w.y);
+}
+float waterCell(vec2 world) {
+ if(any(lessThan(world,vec2(0)))||any(greaterThanEqual(world,uWorldSize)))return 0.0;
+ float slot=texture2D(uLookup,(floor(world/512.0)+.5)/uLookupSize).r*255.0-1.0;
+ return slot<-.5?0.0:terrain(floor(slot+.5),floor(mod(world,512.0)/8.0)).g;
+}
+float smoothWater(vec2 world) {
+ vec2 grid=world/8.0-.5,base=(floor(grid)+.5)*8.0,w=fract(grid);
+ return mix(mix(waterCell(base),waterCell(base+vec2(8,0)),w.x),
+  mix(waterCell(base+vec2(0,8)),waterCell(base+vec2(8,8)),w.x),w.y);
+}
+float boundaryCell(vec2 world) {
+ if(any(lessThan(world,vec2(0))) || any(greaterThanEqual(world,uWorldSize)))return -64.0;
+ float slot=texture2D(uLookup,(floor(world/512.0)+.5)/uLookupSize).r*255.0-1.0;
+ if(slot<-.5)return -64.0;
+ // Unit six is the boundary atlas in woodland material mode, the impulse map in debug mode.
+ vec4 encodedBoundary=texture2D(uImpulse,cellUV(floor(slot+.5),floor(mod(world,512.0)/8.0)));
+ float blend=uBoundaryBlend*uBoundaryBlend*(3.0-2.0*uBoundaryBlend);
+ return mix(unpack16(encodedBoundary.ba),unpack16(encodedBoundary.rg),blend)*128.0-64.0;
+}
+// Decode first, interpolate second: packed high/low bytes must never use LINEAR filtering.
+vec3 boundaryField(vec2 world) {
+ vec2 grid=world/8.0-.5,p=(floor(grid)+.5)*8.0,w=fract(grid);
+ float a=boundaryCell(p),b=boundaryCell(p+vec2(8,0)),c=boundaryCell(p+vec2(0,8)),d=boundaryCell(p+vec2(8,8));
+ return vec3(mix(mix(a,b,w.x),mix(c,d,w.x),w.y),mix(b-a,d-c,w.y)/8.0,mix(c-a,d-b,w.x)/8.0);
+}
+float woodlandThickness(vec2 world,float surface,out float layered,out float waterWeight,out float patchDistance,out float patchActivity) {
+ patchDistance=-1000.0;patchActivity=0.0;
+ waterWeight=0.0;
+ vec2 global=world+vec2(uWorldOffsetX,uWorldOffsetY);
+ vec2 drift=vec2(1.0,.23)*cloudTravel(uCloudTime,uCloudSpeed)*.18;
+ vec3 boundary=boundaryField(world);
+ vec2 normal=boundary.yz/max(.001,length(boundary.yz)),tangent=vec2(-normal.y,normal.x);
+ float nearEdge=1.0-smoothstep(0.0,uFogPileSoftness*2.0,abs(boundary.x));
+ float roll=sin(dot(global,tangent)/31.0-uCloudTime*.17)*nearEdge;
+ vec2 q=global-drift+tangent*roll*6.0;
+ // Static small erosion follows rounded corners without moving the collision contour.
+ float edge=boundary.x+(fogBankNoise(global/19.0)-.5)*4.0;
+ vec2 source=world+normal*max(0.0,12.0-boundary.x);
+ vec4 transported=smoothWorld(source);
+ float slot=texture2D(uLookup,(floor(source/512.0)+.5)/uLookupSize).r*255.0-1.0;
+ if(slot<-.5){layered=0.0;return 0.0;}
+ float original=targetDensity(floor(slot+.5),mod(source,512.0)/8.0-.5,transported.b);
+ float flow=clamp(transported.r/max(.0001,original),0.0,1.8);
+ // Invert the existing cubic water-distance encoding, then use a much gentler density ratio.
+ float water=boundary.x>=12.0?transported.b:smoothWater(world);
+ float distance=(.5-sin(asin(clamp(1.0-2.0*water,-1.0,1.0))/3.0))*224.0-160.0;
+ float shoreWarp=(fogBankNoise(q/85.0)-.5)*24.0;
+ float waterRamp=smoothstep(-uFogShoreRamp*.65,uFogShoreRamp*.35,distance+shoreWarp);
+ waterWeight=waterRamp;
+ float bank=fogBank(global,uCloudTime,uCloudSpeed);
+ layered=clamp(fogPatchStructure(q,uCloudTime,uQuality)+.08*roll,0.0,1.0);
+ float patch=fogPatchMaskDistance(q,uCloudTime,bank,waterRamp,patchDistance);
+ // Squared billows have real inner valleys; banks merely favour their locations.
+ float shape=uFogClearHaze+uFogPatchDensity*patch*(.07+2.25*layered*layered);
+ float pile=smoothstep(-5.0,uFogPileSoftness,edge)
+   *(1.0+.28*exp(-pow((edge-uFogPileSoftness*.65)/uFogPileSoftness,2.0)));
+ // Extra moisture appears only in narrow drifting fibres, not the entire pond.
+ float vapour=smoothstep(.65,.95,layered);
+ float density=uFogDensity*shape*(1.0+uFogWaterBoost*waterRamp*vapour)*flow*pile;
+ // Thin wind-borne shoulder wisps, not a fog sheet over rock tops.
+ density*=mix(.22,1.0,smoothstep(-2.0,9.0,edge));
+ patchActivity=clamp(uOpacity*uFogOpticalOpacity*uFogDensity*uFogPatchDensity
+   *flow*pile*mix(.22,1.0,smoothstep(-2.0,9.0,edge))*(1.0-surface),0.0,1.0);
+ return max(0.0,density*(1.0-surface)-.004);
+}
 void main() {
  vec2 world=uViewOrigin+flip(outTexCoord)*uViewSize;
- vec4 center=worldSample(world);
- vec2 grid=world/8.0-.5,base=(floor(grid)+.5)*8.0,weight=fract(grid);
- float d=mix(mix(worldSample(base).r,worldSample(base+vec2(8,0)).r,weight.x),
-   mix(worldSample(base+vec2(0,8)).r,worldSample(base+vec2(8,8)).r,weight.x),weight.y);
+ float day=uFogBanksK*smoothstep(0.0,.15,uFogDay);
+ vec4 center=vec4(0.0);float d=0.0;
+ if(day<1.0||uDebug>.5){
+  center=worldSample(world);
+  vec2 grid=world/8.0-.5,base=(floor(grid)+.5)*8.0,weight=fract(grid);
+  d=mix(mix(worldSample(base).r,worldSample(base+vec2(8,0)).r,weight.x),
+    mix(worldSample(base+vec2(0,8)).r,worldSample(base+vec2(8,8)).r,weight.x),weight.y);
+ }
  float surface=uHasSurface>.5?texture2D(uBins,outTexCoord).a:0.0;
  d*=1.0-surface;
  if(uDebug>.5) {
@@ -235,6 +399,8 @@ void main() {
    }
    gl_FragColor=vec4(color, .92);return;
  }
+ float structure=0.0,thickness=0.0;
+ if(day<1.0) {
  // Displayed density lies between the previous and current step; texture time follows it.
  float t=uTime-(1.0-uInterpolation)*${f(FOG.stepMs / 1000)};
  vec2 q=fogSpace(world,t);
@@ -243,27 +409,70 @@ void main() {
  float body=noise(q/74.0+warp*2.2)*.62+noise(q/33.0+warp*3.0+vec2(t*.011,0.0))*.38;
  float strand=1.0-abs(noise(q/47.0+warp*3.4-vec2(0.0,t*.009))*2.0-1.0);
  float fine=uQuality>1.5?noise(q/17.0+warp*4.0+vec2(0.0,t*.02)):.5;
- float structure=smoothstep(.22,.82,body*.76+strand*strand*.12+fine*.12);
+ structure=smoothstep(.22,.82,body*.76+strand*strand*.12+fine*.12);
  // Structure scales optical thickness; a small edge offset erodes thin fog into wisps and
  // leaves the gaps clear, while saturation keeps dense cores soft instead of clipped flat.
- float thickness=max(0.0,d*mix(1.0,.12+1.8*structure,uDetail)-${f(FOG.materialEdge)});
+ thickness=max(0.0,d*mix(1.0,.12+1.8*structure,uDetail)-${f(FOG.materialEdge)});
+ // Optional forest presentation: clear the thin veil between smaller billows,
+ // retain dense soft cores. This never writes the transported density field.
+ if(uWoodlandBanks>.5) {
+   // A second narrow threshold made islands with conspicuous dark cut-outs.
+   // Squaring the existing soft structure concentrates cores without that rim.
+   float bank=structure*structure;
+   thickness=max(0.0,d*(.07+2.25*bank)-.025);
+ }
+ }
+ float waterWeight=0.0,patchDistance=-1000.0,patchActivity=0.0;
+ if(day>0.0) {
+   // Feather the base-image cutout before applying the smooth obstacle shoulder.
+   float softSurface=surface;
+   if(uHasSurface>.5) {
+     vec2 px=vec2(5.0)/uViewSize;
+     softSurface=(surface*2.0+texture2D(uBins,outTexCoord+vec2(px.x,0)).a+texture2D(uBins,outTexCoord-vec2(px.x,0)).a
+       +texture2D(uBins,outTexCoord+vec2(0,px.y)).a+texture2D(uBins,outTexCoord-vec2(0,px.y)).a)/6.0;
+   }
+   float layered;
+   float banks=woodlandThickness(world,softSurface,layered,waterWeight,patchDistance,patchActivity);
+   thickness=mix(thickness,banks,day);
+   structure=mix(structure,layered,day);
+ }
  // Weapon wakes are cut in FOG_DISPLAY_FRAGMENT at mask resolution, never at material texels.
- float alpha=${f(FOG.materialMaxAlpha)}*(1.0-exp(-${f(FOG.materialGain)}*uOpacity*thickness));
+ float alpha=${f(FOG.materialMaxAlpha)}*(1.0-exp(-${f(FOG.materialGain)}*uOpacity*mix(1.0,uFogOpticalOpacity,day)*thickness));
+ if(day>0.0)alpha=mix(alpha,fogPatchEdgeAlpha(alpha,patchDistance,patchActivity),day);
+ if(day>0.0)alpha=max(0.0,alpha+atmosphereDither(world+vec2(uWorldOffsetX,uWorldOffsetY))/255.0*day*min(1.0,alpha*255.0));
  gl_FragColor=vec4(mix(vec3(.72,.79,.81),vec3(.84,.88,.88),structure)*alpha,alpha);
+ // Woodland intermediate material: B carries premultiplied shoreline weight.
+ // Display reconstructs blue from green/alpha before lighting. No extra sampler
+ // or surface pass; linear filtering and wake attenuation preserve the ratio.
+ if(day>0.0)gl_FragColor.b=waterWeight*alpha;
+ if(uFogPrelit>.5)gl_FragColor=lightFog(gl_FragColor,world+vec2(uWorldOffsetX,uWorldOffsetY));
 }
 `;
+
+// Unlit material retains its sampler budget and unlit material contract.
+export const FOG_MATERIAL_FRAGMENT=FOG_K_MATERIAL_FRAGMENT.replace(FOG_LIGHT_GLSL,'')
+ .replace(' if(uFogPrelit>.5)gl_FragColor=lightFog(gl_FragColor,world+vec2(uWorldOffsetX,uWorldOffsetY));','');
 
 /** Screen composite: soft half-resolution material, wake cut at the finer trail-mask resolution.
  * Cutting inside the material would sample thin wakes per material texel and bead diagonals. */
 export const FOG_DISPLAY_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
-precision mediump float;
+precision highp float;
 varying vec2 outTexCoord;
 uniform sampler2D uMaterial,uTrails;
-uniform float uHasTrails;
+uniform float uHasTrails,uFogPrelit;
+uniform vec4 uFogView;
+${CLOUD_SHADOW_GLSL}
+${FOG_BANK_GLSL}
+${ATMOSPHERE_DITHER_GLSL}
+${FOG_LIGHT_GLSL}
 void main() {
  float trace=uHasTrails>.5?texture2D(uTrails,outTexCoord).r:0.0;
- gl_FragColor=texture2D(uMaterial,outTexCoord)*(1.0-trace);
+ vec4 fog=texture2D(uMaterial,outTexCoord)*(1.0-trace);
+ // Woodland radiance is already resolved at material resolution; preserve fine wakes.
+ if(uFogPrelit>.5||fog.a<=0.0){gl_FragColor=fog;return;}
+ vec2 world=uFogView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uFogView.zw;
+ gl_FragColor=lightFog(fog,world);
 }
 `;
 

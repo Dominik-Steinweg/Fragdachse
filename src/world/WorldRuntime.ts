@@ -174,6 +174,7 @@ export class WorldRuntime {
    * sie danach; {@link destroy} raeumt sie nicht mehr ab.
    */
   releasePresentation(): WorldPresentationBinding | null {
+    this.detachPresentationFrame();
     const released = this.presentationBinding;
     this.presentationBinding = null;
     return released;

@@ -3,6 +3,7 @@ import { DEPTH, DEPTH_LIGHTING } from '../config';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import { LIGHT_PRESETS } from '../effects/LightingConfig';
 import type { LightingSystem } from '../effects/LightingSystem';
+import type { SunCloudState } from '../effects/sunlight/cloudShadow';
 import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { prepareWildlifeVisuals } from './AmbientWildlifeGeometry';
@@ -22,6 +23,7 @@ export class AmbientWildlifeRenderer {
   private destroyed = false;
   private visualTime = 0;
   private lighting: WildlifeLighting | null = null;
+  private sunlight: SunCloudState | undefined;
   private readonly fireflyLights: { animal: WildlifeAnimal; key: string; active: boolean }[];
 
   constructor(scene: Phaser.Scene, frame: ChunkWorldFrame, layout: ArenaLayout) {
@@ -33,15 +35,21 @@ export class AmbientWildlifeRenderer {
     // and bounded output buffer here, including animals outside the initial viewport.
     const visuals = prepareWildlifeVisuals(this.model.animals);
     this.ground = createAmbientWildlifeLayer(scene, visuals.filter(v => v.animal.kind !== 'fish' && v.animal.kind !== 'firefly'),
-      DEPTH.DECALS + .4, 'ambient-wildlife-land');
+      DEPTH.GROUND_FOG - .01, 'ambient-wildlife-land');
     this.fish = createAmbientWildlifeLayer(scene, visuals.filter(v => v.animal.kind === 'fish'),
-      DEPTH.WATER + .1, 'ambient-wildlife-fish');
+      DEPTH.WATER + .025, 'ambient-wildlife-fish');
     // Self-lit insects stay above the darkening composite, but below occluding canopies.
     this.fireflies = createAmbientWildlifeLayer(scene, visuals.filter(v => v.animal.kind === 'firefly'),
       DEPTH_LIGHTING + .1, 'ambient-wildlife-fireflies');
     registerGraphicsObject(scene, 'ambientWildlife', this.ground);
     registerGraphicsObject(scene, 'ambientWildlife', this.fish);
     registerGraphicsObject(scene, 'ambientWildlife', this.fireflies);
+  }
+
+  /** Borrow the active World atmosphere; depths also remain valid during a terrain handoff. */
+  setSunlight(state: SunCloudState | undefined): void {
+    if (this.destroyed) return;
+    this.sunlight = state;
   }
 
   update(deltaMs: number, players: readonly WildlifePlayer[], view: ChunkWorldRect, timeOfDayMinutes?: number,
@@ -51,7 +59,7 @@ export class AmbientWildlifeRenderer {
     this.model.update(deltaMs, players, view, timeOfDayMinutes);
     this.ground.updatePose(view, this.visualTime);
     this.fish.updatePose(view, this.visualTime);
-    this.fireflies.updatePose(view, this.visualTime);
+    this.fireflies.updatePose(view, this.visualTime, this.sunlight);
     if (lighting && lighting !== this.lighting) {
       this.clearLights();
       this.lighting = lighting;
@@ -90,6 +98,7 @@ export class AmbientWildlifeRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.sunlight = undefined;
     this.clearLights();
     this.fireflyLights.length = 0;
     this.ground.destroy(); this.fish.destroy(); this.fireflies.destroy(); this.model.destroy();

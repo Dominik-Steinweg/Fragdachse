@@ -1,7 +1,10 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
 import type { ArenaLayout, DecalCell, DirtCell, WaterCell } from '../../types';
-import { ArenaVisualFactory } from '../ArenaVisualFactory';
+import { ArenaVisualFactory, groundDecalRotation } from '../ArenaVisualFactory';
+import { VegetationLighting } from '../../effects/sunlight/VegetationLighting';
+import { isVolumeVegetation } from '../../effects/sunlight/VegetationVolume';
+import type { SunCloudState } from '../../effects/sunlight/cloudShadow';
 import { DECAL_SIZE } from '../DecalConfig';
 import { getGroundCoverPlacementRadiusPx, stampGroundCover } from '../GroundCoverLayer';
 import type { GroundCoverPlacement } from '../GroundCoverField';
@@ -89,6 +92,15 @@ export interface GroundSnapshotRegion {
 }
 
 export class GroundSurfaceStreamer {
+  private vegetation: VegetationLighting | null = null;
+  private vegetationBlur = NaN;
+  private readonly vegetationIds: number[] = [];
+  private readonly queueVegetation = (textures: ReadonlyMap<string, Phaser.GameObjects.RenderTexture>): void => {
+    if (!this.vegetation) return;
+    const cover = textures.get(GROUND_COVER_LAYER_ID), decals = textures.get(GROUND_DECAL_LAYER_ID);
+    if (cover) this.vegetation.schedule(cover, GROUND_COVER_LAYER_ID);
+    if (decals) this.vegetation.schedule(decals, GROUND_DECAL_LAYER_ID);
+  };
   private readonly scene: Phaser.Scene;
   private readonly frame: ChunkWorldFrame;
   private readonly dirtCells: readonly DirtCell[];
@@ -192,6 +204,7 @@ export class GroundSurfaceStreamer {
       layers,
       chunkSize: options.chunkSize,
       bake: (region, sink) => this.bakeRegion(region, sink),
+      onChunkBaked: this.queueVegetation,
     });
 
     // Alle Scratch-Rollen haben dieselbe 128-px-Dirty-Groesse. Sie werden neben den Chunk-Zielen
@@ -245,6 +258,44 @@ export class GroundSurfaceStreamer {
 
   getStats() {
     return this.surface.getStats();
+  }
+
+  /** Vegetation lighting. Low/off tears down data immediately; other edits only update uniforms. */
+  setVegetationLight(state?: SunCloudState): void {
+    if (!state || !state.quality?.vegetationForm) {
+      this.vegetation?.destroy(); this.vegetation = null; this.vegetationBlur = NaN; return;
+    }
+    const changed = !this.vegetation || this.vegetationBlur !== state.tuning.vegDomeBlur;
+    this.vegetation ??= new VegetationLighting(this.scene, this.surface.grid.chunkSize, state,
+      (layer,x,y,size,writer) => this.drawVegetationData(layer,x,y,size,writer));
+    this.vegetation.clouds = state;
+    this.vegetationBlur = state.tuning.vegDomeBlur;
+    if (changed) this.surface.visitReadyChunks(this.queueVegetation);
+  }
+
+  getVegetationStats() { return this.vegetation?.stats ?? null; }
+
+  private drawVegetationData(layer: string, x: number, y: number, size: number, writer: VegetationLighting): void {
+    const lx=x-this.frame.offsetX,ly=y-this.frame.offsetY;
+    if (layer === GROUND_COVER_LAYER_ID) {
+      const ids=this.groundCoverIndex.collect(lx,ly,size,this.groundCoverQueryRadius,this.vegetationIds);
+      ids.sort(compareNumbers);
+      for(const id of ids){
+        const p=this.groundCoverPlacements[id];if(!isVolumeVegetation(p.textureKey))continue;
+        const f=this.scene.textures.getFrame(p.textureKey);if(!f)continue;
+        const scale=p.sizePx/Math.max(f.width,f.height);
+        writer.stamp(p.textureKey,p.worldX,p.worldY,f.width*scale,f.height*scale,p.rotation,p.alpha,p.mirrorX,p.mirrorY);
+      }
+    } else {
+      const ids=this.groundDecalIndex.collect(lx,ly,size,DECAL_SIZE*Math.SQRT1_2,this.vegetationIds);
+      ids.sort(compareNumbers);
+      for(const id of ids){
+        const d=this.groundDecals[id];if(!isVolumeVegetation(d.textureKey,true))continue;
+        writer.stamp(d.textureKey,this.frame.offsetX+d.gridX*CELL_SIZE+CELL_SIZE/2+d.offsetX,
+          this.frame.offsetY+d.gridY*CELL_SIZE+CELL_SIZE/2+d.offsetY,DECAL_SIZE,DECAL_SIZE,
+          groundDecalRotation(d),d.alpha??1);
+      }
+    }
   }
 
   getWorkingSet(view: ChunkWorldRect, includePrefetch = true): ChunkedRenderWorkingSet {
@@ -536,6 +587,7 @@ export class GroundSurfaceStreamer {
   }
 
   destroy(): void {
+    this.vegetation?.destroy(); this.vegetation = null;
     this.surface.destroy();
     this.scratch.destroy();
     this.trackGravelLayer?.destroy();

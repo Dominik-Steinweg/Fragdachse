@@ -1,6 +1,11 @@
 import { multiplyTint } from '../BlobSurfaceShading';
 import { ROCK_BASE_TEXTURE_KEY, getRockBaseFrame } from '../RockBaseConfig';
 import type { BlobSurfaceCornerTints } from '../BlobSurfaceShading';
+import { resolveBlobSurfaceCornerTints } from '../BlobSurfaceShading';
+import { ROCK_BLOB_SURFACE_PROFILE } from '../BlobSurfaceProfile';
+
+const NEUTRAL_ROCK_PROFILE = { ...ROCK_BLOB_SURFACE_PROFILE,
+  shading: { ...ROCK_BLOB_SURFACE_PROFILE.shading, directional: undefined } };
 
 /** Rendererunabhaengige Darstellungswahrheit eines einzelnen Felsens. */
 export interface RockVisualState {
@@ -105,12 +110,17 @@ export function resolveRockStateTint(state: RockVisualState): number {
 }
 
 /** Reihenfolge wie `Image.setTint`: top-left, top-right, bottom-left, bottom-right. */
-export function resolveRockCornerTints(state: RockVisualState): BlobSurfaceCornerTints {
+export function resolveRockCornerTints(state: RockVisualState, neutralMaterial = false): BlobSurfaceCornerTints {
   const stateTint = resolveRockStateTint(state);
+  // The relief shader owns directional response. Keep the existing world-space
+  // hue/value wash and damage/ownership exactly in the same tint path.
+  const corners = neutralMaterial && state.material !== 'walls'
+    ? resolveBlobSurfaceCornerTints(NEUTRAL_ROCK_PROFILE, state.gridX, state.gridY, () => true)
+    : state.cornerTints;
   return [
-    multiplyTint(stateTint, state.cornerTints[0]),
-    multiplyTint(stateTint, state.cornerTints[1]),
-    multiplyTint(stateTint, state.cornerTints[2]),
-    multiplyTint(stateTint, state.cornerTints[3]),
+    multiplyTint(stateTint, corners[0]),
+    multiplyTint(stateTint, corners[1]),
+    multiplyTint(stateTint, corners[2]),
+    multiplyTint(stateTint, corners[3]),
   ];
 }

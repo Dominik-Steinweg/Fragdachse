@@ -1,0 +1,51 @@
+{
+  "version": 7,
+  "period": 256,
+  "heightPeriod": 512,
+  "seed": 74931,
+  "variant": "weathered",
+  "geometryScale": 0.8,
+  "geometryChips": 1.2,
+  "source": "tools/source-art/slate-v7/mineral-source-d.png",
+  "sourceSha256": "d25da99d0eefe23ee0466053586050b2c8f5d0a7905dbab65a6ed0e90be5e24c",
+  "coverage": {
+    "file": "coverage.png",
+    "width": 2176,
+    "height": 1870,
+    "downloadBytes": 353809,
+    "sha256": "2d00707909a67858aed2e16b47e8743f9602307911b1e78d0c140c296be83085",
+    "cpuOnly": true
+  },
+  "coverageSource": "tools/source-art/rock-mineral/coverage.png",
+  "coverageSha256": "2d00707909a67858aed2e16b47e8743f9602307911b1e78d0c140c296be83085",
+  "geometrySource": "scripts/lib/slate-v7-geometry.mjs",
+  "geometrySha256": "0add5bce06a6e77e0624f4a9bd4d596fa73f491c3545b1a90dae7a5efb9f17c4",
+  "heightEncoding": "RG uint16: -32 + n/65535 * 64 world pixels",
+  "heightFromAlbedo": false,
+  "assets": [
+    {
+      "file": "mineral-colour.png",
+      "width": 2176,
+      "height": 1870,
+      "rgbaBytes": 16276480,
+      "downloadBytes": 7910226,
+      "sha256": "7c524ea7dbd885655e27b39801517c91cde6d08a1efe136c3bb2ccb8e50c1b83"
+    },
+    {
+      "file": "mineral-colour-2x.png",
+      "width": 4352,
+      "height": 3740,
+      "rgbaBytes": 65105920,
+      "downloadBytes": 33591430,
+      "sha256": "cbf6ddd3f3762af7b247f906c3bc03e6f2a0b41b05cc0bba92bbfe876634ab15"
+    },
+    {
+      "file": "mineral-height.png",
+      "width": 512,
+      "height": 512,
+      "rgbaBytes": 1048576,
+      "downloadBytes": 612165,
+      "sha256": "59792d6a8306fc4440bc31b72ae8e4336b2a13c50928ba6aa8752dfc28a2fbb3"
+    }
+  ]
+}

@@ -7,6 +7,9 @@ import { PersistentGpuWorldSystem } from './PersistentGpuWorldSystem';
 import type { PersistentGpuWorldDiagnostics } from './PersistentGpuWorldSystem';
 import type { RockGpuPageSize, RockRendererMode } from './RockRendererSettings';
 import { RockVisualStateStore, resolveRockCornerTints, resolveRockTexture } from './RockVisualState';
+import { updateRockLightingSun, type RockLightingState } from './RockLightingState';
+import { WOODLAND_ROCK_HEIGHT_KEY, WOODLAND_ROCK_COLOUR_KEY } from '../../assets/WoodlandAssetManifest';
+import { RockFormationLighting } from './RockFormationLighting';
 
 export interface RockDestructionVisualSnapshot {
   readonly material?: 'rocks' | 'walls';
@@ -26,6 +29,9 @@ type ActiveRenderer = ClassicRockRenderer | PersistentGpuWorldSystem;
 /** Umschaltbare Render-Fassade; Gameplay sieht weder Images noch GPU-Handles. */
 export class RockVisualSystem {
   private renderer: ActiveRenderer;
+  private formation: RockFormationLighting | null = null;
+  private view: ChunkWorldRect | null = null;
+  private readonly relief: RockLightingState = { enabled: false, normals: false, strength: 0, sun: [0, 0, 1] };
   private readonly flushBeforeRender = (): void => this.flush();
 
   constructor(
@@ -34,18 +40,28 @@ export class RockVisualSystem {
     readonly store: RockVisualStateStore,
     private mode: RockRendererMode,
     private pageSize: RockGpuPageSize,
+    woodland = false,
   ) {
+    if(woodland) {
+      Object.assign(this.relief,{enabled:true,material:'mineral',selfShadow:true,colourTextureKey:WOODLAND_ROCK_COLOUR_KEY});
+      this.formation=new RockFormationLighting(scene,frame,store.states,this.relief,WOODLAND_ROCK_HEIGHT_KEY);
+    }
     this.renderer = this.createRenderer();
     this.store.clearDirty();
     this.scene.events.on(Phaser.Scenes.Events.PRE_RENDER, this.flushBeforeRender);
   }
 
   flush(): void {
-    this.renderer.applyDirty(this.store.consumeDirtyIds());
+    const ids = this.store.consumeDirtyIds();
+    this.renderer.applyDirty(ids);
+    this.formation?.invalidate(ids);
+    this.formation?.tick();
   }
 
   updateVisibility(view: ChunkWorldRect): void {
+    this.view = view;
     this.renderer.updateVisibility(view);
+    this.formation?.updateView(view);
   }
 
   setMode(mode: RockRendererMode): void {
@@ -73,6 +89,14 @@ export class RockVisualSystem {
     return this.pageSize;
   }
 
+  setSunTime(minutes: number): void { updateRockLightingSun(this.relief, minutes); }
+  setFormationOptions(softShadow: boolean, castShadow: boolean, clouds?: RockLightingState['clouds']): void {
+    this.relief.softShadow=softShadow;this.relief.castShadow=castShadow;
+    this.relief.mineralResponse=true;this.relief.clouds=clouds;
+  }
+  getFormationDiagnostics() { return this.formation?.getDiagnostics() ?? null; }
+  readonly getFormationReceiver = () => this.formation?.getReceiverBinding() ?? null;
+
   getGpuDiagnostics(): PersistentGpuWorldDiagnostics | null {
     return this.renderer instanceof PersistentGpuWorldSystem
       ? this.renderer.getDiagnostics()
@@ -82,6 +106,10 @@ export class RockVisualSystem {
   getDestructionSnapshot(id: number): RockDestructionVisualSnapshot | null {
     const state = this.store.get(id);
     if (!state?.active) return null;
+    const formation = this.formation && state.material !== 'walls';
+    const baseTint = resolveRockCornerTints(state, !!formation)[0];
+    const light = formation ? this.formation!.destructionLight(state.x, state.y) : 1;
+    const channel = (shift: number): number => Math.min(255, Math.round(((baseTint >>> shift) & 255) * light));
     return {
       // Landschaftsfels nutzt die Standardtextur des Trümmer-Renderers, die Felsbasis.
       material: state.material === 'walls' ? 'walls' : undefined,
@@ -89,7 +117,7 @@ export class RockVisualSystem {
       y: state.y,
       frame: resolveRockTexture(state).frame,
       size: CELL_SIZE,
-      tint: resolveRockCornerTints(state)[0],
+      tint: (channel(16) << 16) | (channel(8) << 8) | channel(0),
       angle: 0,
       alpha: state.alpha,
       scaleX: state.scaleX,
@@ -100,12 +128,14 @@ export class RockVisualSystem {
   destroy(): void {
     this.scene.events.off(Phaser.Scenes.Events.PRE_RENDER, this.flushBeforeRender);
     this.renderer.destroy();
+    this.formation?.destroy(); this.formation = null;
     this.store.clear();
   }
 
   private createRenderer(): ActiveRenderer {
-    return this.mode === 'spriteGpu'
-      ? new PersistentGpuWorldSystem(this.scene, this.frame, this.store.states, this.pageSize)
-      : new ClassicRockRenderer(this.scene, this.frame, this.store.states);
+    const renderer = this.mode === 'spriteGpu'
+      ? new PersistentGpuWorldSystem(this.scene, this.frame, this.store.states, this.pageSize, this.relief)
+      : new ClassicRockRenderer(this.scene, this.frame, this.store.states, this.relief);
+    return renderer;
   }
 }

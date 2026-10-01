@@ -14,9 +14,11 @@ import { FogTerrainModel } from './FogTerrainModel';
 import { FogGpuField } from './FogGpuField';
 import { FogImpulses } from './FogImpulses';
 import { FogGpuTimer } from './FogGpuTimer';
+import type { FogWoodlandLight } from './FogWoodlandLight';
 
 interface Motion { id: string; x: number; y: number; revision: number; frame: number }
 export interface FogDiagnostics {
+  materialWidth:number;materialHeight:number;lightingAtMaterialResolution:boolean;
   status: string; cpuMs: number; activeChunks: number; cachedChunks: number; bytes: number;
   pendingImpulses: number; submittedImpulses: number; droppedImpulses: number; steps: number;
   gpuMs: number | null; gpuSample: number; trailSegments: number; trailTileOverflow: number;
@@ -37,6 +39,7 @@ export class GroundFogSystem {
   private timer: FogGpuTimer | null = null;
   private surfaces: readonly Phaser.GameObjects.Image[] = [];
   private gpu: FogGpuField | null = null;
+  private woodlandLight: FogWoodlandLight | null = null;
   private accumulator = 0;
   private readonly fineInputs: { segment: ProjectileTrailSegment; sourceId: number | string; profile?: FogTrailProfile }[] = [];
   private trainBefore: { x: number; front: number; rear: number; dir: number; time: number } | null = null;
@@ -52,6 +55,7 @@ export class GroundFogSystem {
   private destroyed = false;
   private failed = '';
   private stats: FogDiagnostics = { status: 'preparing', cpuMs: 0, activeChunks: 0, cachedChunks: 0, bytes: 0,
+    materialWidth:0,materialHeight:0,lightingAtMaterialResolution:false,
     pendingImpulses: 0, submittedImpulses: 0, droppedImpulses: 0, steps: 0, gpuMs: null, gpuSample: 0, trailSegments: 0, trailTileOverflow: 0, trailDrawCalls: 0, visibleTraces: 0 };
   private readonly onContextRestore = (): void => { this.releaseGpu(); this.failed = ''; this.stats.status = 'preparing'; };
   constructor(private readonly scene: Phaser.Scene, readonly frame: FogFrame, readonly seed: number,
@@ -148,7 +152,10 @@ export class GroundFogSystem {
     const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     if (!renderer?.gl || typeof Phaser.GameObjects?.Shader !== 'function') { this.failed = this.stats.status = 'WebGL unavailable'; return; }
     try {
-      if (!this.gpu) this.gpu = new FogGpuField(this.scene, this.terrain, this.seed, this.tuning, DEPTH.GROUND_FOG);
+      if (!this.gpu) {
+        this.gpu = new FogGpuField(this.scene, this.terrain, this.seed, this.tuning, DEPTH.GROUND_FOG);
+        this.gpu.setWoodlandLight(this.woodlandLight);
+      }
       if (this.measureGpu) { this.timer ??= new FogGpuTimer(renderer.gl); this.timer.begin(); }
       // Geometry is accepted even when simulation is paused. New slots initialize once below.
       this.gpu.prepare(view, this.elapsed);
@@ -179,7 +186,9 @@ export class GroundFogSystem {
       const trailScale = Math.min(1, FOG.trailMaskMaxWidth / pixels.width);
       this.gpu.render(output, pixels.width * scale, pixels.height * scale, this.debug, this.accumulator / FOG.stepMs,
         this.surfaces, this.quality, pixels.width * trailScale, pixels.height * trailScale);
-      this.timer?.end(); this.stats.gpuMs = this.timer?.ms ?? null; this.stats.gpuSample = this.timer?.sample ?? 0;
+        this.timer?.end(); this.stats.gpuMs = this.timer?.ms ?? null; this.stats.gpuSample = this.timer?.sample ?? 0;
+        this.stats.materialWidth=this.gpu.materialWidth;this.stats.materialHeight=this.gpu.materialHeight;
+        this.stats.lightingAtMaterialResolution=this.gpu.lightingAtMaterialResolution;
       const active = [...this.gpu.residency.chunks.values()].filter(c => c.active).length;
       Object.assign(this.stats, { status: this.gpu.residency.overflow ? 'view capacity exceeded' : 'ready',
         activeChunks: active, cachedChunks: this.gpu.residency.chunks.size - active, bytes: this.gpu.bytes,
@@ -196,6 +205,9 @@ export class GroundFogSystem {
   readDensity(x: number, y: number): { density: number; reached: boolean } { return this.gpu?.readDensity(x, y) ?? { density: 0, reached: false }; }
   getDiagnostics(): Readonly<FogDiagnostics> { this.stats.pendingImpulses = this.impulses.size + this.fineInputs.length; return this.stats; }
   setSurfaceImages(images: readonly Phaser.GameObjects.Image[]): void { this.surfaces = images; }
+  setWoodlandLight(binding: FogWoodlandLight | null): void {
+    this.woodlandLight=binding;this.gpu?.setWoodlandLight(binding);
+  }
   prepare(minutes: number, view: FogRect): boolean {
     if (this.stats.status === 'preparing') { this.update(0, minutes, view); this.gpu?.hide(); }
     return this.stats.status !== 'preparing';
@@ -204,10 +216,12 @@ export class GroundFogSystem {
   private releaseGpu(): void {
     this.gpu?.destroy(); this.gpu = null; this.accumulator = 0; this.freeze();
     this.timer?.destroy(); this.timer = null; this.stats.gpuMs = null;
+    this.stats.materialWidth=0;this.stats.materialHeight=0;this.stats.lightingAtMaterialResolution=false;
     this.stats.activeChunks = this.stats.cachedChunks = this.stats.bytes = this.stats.pendingImpulses = this.stats.submittedImpulses = this.stats.trailSegments = this.stats.trailTileOverflow = this.stats.trailDrawCalls = this.stats.visibleTraces = 0;
   }
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;
+    this.woodlandLight=null;
     this.scene.sys.renderer?.off('restorewebgl', this.onContextRestore); this.releaseGpu(); this.terrain.clear(); this.surfaces = [];
   }
 }

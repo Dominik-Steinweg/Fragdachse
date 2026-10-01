@@ -1,3 +1,7 @@
+import { WOODLAND_ROCK_HEIGHT_KEY } from '../../assets/WoodlandAssetManifest';
+import { generateRockEcology, ROCK_ECOLOGY_DEFAULTS, type EcologyColony, type RockEcologyTuning } from '../rocks/RockEcologyField';
+import { rockColonyTint, stampRockColonyContact, ROCK_COLONY_CONTACT_REACH } from '../rocks/RockColonySurface';
+
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
 import type { ArenaLayout, DecalCell, RockCell } from '../../types';
@@ -17,6 +21,7 @@ import { getRockVegetationPlacementRadiusPx } from '../RockVegetationField';
 import type { RockVegetationPlacement } from '../RockVegetationField';
 import type { RockVisualState } from '../rocks/RockVisualState';
 import { resolveRockTexture } from '../rocks/RockVisualState';
+import { RockFoliageLighting, type FormationReceiverProvider } from '../rocks/RockFoliageLighting';
 import { ROCK_VEGETATION_MASK_MARGIN_PX } from '../RockVegetationConfig';
 import {
   ROCK_OVERLAY_CHUNK_SIZE,
@@ -87,7 +92,6 @@ export interface RockOverlayStreamerOptions {
   readonly rockVisualStates: readonly (RockVisualState | undefined)[];
   readonly overlaySource: RockOverlaySource;
   readonly mossPlacements: readonly RockMossPlacement[];
-  readonly vegetationPlacements: readonly RockVegetationPlacement[];
   readonly chunkSize?: number;
 }
 
@@ -98,7 +102,6 @@ export class RockOverlayStreamer {
   private readonly rockVisualStates: readonly (RockVisualState | undefined)[];
   private readonly overlaySource: RockOverlaySource;
   private readonly mossPlacements: readonly RockMossPlacement[];
-  private readonly vegetationPlacements: readonly RockVegetationPlacement[];
   private readonly rockDecals: readonly DecalCell[];
   private readonly mottleConfigs = [
     ROCK_BLOB_SURFACE_PROFILE.mottle,
@@ -106,16 +109,15 @@ export class RockOverlayStreamer {
   ];
   private readonly scratch: ChunkScratchPool;
   private readonly surface: ChunkedRenderSurface;
+  private readonly foliageLighting: RockFoliageLighting;
   /** Raeumlicher Index ueber `layout.rocks` – Positionen im Array sind die Fels-IDs. */
   private readonly rockIndex: ArenaCellBucketIndex;
   /** Raeumlicher Index ueber die Materialquelle; sie waechst, schrumpft aber nie. */
   private readonly sourceIndex: ArenaCellBucketIndex;
   /** Einmalige Indizes ueber die deterministischen, weltpositionierten Platzierungen. */
   private readonly mossIndex: ArenaPointBucketIndex<RockMossPlacement>;
-  private readonly vegetationIndex: ArenaPointBucketIndex<RockVegetationPlacement>;
   private readonly rockDecalIndex: ArenaPointBucketIndex<DecalCell>;
   private readonly mossQueryRadius: number;
-  private readonly vegetationQueryRadius: number;
   private readonly rockDecalQueryRadius: number;
   /** Wiederverwendete Trefferpuffer – eine Allokation je Region weniger. */
   private readonly rockCandidates: number[] = [];
@@ -124,6 +126,12 @@ export class RockOverlayStreamer {
   private readonly vegetationCandidateIds: number[] = [];
   private readonly rockDecalCandidateIds: number[] = [];
   private readonly mossCandidates: RockMossPlacement[] = [];
+  private ecology: EcologyColony[] = [];
+  private readonly ecologyIndex: ArenaPointBucketIndex<EcologyColony>;
+  private readonly ecologyTuning = { ...ROCK_ECOLOGY_DEFAULTS };
+  private readonly ecologyByAnchor = new Map<number, EcologyColony[]>();
+  private ecologyRadius = 0;
+  private ecologyHeight: ((x: number, y: number) => number) | undefined;
   private readonly vegetationCandidates: RockVegetationPlacement[] = [];
   private readonly rockDecalCandidates: DecalCell[] = [];
   private readonly sourceCells: RockCell[] = [];
@@ -141,7 +149,6 @@ export class RockOverlayStreamer {
     this.rockVisualStates = options.rockVisualStates;
     this.overlaySource = options.overlaySource;
     this.mossPlacements = options.mossPlacements;
-    this.vegetationPlacements = options.vegetationPlacements;
     const rockDecals: DecalCell[] = [];
     for (const decal of options.layout.decals ?? []) {
       if ((decal.surface ?? 'ground') === 'rock') rockDecals.push(decal);
@@ -156,12 +163,7 @@ export class RockOverlayStreamer {
     );
     this.mossIndex.sync(this.mossPlacements);
     this.mossQueryRadius = maxMossRadius(this.mossPlacements);
-    this.vegetationIndex = new ArenaPointBucketIndex(
-      options.frame,
-      (placement) => ({ x: placement.worldX, y: placement.worldY }),
-    );
-    this.vegetationIndex.sync(this.vegetationPlacements);
-    this.vegetationQueryRadius = maxVegetationRadius(this.vegetationPlacements);
+    this.ecologyIndex = new ArenaPointBucketIndex(options.frame, p => ({x:p.worldX,y:p.worldY}));
     this.rockDecalIndex = new ArenaPointBucketIndex(
       options.frame,
       (decal) => ({
@@ -185,11 +187,15 @@ export class RockOverlayStreamer {
       { id: ROCK_OVERLAY_VEGETATION_LAYER_ID, depth: DEPTH.ROCK_VEGETATION },
     );
 
+    this.foliageLighting = new RockFoliageLighting(options.scene);
     this.surface = new ChunkedRenderSurface(options.scene, {
       frame: options.frame,
       layers,
       chunkSize: options.chunkSize,
       bake: (region, sink) => this.bakeRegion(region, sink),
+      onChunkTextureCreated: (texture, layerId) => {
+        if (layerId === ROCK_OVERLAY_VEGETATION_LAYER_ID) this.foliageLighting.attach(texture);
+      },
     });
 
     // Scratch-Targets sind klein, aber ebenfalls WebGL-Renderziele. Alle Rollen werden deshalb
@@ -205,10 +211,50 @@ export class RockOverlayStreamer {
     this.scratch.preallocate('vegetation', scratchSize);
     this.scratch.preallocate('rockDecal', scratchSize);
     this.scratch.preallocate('rockDecalCutout', scratchSize, 'redraw');
+    this.rebuildEcology();
   }
 
   updateResidency(view: ChunkWorldRect): void {
     this.surface.updateResidency(view);
+  }
+
+  setEcologyTuning(t: RockEcologyTuning): void {
+    const old=this.ecologyTuning;
+    if(old.rockEdgeFlora===t.rockEdgeFlora && old.rockCreviceFlora===t.rockCreviceFlora && old.rockFootFlora===t.rockFootFlora
+      && old.rockFloraContact===(t.rockFloraContact??.24) && old.rockFloraBlend===(t.rockFloraBlend??.5))return;
+    old.rockEdgeFlora=t.rockEdgeFlora;old.rockCreviceFlora=t.rockCreviceFlora;old.rockFootFlora=t.rockFootFlora;
+    old.rockFloraContact=t.rockFloraContact??.24;old.rockFloraBlend=t.rockFloraBlend??.5;
+    {this.rebuildEcology();this.refreshAll();}
+  }
+
+  private rebuildEcology(): void {
+    // Read once during world construction, never in rendering or a destruction update.
+    if(!this.ecologyHeight && this.scene.textures.exists(WOODLAND_ROCK_HEIGHT_KEY)) {
+      const image=this.scene.textures.get(WOODLAND_ROCK_HEIGHT_KEY).getSourceImage?.() as HTMLImageElement | undefined;
+      if(image?.width && typeof document!=='undefined') {
+        const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+        const context=canvas.getContext('2d',{willReadFrequently:true});
+        if(context){
+          context.drawImage(image,0,0);
+          const rgba=context.getImageData(0,0,image.width,image.height).data,w=image.width,h=image.height;
+          const height=Float32Array.from({length:w*h},(_,i)=>-32+(rgba[4*i]*256+rgba[4*i+1])/65535*64);
+          this.ecologyHeight=(x,y)=>height[((Math.round(y)%h+h)%h)*w+(Math.round(x)%w+w)%w];
+        }
+      }
+    }
+    this.ecology=generateRockEcology({rocks:this.overlaySource.cells,frame:this.frame,seed:this.layout.seed,
+      tuning:this.ecologyTuning,water:this.layout.water,trees:this.layout.trees,moss:this.mossPlacements,height:this.ecologyHeight});
+    this.ecologyIndex.clear();this.ecologyIndex.sync(this.ecology);
+    this.ecologyRadius=maxVegetationRadius(this.ecology)+ROCK_COLONY_CONTACT_REACH;
+    this.ecologyByAnchor.clear();
+    for(const colony of this.ecology){
+      const group=this.ecologyByAnchor.get(colony.anchorKey);
+      if(group)group.push(colony);else this.ecologyByAnchor.set(colony.anchorKey,[colony]);
+    }
+  }
+
+  setFormationReceiver(provider: FormationReceiverProvider | null): void {
+    this.foliageLighting.setProvider(provider);
   }
 
   isReadyForView(view: ChunkWorldRect, includePrefetch = true): boolean {
@@ -281,6 +327,7 @@ export class RockOverlayStreamer {
       this.overlaySource.keys.clear();
       for (const cell of retained) this.overlaySource.keys.add(rockCellKey(cell));
     }
+    if(addedSourceCells.length || removedSourceCells.length) this.rebuildEcology();
     const dirtyCells: RockCell[] = [];
     for (const id of dirtyRockIds) {
       const cell = this.layout.rocks[id];
@@ -300,18 +347,31 @@ export class RockOverlayStreamer {
       [...addedSourceCells, ...removedSourceCells],
       this.frame,
     );
+    // Removing an anchor removes its complete colony, including neighbouring
+    // chunks beyond the ordinary cell-mask reach. Never scan the entire field.
+    for(const cell of dirtyCells){
+      for(const colony of this.ecologyByAnchor.get(rockCellKey(cell))??[]){
+        const r=getRockVegetationPlacementRadiusPx(colony)+ROCK_COLONY_CONTACT_REACH,x=colony.worldX-this.frame.offsetX,y=colony.worldY-this.frame.offsetY;
+        for(let cy=Math.max(0,Math.floor((y-r)/ROCK_OVERLAY_CHUNK_SIZE));cy<=Math.floor(Math.min(this.frame.height-1,y+r)/ROCK_OVERLAY_CHUNK_SIZE);cy++)
+          for(let cx=Math.max(0,Math.floor((x-r)/ROCK_OVERLAY_CHUNK_SIZE));cx<=Math.floor(Math.min(this.frame.width-1,x+r)/ROCK_OVERLAY_CHUNK_SIZE);cx++){
+            const localX=cx*ROCK_OVERLAY_CHUNK_SIZE,localY=cy*ROCK_OVERLAY_CHUNK_SIZE;
+            if(!chunks.some(c=>c.localX===localX&&c.localY===localY))chunks.push({localX,localY});
+          }
+      }
+    }
     for (const chunk of chunks) {
       this.surface.refreshRegion(chunk.localX, chunk.localY, ROCK_OVERLAY_CHUNK_SIZE);
     }
   }
 
   destroy(): void {
+    this.foliageLighting.destroy();
     this.surface.destroy();
     this.scratch.destroy();
     this.rockIndex.clear();
     this.sourceIndex.clear();
     this.mossIndex.clear();
-    this.vegetationIndex.clear();
+    this.ecology.length=0; this.ecologyIndex.clear(); this.ecologyByAnchor.clear(); this.ecologyHeight=undefined;
     this.rockDecalIndex.clear();
   }
 
@@ -348,7 +408,7 @@ export class RockOverlayStreamer {
       region.localX,
       region.localY,
       size,
-      ACTIVE_ROCK_QUERY_MARGIN_PX,
+      Math.max(ACTIVE_ROCK_QUERY_MARGIN_PX, this.ecologyRadius*2+CELL_SIZE),
       this.rockCandidates,
     )) {
       const cell = this.layout.rocks[id];
@@ -450,9 +510,9 @@ export class RockOverlayStreamer {
       sink.blit(rockOverlayMottleLayerId(index), target);
     }
 
+    this.bakeVegetationRegion(region,sink,vegetationSources);
     this.bakeMossRegion(region, sink, silhouetteSources);
     this.bakeDecalRegion(region, sink, decalCutoutCells, activeCellKeys);
-    this.bakeVegetationRegion(region, sink, vegetationSources);
 
     for (const image of temporaryImages) image.destroy();
     temporaryImages.length = 0;
@@ -514,19 +574,20 @@ export class RockOverlayStreamer {
     const { size } = region;
     const maxX = region.localX + size;
     const maxY = region.localY + size;
-    const candidateIds = this.vegetationIndex.collect(
+    const candidateIds = this.ecologyIndex.collect(
       region.localX,
       region.localY,
       size,
-      this.vegetationQueryRadius,
+      this.ecologyRadius,
       this.vegetationCandidateIds,
     );
     candidateIds.sort(compareNumbers);
     this.vegetationCandidates.length = 0;
     for (const id of candidateIds) {
-      const placement = this.vegetationPlacements[id];
-      if (!placement) continue;
-      const radius = getRockVegetationPlacementRadiusPx(placement);
+      const colony=this.ecology[id];
+      const placement = colony;
+      if (!placement || (colony && !this.activeCellKeys.has(colony.anchorKey))) continue;
+      const radius = getRockVegetationPlacementRadiusPx(placement)+ROCK_COLONY_CONTACT_REACH;
       const localX = placement.worldX - this.frame.offsetX;
       const localY = placement.worldY - this.frame.offsetY;
       if (localX + radius > region.localX && localX - radius < maxX
@@ -542,11 +603,25 @@ export class RockOverlayStreamer {
     const target = this.scratch.get('vegetation', size);
     target.clear();
     if (this.vegetationCandidates.length > 0) {
-      stampRockVegetation(this.scene, target, this.vegetationCandidates, -region.worldX, -region.worldY);
+      stampRockVegetation(this.scene, target, this.vegetationCandidates, -region.worldX, -region.worldY,1,
+        rockColonyTint(this.ecologyTuning.rockFloraBlend??.5));
       target.render();
       eraseChunkScratch(target, cutout, size);
     }
     target.render();
+    {
+      const surface=this.scratch.get('ecologySurface',size);
+      surface.clear();
+      stampRockColonyContact(this.scene,surface,this.vegetationCandidates,-region.worldX,-region.worldY,
+        this.ecologyTuning.rockFloraContact??.24,this.ecologyHeight);
+      surface.stamp(target.texture.key,undefined,0,0,{originX:0,originY:0});
+      surface.render();
+      // Exact mineral silhouette, not the broader moss/vegetation reach mask.
+      eraseChunkScratch(surface,this.scratch.get('silhouetteCutout',size,'redraw'),size);
+      surface.render();
+      if(this.silhouetteImages.length>0)target.erase(this.silhouetteImages);
+      target.render();
+    }
     sink.blit(ROCK_OVERLAY_VEGETATION_LAYER_ID, target);
     for (const mask of masks) mask.destroy();
   }
@@ -609,6 +684,15 @@ export class RockOverlayStreamer {
     }
     target.render();
     for (const image of images) image.destroy();
+    {
+      // Both mineral layers receive the same formation light. Composite the
+      // on-rock colonies last so cracks/lichen stay underneath their leaves.
+      // The surface is rebuilt from live anchors each bake, including empty
+      // regions; removing a colony therefore reveals surviving decals again.
+      const colonies=this.scratch.get('ecologySurface',size);
+      target.stamp(colonies.texture.key,undefined,0,0,{originX:0,originY:0});
+      target.render();
+    }
     sink.blit(ROCK_OVERLAY_DECAL_LAYER_ID, target);
   }
 }

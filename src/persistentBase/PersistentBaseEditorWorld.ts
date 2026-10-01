@@ -1,3 +1,4 @@
+import { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
 import { getStoredGroundFogEnabled } from '../utils/localPreferences';
@@ -38,6 +39,8 @@ export class PersistentBaseEditorWorld {
   private readonly background: ReturnType<typeof createArenaBackground>;
   private readonly lighting: LightingSystem;
   private readonly shadows: ShadowSystem;
+  private presentationTimeMs=0;
+  private readonly sunlight: WorldSunlightPresentation;
   private readonly fog: GroundFogSystem;
   private readonly fx: CameraPostFxController;
   private readonly powerUps: PowerUpRenderer;
@@ -94,6 +97,12 @@ export class PersistentBaseEditorWorld {
     this.fog.setSurfaceImages(surfaces);
     this.fx = new CameraPostFxController(scene, scene.cameras.main);
     this.fx.setBaseGrade(resolveBaseGrade({ skyState: resolveSkyState(this.timeOfDay), isVoidMap: false, bossPhase: 0, localHpFraction: 1, gamePhase: 'ARENA' }));
+    this.sunlight=new WorldSunlightPresentation(scene,{
+      ground:this.arena.groundSurface,rocks:this.arena.rockVisualSystem,rockOverlays:this.arena.rockOverlaySurface,
+      canopies:this.arena.canopyObjects,water:this.arena.waterSurface,wildlife:this.arena.wildlife,
+      shadow:this.shadows,lighting:this.lighting,fog:this.fog,postFx:this.fx,layout,worldContext:this.world,
+    });
+    this.sunlight.update(this.timeOfDay,0);
     this.syncObjects();
   }
   /** Update object identities in place; terrain, fog, lighting and camera resources stay alive. */
@@ -183,6 +192,8 @@ export class PersistentBaseEditorWorld {
     this.animations.update(delta);
     this.powerUps.updatePedestals(now);
     this.gpu.update(delta);
+    this.presentationTimeMs+=Math.max(0,delta);
+    this.sunlight.update(this.timeOfDay,this.presentationTimeMs);
     this.fog.update(delta, this.timeOfDay, view);
     this.lighting.update();
     this.fx.update(delta);
@@ -191,6 +202,7 @@ export class PersistentBaseEditorWorld {
     ChunkedRenderSurface.flushBakeBudget(this.scene);
   }
   destroy(): void {
+    this.sunlight.destroy();
     this.fx.destroy(); this.fog.destroy(); this.powerUps.destroy(); this.gpu.destroy();
     this.animations.clear();
     for (const visual of this.turrets.values()) { visual.image.destroy(); visual.aura.destroy(); }

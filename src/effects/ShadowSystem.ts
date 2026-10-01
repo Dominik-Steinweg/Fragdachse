@@ -1,11 +1,15 @@
 import * as Phaser from 'phaser';
+import type { SunPathState } from './sunlight/SunPath';
+import { writeShadowCellHull } from './sunlight/ShadowProjection';
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
   CELL_SIZE,
+  DEPTH,
 } from '../config';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
 import type { PlayerEntity } from '../entities/PlayerEntity';
+import type { EnemyEntity } from '../entities/EnemyEntity';
 import { TRAIN } from '../train/TrainConfig';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedTrainState } from '../types';
 import {
@@ -88,6 +92,24 @@ const STATIC_SHADOW_CASTERS: ReadonlyArray<{
 ];
 /** Leere Kandidatenliste ohne Layout – spart eine Allokation je Region. */
 const EMPTY_INDEX_LIST: readonly number[] = [];
+// Dev-only crown silhouette profile. Ratios track the existing day curve rather
+// than baking a second time-of-day model into the shadow renderer.
+const SUN_FOREST_SHADOW = { offsetDiameter: .30, scale: 1.10, opacity: .52,
+  softnessDiameter: .055, color: 0x182c48, reference: resolveSkyState(17 * 60) };
+
+// Antipodal disk samples have no directional drift. Gaussian weights are
+// normalized in optical depth, so a solid silhouette keeps the profile opacity
+// regardless of the number of taps. This is paid only during existing bakes.
+const CANOPY_SHADOW_KERNEL = (() => {
+  const samples = Array.from({ length: 6 }, (_, i) => {
+    const radius = Math.sqrt((i + .5) / 6), angle = i * Math.PI * (3 - Math.sqrt(5));
+    const x = Math.cos(angle) * radius, y = Math.sin(angle) * radius;
+    return [{ x, y, weight: Math.exp(-2 * radius * radius) },
+      { x: -x, y: -y, weight: Math.exp(-2 * radius * radius) }];
+  }).flat();
+  const total = samples.reduce((sum, sample) => sum + sample.weight, 0);
+  return samples.map(sample => ({ ...sample, weight: sample.weight / total }));
+})();
 
 /**
  * Wie weit die Schattenhuelle eines Casters ueber seinen Mittelpunkt hinausreicht.
@@ -95,7 +117,7 @@ const EMPTY_INDEX_LIST: readonly number[] = [];
  * Das ist die Reichweite, mit der ein raeumlicher Index nach Kandidaten fuer eine Region sucht:
  * Ein Fels ausserhalb der Region kann seinen Schatten noch hineinwerfen.
  */
-function getStaticShadowReachPx(preset: ShadowCasterConfig, profile: ShadowProfile): number {
+function getStaticShadowReachPx(preset: ShadowCasterConfig, profile: ShadowProfile, direction = WORLD_SHADOW_CONFIG.lightDirection): number {
   const castLength = preset.castHeightPx * preset.stretch * profile.lengthMult;
   const inflate = preset.inflatePx + preset.softnessPx * profile.softnessMult;
   const radius = Math.max(
@@ -104,15 +126,15 @@ function getStaticShadowReachPx(preset: ShadowCasterConfig, profile: ShadowProfi
   ) * 0.5;
   const offset = (preset.airborneHeightPx ?? 0) + castLength;
   return Math.max(
-    Math.abs(WORLD_SHADOW_CONFIG.lightDirection.x * offset),
-    Math.abs(WORLD_SHADOW_CONFIG.lightDirection.y * offset),
+    Math.abs(direction.x * offset),
+    Math.abs(direction.y * offset),
   ) + radius;
 }
 
-function getMaxStaticShadowReachPx(profile: ShadowProfile): number {
+function getMaxStaticShadowReachPx(profile: ShadowProfile, direction = WORLD_SHADOW_CONFIG.lightDirection): number {
   let reach = 0;
   for (const { config } of STATIC_SHADOW_CASTERS) {
-    reach = Math.max(reach, getStaticShadowReachPx(config, profile));
+    reach = Math.max(reach, getStaticShadowReachPx(config, profile, direction));
   }
   return reach;
 }
@@ -124,7 +146,7 @@ const STATIC_PROFILE_SOFTNESS_DELTA = 0.08;
 
 // ---------------------------------------------------------------------------
 // Pre-computed stadium arc tables.
-// lightDirection is a compile-time constant so dirAngle never changes.
+// Base lightDirection is constant; the sun path rotates these tables at submission.
 // Computing cos/sin once at module load avoids repeated trig calls per frame.
 // ---------------------------------------------------------------------------
 const STADIUM_ARC_N = 8; // arc subdivisions per semicircle
@@ -132,6 +154,7 @@ const _stadiumDirAngle = Math.atan2(
   WORLD_SHADOW_CONFIG.lightDirection.y,
   WORLD_SHADOW_CONFIG.lightDirection.x,
 );
+const STADIUM_DIRECTION_COS=Math.cos(_stadiumDirAngle),STADIUM_DIRECTION_SIN=Math.sin(_stadiumDirAngle);
 // Back cap: source semicircle faces away from shadow direction
 const STADIUM_BACK_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: number }> =
   Array.from({ length: STADIUM_ARC_N + 1 }, (_, i) => {
@@ -146,6 +169,54 @@ const STADIUM_FRONT_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: num
   });
 
 export class ShadowSystem {
+  private formationShadows: ((id: number) => boolean) | null = null;
+  setFormationShadows(landscape: ((id: number) => boolean) | null): void {
+    if (this.formationShadows === landscape) return;
+    this.formationShadows = landscape;
+    this.rebuildStaticShadowsForProfileChange();
+  }
+  private canopySources: ArenaBuilderResult['canopyObjects'] | null = null;
+  private canopyWoodland = false;
+  private sunDirection: {x:number;y:number} | null = null;
+  private staticSunDirection: {x:number;y:number} | null = null;
+  private sunAzimuth: number | null = null;
+  private bakedAzimuth: number | null = null;
+  private sunEnemies: { forEachEnemy(visitor: (enemy: EnemyEntity) => void): void } | null = null;
+  private enemyPrimitives = 0;
+  private enemyCasters = 0;
+  private readonly drawSunEnemy = (enemy: EnemyEntity): void => {
+    const sprite = enemy.sprite;
+    if (!sprite.active || !sprite.visible || enemy.getHp() <= 0 || enemy.isBurrowed()) return;
+    const size = enemy.getSize();
+    this.enemyPrimitives += this.drawFootprint(
+      this.getLayer(SHADOW_CASTERS.player.layerDepth).dynamicGraphics,
+      sprite.x, sprite.y, SHADOW_CASTERS.player, size * 0.72, size * 0.62,
+    );
+    this.enemyCasters++;
+  };
+
+  /** Dynamic casters follow continuously; static bakes use the existing throttled
+   * profile scheduler. No authority, free clock or production config mutation. */
+  setSunPath(path: SunPathState | null, enemies: ShadowSystem['sunEnemies'] = null): void {
+    this.sunEnemies = path ? enemies : null;
+    if(!path) {
+      if(!this.sunDirection)return;
+      this.sunDirection=null;this.sunAzimuth=null;
+      this.rebuildStaticShadowsForProfileChange();return;
+    }
+    this.sunDirection??={x:0,y:0};
+    this.sunDirection.x=-path.direction[0];this.sunDirection.y=-path.direction[1];
+    if(path.strength>0||this.sunAzimuth===null)this.sunAzimuth=path.horizonAzimuth;
+  }
+
+  /** Dev A/B: use the authored canopy's alpha/rotation instead of a broad circular footprint. */
+  setCanopyShadows(sources: ArenaBuilderResult['canopyObjects'] | null, woodland = false): void {
+    woodland = sources !== null && woodland;
+    if (sources === this.canopySources && woodland === this.canopyWoodland) return;
+    this.canopySources = sources;
+    this.canopyWoodland = woodland;
+    this.rebuildStaticShadowsForProfileChange();
+  }
   private readonly baseCells = new Map<
     { readonly x: number; readonly y: number },
     { x: number; y: number }
@@ -317,7 +388,7 @@ export class ShadowSystem {
     const nowMs = Number.isFinite(synchronizedNowMs) ? synchronizedNowMs : 0;
     const baked = this.lastBakedProfile;
     if (!force) {
-      if (baked && !hasRelevantStaticProfileChange(baked, this.profile)) return false;
+      if (baked && this.bakedAzimuth===this.sunAzimuth && !hasRelevantStaticProfileChange(baked, this.profile)) return false;
       if (nowMs - this.lastStaticProfileBakeAtMs < STATIC_PROFILE_REBAKE_MIN_INTERVAL_MS) return false;
     }
     this.rebuildStaticLayoutShadowsWithProfile(
@@ -416,6 +487,13 @@ export class ShadowSystem {
     this.lastStaticLayout = layout;
     this.lastStaticOptions = options;
     this.staticBakeProfile = profile;
+    this.bakedAzimuth=this.sunAzimuth;
+    if(this.bakedAzimuth===null)this.staticSunDirection=null;
+    else {
+      this.staticSunDirection??={x:0,y:0};
+      const angle=this.bakedAzimuth*Math.PI/180;
+      this.staticSunDirection.x=-Math.cos(angle);this.staticSunDirection.y=Math.sin(angle);
+    }
     this.staticHasLayout = true;
     const { surface, created } = this.ensureStaticSurface();
     // Ein frisch erzeugter Chunk hat seine 128-px-Regionen bereits im gemeinsamen Scheduler;
@@ -515,13 +593,13 @@ export class ShadowSystem {
   /**
    * Erzeugt die Chunk-Flaeche der statischen Schatten, sobald sie gebraucht wird.
    *
-   * Die Ebenenmenge ist fest: Sie folgt den vier statischen Castern aus `SHADOW_CASTERS`, deren
-   * Tiefen Konstanten sind. Aendern sich die Weltgrenzen – Moduswechsel, andere Coop-Karte –,
-   * wird die Flaeche verworfen und neu aufgebaut.
+   * Die Ebenenmenge und Bucket-IDs folgen den statischen Castern aus `SHADOW_CASTERS`.
+   * Der optionale Kronenversuch verschiebt nur seine Ausgabetiefe unter den Bodennebel.
+   * Aendern sich Weltgrenzen oder dieser Modus, wird die Flaeche neu aufgebaut.
    */
   private ensureStaticSurface(): { surface: ChunkedRenderSurface; created: boolean } {
     const bounds = this.getStaticWorldBounds();
-    const frameKey = `${bounds.minX}:${bounds.minY}:${bounds.maxX}:${bounds.maxY}`;
+    const frameKey = `${bounds.minX}:${bounds.minY}:${bounds.maxX}:${bounds.maxY}:${Number(this.canopySources !== null)}`;
     if (this.staticSurface && this.staticSurfaceFrameKey === frameKey) {
       return { surface: this.staticSurface, created: false };
     }
@@ -538,7 +616,8 @@ export class ShadowSystem {
       seen.add(id);
       layers.push({
         id,
-        depth: preset.config.layerDepth,
+        depth: this.canopySources && preset.config === SHADOW_CASTERS.canopy
+          ? DEPTH.GROUND_FOG - .02 : preset.config.layerDepth,
         // Die Textur startet deckend weiss, die Footprints tragen ihren eigenen MULTIPLY-Blend
         // hinein. Weiss ist das neutrale Element: ausserhalb der Schatten aendert der Chunk
         // nichts. Normales Alpha-Blending waere hier *nicht* gleichwertig, weil die
@@ -597,7 +676,7 @@ export class ShadowSystem {
     // ueber den gesamten Felsbestand mal vier Ebenen mal dutzender Dirty-Chunks war im Trace der
     // groesste Posten des `POST_UPDATE` nach einer Flaechenzerstoerung.
     this.staticRockIndex.sync(layout?.rocks ?? []);
-    const reachPx = getMaxStaticShadowReachPx(profile);
+    const reachPx = getMaxStaticShadowReachPx(profile,this.staticSunDirection??WORLD_SHADOW_CONFIG.lightDirection);
     const localX = region.worldX - offsetX;
     const localY = region.worldY - offsetY;
     const rockCandidates = layout && this.staticHasLayout
@@ -627,7 +706,7 @@ export class ShadowSystem {
             if (!cell || !rockVisible(id)) continue;
             const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
             const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-            if (drawsRock) {
+            if (drawsRock && !this.formationShadows?.(id)) {
               this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.rock, regionBounds, profile);
             }
             if (drawsTurret && runtimeById.get(id)?.kind === 'turret') {
@@ -646,7 +725,7 @@ export class ShadowSystem {
             if (drawsTrunk) {
               this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.trunk, regionBounds, profile);
             }
-            if (drawsCanopy) {
+            if (drawsCanopy && !this.canopySources) {
               this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.canopy, regionBounds, profile);
             }
           }
@@ -660,6 +739,9 @@ export class ShadowSystem {
       // draw() rendert das Objekt mit seinem eigenen Blendmode; sichtbar muss es dafuer sein.
       bucket.staticGraphics.setVisible(true);
       scratch.draw(bucket.staticGraphics);
+      if (depth === SHADOW_CASTERS.canopy.layerDepth && this.canopySources) {
+        this.drawCanopyShadows(scratch, regionBounds, profile);
+      }
       scratch.render();
       bucket.staticGraphics.setVisible(false);
       bucket.staticGraphics.clear();
@@ -681,7 +763,41 @@ export class ShadowSystem {
       || bounds.maxY <= region.minY || bounds.minY >= region.maxY) {
       return;
     }
-    this.drawFootprint(bucket.staticGraphics, worldX, worldY, preset, undefined, undefined, profile);
+    this.drawFootprint(bucket.staticGraphics, worldX, worldY, preset, undefined, undefined, profile,this.staticSunDirection??WORLD_SHADOW_CONFIG.lightDirection);
+  }
+
+  private drawCanopyShadows(scratch: Phaser.GameObjects.RenderTexture, region: ShadowWorldBounds, profile: ShadowProfile): void {
+    const sources = this.canopySources;
+    if (!sources?.length) return;
+    // Height is an artistic tree-height estimate. This approximation receives on
+    // ground only: the baked layer is below ground fog and opaque rock surfaces.
+    // It does not cast height-correct canopy shadows onto raised rock receivers.
+    const offset = 64 * profile.lengthMult;
+    const woodland = this.canopyWoodland;
+    const tuning = SUN_FOREST_SHADOW;
+    const opacity = woodland ? Math.min(.55, tuning.opacity * profile.opacityMult / tuning.reference.shadowOpacityMult)
+      : Math.min(.45, .7 * profile.opacityMult);
+    const blur = 9 * profile.softnessMult;
+    const taps = CANOPY_SHADOW_KERNEL.map(sample => ({ ...sample,
+      alpha: 1 - Math.pow(1 - opacity, sample.weight) }));
+    for (const source of sources) {
+      const diameter = Math.max(source.gfx.displayWidth, source.gfx.displayHeight);
+      const distance = woodland ? diameter * tuning.offsetDiameter * profile.lengthMult / tuning.reference.shadowLengthMult : offset;
+      const direction = woodland ? Math.SQRT1_2 : .75;
+      const softness = woodland ? diameter * tuning.softnessDiameter * profile.softnessMult / tuning.reference.shadowSoftnessMult : blur;
+      const scale = woodland ? tuning.scale : 1;
+      const x = source.worldX + distance * (this.staticSunDirection?.x??direction), y = source.worldY + distance * (this.staticSunDirection?.y??direction);
+      const radius = Math.hypot(source.gfx.displayWidth, source.gfx.displayHeight) * .5 * scale + softness;
+      if (x + radius < region.minX || y + radius < region.minY || x - radius > region.maxX || y - radius > region.maxY) continue;
+      for (const tap of taps) {
+        // Phaser 4's DynamicTextureHandler renders STAMP through the drawing camera.
+        // Keep world coordinates, like the Graphics draw above. Commands snapshot poses.
+        scratch.stamp(source.gfx.texture.key, source.gfx.frame.name, x + tap.x * softness, y + tap.y * softness, {
+          scaleX: source.gfx.scaleX * scale, scaleY: source.gfx.scaleY * scale, rotation: source.gfx.rotation,
+          tint: woodland ? tuning.color : WORLD_SHADOW_CONFIG.color, alpha: tap.alpha, blendMode: Phaser.BlendModes.MULTIPLY,
+        });
+      }
+    }
   }
 
   private collectDirtyShadowChunks(
@@ -728,8 +844,9 @@ export class ShadowSystem {
       preset.footprintHeightPx + inflate * 2,
     ) * 0.5;
     const offset = (preset.airborneHeightPx ?? 0) + castLength;
-    const dx = WORLD_SHADOW_CONFIG.lightDirection.x * offset;
-    const dy = WORLD_SHADOW_CONFIG.lightDirection.y * offset;
+    const direction=this.staticSunDirection??WORLD_SHADOW_CONFIG.lightDirection;
+    const dx = direction.x * offset;
+    const dy = direction.y * offset;
     return {
       minX: Math.min(x, x + dx) - radius,
       minY: Math.min(y, y + dy) - radius,
@@ -793,6 +910,11 @@ export class ShadowSystem {
       );
     }
 
+    this.enemyPrimitives = 0;
+    this.enemyCasters = 0;
+    if (this.sunDirection) this.sunEnemies?.forEachEnemy(this.drawSunEnemy);
+    primitivesBuilt += this.enemyPrimitives;
+
     for (const projectile of projectiles) {
       if (!this.quality.projectileShadows) break;
       const preset = getProjectileShadowConfig(projectile.style);
@@ -814,7 +936,7 @@ export class ShadowSystem {
     }
     const collector = this.attributionCollector;
     if (collector?.isActive()) {
-      const dynamicCasterCount = players.length + projectiles.length + (train?.alive ? 1 : 0);
+      const dynamicCasterCount = players.length + projectiles.length + (train?.alive ? 1 : 0) + this.enemyCasters;
       collector.setGraphicsGauge('dynamicShadows', {
         objectCount: this.layers.size,
         activeObjects: dynamicCasterCount,
@@ -830,6 +952,11 @@ export class ShadowSystem {
   }
 
   clear(): void {
+    this.sunEnemies = null;
+    this.sunDirection=null;this.staticSunDirection=null;this.sunAzimuth=null;this.bakedAzimuth=null;
+    this.formationShadows = null;
+    this.canopySources = null;
+    this.canopyWoodland = false;
     this.clearStatic();
     this.clearDynamic();
     this.shadowsVisible = true;
@@ -842,6 +969,11 @@ export class ShadowSystem {
   }
 
   destroy(): void {
+    this.sunEnemies = null;
+    this.sunDirection=null;this.staticSunDirection=null;this.sunAzimuth=null;this.bakedAzimuth=null;
+    this.formationShadows = null;
+    this.canopySources = null;
+    this.canopyWoodland = false;
     this.baseCells.clear();
     this.seenBaseCells.clear();
     for (const bucket of this.layers.values()) {
@@ -935,9 +1067,10 @@ export class ShadowSystem {
     width = preset.footprintWidthPx,
     height = preset.footprintHeightPx,
     profile = this.profile,
+    direction = this.sunDirection??WORLD_SHADOW_CONFIG.lightDirection,
   ): number {
     // Profil-Multiplikatoren (Tag/Nacht) skalieren Länge, Deckkraft und Weichheit;
-    // die Lichtrichtung bleibt konstant, siehe SHADOW_PROFILES.
+    // The sun path supplies the direction without mutating WORLD_SHADOW_CONFIG.
     const castLength = preset.castHeightPx * preset.stretch * profile.lengthMult;
     const softnessPx = preset.softnessPx * profile.softnessMult;
 
@@ -950,7 +1083,7 @@ export class ShadowSystem {
 
     const steps = Math.max(1, Math.round(preset.blurLayers * this.quality.shadowLayerFactor));
     const denominator = Math.max(1, steps - 1);
-    const dir = WORLD_SHADOW_CONFIG.lightDirection;
+    const dir = direction;
     const airborneHeight = preset.airborneHeightPx ?? 0;
 
     // Fixed directional offset for all layers.
@@ -1002,17 +1135,25 @@ export class ShadowSystem {
 
     const pts = this.stadiumPts;
     const N = STADIUM_ARC_N;
+    // Rotate the already computed arcs for the sun path. Normalizing the actual offset
+    // also handles the quantized static direction without per-frame trig tables.
+    let turnC=1,turnS=0;
+    const rotating=!!(this.sunDirection || this.staticSunDirection);
+    if(rotating) {
+      const length=Math.hypot(dx,dy),c=STADIUM_DIRECTION_COS,s=STADIUM_DIRECTION_SIN;
+      turnC=(dx*c+dy*s)/length;turnS=(dy*c-dx*s)/length;
+    }
     // Back cap — source semicircle (pre-computed angles, no trig here)
     for (let i = 0; i <= N; i++) {
       const arc = STADIUM_BACK_ARC[i];
-      pts[i].x = cx + arc.cos * radius;
-      pts[i].y = cy + arc.sin * radius;
+      pts[i].x = cx + (rotating?arc.cos*turnC-arc.sin*turnS:arc.cos) * radius;
+      pts[i].y = cy + (rotating?arc.sin*turnC+arc.cos*turnS:arc.sin) * radius;
     }
     // Front cap — shadow semicircle
     for (let i = 0; i <= N; i++) {
       const arc = STADIUM_FRONT_ARC[i];
-      pts[N + 1 + i].x = cx + dx + arc.cos * radius;
-      pts[N + 1 + i].y = cy + dy + arc.sin * radius;
+      pts[N + 1 + i].x = cx + dx + (rotating?arc.cos*turnC-arc.sin*turnS:arc.cos) * radius;
+      pts[N + 1 + i].y = cy + dy + (rotating?arc.sin*turnC+arc.cos*turnS:arc.sin) * radius;
     }
 
     graphics.fillPoints(pts, true);
@@ -1040,6 +1181,10 @@ export class ShadowSystem {
     // the hull is always this clockwise hexagon:
     //   source-TL → source-TR → shadow-TR → shadow-BR → shadow-BL → source-BL
     const p = this.cellPts;
+    if(this.sunDirection || this.staticSunDirection) {
+      writeShadowCellHull(p,cx,cy,width,height,dx,dy);
+      graphics.fillStyle(WORLD_SHADOW_CONFIG.color,alpha);graphics.fillPoints(p,true);return;
+    }
     p[0].x = cx - hw;      p[0].y = cy - hh;        // source TL
     p[1].x = cx + hw;      p[1].y = cy - hh;        // source TR
     p[2].x = cx + hw + dx; p[2].y = cy - hh + dy;   // shadow TR

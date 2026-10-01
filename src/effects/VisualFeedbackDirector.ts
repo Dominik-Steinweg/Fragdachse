@@ -212,7 +212,8 @@ export class VisualFeedbackDirector {
 
     this.stepNukeSequences(deltaMs);
     this.stepExplosionShockwaves(deltaMs);
-    this.postFx.setBaseGrade(resolveBaseGrade({ ...inputs, bossVisualIntensity }));
+    const gradeInputs = { ...inputs, bossVisualIntensity };
+    this.postFx.setBaseGrade(resolveBaseGrade(gradeInputs), gradeInputs);
     this.postFx.update(deltaMs);
     // Niedrige Gesundheit spricht am Bildrand über Blut, nicht über zunehmende Dunkelheit.
     this.lowHealthBlood.update(inputs.localHpFraction, deltaMs);

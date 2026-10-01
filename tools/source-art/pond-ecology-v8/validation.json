@@ -1,0 +1,87 @@
+[
+  {
+    "id": "lily-group-01",
+    "path": "lily-group-01.png",
+    "accepted": true,
+    "width": 1506,
+    "height": 1506,
+    "hasAlpha": true,
+    "transparentMarginPercent": [
+      8.367,
+      9.628,
+      9.695,
+      8.367
+    ],
+    "fullyTransparentPixels": 1463356,
+    "partiallyTransparentPixels": 803737,
+    "passed": true
+  },
+  {
+    "id": "lily-group-02",
+    "path": "lily-group-02.png",
+    "accepted": true,
+    "width": 1844,
+    "height": 1230,
+    "hasAlpha": true,
+    "transparentMarginPercent": [
+      8.351,
+      9.593,
+      9.761,
+      9.837
+    ],
+    "fullyTransparentPixels": 1666875,
+    "partiallyTransparentPixels": 601245,
+    "passed": true
+  },
+  {
+    "id": "lily-pad-01",
+    "path": "lily-pad-01.png",
+    "accepted": true,
+    "width": 1552,
+    "height": 1462,
+    "hasAlpha": true,
+    "transparentMarginPercent": [
+      8.376,
+      9.781,
+      11.662,
+      8.892
+    ],
+    "fullyTransparentPixels": 1418470,
+    "partiallyTransparentPixels": 850053,
+    "passed": true
+  },
+  {
+    "id": "lily-pad-02",
+    "path": "lily-pad-02.png",
+    "accepted": true,
+    "width": 1506,
+    "height": 1506,
+    "hasAlpha": true,
+    "transparentMarginPercent": [
+      11.089,
+      9.628,
+      11.288,
+      11.023
+    ],
+    "fullyTransparentPixels": 1875399,
+    "partiallyTransparentPixels": 391781,
+    "passed": true
+  },
+  {
+    "id": "lily-pad-03",
+    "path": "lily-pad-03.png",
+    "accepted": true,
+    "width": 1844,
+    "height": 1230,
+    "hasAlpha": true,
+    "transparentMarginPercent": [
+      8.351,
+      8.374,
+      9.328,
+      8.374
+    ],
+    "fullyTransparentPixels": 1718658,
+    "partiallyTransparentPixels": 549462,
+    "passed": true
+  }
+]

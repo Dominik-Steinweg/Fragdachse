@@ -12,6 +12,8 @@ import type { RockGpuPageSize } from './RockRendererSettings';
 import type { RockVisualState } from './RockVisualState';
 import { resolveRockCornerTints, resolveRockTexture } from './RockVisualState';
 import { ROCK_BASE_TEXTURE_KEY } from '../RockBaseConfig';
+import { WOODLAND_ROCK_COLOUR_KEY } from "../../assets/WoodlandAssetManifest";
+import type { RockLightingState } from './RockLightingState';
 
 const BUFFER_SEGMENTS = 24;
 const FULL_UPLOAD_SEGMENT_THRESHOLD = 12;
@@ -36,6 +38,8 @@ interface RockGpuVisualHandle {
 }
 
 interface RockGpuPage {
+  diffuseResolutionConfigured?: boolean;
+  diffuseResolutionOverride?: [number, number] | null;
   wallLayer?: Phaser.GameObjects.SpriteGPULayer;
   readonly key: number;
   readonly layer: Phaser.GameObjects.SpriteGPULayer;
@@ -56,12 +60,15 @@ export class PersistentGpuWorldSystem {
   private readonly handles: Array<RockGpuVisualHandle | undefined> = [];
   private visiblePageKeys = new Set<number>();
   private diagnostics: PersistentGpuWorldDiagnostics;
+  private slateMaterial = false;
+  private materialTextureKey = ROCK_BASE_TEXTURE_KEY;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly frame: RockWorldFrame,
     private readonly states: readonly (RockVisualState | undefined)[],
     private readonly configuredPageSize: RockGpuPageSize,
+    initialMaterial?: RockLightingState,
   ) {
     this.pagePixels = configuredPageSize === 'global'
       ? Math.ceil(Math.max(frame.width, frame.height) / 128) * 128
@@ -73,6 +80,7 @@ export class PersistentGpuWorldSystem {
     this.buildPages();
     this.diagnostics = this.emptyDiagnostics();
     this.applyDirty(states.filter(state => state?.material === 'walls').map(state => state!.id));
+    if(initialMaterial)this.setMaterialLighting(initialMaterial);
   }
 
   applyDirty(ids: readonly number[]): void {
@@ -154,6 +162,37 @@ export class PersistentGpuWorldSystem {
     return this.diagnostics;
   }
 
+  setMaterialLighting(state: RockLightingState): void {
+    const slate = state.material === 'mineral';
+    const changed = slate !== this.slateMaterial;
+    const textureKey = slate ? state.colourTextureKey ?? WOODLAND_ROCK_COLOUR_KEY : ROCK_BASE_TEXTURE_KEY;
+    const originalSource = this.texture.source[0], selectedSource = this.scene.textures.get(textureKey).source[0];
+    const largerAtlas = selectedSource.width !== originalSource.width || selectedSource.height !== originalSource.height;
+    for (const page of this.pages.values()) {
+      page.diffuseResolutionOverride = largerAtlas ? [originalSource.width, originalSource.height] : null;
+      if (largerAtlas && !page.diffuseResolutionConfigured) {
+        // Phaser stores frame coordinates AND member sizes in original pixels.
+        // Keep that table and its 32px quads; only UV normalization is virtual.
+        // uMainResolution continues to describe the actual diffuse texture.
+        const node = page.layer.submitterNode, setup = node.setupUniforms;
+        node.setupUniforms = function (context): void {
+          setup.call(this, context);
+          if (page.diffuseResolutionOverride) this.programManager.setUniform('uDiffuseResolution', page.diffuseResolutionOverride);
+        };
+        page.diffuseResolutionConfigured = true;
+      }
+      if (textureKey !== this.materialTextureKey) {
+        // Frame ordering and normalized UVs match, including the 2x atlas. The
+        // existing frame-data texture and slots stay valid; never regenerate them.
+        page.layer.setTexture(textureKey);
+      }
+    }
+    this.slateMaterial = slate;
+    this.materialTextureKey = textureKey;
+    // Only switching material changes corner tints, never time or sun direction.
+    if (changed) this.applyDirty(this.states.filter(s => s?.active && s.material !== 'walls').map(s => s!.id));
+  }
+
   destroy(): void {
     for (const page of this.pages.values()) {
       destroyGpuLayer(page.layer);
@@ -220,7 +259,7 @@ export class PersistentGpuWorldSystem {
   private memberFor(state: RockVisualState): Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member> {
     const texture = state.material === 'walls' ? this.scene.textures.get('walls') : this.texture;
     if (!state.active) return this.deadMember(state.gridX, state.gridY, texture);
-    const [topLeft, topRight, bottomLeft, bottomRight] = resolveRockCornerTints(state);
+    const [topLeft, topRight, bottomLeft, bottomRight] = resolveRockCornerTints(state, this.slateMaterial);
     return {
       x: state.x,
       y: state.y,

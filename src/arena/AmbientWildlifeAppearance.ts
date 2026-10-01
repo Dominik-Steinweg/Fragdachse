@@ -1,4 +1,20 @@
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
+import type { SunCloudState } from '../effects/sunlight/cloudShadow';
+import { fogPatchMaskAt } from '../effects/sunlight/FogPatchField';
+import { fogDayWeight } from '../effects/groundFog/FogBankField';
+
+/** Emissive halo approximation only. Ordinary animals receive the actual fog pass.
+ * Reuses the world-space bank/time; deliberately avoids synchronous GPU readbacks.
+ * Night uses a faint mean haze, since the daylight bank field is disabled then.
+ * Local obstacle pile-ups are not available here; neither emission nor light power grows. */
+export function wildlifeFogCover(x: number, y: number, state: SunCloudState): number {
+  const t = state.tuning, day = fogDayWeight(state.strength);
+  // Night keeps its unchanged mean haze; don't evaluate invisible daylight fields.
+  const bank = day > 0 ? t.fogClearHaze + fogPatchMaskAt(x, y, state) * t.fogPatchDensity : 0;
+  const density = .12 + (bank * t.fogDensity - .12) * day;
+  const alpha = 1 - Math.exp(-Math.max(0, density * t.fogOpacity));
+  return Number.isFinite(alpha) ? Math.min(.55, t.fogMaxCover, alpha) : 0;
+}
 
 export type WildlifeKind = 'butterfly' | 'moth' | 'firefly' | 'snake' | 'fish';
 export function isWingedInsect(kind: WildlifeKind): kind is 'butterfly' | 'moth' | 'firefly' {

@@ -3,33 +3,46 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-/** Dev server only: fixed output directory, PNG only, no caller-supplied filesystem paths. */
+/** Dev server only: fixed output directory and types, no caller-supplied filesystem paths. */
 export function devScenarioArtifacts(): Plugin {
   return { name: 'local-dev-scenario-artifacts', apply: 'serve', configureServer(server) {
-    server.middlewares.use('/__dev-scenario-capture', (request, response) => {
+    for(const kind of ['capture','report'] as const)server.middlewares.use(`/__dev-scenario-${kind}`, (request, response) => {
       const send = (status: number, value: unknown) => {
         response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value));
       };
       const address = request.socket.remoteAddress;
       if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address ?? '')
         || request.headers.origin !== `http://${request.headers.host}`) { send(403, { error: 'Local same-origin request required.' }); return; }
-      if (request.method !== 'POST' || request.headers['content-type'] !== 'image/png') { send(400, { error: 'PNG POST required.' }); return; }
+      const contentType=kind==='capture'?'image/png':'application/json',limit=(kind==='capture'?16:4)*1024*1024;
+      if (request.method !== 'POST' || request.headers['content-type'] !== contentType) { send(400, { error: `${contentType} POST required.` }); return; }
+      if(kind==='report') {
+        let referrer:URL;try{referrer=new URL(request.headers.referer??'');}catch{send(403,{error:'Dev scenario page required.'});return;}
+        if(referrer.origin!==request.headers.origin||referrer.pathname!=='/dev-scenario.html'){send(403,{error:'Dev scenario page required.'});return;}
+      }
       const chunks: Buffer[] = []; let size = 0, tooLarge = false;
       request.on('data', (chunk: Buffer) => {
         size += chunk.length;
-        if (size > 16 * 1024 * 1024) { tooLarge = true; chunks.length = 0; }
+        if (size > limit) { tooLarge = true; chunks.length = 0; }
         else if (!tooLarge) chunks.push(chunk);
       });
       request.on('end', () => {
         void (async () => {
-          if (tooLarge) { send(413, { error: 'PNG exceeds 16 MiB.' }); return; }
-          const png = Buffer.concat(chunks);
-          if (!png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) { send(400, { error: 'Invalid PNG signature.' }); return; }
+          if (tooLarge) { send(413, { error: `Artifact exceeds ${limit/1024/1024} MiB.` }); return; }
+          const data = Buffer.concat(chunks);
+          if(kind==='capture') {
+            if (!data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) { send(400, { error: 'Invalid PNG signature.' }); return; }
+          } else {
+            let report:unknown;try{report=JSON.parse(data.toString('utf8'));}catch{send(400,{error:'Invalid JSON.'});return;}
+            const value=report as {isolated?:unknown;network?:unknown;config?:{version?:unknown};state?:unknown}|null;
+            if(!value||value.isolated!==true||value.network!=='local-only'||value.config?.version!==1||typeof value.state!=='string') {
+              send(400,{error:'Isolated scenario snapshot required.'});return;
+            }
+          }
           const directory = resolve(server.config.root, 'build/dev-scenarios');
-          const name = `capture-${randomUUID()}.png`;
+          const name = `${kind}-${randomUUID()}.${kind==='capture'?'png':'json'}`;
           await mkdir(directory, { recursive: true });
           const path = resolve(directory, name);
-          await writeFile(path, png, { flag: 'wx' });
+          await writeFile(path, data, { flag: 'wx' });
           send(200, { path, url: `/build/dev-scenarios/${name}` });
         })().catch(error => send(500, { error: String(error) }));
       });

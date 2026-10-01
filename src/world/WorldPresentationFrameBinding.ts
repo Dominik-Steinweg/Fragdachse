@@ -1,3 +1,4 @@
+import type { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import type { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
 import type { MovementVisualSource } from '../effects/MovementStepSampler';
@@ -234,6 +235,19 @@ export function resetWorldCameraBase(scene: Phaser.Scene): void {
 }
 
 export class WorldPresentationFrameBinding {
+  private presentationTimeMs=0;
+  private sunlightOwner: WorldSunlightPresentation | null = null;
+  get sunlight(): WorldSunlightPresentation | null { return this.sunlightOwner; }
+  bindSunlight(create: () => WorldSunlightPresentation): void {
+    if(this.destroyed)return;
+    this.sunlightOwner?.destroy();this.sunlightOwner=null;
+    const owner=create();this.sunlightOwner=owner;
+    try {this.syncSunlight();}
+    catch(error){owner.destroy();this.sunlightOwner=null;throw error;}
+  }
+  private syncSunlight():void {
+    this.sunlightOwner?.update(this.input.lighting.getTimeOfDayMinutes(),this.presentationTimeMs);
+  }
   private fogBinding: WorldGroundFogBinding | null = null;
   private ownershipMarkers: ConstructionOwnershipGpuSystem | null = null;
   private ownershipScope: object | null = null;
@@ -397,6 +411,7 @@ export class WorldPresentationFrameBinding {
    */
   syncSurfaceResidency(showWorld: boolean): void {
     if (this.destroyed) return;
+    this.syncSunlight();
     const fog = this.prepareGroundFog();
     if (fog) {
       const quality = getGraphicsQualityController(this.input.scene);
@@ -442,6 +457,8 @@ export class WorldPresentationFrameBinding {
   /** Runs after host/client pose presentation; independent of footprint budgets. */
   syncGroundFog(deltaMs: number, showWorld: boolean, enemies: readonly MovementVisualSource[]): void {
     if (this.destroyed) return;
+    this.presentationTimeMs+=Math.max(0,deltaMs);
+    this.syncSunlight();
     const fog = this.prepareGroundFog(); if (!fog) return;
     const quality = getGraphicsQualityController(this.input.scene);
     fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
@@ -681,6 +698,7 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.sunlightOwner?.destroy();this.sunlightOwner=null;
     this.fogBinding?.destroy(); this.fogBinding = null;
     this.wildlifePlayers.length = 0;
     this.input.getArenaResult()?.wildlife?.clearLights();

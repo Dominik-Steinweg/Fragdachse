@@ -44,6 +44,26 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       .some(player => player.id !== bridge.getLocalPlayerId() && !isLocalScenarioBotPeer(player.id))) throw new Error('Isolated dev host required.');
   };
   return {
+    findDestructibleRock(gridX: number, gridY: number) {
+      requireLocal();
+      const materialization=flow.getWorldRuntime()?.materialization, arena=materialization?.arena, registry=materialization?.rocks;
+      if(!arena||!registry)return null;
+      let best:{id:number;gridX:number;gridY:number;distance:number}|null=null;
+      for(let y=Math.floor(gridY)-8;y<=Math.floor(gridY)+8;y++)for(let x=Math.floor(gridX)-8;x<=Math.floor(gridX)+8;x++) {
+        const id=arena.rockGrid.getIndex(x,y);
+        if(id<0||registry.isIndestructible(id)||!registry.readIntegrity(id)?.integrity)continue;
+        const distance=(x-gridX)**2+(y-gridY)**2;
+        if(!best||distance<best.distance)best={id,gridX:x,gridY:y,distance};
+      }
+      return best;
+    },
+    destroyRock(id:number): boolean {
+      requireLocal();
+      const hp=flow.getWorldRuntime()?.materialization?.rocks?.readIntegrity(id)?.integrity;
+      if(!hp)return false;
+      const outcome=flow.getWorldObjectMutationRuntime()?.applyResolvedDamage('rock',id,hp,bridge.getLocalPlayerId(),'dev-scenario.single-rock');
+      return outcome?.kind==='damage-applied'&&outcome.transition.kind==='destroyed';
+    },
     getPlayer(id: string): { x: number; y: number; alive: boolean; burrowed: boolean } | null {
       const player = players.getPlayer(id), combat = flow.getWorldCombatCore();
       return player ? { x: player.x, y: player.y, alive: combat?.isAlive(id) ?? false, burrowed: combat?.isBurrowed(id) ?? false } : null;

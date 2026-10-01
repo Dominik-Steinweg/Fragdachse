@@ -9,9 +9,9 @@ describe('Arena rock decals', () => {
     applyArenaMetricsForMode('deathmatch', 'ARENA');
   });
 
-  it('configures eighty generated variants in three sizes and keeps their layout deterministic', () => {
-    expect(ROCK_DECAL_CONFIG.variants).toHaveLength(80);
-    expect(ROCK_DECAL_CONFIG.variants.filter((variant) => variant.displaySize === ROCK_DECAL_SIZE)).toHaveLength(57);
+  it('configures seventy-nine generated variants in three sizes and keeps their layout deterministic', () => {
+    expect(ROCK_DECAL_CONFIG.variants).toHaveLength(79);
+    expect(ROCK_DECAL_CONFIG.variants.filter((variant) => variant.displaySize === ROCK_DECAL_SIZE)).toHaveLength(56);
     expect(ROCK_DECAL_CONFIG.variants.filter((variant) => variant.displaySize === ROCK_DECAL_LARGE_SIZE)).toHaveLength(17);
     expect(ROCK_DECAL_CONFIG.variants.filter((variant) => variant.displaySize === ROCK_DECAL_VERY_LARGE_SIZE)).toHaveLength(6);
     expect(ROCK_DECAL_CONFIG.variants.filter((variant) => variant.displaySize === ROCK_DECAL_SIZE && variant.placement === 'edge')).toHaveLength(47);

@@ -1,0 +1,90 @@
+{
+  "base": "Use case: stylized-concept. ONE premium painterly-realistic 2D tree crown sprite for Fragdachse, strictly orthographic 90-degree vertical overhead, no oblique perspective. This is a DIFFUSE BASE COLOR / NEUTRAL ALBEDO under a completely UNIFORM OVERCAST WHITE SKY: NO DIRECTIONAL LIGHT, NO SUNLIGHT, NO RIMLIGHT. Ambient occlusion only in the gaps. The mean brightness and hue of north, south, east, west AND all opposite diagonals must be equal: no left-right or top-bottom illumination gradient at all. Strong saturated slightly warm forest-green leaf color, deeper blue-green opaque cavities; not mint, gray, pale, neon, yellow-dominated, or glossy. About 10-16 LARGE uneven interlocking branch volumes containing 25-35 irregular MEDIUM leafy clusters. Realistic irregular leaf sprays, tiny leaf texture; avoid repeated beads, equally-sized spherical broccoli blobs, repeated rosettes or plastic. Clump tops are naturally leaf-green, never sparkling white/yellow points. Local cavities distributed naturally across the WHOLE crown, not biased toward one side. A complete opaque closed central leaf roof, no transparent holes or exposed skeleton in inner 80%; overlap branches continuously. Small gaps only at extreme edge. Roughly round broad filled silhouette, centered and entirely uncut, filling 84% of square canvas with at least 7% fully TRANSPARENT border on ALL sides. Source >=1024 square. Genuine alpha, no background color, ground, exterior cast shadow, trunk side, text or watermark. ",
+  "forms": [
+    "Form 1: nearly round, upper-right and lower-left shoulders of different sizes; broad varied foliage groups, no radial regularity.",
+    "Form 2: gently horizontal oval (1.10:1), shallow top-edge indentation and full bottom shoulders; central opaque mass.",
+    "Form 3: broad asymmetric shallow lobes, small outer right notch, uneven edge tufts, closed rounded central core."
+  ],
+  "species": [
+    [
+      "stieleiche-rund",
+      8,
+      "Dense pedunculate oak, broad rounded asymmetrical shoulders and 6-8 interlocking large branch masses, small deeply lobed leaves."
+    ],
+    [
+      "stieleiche-gelappt",
+      9,
+      "Dense pedunculate oak, broad shallow uneven exterior lobes with a small peripheral notch; fully closed center; deeply lobed small leaves."
+    ],
+    [
+      "traubeneiche",
+      10,
+      "Sessile oak, squat subtly oval dense crown with short uneven edge lobes, refined small lobed leaves."
+    ],
+    [
+      "alte-eiche",
+      11,
+      "Ancient broad oak, massive asymmetric closed crown, broad shoulders with interlocking bough masses, no core holes."
+    ],
+    [
+      "rotbuche",
+      0,
+      "Old European beech, dense layered sprays of small oval leaves and elegant irregular broad crown."
+    ],
+    [
+      "bergahorn",
+      12,
+      "Sycamore maple, five-lobed leaves grouped into irregular medium and large leafy masses, slightly fresher but saturated forest green."
+    ],
+    [
+      "spitzahorn",
+      13,
+      "Norway maple, pointed five-lobed leaves, crisp leafy sprays and subtly angular uneven closed crown."
+    ],
+    [
+      "esche",
+      14,
+      "Dense mature ash, fine pinnate leaflets in overlapping broad feathery plumes, fully opaque dense center."
+    ],
+    [
+      "esskastanie",
+      15,
+      "Sweet chestnut, long serrated leaves in overlapping medium fan-like sprays, deep rich forest green."
+    ],
+    [
+      "ulme",
+      16,
+      "Mature elm, small serrated oval leaves on closely packed short sprays; broad irregular full crown, warm muted green."
+    ],
+    [
+      "walnuss",
+      17,
+      "Walnut tree, small pinnate oval leaflets in broad overlapping irregular branch groups, rich closed canopy."
+    ],
+    [
+      "linde",
+      18,
+      "Linden, small heart-shaped leaves and soft broad layered groups, warm rich green with shallow outline indentations."
+    ],
+    [
+      "hainbuche",
+      1,
+      "Hornbeam, fine serrated pointed leaves in many short irregular sprays, dense broad crown with restrained asymmetry."
+    ],
+    [
+      "tanne",
+      19,
+      "Dense silver fir/spruce from vertically overhead, cool dark needles in SHORT closely overlapping radial fans, broad irregular compact crown, no long separate star arms."
+    ],
+    [
+      "schirmkiefer",
+      20,
+      "Dense Scots/umbrella pine from vertically overhead, thick needle tufts in a broad fully closed umbrella crown, many irregular connected branch pads, not side-view umbrella."
+    ],
+    [
+      "eibe",
+      21,
+      "Dense yew, very dark saturated evergreen needles in tight irregular soft sprays, broad full subtly scalloped crown, not clipped topiary."
+    ]
+  ]
+}

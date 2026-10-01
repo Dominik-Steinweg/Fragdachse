@@ -137,6 +137,18 @@ function clamp(value: number, range: readonly [number, number]): number {
   return value < range[0] ? range[0] : value > range[1] ? range[1] : value;
 }
 
+/** Reversible presentation override; all permanent readability bounds still apply. */
+const GRADE_CLAMP_KEYS=Object.keys(WORLD_GRADE_CLAMPS) as (keyof typeof WORLD_GRADE_CLAMPS)[];
+export function overrideWorldGrade(base: WorldGrade, patch: Partial<WorldGrade> | null, output?: { -readonly [K in keyof WorldGrade]: WorldGrade[K] }): WorldGrade {
+  if (!patch) return base;
+  const result: { -readonly [K in keyof WorldGrade]: WorldGrade[K] } = output ?? { ...base };
+  Object.assign(result,base,patch);
+  for (const key of GRADE_CLAMP_KEYS) {
+    result[key] = clamp(result[key], WORLD_GRADE_CLAMPS[key]);
+  }
+  return result;
+}
+
 /** Framerate-unabhängige Ease-in-out-Kurve für rein visuelle Zustandswechsel. */
 export function smoothstep01(value: number): number {
   const t = clamp(value, [0, 1]);
@@ -187,7 +199,7 @@ const DAY_LOOK = {
   brightness: 1.05,
 } as const;
 
-export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
+export function resolveBaseGrade(inputs: WorldGradeInputs, atmosphere: Partial<WorldGrade> | null = null, output?: { -readonly [K in keyof WorldGrade]: WorldGrade[K] }): WorldGrade {
   // Die Lobby-Welt bekommt denselben Tageszeit-Look wie die Arena – sie ist das erste Bild,
   // das Spieler sehen. Menüs liegen auf der Klarheitskamera und bleiben ungefiltert.
   // Verletzung und Bossphasen gehören dagegen ausschließlich zur laufenden Arena.
@@ -214,6 +226,17 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
   let temperature = -night * 0.5;
   let bloomAmount = 0.14 + darkness * 0.04;
   let vignetteStrength = 0.16 + darkness * 0.05;
+
+  // Replace the old day/night trim before semantic modifiers, never after them.
+  // Unspecified channels retain the atmosphere baseline (night tint and vignette).
+  saturation = atmosphere?.saturation ?? saturation;
+  contrast = atmosphere?.contrast ?? contrast;
+  brightness = atmosphere?.brightness ?? brightness;
+  temperature = atmosphere?.temperature ?? temperature;
+  tint = atmosphere?.tint ?? tint;
+  tintStrength = atmosphere?.tintStrength ?? tintStrength;
+  bloomAmount = atmosphere?.bloomAmount ?? bloomAmount;
+  vignetteStrength = atmosphere?.vignetteStrength ?? vignetteStrength;
 
   if (inputs.isVoidMap) {
     tint = VOID_TINT;
@@ -254,21 +277,21 @@ export function resolveBaseGrade(inputs: WorldGradeInputs): WorldGrade {
   // Lightmap ohnehin dunkel ist, Gegner am Bildrand. Den Zustand trägt stattdessen die
   // Blutdarstellung auf der Klarheitskamera (`LowHealthBloodOverlay`) – sie ist rot, sie ist
   // großflächig, und sie kann die Bildmitte nicht abdunkeln.
-  const vignetteRadius = 1.05;
+  const vignetteRadius = atmosphere?.vignetteRadius ?? 1.05;
   saturation -= hurt * 0.2;
 
-  return {
-    saturation: clamp(saturation, WORLD_GRADE_CLAMPS.saturation),
-    contrast: clamp(contrast, WORLD_GRADE_CLAMPS.contrast),
-    brightness: clamp(brightness, WORLD_GRADE_CLAMPS.brightness),
-    temperature: clamp(temperature, WORLD_GRADE_CLAMPS.temperature),
-    tint,
-    tintStrength: clamp(tintStrength, WORLD_GRADE_CLAMPS.tintStrength),
-    vignetteRadius: clamp(vignetteRadius, WORLD_GRADE_CLAMPS.vignetteRadius),
-    vignetteStrength: clamp(vignetteStrength, WORLD_GRADE_CLAMPS.vignetteStrength),
-    bloomThreshold: resolveBloomThreshold(darkness),
-    bloomAmount: clamp(bloomAmount, WORLD_GRADE_CLAMPS.bloomAmount),
-  };
+  const result = output ?? {} as { -readonly [K in keyof WorldGrade]: WorldGrade[K] };
+  result.saturation = clamp(saturation, WORLD_GRADE_CLAMPS.saturation);
+  result.contrast = clamp(contrast, WORLD_GRADE_CLAMPS.contrast);
+  result.brightness = clamp(brightness, WORLD_GRADE_CLAMPS.brightness);
+  result.temperature = clamp(temperature, WORLD_GRADE_CLAMPS.temperature);
+  result.tint = tint;
+  result.tintStrength = clamp(tintStrength, WORLD_GRADE_CLAMPS.tintStrength);
+  result.vignetteRadius = clamp(vignetteRadius, WORLD_GRADE_CLAMPS.vignetteRadius);
+  result.vignetteStrength = clamp(vignetteStrength, WORLD_GRADE_CLAMPS.vignetteStrength);
+  result.bloomThreshold = clamp(atmosphere?.bloomThreshold ?? resolveBloomThreshold(darkness), WORLD_GRADE_CLAMPS.bloomThreshold);
+  result.bloomAmount = clamp(bloomAmount, WORLD_GRADE_CLAMPS.bloomAmount);
+  return result;
 }
 
 /**

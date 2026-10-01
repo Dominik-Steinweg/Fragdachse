@@ -1,0 +1,1745 @@
+{
+  "version": 8,
+  "source": "tools/source-art/rock-ecology-v8",
+  "atlas": {
+    "file": "rock-colonies-atlas.png",
+    "width": 1024,
+    "height": 2048,
+    "rgbaBytes": 8388608,
+    "downloadBytes": 1261215,
+    "sha256": "f2b643c2e7c79ae4ffcb12b9d6b5521f9a90362c3e5bcc680413b75ec4d10734",
+    "frames": {
+      "moss-strip-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "moss-strip-02": {
+        "frame": {
+          "x": 256,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "lichen-06": {
+        "frame": {
+          "x": 512,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "lichen-07": {
+        "frame": {
+          "x": 768,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "edge-overhang-02": {
+        "frame": {
+          "x": 0,
+          "y": 256,
+          "w": 256,
+          "h": 116
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 116
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 116
+        }
+      },
+      "edge-overhang-04": {
+        "frame": {
+          "x": 256,
+          "y": 256,
+          "w": 256,
+          "h": 107
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 107
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 107
+        }
+      },
+      "edge-overhang-05": {
+        "frame": {
+          "x": 512,
+          "y": 256,
+          "w": 256,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 128
+        }
+      },
+      "edge-overhang-06": {
+        "frame": {
+          "x": 768,
+          "y": 256,
+          "w": 256,
+          "h": 92
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 92
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 92
+        }
+      },
+      "corner-tuft-01": {
+        "frame": {
+          "x": 0,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "corner-tuft-03": {
+        "frame": {
+          "x": 256,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "corner-tuft-05": {
+        "frame": {
+          "x": 512,
+          "y": 512,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "corner-tuft-06": {
+        "frame": {
+          "x": 768,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "foot-cluster-01": {
+        "frame": {
+          "x": 0,
+          "y": 768,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "foot-cluster-02": {
+        "frame": {
+          "x": 256,
+          "y": 768,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "foot-cluster-04": {
+        "frame": {
+          "x": 512,
+          "y": 768,
+          "w": 256,
+          "h": 202
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 202
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 202
+        }
+      },
+      "foot-cluster-06": {
+        "frame": {
+          "x": 768,
+          "y": 768,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "crevice-herb-01": {
+        "frame": {
+          "x": 0,
+          "y": 1024,
+          "w": 256,
+          "h": 117
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 117
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 117
+        }
+      },
+      "crevice-herb-02": {
+        "frame": {
+          "x": 256,
+          "y": 1024,
+          "w": 256,
+          "h": 234
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 234
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 234
+        }
+      },
+      "crevice-herb-06": {
+        "frame": {
+          "x": 512,
+          "y": 1024,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "moss-nest-01": {
+        "frame": {
+          "x": 768,
+          "y": 1024,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "moss-nest-02": {
+        "frame": {
+          "x": 0,
+          "y": 1280,
+          "w": 256,
+          "h": 218
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 218
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 218
+        }
+      },
+      "moss-nest-04": {
+        "frame": {
+          "x": 256,
+          "y": 1280,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "moss-nest-05": {
+        "frame": {
+          "x": 512,
+          "y": 1280,
+          "w": 256,
+          "h": 199
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 199
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 199
+        }
+      }
+    }
+  },
+  "contactAtlas": {
+    "file": "rock-contact-atlas.png",
+    "width": 512,
+    "height": 1024,
+    "rgbaBytes": 2097152,
+    "downloadBytes": 108078,
+    "sha256": "ad33e0618dd4b3591b4caa02864765ed9cf72ee1bd878545cd99b52ce2bed5b2",
+    "frames": {
+      "moss-strip-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 128
+        }
+      },
+      "moss-strip-02": {
+        "frame": {
+          "x": 128,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 128
+        }
+      },
+      "lichen-06": {
+        "frame": {
+          "x": 256,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 128
+        }
+      },
+      "lichen-07": {
+        "frame": {
+          "x": 384,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 128
+        }
+      },
+      "edge-overhang-02": {
+        "frame": {
+          "x": 0,
+          "y": 128,
+          "w": 128,
+          "h": 76
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 76
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 76
+        }
+      },
+      "edge-overhang-04": {
+        "frame": {
+          "x": 128,
+          "y": 128,
+          "w": 128,
+          "h": 72
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 72
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 72
+        }
+      },
+      "edge-overhang-05": {
+        "frame": {
+          "x": 256,
+          "y": 128,
+          "w": 128,
+          "h": 80
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 80
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 80
+        }
+      },
+      "edge-overhang-06": {
+        "frame": {
+          "x": 384,
+          "y": 128,
+          "w": 128,
+          "h": 67
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 67
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 67
+        }
+      },
+      "corner-tuft-01": {
+        "frame": {
+          "x": 0,
+          "y": 256,
+          "w": 128,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 128
+        }
+      },
+      "corner-tuft-03": {
+        "frame": {
+          "x": 128,
+          "y": 256,
+          "w": 128,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 128
+        }
+      },
+      "corner-tuft-05": {
+        "frame": {
+          "x": 256,
+          "y": 256,
+          "w": 128,
+          "h": 96
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 96
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 96
+        }
+      },
+      "corner-tuft-06": {
+        "frame": {
+          "x": 384,
+          "y": 256,
+          "w": 128,
+          "h": 128
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 128
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 128
+        }
+      },
+      "foot-cluster-01": {
+        "frame": {
+          "x": 0,
+          "y": 384,
+          "w": 128,
+          "h": 96
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 96
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 96
+        }
+      },
+      "foot-cluster-02": {
+        "frame": {
+          "x": 128,
+          "y": 384,
+          "w": 128,
+          "h": 96
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 96
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 96
+        }
+      },
+      "foot-cluster-04": {
+        "frame": {
+          "x": 256,
+          "y": 384,
+          "w": 128,
+          "h": 108
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 108
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 108
+        }
+      },
+      "foot-cluster-06": {
+        "frame": {
+          "x": 384,
+          "y": 384,
+          "w": 128,
+          "h": 96
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 96
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 96
+        }
+      },
+      "crevice-herb-01": {
+        "frame": {
+          "x": 0,
+          "y": 512,
+          "w": 128,
+          "h": 76
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 76
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 76
+        }
+      },
+      "crevice-herb-02": {
+        "frame": {
+          "x": 128,
+          "y": 512,
+          "w": 128,
+          "h": 120
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 120
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 120
+        }
+      },
+      "crevice-herb-06": {
+        "frame": {
+          "x": 256,
+          "y": 512,
+          "w": 128,
+          "h": 96
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 96
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 96
+        }
+      },
+      "moss-nest-01": {
+        "frame": {
+          "x": 384,
+          "y": 512,
+          "w": 128,
+          "h": 96
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 96
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 96
+        }
+      },
+      "moss-nest-02": {
+        "frame": {
+          "x": 0,
+          "y": 640,
+          "w": 128,
+          "h": 114
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 114
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 114
+        }
+      },
+      "moss-nest-04": {
+        "frame": {
+          "x": 128,
+          "y": 640,
+          "w": 128,
+          "h": 96
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 96
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 96
+        }
+      },
+      "moss-nest-05": {
+        "frame": {
+          "x": 256,
+          "y": 640,
+          "w": 128,
+          "h": 107
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 128,
+          "h": 107
+        },
+        "sourceSize": {
+          "w": 128,
+          "h": 107
+        }
+      }
+    }
+  },
+  "contacts": [
+    {
+      "name": "moss-strip-01",
+      "width": 128,
+      "height": 128,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3333333333333333,
+      "rgbaBytes": 65536,
+      "pixelSha256": "04395082287fb1dd04e92ec2ddaf2b40dcf4433bfeaf32babfef6260226267c4"
+    },
+    {
+      "name": "moss-strip-02",
+      "width": 128,
+      "height": 128,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3333333333333333,
+      "rgbaBytes": 65536,
+      "pixelSha256": "b69036dc00c6daafa94e590c21684b381392daf986ed697130b400e0d669c676"
+    },
+    {
+      "name": "lichen-06",
+      "width": 128,
+      "height": 128,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3333333333333333,
+      "rgbaBytes": 65536,
+      "pixelSha256": "074167c13430e404a1ca07d228499de999b38afe9c6e3e33523eafe1f20af385"
+    },
+    {
+      "name": "lichen-07",
+      "width": 128,
+      "height": 128,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3333333333333333,
+      "rgbaBytes": 65536,
+      "pixelSha256": "1407a81c74de6e30352077a0496546ea93a3f48bf6141d58902390b3468859ed"
+    },
+    {
+      "name": "edge-overhang-02",
+      "width": 128,
+      "height": 76,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.7272727272727273,
+      "rgbaBytes": 38912,
+      "pixelSha256": "319efbff1b052667a3b3cd211c2672f67c1e57289f9cfed9cbca4cdafdd94c7a"
+    },
+    {
+      "name": "edge-overhang-04",
+      "width": 128,
+      "height": 72,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.8,
+      "rgbaBytes": 36864,
+      "pixelSha256": "a1146a4416521c68fcf2049d7795c55b647cac13d18f1746ac0feb8e5fc3309d"
+    },
+    {
+      "name": "edge-overhang-05",
+      "width": 128,
+      "height": 80,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.6666666666666667,
+      "rgbaBytes": 40960,
+      "pixelSha256": "d5d12cdcbc1a53032034373fc9c4159ca1be0870e6ab4f5e7f324ac8b0e16a43"
+    },
+    {
+      "name": "edge-overhang-06",
+      "width": 128,
+      "height": 67,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.9142857142857144,
+      "rgbaBytes": 34304,
+      "pixelSha256": "9bc0c6bd1abf9d8d1e1265006439d80b243ebb8da97c4957855183495a845af8"
+    },
+    {
+      "name": "corner-tuft-01",
+      "width": 128,
+      "height": 128,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3333333333333333,
+      "rgbaBytes": 65536,
+      "pixelSha256": "c47a4f74d23616f404de97b367c0013e1d127faebd1327daf3e5997aa52cf66b"
+    },
+    {
+      "name": "corner-tuft-03",
+      "width": 128,
+      "height": 128,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3333333333333333,
+      "rgbaBytes": 65536,
+      "pixelSha256": "74c95f05222e9a8847291da4996426693afa1e75b7581dec0783a19cdd628112"
+    },
+    {
+      "name": "corner-tuft-05",
+      "width": 128,
+      "height": 96,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.5,
+      "rgbaBytes": 49152,
+      "pixelSha256": "d620391f66e764de7bd63224cfde2dc8e3d73884522599061ffac6a8df23d953"
+    },
+    {
+      "name": "corner-tuft-06",
+      "width": 128,
+      "height": 128,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3333333333333333,
+      "rgbaBytes": 65536,
+      "pixelSha256": "ef3f4690432f1992cfde21595f7e1f9201779b901e5294092cb76c40d2b1fe4e"
+    },
+    {
+      "name": "foot-cluster-01",
+      "width": 128,
+      "height": 96,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.5,
+      "rgbaBytes": 49152,
+      "pixelSha256": "2bb8e4d72f879786d51d5f19872447b26bc9276f32a5378481dfc049be492e27"
+    },
+    {
+      "name": "foot-cluster-02",
+      "width": 128,
+      "height": 96,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.5,
+      "rgbaBytes": 49152,
+      "pixelSha256": "783cf768755deaed26dd326fbf95da678d6169cdeac5842e65ee8f59c8da2ce5"
+    },
+    {
+      "name": "foot-cluster-04",
+      "width": 128,
+      "height": 108,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.4210526315789473,
+      "rgbaBytes": 55296,
+      "pixelSha256": "2255fba13496688822453083c9bc985c27c770b09c7350866298e072fe5f7fd9"
+    },
+    {
+      "name": "foot-cluster-06",
+      "width": 128,
+      "height": 96,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.5,
+      "rgbaBytes": 49152,
+      "pixelSha256": "d1ab169d8af1ff822ce190172f023c2d0105c1b87895d03b24a818b0ca5d737e"
+    },
+    {
+      "name": "crevice-herb-01",
+      "width": 128,
+      "height": 76,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.7272727272727273,
+      "rgbaBytes": 38912,
+      "pixelSha256": "29a8a3522b16c0b3d807c4d24a9c8bf918c645860e089e6cd4095a016328d7fb"
+    },
+    {
+      "name": "crevice-herb-02",
+      "width": 128,
+      "height": 120,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3636363636363635,
+      "rgbaBytes": 61440,
+      "pixelSha256": "7804a1be907f4715dd84294b57f445e029bbb2085ce09235743f09580c156a83"
+    },
+    {
+      "name": "crevice-herb-06",
+      "width": 128,
+      "height": 96,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.5,
+      "rgbaBytes": 49152,
+      "pixelSha256": "16ab9201bdc8d3d0234150266564c502c0b49193eae2256c84e29b102edbd63e"
+    },
+    {
+      "name": "moss-nest-01",
+      "width": 128,
+      "height": 96,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.5,
+      "rgbaBytes": 49152,
+      "pixelSha256": "16e0d95949a952c8eb6403f7fb10f587ac4e189e68b8dd029069603814fc7ffd"
+    },
+    {
+      "name": "moss-nest-02",
+      "width": 128,
+      "height": 114,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.3902439024390243,
+      "rgbaBytes": 58368,
+      "pixelSha256": "838884552b56551caf51cb52fb3c15e5be34bb9a5d2aca34c16e8687688cdc20"
+    },
+    {
+      "name": "moss-nest-04",
+      "width": 128,
+      "height": 96,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.5,
+      "rgbaBytes": 49152,
+      "pixelSha256": "0a2a9a33b33b0dcfc9a518e2e14ff29ff27bf4dd3eea62ca8a626ff87b905b70"
+    },
+    {
+      "name": "moss-nest-05",
+      "width": 128,
+      "height": 107,
+      "scaleX": 1.3333333333333333,
+      "scaleY": 1.4266666666666667,
+      "rgbaBytes": 54784,
+      "pixelSha256": "02fce805576c556a19dd57386cdb8cb0509bf29ff504d15982ef6c93a3cc1d6b"
+    }
+  ],
+  "contactRecipe": "96px colour alpha + 16px guard, dilate 3px, blur sigma 3px; dark neutral green; runtime opacity",
+  "recipe": "scripts/export-rock-ecology-v8.mjs",
+  "alphaCleanup": "legacy moss/creeper: smoothstep(64,208,alpha); preserveAlpha variants: authored alpha; all: transparent 4px margin",
+  "orientation": "orthographic overhead; diffuse albedo; runtime formation lighting",
+  "assets": [
+    {
+      "name": "moss-strip-01",
+      "width": 256,
+      "height": 256,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "moss-strip-01.png",
+      "sourceSha256": "5e3a65e62418f0ceb45809c45cb6743c5f3990bf9392e6a9992649dcc20412da",
+      "sourceWidth": 2498,
+      "sourceHeight": 834,
+      "rgbaBytes": 262144,
+      "pixelSha256": "d4443137528d69c499b5e4d96dea894b662dd4bc150af6213e300c9407c423b6"
+    },
+    {
+      "name": "moss-strip-02",
+      "width": 256,
+      "height": 256,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "moss-strip-02.png",
+      "sourceSha256": "8863d1089d778b27f8df879496d5dc2f8e804f99e123b9d630b7f0caf3435b0c",
+      "sourceWidth": 2281,
+      "sourceHeight": 913,
+      "rgbaBytes": 262144,
+      "pixelSha256": "6bfd762b20caf98e982f2bb204510111be9b47cf899324631fa2fb9e294f959f"
+    },
+    {
+      "name": "lichen-06",
+      "width": 256,
+      "height": 256,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "lichen-06.png",
+      "sourceSha256": "3986325d48283d733aa84ee46204112276380ecc6c17f79beae46f7c1bc3c67a",
+      "sourceWidth": 1510,
+      "sourceHeight": 1379,
+      "rgbaBytes": 262144,
+      "pixelSha256": "af024482ba560449f1fe3d9364d997f83aa1b7b21fa875b6908340ea588434d1"
+    },
+    {
+      "name": "lichen-07",
+      "width": 256,
+      "height": 256,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "lichen-07.png",
+      "sourceSha256": "83b3229037098f53163e35387df9989e2ddccd7135f1343efc06b1751c26ed2f",
+      "sourceWidth": 1647,
+      "sourceHeight": 1265,
+      "rgbaBytes": 262144,
+      "pixelSha256": "d7c97302c482298de026ea4764074adf8bef3d0d5bee3e53fba37df7de9b6370"
+    },
+    {
+      "name": "edge-overhang-02",
+      "width": 256,
+      "height": 116,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 80,
+      "maxWorld": 120,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "edge-overhang-02.png",
+      "sourceSha256": "6482f631e97c1fc04e1d24060301cd09e55877b83ec874cf4d21f9fb901d1277",
+      "sourceWidth": 2140,
+      "sourceHeight": 973,
+      "rgbaBytes": 118784,
+      "pixelSha256": "db12ab626149d44ee9ce7534a496ff5e21224b4c068ee2ee5c3b63b1a33a0802"
+    },
+    {
+      "name": "edge-overhang-04",
+      "width": 256,
+      "height": 107,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 80,
+      "maxWorld": 120,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "edge-overhang-04.png",
+      "sourceSha256": "e5f6e48688198f0888b713fd1c42203f26fb481b82400737e9da4c6533362873",
+      "sourceWidth": 2234,
+      "sourceHeight": 931,
+      "rgbaBytes": 109568,
+      "pixelSha256": "f4ec94b1d5cf1b8c47e2ed73b61220eff8b467481275d9bff553c8e05af2c788"
+    },
+    {
+      "name": "edge-overhang-05",
+      "width": 256,
+      "height": 128,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 80,
+      "maxWorld": 120,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "edge-overhang-05.png",
+      "sourceSha256": "d3c31efaf065573315a6751c13e8dda7da9ccae2bdd822d3cda76acdf3e28076",
+      "sourceWidth": 2042,
+      "sourceHeight": 1021,
+      "rgbaBytes": 131072,
+      "pixelSha256": "6ba7331260a06e234e61d1fc59be51e7532207559bb7ba1700545b2420b3e275"
+    },
+    {
+      "name": "edge-overhang-06",
+      "width": 256,
+      "height": 92,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 80,
+      "maxWorld": 120,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "edge-overhang-06.png",
+      "sourceSha256": "d228bf8aeee2f2ac33904488815362dbd55a197c9f31b15a330dd59c1a08b83a",
+      "sourceWidth": 2414,
+      "sourceHeight": 863,
+      "rgbaBytes": 94208,
+      "pixelSha256": "2910a8a7f7643325bfcad4e0576032861072f545e64561bcf529d6a2acf573c5"
+    },
+    {
+      "name": "corner-tuft-01",
+      "width": 256,
+      "height": 256,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 48,
+      "maxWorld": 96,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "corner-tuft-01.png",
+      "sourceSha256": "fe08d60f25e53fb0e4f2d270adbceb4ecbb875c4c33feee5e485198beb488330",
+      "sourceWidth": 1444,
+      "sourceHeight": 1444,
+      "rgbaBytes": 262144,
+      "pixelSha256": "51261fcc49474f8b390e026d6e9e3cb6b8c63b422ebb5fc4d538d27e8e19e0f3"
+    },
+    {
+      "name": "corner-tuft-03",
+      "width": 256,
+      "height": 256,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 48,
+      "maxWorld": 96,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "corner-tuft-03.png",
+      "sourceSha256": "760b1f0f6fa8deb84830739fb51af67d6a9ff63903b3d3f0cba1701aa130428c",
+      "sourceWidth": 1444,
+      "sourceHeight": 1444,
+      "rgbaBytes": 262144,
+      "pixelSha256": "a5acf67791660c838733ffff898adf4330d450d4f2068f12274be9fc8752ca65"
+    },
+    {
+      "name": "corner-tuft-05",
+      "width": 256,
+      "height": 171,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 48,
+      "maxWorld": 96,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "corner-tuft-05.png",
+      "sourceSha256": "aeb71d5d7284eb9cd23d0daa0aebfe37d68a7cfa5aa1ddd5eb08b41277006614",
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "rgbaBytes": 175104,
+      "pixelSha256": "48dbb76bbd8c594d52ec1b722a3edff2d07fa056b362d5162589e7c17f8c3859"
+    },
+    {
+      "name": "corner-tuft-06",
+      "width": 256,
+      "height": 256,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 48,
+      "maxWorld": 96,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "corner-tuft-06.png",
+      "sourceSha256": "18fe4cba6871e4bbede79b3e19df1de620254a3c37a4ce704449b1543f79686b",
+      "sourceWidth": 1444,
+      "sourceHeight": 1444,
+      "rgbaBytes": 262144,
+      "pixelSha256": "271efdbd9b81d2532774d0e0a6246853beb9ac629430a03974385c1ac45ae463"
+    },
+    {
+      "name": "foot-cluster-01",
+      "width": 256,
+      "height": 171,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 56,
+      "maxWorld": 100,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "foot-cluster-01.png",
+      "sourceSha256": "dc441ba221c7105c403702007f97f2ac02ed671c4e243312720fe04a6be8d14a",
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "rgbaBytes": 175104,
+      "pixelSha256": "872bf28b82ca113602d5366443b7e7da0c6d059cbb2d940c4da9d2a2bac2ed6c"
+    },
+    {
+      "name": "foot-cluster-02",
+      "width": 256,
+      "height": 171,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 56,
+      "maxWorld": 100,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "foot-cluster-02.png",
+      "sourceSha256": "89574cc8fea65f9fddb531e5465bc308f05e30048add70dc22d0673a0b27a223",
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "rgbaBytes": 175104,
+      "pixelSha256": "f3903e065f0566f7e6057da00db247a4a85f6233edb838877b1b83eafe5632d7"
+    },
+    {
+      "name": "foot-cluster-04",
+      "width": 256,
+      "height": 202,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 56,
+      "maxWorld": 100,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "foot-cluster-04.png",
+      "sourceSha256": "90cd4d5f90d1d46302b14eef02ddbd64c3369421503df75fcbf2f8f6f8208af5",
+      "sourceWidth": 1624,
+      "sourceHeight": 1282,
+      "rgbaBytes": 206848,
+      "pixelSha256": "582ab2a18860fe394b4df2fe7bcbdd693407bae2e673be678f4f3ee3198887d8"
+    },
+    {
+      "name": "foot-cluster-06",
+      "width": 256,
+      "height": 171,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 80,
+      "maxWorld": 100,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "foot-cluster-06.png",
+      "sourceSha256": "c1dc9afa2d8e0c02d7b63bc1e4f5b138c6f9dee45995ce85566bcf871c9bc8d3",
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "rgbaBytes": 175104,
+      "pixelSha256": "64aa1104e15afe9892255f518cbd900cbe02f92c19939e230c7fae7895e797f8"
+    },
+    {
+      "name": "crevice-herb-01",
+      "width": 256,
+      "height": 117,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 40,
+      "maxWorld": 60,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "crevice-herb-01.png",
+      "sourceSha256": "e853f942c44a557ae788ee232824c08068650b1c6f71172ec24192798b63fd2b",
+      "sourceWidth": 2140,
+      "sourceHeight": 974,
+      "rgbaBytes": 119808,
+      "pixelSha256": "dcf2f077175d9b5383ce479ca7f0f446a169ba1e1e1d5ec9fd6e4b152a976424"
+    },
+    {
+      "name": "crevice-herb-02",
+      "width": 256,
+      "height": 234,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 24,
+      "maxWorld": 60,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "crevice-herb-02.png",
+      "sourceSha256": "d145cbc218c708b1d0d84ea4012fc8380d00e5203abae9cf844088c37e033b6c",
+      "sourceWidth": 1510,
+      "sourceHeight": 1379,
+      "rgbaBytes": 239616,
+      "pixelSha256": "9fdf0201c80345da538c4119f74adcb9f0097482cf15be2a383bd01dc9688963"
+    },
+    {
+      "name": "crevice-herb-06",
+      "width": 256,
+      "height": 171,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 40,
+      "maxWorld": 60,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "crevice-herb-06.png",
+      "sourceSha256": "314f6c2addeba70dd865a7686fa3c07e29d3bd8a9e2c10c0af15e78276d7d050",
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "rgbaBytes": 175104,
+      "pixelSha256": "936f9a28f14a9dd9047165232ceeeb460f08984a13055073de835301ed768302"
+    },
+    {
+      "name": "moss-nest-01",
+      "width": 256,
+      "height": 171,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 28,
+      "maxWorld": 64,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "moss-nest-01.png",
+      "sourceSha256": "a61bdec2f4b4e6f17c4c6b75dc3855d0b9e4eda5f5a66bffceea477282c9013c",
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "rgbaBytes": 175104,
+      "pixelSha256": "4d46794e4422225b0673efc327f8429c39dc79e5e85d116b2e1828a7caaefdf3"
+    },
+    {
+      "name": "moss-nest-02",
+      "width": 256,
+      "height": 218,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 28,
+      "maxWorld": 64,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "moss-nest-02.png",
+      "sourceSha256": "507f85097427abc183d3600a22d53ddadfe30272b9c90d04367771128b963b6c",
+      "sourceWidth": 1563,
+      "sourceHeight": 1332,
+      "rgbaBytes": 223232,
+      "pixelSha256": "adc0d51cc0b68e7dc118589afbdee9015007a3b1a6eabdd914b0031de8b5e87c"
+    },
+    {
+      "name": "moss-nest-04",
+      "width": 256,
+      "height": 171,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 28,
+      "maxWorld": 64,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "moss-nest-04.png",
+      "sourceSha256": "0ebb84e302210b5f7823f32750a521396787ae4827c6134df9588efd9df71563",
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "rgbaBytes": 175104,
+      "pixelSha256": "2b1180e5cd566e603d8fa3a39a518c3539812abd3f65215a8efcccbf11493881"
+    },
+    {
+      "name": "moss-nest-05",
+      "width": 256,
+      "height": 199,
+      "brightness": 1,
+      "preserveAlpha": true,
+      "preserveCanvas": true,
+      "minWorld": 28,
+      "maxWorld": 64,
+      "surfaceFinish": {
+        "blur": 1.2,
+        "brightness": 0.94,
+        "saturation": 0.86,
+        "rgb": [
+          0.97,
+          1,
+          1.03
+        ]
+      },
+      "source": "moss-nest-05.png",
+      "sourceSha256": "8a2f30c8e3b7c94b43b2654ccd2475524a1583f4ed99f7c444a7521b254362fe",
+      "sourceWidth": 1636,
+      "sourceHeight": 1272,
+      "rgbaBytes": 203776,
+      "pixelSha256": "509203eaebee0a92a64554e723cb740ce0b28ba046da8e37035f390621343652"
+    }
+  ]
+}

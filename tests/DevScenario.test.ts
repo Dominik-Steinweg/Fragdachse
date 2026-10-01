@@ -71,3 +71,7 @@ describe('Dev scenario contract', () => {
     expect(Date.now).toBe(realNow); expect(loop.callback).toBe(original);
   });
 });
+
+it('rejects saved comparison options with an explicit migration hint',()=>{
+ expect(()=>parseScenario({...defaultScenario(),worldLighting:{}})).toThrow(/Lichtvergleichs-Optionen.*Standard/);
+});

@@ -5,6 +5,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { PersistentGpuWorldSystem } from '../src/arena/rocks/PersistentGpuWorldSystem';
+import { updateRockLightingSun, type RockLightingState } from '../src/arena/rocks/RockLightingState';
 import { RockVisualStateStore, resolveRockCornerTints } from '../src/arena/rocks/RockVisualState';
 import type { RockVisualState } from '../src/arena/rocks/RockVisualState';
 
@@ -21,6 +22,7 @@ class FakeGpuLayer {
 
   setDepth(): this { return this; }
   setBlendMode(): this { return this; }
+  setTexture = vi.fn((_key: string) => this);
   setVisible(visible: boolean): this { this.visible = visible; return this; }
   addMember(member: object): this { this.members.push(member); return this; }
   editMember(slot: number, member: object): this {
@@ -51,9 +53,9 @@ function state(id: number, gridX: number, gridY: number): RockVisualState {
   };
 }
 
-function fixture(states: RockVisualState[], width = 1024, height = 512) {
+function fixture(states: RockVisualState[], width = 1024, height = 512, mineralScale = 1) {
   const layers: FakeGpuLayer[] = [];
-  const textures = (key: string) => ({ get: (frame: number) => ({ name: String(frame), textureKey: key, width: 32, height: 32 }) });
+  const textures = (key: string) => ({ source: [{ width: 2176 * (key === 'woodland-rock-colour' ? mineralScale : 1), height: 1870 * (key === 'woodland-rock-colour' ? mineralScale : 1) }], get: (frame: number) => ({ name: String(frame), textureKey: key, width: 32, height: 32 }) });
   const scene = {
     textures: { get: textures },
     add: {
@@ -74,6 +76,50 @@ function fixture(states: RockVisualState[], width = 1024, height = 512) {
 }
 
 describe('PersistentGpuWorldSystem', () => {
+  it('normalizes a doubled atlas against the original frame table without changing slots, walls or world sizes', () => {
+    const {system,layers}=fixture([state(0,3,5),{...state(1,4,5),material:'walls'}],512,512,2);
+    const uniforms=new Map<string,unknown>();
+    const setUniform=vi.fn((key:string,value:unknown)=>uniforms.set(key,value));
+    const node={programManager:{setUniform},setupUniforms(){
+      const scale=layers[0].setTexture.mock.calls.at(-1)?.[0]==='woodland-rock-colour'?2:1;
+      this.programManager.setUniform('uDiffuseResolution',[2176*scale,1870*scale]);
+      this.programManager.setUniform('uMainResolution',[2176*scale,1870*scale]);
+    }};
+    Object.assign(layers[0],{submitterNode:node});
+    const materialState:RockLightingState={enabled:true,normals:false,material:'mineral',colourTextureKey:'test-mineral-1x',strength:1,sun:[0,0,1]};
+    const originalSetup=node.setupUniforms;
+    system.setMaterialLighting(materialState);
+    expect(node.setupUniforms).toBe(originalSetup);
+    const members=structuredClone(layers[0].members),edits=layers[0].edits.length,uploads=system.getDiagnostics().estimatedUploadBytes;
+    materialState.colourTextureKey='woodland-rock-colour';system.setMaterialLighting(materialState);
+    const setup=node.setupUniforms;node.setupUniforms();
+    expect(uniforms.get('uDiffuseResolution')).toEqual([2176,1870]);
+    expect(uniforms.get('uMainResolution')).toEqual([4352,3740]);
+    // Authored frames retain exactly the same normalized corners and 32px quads.
+    for(const [column,row] of [[0,0],[12,8],[63,54]])for(const edge of [0,32]){
+      const x=1+column*34+edge,y=1+row*34+edge;
+      expect(x/2176).toBe((x*2)/4352);expect(y/1870).toBe((y*2)/3740);
+    }
+    system.setMaterialLighting(materialState);expect(node.setupUniforms).toBe(setup);
+    expect(layers[0].members).toEqual(members);expect(layers[0].edits).toHaveLength(edits);
+    expect(system.getDiagnostics().estimatedUploadBytes).toBe(uploads);
+    expect(layers.at(-1)!.setTexture).not.toHaveBeenCalled();
+    for(let cycle=0;cycle<4;cycle++)for(const scale of [1,2]){
+      materialState.colourTextureKey=scale===2?'woodland-rock-colour':'test-mineral-1x';
+      system.setMaterialLighting(materialState);setUniform.mockClear();node.setupUniforms();
+      expect(node.setupUniforms).toBe(setup);
+      expect(uniforms.get('uDiffuseResolution')).toEqual([2176,1870]);
+      expect(uniforms.get('uMainResolution')).toEqual([2176*scale,1870*scale]);
+      expect(setUniform).toHaveBeenCalledTimes(scale===2?3:2);
+      expect(layers[0].members).toEqual(members);expect(layers[0].edits).toHaveLength(edits);
+      expect(system.getDiagnostics().estimatedUploadBytes).toBe(uploads);
+    }
+    materialState.material='original';materialState.enabled=false;system.setMaterialLighting(materialState);
+    setUniform.mockClear();node.setupUniforms();
+    expect(uniforms.get('uDiffuseResolution')).toEqual([2176,1870]);expect(setUniform).toHaveBeenCalledTimes(2);
+    expect(layers.at(-1)!.setTexture).not.toHaveBeenCalled();
+  });
+
   it('releases rock and wall GPU resources across repeated world lifetimes without deleting shared programs', () => {
     const sharedProgram = { destroy: vi.fn() };
     const unrelatedVao = { destroy: vi.fn() };

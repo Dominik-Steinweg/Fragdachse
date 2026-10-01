@@ -1,11 +1,20 @@
+import { canPrelightFog } from './FogMaterialLighting';
 import * as Phaser from 'phaser';
+import { CELL_SIZE, DEPTH } from '../../config';
+import { FogBankField, FOG_BOUNDARY_RANGE, snapshotFogBoundary, fogDayWeight } from './FogBankField';
+import { setFogBankUniforms } from '../sunlight/atmosphereNoise';
+import { setFogVisibilityUniforms } from '../sunlight/FogVisibilityBudget';
 import { FOG, FOG_DEBUG, type FogDebug, type FogRect, type FogTuning, type FogQuality } from './FogConfig';
 import { FogTerrainModel } from './FogTerrainModel';
 import { FogResidency } from './FogResidency';
 import type { FogImpulse } from './FogImpulses';
-import { FOG_DENSITY_FRAGMENT, FOG_DISPLAY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_MATERIAL_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
+import { FOG_DENSITY_FRAGMENT, FOG_DISPLAY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_MATERIAL_FRAGMENT, FOG_K_MATERIAL_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
 import { FogTrailSegments } from './FogTrailSegments';
 import { FogTrailRenderer } from './FogTrailRenderer';
+import type { FogWoodlandLight } from './FogWoodlandLight';
+import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
+import { setCloudUniforms } from '../sunlight/cloudShadow';
+import { setSunVisibilityUniforms } from '../sunlight/sunVisibility';
 
 const SIDE = FOG.chunkSize / FOG.cellSize;
 const WIDTH = SIDE * FOG.atlasCols, HEIGHT = SIDE * FOG.atlasRows, SLOTS = FOG.atlasCols * FOG.atlasRows;
@@ -62,6 +71,12 @@ export class FogGpuField {
   private readonly impulse: Phaser.GameObjects.Shader;
   private material: Phaser.GameObjects.Shader | null = null;
   private display: Phaser.GameObjects.Shader | null = null;
+  private woodlandLight: FogWoodlandLight | null = null;
+  private boundary: FogDataTexture | null = null;
+  private boundaryBuilder: FogBankField | null = null;
+  private boundaryFresh = false;
+  private boundarySince = -Infinity;
+  private readonly boundarySlots = new Int32Array(SLOTS).fill(-1);
   private surfaceMask: Phaser.GameObjects.RenderTexture | null = null;
   private trailMask: Phaser.GameObjects.Shader | null = null;
   private trailCommands: FogDataTexture | null = null;
@@ -72,6 +87,10 @@ export class FogGpuField {
   private readonly dither: boolean;
   private hasSurfaces = false;
   private quality: FogQuality = 'high';
+  private prelit=false;
+  private readonly textureUnits:number;
+  private readonly lightView=[0,0,1,1];
+  private readonly neutralSun=[0,0,0];
   private lookupKey = '';
   private current = 0;
   private elapsed = 0;
@@ -92,6 +111,7 @@ export class FogGpuField {
     this.residency = new FogResidency(terrain.frame);
     this.trails = new FogTrailSegments(terrain.frame);
     const gl = (scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer).gl;
+    this.textureUnits=gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
     this.dither = gl.isEnabled(gl.DITHER);
     if (gl.getParameter(gl.MAX_TEXTURE_SIZE) < Math.max(WIDTH, HEIGHT, FOG.trailTextureWidth)
       || gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) < 8
@@ -129,7 +149,19 @@ export class FogGpuField {
         set('uLookupSize', [this.lookup.width, this.lookup.height]);
         set('uViewOrigin', [this.view.x - this.terrain.frame.offsetX, this.view.y - this.terrain.frame.offsetY]);
         set('uViewSize', [this.view.width, this.view.height]);
-        set('uOpacity', this.tuning.opacity); set('uDetail', this.tuning.detail);
+        const day=this.woodlandLight?.sunCompositeTuning?fogDayWeight(this.woodlandLight.sunStrength??0):1;
+        const baseOpacity=this.woodlandLight?.baseFogOpacity??this.tuning.opacity;
+        const baseDetail=this.woodlandLight?.baseFogDetail??this.tuning.detail;
+        set('uOpacity',baseOpacity+(this.tuning.opacity-baseOpacity)*day);
+        set('uDetail',baseDetail+(this.tuning.detail-baseDetail)*day);
+        set('uWoodlandBanks', this.woodlandLight && !this.woodlandLight.sunCompositeTuning ? 1 : 0);
+        set('uFogBanksK',this.woodlandLight?.sunCompositeTuning && this.boundary && this.debug==='normal' ? 1 : 0);
+        set('uFogDay',this.woodlandLight?.sunStrength??0);
+        set('uBoundaryBlend',Math.max(0,Math.min(1,(this.elapsed-this.boundarySince)/450)));
+        set('uWorldOffsetX',this.terrain.frame.offsetX);set('uWorldOffsetY',this.terrain.frame.offsetY);
+        setCloudUniforms(set,this.woodlandLight?.clouds);
+        setFogBankUniforms(set,this.woodlandLight?.sunCompositeTuning??SUN_TUNING_DEFAULTS);
+        if(name==='materialLit')this.setLightingUniforms(set,true);
         set('uDebug', FOG_DEBUG.indexOf(this.debug)); set('uInterpolation', this.interpolation);
         set('uHasSurface', this.hasSurfaces ? 1 : 0); set('uQuality', this.quality === 'high' ? 2 : this.quality === 'medium' ? 1 : 0);
       },
@@ -154,6 +186,7 @@ export class FogGpuField {
     if (shader === this.material) {
       shader.textures[4] = this.velocities[this.current].texture!;
       shader.textures[5] = this.surfaceMask?.texture ?? this.scene.textures.get('__DEFAULT');
+      if(this.boundary && this.debug==='normal')shader.textures[6]=this.boundary.texture;
     }
     // Never bind the output as an input, even when that sampler was optimized out.
     for (let i = 0; i < shader.textures.length; i++) if (shader.textures[i] === shader.texture)
@@ -169,8 +202,28 @@ export class FogGpuField {
     this.residency.update(view, now);
     if (this.residency.overflow) { this.display?.setVisible(false); return; }
     const data = this.terrainTexture.data;
-    let changed = false;
+    let changed = false, boundaryChanged = false;
+    if(this.boundary && !this.boundaryFresh && this.terrain.changed.size>0) {
+      snapshotFogBoundary(this.boundary.data,(this.elapsed-this.boundarySince)/450);
+      this.boundarySince=this.elapsed;boundaryChanged=true;
+    }
     for (const chunk of this.residency.chunks.values()) {
+      if(this.boundary && this.boundaryBuilder) {
+        const key=chunk.cy*this.lookup.width+chunk.cx;
+        const fresh=this.boundarySlots[chunk.slot]!==key;
+        let dirty=this.boundaryFresh||fresh;
+        if(!dirty)for(const index of this.terrain.changed) {
+          const x=index%this.terrain.cols*CELL_SIZE,y=Math.floor(index/this.terrain.cols)*CELL_SIZE;
+          if(x+CELL_SIZE>=chunk.cx*512-FOG_BOUNDARY_RANGE && x<=chunk.cx*512+512+FOG_BOUNDARY_RANGE
+            && y+CELL_SIZE>=chunk.cy*512-FOG_BOUNDARY_RANGE && y<=chunk.cy*512+512+FOG_BOUNDARY_RANGE) { dirty=true;break; }
+        }
+        if(dirty) {
+          this.boundaryBuilder.build(this.terrain,chunk.cx,chunk.cy,this.boundary.data,WIDTH,
+            chunk.slot%FOG.atlasCols*SIDE,Math.floor(chunk.slot/FOG.atlasCols)*SIDE,!this.boundaryFresh&&!fresh);
+          this.boundarySlots[chunk.slot]=key;
+          boundaryChanged=true;
+        }
+      }
       if (!chunk.fresh && !this.terrain.dirtyChunks.has(`${chunk.cx},${chunk.cy}`)) continue;
       changed = true;
       // Cached cells retain their reset flags until their first active step. A
@@ -186,6 +239,8 @@ export class FogGpuField {
       }
     }
     if (changed) this.terrainTexture.upload();
+    if(boundaryChanged)this.boundary!.upload();
+    this.boundaryFresh=false;
     this.terrain.acknowledge();
     const lookupKey = [...this.residency.chunks.values()].filter(c => c.active).map(c => `${c.slot}:${c.cx}:${c.cy}`).join(';');
     if (lookupKey !== this.lookupKey) {
@@ -256,13 +311,38 @@ export class FogGpuField {
     if (cleared) this.terrainTexture.upload();
   }
   /** Screen-space composite of the soft material and the finer wake mask. */
+  private setLightingUniforms(set:(name:string,value:unknown)=>void,material:boolean):void {
+        set('uFogBankMetadata',this.woodlandLight?.sunCompositeTuning && this.boundary && this.debug==='normal' ? 1 : 0);
+        setFogVisibilityUniforms(set,this.woodlandLight?.sunCompositeTuning??SUN_TUNING_DEFAULTS);
+        set('uSunTransmission',material?9:2);
+        set('uSceneSun',this.debug==='normal'?(this.woodlandLight?.sunStrength??0):0);
+        setCloudUniforms(set,this.woodlandLight?.clouds);
+        set('uSunComposite', this.woodlandLight?.sunCompositeTuning ? 1 : 0);
+        setSunVisibilityUniforms(set, this.woodlandLight?.sunCompositeTuning ?? SUN_TUNING_DEFAULTS);
+        set('uCompositeShade', this.woodlandLight?.sunCompositeTuning?.shade ?? SUN_TUNING_DEFAULTS.shade);
+        set('uCompositeSun', this.woodlandLight?.sunCompositeTuning?.sun ?? SUN_TUNING_DEFAULTS.sun);
+        set('uSunFogShade', this.woodlandLight?.sunCompositeTuning?.fogShade ?? SUN_TUNING_DEFAULTS.fogShade);
+        set('uSunFogLit', this.woodlandLight?.sunCompositeTuning?.fogSun ?? SUN_TUNING_DEFAULTS.fogSun);
+        set('uSunFogOpacity', this.woodlandLight?.sunCompositeTuning?.fogOpacity ?? 1);
+        set('uSunFogShadeOpacity', this.woodlandLight?.sunCompositeTuning?.fogShadeOpacity ?? 1);
+        setFogBankUniforms(set,this.woodlandLight?.sunCompositeTuning??SUN_TUNING_DEFAULTS);
+        set('uFogSun',this.woodlandLight?.sun??this.neutralSun);
+        this.lightView[0]=this.view.x;this.lightView[1]=this.view.y;
+        this.lightView[2]=this.view.width;this.lightView[3]=this.view.height;
+        set('uFogView',this.lightView);set('uFogPrelit',Number(this.prelit));
+        if(material){
+          const renderer=this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+          renderer.glTextureUnits.bind((this.woodlandLight?.transmissionTexture??this.scene.textures.get('__DEFAULT')).source[0].glTexture!,9);
+        }
+  }
   private makeDisplay(width: number, height: number): Phaser.GameObjects.Shader {
     const display = new Phaser.GameObjects.Shader(this.scene, {
       name: 'GroundFog_display', shaderName: 'GroundFog_display', fragmentSource: FOG_DISPLAY_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
         set('uMaterial', 0); set('uTrails', 1); set('uHasTrails', this.trailMask && this.debug === 'normal' ? 1 : 0);
+        this.setLightingUniforms(set,false);
       },
-    }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT']);
+    }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT', '__DEFAULT']);
     return this.scene.add.existing(display).setOrigin(0).setDepth(this.depth);
   }
   /** `trailWidth`/`trailHeight` size the wake mask independently of the soft material. */
@@ -272,10 +352,12 @@ export class FogGpuField {
     if (!this.initialized || this.residency.overflow || this.destroyed) { this.display?.setVisible(false); return; }
     this.view = view; this.debug = debug; this.interpolation = interpolation; this.quality = quality;
     const w = Math.max(2, Math.ceil(pixelWidth / 2) * 2), h = Math.max(2, Math.ceil(pixelHeight / 2) * 2);
-    if (!this.material || this.material.width !== w || this.material.height !== h) {
+    const prelit=canPrelightFog(this.woodlandLight?.sunCompositeTuning,this.textureUnits,debug==='normal');
+    if (!this.material || this.material.width !== w || this.material.height !== h || prelit!==this.prelit) {
+      this.prelit=prelit;
       if (this.display) destroyFogShader(this.display);
       if (this.material) destroyFogShader(this.material);
-      this.material = this.makePass('material', FOG_MATERIAL_FRAGMENT, w, h);
+      this.material = this.makePass(prelit?'materialLit':'material',prelit?FOG_K_MATERIAL_FRAGMENT:FOG_MATERIAL_FRAGMENT,w,h);
       this.material.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
       this.display = this.makeDisplay(w, h);
       this.surfaceMask?.destroy(); this.surfaceMask = null;
@@ -310,12 +392,33 @@ export class FogGpuField {
       mask.render();
     }
     this.draw(this.material, this.states[this.current], this.states[1 - this.current]);
-    this.display!.setTextures([this.material.texture!, this.trailMask?.texture ?? this.scene.textures.get('__DEFAULT')]);
+    this.display!.setTextures([this.material.texture!, this.trailMask?.texture ?? this.scene.textures.get('__DEFAULT'),
+      this.woodlandLight?.transmissionTexture??this.scene.textures.get('__DEFAULT')]);
     this.display!.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setVisible(true);
+    // Only the thin SDF fringe crosses low rock shoulders; actors remain above it.
+    this.display!.setDepth(this.woodlandLight?.sunCompositeTuning && (this.woodlandLight.sunStrength??0)>0
+      ? DEPTH.ROCK_VEGETATION+.02 : this.depth);
   }
   hide(): void { this.display?.setVisible(false); }
+  setWoodlandLight(binding: FogWoodlandLight | null): void {
+    this.woodlandLight=binding;
+    if(binding?.sunCompositeTuning && !this.boundary) {
+      this.boundary=new FogDataTexture(this.scene,this.prefix+'boundary',WIDTH,HEIGHT);
+      this.boundaryBuilder=new FogBankField();this.boundaryFresh=true;
+      this.boundarySince=-Infinity;
+      this.boundarySlots.fill(-1);
+    } else if(!binding?.sunCompositeTuning && this.boundary) {
+      if(this.material)this.material.textures[6]=this.impulse.texture!;
+      this.boundary.destroy();this.boundary=null;this.boundaryBuilder=null;
+    }
+    // Detachment must release the borrowed texture even while presentation is paused.
+    if(this.display)this.display.textures[2]=binding?.transmissionTexture??this.scene.textures.get('__DEFAULT');
+  }
   get trailDrawCalls(): number { return this.trailRenderer?.drawCalls ?? 0; }
   get visibleTraces(): number { return this.trailRenderer?.visibleTraces ?? 0; }
+  get materialWidth():number {return this.material?.width??0;}
+  get materialHeight():number {return this.material?.height??0;}
+  get lightingAtMaterialResolution():boolean {return this.prelit;}
   /** Explicit lab diagnostic only; never used by simulation, residency or ordinary rendering. */
   readDensity(worldX: number, worldY: number): { density: number; reached: boolean } {
     const pixel = this.readPixel(worldX, worldY, this.states[this.current]);
@@ -353,10 +456,12 @@ export class FogGpuField {
       + this.lookup.data.length + (this.material ? this.material.width * this.material.height * 4 : 0)
       + (this.surfaceMask ? this.surfaceMask.width * this.surfaceMask.height * 4 : 0)
       + (this.trailMask ? this.trailMask.width * this.trailMask.height * 4 : 0)
-      + (this.trailCommands?.data.length ?? 0) + (this.trailRenderer ? FOG.trailCapacity * 6 * 16 : 0);
+      + (this.trailCommands?.data.length ?? 0) + (this.boundary?.data.length??0) + (this.trailRenderer ? FOG.trailCapacity * 6 * 16 : 0);
   }
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;
+    this.woodlandLight=null;
+    this.boundary?.destroy();this.boundary=null;this.boundaryBuilder=null;
     if (this.display) destroyFogShader(this.display); this.display = null;
     this.surfaceMask?.destroy(); this.surfaceMask = null;
     if (this.material) destroyFogShader(this.material);

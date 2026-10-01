@@ -1,0 +1,22 @@
+{
+  "lily-group-01": {
+    "accepted": true,
+    "reason": "Fuenf klar lesbare, ungleich grosse Blaetter; kleine gedeckte rosa Knospe; ruhige dunkle Farbigkeit."
+  },
+  "lily-group-02": {
+    "accepted": true,
+    "reason": "Drei getrennte Blaetter, offene Silhouette; gute Ergaenzung zu dichten Gruppen und bei 40 px noch lesbar."
+  },
+  "lily-pad-01": {
+    "accepted": true,
+    "reason": "Dunkles Einzelblatt mit ausgepraegter Kerbe; bei allen drei Groessen klar und ruhig."
+  },
+  "lily-pad-02": {
+    "accepted": true,
+    "reason": "Kleines asymmetrisches Einzelblatt; wenig Strukturkontrast, gut zur Streuung."
+  },
+  "lily-pad-03": {
+    "accepted": true,
+    "reason": "Dunkles ungleich grosses Zweierpaar; flacher Eindruck und gute Groessenvariation."
+  }
+}

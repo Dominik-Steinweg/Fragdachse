@@ -1,3 +1,4 @@
+import { SUN_RENDER_QUALITY, type SunRenderQuality } from '../effects/sunlight/SunRenderQuality';
 import type * as Phaser from 'phaser';
 
 const GAME_OBJECT_DESTROY_EVENT = 'destroy';
@@ -22,6 +23,7 @@ export interface SharedGlowProfile {
 
 export interface GraphicsQualityProfile {
   readonly level: GraphicsQuality;
+  readonly sunlight: SunRenderQuality;
   readonly particleFactors: Readonly<Record<VisualImportance, number>>;
   readonly lightMapScale: number;
   /** Ambient-subtracted lightmap composite; no additional light rendering. */
@@ -108,6 +110,7 @@ export interface GraphicsQualityProfile {
 export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, GraphicsQualityProfile>> = {
   high: {
     level: 'high',
+    sunlight: SUN_RENDER_QUALITY.high,
     particleFactors: { critical: 1, standard: 1, decorative: 1 },
     lightMapScale: 0.5,
     lightBleed: true,
@@ -145,6 +148,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
   },
   medium: {
     level: 'medium',
+    sunlight: SUN_RENDER_QUALITY.medium,
     particleFactors: { critical: 0.8, standard: 0.65, decorative: 0.45 },
     lightMapScale: 0.375,
     lightBleed: true,
@@ -178,6 +182,7 @@ export const GRAPHICS_QUALITY_PROFILES: Readonly<Record<GraphicsQuality, Graphic
   },
   low: {
     level: 'low',
+    sunlight: SUN_RENDER_QUALITY.low,
     particleFactors: { critical: 0.6, standard: 0.35, decorative: 0 },
     lightMapScale: 0.25,
     lightBleed: false,

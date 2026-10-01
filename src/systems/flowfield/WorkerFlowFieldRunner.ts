@@ -1,5 +1,5 @@
 /**
- * Einzige Datei im Projekt mit `new Worker(...)`. Diese Modulgrenze ist der Grund, warum Tests
+ * Besitzt den Flowfield-Worker. Diese Modulgrenze ist der Grund, warum Tests
  * und der Inline-Fallback den Worker-Entry nie laden.
  */
 import {

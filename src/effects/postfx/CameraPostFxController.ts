@@ -11,7 +11,7 @@ import {
   type ResolvedPostFxState,
 } from './PostFxComposer';
 import { BARREL_MIN_PRIORITY, getPostFxPreset, type PostFxEvent } from './postFxPresets';
-import { buildTintMatrix, NEUTRAL_WORLD_GRADE, type WorldGrade } from './worldGrade';
+import { buildTintMatrix, NEUTRAL_WORLD_GRADE, overrideWorldGrade, resolveBaseGrade, type WorldGradeInputs, type WorldGrade } from './worldGrade';
 import {
   RadialFocusMaskTexture,
   RadialFocusParallelFilters,
@@ -114,7 +114,13 @@ export class CameraPostFxController {
     colorMatrix: null, vignette: null, radialFocus: null, barrel: null,
   };
 
+  private gradeInputs: WorldGradeInputs | null = null;
   private baseGrade: WorldGrade = NEUTRAL_WORLD_GRADE;
+  private sunGrade: Partial<WorldGrade> | null = null;
+  private readonly sunGradeBuffer = { ...NEUTRAL_WORLD_GRADE };
+  private effectiveGrade: WorldGrade = NEUTRAL_WORLD_GRADE;
+  private sunOlive = 0;
+  private readonly sunOliveMatrix = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0];
   private radialFocusFrame: RadialFocusFrame | null = null;
   private lastState: ResolvedPostFxState | null = null;
   private lastBloomThreshold = Number.NaN;
@@ -141,8 +147,27 @@ export class CameraPostFxController {
     return this.enabled;
   }
 
-  setBaseGrade(grade: WorldGrade): void {
+  setBaseGrade(grade: WorldGrade, inputs?: WorldGradeInputs): void {
+    this.gradeInputs = inputs ?? null;
     this.baseGrade = grade;
+    this.refreshGrade();
+  }
+
+  setSunGrade(grade: Partial<WorldGrade> | null, olive = 0): void {
+    this.sunGrade = grade;
+    this.sunOlive = grade && Number.isFinite(olive) ? Math.max(0, Math.min(.08, olive)) : 0;
+    // Transfer a small fraction of green to red: foliage shifts towards olive,
+    // with no global hue rotation of team colours or new filter pass.
+    this.sunOliveMatrix[1] = this.sunOlive;
+    this.sunOliveMatrix[6] = 1 - this.sunOlive;
+    this.refreshGrade();
+    this.update(0);
+  }
+
+  private refreshGrade(): void {
+    this.effectiveGrade = this.gradeInputs
+      ? resolveBaseGrade(this.gradeInputs, this.sunGrade, this.sunGradeBuffer)
+      : overrideWorldGrade(this.baseGrade, this.sunGrade, this.sunGradeBuffer);
   }
 
   /**
@@ -215,7 +240,7 @@ export class CameraPostFxController {
       return;
     }
     const now = this.scene.time.now;
-    const state = composePostFx(this.baseGrade, this.pulses.prune(now), now);
+    const state = composePostFx(this.effectiveGrade, this.pulses.prune(now), now);
     this.lastState = state;
     this.applyState(state);
   }
@@ -232,7 +257,11 @@ export class CameraPostFxController {
   /** Rundenende: laufende Ereignisse fallen lassen und auf Normalwerte zurückkehren. */
   reset(): void {
     this.pulses.clear();
+    this.gradeInputs = null;
     this.baseGrade = NEUTRAL_WORLD_GRADE;
+    this.sunGrade = null;
+    this.sunOlive = 0;
+    this.effectiveGrade = NEUTRAL_WORLD_GRADE;
     this.radialFocusFrame = null;
     this.lastState = null;
     this.chain.displacement?.setEffectActive(false);
@@ -356,7 +385,7 @@ export class CameraPostFxController {
     const { colorMatrix, vignette, parallel, barrel } = this.chain;
     this.applyBloomSampling(profile.level);
 
-    if (!state || state.neutral) {
+    if (!state || (state.neutral && this.sunOlive === 0 && !(this.sunGrade && state.temperature !== 0))) {
       if (colorMatrix) colorMatrix.active = false;
       if (vignette) vignette.active = false;
       if (parallel) parallel.active = false;
@@ -367,7 +396,8 @@ export class CameraPostFxController {
 
     if (colorMatrix) {
       const wanted = profile.worldColorGrade
-        && (state.saturation !== 1 || state.contrast !== 1 || state.brightness !== 1 || state.tintStrength > 0);
+        && (state.saturation !== 1 || state.contrast !== 1 || state.brightness !== 1 || state.tintStrength > 0
+          || (this.sunGrade !== null && state.temperature !== 0) || this.sunOlive > 0);
       colorMatrix.active = wanted;
       if (wanted) {
         const m = colorMatrix.colorMatrix;
@@ -377,9 +407,10 @@ export class CameraPostFxController {
         m.brightness(state.brightness, true);
         m.saturate(state.saturation - 1, true);
         m.contrast(state.contrast - 1, true);
-        if (state.tintStrength > 0) {
+        if (state.tintStrength > 0 || (this.sunGrade !== null && state.temperature !== 0)) {
           m.multiply(buildTintMatrix(state.temperature, state.tint, state.tintStrength), true);
         }
+        if (this.sunOlive > 0) m.multiply(this.sunOliveMatrix, true);
       }
     }
 
@@ -399,7 +430,7 @@ export class CameraPostFxController {
       const amount = mode === 'off'
         ? 0
         : mode === 'event'
-          ? Math.max(0, state.bloomAmount - this.baseGrade.bloomAmount)
+          ? Math.max(0, state.bloomAmount - this.effectiveGrade.bloomAmount)
           : state.bloomAmount;
       parallel.active = amount > 0;
       parallel.blend.amount = amount;

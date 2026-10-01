@@ -2,6 +2,8 @@ import * as Phaser from 'phaser';
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
 import type { ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import type { WildlifeVisual } from './AmbientWildlifeGeometry';
+import type { SunCloudState } from '../effects/sunlight/cloudShadow';
+import { wildlifeFogCover } from './AmbientWildlifeAppearance';
 
 interface Entry {
   readonly visual: WildlifeVisual;
@@ -43,14 +45,15 @@ export function createAmbientWildlifeLayer(scene: Phaser.Scene, visuals: readonl
       scene.add.existing(this);
     }
 
-    updatePose(view: ChunkWorldRect, time: number): void {
+    updatePose(view: ChunkWorldRect, time: number, fog?: SunCloudState): void {
       let count = 0;
       for (const entry of this.entries) {
-        const a = entry.visual.animal, margin = a.appearance.footprint;
+        const a = entry.visual.animal, margin = a.appearance.footprint * (fog ? 1.36 : 1);
         entry.visible = a.opacity > .005 && a.x >= view.x - margin && a.y >= view.y - margin
           && a.x <= view.x + view.width + margin && a.y <= view.y + view.height + margin;
         if (!entry.visible) continue;
-        entry.visual.sample(time);
+        if (fog) entry.visual.sample(time, wildlifeFogCover(a.x, a.y, fog));
+        else entry.visual.sample(time);
         for (let i = 0; i < entry.indices.length; i++) this.indices[count++] = entry.indices[i];
       }
       // Only a tiny view changes when the visible count changes. The backing allocation

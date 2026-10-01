@@ -1,0 +1,173 @@
+{
+  "version": 8,
+  "source": "tools/source-art/pond-ecology-v8",
+  "recipe": "scripts/export-woodland-ecology-v8.mjs",
+  "alpha": "authored alpha; unchanged colours; transparent 4px padding",
+  "atlas": {
+    "file": "lilies-atlas.png",
+    "width": 1024,
+    "height": 512,
+    "rgbaBytes": 2097152,
+    "downloadBytes": 240168,
+    "sha256": "0d44d573b283ea3a1e474061486ca0d179c47bb40618748d54243b2ab28787a0",
+    "frames": {
+      "lily-group-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "lily-group-02": {
+        "frame": {
+          "x": 256,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "lily-pad-01": {
+        "frame": {
+          "x": 512,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "lily-pad-02": {
+        "frame": {
+          "x": 768,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "lily-pad-03": {
+        "frame": {
+          "x": 0,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      }
+    }
+  },
+  "assets": [
+    {
+      "name": "lily-group-01",
+      "source": "lily-group-01.png",
+      "sourceSha256": "805096a816e201285f2a0cbe2b5faf8b266d9161730564125bb6a4a26376c20a",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1506,
+      "sourceHeight": 1506,
+      "pixelSha256": "bf451eb6d3efd660132812768d9963d10435123ab5fe8799c7ca955db948fa0b"
+    },
+    {
+      "name": "lily-group-02",
+      "source": "lily-group-02.png",
+      "sourceSha256": "d057a614147e4469e58ba0eac6c526bba84bdf341dca672e4c7f7190d7de0881",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1844,
+      "sourceHeight": 1230,
+      "pixelSha256": "3a937acb8dc510bfe1ccafcb2d8141c29045665b6141db2231366ddbed5bbd41"
+    },
+    {
+      "name": "lily-pad-01",
+      "source": "lily-pad-01.png",
+      "sourceSha256": "d87b4f7422ee426a1c4986981323149bcc1947a90c52da33c64601dcb759c64c",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1552,
+      "sourceHeight": 1462,
+      "pixelSha256": "f30c5d3cc23adc011af15ef32ede9e899620114f5cdac874b1b3788aa8a0af67"
+    },
+    {
+      "name": "lily-pad-02",
+      "source": "lily-pad-02.png",
+      "sourceSha256": "763e6cfdb4f95416cff9d6f59e916e70d367ccd3ff11eafeb7084370b560d157",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1506,
+      "sourceHeight": 1506,
+      "pixelSha256": "be5c96bfb5ccc4b8bcaef741d33cdddc532536e3620a12e07a64a2f6d270c26b"
+    },
+    {
+      "name": "lily-pad-03",
+      "source": "lily-pad-03.png",
+      "sourceSha256": "f089c3c9bce54033994ec3f730125cb840fc7388ad28a1c4ba2b4d1aac4e6ea5",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1844,
+      "sourceHeight": 1230,
+      "pixelSha256": "041f06cd1ab295c66f51d22b10dec5c21e82840cf4725a7ddde1af1868d27398"
+    }
+  ]
+}

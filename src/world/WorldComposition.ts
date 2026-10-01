@@ -1,3 +1,4 @@
+import { WorldSunlightPresentation, type WorldSunlightTargets } from '../effects/sunlight/WorldSunlightPresentation';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
 import { DEFAULT_FOG_STRENGTH } from '../config/groundFog';
@@ -167,6 +168,7 @@ export interface MaterializeWorldCompositionInput {
   readonly persistentBaseSink?: PersistentBaseWorldBindingSink;
   readonly baseDestructionHooks: BaseDestructionHooks;
   readonly lighting: LightingSystem;
+  readonly sunlight?: Pick<WorldSunlightTargets, 'shadow' | 'postFx' | 'enemyShadows'>;
   readonly createRockRegistry: boolean;
   readonly healthBars?: WorldHealthBarRenderer;
   readonly turretAnimations?: TurretAnimationController;
@@ -279,6 +281,15 @@ export function materializeWorldComposition(
   baseManager?.setLightingSystem(input.lighting);
   if (input.createRockRegistry) materialization.setRocks(new RockRegistry(layout));
 
+  if(presentationRequired && input.sunlight && input.runtime.presentationFrame) {
+    const sunlight=input.sunlight;
+    input.runtime.presentationFrame.bindSunlight(()=>new WorldSunlightPresentation(input.scene, {
+      ground:arena.groundSurface,rocks:arena.rockVisualSystem,rockOverlays:arena.rockOverlaySurface,
+      canopies:arena.canopyObjects,water:arena.waterSurface,wildlife:arena.wildlife,
+      fog:presentation.groundFog,lighting:input.lighting,shadow:sunlight.shadow,postFx:sunlight.postFx,
+      get enemyShadows(){return sunlight.enemyShadows;},layout,worldContext:world,
+    }));
+  }
   return {
     materialization,
     presentation,

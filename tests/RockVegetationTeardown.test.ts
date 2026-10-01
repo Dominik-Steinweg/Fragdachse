@@ -112,7 +112,6 @@ function buildResult() {
     rockOverlaySurface,
     rockOverlaySource: overlaySource,
     rockMossPlacements: [{ textureKey: 'rock_moss_01' }],
-    rockVegetationPlacements: [{ textureKey: 'rock_veg_01_large' }],
   } as unknown as ArenaBuilderResult;
 
   return { result, groundSurface, rockOverlaySurface, scene };
@@ -153,7 +152,6 @@ describe('round-scoped world surface teardown', () => {
 
     // Die Platzierungen sind die Quelle jedes Chunk-Bakes; blieben sie stehen, stempelte die
     // naechste Runde die Flecken der vorigen.
-    expect(result.rockVegetationPlacements).toHaveLength(0);
     expect(result.rockMossPlacements).toHaveLength(0);
     expect(result.groundCoverPlacements).toHaveLength(0);
     // Und die Materialquelle wuerde sonst Zellen der Vorrunde weiterstempeln.

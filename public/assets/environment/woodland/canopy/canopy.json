@@ -1,0 +1,709 @@
+{
+  "version": 9,
+  "source": "tools/source-art/forest-v9-neutral",
+  "recipe": "scripts/export-forest-v9.mjs",
+  "orientation": "top-down neutral; no rotation or mirroring",
+  "coverageConfig": "tools/source-art/forest-canopy/coverage.json",
+  "coverageVersion": 1,
+  "coverageSha256": "750c4b95ae592d6b5f9983d4a3b68e44b74b0eabf4f3be56622593bfcefb12c5",
+  "coverageContract": {
+    "alpha": 192,
+    "size": 512,
+    "coreRadius": 192,
+    "coreMinimum": 0.98,
+    "maxScale": 1.7,
+    "minimumArea": 0.7518043518066406,
+    "references": [
+      {
+        "file": "canopy01.png",
+        "sha256": "ce7157f44f536b35959a4d1e2739ffa83f979562a9792e910ce094677d5a2c7c",
+        "opaqueFraction": 0.7122154235839844,
+        "displayedOpaqueFraction": 0.7122154235839844,
+        "coreCoverage": 1
+      },
+      {
+        "file": "canopy02.png",
+        "sha256": "439fc4c85d2c5f2a62bc78d9b138aa5526790f7e4f7416d6cabe9d549aef9703",
+        "opaqueFraction": 0.7518043518066406,
+        "displayedOpaqueFraction": 0.7518043518066406,
+        "coreCoverage": 1
+      },
+      {
+        "file": "canopy03.png",
+        "sha256": "39c7891bef120552c91ca6afb915af323e7cd9bc7cfcbed51e3f351a25dcf183",
+        "opaqueFraction": 0.7429122924804688,
+        "displayedOpaqueFraction": 0.7429122924804688,
+        "coreCoverage": 1
+      },
+      {
+        "file": "canopy04.png",
+        "sha256": "2fe3f4c701840d87a8165d4de62d952ec590e83c48cbef793ab17305e50feb6e",
+        "opaqueFraction": 0.7056617736816406,
+        "displayedOpaqueFraction": 0.7056617736816406,
+        "coreCoverage": 1
+      },
+      {
+        "file": "canopy05.png",
+        "sha256": "527cfdcb329d0a54a7b655d4ea99b8afe31bda9b2830481c75aff6a9b9c1a4a0",
+        "opaqueFraction": 0.7471771240234375,
+        "displayedOpaqueFraction": 0.7471771240234375,
+        "coreCoverage": 0.9999308269636495
+      }
+    ]
+  },
+  "materialConfig": "tools/source-art/forest-canopy/material.json",
+  "materialVersion": 1,
+  "materialSha256": "df98f029599984b5da3d9431f71aafd7ee6cb442012bd28f9d3103204ebc496e",
+  "atlases": [
+    {
+      "kind": "albedo",
+      "file": "albedo.png",
+      "width": 2048,
+      "height": 2048,
+      "rgbaBytes": 16777216,
+      "downloadBytes": 6454142,
+      "sha256": "04473e0e00e1a4cfff9ee55dcbf5c1db20a39e644285a47a1b141ec168b1f69f",
+      "premultiplied": true
+    },
+    {
+      "kind": "data",
+      "file": "normal-ao-thickness.png",
+      "width": 2048,
+      "height": 2048,
+      "rgbaBytes": 16777216,
+      "downloadBytes": 8143566,
+      "sha256": "6d44dd8ada6378667187be00e24e3d80706b143c914c4a639f272d0f66c90b57",
+      "premultiplied": false
+    },
+    {
+      "kind": "horizon-0",
+      "file": "horizon-0.png",
+      "width": 2048,
+      "height": 2048,
+      "rgbaBytes": 16777216,
+      "downloadBytes": 7254146,
+      "sha256": "a2a0f99a80b96e3ca0b1aefdf330dc0d54573ed33418f20afbc0dd8c2fa94b86",
+      "premultiplied": false
+    },
+    {
+      "kind": "horizon-1",
+      "file": "horizon-1.png",
+      "width": 2048,
+      "height": 2048,
+      "rgbaBytes": 16777216,
+      "downloadBytes": 7340266,
+      "sha256": "701334921dc3d49112a393db0fc45fcffa63460afe9f25e624ca06a1596d7382",
+      "premultiplied": false
+    }
+  ],
+  "assets": [
+    {
+      "id": "stieleiche-gelappt-1",
+      "index": 0,
+      "reason": "Dichte breite Eichenmassen, ruhige kompakte Kontur.",
+      "displayScale": 1.25,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.4829750061035156,
+        "displayedOpaqueFraction": 0.7546484470367432,
+        "coreCoverage": 0.9997924808909487
+      },
+      "conifer": false,
+      "weight": 1.4,
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-0-albedo.png",
+          "sha256": "24d6097673920abd31a6cf22237272d12f0e53e8e3f2a872482ce2476ec7b880"
+        },
+        {
+          "file": "canopy-v9-0-data.png",
+          "sha256": "c42dcb89fe39644794b7a24b1d93a8c3b523de1741f6ee0a5aaf2e4a60d19d96"
+        },
+        {
+          "file": "canopy-v9-0-horizon-0.png",
+          "sha256": "201d00cee5777d4e45e645186f493e5aa7cdefeb606ef8fc7596f0030264959a"
+        },
+        {
+          "file": "canopy-v9-0-horizon-1.png",
+          "sha256": "8830207f94813da89c8404688922dc649de9ecbf692d12f41b45327f50eb0eb1"
+        }
+      ]
+    },
+    {
+      "id": "stieleiche-gelappt-3",
+      "index": 1,
+      "reason": "Unregelmaessige Eichenkontur mit flacher Randkerbe und geschlossenem Kern.",
+      "displayScale": 1.29,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.4568290710449219,
+        "displayedOpaqueFraction": 0.7602092571258545,
+        "coreCoverage": 0.9997233078545983
+      },
+      "conifer": false,
+      "weight": 1.4,
+      "frame": {
+        "x": 512,
+        "y": 0,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-1-albedo.png",
+          "sha256": "4c59f2e82550908fad252013a31eac7d6b057ad0e5334ac0733930c08b29bfa0"
+        },
+        {
+          "file": "canopy-v9-1-data.png",
+          "sha256": "6d77c13da58eb720c5951f172a954051de2876b16001929bf953442a17c9e5d6"
+        },
+        {
+          "file": "canopy-v9-1-horizon-0.png",
+          "sha256": "a777e5e3d34d6513781241be3066d441ce044067b4292eb23c29e7f8fd7423d4"
+        },
+        {
+          "file": "canopy-v9-1-horizon-1.png",
+          "sha256": "02f5fa305dd238dc74146bda74514935a5546414092db6458b814c38e8cf3893"
+        }
+      ]
+    },
+    {
+      "id": "traubeneiche-1",
+      "index": 2,
+      "reason": "Runde kompakte Eiche mit gut getrennten mittleren Bueschelgruppen.",
+      "displayScale": 1.26,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.47747802734375,
+        "displayedOpaqueFraction": 0.7580441162109375,
+        "coreCoverage": 0.9971984920278075
+      },
+      "conifer": false,
+      "weight": 1.4,
+      "frame": {
+        "x": 1024,
+        "y": 0,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-2-albedo.png",
+          "sha256": "f22a6379118b13fe90021beebeeca204aa80c8c2e6769a455ab17e61cc6d5eab"
+        },
+        {
+          "file": "canopy-v9-2-data.png",
+          "sha256": "590b0e16c8ec18177398782d61c88113005800b8bd874131632af172e7ba40b1"
+        },
+        {
+          "file": "canopy-v9-2-horizon-0.png",
+          "sha256": "70f66ea6f88331b225454d23d9b3d035da132dfdcf70e9cba115be2f646a69a2"
+        },
+        {
+          "file": "canopy-v9-2-horizon-1.png",
+          "sha256": "22217ddb4eb90570354b644eed2444d549f210fc5ad39aaab7b284fc3f8b8b09"
+        }
+      ]
+    },
+    {
+      "id": "traubeneiche-2",
+      "index": 3,
+      "reason": "Breitovale Eiche, klar abweichende Silhouette.",
+      "displayScale": 1.39,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.3937873840332031,
+        "displayedOpaqueFraction": 0.7608366046905517,
+        "coreCoverage": 0.9964375886279528
+      },
+      "conifer": false,
+      "weight": 1.4,
+      "frame": {
+        "x": 1536,
+        "y": 0,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-3-albedo.png",
+          "sha256": "c8baa9455c3966ac3b58d3b3173080607fe2ceb384fa3510fd85b12f35ceaf40"
+        },
+        {
+          "file": "canopy-v9-3-data.png",
+          "sha256": "28783d440a86b02579134b3b91fcd7076a23d56e90bbe96e9f2e09c1a9648726"
+        },
+        {
+          "file": "canopy-v9-3-horizon-0.png",
+          "sha256": "99da25a00752042335a383a49097fbd15ce978ab5c39cde643c5b4b63950e812"
+        },
+        {
+          "file": "canopy-v9-3-horizon-1.png",
+          "sha256": "8462ac5474188976157aafa338ea4dea1e399399f33e8e37e859fe386e4b482f"
+        }
+      ]
+    },
+    {
+      "id": "alte-eiche-1",
+      "index": 4,
+      "reason": "Geschlossene breite Alterskrone mit grossen Astmassen.",
+      "displayScale": 1.26,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.48000335693359375,
+        "displayedOpaqueFraction": 0.7620533294677734,
+        "coreCoverage": 0.999515788745547
+      },
+      "conifer": false,
+      "weight": 1.4,
+      "frame": {
+        "x": 0,
+        "y": 512,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-4-albedo.png",
+          "sha256": "54f80c156e7757a28c174c880a98705fb809f8972078a40f9aa3b5dbb3a28d8e"
+        },
+        {
+          "file": "canopy-v9-4-data.png",
+          "sha256": "c1d22bcd51d7df8beaaaada1323fe5edd57d045dd3564220b70aa6c4320b5734"
+        },
+        {
+          "file": "canopy-v9-4-horizon-0.png",
+          "sha256": "2ea95df5beb3c32a8f8653504bf7c6a017212912e376ec28916cd5773b8b6475"
+        },
+        {
+          "file": "canopy-v9-4-horizon-1.png",
+          "sha256": "0b8e89196ae1ca8c0ef6c08158e6e277987a0f890ef47d94ad7b323ce19ae4db"
+        }
+      ]
+    },
+    {
+      "id": "spitzahorn-1",
+      "index": 5,
+      "reason": "Frische satte Palette, deutliche kantige Blattgruppen.",
+      "displayScale": 1.26,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.4766082763671875,
+        "displayedOpaqueFraction": 0.7566632995605469,
+        "coreCoverage": 1
+      },
+      "conifer": false,
+      "weight": 1,
+      "frame": {
+        "x": 512,
+        "y": 512,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-5-albedo.png",
+          "sha256": "0985663c3610cb7f74032e24fd05c550d869c46b7a5db4a03ae9529dd8fb2264"
+        },
+        {
+          "file": "canopy-v9-5-data.png",
+          "sha256": "a075b9af210ac2742b587b325d419d2ce896f7f81a817020c67af817fd30b737"
+        },
+        {
+          "file": "canopy-v9-5-horizon-0.png",
+          "sha256": "7c328d872e9f983ceac1ff73a11276e04c04b92f8dd5ea2b8d6c466239f0a888"
+        },
+        {
+          "file": "canopy-v9-5-horizon-1.png",
+          "sha256": "ef43181e0e477810b5612a5aedfed5c03b79e1416a037a29ecc7ce49332793ff"
+        }
+      ]
+    },
+    {
+      "id": "spitzahorn-2",
+      "index": 6,
+      "reason": "Ovale Ahornkrone mit feineren Blattfaechern.",
+      "displayScale": 1.39,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.3912467956542969,
+        "displayedOpaqueFraction": 0.7559279338836669,
+        "coreCoverage": 0.992944350292256
+      },
+      "conifer": false,
+      "weight": 1,
+      "frame": {
+        "x": 1024,
+        "y": 512,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-6-albedo.png",
+          "sha256": "4ad58faafc5cb8a4ab5349bed91a3786cd0bdacc7fe5602b103676c66b054c69"
+        },
+        {
+          "file": "canopy-v9-6-data.png",
+          "sha256": "9d5e23f6be9d704c3a642b09cb6f6bc15dca4679f3efe4a992019667f2648d24"
+        },
+        {
+          "file": "canopy-v9-6-horizon-0.png",
+          "sha256": "2929622d93fae2d6e88b3744d9129063d763f8e91e95855db351275a78790686"
+        },
+        {
+          "file": "canopy-v9-6-horizon-1.png",
+          "sha256": "2d8376b3357bcce1882bcb3dfc9df7a6f72daaf84f5c1cf4ddff5fc624983d2e"
+        }
+      ]
+    },
+    {
+      "id": "esskastanie-3",
+      "index": 7,
+      "reason": "Asymmetrische geschlossene Krone, breite Blattfaecher.",
+      "displayScale": 1.27,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.4674224853515625,
+        "displayedOpaqueFraction": 0.7539057266235353,
+        "coreCoverage": 0.9983744336457648
+      },
+      "conifer": false,
+      "weight": 1,
+      "frame": {
+        "x": 1536,
+        "y": 512,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-7-albedo.png",
+          "sha256": "a4f1f9cf6604ffd9b6dd4d4715a307fb876280489937ed977fe56e704b523efc"
+        },
+        {
+          "file": "canopy-v9-7-data.png",
+          "sha256": "69774c1291a2de748726cafbdf3827783ff2eadad1c29c90405e2e1a2a30b012"
+        },
+        {
+          "file": "canopy-v9-7-horizon-0.png",
+          "sha256": "9de3098c29d95bf491e3092007e76ea39342ef7e58746df34f777bbd0849a0b6"
+        },
+        {
+          "file": "canopy-v9-7-horizon-1.png",
+          "sha256": "756ff6c6aa0545dfcc3561f2fb465e8fc7e9bd5005f839778974dff99de89607"
+        }
+      ]
+    },
+    {
+      "id": "ulme-2",
+      "index": 8,
+      "reason": "Breitoval und gedeckt, ruhiger Kontrast zu den Eichen.",
+      "displayScale": 1.42,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.373321533203125,
+        "displayedOpaqueFraction": 0.7527655395507813,
+        "coreCoverage": 0.9917684086742987
+      },
+      "conifer": false,
+      "weight": 1,
+      "frame": {
+        "x": 0,
+        "y": 1024,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-8-albedo.png",
+          "sha256": "0ea62725f0e763dea32806f3c28f6d7c3ce81a134d5f2ef383d4ea94e6b80260"
+        },
+        {
+          "file": "canopy-v9-8-data.png",
+          "sha256": "211b26cbff352ec20d1be1f6263404c09b97b995818d277f3837f9e5efd49596"
+        },
+        {
+          "file": "canopy-v9-8-horizon-0.png",
+          "sha256": "1f2913721107cc05b331f6cf9c95905d3818d0ff410402487271d25350d926bd"
+        },
+        {
+          "file": "canopy-v9-8-horizon-1.png",
+          "sha256": "86dec3be0cde677be94972b3070398f3a57adfd7b3e98571c890162bd985d1b3"
+        }
+      ]
+    },
+    {
+      "id": "walnuss-3",
+      "index": 9,
+      "reason": "Unregelmaessige volle Krone mit groesseren Blattgruppen.",
+      "displayScale": 1.29,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.4541778564453125,
+        "displayedOpaqueFraction": 0.7557973709106445,
+        "coreCoverage": 0.9999654134818248
+      },
+      "conifer": false,
+      "weight": 1,
+      "frame": {
+        "x": 512,
+        "y": 1024,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-9-albedo.png",
+          "sha256": "65f4913228b2abf184020f023aa299454aac1cfa877dd7bbd83547abbdb351b5"
+        },
+        {
+          "file": "canopy-v9-9-data.png",
+          "sha256": "e52af92bca2bdece974b135ed7e2758cc137e43ee8211345b2d5a869fd976b77"
+        },
+        {
+          "file": "canopy-v9-9-horizon-0.png",
+          "sha256": "be95a1de4f5770b5d8e336abbf03e7b0144af5ec58fb162383469904c78c32c5"
+        },
+        {
+          "file": "canopy-v9-9-horizon-1.png",
+          "sha256": "c5544f7b0d93beddaeafd69dd3e5c209a090f73b72bcad1c488c90bd17b47a89"
+        }
+      ]
+    },
+    {
+      "id": "hainbuche-3",
+      "index": 10,
+      "reason": "Dichte Krone mit schraeg versetzter Schulter und kleinen Blaettern.",
+      "displayScale": 1.27,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.4676666259765625,
+        "displayedOpaqueFraction": 0.7542995010375977,
+        "coreCoverage": 0.9999654134818248
+      },
+      "conifer": false,
+      "weight": 1,
+      "frame": {
+        "x": 1024,
+        "y": 1024,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-10-albedo.png",
+          "sha256": "e99f3afe9236fece131851f13021bdf83673e6d69b5c105529048d74eeef4963"
+        },
+        {
+          "file": "canopy-v9-10-data.png",
+          "sha256": "4a7fd680eeab3d8d0252a47b53006d95aad47932a307158ba9d01ad7c5208f35"
+        },
+        {
+          "file": "canopy-v9-10-horizon-0.png",
+          "sha256": "c44dd188da8b72b9fb1d2070cea83a26139f78e5abcc6caebc5ae78410856e02"
+        },
+        {
+          "file": "canopy-v9-10-horizon-1.png",
+          "sha256": "88bd3ec0e746e743b272d15877f9a7b50141264a45c1d650b7b59867ce94c6b1"
+        }
+      ]
+    },
+    {
+      "id": "tanne-2",
+      "index": 11,
+      "reason": "Kompakte ovale Nadelkrone mit dichtem Kern.",
+      "displayScale": 1.36,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.40915679931640625,
+        "displayedOpaqueFraction": 0.7567764160156251,
+        "coreCoverage": 0.9968180403278802
+      },
+      "conifer": true,
+      "weight": 0.65,
+      "frame": {
+        "x": 1536,
+        "y": 1024,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-11-albedo.png",
+          "sha256": "62fa930e6f701e2c08129d6d3729876954d954c5e48b0bf38bafe594b57bd46d"
+        },
+        {
+          "file": "canopy-v9-11-data.png",
+          "sha256": "aabeb0414535c6925fc637a4241fa0b1c7b6112151a35905fc80a068f89bdbd3"
+        },
+        {
+          "file": "canopy-v9-11-horizon-0.png",
+          "sha256": "43ad53043cd407a9a084b25de03da7ce73b91fbb33b10ead334f025c5ea80a79"
+        },
+        {
+          "file": "canopy-v9-11-horizon-1.png",
+          "sha256": "ed389d77230e2c2898dcf32a957c0566fc96cf24044455441d9c30dbc4db449c"
+        }
+      ]
+    },
+    {
+      "id": "tanne-3",
+      "index": 12,
+      "reason": "Unregelmaessigere Tanne mit klaren radialen Nadelfaechern.",
+      "displayScale": 1.29,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.45827484130859375,
+        "displayedOpaqueFraction": 0.7626151634216309,
+        "coreCoverage": 1
+      },
+      "conifer": true,
+      "weight": 0.65,
+      "frame": {
+        "x": 0,
+        "y": 1536,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-12-albedo.png",
+          "sha256": "afa9d69cc3912e88d8289fe3d39fa231fa660a92300f4ffa03556f74c7dac0c2"
+        },
+        {
+          "file": "canopy-v9-12-data.png",
+          "sha256": "ada4dac088aa7b45d47ad375eb7950ce49481e55a3ee59d2db94b30e6777e973"
+        },
+        {
+          "file": "canopy-v9-12-horizon-0.png",
+          "sha256": "6f07f20f88371f519b1ee002a6c03f961de25bcde08f5afe4bdadc41a4365885"
+        },
+        {
+          "file": "canopy-v9-12-horizon-1.png",
+          "sha256": "9ac57631e5d233df19d3a129b9c2fa9f5c2d1de227f00e1730e8e0878eda7c75"
+        }
+      ]
+    },
+    {
+      "id": "schirmkiefer-3",
+      "index": 13,
+      "reason": "Dichter asymmetrischer Schirm mit grossen Nadelpolstern.",
+      "displayScale": 1.27,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.46734619140625,
+        "displayedOpaqueFraction": 0.7537826721191406,
+        "coreCoverage": 0.9997233078545983
+      },
+      "conifer": true,
+      "weight": 0.65,
+      "frame": {
+        "x": 512,
+        "y": 1536,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-13-albedo.png",
+          "sha256": "fc285827f22804b898b778a9a2bc0ba2ef54f2a4a1e78e318c45440cc60125e0"
+        },
+        {
+          "file": "canopy-v9-13-data.png",
+          "sha256": "9340d2b0a52f0838af3e2708a902a145c48b50b78273022e1a1ceda9b620256b"
+        },
+        {
+          "file": "canopy-v9-13-horizon-0.png",
+          "sha256": "e4e913e0fb77d3d019fde68cd4527846a2f88e8a2c9b503400cffdbe1b474b24"
+        },
+        {
+          "file": "canopy-v9-13-horizon-1.png",
+          "sha256": "42621cde3afbda42ec2790be1dbd104bae06e8934acb7a8bcd2b639a68b03cb4"
+        }
+      ]
+    },
+    {
+      "id": "eibe-1",
+      "index": 14,
+      "reason": "Feine dunkle Nadelstruktur, kompakte leicht unregelmaessige Kontur.",
+      "displayScale": 1.28,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.4653663635253906,
+        "displayedOpaqueFraction": 0.7624562500000001,
+        "coreCoverage": 1
+      },
+      "conifer": true,
+      "weight": 0.65,
+      "frame": {
+        "x": 1024,
+        "y": 1536,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-14-albedo.png",
+          "sha256": "33f42c24c7b2c9568b4aaae38e38a9f4ac47c097435db50c0d11809df19f1da5"
+        },
+        {
+          "file": "canopy-v9-14-data.png",
+          "sha256": "c6ad0dc8af22b478d7d3bf6fb78f50536b0c8d165f78abc61f7638d74c5ac7b5"
+        },
+        {
+          "file": "canopy-v9-14-horizon-0.png",
+          "sha256": "23f558d8422b9e2df1eede0d872117709a63229523b608fbbf9ce10566b76209"
+        },
+        {
+          "file": "canopy-v9-14-horizon-1.png",
+          "sha256": "de7c51b025775d3b5622abdcc18e5bc82d3f19558fe2acf417399c2d75da6e3b"
+        }
+      ]
+    },
+    {
+      "id": "eibe-2",
+      "index": 15,
+      "reason": "Breitovale dunkle Eibe als deutliche Formalternative.",
+      "displayScale": 1.4,
+      "runtimeEligible": true,
+      "coverage": {
+        "opaqueFraction": 0.3854637145996094,
+        "displayedOpaqueFraction": 0.7555088806152342,
+        "coreCoverage": 0.9947774357555424
+      },
+      "conifer": true,
+      "weight": 0.65,
+      "frame": {
+        "x": 1536,
+        "y": 1536,
+        "w": 512,
+        "h": 512
+      },
+      "sources": [
+        {
+          "file": "canopy-v9-15-albedo.png",
+          "sha256": "71194ed8d76e12de8c14239e7fdb87417f0e7565a5411a594ad64027a92f8f9d"
+        },
+        {
+          "file": "canopy-v9-15-data.png",
+          "sha256": "e2152bf113e1a92c8a51af2fd634f75ac6048e49416943939e8114a98ce625be"
+        },
+        {
+          "file": "canopy-v9-15-horizon-0.png",
+          "sha256": "4d60ef1efed3de01bceea45e78f5bcbb7d1fd242ba8779513f64e92bee61d5fb"
+        },
+        {
+          "file": "canopy-v9-15-horizon-1.png",
+          "sha256": "5c6dc9ce261cd18b9045904c23304e9f38ef5284968476dd039fae7c850c03fa"
+        }
+      ]
+    }
+  ]
+}

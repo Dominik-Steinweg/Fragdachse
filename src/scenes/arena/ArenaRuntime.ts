@@ -676,6 +676,17 @@ export class ArenaRuntime {
     return { trees: arena?.trunkBodies.length ?? 0, wildlife: arena?.wildlife?.model.animals.length ?? 0 };
   }
 
+  getScenarioLightingTargets() {
+    const world = this.flow.getWorldRuntime();
+    const arena = world?.materialization?.arena;
+    return { sunlight:world?.presentationFrame?.sunlight??null, ground: arena?.groundSurface ?? null, rocks: arena?.rockVisualSystem ?? null, rockOverlays: arena?.rockOverlaySurface ?? null,
+      canopies: arena?.canopyObjects ?? [], shadow: this.renderers.shadow,
+      enemyShadows: this.flow.getWorldEnemyManager(),
+      lighting: this.renderers.lighting, fog: world?.presentation?.groundFog ?? null, postFx: this.ctx.visualFeedback.postFx,
+      water: arena?.waterSurface ?? null, wildlife: arena?.wildlife ?? null, layout: world?.presentation?.layout ?? null,
+      worldContext: world?.context ?? null };
+  }
+
   getScenarioVisibleEnvironment() {
     const world = this.flow.getWorldRuntime();
     const view = getVisibleWorldView(this.scene.cameras.main);

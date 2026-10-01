@@ -131,6 +131,31 @@ Beispiel für einen vollständig über die Oberfläche geprüften Aufbau: Map `7
 Werkzeug `construction:flame_turret`, Spieler bei Grid `(98,26)`, Flammenturm bei `(102,25)`, fixierter
 `zombie-badger` mit erhöhten HP bei `(106,25)`, Seed `12345`. Andere Maps/Klassen/Inhalte verwenden dieselben Kommandos.
 
+## Produktionsdarstellung diagnostizieren
+
+Der Panel-Bereich **Sonnenwald: Diagnose und Messung** bietet Uhrzeit-Kurzbefehle, **Kamera: nächster Baum**,
+Formationsstatus und Messungen im Stand, bei Felszerstörung oder während einer Kamerafahrt.
+Die Tagesminute lässt sich unter Simulation setzen; Pause und Einzelschritte halten auch die Präsentationszeit an.
+Die Grafikqualität (`high`, `medium`, `low`) wird in den regulären Spieloptionen gewählt, nicht über die Szenario-API.
+
+```js
+const dev = window.devScenario;
+dev.run({ action: 'options', values: { timeOfDay: 720 } });
+dev.run({ action: 'sunTuning', values: { raysAmount: 0 } });
+dev.run({ action: 'sunTuning', reset: true });
+dev.run({ action: 'measureWorldLighting', mode: 'stationary' });
+// Nach Abschluss: Messung mit Qualitätsstufe und tatsächlichen Rendergrößen.
+const measurement = dev.status().worldLightingMeasurement;
+```
+
+Messmodi: `stationary`, `destruction` (Fels nahe dem eingestellten Ziel), `walk` und `traverse` (Kamerafahrt).
+Eine Messung setzt Pause fort; Änderungen an Uhrzeit, Tuning, Zoom oder Qualitätsstufe brechen sie ab.
+Das Ergebnis enthält Frameintervalle, Draws, Upload-/Ressourcendaten, `graphicsQuality` und `sunRendering`.
+Frameintervalle enthalten Browser-Scheduling und sind keine GPU-Zeiten.
+`sunTuning` ist ein lokaler Override; gültige Schlüssel und Grenzen stehen in
+[`src/config/sunlight.ts`](../src/config/sunlight.ts). Reset oder ein neuer World-Aufbau beendet die Overrides.
+Rezepte mit entfernten Lichtvergleichsfeldern werden mit Hinweis abgelehnt.
+
 ## Grenzen
 
 - Die Oberfläche konfiguriert Coop-Defense-Aktivitäten. Multiplayer-/Client-Replikation braucht separate Prüfungen.

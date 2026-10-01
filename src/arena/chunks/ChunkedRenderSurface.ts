@@ -103,6 +103,8 @@ export interface ChunkedRenderSurfaceOptions {
   readonly gutterPx?: number;
   /** Wird einmal je neu erzeugtem Renderziel aufgerufen – z. B. fuer die Arena-Maske. */
   readonly onChunkTextureCreated?: (texture: Phaser.GameObjects.RenderTexture, layerId: string) => void;
+  /** Optional paired material data; called after the last scheduled colour bake. */
+  readonly onChunkBaked?: (textures: ReadonlyMap<string, Phaser.GameObjects.RenderTexture>) => void;
 }
 
 export interface ChunkedRenderSurfaceRefreshOptions {
@@ -193,6 +195,7 @@ export class ChunkedRenderSurface {
   private readonly layers: readonly ChunkedSurfaceLayerSpec[];
   private readonly bakeFn: ChunkBakeFn;
   private readonly onChunkTextureCreated?: (texture: Phaser.GameObjects.RenderTexture, layerId: string) => void;
+  private readonly onChunkBaked?: ChunkedRenderSurfaceOptions['onChunkBaked'];
   private readonly scheduler: ChunkBakeScheduler;
   private readonly surfaceId = nextSurfaceId++;
   private readonly resident = new Map<number, ResidentChunk>();
@@ -217,6 +220,7 @@ export class ChunkedRenderSurface {
     this.frame = options.frame;
     this.layers = options.layers;
     this.bakeFn = options.bake;
+    this.onChunkBaked = options.onChunkBaked;
     this.onChunkTextureCreated = options.onChunkTextureCreated;
     this.scheduler = getChunkBakeScheduler(scene);
     this.grid = new ArenaChunkGrid(options.frame.width, options.frame.height, options.chunkSize);
@@ -480,6 +484,11 @@ export class ChunkedRenderSurface {
       residentPixels: residentTextures * chunkPixels,
       allocatedPixels: allocatedTextures * chunkPixels,
     };
+  }
+
+  /** Material attachment changes visit ready chunks only; no residency or colour rebake. */
+  visitReadyChunks(visitor: (textures: ReadonlyMap<string, Phaser.GameObjects.RenderTexture>) => void): void {
+    for (const chunk of this.resident.values()) if (chunk.ready) visitor(chunk.textures);
   }
 
   destroy(): void {
@@ -911,6 +920,7 @@ export class ChunkedRenderSurface {
     }
     chunk.pendingRegions.delete(regionKey);
     chunk.dirtyRegions.delete(regionKey);
+    if (chunk.pendingRegions.size === 0) this.onChunkBaked?.(chunk.textures);
     if (!chunk.ready && chunk.pendingRegions.size === 0) {
       this.markReadyIfComplete(chunk);
     }

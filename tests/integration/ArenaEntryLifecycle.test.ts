@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../../src/assets/WoodlandAssets',()=>({preloadWoodlandAssets:vi.fn(),assertWoodlandAssetsReady:vi.fn()}));
 vi.mock('phaser', () => ({
   Scene: class {},
   Core: { Events: { POST_RENDER: 'postrender' } },

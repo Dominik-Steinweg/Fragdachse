@@ -156,3 +156,36 @@ describe('retained wildlife rendering', () => {
     expect(harness.scene.objects.every((object: any) => !object.active)).toBe(true);
   });
 });
+
+it('reversibly places fish below lilies and all non-emissive animals below fog',async()=>{
+  const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
+  const harness=wildlifeScene(),renderer=new AmbientWildlifeRenderer(harness.scene,frame,layout);
+  const ground=harness.scene.objects.find((o:any)=>o.name==='ambient-wildlife-land');
+  const fish=harness.scene.objects.find((o:any)=>o.name==='ambient-wildlife-fish');
+  const old=[ground.depth,fish.depth];
+  expect(ground.depth).toBeLessThan(DEPTH.GROUND_FOG);expect(fish.depth).toBeLessThan(DEPTH.WATER+.05);
+  renderer.setSunlight({tuning:createSunTuning(),timeSec:0,strength:1});
+  expect(fish.depth).toBeGreaterThan(DEPTH.WATER);expect(fish.depth).toBeLessThan(DEPTH.WATER+.05);
+  expect(DEPTH.WATER+.05).toBeLessThan(DEPTH.GROUND_FOG);expect(ground.depth).toBeLessThan(DEPTH.GROUND_FOG);
+  renderer.setSunlight(undefined);expect([ground.depth,fish.depth]).toEqual(old);
+  renderer.destroy();renderer.setSunlight(undefined);
+});
+it('softens emissive cores without increasing halo energy or changing unbound visuals',async()=>{
+  const {wildlifeFogCover}=await import('../src/arena/AmbientWildlifeAppearance');
+  const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
+  const animal=new AmbientWildlifeModel(layout,frame).animals.find(a=>a.kind==='firefly')!;
+  const visual=prepareWildlifeVisual(animal),mesh=visual.mesh;
+  visual.sample(1);const clear=[...mesh.alpha];
+  visual.sample(1,.5);expect(mesh.poses[0].sx).toBeGreaterThan(1);
+  expect(mesh.alpha[0]*mesh.poses[0].sx**2).toBeCloseTo(clear[0]);
+  expect(mesh.alpha.at(-1)).toBeLessThan(clear.at(-1)!);
+  visual.sample(1);expect(mesh.alpha).toEqual(clear);expect(mesh.poses[0].sx).toBe(1);
+  const tuning=createSunTuning(),state={tuning,timeSec:0,strength:1};
+  tuning.fogAreaBudget=0;tuning.fogClearHaze=0;
+  expect(wildlifeFogCover(100,200,state)).toBe(0);
+  tuning.fogAreaBudget=.30;let cover=0;
+  for(let y=0;y<800;y+=20)for(let x=0;x<800;x+=20)cover=Math.max(cover,wildlifeFogCover(x,y,state));
+  expect(cover).toBeGreaterThan(0);expect(cover).toBeLessThanOrEqual(tuning.fogMaxCover);
+  expect(wildlifeFogCover(100,200,state)).toBe(wildlifeFogCover(100,200,state));
+  tuning.fogOpacity=0;expect(wildlifeFogCover(100,200,state)).toBe(0);
+});

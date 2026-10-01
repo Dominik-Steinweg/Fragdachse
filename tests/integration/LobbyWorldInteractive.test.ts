@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Die Boot-Barriere und die echten Overlay-Methoden laufen ohne GPU/DOM.
+vi.mock('../../src/assets/WoodlandAssets',()=>({preloadWoodlandAssets:vi.fn(),assertWoodlandAssetsReady:vi.fn()}));
 vi.mock('phaser', () => ({
   Scene: class {},
   Core: { Events: { POST_RENDER: 'postrender' } },

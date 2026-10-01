@@ -16,6 +16,7 @@ vi.mock('../../src/adrenalineEssence/AdrenalineEssenceGpuRenderer', () => ({
   },
 }));
 
+vi.mock('../../src/assets/WoodlandAssets',()=>({preloadWoodlandAssets:vi.fn(),assertWoodlandAssetsReady:vi.fn()}));
 vi.mock('phaser', () => ({
   Scene: class {},
   GameObjects: {

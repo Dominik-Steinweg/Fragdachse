@@ -2703,6 +2703,7 @@ export class ArenaLifecycleCoordinator {
     );
     const worldRuntime = this.worldRuntime;
     if (!worldRuntime) throw new Error('[ArenaLifecycleCoordinator] WorldRuntime was not attached');
+    const sunlightEnemies=()=>this.getWorldEnemyManager();
     const builtWorld = materializeWorldComposition({
       entityBurnGpu: this.renderers.entityBurnGpu,
       turretAnimations: this.renderers.turretAnimations,
@@ -2743,6 +2744,8 @@ export class ArenaLifecycleCoordinator {
           : undefined,
       },
       lighting: this.renderers.lighting,
+      sunlight: {shadow:this.renderers.shadow,postFx:this.ctx.visualFeedback.postFx,
+        get enemyShadows(){return sunlightEnemies();}},
       createRockRegistry: bridge.isHost(),
     });
     const {

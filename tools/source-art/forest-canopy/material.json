@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "parameters": {
+    "dome": 140,
+    "mass": 20,
+    "group": 5,
+    "massSigma": 16,
+    "broadSigma": 48,
+    "groupSigma": 9,
+    "groupBroad": 24,
+    "core": 0.26,
+    "cavity": 0.24,
+    "wrap": 0.12,
+    "shadowFloor": 0.16,
+    "softness": 0.07,
+    "translucency": 0.12
+  }
+}

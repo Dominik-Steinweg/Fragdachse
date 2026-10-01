@@ -9,9 +9,10 @@ export type ScenarioResult = { ok: true; status: Record<string, unknown>; path?:
 export interface DevScenarioApi {
   readonly version: 1;
   status(): Record<string, unknown>;
-  run(command: unknown): ScenarioResult;
+  run(command: unknown): ScenarioResult | Promise<ScenarioResult>;
   whenReady(timeoutMs?: number): Promise<ScenarioResult>;
   capture(): Promise<ScenarioResult>;
+  saveReport(): Promise<ScenarioResult>;
 }
 declare global { interface Window { devScenario?: DevScenarioApi } }
 
@@ -37,10 +38,19 @@ function slot(value: unknown): WeaponSlot {
 }
 
 /** The panel and script API share commands; arbitrary JavaScript is never evaluated. */
-export function runScenarioCommand(controller: DevScenarioController, value: unknown): void {
+export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
     case 'status': return;
+    case 'sunTuning':
+      if(c.reset !== undefined && c.reset !== true) throw new Error('sunTuning.reset: true erwartet.');
+      if(c.reset === true && c.values !== undefined) throw new Error('sunTuning: reset oder values angeben.');
+      controller.setSunTuning(c.values,c.reset === true); break;
+    case 'measureWorldLighting': {
+      const mode=c.mode??'stationary';
+      if(mode!=='stationary'&&mode!=='destruction'&&mode!=='traverse'&&mode!=='walk')throw new Error('mode: stationary, destruction, traverse oder walk erwartet.');
+      controller.measureWorldLighting(mode);break;
+    }
     case 'start': controller.start(c.scenario); break;
     case 'target': controller.aim = point(c); break;
     case 'findFree': controller.findFree(); break;
@@ -128,7 +138,10 @@ export function installScenarioApi(controller: DevScenarioController) {
     run(command) {
       try {
         if (!active) throw new Error('Dev-Szenario wurde beendet.');
-        runScenarioCommand(controller, command); return { ok: true, status: status() };
+        const result = runScenarioCommand(controller, command);
+        if (result) return result.then((): ScenarioResult => ({ ok: true, status: status() }))
+          .catch(error => { controller.fail(error); return failure(error); });
+        return { ok: true, status: status() };
       } catch (error) { controller.fail(error); return failure(error); }
     },
     whenReady(timeoutMs = 180000) {
@@ -145,6 +158,12 @@ export function installScenarioApi(controller: DevScenarioController) {
         };
         const timer = setInterval(check, 100); waiters.add(check); check();
       });
+    },
+    async saveReport() {
+      try {
+        if(!active)throw new Error('Dev-Szenario wurde beendet.');
+        return {ok:true,...await controller.saveReportToWorkspace()};
+      }catch(error){controller.fail(error);return failure(error);}
     },
     async capture() {
       try {

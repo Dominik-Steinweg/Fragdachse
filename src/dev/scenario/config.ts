@@ -121,7 +121,7 @@ export function parseScenario(value: unknown): DevScenario {
   if (raw.version !== 1) throw new Error('Unbekannte Szenario-Version.');
   if (!COOP_DEFENSE_CLASS_IDS.includes(raw.classId as CoopDefenseClassId)) throw new Error('Unbekannte Klasse.');
   const config = { ...defaultScenario(raw.classId as CoopDefenseClassId), ...raw } as DevScenario;
-  for (const key of Object.keys(raw)) if (!(key in defaultScenario(config.classId))) throw new Error(`Unbekanntes Feld: ${key}`);
+  for (const key of Object.keys(raw)) if (!(key in defaultScenario(config.classId))) throw new Error(`Unbekanntes oder entferntes Feld: ${key}. Alte Lichtvergleichs-Optionen werden nicht importiert; Sonnenwald ist der Standard.`);
   if (!scenarioMaps().some(map => map.mapId === config.mapId)) throw new Error(`Unbekannte Map: ${config.mapId}`);
   number(config.seed, 'seed', 0, 0xffffffff);
   if (!Number.isInteger(config.seed)) throw new Error('seed muss ganzzahlig sein.');

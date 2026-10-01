@@ -1,0 +1,146 @@
+[
+  {
+    "id": "stieleiche-gelappt-1",
+    "species": "stieleiche-gelappt",
+    "variant": 1,
+    "original": 9,
+    "route": "B",
+    "raw": "candidates/stieleiche-gelappt-1-raw.png",
+    "file": "candidates/stieleiche-gelappt-1.png"
+  },
+  {
+    "id": "stieleiche-gelappt-3",
+    "species": "stieleiche-gelappt",
+    "variant": 3,
+    "original": 9,
+    "route": "B",
+    "raw": "candidates/stieleiche-gelappt-3-raw.png",
+    "file": "candidates/stieleiche-gelappt-3.png"
+  },
+  {
+    "id": "traubeneiche-1",
+    "species": "traubeneiche",
+    "variant": 1,
+    "original": 10,
+    "route": "B",
+    "raw": "candidates/traubeneiche-1-raw.png",
+    "file": "candidates/traubeneiche-1.png"
+  },
+  {
+    "id": "traubeneiche-2",
+    "species": "traubeneiche",
+    "variant": 2,
+    "original": 10,
+    "route": "B",
+    "raw": "candidates/traubeneiche-2-raw.png",
+    "file": "candidates/traubeneiche-2.png"
+  },
+  {
+    "id": "alte-eiche-1",
+    "species": "alte-eiche",
+    "variant": 1,
+    "original": 11,
+    "route": "B",
+    "raw": "candidates/alte-eiche-1-raw.png",
+    "file": "candidates/alte-eiche-1.png"
+  },
+  {
+    "id": "spitzahorn-1",
+    "species": "spitzahorn",
+    "variant": 1,
+    "original": 13,
+    "route": "B",
+    "raw": "candidates/spitzahorn-1-raw.png",
+    "file": "candidates/spitzahorn-1.png"
+  },
+  {
+    "id": "spitzahorn-2",
+    "species": "spitzahorn",
+    "variant": 2,
+    "original": 13,
+    "route": "B",
+    "raw": "candidates/spitzahorn-2-raw.png",
+    "file": "candidates/spitzahorn-2.png"
+  },
+  {
+    "id": "esskastanie-3",
+    "species": "esskastanie",
+    "variant": 3,
+    "original": 15,
+    "route": "B",
+    "raw": "candidates/esskastanie-3-raw.png",
+    "file": "candidates/esskastanie-3.png"
+  },
+  {
+    "id": "ulme-2",
+    "species": "ulme",
+    "variant": 2,
+    "original": 16,
+    "route": "B",
+    "raw": "candidates/ulme-2-raw.png",
+    "file": "candidates/ulme-2.png"
+  },
+  {
+    "id": "walnuss-3",
+    "species": "walnuss",
+    "variant": 3,
+    "original": 17,
+    "route": "B",
+    "raw": "candidates/walnuss-3-raw.png",
+    "file": "candidates/walnuss-3.png"
+  },
+  {
+    "id": "hainbuche-3",
+    "species": "hainbuche",
+    "variant": 3,
+    "original": 1,
+    "route": "B",
+    "raw": "candidates/hainbuche-3-raw.png",
+    "file": "candidates/hainbuche-3.png"
+  },
+  {
+    "id": "tanne-2",
+    "species": "tanne",
+    "variant": 2,
+    "original": 19,
+    "route": "B",
+    "raw": "candidates/tanne-2-raw.png",
+    "file": "candidates/tanne-2.png"
+  },
+  {
+    "id": "tanne-3",
+    "species": "tanne",
+    "variant": 3,
+    "original": 19,
+    "route": "B",
+    "raw": "candidates/tanne-3-raw.png",
+    "file": "candidates/tanne-3.png"
+  },
+  {
+    "id": "schirmkiefer-3",
+    "species": "schirmkiefer",
+    "variant": 3,
+    "original": 20,
+    "route": "B",
+    "raw": "candidates/schirmkiefer-3-raw.png",
+    "file": "candidates/schirmkiefer-3.png"
+  },
+  {
+    "id": "eibe-1",
+    "species": "eibe",
+    "variant": 1,
+    "original": 21,
+    "route": "B",
+    "raw": "candidates/eibe-1-raw.png",
+    "file": "candidates/eibe-1.png"
+  },
+  {
+    "id": "eibe-2",
+    "species": "eibe",
+    "variant": 2,
+    "original": 21,
+    "route": "B",
+    "raw": "candidates/eibe-2-raw.png",
+    "file": "candidates/eibe-2.png"
+  }
+]

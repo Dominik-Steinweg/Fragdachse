@@ -110,16 +110,6 @@ function buildFixture(options: FixtureOptions = {}) {
       mirrorX: false,
       mirrorY: true,
     }],
-    vegetationPlacements: [{
-      textureKey: 'rock_vegetation_01_small',
-      worldX: FRAME.offsetX + 64,
-      worldY: FRAME.offsetY + 32,
-      lengthPx: 48,
-      bandPx: 24,
-      rotation: 0,
-      alpha: 0.9,
-      mirrorX: true,
-    }],
     chunkSize: CHUNK,
   });
   streamer.updateResidency(FULL_VIEW);
@@ -198,7 +188,7 @@ describe('rock overlay streamer', () => {
     expect(lastBlit(chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 0, 0)))
       .toEqual([inChunk('rock_moss_01', 48, 48)]);
     expect(lastBlit(chunkTexture(streamer, ROCK_OVERLAY_VEGETATION_LAYER_ID, 0, 0)))
-      .toEqual([inChunk('rock_vegetation_01_small', 64, 32)]);
+      .toEqual(expect.arrayContaining([expect.stringMatching(/^woodland-rock-/)]));
   });
 
   it('keeps finished chunks visible while rebuilding a removed runtime slot', () => {
@@ -347,7 +337,7 @@ describe('rock decal cutout inside the streamer', () => {
     const texture = chunkTexture(streamer, ROCK_OVERLAY_DECAL_LAYER_ID, 0, 0);
     const drawn = lastBlit(texture);
     // Alle vier Decals liegen im ersten Chunk und werden gezeichnet.
-    expect(drawn).toHaveLength(DECALS.length);
+    expect(drawn.filter(entry=>!entry.startsWith('woodland-rock-'))).toHaveLength(DECALS.length);
     expect(drawn.some((entry) => entry.startsWith(LARGE_CORE_DECAL))).toBe(true);
   });
 
@@ -395,4 +385,79 @@ describe('rock decal cutout inside the streamer', () => {
       expect(pixel.y).toBeLessThan(cellMin + CELL_SIZE);
     }
   });
+});
+
+it('splits colonies into the mineral receiver and overhang and erases both after destruction',()=>{
+  const {scene,streamer,rockVisualStates}=buildFixture();
+  const layer=chunkTexture(streamer,ROCK_OVERLAY_VEGETATION_LAYER_ID,0,0);
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
+  expect(lastBlit(layer).some(s=>s.startsWith('woodland-rock-'))).toBe(true);
+  expect(lastBlit(chunkTexture(streamer,ROCK_OVERLAY_DECAL_LAYER_ID,0,0)).some(s=>s.startsWith('woodland-rock-'))).toBe(true);
+  for(const id of [ROCK_OVERLAY_MOSS_LAYER_ID,rockOverlayMottleLayerId(0)])
+    expect(lastBlit(chunkTexture(streamer,id,0,0)).some(s=>s.startsWith('woodland-rock-'))).toBe(false);
+  expect(lastBlit(layer).some(s=>s.startsWith('rock_vegetation_01_small'))).toBe(false);
+
+  rockVisualStates.forEach((_s,i)=>deactivateRock(rockVisualStates,i));
+  streamer.refreshAll();ChunkedRenderSurface.drainBakeQueue(scene as never);
+  expect(layer.snapshotPixels().every(value=>value===0)).toBe(true);
+  expect(chunkTexture(streamer,ROCK_OVERLAY_DECAL_LAYER_ID,0,0).snapshotPixels().every(value=>value===0)).toBe(true);
+  streamer.destroy();
+});
+
+it('removes an anchored colony across chunks exactly as a full rebake, without rerolling neighbours',()=>{
+  const rocks=Array.from({length:64},(_,i)=>({gridX:i%8,gridY:Math.floor(i/8)}));
+  const {scene,streamer,rockVisualStates}=buildFixture({rocks,decals:rocks.map(r=>decal(LARGE_CORE_DECAL,r.gridX,r.gridY,ROCK_DECAL_LARGE_SIZE))});
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
+  for(const id of [0,7,27,31,56,63]){
+    deactivateRock(rockVisualStates,id);streamer.refreshRegions(new Set([id]));
+    ChunkedRenderSurface.drainBakeQueue(scene as never);
+    const regions=[ROCK_OVERLAY_VEGETATION_LAYER_ID,ROCK_OVERLAY_DECAL_LAYER_ID].flatMap(layer=>
+      [0,1].flatMap(cx=>[0,1].map(cy=>chunkTexture(streamer,layer,cx,cy))));
+    const dirty=regions.map(r=>[...r.snapshotPixels()]);
+    streamer.refreshAll();ChunkedRenderSurface.drainBakeQueue(scene as never);
+    expect(regions.map(r=>[...r.snapshotPixels()])).toEqual(dirty);
+  }
+  streamer.setEcologyTuning({rockEdgeFlora:0,rockCreviceFlora:0,rockFootFlora:0});
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
+  for(const cx of [0,1])for(const cy of [0,1])
+    expect(chunkTexture(streamer,ROCK_OVERLAY_VEGETATION_LAYER_ID,cx,cy).snapshotPixels().every(v=>v===0)).toBe(true);
+  streamer.destroy();
+});
+
+it('composites opaque colony leaves after decals under the same formation light and reveals decals when removed',()=>{
+  const {scene,streamer}=buildFixture({decals:[decal(LARGE_CORE_DECAL,1,1,ROCK_DECAL_LARGE_SIZE)]});
+  const decals=chunkTexture(streamer,ROCK_OVERLAY_DECAL_LAYER_ID,0,0);
+  streamer.setEcologyTuning({rockEdgeFlora:0,rockCreviceFlora:0,rockFootFlora:0});
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
+  const baseline=[...lastBlit(decals)],pixels=decals.snapshotPixels();
+  const moss=[...lastBlit(chunkTexture(streamer,ROCK_OVERLAY_MOSS_LAYER_ID,0,0))];
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
+  streamer.setEcologyTuning({rockEdgeFlora:1,rockCreviceFlora:1,rockFootFlora:1});
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
+  const order=[...lastBlit(decals)];
+  const firstColony=order.findIndex(s=>s.startsWith('woodland-rock-'));
+  expect(firstColony).toBeGreaterThan(0);
+  expect(order.slice(0,firstColony)).toEqual(baseline);
+  expect(order.slice(firstColony).every(s=>s.startsWith('woodland-rock-'))).toBe(true);
+  expect(lastBlit(chunkTexture(streamer,ROCK_OVERLAY_MOSS_LAYER_ID,0,0))).toEqual(moss);
+  // CPU source-over at an opaque leaf, driven by the actual flushed draw order.
+  // The mineral lighting pass multiplies the result once, after both layers.
+  let decalContribution=0,leafContribution=0;
+  for(const entry of order){
+    const leaf=entry.startsWith('woodland-rock-');
+    const alpha=leaf?1:.7;
+    decalContribution=decalContribution*(1-alpha)+(leaf?0:alpha);
+    leafContribution=leafContribution*(1-alpha)+(leaf?alpha:0);
+  }
+  for(const light of [.2,.8,1,1.4]){
+    expect(decalContribution*light).toBe(0);expect(leafContribution*light).toBe(light);
+  }
+  streamer.updateResidency(FAR_AWAY);ChunkedRenderSurface.drainBakeQueue(scene as never);
+  streamer.updateResidency(FULL_VIEW);ChunkedRenderSurface.drainBakeQueue(scene as never);
+  expect(lastBlit(chunkTexture(streamer,ROCK_OVERLAY_DECAL_LAYER_ID,0,0))).toEqual(order);
+  streamer.setEcologyTuning({rockEdgeFlora:0,rockCreviceFlora:0,rockFootFlora:0});
+  ChunkedRenderSurface.drainBakeQueue(scene as never);
+  const revealed=chunkTexture(streamer,ROCK_OVERLAY_DECAL_LAYER_ID,0,0);
+  expect(lastBlit(revealed)).toEqual(baseline);expect(revealed.snapshotPixels()).toEqual(pixels);
+  streamer.destroy();
 });

@@ -253,3 +253,67 @@ DOM-Overlays liegen unter demselben Game-Container, der auch Parent und Fullscre
 ## Verifikation
 
 Sichtbare Phaser- oder UI-Änderungen werden mit npm run build geprüft. Browser, Dev-Server und Screenshots sind opt-in und nur nach ausdrücklicher Aufforderung auszuführen. Für visuelle Lesbarkeit gilt zusätzlich [visual-guidelines.md](visual-guidelines.md).
+
+## Sonnenwald-Assetvertrag
+
+Unveränderliche Woodland-Texturen gehören dem Game-Asset-Cache.
+[WoodlandAssets.ts](../../src/assets/WoodlandAssets.ts) lädt sie über den regulären Scene-Loader;
+World-Renderer leihen sie und entfernen sie nicht beim World-Teardown. Fehlende Pflichtassets
+blockieren die Boot-Vorbereitung und benutzen die vorhandene Fehler-/Retry-Anzeige.
+
+Kronen-Normalen/AO/Dicke und Horizonte sind lineare UNORM-Daten: Alpha ist ein Datenkanal,
+keine Transparenz. Der Upload erfolgt ohne Alpha-Premultiplikation und ohne Canvas-Roundtrip.
+Die Mineral-Coverage liegt als CPU-Alpha im Binary-Cache; Worker erhalten eine Kopie,
+damit Transferables den gemeinsamen Cache nicht ablösen. Der Loader wählt genau eine
+V7-Farbauflösung (1× oder 2×) anhand der GPU-Texturgrenze; Framegröße, Margin und Spacing
+skalieren gemeinsam. Auswahl und Speicherbilanz besitzt
+[WoodlandAssetManifest.ts](../../src/assets/WoodlandAssetManifest.ts).
+
+## Sonnenwald-World-Presentation
+
+[WorldSunlightPresentation](../../src/effects/sunlight/WorldSunlightPresentation.ts) besitzt den
+Sonnenzustand und die aktiven Materialbindungen einer lokal dargestellten World.
+[WorldComposition](../../src/world/WorldComposition.ts) bindet ihn am
+[WorldPresentationFrameBinding](../../src/world/WorldPresentationFrameBinding.ts);
+der eigenständige [Basis-Editor](../../src/persistentBase/PersistentBaseEditorWorld.ts) verwendet
+denselben Owner. Activity, Runde und Netzwerkrolle erzeugen keinen zweiten Sonnen-Writer.
+Felsen und Kronen entstehen beim regulären Aufbau mit ihren Produktionsmaterialien.
+
+Ein Terrain-Handoff überträgt statische Oberflächen, nicht den Sonnen-Owner.
+`WorldRuntime.releasePresentation()` löst vorher die Framebindung: Empfänger werden entkoppelt,
+danach temporäre Sonnenfelder, Kronen-Renderrollen und Vegetationslicht freigegeben.
+Die neue World bindet ihren eigenen Zustand; Woodland-Assets bleiben im Game-Cache.
+Zerstörte Owner reagieren weder auf spätere Frames noch auf Debug-Overrides.
+
+Die Tageszeit stammt aus der bestehenden replizierten World-Uhr. Wind-/Wolkenbewegung und
+Uhrsprung-Blenden verwenden lokale, pausierbare Präsentationszeit; sie erzeugen keinen
+zusätzlichen replizierten Zustand. Defaults, Limits und Atmosphären-Keyframes gehören
+[src/config/sunlight.ts](../../src/config/sunlight.ts); Dev-Overrides schreiben durch denselben Owner.
+
+Die Depth-Reihenfolge ist Teil des Beleuchtungsvertrags:
+
+- Fische liegen über Wasser, unter schwimmender Flora; diese und Landtiere liegen unter Bodennebel.
+- Beleuchteter Bodennebel liegt über Felsbewuchs, aber unter Figuren; ohne aktive Sonne verwendet
+  er `GROUND_FOG`. Die Sonnenmodulation liegt unter Projektilen und erfasst so Welt, Nebel und Figuren.
+- Die Lichtkarte liegt unter Lichtschächten und Kronen. Kronen erhalten Sonnen-, Ambient- und lokale
+  Lichtbeiträge im eigenen Material. Ambient und lokale Lichter werden als Irradianz genau einmal
+  verbraucht; weißer Vertex-Tint verhindert einen zweiten Kronen-Tint.
+- Glühwürmchen bleiben emissiv über der Lichtkarte; ihre Nebeldämpfung gehört ihrem Material.
+
+Maßgeblich sind [DEPTH](../../src/config.ts), [WorldSunComposite](../../src/effects/sunlight/WorldSunComposite.ts),
+[FogGpuField](../../src/effects/groundFog/FogGpuField.ts) und
+[AmbientWildlifeRenderer](../../src/arena/AmbientWildlifeRenderer.ts).
+
+### Atmosphäre und fachliche Grade-Komposition
+
+[CameraPostFxController](../../src/effects/postfx/CameraPostFxController.ts) hält `WorldGradeInputs`
+neben der Sonnenbasis. `resolveBaseGrade` verwendet die Sonnenatmosphäre als Basis und wendet danach
+Void (authored `trackMode`), Bossprofil und lokale Verletzung an. Erst `composePostFx` legt
+Ereignispulse darüber. Sonnen-Updates dürfen diese fachlichen Kanäle nicht überschreiben;
+die Reihenfolge der Updates beider Eingänge verändert das Ergebnis nicht. Dauerbild und Pulse
+behalten die getrennten Clamp-Verträge in [worldGrade.ts](../../src/effects/postfx/worldGrade.ts).
+
+Fels-Horizonte unterscheiden Geometrie-Revision und Sonnenrichtung. Ein Richtungswechsel entwertet
+keinen geometrisch gültigen laufenden Bake: Sein Ergebnis darf als Zwischenstand erscheinen und
+wird anschließend auf die neueste Richtung nachgeführt. Geometrieänderungen, insbesondere
+Zerstörung, verwerfen veraltete Ergebnisse. Horizont-Blends verwenden die pausierbare Präsentationsuhr.

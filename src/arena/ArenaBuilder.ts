@@ -34,8 +34,6 @@ import { generateGroundCoverPlacements } from './GroundCoverField';
 import type { GroundCoverPlacement } from './GroundCoverField';
 import { generateRockMossPlacements } from './RockMossField';
 import type { RockMossPlacement } from './RockMossField';
-import { generateRockVegetationPlacements } from './RockVegetationField';
-import type { RockVegetationPlacement } from './RockVegetationField';
 import { RockGridIndex } from './RockGridIndex';
 import { GroundSurfaceStreamer } from './chunks/GroundSurfaceStreamer';
 import type { GroundSurfacePersistentBaseGravelZone } from './chunks/GroundSurfaceStreamer';
@@ -142,7 +140,6 @@ export interface ArenaPresentationResult {
    * die Voraussetzung dafuer, dass eine Zerstoerung nur den Anteil des gefallenen Felsens entfernt
    * und die uebrige Matte Pixel fuer Pixel stehen laesst.
    */
-  rockVegetationPlacements: RockVegetationPlacement[];
 }
 
 /** Aktive Aufbau-Fassade; Ownership bleibt zwischen Runtime und Presentation getrennt. */
@@ -324,6 +321,7 @@ export class ArenaBuilder {
         rockVisualStates,
         getRockRendererMode(),
         getRockGpuPageSize(),
+        true,
       )
       : null;
     const result: ArenaBuilderResult = {
@@ -346,12 +344,6 @@ export class ArenaBuilder {
       rockOverlaySource: createRockOverlaySource(),
       // Einmalig hier erzeugt und nie wieder: siehe `rockMossPlacements`.
       rockMossPlacements: generateRockMossPlacements({
-        seed: layout.seed,
-        rocks: layout.rocks,
-        metrics: worldMetrics,
-      }),
-      // Ebenfalls einmalig hier erzeugt und nie wieder: siehe `rockVegetationPlacements`.
-      rockVegetationPlacements: generateRockVegetationPlacements({
         seed: layout.seed,
         rocks: layout.rocks,
         metrics: worldMetrics,
@@ -380,8 +372,8 @@ export class ArenaBuilder {
         rockVisualStates: rockVisualStates.states,
         overlaySource: result.rockOverlaySource,
         mossPlacements: result.rockMossPlacements,
-        vegetationPlacements: result.rockVegetationPlacements,
       });
+      result.rockOverlaySurface.setFormationReceiver(rockVisualSystem?.getFormationReceiver ?? null);
     }
     return result;
   }
@@ -473,7 +465,6 @@ export class ArenaBuilder {
       rockOverlaySurface: result.rockOverlaySurface,
       rockOverlaySource: result.rockOverlaySource,
       rockMossPlacements: result.rockMossPlacements,
-      rockVegetationPlacements: result.rockVegetationPlacements,
     };
   }
 
@@ -885,7 +876,6 @@ export class ArenaBuilder {
     result.rockOverlaySource.cells.length = 0;
     result.rockOverlaySource.keys.clear();
     result.rockMossPlacements.length = 0;
-    result.rockVegetationPlacements.length = 0;
   }
 
   /** Kompatibilitaets-Cleanup fuer isolierte Builder-Consumer. */

@@ -7,7 +7,7 @@ vi.mock('phaser', () => ({
 
 import { ShadowSystem } from '../src/effects/ShadowSystem';
 import { SHADOW_CASTERS } from '../src/effects/ShadowConfig';
-import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH } from '../src/config';
+import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, DEPTH } from '../src/config';
 import { ARENA_RENDER_CHUNK_SIZE } from '../src/arena/chunks/ArenaChunkGrid';
 import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
 import type { ArenaLayout } from '../src/types';
@@ -40,7 +40,8 @@ interface TextureEvent {
   x: number;
   y: number;
   destroyed: boolean;
-  stamps: Array<{ x: number; y: number; originX?: number; originY?: number }>;
+  stamps: Array<{ x: number; y: number; originX?: number; originY?: number; key?: string; frame?: unknown;
+    rotation?: number; scaleX?: number; scaleY?: number; alpha?: number; tint?: number }>;
   cameraScrolls: Array<{ x: number; y: number }>;
 }
 
@@ -146,9 +147,9 @@ function makeScene() {
       _frame: unknown,
       sx: number,
       sy: number,
-      config?: { originX?: number; originY?: number },
+      config?: { originX?: number; originY?: number; rotation?: number; scaleX?: number; scaleY?: number; alpha?: number; tint?: number },
     ) => {
-      event.stamps.push({ x: sx, y: sy, originX: config?.originX, originY: config?.originY });
+      event.stamps.push({ x: sx, y: sy, key: _key, frame: _frame, ...config });
       return rt;
     };
     return rt;
@@ -184,6 +185,108 @@ function drain(scene: object): void {
 }
 
 describe('static shadow baking', () => {
+  it('invalidates a changed woodland profile, scales its southeast cast with the crown and restores the baseline', () => {
+    const { scene, textures } = makeScene(), shadows = new ShadowSystem(scene);
+    shadows.setWorldBoundsOverride({ minX: 0, minY: 0, maxX: 1536, maxY: 1024 });
+    shadows.setTimeOfDay(1020);
+    shadows.rebuildStaticLayoutShadows(layout(0, 0), { offsetX: 0, offsetY: 0 }); drain(scene);
+    const source = { worldX: 500, worldY: 300, gfx: { texture: { key: 'canopy-proof' }, frame: { name: '__BASE' },
+      displayWidth: 200, displayHeight: 200, scaleX: .5, scaleY: .5, rotation: 0 } };
+    const sources = [source];
+    const stamps = () => [...new Map(textures.flatMap(t => t.stamps).filter(s => s.key === 'canopy-proof')
+      .map(s => [s.x + ':' + s.y, s] as const)).values()];
+    const clear = () => { for (const t of textures) t.stamps.length = 0; };
+    const centre = (s: ReturnType<typeof stamps>) => [s.reduce((n, v) => n + v.x, 0) / s.length,
+      s.reduce((n, v) => n + v.y, 0) / s.length];
+    shadows.setCanopyShadows(sources as never); drain(scene);
+    const baseline = stamps(); clear();
+    shadows.setCanopyShadows(sources as never, true); drain(scene);
+    const woodland = stamps(), c = centre(woodland);
+    expect(woodland.length).toBeGreaterThan(0);
+    expect(c[0]).toBeGreaterThan(source.worldX); expect(c[1]).toBeGreaterThan(source.worldY);
+    expect(c[0] - source.worldX).toBeCloseTo(c[1] - source.worldY);
+    expect(woodland[0].tint).not.toBe(baseline[0].tint);
+    expect(woodland[0].alpha!).toBeGreaterThan(baseline[0].alpha!);
+    const draws = totalDraws(textures);
+    shadows.setCanopyShadows(sources as never, true); drain(scene);
+    expect(totalDraws(textures)).toBe(draws);
+    clear();
+    source.gfx.displayWidth *= 2; source.gfx.displayHeight *= 2;
+    source.gfx.scaleX *= 2; source.gfx.scaleY *= 2;
+    shadows.setCanopyShadows([source] as never, true); drain(scene);
+    const larger = centre(stamps());
+    expect(larger[0] - source.worldX).toBeCloseTo(2 * (c[0] - source.worldX));
+    expect(larger[1] - source.worldY).toBeCloseTo(2 * (c[1] - source.worldY));
+    clear();
+    shadows.setCanopyShadows(null); drain(scene);
+    expect(stamps()).toHaveLength(0); shadows.destroy();
+  });
+
+  it('bakes canopy silhouettes through the world camera and releases the opt-in source on clear', () => {
+    const { scene, textures } = makeScene(), shadows = new ShadowSystem(scene);
+    shadows.setWorldBoundsOverride({ minX: 0, minY: 0, maxX: 1536, maxY: 512 });
+    shadows.setTimeOfDay(720);
+    shadows.rebuildStaticLayoutShadows(layout(0, 0), { offsetX: 0, offsetY: 0 });
+    drain(scene);
+    const originalDepths = visibleChunkTargets(textures).map(texture => texture.depth).sort();
+    const sources = [{ worldX: 1000, worldY: 220, gfx: { texture: { key: 'canopy-proof' }, frame: { name: '__BASE' },
+      displayWidth: 192, displayHeight: 192, scaleX: .5, scaleY: .5, rotation: .63, tint: 0x345678 } }];
+    const originalSources = structuredClone(sources);
+    shadows.setCanopyShadows(sources as never); drain(scene);
+    const stamps = textures.flatMap(texture => texture.stamps).filter(stamp => stamp.key === 'canopy-proof');
+    expect(stamps.length).toBeGreaterThan(0);
+    // Local coordinates would be wrong in Phaser 4: the scratch camera already subtracts the region origin.
+    expect(stamps.every(stamp => stamp.x > 1000 && stamp.y > 220 && stamp.rotation === .63)).toBe(true);
+    expect(stamps.every(stamp => stamp.frame === '__BASE' && stamp.scaleX === .5 && stamp.scaleY === .5)).toBe(true);
+    expect(sources).toEqual(originalSources);
+    const trialTargets = visibleChunkTargets(textures);
+    expect(trialTargets).toHaveLength(originalDepths.length);
+    expect(trialTargets.some(texture => texture.depth === SHADOW_CASTERS.canopy.layerDepth)).toBe(false);
+    expect(trialTargets.some(texture => texture.depth < DEPTH.GROUND_FOG)).toBe(true);
+    const draws = totalDraws(textures);
+    shadows.setCanopyShadows(sources as never); drain(scene);
+    expect(totalDraws(textures)).toBe(draws);
+    shadows.clear();
+    for (const texture of textures) texture.stamps.length = 0;
+    shadows.rebuildStaticLayoutShadows(layout(0, 1), { offsetX: 0, offsetY: 0 }); drain(scene);
+    expect(textures.flatMap(texture => texture.stamps).some(stamp => stamp.key === 'canopy-proof')).toBe(false);
+    expect(visibleChunkTargets(textures).map(texture => texture.depth).sort()).toEqual(originalDepths);
+    shadows.destroy();
+  });
+
+  it('keeps the soft canopy kernel centred, weakens it at night, and restores original layers when disabled', () => {
+    const { scene, textures } = makeScene(), shadows = new ShadowSystem(scene);
+    shadows.setWorldBoundsOverride({ minX: 0, minY: 0, maxX: 512, maxY: 512 });
+    shadows.setTimeOfDay(720);
+    shadows.rebuildStaticLayoutShadows(layout(0, 1), { offsetX: 0, offsetY: 0 }); drain(scene);
+    const originalDepths = visibleChunkTargets(textures).map(texture => texture.depth).sort();
+    const sources = [{ worldX: 220, worldY: 220, gfx: { texture: { key: 'canopy-proof' }, frame: { name: 'crown' },
+      displayWidth: 100, displayHeight: 100, scaleX: .5, scaleY: .5, rotation: .4 } }];
+    shadows.setCanopyShadows(sources as never); drain(scene);
+    // Each intersecting bake region records the same world-space kernel.
+    const canopyStamps = () => [...new Map(textures.flatMap(texture => texture.stamps)
+      .filter(stamp => stamp.key === 'canopy-proof').map(stamp => [`${stamp.x}:${stamp.y}`, stamp] as const)).values()];
+    const day = canopyStamps();
+    expect(new Set(day.map(stamp => stamp.alpha)).size).toBeGreaterThan(1);
+    // Optical weights are centred around one translated silhouette; jitter has no preferred side.
+    const weighted = (axis:'x'|'y') => day.reduce((sum, stamp) => sum + stamp[axis] * -Math.log(1-stamp.alpha!), 0)
+      / day.reduce((sum, stamp) => sum - Math.log(1-stamp.alpha!), 0);
+    const centreX = weighted('x'), centreY = weighted('y');
+    expect(centreX).toBeCloseTo(centreY);
+    expect(day.every(stamp => day.some(other => Math.abs(stamp.x+other.x-centreX*2)<.0001
+      && Math.abs(stamp.y+other.y-centreY*2)<.0001 && stamp.alpha===other.alpha))).toBe(true);
+    const dayOpacity = 1-day.reduce((transmission,stamp)=>transmission*(1-stamp.alpha!),1);
+    for(const texture of textures)texture.stamps.length=0;
+    shadows.setTimeOfDay(0);shadows.syncStaticProfile(1000,true);drain(scene);
+    const night = canopyStamps();
+    expect(night.length).toBe(day.length);
+    const nightOpacity = 1-night.reduce((transmission,stamp)=>transmission*(1-stamp.alpha!),1);
+    expect(nightOpacity).toBeGreaterThan(0);expect(nightOpacity).toBeLessThan(dayOpacity);
+    shadows.setCanopyShadows(null);drain(scene);
+    expect(visibleChunkTargets(textures).map(texture => texture.depth).sort()).toEqual(originalDepths);
+    shadows.destroy();
+  });
+
   it('caches base cells and removes their shadows as surface images disappear', () => {
     const { scene, graphicsLog, textures } = makeScene();
     const shadows = new ShadowSystem(scene);
@@ -436,4 +539,48 @@ describe('static shadow baking', () => {
     drain(scene);
     expect(visibleChunkTargets(textures).length).toBeLessThan(fullyResident);
   });
+});
+
+it('throttles direction rebakes, preserves unchanged bins and restores the production hull',async()=>{
+  const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
+  const {scene,graphicsLog}=makeScene(),shadows=new ShadowSystem(scene);
+  shadows.setWorldBoundsOverride({minX:0,minY:0,maxX:512,maxY:512});shadows.setTimeOfDay(720);
+  shadows.rebuildStaticLayoutShadows(layout(1,0),{offsetX:0,offsetY:0});drain(scene);
+  const rock=graphicsLog.find(g=>g.depth===SHADOW_CASTERS.rock.layerDepth)!;
+  const original=structuredClone(rock.fillPoints);const path=resolveSunPath(720,0,createSunPath());
+  shadows.setSunPath(path);expect(shadows.syncStaticProfile(1000)).toBe(true);drain(scene);
+  resolveSunPath(720,1,path);shadows.setSunPath(path);expect(shadows.syncStaticProfile(2000)).toBe(false);
+  resolveSunPath(720,6,path);shadows.setSunPath(path);expect(shadows.syncStaticProfile(1200)).toBe(false);
+  expect(shadows.syncStaticProfile(1600)).toBe(true);drain(scene);
+  rock.fillPoints.length=0;shadows.setSunPath(null);drain(scene);expect(rock.fillPoints).toEqual(original);
+  expect(shadows.syncStaticProfile(5000)).toBe(false);shadows.destroy();
+});
+it('builds gapless convex stadiums in every shadow direction',async()=>{
+  const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
+  const {scene}=makeScene(),shadows=new ShadowSystem(scene),path=createSunPath();
+  let pts:{x:number;y:number}[]=[];const graphics={fillStyle(){},fillPoints(p:typeof pts){pts=p.map(v=>({...v}));}};
+  for(const angle of [0,45,90,135,180,225,270,315]){
+    resolveSunPath(720,angle,path);shadows.setSunPath(path);const dx=-path.direction[0]*60,dy=-path.direction[1]*60;
+    (shadows as any).fillStadiumShadow(graphics,0,0,12,dx,dy,.5);
+    let area=0;
+    for(let i=0;i<pts.length;i++) {const a=pts[i],b=pts[(i+1)%pts.length],c=pts[(i+2)%pts.length];area+=a.x*b.y-a.y*b.x;
+      expect((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x)).toBeGreaterThanOrEqual(-1e-8);
+      for(const p of [{x:0,y:0},{x:dx,y:dy}])expect((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x)).toBeGreaterThanOrEqual(-1e-8);
+    }
+    expect(area/2).toBeGreaterThan(60*24+12*12*Math.PI*.95);expect(area/2).toBeLessThanOrEqual(60*24+12*12*Math.PI);
+  }shadows.destroy();
+});
+
+it('visits enemy casters only with a bound sun path and omits hidden or burrowed enemies',async()=>{
+  const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
+  const {scene}=makeScene();const shadows=new ShadowSystem(scene as any);
+  const enemy={sprite:{active:true,visible:true,x:12,y:34},getHp:()=>10,getSize:()=>30,isBurrowed:()=>false};
+  const source={forEachEnemy:vi.fn((visit:any)=>visit(enemy))};
+  const draw=vi.spyOn(shadows as any,'drawFootprint');
+  shadows.setSunPath(resolveSunPath(720,null,createSunPath()),source as any);
+  shadows.syncDynamicShadows([],[],null);expect(source.forEachEnemy).toHaveBeenCalledTimes(1);expect(draw).toHaveBeenCalledTimes(1);
+  enemy.sprite.visible=false;shadows.syncDynamicShadows([],[],null);expect(draw).toHaveBeenCalledTimes(1);
+  enemy.sprite.visible=true;enemy.isBurrowed=()=>true;shadows.syncDynamicShadows([],[],null);expect(draw).toHaveBeenCalledTimes(1);
+  shadows.setSunPath(null);shadows.syncDynamicShadows([],[],null);expect(source.forEachEnemy).toHaveBeenCalledTimes(3);
+  shadows.destroy();
 });

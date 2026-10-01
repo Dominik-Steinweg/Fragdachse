@@ -72,3 +72,25 @@ Nach sichtbaren Phaser-Änderungen npm run build ausführen. Für reine Performa
 - [tests/WorldMetricsScopeContracts.test.ts](../../tests/WorldMetricsScopeContracts.test.ts)
 - [tests/WorldPresentationContracts.test.ts](../../tests/WorldPresentationContracts.test.ts)
 - [tests/PlayerTreeRuntimeContracts.test.ts](../../tests/PlayerTreeRuntimeContracts.test.ts)
+
+## Sonnenwald-Ressourcen und Qualitätsstufen
+
+[GraphicsQualityProfile](../../src/graphics/GraphicsQuality.ts) wählt die gemeinsame
+[SunRenderQuality](../../src/effects/sunlight/SunRenderQuality.ts). Die Stufen steuern
+Composite-/Strahlenauflösung, Wolkenfeld, Horizont-Aktualisierung, Vegetationslicht und Ökologiedichte.
+High enthält Formlicht und Pflanzenschatten, Medium nur Formlicht; Low baut keine Vegetations-Datentexturen
+und verzichtet auf Lichtschächte, Blatt-Dapple und Selbstschatten-Horizonte.
+Qualitätswechsel werden vom vorhandenen World-Owner verarbeitet; deaktivierte Renderressourcen
+werden freigegeben und bei erneuter Aktivierung wieder aufgebaut.
+
+Composite und Strahlen rechnen in reduzierten Renderzielen. Ihre Anzeigequads und alle Empfänger
+müssen dieselben weltfesten Koordinaten einschließlich Zoom und Kamera-Viewport verwenden.
+Das gemeinsame [CloudFieldTexture](../../src/effects/sunlight/CloudFieldTexture.ts) bereitet
+Wolken- und Schwadenbeiträge für mehrere Empfänger vor; diese dürfen keine konkurrierenden
+Feldzustände pflegen. Vegetations-Datentexturen entstehen beim Chunk-Bake, nicht pro Frame.
+
+Nebel trennt statistische Flächenbedeckung von lokaler Kerndichte. Wasser besitzt ein eigenes
+Flächenbudget; Streuung und Composite-Kompensation müssen gemeinsam mit dem finalen Alpha geprüft
+werden. Die CPU-Gegenstücke und Tests in [FogPatchField](../../src/effects/sunlight/FogPatchField.ts)
+und [FogPatches.test.ts](../../tests/FogPatches.test.ts) sichern diese Grenze.
+Das Flächenbudget ist kein harter Grenzwert für jeden einzelnen Kameraausschnitt.

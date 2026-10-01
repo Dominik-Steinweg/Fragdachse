@@ -1,0 +1,266 @@
+{
+  "version": 8,
+  "source": "tools/source-art/ground-litter-v8",
+  "recipe": "scripts/export-woodland-ecology-v8.mjs",
+  "alpha": "authored alpha; unchanged colours; transparent 4px padding",
+  "atlas": {
+    "file": "ground-litter-atlas.png",
+    "width": 1024,
+    "height": 512,
+    "rgbaBytes": 2097152,
+    "downloadBytes": 306586,
+    "sha256": "95436535d48ff0e872e68564a10c6207808ead591f85dfaaa68ca86d81101fb0",
+    "frames": {
+      "leaf-litter-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "leaf-litter-03": {
+        "frame": {
+          "x": 256,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "leaf-litter-04": {
+        "frame": {
+          "x": 512,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "twigs-02": {
+        "frame": {
+          "x": 768,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "twigs-05": {
+        "frame": {
+          "x": 0,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "needle-litter-02": {
+        "frame": {
+          "x": 256,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "needle-litter-03": {
+        "frame": {
+          "x": 512,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "pebbles-01": {
+        "frame": {
+          "x": 768,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      }
+    }
+  },
+  "assets": [
+    {
+      "name": "leaf-litter-01",
+      "source": "leaf-litter-01.png",
+      "sourceSha256": "b77fd1e43e62e3fc345a1a7f8aa59fb9d5a8b3c2f9d294cd2b630a13c3dcc136",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "pixelSha256": "3984661a628d5f47a601ade067e4198d32b2a4ebdc4bd818c08346947b19b16a"
+    },
+    {
+      "name": "leaf-litter-03",
+      "source": "leaf-litter-03.png",
+      "sourceSha256": "e60b5a99c1e0fb5c5a565ffd5bfeefd7f335e289bc61dcaad02642e1e144ac29",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "pixelSha256": "dc1976454ab66365a744451f9791cd1ee18fdf5b6467e39ddf8ede2a1483e85d"
+    },
+    {
+      "name": "leaf-litter-04",
+      "source": "leaf-litter-04.png",
+      "sourceSha256": "2a55f288ddccd83a662853b02e0c8d8b2e3e8a8f77bf2d1372b2344da481fd9f",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "pixelSha256": "10d980fd4b9143fe5c5cbaf4258638830ddb5284db4aade76ac41e2a9478f610"
+    },
+    {
+      "name": "twigs-02",
+      "source": "twigs-02.png",
+      "sourceSha256": "8577473c6087701e233118da08076a61f897f2430590d6bf9442b15d7b733bde",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "pixelSha256": "e64fde4711ae9bb68686c889165fbbae4b5a5eff8d87451b8265e35f21b00648"
+    },
+    {
+      "name": "twigs-05",
+      "source": "twigs-05.png",
+      "sourceSha256": "4ce957a1c4751476e40e48be468be8b741bc5ab42c86960d236aee2ed9c1af07",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "pixelSha256": "c4d0da9222359ad390c5d323414bdf7a28a0df00f06fc3f698d33b4b21653f00"
+    },
+    {
+      "name": "needle-litter-02",
+      "source": "needle-litter-02.png",
+      "sourceSha256": "bc4bbead984e420a37cb6501fa6a2f0a3d9698da28fd59bbc423a4453b2c5169",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1444,
+      "sourceHeight": 1444,
+      "pixelSha256": "d0153f1101df1da24e78a11459d8e4fb1130abede070d72118381bba09f4f904"
+    },
+    {
+      "name": "needle-litter-03",
+      "source": "needle-litter-03.png",
+      "sourceSha256": "31669c7d247cafbea97149f557bfa3b7c7946951d68063749a9e1c03d40a88e6",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1768,
+      "sourceHeight": 1178,
+      "pixelSha256": "34bef06e1e03f12a20808152d0fb4c26417d1367107593dde5abeb95a206821c"
+    },
+    {
+      "name": "pebbles-01",
+      "source": "pebbles-01.png",
+      "sourceSha256": "5dc0623eacad2ad0281643e996c447baa8a8a0fc7a744555d752569000430f7a",
+      "width": 256,
+      "height": 256,
+      "rgbaBytes": 262144,
+      "sourceWidth": 1582,
+      "sourceHeight": 1317,
+      "pixelSha256": "06ea638a9a2fda313794756298b7009574e83ce2209d4e2f7669e37c6a04636b"
+    }
+  ]
+}

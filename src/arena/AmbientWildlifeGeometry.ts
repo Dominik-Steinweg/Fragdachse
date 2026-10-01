@@ -70,7 +70,7 @@ export class WildlifeMesh {
 export interface WildlifeVisual {
   readonly animal: WildlifeAnimal;
   readonly mesh: WildlifeMesh;
-  sample(time: number): void;
+  sample(time: number, fogCover?: number): void;
 }
 
 function butterflyVisual(animal: WildlifeAnimal): WildlifeVisual {
@@ -178,10 +178,14 @@ function fireflyVisual(animal: WildlifeAnimal): WildlifeVisual {
   mesh.fill(0xc8ed43, .95, 1); mesh.ellipse(-.7, 0, 1.5, 1.2, 10);
   mesh.fill(0xdff569, 1, 1); mesh.ellipse(-.8, 0, .7, .65, 8);
   const baseAlpha = mesh.alpha.slice();
-  return { animal, mesh, sample: time => {
+  return { animal, mesh, sample: (time, fogCover = 0) => {
     const pulse = fireflyGlowStrength(time, animal.variation, animal.phaseOffset, animal.speed);
-    for (let i = 0; i < haloVertices; i++) mesh.alpha[i] = baseAlpha[i] * pulse;
-    for (let i = glowStart; i < baseAlpha.length; i++) mesh.alpha[i] = baseAlpha[i] * pulse;
+    const cover = Number.isFinite(fogCover) ? Math.max(0, Math.min(.55, fogCover)) : 0;
+    const spread = 1 + cover * .65;
+    mesh.poses[0].sx = mesh.poses[0].sy = spread;
+    // Broader halo with no added energy; the source core loses contrast in haze.
+    for (let i = 0; i < haloVertices; i++) mesh.alpha[i] = baseAlpha[i] * pulse / (spread * spread);
+    for (let i = glowStart; i < baseAlpha.length; i++) mesh.alpha[i] = baseAlpha[i] * pulse * (1 - cover);
     mesh.poses[wings].sy = .4 + .6 * Math.abs(Math.sin(animal.animation));
   } };
 }

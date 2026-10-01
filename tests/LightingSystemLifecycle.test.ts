@@ -298,3 +298,18 @@ describe('keyed light lifecycle', () => {
     lighting.destroy();
   });
 });
+
+it('invalidates the ambient-only cache, tints crowns consistently, and restores the production sky',()=>{
+  const {lighting,fills}=fixture();
+  lighting.setTimeOfDay(1185);lighting.update();
+  const production=resolveSkyState(1185).ambientColor;
+  expect(lighting.getAmbientColor()).toBe(production);
+  lighting.setSunAmbient(0xa08fba);lighting.update();
+  expect(lighting.getAmbientColor()).toBe(0xa08fba);
+  expect(fills.mock.calls.at(-1)?.[0]).toBe(0xa08fba);
+  lighting.setTimeOfDay(0);lighting.setSunAmbient(null);lighting.update();
+  expect(lighting.getAmbientColor()).toBe(resolveSkyState(0).ambientColor);
+  expect(fills.mock.calls.at(-1)?.[0]).toBe(resolveSkyState(0).ambientColor);
+  expect(()=>lighting.setSunAmbient(NaN)).toThrow();
+  lighting.destroy();
+});

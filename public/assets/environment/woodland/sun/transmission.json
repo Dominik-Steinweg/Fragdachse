@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "source": "tools/source-art/slate-v5/sun-transmission-source.png",
+  "sourceSha256": "593278544e5d95c89acca1cc7c1fc5470650fd7755e99d4479e6ce423d44a196",
+  "sha256": "8486df04055fb59b9dd830186c8657e60febfdb8cccd38d5b04c81f296a54bda",
+  "downloadBytes": 258895,
+  "dimensions": [
+    512,
+    512
+  ],
+  "worldPeriod": 1024,
+  "encoding": "linear scalar transmission; black blocked, white open",
+  "intent": "artist-authored forest ceiling, independent of world collision and visible tree geometry"
+}

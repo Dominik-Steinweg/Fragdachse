@@ -155,6 +155,22 @@ export function createScenarioPanel(controller: DevScenarioController) {
   const focus = field(simulation, 'Kamera am Ziel statt am Spieler', 'focus', 'checkbox'); focus.onchange = () => { controller.cameraAtTarget = focus.checked; };
   hint(simulation, 'Pause hält Spielschleife und Gameplay-Uhr an. Worker und Browser-Timer bleiben asynchron. HP-Auffüllen schützt nicht vor tödlichem Einzeltreffer.');
 
+  const worldLight = section('Sonnenwald: Diagnose und Messung', true);
+  for (const [label, minute] of [['08 Uhr', 480], ['12 Uhr', 720], ['17 Uhr', 1020], ['Untergang', 1185], ['Nacht', 0]] as const) {
+    button(worldLight, label, () => { controller.config.timeOfDay = minute; time.value = String(minute); if (controller.clock.paused) controller.step(); });
+  }
+  button(worldLight, 'Kamera: nächster Baum', () => { controller.focusLightingTree(); syncTarget(); focus.checked = controller.cameraAtTarget; });
+  const formationStatus = document.createElement('pre'); formationStatus.setAttribute('aria-label', 'Formationsstatus'); worldLight.append(formationStatus);
+  button(worldLight, 'Formationsstatus anzeigen', () => { formationStatus.textContent = JSON.stringify(controller.worldLightingStatus(), null, 2); });
+  button(worldLight, 'Felszerstörung: Nuke testen', () => controller.temporaryUtility('NUKE'));
+  hint(worldLight, 'Zerstörungstest am Spieler mit echter Nuke. Bei Pause über Einzelschritte fortsetzen; „Neu starten“ stellt die Karte wieder her.');
+  button(worldLight, 'Spielwelt: 180 Frames messen', () => controller.measureWorldLighting());
+  button(worldLight, 'Einzelnen Fels zerstören und messen', () => {target();controller.measureWorldLighting('destruction');});
+  button(worldLight, 'Kamerafahrt in Lauftempo messen', () => controller.measureWorldLighting('walk'));
+  button(worldLight, 'Stress-Kamerafahrt hin und zurück messen', () => controller.measureWorldLighting('traverse'));
+  const worldMeasurement = document.createElement('pre'); worldMeasurement.setAttribute('aria-label', 'Spielwelt Lichtmessung'); worldLight.append(worldMeasurement);
+  button(worldLight, 'Spielwelt-Messung anzeigen', () => { worldMeasurement.textContent = JSON.stringify(controller.worldLightingMeasurement(), null, 2); });
+
   const exchange = section('6 · Szenario-JSON, Link und Bericht');
   const label = document.createElement('label'); label.textContent = 'Szenario JSON';
   const json = document.createElement('textarea'); json.id = 'dev-json'; label.append(json); exchange.append(label);
@@ -168,6 +184,11 @@ export function createScenarioPanel(controller: DevScenarioController) {
   }
   button(exchange, 'Szenario JSON herunterladen', () => download('dev-scenario.json', controller.config));
   button(exchange, 'Bericht herunterladen', () => download('dev-scenario-report.json', controller.snapshot()));
+  const savedReport=document.createElement('output');savedReport.id='dev-report-path';savedReport.setAttribute('aria-label','Gespeicherter Bericht');
+  button(exchange,'Bericht im Workspace speichern',()=>{
+    void window.devScenario!.saveReport().then(result=>{savedReport.textContent=result.ok?result.path!:result.error;refresh();});
+  });
+  exchange.append(savedReport);
   button(exchange, 'Katalog herunterladen', () => download('dev-scenario-catalog.json', { upgrades: COOP_DEFENSE_UPGRADE_DEFINITIONS, affixes: COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS, enemies: COOP_DEFENSE_ENEMY_KINDS, constructions: COOP_DEFENSE_CONSTRUCTION_IDS }));
   const report = document.createElement('pre'); report.id = 'dev-report'; report.setAttribute('aria-label', 'Szenario-Zustand'); exchange.append(report);
   button(exchange, 'Bericht anzeigen', () => { report.textContent = JSON.stringify(controller.snapshot(), null, 2); });
@@ -195,6 +216,7 @@ export function createScenarioPanel(controller: DevScenarioController) {
 
   function syncTarget(): void { gx.value = String(controller.aim.gridX); gy.value = String(controller.aim.gridY); }
   function sync(): void {
+
     const config = controller.config; map.value = config.mapId; cls.value = config.classId; seed.value = String(config.seed);
     const profile = buildScenarioProfile(config.classId, config.upgrades, config.tools);
     for (const slot of ['weapon1', 'weapon2', 'ultimate'] as const) {
