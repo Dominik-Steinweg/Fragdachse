@@ -29,6 +29,7 @@ export class DevScenarioController {
   zoom = 1;
   cameraAtTarget = false;
   private worldLighting: WorldLightingMeasurement | null = null;
+  private debugPostFx: ReturnType<ArenaRuntime['getScenarioLightingTargets']>['postFx'] | null = null;
   private trigger: WeaponSlot | null = null;
   private inputStarted = false;
   private sequence = 0;
@@ -82,6 +83,7 @@ export class DevScenarioController {
   }
   start(value: unknown): void {
     const config = parseScenario(value);
+    this.clearRenderDebug();
     const run = loadingTimeline.begin('scenario', String(performance.now()));
     run.gate('lobby', false); run.gate('scenario-setup', false);
     this.worldLighting?.reset();
@@ -101,6 +103,17 @@ export class DevScenarioController {
     this.message = 'Warte auf Lobby und normalen Rundenstart …';
   }
   saveLink(): void { history.replaceState(null, '', encodeScenario(this.config)); }
+  setRenderDebug(disable: readonly string[]): void {
+    this.requireReady();
+    const postFx = this.runtime.getScenarioLightingTargets().postFx;
+    postFx.setDebugDisabled(disable);
+    this.debugPostFx = disable.length ? postFx : null;
+    this.lastAction = { renderDebug: postFx.getDebugPasses() };
+  }
+  private clearRenderDebug(): void {
+    this.debugPostFx?.setDebugDisabled([]);
+    this.debugPostFx = null;
+  }
   setSunTuning(values: unknown, reset = false): void {
     this.requireReady();
     const patch = reset ? undefined : validateSunTuning(values);
@@ -491,6 +504,7 @@ export class DevScenarioController {
   }
   destroy(): void {
     if (this.disposed) return;
+    this.clearRenderDebug();
     loadingTimeline.get('scenario')?.finish('cancelled');
     this.disposed = true; this.stop(); bridge.setDevScenarioPlayerFreeForAll(false); clearInterval(this.refreshTimer);
     this.worldLighting?.destroy(); this.worldLighting = null;

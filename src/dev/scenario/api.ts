@@ -42,6 +42,9 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
   const c = object(value);
   switch (c.action) {
     case 'status': return;
+    case 'renderDebug':
+      if (!Array.isArray(c.disable) || c.disable.some(name => typeof name !== 'string')) throw new Error('renderDebug.disable: Liste von Passnamen erwartet.');
+      controller.setRenderDebug(c.disable as string[]); break;
     case 'sunTuning':
       if(c.reset !== undefined && c.reset !== true) throw new Error('sunTuning.reset: true erwartet.');
       if(c.reset === true && c.values !== undefined) throw new Error('sunTuning: reset oder values angeben.');

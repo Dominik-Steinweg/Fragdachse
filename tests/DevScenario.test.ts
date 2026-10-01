@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS, isCoopDefenseUpgradeAvailableForClass } from '../src/utils/coopDefenseUpgrades';
 import { buildScenarioProfile, defaultScenario, parseScenario, scenarioLoadout, encodeScenario, decodeScenario } from '../src/dev/scenario/config';
@@ -74,4 +74,74 @@ describe('Dev scenario contract', () => {
 
 it('rejects saved comparison options with an explicit migration hint',()=>{
  expect(()=>parseScenario({...defaultScenario(),worldLighting:{}})).toThrow(/Lichtvergleichs-Optionen.*Standard/);
+});
+
+import { CameraPostFxController } from '../src/effects/postfx/CameraPostFxController';
+import { NEUTRAL_WORLD_GRADE } from '../src/effects/postfx/worldGrade';
+import { GraphicsQualityController } from '../src/graphics/GraphicsQuality';
+import { runScenarioCommand } from '../src/dev/scenario/api';
+const fxMock = vi.hoisted(() => {
+  const matrix = () => ({ active: true, colorMatrix: {
+    reset() {}, brightness() {}, saturate() {}, contrast() {}, multiply() {},
+  } });
+  class Parallel {
+    active = false;
+    blend = { blendMode: 0, amount: 0 };
+    top = { addThreshold: () => ({ setEdge() {} }), addBlur: () => ({ active: true }),
+      addColorMatrix: matrix, addMask: () => ({ active: true }) };
+    setEffectActive(value: boolean) { this.active = value; }
+    setActive(value: boolean) { this.active = value; return this; }
+  }
+  return { matrix, Parallel };
+});
+vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 }, Filters: { Displacement: class {
+  active = false;
+  setActive(value: boolean) { this.active = value; return this; }
+  setPaddingOverride() {}
+  setTexture() {}
+} } }));
+vi.mock('../src/effects/postfx/RadialFocusFilter', () => ({
+  RadialFocusParallelFilters: fxMock.Parallel,
+  RadialFocusMaskTexture: class { textureKey = 'mask'; update() {} destroy() {} },
+}));
+function fxFixture() {
+  const list = { add: (filter: unknown) => filter, addParallelFilters: () => new fxMock.Parallel(),
+    addColorMatrix: fxMock.matrix, addVignette: () => ({ active: false }), addBarrel: () => ({ active: false }) };
+  const camera = { width: 1664, height: 936, filters: { internal: list } };
+  const scene = { time: { now: 0 }, scale: { width: 1664 }, add: { particles() {} } };
+  const quality = new GraphicsQualityController(); quality.attach(scene as never);
+  const controller = new CameraPostFxController(scene as never, camera as never);
+  controller.setBaseGrade({ ...NEUTRAL_WORLD_GRADE, brightness: .9, bloomAmount: .2, vignetteStrength: .1 });
+  controller.update(0);
+  return { controller, quality };
+}
+describe('camera pass diagnostics', () => {
+  it('disables selected passes through frame/quality updates and restores the normal resolver', () => {
+    const { controller, quality } = fxFixture();
+    const active = (name: string) => controller.getDebugPasses().find(p => p.name === name)!.active;
+    expect(active('grade')).toBe(true);
+    controller.setDebugDisabled(['grade', 'distortion']);
+    controller.setDistortion('map', .1); controller.update(16);
+    quality.setLevel('low'); quality.setLevel('high');
+    expect(active('grade')).toBe(false); expect(active('distortion')).toBe(false);
+    expect(active('bloom')).toBe(true);
+    controller.setDebugDisabled([]); controller.setDistortion('map', .1);
+    expect(active('grade')).toBe(true); expect(active('distortion')).toBe(true);
+    controller.destroy();
+  });
+  it('rejects unknown names atomically and clears diagnostics at reset', () => {
+    const { controller } = fxFixture(); controller.setDebugDisabled(['grade']);
+    expect(() => controller.setDebugDisabled(['bloom', 'typo'])).toThrow('Unknown camera pass');
+    expect(controller.getDebugPasses().filter(p => p.disabled).map(p => p.name)).toEqual(['grade']);
+    controller.reset(); expect(controller.getDebugPasses().some(p => p.disabled)).toBe(false);
+    controller.destroy();
+  });
+  it('validates the script action before dispatch', () => {
+    const setRenderDebug = vi.fn(); const controller = { setRenderDebug, syncPanel() {} } as never;
+    for (const disable of [null, 'grade', [2], undefined]) {
+      expect(() => runScenarioCommand(controller, { action: 'renderDebug', disable })).toThrow();
+    }
+    runScenarioCommand(controller, { action: 'renderDebug', disable: ['grade'] });
+    expect(setRenderDebug).toHaveBeenCalledExactlyOnceWith(['grade']);
+  });
 });

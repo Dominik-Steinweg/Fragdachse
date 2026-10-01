@@ -108,6 +108,35 @@ const BLOOM_EDGE_WIDTH = 0.14;
  *   hier ohne einen parallelen Canvas- oder No-op-Pfad aufgebaut.
  */
 export class CameraPostFxController {
+  private readonly debugDisabled = new Set<string>();
+
+  /** Local diagnostics only; an empty list restores the normal quality/effect resolver. */
+  setDebugDisabled(passes: readonly string[]): void {
+    const names = ['distortion', 'bloom', 'grade', 'vignette', 'focus', 'barrel'];
+    for (const name of passes) if (!names.includes(name)) throw new Error(`Unknown camera pass: ${name}`);
+    this.debugDisabled.clear();
+    for (const name of passes) this.debugDisabled.add(name);
+    this.update(0);
+  }
+
+  private applyDebugDisabled(): void {
+    const c = this.chain;
+    if (this.debugDisabled.has('distortion') && c.displacement) c.displacement.active = false;
+    if (this.debugDisabled.has('bloom') && c.parallel) c.parallel.active = false;
+    if (this.debugDisabled.has('grade') && c.colorMatrix) c.colorMatrix.active = false;
+    if (this.debugDisabled.has('vignette') && c.vignette) c.vignette.active = false;
+    if (this.debugDisabled.has('focus') && c.radialFocus) c.radialFocus.parallel.active = false;
+    if (this.debugDisabled.has('barrel') && c.barrel) c.barrel.active = false;
+  }
+
+  getDebugPasses(): { name: string; active: boolean; disabled: boolean }[] {
+    const c = this.chain;
+    const entries: [string, { active: boolean } | null | undefined][] = [
+      ['distortion', c.displacement], ['bloom', c.parallel], ['grade', c.colorMatrix],
+      ['vignette', c.vignette], ['focus', c.radialFocus?.parallel], ['barrel', c.barrel],
+    ];
+    return entries.map(([name, filter]) => ({ name, active: !!filter?.active, disabled: this.debugDisabled.has(name) }));
+  }
   private readonly pulses = new PostFxPulseSet();
   private readonly chain: FilterChain = {
     displacement: null, parallel: null, threshold: null, blur: null,
@@ -178,6 +207,7 @@ export class CameraPostFxController {
     this.radialFocusFrame = frame;
     if (frame) this.radialFocusMask?.update(frame);
     this.applyRadialFocus();
+    this.applyDebugDisabled();
   }
 
   isRadialFocusFilterActive(): boolean {
@@ -203,6 +233,7 @@ export class CameraPostFxController {
     displacement.x = amounts.x;
     displacement.y = amounts.y;
     displacement.setEffectActive(true);
+    this.applyDebugDisabled();
     if (this.distortionTextureKey !== textureKey) {
       this.distortionTextureKey = textureKey;
       displacement.setTexture(textureKey);
@@ -256,6 +287,7 @@ export class CameraPostFxController {
 
   /** Rundenende: laufende Ereignisse fallen lassen und auf Normalwerte zurückkehren. */
   reset(): void {
+    this.debugDisabled.clear();
     this.pulses.clear();
     this.gradeInputs = null;
     this.baseGrade = NEUTRAL_WORLD_GRADE;
@@ -381,6 +413,11 @@ export class CameraPostFxController {
    * vermeidbare Posten.
    */
   private applyState(state: ResolvedPostFxState | null): void {
+    this.applyResolvedState(state);
+    this.applyDebugDisabled();
+  }
+
+  private applyResolvedState(state: ResolvedPostFxState | null): void {
     const profile = getGraphicsQualityProfile(this.scene);
     const { colorMatrix, vignette, parallel, barrel } = this.chain;
     this.applyBloomSampling(profile.level);
