@@ -17,7 +17,7 @@ it('changes only the program on sunlight binding changes, shares paused water ti
   while(!water.isPrepared())water.prepareMasks();water.updateResidency({x:-70,y:30,width:512,height:512});
   expect(state.configs.at(-1).fragmentSource).toBe(WATER_FRAGMENT);const baseline=state.configs.at(-1).samplers;
   const clouds={timeSec:10,strength:1,tuning:createSunTuning()};water.setSunlight(clouds);
-  expect(state.configs.at(-1).fragmentSource).not.toBe(WATER_FRAGMENT);expect(state.configs.at(-1).samplers).toHaveLength(2);
+  expect(state.configs.at(-1).fragmentSource).not.toBe(WATER_FRAGMENT);expect(state.configs.at(-1).samplers).toEqual(baseline);
   const uniforms:Record<string,any>={};state.configs.at(-1).setupUniforms((k:string,v:any)=>uniforms[k]=v);
   expect([...uniforms.uWorldOffset]).toEqual([-70,30]);expect(uniforms.uTime).toBe(10);
   const n=state.configs.length;for(let i=0;i<20;i++)water.setSunlight(clouds);expect(state.configs).toHaveLength(n);

@@ -3,68 +3,63 @@ import type * as Phaser from 'phaser';
 import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState, type CloudFieldBinding } from './cloudShadow';
 import { SunRenderTarget } from './SunRenderTarget';
 import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
-import { SUN_BAND_GLSL, setSunVisibilityUniforms } from './sunVisibility';
+import { cloudFieldSize } from './SunRenderQuality';
 
-const FRAGMENT=`#pragma phaserTemplate(shaderName)
+export const CLOUD_FIELD_FRAGMENT=`#pragma phaserTemplate(shaderName)
 precision highp float;
 varying vec2 outTexCoord;
 uniform vec4 uFieldWorld;
-uniform float uFieldDelay,uFieldCanopy;
 ${CLOUD_SHADOW_GLSL}
-${SUN_BAND_GLSL}
 void main(){
   vec2 p=uFieldWorld.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uFieldWorld.zw;
-  gl_FragColor=vec4(cloudShadowAnalytic(p,uCloudTime),
-    cloudShadowAnalytic(p,max(0.0,uCloudTime-uFieldDelay)),
-    cloudShadowAnalytic(p,max(0.0,uCloudTime-2.0*uFieldDelay)),uFieldCanopy>.5?sunBandVisibility(p):1.0);
+  float opening=cloudShadowAnalytic(p,uCloudTime);
+  gl_FragColor=vec4(vec3(opening),sunlightFromCloud(opening));
 }`;
-/** One world-space cloud map for all receivers. RGB preserves the rays' causal
- * exposure samples; A stores broad canopy visibility for vegetation shadows.
- * No readback, uploads or second clock. Borrowed binding dies
- * before its target. On limited hardware retain the analytic fallback. */
+/** One current-time, world-space cloud evaluation for every receiver. RGB holds
+ * the smooth opening, A its direct-light response for vegetation shadows.
+ * No readback, temporal history or independent clock. Limited hardware uses the
+ * identical analytic fallback. The borrowed binding dies before its target. */
 export class CloudFieldTexture implements CloudFieldBinding {
   readonly world=[0,0,1,1];
   private readonly renderer: Phaser.Renderer.WebGL.WebGLRenderer;
   private readonly target: SunRenderTarget | null;
-  private readonly previous=new Float64Array(20).fill(NaN);
+  private readonly previous=new Float64Array(12).fill(NaN);
+  private readonly size=[0,0];
   private builds=0;
   private dirty=false;
   private check(i:number,value:number):void {if(this.previous[i]!==value){this.previous[i]=value;this.dirty=true;}}
   private disposed=false;
-  get delay():number { return this.state.tuning.raysCloudSoftness; }
   constructor(private readonly scene:Phaser.Scene,private readonly state:SunCloudState) {
     this.renderer=scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     const gl=this.renderer.gl;
-    this.target=gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)>8?new SunRenderTarget(scene,'CloudField',FRAGMENT,set=>{
-      setCloudUniforms(set,state,false);set('uFieldWorld',this.world);set('uFieldDelay',this.delay);
-      setSunVisibilityUniforms(set,state.tuning);
-      set('uFieldCanopy',getGraphicsQualityProfile(scene).sunlight.vegetationShadows?1:0);
+    this.target=gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)>8?new SunRenderTarget(scene,'CloudField',CLOUD_FIELD_FRAGMENT,set=>{
+      setCloudUniforms(set,state,false);set('uFieldWorld',this.world);
     }):null;
   }
   bind():void { if(this.target&&!this.disposed)this.renderer.glTextureUnits.bind(this.target.shader.glTexture!,8); }
   update(x:number,y:number,width:number,height:number):void {
     if(!this.target||this.disposed)return;
-    const t=this.state.tuning,size=getGraphicsQualityProfile(this.scene).sunlight.cloudSize;
-    this.dirty=false;
-    // No string keys/temporary arrays in the presentation path.
-    this.check(0,this.state.strength>0&&t.cloudCover>0&&t.cloudCover<1?this.state.timeSec:0);this.check(1,this.state.strength);this.check(2,t.cloudCover);this.check(3,t.cloudSpeed);
-    this.check(4,t.cloudScale);this.check(5,t.cloudEvolution);this.check(6,t.cloudGust);this.check(7,this.delay);
-    this.check(8,x);this.check(9,y);this.check(10,width);this.check(11,height);
-    this.check(12,this.state.sunPath?.azimuth??0);this.check(13,this.state.sunPath?.elevation??0);
-    this.check(14,t.openFraction);this.check(15,t.bandAlong);this.check(16,t.bandAcross);this.check(17,t.penumbra);
-    this.check(18,this.state.sunPath?1:0);
-    this.check(19,getGraphicsQualityProfile(this.scene).sunlight.vegetationShadows?1:0);
-    if(this.target.shader.width!==size)this.dirty=true;
+    const t=this.state.tuning,quality=getGraphicsQualityProfile(this.scene).sunlight;
+    cloudFieldSize(this.size,width,height,quality);this.dirty=false;
+    // Solar azimuth/elevation never invalidate the pattern. Colour and form light
+    // still follow the sun in receivers. Paused presentation time keeps this RT.
+    this.check(0,this.state.strength>0&&t.cloudCover>0&&t.cloudCover<1?this.state.timeSec:0);
+    this.check(1,this.state.strength>0?1:0);this.check(2,t.cloudCover);this.check(3,t.cloudSpeed);
+    this.check(4,t.cloudScale);this.check(5,t.cloudEvolution);this.check(6,t.cloudGust);
+    this.check(7,t.cloudWarp);this.check(8,t.cloudSoftness);this.check(9,t.cloudDensity);
+    this.check(10,this.size[0]);this.check(11,this.size[1]);
+    if(this.world[0]!==x||this.world[1]!==y||this.world[2]!==width||this.world[3]!==height)this.dirty=true;
     if(!this.dirty)return;
-    // World bounds, not camera UVs; off-world receivers use the analytic field.
     this.world[0]=x;this.world[1]=y;this.world[2]=Math.max(1,width);this.world[3]=Math.max(1,height);
     this.renderer.renderNodes.finishBatch();
     this.renderer.glTextureUnits.bind(this.scene.textures.get('__DEFAULT').source[0].glTexture!,8);
     const measuredAt=loadingTimeline.start();
-    this.target.draw(size,size);
+    this.target.draw(this.size[0],this.size[1]);
     loadingTimeline.end('cloud/field-submit',measuredAt);
     this.state.cache=this;this.builds++;
   }
-  get diagnostics(){return {size:this.target?.shader.width??0,builds:this.builds,rgbaBytes:(this.target?.shader.width??0)**2*4,worldTexelX:this.world[2]/Math.max(1,this.target?.shader.width??0),worldTexelY:this.world[3]/Math.max(1,this.target?.shader.height??0)};}
+  get diagnostics(){const width=this.target?.shader.width??0,height=this.target?.shader.height??0;
+    return {width,height,builds:this.builds,rgbaBytes:width*height*4,
+      worldTexelX:this.world[2]/Math.max(1,width),worldTexelY:this.world[3]/Math.max(1,height)};}
   destroy():void {if(this.disposed)return;this.disposed=true;if(this.state.cache===this)this.state.cache=undefined;this.target?.destroy();}
 }

@@ -295,7 +295,7 @@ Die Depth-Reihenfolge ist Teil des Beleuchtungsvertrags:
 - Fische liegen über Wasser, unter schwimmender Flora; diese und Landtiere liegen unter Bodennebel.
 - Beleuchteter Bodennebel liegt über Felsbewuchs, aber unter Figuren; ohne aktive Sonne verwendet
   er `GROUND_FOG`. Die Sonnenmodulation liegt unter Projektilen und erfasst so Welt, Nebel und Figuren.
-- Die Lichtkarte liegt unter Lichtschächten und Kronen. Kronen erhalten Sonnen-, Ambient- und lokale
+- Die Lichtkarte liegt unter Kronen. Kronen erhalten Sonnen-, Ambient- und lokale
   Lichtbeiträge im eigenen Material. Ambient und lokale Lichter werden als Irradianz genau einmal
   verbraucht; weißer Vertex-Tint verhindert einen zweiten Kronen-Tint.
 - Glühwürmchen bleiben emissiv über der Lichtkarte; ihre Nebeldämpfung gehört ihrem Material.
@@ -303,6 +303,13 @@ Die Depth-Reihenfolge ist Teil des Beleuchtungsvertrags:
 Maßgeblich sind [DEPTH](../../src/config.ts), [WorldSunComposite](../../src/effects/sunlight/WorldSunComposite.ts),
 [FogGpuField](../../src/effects/groundFog/FogGpuField.ts) und
 [AmbientWildlifeRenderer](../../src/arena/AmbientWildlifeRenderer.ts).
+
+Das großflächige Lichtmuster stammt aus den weltverankerten Wolkenöffnungen. Sonnenazimut und
+Elevation verändern geometrische Schatten und Material-Formlicht, nicht die Koordinaten dieses Feldes.
+Boden, Wasserlicht, Nebel und Pflanzenschatten lesen dieselbe Öffnung. Die Nebelstreuung enthält
+keine Blattkonturen; ihre Kompensation verwendet exakt den Composite-Faktor, damit Nebel nicht
+zweimal beleuchtet wird. Der gemeinsame Owner und die pausierbare Präsentationszeit gelten auch
+für den analytischen Fallback ohne Wolkentextur.
 
 ### Atmosphäre und fachliche Grade-Komposition
 

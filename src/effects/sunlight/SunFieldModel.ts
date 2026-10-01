@@ -9,7 +9,6 @@ const cloudHash=(x:number,y:number):number=>{
   x=fract(x*.1031);y=fract(y*.11369);const d=x*(y+19.19)+y*(x+19.19);x+=d;y+=d;
   return fract((x+y)*x);
 };
-const sunHash=(x:number,y:number):number=>fract(Math.sin(x*127.1+y*311.7)*43758.5453);
 function noise(x:number,y:number,hash:(x:number,y:number)=>number):number {
   const ix=Math.floor(x),iy=Math.floor(y),fx=fract(x),fy=fract(y),u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);
   return mix(mix(hash(ix,iy),hash(ix+1,iy),u),mix(hash(ix,iy+1),hash(ix+1,iy+1),u),v);
@@ -29,17 +28,16 @@ export function cloudShadowAt(x:number,y:number,state:SunCloudState,time=state.t
   const sx=seconds*.009*t.cloudEvolution,sy=-seconds*.006*t.cloudEvolution;
   const wx=noise(px*.67+sx+3.1,py*.67+sy+3.1,cloudHash)-.5;
   const wy=noise(px*.67-sx*.71+19.7,py*.67-sy*.71+19.7,cloudHash)-.5;
-  px+=wx*t.cloudEvolution;py+=wy*t.cloudEvolution;
+  px+=wx*t.cloudWarp;py+=wy*t.cloudWarp;
   const field=.62*noise(px,py,cloudHash)+.27*noise(px*2.03+17.3+sx*1.7,py*2.03+39.1+sy*1.7,cloudHash)
     +.11*noise(px*4.11+7.7-sx*2.3,py*4.11+7.7-sy*2.3,cloudHash);
-  const threshold=mix(.20,.84,t.cloudCover),result=smooth(threshold-.14,threshold+.14,field);
+  const threshold=mix(.32,.68,t.cloudCover),opening=smooth(threshold-t.cloudSoftness,threshold+t.cloudSoftness,field);
+  const result=mix(1,opening,smooth(0,.12,t.cloudCover))*(1-smooth(.88,1,t.cloudCover));
   return Number.isFinite(result)?result:1;
 }
-export function sunGapMaskAt(u:number,v:number,leaf:number):number {
-  if(!Number.isFinite(u+v+leaf))return 0;
-  const wx=noise(u/57+13.7,v/57+13.7,sunHash)-.5,wy=noise(u/57+31.9,v/57+31.9,sunHash)-.5;
-  const n=.7*noise(u/22+wx*.8,v/13+wy*.8,sunHash)+.3*noise(u/9+wx+7.1,v/7+wy+7.1,sunHash);
-  return smooth(.76,.93,n)*mix(.35,1,Math.max(0,Math.min(1,leaf)));
+/** Same opening-to-light transfer as CLOUD_SHADOW_GLSL. */
+export function sunlightAt(x:number,y:number,state:SunCloudState):number {
+  return mix(.5,cloudShadowAt(x,y,state),Math.max(0,Math.min(1,state.tuning.cloudDensity*2)));
 }
 
 /** CPU counterpart of FOG_BANK_GLSL. Spatial coverage is independent of density,

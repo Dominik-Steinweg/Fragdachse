@@ -41,7 +41,7 @@ export class SunRenderTarget {
     ownSunShader(this.shader,name);
     try {
       // A non-power-of-two initial size selects CLAMP_TO_EDGE in Phaser.
-      // Resize preserves it; cloud map borders must not wrap to the opposite shore.
+      // Phaser resets sampling on resize; draw() restores the finite-field contract.
       this.shader.setRenderToTexture(name);
       const camera=this.shader.drawingContext!.camera;
       this.shader.once('destroy',()=>camera?.destroy());
@@ -52,7 +52,11 @@ export class SunRenderTarget {
   draw(width: number, height: number): void {
     const shader=this.shader, renderer=shader.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     shader.setSize(width,height);
-    try { shader.renderWebGLStep(renderer,shader,shader.drawingContext!); }
+    try {
+      shader.renderWebGLStep(renderer,shader,shader.drawingContext!);
+      // The actual texture resize happens inside renderWebGLStep, not setSize.
+      clampSunRenderTexture(renderer,shader.glTexture!);
+    }
     finally {
       // DrawingContext.setBlendMode writes 'enable', but WebGLGlobalWrapper
       // consumes 'enabled' in 4.2.1. Do not leave later scene draws unblended.
@@ -60,4 +64,21 @@ export class SunRenderTarget {
     }
   }
   destroy(): void { this.shader.destroy(); }
+}
+
+/** Phaser 4.2.1 resets POT render targets to REPEAT (and may select mipmaps).
+ * Finite world fields and reduced composites must interpolate only adjacent
+ * texels, including after quality/viewport resize and context restoration. */
+export function clampSunRenderTexture(renderer:Phaser.Renderer.WebGL.WebGLRenderer,
+  texture:Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper):void {
+  const gl=renderer.gl;
+  if(texture.wrapS===gl.CLAMP_TO_EDGE&&texture.wrapT===gl.CLAMP_TO_EDGE
+    &&texture.minFilter===gl.LINEAR&&texture.magFilter===gl.LINEAR)return;
+  renderer.glTextureUnits.bind(texture,0);
+  texture.wrapS=texture.wrapT=gl.CLAMP_TO_EDGE;
+  texture.minFilter=texture.magFilter=gl.LINEAR;
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,texture.wrapS);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,texture.wrapT);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,texture.minFilter);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,texture.magFilter);
 }

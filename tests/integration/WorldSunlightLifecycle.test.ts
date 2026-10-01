@@ -93,7 +93,7 @@ it('binds the production owner for all authored maps, modes, lobby and empty-fea
  const {resolveWorldMetrics}=await import('../../src/world/WorldMetrics');
  const {buildLobbyWorldLayout}=await import('../../src/arena/LobbyWorldLayout');
  const {parseTimeOfDay}=await import('../../src/effects/TimeOfDay');
- const {SUN_RENDER_QUALITY}=await import('../../src/effects/sunlight/SunRenderQuality');
+ const {SUN_RENDER_QUALITY,cloudFieldSize}=await import('../../src/effects/sunlight/SunRenderQuality');
  const {writeFileSync}=await import('node:fs');
  const cases:any[]=[];
  for(const map of COOP_DEFENSE_MAP_CONFIGS){const metrics=resolveWorldMetrics(getArenaMetricsProfile('coop_defense','ARENA',map.arenaWidthCells,map.arenaHeightCells));
@@ -113,8 +113,8 @@ it('binds the production owner for all authored maps, modes, lobby and empty-fea
   for(const level of ['high','medium','low'] as const){f.quality.setLevel(level);owner.update(entry.minute,100);owner.update(entry.minute,900);
    for(const value of Object.values(owner.sunStatus))expect(Number.isFinite(value),entry.name).toBe(true);
    expect(owner.clouds.sunPath).toBeDefined();expect(f.targets.fog.setWoodlandLight).toHaveBeenCalled();}
-  const q=SUN_RENDER_QUALITY.high.cloudSize;
-  report.push({name:entry.name,minute:entry.minute,void:entry.map?.trackMode==='void-fire',width:entry.metrics.widthPx,height:entry.metrics.heightPx,rocks:entry.layout.rocks.length,trees:entry.layout.trees.length,water:entry.layout.water?.length??0,cloudTexelX:entry.metrics.widthPx/q,cloudTexelY:entry.metrics.heightPx/q,status:'CPU owner bindings OK'});
+  const q=[0,0];cloudFieldSize(q,entry.metrics.widthPx,entry.metrics.heightPx,SUN_RENDER_QUALITY.high);
+  report.push({name:entry.name,minute:entry.minute,void:entry.map?.trackMode==='void-fire',width:entry.metrics.widthPx,height:entry.metrics.heightPx,rocks:entry.layout.rocks.length,trees:entry.layout.trees.length,water:entry.layout.water?.length??0,cloudTexelX:entry.metrics.widthPx/q[0],cloudTexelY:entry.metrics.heightPx/q[1],status:'CPU owner bindings OK'});
   owner.destroy();expectEmpty();f.quality.destroy();
  }
  writeFileSync('build/sonnenwald-world-matrix.json',JSON.stringify(report,null,2));

@@ -1,5 +1,4 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
-import { WOODLAND_TRANSMISSION_KEY } from '../../assets/WoodlandAssetManifest';
 import type * as Phaser from 'phaser';
 import type { ArenaBuilderResult } from '../../arena/ArenaBuilder';
 import type { ArenaLayout } from '../../types';
@@ -43,7 +42,6 @@ export class WorldSunlightPresentation {
  private disposed=false;
  private lastMinute=NaN;
  private lastSceneTime=0;
- private readonly sunOffset: [number,number]=[0,0];
  readonly sunTuning=createSunTuning();
  private readonly sunOverrides: Partial<SunTuning>={};
  private readonly atmosphereClock=new SunAtmosphereClock();
@@ -68,7 +66,7 @@ export class WorldSunlightPresentation {
   this.fogBase=targets.fog?{opacity:targets.fog.tuning.opacity,detail:targets.fog.tuning.detail}:null;
   try {
   this.canopyLighting=new CanopyLighting(scene,targets.canopies);
-  this.sunComposite=new WorldSunComposite(scene,this.sunTuning,this.sunState,this.sunOffset,this.clouds);
+  this.sunComposite=new WorldSunComposite(scene,this.sunTuning,this.sunState,this.clouds);
   targets.rocks?.setFormationOptions(true,true,this.clouds);
   targets.rockOverlays?.setFormationReceiver(targets.rocks?.getFormationReceiver??null);
   targets.shadow.setFormationShadows(this.landscape);
@@ -113,10 +111,9 @@ export class WorldSunlightPresentation {
   targets.ground?.setVegetationLight(this.clouds);
   targets.water?.setSunlight(this.clouds);targets.wildlife?.setSunlight(this.clouds);
   this.syncWoodland(targets);
-  this.sunComposite!.setEnabled(true,true);
+  this.sunComposite!.setEnabled(true);
   const m=targets.worldContext.metrics;
   this.sunComposite!.prepareClouds(m.offsetX,m.offsetY,m.widthPx,m.heightPx);
-  this.sunFog.transmissionTexture=this.scene.textures.get(WOODLAND_TRANSMISSION_KEY);
   this.sunFog.sunStrength=this.sunState.strength;
   this.sunFog.baseFogOpacity=this.fogBase?.opacity;
   this.sunFog.baseFogDetail=this.fogBase?.detail;
@@ -160,6 +157,5 @@ export class WorldSunlightPresentation {
   this.canopyLighting?.destroy();this.canopyLighting=null;this.woodland?.destroy();this.woodland=null;
   this.sunComposite?.destroy();this.sunComposite=null;this.clouds.cache=undefined;this.clouds.sunPath=undefined;
   t.lighting.setSunAmbient(null);t.postFx.setSunGrade(null);
-  this.sunFog.transmissionTexture=undefined;
  }
 }

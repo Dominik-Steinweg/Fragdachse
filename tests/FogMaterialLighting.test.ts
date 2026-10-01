@@ -1,4 +1,5 @@
 import {expect,it} from 'vitest';
+import {WATER_SUN_FRAGMENT} from '../src/arena/WaterSunlight';
 import {canPrelightFog} from '../src/effects/groundFog/FogMaterialLighting';
 import {createSunTuning,resolveSunAtmosphere} from '../src/effects/sunlight/SunAtmosphere';
 import {FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT} from '../src/effects/groundFog/fogShaders';
@@ -6,7 +7,7 @@ it('uses reduced material lighting for woodland fog and retains safe unlit/debug
  const t=createSunTuning();
  for(let minute=0;minute<1440;minute+=15){resolveSunAtmosphere(minute,t);expect(canPrelightFog(t,16,true)).toBe(true);}
  expect(canPrelightFog(undefined,16,true)).toBe(false);expect(canPrelightFog(t,8,true)).toBe(false);
- expect(canPrelightFog(t,16,false)).toBe(false);t.shade=[.2,.8,.8];expect(canPrelightFog(t,16,true)).toBe(false);
+ expect(canPrelightFog(t,16,false)).toBe(false);t.daylight=[.1,1,1];expect(canPrelightFog(t,16,true)).toBe(false);t.daylight=[1,1,1];t.shade=[.2,.8,.8];expect(canPrelightFog(t,16,true)).toBe(false);
 });
 it('keeps the ordinary material sampler contract and applies lighting before the cheap wake display',()=>{
  expect(FOG_MATERIAL_FRAGMENT).not.toContain('vec4 lightFog(');
@@ -15,10 +16,10 @@ it('keeps the ordinary material sampler contract and applies lighting before the
  // No extra offscreen pass or change to the final alpha/patch field is needed.
  expect(FOG_K_MATERIAL_FRAGMENT).toContain('fogPatchEdgeAlpha(alpha,patchDistance,patchActivity)');
 });
-it('declares every sampler that a fog fragment reads',()=>{
- for(const source of [FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT]){
-  const declared=new Set([...source.matchAll(/uniform\s+sampler2D\s+([^;]+);/g)].flatMap(m=>m[1].split(',').map(s=>s.trim())));
-  const read=new Set([...source.matchAll(/texture2D\(\s*(\w+)/g)].map(m=>m[1]));
+it('declares every uniform and sampler that a fog or water fragment reads',()=>{
+ for(const source of [FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT,WATER_SUN_FRAGMENT]){
+  const declared=new Set([...source.matchAll(/uniform\s+\w+\s+([^;]+);/g)].flatMap(m=>m[1].split(',').map(s=>s.trim())));
+  const read=new Set([...source.replace(/\/\/[^\n]*/g,'').matchAll(/\bu[A-Z]\w*/g)].map(m=>m[0]));
   for(const sampler of read)expect(declared,`missing sampler ${sampler}`).toContain(sampler);
  }
 });

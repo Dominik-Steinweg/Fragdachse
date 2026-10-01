@@ -14,7 +14,6 @@ import { FogTrailRenderer } from './FogTrailRenderer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
 import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
 import { setCloudUniforms } from '../sunlight/cloudShadow';
-import { setSunVisibilityUniforms } from '../sunlight/sunVisibility';
 
 const SIDE = FOG.chunkSize / FOG.cellSize;
 const WIDTH = SIDE * FOG.atlasCols, HEIGHT = SIDE * FOG.atlasRows, SLOTS = FOG.atlasCols * FOG.atlasRows;
@@ -161,7 +160,7 @@ export class FogGpuField {
         set('uWorldOffsetX',this.terrain.frame.offsetX);set('uWorldOffsetY',this.terrain.frame.offsetY);
         setCloudUniforms(set,this.woodlandLight?.clouds);
         setFogBankUniforms(set,this.woodlandLight?.sunCompositeTuning??SUN_TUNING_DEFAULTS);
-        if(name==='materialLit')this.setLightingUniforms(set,true);
+        if(name==='materialLit')this.setLightingUniforms(set);
         set('uDebug', FOG_DEBUG.indexOf(this.debug)); set('uInterpolation', this.interpolation);
         set('uHasSurface', this.hasSurfaces ? 1 : 0); set('uQuality', this.quality === 'high' ? 2 : this.quality === 'medium' ? 1 : 0);
       },
@@ -311,16 +310,15 @@ export class FogGpuField {
     if (cleared) this.terrainTexture.upload();
   }
   /** Screen-space composite of the soft material and the finer wake mask. */
-  private setLightingUniforms(set:(name:string,value:unknown)=>void,material:boolean):void {
+  private setLightingUniforms(set:(name:string,value:unknown)=>void):void {
         set('uFogBankMetadata',this.woodlandLight?.sunCompositeTuning && this.boundary && this.debug==='normal' ? 1 : 0);
         setFogVisibilityUniforms(set,this.woodlandLight?.sunCompositeTuning??SUN_TUNING_DEFAULTS);
-        set('uSunTransmission',material?9:2);
         set('uSceneSun',this.debug==='normal'?(this.woodlandLight?.sunStrength??0):0);
         setCloudUniforms(set,this.woodlandLight?.clouds);
         set('uSunComposite', this.woodlandLight?.sunCompositeTuning ? 1 : 0);
-        setSunVisibilityUniforms(set, this.woodlandLight?.sunCompositeTuning ?? SUN_TUNING_DEFAULTS);
         set('uCompositeShade', this.woodlandLight?.sunCompositeTuning?.shade ?? SUN_TUNING_DEFAULTS.shade);
         set('uCompositeSun', this.woodlandLight?.sunCompositeTuning?.sun ?? SUN_TUNING_DEFAULTS.sun);
+        set('uCompositeDaylight', this.woodlandLight?.sunCompositeTuning?.daylight ?? SUN_TUNING_DEFAULTS.daylight);
         set('uSunFogShade', this.woodlandLight?.sunCompositeTuning?.fogShade ?? SUN_TUNING_DEFAULTS.fogShade);
         set('uSunFogLit', this.woodlandLight?.sunCompositeTuning?.fogSun ?? SUN_TUNING_DEFAULTS.fogSun);
         set('uSunFogOpacity', this.woodlandLight?.sunCompositeTuning?.fogOpacity ?? 1);
@@ -330,19 +328,15 @@ export class FogGpuField {
         this.lightView[0]=this.view.x;this.lightView[1]=this.view.y;
         this.lightView[2]=this.view.width;this.lightView[3]=this.view.height;
         set('uFogView',this.lightView);set('uFogPrelit',Number(this.prelit));
-        if(material){
-          const renderer=this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-          renderer.glTextureUnits.bind((this.woodlandLight?.transmissionTexture??this.scene.textures.get('__DEFAULT')).source[0].glTexture!,9);
-        }
   }
   private makeDisplay(width: number, height: number): Phaser.GameObjects.Shader {
     const display = new Phaser.GameObjects.Shader(this.scene, {
       name: 'GroundFog_display', shaderName: 'GroundFog_display', fragmentSource: FOG_DISPLAY_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
         set('uMaterial', 0); set('uTrails', 1); set('uHasTrails', this.trailMask && this.debug === 'normal' ? 1 : 0);
-        this.setLightingUniforms(set,false);
+        this.setLightingUniforms(set);
       },
-    }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT', '__DEFAULT']);
+    }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT']);
     return this.scene.add.existing(display).setOrigin(0).setDepth(this.depth);
   }
   /** `trailWidth`/`trailHeight` size the wake mask independently of the soft material. */
@@ -392,8 +386,7 @@ export class FogGpuField {
       mask.render();
     }
     this.draw(this.material, this.states[this.current], this.states[1 - this.current]);
-    this.display!.setTextures([this.material.texture!, this.trailMask?.texture ?? this.scene.textures.get('__DEFAULT'),
-      this.woodlandLight?.transmissionTexture??this.scene.textures.get('__DEFAULT')]);
+    this.display!.setTextures([this.material.texture!, this.trailMask?.texture ?? this.scene.textures.get('__DEFAULT')]);
     this.display!.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setVisible(true);
     // Only the thin SDF fringe crosses low rock shoulders; actors remain above it.
     this.display!.setDepth(this.woodlandLight?.sunCompositeTuning && (this.woodlandLight.sunStrength??0)>0
@@ -411,8 +404,6 @@ export class FogGpuField {
       if(this.material)this.material.textures[6]=this.impulse.texture!;
       this.boundary.destroy();this.boundary=null;this.boundaryBuilder=null;
     }
-    // Detachment must release the borrowed texture even while presentation is paused.
-    if(this.display)this.display.textures[2]=binding?.transmissionTexture??this.scene.textures.get('__DEFAULT');
   }
   get trailDrawCalls(): number { return this.trailRenderer?.drawCalls ?? 0; }
   get visibleTraces(): number { return this.trailRenderer?.visibleTraces ?? 0; }

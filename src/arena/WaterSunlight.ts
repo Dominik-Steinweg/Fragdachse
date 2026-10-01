@@ -1,19 +1,18 @@
-import { SUN_VISIBILITY_GLSL, setSunVisibilityUniforms } from '../effects/sunlight/sunVisibility';
+import { SUN_VISIBILITY_GLSL } from '../effects/sunlight/sunVisibility';
 import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState } from '../effects/sunlight/cloudShadow';
 import { WATER_FRAGMENT } from './waterSurfaceShader';
 
 /** A separate program leaves the production fragment source and sampler list untouched. */
 export const WATER_SUN_FRAGMENT = WATER_FRAGMENT.replace('void main() {', `
-uniform sampler2D uSunTransmission;
 uniform vec2 uWorldOffset;
 uniform float uWaterGlint,uWaterGlintDensity,uWaterGlintSpeed;
 uniform vec3 uWaterSun;
-${SUN_VISIBILITY_GLSL}
 ${CLOUD_SHADOW_GLSL}
+${SUN_VISIBILITY_GLSL}
 void main() {`).replace('gl_FragColor=vec4(color*alpha,alpha);', `
   if(uCloudStrength>0.0) {
     vec2 world=p+uWorldOffset;
-    float lit=sunVisibility(world)*cloudTransmission(world);
+    float lit=sunVisibility(world);
     float direct=lit*uCloudStrength;
     // R7 thresholded the amplitude-damped ripple (usually only +/-0.6).
     // Read its unchanged phase instead: crest selection must not depend on height.
@@ -43,6 +42,5 @@ export function setWaterSunUniforms(set:(name:string,value:unknown)=>void, state
   set('uWaterGlintDensity',state?.tuning.waterGlintDensity??0);
   set('uWaterGlintSpeed',state?.tuning.waterGlintSpeed??0);
   setCloudUniforms(set,state);
-  if(state)setSunVisibilityUniforms(set,state.tuning);
 }
 const LEGACY_WATER_SUN = [-.5,-.5,Math.SQRT1_2];

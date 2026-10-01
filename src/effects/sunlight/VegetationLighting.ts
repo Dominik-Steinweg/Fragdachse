@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { getChunkBakeScheduler } from '../../arena/chunks/ChunkBakeScheduler';
 import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState } from './cloudShadow';
-import { SUN_BAND_GLSL, setSunVisibilityUniforms } from './sunVisibility';
+import { SUN_VISIBILITY_GLSL } from './sunVisibility';
 import { VEGETATION_SHADOW_GLSL } from './VegetationShadow';
 import { packVegetationVolume, stampVegetationAlpha, vegetationShadowLength, VEGETATION_PAD,
  type VegetationAlpha } from './VegetationVolume';
@@ -13,17 +13,17 @@ type Binding={id:number;image:Image;layer:string;x:number;y:number;blur:number;p
  texture:Phaser.Textures.Texture|null;wrapper:Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper|null;
  saved:Node|null;data:object|undefined};
 type VegetationDraw=(layer:string,x:number,y:number,size:number,writer:VegetationLighting)=>void;
-const HEADER=`
+export const VEGETATION_LIGHT_HEADER=`
 uniform sampler2D uVegData;
 uniform vec4 uVegUV,uVegWorld;
 uniform vec3 uVegSun;
 uniform vec2 uVegShadowOffset;
 uniform float uVegDataSize,uVegLight,uVegShadow,uVegStrength;
 ${CLOUD_SHADOW_GLSL}
-${SUN_BAND_GLSL}
+${SUN_VISIBILITY_GLSL}
 ${VEGETATION_SHADOW_GLSL}
 `;
-const PROCESS=`
+export const VEGETATION_LIGHT_PROCESS=`
 vec2 local=(outTexCoord-uVegUV.xy)/uVegUV.zw*uVegWorld.zw;
 vec2 dataUV=(local+${VEGETATION_PAD}.0)/(uVegDataSize*2.0);
 vec4 volume=texture2D(uVegData,dataUV);
@@ -45,9 +45,8 @@ float delta=dot(normal,uVegSun)-uVegSun.z;
 fragColor.rgb*=1.0+clamp(delta*uVegLight,-.20,.15)*form*vegetation;
 if(uVegShadow>0.0&&coverage>.015&&volume.g<.18) {
  vec2 world=uVegWorld.xy+local;
- float directCloud=mix(1.0,cloudShadow(world,uCloudTime),clamp(uCloudDensity*2.0,0.0,1.0));
  float shadow=vegetationShadowAlpha(coverage,volume.g,uVegSun.z,uVegStrength,uVegShadow,
-   vegetationCanopy(world),directCloud);
+   vegetationCanopy(world),1.0);
  // Cast onto flat colour in this layer and its transparent gaps exactly once.
  // Ambient/cloud colour is still owned by the world composite and lightmap.
  vec3 cool=vec3(0.0,.006,.012);
@@ -87,7 +86,7 @@ export class VegetationLighting {
   if(!renderer?.gl||!renderer.renderNodes){this.batch=null;return;}
   const manager=renderer.renderNodes,batch=new Phaser.Renderer.WebGL.RenderNodes.BatchHandlerQuadSingle(manager,{name:this.prefix});
   this.batch=batch;
-  batch.programManager.addAddition({name:'VegetationVolumeR18',additions:{fragmentHeader:HEADER,fragmentProcess:PROCESS}});
+  batch.programManager.addAddition({name:'VegetationVolumeR18',additions:{fragmentHeader:VEGETATION_LIGHT_HEADER,fragmentProcess:VEGETATION_LIGHT_PROCESS}});
   const setup=batch.setupUniforms,set=(name:string,value:unknown)=>batch.programManager.setUniform(name,value);
   batch.setupUniforms=context=>{
    setup.call(batch,context);const r=this.current;if(!r?.wrapper)return;
@@ -97,7 +96,6 @@ export class VegetationLighting {
    const length=vegetationShadowLength(path?.elevation??Math.PI/4,t.vegShadowLength);
    this.offset[0]=(path?.direction[0]??0)*length;this.offset[1]=(path?.direction[1]??0)*length;
    setCloudUniforms(set,state);renderer.glTextureUnits.bind(r.wrapper,1);
-   setSunVisibilityUniforms(set,t);
    set('uVegData',1);set('uVegDataSize',this.dataSize);set('uVegUV',this.uv);set('uVegWorld',this.world);
    set('uVegSun',path?.sun??this.sunFallback);set('uVegStrength',state.strength);
    set('uVegLight',t.vegLight);set('uVegShadow',state.quality?.vegetationShadows?t.vegShadow:0);

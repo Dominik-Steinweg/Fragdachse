@@ -1,7 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { canopyV9Direct, canopyHorizonWeights } from '../src/arena/trees/CanopyLightingModel';
 import { SUN_TUNING_DEFAULTS as tuning, validateSunTuning } from '../src/effects/sunlight/SunTuning';
-import { sunBandStretch } from '../src/effects/sunlight/cloudShadow';
 
 it('has no direct light at zero strength and follows the lit side',()=>{
   const east=[.8,0,.6],west=[-.8,0,.6];
@@ -18,11 +17,6 @@ it('interpolates the eight horizons cyclically and normalizes weights',()=>{
     expect([...a,...b].reduce((s,x)=>s+x,0)).toBeCloseTo(1);
     expect([...a,...b].every(x=>Number.isFinite(x)&&x>=0&&x<=1)).toBe(true);
   }
-});
-it('shortens noon bands continuously and leaves legacy bands unchanged',()=>{
-  expect(sunBandStretch()).toBe(1);expect(sunBandStretch(Math.PI/4)).toBeCloseTo(0);
-  expect(sunBandStretch(.3)).toBeGreaterThan(sunBandStretch(.65));
-  expect(Math.abs(sunBandStretch(.65)-sunBandStretch(.65001))).toBeLessThan(.001);
 });
 it('validates model overrides without accepting singular horizon widths',()=>{
   for(const values of [{canopyAO:NaN},{canopyWrap:-1},{canopyHorizonSoftness:0},{canopySunWeight:Infinity}])expect(()=>validateSunTuning(values)).toThrow();

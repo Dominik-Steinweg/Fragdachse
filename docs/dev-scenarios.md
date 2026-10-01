@@ -186,7 +186,7 @@ Die Grafikqualität (`high`, `medium`, `low`) wird in den regulären Spieloption
 ```js
 const dev = window.devScenario;
 dev.run({ action: 'options', values: { timeOfDay: 720 } });
-dev.run({ action: 'sunTuning', values: { raysAmount: 0 } });
+dev.run({ action: 'sunTuning', values: { cloudWarp: .65, cloudSoftness: .25 } });
 dev.run({ action: 'sunTuning', reset: true });
 dev.run({ action: 'measureWorldLighting', mode: 'stationary' });
 // Nach Abschluss: Messung mit Qualitätsstufe und tatsächlichen Rendergrößen.
@@ -199,7 +199,13 @@ Das Ergebnis enthält Frameintervalle, Draws, Upload-/Ressourcendaten, `graphics
 Frameintervalle enthalten Browser-Scheduling und sind keine GPU-Zeiten.
 `sunTuning` ist ein lokaler Override; gültige Schlüssel und Grenzen stehen in
 [`src/config/sunlight.ts`](../src/config/sunlight.ts). Reset oder ein neuer World-Aufbau beendet die Overrides.
-Rezepte mit entfernten Lichtvergleichsfeldern werden mit Hinweis abgelehnt.
+Das Wolkenfeld bleibt in Weltkoordinaten verankert. `cloudCover` und `cloudDensity` steuern
+Bedeckung und Kontrast, `cloudScale` die Größe, `cloudWarp` die Form und `cloudSoftness` die weichen Ränder.
+`shade`, `daylight` und `sun` steuern getrennt k�hlen Wolkenschatten, neutrales Tageslicht und warme Licht�ffnungen.
+`fogShade` und `fogSun` f�rben nur die Nebelradiance; Dichte und Fl�chenbudget �ndern sich dadurch nicht.
+`cloudSpeed`, `cloudEvolution` und `cloudGust` steuern Drift und Formwandel über die pausierbare Präsentationszeit.
+Die Felddiagnose meldet Breite, Höhe, RGBA-Bytes und Weltpixel je Texel; die Auflösung folgt der Grafikqualität.
+Rezepte mit entfernten Lichtvergleichsfeldern oder Strahlen-/Bandparametern werden mit Hinweis abgelehnt.
 
 ## Grenzen
 

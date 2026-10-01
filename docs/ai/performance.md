@@ -77,17 +77,19 @@ Nach sichtbaren Phaser-Änderungen npm run build ausführen. Für reine Performa
 
 [GraphicsQualityProfile](../../src/graphics/GraphicsQuality.ts) wählt die gemeinsame
 [SunRenderQuality](../../src/effects/sunlight/SunRenderQuality.ts). Die Stufen steuern
-Composite-/Strahlenauflösung, Wolkenfeld, Horizont-Aktualisierung, Vegetationslicht und Ökologiedichte.
+Composite-Auflösung, Wolkenfeld, Horizont-Aktualisierung, Vegetationslicht und Ökologiedichte.
 High enthält Formlicht und Pflanzenschatten, Medium nur Formlicht; Low baut keine Vegetations-Datentexturen
-und verzichtet auf Lichtschächte, Blatt-Dapple und Selbstschatten-Horizonte.
+und verzichtet auf Selbstschatten-Horizonte.
 Qualitätswechsel werden vom vorhandenen World-Owner verarbeitet; deaktivierte Renderressourcen
 werden freigegeben und bei erneuter Aktivierung wieder aufgebaut.
 
-Composite und Strahlen rechnen in reduzierten Renderzielen. Ihre Anzeigequads und alle Empfänger
+Das Composite rechnet in einem reduzierten Renderziel. Sein Anzeigequad und alle Empfänger
 müssen dieselben weltfesten Koordinaten einschließlich Zoom und Kamera-Viewport verwenden.
 Das gemeinsame [CloudFieldTexture](../../src/effects/sunlight/CloudFieldTexture.ts) bereitet
-Wolken- und Schwadenbeiträge für mehrere Empfänger vor; diese dürfen keine konkurrierenden
-Feldzustände pflegen. Vegetations-Datentexturen entstehen beim Chunk-Bake, nicht pro Frame.
+Wolkenöffnungen für mehrere Empfänger vor; diese dürfen keine konkurrierenden
+Feldzustände pflegen. Die rechteckige Textur richtet sich nach World-Ausmaßen und Qualitätsprofil,
+nicht nach der Kamera. Das Profil begrenzt Welttexel-Zielgröße, Pixelzahl und Achsenlänge;
+bei übergroßen Worlds hat die Speicherobergrenze Vorrang. Pausierte Felder werden wiederverwendet. Vegetations-Datentexturen entstehen beim Chunk-Bake, nicht pro Frame.
 
 Nebel trennt statistische Flächenbedeckung von lokaler Kerndichte. Wasser besitzt ein eigenes
 Flächenbudget; Streuung und Composite-Kompensation müssen gemeinsam mit dem finalen Alpha geprüft

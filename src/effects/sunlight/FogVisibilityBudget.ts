@@ -1,11 +1,10 @@
 import type { SunTuning } from './SunTuning';
 
-/** A SCREEN source s retains (1-s) of its destination. Reserve its maximum
- * channel contribution before allocating fog alpha: 1-(1-a)*(1-s) <= cover.
- * This is a compositing budget, independent of the optical-density model. */
+/** Conservative fallback-fog alpha margin. Kept independently of lighting so
+ * retiring an optical pass cannot expand fog coverage or change its knees. */
 export const FOG_VISIBILITY_BUDGET_GLSL=`
 uniform float uFogMaxCover,uFogWaterMaxCover,uFogScatterBudget,uFogRadianceLimit;
-float fogRayReserve(float strength) {
+float fogCoverageReserve(float strength) {
  return min(uFogScatterBudget,min(uFogMaxCover,uFogWaterMaxCover)*.5)*clamp(strength,0.0,1.0);
 }
 float fogSoftLimit(float value,float limit) {
@@ -17,13 +16,13 @@ float fogBudgetAlpha(float alpha,float water,float strength) {
  float day=smoothstep(0.0,.15,strength);
  float cover=mix(uFogMaxCover,uFogWaterMaxCover,clamp(water,0.0,1.0));
  float total=mix(alpha,fogSoftLimit(alpha,cover),day);
- float rays=fogRayReserve(strength);
- return max(0.0,(total-rays)/(1.0-rays));
+ float reserve=fogCoverageReserve(strength);
+ return max(0.0,(total-reserve)/(1.0-reserve));
 }
 `;
 
 const clamp=(n:number,a=0,b=1)=>Number.isFinite(n)?Math.max(a,Math.min(b,n)):a;
-export function fogRayReserve(strength:number,t:SunTuning):number {
+export function fogCoverageReserve(strength:number,t:SunTuning):number {
   return Math.min(t.fogScatterBudget,Math.min(t.fogMaxCover,t.fogWaterMaxCover)*.5)*clamp(strength);
 }
 export function fogSoftLimit(value:number,limit:number):number {
@@ -33,17 +32,17 @@ export function fogSoftLimit(value:number,limit:number):number {
 export function fogBudgetAlpha(alpha:number,water:number,strength:number,t:SunTuning):number {
   let day=clamp(strength/.15);day=day*day*(3-2*day);
   const cover=t.fogMaxCover+(t.fogWaterMaxCover-t.fogMaxCover)*clamp(water);
-  const total=alpha+(fogSoftLimit(alpha,cover)-alpha)*day,rays=fogRayReserve(strength,t);
-  return Math.max(0,(total-rays)/(1-rays));
+  const total=alpha+(fogSoftLimit(alpha,cover)-alpha)*day,reserve=fogCoverageReserve(strength,t);
+  return Math.max(0,(total-reserve)/(1-reserve));
 }
 /** Brightest-channel counterpart, after composite compensation and dithering.
  * CPU tests only; callers rendering a frame use the allocation-free GLSL above. */
-export function fogBudgetSample(alpha:number,radiance:number,rays:number,water:number,strength:number,t:SunTuning) {
-  if(!(strength>0))return {alpha,radiance,rays:0,cover:alpha};
+export function fogBudgetSample(alpha:number,radiance:number,water:number,strength:number,t:SunTuning) {
+  if(!(strength>0))return {alpha,radiance,cover:alpha};
   let day=clamp(strength/.15);day=day*day*(3-2*day);
-  const a=fogBudgetAlpha(alpha,water,strength,t),r=Math.min(clamp(rays),fogRayReserve(strength,t));
+  const a=fogBudgetAlpha(alpha,water,strength,t);
   const ceiling=a*(1+(fogRadianceLimit(t)-1)*day);
-  return {alpha:a,radiance:Math.min(Math.max(0,radiance*a/Math.max(.0001,alpha)),ceiling),rays:r,cover:1-(1-a)*(1-r)};
+  return {alpha:a,radiance:Math.min(Math.max(0,radiance*a/Math.max(.0001,alpha)),ceiling),cover:a};
 }
 /** Leave headroom for the existing global grade/bloom; it still affects the
  * entire world. Do not add another grade pass or alter production grading. */

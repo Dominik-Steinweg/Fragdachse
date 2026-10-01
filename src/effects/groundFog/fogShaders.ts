@@ -1,7 +1,7 @@
 import { CLOUD_SHADOW_GLSL } from '../sunlight/cloudShadow';
 import { ATMOSPHERE_DITHER_GLSL, FOG_BANK_GLSL } from '../sunlight/atmosphereNoise';
 import { FOG } from './FogConfig';
-import { SUN_VISIBILITY_GLSL } from '../sunlight/sunVisibility';
+import { SUN_VISIBILITY_GLSL, SUN_COMPOSITE_FACTOR_GLSL } from '../sunlight/sunVisibility';
 import { FOG_VISIBILITY_BUDGET_GLSL } from '../sunlight/FogVisibilityBudget';
 import { FOG_PATCH_GLSL } from '../sunlight/FogPatchField';
 const cells = FOG.chunkSize / FOG.cellSize;
@@ -203,14 +203,14 @@ void main() {
 const FOG_LIGHT_GLSL = `
 uniform vec3 uFogSun;
 uniform float uSunComposite;
-uniform vec3 uCompositeShade,uCompositeSun;
+uniform vec3 uCompositeShade,uCompositeDaylight,uCompositeSun;
 uniform vec3 uSunFogShade,uSunFogLit;
 uniform float uSunFogOpacity,uSunFogShadeOpacity;
 uniform float uFogBankMetadata;
 ${FOG_VISIBILITY_BUDGET_GLSL}
 uniform float uSceneSun;
-uniform sampler2D uSunTransmission;
 ${SUN_VISIBILITY_GLSL}
+${SUN_COMPOSITE_FACTOR_GLSL}
 
 vec4 lightFog(vec4 fog,vec2 world) {
  if(fog.a<=0.0)return fog;
@@ -225,7 +225,7 @@ vec4 lightFog(vec4 fog,vec2 world) {
    fog.b=mix(.81,.88,structure)*fog.a;
  }
  if(day>0.0) {
-   v=sunVolumeVisibility(world)*cloudTransmission(world);
+   v=sunVolumeVisibility(world);
    // Solar visibility changes radiance below, never optical coverage.
    if(uFogBankMetadata<.5)fog*=mix(1.0,uSunFogOpacity,day);
  }
@@ -245,16 +245,15 @@ vec4 lightFog(vec4 fog,vec2 world) {
      float forward=uFogScatter*pow(1.0-clamp(uFogSun.z,0.0,1.0),1.5)*v;
      scattering*=underside*(1.0+forward)*mix(1.0,mix(uSunFogShadeOpacity,1.0,v),amount);
      if(uFogBankMetadata>.5) {
-       // Keep silver crests and darker valleys; sunlight only gently tints them.
+       // Preserve the material relief; cloud openings colour its radiance, never alpha.
        vec3 material=fog.rgb/max(.0001,fog.a);
-       scattering=material*mix(vec3(1.0),mix(uSunFogShade,uSunFogLit,v),.22)
-         *(1.0+forward*.15);
+       scattering=material*mix(vec3(1.0),mix(uSunFogShade,uSunFogLit,v),.80)
+         *(1.0+forward*.35);
      }
-     // Cancel the actual ground composite, including its leaf mask. Cancelling
-     // with the low-pass visibility would print the sharp dapple onto fog again.
-     float ground=sunVisibility(world)*cloudTransmission(world);
-     vec3 factor=mix(vec3(1.0),clamp(mix(uCompositeShade,uCompositeSun,ground),0.0,2.0),amount);
-     factor=clamp(factor+atmosphereDither(world)*(2.0/255.0)*min(1.0,amount*8.0),0.0,2.0);
+     // Cancel the exact shared ground factor. Fog scatters the same smooth
+     // opening once; no leaf texture or separate volumetric pass contributes.
+     float ground=sunVisibility(world);
+     vec3 factor=sunCompositeFactor(uCompositeShade,uCompositeDaylight,uCompositeSun,ground,amount,atmosphereDither(world));
      fogComposite=max(vec3(.05),factor);
      fog.rgb=mix(fog.rgb,scattering*fog.a,amount)/max(vec3(.05),factor);
    }

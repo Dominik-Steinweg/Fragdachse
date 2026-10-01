@@ -1,5 +1,4 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
-import { WOODLAND_TRANSMISSION_KEY } from '../assets/WoodlandAssetManifest';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { WaterCell } from '../types';
@@ -128,9 +127,9 @@ export class WaterSurfaceRenderer {
         setupUniforms: (set: (name: string, value: unknown) => void) => {
           set('uMask', 0); set('uOrigin', origin); set('uSize', size); set('uHalo', WATER_MASK_HALO);
           set('uTime', this.getPresentationTime()); set('uSeed', (this.seed >>> 0) % 997);
-          if(sun) { set('uSunTransmission',1);set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight); }
+          if(sun) { set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight); }
         },
-      }, x + size / 2, y + size / 2, size, size, sun?[key,WOODLAND_TRANSMISSION_KEY]:[key]);
+      }, x + size / 2, y + size / 2, size, size, [key]);
       quad.setDepth(DEPTH.WATER).setBlendMode(Phaser.BlendModes.NORMAL);
       this.scene.add.existing(quad);
       return quad;

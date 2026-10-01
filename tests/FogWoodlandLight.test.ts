@@ -20,7 +20,7 @@ import type { FogWoodlandLight } from '../src/effects/groundFog/FogWoodlandLight
 
 afterEach(()=>{fake.shaders.length=0;vi.clearAllMocks();});
 describe('optional fog woodland presentation',()=>{
-  it('borrows the light texture and mutable uniforms without adding passes, then releases it even while paused',()=>{
+  it('borrows mutable light state without adding passes, then unbinds while paused',()=>{
     const gl={DITHER:1,MAX_TEXTURE_SIZE:2,MAX_TEXTURE_IMAGE_UNITS:3,FRAMEBUFFER_COMPLETE:4,
       isEnabled:()=>false,getParameter:(key:number)=>key===2?8192:16,getShaderPrecisionFormat:()=>({precision:23}),
       getProgramParameter:()=>true,checkFramebufferStatus:()=>4,texSubImage2D(){},disable(){},enable(){}};
@@ -34,16 +34,16 @@ describe('optional fog woodland presentation',()=>{
     const uniforms=(shader:any)=>{const values=new Map();shader.config.setupUniforms((name:string,value:unknown)=>values.set(name,value));return values;};
     expect(uniforms(material).get('uWoodlandBanks')).toBe(0);
     expect(uniforms(display).get('uSceneSun')).toBe(0);
-    const borrowed={source:[{glTexture:{}}]} as never,binding:FogWoodlandLight={transmissionTexture:borrowed,sunStrength:1,sun:[-.5,-.5,.7]};
+    const binding:FogWoodlandLight={sunStrength:1,sun:[-.5,-.5,.7]};
     const allocations=fake.shaders.length;fake.draws.mockClear();
     field.setWoodlandLight(binding);field.render(view,256,256,'normal',1,[],'low');
     expect(fake.shaders).toHaveLength(allocations);expect(fake.draws).toHaveBeenCalledTimes(1);
-    expect(display.textures[2]).toBe(borrowed);expect(uniforms(material).get('uWoodlandBanks')).toBe(1);expect(uniforms(display).get('uFogBankMetadata')).toBe(0);
+    expect(display.textures).toHaveLength(2);expect(uniforms(material).get('uWoodlandBanks')).toBe(1);expect(uniforms(display).get('uFogBankMetadata')).toBe(0);
     expect(uniforms(display).get('uFogView')).toEqual([100,200,512,512]);
     binding.sunStrength=0;
     expect(uniforms(display).get('uSceneSun')).toBe(0);
     field.setWoodlandLight(null);
-    expect(display.textures[2]).toBe(fallback);expect(uniforms(material).get('uWoodlandBanks')).toBe(0);
+    expect(uniforms(display).get('uSceneSun')).toBe(0);expect(uniforms(material).get('uWoodlandBanks')).toBe(0);
     
     const productionBytes=field.bytes;
     binding.sunCompositeTuning={...SUN_TUNING_DEFAULTS};binding.baseFogOpacity=.4;binding.baseFogDetail=.6;
@@ -62,7 +62,7 @@ describe('optional fog woodland presentation',()=>{
     const litDisplay=fake.shaders.filter(s=>s.config.name==='GroundFog_display').at(-1);
     expect(material.destroy).toHaveBeenCalledOnce();expect(display.destroy).toHaveBeenCalledOnce();
     expect(fake.shaders).toHaveLength(allocations+2);expect(fake.draws).toHaveBeenCalledTimes(1);
-    expect(uniforms(lit).get('uFogPrelit')).toBe(1);expect(uniforms(lit).get('uSunTransmission')).toBe(9);
+    expect(uniforms(lit).get('uFogPrelit')).toBe(1);expect(uniforms(lit).has('uSunTransmission')).toBe(false);
     expect(uniforms(litDisplay).get('uFogPrelit')).toBe(1);
     expect(field.lightingAtMaterialResolution).toBe(true);expect(field.materialWidth).toBe(256);
     field.setWoodlandLight(null);expect(field.bytes).toBe(productionBytes);

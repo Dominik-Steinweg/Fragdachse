@@ -3,18 +3,18 @@ export interface SunRenderQuality {
   readonly vegetationForm: boolean;
   readonly vegetationShadows: boolean;
   readonly compositeScale: number;
-  readonly raysScale: number;
-  readonly raysSamples: number;
-  readonly cloudSize: number;
+  /** Target world pixels per texel, subject to the per-world pixel/axis caps. */
+  readonly cloudTexel: number;
+  readonly cloudMaxPixels: number;
+  readonly cloudMaxAxis: number;
   readonly horizonStep: number;
   readonly horizons: boolean;
-  readonly dapple: boolean;
   readonly ecologyDensity: number;
 }
 export const SUN_RENDER_QUALITY = {
-  high: { vegetationForm: true, vegetationShadows: true, compositeScale: .5, raysScale: .5, raysSamples: 6, cloudSize: 256, horizonStep: 6, horizons: true, dapple: true, ecologyDensity: 1 },
-  medium: { vegetationForm: true, vegetationShadows: false, compositeScale: .5, raysScale: .25, raysSamples: 5, cloudSize: 192, horizonStep: 12, horizons: true, dapple: true, ecologyDensity: .8 },
-  low: { vegetationForm: false, vegetationShadows: false, compositeScale: .25, raysScale: 0, raysSamples: 0, cloudSize: 128, horizonStep: 24, horizons: false, dapple: false, ecologyDensity: .5 },
+  high: { vegetationForm: true, vegetationShadows: true, compositeScale: .5, cloudTexel: 10, cloudMaxPixels: 262144, cloudMaxAxis: 2048, horizonStep: 6, horizons: true, ecologyDensity: 1 },
+  medium: { vegetationForm: true, vegetationShadows: false, compositeScale: .5, cloudTexel: 20, cloudMaxPixels: 65536, cloudMaxAxis: 1024, horizonStep: 12, horizons: true, ecologyDensity: .8 },
+  low: { vegetationForm: false, vegetationShadows: false, compositeScale: .25, cloudTexel: 40, cloudMaxPixels: 16384, cloudMaxAxis: 512, horizonStep: 24, horizons: false, ecologyDensity: .5 },
 } as const satisfies Record<string, SunRenderQuality>;
 
 /** Same world rectangle for material and display, independent of backing scale.
@@ -27,4 +27,16 @@ export function sunRenderWorld(out: number[], x: number, y: number, width: numbe
 }
 export function sunRenderSize(worldLength: number, zoom: number, scale: number): number {
   return Math.max(2, Math.ceil(worldLength * zoom * scale / 2 - 1e-8) * 2);
+}
+
+/** Rectangular, bounded world field. Writes reusable storage; never camera-sized.
+ * Finite oversized worlds gracefully exceed the target footprint, not the cap. */
+export function cloudFieldSize(out:number[],width:number,height:number,q:SunRenderQuality):void {
+  const w=Number.isFinite(width)?Math.max(1,width):1,h=Number.isFinite(height)?Math.max(1,height):1;
+  let x=Math.min(q.cloudMaxAxis,Math.max(2,2**Math.ceil(Math.log2(w/q.cloudTexel))));
+  let y=Math.min(q.cloudMaxAxis,Math.max(2,2**Math.ceil(Math.log2(h/q.cloudTexel))));
+  while(x*y>q.cloudMaxPixels) {
+    if(x>2&&(y<=2||w/x<=h/y))x/=2;else y/=2;
+  }
+  out[0]=x;out[1]=y;
 }

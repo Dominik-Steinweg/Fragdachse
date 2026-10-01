@@ -37,6 +37,6 @@ float vegetationCanopy(vec2 world) {
  vec2 uv=(world-uCloudWorld.xy)/max(uCloudWorld.zw,vec2(1.0));
  if(uCloudCached>.5&&all(greaterThanEqual(uv,vec2(0)))&&all(lessThanEqual(uv,vec2(1))))
   return texture2D(uCloudField,vec2(uv.x,1.0-uv.y)).a;
- return sunBandVisibility(world);
+ return sunVisibility(world);
 }
 `;
