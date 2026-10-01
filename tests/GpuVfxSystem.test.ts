@@ -739,3 +739,90 @@ describe('gpu vfx system: sources', () => {
     expect(system.getLaneStats(GpuVfxLaneId.RocketSmoke)?.liveCount).toBe(1);
   });
 });
+
+// Exercise the pinned Phaser assembler, not a hand-written fragment substitute.
+describe('Phaser PMA zero-alpha compatibility for GPU and ordinary batches',()=>{
+  async function harness(){
+    const {createRequire}=await import('node:module');const {readFileSync}=await import('node:fs');
+    const {runInNewContext}=await import('node:vm');const {resolve}=await import('node:path');
+    const require=createRequire(resolve('package.json'));
+    const Program=require(resolve('node_modules/phaser/src/renderer/webgl/ProgramManager.js'));
+    const Factory=require(resolve('node_modules/phaser/src/renderer/webgl/ShaderProgramFactory.js'));
+    const compat=await import('../src/graphics/PhaserAlphaZero');
+    const prototype=Object.create(Program.prototype);compat.installPhaserAlphaZero(prototype);
+    const hook=prototype.addAddition;compat.installPhaserAlphaZero(prototype);expect(prototype.addAddition).toBe(hook);
+    const manager=new Program({},[]);Object.setPrototypeOf(manager,prototype);
+    const factory=new Factory({createProgram:(vertex:string,fragment:string)=>({vertex,fragment})});
+    const nodeConfig=(name:string)=>{
+      const file=resolve('node_modules/phaser/src/renderer/webgl/renderNodes/'+name+'.js');
+      const localRequire=createRequire(file),module={exports:{} as any};
+      // Read each real node's default config without constructing its DOM/GPU resources.
+      runInNewContext(readFileSync(file,'utf8'),{module,require:(id:string)=>id.endsWith('/Class')?(function(config:unknown){return config;}):id.includes('/shaders/')?localRequire(id):{}});
+      return module.exports.defaultConfig;
+    };
+    const compose=()=>{const c=manager.currentConfig;return factory.getShaderProgram(c.base,c.additions,c.features).fragment as string;};
+    return {require,resolve,manager,factory,nodeConfig,compose,...compat};
+  }
+  it('guards the assembled GPU, Quad/QuadSingle, Strip and TileSprite tint before division, with distinct cache names',async()=>{
+    const h=await harness();
+    for(const node of ['submitter/SubmitterSpriteGPULayer','BatchHandlerQuad','BatchHandlerStrip','BatchHandlerTileSprite']){
+      const c=h.nodeConfig(node);expect(c.shaderAdditions).toBeDefined();
+      for(const name of node==='BatchHandlerQuad'?[c.shaderName,'STANDARD_SINGLE']:[c.shaderName]){
+        h.manager.currentConfig.additions=[];h.manager.setBaseShader(name,c.vertexSource,c.fragmentSource);
+        const original=c.shaderAdditions.map((a:any)=>({...a,additions:{...a.additions}}));
+        const oldKey=h.factory.getKey({name},original,[]);
+        for(const addition of original)h.manager.addAddition(addition);
+        const text=h.compose(),guard=text.indexOf('if (texture.a <= 0.0) { return vec4(0.0); }');
+        expect(guard,node).toBeGreaterThan(-1);expect(guard,node).toBeLessThan(text.indexOf('texture.rgb / texture.a'));
+        expect(h.manager.getAdditionsByTag('TINT')[0].name).not.toBe('Tint');
+        expect(h.factory.getKey(h.manager.currentConfig.base,h.manager.currentConfig.additions,[])).not.toBe(oldKey);
+      }
+    }
+  });
+  it('guards self-shadow, changing stencil strategies and Key without losing lighting lookups or tags',async()=>{
+    const h=await harness(),base=h.resolve('node_modules/phaser/src/renderer/webgl/shaders');
+    h.manager.setBaseShader('STANDARD',h.require(base+'/Multi-vert.js'),h.require(base+'/Multi-frag.js'));
+    const lights=h.require(base+'/additionMakers/MakeDefineLights.js')(false);h.manager.addAddition(lights);
+    expect(h.manager.getAddition('DefineLights')).toBe(lights);lights.additions.fragmentDefine='#define LIGHT_COUNT 7';
+    const make=h.require(base+'/additionMakers/MakeApplyAlphaDiscard.js');h.manager.addAddition(make(true));
+    for(const args of [[false,true],[false,false,.1],[true]] as const){
+      const previous=h.manager.getAdditionsByTag('ALPHA_DISCARD')[0];h.manager.replaceAddition(previous.name,make(...args));
+      const text=h.compose();expect(text).toContain('if (fragColor.a <= 0.0) { return vec4(0.0); }');
+      expect(text).toContain('#define LIGHT_COUNT 7');
+      if(!args[0])expect(text.indexOf('if (fragColor.a <= 0.0) { discard; }')).toBeLessThan(text.indexOf('return fragColor / fragColor.a;'));
+    }
+    h.manager.currentConfig.additions=[];
+    h.manager.setBaseShader('KEY','',h.require(base+'/FilterKey-frag.js'));
+    const text=h.compose();expect(text).toContain('if (color.a <= 0.0) { gl_FragColor = vec4(0.0); return; }');
+    h.manager.setBaseShader('GRADIENT_MAP','',h.require(base+'/FilterGradientMap-frag.js'));
+    expect(h.compose()).toContain('if (sample.a <= 0.0) { gl_FragColor = vec4(0.0); return; }');
+    for(const file of ['ColorMatrix-frag','FilterColorMatrix-frag','FilterCombineColorMatrix-frag']){
+      const original=h.require(base+'/'+file+'.js');expect(h.guardPhaserUnpremultiply(original)).toBe(original);
+    }
+  });
+  it('leaves the entire positive-alpha branch byte-identical and makes all tint modes finite at zero',async()=>{
+    const h=await harness(),original=h.require(h.resolve('node_modules/phaser/src/renderer/webgl/shaders/ApplyTint-glsl.js')) as string;
+    const patched=h.guardPhaserUnpremultiply(original);
+    expect(patched.replace('\n    // FD_ALPHA_ZERO_V1\n    if (texture.a <= 0.0) { return vec4(0.0); }','')).toBe(original);
+    expect(h.guardPhaserUnpremultiply(patched)).toBe(patched);
+    // Numeric counterpart of the unchanged ApplyTint branch. Source identity above
+    // proves no positive-alpha GLSL operation (including tint mode 3/pass-through) changes.
+    const tint=(a:number,mode:number,guard:boolean)=>{
+      if(guard&&a<=0)return [0,0,0,0];
+      const rgb=[.2*a,.5*a,.9*a],t=[.25,.6,.8],effect=[.8,.3,.1];
+      const out=rgb.map((channel,i)=>{const u=channel/a;let c=u;
+        if(mode===0)c*=t[i];else if(mode===1)c=t[i];else if(mode===2)c+=t[i];
+        else if(mode===4)c=1-(1-u)*(1-t[i]);
+        else if(mode===5)c=u<.5?2*t[i]*u:1-2*(1-t[i])*(1-u);
+        else if(mode===6)c=t[i]<.5?2*t[i]*u:1-2*(1-t[i])*(1-u);
+        else if(mode===7)c=(1-u)*effect[i]+t[i]*u;
+        return c*a*.7;
+      });return [...out,a*.7];
+    };
+    for(let mode=0;mode<=7;mode++){
+      expect(tint(0,mode,true)).toEqual([0,0,0,0]);expect(tint(-1,mode,true)).toEqual([0,0,0,0]);
+      for(const a of [1e-12,1/255,1]){const actual=tint(a,mode,true);expect(actual.every(Number.isFinite)).toBe(true);expect(actual).toEqual(tint(a,mode,false));}
+    }
+    expect(tint(0,0,false).some(Number.isNaN)).toBe(true);
+  });
+});
