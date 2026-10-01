@@ -229,3 +229,92 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
 });
 
 
+
+
+describe('Performance lab campaign lifecycle', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it.each(['1', '7', '15'])('commits before map %s and exits through normal completion before teardown', async mapId => {
+    const { createPerformanceLabGamePort } = await import('../../src/debug/performanceLab/gamePort');
+    const { buildPerformanceLoadout } = await import('../../src/debug/performanceLab/loadouts');
+    vi.stubGlobal('window', { __FD_PERF_REQUEST__: { load: true } });
+    vi.spyOn(devScenarioMode, 'isDevScenarioMode').mockReturnValue(false);
+    const { flow, setPhase } = fixture(true, 'aborted');
+    setPhase('LOBBY');
+    let committed: any = null, selectedMap = '1';
+    vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([{ id: 'local' }] as any);
+    vi.spyOn(bridge, 'getCoopDefenseMapId').mockImplementation(() => selectedMap);
+    vi.spyOn(bridge, 'setCoopDefenseMapId').mockImplementation(id => { selectedMap = id; });
+    vi.spyOn(bridge, 'setGameMode').mockImplementation(() => {});
+    vi.spyOn(bridge, 'sendLocalInput').mockImplementation(() => {});
+    vi.spyOn(bridge, 'setLocalReadyWithCommittedLoadout').mockImplementation(value => { committed = value; });
+    vi.spyOn(bridge, 'getPlayerCommittedLoadout').mockImplementation(() => committed);
+    vi.mocked(bridge.setLocalReady).mockImplementation(ready => {
+      if (!ready) { expect(bridge.getGamePhase()).toBe('LOBBY'); committed = null; }
+    });
+    const activity = { kind: 'coop-mission', definitionId: 'activity:coop-mission:' + mapId, worldRevision: 1, activityRevision: 1 };
+    flow.worldLifecycle.activity.descriptor = activity;
+    flow.worldLifecycle.activity.isActive = () => true;
+    vi.spyOn(bridge, 'getActivityDescriptor').mockReturnValue(activity as any);
+    const applyBase = vi.fn();
+    flow.resultApplication = new ResultApplication({ getCurrentActivity: () => activity as any,
+      resolveVictoryRewardIds: () => [], grantPersistentBaseRewards: vi.fn(), applyPersistentBaseOutcome: applyBase,
+      clearActivityPresentation: vi.fn(), publishCompletion: vi.fn() });
+    vi.mocked(bridge.hostResetAllLobbyReady).mockImplementation(() => { expect(applyBase).toHaveBeenCalledOnce(); committed = null; });
+    Object.assign(flow, { committedLoadoutSelections: new WeakMap(), resolveConfiguredGameMode: () => 'coop_defense',
+      navigationLabPort: { setNextRoundSeed: vi.fn() }, setIsLocalReady: vi.fn(),
+      clearTimeOfDayDebugOverride: vi.fn(), rpcPorts: { heldAction: { clearPlayer: vi.fn() } } });
+    const discarded = vi.spyOn(flow, 'hostDiscardRound');
+    const aborted = vi.spyOn(flow, 'hostAbortRound');
+    const port = createPerformanceLabGamePort({} as any, flow, { getPlayer: () => undefined } as any,
+      { getSemanticEventSink: () => vi.fn() } as any, vi.fn(), () => true);
+    const commit = buildPerformanceLoadout('GLOCK').commit;
+    port.start(mapId, 12345, commit);
+    expect(committed).toBe(commit);
+    expect(flow.setIsLocalReady).toHaveBeenCalledWith(true);
+    setPhase('ARENA');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    for (let i = 0; i < 100; i++) flow.resolveCommittedLoadoutSelection('local');
+    expect(warn).not.toHaveBeenCalled();
+    // A rejected exit must not erase the still-running activity's commit or clear active ownership.
+    aborted.mockImplementationOnce(() => {});
+    expect(() => port.discard()).toThrow('did not enter LOBBY');
+    expect(committed).toBe(commit);
+    expect(bridge.setLocalReady).not.toHaveBeenCalled();
+    port.discard(); port.discard();
+    expect(discarded).not.toHaveBeenCalled();
+    expect(bridge.getGamePhase()).toBe('LOBBY');
+    expect(applyBase).toHaveBeenCalledWith('rollback', { worldRevision: 1, activityRevision: 1 });
+    expect(flow.worldLifecycle.endInstance).not.toHaveBeenCalled();
+    // The production phase transition, rather than the lab command, owns world teardown.
+    Object.assign(flow, { ctx: { leftPanel: { setLobbyFieldsLocked: vi.fn() }, gameAudioSystem: { playMusic: vi.fn() } },
+      lobbyOverlay: { setReadyButtonState: vi.fn() }, resetLocalArenaHudState: vi.fn(), syncLobbyTimeOfDay: vi.fn(), syncLobbySurface: vi.fn() });
+    flow.hostUpdate.localPlayerState = {};
+    flow.worldLifecycle.descriptor = { definitionId: 'world:coop-defense:' + mapId, worldRevision: 1 };
+    const teardown = vi.spyOn(flow, 'tearDownArena').mockImplementation(() => flow.clearArenaExitPresentation());
+    flow.detectPhaseChange(false);
+    expect(teardown).toHaveBeenCalledOnce();
+    expect(flow.worldLifecycle.endInstance).toHaveBeenCalledOnce();
+  });
+  it('warns once per player and activity, keeping the live-slot fallback available', () => {
+    const { flow } = fixture(true);
+    let activity: any = { activityRevision: 1, worldRevision: 1 };
+    flow.worldLifecycle.activity.descriptor = activity;
+    flow.worldLifecycle.activity.isActive = () => activity !== null;
+    vi.spyOn(bridge, 'getActivityDescriptor').mockImplementation(() => activity);
+    vi.spyOn(bridge, 'getPlayerCommittedLoadout').mockReturnValue(null);
+    vi.spyOn(bridge, 'getPlayerCurrentLoadoutSnapshot').mockReturnValue(null);
+    const fallback = {};
+    flow.resolveLoadoutSelection = vi.fn(() => fallback);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    for (let i = 0; i < 100; i++) expect(flow.resolveCommittedLoadoutSelection('local')).toBe(fallback);
+    expect(warn).toHaveBeenCalledOnce();
+    flow.resolveCommittedLoadoutSelection('remote');
+    expect(warn).toHaveBeenCalledTimes(2);
+    activity = { ...activity, activityRevision: 2 }; flow.worldLifecycle.activity.descriptor = activity;
+    flow.resolveCommittedLoadoutSelection('local');
+    expect(warn).toHaveBeenCalledTimes(3);
+    activity = null;
+    flow.resolveCommittedLoadoutSelection('lobby-player');
+    expect(warn).toHaveBeenCalledTimes(3);
+  });
+});

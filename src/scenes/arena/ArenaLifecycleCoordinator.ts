@@ -216,6 +216,7 @@ export class ArenaLifecycleCoordinator {
   private isLocalReady      = false;
   private lastPhase: import('../../types').GamePhase = 'LOBBY';
   private trainDestroyedShown = false;
+  private missingCommittedLoadoutWarnings?: { revision: number; players: Set<string> };
   /** NetworkBridge replaces the committed snapshot at a new Ready commit. Old builds can be GC'd. */
   private readonly committedLoadoutSelections = new WeakMap<LoadoutCommitSnapshot, {
     mode: GameMode;
@@ -1436,6 +1437,7 @@ export class ArenaLifecycleCoordinator {
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
   private detachActivityRuntime(): void {
+    this.missingCommittedLoadoutWarnings = undefined;
     this.ctx.effectSystem.clearXpTexts();
     this.worldGameplay?.support?.plague?.clearTargets();
     this.ctx.stinkCloudSystem.clearPlagueVisuals();
@@ -3555,7 +3557,14 @@ export class ArenaLifecycleCoordinator {
       // Innerhalb einer Runde bleibt es der bekannte Risikofall ("falsche Waffe") und wird
       // geloggt, damit er im Realbetrieb auffaellt.
       if (this.worldLifecycle.activity.isActive()) {
-        console.warn(`[Loadout] Kein committed Loadout für ${playerId} – nutze Live-Slot-Fallback.`);
+        const revision = this.worldLifecycle.activity.descriptor?.activityRevision ?? -1;
+        if (!this.missingCommittedLoadoutWarnings || this.missingCommittedLoadoutWarnings.revision !== revision) {
+          this.missingCommittedLoadoutWarnings = { revision, players: new Set() };
+        }
+        if (!this.missingCommittedLoadoutWarnings.players.has(playerId)) {
+          this.missingCommittedLoadoutWarnings.players.add(playerId);
+          console.warn(`[Loadout] Kein committed Loadout für ${playerId} – nutze Live-Slot-Fallback.`);
+        }
       }
       return this.resolveLoadoutSelection(
         playerId,

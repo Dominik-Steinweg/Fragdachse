@@ -85,7 +85,7 @@ it('runs cold/warm pairs and real map switches in one context, saving evidence b
   const reset = () => { now = 1000; world = 'world:lobby'; started = 20; win.__FD_PERF__ = {
     state: 'awaiting-audio', audioState: () => 'running', prepareLoad: async () => {},
     load: { start: (map: string) => { commands.push(map); world = 'world:coop-defense:'+map; started = now+10; now += 600; },
-      lobby: () => { world = 'world:lobby'; }, status: () => ({ worldId: world, revealReady: true, ready: world !== 'world:lobby', lobbyReady: world === 'world:lobby' }) },
+      lobby: () => { world = 'world:lobby'; started = now+10; now += 600; }, status: () => ({ worldId: world, revealReady: true, ready: world !== 'world:lobby', lobbyReady: world === 'world:lobby' }) },
   }; };
   vi.stubGlobal('window', win); vi.stubGlobal('history', { replaceState: vi.fn() });
   vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -97,7 +97,8 @@ it('runs cold/warm pairs and real map switches in one context, saving evidence b
   try {
     const result = await runLoadMeasurements({ page, context, url: 'http://127.0.0.1:1234/', directory,
       request: { runs: 2, network: '50mbps', timeoutMs: 10000 }, signal: new AbortController().signal });
-    expect(result.samples).toHaveLength(10);
+    expect(result.samples).toHaveLength(16);
+    expect(result.samples.filter((s: any) => s.phase.endsWith('-to-lobby'))).toHaveLength(6);
     expect(result.samples.every((s: any) => s.valid)).toBe(true);
     expect(commands).toEqual(['1','7','15','1','7','15']);
     expect(page.reload).toHaveBeenCalledTimes(2);

@@ -1,5 +1,6 @@
 import type * as Phaser from 'phaser';
 import { bridge } from '../../network/bridge';
+import { isDiagnosticMapId } from '../../config/coopDefenseMaps';
 import type { PlayerManager } from '../../entities/PlayerManager';
 import type { ArenaRuntime } from '../../scenes/arena/ArenaRuntime';
 import type { ArenaDiagnosticsController } from '../../scenes/arena/ArenaDiagnosticsController';
@@ -480,7 +481,14 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     discard() {
       if (!active) return;
       input(); flow.rpcPorts.heldAction.clearPlayer(localId()); removeWorldObserver?.(); removeWorldObserver = null;
-      flow.clearTimeOfDayDebugOverride(); flow.hostDiscardRound(); targets.clear();
+      flow.clearTimeOfDayDebugOverride();
+      // Discard is intentionally restricted to registered diagnostic maps. Real campaign
+      // maps must use the same activity completion / exit / teardown as the options menu.
+      if (isDiagnosticMapId(requestedMap)) flow.hostDiscardRound();
+      else flow.hostAbortRound();
+      // Never clear the Ready commit or restore lobby settings while the activity still runs.
+      if (bridge.getGamePhase() !== 'LOBBY') throw new Error('Performance lab exit did not enter LOBBY');
+      targets.clear();
       bridge.setLocalReady(false); flow.setIsLocalReady(false); bridge.setCoopDefenseMapId(previousMap); bridge.setGameMode(previousMode); active = false;
     },
     stopRecording: () => diagnostics.stopScenarioRecording(),

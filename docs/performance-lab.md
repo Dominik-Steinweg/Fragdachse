@@ -392,7 +392,7 @@ und [Chromes CPUProfileDataModel](https://chromium.googlesource.com/devtools/dev
 
 Der bestehende Runner bietet einen separaten Lade-Modus. Er baut bzw. verwendet sein
 archiviertes **performance-lab-Produktionsbundle**, keinen Vite-Dev-Server. Der normale
-Host-Verbindungs-, Ready-/Start- und Discard-Pfad l?dt die echten Maps; Kampffixtures und
+Host-Verbindungs-, Ready-/Start- und Abbruch-Pfad l?dt die echten Maps; Kampffixtures und
 vollst?ndige Frame-/Chrome-Traces bleiben aus. Signalisierungszugriff und lokales Chrome
 sind weiterhin Voraussetzungen. Keine parallel laufenden Builds/Lasttests.
 
@@ -461,3 +461,16 @@ somit rechnerisch mindestens 24 volle Wellen allein f?r diese Gruppe; andere Dat
 die Queue. Ein gedrosselter Sekundentakt kann die beobachtete Streckung ?ber etwa 21 Sekunden
 erkl?ren, beweist aber keinen entsprechenden Netzwerk- oder Decode-Aufwand im ungedrosselten
 Spiel. Loader-Parallelit?t und Assets bleiben f?r diese Messrunde unver?ndert.
+
+
+Der Lade-Modus beendet Kampagnen-Activities ueber den regulaeren Host-Abbruch
+(Optionsmenue-Pfad), inklusive Abschluss, Ready-Reset und nachfolgendem World-Teardown.
+Nur registrierte Diagnosemaps verwenden den ergebnislosen Discard. Der Lab-Port setzt
+Ready und Lobby-Einstellungen erst zurueck, nachdem die Phase tatsaechlich LOBBY ist;
+ein abgelehnter Exit wird sofort als Fehler gemeldet und behaelt den laufenden Commit.
+Der Start verwendet weiterhin denselben Snapshot-vor-Ready-Vertrag wie der normale Start.
+
+Jeder Rueckweg bekommt eine eigene Stichprobe und Timeline-Datei
+load-<NN>-map-<ID>-to-lobby.json. Auftrag bis Reveal enthaelt den Activity-Abschluss,
+den alten World-Abbau und den Aufbau der Lobby; World-Ready allein misst nur den neuen
+World-Aufbau. Die naechste Map startet erst nach bereiter und enthuelter Lobby.

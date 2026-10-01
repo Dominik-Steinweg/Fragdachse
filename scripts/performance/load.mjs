@@ -71,7 +71,8 @@ export async function writeLoadReports(directory, request, samples) {
     iterations: request.runs, samples, phases: summarizeLoadSamples(samples),
     notes: [
       'Cold = cleared Chrome HTTP/origin cache, not cold OS/GPU/driver cache. Warm = same context, page reload.',
-      'Maps 1/7/15 use ordinary host ready/start/discard through the existing lab port; no combat fixtures or Vite.',
+      'Maps 1/7/15 use ordinary host ready/start/abort through the existing lab port; no combat fixtures or Vite.',
+      'map-N-to-lobby includes activity completion, teardown and rebuilt lobby reveal from the exit command onward.',
       'Command-to-playable includes normal round countdown. World-ready is the A1 local barrier; reveal eligibility is polled at 100 ms.',
       'rAF validity covers construction through both readiness and reveal eligibility, excluding subsequent countdown/idle/report work.',
       'Boot-reveal includes initial module/network startup and DOM fade; A1 boot starts later at asset preload.',
@@ -181,7 +182,15 @@ export async function runLoadMeasurements({ page, context, url, directory, reque
           return matches && state.ready && state.revealReady;
         });
         await save(iteration, `map-${map}`, from, false, revealAt);
-        await page.evaluate(() => window.__FD_PERF__.load.lobby());
+        const exitFrom = await page.evaluate(() => { const at = performance.now(); window.__FD_PERF__.load.lobby(); return at; });
+        let lobbyRevealAt;
+        await poll(async () => {
+          const state = await page.evaluate(() => ({ ...window.__FD_PERF__.load.status(), at: performance.now() }));
+          if (!state.lobbyReady) return false;
+          lobbyRevealAt = state.at;
+          return true;
+        });
+        await save(iteration, `map-${map}-to-lobby`, exitFrom, false, lobbyRevealAt);
       }
       await poll(() => page.evaluate(() => window.__FD_PERF__.load.status().lobbyReady));
     }

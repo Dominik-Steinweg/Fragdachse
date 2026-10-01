@@ -176,6 +176,9 @@ async function run() {
   }, 2000);
   page.on('console', msg => {
     if (!['warning', 'error'].includes(msg.type())) return;
+    // Repeated identical messages are counted, so one noisy warning cannot abort a long run.
+    const repeated = consoleMessages.find(entry => entry.type === msg.type() && entry.text === msg.text());
+    if (repeated) { repeated.count = (repeated.count ?? 1) + 1; return; }
     if (consoleMessages.length >= 200) {
       manifest.consoleTruncated = true;
       abortRun('Browserprotokoll überschreitet 200 Einträge; Aufnahme unvollständig');
