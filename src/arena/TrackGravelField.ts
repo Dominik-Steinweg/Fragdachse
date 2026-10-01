@@ -1,4 +1,5 @@
 import { CELL_SIZE } from '../config';
+import { terrainSnapshotTexel } from './TerrainSnapshotSampling';
 import type { ArenaTrackColumnSpec } from './ArenaVisualFactory';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
 import { hashSeededCell01 } from './CellHash';
@@ -75,6 +76,7 @@ export function writeTrackBallast(
   frame: ChunkWorldFrame,
   region: { worldX: number; worldY: number; size: number },
   materials: TrackBallastMaterials,
+  snapshotSamples = false,
 ): void {
   data.fill(0);
   const { gravel, soil } = materials;
@@ -83,6 +85,7 @@ export function writeTrackBallast(
       || column.x + column.width + TRACK_BALLAST_REACH_PX <= region.worldX) continue;
     const gridX = Math.round((column.x - frame.offsetX) / CELL_SIZE);
     for (let y = 0; y < region.size; y += 1) {
+      if (snapshotSamples && !terrainSnapshotTexel(y)) continue;
       const worldY = region.worldY + y + 0.5;
       if (worldY < column.y || worldY >= column.y + column.height) continue;
       const localY = worldY - frame.offsetY;
@@ -92,6 +95,7 @@ export function writeTrackBallast(
       const gravelRow = groundMaterialPhase(Math.floor(localY), gravel.height) * gravel.width;
       const soilRow = groundMaterialPhase(Math.floor(localY), soil.height) * soil.width;
       for (let x = minX; x < maxX; x += 1) {
+        if (snapshotSamples && !terrainSnapshotTexel(x)) continue;
         const worldX = region.worldX + x + 0.5;
         const railX = worldX - column.x;
         // 0 inside the dense core, 1 at the outer end of the shoulder.

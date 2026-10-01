@@ -1,3 +1,4 @@
+import type { TerrainSnapshotStaging } from '../TerrainSnapshotStaging';
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
 import type { ArenaLayout, DecalCell, DirtCell, WaterCell } from '../../types';
@@ -357,103 +358,60 @@ export class GroundSurfaceStreamer {
     return this.persistentBaseGravelState;
   }
 
-  /**
-   * Zeichnet die unveraenderten Dirt-Quelldaten in ein externes Snapshot-Target. Die Methode
-   * benutzt bewusst dieselben Indizes, Autotile-/Corner-Tint-Fabriken und Mottle-Stempel wie der
-   * normale Chunk-Bake; sie besitzt kein eigenes Renderziel.
-   */
-  renderSnapshotDirt(
+  /** Same native soil field and spatial queries as visible chunks; the build owns
+   * its batched upload canvas and yields only after borrowed pixels are copied. */
+  *renderSnapshotDirt(
     target: Phaser.GameObjects.RenderTexture,
     region: GroundSnapshotRegion,
-    renderScale: number,
-  ): void {
-    this.renderSnapshotBakedLayer(target, region, renderScale, (part, sink) => this.bakeDirtRegion(part, sink));
+    staging: TerrainSnapshotStaging,
+  ): Generator<void | false, void> {
+    if (!this.dirtLayer) return;
+    yield* staging.draw(target, region, this.frame, part => {
+      const soil = this.dirtIndex.collect(part.localX, part.localY, part.size,
+        DIRT_SURFACE_REACH_PX, this.dirtCandidateIds).length > 0;
+      const bank = !soil && this.waterIndex.collect(part.localX, part.localY, part.size,
+        WATER_BANK_REACH_PX, this.dirtCandidateIds).length > 0;
+      return soil || bank ? this.dirtLayer!.writeRegion(part) : null;
+    }, this.dirtLayer.snapshotSource);
   }
 
-  renderSnapshotTrackGravel(
+  *renderSnapshotTrackGravel(
     target: Phaser.GameObjects.RenderTexture,
     region: GroundSnapshotRegion,
-    renderScale: number,
-  ): void {
+    staging: TerrainSnapshotStaging,
+  ): Generator<void | false, void> {
     if (!this.trackGravelLayer) return;
-    this.renderSnapshotBakedLayer(target, region, renderScale, (part, sink) => this.bakeTrackGravelRegion(part, sink));
-  }
-
-  private renderSnapshotBakedLayer(
-    target: Phaser.GameObjects.RenderTexture,
-    region: GroundSnapshotRegion,
-    renderScale: number,
-    bake: (region: ChunkBakeRegion, sink: ChunkBakeSink) => void,
-  ): void {
-    // Die Aufloesung des Snapshot-Targets ist grober als der bestehende Dirt-Bake. Wir lassen
-    // deshalb denselben 128-px-Bake in kleinen Quadraten laufen und stempeln jedes fertige,
-    // silhouette-geclipte Ergebnis 1:4 in das eine Snapshot-Target. Dadurch braucht der
-    // Snapshot keinen zweiten 512er-Mottle-/Cutout-Puffer und kann trotzdem exakt den normalen
-    // Dirt-Schnitt wiederverwenden.
-    const bakeSize = ROCK_OVERLAY_CHUNK_SIZE;
-    const regionRight = region.worldX + region.width;
-    const regionBottom = region.worldY + region.height;
-    for (let worldY = region.worldY; worldY < regionBottom; worldY += bakeSize) {
-      for (let worldX = region.worldX; worldX < regionRight; worldX += bakeSize) {
-        const localX = worldX - this.frame.offsetX;
-        const localY = worldY - this.frame.offsetY;
-        const bakeRegion: ChunkBakeRegion = {
-          chunk: { cx: 0, cy: 0, localX, localY },
-          localX,
-          localY,
-          size: bakeSize,
-          worldX,
-          worldY,
-          gutterPx: 0,
-        };
-        bake(bakeRegion, {
-          blit: (_layerId, scratch) => {
-            target.stamp(
-              scratch.texture.key,
-              undefined,
-              (worldX - region.worldX) * renderScale,
-              (worldY - region.worldY) * renderScale,
-              {
-                originX: 0,
-                originY: 0,
-                scaleX: renderScale,
-                scaleY: renderScale,
-              },
-            );
-            target.render();
-          },
-          clearRegion: () => {},
-          fillRegion: () => {},
-        });
-      }
-    }
+    yield* staging.draw(target, region, this.frame, part => this.trackGravelLayer!.writeRegion(part), this.trackGravelLayer.snapshotSource);
   }
 
   /** Snapshot-Gegenstueck zu den sichtbaren Gravel-Layern, ohne ein zweites Renderziel anzulegen. */
-  renderSnapshotPersistentBaseGravel(
+  *renderSnapshotPersistentBaseGravel(
     target: Phaser.GameObjects.RenderTexture,
     region: GroundSnapshotRegion,
-    renderScale: number,
-  ): void {
-    this.renderSnapshotPersistentBaseGravelLayers(target, region, renderScale, true, false);
+    staging: TerrainSnapshotStaging,
+  ): Generator<void | false, void> {
+    if (!this.persistentBaseGravelEnabled || !this.persistentBaseGravelLayer) return;
+    yield* staging.draw(target, region, this.frame, part => {
+      const near = this.persistentBaseGravelIndex.collect(part.localX, part.localY, part.size,
+        DIRT_SURFACE_REACH_PX, this.persistentBaseGravelCandidateIds).length > 0;
+      return near ? this.persistentBaseGravelLayer!.writeRegion(part) : null;
+    }, this.persistentBaseGravelLayer.snapshotSource);
   }
 
   /** Snapshot-Gegenstueck fuer die grossen authored Gravel-Dekorstempel. */
-  renderSnapshotPersistentBaseGravelDecoration(
+  *renderSnapshotPersistentBaseGravelDecoration(
     target: Phaser.GameObjects.RenderTexture,
     region: GroundSnapshotRegion,
     renderScale: number,
-  ): void {
-    this.renderSnapshotPersistentBaseGravelLayers(target, region, renderScale, false, true);
+  ): Generator<void, void> {
+    yield* this.renderSnapshotPersistentBaseGravelLayers(target, region, renderScale);
   }
 
-  private renderSnapshotPersistentBaseGravelLayers(
+  private *renderSnapshotPersistentBaseGravelLayers(
     target: Phaser.GameObjects.RenderTexture,
     region: GroundSnapshotRegion,
     renderScale: number,
-    includeGravel: boolean,
-    includeDecoration: boolean,
-  ): void {
+  ): Generator<void, void> {
     if (!this.persistentBaseGravelEnabled || !this.persistentBaseGravelState) return;
 
     const bakeSize = ROCK_OVERLAY_CHUNK_SIZE;
@@ -487,20 +445,13 @@ export class GroundSurfaceStreamer {
           );
           target.render();
         };
-        if (includeGravel) {
-          this.bakePersistentBaseGravelRegion(bakeRegion, {
-            blit: blitSnapshot,
-            clearRegion: () => {},
-            fillRegion: () => {},
-          });
-        }
-        if (includeDecoration) {
-          this.bakePersistentBaseGravelDecorationRegion(bakeRegion, {
-            blit: blitSnapshot,
-            clearRegion: () => {},
-            fillRegion: () => {},
-          });
-        }
+
+        this.bakePersistentBaseGravelDecorationRegion(bakeRegion, {
+          blit: blitSnapshot,
+          clearRegion: () => {},
+          fillRegion: () => {},
+        });
+        yield;
       }
     }
   }

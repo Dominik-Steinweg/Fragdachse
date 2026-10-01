@@ -1,5 +1,7 @@
+import { TerrainSnapshotStaging } from '../src/arena/TerrainSnapshotStaging';
+import { DirtSurfaceField } from '../src/arena/DirtSurfaceField';
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFakePhaserModule());
+vi.mock('phaser', async () => ({ ...(await import('./fakeArenaRenderScene')).createFakePhaserModule(), Textures: { FilterMode: { LINEAR: 0 } } }));
 import { createFakeArenaScene } from './fakeArenaRenderScene';
 import { GroundSurfaceStreamer, GROUND_DIRT_LAYER_ID } from '../src/arena/chunks/GroundSurfaceStreamer';
 import { ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
@@ -14,20 +16,30 @@ const groundMaterials: GroundMaterialSamples = {
 function harness() {
   const scene = createFakeArenaScene();
   const uploads: Array<{ width: number; data: Uint8ClampedArray }> = [];
+  const gpuUploads: Array<{ width: number; data: Uint8ClampedArray }> = [];
   const alive = new Set<string>();
   const createCanvas = vi.fn((key: string, width: number, height: number) => {
     alive.add(key);
-    return { key, context: {
+    const data = new Uint8ClampedArray(width * height * 4);
+    return { key, setFilter() {}, context: {
       createImageData: () => ({ width, height, data: new Uint8ClampedArray(width * height * 4) }),
-      putImageData: (image: { width: number; data: Uint8ClampedArray }) => uploads.push({ width: image.width, data: image.data.slice() }),
-    }, refresh() {} };
+      clearRect: () => data.fill(0),
+      putImageData: (image: { width: number; height: number; data: Uint8ClampedArray }, x = 0, y = 0,
+        _sx = 0, _sy = 0, w = image.width, h = image.height) => {
+        uploads.push({ width: image.width, data: image.data.slice() });
+        for (let row = 0; row < Math.min(h, height - y); row++) {
+          data.set(image.data.subarray(row * image.width * 4, (row * image.width + Math.min(w, width - x)) * 4),
+            ((row + y) * width + x) * 4);
+        }
+      },
+    }, refresh() { gpuUploads.push({ width, data: data.slice() }); } };
   });
   Object.assign(scene.textures, { createCanvas, remove: (key: string) => alive.delete(key) });
   const frame = { offsetX: 37, offsetY: 19, width: 4096, height: 512 };
   const layout: ArenaLayout = { seed: 17, rocks: [], trees: [], tracks: [], powerUpPedestals: [],
     dirt: Array.from({ length: 12 * 8 }, (_, i) => ({ gridX: 1 + i % 12, gridY: 1 + Math.floor(i / 12) })) };
   const ground = new GroundSurfaceStreamer({ scene: scene as never, frame, layout, groundCoverPlacements: [], chunkSize: 128, groundMaterials });
-  return { scene, ground, frame, uploads, alive, createCanvas };
+  return { scene, ground, frame, uploads, gpuUploads, alive, createCanvas, layout };
 }
 
 describe('soil streaming and snapshot parity', () => {
@@ -51,12 +63,44 @@ describe('soil streaming and snapshot parity', () => {
     ChunkedRenderSurface.drainBakeQueue(h.scene as never);
     const normal = h.uploads[0]; h.uploads.length = 0;
     const target = h.scene.add.renderTexture(0, 0, 32, 32);
-    h.ground.renderSnapshotDirt(target as never, { worldX: 37, worldY: 19, width: 128, height: 128 }, .25);
+    const staging = new TerrainSnapshotStaging(h.scene as never, 512);
+    for (const _ of h.ground.renderSnapshotDirt(target as never, { worldX: 37, worldY: 19, width: 128, height: 128 }, staging)) { /* build */ }
     const snapshot = h.uploads[0];
     for (let y = 0; y < 128; y++) {
       expect(snapshot.data.slice(y * snapshot.width * 4, (y * snapshot.width + 128) * 4))
         .toEqual(normal.data.slice(((y + 2) * normal.width + 2) * 4, ((y + 2) * normal.width + 130) * 4));
     }
-    h.ground.destroy(); target.destroy();
+    staging.destroy(); h.ground.destroy(); target.destroy(); expect(h.alive.size).toBe(0);
+  });
+  it('stages native pixels before yielding, batches uploads and clears reused regions', () => {
+    const h = harness(), staging = new TerrainSnapshotStaging(h.scene as never, 512);
+    const target = h.scene.add.renderTexture(0, 0, 256, 128);
+    const work = h.ground.renderSnapshotDirt(target as never,
+      { worldX: 37, worldY: 19, width: 1024, height: 512 }, staging);
+    work.next(); expect(h.gpuUploads).toHaveLength(0);
+    // Ordinary chunk baking can reuse the source pixels while the snapshot yields.
+    h.ground.updateResidency({ x: 37 + 128, y: 19, width: 128, height: 128 });
+    ChunkedRenderSurface.drainBakeQueue(h.scene as never);
+    h.gpuUploads.length = 0;
+    for (const _ of work) { /* remaining slices */ }
+    const expected = new Uint8ClampedArray(512 * 512 * 4);
+    new DirtSurfaceField(h.layout.seed, h.layout.dirt, h.frame).writeSurface(expected, 512, 37, 19, 512, groundMaterials);
+    expect(h.gpuUploads).toHaveLength(2); // one upload per batch, never one per native tile
+    expect(h.gpuUploads[1].data.every(value => value === 0)).toBe(true);
+    expect(Buffer.from(h.gpuUploads[0].data).equals(Buffer.from(expected))).toBe(true);
+    for (const _ of h.ground.renderSnapshotDirt(target as never,
+      { worldX: 37 + 3500, worldY: 19, width: 512, height: 512 }, staging)) { /* clear region */ }
+    expect(h.gpuUploads).toHaveLength(2);
+    staging.destroy(); staging.destroy(); h.ground.destroy(); target.destroy();
+    expect(h.alive.size).toBe(0);
+  });
+
+  it('releases staging on cancellation without uploading borrowed partial pixels', () => {
+    const h = harness(), staging = new TerrainSnapshotStaging(h.scene as never, 512);
+    const target = h.scene.add.renderTexture(0, 0, 128, 128);
+    const work = h.ground.renderSnapshotDirt(target as never,
+      { worldX: 37, worldY: 19, width: 512, height: 512 }, staging);
+    work.next(); work.return(); staging.destroy(); h.ground.destroy(); target.destroy();
+    expect(h.gpuUploads).toHaveLength(0); expect(h.alive.size).toBe(0);
   });
 });

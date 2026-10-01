@@ -34,14 +34,14 @@ function snapshotBuildFixture() {
   };
   const masks = [{ x: 0, y: 0, mask: { size: 128, data: new Uint8ClampedArray(128 * 128 * 4).fill(255) } }];
   const water = { isPrepared: () => prepared, getPreparedMasks: vi.fn(() => masks) };
-  const onReadbackComplete = vi.fn();
-  vi.spyOn(TerrainColorSnapshotBuilder.prototype as any, 'renderRegion').mockImplementation(() => {});
+  const onReadbackComplete = vi.fn(), onBakeProgress = vi.fn();
+  vi.spyOn(TerrainColorSnapshotBuilder.prototype as any, 'renderRegion').mockImplementation(function* () {});
   const builder = new TerrainColorSnapshotBuilder({
     scene: { events, add: { renderTexture: () => scratch } }, mode: 'deathmatch', layout: {},
     worldMetrics: { widthPx: 4, heightPx: 4, offsetX: 100, offsetY: 200 },
-    arenaResult: { waterSurface: water }, isCurrent: () => current, onReadbackComplete,
+    arenaResult: { waterSurface: water }, isCurrent: () => current, onReadbackComplete, onBakeProgress,
   } as any);
-  return { builder, events, scratch, water, onReadbackComplete,
+  return { builder, events, scratch, water, onReadbackComplete, onBakeProgress,
     frame: () => events.emit('postupdate'), read: () => readback(new ReadbackImage()),
     invalidate: () => { current = false; }, prepare: () => { prepared = true; } };
 }
@@ -73,6 +73,60 @@ describe('TerrainColorSnapshot', () => {
     expect(f.water.getPreparedMasks).not.toHaveBeenCalled();
     expect(f.scratch.destroy).toHaveBeenCalledOnce();
     expect(f.events.eventNames()).toEqual([]);
+  });
+
+  it.each(['revision', 'shutdown'])('cancels a sliced bake on %s before publishing or reading it', async reason => {
+    const f = snapshotBuildFixture();
+    let time = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => time);
+    const closed = vi.fn();
+    vi.spyOn(TerrainColorSnapshotBuilder.prototype as any, 'renderRegion').mockImplementation(function* () {
+      try { for (let i = 0; i < 10; i++) { time += 10; yield; } } finally { closed(); }
+    });
+    const rejected = expect(f.builder.build()).rejects.toThrow('cancelled');
+    f.frame();
+    expect(f.scratch.snapshotArea).not.toHaveBeenCalled();
+    if (reason === 'shutdown') f.events.emit('shutdown'); else { f.invalidate(); f.frame(); }
+    await rejected;
+    expect(closed).toHaveBeenCalledOnce();
+    expect(f.onReadbackComplete).not.toHaveBeenCalled();
+    expect(f.scratch.destroy).toHaveBeenCalledOnce();
+    expect(f.events.eventNames()).toEqual([]);
+  });
+
+  it('finishes all bake slices before readback and still waits for the water barrier', async () => {
+    const f = snapshotBuildFixture();
+    let time = 0, tiles = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => time);
+    vi.spyOn(TerrainColorSnapshotBuilder.prototype as any, 'renderRegion').mockImplementation(function* () {
+      for (let i = 0; i < 3; i++) { tiles++; time += 10; yield; }
+    });
+    const promise = f.builder.build();
+    for (let i = 1; i <= 3; i++) {
+      f.frame(); expect(tiles).toBe(i); expect(f.scratch.snapshotArea).not.toHaveBeenCalled();
+    }
+    f.frame(); expect(f.scratch.snapshotArea).toHaveBeenCalledOnce();
+    expect(f.onBakeProgress).toHaveBeenCalledTimes(4);
+    f.frame(); f.frame();
+    expect(f.onBakeProgress).toHaveBeenCalledTimes(4); // a stalled GPU readback cannot rearm the watchdog
+    f.read();
+    f.frame(); expect(f.water.getPreparedMasks).not.toHaveBeenCalled();
+    f.prepare(); f.frame();
+    expect((await promise).sample(102, 202)).toBe(WATER_COLOR);
+  });
+
+  it('does not spin, rearm the watchdog, or publish while a worker result is pending', async () => {
+    const f = snapshotBuildFixture(); let available = false, polls = 0;
+    vi.spyOn(TerrainColorSnapshotBuilder.prototype as any, 'renderRegion').mockImplementation(function* () {
+      while (!available) { polls++; yield false; }
+    });
+    const promise = f.builder.build();
+    for (let i = 0; i < 3; i++) f.frame();
+    expect(polls).toBe(3); expect(f.onBakeProgress).not.toHaveBeenCalled();
+    expect(f.scratch.snapshotArea).not.toHaveBeenCalled();
+    available = true; f.frame(); expect(f.onBakeProgress).toHaveBeenCalledOnce();
+    f.read(); f.prepare(); f.frame(); await promise;
+    expect(f.scratch.destroy).toHaveBeenCalledOnce();
   });
 
   it('stamps expanded water across chunk boundaries while retaining dry ground', () => {

@@ -1,10 +1,12 @@
+import { TERRAIN_SNAPSHOT_SAMPLE_SCALE } from './TerrainSnapshotSampling';
+
 /**
  * Ein einmalig erzeugter, opaker Terrain-Farb-Snapshot fuer den LeafBlower.
  * Die Koordinaten liegen in einem festen Weltfenster; die Daten sind RGB, weil jede Terrain-
  * Schicht den Untergrund vollstaendig opak aufbaut.
  */
 export class TerrainColorSnapshot {
-  readonly scale = 4;
+  readonly scale = TERRAIN_SNAPSHOT_SAMPLE_SCALE;
 
   constructor(
     readonly width: number,

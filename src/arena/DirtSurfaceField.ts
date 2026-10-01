@@ -1,4 +1,5 @@
 import { CELL_SIZE } from '../config';
+import { terrainSnapshotTexel } from './TerrainSnapshotSampling';
 import type { DirtCell, WaterCell } from '../types';
 import { hashSeededCell01 } from './CellHash';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
@@ -242,7 +243,8 @@ export class DirtSurfaceField {
    * snapshots share it.
    */
   writeSurface(data: Uint8ClampedArray, stride: number, worldX: number, worldY: number, size: number,
-    materials: GroundMaterialSamples): void {
+    materials: GroundMaterialSamples, snapshotSamples = false): void {
+    if (snapshotSamples) data.fill(0);
     const { dirt, grassHeight } = materials;
     const localX = worldX - this.frame.offsetX, localY = worldY - this.frame.offsetY;
     const i0 = Math.floor((localX + .5) / DENSITY_STEP), j0 = Math.floor((localY + .5) / DENSITY_STEP);
@@ -283,6 +285,7 @@ export class DirtSurfaceField {
     const bankColumn = bank ? groundMaterialPhase(localX, bank.dry.width) : 0;
     const wetColumn = bank ? groundMaterialPhase(localX, bank.wet.width) : 0;
     for (let py = 0; py < size; py++) {
+      if (snapshotSamples && !terrainSnapshotTexel(py)) continue;
       const y = localY + py + .5, row = Math.floor(y / CELL_SIZE);
       const v = y / DENSITY_STEP - j0, gj = Math.floor(v), ty = v - gj;
       const dirtRow = groundMaterialPhase(localY + py, dirt.height) * dirt.width;
@@ -302,6 +305,7 @@ export class DirtSurfaceField {
           if (++bankX === bank.dry.width) bankX = 0;
           if (++wetX === bank.wet.width) wetX = 0;
         }
+        if (snapshotSamples && !terrainSnapshotTexel(px)) continue;
         const out = (py * stride + px) * 4;
         const x = localX + px + .5;
         const cell = this.index(Math.floor(x / CELL_SIZE), row);

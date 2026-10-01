@@ -698,6 +698,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
   });
 
   it('bereitet Lobby-Effekte im World-Tick vor und gibt den Bootscreen ohne Arena-Ladebarriere frei', () => {
+    vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue(null); // optional diagnostic identity, no active room needed
     const { scene, fade } = bootFixture();
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
     coordinator.arenaBuilt = true;
@@ -1036,17 +1037,27 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
   });
 
   it('laesst die Reveal-Abfrage nicht auf runden- oder netzseitige Bedingungen warten', () => {
-    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    const start = lifecycle.indexOf('  getWorldRevealState(view: WorldViewRect | null)');
-    expect(start).toBeGreaterThan(0);
-    // Bis zur schliessenden Methodenklammer, unabhaengig von den Rueckgabefeldern.
-    const end = start + lifecycle.slice(start).search(/\r?\n {2}\}\r?\n/);
-    expect(end).toBeGreaterThan(start);
-    const body = lifecycle.slice(start, end);
-    // Der Terrain-Farb-Snapshot ist asynchron und beim Reveal unsichtbar; er darf nicht halten.
-    expect(body.includes('terrainSnapshotReady')).toBe(false);
-    expect(body.includes('bridge.')).toBe(false);
-    expect(body).toContain('resolveWorldLoadProgress(');
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.arenaBuilt = true;
+    coordinator.terrainSnapshotReady = false;
+    coordinator.combatPresentationPrepared = true;
+    coordinator.getLocalWorldPresentation = () => ({ required: true });
+    coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => true } };
+    coordinator.worldRuntime = {
+      materialization: { arena: {} }, presentation: { layout: {} },
+      presentationFrame: { getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
+    };
+    vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue(null);
+    const participants = vi.spyOn(bridge, 'areWorldParticipantsLoadReady').mockImplementation(() => {
+      throw new Error('Local reveal must not inspect peer readiness');
+    });
+    const round = vi.spyOn(bridge, 'getRoundState').mockImplementation(() => {
+      throw new Error('Local reveal must not inspect the round');
+    });
+    expect(coordinator.getWorldRevealState({ x: 0, y: 0, width: 640, height: 360 })).toMatchObject({ ready: true });
+    expect(participants).not.toHaveBeenCalled(); expect(round).not.toHaveBeenCalled();
+    coordinator.combatPresentationPrepared = false;
+    expect(coordinator.getWorldRevealState({ x: 0, y: 0, width: 640, height: 360 })).toMatchObject({ ready: false });
   });
 
   it('bereitet die erste Spielerliste voll sichtbar vor und animiert erst spaetere Eintritte', () => {

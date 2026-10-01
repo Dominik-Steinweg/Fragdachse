@@ -3408,6 +3408,10 @@ export class ArenaLifecycleCoordinator {
         // The watchdog guards asynchronous GPU readback, not the independently budgeted
         // World mask preparation. Large worlds must not restart valid work while waiting.
         onReadbackComplete: () => timeoutTimer.remove(false),
+        // Cooperative CPU bakes can span many frames on large Worlds. Rearm the
+        // existing stall watchdog only after real bake progress, never during a
+        // pending readback. Retry count, revision checks and readiness are unchanged.
+        onBakeProgress: () => { timeoutTimer.elapsed = 0; },
       }).build();
     } catch (error) {
       console.error('[ArenaLifecycleCoordinator] Terrain-Farb-Snapshot konnte nicht gestartet werden:', error);

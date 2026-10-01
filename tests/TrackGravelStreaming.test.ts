@@ -1,6 +1,7 @@
+import { TerrainSnapshotStaging } from '../src/arena/TerrainSnapshotStaging';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFakePhaserModule());
+vi.mock('phaser', async () => ({ ...(await import('./fakeArenaRenderScene')).createFakePhaserModule(), Textures: { FilterMode: { LINEAR: 0 } } }));
 
 import { CELL_SIZE, DEPTH } from '../src/config';
 import type { ArenaLayout } from '../src/types';
@@ -37,8 +38,9 @@ function harness(tracks = layout.tracks) {
   const createCanvas = vi.fn((key: string, width: number, height: number) => {
     liveMasks.add(key);
     return {
-      key,
+      key, setFilter() {},
       context: {
+        clearRect() {},
         createImageData: () => ({ width, height, data: new Uint8ClampedArray(width * height * 4) }),
         putImageData: (image: { width: number; data: Uint8ClampedArray }) =>
           uploads.push({ width: image.width, data: image.data.slice() }),
@@ -100,16 +102,18 @@ describe('railway gravel streaming', () => {
     expect(normal).toBeDefined();
     h.uploads.length = 0;
     const target = h.scene.add.renderTexture(0, 0, 32, 32);
-    h.streamer.renderSnapshotTrackGravel(target as never, {
+    const staging = new TerrainSnapshotStaging(h.scene as never, 512);
+    for (const _ of h.streamer.renderSnapshotTrackGravel(target as never, {
       worldX: FRAME.offsetX, worldY: FRAME.offsetY, width: 128, height: 128,
-    }, 0.25);
+    }, staging)) { /* snapshot slices */ }
     const snapshot = h.uploads[0];
     for (let y = 0; y < 128; y += 1) {
       const normalStart = ((y + 2) * normal.width + 2) * 4;
       expect(snapshot.data.slice(y * snapshot.width * 4, (y * snapshot.width + 128) * 4))
         .toEqual(normal.data.slice(normalStart, normalStart + 128 * 4));
     }
-    expect(target.content.some(entry => entry.includes('__track_ballast_'))).toBe(true);
+    expect(target.content.length).toBeGreaterThan(0);
+    staging.destroy();
     h.streamer.destroy();
     target.destroy();
   });

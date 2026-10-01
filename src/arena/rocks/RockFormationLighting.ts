@@ -120,6 +120,10 @@ export class RockFormationLighting {
         timing?.add('rock-worker/startup-including-module-load', performance.now()-workerStarted, 'elapsed');
         timing?.add('rock-worker/init', event.data.initMs, 'worker');
         timing?.add('rock-worker/module-startup-and-delivery', Math.max(0, performance.now()-workerStarted-event.data.initMs), 'elapsed');
+        // Cross-realm monotonic timestamps distinguish module startup from a result
+        // sitting in the main-thread queue during World preparation.
+        timing?.add('rock-worker/module-startup', Math.max(0, event.data.startedAt-performance.timeOrigin-workerStarted), 'elapsed');
+        timing?.add('rock-worker/main-thread-delivery', Math.max(0, performance.timeOrigin+performance.now()-event.data.finishedAt), 'elapsed');
         return;
       }
       timing?.add('rock-worker/build', event.data.buildMs, 'worker');

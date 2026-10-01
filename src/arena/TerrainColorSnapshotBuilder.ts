@@ -16,6 +16,8 @@ import { GROUND_MACRO_KEY, GROUND_MACRO_TILE_SCALE } from './GroundMaterialConfi
 import type { ArenaBuilderResult, RockWorldFrame } from './ArenaBuilder';
 import type { GroundSurfaceStreamer, GroundSnapshotRegion } from './chunks/GroundSurfaceStreamer';
 import { TerrainColorSnapshot } from './TerrainColorSnapshot';
+import { TerrainSnapshotStaging } from './TerrainSnapshotStaging';
+import { TERRAIN_SNAPSHOT_SAMPLE_SCALE } from './TerrainSnapshotSampling';
 import type { WorldMetrics } from '../world/WorldMetrics';
 
 type SnapshotRepeatConfig = Phaser.Types.GameObjects.TileSprite.TileSpriteConfig & {
@@ -23,7 +25,7 @@ type SnapshotRepeatConfig = Phaser.Types.GameObjects.TileSprite.TileSpriteConfig
   tilePositionY: number;
 };
 
-export const TERRAIN_SNAPSHOT_SCALE = 4;
+export const TERRAIN_SNAPSHOT_SCALE = TERRAIN_SNAPSHOT_SAMPLE_SCALE;
 export const TERRAIN_SNAPSHOT_RENDER_SCALE = 1 / TERRAIN_SNAPSHOT_SCALE;
 export const TERRAIN_SNAPSHOT_SCRATCH_SIZE = 512;
 export const TERRAIN_SNAPSHOT_REGION_WORLD_SIZE = TERRAIN_SNAPSHOT_SCRATCH_SIZE * TERRAIN_SNAPSHOT_SCALE;
@@ -36,6 +38,8 @@ export interface TerrainColorSnapshotBuildOptions {
   readonly worldMetrics: WorldMetrics;
   readonly isCurrent?: () => boolean;
   readonly onReadbackComplete?: () => void;
+  /** Actual CPU bake progress; never emitted while waiting for an image callback. */
+  readonly onBakeProgress?: () => void;
 }
 
 export interface TerrainSnapshotRegion extends GroundSnapshotRegion {
@@ -143,10 +147,12 @@ export class TerrainColorSnapshotBuilder {
     );
 
     const measurement = loadingTimeline.capture(), startedAt = performance.now();
+    const staging = new TerrainSnapshotStaging(this.options.scene, ARENA_RENDER_CHUNK_SIZE * 2);
     return new Promise<TerrainColorSnapshot>((resolve, reject) => {
       let settled = false;
       let reading = false;
       let regionIndex = 0;
+      let renderWork: Generator<void | false, void> | null = null;
       let waterWork: Generator<void, void> | null = null;
       const water = this.options.arenaResult.waterSurface;
       const events = this.options.scene.events;
@@ -156,7 +162,10 @@ export class TerrainColorSnapshotBuilder {
         events.off(Phaser.Scenes.Events.POST_UPDATE, step);
         events.off(Phaser.Scenes.Events.SHUTDOWN, cancel);
         waterWork?.return();
+        renderWork?.return();
         waterWork = null;
+        renderWork = null;
+        staging.destroy();
         this.scratch.destroy();
       };
       const finishWithError = (error: unknown): void => {
@@ -170,9 +179,6 @@ export class TerrainColorSnapshotBuilder {
         reading = true;
         const region = this.regions[index];
         try {
-          const renderStarted = loadingTimeline.start();
-          this.renderRegion(region);
-          loadingTimeline.end('terrain-snapshot/render-region', renderStarted);
           this.scratch.snapshotArea(0, 0, region.pixelWidth, region.pixelHeight, (image) => {
             if (settled) return;
             if (this.options.isCurrent?.() === false) { cancel(); return; }
@@ -200,7 +206,26 @@ export class TerrainColorSnapshotBuilder {
         if (this.options.isCurrent?.() === false) { cancel(); return; }
         if (reading) return;
         try {
-          if (regionIndex < this.regions.length) { readRegion(regionIndex); return; }
+          if (regionIndex < this.regions.length) {
+            renderWork ??= this.renderRegion(this.regions[regionIndex], staging);
+            const renderStarted = loadingTimeline.start();
+            let complete = false;
+            let progressed = false;
+            try {
+              const deadline = performance.now() + 8;
+              do {
+                const next = renderWork.next();
+                if (next.done) { renderWork = null; complete = true; progressed = true; break; }
+                if (next.value === false) break; // pending worker: no polling loop and no watchdog rearm
+                progressed = true;
+              } while (performance.now() < deadline);
+            } finally { loadingTimeline.end('terrain-snapshot/render-region', renderStarted); }
+            if (progressed) this.options.onBakeProgress?.();
+            // Readback timing now excludes CPU rendering. World readiness still waits
+            // for every region and the prepared water masks; no partial publication.
+            if (complete) readRegion(regionIndex);
+            return;
+          }
           // Preparation is advanced by the World presentation frame, never duplicated here.
           measurement?.gate('snapshot-water-masks', !water || water.isPrepared());
           if (water && !water.isPrepared()) return;
@@ -219,7 +244,7 @@ export class TerrainColorSnapshotBuilder {
     });
   }
 
-  private renderRegion(region: TerrainSnapshotRegion): void {
+  private *renderRegion(region: TerrainSnapshotRegion, staging: TerrainSnapshotStaging): Generator<void | false, void> {
     const { scene, mode, layout, arenaResult } = this.options;
     const renderScale = TERRAIN_SNAPSHOT_RENDER_SCALE;
     const background = resolveArenaBackgroundSpec(mode, this.frame.width);
@@ -246,12 +271,16 @@ export class TerrainColorSnapshotBuilder {
     );
 
     const groundSurface = arenaResult.groundSurface;
-    groundSurface?.renderSnapshotDirt(this.scratch, region, renderScale);
-    groundSurface?.renderSnapshotPersistentBaseGravel(this.scratch, region, renderScale);
+    // Flush all borrowed render state before yielding to regular World preparation.
+    this.scratch.render();
+    if (groundSurface) yield* groundSurface.renderSnapshotDirt(this.scratch, region, staging);
+    if (groundSurface) yield* groundSurface.renderSnapshotPersistentBaseGravel(this.scratch, region, staging);
     groundSurface?.renderSnapshotGroundCover(this.scratch, region, renderScale);
     this.renderGroundMacro(region);
-    groundSurface?.renderSnapshotPersistentBaseGravelDecoration(this.scratch, region, renderScale);
-    groundSurface?.renderSnapshotTrackGravel(this.scratch, region, renderScale);
+    this.scratch.render();
+    yield;
+    if (groundSurface) yield* groundSurface.renderSnapshotPersistentBaseGravelDecoration(this.scratch, region, renderScale);
+    if (groundSurface) yield* groundSurface.renderSnapshotTrackGravel(this.scratch, region, staging);
     this.renderTracks(layout, region);
     this.renderStaticBases(region);
     groundSurface?.renderSnapshotDecals(this.scratch, region, renderScale);
