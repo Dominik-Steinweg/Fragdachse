@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import * as Phaser from 'phaser';
 import { ROCK_BASE_FRAME_SIZE, ROCK_BASE_FRAME_MARGIN, ROCK_BASE_FRAME_SPACING } from '../arena/RockBaseConfig';
 import { woodlandAssetFiles, type WoodlandAsset } from './WoodlandAssetManifest';
@@ -14,6 +15,7 @@ export class WoodlandImageFile extends Phaser.Loader.FileTypes.ImageFile {
     if(asset.kind==='coverage') this.cache=loader.cacheManager.binary;
   }
   onProcessComplete(): void {
+    const measuredAt = loadingTimeline.start();
     try {
       const a=this.asset,image=this.data as HTMLImageElement;
       if(image.width!==a.width||image.height!==a.height) throw new Error('Invalid woodland image dimensions: '+a.key);
@@ -50,6 +52,7 @@ export class WoodlandImageFile extends Phaser.Loader.FileTypes.ImageFile {
       else if(this.loader.textureManager.exists(this.asset.key))this.loader.textureManager.remove(this.asset.key);
       this.onProcessError();return;
     }
+    loadingTimeline.end('woodland/upload-or-coverage/' + this.asset.key, measuredAt);
     super.onProcessComplete();
   }
   // Upload is validated before reporting completion; no second automatic image upload.

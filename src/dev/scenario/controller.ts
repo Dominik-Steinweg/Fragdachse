@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { WorldLightingMeasurement } from './WorldLightingMeasurement';
 import type * as Phaser from 'phaser';
 import type { ArenaRuntime } from '../../scenes/arena/ArenaRuntime';
@@ -75,11 +76,14 @@ export class DevScenarioController {
     if (this.state !== 'ready' || !bridge.isArenaStarted() || this.runtime.isMatchTerminated()) throw new Error('Szenario ist noch nicht bereit oder die Runde ist beendet.');
   }
   fail(error: unknown): void {
+    loadingTimeline.get('scenario')?.finish('failed');
     this.message = error instanceof Error ? error.message : String(error);
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
     const config = parseScenario(value);
+    const run = loadingTimeline.begin('scenario', String(performance.now()));
+    run.gate('lobby', false); run.gate('scenario-setup', false);
     this.worldLighting?.reset();
     this.stop();
     this.captureCancel?.();
@@ -307,12 +311,18 @@ export class DevScenarioController {
         this.runtime.navigationLabPort.setNextRoundSeed(this.config.seed);
         this.bots.prepare(this.config);
         bridge.setLocalReadyWithCommittedLoadout(scenarioLoadout(this.config)); this.runtime.setIsLocalReady(true);
+        loadingTimeline.get('scenario')?.gate('lobby', true);
         this.state = 'loading'; this.message = 'Map lädt, Szenario wartet auf die Ready-Barriere …';
       }
       if (this.state === 'waiting-lobby' || this.state === 'loading') this.bots.acknowledgeWorld();
       if (this.state === 'loading') {
         this.runtime.devScenarioPort.suppressEncounters(true);
         this.runtime.devScenarioPort.setOptions(this.config.freezeMission, this.config.hideTutorial);
+        const run = loadingTimeline.get('scenario');
+        run?.gate('navigation-ready', this.runtime.navigationLabPort.isReady());
+        run?.gate('arena-started', bridge.isArenaStarted());
+        run?.gate('round-start-prepared', this.runtime.getScenarioLoadingState().roundStartPrepared);
+        run?.gate('player-alive', this.runtime.navigationLabPort.getPlayerPosition()?.alive === true);
         if (!this.runtime.navigationLabPort.isReady() || !bridge.isArenaStarted()
           || !this.runtime.getScenarioLoadingState().roundStartPrepared
           || !this.runtime.navigationLabPort.getPlayerPosition()?.alive) return;
@@ -393,6 +403,8 @@ export class DevScenarioController {
         const expected = requested ? this.world(requested) : player;
         if (Math.hypot(player.x - expected.x, player.y - expected.y) > 0.01) throw new Error('Startposition konnte nicht übernommen werden.');
         this.initialPosition.verified = true; this.setupPending = false; this.readyAt = performance.now();
+        loadingTimeline.get('scenario')?.gate('scenario-setup', true);
+        loadingTimeline.get('scenario')?.finish();
         this.message = 'Szenario bereit. Startposition und Aufbau geprüft.';
       }
     } catch (error) { this.fail(error); this.stop(); this.state = 'error'; }
@@ -478,6 +490,7 @@ export class DevScenarioController {
   }
   destroy(): void {
     if (this.disposed) return;
+    loadingTimeline.get('scenario')?.finish('cancelled');
     this.disposed = true; this.stop(); bridge.setDevScenarioPlayerFreeForAll(false); clearInterval(this.refreshTimer);
     this.worldLighting?.destroy(); this.worldLighting = null;
     window.removeEventListener('hashchange', this.onHashChange); this.api.destroy(); this.captureCancel?.();

@@ -7,13 +7,16 @@ export type FormationWorkerRequest =
   | { kind: 'change'; states: FormationRock[] }
   | { kind: 'build'; cx: number; cy: number; revision: number; azimuth?: number; horizons?: boolean };
 export interface FormationWorkerResult { cx: number; cy: number; revision: number; azimuth: number; data: Uint8Array; occlusion: Uint8Array; buildMs: number }
+export interface FormationWorkerInitialized { kind: 'initialized'; initMs: number }
 let field: RockFormationField;
 let states: (FormationRock | undefined)[];
 self.onmessage = (event: MessageEvent<FormationWorkerRequest>): void => {
   const message = event.data;
   if (message.kind === 'init') {
+    const started = performance.now();
     states = message.states;
     field = new RockFormationField(message.width, message.height, states, message.source);
+    self.postMessage({ kind: 'initialized', initMs: performance.now() - started } satisfies FormationWorkerInitialized);
   } else if (message.kind === 'rim') {
     field.setRimGeometry(message.rim);
   } else if (message.kind === 'change') {

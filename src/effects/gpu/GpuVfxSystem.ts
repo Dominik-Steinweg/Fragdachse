@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import * as Phaser from 'phaser';
 import { configureGpuLayerCameraTransform } from '../../graphics/GpuLayerCameraTransform';
 import { GPU_VFX_ATLAS_KEY, GpuVfxFrameId, buildGpuVfxAtlas, getGpuVfxFrame } from './GpuVfxAtlas';
@@ -145,6 +146,7 @@ export class GpuVfxSystem {
       return;
     }
 
+    const measuredAt = loadingTimeline.start();
     const lane = this.lanes[this.shaderWarmupLane];
     // `getClone()` copies the base state. The next camera render obtains another clone from the
     // untouched base context, so the probe's color mask/scissor cannot leak into the real frame.
@@ -177,6 +179,7 @@ export class GpuVfxSystem {
       this.failShaderWarmup(error);
     } finally {
       context.release();
+      loadingTimeline.end('vfx/shader-warmup-submit', measuredAt);
     }
   };
   /** Invalidates not-yet-emitted commands when live effects are forcibly cleared. */

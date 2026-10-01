@@ -197,6 +197,7 @@ export class ChunkedRenderSurface {
   private readonly onChunkTextureCreated?: (texture: Phaser.GameObjects.RenderTexture, layerId: string) => void;
   private readonly onChunkBaked?: ChunkedRenderSurfaceOptions['onChunkBaked'];
   private readonly scheduler: ChunkBakeScheduler;
+  private readonly diagnosticName: string;
   private readonly surfaceId = nextSurfaceId++;
   private readonly resident = new Map<number, ResidentChunk>();
   private readonly pool = new Map<string, Phaser.GameObjects.RenderTexture[]>();
@@ -219,6 +220,7 @@ export class ChunkedRenderSurface {
   ) {
     this.frame = options.frame;
     this.layers = options.layers;
+    this.diagnosticName = 'chunks/bake/' + options.layers.map(layer => layer.id).join('+');
     this.bakeFn = options.bake;
     this.onChunkBaked = options.onChunkBaked;
     this.onChunkTextureCreated = options.onChunkTextureCreated;
@@ -776,6 +778,7 @@ export class ChunkedRenderSurface {
   ): void {
     this.scheduler.enqueue({
       key: this.textureJobKey(chunk, layer.id),
+      diagnosticName: 'chunks/acquire/' + layer.id,
       owner: this,
       completionKey: chunk,
       priority: () => this.getChunkPriority(chunk),
@@ -933,6 +936,7 @@ export class ChunkedRenderSurface {
   ): void {
     this.scheduler.enqueue({
       key: this.jobKey(chunk, regionKey),
+      diagnosticName: this.diagnosticName,
       owner: this,
       completionKey: chunk,
       priority: () => this.getRegionPriority(chunk, region),

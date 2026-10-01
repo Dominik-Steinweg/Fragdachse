@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 /**
  * BootScreen – DOM-Hilfe für den initialen Boot- und Ladescreen.
  *
@@ -17,6 +18,7 @@ export interface BootDiagnostics {
   loader: BootLoaderState | null;
   steps: Array<{ name: string; durationMs: number }>;
   error?: string;
+  timeline: () => ReturnType<typeof loadingTimeline.report>;
 }
 declare global { interface Window { __FD_BOOT__?: BootDiagnostics } }
 
@@ -37,16 +39,20 @@ export class BootScreen {
   private static diagnostics: BootDiagnostics | null = null;
 
   static begin(): void {
+    loadingTimeline.begin('boot', String(performance.now()));
+    performance.setResourceTimingBufferSize?.(10000);
     this.progressElement = null;
     this.progress = 0;
     this.diagnostics = { phase: 'assets', startedAt: performance.now(), elapsedMs: 0,
-      phases: [{ phase: 'assets', elapsedMs: 0 }], loader: null, steps: [] };
+      phases: [{ phase: 'assets', elapsedMs: 0 }], loader: null, steps: [], timeline: () => loadingTimeline.report() };
     if (typeof window !== 'undefined') window.__FD_BOOT__ = this.diagnostics;
   }
 
   static phase(phase: BootDiagnostics['phase'], error?: unknown): void {
     if (!this.diagnostics) return;
     if (phase === 'cancelled' && ['ready', 'failed'].includes(this.diagnostics.phase)) return;
+    loadingTimeline.get('boot')?.gate(phase, true);
+    if (phase === 'ready' || phase === 'failed' || phase === 'cancelled') loadingTimeline.get('boot')?.finish(phase);
     this.diagnostics.phase = phase;
     this.diagnostics.elapsedMs = performance.now() - this.diagnostics.startedAt;
     this.diagnostics.phases.push({ phase, elapsedMs: this.diagnostics.elapsedMs });
@@ -58,6 +64,7 @@ export class BootScreen {
   }
 
   static recordStep(name: string, durationMs: number): void {
+    loadingTimeline.get('boot')?.add('preparation/' + name, durationMs);
     this.diagnostics?.steps.push({ name, durationMs });
     if (this.diagnostics?.phase === 'preparation' && name !== 'commit') {
       this.setDetail(t('ui.boot.preparationProgress', { count: this.diagnostics.steps.length }));

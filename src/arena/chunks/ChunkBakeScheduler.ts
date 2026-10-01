@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 /**
  * Gemeinsame, kleine Arbeitswarteschlange fuer teure RenderTexture-Bakes.
  *
@@ -27,6 +28,7 @@ const COMPLETION_PRIORITY_TOLERANCE = 250;
 
 export interface ChunkBakeJob {
   readonly key: string;
+  readonly diagnosticName?: string;
   readonly owner: object;
   readonly priority: () => number;
   /** Jobs with the same key are kept together so a chunk does not become visible as patchwork. */
@@ -95,7 +97,9 @@ export class ChunkBakeScheduler {
       const job = this.pickNextJob();
       if (!job) break;
       this.jobs.delete(job.key);
+      const measuredAt = loadingTimeline.start();
       job.run();
+      if (measuredAt >= 0) loadingTimeline.end(job.diagnosticName ?? 'chunks/bake', measuredAt);
       operations += 1;
       this.recordOperation(job);
 

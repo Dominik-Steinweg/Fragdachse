@@ -1,3 +1,4 @@
+import { loadingTimeline, resourceGroup } from '../diagnostics/LoadingTimeline';
 import type * as Phaser from 'phaser';
 
 /** Phaser PROGRESS excludes its processing queue (image decode, audio decode, cache upload).
@@ -9,6 +10,7 @@ export function observeBootLoader(
   onProgress: (state: BootLoaderState) => void,
   onComplete: () => void,
 ): () => void {
+  const stopProcessing = observeLoaderProcessing(loader);
   let disposed = false;
   let queued = false;
   const sample = () => {
@@ -28,6 +30,7 @@ export function observeBootLoader(
   const events = ['start', 'progress', 'load', 'filecomplete', 'loaderror'];
   const dispose = () => {
     disposed = true;
+    stopProcessing();
     for (const event of events) loader.off(event, schedule);
     loader.off('complete', complete);
   };
@@ -42,4 +45,18 @@ export interface BootLoaderState {
   processed: number;
   failed: number;
   processing: string[];
+}
+
+/** Same file events for deferred batches, without boot progress sampling. */
+export function observeLoaderProcessing(loader: Phaser.Loader.LoaderPlugin): () => void {
+  const deferred = loadingTimeline.get('deferred');
+  const run = deferred?.endedAt === null ? deferred : loadingTimeline.capture();
+  const processing = new Map<string, { at: number; group: string }>();
+  const loaded = (file: Phaser.Loader.File) => { if (file) processing.set(file.type + ':' + file.key, { at: performance.now(), group: resourceGroup(String(file.src ?? file.url ?? '')) }); };
+  const processed = (key: string, type: string) => {
+    const id = type + ':' + key, start = processing.get(id);
+    if (start !== undefined) { run?.add('loader-process/' + type + '/' + start.group, performance.now() - start.at, 'elapsed'); processing.delete(id); }
+  };
+  loader.on('load', loaded); loader.on('filecomplete', processed);
+  return () => { loader.off('load', loaded); loader.off('filecomplete', processed); processing.clear(); };
 }

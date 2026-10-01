@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { WOODLAND_TRANSMISSION_KEY } from '../assets/WoodlandAssetManifest';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
@@ -46,6 +47,8 @@ export class WaterSurfaceRenderer {
    */
   prepareMasks(budgetMs = 4): void {
     if (this.destroyed || !this.preparation) return;
+    const measuredAt = loadingTimeline.start();
+    try {
     const deadline = performance.now() + budgetMs;
     do {
       if (this.preparation.next().done) {
@@ -53,6 +56,7 @@ export class WaterSurfaceRenderer {
         return;
       }
     } while (performance.now() < deadline);
+    } finally { loadingTimeline.end('water/mask-slice', measuredAt); }
   }
 
   isPrepared(): boolean { return !this.destroyed && this.preparation === null; }

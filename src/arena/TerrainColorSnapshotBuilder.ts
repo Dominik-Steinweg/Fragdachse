@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { WATER_COLOR, WATER_MASK_HALO, WATER_MASK_STEP, type WaterMaskView } from './WaterSurfaceModel';
 import { ARENA_RENDER_CHUNK_SIZE } from './chunks/ArenaChunkGrid';
 import * as Phaser from 'phaser';
@@ -141,6 +142,7 @@ export class TerrainColorSnapshotBuilder {
       data,
     );
 
+    const measurement = loadingTimeline.capture(), startedAt = performance.now();
     return new Promise<TerrainColorSnapshot>((resolve, reject) => {
       let settled = false;
       let reading = false;
@@ -149,6 +151,7 @@ export class TerrainColorSnapshotBuilder {
       const water = this.options.arenaResult.waterSurface;
       const events = this.options.scene.events;
       const cleanup = (): void => {
+        measurement?.add('terrain-snapshot/total', performance.now()-startedAt, 'elapsed');
         settled = true;
         events.off(Phaser.Scenes.Events.POST_UPDATE, step);
         events.off(Phaser.Scenes.Events.SHUTDOWN, cancel);
@@ -163,10 +166,13 @@ export class TerrainColorSnapshotBuilder {
       };
       const cancel = (): void => finishWithError(new Error('[TerrainColorSnapshot] Build cancelled.'));
       const readRegion = (index: number): void => {
+        const readStarted = performance.now();
         reading = true;
         const region = this.regions[index];
         try {
+          const renderStarted = loadingTimeline.start();
           this.renderRegion(region);
+          loadingTimeline.end('terrain-snapshot/render-region', renderStarted);
           this.scratch.snapshotArea(0, 0, region.pixelWidth, region.pixelHeight, (image) => {
             if (settled) return;
             if (this.options.isCurrent?.() === false) { cancel(); return; }
@@ -174,7 +180,10 @@ export class TerrainColorSnapshotBuilder {
               if (!(image instanceof HTMLImageElement)) {
                 throw new Error('[TerrainColorSnapshot] Snapshot lieferte kein Bild.');
               }
+              measurement?.add('terrain-snapshot/readback-image',performance.now()-readStarted,'elapsed');
+              const copyStarted = loadingTimeline.start();
               copySnapshotImage(image, data, this.width, region);
+              loadingTimeline.end('terrain-snapshot/copy-image',copyStarted);
               regionIndex = index + 1;
               reading = false;
               if (regionIndex === this.regions.length) this.options.onReadbackComplete?.();
@@ -193,12 +202,16 @@ export class TerrainColorSnapshotBuilder {
         try {
           if (regionIndex < this.regions.length) { readRegion(regionIndex); return; }
           // Preparation is advanced by the World presentation frame, never duplicated here.
+          measurement?.gate('snapshot-water-masks', !water || water.isPrepared());
           if (water && !water.isPrepared()) return;
           waterWork ??= stampWaterSnapshot(data, this.width, this.height, water?.getPreparedMasks() ?? []);
+          const measuredAt = loadingTimeline.start();
+          try {
           const deadline = performance.now() + 4;
           do {
             if (waterWork.next().done) { cleanup(); resolve(snapshot); return; }
           } while (performance.now() < deadline);
+          } finally { loadingTimeline.end('terrain-snapshot/water-stamp',measuredAt); }
         } catch (error) { finishWithError(error); }
       };
       events.on(Phaser.Scenes.Events.POST_UPDATE, step);

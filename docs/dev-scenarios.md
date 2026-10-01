@@ -133,6 +133,51 @@ Werkzeug `construction:flame_turret`, Spieler bei Grid `(98,26)`, Flammenturm be
 
 ## Produktionsdarstellung diagnostizieren
 
+### Ladezeit statt Framezeit messen
+
+In Dev und im Produktionsbuild ist `window.__FD_BOOT__.timeline()` auch w?hrend des Ladens abrufbar.
+Der JSON-Bericht h?lt die letzten zw?lf Boot-, World-, Deferred- und Szenario-L?ufe fest.
+`topSections` trennt CPU-/Treiber-Aufrufe, Worker-Rechenzeit und verstrichene Wartezeit.
+Diese teilweise parallelen oder verschachtelten Zeiten nicht addieren. `barriers` und
+`criticalPath` zeigen beobachtete Ready-?berg?nge und noch offene Bedingungen, keinen
+kausal rekonstruierten CPU/GPU-Abh?ngigkeitsgraphen. Boot-Reveal und replizierte World-Readiness
+bleiben getrennt: Nur letztere wartet auf den Terrain-Farbsnapshot. Der Szenario-Status f?hrt
+unter `loading.loadTimelineId` die zugeh?rige World-Kennung.
+
+Dev: `npm run dev:browser`, dann `http://127.0.0.1:8090/dev-scenario.html` f?r Szenarien oder
+`http://127.0.0.1:8090/` f?r den normalen Start. Einen vorhandenen Server weiterverwenden.
+Produktion: `npm run build`, danach
+`npm run preview -- --host 127.0.0.1 --port 8091 --strictPort` und `http://127.0.0.1:8091/` ?ffnen.
+Der Produktionsbuild enth?lt den Timeline-Abruf, nicht den Dev-Szenario-Einstieg. Dieselbe Map dort
+?ber den normalen Host-/Lobby-Ablauf w?hlen; World- und Boot-Lauf getrennt vom Szenario-Gesamtwert vergleichen.
+
+```js
+// W?hrend eines Stillstands und erneut nach Ready; copy() ist eine DevTools-Hilfe.
+copy(JSON.stringify(window.__FD_BOOT__.timeline(), null, 2));
+```
+
+`resources` gruppiert Resource Timing nach Assetverzeichnis sowie Modulen und nennt die gr??ten
+Dateien. Global umfasst es auch Requests vor Phaser-preload; je Lauf nur darin gestartete Requests.
+`transferBytes` enth?lt HTTP-Overhead, `encodedBytes` den komprimierten Body.
+`decodedBytes` bezeichnet HTTP-Dekompression, nicht Bild-RGBA. Null Transfer kann Cache oder
+fehlende Timing-Freigabe bedeuten. Die HTML-Einstiege erweitern den Puffer vor den Modulen auf 10000; fr?here
+?berl?ufe k?nnen nicht r?ckwirkend behoben werden. Vor Navigation exportieren.
+
+Loader-Verarbeitung misst Downloadende bis Cache-Fertigstellung (Decode/Upload einschlie?lich
+Scheduling), Woodland zus?tzlich synchrone Upload-/Coverage-Arbeit. Worker-Start umfasst
+Moduldownload, Auswertung, Initialisierung und Message-Delivery; Worker-Initialisierung und
+Rechenzeit werden separat gemeldet. Der Restwert `module-startup-and-delivery` ist keine reine
+Downloadzeit. Worker-Unterimports liegen nicht im Resource-Timing-Puffer des Hauptfensters.
+CPU-Submit ist keine GPU-Ausf?hrungszeit; asynchrones Shader-Linking erscheint in der Warmup-Barriere.
+Die Formation-Queue ist keine zus?tzliche Ready-Bedingung; ihr vorhandener Diagnosez?hler bleibt
+f?r nach Ready weiterlaufende Jobs ma?geblich.
+
+Je Rechner/Qualit?t/Viewport/Seed mindestens f?nf Vordergrundl?ufe: kalter HTTP-Cache, warmer Cache,
+World-Wechsel im selben Tab; Maps 1/7/15 und Lobby. Cachezustand, Build, Map, Qualit?t und
+Tab-Sichtbarkeit zum Bericht notieren. Keine Overrides oder Frame-Messung gleichzeitig starten.
+
+### Framezeit und Darstellung
+
 Der Panel-Bereich **Sonnenwald: Diagnose und Messung** bietet Uhrzeit-Kurzbefehle, **Kamera: nächster Baum**,
 Formationsstatus und Messungen im Stand, bei Felszerstörung oder während einer Kamerafahrt.
 Die Tagesminute lässt sich unter Simulation setzen; Pause und Einzelschritte halten auch die Präsentationszeit an.

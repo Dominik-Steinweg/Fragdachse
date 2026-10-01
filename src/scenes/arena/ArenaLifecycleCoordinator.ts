@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
@@ -496,6 +497,8 @@ export class ArenaLifecycleCoordinator {
     },
     detach: () => {
       const runtime = this.worldRuntime;
+      const measured = loadingTimeline.get('world'), descriptor = runtime?.context?.descriptor;
+      if (descriptor && measured?.id === String(descriptor.worldRevision) + ':' + descriptor.definitionId) measured.finish('detached');
       this.worldRuntime = null;
       // Die aktive Presentation-Verdrahtung faellt zuerst: Sie adressiert world-scoped Zustand,
       // den ein Uebergang gerade beendet, und darf nie in den Handoff gelangen.
@@ -1106,11 +1109,16 @@ export class ArenaLifecycleCoordinator {
     // arena-only replicated load barrier is never ticked. Keep preparation world-scoped.
     if (!this.matchTerminated && this.arenaBuilt && this.worldRuntime
       && !this.combatPresentationPrepared && this.getLocalWorldPresentation().required) {
+      const measuredAt = loadingTimeline.start();
       const fragmentsReady = this.renderers.combatGoreGpu.fragmentTemplateCache.stepPreparation();
       const xpReady = this.ctx.effectSystem.prepareXpText();
       const smokeReady = this.ctx.smokeSystem.prepare();
       const clawReady = this.ctx.effectSystem.prepareEnemyClawEffects();
       this.combatPresentationPrepared = fragmentsReady && xpReady && smokeReady && clawReady;
+      loadingTimeline.end('combat/presentation-prepare', measuredAt);
+      const run = loadingTimeline.get('world');
+      run?.gate('combat-fragments', fragmentsReady); run?.gate('combat-xp', xpReady);
+      run?.gate('combat-smoke', smokeReady); run?.gate('combat-claws', clawReady);
     }
   }
 
@@ -1139,7 +1147,7 @@ export class ArenaLifecycleCoordinator {
   getWorldSupportGameplayRuntime(): WorldSupportGameplayRuntime | null { return this.worldGameplay?.support ?? null; }
 
   getWorldLoadingDiagnostics() {
-    return { terrainSnapshotReady: this.terrainSnapshotReady, combatPresentationPrepared: this.combatPresentationPrepared,
+    return { loadTimelineId: loadingTimeline.get('world')?.id ?? null, terrainSnapshotReady: this.terrainSnapshotReady, combatPresentationPrepared: this.combatPresentationPrepared,
       shaderWarmupReady: this.renderers.gpuVfx.isShaderWarmupComplete(), localArenaLoadReady: this.localArenaLoadReady,
       roundStartPrepared: this.roundStartPrepared, terrainSnapshotRetryCount: this.terrainSnapshotRetryCount };
   }
@@ -1774,6 +1782,7 @@ export class ArenaLifecycleCoordinator {
     if (!this.getLocalWorldPresentation().required) {
       bridge.setLocalWorldLoadReady(worldRevision, true);
       this.localArenaLoadReady = true;
+      loadingTimeline.get('world')?.finish('ready-without-local-presentation');
       if (bridge.isHost()) this.tryScheduleArenaStart();
       return;
     }
@@ -1785,6 +1794,7 @@ export class ArenaLifecycleCoordinator {
     const work = this.collectWorldRenderWork(view);
     // Die replizierte Barriere wartet zusaetzlich auf den Terrain-Farb-Snapshot; der Boot-Reveal
     // tut das ausdruecklich nicht (siehe getWorldRevealState).
+    this.recordLoadingBarriers(work.renderReady);
     const localRenderReady = work.renderReady && this.terrainSnapshotReady
       && this.renderers.gpuVfx.isShaderWarmupComplete() && this.combatPresentationPrepared;
     const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, localRenderReady);
@@ -1797,8 +1807,18 @@ export class ArenaLifecycleCoordinator {
     // Entry readiness stays latched until the World/entry is reset. Ongoing chunk streaming
     // still publishes its current progress, but must not reopen loading and replay the countdown.
     this.localArenaLoadReady ||= loadProgress.ready;
+    if (loadProgress.ready) loadingTimeline.get('world')?.finish();
 
     if (bridge.isHost()) this.tryScheduleArenaStart();
+  }
+
+  private recordLoadingBarriers(renderReady: boolean): void {
+    const run = loadingTimeline.get('world');
+    if (!run || run.endedAt !== null) return;
+    run.gate('render-working-set', renderReady);
+    run.gate('terrain-snapshot', this.terrainSnapshotReady);
+    run.gate('vfx-shader-warmup', this.renderers.gpuVfx.isShaderWarmupComplete());
+    run.gate('combat-presentation', this.combatPresentationPrepared);
   }
 
   /** View-bezogene Ladearbeit gehoert der aktiven World-Presentation-Verdrahtung. */
@@ -1829,10 +1849,13 @@ export class ArenaLifecycleCoordinator {
       return { ready: false, progress: 0 };
     }
     const work = this.collectWorldRenderWork(view);
+    this.recordLoadingBarriers(work.renderReady);
     const loadProgress = resolveWorldLoadProgress(
       work.pending, work.resident, work.renderReady && this.renderers.gpuVfx.isShaderWarmupComplete()
         && this.combatPresentationPrepared,
     );
+    loadingTimeline.get('world')?.gate('visible-reveal', loadProgress.ready);
+    if (loadProgress.ready && isLobbyWorldDefinitionId(bridge.getWorldDescriptor()?.definitionId ?? '')) loadingTimeline.get('world')?.finish('revealed');
     return loadProgress.ready
       ? { ready: true, progress: loadProgress.progress }
       : { ready: false, progress: loadProgress.progress, pendingRenderWork: work.pending };
@@ -2566,6 +2589,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   terminateMatch(reason?: string): void {
+    loadingTimeline.get('world')?.finish('terminated');
     // Ein Abbruch beendet auch einen laufenden Arena-Uebergang samt Retry-Kette; sonst bliebe
     // der Re-Eintritts-Guard nach einem Abbruch im Retry-Fenster dauerhaft gesetzt.
     this.arenaTransitionInProgress = false;
@@ -2622,6 +2646,7 @@ export class ArenaLifecycleCoordinator {
     activityDescriptor: ActivityDescriptor | null,
     preserveLobbyPresentation = false,
   ): void {
+    const buildStarted = performance.now();
     // Die Darstellung des Vorgaengers steht entweder noch in seiner Runtime oder liegt bereits
     // im Handoff – ein Uebergang endet nicht zwingend im selben Frame, in dem er beginnt.
     const reusablePresentation = preserveLobbyPresentation
@@ -2631,6 +2656,10 @@ export class ArenaLifecycleCoordinator {
       : null;
     const prepared = this.preparedRoundLayout;
     this.tearDownArena(reusablePresentation !== null);
+    const previousMeasurement = loadingTimeline.get('world');
+    const loadRun = loadingTimeline.begin('world', String(worldDescriptor.worldRevision) + ':' + worldDescriptor.definitionId, previousMeasurement?.endedAt !== null);
+    loadRun.gate('world-build', false);
+    for (const gate of ['render-working-set', 'terrain-snapshot', 'vfx-shader-warmup', 'combat-presentation']) loadRun.gate(gate, false);
     // Materialisierungsrezepte gehören zur vorherigen Activity/World und dürfen eine neue World
     // ohne Activity nicht in eine spätere Mission hineinvererben.
 
@@ -2877,6 +2906,8 @@ export class ArenaLifecycleCoordinator {
     this.hostUpdate.resetPerRound();
     this.clientUpdate.resetPerRound();
     this.trainDestroyedShown = false;
+    loadRun.add('world/synchronous-build', performance.now() - buildStarted);
+    loadRun.gate('world-build', true);
   }
 
   tearDownArena(preserveAuthoredPresentation = false): void {
@@ -3204,6 +3235,7 @@ export class ArenaLifecycleCoordinator {
       // Fill it from the host's authoritative admission before the shared readiness barrier.
       this.hostSyncWorldParticipation();
     }
+    if (worldDescriptor) loadingTimeline.begin('world', String(worldDescriptor.worldRevision) + ':' + worldDescriptor.definitionId);
     const activityReady = isArenaTransitionReady({
       phase: bridge.getGamePhase(),
       worldDescriptor,
@@ -3224,6 +3256,7 @@ export class ArenaLifecycleCoordinator {
       this.scheduleHostArenaGeneration(pendingHostGeneration);
       return;
     }
+    loadingTimeline.get('world')?.gate('descriptor-activity', !!worldDescriptor && activityReady);
     if (!worldDescriptor || !activityReady) {
       this.layoutRetryCount++;
       if (this.layoutRetryCount >= ArenaLifecycleCoordinator.LAYOUT_RETRY_LIMIT) {
@@ -3245,6 +3278,7 @@ export class ArenaLifecycleCoordinator {
       || !isLobbyWorldDefinitionId(worldDescriptor.definitionId)) {
       const assets = getDeferredAssets(this.scene);
       assets.start();
+      loadingTimeline.get('world')?.gate('deferred-assets', assets.getState().ready);
       if (!assets.getState().ready) {
         if (assets.getState().status === 'error') {
           this.arenaTransitionInProgress = false;

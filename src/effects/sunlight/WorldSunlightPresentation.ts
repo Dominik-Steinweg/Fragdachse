@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { WOODLAND_TRANSMISSION_KEY } from '../../assets/WoodlandAssetManifest';
 import type * as Phaser from 'phaser';
 import type { ArenaBuilderResult } from '../../arena/ArenaBuilder';
@@ -63,6 +64,7 @@ export class WorldSunlightPresentation {
  get diagnostics(){return this.sunComposite?.diagnostics??null;}
  get woodlandCount():number{return this.woodland?.count??0;}
  constructor(private readonly scene:Phaser.Scene,private readonly targets:Targets) {
+  const measuredAt=loadingTimeline.start();
   this.fogBase=targets.fog?{opacity:targets.fog.tuning.opacity,detail:targets.fog.tuning.detail}:null;
   try {
   this.canopyLighting=new CanopyLighting(scene,targets.canopies);
@@ -73,7 +75,7 @@ export class WorldSunlightPresentation {
   targets.shadow.setCanopyShadows(targets.canopies,true);
   this.canopyLighting.setClouds(this.clouds);this.canopyLighting.setLighting(targets.lighting);
   if(targets.fog)Object.assign(targets.fog.tuning,{opacity:.58,detail:.88});
-  } catch(error){this.destroy();throw error;}
+  } catch(error){this.destroy();throw error;} finally {loadingTimeline.end('sunlight/init',measuredAt);}
  }
  update(minutes:number,presentationTimeMs:number):void {
   if(this.disposed)return;
@@ -132,12 +134,14 @@ export class WorldSunlightPresentation {
     }
     const m=targets.worldContext?.metrics,layout=targets.layout;
     if(enabled&&!this.woodland&&m&&layout&&(!targets.water||targets.water.isPrepared())) {
+      const measuredAt=loadingTimeline.start();
       const frame={offsetX:m.offsetX,offsetY:m.offsetY,width:m.widthPx,height:m.heightPx};
       const crowns=targets.canopies.map(c=>({worldX:c.worldX,worldY:c.worldY,radius:Math.max(c.gfx.displayWidth,c.gfx.displayHeight)*.46,
         conifer:CANOPY_ASSETS[canopyVariant(c.worldX,c.worldY)].conifer}));
       const water=new EcologyWaterField(targets.water?.getPreparedMasks()??[]);
       const placements=buildWoodlandEcology(layout,frame,crowns,water,targets.worldContext!.bases.flatMap(b=>b.cells));
       this.woodland=new WoodlandEcologyRenderer(this.scene,placements);this.woodlandLayout=layout;
+      loadingTimeline.end('ecology/woodland',measuredAt);
     }
     this.woodland?.update(this.sunTuning,targets.water,true,true,getGraphicsQualityProfile(this.scene).sunlight.ecologyDensity);
   }

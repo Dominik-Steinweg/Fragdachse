@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
 import { DEFAULT_FOG_STRENGTH } from '../../config/groundFog';
@@ -153,12 +154,16 @@ export class GroundFogSystem {
     if (!renderer?.gl || typeof Phaser.GameObjects?.Shader !== 'function') { this.failed = this.stats.status = 'WebGL unavailable'; return; }
     try {
       if (!this.gpu) {
+        const measuredAt = loadingTimeline.start();
         this.gpu = new FogGpuField(this.scene, this.terrain, this.seed, this.tuning, DEPTH.GROUND_FOG);
         this.gpu.setWoodlandLight(this.woodlandLight);
+        loadingTimeline.end('fog/field-init', measuredAt);
       }
       if (this.measureGpu) { this.timer ??= new FogGpuTimer(renderer.gl); this.timer.begin(); }
       // Geometry is accepted even when simulation is paused. New slots initialize once below.
+      const prepareAt = loadingTimeline.start();
       this.gpu.prepare(view, this.elapsed);
+      loadingTimeline.end('fog/prepare-submit', prepareAt);
       const target = fogDensityAt(minutes).map(x => x * this.strength * FOG.densityScale) as [number, number];
       if (!this.density) this.density = target;
       if (delta > 150) { this.impulses.clear(); this.tracks.clear(); }

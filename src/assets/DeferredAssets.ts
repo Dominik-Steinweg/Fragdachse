@@ -1,3 +1,5 @@
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
+import { observeLoaderProcessing } from '../ui/BootLoaderProgress';
 import { UPGRADE_HEADER, UPGRADE_CONTROLS } from '../ui/UpgradeForestAssets';
 import { PERSISTENT_BASE_HEADER } from '../ui/PersistentBaseAssets';
 import type * as Phaser from 'phaser';
@@ -45,6 +47,7 @@ export class DeferredAssets {
   private highWater = 0;
   private reliableTotals = true;
   private destroyed = false;
+  private stopTiming: (() => void) | null = null;
 
   constructor(private readonly scene: Phaser.Scene, assets = DEFERRED_ASSETS) {
     this.entries = assets.map(asset => ({ asset, attempts: 0, done: false, failed: false,
@@ -77,6 +80,9 @@ export class DeferredAssets {
     const pending = this.entries.filter(entry => !entry.done && !entry.failed);
     if (pending.length === 0) { this.finish(); return; }
     const loader = this.scene.load;
+    loadingTimeline.begin('deferred', String(performance.now()));
+    this.stopTiming?.();
+    this.stopTiming = observeLoaderProcessing(loader);
     // This owner retries both download and decode failures, after Phaser releases its queue.
     const previousRetries = loader.maxRetries;
     loader.maxRetries = 0;
@@ -145,6 +151,8 @@ export class DeferredAssets {
   }
 
   private detachLoader(): void {
+    this.stopTiming?.(); this.stopTiming = null;
+    loadingTimeline.get('deferred')?.finish(this.destroyed ? 'cancelled' : 'ready');
     this.scene.load.off('fileprogress', this.onProgress);
     this.scene.load.off('filecomplete', this.onFileComplete);
     this.scene.load.off('complete', this.onBatchComplete);

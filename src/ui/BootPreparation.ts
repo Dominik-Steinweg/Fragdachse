@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 /** Acquire cleanup at construction time, including a direct destroy during preparation. */
 export function onBootSceneTeardown(
   events: { once(event: string, callback: () => void): unknown; off(event: string, callback: () => void): unknown },
@@ -65,6 +66,8 @@ export class BootPreparation {
     } catch (error) {
       this.stopped = true;
       this.onError(error);
+    } finally {
+      loadingTimeline.get('boot')?.add('preparation/slice', performance.now() - sliceStart);
     }
   }
 }

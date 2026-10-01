@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import type { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import type { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
@@ -537,6 +538,14 @@ export class WorldPresentationFrameBinding {
     const rockOverlayWork = arenaResult?.rockOverlaySurface?.getWorkingSet(view, true) ?? null;
     const shadowWork = this.input.shadow.getStaticSurfaceWorkingSet(view, true);
     const waterWork = arenaResult?.waterSurface?.getPreparationState();
+    const run = loadingTimeline.get('world');
+    if (run && run.endedAt === null) {
+      run.gate('ground-chunks', groundWork?.ready === true);
+      run.gate('rock-overlay-chunks', rockOverlayWork?.ready === true);
+      run.gate('shadow-chunks', shadowWork?.ready === true);
+      run.gate('water-masks', !arenaResult?.waterSurface || arenaResult.waterSurface.isPrepared());
+      run.gate('fog-field', this.input.groundFog?.getSystem()?.getDiagnostics().status !== 'preparing');
+    }
     return {
       pending: (groundWork?.pendingWork ?? 0)
         + (rockOverlayWork?.pendingWork ?? 0)

@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import type * as Phaser from 'phaser';
 import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState, type CloudFieldBinding } from './cloudShadow';
 import { SunRenderTarget } from './SunRenderTarget';
@@ -59,7 +60,9 @@ export class CloudFieldTexture implements CloudFieldBinding {
     this.world[0]=x;this.world[1]=y;this.world[2]=Math.max(1,width);this.world[3]=Math.max(1,height);
     this.renderer.renderNodes.finishBatch();
     this.renderer.glTextureUnits.bind(this.scene.textures.get('__DEFAULT').source[0].glTexture!,8);
+    const measuredAt=loadingTimeline.start();
     this.target.draw(size,size);
+    loadingTimeline.end('cloud/field-submit',measuredAt);
     this.state.cache=this;this.builds++;
   }
   get diagnostics(){return {size:this.target?.shader.width??0,builds:this.builds,rgbaBytes:(this.target?.shader.width??0)**2*4,worldTexelX:this.world[2]/Math.max(1,this.target?.shader.width??0),worldTexelY:this.world[3]/Math.max(1,this.target?.shader.height??0)};}

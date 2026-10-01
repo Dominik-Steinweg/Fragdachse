@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { WOODLAND_ROCK_COLOUR_KEY, WOODLAND_TRANSMISSION_KEY } from '../../assets/WoodlandAssetManifest';
 import { WOODLAND_ROCK_COVERAGE_KEY, WOODLAND_ROCK_HEIGHT_KEY } from '../../assets/WoodlandAssetManifest';
 import { quantizeSunAzimuth } from '../../effects/sunlight/SunPath';
@@ -11,7 +12,7 @@ import type { ChunkWorldRect } from '../chunks/ArenaChunkGrid';
 import type { RockVisualState } from './RockVisualState';
 import { type RockLightingState } from './RockLightingState';
 import { FORMATION, FORMATION_SIDE, type FormationRock } from './RockFormationField';
-import type { FormationWorkerRequest, FormationWorkerResult } from './RockFormationWorker';
+import type { FormationWorkerRequest, FormationWorkerResult, FormationWorkerInitialized } from './RockFormationWorker';
 import { formationSurfaceFactor, ROCK_FORMATION_FRAGMENT } from './rockFormationShader';
 import type { FormationReceiverBinding } from './RockFoliageLighting';
 
@@ -107,13 +108,21 @@ export class RockFormationLighting {
     this.receiver={field:this.field.texture,lookup:this.lookup.texture,occlusion:this.occlusion.texture,
       frame:[frame.offsetX,frame.offsetY,frame.width,frame.height],sun:state.sun,options:[0,0,1,1],
       };
+    const timing = loadingTimeline.capture(), workerStarted = performance.now();
     this.worker=new Worker(new URL('./RockFormationWorker.ts',import.meta.url),{type:'module'});
     rollback.push(()=>{this.worker.onmessage=null;this.worker.onerror=null;this.worker.terminate();});
     const initial=states.map(s=>s?snapshot(s):undefined);
     for(const s of initial) if(s) this.signatures.set(s.id,signature(s));
     this.post({kind:'init',width:frame.width,height:frame.height,states:initial,source:{alpha,detail}},[alpha.buffer,detail.buffer]);
-    this.worker.onmessage=(event: MessageEvent<FormationWorkerResult>)=>{
+    this.worker.onmessage=(event: MessageEvent<FormationWorkerResult | FormationWorkerInitialized>)=>{
       if(this.disposed) return;
+      if ('initMs' in event.data) {
+        timing?.add('rock-worker/startup-including-module-load', performance.now()-workerStarted, 'elapsed');
+        timing?.add('rock-worker/init', event.data.initMs, 'worker');
+        timing?.add('rock-worker/module-startup-and-delivery', Math.max(0, performance.now()-workerStarted-event.data.initMs), 'elapsed');
+        return;
+      }
+      timing?.add('rock-worker/build', event.data.buildMs, 'worker');
       this.pending=event.data; this.busy=false;
     };
     this.worker.onerror=(event)=>{this.error=event.message;this.busy=false;};

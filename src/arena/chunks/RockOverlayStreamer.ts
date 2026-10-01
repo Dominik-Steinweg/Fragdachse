@@ -1,3 +1,4 @@
+import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { WOODLAND_ROCK_HEIGHT_KEY } from '../../assets/WoodlandAssetManifest';
 import { generateRockEcology, ROCK_ECOLOGY_DEFAULTS, type EcologyColony, type RockEcologyTuning } from '../rocks/RockEcologyField';
 import { rockColonyTint, stampRockColonyContact, ROCK_COLONY_CONTACT_REACH } from '../rocks/RockColonySurface';
@@ -228,6 +229,7 @@ export class RockOverlayStreamer {
   }
 
   private rebuildEcology(): void {
+    const measuredAt = loadingTimeline.start();
     // Read once during world construction, never in rendering or a destruction update.
     if(!this.ecologyHeight && this.scene.textures.exists(WOODLAND_ROCK_HEIGHT_KEY)) {
       const image=this.scene.textures.get(WOODLAND_ROCK_HEIGHT_KEY).getSourceImage?.() as HTMLImageElement | undefined;
@@ -246,6 +248,7 @@ export class RockOverlayStreamer {
       tuning:this.ecologyTuning,water:this.layout.water,trees:this.layout.trees,moss:this.mossPlacements,height:this.ecologyHeight});
     this.ecologyIndex.clear();this.ecologyIndex.sync(this.ecology);
     this.ecologyRadius=maxVegetationRadius(this.ecology)+ROCK_COLONY_CONTACT_REACH;
+    loadingTimeline.end('ecology/rock-placement', measuredAt);
     this.ecologyByAnchor.clear();
     for(const colony of this.ecology){
       const group=this.ecologyByAnchor.get(colony.anchorKey);

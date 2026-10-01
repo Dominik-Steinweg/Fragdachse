@@ -10,5 +10,6 @@ canvas { display:block }
 #boot-bar-fill { height:3px; background:#e3b566; transform-origin:left }
 </style></head><body>
 <div id="game-container"><div id="boot-screen"><h1>Dev-Szenario</h1><div id="boot-status">Spiel wird geladen …</div><div id="boot-bar-fill"></div><div id="boot-detail"></div></div></div>
+<script>performance.setResourceTimingBufferSize(10000);</script>
 <script type="module" src="/src/dev/devScenario.ts"></script>
 </body></html>
