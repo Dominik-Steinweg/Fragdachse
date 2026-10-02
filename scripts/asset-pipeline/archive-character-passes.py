@@ -62,8 +62,8 @@ def archive(folder):
         raise ValueError('Immutable archive already exists')
     selection_data = (root / 'selection.json').read_bytes()
     selection = json.loads(selection_data)
-    if selection.get('schema') != 'fd-character-pass-selection' or selection.get('version') != 2 or not selection.get('files'):
-        raise ValueError('Completed character pass selection required')
+    if selection.get('schema') not in ('fd-character-pass-selection', 'fd-character-mesh-selection') or selection.get('version') != 2 or not selection.get('files'):
+        raise ValueError('Completed character pass/mesh selection required')
     files = dict(selection['files'], **{'selection.json': digest(selection_data)})
     manifest = dict(version=2, id=selection['id'], revision=selection['revision'],
                     selectionSha256=files['selection.json'], files=files)
