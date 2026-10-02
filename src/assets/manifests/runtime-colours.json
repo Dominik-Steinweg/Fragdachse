@@ -421,6 +421,18 @@
       "visiblePixelSha256": "ace520ab7f5d5be9157fdec002641bbc987a61b631e4e606cbaebb2e0eeb1fab",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/badger/passes/player-material-21e4/albedo-1-982578d46bf54e13e77e7ad062cf44fbd1566c4613cae8b5d9578174b7587df5.png": {
+      "file": "assets/sprites/pipeline-v2/badger/passes/player-material-21e4/albedo-1-982578d46bf54e13e77e7ad062cf44fbd1566c4613cae8b5d9578174b7587df5.webp",
+      "source": "assets/sprites/pipeline-v2/badger/passes/player-material-21e4/albedo-1-982578d46bf54e13e77e7ad062cf44fbd1566c4613cae8b5d9578174b7587df5.png",
+      "width": 1980,
+      "height": 396,
+      "sourceBytes": 269462,
+      "downloadBytes": 210068,
+      "sourceSha256": "982578d46bf54e13e77e7ad062cf44fbd1566c4613cae8b5d9578174b7587df5",
+      "sha256": "e59a30e0c0691fd8089c7475c97490157f39bbe34b5a4f27bbc0bef03e428810",
+      "visiblePixelSha256": "96e04e13042c9906f06c7c5cb3366c12254f72ab8effa39f06898ee6be3a77e2",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/badger/passes/player-shadow-21c-production/albedo-4-3f4e7ed005430118842803b6c460e8298269ae5e2158ffb685007f5bb81b9e57.png": {
       "file": "assets/sprites/pipeline-v2/badger/passes/player-shadow-21c-production/albedo-4-3f4e7ed005430118842803b6c460e8298269ae5e2158ffb685007f5bb81b9e57.webp",
       "source": "assets/sprites/pipeline-v2/badger/passes/player-shadow-21c-production/albedo-4-3f4e7ed005430118842803b6c460e8298269ae5e2158ffb685007f5bb81b9e57.png",
