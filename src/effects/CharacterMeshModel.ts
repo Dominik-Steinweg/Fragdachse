@@ -1,5 +1,6 @@
 import { CHARACTER_MESH_MANIFEST as manifest, type CharacterMeshSpec } from '../assets/CharacterMeshAssets';
 import { getHeldItemSpriteSpec } from '../loadout/HeldItemVisuals';
+import { getHeldItemAnchor, HELD_ITEM_TEXTURE_SIZE } from '../config';
 import { CHARACTER_SHADOW_CONFIG as config } from './ShadowConfig';
 
 export const meshPose = (frame: string | number): number => {
@@ -22,11 +23,12 @@ export function bodyMeshMatrix(sprite: MeshDisplayPose, out = new Float32Array(1
 }
 export function characterHandSocket(sprite: MeshDisplayPose) {
   const m = bodyMeshMatrix(sprite), socket = manifest.sockets[meshPose(sprite.frame.name)].weapon, p = socket.position;
-  // The baked socket locates the grip. Its yaw describes the sculpted palm,
-  // not weapon aim: north-authored held items follow the displayed facing.
-  // Recoil is added by HeldItemVisual; the shadow reads that final image pose.
-  return { x: m[12] + m[0] * p[0] + m[4] * p[1], y: m[13] + m[1] * p[0] + m[5] * p[1],
-    z: m[10] * p[2], yaw: sprite.rotation };
+  // The baked right-palm position/orientation is anatomical, not the authored
+  // held-item grip. Share the lobby's visual anchor and displayed scale/facing;
+  // only the weapon's height comes from the current mesh pose. Recoil is added
+  // by HeldItemVisual, and the shadow reads that final image transform.
+  const anchor = getHeldItemAnchor(sprite.x, sprite.y, sprite.rotation, sprite.displayWidth / HELD_ITEM_TEXTURE_SIZE);
+  return { x: anchor.x, y: anchor.y, z: m[10] * p[2], yaw: sprite.rotation };
 }
 export const meshForHeldTexture = new Map<string, CharacterMeshSpec>();
 for (const spec of manifest.meshes) for (const id of 'gameIds' in spec ? spec.gameIds ?? [] : []) {

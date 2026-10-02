@@ -165,10 +165,11 @@ it('uses the same animated hand socket and recoil for the weapon image and visua
 import { characterHandSocket, weaponMeshMatrix } from '../src/effects/CharacterMeshModel';
 import { CHARACTER_MESH_MANIFEST } from '../src/assets/CharacterMeshAssets';
 
-it.each(['GLOCK', 'AK47', 'XBOW'])('keeps %s aligned with preview facing across body poses, including recoil and shadows', (itemId) => {
-  for (const pose of CHARACTER_MESH_MANIFEST.poses) for (const aim of [0, Math.PI / 4, Math.PI / 2, Math.PI]) {
+it.each(['GLOCK', 'AK47', 'XBOW', 'NEGEV', 'SHOTGUN', 'AWP'])('keeps %s on the preview grip across displayed poses, scale, recoil and shadows', (itemId) => {
+  for (const pose of CHARACTER_MESH_MANIFEST.poses) for (let direction = 0; direction < 8; direction++) for (const scale of [.72, 1, 1.28]) {
+    const aim = direction * Math.PI / 4;
     const body = { x: 100, y: 200, rotation: aim + Math.PI / 2,
-      scaleX: .3, scaleY: .3, displayWidth: 38.4, displayHeight: 38.4,
+      scaleX: .3 * scale, scaleY: .3 * scale, displayWidth: 38.4 * scale, displayHeight: 38.4 * scale,
       originX: .5, originY: .5, flipX: false, flipY: false,
       frame: { name: String(pose.index), realWidth: 128, realHeight: 128 } };
     const socket = characterHandSocket(body), game = visualFixture(), preview = visualFixture();
@@ -181,6 +182,11 @@ it.each(['GLOCK', 'AK47', 'XBOW'])('keeps %s aligned with preview facing across 
       game.visual.sync(body.x, body.y, body.rotation, body.displayWidth, true, 1, socket);
       preview.visual.sync(body.x, body.y, body.rotation, body.displayWidth, true);
       expect(game.image.rotation).toBeCloseTo(preview.image.rotation);
+      const dx = game.image.x - preview.image.x, dy = game.image.y - preview.image.y;
+      // The same displayed pose must retain the lobby grip, including recoil.
+      expect(Math.abs(-Math.sin(aim) * dx + Math.cos(aim) * dy)).toBeLessThanOrEqual(.5);
+      expect(game.image.x).toBeCloseTo(preview.image.x, 5);
+      expect(game.image.y).toBeCloseTo(preview.image.y, 5);
       if (!firing) {
         expect(game.image.rotation).toBeCloseTo(aim + Math.PI / 2);
         expect(game.image.x).toBeCloseTo(socket.x); expect(game.image.y).toBeCloseTo(socket.y);

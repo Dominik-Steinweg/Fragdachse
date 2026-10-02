@@ -4,7 +4,7 @@ import { characterDirectShadow, characterShadowOpacity, characterShadowCoreDarke
 import { CHARACTER_SHADOW_MANIFEST as manifest, CHARACTER_SHADOW_FILES } from '../src/assets/CharacterShadowAssetManifest';
 import { CHARACTER_SHADOW_FRAGMENT } from '../src/effects/characterShadowShader';
 import { CHARACTER_SHADOW_CONFIG, SHADOW_CASTERS } from '../src/effects/ShadowConfig';
-import { DEPTH } from '../src/config';
+import { DEPTH, getHeldItemAnchor, HELD_ITEM_TEXTURE_SIZE } from '../src/config';
 
 it('uses inverse displayed rotation in right/south axes and the actual sheet frame', () => {
   expect(characterLightAzimuth(1, 0, 0)).toBe(0);
@@ -99,13 +99,14 @@ it('mesh projection is continuous, world anchored, rotation aware and keeps cont
   }
   expect(meshShadowOpacity(0,.6)).toBe(0);expect(meshShadowOpacity(1,-.1)).toBe(0);
 });
-it('uses the displayed pose sockets and actual held-image recoil, without quantizing facing', () => {
+it('uses the shared visual grip, pose height and actual held-image recoil, without quantizing facing', () => {
   const s=meshSprite();
   for(const pose of meshManifest.poses){
     s.frame.name=String(pose.index);s.rotation=.83;
     expect(meshPose(s.frame.name)).toBe(pose.index);
-    const h=characterHandSocket(s), matrix=bodyMeshMatrix(s), p=meshManifest.sockets[pose.index].weapon.position;
-    expect(h.x).toBeCloseTo(matrix[12]+matrix[0]*p[0]+matrix[4]*p[1]);
+    const h=characterHandSocket(s), p=meshManifest.sockets[pose.index].weapon.position;
+    const anchor=getHeldItemAnchor(s.x,s.y,s.rotation,s.displayWidth/HELD_ITEM_TEXTURE_SIZE);
+    expect(h.x).toBeCloseTo(anchor.x);expect(h.y).toBeCloseTo(anchor.y);
     expect(h.z).toBeCloseTo(p[2]);
     const w={...s,x:h.x+2,y:h.y-1,rotation:h.yaw+.12,originY:.75};
     const wm=weaponMeshMatrix(w,s);
