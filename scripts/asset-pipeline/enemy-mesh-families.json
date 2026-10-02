@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "demon-badger",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "A",
+      "body": [
+        "Forward heavy demonic anatomy"
+      ],
+      "bodyControl": "Body weight transfer",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " tapered foreleg",
+      "footSuffix": " broad articulated paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "proximalFurCount": 0,
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "grave-titan",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "A",
+      "body": [
+        "Massive ancient ribcage"
+      ],
+      "bodyControl": "Body weight transfer",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " tapered foreleg",
+      "footSuffix": " broad articulated paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "spore-warden",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "A",
+      "body": [
+        "Broad fungal host body"
+      ],
+      "bodyControl": "Body weight transfer",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " tapered foreleg",
+      "footSuffix": " broad articulated paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "plague-medic",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "A",
+      "body": [
+        "Compact load-bearing medic torso"
+      ],
+      "bodyControl": "Body weight transfer",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " tapered foreleg",
+      "footSuffix": " broad articulated paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "void-stalker",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "A",
+      "body": [
+        "Low wide predator thorax"
+      ],
+      "bodyControl": "Body weight transfer",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " tapered foreleg",
+      "footSuffix": " broad articulated paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "stink-broodmother",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "B",
+      "body": [
+        "Heavy low shoulder hump",
+        "Pear shaped brood abdomen"
+      ],
+      "bodyControl": "Body weight and balance",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " upper leg",
+      "footSuffix": " broad paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "thrower-badger",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "B",
+      "body": [
+        "Wide carrier shoulders",
+        "Compact supporting ribcage"
+      ],
+      "bodyControl": "Body weight and balance",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " upper leg",
+      "footSuffix": " broad paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "inferno-colossus",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "B",
+      "body": [
+        "Long basalt ribcage",
+        "Huge front shoulder yoke"
+      ],
+      "bodyControl": "Body weight and balance",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " upper leg",
+      "footSuffix": " broad paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "timebomb-badger",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "B",
+      "body": [
+        "Compact sprinting badger body"
+      ],
+      "bodyControl": "Body weight and balance",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " upper leg",
+      "footSuffix": " broad paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    },
+    {
+      "id": "void-hunter",
+      "sourceRevision": "v2-claw-leap-a",
+      "family": "B",
+      "body": [
+        "Long lean predator thorax"
+      ],
+      "bodyControl": "Body weight and balance",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "upperSuffix": " upper leg",
+      "footSuffix": " broad paw",
+      "allowBodyDescendants": true,
+      "union": true,
+      "reviewPoses": [
+        0,
+        4,
+        10,
+        19,
+        21
+      ],
+      "sourceContract": "enemy-mesh-families.json"
+    }
+  ]
+}

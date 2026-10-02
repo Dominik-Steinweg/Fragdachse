@@ -4,7 +4,7 @@ import type { CharacterMeshData } from '../assets/CharacterMeshAssets';
 import { createVisibleWorldView, getVisibleWorldView } from '../graphics/CameraWorldView';
 import { runWithScopedBlend } from '../graphics/PhaserScopedBlend';
 import { CharacterMeshProjector } from './CharacterMeshProjector';
-import { bodyMeshMatrix, extendMeshBounds, meshForHeldTexture, meshPose, meshShadowOpacity, weaponMeshMatrix } from './CharacterMeshModel';
+import { bodyMeshMatrix, extendMeshBounds, meshForHeldTexture, meshPose, meshShadowOpacity, meshShadowSoftness, weaponMeshMatrix } from './CharacterMeshModel';
 import { CHARACTER_MESH_BLUR, CHARACTER_MESH_COMPOSITE, CHARACTER_MESH_MASK } from './characterMeshShaders';
 import { CharacterShadowReceiver } from './CharacterShadowReceiver';
 import { CHARACTER_SHADOW_CONFIG as config } from './ShadowConfig';
@@ -90,7 +90,7 @@ class MeshSlot {
       if (this.weapon) extendMeshBounds(b, this.weapon.spec, this.weaponModel, this.sun);
     }
     // Larger penumbra at low sun. Four kernel steps of transparent gutter prevent edge clamping.
-    const softness = scale * (0.65 + 0.65 * (1 - Math.max(0, this.sun[2]))), pad = softness * 4 + 1;
+    const softness = meshShadowSoftness(scale, this.sun[2]), pad = softness * 4 + 1;
     b[2] = b[2] - b[0] + 2 * pad; b[3] = b[3] - b[1] + 2 * pad;
     b[0] -= pad; b[1] -= pad;
     this.horizontalStep[0] = softness / b[2]; this.verticalStep[1] = softness / b[3];

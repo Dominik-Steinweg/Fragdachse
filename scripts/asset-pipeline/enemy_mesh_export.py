@@ -149,7 +149,9 @@ def main():
             part['coatClusters'] = len(clusters)
             part['sourceTris'] = triangles
             part['weight'] *= 4 if split_coat else 2
-    attempts = fixed_proxy(scene, ordinary, 3250, (1000-sleeve_vertices, 2000-sleeve_vertices, 1, 4000-288))
+    use_union = job['id'] == 'rabid-badger' or (job['pilot'].get('union') and job['id'] != 'demon-badger')
+    # Union builds its own budgeted rest topology; per-object decimation is unused.
+    attempts = [] if use_union else fixed_proxy(scene, ordinary, 3250, (1000-sleeve_vertices, 2000-sleeve_vertices, 1, 4000-288))
     for part in ordinary:
         if part['ob'].name in original_triangles:
             part['sourceTris'] = original_triangles[part['ob'].name]
@@ -161,7 +163,7 @@ def main():
         for j in range(1,11):faces.extend([[0,j+1,j],[12,12+j,12+j+1]])
         p['triangles'] = np.array(faces,dtype=np.int32)
         p['proxyTriangleCleanup'] = p['sourceTriangleCleanup']
-    if job['id'] == 'rabid-badger':
+    if use_union:
         union, attempts = prepare_union(scene, ordinary, scale, anatomy, 2000-sleeve_vertices, job['poses'])
         ordinary = [union]
         # Union first makes the anatomical triangle subsets use zero-based indices.
@@ -240,7 +242,10 @@ def main():
         proxy = {}
         for leg_index, name in enumerate(LEGS):
             if ordinary[0].get('unionSources'):
-                tri = np.concatenate([leg_triangles(ordinary[0],leg_index),part_indices[anatomy['limbs'][name]['transition'].name]])
+                subsets=[];base=0
+                for volume in ordinary:
+                    subsets.append(leg_triangles(volume,leg_index)+base);base+=len(volume['proxy'])
+                tri = np.concatenate([*subsets,part_indices[anatomy['limbs'][name]['transition'].name]])
                 proxy[name] = dict(surfaces=[(points,tri)])
                 continue
             names = [ob.name for ob in anatomy['cores']] + [anatomy['limbs'][name][k].name for k in ('upper', 'transition')]

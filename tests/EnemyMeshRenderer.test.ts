@@ -72,3 +72,32 @@ it('uses the camera framebuffer transform without applying the viewport twice',(
   expect(uniforms.get('uViewMatrix')).toEqual([2,0,0,0,2,0,-260,-200,1]);
   f.renderer.destroy();
 });
+
+it('uses a world-space penumbra and an unblurred debug mask independently of the atlas tile',()=>{
+  const f=fixture(),e=f.enemy(),runtime=f.renderer as any;
+  for(let i=0;i<70;i++)f.sync([e]);
+  expect(runtime.displayData[7]).toBeCloseTo(.65+.65*(1-.5));
+  expect(state.nodes[2].draw).toHaveBeenCalled();
+  const uniforms=new Map<string,unknown>(), texture={};
+  runtime.renderer.setProjectionMatrixFromDrawingContext=vi.fn();runtime.renderer.projectionMatrix={val:[]};
+  runtime.clouds.tuning={};f.receiver.texture={get:()=>({source:{glTexture:{}}})};
+  runtime.raw.shader.texture={get:()=>({source:{glTexture:texture}})};
+  state.nodes[0].draw.mockImplementation((_c:any,_d:any,_n:any,textures:any,set:any)=>{
+    expect(textures[0]).toBe(texture);set((name:string,value:unknown)=>uniforms.set(name,value));return true;
+  });
+  f.renderer.setDebugSolid(true);
+  runtime.drawComposite({useCanvas:true,camera:{getViewMatrix:()=>({a:1,b:0,c:0,d:1,tx:0,ty:0})}});
+  expect(uniforms.get('uDebugSolid')).toBe(1);
+  f.renderer.destroy();
+});
+
+
+it('clears quadruped contacts when a pooled display entry becomes bipedal',()=>{
+  const f=fixture(),e=f.enemy(),runtime=f.renderer as any;
+  for(let i=0;i<70;i++)f.sync([e]);
+  expect(Array.from(runtime.displayData.slice(16,24)).some(v=>v!==0)).toBe(true);
+  const mesh=runtime.assets.ready.get(e.kind),old=mesh.asset;
+  mesh.asset={...old,contacts:old.contacts.map((c:any)=>({...c,feet:c.feet.slice(0,2)}))};
+  f.sync([e]);expect(Array.from(runtime.displayData.slice(16,24))).toEqual([0,0,0,0,0,0,0,0]);
+  expect(runtime.activeCount).toBe(1);f.renderer.destroy();
+});

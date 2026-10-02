@@ -49,7 +49,7 @@ export async function selectedEnemySource(repo, pilot) {
     await selected('source-beauty/' + path.posix.basename(frame.file), variant + '/' + frame.file);
   }
   await bind('source-registry.json', path.join(repo, 'src/config/pipelineAssets.json'));
-  await bind('source-pilot.json', path.join(repo, 'scripts/asset-pipeline/enemy-mesh-pilot.json'));
+  await bind('source-pilot.json', path.join(repo, 'scripts/asset-pipeline', relativeMember(pilot.sourceContract ?? 'enemy-mesh-pilot.json')));
   return { id: pilot.id, pilot, render, layout: asset.layout, coordinates: enemyCoordinates(render),
     poses, reviewSamples: enemyReviewSamples(render), sourceFiles, files };
 }

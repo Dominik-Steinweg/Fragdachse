@@ -23,15 +23,22 @@ def legacy_anatomy(scene, pilot):
     body = required(pilot['bodyControl'], 'EMPTY')
     rig = required(pilot['rig'], 'ARMATURE')
     cores = [required(name, 'MESH') for name in pilot['body']]
-    if any(ob.parent != body for ob in cores):
+    def owned(ob):
+        p = ob.parent
+        while p is not None:
+            if p == body: return True
+            if not pilot.get('allowBodyDescendants'): break
+            p = p.parent
+        return False
+    if any(not owned(ob) for ob in cores):
         raise ValueError('Body ownership differs from selected source')
     limbs = {}
     for name in LEGS:
-        upper = required(name + ' tapered foreleg', 'MESH')
-        foot = required(name + ' broad articulated paw', 'MESH')
+        upper = required(name + pilot.get('upperSuffix', ' tapered foreleg'), 'MESH')
+        foot = required(name + pilot.get('footSuffix', ' broad articulated paw'), 'MESH')
         fur = [ob for ob in scene.objects if ob.type == 'MESH'
                and ob.get(pilot['proximalProperty']) and ob.vertex_groups.get(name)]
-        if len(fur) != 1 or name not in rig.pose.bones:
+        if len(fur) != pilot.get('proximalFurCount', 1) or name not in rig.pose.bones:
             raise ValueError('Missing/ambiguous explicitly tagged proximal fur: ' + name)
         for ob in [upper, *fur]:
             if not ob.vertex_groups.get('root') or not any(m.type == 'ARMATURE' and m.object == rig for m in ob.modifiers):

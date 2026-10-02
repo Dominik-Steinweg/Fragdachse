@@ -9,7 +9,7 @@ vi.mock('phaser', () => ({
 const characters=vi.hoisted(()=>({live:new Set<any>(),receivers:new Set<any>(),enemies:new Set<any>()}));
 vi.mock('../src/effects/EnemyMeshShadowRenderer',()=>({EnemyMeshShadowRenderer:class {
  constructor(_scene:any,readonly clouds:any,readonly receiver:any){characters.enemies.add(this);}
- sync(){}setVisible(){}handles(){return false;}
+ sync(){}setVisible(){}setDebugSolid(){}handles(){return false;}
  destroy(){expect(characters.receivers.has(this.receiver)).toBe(true);characters.enemies.delete(this);}
 }}));
 vi.mock('../src/effects/CharacterShadowReceiver',()=>({CharacterShadowReceiver:class {

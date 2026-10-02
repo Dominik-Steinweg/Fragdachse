@@ -1,4 +1,6 @@
-import manifest from './manifests/character-material-badger-player-material-21e4.json';
+import manifest from './manifests/character-material-badger-player-material-r2-005.json';
+
+export { manifest as CHARACTER_MATERIAL_MANIFEST };
 
 /** Material pages only: the retired D shadow masks never enter the loader. */
 export const CHARACTER_MATERIAL_PAGES = manifest.pages.flatMap((page, index) =>

@@ -84,9 +84,10 @@ export function validateEnemyMeshManifest(m) {
   if (mesh.positions.bytes !== 31 * mesh.vertexCount * 6 || mesh.indices.bytes !== mesh.triangleCount * 6
     || mesh.topologySha256 !== mesh.indices.sha256) throw Error('Enemy binary size/topology mismatch');
   if (m.contacts?.length !== 31) throw Error('Missing pose contact anchors');
+  const legs = m.contacts[0]?.feet?.length === 2 ? ['left_leg', 'right_leg'] : ENEMY_LEGS;
   for (const [i, contact] of m.contacts.entries()) {
-    if (contact.pose !== i || !Array.isArray(contact.feet) || contact.feet.length !== 4
-      || contact.feet.some((f, j) => f.leg !== ENEMY_LEGS[j] || !Array.isArray(f.position) || f.position.length !== 3
+    if (contact.pose !== i || !Array.isArray(contact.feet) || contact.feet.length !== legs.length
+      || contact.feet.some((f, j) => f.leg !== legs[j] || !Array.isArray(f.position) || f.position.length !== 3
         || !f.position.every(Number.isFinite) || !Number.isFinite(f.groundWeight) || f.groundWeight < 0 || f.groundWeight > 1))
       throw Error('Invalid enemy ground contact');
   }

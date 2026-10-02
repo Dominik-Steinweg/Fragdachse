@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import manifest from './manifests/enemy-mesh-pilot.json';
+import manifest from './manifests/enemy-mesh-families.json';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
 
 export { manifest as ENEMY_MESH_MANIFEST };

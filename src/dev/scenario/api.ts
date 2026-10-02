@@ -48,7 +48,9 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     case 'enemyMeshReview': {
       const count = number(c.count ?? 4, 1, 500), pose = number(c.pose ?? -1, -1, 30);
       if (!Number.isInteger(count) || !Number.isInteger(pose)) throw Error('Integer count/pose required');
-      controller.arrangeEnemyMeshReview(count, pose); break;
+      if (c.kinds !== undefined && (!Array.isArray(c.kinds) || !c.kinds.length || c.kinds.length > COOP_DEFENSE_ENEMY_KINDS.length
+        || c.kinds.some(kind => !COOP_DEFENSE_ENEMY_KINDS.includes(kind as CoopDefenseEnemyKind)))) throw Error('Valid enemy fixture kinds required');
+      controller.arrangeEnemyMeshReview(count, pose, c.kinds as CoopDefenseEnemyKind[] | undefined); break;
     }
     case 'measureEnemyMesh': controller.measureEnemyMeshReview(boolean(c.mesh)); break;
     case 'depthReferenceScene':

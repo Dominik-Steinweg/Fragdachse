@@ -4,10 +4,10 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import { createVisibleWorldView, getVisibleWorldView } from '../graphics/CameraWorldView';
 import { runWithScopedBlend } from '../graphics/PhaserScopedBlend';
 import type { CharacterShadowReceiver } from './CharacterShadowReceiver';
-import { meshShadowOpacity } from './CharacterMeshModel';
+import { meshShadowOpacity, meshShadowSoftness } from './CharacterMeshModel';
 import { CHARACTER_MESH_MASK } from './characterMeshShaders';
 import { EnemyMeshGpu } from './EnemyMeshGpu';
-import { ENEMY_MESH_VERTEX, ENEMY_MESH_BLUR, ENEMY_MESH_DISPLAY_VERTEX, ENEMY_MESH_DISPLAY_FRAGMENT } from './enemyMeshShaders';
+import { ENEMY_MESH_VERTEX, ENEMY_MESH_BLUR, ENEMY_MESH_BLUR_VERTEX, ENEMY_MESH_DISPLAY_VERTEX, ENEMY_MESH_DISPLAY_FRAGMENT } from './enemyMeshShaders';
 import { enemyMeshMatrix, enemyMeshPose, enemyShadowBounds, ENEMY_SHADOW_CAPACITY as CAPACITY,
   ENEMY_SHADOW_COLUMNS as COLUMNS, ENEMY_SHADOW_DEPTH } from './EnemyMeshShadowModel';
 import { SunRenderTarget, sunShaderName, ownSunShader } from './sunlight/SunRenderTarget';
@@ -29,6 +29,7 @@ export class EnemyMeshShadowRenderer {
   private readonly blurred: SunRenderTarget;
   private readonly display: Phaser.GameObjects.Shader;
   private readonly composite: EnemyMeshGpu;
+  private readonly blurGpu: EnemyMeshGpu;
   private readonly groups = new Map<string, Group>();
   private readonly prepared = new Map<string, number>();
   private readonly active = new Set<EnemyEntity>();
@@ -42,6 +43,7 @@ export class EnemyMeshShadowRenderer {
   private readonly grid = [COLUMNS, CAPACITY / COLUMNS];
   private readonly programNames: string[] = [];
   private strength = 0;
+  private solid = false;
   private count = 0;
   private draws = 0;
   private triangles = 0;
@@ -63,18 +65,14 @@ export class EnemyMeshShadowRenderer {
     this.raw.shader.drawingContext!.setAutoClear(true, false, false);
     this.raw.shader.drawingContext!.setClearColor(0, 0, 0, 0);
     this.raw.shader.renderNode.run = context => {
-      for (const group of this.groups.values()) if (group.count && this.strength > 0) {
+      for (const group of this.groups.values()) if (group.count && (this.strength > 0 || this.solid)) {
         if (group.gpu.draw(context, group.data.subarray(0, group.count * MASK_WORDS), group.count, [], set => {
           set('uSun', this.sun); set('uGrid', this.grid);
         })) { this.draws++; this.triangles += group.gpu.indexCount / 3 * group.count; }
       }
     };
-    const blur = (axis: number) => (set: (name: string, value: unknown) => void) => {
-      set('uMask', 0); set('uGrid', this.grid); set('uTexel', [1 / this.width, 1 / this.height]);
-      set('uStep', axis === 0 ? [1 / this.width, 0] : [0, 1 / this.height]);
-    };
-    this.horizontal = new SunRenderTarget(scene, 'EnemyMeshBlurH', ENEMY_MESH_BLUR, blur(0), [this.raw.shader.texture!]);
-    this.blurred = new SunRenderTarget(scene, 'EnemyMeshBlurV', ENEMY_MESH_BLUR, blur(1), [this.horizontal.shader.texture!]);
+    this.horizontal = new SunRenderTarget(scene, 'EnemyMeshBlurH', CHARACTER_MESH_MASK, () => {});
+    this.blurred = new SunRenderTarget(scene, 'EnemyMeshBlurV', CHARACTER_MESH_MASK, () => {});
     const name = sunShaderName('EnemyMeshComposite'); this.programNames.push(name);
     this.composite = new EnemyMeshGpu(this.renderer, name, ENEMY_MESH_DISPLAY_VERTEX, ENEMY_MESH_DISPLAY_FRAGMENT,
       new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2, new Uint16Array([0, 1, 2, 0, 2, 3]),
@@ -85,13 +83,28 @@ export class EnemyMeshShadowRenderer {
     ownSunShader(this.display, displayName);
     const owner = this;
     this.display.renderNode.run = function(context, object, parent): void {
-      runWithScopedBlend(this, () => owner.drawComposite(context), context, Phaser.BlendModes.MULTIPLY, object, parent);
+      runWithScopedBlend(this, () => owner.drawComposite(context), context, owner.solid ? Phaser.BlendModes.NORMAL : Phaser.BlendModes.MULTIPLY, object, parent);
     };
     this.display.setDepth(ENEMY_SHADOW_DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY).setVisible(false).setName('enemy-mesh-shadows');
     scene.add.existing(this.display); registerGraphicsObject(scene, 'dynamicShadows', this.display);
     const projectionName = sunShaderName('EnemyMeshProjection'); this.programNames.push(projectionName);
     this.projectionProbe = new EnemyMeshGpu(this.renderer, projectionName, ENEMY_MESH_VERTEX, CHARACTER_MESH_MASK,
       new Float32Array([0, 0, 0]), 3, new Uint16Array([0, 0, 0]), MASK_ATTRIBUTES, 1);
+    const blurName = sunShaderName('EnemyMeshWorldBlur'); this.programNames.push(blurName);
+    this.blurGpu = new EnemyMeshGpu(this.renderer, blurName, ENEMY_MESH_BLUR_VERTEX, ENEMY_MESH_BLUR,
+      new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2, new Uint16Array([0, 1, 2, 0, 2, 3]),
+      ['inBounds', 'inTileAlpha', 'inFoot0', 'inFoot1', 'inFoot2', 'inFoot3'].map(name => ({ name, size: 4 })), CAPACITY);
+    for (const [axis, target, source] of [[0, this.horizontal, this.raw], [1, this.blurred, this.horizontal]] as const) {
+      target.shader.drawingContext!.setAutoClear(true, false, false);
+      target.shader.drawingContext!.setClearColor(0, 0, 0, 0);
+      target.shader.renderNode.run = context => {
+        this.blurGpu.draw(context, this.displayData.subarray(0, this.count * DISPLAY_WORDS), this.count,
+          [source.shader.texture!.get().source.glTexture!], set => {
+            set('uMask', 0); set('uGrid', this.grid); set('uTexel', [1 / this.width, 1 / this.height]);
+            set('uAxis', axis === 0 ? [1, 0] : [0, 1]);
+          });
+      };
+    }
     this.releaseWarmup = registerEnemyMeshWarmup(scene, () => this.preparePrograms());
   }
   private preparePrograms(): boolean {
@@ -103,7 +116,7 @@ export class EnemyMeshShadowRenderer {
     else {
       const target = this.warmupStep === 2 ? this.horizontal : this.blurred;
       target.draw(3, 3);
-      if (target.shader.renderNode.programManager.getCurrentProgramSuite()) this.warmupStep++;
+      if (this.blurGpu.prepare()) this.warmupStep++;
     }
     return this.warmupStep >= 4;
   }
@@ -185,7 +198,11 @@ export class EnemyMeshShadowRenderer {
     const tx = slot % COLUMNS, ty = Math.floor(slot / COLUMNS), offset = group.count++ * MASK_WORDS;
     group.data.set([m[0], m[1], m[4], m[5], m[12], m[13], m[10], ...b, tx, ty], offset);
     const d = this.count++ * DISPLAY_WORDS;
-    this.displayData.set([...b, tx, ty, alpha, 0], d);
+    // Same world-space penumbra as the player, independent of tile size or projected bounds.
+    const softness = meshShadowSoftness(m[10], this.sun[2]);
+    this.displayData.set([...b, tx, ty, alpha, softness], d);
+    // A pooled tile may switch from a quadruped to a biped; clear unused contacts.
+    this.displayData.fill(0, d + 8, d + 24);
     for (const [i, foot] of mesh.asset.contacts[pose].feet.entries()) {
       const p = foot.position;
       this.displayData.set([m[0] * p[0] + m[4] * p[1] + m[12], m[1] * p[0] + m[5] * p[1] + m[13],
@@ -196,14 +213,15 @@ export class EnemyMeshShadowRenderer {
     // Camera targets apply their viewport when composited, matching SpriteGPULayer's transform.
     const camera = context.camera!.getViewMatrix(!context.useCanvas); this.renderer.setProjectionMatrixFromDrawingContext(context);
     this.composite.draw(context, this.displayData.subarray(0, this.count * DISPLAY_WORDS), this.count,
-      [this.blurred.shader.texture!.get().source.glTexture!, this.receiver.texture.get().source.glTexture!], set => {
+      [(this.solid ? this.raw : this.blurred).shader.texture!.get().source.glTexture!, this.receiver.texture.get().source.glTexture!], set => {
         set('uProjectionMatrix', this.renderer.projectionMatrix.val);
         set('uViewMatrix', [camera.a, camera.b, 0, camera.c, camera.d, 0, camera.tx, camera.ty, 1]);
         set('uGrid', this.grid); set('uMask', 0); set('uReceiver', 1); set('uReceiverWorld', this.receiver.world);
-        set('uStrength', this.strength); setCloudUniforms(set, this.clouds);
+        set('uStrength', this.strength); set('uDebugSolid', Number(this.solid)); setCloudUniforms(set, this.clouds);
       });
   }
   handles(enemy: EnemyEntity): boolean { return this.active.has(enemy); }
+  setDebugSolid(value: boolean): void { this.solid = value; }
   get activeCount(): number { return this.count; }
   setVisible(value: boolean): void { this.display.setVisible(value && this.count > 0); }
   inspect() { return { activeInstances: this.count, allocatedSlots: this.assignments.size, tileSize: this.tileSize,
@@ -211,13 +229,13 @@ export class EnemyMeshShadowRenderer {
       geometryDraws: this.draws, triangles: this.triangles, targetPasses: this.count ? 3 : 0,
       targetBytes: this.atlasAllocated ? this.width * this.height * 4 * 3 : 3 * 3 * 4 * 3,
       targetPixelBudget: this.width * this.height * 3,
-      geometryBytes: [...this.groups.values()].reduce((n, g) => n + g.gpu.bytes, this.composite.bytes + this.projectionProbe.bytes),
+      geometryBytes: [...this.groups.values()].reduce((n, g) => n + g.gpu.bytes, this.composite.bytes + this.projectionProbe.bytes + this.blurGpu.bytes),
       stencilBytes: (this.renderer.config as { stencil?: boolean } | undefined)?.stencil ? (this.atlasAllocated ? this.width * this.height : 9) * 3 : 0,
-      uploadedBytes: this.count * (MASK_WORDS + DISPLAY_WORDS) * 4, gpuMs: null } }; }
+      uploadedBytes: this.count * (MASK_WORDS + 3 * DISPLAY_WORDS) * 4, gpuMs: null } }; }
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;
     this.releaseWarmup(); this.projectionProbe.destroy();
-    this.display.destroy(); this.composite.destroy(); for (const g of this.groups.values()) g.gpu.destroy();
+    this.display.destroy(); this.composite.destroy(); this.blurGpu.destroy(); for (const g of this.groups.values()) g.gpu.destroy();
     this.groups.clear(); this.assignments.clear(); this.active.clear();
     this.blurred.destroy(); this.horizontal.destroy(); this.raw.destroy();
     const programs = this.renderer.shaderProgramFactory.programs as Record<string, Phaser.Renderer.WebGL.Wrappers.WebGLProgramWrapper>;

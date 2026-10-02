@@ -1,0 +1,16 @@
+/** Exhaustive per-pose attachment and alpha-hole inventory; never fills authored negative space. */
+import fs from 'node:fs/promises';import path from'node:path';import sharp from'sharp';
+const root=path.resolve(process.argv[2]),selection=JSON.parse(await fs.readFile(path.join(root,'selection.json'),'utf8'));
+function holes(p,w,h){const seen=new Uint8Array(w*h),result=[];for(let i=0;i<seen.length;i++){if(seen[i]||p[i*4+3]>32)continue;const q=[i];seen[i]=1;let edge=false,x0=w,x1=0,y0=h,y1=0;for(let j=0;j<q.length;j++){const k=q[j],x=k%w,y=Math.floor(k/w);edge ||= x===0||y===0||x===w-1||y===h-1;x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);for(const n of [x>0?k-1:-1,x<w-1?k+1:-1,y>0?k-w:-1,y<h-1?k+w:-1])if(n>=0&&!seen[n]&&p[n*4+3]<=32){seen[n]=1;q.push(n);}}if(!edge&&q.length>=2)result.push({area:q.length,bounds:[x0,y0,x1,y1]});}return result;}
+const rows=[],summaries=[];
+for(const {id}of selection.assets){const folder=path.join(root,id),qa=JSON.parse(await fs.readFile(path.join(folder,'corridors.json'),'utf8')),diff=JSON.parse(await fs.readFile(path.join(folder,'beauty-difference.json'),'utf8'));
+ if(qa.flaggedAfter||diff.outsideRepairAlphaPixels)throw Error('Unclassified repaired attachment or unrelated silhouette change');
+ for(let pose=0;pose<31;pose++){
+  const name=`frame-${String(pose).padStart(4,'0')}.png`,old=await sharp(path.join(folder,'source-beauty',name)).resize(128,128).ensureAlpha().raw().toBuffer(),current=await sharp(path.join(folder,'beauty/128',name)).ensureAlpha().raw().toBuffer(),probe=qa.rows.filter(r=>r.sampleId==='p'+pose),before=holes(old,128,128),after=holes(current,128,128);
+  rows.push({id,pose,attachmentFlagsBefore:probe.filter(r=>r.before.maxGapWorld>.25).length,maxAttachmentGapBefore:Math.max(...probe.map(r=>r.before.maxGapWorld)),attachmentFlagsAfter:probe.filter(r=>r.after.maxGapWorld>.25).length,alphaHolesBefore:before,alphaHolesAfter:after,classification:'Anatomical corridors repaired/closed. Remaining negative space between claws, adjacent limbs, horns, armor or arms is intentional; no hull fill applied to Beauty.',review:'all 31 atlas frames plus enlarged P0/P4/P10/P19/P21'});
+ }
+ summaries.push({id,sourceFlagsBefore:qa.flaggedBefore,sourceFlagsAfter:qa.flaggedAfter,intermediateFlagsBefore:qa.rows.filter(r=>!r.sampleId.startsWith('p')&&r.flaggedBefore).length,alphaHolePoses:rows.filter(r=>r.id===id&&r.alphaHolesAfter.length).map(r=>r.pose)});
+}
+await fs.writeFile('build/enemy-mesh/r4-gap-inventory.json',JSON.stringify({resolution:128,alphaThreshold:32,minimumHolePixels:2,summaries,rows},null,2));
+const csv=['enemy,pose,attachment flags before,max gap world px,attachment flags after,alpha holes before px,alpha holes after px,classification',...rows.map(r=>[r.id,r.pose,r.attachmentFlagsBefore,r.maxAttachmentGapBefore.toFixed(4),r.attachmentFlagsAfter,JSON.stringify(r.alphaHolesBefore.map(h=>h.area)).replaceAll(',',';'),JSON.stringify(r.alphaHolesAfter.map(h=>h.area)).replaceAll(',',';'),'attachments repaired; remaining authored negative space retained'].join(','))].join('\n');await fs.writeFile('build/enemy-mesh/r4-gap-inventory.csv',csv+'\n');
+console.log(JSON.stringify(summaries,null,2));

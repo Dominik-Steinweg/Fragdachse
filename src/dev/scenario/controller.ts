@@ -37,11 +37,11 @@ export class DevScenarioController {
   cameraAtTarget = false;
   private worldLighting: WorldLightingMeasurement | null = null;
   private enemyMeshReview: EnemyMeshReview | null = null;
-  arrangeEnemyMeshReview(count: number, pose: number): void {
-    if (this.enemyMeshReview?.count === count) { this.enemyMeshReview.setPose(pose); return; }
+  arrangeEnemyMeshReview(count: number, pose: number, kinds?: readonly CoopDefenseEnemyKind[]): void {
+    if (!kinds && this.enemyMeshReview?.count === count) { this.enemyMeshReview.setPose(pose); return; }
     this.requireReady(); this.clearEnemies(); this.stop();
     this.enemyMeshReview = new EnemyMeshReview(this.scene, this.runtime);
-    this.enemyMeshReview.arrange(count, pose);
+    this.enemyMeshReview.arrange(count, pose, kinds);
     this.cameraAtTarget = false; this.zoom = count <= 8 ? 2 : .85;
     this.syncCamera();
   }

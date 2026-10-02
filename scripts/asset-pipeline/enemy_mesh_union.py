@@ -71,8 +71,14 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
     remaining=max_vertices-len(candidate['proxy'])
     ranked=np.argsort(-error,kind='stable')[:remaining]
     vertices=candidate['proxy'].tolist();faces=candidate['triangles'].tolist()
+    accepted=0
     for edge_index in ranked:
-        a,b=edges[edge_index];new=len(vertices)
+        a,b=edges[edge_index]
+        # A volumetric union may contain non-manifold edges with >2 incident faces.
+        # Splitting one must fit both budgets, not just the remaining vertex slots.
+        incident=sum(int(a in face and b in face) for face in faces)
+        if not incident or len(faces)+incident>max_vertices*2:continue
+        accepted+=1;new=len(vertices)
         point=(source_points[middle['binding'][edge_index]]*middle['weights'][edge_index,:,None]).sum(0)
         vertices.append(point.tolist());refined=[]
         for face in faces:
@@ -84,7 +90,7 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
             if not replaced:refined.append(face)
         faces=refined
     candidate['proxy']=np.array(vertices);candidate['triangles']=np.array(faces,dtype=np.int32)
-    candidate['unionAudit']['deformationRefinement']=dict(addedVertices=len(ranked),evaluatedPoses=len(poses),
+    candidate['unionAudit']['deformationRefinement']=dict(addedVertices=accepted,evaluatedPoses=len(poses),
         maximumPreRefinementDeviationWorld=float(error.max()*scale),method='split highest nonlinear source-binding error edges once in rest space')
     return candidate,attempts
 

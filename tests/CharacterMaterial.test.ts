@@ -182,7 +182,7 @@ it('material GLSL declares all consumed uniforms and does not own colour grading
 });
 
 import { characterMaterialColour, characterLinear, characterSRGB } from '../src/effects/CharacterMaterialModel';
-import materialManifest from '../src/assets/manifests/character-material-badger-player-material-21e4.json';
+import { CHARACTER_MATERIAL_MANIFEST as materialManifest } from '../src/assets/CharacterMaterialAssetManifest';
 it('37 real poses x 16 rotations x four suns retain finite radiance and calibrate noon to Beauty',async()=>{
  const sharp=(await import('sharp')).default;
  const materialPages=new Set(materialManifest.samples.filter(s=>s.pass==='albedo'||s.pass==='normal').map(s=>s.page));

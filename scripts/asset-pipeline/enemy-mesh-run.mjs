@@ -12,10 +12,13 @@ const { values } = parseArgs({ options: { revision: { type: 'string', default: '
   plan: { type: 'boolean', default: false }, geometry: { type: 'boolean', default: false },
   render: { type: 'boolean', default: false },
   'reuse-source': {type:'string'},
+  config: {type:'string',default:'enemy-mesh-pilot.json'}, asset: {type:'string'},
   blender: { type: 'string', default: 'D:/Blender Foundation/Blender 5.2/blender.exe' } } });
 if (!/^enemy-mesh-[a-z0-9-]+$/.test(values.revision) || [values.plan,values.geometry,values.render].filter(Boolean).length!==1)
   throw Error('Choose --plan, --geometry (fresh revision), or --render (existing geometry revision)');
-const pilot = JSON.parse(await readFile(path.join(repo, 'scripts/asset-pipeline/enemy-mesh-pilot.json'), 'utf8'));
+if(!['enemy-mesh-pilot.json','enemy-mesh-families.json'].includes(values.config))throw Error('Unknown anatomy contract');
+const pilot = JSON.parse(await readFile(path.join(repo, 'scripts/asset-pipeline',values.config), 'utf8'));
+if(values.asset){pilot.assets=pilot.assets.filter(a=>a.id===values.asset);if(!pilot.assets.length)throw Error('Unknown asset');}
 const jobs = [];
 for (const item of pilot.assets) {
   const job=await selectedEnemySource(repo,item);
@@ -70,7 +73,8 @@ if (values.render) {
   const parent = await realpath('D:/Fragdachse-render');
   if (path.resolve(parent).toLowerCase() !== path.resolve('D:/Fragdachse-render').toLowerCase())
     throw Error('External output root must not be redirected');
-  await mkdir(outputRoot); // Existing revisions, including junctions, fail. Never delete/resume.
+  await mkdir(outputRoot,{recursive:true}); // Asset directories below remain exclusive; never delete/resume.
+  if(path.resolve(await realpath(outputRoot)).toLowerCase()!==path.resolve(outputRoot).toLowerCase())throw Error("Redirected revision");
   const staged=[];
   for (const job of jobs) {
     const output = path.join(outputRoot, job.id);

@@ -33,7 +33,7 @@ it('encloses rotated/flipped projected extremes and isolates the blur gutter at 
 });
 it('does not fetch unsupported types and deduplicates type prefetch', () => {
   const fetchMock=vi.fn(()=>new Promise<Response>(()=>{}));vi.stubGlobal('fetch',fetchMock);
-  try {const owner=new EnemyMeshAssets();owner.prefetch(['zombie-badger','spore-warden']);owner.prefetch(['zombie-badger']);expect(fetchMock).toHaveBeenCalledTimes(2);}
+  try {const owner=new EnemyMeshAssets();owner.prefetch(['zombie-badger','not-an-enemy']);owner.prefetch(['zombie-badger']);expect(fetchMock).toHaveBeenCalledTimes(2);}
   finally {vi.unstubAllGlobals();}
 });
 it('hash-checks binary inputs and only publishes complete meshes after budgeted decode', async () => {
@@ -61,7 +61,7 @@ it('releases world probes and budgets warmup to one probe per invocation', () =>
 it('binds Beauty, all poses, binary topology and material sheets to the accepted revision', async () => {
   for (const a of ENEMY_MESH_MANIFEST.assets) {
     const live=registry.assets.find(x=>x.id===a.id)!;
-    expect(live.revision).toBe(a.revision);expect(live.hashes.sheet).toBe(a.images.beauty128.sha256);
+    expect(live.revision).toBe(a.revision);expect(live.hashes.sheet).toBe((a.images as Record<string,{sha256:string}>)[`beauty${live.sourceSize}`].sha256);
     expect(live.pivot).toEqual(a.coordinates.pivot);expect(a.mesh.poseIndices).toEqual(a.poses.map(p=>p.index));
     expect(a.contacts.map(p=>p.pose)).toEqual(a.mesh.poseIndices);
     for (const spec of [a.mesh.positions,a.mesh.indices]) {
@@ -72,7 +72,7 @@ it('binds Beauty, all poses, binary topology and material sheets to the accepted
     expect(a.mesh.positions.bytes).toBe(a.mesh.vertexCount*a.poses.length*6);
     for(const [key,image]of Object.entries(a.images)) {
       const bytes=await readFile('public/'+image.file);expect(createHash('sha256').update(bytes).digest('hex')).toBe(image.sha256);
-      const size=key.endsWith('128')?128:64;
+      const size=Number(key.match(/(\d+)$/)![1]);
       expect(await sharp(bytes).metadata()).toMatchObject({width:(size+4)*8,height:(size+4)*4,hasAlpha:true});
     }
   }

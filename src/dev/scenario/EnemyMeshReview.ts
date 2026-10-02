@@ -1,3 +1,4 @@
+import type { CoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import type * as Phaser from 'phaser';
 import type { ArenaRuntime } from '../../scenes/arena/ArenaRuntime';
 import type { EnemyEntity } from '../../entities/EnemyEntity';
@@ -13,7 +14,8 @@ export class EnemyMeshReview {
   measurement: unknown = null;
   get count(): number { return this.enemies.length; }
   constructor(private readonly scene: Phaser.Scene, private readonly runtime: ArenaRuntime) {}
-  arrange(count: number, pose = -1): void {
+  arrange(count: number, pose = -1, kinds: readonly CoopDefenseEnemyKind[] = ['zombie-badger', 'rabid-badger']): void {
+    if (!kinds.length) throw Error('Enemy fixture requires at least one kind');
     this.destroy(); this.pose = pose;
     const targets = this.runtime.getScenarioLightingTargets(), player = this.runtime.navigationLabPort.getPlayerPosition();
     if (!targets.enemyShadows || !player) throw Error('Enemy mesh review requires an interactive world');
@@ -22,7 +24,7 @@ export class EnemyMeshReview {
     const spacing = count <= 8 ? 95 : 36;
     const rows = Math.ceil(count / cols), cx = player.x + (count <= 8 ? 190 : 0), cy = player.y;
     for (let i = 0; i < count; i++) {
-      const id = this.runtime.navigationLabPort.spawnEnemy(player.x + 120, player.y, i % 2 ? 'rabid-badger' : 'zombie-badger', false);
+      const id = this.runtime.navigationLabPort.spawnEnemy(player.x + 120, player.y, kinds[i % kinds.length], false);
       if (!id) throw Error('Enemy fixture spawn failed');
       this.runtime.devScenarioPort.setEnemyHp(id, 1000000);
     }
@@ -47,7 +49,7 @@ export class EnemyMeshReview {
   }
   setPose(pose: number): void { this.pose = pose; }
   inspect() {
-    return this.enemies.slice(0, 4).map(e => ({ kind: e.kind, frame: e.sprite.frame.name,
+    return this.enemies.slice(0, 14).map(e => ({ kind: e.kind, frame: e.sprite.frame.name,
       x: e.sprite.x, y: e.sprite.y, rotation: e.sprite.rotation, scale: [e.sprite.scaleX, e.sprite.scaleY],
       displaySize: [e.sprite.displayWidth, e.sprite.displayHeight], texture: e.sprite.texture.key }));
   }

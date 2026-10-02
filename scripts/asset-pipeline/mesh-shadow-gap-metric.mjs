@@ -12,7 +12,9 @@ export function gapMetric(before,after,{poses=Array.from({length:37},(_,i)=>i),e
   const rows=[];
   for(const pose of poses){for(const elevation of elevations)for(const azimuth of azimuths){
     const xy=projectMesh(before.poses[pose],0,azimuth*DEG,elevation*DEG),fixed=projectMesh(after.poses[pose],0,azimuth*DEG,elevation*DEG);
-    const xs=[],ys=[];for(let i=0;i<fixed.length;i+=2){xs.push(fixed[i]);ys.push(fixed[i+1]);}
+    // A source repair can retract a limb. Enclose BOTH silhouettes so the frozen
+    // original corridor remains measurable when the new bounds become smaller.
+    const xs=[],ys=[];for(const points of [xy,fixed])for(let i=0;i<points.length;i+=2){xs.push(points[i]);ys.push(points[i+1]);}
     const bounds=[Math.floor(Math.min(...xs))-4,Math.floor(Math.min(...ys))-4,Math.ceil(Math.max(...xs))+4,Math.ceil(Math.max(...ys))+4];
     const raster=indices=>rasterUnion([{xy,indices}],bounds,DENSITY),body=raster(torso);let edgeBody=null,oldSoft=null,newSoft=null;
     const row={pose,azimuth,elevation,legs:[]};

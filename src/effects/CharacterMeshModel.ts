@@ -11,6 +11,10 @@ export interface MeshDisplayPose {
   displayWidth: number; displayHeight: number; originX: number; originY: number;
   flipX: boolean; flipY: boolean; frame: { name: string | number; realWidth: number; realHeight: number };
 }
+/** World-space Gaussian step, shared by figure renderers regardless of target resolution. */
+export function meshShadowSoftness(scale: number, sunZ: number): number {
+  return scale * (.65 + .65 * (1 - Math.max(0, sunZ)));
+}
 /** Column-major asset-to-world matrix; X right, Y south, clockwise rotation, Z up. */
 export function bodyMeshMatrix(sprite: MeshDisplayPose, out = new Float32Array(16)): Float32Array {
   const c = Math.cos(sprite.rotation), s = Math.sin(sprite.rotation), size = manifest.coordinates.bodyCanvasWorldPx;

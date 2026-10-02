@@ -19,16 +19,29 @@ void main(){
 export const ENEMY_MESH_BLUR = `
 precision highp float;
 varying vec2 outTexCoord;
+varying vec2 stepUv;
 uniform sampler2D uMask;
-uniform vec2 uStep,uGrid,uTexel;
+uniform vec2 uGrid,uTexel;
 float sampleTile(vec2 uv,vec2 lo,vec2 hi){return texture2D(uMask,clamp(uv,lo,hi)).r;}
 void main(){
  vec2 cell=floor(outTexCoord*uGrid);
  vec2 lo=cell/uGrid+uTexel*.5,hi=(cell+1.0)/uGrid-uTexel*.5;
  float v=sampleTile(outTexCoord,lo,hi)*.2270270270;
- v+=(sampleTile(outTexCoord+uStep*1.3846153846,lo,hi)+sampleTile(outTexCoord-uStep*1.3846153846,lo,hi))*.3162162162;
- v+=(sampleTile(outTexCoord+uStep*3.2307692308,lo,hi)+sampleTile(outTexCoord-uStep*3.2307692308,lo,hi))*.0702702703;
+ v+=(sampleTile(outTexCoord+stepUv*1.3846153846,lo,hi)+sampleTile(outTexCoord-stepUv*1.3846153846,lo,hi))*.3162162162;
+ v+=(sampleTile(outTexCoord+stepUv*3.2307692308,lo,hi)+sampleTile(outTexCoord-stepUv*3.2307692308,lo,hi))*.0702702703;
  gl_FragColor=vec4(v,v,v,1);
+}`;
+export const ENEMY_MESH_BLUR_VERTEX = `
+precision highp float;
+attribute vec2 inPosition;
+attribute vec4 inBounds,inTileAlpha;
+uniform vec2 uGrid,uAxis;
+varying vec2 outTexCoord,stepUv;
+void main(){
+ vec2 uv=(inTileAlpha.xy+inPosition)/uGrid;
+ gl_Position=vec4(uv.x*2.0-1.0,1.0-uv.y*2.0,0,1);
+ outTexCoord=vec2(uv.x,1.0-uv.y);
+ stepUv=uAxis*inTileAlpha.w/inBounds.zw/uGrid;
 }`;
 export const ENEMY_MESH_DISPLAY_VERTEX = `
 precision highp float;
@@ -54,7 +67,7 @@ export const ENEMY_MESH_DISPLAY_FRAGMENT = `
 precision highp float;
 uniform sampler2D uMask,uReceiver;
 uniform vec4 uReceiverWorld;
-uniform float uStrength;
+uniform float uStrength,uDebugSolid;
 varying vec2 world,uv;
 varying float opacity;
 varying vec4 foot0,foot1,foot2,foot3;
@@ -64,7 +77,9 @@ void main(){
  vec2 r=(world-uReceiverWorld.xy)/uReceiverWorld.zw;
  float response=0.0;
  if(all(greaterThanEqual(r,vec2(0)))&&all(lessThanEqual(r,vec2(1))))response=texture2D(uReceiver,r).r;
- float direct=texture2D(uMask,uv).r*uStrength*cloudTransmission(world);
+ float mask=texture2D(uMask,uv).r;
+ if(uDebugSolid>.5){float a=mask*response*opacity;gl_FragColor=vec4(a,0,a,a);return;}
+ float direct=mask*uStrength*cloudTransmission(world);
  float foot=max(max(contact(foot0),contact(foot1)),max(contact(foot2),contact(foot3)))*${CHARACTER_SHADOW_CONFIG.contactOpacity};
  float a=(1.0-(1.0-direct)*(1.0-foot))*response*opacity;
  gl_FragColor=vec4(vec3(${CHARACTER_SHADOW_CONFIG.colour.join(',')})*a,a);

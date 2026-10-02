@@ -209,6 +209,7 @@ export class ShadowSystem {
   }
   setCharacterShadowSolid(value: boolean): void {
     this.characterSolid = value; this.characterShadows?.setDebugSolid(value);
+    this.enemyShadows?.setDebugSolid(value);
   }
   getCharacterShadowsStatus() {
     const meshes = getCharacterMeshes(this.scene);
@@ -980,6 +981,7 @@ export class ShadowSystem {
     if (this.characterShadows && this.characterClouds && this.quality.level !== 'low' && !this.enemyMeshesSuppressed) {
       this.enemyShadows ??= new EnemyMeshShadowRenderer(this.scene, this.characterClouds,
         this.characterShadows.receiver, this.quality.level === 'high' ? 64 : 48);
+      this.enemyShadows.setDebugSolid(this.characterSolid);
       this.enemyShadows.sync(this.enemyShadowSources, this.dynamicVisible);
     } else this.enemyShadows?.setVisible(false);
     this.enemyPrimitives = 0; this.enemyCasters = 0;

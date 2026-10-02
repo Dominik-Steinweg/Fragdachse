@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import manifest from './manifests/character-mesh-badger-player-mesh-22-production-r3.json';
+import manifest from './manifests/character-mesh-badger-player-mesh-r2-005.json';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
 import { preloadCharacterMaterialAssets, assertCharacterMaterialAssetsReady } from './CharacterMaterialAssets';
 

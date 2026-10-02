@@ -1,6 +1,6 @@
 import type { EnemyMeshData } from '../assets/EnemyMeshAssets';
 import type { MeshDisplayPose } from './CharacterMeshModel';
-import { projectMeshPoint } from './CharacterMeshModel';
+import { projectMeshPoint, meshShadowSoftness } from './CharacterMeshModel';
 
 export const ENEMY_SHADOW_CAPACITY = 512;
 export const ENEMY_SHADOW_COLUMNS = 32;
@@ -34,6 +34,8 @@ export function enemyShadowBounds(data: EnemyMeshData, matrix: Float32Array, sun
   }
   const w = Math.max(1, out[2] - out[0]) + 6 * matrix[10], h = Math.max(1, out[3] - out[1]) + 6 * matrix[10];
   const pad = ENEMY_SHADOW_PAD / (tileSize - ENEMY_SHADOW_PAD * 2);
-  out[0] -= w * pad + 3 * matrix[10]; out[1] -= h * pad + 3 * matrix[10];
-  out[2] = w * (1 + 2 * pad); out[3] = h * (1 + 2 * pad);
+  const kernelPad = meshShadowSoftness(matrix[10], sun[2]) * 4 + 1;
+  const px = Math.max(w * pad, kernelPad), py = Math.max(h * pad, kernelPad);
+  out[0] -= px + 3 * matrix[10]; out[1] -= py + 3 * matrix[10];
+  out[2] = w + 2 * px; out[3] = h + 2 * py;
 }
