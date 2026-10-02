@@ -12,6 +12,7 @@ import { getClarityCameraRegistry } from '../../scenes/arena/ClarityCameraRegist
 import type { SunTuning } from './SunTuning';
 import { SUN_VISIBILITY_GLSL, SUN_COMPOSITE_FACTOR_GLSL } from './sunVisibility';
 import { ATMOSPHERE_DITHER_GLSL } from './atmosphereNoise';
+import { runWithScopedBlend } from '../../graphics/PhaserScopedBlend';
 
 const HEADER = `
 #pragma phaserTemplate(shaderName)
@@ -45,6 +46,10 @@ function modulateMode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): number {
     // blendModes directly. Use the actual appended slot, not that return value.
     mode = renderer.blendModes.length;
     renderer.addBlendMode([gl.DST_COLOR, gl.SRC_COLOR], gl.FUNC_ADD);
+    // addBlendMode accepts only combined factors in 4.2.1; updateBlendMode
+    // supports separate alpha. Preserve destination coverage independently of
+    // fragment alpha: later Phaser ADD draws use DST_ALPHA, even for RGB.
+    renderer.updateBlendMode(mode, [gl.DST_COLOR, gl.SRC_COLOR, gl.ZERO, gl.ONE], gl.FUNC_ADD);
     // removeBlendMode splices the array, invalidating other users' indices:
     // retain exactly one slot per renderer instead.
     modulateModes.set(renderer, mode);
@@ -83,8 +88,6 @@ export class WorldSunComposite {
   /** neutral keeps the material draw; neutralInline isolates its GL state changes. */
   setDebugView(view: SunCompositeDebugView): void {
     this.debugView = view;
-    this.composite?.setBlendMode(view === 'material' ? Phaser.BlendModes.NORMAL
-      : modulateMode(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer));
   }
   /** Local diagnostic only: keep field ownership and simulation intact. */
   setDebugSuppressed(value: boolean): void {
@@ -130,8 +133,9 @@ export class WorldSunComposite {
     ownSunShader(quad,shaderName);
     quad.once('destroy',()=>{this.material=null;target.destroy();});
     quad.setOrigin(0).setScrollFactor(0).setDepth(DEPTH.PROJECTILES-.5)
-      .setBlendMode(this.debugView === 'material' ? Phaser.BlendModes.NORMAL
-        : modulateMode(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer));
+      .setBlendMode(Phaser.BlendModes.NORMAL);
+    // The display list sees NORMAL; Modulate-2x exists only inside our draw.
+    const blend = modulateMode(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer);
     const node=quad.renderNode,run=node.run,owner=this;
     node.run=function(context,object,parent):void {
       const camera=context.camera!,view=getVisibleWorldView(camera,visibleWorld),quality=getGraphicsQualityProfile(owner.scene).sunlight;
@@ -144,7 +148,7 @@ export class WorldSunComposite {
       this.manager.finishBatch();
       if(owner.debugView!=='neutralInline')target.draw(w,h);
       quad.setPosition(-pad,-pad).setSize(world[2],world[3]);
-      run.call(this,context,object,parent);
+      runWithScopedBlend(this,run,context,owner.debugView==='material'?Phaser.BlendModes.NORMAL:blend,object,parent);
     };
     quad.setVisible(!this.debugSuppressed);
     this.scene.add.existing(quad);getClarityCameraRegistry(this.scene)?.demote(quad);

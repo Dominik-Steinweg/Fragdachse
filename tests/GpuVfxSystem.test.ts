@@ -826,3 +826,105 @@ describe('Phaser PMA zero-alpha compatibility for GPU and ordinary batches',()=>
     expect(tint(0,0,false).some(Number.isNaN)).toBe(true);
   });
 });
+
+
+describe('standalone composite blend isolation (pinned Phaser state and submitters)',()=>{
+  async function harness(){
+    const {createRequire}=await import('node:module');const {readFileSync}=await import('node:fs');
+    const {runInNewContext}=await import('node:vm');const {resolve}=await import('node:path');
+    const require=createRequire(resolve('package.json')),root=resolve('node_modules/phaser/src/renderer/webgl');
+    const DC=require(root+'/DrawingContext.js'),Wrapper=require(root+'/wrappers/WebGLGlobalWrapper.js');
+    const Factory=require(root+'/parameters/WebGLBlendParametersFactory.js');
+    const List=require(root+'/renderNodes/ListCompositor.js');
+    const methods=(file:string)=>{
+      const module={exports:{} as any},localRequire=createRequire(root+'/'+file);
+      runInNewContext(readFileSync(root+'/'+file,'utf8'),{module,WEBGL_DEBUG:false,
+        require:(id:string)=>id.endsWith('/Class')?function(config:unknown){return config;}
+          :id.includes('/shaders/')||id.includes('WebGLBlendParametersFactory')?localRequire(id):{}});
+      return module.exports;
+    };
+    const Renderer=methods('WebGLRenderer.js'),Quad=methods('renderNodes/BatchHandlerQuad.js');
+    const GPU=methods('renderNodes/submitter/SubmitterSpriteGPULayer.js');
+    const draws:{kind:string;func:number[]}[]=[],calls:number[][]=[];let active:number[]=[1,771,1,771];
+    const gl=new Proxy({ONE:1,ZERO:0,ONE_MINUS_SRC_ALPHA:771,DST_ALPHA:772,DST_COLOR:774,SRC_COLOR:768,ONE_MINUS_SRC_COLOR:769,FUNC_ADD:32774,
+      blendFuncSeparate:(...f:number[])=>{active=f;calls.push(f);},
+      drawElements:()=>draws.push({kind:'quad',func:active.slice()}),
+      drawArraysInstanced:()=>draws.push({kind:'gpu',func:active.slice()}),
+    } as any,{get:(o,k)=>o[k]??(()=>{})});
+    const r:any={...Renderer,gl,width:100,height:100,config:{alphaStrategy:'keep'},createFramebuffer:()=>({}),
+      glTextureUnits:{bindUnits:()=>{},unbindTexture:()=>{}}};
+    r.blendModes=Array.from({length:18},()=>Factory.createCombined(r));
+    r.blendModes[1]=Factory.createCombined(r,true,undefined,gl.FUNC_ADD,gl.ONE,gl.DST_ALPHA);
+    const mode=r.blendModes.length;
+    expect(r.addBlendMode([gl.DST_COLOR,gl.SRC_COLOR],gl.FUNC_ADD)).toBe(mode-1);
+    r.updateBlendMode(mode,[gl.DST_COLOR,gl.SRC_COLOR,gl.ZERO,gl.ONE],gl.FUNC_ADD);
+    r.glWrapper=new Wrapper(r);
+    const manager:any={renderer:r,finishBatch:vi.fn(),startStandAloneRender:()=>manager.finishBatch()};r.renderNodes=manager;
+    const context=new DC(r,{useCanvas:true,autoClear:false}),list=new List(manager);
+    const suite={program:{bind:()=>{}},vao:{bind:()=>{}}};
+    const base={manager,programManager:{getCurrentProgramSuite:()=>suite,applyUniforms:()=>{}},
+      onRunBegin:()=>{},onRunEnd:()=>{},setupUniforms:()=>{},renderOptions:{},updateRenderOptions:()=>{}};
+    const drawQuad=(c:any)=>Quad.run.call({...base,instanceCount:1,bytesPerInstance:64,indicesPerInstance:6,bytesPerIndexPerInstance:12,
+      vertexBufferLayout:{buffer:{update:()=>{}}},batchEntries:[{texture:[],unit:1,count:1,start:0}],currentBatchEntry:{start:0},
+      pushCurrentBatchEntry:()=>{},finalizeTextureCount:()=>{}},c);
+    const drawGPU=(c:any)=>GPU.run.call({...base,gameObject:{memberCount:1,bufferUpdateSegments:0,frame:{source:{glTexture:{}}},frameDataTexture:{}}},c);
+    const {runWithScopedBlend}=await import('../src/graphics/PhaserScopedBlend');
+    const scope=(draw:(c:any)=>void)=>runWithScopedBlend({manager} as never,draw as never,context,mode,{} as never,undefined as never);
+    return {r,mode,context,list,drawQuad,drawGPU,scope,draws,calls,manager};
+  }
+  it('restores caller state immediately and routes subsequent NORMAL/ADD through real quad and GPU draw calls',async()=>{
+    const h=await harness(),normal=h.r.blendModes[0].func,add=h.r.blendModes[1].func,custom=h.r.blendModes[h.mode].func;
+    const original=h.context.state.blend;
+    for(const draw of [h.drawQuad,h.drawGPU])for(const mode of [0,1]){
+      h.scope(c=>{
+        h.r.drawElements(c,[],{bind(){}},{bind(){}},4,0);
+        expect(h.draws.at(-1)!.func).toEqual(custom);
+      });
+      expect(h.context.blendMode).toBe(0);expect(h.context.state.blend).toBe(original);
+      expect(h.r.glWrapper.state.blend.func).toEqual(normal);
+      h.list.run(h.context,[{blendMode:mode,renderWebGLStep:(_r:any,_o:any,c:any)=>draw(c)}]);
+      expect(h.draws.at(-1)!.func).toEqual(mode===0?normal:add);
+      // Transparent PMA texels preserve the destination in both successor modes.
+      const destination=.42,alpha=1;
+      expect(mode===0?0+destination*(1-0):0+destination*alpha).toBe(destination);
+    }
+    // The dependency normally restores at the next draw, not on context release.
+    // Do not claim its index comparison itself fails: verify that baseline too.
+    h.list.run(h.context,[h.mode,0,1].map(blendMode=>({blendMode,renderWebGLStep:(_r:any,_o:any,c:any)=>h.drawGPU(c)})));
+    expect(h.draws.slice(-3).map(d=>d.func)).toEqual([custom,normal,add]);
+  });
+  it('flushes pending geometry first and restores state even when a standalone draw fails',async()=>{
+    const h=await harness(),original=h.context.state.blend;
+    h.manager.finishBatch.mockImplementationOnce(()=>expect(h.context.blendMode).toBe(0));
+    expect(()=>h.scope(c=>{c.beginDraw();throw Error('draw failed');})).toThrow('draw failed');
+    expect(h.context.state.blend).toBe(original);expect(h.context.blendMode).toBe(0);
+    expect(h.r.glWrapper.state.blend.func).toEqual(h.r.blendModes[0].func);
+    h.drawGPU(h.context);expect(h.draws.at(-1)!.func).toEqual(h.r.blendModes[0].func);
+  });
+  it('preserves destination alpha and subsequent transparent ADD pixels regardless of source alpha',async()=>{
+    const h=await harness(),custom=h.r.blendModes[h.mode].func;
+    const factor=(f:number,s:number,d:number)=>f===0?0:f===1?1:f===768?s:f===774||f===772?d:f===771?1-s:NaN;
+    const blendAlpha=(f:number[],s:number,d:number)=>Math.max(0,Math.min(1,s*factor(f[2],s,d)+d*factor(f[3],s,d)));
+    for(const srcAlpha of [0,1/255,127/255,.5,128/255,1])for(const destination of [0,.25,1]){
+      expect(blendAlpha(custom,srcAlpha,destination)).toBe(destination);
+    }
+    // Numeric regression: the old combined factors amplify a one-LSB alpha
+    // deficit through Phaser ADD, whose zero-source alpha result is dstAlpha squared.
+    let oldAlpha=blendAlpha([774,768,774,768],127/255,1),oldRGB=.4;
+    let alpha=blendAlpha(custom,127/255,1),rgb=.4;
+    const add=h.r.blendModes[1].func;expect(add).toEqual([1,772,1,772]);
+    for(let i=0;i<12;i++){
+      oldRGB*=oldAlpha;oldAlpha=blendAlpha(add,0,oldAlpha);
+      rgb*=alpha;alpha=blendAlpha(add,0,alpha);
+    }
+    expect(oldRGB).toBeLessThan(6/255);expect(rgb).toBe(.4);expect(alpha).toBe(1);
+    // Ordinary NORMAL, MULTIPLY and SCREEN preserve an already opaque scene.
+    for(const mode of [0,2,3]){
+      const f=h.r.blendModes[mode].func as number[];
+      // ONE_MINUS_SRC_COLOR has the same alpha factor as ONE_MINUS_SRC_ALPHA.
+      const alphaFactors=f.map(x=>x===769?771:x);
+      for(let a=0;a<=255;a++)expect(blendAlpha(alphaFactors,a/255,1)).toBe(1);
+    }
+  });
+
+});

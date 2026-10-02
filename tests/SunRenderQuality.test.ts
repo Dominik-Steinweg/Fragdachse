@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 const fake=vi.hoisted(()=>({shaders:[] as any[]}));
-vi.mock('phaser',()=>({BlendModes:{SCREEN:3},Textures:{FilterMode:{LINEAR:0}},Utils:{Array:{Remove:(a:any[],v:any)=>{const i=a.indexOf(v);if(i>=0)a.splice(i,1);}}},
+vi.mock('phaser',()=>({BlendModes:{NORMAL:0,SCREEN:3},Textures:{FilterMode:{LINEAR:0}},Utils:{Array:{Remove:(a:any[],v:any)=>{const i=a.indexOf(v);if(i>=0)a.splice(i,1);}}},
   GameObjects:{Shader:class {
     scene:any;config:any;width:number;height:number;renderNode:any;texture:any;glTexture:any;drawingContext:any;
     textures:any[];renderToTexture=false;callbacks:(()=>void)[]=[];uniforms:Record<string,any>={};destroyed=false;
@@ -35,9 +35,9 @@ import type { SunCloudState } from '../src/effects/sunlight/cloudShadow';
 
 function fixture(canopies:any[]=[]){
   fake.shaders.length=0;
-  const renderer={gl:{DST_COLOR:1,SRC_COLOR:2,FUNC_ADD:3,MAX_TEXTURE_IMAGE_UNITS:4,CLAMP_TO_EDGE:33071,LINEAR:9729,TEXTURE_2D:3553,TEXTURE_WRAP_S:10242,TEXTURE_WRAP_T:10243,TEXTURE_MIN_FILTER:10241,TEXTURE_MAG_FILTER:10240,texParameteri:vi.fn(),getParameter:()=>16},
-    createTexture2D:vi.fn(()=>({})),blendModes:[],addBlendMode:vi.fn(),glVAOWrappers:[],deleteBuffer:vi.fn(),deleteProgram:vi.fn(),shaderProgramFactory:{programs:{}},
-    glTextureUnits:{bind:vi.fn()},glWrapper:{update:vi.fn()},renderNodes:{finishBatch:vi.fn()}};
+  const renderer={gl:{ZERO:0,ONE:1,DST_COLOR:774,SRC_COLOR:768,FUNC_ADD:32774,MAX_TEXTURE_IMAGE_UNITS:4,CLAMP_TO_EDGE:33071,LINEAR:9729,TEXTURE_2D:3553,TEXTURE_WRAP_S:10242,TEXTURE_WRAP_T:10243,TEXTURE_MIN_FILTER:10241,TEXTURE_MAG_FILTER:10240,texParameteri:vi.fn(),getParameter:()=>16},
+    createTexture2D:vi.fn(()=>({})),blendModes:Array.from({length:18},()=>({enabled:true,func:[1,771,1,771],equation:[3,3]})),addBlendMode:vi.fn(function(this:any,func:number[],equation:number){return this.blendModes.push({enabled:true,func:[...func,...func],equation:[equation,equation]})-2;}),updateBlendMode:vi.fn(function(this:any,index:number,func:number[],equation:number){this.blendModes[index]={enabled:true,func:func.slice(),equation:[equation,equation]};}),glVAOWrappers:[],deleteBuffer:vi.fn(),deleteProgram:vi.fn(),shaderProgramFactory:{programs:{}},
+    glTextureUnits:{bind:vi.fn()},glWrapper:{update:vi.fn(),updateBlend:vi.fn()},renderNodes:{finishBatch:vi.fn()}};
   const source={glTexture:{}},texture={source:[source],get:()=>({source})};
   const scene={sys:{renderer},textures:{get:()=>texture,addGLTexture:vi.fn((key:string)=>({...texture,key})),remove:vi.fn()},add:{particles:vi.fn(),existing:(x:any)=>x}};
   const quality=new GraphicsQualityController();quality.attach(scene as never);
@@ -60,7 +60,7 @@ describe('reduced sunlight resources',()=>{
     const quad=fake.shaders.find(s=>!s.renderToTexture&&s.config.name.includes('CompositeDisplay'));
     for(const zoom of [.5,1,1.25,2,4]){
       const camera={x:137,y:81,width:1664,height:936,originX:0,originY:0,scrollX:-123.5,scrollY:377.25,zoom,zoomX:zoom,zoomY:zoom,worldView:{x:-123.5,y:377.25,width:1664/zoom,height:936/zoom}};
-      quad.renderNode.run({camera},quad);
+      quad.renderNode.run({camera,renderer:f.renderer,blendMode:0,state:{blend:f.renderer.blendModes[0]}},quad);
       const material=fake.shaders.find(s=>s.config.name.includes('CompositeMaterial')),w=material.uniforms.uSunWorld;
       expect(w[0]+64/(1664+128)*w[2]).toBeCloseTo(camera.worldView.x,8);
       expect(w[1]+64/(936+128)*w[3]).toBeCloseTo(camera.worldView.y,8);
@@ -202,11 +202,11 @@ it('isolates composite output, material sampling and offscreen drawing independe
  f.owner.setEnabled(true);expect(quad.visible).toBe(false);
  f.owner.setDebugSuppressed(false);expect(quad.visible).toBe(true);
  for(const view of ['normal','material','neutral','neutralInline'] as const){
-   draw.mockClear();f.owner.setDebugView(view);quad.renderNode.run({camera},quad);
+   draw.mockClear();f.owner.setDebugView(view);quad.renderNode.run({camera,renderer:f.renderer,blendMode:0,state:{blend:f.renderer.blendModes[0]}},quad);
    expect(draw).toHaveBeenCalledTimes(view==='neutralInline'?0:1);
    expect(quad.uniforms.uDebugView).toBe(view==='normal'?0:view==='material'?1:2);
  }
- f.owner.setDebugView('normal');quad.renderNode.run({camera},quad);expect(quad.uniforms.uDebugView).toBe(0);
+ f.owner.setDebugView('normal');quad.renderNode.run({camera,renderer:f.renderer,blendMode:0,state:{blend:f.renderer.blendModes[0]}},quad);expect(quad.uniforms.uDebugView).toBe(0);
  f.owner.destroy();f.quality.destroy();
 });
 
@@ -226,4 +226,20 @@ it('reads only the factor target on request and restores the framebuffer even on
  read.mockImplementationOnce(()=>{throw Error('read failure');});expect(()=>f.owner.inspectMaterial()).toThrow('read failure');
  expect(bound).toBe(sceneBuffer);
  f.owner.destroy();expect(f.owner.inspectMaterial()).toBeNull();f.quality.destroy();
+});
+
+
+it('registers Modulate RGB with independent destination-alpha preservation, once per renderer',()=>{
+ const f=fixture(),mode=f.renderer.blendModes.length;f.owner.setEnabled(true);
+ const gl=f.renderer.gl,entry=f.renderer.blendModes[mode];
+ expect(entry.func).toEqual([gl.DST_COLOR,gl.SRC_COLOR,gl.ZERO,gl.ONE]);
+ expect(entry.equation).toEqual([gl.FUNC_ADD,gl.FUNC_ADD]);
+ // The public addBlendMode returns mode-1 in pinned Phaser; updating that slot
+ // would corrupt ERASE and leave the Composite with combined alpha factors.
+ expect(f.renderer.updateBlendMode).toHaveBeenCalledWith(mode,entry.func,gl.FUNC_ADD);
+ expect(f.renderer.blendModes[mode-1].func).not.toEqual(entry.func);
+ for(const view of ['normal','material','neutral','neutralInline'] as const)f.owner.setDebugView(view);
+ f.owner.setEnabled(false);f.owner.setEnabled(true);
+ expect(f.renderer.addBlendMode).toHaveBeenCalledOnce();expect(f.renderer.updateBlendMode).toHaveBeenCalledOnce();
+ f.owner.destroy();f.quality.destroy();
 });

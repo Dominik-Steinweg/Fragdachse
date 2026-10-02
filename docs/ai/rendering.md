@@ -79,6 +79,19 @@ gegen die installierten Phaser-Methoden mit und ohne Kamera-Framebuffer und bei 
 
 ## Runtime und Renderer
 
+Phaser 4.2.1 verwendet fuer WebGL-`ADD` die Faktoren `(ONE, DST_ALPHA)` auch fuer RGB.
+Farbmodulation auf deckenden World-/Kamerazielen muss deshalb deren Ziel-Alpha erhalten:
+Schon ein abgesenktes Alpha laesst spaetere additive Draws den Hintergrund abdunkeln,
+selbst unter transparenten Effekttexeln. Der Sonnen-Composite verwendet fuer RGB
+`(DST_COLOR, SRC_COLOR)` und separat fuer Alpha `(ZERO, ONE)`; seine Quell-Alpha darf
+nicht die Szenendeckung steuern. Normales PMA-Compositing bleibt unveraendert.
+Private Material-, Masken-, Daten- und Filter-Zwischenziele duerfen transparente Alpha
+tragen; diese Regel verlangt dort weder opake Clears noch eine pauschale Alpha-Klemmung.
+Die Blend- und Folgedraw-Vertraege pruefen
+[SunRenderQuality.test.ts](../../tests/SunRenderQuality.test.ts) und
+[GpuVfxSystem.test.ts](../../tests/GpuVfxSystem.test.ts).
+
+
 [LightingSystem.ts](../../src/effects/LightingSystem.ts) besitzt beide Licht-Composites:
 MULTIPLY und den optionalen, weich gesättigten Bleed-Beitrag aus derselben Lightmap nach
 Ambient-Abzug. Lichtquellen nutzen weiterhin ausschließlich die vorhandene Lightmap samt
