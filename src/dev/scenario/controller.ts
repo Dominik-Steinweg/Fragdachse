@@ -103,24 +103,29 @@ export class DevScenarioController {
     this.message = 'Warte auf Lobby und normalen Rundenstart …';
   }
   saveLink(): void { history.replaceState(null, '', encodeScenario(this.config)); }
-  setRenderDebug(disable: readonly string[], composite: import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView = 'normal', probe = false): void {
+  setRenderDebug(disable: readonly string[], composite: import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView = 'normal', probe = false, characterShadowSolid = false): void {
     this.requireReady();
     const targets = this.runtime.getScenarioLightingTargets();
-    const worldPasses = ['sunComposite', 'fogDisplay', 'lightmap'];
+    const worldPasses = ['sunComposite', 'fogDisplay', 'lightmap', 'characterShadows'];
     // Validate the entire request before changing any world output.
     targets.postFx.setDebugDisabled(disable.filter(name => !worldPasses.includes(name)));
     targets.sunlight?.setDebugCompositeSuppressed(disable.includes('sunComposite'));
+    targets.sunlight?.setDebugCharacterShadowsSuppressed(disable.includes('characterShadows'));
+    targets.sunlight?.setDebugCharacterShadowSolid(characterShadowSolid);
     targets.sunlight?.setDebugCompositeView(composite);
     targets.fog?.setDebugDisplaySuppressed(disable.includes('fogDisplay'));
     targets.lighting.setCompositeSuppressed(disable.includes('lightmap'));
-    this.debugTargets = disable.length || composite !== 'normal' ? targets : null;
+    this.debugTargets = disable.length || composite !== 'normal' || characterShadowSolid ? targets : null;
     this.lastAction = { renderDebug: targets.postFx.getDebugPasses(),
-      worldOutputs: worldPasses.map(name => ({ name, disabled: disable.includes(name) })), composite, material: probe ? targets.sunlight?.inspectDebugCompositeMaterial() ?? null : undefined };
+      worldOutputs: worldPasses.map(name => ({ name, disabled: disable.includes(name) })), composite, characterShadowSolid,
+      material: probe ? targets.sunlight?.inspectDebugCompositeMaterial() ?? null : undefined };
   }
   private clearRenderDebug(): void {
     const targets = this.debugTargets;
     targets?.postFx.setDebugDisabled([]);
     targets?.sunlight?.setDebugCompositeSuppressed(false);
+    targets?.sunlight?.setDebugCharacterShadowsSuppressed(false);
+    targets?.sunlight?.setDebugCharacterShadowSolid(false);
     targets?.sunlight?.setDebugCompositeView('normal');
     targets?.fog?.setDebugDisplaySuppressed(false);
     targets?.lighting.setCompositeSuppressed(false);
@@ -460,6 +465,7 @@ export class DevScenarioController {
       rendererSize: { width: this.scene.game.canvas.width, height: this.scene.game.canvas.height },
       sunTuning: { ...(this.worldLighting?.sunTuning ?? SUN_TUNING_DEFAULTS) },
       sun: this.worldLighting?.sunStatus ?? null,
+      characterShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().sunlight?.getCharacterShadowsStatus() ?? null : null,
       worldLightingMeasurement:this.worldLightingMeasurement(),
       camera: { zoom: this.zoom, focusTarget: this.cameraAtTarget, scrollX: this.scene.cameras.main.scrollX,
         scrollY: this.scene.cameras.main.scrollY, zoomX: this.scene.cameras.main.zoomX, zoomY: this.scene.cameras.main.zoomY },

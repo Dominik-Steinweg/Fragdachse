@@ -158,6 +158,17 @@ und [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresen
 
 ## Figuren- und Turmassets
 
+`ShadowSystem` besitzt die worldgebundenen `CharacterShadowRenderer`-Ressourcen. Die Bindung an
+Sonnenzustand und pausierbare Praesentationszeit kommt ausschliesslich von `WorldSunlightPresentation`;
+World-Unbind und Low-Qualitaet zerstoeren Quads und Empfaengermaske, geteilte Loader-Texturen bleiben
+game-owned. Schatten lesen den tatsaechlich dargestellten Sprite-Frame und dessen Rotation, nicht
+Netzwerk-Facing oder eine eigene Animationsuhr. Azimut wird ueber den invers rotierten Lichtvektor
+in Rechts/Sued-Achsen bestimmt; vier lineare non-PMA-Masken werden in einem Draw interpoliert.
+Der Figurenschatten liegt auf dem dynamischen Schatten-Layer ueber Bodennebel und Bodenbewuchs,
+aber unter Figuren; eine Empfaengermaske schliesst Basen und
+Hindernisse aus und reduziert die Wasserantwort. Das Multiply-Blending erhaelt Ziel-Alpha.
+
+
 Die versionierte [Runtime-Assetauswahl](../../src/config/pipelineAssets.json) und ihre PNGs unter
 `public/assets/sprites/pipeline-v2/` sind unabhängig von lokalen Blender-Quellen. Statische Bilder
 und animierte Sheets besitzen getrennte Texturschlüssel. Sheet-Geometrie und explizite Clipframes

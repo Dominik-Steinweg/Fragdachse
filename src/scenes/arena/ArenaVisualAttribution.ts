@@ -56,7 +56,7 @@ export const GRAPHICS_FAMILIES = {
   woodlandEcology: ['WoodlandEcologyRenderer'],
   ambientWildlife: ['AmbientWildlifeRenderer'],
   lightingOcclusion: ['LightingSystem'],
-  dynamicShadows: ['ShadowSystem'],
+  dynamicShadows: ['ShadowSystem', 'CharacterShadowRenderer'],
   treeTrunks: ['ArenaVisualFactory'],
   spawnRings: ['SpawnEffectRenderer'],
   playerStatus: ['PlayerStatusRing', 'PlayerEntity', 'DecoyEntity', 'WorldHealthBarRenderer', 'MolotovFirewalkerRenderer'],

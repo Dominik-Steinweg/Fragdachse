@@ -5,6 +5,15 @@ vi.mock('phaser', () => ({
   Math: { Vector2: class { x = 0; y = 0; } },
 }));
 
+const characters=vi.hoisted(()=>({live:new Set<any>(),receivers:new Set<any>()}));
+vi.mock('../src/effects/CharacterShadowReceiver',()=>({CharacterShadowReceiver:class {
+ constructor(){characters.receivers.add(this);}update(){}destroy(){characters.receivers.delete(this);}
+}}));
+vi.mock('../src/effects/CharacterShadowRenderer',()=>({CharacterShadowRenderer:class {
+ count=0;activeCount=0;constructor(_scene:any,readonly clouds:any,readonly receiver:any){characters.live.add(this);}
+  sync(){}setVisible(){}setDebugSolid(){}destroy(){characters.live.delete(this);this.receiver.destroy();}
+}}));
+import {GraphicsQualityController} from '../src/graphics/GraphicsQuality';
 import { ShadowSystem } from '../src/effects/ShadowSystem';
 import { SHADOW_CASTERS } from '../src/effects/ShadowConfig';
 import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, DEPTH } from '../src/config';
@@ -583,4 +592,20 @@ it('visits enemy casters only with a bound sun path and omits hidden or burrowed
   enemy.sprite.visible=true;enemy.isBurrowed=()=>true;shadows.syncDynamicShadows([],[],null);expect(draw).toHaveBeenCalledTimes(1);
   shadows.setSunPath(null);shadows.syncDynamicShadows([],[],null);expect(source.forEachEnemy).toHaveBeenCalledTimes(3);
   shadows.destroy();
+});
+
+it('character world binding survives high-low-high and releases receivers on every handoff',()=>{
+ const f=makeScene();(f.scene as any).add.particles=vi.fn();const quality=new GraphicsQualityController();quality.attach(f.scene);
+ const shadows=new ShadowSystem(f.scene);
+ for(const name of ['A','B','A']){
+  const clouds={name} as any;shadows.rebuildStaticLayoutShadows(layout(0,0));shadows.setCharacterSunlight(clouds);
+  shadows.syncDynamicShadows([],[],null);expect(characters.live.size).toBe(1);expect(characters.receivers.size).toBe(1);
+  expect([...characters.live][0].clouds).toBe(clouds);
+  quality.setLevel('low');expect(characters.live.size).toBe(0);expect(characters.receivers.size).toBe(0);
+  shadows.syncDynamicShadows([],[],null);expect(characters.live.size).toBe(0);
+  quality.setLevel('high');shadows.syncDynamicShadows([],[],null);expect(characters.live.size).toBe(1);
+  shadows.setCharacterSunlight(null);expect(characters.live.size).toBe(0);expect(characters.receivers.size).toBe(0);
+  shadows.clear();
+ }
+ shadows.destroy();quality.destroy();expect(characters.live.size).toBe(0);expect(characters.receivers.size).toBe(0);
 });

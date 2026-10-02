@@ -1,5 +1,9 @@
 import * as Phaser from 'phaser';
+import { CHARACTER_SHADOW_FILES } from '../assets/CharacterShadowAssetManifest';
 import type { SunPathState } from './sunlight/SunPath';
+import type { SunCloudState } from './sunlight/cloudShadow';
+import { CharacterShadowRenderer } from './CharacterShadowRenderer';
+import { CharacterShadowReceiver } from './CharacterShadowReceiver';
 import { writeShadowCellHull } from './sunlight/ShadowProjection';
 import {
   ARENA_OFFSET_X,
@@ -92,6 +96,7 @@ const STATIC_SHADOW_CASTERS: ReadonlyArray<{
 ];
 /** Leere Kandidatenliste ohne Layout – spart eine Allokation je Region. */
 const EMPTY_INDEX_LIST: readonly number[] = [];
+const EMPTY_RUNTIME_ROCKS: readonly SyncedPlaceableRock[] = [];
 // Dev-only crown silhouette profile. Ratios track the existing day curve rather
 // than baking a second time-of-day model into the shadow renderer.
 const SUN_FOREST_SHADOW = { offsetDiameter: .30, scale: 1.10, opacity: .52,
@@ -169,6 +174,52 @@ const STADIUM_FRONT_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: num
   });
 
 export class ShadowSystem {
+  private characterClouds: SunCloudState | null = null;
+  private characterShadows: CharacterShadowRenderer | null = null;
+  private characterReceiverDirty = true;
+  private characterSuppressed = false;
+  private characterSolid = false;
+  private dynamicVisible = true;
+
+  setCharacterSunlight(clouds: SunCloudState | null): void {
+    if (clouds === this.characterClouds) return;
+    this.characterShadows?.destroy(); this.characterShadows = null;
+    this.characterClouds = clouds; this.characterReceiverDirty = true;
+  }
+  setCharacterShadowsSuppressed(value: boolean): void {
+    this.characterSuppressed = value;
+    this.characterShadows?.setVisible(this.dynamicVisible && !value);
+  }
+  setCharacterShadowSolid(value: boolean): void {
+    this.characterSolid = value; this.characterShadows?.setDebugSolid(value);
+  }
+  getCharacterShadowsStatus() {
+    const pages = CHARACTER_SHADOW_FILES.map(asset => ({ key: asset.key, loaded: this.scene.textures.exists(asset.key),
+      uploaded: this.scene.textures.exists(asset.key) && !!this.scene.textures.get(asset.key).source[0]?.glTexture,
+      width: asset.width, height: asset.height }));
+    return { bound: !!this.characterClouds, enabled: this.quality.dynamicShadows,
+      suppressed: this.characterSuppressed, dynamicVisible: this.dynamicVisible, solid: this.characterSolid,
+      loadedPages: pages.filter(page => page.uploaded).length, totalPages: pages.length, pages,
+      ...(this.characterShadows?.inspect() ?? { activeInstances: 0, instances: [] }) };
+  }
+  private syncCharacterShadows(players: readonly PlayerEntity[]): boolean {
+    if (!this.characterClouds || !this.lastStaticLayout || !this.quality.dynamicShadows) return false;
+    if (!this.characterShadows) {
+      this.characterShadows = new CharacterShadowRenderer(this.scene, this.characterClouds,
+        new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds()));
+      this.characterReceiverDirty = true;
+      this.characterShadows.setDebugSolid(this.characterSolid);
+    }
+    if (this.characterReceiverDirty) {
+      const options = this.lastStaticOptions;
+      this.characterShadows.receiver.update(this.lastStaticLayout, options.offsetX ?? ARENA_OFFSET_X,
+        options.offsetY ?? ARENA_OFFSET_Y, options.rockVisibilityPredicate, options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS,
+        this.baseCells.values());
+      this.characterReceiverDirty = false;
+    }
+    this.characterShadows.sync(players, this.dynamicVisible && !this.characterSuppressed);
+    return true;
+  }
   private formationShadows: ((id: number) => boolean) | null = null;
   setFormationShadows(landscape: ((id: number) => boolean) | null): void {
     if (this.formationShadows === landscape) return;
@@ -272,6 +323,7 @@ export class ShadowSystem {
     this.quality = getGraphicsQualityProfile(scene);
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       this.quality = profile;
+      if (!profile.dynamicShadows) { this.characterShadows?.destroy(); this.characterShadows = null; }
       if (this.lastStaticLayout) {
         this.rebuildStaticLayoutShadows(this.lastStaticLayout, this.lastStaticOptions);
       }
@@ -279,6 +331,7 @@ export class ShadowSystem {
   }
 
   setWorldBoundsOverride(bounds: ShadowWorldBounds | null): void {
+    this.characterShadows?.destroy(); this.characterShadows = null;
     this.worldBoundsOverride = bounds;
   }
 
@@ -308,6 +361,7 @@ export class ShadowSystem {
   }
 
   private invalidateBaseShadow(x: number, y: number): void {
+    this.characterReceiverDirty = true;
     const shadow = this.getShadowBounds(x, y, SHADOW_CASTERS.base, this.staticBakeProfile);
     const world = this.getStaticWorldBounds();
     const size = SHADOW_DIRTY_CHUNK_SIZE;
@@ -432,6 +486,8 @@ export class ShadowSystem {
   }
 
   setDynamicVisible(visible: boolean): void {
+    this.dynamicVisible = visible;
+    this.characterShadows?.setVisible(visible && !this.characterSuppressed);
     for (const bucket of this.layers.values()) bucket.dynamicGraphics.setVisible(visible);
   }
 
@@ -478,6 +534,7 @@ export class ShadowSystem {
     bakedAtMs = Number.NEGATIVE_INFINITY,
     preserveVisible = false,
   ): void {
+    this.characterReceiverDirty = true;
     if (this.lastStaticLayout !== layout) {
       // Neues Layout heisst neuer Felsbestand: Der raeumliche Index muss von vorn beginnen,
       // sonst zeigte er auf Positionen der Vorrunde.
@@ -550,6 +607,7 @@ export class ShadowSystem {
     dirtyRockIds: ReadonlySet<number>,
     runtimeRocks: readonly SyncedPlaceableRock[] = [],
   ): void {
+    this.characterReceiverDirty = true;
     if (!layout || !arenaResult || dirtyRockIds.size === 0) return;
     if (this.lastStaticLayout !== layout || !this.staticSurface) {
       this.rebuildArenaStaticShadows(layout, arenaResult, runtimeRocks);
@@ -875,7 +933,8 @@ export class ShadowSystem {
     train: SyncedTrainState | null,
   ): void {
     this.clearDynamic();
-    let primitivesBuilt = 0;
+    const characterShadows = this.syncCharacterShadows(players);
+    let primitivesBuilt = this.characterShadows?.activeCount ?? 0;
 
     // In `low` entfallen die Schatten bewegter Werfer komplett. Sie sind der einzige
     // Schattenanteil, der sich nicht backen laesst, und werden jeden Frame als gestapelte
@@ -894,6 +953,7 @@ export class ShadowSystem {
     }
 
     for (const player of players) {
+      if (characterShadows) break;
       const sprite = player.displayObject;
       if (!sprite || !sprite.active || !sprite.visible) continue;
       if (player.isDecoyStealthedVisual()) continue;
@@ -938,7 +998,7 @@ export class ShadowSystem {
     if (collector?.isActive()) {
       const dynamicCasterCount = players.length + projectiles.length + (train?.alive ? 1 : 0) + this.enemyCasters;
       collector.setGraphicsGauge('dynamicShadows', {
-        objectCount: this.layers.size,
+        objectCount: this.layers.size + (this.characterShadows?.count ?? 0),
         activeObjects: dynamicCasterCount,
         dynamicCasterCount,
         primitiveCount: primitivesBuilt,
@@ -952,6 +1012,7 @@ export class ShadowSystem {
   }
 
   clear(): void {
+    this.setCharacterSunlight(null); this.characterSuppressed = false; this.characterSolid = false;
     this.sunEnemies = null;
     this.sunDirection=null;this.staticSunDirection=null;this.sunAzimuth=null;this.bakedAzimuth=null;
     this.formationShadows = null;
@@ -969,6 +1030,7 @@ export class ShadowSystem {
   }
 
   destroy(): void {
+    this.setCharacterSunlight(null);
     this.sunEnemies = null;
     this.sunDirection=null;this.staticSunDirection=null;this.sunAzimuth=null;this.bakedAzimuth=null;
     this.formationShadows = null;
@@ -1007,6 +1069,7 @@ export class ShadowSystem {
   }
 
   private clearDynamic(): void {
+    this.characterShadows?.setVisible(false);
     for (const bucket of this.layers.values()) {
       bucket.dynamicGraphics.clear();
     }

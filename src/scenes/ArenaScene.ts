@@ -1,5 +1,6 @@
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
+import { preloadCharacterShadowAssets, assertCharacterShadowAssetsReady } from '../assets/CharacterShadowAssets';
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { preloadRockBase } from '../arena/RockBaseConfig';
 import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
@@ -362,6 +363,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     preloadRockBase(this.load);
     preloadWoodlandAssets(this);
+    preloadCharacterShadowAssets(this);
     this.load.spritesheet('walls', './assets/sprites/walls47blob.png', { frameWidth: 32, frameHeight: 32 });
     for (const control of SHOOTING_RANGE_CONTROLS) {
       this.load.image(`shooting-range-${control}`, `./assets/shooting-range/${control}.png`);
@@ -500,6 +502,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private *prepareLobby(): Generator<string, void> {
     assertWoodlandAssetsReady(this);
+    assertCharacterShadowAssetsReady(this);
     onBootSceneTeardown(this.events, () => {
       this.cancelArenaExitRenderWait();
       this.arenaExitFadeOverlay?.destroy();

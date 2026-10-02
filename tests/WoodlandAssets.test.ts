@@ -53,3 +53,16 @@ it('finishes processing errors and fails readiness for the existing BootPreparat
   expect(()=>assertWoodlandAssetsReady(f.scene)).not.toThrow();preloadWoodlandAssets(f.scene);expect(f.files).toHaveLength(0);
   expect(woodlandAssetBytes(8192).coverageCPU).toBe(2176*1870);
 });
+
+import {preloadCharacterShadowAssets,assertCharacterShadowAssetsReady} from '../src/assets/CharacterShadowAssets';
+import {CHARACTER_SHADOW_FILES} from '../src/assets/CharacterShadowAssetManifest';
+it('loads only shared character mask pages through the non-PMA upload and boot retry contract',()=>{
+ const f=fixture();expect(()=>assertCharacterShadowAssetsReady(f.scene)).toThrow();
+ preloadCharacterShadowAssets(f.scene);expect(f.files).toHaveLength(CHARACTER_SHADOW_FILES.length);
+ for(let i=0;i<f.files.length;i++){
+  const file=f.files[i],asset=CHARACTER_SHADOW_FILES[i];file.data={width:asset.width,height:asset.height};file.onProcessComplete();
+  expect(file.complete).toBe(true);expect(f.renderer.createTexture2D.mock.lastCall).toEqual([0,2,2,3,3,4,file.data,asset.width,asset.height,false,false,false]);
+ }
+ expect(()=>assertCharacterShadowAssetsReady(f.scene)).not.toThrow();
+ const count=f.files.length;preloadCharacterShadowAssets(f.scene);expect(f.files).toHaveLength(count);
+});

@@ -143,6 +143,9 @@ describe('camera pass diagnostics', () => {
     }
     runScenarioCommand(controller, { action: 'renderDebug', disable: ['grade'] });
     expect(setRenderDebug).toHaveBeenCalledExactlyOnceWith(['grade']);
+    runScenarioCommand(controller,{action:'renderDebug',disable:[],characterShadowSolid:true});
+    expect(setRenderDebug).toHaveBeenLastCalledWith([],'normal',false,true);
+    expect(()=>runScenarioCommand(controller,{action:'renderDebug',disable:[],characterShadowSolid:'yes'})).toThrow();
   });
 });
 

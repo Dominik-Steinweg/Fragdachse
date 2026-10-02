@@ -342,6 +342,11 @@ export class PlayerEntity {
     return this.sprite;
   }
 
+  /** Borrowed presentation pose, including grip, recoil and displayed rotation. */
+  getHeldItemDisplayObject(): Phaser.GameObjects.Image | null {
+    return this.heldItem?.getImage() ?? null;
+  }
+
   get body(): Phaser.Physics.Arcade.Body {
     return this.runtime.body;
   }

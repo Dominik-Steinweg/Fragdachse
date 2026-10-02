@@ -421,6 +421,18 @@
       "visiblePixelSha256": "ace520ab7f5d5be9157fdec002641bbc987a61b631e4e606cbaebb2e0eeb1fab",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/badger/passes/player-shadow-21c-production/albedo-4-3f4e7ed005430118842803b6c460e8298269ae5e2158ffb685007f5bb81b9e57.png": {
+      "file": "assets/sprites/pipeline-v2/badger/passes/player-shadow-21c-production/albedo-4-3f4e7ed005430118842803b6c460e8298269ae5e2158ffb685007f5bb81b9e57.webp",
+      "source": "assets/sprites/pipeline-v2/badger/passes/player-shadow-21c-production/albedo-4-3f4e7ed005430118842803b6c460e8298269ae5e2158ffb685007f5bb81b9e57.png",
+      "width": 1980,
+      "height": 396,
+      "sourceBytes": 270049,
+      "downloadBytes": 210766,
+      "sourceSha256": "3f4e7ed005430118842803b6c460e8298269ae5e2158ffb685007f5bb81b9e57",
+      "sha256": "572492734a3183c2e27588c0982c3283668b64ce820091c8d3d5a54921c8072f",
+      "visiblePixelSha256": "ab283c440d96d94cf3cbad960f6cd15c8a42a04ea567a28f3408c6b96fc0bc1f",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/badger/sheet.png": {
       "file": "assets/sprites/pipeline-v2/badger/sheet.webp",
       "source": "assets/sprites/pipeline-v2/badger/sheet.png",

@@ -61,6 +61,9 @@ export class WorldSunlightPresentation {
  get sunStatus(){return {azimuth:this.sunPath.azimuth,elevation:this.sunPath.elevation*180/Math.PI,strength:this.sunPath.strength,horizonAzimuth:this.sunPath.horizonAzimuth};}
  get diagnostics(){return this.sunComposite?.diagnostics??null;}
  setDebugCompositeSuppressed(value:boolean):void {this.sunComposite?.setDebugSuppressed(value);}
+ setDebugCharacterShadowsSuppressed(value:boolean):void {this.targets.shadow.setCharacterShadowsSuppressed(value);}
+ setDebugCharacterShadowSolid(value:boolean):void {this.targets.shadow.setCharacterShadowSolid(value);}
+ getCharacterShadowsStatus() {return this.targets.shadow.getCharacterShadowsStatus();}
  setDebugCompositeView(value:import('./WorldSunComposite').SunCompositeDebugView):void {this.sunComposite?.setDebugView(value);}
  inspectDebugCompositeMaterial(){return this.sunComposite?.inspectMaterial()??null;}
  get woodlandCount():number{return this.woodland?.count??0;}
@@ -109,6 +112,7 @@ export class WorldSunlightPresentation {
     targets.rocks?.setSunTime(minute);this.sunMinute=minute;this.azimuthOverride=this.sunTuning.sunAzimuthOverride;
   }
   targets.shadow.setSunPath(this.sunPath,targets.enemyShadows);
+  targets.shadow.setCharacterSunlight(this.clouds);
   this.clouds.timeSec=this.lastSceneTime/1000;this.clouds.strength=this.sunState.strength;
   this.canopyLighting!.update(this.sunState);
   targets.ground?.setVegetationLight(this.clouds);
@@ -156,6 +160,7 @@ export class WorldSunlightPresentation {
   if(t.fog&&this.fogBase)Object.assign(t.fog.tuning,this.fogBase);
   t.rockOverlays?.setFormationReceiver(null);
   t.rocks?.setFormationOptions(true,true);
+  t.shadow.setCharacterSunlight(null);
   t.shadow.setSunPath(null);t.shadow.setCanopyShadows(null);t.shadow.setFormationShadows(null);
   this.canopyLighting?.destroy();this.canopyLighting=null;this.woodland?.destroy();this.woodland=null;
   this.sunComposite?.destroy();this.sunComposite=null;this.clouds.cache=undefined;this.clouds.sunPath=undefined;

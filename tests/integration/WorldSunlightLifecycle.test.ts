@@ -24,7 +24,7 @@ function fixture(){
  const sharedTexture={};const scene={textures:{get:()=>sharedTexture,remove:vi.fn()},add:{particles:vi.fn()},
   cameras:{main:{scrollX:0,scrollY:0,width:1280,height:720,zoom:1}},game:{loop:{delta:16}}};
  const lighting={setSunAmbient:vi.fn(),getTimeOfDayMinutes:()=>480,setDynamicOccluderSource:vi.fn(),clearDynamicOccluderSource:vi.fn()};
- const shadow={setSunPath:vi.fn(),setCanopyShadows:vi.fn(),setFormationShadows:vi.fn()};
+ const shadow={setCharacterSunlight:vi.fn(),setCharacterShadowsSuppressed:vi.fn(),setSunPath:vi.fn(),setCanopyShadows:vi.fn(),setFormationShadows:vi.fn()};
  let vegetation:unknown;const ground={setVegetationLight:vi.fn((s:any)=>{vegetation=s?.quality?.vegetationForm?s:undefined;})};
  const targets={ground,rocks:{setFormationOptions:vi.fn(),setSunTime:vi.fn(),getFormationReceiver:()=>null},
   rockOverlays:{setFormationReceiver:vi.fn(),setEcologyTuning:vi.fn()},canopies:[],
@@ -49,6 +49,7 @@ describe('Sonnenwald production World lifetime',()=>{
    const owner=new WorldSunlightPresentation(f.scene as never,f.targets as never);frame.bindSunlight(()=>owner);
    owner.update(480,33);expect(resources.fields.size).toBe(1);expect(resources.canopies.size).toBe(1);
    expect(f.targets.water.setSunlight).toHaveBeenLastCalledWith(owner.clouds);
+   expect(f.targets.shadow.setCharacterSunlight).toHaveBeenLastCalledWith(owner.clouds);
    // An old asynchronous callback cannot clear the new world's receiver.
    previous?.destroy();previous?.update(720,999);expect(f.targets.water.setSunlight).toHaveBeenLastCalledWith(owner.clouds);
    handoff.release(world.releasePresentation());expect(frame.sunlight).toBeNull();expectEmpty();

@@ -40,6 +40,7 @@ beforeEach(() => {
     rpcPorts: { heldAction: { clearPlayer() {} } },
     getWorldMetrics: () => ({ offsetX: 0, offsetY: 12, gridCols: 60, gridRows: 33 }),
     getScenarioLoadingState: () => ({ roundStartPrepared: true }), getScenarioObservation: () => ({}),
+    getScenarioLightingTargets: () => ({ sunlight: null }),
     getWorldDescriptor: () => ({}), getWorldCombatCore: () => null, setTimeOfDayDebugOverride() {},
     setIsLocalReady() {}, stopScenarioUltimate() {}, isMatchTerminated: () => false,
     hostDiscardRound: () => { host.phase = 'LOBBY'; host.started = false; },
@@ -143,7 +144,7 @@ describe('Dev scenario automation lifecycle', () => {
 
 it('restores world output diagnostics and rejects unknown passes before mutating the world',()=>{
  enter();controller.afterHostFrame();
- const sunlight={setDebugCompositeSuppressed:vi.fn(),setDebugCompositeView:vi.fn(),inspectDebugCompositeMaterial:vi.fn(()=>({zeroRGB:0}))};
+ const sunlight={setDebugCharacterShadowSolid: vi.fn(), getCharacterShadowsStatus:()=>({activeInstances:1}), setDebugCharacterShadowsSuppressed: vi.fn(), setDebugCompositeSuppressed:vi.fn(),setDebugCompositeView:vi.fn(),inspectDebugCompositeMaterial:vi.fn(()=>({zeroRGB:0}))};
  const fog={setDebugDisplaySuppressed:vi.fn()},lighting={setCompositeSuppressed:vi.fn()};
  const postFx={setDebugDisabled:vi.fn((names:string[])=>{if(names.includes('typo'))throw Error('unknown');}),getDebugPasses:()=>[]};
  (controller as any).runtime.getScenarioLightingTargets=()=>({sunlight,fog,lighting,postFx});
@@ -153,12 +154,16 @@ it('restores world output diagnostics and rejects unknown passes before mutating
  expect(sunlight.setDebugCompositeSuppressed).toHaveBeenLastCalledWith(true);
  expect(fog.setDebugDisplaySuppressed).toHaveBeenLastCalledWith(true);
  expect(lighting.setCompositeSuppressed).toHaveBeenLastCalledWith(true);
+ expect(controller.snapshot().characterShadows).toEqual({activeInstances:1});
+ controller.setRenderDebug([],'normal',false,true);
+ expect(sunlight.setDebugCharacterShadowSolid).toHaveBeenLastCalledWith(true);
  expect(()=>controller.setRenderDebug(['typo'])).toThrow();
- expect(sunlight.setDebugCompositeSuppressed).toHaveBeenCalledTimes(1);
+ expect(sunlight.setDebugCompositeSuppressed).toHaveBeenCalledTimes(2);
  controller.start(defaultScenario());
  expect(postFx.setDebugDisabled).toHaveBeenLastCalledWith([]);
  expect(sunlight.setDebugCompositeSuppressed).toHaveBeenLastCalledWith(false);
  expect(sunlight.setDebugCompositeView).toHaveBeenLastCalledWith('normal');
+ expect(sunlight.setDebugCharacterShadowSolid).toHaveBeenLastCalledWith(false);
  expect(fog.setDebugDisplaySuppressed).toHaveBeenLastCalledWith(false);
  expect(lighting.setCompositeSuppressed).toHaveBeenLastCalledWith(false);
 });

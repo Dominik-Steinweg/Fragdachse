@@ -15,6 +15,20 @@ import type { ProjectileStyle } from '../types';
 
 export type ShadowShape = 'cell' | 'circle' | 'ellipse' | 'capsule';
 
+/** Receiver-masked dynamic shadow above ground fog, below figures. */
+export const CHARACTER_SHADOW_CONFIG = {
+  depth: DEPTH.PLAYERS - .08,
+  directOpacity: .50,
+  lowSunOpacity: .38,
+  colour: [.02, .028, .043],
+  contactOpacity: .18,
+  contactRadiusX: 6,
+  contactRadiusY: 4,
+  weaponGripHeight: 16,
+  waterResponse: .45,
+  maxPlayers: 12,
+} as const;
+
 export interface ShadowCasterConfig {
   readonly enabled: boolean;
   readonly layerDepth: number;
@@ -53,11 +67,8 @@ export const WORLD_SHADOW_CONFIG = {
 /**
  * Tageszeitabhängige Ausprägung der statischen Schatten.
  *
- * Die Lichtrichtung bleibt bewusst unangetastet: `ShadowSystem` berechnet daraus beim
- * Modul-Load feste Bogentabellen, eine Laufzeitänderung würde sie ungültig machen. Das
- * ist hier kein Kompromiss, sondern richtig – die Sprites sind mit fester Lichtrichtung
- * gezeichnet; nur den Wurfschatten mitzudrehen sähe falscher aus, nicht besser. Uhrzeit
- * steuert deshalb allein Länge, Deckkraft und Weichheit.
+ * Länge, Deckkraft und Weichheit ergänzen die Sonnenrichtung, die der World-Owner
+ * über `ShadowSystem.setSunPath` aus der Präsentationszeit bereitstellt.
  */
 export interface ShadowProfile {
   readonly opacityMult: number;

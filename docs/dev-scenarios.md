@@ -133,7 +133,21 @@ Werkzeug `construction:flame_turret`, Spieler bei Grid `(98,26)`, Flammenturm be
 
 ## Produktionsdarstellung diagnostizieren
 
-Lokale Render-Ausgaben isolieren: `dev.run({action:'renderDebug',disable:['sunComposite','fogDisplay','lightmap']})`.
+Figurenschatten vergleichen: `dev.run({action:'renderDebug',disable:['characterShadows']})`;
+mit `disable:[]` wieder einschalten. Bei 08:00/12:00/17:00/00:00 drehen, laufen und stehen bleiben;
+Waffenwechsel/Rueckstoss, Wolken, Wasserrand und Basen pruefen. High -> Low -> High und World-Wechsel
+muessen die Schatten korrekt entfernen und wieder aufbauen. Die Nacht behaelt nur den Fusskontakt.
+
+`dev.status().characterShadows` zeigt geladene GPU-Seiten, aktive Instanzen, Draw-Aufrufe,
+Samples/Gewichte, Depth und die Deckkraftanteile am Koerperpivot (CPU-Wolkenwert als Schaetzung gekennzeichnet).
+`instances[].coreDarkeningEstimate` schaetzt die relative Kernabdunklung fuer volle Maskendeckung
+ausserhalb des Fusskontakts auf neutralem Boden vor dem Camera-Grade. Wolken, Empfaenger und
+Sprite-Alpha sind enthalten; es ist kein Bildmittel ueber das Quad und keine GPU-Messung.
+`dev.run({action:'renderDebug',disable:[],characterShadowSolid:true})` zeichnet die Schattenquads
+deckend magenta mit NORMAL-Blend, ohne Masken/Empfaengerausschluss; die regulaere Depth bleibt erhalten.
+Mit `dev.run({action:'renderDebug',disable:[]})` zur normalen Darstellung zurueckkehren.
+
+Lokale Render-Ausgaben isolieren: `dev.run({action:'renderDebug',disable:['sunComposite','fogDisplay','lightmap','characterShadows']})`.
 Die Liste ersetzt die bisherige Auswahl; zusätzlich sind `distortion`, `bloom`, `grade`, `vignette`, `focus`, `barrel` erlaubt.
 `disable:[]` stellt alle Ausgaben wieder her; beim Szenariostart und Teardown wird ebenfalls zurückgesetzt.
 Simulation, Nebeldichte, Wolkenfeld und Lichtquellen laufen bei ausgeblendeter Ausgabe unverändert weiter.

@@ -46,7 +46,9 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if (!Array.isArray(c.disable) || c.disable.some(name => typeof name !== 'string')) throw new Error('renderDebug.disable: Liste von Passnamen erwartet.');
       if(c.composite!==undefined&&!['normal','material','neutral','neutralInline'].includes(c.composite as string)) throw new Error('renderDebug.composite: normal, material, neutral oder neutralInline erwartet.');
       if(c.probe!==undefined)boolean(c.probe);
-      if(c.probe===true)controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,true);
+      if(c.characterShadowSolid!==undefined)boolean(c.characterShadowSolid);
+      if(c.characterShadowSolid!==undefined)controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,c.probe===true,c.characterShadowSolid as boolean);
+      else if(c.probe===true)controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,true);
       else if(c.composite===undefined)controller.setRenderDebug(c.disable as string[]);
       else controller.setRenderDebug(c.disable as string[],c.composite as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView);
       break;
