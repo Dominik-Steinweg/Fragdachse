@@ -40,7 +40,7 @@ beforeEach(() => {
     rpcPorts: { heldAction: { clearPlayer() {} } },
     getWorldMetrics: () => ({ offsetX: 0, offsetY: 12, gridCols: 60, gridRows: 33 }),
     getScenarioLoadingState: () => ({ roundStartPrepared: true }), getScenarioObservation: () => ({}),
-    getScenarioLightingTargets: () => ({ sunlight: null }),
+    getScenarioLightingTargets: () => ({ sunlight: null, enemyReadability: {getDiagnostics:()=>({})} }),
     getWorldDescriptor: () => ({}), getWorldCombatCore: () => null, setTimeOfDayDebugOverride() {},
     setIsLocalReady() {}, stopScenarioUltimate() {}, isMatchTerminated: () => false,
     hostDiscardRound: () => { host.phase = 'LOBBY'; host.started = false; },
@@ -58,6 +58,17 @@ function enter() {
 }
 
 describe('Dev scenario automation lifecycle', () => {
+  it('routes the readability recipe and both terrain stations through the public API',()=>{
+    const start=vi.spyOn(controller,'start').mockImplementation(()=>{});
+    const arrange=vi.spyOn(controller,'arrangeEnemyReadability').mockImplementation(()=>{});
+    const api=window.devScenario!;
+    expect(api.run({action:'enemyReadabilityScene',timeOfDay:360})).toMatchObject({ok:true});
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({mapId:'1',seed:12345,timeOfDay:360}));
+    expect(api.run({action:'enemyReadabilityArrange',surface:'gravel'})).toMatchObject({ok:true});
+    expect(arrange).toHaveBeenLastCalledWith('gravel');
+    expect(api.run({action:'enemyReadabilityArrange',surface:'typo'})).toMatchObject({ok:false});
+    expect(arrange).toHaveBeenCalledTimes(1);
+  });
   it('saves a detached report through the existing local artifact endpoint without changing scenario state',async()=>{
     enter();controller.afterHostFrame();
     const before=structuredClone(controller.snapshot());
@@ -145,13 +156,15 @@ describe('Dev scenario automation lifecycle', () => {
 it('restores world output diagnostics and rejects unknown passes before mutating the world',()=>{
  enter();controller.afterHostFrame();
  const sunlight={setDebugCharacterShadowSolid: vi.fn(), getCharacterShadowsStatus:()=>({activeInstances:1}), setDebugCharacterShadowsSuppressed: vi.fn(), setDebugCompositeSuppressed:vi.fn(),setDebugCompositeView:vi.fn(),inspectDebugCompositeMaterial:vi.fn(()=>({zeroRGB:0}))};
+ const enemyReadability={setSuppressed:vi.fn(),getDiagnostics:()=>({instances:8})};
  const rockOverlays={setVisible:vi.fn()},rocks={setDebugFormationSuppressed:vi.fn()};
  const fog={setDebugDisplaySuppressed:vi.fn()},lighting={setCompositeSuppressed:vi.fn()};
  const postFx={setDebugDisabled:vi.fn((names:string[])=>{if(names.includes('typo'))throw Error('unknown');}),getDebugPasses:()=>[]};
- (controller as any).runtime.getScenarioLightingTargets=()=>({sunlight,fog,lighting,postFx,rocks,rockOverlays});
- controller.setRenderDebug(['sunComposite','fogDisplay','lightmap','grade','rockSurface','rockFoliage','rockOverlays'],'neutral',true);
+ (controller as any).runtime.getScenarioLightingTargets=()=>({sunlight,fog,lighting,postFx,rocks,rockOverlays,enemyReadability});
+ controller.setRenderDebug(['sunComposite','fogDisplay','lightmap','grade','enemyContour','rockSurface','rockFoliage','rockOverlays'],'neutral',true);
  expect(controller.lastAction).toMatchObject({material:{zeroRGB:0}});
  expect(rocks.setDebugFormationSuppressed).toHaveBeenLastCalledWith(true,false,true);
+ expect(enemyReadability.setSuppressed).toHaveBeenLastCalledWith(true);
  expect(rockOverlays.setVisible).toHaveBeenLastCalledWith(false);
  expect(postFx.setDebugDisabled).toHaveBeenLastCalledWith(['grade']);
  expect(sunlight.setDebugCompositeSuppressed).toHaveBeenLastCalledWith(true);
@@ -170,5 +183,6 @@ it('restores world output diagnostics and rejects unknown passes before mutating
  expect(fog.setDebugDisplaySuppressed).toHaveBeenLastCalledWith(false);
  expect(lighting.setCompositeSuppressed).toHaveBeenLastCalledWith(false);
  expect(rocks.setDebugFormationSuppressed).toHaveBeenLastCalledWith(false,false,false);
+ expect(enemyReadability.setSuppressed).toHaveBeenLastCalledWith(false);
  expect(rockOverlays.setVisible).toHaveBeenLastCalledWith(true);
 });

@@ -4,6 +4,7 @@ import { COOP_DEFENSE_ENEMY_KINDS, type CoopDefenseEnemyKind } from '../../confi
 import { COOP_DEFENSE_CONSTRUCTION_IDS } from '../../config/coopDefenseConstructions';
 import type { ConstructionId, WeaponSlot } from '../../types';
 import { POWERUP_DEFS } from '../../powerups/PowerUpConfig';
+import { enemyReadabilityScenario } from './enemyReadabilityRecipe';
 
 export type ScenarioResult = { ok: true; status: Record<string, unknown>; path?: string; url?: string }
   | { ok: false; error: string; status: Record<string, unknown> };
@@ -43,6 +44,12 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
   const c = object(value);
   switch (c.action) {
     case 'status': return;
+    case 'enemyReadabilityScene':
+      controller.start(enemyReadabilityScenario(c.timeOfDay === undefined ? 720 : number(c.timeOfDay, 0, 1439)));
+      break;
+    case 'enemyReadabilityArrange':
+      if (c.surface !== undefined && c.surface !== 'woodland' && c.surface !== 'gravel') throw new Error('surface: woodland oder gravel erwartet.');
+      controller.arrangeEnemyReadability(c.surface as 'woodland' | 'gravel' | undefined); break;
     case 'renderDebug':
       if (!Array.isArray(c.disable) || c.disable.some(name => typeof name !== 'string')) throw new Error('renderDebug.disable: Liste von Passnamen erwartet.');
       if(c.composite!==undefined&&!['normal','material','neutral','neutralInline'].includes(c.composite as string)) throw new Error('renderDebug.composite: normal, material, neutral oder neutralInline erwartet.');

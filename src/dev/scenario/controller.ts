@@ -17,6 +17,7 @@ import { createScenarioPanel } from './panel';
 import { installScenarioApi } from './api';
 import { ScenarioBots } from './bots';
 import { SUN_TUNING_DEFAULTS, validateSunTuning } from '../../effects/sunlight/SunTuning';
+import { enemyReadabilityPlacements } from './enemyReadabilityRecipe';
 
 export class DevScenarioController {
   readonly clock: ScenarioClock;
@@ -106,7 +107,7 @@ export class DevScenarioController {
   setRenderDebug(disable: readonly string[], composite: import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView = 'normal', probe = false, characterShadowSolid = false): void {
     this.requireReady();
     const targets = this.runtime.getScenarioLightingTargets();
-    const worldPasses = ['sunComposite', 'fogDisplay', 'lightmap', 'characterShadows', 'rockSurface', 'rockGround', 'rockFoliage', 'rockOverlays'];
+    const worldPasses = ['sunComposite', 'fogDisplay', 'lightmap', 'characterShadows', 'rockSurface', 'rockGround', 'rockFoliage', 'rockOverlays', 'enemyContour'];
     // Validate the entire request before changing any world output.
     targets.postFx.setDebugDisabled(disable.filter(name => !worldPasses.includes(name)));
     targets.sunlight?.setDebugCompositeSuppressed(disable.includes('sunComposite'));
@@ -117,6 +118,7 @@ export class DevScenarioController {
     targets.lighting.setCompositeSuppressed(disable.includes('lightmap'));
     targets.rocks?.setDebugFormationSuppressed(disable.includes('rockSurface'),disable.includes('rockGround'),disable.includes('rockFoliage'));
     targets.rockOverlays?.setVisible(!disable.includes('rockOverlays'));
+    targets.enemyReadability.setSuppressed(disable.includes('enemyContour'));
     this.debugTargets = disable.length || composite !== 'normal' || characterShadowSolid ? targets : null;
     this.lastAction = { renderDebug: targets.postFx.getDebugPasses(),
       worldOutputs: worldPasses.map(name => ({ name, disabled: disable.includes(name) })), composite, characterShadowSolid,
@@ -133,6 +135,7 @@ export class DevScenarioController {
     targets?.lighting.setCompositeSuppressed(false);
     targets?.rocks?.setDebugFormationSuppressed(false,false,false);
     targets?.rockOverlays?.setVisible(true);
+    targets?.enemyReadability.setSuppressed(false);
     this.debugTargets = null;
   }
   setSunTuning(values: unknown, reset = false): void {
@@ -228,7 +231,7 @@ export class DevScenarioController {
     if (remember) { this.config.player = { ...point }; this.saveLink(); }
     this.message = 'Spieler versetzt.';
   }
-  spawn(kind: CoopDefenseEnemyKind, pinned: boolean, hp: number | null, point = this.aim, remember = true): void {
+  spawn(kind: CoopDefenseEnemyKind, pinned: boolean, hp: number | null, point = this.aim, remember = true): string {
     this.requireReady();
     if (!COOP_DEFENSE_ENEMY_CONFIGS[kind] || (hp !== null && (!Number.isFinite(hp) || hp < 1 || hp > 10000000))) throw new Error('Gegner oder HP ungültig.');
     if (this.runtime.navigationLabPort.readEnemies().length >= 200) throw new Error('Maximal 200 Gegner im Dev-Szenario.');
@@ -239,6 +242,26 @@ export class DevScenarioController {
     if (pinned) this.pinned.set(id, position);
     if (remember) { this.config.enemies.push({ ...point, kind, pinned, hp }); this.saveLink(); }
     this.lastAction = { ok: true, enemyId: id, position };
+    return id;
+  }
+  arrangeEnemyReadability(surface: 'woodland' | 'gravel' = 'woodland'): void {
+    this.requireReady();
+    if (this.config.mapId !== '1' || this.config.seed !== 12345) throw new Error('Zuerst enemyReadabilityScene starten.');
+    this.clearEnemies(); this.stop();
+    const placements = enemyReadabilityPlacements(surface).map(placement => {
+      // Rock/canopy stations are not legal spawn cells: spawn on the free player cell, then pin.
+      let id: string;
+      try { id = this.spawn(placement.kind, true, 1000000, placement); }
+      catch { id = this.spawn(placement.kind, true, 1000000, { gridX: 27, gridY: 28 }); }
+      // Diagnostic pose override only: use the existing pinned-target port, including rock
+      // cells that normal gameplay correctly excludes when finding a legal spawn point.
+      const position = this.world(placement);
+      this.pinned.set(id, position);
+      this.runtime.weaponBalanceLabPort.pinTarget(id, position.x, position.y);
+      return { id, ...placement, position };
+    });
+    this.aim = { gridX: surface === 'gravel' ? 130 : 28, gridY: 21 }; this.cameraAtTarget = true; this.zoom = 1.4;
+    this.syncCamera(); this.lastAction = { enemyReadability: placements };
   }
   clearEnemies(): void {
     this.requireReady(); this.runtime.navigationLabPort.removeEnemies(); this.pinned.clear();
@@ -477,6 +500,7 @@ export class DevScenarioController {
       sunTuning: { ...(this.worldLighting?.sunTuning ?? SUN_TUNING_DEFAULTS) },
       sun: this.worldLighting?.sunStatus ?? null,
       characterShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().sunlight?.getCharacterShadowsStatus() ?? null : null,
+      enemyContour: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().enemyReadability.getDiagnostics() : null,
       worldLightingMeasurement:this.worldLightingMeasurement(),
       camera: { zoom: this.zoom, focusTarget: this.cameraAtTarget, scrollX: this.scene.cameras.main.scrollX,
         scrollY: this.scene.cameras.main.scrollY, zoomX: this.scene.cameras.main.zoomX, zoomY: this.scene.cameras.main.zoomY },

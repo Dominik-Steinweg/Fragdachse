@@ -5,6 +5,7 @@ import { TurretAnimationController } from '../../effects/TurretAnimationControll
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
 import { EnemyEyeGlowRenderer } from '../../effects/EnemyEyeGlowRenderer';
 import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
+import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { createEarthbreakFissureLayers } from '../../effects/earthbreak/EarthbreakFissureGpuLayer';
@@ -81,6 +82,7 @@ export interface RendererBundle {
   healthBars: WorldHealthBarRenderer;
   enemyEyes: EnemyEyeGlowRenderer;
   enemyVulnerability: EnemyVulnerabilityRenderer;
+  enemyReadability: EnemyReadabilityRenderer;
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
   plasmaBurner:        PlasmaBurnerRenderer;
@@ -405,6 +407,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => enemyEyes.destroy());
   const enemyVulnerability = new EnemyVulnerabilityRenderer(scene);
   cleanup.push(() => enemyVulnerability.destroy());
+  const enemyReadability = new EnemyReadabilityRenderer(scene);
+  cleanup.push(() => enemyReadability.destroy());
   const interactions = new WorldInteractionRenderer(scene);
   cleanup.push(() => interactions.clear());
   const constructionOwnershipMotes = new ConstructionOwnershipMoteRenderer(gpuVfx);
@@ -420,6 +424,7 @@ export function* createRendererBundleSteps(
     healthBars,
     enemyEyes,
     enemyVulnerability,
+    enemyReadability,
     gpuVfx,
     constructionOwnershipMotes,
     movement,

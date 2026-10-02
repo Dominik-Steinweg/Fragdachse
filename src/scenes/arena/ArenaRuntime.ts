@@ -682,6 +682,7 @@ export class ArenaRuntime {
     return { sunlight:world?.presentationFrame?.sunlight??null, ground: arena?.groundSurface ?? null, rocks: arena?.rockVisualSystem ?? null, rockOverlays: arena?.rockOverlaySurface ?? null,
       canopies: arena?.canopyObjects ?? [], shadow: this.renderers.shadow,
       enemyShadows: this.flow.getWorldEnemyManager(),
+      enemyReadability: this.renderers.enemyReadability,
       lighting: this.renderers.lighting, fog: world?.presentation?.groundFog ?? null, postFx: this.ctx.visualFeedback.postFx,
       water: arena?.waterSurface ?? null, wildlife: arena?.wildlife ?? null, layout: world?.presentation?.layout ?? null,
       worldContext: world?.context ?? null };

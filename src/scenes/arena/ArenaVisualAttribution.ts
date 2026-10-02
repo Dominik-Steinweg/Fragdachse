@@ -60,7 +60,7 @@ export const GRAPHICS_FAMILIES = {
   treeTrunks: ['ArenaVisualFactory'],
   spawnRings: ['SpawnEffectRenderer'],
   playerStatus: ['PlayerStatusRing', 'PlayerEntity', 'DecoyEntity', 'WorldHealthBarRenderer', 'MolotovFirewalkerRenderer'],
-  enemyStatus: ['EnemyEntity', 'WorldHealthBarRenderer', 'EnemyVulnerabilityRenderer', 'SmokeBodyEffect'],
+  enemyStatus: ['EnemyEntity', 'WorldHealthBarRenderer', 'EnemyVulnerabilityRenderer', 'EnemyReadabilityRenderer', 'SmokeBodyEffect'],
   bossDecoration: ['EnemyEntity'],
   smokeClouds: ['SmokeSystem'],
   asmdEffects: ['AsmdPrimaryRenderer'],
