@@ -98,6 +98,12 @@ export const GpuVfxLaneId = {
   TrainBody:             37,
   TrainSmoke:            38,
   TrainHeat:             39,
+  ExplosionLowBody:      40,
+  ExplosionLowSmoke:     41,
+  ExplosionLowCore:      42,
+  ExplosionLowGlow:      43,
+  TrainAftermathSmoke:   44,
+  TrainAftermathDebris:  45,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -635,7 +641,8 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
   {
     id: GpuVfxLaneId.GoreNormal,
     label: 'gore-normal',
-    depth: DEPTH_FX - 0.1,
+    // Material receives sun/clouds and lightmap, and remains below the canopy.
+    depth: 13.2,
     blendMode: Phaser.BlendModes.NORMAL,
     // CubicInOut traegt die Fragmentbewegung; CubicIn bleibt fuer Alpha und Skala. Der Death-
     // Fragment-Glow erbt beide Kurven, deshalb ist GoreAdd identisch vorgewaermt.
@@ -657,7 +664,8 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
   {
     id: GpuVfxLaneId.GoreAdd,
     label: 'gore-add',
-    depth: DEPTH_FX + 0.05,
+    // Emission bypasses ambient passes but is still occluded by the canopy.
+    depth: 19.65,
     blendMode: Phaser.BlendModes.ADD,
     eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn, GpuVfxEase.CubicInOut],
     capacity: 1024,
@@ -780,5 +788,53 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     capacity: 768, maxLifetimeMs: 1800, order: 'ordered', reserveCritical: 0,
     rationale: 'Emissive fire above the lightmap but under canopies; PMA NORMAL avoids Phaser ADD scene-alpha accumulation.',
     capacityRationale: '13 staggered fireballs and spark bursts plus 64 short fragment flames; no screen-sized quads.',
+  },
+  {
+    id: GpuVfxLaneId.ExplosionLowBody, label: 'explosion-low-body', depth: 13.4,
+    blendMode: Phaser.BlendModes.NORMAL, gravity: 40,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.Gravity],
+    capacity: 4096, maxLifetimeMs: 1400, order: 'ordered', reserveCritical: 0,
+    rationale: 'Ordinary material body and chunks below sunlight; separate from high Nuke/Train and from lower smoke.',
+    capacityRationale: 'Bounded ordinary bursts; 24 body plus 14 secondary and 28 chunks, or 20 smoke / 2 cores per event. Existing high-family budgets remain unchanged.',
+  },
+  {
+    id: GpuVfxLaneId.ExplosionLowSmoke, label: 'explosion-low-smoke', depth: 13.36,
+    blendMode: Phaser.BlendModes.NORMAL,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 2048, maxLifetimeMs: 1900, order: 'ordered', reserveCritical: 0,
+    rationale: 'Ordinary smoke below its body; a shared NORMAL lane would lose the required smoke/body order.',
+    capacityRationale: 'Bounded ordinary bursts; 24 body plus 14 secondary and 28 chunks, or 20 smoke / 2 cores per event. Existing high-family budgets remain unchanged.',
+  },
+  {
+    id: GpuVfxLaneId.ExplosionLowCore, label: 'explosion-low-core', depth: 20.2,
+    blendMode: Phaser.BlendModes.NORMAL,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 512, maxLifetimeMs: 1400, order: 'ordered', reserveCritical: 0,
+    rationale: 'Brief impact-light cue above canopy for hit readability (two cores, at most 280 ms for ordinary bursts); body, smoke and sparks stay below. NORMAL preserves the motif.',
+    capacityRationale: 'Bounded ordinary bursts; 24 body plus 14 secondary and 28 chunks, or 20 smoke / 2 cores per event. Existing high-family budgets remain unchanged.',
+  },
+  {
+    id: GpuVfxLaneId.ExplosionLowGlow, label: 'explosion-low-glow', depth: 19.6,
+    blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    capacity: 8192, maxLifetimeMs: 1100, order: 'add-over-opaque', reserveCritical: 0,
+    rationale: 'Ordinary sparks/rings stay below Gore glows as before. Their burst budgets must not starve death glows on GoreAdd.',
+    capacityRationale: 'Retains the combined upper bounds of Spark 4096, Accent 2048 and Cascade 2048; no extra emitted members.',
+  },
+  {
+    id: GpuVfxLaneId.TrainAftermathSmoke, label: 'train-aftermath-smoke', depth: DEPTH.TRAIN + 2.2,
+    blendMode: Phaser.BlendModes.NORMAL,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    capacity: 1024, maxLifetimeMs: 4200, order: 'ordered', reserveCritical: 0,
+    rationale: 'Train material smoke receives sunlight and the lightmap, below canopies; fire remains on TrainHeat.',
+    capacityRationale: '64 bounded fragments emit sparse trails; staggered carriage plumes share the same capped 1024 slots.',
+  },
+  {
+    id: GpuVfxLaneId.TrainAftermathDebris, label: 'train-aftermath-debris', depth: DEPTH.TRAIN + .2,
+    blendMode: Phaser.BlendModes.NORMAL,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    capacity: 96, maxLifetimeMs: 9000, order: 'ordered', reserveCritical: 0,
+    rationale: 'Long-lived train fragments stay lit, below their smoke and canopies; movement grit keeps the short TrainBody lane.',
+    capacityRationale: 'At most 64 ballistic bodies plus a small overlap reserve; no per-fragment Phaser objects.',
   },
 ];

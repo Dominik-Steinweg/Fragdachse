@@ -1,5 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
+it('validates fog-rock optical controls and lobby time before renderDebug dispatch',()=>{
+  const setRenderDebug=vi.fn(),controller={setRenderDebug,syncPanel(){}} as never;
+  for(const key of ['fogRockContactStrength','fogRockSunShadowStrength','rockAerialPerspectiveStrength'])for(const value of [-1,1,NaN,Infinity,'0.2',null])
+    expect(()=>runScenarioCommand(controller,{action:'renderDebug',disable:[],[key]:value})).toThrow();
+  for(const value of [-1,1440,NaN,'480'])expect(()=>runScenarioCommand(controller,{action:'renderDebug',disable:[],lobbyTimeOfDay:value})).toThrow();
+  for(const value of ['true',1,null])expect(()=>runScenarioCommand(controller,{action:'renderDebug',rockAerialPerspective:value})).toThrow();
+  expect(setRenderDebug).not.toHaveBeenCalled();
+  runScenarioCommand(controller,{action:'renderDebug',disable:[],rockAerialPerspective:true,rockAerialPerspectiveStrength:.3});
+  expect(setRenderDebug).toHaveBeenLastCalledWith([],'normal',false,false,'material',expect.objectContaining({rockAerialPerspective:true,rockAerialPerspectiveStrength:.3}));
+  runScenarioCommand(controller,{action:'renderDebug',disable:['fogRockContact'],fogRockSunShadowStrength:.15,lobbyTimeOfDay:480});
+  expect(setRenderDebug).toHaveBeenLastCalledWith(['fogRockContact'],'normal',false,false,'material',
+    {fogRockContactStrength:undefined,fogRockSunShadowStrength:.15,lobbyTimeOfDay:480});
+});
+
 it('validates targeted pickup commands and forwards authored IDs and optional grid coordinates', () => {
   const spawnPowerUp = vi.fn(), controller = { spawnPowerUp, syncPanel() {} } as never;
   runScenarioCommand(controller, { action: 'spawnPowerUp', id: 'HEALTH_PACK', gridX: 24, gridY: 24 });

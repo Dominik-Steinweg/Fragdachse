@@ -11,6 +11,7 @@ import {
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
 import {
   GPU_VFX_EFFECTS,
+  EXPLOSION_LAYER_EFFECTS,
   GpuVfxEffectId,
   type GpuVfxEffectId as GpuVfxEffectIdType,
 } from './gpu/GpuVfxEffects';
@@ -111,6 +112,7 @@ export class ExplosionGpuRenderer {
       GpuVfxEffectId.ExplosionSmoke,
       GpuVfxEffectId.ExplosionShockwave,
       GpuVfxEffectId.ExplosionSecondary,
+      ...Object.values(EXPLOSION_LAYER_EFFECTS.ordinary),
     ];
     for (const effect of effects) this.specs.set(effect, system.createSpec(effect));
 
@@ -176,7 +178,7 @@ export class ExplosionGpuRenderer {
     if (strength <= 0) return;
     const { x, y, radius } = request;
     // A brief, soft volume flash opens the shell; the hollow fronts remain readable after it fades.
-    this.spawnBurst(GpuVfxEffectId.ExplosionShockwave, 2, (spec, index) => {
+    this.spawnBurst(this.effectFor(request, 'Shockwave'), 2, (spec, index) => {
       this.configure(spec, { x, y, vx: 0, vy: 0, gravityFactor: 0,
         frame: GpuVfxFrameId.ExplosionCore, lifeMs: index ? 260 : 140,
         scaleStart: radius / 16 * (index ? 0.55 : 0.16), scaleEnd: radius / 16 * (index ? 1 : 0.65),
@@ -184,7 +186,7 @@ export class ExplosionGpuRenderer {
         tint: index ? 0xff7418 : 0xffe9ae,
       });
     });
-    this.spawnBurst(GpuVfxEffectId.ExplosionShockwave, 3, (spec, index) => {
+    this.spawnBurst(this.effectFor(request, 'Shockwave'), 3, (spec, index) => {
       this.configure(spec, { x, y, vx: 0, vy: 0, gravityFactor: 0,
         frame: GpuVfxFrameId.ExplosionRing, lifeMs: index === 0 ? 180 : (index === 1 ? 340 : 480),
         scaleStart: radius / 32 * (index === 0 ? 0.96 : 0.04), scaleEnd: radius / 32,
@@ -203,7 +205,7 @@ export class ExplosionGpuRenderer {
       });
     });
     // Bright radial spokes connect the source to the front; ember slivers break off the old membrane.
-    this.spawnBurst(GpuVfxEffectId.ExplosionSpark, Math.round(16 + strength * 32), (spec, index, count) => {
+    this.spawnBurst(this.effectFor(request, 'Spark'), Math.round(16 + strength * 32), (spec, index, count) => {
       const angle = index / count * TWO_PI + Math.random() * 0.12;
       const lifeMs = 400 + Math.random() * 260;
       const speed = radius * 0.7 / (lifeMs / 1000);
@@ -217,7 +219,7 @@ export class ExplosionGpuRenderer {
         tintBlendStart: 0.55,
       });
     });
-    this.spawnBurst(GpuVfxEffectId.ExplosionSpark, Math.round(12 + strength * 24), (spec, index, count) => {
+    this.spawnBurst(this.effectFor(request, 'Spark'), Math.round(12 + strength * 24), (spec, index, count) => {
       const angle = index / count * TWO_PI + Math.random() * 0.18;
       const speed = radius * (0.08 + Math.random() * 0.08);
       this.configure(spec, {
@@ -249,7 +251,7 @@ export class ExplosionGpuRenderer {
     const coreLife = (profile.family === 'pop' ? 180 : 280) * profile.lifeScale;
     const coreStart = Math.max(0.24, radius / 180) * profile.bodyScale;
     const coreEnd = Math.max(coreStart, radius / 50) * profile.bodyScale;
-    this.spawnBurst(GpuVfxEffectId.ExplosionBody, 2, (spec, index) => {
+    this.spawnBurst(this.effectFor(request, 'Core'), 2, (spec, index) => {
       this.configure(spec, {
         x,
         y,
@@ -272,7 +274,7 @@ export class ExplosionGpuRenderer {
 
     if (profile.family === 'pop') return;
     const bodyCount = this.resolveBodyCount(radius, profile);
-    this.spawnFireballs(GpuVfxEffectId.ExplosionBody, request, profile, bodyCount, 0.72);
+    this.spawnFireballs(this.effectFor(request, 'Body'), request, profile, bodyCount, 0.72);
   }
 
   private spawnFireballs(
@@ -314,7 +316,7 @@ export class ExplosionGpuRenderer {
     const { x, y, radius, palette } = request;
     const startScale = Math.max(0.12, radius * 0.2 / 32);
     const endScale = Math.max(startScale, radius * (profile.family === 'nuke' ? 1.35 : 1.12) / 32);
-    this.spawnBurst(GpuVfxEffectId.ExplosionShockwave, 1, (spec) => {
+    this.spawnBurst(this.effectFor(request, 'Shockwave'), 1, (spec) => {
       this.configure(spec, {
         x,
         y,
@@ -338,7 +340,7 @@ export class ExplosionGpuRenderer {
       ? GpuVfxEffectId.ExplosionTrainSpark
       : profile.family === 'lightning'
         ? GpuVfxEffectId.ExplosionLightningSpark
-        : GpuVfxEffectId.ExplosionSpark;
+        : this.effectFor(request, 'Spark');
     const tints = isThermalExplosionStyle(request.style)
       ? [palette.hot, palette.body, palette.outer]
       : [palette.core, palette.hot, palette.body, palette.outer];
@@ -371,7 +373,7 @@ export class ExplosionGpuRenderer {
     const count = this.resolveChunkCount(request.radius, profile);
     if (count <= 0) return;
     const { x, y, radius, palette } = request;
-    const effect = profile.upwardEmbers ? GpuVfxEffectId.ExplosionEmberUp : GpuVfxEffectId.ExplosionEmberDown;
+    const effect = profile.upwardEmbers ? GpuVfxEffectId.ExplosionEmberUp : this.effectFor(request, 'EmberDown');
     const gravityFactor = profile.upwardEmbers ? (profile.family === 'holy' ? 0.45 : 0.16) : 1;
     this.spawnBurst(effect, count, (spec) => {
       const angle = Phaser.Math.FloatBetween(0, TWO_PI);
@@ -401,14 +403,14 @@ export class ExplosionGpuRenderer {
     const profile = getCombatExplosionProfile(request.style);
     if (!profile) return;
     const count = Math.max(3, Math.ceil(this.resolveBodyCount(request.radius, profile) * 0.55));
-    this.spawnFireballs(GpuVfxEffectId.ExplosionSecondary, request, profile, count, 0.5);
+    this.spawnFireballs(this.effectFor(request, 'Secondary'), request, profile, count, 0.5);
     if (profile.family === 'nuke') this.spawnNukePlume(request, profile);
   }
 
   private spawnCascade(request: ExplosionCombatVisualRequest): void {
     const { x, y, radius, palette } = request;
     const count = Math.max(8, Math.ceil(radius / 7));
-    this.spawnBurst(GpuVfxEffectId.ExplosionCascade, count, (spec) => {
+    this.spawnBurst(this.effectFor(request, 'Cascade'), count, (spec) => {
       const angle = Phaser.Math.FloatBetween(0, TWO_PI);
       const speed = Phaser.Math.FloatBetween(radius * 0.45, radius * 1.65);
       this.configure(spec, {
@@ -436,7 +438,7 @@ export class ExplosionGpuRenderer {
     if (!profile || profile.smokeScale <= 0) return;
     const { x, y, radius, palette } = request;
     const count = this.resolveSmokeCount(radius, profile);
-    this.spawnBurst(GpuVfxEffectId.ExplosionSmoke, count, (spec) => {
+    this.spawnBurst(this.effectFor(request, 'Smoke'), count, (spec) => {
       const point = this.randomPointInCircle(radius * 0.3);
       this.configure(spec, {
         x: x + point.x,
@@ -657,10 +659,10 @@ export class ExplosionGpuRenderer {
     const profile = getCombatExplosionProfile(stage.request.style);
     if (!profile || !this.gpuVfx) return;
     const effect = stage.kind === 'smoke'
-      ? GpuVfxEffectId.ExplosionSmoke
+      ? this.effectFor(stage.request, 'Smoke')
       : stage.kind === 'cascade'
-        ? GpuVfxEffectId.ExplosionCascade
-        : GpuVfxEffectId.ExplosionSecondary;
+        ? this.effectFor(stage.request, 'Cascade')
+        : this.effectFor(stage.request, 'Secondary');
     const count = stage.kind === 'smoke'
       ? this.resolveSmokeCount(stage.request.radius, profile)
       : stage.kind === 'cascade'
@@ -692,6 +694,10 @@ export class ExplosionGpuRenderer {
     if (profile.family === 'nuke') return clamp(Math.ceil(radius / 4), 48, 160);
     if (profile.family === 'train') return clamp(Math.round(radius / 6), 8, 36);
     return clamp(Math.round(radius / 10 * profile.smokeScale), 3, 20);
+  }
+
+  private effectFor(request: ExplosionCombatVisualRequest, part: keyof typeof EXPLOSION_LAYER_EFFECTS.ordinary): GpuVfxEffectIdType {
+    return EXPLOSION_LAYER_EFFECTS[getCombatExplosionProfile(request.style)!.layering][part];
   }
 
   private spawnBurst(

@@ -112,7 +112,7 @@ Aufnahme ab. Nach Scene-Teardown wird die globale API entfernt und wartende Aufr
 | `options` | `values`: `timeOfDay`, `freezeMission`, `hideTutorial`, `suppressWaves`, `refillHp`, `refillAdrenaline`, `playerFreeForAll`, `hideAim` |
 | `temporaryUtility` | `utility` (z. B. `NUKE`, `BFG`, `HOLY_HAND_GRENADE`), optional `chargeMs`; nutzt ein Pickup-Utility auf das Ziel |
 | `train` | optional `invulnerable`; lässt auf Maps mit Zugstrecke sofort einen Zug einfahren |
-| `trainShowcase` | optional `follow` (Standard true), `zoom` (Standard 0.8); nutzt eine Zugmap oder startet Map 7/Seed 12345, setzt den Beobachter sicher abseits und die Kamera ans Gleis; `status().train` meldet Position/Geschwindigkeit/Sichtbarkeit/Gleis-Bounds in Weltpixeln |
+| `trainShowcase` | Standard `park:'center'`: spawnt stehend mit Zugmitte in Gleismitte; Kamera umfasst Zugbounds und Effektraum (`zoom` ist Obergrenze). Optional `move:true` (60 Weltpx/s), `speedPxPerSec:0..600`, `follow` (true). `park:'entry'` erhaelt die normale Einfahrt. `whenReady()` wartet auf bestaetigten Start. `trainExplosion` sprengt den geparkten Zug sofort. `status().train`: `devPassState:'parked'`, `speed:0`, `visible`, `fullyVisible`, `cameraBounds` sowie Owner-/Startdiagnose. Wiederholte Aufrufe nutzen die Zugmap; Live-`options` erhalten den Zug. |
 | `trainExplosion` | optional `whenVisible: true`: wartet auf Einfahrt, zoomt f?r den vollst?ndigen Zug samt Tr?mmerraum heraus und fixiert die Kamera auf der Hauptdetonation; ohne Option sofortige Z?ndung; `stop`/Szenariowechsel verwirft wartende Z?ndungen, `speed`/`step` gelten weiterhin |
 | `bot` | `index`, optional `place` + `gridX`/`gridY`, `move` {`dx`, `dy`, `durationMs`}, `aim` {`gridX`, `gridY`} oder `null`, `fire` (`weapon1`/`weapon2`/`null`), `burrow` (`enter`/`exit`), `temporaryUtility` + `chargeMs` |
 
@@ -307,3 +307,6 @@ Rezepte mit entfernten Lichtvergleichsfeldern oder Strahlen-/Bandparametern werd
   Sie werden durch Ausrüstung, Upgrades und echte Kampfaktionen erzeugt.
 
 Browserprüfung bleibt gemäß `AGENTS.md` opt-in. Diese Seite erteilt keine pauschale Erlaubnis für Browserstarts in anderen Aufgaben.
+
+Zug-Abnahme train8: `dev.run({action:"trainShowcase",park:"center",focus:"center",zoom:2.2}); await dev.whenReady();` dann `dev.run({action:"trainExplosion"});` (Zug sofort weg, Splitterzerfall vor der Landung; Rauch/Glut ca. 15 s, kein liegendes Wrack).
+Fahrt: `dev.run({action:"trainShowcase",focus:"center",zoom:2.2,move:true,speedPxPerSec:120});` – Nacht über `options.values.timeOfDay:0`, Tag `720`; Warmlicht benötigt den TrainVfxPorts-Lichtanschluss der World-Komposition.

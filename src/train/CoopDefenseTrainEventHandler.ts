@@ -4,7 +4,7 @@ import type {
   CoopDefenseMapEventHandler,
 } from '../systems/CoopDefenseMapEventDirector';
 import type { CombatTrainSegmentPort } from '../combat/CombatCapabilities';
-import type { TrainManager } from './TrainManager';
+import type { TrainManager, TrainDevPassOptions } from './TrainManager';
 import type { TrainEventConfig } from '../types';
 
 /**
@@ -33,6 +33,16 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
 
   private scheduled: ScheduledTrainOccurrence | null = null;
   private trainSpawned = false;
+  private devPass = false;
+  private devState: 'idle' | 'running' | 'parked' | 'exited' | 'reset' = 'idle';
+  private devStartCount = 0;
+  private devSimulatedMs = 0;
+  private devStartReason: string | null = null;
+
+  getDevPassStatus() {
+    return { state: this.devPass && this.trainManager.isDestroyed() ? 'destroyed' as const : this.devState,
+      startCount: this.devStartCount, simulatedMs: this.devSimulatedMs, lastStartReason: this.devStartReason };
+  }
   private readonly initialDirection: 1 | -1;
   private nextDirection: 1 | -1;
   private roundTimeMs = 0;
@@ -50,13 +60,16 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
       const finished = this.scheduled;
       if (!finished || !this.trainSpawned) return;
 
+      const wasDevPass = this.devPass;
+      if (wasDevPass) this.devState = 'exited';
+      this.devPass = false;
       this.trainSpawned = false;
       this.scheduled = null;
       this.trainEvents.clear();
       this.nextDirection = finished.direction === 1 ? -1 : 1;
       trainManager.prepareReentry(this.nextDirection);
       const completedAtMs = this.roundTimeMs;
-      this.onCycleFinished?.({
+      if (!wasDevPass) this.onCycleFinished?.({
         eventId: finished.eventId,
         occurrence: finished.occurrence,
         completedAtMs,
@@ -101,7 +114,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
   }
 
   hostUpdate(deltaMs: number, countdownActive: boolean, roundTimeMs: number): void {
-    if (countdownActive) return;
+    if (countdownActive || this.devPass) return;
     this.roundTimeMs = roundTimeMs;
     if (!this.scheduled) return;
     if (!this.trainSpawned && Date.now() >= this.scheduled.spawnAt) {
@@ -112,7 +125,38 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
     if (this.trainSpawned) this.trainManager.update(deltaMs);
   }
 
+  /** Isolated dev host: immediate pass, owned by scenario delta rather than the map clock. */
+  startDevPass(reason = 'train', options?: TrainDevPassOptions): void {
+    this.devPass = true;
+    this.devState = 'running';
+    this.devStartCount++;
+    this.devSimulatedMs = 0;
+    this.devStartReason = reason;
+    this.trainSpawned = true;
+    this.nextDirection = this.initialDirection;
+    this.roundTimeMs = 0;
+    const spawnAt = Date.now();
+    this.scheduled = { eventId: 'dev-scenario-train', occurrence: 1,
+      spawnAt, direction: this.initialDirection };
+    this.trainManager.prepareReentry(this.initialDirection);
+    this.trainManager.spawn();
+    if (options) this.trainManager.configureDevPass(options);
+    this.devState = this.trainManager.getCurrentSpeed() === 0 ? 'parked' : 'running';
+    this.combatSystem.setTrainSegments(this.trainManager.getSegObjects());
+    this.trainEvents.publish({ trackX: this.trainManager.getTrackX(),
+      direction: this.initialDirection, spawnAt });
+  }
+
+  updateDevPass(deltaMs: number): void {
+    if (!this.devPass) return;
+    const delta = Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+    this.devSimulatedMs += delta;
+    this.trainManager.update(delta);
+  }
+
   reset(): void {
+    this.devState = 'reset';
+    this.devPass = false;
     this.scheduled = null;
     this.trainSpawned = false;
     this.roundTimeMs = 0;

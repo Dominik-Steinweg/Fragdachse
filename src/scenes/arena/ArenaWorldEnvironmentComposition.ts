@@ -140,6 +140,7 @@ export function composeWorldTrain(
     presentationRequired: presentation,
     gameAudioSystem: ctx.gameAudioSystem,
     vfx: presentation ? { gpu: renderers.gpuVfx, camera: ctx.visualFeedback.camera,
+      lighting: renderers.lighting,
       sampleGround: (x, y) => renderers.movement.sampleGroundColor(x, y) } : undefined,
     network: {
       clock: {

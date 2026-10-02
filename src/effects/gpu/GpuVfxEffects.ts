@@ -97,6 +97,14 @@ export const GpuVfxEffectId = {
   TrainHeat: 83,
   TrainDebris: 84,
   TrainResidue: 85,
+  ExplosionLowBody: 86,
+  ExplosionLowSmoke: 87,
+  ExplosionLowSecondary: 88,
+  ExplosionLowCore: 89,
+  ExplosionLowSpark: 90,
+  ExplosionLowShockwave: 91,
+  ExplosionLowCascade: 92,
+  ExplosionLowEmberDown: 93,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -639,4 +647,74 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.ExplosionChunk, importance: 'standard', release: 'kill-with-source' },
   { id: GpuVfxEffectId.TrainResidue, label: 'train.residue', lane: GpuVfxLaneId.TrainGround,
     frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'kill-with-source' },
+  {
+    id: GpuVfxEffectId.ExplosionLowBody,
+    label: 'explosion.low-body',
+    lane: GpuVfxLaneId.ExplosionLowBody,
+    frame: GpuVfxFrameId.ExplosionFireballA,
+    importance: 'critical',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.ExplosionLowSmoke,
+    label: 'explosion.low-smoke',
+    lane: GpuVfxLaneId.ExplosionLowSmoke,
+    frame: GpuVfxFrameId.ExplosionSmoke,
+    importance: 'decorative',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.ExplosionLowSecondary,
+    label: 'explosion.low-secondary',
+    lane: GpuVfxLaneId.ExplosionLowBody,
+    frame: GpuVfxFrameId.ExplosionFireballB,
+    importance: 'standard',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.ExplosionLowCore,
+    label: 'explosion.low-core',
+    lane: GpuVfxLaneId.ExplosionLowCore,
+    frame: GpuVfxFrameId.ExplosionCore,
+    importance: 'critical',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.ExplosionLowSpark,
+    label: 'explosion.low-spark',
+    lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionSpark,
+    importance: 'standard',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.ExplosionLowShockwave,
+    label: 'explosion.low-shockwave',
+    lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionRing,
+    importance: 'critical',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.ExplosionLowCascade,
+    label: 'explosion.low-cascade',
+    lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionSpark,
+    importance: 'standard',
+    release: 'linger',
+  },
+  {
+    id: GpuVfxEffectId.ExplosionLowEmberDown,
+    label: 'explosion.low-emberdown',
+    lane: GpuVfxLaneId.ExplosionLowBody,
+    frame: GpuVfxFrameId.ExplosionEmber,
+    importance: 'standard',
+    release: 'linger',
+  },
 ];
+
+/** Definition-level routing. No particle chooses height by radius, random state or position. */
+export const EXPLOSION_LAYER_EFFECTS = {
+  ordinary: { Body: GpuVfxEffectId.ExplosionLowBody, Smoke: GpuVfxEffectId.ExplosionLowSmoke, Secondary: GpuVfxEffectId.ExplosionLowSecondary, Core: GpuVfxEffectId.ExplosionLowCore, Spark: GpuVfxEffectId.ExplosionLowSpark, Shockwave: GpuVfxEffectId.ExplosionLowShockwave, Cascade: GpuVfxEffectId.ExplosionLowCascade, EmberDown: GpuVfxEffectId.ExplosionLowEmberDown },
+  legacy: { Body: GpuVfxEffectId.ExplosionBody, Smoke: GpuVfxEffectId.ExplosionSmoke, Secondary: GpuVfxEffectId.ExplosionSecondary, Core: GpuVfxEffectId.ExplosionBody, Spark: GpuVfxEffectId.ExplosionSpark, Shockwave: GpuVfxEffectId.ExplosionShockwave, Cascade: GpuVfxEffectId.ExplosionCascade, EmberDown: GpuVfxEffectId.ExplosionEmberDown },
+} as const;

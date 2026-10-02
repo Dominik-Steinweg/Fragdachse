@@ -14,6 +14,9 @@ import {
 
 // ── Öffentliche Ergebnis-Typen ────────────────────────────────────────────────
 
+/** Isolated dev fixture; omitted options retain the normal authored train pass. */
+export interface TrainDevPassOptions { park: 'center' | 'entry'; speedPxPerSec?: number; focus?: 'loco' | 'center' | 'tail' }
+
 export interface TrainDestroyResult {
   /** PlayerId des letzten Treffers (null wenn unbekannt) */
   lastHitterId:      string | null;
@@ -49,6 +52,7 @@ export interface TrainEnemyHitResult {
 export class TrainManager {
   // ── Zustand ───────────────────────────────────────────────────────────────
   private hp: number  = TRAIN.HP_MAX;
+  private devSpeedPxPerSec: number | null = null;
   private alive       = false;
   private active      = false;   // true nach spawn(), false nach Verlassen der Arena / Zerstörung
   private destroyed   = false;
@@ -137,7 +141,7 @@ export class TrainManager {
 
   getCurrentSpeed(now = Date.now()): number {
     if (!this.active || !this.alive || this.destroyed) return 0;
-    return TRAIN.SPEED * this.getTimeBubbleSpeedFactor(now);
+    return (this.devSpeedPxPerSec ?? TRAIN.SPEED) * this.getTimeBubbleSpeedFactor(now);
   }
 
   getCrossingHazardWindowAt(
@@ -189,6 +193,7 @@ export class TrainManager {
 
   /** Startet den Zug (Spawn-Zeitpunkt erreicht). */
   spawn(): void {
+    this.devSpeedPxPerSec = null;
     // hp wird absichtlich NICHT zurückgesetzt – bleibt über Durchfahrten erhalten.
     // Initialwert kommt aus dem Feldinitialisier (HP_MAX) bzw. prepareReentry() lässt ihn stehen.
     this.alive     = true;
@@ -239,8 +244,7 @@ export class TrainManager {
   update(delta: number): void {
     if (!this.active || this.destroyed) return;
 
-    const speedFactor = this.getTimeBubbleSpeedFactor();
-    this.locoY += this.direction * TRAIN.SPEED * speedFactor * (delta / 1000);
+    this.locoY += this.direction * this.getCurrentSpeed() * (delta / 1000);
     this.updateSegmentPositions();
     this.group.refresh();
     this.checkPlayerOverlaps();
@@ -420,6 +424,7 @@ export class TrainManager {
    * @param newDirection - neue Fahrtrichtung (alternierend)
    */
   prepareReentry(newDirection: 1 | -1): void {
+    this.devSpeedPxPerSec = null;
     this.direction  = newDirection;
     this.alive      = false;
     this.active     = false;
@@ -584,6 +589,22 @@ export class TrainManager {
       totalHeight:      this.totalHeight(),
       segmentPositions: ys.map(y => ({ x: this.trackX, y })),
     });
+  }
+
+  /** Place the complete consist by its bounds, not by the locomotive's pivot. */
+  configureDevPass(options: TrainDevPassOptions): void {
+    if (options.speedPxPerSec !== undefined && (!Number.isFinite(options.speedPxPerSec)
+      || options.speedPxPerSec < 0 || options.speedPxPerSec > TRAIN.SPEED)) throw new Error('Invalid dev train speed');
+    this.devSpeedPxPerSec = options.speedPxPerSec ?? (options.park === 'center' ? 0 : null);
+    if (options.park === 'center') {
+      const span = this.getSpanEdges(this.locoY);
+      const center = (this.worldMetrics.offsetY + this.worldMetrics.maxY) / 2;
+      const anchor = options.focus === 'loco' ? this.locoY : options.focus === 'tail'
+        ? this.segCenterYs()[TRAIN.WAGON_COUNT] : (span.frontEdge + span.tailEdge) / 2;
+      this.locoY += center - anchor;
+      this.updateSegmentPositions();
+      this.group.refresh();
+    }
   }
 
   /** Dev scenario fixtures only: restores the full integrity of a living train. */

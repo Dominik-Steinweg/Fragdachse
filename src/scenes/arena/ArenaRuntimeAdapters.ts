@@ -1,6 +1,7 @@
 import type { PlayerManager } from '../../entities/PlayerManager';
 import type { TrainShowcaseState } from '../../dev/scenario/trainShowcase';
 import { TRAIN } from '../../train/TrainConfig';
+import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { planTrainDestruction } from '../../effects/train/TrainVfxModel';
 import { getCoopDefenseMapConfig, resolveCoopDefenseMapEncounterConfigs } from '../../config/coopDefenseMaps';
 import type { NavigationLabWorldPort } from '../../debug/navigationLab/NavigationLabPort';
@@ -9,7 +10,6 @@ import { bridge } from '../../network/bridge';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
 import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
 import type { UtilityConfig } from '../../loadout/LoadoutConfig';
-import type { ResolvedCoopDefenseMapEventConfig } from '../../config/coopDefenseMapAuthoring';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { ArenaInputPersistentBasePorts, ArenaInputPlacementPorts } from './ArenaInputBindings';
@@ -41,6 +41,8 @@ export function createArenaFlowFieldDebugPort(service: EnemyFlowFieldService): E
 
 /** Dev-only mutations resolve activity-owned managers afresh on every command. */
 export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, players: PlayerManager) {
+  const trainOwners = new WeakMap<object, number>();
+  let nextTrainOwnerId = 1;
   // Scripted bot peers are the only allowed additional participants of the isolated host.
   const requireLocal = () => {
     if (!isDevScenarioMode() || !bridge.isHost() || bridge.getConnectedPlayers()
@@ -111,7 +113,10 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       const segments = train.getSegmentPositions(), heights = train.segHeights();
       const x = train.getTrackX();
       const blast = planTrainDestruction(segments, metrics.offsetY, metrics.maxY)[0];
+      const handler = flow.getWorldTrainRuntime()?.getActivityTrainHandler();
+      if (handler && !trainOwners.has(handler)) trainOwners.set(handler, nextTrainOwnerId++);
       return { state: train.getNetSnapshot(), speed: train.getCurrentSpeed(),
+        ...(handler ? { devPass: { ownerId: trainOwners.get(handler)!, ...handler.getDevPassStatus() } } : {}),
         bounds: { left: x - TRAIN.VISUAL_WIDTH / 2, right: x + TRAIN.VISUAL_WIDTH / 2,
           top: Math.min(...segments.map((p, i) => p.y - heights[i] / 2)),
           bottom: Math.max(...segments.map((p, i) => p.y + heights[i] / 2)) },
@@ -120,12 +125,12 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
         explosionCenter: blast ? { x: blast.x, y: blast.y } : null };
     },
     /** Runs one train pass now, independent of authored map events and suppressed encounters. */
-    startTrain(): boolean {
+    startTrain(reason = 'train', options?: TrainDevPassOptions): boolean {
       requireLocal();
       const handler = flow.getWorldTrainRuntime()?.getActivityTrainHandler();
       if (!handler) return false;
-      handler.reset();
-      return handler.schedule({ id: 'dev-scenario-train', type: 'train', start: { type: 'time', atMs: 0 } } as ResolvedCoopDefenseMapEventConfig, 1, 0, 0);
+      handler.startDevPass(reason, options);
+      return true;
     },
     /** Reproduce the normal authoritative destruction, including drops and replicated VFX. */
     destroyTrain(): boolean {
@@ -136,12 +141,10 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       runtime.applyDamage(train.readIntegrity().integrity, '__train__');
       return train.isDestroyed();
     },
-    /** Map events normally drive the train; they are paused while encounters are suppressed or the mission is frozen. */
+    /** Explicit dev passes use scenario delta, regardless of encounter/mission clock suppression. */
     updateTrain(deltaMs: number, invulnerable = false): void {
       if (invulnerable) flow.getWorldTrainRuntime()?.getCurrentTrain()?.restoreIntegrity();
-      const runtime = flow.getCoopMissionRuntime();
-      if (!runtime || !(runtime.analysisScenarioActive || runtime.scenarioMissionFrozen)) return;
-      flow.getWorldTrainRuntime()?.getActivityTrainHandler()?.hostUpdate(deltaMs, false, 0);
+      flow.getWorldTrainRuntime()?.getActivityTrainHandler()?.updateDevPass(deltaMs);
       if (invulnerable) flow.getWorldTrainRuntime()?.getCurrentTrain()?.restoreIntegrity();
     },
     setOptions(freezeMission: boolean, hideTutorial: boolean): void {

@@ -6,6 +6,7 @@ import type { ConstructionId, WeaponSlot } from '../../types';
 import { POWERUP_DEFS } from '../../powerups/PowerUpConfig';
 import { enemyReadabilityScenario } from './enemyReadabilityRecipe';
 import { runDepthReferenceScene } from './depthReferenceScene';
+import { FOG_ROCK_LIGHTING } from '../../effects/groundFog/FogRockLighting';
 
 export type ScenarioResult = { ok: true; status: Record<string, unknown>; path?: string; url?: string }
   | { ok: false; error: string; status: Record<string, unknown> };
@@ -58,7 +59,22 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if(c.composite!==undefined&&!['normal','material','neutral','neutralInline'].includes(c.composite as string)) throw new Error('renderDebug.composite: normal, material, neutral oder neutralInline erwartet.');
       if(c.probe!==undefined)boolean(c.probe);
       if(c.characterShadowSolid!==undefined)boolean(c.characterShadowSolid);
-      if(c.characterShadowSolid!==undefined)controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,c.probe===true,c.characterShadowSolid as boolean);
+      if(c.characterMaterialView!==undefined&&!['material','albedo','normal','lighting'].includes(c.characterMaterialView as string))throw new Error('characterMaterialView: material, albedo, normal oder lighting erwartet.');
+      if(c.rockAerialPerspective!==undefined)boolean(c.rockAerialPerspective);
+      if(c.fogRockContactStrength!==undefined||c.fogRockSunShadowStrength!==undefined||c.lobbyTimeOfDay!==undefined
+        ||c.rockAerialPerspective!==undefined||c.rockAerialPerspectiveStrength!==undefined) {
+        const fog = {
+          fogRockContactStrength:c.fogRockContactStrength===undefined?undefined:number(c.fogRockContactStrength,0,FOG_ROCK_LIGHTING.maxStrength),
+          fogRockSunShadowStrength:c.fogRockSunShadowStrength===undefined?undefined:number(c.fogRockSunShadowStrength,0,FOG_ROCK_LIGHTING.maxStrength),
+          lobbyTimeOfDay:c.lobbyTimeOfDay===undefined?undefined:number(c.lobbyTimeOfDay,0,1439),
+          ...(c.rockAerialPerspective===undefined?{}:{rockAerialPerspective:c.rockAerialPerspective as boolean}),
+          ...(c.rockAerialPerspectiveStrength===undefined?{}:{rockAerialPerspectiveStrength:number(c.rockAerialPerspectiveStrength,0,FOG_ROCK_LIGHTING.maxStrength)}),
+        };
+        controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,
+          c.probe===true,c.characterShadowSolid===true,(c.characterMaterialView??'material') as import('../../effects/CharacterMaterialModel').CharacterMaterialView,fog);
+      }
+      else if(c.characterMaterialView!==undefined)controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,c.probe===true,c.characterShadowSolid===true,c.characterMaterialView as import('../../effects/CharacterMaterialModel').CharacterMaterialView);
+      else if(c.characterShadowSolid!==undefined)controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,c.probe===true,c.characterShadowSolid as boolean);
       else if(c.probe===true)controller.setRenderDebug(c.disable as string[],(c.composite??'normal') as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView,true);
       else if(c.composite===undefined)controller.setRenderDebug(c.disable as string[]);
       else controller.setRenderDebug(c.disable as string[],c.composite as import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView);
@@ -82,8 +98,16 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     case 'fire': controller.fire(slot(c.slot), false); break;
     case 'utility': controller.utility(); break;
     case 'train': controller.startTrain(c.invulnerable === undefined ? false : boolean(c.invulnerable)); break;
-    case 'trainShowcase':
-      controller.startTrainShowcase(c.follow === undefined ? true : boolean(c.follow), c.zoom === undefined ? .8 : number(c.zoom, .1, 8)); break;
+    case 'trainShowcase': {
+      const focus = c.focus ?? 'overview';
+      if (typeof focus !== 'string' || !['overview', 'loco', 'center', 'tail'].includes(focus)) throw new Error('Invalid train focus');
+      const park = c.park ?? 'center';
+      if (park !== 'center' && park !== 'entry') throw new Error('park: center or entry expected');
+      const move = c.move === undefined ? undefined : boolean(c.move);
+      const requestedSpeed = c.speedPxPerSec === undefined ? undefined : number(c.speedPxPerSec, 0, 600);
+      const speedPxPerSec = move === false ? 0 : requestedSpeed ?? (move ? 60 : park === 'center' ? 0 : undefined);
+      controller.startTrainShowcase(c.follow === undefined ? true : boolean(c.follow), c.zoom === undefined ? .8 : number(c.zoom, .1, 8), { park, speedPxPerSec }, focus as import('./trainShowcase').TrainShowcaseFocus); break;
+    }
     case 'trainExplosion':
       controller.destroyTrain(c.whenVisible === undefined ? false : boolean(c.whenVisible)); break;
     case 'temporaryUtility': {

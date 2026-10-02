@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
 
 import { GPU_VFX_ATLAS, GpuVfxFrameId } from '../src/effects/gpu/GpuVfxAtlas';
-import { GPU_VFX_EFFECTS } from '../src/effects/gpu/GpuVfxEffects';
+import { GPU_VFX_EFFECTS, EXPLOSION_LAYER_EFFECTS } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxEase } from '../src/effects/gpu/GpuVfxEase';
 import { GPU_VFX_DEPTH_EPSILON, GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { DEPTH } from '../src/config';
@@ -282,4 +282,25 @@ describe('gpu vfx render lanes', () => {
     expect(new Set(GPU_VFX_EFFECTS.map((effect) => effect.label)).size).toBe(GPU_VFX_EFFECTS.length);
     GPU_VFX_EFFECTS.forEach((effect, index) => expect(effect.id).toBe(index));
   });
+  it('routes ordinary parts by definition, keeps material/cores ordered, and retains large signatures', () => {
+    const laneFor = (id: number) => GPU_VFX_LANES[GPU_VFX_EFFECTS[id].lane];
+    const low = EXPLOSION_LAYER_EFFECTS.ordinary, high = EXPLOSION_LAYER_EFFECTS.legacy;
+    for (const part of ['Body', 'Smoke', 'Secondary', 'EmberDown'] as const) {
+      expect(laneFor(low[part]).depth).toBeGreaterThan(DEPTH.PLAYERS);
+      expect(laneFor(low[part]).depth).toBeLessThan(DEPTH.PROJECTILES - .5);
+      expect(laneFor(low[part]).blendMode).toBe(laneFor(high[part]).blendMode);
+    }
+    for (const part of ['Spark', 'Shockwave', 'Cascade'] as const) {
+      expect(laneFor(low[part]).depth).toBeGreaterThan(19.501);
+      expect(laneFor(low[part]).depth).toBeLessThan(DEPTH.CANOPY);
+      expect(laneFor(low[part]).blendMode).toBe(laneFor(high[part]).blendMode);
+    }
+    expect(laneFor(low.Core).depth).toBeGreaterThan(DEPTH.CANOPY);
+    expect(laneFor(low.Core).blendMode).toBe(laneFor(high.Core).blendMode);
+    expect(laneFor(low.Smoke).depth).toBeLessThan(laneFor(low.Body).depth);
+    expect(laneFor(low.Body).depth).toBeLessThan(laneFor(low.Core).depth);
+    for (const part of ['Body', 'Smoke', 'Core'] as const) expect(laneFor(high[part]).depth).toBeGreaterThan(DEPTH.CANOPY);
+  });
+
 });
+

@@ -1,4 +1,4 @@
-# Tiefenstaffelung: R0-Vertrag und Referenzen
+# Tiefenstaffelung: Vertrag, Zielbild und P1
 
 R0 beschreibt Ist-Zustand und Zielmodell aus `build/depth-analysis.md`, Kapitel 7–8.
 Es ändert keine Depth, Blend-Faktoren, Lichtantwort oder Renderer-Lanes. Optikänderungen ab R1
@@ -15,7 +15,7 @@ AST-Lesehilfe `tests/depthSource.cjs`.
 `height: ground | body | high` und `lighting: material | emissive | mixed` beschreiben die
 beabsichtigte Kategorie, ausschließlich als Metadaten an Definitionen. Kein Spawn liest sie;
 ein Test verbietet Produktionsimports. Ist-Depth/Blend/Kamera/Profile stehen separat daneben.
-Der Katalog erfasst 40 GPU-Lanes, 86 GPU-Effektdefinitionen und 482 CPU-Depth-Selektoren aus
+Der Katalog erfasst 44 GPU-Lanes, 94 GPU-Effektdefinitionen und 482 CPU-Depth-Selektoren aus
 131 Ownern. GPU-Definitionen referenzieren ihre Lanes einschließlich additiver Varianten.
 CPU-Ausdrücke werden gegen aktuelle Konstanten aufgelöst; `CPU_SOURCE_CONTRACTS.bindings`
 nennt explizite Eingabedomänen, keine vollständige Simulation beliebiger Laufzeitargumente.
@@ -38,18 +38,18 @@ Profile folgen der Zeichenreihenfolge, sind keine Receiver-Masken. Eigene Materi
 kann zusätzlich bestehen. 14,5 ist ausdrücklich K/L, 20 E/H: Gleichstände hängen an der
 Einfügereihenfolge. 19,5/19,501 sind reservierte Lightmap-/Bleed-Passgrenzen, markiert als L/E.
 
-Die Allowlist enthält **487 Einträge für 436 Definitionen/Selektoren**, keine 487 unabhängigen
-Fehler. Lanes und Effektdefinitionen können denselben visuellen Befund mehrfach repräsentieren.
+Die Allowlist beschreibt bekannte Abweichungen; der aktuelle Umfang folgt aus
+`EffectLayerContract.exceptions.ts`, nicht aus einer festen Fehlerzahl. Lanes und Effektdefinitionen können denselben visuellen Befund mehrfach repräsentieren.
 `emission-under-lightmap` ist ein offener Balance-/Materialentscheid, kein automatischer Fehler.
 
 | ID | Befund aus Kapitel 7 | Einträge |
 |---|---|---:|
-| D01 | Blut/Todesmaterial über Kronen/Licht | 19 |
-| D02 | gewöhnliche Explosionskörper/-rauch über Kronen | 33 |
+| D01 | nach P1 nur noch Bodenstain-Zuordnung (nachgelagert) | 1 |
+| D02 | gewöhnliche Explosionskörper/-rauch über Kronen | 32 |
 | D03 | Boden-/Körpermotiv im Vordergrund | 74 |
 | D04 | Blutstain auf Gegnerdepth | 1 |
-| D05 | Stink-Bodenanteil über Figuren | 1 |
-| D06 | Material-/Projektilfamilie außerhalb Sonnenpass | 104 |
+| D05 | Stink-Bodenanteil: durch P1 behoben | 0 |
+| D06 | Material-/Projektilfamilie außerhalb Sonnenpass | 103 |
 | D07 | Gleichstand Sonnenpass 14,5 | 1 |
 | D08 | Gleichstand Kronen 20 | 3 |
 | D10 | uneinheitlicher Emissionsvertrag | 238 |
@@ -61,7 +61,7 @@ veraltete Ausnahmen sowie Änderungen an Definitionen, Depth-/Blend-/Kameraselek
 Spätere Runden aktualisieren die konkrete Ist-Zuordnung und entfernen behobene Ausnahmen.
 Den Katalog nicht automatisch regenerieren, um einen fehlgeschlagenen Test zu reparieren.
 
-## Zielmodell für spätere Runden
+## Zielbild – noch nicht vollständig umgesetzt
 
 | Motiv | Zielband / Regel |
 |---|---|
@@ -87,7 +87,63 @@ Fog-Impulse sind unabhängig von Depth. Gefahrenlesbarkeit später durch begrenz
 Kronenöffnung oder minimale Konturen lösen. Neue Gleichstände an 14,5/20 vermeiden;
 R0 lässt die vorhandenen ausdrücklich unverändert.
 
-## Referenzszenen und Aufnahme
+## P1: freigegebene Teilumsetzung
+
+Das Zielbild ist keine Freigabe für weitere Umbauten. P1 behandelt ausschließlich Blut-/Todesmaterial,
+gewöhnliche thermische Explosionen und den Stink-Bodensatz. Die fünf Regeln des Zielbilds sind:
+
+1. Höhe (`ground/body/high`) und Lichtart (`material/emissive/mixed`) getrennt an Definitionen beschreiben.
+2. Gemischte Motive anhand vorhandener Material-/Glowbestandteile trennen; NORMAL kann selbstleuchtend sein.
+3. Höhe allein befreit Material nicht von Beleuchtung; hohe Rauchkörper brauchen eine spätere Materialentscheidung.
+4. Nur begründete Körper werfen Schatten, keine Schatten pro Micro-Partikel; Rauchabsorption ist separat.
+5. Gameplay-Lesbarkeit lokal lösen: später begrenzte Kronenöffnung bzw. kleine Warnkonturen statt ganzer Vordergrundmotive.
+
+| P1-Bestandteil | bisher → jetzt | Licht / Verdeckung |
+|---|---|---|
+| GoreNormal: Blut, Fragmente, Körner/Staub, MG-Blutung | 24,9 → 13,2 | Material, Sonne/Wolken + Lightmap, unter Krone |
+| GoreAdd: Todesglows | 25,05 → 19,65 | ADD, nach Lightmap, unter Krone |
+| gewöhnlicher Körper / Sekundärballen / kalte Brocken | 25 → 13,4 | NORMAL-Material, Sonne + Lightmap |
+| gewöhnlicher niedriger Rauch | 24,96 → 13,36 | NORMAL-Material, vor Körper, Sonne + Lightmap |
+| bereits vorhandener heißer GPU-Kern | 25 → 20,2 | NORMAL bleibt; kurzer Einschlag-Lichtkern über Krone |
+| gewöhnliche Funken / Druckring / Kaskadenfunken | 25 / 25,1 / 25,12 → 19,6 | ADD bleibt; nach Lightmap, unter Krone |
+| gewöhnlicher CPU-Blitz | 26 → 20,25 | NORMAL bleibt; kurzer Einschlag-Blitz über Krone |
+| Stink Ground-MUL/A | 16,88 → 9,3 | unter Schatten/Figuren/Projektilen; Volumen bleibt 17+ |
+
+`ExplosionVisualProfiles.layering` wählt feste Einträge aus `EXPLOSION_LAYER_EFFECTS`.
+`default`, HE-Splitter, Rakete, Mini-Rakete und Kaskade nutzen `ordinary`; Nuke/void_nuke, Zug
+und besondere Energie-/Holy-/Lightning-Signaturen behalten `legacy`. Die bestehenden hohen Lanes
+und deren Allowlist bleiben deshalb bestehen: D02 umfasst im R0-Katalog auch Sonderfamilien.
+Der aufsteigende Todesgeist bleibt ausdrücklich hoch/emissiv auf 25,1.
+
+Vier zusätzliche physische Render-Lanes sichern NORMAL/ADD sowie Rauch-vor-Körper und
+Material-vor-Licht. Keine neuen Motive, Partikelspawns, Shader oder Lifetime-Verlängerungen.
+Die separaten Explosionsbudgets verdrängen keine Todesglows. Kosten: bis zu vier zusätzliche aktive
+GPU-Layer sowie deren reservierte Memberpuffer. Die alten Großeffektbudgets bleiben unverändert.
+
+21 erledigte Ausnahme-Einträge wurden mit P1/P1b entfernt, keine hinzugefügt. Der CPU-Blitz ist als Emission
+klassifiziert, auch mit NORMAL-Blend. R0 zählt verbleibende Abweichungen weiterhin für sämtliche
+Legacy-Varianten. P1 ist deshalb kein pauschales Schließen aller Einträge der Befundfamilie D02.
+
+**Nachgelagert, ausdrücklich unverändert:** Blutstain 9,95 (D04 und verbleibender D01-Eintrag),
+sonstige Boden-/Nahkampf-/Portalvordergründe (D03), Projektile (D06), Gleichstände 14,5/20 (D07/D08),
+Gefahren-Kronenöffnung (D09), allgemeine Emissionsbalance (D10), Welt-UI (D11), Schattenempfänger
+(D12), Lichtantwort hoher/spezieller Effekte (D13/D14). `DEPTH_FX`, Sonnen-/Lightmap-Pässe,
+Scene-Alpha, Nebelmaterialien und Kronenmaterialien werden nicht verändert. Phaser-ADD bleibt
+`(ONE, DST_ALPHA)`; der Sonnen-Composite muss Ziel-Alpha erhalten.
+
+**Nachtabnahme:** Materielle Rauch-/Fragmentanteile werden dunkler, die getrennten Kerne/Glows bleiben
+außerhalb der Ambient-Dämpfung. Bei 00:00 besonders auf dunkle Rauchflächen, den Übergang Sprite→Staub
+und Halo-Verdeckung achten. Keine pauschale Alpha-/Farbkompensation vor Sichtprüfung.
+
+Die Live-Rezepte unten bleiben gültig. Für den isolierten Stink-Test nur bis Frame 119 sampeln,
+bevor die Rauchgranate ausgelöst wird. `deathBlood` tötet auf freiem Boden, nicht unter einer Krone;
+`canopyEdge` benutzt robuste Gegner mit sehr hoher HP und ist kein Todes-Fixture. Für die Kombination
+Kronenrand + Tod zuerst `target(31,19)` und `findFree` nutzen, den zurückgegebenen `status().aim`
+als legale Spawnposition für einen gepinnten 1-HP-Gegner speichern und den Spieler außerhalb der
+lokalen Kronenöffnung daneben platzieren. Den tatsächlichen Kronenüberhang im Bild bestätigen;
+die öffentliche API besitzt keinen Befehl zum Setzen der HP eines bereits gepinnten Readability-Gegners.
+
+## R0-Referenzszenen und Aufnahme
 
 URL: `http://127.0.0.1:8090/dev-scenario.html`. Map 1, Seed 12345, Zeiten 480/720/1140/0.
 
@@ -145,3 +201,20 @@ während Sampling sind fest; Wall-Epoch, Worker, Ambient-Animationen und GPU-Tim
 bitweises Replay. Prepare allein ist kein Ressourcen-Neustart: neue Seite für belastbares A/B.
 36 Rezeptkombinationen sind getestet; tatsächliche Einschlagframes, Sichtbarkeit und
 Pixelgleichheit benötigen weiterhin Claudes Browserabnahme.
+
+## P1b: Browserabnahme und kurzer Einschlaghinweis
+
+Die Browserabnahme zeigte, dass am dichten Kronenüberhang neben Körper/Rauch auch der
+Einschlag vollständig verdeckt wurde. Nur die bereits getrennten zwei GPU-Kerne (gewöhnlich
+höchstens 280 ms) und der CPU-Blitz (150 ms) liegen daher auf 20,2 / 20,25 über der Krone.
+Sie sind als `high/emissive` klassifizierte kurze Lichtsignale, kein hochgezogener
+Explosionskörper. Körper, Rauch, Funken und Druckring bleiben in ihren P1-Bändern.
+Blend, Partikelzahl und Lifetime ändern sich nicht; keine zusätzliche Lane.
+Der bisherige Body-over-canopy-Allowlist-Eintrag des Blitzes entfällt.
+
+A/B-Bögen und Rohbilder: `build/depth-p1/`. Der Capture-Browser rekonstruiert A durch
+Antwortmodifikation der alten Tiefen und Profil-Zuordnungen; B ist der aktuelle Runtime-Code.
+Kein historischer Komplettstand und kein bitweises Replay anderer parallel veränderter Systeme.
+Capture: `node build/depth-p1-batch.mjs`; Kontaktbögen: `node build/depth-p1-sheets.mjs`.
+Bereits vollständige Serien werden übersprungen; für eine Neuaufnahme deren Artefakte zuvor
+in einen eigenen Archivordner verschieben. Weitere Befunde bleiben nachgelagert.

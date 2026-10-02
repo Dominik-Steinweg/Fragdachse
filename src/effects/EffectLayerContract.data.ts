@@ -494,16 +494,16 @@ export const GPU_LAYER_CONTRACTS = {
     "owner": "effects/gpu/GpuVfxRenderLanes.ts",
     "component": "GoreNormal",
     "height": "body",
-    "lighting": "mixed",
+    "lighting": "material",
     "camera": "world",
     "depths": [
-      24.9
+      13.2
     ],
     "blends": [
       "NORMAL"
     ],
     "profiles": [
-      "H"
+      "K"
     ],
     "role": "effect"
   },
@@ -515,13 +515,13 @@ export const GPU_LAYER_CONTRACTS = {
     "lighting": "emissive",
     "camera": "world",
     "depths": [
-      25.05
+      19.65
     ],
     "blends": [
       "ADD"
     ],
     "profiles": [
-      "H"
+      "E"
     ],
     "role": "effect"
   },
@@ -722,7 +722,83 @@ export const GPU_LAYER_CONTRACTS = {
       "E"
     ],
     "role": "effect"
+  },
+  "ExplosionLowBody": {
+    "id": "lane:ExplosionLowBody",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionLowBody",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.4
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  },
+  "ExplosionLowSmoke": {
+    "id": "lane:ExplosionLowSmoke",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionLowSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.36
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  },
+  "ExplosionLowCore": {
+    "id": "lane:ExplosionLowCore",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionLowCore",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      20.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  },
+  "ExplosionLowGlow": {
+    "id": "lane:ExplosionLowGlow",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionLowGlow",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect"
   }
+,
+  "TrainAftermathSmoke": {"id": "lane:TrainAftermathSmoke", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathSmoke", "height": "body", "lighting": "material", "camera": "world", "depths": [13.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"},
+  // train8: rising fragments only; they break before landing. Small landed chips use TrainResidue/TrainGround (5.35).
+  "TrainAftermathDebris": {"id": "lane:TrainAftermathDebris", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathDebris", "height": "body", "lighting": "material", "camera": "world", "depths": [11.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"}
 } as const satisfies Record<keyof typeof GpuVfxLaneId, LayerContract>;
 export const GPU_EFFECT_CONTRACTS = {
   "AirstrikeBomb": {
@@ -1621,13 +1697,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "material",
     "camera": "world",
     "depths": [
-      24.9
+      13.2
     ],
     "blends": [
       "NORMAL"
     ],
     "profiles": [
-      "H"
+      "K"
     ],
     "role": "effect",
     "lanes": [
@@ -1642,13 +1718,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "material",
     "camera": "world",
     "depths": [
-      24.9
+      13.2
     ],
     "blends": [
       "NORMAL"
     ],
     "profiles": [
-      "H"
+      "K"
     ],
     "role": "effect",
     "lanes": [
@@ -1663,13 +1739,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "emissive",
     "camera": "world",
     "depths": [
-      25.05
+      19.65
     ],
     "blends": [
       "ADD"
     ],
     "profiles": [
-      "H"
+      "E"
     ],
     "role": "effect",
     "lanes": [
@@ -1684,13 +1760,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "material",
     "camera": "world",
     "depths": [
-      24.9
+      13.2
     ],
     "blends": [
       "NORMAL"
     ],
     "profiles": [
-      "H"
+      "K"
     ],
     "role": "effect",
     "lanes": [
@@ -1705,13 +1781,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "material",
     "camera": "world",
     "depths": [
-      24.9
+      13.2
     ],
     "blends": [
       "NORMAL"
     ],
     "profiles": [
-      "H"
+      "K"
     ],
     "role": "effect",
     "lanes": [
@@ -1726,13 +1802,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "material",
     "camera": "world",
     "depths": [
-      24.9
+      13.2
     ],
     "blends": [
       "NORMAL"
     ],
     "profiles": [
-      "H"
+      "K"
     ],
     "role": "effect",
     "lanes": [
@@ -1747,13 +1823,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "material",
     "camera": "world",
     "depths": [
-      24.9
+      13.2
     ],
     "blends": [
       "NORMAL"
     ],
     "profiles": [
-      "H"
+      "K"
     ],
     "role": "effect",
     "lanes": [
@@ -1873,13 +1949,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "emissive",
     "camera": "world",
     "depths": [
-      25.05
+      19.65
     ],
     "blends": [
       "ADD"
     ],
     "profiles": [
-      "H"
+      "E"
     ],
     "role": "effect",
     "lanes": [
@@ -2251,13 +2327,13 @@ export const GPU_EFFECT_CONTRACTS = {
     "lighting": "material",
     "camera": "world",
     "depths": [
-      24.9
+      13.2
     ],
     "blends": [
       "NORMAL"
     ],
     "profiles": [
-      "H"
+      "K"
     ],
     "role": "effect",
     "lanes": [
@@ -2536,6 +2612,174 @@ export const GPU_EFFECT_CONTRACTS = {
     "lanes": [
       "TrainGround"
     ]
+  },
+  "ExplosionLowBody": {
+    "id": "gpu:ExplosionLowBody",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowBody",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.4
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowBody"
+    ]
+  },
+  "ExplosionLowSmoke": {
+    "id": "gpu:ExplosionLowSmoke",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.36
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowSmoke"
+    ]
+  },
+  "ExplosionLowSecondary": {
+    "id": "gpu:ExplosionLowSecondary",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowSecondary",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.4
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowBody"
+    ]
+  },
+  "ExplosionLowCore": {
+    "id": "gpu:ExplosionLowCore",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowCore",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      20.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowCore"
+    ]
+  },
+  "ExplosionLowSpark": {
+    "id": "gpu:ExplosionLowSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  },
+  "ExplosionLowShockwave": {
+    "id": "gpu:ExplosionLowShockwave",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowShockwave",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  },
+  "ExplosionLowCascade": {
+    "id": "gpu:ExplosionLowCascade",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowCascade",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  },
+  "ExplosionLowEmberDown": {
+    "id": "gpu:ExplosionLowEmberDown",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowEmberDown",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.4
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowBody"
+    ]
   }
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
@@ -2658,7 +2902,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/EffectSystem.ts:playBurrowPhaseEffect/plume/setDepth/0","owner":"effects/EffectSystem.ts","component":"playBurrowPhaseEffect/plume/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[25.1],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"playBurrowPhaseEffect/plume/setDepth/0","expression":"DEPTH_FX + 0.1"}},
   {"id":"cpu:effects/EffectSystem.ts:playExplosionEffect/core/setDepth/0","owner":"effects/EffectSystem.ts","component":"playExplosionEffect/core/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25.4],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"playExplosionEffect/core/setDepth/0","expression":"DEPTH_FX + 0.4"}},
   {"id":"cpu:effects/EffectSystem.ts:playExplosionEffect/skyFlash/setDepth/0","owner":"effects/EffectSystem.ts","component":"playExplosionEffect/skyFlash/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[98],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"playExplosionEffect/skyFlash/setDepth/0","expression":"DEPTH.OVERLAY - 2"}},
-  {"id":"cpu:effects/EffectSystem.ts:playExplosionEffect/flash/setDepth/0","owner":"effects/EffectSystem.ts","component":"playExplosionEffect/flash/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[26],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"playExplosionEffect/flash/setDepth/0","expression":"DEPTH_FX + 1"}},
+  {"id":"cpu:effects/EffectSystem.ts:playExplosionEffect/flash/setDepth/0","owner":"effects/EffectSystem.ts","component":"playExplosionEffect/flash/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[20.25,26],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"playExplosionEffect/flash/setDepth/0","expression":"getCombatExplosionProfile(visualStyle)?.layering === 'ordinary' ? 20.25 : DEPTH_FX + 1"}},
   {"id":"cpu:effects/EffectSystem.ts:playExplosionEffect/skyFlash/setDepth/1","owner":"effects/EffectSystem.ts","component":"playExplosionEffect/skyFlash/setDepth/1","height":"high","lighting":"emissive","camera":"world","depths":[98],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"playExplosionEffect/skyFlash/setDepth/1","expression":"DEPTH.OVERLAY - 2"}},
   {"id":"cpu:effects/EffectSystem.ts:playLightningExplosionEffect/flash/setDepth/0","owner":"effects/EffectSystem.ts","component":"playLightningExplosionEffect/flash/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25.45],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"playLightningExplosionEffect/flash/setDepth/0","expression":"DEPTH_FX + 0.45"}},
   {"id":"cpu:effects/EffectSystem.ts:playLightningExplosionEffect/arcs/setDepth/0","owner":"effects/EffectSystem.ts","component":"playLightningExplosionEffect/arcs/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25.35],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"playLightningExplosionEffect/arcs/setDepth/0","expression":"DEPTH_FX + 0.35"}},
@@ -2842,7 +3086,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/SporeRenderer.ts:playImpact/haze/createEmitter/0","owner":"effects/SporeRenderer.ts","component":"playImpact/haze/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[16.2],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"playImpact/haze/createEmitter/0","expression":"DEPTH.FIRE + 0.2"}},
   {"id":"cpu:effects/SporeRenderer.ts:spawnTrailPuff/puff/setDepth/0","owner":"effects/SporeRenderer.ts","component":"spawnTrailPuff/puff/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[14.7],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"spawnTrailPuff/puff/setDepth/0","expression":"DEPTH.PROJECTILES - 0.3"}},
   {"id":"cpu:effects/StinkCloudBody.ts:module/this.quad/setDepth/0","owner":"effects/StinkCloudBody.ts","component":"module/this.quad/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[17],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"module/this.quad/setDepth/0","expression":"DEPTH.STINK"}},
-  {"id":"cpu:effects/StinkCloudSystem.ts:createVisual/groundGlow/setDepth/0","owner":"effects/StinkCloudSystem.ts","component":"createVisual/groundGlow/setDepth/0","height":"ground","lighting":"mixed","camera":"world","depths":[16.88],"blends":["ADD","MULTIPLY"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/groundGlow/setDepth/0","expression":"STINK_DEPTH - 0.12"}},
+  {"id":"cpu:effects/StinkCloudSystem.ts:createVisual/groundGlow/setDepth/0","owner":"effects/StinkCloudSystem.ts","component":"createVisual/groundGlow/setDepth/0","height":"ground","lighting":"mixed","camera":"world","depths":[9.3],"blends":["ADD","MULTIPLY"],"profiles":["K"],"role":"effect","source":{"selector":"createVisual/groundGlow/setDepth/0","expression":"9.3"}},
   {"id":"cpu:effects/StinkCloudSystem.ts:createVisual/damageAura/setDepth/0","owner":"effects/StinkCloudSystem.ts","component":"createVisual/damageAura/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[16.92],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/damageAura/setDepth/0","expression":"STINK_DEPTH - 0.08"}},
   {"id":"cpu:effects/StinkCloudSystem.ts:createVisual/reactionPulse/setDepth/0","owner":"effects/StinkCloudSystem.ts","component":"createVisual/reactionPulse/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[16.96],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/reactionPulse/setDepth/0","expression":"STINK_DEPTH - 0.04"}},
   {"id":"cpu:effects/StinkCloudSystem.ts:createVisual/electricArcs/setDepth/0","owner":"effects/StinkCloudSystem.ts","component":"createVisual/electricArcs/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[17.1],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/electricArcs/setDepth/0","expression":"STINK_DEPTH + 0.1"}},
@@ -4054,7 +4298,7 @@ export const CPU_SOURCE_CONTRACTS = {
       },
       {
         "key": "playExplosionEffect/flash/setDepth/0",
-        "expression": "DEPTH_FX + 1",
+        "expression": "getCombatExplosionProfile(visualStyle)?.layering === 'ordinary' ? 20.25 : DEPTH_FX + 1",
         "blends": [
           "NORMAL"
         ]
@@ -5823,7 +6067,7 @@ export const CPU_SOURCE_CONTRACTS = {
     "sites": [
       {
         "key": "createVisual/groundGlow/setDepth/0",
-        "expression": "STINK_DEPTH - 0.12",
+        "expression": "9.3",
         "blends": [
           "ADD",
           "MULTIPLY"

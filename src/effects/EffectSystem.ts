@@ -1,3 +1,4 @@
+import { getCombatExplosionProfile } from './ExplosionVisualProfiles';
 import type { MgAttritionRenderer } from './MgAttritionRenderer';
 import { CoopXpTextRenderer } from './CoopXpTextRenderer';
 import type { PlasmaBurnerPulseEvent } from '../combat/plasmaBurner/PlasmaBurnerContracts';
@@ -904,7 +905,8 @@ export class EffectSystem implements EnemyVisualSink {
 
     const flash = this.scene.add.circle(x, y, startRadius, flashColor, 1);
     registerGraphicsObject(this.scene, 'effectSystemGraphics', flash);
-    flash.setDepth(DEPTH_FX + 1);
+    // Brief impact cue stays readable when the material body is occluded by canopy.
+    flash.setDepth(getCombatExplosionProfile(visualStyle)?.layering === 'ordinary' ? 20.25 : DEPTH_FX + 1);
     const flashEndScale = (radius * 0.3) / startRadius;
     this.scene.tweens.add({
       targets:    flash,

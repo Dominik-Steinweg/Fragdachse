@@ -1,8 +1,23 @@
 import { GAME_WIDTH, GAME_HEIGHT } from '../../config';
 import type { SyncedTrainState } from '../../types';
+import { TRAIN } from '../../train/TrainConfig';
+
+export type TrainShowcaseFocus = 'overview' | 'loco' | 'center' | 'tail';
+
+/** Physical anchors, kept independent from the camera's fit policy. */
+export function trainFocusPoint(train: TrainShowcaseState, focus: TrainShowcaseFocus) {
+  const b = train.bounds, state = train.state;
+  const middle = (b.top + b.bottom) / 2;
+  const y = focus === 'loco' && state ? state.y
+    : focus === 'tail' && state ? (state.dir === 1 ? b.top + TRAIN.WAGON_HEIGHT / 2 : b.bottom - TRAIN.WAGON_HEIGHT / 2) : middle;
+  // Entry mode may still be off-map; parked detail mode places this physical anchor on the rail bed.
+  return { x: (b.left + b.right) / 2, y: Math.max(train.trackBounds.top + 96, Math.min(train.trackBounds.bottom - 96, y)) };
+}
 
 export interface TrainViewBounds { left: number; right: number; top: number; bottom: number }
 export interface TrainShowcaseState {
+  /** Absent for a classic train without an authored dev-pass handler. */
+  devPass?: { ownerId: number; state: string; startCount: number; simulatedMs: number; lastStartReason: string | null };
   state: SyncedTrainState | null;
   speed: number;
   bounds: TrainViewBounds;

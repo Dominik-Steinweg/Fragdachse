@@ -1,4 +1,5 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
+import { setCharacterMaterialSuppressed, setCharacterMaterialView, characterMaterialStatus } from '../../effects/CharacterMaterialLighting';
 import { WorldLightingMeasurement } from './WorldLightingMeasurement';
 import type * as Phaser from 'phaser';
 import type { ArenaRuntime } from '../../scenes/arena/ArenaRuntime';
@@ -10,6 +11,8 @@ import { NavigationGeometry } from '../../systems/navigation/NavigationGeometry'
 import { COOP_DEFENSE_ENEMY_CONFIGS, type CoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../../config/coopDefenseConstructions';
 import { GAME_WIDTH, GAME_HEIGHT } from '../../config';
+import { getVisibleWorldView } from '../../graphics/CameraWorldView';
+import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
 import { ScenarioClock } from './clock';
 import { decodeScenario, defaultScenario, encodeScenario, parseScenario, scenarioLoadout, type DevScenario, type GridPoint } from './config';
@@ -18,7 +21,8 @@ import { installScenarioApi } from './api';
 import { ScenarioBots } from './bots';
 import { SUN_TUNING_DEFAULTS, validateSunTuning } from '../../effects/sunlight/SunTuning';
 import { enemyReadabilityPlacements } from './enemyReadabilityRecipe';
-import { trainExplosionZoom, trainHasEntered, trainObserverPosition, trainView, trainVisibility } from './trainShowcase';
+import { trainFocusPoint, type TrainShowcaseFocus, trainExplosionZoom, trainHasEntered, trainObserverPosition, trainView, trainVisibility } from './trainShowcase';
+import { resolveFogRockLighting, resolveRockAerialPerspective, type FogRockLightingOptions } from '../../effects/groundFog/FogRockLighting';
 
 export class DevScenarioController {
   readonly clock: ScenarioClock;
@@ -105,12 +109,27 @@ export class DevScenarioController {
     this.message = 'Warte auf Lobby und normalen Rundenstart …';
   }
   saveLink(): void { history.replaceState(null, '', encodeScenario(this.config)); }
-  setRenderDebug(disable: readonly string[], composite: import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView = 'normal', probe = false, characterShadowSolid = false): void {
-    this.requireReady();
+  setRenderDebug(disable: readonly string[], composite: import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView = 'normal', probe = false, characterShadowSolid = false,
+    characterMaterialView: import('../../effects/CharacterMaterialModel').CharacterMaterialView = 'material',
+    fogOptions: FogRockLightingOptions & { lobbyTimeOfDay?: number } = {}): void {
+    // World-only render diagnosis is also available in the fresh dev tab's authored lobby.
+    const lobby=this.state==='idle'&&bridge.getGamePhase()==='LOBBY'&&this.lobbyReady()
+      &&this.runtime.getWorldDescriptor()?.definitionId==='world:lobby';
+    if(!lobby)this.requireReady();
+    const fogStrength=resolveFogRockLighting(fogOptions);
+    const aerialStrength=resolveRockAerialPerspective(fogOptions);
+    if(fogOptions.lobbyTimeOfDay!==undefined&&(!lobby||!Number.isFinite(fogOptions.lobbyTimeOfDay)
+      ||fogOptions.lobbyTimeOfDay<0||fogOptions.lobbyTimeOfDay>=1440))throw new Error('lobbyTimeOfDay: bereite Lobby und Minute 0…1439 erwartet.');
     const targets = this.runtime.getScenarioLightingTargets();
-    const worldPasses = ['sunComposite', 'fogDisplay', 'lightmap', 'characterShadows', 'rockSurface', 'rockGround', 'rockFoliage', 'rockOverlays', 'enemyContour'];
+    const worldPasses = ['sunComposite', 'fogDisplay', 'fogRockContact', 'fogRockSunShadow', 'rockAerialPerspective', 'lightmap', 'characterShadows', 'rockSurface', 'rockGround', 'rockFoliage', 'rockOverlays', 'enemyContour', 'characterMaterial'];
     // Validate the entire request before changing any world output.
     targets.postFx.setDebugDisabled(disable.filter(name => !worldPasses.includes(name)));
+    if(fogOptions.lobbyTimeOfDay!==undefined) {
+      bridge.setLobbyTimeOfDayMinutes(fogOptions.lobbyTimeOfDay);
+      this.runtime.syncLobbyTimeOfDay();
+    }
+    targets.fog?.setDebugRockLighting(disable.includes('fogRockContact'),disable.includes('fogRockSunShadow'),
+      disable.includes('rockAerialPerspective')?{...fogOptions,rockAerialPerspective:false}:fogOptions);
     targets.sunlight?.setDebugCompositeSuppressed(disable.includes('sunComposite'));
     targets.sunlight?.setDebugCharacterShadowsSuppressed(disable.includes('characterShadows'));
     targets.sunlight?.setDebugCharacterShadowSolid(characterShadowSolid);
@@ -120,12 +139,21 @@ export class DevScenarioController {
     targets.rocks?.setDebugFormationSuppressed(disable.includes('rockSurface'),disable.includes('rockGround'),disable.includes('rockFoliage'));
     targets.rockOverlays?.setVisible(!disable.includes('rockOverlays'));
     targets.enemyReadability.setSuppressed(disable.includes('enemyContour'));
-    this.debugTargets = disable.length || composite !== 'normal' || characterShadowSolid ? targets : null;
+    setCharacterMaterialSuppressed(this.scene, disable.includes('characterMaterial'));
+    setCharacterMaterialView(this.scene, characterMaterialView);
+    this.debugTargets = disable.length || composite !== 'normal' || characterShadowSolid || characterMaterialView !== 'material'
+      ||fogOptions.fogRockContactStrength!==undefined||fogOptions.fogRockSunShadowStrength!==undefined
+      ||fogOptions.rockAerialPerspective!==undefined||fogOptions.rockAerialPerspectiveStrength!==undefined ? targets : null;
     this.lastAction = { renderDebug: targets.postFx.getDebugPasses(),
-      worldOutputs: worldPasses.map(name => ({ name, disabled: disable.includes(name) })), composite, characterShadowSolid,
+      worldOutputs: worldPasses.map(name => ({ name, disabled: disable.includes(name) })), composite, characterShadowSolid, characterMaterialView,
+      fogRockLighting:{contactStrength:disable.includes('fogRockContact')?0:fogStrength[0],sunShadowStrength:disable.includes('fogRockSunShadow')?0:fogStrength[1]},
+      rockAerialPerspective:{enabled:aerialStrength>0&&!disable.includes('rockAerialPerspective'),strength:disable.includes('rockAerialPerspective')?0:aerialStrength},
+      ...(lobby?{lobbyTimeOfDay:bridge.getLobbyTimeOfDayMinutes()}:{}),
       material: probe ? targets.sunlight?.inspectDebugCompositeMaterial() ?? null : undefined };
   }
   private clearRenderDebug(): void {
+    setCharacterMaterialView(this.scene, 'material');
+    setCharacterMaterialSuppressed(this.scene, false);
     const targets = this.debugTargets;
     targets?.postFx.setDebugDisabled([]);
     targets?.sunlight?.setDebugCompositeSuppressed(false);
@@ -133,6 +161,7 @@ export class DevScenarioController {
     targets?.sunlight?.setDebugCharacterShadowSolid(false);
     targets?.sunlight?.setDebugCompositeView('normal');
     targets?.fog?.setDebugDisplaySuppressed(false);
+    targets?.fog?.setDebugRockLighting(false,false);
     targets?.lighting.setCompositeSuppressed(false);
     targets?.rocks?.setDebugFormationSuppressed(false,false,false);
     targets?.rockOverlays?.setVisible(true);
@@ -334,7 +363,7 @@ export class DevScenarioController {
       hostNowMs: bridge.getSynchronizedNow(), params: { ultimateAction: action } });
   }
   stop(): void {
-    this.pendingTrainShowcase = null; this.trainFollow = false;
+    this.pendingTrainShowcase = null; this.activeTrainShowcase = null; this.trainReadyOwner = null; this.trainFollow = false;
     this.trainCameraPoint = null; this.trainExplosionDeadline = null;
     this.worldLighting?.stopMeasurement();
     this.trigger = null; this.heldUtility = null; this.movement = { dx: 0, dy: 0, until: 0 };
@@ -360,23 +389,69 @@ export class DevScenarioController {
   }
   private lastTrainUpdate = 0;
   private trainInvulnerable = false;
-  private pendingTrainShowcase: { follow: boolean; zoom: number } | null = null;
+  private pendingTrainShowcase: { follow: boolean; zoom: number; reason: string; targetDefinition?: string; motion: TrainDevPassOptions; focus: TrainShowcaseFocus } | null = null;
+  private trainReadyOwner: number | null = null;
+  private activeTrainShowcase: { follow: boolean; zoom: number; ownerId: number; motion: TrainDevPassOptions; focus: TrainShowcaseFocus } | null = null;
+  private lastTrainStartReason: string | null = null;
   private trainFollow = false;
+  private trainCenterFollow = false;
+  private trainFocus: TrainShowcaseFocus = 'overview';
   private trainCameraPoint: { x: number; y: number } | null = null;
   private trainExplosionDeadline: number | null = null;
 
-  startTrainShowcase(follow = true, zoom = .8): void {
-    if (this.state === 'ready' && !this.setupPending && !this.runtime.isMatchTerminated()
-      && this.runtime.navigationLabPort.getPlayerPosition()?.alive
-      && this.runtime.devScenarioPort.readTrain()) {
-      this.prepareTrainShowcase(follow, zoom);
+  startTrainShowcase(follow = true, zoom = .8, motion: TrainDevPassOptions = { park: 'center', speedPxPerSec: 0 }, focus: TrainShowcaseFocus = 'overview'): void {
+    motion = { ...motion, focus: focus === 'overview' ? 'center' : focus };
+    // Repeated commands during admission update the intent, never restart the same map.
+    if (this.pendingTrainShowcase) {
+      Object.assign(this.pendingTrainShowcase, { follow, zoom, motion, focus });
       return;
     }
-    this.start({ ...defaultScenario(), mapId: '7', seed: 12345 });
-    this.pendingTrainShowcase = { follow, zoom };
+    const current = this.state === 'ready' ? this.runtime.devScenarioPort.readTrain() : null;
+    if (this.state === 'ready' && !this.setupPending && current && this.trainWorldReady()) {
+      this.prepareTrainShowcase(follow, zoom, 'showcase-existing-world', motion, focus);
+      return;
+    }
+    const alreadyOnTrainMap = this.config.mapId === '7'
+      && (this.state === 'loading' || this.state === 'waiting-lobby' || this.state === 'ready');
+    if (!alreadyOnTrainMap) this.start({ ...defaultScenario(), mapId: '7', seed: 12345 });
+    this.pendingTrainShowcase = { follow, zoom, motion, focus, reason: 'showcase-after-ready',
+      targetDefinition: 'world:coop-defense:7' };
+    this.lastTrainStartReason = 'showcase-waiting-for-ready';
+    this.trainReadyOwner = null;
   }
 
-  private prepareTrainShowcase(follow: boolean, zoom: number): void {
+  private trainWorldReady(): boolean {
+    const loading = this.runtime.getScenarioLoadingState();
+    return bridge.getGamePhase() === 'ARENA' && bridge.isArenaStarted() && !this.runtime.isMatchTerminated()
+      && this.runtime.navigationLabPort.isReady() && loading.roundStartPrepared
+      && loading.localArenaLoadReady !== false && this.runtime.navigationLabPort.getPlayerPosition()?.alive === true;
+  }
+
+  /** Runs after host reconciliation, and acknowledges only the final World/Activity train owner. */
+  private flushTrainShowcase(): void {
+    if (!this.pendingTrainShowcase && !this.activeTrainShowcase) return;
+    const train = this.runtime.devScenarioPort.readTrain();
+    const ownerId = train?.devPass?.ownerId ?? null;
+    if (this.activeTrainShowcase && ownerId !== this.activeTrainShowcase.ownerId) {
+      this.pendingTrainShowcase = { ...this.activeTrainShowcase, reason: 'showcase-world-replaced' };
+      this.activeTrainShowcase = null;
+      this.trainReadyOwner = null;
+    }
+    const request = this.pendingTrainShowcase;
+    if (!request) return;
+    const world = this.runtime.getWorldDescriptor();
+    if (this.setupPending || !this.trainWorldReady() || !train || ownerId === null
+      || (request.targetDefinition && world?.definitionId !== request.targetDefinition)) {
+      this.trainReadyOwner = null;
+      return;
+    }
+    // Ready was observed for this owner after a complete host frame. Start on the next
+    // post-host boundary; whenReady remains pending throughout this acknowledgement.
+    if (this.trainReadyOwner !== ownerId) { this.trainReadyOwner = ownerId; return; }
+    this.prepareTrainShowcase(request.follow, request.zoom, request.reason, request.motion, request.focus);
+  }
+
+  private prepareTrainShowcase(follow: boolean, zoom: number, reason: string, motion: TrainDevPassOptions, focus: TrainShowcaseFocus): void {
     this.requireReady();
     const train = this.runtime.devScenarioPort.readTrain();
     if (!train) throw new Error('Keine Zugstrecke für die Vorführung verfügbar.');
@@ -385,11 +460,21 @@ export class DevScenarioController {
     this.stop();
     this.teleport(this.grid(observer), false);
     this.config.freezeMission = true; this.config.suppressWaves = true;
-    this.zoom = zoom; this.trainFollow = follow;
+    this.zoom = zoom; this.trainFollow = follow; this.trainFocus = focus;
     this.trainCameraPoint = { x: (train.trackBounds.left + train.trackBounds.right) / 2,
       y: (train.trackBounds.top + train.trackBounds.bottom) / 2 };
-    this.startTrain(true);
-    // Spawn with zero delta only after placing the observer off-track; do not wait a host frame.
+    this.startTrain(true, reason, motion);
+    const started = this.runtime.devScenarioPort.readTrain();
+    if (!started?.state?.alive) throw new Error('Zugstart nicht bestätigt; status().train prüfen.');
+    if (started.devPass) this.activeTrainShowcase = { follow, zoom, motion, focus, ownerId: started.devPass.ownerId };
+    this.trainCenterFollow = motion.park === 'center';
+    if (this.trainCenterFollow) {
+      this.trainCameraPoint = { x: (started.bounds.left + started.bounds.right) / 2,
+        y: (started.bounds.top + started.bounds.bottom) / 2 };
+      if (focus === 'overview') this.zoom = trainExplosionZoom({ ...started, explosionCenter: this.trainCameraPoint }, zoom);
+    }
+    if (focus !== 'overview') this.trainCameraPoint = trainFocusPoint(started, focus);
+    // Restore integrity of the freshly started pass without advancing simulation time.
     this.runtime.devScenarioPort.updateTrain(0, true);
     this.updateTrainShowcase();
     this.syncCamera();
@@ -401,11 +486,18 @@ export class DevScenarioController {
     if (!this.trainFollow && this.trainExplosionDeadline === null) return;
     const train = this.runtime.devScenarioPort.readTrain();
     if (this.trainFollow && train?.state?.alive) {
-      this.trainCameraPoint = { x: train.state.x,
-        y: Math.max(train.trackBounds.top, Math.min(train.trackBounds.bottom, train.state.y)) };
+      this.trainCameraPoint = this.trainFocus !== 'overview' ? trainFocusPoint(train, this.trainFocus) : { x: train.state.x,
+        y: this.trainCenterFollow ? (train.bounds.top + train.bounds.bottom) / 2
+          : Math.max(train.trackBounds.top, Math.min(train.trackBounds.bottom, train.state.y)) };
     }
     if (this.trainExplosionDeadline === null) return;
-    if (train && trainHasEntered(train)) {
+    if (train && this.trainFocus !== 'overview') {
+      const v = getVisibleWorldView(this.scene.cameras.main);
+      if (trainVisibility(train, { left: v.x, top: v.y, right: v.right, bottom: v.bottom }).visible) {
+        this.destroyTrain(); return;
+      }
+    }
+    if (train && this.trainFocus === 'overview' && trainHasEntered(train)) {
       this.zoom = trainExplosionZoom(train, this.zoom);
       this.trainCameraPoint = train.explosionCenter;
       this.syncCamera();
@@ -418,23 +510,27 @@ export class DevScenarioController {
 
   private trainStatus() {
     const train = this.state === 'ready' ? this.runtime.devScenarioPort.readTrain?.() : null;
-    if (!train) return { available: false, preparing: this.pendingTrainShowcase !== null };
+    const diagnostics = { lastStartReason: this.pendingTrainShowcase?.reason ?? train?.devPass?.lastStartReason ?? this.lastTrainStartReason,
+      devPassState: this.pendingTrainShowcase ? 'waiting-for-ready' : train?.devPass?.state ?? 'unavailable',
+      devPassOwnerId: train?.devPass?.ownerId ?? null, devPassStartCount: train?.devPass?.startCount ?? 0,
+      devPassSimulationMs: train?.devPass?.simulatedMs ?? 0,
+      worldRevision: this.runtime.getWorldDescriptor()?.worldRevision ?? null };
+    if (!train) return { available: false, preparing: this.pendingTrainShowcase !== null, ...diagnostics };
     const camera = this.scene.cameras.main;
-    const halfWidth = camera.width / camera.zoomX / 2, halfHeight = camera.height / camera.zoomY / 2;
-    const midX = camera.scrollX + camera.width / 2, midY = camera.scrollY + camera.height / 2;
-    const view = { left: midX - halfWidth, top: midY - halfHeight,
-      right: midX + halfWidth, bottom: midY + halfHeight };
-    return { available: true, position: train.state ? { x: train.state.x, y: train.state.y } : null,
+    const cameraView = getVisibleWorldView(camera);
+    const view = { left: cameraView.x, top: cameraView.y, right: cameraView.right, bottom: cameraView.bottom };
+    return { available: true, ...diagnostics, position: train.state ? { x: train.state.x, y: train.state.y } : null,
       alive: train.state?.alive ?? false, speed: train.speed, coordinateSpace: 'world',
-      ...trainVisibility(train, view), bounds: train.bounds, trackBounds: train.trackBounds,
-      explosionCenter: train.explosionCenter, follow: this.trainFollow,
+      ...trainVisibility(train, view), cameraBounds: view, bounds: train.bounds, trackBounds: train.trackBounds,
+      explosionCenter: train.explosionCenter, follow: this.trainFollow, focus: this.trainFocus,
       pendingExplosion: this.trainExplosionDeadline !== null, cameraCenter: this.trainCameraPoint };
   }
-  startTrain(invulnerable = false): void {
+  startTrain(invulnerable = false, reason = 'train-command', motion?: TrainDevPassOptions): void {
     this.requireReady();
     this.trainInvulnerable = invulnerable;
     this.lastTrainUpdate = this.clock.now;
-    if (!this.runtime.devScenarioPort.startTrain()) throw new Error('Diese Map hat keine Zugstrecke.');
+    this.lastTrainStartReason = reason;
+    if (!this.runtime.devScenarioPort.startTrain(reason, motion)) throw new Error('Diese Map hat keine Zugstrecke.');
   }
   destroyTrain(whenVisible = false): void {
     this.requireReady();
@@ -446,11 +542,13 @@ export class DevScenarioController {
       return;
     }
     const train = this.runtime.devScenarioPort.readTrain();
-    if (train?.explosionCenter) {
+    if (train?.explosionCenter && this.trainFocus === 'overview') {
       this.trainCameraPoint = train.explosionCenter;
+      this.zoom = trainExplosionZoom(train, this.zoom);
       this.trainFollow = false;
       this.syncCamera();
     }
+    this.trainFollow = false;
     this.trainExplosionDeadline = null;
     if (!this.runtime.devScenarioPort.destroyTrain()) throw new Error('Kein lebender Zug. Zuerst train starten und einfahren lassen.');
     this.trainInvulnerable = false;
@@ -565,11 +663,7 @@ export class DevScenarioController {
         loadingTimeline.get('scenario')?.finish();
         this.message = 'Szenario bereit. Startposition und Aufbau geprüft.';
       }
-      if (!this.setupPending && this.pendingTrainShowcase) {
-        const { follow, zoom } = this.pendingTrainShowcase;
-        this.pendingTrainShowcase = null;
-        this.prepareTrainShowcase(follow, zoom);
-      }
+      this.flushTrainShowcase();
       this.updateTrainShowcase();
     } catch (error) { this.fail(error); this.stop(); this.state = 'error'; }
   }
@@ -584,13 +678,17 @@ export class DevScenarioController {
     const camera = this.scene.cameras.main;
     camera.removeBounds();
     camera.setZoom(this.scene.scale.width / GAME_WIDTH * this.zoom, this.scene.scale.height / GAME_HEIGHT * this.zoom);
-    // Phaser's scroll is relative to the unzoomed viewport center, not worldView's top-left.
-    if (this.trainCameraPoint) camera.centerOn(point.x, point.y);
-    else camera.setScroll(point.x - GAME_WIDTH / this.zoom / 2, point.y - GAME_HEIGHT / this.zoom / 2);
+    if (this.trainCameraPoint) {
+      // Arena uses origin (0,0); Phaser centerOn assumes the unzoomed half viewport.
+      // Invert the actual origin/zoom instead, also valid after a DPR or viewport resize.
+      camera.stopFollow();
+      const view = getVisibleWorldView(camera);
+      camera.setScroll(camera.scrollX + point.x - view.centerX, camera.scrollY + point.y - view.centerY);
+    } else camera.setScroll(point.x - GAME_WIDTH / this.zoom / 2, point.y - GAME_HEIGHT / this.zoom / 2);
     setCameraBaseScroll(this.scene, camera.scrollX, camera.scrollY);
   }
   snapshot(): Record<string, unknown> {
-    return { state: this.state, ready: this.state === 'ready' && !this.setupPending, message: this.message, isolated: true, network: 'local-only',
+    return { state: this.state, ready: this.state === 'ready' && !this.setupPending && !this.pendingTrainShowcase, message: this.message, isolated: true, network: 'local-only',
       initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
@@ -603,6 +701,7 @@ export class DevScenarioController {
       sun: this.worldLighting?.sunStatus ?? null,
       characterShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().sunlight?.getCharacterShadowsStatus() ?? null : null,
       enemyContour: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().enemyReadability.getDiagnostics() : null,
+      characterMaterial: characterMaterialStatus(this.scene),
       worldLightingMeasurement:this.worldLightingMeasurement(),
       camera: { zoom: this.zoom, focusTarget: this.cameraAtTarget, scrollX: this.scene.cameras.main.scrollX,
         scrollY: this.scene.cameras.main.scrollY, zoomX: this.scene.cameras.main.zoomX, zoomY: this.scene.cameras.main.zoomY },

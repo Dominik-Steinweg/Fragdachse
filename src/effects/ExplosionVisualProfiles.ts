@@ -5,6 +5,8 @@ export type ExplosionSpecialFamily = 'standard' | 'cascade' | 'energy' | 'holy' 
 
 export interface ExplosionVisualProfile {
   readonly family: ExplosionSpecialFamily;
+  /** P1: only ordinary thermal bursts move; large and special signatures retain their lanes. */
+  readonly layering: 'ordinary' | 'legacy';
   readonly countScale: number;
   readonly lifeScale: number;
   readonly bodyScale: number;
@@ -14,7 +16,7 @@ export interface ExplosionVisualProfile {
 }
 
 const STANDARD: ExplosionVisualProfile = {
-  family: 'standard', countScale: 1, lifeScale: 1, bodyScale: 1,
+  family: 'standard', layering: 'ordinary', countScale: 1, lifeScale: 1, bodyScale: 1,
   smokeScale: 1, chunkScale: 1, upwardEmbers: false,
 };
 
@@ -25,60 +27,60 @@ const STANDARD: ExplosionVisualProfile = {
 export const EXPLOSION_VISUAL_PROFILES = {
   default: STANDARD,
   he_cluster_shard: {
-    family: 'standard', countScale: 0.4, lifeScale: 0.55, bodyScale: 0.75,
+    family: 'standard', layering: 'ordinary', countScale: 0.4, lifeScale: 0.55, bodyScale: 0.75,
     smokeScale: 0.15, chunkScale: 0.25, upwardEmbers: false,
   },
   he_demolition_shard: {
-    family: 'standard', countScale: 0.3, lifeScale: 0.42, bodyScale: 0.65,
+    family: 'standard', layering: 'ordinary', countScale: 0.3, lifeScale: 0.42, bodyScale: 0.65,
     smokeScale: 0.08, chunkScale: 0.15, upwardEmbers: false,
   },
   rocket: {
-    family: 'standard', countScale: 1.15, lifeScale: 0.95, bodyScale: 1.05,
+    family: 'standard', layering: 'ordinary', countScale: 1.15, lifeScale: 0.95, bodyScale: 1.05,
     smokeScale: 1, chunkScale: 1.1, upwardEmbers: false,
   },
   mini_rocket: {
-    family: 'standard', countScale: 0.7, lifeScale: 0.72, bodyScale: 0.78,
+    family: 'standard', layering: 'ordinary', countScale: 0.7, lifeScale: 0.72, bodyScale: 0.78,
     smokeScale: 0.45, chunkScale: 0.65, upwardEmbers: false,
   },
   mini_rocket_cascade: {
-    family: 'cascade', countScale: 0.82, lifeScale: 0.8, bodyScale: 0.85,
+    family: 'cascade', layering: 'ordinary', countScale: 0.82, lifeScale: 0.8, bodyScale: 0.85,
     smokeScale: 0.55, chunkScale: 0.7, upwardEmbers: false,
   },
   energy: {
-    family: 'energy', countScale: 0.95, lifeScale: 0.72, bodyScale: 0.78,
+    family: 'energy', layering: 'legacy', countScale: 0.95, lifeScale: 0.72, bodyScale: 0.78,
     smokeScale: 0.12, chunkScale: 0.35, upwardEmbers: true,
   },
   timebomb: {
-    family: 'energy', countScale: 1.05, lifeScale: 0.78, bodyScale: 0.88,
+    family: 'energy', layering: 'legacy', countScale: 1.05, lifeScale: 0.78, bodyScale: 0.88,
     smokeScale: 0.08, chunkScale: 0.4, upwardEmbers: true,
   },
   timebomb_pop: {
-    family: 'pop', countScale: 0.45, lifeScale: 0.45, bodyScale: 0.45,
+    family: 'pop', layering: 'legacy', countScale: 0.45, lifeScale: 0.45, bodyScale: 0.45,
     smokeScale: 0, chunkScale: 0, upwardEmbers: true,
   },
   time_bubble_release: {
-    family: 'energy', countScale: 1, lifeScale: 1, bodyScale: 0,
+    family: 'energy', layering: 'legacy', countScale: 1, lifeScale: 1, bodyScale: 0,
     smokeScale: 0, chunkScale: 0, upwardEmbers: false,
   },
   // Kleinerer Feuerball-Körper: die Form trägt das Lichtsiegel des HolyExplosionRenderer.
   holy: {
-    family: 'holy', countScale: 1.15, lifeScale: 1.25, bodyScale: 0.65,
+    family: 'holy', layering: 'legacy', countScale: 1.15, lifeScale: 1.25, bodyScale: 0.65,
     smokeScale: 0, chunkScale: 0.65, upwardEmbers: true,
   },
   lightning: {
-    family: 'lightning', countScale: 0.9, lifeScale: 0.6, bodyScale: 0.25,
+    family: 'lightning', layering: 'legacy', countScale: 0.9, lifeScale: 0.6, bodyScale: 0.25,
     smokeScale: 0, chunkScale: 0, upwardEmbers: true,
   },
   train: {
-    family: 'train', countScale: 1.4, lifeScale: 1.25, bodyScale: 1.35,
+    family: 'train', layering: 'legacy', countScale: 1.4, lifeScale: 1.25, bodyScale: 1.35,
     smokeScale: 1.3, chunkScale: 1.5, upwardEmbers: false,
   },
   nuke: {
-    family: 'nuke', countScale: 1.7, lifeScale: 1.5, bodyScale: 1.5,
+    family: 'nuke', layering: 'legacy', countScale: 1.7, lifeScale: 1.5, bodyScale: 1.5,
     smokeScale: 2, chunkScale: 1.8, upwardEmbers: true,
   },
   void_nuke: {
-    family: 'nuke', countScale: 1.7, lifeScale: 1.5, bodyScale: 1.5,
+    family: 'nuke', layering: 'legacy', countScale: 1.7, lifeScale: 1.5, bodyScale: 1.5,
     smokeScale: 2, chunkScale: 1.8, upwardEmbers: true,
   },
   brood_hatch: null,

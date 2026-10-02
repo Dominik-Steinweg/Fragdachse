@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedTrainState } from '../types';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import type { LightingSystem } from '../effects/LightingSystem';
 import { TRAIN } from './TrainConfig';
 import { TrainVfxController, type TrainVfxPorts } from '../effects/train/TrainVfxController';
 
@@ -73,6 +74,7 @@ export class TrainRenderer {
   private audioSystem: GameAudioSystem | null = null;
   private moveLoopHandle: string | null = null;
   private readonly vfx: TrainVfxController | null;
+  private destructionShown = false;
 
   constructor(scene: Phaser.Scene, vfx?: TrainVfxPorts) {
     this.textureCenterOffsetY = this.ensureTrainTexture(scene);
@@ -85,9 +87,15 @@ export class TrainRenderer {
   /** False retains the legacy presentation in tools without the shared GPU backend. */
   playExplosion(x: number, y: number, radius: number): boolean {
     if (!this.vfx) return false;
+    this.destructionShown = true;
+    this.image.setVisible(false);
+    this.vfx.disintegrate(this.lastX, this.computeSegYs(this.displayY, this.lastDir));
+    this.vfx.stopMovement();
     this.vfx.playExplosion(x, y, radius);
     return true;
   }
+
+  setLightingSystem(system: Pick<LightingSystem, 'setLight' | 'releaseLight'>): void { this.vfx?.setLighting(system); }
 
   setAudioSystem(system: GameAudioSystem): void {
     this.audioSystem = system;
@@ -98,6 +106,7 @@ export class TrainRenderer {
     if (!state || !state.alive) {
       this.vfx?.stopMovement();
       this.lastAlive = false;
+      this.image.setVisible(false);
       if (this.moveLoopHandle) {
         this.audioSystem?.stopLoop(this.moveLoopHandle);
         this.moveLoopHandle = null;
@@ -105,6 +114,8 @@ export class TrainRenderer {
       return;
     }
     if (!this.lastAlive) {
+      this.destructionShown = false;
+      this.vfx?.resetDestruction();
       this.displayY = state.y;
       this.moveLoopHandle = this.audioSystem?.startLoop('sfx_train_move', state.x, state.y) ?? null;
     }
@@ -120,7 +131,7 @@ export class TrainRenderer {
   }
 
   getShadowState(): SyncedTrainState | null {
-    if (!this.lastAlive) return null;
+    if (!this.lastAlive || this.destructionShown) return null;
     return {
       alive: true,
       x: this.lastX,
@@ -132,7 +143,7 @@ export class TrainRenderer {
   }
 
   render(lerpFactor: number): void {
-    if (!this.lastAlive) {
+    if (!this.lastAlive || this.destructionShown) {
       this.image.setVisible(false);
       return;
     }
@@ -155,6 +166,8 @@ export class TrainRenderer {
       return;
     }
     if (!this.lastAlive) {
+      this.destructionShown = false;
+      this.vfx?.resetDestruction();
       this.moveLoopHandle = this.audioSystem?.startLoop('sfx_train_move', state.x, state.y) ?? null;
     } else if (this.moveLoopHandle) {
       this.audioSystem?.updateLoopPosition(this.moveLoopHandle, state.x, state.y);
@@ -166,6 +179,7 @@ export class TrainRenderer {
     this.lastHp = state.hp;
     this.lastMaxHp = state.maxHp;
     this.lastAlive = true;
+    if (this.destructionShown) { this.image.setVisible(false); return; }
     this.syncImage();
     this.vfx?.setPose(this.lastX, this.displayY, this.lastDir, this.computeSegYs(this.displayY, this.lastDir));
   }

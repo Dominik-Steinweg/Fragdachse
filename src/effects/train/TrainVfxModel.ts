@@ -17,7 +17,7 @@ export function trainRandom(seed: number): () => number {
 
 export interface TrainBlast { x: number; y: number; radius: number; delayMs: number }
 
-/** The main blast starts the event; the rupture travels outward along visible carriages. */
+/** The main blast starts the event; the rupture travels outward along all carriages (off-world particles are culled by presentation). */
 export function planTrainDestruction(
   segments: readonly { x: number; y: number }[], minY: number, maxY: number,
 ): TrainBlast[] {
@@ -25,9 +25,9 @@ export function planTrainDestruction(
   if (!visible.length) return [];
   const center = visible[Math.floor(visible.length / 2)];
   const random = trainRandom(trainVfxSeed(center.x, center.y, 160));
-  const ordered = visible.filter(p => p !== center).sort((a, b) => Math.abs(a.y - center.y) - Math.abs(b.y - center.y));
+  const ordered = segments.filter(p => p !== center).sort((a, b) => Math.abs(a.y - center.y) - Math.abs(b.y - center.y));
   return [{ ...center, radius: 160, delayMs: 0 }, ...ordered.map((p, i) => ({
-    ...p, radius: 80, delayMs: 100 + i * 65 + Math.floor(random() * 24),
+    ...p, radius: 80, delayMs: 110 + i * 120 + Math.floor(random() * 20),
   }))];
 }
 
@@ -41,4 +41,12 @@ export function sampleTrainChunk(path: TrainChunkPath, ageMs: number) {
   const z = 4 * path.height * t * (1 - t);
   const x = path.x + path.dx * t, groundY = path.y + path.dy * t;
   return { x, y: groundY - z * .35, groundY, z, rotation: path.spin * t, landed: t === 1 };
+}
+
+/** Rising fragments break at the apex; there is deliberately no large-fragment landing state. */
+export function sampleTrainEjection(path: TrainChunkPath, ageMs: number) {
+  const t = Math.max(0, Math.min(1, ageMs / path.flightMs));
+  const z = path.height * Math.sin(t * Math.PI / 2);
+  const x = path.x + path.dx * t, groundY = path.y + path.dy * t;
+  return { x, y: groundY - z * .35, groundY, z, rotation: path.spin * t, broken: t === 1 };
 }

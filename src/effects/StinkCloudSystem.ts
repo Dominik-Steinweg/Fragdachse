@@ -472,7 +472,8 @@ export class StinkCloudSystem {
     const isElectric = cloud.visualVariant === 'electric';
 
     const groundGlow = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
-      .setDepth(STINK_DEPTH - 0.12)
+      // Surface residue must not multiply actor/projectile colours. Cloud volume stays at STINK_DEPTH.
+      .setDepth(9.3)
       .setTint(isElectric ? ELEC_GROUND : isVoidSpore ? VOID_SPORE_GROUND : isSpore ? 0x5b3818 : TINT_GROUND_GLOW)
       // Elektrofeld glüht additiv statt den Boden abzudunkeln.
       .setBlendMode(isElectric || isVoidSpore ? Phaser.BlendModes.ADD : Phaser.BlendModes.MULTIPLY)

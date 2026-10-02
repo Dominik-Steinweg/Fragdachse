@@ -35,4 +35,13 @@ describe('explosion visual profiles', () => {
     expect(getCombatExplosionProfile('train')?.family).toBe('train');
     expect(getCombatExplosionProfile('void_nuke')?.family).toBe('nuke');
   });
+  it('limits the P1 routing to ordinary thermal explosions, retaining high and special signatures', () => {
+    for (const style of ['default', 'rocket', 'mini_rocket', 'mini_rocket_cascade', 'he_cluster_shard', 'he_demolition_shard'] as const) {
+      expect(getCombatExplosionProfile(style)?.layering).toBe('ordinary');
+    }
+    for (const style of ['nuke', 'void_nuke', 'train', 'holy', 'lightning', 'energy', 'timebomb', 'timebomb_pop', 'time_bubble_release'] as const) {
+      expect(getCombatExplosionProfile(style)?.layering).toBe('legacy');
+    }
+  });
+
 });

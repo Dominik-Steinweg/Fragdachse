@@ -88,4 +88,31 @@ describe('R0 observed depth contract (diagnostics, never rendering inputs)', () 
     }
     check(resolve('src'));
   });
+  it('keeps P1 material under sunlight/canopy, emission outside ambient and stink residue below actors', () => {
+    for (const name of ['GoreNormal', 'ExplosionLowBody', 'ExplosionLowSmoke'] as const) {
+      const layer = GPU_LAYER_CONTRACTS[name];
+      expect(layer.height).toBe('body'); expect(layer.lighting).toBe('material');
+      expect(layer.profiles).toEqual(['K']);
+      expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.id === layer.id)).toBe(false);
+    }
+    for (const name of ['GoreAdd', 'ExplosionLowGlow'] as const) {
+      const layer = GPU_LAYER_CONTRACTS[name];
+      expect(layer.lighting).toBe('emissive'); expect(layer.profiles).toEqual(['E']);
+      expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.id === layer.id)).toBe(false);
+    }
+    const impact = GPU_LAYER_CONTRACTS.ExplosionLowCore;
+    expect(impact.height).toBe('high'); expect(impact.lighting).toBe('emissive');
+    expect(impact.profiles).toEqual(['H']);
+    expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.id === impact.id)).toBe(false);
+    const flash = CPU_LAYER_CONTRACTS.find(c => c.owner === 'effects/EffectSystem.ts' && c.component === 'playExplosionEffect/flash/setDepth/0')!;
+    expect(flash.height).toBe('high'); expect(flash.lighting).toBe('emissive');
+    expect(flash.profiles).toEqual(['H']);
+    expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.id === flash.id)).toBe(false);
+    const ground = CPU_LAYER_CONTRACTS.find(c => c.owner === 'effects/StinkCloudSystem.ts' && c.component.includes('groundGlow'))!;
+    expect(ground.height).toBe('ground'); expect(ground.depths.every(depth => depth < 9.92)).toBe(true);
+    expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.id === ground.id)).toBe(false);
+    // Explicitly deferred: stain ordering and composite/canopy ties remain debt.
+    for (const finding of ['D04', 'D07', 'D08']) expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.finding === finding)).toBe(true);
+  });
+
 });
