@@ -373,3 +373,20 @@ Loadout-/Upgrade-Icons, Decals und Groundcover verwenden getrennte Offline-Atlan
 muessen beide pruefen. UI und Bake-Images verwenden dieses Paar. CPU-/Canvas-Leser schneiden
 mit `Frame.cutX/cutY/cutWidth/cutHeight` aus, statt das gesamte Atlasbild als Einzelbild zu lesen.
 Die Vollbild-Geometrie bleibt unbeschnitten und ungedreht; Randextrusion verhindert Filter-Bleeding.
+
+## Private WebGL-Paesse und VAOs
+
+Bei rohen GL-Paessen ist `ELEMENT_ARRAY_BUFFER` Teil des gebundenen VAO, nicht nur
+ein globales Binding. Phasers `WebGLVAOWrapper.bind()` aktualisiert den globalen
+Indexbuffer-Cache nicht. Beim erzwungenen Zuruecksetzen daher zuerst ein privates
+VAO binden und globale Bindings wiederherstellen, Phasers VAO erst danach:
+`glWrapper.update(undefined, true, true)` (`vaoLast`). Andernfalls kann ein fremder
+oder leerer Indexbuffer in Phasers VAO geschrieben werden. Dies gilt auch fuer
+Upload-only-Paesse. Owner: [RockFormationGpuRepair.ts](../../src/arena/rocks/RockFormationGpuRepair.ts);
+Vertragstest: [RockFormationLighting.test.ts](../../tests/RockFormationLighting.test.ts).
+
+Private Datentextur-Uploads muessen `UNPACK_PREMULTIPLY_ALPHA_WEBGL` und
+`UNPACK_FLIP_Y_WEBGL` auch vor `texSubImage2D` explizit deaktivieren und danach den
+Caller-Zustand restaurieren. Das einmalige Setzen bei `texImage2D` reicht nicht:
+Phasers Farb-Uploads koennen die Flags zwischen Daten-Updates umschalten.
+RGBA-Daten duerfen bei Alpha 0 beliebige RGB-Werte tragen (etwa Sonnenproben).

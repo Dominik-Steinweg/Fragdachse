@@ -156,6 +156,17 @@ Lokale Render-Ausgaben isolieren: `dev.run({action:'renderDebug',disable:['sunCo
 Die Liste ersetzt die bisherige Auswahl; zusätzlich sind `distortion`, `bloom`, `grade`, `vignette`, `focus`, `barrel` erlaubt.
 `disable:[]` stellt alle Ausgaben wieder her; beim Szenariostart und Teardown wird ebenfalls zurückgesetzt.
 Simulation, Nebeldichte, Wolkenfeld und Lichtquellen laufen bei ausgeblendeter Ausgabe unverändert weiter.
+Felskanten isolieren: jeweils einzeln `disable:['rockSurface']`, `['rockGround']` oder `['rockFoliage']`
+unter `renderDebug` verwenden. Das unterdrueckt den Mineral-Multiply-Pass, den Boden-Schattenpass
+bzw. die Beleuchtung der Felsvegetation, ohne Worker-Daten oder Geometrie zu aendern.
+Mit `disable:['fogDisplay']` den Nebel getrennt vergleichen; `disable:[]` setzt alles zurueck.
+
+Mit `disable:['rockOverlays']` alle gebackenen Felsauflagen (Moos, Decals, Kolonien) ausblenden.
+Im Unterschied dazu entfernt `rockFoliage` nur deren Beleuchtung. Vergleichsbilder mit
+`dev.run({action:'pause'})` bei angehaltener Praesentationszeit aufnehmen, dann `disable:[]`.
+Die GPU-Reparaturdiagnose enthaelt `channelErrors`: pro Kanal Maximum, Texelposition,
+Soll-/Ist-Byte und `count` (Anzahl Abweichungen >1). Der Grenzwert bleibt unveraendert.
+
 Optionales `composite`: `material` zeigt die RGB8-Faktortextur vor dem Modulate-Blend (neutral ≈ grau),
 `neutral` zeichnet Faktor 1 mit weiterhin laufendem Material-Pass, `neutralInline` zeichnet Faktor 1 ohne diesen Pass.
 `normal` ist der Standard. Diese drei Diagnoseansichten ändern absichtlich die Ausgabe, nicht das Tuning.
@@ -243,6 +254,16 @@ Frameintervalle enthalten Browser-Scheduling und sind keine GPU-Zeiten.
 Andere Chunk-Bakes und GPU-Ausfuehrung sind darin nicht enthalten; dafuer die Frameintervalle mitpruefen.
 `formation.lastRepairPublishMs`, `maxRepairPublishMs`, `repairWorkerMs` und `repairLatencyMs`
 trennen Veroeffentlichung, Worker-Arbeit und Wartezeit der Geometrie-Reparatur.
+`rockRepair` meldet den Reparaturpfad (`gpu` oder `worker`), `latencyFrames` und
+CPU-/GPU-Kosten. Bei `gpu` muss `latencyFrames` null Frames betragen; die GPU-Daten
+werden vor dem Welt-Draw veroeffentlicht. `gpu.validated` und `maxChannelError`
+stammen aus einem echten Readback-Vergleich beim Erstaufbau (maximal ein Byte
+Abweichung zur Worker-Referenz durch Float32-Rundung). Bei fehlender Float-FBO-
+Unterstuetzung oder fehlgeschlagener Paritaet bleibt der Worker-Pfad aktiv;
+`gpu.reason` nennt den Grund. Dieser Fallback erfuellt nicht die Same-Frame-Abnahme.
+`gpu.gpuMs` ist eine asynchron abgefragte GPU-Zeit; `null` bedeutet nicht messbar,
+nicht null Millisekunden. `gpu.lastCpuMs` misst Submission, nicht GPU-Ausfuehrung.
+
 `sunTuning` ist ein lokaler Override; gültige Schlüssel und Grenzen stehen in
 [`src/config/sunlight.ts`](../src/config/sunlight.ts). Reset oder ein neuer World-Aufbau beendet die Overrides.
 Das Wolkenfeld bleibt in Weltkoordinaten verankert. `cloudCover` und `cloudDensity` steuern

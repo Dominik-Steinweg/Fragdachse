@@ -145,11 +145,14 @@ describe('Dev scenario automation lifecycle', () => {
 it('restores world output diagnostics and rejects unknown passes before mutating the world',()=>{
  enter();controller.afterHostFrame();
  const sunlight={setDebugCharacterShadowSolid: vi.fn(), getCharacterShadowsStatus:()=>({activeInstances:1}), setDebugCharacterShadowsSuppressed: vi.fn(), setDebugCompositeSuppressed:vi.fn(),setDebugCompositeView:vi.fn(),inspectDebugCompositeMaterial:vi.fn(()=>({zeroRGB:0}))};
+ const rockOverlays={setVisible:vi.fn()},rocks={setDebugFormationSuppressed:vi.fn()};
  const fog={setDebugDisplaySuppressed:vi.fn()},lighting={setCompositeSuppressed:vi.fn()};
  const postFx={setDebugDisabled:vi.fn((names:string[])=>{if(names.includes('typo'))throw Error('unknown');}),getDebugPasses:()=>[]};
- (controller as any).runtime.getScenarioLightingTargets=()=>({sunlight,fog,lighting,postFx});
- controller.setRenderDebug(['sunComposite','fogDisplay','lightmap','grade'],'neutral',true);
+ (controller as any).runtime.getScenarioLightingTargets=()=>({sunlight,fog,lighting,postFx,rocks,rockOverlays});
+ controller.setRenderDebug(['sunComposite','fogDisplay','lightmap','grade','rockSurface','rockFoliage','rockOverlays'],'neutral',true);
  expect(controller.lastAction).toMatchObject({material:{zeroRGB:0}});
+ expect(rocks.setDebugFormationSuppressed).toHaveBeenLastCalledWith(true,false,true);
+ expect(rockOverlays.setVisible).toHaveBeenLastCalledWith(false);
  expect(postFx.setDebugDisabled).toHaveBeenLastCalledWith(['grade']);
  expect(sunlight.setDebugCompositeSuppressed).toHaveBeenLastCalledWith(true);
  expect(fog.setDebugDisplaySuppressed).toHaveBeenLastCalledWith(true);
@@ -166,4 +169,6 @@ it('restores world output diagnostics and rejects unknown passes before mutating
  expect(sunlight.setDebugCharacterShadowSolid).toHaveBeenLastCalledWith(false);
  expect(fog.setDebugDisplaySuppressed).toHaveBeenLastCalledWith(false);
  expect(lighting.setCompositeSuppressed).toHaveBeenLastCalledWith(false);
+ expect(rocks.setDebugFormationSuppressed).toHaveBeenLastCalledWith(false,false,false);
+ expect(rockOverlays.setVisible).toHaveBeenLastCalledWith(true);
 });

@@ -279,7 +279,7 @@ export class RockFormationField {
 /** Prefilter once at worker initialization, before the two-pixel field sampling.
  * Periodic binomial taps reject isolated sub-sample relief without flattening
  * medium crevices or changing an inclined plane. */
-function filterDetail(source: Float32Array): Float32Array {
+export function filterDetail(source: Float32Array): Float32Array {
   const side=Math.sqrt(source.length), scratch=new Float32Array(source.length), result=new Float32Array(source.length);
   const weights=[1,4,6,4,1];
   for(let y=0;y<side;y++)for(let x=0;x<side;x++) {
@@ -348,7 +348,7 @@ function repairSmallHoles(coverage: Float32Array, span: number): Uint8Array {
   return support;
 }
 
-function formationNoise(x: number, y: number): number {
+export function formationNoise(x: number, y: number): number {
   const ix=Math.floor(x), iy=Math.floor(y), fx=x-ix, fy=y-iy;
   const u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
   const hash=(a: number,b: number): number => {

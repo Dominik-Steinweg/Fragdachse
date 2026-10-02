@@ -106,7 +106,7 @@ export class DevScenarioController {
   setRenderDebug(disable: readonly string[], composite: import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView = 'normal', probe = false, characterShadowSolid = false): void {
     this.requireReady();
     const targets = this.runtime.getScenarioLightingTargets();
-    const worldPasses = ['sunComposite', 'fogDisplay', 'lightmap', 'characterShadows'];
+    const worldPasses = ['sunComposite', 'fogDisplay', 'lightmap', 'characterShadows', 'rockSurface', 'rockGround', 'rockFoliage', 'rockOverlays'];
     // Validate the entire request before changing any world output.
     targets.postFx.setDebugDisabled(disable.filter(name => !worldPasses.includes(name)));
     targets.sunlight?.setDebugCompositeSuppressed(disable.includes('sunComposite'));
@@ -115,6 +115,8 @@ export class DevScenarioController {
     targets.sunlight?.setDebugCompositeView(composite);
     targets.fog?.setDebugDisplaySuppressed(disable.includes('fogDisplay'));
     targets.lighting.setCompositeSuppressed(disable.includes('lightmap'));
+    targets.rocks?.setDebugFormationSuppressed(disable.includes('rockSurface'),disable.includes('rockGround'),disable.includes('rockFoliage'));
+    targets.rockOverlays?.setVisible(!disable.includes('rockOverlays'));
     this.debugTargets = disable.length || composite !== 'normal' || characterShadowSolid ? targets : null;
     this.lastAction = { renderDebug: targets.postFx.getDebugPasses(),
       worldOutputs: worldPasses.map(name => ({ name, disabled: disable.includes(name) })), composite, characterShadowSolid,
@@ -129,6 +131,8 @@ export class DevScenarioController {
     targets?.sunlight?.setDebugCompositeView('normal');
     targets?.fog?.setDebugDisplaySuppressed(false);
     targets?.lighting.setCompositeSuppressed(false);
+    targets?.rocks?.setDebugFormationSuppressed(false,false,false);
+    targets?.rockOverlays?.setVisible(true);
     this.debugTargets = null;
   }
   setSunTuning(values: unknown, reset = false): void {

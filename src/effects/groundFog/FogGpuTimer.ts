@@ -17,8 +17,8 @@ export class FogGpuTimer {
     this.extension = gl.getExtension(this.gl2 ? 'EXT_disjoint_timer_query_webgl2' : 'EXT_disjoint_timer_query') as TimerExtension | null;
   }
   get supported(): boolean { return this.extension !== null; }
-  begin(): void {
-    const e = this.extension; if (!e || this.current) return;
+  poll(): void {
+    const e = this.extension; if (!e) return;
     if (this.gl.getParameter(e.GPU_DISJOINT_EXT)) { this.clear(); this.ms = null; return; }
     while (this.pending.length) {
       const q = this.pending[0];
@@ -28,6 +28,10 @@ export class FogGpuTimer {
       this.pending.shift(); this.remove(q);
       if (typeof ns === 'number' && Number.isFinite(ns)) { this.ms = ns / 1e6; this.sample++; }
     }
+  }
+  begin(): void {
+    const e = this.extension; if (!e || this.current) return;
+    this.poll();
     if (this.pending.length >= 8) return;
     this.current = this.gl2 ? this.gl2.createQuery() : e.createQueryEXT();
     if (this.current) {

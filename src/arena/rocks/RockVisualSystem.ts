@@ -98,6 +98,9 @@ export class RockVisualSystem {
     this.relief.mineralResponse=true;this.relief.clouds=clouds;
   }
   getFormationDiagnostics() { return this.formation ? {...this.formation.getDiagnostics(), presentationCpuMs:this.presentationCpuMs} : null; }
+  setDebugFormationSuppressed(surface: boolean, ground: boolean, foliage: boolean): void {
+    this.formation?.setDebugSuppressed(surface,ground,foliage);
+  }
   readonly getFormationReceiver = () => this.formation?.getReceiverBinding() ?? null;
 
   getGpuDiagnostics(): PersistentGpuWorldDiagnostics | null {

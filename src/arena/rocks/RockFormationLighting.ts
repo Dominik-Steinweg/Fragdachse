@@ -15,6 +15,7 @@ import { FORMATION, FORMATION_SIDE, type FormationRock } from './RockFormationFi
 import type { FormationWorkerRequest, FormationWorkerResult, FormationWorkerInitialized, FormationWorkerRepair } from './RockFormationWorker';
 import { formationSurfaceFactor, ROCK_FORMATION_FRAGMENT } from './rockFormationShader';
 import type { FormationReceiverBinding } from './RockFoliageLighting';
+import { RockFormationGpuRepair } from './RockFormationGpuRepair';
 
 let nextId = 0;
 
@@ -34,8 +35,9 @@ class FormationDataTexture {
     gl.texSubImage2D(gl.TEXTURE_2D,0,x,y,width,height,gl.RGBA,gl.UNSIGNED_BYTE,data);
   }
   destroy(): void { this.scene.textures.remove(this.key); }
+  get webGLTexture(): WebGLTexture { return this.wrapper.webGLTexture!; }
 }
-interface Resident { cx: number; cy: number; slot: number; ready: boolean; dirty: boolean; lastUse: number; revision: number; data?: Uint8Array; occlusion?: Uint8Array; previous?: Uint8Array; azimuth?: number; repair?: boolean }
+interface Resident { cx: number; cy: number; slot: number; ready: boolean; dirty: boolean; lastUse: number; revision: number; data?: Uint8Array; occlusion?: Uint8Array; previous?: Uint8Array; azimuth?: number; repair?: boolean; gpuRepaired?: boolean; gpuAzimuth?: number }
 const signature=(s: FormationRock): string => `${s.gridX},${s.gridY},${s.active},${s.material},${s.frame}`;
 const snapshot=(s: RockVisualState): FormationRock => ({id:s.id,gridX:s.gridX,gridY:s.gridY,active:s.active,material:s.material,frame:s.frame});
 
@@ -43,6 +45,21 @@ const snapshot=(s: RockVisualState): FormationRock => ({id:s.id,gridX:s.gridX,gr
  * vegetation and its ground shadow. Workers build static data; each frame draws
  * only two quads and updates uniforms. The existing lightmap still colours once. */
 export class RockFormationLighting {
+  private debugSurfaceSuppressed = false;
+  private debugGroundSuppressed = false;
+  private debugFoliageSuppressed = false;
+  /** Isolate receivers without changing formation bytes, readiness or workers. */
+  setDebugSuppressed(surface: boolean, ground: boolean, foliage: boolean): void {
+    this.debugSurfaceSuppressed=surface;this.debugGroundSuppressed=ground;this.debugFoliageSuppressed=foliage;
+    const active=this.state.material==='mineral'&&!this.error&&!this.overflow;
+    this.surface.setVisible(active&&!surface);
+    this.ground.setVisible(active&&!ground&&(this.state.castShadow!==false||!!this.rim));
+  }
+  private readonly gpuRepair: RockFormationGpuRepair | null;
+  private frameNumber = 0;
+  private repairFrame = 0;
+  private repairLatencyFrames: number | null = null;
+  private repairPath: 'gpu' | 'worker' | null = null;
   private pendingRepair: FormationWorkerRepair | null = null;
   private repairStartedAt: number | null = null;
   private repairMainThreadMs = 0;
@@ -118,6 +135,9 @@ export class RockFormationLighting {
     this.receiver={field:this.field.texture,lookup:this.lookup.texture,occlusion:this.occlusion.texture,
       frame:[frame.offsetX,frame.offsetY,frame.width,frame.height],sun:state.sun,options:[0,0,1,1],
       };
+    this.gpuRepair=RockFormationGpuRepair.create(scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer,
+      frame.width,frame.height,states,{alpha,detail});
+    rollback.push(()=>this.gpuRepair?.destroy());
     const timing = loadingTimeline.capture(), workerStarted = performance.now();
     this.worker=new Worker(new URL('./RockFormationWorker.ts',import.meta.url),{type:'module'});
     rollback.push(()=>{this.worker.onmessage=null;this.worker.onerror=null;this.worker.terminate();});
@@ -195,7 +215,9 @@ export class RockFormationLighting {
     }
     if(!changes.length) return;
     const started = performance.now();
+    this.syncSunDirection();this.syncRimGeometry();
     this.repairStartedAt ??= started;
+    this.repairFrame=this.frameNumber;this.repairLatencyFrames=null;this.repairPath='worker';
     this.revision++;this.post({kind:'change',states:changes});
     const reach=FORMATION.envelopeReach+FORMATION.horizonReach;
     for(const r of this.resident.values()) for(const cell of changes) {
@@ -205,8 +227,15 @@ export class RockFormationLighting {
         r.dirty=true;r.repair=true;r.revision=this.revision;break;
       }
     }
-    // Keep the last exact field, including its receiver mask, untouched until all
-    // affected chunks are ready. Never fabricate cell-height horizons or a pit AO ring.
+    this.gpuRepair?.change(changes);
+    const repairs=[...this.resident.values()].filter(r=>r.repair&&r.ready);
+    if(this.gpuRepair?.repair(repairs,this.azimuth,this.qualityHorizons,this.rim,
+      {field:this.field.webGLTexture,occlusion:this.occlusion.webGLTexture})) {
+      for(const r of repairs) {this.horizonBlend[r.slot]=1;r.gpuRepaired=true;r.gpuAzimuth=this.azimuth;}
+      this.repairLatencyFrames=0;this.repairLatencyMs=performance.now()-started;this.repairPath='gpu';
+    }
+    // Capability/parity failures explicitly report the existing worker fallback.
+    // Never publish a knowingly different approximation.
     this.repairMainThreadMs += performance.now()-started;
   }
 
@@ -265,6 +294,7 @@ export class RockFormationLighting {
 
   tick(): void {
     if(this.disposed) return;
+    this.frameNumber++;this.gpuRepair?.poll();
     this.syncSunDirection();
     this.syncRimGeometry();
     const now=this.state.clouds?.timeSec??0;
@@ -273,7 +303,8 @@ export class RockFormationLighting {
       this.horizonBlend[slot]=t*t*(3-2*t);
     }
     const active=this.state.material==='mineral'&&!this.error&&!this.overflow;
-    this.surface.setVisible(active);this.ground.setVisible(active&&(this.state.castShadow!==false||!!this.rim));
+    this.surface.setVisible(active&&!this.debugSurfaceSuppressed);
+    this.ground.setVisible(active&&!this.debugGroundSuppressed&&(this.state.castShadow!==false||!!this.rim));
     this.surface.setBlendMode(this.state.normals?Phaser.BlendModes.NORMAL:Phaser.BlendModes.MULTIPLY);
     if(this.pending) {
       const result=this.pending;this.pending=null;
@@ -293,7 +324,10 @@ export class RockFormationLighting {
         this.maxRepairPublishMs=Math.max(this.maxRepairPublishMs,this.lastRepairPublishMs);
         this.repairMainThreadMs+=this.lastRepairPublishMs;
         this.repairWorkerMs+=batch.buildMs;this.repairBatches++;
-        this.repairLatencyMs=this.repairStartedAt===null?0:performance.now()-this.repairStartedAt;
+        if(this.repairPath!=='gpu') {
+          this.repairLatencyMs=this.repairStartedAt===null?0:performance.now()-this.repairStartedAt;
+          this.repairLatencyFrames=this.frameNumber-this.repairFrame;
+        }
         this.repairStartedAt=null;
       } else this.discardedBuilds+=batch.results.length;
     }
@@ -321,6 +355,7 @@ export class RockFormationLighting {
     this.maxWorkerBuildMs=Math.max(this.maxWorkerBuildMs,result.buildMs);
     const r=this.resident.get(`${result.cx},${result.cy}`);
     if(!r || result.revision!==r.revision){this.discardedBuilds++;return;}
+    this.gpuRepair?.validate(r,result.azimuth,this.qualityHorizons,this.rim,result.data,result.occlusion);
     if(!repair&&this.previous&&r.ready&&r.data&&r.occlusion&&r.azimuth!==result.azimuth) {
       r.previous??=new Uint8Array(result.data.length);
       packPreviousHorizons(r.data,r.occlusion,r.previous,this.horizonBlend[r.slot]);
@@ -330,7 +365,11 @@ export class RockFormationLighting {
     } else this.horizonBlend[r.slot]=1;
     if(r.azimuth!==undefined&&r.azimuth!==result.azimuth){this.directionBuildMs+=result.buildMs;this.directionBuilds++;}
     let x0=0,y0=0,x1=FORMATION_SIDE,y1=FORMATION_SIDE;
-    if(repair&&r.ready&&r.data&&r.occlusion) {
+    if(repair&&r.gpuRepaired&&r.gpuAzimuth===result.azimuth) {
+      // The correctly repaired GPU field is already final within channel precision.
+      // Refresh only the canonical CPU mirror; no delayed second texture write.
+      x1=y1=0;
+    } else if(repair&&!r.gpuRepaired&&r.ready&&r.data&&r.occlusion) {
       x0=y0=FORMATION_SIDE;x1=y1=0;
       const oldData=new Uint32Array(r.data.buffer,r.data.byteOffset,r.data.byteLength/4);
       const oldOcclusion=new Uint32Array(r.occlusion.buffer,r.occlusion.byteOffset,r.occlusion.byteLength/4);
@@ -354,7 +393,7 @@ export class RockFormationLighting {
       };
       upload(this.field,result.data);upload(this.occlusion,result.occlusion);
     }
-    r.azimuth=result.azimuth;r.repair=false;
+    r.azimuth=result.azimuth;r.repair=false;r.gpuRepaired=false;
     r.dirty=this.qualityHorizons&&result.azimuth!==this.azimuth;r.data=result.data;r.occlusion=result.occlusion;
     if(!r.ready){r.ready=true;this.lookupData[(r.cy*this.lookup.width+r.cx)*4]=r.slot+1;this.uploadLookup();}
   }
@@ -410,7 +449,7 @@ export class RockFormationLighting {
   }
   getDiagnostics() {
     return {residentChunks:this.resident.size,pendingChunks:this.wanted.filter(key=>this.resident.get(key)?.dirty).length,
-      textureBytes:this.field.width*this.field.height*(this.previous?12:8)+this.lookupData.byteLength,uploadBytes:this.uploadBytes,
+      textureBytes:this.field.width*this.field.height*(this.previous?12:8)+this.lookupData.byteLength+(this.gpuRepair?.textureBytes??0),uploadBytes:this.uploadBytes,
       horizonAzimuth:this.azimuth,directionChanges:this.directionChanges,directionBuildMs:this.directionBuildMs,directionBuilds:this.directionBuilds,
       sharedSunTextureBytes:512*512*4,
       light:{strength:this.state.strength,sun:[...this.state.sun]},
@@ -418,10 +457,12 @@ export class RockFormationLighting {
       discardedBuilds:this.discardedBuilds,eraseUploadBytes:this.eraseUploadBytes,lookupUploadBytes:this.lookupUploadBytes,
       repairMainThreadMs:this.repairMainThreadMs,lastRepairPublishMs:this.lastRepairPublishMs,maxRepairPublishMs:this.maxRepairPublishMs,
       repairWorkerMs:this.repairWorkerMs,repairLatencyMs:this.repairLatencyMs,repairBatches:this.repairBatches,
+      repairLatencyFrames:this.repairLatencyFrames,repairPath:this.repairPath,
+      gpuRepair:this.gpuRepair?.diagnostics??{available:false,reason:'WebGL float repair unavailable'},
       residentEvictions:this.residentEvictions,overflow:this.overflow,error:this.error};
   }
   getReceiverBinding(): FormationReceiverBinding | null {
-    if(this.disposed||this.error||this.overflow||this.state.material!=='mineral'||!this.receiver)return null;
+    if(this.disposed||this.error||this.overflow||this.debugFoliageSuppressed||this.state.material!=='mineral'||!this.receiver)return null;
     const binding=this.receiver;
     binding.sun=this.state.sun;
     binding.horizonPrevious=this.previous?.texture;binding.horizonBlend=this.horizonBlend;
@@ -438,6 +479,7 @@ export class RockFormationLighting {
     if(this.disposed)return;this.disposed=true;this.receiver=null;this.worker.onmessage=null;this.worker.onerror=null;this.worker.terminate();
     for(const quad of [this.surface,this.ground]) this.destroyQuad(quad);
     this.previous?.destroy();this.previous=null;
+    this.gpuRepair?.destroy();
     this.field.destroy();this.occlusion.destroy();this.lookup.destroy();this.resident.clear();this.slots.fill(null);this.signatures.clear();this.pending=null;this.pendingRepair=null;
   }
   private destroyQuad(quad:Phaser.GameObjects.Shader):void {

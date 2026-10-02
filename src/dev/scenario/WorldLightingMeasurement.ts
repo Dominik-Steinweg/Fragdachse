@@ -121,6 +121,8 @@ export class WorldLightingMeasurement {
         eraseUploadBytes:(formation?.eraseUploadBytes??0)-initialErase,residentEvictions:(formation?.residentEvictions??0)-initialEvictions,
         frameIntervalMs: summary(frames), drawCalls: summary(draws), offscreenDrawCalls: summary(offscreen),
         rockPresentationFrameCpuMs: summary(presentationFrameCpuMs), rawRockPresentationFrameCpuMs: presentationFrameCpuMs,
+        rockRepair: formation ? {path:formation.repairPath,latencyFrames:formation.repairLatencyFrames,
+          latencyMs:formation.repairLatencyMs,gpu:formation.gpuRepair} : null,
         rockPresentationCpuScope: 'RockVisualSystem.flush: dirty renderer updates, formation invalidation and texture publication; excludes worker CPU, GPU execution and other chunk bakes.',
         rockGeometryUploadBytes: uploaded() - initialUpload,
         mineralColourSize: mineralColour ? [mineralColour.width, mineralColour.height] : null,
