@@ -16,6 +16,21 @@ import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
 import { setCloudUniforms } from '../sunlight/cloudShadow';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
 import { FOG_SURFACE_FRAGMENT, fogSurfaceSize } from './FogSurfaceMask';
+import { resolveFogRockLighting } from './FogRockLighting';
+import { runWithScopedBlend } from '../../graphics/PhaserScopedBlend';
+
+const aerialBlendModes = new WeakMap<Phaser.Renderer.WebGL.WebGLRenderer, number>();
+function aerialBlendMode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): number {
+  let mode=aerialBlendModes.get(renderer);
+  if(mode===undefined) {
+    const gl=renderer.gl;
+    mode=renderer.blendModes.length;
+    renderer.addBlendMode([gl.ONE,gl.ONE_MINUS_SRC_ALPHA],gl.FUNC_ADD);
+    renderer.updateBlendMode(mode,[gl.ONE,gl.ONE_MINUS_SRC_ALPHA,gl.ZERO,gl.ONE],gl.FUNC_ADD);
+    aerialBlendModes.set(renderer,mode);
+  }
+  return mode;
+}
 
 const SIDE = FOG.chunkSize / FOG.cellSize;
 const WIDTH = SIDE * FOG.atlasCols, HEIGHT = SIDE * FOG.atlasRows, SLOTS = FOG.atlasCols * FOG.atlasRows;
@@ -73,6 +88,8 @@ export class FogGpuField {
   private readonly impulse: Phaser.GameObjects.Shader;
   private material: Phaser.GameObjects.Shader | null = null;
   private display: Phaser.GameObjects.Shader | null = null;
+  private rockAerial: Phaser.GameObjects.Shader | null = null;
+  private rockAerialStrength = 0;
   private woodlandLight: FogWoodlandLight | null = null;
   private boundary: FogDataTexture | null = null;
   private boundaryBuilder: FogBankField | null = null;
@@ -82,6 +99,8 @@ export class FogGpuField {
   private surfaceMask: Phaser.GameObjects.RenderTexture | null = null;
   private packedSurface: Phaser.GameObjects.Shader | null = null;
   private rockCoverage: FormationCoverageBinding | null = null;
+  private rockFogStrength = resolveFogRockLighting();
+  private readonly neutralHorizonBlend = new Float32Array(64).fill(1);
   private trailMask: Phaser.GameObjects.Shader | null = null;
   private trailCommands: FogDataTexture | null = null;
   private trailRenderer: FogTrailRenderer | null = null;
@@ -173,6 +192,14 @@ export class FogGpuField {
         set('uHasRockCoverage', this.rockCoverage && this.debug==='normal' ? 1 : 0);
         if(name==='surface') {
           set('uBases',0);set('uRockField',1);set('uRockLookup',2);
+          // Five samplers total: unchanged eight-unit minimum, no new render pass.
+          set('uRockOcclusion',3);set('uHorizonPrevious',4);
+          const shadows=this.rockCoverage?.fogShadows;
+          set('uHasRockShadows',Number(!!shadows));
+          set('uRockFogStrength',this.rockFogStrength);
+          set('uRockSun',shadows?.sun??this.neutralSun);
+          set('uRockSolarStrength',shadows?.solarEnabled&&this.quality!=='low'?shadows.strength:0);
+          set('uHorizonBlend[0]',shadows?.horizonBlend??this.neutralHorizonBlend);
           set('uHasBases',Number(this.hasBases));set('uHasRocks',Number(!!this.rockCoverage));
           set('uView',[this.view.x,this.view.y,this.view.width,this.view.height]);
           set('uRockFrame',this.rockCoverage?.frame??[0,0,1,1]);
@@ -344,16 +371,27 @@ export class FogGpuField {
         this.lightView[2]=this.view.width;this.lightView[3]=this.view.height;
         set('uFogView',this.lightView);set('uFogPrelit',Number(this.prelit));
   }
-  private makeDisplay(width: number, height: number): Phaser.GameObjects.Shader {
+  private makeDisplay(width: number, height: number, aerial = false): Phaser.GameObjects.Shader {
     const display = new Phaser.GameObjects.Shader(this.scene, {
-      name: 'GroundFog_display', shaderName: 'GroundFog_display', fragmentSource: FOG_DISPLAY_FRAGMENT,
+      name: aerial?'GroundFog_rockAerial':'GroundFog_display', shaderName: aerial?'GroundFog_rockAerial':'GroundFog_display', fragmentSource: FOG_DISPLAY_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
+        set('uRockAerialOnly',Number(aerial));set('uRockAerialStrength',this.rockAerialStrength);
         set('uMaterial', 0); set('uTrails', 1); set('uHasTrails', this.trailMask && this.debug === 'normal' ? 1 : 0);
         set('uSurfaces', this.rockCoverage ? 2 : 0); set('uHasRockCoverage', this.rockCoverage && this.debug==='normal' ? 1 : 0);
         this.setLightingUniforms(set);
       },
     }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT']);
-    return this.scene.add.existing(display).setOrigin(0).setDepth(this.depth);
+    // Optional mineral-only optical mix, above attached foliage and below daytime fog.
+    // Preserve scene alpha explicitly: subsequent Phaser ADD draws use DST_ALPHA.
+    // Scope the private PMA RGB mix to this draw; night fog keeps its original depth.
+    if(aerial) {
+      const blend=aerialBlendMode(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer);
+      const node=display.renderNode,run=node.run;
+      node.run=function(context,object,parent):void {
+        runWithScopedBlend(this,run,context,blend,object,parent);
+      };
+    }
+    return this.scene.add.existing(display).setOrigin(0).setDepth(aerial?DEPTH.ROCK_VEGETATION+.01:this.depth);
   }
   /** `trailWidth`/`trailHeight` size the wake mask independently of the soft material. */
   private makeSurfacePass(width:number,height:number):Phaser.GameObjects.Shader {
@@ -364,7 +402,9 @@ export class FogGpuField {
   private renderSurfacePass(hasBases:boolean):void {
     this.hasBases=hasBases;
     const shader=this.packedSurface!,fallback=this.scene.textures.get('__DEFAULT');
-    shader.setTextures([this.surfaceMask!.texture,this.rockCoverage?.field??fallback,this.rockCoverage?.lookup??fallback]);
+    const shadows=this.rockCoverage?.fogShadows;
+    shader.setTextures([this.surfaceMask!.texture,this.rockCoverage?.field??fallback,this.rockCoverage?.lookup??fallback,
+      shadows?.occlusion??fallback,shadows?.horizonPrevious??this.rockCoverage?.field??fallback]);
     const renderer=this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     renderer.gl.disable(renderer.gl.DITHER);
     shader.renderWebGLStep(renderer,shader,shader.drawingContext!);
@@ -374,13 +414,14 @@ export class FogGpuField {
   render(view: FogRect, pixelWidth: number, pixelHeight: number, debug: FogDebug, interpolation: number,
     surfaces: readonly Phaser.GameObjects.Image[] = [], quality: FogQuality = 'high',
     trailWidth = pixelWidth, trailHeight = pixelHeight): void {
-    if (!this.initialized || this.residency.overflow || this.destroyed) { this.display?.setVisible(false); return; }
+    if (!this.initialized || this.residency.overflow || this.destroyed) { this.hide(); return; }
     this.view = view; this.debug = debug; this.interpolation = interpolation; this.quality = quality;
     const w = Math.max(2, Math.ceil(pixelWidth / 2) * 2), h = Math.max(2, Math.ceil(pixelHeight / 2) * 2);
     const prelit=canPrelightFog(this.woodlandLight?.sunCompositeTuning,this.textureUnits,debug==='normal');
     if (!this.material || this.material.width !== w || this.material.height !== h || prelit!==this.prelit) {
       this.prelit=prelit;
       if (this.display) destroyFogShader(this.display);
+      if (this.rockAerial) { destroyFogShader(this.rockAerial);this.rockAerial=null; }
       if (this.material) destroyFogShader(this.material);
       this.material = this.makePass(prelit?'materialLit':'material',prelit?FOG_K_MATERIAL_FRAGMENT:FOG_MATERIAL_FRAGMENT,w,h);
       this.material.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
@@ -427,11 +468,23 @@ export class FogGpuField {
     if(this.rockCoverage)displayTextures.push(this.packedSurface!.texture!);
     this.display!.setTextures(displayTextures);
     this.display!.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setVisible(true);
+    const showAerial=this.rockAerialStrength>0&&!!this.rockCoverage&&debug==='normal';
+    if(showAerial) {
+      this.rockAerial??=this.makeDisplay(w,h,true);
+      this.rockAerial.setTextures(displayTextures);
+      this.rockAerial.setPosition(view.x,view.y).setDisplaySize(view.width,view.height);
+    }
+    this.rockAerial?.setVisible(showAerial);
     // The fine mineral mask excludes rock tops; actors remain above the fog.
     this.display!.setDepth(this.woodlandLight?.sunCompositeTuning && (this.woodlandLight.sunStrength??0)>0
       ? DEPTH.ROCK_VEGETATION+.02 : this.depth);
   }
-  hide(): void { this.display?.setVisible(false); }
+  hide(): void { this.display?.setVisible(false);this.rockAerial?.setVisible(false); }
+  setRockLighting(strength: [number, number]): void { this.rockFogStrength=strength; }
+  setRockAerialStrength(strength: number): void {
+    this.rockAerialStrength=strength;
+    if(strength===0&&this.rockAerial){destroyFogShader(this.rockAerial);this.rockAerial=null;}
+  }
   setRockCoverage(binding: FormationCoverageBinding | null): void {
     this.rockCoverage=binding;this.syncBoundary();
   }
@@ -502,6 +555,7 @@ export class FogGpuField {
     this.rockCoverage=null;
     this.boundary?.destroy();this.boundary=null;this.boundaryBuilder=null;
     if (this.display) destroyFogShader(this.display); this.display = null;
+    if (this.rockAerial) destroyFogShader(this.rockAerial); this.rockAerial = null;
     this.surfaceMask?.destroy(); this.surfaceMask = null;
     if(this.packedSurface)destroyFogShader(this.packedSurface);this.packedSurface=null;
     if (this.material) destroyFogShader(this.material);

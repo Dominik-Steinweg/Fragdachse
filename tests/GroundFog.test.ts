@@ -3,6 +3,7 @@ vi.mock('phaser', () => ({}));
 import { FogTerrainModel } from '../src/effects/groundFog/FogTerrainModel';
 import { FogResidency } from '../src/effects/groundFog/FogResidency';
 import { FogImpulses } from '../src/effects/groundFog/FogImpulses';
+import { resolveRockAerialPerspective } from '../src/effects/groundFog/FogRockLighting';
 import { GroundFogSystem } from '../src/effects/groundFog/GroundFogSystem';
 import { FOG, fogDensityAt } from '../src/effects/groundFog/FogConfig';
 import { createMovementVisualSample } from '../src/effects/MovementStepSampler';
@@ -16,6 +17,30 @@ import { ARENA_MAP_GRID_CHANGED_EVENT } from '../src/scenes/arena/ArenaEvents';
 const frame = { offsetX: 80, offsetY: 40, width: 40960, height: 8192 };
 const view = { x: 100, y: 60, width: 1000, height: 700 };
 describe('ground fog bounded world state', () => {
+  it('toggles rock optics without changing readiness, density or queued reactions',()=>{
+    const fog=new GroundFogSystem({sys:{renderer:{on:vi.fn(),off:vi.fn()}}} as never,frame,1,[]);
+    expect((fog as any).rockAerialStrength).toBe(resolveRockAerialPerspective());
+    fog.terrain.setObstacle('rock',[{gridX:2,gridY:2}],true,true);
+    fog.addHitscan(300,300,500,300,12);
+    const diagnostics={...fog.getDiagnostics()},blocked=fog.terrain.blocked.slice(),tuning={...fog.tuning};
+    const setRockLighting=vi.fn(),setRockAerialStrength=vi.fn();(fog as any).gpu={setRockLighting,setRockAerialStrength};
+    fog.setDebugRockLighting(false,true,{fogRockContactStrength:.3});
+    expect(setRockLighting).toHaveBeenLastCalledWith([.3,0]);
+    fog.setDebugRockLighting(true,false,{fogRockSunShadowStrength:.2});
+    expect(setRockLighting).toHaveBeenLastCalledWith([0,.2]);
+    expect(()=>fog.setDebugRockLighting(false,false,{fogRockContactStrength:NaN})).toThrow();
+    expect(setRockLighting).toHaveBeenCalledTimes(2);
+    expect(setRockAerialStrength).toHaveBeenLastCalledWith(resolveRockAerialPerspective());
+    fog.setDebugRockLighting(false,false,{rockAerialPerspective:true,rockAerialPerspectiveStrength:.3});
+    expect(setRockAerialStrength).toHaveBeenLastCalledWith(.3);
+    expect(()=>fog.setDebugRockLighting(false,false,{rockAerialPerspectiveStrength:Infinity})).toThrow();
+    expect(setRockLighting).toHaveBeenCalledTimes(3);expect(setRockAerialStrength).toHaveBeenCalledTimes(3);
+    fog.setDebugRockLighting(false,false,{rockAerialPerspective:false});
+    expect(setRockAerialStrength).toHaveBeenLastCalledWith(0);
+    fog.setDebugRockLighting(false,false);expect(setRockAerialStrength).toHaveBeenLastCalledWith(resolveRockAerialPerspective());
+    expect(fog.getDiagnostics()).toEqual(diagnostics);expect(fog.terrain.blocked).toEqual(blocked);expect(fog.tuning).toEqual(tuning);
+    (fog as any).gpu=null;fog.destroy();
+  });
   it('resolves factors by exact weapon identity and scales width and the entire fade independently', () => {
     expect(weaponFogTrail('P90')).toBe(WEAPON_CONFIGS.P90);
     expect(weaponFogTrail('BFG')).toBe(UTILITY_CONFIGS.BFG);

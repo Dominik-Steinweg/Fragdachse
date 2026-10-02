@@ -1,6 +1,7 @@
 import { CLOUD_SHADOW_GLSL } from '../sunlight/cloudShadow';
 import { ATMOSPHERE_DITHER_GLSL, FOG_BANK_GLSL } from '../sunlight/atmosphereNoise';
 import { FOG } from './FogConfig';
+import { FOG_ROCK_LIGHTING } from './FogRockLighting';
 import { SUN_VISIBILITY_GLSL, SUN_COMPOSITE_FACTOR_GLSL } from '../sunlight/sunVisibility';
 import { FOG_VISIBILITY_BUDGET_GLSL } from '../sunlight/FogVisibilityBudget';
 import { FOG_PATCH_GLSL } from '../sunlight/FogPatchField';
@@ -486,6 +487,7 @@ precision highp float;
 varying vec2 outTexCoord;
 uniform sampler2D uMaterial,uTrails,uSurfaces;
 uniform float uHasTrails,uFogPrelit,uHasRockCoverage;
+uniform float uRockAerialOnly,uRockAerialStrength;
 uniform vec4 uFogView;
 ${CLOUD_SHADOW_GLSL}
 ${FOG_BANK_GLSL}
@@ -494,12 +496,30 @@ ${FOG_LIGHT_GLSL}
 void main() {
  float trace=uHasTrails>.5?texture2D(uTrails,outTexCoord).r:0.0;
  vec4 fog=texture2D(uMaterial,outTexCoord)*(1.0-trace);
- // Apply geometry after upsampling: even Low cannot spill fog over rock tops.
- if(uHasRockCoverage>.5)fog*=1.0-smoothstep(.25,.75,texture2D(uSurfaces,outTexCoord).r);
- // Woodland radiance is already resolved at material resolution; preserve fine wakes.
- if(uFogPrelit>.5||fog.a<=0.0){gl_FragColor=fog;return;}
  vec2 world=uFogView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uFogView.zw;
- gl_FragColor=lightFog(fog,world);
+ if(uRockAerialOnly>.5) {
+   if(uHasRockCoverage<.5)discard;
+   float mineral=smoothstep(.25,.75,texture2D(uSurfaces,outTexCoord).r);
+   if(mineral<=0.0)discard;
+   if(uFogPrelit<.5)fog=lightFog(fog,world);
+   // Affine local colour mix lifts black and reduces contrast/chroma only where
+   // uncut fog exists. Share its sun compensation, never its contact darkening.
+   // This PMA NORMAL contribution does not change the original fog's alpha/wakes.
+   float visibleFog=smoothstep(${f(FOG_ROCK_LIGHTING.aerialHazeOpacity)},${f(FOG_ROCK_LIGHTING.aerialFullOpacity)},fog.a);
+   gl_FragColor=fog*(mineral*uRockAerialStrength*visibleFog);return;
+ }
+ // Apply geometry after upsampling: even Low cannot spill fog over rock tops.
+ float rockRetention=1.0;
+ if(uHasRockCoverage>.5) {
+   vec4 surface=texture2D(uSurfaces,outTexCoord);
+   fog*=1.0-smoothstep(.25,.75,surface.r);
+   rockRetention=surface.b;
+ }
+ // Woodland radiance is already resolved at material resolution; preserve fine wakes.
+ if(uFogPrelit>.5||fog.a<=0.0){gl_FragColor=vec4(fog.rgb*rockRetention,fog.a);return;}
+ fog=lightFog(fog,world);
+ // Optical response after lighting on both paths. PMA alpha and fine wakes stay intact.
+ gl_FragColor=vec4(fog.rgb*rockRetention,fog.a);
 }
 `;
 

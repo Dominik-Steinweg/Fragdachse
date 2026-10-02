@@ -47,9 +47,14 @@ describe('formation lighting ownership and incremental updates',()=>{
   it('lends geometry independently of light debug and rejects stale worker-only repairs',()=>{
     const f=fixture();settle(f);
     const coverage=f.lighting.getCoverageBinding();expect(coverage).not.toBeNull();
+    expect(coverage!.fogShadows!.occlusion).toBe(f.lighting.getReceiverBinding()!.occlusion);
+    expect(coverage!.fogShadows!.solarEnabled).toBe(true);
     f.lighting.setDebugSuppressed(true,true,true);f.state.enabled=false;
     expect(f.lighting.getReceiverBinding()).toBeNull();
     expect(f.lighting.getCoverageBinding()).toBe(coverage);
+    expect(coverage!.fogShadows!.strength).toBe(0);
+    f.state.enabled=true;f.state.castShadow=false;
+    expect(f.lighting.getCoverageBinding()!.fogShadows!.solarEnabled).toBe(false);
     f.states[0].active=false;f.lighting.invalidate([0]);
     expect(f.lighting.getCoverageBinding()).toBeNull();
     settle(f);expect(f.lighting.getCoverageBinding()).toBe(coverage);
@@ -187,7 +192,11 @@ it('uses quality bins and stops solar horizon jobs on low',async()=>{
   expect(f.worker.messages.filter(m=>m.kind==='build').at(-1).horizons).toBe(false);
   resolveSunPath(720,150,path);f.lighting.tick();expect(jobs()).toBe(low);
   expect(f.lighting.getReceiverBinding()!.options[2]).toBe(0);
+  const fog=f.lighting.getCoverageBinding()!.fogShadows!;
+  expect(fog.solarEnabled).toBe(false);expect(fog.occlusion).toBeDefined();
+  expect(fog.horizonPrevious).toBeUndefined();
   f.state.clouds.quality=SUN_RENDER_QUALITY.high;f.lighting.tick();settle();expect(jobs()).toBeGreaterThan(low);
+  expect(f.lighting.getCoverageBinding()!.fogShadows!.solarEnabled).toBe(true);
   f.lighting.destroy();
 });
 

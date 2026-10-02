@@ -17,6 +17,7 @@ import { FogImpulses } from './FogImpulses';
 import { FogGpuTimer } from './FogGpuTimer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
+import { resolveFogRockLighting, resolveRockAerialPerspective, type FogRockLightingOptions } from './FogRockLighting';
 
 interface Motion { id: string; x: number; y: number; revision: number; frame: number }
 export interface FogDiagnostics {
@@ -48,6 +49,8 @@ export class GroundFogSystem {
   private gpu: FogGpuField | null = null;
   private woodlandLight: FogWoodlandLight | null = null;
   private rockCoverage: (() => FormationCoverageBinding | null) | null = null;
+  private rockLighting = resolveFogRockLighting();
+  private rockAerialStrength = resolveRockAerialPerspective();
   private accumulator = 0;
   private readonly fineInputs: { segment: ProjectileTrailSegment; sourceId: number | string; profile?: FogTrailProfile }[] = [];
   private trainBefore: { x: number; front: number; rear: number; dir: number; time: number } | null = null;
@@ -169,6 +172,8 @@ export class GroundFogSystem {
       if (this.measureGpu) { this.timer ??= new FogGpuTimer(renderer.gl); this.timer.begin(); }
       // Geometry is accepted even when simulation is paused. New slots initialize once below.
       this.gpu.setRockCoverage(this.rockCoverage?.() ?? null);
+      this.gpu.setRockLighting(this.rockLighting);
+      this.gpu.setRockAerialStrength(this.rockAerialStrength);
       const prepareAt = loadingTimeline.start();
       this.gpu.prepare(view, this.elapsed);
       loadingTimeline.end('fog/prepare-submit', prepareAt);
@@ -220,6 +225,14 @@ export class GroundFogSystem {
   getDiagnostics(): Readonly<FogDiagnostics> { this.stats.pendingImpulses = this.impulses.size + this.fineInputs.length; return this.stats; }
   setSurfaceImages(images: readonly Phaser.GameObjects.Image[]): void { this.surfaces = images; }
   setRockCoverage(provider: (() => FormationCoverageBinding | null) | null): void { this.rockCoverage = provider; }
+  setDebugRockLighting(contactDisabled: boolean, sunDisabled: boolean, options: FogRockLightingOptions = {}): void {
+    const strength=resolveFogRockLighting(options);
+    const aerial=resolveRockAerialPerspective(options);
+    this.rockLighting=[contactDisabled?0:strength[0],sunDisabled?0:strength[1]];
+    this.rockAerialStrength=aerial;
+    this.gpu?.setRockLighting(this.rockLighting);
+    this.gpu?.setRockAerialStrength(aerial);
+  }
   setWoodlandLight(binding: FogWoodlandLight | null): void {
     this.woodlandLight=binding;this.gpu?.setWoodlandLight(binding);
   }

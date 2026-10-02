@@ -17,8 +17,18 @@ import { formationSurfaceFactor, ROCK_FORMATION_FRAGMENT } from './rockFormation
 import type { FormationReceiverBinding } from './RockFoliageLighting';
 import { RockFormationGpuRepair } from './RockFormationGpuRepair';
 
-/** Borrowed geometry only; consumers never own or retune these textures. */
-export type FormationCoverageBinding = Pick<FormationReceiverBinding, 'field' | 'lookup' | 'frame'>;
+/** Borrowed geometry and optical inputs; consumers never own or retune these textures. */
+export type FormationCoverageBinding = Pick<FormationReceiverBinding, 'field' | 'lookup' | 'frame'> & {
+  /** Optional optical data; valid under the same geometry/repair barrier as coverage. */
+  fogShadows?: {
+    occlusion: Phaser.Textures.Texture;
+    horizonPrevious?: Phaser.Textures.Texture;
+    horizonBlend: Float32Array;
+    sun: [number, number, number];
+    strength: number;
+    solarEnabled: boolean;
+  };
+};
 
 let nextId = 0;
 
@@ -105,7 +115,7 @@ export class RockFormationLighting {
   private eraseUploadBytes = 0;
   private lookupUploadBytes = 0;
   private residentEvictions = 0;
-  private receiver: FormationReceiverBinding | null = null;
+  private receiver: (FormationReceiverBinding & FormationCoverageBinding) | null = null;
   private previous: FormationDataTexture | null = null;
   private qualityHorizons=true;
   private azimuth = 135;
@@ -138,6 +148,7 @@ export class RockFormationLighting {
     this.receiver={field:this.field.texture,lookup:this.lookup.texture,occlusion:this.occlusion.texture,
       mineralHeight:scene.textures.get(this.heightTextureKey),
       frame:[frame.offsetX,frame.offsetY,frame.width,frame.height],sun:state.sun,options:[0,0,1,1],
+      fogShadows:{occlusion:this.occlusion.texture,horizonBlend:this.horizonBlend,sun:state.sun,strength:0,solarEnabled:false},
       };
     this.gpuRepair=RockFormationGpuRepair.create(scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer,
       frame.width,frame.height,states,{alpha,detail});
@@ -470,6 +481,11 @@ export class RockFormationLighting {
     // A worker-only repair must not lend the previous silhouette as current geometry.
     // GPU repairs already update the borrowed field synchronously in invalidate().
     for(const r of this.resident.values()) if(r.repair&&(this.repairPath!=='gpu'||!r.gpuRepaired))return null;
+    const shadows=this.receiver.fogShadows!;
+    shadows.horizonPrevious=this.previous?.texture;
+    shadows.sun=this.state.sun;
+    shadows.strength=this.state.enabled?(this.state.clouds?.strength??this.state.strength):0;
+    shadows.solarEnabled=this.state.castShadow!==false&&this.state.selfShadow!==false&&this.state.clouds?.quality?.horizons!==false;
     return this.receiver;
   }
   getReceiverBinding(): FormationReceiverBinding | null {
