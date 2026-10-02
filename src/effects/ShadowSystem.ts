@@ -17,6 +17,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import { TRAIN } from '../train/TrainConfig';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedTrainState } from '../types';
 import {
+  CHARACTER_SHADOW_MASKS_ENABLED,
   getProjectileShadowConfig,
   SHADOW_CASTERS,
   SHADOW_PROFILES,
@@ -203,7 +204,7 @@ export class ShadowSystem {
       ...(this.characterShadows?.inspect() ?? { activeInstances: 0, instances: [] }) };
   }
   private syncCharacterShadows(players: readonly PlayerEntity[]): boolean {
-    if (!this.characterClouds || !this.lastStaticLayout || !this.quality.dynamicShadows) return false;
+    if (!CHARACTER_SHADOW_MASKS_ENABLED || !this.characterClouds || !this.lastStaticLayout || !this.quality.dynamicShadows) return false;
     if (!this.characterShadows) {
       this.characterShadows = new CharacterShadowRenderer(this.scene, this.characterClouds,
         new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds()));

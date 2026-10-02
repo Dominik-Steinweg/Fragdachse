@@ -1,4 +1,6 @@
 import { it, expect, vi, afterEach } from 'vitest';
+// The baked-mask path stays covered while it is disabled in production.
+vi.mock('../src/effects/ShadowConfig', async (load) => ({ ...(await load<typeof import('../src/effects/ShadowConfig')>()), CHARACTER_SHADOW_MASKS_ENABLED: true }));
 vi.mock('phaser',()=>({Textures:{FilterMode:{LINEAR:0}},Loader:{FileTypes:{ImageFile:class {
   data:any; cache:any; key:string; url:string; complete=false;error=false;
   constructor(public loader:any,config:any){this.key=config.key;this.url=config.url;}

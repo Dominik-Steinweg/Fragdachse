@@ -15,6 +15,13 @@ import type { ProjectileStyle } from '../types';
 
 export type ShadowShape = 'cell' | 'circle' | 'ellipse' | 'capsule';
 
+/**
+ * Baked per-azimuth shadow masks ghost between neighbouring samples while a figure turns.
+ * They stay disabled (players use the ellipse caster, no mask download) until projected
+ * mesh shadows replace them.
+ */
+export const CHARACTER_SHADOW_MASKS_ENABLED = false;
+
 /** Receiver-masked dynamic shadow above ground fog, below figures. */
 export const CHARACTER_SHADOW_CONFIG = {
   depth: DEPTH.PLAYERS - .08,
