@@ -16,6 +16,7 @@ import { FogGpuField } from './FogGpuField';
 import { FogImpulses } from './FogImpulses';
 import { FogGpuTimer } from './FogGpuTimer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
+import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
 
 interface Motion { id: string; x: number; y: number; revision: number; frame: number }
 export interface FogDiagnostics {
@@ -46,6 +47,7 @@ export class GroundFogSystem {
   private surfaces: readonly Phaser.GameObjects.Image[] = [];
   private gpu: FogGpuField | null = null;
   private woodlandLight: FogWoodlandLight | null = null;
+  private rockCoverage: (() => FormationCoverageBinding | null) | null = null;
   private accumulator = 0;
   private readonly fineInputs: { segment: ProjectileTrailSegment; sourceId: number | string; profile?: FogTrailProfile }[] = [];
   private trainBefore: { x: number; front: number; rear: number; dir: number; time: number } | null = null;
@@ -166,6 +168,7 @@ export class GroundFogSystem {
       }
       if (this.measureGpu) { this.timer ??= new FogGpuTimer(renderer.gl); this.timer.begin(); }
       // Geometry is accepted even when simulation is paused. New slots initialize once below.
+      this.gpu.setRockCoverage(this.rockCoverage?.() ?? null);
       const prepareAt = loadingTimeline.start();
       this.gpu.prepare(view, this.elapsed);
       loadingTimeline.end('fog/prepare-submit', prepareAt);
@@ -216,6 +219,7 @@ export class GroundFogSystem {
   readDensity(x: number, y: number): { density: number; reached: boolean } { return this.gpu?.readDensity(x, y) ?? { density: 0, reached: false }; }
   getDiagnostics(): Readonly<FogDiagnostics> { this.stats.pendingImpulses = this.impulses.size + this.fineInputs.length; return this.stats; }
   setSurfaceImages(images: readonly Phaser.GameObjects.Image[]): void { this.surfaces = images; }
+  setRockCoverage(provider: (() => FormationCoverageBinding | null) | null): void { this.rockCoverage = provider; }
   setWoodlandLight(binding: FogWoodlandLight | null): void {
     this.woodlandLight=binding;this.gpu?.setWoodlandLight(binding);
   }
@@ -233,6 +237,7 @@ export class GroundFogSystem {
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;
     this.woodlandLight=null;
+    this.rockCoverage=null;
     this.scene.sys.renderer?.off('restorewebgl', this.onContextRestore); this.releaseGpu(); this.terrain.clear(); this.surfaces = [];
   }
 }

@@ -102,6 +102,7 @@ export class RockVisualSystem {
     this.formation?.setDebugSuppressed(surface,ground,foliage);
   }
   readonly getFormationReceiver = () => this.formation?.getReceiverBinding() ?? null;
+  readonly getFormationCoverage = () => this.formation?.getCoverageBinding() ?? null;
 
   getGpuDiagnostics(): PersistentGpuWorldDiagnostics | null {
     return this.renderer instanceof PersistentGpuWorldSystem

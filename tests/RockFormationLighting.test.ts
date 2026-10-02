@@ -44,6 +44,17 @@ function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourK
 }
 afterEach(()=>{vi.unstubAllGlobals();vi.clearAllMocks();fake.quads.length=0;});
 describe('formation lighting ownership and incremental updates',()=>{
+  it('lends geometry independently of light debug and rejects stale worker-only repairs',()=>{
+    const f=fixture();settle(f);
+    const coverage=f.lighting.getCoverageBinding();expect(coverage).not.toBeNull();
+    f.lighting.setDebugSuppressed(true,true,true);f.state.enabled=false;
+    expect(f.lighting.getReceiverBinding()).toBeNull();
+    expect(f.lighting.getCoverageBinding()).toBe(coverage);
+    f.states[0].active=false;f.lighting.invalidate([0]);
+    expect(f.lighting.getCoverageBinding()).toBeNull();
+    settle(f);expect(f.lighting.getCoverageBinding()).toBe(coverage);
+    f.lighting.destroy();expect(f.lighting.getCoverageBinding()).toBeNull();
+  });
   it('borrows the selected authored height source and leaves its lifetime to the asset cache',()=>{
     const key='optional-authored-height', colour='optional-authored-colour',f=fixture(512,512,4,4,key,colour);
     expect(f.getTexture).toHaveBeenCalledWith(key);

@@ -17,6 +17,9 @@ import { formationSurfaceFactor, ROCK_FORMATION_FRAGMENT } from './rockFormation
 import type { FormationReceiverBinding } from './RockFoliageLighting';
 import { RockFormationGpuRepair } from './RockFormationGpuRepair';
 
+/** Borrowed geometry only; consumers never own or retune these textures. */
+export type FormationCoverageBinding = Pick<FormationReceiverBinding, 'field' | 'lookup' | 'frame'>;
+
 let nextId = 0;
 
 class FormationDataTexture {
@@ -461,6 +464,13 @@ export class RockFormationLighting {
       repairLatencyFrames:this.repairLatencyFrames,repairPath:this.repairPath,
       gpuRepair:this.gpuRepair?.diagnostics??{available:false,reason:'WebGL float repair unavailable'},
       residentEvictions:this.residentEvictions,overflow:this.overflow,error:this.error};
+  }
+  getCoverageBinding(): FormationCoverageBinding | null {
+    if(this.disposed||this.error||this.overflow||this.state.material!=='mineral'||!this.receiver)return null;
+    // A worker-only repair must not lend the previous silhouette as current geometry.
+    // GPU repairs already update the borrowed field synchronously in invalidate().
+    for(const r of this.resident.values()) if(r.repair&&(this.repairPath!=='gpu'||!r.gpuRepaired))return null;
+    return this.receiver;
   }
   getReceiverBinding(): FormationReceiverBinding | null {
     if(this.disposed||this.error||this.overflow||this.debugFoliageSuppressed||this.state.material!=='mineral'||!this.receiver)return null;

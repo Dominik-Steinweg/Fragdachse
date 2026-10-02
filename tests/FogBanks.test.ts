@@ -7,6 +7,25 @@ import { validateSunTuning } from '../src/effects/sunlight/SunTuning';
 
 const decode=(data:Uint8Array,x:number,y:number)=>((data[(y*64+x)*4]*256+data[(y*64+x)*4+1])/65535-.5)*128;
 describe('fog bank boundary contracts',()=>{
+  it('borrows open flow for mineral shoulders without opening colliders or bases',()=>{
+    const terrain=new FogTerrainModel({offsetX:70,offsetY:90,width:1024,height:512},[]);
+    terrain.setObstacle('mineral',[{gridX:15,gridY:8}],true,true);
+    const field=new FogBankField(),boundary=new Uint8Array(64*64*4),visual=new Uint8Array(boundary.length);
+    const build=(cx=0)=>field.build(terrain,cx,0,boundary,64,0,0,true,visual);
+    build();
+    for(let y=32;y<36;y++)for(let x=60;x<64;x++) {
+      const i=(y*64+x)*4,wx=(x+.5)*8,wy=(y+.5)*8;
+      expect(terrain.sample(wx,wy)[0]).toBe(0);
+      expect(visual[i+2]).toBe(255);
+      expect(terrain.sample(wx+visual[i]-128,wy+visual[i+1]-128)[0]).toBe(255);
+    }
+    build(1);expect(visual[(33*64)*4+2]).toBe(255);
+    terrain.acknowledge();terrain.setObstacle('base',[{gridX:15,gridY:8}]);
+    expect(terrain.changed.size).toBe(0);expect(terrain.visualChanged.size).toBe(1);build();expect(visual[(33*64+62)*4+2]).toBe(0);
+    terrain.removeObstacle('base');build();expect(visual[(33*64+62)*4+2]).toBe(255);
+    terrain.removeObstacle('mineral');build();expect(visual[(33*64+62)*4+2]).toBe(0);
+    expect(terrain.sample(500,268)[2]).toBe(255);
+  });
   it('has a continuous monotone shoreline ramp on both sides of the waterline',()=>{
     for(const width of [60,110,140])for(const warp of [-12,0,12]) {
       let previous=0;

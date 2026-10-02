@@ -14,6 +14,8 @@ import { FogTrailRenderer } from './FogTrailRenderer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
 import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
 import { setCloudUniforms } from '../sunlight/cloudShadow';
+import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
+import { FOG_SURFACE_FRAGMENT, fogSurfaceSize } from './FogSurfaceMask';
 
 const SIDE = FOG.chunkSize / FOG.cellSize;
 const WIDTH = SIDE * FOG.atlasCols, HEIGHT = SIDE * FOG.atlasRows, SLOTS = FOG.atlasCols * FOG.atlasRows;
@@ -65,6 +67,7 @@ export class FogGpuField {
   private readonly commands: FogDataTexture;
   private readonly bins: FogDataTexture;
   private readonly lookup: FogDataTexture;
+  private readonly presentation: FogDataTexture;
   private readonly states: Phaser.GameObjects.Shader[] = [];
   private readonly velocities: Phaser.GameObjects.Shader[] = [];
   private readonly impulse: Phaser.GameObjects.Shader;
@@ -77,6 +80,8 @@ export class FogGpuField {
   private boundarySince = -Infinity;
   private readonly boundarySlots = new Int32Array(SLOTS).fill(-1);
   private surfaceMask: Phaser.GameObjects.RenderTexture | null = null;
+  private packedSurface: Phaser.GameObjects.Shader | null = null;
+  private rockCoverage: FormationCoverageBinding | null = null;
   private trailMask: Phaser.GameObjects.Shader | null = null;
   private trailCommands: FogDataTexture | null = null;
   private trailRenderer: FogTrailRenderer | null = null;
@@ -85,6 +90,7 @@ export class FogGpuField {
   private readonly resources: (() => void)[] = [];
   private readonly dither: boolean;
   private hasSurfaces = false;
+  private hasBases = false;
   private quality: FogQuality = 'high';
   private prelit=false;
   private readonly textureUnits:number;
@@ -121,6 +127,7 @@ export class FogGpuField {
       this.commands = this.makeData('commands', 256, 4);
       this.bins = this.makeData('bins', FOG.impulsesPerChunk, SLOTS);
       this.lookup = this.makeData('lookup', Math.ceil(terrain.frame.width / 512), Math.ceil(terrain.frame.height / 512));
+      this.presentation = this.makeData('presentation', WIDTH, HEIGHT);
       // All shaders are allocated/compiled during preparation, before first visible impulse.
       this.impulse = this.makePass('impulse', FOG_IMPULSE_FRAGMENT, WIDTH, HEIGHT);
       for (let i = 0; i < 2; i++) {
@@ -163,6 +170,13 @@ export class FogGpuField {
         if(name==='materialLit')this.setLightingUniforms(set);
         set('uDebug', FOG_DEBUG.indexOf(this.debug)); set('uInterpolation', this.interpolation);
         set('uHasSurface', this.hasSurfaces ? 1 : 0); set('uQuality', this.quality === 'high' ? 2 : this.quality === 'medium' ? 1 : 0);
+        set('uHasRockCoverage', this.rockCoverage && this.debug==='normal' ? 1 : 0);
+        if(name==='surface') {
+          set('uBases',0);set('uRockField',1);set('uRockLookup',2);
+          set('uHasBases',Number(this.hasBases));set('uHasRocks',Number(!!this.rockCoverage));
+          set('uView',[this.view.x,this.view.y,this.view.width,this.view.height]);
+          set('uRockFrame',this.rockCoverage?.frame??[0,0,1,1]);
+        }
       },
     }, 0, 0, width, height, Array(8).fill('__DEFAULT'));
     try {
@@ -183,8 +197,8 @@ export class FogGpuField {
     shader.setTextures([state.texture!, velocity.texture!, this.terrainTexture.texture, this.metaTexture.texture,
       this.commands.texture, this.bins.texture, this.impulse.texture!, this.lookup.texture]);
     if (shader === this.material) {
-      shader.textures[4] = this.velocities[this.current].texture!;
-      shader.textures[5] = this.surfaceMask?.texture ?? this.scene.textures.get('__DEFAULT');
+      shader.textures[4] = this.debug==='normal' ? this.presentation.texture : this.velocities[this.current].texture!;
+      shader.textures[5] = this.packedSurface?.texture ?? this.scene.textures.get('__DEFAULT');
       if(this.boundary && this.debug==='normal')shader.textures[6]=this.boundary.texture;
     }
     // Never bind the output as an input, even when that sampler was optimized out.
@@ -201,6 +215,7 @@ export class FogGpuField {
     this.residency.update(view, now);
     if (this.residency.overflow) { this.display?.setVisible(false); return; }
     const data = this.terrainTexture.data;
+    const geometryChanges = new Set([...this.terrain.changed, ...this.terrain.visualChanged]);
     let changed = false, boundaryChanged = false;
     if(this.boundary && !this.boundaryFresh && this.terrain.changed.size>0) {
       snapshotFogBoundary(this.boundary.data,(this.elapsed-this.boundarySince)/450);
@@ -211,14 +226,14 @@ export class FogGpuField {
         const key=chunk.cy*this.lookup.width+chunk.cx;
         const fresh=this.boundarySlots[chunk.slot]!==key;
         let dirty=this.boundaryFresh||fresh;
-        if(!dirty)for(const index of this.terrain.changed) {
+        if(!dirty)for(const index of geometryChanges) {
           const x=index%this.terrain.cols*CELL_SIZE,y=Math.floor(index/this.terrain.cols)*CELL_SIZE;
           if(x+CELL_SIZE>=chunk.cx*512-FOG_BOUNDARY_RANGE && x<=chunk.cx*512+512+FOG_BOUNDARY_RANGE
             && y+CELL_SIZE>=chunk.cy*512-FOG_BOUNDARY_RANGE && y<=chunk.cy*512+512+FOG_BOUNDARY_RANGE) { dirty=true;break; }
         }
         if(dirty) {
           this.boundaryBuilder.build(this.terrain,chunk.cx,chunk.cy,this.boundary.data,WIDTH,
-            chunk.slot%FOG.atlasCols*SIDE,Math.floor(chunk.slot/FOG.atlasCols)*SIDE,!this.boundaryFresh&&!fresh);
+            chunk.slot%FOG.atlasCols*SIDE,Math.floor(chunk.slot/FOG.atlasCols)*SIDE,!this.boundaryFresh&&!fresh,this.presentation.data);
           this.boundarySlots[chunk.slot]=key;
           boundaryChanged=true;
         }
@@ -238,7 +253,7 @@ export class FogGpuField {
       }
     }
     if (changed) this.terrainTexture.upload();
-    if(boundaryChanged)this.boundary!.upload();
+    if(boundaryChanged){this.boundary!.upload();this.presentation.upload();}
     this.boundaryFresh=false;
     this.terrain.acknowledge();
     const lookupKey = [...this.residency.chunks.values()].filter(c => c.active).map(c => `${c.slot}:${c.cx}:${c.cy}`).join(';');
@@ -334,12 +349,28 @@ export class FogGpuField {
       name: 'GroundFog_display', shaderName: 'GroundFog_display', fragmentSource: FOG_DISPLAY_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
         set('uMaterial', 0); set('uTrails', 1); set('uHasTrails', this.trailMask && this.debug === 'normal' ? 1 : 0);
+        set('uSurfaces', this.rockCoverage ? 2 : 0); set('uHasRockCoverage', this.rockCoverage && this.debug==='normal' ? 1 : 0);
         this.setLightingUniforms(set);
       },
     }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT']);
     return this.scene.add.existing(display).setOrigin(0).setDepth(this.depth);
   }
   /** `trailWidth`/`trailHeight` size the wake mask independently of the soft material. */
+  private makeSurfacePass(width:number,height:number):Phaser.GameObjects.Shader {
+    const shader=this.makePass('surface',FOG_SURFACE_FRAGMENT,width,height);
+    shader.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    return shader;
+  }
+  private renderSurfacePass(hasBases:boolean):void {
+    this.hasBases=hasBases;
+    const shader=this.packedSurface!,fallback=this.scene.textures.get('__DEFAULT');
+    shader.setTextures([this.surfaceMask!.texture,this.rockCoverage?.field??fallback,this.rockCoverage?.lookup??fallback]);
+    const renderer=this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    renderer.gl.disable(renderer.gl.DITHER);
+    shader.renderWebGLStep(renderer,shader,shader.drawingContext!);
+    if(this.dither)renderer.gl.enable(renderer.gl.DITHER);
+    renderer.glWrapper.update({blend:{enabled:true}});
+  }
   render(view: FogRect, pixelWidth: number, pixelHeight: number, debug: FogDebug, interpolation: number,
     surfaces: readonly Phaser.GameObjects.Image[] = [], quality: FogQuality = 'high',
     trailWidth = pixelWidth, trailHeight = pixelHeight): void {
@@ -354,7 +385,6 @@ export class FogGpuField {
       this.material = this.makePass(prelit?'materialLit':'material',prelit?FOG_K_MATERIAL_FRAGMENT:FOG_MATERIAL_FRAGMENT,w,h);
       this.material.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
       this.display = this.makeDisplay(w, h);
-      this.surfaceMask?.destroy(); this.surfaceMask = null;
     }
     if (quality !== 'low' || this.trails.size > 0 || this.trailMask) {
       this.trailCommands ??= this.makeData('trailCommands', FOG.trailTextureWidth, FOG.trailCapacity / FOG.trailTextureWidth * 5);
@@ -370,11 +400,17 @@ export class FogGpuField {
       }
       this.trailRenderer!.draw(this.trails, view, this.elapsed, this.tuning.reaction, this.trailCommands.texture, quality !== 'low');
     }
-    this.hasSurfaces = surfaces.length > 0;
+    this.hasSurfaces = surfaces.length > 0 || !!this.rockCoverage;
     if (this.hasSurfaces) {
-      this.surfaceMask ??= new Phaser.GameObjects.RenderTexture(this.scene, 0, 0, w, h);
+      const [mw,mh]=fogSurfaceSize(view.width,view.height);
+      if(this.surfaceMask?.width!==mw||this.surfaceMask?.height!==mh) {
+        this.surfaceMask?.destroy();
+        this.surfaceMask=new Phaser.GameObjects.RenderTexture(this.scene,0,0,mw,mh);
+        if(this.packedSurface)destroyFogShader(this.packedSurface);
+        this.packedSurface=this.makeSurfacePass(mw,mh);
+      }
       const mask = this.surfaceMask; mask.clear();
-      const sx = w / view.width, sy = h / view.height;
+      const sx = mw / view.width, sy = mh / view.height;
       for (const image of surfaces) {
         if (!image.active || !image.visible || image.alpha <= 0 || image.x < view.x - image.displayWidth
           || image.y < view.y - image.displayHeight || image.x > view.x + view.width + image.displayWidth
@@ -384,23 +420,33 @@ export class FogGpuField {
             rotation: image.rotation, alpha: image.alpha });
       }
       mask.render();
+      this.renderSurfacePass(surfaces.length>0);
     }
     this.draw(this.material, this.states[this.current], this.states[1 - this.current]);
-    this.display!.setTextures([this.material.texture!, this.trailMask?.texture ?? this.scene.textures.get('__DEFAULT')]);
+    const displayTextures=[this.material.texture!, this.trailMask?.texture ?? this.scene.textures.get('__DEFAULT')];
+    if(this.rockCoverage)displayTextures.push(this.packedSurface!.texture!);
+    this.display!.setTextures(displayTextures);
     this.display!.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setVisible(true);
-    // Only the thin SDF fringe crosses low rock shoulders; actors remain above it.
+    // The fine mineral mask excludes rock tops; actors remain above the fog.
     this.display!.setDepth(this.woodlandLight?.sunCompositeTuning && (this.woodlandLight.sunStrength??0)>0
       ? DEPTH.ROCK_VEGETATION+.02 : this.depth);
   }
   hide(): void { this.display?.setVisible(false); }
+  setRockCoverage(binding: FormationCoverageBinding | null): void {
+    this.rockCoverage=binding;this.syncBoundary();
+  }
   setWoodlandLight(binding: FogWoodlandLight | null): void {
     this.woodlandLight=binding;
-    if(binding?.sunCompositeTuning && !this.boundary) {
+    this.syncBoundary();
+  }
+  private syncBoundary():void {
+    const needed=!!this.woodlandLight?.sunCompositeTuning||!!this.rockCoverage;
+    if(needed && !this.boundary) {
       this.boundary=new FogDataTexture(this.scene,this.prefix+'boundary',WIDTH,HEIGHT);
       this.boundaryBuilder=new FogBankField();this.boundaryFresh=true;
       this.boundarySince=-Infinity;
       this.boundarySlots.fill(-1);
-    } else if(!binding?.sunCompositeTuning && this.boundary) {
+    } else if(!needed && this.boundary) {
       if(this.material)this.material.textures[6]=this.impulse.texture!;
       this.boundary.destroy();this.boundary=null;this.boundaryBuilder=null;
     }
@@ -446,15 +492,18 @@ export class FogGpuField {
     return WIDTH * HEIGHT * 4 * 6 + this.metaTexture.data.length + this.commands.data.length + this.bins.data.length
       + this.lookup.data.length + (this.material ? this.material.width * this.material.height * 4 : 0)
       + (this.surfaceMask ? this.surfaceMask.width * this.surfaceMask.height * 4 : 0)
+      + (this.packedSurface ? this.packedSurface.width * this.packedSurface.height * 4 : 0) + this.presentation.data.length
       + (this.trailMask ? this.trailMask.width * this.trailMask.height * 4 : 0)
       + (this.trailCommands?.data.length ?? 0) + (this.boundary?.data.length??0) + (this.trailRenderer ? FOG.trailCapacity * 6 * 16 : 0);
   }
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;
     this.woodlandLight=null;
+    this.rockCoverage=null;
     this.boundary?.destroy();this.boundary=null;this.boundaryBuilder=null;
     if (this.display) destroyFogShader(this.display); this.display = null;
     this.surfaceMask?.destroy(); this.surfaceMask = null;
+    if(this.packedSurface)destroyFogShader(this.packedSurface);this.packedSurface=null;
     if (this.material) destroyFogShader(this.material);
     if (this.trailMask) destroyFogShader(this.trailMask);
     for (const shader of [...this.states, ...this.velocities, this.impulse]) if (shader) destroyFogShader(shader);

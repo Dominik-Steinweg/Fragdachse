@@ -291,7 +291,7 @@ ${FOG_PATCH_GLSL}
 ${ATMOSPHERE_DITHER_GLSL}
 ${FOG_LIGHT_GLSL}
 uniform vec2 uLookupSize,uViewOrigin,uViewSize;
-uniform float uOpacity,uDetail,uDebug,uInterpolation,uHasSurface,uQuality,uWoodlandBanks;
+uniform float uOpacity,uDetail,uDebug,uInterpolation,uHasSurface,uQuality,uWoodlandBanks,uHasRockCoverage;
 // uVelocity is the previous DENSITY buffer in this presentation pass.
 vec4 worldSample(vec2 world) {
  if(any(lessThan(world,vec2(0))) || any(greaterThanEqual(world,uWorldSize))) return vec4(0);
@@ -310,6 +310,23 @@ vec4 smoothWorld(vec2 world) {
  vec2 grid=world/8.0-.5,base=(floor(grid)+.5)*8.0,w=fract(grid);
  return mix(mix(worldSample(base),worldSample(base+vec2(8,0)),w.x),
    mix(worldSample(base+vec2(0,8)),worldSample(base+vec2(8,8)),w.x),w.y);
+}
+// Unit four is presentation topology only in normal material mode. The flow
+// simulation still sees the full collider. Geometry is current, never the old SDF fade.
+vec3 rockPresentation(vec2 world) {
+ if(uHasRockCoverage<.5||any(lessThan(world,vec2(0)))||any(greaterThanEqual(world,uWorldSize)))return vec3(world,0.0);
+ float slot=texture2D(uLookup,(floor(world/512.0)+.5)/uLookupSize).r*255.0-1.0;
+ if(slot<-.5)return vec3(world,0.0);
+ vec2 cell=floor(mod(world,512.0)/8.0);
+ vec4 p=texture2D(uCommands,cellUV(floor(slot+.5),cell));
+ float valid=texture2D(uBins,outTexCoord).g;
+ if(p.b<.5||valid<.999)return vec3(world,0.0);
+ vec2 delta=floor(p.rg*255.0+.5)-128.0;
+ // Away from the shoulder, free samples retain continuous coordinates. At the
+ // shoulder borrow an open centre, including corners where a gradient is zero.
+ float distance=floor(p.a*255.0+.5)-128.0;
+ vec2 source=distance<8.0?(floor(world/8.0)+.5)*8.0+delta:world;
+ return vec3(source,1.0);
 }
 float waterCell(vec2 world) {
  if(any(lessThan(world,vec2(0)))||any(greaterThanEqual(world,uWorldSize)))return 0.0;
@@ -336,7 +353,7 @@ vec3 boundaryField(vec2 world) {
  float a=boundaryCell(p),b=boundaryCell(p+vec2(8,0)),c=boundaryCell(p+vec2(0,8)),d=boundaryCell(p+vec2(8,8));
  return vec3(mix(mix(a,b,w.x),mix(c,d,w.x),w.y),mix(b-a,d-c,w.y)/8.0,mix(c-a,d-b,w.x)/8.0);
 }
-float woodlandThickness(vec2 world,float surface,out float layered,out float waterWeight,out float patchDistance,out float patchActivity) {
+float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out float waterWeight,out float patchDistance,out float patchActivity) {
  patchDistance=-1000.0;patchActivity=0.0;
  waterWeight=0.0;
  vec2 global=world+vec2(uWorldOffsetX,uWorldOffsetY);
@@ -349,6 +366,7 @@ float woodlandThickness(vec2 world,float surface,out float layered,out float wat
  // Static small erosion follows rounded corners without moving the collision contour.
  float edge=boundary.x+(fogBankNoise(global/19.0)-.5)*4.0;
  vec2 source=world+normal*max(0.0,12.0-boundary.x);
+ if(rock.z>.5)source=rock.xy;
  vec4 transported=smoothWorld(source);
  float slot=texture2D(uLookup,(floor(source/512.0)+.5)/uLookupSize).r*255.0-1.0;
  if(slot<-.5){layered=0.0;return 0.0;}
@@ -367,18 +385,21 @@ float woodlandThickness(vec2 world,float surface,out float layered,out float wat
  float shape=uFogClearHaze+uFogPatchDensity*patch*(.07+2.25*layered*layered);
  float pile=smoothstep(-5.0,uFogPileSoftness,edge)
    *(1.0+.28*exp(-pow((edge-uFogPileSoftness*.65)/uFogPileSoftness,2.0)));
+ if(rock.z>.5)pile=1.0;
  // Extra moisture appears only in narrow drifting fibres, not the entire pond.
  float vapour=smoothstep(.65,.95,layered);
  float density=uFogDensity*shape*(1.0+uFogWaterBoost*waterRamp*vapour)*flow*pile;
  // Thin wind-borne shoulder wisps, not a fog sheet over rock tops.
- density*=mix(.22,1.0,smoothstep(-2.0,9.0,edge));
+ float shoulder=rock.z>.5?1.0:mix(.22,1.0,smoothstep(-2.0,9.0,edge));
+ density*=shoulder;
  patchActivity=clamp(uOpacity*uFogOpticalOpacity*uFogDensity*uFogPatchDensity
-   *flow*pile*mix(.22,1.0,smoothstep(-2.0,9.0,edge))*(1.0-surface),0.0,1.0);
+   *flow*pile*shoulder*(1.0-surface),0.0,1.0);
  return max(0.0,density*(1.0-surface)-.004);
 }
 void main() {
  vec2 world=uViewOrigin+flip(outTexCoord)*uViewSize;
  float day=uFogBanksK*smoothstep(0.0,.15,uFogDay);
+ vec3 rock=rockPresentation(world);
  vec4 center=vec4(0.0);float d=0.0;
  if(day<1.0||uDebug>.5){
   center=worldSample(world);
@@ -386,6 +407,7 @@ void main() {
   d=mix(mix(worldSample(base).r,worldSample(base+vec2(8,0)).r,weight.x),
     mix(worldSample(base+vec2(0,8)).r,worldSample(base+vec2(8,8)).r,weight.x),weight.y);
  }
+ if(rock.z>.5&&day<1.0)d=smoothWorld(rock.xy).r;
  float surface=uHasSurface>.5?texture2D(uBins,outTexCoord).a:0.0;
  d*=1.0-surface;
  if(uDebug>.5) {
@@ -435,7 +457,7 @@ void main() {
        +texture2D(uBins,outTexCoord+vec2(0,px.y)).a+texture2D(uBins,outTexCoord-vec2(0,px.y)).a)/6.0;
    }
    float layered;
-   float banks=woodlandThickness(world,softSurface,layered,waterWeight,patchDistance,patchActivity);
+   float banks=woodlandThickness(world,softSurface,rock,layered,waterWeight,patchDistance,patchActivity);
    thickness=mix(thickness,banks,day);
    structure=mix(structure,layered,day);
  }
@@ -462,8 +484,8 @@ export const FOG_DISPLAY_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
 varying vec2 outTexCoord;
-uniform sampler2D uMaterial,uTrails;
-uniform float uHasTrails,uFogPrelit;
+uniform sampler2D uMaterial,uTrails,uSurfaces;
+uniform float uHasTrails,uFogPrelit,uHasRockCoverage;
 uniform vec4 uFogView;
 ${CLOUD_SHADOW_GLSL}
 ${FOG_BANK_GLSL}
@@ -472,6 +494,8 @@ ${FOG_LIGHT_GLSL}
 void main() {
  float trace=uHasTrails>.5?texture2D(uTrails,outTexCoord).r:0.0;
  vec4 fog=texture2D(uMaterial,outTexCoord)*(1.0-trace);
+ // Apply geometry after upsampling: even Low cannot spill fog over rock tops.
+ if(uHasRockCoverage>.5)fog*=1.0-smoothstep(.25,.75,texture2D(uSurfaces,outTexCoord).r);
  // Woodland radiance is already resolved at material resolution; preserve fine wakes.
  if(uFogPrelit>.5||fog.a<=0.0){gl_FragColor=fog;return;}
  vec2 world=uFogView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uFogView.zw;

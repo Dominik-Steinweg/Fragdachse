@@ -419,6 +419,8 @@ export class WorldPresentationFrameBinding {
       const quality = getGraphicsQualityController(this.input.scene);
       fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
       fog.setSurfaceImages([...this.input.getBaseShadowCells()]);
+      fog.setRockCoverage(this.input.getArenaResult()?.rockVisualSystem?.getFormationCoverage ?? null);
+      this.input.getArenaResult()?.rockVisualSystem?.flush();
       fog.prepare(this.input.lighting.getTimeOfDayMinutes(), getVisibleWorldView(this.input.scene.cameras.main));
     }
     if (!showWorld) {
@@ -471,6 +473,9 @@ export class WorldPresentationFrameBinding {
     const train = trainRenderer?.getShadowState() ?? null;
     fog.captureTrain(deltaMs, train, train && trainRenderer ? trainRenderer.computeSegYs(train.y, train.dir) : []);
     fog.setSurfaceImages([...this.input.getBaseShadowCells()]);
+    fog.setRockCoverage(this.input.getArenaResult()?.rockVisualSystem?.getFormationCoverage ?? null);
+    // Publish dirty geometry/GPU repair before the fog samples the borrowed field.
+    this.input.getArenaResult()?.rockVisualSystem?.flush();
     fog.update(deltaMs, this.input.lighting.getTimeOfDayMinutes(), view, showWorld);
   }
 

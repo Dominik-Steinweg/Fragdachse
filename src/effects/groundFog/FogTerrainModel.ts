@@ -8,16 +8,20 @@ export class FogTerrainModel {
   readonly cols: number;
   readonly rows: number;
   readonly blocked: Uint16Array;
+  readonly mineral: Uint16Array;
   readonly opened: Uint8Array;
   readonly changed = new Set<number>();
+  readonly visualChanged = new Set<number>();
   readonly dirtyChunks = new Set<string>();
   private readonly sources = new Map<string, Set<number>>();
+  private readonly mineralSources = new Set<string>();
   private readonly water: WaterSurfaceModel;
   /** World cells within the shoreline ramp of any water cell; everything else skips the search. */
   private readonly nearWater: Uint8Array;
   constructor(readonly frame: FogFrame, water: readonly WaterCell[]) {
     this.cols = Math.ceil(frame.width / CELL_SIZE); this.rows = Math.ceil(frame.height / CELL_SIZE);
     this.blocked = new Uint16Array(this.cols * this.rows);
+    this.mineral = new Uint16Array(this.blocked.length);
     this.opened = new Uint8Array(this.blocked.length);
     this.water = new WaterSurfaceModel(water, frame);
     this.nearWater = new Uint8Array(this.cols * this.rows);
@@ -25,11 +29,18 @@ export class FogTerrainModel {
     for (const c of water) for (let y = Math.max(0, c.gridY - reach); y <= Math.min(this.rows - 1, c.gridY + reach); y++)
       for (let x = Math.max(0, c.gridX - reach); x <= Math.min(this.cols - 1, c.gridX + reach); x++) this.nearWater[y * this.cols + x] = 1;
   }
-  setObstacle(id: string, cells: Iterable<{ gridX: number; gridY: number }>, baseline = false): void {
+  setObstacle(id: string, cells: Iterable<{ gridX: number; gridY: number }>, baseline = false, mineral = false): void {
     const next = new Set<number>();
     for (const c of cells) if (c.gridX >= 0 && c.gridY >= 0 && c.gridX < this.cols && c.gridY < this.rows)
       next.add(c.gridY * this.cols + c.gridX);
     const previous = this.sources.get(id);
+    const wasMineral = this.mineralSources.has(id);
+    if (wasMineral) for (const i of previous ?? []) this.mineral[i]--;
+    if (mineral) for (const i of next) this.mineral[i]++;
+    if (mineral && next.size) this.mineralSources.add(id); else this.mineralSources.delete(id);
+    if (wasMineral !== mineral) for (const i of new Set([...(previous ?? []), ...next])) {
+      this.visualChanged.add(i);
+    }
     if (previous) for (const i of previous) if (!next.has(i)) this.adjust(i, -1, baseline);
     for (const i of next) if (!previous?.has(i)) this.adjust(i, 1, baseline);
     if (next.size) this.sources.set(id, next); else this.sources.delete(id);
@@ -46,7 +57,10 @@ export class FogTerrainModel {
   private adjust(i: number, change: number, baseline: boolean): void {
     const before = this.blocked[i] > 0;
     this.blocked[i] = Math.max(0, this.blocked[i] + change);
-    if (before === (this.blocked[i] > 0)) return;
+    if (before === (this.blocked[i] > 0)) {
+      // Overlapping owners can change visual eligibility without opening flow.
+      this.visualChanged.add(i); return;
+    }
     if (before && !baseline) this.opened[i] = 1;
     if (!baseline) this.changed.add(i);
     this.markDirty(i);
@@ -80,6 +94,6 @@ export class FogTerrainModel {
       }
     return best;
   }
-  acknowledge(): void { this.changed.clear(); this.dirtyChunks.clear(); }
-  clear(): void { this.sources.clear(); this.changed.clear(); this.dirtyChunks.clear(); }
+  acknowledge(): void { this.changed.clear(); this.visualChanged.clear(); this.dirtyChunks.clear(); }
+  clear(): void { this.sources.clear(); this.mineralSources.clear(); this.changed.clear(); this.visualChanged.clear(); this.dirtyChunks.clear(); }
 }

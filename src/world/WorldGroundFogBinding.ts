@@ -33,7 +33,8 @@ export class WorldGroundFogBinding {
   constructor(private readonly scene: Phaser.Scene, readonly fog: GroundFogSystem,
     layout: ArenaLayout, arena: ArenaBuilderResult, effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>) {
     layout.rocks.forEach((cell, id) => {
-      if (arena.rockPhysicsProxies[id]?.active) fog.terrain.setObstacle(`rock:${id}`, [cell], true);
+      if (arena.rockPhysicsProxies[id]?.active) fog.terrain.setObstacle(`rock:${id}`, [cell], true,
+        arena.rockVisualStates?.states[id]?.material !== 'walls');
       else fog.terrain.markOpened([cell]);
     });
     scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, this.listener);
