@@ -31,12 +31,16 @@ export interface DeathMorphBlend {
 }
 
 /** Einmal beim Atlasbau abtasten; die GPU spielt danach nur die fertige Folge ab. */
-export function sampleDeathMorphBlend(progress: number): DeathMorphBlend {
+export function sampleDeathMorphBlend(progress: number, timing?: import('./DeathTuning').DeathMorphTiming): DeathMorphBlend {
+  const keys = timing ? KEYFRAMES.map((key, i) => ({ ...key,
+    at: [0, timing.frayedAt, timing.porousAt, timing.fragmentedAt, timing.dustAt,
+      timing.fineDustAt, timing.hazeAt, timing.vaporAt, 1][i],
+  })) : KEYFRAMES;
   const t = Math.max(0, Math.min(1, progress));
   let index = 0;
-  while (index < KEYFRAMES.length - 2 && t > KEYFRAMES[index + 1].at) index += 1;
-  const from = KEYFRAMES[index];
-  const to = KEYFRAMES[index + 1];
+  while (index < keys.length - 2 && t > keys[index + 1].at) index += 1;
+  const from = keys[index];
+  const to = keys[index + 1];
   return { from: from.texture, to: to.texture, mix: (t - from.at) / (to.at - from.at) };
 }
 

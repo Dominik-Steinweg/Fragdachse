@@ -2,6 +2,7 @@ import type * as Phaser from 'phaser';
 import { BLOOD_HIT_VFX, COLORS, DEATH_DISINTEGRATION_VFX } from '../config';
 import { getPipelineSpriteScale } from '../config/pipelineAssets';
 import type { SyncedDeathEffect, SyncedHitEffect } from '../types';
+import { resolveDeathTuning, type DeathSpawnTuning } from './gpu/DeathTuning';
 import { createSeededRandom, mixColors } from './EffectUtils';
 import {
   DeathFragmentTemplateCache,
@@ -66,6 +67,12 @@ export class CombatGoreGpuRenderer {
   readonly fragmentTemplateCache: DeathFragmentTemplateCache;
 
   private gpu: GpuVfxSystem | null = null;
+  private deathTuning: DeathSpawnTuning = DEATH_DISINTEGRATION_VFX;
+
+  /** Instance-local opt-in tuning; null restores the original config object. */
+  setDeathTuning(values: unknown | null): void {
+    this.deathTuning = values === null ? DEATH_DISINTEGRATION_VFX : resolveDeathTuning(values);
+  }
   private deathFragmentSpec: GpuVfxSpawnSpec | null = null;
   private deathMicroFragmentSpec: GpuVfxSpawnSpec | null = null;
   private deathGlowSpec: GpuVfxSpawnSpec | null = null;
@@ -117,13 +124,13 @@ export class CombatGoreGpuRenderer {
     if (template.chunks.length === 0) return;
 
     const maxDimension = Math.max(displayWidth, displayHeight) / getPipelineSpriteScale(effect.textureKey);
-    const profile = resolveDeathProfile(maxDimension, template.chunks.length);
+    const profile = resolveDeathProfile(maxDimension, template.chunks.length, this.deathTuning);
     const rng = createSeededRandom(effect.seed);
     const entityTint = effect.tint ?? 0xffffff;
     const auraColor = effect.targetColor ?? COLORS.GREY_2;
     const neutralTargetColorBoost = !isPlayerDeath
       && entityTint === 0xffffff && effect.targetColor !== undefined
-      ? DEATH_DISINTEGRATION_VFX.neutralTargetColorBoost
+      ? this.deathTuning.neutralTargetColorBoost
       : 0;
     const rotation = Number.isFinite(effect.rotation) ? effect.rotation : 0;
     const hitX = effect.dirX ?? 0;
@@ -138,8 +145,8 @@ export class CombatGoreGpuRenderer {
       ? Math.min(
         mainCount,
         Math.min(
-          DEATH_DISINTEGRATION_VFX.playerFragmentGlowMaxCount,
-          Math.max(1, Math.round(profile.main * DEATH_DISINTEGRATION_VFX.playerFragmentGlowRatio)),
+          this.deathTuning.playerFragmentGlowMaxCount,
+          Math.max(1, Math.round(profile.main * this.deathTuning.playerFragmentGlowRatio)),
         ),
       )
       : 0;
@@ -219,11 +226,11 @@ export class CombatGoreGpuRenderer {
       const angle = rng() * Math.PI * 2;
       const travel = randomBetween(
         rng,
-        DEATH_DISINTEGRATION_VFX.glowTravelMinPx,
-        DEATH_DISINTEGRATION_VFX.glowTravelMaxPx,
+        this.deathTuning.glowTravelMinPx,
+        this.deathTuning.glowTravelMaxPx,
       ) * profile.travelScale;
       const hitImpulse = hitLength > 0.0001
-        ? travel * DEATH_DISINTEGRATION_VFX.glowHitImpulse
+        ? travel * this.deathTuning.glowHitImpulse
         : 0;
       const lifeMs = randomBetween(rng, 430, 760);
       glowSpec.lifeMs = lifeMs;
@@ -238,14 +245,14 @@ export class CombatGoreGpuRenderer {
       glowSpec.angularVelocity = (rng() - 0.5) * 2.4;
       glowSpec.scaleStart = randomBetween(
         rng,
-        DEATH_DISINTEGRATION_VFX.glowScaleMin,
-        DEATH_DISINTEGRATION_VFX.glowScaleMax,
+        this.deathTuning.glowScaleMin,
+        this.deathTuning.glowScaleMax,
       ) * Math.min(1.35, 0.8 + profile.travelScale * 0.22);
       glowSpec.scaleEnd = glowSpec.scaleStart * 0.3;
       glowSpec.scaleEase = GpuVfxEase.QuadOut;
       glowSpec.stretchStart = 1;
       glowSpec.stretchEnd = 1;
-      glowSpec.alphaStart = DEATH_DISINTEGRATION_VFX.glowAlpha * randomBetween(rng, 0.72, 1.08);
+      glowSpec.alphaStart = this.deathTuning.glowAlpha * randomBetween(rng, 0.72, 1.08);
       glowSpec.alphaEnd = 0;
       glowSpec.alphaEase = GpuVfxEase.QuadOut;
       glowSpec.tint = mixColors(auraColor, entityTint, 0.12);
@@ -541,19 +548,19 @@ export class CombatGoreGpuRenderer {
     const angle = radialAngle + (rng() - 0.5) * (micro ? 1.65 : 1.2);
     const travel = randomBetween(
       rng,
-      DEATH_DISINTEGRATION_VFX.travelMinPx * (micro ? 1.12 : 0.72),
-      DEATH_DISINTEGRATION_VFX.travelMaxPx * (micro ? 1.15 : 1),
+      this.deathTuning.travelMinPx * (micro ? 1.12 : 0.72),
+      this.deathTuning.travelMaxPx * (micro ? 1.15 : 1),
     ) * travelScale;
-    const jitter = DEATH_DISINTEGRATION_VFX.jitterPx * (micro ? 1.4 : 1);
+    const jitter = this.deathTuning.jitterPx * (micro ? 1.4 : 1);
     const cohesionHitDrift = hasHitDirection
-      ? DEATH_DISINTEGRATION_VFX.cohesionHitDriftPx
+      ? this.deathTuning.cohesionHitDriftPx
       : 0;
     const startX = rotatedX + hitX * cohesionHitDrift;
     const startY = rotatedY + hitY * cohesionHitDrift;
     const hitImpulse = hasHitDirection
       ? travel * (micro
-        ? DEATH_DISINTEGRATION_VFX.microHitImpulse
-        : DEATH_DISINTEGRATION_VFX.mainHitImpulse)
+        ? this.deathTuning.microHitImpulse
+        : this.deathTuning.mainHitImpulse)
       : 0;
     const endX = startX
       + Math.cos(angle) * travel
@@ -569,13 +576,13 @@ export class CombatGoreGpuRenderer {
     const lifeMs = micro
       ? randomBetween(
         rng,
-        DEATH_DISINTEGRATION_VFX.microLifetimeMinMs,
-        DEATH_DISINTEGRATION_VFX.microLifetimeMaxMs,
+        this.deathTuning.microLifetimeMinMs,
+        this.deathTuning.microLifetimeMaxMs,
       )
       : randomBetween(
         rng,
-        DEATH_DISINTEGRATION_VFX.durationMs - DEATH_DISINTEGRATION_VFX.lifetimeVarianceMs,
-        DEATH_DISINTEGRATION_VFX.durationMs + DEATH_DISINTEGRATION_VFX.lifetimeVarianceMs,
+        this.deathTuning.durationMs - this.deathTuning.lifetimeVarianceMs,
+        this.deathTuning.durationMs + this.deathTuning.lifetimeVarianceMs,
       );
     // The template deliberately stays on the fixed 4x4 source-pixel analysis grid. Convert
     // only the visible chunk size here so a source block occupies the same World-space size
@@ -583,16 +590,16 @@ export class CombatGoreGpuRenderer {
     // therefore keep the existing silhouette positions and sampling order.
     const width = Math.max(
       0.8,
-      chunk.width * displayWidth * sourceWidth / DEATH_DISINTEGRATION_VFX.referenceDisplaySizePx,
+      chunk.width * displayWidth * sourceWidth / this.deathTuning.referenceDisplaySizePx,
     );
     const height = Math.max(
       0.8,
-      chunk.height * displayHeight * sourceHeight / DEATH_DISINTEGRATION_VFX.referenceDisplaySizePx,
+      chunk.height * displayHeight * sourceHeight / this.deathTuning.referenceDisplaySizePx,
     );
     const baseScale = clamp(
       height / DEATH_FRAGMENT_TEXTURE_SIZE
-        * DEATH_DISINTEGRATION_VFX.scaleStart
-        * (micro ? 1 : DEATH_DISINTEGRATION_VFX.mainFragmentScaleBoost),
+        * this.deathTuning.scaleStart
+        * (micro ? 1 : this.deathTuning.mainFragmentScaleBoost),
       0.2,
       16,
     );
@@ -607,7 +614,7 @@ export class CombatGoreGpuRenderer {
       ? 0
       : Math.min(
         1,
-        DEATH_DISINTEGRATION_VFX.auraTintMix * Math.max(0.18, chunk.brightness)
+        this.deathTuning.auraTintMix * Math.max(0.18, chunk.brightness)
           + targetColorBoost,
       );
     const tint = mixColors(
@@ -617,7 +624,7 @@ export class CombatGoreGpuRenderer {
     );
     const visibleTint = micro
       ? tint
-      : mixColors(tint, COLORS.GREY_1, DEATH_DISINTEGRATION_VFX.mainFragmentContrast);
+      : mixColors(tint, COLORS.GREY_1, this.deathTuning.mainFragmentContrast);
 
     spec.lifeMs = lifeMs;
     spec.frame = micro
@@ -635,7 +642,7 @@ export class CombatGoreGpuRenderer {
     // Alpha nicht auffaellt.
     spec.frameAnimationDurationScale = micro
       ? 1
-      : randomBetween(rng, 1, DEATH_DISINTEGRATION_VFX.morphDesyncMaxScale);
+      : randomBetween(rng, 1, this.deathTuning.morphDesyncMaxScale);
     spec.x = originX + startX;
     spec.y = originY + startY;
     spec.vx = (endX - startX) * 1000 / lifeMs;
@@ -651,7 +658,7 @@ export class CombatGoreGpuRenderer {
     spec.rotation = entityRotation + (rng() - 0.5) * (micro ? 1.2 : 0.18);
     const rotationFactor = largeMass ? 0.45 : smallMass ? 1.65 : 1;
     spec.angularVelocity = (rng() - 0.5)
-      * (micro ? 2.4 : DEATH_DISINTEGRATION_VFX.rotationMaxDeg * Math.PI / 180 * 2)
+      * (micro ? 2.4 : this.deathTuning.rotationMaxDeg * Math.PI / 180 * 2)
       * rotationFactor;
     // Dieselbe Kurve wie die Position: die Drehung laeuft mit dem Burst aus, statt am Ende
     // aufzudrehen und dann abgeschnitten zu werden.
@@ -659,13 +666,13 @@ export class CombatGoreGpuRenderer {
     spec.scaleStart = morphScale * (micro ? 0.72 : 1);
     spec.scaleEnd = micro
       ? spec.scaleStart * 0.62
-      : morphScale * DEATH_DISINTEGRATION_VFX.scaleEnd;
+      : morphScale * this.deathTuning.scaleEnd;
     spec.scaleEase = micro ? GpuVfxEase.QuadOut : GpuVfxEase.CubicIn;
     spec.stretchStart = stretch;
     spec.stretchEnd = Math.max(0.72, stretch * (smallMass ? 0.68 : 0.84));
     spec.alphaStart = Math.min(
       1,
-      DEATH_DISINTEGRATION_VFX.alpha
+      this.deathTuning.alpha
         * randomBetween(rng, micro ? 0.3 : 0.98, micro ? 0.48 : 1.08),
     );
     spec.alphaEnd = 0;
@@ -678,7 +685,7 @@ export class CombatGoreGpuRenderer {
     if (fragmentGlowSpec) {
       const glowScaleStart = baseScale
         * DEATH_FRAGMENT_TEXTURE_SIZE / DEATH_GLOW_TEXTURE_SIZE
-        * DEATH_DISINTEGRATION_VFX.playerFragmentGlowScale;
+        * this.deathTuning.playerFragmentGlowScale;
       fragmentGlowSpec.lifeMs = lifeMs;
       fragmentGlowSpec.frameAnimation = GPU_VFX_NO_FRAME_ANIMATION;
       fragmentGlowSpec.x = spec.x;
@@ -696,7 +703,7 @@ export class CombatGoreGpuRenderer {
       fragmentGlowSpec.scaleEase = GpuVfxEase.QuadOut;
       fragmentGlowSpec.stretchStart = spec.stretchStart;
       fragmentGlowSpec.stretchEnd = spec.stretchEnd;
-      fragmentGlowSpec.alphaStart = DEATH_DISINTEGRATION_VFX.playerFragmentGlowAlpha;
+      fragmentGlowSpec.alphaStart = this.deathTuning.playerFragmentGlowAlpha;
       fragmentGlowSpec.alphaEnd = 0;
       fragmentGlowSpec.alphaEase = GpuVfxEase.QuadOut;
       fragmentGlowSpec.tint = auraColor;
@@ -707,7 +714,7 @@ export class CombatGoreGpuRenderer {
   }
 }
 
-function resolveDeathProfile(maxDimension: number, chunkCount: number): DeathProfile {
+function resolveDeathProfile(maxDimension: number, chunkCount: number, tuning: DeathSpawnTuning): DeathProfile {
   const profile = maxDimension <= 24
     ? { main: 24, micro: 6, glow: 2, travelScale: 0.78 }
     : maxDimension <= 36
@@ -716,7 +723,7 @@ function resolveDeathProfile(maxDimension: number, chunkCount: number): DeathPro
         ? { main: 44, micro: 16, glow: 5, travelScale: 1.14 }
         : { main: 48, micro: 22, glow: 8, travelScale: 1.34 };
   return {
-    main: Math.min(chunkCount, Math.min(DEATH_DISINTEGRATION_VFX.maxChunksPerEffect, profile.main)),
+    main: Math.min(chunkCount, Math.min(tuning.maxChunksPerEffect, profile.main)),
     micro: Math.min(chunkCount, profile.micro),
     glow: profile.glow,
     travelScale: profile.travelScale,

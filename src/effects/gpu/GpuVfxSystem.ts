@@ -120,6 +120,30 @@ export class GpuVfxSystem {
 
   /** Gemeinsame monotone Uhr fuer Slot-Lebenszeiten, gleich getaktet mit den GPU-Animationen. */
   private clockMs = 0;
+  private manualPresentationTime = false;
+  private previewEffects: ReadonlySet<GpuVfxEffectId> | null = null;
+
+  /** Opt-in lab clock. The normal Scene/ElapseTimer path is untouched until called. */
+  setManualPresentationTime(enabled: boolean): void {
+    this.manualPresentationTime = enabled;
+    for (const lane of this.lanes) lane.layer.timePaused = enabled;
+  }
+
+  /** Local isolated previews only; admission filtering does not consume or reorder RNG. */
+  setPreviewEffects(effects: ReadonlySet<GpuVfxEffectId> | null): void {
+    this.previewEffects = effects ? new Set(effects) : null;
+  }
+
+  /** Clear old members before resetting both clocks; never seek live members backwards. */
+  resetPresentationTime(): void {
+    if (!this.manualPresentationTime) throw new Error('Manual presentation time is not enabled.');
+    this.releaseAll();
+    this.clockMs = 0;
+    for (const lane of this.lanes) {
+      lane.layer.timeElapsed = 0;
+      lane.lastTimeElapsed = 0;
+    }
+  }
   private readonly transformData = new Uint32Array(9);
   private readonly transformFloats = new Float32Array(this.transformData.buffer);
   private readonly transformMask = [1, 1, 0, 0, 1, 1, 0, 0, 1];
@@ -341,6 +365,7 @@ export class GpuVfxSystem {
    */
   spawn(spec: GpuVfxSpawnSpec, sourceIndex: number, nowMs: number, ageMs = 0, out?: GpuVfxMemberHandle): boolean {
     if (out) out.slot = -1;
+    if (this.previewEffects && !this.previewEffects.has(spec.effect)) return false;
     ageMs = Math.max(0, ageMs);
     if (!Number.isFinite(ageMs) || ageMs >= spec.lifeMs) return false;
     const lane = this.lanes[spec.lane];
@@ -503,6 +528,10 @@ export class GpuVfxSystem {
    * liefen autonom weiter, auch wenn gerade kein neuer Zustand ankam.
    */
   update(deltaMs: number): void {
+    if (this.manualPresentationTime) {
+      if (!Number.isFinite(deltaMs) || deltaMs < 0) throw new Error('Manual delta must be finite and non-negative.');
+      for (const lane of this.lanes) lane.layer.timeElapsed += deltaMs;
+    }
     this.clockMs += deltaMs;
     this.flightRibbons.retire(this.clockMs);
 

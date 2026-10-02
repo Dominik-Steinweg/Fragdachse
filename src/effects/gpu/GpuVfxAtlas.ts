@@ -580,8 +580,8 @@ let built = false;
 /**
  * Baut den Atlas vollstaendig und friert ihn ein. Idempotent; muss vor der ersten Lane laufen.
  */
-export function buildGpuVfxAtlas(scene: Phaser.Scene): void {
-  if (built && scene.textures.exists(GPU_VFX_ATLAS_KEY)) return;
+export function buildGpuVfxAtlas(scene: Phaser.Scene, deathTiming?: import('./DeathTuning').DeathMorphTiming): void {
+  if (built && scene.textures.exists(GPU_VFX_ATLAS_KEY) && !deathTiming) return;
 
   const entries = [...GPU_VFX_ATLAS].sort((a, b) => a.id - b.id);
   for (const entry of entries) entry.ensure?.(scene);
@@ -618,7 +618,10 @@ export function buildGpuVfxAtlas(scene: Phaser.Scene): void {
     // unter der stabilen Manifest-Id – die Reihenfolge im Manifest darf keinen Frame verschieben.
     const rect = layout.rects[GPU_VFX_ATLAS.indexOf(entry)];
     if (ctx && morphPixels && entry.deathMorph) {
-      const blend = entry.deathMorph;
+      // Explicit lab apply only. Layout and Frame identities stay stable for existing GPU lanes.
+      const blend = deathTiming
+        ? sampleDeathMorphBlend((entry.id - 54) / (DEATH_MORPH_FRAME_COUNT - 1), deathTiming)
+        : entry.deathMorph;
       writeDeathMorphPixels(morphPixels.data, readMorphSource(blend.from), readMorphSource(blend.to), blend.mix);
       ctx.putImageData(morphPixels, rect.x, rect.y);
     }
