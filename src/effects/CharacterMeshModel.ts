@@ -22,8 +22,11 @@ export function bodyMeshMatrix(sprite: MeshDisplayPose, out = new Float32Array(1
 }
 export function characterHandSocket(sprite: MeshDisplayPose) {
   const m = bodyMeshMatrix(sprite), socket = manifest.sockets[meshPose(sprite.frame.name)].weapon, p = socket.position;
+  // The baked socket locates the grip. Its yaw describes the sculpted palm,
+  // not weapon aim: north-authored held items follow the displayed facing.
+  // Recoil is added by HeldItemVisual; the shadow reads that final image pose.
   return { x: m[12] + m[0] * p[0] + m[4] * p[1], y: m[13] + m[1] * p[0] + m[5] * p[1],
-    z: m[10] * p[2], yaw: sprite.rotation + socket.yaw };
+    z: m[10] * p[2], yaw: sprite.rotation };
 }
 export const meshForHeldTexture = new Map<string, CharacterMeshSpec>();
 for (const spec of manifest.meshes) for (const id of 'gameIds' in spec ? spec.gameIds ?? [] : []) {

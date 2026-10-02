@@ -160,3 +160,38 @@ it('uses the same animated hand socket and recoil for the weapon image and visua
  expect(Math.hypot(image.x-socket.x,image.y-socket.y)).toBeLessThan(10);
  expect(getHeldWeaponGameplayMuzzleOrigin('GLOCK',100,200,.5,38.4)).toEqual(gameplay);
 });
+
+// Authored hand orientation must not steer a north-facing weapon away from aim.
+import { characterHandSocket, weaponMeshMatrix } from '../src/effects/CharacterMeshModel';
+import { CHARACTER_MESH_MANIFEST } from '../src/assets/CharacterMeshAssets';
+
+it.each(['GLOCK', 'AK47', 'XBOW'])('keeps %s aligned with preview facing across body poses, including recoil and shadows', (itemId) => {
+  for (const pose of CHARACTER_MESH_MANIFEST.poses) for (const aim of [0, Math.PI / 4, Math.PI / 2, Math.PI]) {
+    const body = { x: 100, y: 200, rotation: aim + Math.PI / 2,
+      scaleX: .3, scaleY: .3, displayWidth: 38.4, displayHeight: 38.4,
+      originX: .5, originY: .5, flipX: false, flipY: false,
+      frame: { name: String(pose.index), realWidth: 128, realHeight: 128 } };
+    const socket = characterHandSocket(body), game = visualFixture(), preview = visualFixture();
+    game.visual.setItem(itemId); preview.visual.setItem(itemId);
+    for (const firing of [false, true]) {
+      if (firing) {
+        game.visual.playShot(itemId, profiles.light); preview.visual.playShot(itemId, profiles.light);
+        game.scene.time.now = preview.scene.time.now = 15;
+      }
+      game.visual.sync(body.x, body.y, body.rotation, body.displayWidth, true, 1, socket);
+      preview.visual.sync(body.x, body.y, body.rotation, body.displayWidth, true);
+      expect(game.image.rotation).toBeCloseTo(preview.image.rotation);
+      if (!firing) {
+        expect(game.image.rotation).toBeCloseTo(aim + Math.PI / 2);
+        expect(game.image.x).toBeCloseTo(socket.x); expect(game.image.y).toBeCloseTo(socket.y);
+      }
+      const rendered = { x: 0, y: 0, rotation: 0, itemId: '' };
+      expect(game.visual.readWeaponPose(rendered)).toBe(true);
+      const muzzle = game.visual.getMuzzleOrigin(body.x, body.y, body.rotation, body.displayWidth, socket)!;
+      expect(muzzle.x).toBeCloseTo(rendered.x); expect(muzzle.y).toBeCloseTo(rendered.y);
+      const matrix = weaponMeshMatrix({ ...body, x: game.image.x, y: game.image.y, rotation: rendered.rotation }, body);
+      expect(Math.atan2(matrix[1], matrix[0])).toBeCloseTo(Math.atan2(Math.sin(rendered.rotation), Math.cos(rendered.rotation)));
+      expect(matrix[12]).toBeCloseTo(game.image.x, 4); expect(matrix[13]).toBeCloseTo(game.image.y, 4);
+    }
+  }
+});
