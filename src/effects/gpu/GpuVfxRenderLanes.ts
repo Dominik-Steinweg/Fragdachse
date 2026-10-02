@@ -94,6 +94,10 @@ export const GpuVfxLaneId = {
   ElectricGround:        33,
   ElectricBody:          34,
   WaterSurface:          35,
+  TrainGround:           36,
+  TrainBody:             37,
+  TrainSmoke:            38,
+  TrainHeat:             39,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -748,5 +752,33 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     maxLifetimeMs: LEAF_BLOWER_FX.ripple.lifeMaxMs, order: 'add-over-opaque', reserveCritical: 0,
     rationale: 'Wind ripples and rings lie on the water surface: above the water quads, below ground fog, rocks and actors. No existing lane sits in that band.',
     capacityRationale: 'A blower over water leaves about 45 ripple members per 350 px of flight at under 820 ms; 1536 slots carry several blowers over water at once.',
+  },
+  {
+    id: GpuVfxLaneId.TrainGround, label: 'train-ground', depth: DEPTH.GROUND_FOG + .05,
+    blendMode: Phaser.BlendModes.NORMAL, eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 256, maxLifetimeMs: 9000, order: 'ordered', reserveCritical: 0,
+    rationale: 'Train scorch and fragment contact shadows cover the rail bed but stay below actors.',
+    capacityRationale: 'At most 64 fragment shadows and landing marks plus 13 carriage marks, bounded to nine seconds.',
+  },
+  {
+    id: GpuVfxLaneId.TrainBody, label: 'train-body', depth: DEPTH.TRAIN + .1,
+    blendMode: Phaser.BlendModes.NORMAL, eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 256, maxLifetimeMs: 4000, order: 'ordered', reserveCritical: 0,
+    rationale: 'Train dust and fragments cover rolling stock, below smoke, lighting and tree canopies.',
+    capacityRationale: '80 dust puffs/s for 1.2 seconds, sparse gravel, 64 fragments and bounded impact puffs.',
+  },
+  {
+    id: GpuVfxLaneId.TrainSmoke, label: 'train-smoke', depth: DEPTH.SMOKE + .1,
+    blendMode: Phaser.BlendModes.NORMAL, eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 1024, maxLifetimeMs: 3200, order: 'ordered', reserveCritical: 0,
+    rationale: 'A short train aftermath plume below the existing lighting and canopy bands.',
+    capacityRationale: '64 bounded burning chunks with 70/160 ms trails and up to 13 two-phase plumes.',
+  },
+  {
+    id: GpuVfxLaneId.TrainHeat, label: 'train-heat', depth: DEPTH.CANOPY - .3,
+    blendMode: Phaser.BlendModes.NORMAL, eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
+    capacity: 768, maxLifetimeMs: 1800, order: 'ordered', reserveCritical: 0,
+    rationale: 'Emissive fire above the lightmap but under canopies; PMA NORMAL avoids Phaser ADD scene-alpha accumulation.',
+    capacityRationale: '13 staggered fireballs and spark bursts plus 64 short fragment flames; no screen-sized quads.',
   },
 ];

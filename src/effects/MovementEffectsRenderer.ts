@@ -101,6 +101,9 @@ export class MovementEffectsRenderer {
 
   setTerrainColorSnapshot(snapshot: TerrainColorSnapshot | null): void { this.terrain = snapshot; }
 
+  /** Other ground-contact VFX share this world-owned material snapshot, including retained worlds. */
+  sampleGroundColor(x: number, y: number): number { return this.terrain?.sample(x, y) ?? 0x939080; }
+
   interruptSource(id: string): void {
     if (this.world) this.interruptions.set(id, this.gpu.now() + 500);
   }

@@ -139,6 +139,8 @@ export function composeWorldTrain(
     worldMetrics: world.metrics,
     presentationRequired: presentation,
     gameAudioSystem: ctx.gameAudioSystem,
+    vfx: presentation ? { gpu: renderers.gpuVfx, camera: ctx.visualFeedback.camera,
+      sampleGround: (x, y) => renderers.movement.sampleGroundColor(x, y) } : undefined,
     network: {
       clock: {
         getArenaStartTime: () => bridge.getArenaStartTime(),
@@ -171,7 +173,10 @@ export function composeWorldTrain(
     setTranslocatorTrainManager: (train) => gameplay.player?.setTranslocatorTrainManager(train),
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
     setClassicTrainSpawned: (spawned) => { hostUpdate.setClassicTrainSpawned(spawned); },
-    onRendererChanged: (renderer) => { renderers.train = renderer; },
+    onRendererChanged: (renderer) => {
+      renderers.train = renderer;
+      ctx.effectSystem.setTrainExplosionRenderer(renderer ? (x, y, radius) => renderer.playExplosion(x, y, radius) : null);
+    },
   });
   gameplay.train = trainRuntime;
   worldRuntime.bind(trainRuntime);

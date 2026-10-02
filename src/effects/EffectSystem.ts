@@ -339,6 +339,12 @@ export class EffectSystem implements EnemyVisualSink {
 
   }
 
+  private trainExplosionRenderer: ((x: number, y: number, radius: number) => boolean) | null = null;
+
+  setTrainExplosionRenderer(renderer: ((x: number, y: number, radius: number) => boolean) | null): void {
+    this.trainExplosionRenderer = renderer;
+  }
+
   private playTrainExplosionEffect(x: number, y: number, radius: number, color?: number): void {
     const fillColor = color ?? 0xff5a1e;
     const haloColor = this.mixColor(fillColor, 0xffffff, 0.52);
@@ -807,6 +813,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.emitExplosionLight(x, y, radius, color, visualStyle);
 
     if (visualStyle === 'train') {
+      if (this.trainExplosionRenderer?.(x, y, radius)) return;
       this.playTrainExplosionEffect(x, y, radius, color);
       return;
     }

@@ -158,16 +158,19 @@ und [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresen
 
 ## Figuren- und Turmassets
 
-`ShadowSystem` besitzt die worldgebundenen `CharacterShadowRenderer`-Ressourcen. Die Bindung an
-Sonnenzustand und pausierbare Praesentationszeit kommt ausschliesslich von `WorldSunlightPresentation`;
-World-Unbind und Low-Qualitaet zerstoeren Quads und Empfaengermaske, geteilte Loader-Texturen bleiben
-game-owned. Schatten lesen den tatsaechlich dargestellten Sprite-Frame und dessen Rotation, nicht
-Netzwerk-Facing oder eine eigene Animationsuhr. Azimut wird ueber den invers rotierten Lichtvektor
-in Rechts/Sued-Achsen bestimmt; vier lineare non-PMA-Masken werden in einem Draw interpoliert.
-Der Figurenschatten liegt auf dem dynamischen Schatten-Layer ueber Bodennebel und Bodenbewuchs,
-aber unter Figuren; eine Empfaengermaske schliesst Basen und
-Hindernisse aus und reduziert die Wasserantwort. Das Multiply-Blending erhaelt Ziel-Alpha.
-
+`ShadowSystem` besitzt die worldgebundenen `CharacterMeshShadowRenderer`-Ressourcen.
+Sonnenzustand und pausierbare Praesentationszeit kommen von `WorldSunlightPresentation`;
+World-Unbind und Qualitaetswechsel geben Masken-Slots, Geometriebuffer und Empfaengermaske frei.
+Die binaeren, hashgebundenen Meshdaten bleiben im game-owned Loader-Cache. Schatten lesen den
+tatsaechlich dargestellten Sprite-Frame und dessen Rotation, nicht Netzwerk-Facing oder eine
+eigene Animationsuhr. Meshpositionen sind X rechts, Y Sued, Z oben; Projektion erfolgt erst nach
+Instanz-/Hand-Socket-Transformation entlang des kontinuierlichen Welt-Sonnenvektors.
+Hand-Socket und Rueckstosspose binden Waffenbild, visuellen Muendungspunkt und Waffenproxy
+aneinander; Gameplay-Muendungen bleiben unabhaengig vom Renderpose-Vertrag.
+Koerper und Waffe schreiben eine Vereinigungsmaske ohne Alpha-Akkumulation. Erst deren weiche
+Komposition liegt ueber Bodennebel/Bodenbewuchs und unter Figuren. Die Empfaengermaske schliesst
+Basen/Hindernisse aus und reduziert die Wasserantwort; PMA-Multiply erhaelt Ziel-Alpha.
+Low verwendet die Spielerellipse; die gebackenen D-Masken werden nicht geladen.
 
 Die versionierte [Runtime-Assetauswahl](../../src/config/pipelineAssets.json) und ihre PNGs unter
 `public/assets/sprites/pipeline-v2/` sind unabhängig von lokalen Blender-Quellen. Statische Bilder
@@ -397,3 +400,18 @@ Private Datentextur-Uploads muessen `UNPACK_PREMULTIPLY_ALPHA_WEBGL` und
 Caller-Zustand restaurieren. Das einmalige Setzen bei `texImage2D` reicht nicht:
 Phasers Farb-Uploads koennen die Flags zwischen Daten-Updates umschalten.
 RGBA-Daten duerfen bei Alpha 0 beliebige RGB-Werte tragen (etwa Sonnenproben).
+
+## Zeichenreihenfolge und Empfaenger
+
+Depth beschreibt die Zeichenreihenfolge, keine geometrische Hoehe oder Schattenmaske.
+Die beiden Composites in [LightingSystem.ts](../../src/effects/LightingSystem.ts)
+beeinflussen zuvor gezeichnete World-Pixel; eigene Materialbeleuchtung und die
+Clarity-Kamera bleiben getrennte Vertraege. Ein Fog-Impuls verleiht seinem Ausloeser
+keinen automatischen Nebelempfang.
+
+Der [diagnostische Ebenenvertrag](../../src/effects/EffectLayerContract.ts) trennt
+beabsichtigte Hoehe/Lichtart von bestehender Depth/Blend-Zuordnung. Renderpfade
+konsumieren diese Metadaten nicht. Gleichstaende am Sonnen-Composite und an der
+Kronengrenze sind explizite bekannte Ausnahmen, keine gesicherte Sortiergarantie.
+Siehe [Tiefenstaffelung](../depth-layering.md) und
+[Vertragstest](../../tests/depthR0Contract.test.ts).

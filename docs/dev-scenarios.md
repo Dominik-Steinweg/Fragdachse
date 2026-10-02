@@ -112,6 +112,8 @@ Aufnahme ab. Nach Scene-Teardown wird die globale API entfernt und wartende Aufr
 | `options` | `values`: `timeOfDay`, `freezeMission`, `hideTutorial`, `suppressWaves`, `refillHp`, `refillAdrenaline`, `playerFreeForAll`, `hideAim` |
 | `temporaryUtility` | `utility` (z. B. `NUKE`, `BFG`, `HOLY_HAND_GRENADE`), optional `chargeMs`; nutzt ein Pickup-Utility auf das Ziel |
 | `train` | optional `invulnerable`; lässt auf Maps mit Zugstrecke sofort einen Zug einfahren |
+| `trainShowcase` | optional `follow` (Standard true), `zoom` (Standard 0.8); nutzt eine Zugmap oder startet Map 7/Seed 12345, setzt den Beobachter sicher abseits und die Kamera ans Gleis; `status().train` meldet Position/Geschwindigkeit/Sichtbarkeit/Gleis-Bounds in Weltpixeln |
+| `trainExplosion` | optional `whenVisible: true`: wartet auf Einfahrt, zoomt f?r den vollst?ndigen Zug samt Tr?mmerraum heraus und fixiert die Kamera auf der Hauptdetonation; ohne Option sofortige Z?ndung; `stop`/Szenariowechsel verwirft wartende Z?ndungen, `speed`/`step` gelten weiterhin |
 | `bot` | `index`, optional `place` + `gridX`/`gridY`, `move` {`dx`, `dy`, `durationMs`}, `aim` {`gridX`, `gridY`} oder `null`, `fire` (`weapon1`/`weapon2`/`null`), `burrow` (`enter`/`exit`), `temporaryUtility` + `chargeMs` |
 
 Browser-Werkzeuge, die keine schreibenden JavaScript-Aufrufe erlauben, können denselben JSON-Befehl
@@ -143,14 +145,33 @@ mit `disable:[]` wieder einschalten. Bei 08:00/12:00/17:00/00:00 drehen, laufen 
 Waffenwechsel/Rueckstoss, Wolken, Wasserrand und Basen pruefen. High -> Low -> High und World-Wechsel
 muessen die Schatten korrekt entfernen und wieder aufbauen. Die Nacht behaelt nur den Fusskontakt.
 
-`dev.status().characterShadows` zeigt geladene GPU-Seiten, aktive Instanzen, Draw-Aufrufe,
-Samples/Gewichte, Depth und die Deckkraftanteile am Koerperpivot (CPU-Wolkenwert als Schaetzung gekennzeichnet).
-`instances[].coreDarkeningEstimate` schaetzt die relative Kernabdunklung fuer volle Maskendeckung
-ausserhalb des Fusskontakts auf neutralem Boden vor dem Camera-Grade. Wolken, Empfaenger und
-Sprite-Alpha sind enthalten; es ist kein Bildmittel ueber das Quad und keine GPU-Messung.
-`dev.run({action:'renderDebug',disable:[],characterShadowSolid:true})` zeichnet die Schattenquads
-deckend magenta mit NORMAL-Blend, ohne Masken/Empfaengerausschluss; die regulaere Depth bleibt erhalten.
-Mit `dev.run({action:'renderDebug',disable:[]})` zur normalen Darstellung zurueckkehren.
+`dev.status().characterShadows` zeigt geladene Meshes, aktive Instanzen, Pose, Waffenproxy,
+Sonnenvektor, Slot, Depth und Deckkraft am Koerperpivot. `costs` meldet CPU-Zeit des letzten Sync,
+Geometrie-Draws, Dreiecke, Uploadbytes und Ziel-Speicher; `gpuMs:null` bedeutet nicht gemessen.
+`instances[].coreDarkeningEstimate` schaetzt die Kernabdunklung bei Maskendeckung 1 ausserhalb
+des Fusskontakts vor dem Camera-Grade (CPU-Wolkenwert, Empfaenger und Sprite-Alpha enthalten).
+`dev.run({action:'renderDebug',disable:[],characterShadowSolid:true})` zeigt die echte Vereinigungsmaske
+deckend magenta ohne Blur, weiterhin mit Empfaengerausschluss und regulaerer Depth.
+`dev.run({action:'renderDebug',disable:[]})` stellt die weiche Schattenkomposition wieder her.
+
+Mesh-Pruefszene (High/Medium; Low verwendet die Ellipse):
+
+```js
+dev.run({action:'start',scenario:{version:1,mapId:'1',seed:12345,classId:'inspector_gadachs',
+  weapon1:'GLOCK',weapon2:'AWP',player:{gridX:20,gridY:24},timeOfDay:480}});
+dev.run({action:'camera',zoom:3,focusTarget:false});
+dev.run({action:'target',gridX:24,gridY:24}); // danach 20/20, 16/24, 20/28: rundum drehen
+dev.run({action:'move',dx:1,dy:0,durationMs:1500});
+dev.run({action:'fire',slot:'weapon1'});
+dev.run({action:'fire',slot:'weapon2'}); // dargestellter Waffenwechsel samt Rueckstoss
+dev.run({action:'options',values:{timeOfDay:720}}); // auch 480 / 1020 / 0
+dev.status().characterShadows;
+```
+
+Fuer 12 Spieler vor dem Start elf `bots` im Rezept angeben (siehe Bots oben).
+Masken ohne Doppelkanten bei freier Drehung, alle Laufphasen und Waffenwechsel pruefen;
+Nacht nur Fusskontakt, Wasserrand schwaecher, keine Schatten auf Fels/Basen.
+High/Medium/Low-Wechsel, World-Wechsel und WebGL-Kontext-Wiederherstellung separat pruefen.
 
 Lokale Render-Ausgaben isolieren: `dev.run({action:'renderDebug',disable:['sunComposite','fogDisplay','lightmap','characterShadows']})`.
 Die Liste ersetzt die bisherige Auswahl; zusätzlich sind `distortion`, `bloom`, `grade`, `vignette`, `focus`, `barrel` erlaubt.

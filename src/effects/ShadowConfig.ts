@@ -17,10 +17,12 @@ export type ShadowShape = 'cell' | 'circle' | 'ellipse' | 'capsule';
 
 /**
  * Baked per-azimuth shadow masks ghost between neighbouring samples while a figure turns.
- * They stay disabled (players use the ellipse caster, no mask download) until projected
- * mesh shadows replace them.
+ * They remain disabled; projected meshes replace the runtime path. The old export
+ * is retained as an offline reference (and shares future body-material passes).
  */
 export const CHARACTER_SHADOW_MASKS_ENABLED = false;
+export const CHARACTER_SHADOW_MODE: 'mesh' | 'ellipse' = 'mesh';
+export const CHARACTER_MESH_TARGET_SIZE = { high: 256, medium: 128 } as const;
 
 /** Receiver-masked dynamic shadow above ground fog, below figures. */
 export const CHARACTER_SHADOW_CONFIG = {

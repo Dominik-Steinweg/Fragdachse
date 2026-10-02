@@ -3,6 +3,7 @@ import { DEPTH } from '../config';
 import type { SyncedTrainState } from '../types';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { TRAIN } from './TrainConfig';
+import { TrainVfxController, type TrainVfxPorts } from '../effects/train/TrainVfxController';
 
 const TEX_TRAIN_RB54 = '__train_rb54_material_baked_v1';
 const MATERIAL_TILE_SIZE = 192;
@@ -71,20 +72,31 @@ export class TrainRenderer {
 
   private audioSystem: GameAudioSystem | null = null;
   private moveLoopHandle: string | null = null;
+  private readonly vfx: TrainVfxController | null;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, vfx?: TrainVfxPorts) {
     this.textureCenterOffsetY = this.ensureTrainTexture(scene);
     this.image = scene.add.image(0, 0, TEX_TRAIN_RB54)
       .setDepth(DEPTH.TRAIN)
       .setVisible(false);
+    this.vfx = vfx ? new TrainVfxController(scene, vfx) : null;
+  }
+
+  /** False retains the legacy presentation in tools without the shared GPU backend. */
+  playExplosion(x: number, y: number, radius: number): boolean {
+    if (!this.vfx) return false;
+    this.vfx.playExplosion(x, y, radius);
+    return true;
   }
 
   setAudioSystem(system: GameAudioSystem): void {
     this.audioSystem = system;
+    this.vfx?.setAudio(system);
   }
 
   setTarget(state: SyncedTrainState | null): void {
     if (!state || !state.alive) {
+      this.vfx?.stopMovement();
       this.lastAlive = false;
       if (this.moveLoopHandle) {
         this.audioSystem?.stopLoop(this.moveLoopHandle);
@@ -127,11 +139,13 @@ export class TrainRenderer {
 
     this.displayY = Phaser.Math.Linear(this.displayY, this.targetY, lerpFactor);
     this.syncImage();
+    this.vfx?.setPose(this.lastX, this.displayY, this.lastDir, this.computeSegYs(this.displayY, this.lastDir));
   }
 
   /** Legacy direct update path used by the host. */
   update(state: SyncedTrainState | null): void {
     if (!state || !state.alive) {
+      this.vfx?.stopMovement();
       this.lastAlive = false;
       this.image.setVisible(false);
       if (this.moveLoopHandle) {
@@ -153,9 +167,11 @@ export class TrainRenderer {
     this.lastMaxHp = state.maxHp;
     this.lastAlive = true;
     this.syncImage();
+    this.vfx?.setPose(this.lastX, this.displayY, this.lastDir, this.computeSegYs(this.displayY, this.lastDir));
   }
 
   destroy(): void {
+    this.vfx?.destroy();
     if (this.moveLoopHandle) {
       this.audioSystem?.stopLoop(this.moveLoopHandle);
       this.moveLoopHandle = null;

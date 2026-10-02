@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import type { TrainVfxPorts } from '../effects/train/TrainVfxController';
+import { planTrainDestruction } from '../effects/train/TrainVfxModel';
 import { CELL_SIZE } from '../config';
 import { TRAIN_DROP_COUNT } from '../powerups/PowerUpConfig';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
@@ -69,6 +71,7 @@ export interface WorldTrainRuntimeOptions {
   readonly hostPhysics: HostPhysicsSystem;
   readonly worldMetrics: WorldMetrics;
   readonly presentationRequired: boolean;
+  readonly vfx?: TrainVfxPorts;
   readonly gameAudioSystem: GameAudioSystem;
   readonly network: WorldTrainNetworkPort;
   readonly getEnemyManager: () => EnemyManager | null;
@@ -96,7 +99,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
 
   constructor(private readonly options: WorldTrainRuntimeOptions) {
     if (options.presentationRequired) {
-      this.renderer = new TrainRenderer(options.scene);
+      this.renderer = new TrainRenderer(options.scene, options.vfx);
       this.renderer.setAudioSystem(options.gameAudioSystem);
       options.onRendererChanged(this.renderer);
     }
@@ -317,18 +320,9 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     }
     this.options.network.matchEvents.broadcastTrainDestroyed();
     try {
-      let latestWagonDelay = 0;
-      for (const segment of result.segmentPositions) {
-        const delay = Math.round(Math.random() * TRAIN.EXPLOSION_WAGON_DELAY_MAX_MS);
-        latestWagonDelay = Math.max(latestWagonDelay, delay);
-        this.scheduleExplosion(segment.x, segment.y, 80, delay);
+      for (const blast of planTrainDestruction(result.segmentPositions, worldMetrics.offsetY, worldMetrics.maxY)) {
+        this.scheduleExplosion(blast.x, blast.y, blast.radius, blast.delayMs);
       }
-      this.scheduleExplosion(
-        result.centerX,
-        result.centerY,
-        160,
-        latestWagonDelay + TRAIN.EXPLOSION_CENTER_DELAY_MS,
-      );
     } catch (error) {
       console.error('[WorldTrainRuntime] Destruction presentation failed', error);
     }

@@ -92,6 +92,11 @@ export const GpuVfxEffectId = {
   LeafBlowerStreak: 78,
   LeafBlowerSpray: 79,
   LeafBlowerRipple: 80,
+  TrainDust: 81,
+  TrainSmoke: 82,
+  TrainHeat: 83,
+  TrainDebris: 84,
+  TrainResidue: 85,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -624,4 +629,14 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.LeafBlowerDroplet, importance: 'standard', release: 'linger' },
   { id: GpuVfxEffectId.LeafBlowerRipple, label: 'leafblower.water-ripple', lane: GpuVfxLaneId.WaterSurface,
     frame: GpuVfxFrameId.LeafBlowerWindStreak, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.TrainDust, label: 'train.dust', lane: GpuVfxLaneId.TrainBody,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.TrainSmoke, label: 'train.smoke', lane: GpuVfxLaneId.TrainSmoke,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.TrainHeat, label: 'train.heat', lane: GpuVfxLaneId.TrainHeat,
+    frame: GpuVfxFrameId.FlameBillow, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.TrainDebris, label: 'train.debris', lane: GpuVfxLaneId.TrainBody,
+    frame: GpuVfxFrameId.ExplosionChunk, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.TrainResidue, label: 'train.residue', lane: GpuVfxLaneId.TrainGround,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'kill-with-source' },
 ];

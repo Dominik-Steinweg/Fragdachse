@@ -1,4 +1,7 @@
 import type { PlayerManager } from '../../entities/PlayerManager';
+import type { TrainShowcaseState } from '../../dev/scenario/trainShowcase';
+import { TRAIN } from '../../train/TrainConfig';
+import { planTrainDestruction } from '../../effects/train/TrainVfxModel';
 import { getCoopDefenseMapConfig, resolveCoopDefenseMapEncounterConfigs } from '../../config/coopDefenseMaps';
 import type { NavigationLabWorldPort } from '../../debug/navigationLab/NavigationLabPort';
 import type { EnemyIntent, MovementFeedback } from '../../systems/navigation/NavigationContracts';
@@ -99,6 +102,23 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       requireLocal();
       return flow.getWorldPlayerGameplayRuntime()?.addTemporaryUtility(id, config, 1) ?? null;
     },
+    /** Read the actual track, consist and host speed; the scenario never guesses map coordinates. */
+    readTrain(): TrainShowcaseState | null {
+      requireLocal();
+      const train = flow.getWorldTrainRuntime()?.getCurrentTrain();
+      const metrics = flow.getWorldRuntime()?.context.metrics;
+      if (!train || !metrics) return null;
+      const segments = train.getSegmentPositions(), heights = train.segHeights();
+      const x = train.getTrackX();
+      const blast = planTrainDestruction(segments, metrics.offsetY, metrics.maxY)[0];
+      return { state: train.getNetSnapshot(), speed: train.getCurrentSpeed(),
+        bounds: { left: x - TRAIN.VISUAL_WIDTH / 2, right: x + TRAIN.VISUAL_WIDTH / 2,
+          top: Math.min(...segments.map((p, i) => p.y - heights[i] / 2)),
+          bottom: Math.max(...segments.map((p, i) => p.y + heights[i] / 2)) },
+        trackBounds: { left: x - TRAIN.VISUAL_WIDTH / 2, right: x + TRAIN.VISUAL_WIDTH / 2,
+          top: metrics.offsetY, bottom: metrics.maxY },
+        explosionCenter: blast ? { x: blast.x, y: blast.y } : null };
+    },
     /** Runs one train pass now, independent of authored map events and suppressed encounters. */
     startTrain(): boolean {
       requireLocal();
@@ -107,12 +127,22 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       handler.reset();
       return handler.schedule({ id: 'dev-scenario-train', type: 'train', start: { type: 'time', atMs: 0 } } as ResolvedCoopDefenseMapEventConfig, 1, 0, 0);
     },
+    /** Reproduce the normal authoritative destruction, including drops and replicated VFX. */
+    destroyTrain(): boolean {
+      requireLocal();
+      const runtime = flow.getWorldTrainRuntime();
+      const train = runtime?.getCurrentTrain();
+      if (!runtime || !train?.isAlive()) return false;
+      runtime.applyDamage(train.readIntegrity().integrity, '__train__');
+      return train.isDestroyed();
+    },
     /** Map events normally drive the train; they are paused while encounters are suppressed or the mission is frozen. */
     updateTrain(deltaMs: number, invulnerable = false): void {
       if (invulnerable) flow.getWorldTrainRuntime()?.getCurrentTrain()?.restoreIntegrity();
       const runtime = flow.getCoopMissionRuntime();
       if (!runtime || !(runtime.analysisScenarioActive || runtime.scenarioMissionFrozen)) return;
       flow.getWorldTrainRuntime()?.getActivityTrainHandler()?.hostUpdate(deltaMs, false, 0);
+      if (invulnerable) flow.getWorldTrainRuntime()?.getCurrentTrain()?.restoreIntegrity();
     },
     setOptions(freezeMission: boolean, hideTutorial: boolean): void {
       requireLocal();

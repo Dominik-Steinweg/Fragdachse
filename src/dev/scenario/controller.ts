@@ -18,6 +18,7 @@ import { installScenarioApi } from './api';
 import { ScenarioBots } from './bots';
 import { SUN_TUNING_DEFAULTS, validateSunTuning } from '../../effects/sunlight/SunTuning';
 import { enemyReadabilityPlacements } from './enemyReadabilityRecipe';
+import { trainExplosionZoom, trainHasEntered, trainObserverPosition, trainView, trainVisibility } from './trainShowcase';
 
 export class DevScenarioController {
   readonly clock: ScenarioClock;
@@ -333,6 +334,8 @@ export class DevScenarioController {
       hostNowMs: bridge.getSynchronizedNow(), params: { ultimateAction: action } });
   }
   stop(): void {
+    this.pendingTrainShowcase = null; this.trainFollow = false;
+    this.trainCameraPoint = null; this.trainExplosionDeadline = null;
     this.worldLighting?.stopMeasurement();
     this.trigger = null; this.heldUtility = null; this.movement = { dx: 0, dy: 0, until: 0 };
     this.setInput(0, null);
@@ -357,11 +360,101 @@ export class DevScenarioController {
   }
   private lastTrainUpdate = 0;
   private trainInvulnerable = false;
+  private pendingTrainShowcase: { follow: boolean; zoom: number } | null = null;
+  private trainFollow = false;
+  private trainCameraPoint: { x: number; y: number } | null = null;
+  private trainExplosionDeadline: number | null = null;
+
+  startTrainShowcase(follow = true, zoom = .8): void {
+    if (this.state === 'ready' && !this.setupPending && !this.runtime.isMatchTerminated()
+      && this.runtime.navigationLabPort.getPlayerPosition()?.alive
+      && this.runtime.devScenarioPort.readTrain()) {
+      this.prepareTrainShowcase(follow, zoom);
+      return;
+    }
+    this.start({ ...defaultScenario(), mapId: '7', seed: 12345 });
+    this.pendingTrainShowcase = { follow, zoom };
+  }
+
+  private prepareTrainShowcase(follow: boolean, zoom: number): void {
+    this.requireReady();
+    const train = this.runtime.devScenarioPort.readTrain();
+    if (!train) throw new Error('Keine Zugstrecke für die Vorführung verfügbar.');
+    const observer = trainObserverPosition(this.runtime.navigationLabPort.getFreePositions(24), train);
+    if (!observer) throw new Error('Keine freie Beobachterposition mit Sicherheitsabstand zum Gleis.');
+    this.stop();
+    this.teleport(this.grid(observer), false);
+    this.config.freezeMission = true; this.config.suppressWaves = true;
+    this.zoom = zoom; this.trainFollow = follow;
+    this.trainCameraPoint = { x: (train.trackBounds.left + train.trackBounds.right) / 2,
+      y: (train.trackBounds.top + train.trackBounds.bottom) / 2 };
+    this.startTrain(true);
+    // Spawn with zero delta only after placing the observer off-track; do not wait a host frame.
+    this.runtime.devScenarioPort.updateTrain(0, true);
+    this.updateTrainShowcase();
+    this.syncCamera();
+    this.lastAction = { trainShowcase: true, observer, follow, zoom };
+    this.message = 'Zug-Vorführung bereit; Beobachter steht abseits des Gleises.';
+  }
+
+  private updateTrainShowcase(): void {
+    if (!this.trainFollow && this.trainExplosionDeadline === null) return;
+    const train = this.runtime.devScenarioPort.readTrain();
+    if (this.trainFollow && train?.state?.alive) {
+      this.trainCameraPoint = { x: train.state.x,
+        y: Math.max(train.trackBounds.top, Math.min(train.trackBounds.bottom, train.state.y)) };
+    }
+    if (this.trainExplosionDeadline === null) return;
+    if (train && trainHasEntered(train)) {
+      this.zoom = trainExplosionZoom(train, this.zoom);
+      this.trainCameraPoint = train.explosionCenter;
+      this.syncCamera();
+      if (trainVisibility(train, trainView(this.trainCameraPoint!, this.zoom)).fullyVisible) this.destroyTrain();
+    } else if (this.clock.now > this.trainExplosionDeadline) {
+      this.trainExplosionDeadline = null;
+      throw new Error('Zug nicht rechtzeitig eingefahren. trainShowcase erneut starten.');
+    }
+  }
+
+  private trainStatus() {
+    const train = this.state === 'ready' ? this.runtime.devScenarioPort.readTrain?.() : null;
+    if (!train) return { available: false, preparing: this.pendingTrainShowcase !== null };
+    const camera = this.scene.cameras.main;
+    const halfWidth = camera.width / camera.zoomX / 2, halfHeight = camera.height / camera.zoomY / 2;
+    const midX = camera.scrollX + camera.width / 2, midY = camera.scrollY + camera.height / 2;
+    const view = { left: midX - halfWidth, top: midY - halfHeight,
+      right: midX + halfWidth, bottom: midY + halfHeight };
+    return { available: true, position: train.state ? { x: train.state.x, y: train.state.y } : null,
+      alive: train.state?.alive ?? false, speed: train.speed, coordinateSpace: 'world',
+      ...trainVisibility(train, view), bounds: train.bounds, trackBounds: train.trackBounds,
+      explosionCenter: train.explosionCenter, follow: this.trainFollow,
+      pendingExplosion: this.trainExplosionDeadline !== null, cameraCenter: this.trainCameraPoint };
+  }
   startTrain(invulnerable = false): void {
     this.requireReady();
     this.trainInvulnerable = invulnerable;
     this.lastTrainUpdate = this.clock.now;
     if (!this.runtime.devScenarioPort.startTrain()) throw new Error('Diese Map hat keine Zugstrecke.');
+  }
+  destroyTrain(whenVisible = false): void {
+    this.requireReady();
+    if (whenVisible) {
+      if (!this.runtime.devScenarioPort.readTrain()) throw new Error('Keine Zugstrecke; zuerst trainShowcase starten.');
+      this.trainExplosionDeadline = this.clock.now + 30000;
+      this.lastAction = { trainExplosion: 'waiting-for-entry-and-framing' };
+      this.updateTrainShowcase();
+      return;
+    }
+    const train = this.runtime.devScenarioPort.readTrain();
+    if (train?.explosionCenter) {
+      this.trainCameraPoint = train.explosionCenter;
+      this.trainFollow = false;
+      this.syncCamera();
+    }
+    this.trainExplosionDeadline = null;
+    if (!this.runtime.devScenarioPort.destroyTrain()) throw new Error('Kein lebender Zug. Zuerst train starten und einfahren lassen.');
+    this.trainInvulnerable = false;
+    this.lastAction = { trainExplosion: 'detonated', center: this.trainCameraPoint, zoom: this.zoom };
   }
   aimBot(index: number, point: GridPoint | null): void { this.bots.aim(index, point ? this.world(point) : null); }
   pause(): void { this.requireReady(); this.worldLighting?.stopMeasurement(); this.clock.paused = true; }
@@ -472,6 +565,12 @@ export class DevScenarioController {
         loadingTimeline.get('scenario')?.finish();
         this.message = 'Szenario bereit. Startposition und Aufbau geprüft.';
       }
+      if (!this.setupPending && this.pendingTrainShowcase) {
+        const { follow, zoom } = this.pendingTrainShowcase;
+        this.pendingTrainShowcase = null;
+        this.prepareTrainShowcase(follow, zoom);
+      }
+      this.updateTrainShowcase();
     } catch (error) { this.fail(error); this.stop(); this.state = 'error'; }
   }
   setPanelCollapsed(collapsed: boolean): void { this.panel.setCollapsed(collapsed); }
@@ -479,18 +578,21 @@ export class DevScenarioController {
   syncCamera(): void {
     if (this.state !== 'ready') return;
     let point: { x: number; y: number } | null;
-    try { point = this.cameraAtTarget ? this.world(this.aim) : this.runtime.navigationLabPort.getPlayerPosition(); }
+    try { point = this.trainCameraPoint ?? (this.cameraAtTarget ? this.world(this.aim) : this.runtime.navigationLabPort.getPlayerPosition()); }
     catch (error) { this.cameraAtTarget = false; this.fail(error); return; }
     if (!point) return;
     const camera = this.scene.cameras.main;
     camera.removeBounds();
     camera.setZoom(this.scene.scale.width / GAME_WIDTH * this.zoom, this.scene.scale.height / GAME_HEIGHT * this.zoom);
-    camera.setScroll(point.x - GAME_WIDTH / this.zoom / 2, point.y - GAME_HEIGHT / this.zoom / 2);
+    // Phaser's scroll is relative to the unzoomed viewport center, not worldView's top-left.
+    if (this.trainCameraPoint) camera.centerOn(point.x, point.y);
+    else camera.setScroll(point.x - GAME_WIDTH / this.zoom / 2, point.y - GAME_HEIGHT / this.zoom / 2);
     setCameraBaseScroll(this.scene, camera.scrollX, camera.scrollY);
   }
   snapshot(): Record<string, unknown> {
     return { state: this.state, ready: this.state === 'ready' && !this.setupPending, message: this.message, isolated: true, network: 'local-only',
       initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
+      train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),
       elapsedWallMs: Math.round(performance.now() - this.startedAt), simulationMs: this.clock.now,

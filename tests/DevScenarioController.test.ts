@@ -186,3 +186,75 @@ it('restores world output diagnostics and rejects unknown passes before mutating
  expect(enemyReadability.setSuppressed).toHaveBeenLastCalledWith(false);
  expect(rockOverlays.setVisible).toHaveBeenLastCalledWith(true);
 });
+
+function trainShowcaseFixture() {
+  enter(); controller.afterHostFrame();
+  const runtime = (controller as any).runtime;
+  const scene = (controller as any).scene;
+  scene.scale = { width: 1920, height: 1080 };
+  const camera = scene.cameras.main;
+  camera.width = 1920; camera.height = 1080;
+  camera.centerOn = (x: number, y: number) => { camera.scrollX = x - camera.width / 2; camera.scrollY = y - camera.height / 2; };
+  camera.removeBounds = () => {};
+  camera.setZoom = (x: number, y: number) => { camera.zoomX = x; camera.zoomY = y; };
+  camera.setScroll = (x: number, y: number) => { camera.scrollX = x; camera.scrollY = y; };
+  const train = { state: { x: 1000, y: 500, alive: true }, speed: 600,
+    bounds: { left: 968, right: 1032, top: -2500, bottom: 600 },
+    trackBounds: { left: 968, right: 1032, top: 12, bottom: 6000 },
+    explosionCenter: { x: 1000, y: 300 } };
+  runtime.devScenarioPort.readTrain = () => train;
+  runtime.devScenarioPort.startTrain = vi.fn(() => true);
+  runtime.devScenarioPort.destroyTrain = vi.fn(() => true);
+  runtime.navigationLabPort.getFreePositions = () => [{ x: 1000, y: 400 }, { x: 800, y: 400 }];
+  return { runtime, train, camera };
+}
+
+it('starts the train showcase on the fallback map through the public API', () => {
+  const start = vi.spyOn(controller, 'start').mockImplementation(() => {});
+  expect(window.devScenario!.run({ action: 'trainShowcase', follow: true, zoom: .7 })).toMatchObject({ ok: true });
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ mapId: '7', seed: 12345, player: null }));
+  expect(window.devScenario!.status()).toMatchObject({ train: { preparing: true } });
+  expect(window.devScenario!.run({ action: 'trainShowcase', zoom: 0 })).toMatchObject({ ok: false });
+});
+
+it('places the observer off the track before spawning and follows the locomotive', () => {
+  const { runtime, train } = trainShowcaseFixture();
+  runtime.devScenarioPort.startTrain.mockImplementation(() => {
+    expect(player.x).toBeLessThan(train.trackBounds.left - 128); return true;
+  });
+  expect(window.devScenario!.run({ action: 'trainShowcase', follow: true, zoom: .8 })).toMatchObject({ ok: true });
+  expect(runtime.devScenarioPort.startTrain).toHaveBeenCalledOnce();
+  train.state.y = 700; controller.afterHostFrame(); controller.syncCamera();
+  expect(controller.snapshot()).toMatchObject({ train: { visible: true, fullyVisible: false, speed: 600,
+    coordinateSpace: 'world', cameraCenter: { x: 1000, y: 700 }, trackBounds: train.trackBounds } });
+});
+
+it('waits for entry, frames the complete train and fixes the camera on the real main blast', () => {
+  const { runtime, train } = trainShowcaseFixture();
+  controller.startTrainShowcase(true, 1.4);
+  controller.destroyTrain(true);
+  expect(runtime.devScenarioPort.destroyTrain).not.toHaveBeenCalled();
+  expect(controller.snapshot()).toMatchObject({ train: { pendingExplosion: true } });
+  train.bounds.top = 100; train.bounds.bottom = 3300; train.explosionCenter.y = 1800;
+  controller.afterHostFrame();
+  expect(runtime.devScenarioPort.destroyTrain).toHaveBeenCalledOnce();
+  expect(controller.snapshot()).toMatchObject({ train: { fullyVisible: true, follow: false,
+    pendingExplosion: false, cameraCenter: { x: 1000, y: 1800 } } });
+  expect(controller.zoom).toBeLessThan(1.4);
+  const camera = (controller as any).scene.cameras.main;
+  expect(camera.scrollY + camera.height / 2).toBe(1800);
+  train.state.y = 4000; controller.afterHostFrame();
+  expect(controller.snapshot()).toMatchObject({ train: { cameraCenter: { x: 1000, y: 1800 } } });
+  expect(runtime.devScenarioPort.destroyTrain).toHaveBeenCalledOnce();
+});
+
+it('cancels a queued train explosion on stop and refuses unsafe observer positions', () => {
+  const { runtime, train } = trainShowcaseFixture();
+  controller.startTrainShowcase(); controller.destroyTrain(true); controller.stop();
+  train.bounds.top = 100; train.bounds.bottom = 3300;
+  controller.afterHostFrame(); expect(runtime.devScenarioPort.destroyTrain).not.toHaveBeenCalled();
+  runtime.devScenarioPort.startTrain.mockClear();
+  runtime.navigationLabPort.getFreePositions = () => [{ x: 1000, y: 400 }];
+  expect(() => controller.startTrainShowcase()).toThrow('Sicherheitsabstand');
+  expect(runtime.devScenarioPort.startTrain).not.toHaveBeenCalled();
+});

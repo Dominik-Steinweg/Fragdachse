@@ -1,6 +1,5 @@
+vi.mock('../src/assets/CharacterMeshAssets',()=>({getCharacterMeshes:()=>new Map(),CHARACTER_MESH_MANIFEST:{meshes:[]}}));
 import { describe, expect, it, vi } from 'vitest';
-// The baked-mask path stays covered while it is disabled in production.
-vi.mock('../src/effects/ShadowConfig', async (load) => ({ ...(await load<typeof import('../src/effects/ShadowConfig')>()), CHARACTER_SHADOW_MASKS_ENABLED: true }));
 
 vi.mock('phaser', () => ({
   BlendModes: { NORMAL: 0, MULTIPLY: 3, ERASE: 17 },
@@ -11,7 +10,7 @@ const characters=vi.hoisted(()=>({live:new Set<any>(),receivers:new Set<any>()})
 vi.mock('../src/effects/CharacterShadowReceiver',()=>({CharacterShadowReceiver:class {
  constructor(){characters.receivers.add(this);}update(){}destroy(){characters.receivers.delete(this);}
 }}));
-vi.mock('../src/effects/CharacterShadowRenderer',()=>({CharacterShadowRenderer:class {
+vi.mock('../src/effects/CharacterMeshShadowRenderer',()=>({CharacterMeshShadowRenderer:class {
  count=0;activeCount=0;constructor(_scene:any,readonly clouds:any,readonly receiver:any){characters.live.add(this);}
   sync(){}setVisible(){}setDebugSolid(){}destroy(){characters.live.delete(this);this.receiver.destroy();}
 }}));

@@ -1,11 +1,20 @@
 import { expect, it, vi } from 'vitest';
 // The baked-mask path stays covered while it is disabled in production.
 vi.mock('../src/effects/ShadowConfig', async (load) => ({ ...(await load<typeof import('../src/effects/ShadowConfig')>()), CHARACTER_SHADOW_MASKS_ENABLED: true }));
-const state = vi.hoisted(() => ({ shaders: [] as any[] }));
+const state = vi.hoisted(() => ({ shaders: [] as any[], draws: [] as any[] }));
 vi.mock('phaser', async () => {
   const { InstalledShader } = await import('./CharacterShadowPhaserHarness');
   return { BlendModes: { NORMAL: 0, MULTIPLY: 2 }, Textures: { FilterMode: { LINEAR: 0 } },
-    Loader: { FileTypes: { ImageFile: class {
+    Renderer: { Events: { SET_PARALLEL_TEXTURE_UNITS: 'parallel', RESIZE: 'resize' }, WebGL: { RenderNodes: { BatchHandler: class {
+ manager:any; renderer:any; vertexBufferLayout:any; indexBuffer:any; programManager:any; topology:any;
+ constructor(manager:any,config:any){this.manager=manager;this.renderer=manager.renderer;this.topology=config.topology;
+  this.indexBuffer=(this as any)._generateElementIndices();
+  this.vertexBufferLayout={buffer:{viewF32:new Float32Array(config.verticesPerInstance*3),update:vi.fn()}};
+  const uniforms:any={};this.programManager={programs:{},getCurrentProgramSuite:()=>({program:{uniforms},vao:{}}),
+   setUniform:(k:string,v:any)=>uniforms[k]=v,applyUniforms(){}};
+ }
+ onRunBegin(){} onRunEnd(){} resize(){} updateTextureCount(){}
+} } } }, Utils: { Array: { Remove(){} } }, Loader: { FileTypes: { ImageFile: class {
       data:any; complete=false;error=false;
       constructor(public loader:any, public config:any) {}
       onProcessComplete(){this.complete=true;} onProcessError(){this.error=true;}
@@ -14,7 +23,21 @@ vi.mock('phaser', async () => {
       constructor(...args:any[]){super(...args);this.config=args[1];state.shaders.push(this);}
     } } };
 });
-vi.mock('../src/effects/sunlight/SunRenderTarget',()=>({ownSunShader:vi.fn(),sunShaderName:(k:string)=>k+state.shaders.length}));
+
+vi.mock('../src/effects/sunlight/SunRenderTarget',async()=>{
+ const Phaser=await import('phaser');
+ return {ownSunShader:vi.fn(),sunShaderName:(k:string)=>k+state.shaders.length,SunRenderTarget:class {
+ shader:any;
+ constructor(scene:any,kind:string,fragmentSource:string,setupUniforms:any,textures:any[]=['__DEFAULT']){
+  this.shader=new Phaser.GameObjects.Shader(scene,{name:kind,shaderName:kind,fragmentSource,setupUniforms},0,0,3,3,textures);
+  this.shader.texture=scene.textures.get(kind+state.shaders.length);
+  this.shader.renderToTexture=true;
+  this.shader.drawingContext={renderer:scene.sys.renderer,state:{blend:{enabled:false}},setAutoClear:vi.fn(),setClearColor:vi.fn()};
+ }
+ draw(w:number,h:number){this.shader.setSize(w,h);this.shader.renderNode.run(this.shader.drawingContext,this.shader);}
+ destroy(){this.shader.destroy();}
+ }};
+});
 vi.mock('../src/effects/EffectUtils',()=>({registerGraphicsObject:vi.fn()}));
 import {CharacterShadowRenderer} from '../src/effects/CharacterShadowRenderer';
 import {CharacterShadowReceiver} from '../src/effects/CharacterShadowReceiver';
@@ -142,4 +165,88 @@ it('manifest pages reach a daytime draw whose real Phaser vertices match sampled
  expect(uniforms(shader).uDebugSolid).toBe(1);expect(f.renderer.inspect().instances[0].solid).toBe(true);
  f.renderer.setVisible(false);expect(f.renderer.inspect().activeInstances).toBe(0);
  f.renderer.destroy();
+});
+
+import { CharacterMeshShadowRenderer } from '../src/effects/CharacterMeshShadowRenderer';
+import { preloadCharacterMeshAssets, getCharacterMeshes } from '../src/assets/CharacterMeshAssets';
+import { meshForHeldTexture } from '../src/effects/CharacterMeshModel';
+import { readFile } from 'node:fs/promises';
+async function meshFixture(){
+ const f=fixture(), binaries=new Map<string,ArrayBuffer>(), loads:any[]=[];
+ f.scene.cache={binary:{exists:(k:string)=>binaries.has(k),get:(k:string)=>binaries.get(k)}};
+ f.scene.load.binary=(key:string,url:string)=>loads.push({key,url});
+ preloadCharacterMeshAssets(f.scene);
+ for(const load of loads){const b=await readFile('public/'+load.url.replace(/^\.\//,'').split('?')[0]);binaries.set(load.key,Uint8Array.from(b).buffer);}
+ const renderer=f.scene.sys.renderer;
+ renderer.config={stencil:true};
+ renderer.glWrapper.update=vi.fn();renderer.deleteBuffer=vi.fn();renderer.deleteProgram=vi.fn();renderer.off=vi.fn();
+ renderer.glVAOWrappers=[];renderer.shaderProgramFactory={programs:{}};renderer.renderNodes.off=vi.fn();
+ renderer.drawElements.mockImplementation((context:any,textures:any,program:any,vao:any,count:number)=>{
+   state.draws.push({context,uniforms:structuredClone(program.uniforms),count,blend:context.state.blend});
+ });
+ state.draws.length=0;
+ const meshes=getCharacterMeshes(f.scene)!;
+ const meshRenderer=new CharacterMeshShadowRenderer(f.scene,f.clouds,f.receiver,meshes,128);
+ return {...f,meshRenderer,meshes};
+}
+it('binary manifest reaches projected indexed draws and one visible receiver-masked composite',async()=>{
+ const f=await meshFixture(),p=player();
+ p.weapon.texture.key=meshForHeldTexture.keys().next().value!;
+ Object.assign(p.weapon,{displayWidth:38.4,displayHeight:38.4});
+ p.weapon.frame.realWidth=p.weapon.frame.realHeight=128;
+ f.receiver.update({rocks:[],water:[]} as never,0,0,undefined,[],[]);
+ for(const minute of [480,720,1020])for(const angle of [0,.123,Math.PI/2,5.9]){
+  resolveSunPath(minute,null,f.clouds.sunPath);p.displayObject.rotation=angle;
+  f.meshRenderer.sync([p] as never,true);
+  const status=f.meshRenderer.inspect(),instance=status.instances[0];
+  expect(instance.visible).toBe(true);expect(instance.pose).toBe(17);expect(instance.weapon).not.toBeNull();
+  expect(instance.depth).toBeGreaterThan(DEPTH.ROCK_VEGETATION+.02);expect(instance.depth).toBeLessThan(DEPTH.PLAYERS);
+  expect(instance.coreDarkeningEstimate).toBeGreaterThan(0);expect(status.costs.geometryDraws).toBe(2);
+  const geometry=state.draws.filter(d=>d.uniforms.uModel);
+  expect(geometry.at(-2)!.count).toBe(f.meshes.get('badger')!.indices.length);
+  expect(geometry.at(-2)!.uniforms.uSun).toEqual(f.clouds.sunPath.sun);
+  expect(geometry.every(d=>d.blend.enabled===false)).toBe(true); // union, never accumulated alpha
+  const quad=state.shaders.at(-1),context:any={renderer:f.scene.sys.renderer,camera:f.scene.cameras.main,state:{blend:{name:'prior'}},blendMode:0};
+  quad.renderNode.run(context,quad);
+  const u=uniforms(quad),verts=quad.renderNode.vertexBufferLayout.buffer.viewF32;
+  for(let i=0;i<16;i+=4){
+   expect(verts[i]).toBeCloseTo(u.uBounds[0]+verts[i+2]*u.uBounds[2],3);
+   expect(verts[i+1]).toBeCloseTo(u.uBounds[1]+(1-verts[i+3])*u.uBounds[3],3);
+  }
+  expect(context.state.blend).toEqual({name:'prior'});
+ }
+ f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.uploadedBytes).toBe(0);
+ p.displayObject.frame.name='4';f.meshRenderer.sync([p] as never,true);
+ expect(f.meshRenderer.inspect().costs.uploadedBytes).toBe(f.meshes.get('badger')!.spec.vertexCount*3*4);
+ f.meshRenderer.destroy();
+ expect(f.scene.sys.renderer.deleteBuffer).toHaveBeenCalledTimes(4);
+});
+it('reuses bounded slots, excludes hidden players, supports raw-mask debug and leaves only contact at night',async()=>{
+ const f=await meshFixture(),p=player();p.getHeldItemDisplayObject=()=>null as any;
+ f.meshRenderer.sync([p] as never,true);const allocated=state.shaders.length;
+ for(const phase of ['underground','trapped']){p.getBurrowPhase=()=>phase;f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.activeCount).toBe(0);}
+ p.getBurrowPhase=()=> 'surface';p.isDecoyStealthedVisual=()=>true;f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.activeCount).toBe(0);
+ p.isDecoyStealthedVisual=()=>false;f.meshRenderer.sync([],true);f.meshRenderer.sync([p] as never,true);
+ expect(state.shaders.length).toBe(allocated);expect(f.meshRenderer.count).toBe(1);
+ f.meshRenderer.setDebugSolid(true);f.meshRenderer.sync([p] as never,true);
+ expect(f.meshRenderer.inspect().costs.targetPasses).toBe(1);
+ expect(uniforms(state.shaders.at(-1)).uDebugSolid).toBe(1);
+ f.meshRenderer.setDebugSolid(false);f.clouds.sunPath.strength=0;f.meshRenderer.sync([p] as never,true);
+ expect(f.meshRenderer.inspect().costs.geometryDraws).toBe(0);
+ expect(f.meshRenderer.inspect().instances[0].opacityAtBody.direct).toBe(0);
+ expect(f.meshRenderer.inspect().instances[0].opacityAtBody.contact).toBeGreaterThan(0);
+ f.meshRenderer.setVisible(false);expect(f.meshRenderer.activeCount).toBe(0);
+ f.meshRenderer.destroy();expect(state.shaders.every(shader=>shader.destroyed)).toBe(true);
+});
+
+it('caps the slot pool at twelve and recycles departed assignments without allocating targets',async()=>{
+ const f=await meshFixture(),players=Array.from({length:13},()=>player());
+ for(const p of players)p.getHeldItemDisplayObject=()=>null as any;
+ f.meshRenderer.sync(players as never,true);
+ expect(f.meshRenderer.count).toBe(config.maxPlayers);expect(f.meshRenderer.activeCount).toBe(config.maxPlayers);
+ expect(f.meshRenderer.inspect().costs.geometryDraws).toBe(config.maxPlayers);
+ expect(f.meshRenderer.inspect().costs.targetBytes).toBe(config.maxPlayers*128*128*4*3);
+ const allocated=state.shaders.length;
+ f.meshRenderer.sync([players[12]] as never,true);expect(f.meshRenderer.activeCount).toBe(1);
+ expect(state.shaders.length).toBe(allocated);f.meshRenderer.destroy();
 });

@@ -7,6 +7,7 @@ import { BURROW_FX } from '../config/burrowEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
 import { playerHealthBarStyle } from '../effects/health/healthBarStyles';
 import * as Phaser from 'phaser';
+import { characterHandSocket } from '../effects/CharacterMeshModel';
 import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types';
 import {
   BADGER_IDLE_FRAME,
@@ -441,6 +442,7 @@ export class PlayerEntity {
       this.sprite.y,
       this.sprite.rotation,
       this.sprite.displayWidth,
+      characterHandSocket(this.sprite),
     ) ?? null;
   }
 
@@ -995,6 +997,7 @@ export class PlayerEntity {
       this.sprite.displayWidth,
       this.sprite.visible && this.burrowPhase !== 'windup',
       this.sprite.alpha,
+      characterHandSocket(this.sprite),
     );
   }
 

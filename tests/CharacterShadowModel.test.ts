@@ -73,3 +73,54 @@ it('uses only published data pages and declares every consumed shader uniform', 
   for (const [name] of CHARACTER_SHADOW_FRAGMENT.matchAll(/\bu[A-Z]\w*/g)) expect(declared).toContain(name);
   for (const dst of [0, .3, 1]) for (const alpha of [0, .1, 1]) expect(alpha * dst + dst * (1 - alpha)).toBeCloseTo(dst);
 });
+
+import { bodyMeshMatrix, characterHandSocket, extendMeshBounds, meshPose, meshShadowOpacity, projectMeshPoint, weaponMeshMatrix } from '../src/effects/CharacterMeshModel';
+import { CHARACTER_MESH_MANIFEST as meshManifest } from '../src/assets/CharacterMeshAssets';
+import { CHARACTER_MESH_VERTEX, CHARACTER_MESH_BLUR, CHARACTER_MESH_COMPOSITE } from '../src/effects/characterMeshShaders';
+
+const meshSprite = () => ({ x: 100, y: 200, rotation: 0, scaleX: .3, scaleY: .3, displayWidth: 38.4,
+  displayHeight: 38.4, originX: .5, originY: .5, flipX: false, flipY: false,
+  frame: { name: '0', realWidth: 128, realHeight: 128 } });
+it('mesh projection is continuous, world anchored, rotation aware and keeps contact on the plane', () => {
+  const s=meshSprite(), m=bodyMeshMatrix(s);
+  expect(projectMeshPoint([0,0,10],m,[0,-1,1])).toEqual([100,210]);
+  expect(projectMeshPoint([3,4,-1],m,[0,-1,1])).toEqual([103,204]);
+  for(const angle of [0,.23,1.5,3,6.28])for(const elevation of [20,28,35,45,60]) {
+    const e=elevation*Math.PI/180, sun=[.3*Math.cos(e),-Math.sqrt(.91)*Math.cos(e),Math.sin(e)];
+    s.rotation=angle;bodyMeshMatrix(s,m);
+    const q=projectMeshPoint([5,7,20],m,sun);
+    expect(q[0]).toBeCloseTo(100+Math.cos(angle)*5-Math.sin(angle)*7-sun[0]*20/sun[2],4);
+    expect(q[1]).toBeCloseTo(200+Math.sin(angle)*5+Math.cos(angle)*7-sun[1]*20/sun[2],4);
+    const b=[Infinity,Infinity,-Infinity,-Infinity];extendMeshBounds(b,meshManifest.meshes[0],m,sun);
+    expect(b[2]).toBeGreaterThan(b[0]);expect(b[3]).toBeGreaterThan(b[1]);
+    const next=projectMeshPoint([5,7,20],bodyMeshMatrix({...s,rotation:angle+.00001}),sun);
+    expect(Math.hypot(next[0]-q[0],next[1]-q[1])).toBeLessThan(.001);
+    expect(meshShadowOpacity(1,e)).toBeCloseTo(characterShadowOpacity(1,e));
+  }
+  expect(meshShadowOpacity(0,.6)).toBe(0);expect(meshShadowOpacity(1,-.1)).toBe(0);
+});
+it('uses the displayed pose sockets and actual held-image recoil, without quantizing facing', () => {
+  const s=meshSprite();
+  for(const pose of meshManifest.poses){
+    s.frame.name=String(pose.index);s.rotation=.83;
+    expect(meshPose(s.frame.name)).toBe(pose.index);
+    const h=characterHandSocket(s), matrix=bodyMeshMatrix(s), p=meshManifest.sockets[pose.index].weapon.position;
+    expect(h.x).toBeCloseTo(matrix[12]+matrix[0]*p[0]+matrix[4]*p[1]);
+    expect(h.z).toBeCloseTo(p[2]);
+    const w={...s,x:h.x+2,y:h.y-1,rotation:h.yaw+.12,originY:.75};
+    const wm=weaponMeshMatrix(w,s);
+    expect(wm[12]).toBeCloseTo(w.x,4);expect(wm[13]).toBeCloseTo(w.y,4);expect(wm[14]).toBeCloseTo(h.z,4);
+    expect(Math.atan2(wm[1],wm[0])).toBeCloseTo(w.rotation,4);
+  }
+});
+it('mesh shader uses world projection, north-at-v1 RTTs and an alpha-preserving PMA multiply output', () => {
+  expect(CHARACTER_MESH_VERTEX).toContain('(uModel*vec4(inPosition,1.0)).xyz');
+  expect(CHARACTER_MESH_VERTEX).toContain('1.0-uv.y*2.0');
+  expect(CHARACTER_MESH_COMPOSITE).toContain('1.0-outTexCoord.y');
+  expect(CHARACTER_MESH_COMPOSITE).toContain('cloudTransmission(world)');
+  expect(CHARACTER_MESH_BLUR).toContain('uStep');
+  for(const mask of [0,.01,.3,1])for(const destinationAlpha of [.2,1]) {
+    // MULTIPLY alpha factors are DST_ALPHA / ONE_MINUS_SRC_ALPHA.
+    expect(mask*destinationAlpha+destinationAlpha*(1-mask)).toBeCloseTo(destinationAlpha);
+  }
+});

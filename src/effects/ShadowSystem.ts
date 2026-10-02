@@ -1,8 +1,8 @@
 import * as Phaser from 'phaser';
-import { CHARACTER_SHADOW_FILES } from '../assets/CharacterShadowAssetManifest';
+import { getCharacterMeshes, CHARACTER_MESH_MANIFEST } from '../assets/CharacterMeshAssets';
 import type { SunPathState } from './sunlight/SunPath';
 import type { SunCloudState } from './sunlight/cloudShadow';
-import { CharacterShadowRenderer } from './CharacterShadowRenderer';
+import { CharacterMeshShadowRenderer } from './CharacterMeshShadowRenderer';
 import { CharacterShadowReceiver } from './CharacterShadowReceiver';
 import { writeShadowCellHull } from './sunlight/ShadowProjection';
 import {
@@ -17,7 +17,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import { TRAIN } from '../train/TrainConfig';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedTrainState } from '../types';
 import {
-  CHARACTER_SHADOW_MASKS_ENABLED,
+  CHARACTER_SHADOW_MODE, CHARACTER_MESH_TARGET_SIZE,
   getProjectileShadowConfig,
   SHADOW_CASTERS,
   SHADOW_PROFILES,
@@ -176,7 +176,7 @@ const STADIUM_FRONT_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: num
 
 export class ShadowSystem {
   private characterClouds: SunCloudState | null = null;
-  private characterShadows: CharacterShadowRenderer | null = null;
+  private characterShadows: CharacterMeshShadowRenderer | null = null;
   private characterReceiverDirty = true;
   private characterSuppressed = false;
   private characterSolid = false;
@@ -195,19 +195,19 @@ export class ShadowSystem {
     this.characterSolid = value; this.characterShadows?.setDebugSolid(value);
   }
   getCharacterShadowsStatus() {
-    const pages = CHARACTER_SHADOW_FILES.map(asset => ({ key: asset.key, loaded: this.scene.textures.exists(asset.key),
-      uploaded: this.scene.textures.exists(asset.key) && !!this.scene.textures.get(asset.key).source[0]?.glTexture,
-      width: asset.width, height: asset.height }));
-    return { bound: !!this.characterClouds, enabled: this.quality.dynamicShadows,
+    const meshes = getCharacterMeshes(this.scene);
+    return { bound: !!this.characterClouds, enabled: this.quality.level !== 'low' && CHARACTER_SHADOW_MODE === 'mesh',
       suppressed: this.characterSuppressed, dynamicVisible: this.dynamicVisible, solid: this.characterSolid,
-      loadedPages: pages.filter(page => page.uploaded).length, totalPages: pages.length, pages,
+      loadedMeshes: meshes?.size ?? 0, totalMeshes: CHARACTER_MESH_MANIFEST.meshes.length,
       ...(this.characterShadows?.inspect() ?? { activeInstances: 0, instances: [] }) };
   }
   private syncCharacterShadows(players: readonly PlayerEntity[]): boolean {
-    if (!CHARACTER_SHADOW_MASKS_ENABLED || !this.characterClouds || !this.lastStaticLayout || !this.quality.dynamicShadows) return false;
+    if (CHARACTER_SHADOW_MODE !== 'mesh' || !this.characterClouds || !this.lastStaticLayout || this.quality.level === 'low') return false;
     if (!this.characterShadows) {
-      this.characterShadows = new CharacterShadowRenderer(this.scene, this.characterClouds,
-        new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds()));
+      const meshes = getCharacterMeshes(this.scene);
+      if (!meshes) return false;
+      this.characterShadows = new CharacterMeshShadowRenderer(this.scene, this.characterClouds,
+        new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds()), meshes, CHARACTER_MESH_TARGET_SIZE[this.quality.level]);
       this.characterReceiverDirty = true;
       this.characterShadows.setDebugSolid(this.characterSolid);
     }
@@ -324,7 +324,7 @@ export class ShadowSystem {
     this.quality = getGraphicsQualityProfile(scene);
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       this.quality = profile;
-      if (!profile.dynamicShadows) { this.characterShadows?.destroy(); this.characterShadows = null; }
+      this.characterShadows?.destroy(); this.characterShadows = null;
       if (this.lastStaticLayout) {
         this.rebuildStaticLayoutShadows(this.lastStaticLayout, this.lastStaticOptions);
       }
@@ -937,26 +937,10 @@ export class ShadowSystem {
     const characterShadows = this.syncCharacterShadows(players);
     let primitivesBuilt = this.characterShadows?.activeCount ?? 0;
 
-    // In `low` entfallen die Schatten bewegter Werfer komplett. Sie sind der einzige
-    // Schattenanteil, der sich nicht backen laesst, und werden jeden Frame als gestapelte
-    // Alpha-Fuellungen neu gezeichnet. `clearDynamic()` lief bereits – der Layer ist also leer.
-    if (!this.quality.dynamicShadows) {
-      const collector = this.attributionCollector;
-      if (collector?.isActive()) {
-        collector.setGraphicsGauge('dynamicShadows', {
-          objectCount: this.layers.size,
-          activeObjects: 0,
-          dynamicCasterCount: 0,
-          primitiveCount: 0,
-        });
-      }
-      return;
-    }
-
     for (const player of players) {
-      if (characterShadows) break;
+      if (characterShadows || this.characterSuppressed || !this.dynamicVisible) break;
       const sprite = player.displayObject;
-      if (!sprite || !sprite.active || !sprite.visible) continue;
+      if (!sprite || !sprite.active || !sprite.visible || sprite.alpha <= 0 || !sprite.scaleX || !sprite.scaleY) continue;
       if (player.isDecoyStealthedVisual()) continue;
       const burrowPhase = player.getBurrowPhase();
       if (burrowPhase === 'underground' || burrowPhase === 'trapped') continue;
@@ -969,6 +953,16 @@ export class ShadowSystem {
         SHADOW_CASTERS.player.footprintWidthPx * Math.abs(sprite.scaleX || 1),
         SHADOW_CASTERS.player.footprintHeightPx * Math.abs(sprite.scaleY || 1),
       );
+    }
+
+    // Low keeps the inexpensive player ellipse; other moving casters remain disabled.
+    if (!this.quality.dynamicShadows) {
+      const collector = this.attributionCollector;
+      if (collector?.isActive()) collector.setGraphicsGauge('dynamicShadows', {
+        objectCount: this.layers.size, activeObjects: primitivesBuilt > 0 ? players.length : 0,
+        dynamicCasterCount: primitivesBuilt > 0 ? players.length : 0, primitiveCount: primitivesBuilt,
+      });
+      return;
     }
 
     this.enemyPrimitives = 0;

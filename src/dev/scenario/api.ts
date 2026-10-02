@@ -5,6 +5,7 @@ import { COOP_DEFENSE_CONSTRUCTION_IDS } from '../../config/coopDefenseConstruct
 import type { ConstructionId, WeaponSlot } from '../../types';
 import { POWERUP_DEFS } from '../../powerups/PowerUpConfig';
 import { enemyReadabilityScenario } from './enemyReadabilityRecipe';
+import { runDepthReferenceScene } from './depthReferenceScene';
 
 export type ScenarioResult = { ok: true; status: Record<string, unknown>; path?: string; url?: string }
   | { ok: false; error: string; status: Record<string, unknown> };
@@ -43,6 +44,8 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'depthReferenceScene':
+      return runDepthReferenceScene(controller, c, command => runScenarioCommand(controller, command));
     case 'status': return;
     case 'enemyReadabilityScene':
       controller.start(enemyReadabilityScenario(c.timeOfDay === undefined ? 720 : number(c.timeOfDay, 0, 1439)));
@@ -79,6 +82,10 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     case 'fire': controller.fire(slot(c.slot), false); break;
     case 'utility': controller.utility(); break;
     case 'train': controller.startTrain(c.invulnerable === undefined ? false : boolean(c.invulnerable)); break;
+    case 'trainShowcase':
+      controller.startTrainShowcase(c.follow === undefined ? true : boolean(c.follow), c.zoom === undefined ? .8 : number(c.zoom, .1, 8)); break;
+    case 'trainExplosion':
+      controller.destroyTrain(c.whenVisible === undefined ? false : boolean(c.whenVisible)); break;
     case 'temporaryUtility': {
       if (typeof c.utility !== 'string') throw new Error('utility: Utility-ID erwartet.');
       controller.temporaryUtility(c.utility, c.chargeMs === undefined ? undefined : number(c.chargeMs, 0, 10000)); break;

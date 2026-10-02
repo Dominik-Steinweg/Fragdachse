@@ -100,6 +100,7 @@ export class HeldItemVisual {
     displaySize: number,
     visible: boolean,
     alpha = 1,
+    socket?: { x: number; y: number; yaw: number },
   ): void {
     if (!this.image) return;
     if (!this.hasSprite || !visible) {
@@ -109,7 +110,7 @@ export class HeldItemVisual {
     }
 
     const textureScale = displaySize / HELD_ITEM_TEXTURE_SIZE;
-    const anchor = getHeldItemAnchor(x, y, spriteRotation, textureScale);
+    const anchor = socket ?? getHeldItemAnchor(x, y, spriteRotation, textureScale);
     const frame = this.image.frame;
     this.feedback.sample(this.scene.time.now, this.feedbackPose);
     const recoil = this.feedbackPose.recoilPx * textureScale;
@@ -117,7 +118,7 @@ export class HeldItemVisual {
     this.image
       .setVisible(true)
       .setPosition(anchor.x - Math.sin(spriteRotation) * recoil, anchor.y + Math.cos(spriteRotation) * recoil)
-      .setRotation(spriteRotation + this.feedbackPose.rotationRad)
+      .setRotation((socket?.yaw ?? spriteRotation) + this.feedbackPose.rotationRad)
       .setDisplaySize(frame.cutWidth * textureScale / this.sourceScale, frame.cutHeight * textureScale / this.sourceScale)
       .setAlpha(alpha);
   }
@@ -165,6 +166,7 @@ export class HeldItemVisual {
     y: number,
     spriteRotation: number,
     displaySize: number,
+    socket?: { x: number; y: number; yaw: number },
   ): MuzzleOrigin | null {
     const spec = getHeldItemSpriteSpec(this.itemId);
     if (!spec) return null;
@@ -179,12 +181,13 @@ export class HeldItemVisual {
     );
     const anchor = getHeldItemAnchor(x, y, spriteRotation, displaySize / HELD_ITEM_TEXTURE_SIZE);
     this.feedback.sample(this.scene.time.now, this.feedbackPose);
-    const c = Math.cos(this.feedbackPose.rotationRad), s = Math.sin(this.feedbackPose.rotationRad);
+    const rotation = this.feedbackPose.rotationRad + (socket ? socket.yaw - spriteRotation : 0);
+    const c = Math.cos(rotation), s = Math.sin(rotation);
     const dx = point.x - anchor.x, dy = point.y - anchor.y;
     const recoil = this.feedbackPose.recoilPx * displaySize / HELD_ITEM_TEXTURE_SIZE;
     return {
-      x: anchor.x + dx * c - dy * s - Math.sin(spriteRotation) * recoil,
-      y: anchor.y + dx * s + dy * c + Math.cos(spriteRotation) * recoil,
+      x: (socket?.x ?? anchor.x) + dx * c - dy * s - Math.sin(spriteRotation) * recoil,
+      y: (socket?.y ?? anchor.y) + dx * s + dy * c + Math.cos(spriteRotation) * recoil,
     };
   }
 

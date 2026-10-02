@@ -148,3 +148,15 @@ describe('animated held item geometry and lifetime', () => {
     expect(visual.readWeaponPose(out)).toBe(false);
   });
 });
+
+it('uses the same animated hand socket and recoil for the weapon image and visual muzzle only',()=>{
+ const {visual,scene,image}=visualFixture();visual.setItem('GLOCK');
+ const socket={x:107,y:183,yaw:.37},gameplay=getHeldWeaponGameplayMuzzleOrigin('GLOCK',100,200,.5,38.4);
+ visual.playShot('GLOCK',profiles.light);scene.time.now=15;
+ visual.sync(100,200,.5,38.4,true,1,socket);
+ const out={x:0,y:0,rotation:0,itemId:''};visual.readWeaponPose(out);
+ const muzzle=visual.getMuzzleOrigin(100,200,.5,38.4,socket)!;
+ expect(muzzle.x).toBeCloseTo(out.x);expect(muzzle.y).toBeCloseTo(out.y);
+ expect(Math.hypot(image.x-socket.x,image.y-socket.y)).toBeLessThan(10);
+ expect(getHeldWeaponGameplayMuzzleOrigin('GLOCK',100,200,.5,38.4)).toEqual(gameplay);
+});
