@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "zombie-badger",
+      "sourceRevision": "v2-claw-leap-a",
+      "body": ["Continuous heavy hunched torso", "Connected sloping shoulder", "Connected sloping shoulder.001"],
+      "bodyControl": "Body weight transfer",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_ZombieProximal",
+      "reviewPoses": [0, 4, 10, 18, 19, 21, 23]
+    },
+    {
+      "id": "rabid-badger",
+      "sourceRevision": "v2-claw-leap-a",
+      "body": ["Lean pinched pursuit torso", "Forward narrow shoulder", "Forward narrow shoulder.001", "Long visible rear haunch", "Long visible rear haunch.001"],
+      "bodyControl": "Body weight transfer",
+      "rig": "Locomotion rig",
+      "proximalProperty": "FD_CraftProximal",
+      "reviewPoses": [0, 4, 10, 19, 20, 21, 23]
+    }
+  ],
+  "legs": ["front_left", "front_right", "rear_left", "rear_right"],
+  "upperSuffix": " tapered foreleg",
+  "footSuffix": " broad articulated paw",
+  "note": "Exact legacy identities are pinned by selected blend hashes. Fresh recipes pass direct references. Never apply this adapter to unlisted assets."
+}
