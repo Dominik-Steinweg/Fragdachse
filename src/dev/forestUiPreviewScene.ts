@@ -1,3 +1,4 @@
+import { preloadRuntimeAtlas } from '../assets/RuntimeAtlases';
 import { UPGRADE_HEADER, UPGRADE_CONTROLS } from '../ui/UpgradeForestAssets';
 import { ArenaCountdownOverlay } from '../ui/ArenaCountdownOverlay';
 import { RoundStartCountdownView } from '../ui/RoundStartCountdownView';
@@ -59,10 +60,7 @@ class ForestUiPreview extends Phaser.Scene {
       if (!key || keys.has(key)) return;
       keys.add(key); this.load.image(key, `/assets/sprites/${folder}/${key}.png`);
     };
-    for (const entry of LOADOUT_CATALOG_ENTRIES) icon(entry.iconKey);
-    for (const entry of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
-      if (entry.kind === 'upgrade' || hasCoopDefenseDedicatedUpgradeIcon(entry.id)) icon(getCoopDefenseUpgradeTextureKey(entry.id));
-    }
+    preloadRuntimeAtlas(this.load, 'icons');
     for (const slot of COOP_DEFENSE_ITEM_ART_SLOTS) {
       icon(getCoopDefenseItemEmptyArtKey(slot), 'coop-defense');
       for (const level of COOP_DEFENSE_ITEM_ART_LEVELS) icon(getCoopDefenseItemArtKey(slot, level), 'coop-defense');

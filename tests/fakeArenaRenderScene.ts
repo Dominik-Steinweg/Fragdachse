@@ -107,7 +107,7 @@ export class FakeImage {
 
   /** Alles, was die Darstellung bestimmt – Grundlage jedes Paritaetsvergleichs. */
   describe(x = this.x, y = this.y): string {
-    return `${this.key}@${Math.round(x)},${Math.round(y)}`
+    return `${this.key}${this.frame.name ? `:${this.frame.name}` : ''}@${Math.round(x)},${Math.round(y)}`
       + `|size=${this.displaySize}|rot=${this.rotation.toFixed(4)}|alpha=${this.alpha}`;
   }
 }

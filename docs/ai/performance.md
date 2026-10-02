@@ -110,3 +110,11 @@ Inhaltsversionierte Asset-URLs erhalten lokal bei Vite/Preview immutable-Header.
 langlebige Cache-Control-Header muessen bei einem dafuer geeigneten Host/CDN gesetzt werden.
 
 Native Bodenmaterial-Kacheln und Terrain-Snapshot verwenden denselben Material-Worker-Vertrag. Ein Chunk-Bake bleibt bis zu seinen vollst�ndigen Materialdaten pending; wartende Jobs blockieren keine anderen Surface-Owner. Der World-Owner beendet Worker und verwirft �bertragene Kacheln beim Teardown.
+
+## Public-Asset-Auslieferung
+
+`scripts/lib/public-deployment.mjs` waehlt fuer Produktionsbuild
+und Perf-Archiv dieselben Public-Dateien. Manifestbelegte PNG-Zwillinge und durch Offline-Atlanten
+ersetzte Einzelbilder bleiben als Authoring-/Testquellen im Repository, werden aber nicht kopiert.
+Die Auswahl prueft Inhalts-Hashes der Quellen und Ersatzdateien; ein veralteter Export bricht den
+Build ab. Die generierten Atlasbilder und Frame-Metadaten werden gemeinsam ueber Inhalts-Hash-URLs geladen.

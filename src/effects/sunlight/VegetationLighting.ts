@@ -1,3 +1,4 @@
+import { runtimeTextureFrame } from '../../assets/RuntimeAtlases';
 import {getVisibleWorldView,createVisibleWorldView} from '../../graphics/CameraWorldView';
 import * as Phaser from 'phaser';
 import { getChunkBakeScheduler } from '../../arena/chunks/ChunkBakeScheduler';
@@ -184,7 +185,7 @@ export class VegetationLighting {
  stamp(key:string,x:number,y:number,width:number,height:number,rotation:number,alpha:number,flipX=false,flipY=false):void {
   let source=this.sources.get(key);
   if(!source){
-   const f=this.scene.textures.getFrame(key);if(!f)return;
+   const f=runtimeTextureFrame(this.scene.textures, key);if(!f)return;
    const canvas=this.sourceCanvas??=document.createElement('canvas');canvas.width=f.cutWidth;canvas.height=f.cutHeight;
    const ctx=canvas.getContext('2d',{willReadFrequently:true})!;
    ctx.drawImage(f.source.image as CanvasImageSource,f.cutX,f.cutY,f.cutWidth,f.cutHeight,0,0,canvas.width,canvas.height);

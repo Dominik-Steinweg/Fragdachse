@@ -1,3 +1,4 @@
+import { runtimeImage, runtimeTextureExists, setRuntimeTexture } from '../assets/RuntimeAtlases';
 import { UPGRADE_HEADER, UPGRADE_CONTROLS } from './UpgradeForestAssets';
 import { MATCH_RESULTS_BACKGROUND } from './MatchResultsAssets';
 import { UPGRADE_MENU } from './UpgradeMenuLayout';
@@ -1828,7 +1829,7 @@ export class CoopDefenseUpgradesOverlay {
     const iconKey = this.getNodeTextureKey(node);
     // Nicht registrierte Upgrades liefern bewusst keinen Texture-Key. In diesem Fall bleibt der
     // Knoten vollstaendig funktionsfaehig und zeigt Text statt eines fachlich falschen Bildes.
-    const hasIcon = iconKey !== null && this.scene.textures.exists(iconKey);
+    const hasIcon = iconKey !== null && runtimeTextureExists(this.scene.textures, iconKey);
 
     // Boss-Punkt-Upgrades bilden den hochwertigen Abschluss eines Zweigs. Ein
     // eigener, etwas groesserer Rahmen hebt ihre Silhouette hervor, waehrend der
@@ -1929,7 +1930,7 @@ export class CoopDefenseUpgradesOverlay {
     if (hasIcon && iconKey !== null) {
       const uiIconKey = ensureUpgradeIcon(this.scene, getLoadoutIconTextureKey(this.scene, iconKey), isActive, isLocked);
       const icon = fitLoadoutIcon(
-        this.scene.add.image(0, 0, uiIconKey),
+        runtimeImage(this.scene, 0, 0, uiIconKey),
         ICON_SIZE,
         ICON_SIZE,
       )

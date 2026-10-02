@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 // so viel bereit, dass die Modulkette importierbar bleibt.
 vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFakePhaserModule());
 import { CELL_SIZE } from '../src/config';
+import { runtimeTextureKey } from '../src/assets/RuntimeAtlases';
 import type { ArenaLayout, DecalCell } from '../src/types';
 import { ROCK_DECAL_LARGE_SIZE, ROCK_DECAL_SIZE, isEnclosedRockDecal } from '../src/arena/DecalConfig';
 import {
@@ -40,6 +41,7 @@ const FAR_AWAY = { x: FRAME.offsetX + 100_000, y: FRAME.offsetY, width: 200, hei
 
 const LARGE_CORE_DECAL = 'rock_moss_carpet';
 const SMALL_EDGE_DECAL = 'rock_moss_fringe';
+const decalDrawKey = (id: string) => `${runtimeTextureKey(id)}:${id}@`;
 
 function decal(textureKey: string, gridX: number, gridY: number, displaySize: number): DecalCell {
   return {
@@ -338,7 +340,7 @@ describe('rock decal cutout inside the streamer', () => {
     const drawn = lastBlit(texture);
     // Alle vier Decals liegen im ersten Chunk und werden gezeichnet.
     expect(drawn.filter(entry=>!entry.startsWith('woodland-rock-'))).toHaveLength(DECALS.length);
-    expect(drawn.some((entry) => entry.startsWith(LARGE_CORE_DECAL))).toBe(true);
+    expect(drawn.some((entry) => entry.startsWith(decalDrawKey(LARGE_CORE_DECAL)))).toBe(true);
   });
 
   it('keeps a large mat whose anchor cell fell and drops the small decal on it', () => {
@@ -351,10 +353,10 @@ describe('rock decal cutout inside the streamer', () => {
     const drawn = lastBlit(chunkTexture(streamer, ROCK_OVERLAY_DECAL_LAYER_ID, 0, 0));
     // Die `core`-Matte liegt per Konstruktion vollstaendig auf Fels; sie bleibt stehen und
     // verliert nur das Quadrat der gefallenen Zelle.
-    expect(drawn.some((entry) => entry.startsWith(LARGE_CORE_DECAL))).toBe(true);
+    expect(drawn.some((entry) => entry.startsWith(decalDrawKey(LARGE_CORE_DECAL)))).toBe(true);
     // Das kleine Kantendecal derselben Zelle darf die Kante ueberragen – sein Ueberhang laege
     // sonst frei auf dem Boden, also verschwindet es ganz.
-    expect(drawn.filter((entry) => entry.startsWith(SMALL_EDGE_DECAL))).toHaveLength(2);
+    expect(drawn.filter((entry) => entry.startsWith(decalDrawKey(SMALL_EDGE_DECAL)))).toHaveLength(2);
   });
 
   it('erases exactly the square of the fallen cell, nothing else', () => {

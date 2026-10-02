@@ -1,3 +1,4 @@
+import { runtimeTextureFrame } from '../../assets/RuntimeAtlases';
 import type { TerrainSnapshotStaging } from '../TerrainSnapshotStaging';
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
@@ -284,7 +285,7 @@ export class GroundSurfaceStreamer {
       ids.sort(compareNumbers);
       for(const id of ids){
         const p=this.groundCoverPlacements[id];if(!isVolumeVegetation(p.textureKey))continue;
-        const f=this.scene.textures.getFrame(p.textureKey);if(!f)continue;
+        const f=runtimeTextureFrame(this.scene.textures, p.textureKey);if(!f)continue;
         const scale=p.sizePx/Math.max(f.width,f.height);
         writer.stamp(p.textureKey,p.worldX,p.worldY,f.width*scale,f.height*scale,p.rotation,p.alpha,p.mirrorX,p.mirrorY);
       }

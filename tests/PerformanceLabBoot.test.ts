@@ -90,9 +90,20 @@ it('runs cold/warm pairs and real map switches in one context, saving evidence b
   vi.stubGlobal('window', win); vi.stubGlobal('history', { replaceState: vi.fn() });
   vi.spyOn(performance, 'now').mockImplementation(() => now);
   vi.spyOn(performance, 'getEntriesByType').mockImplementation(type => type === 'mark' ? [{ name: 'FD:lab:test:lobby-revealed', startTime: 900 } as any] : []);
-  const cdp = { send: vi.fn(async () => ({})), detach: vi.fn(async () => {}) };
+  const handlers = new Map<string, Function>();
+  const cdp = { send: vi.fn(async () => ({})), detach: vi.fn(async () => {}),
+    on: (name: string, fn: Function) => handlers.set(name, fn),
+    off: (name: string) => handlers.delete(name) };
   const context = { newCDPSession: async () => cdp, addInitScript: vi.fn(async () => {}) };
-  const page = { goto: vi.fn(async () => reset()), reload: vi.fn(async () => reset()), bringToFront: async () => {},
+  const page = { goto: vi.fn(async (url: string) => {
+    reset();
+    if (url === 'about:blank') return;
+    handlers.get('Network.requestWillBeSent')?.({ requestId: 'missing', request: { url: '/missing.woff2' }, initiator: { type: 'parser' } });
+    handlers.get('Network.responseReceived')?.({ requestId: 'missing', response: { url: '/missing.woff2', status: 404, headers: {} } });
+    handlers.get('Network.loadingFinished')?.({ requestId: 'missing' });
+    handlers.get('Network.requestWillBeSent')?.({ requestId: 'failed', request: { url: '/offline.webp' }, initiator: { type: 'script' } });
+    handlers.get('Network.loadingFailed')?.({ requestId: 'failed', errorText: 'net::ERR_FAILED' });
+  }), reload: vi.fn(async () => reset()), bringToFront: async () => {},
     evaluate: async (fn: Function, arg: unknown) => fn(arg), mouse: { click: async () => {} } };
   try {
     const result = await runLoadMeasurements({ page, context, url: 'http://127.0.0.1:1234/', directory,
@@ -107,6 +118,11 @@ it('runs cold/warm pairs and real map switches in one context, saving evidence b
     expect(cdp.detach).toHaveBeenCalledOnce();
     const cold = JSON.parse(await readFile(join(directory,'load-01-cold-lobby.json'),'utf8'));
     expect(cold.timeline.runs[0].id).toBe('world:lobby');
+    expect(cold.http.failures).toEqual([
+      { url: '/missing.woff2', status: 404, initiator: { type: 'parser' } },
+      { url: '/offline.webp', requestId: 'failed', errorText: 'net::ERR_FAILED', initiator: { type: 'script' } },
+    ]);
+    expect(handlers.size).toBe(0);
     expect(await readFile(join(directory,'load-summary.md'),'utf8')).toContain('2 / 2');
     page.goto.mockRejectedValueOnce(new Error('navigation failed'));
     await expect(runLoadMeasurements({ page, context, url: 'http://127.0.0.1:1234/', directory,

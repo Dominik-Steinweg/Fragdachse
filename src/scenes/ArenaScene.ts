@@ -31,9 +31,8 @@ import {
 import { ChunkedRenderSurface }  from '../arena/chunks/ChunkedRenderSurface';
 import { CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS } from '../arena/chunks/ChunkBakeScheduler';
 import { preloadCanopyAssets }   from '../arena/CanopyConfig';
-import { preloadArenaDecalAssets } from '../arena/DecalConfig';
+import { preloadRuntimeAtlas, assertRuntimeAtlasesReady } from '../assets/RuntimeAtlases';
 import { preloadBaseGroundingAssets } from '../arena/BaseGroundingConfig';
-import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravelConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationMask } from '../arena/RockVegetationConfig';
@@ -375,9 +374,9 @@ export class ArenaScene extends Phaser.Scene {
     // Authored Void-Panzerung fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
     // Frame-Indizes, daher unveraenderte Autotile-Logik.
     this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
-    preloadArenaDecalAssets(this.load);
+    preloadRuntimeAtlas(this.load, 'decals');
     preloadBaseGroundingAssets(this.load);
-    preloadGroundCoverAssets(this.load);
+    preloadRuntimeAtlas(this.load, 'groundcover');
     preloadPersistentBaseGravelAssets(this.load);
     preloadRockMossAssets(this.load);
     preloadRockVegetationMask(this.load);
@@ -407,27 +406,7 @@ export class ArenaScene extends Phaser.Scene {
       this.load.image(imageKey, getPipelineAssetForTexture(imageKey)?.idlePath ?? `./assets/sprites/enemies/${imageKey}.png`);
     }
 
-    // Katalogmetadaten bestimmen explizit Auswahlreihenfolge und vorhandene Icons.
-    const queuedLoadoutIcons = new Set<string>();
-    for (const entry of LOADOUT_CATALOG_ENTRIES) {
-      if (!entry.iconKey || queuedLoadoutIcons.has(entry.iconKey)) continue;
-      queuedLoadoutIcons.add(entry.iconKey);
-      this.load.image(entry.iconKey, `./assets/sprites/Loadout/${entry.iconKey}.png`);
-    }
-
-    // Nur explizit registrierte Upgrade-Icons laden. Neue Upgrades fallen dadurch auf Text
-    // zurueck, bis das zugehoerige PNG vorhanden und in der Icon-Registry eingetragen ist.
-    const queuedUpgradeTextures = new Set<string>();
-    for (const definition of Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)) {
-      // Dedicated upgrade-tree artwork also covers unlock nodes that should not fall back to
-      // the corresponding loadout-item icon.
-      if (definition.kind !== 'upgrade' && !hasCoopDefenseDedicatedUpgradeIcon(definition.id)) continue;
-      const key = getCoopDefenseUpgradeTextureKey(definition.id);
-      if (key === null) continue;
-      if (queuedUpgradeTextures.has(key)) continue;
-      queuedUpgradeTextures.add(key);
-      this.load.image(key, `./assets/sprites/Loadout/${key}.png`);
-    }
+    preloadRuntimeAtlas(this.load, 'icons');
 
     for (const slot of COOP_DEFENSE_ITEM_ART_SLOTS) {
       const emptyKey = getCoopDefenseItemEmptyArtKey(slot);
@@ -498,6 +477,7 @@ export class ArenaScene extends Phaser.Scene {
     assertWoodlandAssetsReady(this);
     assertCharacterShadowAssetsReady(this);
     assertPowerUpAssetsReady(this);
+    assertRuntimeAtlasesReady(this.textures);
     onBootSceneTeardown(this.events, () => {
       this.cancelArenaExitRenderWait();
       this.arenaExitFadeOverlay?.destroy();

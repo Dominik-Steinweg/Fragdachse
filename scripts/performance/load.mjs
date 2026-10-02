@@ -104,11 +104,20 @@ export async function runLoadMeasurements({ page, context, url, directory, reque
   signal.throwIfAborted();
   const cdp = await context.newCDPSession(page);
   const samples = [];
-  let http = { responses: 0, diskCache: 0, serviceWorker: 0, examples: [] };
-  const responseReceived = ({ response }) => {
+  const emptyHttp = () => ({ responses: 0, diskCache: 0, serviceWorker: 0, examples: [], failures: [] });
+  let http = emptyHttp();
+  const requests = new Map();
+  const requestWillBeSent = ({ requestId, request, initiator }) => requests.set(requestId, { url: request.url, initiator });
+  const loadingFinished = ({ requestId }) => requests.delete(requestId);
+  const loadingFailed = ({ requestId, errorText, canceled, blockedReason }) => {
+    http.failures.push({ ...requests.get(requestId), requestId, errorText, canceled, blockedReason });
+    requests.delete(requestId);
+  };
+  const responseReceived = ({ requestId, response }) => {
     http.responses++;
     if (response.fromDiskCache) http.diskCache++;
     if (response.fromServiceWorker) http.serviceWorker++;
+    if (response.status >= 400) http.failures.push({ ...requests.get(requestId), url: response.url, status: response.status });
     if (http.examples.length < 12 && /woodland|rock_base|gravel_material/.test(response.url)) {
       const headers = Object.fromEntries(Object.entries(response.headers).map(([k, v]) => [k.toLowerCase(), v]));
       http.examples.push({ url: response.url, status: response.status, diskCache: !!response.fromDiskCache,
@@ -116,6 +125,9 @@ export async function runLoadMeasurements({ page, context, url, directory, reque
     }
   };
   cdp.on?.('Network.responseReceived', responseReceived);
+  cdp.on?.('Network.requestWillBeSent', requestWillBeSent);
+  cdp.on?.('Network.loadingFailed', loadingFailed);
+  cdp.on?.('Network.loadingFinished', loadingFinished);
   const poll = async predicate => {
     const deadline = Date.now() + Math.min(request.timeoutMs, 300_000);
     for (;;) {
@@ -152,7 +164,7 @@ export async function runLoadMeasurements({ page, context, url, directory, reque
       resources: boot ? raw.timeline.resources : world?.resources ?? { groups: [] } };
     // Raw timeline + phase-local raw resources preserve evidence for other attribution/grouping.
     await writeFile(join(directory, `load-${String(iteration).padStart(2, '0')}-${phase}.json`), JSON.stringify({ sample, ...raw, http }, null, 2));
-    http = { responses: 0, diskCache: 0, serviceWorker: 0, examples: [] };
+    http = emptyHttp();
     samples.push(sample);
     await writeLoadReports(directory, request, samples);
     console.log(`Load ${iteration}/${request.runs} ${phase}: ${(sample.commandToRevealMs / 1000).toFixed(2)} s, rAF ${raf.medianFps?.toFixed(1) ?? '?'} fps${sample.valid ? '' : ' INVALID'}`);
@@ -211,8 +223,16 @@ export async function runLoadMeasurements({ page, context, url, directory, reque
   } catch (error) {
     try {
       const partial = await page.evaluate(() => ({ timeline: window.__FD_BOOT__?.timeline(), status: window.__FD_PERF__?.detail }));
+      partial.http = http;
       await writeFile(join(directory, 'load-failed-timeline.json'), JSON.stringify(partial, null, 2));
     } catch { /* The renderer can already be gone; previous samples remain on disk. */ }
     throw error;
-  } finally { cdp.off?.('Network.responseReceived', responseReceived); await cdp.detach().catch(() => {}); }
+  } finally {
+    cdp.off?.('Network.responseReceived', responseReceived);
+    cdp.off?.('Network.requestWillBeSent', requestWillBeSent);
+    cdp.off?.('Network.loadingFailed', loadingFailed);
+    cdp.off?.('Network.loadingFinished', loadingFinished);
+    requests.clear();
+    await cdp.detach().catch(() => {});
+  }
 }

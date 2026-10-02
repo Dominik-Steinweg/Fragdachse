@@ -1,5 +1,6 @@
 import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
+import { publicDeploymentFiles } from '../lib/public-deployment.mjs';
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, readdir, writeFile, stat } from 'node:fs/promises';
 import { resolve, join, relative, extname, sep } from 'node:path';
@@ -76,7 +77,7 @@ async function hashSources() {
     if (info.isDirectory()) for (const entry of (await readdir(path)).sort()) await visit(join(path, entry));
     else { hash.update(relative(root, path).replaceAll('\\', '/')); hash.update(await readFile(path)); }
   }
-  for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'public', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) await visit(resolve(path));
+  for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'scripts/lib/runtime-atlases.mjs', 'scripts/lib/public-deployment.mjs', 'public', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) await visit(resolve(path));
   return hash.digest('hex');
 }
 
@@ -99,8 +100,8 @@ async function run() {
     await command(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--mode', 'performance-lab'], { FD_PERFORMANCE_BUILD_DIR: site });
     const storage = createBuildStorage(resolve('build/performance-objects'), buildDirectory, checkSpace, abortController.signal);
     await storage.deduplicateTree(site);
-    await storage.archiveTree(resolve('public'), site);
-    for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) {
+    for (const file of await publicDeploymentFiles()) await storage.archiveTree(resolve('public', file), join(site, file));
+    for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'scripts/lib/runtime-atlases.mjs', 'scripts/lib/public-deployment.mjs', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) {
       abortController.signal.throwIfAborted();
       await storage.archiveTree(resolve(path), join(buildDirectory, 'source', path));
     }

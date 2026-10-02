@@ -1,4 +1,3 @@
-import type * as Phaser from 'phaser';
 
 /**
  * Ground cover tiers above the authored materials, in draw order (GROUND_COVER_TIERS): feathered
@@ -9,7 +8,6 @@ import type * as Phaser from 'phaser';
  * Keep this module free of value imports: the export script reads the variant tables directly.
  */
 
-const GROUND_COVER_ASSET_PATH = './assets/sprites/groundcover';
 
 /**
  * Ankerklasse einer Platzierung.
@@ -464,10 +462,4 @@ export function getGroundCoverAnchorConfig(
   config: GroundCoverLayerConfig = GROUND_COVER_CONFIG,
 ): GroundCoverAnchorConfig | undefined {
   return config[anchor];
-}
-
-export function preloadGroundCoverAssets(loader: Phaser.Loader.LoaderPlugin): void {
-  for (const tier of GROUND_COVER_TIERS) for (const variant of tier.variants) {
-    loader.image(getGroundCoverTextureKey(variant.fileName), `${GROUND_COVER_ASSET_PATH}/${variant.fileName}`);
-  }
 }

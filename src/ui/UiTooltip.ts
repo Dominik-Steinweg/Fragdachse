@@ -1,3 +1,4 @@
+import { runtimeImage, runtimeTextureExists, setRuntimeTexture } from '../assets/RuntimeAtlases';
 import * as Phaser from 'phaser';
 import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
 import { ensureForestPanel } from './forestTextures';
@@ -135,7 +136,7 @@ export class UiTooltip {
         cursorY += SPACER_H;
         return;
       }
-      const iconTextureKey = line.textureKey && this.scene.textures.exists(line.textureKey)
+      const iconTextureKey = line.textureKey && runtimeTextureExists(this.scene.textures, line.textureKey)
         ? getLoadoutIconTextureKey(this.scene, line.textureKey)
         : null;
       const icon = iconTextureKey
@@ -150,8 +151,7 @@ export class UiTooltip {
         .setPosition(textX, cursorY)
         .setVisible(true);
       if (icon) {
-        icon
-          .setTexture(iconTextureKey!);
+        setRuntimeTexture(icon, iconTextureKey!);
         fitLoadoutIcon(icon, ICON_SIZE, ICON_SIZE)
           .setPosition(PADDING + ICON_SIZE / 2, cursorY + text.height / 2)
           .setVisible(true);

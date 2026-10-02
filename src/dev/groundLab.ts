@@ -5,7 +5,7 @@ import { CELL_SIZE, DEPTH, GAME_WIDTH, GAME_HEIGHT, CANOPY_RADIUS } from '../con
 import type { ArenaLayout, DirtCell } from '../types';
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
-import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
+import { preloadRuntimeAtlas } from '../assets/RuntimeAtlases';
 import { generateGroundCoverPlacements } from '../arena/GroundCoverField';
 import { buildLobbyWorldLayout, LOBBY_WORLD_WIDTH_CELLS, LOBBY_WORLD_HEIGHT_CELLS } from '../arena/LobbyWorldLayout';
 import { GroundSurfaceStreamer } from '../arena/chunks/GroundSurfaceStreamer';
@@ -47,7 +47,7 @@ class GroundLab extends Phaser.Scene {
 
   preload(): void {
     preloadGroundMaterials(this.load);
-    preloadGroundCoverAssets(this.load);
+    preloadRuntimeAtlas(this.load, 'groundcover');
     preloadRockBase(this.load);
     this.load.image('ground-lab-canopy', './assets/sprites/canopies/canopy01.png');
     this.load.image('ground-lab-player', './assets/sprites/pipeline-v2/badger/idle.png');

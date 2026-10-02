@@ -1,4 +1,5 @@
 import { runtimeAssetCache } from './scripts/asset-cache';
+import { publicDeployment } from './scripts/lib/public-deployment.mjs';
 import gameVersion from './game-version.json';
 import { devScenarioArtifacts } from './scripts/dev-scenario-artifacts';
 import { defineConfig, normalizePath } from 'vite';
@@ -31,7 +32,7 @@ export default defineConfig(({ mode }) => {
 
   return {
   base: navigationBuild ? `/build/${mode}/` : './',
-  plugins: [runtimeAssetCache(), devScenarioArtifacts(), {
+  plugins: [runtimeAssetCache(), publicDeployment(), devScenarioArtifacts(), {
     name: 'local-navigation-report',
     configureServer(server) {
       server.middlewares.use('/__navigation-environment', (_request, response) => {
@@ -98,6 +99,7 @@ export default defineConfig(({ mode }) => {
     format: 'es' as const,
   },
   build: {
+    copyPublicDir: false,
     ...(performanceBuild ? { outDir: process.env.FD_PERFORMANCE_BUILD_DIR || 'build/performance-lab', copyPublicDir: false } : {}),
     ...(navigationBuild ? { outDir: `build/${mode}`, copyPublicDir: false } : {}),
     ...(fogBuild ? { outDir: 'build/fog-lab', copyPublicDir: false } : {}),

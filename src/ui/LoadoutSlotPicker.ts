@@ -1,3 +1,4 @@
+import { runtimeImage, runtimeTextureExists, setRuntimeTexture } from '../assets/RuntimeAtlases';
 import { BUTTON_CURSOR } from './gameCursor';
 import * as Phaser from 'phaser';
 import { activateUi, playUiHover } from './UiAudio';
@@ -248,10 +249,10 @@ export class LoadoutSlotPicker {
       .setAlpha(entry.disabled ? 0.45 : 1);
     children.push(background);
 
-    if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
+    if (entry.textureKey && runtimeTextureExists(this.scene.textures, entry.textureKey)) {
       const textureKey = getLoadoutIconTextureKey(this.scene, entry.textureKey);
       children.push(fitLoadoutIcon(
-        this.scene.add.image(x + 6 + ICON_SIZE / 2, y + height / 2, textureKey),
+        runtimeImage(this.scene, x + 6 + ICON_SIZE / 2, y + height / 2, textureKey),
         ICON_SIZE,
         ICON_SIZE,
       )

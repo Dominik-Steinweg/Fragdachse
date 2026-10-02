@@ -353,7 +353,7 @@ Zerstörung, verwerfen veraltete Ergebnisse. Horizont-Blends verwenden die pausi
 
 Farbtexturen werden durch `scripts/prepare-runtime-assets.mjs` verlustfrei veroeffentlicht.
 `src/assets/RuntimeAssetUrls.ts` bindet logische Loader-Pfade an den Inhalts-Hash der tatsaechlich
-geladenen Datei, auch fuer Deferred-Assets und Retry. Textur-Keys und Frames bleiben stabil.
+geladenen Datei, auch fuer Deferred-Assets und Retry. Logische Asset-IDs bleiben stabil.
 Die PNG-Exportzwischenprodukte bleiben fuer Offline-Paritaetspruefungen vorhanden.
 Bei premultipliziert hochgeladenen Farbtexturen sind Alpha und RGB bei Alpha > 0 exakt;
 unsichtbares RGB darf nur dort entfallen. Datenatlanten behalten alle Kanaele, auch RGB
@@ -362,3 +362,9 @@ uebertragen werden. Nach einem Export aktualisiert `npm run assets:runtime` die 
 und URL-Versionen; die Build-Scripts fuehren diesen Schritt automatisch aus.
 
 Culling und Residency verwenden das sichtbare Weltrechteck aus `src/graphics/CameraWorldView.ts`: Die Berechnung ber�cksichtigt Kamera-Ursprung, Zoom und Rotation aus dem aktuellen Zustand. `camera.worldView` kann vor `preRender` veraltet sein und bildet den Arena-Ursprung nicht korrekt ab. Frame-Consumer reichen wiederverwendbaren Ausgabespeicher ein.
+
+Loadout-/Upgrade-Icons, Decals und Groundcover verwenden getrennte Offline-Atlanten.
+`src/assets/RuntimeAtlases.ts` loest logische IDs in Textur-Key und Frame auf; Existenzpruefungen
+muessen beide pruefen. UI und Bake-Images verwenden dieses Paar. CPU-/Canvas-Leser schneiden
+mit `Frame.cutX/cutY/cutWidth/cutHeight` aus, statt das gesamte Atlasbild als Einzelbild zu lesen.
+Die Vollbild-Geometrie bleibt unbeschnitten und ungedreht; Randextrusion verhindert Filter-Bleeding.

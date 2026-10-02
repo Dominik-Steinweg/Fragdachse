@@ -2,6 +2,7 @@ import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { publishColour, sha256 } from './lib/runtime-colours.mjs';
+import { prepareRuntimeAtlases } from './lib/runtime-atlases.mjs';
 
 // Explicit colour-only families. Never infer data semantics from size or alpha.
 const materials = ['rock_base', 'gras_bg_tile', 'ground_macro', 'gravel_material', 'gravel_material_alt',
@@ -41,6 +42,7 @@ export async function prepareRuntimeAssets() {
   const output = 'src/assets/manifests/runtime-colours.json';
   const text = JSON.stringify({ version: 1, assets: manifest }, null, 2) + '\n';
   if (await readFile(output, 'utf8').catch(() => '') !== text) await writeFile(output, text);
+  await prepareRuntimeAtlases(manifest);
   const urls = {};
   const visit = async directory => {
     for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {

@@ -1,3 +1,4 @@
+import { runtimeTextureFrame } from '../assets/RuntimeAtlases';
 import type * as Phaser from 'phaser';
 import { drawModalFrame, MODAL_FRAME_ASSET } from './ForestModal';
 import { roundRectPath, lerpColor } from './uiTextures';
@@ -71,7 +72,7 @@ export function ensureUpgradeIcon(scene: Phaser.Scene, source: string, active: b
   if (active) return source;
   const key = `_upgrade_muted_v2_${source}_${locked}`;
   if (scene.textures.exists(key)) return key;
-  const frame = scene.textures.getFrame(source);
+  const frame = runtimeTextureFrame(scene.textures, source);
   const texture = scene.textures.createCanvas(key, frame.cutWidth, frame.cutHeight)!;
   const ctx = texture.context;
   ctx.drawImage(frame.source.image as HTMLImageElement, frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight,

@@ -1,3 +1,4 @@
+import { runtimeImage, runtimeTextureExists, setRuntimeTexture } from '../assets/RuntimeAtlases';
 import { BUTTON_CURSOR } from './gameCursor';
 import * as Phaser from 'phaser';
 import { activateUi, playUiHover } from './UiAudio';
@@ -158,13 +159,13 @@ export function createLoadoutSlotControl(
   const presentation = options.presentation;
   const hoverKey = options.hoverKey ?? `${options.x}:${options.y}`;
   let applyHoverState: ((state: LoadoutHoverState) => void) | null = null;
-  if (presentation?.textureKey && scene.textures.exists(presentation.textureKey)) {
+  if (presentation?.textureKey && runtimeTextureExists(scene.textures, presentation.textureKey)) {
     const textureKey = getLoadoutIconTextureKey(scene, presentation.textureKey);
     if (options.hoverGroup) {
       const mutedIcon = createMutedIcon(scene, iconX, iconSize, textureKey);
       const blockIcon = createBlockHoverIcon(scene, iconX, iconSize, textureKey);
       const colorIcon = fitLoadoutIcon(
-        scene.add.image(iconX, 0, textureKey),
+        runtimeImage(scene, iconX, 0, textureKey),
         iconSize,
         iconSize,
       )
@@ -197,7 +198,7 @@ export function createLoadoutSlotControl(
       };
     } else {
       root.add(fitLoadoutIcon(
-        scene.add.image(iconX, 0, textureKey),
+        runtimeImage(scene, iconX, 0, textureKey),
         iconSize,
         iconSize,
       )
@@ -443,7 +444,7 @@ function createMutedIcon(
   size: number,
   textureKey: string,
 ): Phaser.GameObjects.Image {
-  const icon = fitLoadoutIcon(scene.add.image(x, 0, textureKey), size, size)
+  const icon = fitLoadoutIcon(runtimeImage(scene, x, 0, textureKey), size, size)
     .setScrollFactor(0);
 
   icon.enableFilters();
@@ -463,7 +464,7 @@ function createBlockHoverIcon(
   size: number,
   textureKey: string,
 ): Phaser.GameObjects.Image {
-  const icon = fitLoadoutIcon(scene.add.image(x, 0, textureKey), size, size)
+  const icon = fitLoadoutIcon(runtimeImage(scene, x, 0, textureKey), size, size)
     .setAlpha(0)
     .setScrollFactor(0);
 

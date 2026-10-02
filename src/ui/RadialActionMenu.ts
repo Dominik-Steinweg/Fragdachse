@@ -1,3 +1,4 @@
+import { runtimeImage, runtimeTextureExists, setRuntimeTexture } from '../assets/RuntimeAtlases';
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
 import { toDesignSpace } from '../graphics/RenderResolution';
@@ -456,9 +457,9 @@ export class RadialActionMenu {
     size: number,
   ): { icon: Phaser.GameObjects.Image | Phaser.GameObjects.Text; textureKey: string | null } {
     const scene = this.scene;
-    if (entry.iconKey && scene.textures.exists(entry.iconKey)) {
+    if (entry.iconKey && runtimeTextureExists(scene.textures, entry.iconKey)) {
       const textureKey = getLoadoutIconTextureKey(scene, entry.iconKey);
-      return { icon: fitLoadoutIcon(scene.add.image(x, y, textureKey), size, size), textureKey };
+      return { icon: fitLoadoutIcon(runtimeImage(scene, x, y, textureKey), size, size), textureKey };
     }
     if (entry.ref.kind === 'management' && scene.textures.exists(RADIAL_WHEEL_TEXTURE)) {
       const frame = radialManagementIconFrame(entry.ref.action);
@@ -479,7 +480,7 @@ export class RadialActionMenu {
       return;
     }
     if (view.iconTextureKey) {
-      view.icon.setTexture(muted ? ensureUpgradeIcon(this.scene, view.iconTextureKey, false, true) : view.iconTextureKey);
+      setRuntimeTexture(view.icon, muted ? ensureUpgradeIcon(this.scene, view.iconTextureKey, false, true) : view.iconTextureKey);
     } else {
       view.icon.setTint(muted ? 0x8a8a8a : 0xffffff);
     }

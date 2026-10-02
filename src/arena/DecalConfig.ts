@@ -1,4 +1,3 @@
-import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
 import type { DecalKey, DecalTerrainLayer } from '../types';
 
@@ -47,7 +46,6 @@ export const ROCK_DECAL_VERY_LARGE_SIZE = 64;
 export const ROCK_DECAL_MAX_OFFSET_PX = 7;
 export const ROCK_DECAL_LARGE_MAX_OFFSET_PX = 4;
 export const ROCK_DECAL_VERY_LARGE_MAX_OFFSET_PX = 2;
-const DECAL_ASSET_PATH = './assets/sprites/decals';
 
 export const ARENA_DECAL_CONFIG = {
   dirt: {
@@ -286,16 +284,6 @@ export function getRockDecalMaxOffsetPx(displaySize: number | undefined): number
   return ROCK_DECAL_MAX_OFFSET_PX;
 }
 
-export function preloadArenaDecalAssets(loader: Phaser.Loader.LoaderPlugin): void {
-  const seen = new Set<string>();
-  for (const layerConfig of [...Object.values(ARENA_DECAL_CONFIG), DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG]) {
-    for (const variant of layerConfig.variants) {
-      if (seen.has(variant.fileName)) continue;
-      seen.add(variant.fileName);
-      loader.image(getDecalTextureKey(variant.fileName), `${DECAL_ASSET_PATH}/${variant.fileName}`);
-    }
-  }
-}
 
 export function clampDecalPercent(percent: number): number {
   return Math.max(0, Math.min(100, percent));

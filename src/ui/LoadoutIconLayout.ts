@@ -1,3 +1,4 @@
+import { runtimeTextureExists, runtimeTextureKey } from '../assets/RuntimeAtlases';
 import * as Phaser from 'phaser';
 
 const ASMD_LOADOUT_ICON_KEYS = new Set(['ASMD_PRIM', 'ASMD_SEC']);
@@ -16,8 +17,8 @@ function isAsmdLoadoutIcon(textureKey: string): boolean {
  * ASMD icons into their small UI display boxes.
  */
 export function getLoadoutIconTextureKey(scene: Phaser.Scene, textureKey: string): string {
-  if (isAsmdLoadoutIcon(textureKey) && scene.textures.exists(textureKey)) {
-    scene.textures.get(textureKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
+  if (isAsmdLoadoutIcon(textureKey) && runtimeTextureExists(scene.textures, textureKey)) {
+    scene.textures.get(runtimeTextureKey(textureKey)).setFilter(Phaser.Textures.FilterMode.LINEAR);
   }
   return textureKey;
 }

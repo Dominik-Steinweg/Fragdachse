@@ -1,3 +1,4 @@
+import { runtimeTextureKey, runtimeFrameName } from '../assets/RuntimeAtlases';
 import { CANOPY_ATLASES, CANOPY_ASSETS, canopyVariant } from './trees/CanopyAssets';
 import * as Phaser from 'phaser';
 import {
@@ -209,7 +210,7 @@ export class ArenaVisualFactory {
       const { gridX, gridY, textureKey, offsetX, offsetY } = decal;
       const worldX = gridMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2 + offsetX;
       const worldY = gridMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2 + offsetY;
-      const img = new Phaser.GameObjects.Image(scene, worldX, worldY, textureKey);
+      const img = new Phaser.GameObjects.Image(scene, worldX, worldY, runtimeTextureKey(textureKey), runtimeFrameName(textureKey));
       const displaySize = surface === 'rock' ? decal.displaySize ?? ROCK_DECAL_DISPLAY_SIZE : DECAL_SIZE;
       img.setDisplaySize(displaySize, displaySize);
       if (decal.alpha !== undefined) img.setAlpha(decal.alpha);

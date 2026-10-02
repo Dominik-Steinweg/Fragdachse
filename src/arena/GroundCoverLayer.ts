@@ -1,3 +1,4 @@
+import { runtimeTextureFrame, runtimeTextureKey, runtimeFrameName } from '../assets/RuntimeAtlases';
 import type * as Phaser from 'phaser';
 import type { GroundCoverPlacement, GroundCoverStampPlacement } from './GroundCoverField';
 
@@ -59,10 +60,10 @@ export function stampGroundCover(
   renderScale = 1,
 ): void {
   for (const placement of placements) {
-    const frame = scene.textures.getFrame(placement.textureKey);
+    const frame = runtimeTextureFrame(scene.textures, placement.textureKey);
     if (!frame) continue;
     const scale = placement.sizePx / Math.max(frame.width, frame.height) * renderScale;
-    layer.stamp(placement.textureKey, undefined, placement.worldX * renderScale + drawOffsetX, placement.worldY * renderScale + drawOffsetY, {
+    layer.stamp(runtimeTextureKey(placement.textureKey), runtimeFrameName(placement.textureKey), placement.worldX * renderScale + drawOffsetX, placement.worldY * renderScale + drawOffsetY, {
       alpha: placement.alpha * layerAlpha,
       rotation: placement.rotation,
       scaleX: placement.mirrorX ? -scale : scale,
@@ -92,7 +93,7 @@ export function bakeGroundCoverLayer(
 
   const stamps: DirtStamp[] = [];
   for (const placement of placements) {
-    const frame = scene.textures.getFrame(placement.textureKey);
+    const frame = runtimeTextureFrame(scene.textures, placement.textureKey);
     if (!frame) continue;
     const scale = placement.sizePx / Math.max(frame.width, frame.height);
     // Die Ebenendeckkraft geht auf jeden einzelnen Stempel, nie auf die fertige RenderTexture.
@@ -102,7 +103,7 @@ export function bakeGroundCoverLayer(
     const alpha = placement.alpha * layerAlpha;
     // `stamp()` schreibt reine Werte in den Kommandopuffer und erzeugt kein Game-Object, laeuft
     // dafuer aber an der Kamera der RenderTexture vorbei – die Koordinaten sind texturlokal.
-    layer.stamp(placement.textureKey, undefined, placement.worldX - bounds.offsetX, placement.worldY - bounds.offsetY, {
+    layer.stamp(runtimeTextureKey(placement.textureKey), runtimeFrameName(placement.textureKey), placement.worldX - bounds.offsetX, placement.worldY - bounds.offsetY, {
       alpha,
       rotation: placement.rotation,
       scaleX: placement.mirrorX ? -scale : scale,
