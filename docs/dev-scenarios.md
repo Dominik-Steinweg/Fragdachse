@@ -8,6 +8,11 @@ Der Einstieg und die Bedienoberfläche werden vom normalen Produktionsbuild nich
 
 ## Bedienung
 
+Power-Ups gezielt auf einer freien Zelle erzeugen: `devScenario.run({action:'spawnPowerUp', id:'HEALTH_PACK', gridX:24, gridY:24})`.
+Erlaubt sind `HEALTH_PACK`, `ARMOR`, `RAGE`, `ADRENALINE`, `DOUBLE_DAMAGE`, `NUKE`, `HOLY_HAND_GRENADE`, `BFG`.
+Ohne Koordinaten gilt das aktuelle Ziel; die Aktion nutzt den normalen Host-Pickup-Pfad und wird nicht im Rezept gespeichert.
+Bei Pause bleibt der Symbolpuls stehen; Einzelschritte setzen ihn fort. UI-Komposite bleiben statisch.
+
 1. Map, Klasse, Seed und Waffen wählen. Alle für die Klasse erlaubten Freischaltungen stehen bereit.
 2. Werkzeuge ergänzen, Upgrade-Stufen setzen und bei Bedarf Items erzeugen. Voraussetzungen werden ergänzt;
    ungültige Stufen, Klassenkombinationen, Slots und Itemwerte werden abgelehnt.

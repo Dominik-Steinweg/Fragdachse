@@ -1,4 +1,5 @@
 import { BfgRenderer } from '../effects/BfgRenderer';
+import { preloadPowerUpAssets } from '../assets/PowerUpAssets';
 import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import type { ProjectileStyle } from '../types';
 import * as Phaser from 'phaser';
@@ -82,7 +83,7 @@ class FogLab extends Phaser.Scene {
     preloadTrainMaterialAssets(this.load);
     this.load.image('fog-grass', '/assets/sprites/gras_bg_tile.png');
     this.load.image('fog-detail', '/assets/sprites/gras_detail_tile.png');
-    this.load.image('powerup_hp', '/assets/sprites/16x16HP.png');
+    preloadPowerUpAssets(this);
     this.load.image('fog-badger', '/assets/sprites/pipeline-v2/badger/idle.png');
     this.load.spritesheet('fog-rock', '/assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('fog-dirt', '/assets/sprites/dirt47blob.png', { frameWidth: 32, frameHeight: 32 });
@@ -278,6 +279,7 @@ class FogLab extends Phaser.Scene {
   }
   update(_time: number, rawDelta: number): void {
     const dt = this.advance || (this.paused ? 0 : Math.min(rawDelta, 67)); this.advance = 0; this.elapsed += Math.min(dt, 67);
+    this.pickups?.updatePresentation(this.elapsed);
     const camera = this.cameras.main;
     camera.setScroll(this.baseScroll.x, this.baseScroll.y);
     if (this.pan && dt) camera.centerOn(960 + (1 - Math.cos(this.elapsed / 2500)) * (frame.width - 1920) / 2,

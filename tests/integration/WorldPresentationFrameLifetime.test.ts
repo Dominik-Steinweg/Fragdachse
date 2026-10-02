@@ -136,7 +136,7 @@ function fakeBindingInput(
       slimeTrail: { syncVisuals: vi.fn() },
       flamethrowerUpgrades: { syncGround: vi.fn(), syncRings: vi.fn() },
       getTrain: () => null,
-      powerUp: { syncPedestals: vi.fn(), sync: vi.fn(), updatePedestals: vi.fn() },
+      powerUp: { syncPedestals: vi.fn(), sync: vi.fn(), updatePedestals: vi.fn(), updatePresentation: vi.fn() },
       nuke: { sync: vi.fn() },
       airstrike: { sync: vi.fn() },
       meteor: { sync: vi.fn() },
@@ -181,6 +181,20 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  it('drives pickup animation from pausable World time even without fog, and stops at teardown', () => {
+    const input = fakeBindingInput(fakeScene());
+    const pulse = input.clientWorldPresentation.powerUp.updatePresentation;
+    const binding = new WorldPresentationFrameBinding(input);
+    binding.syncGroundFog(25, true, []);
+    expect(pulse).toHaveBeenLastCalledWith(25);
+    binding.syncGroundFog(0, true, []);
+    expect(pulse).toHaveBeenLastCalledWith(25);
+    binding.syncGroundFog(16, true, []);
+    expect(pulse).toHaveBeenLastCalledWith(41);
+    binding.destroy();
+    binding.syncGroundFog(16, true, []);
+    expect(pulse).toHaveBeenCalledTimes(3);
+  });
   it('feeds ground fog the displayed train pose and disconnects it when hidden or destroyed', () => {
     const gpuScene = makeFakeGpuVfxScene();
     const scene = Object.assign(gpuScene, { cameras: { main: fakeCamera() } });
@@ -318,7 +332,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       slimeTrail: { syncVisuals: vi.fn() },
       flamethrowerUpgrades: { syncGround: vi.fn(), syncRings: vi.fn() },
       getTrain: () => currentTrain,
-      powerUp: { syncPedestals: vi.fn(), sync: vi.fn(), updatePedestals: vi.fn() },
+      powerUp: { syncPedestals: vi.fn(), sync: vi.fn(), updatePedestals: vi.fn(), updatePresentation: vi.fn() },
       nuke: { sync: vi.fn() },
       airstrike: { sync: vi.fn() },
       meteor: { sync: vi.fn() },

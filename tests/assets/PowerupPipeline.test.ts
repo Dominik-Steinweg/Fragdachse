@@ -6,7 +6,32 @@ import sharp from 'sharp';
 import {validatePowerupSpec,POWERUP_IDS,sameProjectionScale} from '../../scripts/asset-pipeline/powerups-contract.mjs';
 import {validateManifestV2} from '../../scripts/asset-pipeline/export-v2.mjs';
 import {compositePowerup} from '../../scripts/asset-pipeline/review-powerups.mjs';
+import {createHash} from 'node:crypto';
+import runtimeManifest from '../../src/assets/manifests/powerups-powerups-r02.json';
+import {POWERUP_DEFS, POWERUP_RENDER_SIZE} from '../../src/powerups/PowerUpConfig';
+import {runtimeAssetUrl} from '../../src/assets/RuntimeAssetUrls';
 const spec=JSON.parse(await readFile('scripts/asset-pipeline/powerups-v2.json','utf8'));
+
+test('published pickup layers retain hashes, shared full canvases and exact static UI composites', async () => {
+  const m = runtimeManifest;
+  assert.equal(m.displaySize, POWERUP_RENDER_SIZE);
+  assert.deepEqual(m.pivot, [.5, .5]);
+  assert.deepEqual(new Set(m.symbols.map(s => s.gameId)), new Set(Object.values(POWERUP_DEFS).filter(d => d.spriteKey).map(d => d.id)));
+  for (const asset of [m.base, ...m.symbols.flatMap(s => [s.image, s.composite])]) {
+    const bytes = await readFile('public/' + asset.file);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), asset.sha256);
+    assert.equal(bytes.length, asset.downloadBytes);
+    const meta = await sharp(bytes).metadata();
+    assert.equal(meta.width, m.sourceSize); assert.equal(meta.height, m.sourceSize);
+    assert.equal(meta.channels, 4);
+    assert.ok(runtimeAssetUrl(asset.file).endsWith('?v=' + asset.sha256));
+  }
+  for (const symbol of m.symbols) {
+    assert.equal(POWERUP_DEFS[symbol.gameId].spriteKey, symbol.spriteKey);
+    const expected = await sharp('public/' + m.base.file).composite([{ input: 'public/' + symbol.image.file }]).raw().toBuffer();
+    assert.deepEqual(await sharp('public/' + symbol.composite.file).raw().toBuffer(), expected);
+  }
+});
 test('exactly one base, eight semantic symbols and a shared projection',()=>{
   validatePowerupSpec(spec);assert.equal(POWERUP_IDS.length,8);
   for(const mutate of [s=>s.assets.pop(),s=>s.assets.push(s.assets[0]),s=>s.assets[1].pivot=[.4,.5],s=>s.assets[2].orthoScale=3,s=>s.assets[2].model.symbol='hp',s=>s.pulseScales[2]=1.5]){

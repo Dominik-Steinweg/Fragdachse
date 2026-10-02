@@ -193,6 +193,7 @@ export class PersistentBaseEditorWorld {
     this.powerUps.updatePedestals(now);
     this.gpu.update(delta);
     this.presentationTimeMs+=Math.max(0,delta);
+    this.powerUps.updatePresentation(this.presentationTimeMs);
     this.sunlight.update(this.timeOfDay,this.presentationTimeMs);
     this.fog.update(delta, this.timeOfDay, view);
     this.lighting.update();

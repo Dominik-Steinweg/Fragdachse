@@ -3,6 +3,7 @@ import { parseScenario, type GridPoint } from './config';
 import { COOP_DEFENSE_ENEMY_KINDS, type CoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { COOP_DEFENSE_CONSTRUCTION_IDS } from '../../config/coopDefenseConstructions';
 import type { ConstructionId, WeaponSlot } from '../../types';
+import { POWERUP_DEFS } from '../../powerups/PowerUpConfig';
 
 export type ScenarioResult = { ok: true; status: Record<string, unknown>; path?: string; url?: string }
   | { ok: false; error: string; status: Record<string, unknown> };
@@ -109,6 +110,10 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if (!COOP_DEFENSE_ENEMY_KINDS.includes(c.kind as CoopDefenseEnemyKind)) throw new Error(`Unbekannte spawn.kind: ${String(c.kind)}. Registry-Keys: ${COOP_DEFENSE_ENEMY_KINDS.join(', ')}`);
       controller.spawn(c.kind as CoopDefenseEnemyKind, c.pinned === undefined ? false : boolean(c.pinned),
         c.hp == null ? null : number(c.hp, 1, 10000000), c.gridX === undefined && c.gridY === undefined ? undefined : point(c)); break;
+    }
+    case 'spawnPowerUp': {
+      if (typeof c.id !== 'string' || !Object.prototype.hasOwnProperty.call(POWERUP_DEFS, c.id) || !POWERUP_DEFS[c.id].spriteKey) throw new Error('Unbekannte Power-Up-ID.');
+      controller.spawnPowerUp(c.id, c.gridX === undefined && c.gridY === undefined ? undefined : point(c)); break;
     }
     case 'clearEnemies': controller.clearEnemies(); break;
     case 'build': {

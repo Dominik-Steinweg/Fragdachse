@@ -1,4 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
+
+it('validates targeted pickup commands and forwards authored IDs and optional grid coordinates', () => {
+  const spawnPowerUp = vi.fn(), controller = { spawnPowerUp, syncPanel() {} } as never;
+  runScenarioCommand(controller, { action: 'spawnPowerUp', id: 'HEALTH_PACK', gridX: 24, gridY: 24 });
+  expect(spawnPowerUp).toHaveBeenLastCalledWith('HEALTH_PACK', { gridX: 24, gridY: 24 });
+  runScenarioCommand(controller, { action: 'spawnPowerUp', id: 'NUKE' });
+  expect(spawnPowerUp).toHaveBeenLastCalledWith('NUKE', undefined);
+  for (const id of ['typo', 'constructor', 'DECOY_STEALTH']) {
+    expect(() => runScenarioCommand(controller, { action: 'spawnPowerUp', id })).toThrow();
+  }
+  expect(() => runScenarioCommand(controller, { action: 'spawnPowerUp', id: 'ARMOR', gridX: NaN, gridY: 0 })).toThrow();
+  expect(spawnPowerUp).toHaveBeenCalledTimes(2);
+});
 import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS, isCoopDefenseUpgradeAvailableForClass } from '../src/utils/coopDefenseUpgrades';
 import { buildScenarioProfile, defaultScenario, parseScenario, scenarioLoadout, encodeScenario, decodeScenario } from '../src/dev/scenario/config';

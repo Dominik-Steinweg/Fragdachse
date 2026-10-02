@@ -4,6 +4,23 @@ vi.mock('../src/network/bridge',()=>({bridge:{isHost:()=>authority.host,getConne
 vi.mock('../src/utils/devScenarioMode',()=>({isDevScenarioMode:()=>true}));
 import { createDevScenarioWorldPort } from '../src/scenes/arena/ArenaRuntimeAdapters';
 
+it('spawns pickups only in the isolated host and resolves the current World owner on each command', () => {
+  authority.host = true;
+  const first = { system: { spawnPickup: vi.fn(() => 12) } }, second = { system: { spawnPickup: vi.fn(() => 13) } };
+  let runtime: typeof first | null = first;
+  const port = createDevScenarioWorldPort({ getWorldPowerUpRuntime: () => runtime } as never, {} as never);
+  expect(port.spawnPowerUp('ARMOR', 100, 200)).toBe(12);
+  expect(first.system.spawnPickup).toHaveBeenCalledWith('ARMOR', 100, 200);
+  runtime = second;
+  expect(port.spawnPowerUp('NUKE', 100, 200)).toBe(13);
+  authority.host = false;
+  expect(() => port.spawnPowerUp('NUKE', 100, 200)).toThrow('Isolated dev host');
+  expect(second.system.spawnPickup).toHaveBeenCalledOnce();
+  authority.host = true;
+  runtime = null;
+  expect(port.spawnPowerUp('NUKE', 100, 200)).toBeNull();
+});
+
 describe('isolated scenario rock damage port',()=>{
   it('selects a live destructible grid cell and commits lethal damage through the current world mutation owner',()=>{
     authority.host=true;

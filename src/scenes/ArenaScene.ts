@@ -1,4 +1,5 @@
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
+import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
 import { preloadCharacterShadowAssets, assertCharacterShadowAssetsReady } from '../assets/CharacterShadowAssets';
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
@@ -383,14 +384,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadTurretVisualAssets(this.load);
     preloadCanopyAssets(this.load);
     preloadTrainMaterialAssets(this.load);
-    this.load.image('powerup_hp',  './assets/sprites/16x16HP.png');
-    this.load.image('powerup_arm', './assets/sprites/16x16Armor.png');
-    this.load.image('powerup_rage', './assets/sprites/16x16Rage.png');
-    this.load.image('powerup_adr', './assets/sprites/16x16adrenalin.png');
-    this.load.image('powerup_dam', './assets/sprites/16x16damageamp.png');
-    this.load.image('powerup_hhg', './assets/sprites/16x16holy_grenade.png');
-    this.load.image('powerup_nuk', './assets/sprites/16x16nuke.png');
-    this.load.image('powerup_bfg', './assets/sprites/16x16bfg.png');
+    preloadPowerUpAssets(this);
     this.load.image('mission_reward_pedestal', './assets/sprites/mission_reward_pedestal.png');
     this.load.image('mission_reward_pickup', './assets/sprites/mission_reward_pickup.png');
     this.load.image('reward_plasma_turret', './assets/sprites/rewards/plasma_turret.png');
@@ -503,6 +497,7 @@ export class ArenaScene extends Phaser.Scene {
   private *prepareLobby(): Generator<string, void> {
     assertWoodlandAssetsReady(this);
     assertCharacterShadowAssetsReady(this);
+    assertPowerUpAssetsReady(this);
     onBootSceneTeardown(this.events, () => {
       this.cancelArenaExitRenderWait();
       this.arenaExitFadeOverlay?.destroy();

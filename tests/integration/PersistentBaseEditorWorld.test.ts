@@ -84,7 +84,7 @@ describe('base editor World terrain', () => {
     // Unrelated animated renderers are ports here; terrain and its scene-local queue are real.
     const world = Object.assign(Object.create(PersistentBaseEditorWorld.prototype), {
       scene, arena: { groundSurface: ground }, shadows: { updateStaticResidency() {} },
-      bases: { syncLights() {} }, animations: { update() {} }, powerUps: { updatePedestals() {} },
+      bases: { syncLights() {} }, animations: { update() {} }, powerUps: { updatePedestals() {}, updatePresentation() {} },
       presentationTimeMs:0,sunlight:{update:vi.fn()},
       gpu: { update() {} }, fog: { update() {} }, lighting: { update() {} }, fx: { update() {} },
     }) as PersistentBaseEditorWorld;

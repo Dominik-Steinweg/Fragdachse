@@ -548,6 +548,13 @@ export class PowerUpSystem {
     this.spawnPowerUpDef(def, x, y);
   }
 
+  /** Deterministic authored drop; callers retain host authority. */
+  spawnPickup(defId: string, x: number, y: number): number | null {
+    const def = POWERUP_DEFS[defId];
+    if (!def?.spriteKey || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return this.spawnPowerUpDef(def, x, y);
+  }
+
   /** Callback: Ein Spieler wurde getötet → Drop an Todesposition. */
   onPlayerKilled(x: number, y: number): void {
     this.spawnFromTable('ENEMY_KILL', x, y);

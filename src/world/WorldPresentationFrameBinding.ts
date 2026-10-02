@@ -132,6 +132,7 @@ export interface WorldClientPresentationRenderers {
     syncPedestals(pedestals: SyncedPowerUpPedestal[]): void;
     sync(powerups: SyncedPowerUp[]): void;
     updatePedestals(now: number): void;
+    updatePresentation(presentationTimeMs: number): void;
   };
   readonly nuke: { sync(nukes: SyncedNukeStrike[]): void };
   readonly airstrike: { sync(strikes: SyncedAirstrikeStrike[]): void };
@@ -459,6 +460,7 @@ export class WorldPresentationFrameBinding {
   syncGroundFog(deltaMs: number, showWorld: boolean, enemies: readonly MovementVisualSource[]): void {
     if (this.destroyed) return;
     this.presentationTimeMs+=Math.max(0,deltaMs);
+    this.input.clientWorldPresentation.powerUp.updatePresentation(this.presentationTimeMs);
     this.syncSunlight();
     const fog = this.prepareGroundFog(); if (!fog) return;
     const quality = getGraphicsQualityController(this.input.scene);

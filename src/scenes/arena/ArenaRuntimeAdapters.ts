@@ -57,6 +57,10 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       }
       return best;
     },
+    spawnPowerUp(defId: string, x: number, y: number): number | null {
+      requireLocal();
+      return flow.getWorldPowerUpRuntime()?.system.spawnPickup(defId, x, y) ?? null;
+    },
     destroyRock(id:number): boolean {
       requireLocal();
       const hp=flow.getWorldRuntime()?.materialization?.rocks?.readIntegrity(id)?.integrity;

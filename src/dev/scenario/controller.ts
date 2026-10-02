@@ -240,6 +240,13 @@ export class DevScenarioController {
     this.requireReady(); this.runtime.navigationLabPort.removeEnemies(); this.pinned.clear();
     this.config.enemies = []; this.saveLink();
   }
+  spawnPowerUp(defId: string, point = this.aim): void {
+    this.requireReady();
+    const position = this.free(point, 11);
+    const uid = this.runtime.devScenarioPort.spawnPowerUp(defId, position.x, position.y);
+    if (uid === null) throw new Error('Power-Up konnte nicht erzeugt werden.');
+    this.lastAction = { ok: true, powerUpUid: uid, defId, position };
+  }
   build(id: ConstructionId, point = this.aim, remember = true): LoadoutUseResult {
     this.requireReady(); const position = this.world(point);
     const result = this.runtime.rpcPorts.construction.placeInspectorConstruction(bridge.getLocalPlayerId(), id, position.x, position.y, bridge.getSynchronizedNow());

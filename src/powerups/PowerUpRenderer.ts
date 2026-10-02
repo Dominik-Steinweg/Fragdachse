@@ -16,7 +16,8 @@ import type { GpuVfxSpawnSpec } from '../effects/gpu/GpuVfxSpawnSpec';
 import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from '../effects/gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from '../effects/gpu/ParticleFlowScheduler';
 import type { LightingSystem } from '../effects/LightingSystem';
-import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, POWERUP_RENDER_SIZE } from './PowerUpConfig';
+import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, POWERUP_RENDER_SIZE, powerUpSymbolScale } from './PowerUpConfig';
+import { POWERUP_BASE_KEY, powerUpSymbolKey } from '../assets/PowerUpAssets';
 import {
   PowerUpPedestalGpuSystem,
   resolvePowerUpPedestalGpuMode,
@@ -33,7 +34,9 @@ const PEDESTAL_SPAWN_POINT = { x: 0, y: 0 };
 
 interface ItemVisual {
   container: Phaser.GameObjects.Container;
-  graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle | null;
+  graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Container | null;
+  symbol?: Phaser.GameObjects.Image;
+  symbolFit?: number;
   /** Für das Dauerlicht: die Farbe wird pro Frame gebraucht, der Def-Lookup nicht. */
   color: number;
   emitsLight: boolean;
@@ -67,6 +70,7 @@ export class PowerUpRenderer {
   private ambientSpec: GpuVfxSpawnSpec | null = null;
   private sparkSpec: GpuVfxSpawnSpec | null = null;
   private burstSpec: GpuVfxSpawnSpec | null = null;
+  private presentationTimeMs = 0;
 
   constructor(private scene: Phaser.Scene) {
     this.ensureTextures();
@@ -127,15 +131,24 @@ export class PowerUpRenderer {
       container.setDepth(DEPTH.PLAYERS - 1);
 
       // Feste Zielgröße; die Einblendanimation skaliert relativ zu diesem Fit.
-      const graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle | null =
+      const symbolKey = !isMissionVisual && def?.spriteKey ? powerUpSymbolKey(def.spriteKey) : undefined;
+      const symbol = symbolKey
+        ? this.scene.add.image(0, 0, symbolKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
+        : undefined;
+      // Full authored canvases share their pivot. The group owns reveal; only the symbol pulses.
+      const layered = symbol ? this.scene.add.container(0, 0, [
+        this.scene.add.image(0, 0, POWERUP_BASE_KEY).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE),
+        symbol,
+      ]) : null;
+      const graphic: ItemVisual['graphic'] =
         isMissionMarker
           ? null
           :
         isMissionReward
           ? this.scene.add.image(0, 0, 'mission_reward_pickup').setDisplaySize(MISSION_REWARD_PICKUP_SIZE, MISSION_REWARD_PICKUP_SIZE)
-          : def?.spriteKey
+          : layered ?? (def?.spriteKey
           ? this.scene.add.image(0, 0, def.spriteKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
-          : this.scene.add.rectangle(0, 0, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, glowColor);
+          : this.scene.add.rectangle(0, 0, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, glowColor));
       // Nur der seltene Shape-Fallback gehoert zur Vector-Attribution; Bilder bleiben normale
       // Sprite-Last und werden nicht in eine Graphics-Familie eingemischt.
       if (graphic && !isMissionReward && !def?.spriteKey) {
@@ -182,7 +195,9 @@ export class PowerUpRenderer {
       });
       itemAura.once(Phaser.GameObjects.Events.DESTROY, () => auraTween.stop());
 
-      this.sprites.set(pu.uid, { container, graphic, color: glowColor, emitsLight: true });
+      const symbolFit = symbol?.scaleX;
+      this.sprites.set(pu.uid, { container, graphic, symbol, symbolFit, color: glowColor, emitsLight: true });
+      if (symbol && symbolFit !== undefined) symbol.setScale(symbolFit * powerUpSymbolScale(pu.uid, this.presentationTimeMs));
       this.setItemLight(pu.uid, pu.x, pu.y, glowColor);
       this.playMaterializeEffect(pu.x, pu.y, glowColor, container, graphic);
     }
@@ -253,6 +268,16 @@ export class PowerUpRenderer {
         const index = this.activePedestals.indexOf(visual);
         if (index >= 0) this.activePedestals.splice(index, 1);
         this.pedestals.delete(id);
+      }
+    }
+  }
+
+  /** The World owner supplies its pausable clock; snapshot cadence cannot restart the pulse. */
+  updatePresentation(presentationTimeMs: number): void {
+    this.presentationTimeMs = presentationTimeMs;
+    for (const [uid, visual] of this.sprites) {
+      if (visual.symbol && visual.symbolFit !== undefined) {
+        visual.symbol.setScale(visual.symbolFit * powerUpSymbolScale(uid, presentationTimeMs));
       }
     }
   }
@@ -422,7 +447,7 @@ export class PowerUpRenderer {
     y: number,
     color: number,
     container: Phaser.GameObjects.Container,
-    graphic: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle,
+    graphic: NonNullable<ItemVisual['graphic']>,
   ): void {
     const flash = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_POWERUP_PEDESTAL_FLASH),
