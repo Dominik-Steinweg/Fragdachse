@@ -77,12 +77,7 @@ import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
 import { RoomStatisticsOverlay } from '../ui/RoomStatisticsOverlay';
 import { ArenaExitFadeOverlay } from '../ui/ArenaExitFadeOverlay';
 import { CoopDefenseItemRewardOverlay } from '../ui/CoopDefenseItemRewardOverlay';
-import {
-  COOP_DEFENSE_ITEM_ART_LEVELS,
-  COOP_DEFENSE_ITEM_ART_SLOTS,
-  getCoopDefenseItemArtKey,
-  getCoopDefenseItemEmptyArtKey,
-} from '../ui/coopDefenseItemIcons';
+import { getOverlayAssets } from '../ui/OverlayAssets';
 import {
   CoopDefenseItemsOverlay,
 } from '../ui/CoopDefenseItemsOverlay';
@@ -407,15 +402,6 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     preloadRuntimeAtlas(this.load, 'icons');
-
-    for (const slot of COOP_DEFENSE_ITEM_ART_SLOTS) {
-      const emptyKey = getCoopDefenseItemEmptyArtKey(slot);
-      this.load.image(emptyKey, `./assets/sprites/coop-defense/${emptyKey}.png`);
-      for (const itemLevel of COOP_DEFENSE_ITEM_ART_LEVELS) {
-        const key = getCoopDefenseItemArtKey(slot, itemLevel);
-        this.load.image(key, `./assets/sprites/coop-defense/${key}.png`);
-      }
-    }
   }
 
   create(): void {
@@ -876,6 +862,11 @@ export class ArenaScene extends Phaser.Scene {
       () => this.clearDebugTimeOfDay(),
     );
     yield 'hud-and-meta';
+    const canOpenMetaOverlay = () => bridge.getGamePhase() === 'LOBBY'
+      && isCoopDefenseMode(bridge.getGameMode())
+      && !this.arenaRuntime.getIsLocalReady()
+      && !bridge.getPlayerReady(bridge.getLocalPlayerId())
+      && !this.lobbyOverlay.hasTerminalFailure();
     this.coopDefenseUpgradesOverlay = new CoopDefenseUpgradesOverlay(
       this,
       () => this.meta!.getProgress(),
@@ -895,22 +886,22 @@ export class ArenaScene extends Phaser.Scene {
       () => this.meta?.cancelUpgradeChanges(),
       () => this.meta?.applyUpgradeChanges(),
       () => this.meta?.finishAfterRoundStep('upgrades'),
+      canOpenMetaOverlay,
     );
-    this.coopDefenseUpgradesOverlay.build();
     yield 'upgrade-overlay';
     this.itemRewardOverlay = new CoopDefenseItemRewardOverlay(
       this,
       (roundEndedAt, offerUid, salvageUid, action) => Boolean(
         this.meta?.claimItemReward(roundEndedAt, offerUid, salvageUid, action),
       ),
-      () => this.meta?.getItemRewardPresentation() ?? null,
+      (roundEndedAt) => this.meta?.getItemRewardPresentation(roundEndedAt) ?? null,
       () => {
         this.lobbyOverlay.setReadyButtonState(false);
         this.itemsOverlay?.refresh();
         this.meta?.finishAfterRoundStep('items');
       },
+      canOpenMetaOverlay,
     );
-    this.itemRewardOverlay.build();
     yield "reward-overlay";
     this.itemsOverlay = new CoopDefenseItemsOverlay(
       this,
@@ -920,8 +911,8 @@ export class ArenaScene extends Phaser.Scene {
       (uid) => this.meta?.salvageItem(uid) ?? 0,
       () => this.meta?.openItemRewardOverlay(),
       () => this.lobbyOverlay.setReadyButtonState(false),
+      canOpenMetaOverlay,
     );
-    this.itemsOverlay.build();
     yield "items-overlay";
     this.matchResultsOverlay = new MatchResultsOverlay(this, () => {
       // Die Netzwerkphase ist bereits LOBBY. Der lokale Layer gibt lediglich die darunter
@@ -2841,7 +2832,10 @@ export class ArenaScene extends Phaser.Scene {
     this.game.events.off(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
     BootScreen.setProgress(1);
     void BootScreen.fadeOut().then(() => {
-      if (this.sys.isActive()) this.lobbyOverlay.completeBootReveal();
+      if (this.sys.isActive()) {
+        this.lobbyOverlay.completeBootReveal();
+        getOverlayAssets(this).prefetch();
+      }
       if (__PERFORMANCE_LAB__ && this.sys.isActive()) performanceLobbyRevealed();
     });
   }

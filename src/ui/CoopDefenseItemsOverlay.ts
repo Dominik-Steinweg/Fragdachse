@@ -1,6 +1,7 @@
 import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
+import { LazyOverlayGate } from './LazyOverlayGate';
 import { playUiActivation, playUiHover } from './UiAudio';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import {
@@ -145,6 +146,7 @@ interface ItemCell {
 }
 
 export class CoopDefenseItemsOverlay {
+  private readonly lazy: LazyOverlayGate;
   private container: Phaser.GameObjects.Container | null = null;
   private dollCells = new Map<CoopDefenseItemSlot, ItemCell>();
   private stashCells: ItemCell[] = [];
@@ -182,7 +184,10 @@ export class CoopDefenseItemsOverlay {
     private readonly onSalvage: (uid: string) => number | void,
     private readonly onOpenPendingReward: () => void,
     private readonly onClose: () => void,
-  ) {}
+    canOpen: () => boolean = () => true,
+  ) {
+    this.lazy = new LazyOverlayGate(scene, 'items', canOpen);
+  }
 
   build(): void {
     this.destroy();
@@ -234,6 +239,11 @@ export class CoopDefenseItemsOverlay {
   }
 
   show(): void {
+    if (this.visible) return;
+    this.lazy.open(() => this.showLoaded(), () => { this.hide(); this.onClose(); });
+  }
+
+  private showLoaded(): void {
     if (!this.container) this.build();
     this.visible = true;
     this.pendingSalvageUid = null;
@@ -248,6 +258,7 @@ export class CoopDefenseItemsOverlay {
   }
 
   hide(): void {
+    this.lazy.cancel();
     this.visible = false;
     this.pendingSalvageUid = null;
     this.closeTransientLayers();
@@ -259,7 +270,7 @@ export class CoopDefenseItemsOverlay {
   }
 
   isOpen(): boolean {
-    return this.visible;
+    return this.visible || this.lazy.isPending();
   }
 
   /** Nach jeder Aenderung von aussen aufrufen; liest den Stand ueber `getState()` neu. */
@@ -292,6 +303,7 @@ export class CoopDefenseItemsOverlay {
   }
 
   destroy(): void {
+    this.lazy.cancel();
     this.closeTransientLayers();
     this.tooltip?.destroy();
     this.tooltip = null;

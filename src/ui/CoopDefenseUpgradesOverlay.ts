@@ -7,6 +7,7 @@ import { ensureUpgradeSurface, ensureUpgradeIcon, ensureUpgradeFrame, ensureUpgr
 import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureModalFrame, ensureModalPanelTexture, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
+import { LazyOverlayGate } from './LazyOverlayGate';
 import { activateUi, playUiHover, playUiActivation } from './UiAudio';
 import {
   COLORS,
@@ -300,6 +301,7 @@ const CATEGORY_VISUALS: Record<CoopDefenseUpgradeCategorySnapshot['id'], Categor
 };
 
 export class CoopDefenseUpgradesOverlay {
+  private readonly lazy: LazyOverlayGate;
   private container: Phaser.GameObjects.Container | null = null;
   private dimRect: Phaser.GameObjects.Rectangle | null = null;
   private levelText: Phaser.GameObjects.Text | null = null;
@@ -361,7 +363,10 @@ export class CoopDefenseUpgradesOverlay {
     private readonly onCancel: () => void,
     private readonly onApply: () => void,
     private readonly onClosed: () => void = () => {},
-  ) {}
+    canOpen: () => boolean = () => true,
+  ) {
+    this.lazy = new LazyOverlayGate(scene, 'upgrades', canOpen);
+  }
 
   build(): void {
     this.visibilityTween?.remove();
@@ -633,6 +638,12 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   show(): void {
+    if (this.visible) return;
+    this.lazy.open(() => this.showLoaded(), () => this.closeWithCancel());
+  }
+
+  private showLoaded(): void {
+    if (!this.container) this.build();
     if (this.visible || !this.container) return;
     this.visible = true;
     this.xpBarEffect?.start();
@@ -655,7 +666,7 @@ export class CoopDefenseUpgradesOverlay {
 
   /** Verwirft alle Aenderungen seit dem Oeffnen und schliesst. */
   closeWithCancel(): void {
-    if (!this.visible) return;
+    if (!this.isOpen()) return;
     this.onCancel();
     this.refresh();
     this.hide(this.onClosed);
@@ -669,7 +680,12 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   hide(afterHidden?: () => void): void {
-    if (!this.visible || !this.container) return;
+    const pending = this.lazy.isPending();
+    this.lazy.cancel();
+    if (!this.visible || !this.container) {
+      if (pending) afterHidden?.();
+      return;
+    }
     this.visible = false;
     this.dismissDelay?.destroy();
     this.dismissDelay = null;
@@ -693,15 +709,17 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   toggle(): void {
-    if (this.visible) this.closeWithCancel();
+    if (this.isOpen()) this.closeWithCancel();
     else this.show();
   }
 
   isOpen(): boolean {
-    return this.visible;
+    return this.visible || this.lazy.isPending();
   }
 
   destroy(): void {
+    this.lazy.cancel();
+    this.visible = false;
     this.visibilityTween?.remove();
     this.visibilityTween = null;
     this.dismissDelay?.destroy();

@@ -1,6 +1,7 @@
 import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal, ensureTintedSectionTexture } from './ForestModal';
 import * as Phaser from 'phaser';
+import { LazyOverlayGate } from './LazyOverlayGate';
 import { playUiActivation, playUiHover } from './UiAudio';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import {
@@ -137,6 +138,7 @@ interface SalvageRow {
 }
 
 export class CoopDefenseItemRewardOverlay {
+  private readonly lazy: LazyOverlayGate;
   private container: Phaser.GameObjects.Container | null = null;
   private title: Phaser.GameObjects.Text | null = null;
   private subtitle: Phaser.GameObjects.Text | null = null;
@@ -166,9 +168,12 @@ export class CoopDefenseItemRewardOverlay {
       action?: CoopDefenseItemRewardAction,
     ) => boolean,
     /** Liefert den aktuellen Stand nach jeder Aenderung; `null` schliesst den Layer. */
-    private readonly getPresentation: () => MatchItemRewardPresentation | null,
+    private readonly getPresentation: (roundEndedAt?: number) => MatchItemRewardPresentation | null,
     private readonly onClosed: () => void,
-  ) {}
+    canOpen: () => boolean = () => true,
+  ) {
+    this.lazy = new LazyOverlayGate(scene, 'items', canOpen);
+  }
 
   build(): void {
     this.destroy();
@@ -258,6 +263,18 @@ export class CoopDefenseItemRewardOverlay {
   }
 
   show(presentation: MatchItemRewardPresentation, closeAfterClaim = false): void {
+    // Preserve synchronous callers; after a download, re-read rewards instead of
+    // displaying an offer that may have been claimed or replaced in the meantime.
+    let immediate = true;
+    this.lazy.open(() => {
+      const current = immediate ? presentation : this.getPresentation(presentation.roundEndedAt);
+      if (!current) { this.hide(); this.onClosed(); return; }
+      this.showLoaded(current, closeAfterClaim);
+    }, () => this.dismiss());
+    immediate = false;
+  }
+
+  private showLoaded(presentation: MatchItemRewardPresentation, closeAfterClaim: boolean): void {
     if (!this.container) this.build();
     this.presentation = presentation;
     this.closeAfterClaim = closeAfterClaim;
@@ -267,7 +284,7 @@ export class CoopDefenseItemRewardOverlay {
   }
 
   isVisible(): boolean {
-    return this.visible;
+    return this.visible || this.lazy.isPending();
   }
 
   dismiss(): void {
@@ -276,6 +293,7 @@ export class CoopDefenseItemRewardOverlay {
   }
 
   hide(): void {
+    this.lazy.cancel();
     this.visible = false;
     this.presentation = null;
     this.salvageOption = null;
@@ -286,6 +304,7 @@ export class CoopDefenseItemRewardOverlay {
   }
 
   destroy(): void {
+    this.lazy.cancel();
     this.tooltip?.destroy();
     this.tooltip = null;
     this.container?.destroy(true);
