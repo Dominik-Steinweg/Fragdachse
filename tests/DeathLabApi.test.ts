@@ -44,7 +44,7 @@ describe('death lab automation', () => {
     const { api, scene } = setup();
     await api.run({ action: 'freeze', frames: 4, stepMs: 500 });
     expect(scene.capture).toHaveBeenCalledTimes(4);
-    await api.run({ action: 'tuning', values: { dustAt: 0.42 } });
+    await api.run({ action: 'tuning', values: { dustAt: 0.35 } });
     expect(api.status().baseline?.metadata.tuning).toEqual(DEATH_TUNING_DEFAULTS);
     await api.run({ action: 'seek', timeMs: 480 });
     expect(api.status().timeMs).toBe(500); expect(api.status().requestedTimeMs).toBe(480);

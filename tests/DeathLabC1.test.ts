@@ -85,7 +85,7 @@ describe('death lab: explicit C1 reference spawn bytes', () => {
 describe('death lab tuning and clocks', () => {
   it('keeps morph defaults identical and validates changes before application', () => {
     for (let i = 0; i < 128; i++) expect(sampleDeathMorphBlend(i / 127, DEATH_TUNING_DEFAULTS)).toEqual(sampleDeathMorphBlend(i / 127));
-    expect(sampleDeathMorphBlend(0.4, resolveDeathTuning({ dustAt: 0.42 }))).not.toEqual(sampleDeathMorphBlend(0.4));
+    expect(sampleDeathMorphBlend(0.4, resolveDeathTuning({ dustAt: 0.35 }))).not.toEqual(sampleDeathMorphBlend(0.4));
     for (const patch of [{ dustAt: 0.2 }, { alpha: NaN }, { alpha: 2 }, { durationMs: 0 },
       { morphDesyncMaxScale: 0.9 }, { chunkSizePx: 8 }, { typo: 1 }, { maxChunksPerEffect: 100 }]) {
       expect(() => resolveDeathTuning(patch)).toThrow();
@@ -99,7 +99,7 @@ describe('death lab tuning and clocks', () => {
     const frames = GPU_VFX_DEATH_MORPH_FRAME_IDS.map(getGpuVfxFrame);
     buildGpuVfxAtlas(scene as never);
     expect(atlas.refreshed).toBe(refreshed);
-    buildGpuVfxAtlas(scene as never, resolveDeathTuning({ dustAt: 0.42 }));
+    buildGpuVfxAtlas(scene as never, resolveDeathTuning({ dustAt: 0.35 }));
     expect(atlas.refreshed).toBe(refreshed + 1);
     GPU_VFX_DEATH_MORPH_FRAME_IDS.forEach((id, i) => expect(getGpuVfxFrame(id)).toBe(frames[i]));
   });

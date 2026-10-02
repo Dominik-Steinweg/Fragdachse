@@ -69,3 +69,10 @@ npx tsc --noEmit und npx vite build --mode death-lab --emptyOutDir false bestand
 C2-Doku liegt als build/c2-docs.patch vor. Langlebige Netzwerk-/Lifecycle-/Render-Vertraege wurden nicht geaendert. Hoehere Micro-Lebensdauer erhoeht temporaere Slot-Belegung bei gleichem Count; bestehende Quality-/Poolgrenzen bleiben aktiv.
 
 Knowledge writeback: No durable project knowledge discovered.
+
+## C3-Abstimmung (aktuelle Defaults)
+
+Fokus auf feine Körner und Staub, kurze Blockphase: frayedAt=.06, porousAt=.10, fragmentedAt=.14, dustAt=.28,
+fineDustAt=.42, hazeAt=.58, vaporAt=.875; grainSpacingPx=2.3, grainRadiusPx=0.9, grainDriftPx=5.5, grainAlpha=.95,
+grainSizeVariance=.6, grainEdgeRelease=.95, dustBodyAlpha=.55, microAlpha=1. Grobe Blöcke sind nominal bis etwa 280 ms
+sichtbar; das Zerfallsfenster (150 ms) passt weiterhin zwischen fragmentedAt und dustAt.

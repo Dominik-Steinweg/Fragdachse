@@ -7,17 +7,18 @@ export const C1_DEATH_MORPH_TIMING = Object.freeze({
   frayedAt: 0.125, porousAt: 0.25, fragmentedAt: 0.3125, dustAt: 0.375,
   fineDustAt: 0.4375, hazeAt: 0.5, vaporAt: 0.875,
 });
+// Short block phase: coarse fragments erode early so fine grains and dust carry the effect.
 export const DEATH_MORPH_TIMING = Object.freeze({
-  frayedAt: 0.125, porousAt: 0.22, fragmentedAt: 0.30, dustAt: 0.44,
-  fineDustAt: 0.54, hazeAt: 0.64, vaporAt: 0.875,
+  frayedAt: 0.06, porousAt: 0.10, fragmentedAt: 0.14, dustAt: 0.28,
+  fineDustAt: 0.42, hazeAt: 0.58, vaporAt: 0.875,
 });
 export type DeathMorphTiming = { readonly [K in keyof typeof DEATH_MORPH_TIMING]: number };
 const MATERIAL_DEFAULTS = Object.freeze({
-  legacyMorph: 0, dissolveWindowMs: 150, grainRadiusPx: 1.25, grainDriftPx: 4.8,
-  grainAlpha: 0.82, dustBodyAlpha: 0.45, dustBodyRadiusPx: 3, hazeGrowth: 1.7, hazeAlpha: 0.32,
-  darkFragmentAlpha: 0.08, darkFragmentCutoff: 0.42, microAlpha: 0.75,
-  grainOrganic: 1, grainSeed: 713, grainSpacingPx: 3.1, grainJitter: 1,
-  grainSizeVariance: 0.55, grainEdgeRelease: 0.7, grainEdgeDrift: 0.6,
+  legacyMorph: 0, dissolveWindowMs: 150, grainRadiusPx: 0.9, grainDriftPx: 5.5,
+  grainAlpha: 0.95, dustBodyAlpha: 0.55, dustBodyRadiusPx: 3, hazeGrowth: 1.7, hazeAlpha: 0.32,
+  darkFragmentAlpha: 0.08, darkFragmentCutoff: 0.42, microAlpha: 1,
+  grainOrganic: 1, grainSeed: 713, grainSpacingPx: 2.3, grainJitter: 1,
+  grainSizeVariance: 0.6, grainEdgeRelease: 0.95, grainEdgeDrift: 0.6,
   grainFlowBias: 0.65, grainRoughness: 0.18,
 });
 export type DeathMaterialTuning = { readonly [K in keyof typeof MATERIAL_DEFAULTS]: number };
