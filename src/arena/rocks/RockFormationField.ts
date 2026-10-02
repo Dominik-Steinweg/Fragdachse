@@ -20,6 +20,11 @@ export interface RockFormationSource {
   detail: Float32Array;
 }
 export type FormationRock = Pick<RockVisualState, 'id' | 'gridX' | 'gridY' | 'active' | 'material' | 'frame'>;
+export interface FormationFieldResult { data: Uint8Array; occlusion: Uint8Array; heights: Float32Array }
+interface FormationCache {
+  heights: Float32Array; support: Uint8Array; result: FormationFieldResult;
+  azimuth: number; solarHorizons: boolean;
+}
 
 /** Visual-only projection of the existing live rock store. Cells are indexed once;
  * destruction updates only dirty cells. No independent gameplay geometry or clock. */
@@ -32,6 +37,13 @@ export class RockFormationField {
   readonly rows: number;
   revision = 0;
   private rim: RockRimGeometry | null = null;
+  // Worker-owned, bounded independently of world size. Never transfer these buffers.
+  private readonly cache = new Map<string, FormationCache>();
+  lastBuild = { cacheHit: false, shadedTexels: 0, totalTexels: FORMATION_SIDE ** 2 };
+
+  buildCached(cx: number, cy: number, azimuth = 135, solarHorizons = true): FormationFieldResult {
+    return this.build(cx, cy, azimuth, solarHorizons, true);
+  }
 
   setRimGeometry(rim: RockRimGeometry | null): void { this.rim = rim; }
   constructor(width: number, height: number, private readonly states: readonly (FormationRock | undefined)[],
@@ -69,7 +81,9 @@ export class RockFormationField {
 
   /** Extended geometry support makes all shared chunk edges mathematically identical.
    * A distance-to-silhouette envelope has no fixed bevel width or flat centre plateau. */
-  build(cx: number, cy: number, azimuth = 135, solarHorizons = true): { data: Uint8Array; occlusion: Uint8Array; heights: Float32Array } {
+  build(cx: number, cy: number, azimuth = 135, solarHorizons = true, incremental = false): FormationFieldResult {
+    const key = `${cx},${cy}`, cached = incremental ? this.cache.get(key) : undefined;
+    this.lastBuild = { cacheHit: !!cached, shadedTexels: 0, totalTexels: FORMATION_SIDE ** 2 };
     const period = Math.sqrt(this.detail.length);
     const step = FORMATION.step, pad = Math.ceil((FORMATION.horizonReach + FORMATION.envelopeReach) / step) + 3;
     const side = FORMATION_SIDE, span = side + pad * 2, count = span * span;
@@ -77,6 +91,7 @@ export class RockFormationField {
     const ox = cx * FORMATION.chunk - (pad + FORMATION.gutter) * step;
     const oy = cy * FORMATION.chunk - (pad + FORMATION.gutter) * step;
     if(!this.fillCoverage(coverage, span, ox, oy)) {
+      this.cache.delete(key);
       const data=new Uint8Array(side*side*4),occlusion=new Uint8Array(data.length);
       for(let i=0;i<data.length;i+=4) {
         data[i]=128;data[i+1]=128;occlusion[i]=255;occlusion[i+3]=255;
@@ -150,8 +165,39 @@ export class RockFormationField {
       });
     });
     const horizons=new Uint8Array(3);
+    // Exact dependency invalidation: compare the padded geometry, then reverse the
+    // *same* discrete ray taps. A changed receiver also invalidates its normal/tangent.
+    // No radius/cell-level approximation and no assumption about hole-repair locality.
+    const dirty = cached ? new Uint8Array(count) : null;
+    if (cached && dirty) {
+      const offsets = new Set<number>([0, 1, -1, span, -span]);
+      for (const ray of [...sunRays, ...skyRays]) for (const tap of ray) offsets.add(-tap.offset);
+      const reverse = [...offsets];
+      for (let y = 0; y < span; y++) {
+        let first = span, last = -1;
+        for (let x = 0; x < span; x++) if (heights[y*span+x] !== cached.heights[y*span+x]) {
+          first = Math.min(first,x); last = x;
+        }
+        if (last < 0) continue;
+        for (const offset of reverse) {
+          const start = Math.max(0,y*span+first+offset), end = Math.min(count,y*span+last+offset+1);
+          if (end > start) dirty.fill(1,start,end);
+        }
+      }
+    }
     for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
       const i = (y+pad)*span+x+pad, z = heights[i];
+      const p = (y*side+x)*4;
+      if (cached && !dirty![i] && cached.support[i] === support[i]
+        && cached.azimuth === azimuth && cached.solarHorizons === solarHorizons) {
+        data[p]=cached.result.data[p]; data[p+1]=cached.result.data[p+1]; data[p+2]=cached.result.data[p+2];
+        data[p+3] = Math.round(clamp(coverage[i])*255);
+        occlusion[p]=cached.result.occlusion[p]; occlusion[p+1]=cached.result.occlusion[p+1]; occlusion[p+2]=cached.result.occlusion[p+2];
+        occlusion[p+3] = Math.round(clamp(1-contact[i]*Math.exp(-z/8))*255);
+        surface[y*side+x] = z;
+        continue;
+      }
+      this.lastBuild.shadedTexels++;
       const dx = (heights[i+1]-heights[i-1])/(step*2), dy = (heights[i+span]-heights[i-span])/(step*2);
       const length = Math.hypot(dx,dy,1);
       const receiverRays=support[i]?surfaceSunRays:sunRays;
@@ -176,7 +222,6 @@ export class RockFormationField {
         const horizon=Math.max(0,Math.atan(slope)-Math.atan(tangent));
         blocked+=Math.sin(Math.min(Math.PI*.5,horizon))**2;
       }
-      const p = (y*side+x)*4;
       data[p] = Math.round((-.5*dx/length+.5)*255);
       data[p+1] = Math.round((-.5*dy/length+.5)*255);
       data[p+2] = horizons[1];
@@ -188,7 +233,13 @@ export class RockFormationField {
       occlusion[p+3]=Math.round(clamp(1-contact[i]*Math.exp(-z/8))*255);
       surface[y*side+x] = z;
     }
-    return {data,occlusion,heights:surface};
+    const result = {data,occlusion,heights:surface};
+    if (incremental) {
+      this.cache.delete(key);
+      this.cache.set(key, { heights, support, result, azimuth, solarHorizons });
+      while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value!);
+    }
+    return result;
   }
 
   /** Chunk samples and cell origins share the two-pixel lattice. Cache each

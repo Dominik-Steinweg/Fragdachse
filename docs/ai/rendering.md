@@ -347,7 +347,12 @@ behalten die getrennten Clamp-Verträge in [worldGrade.ts](../../src/effects/pos
 Fels-Horizonte unterscheiden Geometrie-Revision und Sonnenrichtung. Ein Richtungswechsel entwertet
 keinen geometrisch gültigen laufenden Bake: Sein Ergebnis darf als Zwischenstand erscheinen und
 wird anschließend auf die neueste Richtung nachgeführt. Geometrieänderungen, insbesondere
-Zerstörung, verwerfen veraltete Ergebnisse. Horizont-Blends verwenden die pausierbare Präsentationsuhr.
+Zerstoerung, verwerfen veraltete Ergebnisse. Geometrie-Reparaturen werden als gemeinsame Worker-Transaktion
+ueber betroffene residente Chunks veroeffentlicht; bis dahin bleibt der letzte exakte Feldstand erhalten.
+Die gemeinsamen Empfaenger (Felsoberflaeche, Boden und Felsbewuchs) lesen denselben Stand.
+Nur Sonnenrichtungswechsel verwenden Horizont-Blends auf der pausierbaren Praesentationsuhr,
+Geometrie-Reparaturen schreiben weder Zellraster-Schaetzungen noch einen Reparatur-Fade.
+Uebertragene Worker-Ergebnisse sind Kopien; der begrenzte Geometrie-Cache behaelt seine eigenen Buffer.
 
 ## Runtime-Asset-Vertrag
 

@@ -234,10 +234,15 @@ dev.run({ action: 'measureWorldLighting', mode: 'explosion', radius: 2.5 });
 const measurement = dev.status().worldLightingMeasurement;
 ```
 
-Messmodi: `stationary`, `destruction` (Fels nahe dem eingestellten Ziel), `walk` und `traverse` (Kamerafahrt).
+Messmodi: `stationary`, `destruction` (Fels nahe dem eingestellten Ziel), `explosion` (mehrere Felsen), `walk` und `traverse` (Kamerafahrt).
 Eine Messung setzt Pause fort; Änderungen an Uhrzeit, Tuning, Zoom oder Qualitätsstufe brechen sie ab.
 Das Ergebnis enthält Frameintervalle, Draws, Upload-/Ressourcendaten, `graphicsQuality` und `sunRendering`.
 Frameintervalle enthalten Browser-Scheduling und sind keine GPU-Zeiten.
+`rockPresentationFrameCpuMs` und `rawRockPresentationFrameCpuMs` messen die CPU-Arbeit des
+`RockVisualSystem.flush` je aufgezeichnetem Frame (Renderer-Updates und Formation-Uploads).
+Andere Chunk-Bakes und GPU-Ausfuehrung sind darin nicht enthalten; dafuer die Frameintervalle mitpruefen.
+`formation.lastRepairPublishMs`, `maxRepairPublishMs`, `repairWorkerMs` und `repairLatencyMs`
+trennen Veroeffentlichung, Worker-Arbeit und Wartezeit der Geometrie-Reparatur.
 `sunTuning` ist ein lokaler Override; gültige Schlüssel und Grenzen stehen in
 [`src/config/sunlight.ts`](../src/config/sunlight.ts). Reset oder ein neuer World-Aufbau beendet die Overrides.
 Das Wolkenfeld bleibt in Weltkoordinaten verankert. `cloudCover` und `cloudDensity` steuern

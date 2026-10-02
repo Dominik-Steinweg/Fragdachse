@@ -5,8 +5,10 @@ export type FormationWorkerRequest =
   | { kind: 'init'; width: number; height: number; states: (FormationRock | undefined)[]; source: RockFormationSource }
   | { kind: 'rim'; rim: RockRimGeometry | null }
   | { kind: 'change'; states: FormationRock[] }
+  | { kind: 'repair'; revision: number; chunks: { cx: number; cy: number; revision: number }[]; azimuth: number; horizons: boolean }
   | { kind: 'build'; cx: number; cy: number; revision: number; azimuth?: number; horizons?: boolean };
-export interface FormationWorkerResult { cx: number; cy: number; revision: number; azimuth: number; data: Uint8Array; occlusion: Uint8Array; buildMs: number }
+export interface FormationWorkerResult { cx: number; cy: number; revision: number; azimuth: number; data: Uint8Array; occlusion: Uint8Array; buildMs: number; shadedTexels?: number; cacheHit?: boolean }
+export interface FormationWorkerRepair { kind: 'repair'; revision: number; results: FormationWorkerResult[]; buildMs: number }
 export interface FormationWorkerInitialized { kind: 'initialized'; initMs: number; startedAt: number; finishedAt: number }
 let field: RockFormationField;
 let states: (FormationRock | undefined)[];
@@ -24,10 +26,20 @@ self.onmessage = (event: MessageEvent<FormationWorkerRequest>): void => {
   } else if (message.kind === 'change') {
     for (const state of message.states) states[state.id] = state;
     field.invalidate(message.states.map(s => s.id));
+  } else if (message.kind === 'repair') {
+    const started = performance.now();
+    const results = message.chunks.map(chunk => build(chunk, message.azimuth, message.horizons));
+    self.postMessage({ kind: 'repair', revision: message.revision, results, buildMs: performance.now()-started } satisfies FormationWorkerRepair,
+      { transfer: results.flatMap(r => [r.data.buffer, r.occlusion.buffer]) });
   } else {
-    const started = performance.now(), result = field.build(message.cx, message.cy, message.azimuth, message.horizons);
-    self.postMessage({ cx: message.cx, cy: message.cy, revision: message.revision, azimuth: message.azimuth ?? 135,
-      data: result.data, occlusion: result.occlusion, buildMs: performance.now() - started } satisfies FormationWorkerResult,
-    { transfer: [result.data.buffer, result.occlusion.buffer] });
+    const result = build(message, message.azimuth, message.horizons);
+    self.postMessage(result, { transfer: [result.data.buffer, result.occlusion.buffer] });
   }
 };
+
+function build(chunk: {cx:number;cy:number;revision:number}, azimuth=135, horizons=true): FormationWorkerResult {
+  const started = performance.now(), result = field.buildCached(chunk.cx,chunk.cy,azimuth,horizons);
+  // Cache ownership stays in this worker. Transferring its buffers would detach the next rebuild's inputs.
+  return {...chunk, azimuth, data:result.data.slice(), occlusion:result.occlusion.slice(),
+    buildMs:performance.now()-started, ...field.lastBuild};
+}

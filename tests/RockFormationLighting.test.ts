@@ -22,8 +22,9 @@ function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourK
     static instance:Worker; messages:any[]=[];onmessage:((e:any)=>void)|null=null;onerror:unknown;
     terminate=vi.fn();constructor(){Worker.instance=this;}
     postMessage(value:unknown){this.messages.push(value);}
-    reply(){const request=this.messages.filter(m=>m.kind==='build').at(-1);
-      this.onmessage?.({data:{...request,data:new Uint8Array(FORMATION_SIDE*FORMATION_SIDE*4).fill(255),occlusion:new Uint8Array(FORMATION_SIDE*FORMATION_SIDE*4).fill(255),buildMs:1}});}
+    reply(){const request=this.messages.filter(m=>m.kind==='build'||m.kind==='repair').at(-1);
+      const result=(chunk:any)=>({...chunk,azimuth:request.azimuth,data:new Uint8Array(FORMATION_SIDE*FORMATION_SIDE*4).fill(request.kind==='repair'?100:255),occlusion:new Uint8Array(FORMATION_SIDE*FORMATION_SIDE*4).fill(request.kind==='repair'?200:255),buildMs:1});
+      this.onmessage?.({data:request.kind==='repair'?{kind:'repair',revision:request.revision,results:request.chunks.map(result),buildMs:1}:result(request)});}
   }
   vi.stubGlobal('Worker',Worker);
   vi.stubGlobal('document',{createElement:()=>({getContext:()=>({drawImage(){},getImageData:()=>({data:new Uint8ClampedArray(16).fill(255)})})})});
@@ -76,28 +77,31 @@ describe('formation lighting ownership and incremental updates',()=>{
     expect(f.worker.messages.filter(m=>m.kind==='rim').at(-1).rim).toBeNull();
     settle(f);expect(fake.quads[1].visible).toBe(false);f.lighting.destroy();
   });
-  it('erases only the destroyed cell receiver rectangle while the worker rebuilds neighbouring lighting',()=>{
+  it('keeps exact resident bytes untouched until an entire geometry repair is available',()=>{
     const f=fixture();settle(f);f.upload.mockClear();
     const before=f.lighting.getDiagnostics().uploadBytes;
     f.states[0].active=false;f.lighting.invalidate([0]);
-    expect(f.upload).toHaveBeenCalledTimes(2);
-    for(const call of f.upload.mock.calls) {
-      expect(call.slice(2,6)).toEqual([65,65,16,16]);
-      const data=call[8] as Uint8Array;
-      expect(data).toHaveLength(16*16*4);
-    }
-    const field=f.upload.mock.calls[0][8] as Uint8Array;
-    expect(field.filter((_,i)=>i%4===3).every(v=>v===0)).toBe(true);
-    expect(field.filter((_,i)=>i%4===2).every(v=>v===0)).toBe(true); // An isolated removed rock has no neighbours to cast ground shadows.
-    expect(f.lighting.getDiagnostics().uploadBytes-before).toBe(16*16*4*2);
+    expect(f.upload).not.toHaveBeenCalled();expect(f.lighting.getDiagnostics().uploadBytes).toBe(before);
     expect(f.lighting.getDiagnostics().pendingChunks).toBe(1);
+    f.lighting.tick();expect(f.upload).not.toHaveBeenCalled();
+    f.worker.reply();expect(f.upload).not.toHaveBeenCalled();
+    f.lighting.tick();expect(f.upload).toHaveBeenCalledTimes(2);
+    expect(f.lighting.getDiagnostics().pendingChunks).toBe(0);
+    expect(f.lighting.getDiagnostics().repairBatches).toBe(1);
+    expect(f.lighting.getReceiverBinding()!.horizonBlend![0]).toBe(1);
     f.lighting.destroy();
   });
-  it('also clears duplicated receiver samples in adjacent chunk gutters on destruction',()=>{
+  it('publishes all chunk-border receivers together and discards superseded explosion transactions',()=>{
     const f=fixture(1024,512,16,4);settle(f);f.upload.mockClear();
-    f.states[0].active=false;f.lighting.invalidate([0]);
-    const widths=f.upload.mock.calls.map(call=>call[4]);
-    expect(widths.sort((a,b)=>a-b)).toEqual([1,1,16,16]);
+    f.states[0].active=false;f.lighting.invalidate([0]);f.lighting.tick();
+    const first=f.worker.messages.at(-1);expect(first.kind).toBe('repair');expect(first.chunks).toHaveLength(2);
+    f.states.push({...f.states[0],id:1,gridX:15});f.lighting.invalidate([1]);
+    f.worker.reply();f.lighting.tick();expect(f.upload).not.toHaveBeenCalled();
+    expect(f.lighting.getDiagnostics().discardedBuilds).toBe(2);
+    const second=f.worker.messages.at(-1);expect(second.revision).toBeGreaterThan(first.revision);
+    f.worker.reply();expect(f.upload).not.toHaveBeenCalled();f.lighting.tick();
+    expect(f.upload).toHaveBeenCalledTimes(4);expect(f.lighting.getDiagnostics().pendingChunks).toBe(0);
+    expect(f.lighting.getDiagnostics().repairBatches).toBe(1);
     f.lighting.destroy();
   });
   it('retains completed resident chunks across camera traversal without rebuilding or uploading on return',()=>{
@@ -110,6 +114,20 @@ describe('formation lighting ownership and incremental updates',()=>{
     expect(f.worker.messages.filter(m=>m.kind==='build')).toHaveLength(builds);
     expect(f.upload).not.toHaveBeenCalled();
     expect(f.lighting.getDiagnostics().residentEvictions).toBe(0);
+    f.lighting.destroy();
+  });
+  it('uploads the union of changed normal/coverage and occlusion samples, preserving atlas coordinates',()=>{
+    const f=fixture();settle(f);f.upload.mockClear();
+    f.states[0].active=false;f.lighting.invalidate([0]);f.lighting.tick();
+    const request=f.worker.messages.at(-1), chunk=request.chunks[0];
+    const data=new Uint8Array(FORMATION_SIDE**2*4).fill(255),occlusion=data.slice();
+    data[(20*FORMATION_SIDE+100)*4]=128;
+    occlusion[(22*FORMATION_SIDE+105)*4+3]=180;
+    f.worker.onmessage?.({data:{kind:'repair',revision:request.revision,buildMs:1,
+      results:[{...chunk,azimuth:request.azimuth,data,occlusion,buildMs:1}]}});
+    f.lighting.tick();expect(f.upload).toHaveBeenCalledTimes(2);
+    for(const call of f.upload.mock.calls)expect(call.slice(2,6)).toEqual([100,20,6,3]);
+    expect(f.lighting.getDiagnostics().lastRepairPublishMs).toBeGreaterThanOrEqual(0);
     f.lighting.destroy();
   });
   it('discards stale worker results on destruction and releases every listener, texture and shader on teardown',()=>{
@@ -205,15 +223,15 @@ it('reaches resident readiness at both ends of every authored world without exha
  }
 });
 
-it('blends geometry repair shadows even when the solar azimuth is unchanged',async()=>{
+it('never fades from a fabricated or obsolete geometry repair, even during a sun transition',async()=>{
  const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
  const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
  const settle=(f:ReturnType<typeof fixture>)=>{let guard=100;while(f.lighting.getDiagnostics().pendingChunks&&guard-->0){f.worker.reply();f.lighting.tick();}expect(guard).toBeGreaterThan(0);};
  const f=fixture();f.state.clouds={tuning:createSunTuning(),timeSec:0,strength:1,sunPath:resolveSunPath(720,null,createSunPath())};
  settle(f);f.state.clouds.timeSec=1;f.lighting.tick();
  f.states[0].active=false;f.lighting.invalidate([0]);settle(f);
- const binding=f.lighting.getReceiverBinding()!;expect(binding.horizonBlend![0]).toBe(0);
- f.state.clouds.timeSec=1.09;f.lighting.tick();expect(binding.horizonBlend![0]).toBeCloseTo(.5);
+ const binding=f.lighting.getReceiverBinding()!;expect(binding.horizonBlend![0]).toBe(1);
+ f.state.clouds.timeSec=1.09;f.lighting.tick();expect(binding.horizonBlend![0]).toBe(1);
  f.state.clouds.timeSec=1.18;f.lighting.tick();expect(binding.horizonBlend![0]).toBeCloseTo(1);
  f.lighting.destroy();
 });

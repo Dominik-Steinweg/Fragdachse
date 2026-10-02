@@ -33,6 +33,7 @@ export class RockVisualSystem {
   private view: ChunkWorldRect | null = null;
   private readonly relief: RockLightingState = { enabled: false, normals: false, strength: 0, sun: [0, 0, 1] };
   private readonly flushBeforeRender = (): void => this.flush();
+  private presentationCpuMs = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -52,10 +53,12 @@ export class RockVisualSystem {
   }
 
   flush(): void {
+    const started = performance.now();
     const ids = this.store.consumeDirtyIds();
     this.renderer.applyDirty(ids);
     this.formation?.invalidate(ids);
     this.formation?.tick();
+    this.presentationCpuMs += performance.now()-started;
   }
 
   updateVisibility(view: ChunkWorldRect): void {
@@ -94,7 +97,7 @@ export class RockVisualSystem {
     this.relief.softShadow=softShadow;this.relief.castShadow=castShadow;
     this.relief.mineralResponse=true;this.relief.clouds=clouds;
   }
-  getFormationDiagnostics() { return this.formation?.getDiagnostics() ?? null; }
+  getFormationDiagnostics() { return this.formation ? {...this.formation.getDiagnostics(), presentationCpuMs:this.presentationCpuMs} : null; }
   readonly getFormationReceiver = () => this.formation?.getReceiverBinding() ?? null;
 
   getGpuDiagnostics(): PersistentGpuWorldDiagnostics | null {

@@ -53,6 +53,8 @@ export class WorldLightingMeasurement {
     let started = performance.now(), previous = started, initialUpload = uploaded();
     let initialFormationUpload = this.targets().rocks?.getFormationDiagnostics()?.uploadBytes ?? 0;
     let initialBuilds=0,initialWorkerMs=0,initialErase=0,initialEvictions=0;
+    let previousPresentationCpuMs=0;
+    const presentationFrameCpuMs:number[]=[];
     let recordingAt:number|null=null,settleAt:number|null=null,quietSince:number|null=null,workloadResult:unknown=null;
     const requestedAt=started;
     this.measurement = { status: 'warming' };
@@ -78,6 +80,7 @@ export class WorldLightingMeasurement {
         recordingAt=now;initialUpload=uploaded();initialFormationUpload=formation?.uploadBytes??0;
         initialBuilds=formation?.builds??0;initialWorkerMs=formation?.workerBuildMs??0;
         initialErase=formation?.eraseUploadBytes??0;initialEvictions=formation?.residentEvictions??0;
+        previousPresentationCpuMs=formation?.presentationCpuMs??0;
         this.measurement={status:'recording',mode:workload?.mode??'stationary'};
         if(workload) {
           try {workloadResult=workload.start();} catch(error) {this.measurement={status:'failed',reason:String(error)};stop();}
@@ -85,6 +88,8 @@ export class WorldLightingMeasurement {
         }
       }
       const counts = counters.snapshot(); frames.push(delta);
+      const cpu=formation?.presentationCpuMs??0;
+      presentationFrameCpuMs.push(Math.max(0,cpu-previousPresentationCpuMs));previousPresentationCpuMs=cpu;
       if (counts.drawCalls !== null) draws.push(counts.drawCalls);
       if (counts.offscreenDrawCalls !== null) offscreen.push(counts.offscreenDrawCalls);
       const elapsed=now-recordingAt;
@@ -115,6 +120,8 @@ export class WorldLightingMeasurement {
         formationBuilds:(formation?.builds??0)-initialBuilds, workerBuildMs:(formation?.workerBuildMs??0)-initialWorkerMs,
         eraseUploadBytes:(formation?.eraseUploadBytes??0)-initialErase,residentEvictions:(formation?.residentEvictions??0)-initialEvictions,
         frameIntervalMs: summary(frames), drawCalls: summary(draws), offscreenDrawCalls: summary(offscreen),
+        rockPresentationFrameCpuMs: summary(presentationFrameCpuMs), rawRockPresentationFrameCpuMs: presentationFrameCpuMs,
+        rockPresentationCpuScope: 'RockVisualSystem.flush: dirty renderer updates, formation invalidation and texture publication; excludes worker CPU, GPU execution and other chunk bakes.',
         rockGeometryUploadBytes: uploaded() - initialUpload,
         mineralColourSize: mineralColour ? [mineralColour.width, mineralColour.height] : null,
         mineralColourScale: mineralColour ? mineralColour.width / 2176 : null,

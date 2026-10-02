@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RockFormationField, FORMATION_SIDE, type FormationRock } from '../src/arena/rocks/RockFormationField';
 import { CELL_SIZE } from '../src/config';
 import { ROCK_BASE_PHASE_CELLS, ROCK_BASE_PHASES, ROCK_BASE_FRAME_MARGIN } from '../src/arena/RockBaseConfig';
@@ -14,6 +14,54 @@ function fixture(cells: [number,number][], detail=new Float32Array(256*256), hol
   return {states,field:new RockFormationField(1024,1024,states,source)};
 }
 const height=(data:Float32Array,x:number,y:number):number=>data[(Math.floor(y/2)+1)*FORMATION_SIDE+Math.floor(x/2)+1];
+
+it('keeps incremental geometry byte-identical to full builds across explosions, gutters, holes and sun/quality changes',()=>{
+  const cells:[number,number][]=[];for(let y=12;y<21;y++)for(let x=12;x<21;x++)cells.push([x,y]);
+  const detail=Float32Array.from({length:65536},(_,i)=>Math.sin(i%256*.1)*Math.cos(Math.floor(i/256)*.1));
+  const {field,states}=fixture(cells,detail,[[510,510],[511,510],[510,511],[511,511]]);
+  field.setRimGeometry({rockRimWidth:14,rockRimHeight:12,rockRimLip:2});
+  for(let cy=0;cy<2;cy++)for(let cx=0;cx<2;cx++)field.buildCached(cx,cy);
+  for(const [gx,gy,angle,solar] of [[16,16,135,true],[17,15,135,true],[13,14,35,false]] as const) {
+    const ids:number[]=[];
+    for(const s of states)if(s.active&&Math.hypot(s.gridX-gx,s.gridY-gy)<=2.5){s.active=false;ids.push(s.id);}
+    field.invalidate(ids);
+    let shaded=0;
+    for(let cy=0;cy<2;cy++)for(let cx=0;cx<2;cx++) {
+      const actual=field.buildCached(cx,cy,angle,solar);shaded+=field.lastBuild.shadedTexels;
+      const expected=field.build(cx,cy,angle,solar);
+      for(const channel of ['data','occlusion','heights'] as const)
+        expect(Buffer.from(actual[channel].buffer).equals(Buffer.from(expected[channel].buffer)),channel).toBe(true);
+    }
+    if(angle===135)expect(shaded).toBeLessThan(4*FORMATION_SIDE**2);
+  }
+  // An unchanged rebuild reuses every ray result, with identical bytes.
+  const before=field.buildCached(0,0,35,false),again=field.buildCached(0,0,35,false);
+  expect(field.lastBuild.shadedTexels).toBe(0);
+  expect(Buffer.from(before.data).equals(Buffer.from(again.data))).toBe(true);
+},60000);
+
+it('retains worker cache ownership across transferable results and returns one exact repair transaction',async()=>{
+  const received:any[]=[];
+  const scope:any={postMessage:(message:any,options?:{transfer:Transferable[]})=>received.push(structuredClone(message,{transfer:options?.transfer??[]}))};
+  vi.stubGlobal('self',scope);
+  try {
+    await import('../src/arena/rocks/RockFormationWorker');
+    const states:FormationRock[]=[{id:0,gridX:15,gridY:4,frame:0,active:true},{id:1,gridX:16,gridY:4,frame:0,active:true}];
+    const source={alpha:new Uint8Array(2176*1870).fill(255),detail:new Float32Array(65536)};
+    const send=(data:unknown)=>scope.onmessage({data:structuredClone(data)});
+    send({kind:'init',width:1024,height:512,states,source});
+    for(const cx of [0,1])send({kind:'build',cx,cy:0,revision:0,azimuth:135,horizons:true});
+    states[0].active=false;send({kind:'change',states:[states[0]]});
+    send({kind:'repair',revision:1,chunks:[{cx:0,cy:0,revision:1},{cx:1,cy:0,revision:1}],azimuth:135,horizons:true});
+    const batch=received.at(-1);expect(batch.kind).toBe('repair');expect(batch.results).toHaveLength(2);
+    const reference=new RockFormationField(1024,512,states,source);
+    for(const result of batch.results){
+      expect(result.cacheHit).toBe(true);const expected=reference.build(result.cx,0);
+      expect(Buffer.from(result.data).equals(Buffer.from(expected.data))).toBe(true);
+      expect(Buffer.from(result.occlusion).equals(Buffer.from(expected.occlusion))).toBe(true);
+    }
+  } finally {vi.unstubAllGlobals();}
+},30000);
 
 describe('continuous visual rock formation height',()=>{
   it('makes a wide formation higher inside, and an isolated rock lower without a fixed flat cap',()=>{

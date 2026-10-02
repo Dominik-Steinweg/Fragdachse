@@ -1,4 +1,3 @@
-import { RockGroundEstimate } from './RockGroundEstimate';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { WOODLAND_ROCK_COLOUR_KEY, WOODLAND_TRANSMISSION_KEY } from '../../assets/WoodlandAssetManifest';
 import { WOODLAND_ROCK_COVERAGE_KEY, WOODLAND_ROCK_HEIGHT_KEY } from '../../assets/WoodlandAssetManifest';
@@ -13,7 +12,7 @@ import type { ChunkWorldRect } from '../chunks/ArenaChunkGrid';
 import type { RockVisualState } from './RockVisualState';
 import { type RockLightingState } from './RockLightingState';
 import { FORMATION, FORMATION_SIDE, type FormationRock } from './RockFormationField';
-import type { FormationWorkerRequest, FormationWorkerResult, FormationWorkerInitialized } from './RockFormationWorker';
+import type { FormationWorkerRequest, FormationWorkerResult, FormationWorkerInitialized, FormationWorkerRepair } from './RockFormationWorker';
 import { formationSurfaceFactor, ROCK_FORMATION_FRAGMENT } from './rockFormationShader';
 import type { FormationReceiverBinding } from './RockFoliageLighting';
 
@@ -44,8 +43,15 @@ const snapshot=(s: RockVisualState): FormationRock => ({id:s.id,gridX:s.gridX,gr
  * vegetation and its ground shadow. Workers build static data; each frame draws
  * only two quads and updates uniforms. The existing lightmap still colours once. */
 export class RockFormationLighting {
-  private readonly groundEstimate:RockGroundEstimate;
-  private readonly estimatedGround=new Float64Array(5);
+  private pendingRepair: FormationWorkerRepair | null = null;
+  private repairStartedAt: number | null = null;
+  private repairMainThreadMs = 0;
+  private maxRepairPublishMs = 0;
+  private lastRepairPublishMs = 0;
+  private repairWorkerMs = 0;
+  private repairLatencyMs = 0;
+  private repairBatches = 0;
+  private readonly uploadScratch = new Uint8Array(FORMATION_SIDE*FORMATION_SIDE*4);
   private readonly field: FormationDataTexture;
   private readonly occlusion: FormationDataTexture;
   private readonly lookup: FormationDataTexture;
@@ -93,7 +99,6 @@ export class RockFormationLighting {
   constructor(private readonly scene: Phaser.Scene, private readonly frame: RockWorldFrame,
     private readonly states: readonly (RockVisualState | undefined)[], private readonly state: RockLightingState,
     private readonly heightTextureKey = WOODLAND_ROCK_HEIGHT_KEY) {
-    this.groundEstimate=new RockGroundEstimate(frame.width,frame.height,states);
     this.frameUniform=new Float32Array([frame.offsetX,frame.offsetY,frame.width,frame.height]);
     const prefix=`__rock_formation_${nextId++}_`;
     // Every mineral atlas preserves this original coverage, including 2x colour.
@@ -119,7 +124,7 @@ export class RockFormationLighting {
     const initial=states.map(s=>s?snapshot(s):undefined);
     for(const s of initial) if(s) this.signatures.set(s.id,signature(s));
     this.post({kind:'init',width:frame.width,height:frame.height,states:initial,source:{alpha,detail}},[alpha.buffer,detail.buffer]);
-    this.worker.onmessage=(event: MessageEvent<FormationWorkerResult | FormationWorkerInitialized>)=>{
+    this.worker.onmessage=(event: MessageEvent<FormationWorkerResult | FormationWorkerInitialized | FormationWorkerRepair>)=>{
       if(this.disposed) return;
       if ('initMs' in event.data) {
         timing?.add('rock-worker/startup-including-module-load', performance.now()-workerStarted, 'elapsed');
@@ -132,7 +137,9 @@ export class RockFormationLighting {
         return;
       }
       timing?.add('rock-worker/build', event.data.buildMs, 'worker');
-      this.pending=event.data; this.busy=false;
+      if ('kind' in event.data && event.data.kind === 'repair') this.pendingRepair=event.data;
+      else this.pending=event.data as FormationWorkerResult;
+      this.busy=false;
     };
     this.worker.onerror=(event)=>{this.error=event.message;this.busy=false;};
     this.surface=this.makeQuad(false);
@@ -187,54 +194,20 @@ export class RockFormationLighting {
       this.signatures.set(id,next);changes.push(snapshot(s));
     }
     if(!changes.length) return;
+    const started = performance.now();
+    this.repairStartedAt ??= started;
     this.revision++;this.post({kind:'change',states:changes});
     const reach=FORMATION.envelopeReach+FORMATION.horizonReach;
-    for(const r of this.resident.values()) {
-      let erased=false,eraseX0=FORMATION_SIDE,eraseY0=FORMATION_SIDE,eraseX1=0,eraseY1=0;
-      for(const s of changes) {
-        const x=s.gridX*CELL_SIZE,y=s.gridY*CELL_SIZE;
-        if(x>=r.cx*FORMATION.chunk-reach-CELL_SIZE && x<= (r.cx+1)*FORMATION.chunk+reach
-          && y>=r.cy*FORMATION.chunk-reach-CELL_SIZE && y<= (r.cy+1)*FORMATION.chunk+reach) {r.dirty=true;r.repair=true;r.revision=this.revision;}
-        if(!r.data || (s.active && s.material!=='walls')) continue;
-        const x0=Math.max(0,Math.floor((x-r.cx*FORMATION.chunk)/FORMATION.step)+FORMATION.gutter);
-        const x1=Math.min(FORMATION_SIDE,Math.ceil((x+CELL_SIZE-r.cx*FORMATION.chunk)/FORMATION.step)+FORMATION.gutter);
-        const y0=Math.max(0,Math.floor((y-r.cy*FORMATION.chunk)/FORMATION.step)+FORMATION.gutter);
-        const y1=Math.min(FORMATION_SIDE,Math.ceil((y+CELL_SIZE-r.cy*FORMATION.chunk)/FORMATION.step)+FORMATION.gutter);
-        if(x0>=x1||y0>=y1)continue;
-        eraseX0=Math.min(eraseX0,x0);eraseY0=Math.min(eraseY0,y0);
-        eraseX1=Math.max(eraseX1,x1);eraseY1=Math.max(eraseY1,y1);
-        for(let py=y0;py<y1;py++)for(let px=x0;px<x1;px++) {
-          const p=(py*FORMATION_SIDE+px)*4;r.data[p]=128;r.data[p+1]=128;r.data[p+3]=0;
-          const e=this.estimatedGround;
-          this.groundEstimate.sample(e,r.cx*FORMATION.chunk+(px-FORMATION.gutter+.5)*FORMATION.step,
-            r.cy*FORMATION.chunk+(py-FORMATION.gutter+.5)*FORMATION.step,this.azimuth,36+(this.rim?.rockRimHeight??0));
-          r.data[p+2]=Math.round(e[0]*255/(Math.PI/2));
-          if(r.occlusion){r.occlusion[p]=Math.round(e[3]*255);r.occlusion[p+1]=Math.round(e[1]*255/(Math.PI/2));
-            r.occlusion[p+2]=Math.round(e[2]*255/(Math.PI/2));r.occlusion[p+3]=Math.round(e[4]*255);}
-          // An interrupted sun transition must not blend the old bright rock top back in.
-          if(r.previous&&r.occlusion){r.previous[p]=r.data[p+2];r.previous[p+1]=r.occlusion[p+1];
-            r.previous[p+2]=r.occlusion[p+2];r.previous[p+3]=r.occlusion[p+3];}
-          erased=true;
-        }
-      }
-      // Remove the receiver mask immediately. A deleted rock must never leave a
-      // surface-light stamp on the exposed floor while the worker rebuilds its horizon.
-      if(erased && r.data) {
-        const width=eraseX1-eraseX0,height=eraseY1-eraseY0;
-        const uploadRect=(texture:FormationDataTexture,source:Uint8Array):void=>{
-          const patch=new Uint8Array(width*height*4);
-          for(let y=0;y<height;y++)patch.set(source.subarray(((eraseY0+y)*FORMATION_SIDE+eraseX0)*4,
-            ((eraseY0+y)*FORMATION_SIDE+eraseX1)*4),y*width*4);
-          texture.upload(r.slot%FORMATION.atlasColumns*FORMATION_SIDE+eraseX0,
-            Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE+eraseY0,width,height,patch);
-          this.uploadBytes+=patch.byteLength;this.eraseUploadBytes+=patch.byteLength;
-        };
-        uploadRect(this.field,r.data);
-        if(r.occlusion)uploadRect(this.occlusion,r.occlusion);
-        if(r.previous&&this.previous)uploadRect(this.previous,r.previous);
-
+    for(const r of this.resident.values()) for(const cell of changes) {
+      const x=cell.gridX*CELL_SIZE,y=cell.gridY*CELL_SIZE;
+      if(x>=r.cx*FORMATION.chunk-reach-CELL_SIZE && x<=(r.cx+1)*FORMATION.chunk+reach
+        && y>=r.cy*FORMATION.chunk-reach-CELL_SIZE && y<=(r.cy+1)*FORMATION.chunk+reach) {
+        r.dirty=true;r.repair=true;r.revision=this.revision;break;
       }
     }
+    // Keep the last exact field, including its receiver mask, untouched until all
+    // affected chunks are ready. Never fabricate cell-height horizons or a pit AO ring.
+    this.repairMainThreadMs += performance.now()-started;
   }
 
   updateView(view: ChunkWorldRect): void {
@@ -295,7 +268,7 @@ export class RockFormationLighting {
     this.syncSunDirection();
     this.syncRimGeometry();
     const now=this.state.clouds?.timeSec??0;
-    for(let slot=0;slot<64;slot++)if(this.horizonBlend[slot]<1) {
+    for(let slot=0;slot<64;slot++)if(this.horizonBlend[slot]<1 && !this.slots[slot]?.repair) {
       const t=Math.max(0,Math.min(1,(now-this.horizonSince[slot])/this.horizonDuration[slot]));
       this.horizonBlend[slot]=t*t*(3-2*t);
     }
@@ -304,32 +277,36 @@ export class RockFormationLighting {
     this.surface.setBlendMode(this.state.normals?Phaser.BlendModes.NORMAL:Phaser.BlendModes.MULTIPLY);
     if(this.pending) {
       const result=this.pending;this.pending=null;
-      this.builds++;this.workerMs+=result.buildMs;
-      this.maxWorkerBuildMs=Math.max(this.maxWorkerBuildMs,result.buildMs);
-      const r=this.resident.get(`${result.cx},${result.cy}`);
-      if(r&&result.revision===r.revision) {
-        if(this.previous&&r.ready&&r.data&&r.occlusion&&(r.repair||r.azimuth!==result.azimuth)) {
-          r.previous??=new Uint8Array(result.data.length);
-          packPreviousHorizons(r.data,r.occlusion,r.previous,this.horizonBlend[r.slot]);
-          this.previous.upload(r.slot%FORMATION.atlasColumns*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
-            FORMATION_SIDE,FORMATION_SIDE,r.previous);
-          this.uploadBytes+=r.previous.byteLength;this.horizonBlend[r.slot]=0;this.horizonSince[r.slot]=now;this.horizonDuration[r.slot]=r.repair?.18:.6;
-        } else this.horizonBlend[r.slot]=1;
-        if(r.azimuth!==undefined&&r.azimuth!==result.azimuth){this.directionBuildMs+=result.buildMs;this.directionBuilds++;}
-        r.azimuth=result.azimuth;r.repair=false;
-        this.field.upload((r.slot%FORMATION.atlasColumns)*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
-          FORMATION_SIDE,FORMATION_SIDE,result.data);
-        this.occlusion.upload((r.slot%FORMATION.atlasColumns)*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
-          FORMATION_SIDE,FORMATION_SIDE,result.occlusion);
-        this.uploadBytes+=result.data.byteLength+result.occlusion.byteLength;r.ready=true;r.dirty=this.qualityHorizons && result.azimuth!==this.azimuth;r.data=result.data;r.occlusion=result.occlusion;
-        this.lookupData[(r.cy*this.lookup.width+r.cx)*4]=r.slot+1;this.uploadLookup();
-      } else this.discardedBuilds++;
+      this.publish(result,false,now);
+    }
+    if(this.pendingRepair) {
+      const batch=this.pendingRepair;this.pendingRepair=null;
+      // Superseding explosions invalidate the entire transaction, including chunks
+      // whose own cells did not change. Never expose a mixture of geometry revisions.
+      if(batch.revision===this.revision && batch.results.every(result=>{
+        const r=this.resident.get(`${result.cx},${result.cy}`);
+        return !r || r.revision===result.revision;
+      })) {
+        const started=performance.now();
+        for(const result of batch.results)this.publish(result,true,now);
+        this.lastRepairPublishMs=performance.now()-started;
+        this.maxRepairPublishMs=Math.max(this.maxRepairPublishMs,this.lastRepairPublishMs);
+        this.repairMainThreadMs+=this.lastRepairPublishMs;
+        this.repairWorkerMs+=batch.buildMs;this.repairBatches++;
+        this.repairLatencyMs=this.repairStartedAt===null?0:performance.now()-this.repairStartedAt;
+        this.repairStartedAt=null;
+      } else this.discardedBuilds+=batch.results.length;
     }
     if(!active||this.busy)return;
-    // Geometry repairs precede speculative residency/direction work.
-    for(const key of this.wanted){const r=this.resident.get(key);if(r?.repair&&r.dirty){
-      this.busy=true;this.post({kind:'build',cx:r.cx,cy:r.cy,revision:r.revision,azimuth:this.azimuth,horizons:this.qualityHorizons});return;
-    }}
+    // One worker transaction, one publication, also across resident chunk borders.
+    if(this.repairStartedAt!==null) {
+      const repairs=[...this.resident.values()].filter(r=>r.repair&&r.dirty);
+      if(repairs.length) {
+        this.busy=true;this.post({kind:'repair',revision:this.revision,
+          chunks:repairs.map(({cx,cy,revision})=>({cx,cy,revision})),azimuth:this.azimuth,horizons:this.qualityHorizons});return;
+      }
+      this.repairStartedAt=null;
+    }
     // Round-robin prevents a moving sun from starving later resident chunks.
     for(let i=0;i<this.wanted.length;i++) {
       const index=(this.buildCursor+i)%this.wanted.length;
@@ -337,6 +314,49 @@ export class RockFormationLighting {
       this.buildCursor=(index+1)%this.wanted.length;
       this.busy=true;this.post({kind:'build',cx:r.cx,cy:r.cy,revision:r.revision,azimuth:this.azimuth,horizons:this.qualityHorizons});break;
     }
+  }
+
+  private publish(result:FormationWorkerResult,repair:boolean,now:number):void {
+    this.builds++;this.workerMs+=result.buildMs;
+    this.maxWorkerBuildMs=Math.max(this.maxWorkerBuildMs,result.buildMs);
+    const r=this.resident.get(`${result.cx},${result.cy}`);
+    if(!r || result.revision!==r.revision){this.discardedBuilds++;return;}
+    if(!repair&&this.previous&&r.ready&&r.data&&r.occlusion&&r.azimuth!==result.azimuth) {
+      r.previous??=new Uint8Array(result.data.length);
+      packPreviousHorizons(r.data,r.occlusion,r.previous,this.horizonBlend[r.slot]);
+      this.previous.upload(r.slot%FORMATION.atlasColumns*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
+        FORMATION_SIDE,FORMATION_SIDE,r.previous);
+      this.uploadBytes+=r.previous.byteLength;this.horizonBlend[r.slot]=0;this.horizonSince[r.slot]=now;this.horizonDuration[r.slot]=.6;
+    } else this.horizonBlend[r.slot]=1;
+    if(r.azimuth!==undefined&&r.azimuth!==result.azimuth){this.directionBuildMs+=result.buildMs;this.directionBuilds++;}
+    let x0=0,y0=0,x1=FORMATION_SIDE,y1=FORMATION_SIDE;
+    if(repair&&r.ready&&r.data&&r.occlusion) {
+      x0=y0=FORMATION_SIDE;x1=y1=0;
+      const oldData=new Uint32Array(r.data.buffer,r.data.byteOffset,r.data.byteLength/4);
+      const oldOcclusion=new Uint32Array(r.occlusion.buffer,r.occlusion.byteOffset,r.occlusion.byteLength/4);
+      const newData=new Uint32Array(result.data.buffer,result.data.byteOffset,result.data.byteLength/4);
+      const newOcclusion=new Uint32Array(result.occlusion.buffer,result.occlusion.byteOffset,result.occlusion.byteLength/4);
+      for(let y=0;y<FORMATION_SIDE;y++)for(let x=0;x<FORMATION_SIDE;x++) {
+        const p=y*FORMATION_SIDE+x;
+        if(oldData[p]!==newData[p]||oldOcclusion[p]!==newOcclusion[p]){
+          x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x+1);y1=Math.max(y1,y+1);
+        }
+      }
+    }
+    if(x1>x0&&y1>y0) {
+      const width=x1-x0,height=y1-y0;
+      const upload=(texture:FormationDataTexture,source:Uint8Array):void=>{
+        for(let y=0;y<height;y++)this.uploadScratch.set(source.subarray(((y0+y)*FORMATION_SIDE+x0)*4,
+          ((y0+y)*FORMATION_SIDE+x1)*4),y*width*4);
+        texture.upload(r.slot%FORMATION.atlasColumns*FORMATION_SIDE+x0,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE+y0,
+          width,height,this.uploadScratch.subarray(0,width*height*4));
+        this.uploadBytes+=width*height*4;
+      };
+      upload(this.field,result.data);upload(this.occlusion,result.occlusion);
+    }
+    r.azimuth=result.azimuth;r.repair=false;
+    r.dirty=this.qualityHorizons&&result.azimuth!==this.azimuth;r.data=result.data;r.occlusion=result.occlusion;
+    if(!r.ready){r.ready=true;this.lookupData[(r.cy*this.lookup.width+r.cx)*4]=r.slot+1;this.uploadLookup();}
   }
 
   private syncSunDirection(): void {
@@ -396,6 +416,8 @@ export class RockFormationLighting {
       light:{strength:this.state.strength,sun:[...this.state.sun]},
       builds:this.builds,workerBuildMs:this.workerMs,maxWorkerBuildMs:this.maxWorkerBuildMs,
       discardedBuilds:this.discardedBuilds,eraseUploadBytes:this.eraseUploadBytes,lookupUploadBytes:this.lookupUploadBytes,
+      repairMainThreadMs:this.repairMainThreadMs,lastRepairPublishMs:this.lastRepairPublishMs,maxRepairPublishMs:this.maxRepairPublishMs,
+      repairWorkerMs:this.repairWorkerMs,repairLatencyMs:this.repairLatencyMs,repairBatches:this.repairBatches,
       residentEvictions:this.residentEvictions,overflow:this.overflow,error:this.error};
   }
   getReceiverBinding(): FormationReceiverBinding | null {
@@ -416,7 +438,7 @@ export class RockFormationLighting {
     if(this.disposed)return;this.disposed=true;this.receiver=null;this.worker.onmessage=null;this.worker.onerror=null;this.worker.terminate();
     for(const quad of [this.surface,this.ground]) this.destroyQuad(quad);
     this.previous?.destroy();this.previous=null;
-    this.field.destroy();this.occlusion.destroy();this.lookup.destroy();this.resident.clear();this.slots.fill(null);this.signatures.clear();this.pending=null;
+    this.field.destroy();this.occlusion.destroy();this.lookup.destroy();this.resident.clear();this.slots.fill(null);this.signatures.clear();this.pending=null;this.pendingRepair=null;
   }
   private destroyQuad(quad:Phaser.GameObjects.Shader):void {
       // Phaser 4.2.1 Shader.preDestroy omits its private VAOs and vertex buffer.
