@@ -2,13 +2,14 @@ import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState } from '../../e
 import * as Phaser from 'phaser';
 import { HORIZON_BLEND_GLSL } from './FormationHorizonTransition';
 import { FORMATION, FORMATION_SIDE } from './RockFormationField';
-import { FORMATION_RESPONSE_GLSL } from './rockFormationShader';
+import { FORMATION_RESPONSE_GLSL, MINERAL_CAVITY_GLSL } from './rockFormationShader';
 
 /** Borrowed textures and mutable uniforms. The formation remains their sole owner. */
 export interface FormationReceiverBinding {
   field: Phaser.Textures.Texture;
   lookup: Phaser.Textures.Texture;
   occlusion: Phaser.Textures.Texture;
+  mineralHeight?: Phaser.Textures.Texture;
   frame: [number, number, number, number];
   sun: [number, number, number];
   options: [number, number, number, number];
@@ -20,14 +21,16 @@ export interface FormationReceiverBinding {
 }
 export type FormationReceiverProvider = () => FormationReceiverBinding | null;
 
-const FOLIAGE_HEADER = `
+export const FOLIAGE_HEADER = `
 uniform sampler2D uFoliageField, uFoliageLookup, uFoliageOcclusion;
 uniform vec4 uFoliageFrame, uFoliageChunk, uFoliageUV, uFoliageOptions;
 uniform vec3 uFoliageSun;
 ${FORMATION_RESPONSE_GLSL}
+${MINERAL_CAVITY_GLSL}
 ${HORIZON_BLEND_GLSL}
 ${CLOUD_SHADOW_GLSL}
-vec3 foliageSample(vec2 world) {
+vec3 foliageSample(vec2 world, bool centre, out vec3 surface, out float coverage) {
+  surface=vec3(1.0);coverage=0.0;
   vec2 local = world-uFoliageFrame.xy;
   if (min(local.x,local.y)<0.0 || local.x>=uFoliageFrame.z || local.y>=uFoliageFrame.w) return vec3(1.0);
   vec2 cell = floor(local/${FORMATION.chunk}.0);
@@ -43,18 +46,33 @@ vec3 foliageSample(vec2 world) {
   field.b=horizons.r;shelter.gb=horizons.gb;shelter.a=horizons.a;
   vec2 xy = field.rg*2.0-1.0;
   vec3 mineralNormal = normalize(vec3(xy,sqrt(max(.001,1.0-dot(xy,xy)))));
-  // Leaves present many orientations. Broad wrapped response avoids printing
-  // mineral creases onto their authored leaf detail; overhang receives the same
-  // continuous horizon field without a mineral-alpha lighting boundary.
+  // Overhanging leaves present many orientations. Colonies resting on mineral
+  // inherit its full directional form light, including the lip and cavities.
   vec3 normal = normalize(mix(vec3(0.0,0.0,1.0),mineralNormal,.34));
   vec4 options=uFoliageOptions;options.x*=cloudFormStrength(world);
+  if(centre) {
+    coverage=field.a;
+    surface=formationResponse(mineralNormal,field.b*1.570796327,
+      vec4(shelter.r,shelter.gb*1.570796327,shelter.a),uFoliageSun,options,0.0);
+    if(uFineMineral>.5 && options.z>.5) surface*=mineralCavity(local);
+    if(coverage>=1.0) return surface;
+  }
   return formationResponse(normal,field.b*1.570796327,
     vec4(shelter.r,shelter.gb*1.570796327,shelter.a),uFoliageSun,options,0.0);
 }
 vec3 foliageResponse(vec2 world) {
-  return foliageSample(world)*.4
-    + (foliageSample(world+vec2(12.0,0.0))+foliageSample(world-vec2(12.0,0.0))
-    + foliageSample(world+vec2(0.0,12.0))+foliageSample(world-vec2(0.0,12.0)))*.15;
+  vec3 surface,unusedSurface;float coverage,unusedCoverage;
+  vec3 broad=foliageSample(world,true,surface,coverage);
+  if(coverage>=1.0) return surface;
+  broad*=.4;
+  broad+=foliageSample(world+vec2(12.0,0.0),false,unusedSurface,unusedCoverage)*.15;
+  broad+=foliageSample(world-vec2(12.0,0.0),false,unusedSurface,unusedCoverage)*.15;
+  broad+=foliageSample(world+vec2(0.0,12.0),false,unusedSurface,unusedCoverage)*.15;
+  broad+=foliageSample(world-vec2(0.0,12.0),false,unusedSurface,unusedCoverage)*.15;
+  // Coverage selects form light, never opacity: one PMA colony draw across the
+  // mineral contour. Sun-facing lips keep full form response; backfaces receive
+  // the same shadow/sky response as the stone beneath, not an unlit alpha gap.
+  return mix(broad,surface,coverage);
 }
 `;
 
@@ -111,7 +129,7 @@ export class RockFoliageLighting {
     this.batch = batch;
     // ProgramFactory owns programs by shader/addition names. Keep the material
     // key stable across World lifetimes; only its per-node VAO/buffers are ours.
-    batch.programManager.addAddition({ name: 'RockFoliageMaterial', additions: {
+    batch.programManager.addAddition({ name: 'RockFoliageSingleCoverage', additions: {
       fragmentHeader: FOLIAGE_HEADER,
       fragmentProcess: `
         if (fragColor.a > 0.0) {
@@ -145,12 +163,14 @@ export class RockFoliageLighting {
       programs.setUniform('uFoliageField', 1);
       programs.setUniform('uFoliageLookup', 2);
       programs.setUniform('uFoliageOcclusion', 3);
+      programs.setUniform('uMineralHeight', 4);
       programs.setUniform('uHorizonPrevious',5);
       programs.setUniform('uHorizonBlend[0]',binding.horizonBlend??this.neutralHorizonBlend);
       renderer.glTextureUnits.bind((binding.horizonPrevious??binding.field).source[0].glTexture,5);
       renderer.glTextureUnits.bind(binding.field.source[0].glTexture, 1);
       renderer.glTextureUnits.bind(binding.lookup.source[0].glTexture, 2);
       renderer.glTextureUnits.bind(binding.occlusion.source[0].glTexture, 3);
+      renderer.glTextureUnits.bind((binding.mineralHeight??binding.field).source[0].glTexture, 4);
       // Bind a valid neutral-path texture even when the optional mask has gone
       // away. The zero-strength shader branch performs no transmission lookup.
     };

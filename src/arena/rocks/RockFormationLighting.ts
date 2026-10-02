@@ -133,6 +133,7 @@ export class RockFormationLighting {
     rollback.push(()=>this.lookup.destroy());
     this.lookupData=new Uint8Array(this.lookup.width*this.lookup.height*4);
     this.receiver={field:this.field.texture,lookup:this.lookup.texture,occlusion:this.occlusion.texture,
+      mineralHeight:scene.textures.get(this.heightTextureKey),
       frame:[frame.offsetX,frame.offsetY,frame.width,frame.height],sun:state.sun,options:[0,0,1,1],
       };
     this.gpuRepair=RockFormationGpuRepair.create(scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer,

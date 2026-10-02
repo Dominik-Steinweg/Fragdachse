@@ -389,12 +389,22 @@ describe('rock decal cutout inside the streamer', () => {
   });
 });
 
-it('splits colonies into the mineral receiver and overhang and erases both after destruction',()=>{
+it('draws colony colour once across the mineral contour, keeps contact separate and removes both after destruction',()=>{
   const {scene,streamer,rockVisualStates}=buildFixture();
   const layer=chunkTexture(streamer,ROCK_OVERLAY_VEGETATION_LAYER_ID,0,0);
   ChunkedRenderSurface.drainBakeQueue(scene as never);
-  expect(lastBlit(layer).some(s=>s.startsWith('woodland-rock-'))).toBe(true);
-  expect(lastBlit(chunkTexture(streamer,ROCK_OVERLAY_DECAL_LAYER_ID,0,0)).some(s=>s.startsWith('woodland-rock-'))).toBe(true);
+  const colour=lastBlit(layer),below=lastBlit(chunkTexture(streamer,ROCK_OVERLAY_DECAL_LAYER_ID,0,0));
+  expect(colour.some(s=>s.startsWith('woodland-rock-colonies'))).toBe(true);
+  expect(below.some(s=>s.startsWith('woodland-rock-contact'))).toBe(true);
+  expect(below.some(s=>s.startsWith('woodland-rock-colonies'))).toBe(false);
+  // A second mineral-silhouette erase would reopen the alpha seam.
+  const erased=vi.spyOn(FakeRenderTexture.prototype,'erase');
+  streamer.refreshAll();ChunkedRenderSurface.drainBakeQueue(scene as never);
+  const vegetation=(streamer as any).scratch.get('vegetation',CHUNK+CHUNK_SAMPLING_GUTTER_PX*2);
+  const masks=erased.mock.calls.filter((_c,i)=>erased.mock.contexts[i]===vegetation);
+  expect(masks.length).toBeGreaterThan(0);
+  expect(masks.every(c=>typeof c[0]==='string')).toBe(true); // Only the authored reach mask.
+  erased.mockRestore();
   for(const id of [ROCK_OVERLAY_MOSS_LAYER_ID,rockOverlayMottleLayerId(0)])
     expect(lastBlit(chunkTexture(streamer,id,0,0)).some(s=>s.startsWith('woodland-rock-'))).toBe(false);
   expect(lastBlit(layer).some(s=>s.startsWith('rock_vegetation_01_small'))).toBe(false);
@@ -443,11 +453,11 @@ it('composites opaque colony leaves after decals under the same formation light 
   expect(order.slice(0,firstColony)).toEqual(baseline);
   expect(order.slice(firstColony).every(s=>s.startsWith('woodland-rock-'))).toBe(true);
   expect(lastBlit(chunkTexture(streamer,ROCK_OVERLAY_MOSS_LAYER_ID,0,0))).toEqual(moss);
-  // CPU source-over at an opaque leaf, driven by the actual flushed draw order.
-  // The mineral lighting pass multiplies the result once, after both layers.
+  // Actual flushed colour order, including the separate top leaf layer.
+  const leaves=lastBlit(chunkTexture(streamer,ROCK_OVERLAY_VEGETATION_LAYER_ID,0,0));
   let decalContribution=0,leafContribution=0;
-  for(const entry of order){
-    const leaf=entry.startsWith('woodland-rock-');
+  for(const entry of [...order,...leaves]){
+    const leaf=entry.startsWith('woodland-rock-colonies');
     const alpha=leaf?1:.7;
     decalContribution=decalContribution*(1-alpha)+(leaf?0:alpha);
     leafContribution=leafContribution*(1-alpha)+(leaf?alpha:0);

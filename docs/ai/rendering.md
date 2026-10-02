@@ -344,6 +344,13 @@ Ereignispulse darüber. Sonnen-Updates dürfen diese fachlichen Kanäle nicht ü
 die Reihenfolge der Updates beider Eingänge verändert das Ergebnis nicht. Dauerbild und Pulse
 behalten die getrennten Clamp-Verträge in [worldGrade.ts](../../src/effects/postfx/worldGrade.ts).
 
+Felskolonien behalten eine gemeinsame Alpha-Ebene ueber Mineral und Ueberhang.
+`RockOverlayStreamer` backt ihren Kontakt getrennt, `RockFoliageLighting` waehlt
+das Licht am Empfaenger. Komplementaer maskierte Kopien derselben Farbe duerfen
+nicht per Source-over zusammengesetzt werden: Sie verlieren an teilgedeckten
+Kanten Alpha und legen einen Saum des Untergrunds frei, auch bei korrektem PMA.
+Vertrag: [RockOverlayStreamer.test.ts](../../tests/RockOverlayStreamer.test.ts).
+
 Fels-Horizonte unterscheiden Geometrie-Revision und Sonnenrichtung. Ein Richtungswechsel entwertet
 keinen geometrisch gültigen laufenden Bake: Sein Ergebnis darf als Zwischenstand erscheinen und
 wird anschließend auf die neueste Richtung nachgeführt. Geometrieänderungen, insbesondere

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RockFormationField, FORMATION_SIDE, type FormationRock } from '../src/arena/rocks/RockFormationField';
 import { CELL_SIZE } from '../src/config';
+import { formationSurfaceColour } from '../src/arena/rocks/rockFormationShader';
+import { createSunPath, resolveSunPath } from '../src/effects/sunlight/SunPath';
+import { SUN_TUNING_DEFAULTS } from '../src/config/sunlight';
 import { ROCK_BASE_PHASE_CELLS, ROCK_BASE_PHASES, ROCK_BASE_FRAME_MARGIN } from '../src/arena/RockBaseConfig';
 
 function fixture(cells: [number,number][], detail=new Float32Array(256*256), holes:[number,number][]=[]) {
@@ -14,6 +17,30 @@ function fixture(cells: [number,number][], detail=new Float32Array(256*256), hol
   return {states,field:new RockFormationField(1024,1024,states,source)};
 }
 const height=(data:Float32Array,x:number,y:number):number=>data[(Math.floor(y/2)+1)*FORMATION_SIDE+Math.floor(x/2)+1];
+
+it('keeps the raised lip directional: sun-facing facets stay lit and south-facing lips stay below ground exposure',()=>{
+  const cells:[number,number][]=[];for(let y=5;y<10;y++)for(let x=5;x<10;x++)cells.push([x,y]);
+  const {field}=fixture(cells);field.setRimGeometry(SUN_TUNING_DEFAULTS);
+  const path=createSunPath();
+  for(const minute of [480,720,1020]) {
+    resolveSunPath(minute,null,path);
+    const {data,occlusion}=field.build(0,0,path.horizonAzimuth);
+    const colour=(x:number,y:number)=>{
+      const p=((Math.floor(y/2)+1)*FORMATION_SIDE+Math.floor(x/2)+1)*4;
+      return formationSurfaceColour(data[p]/255*2-1,data[p+1]/255*2-1,data[p+2]/255*Math.PI/2,
+        {enabled:true,normals:false,strength:1,sun:path.sun,mineralResponse:true,
+          clouds:{tuning:SUN_TUNING_DEFAULTS,timeSec:0,strength:1}},
+        [occlusion[p]/255,occlusion[p+1]/255*Math.PI/2,occlusion[p+2]/255*Math.PI/2,occlusion[p+3]/255]);
+    };
+    for(const y of [315,317,319])expect(Math.max(...colour(240,y))).toBeLessThan(1);
+    let lit=0;
+    for(let d=1;d<=15;d+=2) {
+      const c=minute===480?colour(320-d,240):minute===1020?colour(160+d,240):colour(240,160+d);
+      lit=Math.max(lit,...c);
+    }
+    expect(lit).toBeGreaterThan(1);
+  }
+},15000);
 
 it('keeps incremental geometry byte-identical to full builds across explosions, gutters, holes and sun/quality changes',()=>{
   const cells:[number,number][]=[];for(let y=12;y<21;y++)for(let x=12;x<21;x++)cells.push([x,y]);

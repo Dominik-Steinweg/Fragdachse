@@ -36,7 +36,7 @@ vi.mock('phaser', () => ({
   Utils: { Array: { Remove: (array: unknown[], value: unknown) => array.splice(array.indexOf(value), 1) } },
 }));
 
-import { RockFoliageLighting, type FormationReceiverBinding } from '../src/arena/rocks/RockFoliageLighting';
+import { FOLIAGE_HEADER, RockFoliageLighting, type FormationReceiverBinding } from '../src/arena/rocks/RockFoliageLighting';
 
 function fixture() {
   type Batch = { setupUniforms: (context: unknown) => void; uniforms: Map<string, unknown> };
@@ -89,6 +89,13 @@ function fixture() {
   return { receiver, renderer, manager, makeTexture, render, binding, draws };
 }
 
+it('declares all material samplers, including the shared mineral cavity input',()=>{
+  const declared=new Set([...FOLIAGE_HEADER.matchAll(/uniform\s+\w+\s+([^;]+);/g)]
+    .flatMap(m=>m[1].split(',').map(s=>s.trim().replace(/\[.*$/, ''))));
+  const read=new Set([...FOLIAGE_HEADER.replace(/\/\/[^\n]*/g,'').matchAll(/\bu[A-Z]\w*/g)].map(m=>m[0]));
+  for(const name of read)expect(declared,`missing ${name}`).toContain(name);
+});
+
 describe('foliage receiver ownership', () => {
   it('uses ordinary rendering before opt-in and after a null, failed, or disposed provider', () => {
     const f = fixture(), texture = f.makeTexture();
@@ -121,6 +128,7 @@ describe('foliage receiver ownership', () => {
     expect(f.draws.at(-1)?.uniforms?.get('uFoliageChunk')).toEqual([100, 200, 512, 512]);
     expect(f.draws.at(-1)?.uniforms?.get('uMineralResponse')).toBe(0);
     f.binding.mineralResponse=true;
+    f.binding.mineralHeight=f.binding.occlusion;
     f.binding.sceneSunOffset[0] = 13;
     texture.x = 1636; texture.y = 712; texture.frame.cutWidth = 176;
     texture.frame.u1 = 178/516;
@@ -128,6 +136,8 @@ describe('foliage receiver ownership', () => {
     expect(texture.customRenderNodes.Submitter).toBe(material);
     expect(f.draws.at(-1)?.uniforms?.get('uFoliageChunk')).toEqual([1636, 712, 176, 512]);
     expect(f.draws.at(-1)?.uniforms?.get('uMineralResponse')).toBe(1);
+    expect(f.draws.at(-1)?.uniforms?.get('uMineralHeight')).toBe(4);
+    expect(f.renderer.glTextureUnits.bind).toHaveBeenCalledWith(f.binding.mineralHeight.source[0].glTexture,4);
     expect(f.draws.at(-1)?.uniforms?.get('uFoliageUV')).toEqual([2/516, 514/516, 176/516, -512/516]);
     const later = f.makeTexture(2000, 40);
     expect(later.customRenderNodes.Submitter).toBe(material);

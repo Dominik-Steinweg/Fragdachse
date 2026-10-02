@@ -101,6 +101,21 @@ vec4 formationMultiply(vec3 factor) {
 }
 `;
 
+/** Shared by mineral and colonies resting on it; colour never defines relief. */
+export const MINERAL_CAVITY_GLSL = `
+uniform sampler2D uMineralHeight;
+float mineralHeight(vec2 local) {
+  vec2 uv=fract((local+.5)/512.0);
+  vec2 rg=texture2D(uMineralHeight,vec2(uv.x,1.0-uv.y)).rg;
+  return -32.0+dot(rg,vec2(65280.0,255.0))*(64.0/65535.0);
+}
+float mineralCavity(vec2 local) {
+  float bowl=(mineralHeight(local+vec2(2,0))+mineralHeight(local-vec2(2,0))
+    +mineralHeight(local+vec2(0,2))+mineralHeight(local-vec2(0,2)))*.25-mineralHeight(local);
+  return 1.0-.14*smoothstep(.35,2.4,bowl);
+}
+`;
+
 export const ROCK_FORMATION_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
@@ -110,7 +125,6 @@ uniform vec4 uView, uFrame;
 uniform vec3 uSun;
 uniform vec4 uOptions;
 uniform float uGround, uCastShadow, uRockContactAO;
-uniform sampler2D uMineralHeight;
 const float CHUNK = ${FORMATION.chunk}.0;
 const float SIDE = ${FORMATION_SIDE}.0;
 const vec2 ATLAS = vec2(${FORMATION.atlasColumns}.0, ${FORMATION.atlasRows}.0);
@@ -119,11 +133,7 @@ ${HORIZON_BLEND_GLSL}
 ${CLOUD_SHADOW_GLSL}
 // Geometric cavity at a two-world-pixel radius, independent of colour. This
 // only enhances small V7 depressions; macro contour and broad gaps stay intact.
-float mineralHeight(vec2 local) {
-  vec2 uv=fract((local+.5)/512.0);
-  vec2 rg=texture2D(uMineralHeight,vec2(uv.x,1.0-uv.y)).rg;
-  return -32.0+dot(rg,vec2(65280.0,255.0))*(64.0/65535.0);
-}
+${MINERAL_CAVITY_GLSL}
 void main() {
   vec2 world = uView.xy + vec2(outTexCoord.x, 1.0-outTexCoord.y) * uView.zw;
   vec2 local = world-uFrame.xy, cell = floor(local/CHUNK);
@@ -142,9 +152,7 @@ void main() {
   vec3 factor=formationResponse(normal,data.b*1.570796327,
     vec4(shelter.r,shelter.gb*1.570796327,shelter.a),uSun,formOptions,uGround);
   if(uFineMineral>.5 && uGround<.5 && uOptions.z>.5) {
-    float bowl=(mineralHeight(local+vec2(2,0))+mineralHeight(local-vec2(2,0))
-      +mineralHeight(local+vec2(0,2))+mineralHeight(local-vec2(0,2)))*.25-mineralHeight(local);
-    factor*=1.0-.14*smoothstep(.35,2.4,bowl);
+    factor*=mineralCavity(local);
   }
   if(uGround>.5&&uCastShadow<.5)factor=vec3(1.0);
   // Ambient foot outside the actual mineral contour, before fog. It remains

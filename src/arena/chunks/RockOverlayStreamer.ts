@@ -617,13 +617,14 @@ export class RockOverlayStreamer {
       surface.clear();
       stampRockColonyContact(this.scene,surface,this.vegetationCandidates,-region.worldX,-region.worldY,
         this.ecologyTuning.rockFloraContact??.24,this.ecologyHeight);
-      surface.stamp(target.texture.key,undefined,0,0,{originX:0,originY:0});
       surface.render();
-      // Exact mineral silhouette, not the broader moss/vegetation reach mask.
+      // Only contact belongs below the mineral response. Keep every colony in
+      // one alpha layer: complementary mineral/overhang cuts re-composited with
+      // source-over lose a^2*m*(1-m) coverage (25% at an opaque half-mask edge).
+      // Select the lighting receiver in the foliage shader, never by cutting
+      // the leaf alpha. This also remains correct under bilinear filtering.
       eraseChunkScratch(surface,this.scratch.get('silhouetteCutout',size,'redraw'),size);
       surface.render();
-      if(this.silhouetteImages.length>0)target.erase(this.silhouetteImages);
-      target.render();
     }
     sink.blit(ROCK_OVERLAY_VEGETATION_LAYER_ID, target);
     for (const mask of masks) mask.destroy();
@@ -688,10 +689,8 @@ export class RockOverlayStreamer {
     target.render();
     for (const image of images) image.destroy();
     {
-      // Both mineral layers receive the same formation light. Composite the
-      // on-rock colonies last so cracks/lichen stay underneath their leaves.
-      // The surface is rebuilt from live anchors each bake, including empty
-      // regions; removing a colony therefore reveals surviving decals again.
+      // Contact is clipped to mineral coverage. The complete colonies render
+      // once above this layer, including their overhang and antialiased edge.
       const colonies=this.scratch.get('ecologySurface',size);
       target.stamp(colonies.texture.key,undefined,0,0,{originX:0,originY:0});
       target.render();
