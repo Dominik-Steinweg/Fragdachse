@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { syncCharacterMaterialCopy } from './CharacterMaterialLighting';
 import { HIT_FEEDBACK_VFX } from '../config';
 import { getPipelineSpriteScale } from '../config/pipelineAssets';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
@@ -205,6 +206,7 @@ export class HitFeedbackRenderer {
   private syncSlot(slot: FlashSlot): void {
     const sprite = slot.sprite;
     if (!sprite) return;
+    syncCharacterMaterialCopy(sprite, slot.image);
     const t = slot.durationMs > 0 ? Math.min(1, slot.ageMs / slot.durationMs) : 1;
     // Der Blitz folgt dem gezuckten Körper. Der Versatz liegt als Datum in der Registry vor,
     // aufgetragen wird er erst im Renderfenster – hier wird er deshalb ausdrücklich addiert.
@@ -297,6 +299,7 @@ export class HitFeedbackRenderer {
   }
 
   private releaseSlot(slot: FlashSlot): void {
+    syncCharacterMaterialCopy(null, slot.image);
     if (slot.targetId && this.byTarget.get(slot.targetId) === slot) this.byTarget.delete(slot.targetId);
     slot.targetId = null;
     slot.sprite = null;

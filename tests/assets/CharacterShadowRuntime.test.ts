@@ -29,7 +29,7 @@ it('published shadow pages retain source bytes, linear RGBA channels and complet
 import { CHARACTER_MESH_MANIFEST as meshes, decodeCharacterMesh, getCharacterMeshes, preloadCharacterMeshAssets } from '../../src/assets/CharacterMeshAssets';
 it('mesh publication loads exact hashes and quantized fixed-topology poses through the binary cache',async()=>{
  const cache=new Map<string,ArrayBuffer>(), requests:{key:string;url:string}[]=[];
- const scene:any={cache:{binary:{get:(key:string)=>cache.get(key),exists:(key:string)=>cache.has(key)}},
+ const scene:any={textures:{exists:()=>true},cache:{binary:{get:(key:string)=>cache.get(key),exists:(key:string)=>cache.has(key)}},
   load:{binary:(key:string,url:string)=>requests.push({key,url})}};
  preloadCharacterMeshAssets(scene);expect(requests).toHaveLength(meshes.meshes.length*2);
  expect(getCharacterMeshes(scene)).toBeNull();
@@ -60,4 +60,41 @@ it('mesh publication loads exact hashes and quantized fixed-topology poses throu
   expect(Math.atan2(r[3],r[0])).toBeCloseTo(s.yaw,5);
  }
  expect(()=>decodeCharacterMesh(meshes.meshes[0],new ArrayBuffer(1),new ArrayBuffer(1))).toThrow('byte count');
+});
+
+import repairedMaterials from '../../src/assets/manifests/character-material-badger-player-material-21e4.json';
+import parentMaterials from '../../src/assets/manifests/character-badger-player-shadow-21c-production.json';
+it('material repair preserves all unaffected frame pixels, source hashes, coverage and normalized data',async()=>{
+ const raw=await Promise.all(repairedMaterials.pages.map(async p=>{
+  const bytes=await readFile('public/'+p.file);expect(createHash('sha256').update(bytes).digest('hex')).toBe(p.sha256);
+  expect(p.premultiplied).toBe(false);expect(p.unpackPremultiplyAlpha).toBe(false);
+  return sharp(bytes).ensureAlpha().raw().toBuffer();
+ }));
+ const original=await Promise.all(parentMaterials.pages.slice(3).map(p=>sharp('public/'+p.file).ensureAlpha().raw().toBuffer()));
+ const beauty=await sharp('public/assets/sprites/pipeline-v2/badger/sheet.png').ensureAlpha().raw().toBuffer({resolveWithObject:true});
+ expect(repairedMaterials.samples).toHaveLength(37*2*2);
+ for(const sample of repairedMaterials.samples){
+  const [x,y,w,h]=sample.rect,p=repairedMaterials.pages[sample.page];
+  const pixels=Buffer.alloc(w*h*4),old=Buffer.alloc(w*h*4);
+  for(let row=0;row<h;row++){
+   const from=((y+row)*p.width+x)*4;raw[sample.page].copy(pixels,row*w*4,from,from+w*4);
+   original[sample.page].copy(old,row*w*4,from,from+w*4);
+  }
+  const source=repairedMaterials.source.frames.find(s=>s.pose===sample.pose&&s.pass===sample.pass&&s.sourceSize===w);
+  if(source)expect(createHash('sha256').update(pixels).digest('hex')).toBe(source.rgbaSha256);
+  else expect(pixels.equals(old),`unaffected ${sample.pass}/${w}/${sample.pose}`).toBe(true);
+  let holes=0,black=0,maxNormalError=0;
+  if(sample.pass==='albedo'&&w===128)for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){
+   const i=(yy*w+xx)*4,b=((2+Math.floor(sample.pose/8)*132+yy)*beauty.info.width+2+sample.pose%8*132+xx)*4;
+   if(beauty.data[b+3]>240){if(pixels[i+3]<=15)holes++;
+    if(pixels[i+3]>240&&Math.min(...beauty.data.subarray(b,b+3))>16)if(Math.max(...pixels.subarray(i,i+3))<3)black++;
+   }
+  }
+  if(sample.pass==='normal')for(let i=0;i<pixels.length;i+=4){
+   // Component quantization in RGB8 permits sqrt(3)/255 length error.
+   const len=Math.hypot(pixels[i]/127.5-1,pixels[i+1]/127.5-1,pixels[i+2]/127.5-1);
+   maxNormalError=Math.max(maxNormalError,Math.abs(len-1));
+  }
+  expect(holes).toBe(0);expect(black).toBe(0);expect(maxNormalError).toBeLessThan(.007);
+ }
 });

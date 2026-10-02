@@ -1,3 +1,4 @@
+import { bindCharacterMaterialSunlight } from '../CharacterMaterialLighting';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import type * as Phaser from 'phaser';
 import type { ArenaBuilderResult } from '../../arena/ArenaBuilder';
@@ -40,6 +41,7 @@ type Targets = WorldSunlightTargets;
 /** Active render resources belong to one displayed World, never its transferable terrain cache. */
 export class WorldSunlightPresentation {
  private disposed=false;
+ private releaseCharacterMaterial: (()=>void)|null=null;
  private lastMinute=NaN;
  private lastSceneTime=0;
  readonly sunTuning=createSunTuning();
@@ -71,6 +73,7 @@ export class WorldSunlightPresentation {
   const measuredAt=loadingTimeline.start();
   this.fogBase=targets.fog?{opacity:targets.fog.tuning.opacity,detail:targets.fog.tuning.detail}:null;
   try {
+  this.releaseCharacterMaterial=bindCharacterMaterialSunlight(scene,this.clouds);
   this.canopyLighting=new CanopyLighting(scene,targets.canopies);
   this.sunComposite=new WorldSunComposite(scene,this.sunTuning,this.sunState,this.clouds,targets.canopies);
   targets.rocks?.setFormationOptions(true,true,this.clouds);
@@ -153,6 +156,7 @@ export class WorldSunlightPresentation {
 
  destroy():void {
   if(this.disposed)return;this.disposed=true;
+  this.releaseCharacterMaterial?.();this.releaseCharacterMaterial=null;
   const t=this.targets;
   // Unbind receivers before destroying fields; the terrain may be handed to another World.
   t.ground?.setVegetationLight(undefined);t.water?.setSunlight(undefined);t.wildlife?.setSunlight(undefined);

@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import { characterLightWeight, characterLightBlockedRect, CHARACTER_MATERIAL_CONFIG,
+  type CharacterMaterialLight } from './CharacterMaterialModel';
 import {
   DEPTH_LIGHTING,
   GAME_HEIGHT,
@@ -338,6 +340,36 @@ export class LightingSystem {
 
   getTimeOfDayMinutes(): number {
     return this.timeOfDayMinutes;
+  }
+
+  /** Bounded, borrowed presentation port. No new light ownership or irradiance:
+   * the material uses these two directions for relative form only. */
+  sampleCharacterMaterialLights(x: number, y: number, out: CharacterMaterialLight[]): void {
+    for (const sample of out) sample.weight = 0;
+    if (!this.enabled || out.length < 2) return;
+    for (const light of this.renderQueue) {
+      const weight = characterLightWeight(light, x, y);
+      if (weight <= out[1].weight) continue;
+      if (light.occludes && !this.vectorSuppressed) {
+        let blocked = false;
+        const rect = (l:number,t:number,r:number,b:number):void => {
+          blocked ||= characterLightBlockedRect(light.x,light.y,x,y,l,t,r,b);
+        };
+        const distance = Math.hypot(x-light.x,y-light.y);
+        this.occluders?.queryCircle(light.x,light.y,distance,rect,(cx,cy,radius) => {
+          const dx=x-light.x,dy=y-light.y,length2=dx*dx+dy*dy;
+          if (Math.hypot(cx-light.x,cy-light.y)<=radius || length2===0) return;
+          const t=Math.max(0,Math.min(1,((cx-light.x)*dx+(cy-light.y)*dy)/length2));
+          blocked ||= Math.hypot(light.x+t*dx-cx,light.y+t*dy-cy)<radius;
+        });
+        if (!blocked) this.dynamicOccluders?.queryCircle(light.x,light.y,distance,rect);
+        if (blocked) continue;
+      }
+      const target = weight > out[0].weight ? 0 : 1;
+      if (target===0) Object.assign(out[1],out[0]);
+      out[target].x=light.x; out[target].y=light.y;
+      out[target].height=CHARACTER_MATERIAL_CONFIG.localHeight; out[target].weight=weight;
+    }
   }
 
   /**

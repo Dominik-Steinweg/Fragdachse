@@ -40,6 +40,9 @@ export class CharacterShadowReceiver {
     for (const cell of bases) this.set(cell.x, cell.y, 0);
     const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl = renderer.gl;
     renderer.glTextureUnits.bind(this.texture.source[0].glTexture!, 0);
+    // Image uploads can leave flipY enabled. Receiver rows are world north-to-south;
+    // inherit neither their orientation nor colour conversion from the previous upload.
+    renderer.glWrapper.updateTexturing({ texturing: { flipY: false, premultiplyAlpha: false } });
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.data);
   }
   private set(x: number, y: number, value: number): void {

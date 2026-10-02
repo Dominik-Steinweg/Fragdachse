@@ -49,7 +49,7 @@ import {characterLightAzimuth,createCharacterShadowSelection,selectCharacterShad
 import { Matrix } from './CharacterShadowPhaserHarness';
 import { preloadCharacterShadowAssets, assertCharacterShadowAssetsReady } from '../src/assets/CharacterShadowAssets';
 import { CHARACTER_SHADOW_FILES } from '../src/assets/CharacterShadowAssetManifest';
-import { DEPTH } from '../src/config';
+import { CELL_SIZE, DEPTH } from '../src/config';
 import sharp from 'sharp';
 
 function fixture(){
@@ -58,7 +58,7 @@ function fixture(){
    texSubImage2D:vi.fn((...args:any[])=>{pixels=Uint8Array.from(args[8]);})};
  const makeTexture=(key:string,wrapper:any)=>{const source={glTexture:wrapper};return {key,source:[source],get:()=>({source}),setFilter(){}};};
  const scene:any={sys:{renderer:{gl,createTexture2D:vi.fn((...args:any[])=>({data:args[6],width:args[7],height:args[8],pma:args[9]})),glTextureUnits:{bind:vi.fn()},
-  blendModes:[{name:'normal'},null,{name:'multiply'}],glWrapper:{updateBlend:vi.fn()},
+  blendModes:[{name:'normal'},null,{name:'multiply'}],glWrapper:{updateBlend:vi.fn(),updateTexturing:vi.fn()},
   projectionMatrix:{val:new Float32Array(16)},setProjectionMatrixFromDrawingContext(){},drawElements:vi.fn()}},
   add:{existing:vi.fn()},cameras:{main:{scrollX:0,scrollY:0,width:600,height:600,zoom:1,originX:.5,originY:.5}},
   textures:{exists:(key:string)=>textures.has(key),get:(key:string)=>{if(!textures.has(key))textures.set(key,makeTexture(key,{}));return textures.get(key);},
@@ -175,6 +175,8 @@ async function meshFixture(){
  const f=fixture(), binaries=new Map<string,ArrayBuffer>(), loads:any[]=[];
  f.scene.cache={binary:{exists:(k:string)=>binaries.has(k),get:(k:string)=>binaries.get(k)}};
  f.scene.load.binary=(key:string,url:string)=>loads.push({key,url});
+ // Material pages are already loaded in this mesh-only renderer fixture.
+ for(const page of CHARACTER_MATERIAL_PAGES)f.scene.textures.get(page.key);
  preloadCharacterMeshAssets(f.scene);
  for(const load of loads){const b=await readFile('public/'+load.url.replace(/^\.\//,'').split('?')[0]);binaries.set(load.key,Uint8Array.from(b).buffer);}
  const renderer=f.scene.sys.renderer;
@@ -249,4 +251,32 @@ it('caps the slot pool at twelve and recycles departed assignments without alloc
  const allocated=state.shaders.length;
  f.meshRenderer.sync([players[12]] as never,true);expect(f.meshRenderer.activeCount).toBe(1);
  expect(state.shaders.length).toBe(allocated);f.meshRenderer.destroy();
+});
+
+import { CHARACTER_MATERIAL_PAGES } from '../src/assets/CharacterMaterialAssetManifest';
+
+it('uploads receiver rows in world order even after image uploads leave flipY enabled',()=>{
+ const f=fixture();
+ const unpack={flipY:true,premultiplyAlpha:true};
+ let uploaded=new Uint8Array();
+ // Emulate the real upload conversion: CPU-only sampling misses a mirrored GPU mask.
+ f.scene.sys.renderer.glWrapper.updateTexturing=({texturing}:any)=>Object.assign(unpack,texturing);
+ f.scene.sys.renderer.gl.texSubImage2D.mockImplementation((_t:any,_l:any,_x:any,_y:any,w:number,h:number,_f:any,_type:any,data:Uint8Array)=>{
+  uploaded=new Uint8Array(data.length);
+  for(let row=0;row<h;row++){
+   const source=unpack.flipY?h-row-1:row;
+   uploaded.set(data.subarray(source*w*4,(source+1)*w*4),row*w*4);
+  }
+ });
+ const layout:any={rocks:[{gridX:0,gridY:0}],water:[{gridX:1,gridY:1}]};
+ for(const visible of [true,false,true]){
+  unpack.flipY=true;unpack.premultiplyAlpha=true;
+  f.receiver.update(layout,0,0,()=>visible,[],[{x:80,y:16}]);
+  const cols=f.receiver.world[2]/CELL_SIZE,rows=f.receiver.world[3]/CELL_SIZE;
+  for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+   expect(uploaded[(row*cols+col)*4]/255).toBe(f.receiver.sample((col+.5)*CELL_SIZE,(row+.5)*CELL_SIZE));
+  }
+  expect(unpack).toEqual({flipY:false,premultiplyAlpha:false});
+ }
+ f.renderer.destroy();
 });

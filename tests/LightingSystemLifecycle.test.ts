@@ -313,3 +313,24 @@ it('invalidates the ambient-only cache, tints crowns consistently, and restores 
   expect(()=>lighting.setSunAmbient(NaN)).toThrow();
   lighting.destroy();
 });
+
+
+it('character material borrows only two dominant visible local lights, resets on clear and respects cone/occluders',()=>{
+ const {lighting}=fixture();
+ const samples=createCharacterMaterialLights();
+ const light=(x:number,y:number,weight:number)=>({x,y,radiusPx:200,effectiveIntensity:weight,shape:'radial',angle:0,coneAngle:Math.PI/2,occludes:false});
+ const state=lighting as any;
+ state.renderQueue=[light(0,0,.2),light(20,0,.9),light(30,0,.8),light(50,0,.1)];
+ lighting.sampleCharacterMaterialLights(0,0,samples);
+ expect(samples[0].x).toBe(20);expect(samples[1].x).toBe(30);
+ expect(samples[0].height).toBeGreaterThan(0);
+ state.renderQueue[1].occludes=true;
+ state.occluders={queryCircle:(_x:number,_y:number,_r:number,rect:Function)=>rect(5,-5,10,5)};
+ lighting.sampleCharacterMaterialLights(0,0,samples);expect(samples[0].x).toBe(30);expect(samples[1].x).toBe(0);
+ state.renderQueue=[{...light(0,0,1),shape:'cone',angle:Math.PI,coneAngle:.5}];
+ lighting.sampleCharacterMaterialLights(30,0,samples);expect(samples.every(s=>s.weight===0)).toBe(true);
+ state.renderQueue=[];lighting.sampleCharacterMaterialLights(0,0,samples);expect(samples.every(s=>s.weight===0)).toBe(true);
+ lighting.setActive(false);lighting.sampleCharacterMaterialLights(0,0,samples);expect(samples.every(s=>s.weight===0)).toBe(true);
+ lighting.destroy();
+});
+import { createCharacterMaterialLights } from '../src/effects/CharacterMaterialModel';

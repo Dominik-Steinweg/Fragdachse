@@ -1,4 +1,5 @@
 import { MolotovFirewalkerRenderer } from '../effects/MolotovFirewalkerRenderer';
+import { attachCharacterMaterial, syncCharacterMaterialCopy } from '../effects/CharacterMaterialLighting';
 import { PressureShieldRenderer } from '../effects/PressureShieldRenderer';
 import { HealingAuraRenderer } from '../effects/HealingAuraRenderer';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
@@ -311,6 +312,11 @@ export class PlayerEntity {
           .setVisible(false);
       }
 
+    }
+    if (this.sprite && lighting) {
+      attachCharacterMaterial(this.sprite, lighting);
+      for (const copy of [this.spawnShine, this.stealthShell, this.stealthScan])
+        if (copy) syncCharacterMaterialCopy(this.sprite, copy);
     }
     this.syncBar();
     this.syncWalkingAnimation();

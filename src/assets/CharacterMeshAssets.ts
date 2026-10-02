@@ -1,6 +1,7 @@
 import type * as Phaser from 'phaser';
 import manifest from './manifests/character-mesh-badger-player-mesh-22-production-r3.json';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
+import { preloadCharacterMaterialAssets, assertCharacterMaterialAssetsReady } from './CharacterMaterialAssets';
 
 export { manifest as CHARACTER_MESH_MANIFEST };
 export type CharacterMeshSpec = (typeof manifest.meshes)[number];
@@ -10,6 +11,7 @@ const decoded = new WeakMap<object, ReadonlyMap<string, CharacterMeshData>>();
 
 /** Binary loader/cache, never an Image/Canvas/PMA or colour-publication path. */
 export function preloadCharacterMeshAssets(scene: Phaser.Scene): void {
+  preloadCharacterMaterialAssets(scene);
   for (const mesh of manifest.meshes) for (const part of ['positions', 'indices'] as const) {
     if (!scene.cache.binary.exists(key(mesh.id, part)))
       scene.load.binary(key(mesh.id, part), runtimeAssetUrl('./' + mesh[part].url));
@@ -43,5 +45,6 @@ export function getCharacterMeshes(scene: Phaser.Scene): ReadonlyMap<string, Cha
   decoded.set(cache, result); return result;
 }
 export function assertCharacterMeshAssetsReady(scene: Phaser.Scene): void {
+  assertCharacterMaterialAssetsReady(scene);
   if (!getCharacterMeshes(scene)) throw new Error('Character mesh buffers are incomplete.');
 }
