@@ -170,7 +170,7 @@ export const PICKUP_RADIUS = 16;
 /** Kantenlänge der Power-Up-Symbole in Spieleinheiten, unabhängig von der Texturauflösung. */
 export const POWERUP_RENDER_SIZE = 22;
 
-export const POWERUP_SYMBOL_PULSE = { amplitude: 0.08, periodMs: 1500 } as const;
+export const POWERUP_SYMBOL_PULSE = { amplitude: 0.03, periodMs: 2400 } as const;
 
 /** Pure presentation: identical time/UID gives identical scale, including pause and step. */
 export function powerUpSymbolScale(uid: number, presentationTimeMs: number): number {
