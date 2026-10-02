@@ -75,34 +75,46 @@ export class TrainVfxController {
 
   resetDestruction(): void { this.disintegrated = false; }
 
-  /** Synchronous full-length flash replaces the now non-colliding train, once per destruction. */
+  /** Brief scattered rupture flashes; the main fireball hides the removal, never a luminous train silhouette. */
   disintegrate(x: number, segments: readonly number[]): void {
     if (this.disintegrated || this.destroyed || this.ports.gpu.isSuppressed()) return;
     this.disintegrated = true;
     const now = this.ports.gpu.now(), factor = this.ports.gpu.quality.getEmissionFactor(Effect.TrainDebris);
+    const view = getVisibleWorldView(this.scene.cameras.main, this.cameraView);
+    const centerY = (view.y + view.bottom) / 2;
+    const heroSegments = new Set(segments.map((y, i) => ({ y, i }))
+      .filter(p => this.visible(x, p.y, 100)).sort((a, b) => Math.abs(a.y - centerY) - Math.abs(b.y - centerY))
+      .slice(0, 4).map(p => p.i));
     for (let i = 0; i < Math.min(segments.length, TRAIN.WAGON_COUNT + 1); i++) {
       const y = segments[i], height = i ? TRAIN.WAGON_HEIGHT : TRAIN.LOCO_HEIGHT;
       const random = trainRandom(trainVfxSeed(x, y, 64));
-      // Fixed overlap, independent of quality: Low must also hide the whole silhouette immediately.
-      const cells = Math.ceil(height / 44);
+      // Sparse, offset islands with gaps: the common flash is gone before the chained fireballs peak.
+      const cells = i ? 3 : 1;
       for (let n = 0; n < cells; n++) {
-        const cy = y - height / 2 + (n + .5) * height / cells;
-        if (!this.visible(x, cy, 140)) continue;
-        this.particle(Effect.TrainHeat, Frame.GroundFireSurfaceC, x, cy, 0, 0, 105, 142, 240, 1, 0xf7791b, now);
-        this.particle(Effect.TrainHeat, Frame.ExplosionCore, x, cy, 0, 0, 82, 105, 85, 1, 0xffedb9, now);
-        this.particle(Effect.TrainSmoke, Frame.ExplosionSmoke, x, cy, 12, -6, 58, 100, 1700, .78, 0x393027, now);
-        this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, x, cy, 0, 0, 55, 78, 9000, .55, 0x211c14, now);
+        const cx = x + (random() - .5) * 58;
+        const cy = y - height / 2 + (n + .5) * height / cells + (random() - .5) * 26;
+        const width = 43 + random() * 37, life = 40 + random() * 18;
+        const vx = (random() - .5) * 100, vy = (random() - .5) * 100;
+        if (!this.visible(cx, cy, 140)) continue;
+        this.particle(Effect.TrainHeat, n % 2 ? Frame.GroundFireSurfaceB : Frame.GroundFireSurfaceC,
+          cx, cy, vx, vy, width, width * .35, life, .95, 0xffbd55, now);
+        if (n % 2 === 0) this.particle(Effect.TrainHeat, Frame.ExplosionCore, cx, cy, vx, vy,
+          width * .6, width * .2, life * .8, .85, 0xffedb9, now);
+        this.particle(Effect.TrainHeat, Frame.ExplosionStreak, cx, cy, vx * 1.5, vy * 1.5,
+          4, .5, 280 + random() * 160, .85, 0xffa438, now);
+        this.particle(Effect.TrainSmoke, Frame.ExplosionSmoke, cx, cy, 12, -6, 38, 85, 1700, .65, 0x393027, now);
+        this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, cx, cy, 0, 0, 40, 66, 9000, .5, 0x211c14, now);
       }
       for (let j = 0; j < 2; j++) {
         const path: TrainChunkPath = { x, y: y + (random() - .5) * height * .7,
           dx: (j ? 1 : -1) * (75 + random() * 90), dy: (random() - .5) * 100,
-          height: 70 + random() * 45, flightMs: 430 + random() * 190, spin: (random() - .5) * 8 };
-        if (j >= Math.ceil(2 * factor) || !this.visible(path.x, path.y, 180) || this.ejections.length >= 26) continue;
+          height: 70 + random() * 45, flightMs: 650 + random() * 140, spin: (random() - .5) * 8 };
+        if (j >= Math.ceil(2 * factor) || !this.visible(path.x, path.y, 180) || !heroSegments.has(i) || this.ejections.length >= 8) continue;
         const body = createGpuVfxMemberHandle(), shadow = createGpuVfxMemberHandle();
         if (!this.particle(Effect.TrainDebris, Frame.ExplosionChunk, path.x, path.y, 0, 0,
-          19, 44, path.flightMs, 1, 0x8a7560, now, now, body)) continue;
+          29, 66, path.flightMs, 1, 0x3e3932, now, now, body)) continue;
         this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, path.x, path.y, 0, 0,
-          12, 40, path.flightMs, .4, 0x171512, now, now, shadow);
+          18, 54, path.flightMs, .65, 0x171512, now, now, shadow);
         this.ejections.push({ ...path, at: now, body, shadow });
       }
     }
