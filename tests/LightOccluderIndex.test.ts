@@ -66,6 +66,20 @@ function collectExposedEdges(
 type AnyBox = any;
 
 describe('LightOccluderIndex', () => {
+  it('prepares before first use and reuses the published index until geometry changes', () => {
+    let sourceReads = 0;
+    const index = new LightOccluderIndex({ rocks: () => { sourceReads++; return []; },
+      trunks: () => [], baseCells: () => [], baseGeneration: () => 0 });
+    index.prepare();
+    const preparedReads = sourceReads;
+    expect(preparedReads).toBeGreaterThan(0);
+    index.prepare();
+    countOccluders(index, 0, 0, 500);
+    expect(sourceReads).toBe(preparedReads);
+    index.markDirty(); index.prepare();
+    expect(sourceReads).toBeGreaterThan(preparedReads);
+  });
+
   it('führt eine monotone Revision für abgeleitete Occlusion-Caches', () => {
     const index = new LightOccluderIndex({
       rocks: () => null,

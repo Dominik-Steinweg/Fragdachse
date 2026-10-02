@@ -109,6 +109,11 @@ export class LightOccluderIndex {
     this.revision += 1;
   }
 
+  /** Publish the initial World index before its render release, even in daylight. */
+  prepare(): void {
+    if (this.dirty || this.sources.baseGeneration() !== this.builtBaseGeneration) this.rebuild();
+  }
+
   /**
    * Änderungsnummer für Konsumenten, die ihre eigene abgeleitete Geometrie cachen.
    * Eine geänderte Basisgeneration wird auch ohne explizites `markDirty()` erkannt.
@@ -133,7 +138,7 @@ export class LightOccluderIndex {
     visitRect: RectOccluderVisitor,
     visitCircle: CircleOccluderVisitor,
   ): void {
-    if (this.dirty || this.sources.baseGeneration() !== this.builtBaseGeneration) this.rebuild();
+    this.prepare();
     if (this.bucketCols === 0 || this.bucketRows === 0) return;
 
     const minCol = Math.max(0, Math.floor((x - radius - this.originX) / BUCKET_SIZE));

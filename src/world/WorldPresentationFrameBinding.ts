@@ -242,6 +242,8 @@ export class WorldPresentationFrameBinding {
   get sunlight(): WorldSunlightPresentation | null { return this.sunlightOwner; }
   bindSunlight(create: () => WorldSunlightPresentation): void {
     if(this.destroyed)return;
+    this.cancelRenderRelease();
+    this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;
     const owner=create();this.sunlightOwner=owner;
     try {this.syncSunlight();}
@@ -537,14 +539,75 @@ export class WorldPresentationFrameBinding {
     train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
   }
 
-  /** View-bezogene World-Readiness fuer Ladebarriere und Boot-Reveal. */
+  private renderGeneration = 0;
+  private releaseView: string | null = null;
+  private releasedView: string | null = null;
+  private releaseListener: (() => void) | null = null;
+  private sceneRenderListener: (() => void) | null = null;
+  private lightingPublished = false;
+  private canopyPublished = false;
+
+  private renderViewKey(view: WorldViewRect): string {
+    return `${view.x},${view.y},${view.width},${view.height}`;
+  }
+
+  private cancelRenderRelease(): void {
+    this.renderGeneration++;
+    if (this.releaseListener) this.input.scene.game.events.off(Phaser.Core.Events.POST_RENDER, this.releaseListener);
+    if (this.sceneRenderListener) this.input.scene.events.off(Phaser.Scenes.Events.RENDER, this.sceneRenderListener);
+    this.releaseListener = null;
+    this.sceneRenderListener = null;
+    this.releaseView = null;
+  }
+
+  /** One local World gate shared by boot reveal and replicated World readiness.
+   * Two actual renders let dependent receivers consume the last published worker/mask result.
+   * No timer, Round resource or callback can survive this active World owner. */
   getWorldRenderWork(view: WorldViewRect): WorldPresentationRenderWork {
+    const work = this.collectWorldRenderWork(view);
+    const key = this.renderViewKey(view);
+    if (!work.renderReady) {
+      this.cancelRenderRelease();
+      this.releasedView = null;
+    } else if (this.releasedView !== key && this.releaseView !== key) {
+      this.cancelRenderRelease();
+      this.releasedView = null;
+      this.releaseView = key;
+      const generation = this.renderGeneration;
+      let frames = 0, sceneRendered = false;
+      this.sceneRenderListener = () => { sceneRendered = true; };
+      this.releaseListener = () => {
+        if (this.destroyed || generation !== this.renderGeneration) return;
+        const currentView = getVisibleWorldView(this.input.scene.cameras.main);
+        if (this.renderViewKey(currentView) !== key || !this.collectWorldRenderWork(currentView).renderReady) {
+          this.cancelRenderRelease();
+          return;
+        }
+        if (!sceneRendered) return;
+        sceneRendered = false;
+        if (++frames < 2) return;
+        this.cancelRenderRelease();
+        this.releasedView = key;
+      };
+      this.input.scene.events.on(Phaser.Scenes.Events.RENDER, this.sceneRenderListener);
+      this.input.scene.game.events.on(Phaser.Core.Events.POST_RENDER, this.releaseListener);
+    }
+    const renderReady = work.renderReady && this.releasedView === key;
+    loadingTimeline.get('world')?.gate('final-world-frame', renderReady);
+    return { ...work, pending: work.pending + (work.renderReady && !renderReady ? 1 : 0), renderReady };
+  }
+
+  /** CPU/GPU publications for the start view plus each surface's residency halo. */
+  private collectWorldRenderWork(view: WorldViewRect): WorldPresentationRenderWork {
     if (this.destroyed) return { pending: 0, resident: 0, renderReady: false };
     const arenaResult = this.input.getArenaResult();
     const groundWork = arenaResult?.groundSurface?.getWorkingSet(view, true) ?? null;
     const rockOverlayWork = arenaResult?.rockOverlaySurface?.getWorkingSet(view, true) ?? null;
     const shadowWork = this.input.shadow.getStaticSurfaceWorkingSet(view, true);
     const waterWork = arenaResult?.waterSurface?.getPreparationState();
+    const rockWork = arenaResult?.rockVisualSystem?.getPreparationState();
+    const sunlightReady = this.sunlightOwner?.isPrepared() ?? true;
+    const framePublished = this.lightingPublished && this.canopyPublished;
     const run = loadingTimeline.get('world');
     if (run && run.endedAt === null) {
       run.gate('ground-chunks', groundWork?.ready === true);
@@ -552,19 +615,24 @@ export class WorldPresentationFrameBinding {
       run.gate('shadow-chunks', shadowWork?.ready === true);
       run.gate('water-masks', !arenaResult?.waterSurface || arenaResult.waterSurface.isPrepared());
       run.gate('fog-field', this.input.groundFog?.getSystem()?.getDiagnostics().status !== 'preparing');
+      run.gate('rock-formation-publication', rockWork?.ready ?? true);
+      run.gate('sun-vegetation-publication', sunlightReady);
+      run.gate('lightmap-canopy-publication', framePublished);
     }
     return {
       pending: (groundWork?.pendingWork ?? 0)
         + (rockOverlayWork?.pendingWork ?? 0)
         + (shadowWork?.pendingWork ?? 0)
-        + (waterWork?.pending ?? 0),
+        + (waterWork?.pending ?? 0) + (rockWork?.pending ?? 0)
+        + (sunlightReady ? 0 : 1) + (framePublished ? 0 : 1),
       resident: (groundWork?.residentChunks ?? 0)
         + (rockOverlayWork?.residentChunks ?? 0)
         + (shadowWork?.residentChunks ?? 0)
-        + (waterWork?.completed ?? 0),
+        + (waterWork?.completed ?? 0) + (rockWork?.resident ?? 0),
       // Surface-Readiness bleibt die Authority; Working-Set-Daten liefern nur den
       // view-bezogenen Fortschritt.
       renderReady: ArenaBuilder.isSurfaceWorkingSetReady(arenaResult, view)
+        && (rockWork?.ready ?? true) && sunlightReady && framePublished
         && this.input.shadow.isStaticReadyForView(view, true)
         && this.input.groundFog?.getSystem()?.getDiagnostics().status !== 'preparing',
     };
@@ -580,6 +648,7 @@ export class WorldPresentationFrameBinding {
       this.input.getLocalPlayerSprite(),
       (worldX, worldY) => this.input.lighting.resolveCanopyTint(worldX, worldY),
     );
+    this.canopyPublished = true;
   }
 
   /** World-lokale Spieler-HUD-Darstellung; Bars bleiben ausserhalb des Arena-Feldes sichtbar. */
@@ -704,6 +773,8 @@ export class WorldPresentationFrameBinding {
     this.input.syncBaseLights(inArena);
     this.input.persistentBasePreview.syncLights(inArena);
     lighting.update();
+    // Lighting.update synchronously refreshes the World occluder index and submits the lightmap.
+    this.lightingPublished = true;
   }
 
   /**
@@ -714,6 +785,8 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.cancelRenderRelease();
+    this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;
     this.fogBinding?.destroy(); this.fogBinding = null;
     this.wildlifePlayers.length = 0;

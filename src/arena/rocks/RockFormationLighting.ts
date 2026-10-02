@@ -462,6 +462,21 @@ export class RockFormationLighting {
     let light=count?sum/count:1;
     return light;
   }
+  /** The current start view includes the bounded residency halo, not the whole map. */
+  getPreparationState(): { ready: boolean; pending: number; resident: number } {
+    const pendingChunks = this.wanted.filter(key => {
+      const chunk = this.resident.get(key);
+      return !chunk?.ready || chunk.dirty || chunk.repair;
+    }).length;
+    const publicationPending = this.busy || this.pending !== null || this.pendingRepair !== null;
+    const pending = pendingChunks + (publicationPending ? 1 : 0);
+    return {
+      ready: !this.disposed && !this.error && !this.overflow && this.viewKey !== '' && pending === 0,
+      pending,
+      resident: this.resident.size,
+    };
+  }
+
   getDiagnostics() {
     return {residentChunks:this.resident.size,pendingChunks:this.wanted.filter(key=>this.resident.get(key)?.dirty).length,
       textureBytes:this.field.width*this.field.height*(this.previous?12:8)+this.lookupData.byteLength+(this.gpuRepair?.textureBytes??0),uploadBytes:this.uploadBytes,

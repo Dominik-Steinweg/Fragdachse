@@ -44,6 +44,24 @@ function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourK
 }
 afterEach(()=>{vi.unstubAllGlobals();vi.clearAllMocks();fake.quads.length=0;});
 describe('formation lighting ownership and incremental updates',()=>{
+  it('waits for halo jobs and publication, including a superseding repair and teardown',()=>{
+    const f=fixture(2048,512);
+    expect(f.lighting.getPreparationState().ready).toBe(false);
+    f.worker.reply();
+    expect(f.lighting.getPreparationState().ready).toBe(false); // Received, not uploaded.
+    f.lighting.tick();settle(f);
+    expect(f.lighting.getPreparationState().ready).toBe(true);
+    f.states[0].active=false;f.lighting.invalidate([0]);f.lighting.tick();
+    expect(f.lighting.getPreparationState().ready).toBe(false);
+    f.worker.reply();
+    expect(f.lighting.getPreparationState().ready).toBe(false);
+    f.lighting.tick();settle(f);
+    expect(f.lighting.getPreparationState().ready).toBe(true);
+    f.lighting.updateView({x:1400,y:0,width:400,height:400});
+    expect(f.lighting.getPreparationState().ready).toBe(false);
+    f.lighting.destroy();
+    expect(f.lighting.getPreparationState().ready).toBe(false);
+  });
   it('lends geometry independently of light debug and rejects stale worker-only repairs',()=>{
     const f=fixture();settle(f);
     const coverage=f.lighting.getCoverageBinding();expect(coverage).not.toBeNull();

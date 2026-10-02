@@ -74,6 +74,7 @@ export class CloudFieldTexture implements CloudFieldBinding {
     loadingTimeline.end('cloud/field-submit',measuredAt);
     this.state.cache=this;this.builds++;
   }
+  isPrepared():boolean {return !this.disposed && (!this.target || this.builds > 0);}
   get diagnostics(){const width=this.target?.shader.width??0,height=this.target?.shader.height??0;
     return {width,height,builds:this.builds,rgbaBytes:width*height*4,canopyBytes:this.canopyBytes,
       worldTexelX:this.world[2]/Math.max(1,width),worldTexelY:this.world[3]/Math.max(1,height)};}

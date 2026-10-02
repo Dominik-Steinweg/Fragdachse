@@ -16,7 +16,7 @@ import { bridge }            from '../../network/bridge';
 import { ArenaBuilder } from '../../arena/ArenaBuilder';
 import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../../arena/ArenaGenerator';
 import { TerrainColorSnapshotBuilder } from '../../arena/TerrainColorSnapshotBuilder';
-import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
+import { getVisibleWorldView, type WorldViewRect } from '../../ui/HostileBaseIndicator';
 import { getLocale, t } from '../../i18n';
 import { getMapName } from '../../i18n/contentPresentation';
 import {
@@ -1797,6 +1797,8 @@ export class ArenaLifecycleCoordinator {
     // Die replizierte Barriere wartet zusaetzlich auf den Terrain-Farb-Snapshot; der Boot-Reveal
     // tut das ausdruecklich nicht (siehe getWorldRevealState).
     this.recordLoadingBarriers(work.renderReady);
+    // renderReady is the World owner's final POST_RENDER release, shared with boot reveal.
+    // Publishing it here also keeps local/late-client countdown fades behind that release.
     const localRenderReady = work.renderReady && this.terrainSnapshotReady
       && this.renderers.gpuVfx.isShaderWarmupComplete() && this.combatPresentationPrepared;
     const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, localRenderReady);
@@ -1877,6 +1879,10 @@ export class ArenaLifecycleCoordinator {
     if (!getDeferredAssets(this.scene).getState().ready) return;
     if (!bridge.areWorldParticipantsLoadReady(true)) return;
     if (!this.prepareRoundStart(Date.now())) return;
+    // Round preparation may dirty World presentation. Revalidate its final frame before
+    // publishing the countdown anchor; a non-rendering host still needs no local GPU gate.
+    if (this.getLocalWorldPresentation().required
+      && !this.getWorldRevealState(getVisibleWorldView(this.scene.cameras.main)).ready) return;
 
     const arenaStartTime = resolveArenaStartTime(Date.now());
     bridge.setArenaStartTime(arenaStartTime);

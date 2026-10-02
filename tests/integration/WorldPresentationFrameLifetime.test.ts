@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import EventEmitter from 'eventemitter3';
 
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('../fakeArenaRenderScene');
-  return createFakePhaserModule();
+  const fake = createFakePhaserModule();
+  return { ...fake, Core: { Events: { POST_RENDER: 'postrender' } },
+    Scenes: { Events: { ...fake.Scenes.Events, RENDER: 'render' } } };
 });
 
 import type { ArenaBuilderResult } from '../../src/arena/ArenaBuilder';
@@ -181,6 +184,44 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  it('releases a complete preview only after rendering; cancels new work, view changes and stale owners', () => {
+    const camera = fakeCamera(), events = new EventEmitter(), gameEvents = new EventEmitter();
+    const scene = Object.assign(fakeScene(camera), { events, game: { events: gameEvents } });
+    const view = () => ({ x: camera.scrollX, y: camera.scrollY, width: camera.width, height: camera.height });
+    let formationReady = false;
+    const surface = { getWorkingSet: () => ({ ready: true, pendingWork: 0, residentChunks: 1 }), isReadyForView: () => true };
+    const arena = { groundSurface: surface, rockOverlaySurface: surface, canopyObjects: [],
+      rockVisualSystem: { getPreparationState: () => ({ ready: formationReady, pending: formationReady ? 0 : 1, resident: 1 }) } };
+    const input = fakeBindingInput(scene as never, { getArenaResult: () => arena as never,
+      getLocalWorldPresentation: () => PREVIEW_PRESENTATION });
+    Object.assign(input.shadow, { isStaticReadyForView: () => true });
+    Object.assign(input.lighting, { getArtificialLightFactor: () => 0, update: vi.fn() });
+    const binding = new WorldPresentationFrameBinding(input);
+    const render = () => { events.emit('render'); gameEvents.emit('postrender'); };
+    binding.syncCanopyTransparency(true);
+    binding.syncWorldLighting(false, false);
+    expect(binding.getWorldRenderWork(view()).renderReady).toBe(false);
+    formationReady = true;
+    expect(binding.getWorldRenderWork(view()).renderReady).toBe(false);
+    gameEvents.emit('postrender'); // Another Scene rendered, this World did not.
+    render();
+    expect(binding.getWorldRenderWork(view()).renderReady).toBe(false);
+    formationReady = false; // Worker repair arrives between the two frames.
+    render();
+    formationReady = true;
+    expect(binding.getWorldRenderWork(view()).renderReady).toBe(false);
+    render(); render();
+    expect(binding.getWorldRenderWork(view()).renderReady).toBe(true);
+    camera.scrollX += 128;
+    expect(binding.getWorldRenderWork(view()).renderReady).toBe(false);
+    const stale = gameEvents.listeners('postrender')[0];
+    binding.destroy();
+    expect(gameEvents.listenerCount('postrender')).toBe(0);
+    expect(events.listenerCount('render')).toBe(0);
+    stale(); render();
+    expect(binding.getWorldRenderWork(view()).renderReady).toBe(false);
+  });
+
   it('drives pickup animation from pausable World time even without fog, and stops at teardown', () => {
     const input = fakeBindingInput(fakeScene());
     const pulse = input.clientWorldPresentation.powerUp.updatePresentation;
@@ -198,7 +239,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
   it('feeds ground fog the displayed train pose and disconnects it when hidden or destroyed', () => {
     const gpuScene = makeFakeGpuVfxScene();
     const scene = Object.assign(gpuScene, { cameras: { main: fakeCamera() } });
-    const fog = { captureMotion: vi.fn(), captureTrain: vi.fn(), setSurfaceImages: vi.fn(), update: vi.fn() };
+    const fog = { captureMotion: vi.fn(), captureTrain: vi.fn(), setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn() };
     const pose = { alive: true, x: 500, y: 700, dir: 1 as const, hp: 100, maxHp: 100 };
     const visual = { getShadowState: vi.fn(() => pose), computeSegYs: vi.fn(() => [700, 500, 240]) };
     const input = fakeBindingInput(scene as never, {

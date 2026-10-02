@@ -73,6 +73,8 @@ export class RockVisualStateStore {
     return ids;
   }
 
+  get pendingChanges(): number { return this.dirtyIds.size; }
+
   clearDirty(): void {
     this.dirtyIds.clear();
   }

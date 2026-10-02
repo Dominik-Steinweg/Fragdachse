@@ -5,7 +5,7 @@ vi.mock('../../src/arena/trees/CanopyLighting',()=>({CanopyLighting:class {
  constructor(){resources.canopies.add(this);}setClouds(){}setLighting(){}update(){}destroy(){resources.canopies.delete(this);}
 }}));
 vi.mock('../../src/effects/sunlight/WorldSunComposite',()=>({WorldSunComposite:class {
- diagnostics={}; constructor(){resources.fields.add(this);}setEnabled(){}prepareClouds(){}destroy(){resources.fields.delete(this);}
+ diagnostics={}; constructor(){resources.fields.add(this);}isPrepared(){return true;}setEnabled(){}prepareClouds(){}destroy(){resources.fields.delete(this);}
 }}));
 vi.mock('../../src/arena/WoodlandEcologyRenderer',()=>({WoodlandEcologyRenderer:class {
  count=0;constructor(){resources.flora.add(this);}update(){}destroy(){resources.flora.delete(this);}
@@ -39,6 +39,14 @@ function fixture(){
 function expectEmpty(){expect(resources.canopies.size+resources.fields.size+resources.flora.size).toBe(0);}
 
 describe('Sonnenwald production World lifetime',()=>{
+ it('publishes ecology only after water masks and revokes readiness on destruction',()=>{
+  const f=fixture();let waterReady=false;
+  f.targets.water.isPrepared=()=>waterReady;
+  const owner=new WorldSunlightPresentation(f.scene as never,f.targets as never);
+  owner.update(480,0);expect(owner.isPrepared()).toBe(false);expect(resources.flora.size).toBe(0);
+  waterReady=true;owner.update(480,0);expect(owner.isPrepared()).toBe(true);expect(resources.flora.size).toBe(1);
+  owner.destroy();expect(owner.isPrepared()).toBe(false);expectEmpty();f.quality.destroy();
+ });
  it.each([['A','B','A'],['Lobby','Arena','Lobby']])('unbinds before handoff and rebinds %s -> %s -> %s',(...names)=>{
   const f=fixture(),handoff=new WorldPresentationHandoff();let previous:WorldSunlightPresentation|null=null;
   for(let i=0;i<names.length;i++){

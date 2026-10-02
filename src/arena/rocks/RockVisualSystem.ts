@@ -98,6 +98,14 @@ export class RockVisualSystem {
     this.relief.mineralResponse=true;this.relief.clouds=clouds;
   }
   getFormationDiagnostics() { return this.formation ? {...this.formation.getDiagnostics(), presentationCpuMs:this.presentationCpuMs} : null; }
+  getPreparationState(): { ready: boolean; pending: number; resident: number } {
+    const formation = this.formation?.getPreparationState();
+    return {
+      ready: this.view !== null && this.store.pendingChanges === 0 && (formation?.ready ?? true),
+      pending: this.store.pendingChanges + (formation?.pending ?? 0),
+      resident: formation?.resident ?? 0,
+    };
+  }
   setDebugFormationSuppressed(surface: boolean, ground: boolean, foliage: boolean): void {
     this.formation?.setDebugSuppressed(surface,ground,foliage);
   }

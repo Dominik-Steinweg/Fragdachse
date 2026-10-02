@@ -270,6 +270,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       barrierCells: getBarrierObstacles,
       baseGeneration: () => this.input.baseManager?.getObstacleGeneration() ?? 0,
     });
+    index.prepare();
     materialization.setLightOccluders(index);
     this.input.lighting.setOccluderIndex(index);
     return index;

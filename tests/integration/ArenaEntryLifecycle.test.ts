@@ -452,15 +452,23 @@ describe('Lobby exit gates local Arena work', () => {
     f.events.emit('postrender'); f.flow.syncArenaEntryTransition();
     const scene = Object.create(ArenaScene.prototype) as any;
     Object.assign(f.countdown, { update: vi.fn(), syncTo: vi.fn(), isLoading: () => true });
+    let finalFrame = false;
+    vi.spyOn(f.flow, 'getWorldRevealState').mockImplementation(() => ({ ready: finalFrame, progress: 99 }));
     Object.assign(scene, { initializationReady: true, ctx: f.flow.ctx, arenaRuntime: f.flow,
+      cameras: { main: { width: 100, height: 100, zoom: 1, originX: 0, originY: 0, scrollX: 0, scrollY: 0 } },
       localPlayerState: { alive: true }, getArenaLoadingScreenState: () => ({}) });
     vi.spyOn(bridge, 'isArenaLoading').mockReturnValue(false);
     vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(true);
+    vi.spyOn(bridge, 'getArenaStartTime').mockReturnValue(1234);
     scene.syncArenaFogOverlay(1000, true, false);
     expect(f.countdown.syncTo).not.toHaveBeenCalled();
     f.flow.localArenaLoadReady = true;
     scene.syncArenaFogOverlay(1000, true, false);
+    expect(f.countdown.syncTo).not.toHaveBeenCalled();
+    finalFrame = true;
+    scene.syncArenaFogOverlay(1000, true, false);
     expect(f.countdown.syncTo).toHaveBeenCalledOnce();
+    expect(f.countdown.syncTo).toHaveBeenCalledWith(1234);
   });
 
   it('does not replay the entry reveal when streaming becomes pending after initial readiness', () => {
@@ -485,6 +493,7 @@ describe('Lobby exit gates local Arena work', () => {
     });
     const scene = Object.create(ArenaScene.prototype) as any;
     Object.assign(scene, { initializationReady: true, ctx: f.flow.ctx, arenaRuntime: f.flow,
+      cameras: { main: { width: 100, height: 100, zoom: 1, originX: 0, originY: 0, scrollX: 0, scrollY: 0 } },
       localPlayerState: { alive: true }, getArenaLoadingScreenState: () => ({}) });
     vi.spyOn(bridge, 'isArenaLoading').mockReturnValue(false);
     vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(true);
@@ -507,6 +516,28 @@ describe('Lobby exit gates local Arena work', () => {
     renderReady = true;
     frame();
     expect(f.countdown.syncTo).toHaveBeenCalledOnce();
+  });
+
+  it.each([true, false])('revalidates the final frame after Round preparation (local presentation: %s)', required => {
+    const f = fixture(true);
+    let ready = true, prepared = false;
+    Object.assign(f.flow, {
+      getLocalWorldPresentation: () => ({ required }),
+      prepareRoundStart: vi.fn(() => { if (!prepared) { ready = false; prepared = true; } return true; }),
+      getWorldRevealState: vi.fn(() => ({ ready, progress: ready ? 100 : 99 })),
+      resolveRoundEndTime: () => 9999, syncAuthoritativeRoundStartAnchors: vi.fn(),
+    });
+    f.scene.cameras = { main: { width: 100, height: 100, zoom: 1, originX: 0, originY: 0, scrollX: 0, scrollY: 0 } };
+    vi.spyOn(bridge, 'areWorldParticipantsLoadReady').mockReturnValue(true);
+    const start = vi.spyOn(bridge, 'setArenaStartTime').mockImplementation(() => {});
+    vi.spyOn(bridge, 'setRoundEndTime').mockImplementation(() => {});
+    vi.spyOn(bridge, 'publishRoundState').mockImplementation(() => {});
+    f.flow.tryScheduleArenaStart();
+    if (required) {
+      expect(start).not.toHaveBeenCalled();
+      ready = true; f.flow.tryScheduleArenaStart();
+    } else expect(f.flow.getWorldRevealState).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledOnce();
   });
 
   it('removes the pending render continuation on Scene shutdown', () => {

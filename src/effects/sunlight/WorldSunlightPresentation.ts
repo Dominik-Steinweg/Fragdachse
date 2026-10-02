@@ -90,6 +90,11 @@ export class WorldSunlightPresentation {
   this.lastMinute=this.atmosphereClock.resolve(minutes,this.lastSceneTime);
   this.sync();
  }
+ /** Water masks precede ecology; canopy/cloud fields and the composite must also be published. */
+ isPrepared():boolean {
+  return !this.disposed && this.gradeBound && this.woodland !== null
+   && this.woodlandLayout === this.targets.layout && this.sunComposite?.isPrepared() === true;
+ }
  tuneSun(values:unknown,reset=false):void {
   if(this.disposed)return;
   if(reset)for(const key of Object.keys(this.sunOverrides))delete this.sunOverrides[key as keyof SunTuning];

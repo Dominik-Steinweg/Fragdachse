@@ -1582,9 +1582,9 @@ export class ArenaScene extends Phaser.Scene {
     // Baumkronen haengen an der Darstellung, nicht an der Runde: der Abgleich ist rein lokal und
     // kennt weder Activity noch Rundenphase. Deshalb blenden sie ueber der eigenen Figur auch in
     // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
-    if (presentationPolicy.showWorld) {
+    if (prepareWorldSurfaces) {
       diagnosticsFrame?.begin('leaderboardCanopy');
-      this.arenaRuntime.presentation.syncWorldCanopy(presentationPolicy.showWorld);
+      this.arenaRuntime.presentation.syncWorldCanopy(prepareWorldSurfaces);
       diagnosticsFrame?.end('leaderboardCanopy');
     }
 
@@ -1607,8 +1607,10 @@ export class ArenaScene extends Phaser.Scene {
       getVisibleWorldView(this.cameras.main),
     );
     this.visualFeedback?.weaponFire.update();
-    this.arenaRuntime.presentation.syncConstructionOwnership(presentationPolicy.showWorld);
-    this.arenaRuntime.presentation.syncGroundFog(delta, presentationPolicy.showWorld);
+    // Publish World layers behind the opaque entry veil too. Visibility must not be a
+    // prerequisite for the same final render release that permits the veil to fade.
+    this.arenaRuntime.presentation.syncConstructionOwnership(prepareWorldSurfaces);
+    this.arenaRuntime.presentation.syncGroundFog(delta, prepareWorldSurfaces);
     this.renderers.gpuVfx.update(delta);
     const inArena = presentationPolicy.showWorld;
     // Eine Preview zeigt die Welt, ohne dass dieser Peer in ihr steht. Zielhilfe, Systemcursor
@@ -1696,7 +1698,7 @@ export class ArenaScene extends Phaser.Scene {
     const shadowArenaActive = inArena || (inGame && !terminated);
     this.arenaRuntime.presentation.syncWorldShadows(shadowArenaActive, inRoundWorld);
     diagnosticsFrame?.end('shadow');
-    this.arenaRuntime.presentation.syncWorldLighting(inArena, inRoundWorld);
+    this.arenaRuntime.presentation.syncWorldLighting(prepareWorldSurfaces, inRoundWorld);
 
     // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
     // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
@@ -2294,7 +2296,9 @@ export class ArenaScene extends Phaser.Scene {
 
     // A late join can receive the running round before its own World is resident. Keep the
     // existing loading veil until local readiness, then use the unchanged synchronized time.
-    if (bridge.isArenaLoading() || this.arenaRuntime.isArenaEntryLoading()) {
+    if (bridge.isArenaLoading() || this.arenaRuntime.isArenaEntryLoading()
+      || (this.ctx.arenaCountdown.isLoading()
+        && !this.arenaRuntime.getWorldRevealState(getVisibleWorldView(this.cameras.main)).ready)) {
       this.localPlayerState.overlayTrackedAlive = null;
       this.ctx.arenaCountdown.showLoading();
       this.ctx.arenaCountdown.updateLoadingScreen(this.getArenaLoadingScreenState());

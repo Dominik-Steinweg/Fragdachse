@@ -101,6 +101,10 @@ export class WorldSunComposite {
     this.cloudField=clouds?new CloudFieldTexture(scene,clouds,canopies):null;
   }
   prepareClouds(x:number,y:number,width:number,height:number):void { this.cloudField?.update(x,y,width,height); }
+  isPrepared():boolean {
+    return this.composite !== null && this.sizes.composite.every(size => size > 0)
+      && (this.cloudField?.isPrepared() ?? true);
+  }
   get diagnostics() { return { quality:getGraphicsQualityProfile(this.scene).level,
     composite:this.sizes.composite.slice(),clouds:this.cloudField?.diagnostics??null }; }
   setEnabled(composite: boolean): void {
