@@ -1,4 +1,5 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
+import { prepareEnemyMeshWarmups, subscribeEnemyMeshWarmup } from '../EnemyMeshWarmup';
 import * as Phaser from 'phaser';
 import { configureGpuLayerCameraTransform } from '../../graphics/GpuLayerCameraTransform';
 import { GPU_VFX_ATLAS_KEY, GpuVfxFrameId, buildGpuVfxAtlas, getGpuVfxFrame } from './GpuVfxAtlas';
@@ -18,6 +19,7 @@ import type { GpuVfxSpawnSpec } from './GpuVfxSpawnSpec';
 import { GpuFlightRibbonStore, type FlightRibbonHandle, type FlightRibbonStyle } from './GpuFlightRibbon';
 import { createFlightRibbonLayer, type FlightRibbonLayer } from './GpuFlightRibbonLayer';
 import type { ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
+import type { ShaderWarmupProbe } from '../../graphics/ShaderWarmupProbe';
 
 /**
  * GpuVfxSystem – das gemeinsame GPU-VFX-Backend einer Szene.
@@ -162,10 +164,12 @@ export class GpuVfxSystem {
    * Phaser compiles the final feature combination on the first `run()`.
    */
   private shaderWarmupLane = 0;
+  private readonly shaderWarmupProbes: ShaderWarmupProbe[];
   private shaderWarmupActive = false;
   private shaderWarmupState: GpuVfxShaderWarmupState = 'inactive';
   private shaderWarmupWarningIssued = false;
   private shaderWarmupShutdownRegistered = false;
+  private releaseEnemyMeshWarmup: (() => void) | null = null;
   private readonly stopShaderWarmupOnShutdown = (): void => { this.stopShaderWarmup(); };
   private readonly runShaderWarmup = (): void => {
     if (!this.shaderWarmupActive) return;
@@ -178,6 +182,8 @@ export class GpuVfxSystem {
 
     const measuredAt = loadingTimeline.start();
     const lane = this.lanes[this.shaderWarmupLane];
+    const probeOffset = this.lanes.length + (this.ribbonLayer ? 1 : 0);
+    const probe = this.shaderWarmupProbes[this.shaderWarmupLane - probeOffset];
     // `getClone()` copies the base state. The next camera render obtains another clone from the
     // untouched base context, so the probe's color mask/scissor cannot leak into the real frame.
     const context = renderer.baseDrawingContext.getClone();
@@ -194,11 +200,10 @@ export class GpuVfxSystem {
       // With KHR_parallel_shader_compile Phaser returns null while the link is pending. Keep
       // this lane selected until its actual program suite is resident in the ProgramManager.
       const ready = lane ? lane.layer.submitterNode.programManager.getCurrentProgramSuite()
-        : this.ribbonLayer?.prepare(context) ?? true;
+        : probe ? probe.prepare(context) : this.ribbonLayer?.prepare(context) ?? true;
       if (ready) {
-        this.shaderWarmupLane += 1;
-        if (this.shaderWarmupLane > this.lanes.length
-          || this.shaderWarmupLane === this.lanes.length && !this.ribbonLayer) {
+        this.shaderWarmupLane = Math.min(this.shaderWarmupLane + 1, probeOffset + this.shaderWarmupProbes.length);
+        if (this.shaderWarmupLane >= probeOffset + this.shaderWarmupProbes.length && prepareEnemyMeshWarmups(this.scene)) {
           this.shaderWarmupState = 'complete';
           this.stopShaderWarmup();
         }
@@ -209,14 +214,15 @@ export class GpuVfxSystem {
       this.failShaderWarmup(error);
     } finally {
       context.release();
-      loadingTimeline.end('vfx/shader-warmup-submit', measuredAt);
+      loadingTimeline.end(probe ? `vfx/shader-warmup-${probe.name}` : 'vfx/shader-warmup-submit', measuredAt);
     }
   };
   /** Invalidates not-yet-emitted commands when live effects are forcibly cleared. */
   get emissionGeneration(): number { return this.generation; }
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, shaderWarmupProbes: readonly ShaderWarmupProbe[] = []) {
     this.scene = scene;
+    this.shaderWarmupProbes = [...shaderWarmupProbes];
     // Der Atlas muss vollstaendig sein, bevor die erste Lane entsteht: `frameDataTexture` wird im
     // Konstruktor des Layers gebaut, spaeter ergaenzte Frames existieren fuer den Shader nicht.
     buildGpuVfxAtlas(scene);
@@ -274,6 +280,9 @@ export class GpuVfxSystem {
     // Register after all lanes exist. Each PRE_RENDER pass probes one lane through its actual
     // SpriteGPULayer submitter, moving first-use shader work out of the combat path.
     this.startShaderWarmup();
+    this.releaseEnemyMeshWarmup = subscribeEnemyMeshWarmup(scene, () => {
+      if (!this.shaderWarmupActive) this.startShaderWarmup();
+    });
   }
 
   private startShaderWarmup(): void {
@@ -298,6 +307,7 @@ export class GpuVfxSystem {
       this.shaderWarmupShutdownRegistered = false;
       this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.stopShaderWarmupOnShutdown, this);
     }
+    for (const probe of this.shaderWarmupProbes.splice(0)) probe.destroy();
   }
 
   private failShaderWarmup(reason: unknown): void {
@@ -611,6 +621,7 @@ export class GpuVfxSystem {
 
   destroy(): void {
     this.previewSpawnObserver = null;
+    this.releaseEnemyMeshWarmup?.(); this.releaseEnemyMeshWarmup = null;
     this.stopShaderWarmup();
     this.releaseAll();
     this.ribbonLayer?.image.destroy();

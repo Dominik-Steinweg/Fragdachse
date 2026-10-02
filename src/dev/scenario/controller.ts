@@ -1,4 +1,5 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
+import { EnemyMeshReview } from './EnemyMeshReview';
 import { setCharacterMaterialSuppressed, setCharacterMaterialView, characterMaterialStatus } from '../../effects/CharacterMaterialLighting';
 import { WorldLightingMeasurement } from './WorldLightingMeasurement';
 import type * as Phaser from 'phaser';
@@ -35,6 +36,19 @@ export class DevScenarioController {
   zoom = 1;
   cameraAtTarget = false;
   private worldLighting: WorldLightingMeasurement | null = null;
+  private enemyMeshReview: EnemyMeshReview | null = null;
+  arrangeEnemyMeshReview(count: number, pose: number): void {
+    if (this.enemyMeshReview?.count === count) { this.enemyMeshReview.setPose(pose); return; }
+    this.requireReady(); this.clearEnemies(); this.stop();
+    this.enemyMeshReview = new EnemyMeshReview(this.scene, this.runtime);
+    this.enemyMeshReview.arrange(count, pose);
+    this.cameraAtTarget = false; this.zoom = count <= 8 ? 2 : .85;
+    this.syncCamera();
+  }
+  measureEnemyMeshReview(mesh: boolean): void {
+    this.requireReady(); if (!this.enemyMeshReview) throw Error('Arrange enemyMeshReview first');
+    this.enemyMeshReview.measure(mesh);
+  }
   private debugTargets: ReturnType<ArenaRuntime['getScenarioLightingTargets']> | null = null;
   private trigger: WeaponSlot | null = null;
   private inputStarted = false;
@@ -89,6 +103,7 @@ export class DevScenarioController {
   }
   start(value: unknown): void {
     const config = parseScenario(value);
+    this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
     this.clearRenderDebug();
     const run = loadingTimeline.begin('scenario', String(performance.now()));
     run.gate('lobby', false); run.gate('scenario-setup', false);
@@ -294,6 +309,7 @@ export class DevScenarioController {
     this.syncCamera(); this.lastAction = { enemyReadability: placements };
   }
   clearEnemies(): void {
+    this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
     this.requireReady(); this.runtime.navigationLabPort.removeEnemies(); this.pinned.clear();
     this.config.enemies = []; this.saveLink();
   }
@@ -700,6 +716,9 @@ export class DevScenarioController {
       sunTuning: { ...(this.worldLighting?.sunTuning ?? SUN_TUNING_DEFAULTS) },
       sun: this.worldLighting?.sunStatus ?? null,
       characterShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().sunlight?.getCharacterShadowsStatus() ?? null : null,
+      enemyMeshShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().shadow?.getEnemyShadowsStatus() ?? null : null,
+      enemyMeshMeasurement: this.enemyMeshReview?.measurement ?? null,
+      enemyMeshFixture: this.enemyMeshReview?.inspect() ?? null,
       enemyContour: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().enemyReadability.getDiagnostics() : null,
       characterMaterial: characterMaterialStatus(this.scene),
       worldLightingMeasurement:this.worldLightingMeasurement(),
@@ -758,6 +777,7 @@ export class DevScenarioController {
   }
   destroy(): void {
     if (this.disposed) return;
+    this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
     this.clearRenderDebug();
     loadingTimeline.get('scenario')?.finish('cancelled');
     this.disposed = true; this.stop(); bridge.setDevScenarioPlayerFreeForAll(false); clearInterval(this.refreshTimer);

@@ -481,7 +481,7 @@
       "gameIds": [
         "zombie-badger"
       ],
-      "revision": "v2-claw-leap-a",
+      "revision": "enemy-mesh-r1-010",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_zombie_badger",
@@ -557,8 +557,8 @@
         }
       ],
       "hashes": {
-        "idle": "eee4ef0fa441302c76f4529f4c1275f4469a09f986ad71f380dff87540d78be9",
-        "sheet": "986ced3550c4fecc7051bf63ddc63b4dde3439488d69d15373fb78baeb982110"
+        "idle": "e12cef861ab6c7c6e1514b2068ef76921eb9f515161bff630e14ef7eb50c931f",
+        "sheet": "08f6b4ccf06f90603620c6931506e79c107107a257bb65bf00cff154a719e3f7"
       },
       "eyeAnchors": {
         "version": 1,
@@ -1061,11 +1061,11 @@
           }
         ],
         "source": {
-          "revision": "v2-claw-leap-a",
+          "revision": "enemy-mesh-r1-010",
           "variant": "standard",
-          "blendSha256": "64f016c0aebf000645662912a10081d5fb34aa33d69d5e8c13f8bab7e1c9d5f9",
-          "sheetSha256": "986ced3550c4fecc7051bf63ddc63b4dde3439488d69d15373fb78baeb982110",
-          "idleSha256": "eee4ef0fa441302c76f4529f4c1275f4469a09f986ad71f380dff87540d78be9"
+          "blendSha256": "7e321f634ec7582bf14e81f3ef5a957113f11612a5b0715ea7b2bd78c8684dd9",
+          "sheetSha256": "08f6b4ccf06f90603620c6931506e79c107107a257bb65bf00cff154a719e3f7",
+          "idleSha256": "e12cef861ab6c7c6e1514b2068ef76921eb9f515161bff630e14ef7eb50c931f"
         }
       }
     },
@@ -1669,7 +1669,7 @@
       "gameIds": [
         "rabid-badger"
       ],
-      "revision": "v2-claw-leap-a",
+      "revision": "enemy-mesh-r1-010",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "enemy_rabid_badger",
@@ -1745,8 +1745,8 @@
         }
       ],
       "hashes": {
-        "idle": "16650dce5fbd682482072546f917987855fe1741508433dd2f5da2553f6aeca9",
-        "sheet": "84446361a9fc74301ef72cff6d02cf67f5eedcba0386284045b3651ce35879e4"
+        "idle": "be7e1426aa8efd81bfb38fe6cb6a378fba693657f8d038ed8191eff82935fac4",
+        "sheet": "ce342a9c9832a757891adba2fce04f8eb50fcf2c93b6f67307a95a83070a1fc2"
       },
       "eyeAnchors": {
         "version": 1,
@@ -2249,11 +2249,11 @@
           }
         ],
         "source": {
-          "revision": "v2-claw-leap-a",
+          "revision": "enemy-mesh-r1-010",
           "variant": "standard",
-          "blendSha256": "df059ddeaf41e677f3877acff637cc868816934d4afb81d1a8a7a4e7006d94df",
-          "sheetSha256": "84446361a9fc74301ef72cff6d02cf67f5eedcba0386284045b3651ce35879e4",
-          "idleSha256": "16650dce5fbd682482072546f917987855fe1741508433dd2f5da2553f6aeca9"
+          "blendSha256": "36e537c8b542864d1fcd3d96531d052ad3bf955bc6ad3b0d57a91479d57bd20f",
+          "sheetSha256": "ce342a9c9832a757891adba2fce04f8eb50fcf2c93b6f67307a95a83070a1fc2",
+          "idleSha256": "be7e1426aa8efd81bfb38fe6cb6a378fba693657f8d038ed8191eff82935fac4"
         }
       }
     },

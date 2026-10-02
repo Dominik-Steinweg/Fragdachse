@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import { configureGpuLayerCameraTransform } from '../graphics/GpuLayerCameraTransform';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { getEmissiveScale } from './EmissiveScale';
@@ -16,6 +17,7 @@ export class EnemyReadabilityRenderer {
   private readonly member: Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member> = {};
   private suppressed = false;
   private destroyed = false;
+  private warmupLayer: Phaser.GameObjects.SpriteGPULayer | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -38,7 +40,7 @@ export class EnemyReadabilityRenderer {
       this.visible.push(enemy);
       const key = this.key(enemy);
       this.counts.set(key, (this.counts.get(key) ?? 0) + 1);
-      if (!this.layers.has(key)) this.layers.set(key, this.createLayer(enemy));
+      if (!this.layers.has(key)) this.layers.set(key, this.createLayer(s));
     }
     for (const [key, count] of this.counts) {
       const layer = this.layers.get(key)!;
@@ -69,6 +71,10 @@ export class EnemyReadabilityRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.clear();
+    if (this.warmupLayer) {
+      disposeShaderWarmupNode(this.warmupLayer.submitterNode);
+      this.warmupLayer.destroy(); this.warmupLayer = null;
+    }
     for (const layer of this.layers.values()) layer.destroy();
     this.layers.clear(); this.destroyed = true;
   }
@@ -80,8 +86,18 @@ export class EnemyReadabilityRenderer {
 
   private key(enemy: EnemyVisualSource): string { return `${enemy.sprite.texture.key}:${enemy.sprite.depth}`; }
 
-  private createLayer(enemy: EnemyVisualSource): Phaser.GameObjects.SpriteGPULayer {
-    const s = enemy.sprite;
+  /** Same submitter/features as a live enemy; sheet, depth and pose only change data/uniforms. */
+  prepareShader(context: Phaser.Renderer.WebGL.DrawingContext): boolean {
+    if (!this.warmupLayer) {
+      this.warmupLayer = this.createLayer({ texture: this.scene.textures.get('__WHITE'), depth: 0 }).setVisible(false);
+      this.warmupLayer.addMember({ x: 0, y: 0, scaleX: 1, scaleY: 1, alpha: 0 });
+    }
+    const node = this.warmupLayer.submitterNode;
+    node.run(context);
+    return !!node.programManager.getCurrentProgramSuite();
+  }
+
+  private createLayer(s: Pick<Phaser.GameObjects.Sprite, 'texture' | 'depth'>): Phaser.GameObjects.SpriteGPULayer {
     const layer = new Phaser.GameObjects.SpriteGPULayer(this.scene, s.texture, 32);
     configureGpuLayerCameraTransform(layer);
     layer.setDepth(s.depth - 0.001).setName(`enemy-contour:${s.texture.key}`).setBlendMode(Phaser.BlendModes.NORMAL);

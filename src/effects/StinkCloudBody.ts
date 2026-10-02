@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import type { DamageZoneVisualStyle } from '../types';
 import { registerGraphicsObject } from './EffectUtils';
 import { STINK_FRAGMENT_SOURCE, STINK_SHADER_NAME } from './stinkCloudShader';
@@ -49,5 +50,17 @@ export class StinkCloudBody {
     this.quad.setPosition(x, y).setSize(radius * 2, radius * 2).setOrigin(.5).setVisible(visible);
   }
 
+  /** Run the real body shader while the loading owner masks writes to the framebuffer. */
+  prepareShader(context: Phaser.Renderer.WebGL.DrawingContext): boolean {
+    // Phaser's runtime accepts no parent; its 4.2.1 declaration incorrectly requires one.
+    this.quad.renderNode.run(context, this.quad, undefined as unknown as Phaser.GameObjects.Components.TransformMatrix);
+    return !!this.quad.renderNode.programManager.getCurrentProgramSuite();
+  }
+
   destroy(): void { this.quad.destroy(); }
+
+  destroyShaderProbe(): void {
+    disposeShaderWarmupNode(this.quad.renderNode);
+    this.destroy();
+  }
 }

@@ -45,6 +45,12 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'enemyMeshReview': {
+      const count = number(c.count ?? 4, 1, 500), pose = number(c.pose ?? -1, -1, 30);
+      if (!Number.isInteger(count) || !Number.isInteger(pose)) throw Error('Integer count/pose required');
+      controller.arrangeEnemyMeshReview(count, pose); break;
+    }
+    case 'measureEnemyMesh': controller.measureEnemyMeshReview(boolean(c.mesh)); break;
     case 'depthReferenceScene':
       return runDepthReferenceScene(controller, c, command => runScenarioCommand(controller, command));
     case 'status': return;

@@ -8,7 +8,7 @@ import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
-import { getDeferredAssets } from '../assets/DeferredAssets';
+import { getDeferredAssets, preloadDeferredImages } from '../assets/DeferredAssets';
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import { preloadAttackDroneAssets } from '../effects/AttackDroneRenderer';
@@ -350,6 +350,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadAllAudio(this.load);
     preloadForestAssets(this.load);
     preloadForestModalAssets(this.load);
+    preloadDeferredImages(this.load);
     preloadHudFrameAssets(this.load);
     preloadRadialWheelAssets(this.load);
     preloadGroundMaterials(this.load);

@@ -22,6 +22,7 @@ import { GPU_VFX_EFFECTS, GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffect
 import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { GpuVfxSystem, admitGpuVfxSpawn } from '../src/effects/gpu/GpuVfxSystem';
 import * as flightRibbonLayer from '../src/effects/gpu/GpuFlightRibbonLayer';
+import { registerEnemyMeshWarmup } from '../src/effects/EnemyMeshWarmup';
 import { FLIGHT_SIGNATURE_PROFILES } from '../src/projectile/FlightSignature';
 import { createGpuVfxMemberHandle } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
@@ -296,6 +297,70 @@ describe('gpu vfx system: lanes', () => {
     expect(events.count('prerender')).toBe(0);
     expect(events.count('shutdown')).toBe(0);
     system.destroy();
+  });
+
+  it.each(['complete', 'shutdown', 'failure', 'destroy'] as const)(
+    'owns additional probes through pending links and releases them once on %s', outcome => {
+      const scene = makeFakeGpuVfxScene(), events = makeWarmupEvents(), context = makeWarmupContext();
+      Object.assign(scene, { events, cameras: { main: {} }, renderer: { baseDrawingContext: { getClone: () => context } } });
+      const addLayer = scene.add.spriteGPULayer;
+      scene.add.spriteGPULayer = ((key: string, size: number) => Object.assign(addLayer(key, size), {
+        submitterNode: { run() {}, programManager: { getCurrentProgramSuite: () => ({}) } },
+      })) as typeof scene.add.spriteGPULayer;
+      const prepare = vi.fn(() => false), destroy = vi.fn();
+      const next = { name: 'next', prepare: vi.fn(() => true), destroy: vi.fn() };
+      const system = new GpuVfxSystem(scene as never, [{ name: 'pending', prepare, destroy }, next]);
+      for (let i = 0; i < GPU_VFX_LANES.length; i++) events.emit('prerender');
+      expect(prepare).not.toHaveBeenCalled();
+      events.emit('prerender'); events.emit('prerender');
+      expect(system.isShaderWarmupComplete()).toBe(false);
+      expect(next.prepare).not.toHaveBeenCalled(); expect(destroy).not.toHaveBeenCalled();
+      expect(prepare).toHaveBeenCalledWith(context);
+      if (outcome === 'complete') {
+        prepare.mockReturnValue(true); events.emit('prerender');
+        expect(system.isShaderWarmupComplete()).toBe(false);
+        events.emit('prerender'); expect(system.getShaderWarmupState()).toBe('complete');
+      } else if (outcome === 'shutdown') events.emit('shutdown');
+      else if (outcome === 'destroy') system.destroy();
+      else {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        prepare.mockImplementation(() => { throw Error('probe failure'); }); events.emit('prerender');
+        expect(system.getShaderWarmupState()).toBe('failed');
+      }
+      const calls = prepare.mock.calls.length;
+      events.emit('prerender'); events.emit('shutdown');
+      expect(prepare).toHaveBeenCalledTimes(calls);
+      expect(destroy).toHaveBeenCalledTimes(1); expect(next.destroy).toHaveBeenCalledTimes(1);
+      expect(events.count('prerender')).toBe(0); expect(events.count('shutdown')).toBe(0);
+      expect(context.setColorWritemask).toHaveBeenCalledWith(false, false, false, false);
+      expect(context.releases).toBe(GPU_VFX_LANES.length + calls + next.prepare.mock.calls.length);
+      if (outcome !== 'destroy') system.destroy();
+      expect(destroy).toHaveBeenCalledTimes(1);
+    });
+
+  it('keeps world mesh probes in the ready barrier and can wake without recreating disposed combat probes', () => {
+    const scene = makeFakeGpuVfxScene(), events = makeWarmupEvents(), context = makeWarmupContext();
+    Object.assign(scene, { events, cameras: { main: {} }, renderer: { baseDrawingContext: { getClone: () => context } } });
+    const addLayer = scene.add.spriteGPULayer;
+    scene.add.spriteGPULayer = ((key: string, size: number) => Object.assign(addLayer(key, size), {
+      submitterNode: { run() {}, programManager: { getCurrentProgramSuite: () => ({}) } },
+    })) as typeof scene.add.spriteGPULayer;
+    const probe = { name: 'combat', prepare: vi.fn(() => true), destroy: vi.fn() };
+    const system = new GpuVfxSystem(scene as never, [probe]);
+    let meshReady = false;
+    const mesh = vi.fn(() => meshReady), release = registerEnemyMeshWarmup(scene as never, mesh);
+    for (let i = 0; i <= GPU_VFX_LANES.length; i++) events.emit('prerender');
+    expect(probe.prepare).toHaveBeenCalledOnce(); expect(mesh).toHaveBeenCalledOnce();
+    expect(system.isShaderWarmupComplete()).toBe(false); expect(probe.destroy).not.toHaveBeenCalled();
+    meshReady = true; events.emit('prerender');
+    expect(system.getShaderWarmupState()).toBe('complete'); expect(probe.destroy).toHaveBeenCalledOnce();
+    const releaseNext = registerEnemyMeshWarmup(scene as never, () => false);
+    expect(system.isShaderWarmupComplete()).toBe(false);
+    releaseNext();
+    for (let i = 0; i < GPU_VFX_LANES.length; i++) events.emit('prerender');
+    expect(system.getShaderWarmupState()).toBe('complete');
+    expect(probe.prepare).toHaveBeenCalledOnce(); expect(probe.destroy).toHaveBeenCalledOnce();
+    release(); system.destroy();
   });
 });
 

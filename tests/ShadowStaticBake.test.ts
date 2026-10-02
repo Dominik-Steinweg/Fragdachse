@@ -6,7 +6,12 @@ vi.mock('phaser', () => ({
   Math: { Vector2: class { x = 0; y = 0; } },
 }));
 
-const characters=vi.hoisted(()=>({live:new Set<any>(),receivers:new Set<any>()}));
+const characters=vi.hoisted(()=>({live:new Set<any>(),receivers:new Set<any>(),enemies:new Set<any>()}));
+vi.mock('../src/effects/EnemyMeshShadowRenderer',()=>({EnemyMeshShadowRenderer:class {
+ constructor(_scene:any,readonly clouds:any,readonly receiver:any){characters.enemies.add(this);}
+ sync(){}setVisible(){}handles(){return false;}
+ destroy(){expect(characters.receivers.has(this.receiver)).toBe(true);characters.enemies.delete(this);}
+}}));
 vi.mock('../src/effects/CharacterShadowReceiver',()=>({CharacterShadowReceiver:class {
  constructor(){characters.receivers.add(this);}update(){}destroy(){characters.receivers.delete(this);}
 }}));
@@ -601,11 +606,18 @@ it('character world binding survives high-low-high and releases receivers on eve
  for(const name of ['A','B','A']){
   const clouds={name} as any;shadows.rebuildStaticLayoutShadows(layout(0,0));shadows.setCharacterSunlight(clouds);
   shadows.syncDynamicShadows([],[],null);expect(characters.live.size).toBe(1);expect(characters.receivers.size).toBe(1);
+  // No Activity or enemy is needed to construct the World owner and register its warmup.
+  expect(characters.enemies.size).toBe(1);
+  expect([...characters.enemies][0].receiver).toBe([...characters.live][0].receiver);
+  shadows.syncDynamicShadows([],[],null);expect(characters.enemies.size).toBe(1);
   expect([...characters.live][0].clouds).toBe(clouds);
   quality.setLevel('low');expect(characters.live.size).toBe(0);expect(characters.receivers.size).toBe(0);
+  expect(characters.enemies.size).toBe(0);
   shadows.syncDynamicShadows([],[],null);expect(characters.live.size).toBe(0);
   quality.setLevel('high');shadows.syncDynamicShadows([],[],null);expect(characters.live.size).toBe(1);
+  expect(characters.enemies.size).toBe(1);
   shadows.setCharacterSunlight(null);expect(characters.live.size).toBe(0);expect(characters.receivers.size).toBe(0);
+  expect(characters.enemies.size).toBe(0);
   shadows.clear();
  }
  shadows.destroy();quality.destroy();expect(characters.live.size).toBe(0);expect(characters.receivers.size).toBe(0);

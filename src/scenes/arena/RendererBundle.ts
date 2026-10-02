@@ -6,6 +6,7 @@ import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRende
 import { EnemyEyeGlowRenderer } from '../../effects/EnemyEyeGlowRenderer';
 import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
 import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
+import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { createEarthbreakFissureLayers } from '../../effects/earthbreak/EarthbreakFissureGpuLayer';
@@ -171,7 +172,7 @@ export function* createRendererBundleSteps(
   // Vor allen Renderern: das Backend baut den geteilten Atlas und alle Render-Lanes. Beides
   // muss stehen, bevor ein Effekt sich anmeldet – Frames, die erst nach dem Layer entstehen,
   // existieren fuer dessen Shader nicht.
-  const gpuVfx = new GpuVfxSystem(scene);
+  const gpuVfx = new GpuVfxSystem(scene, createCombatShaderWarmupProbes(scene));
   cleanup.push(() => gpuVfx.destroy());
   yield 'renderers/gpu-atlas-and-lanes';
   const burrowGpu = new BurrowGpuRenderer(gpuVfx);

@@ -3,6 +3,7 @@ import { getCharacterMeshes, CHARACTER_MESH_MANIFEST } from '../assets/Character
 import type { SunPathState } from './sunlight/SunPath';
 import type { SunCloudState } from './sunlight/cloudShadow';
 import { CharacterMeshShadowRenderer } from './CharacterMeshShadowRenderer';
+import { EnemyMeshShadowRenderer } from './EnemyMeshShadowRenderer';
 import { CharacterShadowReceiver } from './CharacterShadowReceiver';
 import { writeShadowCellHull } from './sunlight/ShadowProjection';
 import {
@@ -177,6 +178,21 @@ const STADIUM_FRONT_ARC: ReadonlyArray<{ readonly cos: number; readonly sin: num
 export class ShadowSystem {
   private characterClouds: SunCloudState | null = null;
   private characterShadows: CharacterMeshShadowRenderer | null = null;
+  private enemyShadows: EnemyMeshShadowRenderer | null = null;
+  private readonly enemyShadowSources: EnemyEntity[] = [];
+  private enemyMeshesSuppressed = false;
+  private readonly collectShadowEnemy = (enemy: EnemyEntity): void => { this.enemyShadowSources.push(enemy); };
+  setEnemyMeshShadowsSuppressed(value: boolean): void {
+    this.enemyMeshesSuppressed = value;
+    if (value) { this.enemyShadows?.destroy(); this.enemyShadows = null; }
+  }
+  getEnemyShadowsStatus() { return { suppressed: this.enemyMeshesSuppressed, ...(this.enemyShadows?.inspect() ?? { activeInstances: 0 }) }; }
+  private destroyFigureShadows(): void {
+    // Borrower first: player renderer alone owns the shared receiver.
+    this.enemyShadows?.destroy(); this.enemyShadows = null;
+    this.characterShadows?.destroy(); this.characterShadows = null;
+    this.enemyShadowSources.length = 0;
+  }
   private characterReceiverDirty = true;
   private characterSuppressed = false;
   private characterSolid = false;
@@ -184,7 +200,7 @@ export class ShadowSystem {
 
   setCharacterSunlight(clouds: SunCloudState | null): void {
     if (clouds === this.characterClouds) return;
-    this.characterShadows?.destroy(); this.characterShadows = null;
+    this.destroyFigureShadows();
     this.characterClouds = clouds; this.characterReceiverDirty = true;
   }
   setCharacterShadowsSuppressed(value: boolean): void {
@@ -238,7 +254,8 @@ export class ShadowSystem {
   private enemyCasters = 0;
   private readonly drawSunEnemy = (enemy: EnemyEntity): void => {
     const sprite = enemy.sprite;
-    if (!sprite.active || !sprite.visible || enemy.getHp() <= 0 || enemy.isBurrowed()) return;
+    if (!this.dynamicVisible || !sprite.active || !sprite.visible || sprite.alpha <= 0 || enemy.getHp() <= 0 || enemy.isBurrowed()
+      || !this.enemyMeshesSuppressed && this.enemyShadows?.handles(enemy)) return;
     const size = enemy.getSize();
     this.enemyPrimitives += this.drawFootprint(
       this.getLayer(SHADOW_CASTERS.player.layerDepth).dynamicGraphics,
@@ -324,7 +341,7 @@ export class ShadowSystem {
     this.quality = getGraphicsQualityProfile(scene);
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       this.quality = profile;
-      this.characterShadows?.destroy(); this.characterShadows = null;
+      this.destroyFigureShadows();
       if (this.lastStaticLayout) {
         this.rebuildStaticLayoutShadows(this.lastStaticLayout, this.lastStaticOptions);
       }
@@ -332,7 +349,7 @@ export class ShadowSystem {
   }
 
   setWorldBoundsOverride(bounds: ShadowWorldBounds | null): void {
-    this.characterShadows?.destroy(); this.characterShadows = null;
+    this.destroyFigureShadows();
     this.worldBoundsOverride = bounds;
   }
 
@@ -489,6 +506,7 @@ export class ShadowSystem {
   setDynamicVisible(visible: boolean): void {
     this.dynamicVisible = visible;
     this.characterShadows?.setVisible(visible && !this.characterSuppressed);
+    this.enemyShadows?.setVisible(visible && !this.enemyMeshesSuppressed);
     for (const bucket of this.layers.values()) bucket.dynamicGraphics.setVisible(visible);
   }
 
@@ -955,7 +973,21 @@ export class ShadowSystem {
       );
     }
 
-    // Low keeps the inexpensive player ellipse; other moving casters remain disabled.
+    this.enemyShadowSources.length = 0;
+    this.sunEnemies?.forEachEnemy(this.collectShadowEnemy);
+    // Create the World-owned renderer even without live enemies. Its shader probes must join
+    // the existing loading barrier before Ready, not wake it on the first gameplay spawn.
+    if (this.characterShadows && this.characterClouds && this.quality.level !== 'low' && !this.enemyMeshesSuppressed) {
+      this.enemyShadows ??= new EnemyMeshShadowRenderer(this.scene, this.characterClouds,
+        this.characterShadows.receiver, this.quality.level === 'high' ? 64 : 48);
+      this.enemyShadows.sync(this.enemyShadowSources, this.dynamicVisible);
+    } else this.enemyShadows?.setVisible(false);
+    this.enemyPrimitives = 0; this.enemyCasters = 0;
+    if (this.sunDirection) for (const enemy of this.enemyShadowSources) this.drawSunEnemy(enemy);
+    const meshEnemies = this.enemyShadows?.activeCount ?? 0;
+    primitivesBuilt += this.enemyPrimitives + meshEnemies;
+
+    // Low retains figure ellipses; other moving casters remain disabled.
     if (!this.quality.dynamicShadows) {
       const collector = this.attributionCollector;
       if (collector?.isActive()) collector.setGraphicsGauge('dynamicShadows', {
@@ -964,11 +996,6 @@ export class ShadowSystem {
       });
       return;
     }
-
-    this.enemyPrimitives = 0;
-    this.enemyCasters = 0;
-    if (this.sunDirection) this.sunEnemies?.forEachEnemy(this.drawSunEnemy);
-    primitivesBuilt += this.enemyPrimitives;
 
     for (const projectile of projectiles) {
       if (!this.quality.projectileShadows) break;
@@ -991,9 +1018,9 @@ export class ShadowSystem {
     }
     const collector = this.attributionCollector;
     if (collector?.isActive()) {
-      const dynamicCasterCount = players.length + projectiles.length + (train?.alive ? 1 : 0) + this.enemyCasters;
+      const dynamicCasterCount = players.length + projectiles.length + (train?.alive ? 1 : 0) + this.enemyCasters + meshEnemies;
       collector.setGraphicsGauge('dynamicShadows', {
-        objectCount: this.layers.size + (this.characterShadows?.count ?? 0),
+        objectCount: this.layers.size + (this.characterShadows?.count ?? 0) + (this.enemyShadows ? 1 : 0),
         activeObjects: dynamicCasterCount,
         dynamicCasterCount,
         primitiveCount: primitivesBuilt,
@@ -1008,7 +1035,7 @@ export class ShadowSystem {
 
   clear(): void {
     this.setCharacterSunlight(null); this.characterSuppressed = false; this.characterSolid = false;
-    this.sunEnemies = null;
+    this.sunEnemies = null; this.enemyShadowSources.length = 0; this.enemyMeshesSuppressed = false;
     this.sunDirection=null;this.staticSunDirection=null;this.sunAzimuth=null;this.bakedAzimuth=null;
     this.formationShadows = null;
     this.canopySources = null;
@@ -1065,6 +1092,7 @@ export class ShadowSystem {
 
   private clearDynamic(): void {
     this.characterShadows?.setVisible(false);
+    this.enemyShadows?.setVisible(false);
     for (const bucket of this.layers.values()) {
       bucket.dynamicGraphics.clear();
     }

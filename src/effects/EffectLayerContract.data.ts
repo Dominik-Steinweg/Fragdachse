@@ -2783,6 +2783,8 @@ export const GPU_EFFECT_CONTRACTS = {
   }
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {"id":"cpu:effects/EnemyReadabilityRenderer.ts:prepareShader/this.warmupLayer/depth/0","owner":"effects/EnemyReadabilityRenderer.ts","component":"prepareShader/this.warmupLayer/depth/0","height":"ground","lighting":"material","camera":"world","depths":[0],"blends":["NORMAL"],"profiles":["G"],"role":"pass","source":{"selector":"prepareShader/this.warmupLayer/depth/0","expression":"0"}},
+  {"id":"cpu:effects/EnemyMeshShadowRenderer.ts:module/this.display/setDepth/0","owner":"effects/EnemyMeshShadowRenderer.ts","component":"module/this.display/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[9.92],"blends":["MULTIPLY"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.display/setDepth/0","expression":"ENEMY_SHADOW_DEPTH"}},
   {"id":"cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.glow/setDepth/0","owner":"adrenalineEssence/AdrenalineEssenceGpuRenderer.ts","component":"module/this.glow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.39],"blends":["ADD"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.glow/setDepth/0","expression":"GLOW_DEPTH"}},
   {"id":"cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.body/setDepth/0","owner":"adrenalineEssence/AdrenalineEssenceGpuRenderer.ts","component":"module/this.body/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.4],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.body/setDepth/0","expression":"BODY_DEPTH"}},
   {"id":"cpu:arena/BaseAccentGlowRenderer.ts:module/overlay/setDepth/0","owner":"arena/BaseAccentGlowRenderer.ts","component":"module/overlay/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[4.04,4.05],"blends":["ADD"],"profiles":["G"],"role":"effect","source":{"selector":"module/overlay/setDepth/0","expression":"source.depth + depth"}},
@@ -3161,10 +3163,10 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:entities/DecoyEntity.ts:module/this.armorBarBg/setDepth/0","owner":"entities/DecoyEntity.ts","component":"module/this.armorBarBg/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[11],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.armorBarBg/setDepth/0","expression":"DEPTH.PLAYERS + 1"}},
   {"id":"cpu:entities/DecoyEntity.ts:module/this.armorBarFg/setDepth/0","owner":"entities/DecoyEntity.ts","component":"module/this.armorBarFg/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.armorBarFg/setDepth/0","expression":"DEPTH.PLAYERS + 2"}},
   {"id":"cpu:entities/EnemyEntity.ts:module/this.sprite/setDepth/0","owner":"entities/EnemyEntity.ts","component":"module/this.sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.95],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.sprite/setDepth/0","expression":"DEPTH.PLAYERS - 0.05"}},
-  {"id":"cpu:entities/EnemyEntity.ts:module/this.ownerRing/setDepth/0","owner":"entities/EnemyEntity.ts","component":"module/this.ownerRing/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.92],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.ownerRing/setDepth/0","expression":"DEPTH.PLAYERS - 0.08"}},
+  {"id":"cpu:entities/EnemyEntity.ts:module/this.ownerRing/setDepth/0","owner":"entities/EnemyEntity.ts","component":"module/this.ownerRing/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.925],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.ownerRing/setDepth/0","expression":"DEPTH.PLAYERS - 0.075"}},
   {"id":"cpu:entities/EnemyEntity.ts:createGlowHalo/this.glowHalo/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createGlowHalo/this.glowHalo/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.91],"blends":["ADD"],"profiles":["K"],"role":"effect","source":{"selector":"createGlowHalo/this.glowHalo/setDepth/0","expression":"DEPTH.PLAYERS - 0.09"}},
   {"id":"cpu:entities/EnemyEntity.ts:syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","owner":"entities/EnemyEntity.ts","component":"syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.96],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","expression":"this.sprite.depth + 0.01"}},
-  {"id":"cpu:entities/EnemyEntity.ts:createBossDecorations/this.bossAura/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createBossDecorations/this.bossAura/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.92],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"createBossDecorations/this.bossAura/setDepth/0","expression":"DEPTH.PLAYERS - 0.08"}},
+  {"id":"cpu:entities/EnemyEntity.ts:createBossDecorations/this.bossAura/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createBossDecorations/this.bossAura/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.925],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"createBossDecorations/this.bossAura/setDepth/0","expression":"DEPTH.PLAYERS - 0.075"}},
   {"id":"cpu:entities/EnemyEntity.ts:createBossDecorations/this.bossRing/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createBossDecorations/this.bossRing/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.93],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"createBossDecorations/this.bossRing/setDepth/0","expression":"DEPTH.PLAYERS - 0.07"}},
   {"id":"cpu:entities/EnemyEntity.ts:createBossDecorations/this.bossLabel/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createBossDecorations/this.bossLabel/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"createBossDecorations/this.bossLabel/setDepth/0","expression":"DEPTH.PLAYERS + 2"}},
   {"id":"cpu:entities/HeldItemVisual.ts:setDepth/this.image/setDepth/0","owner":"entities/HeldItemVisual.ts","component":"setDepth/this.image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"setDepth/this.image/setDepth/0","expression":"depth"}},
@@ -3267,6 +3269,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0","owner":"ui/UiContextMenu.ts","component":"open/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[103],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"open/this.container/setDepth/0","expression":"this.standaloneDepth"}},
 ];
 export const CPU_SOURCE_CONTRACTS = {
+  "effects/EnemyMeshShadowRenderer.ts": {"blends":["Phaser.BlendModes.MULTIPLY"],"cameras":[],"sites":[{"key":"module/this.display/setDepth/0","expression":"ENEMY_SHADOW_DEPTH","blends":["MULTIPLY"]}],"bindings":{}},
   "adrenalineEssence/AdrenalineEssenceGpuRenderer.ts": {
     "blends": [
       "Phaser.BlendModes.ADD",
@@ -4532,6 +4535,7 @@ export const CPU_SOURCE_CONTRACTS = {
     ],
     "cameras": [],
     "sites": [
+      {"key":"prepareShader/this.warmupLayer/depth/0","expression":"0","blends":["NORMAL"]},
       {
         "key": "createLayer/layer/setDepth/0",
         "expression": "s.depth - 0.001",
@@ -6819,7 +6823,7 @@ export const CPU_SOURCE_CONTRACTS = {
       },
       {
         "key": "module/this.ownerRing/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 0.08",
+        "expression": "DEPTH.PLAYERS - 0.075",
         "blends": [
           "NORMAL"
         ]
@@ -6840,7 +6844,7 @@ export const CPU_SOURCE_CONTRACTS = {
       },
       {
         "key": "createBossDecorations/this.bossAura/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 0.08",
+        "expression": "DEPTH.PLAYERS - 0.075",
         "blends": [
           "NORMAL"
         ]

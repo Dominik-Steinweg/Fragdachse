@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('./fakeArenaRenderScene');
-  return createFakePhaserModule();
+  return { ...createFakePhaserModule(), Filters: { Displacement: class {} } };
 });
 
 import { ArenaRuntime } from '../src/scenes/arena/ArenaRuntime';

@@ -189,7 +189,7 @@ export class EnemyEntity {
       this.sprite.setTint(0x89d66d);
       this.ownerRing = scene.add.ellipse(x, y + this.config.size * 0.22, this.config.size * 1.15, this.config.size * 0.52, 0x000000, 0)
         .setStrokeStyle(2, ownerColor ?? 0x80ff80, 0.95)
-        .setDepth(DEPTH.PLAYERS - 0.08);
+        .setDepth(DEPTH.PLAYERS - 0.075); // Above figure shadows (9.92), below the contour/body.
       registerGraphicsObject(scene, 'enemyStatus', this.ownerRing);
     } else if (this.config.color !== undefined) {
       this.sprite.setTint(this.config.color);
@@ -979,7 +979,7 @@ export class EnemyEntity {
       this.config.size * 0.72,
       this.config.voidHunterBoss ? 0x6f16a8 : 0x6d1026,
       0.38,
-    ).setDepth(DEPTH.PLAYERS - 0.08);
+    ).setDepth(DEPTH.PLAYERS - 0.075);
     this.bossRing = scene.add.ellipse(
       this.sprite.x,
       this.sprite.y + this.config.size * 0.2,

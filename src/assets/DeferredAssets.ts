@@ -27,6 +27,15 @@ export const DEFERRED_ASSETS: readonly DeferredAsset[] = [
   { key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },
 ];
 
+/** Large decoration uploads belong behind the boot cover. Overlay construction and item
+ * images stay lazy; the deferred owner reuses this cache and retries optional load failures.
+ */
+export function preloadDeferredImages(loader: Phaser.Loader.LoaderPlugin): void {
+  for (const asset of DEFERRED_ASSETS) {
+    if (asset.type === 'image') loader.image({ key: asset.key, url: asset.url });
+  }
+}
+
 export interface DeferredAssetState {
   readonly status: 'idle' | 'loading' | 'complete' | 'error';
   /** Actual byte progress, or null when totals are unknown / processing is still pending. */

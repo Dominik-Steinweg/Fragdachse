@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as Phaser from 'phaser';
 import { preloadAllAudio } from '../src/audio/AudioCatalog';
 import { GameAudioSystem } from '../src/audio/GameAudioSystem';
-import { DEFERRED_ASSETS, DeferredAssets, getDeferredAssets } from '../src/assets/DeferredAssets';
+import { DEFERRED_ASSETS, DeferredAssets, getDeferredAssets, preloadDeferredImages } from '../src/assets/DeferredAssets';
 import { SOUND_MUSIC_VOLUME } from '../src/config';
 
 vi.mock('phaser', () => ({ Math: { Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)) } }));
@@ -48,6 +48,16 @@ function setup(cached: string[] = DEFERRED_ASSETS.filter(asset => asset.type ===
 afterEach(() => vi.unstubAllGlobals());
 
 describe('central second asset phase', () => {
+  it('uploads decoration images during boot and reuses them without loading music or building overlays', () => {
+    const h = setup([]);
+    preloadDeferredImages(h.loader as unknown as Phaser.Loader.LoaderPlugin);
+    const images = DEFERRED_ASSETS.filter(asset => asset.type === 'image');
+    expect(h.loader.queued.map(file => file.key)).toEqual(images.map(asset => asset.key));
+    for (const asset of images) h.complete(asset.key);
+    h.loader.queued.length = 0;
+    h.assets.start();
+    expect(h.loader.queued.map(file => file.key)).toEqual(['music_lobby', 'music_arena']);
+  });
   it('loads result artwork in the shared second phase and accepts its image completion events', async () => {
     const h = setup([]); h.assets.start();
     expect(h.loader.queued.map(file => file.key)).toEqual(DEFERRED_ASSETS.map(asset => asset.key));
