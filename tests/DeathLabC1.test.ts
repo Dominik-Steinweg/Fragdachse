@@ -8,7 +8,7 @@ import { CombatGoreGpuRenderer } from '../src/effects/CombatGoreGpuRenderer';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { makeFakeGpuVfxScene } from './fakeGpuVfxScene';
-import { DEATH_TUNING_DEFAULTS, resolveDeathTuning } from '../src/effects/gpu/DeathTuning';
+import { C1_DEATH_TUNING, DEATH_TUNING_DEFAULTS, resolveDeathTuning } from '../src/effects/gpu/DeathTuning';
 import { sampleDeathMorphBlend } from '../src/effects/gpu/DeathMorphFrames';
 import { buildGpuVfxAtlas, GPU_VFX_ATLAS_KEY, GPU_VFX_DEATH_MORPH_FRAME_IDS, getGpuVfxFrame } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
@@ -59,20 +59,25 @@ function captureDefaults(player: boolean, size: number, seed: number) {
   return { specs, renderer, gpu, play, scene };
 }
 
-describe('death lab: pre-C1 default spawn bytes', () => {
+describe('death lab: explicit C1 reference spawn bytes', () => {
   it.each([false, true].flatMap(player => [22, 32, 48, 96].map(size => ({ player, size }))))(
     '$player / $size', ({ player, size }) => {
       const { specs, play, renderer, gpu } = captureDefaults(player, size, 0x12345678);
-      play();
+      renderer.setDeathTuning(C1_DEATH_TUNING); play();
       const expected = BEFORE_C1[(player ? 4 : 0) + [22, 32, 48, 96].indexOf(size)];
       const original = structuredClone(specs), bytes = spawnBytes(original);
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(expected);
-      specs.length = 0; gpu.releaseAll(); renderer.setDeathTuning(DEATH_TUNING_DEFAULTS); play();
+      specs.length = 0; gpu.releaseAll(); renderer.setDeathTuning(C1_DEATH_TUNING); play();
       expect(specs).toEqual(original);
       expect(spawnBytes(specs)).toEqual(bytes);
       specs.length = 0; gpu.releaseAll(); renderer.setDeathTuning({ mainHitImpulse: 0 });
-      renderer.setDeathTuning(null); play();
+      renderer.setDeathTuning(C1_DEATH_TUNING); play();
       expect(spawnBytes(specs)).toEqual(bytes);
+      specs.length = 0; gpu.releaseAll(); renderer.setDeathTuning(null); play();
+      const current = spawnBytes(specs);
+      expect(current).not.toEqual(bytes);
+      specs.length = 0; gpu.releaseAll(); renderer.setDeathTuning(DEATH_TUNING_DEFAULTS); play();
+      expect(spawnBytes(specs)).toEqual(current);
       renderer.destroy(); gpu.destroy();
     });
 });

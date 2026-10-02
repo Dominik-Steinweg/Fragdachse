@@ -23,11 +23,12 @@ export type Layers = Record<typeof LAYERS[number], boolean>;
 export interface LabSettings {
   fixture: string; pose: 'idle' | 'move'; frameIndex: number; seed: number;
   direction: number; rotation: number; size: number; zoom: number;
+  follow: boolean;
   quality: GraphicsQuality; background: 'dark' | 'light' | 'forest'; layers: Layers;
 }
 export const INITIAL_SETTINGS: LabSettings = {
   fixture: 'player', pose: 'idle', frameIndex: 0, seed: 305419896,
-  direction: 0, rotation: 0, size: PLAYER_VISUAL_SIZE, zoom: 1,
+  direction: 0, rotation: 0, size: PLAYER_VISUAL_SIZE, zoom: 1, follow: false,
   quality: 'high', background: 'dark',
   layers: { main: true, micro: true, glows: true, ghost: true, gore: false, postfx: false },
 };
@@ -50,6 +51,7 @@ export function resolveSettings(patch: unknown, base: LabSettings): LabSettings 
   const raw = object(patch);
   keys(raw, Object.keys(INITIAL_SETTINGS));
   const next = { ...base, layers: { ...base.layers } };
+  if (raw.follow !== undefined) next.follow = bool(raw.follow);
   if (raw.fixture !== undefined) {
     const fixture = FIXTURES.find(f => f.id === raw.fixture);
     if (!fixture) throw new Error('fixture: player, small, medium oder large.');

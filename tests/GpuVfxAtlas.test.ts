@@ -1,3 +1,4 @@
+import { C1_DEATH_TUNING } from '../src/effects/gpu/DeathTuning';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
@@ -99,7 +100,7 @@ describe('gpu vfx atlas', () => {
     expect(output).toEqual(to);
   });
 
-  it('bakes the whole morph once with fixed geometry and exact endpoint alpha', () => {
+  it('keeps the C1 reference bake with fixed geometry and exact endpoint alpha', () => {
     const scene = makeFakeGpuVfxScene();
     ensureDeathMorphTextures(scene as never);
     const sources = [
@@ -118,7 +119,7 @@ describe('gpu vfx atlas', () => {
     vi.spyOn(atlas.context, 'putImageData').mockImplementation((image, x, y) => {
       pixels.set(`${x},${y}`, [...image.data.slice(0, 4)]);
     });
-    buildGpuVfxAtlas(scene as never);
+    buildGpuVfxAtlas(scene as never, C1_DEATH_TUNING);
     expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
     expect(GPU_VFX_DEATH_MORPH_FRAME_IDS).toHaveLength(DEATH_MORPH_FRAME_COUNT);
     const baked = GPU_VFX_DEATH_MORPH_FRAME_IDS.map((id) => {

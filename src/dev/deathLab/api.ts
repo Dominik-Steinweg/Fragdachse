@@ -1,5 +1,5 @@
 import type { DeathLabScene } from './Scene';
-import { DEATH_TUNING_DEFAULTS, deathPhaseBands, resolveDeathTuning } from '../../effects/gpu/DeathTuning';
+import { C1_DEATH_TUNING, DEATH_TUNING_DEFAULTS, deathPhaseBands, resolveDeathTuning } from '../../effects/gpu/DeathTuning';
 import { bool, finite, keys, object, resolveSettings, fixtureSnapshot } from './State';
 import { contactSheet, decodePng, downloadExport, frameTimes, type CapturedFrame, type LabExport } from './Export';
 
@@ -116,10 +116,14 @@ export class DeathLabApi {
         this.baseline = null; this.seek(this.scene.playback.timeMs); break;
       }
       case 'tuning': {
-        keys(c, ['action', 'values', 'reset']);
+        keys(c, ['action', 'values', 'reset', 'preset']);
         if (c.reset !== undefined && c.reset !== true) throw new Error('reset: true erwartet.');
         if (c.reset === true && c.values !== undefined) throw new Error('reset oder values angeben.');
-        const tuning = c.reset === true ? DEATH_TUNING_DEFAULTS : resolveDeathTuning(c.values, this.scene.tuning);
+        if (c.preset !== undefined && (c.preset !== 'c1' || c.values !== undefined || c.reset !== undefined)) {
+          throw new Error('preset: "c1" ohne values/reset angeben.');
+        }
+        const tuning = c.preset === 'c1' ? C1_DEATH_TUNING
+          : c.reset === true ? DEATH_TUNING_DEFAULTS : resolveDeathTuning(c.values, this.scene.tuning);
         this.scene.playback.playing = false;
         this.scene.applyTuning(tuning); this.seek(this.scene.playback.timeMs); break;
       }

@@ -7,7 +7,7 @@ import { BURROW_FX } from '../../config/burrowEffects';
 import { ZEUS_FX } from '../../config/zeusEffects';
 import { LEAF_BLOWER_FX } from '../../config/leafBlowerEffects';
 import {
-  GpuVfxFrameAnimationId,
+  DEATH_FRAME_ANIMATION_IDS,
   type GpuVfxFrameAnimationId as GpuVfxFrameAnimationIdType,
 } from './GpuVfxFrameAnimations';
 
@@ -636,7 +636,7 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     // CubicInOut traegt die Fragmentbewegung; CubicIn bleibt fuer Alpha und Skala. Der Death-
     // Fragment-Glow erbt beide Kurven, deshalb ist GoreAdd identisch vorgewaermt.
     eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn, GpuVfxEase.CubicInOut],
-    frameAnimations: [GpuVfxFrameAnimationId.DeathDisintegration],
+    frameAnimations: DEATH_FRAME_ANIMATION_IDS,
     capacity: 4096,
     maxLifetimeMs: 1400,
     order: 'ordered',

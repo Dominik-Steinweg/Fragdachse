@@ -1,3 +1,4 @@
+import { DEATH_FRAME_ANIMATION_IDS } from '../src/effects/gpu/GpuVfxFrameAnimations';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -185,13 +186,12 @@ describe('gpu vfx system: lanes', () => {
     const gore = findFakeLane(scene, 'gore-normal');
 
     expect(GPU_VFX_LANES[GpuVfxLaneId.GoreNormal].frameAnimations)
-      .toEqual([GpuVfxFrameAnimationId.DeathDisintegration]);
-    expect(gore.frameAnimations).toEqual([{
-      name: 'death-disintegration',
-      frames: getGpuVfxFrameAnimation(GpuVfxFrameAnimationId.DeathDisintegration).frames
-        .map((id) => getGpuVfxFrame(id).name),
+      .toEqual(DEATH_FRAME_ANIMATION_IDS);
+    expect(gore.frameAnimations).toEqual(DEATH_FRAME_ANIMATION_IDS.map(id => ({
+      name: getGpuVfxFrameAnimation(id).name,
+      frames: getGpuVfxFrameAnimation(id).frames.map(frame => getGpuVfxFrame(frame).name),
       duration: 1,
-    }]);
+    })));
     expect(scene.layers.filter((lane) => lane.frameAnimations.length > 0)).toEqual([gore]);
   });
 

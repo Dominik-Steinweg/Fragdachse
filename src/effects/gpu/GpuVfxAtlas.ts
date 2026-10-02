@@ -7,10 +7,13 @@ import {
 import {
   DEATH_MORPH_FRAME_COUNT,
   DEATH_MORPH_FRAME_SIZE,
+  DEATH_MORPH_VARIANTS,
   sampleDeathMorphBlend,
+  createDeathGrainBaker,
   writeDeathMorphPixels,
   type DeathMorphBlend,
 } from './DeathMorphFrames';
+import { DEATH_TUNING_DEFAULTS, type DeathTuning } from './DeathTuning';
 import {
   TEX_AIRSTRIKE_BOMB,
   TEX_AIRSTRIKE_SPARK,
@@ -212,6 +215,7 @@ export const GpuVfxFrameId = {
   LeafBlowerClod:        217,
   LeafBlowerDroplet:     218,
   LeafBlowerWindStreak:  219,
+  // 220..603: three additional 128-frame death variants. Existing IDs remain stable.
 } as const;
 
 /** Nur die unten erzeugte, zusammenhaengende Morph-Folge darf diesen ID-Bereich belegen. */
@@ -231,6 +235,8 @@ interface GpuVfxAtlasEntry {
   readonly sourceX?: number;
   /** Vorbereitete Alpha-Mischung vorhandener Motive, direkt in den Atlas geschrieben. */
   readonly deathMorph?: DeathMorphBlend;
+  readonly deathVariant?: number;
+  readonly deathProgress?: number;
   readonly essenceLiquid?: { readonly variant: number; readonly phase: number };
   readonly essenceTail?: boolean;
   /** Erzeugt die Quelltextur, falls der zustaendige Renderer noch nicht gelaufen ist. */
@@ -245,21 +251,26 @@ function leafBlowerSheetEntry(
 }
 
 const DEATH_MORPH_ATLAS_ENTRIES: readonly GpuVfxAtlasEntry[] = Array.from(
-  { length: DEATH_MORPH_FRAME_COUNT },
+  { length: DEATH_MORPH_FRAME_COUNT * DEATH_MORPH_VARIANTS },
   (_, index) => ({
-    // IDs 0–53 bleiben unveraendert; weitere statische Frames hinter diesem Bereich anhaengen.
-    id: (54 + index) as DeathMorphFrameId,
+    // Keep 54..181 and all authored IDs through 219; append the other three complete sequences.
+    id: (index < DEATH_MORPH_FRAME_COUNT ? 54 + index : 220 + index - DEATH_MORPH_FRAME_COUNT) as DeathMorphFrameId,
     frame: `death-morph-blend-${index}`,
     sourceTextureKey: null,
     width: DEATH_MORPH_FRAME_SIZE,
     height: DEATH_MORPH_FRAME_SIZE,
-    deathMorph: sampleDeathMorphBlend(index / (DEATH_MORPH_FRAME_COUNT - 1)),
+    deathVariant: Math.floor(index / DEATH_MORPH_FRAME_COUNT),
+    deathProgress: (index % DEATH_MORPH_FRAME_COUNT) / (DEATH_MORPH_FRAME_COUNT - 1),
+    deathMorph: sampleDeathMorphBlend((index % DEATH_MORPH_FRAME_COUNT) / (DEATH_MORPH_FRAME_COUNT - 1)),
     ensure: null,
   }),
 );
 
 export const GPU_VFX_DEATH_MORPH_FRAME_IDS: readonly GpuVfxFrameId[] =
-  DEATH_MORPH_ATLAS_ENTRIES.map((entry) => entry.id);
+  DEATH_MORPH_ATLAS_ENTRIES.slice(0, DEATH_MORPH_FRAME_COUNT).map((entry) => entry.id);
+export const GPU_VFX_DEATH_MORPH_VARIANT_FRAME_IDS: readonly (readonly GpuVfxFrameId[])[] =
+  Array.from({ length: DEATH_MORPH_VARIANTS }, (_, v) => DEATH_MORPH_ATLAS_ENTRIES
+    .slice(v * DEATH_MORPH_FRAME_COUNT, (v + 1) * DEATH_MORPH_FRAME_COUNT).map(entry => entry.id));
 
 /**
  * Reihenfolge egal fuer die IDs, aber `Void` muss zuerst *eingefuegt* werden – das erledigt
@@ -580,7 +591,7 @@ let built = false;
 /**
  * Baut den Atlas vollstaendig und friert ihn ein. Idempotent; muss vor der ersten Lane laufen.
  */
-export function buildGpuVfxAtlas(scene: Phaser.Scene, deathTiming?: import('./DeathTuning').DeathMorphTiming): void {
+export function buildGpuVfxAtlas(scene: Phaser.Scene, deathTiming?: DeathTuning): void {
   if (built && scene.textures.exists(GPU_VFX_ATLAS_KEY) && !deathTiming) return;
 
   const entries = [...GPU_VFX_ATLAS].sort((a, b) => a.id - b.id);
@@ -606,6 +617,9 @@ export function buildGpuVfxAtlas(scene: Phaser.Scene, deathTiming?: import('./De
     }
     return pixels;
   };
+  const tuning = deathTiming ?? DEATH_TUNING_DEFAULTS;
+  const grainBakers = ctx && !tuning.legacyMorph
+    ? Array.from({ length: DEATH_MORPH_VARIANTS }, (_, v) => createDeathGrainBaker(readMorphSource(TEX_DEATH_MORPH_FRAGMENTED), tuning, v)) : [];
   if (ctx) {
     ctx.clearRect(0, 0, layout.size, layout.size);
     ctx.imageSmoothingEnabled = false;
@@ -619,10 +633,13 @@ export function buildGpuVfxAtlas(scene: Phaser.Scene, deathTiming?: import('./De
     const rect = layout.rects[GPU_VFX_ATLAS.indexOf(entry)];
     if (ctx && morphPixels && entry.deathMorph) {
       // Explicit lab apply only. Layout and Frame identities stay stable for existing GPU lanes.
-      const blend = deathTiming
-        ? sampleDeathMorphBlend((entry.id - 54) / (DEATH_MORPH_FRAME_COUNT - 1), deathTiming)
-        : entry.deathMorph;
-      writeDeathMorphPixels(morphPixels.data, readMorphSource(blend.from), readMorphSource(blend.to), blend.mix);
+      const progress = entry.deathProgress!;
+      const bakeGrains = grainBakers[entry.deathVariant!];
+      if (bakeGrains && progress >= tuning.fragmentedAt) bakeGrains(morphPixels.data, progress);
+      else {
+        const blend = sampleDeathMorphBlend(progress, tuning);
+        writeDeathMorphPixels(morphPixels.data, readMorphSource(blend.from), readMorphSource(blend.to), blend.mix);
+      }
       ctx.putImageData(morphPixels, rect.x, rect.y);
     }
     if (ctx && liquidPixels && (entry.essenceLiquid || entry.essenceTail)) {

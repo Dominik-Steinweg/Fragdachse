@@ -1,3 +1,4 @@
+import { DEATH_TUNING_DEFAULTS } from '../src/effects/gpu/DeathTuning';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -341,7 +342,7 @@ describe('combat gore gpu renderer', () => {
     );
     expect(primary.alpha.ease).toBe('Cubic.easeIn');
     expect(primary.frameAnimation).toMatchObject({
-      name: 'death-disintegration',
+      name: expect.stringMatching(/^death-disintegration(?:-[1-3])?$/),
       amplitude: getGpuVfxFrameAnimation(GpuVfxFrameAnimationId.DeathDisintegration).frames.length,
       loop: false,
       yoyo: false,
@@ -377,7 +378,7 @@ describe('combat gore gpu renderer', () => {
     const lastQuarter = fraction(0.9999) - fraction(0.75);
     expect(lastQuarter).toBeLessThan(middleQuarter * 0.5);
 
-    expect(evaluateFakeAnimation(primary.alpha, 400 / lifeMs)).toBeGreaterThan(0.94);
+    expect(evaluateFakeAnimation(primary.alpha, 400 / lifeMs) / evaluateFakeAnimation(primary.alpha, 0)).toBeGreaterThan(0.94);
     // Die Drehung folgt derselben Kurve und bleibt in der Cohesion-Phase entsprechend klein.
     const rotationStart = evaluateFakeAnimation(primary.rotation, 0);
     const rotationTotal = Math.abs(primary.rotation.amplitude);
@@ -404,13 +405,12 @@ describe('combat gore gpu renderer', () => {
     ))).toBe(true);
     expect(normal.micro.every((member) => member.frameAnimation === null)).toBe(true);
     expect(normal.micro.every((member) => evaluateFakeAnimation(member.alpha, 0) < 0.5)).toBe(true);
-    // Micro-Motes sind Uebergangsdetail und muessen deutlich vor der Haze-Phase der Hauptmasse
-    // erloschen sein, damit am Ende keine Einzelpunkte vor der Staubwolke stehen.
+    // Micro-Motes span the fragment-to-dust window and retire before the residual tail.
     expect(normal.micro.every((member) => (
-      member.alpha.duration >= DEATH_DISINTEGRATION_VFX.microLifetimeMinMs
+      member.alpha.duration >= DEATH_TUNING_DEFAULTS.microLifetimeMinMs
     ))).toBe(true);
     expect(normal.micro.every((member) => (
-      member.alpha.duration <= DEATH_DISINTEGRATION_VFX.microLifetimeMaxMs
+      member.alpha.duration <= DEATH_TUNING_DEFAULTS.microLifetimeMaxMs
     ))).toBe(true);
   });
 

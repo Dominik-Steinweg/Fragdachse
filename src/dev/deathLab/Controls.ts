@@ -9,6 +9,18 @@ const tuningFields = [
   ['fineDustAt', 'Fine dust', 0.01], ['hazeAt', 'Haze', 0.01],
   ['vaporAt', 'Vapor', 0.01], ['alpha', 'Alpha', 0.01],
   ['mainFragmentScaleBoost', 'Fragmentgröße ×', 0.05], ['mainHitImpulse', 'Richtungsimpuls ×', 0.05],
+  ['dissolveWindowMs', 'Zerfall ms', 10], ['dustBodyAlpha', 'Staubdeckung', 0.01],
+  ['dustBodyRadiusPx', 'Staubradius Texel', 0.1],
+  ['grainRadiusPx', 'Kornradius Texel', 0.05], ['grainDriftPx', 'Korndrift Texel', 0.1],
+  ['grainAlpha', 'Kornalpha', 0.01], ['hazeGrowth', 'Dunstwachstum ×', 0.05],
+  ['hazeAlpha', 'Dunstalpha', 0.01], ['darkFragmentAlpha', 'Dunkel-Deckung', 0.01],
+  ['darkFragmentCutoff', 'Dunkel-Schwelle', 0.01], ['microAlpha', 'Micro-Alpha ×', 0.05],
+  ['microLifetimeMinMs', 'Micro min ms', 10], ['microLifetimeMaxMs', 'Micro max ms', 10],
+  ['grainOrganic', 'Organische Körner 0/1', 1], ['grainSeed', 'Motiv-Seed', 1],
+  ['grainSpacingPx', 'Kornabstand Texel', 0.1], ['grainJitter', 'Subpixel-Jitter', 0.05],
+  ['grainSizeVariance', 'Größenvarianz', 0.05], ['grainEdgeRelease', 'Rand zuerst', 0.05],
+  ['grainEdgeDrift', 'Randdrift-Zuschlag', 0.05], ['grainFlowBias', 'Flugrichtungsanteil', 0.05],
+  ['grainRoughness', 'Korn-Unregelmäßigkeit', 0.02],
 ] as const;
 export function attachControls(api: DeathLabApi): () => void {
   const disposers: (() => void)[] = [];
@@ -43,6 +55,7 @@ export function attachControls(api: DeathLabApi): () => void {
   bind('apply-fixture', 'click', () => run({ action: 'configure', values: {
     fixture: input('fixture').value, pose: input('pose').value, quality: input('quality').value,
     background: input('background').value,
+    follow: input('follow').checked,
     ...Object.fromEntries(['frameIndex', 'seed', 'direction', 'rotation', 'size', 'zoom'].map(k => [k, Number(input(k).value)])),
   } }));
   bind('apply-tuning', 'click', () => run({ action: 'tuning', values: Object.fromEntries(tuningFields.map(([key]) => [key, Number(input(`tuning-${key}`).value)])) }));
@@ -51,6 +64,7 @@ export function attachControls(api: DeathLabApi): () => void {
     catch (error) { document.getElementById('status')!.textContent = String(error); }
   });
   bind('reset-tuning', 'click', () => run({ action: 'tuning', reset: true }));
+  bind('c1-tuning', 'click', () => run({ action: 'tuning', preset: 'c1' }));
   bind('play', 'click', () => run({ action: 'play', playing: !api.status().playing, speed: Number(input('speed').value) }));
   bind('speed', 'change', () => run({ action: 'play', playing: api.status().playing, speed: Number(input('speed').value) }));
   bind('back', 'click', () => run({ action: 'step', deltaMs: -25 }));
@@ -68,7 +82,8 @@ export function attachControls(api: DeathLabApi): () => void {
     const sk = JSON.stringify(state.settings), tk = JSON.stringify(state.tuning);
     if (sk !== settingsKey) {
       settingsKey = sk;
-      for (const [key, value] of Object.entries(state.settings)) if (key !== 'layers') input(key).value = String(value);
+      for (const [key, value] of Object.entries(state.settings)) if (key !== 'layers' && key !== 'follow') input(key).value = String(value);
+      input('follow').checked = state.settings.follow;
       input('frameIndex').max = String(fixtureFrames(state.settings).length - 1);
       for (const key of LAYERS) input(`layer-${key}`).checked = state.settings.layers[key];
     }

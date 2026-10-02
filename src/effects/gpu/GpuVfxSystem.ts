@@ -122,6 +122,12 @@ export class GpuVfxSystem {
   private clockMs = 0;
   private manualPresentationTime = false;
   private previewEffects: ReadonlySet<GpuVfxEffectId> | null = null;
+  private previewSpawnObserver: ((spec: Readonly<GpuVfxSpawnSpec>) => void) | null = null;
+
+  /** Lab-only accepted spawn observation. The callback must copy values from the reused spec. */
+  setPreviewSpawnObserver(observer: ((spec: Readonly<GpuVfxSpawnSpec>) => void) | null): void {
+    this.previewSpawnObserver = observer;
+  }
 
   /** Opt-in lab clock. The normal Scene/ElapseTimer path is untouched until called. */
   setManualPresentationTime(enabled: boolean): void {
@@ -411,6 +417,7 @@ export class GpuVfxSystem {
     // Auch Spawns ausserhalb des Emissions-Ticks muessen ihre Lane sofort sichtbar machen,
     // sonst faellt das erste Partikel eines Bursts einen Frame lang aus.
     this.applyVisibility(lane);
+    this.previewSpawnObserver?.(spec);
     return true;
   }
 
@@ -603,6 +610,7 @@ export class GpuVfxSystem {
   }
 
   destroy(): void {
+    this.previewSpawnObserver = null;
     this.stopShaderWarmup();
     this.releaseAll();
     this.ribbonLayer?.image.destroy();

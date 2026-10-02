@@ -1,8 +1,8 @@
 import type * as Phaser from 'phaser';
-import { BLOOD_HIT_VFX, COLORS, DEATH_DISINTEGRATION_VFX } from '../config';
+import { BLOOD_HIT_VFX, COLORS } from '../config';
 import { getPipelineSpriteScale } from '../config/pipelineAssets';
 import type { SyncedDeathEffect, SyncedHitEffect } from '../types';
-import { resolveDeathTuning, type DeathSpawnTuning } from './gpu/DeathTuning';
+import { DEATH_TUNING_DEFAULTS, deathFragmentOpacity, resolveDeathTuning, type DeathSpawnTuning, type DeathTuning } from './gpu/DeathTuning';
 import { createSeededRandom, mixColors } from './EffectUtils';
 import {
   DeathFragmentTemplateCache,
@@ -15,6 +15,7 @@ import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
 import {
   GPU_VFX_NO_FRAME_ANIMATION,
   GpuVfxFrameAnimationId,
+  DEATH_FRAME_ANIMATION_IDS,
 } from './gpu/GpuVfxFrameAnimations';
 import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
@@ -67,11 +68,11 @@ export class CombatGoreGpuRenderer {
   readonly fragmentTemplateCache: DeathFragmentTemplateCache;
 
   private gpu: GpuVfxSystem | null = null;
-  private deathTuning: DeathSpawnTuning = DEATH_DISINTEGRATION_VFX;
+  private deathTuning: DeathTuning = DEATH_TUNING_DEFAULTS;
 
-  /** Instance-local opt-in tuning; null restores the original config object. */
+  /** Instance-local tuning; null restores the current production defaults. */
   setDeathTuning(values: unknown | null): void {
-    this.deathTuning = values === null ? DEATH_DISINTEGRATION_VFX : resolveDeathTuning(values);
+    this.deathTuning = values === null ? DEATH_TUNING_DEFAULTS : resolveDeathTuning(values);
   }
   private deathFragmentSpec: GpuVfxSpawnSpec | null = null;
   private deathMicroFragmentSpec: GpuVfxSpawnSpec | null = null;
@@ -570,9 +571,7 @@ export class CombatGoreGpuRenderer {
       + Math.sin(angle) * travel
       + (rng() - 0.5) * jitter
       + hitY * hitImpulse;
-    // Die Micro-Motes sind nur das Uebergangsdetail der herausbrechenden Koerner, nicht der
-    // Schluss des Effekts: sie sind lange erloschen, bevor die Hauptmasse ihre Haze-Phase
-    // erreicht. Sonst dominieren am Ende einzelne Punkte statt der zusammenhaengenden Wolke.
+    // Micro-Motes remain through the fragment-to-dust window, fading before the residual haze.
     const lifeMs = micro
       ? randomBetween(
         rng,
@@ -635,6 +634,11 @@ export class CombatGoreGpuRenderer {
     spec.frameAnimation = micro
       ? GPU_VFX_NO_FRAME_ANIMATION
       : GpuVfxFrameAnimationId.DeathDisintegration;
+    if (!micro && !this.deathTuning.legacyMorph && this.deathTuning.grainOrganic) {
+      // Existing per-fragment random values carry the death seed; do not consume another RNG draw.
+      const variant = (Math.round(lifeMs * 1000) ^ Math.round(endX * 4096) ^ Math.round(endY * 8192)) >>> 0;
+      spec.frameAnimation = DEATH_FRAME_ANIMATION_IDS[variant % DEATH_FRAME_ANIMATION_IDS.length];
+    }
     // Ohne Streckung durchlaufen alle Fragmente eines Bursts ihre Morph-Phasen gleichzeitig - der
     // gesamte Burst schaltet dann als Block von Korn auf Wolke um. Die Streuung laesst denselben
     // Uebergang als Welle ueber die Fragmente laufen, ohne Bewegung oder Lebensdauer anzufassen.
@@ -656,6 +660,10 @@ export class CombatGoreGpuRenderer {
     spec.yMode = GpuVfxEase.Linear;
     spec.gravityFactor = 1;
     spec.rotation = entityRotation + (rng() - 0.5) * (micro ? 1.2 : 0.18);
+    if (!micro && !this.deathTuning.legacyMorph && this.deathTuning.grainOrganic) {
+      // Baked +X grain drift follows the existing member's flight; its large-scale trajectory is unchanged.
+      spec.rotation = Math.atan2(endY - startY, endX - startX);
+    }
     const rotationFactor = largeMass ? 0.45 : smallMass ? 1.65 : 1;
     spec.angularVelocity = (rng() - 0.5)
       * (micro ? 2.4 : this.deathTuning.rotationMaxDeg * Math.PI / 180 * 2)
@@ -675,6 +683,7 @@ export class CombatGoreGpuRenderer {
       this.deathTuning.alpha
         * randomBetween(rng, micro ? 0.3 : 0.98, micro ? 0.48 : 1.08),
     );
+    spec.alphaStart *= deathFragmentOpacity(tint, this.deathTuning) * (micro ? this.deathTuning.microAlpha : 1);
     spec.alphaEnd = 0;
     spec.alphaEase = GpuVfxEase.CubicIn;
     spec.tint = visibleTint;

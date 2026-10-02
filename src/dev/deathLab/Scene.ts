@@ -11,6 +11,7 @@ import { DeathPlayback } from './Playback';
 import { DeathLabApi } from './api';
 import { attachControls } from './Controls';
 import { sha256 } from './Export';
+import { deathFollowCenter, type DeathFollowSample } from './Follow';
 
 // Raw inputs identify the dirty worktree as well as HEAD; this import exists only in the lab bundle.
 const codeSources = import.meta.glob([
@@ -35,6 +36,7 @@ export class DeathLabScene extends Phaser.Scene {
   private forest!: Phaser.GameObjects.TileSprite;
   private cleanupControls: (() => void) | null = null;
   private readonly assetUrls = new Set<string>();
+  private readonly followSamples: DeathFollowSample[] = [];
 
   preload(): void {
     this.load.setBaseURL('/');
@@ -59,13 +61,16 @@ export class DeathLabScene extends Phaser.Scene {
   create(): void {
     this.quality = new GraphicsQualityController('high'); this.quality.attach(this);
     this.gpu = new GpuVfxSystem(this); this.gpu.setManualPresentationTime(true);
+    this.gpu.setPreviewSpawnObserver(spec => {
+      if (spec.effect === GpuVfxEffectId.DeathFragment) this.followSamples.push({ ...spec });
+    });
     this.gore = new CombatGoreGpuRenderer(this); this.gore.registerGpuVfx(this.gpu);
     this.forest = this.add.tileSprite(0, 0, 2000, 1600, 'death-lab-forest').setDepth(1).setVisible(false);
     this.ghost = this.add.image(0, 0, 'dachs_death', 'badger-death-000')
       .setOrigin(0.5, 0.75).setDisplaySize(48, 96).setDepth(25.1);
     this.postfx = new CameraPostFxController(this, this.cameras.main);
     this.playback = new DeathPlayback({
-      reset: () => { this.gpu.resetPresentationTime(); this.time.now = 0; this.postfx.reset(); },
+      reset: () => { this.gpu.resetPresentationTime(); this.followSamples.length = 0; this.time.now = 0; this.postfx.reset(); },
       spawn: () => {
         const effect = fixtureSnapshot(this.settings);
         if (this.settings.layers.gore) this.gore.playHit({ type: 'hit', x: 0, y: 0,
@@ -80,6 +85,8 @@ export class DeathLabScene extends Phaser.Scene {
         this.ghost.setVisible(this.settings.fixture === 'player' && this.settings.layers.ghost && time < 1200);
         this.ghost.setFrame(`badger-death-${String(Math.min(71, Math.floor(time * 60 / 1000))).padStart(3, '0')}`);
         this.postfx.update(0);
+        const center = this.settings.follow ? deathFollowCenter(this.followSamples, time) : { x: 0, y: 0 };
+        this.cameras.main.centerOn(center.x, center.y);
       },
     });
     this.applySettings(this.settings);
@@ -89,6 +96,7 @@ export class DeathLabScene extends Phaser.Scene {
     this.cleanupControls = attachControls(this.api);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.cleanupControls?.(); this.api.dispose();
+      this.gpu.setPreviewSpawnObserver(null); this.followSamples.length = 0;
       this.gore.destroy(); this.gpu.destroy(); this.postfx.destroy(); this.quality.destroy();
       if (window.deathLab === this.api) delete window.deathLab;
     });
