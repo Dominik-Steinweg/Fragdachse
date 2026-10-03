@@ -101,7 +101,10 @@ export class FlamethrowerUpgradeRenderer {
     startedAt: number,
     now = Date.now(),
     visualStyle: GroundFireVisualStyle = 'normal',
-  ): void {
+    random?: () => number,
+  ): () => void {
+    // A cosmetic caller can cancel only its own flights without clearing other owners' fire.
+    const cancelFlights: (() => void)[] = [];
     for (const target of targets) {
       if (target.landsAt <= now) continue;
       const duration = target.landsAt - now;
@@ -110,15 +113,16 @@ export class FlamethrowerUpgradeRenderer {
       const lightKey = `firechunk:${this.nextChunkLightId++}`;
       this.activeChunkLightKeys.add(lightKey);
       const isVoid = visualStyle === 'void';
+      const colors = isVoid ? VOID_FLAME_COLORS_OUTER : FLAME_COLORS_OUTER;
       const chunk = this.scene.add.image(x, y, isVoid ? TEX_VOID_FLAME_EMBER : TEX_FLAME_EMBER)
         .setDepth(DEPTH.PROJECTILES + 0.4)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(Phaser.Utils.Array.GetRandom([
-          ...(isVoid ? VOID_FLAME_COLORS_OUTER : FLAME_COLORS_OUTER),
-        ]))
+        .setTint(random
+          ? colors[Math.floor(random() * colors.length)]
+          : Phaser.Utils.Array.GetRandom([...colors]))
         .setScale(0.72);
       this.flyingChunks.add(chunk);
-      const arc = Phaser.Math.Between(22, 46);
+      const arc = random ? 22 + Math.floor(random() * 25) : Phaser.Math.Between(22, 46);
       chunk.setPosition(Phaser.Math.Linear(x, target.x, startProgress),
         Phaser.Math.Linear(y, target.y, startProgress) - Math.sin(startProgress * Math.PI) * arc);
       const flightTween = this.scene.tweens.addCounter({
@@ -152,7 +156,16 @@ export class FlamethrowerUpgradeRenderer {
         },
       });
       this.chunkTweens.set(chunk, flightTween);
+      cancelFlights.push(() => {
+        if (!this.flyingChunks.delete(chunk)) return;
+        this.chunkTweens.get(chunk)?.remove();
+        this.chunkTweens.delete(chunk);
+        this.activeChunkLightKeys.delete(lightKey);
+        this.lighting?.releaseLight(lightKey);
+        chunk.destroy();
+      });
     }
+    return () => { for (const cancel of cancelFlights) cancel(); cancelFlights.length = 0; };
   }
 
   syncRings(players: Readonly<Record<string, PlayerNetState>>): void {

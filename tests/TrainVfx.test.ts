@@ -5,13 +5,15 @@ vi.mock('../src/effects/gpu/GpuVfxAtlas', async importOriginal => ({
 }));
 import assert from 'node:assert/strict';
 import { TrainVfxController } from '../src/effects/train/TrainVfxController';
-import { planTrainDestruction, trainVfxSeed, trainRandom, sampleTrainChunk } from '../src/effects/train/TrainVfxModel';
+import { planTrainDestruction, trainVfxSeed, trainRandom } from '../src/effects/train/TrainVfxModel';
 import { GpuVfxEffectId as Effect } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxFrameId as Frame } from '../src/effects/gpu/GpuVfxAtlas';
 
 function fixture(factor = 1) {
   let now = 0, callback: ((delta: number, now: number) => void) | null = null;
   let cleared = 0, released = 0;
+  const flights: any[] = [];
+  let cancelled = 0;
   const particles: any[] = [], transforms: any[] = [], camera: any[] = [], retired: any[] = [];
   const gpu = {
     emissionGeneration: 0, isSuppressed: () => false, now: () => now,
@@ -29,8 +31,12 @@ function fixture(factor = 1) {
   };
   const scene = { cameras: { main: { width: 6000, height: 6000, originX: 0, originY: 0, zoom: 1, scrollX: -2000, scrollY: -2000, worldView: { x: -2000, y: -2000, right: 4000, bottom: 4000 } } } };
   const renderer = new TrainVfxController(scene as never, { gpu: gpu as never,
+    fireChunks: { playFireChunkBurst: (x, y, targets, startedAt, now, style, random) => {
+      flights.push({ x, y, targets, startedAt, now, style, variation: random?.() });
+      let done = false; return () => { if (!done) { cancelled++; done = true; } };
+    } },
     camera: { request: (request: any) => camera.push(request) } as never, sampleGround: () => 0x345678 });
-  return { renderer, particles, transforms, camera, gpu, scene, retired,
+  return { renderer, particles, transforms, camera, gpu, scene, retired, flights, cancelled: () => cancelled,
     tick: (delta: number) => { now += delta; callback?.(delta, now); },
     cleanup: () => ({ cleared, released, registered: callback !== null }) };
 }
@@ -52,22 +58,25 @@ it('seeds match Float32 wire coordinates and do not consume Math.random', () => 
   for (let i = 0; i < 100; i++) { const n = a(); assert.equal(n, b()); assert(n >= 0 && n < 1); }
 });
 
-it('projects height above the XY path and settles at a fixed ground point', () => {
-  const path = { x: 10, y: 20, dx: 60, dy: -40, height: 50, flightMs: 800, spin: 4 };
-  assert.equal(sampleTrainChunk(path, 0).z, 0);
-  assert.equal(sampleTrainChunk(path, 400).z, 50);
-  const end = sampleTrainChunk(path, 800);
-  assert.equal(end.x, 70); assert.equal(end.y, -20); assert(end.landed);
-  assert.deepEqual(end, sampleTrainChunk(path, 5000));
+it('delegates seeded flights to the base renderer and cancels only its own flights on reset/destroy', () => {
+  const a = fixture(), b = fixture();
+  for (const f of [a,b]) { f.renderer.playExplosion(100,120,160); f.tick(16); }
+  assert.deepEqual(a.flights,b.flights); assert(a.flights.length > 0);
+  assert(a.flights.every(f => f.style === 'normal' && f.targets.every((t:any) => t.landsAt > f.now)));
+  assert(!a.particles.some(p => p.effect === Effect.TrainDebris));
+  a.gpu.emissionGeneration++; a.tick(16);
+  assert.equal(a.cancelled(),a.flights.length); assert.equal(b.cancelled(),0);
+  b.renderer.destroy(); b.renderer.destroy(); assert.equal(b.cancelled(),b.flights.length);
 });
 
-it('keeps chunk trajectories and fixed-time trails stable at different frame rates', () => {
-  const run = (delta: number) => {
-    const f = fixture(); f.renderer.playExplosion(100, 120, 160);
-    for (let i = 0; i < 1000 / delta; i++) f.tick(delta);
-    return f.particles.filter(p => (p.frame === Frame.FlameTongue || p.frame === Frame.GroundFireSurface)).map(p => ({ x: p.x, y: p.y, at: p.at, tint: p.tint })).sort((a,b)=>a.at-b.at || a.x-b.x || a.y-b.y || a.tint-b.tint);
-  };
-  assert.deepEqual(run(20), run(40));
+it('skips already landed flights after a long frame and preserves shared targets across quality levels', () => {
+  const high = fixture(), low = fixture(.25), late = fixture();
+  for (const f of [high,low,late]) f.renderer.playExplosion(100,120,160);
+  high.tick(16); low.tick(16); late.tick(5000);
+  assert.equal(late.flights.length,0);
+  assert(low.flights[0].targets.length < high.flights[0].targets.length);
+  assert.deepEqual(low.flights[0].targets,high.flights[0].targets.slice(0,low.flights[0].targets.length));
+  for (const f of [high,low,late]) f.renderer.destroy();
 });
 
 it('uses terrain-colored motion dust, stays quiet at rest and stops emission when the train disappears', () => {
@@ -118,7 +127,6 @@ it('emits slow train dust in the actual origin-zero viewport, even with stale wo
 });
 
 import { TrainRenderer } from '../src/train/TrainRenderer';
-import { sampleTrainEjection } from '../src/effects/train/TrainVfxModel';
 it('bounds keyed fire lights and releases them on generation changes and teardown', () => {
  const f=fixture(); const live=new Map<string, unknown>(); let peak=0;
  const light={setLight:(key:string,...args:unknown[])=>{live.set(key,args);peak=Math.max(peak,live.size);},releaseLight:(key:string)=>live.delete(key)};
@@ -158,24 +166,6 @@ it('covers every segment synchronously on High and Low, exactly once per destruc
     f.renderer.resetDestruction(); f.renderer.disintegrate(50, ys); assert(f.particles.length > count);
     f.renderer.destroy();
   }
-});
-it('breaks rising plates before landing and leaves only small, expiring fragments', () => {
-  const f = fixture(); f.renderer.disintegrate(50, [100]);
-  const plates = f.particles.filter(p => p.effect === Effect.TrainDebris);
-  assert(plates.length > 0); assert(plates.every(p => p.lifeMs < 1000));
-  for (let i = 0; i < 40; i++) f.tick(20);
-  assert(f.retired.length >= plates.length * 2);
-  const pieces = f.particles.filter(p => p.effect === Effect.TrainDebris && p.at > 0);
-  assert(pieces.length > 0); assert(pieces.every(p => p.scaleStart * 56 < 8));
-  assert(pieces.every(p => p.scaleEnd < p.scaleStart));
-  for (let i = 0; i < 40; i++) f.tick(20);
-  const groundChips = f.particles.filter(p => p.effect === Effect.TrainResidue && p.frame === Frame.ExplosionChunk);
-  assert(groundChips.length > 0); assert(groundChips.every(p => p.scaleStart * 56 < 8));
-  const path = { x: 0, y: 0, dx: 90, dy: 20, height: 80, flightMs: 500, spin: 4 };
-  assert(sampleTrainEjection(path, 250).z > 0);
-  const apex = sampleTrainEjection(path, 500); assert(apex.broken); assert.equal(apex.z, 80);
-  assert.deepEqual(sampleTrainEjection(path, 5000), apex);
-  f.renderer.destroy();
 });
 it('immediately hides the complete train and never restores it from a stale alive snapshot', () => {
   const f: any = Object.create(TrainRenderer.prototype); let visible = true, starts = 0;

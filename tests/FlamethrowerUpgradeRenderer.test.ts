@@ -168,3 +168,36 @@ describe('fire-chunk authoritative presentation times', () => {
     expect(images.every(image => !image.active)).toBe(true);
   });
 });
+
+describe('fire-chunk scoped cancellation', () => {
+  it('cancels one burst without landing effects or touching another owner, and tolerates global clear', () => {
+    const images: any[] = [], counters: any[] = [];
+    const scene = {
+      add: { image: (x: number, y: number) => {
+        const image: any = { x, y, active: true, destroy: vi.fn(() => { image.active = false; }) };
+        for (const method of ['setDepth','setBlendMode','setTint','setScale','setRotation']) image[method] = () => image;
+        image.setPosition = (x: number, y: number) => { Object.assign(image, { x, y }); return image; };
+        images.push(image); return image;
+      } },
+      tweens: { addCounter: (options: any) => {
+        const tween = { ...options, remove: vi.fn() }; counters.push(tween); return tween;
+      }, killTweensOf: vi.fn() },
+    };
+    const renderer = new FlamethrowerUpgradeRenderer(scene as never, {} as never);
+    const lighting = { setLight: vi.fn(), releaseLight: vi.fn(), pulse: vi.fn() };
+    renderer.setLightingSystem(lighting as never);
+    const random = vi.fn(() => .25);
+    const cancel = renderer.playFireChunkBurst(0,0,[{x:80,y:50,landsAt:600}],0,0,'normal',random);
+    const cancelOther = renderer.playFireChunkBurst(0,0,[{x:20,y:40,landsAt:600}],0,0);
+    counters[0].onUpdate({getValue:()=>.5});
+    expect(lighting.setLight).toHaveBeenCalled(); expect(random).toHaveBeenCalled();
+    cancel(); cancel();
+    expect(images[0].active).toBe(false); expect(images[1].active).toBe(true);
+    expect(counters[0].remove).toHaveBeenCalledOnce(); expect(counters[1].remove).not.toHaveBeenCalled();
+    expect(lighting.releaseLight).toHaveBeenCalledOnce(); expect(lighting.pulse).not.toHaveBeenCalled();
+    counters[1].onComplete();
+    expect(lighting.pulse).toHaveBeenCalledOnce();
+    renderer.clear(); cancelOther();
+    expect(images.every(image=>!image.active)).toBe(true);
+  });
+});

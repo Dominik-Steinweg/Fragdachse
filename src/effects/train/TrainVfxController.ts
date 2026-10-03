@@ -1,3 +1,5 @@
+import type { FlamethrowerUpgradeRenderer } from '../FlamethrowerUpgradeRenderer';
+import type { FireChunkFlight } from '../../types';
 import type { LightingSystem } from '../LightingSystem';
 import { createVisibleWorldView, getVisibleWorldView } from '../../graphics/CameraWorldView';
 import type * as Phaser from 'phaser';
@@ -8,12 +10,13 @@ import { TRAIN } from '../../train/TrainConfig';
 import { GpuVfxFrameId as Frame, getGpuVfxFrame } from '../gpu/GpuVfxAtlas';
 import { GpuVfxEffectId as Effect } from '../gpu/GpuVfxEffects';
 import { GpuVfxEase as Ease } from '../gpu/GpuVfxEase';
-import { createGpuVfxMemberHandle, type GpuVfxMemberHandle, type GpuVfxSystem } from '../gpu/GpuVfxSystem';
+import type { GpuVfxSystem } from '../gpu/GpuVfxSystem';
 import type { GpuVfxSpawnSpec } from '../gpu/GpuVfxSpawnSpec';
 import { GpuVfxLaneId as Lane } from '../gpu/GpuVfxRenderLanes';
-import { trainRandom, trainVfxSeed, sampleTrainChunk, sampleTrainEjection, type TrainChunkPath } from './TrainVfxModel';
+import { trainRandom, trainVfxSeed } from './TrainVfxModel';
 
 export interface TrainVfxPorts {
+  readonly fireChunks?: Pick<FlamethrowerUpgradeRenderer, 'playFireChunkBurst'>;
   readonly lighting?: Pick<LightingSystem, 'setLight' | 'releaseLight'>;
   readonly gpu: GpuVfxSystem;
   readonly camera: Pick<CameraFeedbackController, 'request'>;
@@ -21,12 +24,6 @@ export interface TrainVfxPorts {
 }
 
 interface Burst { x: number; y: number; radius: number; at: number; seed: number; phase: number }
-interface Ejection extends TrainChunkPath { at: number; body: GpuVfxMemberHandle; shadow: GpuVfxMemberHandle }
-interface Chunk extends TrainChunkPath {
-  at: number; nextTrail: number; burnMs: number; landed: boolean;
-  body: GpuVfxMemberHandle; shadow: GpuVfxMemberHandle;
-}
-
 /** World-owned cosmetic controller. No FireSystem zones, collision bodies, or gameplay timers. */
 export class TrainVfxController {
   private readonly specs = new Map<number, GpuVfxSpawnSpec>();
@@ -34,8 +31,7 @@ export class TrainVfxController {
   private readonly unsubscribe: () => void;
   private generation: number;
   private readonly bursts: Burst[] = [];
-  private readonly chunks: Chunk[] = [];
-  private readonly ejections: Ejection[] = [];
+  private readonly flights: { until: number; count: number; cancel: () => void }[] = [];
   private disintegrated = false;
   private audio: GameAudioSystem | null = null;
   private pose: { x: number; y: number; dir: 1 | -1; segments: readonly number[] } | null = null;
@@ -79,12 +75,7 @@ export class TrainVfxController {
   disintegrate(x: number, segments: readonly number[]): void {
     if (this.disintegrated || this.destroyed || this.ports.gpu.isSuppressed()) return;
     this.disintegrated = true;
-    const now = this.ports.gpu.now(), factor = this.ports.gpu.quality.getEmissionFactor(Effect.TrainDebris);
-    const view = getVisibleWorldView(this.scene.cameras.main, this.cameraView);
-    const centerY = (view.y + view.bottom) / 2;
-    const heroSegments = new Set(segments.map((y, i) => ({ y, i }))
-      .filter(p => this.visible(x, p.y, 100)).sort((a, b) => Math.abs(a.y - centerY) - Math.abs(b.y - centerY))
-      .slice(0, 4).map(p => p.i));
+    const now = this.ports.gpu.now();
     for (let i = 0; i < Math.min(segments.length, TRAIN.WAGON_COUNT + 1); i++) {
       const y = segments[i], height = i ? TRAIN.WAGON_HEIGHT : TRAIN.LOCO_HEIGHT;
       const random = trainRandom(trainVfxSeed(x, y, 64));
@@ -105,18 +96,6 @@ export class TrainVfxController {
         this.particle(Effect.TrainSmoke, Frame.ExplosionSmoke, cx, cy, 12, -6, 38, 85, 1700, .65, 0x393027, now);
         this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, cx, cy, 0, 0, 40, 66, 9000, .5, 0x211c14, now);
       }
-      for (let j = 0; j < 2; j++) {
-        const path: TrainChunkPath = { x, y: y + (random() - .5) * height * .7,
-          dx: (j ? 1 : -1) * (75 + random() * 90), dy: (random() - .5) * 100,
-          height: 70 + random() * 45, flightMs: 650 + random() * 140, spin: (random() - .5) * 8 };
-        if (j >= Math.ceil(2 * factor) || !this.visible(path.x, path.y, 180) || !heroSegments.has(i) || this.ejections.length >= 8) continue;
-        const body = createGpuVfxMemberHandle(), shadow = createGpuVfxMemberHandle();
-        if (!this.particle(Effect.TrainDebris, Frame.ExplosionChunk, path.x, path.y, 0, 0,
-          29, 66, path.flightMs, 1, 0x3e3932, now, now, body)) continue;
-        this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, path.x, path.y, 0, 0,
-          18, 54, path.flightMs, .65, 0x171512, now, now, shadow);
-        this.ejections.push({ ...path, at: now, body, shadow });
-      }
     }
   }
 
@@ -134,7 +113,8 @@ export class TrainVfxController {
     this.unsubscribe();
     this.clearLights();
     this.ports.gpu.releaseSource(this.source);
-    this.bursts.length = this.chunks.length = this.ejections.length = 0;
+    this.bursts.length = 0;
+    this.cancelFlights();
     this.stopMovement();
   }
 
@@ -150,7 +130,8 @@ export class TrainVfxController {
     if (this.generation !== gpu.emissionGeneration || gpu.isSuppressed()) {
       gpu.clearSource(this.source);
       this.clearLights();
-      this.bursts.length = this.chunks.length = this.ejections.length = 0;
+      this.bursts.length = 0;
+      this.cancelFlights();
       this.disintegrated = false;
       this.before = null;
       this.generation = gpu.emissionGeneration;
@@ -172,70 +153,16 @@ export class TrainVfxController {
       }
       if (b.phase === times.length) this.bursts.splice(i, 1);
     }
-    for (let i = this.chunks.length - 1; i >= 0; i--) {
-      const c = this.chunks[i], age = now - c.at;
-      if (age >= c.flightMs + c.burnMs + 900) { this.chunks.splice(i, 1); continue; }
-      const p = sampleTrainChunk(c, age);
-      if (i < 6 && age < c.flightMs + c.burnMs) this.light(`train-chunk-${trainVfxSeed(c.x, c.y, 80)}-${c.spin}`, p.x, p.groundY, 65,
-        .6 * Math.max(0, 1 - Math.max(0, age - c.flightMs) / c.burnMs));
-      gpu.updateTransform(c.body, p.x, p.y, 0, 0, p.rotation);
-      gpu.updateTransform(c.shadow, p.x, p.groundY, 0, 0, 0);
-      if (p.landed && !c.landed) {
-        c.landed = true;
-        gpu.releaseMember(c.body);
-        // Only a tiny static chip remains, under figures; airborne material never becomes a prop.
-        this.particle(Effect.TrainResidue, Frame.ExplosionChunk, p.x, p.groundY, 0, 0,
-          4 + Math.abs(c.spin) * .35, 1.5, c.burnMs + 900, .8, 0x514439, now);
-        this.particle(Effect.TrainDust, Frame.ExplosionSmoke, p.x, p.groundY, 0, 0, 22, 65, 750, .55, this.groundColor(p.x, p.groundY), now);
-        this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, p.x, p.groundY, 0, 0, 30, 42, 8500, .8, 0x171511, now);
-        this.particle(Effect.TrainHeat, Frame.GroundFireBedB, p.x, p.groundY, 0, 0, 12, 4, 1800, .85, 0xff7628, now);
-      }
-      if (now - c.nextTrail > 300) c.nextTrail += Math.floor((now - c.nextTrail) / 100) * 100;
-      for (let samples = 0; samples < 4 && now >= c.nextTrail; samples++) {
-        const at = c.nextTrail, trailAge = at - c.at;
-        c.nextTrail += 100;
-        if (trailAge >= c.flightMs + c.burnMs) break;
-        const trail = sampleTrainChunk(c, trailAge);
-        // Fixed-time positions: 30/60/144 Hz produce the same trail samples, with aged GPU spawns.
-        if (trail.landed && Math.round(trailAge / 100) % 2) continue;
-        const heat = trail.landed ? Math.max(0, 1 - Math.pow((trailAge - c.flightMs) / c.burnMs, 2)) : 1;
-        const flicker = .8 + .2 * Math.sin(trailAge * .037 + c.spin);
-        this.particle(Effect.TrainHeat, trail.landed ? Frame.GroundFireSurface : Frame.FlameTongue,
-          trail.x, trail.y, trail.landed ? 3 : -c.dx / c.flightMs * 160, trail.landed ? -9 : -c.dy / c.flightMs * 160,
-          (trail.landed ? 14 : 24) * flicker * heat, 9 * heat, trail.landed ? 480 : 280, .92 * heat, 0xff5c0a, at, now);
-        this.particle(Effect.TrainHeat, Frame.FlameTongue, trail.x, trail.y, 2, -12,
-          9 * flicker * heat, 4, 210, .96 * heat, 0xffed9a, at, now);
-        if (Math.round(trailAge / 100) % (trail.landed ? 6 : 3) === 0) {
-          this.particle(Effect.TrainSmoke, Frame.ExplosionSmoke, trail.x, trail.y, 12, -16,
-            19, 60, 2800, .82 * heat, 0x292720, at, now);
-        }
-      }
+    // Drop completed cancellation handles; rendering and landing remain owned by the shared renderer.
+    for (let i = this.flights.length - 1; i >= 0; i--) {
+      if (now >= this.flights[i].until) { this.flights[i].cancel(); this.flights.splice(i, 1); }
     }
-    this.updateEjections(now);
     this.finishLights();
   }
 
-  private updateEjections(now: number): void {
-    const gpu = this.ports.gpu;
-    for (let i = this.ejections.length - 1; i >= 0; i--) {
-      const c = this.ejections[i], p = sampleTrainEjection(c, now - c.at);
-      if (!p.broken) {
-        gpu.updateTransform(c.body, p.x, p.y, 0, 0, p.rotation);
-        gpu.updateTransform(c.shadow, p.x, p.groundY, 0, 0, 0);
-        continue;
-      }
-      gpu.releaseMember(c.body); gpu.releaseMember(c.shadow);
-      const at = c.at + c.flightMs, random = trainRandom(trainVfxSeed(c.x, c.y, 32));
-      const count = Math.ceil(3 * gpu.quality.getEmissionFactor(Effect.TrainDebris));
-      for (let j = 0; j < 3; j++) {
-        const angle = random() * Math.PI * 2, reach = 18 + random() * 46;
-        const path = { x: p.x, y: p.y, dx: Math.cos(angle) * reach, dy: Math.sin(angle) * reach,
-          height: 15 + random() * 25, flightMs: 380 + random() * 240, spin: (random() - .5) * 9 };
-        if (j < count) this.chunk(path, at, now);
-      }
-      this.particle(Effect.TrainSmoke, Frame.ExplosionSmoke, p.x, p.y, 10, -8, 20, 50, 1500, .6, 0x34302a, at, now);
-      this.ejections.splice(i, 1);
-    }
+  private cancelFlights(): void {
+    for (const flight of this.flights) flight.cancel();
+    this.flights.length = 0;
   }
 
   private finishLights(): void {
@@ -292,13 +219,7 @@ export class TrainVfxController {
     if (phase === 0) {
       this.particle(Effect.TrainHeat, Frame.ExplosionCore, b.x, b.y, 0, 0, 60 * size, b.radius * .8, 190, 1, 0xffefb9, at, now);
       this.particle(Effect.TrainDust, Frame.ExplosionRing, b.x, b.y, 0, 0, 35, b.radius * 3.4, 850, .65, this.groundColor(b.x, b.y), at, now);
-      for (let i = 0; i < (main ? 10 : 4); i++) {
-        const angle = random() * Math.PI * 2, reach = (65 + random() * 130) * size;
-        const path: TrainChunkPath = { x: b.x, y: b.y, dx: Math.cos(angle) * reach, dy: Math.sin(angle) * reach,
-          height: 55 + random() * 100, flightMs: 950 + random() * 850, spin: (random() - .5) * 14 };
-        // Consume the full seeded stream before quality/culling, so shared chunks take identical paths.
-        if (i < Math.ceil((main ? 10 : 4) * factor)) this.chunk(path, at, now);
-      }
+      this.fireChunkBurst(b, at, now);
       for (let i = 0; i < Math.ceil(18 * size * factor); i++) {
         const angle = random() * Math.PI * 2, speed = (70 + random() * 190) * size;
         this.particle(Effect.TrainHeat, Frame.ExplosionStreak, b.x, b.y,
@@ -337,16 +258,24 @@ export class TrainVfxController {
     }
   }
 
-  private chunk(path: TrainChunkPath, at: number, now: number): void {
-    if (this.chunks.length >= 64) return;
-    const body = createGpuVfxMemberHandle(), shadow = createGpuVfxMemberHandle();
-    const burnMs = 5200 + Math.abs(path.spin) * 100;
-    const life = path.flightMs + burnMs + 900;
-    const p = sampleTrainChunk(path, now - at);
-    const size = 4 + Math.abs(path.spin) * .35;
-    if (!this.particle(Effect.TrainDebris, Frame.ExplosionChunk, p.x, p.y, 0, 0, size, 1.5, path.flightMs, 1, 0x827666, at, now, body)) return;
-    this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, p.x, p.groundY, 0, 0, size * 1.3, size, life, .65, 0x14130f, at, now, shadow);
-    this.chunks.push({ ...path, at, nextTrail: at, burnMs, landed: false, body, shadow });
+  private fireChunkBurst(b: Burst, at: number, now: number): void {
+    const renderer = this.ports.fireChunks;
+    const landsAt = at + 600;
+    if (!renderer || now >= landsAt) return;
+    const available = 48 - this.flights.reduce((sum, flight) => sum + flight.count, 0);
+    const factor = this.ports.gpu.quality.getEmissionFactor(Effect.TrainDebris);
+    const count = Math.min(available, Math.ceil((b.radius >= 140 ? 8 : 3) * factor));
+    if (count <= 0) return;
+    const random = trainRandom(b.seed ^ 0x46f1);
+    const targets: FireChunkFlight[] = [];
+    for (let i = 0; i < count; i++) {
+      const angle = random() * Math.PI * 2, distance = 45 + random() * b.radius;
+      targets.push({ x: b.x + Math.cos(angle) * distance, y: b.y + Math.sin(angle) * distance, landsAt });
+    }
+    // Same flight, follow-light and impact as base destruction. No host ground-fire callback.
+    const cancel = renderer.playFireChunkBurst(b.x, b.y, targets, at, now, 'normal', trainRandom(b.seed ^ 0x7b51));
+    // Allow the shared Scene tween to run its completion before retiring the cancellation handle.
+    this.flights.push({ until: landsAt + 1000, count, cancel });
   }
 
   private dustColor(x: number, y: number): number {
@@ -363,11 +292,10 @@ export class TrainVfxController {
   }
 
   private particle(effect: number, frame: Frame, x: number, y: number, vx: number, vy: number,
-    size: number, endSize: number, life: number, alpha: number, color: number, at: number, now = at,
-    handle?: GpuVfxMemberHandle): boolean {
+    size: number, endSize: number, life: number, alpha: number, color: number, at: number, now = at): boolean {
     const s = this.specs.get(effect)!;
     if (effect === Effect.TrainSmoke) s.lane = Lane.TrainAftermathSmoke;
-    if (effect === Effect.TrainDebris) s.lane = handle ? Lane.TrainAftermathDebris : Lane.TrainBody;
+    if (effect === Effect.TrainDebris) s.lane = Lane.TrainBody;
     const age = Math.max(0, now - at);
     if (age >= life || this.source < 0) return false;
     s.frame = frame; s.x = x; s.y = y; s.vx = vx; s.vy = vy;
@@ -375,12 +303,12 @@ export class TrainVfxController {
     s.scaleStart = size / getGpuVfxFrame(frame).width;
     s.scaleEnd = endSize / getGpuVfxFrame(frame).width;
     s.scaleEase = Ease.QuadOut; s.alphaStart = alpha; s.alphaEnd = 0;
-    s.alphaEase = effect === Effect.TrainSmoke || (effect === Effect.TrainDebris && handle) ? Ease.CubicIn : Ease.Linear;
+    s.alphaEase = effect === Effect.TrainSmoke ? Ease.CubicIn : Ease.Linear;
     s.tint = color;
     // White heat belongs to the detonation core; trails stay orange and read as burning metal.
     s.tintBlendStart = effect === Effect.TrainHeat && frame === Frame.ExplosionCore ? .3 : 1;
     s.tintBlendEnd = 1;
     s.stretchStart = frame === Frame.FlameTongue ? 1.6 : 1; s.stretchEnd = 1;
-    return this.ports.gpu.spawn(s, this.source, now, age, handle);
+    return this.ports.gpu.spawn(s, this.source, now, age);
   }
 }

@@ -30,23 +30,3 @@ export function planTrainDestruction(
     ...p, radius: 80, delayMs: 110 + i * 120 + Math.floor(random() * 20),
   }))];
 }
-
-export interface TrainChunkPath {
-  x: number; y: number; dx: number; dy: number; height: number; flightMs: number; spin: number;
-}
-
-/** A 3D arc above a fixed XY landing point. Gravity never accelerates across the map. */
-export function sampleTrainChunk(path: TrainChunkPath, ageMs: number) {
-  const t = Math.max(0, Math.min(1, ageMs / path.flightMs));
-  const z = 4 * path.height * t * (1 - t);
-  const x = path.x + path.dx * t, groundY = path.y + path.dy * t;
-  return { x, y: groundY - z * .35, groundY, z, rotation: path.spin * t, landed: t === 1 };
-}
-
-/** Rising fragments break at the apex; there is deliberately no large-fragment landing state. */
-export function sampleTrainEjection(path: TrainChunkPath, ageMs: number) {
-  const t = Math.max(0, Math.min(1, ageMs / path.flightMs));
-  const z = path.height * Math.sin(t * Math.PI / 2);
-  const x = path.x + path.dx * t, groundY = path.y + path.dy * t;
-  return { x, y: groundY - z * .35, groundY, z, rotation: path.spin * t, broken: t === 1 };
-}
