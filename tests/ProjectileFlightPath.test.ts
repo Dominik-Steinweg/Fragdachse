@@ -23,6 +23,33 @@ function projectile(path = curve()): SyncedProjectile {
 }
 
 describe('projectile flight path', () => {
+  it('keeps encoded strings independent across nested calls, failures and buffer reuse', () => {
+    const first = curve(), firstWire = encodeProjectileFlightPath(first);
+    const nested = { ...curve(), ended: true };
+    const outer = { ...first, get timeMs() {
+      expect(decodeProjectileFlightPath(encodeProjectileFlightPath(nested))).toEqual(nested);
+      return first.timeMs;
+    } };
+    expect(encodeProjectileFlightPath(outer)).toBe(firstWire);
+    expect(() => encodeProjectileFlightPath({ ...first, timeMs: NaN })).toThrow();
+    expect(encodeProjectileFlightPath(first)).toBe(firstWire);
+    expect(decodeProjectileFlightPath(firstWire)).toEqual(first);
+  });
+
+  it('preserves standard wire bytes when native base64 is unavailable', () => {
+    const prototype = Uint8Array.prototype as Uint8Array & { toBase64?: () => string };
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, 'toBase64');
+    const path = { ...curve(), ended: true }, wire = encodeProjectileFlightPath(path);
+    try {
+      Object.defineProperty(prototype, 'toBase64', { configurable: true, value: undefined });
+      expect(encodeProjectileFlightPath(path)).toBe(wire);
+      expect(decodeProjectileFlightPath(wire)).toEqual(path);
+    } finally {
+      if (descriptor) Object.defineProperty(prototype, 'toBase64', descriptor);
+      else delete prototype.toBase64;
+    }
+  });
+
   it('encodes straight fixed-step travel with a jittering wall clock without removing temporal samples', () => {
     const recorder = new ProjectilePathRecorder();
     const epoch = 1_800_000_000_000;
