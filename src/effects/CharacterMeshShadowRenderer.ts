@@ -33,6 +33,13 @@ class MeshSlot {
   seen = false;
   solid = false;
   drawSubmissions = 0;
+  private maskValid = false;
+  private lastPose = -1;
+  private lastWeapon: CharacterMeshData | undefined;
+  private lastSolid = false;
+  private lastCasts = false;
+  private lastTexture: WebGLTexture | null | undefined;
+  private readonly maskInputs = new Float64Array(43);
   constructor(scene: Phaser.Scene, readonly index: number, private readonly size: number,
     private readonly meshes: ReadonlyMap<string, CharacterMeshData>, private readonly projector: CharacterMeshProjector,
     private readonly clouds: SunCloudState, receiver: CharacterShadowReceiver) {
@@ -94,12 +101,41 @@ class MeshSlot {
     b[2] = b[2] - b[0] + 2 * pad; b[3] = b[3] - b[1] + 2 * pad;
     b[0] -= pad; b[1] -= pad;
     this.horizontalStep[0] = softness / b[2]; this.verticalStep[1] = softness / b[3];
-    this.raw.draw(this.size, this.size);
-    let passes = 1;
-    if (!this.solid && this.strength[0] > 0) { this.horizontal.draw(this.size, this.size); this.blurred.draw(this.size, this.size); passes += 2; }
+    let passes = 0;
+    if (this.maskChanged()) {
+      this.raw.draw(this.size, this.size); passes = 1;
+      if (!this.solid && this.strength[0] > 0) { this.horizontal.draw(this.size, this.size); this.blurred.draw(this.size, this.size); passes += 2; }
+      this.lastTexture = this.raw.shader.glTexture?.webGLTexture;
+      this.maskValid = true;
+    }
     this.shader.textures[0] = this.solid || this.strength[0] <= 0 ? this.raw.shader.texture! : this.blurred.shader.texture!;
     this.shader.setPosition(b[0] + b[2] / 2, b[1] + b[3] / 2).setSize(b[2], b[3]).setOrigin(.5).setVisible(true);
     return passes;
+  }
+  /** Reuse only bit-for-bit equal numeric inputs. Cloud motion, opacity and the
+   * receiver still enter the visible composite every frame. Context restoration
+   * replaces the raw texture handle and therefore invalidates this cache. */
+  private maskChanged(): boolean {
+    const casts = this.strength[0] > 0;
+    let changed = !this.maskValid || this.lastPose !== this.pose || this.lastWeapon !== this.weapon
+      || this.lastSolid !== this.solid || this.lastCasts !== casts
+      || this.lastTexture !== this.raw.shader.glTexture?.webGLTexture;
+    changed = this.trackInputs(this.model, 0) || changed;
+    if (this.weapon) changed = this.trackInputs(this.weaponModel, 16) || changed;
+    changed = this.trackInputs(this.bounds, 32) || changed;
+    changed = this.trackInputs(this.sun, 36) || changed;
+    changed = this.trackInputs(this.horizontalStep, 39) || changed;
+    changed = this.trackInputs(this.verticalStep, 41) || changed;
+    this.lastPose = this.pose; this.lastWeapon = this.weapon; this.lastSolid = this.solid; this.lastCasts = casts;
+    return changed;
+  }
+  private trackInputs(values: ArrayLike<number>, offset: number): boolean {
+    let changed = false;
+    for (let i = 0; i < values.length; i++) {
+      if (this.maskInputs[offset + i] !== values[i]) changed = true;
+      this.maskInputs[offset + i] = values[i];
+    }
+    return changed;
   }
   destroy(): void { this.shader.destroy(); this.blurred.destroy(); this.horizontal.destroy(); this.raw.destroy(); }
 }

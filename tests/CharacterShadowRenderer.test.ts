@@ -218,10 +218,36 @@ it('binary manifest reaches projected indexed draws and one visible receiver-mas
   expect(context.state.blend).toEqual({name:'prior'});
  }
  f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.uploadedBytes).toBe(0);
+ expect(f.meshRenderer.inspect().costs.targetPasses).toBe(0);
  p.displayObject.frame.name='4';f.meshRenderer.sync([p] as never,true);
  expect(f.meshRenderer.inspect().costs.uploadedBytes).toBe(f.meshes.get('badger')!.spec.vertexCount*3*4);
  f.meshRenderer.destroy();
  expect(f.scene.sys.renderer.deleteBuffer).toHaveBeenCalledTimes(4);
+});
+
+it('reuses identical mesh masks but redraws pose, transform, sunlight, weapon and restored textures',async()=>{
+ const f=await meshFixture(),p=player();p.getHeldItemDisplayObject=()=>null as any;
+ f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.targetPasses).toBe(3);
+ for(const change of [()=>{p.displayObject.frame.name='4';},()=>{p.displayObject.x+=.01;},
+  ()=>{p.displayObject.rotation+=.01;},()=>{f.clouds.sunPath.sun[0]+=.001;}]){
+  f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.targetPasses).toBe(0);
+  change();f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.targetPasses).toBe(3);
+ }
+ // The display keeps opacity/cloud updates; they do not change the union mask.
+ p.displayObject.alpha=.5;f.clouds.timeSec+=1;f.meshRenderer.sync([p] as never,true);
+ expect(f.meshRenderer.inspect().costs.targetPasses).toBe(0);
+ expect(f.meshRenderer.inspect().instances[0].opacityAtBody.sprite).toBe(.5);
+ p.weapon.texture.key=meshForHeldTexture.keys().next().value!;
+ Object.assign(p.weapon,{displayWidth:38.4,displayHeight:38.4});
+ p.weapon.frame.realWidth=p.weapon.frame.realHeight=128;
+ p.getHeldItemDisplayObject=()=>p.weapon;
+ f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.targetPasses).toBe(3);
+ f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.targetPasses).toBe(0);
+ p.getHeldItemDisplayObject=()=>null as any;
+ f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.targetPasses).toBe(3);
+ const slot=(f.meshRenderer as any).pool[0];slot.raw.shader.glTexture={webGLTexture:{}};
+ f.meshRenderer.sync([p] as never,true);expect(f.meshRenderer.inspect().costs.targetPasses).toBe(3);
+ f.meshRenderer.destroy();
 });
 it('reuses bounded slots, excludes hidden players, supports raw-mask debug and leaves only contact at night',async()=>{
  const f=await meshFixture(),p=player();p.getHeldItemDisplayObject=()=>null as any;

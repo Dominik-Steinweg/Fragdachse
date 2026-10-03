@@ -22,11 +22,11 @@ export const CANOPY_V9_GLSL=`
 uniform float uCrownHorizons;
 uniform sampler2D uCrownData,uCrownH0,uCrownH1;
 uniform vec4 uHorizonWeights0,uHorizonWeights1,uCrownModel;
-uniform vec3 uCrownAmbient,uCrownSunColor;
+uniform vec3 uCrownSunColor;
 uniform float uCrownSunWeight;
 vec3 crownLinear(vec3 x){return mix(x/12.92,pow((x+.055)/1.055,vec3(2.4)),step(vec3(.04045),x));}
 vec3 crownSrgb(vec3 x){return mix(x*12.92,1.055*pow(max(x,vec3(0)),vec3(1.0/2.4))-.055,step(vec3(.0031308),x));}
-vec3 crownV9(vec3 albedo,vec2 uv,vec2 world) {
+vec3 crownV9(vec3 albedo,vec2 uv,vec2 world,vec3 crownAmbient) {
   vec4 d=texture2D(uCrownData,uv);
   vec4 h0=vec4(0.0),h1=vec4(0.0);
   if(uCrownHorizons>0.5){h0=texture2D(uCrownH0,uv);h1=texture2D(uCrownH1,uv);}
@@ -37,7 +37,7 @@ vec3 crownV9(vec3 albedo,vec2 uv,vec2 world) {
   float visibility=uCrownHorizons>0.5?mix(.16,1.0,smoothstep(-uCrownModel.w,uCrownModel.w,elevation-horizon)):1.0;
   float ndl=dot(n,uCrownSun),diffuse=clamp((ndl+uCrownModel.x)/(1.0+uCrownModel.x),0.0,1.0);
   float back=uCrownModel.z*pow(1.0-d.a,1.5)*max(0.0,-ndl+.15)*cos(elevation)*(.35+.65*visibility);
-  vec3 ambient=uCrownAmbient*mix(1.0,d.b,uCrownModel.y);
+  vec3 ambient=crownAmbient*mix(1.0,d.b,uCrownModel.y);
   vec3 direct=uCrownSunColor*uCrownStrength*uCrownSunWeight*(diffuse*visibility+back)*cloudTransmission(world);
   vec3 shade=mix(vec3(1.0),mix(uCloudCanopyShade,vec3(1.0),cloudShadow(world,uCloudTime)),uCloudStrength*uCloudDensity);
   return crownSrgb(crownLinear(albedo)*(ambient+direct))*shade;

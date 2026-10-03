@@ -1,4 +1,5 @@
 import type * as Phaser from 'phaser';
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { CHARACTER_MATERIAL_PAGES } from './CharacterMaterialAssetManifest';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
 
@@ -10,6 +11,7 @@ export function preloadCharacterMaterialAssets(scene: Phaser.Scene): void {
       if (key!==page.key || type!=='image') return;
       const complete=file.onProcessComplete;
       file.onProcessComplete=():void=>{
+        const started = loadingTimeline.start();
         try {
           const image=file.data as HTMLImageElement;
           if(image.width!==page.width || image.height!==page.height)throw new Error('Character material dimensions');
@@ -18,6 +20,7 @@ export function preloadCharacterMaterialAssets(scene: Phaser.Scene): void {
             gl.RGBA,image,page.width,page.height,false,false,false);
           if(!scene.textures.addGLTexture(page.key,wrapper)){wrapper.destroy();throw new Error('Character material upload');}
         } catch { file.onProcessError(); return; }
+        finally { loadingTimeline.end('assets/character-material-upload', started); }
         complete.call(file);
       };
       file.addToCache=():void=>{};

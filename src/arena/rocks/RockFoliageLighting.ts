@@ -75,6 +75,15 @@ vec3 foliageResponse(vec2 world) {
   return mix(broad,surface,coverage);
 }
 `;
+export const ROCK_FOLIAGE_MATERIAL = { name: 'RockFoliageSingleCoverage', additions: {
+  fragmentHeader: FOLIAGE_HEADER,
+  fragmentProcess: `
+    if (fragColor.a > 0.0) {
+      vec2 foliageWorld = uFoliageChunk.xy+(outTexCoord-uFoliageUV.xy)/uFoliageUV.zw*uFoliageChunk.zw;
+      fragColor.rgb *= foliageResponse(foliageWorld);
+    }
+  `,
+} };
 
 let nextId = 0;
 
@@ -129,15 +138,7 @@ export class RockFoliageLighting {
     this.batch = batch;
     // ProgramFactory owns programs by shader/addition names. Keep the material
     // key stable across World lifetimes; only its per-node VAO/buffers are ours.
-    batch.programManager.addAddition({ name: 'RockFoliageSingleCoverage', additions: {
-      fragmentHeader: FOLIAGE_HEADER,
-      fragmentProcess: `
-        if (fragColor.a > 0.0) {
-          vec2 foliageWorld = uFoliageChunk.xy+(outTexCoord-uFoliageUV.xy)/uFoliageUV.zw*uFoliageChunk.zw;
-          fragColor.rgb *= foliageResponse(foliageWorld);
-        }
-      `,
-    } });
+    batch.programManager.addAddition(ROCK_FOLIAGE_MATERIAL);
     const setCloud=(name:string,value:unknown)=>batch.programManager.setUniform(name,value);
     const setup = batch.setupUniforms;
     batch.setupUniforms = (context): void => {

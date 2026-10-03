@@ -13,7 +13,7 @@ import { measureSuiteLoading } from './suite-load.mjs';
 
 export const SUITE_VERSION = 1;
 
-async function serve(site, publicRoot) {
+export async function serve(site, publicRoot) {
   const mime = { '.html':'text/html', '.js':'text/javascript', '.json':'application/json', '.css':'text/css', '.png':'image/png',
     '.webp':'image/webp', '.svg':'image/svg+xml', '.woff2':'font/woff2', '.ogg':'audio/ogg', '.mp3':'audio/mpeg', '.wav':'audio/wav' };
   const server = createServer((req,res) => { void (async () => {
@@ -86,7 +86,12 @@ export async function runSuite(args) {
     const messages=[],memory=[];
     try {
       // Explicit persistent profile on the selected output drive; no large temp profile on C:.
-      context=await chromium.launchPersistentContext(join(directory,'chrome-profile'),{...launch,viewport:{width:1920,height:1080},deviceScaleFactor:1});
+      // An interrupted attempt may already have populated HTTP/shader caches.
+      // Preserve that evidence, but never reuse it for a cold-profile retry.
+      let profileDirectory=join(directory,'chrome-profile'),attempt=1;
+      while(await stat(profileDirectory).then(()=>true,()=>false))profileDirectory=join(directory,`chrome-profile-${++attempt}`);
+      record.profileAttempt=attempt;
+      context=await chromium.launchPersistentContext(profileDirectory,{...launch,viewport:{width:1920,height:1080},deviceScaleFactor:1});
       environment.browserVersion=context.browser().version();
       const browserCdp=await context.browser().newBrowserCDPSession();
       environment.gpu=(await browserCdp.send('SystemInfo.getInfo')).gpu;

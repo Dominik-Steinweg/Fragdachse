@@ -20,6 +20,9 @@ session through the normal Room/RPC contracts. This is a rendering/host benchmar
 not a WebRTC transport benchmark. The local session cannot be enabled in a
 production build. A normal lab run still connects normally unless `localHost`
 is requested. Profiles and cache live under `--output-root`.
+Completed runs are resumed only for matching build/workload fingerprints.
+Interrupted attempts retain their evidence; a retry gets a new profile directory
+so partial HTTP/shader caches cannot turn a cold-load retry into a warm one.
 
 Cases: `review`, `review.enemies-100`, `review.enemies-300`,
 `review.enemies-500`, `review.player`, `review.fog-rock`, `review.camera`,
@@ -31,6 +34,8 @@ whole and label feature-specific costs n/a rather than transplanting new visuals
 Current enemy cases additionally wait for every fixture mesh pose to be prepared.
 Use `--warmup-ms 30000` for sustained dense-enemy comparisons; the older archived
 review build used a two-second minimum and includes deferred mesh preparation.
+Keep the standard warmup for transient events such as `review.train`: a long
+warmup can let the train leave before the measured destruction starts.
 Shadow readiness, active casters, target and geometry bytes are exported in load
 counters. A missing shadow probe on old revisions means n/a, not synthetic readiness.
 
@@ -59,3 +64,19 @@ Keep this workload quiet: no simultaneous tests/builds/other measurement browser
 Boot is a new HTTP profile, not a cold OS/driver cache. A broker-free startup is
 not the public site's connection latency. Check actual loads and repeated-run
 spread before calling a small difference a gain.
+
+For a separate system diagnostic, inject `installGlProbe` from `probe.mjs` as a
+Playwright init script and request `systemProbe: true` in the lab request. Once
+`window.__FD_PERF__.probeScene` has initialized its renderers, evaluate
+`installSceneProbe`. Evaluate `readSystemProbe` before closing the page to export
+compact statistics, including GPU quantiles without individual samples.
+It groups GL draws, uniform calls, uploads and blocking program queries by the
+actual shader key, and records deleted-renderbuffer bindings with their stacks.
+CPU wrappers report inclusive times; shared Scene-manager and transformer scopes
+are labeled as Phaser work, not attributed to their first borrower. These probes add overhead and must not
+be enabled in the ordinary comparison matrix. Boot/loading timeline markers for
+mesh decode and character material upload remain available without this probe.
+When WebGL2 timer queries are available, the diagnostic also samples the World
+fog, shadow and lighting submissions before PRE_RENDER (every eighth frame).
+It skips nested queries, discards disjoint results and releases its query objects.
+Those elapsed GPU intervals are system samples, not a total frame GPU budget.

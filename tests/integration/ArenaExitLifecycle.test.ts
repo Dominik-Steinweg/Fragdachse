@@ -265,7 +265,8 @@ describe('Performance lab campaign lifecycle', () => {
       clearTimeOfDayDebugOverride: vi.fn(), rpcPorts: { heldAction: { clearPlayer: vi.fn() } } });
     const discarded = vi.spyOn(flow, 'hostDiscardRound');
     const aborted = vi.spyOn(flow, 'hostAbortRound');
-    const port = createPerformanceLabGamePort({} as any, flow, { getPlayer: () => undefined } as any,
+    const labScene = { cameras: { main: { zoomX: 1, zoomY: 1, setZoom: vi.fn() } } };
+    const port = createPerformanceLabGamePort(labScene as any, flow, { getPlayer: () => undefined } as any,
       { getSemanticEventSink: () => vi.fn() } as any, vi.fn(), () => true);
     const commit = buildPerformanceLoadout('GLOCK').commit;
     port.start(mapId, 12345, commit);
