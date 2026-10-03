@@ -339,7 +339,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
       // Burning wreckage is thrown off as the ordinary fire chunks that leave real burning ground.
       const main = radius >= TRAIN_FIRE_MAIN_RADIUS;
       this.options.getFireChunkPort?.()?.hostCreateFireChunkBurst(ownerId ?? TRAIN_FIRE_OWNER, x, y, {
-        ...TRAIN_FIRE_BURST, count: main ? 7 : 2, searchRadius: main ? 150 : 90,
+        ...TRAIN_FIRE_BURST, count: main ? 12 : radius >= 100 ? 4 : 2, searchRadius: main ? 170 : 100,
       }, `train-wreck:${Math.round(x)}:${Math.round(y)}`, Date.now());
     });
     this.explosionTimers.push(timer);

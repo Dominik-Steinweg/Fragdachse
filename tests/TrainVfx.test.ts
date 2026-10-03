@@ -35,13 +35,14 @@ function fixture(factor = 1) {
     cleanup: () => ({ cleared, released, registered: callback !== null }) };
 }
 
-it('plans an ordered replicated rupture across every carriage, anchored in the visible world, deterministically', () => {
+it('plans an orchestrated, never simultaneous rupture with several charges per carriage, anchored in the visible world', () => {
   const segments = Array.from({ length: 13 }, (_, i) => ({ x: 64, y: i * 200 - 400 }));
   const a = planTrainDestruction(segments, 0, 1200);
   assert.deepEqual(a, planTrainDestruction(segments, 0, 1200));
   assert.equal(a[0].delayMs, 0); assert.equal(a.filter(p => p.radius >= 140).length, 1);
   assert.equal(new Set(a.map(p => p.y)).size, a.length);
-  assert.equal(a.length, segments.length); assert(a[0].y >= 0 && a[0].y <= 1200);
+  assert(a.length >= segments.length * 2 + 2); assert(a[0].y >= 0 && a[0].y <= 1200);
+  for (const segment of segments) assert(a.some(p => Math.abs(p.y - segment.y) <= 60));
   assert(a.slice(1).every((p, i) => p.delayMs > a[i].delayMs));
   assert.deepEqual(planTrainDestruction(segments, 3000, 4000), []);
 });
@@ -81,9 +82,9 @@ it('reduces decorative load on low quality without changing the hero impact', ()
 
 it('caps event work, ages skipped phases, and releases all world-owned particles and callbacks', () => {
   const f = fixture(); for (let i = 0; i < 1000; i++) f.renderer.playExplosion(100, 120, 160);
-  f.tick(16); assert(f.camera.length <= 16);
+  f.tick(16); assert(f.camera.length <= 64);
   const debris = f.particles.filter(p => p.effect === Effect.TrainDebris);
-  assert(debris.length <= 16 * 12);
+  assert(debris.length <= 64 * 12);
   f.tick(10000);
   assert(f.particles.every(p => Number.isFinite(p.x + p.y + p.lifeMs + p.scaleStart)));
   f.renderer.destroy(); f.renderer.destroy();

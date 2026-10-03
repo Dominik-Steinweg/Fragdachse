@@ -269,7 +269,8 @@ export class ExplosionGpuRenderer {
     const { x, y, radius, palette } = request;
     const coreLife = (profile.family === 'pop' ? 180 : 280) * profile.lifeScale;
     const coreStart = Math.max(0.24, radius / 180) * profile.bodyScale;
-    const coreEnd = Math.max(coreStart, radius / 50) * profile.bodyScale;
+    // Thermal: a compact white-hot flash; the billowing body, not the flash, carries the volume.
+    const coreEnd = Math.max(coreStart, radius / (isThermalExplosionStyle(request.style) ? 80 : 50)) * profile.bodyScale;
     this.spawnBurst(this.effectFor(request, 'Core'), 2, (spec, index) => {
       this.configure(spec, {
         x,
@@ -280,7 +281,7 @@ export class ExplosionGpuRenderer {
         scaleStart: coreStart * (index === 0 ? 0.72 : 1),
         scaleEnd: coreEnd * (index === 0 ? 0.72 : 1),
         scaleEase: GpuVfxEase.QuadOut,
-        alphaStart: index === 0 ? 0.96 : 0.72,
+        alphaStart: index === 0 ? 0.96 : (isThermalExplosionStyle(request.style) ? 0.55 : 0.72),
         tint: index === 0 ? palette.core : palette.hot,
         // Ein einziger kleiner Kern darf als Weissglut starten; der zweite Kern ist
         // bereits fast voll eingefärbt, damit die grosse Body-Fläche nicht weiss bleibt.
@@ -293,7 +294,9 @@ export class ExplosionGpuRenderer {
 
     if (profile.family === 'pop') return;
     const bodyCount = this.resolveBodyCount(radius, profile);
-    this.spawnFireballs(this.effectFor(request, 'Body'), request, profile, bodyCount, 0.72);
+    const thermalBody = isThermalExplosionStyle(request.style);
+    this.spawnFireballs(this.effectFor(request, 'Body'), request, profile,
+      thermalBody ? Math.ceil(bodyCount * 1.35) : bodyCount, thermalBody ? 0.92 : 0.72);
   }
 
   private spawnFireballs(
@@ -304,12 +307,15 @@ export class ExplosionGpuRenderer {
     alpha: number,
   ): void {
     const { x, y, radius, palette } = request;
+    const thermal = isThermalExplosionStyle(request.style);
     this.spawnBurst(effect, count, (spec, index) => {
-      const point = this.randomPointInCircle(radius * 0.16);
+      const point = this.randomPointInCircle(radius * (thermal ? 0.24 : 0.16));
+      // Thermal bodies start white-hot and cool into their tint; the inner billows stay hottest.
+      const inner = Math.hypot(point.x, point.y) < radius * 0.11;
       const angle = Math.atan2(point.y, point.x) + Phaser.Math.FloatBetween(-0.55, 0.55);
       const speed = Phaser.Math.FloatBetween(radius * 0.12, radius * 0.42);
       const lifeMs = Phaser.Math.FloatBetween(300, 560) * profile.lifeScale;
-      const startScale = Math.max(0.18, radius / 190) * profile.bodyScale;
+      const startScale = Math.max(0.18, radius / (thermal ? 150 : 190)) * profile.bodyScale;
       const endScale = Phaser.Math.FloatBetween(radius / 78, radius / 56) * profile.bodyScale;
       this.configure(spec, {
         x: x + point.x,
@@ -321,8 +327,9 @@ export class ExplosionGpuRenderer {
         scaleEnd: endScale,
         scaleEase: GpuVfxEase.QuadOut,
         alphaStart: alpha,
-        tint: pickGpuVfxTint([palette.hot, palette.body, palette.outer]),
-        tintBlendStart: isThermalExplosionStyle(request.style) ? 0.88 : 0.08,
+        tint: thermal && inner ? palette.hot
+          : pickGpuVfxTint(thermal ? [palette.hot, palette.body, palette.body, palette.outer] : [palette.hot, palette.body, palette.outer]),
+        tintBlendStart: thermal ? (inner ? 0.55 : 0.8) : 0.08,
         tintBlendEnd: 1,
         frame: index % 2 === 0 ? GpuVfxFrameId.ExplosionFireballA : GpuVfxFrameId.ExplosionFireballB,
         rotation: Phaser.Math.FloatBetween(0, TWO_PI),
@@ -345,7 +352,7 @@ export class ExplosionGpuRenderer {
         scaleStart: startScale,
         scaleEnd: endScale,
         scaleEase: GpuVfxEase.QuadOut,
-        alphaStart: profile.family === 'lightning' ? 0.92 : 0.78,
+        alphaStart: profile.family === 'lightning' ? 0.92 : (isThermalExplosionStyle(request.style) ? 0.36 : 0.78),
         tint: palette.hot,
         frame: GpuVfxFrameId.ExplosionRing,
       });
@@ -354,7 +361,9 @@ export class ExplosionGpuRenderer {
 
   private spawnStreaks(request: ExplosionCombatVisualRequest, profile: ExplosionVisualProfile): void {
     const { x, y, radius, palette } = request;
-    const count = this.resolveSparkCount(radius, profile);
+    const thermal = isThermalExplosionStyle(request.style);
+    // Thermal bursts read as fire, not as a sun: fewer, shorter streaks.
+    const count = thermal ? Math.ceil(this.resolveSparkCount(radius, profile) * 0.4) : this.resolveSparkCount(radius, profile);
     const effect = profile.family === 'train'
       ? GpuVfxEffectId.ExplosionTrainSpark
       : profile.family === 'lightning'
@@ -382,7 +391,7 @@ export class ExplosionGpuRenderer {
         tintBlendEnd: 1,
         frame: GpuVfxFrameId.ExplosionStreak,
         rotation: angle,
-        stretchStart: Phaser.Math.FloatBetween(1.4, 2.5),
+        stretchStart: thermal ? Phaser.Math.FloatBetween(1.1, 1.8) : Phaser.Math.FloatBetween(1.4, 2.5),
         stretchEnd: 0.55,
       });
     });
@@ -422,7 +431,8 @@ export class ExplosionGpuRenderer {
     const profile = getCombatExplosionProfile(request.style);
     if (!profile) return;
     const count = Math.max(3, Math.ceil(this.resolveBodyCount(request.radius, profile) * 0.55));
-    this.spawnFireballs(this.effectFor(request, 'Secondary'), request, profile, count, 0.5);
+    this.spawnFireballs(this.effectFor(request, 'Secondary'), request, profile, count,
+      isThermalExplosionStyle(request.style) ? 0.62 : 0.5);
     if (profile.family === 'nuke') this.spawnNukePlume(request, profile);
   }
 
@@ -456,7 +466,9 @@ export class ExplosionGpuRenderer {
     const profile = getCombatExplosionProfile(request.style);
     if (!profile || profile.smokeScale <= 0) return;
     const { x, y, radius, palette } = request;
-    const count = this.resolveSmokeCount(radius, profile);
+    const thermal = isThermalExplosionStyle(request.style);
+    // Thermal fire is swallowed by a dense, swelling smoke body rather than a faint haze.
+    const count = thermal ? Math.ceil(this.resolveSmokeCount(radius, profile) * 1.3) : this.resolveSmokeCount(radius, profile);
     this.spawnBurst(this.effectFor(request, 'Smoke'), count, (spec) => {
       const point = this.randomPointInCircle(radius * 0.3);
       this.configure(spec, {
@@ -466,9 +478,9 @@ export class ExplosionGpuRenderer {
         vy: Phaser.Math.FloatBetween(-radius * 0.28, -radius * 0.08),
         lifeMs: Phaser.Math.FloatBetween(900, 1900),
         scaleStart: Math.max(0.2, radius / 190),
-        scaleEnd: Math.max(0.5, radius / 72),
+        scaleEnd: Math.max(0.5, radius / (thermal ? 62 : 72)),
         scaleEase: GpuVfxEase.QuadOut,
-        alphaStart: profile.family === 'nuke' ? 0.42 : 0.3,
+        alphaStart: profile.family === 'nuke' ? 0.42 : (thermal ? 0.46 : 0.3),
         tint: palette.smoke,
         frame: GpuVfxFrameId.ExplosionSmoke,
         rotation: Phaser.Math.FloatBetween(0, TWO_PI),

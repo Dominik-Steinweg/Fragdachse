@@ -98,7 +98,7 @@ export class TrainVfxController {
   /** Called only from the existing replicated explosion presentation, on every peer including host. */
   playExplosion(x: number, y: number, radius: number): void {
     if (this.destroyed || !Number.isFinite(x + y + radius) || radius <= 0) return;
-    if (this.bursts.length >= 16 || this.ports.gpu.isSuppressed()) return;
+    if (this.bursts.length >= 64 || this.ports.gpu.isSuppressed()) return;
     this.bursts.push({ x, y, radius: Math.min(160, radius), at: this.ports.gpu.now(),
       seed: trainVfxSeed(x, y, radius), phase: 0 });
   }
@@ -195,9 +195,12 @@ export class TrainVfxController {
     if (phase === 0) {
       this.ports.camera.request(main ? impactExceptional({ sourceX: b.x, sourceY: b.y })
         : impactLight({ sourceX: b.x, sourceY: b.y }));
-      if (!main) this.audio?.playSound('sfx_explosion_rocket_aftershock', b.x, b.y, undefined, .28);
+      // Dozens of charges per destruction: a thinned, quieter aftershock layer instead of a wall of sound.
+      if (!main && b.seed % 3 === 0) this.audio?.playSound('sfx_explosion_rocket_aftershock', b.x, b.y, undefined, .22);
     }
     if (!this.visible(b.x, b.y, 360)) return;
+    // Charges share one smoke column: only the hero blast and every third charge keep feeding it.
+    if (!main && phase >= 3 && (b.seed + phase) % 3 !== 0) return;
     const random = trainRandom(b.seed ^ Math.imul(phase + 1, 2654435761));
     const factor = this.ports.gpu.quality.getEmissionFactor(Effect.TrainSmoke);
     const size = main ? 1.85 : 1.1;
@@ -206,7 +209,7 @@ export class TrainVfxController {
     // torn metal, earthy dust, a dark smoke column and soot. No free-floating flames.
     if (phase === 0) {
       this.particle(Effect.TrainDust, Frame.ExplosionRing, b.x, b.y, 0, 0, 35, b.radius * 3.2, 900, .5, this.dustColor(b.x, b.y), at, now);
-      for (let i = 0; i < Math.ceil(14 * size * factor); i++) {
+      for (let i = 0; i < Math.ceil(8 * size * factor); i++) {
         const angle = random() * Math.PI * 2, speed = (70 + random() * 190) * size;
         this.particle(Effect.TrainHeat, Frame.ExplosionStreak, b.x, b.y,
           Math.cos(angle) * speed, Math.sin(angle) * speed, 9, .7, 700 + random() * 500, .9, 0xffb854, at, now);
@@ -219,7 +222,7 @@ export class TrainVfxController {
       }
       this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, b.x, b.y, 0, 0, 90 * size, 140 * size, 9000, .8, 0x171611, at, now);
     } else if (phase <= 2) {
-      for (let i = 0; i < Math.ceil(7 * size * factor); i++) {
+      for (let i = 0; i < Math.ceil((main ? 7 : 3) * size * factor); i++) {
         const angle = random() * Math.PI * 2, spread = 12 + random() * 33 * size;
         const x = b.x + Math.cos(angle) * spread, y = b.y + Math.sin(angle) * spread;
         const vx = Math.cos(angle) * 28, vy = Math.sin(angle) * 28;

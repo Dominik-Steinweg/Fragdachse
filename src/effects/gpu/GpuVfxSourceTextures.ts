@@ -526,12 +526,65 @@ export function ensureExplosionRingTexture(scene: Phaser.Scene): void {
   });
 }
 
+/**
+ * Cauliflower fireball: overlapping domes lit from the upper left, darker creases between them.
+ * Luminance lives in RGB, so the per-member tint becomes shading instead of a flat disc; the
+ * silhouette still fades out well inside the frame for invisible edges when stacked.
+ */
+function drawBillowedFireball(ctx: CanvasRenderingContext2D, size: number, safeRadius: number,
+  radii: readonly number[]): void {
+  const half = size / 2;
+  let seed = radii.reduce((sum, value, index) => sum + value * (index + 1) * 7919, 0) >>> 0;
+  const random = () => { seed = (Math.imul(seed ^ (seed >>> 15), 2246822519) + 0x6d2b79f5) >>> 0; return seed / 4294967296; };
+  const domes = radii.map((lobe, index) => {
+    const angle = (index / radii.length) * Math.PI * 2 + (random() - 0.5) * 0.6;
+    const distance = safeRadius * (index % 3 === 0 ? 0.08 + random() * 0.18 : 0.3 + random() * 0.3);
+    return { x: half + Math.cos(angle) * distance, y: half + Math.sin(angle) * distance,
+      r: safeRadius * (0.3 + lobe * 0.22) };
+  });
+  const light = { x: -0.55, y: -0.65, z: 0.52 };
+  const image = ctx.createImageData(size, size);
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      let height = 0, nx = 0, ny = 0, nz = 1;
+      for (const dome of domes) {
+        const dx = (px + 0.5 - dome.x) / dome.r, dy = (py + 0.5 - dome.y) / dome.r;
+        const q = 1 - dx * dx - dy * dy;
+        if (q <= 0) continue;
+        const h = Math.sqrt(q) * dome.r;
+        if (h > height) { height = h; const z = Math.sqrt(q); nx = dx; ny = dy; nz = z; }
+      }
+      const radial = Math.hypot(px + 0.5 - half, py + 0.5 - half) / safeRadius;
+      const body = Math.max(0, 1 - radial * radial * 1.15);
+      const coverage = Math.min(1, height / (safeRadius * 0.16)) * (1 - smoothstep01(0.78, 1, radial));
+      const alpha = Math.min(1, Math.max(coverage, body * 0.55)) * (1 - smoothstep01(0.86, 1, radial));
+      const lambert = Math.max(0, nx * light.x + ny * light.y + nz * light.z);
+      const crease = height > 0 ? 1 : 0.6;
+      const luminance = Math.min(1, (0.5 + 0.5 * lambert) * crease * (0.82 + 0.18 * body));
+      const offset = (py * size + px) * 4;
+      const value = Math.round(255 * luminance);
+      image.data[offset] = value; image.data[offset + 1] = value; image.data[offset + 2] = value;
+      image.data[offset + 3] = Math.round(255 * alpha * 0.92);
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
+function smoothstep01(edge0: number, edge1: number, value: number): number {
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 function drawExplosionBlob(scene: Phaser.Scene, key: string, radii: readonly number[]): void {
   const size = 48;
   const half = size / 2;
   const safeRadius = half - 3.5;
 
   ensureCanvasTexture(scene.textures, key, size, size, (ctx) => {
+    if (typeof ctx.createImageData === 'function') {
+      drawBillowedFireball(ctx, size, safeRadius, radii);
+      return;
+    }
     // Eine breite Grundwolke hält die Mitte geschlossen. Sie läuft vor dem Sicherheitsrand
     // aus, damit die Frame-Kante auch beim additiven Stapeln unsichtbar bleibt.
     const body = ctx.createRadialGradient(half - 2.5, half - 3, 0, half - 1, half - 1.5, safeRadius * 0.72);

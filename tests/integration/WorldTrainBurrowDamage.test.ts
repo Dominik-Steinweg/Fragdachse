@@ -75,8 +75,10 @@ describe('World train destruction', () => {
     const segmentPositions = [0, 1, 2].map(i => ({ x: metrics.offsetX + 64, y: metrics.offsetY + 200 + i * 120 }));
     (runtime as unknown as { handleDestroyed: (r: unknown, m: unknown) => void })
       .handleDestroyed({ lastHitterId: 'p1', segmentPositions }, metrics);
-    expect(burst).toHaveBeenCalledTimes(segmentPositions.length);
-    expect(order).toEqual(['blast', 'fire', 'blast', 'fire', 'blast', 'fire']);
+    const blasts = order.filter(entry => entry === 'blast').length;
+    expect(blasts).toBeGreaterThan(segmentPositions.length);
+    expect(burst).toHaveBeenCalledTimes(blasts);
+    expect(order).toEqual(Array.from({ length: blasts }, () => ['blast', 'fire']).flat());
     for (const call of burst.mock.calls) {
       expect(call[0]).toBe('p1');
       expect(call[3]).toMatchObject({ sourceId: 'ground_fire.train', igniteCenter: true });
