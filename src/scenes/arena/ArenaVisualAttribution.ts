@@ -31,7 +31,6 @@ export const CLASSIC_PARTICLE_FAMILIES = {
   honeyBadgerRage: ['HoneyBadgerRageRenderer'],
   molotovFirewalker: ['MolotovFirewalkerRenderer'],
   hydra: ['HydraRenderer'],
-  meteor: ['MeteorRenderer'],
   nuke: ['NukeRenderer'],
   plasmaCharge: ['PlasmaChargeRenderer'],
   powerUp: ['PowerUpRenderer'],
@@ -75,7 +74,7 @@ export const GRAPHICS_FAMILIES = {
   shootingRange: ['ShootingRangeRenderer'],
   gaussWarning: ['GaussWarningRenderer'],
   airstrikeWarning: ['AirstrikeRenderer'],
-  meteorEffects: ['MeteorRenderer'],
+  meteorEffects: ['MeteorGpuLayer'],
   nukeTelegraphs: ['NukeRenderer', 'EffectSystem'],
   effectSystemGraphics: ['EffectSystem'],
   objectiveMarkers: [

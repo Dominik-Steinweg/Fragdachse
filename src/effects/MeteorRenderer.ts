@@ -1,418 +1,60 @@
-import * as Phaser from 'phaser';
+﻿import type * as Phaser from 'phaser';
 import type { SyncedMeteorStrike } from '../types';
-import { DEPTH, DEPTH_FX, VOID_PALETTE } from '../config';
-import { circleZone, makeAdditive, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
-import { emissiveAlpha } from './EmissiveScale';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from './camera/cameraFeedbackPresets';
+import { MeteorGpuLayer } from './gpu/MeteorGpuLayer';
+import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
 
-// ── Textur-Schlüssel ────────────────────────────────────────────────────────
-const TEX_METEOR_CORE  = '__meteor_core';
-const TEX_METEOR_EMBER = '__meteor_ember';
-const TEX_METEOR_SPARK = '__meteor_spark';
-const TEX_METEOR_GLOW  = '__meteor_glow';
-
-// ── Farb-Palette (feste Meteorfarben) ──────────────────────────────────────
-const METEOR_COLORS_CORE  = [0xffffff, 0xffee88, 0xffcc44, 0xff9922];
-const METEOR_COLORS_OUTER = [0xff6622, 0xff4400, 0xdd2200, 0xcc3300];
-const METEOR_COLORS_SPARK = [0xffffff, 0xffee88, 0xffaa44, 0xff6622];
-const METEOR_IMPACT_TINTS = [0xffd700, 0xff8800, 0xff4400, 0xffee88];
-const METEOR_EMBER_TINTS  = [0xff6622, 0xff4400, 0xcc3300];
-const WARNING_COLOR       = 0xff4400;
-const WARNING_FILL_ALPHA  = 0.12;
-const WARNING_STROKE_ALPHA = 0.55;
-const BASE_METEOR_RADIUS  = 96;
-
-// ── Depth-Layering ─────────────────────────────────────────────────────────
-const DEPTH_WARNING  = DEPTH.FIRE - 0.5;
-const DEPTH_METEOR   = DEPTH.FIRE + 0.2;
-const DEPTH_IMPACT   = DEPTH_FX;
-
-// ── Visuelle State-Typen ───────────────────────────────────────────────────
-
-interface MeteorWarningVisual {
-  warningCircle:  Phaser.GameObjects.Arc;        // Boden-Warnkreis (Stroke)
-  warningFill:    Phaser.GameObjects.Arc;        // Boden-Warnfüllung
-  shadow:         Phaser.GameObjects.Ellipse;    // Schlagschatten
-  meteorGlow:     Phaser.GameObjects.Image;      // Leuchtender Kern (skaliert hoch)
-  trailEmitter:   Phaser.GameObjects.Particles.ParticleEmitter;  // Schweif-Partikel
-  sizeFactor:     number;
-  isVoid:         boolean;
-}
-
-/**
- * MeteorRenderer – Client-seitige Darstellung der Armageddon-Meteore.
- *
- * Jeder Meteor durchläuft zwei Phasen:
- * 1. Warn-Phase (spawnedAt → impactAt): Warnkreis am Boden + herannahender Meteor (Scale-Up)
- * 2. Einschlag (impactAt): Explosionseffekt (Burst-Partikel, Flash, Schockwelle)
- *
- * Orientiert sich visuell an FlameRenderer/BfgRenderer (Partikel-Emitter, prozed. Texturen).
- */
+/** Snapshot presentation only. Explosions, local light and burning chunks are already driven
+ * by the authoritative explosion RPC / FireChunkSystem; disappearing IDs never duplicate them. */
 export class MeteorRenderer {
-  private scene: Phaser.Scene;
-  private visuals = new Map<number, MeteorWarningVisual>();
-  /** IDs die beim letzten sync() aktiv waren – zum Erkennen des Einschlags */
-  private previousIds = new Set<number>();
+  private readonly layer: MeteorGpuLayer;
+  private readonly previous = new Map<number, SyncedMeteorStrike>();
+  private readonly craters: { meteor: SyncedMeteorStrike; born: number }[] = [];
   private cameraFeedback: CameraFeedbackController | null = null;
+  private gpuVfx: GpuVfxSystem | null = null;
 
-  constructor(scene: Phaser.Scene) {
-    this.scene = scene;
-  }
-
-  setCameraFeedback(controller: CameraFeedbackController | null): void {
-    this.cameraFeedback = controller;
-  }
-
-// ── Texturen ──────────────────────────────────────────────────────────────
-
-  generateTextures(): void {
-    const texMgr = this.scene.textures;
-
-    // Meteor-Kern: weicher leuchtender Kreis 32×32
-    if (!texMgr.exists(TEX_METEOR_CORE)) {
-      const s = 32;
-      const canvas = texMgr.createCanvas(TEX_METEOR_CORE, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0,   'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.2, 'rgba(255,238,136,0.9)');
-      grad.addColorStop(0.5, 'rgba(255,153,34,0.6)');
-      grad.addColorStop(0.8, 'rgba(255,68,0,0.3)');
-      grad.addColorStop(1,   'rgba(200,51,0,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
-
-    // Ember-Textur: kleine Glut 12×12
-    if (!texMgr.exists(TEX_METEOR_EMBER)) {
-      const s = 12;
-      const canvas = texMgr.createCanvas(TEX_METEOR_EMBER, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0,   'rgba(255,238,136,1.0)');
-      grad.addColorStop(0.5, 'rgba(255,102,34,0.5)');
-      grad.addColorStop(1,   'rgba(204,51,0,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
-
-    // Spark-Textur: winziger Punkt 6×6
-    if (!texMgr.exists(TEX_METEOR_SPARK)) {
-      const s = 6;
-      const canvas = texMgr.createCanvas(TEX_METEOR_SPARK, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0,   'rgba(255,255,255,1.0)');
-      grad.addColorStop(0.5, 'rgba(255,238,136,0.6)');
-      grad.addColorStop(1,   'rgba(255,170,68,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
-
-    // Glow-Textur: großer weicher Kreis 48×48 (Halo um Meteor)
-    if (!texMgr.exists(TEX_METEOR_GLOW)) {
-      const s = 48;
-      const canvas = texMgr.createCanvas(TEX_METEOR_GLOW, s, s)!;
-      const ctx = canvas.context;
-      const grad = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-      grad.addColorStop(0,   'rgba(255,200,100,0.8)');
-      grad.addColorStop(0.4, 'rgba(255,102,0,0.3)');
-      grad.addColorStop(1,   'rgba(200,51,0,0.0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, s, s);
-      canvas.refresh();
-    }
-  }
-
-  // ── Sync (pro Frame aufrufen) ─────────────────────────────────────────────
+  constructor(private readonly scene: Phaser.Scene) { this.layer = new MeteorGpuLayer(scene); }
+  registerGpuVfx(system: GpuVfxSystem): void { this.gpuVfx = system; }
+  setCameraFeedback(controller: CameraFeedbackController | null): void { this.cameraFeedback = controller; }
 
   sync(meteors: SyncedMeteorStrike[]): void {
     const now = Date.now();
-    const activeIds = new Set<number>();
-
-    for (const m of meteors) {
-      activeIds.add(m.id);
-
-      let visual = this.visuals.get(m.id);
-      if (!visual) {
-        visual = this.createWarningVisual(m);
-        this.visuals.set(m.id, visual);
-      }
-
-      this.updateWarningVisual(visual, m, now);
+    const active = new Set(meteors.map(m => m.id));
+    for (const [id, meteor] of this.previous) {
+      if (active.has(id)) continue;
+      this.previous.delete(id);
+      // Cancellation before impact (e.g. killed Void caster) leaves no fictitious crater.
+      if (now < meteor.impactAt) continue;
+      if (this.craters.length === 64) this.craters.shift();
+      this.craters.push({ meteor, born: this.scene.time.now });
+      this.cameraFeedback?.request({channel:'impact', amplitudePx:legacyShakeAmplitudePx(Math.min(.006,.002*Math.sqrt(meteor.radius/60))),
+        durationMs:260, priority:CAMERA_FEEDBACK_PRIORITY.mediumImpact, decay:'impulse',sourceX:meteor.x,sourceY:meteor.y});
     }
-
-    // Entfernte Meteore: Einschlag abspielen + Visual aufräumen
-    for (const [id, visual] of this.visuals) {
-      if (activeIds.has(id)) continue;
-
-      // Wenn der Meteor gerade verschwunden ist → Einschlag (nicht bei bereits explodierten)
-      if (this.previousIds.has(id)) {
-        this.playImpactEffect(visual);
-      }
-
-      this.destroyWarningVisual(visual);
-      this.visuals.delete(id);
+    this.layer.begin();
+    // Warnings have priority over decorative residue; offscreen strikes need no GPU slots.
+    const camera = this.scene.cameras.main;
+    const visible = (m: SyncedMeteorStrike) => camera.worldView.contains(m.x, m.y)
+      || (m.x + m.radius*4 >= camera.worldView.x && m.x - m.radius*4 <= camera.worldView.right
+        && m.y + m.radius*4 >= camera.worldView.y && m.y - m.radius*4 <= camera.worldView.bottom);
+    const suppressed = this.gpuVfx?.isSuppressed() ?? false;
+    for (const meteor of meteors) {
+      this.previous.set(meteor.id, meteor);
+      if (suppressed || !visible(meteor)) continue;
+      const progress = Math.max(0,Math.min(1,(now-meteor.spawnedAt)/Math.max(1,meteor.impactAt-meteor.spawnedAt)));
+      this.layer.add({x:meteor.x,y:meteor.y,radius:meteor.radius,progress,
+        seed:(Math.imul(meteor.id+1,2654435761)>>>0)%997,void:meteor.variant==='void',age:-1});
     }
-
-    this.previousIds = activeIds;
-  }
-
-  // ── Aufräumen ─────────────────────────────────────────────────────────────
-
-  clear(): void {
-    for (const visual of this.visuals.values()) {
-      this.destroyWarningVisual(visual);
+    for(let i=this.craters.length-1;i>=0;i--) {
+      const crater=this.craters[i], age=(this.scene.time.now-crater.born)/1000;
+      if(age>=7) {this.craters.splice(i,1);continue;}
+      const m=crater.meteor;
+      if(suppressed || !visible(m))continue;
+      this.layer.add({x:m.x,y:m.y,radius:m.radius,progress:1,
+        seed:(Math.imul(m.id+1,2654435761)>>>0)%997,void:m.variant==='void',age});
     }
-    this.visuals.clear();
-    this.previousIds.clear();
+    this.layer.flush();
   }
-
-  // ── Warning-Visual erstellen ──────────────────────────────────────────────
-
-  private createWarningVisual(m: SyncedMeteorStrike): MeteorWarningVisual {
-    const sizeFactor = Math.max(0.5, m.radius / BASE_METEOR_RADIUS);
-    const isVoid = m.variant === 'void';
-    const warningColor = isVoid ? VOID_PALETTE.primary : WARNING_COLOR;
-    // Boden-Warnkreis (Stroke)
-    const warningCircle = this.scene.add.circle(m.x, m.y, m.radius);
-    warningCircle.setStrokeStyle(2, warningColor, WARNING_STROKE_ALPHA);
-    warningCircle.setFillStyle(0, 0);
-    warningCircle.setDepth(DEPTH_WARNING);
-    warningCircle.setScale(0);
-    registerGraphicsObject(this.scene, 'meteorEffects', warningCircle);
-
-    // Boden-Füllung (semi-transparent)
-    const warningFill = this.scene.add.circle(m.x, m.y, m.radius, warningColor, WARNING_FILL_ALPHA);
-    warningFill.setDepth(DEPTH_WARNING - 0.01);
-    warningFill.setScale(0);
-    registerGraphicsObject(this.scene, 'meteorEffects', warningFill);
-
-    // Pulsierender Warnkreis-Tween
-    this.scene.tweens.add({
-      targets:  warningCircle,
-      alpha:    { from: WARNING_STROKE_ALPHA * 0.6, to: WARNING_STROKE_ALPHA },
-      duration: 200,
-      yoyo:     true,
-      repeat:   -1,
-      ease:     'Sine.easeInOut',
-    });
-
-    // Schlagschatten am Boden
-    const shadow = this.scene.add.ellipse(m.x, m.y, 10, 5, 0x000000, 0.25);
-    shadow.setDepth(DEPTH_WARNING - 0.02);
-    registerGraphicsObject(this.scene, 'meteorEffects', shadow);
-
-    // Meteor-Glow (Kern) – startet klein, skaliert hoch
-    const meteorGlow = this.scene.add.image(m.x, m.y, TEX_METEOR_GLOW);
-    // Alpha wird unten auf 0 gesetzt und anschliessend animiert; die Dämpfung sitzt
-    // deshalb dort, nicht hier.
-    meteorGlow.setBlendMode(Phaser.BlendModes.ADD);
-    meteorGlow.setDepth(DEPTH_METEOR);
-    meteorGlow.setScale(0.1);
-    meteorGlow.setAlpha(0);
-    if (isVoid) meteorGlow.setTint(VOID_PALETTE.primary);
-
-    // Schweif-Partikel (fallen nach oben/hinten = "Annäherung von oben")
-    const trailEmitter = this.scene.add.particles(m.x, m.y, TEX_METEOR_EMBER, {
-      lifespan:  { min: 150, max: 350 },
-      frequency: 30,
-      quantity:  2,
-      speedX:    { min: -20, max: 20 },
-      speedY:    { min: -50, max: -10 },
-      scale:     { start: 0.5, end: 0.05 },
-      alpha:     { start: 0.8, end: 0 },
-      tint:      isVoid
-        ? [VOID_PALETTE.core, VOID_PALETTE.bright, VOID_PALETTE.primary, VOID_PALETTE.deep]
-        : METEOR_COLORS_OUTER,
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  false,
-    });
-    trailEmitter.setDepth(DEPTH_METEOR + 0.05);
-    registerParticleEmitter(this.scene, 'meteor', trailEmitter);
-    trailEmitter.setScale(sizeFactor);
-
-    return { warningCircle, warningFill, shadow, meteorGlow, trailEmitter, sizeFactor, isVoid };
-  }
-
-  // ── Warning-Visual aktualisieren ──────────────────────────────────────────
-
-  private updateWarningVisual(visual: MeteorWarningVisual, m: SyncedMeteorStrike, now: number): void {
-    const totalDuration = m.impactAt - m.spawnedAt;
-    const elapsed = now - m.spawnedAt;
-    const progress = Math.min(1, Math.max(0, elapsed / totalDuration));
-
-    // Warnkreis von 0 → 1 skalieren (beschleunigt am Anfang, bremst am Ende)
-    const warningScale = Phaser.Math.Easing.Quadratic.Out(progress);
-    visual.warningCircle.setScale(warningScale);
-    visual.warningFill.setScale(warningScale);
-
-    // Warnkreis-Füllung wird gegen Ende intensiver
-    const fillAlpha = WARNING_FILL_ALPHA + (0.25 - WARNING_FILL_ALPHA) * progress * progress;
-    visual.warningFill.setAlpha(fillAlpha);
-
-    // Schatten wächst mit (von klein zu voller Größe)
-    const shadowScale = (0.5 + 1.5 * progress) * visual.sizeFactor;
-    visual.shadow.setScale(shadowScale, shadowScale * 0.5);
-    visual.shadow.setAlpha(0.15 + 0.2 * progress);
-
-    // Meteor-Glow: erscheint ab 20% Fortschritt, skaliert exponentiell hoch
-    if (progress > 0.2) {
-      const meteorProgress = (progress - 0.2) / 0.8;
-      const meteorScale = 0.3 + 2.2 * Phaser.Math.Easing.Quadratic.In(meteorProgress);
-      visual.meteorGlow.setScale(meteorScale * visual.sizeFactor);
-      visual.meteorGlow.setAlpha(emissiveAlpha(0.4 + 0.6 * meteorProgress));
-      // Schweif-Emitter aktiv
-      visual.trailEmitter.emitting = true;
-    } else {
-      visual.meteorGlow.setAlpha(0);
-      visual.trailEmitter.emitting = false;
-    }
-
-    // Schweif-Emitter Zone anpassen (größer wenn Meteor näher)
-    if (progress > 0.2) {
-      visual.trailEmitter.clearEmitZones();
-      const spread = (4 + 12 * progress) * visual.sizeFactor;
-      visual.trailEmitter.addEmitZone(circleZone(spread, 2));
-    }
-  }
-
-  // ── Einschlags-Effekt ─────────────────────────────────────────────────────
-
-  private playImpactEffect(visual: MeteorWarningVisual): void {
-    const x = visual.warningCircle.x;
-    const y = visual.warningCircle.y;
-    const radius = (visual.warningCircle.geom as Phaser.Geom.Circle).radius;
-
-    // 1. Heller Blitz (weiß, expandiert schnell)
-    const flash = this.scene.add.circle(x, y, 6, 0xffffff, 1);
-    registerGraphicsObject(this.scene, 'meteorEffects', flash);
-    flash.setDepth(DEPTH_IMPACT + 1);
-    makeAdditive(flash);
-    const flashEndScale = (radius * 0.6) / 6;
-    this.scene.tweens.add({
-      targets:    flash,
-      scaleX:     flashEndScale,
-      scaleY:     flashEndScale,
-      alpha:      0,
-      duration:   120,
-      ease:       'Power3Out',
-      onComplete: () => flash.destroy(),
-    });
-
-    // 2. Feurige Explosionsfüllung
-    const blast = this.scene.add.circle(x, y, 4, visual.isVoid ? VOID_PALETTE.primary : 0xff6622, 0.75);
-    registerGraphicsObject(this.scene, 'meteorEffects', blast);
-    blast.setDepth(DEPTH_IMPACT);
-    makeAdditive(blast);
-    const blastEndScale = radius / 4;
-    this.scene.tweens.add({
-      targets:    blast,
-      scaleX:     blastEndScale,
-      scaleY:     blastEndScale,
-      alpha:      0,
-      duration:   450,
-      ease:       'Power2Out',
-      onComplete: () => blast.destroy(),
-    });
-
-    // 3. Schockwellen-Ring
-    const ringStartR = radius * 0.4;
-    const ringEndScale = (radius * 1.2) / ringStartR;
-    const ring = this.scene.add.circle(x, y, ringStartR);
-    registerGraphicsObject(this.scene, 'meteorEffects', ring);
-    ring.setStrokeStyle(2, visual.isVoid ? VOID_PALETTE.bright : 0xff8800, 0.7);
-    ring.setFillStyle(0, 0);
-    ring.setDepth(DEPTH_IMPACT);
-    this.scene.tweens.add({
-      targets:    ring,
-      scaleX:     ringEndScale,
-      scaleY:     ringEndScale,
-      alpha:      0,
-      duration:   350,
-      ease:       'Linear',
-      onComplete: () => ring.destroy(),
-    });
-
-    // 4. Funken-Burst (schnelle helle Partikel nach außen)
-    const sparkEmitter = this.scene.add.particles(x, y, TEX_METEOR_SPARK, {
-      lifespan:  { min: 200, max: 500 },
-      speed:     { min: 60, max: radius * 2 },
-      scale:     { start: 1.5, end: 0 },
-      alpha:     { start: 1, end: 0 },
-      tint:      visual.isVoid
-        ? [VOID_PALETTE.core, VOID_PALETTE.bright, VOID_PALETTE.primary, VOID_PALETTE.deep]
-        : METEOR_IMPACT_TINTS,
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  false,
-    });
-    sparkEmitter.setDepth(DEPTH_IMPACT + 0.1);
-    registerParticleEmitter(this.scene, 'meteor', sparkEmitter);
-    const impactParticleFactor = Math.max(0.75, Math.sqrt(radius / BASE_METEOR_RADIUS));
-    sparkEmitter.explode(Math.round(18 * impactParticleFactor));
-    this.scene.time.delayedCall(700, () => sparkEmitter.destroy());
-
-    // 5. Glut-Partikel (langsamer, mit Drift + Gravitation)
-    const emberEmitter = this.scene.add.particles(x, y, TEX_METEOR_EMBER, {
-      lifespan:  { min: 400, max: 900 },
-      speed:     { min: 15, max: radius * 0.9 },
-      scale:     { start: 0.9, end: 0.15 },
-      alpha:     { start: 0.75, end: 0 },
-      tint:      visual.isVoid
-        ? [VOID_PALETTE.bright, VOID_PALETTE.primary, VOID_PALETTE.deep]
-        : METEOR_EMBER_TINTS,
-      gravityY:  30,
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  false,
-    });
-    emberEmitter.setDepth(DEPTH_IMPACT);
-    registerParticleEmitter(this.scene, 'meteor', emberEmitter);
-    emberEmitter.explode(Math.round(10 * impactParticleFactor));
-    this.scene.time.delayedCall(1100, () => emberEmitter.destroy());
-
-    // 6. Boden-Scorch (dunkler Kreis, fadet langsam)
-    const scorch = this.scene.add.circle(
-      x,
-      y,
-      radius * 0.8,
-      visual.isVoid ? VOID_PALETTE.shadow : 0x1a0a00,
-      0.2,
-    );
-    registerGraphicsObject(this.scene, 'meteorEffects', scorch);
-    scorch.setDepth(DEPTH_WARNING - 0.1);
-    this.scene.tweens.add({
-      targets:    scorch,
-      alpha:      0,
-      duration:   1500,
-      ease:       'Quad.easeOut',
-      onComplete: () => scorch.destroy(),
-    });
-
-    // 7. Kamera-Einschlag (dezent, da viele Einschläge). Die Distanzdämpfung über die
-    // Einschlagsposition sorgt dafür, dass ein Hagel am anderen Arenaende nicht mitwirkt.
-    this.cameraFeedback?.request({
-      channel: 'impact',
-      amplitudePx: legacyShakeAmplitudePx(Math.min(0.006, 0.002 * impactParticleFactor)),
-      durationMs: 260,
-      priority: CAMERA_FEEDBACK_PRIORITY.mediumImpact,
-      decay: 'impulse',
-      sourceX: x,
-      sourceY: y,
-    });
-  }
-
-  // ── Cleanup ───────────────────────────────────────────────────────────────
-
-  private destroyWarningVisual(visual: MeteorWarningVisual): void {
-    visual.warningCircle.destroy();
-    visual.warningFill.destroy();
-    visual.shadow.destroy();
-    visual.meteorGlow.destroy();
-    visual.trailEmitter.stop();
-    visual.trailEmitter.destroy();
-  }
+  clear(): void { this.previous.clear(); this.craters.length=0; this.layer.clear(); }
+  destroy(): void { this.clear(); this.layer.destroy(); }
 }

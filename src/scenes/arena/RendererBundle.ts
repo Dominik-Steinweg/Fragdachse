@@ -363,7 +363,8 @@ export function* createRendererBundleSteps(
   yield 'renderers/objectiveRepairDrones';
 
   const meteor = new MeteorRenderer(scene);
-  meteor.generateTextures();
+  meteor.registerGpuVfx(gpuVfx);
+  cleanup.push(() => meteor.destroy());
   yield 'renderers/meteor';
 
   const rockDestruction = new RockDestructionRenderer(scene);

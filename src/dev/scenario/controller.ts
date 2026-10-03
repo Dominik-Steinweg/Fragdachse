@@ -1,5 +1,6 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { EnemyMeshReview } from './EnemyMeshReview';
+import { ArmageddonReview } from './ArmageddonReview';
 import { setCharacterMaterialSuppressed, setCharacterMaterialView, characterMaterialStatus } from '../../effects/CharacterMaterialLighting';
 import { WorldLightingMeasurement } from './WorldLightingMeasurement';
 import type * as Phaser from 'phaser';
@@ -37,6 +38,12 @@ export class DevScenarioController {
   cameraAtTarget = false;
   private worldLighting: WorldLightingMeasurement | null = null;
   private enemyMeshReview: EnemyMeshReview | null = null;
+  private armageddonReview: ArmageddonReview | null = null;
+  arrangeArmageddonReview(options: {count:number;progress:number;quality:import('../../graphics/GraphicsQuality').GraphicsQuality;impacts:boolean;variant:'normal'|'void'}):void {
+    this.requireReady(); this.armageddonReview?.destroy();
+    const point=this.world(this.aim);
+    this.armageddonReview=new ArmageddonReview(this.scene,this.runtime,{...options,...point});
+  }
   arrangeEnemyMeshReview(count: number, pose: number, kinds?: readonly CoopDefenseEnemyKind[]): void {
     if (!kinds && this.enemyMeshReview?.count === count) { this.enemyMeshReview.setPose(pose); return; }
     this.requireReady(); this.clearEnemies(); this.stop();
@@ -102,6 +109,7 @@ export class DevScenarioController {
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
+    this.armageddonReview?.destroy(); this.armageddonReview = null;
     const config = parseScenario(value);
     this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
     this.clearRenderDebug();
@@ -718,6 +726,7 @@ export class DevScenarioController {
       characterShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().sunlight?.getCharacterShadowsStatus() ?? null : null,
       enemyMeshShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().shadow?.getEnemyShadowsStatus() ?? null : null,
       enemyMeshMeasurement: this.enemyMeshReview?.measurement ?? null,
+      armageddonReview: this.armageddonReview?.status() ?? null,
       enemyMeshFixture: this.enemyMeshReview?.inspect() ?? null,
       enemyContour: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().enemyReadability.getDiagnostics() : null,
       characterMaterial: characterMaterialStatus(this.scene),
@@ -776,6 +785,7 @@ export class DevScenarioController {
     return { path: result.path, url: result.url, status };
   }
   destroy(): void {
+    this.armageddonReview?.destroy(); this.armageddonReview = null;
     if (this.disposed) return;
     this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
     this.clearRenderDebug();

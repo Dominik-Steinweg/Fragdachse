@@ -3011,17 +3011,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/LightingSystem.ts:ensureLightMap/lightMap/setDepth/0","owner":"effects/LightingSystem.ts","component":"ensureLightMap/lightMap/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[19.5],"blends":["MULTIPLY"],"profiles":["E","L"],"role":"pass","source":{"selector":"ensureLightMap/lightMap/setDepth/0","expression":"DEPTH_LIGHTING"}},
   {"id":"cpu:effects/LightingSystem.ts:createOccluderSlot/renderTexture/setDepth/0","owner":"effects/LightingSystem.ts","component":"createOccluderSlot/renderTexture/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[19.49,19.491,19.492,19.493],"blends":["NORMAL"],"profiles":["L"],"role":"pass","source":{"selector":"createOccluderSlot/renderTexture/setDepth/0","expression":"DEPTH_LIGHTING - 0.01 + slotIndex * 0.001"}},
   {"id":"cpu:effects/LowHealthBloodOverlay.ts:ensureObjects/createLayer/setDepth/0","owner":"effects/LowHealthBloodOverlay.ts","component":"ensureObjects/createLayer/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[98],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"ensureObjects/createLayer/setDepth/0","expression":"DEPTH_LOW_HEALTH_BLOOD"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:createWarningVisual/warningCircle/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"createWarningVisual/warningCircle/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15.5],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createWarningVisual/warningCircle/setDepth/0","expression":"DEPTH_WARNING"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:createWarningVisual/warningFill/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"createWarningVisual/warningFill/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15.49],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createWarningVisual/warningFill/setDepth/0","expression":"DEPTH_WARNING - 0.01"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:createWarningVisual/shadow/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"createWarningVisual/shadow/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[15.48],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createWarningVisual/shadow/setDepth/0","expression":"DEPTH_WARNING - 0.02"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:createWarningVisual/meteorGlow/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"createWarningVisual/meteorGlow/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[16.2],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createWarningVisual/meteorGlow/setDepth/0","expression":"DEPTH_METEOR"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:createWarningVisual/trailEmitter/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"createWarningVisual/trailEmitter/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[16.25],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createWarningVisual/trailEmitter/setDepth/0","expression":"DEPTH_METEOR + 0.05"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:playImpactEffect/flash/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"playImpactEffect/flash/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[26],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"playImpactEffect/flash/setDepth/0","expression":"DEPTH_IMPACT + 1"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:playImpactEffect/blast/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"playImpactEffect/blast/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"playImpactEffect/blast/setDepth/0","expression":"DEPTH_IMPACT"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:playImpactEffect/ring/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"playImpactEffect/ring/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[25],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"playImpactEffect/ring/setDepth/0","expression":"DEPTH_IMPACT"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:playImpactEffect/sparkEmitter/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"playImpactEffect/sparkEmitter/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[25.1],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"playImpactEffect/sparkEmitter/setDepth/0","expression":"DEPTH_IMPACT + 0.1"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:playImpactEffect/emberEmitter/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"playImpactEffect/emberEmitter/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[25],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"playImpactEffect/emberEmitter/setDepth/0","expression":"DEPTH_IMPACT"}},
-  {"id":"cpu:effects/MeteorRenderer.ts:playImpactEffect/scorch/setDepth/0","owner":"effects/MeteorRenderer.ts","component":"playImpactEffect/scorch/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[15.4],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"playImpactEffect/scorch/setDepth/0","expression":"DEPTH_WARNING - 0.1"}},
   {"id":"cpu:effects/MiniTeslaDomeRenderer.ts:syncDome/visual/depth/0","owner":"effects/MiniTeslaDomeRenderer.ts","component":"syncDome/visual/depth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.86],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"syncDome/visual/depth/0","expression":"DEPTH.PLAYERS - 0.14"}},
   {"id":"cpu:effects/MiniTeslaDomeRenderer.ts:syncDome/visual/boltDepth/0","owner":"effects/MiniTeslaDomeRenderer.ts","component":"syncDome/visual/boltDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[10.12],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"syncDome/visual/boltDepth/0","expression":"DEPTH.PLAYERS + 0.12"}},
   {"id":"cpu:effects/MolotovFirewalkerRenderer.ts:module/this.glow/configureAdditiveImage/0","owner":"effects/MolotovFirewalkerRenderer.ts","component":"module/this.glow/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[9.98],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.glow/configureAdditiveImage/0","expression":"DEPTH.PLAYERS - 0.02"}},
@@ -5321,93 +5310,6 @@ export const CPU_SOURCE_CONTRACTS = {
       {
         "key": "ensureObjects/createLayer/setDepth/0",
         "expression": "DEPTH_LOW_HEALTH_BLOOD",
-        "blends": [
-          "NORMAL"
-        ]
-      }
-    ],
-    "bindings": {}
-  },
-  "effects/MeteorRenderer.ts": {
-    "blends": [
-      "Phaser.BlendModes.ADD",
-      "makeAdditive"
-    ],
-    "cameras": [],
-    "sites": [
-      {
-        "key": "createWarningVisual/warningCircle/setDepth/0",
-        "expression": "DEPTH_WARNING",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "createWarningVisual/warningFill/setDepth/0",
-        "expression": "DEPTH_WARNING - 0.01",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "createWarningVisual/shadow/setDepth/0",
-        "expression": "DEPTH_WARNING - 0.02",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "createWarningVisual/meteorGlow/setDepth/0",
-        "expression": "DEPTH_METEOR",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createWarningVisual/trailEmitter/setDepth/0",
-        "expression": "DEPTH_METEOR + 0.05",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "playImpactEffect/flash/setDepth/0",
-        "expression": "DEPTH_IMPACT + 1",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "playImpactEffect/blast/setDepth/0",
-        "expression": "DEPTH_IMPACT",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "playImpactEffect/ring/setDepth/0",
-        "expression": "DEPTH_IMPACT",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "playImpactEffect/sparkEmitter/setDepth/0",
-        "expression": "DEPTH_IMPACT + 0.1",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "playImpactEffect/emberEmitter/setDepth/0",
-        "expression": "DEPTH_IMPACT",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "playImpactEffect/scorch/setDepth/0",
-        "expression": "DEPTH_WARNING - 0.1",
         "blends": [
           "NORMAL"
         ]
@@ -7963,4 +7865,9 @@ export const CPU_SOURCE_CONTRACTS = {
     }
   }
 };
-export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS];
+export const METEOR_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {id:'meteor:ground',owner:'effects/gpu/MeteorGpuLayer.ts',component:'ground',height:'ground',lighting:'material',camera:'world',depths:[5.12],blends:['NORMAL'],profiles:['G'],role:'effect'},
+  {id:'meteor:warning',owner:'effects/gpu/MeteorGpuLayer.ts',component:'warning',height:'ground',lighting:'emissive',camera:'world',depths:[20.4],blends:['NORMAL'],profiles:['H'],role:'ui'},
+  {id:'meteor:flight',owner:'effects/gpu/MeteorGpuLayer.ts',component:'flight',height:'high',lighting:'emissive',camera:'world',depths:[20.6],blends:['NORMAL'],profiles:['H'],role:'effect'},
+];
+export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS];

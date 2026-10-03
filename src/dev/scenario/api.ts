@@ -45,6 +45,14 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'armageddonReview': {
+      const count=number(c.count??1,1,256);
+      if(!Number.isInteger(count))throw new Error('Integer count required');
+      if(c.quality!==undefined&&!['high','medium','low'].includes(String(c.quality)))throw new Error('quality: high, medium or low required');
+      if(c.variant!==undefined&&c.variant!=='normal'&&c.variant!=='void')throw new Error('variant: normal or void required');
+      controller.arrangeArmageddonReview({count,progress:number(c.progress??.65,0,1),quality:(c.quality??'high') as 'high'|'medium'|'low',
+        impacts:c.impacts===undefined?false:boolean(c.impacts),variant:(c.variant??'normal') as 'normal'|'void'});break;
+    }
     case 'enemyMeshReview': {
       const count = number(c.count ?? 4, 1, 500), pose = number(c.pose ?? -1, -1, 30);
       if (!Number.isInteger(count) || !Number.isInteger(pose)) throw Error('Integer count/pose required');

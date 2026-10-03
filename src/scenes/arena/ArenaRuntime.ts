@@ -676,6 +676,10 @@ export class ArenaRuntime {
     return { trees: arena?.trunkBodies.length ?? 0, wildlife: arena?.wildlife?.model.animals.length ?? 0 };
   }
 
+  getScenarioMeteorTargets() {
+    return { gpuVfx: this.renderers.gpuVfx, explosion: this.renderers.explosionGpu, lighting: this.renderers.lighting };
+  }
+
   getScenarioLightingTargets() {
     const world = this.flow.getWorldRuntime();
     const arena = world?.materialization?.arena;

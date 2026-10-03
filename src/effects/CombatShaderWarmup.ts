@@ -3,6 +3,7 @@ import type { ShaderWarmupProbe } from '../graphics/ShaderWarmupProbe';
 import { DistortionFilter } from './distortion/DistortionFilter';
 import { EnemyReadabilityRenderer } from './EnemyReadabilityRenderer';
 import { StinkCloudBody } from './StinkCloudBody';
+import { MeteorGpuLayer } from './gpu/MeteorGpuLayer';
 
 /** Lazy probes; their owner releases them on completion, failure and Scene teardown.
  * Phaser's program cache belongs to this renderer/context. No Activity or Round is created.
@@ -11,7 +12,13 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
   let contour: EnemyReadabilityRenderer | null = null;
   let stink: StinkCloudBody | null = null;
   let displacement: DistortionFilter | null = null;
+  let meteor: MeteorGpuLayer | null = null;
   return [
+    {
+      name: 'armageddon',
+      prepare: context => (meteor ??= new MeteorGpuLayer(scene)).prepare(context),
+      destroy: () => { meteor?.destroy(); meteor = null; },
+    },
     {
       name: 'enemy-contour',
       prepare: context => (contour ??= new EnemyReadabilityRenderer(scene)).prepareShader(context),
