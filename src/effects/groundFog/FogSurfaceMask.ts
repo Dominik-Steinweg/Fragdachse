@@ -32,8 +32,10 @@ void main() {
      coverage=data.a;valid=1.0;
      if(uHasRockShadows>.5) {
        vec4 shelter=texture2D(uRockOcclusion,uv);
+       // Keep contact through the antialiased contour. The display pass cuts fog
+       // by mineral coverage; fading contact first leaves a bright fringe.
        // Current contact is independent of sun, horizon quality and azimuth fades.
-       float contact=(1.0-shelter.a)*(1.0-smoothstep(0.0,.4,coverage));
+       float contact=1.0-shelter.a;
        retention=1.0-uRockFogStrength.x*contact;
        if(uRockSolarStrength>0.0 && uRockFogStrength.y>0.0 && uRockSun.z>0.0) {
          vec3 horizons=blendHorizons(vec4(data.b,shelter.gba),uv,slot).rgb*1.570796327;

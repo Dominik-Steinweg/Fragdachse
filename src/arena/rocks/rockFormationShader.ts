@@ -155,10 +155,12 @@ void main() {
     factor*=mineralCavity(local);
   }
   if(uGround>.5&&uCastShadow<.5)factor=vec3(1.0);
-  // Ambient foot outside the actual mineral contour, before fog. It remains
-  // independent of direct light, clouds and the cast-shadow comparison switch.
+  // Ambient foot beneath the mineral contour, before fog. Preserve contact
+  // under partial mineral coverage so antialiased edges cannot expose a bright
+  // strip of ground. Opaque mineral covers this pass at its own depth.
+  // It remains independent of direct light, clouds and the cast-shadow switch.
   if(uGround>.5 && uFineMineral>.5)
-    factor*=1.0-uRockContactAO*(1.0-shelter.a)*(1.0-smoothstep(0.0,.4,data.a))*uOptions.z;
+    factor*=1.0-uRockContactAO*(1.0-shelter.a)*uOptions.z;
   // Apply before mineral coverage: exposed ground receives this only from its
   // own pass, while the surface pass remains neutral outside the rock alpha.
   if (uGround<.5) {
