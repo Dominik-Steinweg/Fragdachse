@@ -84,6 +84,44 @@ function makeSystem(playerTarget: (targetId: string) => boolean) {
 }
 
 describe('EffectSystem player death animation', () => {
+  it('replaces only its own damage fade on repeated hits and releases it on teardown', () => {
+    const system = Object.create(EffectSystem.prototype) as EffectSystem;
+    let receive: (effect: any) => void = () => {};
+    const fades: Array<{ active: boolean; targets: object[]; destroy(): void; finish(): void }> = [];
+    const edges = Array.from({ length: 4 }, () => ({
+      scene: {}, alpha: 0, visible: false, destroy: vi.fn(),
+      setAlpha(value: number) { this.alpha = value; return this; },
+      setVisible(value: boolean) { this.visible = value; return this; },
+    }));
+    Object.assign(system, {
+      ensureTextures: vi.fn(), playHitEffect: vi.fn(), zeusAudioUses: new Map(),
+      damageVignetteTop: edges[0], damageVignetteBottom: edges[1],
+      damageVignetteLeft: edges[2], damageVignetteRight: edges[3],
+      scene: { tweens: { add: (config: any) => {
+        const fade = { active: true, targets: config.targets, destroy() { this.active = false; },
+          finish() { if (this.active) { this.active = false; config.onComplete(); } } };
+        fades.push(fade); return fade;
+      }, killTweensOf: (target: object) => {
+        for (const fade of fades) if (fade.targets.includes(target)) fade.destroy();
+      } } },
+      bridge: { getLocalPlayerId: () => 'local',
+        registerEffectHandler: (handler: typeof receive) => { receive = handler; },
+        registerPlasmaBurnerPulseHandler: vi.fn(), registerHitscanTracerHandler: vi.fn(),
+        registerMeleeSwingHandler: vi.fn() },
+    });
+    system.setup();
+    const hit = { type: 'hit', targetId: 'local', shooterId: 'enemy', totalDamage: 20, dirX: 1, dirY: 0 };
+    receive(hit); receive({ ...hit, dirX: 0, dirY: 1 });
+    expect(fades.map(fade => fade.active)).toEqual([false, true]);
+    fades[0].finish();
+    expect(edges.every(edge => edge.visible)).toBe(true);
+    fades[1].finish();
+    expect(edges.every(edge => !edge.visible)).toBe(true);
+    receive(hit); system.destroy();
+    expect(fades.every(fade => !fade.active)).toBe(true);
+    expect(edges.every(edge => edge.destroy.mock.calls.length === 1)).toBe(true);
+  });
+
   it('observes predicted hitscan once, skips its echo and disconnects only the owning fog sink', () => {
     const system = Object.create(EffectSystem.prototype) as EffectSystem;
     Object.assign(system, { scene: { time: { now: 10 } }, bridge: { getLocalPlayerId: () => 'local' },
