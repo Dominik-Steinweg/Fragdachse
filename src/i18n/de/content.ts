@@ -163,6 +163,7 @@ export const deContent = {
   "source.weapon.NEGEV.killstreak.name": "Negev-Killstreak",
   "source.weapon.AWP.fire_trail.name": "AWP-Brandspur",
   "source.ground_fire.armageddon.name": "Armageddon-Brand",
+  "source.ground_fire.train.name": "Zugbrand",
   "source.ground_fire.rocket.name": "Raketenbrand",
   "source.ground_fire.flamethrower.name": "Brennender Boden",
   "source.ground_fire.base_destruction.name": "Basisbrand",

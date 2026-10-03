@@ -12,8 +12,6 @@ import { GpuVfxFrameId as Frame } from '../src/effects/gpu/GpuVfxAtlas';
 function fixture(factor = 1) {
   let now = 0, callback: ((delta: number, now: number) => void) | null = null;
   let cleared = 0, released = 0;
-  const flights: any[] = [];
-  let cancelled = 0;
   const particles: any[] = [], transforms: any[] = [], camera: any[] = [], retired: any[] = [];
   const gpu = {
     emissionGeneration: 0, isSuppressed: () => false, now: () => now,
@@ -31,12 +29,8 @@ function fixture(factor = 1) {
   };
   const scene = { cameras: { main: { width: 6000, height: 6000, originX: 0, originY: 0, zoom: 1, scrollX: -2000, scrollY: -2000, worldView: { x: -2000, y: -2000, right: 4000, bottom: 4000 } } } };
   const renderer = new TrainVfxController(scene as never, { gpu: gpu as never,
-    fireChunks: { playFireChunkBurst: (x, y, targets, startedAt, now, style, random) => {
-      flights.push({ x, y, targets, startedAt, now, style, variation: random?.() });
-      let done = false; return () => { if (!done) { cancelled++; done = true; } };
-    } },
     camera: { request: (request: any) => camera.push(request) } as never, sampleGround: () => 0x345678 });
-  return { renderer, particles, transforms, camera, gpu, scene, retired, flights, cancelled: () => cancelled,
+  return { renderer, particles, transforms, camera, gpu, scene, retired,
     tick: (delta: number) => { now += delta; callback?.(delta, now); },
     cleanup: () => ({ cleared, released, registered: callback !== null }) };
 }
@@ -58,25 +52,13 @@ it('seeds match Float32 wire coordinates and do not consume Math.random', () => 
   for (let i = 0; i < 100; i++) { const n = a(); assert.equal(n, b()); assert(n >= 0 && n < 1); }
 });
 
-it('delegates seeded flights to the base renderer and cancels only its own flights on reset/destroy', () => {
-  const a = fixture(), b = fixture();
-  for (const f of [a,b]) { f.renderer.playExplosion(100,120,160); f.tick(16); }
-  assert.deepEqual(a.flights,b.flights); assert(a.flights.length > 0);
-  assert(a.flights.every(f => f.style === 'normal' && f.targets.every((t:any) => t.landsAt > f.now)));
-  assert(!a.particles.some(p => p.effect === Effect.TrainDebris));
-  a.gpu.emissionGeneration++; a.tick(16);
-  assert.equal(a.cancelled(),a.flights.length); assert.equal(b.cancelled(),0);
-  b.renderer.destroy(); b.renderer.destroy(); assert.equal(b.cancelled(),b.flights.length);
-});
-
-it('skips already landed flights after a long frame and preserves shared targets across quality levels', () => {
-  const high = fixture(), low = fixture(.25), late = fixture();
-  for (const f of [high,low,late]) f.renderer.playExplosion(100,120,160);
-  high.tick(16); low.tick(16); late.tick(5000);
-  assert.equal(late.flights.length,0);
-  assert(low.flights[0].targets.length < high.flights[0].targets.length);
-  assert.deepEqual(low.flights[0].targets,high.flights[0].targets.slice(0,low.flights[0].targets.length));
-  for (const f of [high,low,late]) f.renderer.destroy();
+it('leaves burning wreckage to the shared fireball and host ground fire: no free flames in the smoke', () => {
+  const f = fixture(); f.renderer.playExplosion(100, 120, 160);
+  for (let i = 0; i < 800; i++) f.tick(16);
+  const flames = new Set<number>([Frame.FlameTongue, Frame.GroundFireSurfaceB, Frame.GroundFireSurfaceC, Frame.ExplosionCore]);
+  assert(!f.particles.some(p => flames.has(p.frame)));
+  assert(f.particles.some(p => p.effect === Effect.TrainSmoke && p.at >= 4000));
+  f.renderer.destroy();
 });
 
 it('uses terrain-colored motion dust, stays quiet at rest and stops emission when the train disappears', () => {
@@ -94,14 +76,14 @@ it('reduces decorative load on low quality without changing the hero impact', ()
   const high = run(1), low = run(.25);
   assert(low.particles.length < high.particles.length);
   assert.equal(low.camera.length, high.camera.length);
-  assert(low.particles.some(p => p.frame === Frame.ExplosionCore));
+  assert(low.particles.some(p => p.frame === Frame.ExplosionRing));
 });
 
 it('caps event work, ages skipped phases, and releases all world-owned particles and callbacks', () => {
   const f = fixture(); for (let i = 0; i < 1000; i++) f.renderer.playExplosion(100, 120, 160);
   f.tick(16); assert(f.camera.length <= 16);
   const debris = f.particles.filter(p => p.effect === Effect.TrainDebris);
-  assert(debris.length <= 64);
+  assert(debris.length <= 16 * 12);
   f.tick(10000);
   assert(f.particles.every(p => Number.isFinite(p.x + p.y + p.lifeMs + p.scaleStart)));
   f.renderer.destroy(); f.renderer.destroy();

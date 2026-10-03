@@ -1,5 +1,3 @@
-import type { FlamethrowerUpgradeRenderer } from '../FlamethrowerUpgradeRenderer';
-import type { FireChunkFlight } from '../../types';
 import type { LightingSystem } from '../LightingSystem';
 import { createVisibleWorldView, getVisibleWorldView } from '../../graphics/CameraWorldView';
 import type * as Phaser from 'phaser';
@@ -16,7 +14,6 @@ import { GpuVfxLaneId as Lane } from '../gpu/GpuVfxRenderLanes';
 import { trainRandom, trainVfxSeed } from './TrainVfxModel';
 
 export interface TrainVfxPorts {
-  readonly fireChunks?: Pick<FlamethrowerUpgradeRenderer, 'playFireChunkBurst'>;
   readonly lighting?: Pick<LightingSystem, 'setLight' | 'releaseLight'>;
   readonly gpu: GpuVfxSystem;
   readonly camera: Pick<CameraFeedbackController, 'request'>;
@@ -31,7 +28,6 @@ export class TrainVfxController {
   private readonly unsubscribe: () => void;
   private generation: number;
   private readonly bursts: Burst[] = [];
-  private readonly flights: { until: number; count: number; cancel: () => void }[] = [];
   private disintegrated = false;
   private audio: GameAudioSystem | null = null;
   private pose: { x: number; y: number; dir: 1 | -1; segments: readonly number[] } | null = null;
@@ -114,7 +110,6 @@ export class TrainVfxController {
     this.clearLights();
     this.ports.gpu.releaseSource(this.source);
     this.bursts.length = 0;
-    this.cancelFlights();
     this.stopMovement();
   }
 
@@ -131,7 +126,6 @@ export class TrainVfxController {
       gpu.clearSource(this.source);
       this.clearLights();
       this.bursts.length = 0;
-      this.cancelFlights();
       this.disintegrated = false;
       this.before = null;
       this.generation = gpu.emissionGeneration;
@@ -146,23 +140,14 @@ export class TrainVfxController {
       const age = now - b.at;
       const hot = Math.exp(-age / 470);
       this.light(`train-afterburn-${b.seed}`, b.x, b.y, 150 + 330 * hot,
-        (2.5 * hot + .72 * Math.max(0, 1 - age / 11000)) * (.94 + .06 * Math.sin(age * .031)));
+        (2.5 * hot + .3 * Math.max(0, 1 - age / 9000)) * (.94 + .06 * Math.sin(age * .031)));
       while (b.phase < times.length && now - b.at >= times[b.phase]) {
         const at = b.at + times[b.phase];
         this.burstPhase(b, b.phase++, at, now);
       }
       if (b.phase === times.length) this.bursts.splice(i, 1);
     }
-    // Drop completed cancellation handles; rendering and landing remain owned by the shared renderer.
-    for (let i = this.flights.length - 1; i >= 0; i--) {
-      if (now >= this.flights[i].until) { this.flights[i].cancel(); this.flights.splice(i, 1); }
-    }
     this.finishLights();
-  }
-
-  private cancelFlights(): void {
-    for (const flight of this.flights) flight.cancel();
-    this.flights.length = 0;
   }
 
   private finishLights(): void {
@@ -216,66 +201,41 @@ export class TrainVfxController {
     const random = trainRandom(b.seed ^ Math.imul(phase + 1, 2654435761));
     const factor = this.ports.gpu.quality.getEmissionFactor(Effect.TrainSmoke);
     const size = main ? 1.85 : 1.1;
+    // The fireball itself is the shared combat burst (EffectSystem) and the burning wreckage is
+    // the host's ordinary fire-chunk burst. This layer only adds what is specific to a train:
+    // torn metal, earthy dust, a dark smoke column and soot. No free-floating flames.
     if (phase === 0) {
-      this.particle(Effect.TrainHeat, Frame.ExplosionCore, b.x, b.y, 0, 0, 60 * size, b.radius * .8, 190, 1, 0xffefb9, at, now);
-      this.particle(Effect.TrainDust, Frame.ExplosionRing, b.x, b.y, 0, 0, 35, b.radius * 3.4, 850, .65, this.groundColor(b.x, b.y), at, now);
-      this.fireChunkBurst(b, at, now);
-      for (let i = 0; i < Math.ceil(18 * size * factor); i++) {
+      this.particle(Effect.TrainDust, Frame.ExplosionRing, b.x, b.y, 0, 0, 35, b.radius * 3.2, 900, .5, this.dustColor(b.x, b.y), at, now);
+      for (let i = 0; i < Math.ceil(14 * size * factor); i++) {
         const angle = random() * Math.PI * 2, speed = (70 + random() * 190) * size;
         this.particle(Effect.TrainHeat, Frame.ExplosionStreak, b.x, b.y,
-          Math.cos(angle) * speed, Math.sin(angle) * speed, 9, .7, 900 + random() * 650, .95, 0xffb854, at, now);
+          Math.cos(angle) * speed, Math.sin(angle) * speed, 9, .7, 700 + random() * 500, .9, 0xffb854, at, now);
       }
-      this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, b.x, b.y, 0, 0, 90 * size, 140 * size, 9000, .85, 0x171611, at, now);
+      for (let i = 0; i < Math.ceil(6 * size * factor); i++) {
+        const angle = random() * Math.PI * 2, speed = (60 + random() * 140) * size;
+        this.particle(Effect.TrainDebris, Frame.ExplosionChunk, b.x + (random() - .5) * 30, b.y + (random() - .5) * 60,
+          Math.cos(angle) * speed, Math.sin(angle) * speed, 6 + random() * 5 * size, 2, 650 + random() * 350, .95,
+          random() < .5 ? 0x2b2723 : 0x4a3d33, at, now);
+      }
+      this.particle(Effect.TrainResidue, Frame.ExplosionSmoke, b.x, b.y, 0, 0, 90 * size, 140 * size, 9000, .8, 0x171611, at, now);
     } else if (phase <= 2) {
-      this.particle(Effect.TrainHeat, Frame.GroundFireSurfaceC, b.x, b.y, 4, -6,
-        92 * size, 60 * size, 580, .95, 0xee650f, at, now);
       for (let i = 0; i < Math.ceil(7 * size * factor); i++) {
         const angle = random() * Math.PI * 2, spread = 12 + random() * 33 * size;
         const x = b.x + Math.cos(angle) * spread, y = b.y + Math.sin(angle) * spread;
         const vx = Math.cos(angle) * 28, vy = Math.sin(angle) * 28;
-        const frame = i % 2 ? Frame.GroundFireSurfaceB : Frame.GroundFireSurfaceC;
-        this.particle(Effect.TrainSmoke, Frame.ExplosionSmoke, x, y, vx, vy, 48 * size, 115 * size, 2300, .94, 0x30241c, at, now);
-        this.particle(Effect.TrainHeat, frame, x, y, vx, vy, 65 * size, 26 * size, 700, .95, 0xb83208, at, now);
-        this.particle(Effect.TrainHeat, frame, x - 3, y - 3, vx * .6, vy * .6, 44 * size, 14 * size, 490, 1, 0xff871e, at, now);
-        if (i % 3 === 0) this.particle(Effect.TrainHeat, Frame.GroundFireSurfaceC, x - 5, y - 5, vx * .4, vy * .4,
-          29 * size, 7 * size, 270, .93, 0xffec98, at, now);
+        this.particle(Effect.TrainSmoke, Frame.ExplosionSmoke, x, y, vx, vy, 48 * size, 115 * size, 2300, .9,
+          i % 2 ? 0x2a211b : 0x3a3029, at, now);
       }
     } else {
+      // A steady, thinning column drifting with the breeze instead of flames popping in the smoke.
       const remaining = Math.max(.12, 1 - (at - b.at) / 13500);
-      for (let i = 0; i < Math.ceil(7 * size * factor); i++) {
+      for (let i = 0; i < Math.ceil(6 * size * factor); i++) {
         this.particle(Effect.TrainSmoke, Frame.ExplosionSmoke,
-          b.x + (random() - .5) * 50 * size, b.y + (random() - .5) * 80 * size,
-          13 + random() * 11, -9 - random() * 10, 36 * size, 112 * size,
-          3600 + random() * 550, .93 * remaining, i % 2 ? 0x272823 : 0x3b3931, at, now);
-      }
-      for (let i = 0; i < Math.ceil(3 * factor); i++) {
-        const x = b.x + (random() - .5) * 28, y = b.y + (random() - .5) * 110;
-        this.particle(Effect.TrainHeat, Frame.GroundFireSurfaceB, x, y, 2, -4,
-          28 * remaining, 8, 1700, .88 * remaining, 0xef560c, at, now);
-        this.particle(Effect.TrainHeat, Frame.FlameTongue, x, y, 2, -6,
-          11 * remaining, 3, 1100, .9 * remaining, 0xffdf7b, at, now);
+          b.x + (random() - .5) * 40 * size, b.y + (random() - .5) * 70 * size,
+          14 + random() * 10, -9 - random() * 9, 36 * size, 116 * size,
+          3600 + random() * 550, .85 * remaining, i % 2 ? 0x272823 : 0x3b3931, at, now);
       }
     }
-  }
-
-  private fireChunkBurst(b: Burst, at: number, now: number): void {
-    const renderer = this.ports.fireChunks;
-    const landsAt = at + 600;
-    if (!renderer || now >= landsAt) return;
-    const available = 48 - this.flights.reduce((sum, flight) => sum + flight.count, 0);
-    const factor = this.ports.gpu.quality.getEmissionFactor(Effect.TrainDebris);
-    const count = Math.min(available, Math.ceil((b.radius >= 140 ? 8 : 3) * factor));
-    if (count <= 0) return;
-    const random = trainRandom(b.seed ^ 0x46f1);
-    const targets: FireChunkFlight[] = [];
-    for (let i = 0; i < count; i++) {
-      const angle = random() * Math.PI * 2, distance = 45 + random() * b.radius;
-      targets.push({ x: b.x + Math.cos(angle) * distance, y: b.y + Math.sin(angle) * distance, landsAt });
-    }
-    // Same flight, follow-light and impact as base destruction. No host ground-fire callback.
-    const cancel = renderer.playFireChunkBurst(b.x, b.y, targets, at, now, 'normal', trainRandom(b.seed ^ 0x7b51));
-    // Allow the shared Scene tween to run its completion before retiring the cancellation handle.
-    this.flights.push({ until: landsAt + 1000, count, cancel });
   }
 
   private dustColor(x: number, y: number): number {

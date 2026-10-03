@@ -163,6 +163,7 @@ export const enContent = {
   "source.weapon.NEGEV.killstreak.name": "Negev Killstreak",
   "source.weapon.AWP.fire_trail.name": "AWP Fire Trail",
   "source.ground_fire.armageddon.name": "Armageddon Fire",
+  "source.ground_fire.train.name": "Train Fire",
   "source.ground_fire.rocket.name": "Rocket Fire",
   "source.ground_fire.flamethrower.name": "Burning Ground",
   "source.ground_fire.base_destruction.name": "Base Fire",

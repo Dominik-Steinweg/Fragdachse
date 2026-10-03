@@ -825,7 +825,12 @@ export class EffectSystem implements EnemyVisualSink {
     this.emitExplosionLight(x, y, radius, color, visualStyle);
 
     if (visualStyle === 'train') {
-      if (this.trainExplosionRenderer?.(x, y, radius)) return;
+      if (this.trainExplosionRenderer?.(x, y, radius)) {
+        // The train layer adds rupture, ejecta, smoke and soot; the fireball is the shared
+        // heavy combat burst, so train and Armageddon read as the same family of explosions.
+        this.spawnCombatExplosionGpu(x, y, radius * 0.85, 'meteor', 0xff2200, 0xffffcc, 0xff7a3d);
+        return;
+      }
       this.playTrainExplosionEffect(x, y, radius, color);
       return;
     }

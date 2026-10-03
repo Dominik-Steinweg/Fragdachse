@@ -21,7 +21,8 @@ import { CoopDefenseTrainEventHandler, type TrainEventReplicationPort } from '..
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../train/TrainEvent';
 import type { CoopTrainPort } from '../activity/CoopTrainPort';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
-import type { ExplosionVisualStyle, PlayerProfile, TrainEventConfig } from '../types';
+import type { ExplosionVisualStyle, FireChunkBurstConfig, PlayerProfile, TrainEventConfig } from '../types';
+import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
 import type { WorldIntegrityMutationResult, WorldIntegrityState } from './WorldIntegrityMutation';
 
 export interface WorldTrainKillEvent {
@@ -82,6 +83,8 @@ export interface WorldTrainRuntimeOptions {
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly setClassicTrainSpawned: (spawned: boolean) => void;
   readonly onRendererChanged: (renderer: TrainRenderer | null) => void;
+  /** Host: the shared fire-chunk burst that lands as ordinary burning ground (as for destroyed bases). */
+  readonly getFireChunkPort?: () => FireChunkBurstPort | null;
 }
 
 /** World owner for the classic train and the Activity-owned authored train child. */
@@ -321,18 +324,23 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.options.network.matchEvents.broadcastTrainDestroyed();
     try {
       for (const blast of planTrainDestruction(result.segmentPositions, worldMetrics.offsetY, worldMetrics.maxY)) {
-        this.scheduleExplosion(blast.x, blast.y, blast.radius, blast.delayMs);
+        this.scheduleExplosion(blast.x, blast.y, blast.radius, blast.delayMs, result.lastHitterId);
       }
     } catch (error) {
       console.error('[WorldTrainRuntime] Destruction presentation failed', error);
     }
   }
 
-  private scheduleExplosion(x: number, y: number, radius: number, delayMs: number): void {
+  private scheduleExplosion(x: number, y: number, radius: number, delayMs: number, ownerId: string | null): void {
     let timer: Phaser.Time.TimerEvent;
     timer = this.options.scene.time.delayedCall(delayMs, () => {
       this.explosionTimers = this.explosionTimers.filter((candidate) => candidate !== timer);
       this.options.network.effects.broadcastExplosionEffect(x, y, radius, undefined, 'train');
+      // Burning wreckage is thrown off as the ordinary fire chunks that leave real burning ground.
+      const main = radius >= TRAIN_FIRE_MAIN_RADIUS;
+      this.options.getFireChunkPort?.()?.hostCreateFireChunkBurst(ownerId ?? TRAIN_FIRE_OWNER, x, y, {
+        ...TRAIN_FIRE_BURST, count: main ? 7 : 2, searchRadius: main ? 150 : 90,
+      }, `train-wreck:${Math.round(x)}:${Math.round(y)}`, Date.now());
     });
     this.explosionTimers.push(timer);
   }
@@ -342,6 +350,14 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.explosionTimers.length = 0;
   }
 }
+
+const TRAIN_FIRE_OWNER = '__train__';
+const TRAIN_FIRE_MAIN_RADIUS = 140;
+const TRAIN_FIRE_BURST: FireChunkBurstConfig = {
+  count: 2, searchRadius: 90, flightMs: 620, igniteCenter: true,
+  durationMs: 6500, burnDurationMs: 2000, burnDamagePerTick: 0.5,
+  sourceId: 'ground_fire.train', visualStyle: 'normal',
+};
 
 export function getClassicTrainTrackX(trackGridX: number, metrics: WorldMetrics): number {
   return metrics.offsetX + trackGridX * CELL_SIZE + CELL_SIZE;

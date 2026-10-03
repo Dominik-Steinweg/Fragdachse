@@ -141,7 +141,6 @@ export function composeWorldTrain(
     gameAudioSystem: ctx.gameAudioSystem,
     vfx: presentation ? { gpu: renderers.gpuVfx, camera: ctx.visualFeedback.camera,
       lighting: renderers.lighting,
-      fireChunks: renderers.flamethrowerUpgrades,
       sampleGround: (x, y) => renderers.movement.sampleGroundColor(x, y) } : undefined,
     network: {
       clock: {
@@ -168,6 +167,7 @@ export function composeWorldTrain(
       },
     },
     getEnemyManager: () => (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager) ?? null,
+    getFireChunkPort: () => gameplay.player?.getPlayerFireChunkPort() ?? null,
     isPlayerBurrowed: (playerId) => gameplay.player?.isBurrowed(playerId) ?? false,
     resolveBurrowDamage: (playerId, baseDamage) => gameplay.player?.getPlayerModifierReadPort()
       .getResolvedStat(playerId, 'player.burrowTrainDamage', baseDamage) ?? baseDamage,

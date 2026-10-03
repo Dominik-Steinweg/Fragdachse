@@ -50,3 +50,38 @@ describe('World train undermining damage', () => {
     } finally { runtime.destroy(); }
   });
 });
+
+describe('World train destruction', () => {
+  it('throws every replicated blast off as ordinary burning ground through the shared fire-chunk burst', () => {
+    const order: string[] = [];
+    const burst = vi.fn((..._args: unknown[]) => { order.push('fire'); });
+    const scene = { time: { delayedCall: (_ms: number, cb: () => void) => { cb(); return { remove: vi.fn() }; } } };
+    const metrics = resolveCoopDefenseWorldMetrics(undefined, undefined);
+    const runtime = new WorldTrainRuntime({
+      scene, playerManager: { getAllPlayers: () => [] }, worldMetrics: metrics, presentationRequired: false,
+      projectileTrain: { setTrainGroup: vi.fn(), setTrainImpactPort: vi.fn() }, combatSystem: { setTrainSegments: vi.fn() },
+      hostPhysics: {}, gameAudioSystem: {},
+      network: { clock: { getArenaStartTime: () => 0, now: () => 0 },
+        trainEvents: { isHost: () => true, get: () => undefined, publish: vi.fn(), clear: vi.fn() },
+        matchEvents: { addPlayerFrags: vi.fn(), getConnectedPlayers: () => [], broadcastKillEvent: vi.fn(),
+          broadcastTrainDestroyed: vi.fn() },
+        effects: { broadcastTrainBurrowSparks: vi.fn(),
+          broadcastExplosionEffect: vi.fn(() => { order.push('blast'); }) } },
+      getEnemyManager: () => null, isPlayerBurrowed: () => false, getTimeBubbleSystem: () => null,
+      setTranslocatorTrainManager: vi.fn(), getPowerUpSystem: () => null,
+      setClassicTrainSpawned: vi.fn(), onRendererChanged: vi.fn(),
+      getFireChunkPort: () => ({ hostCreateFireChunkBurst: burst }),
+    } as never);
+    const segmentPositions = [0, 1, 2].map(i => ({ x: metrics.offsetX + 64, y: metrics.offsetY + 200 + i * 120 }));
+    (runtime as unknown as { handleDestroyed: (r: unknown, m: unknown) => void })
+      .handleDestroyed({ lastHitterId: 'p1', segmentPositions }, metrics);
+    expect(burst).toHaveBeenCalledTimes(segmentPositions.length);
+    expect(order).toEqual(['blast', 'fire', 'blast', 'fire', 'blast', 'fire']);
+    for (const call of burst.mock.calls) {
+      expect(call[0]).toBe('p1');
+      expect(call[3]).toMatchObject({ sourceId: 'ground_fire.train', igniteCenter: true });
+      expect((call[3] as { burnDamagePerTick: number }).burnDamagePerTick).toBeGreaterThan(0);
+    }
+    runtime.destroy();
+  });
+});
