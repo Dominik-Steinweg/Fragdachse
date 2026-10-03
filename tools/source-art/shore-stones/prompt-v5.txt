@@ -1,0 +1,16 @@
+Use case: stylized-concept.
+Create a NEW production sprite atlas for a richly textured woodland game: NINE low natural riverbank stone-and-gravel fragments on TRUE TRANSPARENT background, precisely arranged in a 3 by 3 equal-cell grid. Square canvas. Each motif horizontal approximately 2:1, centered in its cell, with generous fully transparent gutters so no cells touch.
+Camera is exactly 90 degree orthographic straight overhead. Flat shallow terrain fragments only.
+
+ART DIRECTION:
+Subtle natural irregular grey-olive and muted brown river stones, matte weathered surfaces, gently chipped contours, partly buried shallow stone caps, small contact recesses. NO white veins or marble patterns. A small mix of flat rounded and angular stones with delicate restrained lighting, no outlined cartoon styling, no raised boulder piles. The native riverbank beneath them is dark, fine-grained damp olive-umber soil around #39392D and #494637. Small soil collars touching stones should match that dark muted palette. Stones can be somewhat lighter muted grey taupe, never chalk white, never glossy.
+
+CRITICAL GROUND INTEGRATION:
+These are OPEN POROUS stone groupings, NOT opaque oval dirt pads. The engine supplies the continuous soil beneath. At least half of each arrangement's interior should be TRUE TRANSPARENT irregular gaps between the stones. Show only very small thin dark damp-earth contact collars immediately around stone edges, softly dissolving into alpha. Scatter a few tiny isolated grit particles to transition out. No continuous earth mat, no thick soil clods, no bounding ground silhouette, no ambient shadow under whole group. Keep stone interiors opaque.
+
+FAMILIES:
+Top row: three distinct asymmetric bank fragments, each with 3 to 5 modest low flat stone caps and a handful of smaller chips and pebbles in the gaps. Denser darker dry-bank contacts on upper side, smaller clean gravel tapering on lower side towards the water. Individual main stones no wider than a quarter of motif width.
+Middle row: three distinct loose shallow-water gravel shoals, each a sparse spread of 10 to 15 small flattened stones in two uneven little pockets. No dominant boulder. Most visible area between stones transparent.
+Bottom row: three distinct fine scree scatters, 15 to 25 tiny mixed chips and small pebbles with 2 slightly larger flat caps. Very open, diffuse, irregular footprint. Smaller stones than top row, avoid a rigid circular or linear arrangement.
+
+ABSOLUTE EXCLUSIONS: NO roots, NO twigs, NO branches, NO sticks, NO vines, NO stems, NO moss, NO leaves, NO grass, NO reeds, NO plants, NO mushrooms, NO vegetation or organic debris whatsoever. Only mineral stone, gravel and very sparse fine earth contacts. No water, no ripples, no full landscape, no labels, no text, no borders, no checkerboard or black background. Entire spaces around and between fragments genuinely transparent. High quality understated top-down game art that blends into an existing dark woodland soil rather than looking like isolated props.

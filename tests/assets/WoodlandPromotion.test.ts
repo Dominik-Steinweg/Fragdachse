@@ -7,7 +7,7 @@ const root='public/assets/environment/woodland';
 const json=async(p:string)=>JSON.parse(await readFile(p,'utf8'));
 const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
 it('binds all delivered bytes to manifest hashes and reports actual boot/RGBA totals',async()=>{
-  const manifests=await Promise.all(['rock/mineral','canopy/canopy','ecology/rock-colonies','ecology/ground-litter','ecology/lilies','sun/transmission'].map(p=>json('src/assets/manifests/'+p.split('/').at(-1)+'.json')));
+  const manifests=await Promise.all(['rock/mineral','canopy/canopy','ecology/rock-colonies','ecology/ground-litter','ecology/lilies','sun/transmission','ecology/shore-stones'].map(p=>json('src/assets/manifests/'+p.split('/').at(-1)+'.json')));
   for(const [i,m] of manifests.entries()){
     const folder=i===0?'rock':i===1?'canopy':i===5?'sun':'ecology';
     const assets=i===0?[...m.assets,m.coverage]:i===1?m.atlases:i===5?[{...m,file:'transmission.png'}]:[m.atlas,...(m.contactAtlas?[m.contactAtlas]:[])];

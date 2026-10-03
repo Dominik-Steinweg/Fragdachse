@@ -14,7 +14,13 @@ import { resolveCoopDefenseWorldMetrics } from '../world/WorldMetrics';
 import { buildLobbyWorldLayout } from '../arena/LobbyWorldLayout';
 import { WaterSurfaceModel } from '../arena/WaterSurfaceModel';
 import { CELL_SIZE } from '../config';
-import type { WaterCell } from '../types';
+import type { ArenaLayout, WaterCell } from '../types';
+import { GroundSurfaceStreamer } from '../arena/chunks/GroundSurfaceStreamer';
+import { ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
+import { buildWoodlandEcology, EcologyWaterField, WOODLAND_ATLASES } from '../arena/WoodlandEcologyField';
+import { WoodlandEcologyRenderer } from '../arena/WoodlandEcologyRenderer';
+import { SUN_TUNING_DEFAULTS } from '../effects/sunlight/SunTuning';
+import { runtimeAssetUrl } from '../assets/RuntimeAssetUrls';
 
 // A deliberately small, directly operable fixture. It imports production behavior;
 // no debug hooks or alternative rules are installed in the actual game.
@@ -52,6 +58,9 @@ const status = (message: string): void => { document.querySelector('output')!.te
 
 class WaterLab extends Phaser.Scene {
   private surface!: WaterSurfaceRenderer;
+  private ground!: GroundSurfaceStreamer;
+  private ecology: WoodlandEcologyRenderer | null = null;
+  private layout!: ArenaLayout;
   private host!: HostPhysicsSystem;
   private proxy!: Phaser.GameObjects.Zone;
   private actor!: Phaser.GameObjects.Image;
@@ -68,6 +77,8 @@ class WaterLab extends Phaser.Scene {
 
   preload(): void {
     preloadGroundMaterials(this.load);
+    for (const atlas of WOODLAND_ATLASES)
+      this.load.atlas(atlas.key, runtimeAssetUrl(`/assets/environment/woodland/ecology/${atlas.file}`), {frames: atlas.frames});
     this.load.image('lab-badger', '/assets/sprites/pipeline-v2/badger/idle.png');
   }
   create(): void {
@@ -94,6 +105,9 @@ class WaterLab extends Phaser.Scene {
     const focusButton = document.getElementById('focus') as HTMLButtonElement;
     focusButton.disabled = !tip;
     createArenaBackground(this, width / 2, height / 2, width, height);
+    this.layout = {seed: fixture.seed, water, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: []};
+    this.ground = new GroundSurfaceStreamer({scene: this, frame: {offsetX: 0, offsetY: 0, width, height},
+      layout: this.layout, groundCoverPlacements: []});
     this.surface = new WaterSurfaceRenderer(this, { offsetX: 0, offsetY: 0, width, height }, water, fixture.seed);
     this.proxy = this.add.zone(this.startX, this.startY, PLAYER_SIZE, PLAYER_SIZE);
     this.physics.add.existing(this.proxy);
@@ -169,6 +183,7 @@ class WaterLab extends Phaser.Scene {
     bind('rebuild', () => this.scene.restart());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.host.setWaterGeometry(null); this.surface.destroy();
+      this.ground.destroy(); this.ecology?.destroy(); this.ecology = null;
       this.disposers.forEach(dispose => dispose()); this.disposers = [];
     });
     const startedAt = this.time.now;
@@ -201,7 +216,16 @@ class WaterLab extends Phaser.Scene {
     }
     this.actor.setPosition(this.proxy.x, this.proxy.y);
     this.surface.prepareMasks();
-    this.surface.updateResidency(getVisibleWorldView(this.cameras.main,cameraView));
+    const view = getVisibleWorldView(this.cameras.main,cameraView);
+    this.surface.updateResidency(view);
+    this.ground.updateResidency(view);
+    ChunkedRenderSurface.drainBakeQueue(this);
+    if (!this.ecology && this.surface.isPrepared()) {
+      const water = new EcologyWaterField(this.surface.getPreparedMasks());
+      this.ecology = new WoodlandEcologyRenderer(this, buildWoodlandEcology(this.layout,
+        {offsetX: 0, offsetY: 0, width, height}, [], water));
+    }
+    this.ecology?.update(SUN_TUNING_DEFAULTS, this.surface, true, true);
   }
 }
 

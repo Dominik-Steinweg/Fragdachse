@@ -13,9 +13,12 @@ export class WoodlandEcologyRenderer {
   private readonly entries:{p:EcologyPlacement;image:Phaser.GameObjects.Image}[];
   constructor(private readonly scene:Phaser.Scene, placements:readonly EcologyPlacement[]) {
     this.entries=placements.map(p=>{
-      const image=scene.add.image(p.x,p.y,WOODLAND_ATLASES[p.kind==='litter'?0:1].key,p.frame)
+      const image=scene.add.image(p.x,p.y,WOODLAND_ATLASES[p.kind==='litter'?0:p.kind==='pond'?1:2].key,p.frame)
         .setDisplaySize(p.size,p.size).setRotation(p.rotation).setAlpha(p.alpha)
-        .setDepth(p.kind==='litter'?DEPTH.GROUND_MACRO+.05:DEPTH.WATER+.05);
+        // Embedded shore material shares the ground macro shade; ground cover can
+        // overgrow its dry edge and water still covers the submerged stone faces.
+        .setDepth(p.kind==='litter'?DEPTH.GROUND_MACRO+.05:p.kind==='shore'?DEPTH.DIRT+.03:DEPTH.WATER+.05);
+      if(p.kind==='shore')image.setTint(0xc5c6b8);
       registerGraphicsObject(scene,'woodlandEcology',image);
       return {p,image};
     });
@@ -24,7 +27,9 @@ export class WoodlandEcologyRenderer {
     const view=getVisibleWorldView(this.scene.cameras.main,this.cameraView),time=water?.getPresentationTime()??0;
     for(const entry of this.entries) {
       const p=entry.p, image=entry.image,isLitter=p.kind==='litter';
-      const visible=(isLitter?litter:pond)&&p.rank<(isLitter?tuning.litterDensity:tuning.pondFloraDensity)*density
+      const enabled=p.kind==='shore'||(isLitter?litter:pond);
+      const amount=p.kind==='shore'?1:isLitter?tuning.litterDensity:tuning.pondFloraDensity;
+      const visible=enabled&&p.rank<amount*density
         &&p.x+p.size>view.x&&p.y+p.size>view.y&&p.x-p.size<view.right&&p.y-p.size<view.bottom;
       image.setVisible(visible);
       if(visible&&p.floating) {

@@ -14,6 +14,8 @@ import { FONT_DISPLAY, FONT_WEIGHT } from './uiTheme';
 
 /** Angezeigte Kantenlänge des Waldboden-Nabenrings aus dem Utility-Rad-Atlas. */
 const MEDALLION_SIZE = 136;
+/** Hält die Bildmitte für den Spieler frei, mit Abstand zu den Missions-Einblendungen darüber. */
+const COUNTDOWN_CENTER_Y = GAME_HEIGHT / 2 - 110;
 const FRAME_SCALE = MEDALLION_SIZE / RADIAL_HUB_GEOMETRY.size;
 const INNER_RADIUS = RADIAL_HUB_GEOMETRY.innerRadius * FRAME_SCALE;
 const OUTER_RADIUS = RADIAL_HUB_GEOMETRY.outerRadius * FRAME_SCALE;
@@ -74,7 +76,7 @@ const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
 const clamp01 = (value: number): number => Phaser.Math.Clamp(value, 0, 1);
 
 /**
- * Rundenstart-Countdown (3 · 2 · 1 · LOS!) als Waldboden-Medaillon in der Bildschirmmitte.
+ * Rundenstart-Countdown (3 · 2 · 1 · LOS!) als Waldboden-Medaillon oberhalb der Bildschirmmitte.
  *
  * Der Nabenring des Utility-Rads trägt die Ziffer; auf seinem grünen Innensaum läuft pro
  * Sekunde ein heller Lichtbogen ab. Bei „LOS!“ lösen sich ein paar Blätter vom Ring, danach blendet es sich aus.
@@ -122,7 +124,7 @@ export class RoundStartCountdownView {
     parts.push(this.seam, this.outgoing, this.numeral, this.goText);
 
     this.medallion = scene.add.container(0, 0, parts);
-    this.root = scene.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2, [this.medallion, this.leaves])
+    this.root = scene.add.container(GAME_WIDTH / 2, COUNTDOWN_CENTER_Y, [this.medallion, this.leaves])
       .setDepth(DEPTH.OVERLAY)
       .setScrollFactor(0)
       .setVisible(false);

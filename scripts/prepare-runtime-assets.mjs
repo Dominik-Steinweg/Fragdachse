@@ -10,7 +10,8 @@ const materials = ['rock_base', 'gras_bg_tile', 'ground_macro', 'gravel_material
 export async function colourSources() {
   const root = 'public/assets/environment/woodland';
   const files = ['rock/mineral-colour.png', 'rock/mineral-colour-2x.png', 'canopy/albedo.png',
-    'ecology/rock-colonies-atlas.png', 'ecology/ground-litter-atlas.png', 'ecology/lilies-atlas.png'].map(f => `${root}/${f}`);
+    'ecology/rock-colonies-atlas.png', 'ecology/ground-litter-atlas.png', 'ecology/lilies-atlas.png',
+    'ecology/shore-stones-atlas.png'].map(f => `${root}/${f}`);
   files.push(...materials.map(f => `public/assets/sprites/${f}.png`));
   // Existing sprite/atlas keys and frame layouts survive publication unchanged.
   for (const family of ['groundcover', 'persistent-base', 'pipeline-v2', 'rewards']) {

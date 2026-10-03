@@ -2,6 +2,7 @@ import mineral from './manifests/mineral.json';
 import colonies from './manifests/rock-colonies.json';
 import litter from './manifests/ground-litter.json';
 import lilies from './manifests/lilies.json';
+import stones from './manifests/shore-stones.json';
 import transmission from './manifests/transmission.json';
 import { CANOPY_ATLASES, CANOPY_FRAMES } from '../arena/trees/CanopyAssets';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
@@ -29,7 +30,8 @@ export function woodlandAssetFiles(maxTextureSize: number): WoodlandAsset[] {
     {...mineral.coverage,key:WOODLAND_ROCK_COVERAGE_KEY,url:root+'rock/'+mineral.coverage.file,kind:'coverage'},
     ...CANOPY_ATLASES.map((a,i):WoodlandAsset=>({...a,url:root+'canopy/'+a.file,kind:i===0?'atlas':'data',frames:CANOPY_FRAMES,linear:true})),
     ...[[colonies.atlas,'woodland-rock-colonies'],[colonies.contactAtlas,'woodland-rock-contact'],
-      [litter.atlas,'woodland-ground-litter'],[lilies.atlas,'woodland-lilies']].map(([a,key]):WoodlandAsset=> {
+      [litter.atlas,'woodland-ground-litter'],[lilies.atlas,'woodland-lilies'],
+      [stones.atlas,'woodland-shore-stones']].map(([a,key]):WoodlandAsset=> {
         const atlas=a as typeof colonies.atlas;
         return {...atlas,key:key as string,url:root+'ecology/'+atlas.file,kind:'atlas'};
       }),

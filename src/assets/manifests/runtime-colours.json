@@ -49,6 +49,18 @@
       "visiblePixelSha256": "d9ee2be8d5097ac9bc38d46ed53b4378092e2f9994ed814446abed13b22cfae5",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/environment/woodland/ecology/shore-stones-atlas.png": {
+      "file": "assets/environment/woodland/ecology/shore-stones-atlas.webp",
+      "source": "assets/environment/woodland/ecology/shore-stones-atlas.png",
+      "width": 576,
+      "height": 576,
+      "sourceBytes": 328526,
+      "downloadBytes": 244960,
+      "sourceSha256": "21f58f5814771257712cca068af575624fa0faf11078bc24a9af748f8c387ac3",
+      "sha256": "76c2503e910438dce06cd582b08f2687aabc726f25ceb8b51ae33b4be7df6bc8",
+      "visiblePixelSha256": "0bc25aebf9eceb5884fdf463f86b2077e8cced8abb9317e82c8aaa764ba0fae7",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/environment/woodland/rock/mineral-colour-2x.png": {
       "file": "assets/environment/woodland/rock/mineral-colour-2x.webp",
       "source": "assets/environment/woodland/rock/mineral-colour-2x.png",

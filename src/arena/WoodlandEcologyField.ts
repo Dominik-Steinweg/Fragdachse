@@ -1,4 +1,5 @@
 import { buildPondEcology } from './PondEcologyField';
+import { buildShoreStones } from './ShoreStoneField';
 import { ecologyHash } from './ecologyHash';
 export { ecologyHash } from './ecologyHash';
 import { CELL_SIZE } from '../config';
@@ -8,14 +9,16 @@ import { ARENA_RENDER_CHUNK_SIZE } from './chunks/ArenaChunkGrid';
 import { WATER_MASK_HALO, WATER_MASK_STEP, WATER_SHORE_DISTANCE, type WaterMaskView } from './WaterSurfaceModel';
 import litter from '../assets/manifests/ground-litter.json';
 import pond from '../assets/manifests/lilies.json';
+import stones from '../assets/manifests/shore-stones.json';
 import { CANOPY_ASSETS, canopyVariant } from './trees/CanopyAssets';
 
 export const WOODLAND_ATLASES = [
   {...litter.atlas,key:'woodland-ground-litter'}, {...pond.atlas,key:'woodland-lilies'},
+  {...stones.atlas,key:'woodland-shore-stones'},
 ];
 export type PreparedWaterMask = {readonly x:number;readonly y:number;readonly mask:WaterMaskView};
 export interface EcologyPlacement {
-  kind:'litter'|'pond'; frame:string; x:number;y:number;size:number;rotation:number;alpha:number;
+  kind:'litter'|'pond'|'shore'; frame:string; x:number;y:number;size:number;rotation:number;alpha:number;
   /** Stable density thinning; changing density doesn't reshuffle or upload textures. */
   rank:number;floating:boolean;pond?:number;colony?:number;stand?:number;
 }
@@ -49,7 +52,7 @@ export function buildWoodlandEcology(layout:ArenaLayout, frame:ChunkWorldFrame,
         if(blocked.has(gy*columns+gx)||(dry&&wet.has(gy*columns+gx)))return false;
     return true;
   };
-  const out:EcologyPlacement[]=[];
+  const out:EcologyPlacement[]=buildShoreStones(layout,frame,water,fits,1024);
   const pick=(assets:readonly {name:string}[],n:number)=>assets[Math.min(assets.length-1,Math.floor(n*assets.length))].name;
   const leaf=litter.assets.filter(a=>a.name.startsWith('leaf-')),needles=litter.assets.filter(a=>a.name.startsWith('needle-'));
   const twigs=litter.assets.filter(a=>a.name.startsWith('twigs')),pebbles=litter.assets.filter(a=>a.name.startsWith('pebbles'));

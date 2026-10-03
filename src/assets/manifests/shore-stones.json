@@ -1,0 +1,271 @@
+{
+  "version": 7,
+  "source": "tools/source-art/shore-stones",
+  "recipe": "scripts/export-shore-stones.mjs",
+  "generator": "built-in image_gen",
+  "alpha": "Generated alpha retained; trimmed and resized; transparent 6px frame padding",
+  "atlas": {
+    "file": "shore-stones-atlas.png",
+    "width": 576,
+    "height": 576,
+    "rgbaBytes": 1327104,
+    "downloadBytes": 328526,
+    "sha256": "21f58f5814771257712cca068af575624fa0faf11078bc24a9af748f8c387ac3",
+    "frames": {
+      "bank-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      },
+      "bank-02": {
+        "frame": {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      },
+      "bank-03": {
+        "frame": {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      },
+      "shoal-01": {
+        "frame": {
+          "x": 0,
+          "y": 192,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      },
+      "shoal-02": {
+        "frame": {
+          "x": 192,
+          "y": 192,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      },
+      "shoal-03": {
+        "frame": {
+          "x": 384,
+          "y": 192,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      },
+      "scree-01": {
+        "frame": {
+          "x": 0,
+          "y": 384,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      },
+      "scree-02": {
+        "frame": {
+          "x": 192,
+          "y": 384,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      },
+      "scree-03": {
+        "frame": {
+          "x": 384,
+          "y": 384,
+          "w": 192,
+          "h": 192
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 192
+        },
+        "sourceSize": {
+          "w": 192,
+          "h": 192
+        }
+      }
+    }
+  },
+  "assets": [
+    {
+      "name": "bank-01",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "3f0ae5c631211f9d1e06a1de1286a038c7e5d469d11d1a878760184fe089af5c"
+    },
+    {
+      "name": "bank-02",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "d1706a8e140260cdb1b25c6aba0478b359f8b7353f7eaaa9fe561f3f0b35bf83"
+    },
+    {
+      "name": "bank-03",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "b42f43fde99ee601b91249cfcd3fe3e599f8ddb920454a961017f41285644a0c"
+    },
+    {
+      "name": "shoal-01",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "c1c87b5850bff254d6aae96c1e66ff79631777ce7214e63a47a876104725c971"
+    },
+    {
+      "name": "shoal-02",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "7ed7109f0576f3ecd62ab17df187a81c0f825aa735258c186e669799aeca0f19"
+    },
+    {
+      "name": "shoal-03",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "6071d25e51d90b5d181c26f5bf928ba1b53390e64d508169f305b8d1ce05b8d9"
+    },
+    {
+      "name": "scree-01",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "8d1152354b2ada14a54faec1a766ca484929148bec258c530fcd004e7af3977a"
+    },
+    {
+      "name": "scree-02",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "698a52a37e9b5da5b3c5bacd1b4cd02257a7fec02b501370c7526fd3f9b4a9cb"
+    },
+    {
+      "name": "scree-03",
+      "source": "source-v5.png",
+      "sourceSha256": "a8ea32f04104ae02398bc873aa11a5891cbd6506e61ad60caaa8db33d06d036e",
+      "width": 192,
+      "height": 192,
+      "pixelSha256": "7f1e8166cb948bd2bafbc0132c2dc5ecdd2f459854bb173adfb48c23298cac92"
+    }
+  ]
+}

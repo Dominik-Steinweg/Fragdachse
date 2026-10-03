@@ -1,0 +1,15 @@
+Use case: stylized-concept.
+Create one square production sprite atlas with exactly NINE SPARSE FINE-PEBBLE SCATTERS in a precise 3 by 3 grid on a TRUE TRANSPARENT background. Orthographic 90-degree straight-overhead terrain art. Each cell holds a loose horizontal 2:1 scatter with broad clear gutters. Understated natural woodland riverbank material.
+
+Scale and occupancy are critical: each grouping is mostly empty transparent space. Stones occupy only about 10 to 20 percent of its footprint. NO dominant central stone. NO large boulders, slabs or rock plates. The largest individual pebble is at most 10 to 12 percent of the grouping's total width; most pebbles are only 3 to 6 percent. They are spread with generous irregular clear gaps, not a dense heap, ring, line or mosaic. Maximum 5 to 9 visible pebbles in each top-row grouping, no two prominent stones adjacent. Additional grit should be very sparse, almost absent, not visual noise.
+
+Three families:
+Row 1: three modest dry-bank accents, each 5 to 8 small low half-buried flat pebbles, 1 or 2 just slightly larger than the rest. Loose uneven asymmetrical spacing across an elongated footprint.
+Row 2: three shallow-water pebble scatters, 5 to 9 SMALL smooth flattened pebbles in 2 widely separated loose little pockets. No vegetation, no rendered water.
+Row 3: three extremely sparse fine gravel scatters, 8 to 12 TINY irregular chips, no larger rock at all, diffuse and irregular distribution.
+
+Material and palette: DARK desaturated olive grey, umber grey, very restrained earthy taupe. Soft matte surfaces and extremely shallow relief. Tone range mostly dark middle values, comparable to damp woodland soil; no pale white highlights or bright mineral veins. No white marble texture. Very fine subtle natural weathering, no sharp painted outlines, no glossy rounded domes, no deep cast shadows. Only tiny fine dark brown earth contacts at a few stone edges, partly concealing their perimeters; those contacts dissolve immediately into actual alpha. The game's native soil fills the gaps. Never paint an opaque oval earth pad, continuous brown substrate, or bounding dirt shape.
+
+ABSOLUTELY NO roots, twigs, branches, sticks, stems, vines, leaves, moss, grass, reeds, flowers, plants or organic debris. Only a few small understated mineral pebbles and minute earth contacts. No scenery, water, text, labels, gridlines, background colour or painted checkerboard. Preserve truly clear space between every individual small pebble and between all nine motifs.
+
+This will render as subtle ground detail, not a decorative border. Prioritize light sparse irregular composition, very small stone size relative to the full motif, low contrast, lots of empty space and natural asymmetry.
