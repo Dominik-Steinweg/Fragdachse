@@ -314,7 +314,9 @@ export class ExplosionGpuRenderer {
       const inner = Math.hypot(point.x, point.y) < radius * 0.11;
       const angle = Math.atan2(point.y, point.x) + Phaser.Math.FloatBetween(-0.55, 0.55);
       const speed = Phaser.Math.FloatBetween(radius * 0.12, radius * 0.42);
-      const lifeMs = Phaser.Math.FloatBetween(300, 560) * profile.lifeScale;
+      // Thermal billows linger 50 % longer so the fireball reads before the smoke takes over;
+      // capped below the 1400 ms lane lifetime.
+      const lifeMs = Math.min(1350, Phaser.Math.FloatBetween(300, 560) * profile.lifeScale * (thermal ? 1.5 : 1));
       const startScale = Math.max(0.18, radius / (thermal ? 150 : 190)) * profile.bodyScale;
       const endScale = Phaser.Math.FloatBetween(radius / 78, radius / 56) * profile.bodyScale;
       this.configure(spec, {
