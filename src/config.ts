@@ -107,7 +107,7 @@ export const DEPTH = {
   BASES: 4,
   DECALS: 5,
   WATER: 5.2,
-  /** Cosmetic ground mist, lit once by the world lightmap. */
+  /** Ground-detail anchor for wildlife, surface lighting and grounded effects; fog uses GROUND_FOG_COMPOSITE. */
   GROUND_FOG: 5.3,
   ROCKS: 9,
   /**
@@ -126,6 +126,8 @@ export const DEPTH = {
    */
   ROCK_VEGETATION: 9.12,
   PLAYERS: 10,
+  /** One fog composite over figures, held items and shadows; below figure status UI. */
+  GROUND_FOG_COMPOSITE: 10.5,
   TRAIN: 11,  
   PROJECTILES: 15,
   FIRE: 16,

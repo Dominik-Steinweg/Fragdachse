@@ -26,16 +26,16 @@ keine eigenständigen Effektdefinitionen dieses Katalogs. Bestehende Licht-/Scha
 
 | Profil | World-Depth | Sonne/Wolken | Lightmap | Nebel davor | Krone davor | World-PostFX |
 |---|---|---|---|---|---|---|
-| G | < 5,3 | ja | ja | beide Tiefen | ja | ja |
-| M | 5,3 bis < 9,14 | ja | ja | nur 9,14 | ja | ja |
-| K | 9,14 bis < 14,5 | ja | ja | nein | ja | ja |
+| G | < 5,3 | ja | ja | ja | ja | ja |
+| M | 5,3 bis < 10,5 | ja | ja | ja | ja | ja |
+| K | > 10,5 bis < 14,5 | ja | ja | nein | ja | ja |
 | L | > 14,5 bis < 19,5 | nein | ja | nein | ja | ja |
 | E | > 19,501 bis < 20 | nein | nein | nein | ja | ja |
 | H | > 20 | nein | nein | nein | nein | ja |
 | C | Clarity-Kamera | nein | nein | nein | nein | nein |
 
 Profile folgen der Zeichenreihenfolge, sind keine Receiver-Masken. Eigene Materialbeleuchtung
-kann zusätzlich bestehen. 14,5 ist ausdrücklich K/L, 20 E/H: Gleichstände hängen an der
+kann zusätzlich bestehen. 10,5 ist ausdrücklich M/K, 14,5 K/L, 20 E/H: Gleichstände hängen an der
 Einfügereihenfolge. 19,5/19,501 sind reservierte Lightmap-/Bleed-Passgrenzen, markiert als L/E.
 
 Die Allowlist beschreibt bekannte Abweichungen; der aktuelle Umfang folgt aus
@@ -67,7 +67,8 @@ Den Katalog nicht automatisch regenerieren, um einen fehlgeschlagenen Test zu re
 |---|---|
 | geerdete Decals | etwa 5,05–5,15; Sonne + Lightmap, Nebel darüber |
 | Wasser | 5,2–5,25 erhalten; keine Landdecals über Wasser |
-| Gelände/Bewuchs/Nebel | bestehende Bänder erhalten |
+| Gelände/Bewuchs | bestehende Bänder erhalten |
+| Bodennebel | einmal über Figuren/Waffen/Schatten, unter Figurenanzeigen; Tag und Nacht |
 | Bodeneffekte auf Oberflächen | je Empfänger etwa 9,15–9,8, unter Figuren |
 | Figurenschatten / Gegner / Spieler / Zug | nominal 9,92 / 9,95 / 10 / 11 erhalten |
 | körperhohes Material | etwa 11,2–14,3; Sonne + Lightmap, unter Kronen |

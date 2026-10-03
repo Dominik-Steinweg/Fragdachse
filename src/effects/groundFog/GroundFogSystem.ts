@@ -165,7 +165,7 @@ export class GroundFogSystem {
     try {
       if (!this.gpu) {
         const measuredAt = loadingTimeline.start();
-        this.gpu = new FogGpuField(this.scene, this.terrain, this.seed, this.tuning, DEPTH.GROUND_FOG);
+        this.gpu = new FogGpuField(this.scene, this.terrain, this.seed, this.tuning, DEPTH.GROUND_FOG_COMPOSITE);
         this.gpu.setWoodlandLight(this.woodlandLight);
         loadingTimeline.end('fog/field-init', measuredAt);
       }

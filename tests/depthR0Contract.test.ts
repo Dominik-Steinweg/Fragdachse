@@ -61,6 +61,7 @@ describe('R0 observed depth contract (diagnostics, never rendering inputs)', () 
     expect(owners.sort()).toEqual(Object.keys(CPU_SOURCE_CONTRACTS).sort());
   });
   it('stores the effective profiles and explicitly represents insertion-order boundaries', () => {
+    expect(layerProfiles(10.5)).toEqual(['M','K']);
     expect(layerProfiles(14.5)).toEqual(['K','L']); expect(layerProfiles(20)).toEqual(['E','H']);
     expect(layerProfiles(42,'clarity')).toEqual(['C']);
     for(const layer of EFFECT_LAYER_CONTRACTS) {

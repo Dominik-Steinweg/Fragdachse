@@ -24,7 +24,7 @@ export const CHARACTER_SHADOW_MASKS_ENABLED = false;
 export const CHARACTER_SHADOW_MODE: 'mesh' | 'ellipse' = 'mesh';
 export const CHARACTER_MESH_TARGET_SIZE = { high: 256, medium: 128 } as const;
 
-/** Receiver-masked dynamic shadow above ground fog, below figures. */
+/** Receiver-masked dynamic shadow below figures and their shared fog composite. */
 export const CHARACTER_SHADOW_CONFIG = {
   depth: DEPTH.PLAYERS - .08,
   directOpacity: .50,

@@ -381,9 +381,9 @@ export class FogGpuField {
         this.setLightingUniforms(set);
       },
     }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT']);
-    // Optional mineral-only optical mix, above attached foliage and below daytime fog.
+    // Optional mineral-only optical mix, above attached foliage and below the fog.
     // Preserve scene alpha explicitly: subsequent Phaser ADD draws use DST_ALPHA.
-    // Scope the private PMA RGB mix to this draw; night fog keeps its original depth.
+    // Scope the private PMA RGB mix to this draw.
     if(aerial) {
       const blend=aerialBlendMode(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer);
       const node=display.renderNode,run=node.run;
@@ -391,6 +391,10 @@ export class FogGpuField {
         runWithScopedBlend(this,run,context,blend,object,parent);
       };
     }
+    // Keep the same receiver order through dawn, night and quality changes. Drawing
+    // fog once after figures also attenuates their shadows by local transmittance;
+    // a shadow drawn afterwards would darken the scattering itself. Rock tops are
+    // still excluded by the fine mineral mask, independently of display depth.
     return this.scene.add.existing(display).setOrigin(0).setDepth(aerial?DEPTH.ROCK_VEGETATION+.01:this.depth);
   }
   /** `trailWidth`/`trailHeight` size the wake mask independently of the soft material. */
@@ -475,9 +479,6 @@ export class FogGpuField {
       this.rockAerial.setPosition(view.x,view.y).setDisplaySize(view.width,view.height);
     }
     this.rockAerial?.setVisible(showAerial);
-    // The fine mineral mask excludes rock tops; actors remain above the fog.
-    this.display!.setDepth(this.woodlandLight?.sunCompositeTuning && (this.woodlandLight.sunStrength??0)>0
-      ? DEPTH.ROCK_VEGETATION+.02 : this.depth);
   }
   hide(): void { this.display?.setVisible(false);this.rockAerial?.setVisible(false); }
   setRockLighting(strength: [number, number]): void { this.rockFogStrength=strength; }

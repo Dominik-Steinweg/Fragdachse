@@ -28,7 +28,8 @@ export function layerProfiles(depth: number, camera: LayerContract['camera'] = '
   if (depth === 14.5) return ['K', 'L'];
   if (depth === 20) return ['E', 'H'];
   if (depth < 5.3) return ['G'];
-  if (depth < 9.14) return ['M'];
+  if (depth === 10.5) return ['M', 'K'];
+  if (depth < 10.5) return ['M'];
   if (depth < 14.5) return ['K'];
   if (depth < 19.5) return ['L'];
   // The lightmap / bleed are passes, not receivers. Reserve their exact depths.

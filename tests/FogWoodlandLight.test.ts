@@ -22,6 +22,9 @@ vi.mock('../src/effects/groundFog/FogTrailRenderer',()=>({FogTrailRenderer:class
 import { FogTerrainModel } from '../src/effects/groundFog/FogTerrainModel';
 import { fogTuning } from '../src/effects/groundFog/FogConfig';
 import type { FogWoodlandLight } from '../src/effects/groundFog/FogWoodlandLight';
+import { DEPTH } from '../src/config';
+import { CHARACTER_SHADOW_CONFIG } from '../src/effects/ShadowConfig';
+import { ENEMY_SHADOW_DEPTH } from '../src/effects/EnemyMeshShadowModel';
 
 afterEach(()=>{fake.shaders.length=0;vi.clearAllMocks();});
 describe('optional fog woodland presentation',()=>{
@@ -32,7 +35,7 @@ describe('optional fog woodland presentation',()=>{
     const fallback={},remove=vi.fn(),scene={sys:{renderer:{gl,blendModes:[],addBlendMode:vi.fn(),updateBlendMode:vi.fn(),createTexture2D:()=>({}),glTextureUnits:{bind(){}},glWrapper:{updateTexturing(){},update(){}}}},
       textures:{addGLTexture:()=>({}),get:()=>fallback,remove},add:{existing:(value:unknown)=>value}};
     const terrain=new FogTerrainModel({offsetX:100,offsetY:200,width:512,height:512},[]),tuning=fogTuning(1);
-    const field=new FogGpuField(scene as never,terrain,1,tuning,5.3),view={x:100,y:200,width:512,height:512};
+    const field=new FogGpuField(scene as never,terrain,1,tuning,DEPTH.GROUND_FOG_COMPOSITE),view={x:100,y:200,width:512,height:512};
     const shadows={occlusion:{},horizonPrevious:{},horizonBlend:new Float32Array(64).fill(1),sun:[0,0,1],strength:1,solarEnabled:true};
     const binding={field:{},lookup:{},frame:[100,200,512,512],fogShadows:shadows};
     const uniforms=(shader:any)=>{const values=new Map();shader.config.setupUniforms((name:string,value:unknown)=>values.set(name,value));return values;};
@@ -60,6 +63,22 @@ describe('optional fog woodland presentation',()=>{
     shadows.solarEnabled=true;shadows.strength=0;expect(uniforms(surface).get('uRockSolarStrength')).toBe(0);
     field.setRockCoverage(null);render();expect(uniforms(display).get('uHasRockCoverage')).toBe(0);
     expect(uniforms(surface).get('uHasRockShadows')).toBe(0);
+    // The same fog must cover bodies, held items and both shadow paths at night,
+    // dawn and full sun, including reduced-quality and unlit sampler fallbacks.
+    const light:FogWoodlandLight={sun:[0,0,1],sunCompositeTuning:{...SUN_TUNING_DEFAULTS}};
+    for(const strength of [0,.01,1,0])for(const quality of ['low','medium','high'] as const) {
+      light.sunStrength=strength;field.setWoodlandLight(light);
+      field.render(view,256,256,'normal',1,[],quality);
+      const visible=fake.shaders.filter(s=>s.visible&&s.config.name==='GroundFog_display'&&!s.destroy.mock.calls.length);
+      expect(visible).toHaveLength(1);
+      const fog=visible[0];
+      expect(fog.depth).toBeGreaterThan(DEPTH.PLAYERS+.05);
+      expect(fog.depth).toBeGreaterThan(CHARACTER_SHADOW_CONFIG.depth);
+      expect(fog.depth).toBeGreaterThan(ENEMY_SHADOW_DEPTH);
+      expect(fog.depth).toBeLessThan(DEPTH.PLAYERS+1);
+      expect(fog.depth).toBeLessThan(DEPTH.PROJECTILES);
+    }
+    field.hide();expect(fake.shaders.filter(s=>s.visible&&!s.destroy.mock.calls.length)).toHaveLength(0);
     field.destroy();expect(remove.mock.calls.every(call=>String(call[0]).startsWith('__ground_fog_'))).toBe(true);
   });
   it('borrows mutable light state without adding passes, then unbinds while paused',()=>{

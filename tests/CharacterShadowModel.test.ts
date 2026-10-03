@@ -32,12 +32,12 @@ it('normalizes the single mask sum with cyclic azimuth and cotangent elevation',
   const copy = structuredClone(out); selectCharacterShadows(710, 1.3, out);
   selectCharacterShadows(710, 1.3, copy); expect(copy).toEqual(out);
 });
-it('keeps night contact without direct shadow and draws above ground fog but below figures', () => {
+it('keeps night contact without direct shadow below figures and their shared fog', () => {
   expect(characterDirectShadow(0, .6)).toBe(0); expect(characterDirectShadow(1, 0)).toBe(0);
   expect(characterDirectShadow(1, -.1)).toBe(0); expect(characterDirectShadow(.7, .6)).toBe(.7);
   expect(CHARACTER_SHADOW_CONFIG.depth).toBeGreaterThan(DEPTH.WATER);
-  expect(CHARACTER_SHADOW_CONFIG.depth).toBeGreaterThan(DEPTH.GROUND_FOG);
-  expect(CHARACTER_SHADOW_CONFIG.depth).toBeGreaterThan(DEPTH.ROCK_VEGETATION + .02);
+  expect(CHARACTER_SHADOW_CONFIG.depth).toBeGreaterThan(DEPTH.ROCK_VEGETATION);
+  expect(CHARACTER_SHADOW_CONFIG.depth).toBeLessThan(DEPTH.GROUND_FOG_COMPOSITE);
   expect(CHARACTER_SHADOW_CONFIG.depth).toBe(SHADOW_CASTERS.player.layerDepth);
   expect(CHARACTER_SHADOW_CONFIG.depth).toBeLessThan(DEPTH.PLAYERS);
   expect(CHARACTER_SHADOW_CONFIG.waterResponse).toBeGreaterThan(0);

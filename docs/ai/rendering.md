@@ -168,7 +168,7 @@ Instanz-/Hand-Socket-Transformation entlang des kontinuierlichen Welt-Sonnenvekt
 Hand-Socket und Rueckstosspose binden Waffenbild, visuellen Muendungspunkt und Waffenproxy
 aneinander; Gameplay-Muendungen bleiben unabhaengig vom Renderpose-Vertrag.
 Koerper und Waffe schreiben eine Vereinigungsmaske ohne Alpha-Akkumulation. Erst deren weiche
-Komposition liegt ueber Bodennebel/Bodenbewuchs und unter Figuren. Die Empfaengermaske schliesst
+Komposition liegt ueber Bodenbewuchs und unter Figuren sowie deren gemeinsamem Nebelpass. Die Empfaengermaske schliesst
 Basen/Hindernisse aus und reduziert die Wasserantwort; PMA-Multiply erhaelt Ziel-Alpha.
 Low verwendet die Spielerellipse; die gebackenen D-Masken werden nicht geladen.
 
@@ -320,8 +320,12 @@ zusätzlichen replizierten Zustand. Defaults, Limits und Atmosphären-Keyframes 
 Die Depth-Reihenfolge ist Teil des Beleuchtungsvertrags:
 
 - Fische liegen über Wasser, unter schwimmender Flora; diese und Landtiere liegen unter Bodennebel.
-- Beleuchteter Bodennebel liegt über Felsbewuchs, aber unter Figuren; ohne aktive Sonne verwendet
-  er `GROUND_FOG`. Die Sonnenmodulation liegt unter Projektilen und erfasst so Welt, Nebel und Figuren.
+- Bodennebel wird bei Tag und Nacht einmal auf `GROUND_FOG_COMPOSITE` über Figuren, getragenen
+  Waffen und Figurenschatten komponiert. Alle erhalten dieselbe lokale Nebeldeckung und dieselben
+  Bewegungsspuren; Schatten verdunkeln so nicht das Streulicht. Figurenanzeigen und Projektile
+  liegen darüber. `GROUND_FOG` bleibt der untere Anker für bodengebundene Effekte und Flächen,
+  damit deren Zeichenreihenfolge unabhängig vom Nebelpass bleibt. Die Sonnenmodulation liegt
+  unter Projektilen und erfasst Welt, Nebel und Figuren.
 - Die Lichtkarte liegt unter Kronen. Kronen erhalten Sonnen-, Ambient- und lokale
   Lichtbeiträge im eigenen Material. Ambient und lokale Lichter werden als Irradianz genau einmal
   verbraucht; weißer Vertex-Tint verhindert einen zweiten Kronen-Tint.
