@@ -1,6 +1,6 @@
 import type { EnemyMeshData } from '../assets/EnemyMeshAssets';
 import type { MeshDisplayPose } from './CharacterMeshModel';
-import { projectMeshPoint, meshShadowSoftness } from './CharacterMeshModel';
+import { extendMeshBounds, meshShadowSoftness } from './CharacterMeshModel';
 
 export const ENEMY_SHADOW_CAPACITY = 512;
 export const ENEMY_SHADOW_COLUMNS = 32;
@@ -25,13 +25,7 @@ export function enemyMeshPose(frame: string | number, data: EnemyMeshData): numb
 /** Conservative all-pose bounds also enclose contacts. Includes a five-texel transparent gutter. */
 export function enemyShadowBounds(data: EnemyMeshData, matrix: Float32Array, sun: readonly number[], tileSize: number, out: number[]): void {
   out[0] = out[1] = Infinity; out[2] = out[3] = -Infinity;
-  const bounds = data.asset.mesh.bounds;
-  for (let i = 0; i < 8; i++) {
-    const p = [bounds[i & 1 ? 'max' : 'min'][0], bounds[i & 2 ? 'max' : 'min'][1], bounds[i & 4 ? 'max' : 'min'][2]];
-    const q = projectMeshPoint(p, matrix, sun);
-    out[0] = Math.min(out[0], q[0]); out[1] = Math.min(out[1], q[1]);
-    out[2] = Math.max(out[2], q[0]); out[3] = Math.max(out[3], q[1]);
-  }
+  extendMeshBounds(out, data.asset.mesh, matrix, sun);
   const w = Math.max(1, out[2] - out[0]) + 6 * matrix[10], h = Math.max(1, out[3] - out[1]) + 6 * matrix[10];
   const pad = ENEMY_SHADOW_PAD / (tileSize - ENEMY_SHADOW_PAD * 2);
   const kernelPad = meshShadowSoftness(matrix[10], sun[2]) * 4 + 1;

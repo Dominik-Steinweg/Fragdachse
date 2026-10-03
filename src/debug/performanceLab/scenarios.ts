@@ -3,7 +3,7 @@ import type { PerformanceCase } from './contracts';
 import { buildPerformanceLoadout as build, presets, type PresetItem } from './loadouts';
 import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID, DAWN_MAP_ID } from './referenceMap';
 export { PERFORMANCE_MAP_ID, REFERENCE_SEED, registerReferenceMap } from './referenceMap';
-export const SCENARIO_VERSION = 'reference-1-candidate.6';
+export const SCENARIO_VERSION = 'pages-review-1';
 
 export function allPerformanceCases(): PerformanceCase[] {
   const glock = build('GLOCK');
@@ -19,6 +19,12 @@ export function allPerformanceCases(): PerformanceCase[] {
   ];
   const combat = build('GLOCK', true);
   return [
+    ...[100, 300, 500].map(enemyCount => base(`review.enemies-${enemyCount}`, 12_000, 'enemies', { enemyCount })),
+    base('review.player', 12_000, 'presentation'),
+    base('review.fog-rock', 12_000, 'presentation', { timeOfDay: 360 }),
+    base('review.camera', 12_000, 'presentation', { timeOfDay: 360 }),
+    base('review.explosions', 12_000, 'presentation'),
+    base('review.train', 15_000, 'presentation', { mapId: `${PERFORMANCE_MAP_ID}-train` }),
     base('environment.route', 55_000, 'environment', { mapId: `${PERFORMANCE_MAP_ID}-train` }),
     base('environment.dawn', 15_000, 'environment', { mapId: DAWN_MAP_ID }),
     base('destruction.single', 8000, 'weapon', { itemId: 'GLOCK', maximumActions: undefined, minimumActions: 1, targetDistance: 80, requireHits: false }),
@@ -58,6 +64,8 @@ export function allPerformanceCases(): PerformanceCase[] {
 export function resolvePerformanceCases(caseId: string): PerformanceCase[] {
   const all = allPerformanceCases();
   if (caseId === 'standard') return all;
+  if (caseId === 'review') return [...all.filter(c => c.id.startsWith('review.')),
+    ...all.filter(c => ['ultimate.armageddon', 'combat.day'].includes(c.id))];
   const selected = caseId === 'combat.day-night' ? all.filter(c => c.kind === 'combat' || c.kind === 'recovery') : all.filter(c => c.id === caseId);
   if (!selected.length) throw new Error(`Unknown performance case: ${caseId}`);
   return selected;

@@ -225,6 +225,7 @@ export class EnemyMeshShadowRenderer {
   get activeCount(): number { return this.count; }
   setVisible(value: boolean): void { this.display.setVisible(value && this.count > 0); }
   inspect() { return { activeInstances: this.count, allocatedSlots: this.assignments.size, tileSize: this.tileSize,
+    readyTypes: [...this.assets.ready].filter(([id, data]) => this.prepared.get(id) === data.asset.poses.length).map(([id]) => id),
     prepared: Object.fromEntries(this.prepared), assets: this.assets.inspect(), costs: { cpuMs: this.cpuMs,
       geometryDraws: this.draws, triangles: this.triangles, targetPasses: this.count ? 3 : 0,
       targetBytes: this.atlasAllocated ? this.width * this.height * 4 * 3 : 3 * 3 * 4 * 3,

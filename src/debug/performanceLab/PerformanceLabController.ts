@@ -4,7 +4,7 @@ import { PERFORMANCE_MAP_ID, REFERENCE_SEED, SCENARIO_VERSION, registerReference
 export class PerformanceLabController {
   private readonly cases: PerformanceCase[];
   private index = 0;
-  private stage: 'prepare' | 'measure' | 'tail' | 'return' | 'done' = 'prepare';
+  private stage: 'prepare' | 'warmup' | 'measure' | 'tail' | 'return' | 'done' = 'prepare';
   private startedAt: number;
   private nextActionAt = 0;
   private actions = 0;
@@ -52,6 +52,16 @@ export class PerformanceLabController {
       this.removeHits = this.port.observeHits(() => { this.hits++; });
       now = this.mark(`${test.id}:prepared`);
       this.endWindow(`${test.id}.prepare`, 'preparation', now);
+      this.stage = (this.request.warmupMs ?? 0) > 0 ? 'warmup' : 'measure';
+      this.nextActionAt = now;
+      if (this.stage === 'measure') this.mark(`${test.id}:start`);
+    }
+    if (this.stage === 'warmup') {
+      this.port.updateCase?.(test, 0, 'warmup');
+      if (now - this.startedAt < this.request.warmupMs!) return;
+      if (this.port.isCaseWarmupReady?.(test) === false) return;
+      this.endWindow(`${test.id}.warmup`, 'preparation', now);
+      this.hits = 0;
       this.stage = 'measure';
       this.nextActionAt = now;
       this.mark(`${test.id}:start`);

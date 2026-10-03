@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { bridge } from '../../network/bridge';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import type { ArenaContext } from './ArenaContext';
 import type { RendererBundle } from './RendererBundle';
@@ -723,6 +724,14 @@ export class ArenaRuntime {
 
   prepareScenarioRage(): void {
     this.flow.getWorldPlayerGameplayRuntime()?.grantPowerUpRage(this.getLocalPlayerId(), 1_000_000);
+  }
+
+  destroyScenarioTrain(): boolean {
+    if (!__PERFORMANCE_LAB__ || !bridge.isHost()) return false;
+    const runtime = this.flow.getWorldTrainRuntime(), train = runtime?.getCurrentTrain();
+    if (!runtime || !train?.isAlive()) return false;
+    runtime.applyDamage(train.readIntegrity().integrity, this.getLocalPlayerId());
+    return train.isDestroyed();
   }
 
   stopScenarioUltimate(): void {

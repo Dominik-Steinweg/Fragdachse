@@ -12,6 +12,11 @@ export function isLocalScenarioBotPeer(playerId: string): boolean {
   return botPeerIds.has(playerId);
 }
 
+export function isLocalScenarioSessionRequested(): boolean {
+  return isDevScenarioMode() || (typeof __PERFORMANCE_LAB__ !== 'undefined' && __PERFORMANCE_LAB__
+    && typeof window !== 'undefined' && window.__FD_PERF_REQUEST__?.localHost === true);
+}
+
 /**
  * Dev scenario only: joins a scripted in-process peer through the normal host handshake.
  * The host treats it like any client; its client-owned state is written by the dev scenario.
@@ -23,7 +28,7 @@ export function addLocalScenarioBotPeer(): string {
 
 /** Real room/RPC authority with no broker, links or multiplayer entry point. */
 export async function createLocalScenarioSession(options: PeerRoomOptions): Promise<PeerSession> {
-  if (!isDevScenarioMode()) throw new Error('Local scenario session requires the isolated dev entry.');
+  if (!isLocalScenarioSessionRequested()) throw new Error('Local scenario session requires the isolated dev entry or an explicit performance-lab request.');
   let handlers: PeerTransportHandlers | null = null;
   const transport: PeerSession['transport'] = {
     isHost: true,

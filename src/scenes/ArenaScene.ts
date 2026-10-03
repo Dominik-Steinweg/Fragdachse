@@ -536,7 +536,7 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     this.graphicsQuality = new GraphicsQualityController(
-      __PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__ ? 'high' : getStoredGraphicsQuality());
+      __PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__ ? (window.__FD_PERF_REQUEST__.quality ?? 'high') : getStoredGraphicsQuality());
     this.graphicsQuality.setGroundFogEnabled(__PERFORMANCE_LAB__ || getStoredGroundFogEnabled());
     this.graphicsQuality.attach(this);
     onBootSceneTeardown(this.events, () => this.graphicsQuality.destroy());
@@ -1204,7 +1204,8 @@ export class ArenaScene extends Phaser.Scene {
         this.renderers.enemyEyes.setSuppressed(window.__FD_PERF_REQUEST__?.enemyEyes === 'off');
         const { createPerformanceLabGamePort } = await import('../debug/performanceLab/gamePort');
         return createPerformanceLabGamePort(this, this.arenaRuntime, playerManager, this.diagnostics!,
-          (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger), () => this.lobbyOverlay.isRevealComplete());
+          (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger), () => this.lobbyOverlay.isRevealComplete(), 1,
+          () => this.renderers.shadow?.getEnemyShadowsStatus() ?? null);
       }, () => (this.sound as Phaser.Sound.WebAudioSoundManager).context?.state ?? 'unavailable');
     }
     this.weaponBalanceLabRuntime = new WeaponBalanceLabRuntime(

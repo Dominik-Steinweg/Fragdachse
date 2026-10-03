@@ -15,10 +15,17 @@ import { PERFORMANCE_FIXTURE as fixture } from './fixtures';
 import { CELL_SIZE } from '../../config';
 import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
 
+interface EnemyShadowProbe {
+  readyTypes?: string[];
+  activeInstances: number;
+  costs?: { cpuMs: number; targetBytes: number; geometryBytes: number };
+}
+
 export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRuntime,
   players: PlayerManager, diagnostics: ArenaDiagnosticsController,
   setInput: (angle: number, trigger: WeaponSlot | null) => void,
-  isLobbyRevealed: () => boolean, participants = 1): PerformanceLabGamePort {
+  isLobbyRevealed: () => boolean, participants = 1,
+  readEnemyShadows?: () => EnemyShadowProbe | null): PerformanceLabGamePort {
   if (!window.__FD_PERF_REQUEST__?.load) {
     diagnostics.addFrameScope(flow, 'runHostFrame', 'gameplay');
     diagnostics.addFrameScope(flow, 'runClientFrame', 'gameplay');
@@ -40,6 +47,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
   let subphases: PerformanceWindow[] = [];
   let spawnCandidates: readonly { x: number; y: number }[] | null = null;
   let nextResourceAt = 0, maximumAdrenaline = 0;
+  let nextVisualBurst = 0;
+  const originalZoom = { x: scene.cameras.main.zoomX, y: scene.cameras.main.zoomY };
   const seenLakes = new Set<number>();
   let geometry: NavigationGeometry | null = null;
   const event = diagnostics.getSemanticEventSink();
@@ -168,6 +177,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     preparedId = test.id; prepared = false; preparationAt = performance.now(); timeChanged = false;
     clearedRouteAt = null; subphases = [];
     nextBuildAt = 0; nextCombatShotAt = 0; nextWaveAt = fixture.combatWaveIntervalMs; seenLakes.clear();
+    nextVisualBurst = 0;
     spawnCandidates = null; nextResourceAt = 0;
     maximumAdrenaline = flow.weaponBalanceLabPort.getMaxAdrenaline(localId());
     removeWorldObserver?.(); removeWorldObserver = null;
@@ -176,7 +186,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     stopped = false; lastTrainY = null; lastObservationAt = 0; caseStart = performance.now();
     flow.navigationLabPort.setScenarioActive(true);
     // Authored environment/hazard cases keep the ordinary event scheduler.
-    if (test.kind === 'environment' || test.kind === 'hazard') flow.navigationLabPort.setScenarioActive(false);
+    if (test.kind === 'environment' || test.kind === 'hazard' || test.id === 'review.train') flow.navigationLabPort.setScenarioActive(false);
     if (test.kind === 'hazard') counters.expectedVoidFireCells = fixture.voidFire.area.widthCells
       * fixture.voidFire.area.heightCells * (CELL_SIZE / GROUND_FIRE_CELL_SIZE) ** 2;
     const snapshot = flow.navigationLabPort.getGeometry();
@@ -194,7 +204,9 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       input();
       return;
     }
-    playerPosition = test.id === 'environment.dawn' ? point(80, 64) : test.kind === 'environment' ? point(33, 48)
+    playerPosition = test.id === 'review.train' ? point(33, 48)
+      : test.id === 'review.fog-rock' || test.id === 'review.camera' ? point(76, 64)
+      : test.id === 'environment.dawn' ? point(80, 64) : test.kind === 'environment' ? point(33, 48)
       : test.itemId === 'NUKE' || test.id === 'destruction.single' ? point(40, 51)
       : test.itemId === 'BFG' || test.itemId === 'HYDRA' ? point(76, 51) : point(67, 72);
     if (!geometry.isFree(playerPosition.x, playerPosition.y, 18)) throw new Error(`${test.id}: blocked player fixture`);
@@ -337,6 +349,11 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     return result;
   };
   return {
+    isCaseWarmupReady(test) {
+      if (test.kind !== 'enemies' || window.__FD_PERF_REQUEST__?.quality === 'low' || !readEnemyShadows) return true;
+      const state = readEnemyShadows();
+      return fixture.enemyKinds.every(id => state?.readyTypes?.includes(id));
+    },
     start(mapId, seed, commit) {
       if (!bridge.isHost() || bridge.getConnectedPlayers().length !== participants || bridge.getGamePhase() !== 'LOBBY') throw new Error(`Performance lab requires a host and ${participants - 1} clients in the lobby`);
       previousMap = bridge.getCoopDefenseMapId(); previousMode = bridge.getGameMode(); active = true;
@@ -381,7 +398,28 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         flow.navigationLabPort.removeEnemies();
       }
       maintainTargets(); observe(test.kind === 'hazard' && stage === 'measure');
+      if (stage === 'warmup') { input(); return; }
       if (stage === 'tail') { input(); return; }
+      if (test.id === 'review.explosions' && elapsed >= nextVisualBurst) {
+        // Fixed presentation load through the ordinary effect RPC; no fake damage.
+        for (let i = 0; i < 12; i++) {
+          const angle = i * Math.PI / 6;
+          bridge.broadcastExplosionEffect(playerPosition.x + Math.cos(angle) * 230,
+            playerPosition.y + Math.sin(angle) * 150, 110, 0xff6622, undefined, undefined, 'ARMAGEDDON');
+        }
+        nextVisualBurst += 1000; add('visualExplosions', 12);
+      }
+      if (test.id === 'review.train' && !counters.trainDestroyed) {
+        const state = flow.getScenarioObservation().train;
+        if (state?.alive && Math.abs(state.y - playerPosition.y) < 180 && flow.destroyScenarioTrain()) {
+          counters.trainDestroyed = 1;
+        }
+      }
+      if (test.id === 'review.camera') {
+        const phase = elapsed / 12_000 * Math.PI * 2, zoom = 1 + Math.sin(phase) * .25;
+        scene.cameras.main.setZoom(originalZoom.x * zoom, originalZoom.y * zoom);
+        flow.navigationLabPort.placePlayer(playerPosition.x + Math.sin(phase) * 180, playerPosition.y + Math.cos(phase) * 100);
+      }
       if ((test.kind === 'construction' || test.kind === 'combat') && builds === 4) startSiege();
       if (test.kind === 'pickup' && elapsed > 12_000) {
         if (clearedRouteAt === null) {
@@ -432,6 +470,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     readSubphases: () => subphases,
     verifyCase(test) {
       observe();
+      if (test.id === 'review.train' && !counters.trainDestroyed) throw new Error('Train destruction was not observed');
+      if (test.id === 'review.explosions' && !counters.visualExplosions) throw new Error('No visual explosions');
       if (test.kind === 'hazard' && (!(counters.voidFireMeasurementSamples > 0)
         || counters.voidFireCellsMin !== counters.expectedVoidFireCells
         || counters.voidFireCells !== counters.expectedVoidFireCells || !(counters.visibleVoidFireCellsMin > 0))) {
@@ -476,12 +516,22 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       return () => { removeDamage(); removeKills(); };
     },
     readLoad() {
+      // Registered source dimensions as RGBA8; not complete GPU residency (targets, mipmaps, driver copies).
+      const sources = new Set(Object.values(scene.textures.list).flatMap(texture => texture.source));
+      let textureRgbaBytes = 0;
+      for (const source of sources) textureRgbaBytes += source.width * source.height * 4;
+      const shadows = readEnemyShadows?.();
       return { ...counters, enemies: flow.getEnemyCount(), projectiles: flow.getWorldProjectileRuntime()?.getDebugActiveProjectileCount() ?? 0,
+        textureRgbaBytes,
+        ...(shadows?.costs ? { enemyShadowReadyTypes: shadows.readyTypes?.length ?? 0,
+          enemyShadowCasters: shadows.activeInstances, enemyShadowTargetBytes: shadows.costs.targetBytes,
+          enemyShadowGeometryBytes: shadows.costs.geometryBytes, enemyShadowLastCpuMs: shadows.costs.cpuMs } : {}),
         rocksBefore, rocksRemaining: active ? rocks() : 0, layoutFingerprint: bridge.getWorldDescriptor()?.layoutFingerprint ?? '',
         seed: REFERENCE_SEED, elapsedCaseMs: Math.round(performance.now() - caseStart), playerAttacksStopped: stopped ? 1 : 0 };
     },
     discard() {
       if (!active) return;
+      scene.cameras.main.setZoom(originalZoom.x, originalZoom.y);
       input(); flow.rpcPorts.heldAction.clearPlayer(localId()); removeWorldObserver?.(); removeWorldObserver = null;
       flow.clearTimeOfDayDebugOverride();
       // Discard is intentionally restricted to registered diagnostic maps. Real campaign
@@ -496,7 +546,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     stopRecording: () => diagnostics.stopScenarioRecording(),
     environment: () => ({ canvasWidth: scene.game.canvas.width, canvasHeight: scene.game.canvas.height,
       viewportWidth: innerWidth, viewportHeight: innerHeight, dpr: devicePixelRatio,
-      quality: 'high', groundFog: true, targetFps: 120, physicsFps: 120, coldBrowser: true, audio: 'running',
+      quality: window.__FD_PERF_REQUEST__?.quality ?? 'high', groundFog: true, targetFps: 120, physicsFps: 120, coldBrowser: true, audio: 'running',
       enemyEyes: window.__FD_PERF_REQUEST__?.enemyEyes ?? 'on',
       timeOfDayMinutes: window.__FD_PERF_REQUEST__?.timeOfDayMinutes ?? null }),
   };

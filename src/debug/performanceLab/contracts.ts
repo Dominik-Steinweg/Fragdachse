@@ -8,6 +8,10 @@ export interface PerformanceRunRequest {
   durationMs?: number;
   timeoutMs: number;
   captureProfile: 'standard' | 'reduced';
+  quality?: 'high' | 'low';
+  warmupMs?: number;
+  /** Explicit broker-free host measurement; never a production connection fallback. */
+  localHost?: boolean;
   /** Controlled visual ablation, with identical enemy simulation and assets. */
   enemyEyes?: 'on' | 'off';
   timeOfDayMinutes?: number;
@@ -38,7 +42,8 @@ export interface PerformanceLabGamePort {
   readLoadingState?(): { worldId: string | null; revealReady: boolean };
   prepareTargets(): void;
   prepareCase?(test: PerformanceCase, markPreparation?: (name: string) => void): boolean | void;
-  updateCase?(test: PerformanceCase, elapsedMs: number, stage?: 'measure' | 'tail', durationMs?: number): void;
+  updateCase?(test: PerformanceCase, elapsedMs: number, stage?: 'warmup' | 'measure' | 'tail', durationMs?: number): void;
+  isCaseWarmupReady?(test: PerformanceCase): boolean;
   isCaseComplete?(test: PerformanceCase, elapsedMs: number, durationMs: number): boolean;
   performAction?(test: PerformanceCase, sequence: number, inputStarted: boolean): LoadoutUseResult | null;
   finishCase?(test: PerformanceCase): void;
@@ -61,7 +66,7 @@ export interface PerformanceCase {
   minimumActions: number;
   slot: WeaponSlot;
   commit: LoadoutCommitSnapshot;
-  kind?: 'weapon' | 'utility' | 'pickup' | 'environment' | 'enemies' | 'construction' | 'combat' | 'recovery' | 'hazard';
+  kind?: 'weapon' | 'utility' | 'pickup' | 'environment' | 'enemies' | 'construction' | 'combat' | 'recovery' | 'hazard' | 'presentation';
   itemId?: string;
   mapId?: string;
   targetDistance?: number;

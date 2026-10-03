@@ -54,12 +54,18 @@ export function projectMeshPoint(p: readonly number[], m: Float32Array, sun: rea
   const reach = Math.max(0, z) / Math.max(0.05, sun[2]);
   return [x - sun[0] * reach, y - sun[1] * reach];
 }
-export function extendMeshBounds(bounds: number[], mesh: CharacterMeshSpec, matrix: Float32Array, sun: readonly number[]): void {
+export function extendMeshBounds(bounds: number[], mesh: Pick<CharacterMeshSpec, 'bounds'>, matrix: Float32Array, sun: readonly number[]): void {
+  const min = mesh.bounds.min, max = mesh.bounds.max, m = matrix;
+  const sunZ = Math.max(0.05, sun[2]);
   for (let i = 0; i < 8; i++) {
-    const p = [mesh.bounds[(i & 1) ? 'max' : 'min'][0], mesh.bounds[(i & 2) ? 'max' : 'min'][1], mesh.bounds[(i & 4) ? 'max' : 'min'][2]];
-    const q = projectMeshPoint(p, matrix, sun);
-    bounds[0] = Math.min(bounds[0], q[0]); bounds[1] = Math.min(bounds[1], q[1]);
-    bounds[2] = Math.max(bounds[2], q[0]); bounds[3] = Math.max(bounds[3], q[1]);
+    // Same operation order as projectMeshPoint, without sixteen short-lived arrays per caster.
+    const px = (i & 1 ? max : min)[0], py = (i & 2 ? max : min)[1], pz = (i & 4 ? max : min)[2];
+    const x = m[0] * px + m[4] * py + m[8] * pz + m[12];
+    const y = m[1] * px + m[5] * py + m[9] * pz + m[13];
+    const z = m[2] * px + m[6] * py + m[10] * pz + m[14];
+    const reach = Math.max(0, z) / sunZ, qx = x - sun[0] * reach, qy = y - sun[1] * reach;
+    bounds[0] = Math.min(bounds[0], qx); bounds[1] = Math.min(bounds[1], qy);
+    bounds[2] = Math.max(bounds[2], qx); bounds[3] = Math.max(bounds[3], qy);
   }
 }
 export function meshShadowOpacity(strength: number, elevation: number): number {

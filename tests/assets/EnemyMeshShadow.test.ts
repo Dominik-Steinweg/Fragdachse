@@ -4,11 +4,25 @@ import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { ENEMY_MESH_MANIFEST, EnemyMeshAssets, type EnemyMeshData } from '../../src/assets/EnemyMeshAssets';
 import { enemyMeshMatrix, enemyMeshPose, enemyShadowBounds, ENEMY_SHADOW_PAD } from '../../src/effects/EnemyMeshShadowModel';
-import { projectMeshPoint } from '../../src/effects/CharacterMeshModel';
+import { projectMeshPoint, extendMeshBounds } from '../../src/effects/CharacterMeshModel';
 import { registerEnemyMeshWarmup, subscribeEnemyMeshWarmup, prepareEnemyMeshWarmups } from '../../src/effects/EnemyMeshWarmup';
 import registry from '../../src/config/pipelineAssets.json';
 const asset = ENEMY_MESH_MANIFEST.assets[0];
 const mesh: EnemyMeshData = { asset, positions: new Float32Array(), indices: new Uint16Array() };
+it('extends projected bounds exactly like the reference corners, including below-ground vertices and low sun', () => {
+  for (const a of ENEMY_MESH_MANIFEST.assets) for (const sun of [[1, 0, 0], [0, -1, .2], [-.4, .7, 1]]) {
+    const matrix = new Float32Array([.7, -.3, 0, 0, -.2, -1.2, 0, 0, .1, .2, 1.4, 0, 100, -200, -3, 1]);
+    const expected = [-5, -10, 5, 10], actual = [...expected];
+    for (let i = 0; i < 8; i++) {
+      const b = a.mesh.bounds;
+      const q = projectMeshPoint([b[i & 1 ? 'max' : 'min'][0], b[i & 2 ? 'max' : 'min'][1], b[i & 4 ? 'max' : 'min'][2]], matrix, sun);
+      expected[0] = Math.min(expected[0], q[0]); expected[1] = Math.min(expected[1], q[1]);
+      expected[2] = Math.max(expected[2], q[0]); expected[3] = Math.max(expected[3], q[1]);
+    }
+    extendMeshBounds(actual, a.mesh, matrix, sun);
+    expect(actual).toEqual(expected);
+  }
+});
 it('maps actual frames, rejects foreign poses, keeps baked jump Z and final sprite transforms', () => {
   for (const pose of asset.poses) expect(enemyMeshPose(String(pose.index), mesh)).toBe(pose.index);
   expect(enemyMeshPose('__BASE', mesh)).toBe(0); expect(enemyMeshPose('other', mesh)).toBe(-1);

@@ -16,6 +16,11 @@ import { createBuildStorage, checkDiskSpace, MINIMUM_FREE_BYTES, DISK_HEADROOM_B
 import { parsePerformanceOptions } from './options.mjs';
 import { LOAD_VIEWPORT, runLoadMeasurements } from './load.mjs';
 
+if (process.argv.includes('--suite')) {
+  await (await import('./suite.mjs')).runSuite(process.argv.slice(2).filter(arg => arg !== '--suite'));
+  process.exit(0);
+}
+
 const request = { schemaVersion: 1, runId: `${new Date().toISOString().replaceAll(':', '-')}-${randomUUID().slice(0, 8)}`, ...parsePerformanceOptions(process.argv.slice(2)) };
 const root = resolve('.');
 const directory = resolve('build/performance-results', request.runId);

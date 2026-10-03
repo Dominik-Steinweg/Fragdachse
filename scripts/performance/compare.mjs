@@ -1,8 +1,19 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { compareResults } from './metrics.mjs';
+import { compareSuiteGroups } from './suite-metrics.mjs';
 
 const args = process.argv.slice(2);
+if (args[0] === '--suite') {
+  const input = JSON.parse(await readFile(resolve(args[1]), 'utf8'));
+  if (args[2] !== '--output' || !args[3]) throw Error('Usage: perf:compare --suite suite.json --output comparison.json');
+  const comparisons = ['high', 'low'].map(quality => ({ quality, cases: compareSuiteGroups(
+    input.groups.find(g => g.key === `baseline/${quality}`)?.cases ?? [],
+    input.groups.find(g => g.key === `current/${quality}`)?.cases ?? []) }));
+  await writeFile(resolve(args[3]), JSON.stringify({ note: 'Median of per-run quantiles; observational comparison, not a significance test.', comparisons }, null, 2));
+  console.log(resolve(args[3]));
+  process.exit(0);
+}
 if (args.length !== 2) throw new Error('Usage: npm run perf:compare -- <run-A> <run-B>');
 const load = async directory => {
   const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'));

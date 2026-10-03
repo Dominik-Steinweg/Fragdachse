@@ -14,7 +14,7 @@ import type { PerformanceLabGamePort } from '../src/debug/performanceLab/contrac
 
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 describe('Performance scenario lifecycle', () => {
-  function fixture(caseId = 'weapon.glock') {
+  function fixture(caseId = 'weapon.glock', warmupMs = 0) {
     vi.stubGlobal('window', {});
     let hit: () => void = () => {};
     const unsubscribe = vi.fn(), complete = vi.fn(), windows: any[] = [];
@@ -23,7 +23,7 @@ describe('Performance scenario lifecycle', () => {
       observeHits: (f: () => void) => { hit = f; return unsubscribe; }, readLoad: () => ({ enemies: 3 }),
       discard: vi.fn(), environment: () => ({}), stopRecording: vi.fn(() => ({ frameCapture: {}, session: {}, series: {} })),
     } as unknown as PerformanceLabGamePort;
-    const controller = new PerformanceLabController({ schemaVersion: 1, runId: 'r', caseId, timeoutMs: 10_000, captureProfile: 'standard' },
+    const controller = new PerformanceLabController({ schemaVersion: 1, runId: 'r', caseId, timeoutMs: 10_000, captureProfile: 'standard', warmupMs },
       port, windows, [], () => 0, complete);
     return { controller, port, unsubscribe, complete, windows };
   }
@@ -45,6 +45,31 @@ describe('Performance scenario lifecycle', () => {
     expect(f.unsubscribe).toHaveBeenCalledOnce();
     expect(unregister).toHaveBeenCalledOnce();
     expect(f.complete).not.toHaveBeenCalled();
+  });
+  it('excludes warmup from the measured window and does not trigger actions during it', () => {
+    const f = fixture('weapon.glock', 200);
+    f.port.updateCase = vi.fn();
+    f.controller.update(0); f.controller.update(100);
+    expect(f.port.attack).not.toHaveBeenCalled();
+    expect(f.port.updateCase).toHaveBeenLastCalledWith(expect.anything(), 0, 'warmup');
+    f.controller.update(200);
+    expect(f.port.attack).toHaveBeenCalledOnce();
+    expect(f.windows.find(w => w.id.endsWith('.warmup'))).toMatchObject({ kind: 'preparation', fromMs: 0, toMs: 200 });
+    f.controller.update(600); f.controller.update(1000); f.controller.update(1200);
+    expect(f.windows.find(w => w.id === 'weapon.glock')).toMatchObject({ fromMs: 200, toMs: 1200 });
+    f.controller.cancel('done');
+  });
+  it('waits for asynchronous render readiness beyond the minimum warmup', () => {
+    const f = fixture('weapon.glock', 200);
+    let ready = false;
+    f.port.isCaseWarmupReady = () => ready;
+    f.controller.update(0); f.controller.update(200); f.controller.update(300);
+    expect(f.port.attack).not.toHaveBeenCalled();
+    ready = true;
+    f.controller.update(350);
+    expect(f.port.attack).toHaveBeenCalledOnce();
+    expect(f.windows.find(w => w.id.endsWith('.warmup'))?.toMs).toBe(350);
+    f.controller.cancel('done');
   });
   it('rolls back a partially failed start and unregisters the diagnostic map', () => {
     const discard = vi.fn();

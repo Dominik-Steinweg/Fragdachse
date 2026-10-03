@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { metric, summarizeWindows, compareResults, findings } from '../scripts/performance/metrics.mjs';
+import { aggregateSuite, compareSuiteGroups } from '../scripts/performance/suite-metrics.mjs';
+import { compactRecording } from '../scripts/performance/compact.mjs';
 import { analyzeTrace, createSourceResolver, traceEvents, archiveDependencySources } from '../scripts/performance/trace.mjs';
 import { acquireOwned, preserveFailedChromeTrace, transferChromeTrace, readBrowserJson } from '../scripts/performance/lifecycle.mjs';
 import { createBuildStorage, checkDiskSpace, MINIMUM_FREE_BYTES, DISK_HEADROOM_BYTES } from '../scripts/performance/storage.mjs';
@@ -12,6 +14,35 @@ import { parsePerformanceOptions } from '../scripts/performance/options.mjs';
 import { checkProbePair, summarizeProbe } from '../scripts/performance/network-report.mjs';
 
 describe('Performance lab offline evidence', () => {
+  it('reduces in the browser with the same contained-frame, CPU, draw and GPU semantics', () => {
+    const result = { windows: [{ id: 'case', fromMs: 110, toMs: 200 }], game: {
+      frameCapture: { version: 2, startedAtPerformanceMs: 100,
+        frames: [[1, 12, 16], [2, 30, 18], [3, 100, 70], [4, 116, 16]],
+        work: [{ fromMs: 8, toMs: 16, complete: true, drawCalls: 900, spans: [{ scope: 'scenePostUpdate', fromMs: 11, toMs: 15 }] },
+          { fromMs: 31, toMs: 39, complete: true, drawCalls: 12, spans: [{ scope: 'gameplay', fromMs: 32, toMs: 36 }] },
+          { fromMs: 50, toMs: 80, complete: false, drawCalls: 999, spans: [{ scope: 'gameplay', fromMs: 51, toMs: 70 }] }] },
+      series: { gpuSamples: [{ atMs: 15, submissionEndMs: 20, durationMs: 3 }, { atMs: 99, submissionEndMs: 101, durationMs: 90 }] },
+      session: {}, summaries: { gpu: { status: 'supported' } } } };
+    const reference = summarizeWindows(result)[0], compact = compactRecording(result).windows[0];
+    expect(compact.frame).toEqual(reference.frame);
+    expect(compact.cpu).toEqual(reference.costs.scopes.gameCallback);
+    expect(compact.drawCalls).toEqual(reference.drawCalls);
+    expect(compact.gpu).toEqual(reference.gpu);
+    for (const scope of Object.keys(compact.scopes)) expect(compact.scopes[scope]).toEqual(reference.costs.scopes[scope]);
+    expect(() => compactRecording({ ...result, game: { ...result.game, frameCapture: { ...result.game.frameCapture, truncated: true } } })).toThrow('Incomplete');
+  });
+  it('weights completed runs equally and keeps unavailable GPU measurements missing', () => {
+    const run = (value: number, status = 'complete') => ({ status, windows: [{ id: 'test', kind: 'measurement',
+      frame: { median: value, p95: value + 1, p99: value + 2, count: value * 100 }, gpu: null, scopes: {} }] });
+    const a = aggregateSuite([run(2), run(4), run(20), run(900, 'failed')]);
+    expect(a[0].runs).toBe(3);
+    expect(a[0].metrics.frame.median.median).toBe(4);
+    expect(a[0].metrics.gpu.median).toBeNull();
+    expect(compareSuiteGroups(a, aggregateSuite([run(1)]))[0].status).toBe('insufficient-repetitions');
+    expect(compareSuiteGroups(a, [])[0].status).toBe('n/a');
+    const changed = { ...a[0], loads: [{ spawnedEnemies: 50 }] };
+    expect(compareSuiteGroups(a, [changed])[0].warnings).toContain('Workload differs: spawnedEnemies');
+  });
   it('rejects unrelated network captures even if their settings match', () => {
     const host = { schemaVersion: 1, experiment: 'p90-bubble-1', role: 'host', room: 'room', roundStart: 100,
       quality: 'high', buildSignature: 'build', cooldownMs: 200 };
