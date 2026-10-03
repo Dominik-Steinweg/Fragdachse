@@ -70,11 +70,13 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     const traceLoad = checkTraceLoad(field, view, tuning, time);
     const weaponProfiles = checkWeaponProfiles(field, view, tuning, time);
     const softTraces = checkSoftTraces(field, view, tuning, time);
+    const thinOpenings = checkThinOpenings(scene);
     const checks = {
       ...obstacleFlow.checks,
       ...traceLoad.checks,
       ...weaponProfiles.checks,
       ...softTraces.checks,
+      ...thinOpenings.checks,
       cachedTerrainEditsPreserveOtherCells: cachedBefore.density === cachedAfter.density,
       cachedEditsAppliedBeforeResume: reopenedCached.density === 0 && !reopenedCached.reached && blockedCached.density === 0,
       thinTraceWithoutWideLane: fineTrail > 0 && outsideTrail === 0,
@@ -97,7 +99,66 @@ export function runFogGpuContracts(scene: Phaser.Scene): object {
     };
     return { passed: Object.values(checks).every(Boolean), checks,
       readings: { initial, initialVelocity, wall, isolated, openingCenter, openingEdge, entered, reblocked, beforeRead, afterRead, neighbourhood,
-        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings, traceLoad: traceLoad.readings, weaponProfiles: weaponProfiles.readings, softTraces: softTraces.readings } };
+        fineTrail, sustainedTrail, expiredTrail, diagonalTrace, joinedTraceCount, frontBefore, frontAfter, backBefore, backAfter, obstacleFlow: obstacleFlow.readings, traceLoad: traceLoad.readings, weaponProfiles: weaponProfiles.readings, softTraces: softTraces.readings, thinOpenings: thinOpenings.readings } };
+  } finally { field.destroy(); terrain.clear(); }
+}
+
+/** Thin inflow must survive density quantization, including after atlas eviction.
+ * The corridor crosses a chunk boundary and has only one open end. A second
+ * corridor starts already destroyed, as on a late join. */
+function checkThinOpenings(scene: Phaser.Scene) {
+  const frame = { offsetX: 0, offsetY: 0, width: 4096, height: 512 };
+  const view = { x: 320, y: 0, width: 400, height: 512 };
+  const terrain = new FogTerrainModel(frame, []);
+  const corridor = (y: number) => Array.from({ length: 6 }, (_, i) => ({ gridX: 14 + i, gridY: y }));
+  const walls = [5, 10].flatMap(y => [
+    ...Array.from({ length: 7 }, (_, i) => ({ gridX: 14 + i, gridY: y - 1 })),
+    ...Array.from({ length: 7 }, (_, i) => ({ gridX: 14 + i, gridY: y + 1 })),
+    { gridX: 20, gridY: y },
+  ]);
+  // Four face barriers keep this opened cell isolated even from diagonal fog.
+  walls.push({ gridX: 23, gridY: 7 }, { gridX: 25, gridY: 7 },
+    { gridX: 24, gridY: 6 }, { gridX: 24, gridY: 8 });
+  terrain.setObstacle('walls', walls, true);
+  terrain.setObstacle('rock', corridor(5), true, true);
+  terrain.markOpened([...corridor(10), { gridX: 24, gridY: 7 }]);
+  const tuning = { ...fogTuning(183), windX: 0, windY: 0, meander: 0 };
+  // Even the densest source here supplies less than half a linear 16-bit unit
+  // through one face. The fixture exercises precision, not authored fog tuning.
+  const density = [.0003, .0003];
+  const field = new FogGpuField(scene, terrain, 183, tuning, 0);
+  let time = 0;
+  const steps = (n: number) => {
+    for (let i = 0; i < n; i++) {
+      field.prepare(view, time); field.step([], density, tuning, time += FOG.stepMs);
+    }
+  };
+  const inner = (y: number) => field.readDensity(612, y * 32 + 12);
+  try {
+    steps(1);
+    terrain.removeObstacle('rock'); steps(1);
+    const initial = inner(5), joinedInitial = inner(10);
+    steps(240);
+    const filled = inner(5), joinedFilled = inner(10);
+    const isolated = field.readDensity(780, 236), wall = field.readDensity(652, 172);
+    // Expire all original slots, then revisit the remembered opening in weak wind.
+    time += FOG.cacheMs + 1;
+    field.prepare({ x: 3800, y: 0, width: 100, height: 100 }, time);
+    field.step([], density, tuning, time += FOG.stepMs);
+    const evicted = !field.residency.chunks.has('1,0');
+    tuning.windX = .1;
+    steps(1); const returned = inner(5);
+    steps(240); const refilled = inner(5);
+    terrain.setObstacle('rock', corridor(5), false, true); steps(1);
+    const reblocked = inner(5);
+    return { checks: {
+      thinOpeningStartsEmpty: initial.density === 0 && !initial.reached,
+      thinOpeningRefillsAcrossChunks: filled.density > 0 && filled.reached,
+      thinLateJoinRefills: joinedInitial.density === 0 && !joinedInitial.reached && joinedFilled.density > 0 && joinedFilled.reached,
+      thinFogCannotCrossWallsOrCorners: isolated.density === 0 && !isolated.reached && wall.density === 0,
+      thinOpeningRefillsAfterEviction: evicted && returned.density === 0 && !returned.reached && refilled.density > 0 && refilled.reached,
+      thinOpeningReblocks: reblocked.density === 0 && !reblocked.reached,
+    }, readings: { initial, joinedInitial, filled, joinedFilled, isolated, wall, evicted, returned, refilled, reblocked } };
   } finally { field.destroy(); terrain.clear(); }
 }
 

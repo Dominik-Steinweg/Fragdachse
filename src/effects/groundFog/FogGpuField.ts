@@ -512,7 +512,8 @@ export class FogGpuField {
   /** Explicit lab diagnostic only; never used by simulation, residency or ordinary rendering. */
   readDensity(worldX: number, worldY: number): { density: number; reached: boolean } {
     const pixel = this.readPixel(worldX, worldY, this.states[this.current]);
-    return { density: (pixel[0] * 256 + pixel[1]) / 65535, reached: pixel[2] > 127 };
+    const rootDensity = (pixel[0] * 256 + pixel[1]) / 65535;
+    return { density: rootDensity * rootDensity, reached: pixel[2] > 127 };
   }
   readVelocity(worldX: number, worldY: number): readonly number[] {
     const p = this.readPixel(worldX, worldY, this.velocities[this.current]);

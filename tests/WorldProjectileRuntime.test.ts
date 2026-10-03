@@ -139,6 +139,41 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it.each(['sweep', 'overlap'] as const)('separates a %s train ricochet so later frames cannot repeat its damage', collisionMode => {
+    const { runtime, physics } = createRuntimeHarness();
+    const damage = vi.fn();
+    runtime.setTrainImpactPort({ resolveTrainImpact: damage });
+    runtime.setProjectileCollisionTargetQueryPort({
+      readCollisionTargets: sink => sink('train', 'main', 'train', 50, 0, 100, 20, -100, 80, 100),
+      getWorldTargetHit: (_target, sx, sy, ex, _ey, hw) => {
+        const face = 20 - hw;
+        if (Math.max(sx, ex) < face || Math.min(sx, ex) > 80 + hw) return null;
+        const centerX = sx < face ? face : sx;
+        return { x: 20, y: sy, centerX, centerY: sy, distance: Math.abs(centerX - sx), normal: { x: -1, y: 0 } };
+      },
+    });
+    const request = baseRequest({ collisionMode, speed: 1000, maxBounces: 1, lifetime: 5000 });
+    const id = runtime.spawnProjectile(request)!;
+    const handle = physics.handles.get(id)!;
+    for (let frame = 0; frame < 20; frame++) {
+      handle.sprite.x += handle.body.velocity.x * 0.032;
+      runtime.runHostInteractionStage(1000 + frame * 32);
+      runtime.runHostProjectileStage(32, 1000 + frame * 32);
+    }
+    expect(damage).toHaveBeenCalledExactlyOnceWith({ damage: request.interaction.directHit!.damage, attributionId: 'owner' });
+    expect(handle.body.velocity.x).toBeLessThan(0);
+    expect(handle.sprite.x + handle.body.halfWidth).toBeLessThan(20);
+
+    // A genuinely new arrival can hit again, and must exhaust the shared bounce budget.
+    handle.body.setVelocity(1000, 0);
+    handle.sprite.x = 32;
+    runtime.runHostInteractionStage(2000);
+    runtime.runHostProjectileStage(32, 2000);
+    expect(damage).toHaveBeenCalledTimes(2);
+    expect(physics.released).toContain(id);
+    runtime.destroy();
+  });
+
   it.each(['sweep', 'overlap'] as const)('honors exact train misses and deduplicates accepted %s contacts', collisionMode => {
     const { runtime, physics } = createRuntimeHarness();
     const damage = vi.fn();
@@ -164,6 +199,43 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     expect(damage).toHaveBeenCalledOnce();
     runtime.destroy();
   });
+
+  it.each(['physics-first', 'sweep-first'] as const)('keeps one train ricochet when contacts arrive %s', order => {
+    const { runtime, physics } = createRuntimeHarness();
+    const damage = vi.fn();
+    runtime.setTrainImpactPort({ resolveTrainImpact: damage });
+    runtime.setProjectileCollisionTargetQueryPort({
+      readCollisionTargets: sink => sink('train', 'main', 'train', 50, 0, 100, 20, -100, 80, 100),
+      getWorldTargetHit: (_target, _sx, _sy, _ex, _ey, hw) => ({
+        x: 20, y: 0, centerX: 20 - hw, centerY: 0, distance: 20 - hw, normal: { x: -1, y: 0 },
+      }),
+    });
+    const id = runtime.spawnProjectile(baseRequest({ collisionMode: 'sweep', maxBounces: 1 }))!;
+    const handle = physics.handles.get(id)!;
+    const separatedX = 20 - handle.body.halfWidth - 0.5;
+    const contact = { projectileId: id, target: { kind: 'train', id: 'main' } as const,
+      x: 20, y: 0, flightPosition: { x: separatedX, y: 0 }, velocityX: -100, velocityY: 0, source: 'physics-collider' as const };
+    runtime.setHostFrameTime(1000);
+    if (order === 'physics-first') {
+      handle.body.reset(separatedX, 0);
+      handle.body.setVelocity(-100, 0);
+      physics.emit(contact);
+      runtime.runHostInteractionStage(1000);
+    } else {
+      handle.sprite.x = 50;
+      runtime.runHostInteractionStage(1000);
+      // A second Arcade collider can reflect the same body again before reporting.
+      handle.body.setVelocity(100, 0);
+      physics.emit(contact);
+    }
+    expect(damage).toHaveBeenCalledOnce();
+    expect(handle.sprite.x).toBe(separatedX);
+    expect(handle.body.velocity.x).toBe(-100);
+    runtime.runHostProjectileStage(16, 1000);
+    expect(physics.released).not.toContain(id);
+    runtime.destroy();
+  });
+
   function emitterRequest(lifetimeMs = 1_000): ProjectileSpawnRequest {
     const flame = baseRequest({ speed: 400, size: 14, lifetime: 2_000, projectileStyle: 'flame' });
     return { ...baseRequest(), origin: { x: 0, y: 0, angle: 0.3 },

@@ -402,7 +402,8 @@ export class WorldProjectileRuntime implements
         ? this.allowsWorldContact(record, target) : this.plasmaTargetAllowed(record, target),
       resolveSupportImpact: (record, candidate) => this.resolvePlasmaSupport(record, candidate),
       shotOptions: record => this.shotOptions(record),
-      allowsWorldContact: (record, target) => this.allowsWorldContact(record, target),
+      allowsWorldContact: (record, target) => !(target.kind === 'train' && record.bounceProcessedThisStep)
+        && this.allowsWorldContact(record, target),
       worldTargetHit: (record, target, sx, sy, ex, ey) => {
         if (target.kind === 'base') return this.physicsBinding.getObstacleGeometry?.()?.baseHit(
           target.id, sx, sy, ex, ey, record.physics.body.width / 2, record.physics.body.height / 2,
@@ -1024,6 +1025,30 @@ export class WorldProjectileRuntime implements
     projectile: ProjectileRuntimeRecord,
     candidate: ProjectileImpactCandidate,
   ): ProjectileCollisionOutcome {
+    if (candidate.target.kind === 'train' && this.shouldBounceAfterContact(projectile, { kind: 'train', id: 'main' })) {
+      // Unlike Arcade contacts, canonical sweeps/overlaps have not separated or reflected the
+      // body. A damage-only resolution pins a swept bullet to the train and hits every frame.
+      const body = projectile.physics.body;
+      const sprite = projectile.physics.sprite;
+      const hit = candidate.normal ? candidate : this.collisionTargetQueryPort?.getWorldTargetHit?.(
+        candidate.target, sprite.x, sprite.y, sprite.x, sprite.y, body.width / 2, body.height / 2);
+      if (hit?.normal) {
+        const { x: nx, y: ny } = hit.normal;
+        const flightPosition = {
+          x: hit.x + nx * (body.width / 2 + 0.5),
+          y: hit.y + ny * (body.height / 2 + 0.5),
+        };
+        const vx = body.velocity.x, vy = body.velocity.y;
+        const dot = Math.min(0, vx * nx + vy * ny);
+        body.reset(flightPosition.x, flightPosition.y);
+        body.setVelocity(vx - 2 * dot * nx, vy - 2 * dot * ny);
+        // Share damage, bounce limits, splitting and replication with technical contacts.
+        this.reportPhysicsContact({ projectileId: projectile.id, target: { kind: 'train', id: 'main' },
+          x: hit.x, y: hit.y, flightPosition, velocityX: body.velocity.x, velocityY: body.velocity.y,
+          source: 'physics-collider' });
+        return 'consumed';
+      }
+    }
     return this.resolveWorldImpactCandidate(projectile, candidate).outcome;
   }
 

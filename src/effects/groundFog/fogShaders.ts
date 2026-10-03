@@ -24,6 +24,10 @@ const float SPEED = ${FOG.maxSpeed}.0;
 vec2 flip(vec2 uv) { return vec2(uv.x, 1.0-uv.y); }
 float unpack16(vec2 v) { return dot(v,vec2(65280.0,255.0))/65535.0; }
 vec2 pack16(float v) { float n=floor(clamp(v,0.0,1.0)*65535.0+.5); return vec2(floor(n/256.0),mod(n,256.0))/255.0; }
+// Density needs precision near zero: thin face inflow must survive each stored
+// step. Other packed data (velocity, coordinates and boundaries) stays linear.
+float unpackDensity(vec2 v) { float root=unpack16(v); return root*root; }
+vec2 packDensity(float v) { return pack16(sqrt(clamp(v,0.0,1.0))); }
 vec4 meta(float slot,float row) { return texture2D(uMeta,vec2((slot+.5)/SLOTS,(row+.5)/3.0)); }
 vec2 cellUV(float slot,vec2 p) { return (vec2(mod(slot,${FOG.atlasCols}.0),floor(slot/${FOG.atlasCols}.0))*SIDE+p+.5)/atlasSize; }
 vec2 origin(float slot) { vec4 m=meta(slot,1.0); return vec2(unpack16(m.rg),unpack16(m.ba))*65535.0*512.0; }
@@ -77,7 +81,7 @@ vec4 state(float slot,vec2 p) {
   if(mask.a>.5) return vec4(0);
   if(meta(slot,2.0).g>.5) {
     float d=mask.b>.5?0.0:targetDensity(slot,p,mask.g);
-    return vec4(pack16(d),mask.b>.5?0.0:1.0,0.0);
+    return vec4(packDensity(d),mask.b>.5?0.0:1.0,0.0);
   }
   return texture2D(uState,flip(cellUV(slot,p)));
 }
@@ -143,7 +147,7 @@ void main() {
 `;
 export const FOG_VELOCITY_FRAGMENT = FOG_GLSL + `
 float pressure(float slot,vec2 p) {
- return max(0.0,unpack16(state(slot,p).rg)-targetDensity(slot,p,terrain(slot,p).g)-.04);
+ return max(0.0,unpackDensity(state(slot,p).rg)-targetDensity(slot,p,terrain(slot,p).g)-.04);
 }
 void flowFace(float slot,vec2 p,vec2 direction,float ownPressure,vec2 ownVelocity,inout vec2 push,inout vec2 mixing) {
  vec2 q=p;float n=neighbour(slot,q,direction);
@@ -173,7 +177,7 @@ export const FOG_DENSITY_FRAGMENT = FOG_GLSL + `
 void exchange(float slot,vec2 p,vec2 direction,vec2 v,float d,inout float change,inout float incoming) {
  vec2 q=p;float n=neighbour(slot,q,direction);
  if(n<0.0 || terrain(n,q).r<.5) return;
- float other=unpack16(state(n,q).rg)*(1.0-texture2D(uImpulse,flip(cellUV(n,q))).b);
+ float other=unpackDensity(state(n,q).rg)*(1.0-texture2D(uImpulse,flip(cellUV(n,q))).b);
  // Four face fluxes plus diffusion remain below one cell's available mass,
  // including convergent velocities from independently saturated impulses.
  float speed=clamp(dot((v+velocity(n,q))*.5,direction)/240.0,-.18,.18);
@@ -188,16 +192,18 @@ void main() {
  vec4 mask=terrain(slot,p);
  if(mask.r<.5) {gl_FragColor=vec4(0);return;}
  vec4 impulse=texture2D(uImpulse,flip(uv));
- vec4 before=state(slot,p);float d=unpack16(before.rg)*(1.0-impulse.b),change=0.0,incoming=0.0;
+ vec4 before=state(slot,p);float d=unpackDensity(before.rg)*(1.0-impulse.b),change=0.0,incoming=0.0;
  vec2 v=velocity(slot,p);
  exchange(slot,p,vec2(-1,0),v,d,change,incoming);exchange(slot,p,vec2(1,0),v,d,change,incoming);
  exchange(slot,p,vec2(0,-1),v,d,change,incoming);exchange(slot,p,vec2(0,1),v,d,change,incoming);
- float arrived=max(before.b,step(.0000076,incoming));
+ // Arrival is physical face inflow, not a threshold tied to the storage codec.
+ // A zero influx must still leave disconnected openings empty.
+ float arrived=max(before.b,incoming>0.0?1.0:0.0);
  float inhibition=max(before.a*.95,impulse.a);
  d=max(0.0,d+change);
  float target=targetDensity(slot,p,mask.g);
  if(arrived>.5) d=mix(d,target,(target<d?.004:.0025)*(1.0-inhibition));
- gl_FragColor=vec4(pack16(d),arrived,inhibition);
+ gl_FragColor=vec4(packDensity(d),arrived,inhibition);
 }
 `;
 
@@ -303,7 +309,7 @@ vec4 worldSample(vec2 world) {
  vec4 mask=terrain(floor(slot+.5),p);
  vec4 s=texture2D(uState,flip(uv));
  vec4 old=texture2D(uVelocity,flip(uv));
- float d=mix(unpack16(old.rg),unpack16(s.rg),meta(floor(slot+.5),2.0).g>.5?1.0:uInterpolation);
+ float d=mix(unpackDensity(old.rg),unpackDensity(s.rg),meta(floor(slot+.5),2.0).g>.5?1.0:uInterpolation);
  if(mask.r<.5 || (mask.b>.5 && s.b<.5)) d=0.0;
  return vec4(d,mask.r,mask.g,s.b);
 }
