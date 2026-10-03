@@ -51,7 +51,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if(c.quality!==undefined&&!['high','medium','low'].includes(String(c.quality)))throw new Error('quality: high, medium or low required');
       if(c.variant!==undefined&&c.variant!=='normal'&&c.variant!=='void')throw new Error('variant: normal or void required');
       controller.arrangeArmageddonReview({count,progress:number(c.progress??.65,0,1),quality:(c.quality??'high') as 'high'|'medium'|'low',
-        impacts:c.impacts===undefined?false:boolean(c.impacts),variant:(c.variant??'normal') as 'normal'|'void'});break;
+        impacts:c.impacts===undefined?false:boolean(c.impacts),singleImpact:c.singleImpact===undefined?false:boolean(c.singleImpact),variant:(c.variant??'normal') as 'normal'|'void'});break;
     }
     case 'enemyMeshReview': {
       const count = number(c.count ?? 4, 1, 500), pose = number(c.pose ?? -1, -1, 30);

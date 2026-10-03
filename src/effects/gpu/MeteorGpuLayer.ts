@@ -3,7 +3,7 @@ import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
 import { METEOR_FRAGMENT, METEOR_VERTEX } from './MeteorShader';
 import { registerGraphicsObject } from '../EffectUtils';
 
-/** Fixed bounded batch: three draws regardless of strike count. No per-meteor GameObjects. */
+/** Fixed bounded batch: four draws regardless of strike count. No per-meteor GameObjects. */
 export const METEOR_BATCH_CAPACITY = 256;
 const WORDS = 9, VERTICES = 6;
 const CORNERS = [-1,-1, 1,-1, 1,1, -1,-1, 1,1, -1,1];
@@ -18,11 +18,11 @@ export class MeteorGpuLayer {
   constructor(private readonly scene: Phaser.Scene) {
     const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
     if (!renderer?.gl) return;
-    // Ground before water (5.2), sunlight, fog and canopy. Only thin information and the
-    // incandescent airborne body clear canopy; no unlit dust/material goes into these bands.
-    for (const [pass, depth] of [5.12, 20.4, 20.6].entries()) {
+    // Ground before water; glow below canopy. Only the airborne body / brief flash is high.
+    // The overhead smoke column stays in the lit material band, never above the canopy.
+    for (const [pass, depth] of [5.12, 19.7, 20.6, 13.38].entries()) {
       const image = scene.add.image(0, 0, '__WHITE').setDepth(depth).setVisible(false);
-      image.name = `armageddon-${['ground','warning','flight'][pass]}`;
+      image.name = `armageddon-${['ground','heat','flight','material'][pass]}`;
       registerGraphicsObject(scene, 'meteorEffects', image);
       const batch = createMeteorBatch(renderer, image, pass, this);
       const manager = renderer.renderNodes;
@@ -101,7 +101,7 @@ class MeteorBatch extends Phaser.Renderer.WebGL.RenderNodes.BatchHandler {
       program.setUniform('uProjectionMatrix',this.renderer.projectionMatrix.val);
       program.setUniform('uViewMatrix',[m.a,m.b,0,m.c,m.d,0,m.tx,m.ty,1]);
       program.setUniform('uPass',this.pass);program.setUniform('uDetail',frame.detail);
-      program.setUniform('uZoom',context.camera!.zoom);program.setUniform('uAlpha',this.image.alpha);
+      program.setUniform('uAlpha',this.image.alpha);
       program.applyUniforms(suite.program);
       this.renderer.drawElements(context,[],suite.program,suite.vao,Math.max(preparing?1:0,frame.count)*VERTICES,0,this.topology);
     }

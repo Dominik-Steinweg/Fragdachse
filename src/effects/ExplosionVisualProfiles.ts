@@ -34,6 +34,11 @@ export const EXPLOSION_VISUAL_PROFILES = {
     family: 'standard', layering: 'ordinary', countScale: 0.3, lifeScale: 0.42, bodyScale: 0.65,
     smokeScale: 0.08, chunkScale: 0.15, upwardEmbers: false,
   },
+  // Armageddon strike: heavier, longer burst with secondary fireballs and a broad smoke bloom.
+  meteor: {
+    family: 'cascade', layering: 'ordinary', countScale: 1.3, lifeScale: 1.2, bodyScale: 1.35,
+    smokeScale: 1.5, chunkScale: 1.25, upwardEmbers: false,
+  },
   rocket: {
     family: 'standard', layering: 'ordinary', countScale: 1.15, lifeScale: 0.95, bodyScale: 1.05,
     smokeScale: 1, chunkScale: 1.1, upwardEmbers: false,
@@ -93,6 +98,7 @@ export function getCombatExplosionProfile(style: ExplosionVisualStyle): Explosio
 
 export function isThermalExplosionStyle(style: ExplosionVisualStyle): boolean {
   return style === 'default'
+    || style === 'meteor'
     || style === 'he_cluster_shard'
     || style === 'he_demolition_shard'
     || style === 'rocket'

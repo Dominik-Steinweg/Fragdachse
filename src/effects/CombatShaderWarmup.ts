@@ -16,6 +16,8 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
   return [
     {
       name: 'armageddon',
+      // Ground, radiant heat, flight/flash and lit smoke all share this program;
+      // prepare() primes every pass, including the v2 material buffer, before combat.
       prepare: context => (meteor ??= new MeteorGpuLayer(scene)).prepare(context),
       destroy: () => { meteor?.destroy(); meteor = null; },
     },

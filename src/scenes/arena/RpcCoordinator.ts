@@ -401,7 +401,9 @@ export class RpcCoordinator {
 
   private registerExplosionEffectHandler(): void {
     bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle, chargeDamage, audioSourceId) => {
-      if (chargeDamage === undefined) this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
+      if(audioSourceId==='ARMAGEDDON' || audioSourceId==='enemy.void_meteor') {
+        this.effectSystem.playExplosionEffect(x,y,radius,color,visualStyle,chargeDamage,audioSourceId==='ARMAGEDDON'?'normal':'void');
+      } else if (chargeDamage === undefined) this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
       else this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle, chargeDamage);
       const audio = resolveExplosionAudio(audioSourceId ?? 'generic', chargeDamage);
       if (audio) this.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);

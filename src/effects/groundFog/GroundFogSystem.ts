@@ -83,7 +83,7 @@ export class GroundFogSystem {
   }
   addProjectile(segment: ProjectileTrailSegment, size: number, style: string, sourceId = 0, modifiers: FogTrailModifiers = {}): void {
     if (!this.active || !this.reactions || this.quality === 'low') return;
-    const large = ['rocket', 'fireball', 'plasma', 'bfg', 'energy_ball', 'hydra'].includes(style);
+    const large = ['rocket', 'meteor', 'fireball', 'plasma', 'bfg', 'energy_ball', 'hydra'].includes(style);
     const { from, to } = segment;
     if (!Number.isFinite(from.x + from.y + to.x + to.y)) return;
     const streamRadius = getStreamFogRadius(style, size);

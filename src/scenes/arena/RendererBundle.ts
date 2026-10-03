@@ -488,6 +488,8 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.airstrike.setEffectSystem(effectSystem);
   effectSystem.setLightingSystem(bundle.lighting);
   effectSystem.setExplosionGpuRenderer(bundle.explosionGpu);
+  bundle.meteor.setImpactSystems(bundle.explosionGpu,bundle.lighting);
+  effectSystem.setMeteorExplosionRenderer((x,y,radius,variant)=>bundle.meteor.playImpact(x,y,radius,variant));
   effectSystem.setBurrowGpuRenderer(bundle.burrowGpu);
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
 }

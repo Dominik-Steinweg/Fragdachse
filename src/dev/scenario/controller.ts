@@ -39,7 +39,7 @@ export class DevScenarioController {
   private worldLighting: WorldLightingMeasurement | null = null;
   private enemyMeshReview: EnemyMeshReview | null = null;
   private armageddonReview: ArmageddonReview | null = null;
-  arrangeArmageddonReview(options: {count:number;progress:number;quality:import('../../graphics/GraphicsQuality').GraphicsQuality;impacts:boolean;variant:'normal'|'void'}):void {
+  arrangeArmageddonReview(options: {count:number;progress:number;quality:import('../../graphics/GraphicsQuality').GraphicsQuality;impacts:boolean;singleImpact?:boolean;variant:'normal'|'void'}):void {
     this.requireReady(); this.armageddonReview?.destroy();
     const point=this.world(this.aim);
     this.armageddonReview=new ArmageddonReview(this.scene,this.runtime,{...options,...point});

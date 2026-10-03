@@ -7867,7 +7867,8 @@ export const CPU_SOURCE_CONTRACTS = {
 };
 export const METEOR_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'meteor:ground',owner:'effects/gpu/MeteorGpuLayer.ts',component:'ground',height:'ground',lighting:'material',camera:'world',depths:[5.12],blends:['NORMAL'],profiles:['G'],role:'effect'},
-  {id:'meteor:warning',owner:'effects/gpu/MeteorGpuLayer.ts',component:'warning',height:'ground',lighting:'emissive',camera:'world',depths:[20.4],blends:['NORMAL'],profiles:['H'],role:'ui'},
+  {id:'meteor:heat',owner:'effects/gpu/MeteorGpuLayer.ts',component:'heat',height:'body',lighting:'emissive',camera:'world',depths:[19.7],blends:['NORMAL'],profiles:['E'],role:'effect'},
   {id:'meteor:flight',owner:'effects/gpu/MeteorGpuLayer.ts',component:'flight',height:'high',lighting:'emissive',camera:'world',depths:[20.6],blends:['NORMAL'],profiles:['H'],role:'effect'},
+  {id:'meteor:material',owner:'effects/gpu/MeteorGpuLayer.ts',component:'material',height:'body',lighting:'material',camera:'world',depths:[13.38],blends:['NORMAL'],profiles:['K'],role:'effect'},
 ];
 export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS];

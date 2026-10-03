@@ -22,9 +22,11 @@ describe('meteor snapshot presentation',()=>{
     renderer.sync([strike]);batch.add.mockClear();renderer.sync([]);
     expect(batch.add).not.toHaveBeenCalled();expect(feedback.request).not.toHaveBeenCalled();
   });
-  it('creates residue on removal, expires it and clears round resources',()=>{
+  it('creates residue only from the impact event, expires it and clears round resources',()=>{
     const {renderer,scene}=fixture();renderer.sync([strike]);vi.mocked(Date.now).mockReturnValue(2000);
-    renderer.sync([]);expect(batch.add).toHaveBeenLastCalledWith(expect.objectContaining({age:0}));
+    renderer.sync([]);expect(batch.add).not.toHaveBeenCalledWith(expect.objectContaining({age:0}));
+    renderer.playImpact(100,100,60,'normal');batch.add.mockClear();renderer.sync([]);
+    expect(batch.add).toHaveBeenLastCalledWith(expect.objectContaining({x:100,y:100,radius:60,age:0}));
     batch.add.mockClear();scene.time.now=8000;renderer.sync([]);expect(batch.add).not.toHaveBeenCalled();
     renderer.sync([strike]);renderer.clear();batch.add.mockClear();renderer.sync([]);
     expect(batch.add).not.toHaveBeenCalled();expect(batch.clear).toHaveBeenCalled();

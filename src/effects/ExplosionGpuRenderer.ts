@@ -145,6 +145,25 @@ export class ExplosionGpuRenderer {
     }
   }
 
+  /** Meteor volume/flash/smoke are batched procedural fields; only ejecta use the shared
+   * particle lanes. Burning gameplay chunks remain exclusively in FireChunkSystem. */
+  spawnMeteorDebris(x:number,y:number,radius:number,variant:'normal'|'void'):void {
+    this.spawnBurst(GpuVfxEffectId.ExplosionLowEmberDown,Math.min(28,Math.max(10,Math.round(radius/4))), (spec,index,count)=>{
+      const angle=index/count*TWO_PI+Math.random()*.3;
+      const speed=radius*(.6+Math.random()*1.5);
+      this.configure(spec,{x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed-radius*.7,
+        yMode:GpuVfxEase.Gravity,gravityFactor:1,lifeMs:700+Math.random()*650,
+        scaleStart:.6+Math.random()*.9,scaleEnd:.08,alphaStart:.95,tint:index%3?0x4e3925:0x88735a,
+        frame:GpuVfxFrameId.ExplosionChunk,rotation:angle,angularVelocity:Math.random()*6-3});
+    });
+    this.spawnBurst(GpuVfxEffectId.ExplosionLowSpark,Math.min(30,Math.round(radius/3)),spec=>{
+      const angle=Math.random()*TWO_PI,speed=radius*(.8+Math.random()*1.7);
+      this.configure(spec,{x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,lifeMs:350+Math.random()*650,
+        scaleStart:.5+Math.random()*.7,scaleEnd:0,alphaStart:.85,tint:variant==='void'?0xbb72ff:0xffa339,
+        frame:GpuVfxFrameId.ExplosionStreak,rotation:angle,stretchStart:1.9,stretchEnd:.4});
+    });
+  }
+
   /** Rundenwechsel duerfen keine verzoegerten Bursts in Lobby oder naechste Runde tragen. */
   clearPending(): void {
     this.pendingStages.length = 0;

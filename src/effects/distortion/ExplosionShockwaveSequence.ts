@@ -11,6 +11,7 @@ export const EXPLOSION_SHOCKWAVE_DURATION_MS = 280;
 const PHYSICAL_EXPLOSION_STYLES = new Set<ExplosionVisualStyle>([
   'default',
   'rocket',
+  'meteor',
   'mini_rocket',
   'mini_rocket_cascade',
   'train',

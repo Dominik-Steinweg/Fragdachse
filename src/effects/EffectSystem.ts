@@ -341,6 +341,11 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   private trainExplosionRenderer: ((x: number, y: number, radius: number) => boolean) | null = null;
+  private meteorExplosionRenderer: ((x:number,y:number,radius:number,variant:'normal'|'void')=>void) | null = null;
+
+  setMeteorExplosionRenderer(renderer: ((x:number,y:number,radius:number,variant:'normal'|'void')=>void) | null):void {
+    this.meteorExplosionRenderer=renderer;
+  }
 
   setTrainExplosionRenderer(renderer: ((x: number, y: number, radius: number) => boolean) | null): void {
     this.trainExplosionRenderer = renderer;
@@ -800,7 +805,13 @@ export class EffectSystem implements EnemyVisualSink {
    * @param color        Optionale Farbe (Default stilabhaengig)
    * @param visualStyle  Default | holy | energy
    */
-  playExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle: ExplosionVisualStyle = 'default', chargeDamage?: number): void {
+  playExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle: ExplosionVisualStyle = 'default', chargeDamage?: number, meteorVariant?: 'normal'|'void'): void {
+    if (meteorVariant) {
+      // The meteor layer adds crater, dust ring and ejecta; the shared combat burst carries the
+      // fireball. A normal strike uses the heavier meteor profile.
+      this.meteorExplosionRenderer?.(x, y, radius, meteorVariant);
+      if (meteorVariant === 'normal') visualStyle = 'meteor';
+    }
     if (isDestructiveExplosionStyle(visualStyle)) this.groundFogExplosion?.(x, y, radius, visualStyle);
     this.ensureTextures();
     if (visualStyle === 'time_bubble_release') {
