@@ -116,7 +116,8 @@
         "BASE_SPORES",
         "TURRET_SPORES"
       ],
-      "variant": "rich",
+      "revision": "v2-spore-agaric-r1",
+      "variant": "standard",
       "sourceSize": 128,
       "textureKey": "turret_weapon_spore",
       "sheetTextureKey": "turret_weapon_spore_animated",
@@ -157,8 +158,8 @@
         }
       ],
       "hashes": {
-        "idle": "f1bc95189e678277aeeb8375d74617106339dd602616bb6c5455666c0e9d53b4",
-        "sheet": "e4a04eb38263cf05bbe6306f71bebfe8a2cfa4f119e96dcb64865c39851488ed"
+        "idle": "4b1b52cd610ffc06a67824305bbe6ed29c78ed82661d7ece19a4a35616fa12ca",
+        "sheet": "b58f7afcdb77740f2c365cfc9d706f4aba21c2315c4b62cb77da95fca753907d"
       }
     },
     {
