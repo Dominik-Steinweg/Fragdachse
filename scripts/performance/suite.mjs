@@ -42,7 +42,7 @@ function initialize(request) {
 }
 
 export async function runSuite(args) {
-  const options={runs:3,qualities:['high','low'],caseId:'review',timeoutMs:900_000,warmupMs:2000};
+  const options={runs:3,qualities:['high','low'],caseId:'review',timeoutMs:900_000,warmupMs:2000,cpuThrottle:1};
   for(let i=0;i<args.length;i+=2){const key=args[i],v=args[i+1];if(!v)throw Error(`Missing value: ${key}`);
     if(key==='--sites')options.sites=v;
     else if(key==='--output-root')options.output=resolve(v);
@@ -50,18 +50,19 @@ export async function runSuite(args) {
     else if(key==='--qualities')options.qualities=v.split(',');
     else if(key==='--case')options.caseId=v;
     else if(key==='--warmup-ms' && /^\d+$/.test(v))options.warmupMs=Number(v);
+    else if(key==='--cpu-throttle' && /^(1|4)$/.test(v))options.cpuThrottle=Number(v);
     else if(key==='--profile'&&['on','off'].includes(v))options.profile=v==='on';
     else throw Error(`Unknown suite option: ${key}`);
   }
   if(!options.sites||!options.output||options.runs<1||options.runs>100||options.warmupMs>120_000||options.qualities.some(q=>!['high','low'].includes(q)))
-    throw Error('Usage: perf:chrome --suite --sites sites.json --output-root D:/... [--runs 3] [--qualities high,low] [--case review] [--profile on]');
+    throw Error('Usage: perf:chrome --suite --sites sites.json --output-root D:/... [--runs 3] [--qualities high,low] [--case review] [--cpu-throttle 1|4] [--profile on]');
   if(options.caseId==='load'&&options.profile)throw Error('Loading probes do not support the gameplay CPU profile option');
   const sites=JSON.parse(await readFile(options.sites,'utf8'));
   for (const site of sites) site.buildId = createHash('sha256').update(await readFile(join(site.site, 'index.html'))).digest('hex');
   await mkdir(options.output,{recursive:true});
   const stopRequested=async()=>{try{await stat(join(options.output,'STOP'));return true;}catch{return false;}};
   const launch={executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:false,
-    args:['--window-size=1940,1160','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--enable-precise-memory-info'],
+    args:['--force-device-scale-factor=1','--window-size=1940,1160','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--enable-precise-memory-info'],
     ignoreDefaultArgs:['--mute-audio','--autoplay-policy=no-user-gesture-required']};
   const all=[],environment={version:SUITE_VERSION,options,launch,cpu:cpus()[0]?.model,memoryBytes:totalmem(),sites};
   const storageStart=await statfs('C:/');
@@ -74,11 +75,11 @@ export async function runSuite(args) {
     let saved;
     try { saved=JSON.parse(await readFile(join(directory,'run.json'),'utf8')); } catch {}
     if(saved?.status==='complete') {
-      if(saved.buildId!==site.buildId||saved.caseId!==options.caseId||saved.profile!==!!options.profile||(saved.warmupMs??2000)!==options.warmupMs)
+      if(saved.buildId!==site.buildId||saved.caseId!==options.caseId||saved.profile!==!!options.profile||(saved.warmupMs??2000)!==options.warmupMs||(saved.cpuThrottle??1)!==options.cpuThrottle)
         throw Error(`Refusing incompatible resume: ${id}`);
       all.push(saved);console.log(`RESUME completed ${id}`);continue;
     }
-    const record={id,repetition,quality,label:site.label,commit:site.commit,buildId:site.buildId,caseId:options.caseId,warmupMs:options.warmupMs,profile:!!options.profile,status:'running'};
+    const record={id,repetition,quality,label:site.label,commit:site.commit,buildId:site.buildId,caseId:options.caseId,warmupMs:options.warmupMs,cpuThrottle:options.cpuThrottle,profile:!!options.profile,status:'running'};
     await writeFile(join(directory,'run.json'),JSON.stringify(record));
     all.push(record); console.log(`START ${id} ${options.caseId}`);
     const server=await serve(resolve(site.site),resolve(site.public));
@@ -104,6 +105,7 @@ export async function runSuite(args) {
       page.on('pageerror',e=>messages.push({type:'pageerror',text:e.stack}));
       page.on('console',m=>{if(['warning','error'].includes(m.type()) && messages.length<100)messages.push({type:m.type(),text:m.text(),location:m.location()});});
       cdp=await context.newCDPSession(page);
+      await cdp.send('Emulation.setCPUThrottlingRate',{rate:options.cpuThrottle});
       await page.goto(server.url,{waitUntil:'domcontentloaded',timeout:120_000});await page.bringToFront();
       const deadline=Date.now()+options.timeoutMs;
       const guard=async()=>{

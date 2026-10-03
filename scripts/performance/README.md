@@ -50,6 +50,35 @@ unregistered targets. GPU timer availability and failed repetitions remain visib
 `--profile on` adds a sampled CPU diagnostic pass; compare ordinary timings using
 unprofiled runs. No raw Chrome trace is retained.
 
+`--cpu-throttle 4` applies CDP `Emulation.setCPUThrottlingRate` before navigation;
+the default is `1`. Use Low for the simulated low-end run and a separate output
+directory. The rate is recorded in each run and checked on resume. It slows the
+page CPU, not the GPU, and is not a substitute for physical low-end hardware.
+Chrome is also forced to device scale 1, matching the lab's 1920 x 1080 / DPR 1
+contract and preventing fractional Windows scaling from reporting 1.00000003.
+
+For fixed-frame R3 parity and three isolated before/after repetitions:
+
+```powershell
+node scripts/performance/suite-parity.mjs sites.json D:/perf/parity-high high <reference-commit>
+node scripts/performance/suite-parity.mjs sites.json D:/perf/parity-low low <reference-commit>
+```
+
+The reference commit must precede the optimization. This uses the site in the
+first entry, freezes its world, compares both damage-fade implementations at
+several times/daylight/zoom settings, and writes PNG differences. The actual
+Phaser tween manager advances only those four images. Projectile histories are
+also checked for identical wire bytes and cross-decoding. Isolated timings use
+three alternating pairs after a discarded warmup; ordinary frame costs still
+come from the uninstrumented suite. Run this separately from all other workloads.
+Animation states and wire bytes must match exactly. Capture clocks and random
+inputs are frozen after the benchmarks. Screenshot acceptance allows at most
+3/255 channel levels on 0.1% of pixels, calibrated against unchanged-reference
+rerenders (Low can vary by 3/255 on about 0.06% of pixels). Four reference captures,
+raw differences and differences outside their per-pixel range are all exported.
+Report actual nonzero values, not just the pass status; visual parity does not
+mean bit-identical captures. Production rendering and GPU dithering remain enabled.
+
 `--case load` measures fresh-profile boot, ordinary map 1 entry and return to the
 lobby with the same High/Low repetitions. Reveal eligibility is polled at 100 ms;
 playable includes the regular countdown. Internal map-ready is n/a when the
