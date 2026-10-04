@@ -530,7 +530,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       }
       this.systems.teslaDome.setConstructionSourceProvider(null);
       this.systems.teslaDome.setManualControlProvider(null);
-      this.systems.teslaDome.setManualControlProvider(null);
       this.systems.teslaDome.setRockCallbacks(null, null);
       this.systems.teslaDome.setTrainCallbacks(null, null);
       this.systems.teslaDome.setTurretCallbacks(null, null);
@@ -541,7 +540,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems.teslaDome.setNovaHitHandler(null);
       this.systems.teslaDome.setLineOfSightChecker(null);
       this.systems.turret.setLineOfFireChecker(null);
-      this.systems.turret.setManualControlProvider(null);
       this.systems.turret.setManualControlProvider(null);
       this.systems.turret.setTurretProvider(null, null);
       this.systems.turret.setEnemyTargetProvider(null);

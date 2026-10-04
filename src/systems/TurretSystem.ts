@@ -127,7 +127,6 @@ export class TurretSystem {
       this.nextFireAt.clear();
       this.pendingBursts.clear();
       this.controlRevisions.clear();
-      this.controlRevisions.clear();
     }
   }
 
