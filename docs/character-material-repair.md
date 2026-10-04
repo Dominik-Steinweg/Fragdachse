@@ -1,5 +1,24 @@
 # Character material repair / R2 handoff
 
+## Shared pipeline guard and later inventory
+
+The production character exporter now disables Cycles persistent data and renders
+Albedo/Normal/AO pass-major. `scripts/asset-pipeline/render_integrity.py` rejects
+nonfinite values, invalid coverage, zero/invalid raw normals and opaque-black
+material corruption before encoding. Fully occluded AO and black emission remain
+valid. Antialiasing may shorten raw normals before normalization; encoded normals
+must satisfy the RGB8 unit-vector tolerance. Hash-bound disk caching does not reuse
+mutable Cycles state.
+
+`npm run assets:verify-published -- --sources D:/Fragdachse-render` checks both
+retained 21c/21e4 and current R2 publications against their own sources, including
+the repair source selected by receipt hash (never by newest folder). Historical
+21c material defects are still reported because its old files are retained; 21e4
+and R2 contain their valid replacements. The old 21c manifest is not rewritten.
+The all-enemy audit additionally found and rerendered one Zombie albedo defect on
+D:, without importing it. Counts, limits and evidence:
+[pipeline audit](../scripts/asset-pipeline/PIPELINE-AUDIT.md).
+
 21e4 uses the immutable 21c source Blend (SHA-256 `7bb22c9a13389ddf1381b145d82d73ed88e37ee5a913aad2834e7853641e1be1`). Beauty, mesh, camera, pivot and pose mapping are unchanged. Only material samples 9/12/17/22/27 are replaced. The separate material-only manifest has four pages; the old D-mask manifest is not republished or loaded for materials.
 
 ## Verified failure and fix
