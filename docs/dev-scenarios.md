@@ -106,6 +106,8 @@ Aufnahme ab. Nach Scene-Teardown wird die globale API entfernt und wartende Aufr
 | `spawn` | `kind`, optional `pinned`, `hp`, `gridX`, `gridY`; ohne Position am Ziel |
 | `build` | `id`, optional `gridX`, `gridY`; ohne Position am Ziel |
 | `step` | optional `frames` (1…600, ganzzahlig) |
+| `settle` | optional `frames` (1…600): ausstehende Render-/Worker-Arbeit mit Delta null verarbeiten; erst nach Abschluss vorheriger Schritte aufrufen |
+| `quality` | `level`: `high`, `medium` oder `low` |
 | `speed` | `value` (0.1…2) |
 | `camera` | optional `zoom` (0.25…8), `focusTarget` |
 | `panel` | `collapsed`: Boolean |

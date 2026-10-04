@@ -1,0 +1,62 @@
+{
+  "status": "MERGE-READY",
+  "verifiedAt": "2026-10-04T02:14:11.177Z",
+  "testedCodeCommit": "d8fc6859e865a63eb45e8348582518ca709bb20e",
+  "browser": "154.0.8037.97",
+  "platform": "win32",
+  "viewport": {
+    "width": 960,
+    "height": 540
+  },
+  "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+  "tolerance": {
+    "delta": 12,
+    "maxRatio": 0.001
+  },
+  "references": 20,
+  "referenceBytes": 12483188,
+  "runs": [
+    {
+      "run": 1,
+      "passed": 20,
+      "failures": 0,
+      "maxChangedRatio": 0.00039737654320987656
+    },
+    {
+      "run": 2,
+      "passed": 20,
+      "failures": 0,
+      "maxChangedRatio": 0.0001890432098765432
+    },
+    {
+      "run": 3,
+      "passed": 20,
+      "failures": 0,
+      "maxChangedRatio": 0.0003896604938271605
+    }
+  ],
+  "negativeControl": {
+    "passed": true,
+    "exitCode": 1,
+    "changedRatio": 0.038641975308641975,
+    "diffWritten": true
+  },
+  "checks": {
+    "command": "npm run check",
+    "environment": {
+      "VITEST_MAX_THREADS": "4",
+      "VITEST_MIN_THREADS": "1"
+    },
+    "coreTests": 4907,
+    "architectureTests": 54,
+    "builds": [
+      "game",
+      "map-editor"
+    ],
+    "comparatorTests": 4
+  },
+  "limitations": [
+    "Same Chrome/OS/GPU rendering environment; re-review references on renderer changes.",
+    "Twenty selected image states, not exhaustive gameplay or performance coverage."
+  ]
+}

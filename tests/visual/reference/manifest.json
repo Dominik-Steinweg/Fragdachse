@@ -1,0 +1,184 @@
+{
+  "scenes": {
+    "map1-day": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "38d6239a3fc78bd0b37514dea1058625c124386fadd6c8b58f1855cc396ce511"
+    },
+    "fog-rocks": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "ffab79ad045f0187dab6bcb224e0c095d0e787ff87307979d304f2ba0806bd6c"
+    },
+    "zoom-wide": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "cdb4219e5e631116d5e71841873664e3de41179f74b95f5f0f3e5106f3a75a79"
+    },
+    "zoom-close": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "d719a154c4a1a973f362790ae62fe8a8d086a1a990974216a9d2fee044581cde"
+    },
+    "player-material": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "562583ccaa10c494aa5313705ca99c59c6260da5d30cf79b22ad010d3f083f68"
+    },
+    "player-normal": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "f9cd4ecdac54afa32cc1cbedfab9ea33cd8bb1009fe646a820fced1ed6078e5b"
+    },
+    "enemies-day": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "dcfcc7e719a65b7e3d4ada609a537063a45a45ea0af7546f7dac0a9f988a9ba7"
+    },
+    "lobby-day": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "5e4f830f3db83a242d334955f3eaa4055e6c2daeb83ad17ba660adef04c27166"
+    },
+    "map1-dusk": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "e15a4a4b2c19b3476ad85fe0e02f1283a1779c3842f40d8dbb7b5270c8983e6a"
+    },
+    "map1-night": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "8d2de0e6425cf76124986ec1738d23616c15283c85b9c546bb6405916f0e76aa"
+    },
+    "enemies-night": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "750438dc1b35ee6b1d4da77a8406160ff0a9c78a639345b16d66522e1666c11a"
+    },
+    "map1-low": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "bdeed79271145a774cac84da6d3b2f3a95b204cf3985b23e00d34cebd2fab0e3"
+    },
+    "explosion-f01": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "9cfc0f2ccaba00784f4bb29bd3f44c8a99ba52fbddc390b31f0717b1853aaf6d"
+    },
+    "explosion-f12": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "07c27c4f1ca89e9cf38ce774dcaf58cbe3ec5de83e06aba8f24e9b48a1c6addc"
+    },
+    "explosion-f36": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "830e69573ed18e33f0bc91812ece910ee8142e5231e8dc26719b12e3b61927e6"
+    },
+    "armageddon-normal": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "5d2b5c510335ace85705d5cd32aeb68a92d76faaf65943a1aa58bc6ebbb25c52"
+    },
+    "armageddon-void": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "60f5336082475256e82040d2d65478e4ad3520612f1f5e2333f5d146fab255c2"
+    },
+    "armageddon-impact": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "3b125204c2698b7d9c56dc9bd75c1caf10144e87bb51b02bcfbba7a857fe33b3"
+    },
+    "train-intact": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "7ab05b095368657636b64a7dd9c5118ef38c914168b682c023b8e32f5cd28920"
+    },
+    "train-destroyed-f12": {
+      "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+      "browser": "154.0.8037.97",
+      "viewport": {
+        "width": 960,
+        "height": 540
+      },
+      "sha256": "fce07225db010ba66e665012f47cf09496349bf972a6e9edf0e918857c8372a0"
+    }
+  }
+}

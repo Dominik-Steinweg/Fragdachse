@@ -31,6 +31,7 @@ import { COOP_DEFENSE_UPGRADE_DEFINITIONS, isCoopDefenseUpgradeAvailableForClass
 import { buildScenarioProfile, defaultScenario, parseScenario, scenarioLoadout, encodeScenario, decodeScenario } from '../src/dev/scenario/config';
 import { createMemoryStorage } from '../src/dev/scenario/memoryStorage';
 import { ScenarioClock } from '../src/dev/scenario/clock';
+import { visualTest } from '../src/dev/scenario/visualTest';
 
 describe('Dev scenario contract', () => {
   it('loads old recipes with visual-review defaults and validates explicit overrides', () => {
@@ -96,6 +97,41 @@ describe('Dev scenario contract', () => {
       expect(deltas[2]).toBe(4);
     } finally { clock.destroy(); }
     expect(Date.now).toBe(realNow); expect(loop.callback).toBe(original);
+  });
+  it('settles asynchronous rendering without aging effects or consuming queued simulation steps', () => {
+    const deltas: number[] = [];
+    const loop = { callback: (_time: number, delta: number) => { deltas.push(delta); } };
+    const clock = new ScenarioClock(loop);
+    try {
+      clock.settle(2);
+      const before = Date.now();
+      expect(() => clock.settle(1)).toThrow(/pending/);
+      loop.callback(1000, 80); loop.callback(1100, 100); loop.callback(1200, 100);
+      expect(deltas).toEqual([0, 0]); expect(clock.pendingSteps).toBe(0);
+      expect(Date.now()).toBe(before);
+      clock.step(1); loop.callback(1300, 100);
+      expect(deltas[2]).toBe(1000 / 60); expect(clock.now).toBe(1000 / 60);
+    } finally { clock.destroy(); }
+  });
+  it('gives effect frames the same random sequence regardless of loading duration', () => {
+    const previous = { ...visualTest };
+    try {
+      visualTest.enabled = true;
+      for (const loadingFrames of [2, 37]) {
+        const seeds: number[] = [];
+        visualTest.reseed = frame => { seeds.push(frame); };
+        const loop = { callback(_time: number, _delta: number) {} };
+        const clock = new ScenarioClock(loop);
+        try {
+          clock.holdLoadingTime = () => false;
+          for (let i = 0; i < loadingFrames; i++) loop.callback(1000, 20);
+          clock.preparing = false;
+          clock.step(2); loop.callback(2000, 99); loop.callback(2100, 99);
+          clock.settle(2); loop.callback(2200, 99); loop.callback(2300, 99);
+          expect(seeds.slice(-4)).toEqual([1, 2, 2, 2]);
+        } finally { clock.destroy(); }
+      }
+    } finally { Object.assign(visualTest, previous); }
   });
 });
 
