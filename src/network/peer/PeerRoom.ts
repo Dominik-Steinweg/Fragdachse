@@ -128,6 +128,7 @@ export class PeerRoom {
   private readonly resumeSlots = new Map<string, ResumeSlot>();
   private readonly linkResumeTokens = new Map<PeerLinkLike, string>();
   private readonly lastHeartbeatAt = new Map<PeerLinkLike, number>();
+  private readonly hostHelloTimers = new Map<PeerLinkLike, ReturnType<typeof setTimeout>>();
 
   private readonly joinCallbacks: Array<(handle: PeerPlayerHandle) => void> = [];
   private readonly playerQuitCallbacks: Array<(playerId: string) => void> = [];
@@ -563,6 +564,7 @@ export class PeerRoom {
       return;
     }
     if (link.playerId.length > 0) return;
+    this.clearHostHelloTimeout(link);
 
     const existing = this.resumeSlots.get(resumeToken);
     if (existing) {
@@ -758,7 +760,18 @@ export class PeerRoom {
   }
 
   private handleLinkReady(link: PeerLinkLike): void {
-    if (this.transport.isHost) return;
+    if (this.destroyed || !this.links.has(link)) return;
+    if (this.transport.isHost) {
+      // Heartbeats prove liveness, not admission. Start only once both channels are ready;
+      // an early hello may already have admitted the peer while open() flushed its inbox.
+      if (!link.playerId && !this.hostHelloTimers.has(link)) {
+        this.hostHelloTimers.set(link, setTimeout(() => {
+          this.hostHelloTimers.delete(link);
+          if (!this.destroyed && this.links.has(link) && !link.playerId) link.close();
+        }, PEER_HANDSHAKE_TIMEOUT_MS));
+      }
+      return;
+    }
     if (this.kicked) {
       link.close();
       return;
@@ -773,6 +786,7 @@ export class PeerRoom {
   }
 
   private handleLinkClosed(link: PeerLinkLike): void {
+    this.clearHostHelloTimeout(link);
     if (!this.links.delete(link)) return;
     this.fastBuffers.delete(link);
     this.fastSendSequences.delete(link);
@@ -927,6 +941,12 @@ export class PeerRoom {
     }, PEER_HANDSHAKE_TIMEOUT_MS);
   }
 
+  private clearHostHelloTimeout(link: PeerLinkLike): void {
+    const timer = this.hostHelloTimers.get(link);
+    if (timer !== undefined) clearTimeout(timer);
+    this.hostHelloTimers.delete(link);
+  }
+
   private resolveHandshake(): void {
     const pending = this.pendingHandshake;
     if (!pending) return;
@@ -1039,6 +1059,8 @@ export class PeerRoom {
     if (this.leaveDestroyTimer) globalThis.clearTimeout(this.leaveDestroyTimer);
     this.leaveDestroyTimer = null;
     this.clearHeartbeatTimer();
+    for (const timer of this.hostHelloTimers.values()) clearTimeout(timer);
+    this.hostHelloTimers.clear();
     for (const slot of this.resumeSlots.values()) {
       if (slot.expiryTimer) clearTimeout(slot.expiryTimer);
     }

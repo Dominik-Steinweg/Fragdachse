@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_PLAYERS,
+  PEER_HANDSHAKE_TIMEOUT_MS,
   PEER_HEARTBEAT_INTERVAL_MS,
   PEER_HEARTBEAT_TIMEOUT_MS,
   PEER_RESUME_GRACE_MS,
@@ -22,7 +23,69 @@ import {
   startRoom,
 } from './fakePeerNetwork';
 
+function connectUnadmittedClient(network: FakeNetwork) {
+  const client = network.createClientTransport();
+  client.setHandlers({
+    onLinkRegistered: () => {}, onLinkReady: () => {}, onLinkClosed: () => {}, onFatal: () => {},
+    onMessage: (link, message) => { if (message.t === 'hb') link.send({ t: 'hba' }, 'rel'); },
+  });
+  network.connectClient(client);
+  return client.links[0];
+}
+
 describe('PeerRoom handshake and roster', () => {
+  it('expires a ready but unadmitted client even when it keeps answering heartbeats', async () => {
+    vi.useFakeTimers();
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const client = connectUnadmittedClient(network);
+    try {
+      await vi.advanceTimersByTimeAsync(PEER_HANDSHAKE_TIMEOUT_MS - 1);
+      expect(client.closed).toBe(false);
+      // Repeated ready notifications must not move the original admission deadline.
+      host.transport.handlers!.onLinkReady(host.transport.links[0]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(client.closed).toBe(true);
+      expect(host.room.getPlayerIds()).toEqual(['p0']);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { host.room.destroy(); vi.useRealTimers(); }
+  });
+
+  it('starts the host hello deadline at transport readiness and clears it after a valid hello', async () => {
+    vi.useFakeTimers();
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const onReady = host.transport.handlers!.onLinkReady;
+    host.transport.handlers!.onLinkReady = () => {};
+    const client = connectUnadmittedClient(network);
+    try {
+      await vi.advanceTimersByTimeAsync(PEER_HANDSHAKE_TIMEOUT_MS + 1);
+      expect(client.closed).toBe(false);
+      onReady(host.transport.links[0]);
+      await vi.advanceTimersByTimeAsync(PEER_HANDSHAKE_TIMEOUT_MS - 1);
+      client.send({ t: 'hello', v: PEER_PROTOCOL_VERSION, k: 'slow-transport-valid-token' }, 'rel');
+      expect(host.room.getPlayerIds()).toEqual(['p0', 'p1']);
+      await vi.advanceTimersByTimeAsync(PEER_HANDSHAKE_TIMEOUT_MS * 2);
+      expect(client.closed).toBe(false);
+      expect(vi.getTimerCount()).toBe(1); // Only the existing room heartbeat remains.
+    } finally { host.room.destroy(); vi.useRealTimers(); }
+  });
+
+  it.each(['close', 'destroy'] as const)('clears a pending host hello deadline on %s', async cause => {
+    vi.useFakeTimers();
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const client = connectUnadmittedClient(network);
+    const close = vi.spyOn(host.transport.links[0], 'close');
+    try {
+      if (cause === 'close') client.close();
+      else host.room.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(PEER_HANDSHAKE_TIMEOUT_MS * 2);
+      expect(close).not.toHaveBeenCalled();
+    } finally { host.room.destroy(); vi.useRealTimers(); }
+  });
+
   it('rejects boot when an open link never receives welcome', async () => {
     vi.useFakeTimers();
     try {
