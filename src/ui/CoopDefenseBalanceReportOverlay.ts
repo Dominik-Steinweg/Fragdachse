@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { BUTTON_CURSOR } from './gameCursor';
 import { COLORS, toCssColor } from '../config';
 import { getOverlayRoot } from './fullscreen';
@@ -54,35 +55,35 @@ export class CoopDefenseBalanceReportOverlay {
       buildAllCoopDefenseBalanceMapSnapshots(),
       this.tracker.getRounds(),
     );
-    const panel = this.createPanel('COOP DEFENSE · BALANCE LAB · AUSWERTUNG', false);
+    const panel = this.createPanel(t('ui.balanceReport.title'), false);
     const controls = document.createElement('div');
     Object.assign(controls.style, { display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' });
     controls.append(
-      makeButton('Summary-CSV', () => this.download('fragdachse-balancing-summary', toBalanceSummaryCsv(report))),
-      makeButton('Runden-CSV', () => this.download('fragdachse-balancing-rounds', toBalanceRoundsCsv(report))),
-      makeButton('Veraltete Messungen löschen', () => {
+      makeButton(t('ui.balanceReport.summaryCsv'), () => this.download('fragdachse-balancing-summary', toBalanceSummaryCsv(report))),
+      makeButton(t('ui.balanceReport.roundsCsv'), () => this.download('fragdachse-balancing-rounds', toBalanceRoundsCsv(report))),
+      makeButton(t('ui.balanceReport.deleteStale'), () => {
         const staleIds = report.rounds
           .filter((round) => round.status === 'STALE')
           .map((round) => round.record.roundEndedAt);
         if (staleIds.length === 0) return;
-        if (window.confirm(`${staleIds.length} veraltete Messungen löschen?`)) {
+        if (window.confirm(t('ui.balanceReport.confirmDeleteStale', { count: staleIds.length }))) {
           deleteStoredCoopDefenseBalanceStaleRounds(staleIds);
         }
         this.show();
       }),
-      makeButton('Alle Balance-Messungen löschen', () => {
-        if (!window.confirm('Alle lokalen Balance-Messungen unwiderruflich löschen?')) return;
+      makeButton(t('ui.balanceReport.deleteAll'), () => {
+        if (!window.confirm(t('ui.balanceReport.confirmDeleteAll'))) return;
         deleteAllStoredCoopDefenseBalanceRounds();
         this.show();
       }),
-      makeButton('Schließen', () => this.hide()),
+      makeButton(t('ui.common.close'), () => this.hide()),
     );
     // The report is deliberately textual: it keeps theory and playtest values scannable even
     // with many maps and avoids another bespoke Phaser/DOM table abstraction.
     const output = document.createElement('pre');
     Object.assign(output.style, { margin: '0', whiteSpace: 'pre-wrap', font: 'inherit', lineHeight: '1.35' });
     const lines = [
-      `Aufzeichnung: ${getStoredCoopDefenseBalanceLab().recordingEnabled ? 'AN (nur 1P)' : 'AUS'} · Aktuell: ${report.currentRoundCount} · Veraltet: ${report.staleRoundCount}`,
+      t('ui.balanceReport.recording', { status: getStoredCoopDefenseBalanceLab().recordingEnabled ? t('ui.balanceReport.recordingOn') : t('ui.balanceReport.recordingOff'), current: report.currentRoundCount, stale: report.staleRoundCount }),
       '',
     ];
     for (const map of report.maps) {
@@ -90,10 +91,10 @@ export class CoopDefenseBalanceReportOverlay {
       const metrics = map.metrics;
       lines.push(
         `${snapshot.mapId} · ${snapshot.displayName} · ${snapshot.objective.toUpperCase()} · ${snapshot.modelQuality}`,
-        `  Theorie: ${snapshot.balanceReferenceDurationSec}s | finite ${snapshot.finiteEnemyCount} Gegner / ${snapshot.finiteEnemyHp} HP / ${snapshot.finiteEnemyXp} XP | persistent REFERENZ ${snapshot.persistentReferenceEnemyCount} / ${snapshot.persistentReferenceHp} HP / ${snapshot.persistentReferenceXp} XP | ${snapshot.persistentReferenceHpPerMinute.toFixed(1)} HP/min`,
-        `  Basen: eigen ${snapshot.friendlyMainBaseHp} HP | Siegziel ${snapshot.hostileVictoryTargetHp || '—'} HP | Türme ${snapshot.turretCount} | Power-Ups ${snapshot.powerUpCount + snapshot.powerUpPedestalCount} | Tags ${snapshot.mechanicTags.join(', ') || '—'}`,
-        `  Real: ${metrics.currentRounds} aktuell / ${metrics.ratedRounds} bewertet / ${metrics.staleRounds} veraltet | Siegquote ${formatPercent(metrics.victoryRate)} | Dauer Ø ${formatDuration(metrics.averageDurationMs)} / Median ${formatDuration(metrics.medianDurationMs)} | XP Ø ${metrics.averageActualXp?.toFixed(1) ?? '—'} | Schwierigkeit Ø ${metrics.averageDifficulty?.toFixed(1) ?? '—'} | Pacing Ø ${metrics.averagePacing?.toFixed(1) ?? '—'} | Basisreserve Ø ${formatPercent(metrics.averageOwnBaseReserve)}`,
-        `  Auffälligkeiten: ${map.anomalies.join(' · ') || 'keine'}`,
+        t('ui.balanceReport.theory', { duration: snapshot.balanceReferenceDurationSec, enemies: snapshot.finiteEnemyCount, hp: snapshot.finiteEnemyHp, xp: snapshot.finiteEnemyXp, referenceEnemies: snapshot.persistentReferenceEnemyCount, referenceHp: snapshot.persistentReferenceHp, referenceXp: snapshot.persistentReferenceXp, hpPerMinute: snapshot.persistentReferenceHpPerMinute.toFixed(1) }),
+        t('ui.balanceReport.bases', { hp: snapshot.friendlyMainBaseHp, targetHp: snapshot.hostileVictoryTargetHp || '—', turrets: snapshot.turretCount, powerups: snapshot.powerUpCount + snapshot.powerUpPedestalCount, tags: snapshot.mechanicTags.join(', ') || '—' }),
+        t('ui.balanceReport.actual', { current: metrics.currentRounds, rated: metrics.ratedRounds, stale: metrics.staleRounds, winRate: formatPercent(metrics.victoryRate), averageDuration: formatDuration(metrics.averageDurationMs), medianDuration: formatDuration(metrics.medianDurationMs), xp: metrics.averageActualXp?.toFixed(1) ?? '—', difficulty: metrics.averageDifficulty?.toFixed(1) ?? '—', pacing: metrics.averagePacing?.toFixed(1) ?? '—', reserve: formatPercent(metrics.averageOwnBaseReserve) }),
+        t('ui.balanceReport.anomalies', { anomalies: map.anomalies.join(' · ') || t('ui.balanceReport.none') }),
         '',
       );
     }
@@ -107,21 +108,21 @@ export class CoopDefenseBalanceReportOverlay {
     if (typeof document === 'undefined') return;
     const round = this.tracker.getRound(roundEndedAt);
     if (!round) return;
-    const panel = this.createPanel('BALANCE-FEEDBACK', true);
+    const panel = this.createPanel(t('ui.balanceReport.feedback'), true);
     const description = document.createElement('div');
-    description.textContent = 'Nur fuer diesen lokalen 1P-Testlauf. Das technische Ergebnis bleibt auch ohne Feedback gespeichert.';
+    description.textContent = t('ui.balanceReport.feedbackHint');
     Object.assign(description.style, { color: toCssColor(COLORS.GREY_3), marginBottom: '12px', lineHeight: '1.4' });
 
-    const difficulty = this.createRating('Schwierigkeit', [
-      'viel zu leicht', 'eher leicht', 'passend', 'eher schwer', 'viel zu schwer',
+    const difficulty = this.createRating(t('ui.balanceReport.difficulty'), [
+      t('ui.balanceReport.tooEasy'), t('ui.balanceReport.easy'), t('ui.balanceReport.justRight'), t('ui.balanceReport.hard'), t('ui.balanceReport.tooHard'),
     ], round.feedback?.difficulty ?? 3);
-    const pacing = this.createRating('Pacing', [
-      'zu ruhig', 'eher ruhig', 'passend', 'hektisch', 'Dauerstress',
+    const pacing = this.createRating(t('ui.balanceReport.pacing'), [
+      t('ui.balanceReport.tooCalm'), t('ui.balanceReport.calm'), t('ui.balanceReport.justRight'), t('ui.balanceReport.hectic'), t('ui.balanceReport.stress'),
     ], round.feedback?.pacing ?? 3);
     const comment = document.createElement('textarea');
     comment.value = round.feedback?.comment ?? '';
     comment.maxLength = 500;
-    comment.placeholder = 'Optionaler Kommentar';
+    comment.placeholder = t('ui.balanceReport.comment');
     Object.assign(comment.style, {
       width: '100%', minHeight: '82px', boxSizing: 'border-box', resize: 'vertical',
       padding: '7px', margin: '6px 0 12px', background: toCssColor(COLORS.GREY_9),
@@ -130,8 +131,8 @@ export class CoopDefenseBalanceReportOverlay {
     const buttons = document.createElement('div');
     Object.assign(buttons.style, { display: 'flex', justifyContent: 'flex-end', gap: '7px' });
     buttons.append(
-      makeButton('Abbrechen', () => this.hide()),
-      makeButton('Feedback speichern', () => {
+      makeButton(t('ui.common.cancel'), () => this.hide()),
+      makeButton(t('ui.balanceReport.saveFeedback'), () => {
         this.tracker.updateFeedback(roundEndedAt, {
           difficulty: Number(difficulty.input.value) as BalanceRoundFeedback['difficulty'],
           pacing: Number(pacing.input.value) as BalanceRoundFeedback['pacing'],

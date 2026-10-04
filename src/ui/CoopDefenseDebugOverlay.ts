@@ -97,7 +97,7 @@ export class CoopDefenseDebugOverlay {
     });
 
     const title = document.createElement('div');
-    title.innerText = 'COOP DEFENSE DEBUG';
+    title.innerText = t('ui.coopDebug.title');
     Object.assign(title.style, {
       fontSize: '20px',
       fontWeight: 'bold',
@@ -107,7 +107,7 @@ export class CoopDefenseDebugOverlay {
     });
 
     const subtitle = document.createElement('div');
-    subtitle.innerText = 'Nur lokal. Ändert ausschließlich den gespeicherten Fortschritt dieser Browser-Instanz.';
+    subtitle.innerText = t('ui.coopDebug.subtitle');
     Object.assign(subtitle.style, {
       fontSize: '12px',
       color: toCssColor(COLORS.GREY_4),
@@ -212,7 +212,7 @@ export class CoopDefenseDebugOverlay {
       return label;
     };
 
-    const campaignSection = createSection('KAMPAGNE');
+    const campaignSection = createSection(t('ui.coopDebug.campaign'));
     const valuesGrid = document.createElement('div');
     Object.assign(valuesGrid.style, {
       display: 'grid',
@@ -223,13 +223,13 @@ export class CoopDefenseDebugOverlay {
 
     const xpInput = createNumberInput(currentValues.totalXp);
     const xpField = document.createElement('div');
-    xpField.append(createInputLabel('ERFAHRUNG (XP)'), xpInput);
+    xpField.append(createInputLabel(t('ui.coopDebug.xp')), xpInput);
     const bossPointsInput = createNumberInput(currentValues.bossPoints);
     const bossPointsField = document.createElement('div');
-    bossPointsField.append(createInputLabel('BOSSPUNKTE'), bossPointsInput);
+    bossPointsField.append(createInputLabel(t('ui.coopDebug.bossPoints')), bossPointsInput);
     valuesGrid.append(xpField, bossPointsField);
 
-    const unlockLabel = createInputLabel('HÖCHSTE FREIGESCHALTETE MAP');
+    const unlockLabel = createInputLabel(t('ui.coopDebug.highestMap'));
     const unlockSelect = document.createElement('select');
     Object.assign(unlockSelect.style, {
       width: '100%',
@@ -249,7 +249,7 @@ export class CoopDefenseDebugOverlay {
       if (mapConfig.mapId === COOP_DEFENSE_TEST_MAP_ID) continue;
       const option = document.createElement('option');
       option.value = mapConfig.mapId;
-      option.innerText = `Map ${mapConfig.mapId}`;
+      option.innerText = t('ui.coopDebug.map', { id: mapConfig.mapId });
       unlockSelect.appendChild(option);
     }
     unlockSelect.value = currentValues.highestUnlockedMapId;
@@ -259,8 +259,8 @@ export class CoopDefenseDebugOverlay {
     ));
     const currentClasses = currentClassNames.length > 0
       ? currentClassNames.join(', ')
-      : '– keine Klassen freigeschaltet';
-    const currentClassesStatus = createStatusLine('Klassen aktuell', currentClasses);
+      : t('ui.coopDebug.noClasses');
+    const currentClassesStatus = createStatusLine(t('ui.coopDebug.currentClasses'), currentClasses);
 
     const preview = document.createElement('div');
     Object.assign(preview.style, {
@@ -275,26 +275,26 @@ export class CoopDefenseDebugOverlay {
     });
     campaignSection.append(valuesGrid, unlockLabel, unlockSelect, currentClassesStatus, preview);
     const unlockTestMapButton = createButton(
-      isCoopDefenseTestMapUnlocked() ? '[MAP 0 FREIGESCHALTET]' : '[MAP 0 FREISCHALTEN]',
+      isCoopDefenseTestMapUnlocked() ? t('ui.coopDebug.testMapUnlocked') : t('ui.coopDebug.unlockTestMap'),
       'positive',
     );
     unlockTestMapButton.style.marginTop = '7px';
     unlockTestMapButton.disabled = isCoopDefenseTestMapUnlocked();
-    unlockTestMapButton.title = 'Testmap bis zum Neuladen des Spiels in der Map-Auswahl freischalten';
+    unlockTestMapButton.title = t('ui.coopDebug.testMapHint');
     unlockTestMapButton.onclick = () => {
       unlockCoopDefenseTestMap();
       this.refresh();
     };
     campaignSection.appendChild(unlockTestMapButton);
 
-    const itemSection = createSection('ITEM-SYSTEM');
+    const itemSection = createSection(t('ui.coopDebug.items'));
     const itemStatus = createStatusLine(
-      'Items',
-      currentValues.itemsUnlocked ? '✓ freigeschaltet' : '– gesperrt',
+      t('ui.coopDebug.itemLabel'),
+      currentValues.itemsUnlocked ? t('ui.coopDebug.unlocked') : t('ui.coopDebug.locked'),
     );
     itemSection.appendChild(itemStatus);
     if (!currentValues.itemsUnlocked) {
-      const unlockItemsButton = createButton('[ITEM-SYSTEM FREISCHALTEN]', 'positive');
+      const unlockItemsButton = createButton(t('ui.coopDebug.unlockItems'), 'positive');
       unlockItemsButton.style.marginTop = '7px';
       unlockItemsButton.onclick = () => {
         this.onUnlockItemSystem();
@@ -303,13 +303,13 @@ export class CoopDefenseDebugOverlay {
       itemSection.appendChild(unlockItemsButton);
     }
 
-    const persistentBaseSection = createSection('PERSISTENTE BASIS');
+    const persistentBaseSection = createSection(t('ui.coopDebug.persistentBase'));
     persistentBaseSection.appendChild(createStatusLine(
-      'Basis',
-      currentValues.persistentBaseUnlocked ? '✓ Basis freigeschaltet' : '– gesperrt',
+      t('ui.base.title'),
+      currentValues.persistentBaseUnlocked ? t('ui.coopDebug.baseUnlocked') : t('ui.coopDebug.locked'),
     ));
     if (!currentValues.persistentBaseUnlocked) {
-      const unlockBaseButton = createButton('[BASIS FREISCHALTEN]', 'positive');
+      const unlockBaseButton = createButton(t('ui.coopDebug.unlockBase'), 'positive');
       unlockBaseButton.style.marginTop = '7px';
       unlockBaseButton.onclick = () => {
         this.onUnlockPersistentBase();
@@ -320,12 +320,12 @@ export class CoopDefenseDebugOverlay {
 
     const area = resolvePersistentBaseBuildAreaForStage(currentValues.persistentBaseAreaStage);
     const areaDescription = area.kind === 'square'
-      ? `Stage ${currentValues.persistentBaseAreaStage} · kleiner ${area.sizeCells}×${area.sizeCells}-Baubereich`
-      : `Stage ${currentValues.persistentBaseAreaStage} · erweiterter Radius-${area.radiusCells}-Baubereich`;
-    persistentBaseSection.appendChild(createStatusLine('Baubereich', areaDescription));
+      ? t('ui.coopDebug.squareArea', { stage: currentValues.persistentBaseAreaStage, width: area.sizeCells, height: area.sizeCells })
+      : t('ui.coopDebug.radialArea', { stage: currentValues.persistentBaseAreaStage, radius: area.radiusCells });
+    persistentBaseSection.appendChild(createStatusLine(t('ui.coopDebug.buildArea'), areaDescription));
     if (currentValues.persistentBaseAreaStage < 2) {
       const nextStage = (currentValues.persistentBaseAreaStage + 1) as PersistentBaseAreaStage;
-      const unlockAreaButton = createButton(`[BAUBEREICH STUFE ${nextStage} FREISCHALTEN]`, 'positive');
+      const unlockAreaButton = createButton(t('ui.coopDebug.unlockArea', { stage: nextStage }), 'positive');
       unlockAreaButton.style.marginTop = '7px';
       unlockAreaButton.onclick = () => {
         this.onUnlockPersistentBaseAreaStage(nextStage);
@@ -334,7 +334,7 @@ export class CoopDefenseDebugOverlay {
       persistentBaseSection.appendChild(unlockAreaButton);
     } else {
       const stageDone = document.createElement('div');
-      stageDone.innerText = `✓ Baubereich Stufe ${currentValues.persistentBaseAreaStage}`;
+      stageDone.innerText = t('ui.coopDebug.areaUnlocked', { stage: currentValues.persistentBaseAreaStage });
       Object.assign(stageDone.style, {
         color: toCssColor(COLORS.GREEN_2),
         fontSize: '12px',
@@ -343,7 +343,7 @@ export class CoopDefenseDebugOverlay {
       persistentBaseSection.appendChild(stageDone);
     }
 
-    const rewardsSection = createSection('BASIS-REWARDS');
+    const rewardsSection = createSection(t('ui.coopDebug.rewards'));
     const rewardList = document.createElement('div');
     Object.assign(rewardList.style, {
       display: 'grid',
@@ -372,7 +372,7 @@ export class CoopDefenseDebugOverlay {
         granted.style.color = toCssColor(COLORS.GREEN_2);
         row.appendChild(granted);
       } else {
-        const grantButton = createButton('[VERGEBEN]', 'positive');
+        const grantButton = createButton(t('ui.coopDebug.grant'), 'positive');
         grantButton.onclick = () => {
           this.onGrantPersistentBaseReward(definition.id);
           this.refresh();
@@ -388,7 +388,7 @@ export class CoopDefenseDebugOverlay {
       currentValues.persistentBaseRewardUnlocks.includes(rewardId)
     ));
     const allRewardsButton = createButton(
-      allRewardsGranted ? '✓ ALLE REWARDS VERGEBEN' : '[ALLE REWARDS VERGEBEN]',
+      allRewardsGranted ? t('ui.coopDebug.allGranted') : t('ui.coopDebug.grantAll'),
       'positive',
     );
     allRewardsButton.style.marginTop = '9px';
@@ -404,9 +404,9 @@ export class CoopDefenseDebugOverlay {
     }
     rewardsSection.appendChild(allRewardsButton);
 
-    const toolsSection = createSection('TOOLS');
+    const toolsSection = createSection(t('ui.coopDebug.tools'));
     const balanceTitle = document.createElement('div');
-    balanceTitle.innerText = 'BALANCE LAB · 1P';
+    balanceTitle.innerText = t('ui.coopDebug.balance');
     Object.assign(balanceTitle.style, {
       fontSize: '12px',
       fontWeight: 'bold',
@@ -440,9 +440,9 @@ export class CoopDefenseDebugOverlay {
       accentColor: toCssColor(COLORS.GOLD_1),
     });
     const balanceLabel = document.createElement('span');
-    balanceLabel.innerText = 'Runden aufzeichnen';
+    balanceLabel.innerText = t('ui.coopDebug.recordRounds');
     balanceToggle.append(balanceCheckbox, balanceLabel);
-    const balanceReportButton = createButton('Auswertung öffnen');
+    const balanceReportButton = createButton(t('ui.coopDebug.openReport'));
     balanceReportButton.onclick = () => this.onOpenBalanceReport();
     balanceControls.append(balanceToggle, balanceReportButton);
     toolsSection.append(balanceTitle, balanceControls);
@@ -457,12 +457,12 @@ export class CoopDefenseDebugOverlay {
       borderTop: `1px solid ${toCssColor(COLORS.GREY_6)}`,
     });
 
-    const confirmBtn = createButton('WERTE SETZEN', 'positive');
+    const confirmBtn = createButton(t('ui.coopDebug.apply'), 'positive');
     confirmBtn.style.padding = '8px 14px';
-    const cancelBtn = createButton('SCHLIESSEN', 'danger');
+    const cancelBtn = createButton(t('ui.coopDebug.close'), 'danger');
     cancelBtn.style.padding = '8px 14px';
 
-    const resetBtn = createButton('GESAMTEN COOP-FORTSCHRITT ZURÜCKSETZEN', 'danger');
+    const resetBtn = createButton(t('ui.coopDebug.reset'), 'danger');
     Object.assign(resetBtn.style, {
       width: '100%',
       marginTop: '12px',
@@ -484,12 +484,12 @@ export class CoopDefenseDebugOverlay {
         `${effectiveClassIds.includes(classId) ? '✓' : '–'} ${getClassName(classId, getLocale())}`
       ));
       preview.innerText = [
-        `Level ${progress.level} · ${progress.xpNeededForNextLevel} XP bis Level ${progress.level + 1}`,
-        `★ ${bossPoints} Bosspunkte · höchste Map: ${unlockSelect.value}`,
-        'Klassen:',
+        t('ui.coopDebug.levelPreview', { level: progress.level, xp: progress.xpNeededForNextLevel, nextLevel: progress.level + 1 }),
+        t('ui.coopDebug.mapPreview', { points: bossPoints, map: unlockSelect.value }),
+        t('ui.coopDebug.classes'),
         ...classLines,
-        `Items: ${currentValues.itemsUnlocked ? '✓ freigeschaltet' : '– gesperrt'}`,
-        `Basis: ${currentValues.persistentBaseUnlocked ? '✓ freigeschaltet' : '– gesperrt'} · Stage ${currentValues.persistentBaseAreaStage}`,
+        t('ui.coopDebug.itemsPreview', { status: currentValues.itemsUnlocked ? t('ui.coopDebug.unlocked') : t('ui.coopDebug.locked') }),
+        t('ui.coopDebug.basePreview', { status: currentValues.persistentBaseUnlocked ? t('ui.coopDebug.unlocked') : t('ui.coopDebug.locked'), stage: currentValues.persistentBaseAreaStage }),
       ].join('\n');
     };
 
@@ -526,7 +526,7 @@ export class CoopDefenseDebugOverlay {
     cancelBtn.onclick = closePopup;
     resetBtn.onclick = () => {
       if (!window.confirm(
-        'Wirklich den gesamten lokalen Coop-Fortschritt inklusive XP, Map-/Klassenfortschritt, Items, persistenter Basis und Basis-Rewards zurücksetzen?',
+        t('ui.coopDebug.confirmReset'),
       )) return;
       this.onResetCharacter();
       closePopup();

@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { BUTTON_CURSOR } from './gameCursor';
 import { COLORS, toCssColor } from '../config';
 import { getOverlayRoot } from './fullscreen';
@@ -48,17 +49,17 @@ function formatDuration(durationMs: number): string {
 }
 
 function buildSummaryLines(summary: ArenaRuntimeWindowSummary | null): string[] {
-  if (!summary) return ['Noch kein Companion-Sample vorhanden.'];
+  if (!summary) return [t('ui.performance.noSample')];
   const timings = summary.timings;
   const counts = summary.counts;
   return [
     `${summary.role.toUpperCase()} · ${summary.phase.toUpperCase()} · ${summary.quality.toUpperCase()} · ${summary.mode}`
       + (summary.mapId ? ` · ${summary.mapId}` : ''),
-    `FPS aktuell ${summary.currentFps.toFixed(1)} · Ø FPS ${summary.fps.toFixed(1)}`
+    t('ui.performance.fps', { current: summary.currentFps.toFixed(1), average: summary.fps.toFixed(1) })
       + ` · Frame-p95 ${ms(timings.rawDeltaMs.p95)} · p99 ${ms(timings.rawDeltaMs.p99)}`,
-    `Slow Frames >16,7 ms ${summary.over16msPercent.toFixed(1)}% · Samples ${summary.sampleCount}`,
-    `Host/Client CPU ${ms(timings.roleStepMs.avg)} · Gegner ${count(counts.enemyCount.avg)} · Projektile ${count(counts.projectileCount.avg)}`,
-    'Chrome Trace liefert Call Stacks, Renderer/GPU, GC und Scheduling; Companion sammelt semantische Korrelationen.',
+    t('ui.performance.slowFrames', { percent: summary.over16msPercent.toFixed(1), samples: summary.sampleCount }),
+    t('ui.performance.cpu', { cpu: ms(timings.roleStepMs.avg), enemies: count(counts.enemyCount.avg), projectiles: count(counts.projectileCount.avg) }),
+    t('ui.performance.traceHint'),
   ];
 }
 
@@ -120,7 +121,7 @@ export class PerformanceDiagnosticsOverlay {
     });
 
     const title = document.createElement('div');
-    title.textContent = 'PERFORMANCE · T zum Schließen';
+    title.textContent = t('ui.performance.title');
     title.style.fontWeight = 'bold';
     title.style.marginBottom = '8px';
 
@@ -128,18 +129,17 @@ export class PerformanceDiagnosticsOverlay {
     controls.style.display = 'flex';
     controls.style.gap = '8px';
     controls.style.marginBottom = '8px';
-    this.startButton = this.createButton('Trace Assist starten', () => this.profiler.startRecording(this.getEnvironment()));
-    this.stopButton = this.createButton('Messung stoppen', () => this.stopRecording());
-    this.exportButton = this.createButton('JSON exportieren', () => this.exportJson());
+    this.startButton = this.createButton(t('ui.performance.start'), () => this.profiler.startRecording(this.getEnvironment()));
+    this.stopButton = this.createButton(t('ui.performance.stop'), () => this.stopRecording());
+    this.exportButton = this.createButton(t('ui.diagnostics.exportJson'), () => this.exportJson());
     this.sceneInspectionButton = this.captureSceneInspection
-      ? this.createButton('Scene Inspection', () => this.captureSceneInspection?.())
+      ? this.createButton(t('ui.performance.inspect'), () => this.captureSceneInspection?.())
       : null;
     controls.append(this.startButton, this.stopButton, this.exportButton);
     if (this.sceneInspectionButton) controls.append(this.sceneInspectionButton);
     if (this.ablation) {
-      this.ablationButton = this.createButton('Diagnose-Trace starten', () => this.startAblationRecording());
-      this.ablationButton.title = 'Startet Messung + Ablationsmodus: schaltet reihum einzelne '
-        + 'Darstellungsaspekte ab. Das Spiel ist dabei absichtlich nicht normal spielbar.';
+      this.ablationButton = this.createButton(t('ui.performance.diagnose'), () => this.startAblationRecording());
+      this.ablationButton.title = t('ui.performance.ablationHint');
       controls.append(this.ablationButton);
     }
 
@@ -211,8 +211,8 @@ export class PerformanceDiagnosticsOverlay {
       this.profiler.setAblationSegments(this.ablation.getSegments(), this.ablation.getSegmentMs());
     }
     this.status.textContent = recording
-      ? `● Trace Assist läuft ${formatDuration(this.profiler.getRecordingDurationMs())} · Sync alle 5 s`
-      : this.profiler.canExport() ? 'Trace Assist beendet · Companion-Report kann exportiert werden.' : 'Live-HUD · Trace Assist noch nicht gestartet.';
+      ? t('ui.performance.recording', { duration: formatDuration(this.profiler.getRecordingDurationMs()) })
+      : this.profiler.canExport() ? t('ui.performance.finished') : t('ui.performance.idle');
     this.status.style.color = recording ? '#7ee787' : '#b7c7b7';
     if (this.startButton) this.startButton.disabled = recording;
     if (this.stopButton) this.stopButton.disabled = !recording;
@@ -225,8 +225,8 @@ export class PerformanceDiagnosticsOverlay {
       lines.push(
         `GPU-Rocks Pages ${rockGpu.visiblePages}/${rockGpu.pageCount} · Slots ${rockGpu.capacity}`
         + ` · Buffer ${(rockGpu.bufferBytes / 1024 / 1024).toFixed(2)} MiB`,
-        `GPU-Rocks dirty ${rockGpu.dirtyRocks} · Pages ${rockGpu.affectedPages}`
-        + ` · Segmente ${rockGpu.dirtyBufferSegments} · Sparse/Full ${rockGpu.sparseUploads}/${rockGpu.fullUploads}`
+        t('ui.performance.rockUploads', { rocks: rockGpu.dirtyRocks, pages: rockGpu.affectedPages })
+        + t('ui.performance.rockSegments', { segments: rockGpu.dirtyBufferSegments, sparse: rockGpu.sparseUploads, full: rockGpu.fullUploads })
         + ` · Upload ~${(rockGpu.estimatedUploadBytes / 1024).toFixed(1)} KiB`,
       );
     }
@@ -236,9 +236,9 @@ export class PerformanceDiagnosticsOverlay {
         // Nur belegte Lanes zeigen; leere sind nach dem Idle-Hiding ohnehin unsichtbar.
         if (stats.liveCount === 0 && stats.peakLive === 0) continue;
         lines.push(
-          `GPU-VFX ${label} ${stats.liveCount}/${stats.capacity} aktiv`
+          t('ui.performance.vfx', { lane: label, live: stats.liveCount, capacity: stats.capacity })
           + ` · Peak ${stats.peakLive} · Rearms ${stats.rearms}`
-          + ` · Drops ${stats.capacityDrops} · Segmente ${stats.segmentsTouched}`,
+          + t('ui.performance.vfxDrops', { drops: stats.capacityDrops, segments: stats.segmentsTouched }),
         );
       }
     }
@@ -246,9 +246,9 @@ export class PerformanceDiagnosticsOverlay {
       const category = this.ablation.getCurrentCategory();
       lines.unshift(
         `◆ ABLATION: ${ABLATION_LABELS[category]}`
-        + (category === 'baseline' ? '' : ' — AUS')
+        + (category === 'baseline' ? '' : t('ui.performance.disabled'))
         + ` · Segment ${(this.ablation.getSegmentMs() / 1000).toFixed(0)}s`
-        + ` · voller Zyklus ${(this.ablation.getCycleDurationMs() / 1000).toFixed(0)}s`,
+        + t('ui.performance.cycle', { seconds: (this.ablation.getCycleDurationMs() / 1000).toFixed(0) }),
         '',
       );
     }
@@ -298,7 +298,7 @@ export class PerformanceDiagnosticsOverlay {
     });
 
     const heading = document.createElement('div');
-    heading.textContent = 'Chunk Rendering Diagnostics';
+    heading.textContent = t('ui.performance.chunks');
     heading.style.fontWeight = 'bold';
     heading.style.marginBottom = '5px';
     section.appendChild(heading);
@@ -328,17 +328,17 @@ export class PerformanceDiagnosticsOverlay {
     };
 
     addToggle(
-      'Static Shadows',
+      t('ui.performance.staticShadows'),
       (state) => state.staticShadows,
       (visible) => this.chunkDiagnostics?.setStaticShadowsVisible(visible),
     );
     addToggle(
-      'Ground Surface',
+      t('ui.performance.groundSurface'),
       (state) => state.groundSurface,
       (visible) => this.chunkDiagnostics?.setGroundSurfaceVisible(visible),
     );
     addToggle(
-      'Rock Overlay',
+      t('ui.performance.rockOverlay'),
       (state) => state.rockOverlay,
       (visible) => this.chunkDiagnostics?.setRockOverlayVisible(visible),
     );

@@ -1,12 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { getCatalog, getTranslationParityIssues, t } from '../src/i18n';
-import { getTranslationKeySources, getTranslationSourceCollisions } from '../src/i18n/catalog';
+import { getCatalog, getTranslationParityIssues, t, translate } from '../src/i18n';
+import { getDomainCatalog, getTranslationKeySources, getTranslationSourceCollisions } from '../src/i18n/catalog';
 import { getContentDisplayName, getContentTranslationKeys, getSourceName } from '../src/i18n/contentPresentation';
 import { getUpgradePresentationKeys } from '../src/i18n/upgradePresentation';
 
 describe('player locale catalogs', () => {
   it('keeps German and English catalogs structurally identical', () => {
     expect(getTranslationParityIssues()).toEqual([]);
+    for (const domain of ['ui', 'content', 'upgrades'] as const) {
+      const de = getDomainCatalog('de', domain);
+      const en = getDomainCatalog('en', domain);
+      expect(Object.keys(en).sort(), domain).toEqual(Object.keys(de).sort());
+      for (const locale of ['de', 'en'] as const) {
+        for (const [key, value] of Object.entries(getDomainCatalog(locale, domain))) {
+          expect(value.trim(), `${locale}:${key}`).not.toBe('');
+        }
+      }
+    }
+  });
+
+  it('provides the affirmative action used by the lobby confirmation in either language', () => {
+    expect(translate('de', 'ui.common.yes')).toBe('Ja');
+    expect(translate('en', 'ui.common.yes')).toBe('Yes');
   });
 
   it('assigns every translation key to exactly one domain source per locale', () => {

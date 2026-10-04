@@ -2109,17 +2109,17 @@ export class ArenaScene extends Phaser.Scene {
 
   private startWeaponBalanceLab(request: RuntimeBenchmarkRequest): WeaponBalanceLabStartResult {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) {
-      return { ok: false, message: 'Das Testgelände kann nur in der Coop-Defense-Lobby starten.' };
+      return { ok: false, message: t('ui.weaponLab.requiresLobby') };
     }
-    if (!bridge.isHost()) return { ok: false, message: 'Nur der Host kann das Testgelände starten.' };
+    if (!bridge.isHost()) return { ok: false, message: t('ui.weaponLab.hostOnly') };
     if (bridge.getConnectedPlayers().length !== 1) {
-      return { ok: false, message: 'Balance Lab 2.0 ist zunächst ausschließlich für Solo-Hosts verfügbar.' };
+      return { ok: false, message: t('ui.weaponLab.soloOnly') };
     }
     if (this.arenaRuntime.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) {
-      return { ok: false, message: 'Vor dem Testgelände muss der Spieler nicht bereit sein.' };
+      return { ok: false, message: t('ui.weaponLab.unready') };
     }
     if (this.roomQualityMonitor.shouldBlockStart()) {
-      return { ok: false, message: 'Der normale Startschutz blockiert den Rundenstart momentan.' };
+      return { ok: false, message: t('ui.weaponLab.startBlocked') };
     }
 
     try {
@@ -2138,7 +2138,7 @@ export class ArenaScene extends Phaser.Scene {
       this.weaponBalanceLabRuntime.cancel();
       return {
         ok: false,
-        message: error instanceof Error ? error.message : 'Der neutrale Waffen-Build ist ungültig.',
+        message: error instanceof Error ? error.message : t('ui.weaponLab.invalidBuild'),
       };
     }
   }
