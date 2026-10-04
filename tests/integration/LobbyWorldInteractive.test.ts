@@ -12,6 +12,7 @@ vi.mock('../../src/assets/WoodlandAssets',()=>({preloadWoodlandAssets:vi.fn(),as
 vi.mock('phaser', () => ({
   Scene: class {},
   Core: { Events: { POST_RENDER: 'postrender' } },
+  Scenes: { Events: { RENDER: 'render' } },
   GameObjects: {
     Image: class {}, Sprite: class {}, Container: class {},
     Particles: { ParticleProcessor: class {} },
@@ -71,6 +72,7 @@ import { DEFAULT_LOADOUT, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig
 import { LobbyOverlay } from '../../src/scenes/LobbyOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
 import { BootScreen } from '../../src/ui/BootScreen';
+import { getOverlayAssets } from '../../src/ui/OverlayAssets';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
 import { resolveInputPolicy } from '../../src/world/InputPolicy';
 import { resolvePlayerCapabilities } from '../../src/world/PlayerCapabilities';
@@ -656,6 +658,9 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     scene.sys = { isActive: () => true };
     scene.time = { now: 0 };
     scene.game = { events: { off: vi.fn() } };
+    scene.events = new EventEmitter();
+    // Background image prefetch has its own asset tests and must not escape this fixture.
+    vi.spyOn(getOverlayAssets(scene), 'prefetch').mockImplementation(() => {});
     scene.cameras = {
       main: { width: 1280, height: 720, zoom: 2, originX: 0, originY: 0, scrollX: 90, scrollY: 120 },
     };
@@ -965,17 +970,23 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const water = new WaterSurfaceRenderer({} as never,
       { offsetX: 0, offsetY: 0, width: 4096, height: 512 },
       [{ gridX: 1, gridY: 1 }, { gridX: 111, gridY: 1 }], 1);
-    const arena = { waterSurface: water, groundSurface: { isReadyForView: () => true, getWorkingSet: () => null },
+    const arena = { canopyObjects: [], waterSurface: water, groundSurface: { isReadyForView: () => true, getWorkingSet: () => null },
       rockOverlaySurface: { isReadyForView: () => true, getWorkingSet: () => null } };
     const camera = { scrollX: 0, scrollY: 0, width: 100, height: 100, originX: 0, originY: 0, zoom: 1 };
+    const renderEvents = new EventEmitter(), gameEvents = new EventEmitter();
     const frame = new WorldPresentationFrameBinding({ getArenaResult: () => arena, getWorldLayout: () => null,
-      scene: { cameras: { main: camera } },
-      lighting: { setDynamicOccluderSource: () => {} },
+      scene: { cameras: { main: camera }, events: renderEvents, game: { events: gameEvents } },
+      getLocalPlayerSprite: () => null, getTrainVisual: () => null,
+      syncTurretLights: () => {}, syncBaseLights: () => {}, persistentBasePreview: { syncLights: () => {} },
+      lighting: { setDynamicOccluderSource: () => {}, clearDynamicOccluderSource: () => {}, update: () => {} },
       shadow: { getStaticSurfaceWorkingSet: () => null, isStaticReadyForView: () => true,
         updateStaticResidency: () => {} } } as never);
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
     coordinator.arenaBuilt = true;
     coordinator.terrainSnapshotReady = true;
+    // Publish the unrelated lightmap/canopy work through the real frame ports.
+    frame.syncWorldLighting(false, false);
+    frame.syncCanopyTransparency(true);
     coordinator.worldRuntime = {
       materialization: { arena }, presentation: { layout: {} }, presentationFrame: frame,
     };
@@ -1028,12 +1039,15 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       expect(publish).toHaveBeenLastCalledWith(7, expect.any(Number), 'rendering', false);
       for (let i = 0; i < 2000 && !water.isPrepared(); i++) tick();
       expect(water.isPrepared()).toBe(true);
+      // Prepared surfaces still need their final visible frames before Ready is published.
+      expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+      for (let i = 0; i < 2; i++) { renderEvents.emit('render'); gameEvents.emit('postrender'); }
       expect(coordinator.getWorldRevealState(view).ready).toBe(true);
       coordinator.syncArenaLoadReady(view);
       expect(publish).toHaveBeenLastCalledWith(7, 100, 'ready', true);
       water.destroy();
       expect(coordinator.getWorldRevealState(view).ready).toBe(false);
-    } finally { water.destroy(); }
+    } finally { frame.destroy(); water.destroy(); }
   });
 
   it('laesst die Reveal-Abfrage nicht auf runden- oder netzseitige Bedingungen warten', () => {
