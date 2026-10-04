@@ -130,7 +130,7 @@ function renderStatus(): void {
   generateButton.disabled = !validation.normalized; variantsButton.disabled = !validation.normalized;
 }
 async function save(): Promise<void> {
-  if (!env || !commitFocused()) return;
+  if (!env || saving || !commitFocused()) return;
   const session = env.session;
   if (session.pending.size) return showMessage('Offene oder ungültige Eingaben zuerst abschließen.');
   const result = validateDocument(session.draft);

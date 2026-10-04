@@ -32,12 +32,19 @@ const response = (key: string, ok = true) => ({ ok, json: async () => ok
   : { error: `Failed ${key}` } });
 async function setup() {
   const nodes: Element[] = [], pending = new Map<string, ReturnType<typeof deferred<ReturnType<typeof response>>>>();
+  const savedRequests: { document: Record<string, unknown>; revision: string; request: ReturnType<typeof deferred<ReturnType<typeof response>>> }[] = [];
+  const windowEvents = new Map<string, (event: unknown) => void>();
   const app = new Element();
-  vi.stubGlobal('document', { querySelector: () => app, createElement: () => { const node = new Element(); nodes.push(node); return node; } });
-  vi.stubGlobal('window', { addEventListener() {} });
-  const fetch = vi.fn((url: string) => {
+  vi.stubGlobal('HTMLElement', Element);
+  vi.stubGlobal('document', { querySelector: (selector: string) => selector === '#app' ? app : null, createElement: () => { const node = new Element(); nodes.push(node); return node; } });
+  vi.stubGlobal('window', { addEventListener: (name: string, handler: (event: unknown) => void) => windowEvents.set(name, handler) });
+  const fetch = vi.fn((url: string, options?: RequestInit) => {
     if (url === '/api/session') return Promise.resolve({ ok: true, json: async () => ({ token: 'token' }) });
     if (url === '/api/maps') return Promise.resolve({ ok: true, json: async () => [{ file: 'initial.json', mapId: '1' }] });
+    if (options?.method === 'PUT') {
+      const request = deferred<ReturnType<typeof response>>();
+      savedRequests.push({ ...JSON.parse(String(options.body)), request }); return request.promise;
+    }
     if (url === '/api/maps/initial.json') return Promise.resolve(response('initial.json'));
     const request = deferred<ReturnType<typeof response>>(); pending.set(url, request); return request.promise;
   });
@@ -46,7 +53,15 @@ async function setup() {
   const select = nodes.find(node => node.className === 'map-select')!;
   const message = nodes.find(node => node.className === 'message')!;
   const current = () => boundary.environments.at(-1)!;
-  return { select, message, current, fetch,
+  return { select, message, current, fetch, savedRequests,
+    save() { windowEvents.get('keydown')!({ key: 's', ctrlKey: true, preventDefault() {} }); },
+    async completeSave(index: number, ok = true) {
+      const saved = savedRequests[index];
+      saved.request.resolve({ ok, json: async () => ok
+        ? { sourceKey: 'initial.json', mapId: 'initial.json', text: JSON.stringify(saved.document), revision: `saved-${index}`, document: saved.document }
+        : { error: 'Save failed' } } as ReturnType<typeof response>);
+      await flush();
+    },
     choose(key: string) { select.value = key; select.onchange!(); },
     async complete(key: string, ok = true) { pending.get(`/api/maps/${key}`)!.resolve(response(key, ok)); await flush(); },
   };
@@ -55,6 +70,20 @@ beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); boundary.environments.
 afterEach(() => vi.unstubAllGlobals());
 
 describe('map editor document loading', () => {
+  it.each([true, false])('ignores repeated save hotkeys while a write is pending and permits the next save (success=%s)', async success => {
+    const h = await setup(); h.current().session.change(['treeCount'], 3);
+    h.save(); h.save(); await flush(); h.save(); await flush();
+    expect(h.savedRequests).toHaveLength(1);
+    h.current().session.change(['treeCount'], 4);
+    await h.completeSave(0, success);
+    expect(h.current().session.draft.treeCount).toBe(4);
+    expect(h.current().session.dirty).toBe(true);
+    h.save(); await flush(); expect(h.savedRequests).toHaveLength(2);
+    expect(h.savedRequests[1].document.treeCount).toBe(4);
+    expect(h.savedRequests[1].revision).toBe(success ? 'saved-0' : 'r');
+    await h.completeSave(1);
+    expect(h.current().session.dirty).toBe(false);
+  });
   it.each([true, false])('ignores a superseded response (success=%s) after the newest map loads', async ok => {
     const h = await setup(); h.choose('old.json'); h.choose('latest.json');
     await h.complete('latest.json');
