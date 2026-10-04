@@ -171,20 +171,30 @@ function validateFiniteNumbers(value: unknown, path: string, issues: string[]): 
   }
 }
 
+/** Shared numeric constraints for validation and authoring forms. Specialized checks remain below. */
+export function getLoadoutNumericContract(path: string, configId: string): { minimum?: number; maximum?: number; integer: boolean } {
+  const key = path.split('.').slice(-1)[0] ?? '';
+  const signed = configId === 'NEGEV' && (path === '$.spreadPerShot' || path === '$.maxDynamicSpread');
+  return {
+    minimum: signed ? undefined : 0,
+    maximum: COLOR_KEYS.has(key) ? 0xffffff : /(?:Alpha|Chance|Probability|Fraction)$/.test(key) ? 1 : undefined,
+    integer: COLOR_KEYS.has(key) || /(?:Count|maxJumps|maxBounces|piercingCount|enabled|Enabled)$/.test(key),
+  };
+}
+
 function validateNumericContracts(value: unknown, path: string, issues: string[], configId: string): void {
   if (typeof value === 'number') {
     const pathSegments = path.split('.');
     const key = pathSegments[pathSegments.length - 1] ?? '';
-    const negativeNegevSpread = configId === 'NEGEV'
-      && (path === '$.spreadPerShot' || path === '$.maxDynamicSpread');
-    if (value < 0 && !negativeNegevSpread) issues.push(`${path}: negative Zahl ist für dieses Feld nicht erlaubt`);
+    const contract = getLoadoutNumericContract(path, configId);
+    if (contract.minimum !== undefined && value < contract.minimum) issues.push(`${path}: negative Zahl ist für dieses Feld nicht erlaubt`);
     if (COLOR_KEYS.has(key) && (!Number.isInteger(value) || value < 0 || value > 0xffffff)) {
       issues.push(`${path}: Farbe muss eine Ganzzahl zwischen 0x000000 und 0xffffff sein`);
     }
-    if (/(?:Alpha|Chance|Probability|Fraction)$/.test(key) && (value < 0 || value > 1)) {
+    if (!COLOR_KEYS.has(key) && contract.maximum !== undefined && (value < 0 || value > contract.maximum)) {
       issues.push(`${path}: Wert muss zwischen 0 und 1 liegen`);
     }
-    if (/(?:Count|maxJumps|maxBounces|piercingCount|enabled|Enabled)$/.test(key) && !Number.isInteger(value)) {
+    if (!COLOR_KEYS.has(key) && contract.integer && !Number.isInteger(value)) {
       issues.push(`${path}: Ganzzahl erforderlich`);
     }
     return;

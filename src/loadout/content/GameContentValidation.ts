@@ -51,7 +51,18 @@ function hasPath(root: unknown, path: readonly string[]): boolean {
   return true;
 }
 
-function matchingConfigs(descriptor: ConfigStatDescriptor): readonly unknown[] {
+interface ContentReferences {
+  WEAPON_CONFIGS: typeof WEAPON_CONFIGS;
+  UTILITY_CONFIGS: typeof UTILITY_CONFIGS;
+  ULTIMATE_CONFIGS: typeof ULTIMATE_CONFIGS;
+  DEFAULT_LOADOUT: typeof DEFAULT_LOADOUT;
+  LOADOUT_CATALOG_ENTRIES: typeof LOADOUT_CATALOG_ENTRIES;
+  getUtilityConfigLineage: typeof getUtilityConfigLineage;
+  COOP_DEFENSE_UPGRADE_DEFINITIONS: typeof COOP_DEFENSE_UPGRADE_DEFINITIONS;
+}
+
+function matchingConfigs(descriptor: ConfigStatDescriptor, content: ContentReferences): readonly unknown[] {
+  const { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getUtilityConfigLineage } = content;
   if (descriptor.kind === 'weapon') {
     if (descriptor.itemId) return WEAPON_CONFIGS[descriptor.itemId] ? [WEAPON_CONFIGS[descriptor.itemId]] : [];
     return Object.values(WEAPON_CONFIGS).filter((config) => !descriptor.slot || config.allowedSlots.includes(descriptor.slot));
@@ -83,7 +94,12 @@ function validateShotAudio(config: { readonly id: string; readonly shotAudio?: {
 }
 
 /** Validates references that intentionally live outside the pure loadout loader. */
-export function validateGameContentReferences(): void {
+export function validateGameContentReferences(content: ContentReferences = {
+  WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT,
+  LOADOUT_CATALOG_ENTRIES, getUtilityConfigLineage, COOP_DEFENSE_UPGRADE_DEFINITIONS,
+}): void {
+  const { WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT,
+    LOADOUT_CATALOG_ENTRIES, getUtilityConfigLineage, COOP_DEFENSE_UPGRADE_DEFINITIONS } = content;
   const issues: string[] = [];
 
   for (const [enemyId, enemy] of Object.entries(COOP_DEFENSE_ENEMY_CONFIGS)) {
@@ -172,7 +188,7 @@ export function validateGameContentReferences(): void {
   }
 
   for (const [stat, descriptor] of Object.entries(CONFIG_STAT_DESCRIPTORS)) {
-    const configs = matchingConfigs(descriptor);
+    const configs = matchingConfigs(descriptor, content);
     if (configs.length === 0) {
       issues.push(`modifier:${stat}: adressiert keine Config`);
       continue;

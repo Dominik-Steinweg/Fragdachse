@@ -997,7 +997,10 @@ export function getUnlockedCoopDefenseConstructionIds(
   ));
 }
 
-function normalizeUpgradeRegistry(registry: CoopDefenseUpgradeRegistryFile): NormalizedCoopDefenseUpgradeRegistry {
+/** Authoring callers can validate a draft against its candidate loadout registries. */
+export function normalizeUpgradeRegistry(registry: CoopDefenseUpgradeRegistryFile, loadout = {
+  weapons: WEAPON_CONFIGS, utilities: UTILITY_CONFIGS, ultimates: ULTIMATE_CONFIGS,
+}): NormalizedCoopDefenseUpgradeRegistry {
   if (!Array.isArray(registry.categories)) {
     throw new Error('[coopDefenseUpgrades] categories must be an array');
   }
@@ -1021,7 +1024,7 @@ function normalizeUpgradeRegistry(registry: CoopDefenseUpgradeRegistryFile): Nor
   }
 
   validateUniqueUpgradeIds(upgrades);
-  validateUpgradeDefinitions(upgrades);
+  validateUpgradeDefinitions(upgrades, loadout);
 
   return {
     categories,
@@ -1177,7 +1180,9 @@ function validateUniqueUpgradeIds(upgrades: readonly CoopDefenseUpgradeDefinitio
   }
 }
 
-function validateUpgradeDefinitions(upgrades: readonly CoopDefenseUpgradeDefinition[]): void {
+function validateUpgradeDefinitions(upgrades: readonly CoopDefenseUpgradeDefinition[], loadout: {
+  weapons: typeof WEAPON_CONFIGS; utilities: typeof UTILITY_CONFIGS; ultimates: typeof ULTIMATE_CONFIGS;
+}): void {
   const upgradesById = new Map(upgrades.map((definition) => [definition.id, definition]));
 
   for (const definition of upgrades) {
@@ -1204,14 +1209,16 @@ function validateUpgradeDefinitions(upgrades: readonly CoopDefenseUpgradeDefinit
     }
 
     if (definition.loadoutUnlock) {
-      validateLoadoutUnlockDefinition(definition);
+      validateLoadoutUnlockDefinition(definition, loadout);
     }
   }
 
   buildTopologicalUpgradeOrder(upgrades);
 }
 
-function validateLoadoutUnlockDefinition(definition: CoopDefenseUpgradeDefinition): void {
+function validateLoadoutUnlockDefinition(definition: CoopDefenseUpgradeDefinition, loadout: {
+  weapons: typeof WEAPON_CONFIGS; utilities: typeof UTILITY_CONFIGS; ultimates: typeof ULTIMATE_CONFIGS;
+}): void {
   const loadoutUnlock = definition.loadoutUnlock;
   if (!loadoutUnlock) return;
 
@@ -1230,7 +1237,7 @@ function validateLoadoutUnlockDefinition(definition: CoopDefenseUpgradeDefinitio
   switch (loadoutUnlock.slot) {
     case 'weapon1':
     case 'weapon2': {
-      const weapon = WEAPON_CONFIGS[loadoutUnlock.itemId as keyof typeof WEAPON_CONFIGS];
+      const weapon = loadout.weapons[loadoutUnlock.itemId];
       if (!weapon || !(weapon.allowedSlots as readonly string[]).includes(loadoutUnlock.slot)) {
         throw new Error(
           `[coopDefenseUpgrades] Upgrade ${definition.id} references invalid ${loadoutUnlock.slot} unlock ${loadoutUnlock.itemId}`,
@@ -1239,7 +1246,7 @@ function validateLoadoutUnlockDefinition(definition: CoopDefenseUpgradeDefinitio
       return;
     }
     case 'utility': {
-      const utility = UTILITY_CONFIGS[loadoutUnlock.itemId as keyof typeof UTILITY_CONFIGS];
+      const utility = loadout.utilities[loadoutUnlock.itemId];
       if (!utility || !(utility.allowedSlots as readonly string[]).includes('utility')) {
         throw new Error(
           `[coopDefenseUpgrades] Upgrade ${definition.id} references invalid utility unlock ${loadoutUnlock.itemId}`,
@@ -1248,7 +1255,7 @@ function validateLoadoutUnlockDefinition(definition: CoopDefenseUpgradeDefinitio
       return;
     }
     case 'ultimate': {
-      const ultimate = ULTIMATE_CONFIGS[loadoutUnlock.itemId as keyof typeof ULTIMATE_CONFIGS];
+      const ultimate = loadout.ultimates[loadoutUnlock.itemId];
       if (!ultimate || !isUltimateAllowedInMode(ultimate, COOP_DEFENSE_MODE)) {
         throw new Error(
           `[coopDefenseUpgrades] Upgrade ${definition.id} references invalid coop-defense ultimate unlock ${loadoutUnlock.itemId}`,

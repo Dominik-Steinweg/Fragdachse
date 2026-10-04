@@ -164,8 +164,9 @@ export const COOP_DEFENSE_REPAIR_DRONE_CONFIG = Object.freeze({
   repairDistance: 22,
 });
 
-function loadConstructionBuildCooldowns(): Readonly<Record<ConstructionId, number>> {
-  const raw = rawCoopDefenseConstructionCooldowns as Record<string, RawCoopDefenseConstructionCooldownDefinition>;
+export function loadConstructionBuildCooldowns(
+  raw: Record<string, RawCoopDefenseConstructionCooldownDefinition> = rawCoopDefenseConstructionCooldowns,
+): Readonly<Record<ConstructionId, number>> {
   const cooldowns = {} as Record<ConstructionId, number>;
 
   for (const constructionId of COOP_DEFENSE_CONSTRUCTION_IDS) {

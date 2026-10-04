@@ -1,14 +1,17 @@
 import authored from './attackDrone.json';
 
-for (const [key, value] of Object.entries(authored)) {
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`[attackDrone] Invalid ${key}`);
+export function validateAttackDroneRules(rules: typeof authored): void {
+  for (const [key, value] of Object.entries(rules)) {
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`[attackDrone] Invalid ${key}`);
+  }
+  if (rules.burstMs % rules.shotIntervalMs !== 0
+    || rules.magazine % (rules.burstMs / rules.shotIntervalMs) !== 0
+    || rules.serviceReductionPerLevel * 3 >= 1
+    || rules.catchupEndRadius >= rules.catchupStartRadius) {
+    throw new Error('[attackDrone] Inconsistent timing, magazine or flight rules');
+  }
 }
-if (authored.burstMs % authored.shotIntervalMs !== 0
-  || authored.magazine % (authored.burstMs / authored.shotIntervalMs) !== 0
-  || authored.serviceReductionPerLevel * 3 >= 1
-  || authored.catchupEndRadius >= authored.catchupStartRadius) {
-  throw new Error('[attackDrone] Inconsistent timing, magazine or flight rules');
-}
+validateAttackDroneRules(authored);
 
 export const ATTACK_DRONE_RULES = Object.freeze(authored);
 export const ATTACK_DRONE_STAT_PREFIX = 'construction.attack_drone_station.';
