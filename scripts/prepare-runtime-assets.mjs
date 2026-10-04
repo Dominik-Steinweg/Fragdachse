@@ -13,8 +13,9 @@ export async function colourSources() {
     'ecology/rock-colonies-atlas.png', 'ecology/ground-litter-atlas.png', 'ecology/lilies-atlas.png',
     'ecology/shore-stones-atlas.png'].map(f => `${root}/${f}`);
   files.push(...materials.map(f => `public/assets/sprites/${f}.png`));
+  files.push('public/assets/player/death-a01-r03/death-sheet.png');
   // Existing sprite/atlas keys and frame layouts survive publication unchanged.
-  for (const family of ['groundcover', 'persistent-base', 'pipeline-v2', 'rewards']) {
+  for (const family of ['groundcover', 'persistent-base', 'pipeline-v2', 'rewards', 'canopies', 'rockmoss']) {
     const visit = async dir => {
       for (const entry of await readdir(dir, { withFileTypes: true })) {
         const file = `${dir}/${entry.name}`;
