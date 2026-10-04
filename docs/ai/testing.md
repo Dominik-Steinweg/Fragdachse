@@ -69,6 +69,45 @@ Die Spezial-Suites liegen unter `tests/architecture/`, `tests/integration/`, `te
 schneller Architecture-Suite und Build; die übrigen Spezial-Suites werden gezielt für ihre
 Änderung ausgeführt. Browser, Dev-Server und Sichtprüfung gehören nicht zum normalen Test-Gate.
 
+## Visuelle Regression
+
+`npm run test:visual` vergleicht 20 feste Ansichten über `window.devScenario` mit den
+verlustfreien WebP-Referenzen in [`tests/visual/reference/`](../../tests/visual/reference/).
+Der Runner [`scripts/visual/run.mjs`](../../scripts/visual/run.mjs) startet einen eigenen
+Vite-Server auf einem verfügbaren lokalen Port und installiertes Chrome mit Playwright-Core
+(sichtbar, 960×540, DPR 1, sRGB). `CHROME_PATH` überschreibt den Windows-Standardpfad.
+Der angezeigte Build-Zeitstempel ist im Testserver festgesetzt.
+Server und Browser werden anschließend geschlossen. Das bleibt außerhalb von `npm run check`.
+
+- `npm run test:visual -- --runs=3`: drei vollständige Läufe gegen unveränderte Referenzen.
+- `npm run test:visual -- --update`: alle Referenzen ausdrücklich neu aufnehmen; anschließend
+  Bilder prüfen und die drei Vergleichsläufe ausführen. Fehlgeschlagene Aufbauten ersetzen nichts.
+- `--list` zeigt Gruppen und Bilder; `--group=day` führt eine ganze Gruppe einschließlich
+  aller vorausgehenden Schritte aus. Nach Änderungen am Szenenkatalog alle Referenzen erneuern.
+
+Der [Szenenkatalog](../../scripts/visual/scenes.mjs) enthält Seed, Tagesminute, Kamera,
+Qualität, Vorlauf und Effektframes. Jede Gruppe startet in einem frischen isolierten Tab.
+`dev-scenario.html?visual-test=1` setzt Startzeit und Zufallsquelle vor den Spielimports fest,
+hält die Simulationszeit während ausstehender Render-Arbeit an und pausiert an der Ready-Barriere.
+Die Zufallsfolge der Effektframes beginnt an dieser Barriere; Ladezeit verändert sie nicht.
+120 Schritte à 1/60 s bilden den Vorlauf. `settle` veröffentlicht Worker-Ergebnisse davor und
+danach mit Delta null; weitere 60 feste Schritte schließen Schatten-Überblendungen ab, bevor
+Effekte ausgelöst werden. Screenshots führen keinen zusätzlichen Spielschritt aus.
+Die normale Dev-Seite und Produktionsläufe aktivieren diesen Modus nicht.
+
+Ein Pixel zählt als geändert, wenn mindestens ein RGBA-Kanal um mehr als 12 von 255 abweicht;
+höchstens 0,1 % der verglichenen Pixel sind erlaubt. Rechteckmasken können pro Ansicht im Katalog
+angegeben werden und zählen nicht zum Nenner; derzeit sind keine Masken nötig. Fehlende Referenzen,
+geänderte Abmessungen, veraltete Rezept-Metadaten, Ladefehler und Timeouts lassen den Lauf scheitern.
+Referenzupdates sind auf insgesamt 30 MB Bilddaten begrenzt. Die Vergleichslogik besitzt eigene
+[Asset-Tests](../../tests/assets/VisualComparison.test.ts).
+
+`build/visual-tests/<Zeitstempel>/index.html` und `report.json` enthalten Ergebnisse und tatsächliche
+Dev-Zustände; bei Pixelabweichungen liegen Referenz, Istbild und magentafarbenes Differenzbild daneben.
+Browser-Version und Rezepthash werden protokolliert. Referenzen sind für dieselbe Chrome-/GPU-/OS-
+Umgebung gedacht; andere Schrift- oder GPU-Rasterung kann eine geprüfte Neureferenzierung erfordern.
+Die Suite prüft die gewählten Bildzustände, keine vollständigen Spielabläufe oder Leistungsgrenzen.
+
 ## Mocks und Reduktion
 
 Phaser-Mocks sind zulässig, wenn die getestete Logik ohne Renderer sinnvoll isoliert werden kann.
