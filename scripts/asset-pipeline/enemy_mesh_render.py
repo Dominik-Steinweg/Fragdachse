@@ -21,6 +21,7 @@ def main():
         raise ValueError('Render output must be in the bound D: revision')
     # Repair implementation is the exact archived implementation used for geometry.
     sys.path.insert(0, str(output/'source-tools'))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     import bpy
     import numpy as np
     from mesh_shadow_geometry import select_source_scene
@@ -61,7 +62,7 @@ def main():
         except Exception:
             pass
     scene.cycles.device = 'CPU' if device == 'CPU' else 'GPU'
-    scene.render.use_persistent_data = True
+    scene.render.use_persistent_data = False
     scene.render.resolution_x = scene.render.resolution_y = 1024
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = True
@@ -128,9 +129,11 @@ def main():
     dark = bpy.data.worlds.new('FD_Enemy_Data_World'); dark.use_nodes = True
     dark.node_tree.nodes['Background'].inputs['Strength'].default_value = 0
     selected = job['poses'] if args.frames == 'all' else [p for p in job['poses'] if p['index'] in [int(s) for s in args.frames.split(',')]]
-    report = dict(schema='fd-enemy-render-passes', version=1, id=job['id'], sourceBlendSha256=sha(target),
+    from render_integrity import configure_cache, provenance
+    configure_cache(scene, job, output)
+    report = dict(provenance=provenance(scene, {**job['sourceFiles'], 'renderBlend': sha(target)}), schema='fd-enemy-render-passes', version=1, id=job['id'], sourceBlendSha256=sha(target),
                   rendererSha256=sha(__file__), device=device, masterSize=1024, samples=64, seed=37,
-                  canvas=job['coordinates'], layout=job['layout'], materialAudit=audit, frames=[],
+                  canvas=job['coordinates'], layout=job['layout'], materialAudit=audit, frames=[], persistentData=False, passMajor=False,
                   normalEncoding='linear RGB world (X right, Y south, Z up); A raw AO visibility; coverage in albedo A',
                   albedoEncoding='sRGB straight RGB, coverage A; no form light/AO/specular',
                   emissionEncoding='separate sRGB radiance (authored strengths <=1), coverage A')

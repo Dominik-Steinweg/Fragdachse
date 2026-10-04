@@ -54,7 +54,7 @@ for (const index of spec.poseIndices) {
   poses.push({ index, blenderFrame: f.blenderFrame, beautyFile: f.file, beautySha256: f.sha256 });
 }
 const toolHashes = {};
-for (const name of ['character_pass_blender.py', 'character-pass-contract.mjs', 'export-character-passes.mjs',
+for (const name of ['render_integrity.py', 'character_pass_blender.py', 'character-pass-contract.mjs', 'export-character-passes.mjs',
   'review-character-passes.mjs', 'player-shadow-pilot.mjs', 'player-shadow-run.mjs', 'character-passes.d.ts', 'character-pass-bundle.mjs',
   'archive-character-passes.py', 'import-character-passes.mjs', 'inspect-character-materials.py', 'CHARACTER-PASSES.md']) {
   toolHashes[name] = await fileHash(path.join(repo, 'scripts/asset-pipeline', name));

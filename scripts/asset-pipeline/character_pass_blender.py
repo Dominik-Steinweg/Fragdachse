@@ -14,6 +14,7 @@ import time
 import zlib
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def sha(path):
@@ -189,10 +190,17 @@ def unlit_copy(material, report):
 def render_float(scene, output, label):
     import bpy
     import numpy as np
+    from render_integrity import inspect_float, pass_key, restore, store
     destination = output / 'intermediate' / (label + '.exr')
+    destination.parent.mkdir(parents=True, exist_ok=True)
     scene.render.filepath = str(destination)
     start = time.perf_counter()
-    bpy.ops.render.render(write_still=True, scene=scene.name)
+    key = pass_key(scene, label)
+    cached = bool(key and restore(scene['fd_pass_cache_root'], key, destination))
+    counter = 'fd_cache_hits' if cached else 'fd_cache_misses'
+    scene[counter] = scene.get(counter, 0) + 1
+    if not cached:
+        bpy.ops.render.render(write_still=True, scene=scene.name)
     elapsed = time.perf_counter() - start
     image = bpy.data.images.load(str(destination), check_existing=False)
     try:
@@ -201,10 +209,11 @@ def render_float(scene, output, label):
         pixels = np.empty(w * h * 4, dtype=np.float32)
         image.pixels.foreach_get(pixels)
         pixels = pixels.reshape(h, w, 4)[::-1].copy()
-        if not np.isfinite(pixels).all():
-            raise ValueError('Nonfinite render pixels: ' + label)
+        inspect_float(pixels, label.split('-')[0])
     finally:
         bpy.data.images.remove(image)
+    if key and not cached:
+        store(scene['fd_pass_cache_root'], key, destination)
     return pixels, elapsed
 
 
@@ -261,11 +270,13 @@ def main():
         raise ValueError('Source camera differs from pass contract')
     if list(scene.get('pivot', [])) != [.5, .5]:
         raise ValueError('Source pivot mismatch')
+    from render_integrity import configure_cache, provenance
+    configure_cache(scene, job, output)
     objects = [o for o in scene.objects if o.type == 'MESH' and not o.hide_render]
     canvases, geometry = projected_canvases(scene, objects, render, spec)
     scene.render.engine = 'CYCLES'; scene.cycles.use_denoising = False
     scene.cycles.seed = spec['shadow']['seed']; scene.cycles.samples = spec['shadow']['samples']
-    scene.render.use_persistent_data = True
+    scene.render.use_persistent_data = False
     device = job['device']
     if device != 'CPU':
         prefs = bpy.context.preferences.addons['cycles'].preferences
@@ -303,7 +314,8 @@ def main():
                     sourceFrameCount=len(job['render']['frames']),
                     source=job['source'], poses=job['poses'], canvases=canvases, images=[],
                     geometry=geometry, materialAudit=material_audit, timings=[], blenderVersion=bpy.app.version_string,
-                    device=device, masterColorSpace='linear float EXR; premultiplied coverage', sourceBlendUntouched=True)
+                    device=device, masterColorSpace='linear float EXR; premultiplied coverage', sourceBlendUntouched=True,
+                    provenance=provenance(scene, job['source']))
     def record(pass_name, pose, pixels, encoding, canvas_index=None):
         h, w = pixels.shape[:2]
         name = f'{pass_name}/pose-{pose:02d}-' + (f'light-{canvas_index:02d}' if canvas_index is not None else str(w)) + '.png'
@@ -321,15 +333,19 @@ def main():
     scene.render.film_transparent = True
     scene.render.resolution_x = scene.render.resolution_y = spec['material']['masterSize']
     scene.cycles.samples = spec['material']['samples']
-    for pose in job['poses']:
-        sample(scene, pose['blenderFrame'])
-        values = {}
-        for mode in ('albedo', 'normal', 'ao'):
-            for ob, mats in originals.items():
-                for i, material in enumerate(mats):
-                    ob.material_slots[i].material = albedos[material] if mode == 'albedo' else normal_mat if mode == 'normal' else ao_mat
-            values[mode], seconds = render_float(scene, output, f'{mode}-{pose["index"]:02d}')
+    for mode in ('albedo', 'normal', 'ao'):
+        for ob, mats in originals.items():
+            for i, material in enumerate(mats):
+                ob.material_slots[i].material = albedos[material] if mode == 'albedo' else normal_mat if mode == 'normal' else ao_mat
+            ob.update_tag(refresh={'DATA'})
+        bpy.context.view_layer.update()
+        for pose in job['poses']:
+            sample(scene, pose['blenderFrame'])
+            pixels, seconds = render_float(scene, output, f'{mode}-{pose["index"]:02d}')
+            np.save(output/'intermediate'/f'{mode}-{pose["index"]:02d}.npy', pixels)
             manifest['timings'].append(dict(pass_name=mode, pose=pose['index'], seconds=seconds))
+    for pose in job['poses']:
+        values = {mode: np.load(output/'intermediate'/f'{mode}-{pose["index"]:02d}.npy') for mode in ('albedo', 'normal', 'ao')}
         for size in spec['material']['sourceSizes']:
             factor = spec['material']['masterSize'] // size
             a = reduce_blocks(values['albedo'], factor)

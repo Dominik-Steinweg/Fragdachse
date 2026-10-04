@@ -84,7 +84,7 @@ if(values['review-only']) {
     const file=`references/p${pose}-a${a}.png`;await stage(file,path.join(values['d-source'],safeFile(img.file)),img.sha256);
     references.push({pose,azimuth:d.spec.grid.azimuthDegrees[a],canvas:d.canvases[canvasIndex],file});
   }
-  const tools=['player-mesh-run.mjs','mesh_shadow_blender.py','mesh_shadow_geometry.py','mesh_shadow_geometry_selfcheck.py','mesh-shadow-contract.mjs','mesh-shadow-raster.mjs','review-mesh-shadow.mjs',
+  const tools=['render_integrity.py','player-mesh-run.mjs','mesh_shadow_blender.py','mesh_shadow_geometry.py','mesh_shadow_geometry_selfcheck.py','mesh-shadow-contract.mjs','mesh-shadow-raster.mjs','review-mesh-shadow.mjs',
     'mesh-shadow-selfcheck.mjs','MESH-SHADOWS.md','mesh-shadows.d.ts','archive-character-passes.py','character-pass-bundle.mjs',
     'character-pass-contract.mjs','export-character-passes.mjs','mesh-shadow-sources.mjs','mesh-shadow-repair.mjs','mesh-shadow-gap-metric.mjs',
     'import-character-mesh.mjs','mesh-shadow-production-selfcheck.mjs','mesh_shadow_weapon.py','mesh_shadow_weapon_blender.py',

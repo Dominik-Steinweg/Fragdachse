@@ -4,6 +4,14 @@ Authoring contract with a prepared, opt-in runtime importer. The unchanged Beaut
 pipeline and 21a material passes remain independent. The export runner writes no
 runtime files and can run independently of the parallel runtime integration.
 
+New geometry manifests include `provenance` with the Blender build, Python/NumPy,
+source/tool hashes and an explicit deterministic-geometry/no-random-seed policy.
+Publication preserves that metadata. `npm run assets:verify-published -- --sources
+D:/Fragdachse-render` checks the published player/enemy buffers, finite shared
+bounds, fixed topology, index ranges and pose mapping against source manifests and
+archives. It complements the existing silhouette/corridor suites; it does not
+replace their geometric acceptance criteria. See [PIPELINE-AUDIT.md](PIPELINE-AUDIT.md).
+
 ## Commands
 
 ```powershell

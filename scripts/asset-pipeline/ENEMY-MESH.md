@@ -1,5 +1,34 @@
 # Enemy mesh R0/R1 — isolated pipeline
 
+## Offline material preparation for all selected enemies
+
+`npm run assets:prepare-enemy-materials -- --out D:/Fragdachse-render/<new-revision>`
+resolves all 14 enemies from the catalog and current mesh manifests. It verifies
+selected sources, archives, Blend, masters, sheets and pose/pivot mapping before
+copying Beauty/Albedo/Normal/separate Emission to D:. AO stays in normal alpha.
+Every master and published source size is checked. Runtime registration is unchanged.
+
+`--verify <prepared-directory>` rechecks the catalog, source/output/tool hashes
+and all master pixels. `--jobs 2` bounds independent CPU/I/O work. Source revisions
+and prepared directories are immutable. Missing historical EXRs are reported by
+`audit_float_sources.py`; PNGs cannot establish their pre-encoding float validity.
+
+Confirmed albedo corruption can be rerendered from the original camera/seed:
+
+```powershell
+& 'D:/Blender Foundation/Blender 5.2/blender.exe' -b --factory-startup --python-exit-code 1 --python scripts/asset-pipeline/enemy_mesh_family_render.py -- --job D:/Fragdachse-render/enemy-mesh-r1-010/zombie-badger/job.json --frames 2 --output D:/Fragdachse-render/<new-repair>/zombie-badger
+npm run assets:prepare-enemy-materials -- --out D:/Fragdachse-render/<new-preparation> --repairs D:/Fragdachse-render/<new-repair>
+```
+
+The repair must match the archived render Blend and pose. Only corrected Albedo
+masters and their sheet tiles are adopted. Coverage must be exactly equal; colour
+changes must stay within corruption bounds plus four filter pixels. At most one
+unrelated RGB8 pixel may differ by one code value between independent Cycles runs;
+this is explicitly reported. Larger changes fail. Other frames, Beauty, Normal/AO
+and Emission retain their pixels. No importer is called. See [PIPELINE-AUDIT.md](PIPELINE-AUDIT.md).
+
+## Historical pilot contract
+
 Pilots: Zombie and Rabid, selected `v2-claw-leap-a` sources. No player-r3 module,
 recipe, registry, public asset or runtime code is changed. Other enemies retain
 their original recipes. Import belongs to R3 after review.

@@ -1,5 +1,41 @@
 # FRAGDACHSE Asset-Pipeline V2
 
+## Reproduzierbarkeit und Pass-Prüfung
+
+Neue Render-/Mesh-Manifeste führen `provenance`: Blender-Build, Python/NumPy,
+Cycles-Seed (bei Geometrie ausdrücklich kein Zufallssampling), Renderparameter
+und SHA-256 der Quellen/Werkzeugbibliothek. PNG-Exporte ergänzen Node,
+Sharp/libvips und Exporter-Hashes. Atlas-/Import-Manifeste reichen diese Herkunft
+durch. Historische Manifeste bleiben unverändert; fehlende alte Einstellungen
+werden ausdrücklich als unbekannt markiert.
+
+```powershell
+npm run assets:verify-published -- --sources D:/Fragdachse-render --out D:/Fragdachse-render/pipeline-audit/published.json
+npm run assets:prepare-enemy-materials -- --out D:/Fragdachse-render/enemy-material-new
+npm run assets:prepare-enemy-materials -- --verify D:/Fragdachse-render/enemy-material-new
+```
+
+Die Bestandsprüfung liest alle eingecheckten Spieler-/Gegner-Material- und
+Mesh-Manifeste einschließlich alter Revisionen: Hashes, Quellenarchive, Posen,
+Pivot, Mesh-Bounds/Indizes, Normalen, schwarze Farbflächen und Alpha-Abweichungen.
+Ohne `--sources` werden nur veröffentlichte Dateien geprüft. Hash-/Vertragsfehler
+liefern Exitcode 1; verdächtige Pixel stehen mit Pose und Größe im Befundbericht,
+da dunkle Beauty-Pixel beabsichtigt sein können. Normalen-Alpha ist AO.
+
+`render_integrity.py` prüft Float-Pässe vor der Kodierung. Cycles-Persistenz ist
+in den Produktions-Renderern deaktiviert. `FD_RENDER_CACHE` kann auf einen
+gemeinsamen D:-Ordner zeigen; identische Pässe werden nur mit überprüften
+Quellen-, Parameter-, Blender- und Ausgabehashes wiederverwendet und erneut
+pixelgeprüft. `executed-tools/` und `render-inputs.json` bewahren die tatsächlich
+verwendeten Werkzeuge. Die konservative Invalidierung bei Werkzeugänderungen
+ist beabsichtigt. Cache und Quellenarchiv haben unterschiedliche Lebensdauern.
+
+V2-PNG-Exporte überspringen erneute Reduktion/Packung bei identischen Quellen,
+Werkzeugen/Bibliotheken und geprüften Ausgabehashes. Offline-Gegnerprüfung und
+Dateikopien arbeiten mit begrenzten unabhängigen Jobs (`--jobs`, Standard 2).
+GPU-Render bleiben seriell. Details, Float-Prüfung und gemessene Grenzen stehen
+in [PIPELINE-AUDIT.md](PIPELINE-AUDIT.md).
+
 Codex steuert Blender über den vorhandenen MCP. Die Pipeline erzeugt orthografische Turm-, Gegner-, Figuren- und gehaltene Waffensprites einschließlich Blender-Actions, transparenten Animationsframes und vollständigen Quellenpaketen. Der separate Phaser-Viewer prüft sie bei Spielgröße. Runtime-Integration bleibt ein eigener Auftrag.
 
 ## V2-Katalog und Produktionsstand

@@ -14,13 +14,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--job', required=True)
     parser.add_argument('--frames', default='all')
+    parser.add_argument('--output', help='Exclusive D: directory for material-only repair of an archived source')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:])
-    output = Path(args.job).resolve().parent
+    source = Path(args.job).resolve().parent
+    output = source
     job = json.loads(Path(args.job).read_text(encoding='utf8'))
     if output.parent != Path(job['outputRoot']).resolve() or output.parent.parent != Path('D:/Fragdachse-render'):
         raise ValueError('Render output must be in the bound D: revision')
     # Repair implementation is the exact archived implementation used for geometry.
-    sys.path.insert(0, str(output/'source-tools'))
+    sys.path.insert(0, str(source/'source-tools'))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     import bpy
     import numpy as np
     from mesh_shadow_geometry import select_source_scene
@@ -30,9 +33,19 @@ def main():
     def sha(p):
         return hashlib.sha256(Path(p).read_bytes()).hexdigest()
     for member, expected in job['sourceFiles'].items():
-        if sha(output/member) != expected:
+        if sha(source/member) != expected:
             raise ValueError('Changed source: '+member)
-    target = output/'candidate.blend'
+    target = source/'candidate.blend'
+    if args.output:
+        output = Path(args.output).resolve()
+        if not output.is_relative_to(Path('D:/Fragdachse-render')) or output == source:
+            raise ValueError('Repair output must be an exclusive external D: directory')
+        output.mkdir(parents=True, exist_ok=False)
+        target = source/'render-source.blend'
+        prior = json.loads((source/'render-passes.json').read_text(encoding='utf8'))
+        if sha(target) != prior['sourceBlendSha256']:
+            raise ValueError('Changed archived render source')
+    (output/'intermediate/optix').mkdir(parents=True, exist_ok=True)
     if not target.exists(): raise ValueError('Missing persisted repaired source')
     # Every actual render reopens the persisted repaired source independently.
     bpy.ops.wm.open_mainfile(filepath=str(target), load_ui=False)
@@ -42,7 +55,8 @@ def main():
         raise ValueError('Camera is not exactly top-down')
     if abs(scene.camera.data.ortho_scale-job['render']['orthoScale']) > 1e-5:
         raise ValueError('Canvas scale changed')
-    os.environ['OPTIX_CACHE_PATH'] = str(output/'intermediate/optix')
+    os.environ['OPTIX_CACHE_PATH'] = os.environ.get('OPTIX_CACHE_PATH', str(output/'intermediate/optix'))
+    Path(os.environ['OPTIX_CACHE_PATH']).mkdir(parents=True, exist_ok=True)
     prefs = bpy.context.preferences.addons['cycles'].preferences
     device = 'CPU'
     for kind in ('OPTIX', 'CUDA'):
@@ -122,7 +136,9 @@ def main():
     dark = bpy.data.worlds.new('FD_Enemy_Data_World'); dark.use_nodes = True
     dark.node_tree.nodes['Background'].inputs['Strength'].default_value = 0
     selected = job['poses'] if args.frames == 'all' else [p for p in job['poses'] if p['index'] in [int(s) for s in args.frames.split(',')]]
-    report = dict(schema='fd-enemy-render-passes', version=1, id=job['id'], sourceBlendSha256=sha(target),
+    from render_integrity import configure_cache, provenance
+    configure_cache(scene, dict(job=job, renderer=sha(__file__), device=device), output)
+    report = dict(provenance=provenance(scene, {**job['sourceFiles'], 'renderBlend': sha(target)}), schema='fd-enemy-render-passes', version=1, id=job['id'], sourceBlendSha256=sha(target),
                   rendererSha256=sha(__file__), device=device, masterSize=1024, samples=64, seed=37,
                   canvas=job['coordinates'], layout=job['layout'], materialAudit=audit, frames=[], persistentData=False, passMajor=True,
                   normalEncoding='linear RGB world (X right, Y south, Z up); A raw AO visibility; coverage in albedo A',
@@ -175,6 +191,8 @@ def main():
             extend_normal_edges(normals,ao,coverage)
             png(output/'normal'/folder/name,np.rint(np.clip(np.concatenate([normals*.5+.5,ao],2),0,1)*255).astype('uint8'))
         report['frames'].append(dict(index=index,blenderFrame=frame,beautySha256=sha(output/'beauty/masters'/name)))
+    report['cache'] = dict(hits=scene['fd_cache_hits'], misses=scene['fd_cache_misses'])
+    report['outputs'] = {p.relative_to(output).as_posix(): sha(p) for mode in ('beauty','albedo','normal','emission') for p in (output/mode).rglob('*.png')}
     (output/'render-passes.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf8')
     print('FD_ENEMY_RENDER_COMPLETE',job['id'],flush=True)
 

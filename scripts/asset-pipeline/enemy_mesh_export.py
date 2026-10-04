@@ -268,6 +268,8 @@ def main():
                                        fadeWorldPx=1.5, gameplayAuthority=False),
                     gapReport='corridors.json', geometrySeconds=time.monotonic()-started,
                     blenderVersion=bpy.app.version_string)
+    from render_integrity import provenance
+    manifest['provenance'] = provenance(sources=job['sourceFiles'])
     write_json(output/'mesh-manifest.json', manifest)
     set_frame(scene, 0)
     bpy.data.libraries.write(str(output/'candidate.blend'), {scene}, fake_user=True, compress=True)

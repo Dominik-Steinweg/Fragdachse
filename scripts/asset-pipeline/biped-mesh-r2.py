@@ -26,7 +26,7 @@ for name in ('asset.blend','render.json'):
 provenance=dict(blendSha256=sha(base/'asset.blend'),renderSha256=sha(base/'render.json'),archiveSha256=sha(source/'source-bundle.zip'))
 shutil.copyfile(base/'asset.blend',root/'original.blend');shutil.copyfile(base/'render.json',root/'source-render.json');shutil.copyfile(source/'selection.json',root/'source-selection.json')
 tools={}
-for name in ('biped-mesh-r2.py','biped_mesh_repair.py','mesh_shadow_blender.py','mesh_shadow_geometry.py','enemy_mesh_corridor.py'):
+for name in ('render_integrity.py','biped-mesh-r2.py','biped_mesh_repair.py','mesh_shadow_blender.py','mesh_shadow_geometry.py','enemy_mesh_corridor.py'):
  p=Path(__file__).parent/name;(root/'source-tools').mkdir(exist_ok=True);shutil.copyfile(p,root/'source-tools'/name);tools[name]=sha(p)
 bpy.ops.wm.open_mainfile(filepath=str(root/'original.blend'),load_ui=False)
 scene=select_source_scene(bpy.data.scenes,render['inputHash'],args.asset);bpy.context.window.scene=scene
@@ -77,4 +77,6 @@ mesh=emit(root,args.asset,positions,triangles,list(range(len(render['frames'])))
 receipt=dict(asset=args.asset,revision=args.revision,source=provenance,repairedBlendSha256=sha(root/'source.blend'),render=render,scale=scale,mesh=mesh,sockets=sockets,
  sourceQa=dict(samples=qa['samples'],views=qa['views'],quick=args.quick,beforeFailures=qa['beforeFailures'],afterFailures=qa['afterFailures'],untouchedObjects=qa['untouchedObjects']),
  proxyFillers=False,tools=tools,persistentData=False,status='geometry-awaiting-image-review')
+from render_integrity import provenance as export_provenance
+receipt['provenance']=export_provenance(sources=provenance)
 (root/'geometry.json').write_text(json.dumps(receipt,indent=2));print('R2_GEOMETRY_COMPLETE',json.dumps(receipt['sourceQa']),mesh['vertexCount'],mesh['triangleCount'],flush=True)

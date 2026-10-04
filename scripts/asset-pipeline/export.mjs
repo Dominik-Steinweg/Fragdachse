@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
+import { exportProvenance } from './export-provenance.mjs';
 import { archiveAssetV2, exportRunV2, selectVariantV2 } from './export-v2.mjs';
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -165,7 +166,7 @@ export async function exportVariant(folder, workspace = repoRoot) {
     await writeFile(path.join(folder, name), output);
     outputs[name] = hash(output);
   }
-  await saveJson(priorFile, { manifest: m, masterSha256: masterHash, outputs, report });
+  await saveJson(priorFile, { provenance: await exportProvenance(m), manifest: m, masterSha256: masterHash, outputs, report });
   return m;
 }
 

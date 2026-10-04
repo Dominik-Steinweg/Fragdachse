@@ -50,7 +50,9 @@
     "prebuild:perf-lab": "npm run assets:runtime",
     "prebuild:map-editor": "npm run assets:runtime",
     "assets:verify-runtime": "node scripts/verify-runtime-assets.mjs",
-    "pretest:assets": "npm run assets:runtime"
+    "pretest:assets": "npm run assets:runtime",
+    "assets:verify-published": "node scripts/asset-pipeline/verify-published-assets.mjs",
+    "assets:prepare-enemy-materials": "node scripts/asset-pipeline/prepare-enemy-materials.mjs"
   },
   "dependencies": {
     "peerjs": "^1.5.5",
