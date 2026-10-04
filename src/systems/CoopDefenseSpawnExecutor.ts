@@ -21,6 +21,12 @@ interface SpawnCell {
   readonly gridY: number;
 }
 
+export interface CoopDefenseSpawnResult {
+  readonly enemyIds: readonly string[];
+  /** Occupancy and pending navigation are temporary; neither may consume a wave's remainder. */
+  readonly deferred: boolean;
+}
+
 /**
  * Gemeinsame autoritative Spawn-Ausfuehrung fuer Encounter, Druckquellen und Bosses.
  * Zeitplanung und Quell-Lebenszyklus liegen bewusst in separaten Round-Systemen.
@@ -29,6 +35,7 @@ export class CoopDefenseSpawnExecutor {
   private readonly recentCells: string[] = [];
   private exhaustionWarned = false;
   private waitingForNavigation = false;
+  private waitingForSpace = false;
 
   constructor(
     private readonly enemyManager: EnemyManager,
@@ -46,7 +53,7 @@ export class CoopDefenseSpawnExecutor {
     originId?: string,
     front: SpawnFront = DEFAULT_SPAWN_FRONT,
     spawnArea?: CoopDefenseMapSpawnAreaConfig,
-  ): readonly string[] {
+  ): CoopDefenseSpawnResult {
     return this.spawnArenaGroup(
       kind,
       count,
@@ -63,7 +70,7 @@ export class CoopDefenseSpawnExecutor {
     count: number,
     front: SpawnFront = DEFAULT_SPAWN_FRONT,
   ): readonly string[] {
-    return this.spawnArenaGroup(kind, count, { spawnFront: front }, front, this.resolveSpawnFlowField(kind));
+    return this.spawnArenaGroup(kind, count, { spawnFront: front }, front, this.resolveSpawnFlowField(kind)).enemyIds;
   }
 
   /** Strukturgebundene Quelle mit unveraendertem Spawnzentrum und Burrow-Sonderbehandlung. */
@@ -106,13 +113,13 @@ export class CoopDefenseSpawnExecutor {
     front: SpawnFront,
     flowFieldService: EnemyFlowFieldService,
     spawnArea?: CoopDefenseMapSpawnAreaConfig,
-  ): string[] {
+  ): CoopDefenseSpawnResult {
     const spawnedEnemyIds: string[] = [];
-    if (count <= 0) return spawnedEnemyIds;
+    if (count <= 0) return { enemyIds: spawnedEnemyIds, deferred: false };
     const candidatesAll = this.collectCandidates(kind, front, flowFieldService, spawnArea);
     if (candidatesAll.length === 0) {
       this.warnExhausted();
-      return spawnedEnemyIds;
+      return { enemyIds: spawnedEnemyIds, deferred: this.waitingForSpace || this.waitingForNavigation };
     }
 
     const recentSet = new Set(this.recentCells);
@@ -121,8 +128,7 @@ export class CoopDefenseSpawnExecutor {
 
     for (let index = 0; index < count; index += 1) {
       if (candidates.length === 0) {
-        this.warnExhausted();
-        return spawnedEnemyIds;
+        return { enemyIds: spawnedEnemyIds, deferred: true };
       }
 
       const pick = Phaser.Math.RND.pick(candidates);
@@ -132,12 +138,15 @@ export class CoopDefenseSpawnExecutor {
       const enemy = this.enemyManager.hostSpawnAtWorld(world.x, world.y, kind, spawnOptions);
       spawnedEnemyIds.push(enemy.id);
       this.pushRecent(this.key(pick.gridX, pick.gridY));
-      candidates = candidates.filter(
-        (cell) => Math.abs(cell.gridX - pick.gridX) > MIN_INTRA_GROUP_DISTANCE_CELLS
-          || Math.abs(cell.gridY - pick.gridY) > MIN_INTRA_GROUP_DISTANCE_CELLS,
-      );
+      const minimumDistance = getCoopDefenseEnemyConfig(kind).size * 0.5 + enemy.getCollisionRadius();
+      candidates = candidates.filter((cell) => {
+        if (Math.abs(cell.gridX - pick.gridX) <= MIN_INTRA_GROUP_DISTANCE_CELLS
+          && Math.abs(cell.gridY - pick.gridY) <= MIN_INTRA_GROUP_DISTANCE_CELLS) return false;
+        const next = worldCellCenter(this.metrics, cell.gridX, cell.gridY);
+        return Phaser.Math.Distance.Squared(world.x, world.y, next.x, next.y) >= minimumDistance ** 2;
+      });
     }
-    return spawnedEnemyIds;
+    return { enemyIds: spawnedEnemyIds, deferred: false };
   }
 
   private collectCandidates(
@@ -147,6 +156,7 @@ export class CoopDefenseSpawnExecutor {
     spawnArea?: CoopDefenseMapSpawnAreaConfig,
   ): SpawnCell[] {
     this.waitingForNavigation = false;
+    this.waitingForSpace = false;
     if (getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge) {
       return this.collectEdgeBurrowCandidates(kind, front, flowFieldService);
     }
@@ -162,7 +172,10 @@ export class CoopDefenseSpawnExecutor {
         const world = worldCellCenter(this.metrics, gridX, gridY);
         if (!flowFieldService.isCircleGroundFreeAt(world.x, world.y, spawnRadius)) continue;
         if (!this.isReachable(world.x, world.y, flowFieldService, allowPlayerTargetWithoutGoals)) continue;
-        if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) continue;
+        if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) {
+          this.waitingForSpace = true;
+          continue;
+        }
         cells.push({ gridX, gridY });
       }
     }
@@ -222,9 +235,12 @@ export class CoopDefenseSpawnExecutor {
 
     for (const cell of this.getEdgeLine(front)) {
       const world = worldCellCenter(this.metrics, cell.gridX, cell.gridY);
-      if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) continue;
       const digCells = this.measureEdgeDigDistance(front, cell, flowFieldService, spawnRadius);
       if (digCells === null) continue;
+      if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) {
+        this.waitingForSpace = true;
+        continue;
+      }
       shortestDigCells = Math.min(shortestDigCells, digCells);
       edgeCells.push({ cell, digCells });
     }
@@ -320,8 +336,8 @@ export class CoopDefenseSpawnExecutor {
   }
 
   private warnExhausted(): void {
-    // A pending Worker result is not evidence of a physically exhausted spawn area.
-    if (this.waitingForNavigation) return;
+    // A pending Worker or a living crowd is not evidence of an unusable spawn area.
+    if (this.waitingForNavigation || this.waitingForSpace) return;
     if (this.exhaustionWarned) return;
     this.exhaustionWarned = true;
     console.warn('[CoopDefenseSpawnExecutor] Keine freien Spawn-Zellen an der authored Arena-Front mehr.');

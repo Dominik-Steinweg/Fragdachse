@@ -13,10 +13,12 @@ import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager, EnemySpawnOptions } from '../src/entities/EnemyManager';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { CoopDefenseSpawnExecutor } from '../src/systems/CoopDefenseSpawnExecutor';
+import { CoopDefenseMapDirector } from '../src/systems/CoopDefenseMapDirector';
 import { EnemyFlowFieldService } from '../src/systems/EnemyFlowFieldService';
 import { SPAWN_FRONTS, type SpawnFront } from '../src/utils/spawnFront';
 import { navigationTestWorld } from './navigationTestWorld';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
+import * as enemyConfigs from '../src/config/coopDefenseEnemies';
 import { resolveActiveArenaWorldMetrics, resolveCoopDefenseWorldMetrics, worldCellCenter } from '../src/world/WorldMetrics';
 
 describe('Spawn coordinates across World and navigation grids', () => {
@@ -24,12 +26,13 @@ describe('Spawn coordinates across World and navigation grids', () => {
     const world = navigationTestWorld();
     const metrics = { ...resolveCoopDefenseWorldMetrics(8, 8), gridCols: 8, gridRows: 8,
       widthPx: 256, heightPx: 256, offsetX: 0, offsetY: 0, maxX: 256, maxY: 256 };
-    const spawned: { x: number; y: number; radius: number }[] = [];
+    const spawned: { x: number; y: number; radius: number; active: boolean }[] = [];
     const spawn = (x: number, y: number, kind: Parameters<typeof getCoopDefenseEnemyConfig>[0]) => {
-      spawned.push({ x, y, radius: getCoopDefenseEnemyConfig(kind).size / 2 });
-      return { id: `spawn-${spawned.length}` };
+      spawned.push({ x, y, radius: getCoopDefenseEnemyConfig(kind).size / 2, active: true });
+      return { id: `spawn-${spawned.length}`, getCollisionRadius: () => getCoopDefenseEnemyConfig(kind).size / 2 };
     };
-    const manager = { getAllEnemies: () => [], hostSpawnAtWorld: spawn,
+    const manager = { getAllEnemies: () => spawned.filter(p => p.active)
+      .map(p => ({ sprite: p, getCollisionRadius: () => p.radius })), hostSpawnAtWorld: spawn,
       hostSpawnDummyAt: (gx: number, gy: number, kind: Parameters<typeof getCoopDefenseEnemyConfig>[0]) => {
         const p = worldCellCenter(metrics, gx, gy); return spawn(p.x, p.y, kind);
       } } as unknown as EnemyManager;
@@ -41,7 +44,7 @@ describe('Spawn coordinates across World and navigation grids', () => {
   it('spawns at the checked world position on every front with a finer navigation grid', () => {
     const world = setup();
     for (const front of SPAWN_FRONTS) {
-      expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'front', front)).toHaveLength(1);
+      expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'front', front).enemyIds).toHaveLength(1);
       const p = world.spawned.at(-1)!;
       expect(world.geometry().isFree(p.x, p.y, p.radius), front).toBe(true);
     }
@@ -53,7 +56,7 @@ describe('Spawn coordinates across World and navigation grids', () => {
     world.snapshot.obstacles.push({ id: 'rock:wrong-area', kind: 'rock', shape: 'rect', left: 64, top: 64, right: 128, bottom: 128, destructible: true });
     world.coordinator.invalidateGeometry(); world.flush();
     expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'late', 'west',
-      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 })).toHaveLength(1);
+      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 }).enemyIds).toHaveLength(1);
     expect(world.spawned[0]).toMatchObject({ x: 176, y: 176 });
     world.destroy();
   });
@@ -63,7 +66,7 @@ describe('Spawn coordinates across World and navigation grids', () => {
     world.snapshot.obstacles.push({ id: 'rock:neighbor', kind: 'rock', shape: 'rect', left: 192, top: 160, right: 224, bottom: 192, destructible: true });
     world.coordinator.invalidateGeometry(); world.flush();
     expect(world.executor.hostSpawnEncounterGroup('grave-titan', 1, 'boss', 'west',
-      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 })).toHaveLength(0);
+      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 })).toEqual({ enemyIds: [], deferred: false });
     expect(world.spawned).toHaveLength(0);
     world.destroy();
   });
@@ -73,7 +76,63 @@ describe('Spawn coordinates across World and navigation grids', () => {
     world.snapshot.obstacles.push({ id: 'rock:new', kind: 'rock', shape: 'rect', left: 160, top: 160, right: 192, bottom: 192, destructible: true });
     world.coordinator.invalidateGeometry();
     expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'blocked', 'west',
-      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 })).toHaveLength(0);
+      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 }).enemyIds).toHaveLength(0);
+    world.destroy();
+  });
+
+  it('separates a burst by physical body size even for bodies wider than the usual cell spacing', () => {
+    const boss = getCoopDefenseEnemyConfig('grave-titan');
+    const config = vi.spyOn(enemyConfigs, 'getCoopDefenseEnemyConfig').mockReturnValue({ ...boss, size: 128 });
+    const world = setup();
+    try {
+      const result = world.executor.hostSpawnEncounterGroup('grave-titan', 10, 'wide', 'west',
+        { gridX: 0, gridY: 0, widthCells: 8, heightCells: 8 });
+      expect(result.enemyIds.length).toBeGreaterThan(0);
+      expect(result.deferred).toBe(true);
+      for (let i = 0; i < world.spawned.length; i++) {
+        const a = world.spawned[i];
+        for (const b of world.spawned.slice(i + 1)) {
+          expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(a.radius + b.radius);
+        }
+      }
+    } finally { config.mockRestore(); world.destroy(); }
+  });
+
+  it('defers safe cells until the current navigation graph is ready', () => {
+    const world = setup();
+    world.snapshot.obstacles.push({ id: 'rock:elsewhere', kind: 'rock', shape: 'rect', left: 96, top: 0, right: 128, bottom: 32 });
+    world.coordinator.invalidateGeometry();
+    const area = { gridX: 1, gridY: 1, widthCells: 1, heightCells: 1 };
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'pending', 'west', area))
+      .toEqual({ enemyIds: [], deferred: true });
+    world.flush();
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'pending', 'west', area).enemyIds).toHaveLength(1);
+    world.destroy();
+  });
+
+  it('retains a whole wave through prolonged foreign occupancy and drains the one-cell queue after release', () => {
+    const world = setup();
+    const area = { gridX: 1, gridY: 1, widthCells: 1, heightCells: 1 };
+    world.manager.hostSpawnAtWorld(48, 48, 'zombie-badger');
+    const waveSize = 5;
+    const director = new CoopDefenseMapDirector([{
+      id: 'corridor', start: { type: 'time', atMs: 0 },
+      groups: [{ enemyKind: 'zombie-badger', count: waveSize, spawnArea: area }],
+    }], (...args) => world.executor.hostSpawnEncounterGroup(...args), { spawnBackstopAfterMs: 100 });
+    for (let i = 0; i < 100; i++) director.hostUpdate(100, false);
+    expect(world.spawned).toHaveLength(1);
+    expect(director.isEncounterSpawnComplete('corridor')).toBe(false);
+    // Departures free the sole admission cell. Every attempt must re-read its occupancy.
+    let elapsed = 0;
+    while (!director.isEncounterSpawnComplete('corridor') && elapsed < 5_000) {
+      world.spawned.forEach(enemy => { enemy.active = false; });
+      director.hostUpdate(200, false);
+      elapsed += 200;
+      expect(world.spawned.filter(enemy => enemy.active)).toHaveLength(1);
+    }
+    expect(director.isEncounterSpawnComplete('corridor')).toBe(true);
+    expect(world.spawned).toHaveLength(1 + waveSize);
+    for (const p of world.spawned) expect(world.geometry().isFree(p.x, p.y, p.radius)).toBe(true);
     world.destroy();
   });
 
@@ -81,11 +140,11 @@ describe('Spawn coordinates across World and navigation grids', () => {
     const world = setup();
     world.goal(224, 176);
     expect(world.field.queryNavigation(48, 48).status).toBe('pending');
-    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'moving', 'west')).toHaveLength(1);
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'moving', 'west').enemyIds).toHaveLength(1);
     world.snapshot.obstacles.push({ id: 'new-wall', kind: 'barrier', shape: 'rect', left: 96, top: 0, right: 128, bottom: 256 });
     world.coordinator.invalidateGeometry(); world.flush();
     world.goal(208, 192);
-    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'wrong-region', 'west')).toHaveLength(0);
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'wrong-region', 'west').enemyIds).toHaveLength(0);
     world.destroy();
   });
 
@@ -94,7 +153,7 @@ describe('Spawn coordinates across World and navigation grids', () => {
     expect(world.executor.hostSpawnBoss('grave-titan')).toBe(true);
     const boss = world.spawned[0];
     expect(world.geometry().isFree(boss.x, boss.y, boss.radius)).toBe(true);
-    expect(world.executor.hostSpawnEncounterGroup('alien-badger', 1, 'burrow', 'east')).toHaveLength(1);
+    expect(world.executor.hostSpawnEncounterGroup('alien-badger', 1, 'burrow', 'east').enemyIds).toHaveLength(1);
     expect(world.spawned.at(-1)?.x).toBe(240);
     world.destroy();
   });
@@ -233,7 +292,7 @@ describe('CoopDefenseSpawnExecutor fronts', () => {
       playerFlowField,
     );
 
-    expect(executor.hostSpawnEncounterGroup('rabid-badger', 1, 'map-9-opening', 'west')).toHaveLength(1);
+    expect(executor.hostSpawnEncounterGroup('rabid-badger', 1, 'map-9-opening', 'west').enemyIds).toHaveLength(1);
     expect(records[0].options).toMatchObject({ originId: 'map-9-opening', spawnFront: 'west' });
   });
 
@@ -254,7 +313,7 @@ describe('CoopDefenseSpawnExecutor fronts', () => {
       playerFlowField,
     );
 
-    expect(executor.hostSpawnEncounterGroup('void-stalker', 1, 'map-9-opening', 'east')).toHaveLength(1);
+    expect(executor.hostSpawnEncounterGroup('void-stalker', 1, 'map-9-opening', 'east').enemyIds).toHaveLength(1);
     expect(records[0].options).toMatchObject({ originId: 'map-9-opening', spawnFront: 'east' });
   });
 });
