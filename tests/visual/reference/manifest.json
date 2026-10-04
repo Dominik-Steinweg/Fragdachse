@@ -187,7 +187,7 @@
         "width": 960,
         "height": 540
       },
-      "sha256": "6479cb573ba3ace57e5e6d1d129d660c2d3161a74a79007c56a8e384acb263ed"
+      "sha256": "5013219b34e20154db1d9d62656dae5adfbe415a54d79ce96da63c9a0c176ec1"
     },
     "towers-dusk": {
       "recipeHash": "75df0023cc7135dc5065d77b2e3a713a84f4b774bc7ee4c87308d838b1737609",
@@ -196,7 +196,7 @@
         "width": 960,
         "height": 540
       },
-      "sha256": "91a29368753b52c82bc86d76f24163d6096997dd4e0c78f5a475da40f9bf1fae"
+      "sha256": "4368be2252fc08d80c45c99fd5260a5e4e3cf212d2b13f57f91d0ac556dc4e9e"
     },
     "towers-night": {
       "recipeHash": "75df0023cc7135dc5065d77b2e3a713a84f4b774bc7ee4c87308d838b1737609",
@@ -205,7 +205,7 @@
         "width": 960,
         "height": 540
       },
-      "sha256": "ce22274f88e6ef273d39563e14fcb28e9f27c1c8cb8cb4ae78119c94501a8415"
+      "sha256": "a08098d2b64dd0e4b06edc9fa272b0c3cc24e2f47b43670382ce22995f2f26f2"
     }
   }
 }

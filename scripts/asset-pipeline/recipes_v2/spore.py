@@ -60,8 +60,8 @@ def fungal_material(c, name, color, low, high, relief):
 def build(c, spec):
     stem = surface_finish(c.material('Warm fibrous ivory stalk', (.53, .43, .29), 'organic'), 'fibre')
     under = surface_finish(c.material('Muted cream rolled rim', (.64, .49, .30), 'organic'), 'fibre')
-    skin = fungal_material(c, 'Weathered vermilion cuticle', (.68, .035, .016),
-                           (.34, .009, .008), (.88, .105, .035), .013)
+    skin = fungal_material(c, 'Weathered terracotta cuticle', (.46, .075, .033),
+                           (.20, .027, .012), (.68, .18, .065), .013)
     pale = fungal_material(c, 'Dry broken ivory veil', (.85, .77, .56),
                            (.57, .47, .31), (.94, .86, .67), .023)
     dark = c.material('Recessed eastern spore slit', (.08, .027, .014), 'organic')
