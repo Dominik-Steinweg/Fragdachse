@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { DirtSurfaceField, DIRT_SURFACE_REACH_PX, WATER_BANK_REACH_PX } from '../src/arena/DirtSurfaceField';
 import { deriveGrassHeight } from '../src/arena/GroundMaterialSamples';
@@ -27,17 +28,18 @@ const sample = (field: DirtSurfaceField, x: number, y: number, size: number) => 
   return pixels;
 };
 
+// Native typed-array comparisons check every byte without generic property traversal.
 describe('World soil surface', () => {
   it('is independent of cell order, rebuilding, and sampling partition', () => {
     const field = new DirtSurfaceField(17, dirt, frame);
     const rebuilt = new DirtSurfaceField(17, [...dirt].reverse(), frame);
     const whole = sample(field, frame.offsetX, frame.offsetY, 256);
-    expect(sample(rebuilt, frame.offsetX, frame.offsetY, 256)).toEqual(whole);
+    assert.deepEqual(sample(rebuilt, frame.offsetX, frame.offsetY, 256), whole);
     for (const dx of [0, 128]) for (const dy of [0, 128]) {
       const part = sample(field, frame.offsetX + dx - 2, frame.offsetY + dy - 2, 132);
       for (let y = 0; y < 128; y++) {
-        expect(part.slice(((y + 2) * 132 + 2) * 4, ((y + 2) * 132 + 130) * 4))
-          .toEqual(whole.slice(((y + dy) * 256 + dx) * 4, ((y + dy) * 256 + dx + 128) * 4));
+        assert.deepEqual(part.subarray(((y + 2) * 132 + 2) * 4, ((y + 2) * 132 + 130) * 4),
+          whole.subarray(((y + dy) * 256 + dx) * 4, ((y + dy) * 256 + dx + 128) * 4));
       }
     }
   });
@@ -45,8 +47,8 @@ describe('World soil surface', () => {
   it('moves with the World frame and varies at edges between seeds', () => {
     const origin = { ...frame, offsetX: 0, offsetY: 0 };
     const pixels = sample(new DirtSurfaceField(17, dirt, frame), 37, 19, 256);
-    expect(sample(new DirtSurfaceField(17, dirt, origin), 0, 0, 256)).toEqual(pixels);
-    expect(sample(new DirtSurfaceField(18, dirt, frame), 37, 19, 256)).not.toEqual(pixels);
+    assert.deepEqual(sample(new DirtSurfaceField(17, dirt, origin), 0, 0, 256), pixels);
+    assert.notDeepEqual(sample(new DirtSurfaceField(18, dirt, frame), 37, 19, 256), pixels);
   });
 
   it('preserves solid interiors, holes, isolated cells and all-grass Worlds', () => {
@@ -71,13 +73,12 @@ describe('World soil surface', () => {
     const water = [{ gridX: 1, gridY: 1 }, { gridX: 2, gridY: 1 }, { gridX: 1, gridY: 2 }, { gridX: 2, gridY: 2 }];
     const field = new DirtSurfaceField(17, dirt, frame, water);
     const whole = sample(field, frame.offsetX, frame.offsetY, 256);
-    expect(sample(new DirtSurfaceField(17, dirt, frame, [...water].reverse()), frame.offsetX, frame.offsetY, 256))
-      .toEqual(whole);
+    assert.deepEqual(sample(new DirtSurfaceField(17, dirt, frame, [...water].reverse()), frame.offsetX, frame.offsetY, 256), whole);
     for (const dx of [0, 128]) for (const dy of [0, 128]) {
       const part = sample(field, frame.offsetX + dx - 2, frame.offsetY + dy - 2, 132);
       for (let y = 0; y < 128; y++) {
-        expect(part.slice(((y + 2) * 132 + 2) * 4, ((y + 2) * 132 + 130) * 4))
-          .toEqual(whole.slice(((y + dy) * 256 + dx) * 4, ((y + dy) * 256 + dx + 128) * 4));
+        assert.deepEqual(part.subarray(((y + 2) * 132 + 2) * 4, ((y + 2) * 132 + 130) * 4),
+          whole.subarray(((y + dy) * 256 + dx) * 4, ((y + dy) * 256 + dx + 128) * 4));
       }
     }
     // The bed below the translucent water rim is fully covered.
@@ -90,6 +91,6 @@ describe('World soil surface', () => {
     const bare = new Uint8ClampedArray(256 * 256 * 4), reference = new Uint8ClampedArray(256 * 256 * 4);
     field.writeSurface(bare, 256, frame.offsetX, frame.offsetY, 256, plain);
     new DirtSurfaceField(17, dirt, frame).writeSurface(reference, 256, frame.offsetX, frame.offsetY, 256, plain);
-    expect(bare).toEqual(reference);
+    assert.deepEqual(bare, reference);
   });
 });

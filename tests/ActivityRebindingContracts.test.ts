@@ -1,8 +1,8 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ArenaLayout, PlayerProfile, SyncedCaptureTheBeerBeer } from '../src/types';
-import type { CoopMissionObjectiveRuntime, CoopMissionRuntime } from '../src/activity/CoopMissionRuntime';
+import type { CoopMissionObjectiveRuntime } from '../src/activity/CoopMissionRuntime';
 import type { CoopDefenseMissionBarrierManager } from '../src/systems/CoopDefenseMissionBarrierManager';
-import type { WorldCombatGameplayBinding, WorldCombatGameplayBindingOptions } from '../src/world/WorldCombatGameplayBinding';
+import type { WorldCombatGameplayBindingOptions } from '../src/world/WorldCombatGameplayBinding';
 import { WorldRuntime } from '../src/world/WorldRuntime';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
@@ -12,76 +12,27 @@ import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatC
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { WorldLifecycle } from '../src/world/WorldLifecycle';
 
-let ULTIMATE_CONFIGS: typeof import('../src/loadout/LoadoutConfig').ULTIMATE_CONFIGS;
-let AirstrikeSystem: typeof import('../src/systems/AirstrikeSystem').AirstrikeSystem;
-let PowerUpSystem: typeof import('../src/powerups/PowerUpSystem').PowerUpSystem;
-let CoopMissionRuntime: typeof import('../src/activity/CoopMissionRuntime').CoopMissionRuntime;
-let CaptureTheBeerActivityRuntime: typeof import('../src/activity/CaptureTheBeerActivityRuntime').CaptureTheBeerActivityRuntime;
-let WorldCombatGameplayBinding: typeof import('../src/world/WorldCombatGameplayBinding').WorldCombatGameplayBinding;
-let WorldPlayerGameplayRuntime: typeof import('../src/world/WorldPlayerGameplayRuntime').WorldPlayerGameplayRuntime;
+// Rebinding exercises gameplay/lifecycle ports, not a browser renderer. Keep Phaser's
+// device detection and module initialization out of the timed setup hook.
+vi.mock('phaser', () => ({
+  // CTB allocates scratch bounds, but this contract only exercises snapshots and detach.
+  Geom: { Rectangle: class {} },
+  Math: {
+    Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
+    Angle: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1) },
+    Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
+  },
+}));
 
-beforeAll(async () => {
-  vi.stubGlobal('window', { cordova: undefined, URL: {} });
-  vi.stubGlobal('navigator', {
-    userAgent: 'vitest',
-    appVersion: 'vitest',
-    maxTouchPoints: 0,
-  });
-  vi.stubGlobal('Image', class {
-    onload: (() => void) | null = null;
-    set src(_value: string) {}
-  });
-  class CanvasElement {
-    readonly style = {};
-    readonly tagName = 'CANVAS';
+import { ULTIMATE_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { AirstrikeSystem } from '../src/systems/AirstrikeSystem';
+import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
+import { CoopMissionRuntime } from '../src/activity/CoopMissionRuntime';
+import { CaptureTheBeerActivityRuntime } from '../src/activity/CaptureTheBeerActivityRuntime';
+import { WorldCombatGameplayBinding } from '../src/world/WorldCombatGameplayBinding';
+import { WorldPlayerGameplayRuntime } from '../src/world/WorldPlayerGameplayRuntime';
 
-    getContext() {
-      const imageData = { data: new Uint8ClampedArray([0, 0, 0, 0]) };
-      return {
-        fillRect: vi.fn(),
-        putImageData: vi.fn(),
-        drawImage: vi.fn(),
-        getImageData: () => imageData,
-      };
-    }
-  }
-  vi.stubGlobal('HTMLCanvasElement', CanvasElement);
-  vi.stubGlobal('document', {
-    hidden: false,
-    documentElement: {},
-    body: { appendChild: vi.fn(), removeChild: vi.fn() },
-    readyState: 'complete',
-    createElement: (tag: string) => {
-      if (tag === 'canvas') {
-        return new CanvasElement();
-      }
-      return {
-        canPlayType: () => '',
-        style: {},
-        tagName: tag.toUpperCase(),
-      };
-    },
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    getElementById: vi.fn(),
-  });
-  const [loadout, airstrike, powerUp, coopRuntime, capture, combat, player] = await Promise.all([
-    import('../src/loadout/LoadoutConfig'),
-    import('../src/systems/AirstrikeSystem'),
-    import('../src/powerups/PowerUpSystem'),
-    import('../src/activity/CoopMissionRuntime'),
-    import('../src/activity/CaptureTheBeerActivityRuntime'),
-    import('../src/world/WorldCombatGameplayBinding'),
-    import('../src/world/WorldPlayerGameplayRuntime'),
-  ]);
-  ULTIMATE_CONFIGS = loadout.ULTIMATE_CONFIGS;
-  AirstrikeSystem = airstrike.AirstrikeSystem;
-  PowerUpSystem = powerUp.PowerUpSystem;
-  CoopMissionRuntime = coopRuntime.CoopMissionRuntime;
-  CaptureTheBeerActivityRuntime = capture.CaptureTheBeerActivityRuntime;
-  WorldCombatGameplayBinding = combat.WorldCombatGameplayBinding;
-  WorldPlayerGameplayRuntime = player.WorldPlayerGameplayRuntime;
-});
+afterEach(() => vi.restoreAllMocks());
 
 function service(overrides: Record<string, unknown> = {}): any {
   const target = { ...overrides } as Record<string, unknown>;

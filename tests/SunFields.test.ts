@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { expect,it } from 'vitest';
 import { cloudShadowAt, cloudTravel, sunlightAt } from '../src/effects/sunlight/SunFieldModel';
 import { setCloudUniforms } from '../src/effects/sunlight/cloudShadow';
@@ -5,6 +6,7 @@ import { createSunTuning } from '../src/effects/sunlight/SunAtmosphere';
 import { createSunPath, resolveSunPath } from '../src/effects/sunlight/SunPath';
 import { validateSunTuning } from '../src/effects/sunlight/SunTuning';
 
+// Use native assertions in dense sampling loops; retain every coordinate and invariant.
 it('keeps clouds bounded, deterministic, stable at zero/paused time and neutral at night',()=>{
   const state={tuning:createSunTuning(),timeSec:0,strength:1};
   for(const time of [0,1/60,30,50000,NaN,Infinity])for(let x=-1000;x<=1000;x+=173) {
@@ -34,10 +36,10 @@ it('anchors organic openings to the world, independent of azimuth and elevation'
  for(let x=-1600;x<1600;x+=83)for(let y=-1600;y<1600;y+=89){
   const opening=sunlightAt(x,y,state);min=Math.min(min,opening);max=Math.max(max,opening);
   for(const minute of [360,480,720,1020,1200]){
-   resolveSunPath(minute,null,state.sunPath);expect(sunlightAt(x,y,state)).toBe(opening);
+   resolveSunPath(minute,null,state.sunPath);assert.equal(sunlightAt(x,y,state),opening);
   }
   variationX+=Math.abs(sunlightAt(x+20,y,state)-opening);variationY+=Math.abs(sunlightAt(x,y+20,state)-opening);
-  expect(Math.abs(sunlightAt(x+.001,y,state)-opening)).toBeLessThan(.001);
+  assert.ok(Math.abs(sunlightAt(x+.001,y,state)-opening)<.001);
  }
  expect(max-min).toBeGreaterThan(.25);expect(variationX/variationY).toBeGreaterThan(.5);expect(variationX/variationY).toBeLessThan(2);
 });
@@ -110,7 +112,7 @@ it('adds bounded smaller openings with negligible mean exposure shift and stable
  for(const {minute} of SUN_ATMOSPHERE_KEYFRAMES){resolveSunAtmosphere(minute,t);let delta=0,changes=0,n=0;
   for(let y=-4096;y<4096;y+=137)for(let x=-4096;x<4096;x+=131){
    const amount=t.cloudSpotAmount,withSpot=sunlightAt(x,y,state);t.cloudSpotAmount=0;const without=sunlightAt(x,y,state);t.cloudSpotAmount=amount;
-   expect(sunlightAt(x,y,state)).toBe(withSpot);sunCompositeFactor(out,t.shade,t.daylight,t.sun,withSpot,1);const a=out[0]*.2126+out[1]*.7152+out[2]*.0722;
+   assert.equal(sunlightAt(x,y,state),withSpot);sunCompositeFactor(out,t.shade,t.daylight,t.sun,withSpot,1);const a=out[0]*.2126+out[1]*.7152+out[2]*.0722;
    sunCompositeFactor(out,t.shade,t.daylight,t.sun,without,1);delta+=a-(out[0]*.2126+out[1]*.7152+out[2]*.0722);changes+=Math.abs(withSpot-without);n++;
   }
   expect(Math.abs(delta/n)).toBeLessThan(.02);if(t.cloudCover>0)expect(changes/n).toBeGreaterThan(.005);else expect(changes).toBe(0);
@@ -128,13 +130,13 @@ it('gives small openings visible local contrast while bounding average exposure 
   let before=0,after=0,peak=1;
   for(let y=-2000;y<2000;y+=39)for(let x=-2000;x<2000;x+=37){
    const spot=cloudSmallOpeningAt(x,y,state),visibility=sunlightAt(x,y,state);
-   expect(cloudSmallOpeningAt(x,y,state,0)).toBe(0);
-   expect(cloudSmallOpeningAt(x,y,state)).toBe(spot);
-   state.sunPath.azimuth+=37;expect(cloudSmallOpeningAt(x,y,state)).toBe(spot);
+   assert.equal(cloudSmallOpeningAt(x,y,state,0),0);
+   assert.equal(cloudSmallOpeningAt(x,y,state),spot);
+   state.sunPath.azimuth+=37;assert.equal(cloudSmallOpeningAt(x,y,state),spot);
    sunCompositeFactor(out,t.shade,t.daylight,t.sun,visibility,state.strength);const base=luma();before+=base;
    sunCompositeFactor(out,t.shade,t.daylight,t.sun,visibility,state.strength,0,spot,t.cloudCover>0?t.cloudSpotAmount:0);
    after+=luma();peak=Math.max(peak,luma()/base);
-   if(!state.strength)expect(out).toEqual([1,1,1]);
+   if(!state.strength)assert.deepEqual(out,[1,1,1]);
   }
   if(state.strength>.99){expect(peak).toBeGreaterThan(1.15);expect(peak).toBeLessThan(1.35);}
   expect(Math.abs(after/before-1)).toBeLessThan(.04);
@@ -149,14 +151,14 @@ it('keeps the material factor finite and positive for all atmosphere anchors and
   for(const visibility of [0,1/255,.5,1])for(const spot of [0,1])for(const grain of [-.5,.5]){
    sunCompositeFactor(result,t.shade,t.daylight,t.sun,visibility,strength,grain,spot,t.cloudSpotAmount);
    for(const factor of result){
-    expect(Number.isFinite(factor)).toBe(true);expect(factor).toBeGreaterThan(0);expect(factor).toBeLessThanOrEqual(2);
-    if(strength===0)expect(factor).toBe(1);
+    assert.ok(Number.isFinite(factor));assert.ok(factor>0);assert.ok(factor<=2);
+    if(strength===0)assert.equal(factor,1);
     // Effect colour is the destination of modulate-2x, never a material input.
     // RGBA8 clamps out-of-range colour on its preceding write, before blending.
     for(const effect of [-1,0,1/255,1,4]){
      const destination=Math.max(0,Math.min(1,effect));
      const output=2*(factor*.5)*destination;
-     expect(Number.isFinite(output)).toBe(true);expect(output).toBeGreaterThanOrEqual(0);
+     assert.ok(Number.isFinite(output));assert.ok(output>=0);
     }
    }
   }
