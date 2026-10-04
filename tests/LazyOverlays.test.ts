@@ -102,13 +102,20 @@ describe('lazy opening lifecycle', () => {
     overlay.showLoaded = vi.fn(); overlay.show({ offers: ['old'] }); current = null; h.resolve(); await h.done;
     expect(overlay.showLoaded).not.toHaveBeenCalled(); expect(closed).toHaveBeenCalledOnce(); expect(overlay.isVisible()).toBe(false);
   });
-  it('retains the requested round when an automatic reward waits behind downloads', async () => {
-    const h = setup(), current = { roundEndedAt: 42, options: ['updated'] };
+  it.each([undefined, { roomCode: 'AAAAAA', roundRevision: 2 }])('retains the requested round when an automatic reward waits behind downloads (%j)', async roundIdentity => {
+    const h = setup(), current = { roundEndedAt: 42, roundIdentity, options: ['updated'] };
     const get = vi.fn(() => current as never);
     const overlay: any = new CoopDefenseItemRewardOverlay(h.scene, vi.fn(), get, vi.fn());
-    overlay.showLoaded = vi.fn(); overlay.show({ roundEndedAt: 42, options: ['old'] }, true);
+    overlay.showLoaded = vi.fn(); overlay.show({ roundEndedAt: 42, roundIdentity, options: ['old'] }, true);
     h.resolve(); await h.done;
-    expect(get).toHaveBeenCalledWith(42);
+    expect(get).toHaveBeenCalledWith(42, roundIdentity);
     expect(overlay.showLoaded).toHaveBeenCalledWith(current, true);
+  });
+  it.each([undefined, { roomCode: 'AAAAAA', roundRevision: 2 }])('claims the exact presented reward even when item IDs repeat (%j)', roundIdentity => {
+    const h = setup(), claim = vi.fn(() => false);
+    const overlay: any = new CoopDefenseItemRewardOverlay(h.scene, claim, vi.fn(), vi.fn());
+    overlay.presentation = { roundEndedAt: 42, roundIdentity };
+    overlay.applyClaim('shared-offer');
+    expect(claim).toHaveBeenCalledWith(42, 'shared-offer', undefined, 'take', roundIdentity ?? null);
   });
 });

@@ -16,6 +16,7 @@ import type {
   CoopDefenseItemRewardAction,
   CoopDefenseItemSlot,
   CoopDefensePendingItemReward,
+  CoopDefenseRoundIdentity,
   CoopDefenseUpgradeProfile,
   LoadoutToolRef,
   LoadoutSlot,
@@ -25,6 +26,7 @@ import { COOP_DEFENSE_CONSTRUCTION_IDS } from '../config/coopDefenseConstruction
 import {
   addCoopDefenseItem,
   getCoopDefenseItemSalvageXp,
+  getCoopDefenseItemRewardRoundKey,
   getEquippedCoopDefenseItem,
   getEquippedCoopDefenseItems,
   isCoopDefenseStashFull,
@@ -323,10 +325,7 @@ function cloneCoopDefenseItemState(progress: CoopDefenseProgressPreferences): {
   return {
     items: [...progress.items],
     equippedItemIds: { ...progress.equippedItemIds },
-    pendingItemRewards: progress.pendingItemRewards.map((reward) => ({
-      ...reward,
-      offers: [...reward.offers],
-    })),
+    pendingItemRewards: progress.pendingItemRewards.map(clonePendingItemReward),
   };
 }
 
@@ -924,7 +923,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   if (coop.pendingItemReward !== undefined && coop.pendingItemReward !== null) {
     const legacyReward = sanitizeCoopDefensePendingItemReward(coop.pendingItemReward);
     if (!legacyReward) return null;
-    if (!pendingItemRewards.some((reward) => reward.roundEndedAt === legacyReward.roundEndedAt)) {
+    if (!pendingItemRewards.some((reward) => getCoopDefenseItemRewardRoundKey(reward) === getCoopDefenseItemRewardRoundKey(legacyReward))) {
       pendingItemRewards.unshift(legacyReward);
     }
   }
@@ -1020,10 +1019,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
       persistentBaseRewardUnlocks: [...progress.persistentBaseRewardUnlocks],
       items: [...progress.items],
       equippedItemIds: { ...progress.equippedItemIds },
-      pendingItemRewards: progress.pendingItemRewards.map((reward) => ({
-        ...reward,
-        offers: [...reward.offers],
-      })),
+      pendingItemRewards: progress.pendingItemRewards.map(clonePendingItemReward),
       unseenItems: progress.unseenItems,
       persistentBase: clonePersistentBaseState(progress.persistentBase),
       personalBaseContribution: clonePersistentPlayerBaseContribution({
@@ -2015,7 +2011,7 @@ export function unlockStoredCoopDefenseItemsAfterVictory(
   const current = readPreferences();
   const progress = current.progression.coopDefense;
   const hasReward = firstReward !== undefined
-    && progress.pendingItemRewards.some((entry) => entry.roundEndedAt === firstReward.roundEndedAt);
+    && progress.pendingItemRewards.some((entry) => getCoopDefenseItemRewardRoundKey(entry) === getCoopDefenseItemRewardRoundKey(firstReward));
   const nextPendingItemRewards = firstReward !== undefined && !hasReward
     ? [...progress.pendingItemRewards, clonePendingItemReward(firstReward)]
     : progress.pendingItemRewards;
@@ -2183,7 +2179,7 @@ export function salvageStoredCoopDefenseItem(uid: string): number {
 }
 
 function clonePendingItemReward(reward: CoopDefensePendingItemReward): CoopDefensePendingItemReward {
-  return { ...reward, offers: [...reward.offers] };
+  return { ...reward, ...(reward.roundIdentity ? { roundIdentity: { ...reward.roundIdentity } } : {}), offers: [...reward.offers] };
 }
 
 /** Gibt die offene FIFO-Queue als defensive Kopie zurueck. */
@@ -2206,7 +2202,7 @@ export function getStoredPendingCoopDefenseItemReward(): CoopDefensePendingItemR
 export function setStoredPendingCoopDefenseItemReward(reward: CoopDefensePendingItemReward): boolean {
   const current = readPreferences();
   const progress = current.progression.coopDefense;
-  if (progress.pendingItemRewards.some((entry) => entry.roundEndedAt === reward.roundEndedAt)) return false;
+  if (progress.pendingItemRewards.some((entry) => getCoopDefenseItemRewardRoundKey(entry) === getCoopDefenseItemRewardRoundKey(reward))) return false;
 
   writePreferences({
     ...current,
@@ -2261,6 +2257,7 @@ export function claimStoredPendingCoopDefenseItemReward(
   offerUid: string,
   salvageUid?: string,
   action?: CoopDefenseItemRewardAction,
+  roundIdentity?: CoopDefenseRoundIdentity | null,
 ): CoopDefenseItemRewardClaim | null;
 /** @deprecated Nur fuer alte Aufrufer; bei mehreren gleichen offerUid ist der Claim bewusst ungueltig. */
 export function claimStoredPendingCoopDefenseItemReward(
@@ -2273,6 +2270,7 @@ export function claimStoredPendingCoopDefenseItemReward(
   offerUidOrSalvageUid?: string,
   salvageUidOrAction?: string | CoopDefenseItemRewardAction,
   action: CoopDefenseItemRewardAction = 'take',
+  roundIdentity?: CoopDefenseRoundIdentity | null,
 ): CoopDefenseItemRewardClaim | null {
   const current = readPreferences();
   const progress = current.progression.coopDefense;
@@ -2289,10 +2287,13 @@ export function claimStoredPendingCoopDefenseItemReward(
     : (salvageUidOrAction as CoopDefenseItemRewardAction | undefined) ?? 'take';
   const matchingRewards = progress.pendingItemRewards.filter((reward) => (
     (requestedRoundEndedAt === null || reward.roundEndedAt === requestedRoundEndedAt)
+      && (roundIdentity === undefined || (roundIdentity === null ? reward.roundIdentity === undefined
+        : reward.roundIdentity?.roomCode === roundIdentity.roomCode
+          && reward.roundIdentity.roundRevision === roundIdentity.roundRevision))
       && reward.offers.some((entry) => entry.uid === offerUid)
   ));
-  // Der alte offerUid-only Aufruf darf niemals bei doppelten IDs willkuerlich einen Reward
-  // entfernen. Der aktuelle Flow gibt immer roundEndedAt + offerUid an.
+  // Undefined preserves unqualified legacy callers; null explicitly selects an old reward.
+  // Never choose arbitrarily when an unqualified timestamp/offer ID is still ambiguous.
   if (matchingRewards.length !== 1) return null;
   const pendingReward = matchingRewards[0];
   const offer = pendingReward.offers.find((entry) => entry.uid === offerUid);

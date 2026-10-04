@@ -1012,9 +1012,16 @@ export interface CoopDefenseItem {
   readonly affixes: readonly CoopDefenseItemAffix[];
 }
 
+export interface CoopDefenseRoundIdentity {
+  readonly roomCode: string;
+  readonly roundRevision: number;
+}
+
 /** Offenes Belohnungsangebot nach einem Sieg. Ueberlebt Reload und Rejoin. */
 export interface CoopDefensePendingItemReward {
   readonly roundEndedAt: number;
+  /** Missing only for legacy rewards whose originating round cannot be reconstructed. */
+  readonly roundIdentity?: CoopDefenseRoundIdentity;
   /** Map, auf der das Angebot verdient wurde; ältere Saves dürfen dieses Feld auslassen. */
   readonly mapId?: string;
   readonly offers: readonly CoopDefenseItem[];

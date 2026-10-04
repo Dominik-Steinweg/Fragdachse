@@ -1,3 +1,5 @@
+import type { CoopDefenseRoundIdentity } from '../../types';
+
 export type AfterRoundStep = 'items' | 'upgrades' | 'base';
 
 /** Local presentation lifetime only; earned rewards remain in their existing persistent owners. */
@@ -7,13 +9,14 @@ export class AfterRoundFlow {
   private current: AfterRoundStep | null = null;
   private started = false;
   private readonly completed = new Set<AfterRoundStep>();
-  private readonly seen = new Set<number>();
+  private readonly seen = new Set<string>();
   get active(): boolean { return this.round !== null; }
   get step(): AfterRoundStep | null { return this.current; }
-  prepare(round: number, steps: readonly AfterRoundStep[]): void {
+  prepare(round: number, steps: readonly AfterRoundStep[], identity?: CoopDefenseRoundIdentity): void {
     this.cancel();
-    if (this.seen.has(round)) return;
-    this.seen.add(round);
+    const key = identity ? `${identity.roomCode}:${identity.roundRevision}` : `legacy:${round}`;
+    if (this.seen.has(key)) return;
+    this.seen.add(key);
     this.round = round;
     for (const step of steps) this.add(step);
   }

@@ -3,7 +3,9 @@ import {
   ArenaMetaController,
   type ArenaMetaControllerInput,
 } from '../src/scenes/arena/ArenaMetaController';
-import { getStoredCoopDefenseProgress } from '../src/utils/localPreferences';
+import { addStoredCoopDefenseXp, claimStoredPendingCoopDefenseItemReward, getStoredCoopDefenseProgress, markStoredCoopDefenseRoundProcessed,
+  restoreStoredCoopDefenseProgress, setStoredPendingCoopDefenseItemReward } from '../src/utils/localPreferences';
+import { COOP_DEFENSE_MAP_CONFIGS } from '../src/config/coopDefenseMaps';
 import { levelUpCoopDefenseUpgrade } from '../src/utils/coopDefenseUpgrades';
 import { getCoopDefenseXpThresholdForLevel } from '../src/utils/coopDefenseProgression';
 
@@ -464,6 +466,38 @@ describe('ArenaMetaController', () => {
 });
 
 describe('room-scoped round progression', () => {
+  it('retains distinct victory item offers when two round revisions share an end timestamp', () => {
+    const saved = getStoredCoopDefenseProgress(); const f = makeInput();
+    restoreStoredCoopDefenseProgress({ ...saved, totalXp: 0, itemsUnlocked: true,
+      pendingItemRewards: [], processedRoundRevisionsByRoom: {}, lastProcessedRoundEndedAt: null });
+    vi.mocked(f.store.getProgress).mockImplementation(getStoredCoopDefenseProgress);
+    vi.mocked(f.store.addCoopDefenseXp).mockImplementation(addStoredCoopDefenseXp);
+    vi.mocked(f.store.markCoopDefenseRoundProcessed).mockImplementation(markStoredCoopDefenseRoundProcessed);
+    vi.mocked(f.store.setPendingItemReward).mockImplementation(setStoredPendingCoopDefenseItemReward);
+    vi.mocked(f.store.claimPendingItemReward).mockImplementation(claimStoredPendingCoopDefenseItemReward);
+    const map = COOP_DEFENSE_MAP_CONFIGS.find(entry => entry.itemDrop)!;
+    try {
+      for (const revision of [1, 2]) {
+        vi.mocked(f.resultRead.getRoundState).mockReturnValue({ status: 'victory', roundRevision: revision,
+          roundStartTime: 1, endedAt: 100_000, coopDefenseMapId: map.mapId });
+        vi.mocked(f.resultRead.getRoundResults).mockReturnValue([{ id: 'local', name: 'Local', colorHex: 0xffffff,
+          frags: 0, teamId: null, roundEndedAt: 100_000, roundRevision: revision,
+          gameMode: 'coop_defense', mapName: map.mapId, sharedXp: 20 }]);
+        f.controller.beginMatchResults(); f.controller.tryFinalizeMatchResults();
+      }
+      expect(getStoredCoopDefenseProgress().totalXp).toBe(40);
+      expect(getStoredCoopDefenseProgress().pendingItemRewards).toHaveLength(2);
+      expect(f.controller.getLastMatchResultsPresentation()?.itemReward?.roundIdentity?.roundRevision).toBe(2);
+      const first = getStoredCoopDefenseProgress().pendingItemRewards[0], uid = first.offers[0].uid;
+      expect(f.controller.claimItemReward(100_000, uid, uid, 'take', first.roundIdentity)).not.toBeNull();
+      expect(f.controller.getLastMatchResultsPresentation()?.itemReward?.roundIdentity?.roundRevision).toBe(2);
+      expect(getStoredCoopDefenseProgress().pendingItemRewards).toHaveLength(1);
+      f.controller.beginMatchResults(); f.controller.tryFinalizeMatchResults();
+      expect(getStoredCoopDefenseProgress().pendingItemRewards).toHaveLength(1);
+      expect(f.store.addCoopDefenseXp).toHaveBeenCalledTimes(2);
+    } finally { f.controller.destroy(); restoreStoredCoopDefenseProgress(saved); }
+  });
+
   function creditingInput(legacyEndedAt: number | null = null) {
     const f = makeInput();
     let current = { ...getStoredCoopDefenseProgress(), totalXp: 0, lastProcessedRoundEndedAt: legacyEndedAt,
@@ -501,6 +535,19 @@ describe('room-scoped round progression', () => {
     expect(f.progress().totalXp).toBe(40);
     expect(f.store.markCoopDefenseRoundProcessed).toHaveBeenLastCalledWith(90_000, { roomCode: 'BBBBBB', roundRevision: 10 });
     expect(f.playSound.mock.calls.filter(([sound]) => sound === 'sfx_round_defeat')).toHaveLength(2);
+    f.controller.destroy();
+  });
+
+  it('opens rewards for a newer revision even when its end timestamp equals a previous round', () => {
+    const f = creditingInput();
+    f.setRound('AAAAAA', 100, 100_000); f.apply(); f.controller.startAfterRoundFlow();
+    expect(f.presentation.showUpgradeOverlay).toHaveBeenCalledOnce();
+    f.controller.finishAfterRoundStep('upgrades');
+    f.setRound('AAAAAA', 101, 100_000);
+    vi.mocked(f.resultRead.getRoundResults).mockReturnValue([{ ...f.resultRead.getRoundResults()![0], sharedXp: 100 }]);
+    f.apply(); f.controller.startAfterRoundFlow();
+    expect(f.progress().totalXp).toBe(120);
+    expect(f.presentation.showUpgradeOverlay).toHaveBeenCalledTimes(2);
     f.controller.destroy();
   });
 

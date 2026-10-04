@@ -8,7 +8,7 @@ import {
   getCoopDefenseItemRarityDefinition,
   getCoopDefenseItemSlotDefinition,
 } from '../config/coopDefenseItems';
-import type { CoopDefenseItem, CoopDefenseItemRewardAction } from '../types';
+import type { CoopDefenseItem, CoopDefenseItemRewardAction, CoopDefenseRoundIdentity } from '../types';
 import {
   describeCoopDefenseItem,
   formatCoopDefenseItemValue,
@@ -166,9 +166,10 @@ export class CoopDefenseItemRewardOverlay {
       offerUid: string,
       salvageUid?: string,
       action?: CoopDefenseItemRewardAction,
+      roundIdentity?: CoopDefenseRoundIdentity | null,
     ) => boolean,
     /** Liefert den aktuellen Stand nach jeder Aenderung; `null` schliesst den Layer. */
-    private readonly getPresentation: (roundEndedAt?: number) => MatchItemRewardPresentation | null,
+    private readonly getPresentation: (roundEndedAt?: number, roundIdentity?: CoopDefenseRoundIdentity) => MatchItemRewardPresentation | null,
     private readonly onClosed: () => void,
     canOpen: () => boolean = () => true,
   ) {
@@ -267,7 +268,7 @@ export class CoopDefenseItemRewardOverlay {
     // displaying an offer that may have been claimed or replaced in the meantime.
     let immediate = true;
     this.lazy.open(() => {
-      const current = immediate ? presentation : this.getPresentation(presentation.roundEndedAt);
+      const current = immediate ? presentation : this.getPresentation(presentation.roundEndedAt, presentation.roundIdentity);
       if (!current) { this.hide(); this.onClosed(); return; }
       this.showLoaded(current, closeAfterClaim);
     }, () => this.dismiss());
@@ -699,7 +700,7 @@ export class CoopDefenseItemRewardOverlay {
     action: CoopDefenseItemRewardAction = 'take',
   ): void {
     const roundEndedAt = this.presentation?.roundEndedAt;
-    if (roundEndedAt === undefined || !this.onClaim(roundEndedAt, offerUid, salvageUid, action)) return;
+    if (roundEndedAt === undefined || !this.onClaim(roundEndedAt, offerUid, salvageUid, action, this.presentation?.roundIdentity ?? null)) return;
     if (this.closeAfterClaim) {
       this.hide();
       this.onClosed();

@@ -28,6 +28,9 @@ import {
   setStoredCoopDefenseCheatProgress,
   setStoredCoopDefenseItemsUnlocked,
   setStoredCoopDefenseTotalXp,
+  setStoredPendingCoopDefenseItemReward,
+  claimStoredPendingCoopDefenseItemReward,
+  unlockStoredCoopDefenseItemsAfterVictory,
   grantStoredPersistentBaseRewards,
   setStoredPersistentBaseUnlocked,
   setStoredPersistentBaseAreaStage,
@@ -40,6 +43,8 @@ import {
 import { resolveBrowserLocale } from '../src/i18n/types';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
+import { rollCoopDefenseItemOffer } from '../src/utils/coopDefenseItems';
+import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../src/config/coopDefenseItems';
 import { PERSISTENT_BASE_STATE_SCHEMA_VERSION } from '../src/config/persistentBase';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
 import { getPersistentBaseRewardIds } from '../src/persistentBase/PersistentBaseRewardCatalog';
@@ -67,6 +72,57 @@ class MemoryStorage implements Storage {
 
 describe('local progress generation', () => {
   let storage: MemoryStorage;
+
+  it('preserves identified rewards and a legacy reward with the same time across export, reload and import', () => {
+    const legacy = { roundEndedAt: 42, offers: rollCoopDefenseItemOffer(2, null) };
+    const first = { ...legacy, roundIdentity: { roomCode: 'AAAAAA', roundRevision: 1 } };
+    expect(unlockStoredCoopDefenseItemsAfterVictory(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID, first)).toBe(true);
+    expect(unlockStoredCoopDefenseItemsAfterVictory(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID, { ...first, roundEndedAt: 43 })).toBe(false);
+    expect(setStoredPendingCoopDefenseItemReward(legacy)).toBe(true);
+    expect(setStoredPendingCoopDefenseItemReward({ ...legacy, roundIdentity: { roomCode: 'BBBBBB', roundRevision: 1 } })).toBe(true);
+    expect(setStoredPendingCoopDefenseItemReward({ ...legacy, roundIdentity: { roomCode: 'AAAAAA', roundRevision: 2 } })).toBe(true);
+    expect(setStoredPendingCoopDefenseItemReward(first)).toBe(false);
+    const expected = getStoredCoopDefenseProgress().pendingItemRewards;
+    expect(expected).toHaveLength(4);
+    first.roundIdentity.roundRevision = 99;
+    (getStoredCoopDefenseProgress().pendingItemRewards[0].roundIdentity as { roundRevision: number }).roundRevision = 98;
+    expect(getStoredCoopDefenseProgress().pendingItemRewards).toEqual(expected);
+    const exported = exportStoredGameProgressJson();
+    invalidateLocalStorageCache(); expect(getStoredCoopDefenseProgress().pendingItemRewards).toEqual(expected);
+    resetStoredCoopDefenseCharacter(); expect(importStoredGameProgressJson(exported).ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().pendingItemRewards).toEqual(expected);
+  });
+
+  it('requires an unambiguous reward identity to claim repeated item IDs at the same end time', () => {
+    const reward = { roundEndedAt: 42, offers: rollCoopDefenseItemOffer(2, null) };
+    const identity = { roomCode: 'AAAAAA', roundRevision: 1 };
+    setStoredPendingCoopDefenseItemReward(reward);
+    setStoredPendingCoopDefenseItemReward({ ...reward, roundIdentity: identity });
+    const offerUid = reward.offers[0].uid;
+    expect(claimStoredPendingCoopDefenseItemReward(42, offerUid)).toBeNull();
+    expect(claimStoredPendingCoopDefenseItemReward(42, offerUid, offerUid, 'take', identity)).not.toBeNull();
+    expect(claimStoredPendingCoopDefenseItemReward(42, offerUid, offerUid, 'take', identity)).toBeNull();
+    expect(getStoredCoopDefenseProgress().pendingItemRewards).toHaveLength(1);
+    expect(claimStoredPendingCoopDefenseItemReward(42, offerUid, offerUid, 'take', null)).not.toBeNull();
+    expect(getStoredCoopDefenseProgress().pendingItemRewards).toHaveLength(0);
+  });
+
+  it('migrates unidentified rewards separately and rejects invalid reward identities atomically', () => {
+    const legacy = { roundEndedAt: 42, offers: rollCoopDefenseItemOffer(2, null) };
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    exported.progress.coopDefense.pendingItemReward = legacy;
+    exported.progress.coopDefense.pendingItemRewards = [{ ...legacy, roundIdentity: { roomCode: 'AAAAAA', roundRevision: 1 } }];
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().pendingItemRewards).toHaveLength(2);
+    const before = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    for (const identity of [null, [], {}, { roomCode: 'AAAAAA' }, { roomCode: 'constructor', roundRevision: 1 },
+      { roomCode: '__proto__', roundRevision: 1 }, { roomCode: 'AAAAAA', roundRevision: 0 },
+      { roomCode: 'AAAAAA', roundRevision: 1.5 }, { roomCode: 'AAAAAA', roundRevision: '1' }]) {
+      exported.progress.coopDefense.pendingItemRewards[0].roundIdentity = identity;
+      expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(false);
+      expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(before);
+    }
+  });
 
   it.each(['xp', 'item'] as const)('rejects a finite imported %s value whose derived runtime state overflows', kind => {
     setStoredCoopDefenseTotalXp(123);

@@ -1,7 +1,7 @@
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
 import type { PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
-import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseItemSlot, GameMode, TeamId } from '../types';
+import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseItemSlot, CoopDefenseRoundIdentity, GameMode, TeamId } from '../types';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import { getLocale } from '../i18n';
 import {
@@ -62,6 +62,7 @@ export interface MatchItemRewardOption {
 
 export interface MatchItemRewardPresentation {
   readonly roundEndedAt: number;
+  readonly roundIdentity?: CoopDefenseRoundIdentity;
   readonly mapId?: string;
   /** Position in der persistenten Queue (1-basiert fuer die Anzeige). */
   readonly queueIndex: number;
@@ -188,6 +189,7 @@ export function createMatchProgressDelta(
 export function createMatchItemRewardPresentation(
   pending: {
     roundEndedAt: number;
+    roundIdentity?: CoopDefenseRoundIdentity;
     mapId?: string;
     offers: readonly CoopDefenseItem[];
     epicGuaranteeCount?: number;
@@ -200,6 +202,7 @@ export function createMatchItemRewardPresentation(
 
   return {
     roundEndedAt: pending.roundEndedAt,
+    ...(pending.roundIdentity ? { roundIdentity: { ...pending.roundIdentity } } : {}),
     ...(pending.mapId ? { mapId: pending.mapId } : {}),
     queueIndex: Math.max(1, Math.floor(queuePosition.index) + 1),
     queueSize: Math.max(1, Math.floor(queuePosition.size)),

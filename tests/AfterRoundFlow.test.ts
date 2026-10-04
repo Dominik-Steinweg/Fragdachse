@@ -2,6 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { AfterRoundFlow, type AfterRoundStep } from '../src/scenes/arena/AfterRoundFlow';
 
 describe('after-round presentation', () => {
+  it('separates room revisions and legacy timestamps while deduplicating A/B/A replay', () => {
+    const flow = new AfterRoundFlow();
+    for (const roomCode of ['AAAAAA', 'BBBBBB']) {
+      flow.prepare(42, ['items'], { roomCode, roundRevision: 1 });
+      expect(flow.start()).toBe('items'); flow.finish('items');
+    }
+    flow.prepare(43, ['items'], { roomCode: 'AAAAAA', roundRevision: 1 });
+    expect(flow.start()).toBeNull();
+    flow.prepare(42, ['items']); expect(flow.start()).toBe('items'); flow.finish('items');
+    flow.prepare(42, ['items']); expect(flow.start()).toBeNull();
+  });
   it.each(Array.from({ length: 8 }, (_, mask) => [mask]))('shows only earned steps, in order (combination %i)', mask => {
     const flow = new AfterRoundFlow();
     const order: AfterRoundStep[] = ['items', 'upgrades', 'base'];

@@ -16,6 +16,7 @@ import type {
   CoopDefenseItemRewardAction,
   CoopDefenseItemSlot,
   CoopDefensePendingItemReward,
+  CoopDefenseRoundIdentity,
   CoopDefenseUpgradeProfile,
   GameMode,
   GamePhase,
@@ -39,6 +40,7 @@ import {
 import {
   applyCoopDefenseEpicGuarantee,
   getEquippedCoopDefenseItems,
+  getCoopDefenseItemRewardRoundKey,
   rollCoopDefenseItemOffer,
   type CoopDefenseEquippedItemIds,
 } from '../../utils/coopDefenseItems';
@@ -105,6 +107,7 @@ export interface ArenaMetaProgressStore {
     offerUid: string,
     salvageUid?: string,
     action?: CoopDefenseItemRewardAction,
+    roundIdentity?: CoopDefenseRoundIdentity | null,
   ): ArenaMetaItemRewardClaim | null;
 }
 
@@ -173,6 +176,7 @@ export interface ArenaMetaItemRewardClaim {
 export interface ArenaMetaVictoryItemRewardInput {
   readonly completedMapId: string;
   readonly roundEndedAt: number;
+  readonly roundIdentity?: CoopDefenseRoundIdentity;
   readonly itemLevel: number | null;
   readonly playedClassId: CoopDefenseClassId | null;
   readonly epicGuaranteeCount: number;
@@ -222,6 +226,7 @@ export class ArenaMetaController {
   private readonly afterRound = new AfterRoundFlow();
   private pendingAfterRoundStep: AfterRoundStep | null = null;
   private afterRoundEndedAt: number | undefined;
+  private afterRoundIdentity: CoopDefenseRoundIdentity | undefined;
   private lastSoundRoundEndedAt: number;
   private rewardBaselineRoundStartedAt: number | null = null;
   private baseRewardIdsBeforeRound: readonly PersistentBaseRewardId[] = [];
@@ -761,19 +766,21 @@ export class ArenaMetaController {
       progress,
       technicalMessage: null,
       itemReward: isCoopDefenseMode(mode) && this.coopDefenseMatchItemReward
-        ? this.getItemRewardPresentation(this.coopDefenseMatchItemReward.roundEndedAt)
+        ? this.getItemRewardPresentation(this.coopDefenseMatchItemReward.roundEndedAt, this.coopDefenseMatchItemReward.roundIdentity)
         : null,
     };
     this.lastMatchResultsPresentation = presentation;
     if (freshProgress && progress) {
       this.afterRoundEndedAt = firstResult.roundEndedAt;
+      this.afterRoundIdentity = firstResult.roundRevision === undefined ? undefined
+        : { roomCode: this.input.session.getRoomCode(), roundRevision: firstResult.roundRevision };
       const steps: AfterRoundStep[] = [];
       if (presentation.itemReward) steps.push('items');
       if (progress.after.level > progress.before.level || progress.newBossPoints > 0
         || progress.classesUnlocked || progress.newlyUnlockedClassIds.length > 0) steps.push('upgrades');
       if (this.input.session.isHost() && (progress.persistentBaseUnlocked || progress.persistentBaseAreaStageUnlocked
         || progress.persistentBaseHealthReward || progress.newlyUnlockedBaseRewardIds.length)) steps.push('base');
-      this.afterRound.prepare(firstResult.roundEndedAt, steps);
+      this.afterRound.prepare(firstResult.roundEndedAt, steps, this.afterRoundIdentity);
       this.setLocalReady(false);
     }
     this.input.presentation.setMatchResultsBalanceFeedbackVisible(balanceFeedbackAvailable);
@@ -824,7 +831,7 @@ export class ArenaMetaController {
     this.presentAfterRoundStep(this.afterRound.finish(step));
   }
 
-  cancelAfterRoundFlow(): void { this.afterRound.cancel(); this.afterRoundEndedAt = undefined; this.pendingAfterRoundStep = null; }
+  cancelAfterRoundFlow(): void { this.afterRound.cancel(); this.afterRoundEndedAt = undefined; this.afterRoundIdentity = undefined; this.pendingAfterRoundStep = null; }
 
   private presentAfterRoundStep(step: AfterRoundStep | null): void {
     if (!step) return;
@@ -839,8 +846,8 @@ export class ArenaMetaController {
     }
     this.pendingAfterRoundStep = null;
     if (step === 'items') {
-      if (!this.getItemRewardPresentation(this.afterRoundEndedAt)) { this.finishAfterRoundStep(step); return; }
-      this.openItemRewardOverlay(this.afterRoundEndedAt, true);
+      if (!this.getItemRewardPresentation(this.afterRoundEndedAt, this.afterRoundIdentity)) { this.finishAfterRoundStep(step); return; }
+      this.openItemRewardOverlay(this.afterRoundEndedAt, true, this.afterRoundIdentity);
     } else if (step === 'upgrades') this.openUpgradeOverlay();
     else this.openBaseOverlay(this.input.progressStore.getProgress().persistentBaseRewardUnlocks.filter(id => !this.baseRewardIdsBeforeRound.includes(id)));
   }
@@ -924,13 +931,14 @@ export class ArenaMetaController {
     return xp;
   }
 
-  getItemRewardPresentation(roundEndedAt?: number): MatchItemRewardPresentation | null {
+  getItemRewardPresentation(roundEndedAt?: number, roundIdentity?: CoopDefenseRoundIdentity): MatchItemRewardPresentation | null {
     if (this.destroyed) return null;
     const stored = this.readFreshStoredProgress();
     const pendingRewards = stored.pendingItemRewards;
     const index = roundEndedAt === undefined
       ? 0
-      : pendingRewards.findIndex((reward) => reward.roundEndedAt === roundEndedAt);
+      : pendingRewards.findIndex((reward) => getCoopDefenseItemRewardRoundKey(reward)
+        === getCoopDefenseItemRewardRoundKey({ roundEndedAt, roundIdentity }));
     const pending = index >= 0 ? pendingRewards[index] : null;
     return createMatchItemRewardPresentation(
       pending,
@@ -940,11 +948,11 @@ export class ArenaMetaController {
     );
   }
 
-  openItemRewardOverlay(automaticRoundEndedAt?: number, automatic = false): void {
+  openItemRewardOverlay(automaticRoundEndedAt?: number, automatic = false, roundIdentity?: CoopDefenseRoundIdentity): void {
     if (this.destroyed || this.input.presentation.isItemRewardOverlayVisible()) return;
     if (automatic && automaticRoundEndedAt === undefined) return;
 
-    const presentation = this.getItemRewardPresentation(automaticRoundEndedAt);
+    const presentation = this.getItemRewardPresentation(automaticRoundEndedAt, roundIdentity);
     if (!presentation) return;
     this.input.presentation.showItemRewardOverlay(presentation, automatic);
   }
@@ -954,6 +962,7 @@ export class ArenaMetaController {
     offerUid: string,
     salvageUid?: string,
     action: CoopDefenseItemRewardAction = 'take',
+    roundIdentity?: CoopDefenseRoundIdentity | null,
   ): ArenaMetaItemRewardClaim | null {
     if (this.destroyed) return null;
     const beforeLevel = this.readStoredLevel();
@@ -962,6 +971,7 @@ export class ArenaMetaController {
       offerUid,
       salvageUid,
       action,
+      roundIdentity,
     );
     if (!claim) return null;
 
@@ -979,7 +989,7 @@ export class ArenaMetaController {
     if (this.lastMatchResultsPresentation?.itemReward?.roundEndedAt === roundEndedAt) {
       this.lastMatchResultsPresentation = {
         ...this.lastMatchResultsPresentation,
-        itemReward: this.getItemRewardPresentation(roundEndedAt),
+        itemReward: this.getItemRewardPresentation(roundEndedAt, this.lastMatchResultsPresentation.itemReward.roundIdentity),
       };
     }
     return claim;
@@ -1004,6 +1014,7 @@ export class ArenaMetaController {
       const offers = rollCoopDefenseItemOffer(input.itemLevel, input.playedClassId);
       reward = {
         roundEndedAt: input.roundEndedAt,
+        ...(input.roundIdentity ? { roundIdentity: { ...input.roundIdentity } } : {}),
         mapId: input.completedMapId,
         epicGuaranteeCount: input.epicGuaranteeCount,
         offers: applyCoopDefenseEpicGuarantee(
@@ -1026,7 +1037,7 @@ export class ArenaMetaController {
     return {
       itemsUnlocked,
       reward: current.pendingItemRewards.find(
-        (entry) => entry.roundEndedAt === input.roundEndedAt,
+        (entry) => getCoopDefenseItemRewardRoundKey(entry) === getCoopDefenseItemRewardRoundKey(input),
       ) ?? null,
     };
   }
@@ -1079,6 +1090,9 @@ export class ArenaMetaController {
       const itemReward = this.recordVictoryItemReward({
         completedMapId,
         roundEndedAt: endedAt,
+        ...(roundState.roundRevision === undefined ? {} : {
+          roundIdentity: { roomCode: this.input.session.getRoomCode(), roundRevision: roundState.roundRevision },
+        }),
         itemLevel: completedMapConfig.itemDrop?.itemLevel ?? null,
         playedClassId: this.input.resultRead.getLocalCommittedLoadout()?.coopDefenseClassId ?? null,
         epicGuaranteeCount: resolveCoopDefenseEpicGuaranteeCount(results, roundState),

@@ -36,6 +36,13 @@ zugeordnete Ergebnisse können deshalb bei der ersten identifizierten Wiederholu
 gutgeschrieben werden. Der Room-Code ist der bestehende Session-Namensraum; seine spätere
 zufällige Wiederverwendung durch einen anderen Host kann eine alte Revisionsgrenze übernehmen.
 
+Offene Item-Angebote führen dieselbe optionale `roundIdentity` aus Room-Code und Rundenrevision.
+Queue, Ergebnisanzeige, verzögertes Öffnen und Claim erhalten diese Zuordnung, weil verschiedene
+Runden dieselbe Endzeit und importierte Angebote dieselbe Item-ID haben können. Legacy-Angebote
+ohne Identität bleiben in einem getrennten Zeitstempel-Namensraum; ihre Herkunft wird nicht
+erfunden. Der Claim-Selector unterscheidet eine konkrete Identität, `null` für ein Legacy-Angebot
+und `undefined` für alte unqualifizierte Aufrufer, deren mehrdeutige Claims abgewiesen werden.
+
 ## PersistentBase
 
 PersistentBase ist persönlicher Progress, nicht Activity-Runtime:

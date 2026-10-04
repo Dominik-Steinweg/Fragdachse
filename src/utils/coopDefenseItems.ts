@@ -734,6 +734,14 @@ export function sanitizeCoopDefenseEquippedItemIds(
 
 export function sanitizeCoopDefensePendingItemReward(raw: unknown): CoopDefensePendingItemReward | null {
   if (!isRecord(raw)) return null;
+  const identity = raw.roundIdentity;
+  if (identity !== undefined && (!isRecord(identity)
+    || typeof identity.roomCode !== 'string' || !/^[A-Z0-9]{1,64}$/.test(identity.roomCode)
+    || typeof identity.roundRevision !== 'number' || !Number.isSafeInteger(identity.roundRevision)
+    || identity.roundRevision <= 0)) return null;
+  const roundIdentity = identity === undefined ? {} : {
+    roundIdentity: { roomCode: identity.roomCode as string, roundRevision: identity.roundRevision as number },
+  };
   const roundEndedAt = typeof raw.roundEndedAt === 'number' && Number.isFinite(raw.roundEndedAt)
     ? Math.floor(raw.roundEndedAt)
     : 0;
@@ -755,20 +763,29 @@ export function sanitizeCoopDefensePendingItemReward(raw: unknown): CoopDefenseP
   if (offers.length === 0) return null;
   const epicGuaranteeCount = normalizeCoopDefenseEpicGuaranteeCount(raw.epicGuaranteeCount);
   return epicGuaranteeCount > 0
-    ? { roundEndedAt, ...(mapId ? { mapId } : {}), offers, epicGuaranteeCount }
-    : { roundEndedAt, ...(mapId ? { mapId } : {}), offers };
+    ? { roundEndedAt, ...roundIdentity, ...(mapId ? { mapId } : {}), offers, epicGuaranteeCount }
+    : { roundEndedAt, ...roundIdentity, ...(mapId ? { mapId } : {}), offers };
+}
+
+export function getCoopDefenseItemRewardRoundKey(
+  reward: Pick<CoopDefensePendingItemReward, 'roundEndedAt' | 'roundIdentity'>,
+): string {
+  return reward.roundIdentity
+    ? `${reward.roundIdentity.roomCode}:${reward.roundIdentity.roundRevision}`
+    : `legacy:${reward.roundEndedAt}`;
 }
 
 /** Sanitizeiert eine persistierte FIFO-Queue und behält pro Runde nur den ersten Eintrag. */
 export function sanitizeCoopDefensePendingItemRewards(raw: unknown): CoopDefensePendingItemReward[] | null {
   if (!Array.isArray(raw)) return null;
-  const seenRounds = new Set<number>();
+  const seenRounds = new Set<string>();
   const rewards: CoopDefensePendingItemReward[] = [];
   for (const entry of raw) {
     const reward = sanitizeCoopDefensePendingItemReward(entry);
     if (!reward) return null;
-    if (seenRounds.has(reward.roundEndedAt)) continue;
-    seenRounds.add(reward.roundEndedAt);
+    const key = getCoopDefenseItemRewardRoundKey(reward);
+    if (seenRounds.has(key)) continue;
+    seenRounds.add(key);
     rewards.push(reward);
   }
   return rewards;
