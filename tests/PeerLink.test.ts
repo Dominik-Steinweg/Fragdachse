@@ -93,6 +93,10 @@ class FakeDataConnection {
     this.listeners.get(type)?.delete(listener);
   }
 
+  listenerCount(type: string): number {
+    return this.listeners.get(type)?.size ?? 0;
+  }
+
   send(_payload: string): void {}
 
   receive(data: unknown): void {
@@ -269,6 +273,60 @@ describe('PeerLink bounded message transport', () => {
 });
 
 describe('PeerLink native connection state', () => {
+  it('rejects opening when a queued handshake closes the link and stops the remaining inbox', async () => {
+    const connection = new FakeDataConnection(new FakePeerConnection());
+    const link = new PeerLink(connection as never);
+    connection.receive(JSON.stringify({ t: 'hello', v: PEER_PROTOCOL_VERSION - 1, k: '0123456789abcdef' }));
+    connection.receive(JSON.stringify({ t: 'hb' }));
+    const onClose = vi.fn();
+    const onMessage = vi.fn((message: PeerMessage) => {
+      if (message.t === 'hello' && message.v !== PEER_PROTOCOL_VERSION) link.close();
+    });
+
+    const outcome = await link.open({ onMessage, onClose })
+      .then(() => 'opened', error => error.kind);
+
+    expect({ outcome, closeCount: onClose.mock.calls.length, delivered: onMessage.mock.calls.map(([message]) => message.t) })
+      .toEqual({ outcome: 'connection-failed', closeCount: 1, delivered: ['hello'] });
+  });
+
+  it.each(['close', 'native-failed', 'already-failed'] as const)('settles a pending reliable open after %s', async (cause) => {
+    const pc = new FakePeerConnection();
+    const connection = new FakeDataConnection(pc);
+    connection.open = false;
+    if (cause === 'already-failed') pc.connectionState = 'failed';
+    const link = new PeerLink(connection as never);
+    const settled = vi.fn();
+    void link.open({ onMessage: vi.fn(), onClose: vi.fn() })
+      .then(() => settled('opened'), error => settled(error.kind));
+
+    if (cause === 'close') link.close();
+    else if (cause === 'native-failed') {
+      pc.connectionState = 'failed';
+      pc.emit('connectionstatechange');
+    }
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toHaveBeenCalledExactlyOnceWith('connection-failed');
+    expect(connection.listenerCount('open')).toBe(0);
+  });
+
+  it('rejects when closed after the fast open event but before the open continuation', async () => {
+    const pc = new FakePeerConnection();
+    pc.fast.readyState = 'connecting';
+    const connection = new FakeDataConnection(pc);
+    const link = new PeerLink(connection as never);
+    const opening = link.open({ onMessage: vi.fn(), onClose: vi.fn() });
+    await Promise.resolve();
+    pc.fast.readyState = 'open';
+    pc.fast.emit('open');
+    link.close();
+
+    await expect(opening).rejects.toMatchObject({ kind: 'connection-failed' });
+    expect(link.isOpen).toBe(false);
+    expect(link.openedAtMs).toBe(0);
+  });
+
   it('tolerates a short disconnected blip and closes if it persists', async () => {
     vi.useFakeTimers();
     try {

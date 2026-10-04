@@ -46,6 +46,7 @@ export class PeerLink implements PeerLinkLike {
   private peerConnectionStateHandler: ((event: Event) => void) | null = null;
   private disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
   private reliableClosedWarningShown = false;
+  private cancelReliableOpen: (() => void) | null = null;
   private payloadDiagnosticsSink: ((info: PeerPayloadDiagnostics) => void) | null = null;
   private compressionAllowed = false;
   private readonly reliablePackets = new PeerPacketAssembler(true);
@@ -116,12 +117,15 @@ export class PeerLink implements PeerLinkLike {
     this.bindPeerConnectionState();
     if (this.closed) throw createPeerNetworkError('connection-failed');
     await this.openFastChannel();
+    if (this.closed) throw createPeerNetworkError('connection-failed');
     this.openedAtMs = Date.now();
     this.handlers = handlers;
     const queued = this.inbox;
     this.inbox = [];
-    for (const item of queued) handlers.onMessage(item.message, item.channel);
-    if (this.closed) handlers.onClose();
+    for (const item of queued) {
+      handlers.onMessage(item.message, item.channel);
+      if (this.closed) throw createPeerNetworkError('connection-failed');
+    }
   }
 
   send(message: PeerMessage, channel: PeerChannelKind): void {
@@ -247,9 +251,11 @@ export class PeerLink implements PeerLinkLike {
   }
 
   private awaitReliableOpen(): Promise<void> {
+    if (this.closed) return Promise.reject(createPeerNetworkError('connection-failed'));
     if (this.connection.open) return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       const cleanup = (): void => {
+        this.cancelReliableOpen = null;
         this.connection.off('open', onOpen);
         this.connection.off('close', onClose);
         this.connection.off('error', onError);
@@ -257,6 +263,9 @@ export class PeerLink implements PeerLinkLike {
       const onOpen = (): void => { cleanup(); resolve(); };
       const onClose = (): void => { cleanup(); reject(createPeerNetworkError('connection-failed')); };
       const onError = (error: unknown): void => { cleanup(); reject(createPeerNetworkError('connection-failed', error)); };
+      // PeerJS does not emit close when a DataConnection was never open. Own cancellation
+      // keeps aborted inbound handshakes from remaining pending in the transport forever.
+      this.cancelReliableOpen = onClose;
       this.connection.on('open', onOpen);
       this.connection.on('close', onClose);
       this.connection.on('error', onError);
@@ -370,6 +379,7 @@ export class PeerLink implements PeerLinkLike {
   }
 
   private clearPackets(): void {
+    this.cancelReliableOpen?.();
     this.connection.dataChannel?.removeEventListener('bufferedamountlow', this.reliableSends.resume);
     this.fastChannel?.removeEventListener('bufferedamountlow', this.fastSends.resume);
     this.reliableSends.close(); this.fastSends.close();
