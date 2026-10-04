@@ -611,6 +611,7 @@ export function createWeaponBalanceLabWorldPort(
         targetY,
         hostNowMs: now,
         shotId: shotSequence,
+        scopeTrigger: 'tap',
         params: { inputStarted },
         clientPosition: { x: player?.x, y: player?.y },
       });

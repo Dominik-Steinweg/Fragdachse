@@ -274,7 +274,7 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number, r
   // Bind only the loadout listener; keyboard/UI setup is unrelated to held-fire dispatch.
   (input as any).setupActionBindings();
   return {
-    config, item, commits, combat, traces, localEffects, remoteEffects, aim, aimSystem, aimModel, hud, prediction, actions, replies,
+    config, item, loadout, commits, combat, traces, localEffects, remoteEffects, aim, aimSystem, aimModel, hud, prediction, actions, replies,
     shotEvents, localWeapon, remoteWeapon, localKick, remoteKick, projectiles, magazine, resourceSystem, recoil,
     setCombatEnabled: (enabled: boolean) => { capabilities.canUseCombat = enabled; },
     setActivityRevision: (revision: number) => network.getActivityDescriptor.mockReturnValue({ activityRevision: revision } as never),
@@ -295,7 +295,7 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number, r
     setResourceCost: (cost: number) => { resourceCost = cost; },
     shoot: (time: number, delay: number, inputStarted = false, angle = 0, params?: LoadoutUseParams) => {
       now = time; processingDelay = delay;
-      fire(fireSlot, angle, 600, 200, { inputStarted, ...params });
+      fire(fireSlot, angle, 600, 200, params?.scope ? params : { inputStarted, ...params });
     },
   };
 }
@@ -303,6 +303,36 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number, r
 afterEach(() => vi.restoreAllMocks());
 
 describe('held weapon fire at the authoritative cooldown boundary', () => {
+  it('keeps scope holds silent, publishes one host release and cancels through input capability gates', async () => {
+    const f = fixture(false, 'AWP');
+    f.shoot(1_000, 0, false, 0, { scope: { id: 1, phase: 'hold' } });
+    expect(f.commits).not.toHaveBeenCalled();
+    expect(f.hud).not.toHaveBeenCalled();
+    expect(f.projectiles).toHaveLength(0);
+    expect(f.loadout.getSpeedMultiplier('shooter', 1500)).toBe(f.config.holdSpeedFactor);
+    f.setCombatEnabled(false);
+    f.shoot(1_500, 0, false, 0, { scope: { id: 1, phase: 'cancel' } });
+    expect(f.loadout.getSpeedMultiplier('shooter', 1500)).toBe(1);
+    f.setCombatEnabled(true);
+    f.shoot(1_600, 0, false, 0, { scope: { id: 2, phase: 'hold' } });
+    f.shoot(2_000, 0, false, 0, { scope: { id: 2, phase: 'release' }, scopeProgress: 1, scopeChargeProgress: 1 });
+    expect(f.commits).toHaveBeenCalledOnce();
+    expect(f.projectiles).toHaveLength(1);
+    expect(f.loadout.getSpeedMultiplier('shooter', 2000)).toBe(1);
+    await Promise.resolve();
+    expect(f.hud).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a host scope when local release prediction is rejected', () => {
+    const f = fixture(true, 'AWP');
+    f.shoot(1_000, 0, false, 0, { scope: { id: 1, phase: 'hold' } });
+    expect(f.loadout.getSpeedMultiplier('shooter', 1100)).toBe(f.config.holdSpeedFactor);
+    Object.assign(f.prediction, { weaponLastFired: { weapon1: 0, weapon2: 1_100 } });
+    f.shoot(1_200, 0, false, 0, { scope: { id: 1, phase: 'release' } });
+    expect(f.loadout.getSpeedMultiplier('shooter', 1200)).toBe(1);
+    expect(f.projectiles).toHaveLength(0);
+    expect(f.commits).not.toHaveBeenCalled();
+  });
   it.each([false, true])('pauses regeneration only for confirmed primary shots (client=%s)', remote => {
     const f = fixture(remote);
     f.setResourceCost(0);

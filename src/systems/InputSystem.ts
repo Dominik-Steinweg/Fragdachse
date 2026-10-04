@@ -8,7 +8,7 @@ import { SHOOTING_RANGE, SHOOTING_RANGE_CONTROLS, shootingRangeControlPosition }
 import { shootingRangeAction } from '../shootingRange/ShootingRangeContracts';
 import { t } from '../i18n';
 import type { AutomatedTurret } from './TurretSystem';
-import type { TurretControlState } from '../types';
+import type { ScopeInput, TurretControlState } from '../types';
 import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
@@ -56,6 +56,7 @@ import type {
   WeaponConfig,
 } from '../loadout/LoadoutConfig';
 import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
+import { areLoadoutConfigsEquivalent } from '../loadout/LoadoutRules';
 
 /** Gemeinsamer Nenner für alle aufladbaren Utility-Aktivierungen. */
 type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUtilityActivationConfig | ChargedAlternateUtilityActivationConfig;
@@ -67,6 +68,20 @@ type DebugHotkeyType = 'flowfield_bases' | 'flowfield_players';
 
 const PRIMARY_POINTER_BUTTON = 1;
 const SECONDARY_POINTER_BUTTON = 2;
+
+// Shared across Scene/Input instances; session storage preserves IDs across a same-peer reload.
+let scopeGestureSequence = 0;
+function nextScopeGestureId(): number | null {
+  const key = 'fragdachse:scope-gesture-sequence';
+  try {
+    const stored = Number(window.sessionStorage.getItem(key));
+    if (Number.isSafeInteger(stored) && stored >= 0) scopeGestureSequence = Math.max(scopeGestureSequence, stored);
+  } catch { /* In-tab gestures remain monotone; the host can repair a stale counter after reload. */ }
+  if (scopeGestureSequence >= Number.MAX_SAFE_INTEGER) return null;
+  const id = ++scopeGestureSequence;
+  try { window.sessionStorage.setItem(key, String(id)); } catch { /* Keep the in-memory sequence. */ }
+  return id;
+}
 
 /**
  * Filtert Pointerbuttons, die bereits die UI-Aktion des aktuellen Press/Release-Zyklus
@@ -164,6 +179,7 @@ export class InputSystem {
     if (!current || !sprite || interactionCandidateScore({ x: sprite.x, y: sprite.y, angle: this.currentAimAngle }, current)
       < WORLD_INTERACTION_RULES.minimumScore) return;
     this.cancelRocketMagazine();
+    this.cancelScopeAim();
     if (candidate.kind === 'turret') this.bridge.sendTurretControlRequest({ action: 'enter', turretId: candidate.turret.id });
     else this.bridge.sendShootingRangeRequest(candidate.request);
   }
@@ -336,6 +352,9 @@ export class InputSystem {
 
   // Scope-Mechanik (für Waffen mit scopeConfig, z.B. AWP)
   private scopeStartedAt: number | null = null;  // Timestamp des RMB-Press
+  private scopeGestureId: number | null = null;
+  private scopeWeaponConfig: WeaponConfig | null = null;
+  private scopeWorldRevision: number | null = null;
   private scopeProgress = 0;                     // 0–1, aktueller Scope-Fortschritt
   private scopeChargeProgress = 0;               // 0–1, separater Schadens-Ladefortschritt
   private getWeapon2Config: (() => WeaponConfig | undefined) | null = null;
@@ -395,9 +414,7 @@ export class InputSystem {
     this.radialActionMenu = new RadialActionMenu(this.scene);
     const cancelOnInputLoss = () => {
       this.shiftPressPending = false;
-      this.scopeStartedAt = null;
-      this.scopeProgress = 0;
-      this.scopeChargeProgress = 0;
+      this.cancelScopeAim();
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
     };
@@ -902,6 +919,16 @@ export class InputSystem {
     this.canStartScope = cb;
   }
 
+  handleScopeActionResult(input: ScopeInput, result: LoadoutUseResult | null): void {
+    if (input.phase !== 'hold' || this.scopeGestureId !== input.id || result?.ok) return;
+    const floor = result?.scopeGestureIdFloor;
+    if (floor !== undefined && Number.isSafeInteger(floor) && floor >= input.id) {
+      scopeGestureSequence = Math.max(scopeGestureSequence, floor);
+    }
+    // No implicit retry: a rejected/expired start requires a fresh physical gesture.
+    this.cancelScopeAim();
+  }
+
   /** Aktueller Scope-Fortschritt (0–1) für ScopeOverlay und AimSystem. */
   getScopeProgress(): number {
     return this.scopeProgress;
@@ -991,9 +1018,7 @@ export class InputSystem {
       this.cancelUltimateCharge();
       this.cancelUltimatePlacement();
       this.ultimateTargetingActive = false;
-      this.scopeStartedAt = null;
-      this.scopeProgress = 0;
-      this.scopeChargeProgress = 0;
+      this.cancelScopeAim();
       this.tunnelPlacementAnchor = null;
       this.placementPreviewState = null;
       this.constructionPlacementActive = false;
@@ -1283,6 +1308,7 @@ export class InputSystem {
     // bereits gedrueckte Tasten oder Debug-/Placement-Hotkeys beim Spectator noch Aktionen
     // erzeugen, bevor der naechste Snapshot die Entity entfernt.
     if (this.bridge.getWorldDescriptor() && !maySendWorldInput(this.bridge.getLocalWorldParticipation())) {
+      this.cancelScopeAim();
       this.placementPreviewState = null;
       this.bridge.sendLocalInput({
         dx: 0,
@@ -1297,11 +1323,17 @@ export class InputSystem {
     // Drehen bleibt während des Arena-Countdowns erlaubt und wird über den
     // Input-Kanal repliziert; Bewegung und Aktionen bleiben gesperrt.
     const aimTarget = this.updateAimFromPointer();
+    if (this.scopeGestureId !== null) {
+      const config = this.getWeapon2Config?.();
+      if (!config || !areLoadoutConfigsEquivalent(this.scopeWeaponConfig ?? undefined, config)
+        || this.scopeWorldRevision !== (this.bridge.getWorldDescriptor()?.worldRevision ?? null)) this.cancelScopeAim();
+    }
     const turretState = this.getTurretControlState();
     if ((turretState?.revision ?? null) !== this.previousTurretRevision) {
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
       this.cancelRocketMagazine();
+      this.cancelScopeAim();
       this.ultimateTargetingActive = false;
       this.consumedPointerButtons |= this.scene.input.activePointer.buttons ?? 0;
       this.previousTurretRevision = turretState?.revision ?? null;
@@ -1354,6 +1386,7 @@ export class InputSystem {
       if (!this.localIsStunned) {
         if (this.localBurrowPhase === 'idle') {
           this.releaseRocketMagazine(aimTarget);
+          this.cancelScopeAim();
           this.bridge.sendBurrowRequest(true);
         } else if (this.localBurrowPhase === 'underground' || this.localBurrowPhase === 'trapped') {
           this.bridge.sendBurrowRequest(false);
@@ -1362,10 +1395,14 @@ export class InputSystem {
     }
 
     const radialHandled = this.updateRadialActionMenu();
-    if (!this.inputEnabled || radialHandled) return;
+    if (!this.inputEnabled || radialHandled) {
+      this.cancelScopeAim();
+      return;
+    }
 
     // ── 3. Stun: keine weiteren Aktionen ───────────────────────────────────
     if (this.localIsStunned) {
+      this.cancelScopeAim();
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
       this.ultimateTargetingActive = false;
@@ -1375,6 +1412,7 @@ export class InputSystem {
     // ── 4. Dash (Flanke, einmalig auslösen) ────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
       this.releaseRocketMagazine(aimTarget);
+      this.cancelScopeAim();
       this.bridge.sendDash(dx, dy);
     }
 
@@ -1386,6 +1424,7 @@ export class InputSystem {
 
     // Ohne aimTarget gibt es keinen lokalen Sprite – dann auch keine Loadout-Aktionen.
     if (!aimTarget) {
+      this.cancelScopeAim();
       this.cancelUtilityInteraction();
       this.placementPreviewState = null;
       return;
@@ -1711,33 +1750,43 @@ export class InputSystem {
       // andere Waffen feuern weiterhin per Dauerfeuer.
       // Auch beim Inspector gehoert RMB der Waffe 2 (Adrenalinfaehigkeit); ein laufender
       // Bau- oder Rueckbaumodus faengt den Rechtsklick bereits weiter oben ab.
-      const scopeCfg = this.getWeapon2Config?.()?.scopeConfig;
+      const weaponConfig = this.getWeapon2Config?.();
+      const scopeCfg = weaponConfig?.scopeConfig;
       if (scopeCfg) {
         if (rightPointerDown) {
           // Scope-In: Fortschritt berechnen, nur holdSpeedFactor aktiv halten (kein Schuss)
           if (rightInputStartedForUse) {
             // Neuen Scope nur starten wenn Cooldown und Adrenalin es erlauben
             if (this.canStartScope && !this.canStartScope()) return;
+            this.scopeGestureId = nextScopeGestureId();
+            if (this.scopeGestureId === null) return;
+            this.scopeWeaponConfig = weaponConfig;
+            this.scopeWorldRevision = this.bridge.getWorldDescriptor()?.worldRevision ?? null;
             this.scopeStartedAt = now;
           }
-          const elapsed = this.scopeStartedAt !== null ? now - this.scopeStartedAt : 0;
-          this.scopeProgress = Math.min(1, elapsed / scopeCfg.scopeInMs);
-          const chargeDurationMs = this.getWeapon2Config?.()?.awpCharge?.durationMs ?? scopeCfg.scopeInMs;
-          this.scopeChargeProgress = Math.min(1, elapsed / Math.max(1, chargeDurationMs));
-          this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { scopeHolding: true });
+          // A cancelled held button cannot silently begin a new gesture.
+          if (this.scopeGestureId !== null && this.scopeStartedAt !== null) {
+            const elapsed = now - this.scopeStartedAt;
+            this.scopeProgress = Math.min(1, elapsed / scopeCfg.scopeInMs);
+            const chargeDurationMs = weaponConfig.awpCharge?.durationMs ?? scopeCfg.scopeInMs;
+            this.scopeChargeProgress = Math.min(1, elapsed / Math.max(1, chargeDurationMs));
+            this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y,
+              { scope: { id: this.scopeGestureId, phase: 'hold' } });
+          }
         } else if (this.scopeStartedAt !== null) {
-          // RMB losgelassen → Schuss auslösen mit berechnetem Scope-Fortschritt
+          // Preview fractions stay local hints; the host derives both from its own gesture.
           const elapsed = now - this.scopeStartedAt;
           const progress = Math.min(1, elapsed / scopeCfg.scopeInMs);
           const chargeDurationMs = this.getWeapon2Config?.()?.awpCharge?.durationMs ?? scopeCfg.scopeInMs;
           const chargeProgress = Math.min(1, elapsed / Math.max(1, chargeDurationMs));
+          const id = this.scopeGestureId!;
+          this.scopeGestureId = null;
+          this.cancelScopeAim();
           this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, {
+            scope: { id, phase: 'release' },
             scopeProgress: progress,
             scopeChargeProgress: chargeProgress,
           });
-          this.scopeStartedAt = null;
-          this.scopeProgress = 0;
-          this.scopeChargeProgress = 0;
         }
       } else if (rightPointerDown) {
         // Normales Dauerfeuer für Nicht-Scope-Waffen
@@ -1748,9 +1797,7 @@ export class InputSystem {
 
     // Scope abbrechen wenn Waffen geblockt (z.B. Burrow, Ultimate)
     if (weaponsBlocked && this.scopeStartedAt !== null) {
-      this.scopeStartedAt = null;
-      this.scopeProgress = 0;
-      this.scopeChargeProgress = 0;
+      this.cancelScopeAim();
     }
 
     if (this.globalDismantleHoldStartedAt !== null) {
@@ -1772,6 +1819,7 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && utilityPressed) {
+      this.cancelScopeAim();
       const selectedAction = this.getSelectedRadialActionState(this.getCooldownNow());
       if (!selectedAction) return;
       if (selectedAction && !selectedAction.available) {
@@ -1895,12 +1943,14 @@ export class InputSystem {
     const airstrikeCfg = ultimateCfg?.type === 'airstrike' ? ultimateCfg as AirstrikeUltimateConfig : undefined;
     const tunnelCfg    = ultimateCfg?.type === 'tunnel'    ? ultimateCfg as TunnelUltimateConfig    : undefined;
     if (!utilityBlocked && gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      this.cancelScopeAim();
       if (this.gaussChargeReady && this.gaussChargeId !== null) {
         this.releaseUltimateCharge(angle, clampedTarget.x, clampedTarget.y, now, gaussCfg);
       } else {
         this.beginUltimateCharge(now, gaussCfg, angle, clampedTarget.x, clampedTarget.y);
       }
     } else if (!utilityBlocked && airstrikeCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      this.cancelScopeAim();
       const rage = this.getLocalRage?.() ?? 0;
       if (rage >= airstrikeCfg.rageCost) {
         this.cancelUtilityInteraction();
@@ -1911,6 +1961,7 @@ export class InputSystem {
         this.onLoadoutUse?.('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
       }
     } else if (!utilityBlocked && tunnelCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      this.cancelScopeAim();
       const rage = this.getLocalRage?.() ?? 0;
       if (rage >= tunnelCfg.rageRequired) {
         this.cancelUtilityInteraction();
@@ -1924,6 +1975,7 @@ export class InputSystem {
         this.onLoadoutUse?.('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
       }
     } else if (!utilityBlocked && !gaussCfg && !airstrikeCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
+      this.cancelScopeAim();
       const rage = this.getLocalRage?.() ?? 0;
       if (ultimateCfg && rage < ultimateCfg.rageRequired) {
         this.notifyUltimatePressedWithoutRage();
@@ -2275,9 +2327,16 @@ export class InputSystem {
   }
 
   private cancelScopeAim(): void {
+    const id = this.scopeGestureId;
+    if (id !== null) this.consumedPointerButtons |= SECONDARY_POINTER_BUTTON;
+    this.scopeGestureId = null;
     this.scopeStartedAt = null;
+    this.scopeWeaponConfig = null;
+    this.scopeWorldRevision = null;
     this.scopeProgress = 0;
     this.scopeChargeProgress = 0;
+    if (id !== null) this.onLoadoutUse?.('weapon2', this.currentAimAngle, 0, 0,
+      { scope: { id, phase: 'cancel' } });
   }
 
   private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {

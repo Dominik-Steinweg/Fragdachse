@@ -10,8 +10,8 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-// Enemy upserts include the position revision for discontinuous movement.
-export const PEER_PROTOCOL_VERSION = 23;
+// Scope weapons require an identified host-timed hold/release/cancel gesture.
+export const PEER_PROTOCOL_VERSION = 24;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

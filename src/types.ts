@@ -478,6 +478,12 @@ export interface RocketMagazineInput {
   readonly focused: boolean;
 }
 
+/** One host-timed scope gesture; client progress is presentation only. */
+export interface ScopeInput {
+  readonly id: number;
+  readonly phase: 'hold' | 'release' | 'cancel';
+}
+
 export interface RocketMagazineState {
   readonly canLoadNext?: boolean;
   readonly id: number;
@@ -1094,6 +1100,7 @@ export interface LoadoutCommitSnapshot {
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
 export interface LoadoutUseParams {
   rocketMagazine?: RocketMagazineInput;
+  scope?: ScopeInput;
   /** Explicit secondary action; a stale request must never turn into a new throw. */
   timeBubbleCollapseId?: number;
   /** Identity of the host-owned translocator use, including depleted temporary sources. */
@@ -1108,9 +1115,9 @@ export interface LoadoutUseParams {
   gaussChargeId?: string;
   ultimateChargeFraction?: number;
   inputStarted?: boolean;
-  scopeProgress?: number;  // 0–1, für fire-on-release Scope-Waffen (beim Loslassen gesetzt)
-  scopeChargeProgress?: number; // 0–1, separater Schadens-Ladefortschritt einer Scope-Waffe
-  scopeHolding?: boolean;  // true = RMB gehalten aber noch kein Schuss (nur holdSpeedFactor aktiv)
+  scopeProgress?: number;  // Client preview only; the action owner replaces it from host elapsed time.
+  scopeChargeProgress?: number; // Client preview only; never authorizes charge damage.
+  scopeHolding?: boolean;  // Legacy wire hint, rejected by the action owner.
   tunnelAction?: 'commit';
   tunnelStartX?: number;
   tunnelStartY?: number;
@@ -1134,6 +1141,8 @@ export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'inv
 export type LoadoutUseResourceKind = 'adrenaline' | 'rage';
 
 export interface LoadoutUseResult {
+  /** Consumed host gesture floor, allowing a resumed client to repair a stale local counter. */
+  scopeGestureIdFloor?: number;
   utilityChargeState?: import('./loadout/UtilityChargeState').UtilityChargeState;
   ok: boolean;
   reason?: LoadoutUseFailureReason;

@@ -692,6 +692,7 @@ export class ArenaInputBindings {
         default: return t('ui.errors.blocked');
       }
     };
+    let lastScopeStartId: number | null = null;
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
       if (slot === 'weapon2' && params?.rocketMagazine) {
         if (params.rocketMagazine.phase === 'cancel' || (actions.getPlayerCapabilities().canUseCombat
@@ -699,6 +700,10 @@ export class ArenaInputBindings {
           if (params.rocketMagazine.phase !== 'cancel') actions.selectAimWeapon(slot);
           void actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
         }
+        return;
+      }
+      if (slot === 'weapon2' && params?.scope?.phase === 'cancel') {
+        void actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
         return;
       }
       const isGaussLifecycleAction = slot === 'ultimate'
@@ -727,25 +732,36 @@ export class ArenaInputBindings {
       }
 
       const capabilities = actions.getPlayerCapabilities();
+      const cancelRejectedScope = () => {
+        if (slot === 'weapon2' && params?.scope) void actions.sendLoadoutUse(slot, angle, targetX, targetY,
+          undefined, { scope: { id: params.scope.id, phase: 'cancel' } });
+      };
       const rejectPendingCharge = () => inputSystem.handleUtilityChargeResult(params?.attemptId, null);
-      if (!capabilities.canInteract) { rejectPendingCharge(); return; }
+      if (!capabilities.canInteract) { cancelRejectedScope(); rejectPendingCharge(); return; }
       const dismantleAction = params?.dismantle === true || params?.globalDismantle === true;
       const constructionAction = params?.constructionId !== undefined
         || params?.toolRef?.kind === 'construction';
       if (dismantleAction ? !capabilities.canDismantle
         : constructionAction ? !capabilities.canPlace
-        : !capabilities.canUseCombat) { rejectPendingCharge(); return; }
-      if (!actions.isLocalPlayerAlive() || actions.isLocalPlayerBurrowed()) { rejectPendingCharge(); return; }
+        : !capabilities.canUseCombat) { cancelRejectedScope(); rejectPendingCharge(); return; }
+      if (!actions.isLocalPlayerAlive() || actions.isLocalPlayerBurrowed()) { cancelRejectedScope(); rejectPendingCharge(); return; }
 
       let shotId: number | undefined;
       let predictionId: number | undefined;
       const inputStarted = params?.inputStarted === true;
 
       if ((slot === 'weapon1' || slot === 'weapon2') && !params?.constructionId) {
-        // scopeHolding: kein Schuss, nur holdSpeedFactor auf Host-Seite aktiv halten.
+        // Scope hold: no shot; refresh the host-owned gesture and movement lease.
         // Weder Cooldown-Check noch notifyLoadoutFired – sonst würde der echte Schuss blockiert.
-        if (params?.scopeHolding) {
-          void actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
+        if (params?.scopeHolding || params?.scope?.phase === 'hold') {
+          const scope = params.scope;
+          const awaitStart = scope !== undefined && scope.id !== lastScopeStartId;
+          if (scope) lastScopeStartId = scope.id;
+          const response = actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params,
+            undefined, undefined, awaitStart);
+          if (awaitStart && scope) void response
+            .then(result => inputSystem.handleScopeActionResult(scope, result))
+            .catch(() => inputSystem.handleScopeActionResult(scope, null));
           return;
         }
         // The local host dispatches immediately through authoritative readiness. Prediction
@@ -754,18 +770,21 @@ export class ArenaInputBindings {
           const now = Date.now();
           const lastFired = actions.getWeaponLastFired(slot);
           const wepConfig = actions.getLocalWeaponConfig(slot);
-          if (!wepConfig) return;
+          if (!wepConfig) { cancelRejectedScope(); return; }
           if (lastFired > 0 && now - lastFired < wepConfig.cooldown) {
+            cancelRejectedScope();
             handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
             return;
           }
           // Remote resource prediction must precede success presentation as well.
           if (slot === 'weapon2' && isWeapon2AdrenalineInsufficient()) {
+            cancelRejectedScope();
             handleLocalFailureFeedback(slot, 'resource', inputStarted, 'adrenaline');
             return;
           }
           const localFire = actions.notifyLoadoutFired(slot, angle, targetX, targetY);
           if (!localFire.fired) {
+            cancelRejectedScope();
             handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
             return;
           }

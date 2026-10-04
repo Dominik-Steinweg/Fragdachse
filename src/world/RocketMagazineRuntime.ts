@@ -2,6 +2,9 @@ import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import { rocketMagazineCapacity } from '../loadout/RocketLauncherConfig';
 import type { LoadoutUseResult, RocketMagazineInput, RocketMagazineState } from '../types';
 
+/** Shared liveness tolerance for host-owned held weapon gestures. */
+export const HELD_WEAPON_INPUT_TIMEOUT_MS = 2000;
+
 interface Magazine {
   id: number; config: WeaponConfig; count: number; nextLoadAt: number; lastInputAt: number;
   angle: number; targetX: number; targetY: number; focused: boolean; held: boolean;
@@ -61,7 +64,7 @@ export class RocketMagazineRuntime {
 
   update(now: number): void {
     for (const [playerId, state] of this.magazines) {
-      if (!this.port.canAct(playerId, now) || this.port.getConfig(playerId) !== state.config || now - state.lastInputAt > 2000) {
+      if (!this.port.canAct(playerId, now) || this.port.getConfig(playerId) !== state.config || now - state.lastInputAt > HELD_WEAPON_INPUT_TIMEOUT_MS) {
         this.cancel(playerId); continue;
       }
       this.advance(playerId, state, now);
@@ -83,7 +86,7 @@ export class RocketMagazineRuntime {
     this.magazines.delete(playerId);
     state.held = false;
     if (!this.destroyed && Number.isFinite(now) && this.port.canAct(playerId, now)
-      && this.port.getConfig(playerId) === state.config && now - state.lastInputAt <= 2000
+      && this.port.getConfig(playerId) === state.config && now - state.lastInputAt <= HELD_WEAPON_INPUT_TIMEOUT_MS
       && state.count > 0) this.shoot(playerId, state, now);
   }
 

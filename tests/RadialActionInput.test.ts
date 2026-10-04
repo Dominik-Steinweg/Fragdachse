@@ -78,7 +78,7 @@ function createSystem(position = { x: 0, y: 0 }) {
 }
 
 describe('focus loss during charged input', () => {
-  it.each([['blur', false], ['hidden', false], ['blur', true], ['hidden', true]] as const)(
+  it.each([['blur', false], ['hidden', false], ['blur', true], ['hidden', true], ['shutdown', false]] as const)(
     'discards a held scope shot on %s, including latched Shift=%s', (event, latchedShift) => {
     vi.useFakeTimers();
     vi.setSystemTime(1000);
@@ -96,11 +96,16 @@ describe('focus loss during charged input', () => {
       const uses = vi.fn(); f.system.setupLoadoutListener(uses);
       f.pointerState.right = true;
       f.system.update();
-      expect(uses).toHaveBeenCalledWith('weapon2', expect.any(Number), expect.any(Number), expect.any(Number), { scopeHolding: true });
+      expect(uses).toHaveBeenCalledWith('weapon2', expect.any(Number), expect.any(Number), expect.any(Number),
+        { scope: { id: expect.any(Number), phase: 'hold' } });
+      const firstId = uses.mock.calls[0][4].scope.id;
       uses.mockClear();
       const shift = keyboard.get('SHIFT')!;
       if (latchedShift) { shift.isDown = true; shift.justDown = true; shift.emit('down'); }
-      gameEvents.emit(event);
+      (event === 'shutdown' ? events : gameEvents).emit(event);
+      expect(uses).toHaveBeenCalledOnce();
+      expect(uses.mock.calls[0][4]).toEqual({ scope: { id: firstId, phase: 'cancel' } });
+      uses.mockClear();
       // Phaser clears the physical keys/pointer when focus is lost, before input resumes.
       shift.isDown = false; shift.justDown = false;
       f.pointerState.right = false;
@@ -110,10 +115,13 @@ describe('focus loss during charged input', () => {
       expect(uses).not.toHaveBeenCalled();
       expect(f.system.getScopeProgress()).toBe(0);
       expect(f.system.getScopeChargeProgress()).toBe(0);
+      if (event === 'shutdown') return;
       f.pointerState.right = true; f.system.update();
       f.pointerState.right = false; vi.setSystemTime(10_100); f.system.update();
       expect(uses).toHaveBeenCalledTimes(2);
       expect(uses.mock.calls[1][4]).toMatchObject({ scopeProgress: expect.any(Number) });
+      expect(uses.mock.calls[0][4].scope.id).toBeGreaterThan(firstId);
+      expect(uses.mock.calls[1][4].scope).toEqual({ id: uses.mock.calls[0][4].scope.id, phase: 'release' });
       events.emit('shutdown');
     } finally { vi.useRealTimers(); }
   });

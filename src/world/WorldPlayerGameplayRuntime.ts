@@ -817,7 +817,8 @@ export class WorldPlayerGameplayRuntime implements
             ? { x: player.x, y: player.y, color: player.color, displaySize: player.displayObject?.displayWidth ?? undefined }
             : undefined;
         },
-        canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
+        canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract
+          && options.getPlayerCapabilities(playerId).canUseCombat,
         isAlive: (playerId) => options.combatSystem.isAlive(playerId),
         isWeaponBlocked: (playerId) => burrow.isWeaponBlocked(playerId) || (this.options.combatSystem.isStunned?.(playerId, Date.now()) ?? false),
         isDashBurst: (playerId) => options.hostPhysics.isDashBurst(playerId),
@@ -951,6 +952,7 @@ export class WorldPlayerGameplayRuntime implements
         },
         removeEnemy: (enemyId) => systems.itemRuntime.removeEnemy(enemyId),
         handlePlayerDeath: (playerId, x, y) => {
+          systems.playerAction.cancelScope(playerId);
           this.earthbreak.removePlayer(playerId);
           systems.plasmaBurner.resetPlayer(playerId);
           systems.molotovUpgrade?.removePlayer(playerId);
@@ -1028,6 +1030,7 @@ export class WorldPlayerGameplayRuntime implements
 
   interruptPlayerActions(playerId: string, nowMs: number): void {
     if (this.destroyed) return;
+    this.systems.playerAction.cancelScope(playerId);
     this.systems.heldAction.clearPlayer(playerId);
     this.systems.sustainedWeaponBehavior.interruptCombat(playerId);
     this.systems.ultimateBehavior.interruptCombat(playerId, nowMs);
@@ -1048,6 +1051,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.plasmaBurner.update(nowMs);
     systems.heldAction.clearExpired(nowMs);
     if (countdownActive) {
+      systems.playerAction.cancelAllScopes();
       this.earthbreak.clear();
       systems.rocketMagazine?.cancelAll();
       systems.heldAction.reset();
@@ -1075,6 +1079,7 @@ export class WorldPlayerGameplayRuntime implements
       }
     }
 
+    systems.playerAction.updateScopes(nowMs);
     systems.rocketMagazine?.update(nowMs);
     systems.translocator.update(nowMs);
     systems.itemRuntime.hostUpdate(nowMs);
@@ -1313,12 +1318,14 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   detachPlayerBuild(playerId: string): void {
+    this.systems.playerAction.cancelScope(playerId);
     this.systems.plasmaBurner.resetPlayer(playerId);
     this.systems.rocketMagazine?.cancel(playerId);
     this.systems.itemRuntime.removePlayer(playerId);
   }
 
   attachPlayerLoadout(playerId: string, selection?: LoadoutSelection): void {
+    this.systems.playerAction.cancelScope(playerId);
     // Frischer Ultimate-State (deaktiviert u. a. ein laufendes Armageddon nach Reconnect),
     // dann das Default-Loadout aus der eingefrorenen bzw. Live-Auswahl.
     this.systems.rocketMagazine?.cancel(playerId);
@@ -1334,6 +1341,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   detachPlayerLoadout(playerId: string): void {
+    this.systems.playerAction.removePlayer(playerId);
     this.systems.plasmaBurner.resetPlayer(playerId);
     this.turretControl.release(playerId);
     this.systems.ultimateBehavior.removePlayer(playerId);
@@ -1355,6 +1363,7 @@ export class WorldPlayerGameplayRuntime implements
   reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean {
     const changed = this.systems.loadout.syncSelectedLoadout(playerId, selection);
     if (changed) {
+      this.systems.playerAction.cancelScope(playerId);
       this.systems.plasmaBurner.resetPlayer(playerId);
       this.systems.rocketMagazine?.cancel(playerId);
       this.systems.ultimateBehavior.resetPlayer(playerId);
@@ -1380,6 +1389,7 @@ export class WorldPlayerGameplayRuntime implements
   ): void {
     const changedPlayerIds = this.systems.playerModifier.syncPlayers(builds);
     for (const playerId of changedPlayerIds) {
+      this.systems.playerAction.cancelScope(playerId);
       this.systems.plasmaBurner.resetPlayer(playerId);
       this.systems.rocketMagazine?.cancel(playerId);
       const snapshot = builds.get(playerId) ?? null;
@@ -1405,6 +1415,7 @@ export class WorldPlayerGameplayRuntime implements
    * Runtime-Detach derselben Activity lässt sie bewusst bestehen.
    */
   invalidateHeldActionsOnActivityEnd(): void {
+    this.systems.playerAction.cancelAllScopes();
     this.earthbreak.clear();
     this.systems.plasmaBurner.clearAll();
     this.turretControl.clear();
@@ -1416,12 +1427,19 @@ export class WorldPlayerGameplayRuntime implements
   /** Host-authoritative Phase-6A Player Action entry point for Weapon1/Weapon2. */
   usePlayerAction(request: PlayerActionRequest): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
+    if (request.category === 'weapon' && request.params?.scope?.phase === 'cancel') {
+      return this.systems.playerAction.execute(request);
+    }
     if (this.isControllingTurret(request.playerId)) return { ok: false, reason: 'blocked' };
     if (request.category === 'utility') {
+      this.systems.playerAction.cancelScope(request.playerId);
       this.systems.rocketMagazine?.releaseForAction(request.playerId, request.hostNowMs);
       return this.systems.utilityAction.execute(request);
     }
-    if (request.category === 'ultimate') return this.systems.ultimateBehavior.execute(request);
+    if (request.category === 'ultimate') {
+      this.systems.playerAction.cancelScope(request.playerId);
+      return this.systems.ultimateBehavior.execute(request);
+    }
     return this.systems.playerAction.execute(request);
   }
 
@@ -1449,6 +1467,7 @@ export class WorldPlayerGameplayRuntime implements
     temporaryUtilityInstanceId?: string,
   ): boolean {
     if (this.destroyed || this.isControllingTurret(playerId)) return false;
+    this.systems.playerAction.cancelScope(playerId);
     this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     return this.systems.utilityAction.startHeldAction(playerId, actionId, kind, hostNowMs, toolRef, temporaryUtilityInstanceId);
   }
@@ -1464,6 +1483,7 @@ export class WorldPlayerGameplayRuntime implements
     params?: LoadoutUseParams,
   ): LoadoutUseResult {
     if (this.destroyed || this.isControllingTurret(playerId)) return { ok: false, reason: 'blocked' };
+    this.systems.playerAction.cancelScope(playerId);
     this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     return this.systems.utilityAction.useInspectorUtility(playerId, tool, config, angle, targetX, targetY, hostNowMs, params);
   }
@@ -1485,12 +1505,14 @@ export class WorldPlayerGameplayRuntime implements
 
   handleDashRequest(playerId: string, dx: number, dy: number, hostNowMs: number): void {
     if (this.destroyed || this.isControllingTurret(playerId)) return;
+    this.systems.playerAction.cancelScope(playerId);
     this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     this.options.hostPhysics.handleDashRPC(playerId, dx, dy);
   }
 
   handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void {
     if (this.destroyed || this.isControllingTurret(playerId)) return;
+    if (wantsBurrowed) this.systems.playerAction.cancelScope(playerId);
     if (wantsBurrowed) this.systems.rocketMagazine?.releaseForAction(playerId, Date.now());
     this.systems.burrow.handleBurrowRequest(playerId, wantsBurrowed);
   }
@@ -1504,6 +1526,7 @@ export class WorldPlayerGameplayRuntime implements
     identity?: PlayerGameplayHeldActionIdentity,
   ): boolean {
     if (this.destroyed || this.isControllingTurret(playerId)) return false;
+    this.systems.playerAction.cancelScope(playerId);
     return this.systems.heldAction.start(
       playerId,
       actionId,
@@ -1540,6 +1563,7 @@ export class WorldPlayerGameplayRuntime implements
 
   clearHeldActionsForPlayer(playerId: string): void {
     if (this.destroyed) return;
+    this.systems.playerAction.cancelScope(playerId);
     this.systems.heldAction.clearPlayer(playerId);
   }
 

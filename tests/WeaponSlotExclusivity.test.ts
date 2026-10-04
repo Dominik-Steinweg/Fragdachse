@@ -60,6 +60,7 @@ function createActionRuntime(
   playerManager: { getPlayer: ReturnType<typeof vi.fn> },
 ) {
   const weaponActivation = {
+    canStartScope: vi.fn(() => ({ ok: true })),
     activateWeapon: vi.fn(() => ({ ok: true })),
     noteWeaponFired: vi.fn(),
   };
@@ -94,6 +95,19 @@ function activateWeapon(
 }
 
 describe('host-authoritative weapon slot exclusivity', () => {
+  it('ends an old channel immediately when a new scope is rejected by host readiness', () => {
+    const tesla = makeTeslaSystem();
+    const { manager, playerManager, resourceSystem } = createManager(WEAPON_CONFIGS.TESLA_DOME, WEAPON_CONFIGS.AWP);
+    const behavior = new SustainedWeaponBehaviorRuntime(manager, resourceSystem as never);
+    behavior.setTeslaDomeSystem(tesla as never);
+    const { action, weaponActivation } = createActionRuntime(manager, behavior, playerManager);
+    activateWeapon(action, 'weapon1', 100);
+    expect(tesla.hostRefresh).toHaveBeenCalledOnce();
+    weaponActivation.canStartScope.mockReturnValue({ ok: false, reason: 'resource' });
+    expect(activateWeapon(action, 'weapon2', 116, { scope: { id: 1, phase: 'hold' } })).toMatchObject({ ok: false });
+    expect(tesla.hostDeactivateForPlayer).toHaveBeenCalledWith(PLAYER_ID);
+    expect(weaponActivation.activateWeapon).not.toHaveBeenCalled();
+  });
   it('ends a weapon-2 Tesla channel immediately on a fast LMB switch, even when Waffe 1 is rejected', () => {
     const tesla = makeTeslaSystem();
     const { manager, playerManager, resourceSystem } = createManager(WEAPON_CONFIGS.GLOCK, WEAPON_CONFIGS.TESLA_DOME);

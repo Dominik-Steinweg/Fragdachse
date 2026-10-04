@@ -163,6 +163,17 @@ Vor dem Hinzufügen einer Nachricht klären:
 
 World-scoped RPCs verwenden den zentralen Bridge-Pfad. Keine neue Funktion darf Transportobjekte in Gameplay leaken.
 
+Scope-Waffen verwenden identifizierte Hold-/Release-/Cancel-Gesten. Der World-eigene
+[PlayerActionRuntime](../../src/world/PlayerActionRuntime.ts) berechnet Ziel- und Schadensladung
+aus Host-Zeit und autoritativer Waffenconfig; Clientquoten sind nur Vorschau. Dieselbe
+Haltefrist bindet die Ladung und die Bewegungsverlangsamung. Abbruch, Ablauf und
+Player-/Activity-Reset schließen die Geste ohne Schuss; ihre ID bleibt bis zum World-Ende
+verbraucht. Der tabweite Clientzähler überlebt Reload-Resume derselben Peer-ID. Bei nicht
+schreibbarem Session-Storage korrigiert eine zur Geste passende Host-Ablehnung den Zähler;
+erst ein neuer physischer Tastendruck darf erneut beginnen. Cancel ist
+Lifecycle-Cleanup und passiert die lokalen und hostseitigen Combat-Sperren, bleibt aber
+an die aktuelle World-/Activity-Identität gebunden.
+
 ## Maßgebliche Tests
 
 - [tests/WorldChannelContracts.test.ts](../../tests/WorldChannelContracts.test.ts)

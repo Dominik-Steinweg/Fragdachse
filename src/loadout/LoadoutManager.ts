@@ -60,8 +60,8 @@ export class LoadoutManager {
   /** Welches Item die Figur gerade in den Pfoten haelt – rein visuell, aber host-autoritativ. */
   private readonly heldItemSlots = new HeldItemSlotTracker();
 
-  // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
-  private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
+  // Explicit input lease; ordinary fire observations retain their short default lifetime.
+  private heldFireSlots = new Map<string, { slot: WeaponSlot; expiresAt: number; angle: number }>();
   private static readonly HOLD_EXPIRE_MS = 100;
 
   constructor(
@@ -169,7 +169,7 @@ export class LoadoutManager {
 
     // holdSpeedFactor: Verlangsamung wenn Feuerknopf gehalten wird
     const held = this.heldFireSlots.get(playerId);
-    if (held && now - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS) {
+    if (held && now < held.expiresAt) {
       const cfg = this.loadouts.get(playerId)?.[held.slot].config;
       const holdFactor = cfg?.holdSpeedFactor ?? 1;
       return ultimateMult * holdFactor;
@@ -180,7 +180,7 @@ export class LoadoutManager {
 
   getHeldSelfPushVelocity(playerId: string, now: number): { vx: number; vy: number } | null {
     const held = this.heldFireSlots.get(playerId);
-    if (!held || now - held.lastAt >= LoadoutManager.HOLD_EXPIRE_MS) return null;
+    if (!held || now >= held.expiresAt) return null;
 
     const cfg = this.loadouts.get(playerId)?.[held.slot].config;
     if (!cfg || cfg.fire.type !== 'leaf_blower') return null;
@@ -246,8 +246,13 @@ export class LoadoutManager {
   // ── Waffen-Getter (für AimSystem) ────────────────────────────────────────
 
   /** Records generic held-fire input; sustained slot/channel state belongs to its behavior owner. */
-  noteWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void {
-    this.heldFireSlots.set(playerId, { slot, lastAt: now, angle });
+  noteWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number,
+    holdDurationMs = LoadoutManager.HOLD_EXPIRE_MS): void {
+    this.heldFireSlots.set(playerId, { slot, expiresAt: now + holdDurationMs, angle });
+  }
+
+  clearHeldWeaponAction(playerId: string): void {
+    this.heldFireSlots.delete(playerId);
   }
 
   /** Readiness read consumed by the World-owned immediate weapon activation boundary. */

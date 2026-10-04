@@ -20,6 +20,7 @@ vi.mock('../src/ui/RadialActionMenu', () => ({
 }));
 
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { resolveEffectiveLoadoutSelection } from '../src/loadout/LoadoutRules';
 import { InputSystem } from '../src/systems/InputSystem';
 import { DASH_T1_S, DASH_T2_S } from '../src/config';
 import type { LoadoutUseParams } from '../src/types';
@@ -113,6 +114,50 @@ describe('authoritative dash input feedback', () => {
 });
 
 describe('weapon input exclusivity', () => {
+  it('keeps a legitimate Lobby scope across equivalent freshly resolved live-build configs', () => {
+    const profile = { upgrades: { unlock_awp: { unlocked: true, level: 1 } } };
+    let chargeLevel = 1;
+    // Lobby previews deserialize profile/items afresh; use the same canonical config resolver.
+    const getConfig = () => resolveEffectiveLoadoutSelection({ weapon2: WEAPON_CONFIGS.AWP }, 'coop_defense',
+      { ...structuredClone(profile), upgrades: { ...profile.upgrades, awp_charge_damage: { unlocked: true, level: chargeLevel } } },
+      'dachs_of_steel', []).weapon2;
+    expect(getConfig()).not.toBe(getConfig());
+    expect(getConfig()).toEqual(getConfig());
+    const f = createInput(getConfig);
+    f.pointerState.right = true; f.system.update();
+    const id = f.uses[0].params!.scope!.id;
+    f.system.update();
+    expect(f.system.isScoping()).toBe(true);
+    expect(f.uses.at(-1)?.params).toEqual({ scope: { id, phase: 'hold' } });
+    // A real effective config change still closes the old gesture.
+    chargeLevel = 0;
+    f.system.update();
+    expect(f.system.isScoping()).toBe(false);
+    expect(f.uses.at(-1)?.params).toEqual({ scope: { id, phase: 'cancel' } });
+  });
+
+  it('correlates rejected scope starts and repairs only a safe authoritative ID floor', () => {
+    const f = createInput(() => WEAPON_CONFIGS.AWP);
+    f.pointerState.right = true; f.system.update();
+    const oldId = f.uses.at(-1)!.params!.scope!.id;
+    f.system.setInputEnabled(false);
+    f.pointerState.right = false; f.system.setInputEnabled(true); f.system.update();
+    f.pointerState.right = true; f.system.update();
+    const newId = f.uses.at(-1)!.params!.scope!.id;
+    expect(newId).toBeGreaterThan(oldId);
+    f.system.handleScopeActionResult({ id: oldId, phase: 'hold' }, { ok: false, scopeGestureIdFloor: newId + 100 });
+    expect(f.system.isScoping()).toBe(true);
+    f.system.handleScopeActionResult({ id: newId, phase: 'hold' }, { ok: false, scopeGestureIdFloor: Number.POSITIVE_INFINITY });
+    expect(f.system.isScoping()).toBe(false);
+    f.pointerState.right = false; f.system.update();
+    f.pointerState.right = true; f.system.update();
+    const freshId = f.uses.at(-1)!.params!.scope!.id;
+    expect(freshId).toBe(newId + 1);
+    f.system.handleScopeActionResult({ id: freshId, phase: 'hold' }, { ok: false, scopeGestureIdFloor: freshId + 5 });
+    f.pointerState.right = false; f.system.update();
+    f.pointerState.right = true; f.system.update();
+    expect(f.uses.at(-1)!.params!.scope!.id).toBe(freshId + 6);
+  });
   it('prioritizes Shift exit, then entry, then Burrow and blocks all mounted loadout input', () => {
     const f = createInput(() => WEAPON_CONFIGS.AWP);
     let state: import('../src/types').TurretControlState | undefined;
@@ -150,12 +195,13 @@ describe('weapon input exclusivity', () => {
     pointerState.left = true;
     system.update();
     expect(system.isScoping()).toBe(false);
-    expect(uses.map((use) => use.slot)).toEqual(['weapon2', 'weapon1']);
+    expect(uses.map((use) => use.slot)).toEqual(['weapon2', 'weapon2', 'weapon1']);
+    expect(uses[1]?.params).toEqual({ scope: { id: uses[0]?.params?.scope?.id, phase: 'cancel' } });
 
     pointerState.left = false;
     pointerState.right = false;
     system.update();
-    expect(uses.map((use) => use.slot)).toEqual(['weapon2', 'weapon1']);
+    expect(uses.map((use) => use.slot)).toEqual(['weapon2', 'weapon2', 'weapon1']);
   });
 
   it('preserves a fast RMB press made while LMB had priority until the deliberate switch back', () => {

@@ -14,6 +14,8 @@ vi.mock('phaser', () => ({
 
 import { WorldPlayerGameplayRuntime } from '../src/world/WorldPlayerGameplayRuntime';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { PlayerActionRuntime } from '../src/world/PlayerActionRuntime';
 import { CoopDefenseItemRuntimeSystem } from '../src/systems/CoopDefenseItemRuntimeSystem';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
@@ -48,6 +50,7 @@ function makeRuntime() {
   const drainUnsub = vi.fn();
   const gainUnsub = vi.fn();
   const systems: Record<string, any> = {
+    playerAction: scopeStub(),
     plasmaBurner: plasmaStub(),
     resource: {
       initPlayer: tag('resource.initPlayer'),
@@ -198,6 +201,7 @@ function makeConcreteRemoveRuntime() {
   };
   const runtime = createRuntimeShell();
   runtime.systems = { plasmaBurner: plasmaStub(),
+    playerAction: scopeStub(),
     resource,
     burrow,
     itemRuntime,
@@ -274,6 +278,7 @@ function makeDestroyRuntime() {
     removePlayer: vi.fn(),
   };
   const systems = { plasmaBurner: plasmaStub(),
+    playerAction: scopeStub(),
     loadout,
     weaponActivation: { destroy: vi.fn() },
     ultimateBehavior: { destroy: vi.fn() },
@@ -528,7 +533,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     const heldAction = new HostHeldActionSystem();
     const runtime = createRuntimeShell();
     runtime.turretControl = emptyTurretControl();
-    runtime.systems = { plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() } };
+    runtime.systems = { playerAction: scopeStub(), plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() } };
 
     expect(heldAction.start('p1', 'action-p1', 'charged_throw', 100, 0)).toBe(true);
     expect(heldAction.start('p2', 'action-p2', 'charged_throw', 100, 0)).toBe(true);
@@ -661,6 +666,7 @@ describe('World player actions release a Rocket magazine before changing player 
     const world = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
     world.turretControl = emptyTurretControl();
     world.systems = {
+      playerAction: scopeStub(),
       rocketMagazine: magazine,
       burrow: { handleBurrowRequest: perform },
       utilityAction: { execute: perform, startHeldAction: perform, useInspectorUtility: perform },
@@ -684,3 +690,81 @@ describe('World player actions release a Rocket magazine before changing player 
 });
 
 function plasmaStub() { return { resetPlayer: vi.fn(), clearAll: vi.fn(), destroy: vi.fn() }; }
+function scopeStub() { return { cancelScope: vi.fn(), cancelAllScopes: vi.fn(), removePlayer: vi.fn(), destroy: vi.fn() }; }
+
+describe('scope gestures at World and player lifetime boundaries', () => {
+  it.each(['attach', 'detach', 'build detach', 'loadout change', 'build change', 'player exit',
+    'activity end', 'stun', 'countdown', 'death', 'dash', 'burrow', 'utility', 'ultimate', 'held action', 'destroy'])(
+    '%s closes the old gesture and its movement lease without a shot', boundary => {
+      const fixture = boundary === 'destroy' ? makeDestroyRuntime() : makeRuntime();
+      const { runtime, systems } = fixture;
+      const loadout = new LoadoutManager({} as never, { getGameMode: () => 'deathmatch' });
+      loadout.assignDefaultLoadout('p1', { weapon2: WEAPON_CONFIGS.AWP });
+      const fire = vi.fn(() => ({ ok: true as const }));
+      const action = new PlayerActionRuntime({ getPlayer: () => ({ x: 0, y: 0, color: 0xffffff }),
+        canInteract: () => true, isAlive: () => true, isWeaponBlocked: () => false, isDashBurst: () => false },
+      loadout, null, { canStartScope: () => ({ ok: true }), activateWeapon: fire, noteWeaponFired: vi.fn() });
+      systems.playerAction = action;
+      const input = (id: number, phase: 'hold' | 'release') => action.execute({
+        category: 'weapon', playerId: 'p1', slot: 'weapon2', angle: 0, targetX: 10, targetY: 0, hostNowMs: 10_000,
+        params: { scope: { id, phase } },
+      });
+      expect(input(1, 'hold').ok).toBe(true);
+      expect(loadout.getSpeedMultiplier('p1', 10_000)).toBe(WEAPON_CONFIGS.AWP.holdSpeedFactor);
+      Object.assign(systems.utilityAction, { execute: vi.fn(), startHeldAction: vi.fn() });
+      Object.assign(systems.ultimateBehavior, { execute: vi.fn(), interruptCombat: vi.fn() });
+      Object.assign(systems.sustainedWeaponBehavior, { interruptCombat: vi.fn() });
+      systems.burrow.handleBurrowRequest = vi.fn();
+      systems.heldAction.start = vi.fn();
+      runtime.options.hostPhysics = { handleDashRPC: vi.fn() };
+      if (boundary === 'attach') runtime.attachPlayerLoadout('p1');
+      if (boundary === 'detach') runtime.detachPlayerLoadout('p1');
+      if (boundary === 'build detach') runtime.detachPlayerBuild('p1');
+      if (boundary === 'loadout change') { systems.loadout.syncSelectedLoadout.mockReturnValue(true); runtime.reconcilePlayerLoadout('p1'); }
+      if (boundary === 'build change') { systems.playerModifier.syncPlayers.mockReturnValue(['p1']); runtime.reconcilePlayerBuildModifiers(new Map(), 10_000); }
+      if (boundary === 'player exit') runtime.invalidateHeldActionsForPlayer('p1');
+      if (boundary === 'activity end') runtime.invalidateHeldActionsOnActivityEnd();
+      if (boundary === 'stun') runtime.interruptPlayerActions('p1', 10_000);
+      if (boundary === 'countdown') {
+        runtime.options.playerManager.getAllPlayers = () => [];
+        runtime.options.combatSystem = { isStunned: () => false };
+        systems.plasmaBurner.update = vi.fn();
+        systems.heldAction.clearExpired = vi.fn();
+        runtime.runHostPrePhysicsStage(16, 10_000, true);
+      }
+      if (boundary === 'death') runtime.getPlayerCombatIntegrationPort().reactions.handlePlayerDeath('p1', 0, 0);
+      if (boundary === 'dash') runtime.handleDashRequest('p1', 1, 0, 10_000);
+      if (boundary === 'burrow') runtime.handleBurrowRequest('p1', true);
+      if (boundary === 'utility' || boundary === 'ultimate') runtime.usePlayerAction({
+        category: boundary, playerId: 'p1', angle: 0, targetX: 10, targetY: 0, hostNowMs: 10_000,
+      });
+      if (boundary === 'held action') runtime.startHeldAction('p1', 'held', 'global_dismantle', 1000, 10_000);
+      if (boundary === 'destroy') runtime.destroy();
+      expect(loadout.getSpeedMultiplier('p1', 10_000)).toBe(1);
+      expect(input(1, 'hold').ok).toBe(false);
+      expect(input(1, 'release').ok).toBe(false);
+      expect(fire).not.toHaveBeenCalled();
+      if (boundary !== 'destroy') expect(input(2, 'hold').ok).toBe(true);
+    });
+
+  it.each(['expired', 'dead', 'blocked', 'dashing', 'changed config'])('revalidates %s scope state before host movement', reason => {
+    const loadout = new LoadoutManager({} as never, { getGameMode: () => 'deathmatch' });
+    loadout.assignDefaultLoadout('p1', { weapon2: WEAPON_CONFIGS.AWP });
+    let invalid = false;
+    const fire = vi.fn(() => ({ ok: true as const }));
+    const action = new PlayerActionRuntime({ getPlayer: () => ({ x: 0, y: 0, color: 0xffffff }),
+      canInteract: () => true, isAlive: () => !(invalid && reason === 'dead'),
+      isWeaponBlocked: () => invalid && reason === 'blocked', isDashBurst: () => invalid && reason === 'dashing' },
+    loadout, null, { canStartScope: () => ({ ok: true }), activateWeapon: fire, noteWeaponFired: vi.fn() });
+    const request = { category: 'weapon' as const, playerId: 'p1', slot: 'weapon2' as const,
+      angle: 0, targetX: 10, targetY: 0, hostNowMs: 10_000 };
+    expect(action.execute({ ...request, params: { scope: { id: 1, phase: 'hold' } } }).ok).toBe(true);
+    invalid = true;
+    if (reason === 'changed config') loadout.assignDefaultLoadout('p1', { weapon2: { ...WEAPON_CONFIGS.AWP, damage: 123 } });
+    action.updateScopes(reason === 'expired' ? 12_000 : 10_001);
+    expect(loadout.getSpeedMultiplier('p1', 10_001)).toBe(1);
+    invalid = false;
+    expect(action.execute({ ...request, params: { scope: { id: 1, phase: 'release' } } }).ok).toBe(false);
+    expect(fire).not.toHaveBeenCalled();
+  });
+});

@@ -112,6 +112,17 @@ export class PlayerWeaponActivationRuntime {
 
   constructor(private readonly options: PlayerWeaponActivationRuntimeOptions) {}
 
+  /** Readiness at gesture start reserves neither a shot nor resources. */
+  canStartScope(playerId: string, slot: WeaponSlot, config: WeaponConfig, nowMs: number): LoadoutUseResult {
+    if (this.destroyed || !this.options.playerManager.getPlayer(playerId)) return { ok: false, reason: 'invalid' };
+    if (this.options.loadout.isWeaponOnCooldown(playerId, slot, nowMs)) return { ok: false, reason: 'cooldown' };
+    const cost = this.options.resourceSystem.resolveAdrenalineCost(playerId, config.adrenalinCost);
+    if (cost > 0 && this.options.resourceSystem.getAdrenaline(playerId) < cost) {
+      return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
+    }
+    return { ok: true };
+  }
+
   activateWeapon(request: PlayerWeaponActivationRequest, prepaidRocketSalvo?: { count: number; focused: boolean }): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
 

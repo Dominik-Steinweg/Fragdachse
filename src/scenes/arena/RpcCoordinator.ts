@@ -199,6 +199,14 @@ export class RpcCoordinator {
       const capabilities = this.capabilities.get(senderId);
       if (!capabilities) return { ok: false, reason: 'blocked' };
       if (!isValidPlayerActionAttemptId(params?.attemptId)) return { ok: false, reason: 'invalid' };
+      if (params?.scope !== undefined && (slot !== 'weapon2' || params.rocketMagazine !== undefined
+        || params.scopeHolding !== undefined || params.inputStarted !== undefined)) {
+        return { ok: false, reason: 'invalid' };
+      }
+      if (params?.rocketMagazine !== undefined && (params.scopeHolding !== undefined
+        || params.scopeProgress !== undefined || params.scopeChargeProgress !== undefined)) {
+        return { ok: false, reason: 'invalid' };
+      }
       if ((params?.scopeHolding !== undefined && typeof params.scopeHolding !== 'boolean')
         || [params?.scopeProgress, params?.scopeChargeProgress].some(progress => progress !== undefined
           && (typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0 || progress > 1))) {
@@ -209,10 +217,10 @@ export class RpcCoordinator {
       // Client-Urspruenge sind ebenso wenig Gameplay-Autoritaet wie eine Client-Uhr.
       // Die Action-Owner lesen die verbindliche Position aus ihrer Host-Player-Runtime.
       const hostNowMs = this.resolveHostActionTime();
-      if (params?.rocketMagazine && params.activityRevision !== bridge.getActivityDescriptor()?.activityRevision) {
+      if ((params?.rocketMagazine || params?.scope) && params.activityRevision !== bridge.getActivityDescriptor()?.activityRevision) {
         return { ok: false, reason: 'invalid' };
       }
-      if (slot === 'weapon2' && params?.rocketMagazine?.phase === 'cancel') {
+      if (slot === 'weapon2' && (params?.rocketMagazine?.phase === 'cancel' || params?.scope?.phase === 'cancel')) {
         return this.playerLoadout.usePlayerAction({ category: 'weapon', playerId: senderId, slot,
           angle, targetX, targetY, hostNowMs, params });
       }
@@ -374,7 +382,8 @@ export class RpcCoordinator {
             params: authoritativeParams,
           });
       if (result.ok && (slot === 'weapon1' || slot === 'weapon2')
-        && senderId === bridge.getLocalPlayerId() && !params?.scopeHolding && !params?.rocketMagazine) {
+        && senderId === bridge.getLocalPlayerId() && !params?.scopeHolding && !params?.rocketMagazine
+        && (!params?.scope || params.scope.phase === 'release')) {
         this.clientUpdate.notifyAuthoritativeLocalWeaponFired(slot);
       }
       if (slot !== 'weapon2') return result;
