@@ -27,7 +27,9 @@
 | UI / audio / input | In progress | Lazy overlays, asset cancellation, voice decoding/disposal, music unlock callbacks and sound cleanup read. Gauss focus-loss bug fixed. Other rendering resources, utilities and tools remain. |
 | Enemy AI / mission / CTB | Second pass reviewed | Windup execution, salvo/lock expiry, teleport/throw/aura ownership, live target replacement, spawn countdown/stagger/retry/provenance and technical backstop checked. CTB own-home pickup blocked opponents depending on player order; fixed. |
 | World entities / train / pickups | In progress | Train reentry, destruction timers and Activity ports; shooting-range guards, target respawn and teardown; pickup UID/delta/snapshot order checked. Base marker ownership fixed. Broader entity review continues. |
-| Effects and rendering resources | In progress | World teardown of BlackHole, GuardianSpirit and pickup materialization fixed and cross-reviewed. Renderer maps, GPU source release and worker job/transfer cancellation traced. Entity-owned spawn effects remain to inspect. |
+| Effects and rendering resources | Third pass reviewed | World teardown of BlackHole, GuardianSpirit, pickup and player/enemy spawn presentation fixed and cross-reviewed. Renderer maps, GPU source release, lighting teardown and worker job/transfer cancellation traced. |
+| Construction moves / editor layouts | Reviewed | Host/client cell swaps, visual cleanup and target-bound injector effects now preserve object ownership through movement and rollback. Pure rotation is rejected by the existing editor contract, so no speculative rotation fix. |
+| Standalone tools | In progress | Voice workshop synthetic-audio suite passed; real HTTP UTF-8 chunk corruption reproduced and fixed. Map/balance editor file allowlists, realpath checks, revisions and atomic writes reviewed. Map editor stale-load race reproduced; fix pending. |
 | Proven unused code | Removals reviewed | Removed unused PlayerRuntime navigation flag, two peer helper exports, two obsolete audio wrapper methods and private VALID_SLOTS constant. Full repository/reference search performed; live navigation remains owned by Activity flow fields. |
 | Independent review | First two clusters complete; final pending | Agents cross-reviewed lifecycle, enemy replication, Bridge, PeerLink and input/audio fixes; root reviewed registry, projectile and save gates. Plasma-clear regression discovered in first review; range test isolation improved in second review. |
 
@@ -58,6 +60,20 @@
 | A21 | A host with an earlier clock can suppress a legitimate later round's XP | Fixed: completion preserves the existing round revision in state and result rows. Local progress keeps a per-room monotone revision ledger. Mixed revisions wait, new host times can be earlier, A/B/A replay remains deduplicated. Import/export/reset/legacy migration covered. Legacy and room-code reuse limits are documented. |
 | A22 | A client's non-string player name crashes host profile extraction/update | Fixed: both profile paths narrow client-owned name state to a string before trimming. Two real-wire regressions failed before the fix; invalid updates preserve the previous name, initial invalid values use the existing default. |
 | A23 | BaseEntity.destroy leaves its owned vulnerability marker alive | Fixed: the marker is destroyed and nulled by the entity itself. Other Activity paths normally clean it earlier, but direct entity teardown now fulfills the same complete ownership contract. |
+| A24 | Player/enemy spawn objects, tweens and delayed callbacks outlive their owner | Fixed: reusable spawn renderers own their transient objects/timers and clear on entity destruction or World teardown. Natural completion drops bookkeeping; retired callbacks cannot affect the next World. |
+| A25 | AWP scope and a pending Shift press survive focus loss | Fixed: blur/hidden cancellation clears both scope clocks/fractions and the pending Shift edge. Real input updates previously fired a fully charged shot or activated burrow after focus returned. |
+| A26 | Cancelling the save-file chooser leaves its promise pending | Fixed: the native cancel event resolves the existing no-file result without changing stored progress. |
+| A27 | Balance runtime storage can throw on access or accept malformed result fields | Fixed: storage getter failures are contained; adrenaline and damage-by-kind values require the declared finite numeric shape. |
+| A28 | Authored content accepts inherited type/audio reference keys | Fixed: the required-field/type tables and audio references require own keys. Valid authored content remains unchanged. |
+| A29 | Finite imported XP/item levels can overflow derived runtime values | Fixed at import/sanitization: derived level thresholds and item base/affix/salvage values must stay finite. Existing XP arithmetic moved unchanged into a pure helper to avoid an initialization cycle. Invalid imports preserve the previous save atomically. |
+| A30 | Maps/base/rewards accept inherited pedestal IDs | Fixed: all three pedestal authoring boundaries require own definition keys. |
+| A31 | Swapping construction cells loses occupancy during snapshot/visual synchronization | Fixed: snapshot sync vacates all old cells before assigning the new layout; visual removal only clears a cell still owned by that object. Real host/client swap and idempotent replay covered. |
+| A32 | Malformed scope parameters reach weapon math and charge resources | Fixed: the RPC boundary rejects nonboolean holding and nonfinite/non-numeric/out-of-range fractions before dispatch. This does not solve forged but well-typed charge duration (A35). |
+| A33 | Moving a buffed construction leaves its energy-injector effect at the old position | Fixed: construction movement commits target-bound effect coordinates together with placement, including editor batches and rollback. Owner, effect identity, start and expiry remain unchanged. |
+| A34 | Voice workshop corrupts UTF-8 text split across HTTP chunks | Fixed: collect the bounded byte chunks before decoding UTF-8. Real loopback HTTP regression previously persisted `M��ller` instead of `Müller`; response, memory and disk now agree. |
+| A35 | A client can claim full AWP charge without holding first | Confirmed and open: a well-typed first request with both scope fractions set to 1 doubles damage in the real activation path. Needs an existing authoritative owner/timing design, beyond field validation; reproduction preserved. |
+| A36 | Reliable messages buffered before fast-channel readiness lack a byte bound | Confirmed; fix in progress using the existing receive budget. 513 valid 32 KiB strings stayed buffered before channel readiness in the red reproduction. |
+| A37 | Host links can remain unadmitted indefinitely by sending heartbeat replies | Confirmed; fix in progress using the existing handshake duration from link readiness. A real room reproduction stayed connected for 20 seconds without sending hello. |
 
 Additional hypotheses remain separate from confirmed findings; no speculative fixes are included.
 
@@ -67,6 +83,7 @@ Additional hypotheses remain separate from confirmed findings; no speculative fi
 - First reviewed cluster `npm run check`: PASS, 535 Core files / 4,983 tests, 6 Architecture files / 54 tests, all three builds. Local output: `tmp/overnight-audit/cluster-1-check.log`.
 - Second reviewed cluster `npm run check`: PASS, 535 Core files / 5,010 tests, 6 Architecture files / 54 tests, all three builds. Integration: 62 files / 652 tests PASS. Logs: `tmp/overnight-audit/cluster-2-check.log` and `cluster-2-integration.log`.
 - Third reviewed cluster `npm run check`: PASS, 537 Core files / 5,037 tests, 6 Architecture files / 54 tests, all three builds. Integration: 62 files / 653 tests PASS. Logs: `tmp/overnight-audit/cluster-3-check.log` and `cluster-3-integration.log`.
+- Fourth reviewed cluster `npm run check`: PASS, 537 Core files / 5,079 tests, 6 Architecture files / 54 tests, all three builds. The simultaneous integration process exited natively with Windows code `0xC0000005` without an assertion failure or summary; the unchanged suite rerun separately passed 63 files / 663 tests. Logs: `cluster-4-check.log`, `cluster-4-integration.log`, `cluster-4-integration-retry.log` under `tmp/overnight-audit/`. No speculative source change was made for the process crash.
 - A03: concrete composition regressions red before fix; 227 targeted lifecycle tests green afterward; independent review completed.
 - A04: `npm test -- tests/WorldChannelContracts.test.ts tests/LocalPlayerPrediction.test.ts tests/PlayerMovementAcknowledgements.test.ts`: 3 files / 35 tests PASS. Logs: `tmp/overnight-audit/input-validation-red.log` and `input-validation-green.log`.
 - A05–A07: clock-skew, lost spawn/health, codec/short teleport and plasma-clear tests red before their respective fixes. Latest focused state run: 55 tests PASS (`NavigationPursuit`, `CoopDefenseBurrowingEnemies`, `EnemyClawNetwork`).
@@ -74,7 +91,7 @@ Additional hypotheses remain separate from confirmed findings; no speculative fi
 - A09: `tmp/overnight-audit/queued-feedback-red.log` and `queued-feedback-green.log`; 25 focused tests PASS; independently reviewed.
 - Transport agent additionally ran the integration suite: 62 files / 648 tests PASS. Later focused fixes were retested; rerun the whole suite after the next relevant cluster.
 - Baseline game build reports the existing large-chunk warning; no build failure.
-- The baseline and subsequent game builds also warn about three font URLs left for runtime resolution. This pre-existing warning is separate from the audited code fixes; runtime asset verification remains to inspect.
+- The baseline and subsequent game builds also warn about three font URLs left for runtime resolution. All three corresponding files exist in both public and built output with matching lengths (9,956 / 9,900 / 31,432 bytes); no missing asset was found. Actual browser loading remains unverified.
 - A10: focused PeerLink regressions red before fix; 67 transport tests passed before the additional queued-inbox regression; updated PeerLink suite passes 15 tests. Independent review complete.
 - A11/A12: six inherited-key regressions and three malformed-number cases failed before fixes. Five focused files / 61 tests pass, including null/boolean cases and PeerLink.
 - A13/A14: four lifetime regressions failed before fixes; 3 files / 95 tests pass. Root review requested and received an isolated range test; updated lifecycle suite: 14 PASS. Additional Combat/Collision suites: 5 files / 67 tests PASS.
@@ -86,6 +103,17 @@ Additional hypotheses remain separate from confirmed findings; no speculative fi
 - A21: nine targeted red reproductions; Meta/LocalPersistence/ArenaExitLifecycle: 3 files / 98 PASS. Independent transport and root review complete, including legacy replay boundary monotonicity.
 - A22: 2 red real-wire cases; PlayerName/PeerRoom/WorldChannel: 3 files / 62 PASS. Logs: `tmp/overnight-audit/player-name-wire-red.log` and `player-name-wire-green.log`. Independent review complete.
 - A23: BaseGrounding ownership regression red; 7 focused files / 66 tests PASS, including repeated teardown.
+- A24: 2 ownership cases red; 5 new regressions and 131 focused tests across 4 files PASS. Logs: `spawn-lifetime-red.log` / `spawn-lifetime-green.log`. Independent review complete.
+- A25: 4 focus-loss cases red; 64 tests / 2 files PASS. Logs: `scope-focus-red.log` / `scope-focus-green.log`. Independent review complete.
+- A26/A29: cancellation and derived-overflow regressions pass in LocalPersistence; numeric import/item/progression run 78 tests / 3 files PASS. Evidence: `tmp/numeric-import-verification-2026-10-04.txt`. Both changes independently reviewed.
+- A27/A28: storage regressions red before fix; 44 focused tests / 3 files PASS. Complete Balance-Lab suite after XP extraction: 21 files / 111 tests PASS. Evidence: `tmp/runtime-benchmark-storage-repro-2026-10-04.txt` and `tmp/content-own-key-verification-2026-10-04.txt`.
+- A30: 6 authoring cases red, then 66 tests / 4 files PASS. Evidence: `tmp/map-pedestal-reference-verification-2026-10-04.txt`. Independent review complete.
+- A31: 33 tests / 4 files and 68 additional construction tests / 9 files PASS; root and state review complete.
+- A32: 15 malformed scope cases red before validation; RPC suite 36 PASS, plus 31 existing weapon tests and a real FakePeer path. Root review complete.
+- A33: real construction-management reproduction red, then 32 tests in the extended integration file plus 19 related tests PASS. State and root reviews complete; fourth full integration gate also covers it.
+- A34: existing Voice-Workshop baseline 13 PASS; added real HTTP regression red, then complete suite 14 PASS. Logs: `voice-workshop-baseline.log`, `voice-utf8-red.log`, `voice-utf8-green.log`. Independent lifecycle review complete. Only synthetic test audio/fake generation was used.
+- Projectile stress subset: 2 files / 18 tests PASS, 2 comparison/benchmark files / 3 tests intentionally skipped because their opt-in environment was absent. Log: `projectile-stress.log`; no performance claim is inferred from skipped comparisons.
+- Asset suite: initially 33 files PASS and 2 files failed solely because an ignored character-render reference was absent from the isolated checkout (178 tests passed, 2 failed). Copied the existing `art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json` unchanged from the main checkout; SHA-256 matched `404ECC5099E16D157B17270E688A77E0CF61F915FEC76E451A880C75F43E69AD`. Both affected suites then passed all 17 tests. Logs: `asset-suite.log`, `asset-fixture-recovery.log`. No asset source changed.
 - The runtime-assets prebuild rewrites generated manifests and text-asset hashes due to checkout line endings. These unrelated generated changes were restored before commits; generated output remains available for verification.
 
 ## Local commits
@@ -107,6 +135,18 @@ Additional hypotheses remain separate from confirmed findings; no speculative fi
 - `8fcad7ac` — validate client names before profile extraction.
 - `7de63795` — skip Scene refresh after a rejected reset.
 - `ce814dc6` — credit identified rounds independently of host clock ordering.
+- `ee33e494` — remove the unused projectile removed-state alias and obsolete XP helper; correct the feature inventory.
+- `2e35fd46` — release spawn presentation at owner teardown.
+- `32c13b6d` — cancel scope and pending Shift on focus loss.
+- `efab756e` — preserve cell ownership across layout swaps.
+- `7df04f0c` — move target effects with their construction.
+- `6913c32d` — reject malformed scope action parameters.
+- `35c458bd` — tolerate unavailable lab storage and reject corrupt results.
+- `b437cfcb` — require own keys in authored content reference tables.
+- `397c94ad` — reject inherited pedestal identifiers.
+- `7115311f` — decode complete HTTP request bytes as UTF-8.
+- `e5ebfcad` — settle cancelled save-file selection.
+- `b29c3a06` — reject imports with nonfinite derived state.
 
 No push, merge or deployment.
 
@@ -126,6 +166,10 @@ No push, merge or deployment.
 - Cross-tab storage invalidation is exposed but not wired to a storage listener. Concurrent-tab persistence semantics remain an open investigation, not an assumed safe fix.
 - A suspected synchronous World replacement inside projectile-explosion callbacks was rejected after tracing production callbacks and `ArenaRuntime`: host simulation finishes before round completion and World teardown are applied. No speculative guards added.
 - Worker review covered terrain material transfer/cancellation and flow-field generation/job matching, buffer ownership, watchdog and inline fallback; no new confirmed defect in this pass.
+- A35 is preserved in `tmp/overnight-awp-scope-authority-repro.md` and its `.test.ts.txt` companion. RPC type/range validation deliberately does not claim host-authoritative charge timing.
+- A29 covers imported persisted values, not every direct debug setter, astronomical pure-math input or the sum of many extreme individually finite item values. Those remain separate potential numeric boundaries.
+- Map-editor out-of-order load responses are reproduced in `tmp/map-loading-race-repro.mjs`; the latest-selection guard is in progress. Editing the previous map while a new request is pending remains a separate unproven hypothesis.
+- VoiceLibrary import/remove have no current production callers but are an explicitly documented supported package boundary; they were not removed merely because the current UI only selects bundled voices.
 
 ## Work sessions
 
@@ -133,6 +177,7 @@ No push, merge or deployment.
 | --- | --- | --- |
 | 2026-10-04 21:57:48 – 22:15 | Goal, isolated checkout, contract review, coverage mapping, first parallel audits, regressions, fixes, cross-review, complete gate and local commits | 0 |
 | 2026-10-04 22:15 – 22:40 | Further transport, persistence, content and unused-code audits; second full gate; browser prerequisite check; effects and enemy ownership review | 0 |
-| 2026-10-04 22:40 – ongoing | Malformed profile and host-clock reproductions; entity/effect cleanup; independent review; third full gate | 0 |
+| 2026-10-04 22:40 – 23:12 | Malformed profile and host-clock reproductions; entity/effect cleanup; storage/content/import/move fixes; third and fourth gates; stress/assets/Voice tests; independent reviews and small local commits | 0 |
+| 2026-10-04 23:12 – ongoing | Further transport resource boundaries, editor races, UI listener ownership and remaining codebase review | 0 |
 
 Knowledge writeback: Updated docs/ai/local-persistence.md and docs/ai/networking.md with the verified per-room round-credit identity; corrected docs/ai/gameplay.md to match actual PlayerWorldRuntime feature ownership.
