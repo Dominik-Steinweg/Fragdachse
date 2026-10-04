@@ -6,11 +6,15 @@ from turret_surface_parts import material
 
 
 def palette(c, armor=(.085, .15, .17), accent=(.64, .27, .055), charge=(.06, .58, .73)):
+    # Large panels are weathered mineral/earth tones. Small functional contacts
+    # retain the weapon hue; do not tint the entire structure with the accent.
+    value = sum(channel * weight for channel, weight in zip(armor, (.2126, .7152, .0722)))
+    armor = tuple(channel * .38 + value * .62 + warmth for channel, warmth in zip(armor, (.026, .018, .004)))
     return {
         'dark': material(c, 'Graphite ceramic recesses', (.017, .027, .036), 'recess'),
-        'base': material(c, 'Weathered structural graphite', (.047, .068, .080), 'base'),
-        'steel': material(c, 'Brushed gunmetal', (.14, .19, .21), 'steel'),
-        'edge': material(c, 'Soft worn machined edges', (.29, .36, .37), 'steel'),
+        'base': material(c, 'Earth stained structural graphite', (.065, .075, .054), 'base'),
+        'steel': material(c, 'Warm brushed gunmetal', (.22, .235, .21), 'steel'),
+        'edge': material(c, 'Soft worn machined edges', (.26, .29, .255), 'steel'),
         'armor': material(c, 'Weathered enamel armor', armor),
         'accent': material(c, 'Worn identification enamel', accent),
         'ivory': material(c, 'Warm ceramic contacts', (.63, .62, .49), 'ceramic'),
