@@ -226,6 +226,10 @@ export class ProjectileLifecycleProcessor {
     }
 
     if (proj.spec.flight.isGrenade) {
+      if (coreStage.lifetimeExpiredIds.has(proj.id)) {
+        this.deps.release(proj);
+        return false;
+      }
       if (coreStage.grenadeExpiredIds.has(proj.id) && proj.spec.interaction.grenadeEffect) {
         grenadePayloads.push(this.createGrenadePayload(proj));
         this.deps.release(proj);

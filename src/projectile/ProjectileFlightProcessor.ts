@@ -97,6 +97,9 @@ export class ProjectileFlightProcessor {
     }
 
     if (projectile.spec.flight.isGrenade) {
+      if (projectile.spec.flight.isTranslocatorPuck && simulatedAgeMs > projectile.spec.flight.lifetimeMs) {
+        this.lifetimeExpiredIds.add(projectile.id);
+      }
       const velocity = projectile.physics.body.velocity;
       if (Math.hypot(velocity.x, velocity.y) > 0.001) projectile.grenadeLastDirection = Math.atan2(velocity.y, velocity.x);
       const fuseExpired = realAgeMs >= (projectile.spec.flight.fuseTime ?? Number.POSITIVE_INFINITY);

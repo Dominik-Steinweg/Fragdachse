@@ -2,6 +2,7 @@ import { fakeEntity } from './fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
+  Geom: { Line: class {}, Rectangle: class {} },
   Math: {
     Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
     Distance: {
@@ -26,6 +27,7 @@ import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { EnemyAiTargetCatalog } from '../src/systems/EnemyAiTargetCatalog';
+import { createProjectileRuntimeTestWorld } from './ProjectileRuntimeTestHelper';
 
 function createSystem(
   hasClearLineOfFire: (...args: unknown[]) => boolean,
@@ -90,6 +92,29 @@ function createSystem(
 }
 
 describe('Void-Stalker Translocator', () => {
+  it('lets a discarded puck expire after stun cancels the teleport', () => {
+    const f = createSystem(() => true);
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    f.spawnPuck.mockImplementation(request => runtime.spawnPuck(request));
+    f.translocatorProjectilePort.getPuckPosition = id => runtime.getPuckPosition(id);
+    f.translocatorProjectilePort.consumePuck = id => runtime.consumePuck(id);
+    let stunned = false;
+    f.combatSystem.isStunned = () => stunned;
+    const ability = getCoopDefenseEnemyConfig('void-stalker').translocator!;
+    f.system.hostUpdate(0);
+    expect(runtime.activeCount).toBe(1);
+    stunned = true;
+    f.system.hostUpdate(1);
+    expect(runtime.activeCount).toBe(1);
+    const elapsed = ability.flightTimeMs + 5001;
+    runtime.runHostProjectileStage(elapsed, elapsed);
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toHaveLength(1);
+    expect(f.combatSystem.applyDamage).not.toHaveBeenCalled();
+    f.system.clear();
+    runtime.destroy();
+  });
+
   it.each(['armed-construct', 'armed-outpost', 'armed-base'] as const)('telefrags the actual %s once for its occupants and respects cover', kind => {
     const catalog = new EnemyAiTargetCatalog();
     catalog.updateTargets([{ kind, id: 'structure', x: 800, y: 300, representedPlayerIds: ['player-1', 'player-2'],

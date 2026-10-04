@@ -29,6 +29,22 @@ function fixture() {
 }
 
 describe('world-owned projectile lifecycle authority', () => {
+  it.each([1, 0.5])('expires translocator pucks on their simulated lifetime at time factor %s', factor => {
+    const { runtime, physics } = fixture();
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: () => factor });
+    const id = runtime.spawnPuck({ x: 0, y: 0, angle: 0, speed: 100, size: 16,
+      color: 0xffffff, ownerId: 'owner', lifetimeMs: 100, maxBounces: 3 });
+    runtime.runHostProjectileStage(99 / factor, 99 / factor);
+    expect(runtime.getPuckPosition(id)).not.toBeNull();
+    const result = runtime.runHostProjectileStage(2 / factor, 101 / factor);
+    expect(runtime.getPuckPosition(id)).toBeNull();
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toEqual([id]);
+    expect(result.grenadePayloads).toEqual([]);
+    expect(result.projectileExplosions).toEqual([]);
+    expect(runtime.consumePuck(id)).toBe(false);
+  });
+
   it.each(['lifetime', 'range'] as const)('stops proximity pulses when its %s ends', cause => {
     const { runtime, physics } = fixture();
     const pulse = vi.fn();
