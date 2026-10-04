@@ -18,7 +18,8 @@ import { getVisibleWorldView } from '../../graphics/CameraWorldView';
 import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
 import { ScenarioClock } from './clock';
-import { visualTest } from './visualTest';
+import { visualTest, bindVisualTestBootClock } from './visualTest';
+import { BootScreen } from '../../ui/BootScreen';
 import { getGraphicsQualityController, type GraphicsQuality } from '../../graphics/GraphicsQuality';
 import { decodeScenario, defaultScenario, encodeScenario, parseScenario, scenarioLoadout, type DevScenario, type GridPoint } from './config';
 import { createScenarioPanel } from './panel';
@@ -94,12 +95,14 @@ export class DevScenarioController {
   private readonly panel: ReturnType<typeof createScenarioPanel>;
   private readonly refreshTimer: ReturnType<typeof setInterval>;
   private disposed = false;
+  private readonly restoreBootClock: () => void;
 
   constructor(private scene: Phaser.Scene, private runtime: ArenaRuntime,
     private setInput: (angle: number, trigger: WeaponSlot | null) => void,
     private lobbyReady: () => boolean) {
     if (!isDevScenarioMode()) throw new Error('Dev entry required.');
     this.clock = new ScenarioClock(scene.game.loop);
+    this.restoreBootClock = bindVisualTestBootClock(BootScreen, scene.time);
     this.clock.holdLoadingTime = () => this.runtime.getScenarioLoadingState().work?.renderReady === false;
     this.bots = new ScenarioBots(runtime, () => this.clock.now);
     let imported: DevScenario | null = null;
@@ -821,6 +824,6 @@ export class DevScenarioController {
     this.disposed = true; this.stop(); bridge.setDevScenarioPlayerFreeForAll(false); clearInterval(this.refreshTimer);
     this.worldLighting?.destroy(); this.worldLighting = null;
     window.removeEventListener('hashchange', this.onHashChange); this.api.destroy(); this.captureCancel?.();
-    this.panel.destroy(); this.clock.destroy();
+    this.panel.destroy(); this.restoreBootClock(); this.clock.destroy();
   }
 }

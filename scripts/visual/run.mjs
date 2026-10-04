@@ -12,15 +12,17 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 process.chdir(root);
 const args = process.argv.slice(2), update = args.includes('--update');
 const value = name => args.find(a => a.startsWith(`${name}=`))?.slice(name.length + 1);
-for (const arg of args) if (!['--update', '--help', '--list'].includes(arg) && !/^--(runs|group)=/.test(arg)) throw Error(`Unknown flag: ${arg}`);
+for (const arg of args) if (!['--update', '--help', '--list'].includes(arg) && !/^--(runs|group|shot)=/.test(arg)) throw Error(`Unknown flag: ${arg}`);
 if (args.includes('--help')) {
-  console.log('npm run test:visual -- [--update] [--runs=3] [--group=day]\nCHROME_PATH overrides the installed Chrome executable. References: tests/visual/reference; results: build/visual-tests.');
+  console.log('npm run test:visual -- [--update] [--runs=5] [--group=day] [--shot=enemies-night,train-destroyed-f12]\nEach run launches a fresh Chrome profile. --shot replays preceding cues but captures/updates only the named shots.\nCHROME_PATH overrides the installed Chrome executable. References: tests/visual/reference; results: build/visual-tests.');
   process.exit(0);
 }
 if (args.includes('--list')) { for (const group of groups) console.log(`${group.id}: ${group.shots.map(s => s.id).join(', ')}`); process.exit(0); }
 const runs = Number(value('--runs') ?? 1);
 if (!Number.isInteger(runs) || runs < 1 || runs > 10 || (update && runs !== 1)) throw Error('runs: 1..10; --update requires one run');
-const selected = value('--group') ? groups.filter(g => g.id === value('--group')) : groups;
+const shots = value('--shot')?.split(',');
+if (shots?.some(id => !groups.some(g => g.shots.some(s => s.id === id)))) throw Error('Unknown shot (see --list)');
+const selected = groups.filter(g => (!value('--group') || g.id === value('--group')) && (!shots || g.shots.some(s => shots.includes(s.id))));
 if (!selected.length) throw Error('Unknown group (see --list)');
 const reference = join(root, 'tests/visual/reference');
 const output = join(root, 'build/visual-tests', new Date().toISOString().replace(/[:.]/g, '-'));
@@ -31,7 +33,7 @@ const browserTemp = join(root, 'build/visual-browser-temp');
 await mkdir(browserTemp, { recursive: true });
 process.env.TEMP = process.env.TMP = process.env.TMPDIR = browserTemp;
 const recipeHash = createHash('sha256').update(JSON.stringify({ groups, viewport, tolerance })).digest('hex');
-const report = { update, recipeHash, viewport, tolerance, browser: null, results: [], errors: [] };
+const report = { update, recipeHash, viewport, tolerance, browser: null, freshBrowserPerRun: true, results: [], errors: [] };
 let server, browser, stopped = false;
 const close = async () => {
   if (stopped) return;
@@ -49,92 +51,108 @@ try {
   await server.listen();
   const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
   if ((await fetch(origin + '/dev-scenario.html')).status !== 200) throw Error('Dev server did not return HTTP 200');
-  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    headless: false, args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--force-color-profile=srgb'] });
-  report.browser = browser.version();
-  for (let run = 1; run <= runs; run++) for (const group of selected) {
-    const context = await browser.newContext({ viewport, deviceScaleFactor: 1, locale: 'de-DE', timezoneId: 'UTC', colorScheme: 'dark', reducedMotion: 'reduce' });
-    const page = await context.newPage();
-    page.setDefaultTimeout(180000);
-    const errors = [];
-    // evaluate() has no Playwright timeout; closing this owned context also cancels a stuck page.
-    const watchdog = setTimeout(() => { errors.push('Group exceeded 240 seconds'); void context.close(); }, 240000);
-    page.on('pageerror', e => errors.push(e.message));
-    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-    page.on('crash', () => errors.push('Browser page crashed'));
-    page.on('response', r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()}: ${r.url()}`); });
-    const command = async c => {
-      const result = await page.evaluate(command => window.devScenario.run(command), c);
-      if (!result.ok) throw Error(`${JSON.stringify(c)}: ${result.error}`);
-      if (c.action === 'step' || c.action === 'settle') await page.waitForFunction(() => window.devScenario.status().pendingSteps === 0);
-    };
-    const settle = async () => {
-      // Workers finish on wall time; publish their results at zero simulation delta.
-      const started = performance.now();
-      for (;;) {
-        await command({ action: 'settle', frames: 12 });
-        const state = await page.evaluate(() => window.devScenario.status());
-        if (state.loading.work?.renderReady && state.loading.work.pending === 0) return;
-        if (performance.now() - started > 60000) throw Error('Render work did not settle');
-      }
-    };
-    try {
-      console.log(`[${run}/${runs}] ${group.id}: loading`);
-      const hash = group.scenario ? '#scenario=' + encodeURIComponent(JSON.stringify(group.scenario)) : '';
-      await page.goto(`${origin}/dev-scenario.html?visual-test=1${hash}`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(lobby => {
-        const s = window.devScenario?.status();
-        if (s?.state === 'error') throw Error(String(s.message));
-        return s?.paused && (lobby ? s.lobbyReady : s.ready);
-      }, !group.scenario);
-      console.log(`  ${group.id}: ready`);
-      await page.evaluate(() => document.fonts.ready);
-      await page.addStyleTag({ content: '#dev-scenario-panel{display:none!important} *,*::before,*::after{caret-color:transparent!important}' });
-      for (const c of group.setup) await command(c);
-      await settle();
-      await command({ action: 'step', frames: 120 });
-      await settle();
-      // Sun-direction worker results are published atomically but then crossfade for 600 ms.
-      // Finish that fade only after the worker barrier, before creating short-lived effects.
-      await command({ action: 'step', frames: 60 });
-      await settle();
-      for (const shot of group.shots) {
-        console.log(`  capture ${shot.id}`);
-        for (const c of shot.commands) await command(c);
-        await settle();
-        const status = await page.evaluate(() => window.devScenario.status());
-        if (errors.length) throw Error(errors.join('\n'));
-        if (!status.visualTest || !status.paused || status.pendingSteps !== 0) throw Error('Capture requires a paused deterministic frame');
-        const actual = await page.screenshot({ animations: 'disabled', caret: 'hide' });
-        const name = `${run}-${shot.id}`, path = join(output, name);
-        await writeJson(path + '.json', status);
-        await sharp(actual).webp({ lossless: true, effort: 4 }).toFile(path + '.webp');
-        const result = { run, id: shot.id, group: group.id, simulationMs: status.simulationMs, passed: true };
-        if (update) staged.push({ id: shot.id, path: path + '.webp' });
-        else {
-          try {
-            const expected = await readFile(join(reference, shot.id + '.webp'));
-            const comparison = await compareImages(expected, actual, { ...tolerance, masks: shot.masks });
-            const { diff, width, height, ...metrics } = comparison;
-            Object.assign(result, metrics);
-            if (manifest?.scenes?.[shot.id]?.recipeHash !== recipeHash) {
-              Object.assign(result, { passed: false, error: 'Missing or stale reference manifest; review and run --update' });
-            }
-            if (!comparison.passed) {
-              await sharp(diff, { raw: { width, height, channels: 4 } }).png().toFile(path + '-diff.png');
-              await writeFile(path + '-expected.webp', expected);
-            }
-          } catch (error) { Object.assign(result, { passed: false, error: String(error) }); }
+  for (let run = 1; run <= runs; run++) {
+    // A context isolates page storage; a new process also discards the profile's HTTP,
+    // shader and GPU caches. Repetition must exercise the cold startup barrier as well.
+    browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe',
+      headless: false, args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--force-color-profile=srgb'] });
+    report.browser = browser.version();
+    for (const group of selected) {
+      const context = await browser.newContext({ viewport, deviceScaleFactor: 1, locale: 'de-DE', timezoneId: 'UTC', colorScheme: 'dark', reducedMotion: 'reduce' });
+      const page = await context.newPage();
+      page.setDefaultTimeout(180000);
+      const errors = [];
+      // evaluate() has no Playwright timeout; closing this owned context also cancels a stuck page.
+      const watchdog = setTimeout(() => { errors.push('Group exceeded 240 seconds'); void context.close(); }, 240000);
+      page.on('pageerror', e => errors.push(e.message));
+      page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+      page.on('crash', () => errors.push('Browser page crashed'));
+      page.on('response', r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()}: ${r.url()}`); });
+      const command = async c => {
+        const result = await page.evaluate(command => window.devScenario.run(command), c);
+        if (!result.ok) throw Error(`${JSON.stringify(c)}: ${result.error}`);
+        if (c.action === 'step' || c.action === 'settle') await page.waitForFunction(() => window.devScenario.status().pendingSteps === 0);
+      };
+      const settle = async () => {
+        // Workers finish on wall time; publish their results at zero simulation delta.
+        const started = performance.now();
+        for (;;) {
+          await command({ action: 'settle', frames: 12 });
+          const state = await page.evaluate(() => window.devScenario.status());
+          if (state.loading.work?.renderReady && state.loading.work.pending === 0) return;
+          if (performance.now() - started > 60000) throw Error('Render work did not settle');
         }
-        report.results.push(result);
-        console.log(`  ${result.passed ? update ? 'STAGED' : 'PASS' : 'FAIL'} ${shot.id}${result.ratio === undefined ? '' : `: ${(result.ratio * 100).toFixed(4)}%`}`);
-      }
-    } catch (error) {
-      report.errors.push({ run, group: group.id, error: String(error), pageErrors: errors });
-      console.error(`  ERROR ${group.id}: ${error}`);
-      await page.screenshot({ path: join(output, `${run}-${group.id}-error.png`) }).catch(() => {});
-      await writeJson(join(output, `${run}-${group.id}-error.json`), await page.evaluate(() => window.devScenario?.status()).catch(() => null));
-    } finally { clearTimeout(watchdog); await context.close(); }
+      };
+      try {
+        console.log(`[${run}/${runs}] ${group.id}: loading`);
+        const hash = group.scenario ? '#scenario=' + encodeURIComponent(JSON.stringify(group.scenario)) : '';
+        await page.goto(`${origin}/dev-scenario.html?visual-test=1${hash}`, { waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(lobby => {
+          const s = window.devScenario?.status();
+          if (s?.state === 'error') throw Error(String(s.message));
+          return s?.paused && (lobby ? s.lobbyReady : s.ready);
+        }, !group.scenario);
+        console.log(`  ${group.id}: ready`);
+        await page.evaluate(() => document.fonts.ready);
+        await page.addStyleTag({ content: '#dev-scenario-panel{display:none!important} *,*::before,*::after{caret-color:transparent!important}' });
+        for (const c of group.setup) await command(c);
+        await settle();
+        await command({ action: 'step', frames: 120 });
+        await settle();
+        // Sun-direction worker results are published atomically but then crossfade for 600 ms.
+        // Finish that fade only after the worker barrier, before creating short-lived effects.
+        await command({ action: 'step', frames: 60 });
+        await settle();
+        for (const shot of group.shots) {
+          const capture = !shots || shots.includes(shot.id);
+          console.log(`  ${capture ? 'capture' : 'replay'} ${shot.id}`);
+          for (const c of shot.commands) await command(c);
+          await settle();
+          if (!capture) continue;
+          const status = await page.evaluate(() => window.devScenario.status());
+          if (errors.length) throw Error(errors.join('\n'));
+          if (!status.visualTest || !status.paused || status.pendingSteps !== 0) throw Error('Capture requires a paused deterministic frame');
+          const actual = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+          // Exercise native browser frames while the scenario is paused. A clock leak must
+          // fail before a moving image can become a reference, even inside existing masks.
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          const frozen = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+          const freeze = await compareImages(actual, frozen, { delta: 0, maxRatio: 0 });
+          const after = await page.evaluate(() => window.devScenario.status());
+          if (!freeze.passed || !after.paused || after.pendingSteps !== 0 || after.simulationMs !== status.simulationMs) {
+            throw Error(`Paused capture moved: ${freeze.changed} pixels; simulation ${status.simulationMs} -> ${after.simulationMs}`);
+          }
+          const name = `${run}-${shot.id}`, path = join(output, name);
+          await writeJson(path + '.json', status);
+          await sharp(actual).webp({ lossless: true, effort: 4 }).toFile(path + '.webp');
+          const result = { run, id: shot.id, group: group.id, simulationMs: status.simulationMs, freezeChangedPixels: freeze.changed, passed: true };
+          if (update) staged.push({ id: shot.id, path: path + '.webp' });
+          else {
+            try {
+              const expected = await readFile(join(reference, shot.id + '.webp'));
+              const comparison = await compareImages(expected, actual, { ...tolerance, masks: shot.masks });
+              const { diff, width, height, ...metrics } = comparison;
+              Object.assign(result, metrics);
+              if (manifest?.scenes?.[shot.id]?.recipeHash !== recipeHash) {
+                Object.assign(result, { passed: false, error: 'Missing or stale reference manifest; review and run --update' });
+              }
+              if (!comparison.passed) {
+                await sharp(diff, { raw: { width, height, channels: 4 } }).png().toFile(path + '-diff.png');
+                await writeFile(path + '-expected.webp', expected);
+              }
+            } catch (error) { Object.assign(result, { passed: false, error: String(error) }); }
+          }
+          report.results.push(result);
+          console.log(`  ${result.passed ? update ? 'STAGED' : 'PASS' : 'FAIL'} ${shot.id}${result.ratio === undefined ? '' : `: ${(result.ratio * 100).toFixed(4)}%`}`);
+        }
+      } catch (error) {
+        report.errors.push({ run, group: group.id, error: String(error), pageErrors: errors });
+        console.error(`  ERROR ${group.id}: ${error}`);
+        await page.screenshot({ path: join(output, `${run}-${group.id}-error.png`) }).catch(() => {});
+        await writeJson(join(output, `${run}-${group.id}-error.json`), await page.evaluate(() => window.devScenario?.status()).catch(() => null));
+      } finally { clearTimeout(watchdog); await context.close(); }
+    }
+    await browser.close(); browser = undefined;
   }
   if (update && !report.errors.length) {
     // Validate the entire candidate set before replacing any reviewed reference.
