@@ -70,7 +70,6 @@ interface NecromancyConfig {
   moveSpeedMultiplier: number;
   hpRegenPerSecond: number;
   intervalMs: number;
-  corpseLifetimeMs: number;
   reviveRadius: number;
   targetRadius: number;
   leashRadius: number;
@@ -561,7 +560,6 @@ export class NecromancySystem {
       moveSpeedMultiplier: Math.max(0, this.resolveStat(playerId, `${STAT_PREFIX}.moveSpeedMultiplier`, 1)),
       hpRegenPerSecond: Math.max(0, this.resolveStat(playerId, `${STAT_PREFIX}.hpRegenPerSecond`, 0)),
       intervalMs: Math.max(100, this.resolveStat(playerId, `${STAT_PREFIX}.intervalMs`, DEFAULT_INTERVAL_MS)),
-      corpseLifetimeMs: Math.max(100, this.resolveStat(playerId, `${STAT_PREFIX}.corpseLifetimeMs`, DEFAULT_CORPSE_LIFETIME_MS)),
       reviveRadius: this.resolveStat(playerId, `${STAT_PREFIX}.reviveRadius`, DEFAULT_REVIVE_RADIUS),
       targetRadius: this.resolveStat(playerId, `${STAT_PREFIX}.targetRadius`, DEFAULT_TARGET_RADIUS),
       leashRadius,
