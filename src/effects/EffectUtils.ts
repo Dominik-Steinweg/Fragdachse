@@ -118,16 +118,6 @@ export function createQualityEmitter(
   return emitter;
 }
 
-export function trackQualityEmitter(
-  scene: Phaser.Scene,
-  emitter: Phaser.GameObjects.Particles.ParticleEmitter,
-  config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig,
-  importance: VisualImportance = 'standard',
-): Phaser.GameObjects.Particles.ParticleEmitter {
-  getGraphicsQualityController(scene)?.trackEmitter(emitter, config, importance);
-  return emitter;
-}
-
 export function registerParticleEmitter(
   scene: Phaser.Scene,
   family: ClassicParticleFamily,
@@ -231,25 +221,7 @@ export function setEmitterTintArray(
   emitter: Phaser.GameObjects.Particles.ParticleEmitter,
   colors: number[],
 ): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (emitter as any).ops?.tint?.loadConfig({ tint: colors });
-}
-
-/**
- * Correctly updates the emission direction of a radial particle emitter.
- *
- * Same trap as setEmitterTintArray(): setEmitterAngle() only calls EmitterOp.onChange(),
- * which updates `current` but neither `propertyValue` nor the emit method. A {min,max}
- * range passed that way never reaches randomRangedIntEmit(), so the emitter keeps its
- * previous (by default full-circle) direction. loadConfig() rebinds the emit method.
- */
-export function setEmitterAngleRange(
-  emitter: Phaser.GameObjects.Particles.ParticleEmitter,
-  minDeg: number,
-  maxDeg: number,
-): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (emitter as any).ops?.angle?.loadConfig({ angle: { min: minDeg, max: maxDeg } });
+  emitter.ops?.tint?.loadConfig({ tint: colors });
 }
 
 export function createSeededRandom(seed: number): () => number {

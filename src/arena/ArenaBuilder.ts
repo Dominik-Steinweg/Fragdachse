@@ -15,7 +15,6 @@ import {
   getCaptureTheBeerBaseWorldBounds,
   isCaptureTheBeerBaseModeActive,
 } from '../config';
-import { CAPTURE_THE_BEER_MODE } from '../gameModes';
 import type { ArenaLayout, RockCell, TrackCell, GameMode, GamePhase } from '../types';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import { AutoTiler, ROCK_AUTOTILE } from './AutoTiler';
@@ -944,22 +943,6 @@ export class ArenaBuilder {
    */
   private buildTracks(tracks: TrackCell[], metrics: WorldMetrics): Phaser.GameObjects.TileSprite[] {
     return ArenaVisualFactory.createTracks(this.scene, tracks, metrics);
-  }
-
-  /**
-   * Erstellt einen TileSprite für eine vollständige Gleis-Spalte.
-   * Die Textur 'bg_tracks' (64×32 px) passt exakt auf 2 Zellen Breite
-   * und wird vertikal ohne Skalierung pro 32 px Zeile gekachelt.
-   */
-  private createTrackColumnVisual(col: number, rowCount: number): Phaser.GameObjects.TileSprite {
-    const w = CELL_SIZE * 2;
-    const h = rowCount * CELL_SIZE;
-    const cx = ARENA_OFFSET_X + col * CELL_SIZE + w / 2;
-    const cy = ARENA_OFFSET_Y + h / 2;
-
-    const ts = this.scene.add.tileSprite(cx, cy, w, h, 'bg_tracks');
-    ts.setDepth(DEPTH.TRACKS);
-    return ts;
   }
 
   // ── Statische Interna ──────────────────────────────────────────────────────

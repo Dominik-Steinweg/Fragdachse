@@ -1,7 +1,6 @@
 import { turretAimConfig, type TurretAimConfig } from '../config/turretAim';
 import {
   CELL_SIZE,
-  isGridCellInArenaRegion,
   type ArenaGridRegion,
 } from '../config';
 import {
@@ -14,7 +13,6 @@ import {
   type CoopBaseTurretConfig,
   type CoopBaseRole,
   type CoopBaseTurretWeaponId,
-  type CoopDefenseMapConfig,
   DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER,
 } from '../config/coopDefenseMapAuthoring';
 import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
@@ -582,19 +580,6 @@ export function isCoopDefenseBaseCell(
 }
 
 /**
- * True wenn (gx, gy) in der Bounding-Box einer Coop-Basis ODER im 1-Zellen-Rand
- * drumherum liegt. Wird vom Spawn-System genutzt (Spieler sollen weder auf
- * noch direkt neben der Basis spawnen).
- */
-export function isCoopDefenseBaseOrBorderCell(
-  gx: number,
-  gy: number,
-  bases: readonly BaseSpec[],
-): boolean {
-  return isCoopDefenseBaseWithinBoundingBoxDistance(gx, gy, 1, bases);
-}
-
-/**
  * True wenn (gx, gy) innerhalb des Hindernis-Schutz-Radius einer Coop-Basis
  * liegt (= Bounding-Box + 5 Zellen). Bewusst Bounding-Box-basiert, damit
  * konkave Innenflächen (z. B. die Lücke einer C-Form) frei von Felsen/Bäumen
@@ -628,12 +613,4 @@ export function isPersistentBaseReservationCell(
       },
     )
   ));
-}
-
-/**
- * Hilfsfunktion: Region (Bounding-Box) → True wenn (gx,gy) drinliegt.
- * Wird vom Generator-Pfad weiterhin als Sanity-Check verwendet.
- */
-export function isCellInBaseRegion(spec: BaseSpec, gx: number, gy: number): boolean {
-  return isGridCellInArenaRegion(spec.region, gx, gy);
 }

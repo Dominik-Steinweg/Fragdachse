@@ -404,10 +404,6 @@ export function getSoundVolume(key: string | undefined): number {
   return registered ?? 0.5;
 }
 
-/** Backward-compatible re-exports */
-export const SHOT_AUDIO_ASSETS = SHOT_ASSETS;
-export type ShotAudioAssetKey = keyof typeof SHOT_ASSETS;
-
 /**
  * Laedt alle Audio-Assets in den Phaser-Loader.
  * Geplante Sounds bleiben ohne Ladeanfrage, bis Audio Studio ihre Datei veroeffentlicht.
@@ -418,9 +414,4 @@ export function preloadAllAudio(loader: Phaser.Loader.LoaderPlugin): void {
     if (!isShippedAudioAsset(assetPath)) continue;
     loader.audio(key, assetPath);
   }
-}
-
-/** @deprecated Use preloadAllAudio instead */
-export function preloadShotAudio(loader: Phaser.Loader.LoaderPlugin): void {
-  preloadAllAudio(loader);
 }

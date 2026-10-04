@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { expect, it, vi } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -81,7 +82,8 @@ it('binds Beauty, all poses, binary topology and material sheets to the accepted
     for (const spec of [a.mesh.positions,a.mesh.indices]) {
       const bytes=await readFile('public/'+spec.file);expect(bytes.length).toBe(spec.bytes);
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(spec.sha256);
-      if(spec===a.mesh.indices)for(let i=0;i<bytes.length;i+=2)expect(bytes.readUInt16LE(i)).toBeLessThan(a.mesh.vertexCount);
+      // Validate every index without allocating a generic matcher per triangle corner.
+      if(spec===a.mesh.indices)for(let i=0;i<bytes.length;i+=2)assert.ok(bytes.readUInt16LE(i)<a.mesh.vertexCount);
     }
     expect(a.mesh.positions.bytes).toBe(a.mesh.vertexCount*a.poses.length*6);
     for(const [key,image]of Object.entries(a.images)) {

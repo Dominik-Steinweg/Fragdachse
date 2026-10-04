@@ -8,7 +8,7 @@ import type {
 import type { ProjectileDirectHitSpec } from './ProjectileSpawnRequest';
 import type { ProjectileInteractionAugment } from './ProjectileTravelPort';
 import type { ProjectileId } from './ProjectileSpawnPort';
-import type { ProjectileAllegianceRef, ProjectileProvenance } from './ProjectileSpawnRequest';
+import type { ProjectileProvenance } from './ProjectileSpawnRequest';
 import type { ProjectileDefenseResolution } from './ProjectileInteractionPorts';
 import type { ProjectileTargetRef } from './ProjectileTargetPort';
 import type {
@@ -118,16 +118,4 @@ export interface ProjectileEnergyInjectorImpact {
   readonly targetId: string;
   readonly x: number;
   readonly y: number;
-}
-
-/** Helper kept at the boundary so callers cannot accidentally treat world targets as combat. */
-export function asProjectileCombatTarget(target: ProjectileTargetRef): ProjectileCombatTargetRef | null {
-  return target.kind === 'player' || target.kind === 'enemy' || target.kind === 'decoy'
-    ? target
-    : null;
-}
-
-/** Allegiance is deliberately carried separately from the source/attribution dimensions. */
-export function projectileCombatOwner(provenance: ProjectileProvenance): ProjectileAllegianceRef {
-  return provenance.allegiance;
 }

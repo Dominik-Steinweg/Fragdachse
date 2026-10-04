@@ -1090,7 +1090,8 @@ export class ArenaHUD {
 
   /** Shake bar elements horizontally. */
   private shakeBar(bundle: BarBundle): void {
-    const targets = [bundle.bgImg, bundle.fgImg, bundle.border, bundle.trail].filter(Boolean);
+    const targets = [bundle.bgImg, bundle.fgImg, bundle.border, bundle.trail]
+      .filter((target): target is NonNullable<typeof target> => Boolean(target));
     const origX = bundle.layout.x;
     this.scene.tweens.add({
       targets,
@@ -1100,7 +1101,7 @@ export class ArenaHUD {
       repeat: 2,
       ease: 'Linear',
       onComplete: () => {
-        for (const t of targets) (t as any).x = origX;
+        for (const t of targets) t.x = origX;
       },
     });
   }

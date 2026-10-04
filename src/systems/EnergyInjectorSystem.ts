@@ -4,7 +4,7 @@ import type {
   SyncedEnergyInjectorEffect,
   SyncedEnergyInjectorFocus,
 } from '../types';
-import type { TargetStatusTarget, TargetStatusTargetType } from './TargetStatusSystem';
+import type { TargetStatusTarget } from './TargetStatusSystem';
 
 const CONSTRUCTION_MATCH_RADIUS = 24;
 
@@ -176,8 +176,4 @@ export class EnergyInjectorSystem {
     this.effects.clear();
     this.focusTargets.clear();
   }
-}
-
-export function getEnergyInjectorFocusTargetType(value: string): TargetStatusTargetType | null {
-  return value === 'enemy' || value === 'base' ? value : null;
 }
