@@ -19,13 +19,14 @@ import { PERSISTENT_BASE_STATE_SCHEMA_VERSION } from '../src/config/persistentBa
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID } from '../src/config';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import { getUtilityConfigForMode } from '../src/loadout/LoadoutConfig';
+import { getUtilityConfigForMode, ULTIMATE_CONFIGS, type TunnelUltimateConfig } from '../src/loadout/LoadoutConfig';
 import type { PersistentRestoreToolDefinition } from '../src/persistentBase/PersistentBaseTools';
 import { mergePersistentBaseComposite } from '../src/persistentBase/PersistentBaseComposite';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { resolvePersistentBaseCoreCells } from '../src/persistentBase/PersistentBaseCore';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
+import { TunnelSystem } from '../src/systems/TunnelSystem';
 import type { ArenaLayout } from '../src/types';
 
 const layout: ArenaLayout = {
@@ -66,6 +67,43 @@ function makeBase(
 function createPlacement(bases: readonly BaseSpec[] = []): PlacementSystem {
   return new PlacementSystem(layout, new RockGridIndex(layout.rocks), noPlayers, resolveActiveArenaWorldMetrics(), bases);
 }
+
+describe('PlacementSystem tunnel raster contract', () => {
+  it.each([
+    ['fractional X', 3.5, 3], ['fractional Y', 3, 3.5],
+    ['string X', 'bad', 3], ['string Y', 3, 'bad'],
+    ['object X', {}, 3], ['object Y', 3, {}],
+    ['null X', null, 3], ['null Y', 3, null],
+  ])('rejects a malformed %s tunnel anchor before creating a world endpoint', (_label, gridX, gridY) => {
+      const placement = createPlacement();
+      const tunnel = new TunnelSystem(noPlayers, {} as never, placement, {} as never, {} as never);
+      const origin = placement.getWorldPointForCell(2, 4);
+      const target = placement.getWorldPointForCell(4, 4);
+
+      expect(tunnel.tryPlaceTunnel(
+        ULTIMATE_CONFIGS.DACHS_TUNNEL as TunnelUltimateConfig,
+        'player', 0xffffff, origin.x, origin.y, gridX as number, gridY as number, target.x, target.y,
+      )).toBe(false);
+      expect(tunnel.getSnapshot()).toEqual([]);
+    },
+  );
+  it('accepts a free integer tunnel anchor and preserves both world endpoints', () => {
+    const placement = createPlacement();
+    const tunnel = new TunnelSystem(noPlayers, {} as never, placement, {} as never, {} as never);
+    const origin = placement.getWorldPointForCell(2, 4);
+    const anchor = placement.getWorldPointForCell(3, 3);
+    const target = placement.getWorldPointForCell(4, 4);
+    expect(tunnel.tryPlaceTunnel(
+      ULTIMATE_CONFIGS.DACHS_TUNNEL as TunnelUltimateConfig,
+      'player', 0xffffff, origin.x, origin.y, 3, 3, target.x, target.y,
+    )).toBe(true);
+    expect(tunnel.getSnapshot()).toEqual([{
+      ownerId: 'player', ownerColor: 0xffffff,
+      entranceA: { gridX: 3, gridY: 3, ...anchor },
+      entranceB: { gridX: 4, gridY: 4, ...target },
+    }]);
+  });
+});
 
 describe('turret aim configuration in placement snapshots', () => {
   it('moves a layout batch atomically, including swaps, preserving runtime identity and damage', () => {

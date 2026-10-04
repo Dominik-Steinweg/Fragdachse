@@ -1057,6 +1057,7 @@ export class PlacementSystem {
     allowRuntimeReplacement = false,
     movableSourceId?: number,
   ): boolean {
+    if (!Number.isInteger(gx) || !Number.isInteger(gy)) return false;
     for (const cell of footprint) {
       const tx = gx + cell.dx;
       const ty = gy + cell.dy;
