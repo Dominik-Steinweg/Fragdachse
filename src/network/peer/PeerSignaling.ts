@@ -55,10 +55,6 @@ const FAILURE_MESSAGES: Record<PeerFailureKind, string> = {
   'room-full': 'Der Raum ist voll.',
 };
 
-export function describePeerFailure(kind: PeerFailureKind): string {
-  return FAILURE_MESSAGES[kind];
-}
-
 export function createPeerNetworkError(kind: PeerFailureKind, cause?: unknown): PeerNetworkError {
   return new PeerNetworkError(kind, FAILURE_MESSAGES[kind], cause);
 }

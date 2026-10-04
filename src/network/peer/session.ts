@@ -25,10 +25,6 @@ export function getActiveSession(): PeerSession | null {
   return activeSession;
 }
 
-export function hasActiveSession(): boolean {
-  return activeSession !== null;
-}
-
 export function requireRoom(): PeerRoom {
   if (!activeSession) throw new Error('Keine aktive Netzwerkverbindung – NetworkBridge.connect() fehlt.');
   return activeSession.room;

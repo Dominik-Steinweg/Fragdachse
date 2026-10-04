@@ -31,7 +31,7 @@ function fixture(realLoadout = false) {
     loadout: realLoadout ? manager : { getEquippedUtilityConfig: () => equipped,
       resolveUtilityConfig: (_p, value) => value.id === 'HE_GRENADE' ? config : value, noteUtilityUsed: vi.fn() },
     heldAction: held, translocator: null, decoy: null, stinkCloud: null,
-    gameAudioSystem: { playShot: vi.fn(), playShotSuccess: vi.fn() } as never,
+    gameAudioSystem: { playSound: vi.fn() } as never,
     network: { loadout: { publishUtilityChargeState: publish, publishUtilityCooldownUntil: vi.fn(),
       publishTemporaryUtilityInstances: vi.fn(), publishHeldUtilityId: vi.fn() },
       roundStats: { recordUtilityUsed: vi.fn(), recordConstructionBuilt: vi.fn() } },

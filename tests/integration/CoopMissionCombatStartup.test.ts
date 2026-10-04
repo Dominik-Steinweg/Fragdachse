@@ -624,7 +624,7 @@ describe('Coop mission combat startup', () => {
     };
     const runtime = coordinator.composePlayerRuntime();
     runtime.attach({ profile: { id: 'leaving-player' }, reconnectAfterDeath: false, nowMs: 1000 }, {
-      entity: false, navigation: false, combat: false, combatResources: false,
+      entity: false, combat: false, combatResources: false,
       loadoutTools: false, playerBuild: false, worldTargeting: true,
     });
     const beforeDetach = Date.now();

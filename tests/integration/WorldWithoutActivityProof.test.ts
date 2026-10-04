@@ -317,7 +317,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
               hostPlayers.set(profile.id, createHeadlessPlayer(profile.id, origin.x, origin.y));
             },
           },
-          ...(['navigation', 'combat', 'combatResources', 'loadoutTools', 'playerBuild', 'worldTargeting'] as const).map((feature) => ({
+          ...(['combat', 'combatResources', 'loadoutTools', 'playerBuild', 'worldTargeting'] as const).map((feature) => ({
             id: feature,
             feature,
             run: () => { hostFeatureSteps.push(feature); },
@@ -370,7 +370,6 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       expect(clientPlayerRuntime.attach({ profile, reconnectAfterDeath: false, nowMs: 0 }, clientFeatures)).toBe(true);
       expect(hostFeatureSteps).toEqual([
         'entity',
-        'navigation',
         'combat',
         'combatResources',
         'loadoutTools',

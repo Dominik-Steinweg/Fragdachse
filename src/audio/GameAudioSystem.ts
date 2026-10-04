@@ -383,18 +383,6 @@ export class GameAudioSystem {
     }
   }
 
-  // ── Backward-compatible API ───────────────────────────────────────────────
-
-  /** @deprecated Use playSound() instead */
-  playShot(soundKey: AudioKey | undefined, emitterX: number, emitterY: number, shooterId?: string, volumeScale = 1): void {
-    this.playSound(soundKey, emitterX, emitterY, shooterId, volumeScale);
-  }
-
-  /** @deprecated Use playLocalSound() instead */
-  playFailure(soundKey: AudioKey | undefined, volumeScale = 1): void {
-    this.playLocalSound(soundKey, volumeScale);
-  }
-
   // ── Spatial Audio ─────────────────────────────────────────────────────────
 
   private playOneShot(key: string, config: Phaser.Types.Sound.SoundConfig): void {

@@ -24,7 +24,6 @@ function features(overrides: Partial<PlayerRuntimeFeatures> = {}): PlayerRuntime
   return {
     entity: true,
     worldTargeting: true,
-    navigation: true,
     combat: true,
     combatResources: true,
     loadoutTools: true,
@@ -61,7 +60,6 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
     expect(host).toEqual({
       entity: true,
       worldTargeting: true,
-      navigation: true,
       combat: true,
       combatResources: true,
       loadoutTools: true,
@@ -82,7 +80,6 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
     expect(resolvePlayerRuntimeFeatures({ isHost: false, participation: 'interactive' })).toEqual({
       entity: true,
       worldTargeting: true,
-      navigation: false,
       combat: false,
       combatResources: false,
       loadoutTools: false,

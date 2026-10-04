@@ -22,8 +22,6 @@ import type { WorldParticipation } from './WorldParticipation';
 export type PlayerRuntimeFeature =
   /** Spielfigur, Physikkoerper und ihre Darstellung. */
   | 'entity'
-  /** Wegfindung fuer verbuendete Einheiten. */
-  | 'navigation'
   /** Kampfzustand: Leben, Treffer, Tod, Respawn. */
   | 'combat'
   /** Verbrauchsressourcen des Kampfes. */
@@ -60,7 +58,6 @@ export function resolvePlayerRuntimeFeatures(input: PlayerRuntimeContextInput): 
   return {
     entity: true,
     worldTargeting: true,
-    navigation: simulation,
     combat: simulation,
     combatResources: simulation,
     loadoutTools: simulation,

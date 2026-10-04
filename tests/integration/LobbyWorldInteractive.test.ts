@@ -380,7 +380,6 @@ describe('LobbyWorld – interaktives World-Gameplay ohne Activity', () => {
     expect(features).toEqual({
       entity: true,
       worldTargeting: true,
-      navigation: true,
       combat: true,
       combatResources: true,
       loadoutTools: true,

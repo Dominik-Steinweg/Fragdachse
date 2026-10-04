@@ -47,7 +47,6 @@ export { PeerLink } from './PeerLink';
 export {
   PeerNetworkError,
   createPeerNetworkError,
-  describePeerFailure,
   generateRoomCode,
   isValidRoomCode,
   roomCodeToPeerId,
@@ -63,7 +62,6 @@ export { PEER_PROTOCOL_VERSION } from './protocol';
 export {
   clearActiveSession,
   getActiveSession,
-  hasActiveSession,
   leaveActiveSession,
   requireRoom,
   type PeerSession,
