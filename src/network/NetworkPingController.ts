@@ -10,6 +10,7 @@
 /** Client → Host. Nur der Host liest ihn, daher wird er nicht an andere Clients weitergereicht. */
 export const KEY_FAST_PING_PROBE = 'fpp';
 const KEY_FAST_PING_ACK = 'fpa';
+const MAX_PENDING_PROBES = 32;
 
 interface PingPlayerState {
   id: string;
@@ -52,7 +53,8 @@ export class NetworkPingController {
   private nextFastProbeSeq = 1;
   private lastFastAckSeq = 0;
   private lastAppPingMs: number | null = null;
-  private handledHostProbeSeq = new Map<string, number>();
+  private handledHostProbes = new Map<string, FastPingProbe>();
+  private pendingProbes = new Map<number, number>();
 
   constructor(private deps: NetworkPingControllerDeps) {}
 
@@ -71,10 +73,16 @@ export class NetworkPingController {
 
   sendPingToHost(): void {
     if (this.deps.isHost()) return;
-    this.deps.getLocalPlayer().setState(KEY_FAST_PING_PROBE, {
+    const probe: FastPingProbe = {
       seq: this.nextFastProbeSeq++,
       ts: Date.now(),
-    } satisfies FastPingProbe, false);
+    };
+    this.pendingProbes.set(probe.seq, probe.ts);
+    // Lost probes are replaceable and must not accumulate over a long connection outage.
+    if (this.pendingProbes.size > MAX_PENDING_PROBES) {
+      this.pendingProbes.delete(this.pendingProbes.keys().next().value!);
+    }
+    this.deps.getLocalPlayer().setState(KEY_FAST_PING_PROBE, probe, false);
   }
 
   /** Host beantwortet offene Proben, Client wertet eingetroffene Antworten aus. */
@@ -84,21 +92,26 @@ export class NetworkPingController {
       for (const player of this.deps.getPlayers()) {
         if (player.id === localId) continue;
         const probe = parseProbe(player.getState(KEY_FAST_PING_PROBE));
-        if (!probe || probe.seq <= (this.handledHostProbeSeq.get(player.id) ?? 0)) continue;
-        this.handledHostProbeSeq.set(player.id, probe.seq);
+        const previous = this.handledHostProbes.get(player.id);
+        // A resumed browser may restart its sequence while retaining the same player ID.
+        if (!probe || (probe.seq === previous?.seq && probe.ts === previous.ts)) continue;
+        this.handledHostProbes.set(player.id, probe);
         player.setState(KEY_FAST_PING_ACK, { ...probe, hostTs: Date.now() } satisfies FastPingAck, false);
       }
       return;
     }
 
     const ack = parseAck(this.deps.getLocalPlayer().getState(KEY_FAST_PING_ACK));
-    if (!ack || ack.seq <= this.lastFastAckSeq) return;
+    if (!ack || ack.seq <= this.lastFastAckSeq || this.pendingProbes.get(ack.seq) !== ack.ts) return;
     this.lastFastAckSeq = ack.seq;
+    for (const sequence of this.pendingProbes.keys()) {
+      if (sequence <= ack.seq) this.pendingProbes.delete(sequence);
+    }
     this.applyMeasurement(ack.ts, ack.hostTs);
   }
 
   removePlayer(playerId: string): void {
-    this.handledHostProbeSeq.delete(playerId);
+    this.handledHostProbes.delete(playerId);
   }
 
   private applyMeasurement(sentAt: number, hostTs: number): void {
