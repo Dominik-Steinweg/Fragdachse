@@ -45,21 +45,33 @@ export function composePlayerWorldRuntime(
         id: 'combat-resources',
         feature: 'combatResources',
         run: ({ profile }) => { ports.attachCombatResources(profile.id); },
+        rollback: ({ profile }) => { ports.detachCombatResources(profile.id); },
       },
       {
         id: 'player-build',
         feature: 'playerBuild',
         run: ({ profile, nowMs }) => { ports.attachPlayerBuild(profile.id, nowMs); },
+        rollback: ({ profile }) => { ports.detachPlayerBuild(profile.id); },
       },
       {
         id: 'burrow-state',
         feature: 'combatResources',
         run: ({ profile }) => { ports.attachBurrow(profile.id); },
+        rollback: ({ profile }) => { ports.detachBurrow(profile.id); },
       },
       {
         id: 'loadout',
         feature: 'loadoutTools',
-        run: ({ profile }) => { ports.attachLoadout(profile.id); },
+        run: ({ profile }) => {
+          try {
+            ports.attachLoadout(profile.id);
+          } catch (error) {
+            // Utility initialization can fail after the loadout has already been assigned.
+            // The failed step owns its partial state; the ledger only rolls back completed steps.
+            try { ports.detachLoadout(profile.id); } catch { /* Preserve the attach failure. */ }
+            throw error;
+          }
+        },
       },
     ],
     detach: [

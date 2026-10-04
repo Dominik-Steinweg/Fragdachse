@@ -223,6 +223,44 @@ describe('Player-Lifecycle – atomarer Attach', () => {
   });
 });
 describe('Player-Lifecycle – konkrete World-Komposition', () => {
+  it.each(['before-loadout', 'partial-loadout', 'cleanup-failure'])('bereinigt fehlgeschlagenen Aufbau (%s)', (failureStage) => {
+    const materialized = new Set<string>();
+    let failLoadout = true;
+    const runtime = composePlayerWorldRuntime({
+      attachEntity: () => { materialized.add('entity'); },
+      detachEntity: () => { materialized.delete('entity'); },
+      attachCombat: () => { materialized.add('combat'); return true; },
+      detachCombat: () => { materialized.delete('combat'); },
+      attachCombatResources: () => { materialized.add('resources'); },
+      detachCombatResources: () => { materialized.delete('resources'); },
+      attachPlayerBuild: () => { materialized.add('build'); },
+      detachPlayerBuild: () => { materialized.delete('build'); },
+      attachBurrow: () => { materialized.add('burrow'); },
+      detachBurrow: () => { materialized.delete('burrow'); },
+      attachLoadout: () => {
+        if (failureStage !== 'before-loadout') materialized.add('loadout');
+        if (failLoadout) throw new Error('Loadout configuration failed');
+        materialized.add('loadout');
+      },
+      detachLoadout: () => {
+        materialized.delete('loadout');
+        if (failLoadout && failureStage === 'cleanup-failure') throw new Error('Loadout cleanup failed');
+      },
+      detachWorldTargeting: () => {},
+    });
+    const context = { profile: PROFILE, reconnectAfterDeath: false, nowMs: 0 };
+
+    expect(() => runtime.attach(context, features())).toThrow('Loadout configuration failed');
+    expect(runtime.isAttached(PROFILE.id)).toBe(false);
+    expect(materialized).toEqual(new Set());
+
+    failLoadout = false;
+    expect(runtime.attach(context, features())).toBe(true);
+    expect(materialized).toEqual(new Set(['entity', 'combat', 'resources', 'build', 'burrow', 'loadout']));
+    runtime.detach(PROFILE.id);
+    expect(materialized).toEqual(new Set());
+  });
+
   it('haelt die feste Attach- und Detach-Reihenfolge ausserhalb des Coordinators', () => {
     const calls: string[] = [];
     const buildAttachTimes: number[] = [];
