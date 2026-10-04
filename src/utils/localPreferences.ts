@@ -113,6 +113,8 @@ const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 export interface CoopDefenseProgressPreferences {
   totalXp: number;
   lastProcessedRoundEndedAt: number | null;
+  /** Monotone round credits within each room; host clocks are not comparable across rooms. */
+  processedRoundRevisionsByRoom: Record<string, number>;
   completedMapIds: string[];
   completedBossMapIds: string[];
   /** Hoechste freigeschaltete Map der linearen Kampagne; alles davor ist ebenfalls offen. */
@@ -226,6 +228,7 @@ export interface LocalProgressDocument {
   coopDefense: {
     totalXp: number;
     lastProcessedRoundEndedAt: number | null;
+    processedRoundRevisionsByRoom?: Record<string, number>;
     completedMapIds: string[];
   completedBossMapIds: string[];
     highestUnlockedMapId: string;
@@ -280,6 +283,7 @@ export type LocalProgressTransferMessageKey =
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   totalXp: 0,
   lastProcessedRoundEndedAt: null,
+  processedRoundRevisionsByRoom: {},
   completedMapIds: [],
   completedBossMapIds: [],
   highestUnlockedMapId: INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
@@ -482,6 +486,18 @@ function sanitizeStoredUnlockedClassIds(value: unknown): CoopDefenseClassId[] | 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeProcessedRoundRevisionsByRoom(value: unknown): Record<string, number> | null {
+  if (value === undefined) return {};
+  if (!isRecord(value)) return null;
+  const result: Record<string, number> = Object.create(null);
+  for (const [roomCode, revision] of Object.entries(value)) {
+    // Includes the isolated DEV room, without accepting prototype keys as namespaces.
+    if (!/^[A-Z0-9]{1,64}$/.test(roomCode) || !Number.isSafeInteger(revision) || (revision as number) <= 0) return null;
+    result[roomCode] = revision as number;
+  }
+  return result;
 }
 
 const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
@@ -822,6 +838,8 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.unseenItems !== 'boolean') return null;
 
   const loadout = sanitizeStoredLoadout(document.loadout);
+  const processedRoundRevisionsByRoom = sanitizeProcessedRoundRevisionsByRoom(coop.processedRoundRevisionsByRoom);
+  if (!processedRoundRevisionsByRoom) return null;
   const unlockedClassIds = sanitizeStoredUnlockedClassIds(coop.unlockedClassIds);
   if (unlockedClassIds === null) return null;
   const persistentBase = sanitizePersistentBaseState(coop.persistentBase);
@@ -918,6 +936,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
       coopDefense: {
         totalXp: sanitizeStoredXp(coop.totalXp),
         lastProcessedRoundEndedAt: sanitizeStoredRoundEndedAt(coop.lastProcessedRoundEndedAt),
+        processedRoundRevisionsByRoom,
         completedMapIds: [...new Set((coop.completedMapIds ?? []) as string[])],
         completedBossMapIds,
         highestUnlockedMapId,
@@ -977,6 +996,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
     coopDefense: {
       totalXp: progress.totalXp,
       lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
+      processedRoundRevisionsByRoom: { ...progress.processedRoundRevisionsByRoom },
       completedMapIds: [...progress.completedMapIds],
       completedBossMapIds: [...progress.completedBossMapIds],
       highestUnlockedMapId: progress.highestUnlockedMapId,
@@ -1414,6 +1434,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
   return {
     totalXp: progress.totalXp,
     lastProcessedRoundEndedAt: progress.lastProcessedRoundEndedAt,
+    processedRoundRevisionsByRoom: { ...progress.processedRoundRevisionsByRoom },
     completedMapIds: [...progress.completedMapIds],
     completedBossMapIds: [...progress.completedBossMapIds],
     highestUnlockedMapId: progress.highestUnlockedMapId,
@@ -1440,9 +1461,10 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
 
 /** Stellt einen zuvor gelesenen, bereits validierten Fortschrittsstand atomar wieder her. */
 export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPreferences): void {
+  const processedRoundRevisionsByRoom = sanitizeProcessedRoundRevisionsByRoom(progress.processedRoundRevisionsByRoom);
   const rewardUnlocks = sanitizePersistentBaseRewardIds(progress.persistentBaseRewardUnlocks);
   const rewardState = sanitizePersistentBaseRewardState(progress.persistentBaseRewardState);
-  if (!rewardUnlocks || !rewardState
+  if (!processedRoundRevisionsByRoom || !rewardUnlocks || !rewardState
     || rewardState.placements.some((placement) => !rewardUnlocks.includes(placement.rewardId))) return;
   updatePreferences((current) => ({
     ...current,
@@ -1450,6 +1472,7 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
       ...current.progression,
       coopDefense: {
         ...progress,
+        processedRoundRevisionsByRoom,
         completedMapIds: [...progress.completedMapIds],
         completedBossMapIds: [...progress.completedBossMapIds],
         defaultProfile: cloneCoopDefenseUpgradeProfile(
@@ -1925,7 +1948,11 @@ export function addStoredCoopDefenseXp(amount: number): number {
   return nextTotalXp;
 }
 
-export function markStoredCoopDefenseRoundProcessed(endedAt: number | null): void {
+export function markStoredCoopDefenseRoundProcessed(
+  endedAt: number | null,
+  identity?: { roomCode: string; roundRevision: number },
+): void {
+  if (identity && !sanitizeProcessedRoundRevisionsByRoom({ [identity.roomCode]: identity.roundRevision })) return;
   const nextEndedAt = sanitizeStoredRoundEndedAt(endedAt);
   updatePreferences((current) => ({
     ...current,
@@ -1933,7 +1960,14 @@ export function markStoredCoopDefenseRoundProcessed(endedAt: number | null): voi
       ...current.progression,
       coopDefense: {
         ...current.progression.coopDefense,
-        lastProcessedRoundEndedAt: nextEndedAt,
+        lastProcessedRoundEndedAt: identity && nextEndedAt !== null
+          ? Math.max(current.progression.coopDefense.lastProcessedRoundEndedAt ?? 0, nextEndedAt)
+          : nextEndedAt,
+        processedRoundRevisionsByRoom: identity ? {
+          ...current.progression.coopDefense.processedRoundRevisionsByRoom,
+          [identity.roomCode]: Math.max(identity.roundRevision,
+            current.progression.coopDefense.processedRoundRevisionsByRoom[identity.roomCode] ?? 0),
+        } : current.progression.coopDefense.processedRoundRevisionsByRoom,
       },
     },
   }));

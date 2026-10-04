@@ -2027,6 +2027,7 @@ export class ArenaLifecycleCoordinator {
           frags:    bridge.getPlayerFrags(p.id),
           teamId,
           roundEndedAt,
+          roundRevision: roundState?.roundRevision,
           gameMode,
           mapName,
           teamScore: gameMode === CAPTURE_THE_BEER_MODE && teamId
@@ -2075,6 +2076,8 @@ export class ArenaLifecycleCoordinator {
       bridge.publishRoundState({
         status: roundConclusion,
         roundStartTime: bridge.getArenaStartTime(),
+        roundRevision: bridge.getRoundParticipation()?.roundRevision
+          ?? bridge.getActivityDescriptor()?.activityRevision,
         timeOfDayMinutes: currentRoundState?.timeOfDayMinutes,
         coopDefenseBossSpawnedAtMs: currentRoundState?.coopDefenseBossSpawnedAtMs,
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,

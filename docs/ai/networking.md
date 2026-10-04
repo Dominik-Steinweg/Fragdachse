@@ -39,6 +39,12 @@ Jede World-scoped Nachricht trägt worldRevision oder wird vor dem Versand damit
 
 Die Annahmeprüfung liegt zentral in NetworkBridge.acceptsWorldRpc beziehungsweise den zugehörigen World-Parsern. Einzelne Handler dürfen diese Prüfung nicht nachbilden oder auslassen. Activity-Wechsel innerhalb derselben World erfordern nicht automatisch einen World-Neuaufbau.
 
+Coop-Abschlüsse bewahren die `roundRevision` in `RoundState` und jeder `RoundResult`-Zeile,
+bevor die lebende RoundParticipation gelöscht wird. Die lokale Ergebnisbuchung wartet auf
+übereinstimmende Revisionen und Abschlusszeitpunkte in beiden Snapshots. Der Room-Code
+begrenzt den Revisions-Namensraum für persistente Einmaligkeit; ein Host-Zeitstempel allein
+ist über verschiedene Rooms hinweg keine geordnete Rundenidentität.
+
 Die LobbyWorld repliziert pro Spieler zusaetzlich einen kleinen Live-Build getrennt vom Ready-Commit. Er umfasst Coop-Klasse, sanitisiertes Upgrade-Profil, ausgeruestete Items und Inspector-Tools; die laufenden Waffen-, Utility- und Ultimate-Slots bleiben die bestehenden per-player States. Ohne Activity ist dieser Live-Build die hostseitige Quelle fuer World-Gameplay und wird laufend reconciled, waehrend ein aktiver Ready-Commit die unveraenderliche Activity-Auswahl bleibt. Aendert sich daraus die fuer das Persistent-Base-Composite relevante Besitzersicht (insbesondere Klasse, Construction-Loadout, Freischaltungen oder effektive Construction-Werte), reconciled der Host das bestehende Composite erneut; `not-in-loadout` bleibt dabei regulaere Dormancy. Preview-Peers konsumieren die Projektion nur zur Darstellung und erhalten keine eigene Player-Runtime.
 
 ## WorldParticipation ist kein Round-State

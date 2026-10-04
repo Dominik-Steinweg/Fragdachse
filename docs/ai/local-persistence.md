@@ -26,6 +26,16 @@ Settings werden an der Speichergrenze sanitisiert. Ein ausdrücklich unterstütz
 
 Import ist atomar: Erst nach vollständiger Validierung darf der bestehende Save ersetzt werden. Ein ungültiger Import verändert den gültigen Bestand nicht. Legacy-Migrationen gehören in den Decoder und werden nicht von Gameplay, UI oder einer World-Runtime nachgebaut.
 
+Coop-Runden werden anhand des Room-Codes und der monotonen `roundRevision` genau einmal
+gutgeschrieben. Der Progress speichert je Room die höchste verarbeitete Revision; Host-Uhren
+dürfen zwischen Rooms voneinander abweichen. Import, Export und Reset führen diesen Stand mit.
+Ältere Saves ohne diese Zuordnung beginnen mit einer leeren Zuordnung. Ihr bisheriger
+`lastProcessedRoundEndedAt` schützt nur Ergebnisse ohne Rundenidentität: Aus einem alten
+Zeitstempel lässt sich nachträglich kein Room ableiten. Bereits verbuchte, damals noch nicht
+zugeordnete Ergebnisse können deshalb bei der ersten identifizierten Wiederholung erneut
+gutgeschrieben werden. Der Room-Code ist der bestehende Session-Namensraum; seine spätere
+zufällige Wiederverwendung durch einen anderen Host kann eine alte Revisionsgrenze übernehmen.
+
 ## PersistentBase
 
 PersistentBase ist persönlicher Progress, nicht Activity-Runtime:

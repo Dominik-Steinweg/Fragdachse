@@ -82,7 +82,7 @@ export interface ArenaMetaProgressStore {
   setDebugProgress(totalXp: number, bossPoints: number, highestUnlockedMapId: string): void;
   resetCharacter(): void;
   addCoopDefenseXp(amount: number): number;
-  markCoopDefenseRoundProcessed(endedAt: number | null): void;
+  markCoopDefenseRoundProcessed(endedAt: number | null, identity?: { roomCode: string; roundRevision: number }): void;
   markCoopDefenseMapCompleted(mapId: string): boolean;
   markCoopDefenseBossMapCompleted(mapId: string): boolean;
   unlockCoopDefenseClassesAfterVictory(completedMapId: string): boolean;
@@ -110,6 +110,7 @@ export interface ArenaMetaProgressStore {
 
 /** Kleine Bruecke auf den lokalen Spieler-/Ready-Stand, ohne Netzwerk-Substrat im Owner. */
 export interface ArenaMetaSessionPort {
+  getRoomCode(): string;
   getGamePhase(): GamePhase;
   getGameMode(): GameMode;
   getLocalPlayerId(): string;
@@ -722,7 +723,8 @@ export class ArenaMetaController {
     }
 
     const firstResult = results[0];
-    if (results.some(result => result.roundEndedAt !== firstResult.roundEndedAt)) return;
+    if (results.some(result => result.roundEndedAt !== firstResult.roundEndedAt
+      || result.roundRevision !== firstResult.roundRevision)) return;
     const mode = firstResult.gameMode ?? this.input.session.getGameMode();
     const roundState = this.input.resultRead.getRoundState();
     if (
@@ -730,12 +732,15 @@ export class ArenaMetaController {
       && (
         !roundState?.endedAt
         || roundState.endedAt !== firstResult.roundEndedAt
+        || roundState.roundRevision !== firstResult.roundRevision
+        || (roundState.roundRevision !== undefined
+          && (!Number.isSafeInteger(roundState.roundRevision) || roundState.roundRevision <= 0))
         || roundState.status === 'active'
       )
     ) return;
 
     const freshProgress = !isCoopDefenseMode(mode)
-      || (this.getLastProcessedRoundEndedAt() ?? 0) < firstResult.roundEndedAt;
+      || this.isUnprocessedCoopRound(roundState!);
     const outcome = resolvePersonalMatchOutcome(mode, this.input.session.getLocalPlayerId(), results, roundState);
     if (outcome === 'syncing') return;
     const balanceFeedbackAvailable = isCoopDefenseMode(mode)
@@ -776,7 +781,8 @@ export class ArenaMetaController {
     this.input.presentation.setResultsReplayAvailable(true);
     this.matchResultsPending = false;
     this.matchResultsProgressBefore = null;
-    const freshSound = firstResult.roundEndedAt > this.lastSoundRoundEndedAt;
+    const freshSound = isCoopDefenseMode(mode) && roundState?.roundRevision !== undefined
+      ? freshProgress : firstResult.roundEndedAt > this.lastSoundRoundEndedAt;
     this.lastSoundRoundEndedAt = Math.max(this.lastSoundRoundEndedAt, firstResult.roundEndedAt);
     if (freshSound && freshProgress) {
       if (presentation.outcome === 'victory' || presentation.outcome === 'defeat') {
@@ -1025,6 +1031,15 @@ export class ArenaMetaController {
     };
   }
 
+  private isUnprocessedCoopRound(roundState: RoundState): boolean {
+    if (roundState.roundRevision !== undefined) {
+      const lastRevision = this.getStoredProgress().processedRoundRevisionsByRoom[this.input.session.getRoomCode()] ?? 0;
+      return roundState.roundRevision > lastRevision;
+    }
+    // Historical snapshots have no room identity; only those retain the legacy time check.
+    return (this.getLastProcessedRoundEndedAt() ?? 0) < (roundState.endedAt ?? 0);
+  }
+
   private processCoopDefenseRoundProgress(
     before: CoopDefenseProgressSnapshot,
   ): MatchProgressDelta | null {
@@ -1035,8 +1050,7 @@ export class ArenaMetaController {
     if (!this.input.resultRead.isLocalRoundResultEligible(results)) return null;
 
     this.coopDefenseMatchItemReward = null;
-    const lastProcessedRoundEndedAt = this.getLastProcessedRoundEndedAt();
-    if (lastProcessedRoundEndedAt !== null && lastProcessedRoundEndedAt >= endedAt) {
+    if (!this.isUnprocessedCoopRound(roundState)) {
       return createMatchProgressDelta(before, this.getProgress(), 0, null);
     }
 
@@ -1078,7 +1092,8 @@ export class ArenaMetaController {
       unlockedNewMap = this.input.progressStore.unlockCoopDefenseMapAfterVictory(completedMapId);
     }
 
-    this.input.progressStore.markCoopDefenseRoundProcessed(endedAt);
+    this.input.progressStore.markCoopDefenseRoundProcessed(endedAt, roundState.roundRevision === undefined
+      ? undefined : { roomCode: this.input.session.getRoomCode(), roundRevision: roundState.roundRevision });
     this.refresh();
     const unlockedMapName = unlockedNewMap
       ? getMapName(this.getHighestUnlockedMapId(), getLocale())

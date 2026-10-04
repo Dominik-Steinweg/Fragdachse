@@ -782,6 +782,7 @@ export class ArenaScene extends Phaser.Scene {
       playSound: key => gameAudioSystem.playLocalSound(key),
       progressStore: createArenaMetaProgressStore(),
       session: {
+        getRoomCode: () => bridge.getRoomCode(),
         getGamePhase: () => bridge.getGamePhase(),
         getGameMode: () => bridge.getGameMode(),
         getLocalPlayerId: () => bridge.getLocalPlayerId(),

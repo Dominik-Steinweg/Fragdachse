@@ -51,6 +51,7 @@ function makeInput(): {
   };
   const loadout: Record<string, string> = {};
   const session: ArenaMetaControllerInput['session'] = {
+    getRoomCode: vi.fn(() => 'AAAAAA'),
     getGamePhase: vi.fn(() => 'LOBBY'),
     getGameMode: vi.fn(() => 'coop_defense'),
     getLocalPlayerId: vi.fn(() => 'local'),
@@ -460,4 +461,82 @@ describe('ArenaMetaController', () => {
 
 
 
+});
+
+describe('room-scoped round progression', () => {
+  function creditingInput(legacyEndedAt: number | null = null) {
+    const f = makeInput();
+    let current = { ...getStoredCoopDefenseProgress(), totalXp: 0, lastProcessedRoundEndedAt: legacyEndedAt,
+      processedRoundRevisionsByRoom: {} as Record<string, number> };
+    vi.mocked(f.store.getProgress).mockImplementation(() => structuredClone(current));
+    vi.mocked(f.store.addCoopDefenseXp).mockImplementation((amount) => {
+      current = { ...current, totalXp: current.totalXp + amount };
+      return current.totalXp;
+    });
+    vi.mocked(f.store.markCoopDefenseRoundProcessed).mockImplementation((endedAt, identity) => {
+      current = { ...current, lastProcessedRoundEndedAt: endedAt,
+        processedRoundRevisionsByRoom: identity
+          ? { ...current.processedRoundRevisionsByRoom, [identity.roomCode]: identity.roundRevision }
+          : current.processedRoundRevisionsByRoom };
+    });
+    const setRound = (roomCode: string, revision: number, endedAt: number) => {
+      vi.mocked(f.session.getRoomCode).mockReturnValue(roomCode);
+      vi.mocked(f.resultRead.getRoundState).mockReturnValue({
+        status: 'defeat', roundStartTime: endedAt - 1000, endedAt, roundRevision: revision, coopDefenseMapId: '1',
+      });
+      vi.mocked(f.resultRead.getRoundResults).mockReturnValue([{
+        id: 'local', name: 'Local', colorHex: 0xffffff, frags: 0, teamId: null,
+        roundEndedAt: endedAt, roundRevision: revision, gameMode: 'coop_defense', mapName: 'Map 1', sharedXp: 20,
+      }]);
+    };
+    const apply = () => { f.controller.beginMatchResults(); f.controller.tryFinalizeMatchResults(); };
+    f.controller.refresh();
+    return { ...f, setRound, apply, progress: () => current };
+  }
+
+  it.each([null, 200_000])('credits host clock skew independently of legacy endedAt=%s', (legacyEndedAt) => {
+    const f = creditingInput(legacyEndedAt);
+    f.setRound('AAAAAA', 100, 100_000); f.apply();
+    f.setRound('BBBBBB', 10, 90_000); f.apply();
+    expect(f.progress().totalXp).toBe(40);
+    expect(f.store.markCoopDefenseRoundProcessed).toHaveBeenLastCalledWith(90_000, { roomCode: 'BBBBBB', roundRevision: 10 });
+    expect(f.playSound.mock.calls.filter(([sound]) => sound === 'sfx_round_defeat')).toHaveLength(2);
+    f.controller.destroy();
+  });
+
+  it('deduplicates A/B/A replay and stale revisions while accepting a later revision with an earlier timestamp', () => {
+    const f = creditingInput();
+    for (const [room, revision, endedAt] of [
+      ['AAAAAA', 100, 100_000], ['BBBBBB', 10, 90_000], ['AAAAAA', 100, 100_000],
+      ['AAAAAA', 99, 110_000], ['AAAAAA', 101, 80_000], ['BBBBBB', 10, 90_000],
+    ] as const) { f.setRound(room, revision, endedAt); f.apply(); }
+    expect(f.progress().totalXp).toBe(60);
+    expect(f.store.addCoopDefenseXp).toHaveBeenCalledTimes(3);
+    expect(f.progress().processedRoundRevisionsByRoom).toEqual({ AAAAAA: 101, BBBBBB: 10 });
+    f.controller.destroy();
+  });
+
+  it.each(['state-mismatch', 'mixed-results', 'missing-state-revision'] as const)('waits for matching result revisions: %s', (mismatch) => {
+    const f = creditingInput();
+    f.setRound('AAAAAA', 100, 100_000);
+    const state = f.resultRead.getRoundState()!;
+    const result = f.resultRead.getRoundResults()![0];
+    if (mismatch === 'state-mismatch') vi.mocked(f.resultRead.getRoundState).mockReturnValue({ ...state, roundRevision: 99 });
+    else if (mismatch === 'missing-state-revision') vi.mocked(f.resultRead.getRoundState).mockReturnValue({ ...state, roundRevision: undefined });
+    else vi.mocked(f.resultRead.getRoundResults).mockReturnValue([result, { ...result, id: 'other', roundRevision: 99 }]);
+    f.apply();
+    expect(f.store.addCoopDefenseXp).not.toHaveBeenCalled();
+    expect(f.presentation.showMatchResults).not.toHaveBeenCalled();
+    f.setRound('AAAAAA', 100, 100_000); f.controller.tryFinalizeMatchResults();
+    expect(f.progress().totalXp).toBe(20);
+    f.controller.destroy();
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects an invalid shared result revision %s', (revision) => {
+    const f = creditingInput();
+    f.setRound('AAAAAA', revision, 100_000); f.apply();
+    expect(f.store.addCoopDefenseXp).not.toHaveBeenCalled();
+    expect(f.presentation.showMatchResults).not.toHaveBeenCalled();
+    f.controller.destroy();
+  });
 });

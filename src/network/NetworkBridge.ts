@@ -306,6 +306,8 @@ export interface RoundResult {
   teamId:   TeamId | null;
   /** Gemeinsame Match-Metadaten; pro Zeile wiederholt, damit Ergebnis und Kontext atomar replizieren. */
   roundEndedAt: number;
+  /** Stable round identity, preserved after the live participation snapshot is cleared. */
+  roundRevision?: number;
   gameMode: GameMode;
   mapName: string;
   teamScore?: number;
@@ -317,6 +319,7 @@ export interface RoundResult {
 export interface RoundState {
   status: 'active' | RoundConclusion;
   roundStartTime: number;
+  roundRevision?: number;
   // Autoritative Uhrzeit dieser Runde. Coop Defense nutzt weiterhin die Map-Vorgabe;
   // alle anderen Modi uebernehmen die Host-Auswahl aus der Lobby.
   timeOfDayMinutes?: number;

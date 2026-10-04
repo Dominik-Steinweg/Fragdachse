@@ -198,6 +198,44 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     expect(publish).toHaveBeenCalledTimes(1);
     expect(flow.worldLifecycle.endInstance).not.toHaveBeenCalled();
   });
+  it('preserves the completed round revision in state and results after live participation is cleared', () => {
+    const { flow, setPhase } = fixture(true);
+    const activity = { kind: 'coop-mission', definitionId: 'mission:test', worldRevision: 40, activityRevision: 41 };
+    let participation: any = { roundRevision: 41 };
+    let roundState: any = { status: 'active', roundStartTime: 100, coopDefenseMapId: DEFAULT_COOP_DEFENSE_MAP_ID };
+    const publishResults = vi.spyOn(bridge, 'publishRoundResults').mockImplementation(() => {});
+    vi.spyOn(bridge, 'publishRoundState').mockImplementation(value => { roundState = value; });
+    vi.spyOn(bridge, 'getRoundState').mockImplementation(() => roundState);
+    vi.spyOn(bridge, 'getRoundParticipation').mockImplementation(() => participation);
+    vi.mocked(bridge.hostResetRoundParticipation).mockImplementation(() => { participation = null; });
+    vi.spyOn(bridge, 'getRoundResultEligiblePlayerIds').mockReturnValue(['local']);
+    vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([{ id: 'local', name: 'Local', colorHex: 0xffffff }] as any);
+    vi.spyOn(bridge, 'getPlayerFrags').mockReturnValue(0);
+    vi.spyOn(bridge, 'getCoopDefenseRoundXp').mockReturnValue(20);
+    vi.spyOn(bridge, 'getArenaStartTime').mockReturnValue(100);
+    vi.spyOn(bridge, 'hostPublishRoomStatistics').mockImplementation(() => {});
+    Object.assign(flow, {
+      ctx: {}, resolveConfiguredGameMode: () => 'coop_defense',
+      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      hostSaveRoundResults: ArenaLifecycleCoordinator.prototype.hostSaveRoundResults,
+      publishRoundConclusion: (ArenaLifecycleCoordinator.prototype as any).publishRoundConclusion,
+    });
+    flow.worldLifecycle.activity.descriptor = activity;
+    flow.resultApplication = new ResultApplication({
+      getCurrentActivity: () => activity as any,
+      resolveVictoryRewardIds: () => [], grantPersistentBaseRewards: vi.fn(),
+      applyPersistentBaseOutcome: vi.fn(), clearActivityPresentation: vi.fn(),
+      publishCompletion: (completion, endedAt) => flow.publishCoopMissionCompletion(completion, endedAt),
+    });
+    setPhase('ARENA');
+    flow.hostCompleteRound('defeat');
+    expect(participation).toBeNull();
+    expect(roundState).toMatchObject({ status: 'defeat', roundRevision: 41 });
+    expect(publishResults).toHaveBeenCalledWith([expect.objectContaining({
+      id: 'local', roundRevision: 41, roundEndedAt: roundState.endedAt, sharedXp: 20,
+    })]);
+    expect(bridge.getGamePhase()).toBe('LOBBY');
+  });
   it('wartet beim sofortigen Schliessen der gerenderten Auswertung nicht auf die Lobby', () => {
     const { scene, events, completeFade } = fixture(false);
     scene.syncArenaExitFade('LOBBY'); completeFade(); events.emit('postrender');

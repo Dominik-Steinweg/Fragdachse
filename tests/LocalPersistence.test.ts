@@ -14,6 +14,7 @@ import {
   setStoredPersonalBaseContribution,
   getStoredCoopDefenseProgress,
   markStoredCoopDefenseMapCompleted,
+  markStoredCoopDefenseRoundProcessed,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
   getStoredMusicVolume,
@@ -65,6 +66,46 @@ class MemoryStorage implements Storage {
 
 describe('local progress generation', () => {
   let storage: MemoryStorage;
+
+  it('preserves monotone per-room round credits through reload, export/import and reset', () => {
+    markStoredCoopDefenseRoundProcessed(100_000, { roomCode: 'AAAAAA', roundRevision: 100 });
+    markStoredCoopDefenseRoundProcessed(90_000, { roomCode: 'BBBBBB', roundRevision: 10 });
+    markStoredCoopDefenseRoundProcessed(110_000, { roomCode: 'AAAAAA', roundRevision: 99 });
+    expect(getStoredCoopDefenseProgress().processedRoundRevisionsByRoom).toEqual({ AAAAAA: 100, BBBBBB: 10 });
+    const exported = exportStoredGameProgressJson();
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().processedRoundRevisionsByRoom).toEqual({ AAAAAA: 100, BBBBBB: 10 });
+    resetStoredCoopDefenseCharacter();
+    expect(getStoredCoopDefenseProgress().processedRoundRevisionsByRoom).toEqual({});
+    expect(importStoredGameProgressJson(exported).ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().processedRoundRevisionsByRoom).toEqual({ AAAAAA: 100, BBBBBB: 10 });
+    getStoredCoopDefenseProgress().processedRoundRevisionsByRoom.AAAAAA = 999;
+    expect(getStoredCoopDefenseProgress().processedRoundRevisionsByRoom.AAAAAA).toBe(100);
+  });
+
+  it('migrates absent round ledgers and rejects corrupt ledgers atomically', () => {
+    setStoredCoopDefenseTotalXp(123);
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    delete exported.progress.coopDefense.processedRoundRevisionsByRoom;
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().processedRoundRevisionsByRoom).toEqual({});
+    const before = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    for (const invalid of [null, [], { AAAAAA: 0 }, { AAAAAA: 1.5 }, { AAAAAA: '100' },
+      Object.fromEntries([['__proto__', 1]]), { constructor: 1 }]) {
+      exported.progress.coopDefense.processedRoundRevisionsByRoom = invalid;
+      expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(false);
+      expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(before);
+      expect(getStoredCoopDefenseProgress().totalXp).toBe(123);
+    }
+  });
+
+  it('does not lower the legacy replay boundary when an identified host clock is earlier', () => {
+    markStoredCoopDefenseRoundProcessed(200_000);
+    markStoredCoopDefenseRoundProcessed(100_000, { roomCode: 'AAAAAA', roundRevision: 100 });
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().lastProcessedRoundEndedAt).toBe(200_000);
+    expect(getStoredCoopDefenseProgress().processedRoundRevisionsByRoom).toEqual({ AAAAAA: 100 });
+  });
 
   it('persists actual map wins through export/import and clears them on character reset', () => {
     expect(getStoredCoopDefenseProgress().completedMapIds).toEqual([]);
