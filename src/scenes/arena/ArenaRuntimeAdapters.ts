@@ -204,7 +204,7 @@ export function createNavigationLabWorldPort(
       if (!runtime?.analysisScenarioActive || !bridge.isHost()) return [];
       const entry = spawnCases().find(entry => entry.id === id);
       return entry ? runtime.coopDefenseSpawnExecutor?.hostSpawnEncounterGroup(entry.group.enemyKind, 1,
-        'navigation-spawn-audit', entry.group.front, entry.group.spawnArea) ?? [] : [];
+        'navigation-spawn-audit', entry.group.front, entry.group.spawnArea).enemyIds ?? [] : [];
     },
     setNextRoundSeed: seed => flow.setNextScenarioSeed(seed),
     isReady: () => flow.getCoopMissionRuntime()?.enemyManager != null

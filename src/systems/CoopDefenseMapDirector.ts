@@ -11,6 +11,7 @@ import type {
   SpawnFront,
 } from '../types';
 import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
+import type { CoopDefenseSpawnResult } from './CoopDefenseSpawnExecutor';
 
 /** Ausfuehrungsschnitt des Directors zur bestehenden normalen Spawnlogik. */
 export type CoopDefenseEncounterSpawnHandler = (
@@ -19,9 +20,10 @@ export type CoopDefenseEncounterSpawnHandler = (
   originId?: string,
   front?: SpawnFront,
   spawnArea?: CoopDefenseMapSpawnAreaConfig,
-) => readonly string[] | void;
+) => readonly string[] | CoopDefenseSpawnResult | void;
 
 const DEFAULT_SPAWN_BACKSTOP_MS = 30_000;
+const SPAWN_RETRY_INTERVAL_MS = 150;
 const DEFAULT_TECHNICAL_STUCK_BACKSTOP_MS = 60_000;
 /** Reine Präsentationszeit; sie verschiebt weder Trigger noch Spawn-Zeitpunkte. */
 const ENCOUNTER_INCOMING_TELEGRAPH_MS = 900;
@@ -61,7 +63,8 @@ interface EncounterExecutionState {
   started: boolean;
   readonly groupsExecuted: boolean[];
   readonly groupSpawnedCounts: number[];
-  readonly groupNoProgressMs: number[];
+  readonly groupNoProgressSinceMs: Array<number | null>;
+  readonly groupRetryAtMs: number[];
   /** Absolute host times for each individual spawn in a group, in execution order. */
   readonly groupSpawnAtMs: number[][];
   readonly encounterEnemyIds: Set<string>;
@@ -140,7 +143,8 @@ export class CoopDefenseMapDirector {
       started: false,
       groupsExecuted: encounter.groups.map(() => false),
       groupSpawnedCounts: encounter.groups.map(() => 0),
-      groupNoProgressMs: encounter.groups.map(() => 0),
+      groupNoProgressSinceMs: encounter.groups.map(() => null),
+      groupRetryAtMs: encounter.groups.map(() => 0),
       groupSpawnAtMs: encounter.groups.map(() => []),
       encounterEnemyIds: new Set<string>(),
       progressEnemyIds: new Set<string>(),
@@ -180,7 +184,8 @@ export class CoopDefenseMapDirector {
       state.started = false;
       state.groupsExecuted.fill(false);
       state.groupSpawnedCounts.fill(0);
-      state.groupNoProgressMs.fill(0);
+      state.groupNoProgressSinceMs.fill(null);
+      state.groupRetryAtMs.fill(0);
       for (const spawnAtMs of state.groupSpawnAtMs) spawnAtMs.length = 0;
       state.encounterEnemyIds.clear();
       state.progressEnemyIds.clear();
@@ -780,7 +785,8 @@ export class CoopDefenseMapDirector {
       return;
     }
 
-    const enemyIds = spawnResult;
+    const result = 'enemyIds' in spawnResult ? spawnResult : { enemyIds: spawnResult, deferred: false };
+    const enemyIds = result.enemyIds;
     let spawnedCount = 0;
     for (const enemyId of enemyIds) {
       if (typeof enemyId !== 'string' || enemyId.length === 0 || state.encounterEnemyIds.has(enemyId)) continue;
@@ -790,12 +796,16 @@ export class CoopDefenseMapDirector {
     }
     state.groupSpawnedCounts[groupIndex] = Math.min(group.count, state.groupSpawnedCounts[groupIndex] + spawnedCount);
     state.groupsExecuted[groupIndex] = state.groupSpawnedCounts[groupIndex] >= group.count;
+    if (spawnedCount < spawnCount) {
+      // Give moving bodies time to clear the area; never rescan a packed corridor every frame.
+      state.groupRetryAtMs[groupIndex] = this.elapsedMs + SPAWN_RETRY_INTERVAL_MS;
+    }
     if (spawnedCount > 0) {
       if (state.firstGroupSpawnedAtMs === null) {
         state.firstGroupSpawnedAtMs = this.elapsedMs;
         this.options.onWaveStarted?.(state.encounterId);
       }
-      state.groupNoProgressMs[groupIndex] = 0;
+      state.groupNoProgressSinceMs[groupIndex] = null;
       this.onDiagnosticEvent?.('wave:spawn', {
         encounterId: state.encounterId,
         groupIndex,
@@ -803,9 +813,11 @@ export class CoopDefenseMapDirector {
         count: spawnedCount,
         front,
       });
-    } else if (!this.hasActiveOrigin(state)) {
-      state.groupNoProgressMs[groupIndex] += this.lastDeltaMs;
-      if (state.groupNoProgressMs[groupIndex] >= this.spawnBackstopAfterMs) {
+    } else if (result.deferred || this.hasActiveOrigin(state)) {
+      state.groupNoProgressSinceMs[groupIndex] = null;
+    } else {
+      state.groupNoProgressSinceMs[groupIndex] ??= this.elapsedMs;
+      if (this.elapsedMs - state.groupNoProgressSinceMs[groupIndex] >= this.spawnBackstopAfterMs) {
         // This only abandons a group that has produced no progress for a long grace period and
         // has no live encounter provenance. It never removes or ignores a live enemy.
         state.groupsExecuted[groupIndex] = true;
@@ -840,7 +852,7 @@ export class CoopDefenseMapDirector {
   ): number {
     const nextSpawnAtMs = state.groupSpawnAtMs[groupIndex]?.[state.groupSpawnedCounts[groupIndex]]
       ?? state.startedAtMs + Math.max(0, Math.floor(group.delayMs ?? 0));
-    return nextSpawnAtMs;
+    return Math.max(nextSpawnAtMs, state.groupRetryAtMs[groupIndex]);
   }
 
   private getRandomSpawnOffsetMs(staggerMs: number): number {

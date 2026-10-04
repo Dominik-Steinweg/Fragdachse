@@ -61,6 +61,14 @@ prüft den vollständigen Körper an genau der Position, die er erzeugt; ungepr�
 Bei bewegten Zielen darf die aktuelle Regionsverbindung einen Spawn vor Abschluss der neuen Wegkosten
 bestätigen. Eine neue physische Topologie benötigt dagegen einen passenden Graphen.
 
+Der Spawn-Executor meldet belegte, ansonsten gültige Zellen und ausstehende Navigation als
+vorübergehend verzögert an den `CoopDefenseMapDirector`. Der Director behält die noch fehlenden
+Gegner in seinem hostseitigen Encounter-Zustand und wiederholt die Platzierung mit zeitlichem
+Abstand. Solche Wartezustände dürfen weder die Wellenstärke vermindern noch den technischen
+Abbruch für dauerhaft unbrauchbare Spawn-Bereiche auslösen, auch wenn noch kein Gegner dieser
+Welle lebt. Nachrückende Gegner werden erneut gegen aktuelle Geometrie und Belegung geprüft;
+die Warteschlange endet mit dem Encounter-/Activity-Lifetime und wird nicht repliziert.
+
 Auch bestätigte Unerreichbarkeit hängt an aktuellen Körperregionen und gültigen Start-/Zielanschlüssen,
 nicht an fertig berechneten Wegkosten. Bei unveränderter Topologie prüft die Navigation die aktuell
 angeforderten Angriffsplätze gegen diese Regionen. Ein Durchbruchsauftrag bleibt bei Zielbewegung

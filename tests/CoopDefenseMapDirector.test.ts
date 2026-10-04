@@ -439,7 +439,7 @@ describe('CoopDefenseMapDirector', () => {
     expect(director.isAssaultRepelled()).toBe(false);
   });
 
-  it('keeps partial groups pending and retries only on a later update', () => {
+  it('keeps partial groups pending and gives occupied cells time to clear', () => {
     const activeEnemyIds = new Set<string>();
     let calls = 0;
     const spawnGroup = vi.fn((_kind: string, count: number) => {
@@ -464,6 +464,8 @@ describe('CoopDefenseMapDirector', () => {
     expect(director.isEncounterSpawnComplete('opening')).toBe(false);
 
     director.hostUpdate(0, false);
+    expect(spawnGroup).toHaveBeenCalledTimes(1);
+    director.hostUpdate(500, false);
     expect(spawnGroup).toHaveBeenCalledTimes(2);
     expect(spawnGroup).toHaveBeenLastCalledWith('zombie-badger', 2, 'opening');
     expect(director.isEncounterSpawnComplete('opening')).toBe(true);
@@ -492,7 +494,7 @@ describe('CoopDefenseMapDirector', () => {
     director.hostUpdate(99, false);
     expect(director.isAssaultRepelled()).toBe(false);
     shouldSpawn = true;
-    director.hostUpdate(1, false);
+    director.hostUpdate(500, false);
     expect(director.isEncounterSpawnComplete('opening')).toBe(true);
     expect(director.isAssaultRepelled()).toBe(false);
 
@@ -513,6 +515,27 @@ describe('CoopDefenseMapDirector', () => {
     blockedDirector.hostUpdate(0, false);
     blockedDirector.hostUpdate(1_000, false);
     expect(blockedDirector.isAssaultRepelled()).toBe(true);
+  });
+
+  it('never backstops deferred spawns, even without live encounter enemies, and resets the retry timer', () => {
+    let blocked = true;
+    const spawn = vi.fn(() => ({ enemyIds: blocked ? [] : ['arrival'], deferred: blocked }));
+    const director = new CoopDefenseMapDirector([{
+      id: 'deferred', start: { type: 'time', atMs: 0 },
+      groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+    }], spawn, { mode: 'repel-assault', isEnemyActive: () => false, spawnBackstopAfterMs: 100 });
+    director.hostUpdate(0, false);
+    for (let i = 0; i < 100; i++) director.hostUpdate(100, false);
+    expect(spawn.mock.calls.length).toBeLessThan(100);
+    expect(director.isEncounterSpawnComplete('deferred')).toBe(false);
+    expect(director.isAssaultRepelled()).toBe(false);
+    blocked = false;
+    director.hostUpdate(500, false);
+    expect(director.isEncounterSpawnComplete('deferred')).toBe(true);
+    expect(director.isAssaultRepelled()).toBe(true);
+    director.reset();
+    director.hostUpdate(0, false);
+    expect(director.isEncounterSpawnComplete('deferred')).toBe(true);
   });
 
   it('keeps inherited encounter enemies in clear and removes only proven technical stragglers', () => {

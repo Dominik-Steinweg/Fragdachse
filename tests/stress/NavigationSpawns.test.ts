@@ -30,13 +30,8 @@ import { EnemyIntentSystem } from '../../src/systems/navigation/EnemyIntentSyste
 function spawnWorld(mapId: string, seed: number) {
   const map = getCoopDefenseMapConfig(mapId), metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
   const layout = ArenaGenerator.generate(seed, resolveArenaGenerationInput('coop_defense', metrics), map);
+  // Use the shared setCircle-aware body. Sprite margins are not collision geometry.
   const scene = healthBarTestScene().scene;
-  const addBody = scene.physics.add.existing;
-  scene.physics.add.existing = (object: any) => {
-    addBody(object);
-    Object.defineProperty(object.body, 'halfWidth', { get: () => object.displayWidth / 2 });
-    Object.defineProperty(object.body, 'halfHeight', { get: () => object.displayHeight / 2 });
-  };
   const manager = new EnemyManager(scene, resolveCoopDefenseEnemyConfigs(1));
   manager.setWorldMetrics(metrics);
   const water = new WaterGeometry(layout.water ?? [], metrics); manager.setWaterGeometry(water);
@@ -70,6 +65,7 @@ function spawnWorld(mapId: string, seed: number) {
     }
     const goal = field.worldToGrid(chosen.x, chosen.y)!;
     coordinator.setGoalCells('player', [goal.gridY * nav.cols + goal.gridX]); coordinator.prepareNow();
+    return chosen;
   };
   return { map, layout, metrics, manager, coordinator, field, executor, progress, route, cleared, target,
     clear: () => { for (const enemy of manager.getAllEnemies()) manager.hostRemoveEnemy(enemy.id); },
@@ -174,21 +170,86 @@ describe('Authored spawns with body navigation', () => {
             world.progress!.hostUpdate(16, false, [{ playerId: 'reference', eligible: true, ...p }]);
           }
         }
-        const cp = checkpoints[Math.max(0, reached)]; world.target(cp.gridX, cp.gridY);
-        const director = new CoopDefenseMapDirector([encounter], (...args) => world.executor.hostSpawnEncounterGroup(...args),
-          { isEncounterStartSatisfied: () => true, random: () => .5 });
+        const cp = checkpoints[Math.max(0, reached)], target = world.target(cp.gridX, cp.gridY);
+        const geometry = world.coordinator.getGeometry()!;
+        const catalog = new EnemyAiTargetCatalog(), intents = new EnemyIntentSystem(world.coordinator, catalog);
+        catalog.updateTargets([{ kind: 'player', id: 'reference', radius: 12, ...target }]);
+        world.manager.setNavigationIntents(intents);
+        let deferred = 0, unsafe = 0, overlaps = 0, unsafeMoves = 0;
+        const areas = encounter.groups.map(group => {
+          let cells = 0, rocks = 0, free = 0, reachable = 0;
+          const area = group.spawnArea;
+          if (area) for (let y = area.gridY; y < area.gridY + area.heightCells; y++) {
+            for (let x = area.gridX; x < area.gridX + area.widthCells; x++) {
+              cells++;
+              if (world.layout.rocks.some(rock => rock.gridX === x && rock.gridY === y)) rocks++;
+              const p = worldCellCenter(world.metrics, x, y);
+              if (geometry.isFree(p.x, p.y, 15)) {
+                free++;
+                if (world.field.queryNavigation(p.x, p.y).status === 'ready') reachable++;
+              }
+            }
+          }
+          return { kind: group.enemyKind, count: group.count, area, cells, rocks, free, reachable };
+        });
+        const director = new CoopDefenseMapDirector([encounter], (...args) => {
+          const existing = world.manager.getAllEnemies();
+          const result = world.executor.hostSpawnEncounterGroup(...args);
+          if (result.deferred) deferred++;
+          for (const id of result.enemyIds) {
+            const enemy = world.manager.getEnemy(id)!;
+            const { x, y } = enemy.sprite, radius = enemy.getCollisionRadius();
+            // Measure at materialization, before ordinary crowd movement changes positions.
+            if (!geometry.isFree(x, y, radius) || world.field.queryNavigation(x, y).status !== 'ready') unsafe++;
+            if (existing.some(other => Math.hypot(other.sprite.x - x, other.sprite.y - y)
+              < radius + other.getCollisionRadius() - 1e-6)) overlaps++;
+            existing.push(enemy);
+          }
+          return result;
+        }, { isEncounterStartSatisfied: () => true, random: () => .5,
+          isEnemyActive: id => world.manager.getEnemy(id)?.sprite.active === true,
+          isEnemyOriginActive: id => world.manager.hasActiveEnemyOrigin(id) });
         const expected = encounter.groups.reduce((sum, group) => sum + group.count, 0);
-        for (let ms = 0; ms < 180_000 && world.manager.getAllEnemies().length < expected; ms += 250) director.hostUpdate(250, false);
+        const deadline = Math.max(...encounter.groups.map(group => group.delayMs ?? 0)) + 30_000;
+        // Reproduce the reported parking-capacity failure, then release the same living crowd.
+        // No hard-coded capacity/count: authored content still determines how much can fit.
+        const frozenMs = mapId === '7' && seed === 731 && encounter.id === 'medic-3' ? 35_000 : 0;
+        for (let ms = 0; ms < frozenMs; ms += 250) director.hostUpdate(250, false);
+        const pendingAtRelease = frozenMs ? expected - world.manager.getAllEnemies().length : 0;
+        if (pendingAtRelease > 0) expect(director.isEncounterSpawnComplete(encounter.id)).toBe(false);
+        const dt = 1000 / 60;
+        let elapsedMs = 0;
+        // A corridor has finite parking capacity. Drive production intent and locomotion so
+        // arrivals can vacate spawn cells; do not teleport or delete them to make room.
+        while (elapsedMs < deadline && !director.isEncounterSpawnComplete(encounter.id)) {
+          elapsedMs += dt;
+          director.hostUpdate(dt, false);
+          const enemies = world.manager.getAllEnemies();
+          intents.update(enemies, frozenMs + elapsedMs);
+          world.coordinator.advance(dt);
+          intents.update(enemies, frozenMs + elapsedMs);
+          world.manager.hostUpdateMovement(world.field, world.field, world.field, null, false, frozenMs + elapsedMs, dt);
+          for (const enemy of enemies) {
+            const { x, y } = enemy.sprite, { vx, vy } = enemy.getDesiredVelocity();
+            const nx = x + vx * dt / 1000, ny = y + vy * dt / 1000;
+            if (!geometry.canMove(x, y, nx, ny, enemy.getSize() / 2)) unsafeMoves++;
+            enemy.setPosition(nx, ny);
+            enemy.body.setVelocity(vx, vy);
+          }
+        }
         const enemies = world.manager.getAllEnemies();
-        const unsafe = enemies.filter(enemy => !world.coordinator.getGeometry()!.isFree(enemy.sprite.x, enemy.sprite.y, enemy.getCollisionRadius()));
-        reports.push({ seed, encounter: encounter.id, expected, spawned: enemies.length, unsafe: unsafe.length });
+        reports.push({ seed, encounter: encounter.id, expected, spawned: enemies.length,
+          frozenMs, pendingAtRelease, elapsedMs, deadline, deferred, unsafe, overlaps, unsafeMoves, areas });
         expect(enemies.length, `${seed}/${encounter.id}`).toBe(expected);
-        expect(unsafe, `${seed}/${encounter.id}`).toHaveLength(0);
+        expect({ unsafe, overlaps, unsafeMoves }, `${seed}/${encounter.id}`).toEqual({ unsafe: 0, overlaps: 0, unsafeMoves: 0 });
+        expect(elapsedMs, `${seed}/${encounter.id}`).toBeLessThan(deadline);
+        intents.clear(); world.manager.setNavigationIntents(null);
         world.cleared.add(encounter.id); world.progress!.hostUpdate(16, false, []); world.clear();
       }
       world.destroy();
     }
     mkdirSync('build/navigation-results', { recursive: true });
-    writeFileSync(`build/navigation-results/spawn-map${mapId}-encounters.json`, JSON.stringify({ scenarioVersion: 1, reports }, null, 2));
+    writeFileSync(`build/navigation-results/spawn-map${mapId}-encounters.json`, JSON.stringify({ scenarioVersion: 2,
+      scope: 'Generated geometry, mission barriers, production spawns/intents/locomotion at 60 Hz; body sweeps without Arcade collision resolution or combat.', reports }, null, 2));
   }, 180_000);
 });
