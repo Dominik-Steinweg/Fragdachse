@@ -8,6 +8,7 @@ export class ScenarioClock {
   speed = 1;
   private queuedSteps = 0;
   private settling = false;
+  private visualFrame = 0;
   /** The visual runner pumps loading/render work without advancing presentation time. */
   preparing = visualTest.enabled;
   holdLoadingTime = () => true;
@@ -31,7 +32,13 @@ export class ScenarioClock {
       if (this.paused) this.queuedSteps--;
       this.elapsed += step;
       this.simulationTime += step;
-      if (visualTest.enabled) visualTest.reseed(Math.round(this.elapsed * 60 / 1000));
+      if (visualTest.enabled) {
+        // Loading can take a different number of frames. Effect randomness starts at the
+        // ready barrier, and zero-delta worker publication must not consume another frame.
+        if (this.preparing) this.visualFrame = 0;
+        else if (step > 0) this.visualFrame++;
+        visualTest.reseed(this.preparing ? Math.round(this.elapsed * 60 / 1000) : this.visualFrame);
+      }
       this.original(this.simulationTime, step);
     };
     loop.callback = this.callback;

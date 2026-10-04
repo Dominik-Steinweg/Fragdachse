@@ -33,7 +33,11 @@ process.env.TEMP = process.env.TMP = process.env.TMPDIR = browserTemp;
 const recipeHash = createHash('sha256').update(JSON.stringify({ groups, viewport, tolerance })).digest('hex');
 const report = { update, recipeHash, viewport, tolerance, browser: null, results: [], errors: [] };
 let server, browser, stopped = false;
-const close = async () => { if (stopped) return; stopped = true; await browser?.close(); await server?.close(); };
+const close = async () => {
+  if (stopped) return;
+  stopped = true;
+  try { await browser?.close(); } finally { await server?.close(); }
+};
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { void close().finally(() => process.exit(130)); });
 const writeJson = (path, data) => writeFile(path, JSON.stringify(data, null, 2) + '\n');
 const staged = [];
@@ -56,6 +60,7 @@ try {
     // evaluate() has no Playwright timeout; closing this owned context also cancels a stuck page.
     const watchdog = setTimeout(() => { errors.push('Group exceeded 240 seconds'); void context.close(); }, 240000);
     page.on('pageerror', e => errors.push(e.message));
+    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     page.on('crash', () => errors.push('Browser page crashed'));
     page.on('response', r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()}: ${r.url()}`); });
     const command = async c => {
@@ -86,7 +91,12 @@ try {
       await page.evaluate(() => document.fonts.ready);
       await page.addStyleTag({ content: '#dev-scenario-panel{display:none!important} *,*::before,*::after{caret-color:transparent!important}' });
       for (const c of group.setup) await command(c);
+      await settle();
       await command({ action: 'step', frames: 120 });
+      await settle();
+      // Sun-direction worker results are published atomically but then crossfade for 600 ms.
+      // Finish that fade only after the worker barrier, before creating short-lived effects.
+      await command({ action: 'step', frames: 60 });
       await settle();
       for (const shot of group.shots) {
         console.log(`  capture ${shot.id}`);
@@ -133,7 +143,7 @@ try {
     for (const name of new Set([...(await readdir(reference)).filter(n => n.endsWith('.webp')), ...replacements.keys()])) {
       bytes += (await stat(replacements.get(name) ?? join(reference, name))).size;
     }
-    if (bytes > 30 * 1024 * 1024) throw Error('Reference budget exceeds 30 MiB');
+    if (bytes > 30_000_000) throw Error('Reference budget exceeds 30 MB');
     for (const s of staged) {
       await writeFile(join(reference, s.id + '.webp.tmp'), await readFile(s.path));
       await rename(join(reference, s.id + '.webp.tmp'), join(reference, s.id + '.webp'));
