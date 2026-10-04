@@ -199,6 +199,11 @@ export class RpcCoordinator {
       const capabilities = this.capabilities.get(senderId);
       if (!capabilities) return { ok: false, reason: 'blocked' };
       if (!isValidPlayerActionAttemptId(params?.attemptId)) return { ok: false, reason: 'invalid' };
+      if ((params?.scopeHolding !== undefined && typeof params.scopeHolding !== 'boolean')
+        || [params?.scopeProgress, params?.scopeChargeProgress].some(progress => progress !== undefined
+          && (typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0 || progress > 1))) {
+        return { ok: false, reason: 'invalid' };
+      }
       // Ein einziger hostseitiger Zeitpunkt für die gesamte Aktion: Held-Action-Consume,
       // Charge-Validierung, Construction-Use und der Gameplay-Commit teilen sich `hostNowMs`.
       // Client-Urspruenge sind ebenso wenig Gameplay-Autoritaet wie eine Client-Uhr.

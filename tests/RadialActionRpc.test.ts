@@ -253,6 +253,47 @@ beforeEach(() => {
 });
 
 describe('radial action RPC classification', () => {
+  it.each([
+    { scopeProgress: 'garbage' },
+    { scopeProgress: null },
+    { scopeProgress: NaN },
+    { scopeProgress: Infinity },
+    { scopeProgress: -0.1 },
+    { scopeProgress: 1.1 },
+    { scopeChargeProgress: '1' },
+    { scopeChargeProgress: null },
+    { scopeChargeProgress: NaN },
+    { scopeChargeProgress: Infinity },
+    { scopeChargeProgress: -0.1 },
+    { scopeChargeProgress: 1.1 },
+    { scopeHolding: 1 },
+    { scopeHolding: 'true' },
+    { scopeHolding: null },
+  ])('rejects malformed scope input before invoking a weapon action: %j', params => {
+    const fixture = createFixture();
+    const handle = registerLoadoutHandler(fixture.coordinator);
+
+    expect(handle('weapon2', 0, 45, 67, 'p1', undefined, params as unknown as LoadoutUseParams))
+      .toEqual({ ok: false, reason: 'invalid' });
+    expect(fixture.usePlayerAction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    undefined,
+    { scopeHolding: true },
+    { scopeHolding: false, scopeProgress: 0, scopeChargeProgress: 0 },
+    { scopeProgress: 0.5, scopeChargeProgress: 0.5 },
+    { scopeProgress: 1, scopeChargeProgress: 1 },
+  ])('preserves valid scope input for the weapon owner: %j', params => {
+    const fixture = createFixture();
+    const handle = registerLoadoutHandler(fixture.coordinator);
+
+    expect(handle('weapon2', 0, 45, 67, 'p1', undefined, params).ok).toBe(true);
+    expect(fixture.usePlayerAction).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'weapon', playerId: 'p1', slot: 'weapon2', params,
+    }));
+  });
+
   it.each(['weapon1', 'weapon2', 'utility', 'ultimate'] as const)(
     'never passes a forged client origin to the authoritative %s action', slot => {
       const fixture = createFixture();
