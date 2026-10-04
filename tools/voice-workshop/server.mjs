@@ -48,9 +48,9 @@ export async function createWorkshopServer({ port = 8092, root = process.env.VOI
           return reply(200, await readFile(workshop.file(name)), name.endsWith('.ogg') ? 'audio/ogg' : name.endsWith('.flac') ? 'audio/flac' : 'audio/wav');
         }
         if (req.method !== 'POST' || req.headers.origin !== origin || !req.headers['content-type']?.startsWith('application/json')) return reply(403, { error: 'Ungültiger Werkstattauftrag.' });
-        let body = ''; let bytes = 0;
-        for await (const chunk of req) { bytes += chunk.length; if (bytes > 42 * 1024 * 1024) return reply(413, { error: 'Datei zu groß.' }); body += chunk; }
-        const data = JSON.parse(body);
+        const chunks = []; let bytes = 0;
+        for await (const chunk of req) { bytes += chunk.length; if (bytes > 42 * 1024 * 1024) return reply(413, { error: 'Datei zu groß.' }); chunks.push(chunk); }
+        const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (url.pathname === '/api/export') return reply(200, await workshop.bundle(data.checksums));
         if (url.pathname === '/api/summary') return reply(200, workshop.releaseSummary(data.voiceId));
         if (url.pathname === '/api/shutdown') {

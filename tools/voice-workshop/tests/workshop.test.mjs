@@ -193,3 +193,29 @@ test('loopback service requires host, origin and session token, and remains usab
   assert.equal(badHostStatus, 403);
   assert.deepEqual(await (await fetch(`${url}/api/generator`, { headers: { 'x-voice-token': token } })).json(), { ok: false, message: 'Offline' });
 });
+
+test('loopback actions preserve UTF-8 text split across request chunks', async t => {
+  const root = await temp(t); const { server, token, workshop } = await createWorkshopServer({ root, port: 0, generator: {} });
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const name = 'Müller 🦡';
+  const body = Buffer.from(JSON.stringify({ name }));
+  const split = body.indexOf(Buffer.from('ü')) + 1;
+  const response = await new Promise((resolve, reject) => {
+    const request = http.request(`${url}/api/voice`, { method: 'POST', headers: {
+      'x-voice-token': token, origin: url, 'content-type': 'application/json',
+    } }, result => {
+      const chunks = []; result.on('data', chunk => chunks.push(chunk));
+      result.on('end', () => resolve({ status: result.statusCode, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) }));
+    });
+    request.on('error', reject);
+    // Send the rest only after the server has received the incomplete UTF-8 prefix.
+    server.once('request', incoming => incoming.once('data', () => request.end(body.subarray(split))));
+    request.write(body.subarray(0, split));
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.voices[0].name, name);
+  assert.equal(workshop.state.voices[0].name, name);
+  const persisted = JSON.parse(await readFile(path.join(root, 'state.json'), 'utf8'));
+  assert.equal(persisted.voices[0].name, name);
+});
