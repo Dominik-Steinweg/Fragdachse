@@ -50,11 +50,6 @@ export const COOP_DEFENSE_UPGRADE_IDS_WITH_DEDICATED_ICON: ReadonlySet<string> =
   COOP_DEFENSE_UPGRADE_ICON_REGISTRY.withIcon,
 );
 
-/** Active IDs that deliberately use the loadout-item icon or the text fallback. */
-export const COOP_DEFENSE_UPGRADE_IDS_WITHOUT_DEDICATED_ICON: ReadonlySet<string> = new Set(
-  COOP_DEFENSE_UPGRADE_ICON_REGISTRY.withoutIcon,
-);
-
 export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
   return COOP_DEFENSE_UPGRADE_IDS_WITH_DEDICATED_ICON.has(upgradeId);
 }

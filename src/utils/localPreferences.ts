@@ -109,8 +109,6 @@ export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
 export const LOCAL_PROGRESS_SCHEMA_VERSION = 6;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
 export const LOCAL_PROGRESS_EXPORT_VERSION = 6;
-export const LOCAL_BALANCE_LAB_STORAGE_KEY = COOP_DEFENSE_BALANCE_STORAGE_KEY;
-export const LOCAL_BALANCE_LAB_SCHEMA_VERSION = COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
 export interface CoopDefenseProgressPreferences {
@@ -1317,17 +1315,6 @@ export function setStoredLoadoutSlot(slot: LoadoutSlot, itemId: string): void {
   }));
 }
 
-export function clearStoredLoadoutSlot(slot: LoadoutSlot): void {
-  updatePreferences((current) => {
-    const nextLoadout = { ...current.loadout };
-    delete nextLoadout[slot];
-    return {
-      ...current,
-      loadout: nextLoadout,
-    };
-  });
-}
-
 /** Liest einen Coop-Defense-Loadout-Slot aus dem Profil der konkreten Klasse. */
 export function getStoredCoopDefenseLoadoutSlot(
   classId: CoopDefenseClassId,
@@ -1404,28 +1391,6 @@ export function switchStoredCoopDefenseClassLoadout(
           ...storedProgress,
           selectedClassId: sanitizeCoopDefenseClassId(nextClassId),
         },
-      },
-    };
-  });
-}
-
-/** Entfernt einen gespeicherten Coop-Defense-Slot, ohne andere Klassenprofile anzutasten. */
-export function clearStoredCoopDefenseLoadoutSlot(
-  classId: CoopDefenseClassId,
-  slot: LoadoutSlot,
-): void {
-  if (slot === 'utility') {
-    setStoredCoopDefenseUpgradeProfile(setLoadoutToolSlots(getStoredCoopDefenseUpgradeProfile(classId), [], classId), classId);
-    return;
-  }
-  updatePreferences((current) => {
-    const nextClassLoadout = { ...(current.loadoutByClass[classId] ?? {}) };
-    delete nextClassLoadout[slot];
-    return {
-      ...current,
-      loadoutByClass: {
-        ...current.loadoutByClass,
-        [classId]: nextClassLoadout,
       },
     };
   });
@@ -1713,10 +1678,6 @@ export function unlockStoredCoopDefenseMapAfterVictory(completedMapId: string): 
   return true;
 }
 
-export function getStoredCoopDefenseClassId(): CoopDefenseClassId {
-  return readPreferences().progression.coopDefense.selectedClassId;
-}
-
 export function setStoredCoopDefenseClassId(classId: CoopDefenseClassId): void {
   updatePreferences((current) => ({
     ...current,
@@ -1730,14 +1691,6 @@ export function setStoredCoopDefenseClassId(classId: CoopDefenseClassId): void {
       },
     },
   }));
-}
-
-export function getStoredCoopDefenseClassesUnlocked(): boolean {
-  return readPreferences().progression.coopDefense.unlockedClassIds.length > 0;
-}
-
-export function getStoredUnlockedCoopDefenseClassIds(): readonly CoopDefenseClassId[] {
-  return [...readPreferences().progression.coopDefense.unlockedClassIds];
 }
 
 /**
