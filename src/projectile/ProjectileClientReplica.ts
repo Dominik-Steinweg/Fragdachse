@@ -49,11 +49,6 @@ export interface ProjectileClientReplicaUpdate {
   readonly bounce?: ProjectileBouncePresentation;
 }
 
-export interface ProjectileClientReplicaRemovedState {
-  readonly id: number;
-  readonly state: ProjectileClientReplicaState;
-}
-
 export interface ProjectileClientReplicaFrame {
   readonly projectiles: readonly SyncedProjectile[];
   readonly activeIds: ReadonlySet<number>;

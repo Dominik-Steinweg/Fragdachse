@@ -4969,14 +4969,6 @@ export class NetworkBridge {
     return nextTotal;
   }
 
-  /** Host-only, mit Teilnehmerberechtigungs-Gate fuer Kill-/XP-Quellen. */
-  addCoopDefenseRoundXpForPlayer(playerId: string, amount: number): number {
-    if (!isHost() || !this.canPlayerReceiveRoundRewards(playerId)) {
-      return this.getCoopDefenseRoundXp();
-    }
-    return this.addCoopDefenseRoundXp(amount);
-  }
-
   resetCoopDefenseRoundXp(): void {
     this.setCoopDefenseRoundXp(0);
   }

@@ -103,7 +103,7 @@ deaktivierte Einheiten sind keine gewöhnlichen Bewegungsnachbarn.
 
 ## Player-Runtime
 
-[PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts) liefert eine gemeinsame Feature-Beschreibung für Entity, Navigation, Combat, Ressourcen, Loadout, Targeting, World-scoped Player-Build und Missionsstatus. Autoritative Simulationsfeatures sind hostgebunden; ein Client darf keinen Serverzustand aus einer lokalen Visualisierung herstellen. Build- und Item-Modifikatoren können in einer Activity-losen World laufen, während Missionsstatus Activity-spezifisch bleibt.
+[PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts) liefert eine gemeinsame Feature-Beschreibung für Entity, Combat, Ressourcen, Loadout, Targeting und World-scoped Player-Build. Autoritative Simulationsfeatures sind hostgebunden; ein Client darf keinen Serverzustand aus einer lokalen Visualisierung herstellen. Build- und Item-Modifikatoren können in einer Activity-losen World laufen, während Missionsstatus Activity-spezifisch bleibt.
 
 Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody ist der kanonische physische Körper; PlayerEntity kapselt ihn und die optionale Sprite-Präsentation. Attach- und Detach-Operationen sind atomar und müssen bei einem Fehler zurückrollen.
 
