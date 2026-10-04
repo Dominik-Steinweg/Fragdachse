@@ -158,6 +158,11 @@ export class EnergyInjectorSystem {
     return [...this.effects.values()];
   }
 
+  relocateConstructionEffect(targetId: string, x: number, y: number): void {
+    const effect = this.effects.get(targetId);
+    if (effect) this.effects.set(targetId, { ...effect, x, y });
+  }
+
   removeTarget(target: TargetStatusTarget | { readonly targetId: string }): void {
     this.effects.delete(target.targetId);
     for (const [ownerId, focus] of this.focusTargets) {

@@ -281,7 +281,7 @@ export class ArenaPersistentBaseSession {
           footprint: getPersistentConstructionFootprint(next) ?? [{ dx: 0, dy: 0 }] });
       }
     }
-    const relocated = placement?.relocateRocks(moves);
+    const relocated = this.world.getConstructionRuntime()?.relocateRuntimeBatch(moves);
     if (relocated) {
       for (const runtime of relocated) this.relocatePlaceableRuntimePresentation(previous.get(runtime.id)!, runtime);
     } else {
@@ -317,7 +317,7 @@ export class ArenaPersistentBaseSession {
       previous.set(runtime.id, { ...runtime });
       moves.push({ id: runtime.id, gridX: cell.gridX, gridY: cell.gridY, angle: next.angle, footprint: [{ dx: 0, dy: 0 }] });
     }
-    const moved = placement?.relocateRocks(moves);
+    const moved = this.world.getConstructionRuntime()?.relocateRuntimeBatch(moves);
     if (moved) for (const runtime of moved) {
       const id = runtime.persistentRewardId!;
       binding?.relocateRewardRuntime(id, runtime);
@@ -810,7 +810,7 @@ export class ArenaPersistentBaseSession {
       if (displacedPersonalRuntime) this.reconcilePersistentBaseWorld();
       return { ok: false, reason: 'blocked' };
     }
-    const relocated = placementSystem.relocateRock(source.id, preview.gridX, preview.gridY, preview.angle);
+    const relocated = this.world.getConstructionRuntime()?.relocateRuntime(source.id, preview.gridX, preview.gridY, preview.angle);
     if (!relocated) {
       store.moveReward(previousPlacement);
       this.reconcilePersistentBaseWorld();

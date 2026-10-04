@@ -31,6 +31,7 @@ import { PersistentBaseRewardGrantService } from '../../src/persistentBase/Persi
 import { PersistentBaseWorldMaterializer } from '../../src/world/PersistentBaseWorldMaterializer';
 import { ConstructionWorldRuntime } from '../../src/world/ConstructionWorldRuntime';
 import { PlacementSystem } from '../../src/systems/PlacementSystem';
+import { EnergyInjectorSystem } from '../../src/systems/EnergyInjectorSystem';
 import { getCoopDefenseConstructionDefinition } from '../../src/config/coopDefenseConstructions';
 import { createAuthoredWorldDescriptor } from '../../src/world/WorldLayout';
 import { resolveActiveArenaWorldMetrics, worldCellCenter } from '../../src/world/WorldMetrics';
@@ -147,6 +148,7 @@ function createHarness(classId: string, restoreTools: readonly PersistentRestore
   const playerWorld = worldCellCenter(METRICS, playerCell.gridX, playerCell.gridY);
   const player = { id: playerId, active: true, x: playerWorld.x, y: playerWorld.y, color: 0xffffff };
   const combatCore = { isAlive: vi.fn(() => true), isBurrowed: vi.fn(() => false) };
+  const energyInjectorSystem = new EnergyInjectorSystem();
 
   vi.spyOn(bridge, 'getPlayerCurrentLoadoutSnapshot').mockReturnValue({ coopDefenseClassId: classId } as never);
 
@@ -201,8 +203,9 @@ function createHarness(classId: string, restoreTools: readonly PersistentRestore
     combatSystem: combatCore,
     placementSystem,
     loadoutManager,
+    utilityAction: { setUtilityPlacementCapability: vi.fn(), useInspectorUtility: vi.fn() },
     targetStatusSystem: null,
-    energyInjectorSystem: null,
+    energyInjectorSystem,
     powerUpSystem: powerUpSystem as never,
     modifierReadPort: null,
     tunnelPlacementPort: null,
@@ -273,6 +276,7 @@ function createHarness(classId: string, restoreTools: readonly PersistentRestore
     placementSystem,
     loadoutManager,
     powerUpSystem,
+    energyInjectorSystem,
     playerId,
     site,
   };
@@ -793,6 +797,74 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
 });
 
 describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
+  it.each([
+    ['machine_gun_turret', 'request'], ['machine_gun_turret', 'editor'],
+    ['medic_pedestal', 'request'], ['medic_pedestal', 'editor'],
+  ] as const)('keeps a target-bound injector effect on its moved %s through %s', (constructionId, path) => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, placementSystem, contributionStore, persistentBaseSession, playerId, energyInjectorSystem } = harness;
+    const definition = getCoopDefenseConstructionDefinition(constructionId);
+    const cell = rewardCell(0, 0);
+    const source = placementSystem.materializePersistentPlaceable(definition,
+      cell.gridX, cell.gridY, 0, playerId, 0xffffff, 'host-persistent')!;
+    contributionStore.registerNew(playerId, source, { kind: 'construction', id: definition.id },
+      definition.footprint, harness.site.anchor, harness.site.buildArea);
+    persistentBaseSession.bindPlayerOwner(playerId, playerId);
+    const before = worldCellCenter(METRICS, source.gridX, source.gridY);
+    energyInjectorSystem.applyConstructionEffect(String(source.id), playerId, before.x, before.y,
+      definition.energyInjectorEffect!,
+      { durationMs: 7_000, focusDurationMs: 7_000, vulnerabilityBonus: 0.2, color: 0xffffff }, 1_000);
+    const target = rewardCell(1, 1);
+
+    if (path === 'request') {
+      expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, target), 1_000)).toEqual({ ok: true });
+    } else {
+      coordinator.ingestOfferedPersistentBaseContributions = vi.fn();
+      coordinator.publishConfirmedPersistentBaseContributions = vi.fn();
+      vi.spyOn(bridge, 'getGamePhase').mockReturnValue('LOBBY');
+      vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue([playerId]);
+      const contribution = contributionStore.getCommittedContribution(playerId)!;
+      expect(coordinator.editPersonalLayout(playerId, {
+        worldRevision: WORLD_REVISION, areaStage: 0, expectedRevision: contribution.revision,
+        constructions: contribution.constructions.map(entry => ({ ...entry, relativeGridX: 1, relativeGridY: 1 })),
+      }).ok).toBe(true);
+    }
+
+    const after = worldCellCenter(METRICS, target.gridX, target.gridY);
+    expect(energyInjectorSystem.getEffect(String(source.id), 1_000))
+      .toMatchObject({ x: after.x, y: after.y, ownerId: playerId, startedAt: 1_000, expiresAt: 8_000 });
+    expect(energyInjectorSystem.getEffectAt(after.x, after.y, 1_000)?.effect).toEqual(definition.energyInjectorEffect);
+    expect(energyInjectorSystem.getEffectAt(before.x, before.y, 1_000)).toBeNull();
+  });
+
+  it('restores target effects after a rejected blueprint move and clears them at World teardown', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, placementSystem, contributionStore, playerId, energyInjectorSystem } = harness;
+    const definition = getCoopDefenseConstructionDefinition('machine_gun_turret');
+    const cell = rewardCell(0, 0);
+    const source = placementSystem.materializePersistentPlaceable(definition,
+      cell.gridX, cell.gridY, 0, playerId, 0xffffff, 'host-persistent')!;
+    contributionStore.registerNew(playerId, source, { kind: 'construction', id: definition.id },
+      definition.footprint, harness.site.anchor, harness.site.buildArea);
+    const before = worldCellCenter(METRICS, source.gridX, source.gridY);
+    energyInjectorSystem.applyConstructionEffect(String(source.id), playerId, before.x, before.y,
+      definition.energyInjectorEffect!,
+      { durationMs: 7_000, focusDurationMs: 7_000, vulnerabilityBonus: 0.2, color: 0xffffff }, 1_000);
+    const effect = energyInjectorSystem.getEffect(String(source.id), 1_000);
+    const target = rewardCell(1, 1);
+    vi.spyOn(contributionStore, 'moveConstruction').mockReturnValue(false);
+
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, target), 1_000).ok).toBe(false);
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({ gridX: source.gridX, gridY: source.gridY });
+    expect(energyInjectorSystem.getEffect(String(source.id), 1_000)).toEqual(effect);
+    expect(coordinator.constructionWorldRuntime.relocateRuntime(source.id, -1, -1, 0)).toBeUndefined();
+    expect(energyInjectorSystem.getEffect(String(source.id), 1_000)).toEqual(effect);
+
+    coordinator.constructionWorldRuntime.destroy();
+    expect(energyInjectorSystem.getEffect(String(source.id), 1_000)).toBeNull();
+    expect(coordinator.constructionWorldRuntime.relocateRuntime(source.id, target.gridX, target.gridY, 0)).toBeUndefined();
+  });
+
   it('accepts a lobby layout edit without an avatar, preserving owned runtime health and rejecting stale or non-lobby requests', () => {
     const harness = createHarness('assault_dachs');
     const { coordinator, placementSystem, contributionStore, persistentBaseSession, playerId } = harness;

@@ -586,13 +586,33 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     if (registered && !context.contributions.hasActiveMission) this.options.publishImmediateContribution(ownerId);
   }
 
+  /** Commits construction movement together with its target-bound World effects. */
+  relocateRuntime(...args: Parameters<PlacementSystem['relocateRock']>): SyncedPlaceableRock | undefined {
+    if (this.destroyed || !this.options.isHost()) return undefined;
+    const moved = this.options.placementSystem.relocateRock(...args);
+    if (moved) this.relocateTargetEffect(moved);
+    return moved;
+  }
+
+  relocateRuntimeBatch(moves: Parameters<PlacementSystem['relocateRocks']>[0]): SyncedPlaceableRock[] | null {
+    if (this.destroyed || !this.options.isHost()) return null;
+    const relocated = this.options.placementSystem.relocateRocks(moves);
+    for (const moved of relocated ?? []) this.relocateTargetEffect(moved);
+    return relocated;
+  }
+
+  private relocateTargetEffect(runtime: SyncedPlaceableRock): void {
+    const point = this.options.placementSystem.getWorldPointForCell(runtime.gridX, runtime.gridY);
+    this.options.energyInjectorSystem?.relocateConstructionEffect(String(runtime.id), point.x, point.y);
+  }
+
   movePersonalConstruction(playerId: string, source: SyncedPlaceableRock, preview: UtilityPlacementPreviewState): LoadoutUseResult {
     const context = this.options.getPersistentBaseContext();
     const constructionId = normalizeConstructionId(source.constructionId);
     if (!context || !constructionId) return { ok: false, reason: 'blocked' };
     const footprint = getCoopDefenseConstructionDefinition(constructionId).footprint;
     const previous = { ...source };
-    const relocated = this.options.placementSystem.relocateRock(source.id, preview.gridX, preview.gridY, preview.angle, footprint);
+    const relocated = this.relocateRuntime(source.id, preview.gridX, preview.gridY, preview.angle, footprint);
     if (!relocated) return { ok: false, reason: 'placement' };
     const binding = context.contributions.getRuntimeBindings().find((entry) => entry.runtimeId === source.id);
     const inside = (footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }]).every(offset => (
@@ -607,7 +627,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
         // Leaving the save area detaches only the blueprint; the live construction survives.
         context.contributions.removeByRuntimeId(source.id);
       } else if (!context.contributions.moveConstruction(binding.ownerId, binding.blueprint.persistentId, { relativeGridX: preview.gridX - context.anchor.gridX, relativeGridY: preview.gridY - context.anchor.gridY, angle: preview.angle }, footprint, context.buildArea)) {
-        this.options.placementSystem.relocateRock(source.id, previous.gridX, previous.gridY, previous.angle, footprint);
+        this.relocateRuntime(source.id, previous.gridX, previous.gridY, previous.angle, footprint);
         return { ok: false, reason: 'placement' };
       }
       if (!context.contributions.hasActiveMission) this.options.publishImmediateContribution(binding.ownerId);
