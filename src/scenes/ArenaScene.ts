@@ -125,6 +125,8 @@ import {
   getStoredMusicVolume,
 } from '../utils/localPreferences';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
+import { warmupFogShaders } from '../effects/groundFog/FogShaderWarmup';
+import { warmupWorldMaterials } from '../graphics/WorldMaterialWarmup';
 import { destroySharedGlowSystem, installSharedGlowSystem } from '../effects/SharedGlowSystem';
 import { getRenderResolutionController, toDesignSpace } from '../graphics/RenderResolution';
 import { installTextResolution } from '../graphics/TextResolution';
@@ -214,6 +216,14 @@ type ArenaFrameSignals = Readonly<{
 import { startPerformanceCapture, attachPerformanceLab, performanceLobbyRevealed, updatePerformanceLab, failPerformanceLab } from '../debug/performanceLab/boot';
 
 export class ArenaScene extends Phaser.Scene {
+  private finishFogWarmup: (() => void) | null = null;
+  private finishMaterialWarmup: (() => void) | null = null;
+  private completeFogShaderWarmup(): void {
+    const finish = this.finishFogWarmup; this.finishFogWarmup = null;
+    finish?.();
+    const material = this.finishMaterialWarmup; this.finishMaterialWarmup = null;
+    material?.();
+  }
   /** Explicit control surface for a separately booted, local-only analysis arena. */
   createNavigationLabPort(): import('../debug/navigationLab/NavigationLabPort').NavigationLabPort | null {
     if (!this.initializationReady) return null;
@@ -328,6 +338,15 @@ export class ArenaScene extends Phaser.Scene {
   preload(): void {
     installRuntimeAssetUrls(this.load);
     BootScreen.begin();
+    this.finishMaterialWarmup = warmupWorldMaterials(this);
+    onBootSceneTeardown(this.events, () => this.completeFogShaderWarmup());
+    if (__PERFORMANCE_LAB__ || getStoredGroundFogEnabled()) {
+      const started = performance.now();
+      const quality = __PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__
+        ? (window.__FD_PERF_REQUEST__.quality ?? 'high') : getStoredGraphicsQuality();
+      this.finishFogWarmup = warmupFogShaders(this, quality);
+      BootScreen.recordStep('fog-shader-links', performance.now() - started);
+    }
     BootScreen.setStatus(t('ui.boot.loadingData'));
     BootScreen.setProgress(0);
     const cleanupLoader = observeBootLoader(this.load, (state) => {
@@ -461,6 +480,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private *prepareLobby(): Generator<string, void> {
+    if (__PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__?.systemProbe && window.__FD_PERF__) {
+      window.__FD_PERF__.probeScene = this;
+    }
     assertWoodlandAssetsReady(this);
     assertCharacterMeshAssetsReady(this);
     assertPowerUpAssetsReady(this);
@@ -958,6 +980,10 @@ export class ArenaScene extends Phaser.Scene {
     };
 
     // ── Renderers ─────────────────────────────────────────────────────────
+    // No World (and therefore no fog consumer) exists during the preceding UI
+    // steps. Finish every link before creating renderers or publishing the World.
+    this.completeFogShaderWarmup();
+    yield 'fog-shader-ready';
     yield 'context';
     this.renderers = yield* createRendererBundleSteps(this, playerManager);
     this.renderers.attackDrone.setAudio(gameAudioSystem);

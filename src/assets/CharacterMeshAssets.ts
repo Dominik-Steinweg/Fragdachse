@@ -1,4 +1,5 @@
 import type * as Phaser from 'phaser';
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import manifest from './manifests/character-mesh-badger-player-mesh-r2-005.json';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
 import { preloadCharacterMaterialAssets, assertCharacterMaterialAssetsReady } from './CharacterMaterialAssets';
@@ -40,7 +41,9 @@ export function getCharacterMeshes(scene: Phaser.Scene): ReadonlyMap<string, Cha
   for (const spec of manifest.meshes) {
     const p = cache.get(key(spec.id, 'positions')), i = cache.get(key(spec.id, 'indices'));
     if (!p || !i) return null;
-    result.set(spec.id, decodeCharacterMesh(spec, p, i));
+    const started = loadingTimeline.start();
+    try { result.set(spec.id, decodeCharacterMesh(spec, p, i)); }
+    finally { loadingTimeline.end('assets/character-mesh-decode', started); }
   }
   decoded.set(cache, result); return result;
 }

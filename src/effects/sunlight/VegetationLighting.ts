@@ -57,6 +57,7 @@ if(uVegShadow>0.0&&coverage>.015&&volume.g<.18) {
 }
 }
 `;
+export const VEGETATION_MATERIAL={name:'VegetationVolumeR18',additions:{fragmentHeader:VEGETATION_LIGHT_HEADER,fragmentProcess:VEGETATION_LIGHT_PROCESS}};
 let nextId=0;
 
 /** World-owned paired textures borrow the existing colour targets' residency.
@@ -89,7 +90,7 @@ export class VegetationLighting {
   if(!renderer?.gl||!renderer.renderNodes){this.batch=null;return;}
   const manager=renderer.renderNodes,batch=new Phaser.Renderer.WebGL.RenderNodes.BatchHandlerQuadSingle(manager,{name:this.prefix});
   this.batch=batch;
-  batch.programManager.addAddition({name:'VegetationVolumeR18',additions:{fragmentHeader:VEGETATION_LIGHT_HEADER,fragmentProcess:VEGETATION_LIGHT_PROCESS}});
+  batch.programManager.addAddition(VEGETATION_MATERIAL);
   const setup=batch.setupUniforms,set=(name:string,value:unknown)=>batch.programManager.setUniform(name,value);
   batch.setupUniforms=context=>{
    setup.call(batch,context);const r=this.current;if(!r?.wrapper)return;

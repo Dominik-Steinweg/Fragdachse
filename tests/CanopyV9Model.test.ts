@@ -24,9 +24,11 @@ it('validates model overrides without accepting singular horizon widths',()=>{
 });
 
 const gpu=vi.hoisted(()=>({header:'',batch:null as any,values:new Map<string,unknown>()}));
-vi.mock('phaser',()=>({Renderer:{Events:{SET_PARALLEL_TEXTURE_UNITS:'units',RESIZE:'resize'},WebGL:{RenderNodes:{
+vi.mock('phaser',()=>({Renderer:{Events:{SET_PARALLEL_TEXTURE_UNITS:'units',RESIZE:'resize'},WebGL:{
+ Wrappers:{WebGLVertexBufferLayoutWrapper:class{buffer={viewF32:new Float32Array(256*20),update(){}};}},RenderNodes:{
  BatchHandlerQuadSingle:class {
-  programManager={programs:{},addAddition:(a:any)=>{gpu.header=a.additions.fragmentHeader;},setUniform:(k:string,v:unknown)=>gpu.values.set(k,v)};
+  programManager={programs:{},attributeBufferLayouts:[] as any[],addAddition:(a:any)=>{gpu.header=a.additions.fragmentHeader;},setUniform:(k:string,v:unknown)=>gpu.values.set(k,v)};
+  instanceCount=0;batchTextures(){return 0;}run(){}
   vertexBufferLayout={buffer:{}};indexBuffer={};setupUniforms(){} updateTextureCount(){} resize(){}
   constructor(public manager:any){gpu.batch=this;}
  },RenderNode:class{constructor(public name:string,public manager:any){}}

@@ -20,6 +20,7 @@ import { GpuFlightRibbonStore, type FlightRibbonHandle, type FlightRibbonStyle }
 import { createFlightRibbonLayer, type FlightRibbonLayer } from './GpuFlightRibbonLayer';
 import type { ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
 import type { ShaderWarmupProbe } from '../../graphics/ShaderWarmupProbe';
+import { beginShaderPrograms } from '../../graphics/compileShaderPrograms';
 
 /**
  * GpuVfxSystem – das gemeinsame GPU-VFX-Backend einer Szene.
@@ -164,6 +165,7 @@ export class GpuVfxSystem {
    * Phaser compiles the final feature combination on the first `run()`.
    */
   private shaderWarmupLane = 0;
+  private finishLaneLinks: (() => void) | null = null;
   private readonly shaderWarmupProbes: ShaderWarmupProbe[];
   private shaderWarmupActive = false;
   private shaderWarmupState: GpuVfxShaderWarmupState = 'inactive';
@@ -195,8 +197,9 @@ export class GpuVfxSystem {
     context.setScissorEnable(true);
     context.setScissorBox(0, 0, 1, 1);
 
-    try {
-      if (lane) lane.layer.submitterNode.run(context);
+      try {
+        this.completeLaneLinks();
+        if (lane) lane.layer.submitterNode.run(context);
       // With KHR_parallel_shader_compile Phaser returns null while the link is pending. Keep
       // this lane selected until its actual program suite is resident in the ProgramManager.
       const ready = lane ? lane.layer.submitterNode.programManager.getCurrentProgramSuite()
@@ -277,6 +280,19 @@ export class GpuVfxSystem {
     }, [frames[0], frames[1]], flightLane.spec.capacity);
     this.ribbonLayer = createFlightRibbonLayer(scene, this.flightRibbons, flightLane.spec.depth, () => this.clockMs);
 
+    // Configure the actual layer feature combinations, then let independent
+    // links overlap CPU World preparation. The existing masked warmup still
+    // uploads/draws every lane and owns the Ready barrier.
+    const renderer = scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    if (renderer?.shaderProgramFactory && renderer.baseDrawingContext) {
+      const context = renderer.baseDrawingContext.getClone();
+      try {
+        context.setCamera(scene.cameras.main);
+        for (const { layer } of this.lanes) layer.submitterNode.updateRenderOptions(context);
+        this.finishLaneLinks = beginShaderPrograms(renderer, this.lanes.map(({layer}) => layer.submitterNode.programManager));
+      } finally { context.release(); }
+    }
+
     // Register after all lanes exist. Each PRE_RENDER pass probes one lane through its actual
     // SpriteGPULayer submitter, moving first-use shader work out of the combat path.
     this.startShaderWarmup();
@@ -298,7 +314,13 @@ export class GpuVfxSystem {
     this.shaderWarmupShutdownRegistered = true;
   }
 
+  private completeLaneLinks(): void {
+    const finish = this.finishLaneLinks; this.finishLaneLinks = null;
+    finish?.();
+  }
+
   private stopShaderWarmup(): void {
+    this.completeLaneLinks();
     if (this.shaderWarmupActive) {
       this.shaderWarmupActive = false;
       this.scene.events.off(Phaser.Scenes.Events.PRE_RENDER, this.runShaderWarmup, this);

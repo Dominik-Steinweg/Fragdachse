@@ -170,6 +170,7 @@ export class EffectSystem implements EnemyVisualSink {
   private damageVignetteBottom: Phaser.GameObjects.Image | null = null;
   private damageVignetteLeft:   Phaser.GameObjects.Image | null = null;
   private damageVignetteRight:  Phaser.GameObjects.Image | null = null;
+  private damageVignetteTween: Phaser.Tweens.Tween | null = null;
 
   constructor(
     private scene:  Phaser.Scene,
@@ -283,6 +284,8 @@ export class EffectSystem implements EnemyVisualSink {
     this.holyExplosionRenderer = null;
     this.clearZeusUpgrades();
     this.burrowGpuRenderer?.clearAllUnderground();
+    this.damageVignetteTween?.destroy();
+    this.damageVignetteTween = null;
     this.damageVignetteTop?.destroy();
     this.damageVignetteBottom?.destroy();
     this.damageVignetteLeft?.destroy();
@@ -1683,17 +1686,17 @@ export class EffectSystem implements EnemyVisualSink {
     left  .setVisible(true).setAlpha(Phaser.Math.Clamp(frameAlpha + nextDirAlpha * Math.max(0, -sourceDirX), 0, DAMAGE_VIGNETTE_VFX.maxAlpha));
     right .setVisible(true).setAlpha(Phaser.Math.Clamp(frameAlpha + nextDirAlpha * Math.max(0, sourceDirX),  0, DAMAGE_VIGNETTE_VFX.maxAlpha));
 
-    this.scene.tweens.killTweensOf(top);
-    this.scene.tweens.killTweensOf(bottom);
-    this.scene.tweens.killTweensOf(left);
-    this.scene.tweens.killTweensOf(right);
+    // These four private edges share exactly one fade. Cancel its owned handle
+    // instead of searching every scene tween four times for each incoming hit.
+    this.damageVignetteTween?.destroy();
 
-    this.scene.tweens.add({
+    this.damageVignetteTween = this.scene.tweens.add({
       targets: [top, bottom, left, right],
       alpha: 0,
       duration: DAMAGE_VIGNETTE_VFX.durationMs,
       ease: 'Quad.easeOut',
       onComplete: () => {
+        this.damageVignetteTween = null;
         top.setVisible(false);
         bottom.setVisible(false);
         left.setVisible(false);

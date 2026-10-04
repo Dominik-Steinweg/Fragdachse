@@ -73,9 +73,25 @@ class PathBytes {
   }
 }
 
+// Encoding is synchronous and publishes only an immutable string. Borrow bounded
+// scratch storage between calls; nested accessors use a private writer instead.
+const encodingScratch = new PathBytes(new Uint8Array(MAX_BYTES));
+let encodingScratchInUse = false;
+
 export function encodeProjectileFlightPath(path: ProjectileFlightPath): string {
   if (!path.points.length || path.points.length > PROJECTILE_PATH_MAX_POINTS) throw new Error('Invalid projectile path count');
-  const writer = new PathBytes(new Uint8Array(12 + path.points.length * 80));
+  const borrowed = !encodingScratchInUse;
+  const writer = borrowed ? encodingScratch : new PathBytes(new Uint8Array(MAX_BYTES));
+  if (borrowed) encodingScratchInUse = true;
+  writer.offset = 0;
+  try {
+    return encodePath(path, writer);
+  } finally {
+    if (borrowed) encodingScratchInUse = false;
+  }
+}
+
+function encodePath(path: ProjectileFlightPath, writer: PathBytes): string {
   writer.writeFloat(path.timeMs, 0);
   writer.write(path.ended ? 1 : 0); writer.write(path.points.length);
   let previous: ProjectilePathPoint | undefined, before: ProjectilePathPoint | undefined;
@@ -105,7 +121,10 @@ export function encodeProjectileFlightPath(path: ProjectileFlightPath): string {
     if (p.bounceSequence !== undefined) writer.writeInt(p.bounceSequence);
     before = previous; previous = p;
   }
-  return btoa(String.fromCharCode(...writer.bytes.subarray(0, writer.offset)));
+  const bytes = writer.bytes.subarray(0, writer.offset) as Uint8Array & { toBase64?: () => string };
+  // Modern engines encode directly from bytes, avoiding the intermediate binary
+  // string and spread array. Keep identical standard base64 on older browsers.
+  return bytes.toBase64 ? bytes.toBase64() : btoa(String.fromCharCode(...bytes));
 }
 
 export function decodeProjectileFlightPath(encoded: unknown): ProjectileFlightPath {

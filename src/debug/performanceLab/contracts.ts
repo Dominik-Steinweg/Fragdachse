@@ -17,6 +17,8 @@ export interface PerformanceRunRequest {
   timeOfDayMinutes?: number;
   /** Loading attribution without combat fixtures or frame recording. */
   load?: boolean;
+  /** Explicit diagnostic access for per-system timing and fixed-frame visual probes. */
+  systemProbe?: boolean;
 }
 export interface PerformanceWindow {
   id: string;
@@ -86,6 +88,7 @@ declare global {
       state: string;
       error?: string;
       detail?: Record<string, unknown>;
+      probeScene?: unknown;
       result?: PerformanceLabResult;
       audioState?: () => string;
       start: () => void;
