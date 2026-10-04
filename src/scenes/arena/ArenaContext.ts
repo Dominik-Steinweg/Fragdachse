@@ -3,6 +3,7 @@ import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRun
 import type { EffectSystem }        from '../../effects/EffectSystem';
 import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
 import type { GameAudioSystem }     from '../../audio/GameAudioSystem';
+import type { VoiceRuntime } from '../../voice/VoiceRuntime';
 import type { SmokeSystem }         from '../../effects/SmokeSystem';
 import type { FireSystem }          from '../../effects/FireSystem';
 import type { StinkCloudSystem }    from '../../effects/StinkCloudSystem';
@@ -45,6 +46,7 @@ export interface ArenaContext {
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Nie `camera.shake()` direkt rufen. */
   readonly visualFeedback:    VisualFeedbackDirector;
   readonly gameAudioSystem:   GameAudioSystem;
+  readonly voice?: VoiceRuntime;
   readonly smokeSystem:       SmokeSystem;
   readonly fireSystem:        FireSystem;
   readonly stinkCloudSystem:  StinkCloudSystem;

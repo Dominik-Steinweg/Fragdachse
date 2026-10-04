@@ -15,6 +15,7 @@ Diese Seiten dokumentieren langlebige Architektur- und Fachverträge von Fragdac
 | [rendering.md](rendering.md) | ArenaScene, Kameras, Presentation, Renderer, FX oder visuelle Laufzeitobjekte betroffen sind. |
 | [performance.md](performance.md) | Renderbudget, Streaming, Worker-Grenzen, Allokationen oder Qualitätsstufen betroffen sind. |
 | [local-persistence.md](local-persistence.md) | Settings, Progress, Import/Export oder PersistentBase-Speicherung betroffen sind. |
+| [voice.md](voice.md) | Voice-Werkstatt, persönliche Sprachpakete, Sprechregie oder Voice-RPCs betroffen sind. |
 | [visual-guidelines.md](visual-guidelines.md) | sichtbare Gameplay-Grafik oder Lesbarkeit gestaltet wird. |
 | [held-item-sprites.md](held-item-sprites.md) | Held-Item-Sprites, Generatoren oder deren Laufzeitbindung geändert werden. |
 | [weapon-balance-lab.md](weapon-balance-lab.md) | Balance-Lab, Headless-Szenarien, Benchmarks oder Debug-Ausgaben betroffen sind. |

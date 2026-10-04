@@ -1,23 +1,30 @@
 import { buildLoadoutRegistries } from '../../../src/loadout/content/LoadoutContentLoader';
 import { getLoadoutNumericContract } from '../../../src/loadout/content/LoadoutSchemas';
 import { validateGameContentReferences } from '../../../src/loadout/content/GameContentValidation';
-import { normalizeUpgradeRegistry } from '../../../src/utils/coopDefenseUpgrades';
+import { normalizeUpgradeRegistry, getCoopDefenseUpgradeTextureKey } from '../../../src/utils/coopDefenseUpgrades';
 import { getLoadoutItemName } from '../../../src/i18n/contentPresentation';
 import { getDomainCatalog } from '../../../src/i18n/catalog';
+import { BURN_TICK_INTERVAL_MS } from '../../../src/config';
 import { validateAttackDroneRules } from '../../../src/config/attackDrone';
 import { validateMgTurretRules } from '../../../src/config/mgTurretRules';
-import { loadConstructionBuildCooldowns } from '../../../src/config/coopDefenseConstructions';
+import { loadConstructionBuildCooldowns, COOP_DEFENSE_CONSTRUCTIONS } from '../../../src/config/coopDefenseConstructions';
 import { at, object, array, set, stable, type Json, type JsonObject, type Path } from '../../map-editor/shared/json';
 import { LOADOUT_DIRECTORY, RULE_FILES, UPGRADE_FILE, type BalanceFile, type Entry, type Field, type Workspace } from './types';
 
 // Units are documented in LoadoutTypes.ts / types.ts. Unspecified units stay unspecified.
 function unitFor(path: Path): string | undefined {
   const key = String(path.at(-1));
-  if (/Ms$/.test(key) || ['cooldown', 'spreadRecoveryDelay', 'tickInterval', 'fuseTime', 'fullChargeDuration'].includes(key)) return 'ms';
+  if (/Ms$|TickInterval$/.test(key) || ['cooldown', 'spreadRecoveryDelay', 'tickInterval', 'fuseTime', 'fullChargeDuration', 'rageDrainDuration'].includes(key)) return 'ms';
   if (key === 'projectileSpeed') return 'px/s';
   if (/Degrees$|Deg$/.test(key) || ['spreadStanding', 'spreadMoving', 'spreadPerShot', 'maxDynamicSpread', 'pelletSpreadAngle'].includes(key)) return '°';
   if (/Px$/.test(key) || ['range', 'radius', 'projectileSize', 'searchRadius'].includes(key)) return 'px';
   return undefined;
+}
+
+// BurnStatusOwner uses one global cadence, not an editable per-item interval.
+function burnTickContext(stat: string): string | undefined {
+  return /burnDamagePerTick$|burnOnHit\.damagePerTick$|player\.fire\.burningProjectiles\.damagePerTick$/i.test(stat)
+    ? `Tickintervall: ${BURN_TICK_INTERVAL_MS} ms · global (BURN_TICK_INTERVAL_MS)` : undefined;
 }
 
 function leaves(value: unknown, visit: (path: Path, value: Json) => void, path: Path = []): void {
@@ -60,7 +67,8 @@ export function buildWorkspace(files: BalanceFile[]): Workspace {
       const location = locations.get(id)!;
       const entry: Entry = { key: `${kind}:${id}`, id, name: getLoadoutItemName(id, 'de'), kind,
         category: Array.isArray(object(config).allowedSlots) ? (object(config).allowedSlots as string[]).join(', ') || 'NPC / intern' : kind,
-        file: location.file.key, path: [group, id], baseId: location.raw.baseId as string | undefined, fields: [] };
+        file: location.file.key, path: [group, id], baseId: location.raw.baseId as string | undefined,
+        iconKey: loadout.catalog.find(row => row.id === id)?.iconKey ?? undefined, fields: [] };
       leaves(config, (path, resolved) => {
         const originId = loadout.lineages[kind][id].find(ancestor => at(locations.get(ancestor)!.raw, path) !== undefined);
         const origin = originId ? locations.get(originId)! : location;
@@ -72,6 +80,7 @@ export function buildWorkspace(files: BalanceFile[]): Workspace {
           source: `${origin.file.key}#/${group}/${originId ?? id}/${path.join('/')}`, inherited: originId !== id,
           removable: !!entry.baseId && at(object(loadout[group][entry.baseId]), path) !== undefined,
           editable, ...(typeof value === 'number' ? getLoadoutNumericContract(contractPath, id) : {}), unit: unitFor(path),
+          context: burnTickContext(path.join('.')),
           note: editable ? 'LoadoutSchemas + spezialisierte Spielvalidatoren' : 'Identität / Struktur / Referenz (schreibgeschützt)',
         });
       });
@@ -81,9 +90,13 @@ export function buildWorkspace(files: BalanceFile[]): Workspace {
   array(upgradeFile.document.categories).forEach((category, ci) => {
     array(category.upgrades).forEach((raw, ui) => {
       const normalized = upgrades.categories[ci].upgrades[ui];
+      const construction = Object.values(COOP_DEFENSE_CONSTRUCTIONS).find(c => c.unlockUpgradeId === normalized.id);
+      const itemId = normalized.loadoutUnlock?.itemId ?? (construction && 'weaponId' in construction ? construction.weaponId : undefined);
       const entry: Entry = { key: `upgrade:${normalized.id}`, id: normalized.id,
         name: `${normalized.code ? normalized.code + ' · ' : ''}${getDomainCatalog('de', 'upgrades')[`upgrade.${normalized.id}.name`] ?? normalized.id.replaceAll('_', ' ')}`,
-        kind: 'upgrade', category: String(category.id), file: upgradeFile.key, path: ['categories', ci, 'upgrades', ui], fields: [] };
+        kind: 'upgrade', category: String(category.id), file: upgradeFile.key, path: ['categories', ci, 'upgrades', ui],
+        iconKey: getCoopDefenseUpgradeTextureKey(normalized.id) ?? loadout.catalog.find(row => row.id === itemId)?.iconKey ?? undefined,
+        upgrade: { kind: normalized.kind, sortOrder: normalized.sortOrder, requires: normalized.requires, itemId }, fields: [] };
       const values = { ...raw, startingLevel: normalized.startingLevel, bossPointCostPerLevel: normalized.bossPointCostPerLevel,
         refundable: normalized.refundable, maxLevel: normalized.maxLevel, costPerLevel: normalized.costPerLevel };
       leaves(values, (path, value) => {
@@ -99,6 +112,7 @@ export function buildWorkspace(files: BalanceFile[]): Workspace {
             maximum: key === 'startingLevel' ? normalized.maxLevel : undefined } : {}),
           unit: effect && key === 'value' ? (object(array(raw.effects)[Number(path[1])]).mode === 'add_percent_per_level' ? 'Anteil / Level (0,1 = 10 %)' : 'additiv / Level') : undefined,
           options: effectMode ? ['add_per_level', 'add_percent_per_level'] : undefined,
+          context: effect && key === 'value' ? burnTickContext(String(object(array(raw.effects)[Number(path[1])]).stat)) : undefined,
           note: 'coopDefenseUpgrades: Normalisierung, Voraussetzungen und Spielreferenzen',
         });
       });
@@ -124,6 +138,7 @@ export function buildWorkspace(files: BalanceFile[]): Workspace {
       kind: 'rules', category: 'construction', file: key, path: [], fields: [] };
     leaves(file.document, (path, value) => entry.fields.push({ path, label: path.join('.'), value, editable: typeof value === 'number',
       inherited: false, minimum: cooldowns ? 0 : undefined, integer: cooldowns, unit: unitFor(path),
+      context: burnTickContext(path.join('.')),
       source: `${key}#/${path.join('/')}`, note: cooldowns ? 'Spielprüfung: nichtnegative Bauzeit' : 'Spielprüfung: strikt positiv; zusätzliche Timing- und Konsistenzregeln',
     }));
     entries.push(entry);

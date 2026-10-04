@@ -66,6 +66,9 @@ import type { ArenaHUDData } from './ArenaHUD';
 import { ArenaHUD, configureArenaHudLayout } from './ArenaHUD';
 import { BadgerPreview } from './BadgerPreview';
 import { getOverlayRoot } from './fullscreen';
+import { appendVoiceProfileControls } from './VoiceProfileControls';
+import { ensureModalFrame } from './ForestModal';
+import './ProfileDialog.css';
 import { HelpOverlay } from './HelpOverlay';
 import {
   createGradientTexture,
@@ -85,7 +88,7 @@ import {
 } from './OptionsOverlay';
 import { UiContextMenu } from './UiContextMenu';
 import { attachHoverEffect } from './uiHover';
-import { BORDER, FONT_DISPLAY, INTENT, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
+import { BORDER, INTENT, RADIUS, SURFACE, TEXT, textStyle } from './uiTheme';
 
 // ── Layout-Konstanten der rechten Spielerkarte ────────────────────────
 const LOBBY_PANEL_W = LOBBY_CARD.width;
@@ -195,7 +198,7 @@ export class LeftSidePanel {
   private teamArrowButtons: { left: CompactButton; right: CompactButton } | null = null;
   private nameEditEnabled  = true;
   private nameEditOpen     = false;
-  private nameEditPopup:   HTMLDivElement | null = null;
+  private nameEditPopup:   HTMLDialogElement | null = null;
   private closeNameEditPopupFn: (() => void) | null = null;
 
   // Dachs-Vorschau als Farbindikator
@@ -284,7 +287,7 @@ export class LeftSidePanel {
     const editControl = this.createCompactButton(
       NAME_BUTTON_X,
       NAME_COLOR_ROW_Y,
-      t('ui.lobby.editName'),
+      t('ui.voice.profile'),
       NAME_COLOR_BUTTON_W,
       NAME_COLOR_BUTTON_H,
       () => this.openNameEdit(),
@@ -423,7 +426,7 @@ export class LeftSidePanel {
     this.arenaHUD?.refreshLocale();
     this.colorPickerTitle?.setText(t('ui.lobby.editColor'));
     this.loadoutLabelText?.setText(t('ui.lobby.loadout').toUpperCase());
-    this.editBtnLabel?.setText(t('ui.lobby.editName'));
+    this.editBtnLabel?.setText(t('ui.voice.profile'));
     this.colorEditText?.setText(t('ui.lobby.editColor'));
     this.helpOverlay?.build();
     this.optionsOverlay?.setLocaleSelectionBinding(this.localeSelectionBinding);
@@ -1140,93 +1143,61 @@ export class LeftSidePanel {
     const localId     = this.bridge.getLocalPlayerId();
     const currentName = clampPlayerNameInput(this.bridge.getConnectedPlayers().find(p => p.id === localId)?.name ?? '');
 
-    // Position relativ zum Canvas berechnen ([ ÄNDERN ] Button)
-    const canvas = this.scene.game.canvas;
-    const canvasRect = canvas.getBoundingClientRect();
-    // Bezugsgröße ist der Designraum, nicht die Renderauflösung der Canvas: CENTER_X und
-    // NAME_VALUE_Y sind Designkoordinaten (siehe `graphics/RenderResolution`).
-    const scaleX = canvasRect.width / GAME_WIDTH;
-    const scaleY = canvasRect.height / GAME_HEIGHT;
-    const popupLeft = canvasRect.left + LOBBY_PLAYER_CONTENT_LEFT * scaleX;
-    const popupTop  = canvasRect.top  + NAME_VALUE_Y * scaleY;
-
-    const popup = document.createElement('div');
-    Object.assign(popup.style, {
-      position:        'fixed',
-      top:             `${popupTop}px`,
-      left:            `${popupLeft}px`,
-      backgroundColor: toCssColor(FOREST.glass),
-      border:          `2px solid ${toCssColor(FOREST.woodEdge)}`,
-      borderRadius:    `${RADIUS.md}px`,
-      boxShadow:       '0 12px 28px rgba(0, 0, 0, 0.32)',
-      padding:         `${SPACE.md}px`,
-      display:         'flex',
-      flexDirection:   'row',
-      gap:             `${SPACE.sm}px`,
-      alignItems:      'center',
-      zIndex:          '1000',
-      fontFamily:      FONT_DISPLAY,
-    });
-
-    const inputElement = document.createElement('input');
-    inputElement.type  = 'text';
-    inputElement.value = currentName;
-    inputElement.maxLength = PLAYER_NAME_MAX_LENGTH;
-    Object.assign(inputElement.style, {
-      fontSize:        '15px',
-      padding:         `${SPACE.sm}px ${SPACE.md}px`,
-      border:          `1px solid ${toCssColor(FOREST.border)}`,
-      borderRadius:    `${RADIUS.sm}px`,
-      backgroundColor: toCssColor(FOREST.sunken),
-      color:           toCssColor(FOREST.text),
-      outline:         'none',
-      width:           '160px',
-      fontFamily:      FONT_DISPLAY,
-      fontWeight:      'bold',
-    });
-
-    const confirmBtn     = document.createElement('button');
-    confirmBtn.innerText = 'OK';
-    const cancelBtn     = document.createElement('button');
-    cancelBtn.innerText = 'X';
-    // The DOM editor reuses the same generated border and state textures as the card buttons.
-    for (const [button, width] of [[confirmBtn, 44], [cancelBtn, 36]] as const) {
-      const backgrounds = Object.fromEntries((['rest', 'hover', 'press'] as const).map(state => [state,
-        `url("${this.scene.textures.getBase64(ensureForestButton(this.scene, width, 36, 'secondary', state))}")`,
-      ]));
-      Object.assign(button.style, {
-        width: `${width}px`, height: '36px', padding: '0', border: 'none',
-        fontSize: '13px', cursor: BUTTON_CURSOR, backgroundColor: 'transparent',
-        backgroundImage: backgrounds.rest, backgroundSize: '100% 100%',
-        color: toCssColor(FOREST.text), fontFamily: FONT_DISPLAY, fontWeight: 'bold',
-      });
-      button.onpointerenter = () => { button.style.backgroundImage = backgrounds.hover; playUiHover(this.scene); };
-      button.onpointerleave = () => { button.style.backgroundImage = backgrounds.rest; };
-      button.onpointerdown = () => { button.style.backgroundImage = backgrounds.press; };
-      button.onpointerup = () => { button.style.backgroundImage = backgrounds.hover; };
+    const de = getLocale() === 'de';
+    const popup = document.createElement('dialog');
+    popup.className = 'player-profile';
+    popup.setAttribute('aria-labelledby', 'player-profile-title');
+    for (const [name, color] of Object.entries({ text: FOREST.text, muted: FOREST.muted,
+      surface: FOREST.glass, field: FOREST.sunken, border: FOREST.border, button: FOREST.wood })) {
+      popup.style.setProperty('--profile-' + name, toCssColor(color));
     }
+    popup.style.setProperty('--profile-frame', 'url("' + this.scene.textures.getBase64(ensureModalFrame(this.scene, 520, 430)) + '")');
+    const title = document.createElement('h2');
+    title.id = 'player-profile-title'; title.textContent = de ? 'DEIN PROFIL' : 'YOUR PROFILE';
+    const label = document.createElement('label'); label.textContent = de ? 'Spielername' : 'Player name';
+    const inputElement = document.createElement('input');
+    inputElement.type = 'text'; inputElement.value = currentName; inputElement.maxLength = PLAYER_NAME_MAX_LENGTH;
+    inputElement.autocomplete = 'off'; inputElement.spellcheck = false;
+    label.append(inputElement); popup.append(title, label);
+    const removeVoiceControls = appendVoiceProfileControls(popup, this.audioSystem.getVoiceAudioChannel(), checksum => this.bridge.setLocalVoiceChecksum(checksum));
+    const actions = document.createElement('div'); actions.className = 'profile-actions';
+    const cancelBtn = document.createElement('button'); cancelBtn.type = 'button'; cancelBtn.textContent = de ? 'Schließen' : 'Close';
+    const confirmBtn = document.createElement('button'); confirmBtn.type = 'button'; confirmBtn.textContent = de ? 'Name speichern' : 'Save name';
+    confirmBtn.className = 'profile-save';
+    actions.append(cancelBtn, confirmBtn); popup.append(actions);
 
-    popup.appendChild(inputElement);
-    popup.appendChild(confirmBtn);
-    popup.appendChild(cancelBtn);
-
+    // The native modal makes the canvas inert. Also suspend Phaser's global pointer handling
+    // and stop bubbling DOM events so no underlying picker or game hotkey receives them.
+    const inputEnabled = this.scene.input.enabled;
+    this.scene.input.enabled = false;
+    for (const type of ['pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup', 'mousemove', 'click', 'dblclick', 'wheel', 'touchstart', 'touchend', 'touchmove', 'keydown', 'keyup']) {
+      popup.addEventListener(type, event => event.stopPropagation());
+    }
     getOverlayRoot().appendChild(popup);
     this.nameEditPopup = popup;
-    inputElement.focus();
-    inputElement.select();
+    popup.showModal();
+    inputElement.focus(); inputElement.select();
 
     inputElement.addEventListener('input', () => {
       const clamped = clampPlayerNameInput(inputElement.value);
       if (inputElement.value !== clamped) inputElement.value = clamped;
     });
 
+    let closed = false;
     const closePopup = () => {
+      if (closed) return;
+      closed = true;
+      removeVoiceControls();
       if (this.nameEditPopup === popup) {
         this.nameEditPopup = null;
         this.closeNameEditPopupFn = null;
       }
       this.nameEditOpen = false;
+      popup.close();
       popup.remove();
+      // Mouse/touch release may have happened inside the DOM dialog. Do not retain a held game pointer.
+      this.scene.input.activePointer.reset();
+      this.scene.input.enabled = inputEnabled;
     };
     this.closeNameEditPopupFn = closePopup;
     const saveName   = () => {
@@ -1243,9 +1214,9 @@ export class LeftSidePanel {
 
     confirmBtn.onclick = () => activateUi(this.scene, saveName);
     cancelBtn.onclick  = () => activateUi(this.scene, closePopup);
-    inputElement.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter')  saveName();
-      if (e.key === 'Escape') closePopup();
+    popup.addEventListener('cancel', event => { event.preventDefault(); closePopup(); });
+    inputElement.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); saveName(); }
     });
   }
 

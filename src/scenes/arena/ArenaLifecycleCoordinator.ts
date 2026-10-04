@@ -2040,7 +2040,9 @@ export class ArenaLifecycleCoordinator {
     if (countPvpMatch && !isCoopDefenseMode(gameMode)) {
       const winnerIds = resolvePvpWinnerIds(gameMode, results);
       bridge.recordCompletedPvpMatch([...eligibleIds], winnerIds);
+      this.ctx.voice?.victory([...winnerIds]);
     }
+    if (isCoopDefenseMode(gameMode) && roundState?.status === 'victory') this.ctx.voice?.victory([...eligibleIds]);
     bridge.hostPublishRoomStatistics();
   }
 

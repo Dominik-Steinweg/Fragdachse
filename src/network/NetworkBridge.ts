@@ -1,4 +1,6 @@
 import { isEnemyClawEvent } from '../systems/EnemyClawAttack';
+import { isVoiceChecksum, VOICE_EVENTS } from '../voice/VoicePackage';
+import type { VoicePlayback } from '../voice/VoiceDirector';
 import { encodeBurrowEarthbreak, decodeBurrowEarthbreak } from './burrowEarthbreakCodec';
 import { encodeAttackDrones, decodeAttackDrones, encodeAttackDroneBombs, decodeAttackDroneBombs } from './attackDroneSnapshotCodec';
 import type { SyncedAttackDrone, SyncedAttackDroneBomb } from '../types';
@@ -803,7 +805,7 @@ export class NetworkBridge {
   private knownPlayerColors: readonly number[] = [];
   private pingController: NetworkPingController;
   private hostRpcHandlers = new Map<string, (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown>();
-  private allRpcHandlers = new Map<string, (payload: unknown) => Promise<unknown> | unknown>();
+  private allRpcHandlers = new Map<string, (payload: unknown, senderId: string) => Promise<unknown> | unknown>();
   /** Host-only, feature-specific exactly-once state for predicted Weapon2 requests. */
   private readonly weapon2PredictionStates = new Map<number, Map<string, Weapon2PredictionState>>();
 
@@ -5070,6 +5072,35 @@ export class NetworkBridge {
     this.broadcastGameplayEvent('kev', event);
   }
 
+  setLocalVoiceChecksum(checksum: string | null): void {
+    myPlayer().setState('vpk', isVoiceChecksum(checksum) ? checksum : null, true);
+  }
+
+  getPlayerVoiceChecksum(playerId: string): string | null {
+    const value = this.playerStateMap.get(playerId)?.getState('vpk');
+    return isVoiceChecksum(value) ? value : null;
+  }
+
+  broadcastVoice(event: VoicePlayback): void {
+    if (this.isHost()) this.broadcastGameplayEvent('voice', event);
+  }
+
+  registerVoiceHandler(handler: ((event: VoicePlayback) => void) | null): void {
+    this.registerAllRpcHandler('voice', (data, senderId) => {
+      if (senderId !== this.getHostPlayerId() || !handler || !data || typeof data !== 'object') return;
+      const e = data as VoicePlayback;
+      if (!this.acceptsWorldRpc({ wr: e.worldRevision }) || !isVoiceChecksum(e.checksum)
+        || !VOICE_EVENTS.includes(e.event) || typeof e.speakerId !== 'string' || e.speakerId.length > 100
+        || typeof e.clipId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(e.clipId)
+        || !Number.isSafeInteger(e.sequence) || e.sequence < 1 || !Number.isSafeInteger(e.roundRevision)
+        || !Number.isFinite(e.sentAt) || !Number.isFinite(e.expiresAt) || e.expiresAt < e.sentAt
+        || e.expiresAt - e.sentAt > (e.event === 'victory' ? 8500 : 2000)
+        || (e.playAt !== undefined && (!Number.isFinite(e.playAt) || e.playAt < e.sentAt || e.playAt > e.expiresAt
+          || (e.event !== 'victory' && e.playAt !== e.sentAt)))) return;
+      handler(e);
+    });
+  }
+
   /** Registriert einen Handler für eingehende Kill-Ereignisse (alle Clients). */
   registerKillEventHandler(cb: (event: KillEvent) => void): void {
     this.killEventHandler = cb;
@@ -5138,7 +5169,7 @@ export class NetworkBridge {
 
   private registerAllRpcHandler(
     type: string,
-    handler: (payload: unknown) => Promise<unknown> | unknown,
+    handler: (payload: unknown, senderId: string) => Promise<unknown> | unknown,
   ): void {
     this.allRpcHandlers.set(type, handler);
     this.ensureRpcDispatcherRegistered(type, 'all');
@@ -5179,10 +5210,10 @@ export class NetworkBridge {
       return;
     }
 
-    room.registerAllHandler(type, (payload) => {
+    room.registerAllHandler(type, (payload, senderId) => {
       const handler = this.allRpcHandlers.get(type);
       if (!handler) return undefined;
-      return handler(payload);
+      return handler(payload, senderId);
     });
   }
 
@@ -5221,14 +5252,15 @@ export class NetworkBridge {
     const stateName = state.getState(KEY_NAME) as string | undefined;
     const effectiveColor = this.getEffectivePlayerColor(state.id);
     const teamId = this.getPlayerTeam(state.id);
+    const voiceChecksum = this.getPlayerVoiceChecksum(state.id);
 
     if (previous) {
       const nextName = sanitizePlayerName(stateName || previous.name || '') || 'Player';
       const nextColor = effectiveColor ?? previous.colorHex;
-      if (nextName === previous.name && nextColor === previous.colorHex && previous.teamId === teamId) {
+      if (nextName === previous.name && nextColor === previous.colorHex && previous.teamId === teamId && previous.voiceChecksum === voiceChecksum) {
         return previous;
       }
-      const nextProfile: PlayerProfile = { id: state.id, name: nextName, colorHex: nextColor, teamId };
+      const nextProfile: PlayerProfile = { id: state.id, name: nextName, colorHex: nextColor, teamId, voiceChecksum };
       this.connectedPlayers.set(state.id, nextProfile);
       this.connectedPlayersCacheDirty = true;
       return nextProfile;
@@ -5253,6 +5285,7 @@ export class NetworkBridge {
     return {
       id:       state.id,
       name:     sanitizePlayerName(stateName || '') || defaultPlayerName(state.id),
+      voiceChecksum: this.getPlayerVoiceChecksum(state.id),
       colorHex: this.getEffectivePlayerColor(state.id) ?? DEFAULT_PLAYER_COLOR,
       teamId:   this.getPlayerTeam(state.id),
     };

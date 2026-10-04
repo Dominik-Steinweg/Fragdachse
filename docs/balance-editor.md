@@ -5,11 +5,25 @@ Alternativer freier Port: `npm run balance:editor -- --port 8192`.
 Build-Prüfung: `npm run build:balance-editor` (auch Bestandteil von `npm run check`).
 Der statische Editor-Build besitzt keinen Speicher-Endpunkt. Der Spiel-/Produktions-Build bindet den Editor nicht ein.
 
-Links nach Name, ID oder Feld suchen und Typ/Kategorie filtern. Alle Waffen (auch NPC-Varianten),
-Ultimates, Utilities, Coop-Upgrades und Katalogreihenfolgen werden aus den vorhandenen Dateien geladen.
-Zusätzlich: authored Grundwerte der Angriffsdrohne, MG-Turm-Blutung und Bau-Cooldowns unter „Konstruktionsregeln“.
-In der Mitte stehen verschachtelte Zahlen, Schalter, Farben und Upgrade-Effektmodi als Felder.
-Die Feldsuche findet auch tiefe Pfade. Aufklappbare Gruppen, Ursprungswert und Quelldatei helfen beim Vergleichen.
+Links nach Item, Upgrade, ID oder Effekt suchen und nach Spielkategorie filtern. Die Bibliothek gruppiert
+Waffen, Utilities, Ultimates und Konstruktionen mit ihren vollständigen Upgrade-Zweigen. Allgemeine
+Upgrades folgen denselben Voraussetzungen wie im Spiel, etwa Vitalität → HP-Regeneration → Lifeleech.
+NPC-Varianten und technische Einträge bleiben in eigenen eingeklappten Kategorien erreichbar.
+
+In der Mitte stehen Kennzahlen und ein auswählbarer Upgrade-Baum mit Original-Icons, Levelgrenzen,
+Kosten und allen Voraussetzungslinien. Rechts werden die Grundwerte oder der gewählte Knoten bearbeitet.
+Schaden, Tempo, Reichweite und Ressourcen (einschließlich Rage-Bedarf, Rage-Kosten und Verbrauchsdauer)
+stehen oben. Primärwaffen zeigen hier nur Adrenalin-Gewinn, Sekundärwaffen nur Adrenalin-Kosten.
+Authored DoT-Stärke und Tickintervalle bleiben auch bei verschachtelten Effekten sichtbar zusammen.
+Brandwerte zeigen zusätzlich ihr globales, hier schreibgeschütztes Tickintervall aus der Spielkonfiguration.
+Kosten je Upgrade-Level und Boss-Punkte stehen in den eingeklappten Details; spezielle Effektparameter,
+Darstellung und technische Werte sind unter „Weitere Parameter“ eingeklappt. Die Feldsuche öffnet auch
+Treffer in diesen Details. Effektkarten halten Zielwert, Stärke und Level-Vorschau zusammen; die
+Vorschau verwendet die Wertformatierung des Spiels und zeigt den Beitrag dieses Upgrades, keinen
+vollständig simulierten Build. Verknüpfte Loadout-Zielwerte führen direkt zu ihrem Basisfeld.
+Angriffsdrohnen-Grundwerte und MG-Turm-Blutung sind bei ihrer Konstruktion erreichbar, ebenso
+zugehörige Katalogeinträge. Bau-Cooldowns bleiben unter „Katalog & Regeln“.
+Ursprungswert, Rücksetzen pro Feld und aufklappbare Herkunft helfen beim Vergleichen.
 Geerbte Werte erzeugen beim Bearbeiten einen Override im gewählten Eintrag; die Basis bleibt erhalten.
 Upgrade-Defaults für Startlevel, Bosskosten und Rückerstattung lassen sich ausdrücklich authorieren.
 
@@ -17,12 +31,12 @@ Upgrade-Defaults für Startlevel, Bosskosten und Rückerstattung lassen sich aus
 Bei Änderungen an mehreren Dateien jede Datei einzeln speichern. Die Änderungsliste zeigt alle offenen Werte.
 Undo/Redo umfasst bis zu 100 Schritte, auch nach dem Speichern; zum Übernehmen eines Undo erneut speichern.
 „Ursprung“ bezeichnet den Zustand beim Laden der Editor-Sitzung. „Neu laden“ verwirft nach Bestätigung offene Änderungen.
-„Entwurf exportieren“ sichert offene Dokumente und ungültige Texteingaben als JSON zur manuellen Wiederherstellung.
+„Export“ sichert offene Dokumente und ungültige Texteingaben als JSON zur manuellen Wiederherstellung.
 Das Spiel anschließend neu laden; eine laufende Runde übernimmt die neuen Werte nicht automatisch.
 
 ## Entscheidungen und Grenzen
 
-- Der Editor übernimmt Layout und lokalen Vite-Server-Ansatz des Map-Editors und verwendet dessen
+- Der Editor übernimmt den lokalen Vite-Server-Ansatz des Map-Editors und verwendet dessen
   formatstabilen JSON-Schreiber. Unveränderte Dateien bleiben byte-identisch, unveränderte Tokens bleiben erhalten.
   Speichern ersetzt eine Datei über eine temporäre Datei; SHA-256-Revisionen verhindern das Überschreiben
   erkannter externer Änderungen. Bei Konflikten Entwurf exportieren und bewusst neu laden.

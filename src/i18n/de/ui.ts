@@ -1,4 +1,6 @@
 export const deUi = {
+  "ui.voice.volume": "SPRACHE",
+  "ui.voice.off": "AUS",
   "ui.performance.noSample": "Noch kein Companion-Sample vorhanden.",
   "ui.performance.fps": "FPS aktuell {current} · Ø FPS {average}",
   "ui.performance.slowFrames": "Slow Frames >16,7 ms {percent}% · Samples {samples}",
@@ -281,6 +283,7 @@ export const deUi = {
   "ui.lobby.map": "MAP",
   "ui.lobby.editName": "NAME ÄNDERN",
   "ui.lobby.editColor": "FARBE ÄNDERN",
+  "ui.voice.profile": "PROFIL / STIMME",
   "ui.lobby.time": "Uhrzeit: {time}",
   "ui.lobby.chooseTeam": "Team wählen",
   "ui.lobby.localSave": "Lokaler Spielstand",

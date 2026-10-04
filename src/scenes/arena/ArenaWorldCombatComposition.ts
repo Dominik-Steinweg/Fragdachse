@@ -145,6 +145,7 @@ export function composeWorldCombatGameplay(
     isCoopMission: () => flow.isCoopMissionActivity(),
     isCoopDefense: () => bridge.getGameMode() === 'coop_defense',
     isActivityActive: () => flow.isActivityActive(),
+    onVoiceDamage: (id, amount) => ctx.voice?.damage(id, amount),
     getSpawnContext: (playerId) => {
       const latestState = bridge.getLatestGameState();
       const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
@@ -321,7 +322,10 @@ export function composeWorldCombatGameplay(
         broadcastBfgLaserBatch: (lines, color, preset, projectileId) => bridge.broadcastBfgLaserBatch([...lines], color, preset, projectileId),
         broadcastMiniRocketCollectionEffect: (x, y, color) => bridge.broadcastMiniRocketCollectionEffect(x, y, color),
         broadcastMiniRocketDestructionEffect: (x, y, color) => bridge.broadcastMiniRocketDestructionEffect(x, y, color),
-        broadcastKillEvent: (event) => bridge.broadcastKillEvent(event),
+        broadcastKillEvent: (event) => {
+          bridge.broadcastKillEvent(event);
+          if (event.killerId !== event.victimId && bridge.isEnemyPair(event.killerId, event.victimId)) ctx.voice?.kill(event.killerId);
+        },
       },
     },
     respawnPlayer: (playerId) => flow.getPlayerActivityRuntime()?.consumeRespawn(playerId, false) ?? true,

@@ -227,6 +227,8 @@ export interface WorldCombatGameplayBindingOptions {
   readonly isCoopMission: () => boolean;
   readonly isCoopDefense?: () => boolean;
   readonly isActivityActive: () => boolean;
+  /** Passive presentation observer, only after the authoritative opponent/training filters. */
+  readonly onVoiceDamage?: (playerId: string, actualDamage: number) => void;
   readonly getSpawnContext: Parameters<PlayerManager['setSpawnContextProvider']>[0];
   readonly getWorldParticipation: (playerId: string) => WorldParticipation;
   readonly getPlayerCapabilities: (playerId: string) => { canUseCombat: boolean };
@@ -694,6 +696,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         if (targetFaction !== 'hostile') return;
       } else if (o.isCoopMission() || !o.network.authority.isEnemyPair(attackerId, targetId)) return;
       o.network.stats.addPlayerRoomDamage(attackerId, damage);
+      o.onVoiceDamage?.(attackerId, damage);
     });
     combat.setHealingReceivedHandler((playerId, amount) => o.network.stats.recordHealingReceived(playerId, amount));
     combat.setArmorReceivedHandler((playerId, amount) => o.network.stats.recordArmorReceived(playerId, amount));

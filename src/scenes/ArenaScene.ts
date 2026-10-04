@@ -14,6 +14,7 @@ import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import { preloadAttackDroneAssets } from '../effects/AttackDroneRenderer';
 import { preloadRepairDroneAssets } from '../effects/repairDroneVisuals';
 import * as Phaser from 'phaser';
+import { composeArenaVoice } from './arena/ArenaVoiceComposition';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
 import { getForestModalSurfaces, preloadForestModalAssets } from '../ui/ForestModal';
@@ -672,6 +673,8 @@ export class ArenaScene extends Phaser.Scene {
       getStoredMusicVolume(),
     );
     onBootSceneTeardown(this.events, () => gameAudioSystem.cleanup());
+    const voice = composeArenaVoice(gameAudioSystem);
+    onBootSceneTeardown(this.events, () => { bridge.registerVoiceHandler(null); voice.destroy(); });
     onBootSceneTeardown(this.events, bindUiAudio(this, gameAudioSystem));
     const unsubscribeDeferredAssets = getDeferredAssets(this).subscribe(state => {
       bridge.setLocalDeferredAssetsReady(state.ready);
@@ -970,6 +973,7 @@ export class ArenaScene extends Phaser.Scene {
     this.ctx = {
       playerManager, effectSystem,
       getWorldCombatCore,
+      voice,
       getProjectileRuntime: () => this.arenaRuntime?.getWorldProjectileRuntime() ?? null,
       visualFeedback: this.visualFeedback,
       gameAudioSystem,
@@ -1462,6 +1466,7 @@ export class ArenaScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (!this.initializationReady) return;
+    this.ctx?.voice?.update();
     const companionDiagnosticsActive = this.diagnostics?.isDiagnosticsActive() ?? false;
     const diagnosticsFrame: ArenaDiagnosticsFrame | null = this.diagnostics?.beginFrame() ?? null;
     // Vor allem anderen, damit die Diagnose-Zaehlungen weiter unten den abgeschalteten

@@ -15,6 +15,7 @@ export interface Field {
   unit?: string;
   options?: string[];
   note?: string;
+  context?: string;
 }
 export interface Entry {
   key: string;
@@ -25,6 +26,13 @@ export interface Entry {
   file: string;
   path: Path;
   baseId?: string;
+  iconKey?: string;
+  upgrade?: {
+    kind: 'upgrade' | 'unlock';
+    sortOrder: number;
+    requires: readonly { upgradeId: string; minLevel: number }[];
+    itemId?: string;
+  };
   fields: Field[];
 }
 export interface Workspace { files: BalanceFile[]; entries: Entry[] }

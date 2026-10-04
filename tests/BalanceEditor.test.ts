@@ -7,6 +7,7 @@ import { LOADOUT_DIRECTORY, RULE_FILES, UPGRADE_FILE } from '../tools/balance-ed
 import { at, set, type JsonObject } from '../tools/map-editor/shared/json';
 import { updateJsonText } from '../tools/map-editor/server/jsonText';
 import { BalanceSession } from '../tools/balance-editor/client/BalanceSession';
+import { buildFamilies, effectGroups, isPrimaryField } from '../tools/balance-editor/shared/presentation';
 
 const temporaryRoot = resolve('build/balance-editor-tests');
 const temporary: string[] = [];
@@ -25,6 +26,47 @@ afterEach(async () => {
 });
 
 describe('Balance editor authored file boundary', () => {
+  it('keeps every entry reachable and groups upgrade descendants with their item or general root', async () => {
+    const { store } = await fixture(), workspace = await store.load(), families = buildFamilies(workspace);
+    const all = families.flatMap(f => [...(f.base ? [f.base] : []), ...f.upgrades, ...f.related]);
+    expect(all.map(e => e.key).sort()).toEqual(workspace.entries.map(e => e.key).sort());
+    for (const family of families) for (const upgrade of family.upgrades) {
+      const parent = upgrade.upgrade!.requires[0];
+      if (parent) expect(family.upgrades.some(e => e.id === parent.upgradeId)).toBe(true);
+      if (upgrade.upgrade!.itemId) expect(family.base?.id).toBe(upgrade.upgrade!.itemId);
+    }
+    const health = families.find(f => f.upgrades.some(e => e.id === 'hp'))!;
+    expect(health.upgrades.map(e => e.id)).toEqual(expect.arrayContaining(['hp_regeneration', 'life_leech']));
+    const glock = families.find(f => f.base?.id === 'GLOCK')!;
+    expect(glock.upgrades.some(e => e.id === 'glock_burning_bullets')).toBe(true);
+    const mg = families.find(f => f.upgrades.some(e => e.id === 'unlock_machine_gun_turret'))!;
+    expect(mg.related.some(e => e.id === 'mgTurret.json')).toBe(true);
+  });
+  it('prioritizes combat tuning over presentation and keeps multi-effect targets together', async () => {
+    const { store } = await fixture(), workspace = await store.load();
+    const weapon = workspace.entries.find(e => e.key === 'weapon:GLOCK')!;
+    expect(isPrimaryField(weapon, weapon.fields.find(f => f.label === 'damage')!)).toBe(true);
+    expect(isPrimaryField(weapon, weapon.fields.find(f => f.label === 'projectileColor')!)).toBe(false);
+    expect(weapon.fields.find(f => f.label === 'burnOnHit.damagePerTick')!.context).toContain('BURN_TICK_INTERVAL_MS');
+    for (const entry of workspace.entries) for (const field of entry.fields) {
+      if (entry.kind === 'weapon' && ['adrenalinGain', 'adrenalinCost'].includes(field.label)) {
+        const slot = field.label === 'adrenalinGain' ? 'weapon1' : 'weapon2';
+        expect(isPrimaryField(entry, field)).toBe(entry.fields.some(f => f.label.startsWith('allowedSlots.') && f.value === slot));
+      }
+      if (entry.kind === 'upgrade' && ['costPerLevel', 'bossPointCostPerLevel'].includes(field.label)) expect(isPrimaryField(entry, field)).toBe(false);
+      if (['rageRequired', 'rageCost', 'rageDrainDuration'].includes(field.label)) expect(isPrimaryField(entry, field)).toBe(true);
+      if (entry.kind !== 'upgrade' && /(?:tickInterval(?:Ms)?|bleedTickMs)$/i.test(field.label)) expect(isPrimaryField(entry, field)).toBe(true);
+    }
+    const upgrade = workspace.entries.find(e => e.id === 'glock_burning_bullets')!;
+    const effects = effectGroups(upgrade);
+    expect(effects.length).toBeGreaterThan(1);
+    for (const effect of effects) {
+      expect(effect.fields.map(f => f.label)).toEqual(expect.arrayContaining([
+        `effects.${effect.index}.stat`, `effects.${effect.index}.mode`, `effects.${effect.index}.value`,
+      ]));
+      expect(effect.stat).toBe(effect.fields.find(f => f.label.endsWith('.stat'))!.value);
+    }
+  });
   it('lists every loadout and upgrade, and roundtrips every file byte-identically', async () => {
     const { root, store, keys } = await fixture();
     const workspace = await store.load();
@@ -38,7 +80,7 @@ describe('Balance editor authored file boundary', () => {
     const raw = JSON.parse(await readFile(resolve(root, UPGRADE_FILE), 'utf8'));
     expect(workspace.entries.filter(e => e.kind === 'upgrade').map(e => e.id).sort()).toEqual(raw.categories.flatMap((c: { upgrades: { id: string }[] }) => c.upgrades.map(u => u.id)).sort());
     expect(workspace.files.map(f => f.key).sort()).toEqual(keys.sort());
-  });
+  }, 20_000); // Full on-disk roundtrip competes with the complete suite for filesystem/CPU time.
   it('changes only the requested token and the game loader receives the new value', async () => {
     const { root, store } = await fixture();
     const workspace = await store.load(), entry = workspace.entries.find(e => e.key === 'weapon:GLOCK')!;

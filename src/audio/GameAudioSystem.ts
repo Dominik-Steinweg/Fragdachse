@@ -20,6 +20,7 @@ import {
 } from './AudioCatalog';
 import { getHitFeedbackVolumeScale } from './HitFeedbackAudio';
 import { getDeferredAssets } from '../assets/DeferredAssets';
+import { VoiceAudioChannel } from '../voice/VoiceAudioChannel';
 
 const HIT_FEEDBACK_MERGE_WINDOW_MS = 30;
 const ROCKET_EXPLOSION_MERGE_WINDOW_MS = 50;
@@ -55,6 +56,13 @@ interface ActiveLoop {
  * Feinjustierung einzelner Sounds ohne erneutes Abmischen der Audiodateien.
  */
 export class GameAudioSystem {
+  private voiceChannel: VoiceAudioChannel | null = null;
+
+  getVoiceAudioChannel(): VoiceAudioChannel | null {
+    const context = (this.scene.sound as Phaser.Sound.WebAudioSoundManager).context;
+    if (!context) return null;
+    return this.voiceChannel ??= new VoiceAudioChannel(context, () => this.masterVolume);
+  }
   private loopCounter = 0;
   private readonly lastFeedbackAt = new Map<string, number>();
   private lastRocketExplosionAt = -Infinity;
@@ -104,6 +112,7 @@ export class GameAudioSystem {
     this.masterVolume = Phaser.Math.Clamp(volume, 0, 1);
     this.refreshActiveLoopVolumes();
     this.refreshMusicVolume();
+    this.voiceChannel?.refreshVolume();
   }
 
   getMasterVolume(): number {
@@ -347,6 +356,8 @@ export class GameAudioSystem {
    * Stoppt alle aktiven Loops und Musik. Muss bei Scene-Teardown aufgerufen werden.
    */
   cleanup(): void {
+    this.voiceChannel?.destroy();
+    this.voiceChannel = null;
     this.hitFeedbackTimer?.remove();
     this.hitFeedbackTimer = null;
     this.pendingHitFeedbackDamage = 0;

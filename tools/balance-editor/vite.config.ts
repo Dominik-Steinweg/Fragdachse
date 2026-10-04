@@ -9,5 +9,5 @@ export default defineConfig({
   cacheDir: resolve(root, 'build/balance-editor-vite'),
   plugins: [balanceEditorApi(root)],
   server: { host: '127.0.0.1', port: 8092, strictPort: true, open: false, hmr: false, fs: { allow: [root] } },
-  build: { outDir: resolve(root, 'build/balance-editor'), emptyOutDir: true, target: 'es2022' },
+  build: { outDir: resolve(root, 'build/balance-editor'), emptyOutDir: true, target: 'es2022', assetsInlineLimit: 0 },
 });

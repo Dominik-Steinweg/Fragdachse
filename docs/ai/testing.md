@@ -63,10 +63,11 @@ Beispiele:
 | Assets | `npm run test:assets` | Dateisystem-, Asset-, Pixel- und Maskenprüfungen |
 | Stress | `npm run test:stress` | große Inputs, Multi-Seed, Benchmarks und Belastungstests |
 | Balance Lab | `npm run test:balance-lab` | Weapon-Balance-, Progression- und Benchmark-Parität zur aktuellen Config |
+| Voice-Werkstatt | `npm run test:voice-workshop` | lokaler Node-Test-Runner für Produktionsaufträge, beide Cloning-Modi, Paketexport und HTTP-Zugang; benötigt FFmpeg, verwendet synthetische Audiodaten ohne GPU |
 
 Die Spezial-Suites liegen unter `tests/architecture/`, `tests/integration/`, `tests/assets/`,
 `tests/stress/` und `tests/balance-lab/`. `npm run check` bleibt das tägliche Gate aus Core,
-schneller Architecture-Suite, Spiel-Build und Map-Editor-Build; die übrigen Spezial-Suites werden gezielt für ihre
+schneller Architecture-Suite, Spiel-Build, Map-Editor-Build und Balance-Editor-Build; die übrigen Spezial-Suites werden gezielt für ihre
 Änderung ausgeführt. Browser, Dev-Server und Sichtprüfung gehören nicht zum normalen Test-Gate.
 
 ## Visuelle Regression

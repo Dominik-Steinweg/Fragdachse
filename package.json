@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "voice:workshop": "npm run build:voice-workshop && node tools/voice-workshop/server.mjs",
+    "build:voice-workshop": "tsc -p tools/voice-workshop/tsconfig.json && vite build --config tools/voice-workshop/vite.config.ts",
+    "test:voice-workshop": "node --test tools/voice-workshop/tests/*.test.mjs",
     "perf:network": "npm run dev:browser -- --mode performance-lab --open /?network-probe=high",
     "perf:network:report": "node scripts/performance/network-report.mjs",
     "perf:chrome": "node scripts/performance/run.mjs",
@@ -27,7 +30,7 @@
     "dev:browser": "vite --host 127.0.0.1 --port 8090 --strictPort",
     "typecheck": "tsc --noEmit",
     "test:visual": "node scripts/visual/run.mjs",
-    "test": "vitest run --pool=threads --exclude build/** --exclude art/** --exclude tools/audio-studio/** --exclude tests/architecture/** --exclude tests/integration/** --exclude tests/assets/** --exclude tests/stress/** --exclude tests/balance-lab/**",
+    "test": "vitest run --pool=threads --exclude build/** --exclude art/** --exclude tools/audio-studio/** --exclude tools/voice-workshop/** --exclude tests/architecture/** --exclude tests/integration/** --exclude tests/assets/** --exclude tests/stress/** --exclude tests/balance-lab/**",
     "test:architecture": "vitest run --pool=threads --exclude build/** --exclude art/** tests/architecture",
     "test:integration": "vitest run --pool=threads --exclude build/** --exclude art/** tests/integration",
     "test:assets": "vitest run --pool=threads --exclude build/** --exclude art/** tests/assets",

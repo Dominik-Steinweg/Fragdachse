@@ -45,6 +45,7 @@ coverage/
 public/build/
 tmp/
 .audio-workspace/
+.voice-workspace/
 tools/audio-studio/.audio-workspace/
 
 # Interne Notizen und ToDos

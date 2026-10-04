@@ -1,0 +1,218 @@
+[
+  {
+    "id": "ready_01",
+    "revision": 1,
+    "style": "Trocken, leicht widerwillig",
+    "event": "ready",
+    "active": true,
+    "text": "Na gut. Noch eine Runde.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "ready_02",
+    "revision": 1,
+    "style": "Sachlich, trocken",
+    "event": "ready",
+    "active": true,
+    "text": "Munition da. Motivation wird nachgeliefert.",
+    "cloningMode": "ultimate"
+  },
+  {
+    "id": "ready_03",
+    "revision": 1,
+    "style": "Gelangweilt, beiläufig",
+    "event": "ready",
+    "active": true,
+    "text": "Eigentlich hatte ich heute frei.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "kill_01",
+    "revision": 1,
+    "style": "Ruhig, selbstzufrieden",
+    "event": "kill",
+    "active": true,
+    "text": "Den Feierabend hast du dir verdient.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "kill_02",
+    "revision": 1,
+    "style": "Trocken",
+    "event": "kill",
+    "active": true,
+    "text": "Das war die freundliche Variante.",
+    "cloningMode": "ultimate"
+  },
+  {
+    "id": "kill_03",
+    "revision": 1,
+    "style": "Amtlich, beiläufig",
+    "event": "kill",
+    "active": true,
+    "text": "Beschwerden bitte schriftlich.",
+    "cloningMode": "ultimate"
+  },
+  {
+    "id": "kill_04",
+    "revision": 1,
+    "style": "Knapp, unbeeindruckt",
+    "event": "kill",
+    "active": true,
+    "text": "Du lagst mir gerade im Weg.",
+    "cloningMode": "ultimate"
+  },
+  {
+    "id": "kill_05",
+    "revision": 1,
+    "style": "Sachlich, stolz",
+    "event": "kill",
+    "active": true,
+    "text": "Fachgerecht aus dem Verkehr gezogen.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "kill_06",
+    "revision": 1,
+    "style": "Gelassen",
+    "event": "kill",
+    "active": true,
+    "text": "Bitte hinten wieder anstellen.",
+    "cloningMode": "ultimate"
+  },
+  {
+    "id": "leader_01",
+    "revision": 1,
+    "style": "Selbstzufrieden",
+    "event": "leader",
+    "active": true,
+    "text": "Erfahrung schlägt Restjugend.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "leader_02",
+    "revision": 1,
+    "style": "Trocken, leicht triumphierend",
+    "event": "leader",
+    "active": true,
+    "text": "Ich führe. Das war so geplant.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "leader_03",
+    "revision": 1,
+    "style": "Souverän",
+    "event": "leader",
+    "active": true,
+    "text": "Ganz ruhig. Ich mach das beruflich.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "ultimate_01",
+    "revision": 1,
+    "style": "Energisch",
+    "event": "ultimate",
+    "active": true,
+    "text": "Jetzt wird’s unvernünftig.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "ultimate_02",
+    "revision": 1,
+    "style": "Warnend, trocken",
+    "event": "ultimate",
+    "active": true,
+    "text": "Das steht nicht mehr im Handbuch.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "ultimate_03",
+    "revision": 1,
+    "style": "Deutlicher Zuruf",
+    "event": "ultimate",
+    "active": true,
+    "text": "Alle mal kurz die Ohren anlegen.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "burst_01",
+    "revision": 1,
+    "style": "Überrascht, zufrieden",
+    "event": "damage_burst",
+    "active": true,
+    "text": "Das war mehr als bestellt.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "burst_02",
+    "revision": 1,
+    "style": "Knapp, trocken",
+    "event": "damage_burst",
+    "active": true,
+    "text": "Mengenrabatt.",
+    "cloningMode": "ultimate"
+  },
+  {
+    "id": "burst_03",
+    "revision": 1,
+    "style": "Gespielte Unsicherheit",
+    "event": "damage_burst",
+    "active": true,
+    "text": "Ich glaube, das war die große Taste.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "burst_04",
+    "revision": 1,
+    "style": "Erleichtert",
+    "event": "damage_burst",
+    "active": true,
+    "text": "Da hat sich was angestaut.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "burst_05",
+    "revision": 1,
+    "style": "Zufrieden",
+    "event": "damage_burst",
+    "active": true,
+    "text": "So. Jetzt ist hier wieder Platz.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "burst_06",
+    "revision": 1,
+    "style": "Trocken",
+    "event": "damage_burst",
+    "active": true,
+    "text": "Die Rechnung geht an die Natur.",
+    "cloningMode": "ultimate"
+  },
+  {
+    "id": "victory_01",
+    "revision": 1,
+    "style": "Erschöpft, zufrieden",
+    "event": "victory",
+    "active": true,
+    "text": "Auftrag erledigt. Wo ist die Rente?",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "victory_02",
+    "revision": 1,
+    "style": "Erleichtert",
+    "event": "victory",
+    "active": true,
+    "text": "Gut. Dann jetzt Feierabend.",
+    "cloningMode": "controllable"
+  },
+  {
+    "id": "victory_03",
+    "revision": 1,
+    "style": "Trocken, selbstironisch",
+    "event": "victory",
+    "active": true,
+    "text": "War doch ein entspannter Ausflug.",
+    "cloningMode": "controllable"
+  }
+]

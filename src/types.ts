@@ -12,6 +12,8 @@ export interface PlayerProfile {
   name:     string;
   colorHex: number;
   teamId?:  TeamId | null;
+  /** Exact optional presentation package; no private reference recording. */
+  voiceChecksum?: string | null;
 }
 
 /**

@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { createColorRenderTexture } from '../../graphics/createColorRenderTexture';
 import {
   ARENA_RENDER_CHUNK_PREFETCH_MARGIN_PX,
   ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX,
@@ -746,7 +747,7 @@ export class ChunkedRenderSurface {
   /** Creates one genuinely new resident target. Callers must already be on the shared scheduler. */
   private createTexture(layer: ChunkedSurfaceLayerSpec): Phaser.GameObjects.RenderTexture {
 
-    const texture = this.scene.add.renderTexture(0, 0, this.chunkTextureSize, this.chunkTextureSize);
+    const texture = createColorRenderTexture(this.scene, this.chunkTextureSize, this.chunkTextureSize);
     texture.setOrigin(0, 0);
     this.applyVisibleFrame(texture, null);
     texture.setDepth(layer.depth);

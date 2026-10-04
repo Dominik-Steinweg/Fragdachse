@@ -1,4 +1,5 @@
 import { BUTTON_CURSOR } from './gameCursor';
+import { readVoicePreferences, saveVoicePreferences } from '../voice/VoiceLibrary';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
 import { playUiActivation, playUiHover } from './UiAudio';
@@ -88,7 +89,7 @@ const ABORT_HINT_Y = CY + 346;
 /** Fenster, in dem der zweite Klick als Bestaetigung zaehlt; danach faellt der Button zurueck. */
 const ABORT_CONFIRM_TIMEOUT_MS = 5000;
 
-type VolumeSliderKey = 'master' | 'effects' | 'music';
+type VolumeSliderKey = 'master' | 'effects' | 'music' | 'voice';
 
 interface SliderDefinition {
   key: VolumeSliderKey;
@@ -157,24 +158,29 @@ const SLIDER_DEFINITIONS: readonly SliderDefinition[] = [
     key: 'master',
     label: 'ui.options.masterVolume',
     labelY: CY - 84,
-    trackY: CY - 34,
+    trackY: CY - 50,
     palette: { dark: COLORS.GREEN_4, mid: COLORS.GOLD_2, light: COLORS.RED_1 },
     playPreviewOnChange: true,
   },
   {
     key: 'effects',
     label: 'ui.options.effectsVolume',
-    labelY: CY + 12,
-    trackY: CY + 62,
+    labelY: CY - 14,
+    trackY: CY + 20,
     palette: { dark: COLORS.BLUE_5, mid: COLORS.BLUE_3, light: COLORS.BLUE_1 },
     playPreviewOnChange: true,
   },
   {
     key: 'music',
     label: 'ui.options.musicVolume',
-    labelY: CY + 108,
-    trackY: CY + 158,
+    labelY: CY + 56,
+    trackY: CY + 90,
     palette: { dark: COLORS.PURPLE_5, mid: COLORS.PURPLE_3, light: COLORS.PURPLE_1 },
+    playPreviewOnChange: false,
+  },
+  {
+    key: 'voice', label: 'ui.voice.volume', labelY: CY + 126, trackY: CY + 160,
+    palette: { dark: COLORS.GREEN_4, mid: COLORS.GOLD_2, light: COLORS.RED_1 },
     playPreviewOnChange: false,
   },
 ] as const;
@@ -479,6 +485,8 @@ export class OptionsOverlay {
     this.setSliderValue('master', this.audioSystem.getMasterVolume(), false, false);
     this.setSliderValue('effects', this.audioSystem.getEffectsVolume(), false, false);
     this.setSliderValue('music', this.audioSystem.getMusicVolume(), false, false);
+    const voice = readVoicePreferences();
+    this.setSliderValue('voice', voice.enabled ? voice.volume : 0, false, false);
   }
 
   private buildSectionBlock(
@@ -961,7 +969,7 @@ export class OptionsOverlay {
     slider.fill.setCrop(0, 0, width, TRACK_H);
     slider.gloss.setCrop(0, 0, width, TRACK_H);
     slider.knob.setX(TRACK_X + width);
-    slider.valueText.setText(formatPercent(nextValue, getLocale(), 0));
+    slider.valueText.setText(key === 'voice' && nextValue === 0 ? t('ui.voice.off') : formatPercent(nextValue, getLocale(), 0));
     slider.fillEffect.setFilledWidth(width);
 
     switch (key) {
@@ -976,6 +984,9 @@ export class OptionsOverlay {
       case 'music':
         this.audioSystem.setMusicVolume(nextValue);
         if (persist) setStoredMusicVolume(nextValue);
+        break;
+      case 'voice':
+        if (persist) saveVoicePreferences({ ...readVoicePreferences(), volume: nextValue, enabled: nextValue > 0 });
         break;
     }
 

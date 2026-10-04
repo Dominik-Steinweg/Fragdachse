@@ -30,6 +30,24 @@ describe('confirmed feedback over the reliable Bridge channel', () => {
       use(hostRoom); host.publishLobbySync(); host.publishWorldAndActivity(world, null);
       host.hostPublishWorldParticipation({ [hostRoom.room.getLocalPlayerId()]: 'interactive', [clientRoom.room.getLocalPlayerId()]: 'interactive' });
       hostRoom.room.update();
+      const hostVoice = vi.fn(), clientVoice = vi.fn();
+      use(hostRoom); host.registerVoiceHandler(hostVoice);
+      use(clientRoom); client.registerVoiceHandler(clientVoice);
+      const voice = { worldRevision: 1, roundRevision: 1, sequence: 1, speakerId: hostRoom.room.getLocalPlayerId(),
+        event: 'kill' as const, checksum: 'a'.repeat(64), clipId: 'kill_01', sentAt: 1000, expiresAt: 3000 };
+      clientRoom.room.broadcast('voice', voice);
+      expect(hostVoice).not.toHaveBeenCalled(); expect(clientVoice).not.toHaveBeenCalled();
+      use(hostRoom); host.broadcastVoice(voice);
+      expect(hostVoice).toHaveBeenCalledExactlyOnceWith(voice); expect(clientVoice).toHaveBeenCalledExactlyOnceWith(voice);
+      host.broadcastVoice({ ...voice, worldRevision: 0, sequence: 2 });
+      expect(clientVoice).toHaveBeenCalledTimes(1);
+      host.broadcastVoice({ ...voice, sequence: 3, playAt: 2000 });
+      expect(clientVoice).toHaveBeenCalledTimes(1); // Normal events cannot reserve future playback.
+      const victory = { ...voice, event: 'victory' as const, sequence: 4, playAt: 6500, expiresAt: 8500 };
+      host.broadcastVoice(victory);
+      expect(clientVoice).toHaveBeenLastCalledWith(victory);
+      host.broadcastVoice({ ...victory, sequence: 5, expiresAt: 10000 });
+      expect(clientVoice).toHaveBeenCalledTimes(2);
       const death = { key: 'sfx_player_death' as const, eventId: 'p1:life1', position: { x: 10, y: 20, emitterId: 'p1' } };
       host.broadcastAudioFeedback(death, true);
       expect(hostSound).toHaveBeenCalledOnce();
@@ -53,6 +71,8 @@ describe('confirmed feedback over the reliable Bridge channel', () => {
       const lateRoom = await addClientRoom(network);
       const late = connect(lateRoom), lateSound = vi.fn();
       late.registerAudioFeedbackHandler(lateSound);
+      const lateVoice = vi.fn(); late.registerVoiceHandler(lateVoice);
+      expect(lateVoice).not.toHaveBeenCalled();
       expect(lateSound).not.toHaveBeenCalled();
       use(hostRoom);
       host.broadcastAudioFeedback({ key: 'sfx_enemy_death', eventId: 'retired-world' });

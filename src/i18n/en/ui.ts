@@ -1,4 +1,6 @@
 export const enUi = {
+  "ui.voice.volume": "VOICE",
+  "ui.voice.off": "OFF",
   "ui.performance.noSample": "No companion sample yet.",
   "ui.performance.fps": "Current FPS {current} · Avg FPS {average}",
   "ui.performance.slowFrames": "Slow frames >16.7 ms {percent}% · Samples {samples}",
@@ -281,6 +283,7 @@ export const enUi = {
   "ui.lobby.map": "MAP",
   "ui.lobby.editName": "EDIT NAME",
   "ui.lobby.editColor": "EDIT COLOR",
+  "ui.voice.profile": "PROFILE / VOICE",
   "ui.lobby.time": "Time: {time}",
   "ui.lobby.chooseTeam": "Choose team",
   "ui.lobby.localSave": "Local save",

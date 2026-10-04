@@ -140,7 +140,10 @@ export function composeWorldPlayerGameplay(
         canPlayerReceiveRoundRewards: (playerId) => bridge.canPlayerReceiveRoundRewards(playerId),
         recordUtilityUsed: (playerId) => bridge.recordUtilityUsed(playerId),
         recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
-        recordUltimateUsed: (playerId) => bridge.recordUltimateUsed(playerId),
+        recordUltimateUsed: (playerId) => {
+          bridge.recordUltimateUsed(playerId);
+          input.ctx.voice?.ultimate(playerId, bridge.getPlayerCommittedLoadoutSlot(playerId, 'ultimate') ?? bridge.getPlayerLoadoutSlot(playerId, 'ultimate') ?? '');
+        },
       },
     },
   });
