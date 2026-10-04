@@ -3,6 +3,14 @@ import type { RuntimeBenchmarkResult, RuntimeBenchmarkEssenceAccounting } from '
 export const RUNTIME_BENCHMARK_STORAGE_KEY = 'fragdachse_weapon_balance_runtime_v1';
 const MAX_RESULTS = 200;
 
+function getRuntimeBenchmarkStorage(): Storage | null {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeEssenceAccounting(value: unknown): RuntimeBenchmarkEssenceAccounting | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const entry = value as Partial<RuntimeBenchmarkEssenceAccounting>;
@@ -24,7 +32,12 @@ function normalizeResult(value: unknown): RuntimeBenchmarkResult | null {
     && typeof entry.totalDamage === 'number'
     && Number.isFinite(entry.totalDamage)
     && typeof entry.dps === 'number'
-    && Number.isFinite(entry.dps);
+    && Number.isFinite(entry.dps)
+    && typeof entry.adrenalinePerSecond === 'number'
+    && Number.isFinite(entry.adrenalinePerSecond)
+    && entry.damageByKind !== null && typeof entry.damageByKind === 'object'
+    && !Array.isArray(entry.damageByKind)
+    && Object.values(entry.damageByKind).every(amount => typeof amount === 'number' && Number.isFinite(amount));
   if (!valid) return null;
   return {
     ...(entry as RuntimeBenchmarkResult),
@@ -36,7 +49,7 @@ function normalizeResult(value: unknown): RuntimeBenchmarkResult | null {
   };
 }
 
-export function loadRuntimeBenchmarkResults(storage: Storage | null = globalThis.localStorage ?? null): RuntimeBenchmarkResult[] {
+export function loadRuntimeBenchmarkResults(storage: Storage | null = getRuntimeBenchmarkStorage()): RuntimeBenchmarkResult[] {
   if (!storage) return [];
   try {
     const parsed: unknown = JSON.parse(storage.getItem(RUNTIME_BENCHMARK_STORAGE_KEY) ?? '[]');
@@ -50,7 +63,7 @@ export function loadRuntimeBenchmarkResults(storage: Storage | null = globalThis
 
 export function storeRuntimeBenchmarkResult(
   result: RuntimeBenchmarkResult,
-  storage: Storage | null = globalThis.localStorage ?? null,
+  storage: Storage | null = getRuntimeBenchmarkStorage(),
 ): RuntimeBenchmarkResult[] {
   const results = [result, ...loadRuntimeBenchmarkResults(storage)]
     .filter((entry, index, all) => all.findIndex((candidate) => candidate.runId === entry.runId) === index)

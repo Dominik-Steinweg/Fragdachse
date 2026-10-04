@@ -21,6 +21,7 @@ import {
 } from '../../src/debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import {
   loadRuntimeBenchmarkResults,
+  RUNTIME_BENCHMARK_STORAGE_KEY,
   runtimeBenchmarkResultsToCsv,
   selectBestObservedRuntimeResults,
   storeRuntimeBenchmarkResult,
@@ -227,6 +228,31 @@ describe('Weapon Balance Lab 2.0 runtime contracts', () => {
     expect(loadRuntimeBenchmarkResults(storage)[0].essenceAccounting).toEqual(essenceAccounting);
     expect(runtimeBenchmarkResultsToCsv(loadRuntimeBenchmarkResults(storage)))
       .toContain('"activity-measurement-window";"8";"10";"2.5";"1.25"');
+  });
+
+  it('keeps completed runs usable when the browser denies access to the storage object', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true, get: () => { throw new DOMException('Blocked', 'SecurityError'); },
+    });
+    try {
+      expect(loadRuntimeBenchmarkResults()).toEqual([]);
+      expect(storeRuntimeBenchmarkResult(result('current'))).toEqual([result('current')]);
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
+      else Reflect.deleteProperty(globalThis, 'localStorage');
+    }
+  });
+
+  it.each([{ damageByKind: null }, { adrenalinePerSecond: 'bad' }])('discards corrupt stored results without losing intact entries: %j', invalid => {
+    const storage = new MemoryStorage();
+    storage.setItem(RUNTIME_BENCHMARK_STORAGE_KEY, JSON.stringify([
+      { ...result('corrupt'), ...invalid }, result('intact'),
+    ]));
+    const loaded = loadRuntimeBenchmarkResults(storage);
+    expect(loaded.map(entry => entry.runId)).toEqual(['intact']);
+    expect(() => runtimeBenchmarkResultsToCsv(loaded)).not.toThrow();
+    expect(loaded[0].adrenalinePerSecond.toFixed(1)).toBe('0.0');
   });
 
   it('labels the highest measured value only within a comparable runtime group', () => {
