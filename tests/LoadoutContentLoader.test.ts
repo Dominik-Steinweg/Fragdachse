@@ -43,6 +43,19 @@ function expectContentError(run: () => unknown, fragment: string): void {
 }
 
 describe('loadout content loader', () => {
+  it.each(['constructor', 'toString', '__proto__'])('reports inherited type names as content errors: %s', (type) => {
+    for (const [registry, id, nested] of [
+      ['weapons', 'GLOCK', 'fire'], ['utilities', 'HE_GRENADE', null],
+      ['utilities', 'HE_GRENADE', 'activation'], ['ultimates', 'HONEY_BADGER_RAGE', null],
+    ] as const) {
+      const sources = clonedSources();
+      const entry = documentWith(sources, registry, id)[registry]![id];
+      const target = nested ? entry[nested] as Record<string, unknown> : entry;
+      target.type = type;
+      expectContentError(() => buildLoadoutRegistries(sources), 'type');
+    }
+  });
+
   it.each(['projectileSpeed', 'projectileSize', 'projectileMaxBounces'])('rejects non-numeric projectile fire field %s', (field) => {
     for (const value of ['invalid', null, false]) {
       const sources = clonedSources();

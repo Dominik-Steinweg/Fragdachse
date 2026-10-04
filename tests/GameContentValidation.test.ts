@@ -8,6 +8,8 @@ import {
 } from '../src/loadout/CoopDefenseLoadoutModifiers';
 import { validateGameContentReferences } from '../src/loadout/content/GameContentValidation';
 import {
+  DEFAULT_LOADOUT,
+  getUtilityConfigLineage,
   LOADOUT_CATALOG_ENTRIES,
   ULTIMATE_CONFIGS,
   UTILITY_CONFIGS,
@@ -23,6 +25,16 @@ function isConfigStat(stat: string): boolean {
 }
 
 describe('game-wide loadout content validation', () => {
+  it.each(['constructor', 'toString', '__proto__'])('rejects inherited audio-catalog references: %s', successKey => {
+    const weapons = { ...WEAPON_CONFIGS, GLOCK: { ...WEAPON_CONFIGS.GLOCK, shotAudio: { successKey } } };
+    expect(() => validateGameContentReferences({
+      WEAPON_CONFIGS: weapons, UTILITY_CONFIGS, ULTIMATE_CONFIGS,
+      DEFAULT_LOADOUT: { ...DEFAULT_LOADOUT, weapon1: weapons[DEFAULT_LOADOUT.weapon1.id], weapon2: weapons[DEFAULT_LOADOUT.weapon2.id] },
+      LOADOUT_CATALOG_ENTRIES,
+      getUtilityConfigLineage, COOP_DEFENSE_UPGRADE_DEFINITIONS,
+    })).toThrow('GLOCK.shotAudio.successKey');
+  });
+
   it('accepts every shipped cross-content reference', () => {
     expect(() => validateGameContentReferences()).not.toThrow();
   });

@@ -255,7 +255,7 @@ export function validateResolvedWeapon(value: unknown): string[] {
   )) {
     issues.push('$.allowedModes: ungültiger Spielmodus');
   }
-  if (!isRecord(value.fire) || typeof value.fire.type !== 'string' || !(value.fire.type in FIRE_REQUIRED)) {
+  if (!isRecord(value.fire) || typeof value.fire.type !== 'string' || !Object.prototype.hasOwnProperty.call(FIRE_REQUIRED, value.fire.type)) {
     issues.push('$.fire.type: unbekannter Weapon-Fire-Typ');
   } else {
     requireFields(value.fire, FIRE_REQUIRED[value.fire.type], issues, '$.fire');
@@ -455,12 +455,12 @@ export function validateResolvedUtility(value: unknown): string[] {
     'type', 'cooldown', 'activation', 'projectileSpeed', 'projectileSize', 'fuseTime',
     'maxBounces', 'allowedSlots',
   ], issues, '$');
-  if (typeof value.type !== 'string' || !(value.type in UTILITY_REQUIRED)) {
+  if (typeof value.type !== 'string' || !Object.prototype.hasOwnProperty.call(UTILITY_REQUIRED, value.type)) {
     issues.push('$.type: unbekannter Utility-Typ');
   } else {
     requireFields(value, UTILITY_REQUIRED[value.type], issues, '$');
   }
-  if (!isRecord(value.activation) || typeof value.activation.type !== 'string' || !(value.activation.type in ACTIVATION_REQUIRED)) {
+  if (!isRecord(value.activation) || typeof value.activation.type !== 'string' || !Object.prototype.hasOwnProperty.call(ACTIVATION_REQUIRED, value.activation.type)) {
     issues.push('$.activation.type: unbekannter Activation-Typ');
   } else {
     requireFields(value.activation, ACTIVATION_REQUIRED[value.activation.type], issues, '$.activation');
@@ -500,7 +500,7 @@ export function validateResolvedUltimate(value: unknown): string[] {
   if (!isRecord(value)) return ['$: UltimateConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
   requireFields(value, ['type', 'cooldown', 'rageRequired'], issues, '$');
-  if (typeof value.type !== 'string' || !(value.type in ULTIMATE_REQUIRED)) {
+  if (typeof value.type !== 'string' || !Object.prototype.hasOwnProperty.call(ULTIMATE_REQUIRED, value.type)) {
     issues.push('$.type: unbekannter Ultimate-Typ');
   } else {
     requireFields(value, ULTIMATE_REQUIRED[value.type], issues, '$');

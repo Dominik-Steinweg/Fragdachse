@@ -89,7 +89,7 @@ function isLoadoutConfigStat(stat: string): boolean {
 
 function validateShotAudio(config: { readonly id: string; readonly shotAudio?: { readonly successKey: string; readonly failureKey?: string } }, issues: string[]): void {
   for (const [field, key] of Object.entries(config.shotAudio ?? {})) {
-    if (!(key in AUDIO_ASSETS)) issues.push(`${config.id}.shotAudio.${field}: unbekannter Audio-Key ${key}`);
+    if (!Object.prototype.hasOwnProperty.call(AUDIO_ASSETS, key)) issues.push(`${config.id}.shotAudio.${field}: unbekannter Audio-Key ${key}`);
   }
 }
 
