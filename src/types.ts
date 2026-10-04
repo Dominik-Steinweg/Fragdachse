@@ -1865,9 +1865,6 @@ export interface SyncedReinforcementMatrix {
   expiresAt: number;
 }
 
-/** @deprecated Technischer Alias fuer alte Replay-/Snapshot-Leser. */
-export type SyncedOverchargeField = SyncedReinforcementMatrix;
-
 export interface SyncedEnergyInjectorEffect {
   targetId: string;
   targetType: 'construction';

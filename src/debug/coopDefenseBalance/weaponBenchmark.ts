@@ -58,17 +58,6 @@ export function resolveAndValidateWeaponSlot(
   return validSlot;
 }
 
-/**
- * @deprecated Nur noch ein Kompatibilitaets-Export. Die Benchmark-Distanz kommt aus einem
- * versionierten Szenario-Profil und wird nicht aus Fire-Typ oder Weapon-Range berechnet.
- */
-export function resolveDefaultTargetDistance(_fireType: string, _range: number): number {
-  // Abwaertskompatibilitaet fuer alte Importe. Der Benchmark selbst verwendet diese
-  // Funktion bewusst nicht mehr; die Distanz kommt ausschliesslich aus dem versionierten
-  // SingleTargetScenarioConfig.
-  return DEFAULT_SINGLE_TARGET_SCENARIO_CONFIG.targetDistance;
-}
-
 export function resolveSingleTargetScenarioConfig(
   options: SingleTargetBenchmarkOptions | SingleTargetBenchmarkSetOptions,
   fireType = 'projectile',

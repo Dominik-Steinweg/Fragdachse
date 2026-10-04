@@ -77,7 +77,6 @@ vi.mock('phaser', () => {
 
 import {
   runWeaponSingleTargetBenchmark,
-  resolveDefaultTargetDistance,
 } from '../../src/debug/coopDefenseBalance/weaponBenchmark';
 import { HeadlessSingleTargetWorld } from '../../src/debug/coopDefenseBalance/HeadlessSingleTargetWorld';
 import {
