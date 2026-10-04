@@ -50,7 +50,8 @@ export function getUtilityConfigLineage(id: string): readonly string[] {
 }
 
 export function getUtilityBaseId(id: string): string | undefined {
-  const legacyBaseId = LEGACY_COOP_UTILITY_ALIASES[id];
+  const legacyBaseId = Object.prototype.hasOwnProperty.call(LEGACY_COOP_UTILITY_ALIASES, id)
+    ? LEGACY_COOP_UTILITY_ALIASES[id] : undefined;
   if (legacyBaseId) return legacyBaseId;
   const lineage = getUtilityConfigLineage(id);
   return lineage.length > 0 ? lineage[lineage.length - 1] : undefined;

@@ -43,6 +43,25 @@ function expectContentError(run: () => unknown, fragment: string): void {
 }
 
 describe('loadout content loader', () => {
+  it.each(['projectileSpeed', 'projectileSize', 'projectileMaxBounces'])('rejects non-numeric projectile fire field %s', (field) => {
+    for (const value of ['invalid', null, false]) {
+      const sources = clonedSources();
+      const fire = documentWith(sources, 'weapons', 'GLOCK').weapons!.GLOCK.fire as Record<string, unknown>;
+      fire[field] = value;
+      expectContentError(() => buildLoadoutRegistries(sources), field);
+    }
+  });
+
+  it.each(['constructor', 'toString', '__proto__'])('rejects inherited default references: %s', (id) => {
+    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate']) {
+      const sources = clonedSources();
+      const document = sources.map((source) => source.document as MutableDocument)
+        .find((candidate) => candidate.defaultLoadout)!;
+      document.defaultLoadout![slot] = id;
+      expectContentError(() => buildLoadoutRegistries(sources), `defaultLoadout.${slot}`);
+    }
+  });
+
   it('accepts optional fog factors for weapons and BFG and preserves inheritance', () => {
     const sources = clonedSources();
     const weapons = documentWith(sources, 'weapons', 'GLOCK').weapons!;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { areLoadoutConfigsEquivalent } from '../src/loadout/LoadoutRules';
-import { resolveLoadoutSelectionIds } from '../src/loadout/LoadoutRules';
-import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../src/loadout/LoadoutRules';
+import { DEFAULT_LOADOUT, resolveUtilityIdForMode, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 
 describe('loadout config semantic equality', () => {
   it('ignores object-key order while preserving array order', () => {
@@ -14,6 +14,20 @@ describe('loadout config semantic equality', () => {
 });
 
 describe('mode-specific weapon availability', () => {
+  it.each(['constructor', 'toString', '__proto__'])('sanitizes inherited registry keys in committed loadouts: %s', (id) => {
+    const snapshot = sanitizeCommittedLoadoutForMode({
+      weapon1: id, weapon2: id, utility: id, ultimate: id,
+      coopDefenseClassId: null, coopDefenseProfile: null,
+    }, 'deathmatch');
+    expect(snapshot).toMatchObject({
+      weapon1: DEFAULT_LOADOUT.weapon1.id,
+      weapon2: DEFAULT_LOADOUT.weapon2.id,
+      utility: DEFAULT_LOADOUT.utility.id,
+      ultimate: DEFAULT_LOADOUT.ultimate.id,
+    });
+    expect(resolveUtilityIdForMode(id, 'deathmatch')).toBeUndefined();
+  });
+
   it('sanitizes Inspector support weapons when switching to PvP', () => {
     const snapshot = resolveLoadoutSelectionIds(
       { weapon2: WEAPON_CONFIGS.OVERCHARGE_CORE },

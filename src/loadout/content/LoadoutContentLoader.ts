@@ -65,7 +65,6 @@ const PROTECTED_DISCRIMINATORS = new Set([
   'ultimate.activation.type',
   'ultimate.placement.kind',
 ]);
-const VALID_SLOTS = new Set<LoadoutSlot>(['weapon1', 'weapon2', 'utility', 'ultimate']);
 const VALID_MODES = new Set<GameMode>(['deathmatch', 'team_deathmatch', 'capture_the_beer', 'coop_defense']);
 
 export class LoadoutContentError extends Error {
@@ -204,7 +203,9 @@ function convertColors(value: unknown, key = ''): unknown {
 }
 
 function sortedFrozenRecord<T>(entries: ReadonlyMap<string, T>): Readonly<Record<string, T>> {
-  return deepFreeze(Object.fromEntries([...entries.entries()].sort(([left], [right]) => left.localeCompare(right))));
+  // IDs come from saves and peers too; inherited object keys are never registry entries.
+  return deepFreeze(Object.assign(Object.create(null) as Record<string, T>,
+    Object.fromEntries([...entries.entries()].sort(([left], [right]) => left.localeCompare(right)))));
 }
 
 function assertNoErrors(issues: readonly string[]): void {

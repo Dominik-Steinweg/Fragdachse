@@ -259,6 +259,11 @@ export function validateResolvedWeapon(value: unknown): string[] {
     issues.push('$.fire.type: unbekannter Weapon-Fire-Typ');
   } else {
     requireFields(value.fire, FIRE_REQUIRED[value.fire.type], issues, '$.fire');
+    if (value.fire.type === 'projectile') {
+      for (const field of FIRE_REQUIRED.projectile) {
+        if (typeof value.fire[field] !== 'number') issues.push(`$.fire.${field}: Zahl erforderlich`);
+      }
+    }
   }
   if (isRecord(value.detonable) && value.detonable.comboLightningLevel !== undefined) {
     const level = value.detonable.comboLightningLevel;
