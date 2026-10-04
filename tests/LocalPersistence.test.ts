@@ -580,6 +580,25 @@ describe('local progress generation', () => {
     expect(getStoredCoopDefenseProgress().totalXp).toBe(456);
   });
 
+  it('finishes a cancelled file import without changing the existing save', async () => {
+    setStoredCoopDefenseTotalXp(456);
+    const before = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    const input = {
+      files: [],
+      click: vi.fn(),
+      oncancel: null as (() => void) | null,
+    };
+    vi.stubGlobal('document', { createElement: () => input });
+    const completed = vi.fn();
+    void importStoredGameProgressFile().then(completed);
+
+    input.oncancel?.();
+    await Promise.resolve();
+
+    expect(completed).toHaveBeenCalledWith({ ok: false, messageKey: 'ui.lobby.saveNoFile' });
+    expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(before);
+  });
+
   it('rechecks import permission after reading the selected file', async () => {
     setStoredCoopDefenseTotalXp(321);
     const json = exportStoredGameProgressJson();
