@@ -5,8 +5,9 @@ from turret_parts import palette,support,annulus,cylinder_x,tube,grille,new_mesh
 
 def build(c,spec):
     p=palette(c,armor=(.075,.19,.22),accent=(.22,.50,.54),charge=(.20,.67,.74))
-    ice=c.material('Matte frosted pressure reservoir',(.44,.69,.71),'technical')
-    frost=c.material('Pale frost bands',(.69,.81,.77),'technical')
+    from turret_surface_parts import material
+    ice=material(c,'Matte frosted pressure reservoir',(.44,.69,.71),'frost')
+    frost=material(c,'Pale frost bands',(.69,.81,.77),'frost')
     base=support(c,p,radius=.83,facets=12)
     c.cylinder('Pressure cell ceramic socket',(-.14,0,.44),.51,.28,p['dark'],36)
     annulus(c,'Reservoir lower cradle',(-.14,0,.595),.51,.445,.08,p['steel'])

@@ -53,6 +53,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       controller.arrangeArmageddonReview({count,progress:number(c.progress??.65,0,1),quality:(c.quality??'high') as 'high'|'medium'|'low',
         impacts:c.impacts===undefined?false:boolean(c.impacts),singleImpact:c.singleImpact===undefined?false:boolean(c.singleImpact),variant:(c.variant??'normal') as 'normal'|'void'});break;
     }
+    case 'turretMaterialReview': controller.arrangeTurretMaterialReview(); break;
     case 'enemyMeshReview': {
       const count = number(c.count ?? 4, 1, 500), pose = number(c.pose ?? -1, -1, 30);
       if (!Number.isInteger(count) || !Number.isInteger(pose)) throw Error('Integer count/pose required');

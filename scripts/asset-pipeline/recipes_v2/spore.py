@@ -3,6 +3,7 @@ import math
 import random
 import bpy
 from turret_parts import finish
+from turret_surface_parts import finish as surface_finish
 
 
 def surface(x, y):
@@ -53,12 +54,12 @@ def fungal_material(c, name, color, low, high, relief):
     bump.inputs['Distance'].default_value = relief
     links.new(grain.outputs['Fac'], bump.inputs['Height'])
     links.new(bump.outputs['Normal'], shader.inputs['Normal'])
-    return material
+    return surface_finish(material, 'cuticle' if relief < .02 else 'veil')
 
 
 def build(c, spec):
-    stem = c.material('Warm fibrous ivory stalk', (.53, .43, .29), 'organic')
-    under = c.material('Muted cream rolled rim', (.64, .49, .30), 'organic')
+    stem = surface_finish(c.material('Warm fibrous ivory stalk', (.53, .43, .29), 'organic'), 'fibre')
+    under = surface_finish(c.material('Muted cream rolled rim', (.64, .49, .30), 'organic'), 'fibre')
     skin = fungal_material(c, 'Weathered vermilion cuticle', (.68, .035, .016),
                            (.34, .009, .008), (.88, .105, .035), .013)
     pale = fungal_material(c, 'Dry broken ivory veil', (.85, .77, .56),
