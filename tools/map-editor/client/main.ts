@@ -46,6 +46,7 @@ footer.append(message, issuesHost, variantsHost); app.append(header, navigation,
 
 let token = '', env: EditorEnvironment | null = null, encounterView: EncounterView | null = null, mapView: MapView | null = null;
 let activeView: 'map' | 'encounters' = 'map', saving = false;
+let loadTicket = 0;
 let previewKey: string | null = null, previewSeed: number | null = null, lastPreviewInfo = '';
 let validation = { issues: [] } as ReturnType<typeof validateDocument>;
 const preview = new PreviewController();
@@ -64,16 +65,26 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 async function load(key: string, reload = false): Promise<void> {
-  if (env && (env.session.dirty || env.session.pending.size) && !await confirmEdit('Ungespeicherte Änderungen verwerfen und Map neu laden? Bei einem Konflikt zuerst „Entwurf sichern“ verwenden.')) { mapSelect.value = env.session.sourceKey; return; }
+  const ticket = ++loadTicket;
+  if (env && (env.session.dirty || env.session.pending.size)) {
+    const accepted = await confirmEdit('Ungespeicherte Änderungen verwerfen und Map neu laden? Bei einem Konflikt zuerst „Entwurf sichern“ verwenden.');
+    if (ticket !== loadTicket) return;
+    if (!accepted) { mapSelect.value = env.session.sourceKey; return; }
+  }
   try {
     const loaded = await api<LoadedMap>(`/api/maps/${encodeURIComponent(key)}`);
+    if (ticket !== loadTicket) return;
     preview.cancel(); mapView?.destroy();
     const session = new MapDocumentSession(key, loaded);
     env = { session, buffers: new Map(), changed: render, inputChanged: renderStatus, message: showMessage, openMap: path => { switchView('map'); mapView?.open(path); } };
     encounterView = new EncounterView(env); mapView = new MapView(env);
     mapHost.replaceChildren(mapView.root); previewKey = null; previewSeed = null; lastPreviewInfo = ''; report.length = 0; variantsHost.hidden = true;
     mapSelect.value = key; showMessage(reload ? 'Datei neu geladen.' : ''); render();
-  } catch (error) { if (env) mapSelect.value = env.session.sourceKey; showMessage(error instanceof Error ? error.message : String(error)); }
+  } catch (error) {
+    if (ticket !== loadTicket) return;
+    if (env) mapSelect.value = env.session.sourceKey;
+    showMessage(error instanceof Error ? error.message : String(error));
+  }
 }
 function render(): void {
   if (!env) return;
