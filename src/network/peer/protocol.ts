@@ -10,8 +10,8 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-// Projectile statics include the authored source ID for local presentation.
-export const PEER_PROTOCOL_VERSION = 22;
+// Enemy upserts include the position revision for discontinuous movement.
+export const PEER_PROTOCOL_VERSION = 23;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

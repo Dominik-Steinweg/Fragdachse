@@ -14,6 +14,17 @@ describe('enemy claw contracts', () => {
   const attack: EnemyClawAttack = { attackId: 'e:1', weaponId: 'ZOMBIE_BADGER_BITE', angle: 1.2,
     startedAt: 1000, strikeAt: 1270, hitAt: 1350, endsAt: 1570, range: 40, arcDegrees: 110 };
 
+  it('round trips position revisions without losing neighboring enemy fields', () => {
+    const entries: SyncedEnemyDeltaState[] = [
+      { id: 'e1', x: 30, y: 40, positionRevision: 0, entityGeneration: 7, claw: { revision: 3, attack } },
+      { id: 'e1', x: 50, y: 60, positionRevision: 2, claw: { revision: 4, attack: null } },
+      { id: 'e2', hp: 17, maxHp: 30, burrowed: true },
+    ];
+    const wire: (number | string)[] = [];
+    entries.forEach(entry => encodeEnemyUpsert(wire, entry));
+    expect(decodeEnemyUpserts(wire)).toEqual(entries);
+  });
+
   it('gives every authored enemy melee weapon a target-independent anticipation and recovery', () => {
     for (const config of Object.values(COOP_DEFENSE_ENEMY_CONFIGS)) {
       const melee = config.weapons.filter(w => WEAPON_CONFIGS[w.weaponId].fire.type === 'melee');

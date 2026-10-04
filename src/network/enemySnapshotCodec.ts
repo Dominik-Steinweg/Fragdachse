@@ -9,7 +9,7 @@ import { isEnemyClawState } from '../systems/EnemyClawAttack';
  * Update-Frequenz oder Interpolation (Direktheit bleibt unverändert).
  *
  * Stromformat von `u` (Einträge hintereinander, variable Länge):
- *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?, [specialAction...]?, [plasmaChargeStacks]?, [entityGeneration]?
+ *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?, [specialAction...]?, [plasmaChargeStacks]?, [entityGeneration]?, [claw...]?, [positionRevision]?
  * Reihenfolge der optionalen Felder ist fix; `mask` gibt an, welche vorhanden sind.
  */
 import {
@@ -20,6 +20,7 @@ import type { SyncedEnemyDeltaState } from '../types';
 
 const FIELD_GENERATION = 1024;
 const FIELD_CLAW = 2048;
+const FIELD_POSITION_REVISION = 4096;
 const FIELD_POS = 1;   // x + y
 const FIELD_ROT = 2;   // rot (quantisiert × ROT_QUANT)
 const FIELD_HP = 4;    // hp + maxHp
@@ -48,6 +49,7 @@ export function enemyNumToId(num: number): string {
 /** Hängt einen (vollständigen oder Delta-)Upsert an den flachen Zahlenstrom an. */
 export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnemyDeltaState): void {
   let mask = 0;
+  if (entry.positionRevision !== undefined) mask |= FIELD_POSITION_REVISION;
   if (entry.claw !== undefined) mask |= FIELD_CLAW;
   if (entry.entityGeneration !== undefined) mask |= FIELD_GENERATION;
   if (entry.x !== undefined && entry.y !== undefined) mask |= FIELD_POS;
@@ -103,6 +105,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
     if (attack) out.push(attack.attackId, attack.weaponId, attack.startedAt, attack.strikeAt,
       attack.hitAt, attack.endsAt, attack.angle, attack.range, attack.arcDegrees);
   }
+  if (mask & FIELD_POSITION_REVISION) out.push(entry.positionRevision as number);
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -163,6 +166,10 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
         angle: stream[i++] as number, range: stream[i++] as number, arcDegrees: stream[i++] as number,
       } : null };
       if (isEnemyClawState(claw)) entry.claw = claw;
+    }
+    if (mask & FIELD_POSITION_REVISION) {
+      const revision = stream[i++] as number;
+      if (Number.isSafeInteger(revision) && revision >= 0) entry.positionRevision = revision;
     }
     result.push(entry);
   }

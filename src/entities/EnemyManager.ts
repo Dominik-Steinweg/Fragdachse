@@ -720,8 +720,8 @@ export class EnemyManager {
   }
 
   getNetSnapshot(): SyncedEnemySnapshot {
-    // Kein schwerer Full-Snapshot mehr: Neue/geänderte Gegner gehen als Delta, unveränderte Gegner
-    // werden rollierend (Refresh-Zyklus) binnen ~2 s einmal voll nachgesendet. Periodisch trägt der
+    // Neue/geänderte Gegner gehen als Delta; jeder Gegner wird rollierend (Refresh-Zyklus)
+    // binnen ~2 s einmal voll nachgesendet, auch wenn er sich weiter bewegt. Periodisch trägt der
     // Snapshot zusätzlich die vollständige aktive ID-Liste zur Phantom-Reconciliation.
     const sendActiveList = this.forceFullNetSnapshot
       || this.ticksSinceActiveList >= ENEMY_NET_ACTIVE_LIST_INTERVAL_TICKS;
@@ -737,13 +737,7 @@ export class EnemyManager {
       currentIds.add(current.id);
       const previous = this.netSnapshotCache.get(current.id);
 
-      if (this.forceFullNetSnapshot) {
-        upserts.push(current);
-        this.netSnapshotCache.set(current.id, current);
-        continue;
-      }
-
-      if (!previous) {
+      if (this.forceFullNetSnapshot || !previous || refreshIds.has(current.id)) {
         upserts.push(current);
         this.netSnapshotCache.set(current.id, current);
         continue;
@@ -758,11 +752,6 @@ export class EnemyManager {
         });
         continue;
       }
-
-      if (!refreshIds.has(current.id)) continue;
-
-      upserts.push(current);
-      this.netSnapshotCache.set(current.id, current);
     }
 
     // Removals werden über mehrere Delta-Snapshots wiederholt (siehe ENEMY_NET_REMOVAL_RESEND_TICKS),
@@ -1308,6 +1297,8 @@ export class EnemyManager {
       x: Math.round(snapshot.x),
       y: Math.round(snapshot.y),
       rot: Math.round(snapshot.rot * 100) / 100,
+      // Full refreshes share the delta codec: an omitted field would preserve old stacks.
+      plasmaChargeStacks: snapshot.plasmaChargeStacks ?? 0,
       faction: snapshot.faction,
       burrowed: snapshot.burrowed,
       dashPhase: snapshot.dashPhase,
@@ -1416,6 +1407,8 @@ export class EnemyManager {
       enemy.setLightingSystem(this.lighting);
       enemy.setEntityBurnGpuController(this.burnGpu);
       enemy.setHealthBarRenderer(this.healthBars);
+      // Establish the movement baseline so the first ordinary update keeps interpolating.
+      enemy.setTargetPosition(remote.x, remote.y, remote.positionRevision);
       const rotation = remote.rot ?? 0;
       enemy.faceAngle(rotation);
       enemy.setTargetRotation(rotation);

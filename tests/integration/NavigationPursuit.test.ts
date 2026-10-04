@@ -5,6 +5,10 @@ vi.mock('phaser', async () => {
     Wrap: (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle)),
   } } };
 });
+vi.mock('../../src/effects/PlasmaChargeRenderer', async importOriginal => ({
+  ...await importOriginal<typeof import('../../src/effects/PlasmaChargeRenderer')>(),
+  PlasmaChargeRenderer: class { sync() {} destroy() {} },
+}));
 import { EnemyManager } from '../../src/entities/EnemyManager';
 import { resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
 import { healthBarTestScene } from '../healthBarTestScene';
@@ -21,6 +25,71 @@ import { CoopDefenseEnemyAbilitySystem } from '../../src/systems/CoopDefenseEnem
 import { CoopDefenseEnemyCombatPositioningSystem } from '../../src/systems/CoopDefenseEnemyCombatPositioningSystem';
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyKind } from '../../src/config/coopDefenseEnemies';
 import { createMovementVisualSample } from '../../src/effects/MovementStepSampler';
+import { ENEMY_NET_POSITION_DELTA_PX, ENEMY_NET_REFRESH_CYCLE_TICKS } from '../../src/config';
+
+describe('moving enemy snapshot recovery', () => {
+  it('repairs a dropped plasma-stack clear through the scheduled full refresh', () => {
+    const configs = resolveCoopDefenseEnemyConfigs(1);
+    const host = new EnemyManager(healthBarTestScene().scene, configs);
+    const client = new EnemyManager(healthBarTestScene().scene, configs);
+    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-badger');
+    try {
+      enemy.updatePlasmaChargeStacks(7);
+      client.applySnapshot(host.getNetSnapshot());
+      expect(client.getEnemy(enemy.id)!.getPlasmaChargeStacks()).toBe(7);
+      enemy.updatePlasmaChargeStacks(0);
+      host.getNetSnapshot(); // Lose the explicit clear.
+      for (let tick = 0; tick <= ENEMY_NET_REFRESH_CYCLE_TICKS; tick++) {
+        enemy.sprite.x += ENEMY_NET_POSITION_DELTA_PX + 1;
+        client.applySnapshot(host.getNetSnapshot());
+      }
+      expect(client.getEnemy(enemy.id)!.getPlasmaChargeStacks()).toBe(0);
+    } finally { client.destroy(); host.destroy(); }
+  });
+
+  it('keeps ordinary motion interpolated and snaps a short teleport after the wire round trip', () => {
+    const configs = resolveCoopDefenseEnemyConfigs(1);
+    const host = new EnemyManager(healthBarTestScene().scene, configs);
+    const client = new EnemyManager(healthBarTestScene().scene, configs);
+    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-badger');
+    try {
+      client.applySnapshot(host.getNetSnapshot());
+      const remote = client.getEnemy(enemy.id)!;
+      enemy.sprite.x += 8;
+      client.applySnapshot(host.getNetSnapshot());
+      client.updateClientInterpolation(0.5, 0);
+      expect(remote.sprite.x).toBe(68);
+      enemy.setPosition(80, 128);
+      client.applySnapshot(host.getNetSnapshot());
+      expect(remote.sprite.x).toBe(80);
+      enemy.sprite.x += 8;
+      client.applySnapshot(host.getNetSnapshot());
+      client.updateClientInterpolation(0.5, 0);
+      expect(remote.sprite.x).toBe(84);
+    } finally { client.destroy(); host.destroy(); }
+  });
+
+  it.each(['spawn', 'health'] as const)('repairs a dropped %s update while the enemy keeps moving', dropped => {
+    const configs = resolveCoopDefenseEnemyConfigs(1);
+    const host = new EnemyManager(healthBarTestScene().scene, configs);
+    const client = new EnemyManager(healthBarTestScene().scene, configs);
+    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-badger');
+    try {
+      const spawn = host.getNetSnapshot();
+      if (dropped === 'health') {
+        client.applySnapshot(spawn);
+        enemy.setHp(enemy.getMaxHp() / 2);
+        host.getNetSnapshot(); // Lose the health change, including any scheduled refresh.
+      }
+      for (let tick = 0; tick <= ENEMY_NET_REFRESH_CYCLE_TICKS; tick++) {
+        // Physics movement changes position without creating a teleport revision.
+        enemy.sprite.x += ENEMY_NET_POSITION_DELTA_PX + 1;
+        client.applySnapshot(host.getNetSnapshot());
+      }
+      expect(client.getEnemy(enemy.id)?.getHp()).toBe(enemy.getHp());
+    } finally { client.destroy(); host.destroy(); }
+  });
+});
 
 describe('Combat movement and hidden-player pursuit', () => {
   function combatWorld(kind: CoopDefenseEnemyKind = 'rabid-badger',
