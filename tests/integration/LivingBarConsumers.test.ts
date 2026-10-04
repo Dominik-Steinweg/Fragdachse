@@ -39,7 +39,8 @@ vi.mock('../../src/ui/LivingBarEffect', async importOriginal => ({
 import { UiButton } from '../../src/ui/UiButton';
 import { bindUiAudio } from '../../src/ui/UiAudio';
 import { LobbyPlayerProgress } from '../../src/ui/LobbyPlayerProgress';
-import { DEPTH } from '../../src/config';
+import { DEPTH, GAME_WIDTH } from '../../src/config';
+import { getLocale, setLocale } from '../../src/i18n';
 import { OptionsOverlay } from '../../src/ui/OptionsOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
 import { HudResourceRow } from '../../src/ui/HudResourceRow';
@@ -234,6 +235,56 @@ describe('living UI consumer ownership', () => {
     options.hide();
     options.destroy();
     expect(effects[0].destroyed).toBe(true);
+  });
+
+  it('keeps one input binding through language rebuilds and releases it when closed', () => {
+    const { scene } = sceneStub();
+    scene.scale = { width: GAME_WIDTH };
+    const setMasterVolume = vi.fn();
+    const options: any = new OptionsOverlay(scene, { setMasterVolume, playLocalSound: vi.fn() } as never, {} as never);
+    for (const method of ['syncFromAudioSystem', 'syncQualityButtons', 'buildMusicLoadingIndicator']) options[method] = () => {};
+    const locale = getLocale();
+    try {
+      options.setLocaleSelectionBinding({ canChange: () => true, onChanged: vi.fn() });
+      options.build(); options.show();
+      for (let change = 0; change < 3; change++) {
+        const next = getLocale() === 'de' ? 'en' : 'de';
+        options.localeButtons.get(next).background.emit('pointerdown');
+        expect(options.isOpen()).toBe(true);
+        expect(scene.input.listenerCount('pointermove')).toBe(1);
+        expect(scene.input.listenerCount('pointerup')).toBe(1);
+        options.draggingSliderKey = 'master';
+        setMasterVolume.mockClear();
+        scene.input.emit('pointermove', { x: GAME_WIDTH / 2 });
+        expect(setMasterVolume).toHaveBeenCalledOnce();
+        scene.input.emit('pointerup');
+        expect(options.draggingSliderKey).toBeNull();
+      }
+      options.hide();
+      expect(scene.input.listenerCount('pointermove')).toBe(0);
+      expect(scene.input.listenerCount('pointerup')).toBe(0);
+      options.show(); options.destroy();
+      expect(scene.input.listenerCount('pointermove')).toBe(0);
+      expect(scene.input.listenerCount('pointerup')).toBe(0);
+    } finally { options.destroy(); setLocale(locale); }
+  });
+
+  it('sounds an accepted language selection once and keeps the selected language silent', () => {
+    const { scene } = sceneStub();
+    const options: any = new OptionsOverlay(scene, {} as never, {} as never);
+    for (const method of ['syncFromAudioSystem', 'syncQualityButtons', 'buildMusicLoadingIndicator']) options[method] = () => {};
+    const playLocalSound = vi.fn();
+    const unbind = bindUiAudio(scene, { playLocalSound });
+    const locale = getLocale();
+    try {
+      options.setLocaleSelectionBinding({ canChange: () => true, onChanged: vi.fn() });
+      options.build(); options.show();
+      const next = locale === 'de' ? 'en' : 'de';
+      options.localeButtons.get(next).background.emit('pointerdown');
+      expect(playLocalSound).toHaveBeenCalledExactlyOnceWith('sfx_menu_activate');
+      options.localeButtons.get(next).background.emit('pointerdown');
+      expect(playLocalSound).toHaveBeenCalledTimes(1);
+    } finally { options.destroy(); unbind(); setLocale(locale); }
   });
 
   it('keeps built and closed color swatches inactive, including late refreshes', () => {

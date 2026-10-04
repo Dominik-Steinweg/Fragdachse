@@ -605,12 +605,11 @@ export class OptionsOverlay {
       return;
     }
     const wasVisible = this.visible;
-    this.visible = false;
+    this.hide();
     setLocale(locale);
     this.build();
     if (wasVisible) this.show();
     this.localeBinding?.onChanged(locale);
-    playUiActivation(this.scene);
     playUiActivation(this.scene);
   }
 
