@@ -1678,21 +1678,6 @@ export function unlockStoredCoopDefenseMapAfterVictory(completedMapId: string): 
   return true;
 }
 
-export function setStoredCoopDefenseClassId(classId: CoopDefenseClassId): void {
-  updatePreferences((current) => ({
-    ...current,
-    progression: {
-      ...current.progression,
-      coopDefense: {
-        ...current.progression.coopDefense,
-        selectedClassId: current.progression.coopDefense.unlockedClassIds.includes(classId)
-          ? classId
-          : DEFAULT_COOP_DEFENSE_CLASS_ID,
-      },
-    },
-  }));
-}
-
 /**
  * Debug- und Freischaltpfad fuer die Klassenmechanik. Beim Sperren wird die aktive Klasse zum
  * neuen Default-Stand; nicht uebertragbare Investitionen werden dadurch zu freien Punkten.

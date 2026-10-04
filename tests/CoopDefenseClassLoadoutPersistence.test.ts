@@ -4,7 +4,6 @@ import {
   getStoredCoopDefenseLoadoutSlot,
   getStoredCoopDefenseProgress,
   resetStoredCoopDefenseCharacter,
-  setStoredCoopDefenseClassId,
   setStoredCoopDefenseClassesUnlocked,
   setStoredCoopDefenseLoadoutSlot,
   setStoredLoadoutSlot,
