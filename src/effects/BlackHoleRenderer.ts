@@ -64,6 +64,7 @@ export class BlackHoleRenderer {
    * einer prüfbaren Kurve kommen statt aus einem Tween.
    */
   private readonly activeHoles: ActiveBlackHole[] = [];
+  private readonly visualCleanups = new Set<() => void>();
   private distortion: LocalDistortionComposer | null = null;
   private nextHoleId = 1;
 
@@ -101,6 +102,7 @@ export class BlackHoleRenderer {
 
   destroyAll(): void {
     this.activeHoles.length = 0;
+    for (const cleanup of this.visualCleanups) cleanup();
   }
 
   generateTextures(): void {
@@ -294,33 +296,36 @@ export class BlackHoleRenderer {
       duration: fadeDuration,
       ease: 'Cubic.easeOut',
     });
-    this.scene.time.delayedCall(fadeDelay, () => {
+    let disposed = false;
+    const stopEmissionTimer = this.scene.time.delayedCall(fadeDelay, () => {
+      if (disposed) return;
       outerOrbitEmitter.stop();
       wispEmitter.stop();
       innerOrbitEmitter.stop();
     });
+    const cleanup = () => {
+      if (disposed) return;
+      disposed = true;
+      this.visualCleanups.delete(cleanup);
+      stopEmissionTimer.remove(false);
+      this.scene.tweens.killTweensOf([
+        core, horizon, collapseRipple, outerOrbitEmitter, wispEmitter, innerOrbitEmitter,
+      ]);
+      core.destroy();
+      horizon.destroy();
+      collapseRipple.destroy();
+      destroyEmitter(outerOrbitEmitter);
+      destroyEmitter(wispEmitter);
+      destroyEmitter(innerOrbitEmitter);
+    };
+    this.visualCleanups.add(cleanup);
     this.scene.tweens.add({
       targets: [core, horizon, outerOrbitEmitter, wispEmitter, innerOrbitEmitter],
       alpha: 0,
       delay: fadeDelay,
       duration: fadeDuration,
       ease: 'Sine.easeIn',
-      onComplete: () => {
-        this.scene.tweens.killTweensOf([
-          core,
-          horizon,
-          collapseRipple,
-          outerOrbitEmitter,
-          wispEmitter,
-          innerOrbitEmitter,
-        ]);
-        core.destroy();
-        horizon.destroy();
-        collapseRipple.destroy();
-        destroyEmitter(outerOrbitEmitter);
-        destroyEmitter(wispEmitter);
-        destroyEmitter(innerOrbitEmitter);
-      },
+      onComplete: cleanup,
     });
   }
 }

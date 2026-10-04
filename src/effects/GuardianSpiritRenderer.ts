@@ -35,6 +35,8 @@ interface GuardianSpiritVisual {
 /** Kleine, additive Glühwürmchen-Visuals mit lebendigem Schweif und Funkenstaub. */
 export class GuardianSpiritRenderer {
   private readonly visuals = new Map<number, GuardianSpiritVisual>();
+  private readonly burstTimers = new Map<Phaser.GameObjects.Particles.ParticleEmitter, Phaser.Time.TimerEvent>();
+  private readonly impactRings = new Set<Phaser.GameObjects.Image>();
   private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -151,6 +153,16 @@ export class GuardianSpiritRenderer {
       this.destroyVisual(visual);
     }
     this.visuals.clear();
+    for (const [emitter, timer] of this.burstTimers) {
+      timer.remove(false);
+      destroyEmitter(emitter);
+    }
+    this.burstTimers.clear();
+    for (const ring of this.impactRings) {
+      this.scene.tweens.killTweensOf(ring);
+      ring.destroy();
+    }
+    this.impactRings.clear();
   }
 
   private createVisual(snapshot: SyncedGuardianSpirit): GuardianSpiritVisual {
@@ -227,6 +239,7 @@ export class GuardianSpiritRenderer {
       0.95,
       mixColors(color, 0xffffff, 0.78),
     ).setScale(0.22);
+    this.impactRings.add(ring);
     this.scene.tweens.add({
       targets: ring,
       scaleX: 1.25,
@@ -234,7 +247,9 @@ export class GuardianSpiritRenderer {
       alpha: 0,
       duration: 260,
       ease: 'Cubic.easeOut',
-      onComplete: () => ring.destroy(),
+      onComplete: () => {
+        if (this.impactRings.delete(ring)) ring.destroy();
+      },
     });
   }
 
@@ -252,7 +267,10 @@ export class GuardianSpiritRenderer {
       emitting: false,
     }, SPIRIT_DEPTH + 0.12, undefined, 'guardianSpirit');
     emitter.explode(count);
-    this.scene.time.delayedCall(700, () => destroyEmitter(emitter));
+    const timer = this.scene.time.delayedCall(700, () => {
+      if (this.burstTimers.delete(emitter)) destroyEmitter(emitter);
+    });
+    this.burstTimers.set(emitter, timer);
   }
 
   private destroyVisual(visual: GuardianSpiritVisual): void {

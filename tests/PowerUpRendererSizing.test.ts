@@ -6,7 +6,7 @@ vi.mock('phaser', () => ({
 }));
 vi.mock('../src/effects/EffectUtils', () => ({
   configureAdditiveImage: (image: unknown) => image,
-  createEmitter: () => ({ explode: vi.fn() }),
+  createEmitter: vi.fn(() => ({ explode: vi.fn() })),
   destroyEmitter: vi.fn(),
   ensureCanvasTexture: vi.fn(),
   fillRadialGradientTexture: vi.fn(),
@@ -16,12 +16,13 @@ vi.mock('../src/effects/EffectUtils', () => ({
 }));
 
 import { PowerUpRenderer } from '../src/powerups/PowerUpRenderer';
+import { createEmitter, destroyEmitter } from '../src/effects/EffectUtils';
 import { POWERUP_DEFS, POWERUP_RENDER_SIZE, POWERUP_SYMBOL_PULSE } from '../src/powerups/PowerUpConfig';
 import { POWERUP_BASE_KEY, powerUpSymbolKey, POWERUP_ASSETS, preloadPowerUpAssets, assertPowerUpAssetsReady } from '../src/assets/PowerUpAssets';
 
 // Pedestal GPU rendering is covered separately; this test exercises item sync and reveal.
 vi.mock('../src/powerups/PowerUpPedestalGpuSystem', () => ({
-  PowerUpPedestalGpuSystem: class {},
+  PowerUpPedestalGpuSystem: class { clear() {} destroy() {} },
 }));
 
 class DisplayObject {
@@ -31,6 +32,7 @@ class DisplayObject {
   alpha = 1;
   children: DisplayObject[] = [];
   parent: DisplayObject | null = null;
+  private destroyListeners: Array<() => void> = [];
   constructor(readonly width: number, readonly height: number, readonly key = '') {}
   get displayWidth() { return this.width * this.scaleX; }
   get displayHeight() { return this.height * this.scaleY; }
@@ -40,10 +42,15 @@ class DisplayObject {
   setAlpha(value: number) { this.alpha = value; return this; }
   setDepth() { return this; }
   setPosition() { return this; }
-  once() { return this; }
+  once(_event: string, listener: () => void) { this.destroyListeners.push(listener); return this; }
   add(child: DisplayObject) { child.parent = this; this.children.push(child); return this; }
   addAt(child: DisplayObject, index: number) { child.parent = this; this.children.splice(index, 0, child); return this; }
-  destroy(children = false) { this.destroyed = true; if (children) this.children.forEach(child => child.destroy(true)); }
+  destroy(children = false) {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    if (children) this.children.forEach(child => child.destroy(true));
+    this.destroyListeners.splice(0).forEach(listener => listener());
+  }
 }
 
 interface TweenConfig {
@@ -53,6 +60,55 @@ interface TweenConfig {
 }
 
 describe('PowerUpRenderer materialization sizing', () => {
+  it('stops reveal when collected and releases scene-owned materialization effects on world teardown', () => {
+    const objects: DisplayObject[] = [];
+    const tweens: Array<TweenConfig & { stop: ReturnType<typeof vi.fn> }> = [];
+    const timers: Array<{ callback: () => void; remove: ReturnType<typeof vi.fn> }> = [];
+    vi.mocked(createEmitter).mockClear();
+    vi.mocked(destroyEmitter).mockClear();
+    const scene = {
+      add: {
+        container: (_x: number, _y: number, children: DisplayObject[] = []) => {
+          const object = new DisplayObject(1, 1);
+          children.forEach(child => object.add(child)); objects.push(object); return object;
+        },
+        image: (_x: number, _y: number, key: string) => {
+          const object = new DisplayObject(16, 16, key); objects.push(object); return object;
+        },
+      },
+      tweens: { add: (config: TweenConfig) => {
+        const tween = { ...config, stop: vi.fn() }; tweens.push(tween); return tween;
+      } },
+      time: { delayedCall: (_delay: number, callback: () => void) => {
+        const timer = { callback, remove: vi.fn() }; timers.push(timer); return timer;
+      } },
+    };
+    const renderer = new PowerUpRenderer(scene as never);
+    const pickup = { uid: 1, defId: 'HEALTH_PACK', x: 100, y: 100 };
+    renderer.sync([pickup]);
+    const reveal = tweens.find(tween => 'value' in tween.targets)!;
+    const emitters = vi.mocked(createEmitter).mock.results.map(result => result.value);
+    expect(emitters).toHaveLength(2);
+
+    renderer.sync([]);
+    expect(reveal.stop).toHaveBeenCalledOnce();
+    renderer.clear();
+    expect(objects.every(object => object.destroyed)).toBe(true);
+    expect(tweens.every(tween => tween.stop.mock.calls.length > 0)).toBe(true);
+    expect(timers[0].remove).toHaveBeenCalledWith(false);
+    for (const emitter of emitters) expect(destroyEmitter).toHaveBeenCalledWith(emitter);
+    expect(destroyEmitter).toHaveBeenCalledTimes(2);
+    renderer.clear();
+    expect(destroyEmitter).toHaveBeenCalledTimes(2);
+
+    // Completed effects release their bookkeeping and are not destroyed again by the next teardown.
+    renderer.sync([{ ...pickup, uid: 2 }]);
+    timers[1].callback();
+    expect(destroyEmitter).toHaveBeenCalledTimes(4);
+    renderer.clear();
+    expect(destroyEmitter).toHaveBeenCalledTimes(4);
+  });
+
   it.each([16, 256])('keeps every pickup within its display box throughout reveal with %spx source images', (sourceSize) => {
     const images: DisplayObject[] = [];
     const tweens: TweenConfig[] = [];

@@ -58,12 +58,13 @@ interface PedestalVisual {
  *
  * Eine vorgebackene additive Aura pulsiert hinter der eigentlichen Grafik. Damit bleibt das
  * Item klar lesbar, ohne fuer jedes liegende Power-up einen eigenen Filter-Pass zu erzeugen.
- * Container.destroy(true) räumt Grafik + deren Tweens automatisch auf.
+ * Item-Tweens enden mit ihrem Container; kurzlebige Materialisierungseffekte mit der World.
  */
 export class PowerUpRenderer {
   private sprites = new Map<number, ItemVisual>();
   private pedestals = new Map<number, PedestalVisual>();
   private readonly activePedestals: PedestalVisual[] = [];
+  private readonly materializeCleanups = new Set<() => void>();
   private readonly pedestalGpu: PowerUpPedestalGpuSystem;
   private lighting: LightingSystem | null = null;
   private gpuVfx: GpuVfxSystem | null = null;
@@ -206,7 +207,7 @@ export class PowerUpRenderer {
     for (const [uid, visual] of this.sprites) {
       if (!activeUids.has(uid)) {
         this.lighting?.releaseLight(itemLightKey(uid));
-        visual.container.destroy(true); // Kinder (Arc, Grafik) + deren Tweens werden mitgelöscht
+        visual.container.destroy(true);
         this.sprites.delete(uid);
       }
     }
@@ -313,6 +314,7 @@ export class PowerUpRenderer {
       visual.container.destroy(true);
     }
     this.sprites.clear();
+    for (const cleanup of this.materializeCleanups) cleanup();
     for (const [id, visual] of this.pedestals) {
       this.lighting?.releaseLight(pedestalLightKey(id));
       this.gpuVfx?.releaseSource(visual.source);
@@ -463,7 +465,7 @@ export class PowerUpRenderer {
     graphic.setScale(baseScaleX * 0.35, baseScaleY * 0.35);
     container.setScale(0.88);
 
-    this.scene.tweens.add({
+    const revealTween = this.scene.tweens.add({
       targets: reveal,
       value: 1,
       duration: 170,
@@ -481,8 +483,9 @@ export class PowerUpRenderer {
         container.setScale(1);
       },
     });
+    container.once(Phaser.GameObjects.Events.DESTROY, () => revealTween.stop());
 
-    this.scene.tweens.add({
+    const flashTween = this.scene.tweens.add({
       targets: flash,
       alpha: 0,
       scaleX: 1.1,
@@ -521,10 +524,18 @@ export class PowerUpRenderer {
     }, DEPTH.PLAYERS - 0.83, 'standard', 'powerUp');
     embers.explode(10);
 
-    this.scene.time.delayedCall(420, () => {
+    let cleanupTimer: Phaser.Time.TimerEvent | null = null;
+    const cleanup = () => {
+      if (!this.materializeCleanups.delete(cleanup)) return;
+      cleanupTimer?.remove(false);
+      revealTween.stop();
+      flashTween.stop();
+      flash.destroy();
       destroyEmitter(pixelBurst);
       destroyEmitter(embers);
-    });
+    };
+    this.materializeCleanups.add(cleanup);
+    cleanupTimer = this.scene.time.delayedCall(420, cleanup);
   }
 }
 
