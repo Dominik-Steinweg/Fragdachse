@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PEER_DISCONNECTED_GRACE_MS, PEER_FAST_BUFFER_LIMIT_BYTES } from '../src/config';
 import { PeerLink } from '../src/network/peer/PeerLink';
 import { PEER_PROTOCOL_VERSION, type PeerMessage } from '../src/network/peer/protocol';
-import { PeerPacketAssembler, decodePeerPayload } from '../src/network/peer/PeerPacketCodec';
+import { PeerPacketAssembler, decodePeerPayload, PEER_MESSAGE_LIMIT_BYTES } from '../src/network/peer/PeerPacketCodec';
 import { PeerRoom } from '../src/network/peer/PeerRoom';
 import type { PeerRoomTransport, PeerTransportHandlers } from '../src/network/peer/transport';
 import { FULL_GAME_STATE_SLICE_KEYS, isCompleteGameStatePayload } from '../src/network/FullGameStateBootstrap';
@@ -137,6 +137,47 @@ async function decodedPackets(packets: Array<string | ArrayBuffer>, ordered: boo
 }
 
 describe('PeerLink bounded message transport', () => {
+  it('bounds decoded messages queued before the fast channel handshake completes', async () => {
+    const pc = new FakePeerConnection();
+    pc.fast.readyState = 'connecting';
+    const connection = new FakeDataConnection(pc);
+    const link = new PeerLink(connection as never);
+    const onMessage = vi.fn();
+    const opening = link.open({ onMessage, onClose: vi.fn() }).catch(error => error);
+    await Promise.resolve();
+    try {
+      const message = JSON.stringify({ t: 'b', q: 1, g: [['waiting', 'x'.repeat(32 * 1024)]] });
+      const count = Math.floor(PEER_MESSAGE_LIMIT_BYTES * 2 / (message.length * 2)) + 1;
+      for (let i = 0; i < count; i++) connection.receive(message);
+      expect(link.closeError?.kind).toBe('transport-overloaded');
+      expect(connection.open).toBe(false);
+      expect(onMessage).not.toHaveBeenCalled();
+      expect(await opening).toMatchObject({ kind: 'connection-failed' });
+    } finally { link.close(); await opening; }
+  });
+
+  it('delivers the retained early reliable messages once and in order after fast open', async () => {
+    const pc = new FakePeerConnection();
+    pc.fast.readyState = 'connecting';
+    const connection = new FakeDataConnection(pc);
+    const link = new PeerLink(connection as never);
+    const onMessage = vi.fn();
+    const opening = link.open({ onMessage, onClose: vi.fn() });
+    await Promise.resolve();
+    try {
+      connection.receive(JSON.stringify({ t: 'hello', v: PEER_PROTOCOL_VERSION, k: 'early-resume-token' }));
+      connection.receive(JSON.stringify({ t: 'b', p: [['p1', 'pnm', 'Early Player']] }));
+      expect(onMessage).not.toHaveBeenCalled();
+      pc.fast.readyState = 'open'; pc.fast.emit('open');
+      await opening;
+      expect(onMessage.mock.calls).toEqual([
+        [{ t: 'hello', v: PEER_PROTOCOL_VERSION, k: 'early-resume-token' }, 'rel'],
+        [{ t: 'b', p: [['p1', 'pnm', 'Early Player']] }, 'rel'],
+      ]);
+      expect(link.isOpen).toBe(true);
+    } finally { link.close(); }
+  });
+
   it('joins and resumes a real room with a fragmented full baseline on small SCTP channels', async () => {
     let hostHandlers!: PeerTransportHandlers, clientHandlers!: PeerTransportHandlers;
     let hostLink!: PeerLink, clientLink!: PeerLink;

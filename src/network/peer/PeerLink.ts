@@ -40,6 +40,7 @@ export class PeerLink implements PeerLinkLike {
   private fastChannel: RTCDataChannel | null = null;
   private handlers: PeerLinkHandlers | null = null;
   private inbox: QueuedMessage[] = [];
+  private inboxBytes = 0;
   private closed = false;
   private droppedFastMessages = 0;
   private monitoredPeerConnection: RTCPeerConnection | null = null;
@@ -122,6 +123,7 @@ export class PeerLink implements PeerLinkLike {
     this.handlers = handlers;
     const queued = this.inbox;
     this.inbox = [];
+    this.inboxBytes = 0;
     for (const item of queued) {
       handlers.onMessage(item.message, item.channel);
       if (this.closed) throw createPeerNetworkError('connection-failed');
@@ -227,7 +229,7 @@ export class PeerLink implements PeerLinkLike {
     const message = parsePeerMessage(payload);
     if (!message) return;
     if (message.t === 'hello' || message.t === 'welcome') this.compressionAllowed = message.z === 1;
-    this.deliver(message, channel);
+    this.deliver(message, channel, payload.length * 2);
   }
 
   close(): void {
@@ -245,9 +247,19 @@ export class PeerLink implements PeerLinkLike {
     this.handlers?.onClose();
   }
 
-  private deliver(message: PeerMessage, channel: PeerChannelKind): void {
+  private deliver(message: PeerMessage, channel: PeerChannelKind, payloadBytes: number): void {
     if (this.handlers) this.handlers.onMessage(message, channel);
-    else this.inbox.push({ message, channel });
+    else {
+      // The reliable channel can receive before fast-open installs handlers. Bound these
+      // decoded messages with the same budget used for pending reliable string decodes.
+      if (this.inboxBytes + payloadBytes > PEER_MESSAGE_LIMIT_BYTES * 2) {
+        this.closeError = createPeerNetworkError('transport-overloaded');
+        this.handleRemoteClose(this.closeError);
+        return;
+      }
+      this.inboxBytes += payloadBytes;
+      this.inbox.push({ message, channel });
+    }
   }
 
   private awaitReliableOpen(): Promise<void> {
@@ -384,7 +396,7 @@ export class PeerLink implements PeerLinkLike {
     this.fastChannel?.removeEventListener('bufferedamountlow', this.fastSends.resume);
     this.reliableSends.close(); this.fastSends.close();
     this.reliablePackets.clear(); this.fastPackets.clear();
-    this.pendingFastDecode = null; this.inbox = [];
+    this.pendingFastDecode = null; this.inbox = []; this.inboxBytes = 0;
   }
 
   private handlePeerConnectionState(peerConnection: RTCPeerConnection): void {
