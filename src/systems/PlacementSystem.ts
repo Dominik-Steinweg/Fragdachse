@@ -845,7 +845,14 @@ export class PlacementSystem {
     const relocated: { previous: SyncedPlaceableRock; next: SyncedPlaceableRock }[] = [];
 
     for (const [id, existing] of this.runtimeRocks) {
-      if (next.has(id)) continue;
+      const incoming = next.get(id);
+      if (incoming) {
+        // Vacate the complete old layout before assigning new cells, including position swaps.
+        if (existing.gridX !== incoming.gridX || existing.gridY !== incoming.gridY) {
+          this.rockGrid.remove(existing.gridX, existing.gridY);
+        }
+        continue;
+      }
       this.runtimeRocks.delete(id);
       this.carrierBases.delete(id);
       this.rockGrid.remove(existing.gridX, existing.gridY);
@@ -888,7 +895,6 @@ export class PlacementSystem {
         const previous = { ...current };
         this.runtimeRocks.set(incoming.id, { ...incoming });
         if (current.gridX !== incoming.gridX || current.gridY !== incoming.gridY) {
-          this.rockGrid.remove(current.gridX, current.gridY);
           this.rockGrid.set(incoming.gridX, incoming.gridY, incoming.id);
           relocated.push({ previous, next: { ...incoming } });
           continue;

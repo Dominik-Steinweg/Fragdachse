@@ -730,7 +730,8 @@ export class ArenaBuilder {
     const { rockVisualStates, rockGrid } = result;
     const { gridX, gridY } = rocks[id];
     ArenaBuilder.destroyRock(result, id);
-    rockGrid.remove(gridX, gridY);
+    // A layout batch may already have rebound this cell to a different runtime object.
+    if (rockGrid.getIndex(gridX, gridY) === id) rockGrid.remove(gridX, gridY);
 
     // Nachbar-Tiles neu berechnen
     const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);

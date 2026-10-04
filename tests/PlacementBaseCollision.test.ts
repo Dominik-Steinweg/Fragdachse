@@ -96,6 +96,26 @@ describe('turret aim configuration in placement snapshots', () => {
     expect(client.getOwnedConstructions('p2').map(r => r.id)).toEqual([first.id]);
     expect(client.syncFromSnapshot([changed, second]).updated).toEqual([]);
   });
+  it('reconciles every occupied cell when an authoritative layout swaps two runtime objects', () => {
+    const host = createPlacement();
+    const client = createPlacement();
+    const definition = COOP_DEFENSE_CONSTRUCTIONS.rock_barrier;
+    const first = host.materializePersistentPlaceable(definition, 10, 10, 0, 'p1', 0xffffff)!;
+    const second = host.materializePersistentPlaceable(definition, 11, 10, 0, 'p1', 0xffffff)!;
+    client.syncFromSnapshot(host.getNetSnapshot());
+    expect(host.relocateRocks([
+      { id: first.id, gridX: second.gridX, gridY: second.gridY, angle: 0, footprint: definition.footprint },
+      { id: second.id, gridX: first.gridX, gridY: first.gridY, angle: 0, footprint: definition.footprint },
+    ])).not.toBeNull();
+
+    const changes = client.syncFromSnapshot(host.getNetSnapshot());
+    expect(changes.relocated).toHaveLength(2);
+    expect(client.getRuntimeRockAt(second.gridX, second.gridY)?.id).toBe(first.id);
+    expect(client.getRuntimeRockAt(first.gridX, first.gridY)?.id).toBe(second.id);
+    expect(client.canPlaceSingleCell(second.gridX, second.gridY)).toBe(false);
+    expect(client.syncFromSnapshot(host.getNetSnapshot()).relocated).toEqual([]);
+    expect(client.getRuntimeRockAt(second.gridX, second.gridY)?.id).toBe(first.id);
+  });
   it.each(['machine_gun_turret', 'rocket_turret'] as const)('preserves %s tuning across placement, restore and client sync', id => {
     const definition = COOP_DEFENSE_CONSTRUCTIONS[id];
     const host = createPlacement();

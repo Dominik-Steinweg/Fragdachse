@@ -194,6 +194,28 @@ function expectedState(
 }
 
 describe('RockVisualHelper client snapshot materialization', () => {
+  it('preserves replacement occupants while presenting a batch of relocated rocks', () => {
+    const f = createFixture([0, 1]);
+    const previous = f.changes.added.map(rock => ({ ...rock }));
+    const next = previous.map((rock, index) => ({ ...rock, gridX: previous[1 - index].gridX }));
+    for (const rock of next) {
+      Object.assign(f.ctx.placementSystem.getRuntimeRock(rock.id)!, rock);
+      f.result.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    }
+
+    for (let index = 0; index < previous.length; index += 1) {
+      f.helper.removePlaceableRockVisual(previous[index], false);
+      f.helper.materializePlaceableRock(next[index], false);
+      f.helper.updateRockVisualById(next[index].id, next[index].hp);
+    }
+
+    for (const rock of next) {
+      expect(f.result.rockGrid.getIndex(rock.gridX, rock.gridY)).toBe(rock.id);
+      expect(f.result.rockPhysicsProxies[rock.id]?.active).toBe(true);
+      expect(f.result.rockVisualStates.get(rock.id)?.active).toBe(true);
+    }
+  });
+
   it('keeps drone station placement and integrity updates free of turret sprites', () => {
     const f = createFixture([0], false);
     const station = f.changes.added[0];
