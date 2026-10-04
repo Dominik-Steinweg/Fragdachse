@@ -854,7 +854,7 @@ export class ArenaScene extends Phaser.Scene {
         this.refreshCoopDefenseDebugState({ applyMapSelection: true, metaAlreadyRefreshed: true });
       },
       () => {
-        this.meta?.resetCharacter();
+        if (!this.meta?.resetCharacter()) return;
         this.refreshCoopDefenseDebugState({ applyMapSelection: true, metaAlreadyRefreshed: true });
       },
       () => {

@@ -867,11 +867,12 @@ export class ArenaMetaController {
     this.input.presentation.showMatchResultsTechnicalAbort(message);
   }
 
-  resetCharacter(): void {
+  resetCharacter(): boolean {
     if (this.destroyed || this.input.session.getGamePhase() !== 'LOBBY'
-      || this.input.session.isLocalReady() || this.input.session.isAuthoritativeLocalReady()) return;
+      || this.input.session.isLocalReady() || this.input.session.isAuthoritativeLocalReady()) return false;
     this.input.progressStore.resetCharacter();
     this.refresh();
+    return true;
   }
 
   setDebugItemsUnlocked(unlocked: boolean): void {

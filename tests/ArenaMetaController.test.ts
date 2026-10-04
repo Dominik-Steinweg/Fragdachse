@@ -111,7 +111,7 @@ describe('ArenaMetaController', () => {
       if (state === 'local-ready') vi.mocked(session.isLocalReady).mockReturnValue(true);
       else if (state === 'authoritative-ready') vi.mocked(session.isAuthoritativeLocalReady).mockReturnValue(true);
       else vi.mocked(session.getGamePhase).mockReturnValue(state);
-      controller.resetCharacter();
+      expect(controller.resetCharacter()).toBe(false);
       expect(store.resetCharacter).not.toHaveBeenCalled();
       expect(presentation.refreshUpgradeOverlay).not.toHaveBeenCalled();
     },
@@ -119,7 +119,7 @@ describe('ArenaMetaController', () => {
 
   it('allows character reset from an unlocked lobby', () => {
     const { controller, store } = makeInput();
-    controller.resetCharacter();
+    expect(controller.resetCharacter()).toBe(true);
     expect(store.resetCharacter).toHaveBeenCalledOnce();
   });
 
