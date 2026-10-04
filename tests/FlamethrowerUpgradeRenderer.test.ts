@@ -45,7 +45,6 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 }));
 
 vi.mock('../src/utils/phaserFx', () => ({
-  addInternalBlur: () => {},
   addInternalGlow: () => {},
   setInternalFxPadding: () => {},
 }));

@@ -15,15 +15,6 @@ type FilterListLike = {
     quality?: number,
     distance?: number,
   ) => unknown;
-  addBlur?: (
-    quality?: number,
-    x?: number,
-    y?: number,
-    strength?: number,
-    color?: number,
-    steps?: number,
-  ) => unknown;
-  addMask?: (mask?: string | object, invert?: boolean) => unknown;
   remove?: (filter: unknown, forceDestroy?: boolean) => unknown;
 };
 
@@ -37,7 +28,6 @@ type LegacyFxListLike = {
     quality: number,
     distance: number,
   ) => unknown;
-  addShine?: (speed: number, lineWidth: number, gradient: number) => unknown;
   remove?: (fx: unknown) => unknown;
 };
 
@@ -304,27 +294,6 @@ export function addExternalGlow(
   return addFilterGlow(target, true, color, outerStrength, innerStrength, knockout, quality, distance, importance);
 }
 
-export function addInternalShine(
-  target: object,
-  speed: number,
-  lineWidth: number,
-  gradient: number,
-): FxHandle | null {
-  const legacyFx = getLegacyInternalFx(target);
-  if (legacyFx?.addShine) {
-    return (legacyFx.addShine(speed, lineWidth, gradient) ?? null) as FxHandle | null;
-  }
-
-  // Phaser 4 AddEffectShine wires its own destroy listener and DynamicTexture lifecycle.
-  // Manual early cleanup currently collides with round-end teardown in this project.
-  // Prefer local one-shot visuals at the call site instead of the engine Action here.
-  void target;
-  void speed;
-  void lineWidth;
-  void gradient;
-  return null;
-}
-
 export function removeInternalFx(target: object, fx: FxHandle | null | undefined): void {
   if (!fx) return;
   if (markFxRemoved(fx)) return;
@@ -349,34 +318,6 @@ export function removeInternalFx(target: object, fx: FxHandle | null | undefined
   }
 
   fx.destroy?.();
-}
-
-export interface BlurHandle extends FxHandle {
-  strength: number;
-  x: number;
-  y: number;
-  steps: number;
-}
-
-export function addInternalBlur(
-  target: object,
-  quality: number,
-  x: number,
-  y: number,
-  strength: number,
-  color: number,
-  steps: number,
-  importance: VisualImportance = 'standard',
-): BlurHandle | null {
-  ensureFilters(target);
-  const blur = (getInternalFilters(target)?.addBlur?.(quality, x, y, strength, color, steps) ?? null) as BlurHandle | null;
-  trackFilter(target, blur, false, importance);
-  return blur;
-}
-
-export function addInternalMask(target: object, maskKey: string): FxHandle | null {
-  ensureFilters(target);
-  return (getInternalFilters(target)?.addMask?.(maskKey) ?? null) as FxHandle | null;
 }
 
 export function removeExternalFx(target: object, fx: FxHandle | null | undefined): void {
