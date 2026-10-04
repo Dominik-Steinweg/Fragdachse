@@ -53,5 +53,14 @@ Nur `enemies-night.webp` und `train-destroyed-f12.webp` werden neu referenziert.
 Die übrigen 21 Referenzbilder bleiben bytegleich. Die Zahl der Ansichten ist seit
 Integration der Turmgruppe auf Main von 20 auf 23 gestiegen.
 
+Abnahme am 4. Oktober 2026: fünf vollständige Läufe mit je frischem Chrome-Profil,
+115/115 Bildvergleiche bestanden. Jede eingefrorene Bildpaarung blieb pixelgleich;
+Simulationszeit, Rundenversion und Kameraposition waren für jede Ansicht über alle
+fünf Läufe identisch. Die maximale Referenzabweichung war 0,0895 % bei unverändert
+0,1 % Toleranz. `npm run check` bestand mit 4.934 Core- und 54 Architekturtests sowie
+beiden Builds; `npm run test:assets` bestand mit 180 Tests. Das bereits vorhandene,
+ignorierte Offline-Manifest für zwei Assettests wurde unverändert aus dem Hauptrepo
+in den Klon kopiert; Pfad und Prüfsumme stehen im Prüfprotokoll.
+
 Die Prüfung gilt für die dokumentierte Windows-/Chrome-/GPU-Umgebung und die
 gewählten Standbilder; sie ist kein vollständiger Gameplay- oder Leistungstest.
