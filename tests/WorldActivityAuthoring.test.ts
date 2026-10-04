@@ -58,6 +58,32 @@ it('refreshes cached authoring for late diagnostic maps without changing the cam
   expect(isDiagnosticMapId(map.mapId)).toBe(false);
 });
 
+describe('authored base shape numeric boundary', () => {
+  const mapWithShape = (shape: unknown) => ({
+    mapId: 'shape-test', arenaWidthCells: 60, arenaHeightCells: 34,
+    balanceReferenceDurationSec: 60, objective: 'survive' as const, surviveDurationSec: 60,
+    respawnsPerPlayer: 0, powerUps: [], bases: [{ id: 'base', hpMax: 100,
+      anchor: { kind: 'grid' as const, gridX: 10, gridY: 10 }, shape,
+    }],
+  }) as Parameters<typeof normalizeCoopDefenseMapConfig>[0];
+
+  it.each([
+    '{"kind":"rectangle","widthCells":1e400,"heightCells":1}',
+    '{"kind":"rectangle","widthCells":1,"heightCells":1e400}',
+    '{"kind":"cells","cells":[{"gridX":1e400,"gridY":0}]}',
+    '{"kind":"cells","cells":[{"gridX":0,"gridY":1e400}]}',
+  ])('rejects JSON-overflow geometry before any cell expansion: %s', json => {
+    expect(() => normalizeCoopDefenseMapConfig(mapWithShape(JSON.parse(json)))).toThrow();
+  });
+
+  it('preserves finite shape rounding and lower-bound normalization', () => {
+    expect(normalizeCoopDefenseMapConfig(mapWithShape({ kind: 'rectangle', widthCells: 2.9, heightCells: -1 }))
+      .bases[0].shape).toEqual({ kind: 'rectangle', widthCells: 2, heightCells: 1 });
+    expect(normalizeCoopDefenseMapConfig(mapWithShape({ kind: 'cells', cells: [{ gridX: -1, gridY: 2.9 }] }))
+      .bases[0].shape).toEqual({ kind: 'cells', cells: [{ gridX: 0, gridY: 2 }] });
+  });
+});
+
 it('preserves authored base aiming through normalization, world round-trip and runtime resolution', () => {
   const makeMap = (speed: number | undefined = 85) => ({
     mapId: 'aim-test', displayName: 'Aim test', arenaWidthCells: 60, arenaHeightCells: 34,

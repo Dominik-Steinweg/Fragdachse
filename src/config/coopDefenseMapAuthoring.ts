@@ -3696,6 +3696,9 @@ function normalizeBaseAnchor(anchor: CoopBaseAnchor): CoopBaseAnchor {
 
 function normalizeBaseShape(shape: CoopBaseShape): CoopBaseShape {
   if (shape.kind === 'rectangle') {
+    if (!Number.isFinite(shape.widthCells) || !Number.isFinite(shape.heightCells)) {
+      throw new Error('[coopDefenseMaps] Base rectangle dimensions must be finite numbers');
+    }
     return {
       kind: 'rectangle',
       widthCells: Math.max(1, Math.floor(shape.widthCells)),
@@ -3705,10 +3708,15 @@ function normalizeBaseShape(shape: CoopBaseShape): CoopBaseShape {
 
   return {
     kind: 'cells',
-    cells: shape.cells.map((cell) => ({
-      gridX: Math.max(0, Math.floor(cell.gridX)),
-      gridY: Math.max(0, Math.floor(cell.gridY)),
-    })),
+    cells: shape.cells.map((cell) => {
+      if (!Number.isFinite(cell.gridX) || !Number.isFinite(cell.gridY)) {
+        throw new Error('[coopDefenseMaps] Base cell coordinates must be finite numbers');
+      }
+      return {
+        gridX: Math.max(0, Math.floor(cell.gridX)),
+        gridY: Math.max(0, Math.floor(cell.gridY)),
+      };
+    }),
   };
 }
 
