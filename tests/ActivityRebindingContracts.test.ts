@@ -11,18 +11,24 @@ import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { WorldLifecycle } from '../src/world/WorldLifecycle';
+import { getCaptureTheBeerHomeWorldPosition } from '../src/config';
 
 // Rebinding exercises gameplay/lifecycle ports, not a browser renderer. Keep Phaser's
 // device detection and module initialization out of the timed setup hook.
-vi.mock('phaser', () => ({
-  // CTB allocates scratch bounds, but this contract only exercises snapshots and detach.
-  Geom: { Rectangle: class {} },
-  Math: {
-    Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
-    Angle: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1) },
-    Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
-  },
-}));
+vi.mock('phaser', async () => {
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const root = require.resolve('phaser/package.json').replace(/package\.json$/, '');
+  return {
+    Geom: { Rectangle: require(root + 'src/geom/rectangle/Rectangle.js'),
+      Intersects: { RectangleToRectangle: require(root + 'src/geom/intersects/RectangleToRectangle.js') } },
+    Math: {
+      Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
+      Angle: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1) },
+      Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
+    },
+  };
+});
 
 import { ULTIMATE_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { AirstrikeSystem } from '../src/systems/AirstrikeSystem';
@@ -410,6 +416,28 @@ describe('Activity rebinding', () => {
     system.setCoopDefenseMapXpReference(100);
     system.onCoopDefenseEnemyKilled('p1', 10, 100, 100);
     expect(system.getNetSnapshot()?.upserts).toHaveLength(0);
+  });
+
+  it.each([false, true])('lets CTB opponents take a home beer despite an idle defender (attacker first: %s)', attackerFirst => {
+    const home = getCaptureTheBeerHomeWorldPosition('blue');
+    const makePlayer = (id: string, dx: number) => ({
+      id, x: home.x + dx, y: home.y, body: { enable: true },
+      getBounds: () => ({ left: home.x + dx - 12, right: home.x + dx + 12,
+        top: home.y - 12, bottom: home.y + 12, width: 24, height: 24 }),
+    });
+    const defender = makePlayer('defender', 15);
+    const attacker = makePlayer('attacker', -15);
+    const players = attackerFirst ? [attacker, defender] : [defender, attacker];
+    const runtime = new CaptureTheBeerActivityRuntime({
+      playerManager: { getAllPlayers: () => players,
+        getPlayer: (id: string) => players.find(player => player.id === id) } as unknown as PlayerManager,
+      roster: { getPlayerTeam: id => id === 'defender' ? 'blue' : 'red', getPlayerIdentity: () => null },
+      isPlayerInteractionAllowed: () => true,
+      onFx: () => {},
+    });
+    expect(runtime.system.hostUpdate(true).beers.find(beer => beer.teamId === 'blue'))
+      .toMatchObject({ state: 'carried', holderId: 'attacker' });
+    runtime.destroy();
   });
 
   it('erzeugt und zerstört CTB exakt im Activity-Slot, ohne die World zu erneuern', () => {

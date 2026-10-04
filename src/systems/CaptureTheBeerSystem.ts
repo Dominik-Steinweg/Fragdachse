@@ -222,9 +222,8 @@ export class CaptureTheBeerSystem {
         if (!teamId) continue;
 
         if (teamId === beer.teamId) {
-          if (beer.state === 'dropped') {
-            this.returnBeerHome(beer, true);
-          }
+          if (beer.state !== 'dropped') continue;
+          this.returnBeerHome(beer, true);
         } else {
           beer.holderId = player.id;
           beer.state = 'carried';
