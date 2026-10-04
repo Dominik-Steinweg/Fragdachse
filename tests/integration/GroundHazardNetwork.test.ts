@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NET_TICK_RATE_HZ } from '../../src/config';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
@@ -29,6 +29,25 @@ async function setup() {
 }
 
 describe('ground hazard and base burn replication', () => {
+  it.each([-60_000, 60_000])('expires ground and warnings against host time with client clock offset %i', async offset => {
+    const { hostRoom, clientRoom, use, host, client, state } = await setup();
+    const hostNow = 100_000;
+    const localClock = vi.spyOn(Date, 'now').mockReturnValue(hostNow + offset);
+    const synchronizedClock = vi.spyOn(client, 'getSynchronizedNow').mockReturnValue(hostNow);
+    state.burningGround = {
+      cells: [{ id: 1, gridX: 0, gridY: 0, intensity: 1, expiresAt: hostNow + 5_000, visualStyle: 'void' }],
+      warnings: [{ gridX: 1, gridY: 0, activatesAt: hostNow + 5_000 }],
+    };
+    try {
+      use(hostRoom); host.publishGameState(state, true); hostRoom.room.update(); use(clientRoom);
+      expect(client.getLatestGameState()!.burningGround).toEqual(state.burningGround);
+      synchronizedClock.mockReturnValue(hostNow + 5_000);
+      localClock.mockReturnValue(hostNow + 5_000 + offset);
+      use(hostRoom); host.publishGameState(state); hostRoom.room.update(); use(clientRoom);
+      expect(client.getLatestGameState()!.burningGround).toEqual({ cells: [], warnings: [] });
+    } finally { vi.restoreAllMocks(); clearActiveSession(); }
+  });
+
   it('bootstraps late join, sends warning-only changes and clears burned bases and ground on cleanup', async () => {
     const { network, hostRoom, clientRoom, use, connect, host, world, client, state, publish } = await setup();
     try {

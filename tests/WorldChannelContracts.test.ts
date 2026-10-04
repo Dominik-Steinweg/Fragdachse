@@ -54,6 +54,27 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
 }
 
 describe('World-Kanal – Replikation', () => {
+  it('rejects malformed aim bytes before remote input reaches player rotation or shield targeting', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), null);
+      const playerId = clientRoom.room.getLocalPlayerId();
+      const sendInput = (aim: unknown) => {
+        clientRoom.room.getPlayerHandle(playerId)!.setState('inp', { dx: 1, dy: 0, aim, worldRevision: 12 });
+        clientRoom.room.update();
+      };
+      for (const aim of [0, 1, 128, 255]) {
+        sendInput(aim);
+        expect(host.getPlayerInput(playerId)?.aim).toBe(aim);
+      }
+      for (const aim of [undefined, null, 'invalid', '128', {}, [], -1, 256, 1.5, NaN, Infinity]) {
+        sendInput(aim);
+        expect(host.getPlayerInput(playerId), `invalid aim: ${JSON.stringify(aim)}`).toBeUndefined();
+      }
+    } finally { clearActiveSession(); }
+  });
+
   it('sequences the policy-filtered movement state independently of aim and keepalive', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);
     let now = Date.now();
@@ -208,6 +229,71 @@ describe('World-Kanal – Replikation', () => {
 });
 
 describe('World-Kanal – Host-Autoritaet und Verwerfungsregel', () => {
+  it.each(['replace', 'clear'] as const)('discards queued combat feedback when the world is ended by %s', async (transition) => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), null);
+      const client = bridgeFor(clientRoom);
+      const effects = vi.fn();
+      const popups = vi.fn();
+      client.registerEffectHandler(effects);
+      client.registerCoopDefenseXpPopupHandler(popups);
+      setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+      const enqueue = () => {
+        host.broadcastEffect({ type: 'death', x: 10, y: 20, targetId: 'old-enemy', rotation: 0, seed: 1 });
+        host.broadcastCoopDefenseXpPopup(10, 20, 1);
+      };
+      enqueue();
+      host.publishWorldAndActivity(world(), null);
+      host.flushEffects();
+      expect(effects).toHaveBeenCalledOnce();
+      expect(popups).toHaveBeenCalledOnce();
+      effects.mockClear();
+      popups.mockClear();
+
+      enqueue();
+      if (transition === 'replace') host.publishWorldAndActivity(world({ worldRevision: 13 }), null);
+      else host.clearWorldAndActivity();
+      host.flushEffects();
+      expect(effects).not.toHaveBeenCalled();
+      expect(popups).not.toHaveBeenCalled();
+
+      if (transition === 'clear') host.publishWorldAndActivity(world({ worldRevision: 13 }), null);
+      enqueue();
+      host.flushEffects();
+      expect(effects).toHaveBeenCalledOnce();
+      expect(popups).toHaveBeenCalledOnce();
+    } finally { clearActiveSession(); }
+  });
+
+  it('accepts authoritative events only from the host, including relayed client broadcasts', async () => {
+    const [hostRoom, attackerRoom, observerRoom] = await createRoom(3);
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), null);
+      const attacker = bridgeFor(attackerRoom);
+      const observer = bridgeFor(observerRoom);
+      const received = [vi.fn(), vi.fn(), vi.fn()];
+      setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+      host.registerTrainDestroyedHandler(received[0]);
+      setActiveSession({ room: attackerRoom.room, transport: attackerRoom.transport, roomCode: 'ABC123' });
+      attacker.registerTrainDestroyedHandler(received[1]);
+      setActiveSession({ room: observerRoom.room, transport: observerRoom.transport, roomCode: 'ABC123' });
+      observer.registerTrainDestroyedHandler(received[2]);
+
+      attackerRoom.room.broadcast('trdes', {});
+      attackerRoom.transport.links[0].send({ t: 'rpc', c: 0, n: 'trdes', d: {}, s: hostRoom.room.getLocalPlayerId() }, 'rel');
+      await Promise.resolve();
+      for (const handler of received) expect(handler).not.toHaveBeenCalled();
+
+      setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+      host.broadcastTrainDestroyed();
+      await Promise.resolve();
+      for (const handler of received) expect(handler).toHaveBeenCalledOnce();
+    } finally { clearActiveSession(); }
+  });
+
   it('delivers typed shot events once per broadcast and rejects stale or malformed world feedback', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);
     try {

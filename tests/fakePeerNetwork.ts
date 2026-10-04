@@ -175,7 +175,8 @@ export async function startRoom(
   const room = new PeerRoom(transport, {
     hostOnlyPlayerKeys,
     welcomeExcludedPlayerKeys: ['inp', 'ppv'],
-    clientOwnedPlayerKeys: ['ppv'],
+    clientOwnedPlayerKeys: ['fpp', 'inp', 'ppv', 'png', 'pnm', 'isr', 'wlr', 'dar',
+      'lw1', 'lw2', 'lut', 'lul', 'lcm', 'llp', 'cxp', 'pbo', 'pbas', 'vpk'],
     resumeToken,
   });
   const testRoom: TestRoom = { room, transport, joined: [], quit: [], kicked: 0, fatals: [] };

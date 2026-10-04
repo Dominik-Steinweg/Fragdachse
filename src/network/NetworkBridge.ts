@@ -274,7 +274,15 @@ export type KickPlayerResult = { ok: true } | { ok: false; reason: KickPlayerFai
  */
 const HOST_ONLY_PLAYER_KEYS: readonly string[] = [KEY_FAST_PING_PROBE, KEY_INPUT];
 const WELCOME_EXCLUDED_PLAYER_KEYS: readonly string[] = [KEY_INPUT, KEY_PLACEMENT_PREVIEW];
-const CLIENT_OWNED_PLAYER_KEYS: readonly string[] = [KEY_PLACEMENT_PREVIEW];
+// Every other player key and every global key is authored by the host. The room enforces
+// this allowlist on received traffic as well as local writes, independently of UI policy.
+const CLIENT_OWNED_PLAYER_KEYS: readonly string[] = [
+  KEY_FAST_PING_PROBE, KEY_INPUT, KEY_PLACEMENT_PREVIEW, KEY_PING,
+  KEY_NAME, KEY_READY, KEY_WORLD_LOAD_READY, KEY_DEFERRED_ASSETS_READY,
+  KEY_LOADOUT_W1, KEY_LOADOUT_W2, KEY_LOADOUT_UT, KEY_LOADOUT_UL,
+  KEY_LOADOUT_COMMITTED, KEY_LOBBY_LOADOUT_PREVIEW, KEY_COOP_XP,
+  KEY_PB_CONTRIBUTION, 'pbas', 'vpk',
+];
 
 // ── Öffentliche Typen ─────────────────────────────────────────────────────────
 
@@ -1662,6 +1670,7 @@ export class NetworkBridge {
       && isCurrentWorldRevision(world.worldRevision, input.worldRevision)
       && Number.isFinite(input.dx) && Math.abs(input.dx) <= 1
       && Number.isFinite(input.dy) && Math.abs(input.dy) <= 1
+      && Number.isInteger(input.aim) && input.aim >= 0 && input.aim <= 255
       ? input
       : undefined;
   }
@@ -2478,6 +2487,8 @@ export class NetworkBridge {
     // Eine neue World-Instanz startet ohne Teilnehmer. Wer teilnimmt, entscheidet der Host
     // danach ausdruecklich - Teilnahme wird nie aus einer Vorinstanz uebernommen.
     if (previous?.worldRevision !== world.worldRevision) {
+      this.pendingEffects = [];
+      this.pendingXpPopups = [];
       setState(KEY_WORLD_PARTICIPATION, encodeWorldParticipationState({
         worldRevision: world.worldRevision,
         participants: {},
@@ -2502,6 +2513,8 @@ export class NetworkBridge {
   /** Beendet die replizierte World-Instanz; danach existiert weltweit keine mehr. */
   clearWorldAndActivity(): void {
     if (!isHost()) return;
+    this.pendingEffects = [];
+    this.pendingXpPopups = [];
     setState(KEY_ACTIVITY_DESCRIPTOR, null, true);
     setState(KEY_WORLD_DESCRIPTOR, null, true);
     setState(KEY_WORLD_PARTICIPATION, null, true);
@@ -3682,7 +3695,7 @@ export class NetworkBridge {
     delta: EncodedBurningGroundDelta | undefined,
     previous: SyncedBurningGroundSnapshot,
   ): SyncedBurningGroundSnapshot {
-    const now = Date.now();
+    const now = this.getSynchronizedNow();
     if (delta?.f) {
       return { cells: delta.f.map(decodeBurningGroundCell).filter(cell => cell.expiresAt > now),
         warnings: sanitizeGroundWarnings(delta.w, now) };
@@ -5211,6 +5224,9 @@ export class NetworkBridge {
     }
 
     room.registerAllHandler(type, (payload, senderId) => {
+      // Gameplay events and lobby decisions are authored by the host; the transport can
+      // also relay client broadcasts, whose stamped sender must not gain that authority.
+      if (senderId !== room.getHostPlayerId()) return undefined;
       const handler = this.allRpcHandlers.get(type);
       if (!handler) return undefined;
       return handler(payload, senderId);

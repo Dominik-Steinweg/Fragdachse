@@ -87,6 +87,13 @@ describe('PeerRoom handshake and roster', () => {
     expect(host.room.getPlayerIds()).toHaveLength(MAX_PLAYERS);
     expect(clients.every(client => client.fatals.length === 0)).toBe(true);
     expect(clients.every(client => client.transport.links.some(link => !link.closed))).toBe(true);
+
+    const departedId = clients[0].room.getLocalPlayerId();
+    clients[0].room.leave();
+    const replacement = await addClientRoom(network);
+    expect(replacement.room.getLocalPlayerId()).not.toBe(departedId);
+    expect(host.room.getPlayerIds()).toHaveLength(MAX_PLAYERS);
+    replacement.room.destroy();
   });
 
   it('isolates a protocol-mismatched incoming join to that link', async () => {
@@ -125,7 +132,7 @@ describe('PeerRoom handshake and roster', () => {
     expect(client.room.getPlayerState(localId, 'clr')).toBe(0x33cc66);
   });
 
-  it('reuses the id after the resume grace period expired', async () => {
+  it('frees room capacity after grace expires without reusing the departed identity', async () => {
     vi.useFakeTimers();
     try {
       const network = new FakeNetwork();
@@ -138,8 +145,8 @@ describe('PeerRoom handshake and roster', () => {
       await vi.advanceTimersByTimeAsync(10_000);
       const replacement = await addClientRoom(network);
 
-      expect(replacement.room.getLocalPlayerId()).toBe('p1');
-      expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p1']);
+      expect(replacement.room.getLocalPlayerId()).not.toBe(first.room.getLocalPlayerId());
+      expect(host.room.getPlayerIds().sort()).toEqual(['p0', replacement.room.getLocalPlayerId()]);
     } finally {
       vi.useRealTimers();
     }
@@ -147,6 +154,64 @@ describe('PeerRoom handshake and roster', () => {
 });
 
 describe('PeerRoom replicated state', () => {
+  it.each(['rel', 'fast'] as const)('accepts only admitted client-owned state from its origin on %s', async (channel) => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network, ['inp']);
+    const first = await addClientRoom(network, ['inp']);
+    const second = await addClientRoom(network, ['inp']);
+    try {
+      host.room.setGlobal('gph', 'LOBBY', true);
+      host.room.setPlayerState('p1', 'pbk', { confirmed: true }, true);
+      first.transport.links[0].send({
+        t: 'b', q: 1, g: [['gph', 'ARENA']], p: [
+          ['p1', 'pnm', 'Allowed name'],
+          ['p1', 'inp', { dx: 1, dy: 0 }],
+          ['p1', 'pbk', { forged: true }],
+          ['p2', 'pnm', 'Forged name'],
+          ['p2', 'inp', { dx: -1, dy: 0 }],
+          ['unknown', 'pnm', 'Ghost'],
+        ],
+      }, channel);
+      host.room.update();
+
+      expect(host.room.getGlobal('gph')).toBe('LOBBY');
+      expect(second.room.getGlobal('gph')).toBe('LOBBY');
+      expect(host.room.getPlayerState('p1', 'pnm')).toBe('Allowed name');
+      expect(second.room.getPlayerState('p1', 'pnm')).toBe('Allowed name');
+      expect(host.room.getPlayerState('p1', 'inp')).toEqual({ dx: 1, dy: 0 });
+      expect(second.room.getPlayerState('p1', 'inp')).toBeUndefined();
+      expect(host.room.getPlayerState('p1', 'pbk')).toEqual({ confirmed: true });
+      expect(second.room.getPlayerState('p1', 'pbk')).toEqual({ confirmed: true });
+      expect(host.room.getPlayerState('p2', 'pnm')).toBeUndefined();
+      expect(host.room.getPlayerState('p2', 'inp')).toBeUndefined();
+      expect(host.room.getPlayerIds()).toEqual(['p0', 'p1', 'p2']);
+    } finally { first.room.destroy(); second.room.destroy(); host.room.destroy(); }
+  });
+
+  it('ignores state and RPCs before admission and after a link is removed', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const pendingLink = new SilentLink('pending-client');
+    const handler = vi.fn();
+    host.room.registerHostHandler('command', handler);
+    host.transport.handlers?.onLinkRegistered(pendingLink);
+    try {
+      host.transport.handlers?.onMessage(pendingLink, { t: 'rpc', c: 0, n: 'command', d: {} }, 'rel');
+      host.transport.handlers?.onMessage(pendingLink, { t: 'b', g: [['gph', 'ARENA']] }, 'rel');
+      expect(handler).not.toHaveBeenCalled();
+      expect(host.room.getGlobal('gph')).toBeUndefined();
+
+      const client = await addClientRoom(network);
+      const removedLink = host.transport.links[0];
+      host.room.kickPlayer('p1');
+      host.transport.handlers?.onMessage(removedLink, { t: 'rpc', c: 0, n: 'command', d: {} }, 'rel');
+      host.transport.handlers?.onMessage(removedLink, { t: 'b', p: [['p1', 'pnm', 'Ghost']] }, 'rel');
+      expect(handler).not.toHaveBeenCalled();
+      expect(host.room.getPlayerIds()).toEqual(['p0']);
+      client.room.destroy();
+    } finally { host.room.destroy(); }
+  });
+
   it('applies local writes immediately without a network roundtrip', async () => {
     const network = new FakeNetwork();
     const host = await createHostRoom(network);
@@ -431,6 +496,65 @@ describe('PeerRoom rpc', () => {
 });
 
 describe('PeerRoom disconnects', () => {
+  it.each(['queued', 'delayed'] as const)('does not resurrect a departed player from %s fast state', async (delivery) => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const first = await addClientRoom(network);
+    const observer = await addClientRoom(network);
+    try {
+      first.room.setPlayerState('p1', 'png', 42, false);
+      first.room.update();
+      if (delivery === 'delayed') {
+        host.transport.links[1].fastReady = false;
+        host.room.update();
+        host.transport.links[1].fastReady = true;
+      }
+      host.room.kickPlayer('p1');
+      expect(observer.room.getPlayerIds()).toEqual(['p0', 'p2']);
+
+      if (delivery === 'queued') host.room.update();
+      else host.transport.links[1].send({ t: 'b', q: 1, p: [['p1', 'png', 42]] }, 'fast');
+
+      expect(observer.room.getPlayerIds()).toEqual(['p0', 'p2']);
+      expect(observer.room.getPlayerState('p1', 'png')).toBeUndefined();
+      expect(observer.room.getPlayerHandle('p1')).toBeUndefined();
+
+      const replacement = await addClientRoom(network);
+      try {
+        const replacementId = replacement.room.getLocalPlayerId();
+        replacement.room.setPlayerState(replacementId, 'png', 23, false);
+        replacement.room.update(); host.room.update();
+        expect(observer.room.getPlayerHandle(replacementId)).toBeDefined();
+        expect(observer.room.getPlayerState(replacementId, 'png')).toBe(23);
+      } finally { replacement.room.destroy(); }
+    } finally { first.room.destroy(); observer.room.destroy(); host.room.destroy(); }
+  });
+
+  it('keeps a delayed former player snapshot away from a replacement in the same room', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const first = await addClientRoom(network);
+    const observer = await addClientRoom(network);
+    try {
+      host.room.setPlayerState(first.room.getLocalPlayerId(), 'frg', 9, false);
+      const observerLink = host.transport.links[1];
+      observerLink.fastReady = false;
+      host.room.update();
+      observerLink.fastReady = true;
+      const delayed = observerLink.sent.find(entry => entry.channel === 'fast' && entry.message.t === 'b')!.message;
+      host.room.kickPlayer(first.room.getLocalPlayerId());
+
+      const replacement = await addClientRoom(network);
+      try {
+        const replacementId = replacement.room.getLocalPlayerId();
+        host.room.setPlayerState(replacementId, 'frg', 0, true);
+        observerLink.send(delayed, 'fast');
+        expect(observer.room.getPlayerState(replacementId, 'frg')).toBe(0);
+        expect(observer.room.getPlayerIds()).not.toContain(first.room.getLocalPlayerId());
+      } finally { replacement.room.destroy(); }
+    } finally { first.room.destroy(); observer.room.destroy(); host.room.destroy(); }
+  });
+
   it('enforces host/lobby/target checks in NetworkBridge and resets remaining ready state', async () => {
     vi.useFakeTimers();
     try {
@@ -548,8 +672,8 @@ describe('PeerRoom disconnects', () => {
     expect(observer.quit).toEqual(['p1']);
 
     const replacement = await addClientRoom(network, [], 'explicit-leave-token');
-    expect(replacement.room.getLocalPlayerId()).toBe('p1');
-    expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p1', 'p2']);
+    expect(replacement.room.getLocalPlayerId()).not.toBe(leaving.room.getLocalPlayerId());
+    expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p2', replacement.room.getLocalPlayerId()]);
   });
 
   it('closes a silent link after the heartbeat timeout but keeps the resume grace period', async () => {

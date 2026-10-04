@@ -54,7 +54,7 @@ export interface PeerRoomOptions {
   hostOnlyPlayerKeys?: readonly string[];
   /** Per-Spieler-Keys, die nie in einen Welcome-/Resume-Snapshot gehören. */
   welcomeExcludedPlayerKeys?: readonly string[];
-  /** Per-Spieler-Keys, die ein Client nur für seine eigene Spieler-ID schreiben darf. */
+  /** Vollständige Allowlist der Keys, die Clients für ihre eigene Spieler-ID schreiben dürfen. */
   clientOwnedPlayerKeys?: readonly string[];
   /** Stable per-room client token used only for the short resume window. */
   resumeToken?: string;
@@ -143,6 +143,7 @@ export class PeerRoom {
   private hostLink: PeerLinkLike | null = null;
   private localPlayerId = '';
   private hostPlayerId = '';
+  private nextPlayerId = 1;
   private pendingHandshake: PendingHandshake | null = null;
   private reconnecting = false;
   private kicked = false;
@@ -309,6 +310,7 @@ export class PeerRoom {
   }
 
   setGlobal(key: string, value: unknown, reliable = false): void {
+    if (!this.transport.isHost) return;
     this.globalState.set(key, value);
     if (reliable) this.sendToLinks({ t: 'b', g: [[key, value]] }, 'rel', null);
     else for (const buffer of this.fastBuffers.values()) buffer.queueGlobal(key, value);
@@ -324,6 +326,8 @@ export class PeerRoom {
   }
 
   setPlayerState(playerId: string, key: string, value: unknown, reliable = false): void {
+    if (!this.transport.isHost
+      && (playerId !== this.localPlayerId || !this.clientOwnedPlayerKeys.has(key))) return;
     this.applyPlayerState(playerId, key, value);
     if (this.isSuppressedRelayKey(key)) {
       // Host-only-Key: der Host verteilt ihn grundsaetzlich nicht weiter. Ein Client
@@ -454,6 +458,7 @@ export class PeerRoom {
   // ── Nachrichtenverarbeitung ───────────────────────────────────────────────
 
   private handleMessage(link: PeerLinkLike, message: PeerMessage, channel: PeerChannelKind): void {
+    if (this.destroyed || !this.links.has(link)) return;
     // A fragmented/compressed welcome can be overtaken by fast traffic on the other
     // channel. Establish the new/resumed link's baseline before accepting any fast state.
     if (!this.transport.isHost && !link.playerId && channel === 'fast') return;
@@ -472,6 +477,8 @@ export class PeerRoom {
   }
 
   private handleHostMessage(link: PeerLinkLike, message: PeerMessage, channel: PeerChannelKind): void {
+    // Registration precedes the handshake. Only admitted peers may mutate state or run RPCs.
+    if (!link.playerId && message.t !== 'hello') return;
     switch (message.t) {
       case 'hello':
         this.completeHandshake(link, message.v, message.k, message.r === true);
@@ -664,16 +671,19 @@ export class PeerRoom {
 
   private applyBatch(message: BatchMessage): void {
     for (const [key, value] of message.g ?? []) this.globalState.set(key, value);
-    for (const [playerId, key, value] of message.p ?? []) this.applyPlayerState(playerId, key, value);
+    // Roster membership is reliable. A delayed fast batch must not recreate a quit player;
+    // only welcome/join (or the host's handshake) may introduce a received player state.
+    for (const [playerId, key, value] of message.p ?? []) {
+      if (this.playerStates.has(playerId)) this.applyPlayerState(playerId, key, value);
+    }
   }
 
   private filterClientOwnedWrites(message: BatchMessage, originPlayerId: string): BatchMessage {
     const players = (message.p ?? []).filter(([playerId, key]) => (
-      !this.clientOwnedPlayerKeys.has(key) || playerId === originPlayerId
+      playerId === originPlayerId && this.clientOwnedPlayerKeys.has(key)
     ));
     const accepted: BatchMessage = { t: 'b' };
     if (message.q !== undefined) accepted.q = message.q;
-    if (message.g) accepted.g = message.g;
     if (players.length > 0) accepted.p = players;
     return accepted;
   }
@@ -862,12 +872,9 @@ export class PeerRoom {
   }
 
   private allocatePlayerId(): string {
-    for (let index = 0; index < MAX_PLAYERS; index++) {
-      const candidate = `p${index.toString(36)}`;
-      if (!this.playerStates.has(candidate)) return candidate;
-    }
-    // Kann nicht auftreten: completeHandshake prueft MAX_PLAYERS vorher.
-    throw createPeerNetworkError('room-full');
+    // Capacity is checked before allocation. A departed identity must never be reused:
+    // old fast packets and gameplay references can outlive its reliable quit message.
+    return `p${(this.nextPlayerId++).toString(36)}`;
   }
 
   private emitJoin(playerId: string): void {
