@@ -2959,6 +2959,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.stinkCloudSystem.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
     this.ctx.effectSystem.clearEnemyClawEffects();
+    this.ctx.effectSystem.clearSpawnEffects();
     this.ctx.effectSystem.clearXpTexts();
     this.renderers.combatGoreGpu.fragmentTemplateCache.clear();
     this.combatPresentationPrepared = false;

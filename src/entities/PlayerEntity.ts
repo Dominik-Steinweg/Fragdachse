@@ -143,6 +143,7 @@ export class PlayerEntity {
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
   /** Für die an dieser Entity hängenden Lichtquellen (Brand, Spawn-Blitz). */
   private lighting: LightingSystem | null = null;
+  private spawnEffectRenderer: SpawnEffectRenderer | null = null;
 
   // Visueller Tod wird durch den gemeinsamen GPU-Gore-Renderer repliziert.
   private isAliveVisual = true;
@@ -693,6 +694,7 @@ export class PlayerEntity {
    */
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+    this.spawnEffectRenderer?.setLightingSystem(lighting);
     this.burnRenderer?.setLightingSystem(lighting, `entityburn:player:${this.id}`);
   }
 
@@ -805,9 +807,9 @@ export class PlayerEntity {
     });
 
     // World-Space-Effekte (Ringe, Partikel, Lichtstrahl, Kern-Flash)
-    const spawnEffect = new SpawnEffectRenderer(scene);
-    spawnEffect.setLightingSystem(this.lighting);
-    spawnEffect.play(this.runtime.x, this.runtime.y, this.colorHex);
+    this.spawnEffectRenderer ??= new SpawnEffectRenderer(scene);
+    this.spawnEffectRenderer.setLightingSystem(this.lighting);
+    this.spawnEffectRenderer.play(this.runtime.x, this.runtime.y, this.colorHex);
   }
 
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite), 1 = normale Spielergroesse. */
@@ -1246,6 +1248,8 @@ export class PlayerEntity {
   }
 
   destroy(): void {
+    this.spawnEffectRenderer?.clear();
+    this.spawnEffectRenderer = null;
     this.pressureShieldRenderer?.destroy();
     this.rocketHealingRenderer?.destroyAll();
     this.stopBurrowTween(true);

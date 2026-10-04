@@ -215,6 +215,8 @@ export class EffectSystem implements EnemyVisualSink {
     this.spawnEffectRenderer.playEnemy(x, y, colorHex);
   }
 
+  clearSpawnEffects(): void { this.spawnEffectRenderer?.clear(); }
+
   setAsmdPrimaryRenderer(renderer: AsmdPrimaryRenderer | null): void {
     this.asmdPrimaryRenderer = renderer;
   }
@@ -277,6 +279,8 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   destroy(): void {
+    this.clearSpawnEffects();
+    this.spawnEffectRenderer = null;
     this.enemyClawRenderer?.destroy(); this.enemyClawRenderer = null;
     this.xpTextRenderer?.destroy();
     this.xpTextRenderer = null;

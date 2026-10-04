@@ -17,11 +17,40 @@ const AFTERGLOW_DURATION_MS = 1800;
 export class SpawnEffectRenderer {
   private texturesReady = false;
   private lighting: LightingSystem | null = null;
+  private readonly effects = new Set<Phaser.GameObjects.GameObject>();
+  private readonly timers = new Set<Phaser.Time.TimerEvent>();
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+  }
+
+  clear(): void {
+    for (const timer of this.timers) timer.remove(false);
+    this.timers.clear();
+    for (const effect of this.effects) {
+      this.scene.tweens.killTweensOf(effect);
+      effect.destroy();
+    }
+    this.effects.clear();
+  }
+
+  private track(effect: Phaser.GameObjects.GameObject): void {
+    this.effects.add(effect);
+    effect.once('destroy', () => this.effects.delete(effect));
+  }
+
+  private release(effect: Phaser.GameObjects.GameObject): void {
+    if (this.effects.delete(effect)) effect.destroy();
+  }
+
+  private releaseAfter(effect: Phaser.GameObjects.GameObject, delay: number): void {
+    const timer = this.scene.time.delayedCall(delay, () => {
+      this.timers.delete(timer);
+      this.release(effect);
+    });
+    this.timers.add(timer);
   }
 
   private ensureTextures(): void {
@@ -98,6 +127,7 @@ export class SpawnEffectRenderer {
    */
   private playAfterglow(x: number, y: number, colorHex: number, scale: number): void {
     const glow = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
+    this.track(glow);
     glow.setDisplaySize(196 * scale, 196 * scale);
     glow.setDepth(DEPTH_FX - 0.7);
     makeAdditive(glow);
@@ -112,6 +142,7 @@ export class SpawnEffectRenderer {
       duration: 140,
       ease:     'Quad.easeOut',
       onComplete: () => {
+        if (!this.effects.has(glow)) return;
         this.scene.tweens.add({
           targets:  glow,
           alpha:    0,
@@ -119,7 +150,7 @@ export class SpawnEffectRenderer {
           scaleY:   glow.scaleY * 1.25,
           duration: AFTERGLOW_DURATION_MS - 140,
           ease:     'Sine.easeIn',
-          onComplete: () => glow.destroy(),
+          onComplete: () => this.release(glow),
         });
       },
     });
@@ -134,6 +165,7 @@ export class SpawnEffectRenderer {
 
   private playEnemyCoreBurst(x: number, y: number, colorHex: number): void {
     const core = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
+    this.track(core);
     core.setDisplaySize(18, 18);
     core.setDepth(DEPTH_FX + 1);
     makeAdditive(core);
@@ -147,7 +179,7 @@ export class SpawnEffectRenderer {
       alpha:    0,
       duration: 300,
       ease:     'Expo.easeOut',
-      onComplete: () => core.destroy(),
+      onComplete: () => this.release(core),
     });
   }
 
@@ -164,12 +196,13 @@ export class SpawnEffectRenderer {
       emitting:  false,
       gravityY:  40,
     });
+    this.track(emitter);
     registerParticleEmitter(this.scene, 'spawnEffect', emitter);
     emitter.setDepth(DEPTH_FX + 0.5);
     emitter.explode(12);
     recordParticleSpawn(this.scene, 'spawnEffect', 12);
 
-    this.scene.time.delayedCall(600, () => emitter.destroy());
+    this.releaseAfter(emitter, 600);
   }
 
   // ─── Zentraler Licht-Burst ──────────────────────────────────────────────────
@@ -177,6 +210,7 @@ export class SpawnEffectRenderer {
   private playCoreBurst(x: number, y: number, colorHex: number): void {
     // Weißer Kern
     const core = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
+    this.track(core);
     core.setDisplaySize(20, 20);
     core.setDepth(DEPTH_FX + 1.5);
     makeAdditive(core);
@@ -189,11 +223,12 @@ export class SpawnEffectRenderer {
       alpha:    0,
       duration: 380,
       ease:     'Expo.easeOut',
-      onComplete: () => core.destroy(),
+      onComplete: () => this.release(core),
     });
 
     // Farbiger Halo (leicht verzögert)
     const halo = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
+    this.track(halo);
     halo.setDisplaySize(24, 24);
     halo.setDepth(DEPTH_FX + 1);
     halo.setBlendMode(Phaser.BlendModes.ADD);
@@ -208,7 +243,7 @@ export class SpawnEffectRenderer {
       delay:    40,
       duration: 500,
       ease:     'Cubic.easeOut',
-      onComplete: () => halo.destroy(),
+      onComplete: () => this.release(halo),
     });
   }
 
@@ -234,6 +269,7 @@ export class SpawnEffectRenderer {
   ): void {
     const startRadius = 5;
     const ring = this.scene.add.circle(x, y, startRadius, 0, 0);
+    this.track(ring);
     registerGraphicsObject(this.scene, 'spawnRings', ring);
     ring.setDepth(DEPTH_FX);
     ring.isFilled     = false;
@@ -251,7 +287,7 @@ export class SpawnEffectRenderer {
       delay,
       duration,
       ease:     'Cubic.easeOut',
-      onComplete: () => ring.destroy(),
+      onComplete: () => this.release(ring),
     });
   }
 
@@ -259,6 +295,7 @@ export class SpawnEffectRenderer {
 
   private playBeam(x: number, y: number, colorHex: number): void {
     const beam = this.scene.add.rectangle(x, y - 56, 10, 112, colorHex, 0.75);
+    this.track(beam);
     registerGraphicsObject(this.scene, 'spawnRings', beam);
     beam.setDepth(DEPTH_FX - 0.5);
     makeAdditive(beam);
@@ -270,11 +307,12 @@ export class SpawnEffectRenderer {
       y:        y - 140,
       duration: 420,
       ease:     'Quad.easeOut',
-      onComplete: () => beam.destroy(),
+      onComplete: () => this.release(beam),
     });
 
     // Weicher weißer Überschuss am Strahl
     const beamGlow = this.scene.add.rectangle(x, y - 56, 28, 112, 0xffffff, 0.25);
+    this.track(beamGlow);
     registerGraphicsObject(this.scene, 'spawnRings', beamGlow);
     beamGlow.setDepth(DEPTH_FX - 0.6);
     makeAdditive(beamGlow);
@@ -286,7 +324,7 @@ export class SpawnEffectRenderer {
       y:        y - 140,
       duration: 420,
       ease:     'Quad.easeOut',
-      onComplete: () => beamGlow.destroy(),
+      onComplete: () => this.release(beamGlow),
     });
   }
 
@@ -307,12 +345,13 @@ export class SpawnEffectRenderer {
       emitting:  false,
       gravityY:  60,
     });
+    this.track(emitter);
     registerParticleEmitter(this.scene, 'spawnEffect', emitter);
     emitter.setDepth(DEPTH_FX + 0.5);
     emitter.explode(28);
     recordParticleSpawn(this.scene, 'spawnEffect', 28);
 
-    this.scene.time.delayedCall(800, () => emitter.destroy());
+    this.releaseAfter(emitter, 800);
   }
 
   // ─── Nachhall-Wellring (langsam) ────────────────────────────────────────────

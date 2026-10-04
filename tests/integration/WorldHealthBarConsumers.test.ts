@@ -20,7 +20,7 @@ vi.mock('phaser', async () => {
   };
 });
 vi.mock('../../src/effects/SpawnEffectRenderer', () => ({
-  SpawnEffectRenderer: class { setLightingSystem() {} play() {} },
+  SpawnEffectRenderer: class { setLightingSystem() {} play() {} clear() {} },
 }));
 // Decorative base pixels have their own mask and presentation-lifetime tests.
 vi.mock('../../src/arena/BaseAccentGlowRenderer', () => ({
