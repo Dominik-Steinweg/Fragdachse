@@ -530,6 +530,8 @@ export class BaseEntity {
   }
 
   destroy(): void {
+    this.vulnerableMarker?.destroy();
+    this.vulnerableMarker = null;
     this.accentGlow?.destroy();
     this.accentGlow = null;
     this.grounding?.destroy();

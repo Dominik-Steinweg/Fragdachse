@@ -121,6 +121,22 @@ function setup(faction: BaseSpec['faction'], role: BaseSpec['role'], presentatio
 }
 
 describe('Base foundation ownership', () => {
+  it('releases the vulnerability marker when its entity is destroyed directly', () => {
+    const { base, scene } = setup('hostile', 'main');
+    const marker = Object.assign(new FakeImage('vulnerability-marker', 0, 0), {
+      lineStyle: () => marker,
+      strokeRect: () => marker,
+    });
+    Object.assign(scene.add, { graphics: () => marker });
+    Object.assign(scene, { tweens: { add: vi.fn() } });
+    base.setVulnerable(true);
+    expect(marker.active).toBe(true);
+    base.destroy();
+    expect(marker.active).toBe(false);
+    base.destroy();
+    expect(marker.active).toBe(false);
+  });
+
   it.each([
     ['friendly', 'main'], ['hostile', 'main'], ['friendly', 'outpost'], ['hostile', 'outpost'],
   ] as const)('follows %s %s cells through staggered destruction and reset', (faction, role) => {
