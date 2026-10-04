@@ -175,11 +175,19 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       controller.build(c.id as ConstructionId, c.gridX === undefined && c.gridY === undefined ? undefined : point(c)); break;
     }
     case 'pause': controller.pause(); break;
+    case 'quality':
+      if (c.level !== 'high' && c.level !== 'medium' && c.level !== 'low') throw new Error('quality.level: high, medium or low required');
+      controller.setQuality(c.level); break;
     case 'resume': controller.resume(); break;
     case 'step': {
       const frames = c.frames === undefined ? 1 : number(c.frames, 1, 600);
       if (!Number.isInteger(frames)) throw new Error('frames muss ganzzahlig sein.');
       controller.step(frames); break;
+    }
+    case 'settle': {
+      const frames = c.frames === undefined ? 1 : number(c.frames, 1, 600);
+      if (!Number.isInteger(frames)) throw new Error('frames: integer required');
+      controller.settle(frames); break;
     }
     case 'options': {
       const options = object(c.values);

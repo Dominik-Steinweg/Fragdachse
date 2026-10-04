@@ -97,6 +97,21 @@ describe('Dev scenario contract', () => {
     } finally { clock.destroy(); }
     expect(Date.now).toBe(realNow); expect(loop.callback).toBe(original);
   });
+  it('settles asynchronous rendering without aging effects or consuming queued simulation steps', () => {
+    const deltas: number[] = [];
+    const loop = { callback: (_time: number, delta: number) => { deltas.push(delta); } };
+    const clock = new ScenarioClock(loop);
+    try {
+      clock.settle(2);
+      const before = Date.now();
+      expect(() => clock.settle(1)).toThrow(/pending/);
+      loop.callback(1000, 80); loop.callback(1100, 100); loop.callback(1200, 100);
+      expect(deltas).toEqual([0, 0]); expect(clock.pendingSteps).toBe(0);
+      expect(Date.now()).toBe(before);
+      clock.step(1); loop.callback(1300, 100);
+      expect(deltas[2]).toBe(1000 / 60); expect(clock.now).toBe(1000 / 60);
+    } finally { clock.destroy(); }
+  });
 });
 
 it('rejects saved comparison options with an explicit migration hint',()=>{

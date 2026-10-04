@@ -17,6 +17,8 @@ import { getVisibleWorldView } from '../../graphics/CameraWorldView';
 import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
 import { ScenarioClock } from './clock';
+import { visualTest } from './visualTest';
+import { getGraphicsQualityController, type GraphicsQuality } from '../../graphics/GraphicsQuality';
 import { decodeScenario, defaultScenario, encodeScenario, parseScenario, scenarioLoadout, type DevScenario, type GridPoint } from './config';
 import { createScenarioPanel } from './panel';
 import { installScenarioApi } from './api';
@@ -89,6 +91,7 @@ export class DevScenarioController {
     private lobbyReady: () => boolean) {
     if (!isDevScenarioMode()) throw new Error('Dev entry required.');
     this.clock = new ScenarioClock(scene.game.loop);
+    this.clock.holdLoadingTime = () => this.runtime.getScenarioLoadingState().work?.renderReady === false;
     this.bots = new ScenarioBots(runtime, () => this.clock.now);
     let imported: DevScenario | null = null;
     try { imported = decodeScenario(location.hash); } catch (error) { this.fail(error); }
@@ -120,6 +123,7 @@ export class DevScenarioController {
     this.captureCancel?.();
     this.captureRevision++;
     this.clock.paused = false; this.clock.speed = 1;
+    this.clock.preparing = visualTest.enabled;
     this.config = config;
     this.saveLink();
     this.pinned.clear(); this.pendingConstructions = [];
@@ -579,12 +583,22 @@ export class DevScenarioController {
     this.lastAction = { trainExplosion: 'detonated', center: this.trainCameraPoint, zoom: this.zoom };
   }
   aimBot(index: number, point: GridPoint | null): void { this.bots.aim(index, point ? this.world(point) : null); }
-  pause(): void { this.requireReady(); this.worldLighting?.stopMeasurement(); this.clock.paused = true; }
+  private requirePresentation(): void {
+    if (this.state === 'idle' && this.lobbyReady()) return;
+    this.requireReady();
+  }
+  setQuality(level: GraphicsQuality): void { getGraphicsQualityController(this.scene)?.setLevel(level); }
+  pause(): void { this.requirePresentation(); this.worldLighting?.stopMeasurement(); this.clock.paused = true; }
   resume(): void { this.clock.paused = false; }
-  step(frames = 1): void { this.requireReady(); this.clock.step(frames); }
+  step(frames = 1): void { this.requirePresentation(); this.clock.step(frames); }
+  settle(frames = 1): void { this.requirePresentation(); this.clock.settle(frames); }
+  private pauseVisualTest(): void {
+    if (this.clock.preparing) { this.clock.preparing = false; this.clock.paused = true; }
+  }
   update(): void {
     if (this.disposed) return;
     try {
+      if (this.state === 'idle' && this.lobbyReady()) this.pauseVisualTest();
       if ((this.state === 'waiting-lobby' || this.state === 'loading') && performance.now() - this.startedAt > 180000) throw new Error('Start überschreitet 180 s; Ladezustand im Bericht prüfen.');
       if (this.state === 'waiting-lobby' && bridge.getGamePhase() === 'LOBBY' && this.lobbyReady() && ++this.lobbyFrames >= 2) {
         bridge.setGameMode('coop_defense'); bridge.setCoopDefenseMapId(this.config.mapId);
@@ -689,6 +703,7 @@ export class DevScenarioController {
       }
       this.flushTrainShowcase();
       this.updateTrainShowcase();
+      if (!this.setupPending && !this.pendingTrainShowcase) this.pauseVisualTest();
     } catch (error) { this.fail(error); this.stop(); this.state = 'error'; }
   }
   setPanelCollapsed(collapsed: boolean): void { this.panel.setCollapsed(collapsed); }
@@ -718,7 +733,9 @@ export class DevScenarioController {
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),
       elapsedWallMs: Math.round(performance.now() - this.startedAt), simulationMs: this.clock.now,
-      paused: this.clock.paused, speed: this.clock.speed, trigger: this.trigger, moving: this.movement,
+      paused: this.clock.paused, pendingSteps: this.clock.pendingSteps, lobbyReady: this.lobbyReady(), visualTest: visualTest.enabled,
+      quality: getGraphicsQualityController(this.scene)?.getLevel() ?? 'high',
+      speed: this.clock.speed, trigger: this.trigger, moving: this.movement,
       pendingSetupConstructions: this.pendingConstructions.length,
       rendererSize: { width: this.scene.game.canvas.width, height: this.scene.game.canvas.height },
       sunTuning: { ...(this.worldLighting?.sunTuning ?? SUN_TUNING_DEFAULTS) },
