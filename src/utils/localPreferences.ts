@@ -274,6 +274,7 @@ export type LocalProgressTransferMessageKey =
   | 'ui.lobby.saveNoFile'
   | 'ui.lobby.saveTooLarge'
   | 'ui.lobby.saveReadFailed'
+  | 'ui.lobby.saveImportBlocked'
   | 'ui.lobby.saveUnavailable';
 
 const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
@@ -1181,9 +1182,10 @@ export function downloadStoredGameProgress(): LocalProgressTransferResult {
   }
 }
 
-export function importStoredGameProgressFile(): Promise<LocalProgressTransferResult> {
+export function importStoredGameProgressFile(canImport: () => boolean = () => true): Promise<LocalProgressTransferResult> {
   return new Promise((resolve) => {
     try {
+      if (!canImport()) return resolve({ ok: false, messageKey: 'ui.lobby.saveImportBlocked' });
       if (typeof document === 'undefined') throw new Error('unavailable');
       const input = document.createElement('input');
       input.type = 'file';
@@ -1193,7 +1195,10 @@ export function importStoredGameProgressFile(): Promise<LocalProgressTransferRes
           const file = input.files?.[0];
           if (!file) return resolve({ ok: false, messageKey: 'ui.lobby.saveNoFile' });
           if (file.size > 5_000_000) return resolve({ ok: false, messageKey: 'ui.lobby.saveTooLarge' });
-          resolve(importStoredGameProgressJson(await file.text()));
+          const json = await file.text();
+          // The room may have started a round while the picker or file read was pending.
+          if (!canImport()) return resolve({ ok: false, messageKey: 'ui.lobby.saveImportBlocked' });
+          resolve(importStoredGameProgressJson(json));
         } catch {
           resolve({ ok: false, messageKey: 'ui.lobby.saveReadFailed' });
         }

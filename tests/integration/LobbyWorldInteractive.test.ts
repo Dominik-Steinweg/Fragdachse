@@ -87,6 +87,7 @@ import {
 } from '../../src/world/WorldParticipation';
 import { resolveWorldPresentation } from '../../src/world/WorldPresentation';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from '../fakePeerNetwork';
+import { exportStoredGameProgressJson, getStoredCoopDefenseProgress, invalidateLocalStorageCache, setStoredCoopDefenseTotalXp } from '../../src/utils/localPreferences';
 
 /**
  * L2: dieselbe LobbyWorld wird betretbar.
@@ -1204,6 +1205,37 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     overlay.lockButton();
     expect(overlay.settings.setLocked).toHaveBeenCalledWith(true);
     expect(overlay.progress.setReady).toHaveBeenCalledWith(true, false);
+  });
+});
+
+describe('Lobby save import lifetime', () => {
+  afterEach(() => { invalidateLocalStorageCache(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it.each(['round-start', 'ready', 'locked'] as const)('rejects a pending file read after %s', async (transition) => {
+    vi.stubGlobal('window', { localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } });
+    invalidateLocalStorageCache();
+    setStoredCoopDefenseTotalXp(123);
+    const imported = exportStoredGameProgressJson();
+    setStoredCoopDefenseTotalXp(456);
+    let finishReading!: (json: string) => void;
+    const reading = new Promise<string>(resolve => { finishReading = resolve; });
+    const input = { files: [{ size: imported.length, text: () => reading }], click: vi.fn(), onchange: null as (() => Promise<void>) | null };
+    vi.stubGlobal('document', { createElement: () => input });
+    const network = { getGamePhase: vi.fn(() => 'LOBBY'), getPlayerReady: vi.fn(() => false), getLocalPlayerId: () => 'local' };
+    const onImported = vi.fn();
+    const panel = new LeftSidePanel({} as never, network as never, {} as never, {} as never, onImported) as any;
+    panel.showSaveStatus = vi.fn();
+    const importing = panel.importSaveFile();
+    const selected = input.onchange!();
+    if (transition === 'round-start') network.getGamePhase.mockReturnValue('ARENA');
+    else if (transition === 'ready') network.getPlayerReady.mockReturnValue(true);
+    else panel.lobbyFieldsLocked = true;
+    finishReading(imported);
+    await selected;
+    await importing;
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(456);
+    expect(onImported).not.toHaveBeenCalled();
+    expect(panel.showSaveStatus).toHaveBeenCalledWith({ ok: false, messageKey: 'ui.lobby.saveImportBlocked' });
   });
 });
 

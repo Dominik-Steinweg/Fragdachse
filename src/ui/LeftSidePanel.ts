@@ -226,6 +226,7 @@ export class LeftSidePanel {
   private lastLoadoutControlEnabled: boolean | null = null;
   private loadoutEnabled    = true;
   private lobbyFieldsLocked = false;
+  private destroyed = false;
   private helpOverlay:      HelpOverlay | null = null;
   private optionsOverlay:   OptionsOverlay | null = null;
   // Wird vor dem Bau gesetzt, wenn der Lifecycle-Koordinator frueher fertig ist als das Panel.
@@ -674,6 +675,7 @@ export class LeftSidePanel {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.scene.tweens.killTweensOf(this.lobbyContainer);
     this.scene.tweens.killTweensOf(this.gameContainer);
     this.closeNameEditPopup();
@@ -1484,7 +1486,11 @@ export class LeftSidePanel {
   }
 
   private async importSaveFile(): Promise<void> {
-    const result = await importStoredGameProgressFile();
+    const result = await importStoredGameProgressFile(() => !this.destroyed
+      && !this.lobbyFieldsLocked
+      && this.bridge.getGamePhase() === 'LOBBY'
+      && !this.bridge.getPlayerReady(this.bridge.getLocalPlayerId()));
+    if (this.destroyed) return;
     if (result.ok) {
       this.applyStoredPlayerNamePreference();
       this.syncAllLoadoutSelections();

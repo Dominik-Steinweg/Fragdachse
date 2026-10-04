@@ -278,6 +278,7 @@ export const enUi = {
   "ui.lobby.saveNoFile": "No file selected.",
   "ui.lobby.saveTooLarge": "The save file is too large.",
   "ui.lobby.saveReadFailed": "Could not read the save file.",
+  "ui.lobby.saveImportBlocked": "Saves can only be imported in the lobby before getting ready.",
   "ui.lobby.saveUnavailable": "File import is not available in this browser.",
   "ui.lobby.gameMode": "GAME MODE",
   "ui.lobby.map": "MAP",

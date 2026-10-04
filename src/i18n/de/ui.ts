@@ -278,6 +278,7 @@ export const deUi = {
   "ui.lobby.saveNoFile": "Keine Datei ausgewählt.",
   "ui.lobby.saveTooLarge": "Die Spielstanddatei ist zu groß.",
   "ui.lobby.saveReadFailed": "Die Spielstanddatei konnte nicht gelesen werden.",
+  "ui.lobby.saveImportBlocked": "Spielstände können nur vor dem Bereitmachen in der Lobby importiert werden.",
   "ui.lobby.saveUnavailable": "Der Dateiimport ist in diesem Browser nicht verfügbar.",
   "ui.lobby.gameMode": "SPIELMODUS",
   "ui.lobby.map": "MAP",

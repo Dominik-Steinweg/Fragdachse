@@ -21,6 +21,7 @@ import {
   getStoredPlayerName,
   getStoredLocale,
   importStoredGameProgressJson,
+  importStoredGameProgressFile,
   invalidateLocalStorageCache,
   resetStoredCoopDefenseCharacter,
   setStoredCoopDefenseCheatProgress,
@@ -536,6 +537,38 @@ describe('local progress generation', () => {
     const manipulated = importStoredGameProgressJson(JSON.stringify(envelope));
     expect(manipulated.ok).toBe(false);
     expect(getStoredCoopDefenseProgress().totalXp).toBe(456);
+  });
+
+  it('rechecks import permission after reading the selected file', async () => {
+    setStoredCoopDefenseTotalXp(321);
+    const json = exportStoredGameProgressJson();
+    setStoredCoopDefenseTotalXp(456);
+    const before = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    let finishReading!: (json: string) => void;
+    const reading = new Promise<string>((resolve) => { finishReading = resolve; });
+    const input = {
+      files: [{ size: json.length, text: () => reading }],
+      click: vi.fn(),
+      onchange: null as (() => Promise<void>) | null,
+    };
+    vi.stubGlobal('document', { createElement: () => input });
+    let allowed = true;
+    const result = importStoredGameProgressFile(() => allowed);
+    const selected = input.onchange!();
+    allowed = false;
+    finishReading(json);
+    await selected;
+    expect(await result).toEqual({ ok: false, messageKey: 'ui.lobby.saveImportBlocked' });
+    expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(before);
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(456);
+  });
+
+  it('does not open the file picker when progress cannot be replaced', async () => {
+    const createElement = vi.fn();
+    vi.stubGlobal('document', { createElement });
+    expect(await importStoredGameProgressFile(() => false))
+      .toEqual({ ok: false, messageKey: 'ui.lobby.saveImportBlocked' });
+    expect(createElement).not.toHaveBeenCalled();
   });
 
   it('serves repeated reads from cache and reloads only after explicit invalidation', () => {

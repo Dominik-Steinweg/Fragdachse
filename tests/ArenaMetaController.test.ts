@@ -105,6 +105,24 @@ function makeInput(): {
 }
 
 describe('ArenaMetaController', () => {
+  it.each(['ARENA', 'local-ready', 'authoritative-ready'] as const)(
+    'rejects character reset before persistence when the lobby is locked (%s)', (state) => {
+      const { controller, store, session, presentation } = makeInput();
+      if (state === 'local-ready') vi.mocked(session.isLocalReady).mockReturnValue(true);
+      else if (state === 'authoritative-ready') vi.mocked(session.isAuthoritativeLocalReady).mockReturnValue(true);
+      else vi.mocked(session.getGamePhase).mockReturnValue(state);
+      controller.resetCharacter();
+      expect(store.resetCharacter).not.toHaveBeenCalled();
+      expect(presentation.refreshUpgradeOverlay).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows character reset from an unlocked lobby', () => {
+    const { controller, store } = makeInput();
+    controller.resetCharacter();
+    expect(store.resetCharacter).toHaveBeenCalledOnce();
+  });
+
   it.each([false, true])('detects new round rewards and cancels even deferred menus without changing progress (levelUp=%s)', levelUp => {
     const { controller, store, resultRead, presentation, session } = makeInput();
     const progress = getStoredCoopDefenseProgress();
@@ -439,5 +457,7 @@ describe('ArenaMetaController', () => {
     controller.setDebugProgress(999999, 0, '1'); controller.refresh();
     expect(playSound.mock.calls).toEqual([['sfx_upgrade_purchased'], ['sfx_item_selected'], ['sfx_level_up']]);
   });
+
+
 
 });

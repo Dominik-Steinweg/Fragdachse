@@ -868,7 +868,8 @@ export class ArenaMetaController {
   }
 
   resetCharacter(): void {
-    if (this.destroyed) return;
+    if (this.destroyed || this.input.session.getGamePhase() !== 'LOBBY'
+      || this.input.session.isLocalReady() || this.input.session.isAuthoritativeLocalReady()) return;
     this.input.progressStore.resetCharacter();
     this.refresh();
   }
