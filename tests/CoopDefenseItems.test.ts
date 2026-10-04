@@ -52,6 +52,17 @@ function item(overrides: Partial<CoopDefenseItem> = {}): CoopDefenseItem {
 }
 
 describe('coop-defense item rolls', () => {
+  it('does not admit non-finite item values derived from a finite imported level', () => {
+    const imported = sanitizeCoopDefenseItem(item({
+      itemLevel: 1e308, rarity: 'blue', affixes: [{ affixId: 'max_armor', value: 1 }],
+    }));
+    if (imported) {
+      expect(Number.isFinite(imported.baseValue)).toBe(true);
+      expect(imported.affixes.every(affix => Number.isFinite(affix.value))).toBe(true);
+      expect(Number.isFinite(getCoopDefenseItemSalvageXp(imported))).toBe(true);
+    }
+  });
+
   it('derives the affix count from the rarity alone', () => {
     for (const slot of COOP_DEFENSE_ITEM_SLOTS) {
       for (const random of [sequence([0]), sequence([0.6]), sequence([0.95])]) {

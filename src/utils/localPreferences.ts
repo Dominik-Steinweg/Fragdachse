@@ -56,6 +56,7 @@ import {
   PERSISTENT_BASE_AREA_STAGE_2_UNLOCK_AFTER_MAP_ID,
 } from '../config/persistentBase';
 import { sanitizePlayerName } from './playerName';
+import { getCoopDefenseLevelForXp, getCoopDefenseXpThresholdForLevel } from './coopDefenseXp';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 import { isLocale, resolveBrowserLocale, type Locale } from '../i18n/types';
 import type {
@@ -837,6 +838,10 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
       && coop.pendingItemReward !== null && !isRecord(coop.pendingItemReward))
     || typeof coop.unseenItems !== 'boolean') return null;
 
+  // Finite source XP must also produce a usable level and runtime progress bar.
+  const level = getCoopDefenseLevelForXp(coop.totalXp as number);
+  if (![level, getCoopDefenseXpThresholdForLevel(level), getCoopDefenseXpThresholdForLevel(level + 1)]
+    .every(Number.isFinite)) return null;
   const loadout = sanitizeStoredLoadout(document.loadout);
   const processedRoundRevisionsByRoom = sanitizeProcessedRoundRevisionsByRoom(coop.processedRoundRevisionsByRoom);
   if (!processedRoundRevisionsByRoom) return null;

@@ -31,8 +31,8 @@ import {
   getUpgradeName,
 } from '../i18n/upgradePresentation';
 
-const FIRST_LEVEL_UP_XP = 20;
-const XP_INCREASE_PER_LEVEL = 80;
+import { getCoopDefenseLevelForXp, getCoopDefenseXpThresholdForLevel, sanitizeXp } from './coopDefenseXp';
+export { getCoopDefenseLevelForXp, getCoopDefenseXpThresholdForLevel } from './coopDefenseXp';
 
 export interface CoopDefenseProgressSnapshot {
   classId: CoopDefenseClassId;
@@ -95,32 +95,6 @@ export interface CoopDefenseUpgradeCategorySnapshot {
   label: string;
   description: string;
   upgrades: readonly CoopDefenseUpgradeNodeSnapshot[];
-}
-
-function sanitizeXp(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.floor(value));
-}
-
-export function getCoopDefenseXpThresholdForLevel(level: number): number {
-  const safeLevel = Math.max(1, Math.floor(level));
-  const completedLevelUps = safeLevel - 1;
-  if (completedLevelUps === 0) return 0;
-  return completedLevelUps * (
-    2 * FIRST_LEVEL_UP_XP + (completedLevelUps - 1) * XP_INCREASE_PER_LEVEL
-  ) / 2;
-}
-
-export function getCoopDefenseLevelForXp(totalXp: number): number {
-  const safeXp = sanitizeXp(totalXp);
-  // Invert threshold(n) = n * (2 * first + (n - 1) * increase) / 2,
-  // where n is the number of completed level-ups.
-  const linearCoefficient = 2 * FIRST_LEVEL_UP_XP - XP_INCREASE_PER_LEVEL;
-  const completedLevelUps = Math.floor(
-    (-linearCoefficient + Math.sqrt(linearCoefficient ** 2 + 8 * XP_INCREASE_PER_LEVEL * safeXp))
-    / (2 * XP_INCREASE_PER_LEVEL),
-  );
-  return Math.max(1, completedLevelUps + 1);
 }
 
 export function getCoopDefenseProgressSnapshot(

@@ -39,6 +39,7 @@ import {
 } from '../src/utils/localPreferences';
 import { resolveBrowserLocale } from '../src/i18n/types';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
+import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 import { PERSISTENT_BASE_STATE_SCHEMA_VERSION } from '../src/config/persistentBase';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
 import { getPersistentBaseRewardIds } from '../src/persistentBase/PersistentBaseRewardCatalog';
@@ -66,6 +67,30 @@ class MemoryStorage implements Storage {
 
 describe('local progress generation', () => {
   let storage: MemoryStorage;
+
+  it.each(['xp', 'item'] as const)('rejects a finite imported %s value whose derived runtime state overflows', kind => {
+    setStoredCoopDefenseTotalXp(123);
+    const validExport = exportStoredGameProgressJson();
+    const corrupt = JSON.parse(validExport);
+    if (kind === 'xp') corrupt.progress.coopDefense.totalXp = 1e308;
+    else corrupt.progress.coopDefense.items = [{
+      uid: 'overflow', slot: 'armor', rarity: 'blue', itemLevel: 1e308, baseValue: 25,
+      affixes: [{ affixId: 'max_armor', value: 1 }],
+    }];
+    const storedBefore = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    expect(importStoredGameProgressJson(JSON.stringify(corrupt)).ok).toBe(false);
+    expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(storedBefore);
+    invalidateLocalStorageCache();
+    const progress = getStoredCoopDefenseProgress();
+    const snapshot = getCoopDefenseProgressSnapshot(progress.totalXp);
+    expect(progress.totalXp).toBe(123);
+    expect(Number.isFinite(snapshot.level)).toBe(true);
+    expect(Number.isFinite(snapshot.levelProgressFraction)).toBe(true);
+    const exported = exportStoredGameProgressJson();
+    resetStoredCoopDefenseCharacter();
+    expect(importStoredGameProgressJson(exported).ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().totalXp).toBe(123);
+  });
 
   it('preserves monotone per-room round credits through reload, export/import and reset', () => {
     markStoredCoopDefenseRoundProcessed(100_000, { roomCode: 'AAAAAA', roundRevision: 100 });

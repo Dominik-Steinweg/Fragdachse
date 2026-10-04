@@ -641,11 +641,14 @@ export function sanitizeCoopDefenseItem(raw: unknown): CoopDefenseItem | null {
   const slotDefinition = getCoopDefenseItemSlotDefinition(raw.slot);
   const nominal = slotDefinition.baseValueAtLevel1 + slotDefinition.baseValuePerLevel * (itemLevel - 1);
   const maxBaseValue = nominal * (1 + slotDefinition.baseValueSpread);
+  if (!Number.isFinite(maxBaseValue)) return null;
   const rawBaseValue = typeof raw.baseValue === 'number' && Number.isFinite(raw.baseValue) ? raw.baseValue : 0;
   const baseValue = quantizeItemValue(Math.min(Math.max(rawBaseValue, 0), maxBaseValue));
 
   const { rarity, affixes } = reconcileRarity(raw.rarity, sanitizeAffixes(raw.affixes, raw.slot, itemLevel));
-  return { uid: raw.uid, slot: raw.slot, rarity, itemLevel, baseValue, affixes };
+  const item = { uid: raw.uid, slot: raw.slot, rarity, itemLevel, baseValue, affixes };
+  return affixes.every(affix => Number.isFinite(affix.value)) && Number.isFinite(getCoopDefenseItemSalvageXp(item))
+    ? item : null;
 }
 
 /**
