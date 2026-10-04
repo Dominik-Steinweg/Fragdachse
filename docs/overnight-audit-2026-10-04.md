@@ -29,7 +29,7 @@
 | World entities / train / pickups | In progress | Train reentry, destruction timers and Activity ports; shooting-range guards, target respawn and teardown; pickup UID/delta/snapshot order checked. Base marker ownership fixed. Broader entity review continues. |
 | Effects and rendering resources | Third pass reviewed | World teardown of BlackHole, GuardianSpirit, pickup and player/enemy spawn presentation fixed and cross-reviewed. Renderer maps, GPU source release, lighting teardown and worker job/transfer cancellation traced. |
 | Construction moves / editor layouts | Reviewed | Host/client cell swaps, visual cleanup and target-bound injector effects now preserve object ownership through movement and rollback. Pure rotation is rejected by the existing editor contract, so no speculative rotation fix. |
-| Standalone tools | In progress | Voice workshop synthetic-audio suite passed; real HTTP UTF-8 chunk corruption reproduced and fixed. Map/balance editor file allowlists, realpath checks, revisions and atomic writes reviewed. Map editor stale-load race reproduced; fix pending. |
+| Standalone tools | Further pass reviewed | Voice workshop UTF-8 fix tested; map load/save races fixed. Balance editor uses busy/inert gates and versioned validation. Audio Studio request, generation queue, cancellation, path/hash/revision, export/recovery and cleanup transactions reviewed; complete offline Node/Python suite passed. No model/GPU generation or publishing performed. |
 | Proven unused code | Removals reviewed | Removed unused PlayerRuntime navigation flag, two peer helper exports, two obsolete audio wrapper methods and private VALID_SLOTS constant. Full repository/reference search performed; live navigation remains owned by Activity flow fields. |
 | Independent review | First two clusters complete; final pending | Agents cross-reviewed lifecycle, enemy replication, Bridge, PeerLink and input/audio fixes; root reviewed registry, projectile and save gates. Plasma-clear regression discovered in first review; range test isolation improved in second review. |
 
@@ -72,8 +72,15 @@
 | A33 | Moving a buffed construction leaves its energy-injector effect at the old position | Fixed: construction movement commits target-bound effect coordinates together with placement, including editor batches and rollback. Owner, effect identity, start and expiry remain unchanged. |
 | A34 | Voice workshop corrupts UTF-8 text split across HTTP chunks | Fixed: collect the bounded byte chunks before decoding UTF-8. Real loopback HTTP regression previously persisted `M��ller` instead of `Müller`; response, memory and disk now agree. |
 | A35 | A client can claim full AWP charge without holding first | Confirmed and open: a well-typed first request with both scope fractions set to 1 doubles damage in the real activation path. Needs an existing authoritative owner/timing design, beyond field validation; reproduction preserved. |
-| A36 | Reliable messages buffered before fast-channel readiness lack a byte bound | Confirmed; fix in progress using the existing receive budget. 513 valid 32 KiB strings stayed buffered before channel readiness in the red reproduction. |
-| A37 | Host links can remain unadmitted indefinitely by sending heartbeat replies | Confirmed; fix in progress using the existing handshake duration from link readiness. A real room reproduction stayed connected for 20 seconds without sending hello. |
+| A36 | Reliable messages buffered before fast-channel readiness lack a byte bound | Fixed using the existing receive budget. 513 valid 32 KiB strings stayed buffered before channel readiness in the red reproduction. Independent review complete. |
+| A37 | Host links can remain unadmitted indefinitely by sending heartbeat replies | Fixed using the existing handshake duration from link readiness. A real room reproduction stayed connected for 20 seconds without sending hello. Independent review complete. |
+| A38 | An older map load response replaces the newest selection or edits made while loading | Fixed with load tickets and a second discard decision when the previous document changes while a GET is pending. Success/failure and superseded-response paths covered. |
+| A39 | Changing the Options locale leaks old slider pointer listeners | Fixed: normal hide/unbind runs before rebuilding controls. Removed the redundant activation sound in the same interaction. Two real ownership regressions pass. |
+| A40 | Tutorial controls retain the previous locale across missions | Fixed: the long-lived panel releases and rebuilds its translated controls when the locale changes. Existing reset clears cached text/tweens; unchanged-locale updates do not rebuild. |
+| A41 | Repeated map-editor save hotkeys start concurrent PUTs | Fixed by applying the existing saving gate to the hotkey path. Both successful and rejected saves preserve intervening edits and permit a later save with the correct revision. |
+| A42 | Distinct identified rounds with an equal end timestamp lose item offers and skip after-round UI | Reproduced in the real Meta/persistence path. Optional existing room/round identity now propagates through queue, presentation, lazy opening and exact claim; independent review and complete gate pending. |
+| A43 | Malformed tunnel grid anchors create fractional or NaN world endpoints | Fixed at the shared placement boundary: grid coordinates must be integers before index/occupancy access. Eight JSON-representable invalid inputs on both axes and a valid tunnel control tested. |
+| A44 | Reload-resume inherits a stale ping acknowledgement and its new probe sequence is ignored | Reproduced with real PeerRoom encoding and the same resume token. Controller-local outstanding probe correlation and host duplicate-pair suppression pass focused tests; independent review and gate pending. |
 
 Additional hypotheses remain separate from confirmed findings; no speculative fixes are included.
 
@@ -112,6 +119,14 @@ Additional hypotheses remain separate from confirmed findings; no speculative fi
 - A32: 15 malformed scope cases red before validation; RPC suite 36 PASS, plus 31 existing weapon tests and a real FakePeer path. Root review complete.
 - A33: real construction-management reproduction red, then 32 tests in the extended integration file plus 19 related tests PASS. State and root reviews complete; fourth full integration gate also covers it.
 - A34: existing Voice-Workshop baseline 13 PASS; added real HTTP regression red, then complete suite 14 PASS. Logs: `voice-workshop-baseline.log`, `voice-utf8-red.log`, `voice-utf8-green.log`. Independent lifecycle review complete. Only synthetic test audio/fake generation was used.
+- A36/A37: latest PeerRoom/PeerLink/protocol run: 3 files / 70 tests PASS. The pending-inbox bound and unadmitted heartbeat cases failed before their fixes.
+- A38/A41: map-editor focused run 5 files / 65 tests PASS; map-editor build passed after the load guards. The final save guard is also included in the next full gate.
+- A39/A40: Options/Tutorial/living-UI focused run 6 files / 60 tests PASS; independent state and root review complete. Game build will be rerun with the next cluster.
+- A43: malformed-anchor regressions red before the guard; Placement/Inspector/Ultimate/BurrowExit suites: 4 files / 64 tests PASS. The separately selected WorldPlayerGameplayLifecycle suite had temporary fixture failures from the parallel, unfinished A35 work; those are not attributed to this placement fix.
+- A44: `ping-reload-red.log` demonstrates both inherited 140 ms without a probe and failure to obtain the fresh 40 ms response. `ping-reload-green.log`: 4 files / 74 tests PASS, including delayed/out-of-order/replayed acknowledgements and a long outage.
+- Audio Studio `npm test`: Node adapter 16 and frontend 10 tests PASS; Python 158 PASS. The first Python attempt hit Windows global-temp permissions, and the unchanged rerun used an isolated worktree temp directory (`audio-studio-baseline-retry.log`). Existing Python environment reused without installs. Two dependency deprecation warnings remain; no GPU/model claim is made.
+- An experimental Audio Studio double-worker hypothesis was rejected after tracing the only production caller: `Studio.generate` holds the store file lock through `Jobs.submit/start`. The artificial concurrent direct-call reproduction was removed from the suite and preserved only as `tmp/overnight-audit/audio-start-hypothesis-rejected.test.py`; no speculative production change.
+- Navigation intent/breach/reservation and ally-lifetime follow-up: 3 files / 54 tests PASS. Carry/objective repair/placement reward/team buff follow-up: 4 files / 33 tests PASS. Ownership, pending search budgets, topology invalidation and authoritative timing traced without a new finding.
 - Projectile stress subset: 2 files / 18 tests PASS, 2 comparison/benchmark files / 3 tests intentionally skipped because their opt-in environment was absent. Log: `projectile-stress.log`; no performance claim is inferred from skipped comparisons.
 - Asset suite: initially 33 files PASS and 2 files failed solely because an ignored character-render reference was absent from the isolated checkout (178 tests passed, 2 failed). Copied the existing `art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json` unchanged from the main checkout; SHA-256 matched `404ECC5099E16D157B17270E688A77E0CF61F915FEC76E451A880C75F43E69AD`. Both affected suites then passed all 17 tests. Logs: `asset-suite.log`, `asset-fixture-recovery.log`. No asset source changed.
 - The runtime-assets prebuild rewrites generated manifests and text-asset hashes due to checkout line endings. These unrelated generated changes were restored before commits; generated output remains available for verification.
@@ -147,6 +162,13 @@ Additional hypotheses remain separate from confirmed findings; no speculative fi
 - `7115311f` — decode complete HTTP request bytes as UTF-8.
 - `e5ebfcad` — settle cancelled save-file selection.
 - `b29c3a06` — reject imports with nonfinite derived state.
+- `baa72d5c` / `37e59d80` — guard superseded map loads and edits made during a pending load.
+- `395895bd` — unbind Options controls before a locale rebuild.
+- `9c4a6e56` / `3622f47e` — bound pre-ready inbox bytes and require timely hello admission.
+- `705812e8` — remove the unused benchmark distance helper/test import and overcharge state alias after repository-wide reference checks; 17 benchmark tests passed.
+- `34229986` — serialize map-editor save requests.
+- `069dec32` — refresh translated tutorial controls.
+- `c5219f2d` — reject malformed placement grid coordinates.
 
 No push, merge or deployment.
 
@@ -162,13 +184,13 @@ No push, merge or deployment.
 - The requested active duration remains an explicit completion condition.
 - Save replacement needs an explicit session boundary; no automatic reload/disconnection or weakened owner authorization has been introduced. Reproductions are retained under `tmp/overnight-save-replacement-repro.test.ts.txt` and `tmp/overnight-client-save-replacement-repro.test.ts.txt` with companion notes. The latter proves both stale `pbr` rewards and the old `pbk` revision-5 contribution return on the next real client session sync after reset.
 - A21 removes cross-host clock ordering for identified rounds. Historical results without identity retain the old timestamp guard. An old save cannot reconstruct the namespace of an already credited result; the first identified replay may be credited again. A future reuse of an old random room code can inherit that code's revision ceiling. These explicit compatibility limits are not hidden by a invented migration.
-- AfterRoundFlow and pending item-reward UI still use end timestamps as local presentation keys. Exact equal timestamps across different hosts remain an unverified follow-up, separate from the fixed progression ledger.
+- Equal-timestamp reward/presentation collisions are now confirmed (A42); the fix is being reviewed, separately from the already committed progression ledger.
 - Cross-tab storage invalidation is exposed but not wired to a storage listener. Concurrent-tab persistence semantics remain an open investigation, not an assumed safe fix.
 - A suspected synchronous World replacement inside projectile-explosion callbacks was rejected after tracing production callbacks and `ArenaRuntime`: host simulation finishes before round completion and World teardown are applied. No speculative guards added.
 - Worker review covered terrain material transfer/cancellation and flow-field generation/job matching, buffer ownership, watchdog and inline fallback; no new confirmed defect in this pass.
 - A35 is preserved in `tmp/overnight-awp-scope-authority-repro.md` and its `.test.ts.txt` companion. RPC type/range validation deliberately does not claim host-authoritative charge timing.
 - A29 covers imported persisted values, not every direct debug setter, astronomical pure-math input or the sum of many extreme individually finite item values. Those remain separate potential numeric boundaries.
-- Map-editor out-of-order load responses are reproduced in `tmp/map-loading-race-repro.mjs`; the latest-selection guard is in progress. Editing the previous map while a new request is pending remains a separate unproven hypothesis.
+- Map-editor out-of-order responses and edits during a pending load were both reproduced and fixed (A38); the original probe remains in `tmp/map-loading-race-repro.mjs`.
 - VoiceLibrary import/remove have no current production callers but are an explicitly documented supported package boundary; they were not removed merely because the current UI only selects bundled voices.
 
 ## Work sessions
