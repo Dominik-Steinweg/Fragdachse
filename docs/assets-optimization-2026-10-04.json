@@ -1,0 +1,1524 @@
+{
+  "baseline": "c47b37ef",
+  "implementation": "d43ce4a1",
+  "units": "MB = 1000000 bytes; seconds",
+  "audit": {
+    "scannedPublicFiles": 1418,
+    "removed": [
+      {
+        "file": "public/assets/sprites/192x192canopy01.png",
+        "bytes": 11428,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/32x32dachs-walking_Sheet.png",
+        "bytes": 4360,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/32x32grass01.png",
+        "bytes": 1387,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/32x32zombie.png",
+        "bytes": 650,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/64x32tracks.png",
+        "bytes": 3134,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/BahnstreckeKies.png",
+        "bytes": 2056,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/dirt47blob_mottle.png",
+        "bytes": 36561,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/enemies/enemy_zombie_badger-Walking_Sheet.png",
+        "bytes": 36937,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/fragdachselogo.png",
+        "bytes": 17356,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/gras_bg_ctb.png",
+        "bytes": 1305022,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/gras_bg_dm.png",
+        "bytes": 1120293,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/old/base47blob - Kopie.png",
+        "bytes": 29468,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/old/base47blob_hostile2.png",
+        "bytes": 24296,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/old/enemy_rabid_badger2.png",
+        "bytes": 30590,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/old/gras_bg_ctb.png",
+        "bytes": 20425,
+        "exact": [],
+        "partial": []
+      },
+      {
+        "file": "public/assets/sprites/old/gras_bg_dm.png",
+        "bytes": 4428,
+        "exact": [],
+        "partial": []
+      }
+    ],
+    "retained": {
+      "font licences": {
+        "count": 2,
+        "bytes": 8981,
+        "files": [
+          "public/assets/fonts/OFL-ChakraPetch.txt",
+          "public/assets/fonts/OFL-JetBrainsMono.txt"
+        ]
+      },
+      "review archive": {
+        "count": 54,
+        "bytes": 102172,
+        "files": [
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_AK47_ACCURACY.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_AK47_ADRENALINE_COST.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_AK47_FIRE_SUPERIORITY_DAMAGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_AK47_FIRE_SUPERIORITY_SHOTS.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_AK47_FOCUS.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_AK47_FOCUS_DAMAGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_AK47_FOCUS_DURATION.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_AK47_RANGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_DECOY_DURATION.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_DECOY_STEALTH_DURATION.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_FELSBAU_EXPLOSIVE_COLLAPSE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_FELSBAU_HP.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_FELSBAU_RANGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_FLIEGENPILZ_BUILD_RANGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_FLIEGENPILZ_DOUBLE_SPORE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_FLIEGENPILZ_HP.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_FLIEGENPILZ_PLASMA_GUN.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_FLIEGENPILZ_RANGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_HE_GRENADE_RADIUS.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_LAUBBLAESER_ADRENALIN_GAIN.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_LAUBBLAESER_HITBOX_SIZE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_LAUBBLAESER_KNOCKBACK.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_LAUBBLAESER_PRESSURE_DAMAGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_PLASMA_PROJECTILE_SPEED.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ROCKET_LAUNCHER_BLACK_HOLE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ROCKET_LAUNCHER_BLACK_HOLE_DURATION.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ROCKET_LAUNCHER_BLACK_HOLE_PULL.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ROCKET_LAUNCHER_BURNING_EXPLOSION.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ROCKET_LAUNCHER_BURNING_EXPLOSION_DAMAGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ROCKET_LAUNCHER_COOLDOWN.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ROCKET_LAUNCHER_DIRECT_DAMAGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ROCKET_LAUNCHER_EXPLOSION_RADIUS.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_STINKDRUESEN_AFTERCLOUD.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_STINKDRUESEN_DAMAGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_STINKDRUESEN_RADIUS.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TESLA_DOME_ADRENALIN_DRAIN.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TESLA_DOME_DAMAGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TESLA_DOME_HIGH_VOLTAGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TESLA_DOME_MOVEMENT_SLOW.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TESLA_DOME_RADIUS.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TIME_BUBBLE_DURATION.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TIME_BUBBLE_PROJECTILE_SLOW.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TIME_BUBBLE_SLOW_STRENGTH.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TRANSLOCATOR_BOUNCES.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_TRANSLOCATOR_PROJECTILE_SPEED.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_UNLOCK_ENERGIEINJEKTOR.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_UNLOCK_FELSBAU.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_UNLOCK_FLIEGENPILZ.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_UNLOCK_REPARATURSTRAHL.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_XBOW_PROJECTILE_SPEED.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_XBOW_RANGE.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ZEUS_CHAIN_LIGHTNING.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ZEUS_TASER_ARC.png",
+          "public/assets/sprites/Loadout/_review_unused/UPGRADE_ZEUS_TASER_RANGE.png"
+        ]
+      },
+      "dynamic item icons": {
+        "count": 24,
+        "bytes": 2522938,
+        "files": [
+          "public/assets/sprites/coop-defense/coop_item_armor_ilvl_1.png",
+          "public/assets/sprites/coop-defense/coop_item_armor_ilvl_2.png",
+          "public/assets/sprites/coop-defense/coop_item_armor_ilvl_3.png",
+          "public/assets/sprites/coop-defense/coop_item_armor_ilvl_4.png",
+          "public/assets/sprites/coop-defense/coop_item_armor_ilvl_5.png",
+          "public/assets/sprites/coop-defense/coop_item_boots_ilvl_1.png",
+          "public/assets/sprites/coop-defense/coop_item_boots_ilvl_2.png",
+          "public/assets/sprites/coop-defense/coop_item_boots_ilvl_3.png",
+          "public/assets/sprites/coop-defense/coop_item_boots_ilvl_4.png",
+          "public/assets/sprites/coop-defense/coop_item_boots_ilvl_5.png",
+          "public/assets/sprites/coop-defense/coop_item_empty_armor.png",
+          "public/assets/sprites/coop-defense/coop_item_empty_boots.png",
+          "public/assets/sprites/coop-defense/coop_item_empty_gloves.png",
+          "public/assets/sprites/coop-defense/coop_item_empty_helmet.png",
+          "public/assets/sprites/coop-defense/coop_item_gloves_ilvl_1.png",
+          "public/assets/sprites/coop-defense/coop_item_gloves_ilvl_2.png",
+          "public/assets/sprites/coop-defense/coop_item_gloves_ilvl_3.png",
+          "public/assets/sprites/coop-defense/coop_item_gloves_ilvl_4.png",
+          "public/assets/sprites/coop-defense/coop_item_gloves_ilvl_5.png",
+          "public/assets/sprites/coop-defense/coop_item_helmet_ilvl_1.png",
+          "public/assets/sprites/coop-defense/coop_item_helmet_ilvl_2.png",
+          "public/assets/sprites/coop-defense/coop_item_helmet_ilvl_3.png",
+          "public/assets/sprites/coop-defense/coop_item_helmet_ilvl_4.png",
+          "public/assets/sprites/coop-defense/coop_item_helmet_ilvl_5.png"
+        ]
+      },
+      "authoring provenance": {
+        "count": 6,
+        "bytes": 10325,
+        "files": [
+          "public/assets/sprites/rewards/plasma_turret.prompt.txt",
+          "public/assets/ui/match-results/background-prompt.json",
+          "public/assets/ui/match-results/title-prompt.json",
+          "public/assets/ui/match-results/title-v2-prompt.json",
+          "public/assets/ui/upgrades/controls-prompts.json",
+          "public/assets/ui/upgrades/controls-v2-prompts.json"
+        ]
+      }
+    },
+    "method": "Tracked text search across source, JSON/manifests/registries, HTML/CSS, scripts, editor and tests; automatic runtime URL inventory is not an independent consumer. Dynamic filename families reviewed manually."
+  },
+  "dist": {
+    "baseline": {
+      "files": 764,
+      "totalBytes": 160573967,
+      "withoutSourceMapsBytes": 130857779
+    },
+    "current": {
+      "files": 748,
+      "totalBytes": 156525058,
+      "withoutSourceMapsBytes": 126808870
+    }
+  },
+  "distGainBytes": 4048909,
+  "conversionGainBytes": 1407253,
+  "textureEstimate": {
+    "affectedBeforeBytes": 45511680,
+    "affectedAfterBytes": 45511680,
+    "gainBytes": 0,
+    "contract": "Registered source width * height * 4 (RGBA8); excludes mipmaps, render targets, driver copies and decoder CPU memory."
+  },
+  "pixels": [
+    {
+      "file": "assets/player/death-a01-r03/death-sheet.webp",
+      "source": "assets/player/death-a01-r03/death-sheet.png",
+      "width": 2080,
+      "height": 4644,
+      "sourceBytes": 1383278,
+      "downloadBytes": 869972,
+      "sourceSha256": "2d823b4f832a1380049264eb4b4196c67237bbdcaa0e13a1e2f1aaf82d1fb680",
+      "sha256": "964d13d1547c8e39bb5792340c51e2d085bfcbe2f3f328adc1348fb9988cbaab",
+      "visiblePixelSha256": "fb20db2821eb4453ceca1da1f67c783173db15101f367f619c8b5ff4d102347f",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 14.194057823087519,
+      "rawChangedChannels": 2375422,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 38638080,
+      "textureBytesAfter": 38638080
+    },
+    {
+      "file": "assets/sprites/canopies/canopy01.webp",
+      "source": "assets/sprites/canopies/canopy01.png",
+      "width": 384,
+      "height": 384,
+      "sourceBytes": 252536,
+      "downloadBytes": 171030,
+      "sourceSha256": "ce7157f44f536b35959a4d1e2739ffa83f979562a9792e910ce094677d5a2c7c",
+      "sha256": "968b323ce3b9374222cebcb5e8e5d8e3ce6859e7c0b647c70aebb442f2987954",
+      "visiblePixelSha256": "a92ef842e5e81540fabf8c66088bf359f202b912f7672fbd7be0db1b536cc3c1",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 26.489467796729112,
+      "rawChangedChannels": 65387,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 589824,
+      "textureBytesAfter": 589824
+    },
+    {
+      "file": "assets/sprites/canopies/canopy02.webp",
+      "source": "assets/sprites/canopies/canopy02.png",
+      "width": 384,
+      "height": 384,
+      "sourceBytes": 280199,
+      "downloadBytes": 188496,
+      "sourceSha256": "439fc4c85d2c5f2a62bc78d9b138aa5526790f7e4f7416d6cabe9d549aef9703",
+      "sha256": "b86ac544884594db16d6c0c7665adcf5f885bf4edd7013ed408f3d5cb6fc4ac0",
+      "visiblePixelSha256": "fba91f22c6d31b8bb9f30c5b821e14754bb6495ae22d389b18ba9082ab97b71b",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 158,
+      "rawPsnr": 27.844215537871392,
+      "rawChangedChannels": 72048,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 589824,
+      "textureBytesAfter": 589824
+    },
+    {
+      "file": "assets/sprites/canopies/canopy03.webp",
+      "source": "assets/sprites/canopies/canopy03.png",
+      "width": 384,
+      "height": 384,
+      "sourceBytes": 283097,
+      "downloadBytes": 194272,
+      "sourceSha256": "39c7891bef120552c91ca6afb915af323e7cd9bc7cfcbed51e3f351a25dcf183",
+      "sha256": "fbbfa92e6959b1838fc02ef9fdcdc14cf9716e14aeeaf6a6f77173660c9451ee",
+      "visiblePixelSha256": "30fc643d15ab2079fbde17b0edff36189c2fba64db8c18c1d49c4be425842741",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 79,
+      "rawPsnr": 25.719648475234067,
+      "rawChangedChannels": 76230,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 589824,
+      "textureBytesAfter": 589824
+    },
+    {
+      "file": "assets/sprites/canopies/canopy04.webp",
+      "source": "assets/sprites/canopies/canopy04.png",
+      "width": 384,
+      "height": 384,
+      "sourceBytes": 243494,
+      "downloadBytes": 165446,
+      "sourceSha256": "2fe3f4c701840d87a8165d4de62d952ec590e83c48cbef793ab17305e50feb6e",
+      "sha256": "053ae25eda4531c138dfafb99366a61d35c92750ee0133123575d711c55c5f7a",
+      "visiblePixelSha256": "a775ccce65d15258c2dc71b5b9485e97448decb0f0d22c71ef679c692994cf87",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 25.859703273046225,
+      "rawChangedChannels": 85145,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 589824,
+      "textureBytesAfter": 589824
+    },
+    {
+      "file": "assets/sprites/canopies/canopy05.webp",
+      "source": "assets/sprites/canopies/canopy05.png",
+      "width": 384,
+      "height": 384,
+      "sourceBytes": 293312,
+      "downloadBytes": 205594,
+      "sourceSha256": "527cfdcb329d0a54a7b655d4ea99b8afe31bda9b2830481c75aff6a9b9c1a4a0",
+      "sha256": "c1ff9bf7fff90d82a8a6178f4d80536d38661098349c2ca2d933a743cb943a80",
+      "visiblePixelSha256": "e735f070efeb1031077a2717338521e427fe6892fb34ad168f8754c1aee9379d",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 26.82585533540618,
+      "rawChangedChannels": 75239,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 589824,
+      "textureBytesAfter": 589824
+    },
+    {
+      "file": "assets/sprites/rockmoss/rock_moss_01.webp",
+      "source": "assets/sprites/rockmoss/rock_moss_01.png",
+      "width": 384,
+      "height": 382,
+      "sourceBytes": 284595,
+      "downloadBytes": 173308,
+      "sourceSha256": "8c800f05c3bf45b75e924ac1fa3522308c146f9631c5df2671410a02ca56fe6b",
+      "sha256": "39f185f3d5841764605d337521c8f4b09e5acf16e364293195e6ceeafbcb3854",
+      "visiblePixelSha256": "6dd680727623ea808b50edcb600369cc28e44fb853f0b12d6f1d047c547016a8",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 20.180117378643363,
+      "rawChangedChannels": 55474,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 586752,
+      "textureBytesAfter": 586752
+    },
+    {
+      "file": "assets/sprites/rockmoss/rock_moss_03.webp",
+      "source": "assets/sprites/rockmoss/rock_moss_03.png",
+      "width": 346,
+      "height": 384,
+      "sourceBytes": 175174,
+      "downloadBytes": 112542,
+      "sourceSha256": "34a521082d6c30bd21f4e20caf2145429a1f5bc9d6dc82f32eed19b672b43526",
+      "sha256": "c29692fec8a36ccd601afd6e3c680f63159eb35183fa5e59d7840e3aa3958488",
+      "visiblePixelSha256": "ed6aa137c2b4604ead49ca8f8cf1a9d2812e2abfbd8d6b8bdfc551c5a0fbc461",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 18.190267044450536,
+      "rawChangedChannels": 78249,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 531456,
+      "textureBytesAfter": 531456
+    },
+    {
+      "file": "assets/sprites/rockmoss/rock_moss_04.webp",
+      "source": "assets/sprites/rockmoss/rock_moss_04.png",
+      "width": 379,
+      "height": 384,
+      "sourceBytes": 142002,
+      "downloadBytes": 88656,
+      "sourceSha256": "1b31b2f8986a93ef27617be48ee1eeee69b42f1299a80fd301b6fe2fe6d71c43",
+      "sha256": "0249c5f700b617d93e9218caa30470e4802782153f06db93fa8be56ef49e6c5f",
+      "visiblePixelSha256": "3e732b4147a746eb3ffdc91dcbcdb48c5651d9f400e5c3809c9fcb099f188b06",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 8.675699156370014,
+      "rawChangedChannels": 149072,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 582144,
+      "textureBytesAfter": 582144
+    },
+    {
+      "file": "assets/sprites/rockmoss/rock_moss_05.webp",
+      "source": "assets/sprites/rockmoss/rock_moss_05.png",
+      "width": 344,
+      "height": 384,
+      "sourceBytes": 177858,
+      "downloadBytes": 124390,
+      "sourceSha256": "6f35f898aec06a7e9335d68f2fb885622257834d882b90818e47476017a1f5be",
+      "sha256": "7edd25150df3b474d2ae9e12ae8c80c3b5f09a102a32d2dec137ac2b7ec46053",
+      "visiblePixelSha256": "f07a8df301a7984698877719b959001a58dc4f3ee63433f40bbaf6911d6a2b2e",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 16.496620090775902,
+      "rawChangedChannels": 111732,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 528384,
+      "textureBytesAfter": 528384
+    },
+    {
+      "file": "assets/sprites/rockmoss/rock_moss_06.webp",
+      "source": "assets/sprites/rockmoss/rock_moss_06.png",
+      "width": 384,
+      "height": 375,
+      "sourceBytes": 249783,
+      "downloadBytes": 155148,
+      "sourceSha256": "e133f31df0d07e1f4d3a572ab28c8b56fa6fd5fc433e01ab74db16135e9fc5fa",
+      "sha256": "8253f22b8ccad61f3919b65b8fdb5a2e47373372fb01ce5479ad6df021d431d4",
+      "visiblePixelSha256": "5acd375adef36b1ebcacc1740beeda4a44d3c28bf21b35d8d62fe8cdbc2e5579",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 17.898630168434977,
+      "rawChangedChannels": 96275,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 576000,
+      "textureBytesAfter": 576000
+    },
+    {
+      "file": "assets/sprites/rockmoss/rock_moss_07.webp",
+      "source": "assets/sprites/rockmoss/rock_moss_07.png",
+      "width": 354,
+      "height": 384,
+      "sourceBytes": 144922,
+      "downloadBytes": 98188,
+      "sourceSha256": "266ea18578425554e84d40035dd9cf1b1bd8a824b1cd16fa4e318ce1d35721c2",
+      "sha256": "da6820015beb66d21f2b6a2ece39fa5be753035e7089c46630d4584a7cdb079c",
+      "visiblePixelSha256": "42609402e98220485503aa7b85189c33a8e614c62145b8c7ea473a393b86837f",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 15.074938527959683,
+      "rawChangedChannels": 221894,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 543744,
+      "textureBytesAfter": 543744
+    },
+    {
+      "file": "assets/sprites/rockmoss/rock_moss_08.webp",
+      "source": "assets/sprites/rockmoss/rock_moss_08.png",
+      "width": 375,
+      "height": 384,
+      "sourceBytes": 135011,
+      "downloadBytes": 90966,
+      "sourceSha256": "10230f4852a6d48487bce77b7f609e8e2f5938d1ced9cab8c100101e3e52d2cc",
+      "sha256": "985eeafeb68f21f9bb5a3b6da0e0fad11252a111441bcbd480699cc163b58331",
+      "visiblePixelSha256": "3ab206ca105636cea3b90c93039e95e3a5c8cd0bf220297e8294dcae935611d4",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload",
+      "rawMax": 255,
+      "rawPsnr": 15.959942629637208,
+      "rawChangedChannels": 135056,
+      "visibleMax": 0,
+      "visiblePsnr": "Infinity",
+      "alphaMax": 0,
+      "textureBytesBefore": 576000,
+      "textureBytesAfter": 576000
+    }
+  ],
+  "parity": {
+    "criterion": "Every GPU input must be exact. Screenshot differences must be zero, or no larger than the unchanged negative control in maximum/channel count with PSNR >= 100 dB.",
+    "passed": true,
+    "results": [
+      {
+        "quality": "high",
+        "scene": "lobby",
+        "passed": true,
+        "diff": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        },
+        "negativeControl": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        }
+      },
+      {
+        "quality": "high",
+        "scene": "day",
+        "passed": true,
+        "diff": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        },
+        "negativeControl": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        }
+      },
+      {
+        "quality": "high",
+        "scene": "night",
+        "passed": true,
+        "diff": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        },
+        "negativeControl": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        }
+      },
+      {
+        "quality": "high",
+        "scene": "coop",
+        "passed": true,
+        "diff": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        },
+        "negativeControl": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        }
+      },
+      {
+        "quality": "low",
+        "scene": "lobby",
+        "passed": true,
+        "diff": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        },
+        "negativeControl": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        }
+      },
+      {
+        "quality": "low",
+        "scene": "day",
+        "passed": true,
+        "diff": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        },
+        "negativeControl": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        }
+      },
+      {
+        "quality": "low",
+        "scene": "night",
+        "passed": true,
+        "diff": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        },
+        "negativeControl": {
+          "max": 0,
+          "psnr": "Infinity",
+          "changedChannels": 0
+        }
+      },
+      {
+        "quality": "low",
+        "scene": "coop",
+        "passed": true,
+        "diff": {
+          "max": 1,
+          "psnr": 108.86767296372115,
+          "changedChannels": 7
+        },
+        "negativeControl": {
+          "max": 1,
+          "psnr": 108.86767296372115,
+          "changedChannels": 7
+        }
+      }
+    ]
+  },
+  "screenshots": [
+    {
+      "quality": "high",
+      "scene": "lobby",
+      "visible": true,
+      "focused": true,
+      "width": 1920,
+      "height": 1080,
+      "world": "world:lobby",
+      "timeOfDay": 480,
+      "resultsVisible": false,
+      "textureRgbaBytes": 1008393860,
+      "textures": 1377,
+      "controlDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "diff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "restoreDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "files": {
+        "before": {
+          "file": "screenshots/high-lobby-before.png",
+          "sha256": "9b3d6a5a1f27fad58fce9a2567029131d8f587db16907339c3c66877fdd3484d"
+        },
+        "after": {
+          "file": "screenshots/high-lobby-after.png",
+          "sha256": "9b3d6a5a1f27fad58fce9a2567029131d8f587db16907339c3c66877fdd3484d"
+        },
+        "browser": {
+          "file": "screenshots/high-lobby-browser.png",
+          "sha256": "5454e506f41834739111947e0c2752ebabf9fab9e04c0a3183bf3e641aad0844"
+        }
+      }
+    },
+    {
+      "quality": "high",
+      "scene": "day",
+      "visible": true,
+      "focused": true,
+      "width": 1920,
+      "height": 1080,
+      "world": "world:coop-defense:1",
+      "timeOfDay": 720,
+      "resultsVisible": false,
+      "textureRgbaBytes": 1275110192,
+      "textures": 1666,
+      "controlDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "diff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "restoreDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "files": {
+        "before": {
+          "file": "screenshots/high-day-before.png",
+          "sha256": "e5d68d0857dfa941a4c82a59cfea67697c349e2bc04340d4e0275933a52b2e3b"
+        },
+        "after": {
+          "file": "screenshots/high-day-after.png",
+          "sha256": "e5d68d0857dfa941a4c82a59cfea67697c349e2bc04340d4e0275933a52b2e3b"
+        },
+        "browser": {
+          "file": "screenshots/high-day-browser.png",
+          "sha256": "84945b09aaaa7534893dc1ababf0523d7d738fbe9a30bdab01dad446e4834323"
+        }
+      }
+    },
+    {
+      "quality": "high",
+      "scene": "night",
+      "visible": true,
+      "focused": true,
+      "width": 1920,
+      "height": 1080,
+      "world": "world:coop-defense:1",
+      "timeOfDay": 0,
+      "resultsVisible": false,
+      "textureRgbaBytes": 1275110192,
+      "textures": 1666,
+      "controlDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "diff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "restoreDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "files": {
+        "before": {
+          "file": "screenshots/high-night-before.png",
+          "sha256": "206143c142baccab58962381e472996bbbe51a39fb1e3da166359d0125896c23"
+        },
+        "after": {
+          "file": "screenshots/high-night-after.png",
+          "sha256": "206143c142baccab58962381e472996bbbe51a39fb1e3da166359d0125896c23"
+        },
+        "browser": {
+          "file": "screenshots/high-night-browser.png",
+          "sha256": "9b5c41e57d7e9a2d392ff0149e17da63a97d0a4c9198922fbd514e9ed737db50"
+        }
+      }
+    },
+    {
+      "quality": "high",
+      "scene": "coop",
+      "visible": true,
+      "focused": true,
+      "width": 1920,
+      "height": 1080,
+      "world": "world:coop-defense:7",
+      "timeOfDay": 1020,
+      "resultsVisible": false,
+      "textureRgbaBytes": 1348215416,
+      "textures": 1748,
+      "controlDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "diff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "restoreDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "files": {
+        "before": {
+          "file": "screenshots/high-coop-before.png",
+          "sha256": "cb64cf6ab20c20166368cec1a403e8dfae19745914c8c8ab1df2804fc8405232"
+        },
+        "after": {
+          "file": "screenshots/high-coop-after.png",
+          "sha256": "cb64cf6ab20c20166368cec1a403e8dfae19745914c8c8ab1df2804fc8405232"
+        },
+        "browser": {
+          "file": "screenshots/high-coop-browser.png",
+          "sha256": "0a09c38a5fb2af553607f92aa0728f01d88616af6431debcd887fbf6fca3e1cb"
+        }
+      }
+    },
+    {
+      "quality": "low",
+      "scene": "lobby",
+      "visible": true,
+      "focused": true,
+      "width": 1920,
+      "height": 1080,
+      "world": "world:lobby",
+      "timeOfDay": 480,
+      "resultsVisible": false,
+      "textureRgbaBytes": 930620872,
+      "textures": 1336,
+      "controlDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "diff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "restoreDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "files": {
+        "before": {
+          "file": "screenshots/low-lobby-before.png",
+          "sha256": "8fc8f2c5cc9a330e3feb8a479b468aeae1080d3a8e3a0b734a406e7ddeb9268a"
+        },
+        "after": {
+          "file": "screenshots/low-lobby-after.png",
+          "sha256": "8fc8f2c5cc9a330e3feb8a479b468aeae1080d3a8e3a0b734a406e7ddeb9268a"
+        },
+        "browser": {
+          "file": "screenshots/low-lobby-browser.png",
+          "sha256": "852951db87250de90fff1cdf1ccd48c5f96f98d91527b0c7f4f9817107667027"
+        }
+      }
+    },
+    {
+      "quality": "low",
+      "scene": "day",
+      "visible": true,
+      "focused": true,
+      "width": 1920,
+      "height": 1080,
+      "world": "world:coop-defense:1",
+      "timeOfDay": 720,
+      "resultsVisible": false,
+      "textureRgbaBytes": 1195374952,
+      "textures": 1616,
+      "controlDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "diff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "restoreDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "files": {
+        "before": {
+          "file": "screenshots/low-day-before.png",
+          "sha256": "7701d1a5bad845ac45444ca09fc7d65f14f16a7d76b5f06ac8853011a4fa8eff"
+        },
+        "after": {
+          "file": "screenshots/low-day-after.png",
+          "sha256": "7701d1a5bad845ac45444ca09fc7d65f14f16a7d76b5f06ac8853011a4fa8eff"
+        },
+        "browser": {
+          "file": "screenshots/low-day-browser.png",
+          "sha256": "a1fe24ed71eecd55736a12178cc596019a7626903eede7df9c89555a9431d50d"
+        }
+      }
+    },
+    {
+      "quality": "low",
+      "scene": "night",
+      "visible": true,
+      "focused": true,
+      "width": 1920,
+      "height": 1080,
+      "world": "world:coop-defense:1",
+      "timeOfDay": 0,
+      "resultsVisible": false,
+      "textureRgbaBytes": 1195374952,
+      "textures": 1616,
+      "controlDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "diff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "restoreDiff": {
+        "max": 0,
+        "psnr": "Infinity",
+        "changedChannels": 0
+      },
+      "files": {
+        "before": {
+          "file": "screenshots/low-night-before.png",
+          "sha256": "7ef4bf0be13bc119b33e928e1cc6cc6a5f299621a26ab0148523205054b6512f"
+        },
+        "after": {
+          "file": "screenshots/low-night-after.png",
+          "sha256": "7ef4bf0be13bc119b33e928e1cc6cc6a5f299621a26ab0148523205054b6512f"
+        },
+        "browser": {
+          "file": "screenshots/low-night-browser.png",
+          "sha256": "be842fb04e02e3409cfc7d76e406afdbdc69b80ed3fffb674873330f40e49c52"
+        }
+      }
+    },
+    {
+      "quality": "low",
+      "scene": "coop",
+      "visible": true,
+      "focused": true,
+      "width": 1920,
+      "height": 1080,
+      "world": "world:coop-defense:7",
+      "timeOfDay": 1020,
+      "resultsVisible": false,
+      "textureRgbaBytes": 1265218368,
+      "textures": 1688,
+      "controlDiff": {
+        "max": 1,
+        "psnr": 108.86767296372115,
+        "changedChannels": 7
+      },
+      "diff": {
+        "max": 1,
+        "psnr": 108.86767296372115,
+        "changedChannels": 7
+      },
+      "restoreDiff": {
+        "max": 1,
+        "psnr": 107.77622826947047,
+        "changedChannels": 9
+      },
+      "files": {
+        "before": {
+          "file": "screenshots/low-coop-before.png",
+          "sha256": "c114e30626e9f6831627dd38afcea5bd2542ea92409e2aa41c7bdf8e86a4cbb2"
+        },
+        "after": {
+          "file": "screenshots/low-coop-after.png",
+          "sha256": "29d8a5ba6c6aaae9a5f4e75aa3d89b108f82775a322d7bee7de176cd0964fc8d"
+        },
+        "browser": {
+          "file": "screenshots/low-coop-browser.png",
+          "sha256": "17034a09d8eedba593fef66981298eb4678bf24bac6003bcf54198c10ad093af"
+        }
+      }
+    }
+  ],
+  "browserPixels": {
+    "high": [
+      {
+        "key": "dachs_death",
+        "width": 2080,
+        "height": 4644,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 38.73605905443511,
+        "browserDecodedChanged": 719923,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_01",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 8,
+        "browserDecodedPsnr": 60.8377226674706,
+        "browserDecodedChanged": 1661,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_02",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 12,
+        "browserDecodedPsnr": 58.68116942358895,
+        "browserDecodedChanged": 2383,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_03",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 6,
+        "browserDecodedPsnr": 59.60781057719689,
+        "browserDecodedChanged": 2688,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_04",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 3,
+        "browserDecodedPsnr": 67.59546763301252,
+        "browserDecodedChanged": 888,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_05",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 23,
+        "browserDecodedPsnr": 52.67704493827844,
+        "browserDecodedChanged": 2819,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_01",
+        "width": 384,
+        "height": 382,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 35.92861360032621,
+        "browserDecodedChanged": 178624,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_03",
+        "width": 346,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 35.73036996460913,
+        "browserDecodedChanged": 105078,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_04",
+        "width": 379,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 38.81973173031221,
+        "browserDecodedChanged": 82780,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_05",
+        "width": 344,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 35.06167604310393,
+        "browserDecodedChanged": 124873,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_06",
+        "width": 384,
+        "height": 375,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 36.24612465991367,
+        "browserDecodedChanged": 134304,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_07",
+        "width": 354,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 36.73581129373338,
+        "browserDecodedChanged": 92052,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_08",
+        "width": 375,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 36.592465018463,
+        "browserDecodedChanged": 51835,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      }
+    ],
+    "low": [
+      {
+        "key": "dachs_death",
+        "width": 2080,
+        "height": 4644,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 38.73605905443511,
+        "browserDecodedChanged": 719923,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_01",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 8,
+        "browserDecodedPsnr": 60.8377226674706,
+        "browserDecodedChanged": 1661,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_02",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 12,
+        "browserDecodedPsnr": 58.68116942358895,
+        "browserDecodedChanged": 2383,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_03",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 6,
+        "browserDecodedPsnr": 59.60781057719689,
+        "browserDecodedChanged": 2688,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_04",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 3,
+        "browserDecodedPsnr": 67.59546763301252,
+        "browserDecodedChanged": 888,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "bg_canopy_05",
+        "width": 384,
+        "height": 384,
+        "browserDecodedMax": 23,
+        "browserDecodedPsnr": 52.67704493827844,
+        "browserDecodedChanged": 2819,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_01",
+        "width": 384,
+        "height": 382,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 35.92861360032621,
+        "browserDecodedChanged": 178624,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_03",
+        "width": 346,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 35.73036996460913,
+        "browserDecodedChanged": 105078,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_04",
+        "width": 379,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 38.81973173031221,
+        "browserDecodedChanged": 82780,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_05",
+        "width": 344,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 35.06167604310393,
+        "browserDecodedChanged": 124873,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_06",
+        "width": 384,
+        "height": 375,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 36.24612465991367,
+        "browserDecodedChanged": 134304,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_07",
+        "width": 354,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 36.73581129373338,
+        "browserDecodedChanged": 92052,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      },
+      {
+        "key": "rock_moss_08",
+        "width": 375,
+        "height": 384,
+        "browserDecodedMax": 128,
+        "browserDecodedPsnr": 36.592465018463,
+        "browserDecodedChanged": 51835,
+        "gpuMax": 0,
+        "gpuPsnr": "Infinity",
+        "gpuChanged": 0
+      }
+    ]
+  },
+  "timing": [
+    {
+      "quality": "high",
+      "baselineSeconds": [
+        15.125,
+        15.02339999999851,
+        15.32720000000298
+      ],
+      "currentSeconds": [
+        14.82120000000298,
+        15.0845,
+        15.36039999999851
+      ],
+      "baselineMedianSeconds": 15.125,
+      "currentMedianSeconds": 15.0845,
+      "gainSeconds": 0.04049999999999976
+    },
+    {
+      "quality": "low",
+      "baselineSeconds": [
+        13.894800000004471,
+        14.19869999999553,
+        14.35429999999702
+      ],
+      "currentSeconds": [
+        14.35629999999702,
+        14.53520000000298,
+        14.47510000000149
+      ],
+      "baselineMedianSeconds": 14.19869999999553,
+      "currentMedianSeconds": 14.47510000000149,
+      "gainSeconds": -0.2764000000059603
+    }
+  ],
+  "timingMethod": {
+    "runsPerBuildAndQuality": 3,
+    "order": "A/B alternates by repetition; existing suite, case load",
+    "network": "Local HTTP on free ports; broker-free local host; fresh Chrome profiles; warm OS/driver caches",
+    "browser": "154.0.8037.97",
+    "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "viewport": "1920x1080, DPR 1, visible Chrome",
+    "noParallelWorkload": true
+  },
+  "rawTiming": [
+    {
+      "id": "baseline-high-1",
+      "buildId": "048ea539f9c070639e80d269df60592fb265c6708fe0a8c4bc855e42293622a7",
+      "status": "complete",
+      "bootToLobbyMs": 15125,
+      "bootRevealMs": 30689.10000000149,
+      "mapReadyMs": 3672.2999999970198,
+      "commandToRevealMs": 4845.79999999702,
+      "commandToPlayableMs": 7249.5,
+      "returnToLobbyMs": 2943.0999999940395,
+      "navigation": {
+        "connectStart": 15142.10000000149,
+        "connectEnd": 15142.40000000596,
+        "responseStart": 15146.40000000596,
+        "responseEnd": 15146.80000000447,
+        "domContentLoadedEventEnd": 15635.10000000149
+      }
+    },
+    {
+      "id": "current-high-1",
+      "buildId": "04f3494ce13ef57fdb9199aa076abcf160cb06d3b63deb207bb5aa53eee20099",
+      "status": "complete",
+      "bootToLobbyMs": 14821.20000000298,
+      "bootRevealMs": 30407.40000000596,
+      "mapReadyMs": 3690.89999999851,
+      "commandToRevealMs": 4303,
+      "commandToPlayableMs": 7314.10000000149,
+      "returnToLobbyMs": 2735.2000000029802,
+      "navigation": {
+        "connectStart": 15151.20000000298,
+        "connectEnd": 15151.70000000298,
+        "responseStart": 15153,
+        "responseEnd": 15153.5,
+        "domContentLoadedEventEnd": 15659.40000000596
+      }
+    },
+    {
+      "id": "baseline-low-1",
+      "buildId": "048ea539f9c070639e80d269df60592fb265c6708fe0a8c4bc855e42293622a7",
+      "status": "complete",
+      "bootToLobbyMs": 13894.80000000447,
+      "bootRevealMs": 29522.80000000447,
+      "mapReadyMs": 3064.60000000149,
+      "commandToRevealMs": 3636.2000000029802,
+      "commandToPlayableMs": 6667.60000000149,
+      "returnToLobbyMs": 2357.1999999955297,
+      "navigation": {
+        "connectStart": 15190.20000000298,
+        "connectEnd": 15190.5,
+        "responseStart": 15192.10000000149,
+        "responseEnd": 15192.60000000149,
+        "domContentLoadedEventEnd": 15698.5
+      }
+    },
+    {
+      "id": "current-low-1",
+      "buildId": "04f3494ce13ef57fdb9199aa076abcf160cb06d3b63deb207bb5aa53eee20099",
+      "status": "complete",
+      "bootToLobbyMs": 14356.29999999702,
+      "bootRevealMs": 29950.5,
+      "mapReadyMs": 3080.7999999970198,
+      "commandToRevealMs": 4119.20000000298,
+      "commandToPlayableMs": 6724.5,
+      "returnToLobbyMs": 2349.60000000149,
+      "navigation": {
+        "connectStart": 15165.89999999851,
+        "connectEnd": 15166.30000000447,
+        "responseStart": 15167.5,
+        "responseEnd": 15168,
+        "domContentLoadedEventEnd": 15665.30000000447
+      }
+    },
+    {
+      "id": "current-high-2",
+      "buildId": "04f3494ce13ef57fdb9199aa076abcf160cb06d3b63deb207bb5aa53eee20099",
+      "status": "complete",
+      "bootToLobbyMs": 15084.5,
+      "bootRevealMs": 30667.79999999702,
+      "mapReadyMs": 3557.3000000044703,
+      "commandToRevealMs": 4773.19999999553,
+      "commandToPlayableMs": 7176.89999999851,
+      "returnToLobbyMs": 2872.7000000029802,
+      "navigation": {
+        "connectStart": 15158.39999999851,
+        "connectEnd": 15158.69999999553,
+        "responseStart": 15160.10000000149,
+        "responseEnd": 15160.60000000149,
+        "domContentLoadedEventEnd": 15656.10000000149
+      }
+    },
+    {
+      "id": "baseline-high-2",
+      "buildId": "048ea539f9c070639e80d269df60592fb265c6708fe0a8c4bc855e42293622a7",
+      "status": "complete",
+      "bootToLobbyMs": 15023.39999999851,
+      "bootRevealMs": 30604.39999999851,
+      "mapReadyMs": 3575.89999999851,
+      "commandToRevealMs": 4156.80000000447,
+      "commandToPlayableMs": 7195.5,
+      "returnToLobbyMs": 3031.2000000029802,
+      "navigation": {
+        "connectStart": 15138.89999999851,
+        "connectEnd": 15139.29999999702,
+        "responseStart": 15140.69999999553,
+        "responseEnd": 15141.09999999404,
+        "domContentLoadedEventEnd": 15659.69999999553
+      }
+    },
+    {
+      "id": "current-low-2",
+      "buildId": "04f3494ce13ef57fdb9199aa076abcf160cb06d3b63deb207bb5aa53eee20099",
+      "status": "complete",
+      "bootToLobbyMs": 14535.20000000298,
+      "bootRevealMs": 30143.5,
+      "mapReadyMs": 3042.39999999851,
+      "commandToRevealMs": 4053.7000000029802,
+      "commandToPlayableMs": 6680.89999999851,
+      "returnToLobbyMs": 2379.8000000044703,
+      "navigation": {
+        "connectStart": 15123.39999999851,
+        "connectEnd": 15123.69999999553,
+        "responseStart": 15125.10000000149,
+        "responseEnd": 15125.60000000149,
+        "domContentLoadedEventEnd": 15695.60000000149
+      }
+    },
+    {
+      "id": "baseline-low-2",
+      "buildId": "048ea539f9c070639e80d269df60592fb265c6708fe0a8c4bc855e42293622a7",
+      "status": "complete",
+      "bootToLobbyMs": 14198.69999999553,
+      "bootRevealMs": 29755.29999999702,
+      "mapReadyMs": 3159.2000000029802,
+      "commandToRevealMs": 3760.2999999970198,
+      "commandToPlayableMs": 6815.19999999553,
+      "returnToLobbyMs": 2370.60000000149,
+      "navigation": {
+        "connectStart": 15124.20000000298,
+        "connectEnd": 15124.70000000298,
+        "responseStart": 15126,
+        "responseEnd": 15126.5,
+        "domContentLoadedEventEnd": 15629
+      }
+    },
+    {
+      "id": "baseline-high-3",
+      "buildId": "048ea539f9c070639e80d269df60592fb265c6708fe0a8c4bc855e42293622a7",
+      "status": "complete",
+      "bootToLobbyMs": 15327.20000000298,
+      "bootRevealMs": 30923.20000000298,
+      "mapReadyMs": 3533.5,
+      "commandToRevealMs": 4105.20000000298,
+      "commandToPlayableMs": 7143.60000000149,
+      "returnToLobbyMs": 2847.5,
+      "navigation": {
+        "connectStart": 15164.70000000298,
+        "connectEnd": 15165.10000000149,
+        "responseStart": 15166.29999999702,
+        "responseEnd": 15166.79999999702,
+        "domContentLoadedEventEnd": 15668.60000000149
+      }
+    },
+    {
+      "id": "current-high-3",
+      "buildId": "04f3494ce13ef57fdb9199aa076abcf160cb06d3b63deb207bb5aa53eee20099",
+      "status": "complete",
+      "bootToLobbyMs": 15360.39999999851,
+      "bootRevealMs": 30932.60000000149,
+      "mapReadyMs": 3889.2000000029802,
+      "commandToRevealMs": 5234.60000000149,
+      "commandToPlayableMs": 7532.30000000447,
+      "returnToLobbyMs": 2895.10000000149,
+      "navigation": {
+        "connectStart": 15151.20000000298,
+        "connectEnd": 15151.60000000149,
+        "responseStart": 15153,
+        "responseEnd": 15153.5,
+        "domContentLoadedEventEnd": 15657.20000000298
+      }
+    },
+    {
+      "id": "baseline-low-3",
+      "buildId": "048ea539f9c070639e80d269df60592fb265c6708fe0a8c4bc855e42293622a7",
+      "status": "complete",
+      "bootToLobbyMs": 14354.29999999702,
+      "bootRevealMs": 29924.5,
+      "mapReadyMs": 3101.5999999940395,
+      "commandToRevealMs": 3589,
+      "commandToPlayableMs": 6674.29999999702,
+      "returnToLobbyMs": 2401.9000000059605,
+      "navigation": {
+        "connectStart": 15128.30000000447,
+        "connectEnd": 15128.60000000149,
+        "responseStart": 15129.80000000447,
+        "responseEnd": 15130.40000000596,
+        "domContentLoadedEventEnd": 15641.10000000149
+      }
+    },
+    {
+      "id": "current-low-3",
+      "buildId": "04f3494ce13ef57fdb9199aa076abcf160cb06d3b63deb207bb5aa53eee20099",
+      "status": "complete",
+      "bootToLobbyMs": 14475.10000000149,
+      "bootRevealMs": 30021.40000000596,
+      "mapReadyMs": 3098.0999999940395,
+      "commandToRevealMs": 4079.2999999970198,
+      "commandToPlayableMs": 6688.89999999851,
+      "returnToLobbyMs": 2312.3000000044703,
+      "navigation": {
+        "connectStart": 15104.60000000149,
+        "connectEnd": 15104.90000000596,
+        "responseStart": 15106.20000000298,
+        "responseEnd": 15106.60000000149,
+        "domContentLoadedEventEnd": 15618.80000000447
+      }
+    }
+  ],
+  "validation": {
+    "check": "4905 core tests, 54 architecture tests, production build and map-editor build passed",
+    "assets": "171 tests passed",
+    "fixture": "Two asset tests require ignored art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json; copied unchanged from C: (SHA256 404ecc5099e16d157b17270e688a77e0cf61f915fec76e451a880c75f43e69ad).",
+    "initialFailure": "Initial check hit the existing 5-second depthR0Contract timeout; both subsequent complete checks passed without test/config changes."
+  }
+}
