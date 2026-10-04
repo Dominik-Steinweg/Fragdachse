@@ -1893,8 +1893,8 @@ function normalizeSecondaryObjectiveRewards(
     ? placeableReward?.powerUpDefId.trim()
     : undefined;
   if (normalizedPowerUpDefId !== undefined && (
-    POWERUP_DEFS[normalizedPowerUpDefId] === undefined
-    || TIMED_POWERUP_PEDESTAL_CONFIGS[normalizedPowerUpDefId] === undefined
+    !Object.prototype.hasOwnProperty.call(POWERUP_DEFS, normalizedPowerUpDefId)
+    || !Object.prototype.hasOwnProperty.call(TIMED_POWERUP_PEDESTAL_CONFIGS, normalizedPowerUpDefId)
   )) {
     throw new Error(
       `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} references unknown timed Power-Up pedestal: ${normalizedPowerUpDefId}`,
@@ -3472,7 +3472,7 @@ function normalizePowerUpConfig(
     || anchor.gridY < 0 || anchor.gridY >= arenaHeightCells)) {
     throw new Error(`[coopDefenseMaps] Power-up anchor on map ${mapId} is outside the arena`);
   }
-  if (!TIMED_POWERUP_PEDESTAL_CONFIGS[powerUpConfig.defId]) {
+  if (!Object.prototype.hasOwnProperty.call(TIMED_POWERUP_PEDESTAL_CONFIGS, powerUpConfig.defId)) {
     throw new Error(`[coopDefenseMaps] Unknown pedestal power-up on map ${mapId}: ${powerUpConfig.defId}`);
   }
   if (
@@ -3616,7 +3616,7 @@ function normalizeBasePowerUpPedestalConfig(
   baseId: string,
   pedestal: CoopBasePowerUpPedestalConfig,
 ): CoopBasePowerUpPedestalConfig {
-  if (!TIMED_POWERUP_PEDESTAL_CONFIGS[pedestal.defId]) {
+  if (!Object.prototype.hasOwnProperty.call(TIMED_POWERUP_PEDESTAL_CONFIGS, pedestal.defId)) {
     throw new Error(`[coopDefenseMaps] Unknown pedestal power-up on base ${baseId}: ${pedestal.defId}`);
   }
 

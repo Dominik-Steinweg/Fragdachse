@@ -39,6 +39,21 @@ function getShapeBounds(shape: CoopBaseShape): { width: number; height: number }
 }
 
 describe('Coop defense map progression', () => {
+  it.each(['constructor', 'toString', '__proto__'])('rejects inherited timed-pedestal references: %s', defId => {
+    const map = {
+      mapId: 'invalid-pedestal', arenaWidthCells: 20, balanceReferenceDurationSec: 60,
+      objective: 'survive' as const, surviveDurationSec: 60, respawnsPerPlayer: 0, bases: [], powerUps: [],
+    };
+    expect(() => normalizeCoopDefenseMapConfig({ ...map,
+      powerUps: [{ defId, region: 'front', respawnMs: 1000 }],
+    })).toThrow('Unknown pedestal power-up');
+    expect(() => normalizeCoopDefenseMapConfig({ ...map, bases: [{
+      id: 'pedestal-base', hpMax: 100, anchor: { kind: 'right-center', edgeInsetCells: 0 },
+      shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+      powerUpPedestals: [{ id: 'pedestal', defId, respawnMs: 1000, cellOffset: { gridX: 0, gridY: 0 } }],
+    }] })).toThrow('Unknown pedestal power-up');
+  });
+
   it('keeps map identifiers and arena widths valid without snapshotting balance values', () => {
     const mapIds = COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId);
     expect(mapIds.every((mapId) => mapId.trim().length > 0)).toBe(true);

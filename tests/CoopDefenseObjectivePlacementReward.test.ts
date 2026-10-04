@@ -134,6 +134,12 @@ function makePowerUpSystem(options: ConstructorParameters<typeof PowerUpSystem>[
 }
 
 describe('B6 objective placement rewards', () => {
+  it.each(['constructor', 'toString', '__proto__'])('rejects inherited objective reward power-up references: %s', powerUpDefId => {
+    const map = structuredClone(REWARD_MAP);
+    map.secondaryObjectives![0].rewards!.placeablePedestalOnComplete!.powerUpDefId = powerUpDefId;
+    expect(() => normalizeCoopDefenseMapConfig(map)).toThrow('unknown timed Power-Up pedestal');
+  });
+
   /**
    * Der authored Weg von der Hold-Konfiguration bis zum liegenden Pickup.
    *
