@@ -239,6 +239,11 @@ export class ProjectileLifecycleProcessor {
       return true;
     }
 
+    if (coreStage.miniRocketSafetyExpiredIds.has(proj.id)) {
+      this.deps.release(proj);
+      return false;
+    }
+
     const awaitingContinuation = proj.pendingExplosion
       && (proj.interaction.multiExplosionsRemaining ?? 0) > 0;
     if (awaitingContinuation) {
@@ -260,11 +265,6 @@ export class ProjectileLifecycleProcessor {
       proj.lastX = proj.physics.sprite.x;
       proj.lastY = proj.physics.sprite.y;
       return true;
-    }
-
-    if (coreStage.miniRocketSafetyExpiredIds.has(proj.id)) {
-      this.deps.release(proj);
-      return false;
     }
 
     if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.interaction.explosion && !proj.spec.flight.distanceScaling) {
@@ -313,6 +313,7 @@ export class ProjectileLifecycleProcessor {
         this.emitSpentMiniRocketDestruction(proj);
       }
       this.deps.release(proj);
+      return false;
     } else if (proj.spec.flight.homing && proj.spec.flight.miniRocket.stageRangePx === undefined) {
       const simulatedAge = proj.simulatedAgeMs ?? 0;
       this.deps.advanceCarrier?.(proj);
@@ -334,7 +335,7 @@ export class ProjectileLifecycleProcessor {
     proj.lastY = proj.physics.sprite.y;
     proj.bounceProcessedThisStep = false;
     proj.velocityAfterFirstBounce = undefined;
-    return !dead;
+    return true;
   }
 
   private emitSpentMiniRocketDestruction(proj: ProjectileRuntimeRecord): void {

@@ -29,6 +29,29 @@ function fixture() {
 }
 
 describe('world-owned projectile lifecycle authority', () => {
+  it.each(['lifetime', 'range'] as const)('stops proximity pulses when its %s ends', cause => {
+    const { runtime, physics } = fixture();
+    const pulse = vi.fn();
+    runtime.setProximityPulseCallback(pulse);
+    const spawn = request();
+    const id = runtime.spawnProjectile({ ...spawn,
+      flight: { ...spawn.flight, lifetimeMs: cause === 'range' ? 1000 : 100,
+        remainingRangePx: cause === 'range' ? 20 : undefined },
+      interaction: { proximityPulse: { radius: 100, damage: 20, scanIntervalMs: 50 } },
+    })!;
+    runtime.runHostProjectileStage(50, 50);
+    expect(pulse).toHaveBeenCalledOnce();
+    expect(runtime.activeCount).toBe(1);
+    if (cause === 'range') physics.handles.get(id)!.sprite.x = 20;
+    const expiryAt = cause === 'lifetime' ? 101 : 100;
+    runtime.runHostProjectileStage(expiryAt - 50, expiryAt);
+    expect(physics.released).toEqual([id]);
+    expect(runtime.activeCount).toBe(0);
+    expect(pulse).toHaveBeenCalledOnce();
+    runtime.runHostProjectileStage(100, expiryAt + 100);
+    expect(pulse).toHaveBeenCalledOnce();
+  });
+
   it.each(['contact', 'lifetime', 'range', 'safety'] as const)('ends a returning armed rocket without explosion on %s', cause => {
     const { runtime, physics, wall } = fixture();
     runtime.setProjectileMiniRocketStatePort({ getOwnerPosition: () => ({ x: 1000, y: 0 }), onOutcome: () => {} });
@@ -155,6 +178,31 @@ describe('world-owned projectile lifecycle authority', () => {
     runtime.runHostProjectileStage(1001, 2001);
     expect(expiry).toHaveBeenCalledOnce();
     expect(runtime.activeCount).toBe(0);
+  });
+
+  it.each(['receipt', 'coast'] as const)('enforces mini-rocket safety expiry while awaiting %s', waitingFor => {
+    const { runtime, physics, wall } = fixture();
+    const spawn = request();
+    const id = runtime.spawnProjectile({ ...spawn,
+      flight: { ...spawn.flight, lifetimeMs: 12_000,
+        miniRocket: { stageRangePx: 100, safetyLifetimeMs: 12_000 } },
+      interaction: { ...spawn.interaction, multiExplosion: { count: 2, coastMs: 100 } },
+    })!;
+    runtime.runHostProjectileStage(11_990, 11_990);
+    wall(id);
+    expect(runtime.runHostProjectileStage(0, 11_990).projectileExplosions).toHaveLength(1);
+    if (waitingFor === 'coast') {
+      runtime.completeProjectileExplosion(id, { damagedTargetKeys: [] });
+      wall(id);
+    }
+    expect(runtime.runHostProjectileStage(10, 12_000).projectileExplosions).toEqual([]);
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toEqual([id]);
+    runtime.completeProjectileExplosion(id, { damagedTargetKeys: [] });
+    wall(id);
+    expect(runtime.runHostProjectileStage(100, 12_100).projectileExplosions).toEqual([]);
+    expect(runtime.runHostProjectileStage(0, 12_100).projectileExplosions).toEqual([]);
+    expect(physics.released).toEqual([id]);
   });
 
   it('drops pending deferred effects and all resources at world teardown', () => {
