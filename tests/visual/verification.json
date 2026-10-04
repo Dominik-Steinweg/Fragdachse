@@ -1,62 +1,333 @@
 {
   "status": "MERGE-READY",
-  "verifiedAt": "2026-10-04T02:14:11.177Z",
-  "testedCodeCommit": "d8fc6859e865a63eb45e8348582518ca709bb20e",
+  "verifiedAt": "2026-10-04T09:51:05.292Z",
+  "testedCodeCommit": "6bfd0d01d3d8551dfc984bd9f031f62d1c5a98da",
+  "baseCommit": "7f0a575ae0350a93340c81cc033ea53f70d9709d",
   "browser": "154.0.8037.97",
   "platform": "win32",
   "viewport": {
     "width": 960,
     "height": 540
   },
-  "recipeHash": "dd2df1b583c583575ca4be6609bc7a50a77fc97eb36df2b0f0bb5daba8da9398",
+  "recipeHash": "75df0023cc7135dc5065d77b2e3a713a84f4b774bc7ee4c87308d838b1737609",
   "tolerance": {
     "delta": 12,
     "maxRatio": 0.001
   },
-  "references": 20,
-  "referenceBytes": 12483188,
+  "references": 23,
+  "referenceBytes": 13714332,
+  "changedReferences": [
+    "enemies-night.webp",
+    "train-destroyed-f12.webp"
+  ],
+  "unchangedReferenceCount": 21,
+  "commands": [
+    "npm run test:visual -- --update --shot=enemies-night,train-destroyed-f12",
+    "npm run test:visual -- --runs=5",
+    "npm run check",
+    "npm run test:assets"
+  ],
+  "artifactDirectory": "build/visual-tests/2026-10-04T09-27-33-298Z",
   "runs": [
     {
       "run": 1,
-      "passed": 20,
+      "passed": 23,
       "failures": 0,
-      "maxChangedRatio": 0.00039737654320987656
+      "maxChangedRatio": 0.0008950617283950618,
+      "freezeChangedPixels": 0,
+      "freshBrowserProfile": true
     },
     {
       "run": 2,
-      "passed": 20,
+      "passed": 23,
       "failures": 0,
-      "maxChangedRatio": 0.0001890432098765432
+      "maxChangedRatio": 0.0008661265432098765,
+      "freezeChangedPixels": 0,
+      "freshBrowserProfile": true
     },
     {
       "run": 3,
-      "passed": 20,
+      "passed": 23,
       "failures": 0,
-      "maxChangedRatio": 0.0003896604938271605
+      "maxChangedRatio": 0.0008314043209876543,
+      "freezeChangedPixels": 0,
+      "freshBrowserProfile": true
+    },
+    {
+      "run": 4,
+      "passed": 23,
+      "failures": 0,
+      "maxChangedRatio": 0.0008333333333333334,
+      "freezeChangedPixels": 0,
+      "freshBrowserProfile": true
+    },
+    {
+      "run": 5,
+      "passed": 23,
+      "failures": 0,
+      "maxChangedRatio": 0.0008391203703703704,
+      "freezeChangedPixels": 0,
+      "freshBrowserProfile": true
     }
   ],
-  "negativeControl": {
-    "passed": true,
-    "exitCode": 1,
-    "changedRatio": 0.038641975308641975,
-    "diffWritten": true
+  "deterministicPhases": {
+    "lobby-day": {
+      "simulationMs": 3850,
+      "worldRevision": 1700000000000,
+      "camera": {
+        "x": 0,
+        "y": 0,
+        "zoomX": 0.5,
+        "zoomY": 0.5
+      }
+    },
+    "map1-day": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 226.28571428571422,
+        "y": 378.2857142857143,
+        "zoomX": 0.7,
+        "zoomY": 0.7
+      }
+    },
+    "fog-rocks": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 400,
+        "y": 334,
+        "zoomX": 1,
+        "zoomY": 1
+      }
+    },
+    "zoom-wide": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": -48,
+        "y": 224,
+        "zoomX": 0.5,
+        "zoomY": 0.5
+      }
+    },
+    "zoom-close": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 528,
+        "y": 548,
+        "zoomX": 1.25,
+        "zoomY": 1.25
+      }
+    },
+    "player-material": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 640,
+        "y": 789,
+        "zoomX": 2,
+        "zoomY": 2
+      }
+    },
+    "player-normal": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 640,
+        "y": 789,
+        "zoomX": 2,
+        "zoomY": 2
+      }
+    },
+    "enemies-day": {
+      "simulationMs": 7300,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 400,
+        "y": 654,
+        "zoomX": 1,
+        "zoomY": 1
+      }
+    },
+    "map1-dusk": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 226.28571428571422,
+        "y": 378.2857142857143,
+        "zoomX": 0.7,
+        "zoomY": 0.7
+      }
+    },
+    "map1-night": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 226.28571428571422,
+        "y": 378.2857142857143,
+        "zoomX": 0.7,
+        "zoomY": 0.7
+      }
+    },
+    "enemies-night": {
+      "simulationMs": 7300,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 400,
+        "y": 654,
+        "zoomX": 1,
+        "zoomY": 1
+      }
+    },
+    "map1-low": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 226.28571428571422,
+        "y": 378.2857142857143,
+        "zoomX": 0.7,
+        "zoomY": 0.7
+      }
+    },
+    "explosion-f01": {
+      "simulationMs": 7300,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 400,
+        "y": 590,
+        "zoomX": 1,
+        "zoomY": 1
+      }
+    },
+    "explosion-f12": {
+      "simulationMs": 7483.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 400,
+        "y": 590,
+        "zoomX": 1,
+        "zoomY": 1
+      }
+    },
+    "explosion-f36": {
+      "simulationMs": 7883.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 400,
+        "y": 590,
+        "zoomX": 1,
+        "zoomY": 1
+      }
+    },
+    "armageddon-normal": {
+      "simulationMs": 7300,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 240,
+        "y": 436,
+        "zoomX": 0.75,
+        "zoomY": 0.75
+      }
+    },
+    "armageddon-void": {
+      "simulationMs": 7316.666666666667,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 240,
+        "y": 436,
+        "zoomX": 0.75,
+        "zoomY": 0.75
+      }
+    },
+    "armageddon-impact": {
+      "simulationMs": 7516.666666666667,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 240,
+        "y": 436,
+        "zoomX": 0.75,
+        "zoomY": 0.75
+      }
+    },
+    "train-intact": {
+      "simulationMs": 7300,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 8864,
+        "y": 992,
+        "zoomX": 0.75,
+        "zoomY": 0.75
+      }
+    },
+    "train-destroyed-f12": {
+      "simulationMs": 7500,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 8863.971929772633,
+        "y": 993.0894176103413,
+        "zoomX": 0.75,
+        "zoomY": 0.75
+      }
+    },
+    "towers-day": {
+      "simulationMs": 7283.333333333333,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 664,
+        "y": 728.5,
+        "zoomX": 4,
+        "zoomY": 4
+      }
+    },
+    "towers-dusk": {
+      "simulationMs": 8283.333333333334,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 664,
+        "y": 728.5,
+        "zoomX": 4,
+        "zoomY": 4
+      }
+    },
+    "towers-night": {
+      "simulationMs": 9283.333333333334,
+      "worldRevision": 1700000000866,
+      "camera": {
+        "x": 664,
+        "y": 728.5,
+        "zoomX": 4,
+        "zoomY": 4
+      }
+    }
   },
   "checks": {
-    "command": "npm run check",
-    "environment": {
-      "VITEST_MAX_THREADS": "4",
-      "VITEST_MIN_THREADS": "1"
-    },
-    "coreTests": 4907,
+    "coreTests": 4934,
     "architectureTests": 54,
+    "assetTests": 180,
+    "comparatorTests": 4,
     "builds": [
       "game",
       "map-editor"
     ],
-    "comparatorTests": 4
+    "environment": {
+      "VITEST_MAX_THREADS": "2",
+      "VITEST_MIN_THREADS": "1"
+    },
+    "logs": [
+      "build/visualfix/check.log",
+      "build/visualfix/assets-restored.log"
+    ],
+    "localAssetFixture": {
+      "path": "art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json",
+      "source": "C:/Fragdachse/art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json",
+      "sha256": "404ecc5099e16d157b17270e688a77e0cf61f915fec76e451a880c75f43e69ad",
+      "note": "Ignored offline beauty manifest copied unchanged into the clone; required by two existing asset tests."
+    }
   },
   "limitations": [
     "Same Chrome/OS/GPU rendering environment; re-review references on renderer changes.",
-    "Twenty selected image states, not exhaustive gameplay or performance coverage."
+    "Twenty-three selected image states, not exhaustive gameplay or performance coverage."
   ]
 }

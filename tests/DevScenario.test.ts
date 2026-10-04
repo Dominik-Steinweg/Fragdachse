@@ -31,7 +31,7 @@ import { COOP_DEFENSE_UPGRADE_DEFINITIONS, isCoopDefenseUpgradeAvailableForClass
 import { buildScenarioProfile, defaultScenario, parseScenario, scenarioLoadout, encodeScenario, decodeScenario } from '../src/dev/scenario/config';
 import { createMemoryStorage } from '../src/dev/scenario/memoryStorage';
 import { ScenarioClock } from '../src/dev/scenario/clock';
-import { visualTest } from '../src/dev/scenario/visualTest';
+import { visualTest, bindVisualTestBootClock } from '../src/dev/scenario/visualTest';
 
 describe('Dev scenario contract', () => {
   it('loads old recipes with visual-review defaults and validates explicit overrides', () => {
@@ -132,6 +132,62 @@ describe('Dev scenario contract', () => {
         } finally { clock.destroy(); }
       }
     } finally { Object.assign(visualTest, previous); }
+  });
+  it('keeps visual time on exact integer-millisecond boundaries across loading and settle pumps', () => {
+    const previous = { ...visualTest };
+    try {
+      visualTest.enabled = true;
+      const samples: { time: number; wall: number; delta: number }[] = [];
+      const loop = { callback(time: number, delta: number) { samples.push({ time, wall: Date.now(), delta }); } };
+      const clock = new ScenarioClock(loop), epoch = Date.now();
+      try {
+        for (let i = 0; i < 137; i++) loop.callback(10000 + i * 33, 33);
+        expect(clock.now).toBe(0);
+        clock.preparing = false;
+        for (let frame = 1; frame <= 360; frame++) {
+          clock.step(); loop.callback(frame * 23, 23);
+          expect(clock.now).toBe(frame * 1000 / 60);
+          expect(Date.now()).toBe(epoch + Math.floor(frame * 1000 / 60));
+          if (frame % 3 === 0) expect(Number.isInteger(clock.now)).toBe(true);
+          clock.settle(2); loop.callback(90000, 200); loop.callback(100000, 900);
+          expect(clock.now).toBe(frame * 1000 / 60);
+        }
+        expect(samples.at(-1)).toEqual({ time: 6000, wall: epoch + 6000, delta: 0 });
+        const count = samples.length;
+        loop.callback(1000000, 2000);
+        expect(samples).toHaveLength(count);
+      } finally { clock.destroy(); }
+    } finally { Object.assign(visualTest, previous); }
+  });
+  it('admits the visual lobby on scenario time, restores the DOM fade and cancels pending work', async () => {
+    const previous = { ...visualTest };
+    const original = vi.fn(async () => {}), dismissImmediate = vi.fn();
+    const boot = { fadeOut: original, dismissImmediate } as unknown as typeof import('../src/ui/BootScreen').BootScreen;
+    let fire = () => {};
+    const remove = vi.fn();
+    const delayedCall = vi.fn((_delay: number, callback: () => void) => { fire = callback; return { remove }; });
+    const timer = { delayedCall } as unknown as import('phaser').Time.Clock;
+    let restore = () => {};
+    try {
+      visualTest.enabled = false;
+      bindVisualTestBootClock(boot, timer)();
+      expect(boot.fadeOut).toBe(original);
+      visualTest.enabled = true;
+      restore = bindVisualTestBootClock(boot, timer);
+      let ready = false;
+      const pending = boot.fadeOut(200).then(() => { ready = true; });
+      await Promise.resolve();
+      expect(ready).toBe(false); expect(dismissImmediate).not.toHaveBeenCalled();
+      expect(delayedCall).toHaveBeenCalledWith(200, expect.any(Function));
+      fire(); await pending;
+      expect(ready).toBe(true); expect(dismissImmediate).toHaveBeenCalledTimes(1);
+      const cancelled = boot.fadeOut();
+      restore(); await cancelled;
+      fire(); // A retired callback must not finish another fade or mutate the DOM again.
+      expect(dismissImmediate).toHaveBeenCalledTimes(2);
+      expect(remove).toHaveBeenCalledTimes(2);
+      expect(boot.fadeOut).toBe(original); expect(original).not.toHaveBeenCalled();
+    } finally { restore(); Object.assign(visualTest, previous); }
   });
 });
 

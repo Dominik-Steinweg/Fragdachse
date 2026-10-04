@@ -14,6 +14,7 @@ export class ScenarioClock {
   holdLoadingTime = () => true;
   get pendingSteps(): number { return this.queuedSteps; }
   private elapsed = 0;
+  private fixedFrames = 0;
   private simulationTime: number | null = null;
   private readonly nativeNow = Date.now;
   private readonly epoch = Date.now();
@@ -30,8 +31,16 @@ export class ScenarioClock {
       const step = (this.paused && this.settling) || (this.preparing && this.holdLoadingTime()) ? 0
         : this.paused || visualTest.enabled ? 1000 / 60 : Math.min(delta, 100) * this.speed;
       if (this.paused) this.queuedSteps--;
-      this.elapsed += step;
-      this.simulationTime += step;
+      if (visualTest.enabled) {
+        // Multiplication keeps integral frame boundaries independent of how many loading
+        // frames preceded them. Repeated += 1000/60 can floor Date.now one ms early.
+        if (step > 0) this.fixedFrames++;
+        this.elapsed = this.fixedFrames * 1000 / 60;
+        this.simulationTime = this.elapsed;
+      } else {
+        this.elapsed += step;
+        this.simulationTime += step;
+      }
       if (visualTest.enabled) {
         // Loading can take a different number of frames. Effect randomness starts at the
         // ready barrier, and zero-delta worker publication must not consume another frame.

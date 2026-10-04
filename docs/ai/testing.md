@@ -71,7 +71,7 @@ schneller Architecture-Suite, Spiel-Build und Map-Editor-Build; die übrigen Spe
 
 ## Visuelle Regression
 
-`npm run test:visual` vergleicht 20 feste Ansichten über `window.devScenario` mit den
+`npm run test:visual` vergleicht die festen Ansichten im Szenenkatalog über `window.devScenario` mit den
 verlustfreien WebP-Referenzen in [`tests/visual/reference/`](../../tests/visual/reference/).
 Der Runner [`scripts/visual/run.mjs`](../../scripts/visual/run.mjs) startet einen eigenen
 Vite-Server auf einem verfügbaren lokalen Port und installiertes Chrome mit Playwright-Core
@@ -79,9 +79,12 @@ Vite-Server auf einem verfügbaren lokalen Port und installiertes Chrome mit Pla
 Der angezeigte Build-Zeitstempel ist im Testserver festgesetzt.
 Server und Browser werden anschließend geschlossen. Das bleibt außerhalb von `npm run check`.
 
-- `npm run test:visual -- --runs=3`: drei vollständige Läufe gegen unveränderte Referenzen.
+- `npm run test:visual -- --runs=5`: fünf vollständige Läufe gegen unveränderte Referenzen;
+  jeder Lauf startet einen neuen Chrome-Prozess mit frischem temporärem Profil.
 - `npm run test:visual -- --update`: alle Referenzen ausdrücklich neu aufnehmen; anschließend
-  Bilder prüfen und die drei Vergleichsläufe ausführen. Fehlgeschlagene Aufbauten ersetzen nichts.
+  Bilder prüfen und die Vergleichsläufe ausführen. Fehlgeschlagene Aufbauten ersetzen nichts.
+- `--update --shot=enemies-night,train-destroyed-f12` erneuert nur diese Bilder.
+  Vorausgehende Befehle derselben Gruppen werden weiterhin abgespielt.
 - `--list` zeigt Gruppen und Bilder; `--group=day` führt eine ganze Gruppe einschließlich
   aller vorausgehenden Schritte aus. Nach Änderungen am Szenenkatalog alle Referenzen erneuern.
 
@@ -89,15 +92,21 @@ Der [Szenenkatalog](../../scripts/visual/scenes.mjs) enthält Seed, Tagesminute,
 Qualität, Vorlauf und Effektframes. Jede Gruppe startet in einem frischen isolierten Tab.
 `dev-scenario.html?visual-test=1` setzt Startzeit und Zufallsquelle vor den Spielimports fest,
 hält die Simulationszeit während ausstehender Render-Arbeit an und pausiert an der Ready-Barriere.
+Auch die DOM-Bootfreigabe gehört im Test zur Simulationsuhr: CSS-Transitionen oder echte
+Timeouts dürfen den Startzeitpunkt der Runde nicht bestimmen. Der feste Boot-Vorlauf bewahrt
+die geprüfte Lobby-/HUD-Phase; normale Downloads, Worker-Budgets und Fehlerfristen bleiben real.
+Die Uhr berechnet ihre Zeit aus ganzzahligen Frames statt durch wiederholtes Addieren von 1/60 s.
 Die Zufallsfolge der Effektframes beginnt an dieser Barriere; Ladezeit verändert sie nicht.
 120 Schritte à 1/60 s bilden den Vorlauf. `settle` veröffentlicht Worker-Ergebnisse davor und
 danach mit Delta null; weitere 60 feste Schritte schließen Schatten-Überblendungen ab, bevor
 Effekte ausgelöst werden. Screenshots führen keinen zusätzlichen Spielschritt aus.
+Eine zweite Aufnahme nach zwei nativen Browserframes muss ohne Masken pixelgleich bleiben;
+auch die Simulationszeit muss unverändert sein. Bewegte Bilder werden nicht als Referenz gespeichert.
 Die normale Dev-Seite und Produktionsläufe aktivieren diesen Modus nicht.
 
 Ein Pixel zählt als geändert, wenn mindestens ein RGBA-Kanal um mehr als 12 von 255 abweicht;
 höchstens 0,1 % der verglichenen Pixel sind erlaubt. Rechteckmasken können pro Ansicht im Katalog
-angegeben werden und zählen nicht zum Nenner; derzeit sind keine Masken nötig. Fehlende Referenzen,
+angegeben werden und zählen nicht zum Nenner; die Turmansichten maskieren Beobachter und HUD. Fehlende Referenzen,
 geänderte Abmessungen, veraltete Rezept-Metadaten, Ladefehler und Timeouts lassen den Lauf scheitern.
 Referenzupdates sind auf insgesamt 30 MB Bilddaten begrenzt. Die Vergleichslogik besitzt eigene
 [Asset-Tests](../../tests/assets/VisualComparison.test.ts).
