@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { BUTTON_CURSOR } from './gameCursor';
 import type { WeaponSlot } from '../types';
 import {
@@ -69,17 +70,17 @@ export class WeaponBalanceLabOverlay {
       background: 'rgba(18, 22, 17, 0.98)', boxShadow: '0 16px 48px rgba(0,0,0,.55)',
     });
     const title = document.createElement('h2');
-    title.textContent = 'Balance Lab 2.0 – Testgelände';
+    title.textContent = t('ui.weaponLab.title');
     title.style.margin = '0 0 6px';
     const intro = document.createElement('p');
-    intro.textContent = 'Startet eine frische interne Runde mit echtem Waffen-, Projektil-, Treffer- und Ressourcenpfad. Klasse, Items und allgemeine Upgrades bleiben neutral.';
+    intro.textContent = t('ui.weaponLab.intro');
     Object.assign(intro.style, { margin: '0 0 16px', color: '#b9c2b4', fontSize: '13px', lineHeight: '1.45' });
 
     const slot = document.createElement('select');
-    slot.append(new Option(`Waffe 1 · ${selection.weapon1}`, 'weapon1'));
-    if (selection.weapon2) slot.append(new Option(`Waffe 2 · ${selection.weapon2}`, 'weapon2'));
+    slot.append(new Option(t('ui.weaponLab.weaponOne', { weapon: selection.weapon1 }), 'weapon1'));
+    if (selection.weapon2) slot.append(new Option(t('ui.weaponLab.weaponTwo', { weapon: selection.weapon2 }), 'weapon2'));
     const scenario = document.createElement('select');
-    scenario.append(new Option('Einzelziel (ST)', 'single_target'), new Option('Fünf Ziele (5T)', 'five_target'));
+    scenario.append(new Option(t('ui.weaponLab.singleTarget'), 'single_target'), new Option(t('ui.weaponLab.fiveTargets'), 'five_target'));
     const distance = document.createElement('select');
     for (const value of [40, 100, 150, 180, 250]) distance.append(new Option(`${value} px`, String(value), value === 180, value === 180));
     const duration = document.createElement('input');
@@ -87,10 +88,10 @@ export class WeaponBalanceLabOverlay {
     const controls = document.createElement('div');
     Object.assign(controls.style, { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' });
     controls.append(
-      addLabel('Waffen-Slot', slot),
-      addLabel('Szenario', scenario),
-      addLabel('Distanz', distance),
-      addLabel('Messfenster', duration),
+      addLabel(t('ui.weaponLab.slot'), slot),
+      addLabel(t('ui.weaponLab.scenario'), scenario),
+      addLabel(t('ui.weaponLab.distance'), distance),
+      addLabel(t('ui.weaponLab.window'), duration),
     );
 
     const status = document.createElement('div');
@@ -98,10 +99,10 @@ export class WeaponBalanceLabOverlay {
     const buttons = document.createElement('div');
     Object.assign(buttons.style, { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' });
     const startButton = document.createElement('button');
-    startButton.textContent = 'Testgelände starten';
-    const closeButton = document.createElement('button'); closeButton.textContent = 'Schließen';
-    const jsonButton = document.createElement('button'); jsonButton.textContent = 'JSON exportieren';
-    const csvButton = document.createElement('button'); csvButton.textContent = 'CSV exportieren';
+    startButton.textContent = t('ui.weaponLab.start');
+    const closeButton = document.createElement('button'); closeButton.textContent = t('ui.common.close');
+    const jsonButton = document.createElement('button'); jsonButton.textContent = t('ui.diagnostics.exportJson');
+    const csvButton = document.createElement('button'); csvButton.textContent = t('ui.weaponLab.exportCsv');
     for (const button of [startButton, closeButton, jsonButton, csvButton]) {
       Object.assign(button.style, { padding: '8px 12px', cursor: BUTTON_CURSOR });
     }
@@ -116,7 +117,7 @@ export class WeaponBalanceLabOverlay {
         settleMs: 2_000,
       });
       if (result.ok) this.hide();
-      else status.textContent = result.message ?? 'Das Testgelände konnte nicht gestartet werden.';
+      else status.textContent = result.message ?? t('ui.weaponLab.failed');
     };
     closeButton.onclick = () => this.hide();
     jsonButton.onclick = () => download(
@@ -133,12 +134,12 @@ export class WeaponBalanceLabOverlay {
 
     const storedResults = loadRuntimeBenchmarkResults();
     const bestTitle = document.createElement('h3');
-    bestTitle.textContent = 'Best observed (kein theoretisches Maximum)';
+    bestTitle.textContent = t('ui.weaponLab.bestObserved');
     bestTitle.style.margin = '20px 0 8px';
     const bestList = document.createElement('div');
     this.renderBestObserved(bestList, storedResults);
     const resultTitle = document.createElement('h3');
-    resultTitle.textContent = 'Letzte Runtime-Messungen';
+    resultTitle.textContent = t('ui.weaponLab.recent');
     resultTitle.style.margin = '20px 0 8px';
     const resultList = document.createElement('div');
     this.renderResults(resultList, storedResults);
@@ -151,19 +152,19 @@ export class WeaponBalanceLabOverlay {
 
   private renderResults(container: HTMLDivElement, results: readonly RuntimeBenchmarkResult[]): void {
     if (results.length === 0) {
-      container.textContent = 'Noch keine Messungen vorhanden.';
+      container.textContent = t('ui.weaponLab.empty');
       container.style.color = '#90998c';
       return;
     }
     for (const result of results.slice(0, 12)) {
       const row = document.createElement('div');
       Object.assign(row.style, { padding: '7px 0', borderTop: '1px solid #354033', fontFamily: 'monospace', fontSize: '12px' });
-      row.textContent = `${result.weaponId} · ${result.scenario === 'five_target' ? '5T' : 'ST'} · ${result.distance}px · ${result.dps.toFixed(1)} DPS · ${result.totalDamage.toFixed(0)} Schaden · Adr ${result.adrenalineMeasurement ? 'brutto ' : ''}+${result.adrenalineGeneratedPerSecond.toFixed(1)}/s / -${result.adrenalinePerSecond.toFixed(1)}/s · ${result.buildSignature} · Tail ${result.tailStatus}`;
+      row.textContent = t('ui.weaponLab.result', { weapon: result.weaponId, scenario: result.scenario === 'five_target' ? '5T' : 'ST', distance: result.distance, dps: result.dps.toFixed(1), damage: result.totalDamage.toFixed(0), gross: result.adrenalineMeasurement ? t('ui.weaponLab.gross') : '', generated: result.adrenalineGeneratedPerSecond.toFixed(1), spent: result.adrenalinePerSecond.toFixed(1), build: result.buildSignature, tail: result.tailStatus });
       const essence = result.essenceAccounting;
       if (essence) {
         const detail = document.createElement('div');
         detail.style.color = '#aab7a4';
-        detail.textContent = `Essenz im Messfenster (gesamte Activity): authored ${essence.authoredValue.toFixed(2)} · materialisiert ${essence.materializedValue.toFixed(2)} · eingesammelt ${essence.committedValue.toFixed(2)} · verfallen ${essence.expiredValue.toFixed(2)}`;
+        detail.textContent = t('ui.weaponLab.essence', { authored: essence.authoredValue.toFixed(2), materialized: essence.materializedValue.toFixed(2), collected: essence.committedValue.toFixed(2), expired: essence.expiredValue.toFixed(2) });
         row.appendChild(detail);
       }
       container.appendChild(row);
@@ -173,14 +174,14 @@ export class WeaponBalanceLabOverlay {
   private renderBestObserved(container: HTMLDivElement, results: readonly RuntimeBenchmarkResult[]): void {
     const bestObserved = selectBestObservedRuntimeResults(results);
     if (bestObserved.length === 0) {
-      container.textContent = 'Noch keine vergleichbaren Messungen vorhanden.';
+      container.textContent = t('ui.weaponLab.noComparable');
       container.style.color = '#90998c';
       return;
     }
     for (const { result, sampleCount } of bestObserved.slice(0, 8)) {
       const row = document.createElement('div');
       Object.assign(row.style, { padding: '7px 0', borderTop: '1px solid #354033', fontFamily: 'monospace', fontSize: '12px' });
-      row.textContent = `${result.weaponId} · ${result.scenario === 'five_target' ? '5T' : 'ST'} · ${result.distance}px · ${result.dps.toFixed(1)} DPS · ${sampleCount} Run${sampleCount === 1 ? '' : 's'} · ${result.buildSignature}`;
+      row.textContent = t('ui.weaponLab.bestResult', { weapon: result.weaponId, scenario: result.scenario === 'five_target' ? '5T' : 'ST', distance: result.distance, dps: result.dps.toFixed(1), count: sampleCount, plural: sampleCount === 1 ? '' : 's', build: result.buildSignature });
       container.appendChild(row);
     }
   }

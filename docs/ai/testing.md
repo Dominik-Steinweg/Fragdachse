@@ -66,7 +66,7 @@ Beispiele:
 
 Die Spezial-Suites liegen unter `tests/architecture/`, `tests/integration/`, `tests/assets/`,
 `tests/stress/` und `tests/balance-lab/`. `npm run check` bleibt das tägliche Gate aus Core,
-schneller Architecture-Suite und Build; die übrigen Spezial-Suites werden gezielt für ihre
+schneller Architecture-Suite, Spiel-Build und Map-Editor-Build; die übrigen Spezial-Suites werden gezielt für ihre
 Änderung ausgeführt. Browser, Dev-Server und Sichtprüfung gehören nicht zum normalen Test-Gate.
 
 ## Mocks und Reduktion

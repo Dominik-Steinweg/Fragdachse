@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 /**
  * Transportdiagnose als einblendbares Overlay (Taste P).
  *
@@ -34,9 +35,9 @@ interface ProjectileSyncMetrics {
 function describePath(diagnostics: LinkDiagnostics): string {
   const local = diagnostics.localCandidateType ?? '?';
   const remote = diagnostics.remoteCandidateType ?? '?';
-  if (diagnostics.usesRelay) return `RELAY (${local}/${remote}) – Konfigurationsfehler`;
-  if (diagnostics.localCandidateType === null) return 'wird ermittelt…';
-  return `direkt (${local}/${remote})`;
+  if (diagnostics.usesRelay) return t('ui.netDebug.relay', { local: local, remote: remote });
+  if (diagnostics.localCandidateType === null) return t('ui.netDebug.detecting');
+  return t('ui.netDebug.direct', { local: local, remote: remote });
 }
 
 export class NetDebugOverlay {
@@ -107,39 +108,39 @@ export class NetDebugOverlay {
 
     const diagnostics = this.getDiagnostics();
     const lines: string[] = [
-      `NETZ  Raum ${this.getRoomCode()}  Rolle ${this.getLocalRole()}  Verbindungen ${diagnostics.length}`,
-      'Ping = Netzwerk-RTT (STUN, bildratenunabhängig) · Reaktion = Umlauf durch beide Spielschleifen',
+      t('ui.netDebug.header', { room: this.getRoomCode(), role: this.getLocalRole(), connections: diagnostics.length }),
+      t('ui.netDebug.pingHint'),
       '',
     ];
 
     const projectileSync = this.getProjectileSyncMetrics();
     if (projectileSync) {
       lines.push(
-        `Projektile  ${projectileSync.avgActiveCount.toFixed(1)} aktiv`
-          + `  ⌀${projectileSync.avgCharsPerTick.toFixed(0)} Z/Tick`
-          + `  Max ${projectileSync.maxCharsPerTick} Z`
-          + `  ≈${projectileSync.estimatedKbPerSec.toFixed(1)} KB/s je Empfänger`,
+        t('ui.netDebug.projectiles', { active: projectileSync.avgActiveCount.toFixed(1) })
+          + t('ui.netDebug.charsPerTick', { chars: projectileSync.avgCharsPerTick.toFixed(0) })
+          + t('ui.netDebug.maxChars', { chars: projectileSync.maxCharsPerTick })
+          + t('ui.netDebug.bandwidth', { rate: projectileSync.estimatedKbPerSec.toFixed(1) }),
         '',
       );
     }
 
     if (diagnostics.length === 0) {
-      lines.push('Keine Mitspieler verbunden.');
+      lines.push(t('ui.netDebug.noPeers'));
     }
 
     for (const link of diagnostics) {
       const name = link.playerId.length > 0 ? link.playerId : `(Handshake ${link.peerId.slice(0, 12)})`;
       lines.push(
         `── ${name} ──`,
-        `  Pfad        ${describePath(link)}`,
-        `  Zustand     pc=${link.connectionState}  ice=${link.iceConnectionState}`,
-        `  Kanäle      rel=${link.reliableChannelState}  fast=${link.fastChannelState}`,
-        `  Ping (Netz) Median ${formatMs(link.medianRttMs)}  Max ${formatMs(link.maxRttMs)}  Jitter ${formatMs(link.jitterRttMs)}  (n=${link.rttSampleCount})`,
-        `  Reaktion    Median ${formatMs(link.medianAppPingMs)}  Max ${formatMs(link.maxAppPingMs)}  Jitter ${formatMs(link.jitterAppPingMs)}  (n=${link.appPingSampleCount})`,
-        `  Aufbau      ${formatMs(link.connectDurationMs)}  Abbrüche ${link.disconnectCount}`,
-        `  Volumen     ↑${formatBytes(link.bytesSent)}  ↓${formatBytes(link.bytesReceived)}`,
-        `  Puffer      rel=${formatBytes(link.reliableBufferedBytes)}  fast=${formatBytes(link.fastBufferedBytes)}`
-          + `${link.backpressure ? '  RÜCKSTAU' : ''}  verworfen ${link.droppedFastMessages}`,
+        t('ui.netDebug.path', { path: describePath(link) }),
+        t('ui.netDebug.state', { pc: link.connectionState, ice: link.iceConnectionState }),
+        t('ui.netDebug.channels', { reliable: link.reliableChannelState, fast: link.fastChannelState }),
+        t('ui.netDebug.ping', { median: formatMs(link.medianRttMs), max: formatMs(link.maxRttMs), jitter: formatMs(link.jitterRttMs), count: link.rttSampleCount }),
+        t('ui.netDebug.response', { median: formatMs(link.medianAppPingMs), max: formatMs(link.maxAppPingMs), jitter: formatMs(link.jitterAppPingMs), count: link.appPingSampleCount }),
+        t('ui.netDebug.connect', { duration: formatMs(link.connectDurationMs), disconnects: link.disconnectCount }),
+        t('ui.netDebug.volume', { sent: formatBytes(link.bytesSent), received: formatBytes(link.bytesReceived) }),
+        t('ui.netDebug.buffer', { reliable: formatBytes(link.reliableBufferedBytes), fast: formatBytes(link.fastBufferedBytes) })
+          + t('ui.netDebug.dropped', { backpressure: link.backpressure ? t('ui.netDebug.backpressure') : '', count: link.droppedFastMessages }),
         '',
       );
     }

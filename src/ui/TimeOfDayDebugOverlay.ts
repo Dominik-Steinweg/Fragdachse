@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { BUTTON_CURSOR } from './gameCursor';
 import { COLORS, toCssColor } from '../config';
 import { getOverlayRoot } from './fullscreen';
@@ -50,7 +51,7 @@ export class TimeOfDayDebugOverlay {
     });
 
     const title = document.createElement('div');
-    title.innerText = 'UHRZEIT (nur lokal)';
+    title.innerText = t('ui.timeDebug.title');
     Object.assign(title.style, {
       fontSize: '12px',
       fontWeight: 'bold',
@@ -106,11 +107,11 @@ export class TimeOfDayDebugOverlay {
     };
 
     const resetBtn = document.createElement('button');
-    resetBtn.innerText = 'AUTO';
+    resetBtn.innerText = t('ui.timeDebug.auto');
     Object.assign(resetBtn.style, buttonStyle);
 
     const closeBtn = document.createElement('button');
-    closeBtn.innerText = 'SCHLIESSEN (ESC)';
+    closeBtn.innerText = t('ui.timeDebug.close');
     Object.assign(closeBtn.style, buttonStyle);
 
     const applyOverride = (minutes: number, settled: boolean): void => {
@@ -155,7 +156,7 @@ export class TimeOfDayDebugOverlay {
 
     this.panel = panel;
     this.closePanelFn = closePanel;
-    mapHint.innerText = `Auto: ${formatTimeOfDay(this.getAutomaticMinutes())}`;
+    mapHint.innerText = t('ui.timeDebug.automatic', { time: formatTimeOfDay(this.getAutomaticMinutes()) });
     readout.innerText = formatTimeOfDay(this.getCurrentMinutes());
     slider.focus();
   }

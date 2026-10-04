@@ -1,5 +1,6 @@
 /**
- * Einzige Stelle im Projekt, die `peerjs` verwendet.
+ * PeerJS-Adapter für den Raumtransport; Peer-Aufbau und Datenkanäle liegen in
+ * PeerSignaling beziehungsweise PeerLink.
  *
  * Setzt `PeerRoomTransport` um: Raum eröffnen bzw. betreten, eingehende Verbindungen
  * annehmen, Links vollständig öffnen und Nachrichten weiterreichen. PeerJS dient dabei

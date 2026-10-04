@@ -19,7 +19,7 @@ Es gibt kein allgemeines Lint-Script. Neue Test-, Browser- oder CI-Infrastruktur
 `npm test` ist der schnelle Core-Gate. Die getrennten Spezial-Suites laufen über
 `npm run test:architecture`, `npm run test:integration`, `npm run test:assets`,
 `npm run test:stress` und `npm run test:balance-lab`. `npm run check` kombiniert Core,
-schnelle Architecture-Suite und Build;
+schnelle Architecture-Suite, Spiel-Build und Map-Editor-Build;
 die vollständige Testentscheidung und Schutzwertprüfung steht in
 [testing.md](testing.md).
 
