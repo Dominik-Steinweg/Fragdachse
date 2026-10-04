@@ -8,7 +8,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
 import { registerGraphicsObject } from '../effects/EffectUtils';
-import { t } from '../i18n';
+import { getLocale, t } from '../i18n';
 import {
   COOP_DEFENSE_TUTORIAL_CONTROLS_ROW_H,
   COOP_DEFENSE_TUTORIAL_PANEL_WIDTH,
@@ -101,6 +101,7 @@ const TUTORIAL_CONTROLS_DESC_FONT = {
 };
 
 export class CoopDefenseTutorialPanel {
+  private locale = getLocale();
   private tutorialContainer!: Phaser.GameObjects.Container;
   private tutorialLifecycleContainer!: Phaser.GameObjects.Container;
   private tutorialPanelBg!: Phaser.GameObjects.Image;
@@ -122,6 +123,7 @@ export class CoopDefenseTutorialPanel {
   constructor(private readonly scene: Phaser.Scene) {}
 
   build(): void {
+    this.locale = getLocale();
     this.buildTutorialPanel();
     this.buildTutorialStepPanel();
   }
@@ -136,6 +138,13 @@ export class CoopDefenseTutorialPanel {
     this.reset();
     this.tutorialContainer.destroy(true);
     this.tutorialStepContainer.destroy(true);
+  }
+
+  private refreshLocale(): void {
+    if (this.locale === getLocale()) return;
+    // The Scene keeps this panel across rounds; translated labels also determine its decoration.
+    this.destroy();
+    this.build();
   }
 
   private buildTutorialPanel(): void {
@@ -340,6 +349,7 @@ export class CoopDefenseTutorialPanel {
     showControls = false,
     anchor?: CoopDefenseTutorialAnchor,
   ): void {
+    this.refreshLocale();
     this.tutorialContainer.setPosition(
       getCoopDefenseTutorialPanelCenterX(anchor),
       getCoopDefenseTutorialPanelTopY(anchor),
@@ -383,6 +393,7 @@ export class CoopDefenseTutorialPanel {
     text: string | null,
     anchor?: CoopDefenseTutorialAnchor,
   ): void {
+    this.refreshLocale();
     this.tutorialStepContainer.setPosition(
       getCoopDefenseTutorialPanelCenterX(anchor),
       getCoopDefenseTutorialPanelTopY(anchor),

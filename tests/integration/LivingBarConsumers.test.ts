@@ -40,11 +40,13 @@ import { UiButton } from '../../src/ui/UiButton';
 import { bindUiAudio } from '../../src/ui/UiAudio';
 import { LobbyPlayerProgress } from '../../src/ui/LobbyPlayerProgress';
 import { DEPTH, GAME_WIDTH } from '../../src/config';
-import { getLocale, setLocale } from '../../src/i18n';
+import { getLocale, setLocale, t } from '../../src/i18n';
 import { OptionsOverlay } from '../../src/ui/OptionsOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
 import { HudResourceRow } from '../../src/ui/HudResourceRow';
 import { CoopDefenseUpgradesOverlay } from '../../src/ui/CoopDefenseUpgradesOverlay';
+import { CoopDefenseTutorialPanel } from '../../src/ui/CoopDefenseTutorialPanel';
+import { HELP_CONTROLS } from '../../src/config/helpControls';
 
 class UiObject extends EventEmitter {
   visible = true;
@@ -60,6 +62,7 @@ class UiObject extends EventEmitter {
   list: UiObject[] = [];
   parentContainer: UiObject | null = null;
   texture = { key: '' };
+  text = '';
   crop: number[] = [];
   constructor(public kind: string, public x = 0, public y = 0) { super(); this.setMaxListeners(0); }
   add(objects: UiObject | UiObject[]) {
@@ -76,7 +79,7 @@ class UiObject extends EventEmitter {
   setTexture(key: string) { this.texture.key = key; return this; }
   setScrollFactor(x: number, y = x) { this.scrollFactorX = x; this.scrollFactorY = y; return this; }
   setCrop(...crop: number[]) { this.crop = crop; return this; }
-  setText() { return this; }
+  setText(text: string) { this.text = text; return this; }
   setColor() { return this; }
   setOrigin() { return this; }
   setDisplaySize() { return this; }
@@ -98,6 +101,8 @@ class UiObject extends EventEmitter {
   fillRoundedRect() { return this; }
   strokeRoundedRect() { return this; }
   fillPoints() { return this; }
+  fillRect() { return this; }
+  fillTriangle() { return this; }
   destroy() { if (!this.active) return; this.active = false; this.emit('destroy'); this.removeAll(true); }
 }
 
@@ -120,7 +125,7 @@ function sceneStub() {
     add: {
       container: (x = 0, y = 0, children: UiObject[] = []) => new UiObject('container', x, y).add(children),
       image: (x = 0, y = 0, key: string) => new UiObject('image', x, y).setTexture(key),
-      text: (x = 0, y = 0) => new UiObject('text', x, y),
+      text: (x = 0, y = 0, text = '') => new UiObject('text', x, y).setText(text),
       rectangle: (x = 0, y = 0) => new UiObject('rectangle', x, y),
       circle: (x = 0, y = 0) => new UiObject('circle', x, y),
       nineslice: (x = 0, y = 0) => new UiObject('nineslice', x, y),
@@ -285,6 +290,29 @@ describe('living UI consumer ownership', () => {
       options.localeButtons.get(next).background.emit('pointerdown');
       expect(playLocalSound).toHaveBeenCalledTimes(1);
     } finally { options.destroy(); unbind(); setLocale(locale); }
+  });
+
+  it('refreshes tutorial controls after the lobby language changes before the next mission', () => {
+    const { scene } = sceneStub();
+    const locale = getLocale();
+    const tutorial: any = new CoopDefenseTutorialPanel(scene);
+    try {
+      setLocale('de'); tutorial.build();
+      tutorial.updateTutorial('Erste Mission', true);
+      const previousRoots = [tutorial.tutorialContainer, tutorial.tutorialStepContainer];
+      tutorial.reset();
+      setLocale('en'); tutorial.updateTutorial('Next mission', true);
+      const controlTexts = tutorial.tutorialControlsObjects
+        .filter((object: UiObject) => object.kind === 'text').map((object: UiObject) => object.text);
+      expect(controlTexts).toEqual([t('ui.help.heading'), ...HELP_CONTROLS.flatMap(entry => [t(entry.keyId), t(entry.descriptionKey)])]);
+      expect(tutorial.tutorialBody.text).toBe('Next mission');
+      expect(previousRoots.every(root => !root.active)).toBe(true);
+      const current = tutorial.tutorialContainer;
+      tutorial.updateTutorial('Next mission', true);
+      tutorial.updateTutorialStep('Next checkpoint');
+      expect(tutorial.tutorialContainer).toBe(current);
+      expect(current.active).toBe(true);
+    } finally { tutorial.destroy(); setLocale(locale); }
   });
 
   it('keeps built and closed color swatches inactive, including late refreshes', () => {
