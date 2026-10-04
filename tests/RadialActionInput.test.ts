@@ -23,7 +23,7 @@ vi.mock('../src/graphics/cameraBaseScroll', () => ({
   getUnshakenPointerWorldPoint: () => ({ x: 100, y: 0 }),
 }));
 
-import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { ULTIMATE_CONFIGS, UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
   isOpen = false;
   close() {}
@@ -76,6 +76,42 @@ function createSystem(position = { x: 0, y: 0 }) {
   Object.assign(keys.keyShift, { consumeEdge: true });
   return { system, keys, bridge, pointerState, scene };
 }
+
+describe('focus loss during charged input', () => {
+  it.each(['blur', 'hidden', 'shutdown'])('cancels Gauss on %s without firing when input resumes', event => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    try {
+      const f = createSystem(), keyboard = new Map<string, TestKey & EventEmitter>();
+      Object.assign(f.scene.input, { keyboard: { addKey: (code: string) => {
+        const button = Object.assign(new EventEmitter(), key(), { consumeEdge: true });
+        keyboard.set(code, button); return button;
+      } } });
+      const events = new EventEmitter(), gameEvents = new EventEmitter();
+      Object.assign(f.scene, { events, game: { events: gameEvents } });
+      f.system.setup();
+      const cfg = ULTIMATE_CONFIGS.GAUSS_RIFLE;
+      if (cfg.type !== 'gauss') throw new Error('Gauss test configuration');
+      f.system.setupUltimateConfigProvider(() => cfg);
+      f.system.setupLocalRageProvider(() => cfg.rageRequired);
+      const uses = vi.fn(); f.system.setupLoadoutListener(uses);
+      const q = keyboard.get('Q')!;
+      q.isDown = true; q.justDown = true;
+      f.system.update();
+      expect(f.system.getUltimateChargePreviewState()).toBeDefined();
+      (event === 'shutdown' ? events : gameEvents).emit(event);
+      // Phaser resets held keys on focus loss; the next frame can be past full charge.
+      q.isDown = false; q.justDown = false;
+      vi.advanceTimersByTime(cfg.chargeDuration + 1);
+      f.system.update();
+      expect(uses.mock.calls.map(call => call[4]?.ultimateAction)).toEqual(['press', 'cancel']);
+      expect(f.system.getUltimateChargePreviewState()).toBeUndefined();
+      if (event !== 'shutdown') events.emit('shutdown');
+      expect(gameEvents.listenerCount('blur')).toBe(0);
+      expect(gameEvents.listenerCount('hidden')).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+});
 
 describe('shared Shift interaction', () => {
   function interactions() {

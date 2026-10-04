@@ -393,7 +393,10 @@ export class InputSystem {
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
     this.radialActionMenu = new RadialActionMenu(this.scene);
-    const cancelOnInputLoss = () => this.cancelUtilityInteraction();
+    const cancelOnInputLoss = () => {
+      this.cancelUtilityInteraction();
+      this.cancelUltimateCharge();
+    };
     this.scene.game.events.on('blur', cancelOnInputLoss);
     this.scene.game.events.on('hidden', cancelOnInputLoss);
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
