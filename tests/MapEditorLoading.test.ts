@@ -51,7 +51,7 @@ async function setup() {
     async complete(key: string, ok = true) { pending.get(`/api/maps/${key}`)!.resolve(response(key, ok)); await flush(); },
   };
 }
-beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); boundary.environments.length = 0; boundary.confirm.mockResolvedValue(true); });
+beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); boundary.environments.length = 0; boundary.confirm.mockReset().mockResolvedValue(true); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('map editor document loading', () => {
@@ -98,5 +98,60 @@ describe('map editor document loading', () => {
     h.choose('old.json'); h.choose('latest.json'); await flush();
     oldConfirmation.resolve(false); await flush(); expect(h.select.value).toBe('latest.json');
     await h.complete('latest.json'); expect(h.current().session.sourceKey).toBe('latest.json');
+  });
+  it.each(['committed', 'buffered'] as const)('keeps %s edits made during a load until discarding is confirmed', async kind => {
+    const h = await setup(); const initial = h.current(); const confirmation = deferred<boolean>();
+    boundary.confirm.mockReturnValueOnce(confirmation.promise); h.choose('latest.json');
+    if (kind === 'committed') initial.session.change(['treeCount'], 3);
+    else {
+      const { numberField } = await import('../tools/map-editor/client/ui');
+      const input = numberField(initial, 'Bäume', ['treeCount']).children[1] as HTMLInputElement;
+      input.setCustomValidity = vi.fn(); input.value = '3'; input.oninput!(new Event('input'));
+    }
+    await h.complete('latest.json');
+    expect(boundary.confirm).toHaveBeenCalledOnce(); expect(h.current()).toBe(initial);
+    confirmation.resolve(false); await flush();
+    expect(h.current()).toBe(initial); expect(h.select.value).toBe('initial.json');
+    expect(boundary.destroy).not.toHaveBeenCalled();
+    if (kind === 'committed') expect(initial.session.draft.treeCount).toBe(3);
+    else expect(initial.buffers.get('["treeCount"]')).toBe('3');
+  });
+  it('loads the requested map after confirming the new changes may be discarded', async () => {
+    const h = await setup(); h.choose('latest.json'); h.current().session.change(['treeCount'], 3);
+    await h.complete('latest.json');
+    expect(boundary.confirm).toHaveBeenCalledOnce(); expect(h.current().session.sourceKey).toBe('latest.json');
+  });
+  it('detects changed text in an already pending field without a committed document edit', async () => {
+    const h = await setup(); const initial = h.current();
+    const { numberField } = await import('../tools/map-editor/client/ui');
+    const input = numberField(initial, 'Bäume', ['treeCount']).children[1] as HTMLInputElement;
+    input.setCustomValidity = vi.fn(); input.value = '3'; input.oninput!(new Event('input'));
+    h.choose('latest.json'); await flush();
+    input.value = '4'; input.oninput!(new Event('input')); boundary.confirm.mockResolvedValueOnce(false);
+    await h.complete('latest.json');
+    expect(initial.session.version).toBe(0); expect(boundary.confirm).toHaveBeenCalledTimes(2);
+    expect(h.current()).toBe(initial); expect(initial.buffers.get('["treeCount"]')).toBe('4');
+  });
+  it('asks again when edits change after the original discard approval', async () => {
+    const h = await setup(); const initial = h.current(); initial.session.change(['treeCount'], 3);
+    h.choose('latest.json'); await flush(); expect(boundary.confirm).toHaveBeenCalledOnce();
+    initial.session.change(['treeCount'], 4); boundary.confirm.mockResolvedValueOnce(false);
+    await h.complete('latest.json');
+    expect(boundary.confirm).toHaveBeenCalledTimes(2); expect(h.current()).toBe(initial);
+    expect(initial.session.draft.treeCount).toBe(4); expect(h.select.value).toBe('initial.json');
+  });
+  it('does not repeat discard approval when no further edits were made', async () => {
+    const h = await setup(); h.current().session.change(['treeCount'], 3);
+    h.choose('latest.json'); await flush(); await h.complete('latest.json');
+    expect(boundary.confirm).toHaveBeenCalledOnce(); expect(h.current().session.sourceKey).toBe('latest.json');
+  });
+  it.each([true, false])('ignores obsolete follow-up approval (accepted=%s) after a newer map loads', async accepted => {
+    const h = await setup(); const confirmation = deferred<boolean>();
+    h.choose('old.json'); h.current().session.change(['treeCount'], 3);
+    boundary.confirm.mockReturnValueOnce(confirmation.promise); await h.complete('old.json');
+    expect(boundary.confirm).toHaveBeenCalledOnce();
+    h.choose('latest.json'); await flush(); await h.complete('latest.json'); const latest = h.current();
+    confirmation.resolve(accepted); await flush();
+    expect(h.current()).toBe(latest); expect(h.select.value).toBe('latest.json');
   });
 });

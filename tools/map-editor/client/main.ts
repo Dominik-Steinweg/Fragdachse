@@ -71,9 +71,17 @@ async function load(key: string, reload = false): Promise<void> {
     if (ticket !== loadTicket) return;
     if (!accepted) { mapSelect.value = env.session.sourceKey; return; }
   }
+  const source = env, sourceVersion = source?.session.version;
+  const sourceBuffers = JSON.stringify(source ? [...source.buffers] : []);
   try {
     const loaded = await api<LoadedMap>(`/api/maps/${encodeURIComponent(key)}`);
     if (ticket !== loadTicket) return;
+    if (source && (source.session.dirty || source.session.pending.size)
+      && (source.session.version !== sourceVersion || JSON.stringify([...source.buffers]) !== sourceBuffers)) {
+      const accepted = await confirmEdit('Während des Ladens wurden neue Änderungen vorgenommen. Diese Änderungen verwerfen und die geladene Map öffnen?');
+      if (ticket !== loadTicket) return;
+      if (!accepted) { mapSelect.value = source.session.sourceKey; return; }
+    }
     preview.cancel(); mapView?.destroy();
     const session = new MapDocumentSession(key, loaded);
     env = { session, buffers: new Map(), changed: render, inputChanged: renderStatus, message: showMessage, openMap: path => { switchView('map'); mapView?.open(path); } };
