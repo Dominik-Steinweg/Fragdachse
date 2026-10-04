@@ -16,7 +16,7 @@ export function runtimeMeshManifest(m,selection,receipt) {
       out[key]={...f,file:`${folder}/${name}`,url:`${folder}/${name}?v=${f.sha256}`};}
     return out;
   });
-  return {schema:'fd-character-mesh-runtime',version:1,revision:m.revision,assetId:'badger',coordinates:m.coordinates,poses:m.poses,sockets:m.sockets,meshes,
+  return {provenance:m.provenance,schema:'fd-character-mesh-runtime',version:1,revision:m.revision,assetId:'badger',coordinates:m.coordinates,poses:m.poses,sockets:m.sockets,meshes,
     downloadBytes:meshes.reduce((s,m)=>s+m.downloadBytes,0),gpuQuantizedBytes:meshes.reduce((s,m)=>s+m.downloadBytes,0),gpuFloat32Bytes:meshes.reduce((s,m)=>s+m.gpuFloat32Bytes,0),
     shadowRepair:{method:m.shadowRepair.method,addedVertices:m.shadowRepair.addedVertices,addedTriangles:m.shadowRepair.addedTriangles},
     sourceSelectionSha256:receipt.selectionSha256,sourceArchiveSha256:receipt.archiveSha256,

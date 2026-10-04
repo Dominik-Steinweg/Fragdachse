@@ -39,7 +39,7 @@ if(!apply){
  // Held geometry is inherited byte-for-byte; no re-export, socket relocation or new grip policy.
  for(const held of meshes.slice(1))for(const key of ['positions','indices'])if(await fileHash('public/'+held[key].file)!==held[key].sha256)throw Error('Inherited held bytes changed');
  const poses=[];for(const p of oldMesh.poses)poses.push({...p,beautySha256:await fileHash(path.join(root,'renders/beauty',`pose-${String(p.index).padStart(2,'0')}-1024.png`))});
- const meshManifest={...oldMesh,revision,poses,sockets:g.sockets,meshes,
+ const meshManifest={...oldMesh,provenance:g.provenance,revision,poses,sockets:g.sockets,meshes,
   downloadBytes:meshes.reduce((s,m)=>s+m.downloadBytes,0),gpuQuantizedBytes:meshes.reduce((s,m)=>s+m.downloadBytes,0),gpuFloat32Bytes:meshes.reduce((s,m)=>s+m.gpuFloat32Bytes,0),
   shadowRepair:{method:'repaired source rig and closed hip geometry; no shadow-only fillers',addedVertices:0,addedTriangles:0},
   source:{blendSha256:g.repairedBlendSha256,geometrySha256:await fileHash(path.join(root,'geometry.json')),inheritedHeldManifestSha256:await fileHash(oldMeshPath)},
@@ -59,7 +59,7 @@ if(!apply){
   const bytes=await sharp(pixels,{raw:{width:p.width,height:p.height,channels:4}}).png().toBuffer(),file=`${materialFolder}/${p.pass}-${index}-${hash(bytes)}.png`;
   await stage(file,bytes);pages.push({...p,file,url:`${file}?v=${hash(bytes)}`,sha256:hash(bytes),downloadBytes:bytes.length});
  }
- const materialManifest={...oldMaterial,revision:materialRevision,poses,pages,source:{blendSha256:g.repairedBlendSha256,geometrySha256:await fileHash(path.join(root,'geometry.json')),renderReceiptSha256:await fileHash(path.join(root,'renders/receipt.json')),frames:sources},totalDownloadBytes:pages.reduce((s,p)=>s+p.downloadBytes,0)};
+ const materialManifest={...oldMaterial,provenance:receipt.provenance,revision:materialRevision,poses,pages,source:{blendSha256:g.repairedBlendSha256,geometrySha256:await fileHash(path.join(root,'geometry.json')),renderReceiptSha256:await fileHash(path.join(root,'renders/receipt.json')),frames:sources},totalDownloadBytes:pages.reduce((s,p)=>s+p.downloadBytes,0)};
  const hashes={};for(const kind of ['idle','sheet'])hashes[kind]=await stage(live[kind+'Path'].replace(/^\.\//,''),await fs.readFile(path.join(root,'exports',`${kind}-128.png`)));
  const selection={schema:'fd-biped-source-selection',revision,assetId:'badger',geometrySha256:await fileHash(path.join(root,'geometry.json')),visualReviewSha256:await fileHash(path.join(root,'visual-review.json')),files};
  await fs.writeFile(path.join(staged,'selection.json'),JSON.stringify(selection,null,2)+'\n');

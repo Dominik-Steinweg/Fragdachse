@@ -288,6 +288,8 @@ def main():
                     coordinates=job['coordinates'], poses=job['poses'], sockets=sockets, meshes=[body] + held_meshes,
                     sourceFiles=job['sourceFiles'], blenderVersion=bpy.app.version_string,
                     geometryWallSeconds=time.monotonic()-started)
+    from render_integrity import provenance
+    manifest['provenance'] = provenance(sources=job['sourceFiles'])
     name = 'mesh-base-manifest.json' if job.get('production') else 'mesh-manifest.json'
     save(root, name, (json.dumps(manifest, indent=2)+'\n').encode())
     print('FD_MESH_COMPLETE ' + json.dumps(dict(seconds=manifest['geometryWallSeconds'], vertices=body['vertexCount'], triangles=body['triangleCount'])), flush=True)

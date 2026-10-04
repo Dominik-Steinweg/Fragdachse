@@ -95,6 +95,8 @@ def main():
                 sources=sources, textures=textures, inputHash=fingerprint, idleFrame=0, clips=[], frames=[frame],
                 camera=dict(type='ORTHO', rotation=list(scene.camera.rotation_euler), location=list(scene.camera.location),
                             orthoScale=scene.camera.data.ortho_scale, transparent=True, bounds=bounds))
+            from render_integrity import provenance
+            manifest['provenance'] = provenance(scene, sources)
             pipeline.save_json(folder / 'render.json', manifest)
             pipeline.save_json(asset_folder / 'build.json', dict(pipelineVersion=2, id=spec['id'], revision=revision,
                 status='complete', inputHash=fingerprint, variants={'standard': {'frames': [frame]}}))

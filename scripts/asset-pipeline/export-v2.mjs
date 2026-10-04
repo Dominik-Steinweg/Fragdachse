@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { indexLibrary } from './index-library.mjs';
 import { validateEyeAnchors } from './eye-anchors.mjs';
+import { exportProvenance } from './export-provenance.mjs';
 import { inside, inspectMaster, nativeMetrics, repoRoot, resizeMaster, validateManifest, variantLabel } from './export.mjs';
 
 const sha256 = data => createHash('sha256').update(data).digest('hex');
@@ -132,6 +133,17 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
   const exportFile = path.join(folder, 'export.json');
   const prior = await exists(exportFile) ? await readJson(exportFile) : null;
   if (prior && (JSON.stringify(prior.manifest) !== JSON.stringify(m) || prior.inputHash !== build.inputHash || prior.blendSha256 !== blendHash)) throw new Error('Rendered revision changed; create a new revision instead');
+  const provenance = await exportProvenance(m);
+  // Reuse only after inputs AND every output byte have been revalidated. A tool/library
+  // change invalidates this optimization and still has to satisfy pixel parity below.
+  if (prior && JSON.stringify(prior.provenance) === JSON.stringify(provenance)) {
+    let valid = Object.keys(prior.outputs).length === new Set([m.targetSize,...m.sourceSizes]).size * 2;
+    for (const [name, expected] of Object.entries(prior.outputs)) {
+      const bytes = await readFile(inside(folder, relativeFile(name))).catch(() => null);
+      if (!bytes || sha256(bytes) !== expected) valid = false;
+    }
+    if (valid) return prior;
+  }
   const outputs = {}, sheets = {};
   const buffers = new Map();
   for (const size of [...new Set([m.targetSize, ...m.sourceSizes])]) {
@@ -145,7 +157,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     outputs[name] = sha256(buffer);
     if (prior && prior.outputs[name] !== outputs[name]) throw new Error('Export algorithm changed; create a new revision instead');
   }
-  const result = { pipelineVersion: 2, manifest: m, inputHash: build.inputHash, blendSha256: blendHash, outputs, sheets, report: { frames: reports, native: reports[m.idleFrame].native } };
+  const result = { pipelineVersion: 2, provenance, manifest: m, inputHash: build.inputHash, blendSha256: blendHash, outputs, sheets, report: { frames: reports, native: reports[m.idleFrame].native } };
   for (const [name, buffer] of buffers) await writeFile(path.join(folder, name), buffer);
   await writeFile(exportFile, jsonBytes(result));
   return result;

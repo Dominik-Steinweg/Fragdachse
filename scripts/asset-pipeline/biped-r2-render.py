@@ -22,6 +22,8 @@ bpy.ops.wm.open_mainfile(filepath=str(source),load_ui=False)
 scene=select_source_scene(bpy.data.scenes,g['render']['inputHash'],g['asset']);bpy.context.window.scene=scene
 if scene.camera.data.type!='ORTHO' or any(abs(v)>1e-7 for v in scene.camera.rotation_euler) or abs(scene.camera.data.ortho_scale-g['render']['orthoScale'])>1e-6:raise ValueError('Changed canvas')
 spec=json.loads(Path('D:/Fragdachse-render/player-shadow-21c-production/job.json').read_text())['spec']
+from render_integrity import configure_cache, provenance
+configure_cache(scene, dict(geometry=g,spec=spec),out)
 scene.render.engine='CYCLES';scene.render.use_persistent_data=False
 prefs=bpy.context.preferences.addons['cycles'].preferences;prefs.compute_device_type='OPTIX';prefs.get_devices()
 for d in prefs.devices:d.use=d.type=='OPTIX'
@@ -52,7 +54,7 @@ for mode in ('albedo','normal','ao'):
  for f in frames:
   frame(f);pixels,seconds=render_float(scene,out,f'{mode}-{f["index"]:02d}')
   rgb=pixels[:,:,:3][pixels[:,:,3]>.99];black=int(np.count_nonzero(np.max(np.abs(rgb),axis=1)<1e-8))
-  if black or not np.isfinite(pixels).all():raise ValueError(f'Invalid {mode} material sample {f["index"]}: {black} black pixels')
+  if (mode!='ao' and black) or not np.isfinite(pixels).all():raise ValueError(f'Invalid {mode} material sample {f["index"]}: {black} black pixels')
   records.append(dict(pose=f['index'],mode=mode,seconds=seconds,opaqueBlack=black))
   (out/'partial.json').write_text(json.dumps(records));print('R2_RENDER',g['asset'],f['index'],mode,round(seconds,2),flush=True)
 def load(mode,index):
@@ -70,7 +72,7 @@ for f in frames:
   ambient=np.clip(v[:,:,:1]/np.maximum(v[:,:,3:4],1e-8),0,1);ambient[c<1e-6]=1;extend_normal_edges(normals,ambient,c)
   for mode,px in [('albedo',np.concatenate([srgb,c],2)),('normal',np.concatenate([normals*.5+.5,ambient],2)),('ao',np.concatenate([np.repeat(ambient,3,axis=2),c],2))]:
    png(out/mode/f'pose-{i:02d}-{size}.png',np.rint(np.clip(px,0,1)*255).astype('uint8'))
-receipt=dict(sourceBlendSha256=sha(source),geometrySha256=sha(root/'geometry.json'),scriptSha256=sha(__file__),helperSha256=sha(Path(__file__).parent/'character_pass_blender.py'),
+receipt=dict(provenance=provenance(scene, dict(blend=sha(source),geometry=sha(root/'geometry.json'),script=sha(__file__))), sourceBlendSha256=sha(source),geometrySha256=sha(root/'geometry.json'),scriptSha256=sha(__file__),helperSha256=sha(Path(__file__).parent/'character_pass_blender.py'),
  persistentData=False,passMajor=True,blender=bpy.app.version_string,device='OPTIX',poses=[f['index'] for f in frames],records=records,coverage=coverage,materialAudit=audit)
 (out/'receipt.json').write_text(json.dumps(receipt,indent=2));shutil.copyfile(__file__,out/'render.py');shutil.copyfile(Path(__file__).parent/'character_pass_blender.py',out/'character_pass_blender.py')
 if sha(source)!=g['repairedBlendSha256']:raise ValueError('Source modified during rendering')

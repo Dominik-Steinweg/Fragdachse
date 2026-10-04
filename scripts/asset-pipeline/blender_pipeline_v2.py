@@ -92,7 +92,7 @@ def resolve_spec(root, asset_id):
 def inputs(root, spec, device='CPU'):
     names = ['blender_pipeline.py', 'blender_pipeline_v2.py', 'rigs_v2.py', 'motions_v2.py',
              f'recipes_v2/{spec["recipe"]}.py', 'catalog-v2.json',
-             'export.mjs', 'export-v2.mjs', 'eye-anchors.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
+             'export.mjs', 'export-v2.mjs', 'export-provenance.mjs', 'eye-anchors.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
     if spec['recipe'] in ('rocket', 'badger'):
         names.append(f'recipes/{spec["recipe"]}.py')
     # The production library includes shared anatomy/weapon helpers. Snapshot the
@@ -106,7 +106,7 @@ def inputs(root, spec, device='CPU'):
         path = shared.contained(root, relative)
         textures[family] = {'path': relative, 'sha256': shared.digest(path)}
     payload = {'spec': spec, 'sources': sources, 'textures': textures,
-               'blenderVersion': bpy.app.version_string, 'render': {'masterSize': 1024, 'samples': 64, 'seed': 37, 'device': device, 'persistentData': True}}
+               'blenderVersion': bpy.app.version_string, 'render': {'masterSize': 1024, 'samples': 64, 'seed': 37, 'device': device, 'persistentData': False}}
     fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return fingerprint, sources, textures
 
@@ -187,7 +187,7 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
         image.pack()
         images[family] = image
     scene = shared.make_scene(f'FD V2 {spec["id"]} {revision}', spec['orthoScale'])
-    scene.render.use_persistent_data = True
+    scene.render.use_persistent_data = False
     ctx = shared.Authoring(scene, images)
     source = BASE / 'recipes_v2' / (spec['recipe'] + '.py')
     module_spec = importlib.util.spec_from_file_location('fd_recipe_' + spec['recipe'].replace('-', '_'), source)
@@ -368,6 +368,8 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU'):
                                     'transparent':True,'bounds':session['bounds'][0]})
             if session['eyeFrames']:
                 manifest['eyeAnchors'] = {'version': 1, 'frames': session['eyeFrames']}
+            from render_integrity import provenance as export_provenance
+            manifest['provenance'] = export_provenance(scene, sources)
             save_json(folder / 'render.json', manifest)
         state['status'] = 'complete'
         save_json(out / 'build.json', state)

@@ -120,7 +120,7 @@ export async function exportCharacterPasses(root) {
   await mkdir(destination);
   const maxSize = m.spec.shadow.maximumPageSize, gutter = m.spec.shadow.gutterTexels;
   const result = { schema: 'fd-character-pass-atlas', version: 1, status: m.status,
-    source: m.source, renderManifestSha256: digest(await readFile(path.join(root, 'render-passes.json'))),
+    provenance: m.provenance, source: m.source, renderManifestSha256: digest(await readFile(path.join(root, 'render-passes.json'))),
     coordinates: m.spec.coordinates, grid: m.spec.grid, canvases: m.canvases,
     poses: m.poses, pages: [], samples: [], mipmaps: false };
   async function writePages(tiles, family, encoding) {

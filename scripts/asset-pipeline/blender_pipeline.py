@@ -7,10 +7,12 @@ import importlib.util
 import json
 import math
 import re
+import sys
 from pathlib import Path
 from mathutils import Vector
 
 VERSION = 1
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def contained(root, path):
@@ -307,6 +309,8 @@ def build(repo, spec_file, revision):
                                 'location': list(scene.camera.location), 'orthoScale': scene.camera.data.ortho_scale,
                                 'transparent': scene.render.film_transparent},
                         sources={path.name: digest(path) for path in script_paths})
+        from render_integrity import provenance as export_provenance
+        manifest['provenance'] = export_provenance(scene, manifest['sources'])
         (folder / 'render.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
     return {'output': str(out), 'variants': ['calm', 'rich']}
 

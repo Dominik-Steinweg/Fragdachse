@@ -61,7 +61,7 @@ export async function importEnemyMeshes(root, apply = false) {
       }
     }
     assets.push({ id, revision: m.revision, coordinates: m.coordinates, poses: m.poses, contacts: m.contacts,
-      mesh, images, materialEncoding: m.materialEncoding, sourceManifestSha256: hash(manifestBytes),
+      provenance: m.provenance, mesh, images, materialEncoding: m.materialEncoding, sourceManifestSha256: hash(manifestBytes),
       sourceArchiveSha256: receipt.sha256, inheritedEyeAnchorSource, validation: m.validation });
   }
   const previous=JSON.parse(await readFile(path.join(repo,'src/assets/manifests/enemy-mesh-pilot.json')));
