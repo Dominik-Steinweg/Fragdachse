@@ -139,7 +139,9 @@ export class NecromancySystem {
     const owner = this.playerManager.getPlayer(ownerId);
     if (!owner?.active || !this.combatSystem.isAlive(ownerId)) return null;
     const cfg = this.resolveConfig(ownerId);
-    return this.enemyManager.hostSpawnAllyAtWorld(x, y, kind, ownerId, owner.color, cfg.hpMultiplier);
+    const ally = this.enemyManager.hostSpawnAllyAtWorld(x, y, kind, ownerId, owner.color, cfg.hpMultiplier);
+    if (!this.owners.has(ownerId)) this.owners.set(ownerId, { nextRaiseAt: 0 });
+    return ally;
   }
 
   hostUpdate(now: number, deltaMs: number): void {
