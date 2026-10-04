@@ -7,7 +7,6 @@ export type EnemyMeshAsset = (typeof manifest.assets)[number];
 export interface EnemyMeshData { asset: EnemyMeshAsset; positions: Float32Array; indices: Uint16Array }
 type Pending = { asset: EnemyMeshAsset; positions: DataView; result: EnemyMeshData; pose: number };
 const assets = new Map(manifest.assets.map(a => [a.id, a]));
-export const hasEnemyMesh = (id: string): boolean => assets.has(id);
 
 /** Optional, game-owned CPU cache. Fetch is deduplicated; decoding consumes one pose per pump.
  * No scene loader callbacks survive world teardown and no shader is published before all poses exist. */

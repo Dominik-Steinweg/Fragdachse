@@ -2,11 +2,10 @@ import {
   COOP_DEFENSE_MAP_CONFIGS,
   getDiagnosticMapConfigs,
   getDiagnosticMapRevision,
-  getCoopDefenseMapConfig,
 } from '../coopDefenseMaps';
 import type { ActivityDefinition } from './ActivityDefinition';
 import type { AuthoredScenario } from './AuthoredScenario';
-import { getCoopMissionDefinitionId, getWorldDefinitionId, toAuthoredScenario } from './coopDefenseAuthoringAdapter';
+import { getWorldDefinitionId, toAuthoredScenario } from './coopDefenseAuthoringAdapter';
 import { getLobbyWorldDefinition } from './lobbyWorld';
 import type { WorldDefinition } from './WorldDefinition';
 
@@ -83,15 +82,6 @@ export function getActivityDefinition(activityDefinitionId: string): ActivityDef
   return cachedActivitiesById.get(activityDefinitionId) ?? null;
 }
 
-/** Getrennte Authoring-Sicht auf eine Coop-Defense-Map. */
-export function getAuthoredScenarioForMap(mapId: string): AuthoredScenario {
-  return toAuthoredScenario(getCoopDefenseMapConfig(mapId));
-}
-
 export function getWorldDefinitionForMap(mapId: string): WorldDefinition | null {
   return getWorldDefinition(getWorldDefinitionId(mapId));
-}
-
-export function getActivityDefinitionForMap(mapId: string): ActivityDefinition | null {
-  return getActivityDefinition(getCoopMissionDefinitionId(mapId));
 }

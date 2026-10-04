@@ -28,10 +28,19 @@ export interface ArenaRockDestroyedEvent {
   readonly reason: 'damage' | 'decay';
 }
 
+interface ArenaEventPayloads {
+  [ARENA_MAP_GRID_CHANGED_EVENT]: ArenaMapGridChangedEvent;
+  [ARENA_ROCK_DESTROYED_EVENT]: ArenaRockDestroyedEvent;
+}
+
 export interface ArenaEventBus {
-  on(event: string, fn: (...args: any[]) => void, context?: unknown): this;
-  off(event: string, fn?: (...args: any[]) => void, context?: unknown, once?: boolean): this;
-  emit(event: string, ...args: any[]): boolean;
+  on<Event extends keyof ArenaEventPayloads>(
+    event: Event, fn: (payload: ArenaEventPayloads[Event]) => void, context?: unknown,
+  ): this;
+  off<Event extends keyof ArenaEventPayloads>(
+    event: Event, fn?: (payload: ArenaEventPayloads[Event]) => void, context?: unknown, once?: boolean,
+  ): this;
+  emit<Event extends keyof ArenaEventPayloads>(event: Event, payload: ArenaEventPayloads[Event]): boolean;
 }
 
 export function emitArenaMapGridChanged(

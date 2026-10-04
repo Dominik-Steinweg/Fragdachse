@@ -112,17 +112,6 @@ export function reanchorBeamPathStart(points: BeamPoint[], shiftX: number, shift
   }
 }
 
-/** Reanchors the end of a path with a smooth falloff toward its start. */
-export function reanchorBeamPathEnd(points: BeamPoint[], shiftX: number, shiftY: number): void {
-  const last = points.length - 1;
-  for (let index = 0; index < points.length; index += 1) {
-    const t = last > 0 ? index / last : 1;
-    const weight = Math.pow(t, 2.35);
-    points[index].x += shiftX * weight;
-    points[index].y += shiftY * weight;
-  }
-}
-
 /** Strokes a sampled beam path on a Phaser Graphics object. */
 export function strokeBeamPolyline(
   graphics: Phaser.GameObjects.Graphics,
