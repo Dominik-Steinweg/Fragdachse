@@ -5265,7 +5265,8 @@ export class NetworkBridge {
 
   private syncConnectedProfile(state: PlayerState): PlayerProfile {
     const previous = this.connectedPlayers.get(state.id);
-    const stateName = state.getState(KEY_NAME) as string | undefined;
+    const rawName = state.getState(KEY_NAME);
+    const stateName = typeof rawName === 'string' ? rawName : undefined;
     const effectiveColor = this.getEffectivePlayerColor(state.id);
     const teamId = this.getPlayerTeam(state.id);
     const voiceChecksum = this.getPlayerVoiceChecksum(state.id);
@@ -5296,7 +5297,8 @@ export class NetworkBridge {
    * abgeleiteten Platzhalter – stabil und ohne Kollisionen innerhalb eines Raums.
    */
   private extractProfile(state: PlayerState): PlayerProfile {
-    const stateName  = state.getState(KEY_NAME) as string | undefined;
+    const rawName = state.getState(KEY_NAME);
+    const stateName = typeof rawName === 'string' ? rawName : undefined;
 
     return {
       id:       state.id,
