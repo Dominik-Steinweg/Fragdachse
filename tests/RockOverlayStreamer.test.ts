@@ -6,6 +6,7 @@ vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFak
 import { CELL_SIZE } from '../src/config';
 import { runtimeTextureKey } from '../src/assets/RuntimeAtlases';
 import type { ArenaLayout, DecalCell } from '../src/types';
+import type { RockVisualState } from '../src/arena/rocks/RockVisualState';
 import { ROCK_DECAL_LARGE_SIZE, ROCK_DECAL_SIZE, isEnclosedRockDecal } from '../src/arena/DecalConfig';
 import {
   createRockOverlaySource,
@@ -60,6 +61,7 @@ function decal(textureKey: string, gridX: number, gridY: number, displaySize: nu
 interface FixtureOptions {
   readonly rocks?: ReadonlyArray<{ gridX: number; gridY: number }>;
   readonly decals?: readonly DecalCell[];
+  readonly materials?: readonly RockVisualState['material'][];
 }
 
 /** Vier Felsen in einer Reihe; Moos und Vegetation liegen klar im linken Chunk. */
@@ -74,8 +76,9 @@ function buildFixture(options: FixtureOptions = {}) {
   const rocks = options.rocks ?? ROW_ROCKS;
   const decals = options.decals ?? [];
   const layout = { seed: 7, rocks, trees: [], decals } as unknown as ArenaLayout;
-  const rockVisualStates = rocks.map((cell, id) => ({
+  const rockVisualStates: RockVisualState[] = rocks.map((cell, id) => ({
     id,
+    material: options.materials?.[id],
     gridX: cell.gridX,
     gridY: cell.gridY,
     x: FRAME.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2,
@@ -150,6 +153,113 @@ function lastBlit(texture: FakeRenderTexture): string[] {
 function inChunk(key: string, localX: number, localY: number): string {
   return `${key}@${localX + CHUNK_SAMPLING_GUTTER_PX},${localY + CHUNK_SAMPLING_GUTTER_PX}`;
 }
+
+const BIOLOGICAL_LAYERS = [ROCK_OVERLAY_MOSS_LAYER_ID, ROCK_OVERLAY_DECAL_LAYER_ID, ROCK_OVERLAY_VEGETATION_LAYER_ID];
+
+function overlayPixels(streamer: RockOverlayStreamer): number[][] {
+  return BIOLOGICAL_LAYERS.flatMap(layer => [0, 1].flatMap(cx => [0, 1].map(cy =>
+    chunkTexture(streamer, layer, cx, cy).snapshotPixels())));
+}
+
+function cellPixels(texture: FakeRenderTexture, gridX: number, gridY: number): number[] {
+  const x = gridX * CELL_SIZE % CHUNK + CHUNK_SAMPLING_GUTTER_PX;
+  const y = gridY * CELL_SIZE % CHUNK + CHUNK_SAMPLING_GUTTER_PX;
+  const pixels = texture.snapshotPixels();
+  return Array.from({ length: CELL_SIZE * CELL_SIZE }, (_, i) =>
+    pixels[(y + Math.floor(i / CELL_SIZE)) * texture.width + x + i % CELL_SIZE]);
+}
+
+describe('natural rock ecology ownership', () => {
+  it('keeps walls and turret foundations free of every biological layer while retaining material', () => {
+    const { streamer } = buildFixture({
+      materials: ROW_ROCKS.map(() => 'walls'),
+      decals: ROW_ROCKS.map(cell => decal(LARGE_CORE_DECAL, cell.gridX, cell.gridY, ROCK_DECAL_LARGE_SIZE)),
+    });
+    expect(overlayPixels(streamer).every(pixels => pixels.every(value => value === 0))).toBe(true);
+    expect(chunkTexture(streamer, rockOverlayMottleLayerId(1), 0, 0).snapshotPixels().some(Boolean)).toBe(true);
+    streamer.destroy();
+  });
+
+  it('clips neighbouring flora and decals at a wall across a chunk boundary, preserving open-ground overhang', () => {
+    const rocks = Array.from({ length: 4 }, (_, i) => ({ gridX: i, gridY: 1 }));
+    const f = buildFixture({ rocks, decals: [decal(SMALL_EDGE_DECAL, 3, 1, ROCK_DECAL_LARGE_SIZE)] });
+    const before = overlayPixels(f.streamer);
+    const right = chunkTexture(f.streamer, ROCK_OVERLAY_DECAL_LAYER_ID, 1, 0);
+    expect(cellPixels(right, 4, 1).some(Boolean)).toBe(true);
+    // A runtime wall extends the shared layout, but must not extend the natural contour.
+    f.layout.rocks.push({ gridX: 4, gridY: 1 });
+    f.rockVisualStates.push({ ...f.rockVisualStates[0], id: 4, gridX: 4,
+      x: FRAME.offsetX + 4.5 * CELL_SIZE, material: 'walls' });
+    f.streamer.refreshRegions(new Set([4]));
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    for (const layer of BIOLOGICAL_LAYERS) {
+      expect(cellPixels(chunkTexture(f.streamer, layer, 1, 0), 4, 1).every(value => value === 0)).toBe(true);
+    }
+    expect(cellPixels(right, 4, 0).some(Boolean)).toBe(true);
+    const regional = overlayPixels(f.streamer);
+    f.streamer.refreshAll();
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    expect(overlayPixels(f.streamer)).toEqual(regional);
+    f.streamer.updateResidency(FAR_AWAY);
+    f.streamer.updateResidency(FULL_VIEW);
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    expect(overlayPixels(f.streamer)).toEqual(regional);
+    deactivateRock(f.rockVisualStates, 4);
+    f.streamer.refreshRegions(new Set([4]));
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    // The new historical wall cell must not erase natural overhang after demolition.
+    expect(overlayPixels(f.streamer)).toEqual(before);
+    f.streamer.destroy();
+  });
+
+  it('does not revive a destroyed natural anchor when a wall occupies the same cell', () => {
+    const f = buildFixture({ rocks: [...ROW_ROCKS],
+      decals: [decal(SMALL_EDGE_DECAL, 1, 1, ROCK_DECAL_SIZE),
+        decal(LARGE_CORE_DECAL, 1, 1, ROCK_DECAL_LARGE_SIZE)] });
+    deactivateRock(f.rockVisualStates, 1);
+    f.streamer.refreshRegions(new Set([1]));
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    const before = overlayPixels(f.streamer);
+    f.layout.rocks.push({ gridX: 1, gridY: 1 });
+    f.rockVisualStates.push({ ...f.rockVisualStates[0], id: 4, gridX: 1,
+      x: FRAME.offsetX + 1.5 * CELL_SIZE, material: 'walls' });
+    f.streamer.refreshRegions(new Set([4]));
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    for (const layer of BIOLOGICAL_LAYERS) {
+      expect(cellPixels(chunkTexture(f.streamer, layer, 0, 0), 1, 1).every(value => value === 0)).toBe(true);
+    }
+    expect(lastBlit(chunkTexture(f.streamer, ROCK_OVERLAY_DECAL_LAYER_ID, 0, 0))
+      .some(entry => entry.startsWith(decalDrawKey(SMALL_EDGE_DECAL)))).toBe(false);
+    f.layout.rocks.length = ROW_ROCKS.length;
+    deactivateRock(f.rockVisualStates, 4);
+    f.streamer.refreshRegions(new Set([4]));
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    expect(overlayPixels(f.streamer)).toEqual(before);
+    f.streamer.destroy();
+  });
+
+  it('reconciles material-only changes and restoration identically in regional and full bakes', () => {
+    const f = buildFixture({ rocks: [...ROW_ROCKS],
+      decals: ROW_ROCKS.map(cell => decal(LARGE_CORE_DECAL, cell.gridX, cell.gridY, ROCK_DECAL_LARGE_SIZE)) });
+    const before = overlayPixels(f.streamer);
+    for (const state of f.rockVisualStates) state.material = 'walls';
+    f.streamer.refreshRegions(new Set([0, 1, 2, 3]));
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    expect(overlayPixels(f.streamer).every(pixels => pixels.every(value => value === 0))).toBe(true);
+    f.streamer.refreshAll();
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    expect(overlayPixels(f.streamer).every(pixels => pixels.every(value => value === 0))).toBe(true);
+    for (const state of f.rockVisualStates) state.material = 'rocks';
+    f.streamer.refreshRegions(new Set([0, 1, 2, 3]));
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    expect(overlayPixels(f.streamer)).toEqual(before);
+    for (const state of f.rockVisualStates) state.material = 'walls';
+    f.streamer.refreshAll();
+    ChunkedRenderSurface.drainBakeQueue(f.scene as never);
+    expect(overlayPixels(f.streamer).every(pixels => pixels.every(value => value === 0))).toBe(true);
+    f.streamer.destroy();
+  });
+});
 
 describe('rock overlay streamer', () => {
   it('bakes each resident chunk chunk-locally, never at world coordinates', () => {

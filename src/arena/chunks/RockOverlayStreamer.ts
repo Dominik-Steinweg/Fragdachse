@@ -137,7 +137,12 @@ export class RockOverlayStreamer {
   private readonly rockDecalCandidates: DecalCell[] = [];
   private readonly sourceCells: RockCell[] = [];
   private readonly decalCutoutCells: RockCell[] = [];
-  private readonly activeCellKeys = new Set<number>();
+  private readonly activeNaturalCellKeys = new Set<number>();
+  /** Inactive natural rocks retain their contours; construction never contributes ecology. */
+  private readonly ecologyCells = new Map<number, RockCell>();
+  private readonly ecologyCellKeys = new Set<number>();
+  private readonly naturalSilhouetteImages: Phaser.GameObjects.Image[] = [];
+  private readonly wallImages: Phaser.GameObjects.Image[] = [];
   private readonly silhouetteImages: Phaser.GameObjects.Image[] = [];
   private readonly silhouetteSources: RockMaskSource[] = [];
   private readonly vegetationSources: RockMaskSource[] = [];
@@ -212,6 +217,8 @@ export class RockOverlayStreamer {
     this.scratch.preallocate('vegetation', scratchSize);
     this.scratch.preallocate('rockDecal', scratchSize);
     this.scratch.preallocate('rockDecalCutout', scratchSize, 'redraw');
+    this.scratch.preallocate('naturalCutout', scratchSize, 'redraw');
+    this.syncEcologyCells();
     this.rebuildEcology();
   }
 
@@ -226,6 +233,27 @@ export class RockOverlayStreamer {
     old.rockEdgeFlora=t.rockEdgeFlora;old.rockCreviceFlora=t.rockCreviceFlora;old.rockFootFlora=t.rockFootFlora;
     old.rockFloraContact=t.rockFloraContact??.24;old.rockFloraBlend=t.rockFloraBlend??.5;
     {this.rebuildEcology();this.refreshAll();}
+  }
+
+  private syncEcologyCells(ids?: Iterable<number>): boolean {
+    let changed = false;
+    const candidates = ids ?? new Set([...this.ecologyCells.keys(), ...this.layout.rocks.keys()]);
+    for (const id of candidates) {
+      const cell = this.layout.rocks[id];
+      const state = this.rockVisualStates[id];
+      const previous = this.ecologyCells.get(id);
+      if (!cell || !state || state.material === 'walls') {
+        changed = this.ecologyCells.delete(id) || changed;
+      } else if (!previous || previous.gridX !== cell.gridX || previous.gridY !== cell.gridY) {
+        this.ecologyCells.set(id, { gridX: cell.gridX, gridY: cell.gridY });
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.ecologyCellKeys.clear();
+      for (const cell of this.ecologyCells.values()) this.ecologyCellKeys.add(rockCellKey(cell));
+    }
+    return changed;
   }
 
   private rebuildEcology(): void {
@@ -244,7 +272,7 @@ export class RockOverlayStreamer {
         }
       }
     }
-    this.ecology=generateRockEcology({rocks:this.overlaySource.cells,frame:this.frame,seed:this.layout.seed,
+    this.ecology=generateRockEcology({rocks:[...this.ecologyCells.values()],frame:this.frame,seed:this.layout.seed,
       tuning:this.ecologyTuning,water:this.layout.water,trees:this.layout.trees,moss:this.mossPlacements,height:this.ecologyHeight});
     this.ecologyIndex.clear();this.ecologyIndex.sync(this.ecology);
     this.ecologyRadius=maxVegetationRadius(this.ecology)+ROCK_COLONY_CONTACT_REACH;
@@ -301,6 +329,7 @@ export class RockOverlayStreamer {
   /** Vollstaendiger Neuaufbau aller residenten Chunks – nach Aenderungen ohne Dirty-Menge. */
   refreshAll(options: ChunkedRenderSurfaceRefreshOptions = {}): void {
     syncRockOverlaySource(this.overlaySource, this.layout.rocks);
+    if (this.syncEcologyCells()) this.rebuildEcology();
     this.surface.refreshAll(options);
   }
 
@@ -330,7 +359,11 @@ export class RockOverlayStreamer {
       this.overlaySource.keys.clear();
       for (const cell of retained) this.overlaySource.keys.add(rockCellKey(cell));
     }
-    if(addedSourceCells.length || removedSourceCells.length) this.rebuildEcology();
+    const previousEcology = this.ecology;
+    const ecologyChanged = this.syncEcologyCells(
+      addedSourceCells.length || removedSourceCells.length ? undefined : dirtyRockIds,
+    );
+    if (ecologyChanged) this.rebuildEcology();
     const dirtyCells: RockCell[] = [];
     for (const id of dirtyRockIds) {
       const cell = this.layout.rocks[id];
@@ -350,16 +383,27 @@ export class RockOverlayStreamer {
       [...addedSourceCells, ...removedSourceCells],
       this.frame,
     );
-    // Removing an anchor removes its complete colony, including neighbouring
-    // chunks beyond the ordinary cell-mask reach. Never scan the entire field.
-    for(const cell of dirtyCells){
-      for(const colony of this.ecologyByAnchor.get(rockCellKey(cell))??[]){
-        const r=getRockVegetationPlacementRadiusPx(colony)+ROCK_COLONY_CONTACT_REACH,x=colony.worldX-this.frame.offsetX,y=colony.worldY-this.frame.offsetY;
-        for(let cy=Math.max(0,Math.floor((y-r)/ROCK_OVERLAY_CHUNK_SIZE));cy<=Math.floor(Math.min(this.frame.height-1,y+r)/ROCK_OVERLAY_CHUNK_SIZE);cy++)
-          for(let cx=Math.max(0,Math.floor((x-r)/ROCK_OVERLAY_CHUNK_SIZE));cx<=Math.floor(Math.min(this.frame.width-1,x+r)/ROCK_OVERLAY_CHUNK_SIZE);cx++){
-            const localX=cx*ROCK_OVERLAY_CHUNK_SIZE,localY=cy*ROCK_OVERLAY_CHUNK_SIZE;
-            if(!chunks.some(c=>c.localX===localX&&c.localY===localY))chunks.push({localX,localY});
+    // Removing an anchor removes its complete colony, including neighbouring chunks.
+    // Changed natural contours can alter entire edge runs, so include old and new
+    // colonies then. Ordinary destruction only visits the affected anchors.
+    const dirtyColonies = ecologyChanged
+      ? [...previousEcology, ...this.ecology]
+      : dirtyCells.flatMap(cell => this.ecologyByAnchor.get(rockCellKey(cell)) ?? []);
+    const chunkKeys = new Set(chunks.map(chunk => `${chunk.localX}:${chunk.localY}`));
+    for (const colony of dirtyColonies) {
+      const radius = getRockVegetationPlacementRadiusPx(colony) + ROCK_COLONY_CONTACT_REACH;
+      const x = colony.worldX - this.frame.offsetX, y = colony.worldY - this.frame.offsetY;
+      for (let cy = Math.max(0, Math.floor((y - radius) / ROCK_OVERLAY_CHUNK_SIZE));
+        cy <= Math.floor(Math.min(this.frame.height - 1, y + radius) / ROCK_OVERLAY_CHUNK_SIZE); cy++) {
+        for (let cx = Math.max(0, Math.floor((x - radius) / ROCK_OVERLAY_CHUNK_SIZE));
+          cx <= Math.floor(Math.min(this.frame.width - 1, x + radius) / ROCK_OVERLAY_CHUNK_SIZE); cx++) {
+          const localX = cx * ROCK_OVERLAY_CHUNK_SIZE, localY = cy * ROCK_OVERLAY_CHUNK_SIZE;
+          const key = `${localX}:${localY}`;
+          if (!chunkKeys.has(key)) {
+            chunkKeys.add(key);
+            chunks.push({ localX, localY });
           }
+        }
       }
     }
     for (const chunk of chunks) {
@@ -375,6 +419,7 @@ export class RockOverlayStreamer {
     this.sourceIndex.clear();
     this.mossIndex.clear();
     this.ecology.length=0; this.ecologyIndex.clear(); this.ecologyByAnchor.clear(); this.ecologyHeight=undefined;
+    this.ecologyCells.clear(); this.ecologyCellKeys.clear();
     this.rockDecalIndex.clear();
   }
 
@@ -393,12 +438,14 @@ export class RockOverlayStreamer {
     const silhouetteSources = this.silhouetteSources;
     const vegetationSources = this.vegetationSources;
     const temporaryImages = this.temporaryImages;
-    const activeCellKeys = this.activeCellKeys;
+    const activeCellKeys = this.activeNaturalCellKeys;
     silhouetteImages.length = 0;
     silhouetteSources.length = 0;
     vegetationSources.length = 0;
     temporaryImages.length = 0;
     activeCellKeys.clear();
+    this.naturalSilhouetteImages.length = 0;
+    this.wallImages.length = 0;
 
     // Statt eines Durchlaufs ueber den gesamten Felsbestand nur die Buckets der Region: Auf einer
     // grossen Karte ist das der Unterschied zwischen rund 29 000 und wenigen hundert Kandidaten
@@ -417,7 +464,8 @@ export class RockOverlayStreamer {
       const cell = this.layout.rocks[id];
       const visualState = this.rockVisualStates[id];
       if (!cell || !visualState?.active) continue;
-      activeCellKeys.add(rockCellKey(cell));
+      const natural = visualState.material !== 'walls';
+      if (natural) activeCellKeys.add(rockCellKey(cell));
 
       const cellMinX = cell.gridX * CELL_SIZE;
       const cellMinY = cell.gridY * CELL_SIZE;
@@ -438,9 +486,9 @@ export class RockOverlayStreamer {
         y: cellMinY + CELL_SIZE * 0.5 - region.localY,
         autotileFrame: visualState.frame,
       };
-      if (intersectsVegetation) vegetationSources.push(source);
+      if (natural && intersectsVegetation) vegetationSources.push(source);
       if (!intersectsSilhouette) continue;
-      silhouetteSources.push(source);
+      if (natural) silhouetteSources.push(source);
       // Die Stanzform folgt der gezeichneten Silhouette: Landschaftsfels nutzt die Felsbasis mit
       // abgerundeten Ecken, gebaute Waende weiterhin das 47-Blob-Sheet.
       // Losgeloest statt ueber `scene.add`: Die Kopie wird nur gezeichnet und sofort wieder
@@ -453,6 +501,14 @@ export class RockOverlayStreamer {
         .setDisplaySize(CELL_SIZE, CELL_SIZE);
       temporaryImages.push(copy);
       silhouetteImages.push(copy);
+      if (natural) this.naturalSilhouetteImages.push(copy);
+      else {
+        const wall = resolveRockTexture(visualState);
+        const mask = new Phaser.GameObjects.Image(this.scene, source.x, source.y, wall.key, wall.frame)
+          .setDisplaySize(CELL_SIZE, CELL_SIZE);
+        temporaryImages.push(mask);
+        this.wallImages.push(mask);
+      }
     }
 
     // Die Materialquelle kommt aus dem vollstaendigen Bestand, nicht aus den lebenden Felsen:
@@ -483,6 +539,7 @@ export class RockOverlayStreamer {
       }
       if (cellMaxX > region.localX && cellMinX < maxX
         && cellMaxY > region.localY && cellMinY < maxY
+        && this.ecologyCellKeys.has(rockCellKey(cell))
         && !activeCellKeys.has(rockCellKey(cell))) {
         decalCutoutCells.push(cell);
       }
@@ -493,6 +550,12 @@ export class RockOverlayStreamer {
     cutout.fill(0x000000, 1);
     if (silhouetteImages.length > 0) cutout.erase(silhouetteImages);
     cutout.render();
+
+    const naturalCutout = this.scratch.get('naturalCutout', size, 'redraw');
+    naturalCutout.clear();
+    naturalCutout.fill(0x000000, 1);
+    if (this.naturalSilhouetteImages.length) naturalCutout.erase(this.naturalSilhouetteImages);
+    naturalCutout.render();
 
     for (let index = 0; index < this.mottleConfigs.length; index += 1) {
       const target = this.scratch.get(`mottle${index}`, size);
@@ -515,10 +578,12 @@ export class RockOverlayStreamer {
 
     this.bakeVegetationRegion(region,sink,vegetationSources);
     this.bakeMossRegion(region, sink, silhouetteSources);
-    this.bakeDecalRegion(region, sink, decalCutoutCells, activeCellKeys);
+    this.bakeDecalRegion(region, sink, decalCutoutCells, this.activeNaturalCellKeys);
 
     for (const image of temporaryImages) image.destroy();
     temporaryImages.length = 0;
+    this.naturalSilhouetteImages.length = 0;
+    this.wallImages.length = 0;
   }
 
   private bakeMossRegion(
@@ -560,6 +625,7 @@ export class RockOverlayStreamer {
       stampRockMoss(this.scene, target, this.mossCandidates, -region.worldX, -region.worldY);
       target.render();
       eraseChunkScratch(target, cutout, size);
+      if (this.wallImages.length) target.erase(this.wallImages);
     }
     // Muss auch ohne Platzierungen laufen: `clear()` ist ein gepufferter Befehl, der erst hier
     // ausgefuehrt wird. Ohne diesen Aufruf traegt das Scratch-Ziel beim naechsten Blit noch den
@@ -589,7 +655,7 @@ export class RockOverlayStreamer {
     for (const id of candidateIds) {
       const colony=this.ecology[id];
       const placement = colony;
-      if (!placement || (colony && !this.activeCellKeys.has(colony.anchorKey))) continue;
+      if (!placement || !this.activeNaturalCellKeys.has(colony.anchorKey)) continue;
       const radius = getRockVegetationPlacementRadiusPx(placement)+ROCK_COLONY_CONTACT_REACH;
       const localX = placement.worldX - this.frame.offsetX;
       const localY = placement.worldY - this.frame.offsetY;
@@ -610,6 +676,7 @@ export class RockOverlayStreamer {
         rockColonyTint(this.ecologyTuning.rockFloraBlend??.5));
       target.render();
       eraseChunkScratch(target, cutout, size);
+      if (this.wallImages.length) target.erase(this.wallImages);
     }
     target.render();
     {
@@ -623,7 +690,8 @@ export class RockOverlayStreamer {
       // source-over lose a^2*m*(1-m) coverage (25% at an opaque half-mask edge).
       // Select the lighting receiver in the foliage shader, never by cutting
       // the leaf alpha. This also remains correct under bilinear filtering.
-      eraseChunkScratch(surface,this.scratch.get('silhouetteCutout',size,'redraw'),size);
+      eraseChunkScratch(surface,this.scratch.get('naturalCutout',size,'redraw'),size);
+      if (this.wallImages.length) surface.erase(this.wallImages);
       surface.render();
     }
     sink.blit(ROCK_OVERLAY_VEGETATION_LAYER_ID, target);
@@ -634,8 +702,8 @@ export class RockOverlayStreamer {
    * Fels-Decals einer Region.
    *
    * Sie sind die eine Ausnahme vom Silhouettenschnitt, weil sie die Felskante absichtlich
-   * ueberragen: Ihre Stanzform ist allein die Vereinigung der Zellquadrate weggefallener Felsen
-   * (siehe {@link ../RockDecalLayer}).
+   * ueberragen: Neben aktiven Bauwerkssilhouetten werden nur die Zellquadrate
+   * weggefallener Naturfelsen ausgeschnitten (siehe {@link ../RockDecalLayer}).
    */
   private bakeDecalRegion(
     region: ChunkBakeRegion,
@@ -658,6 +726,7 @@ export class RockOverlayStreamer {
     for (const id of candidateIds) {
       const decal = this.rockDecals[id];
       if (!decal) continue;
+      if (!this.ecologyCellKeys.has(rockCellKey(decal))) continue;
       if (!isRockDecalVisible(decal, activeCellKeys)) continue;
       // Dieselbe Ersatzgroesse wie die Bildfabrik; eine andere liesse ein Decal aus dem Neubau
       // fallen, das die Fabrik gezeichnet haette.
@@ -693,6 +762,7 @@ export class RockOverlayStreamer {
       // once above this layer, including their overhang and antialiased edge.
       const colonies=this.scratch.get('ecologySurface',size);
       target.stamp(colonies.texture.key,undefined,0,0,{originX:0,originY:0});
+      if (this.wallImages.length) target.erase(this.wallImages);
       target.render();
     }
     sink.blit(ROCK_OVERLAY_DECAL_LAYER_ID, target);

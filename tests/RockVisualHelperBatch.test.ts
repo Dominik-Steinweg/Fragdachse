@@ -301,6 +301,18 @@ describe('RockVisualHelper client snapshot materialization', () => {
     expect(fixture.result.rockPhysicsProxies[rock.id]?.active).toBe(true);
   });
 
+  it('invalidates overlays when an existing proxy changes from natural rock to construction material', () => {
+    const fixture = createFixture([0]);
+    const rock = fixture.changes.added[0];
+    fixture.flushPostUpdate();
+    fixture.rockOverlaySurface.refreshRegions.mockClear();
+    fixture.result.rockVisualStates.patch(rock.id, { material: 'rocks' });
+    fixture.helper.materializePlaceableRock(rock, false);
+    fixture.flushPostUpdate();
+    expect(fixture.result.rockVisualStates.get(rock.id)?.material).toBe('walls');
+    expect(fixture.rockOverlaySurface.refreshRegions).toHaveBeenCalledExactlyOnceWith(new Set([rock.id]));
+  });
+
   it.each(['base-owned', 'guest-session'] as const)('keeps %s walls neutral and light through HP updates', (ownership) => {
     const fixture = createFixture([0], false);
     const rock = fixture.changes.added[0];

@@ -129,10 +129,12 @@ export class RockVisualHelper {
       const announce = playAudio && playSpawnFx && !this.heardPlacements.has(rock.id)
         && (bridge.isHost() || rock.placementConfirmed === true);
       this.heardPlacements.add(rock.id);
+      const previousMaterial = this.arenaResult.rockVisualStates.get(rock.id)?.material;
       const effects = this.materializePlaceableRockInternal(rock, playSpawnFx, announce);
       refreshStaticShadows ||= effects.refreshStaticShadows;
       requiresObstacleIndexRebuild ||= effects.requiresObstacleIndexRebuild;
-      if (effects.refreshStaticShadows || effects.hasStalePedestalProxy) dirtyRockIds.add(rock.id);
+      const materialChanged = previousMaterial !== this.arenaResult.rockVisualStates.get(rock.id)?.material;
+      if (effects.refreshStaticShadows || effects.hasStalePedestalProxy || materialChanged) dirtyRockIds.add(rock.id);
     }
 
     if (refreshStaticShadows) {
