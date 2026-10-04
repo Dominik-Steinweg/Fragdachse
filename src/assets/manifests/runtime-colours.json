@@ -589,6 +589,18 @@
       "visiblePixelSha256": "94402a45be84b94d1e12aed912febaf899dae3f08b848d4989d0aacb1ad2d64a",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/gravity/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/gravity/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/gravity/sheet.png",
+      "width": 1312,
+      "height": 328,
+      "sourceBytes": 143096,
+      "downloadBytes": 120918,
+      "sourceSha256": "b3a4a4e07b6a9b6f05a9718bbfbb5fadfc7f006fa19006f20291948d1ace6b35",
+      "sha256": "f69221022ac01c3c72d3baa2586e1fa100a6722c5054912f4e8be7b7fa7fdfbb",
+      "visiblePixelSha256": "99059f2291ea03a393b1d8e2fe619c3f61dce11720c1062cef9c0b0988690655",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/inferno-colossus/mesh/enemy-mesh-r4-010/albedo-256.png": {
       "file": "assets/sprites/pipeline-v2/inferno-colossus/mesh/enemy-mesh-r4-010/albedo-256.webp",
       "source": "assets/sprites/pipeline-v2/inferno-colossus/mesh/enemy-mesh-r4-010/albedo-256.png",
@@ -630,11 +642,11 @@
       "source": "assets/sprites/pipeline-v2/rocket/sheet.png",
       "width": 1312,
       "height": 328,
-      "sourceBytes": 132629,
-      "downloadBytes": 91002,
-      "sourceSha256": "b7c660346a2b810392a24d1622e6fe3c53aeb76ec01d24b768c010402d86dc55",
-      "sha256": "49da7eda6488ae91901cbd5dc6fa202e3b3cd493ef462b665636ea996cf8bd9e",
-      "visiblePixelSha256": "d15b3000c6d30154ad04e5c8de4ecdd48c67417ef5eb100ce3d68d857db0d861",
+      "sourceBytes": 160189,
+      "downloadBytes": 105132,
+      "sourceSha256": "0444a60216c9fb2965c1462690d3e42f4912ad02ca435aa385e222eb4ccfe304",
+      "sha256": "f232e8aea20e13337512d0294b589a320993e5926e3e597c7392dcd197d9d34c",
+      "visiblePixelSha256": "19b42c91984e2b08fc370ecdb23cdfae1993ac745a6841294ebf476eec165668",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/tesla/sheet.png": {
@@ -642,11 +654,11 @@
       "source": "assets/sprites/pipeline-v2/tesla/sheet.png",
       "width": 1312,
       "height": 328,
-      "sourceBytes": 161108,
-      "downloadBytes": 128570,
-      "sourceSha256": "6c5285955e6a9f4e2deab41f8877a65985e5ac953b5664a23f2366fcddd5172b",
-      "sha256": "42385ec298acfefaa57b005721dd126d892c70d0d7bcf1f667c8c03da5a594b1",
-      "visiblePixelSha256": "fdf4b21674a0a6a12ea5947065fcd04e1000bf38db8f9e570ed512584b60d094",
+      "sourceBytes": 175835,
+      "downloadBytes": 139530,
+      "sourceSha256": "1aca3f0e52707ee4d5376c39ff4620f1fead2996900678fa9f40245a0e38ace0",
+      "sha256": "5d65c299ac80241839a802482e291eb601d2d99c03f9d89ab0f78724914649a7",
+      "visiblePixelSha256": "496694a9e8eb7faf55359d73b2c982b55e8cf36539147653e016adeb0a63aae0",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/thrower-badger/mesh/enemy-mesh-r4-010/beauty-128.png": {
@@ -671,6 +683,18 @@
       "sourceSha256": "d9761961fcb49e215a123b3a1e9d313943eaba7af5a878abc7c2dc243841bd02",
       "sha256": "d80e450eac332425d78c5c54dde3dcfd786047f001bd47093b00db681ca149b5",
       "visiblePixelSha256": "9f25ea5489ffa248efbcf02575e418648e83aaee45328820e85fb90ce9bfa04b",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/void-flame/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/void-flame/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/void-flame/sheet.png",
+      "width": 1312,
+      "height": 328,
+      "sourceBytes": 146462,
+      "downloadBytes": 129250,
+      "sourceSha256": "9e384fd2adbe7d9060b99e07f3a6a1c00774f91a9e5fde63d28cd11eb6a428e2",
+      "sha256": "3795213ed40a16de33bf130963b0c3b0143f79d71d56eaa960fe6262905b3837",
+      "visiblePixelSha256": "03c3ddfa521725e13a485984e22f1e9f8dcef7d5e8e82f298240971ce4c5b85e",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/void-hunter/mesh/enemy-mesh-r4-010/albedo-256.png": {

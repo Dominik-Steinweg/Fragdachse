@@ -8,7 +8,8 @@
       "gameIds": [
         "TURRET_ROCKET_BURST"
       ],
-      "variant": "calm",
+      "revision": "towers-r01",
+      "variant": "standard",
       "sourceSize": 160,
       "textureKey": "turret_weapon_rocket",
       "sheetTextureKey": "turret_weapon_rocket_animated",
@@ -49,8 +50,8 @@
         }
       ],
       "hashes": {
-        "idle": "9aab7370261e1c5d24abeec44208d9e3130ef37fcb00864c2f7686cdbae73c56",
-        "sheet": "b7c660346a2b810392a24d1622e6fe3c53aeb76ec01d24b768c010402d86dc55"
+        "idle": "36834a0442f6f6c0e06ffd4ed230221516de7452862906f31ef5f590a254223a",
+        "sheet": "0444a60216c9fb2965c1462690d3e42f4912ad02ca435aa385e222eb4ccfe304"
       }
     },
     {
@@ -59,7 +60,8 @@
       "gameIds": [
         "TURRET_TESLA"
       ],
-      "variant": "calm",
+      "revision": "towers-r01",
+      "variant": "standard",
       "sourceSize": 160,
       "textureKey": "turret_weapon_tesla",
       "sheetTextureKey": "turret_weapon_tesla_animated",
@@ -104,8 +106,8 @@
         }
       ],
       "hashes": {
-        "idle": "e97674c0c59263e938f8b8ce33074527f0a2905e9d11a3e09a6afe4c1752b069",
-        "sheet": "6c5285955e6a9f4e2deab41f8877a65985e5ac953b5664a23f2366fcddd5172b"
+        "idle": "54dad429d99cc14b3cff4cba38fcec24a9ba05e10ee8558e2212b7566c538e20",
+        "sheet": "1aca3f0e52707ee4d5376c39ff4620f1fead2996900678fa9f40245a0e38ace0"
       }
     },
     {
@@ -116,7 +118,7 @@
         "BASE_SPORES",
         "TURRET_SPORES"
       ],
-      "revision": "v2-spore-agaric-r1",
+      "revision": "towers-r02",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "turret_weapon_spore",
@@ -158,8 +160,8 @@
         }
       ],
       "hashes": {
-        "idle": "4b1b52cd610ffc06a67824305bbe6ed29c78ed82661d7ece19a4a35616fa12ca",
-        "sheet": "b58f7afcdb77740f2c365cfc9d706f4aba21c2315c4b62cb77da95fca753907d"
+        "idle": "9622247b9495c4468fff8583ec6ee6a9ed15e8f8fd7c4b4210ccc5e66a092737",
+        "sheet": "af05eee691c84864e54c5623dafae4a88f0b198d60b2fc99eb7945e36ec22421"
       }
     },
     {
@@ -168,7 +170,8 @@
       "gameIds": [
         "SPORE_TURRET_PLASMA"
       ],
-      "variant": "calm",
+      "revision": "towers-r01",
+      "variant": "standard",
       "sourceSize": 160,
       "textureKey": "turret_weapon_plasma",
       "sheetTextureKey": "turret_weapon_plasma_animated",
@@ -209,8 +212,8 @@
         }
       ],
       "hashes": {
-        "idle": "3a6b07d92daece60a7a31c80b0df2cdbdfd5def5dc9a7bc11b665e8c16a80815",
-        "sheet": "8dfb7cb8fbe58aa9c7e0402acff914b346ea02ec2d98b4116eb30b9996b5366e"
+        "idle": "39a0b01fd1d607162aea71f13c5e0e302c9ecb2e45d7b9340fe223fc6ad1799b",
+        "sheet": "d69dbf9e30413417c62154a02a81ef6039fb3b4df16f34cf7b02163200fa079b"
       }
     },
     {
@@ -219,7 +222,8 @@
       "gameIds": [
         "TURRET_MG"
       ],
-      "variant": "calm",
+      "revision": "towers-r01",
+      "variant": "standard",
       "sourceSize": 160,
       "textureKey": "turret_weapon_machine_gun",
       "sheetTextureKey": "turret_weapon_machine_gun_animated",
@@ -258,8 +262,8 @@
         }
       ],
       "hashes": {
-        "idle": "82419442aad3ac4b07ffe9db08c0cb6b43c6a3a02c413f6da99d2f1edde09bab",
-        "sheet": "fddf0d21cbad9640c035908ebd77399035a0d34fd5125e1cc443c839053401ee"
+        "idle": "6b9e5971a167bb88a71e19787acd10565a8eac302faa8e91b3a0b999b88a6030",
+        "sheet": "6376690ce4492a3086139b45df4cf90e4e78148f7ec0daa9ee843102bb6607d0"
       }
     },
     {
@@ -268,7 +272,8 @@
       "gameIds": [
         "TURRET_FLAME"
       ],
-      "variant": "rich",
+      "revision": "towers-r01",
+      "variant": "standard",
       "sourceSize": 160,
       "textureKey": "turret_weapon_flame",
       "sheetTextureKey": "turret_weapon_flame_animated",
@@ -313,8 +318,8 @@
         }
       ],
       "hashes": {
-        "idle": "d8183e05b6bd5effe62c0e32c272e66be3926cd8cf077e37eba3ff920dcfd319",
-        "sheet": "3df4cc1558783d78d2f73925869ab699415a5aa9fc3e96f78ae0f81383333cda"
+        "idle": "e6dfa5863a5ff0bbf672044adfb17abe54622c7749691a8a17927105df121fc0",
+        "sheet": "3052a6f1d8edd3e21bd91e27c84840c686467bcb453c84798c7e60d2375a5226"
       }
     },
     {
@@ -323,7 +328,8 @@
       "gameIds": [
         "TURRET_VOID_FLAME"
       ],
-      "variant": "rich",
+      "revision": "towers-r01",
+      "variant": "standard",
       "sourceSize": 160,
       "textureKey": "turret_weapon_void_flame",
       "sheetTextureKey": "turret_weapon_void_flame_animated",
@@ -368,8 +374,8 @@
         }
       ],
       "hashes": {
-        "idle": "09c91c3060028f7cd917dfd22a9a081d5d09f260896c7342cd16b141c6247c59",
-        "sheet": "55f75d688ee3c17895a8b2395b73d0a1690d9d4cde83a8c494ab23b7ae21485d"
+        "idle": "8d1ac260a1dedfe9b996fc34e7f3d4238d6dd1e64739838d20bf625aab09cf04",
+        "sheet": "9e384fd2adbe7d9060b99e07f3a6a1c00774f91a9e5fde63d28cd11eb6a428e2"
       }
     },
     {
@@ -378,7 +384,8 @@
       "gameIds": [
         "TURRET_GRAVITY"
       ],
-      "variant": "calm",
+      "revision": "towers-r01",
+      "variant": "standard",
       "sourceSize": 160,
       "textureKey": "turret_weapon_gravity",
       "sheetTextureKey": "turret_weapon_gravity_animated",
@@ -421,8 +428,8 @@
         }
       ],
       "hashes": {
-        "idle": "6b3222af58451a073343e277734b67651405ffd5620acb1ec8d0f6737e21d8b2",
-        "sheet": "9f0ae0bb79c513c28f8d1e98058abf780ac21a61b6243f625099356a533ab2eb"
+        "idle": "89d38983887aefe80634f7678fd2ee1df8fe7f1ea768273e6d10ddb72995c9a2",
+        "sheet": "b3a4a4e07b6a9b6f05a9718bbfbb5fadfc7f006fa19006f20291948d1ace6b35"
       }
     },
     {
@@ -431,7 +438,8 @@
       "gameIds": [
         "TURRET_SLOW_BUBBLE"
       ],
-      "variant": "calm",
+      "revision": "towers-r01",
+      "variant": "standard",
       "sourceSize": 160,
       "textureKey": "turret_weapon_slow_bubble",
       "sheetTextureKey": "turret_weapon_slow_bubble_animated",
@@ -472,8 +480,8 @@
         }
       ],
       "hashes": {
-        "idle": "01b691c5c131c90c7d21eda44a0cc991aba21a078c75313be5ecb76a6787ee1d",
-        "sheet": "be8c7fb31a22cdbc5e0e8d3a856cf9f563893ca92cfa9c7013ffda12c3fd443e"
+        "idle": "9b9cb7327ad8f88a8ef39d544c60525961ab0550a1d5076930c9436c9f500678",
+        "sheet": "1eb50d0a9c1a49102742c8a8a5b576117d4326dedf4f06a46dd1c1e0ab704b65"
       }
     },
     {

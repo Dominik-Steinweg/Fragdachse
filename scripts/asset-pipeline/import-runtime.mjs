@@ -6,7 +6,9 @@ import { verifySelectionV2 } from './export-v2.mjs';
 import { validateEyeAnchors } from './eye-anchors.mjs';
 
 const revision = process.argv[2] ?? 'v2-g';
-if (!/^v2-[a-z0-9-]+$/.test(revision)) throw new Error('Invalid revision');
+// Use the same revision identifiers as the V2 builder/exporter; the manifest
+// carries the pipeline version independently of the human-readable run name.
+if (!/^[a-z0-9][a-z0-9-]*$/.test(revision)) throw new Error('Invalid revision');
 const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
 const catalog = await readJson('scripts/asset-pipeline/catalog-v2.json');
 const enemies = (await readJson('src/config/coopDefenseEnemies.json')).enemies;

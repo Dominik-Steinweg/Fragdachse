@@ -2,18 +2,19 @@
 import math
 import bpy
 from rigs_v2 import model, control, attach
+from turret_surface_parts import material
 
 
 def palette(c, armor=(.085, .15, .17), accent=(.64, .27, .055), charge=(.06, .58, .73)):
     return {
-        'dark': c.material('Graphite ceramic recesses', (.017, .027, .036)),
-        'base': c.material('Matte structural graphite', (.047, .068, .080), 'technical'),
-        'steel': c.material('Brushed gunmetal', (.14, .19, .21), 'technical'),
-        'edge': c.material('Soft worn machined edges', (.29, .36, .37), 'technical'),
-        'armor': c.material('Colored enamel armor', armor, 'technical'),
-        'accent': c.material('Authored identification enamel', accent, 'technical'),
-        'ivory': c.material('Warm ceramic contacts', (.63, .62, .49), 'technical'),
-        'copper': c.material('Oxidized copper winding', (.38, .18, .060), 'technical'),
+        'dark': material(c, 'Graphite ceramic recesses', (.017, .027, .036), 'recess'),
+        'base': material(c, 'Weathered structural graphite', (.047, .068, .080), 'base'),
+        'steel': material(c, 'Brushed gunmetal', (.14, .19, .21), 'steel'),
+        'edge': material(c, 'Soft worn machined edges', (.29, .36, .37), 'steel'),
+        'armor': material(c, 'Weathered enamel armor', armor),
+        'accent': material(c, 'Worn identification enamel', accent),
+        'ivory': material(c, 'Warm ceramic contacts', (.63, .62, .49), 'ceramic'),
+        'copper': material(c, 'Oxidized copper winding', (.38, .18, .060), 'copper'),
         'charge': c.material('Confined energy color', charge, emission=.30),
     }
 

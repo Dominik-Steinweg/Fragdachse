@@ -2,11 +2,12 @@
 import math
 import bpy
 from turret_parts import palette, support, cylinder_x, grille, new_meshes, finish
+from turret_surface_parts import material
 
 
 def build(c, spec):
     p = palette(c, armor=(.065, .15, .15), accent=(.70, .29, .045))
-    red = c.material('Terracotta warheads', (.48, .065, .038), 'technical')
+    red = material(c, 'Terracotta warheads', (.48, .065, .038))
     base = support(c, p, radius=.87, facets=12, accent_lugs=True)
     c.box('Central recoil cradle', (-.04, 0, .47), (1.30, .36, .29), p['dark'], .085)
     c.box('Cast gimbal spine', (-.20, 0, .63), (.96, .32, .23), p['armor'], .070)

@@ -6,6 +6,10 @@ const step = frames => ({ action: 'step', frames });
 const debug = extra => ({ action: 'renderDebug', disable: [], ...extra });
 const review = extra => ({ action: 'armageddonReview', count: 4, progress: .65, ...extra });
 const shot = (id, commands = []) => ({ id, commands, masks: [] });
+// Exclude the observer's animated status rings and the screen HUD; all nine
+// turret canvases, their supports and world lighting remain inside the comparison.
+const towerShot = (id, commands = []) => ({ id, commands,
+  masks: [{ x: 0, y: 0, width: 160, height: 540 }, { x: 0, y: 0, width: 960, height: 30 }] });
 const base = { version: 1, classId: 'dachs_nukem', mapId: '1', seed: 12345, timeOfDay: 720,
   player: { gridX: 27, gridY: 28 }, hideAim: true, freezeMission: true, suppressWaves: true, hideTutorial: true };
 
@@ -40,4 +44,10 @@ export const groups = [
   ], shots: [
     shot('train-intact', [step(1)]), shot('train-destroyed-f12', [{ action: 'trainExplosion' }, step(12)]),
   ] },
+  { id: 'towers', scenario: { ...base, player: { gridX: 20, gridY: 24 } },
+    setup: [target(24, 24), camera(8), { action: 'turretMaterialReview' }], shots: [
+      towerShot('towers-day'),
+      towerShot('towers-dusk', [{ action: 'options', values: { timeOfDay: 1020 } }, step(60)]),
+      towerShot('towers-night', [{ action: 'options', values: { timeOfDay: 0 } }, step(60)]),
+    ] },
 ];

@@ -1,6 +1,7 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { EnemyMeshReview } from './EnemyMeshReview';
 import { ArmageddonReview } from './ArmageddonReview';
+import { TurretMaterialReview } from './TurretMaterialReview';
 import { setCharacterMaterialSuppressed, setCharacterMaterialView, characterMaterialStatus } from '../../effects/CharacterMaterialLighting';
 import { WorldLightingMeasurement } from './WorldLightingMeasurement';
 import type * as Phaser from 'phaser';
@@ -41,6 +42,14 @@ export class DevScenarioController {
   private worldLighting: WorldLightingMeasurement | null = null;
   private enemyMeshReview: EnemyMeshReview | null = null;
   private armageddonReview: ArmageddonReview | null = null;
+  private turretMaterialReview: TurretMaterialReview | null = null;
+  arrangeTurretMaterialReview(): void {
+    this.requireReady();
+    this.turretMaterialReview?.destroy();
+    const point = this.world(this.aim);
+    this.turretMaterialReview = new TurretMaterialReview(this.scene, point.x, point.y,
+      this.runtime.getScenarioLightingTargets().wildlife);
+  }
   arrangeArmageddonReview(options: {count:number;progress:number;quality:import('../../graphics/GraphicsQuality').GraphicsQuality;impacts:boolean;singleImpact?:boolean;variant:'normal'|'void'}):void {
     this.requireReady(); this.armageddonReview?.destroy();
     const point=this.world(this.aim);
@@ -112,6 +121,7 @@ export class DevScenarioController {
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
+    this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     const config = parseScenario(value);
     this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
@@ -802,6 +812,7 @@ export class DevScenarioController {
     return { path: result.path, url: result.url, status };
   }
   destroy(): void {
+    this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     if (this.disposed) return;
     this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
