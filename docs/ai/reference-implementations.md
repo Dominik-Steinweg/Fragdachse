@@ -6,7 +6,7 @@ Diese Seite nennt wenige konkrete Einstiegspunkte, die als Muster dienen. Sie er
 
 - [src/config/authoring/lobbyWorld.ts](../../src/config/authoring/lobbyWorld.ts) zeigt eine normale authored World ohne Activity.
 - [src/arena/LobbyWorldLayout.ts](../../src/arena/LobbyWorldLayout.ts) liefert ihr Layout über denselben World-Layout-Vertrag.
-- [tests/WorldWithoutActivityProof.test.ts](../../tests/WorldWithoutActivityProof.test.ts) und [tests/SharedWorldWithoutActivity.test.ts](../../tests/SharedWorldWithoutActivity.test.ts) schützen den Zustand World ohne Activity.
+- [tests/integration/WorldWithoutActivityProof.test.ts](../../tests/integration/WorldWithoutActivityProof.test.ts) und [tests/integration/SharedWorldWithoutActivity.test.ts](../../tests/integration/SharedWorldWithoutActivity.test.ts) schützen den Zustand World ohne Activity.
 
 ## World-Aufbau und Participation
 
@@ -25,7 +25,7 @@ Diese Seite nennt wenige konkrete Einstiegspunkte, die als Muster dienen. Sie er
 
 - [src/network/NetworkBridge.ts](../../src/network/NetworkBridge.ts) ist die Gameplay-Grenze.
 - [src/network/peer/PeerRoom.ts](../../src/network/peer/PeerRoom.ts) zeigt die Transportabstraktion unterhalb dieser Grenze.
-- [src/network/peer/PeerJsTransport.ts](../../src/network/peer/PeerJsTransport.ts) ist der einzige PeerJS-Importpfad.
+- [src/network/peer/PeerJsTransport.ts](../../src/network/peer/PeerJsTransport.ts) bindet den Raumtransport an [PeerSignaling.ts](../../src/network/peer/PeerSignaling.ts) für den Peer-Aufbau und [PeerLink.ts](../../src/network/peer/PeerLink.ts) für die Datenkanäle; PeerJS-Imports bleiben innerhalb dieses Transportsubstrats.
 - [tests/WorldChannelContracts.test.ts](../../tests/WorldChannelContracts.test.ts) und [tests/PeerLink.test.ts](../../tests/PeerLink.test.ts) verifizieren Store-, Revision- und Channelverträge.
 
 ## Persistenz

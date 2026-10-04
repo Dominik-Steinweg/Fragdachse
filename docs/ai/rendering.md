@@ -380,7 +380,7 @@ unter Alpha 0, und ihren bisherigen non-PMA-Upload. Farbkompression darf nicht a
 uebertragen werden. Nach einem Export aktualisiert `npm run assets:runtime` die Runtime-Dateien
 und URL-Versionen; die Build-Scripts fuehren diesen Schritt automatisch aus.
 
-Culling und Residency verwenden das sichtbare Weltrechteck aus `src/graphics/CameraWorldView.ts`: Die Berechnung ber�cksichtigt Kamera-Ursprung, Zoom und Rotation aus dem aktuellen Zustand. `camera.worldView` kann vor `preRender` veraltet sein und bildet den Arena-Ursprung nicht korrekt ab. Frame-Consumer reichen wiederverwendbaren Ausgabespeicher ein.
+Culling und Residency verwenden das sichtbare Weltrechteck aus `src/graphics/CameraWorldView.ts`: Die Berechnung berücksichtigt Kamera-Ursprung, Zoom und Rotation aus dem aktuellen Zustand. `camera.worldView` kann vor `preRender` veraltet sein und bildet den Arena-Ursprung nicht korrekt ab. Frame-Consumer reichen wiederverwendbaren Ausgabespeicher ein.
 
 Loadout-/Upgrade-Icons, Decals und Groundcover verwenden getrennte Offline-Atlanten.
 `src/assets/RuntimeAtlases.ts` loest logische IDs in Textur-Key und Frame auf; Existenzpruefungen
