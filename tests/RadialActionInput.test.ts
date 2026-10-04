@@ -23,7 +23,7 @@ vi.mock('../src/graphics/cameraBaseScroll', () => ({
   getUnshakenPointerWorldPoint: () => ({ x: 100, y: 0 }),
 }));
 
-import { ULTIMATE_CONFIGS, UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
   isOpen = false;
   close() {}
@@ -78,6 +78,46 @@ function createSystem(position = { x: 0, y: 0 }) {
 }
 
 describe('focus loss during charged input', () => {
+  it.each([['blur', false], ['hidden', false], ['blur', true], ['hidden', true]] as const)(
+    'discards a held scope shot on %s, including latched Shift=%s', (event, latchedShift) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    try {
+      const f = createSystem(), keyboard = new Map<string, TestKey & EventEmitter>();
+      Object.assign(f.scene.input, { keyboard: { addKey: (code: string) => {
+        const button = Object.assign(new EventEmitter(), key(), { consumeEdge: true });
+        keyboard.set(code, button); return button;
+      } } });
+      const events = new EventEmitter(), gameEvents = new EventEmitter();
+      Object.assign(f.scene, { events, game: { events: gameEvents } });
+      const burrow = vi.fn(); Object.assign(f.bridge, { sendBurrowRequest: burrow });
+      f.system.setup();
+      f.system.setupWeapon2ConfigProvider(() => WEAPON_CONFIGS.AWP);
+      const uses = vi.fn(); f.system.setupLoadoutListener(uses);
+      f.pointerState.right = true;
+      f.system.update();
+      expect(uses).toHaveBeenCalledWith('weapon2', expect.any(Number), expect.any(Number), expect.any(Number), { scopeHolding: true });
+      uses.mockClear();
+      const shift = keyboard.get('SHIFT')!;
+      if (latchedShift) { shift.isDown = true; shift.justDown = true; shift.emit('down'); }
+      gameEvents.emit(event);
+      // Phaser clears the physical keys/pointer when focus is lost, before input resumes.
+      shift.isDown = false; shift.justDown = false;
+      f.pointerState.right = false;
+      vi.setSystemTime(10_000);
+      f.system.update();
+      expect(burrow).not.toHaveBeenCalled();
+      expect(uses).not.toHaveBeenCalled();
+      expect(f.system.getScopeProgress()).toBe(0);
+      expect(f.system.getScopeChargeProgress()).toBe(0);
+      f.pointerState.right = true; f.system.update();
+      f.pointerState.right = false; vi.setSystemTime(10_100); f.system.update();
+      expect(uses).toHaveBeenCalledTimes(2);
+      expect(uses.mock.calls[1][4]).toMatchObject({ scopeProgress: expect.any(Number) });
+      events.emit('shutdown');
+    } finally { vi.useRealTimers(); }
+  });
+
   it.each(['blur', 'hidden', 'shutdown'])('cancels Gauss on %s without firing when input resumes', event => {
     vi.useFakeTimers();
     vi.setSystemTime(1000);
